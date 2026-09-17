@@ -112,6 +112,33 @@ export type PlayerStatePayload = {
 	TutorialComplete: boolean,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },
+	EquippedWeapon: string?,
+}
+
+export type CombatStatePayload = {
+	Health: number,
+	MaxHealth: number,
+	WeaponId: string?,
+	Ammo: number,
+	MagazineSize: number,
+	Reloading: boolean,
+	Alive: boolean,
+}
+
+export type CombatHitFeedbackPayload = {
+	Kind: string, -- "Hit" | "Kill" | "Miss" | "Damaged" | "Death"
+	Damage: number?,
+	TargetName: string?,
+	WeaponId: string?,
+	IsHeadshot: boolean?,
+}
+
+export type FireRequestPayload = {
+	Direction: Vector3,
+	Origin: Vector3?,
+	TargetUserId: number?,
+	TargetNpcId: string?,
+	HitPosition: Vector3?,
 }
 
 export type PurchaseUpgradeRequest = {

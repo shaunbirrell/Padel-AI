@@ -56,3 +56,14 @@ Other structures use similar curves (see `BaseConfig.luau`). Command Center L1 i
 ## Tuning knobs
 
 Edit `EconomyConfig`, `BaseConfig`, `LevelConfig` — keep combat/vehicle numbers in their configs. Document live changes here after playtests.
+
+
+## Combat (Phase 3)
+
+| Source | Cash | XP |
+|--------|------|-----|
+| Player kill | 150 | 40 |
+| NPC Infantry | 50 | 15 |
+| NPC Heavy Infantry | 90 | 28 |
+
+Player max health: **100**. Spawn invuln: **3s**. Tune in `CombatConfig` / `WeaponConfig`.

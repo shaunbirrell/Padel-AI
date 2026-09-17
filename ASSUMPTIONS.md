@@ -37,3 +37,12 @@ Reversible engineering decisions made while implementing the MVP without blockin
 17. **ClanId / BattlePass / Achievements** — Schema fields present; grant logic mostly stubbed for later phases.
 
 18. **Anti-exploit** — Rate limits + strike counter; not a full physics anti-cheat.
+
+
+19. **Combat damage** — Always from `WeaponConfig` (× `Pellets` for shotguns). Client may hint hit target/position; server raycasts and re-validates range/ownership/fire rate/ammo.
+
+20. **Respawn** — After death, wait `GameConfig.RespawnTimeSeconds`, `LoadCharacter`, teleport to assigned plot `PlayerSpawn` (or plot pad + offset).
+
+21. **NPC pool** — Runtime models tagged `WE_NPC`; StudioSetup may place a few placeholders. Cap `CombatConfig.MaxActiveNPCs`; respawn after `NPCRespawnSeconds`.
+
+22. **PvP** — Gated by `GameConfig.PvPEnabled`; friendly fire by `GameConfig.FriendlyFire`. First PvP engagement logs `FIRST_PVP` once per user session/account flag.

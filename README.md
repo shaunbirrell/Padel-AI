@@ -3,7 +3,7 @@
 **BUILD. CONQUER. DOMINATE.**
 
 Commercial Roblox military tycoon / territory / vehicle collection game.  
-Rojo-ready Luau codebase — Phase 1 (Foundation) + Phase 2 (Tycoon) implemented; later systems scaffolded.
+Rojo-ready Luau codebase — Phase 1 (Foundation) + Phase 2 (Tycoon) + Phase 3 (Combat) implemented; later systems scaffolded.
 
 ## Requirements
 
@@ -58,4 +58,13 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 
 ## Play loop (MVP)
 
-Join → profile load → plot assigned → HUD shows Cash/Gold/Level/XP → buy Command Center / Barracks → passive income ticks → data autosaves / saves on leave.
+Join → profile load → plot assigned → HUD shows Cash/Gold/Level/XP → buy Command Center / Barracks → passive income ticks → **combat**: equip StarterRifle, fire (LMB / mobile FIRE), reload (R), fight NPCs / PvP → kill rewards → respawn at base → data autosaves / saves on leave.
+
+## Phase 3 — Combat notes
+
+- Server-authoritative: `CombatService` validates weapon ownership, fire rate, magazine, range; **never trusts client damage**.
+- Remotes (request-only): `RequestFire`, `RequestReload`, `RequestEquipWeapon`, `RequestPurchaseWeapon` — **no GiveWeapon**.
+- NPCs: spawn from `WE_NPCSpawn` markers (+ optional territory pads); capped pool; light aggro/shoot AI; rewards on kill.
+- Client: `CombatController` health bar, ammo/weapon strip, mobile fire button, hit flash.
+- Analytics: `FIRST_PVP`, `PLAYER_KILL`, `NPC_KILL`, `WEAPON_EQUIPPED`, `WEAPON_PURCHASED`.
+- Tunables: `CombatConfig.luau` + `WeaponConfig.luau`.

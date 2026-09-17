@@ -281,6 +281,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 		TutorialComplete = profile.TutorialComplete,
 		Vehicles = profile.Vehicles,
 		Weapons = profile.Weapons,
+		EquippedWeapon = profile.EquippedWeapon,
 	}
 end
 

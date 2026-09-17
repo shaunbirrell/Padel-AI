@@ -13,6 +13,7 @@ export type WeaponDef = {
 	Range: number,
 	Spread: number,
 	CostCash: number?,
+	Pellets: number?, -- shotgun-style; server applies Damage * Pellets max
 }
 
 local WeaponConfig = {
@@ -81,6 +82,7 @@ local WeaponConfig = {
 			Range = 40,
 			Spread = 8.0,
 			CostCash = 12000,
+			Pellets = 6,
 		},
 		Sniper = {
 			Id = "Sniper",

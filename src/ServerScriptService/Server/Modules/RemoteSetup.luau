@@ -1,7 +1,7 @@
 --!strict
 --[[
 	Creates remotes under ReplicatedStorage.Remotes.
-	Request/action pattern ONLY — no GiveCash / GiveXP remotes.
+	Request/action pattern ONLY — no GiveCash / GiveXP / GiveWeapon remotes.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,11 +16,16 @@ local EVENTS = {
 	Constants.RemoteNames.Notification,
 	Constants.RemoteNames.EconomyUpdate,
 	Constants.RemoteNames.XPUpdate,
+	Constants.RemoteNames.CombatStateUpdate,
+	Constants.RemoteNames.CombatHitFeedback,
 	-- Client requests
 	Constants.RemoteNames.RequestPurchaseUpgrade,
 	Constants.RemoteNames.RequestClaimDailyReward,
 	Constants.RemoteNames.RequestSpawnVehicle,
 	Constants.RemoteNames.RequestEquipWeapon,
+	Constants.RemoteNames.RequestPurchaseWeapon,
+	Constants.RemoteNames.RequestFire,
+	Constants.RemoteNames.RequestReload,
 	Constants.RemoteNames.RequestStartMission,
 	Constants.RemoteNames.RequestCaptureTerritory,
 	Constants.RemoteNames.RequestAdminCommand,

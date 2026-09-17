@@ -221,4 +221,39 @@ makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 6, Vector3.new(0, 0, 0), Color3.fr
 makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(100, 0, 100), Color3.fromRGB(120, 80, 80))
 makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-100, 0, -100), Color3.fromRGB(120, 100, 60))
 
+
+-- Lightweight NPC placeholders near spawn pads (CombatService also spawns at runtime)
+local TAG_NPC_ENTITY = "WE_NPC"
+local npcFolder = ensureFolder("NPCPlaceholders", root)
+for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do
+	if i > 4 then break end -- keep Studio light; runtime pool handles the rest
+	local model = Instance.new("Model")
+	model.Name = "HostileInfantry_" .. i
+	model:SetAttribute("NPCId", "studio_npc_" .. i)
+	model:SetAttribute("NPCType", "Infantry")
+	local rootPart = Instance.new("Part")
+	rootPart.Name = "HumanoidRootPart"
+	rootPart.Size = Vector3.new(2, 2, 1)
+	rootPart.Color = Color3.fromRGB(140, 55, 55)
+	rootPart.Anchored = true
+	rootPart.CanCollide = true
+	rootPart.CFrame = spawnPart.CFrame + Vector3.new(0, 3, 0)
+	rootPart.Parent = model
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Size = Vector3.new(1.2, 1.2, 1.2)
+	head.Color = Color3.fromRGB(160, 70, 70)
+	head.Anchored = true
+	head.CanCollide = false
+	head.CFrame = rootPart.CFrame + Vector3.new(0, 1.6, 0)
+	head.Parent = model
+	local hum = Instance.new("Humanoid")
+	hum.MaxHealth = 80
+	hum.Health = 80
+	hum.Parent = model
+	model.PrimaryPart = rootPart
+	model.Parent = npcFolder
+	CollectionService:AddTag(model, TAG_NPC_ENTITY)
+end
+
 print("[WAR EMPIRE] StudioSetup complete: 6 bases, 7 territories, spawn pads created under Workspace.WarEmpireSetup")

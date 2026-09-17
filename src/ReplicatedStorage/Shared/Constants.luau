@@ -17,6 +17,7 @@ Constants.Tags = {
 	VehicleSpawn = "WE_VehicleSpawn",
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
+	NPC = "WE_NPC",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -28,11 +29,16 @@ Constants.RemoteNames = {
 	Notification = "Notification",
 	EconomyUpdate = "EconomyUpdate",
 	XPUpdate = "XPUpdate",
-	-- Client → Server (request/action only — NEVER GiveCash/GiveXP)
+	CombatStateUpdate = "CombatStateUpdate",
+	CombatHitFeedback = "CombatHitFeedback",
+	-- Client → Server (request/action only — NEVER GiveCash/GiveXP/GiveWeapon)
 	RequestPurchaseUpgrade = "RequestPurchaseUpgrade",
 	RequestClaimDailyReward = "RequestClaimDailyReward",
 	RequestSpawnVehicle = "RequestSpawnVehicle",
 	RequestEquipWeapon = "RequestEquipWeapon",
+	RequestPurchaseWeapon = "RequestPurchaseWeapon",
+	RequestFire = "RequestFire",
+	RequestReload = "RequestReload",
 	RequestStartMission = "RequestStartMission",
 	RequestCaptureTerritory = "RequestCaptureTerritory",
 	RequestAdminCommand = "RequestAdminCommand",
@@ -58,6 +64,8 @@ Constants.Colors = {
 	Gold = Color3.fromRGB(230, 190, 60),
 	XP = Color3.fromRGB(90, 160, 220),
 	Danger = Color3.fromRGB(200, 70, 70),
+	Health = Color3.fromRGB(200, 70, 70),
+	Ammo = Color3.fromRGB(220, 200, 120),
 	Text = Color3.fromRGB(235, 238, 242),
 	Muted = Color3.fromRGB(150, 158, 170),
 }
