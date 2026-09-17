@@ -1,0 +1,19 @@
+--!strict
+
+local AnalyticsConfig = {
+	Enabled = true,
+	LogToOutput = true, -- MVP: print; swap sink later
+	Events = {
+		PLAYER_JOIN = "PLAYER_JOIN",
+		PLAYER_LEAVE = "PLAYER_LEAVE",
+		FIRST_UPGRADE = "FIRST_UPGRADE",
+		UPGRADE_PURCHASED = "UPGRADE_PURCHASED",
+		LEVEL_UP = "LEVEL_UP",
+		DAILY_REWARD_CLAIMED = "DAILY_REWARD_CLAIMED",
+		PURCHASE_RECEIPT = "PURCHASE_RECEIPT",
+		ADMIN_COMMAND = "ADMIN_COMMAND",
+		SESSION_LOCK_CONFLICT = "SESSION_LOCK_CONFLICT",
+	},
+}
+
+return AnalyticsConfig

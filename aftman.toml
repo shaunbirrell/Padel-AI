@@ -1,0 +1,6 @@
+# Aftman manifest for WAR EMPIRE
+# Install: aftman install
+# https://github.com/LPGhatguy/aftman
+
+[tools]
+rojo = "rojo-rbx/rojo@7.4.4"

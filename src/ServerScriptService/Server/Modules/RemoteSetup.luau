@@ -1,0 +1,73 @@
+--!strict
+--[[
+	Creates remotes under ReplicatedStorage.Remotes.
+	Request/action pattern ONLY — no GiveCash / GiveXP remotes.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Constants = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Constants"))
+
+local RemoteSetup = {}
+
+local EVENTS = {
+	-- Server pushes
+	Constants.RemoteNames.PlayerStateUpdate,
+	Constants.RemoteNames.BaseStateUpdate,
+	Constants.RemoteNames.Notification,
+	Constants.RemoteNames.EconomyUpdate,
+	Constants.RemoteNames.XPUpdate,
+	-- Client requests
+	Constants.RemoteNames.RequestPurchaseUpgrade,
+	Constants.RemoteNames.RequestClaimDailyReward,
+	Constants.RemoteNames.RequestSpawnVehicle,
+	Constants.RemoteNames.RequestEquipWeapon,
+	Constants.RemoteNames.RequestStartMission,
+	Constants.RemoteNames.RequestCaptureTerritory,
+	Constants.RemoteNames.RequestAdminCommand,
+}
+
+local FUNCTIONS = {
+	Constants.RemoteNames.GetPlayerState,
+}
+
+function RemoteSetup.Init(): Folder
+	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = Constants.RemotesFolderName
+		folder.Parent = ReplicatedStorage
+	end
+
+	for _, name in ipairs(EVENTS) do
+		if not folder:FindFirstChild(name) then
+			local ev = Instance.new("RemoteEvent")
+			ev.Name = name
+			ev.Parent = folder
+		end
+	end
+
+	for _, name in ipairs(FUNCTIONS) do
+		if not folder:FindFirstChild(name) then
+			local fn = Instance.new("RemoteFunction")
+			fn.Name = name
+			fn.Parent = folder
+		end
+	end
+
+	-- Guard: never create Give* remotes
+	for _, child in ipairs(folder:GetChildren()) do
+		if string.sub(child.Name, 1, 4) == "Give" then
+			warn("[RemoteSetup] Removing forbidden remote:", child.Name)
+			child:Destroy()
+		end
+	end
+
+	return folder :: Folder
+end
+
+function RemoteSetup.Get(name: string): Instance
+	local folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName)
+	return folder:WaitForChild(name)
+end
+
+return RemoteSetup
