@@ -199,7 +199,9 @@ function ShopController.Init()
 
 	for key, def in pairs(MonetizationConfig.DevProducts) do
 		local sub = ""
-		if def.Cash and def.Cash > 0 then
+		if def.GrantsBattlePassPremium then
+			sub = string.format("Unlocks BP Premium track (id=%d) — grant via ProcessReceipt only", def.Id or 0)
+		elseif def.Cash and def.Cash > 0 then
 			sub = string.format("$%d  (id=%d)", def.Cash, def.Id or 0)
 		elseif def.Gold and def.Gold > 0 then
 			sub = string.format("%d Gold  (id=%d)", def.Gold, def.Id or 0)

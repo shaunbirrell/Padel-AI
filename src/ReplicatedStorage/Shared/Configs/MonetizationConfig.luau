@@ -35,6 +35,14 @@ local MonetizationConfig = {
 		GoldSmall = { Id = 0, DisplayName = "Gold Pack S", Cash = 0, Gold = 50 },
 		GoldMedium = { Id = 0, DisplayName = "Gold Pack M", Cash = 0, Gold = 200 },
 		GoldLarge = { Id = 0, DisplayName = "Gold Pack L", Cash = 0, Gold = 500 },
+		-- Placeholder Id=0: ProcessReceipt sets Battle Pass Premium when Id is live; Studio uses admin grantpremium
+		PremiumPass = {
+			Id = 0,
+			DisplayName = "Battle Pass Premium",
+			Cash = 0,
+			Gold = 0,
+			GrantsBattlePassPremium = true,
+		},
 	},
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
 	LootBoxPolicyPending = true,

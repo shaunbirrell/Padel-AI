@@ -25,6 +25,7 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local NotificationService: any = nil
 local RemoteSetup: any = nil
+local BattlePassService: any = nil
 
 -- Session receipt cache; also mirrored to profile.ProcessedReceipts
 local processed: { [string]: boolean } = {}
@@ -156,6 +157,7 @@ function MonetizationService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	NotificationService = deps.NotificationService
 	RemoteSetup = deps.RemoteSetup
+	BattlePassService = deps.BattlePassService
 
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return MonetizationService.ProcessReceipt(receiptInfo)
@@ -273,6 +275,10 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	end
 	if product.Gold and product.Gold > 0 then
 		EconomyService.AddGold(player, product.Gold, "devproduct")
+	end
+	-- Battle Pass Premium: server-only via ProcessReceipt (never client confirmation)
+	if product.GrantsBattlePassPremium == true and BattlePassService and BattlePassService.SetPremium then
+		BattlePassService.SetPremium(player, true)
 	end
 
 	markProcessed(profile, receiptId)

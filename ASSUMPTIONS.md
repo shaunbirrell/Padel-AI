@@ -34,7 +34,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 16. **BindToClose** — Best-effort save window (~few seconds); not a hard guarantee under Studio stop.
 
-17. **ClanId / BattlePass / Achievements** — Schema fields present; grant logic mostly stubbed for later phases.
+17. **ClanId / BattlePass / Achievements** — Schema fields present. Battle Pass + Clan create/join/leave are live; achievements remain config-driven one-shots.
 
 18. **Anti-exploit** — Rate limits + strike counter; not a full physics anti-cheat.
 
@@ -56,7 +56,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 26. **Territory ownership** — Runtime world state is authoritative (not only profile.Territories). Profile mirrors personal ownership for persistence/UI. On leave, ownership remains until contested/captured by others.
 
-27. **Territory states** — Neutral / Player / NPC / Clan / Contested. NPC seeds: EastArmory + RadarHill on server start. Clan ownership uses profile.ClanId when set. ClanService creates/joins/leaves in-session; ClanId persists on profile. Session roster rehydrates soft stubs after server restart.
+27. **Territory states** — Neutral / Player / NPC / Clan / Contested. NPC seeds: EastArmory + RadarHill on server start. Clan ownership uses profile.ClanId when set. ClanService persists roster to DataStore `WarEmpire_Clans_v1` (name/owner/members); graceful session-only fallback when API services off. Soft stub rehydrate if ClanId on profile but store miss.
 
 28. **Capture** — Proximity stand-in-zone only (CollectionService `WE_CaptureZone` preferred, else `WE_Territory`). Progress is server tick-based; `RequestCaptureTerritory` is an optional UI ping.
 
@@ -79,6 +79,6 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 37. **Prestige** — Requires Level ≥ PrestigeConfig.MinLevelToPrestige (100). Resets Cash/Level/XP/BaseUpgrades; keeps Vehicles/Weapons/Gold; grants GoldBonusOnPrestige; Cash earnings use EconomyConfig.PrestigeCashMultiplierPerLevel. Admin `forceprestige` / `prestige`.
 
-38. **Battle Pass** — SeasonId from SeasonConfig; XP mirrored from XPService.AddXP; Free/Premium claim remotes; Premium only via admin `grantpremium` or future ProcessReceipt (PremiumProductId=0). Sparse reward milestones in BattlePassConfig.
+38. **Battle Pass** — SeasonId from SeasonConfig; XP mirrored from XPService.AddXP; dense Free/Premium tracks (levels 1–50) in BattlePassConfig. Claim UX: CLAIM ALL (level 0 → ClaimAll) + track preview with claimable counts. Premium only via admin `grantpremium` or Monetization ProcessReceipt for `DevProducts.PremiumPass` (Id=0 placeholder; GrantsBattlePassPremium). Never client-granted.
 
-39. **Clan scaffolding** — Create/Join/Leave remotes; MaxMembers 20; territory capture stamps runtime.ClanId from profile.ClanId for same-clan friendly ownership checks.
+39. **Clan roster** — Create/Join/Leave remotes; MaxMembers 20; DataStore-backed clan records when API services enabled; profile.ClanId always mirrors membership. Territory capture stamps runtime.ClanId from profile.ClanId for same-clan ownership checks.

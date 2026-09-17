@@ -226,14 +226,11 @@ function TerritoryService.GetBonusesForPlayer(player: Player): { [string]: numbe
 			owns = true
 		end
 		if owns then
+			-- Flat and multiplicative bonuses both accumulate additively into the map;
+			-- consumers interpret FlatPassiveCash/MinimapReveal as flat, *Mult as fractions.
 			local key = rt.Def.BonusType
 			local value = rt.Def.BonusValue
-			if key == "FlatPassiveCash" or key == "MinimapReveal" then
-				bonuses[key] = (bonuses[key] or 0) + value
-			else
-				-- multiplicative bonuses stack additively as fractions
-				bonuses[key] = (bonuses[key] or 0) + value
-			end
+			bonuses[key] = (bonuses[key] or 0) + value
 		end
 	end
 	return bonuses

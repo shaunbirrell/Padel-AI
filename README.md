@@ -136,7 +136,8 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 9. **Shop** — **P**: list products/passes; with Id `0`, warn/notify only (no fake grants). With real Ids, ProcessReceipt / ownership only.
 10. **VIP / 2x** — Set `DevConfig.MockOwnedGamePasses` or admin `grantpass VIP` / `DoubleCash` / `DoubleXP`; confirm Cash/XP multipliers on earnings (not on `devproduct` grants).
 11. **Persistence** — Leave + rejoin with API Services on; Cash/upgrades restore; receipts not double-granted.
-12. **Admin** — `givecash` / `resettutorial` / `unlockall` only for `AdminConfig.UserIds`.
+12. **Admin** — `givecash` / `resettutorial` / `unlockall` / `bpxp` / `grantpremium` / `createclan` only for `AdminConfig.UserIds`.
+13. **Progression (K)** — Battle Pass claimable counts + CLAIM ALL; create/join clan; with API Services on, leave/rejoin and confirm clan roster persists.
 
 ## Phase notes
 
@@ -173,5 +174,5 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 ### Prestige / Clan / Battle Pass (post–Phase 7)
 
 - **Prestige:** Level 100+; resets progression currency/levels/base; keeps vehicles/weapons/gold; +Gold; cash mult via `EconomyConfig.PrestigeCashMultiplierPerLevel`.
-- **Clans:** Create/join/leave; `profile.ClanId` stamped onto captured territories for clan ownership checks.
-- **Battle Pass:** XP from gameplay; claim free/premium milestones (**K**); Premium via admin until product IDs set.
+- **Clans:** Create/join/leave (**K**); roster persisted in DataStore `WarEmpire_Clans_v1` (name, owner, members) when Studio API Services are on; session-only fallback otherwise. `profile.ClanId` stamped onto captured territories for clan ownership checks.
+- **Battle Pass:** Dense Free/Premium tracks (L1–50) from `BattlePassConfig`; XP from gameplay; **K** panel shows claimable counts + track preview; CLAIM ALL Free/Premium (server ClaimAll). Premium via admin `grantpremium` or shop `PremiumPass` DevProduct (Id `0` → ProcessReceipt grants when live). **Never** client-granted.

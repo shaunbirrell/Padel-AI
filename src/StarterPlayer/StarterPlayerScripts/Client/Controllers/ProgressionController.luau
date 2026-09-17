@@ -16,7 +16,9 @@ local menuOpen = false
 local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
 local bpLabel: TextLabel? = nil
+local bpClaimHint: TextLabel? = nil
 local clanLabel: TextLabel? = nil
+local trackList: ScrollingFrame? = nil
 local prestigeState: any = nil
 local bpState: any = nil
 local clanState: any = nil
@@ -25,6 +27,120 @@ local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = parent
+end
+
+local function formatReward(reward: any): string
+	if typeof(reward) ~= "table" then
+		return ""
+	end
+	local parts = {}
+	if typeof(reward.Cash) == "number" and reward.Cash > 0 then
+		table.insert(parts, string.format("$%d", reward.Cash))
+	end
+	if typeof(reward.Gold) == "number" and reward.Gold > 0 then
+		table.insert(parts, string.format("%dG", reward.Gold))
+	end
+	return table.concat(parts, " + ")
+end
+
+local function rebuildTrackPreview()
+	if not trackList or typeof(bpState) ~= "table" then
+		return
+	end
+	for _, child in ipairs(trackList:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+
+	local level = tonumber(bpState.Level) or 0
+	local freeTrack = bpState.FreeTrack or {}
+	local premTrack = bpState.PremiumTrack or {}
+	local claimedFree = bpState.ClaimedFree or {}
+	local claimedPrem = bpState.ClaimedPremium or {}
+	local premium = bpState.Premium == true
+
+	local tiers: { number } = {}
+	local seen: { [number]: boolean } = {}
+	for t in pairs(freeTrack) do
+		local n = tonumber(t)
+		if n and not seen[n] then
+			seen[n] = true
+			table.insert(tiers, n)
+		end
+	end
+	for t in pairs(premTrack) do
+		local n = tonumber(t)
+		if n and not seen[n] then
+			seen[n] = true
+			table.insert(tiers, n)
+		end
+	end
+	table.sort(tiers)
+
+	local rows = 0
+	local maxRows = 12
+	for _, tier in ipairs(tiers) do
+		if rows >= maxRows then
+			break
+		end
+		local freeR = freeTrack[tier] or freeTrack[tostring(tier)]
+		local premR = premTrack[tier] or premTrack[tostring(tier)]
+		local freeClaimed = claimedFree[tostring(tier)] == true
+		local premClaimed = claimedPrem[tostring(tier)] == true
+		local reached = tier <= level
+		local freeReady = reached and freeR ~= nil and not freeClaimed
+		local premReady = reached and premium and premR ~= nil and not premClaimed
+		local interesting = freeReady
+			or premReady
+			or (reached and ((freeR ~= nil and not freeClaimed) or (premR ~= nil and not premClaimed)))
+			or (not reached and tier <= level + 6)
+		local skip = false
+		if not interesting and rows > 0 then
+			skip = true
+		elseif not interesting and rows == 0 and tier > level + 3 then
+			skip = true
+		end
+		if not skip then
+			rows += 1
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, -6, 0, 28)
+			row.BackgroundColor3 = Constants.Colors.Background
+			row.BorderSizePixel = 0
+			row.LayoutOrder = tier
+			row.Parent = trackList
+			corner(row, 4)
+
+			local status = "locked"
+			if freeReady or premReady then
+				status = "READY"
+			elseif reached then
+				status = "claimed"
+				if (freeR and not freeClaimed) or (premR and not premClaimed and not premium) then
+					status = if premium then "partial" else "free done / need Prem"
+				end
+			end
+
+			local freeTxt = formatReward(freeR)
+			local premTxt = formatReward(premR)
+			local lab = Instance.new("TextLabel")
+			lab.BackgroundTransparency = 1
+			lab.Position = UDim2.fromOffset(6, 0)
+			lab.Size = UDim2.new(1, -12, 1, 0)
+			lab.Font = Enum.Font.Gotham
+			lab.TextSize = 11
+			lab.TextXAlignment = Enum.TextXAlignment.Left
+			lab.TextColor3 = if (freeReady or premReady) then Constants.Colors.Cash else Constants.Colors.Muted
+			lab.Text = string.format(
+				"L%d  Free:%s  Prem:%s  [%s]",
+				tier,
+				if freeTxt ~= "" then freeTxt else "-",
+				if premTxt ~= "" then premTxt else "-",
+				status
+			)
+			lab.Parent = row
+		end
+	end
 end
 
 local function refreshLabels()
@@ -37,27 +153,46 @@ local function refreshLabels()
 		)
 	end
 	if bpLabel and typeof(bpState) == "table" then
+		local claimFree = tonumber(bpState.ClaimableFree) or 0
+		local claimPrem = tonumber(bpState.ClaimablePremium) or 0
 		bpLabel.Text = string.format(
-			"BP L%d  XP %d/%d  %s",
+			"BP L%d  XP %d/%d  %s\nClaimable: %d free · %d premium",
 			tonumber(bpState.Level) or 0,
 			tonumber(bpState.XP) or 0,
 			tonumber(bpState.XPPerLevel) or 1000,
-			if bpState.Premium then "PREMIUM" else "Free"
+			if bpState.Premium then "PREMIUM" else "Free (admin grantpremium / shop PremiumPass)",
+			claimFree,
+			claimPrem
 		)
+	end
+	if bpClaimHint then
+		if typeof(bpState) == "table" then
+			local cf = tonumber(bpState.ClaimableFree) or 0
+			local cp = tonumber(bpState.ClaimablePremium) or 0
+			if cf + cp > 0 then
+				bpClaimHint.Text = string.format("Tap CLAIM ALL — %d rewards ready", cf + cp)
+				bpClaimHint.TextColor3 = Constants.Colors.Cash
+			else
+				bpClaimHint.Text = "No unclaimed rewards at current BP level"
+				bpClaimHint.TextColor3 = Constants.Colors.Muted
+			end
+		end
 	end
 	if clanLabel and typeof(clanState) == "table" then
 		if clanState.ClanId then
 			clanLabel.Text = string.format(
-				"Clan [%s] %s (%d)\nId: %s",
+				"Clan [%s] %s (%d)\nId: %s%s",
 				tostring(clanState.Tag or "?"),
 				tostring(clanState.Name or "?"),
 				tonumber(clanState.MemberCount) or 0,
-				tostring(clanState.ClanId)
+				tostring(clanState.ClanId),
+				if clanState.Persisted == false then "\n(session-only — enable API Services)" else ""
 			)
 		else
 			clanLabel.Text = "Not in a clan — create one below"
 		end
 	end
+	rebuildTrackPreview()
 end
 
 local function setOpen(open: boolean)
@@ -99,7 +234,7 @@ function ProgressionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(440, 440)
+	panel.Size = UDim2.fromOffset(480, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -144,13 +279,13 @@ function ProgressionController.Init()
 		lab.TextColor3 = Constants.Colors.Accent
 		lab.Text = text
 		lab.Parent = panel
-		y += 24
+		y += 22
 	end
-	local function body(): TextLabel
+	local function body(h: number?): TextLabel
 		local lab = Instance.new("TextLabel")
 		lab.BackgroundTransparency = 1
 		lab.Position = UDim2.fromOffset(16, y)
-		lab.Size = UDim2.new(1, -32, 0, 36)
+		lab.Size = UDim2.new(1, -32, 0, h or 40)
 		lab.Font = Enum.Font.Gotham
 		lab.TextSize = 12
 		lab.TextWrapped = true
@@ -159,60 +294,77 @@ function ProgressionController.Init()
 		lab.TextColor3 = Constants.Colors.Muted
 		lab.Text = "..."
 		lab.Parent = panel
-		y += 40
+		y += (h or 40) + 4
 		return lab
 	end
-	local function btn(label: string, cb: () -> ())
+	local function btn(label: string, w: number, cb: () -> ()): TextButton
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(16, y)
-		b.Size = UDim2.fromOffset(220, 32)
+		b.Size = UDim2.fromOffset(w, 30)
 		b.BackgroundColor3 = Constants.Colors.Accent
 		b.Font = Enum.Font.GothamBold
-		b.TextSize = 13
+		b.TextSize = 12
 		b.TextColor3 = Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
 		corner(b, 6)
 		b.Parent = panel
 		b.MouseButton1Click:Connect(cb)
-		y += 40
+		return b
 	end
 
 	section("PRESTIGE")
-	prestigeLabel = body()
-	btn("PRESTIGE NOW", function()
+	prestigeLabel = body(32)
+	btn("PRESTIGE NOW", 200, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
 	end)
+	y += 36
 
 	section("BATTLE PASS")
-	bpLabel = body()
-	btn("CLAIM FREE REWARDS", function()
-		if typeof(bpState) ~= "table" then
+	bpLabel = body(44)
+	bpClaimHint = body(18)
+	btn("CLAIM ALL FREE", 150, function()
+		-- level 0 = ClaimAll on server
+		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "free")
+	end)
+	local premBtn = btn("CLAIM ALL PREMIUM", 170, function()
+		if typeof(bpState) == "table" and not bpState.Premium then
 			return
 		end
-		local level = tonumber(bpState.Level) or 0
-		local claimed = bpState.ClaimedFree or {}
-		for i = 1, level do
-			if not claimed[tostring(i)] then
-				Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(i, "free")
-			end
-		end
+		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "premium")
 	end)
-	btn("CLAIM PREMIUM REWARDS", function()
-		if typeof(bpState) ~= "table" or not bpState.Premium then
-			return
-		end
-		local level = tonumber(bpState.Level) or 0
-		local claimed = bpState.ClaimedPremium or {}
-		for i = 1, level do
-			if not claimed[tostring(i)] then
-				Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(i, "premium")
-			end
-		end
-	end)
+	premBtn.Position = UDim2.fromOffset(176, y)
+	y += 36
+
+	local trackTitle = Instance.new("TextLabel")
+	trackTitle.BackgroundTransparency = 1
+	trackTitle.Position = UDim2.fromOffset(16, y)
+	trackTitle.Size = UDim2.new(1, -32, 0, 16)
+	trackTitle.Font = Enum.Font.GothamBold
+	trackTitle.TextSize = 11
+	trackTitle.TextXAlignment = Enum.TextXAlignment.Left
+	trackTitle.TextColor3 = Constants.Colors.Muted
+	trackTitle.Text = "Reward track (ready / upcoming)"
+	trackTitle.Parent = panel
+	y += 18
+
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Position = UDim2.fromOffset(12, y)
+	scroll.Size = UDim2.new(1, -24, 0, 110)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 4
+	scroll.CanvasSize = UDim2.fromOffset(0, 0)
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.Parent = panel
+	trackList = scroll
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 3)
+	layout.Parent = scroll
+	y += 118
 
 	section("CLAN")
-	clanLabel = body()
+	clanLabel = body(48)
 	local nameBox = Instance.new("TextBox")
 	nameBox.Position = UDim2.fromOffset(16, y)
 	nameBox.Size = UDim2.fromOffset(200, 28)
@@ -240,9 +392,10 @@ function ProgressionController.Init()
 	corner(tagBox, 6)
 	tagBox.Parent = panel
 	y += 36
-	btn("CREATE CLAN", function()
+	btn("CREATE CLAN", 200, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestCreateClan):FireServer(nameBox.Text, tagBox.Text)
 	end)
+	y += 36
 	local joinBox = Instance.new("TextBox")
 	joinBox.Position = UDim2.fromOffset(16, y)
 	joinBox.Size = UDim2.fromOffset(280, 28)
@@ -257,12 +410,13 @@ function ProgressionController.Init()
 	corner(joinBox, 6)
 	joinBox.Parent = panel
 	y += 36
-	btn("JOIN CLAN", function()
+	btn("JOIN CLAN", 140, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestJoinClan):FireServer(joinBox.Text)
 	end)
-	btn("LEAVE CLAN", function()
+	local leaveBtn = btn("LEAVE CLAN", 140, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestLeaveClan):FireServer()
 	end)
+	leaveBtn.Position = UDim2.fromOffset(166, y)
 
 	Remotes.GetEvent(Constants.RemoteNames.PrestigeStateUpdate).OnClientEvent:Connect(function(payload)
 		prestigeState = payload

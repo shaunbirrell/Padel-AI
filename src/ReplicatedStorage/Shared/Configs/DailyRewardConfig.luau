@@ -1,5 +1,5 @@
 --!strict
---[[ 7-day login streak; day 7 resets streak after claim ]]
+--[[ 7-day login streak; day 7 resets streak after claim. Field names match MissionService. ]]
 
 local DailyRewardConfig = {
 	Rewards = {

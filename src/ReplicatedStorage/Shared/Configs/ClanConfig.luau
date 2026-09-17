@@ -1,5 +1,6 @@
 --!strict
---[[ Clan scaffolding — session-authoritative roster; ClanId persisted on profile. ]]
+--[[ Clan roster — DataStore WarEmpire_Clans_v1 when API services on;
+	session-only fallback otherwise. profile.ClanId always mirrors membership. ]]
 
 local ClanConfig = {
 	MaxNameLength = 24,

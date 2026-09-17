@@ -1,7 +1,7 @@
 --!strict
 --[[
-	Minimal battle pass track — XP from gameplay, claim Free/Premium rewards.
-	Premium flag only set via Monetization ProcessReceipt / admin — never client.
+	Battle pass track — dense Free/Premium rewards from BattlePassConfig.
+	Premium flag only via Monetization ProcessReceipt (PremiumPass) / admin grantpremium — never client.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -50,6 +50,21 @@ local function ensureSeason(profile: any)
 	end
 end
 
+local function countClaimable(bp: any, track: { [number]: any }, claimedMap: any, requirePremium: boolean): number
+	if requirePremium and not bp.Premium then
+		return 0
+	end
+	local n = 0
+	local level = tonumber(bp.Level) or 0
+	for tier, _reward in pairs(track) do
+		local t = tonumber(tier)
+		if t and t >= 1 and t <= level and not claimedMap[tostring(t)] then
+			n += 1
+		end
+	end
+	return n
+end
+
 local function pushState(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -69,6 +84,9 @@ local function pushState(player: Player)
 		ClaimedPremium = bp.ClaimedPremium,
 		FreeTrack = BattlePassConfig.FreeTrack,
 		PremiumTrack = BattlePassConfig.PremiumTrack,
+		ClaimableFree = countClaimable(bp, BattlePassConfig.FreeTrack, bp.ClaimedFree, false),
+		ClaimablePremium = countClaimable(bp, BattlePassConfig.PremiumTrack, bp.ClaimedPremium, true),
+		PremiumProductId = BattlePassConfig.PremiumProductId,
 	})
 end
 
@@ -167,6 +185,54 @@ function BattlePassService.Claim(player: Player, level: number, track: string): 
 	return true, nil
 end
 
+
+function BattlePassService.ClaimAll(player: Player, track: string): (number, string?)
+	if track ~= "free" and track ~= "premium" then
+		return 0, "InvalidTrack"
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0, "NoProfile"
+	end
+	ensureSeason(profile)
+	local bp = profile.BattlePass
+	if track == "premium" and not bp.Premium then
+		return 0, "PremiumRequired"
+	end
+	local trackTable = if track == "free" then BattlePassConfig.FreeTrack else BattlePassConfig.PremiumTrack
+	local claimedMap = if track == "free" then bp.ClaimedFree else bp.ClaimedPremium
+	local claimed = 0
+	local tiers: { number } = {}
+	for tier in pairs(trackTable) do
+		local t = tonumber(tier)
+		if t then
+			table.insert(tiers, t)
+		end
+	end
+	table.sort(tiers)
+	for _, level in ipairs(tiers) do
+		if level >= 1 and level <= bp.Level then
+			local key = tostring(level)
+			if not claimedMap[key] then
+				local reward = trackTable[level]
+				if reward then
+					claimedMap[key] = true
+					grantReward(player, reward)
+					claimed += 1
+					if AnalyticsService and AnalyticsService.Log then
+						AnalyticsService.Log("BATTLEPASS_CLAIM", player.UserId, { level = level, track = track, batch = true })
+					end
+				end
+			end
+		end
+	end
+	if claimed > 0 then
+		DataService.MarkDirty(player)
+		pushState(player)
+	end
+	return claimed, nil
+end
+
 function BattlePassService.SetPremium(player: Player, premium: boolean)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -192,7 +258,24 @@ function BattlePassService.Init(deps: { [string]: any })
 
 	local claimRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimBattlePassReward) :: RemoteEvent
 	claimRemote.OnServerEvent:Connect(function(player: Player, level: any, track: any)
-		if not RateLimitService.Allow(player, "bp_claim", 4, 6) then
+		if not RateLimitService.Allow(player, "bp_claim", 4, 8) then
+			return
+		end
+		if typeof(track) ~= "string" then
+			return
+		end
+		-- level 0 / "all" = claim every reachable unclaimed reward on that track
+		if level == 0 or level == "all" then
+			local n, err = BattlePassService.ClaimAll(player, track)
+			if NotificationService then
+				if n > 0 then
+					NotificationService.Notify(player, string.format("Claimed %d %s battle pass rewards", n, track), "Reward")
+				elseif err then
+					NotificationService.Notify(player, "Cannot claim: " .. tostring(err), "Warn")
+				else
+					NotificationService.Notify(player, "No " .. track .. " rewards ready to claim", "Info")
+				end
+			end
 			return
 		end
 		local ok, err = BattlePassService.Claim(player, level, track)
