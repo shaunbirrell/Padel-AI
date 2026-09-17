@@ -13,6 +13,7 @@ local EconomyService = {}
 
 local DataService: any = nil
 local RemoteSetup: any = nil
+local MissionService: any = nil
 
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
@@ -25,6 +26,7 @@ end
 function EconomyService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	RemoteSetup = deps.RemoteSetup
+	MissionService = deps.MissionService
 end
 
 function EconomyService.Push(player: Player)
@@ -50,6 +52,10 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	profile.Stats.TotalCashEarned += granted
 	DataService.MarkDirty(player)
 	pushEconomy(player, profile)
+	-- Feed daily EarnCash missions (skip recursive mission reward noise is fine)
+	if MissionService and MissionService.TrackProgress and reason ~= "mission" and reason ~= "achievement" then
+		MissionService.TrackProgress(player, "EarnCash", granted)
+	end
 	return true
 end
 

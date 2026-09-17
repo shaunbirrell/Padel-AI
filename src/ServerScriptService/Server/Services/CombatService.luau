@@ -55,6 +55,8 @@ local RateLimitService: any = nil
 local AntiExploitService: any = nil
 local NotificationService: any = nil
 local RemoteSetup: any = nil
+local MissionService: any = nil
+local TerritoryService: any = nil
 
 local combatStates: { [number]: CombatState } = {}
 local npcRecords: { [string]: NPCRecord } = {}
@@ -145,8 +147,12 @@ local function getState(player: Player): CombatState?
 	return state
 end
 
-local function damageFor(def: WeaponDef): number
-	return def.Damage * (def.Pellets or 1)
+local function damageFor(def: WeaponDef, attacker: Player?): number
+	local base = def.Damage * (def.Pellets or 1)
+	if attacker and TerritoryService and TerritoryService.GetDamageMult then
+		base = base * TerritoryService.GetDamageMult(attacker)
+	end
+	return base
 end
 
 local function tagCreator(humanoid: Humanoid, attacker: Player)
@@ -238,6 +244,9 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player)
 	if profile then
 		profile.Stats.Kills += 1
 		DataService.MarkDirty(attacker)
+	end
+	if MissionService and MissionService.TrackProgress then
+		MissionService.TrackProgress(attacker, "KillPlayer", 1)
 	end
 	local vProfile = DataService.GetProfile(victim)
 	if vProfile then
@@ -343,6 +352,9 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord)
 	local cash = rec.Def.CashReward
 	local xp = rec.Def.XPReward
 	grantRewards(attacker, cash, xp, "npc_kill")
+	if MissionService and MissionService.TrackProgress then
+		MissionService.TrackProgress(attacker, "KillNPC", 1)
+	end
 	local profile = DataService.GetProfile(attacker)
 	if profile then
 		profile.Stats.Kills += 1
@@ -781,7 +793,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	pushState(player)
 
 	local range = def.Range + CombatConfig.HitPositionSlopStuds
-	local damage = damageFor(def)
+	local damage = damageFor(def, player)
 	local result = raycast(origin, direction, range, { character })
 
 	local hitSomething = false
@@ -897,6 +909,8 @@ function CombatService.Init(deps: { [string]: any })
 	AntiExploitService = deps.AntiExploitService
 	NotificationService = deps.NotificationService
 	RemoteSetup = deps.RemoteSetup
+	MissionService = deps.MissionService
+	TerritoryService = deps.TerritoryService
 
 	local equipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestEquipWeapon) :: RemoteEvent
 	equipRemote.OnServerEvent:Connect(function(player: Player, weaponId: any)
@@ -983,7 +997,7 @@ function CombatService.ApplyDamage(attacker: Player, target: Humanoid, weaponId:
 	if not def then
 		return
 	end
-	local damage = damageFor(def)
+	local damage = damageFor(def, attacker)
 	local model = target.Parent
 	if model and model:IsA("Model") then
 		local victim = Players:GetPlayerFromCharacter(model)

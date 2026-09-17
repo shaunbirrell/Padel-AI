@@ -26,6 +26,8 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local NotificationService: any = nil
 local RemoteSetup: any = nil
+local TerritoryService: any = nil
+local MissionService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
@@ -55,12 +57,15 @@ local function getDef(vehicleId: string): VehicleDef?
 	return VehicleConfig.Vehicles[vehicleId]
 end
 
-local function cooldownLeft(userId: number): number
+local function cooldownLeft(userId: number, player: Player?): number
 	local last = lastSpawnAt[userId]
 	if not last then
 		return 0
 	end
 	local cd = VehicleConfig.SpawnCooldownSeconds or 15
+	if player and TerritoryService and TerritoryService.GetVehicleCooldownMult then
+		cd = cd * math.max(0.1, TerritoryService.GetVehicleCooldownMult(player))
+	end
 	return math.max(0, cd - (now() - last))
 end
 
@@ -80,7 +85,7 @@ local function pushState(player: Player)
 	local payload: Types.VehicleStatePayload = {
 		Owned = profile.Vehicles,
 		ActiveVehicleId = activeId,
-		CooldownRemaining = cooldownLeft(player.UserId),
+		CooldownRemaining = cooldownLeft(player.UserId, player),
 	}
 	local remote = RemoteSetup.Get(Constants.RemoteNames.VehicleStateUpdate) :: RemoteEvent
 	remote:FireClient(player, payload)
@@ -339,7 +344,7 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if not okStruct then
 		return false, structErr
 	end
-	if cooldownLeft(player.UserId) > 0 then
+	if cooldownLeft(player.UserId, player) > 0 then
 		return false, "Cooldown"
 	end
 
@@ -350,6 +355,9 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 
 	if profile.Stats then
 		profile.Stats.VehiclesSpawned = (profile.Stats.VehiclesSpawned or 0) + 1
+	end
+	if MissionService and MissionService.TrackProgress then
+		MissionService.TrackProgress(player, "SpawnVehicle", 1)
 	end
 	DataService.MarkDirty(player)
 
@@ -374,6 +382,8 @@ function VehicleService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	NotificationService = deps.NotificationService
 	RemoteSetup = deps.RemoteSetup
+	TerritoryService = deps.TerritoryService
+	MissionService = deps.MissionService
 
 	ensureFolder()
 

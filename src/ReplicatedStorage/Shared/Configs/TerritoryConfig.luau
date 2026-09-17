@@ -1,5 +1,5 @@
 --!strict
---[[ 7 territories with control bonuses ]]
+--[[ 7 territories with control bonuses + balance stubs ]]
 
 export type TerritoryDef = {
 	Id: string,
@@ -14,6 +14,25 @@ export type TerritoryDef = {
 }
 
 local TerritoryConfig = {
+	-- Balancing stubs (hooks for later tuning / soft locks)
+	MaxPersonalTerritories = 3,
+	ProtectionPeriodSeconds = 45, -- after capture, progress against owner is slowed/blocked
+	CaptureTickSeconds = 0.5,
+	ProgressDecayPerSecond = 0.35, -- when empty / contested
+	ContestedProgressMult = 0, -- no progress while contested
+	ProtectedCaptureMult = 0.25, -- capturing protected enemy territory is slower
+	NPCOwnerId = -1, -- sentinel "NPC faction" controller
+	NeutralOwnerId = 0,
+
+	-- OwnerType strings used by TerritoryService
+	OwnerTypes = {
+		Neutral = "Neutral",
+		Player = "Player",
+		NPC = "NPC",
+		Clan = "Clan",
+		Contested = "Contested",
+	},
+
 	Territories = {
 		CentralPlaza = {
 			Id = "CentralPlaza",

@@ -22,6 +22,8 @@ local EconomyService: any = nil
 local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
+local TerritoryService: any = nil
+local MissionService: any = nil
 
 -- plotId -> userId
 local plotOwners: { [number]: number } = {}
@@ -102,7 +104,7 @@ function BaseService.GetOwnerUserId(plotId: number): number?
 	return plotOwners[plotId]
 end
 
-function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile): number
+function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile, player: Player?): number
 	local total = EconomyConfig.PassiveIncome.BaseCashPerTick
 	local rates = EconomyConfig.PassiveIncome.PerLevelRates
 	for structureId, level in pairs(profile.BaseUpgrades) do
@@ -112,6 +114,12 @@ function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile): 
 		end
 	end
 	local mult = 1 + (profile.Prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
+	-- Territory ownership bonuses (Phase 5)
+	if player and TerritoryService and TerritoryService.GetPassiveCashBonus then
+		local bonusMult, flat = TerritoryService.GetPassiveCashBonus(player)
+		mult += bonusMult
+		total += flat
+	end
 	return math.floor(total * mult)
 end
 
@@ -124,7 +132,7 @@ function BaseService.PushState(player: Player)
 	local payload: Types.BaseStatePayload = {
 		PlotId = profile.BasePlotId,
 		Upgrades = profile.BaseUpgrades,
-		PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile),
+		PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile, player),
 	}
 	remote:FireClient(player, payload)
 end
@@ -202,6 +210,10 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		end
 	end
 
+	if MissionService and MissionService.TrackProgress then
+		MissionService.TrackProgress(player, "PurchaseUpgrade", 1)
+	end
+
 	BaseService.PushState(player)
 	BaseService.UpdateVisuals(player, structureId, targetLevel)
 
@@ -276,12 +288,14 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 		Base = {
 			PlotId = profile.BasePlotId,
 			Upgrades = profile.BaseUpgrades,
-			PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile),
+			PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile, player),
 		},
 		TutorialComplete = profile.TutorialComplete,
 		Vehicles = profile.Vehicles,
 		Weapons = profile.Weapons,
 		EquippedWeapon = profile.EquippedWeapon,
+		DailyLogin = profile.DailyLogin,
+		TerritoriesOwned = profile.Territories,
 	}
 end
 
@@ -295,6 +309,8 @@ function BaseService.Init(deps: { [string]: any })
 	AnalyticsService = deps.AnalyticsService
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
+	TerritoryService = deps.TerritoryService
+	MissionService = deps.MissionService
 
 	getUpgradeChangedEvent()
 
@@ -353,7 +369,7 @@ function BaseService.Init(deps: { [string]: any })
 			for _, player in ipairs(Players:GetPlayers()) do
 				local profile = DataService.GetProfile(player)
 				if profile then
-					local amount = BaseService.ComputePassiveIncomePerTick(profile)
+					local amount = BaseService.ComputePassiveIncomePerTick(profile, player)
 					if amount > 0 then
 						EconomyService.AddCash(player, amount, "passive")
 					end

@@ -67,3 +67,21 @@ Edit `EconomyConfig`, `BaseConfig`, `LevelConfig` — keep combat/vehicle number
 | NPC Heavy Infantry | 90 | 28 |
 
 Player max health: **100**. Spawn invuln: **3s**. Tune in `CombatConfig` / `WeaponConfig`.
+
+## Territory (Phase 5)
+
+| Territory | Bonus |
+|-----------|-------|
+| Central Plaza | +10% passive cash |
+| North Ridge | +5% XP |
+| South Docks | +15% mission cash |
+| East Armory | +10% damage |
+| West Depot | −20% vehicle spawn cooldown |
+| Oil Fields | +$50 / passive tick |
+| Radar Hill | Minimap reveal (stub) |
+
+Capture times 20–40s. Max personal territories: **3**. Protection: **45s**.
+
+## Daily missions (Phase 6)
+
+See `MissionConfig.DailyMissions` — Kill NPC ×10, Capture ×1, Upgrade ×2, Earn $8k, Spawn vehicle, Kill players ×3 (L5+).

@@ -48,6 +48,13 @@ export type DailyLogin = {
 	LastClaimUnix: number,
 }
 
+export type DailyMissionProgress = {
+	DayKey: number, -- YYYYMMDD UTC
+	Progress: { [string]: number },
+	Claimed: { [string]: boolean },
+	ActiveTimed: { [string]: number }, -- missionId -> endsAt unix
+}
+
 export type BattlePassProgress = {
 	SeasonId: string,
 	XP: number,
@@ -74,6 +81,7 @@ export type PlayerProfile = {
 	TutorialStep: number,
 	TutorialComplete: boolean,
 	DailyLogin: DailyLogin,
+	DailyMissions: DailyMissionProgress,
 	Settings: PlayerSettings,
 	Stats: PlayerStats,
 	Achievements: { [string]: boolean },
@@ -113,6 +121,8 @@ export type PlayerStatePayload = {
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },
 	EquippedWeapon: string?,
+	DailyLogin: DailyLogin?,
+	TerritoriesOwned: { [string]: boolean }?,
 }
 
 export type CombatStatePayload = {
@@ -137,6 +147,54 @@ export type VehicleStatePayload = {
 	Owned: { [string]: boolean },
 	ActiveVehicleId: string?,
 	CooldownRemaining: number,
+}
+
+export type TerritoryEntryPayload = {
+	Id: string,
+	DisplayName: string,
+	OwnerType: string,
+	OwnerUserId: number,
+	ClanId: string?,
+	Progress: number, -- 0..1 capture progress toward CapturingUserId
+	CapturingUserId: number,
+	ProtectedUntil: number, -- unix
+	BonusType: string,
+	BonusValue: number,
+	Contested: boolean,
+}
+
+export type TerritoryStatePayload = {
+	Territories: { TerritoryEntryPayload },
+	LocalCapture: {
+		TerritoryId: string?,
+		Progress: number,
+		Capturing: boolean,
+	}?,
+}
+
+export type MissionEntryPayload = {
+	Id: string,
+	DisplayName: string,
+	Description: string,
+	ObjectiveType: string,
+	Progress: number,
+	Target: number,
+	Claimed: boolean,
+	Complete: boolean,
+	RewardCash: number,
+	RewardXP: number,
+	RewardGold: number,
+}
+
+export type MissionStatePayload = {
+	DayKey: number,
+	Daily: { MissionEntryPayload },
+	DailyLogin: {
+		Streak: number,
+		CanClaim: boolean,
+		NextDay: number,
+		AlreadyClaimedToday: boolean,
+	},
 }
 
 export type FireRequestPayload = {

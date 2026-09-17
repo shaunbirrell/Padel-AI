@@ -18,6 +18,7 @@ local Workspace = game:GetService("Workspace")
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
 local TAG_TERRITORY = "WE_Territory"
+local TAG_CAPTURE = "WE_CaptureZone"
 local TAG_VEHICLE = "WE_VehicleSpawn"
 local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
@@ -49,13 +50,13 @@ local PLOT_POSITIONS = {
 }
 
 local TERRITORIES = {
-	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(200, 200, 80) },
-	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -350), Color = Color3.fromRGB(80, 160, 220) },
-	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 350), Color = Color3.fromRGB(70, 140, 180) },
-	{ Id = "EastArmory", Pos = Vector3.new(350, 1, 0), Color = Color3.fromRGB(200, 80, 80) },
-	{ Id = "WestDepot", Pos = Vector3.new(-350, 1, 0), Color = Color3.fromRGB(100, 180, 100) },
-	{ Id = "OilFields", Pos = Vector3.new(250, 1, 250), Color = Color3.fromRGB(180, 140, 60) },
-	{ Id = "RadarHill", Pos = Vector3.new(-250, 1, -250), Color = Color3.fromRGB(160, 100, 200) },
+	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(200, 200, 80), Radius = 40 },
+	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -350), Color = Color3.fromRGB(80, 160, 220), Radius = 35 },
+	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 350), Color = Color3.fromRGB(70, 140, 180), Radius = 35 },
+	{ Id = "EastArmory", Pos = Vector3.new(350, 1, 0), Color = Color3.fromRGB(200, 80, 80), Radius = 30 },
+	{ Id = "WestDepot", Pos = Vector3.new(-350, 1, 0), Color = Color3.fromRGB(100, 180, 100), Radius = 30 },
+	{ Id = "OilFields", Pos = Vector3.new(250, 1, 250), Color = Color3.fromRGB(180, 140, 60), Radius = 40 },
+	{ Id = "RadarHill", Pos = Vector3.new(-250, 1, -250), Color = Color3.fromRGB(160, 100, 200), Radius = 35 },
 }
 
 local function ensureFolder(name, parent)
@@ -170,12 +171,13 @@ for plotId, pos in ipairs(PLOT_POSITIONS) do
 	end
 end
 
--- Territories
+-- Territories + capture zones
 local territories = ensureFolder("Territories", root)
 for _, def in ipairs(TERRITORIES) do
+	local diameter = (def.Radius or 30) * 2
 	local marker = part({
 		Name = def.Id,
-		Size = Vector3.new(40, 2, 40),
+		Size = Vector3.new(diameter, 2, diameter),
 		Position = def.Pos,
 		Color = def.Color,
 		Transparency = 0.35,
@@ -183,21 +185,41 @@ for _, def in ipairs(TERRITORIES) do
 		Parent = territories,
 	})
 	marker:SetAttribute("TerritoryId", def.Id)
+	marker:SetAttribute("Radius", def.Radius or 30)
+	marker:SetAttribute("OwnerType", "Neutral")
+	marker:SetAttribute("OwnerUserId", 0)
+	marker:SetAttribute("CaptureProgress", 0)
 	CollectionService:AddTag(marker, TAG_TERRITORY)
+	-- Dedicated capture zone (same pad; TerritoryService prefers WE_CaptureZone)
+	CollectionService:AddTag(marker, TAG_CAPTURE)
 
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(140, 30)
+	bb.Size = UDim2.fromOffset(160, 36)
 	bb.StudsOffset = Vector3.new(0, 6, 0)
 	bb.AlwaysOnTop = true
 	bb.Parent = marker
 	local t = Instance.new("TextLabel")
+	t.Name = "TerritoryLabel"
 	t.Size = UDim2.fromScale(1, 1)
 	t.BackgroundTransparency = 1
-	t.Text = def.Id
+	t.Text = def.Id .. " [NEUTRAL]"
 	t.TextColor3 = Color3.new(1, 1, 1)
 	t.TextScaled = true
 	t.Font = Enum.Font.GothamBold
 	t.Parent = bb
+
+	-- Soft cylinder ring hint (non-colliding)
+	local ring = part({
+		Name = def.Id .. "_Ring",
+		Size = Vector3.new(diameter + 4, 0.4, diameter + 4),
+		Position = def.Pos + Vector3.new(0, 0.2, 0),
+		Color = def.Color,
+		Transparency = 0.75,
+		CanCollide = false,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = territories,
+	})
+	ring:SetAttribute("TerritoryId", def.Id)
 end
 
 -- Spawns
@@ -256,4 +278,4 @@ for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 end
 
-print("[WAR EMPIRE] StudioSetup complete: 6 bases, 7 territories, spawn pads created under Workspace.WarEmpireSetup")
+print("[WAR EMPIRE] StudioSetup complete: 6 bases, 7 territories+capture zones, spawn pads under Workspace.WarEmpireSetup")

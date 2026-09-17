@@ -26,6 +26,15 @@ local function emptyUpgrades(): { [string]: number }
 	return upgrades
 end
 
+local function emptyDailyMissions(): Types.DailyMissionProgress
+	return {
+		DayKey = 0,
+		Progress = {},
+		Claimed = {},
+		ActiveTimed = {},
+	}
+end
+
 function ProfileSchema.CreateDefault(): PlayerProfile
 	local now = os.time()
 	return {
@@ -53,6 +62,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 			Streak = 0,
 			LastClaimUnix = 0,
 		},
+		DailyMissions = emptyDailyMissions(),
 		Settings = {
 			MusicVolume = 0.7,
 			SFXVolume = 0.8,
@@ -129,7 +139,34 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		version = 1
 	end
 
-	-- Future: if version < 2 then ... end
+	-- v1 → v2: DailyMissions progress table
+	if version < 2 then
+		if typeof((profile :: any).DailyMissions) ~= "table" then
+			(profile :: any).DailyMissions = emptyDailyMissions()
+		else
+			local dm = (profile :: any).DailyMissions
+			if typeof(dm.Progress) ~= "table" then
+				dm.Progress = {}
+			end
+			if typeof(dm.Claimed) ~= "table" then
+				dm.Claimed = {}
+			end
+			if typeof(dm.ActiveTimed) ~= "table" then
+				dm.ActiveTimed = {}
+			end
+			if typeof(dm.DayKey) ~= "number" then
+				dm.DayKey = 0
+			end
+		end
+		if typeof(profile.Achievements) ~= "table" then
+			profile.Achievements = {}
+		end
+		if typeof(profile.Territories) ~= "table" then
+			profile.Territories = {}
+		end
+		profile.DataVersion = 2
+		version = 2
+	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
 	return profile

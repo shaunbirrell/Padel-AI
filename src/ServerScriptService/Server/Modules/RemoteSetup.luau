@@ -19,6 +19,8 @@ local EVENTS = {
 	Constants.RemoteNames.CombatStateUpdate,
 	Constants.RemoteNames.CombatHitFeedback,
 	Constants.RemoteNames.VehicleStateUpdate,
+	Constants.RemoteNames.TerritoryStateUpdate,
+	Constants.RemoteNames.MissionStateUpdate,
 	-- Client requests
 	Constants.RemoteNames.RequestPurchaseUpgrade,
 	Constants.RemoteNames.RequestClaimDailyReward,
@@ -30,8 +32,10 @@ local EVENTS = {
 	Constants.RemoteNames.RequestFire,
 	Constants.RemoteNames.RequestReload,
 	Constants.RemoteNames.RequestStartMission,
+	Constants.RemoteNames.RequestClaimMission,
 	Constants.RemoteNames.RequestCaptureTerritory,
 	Constants.RemoteNames.RequestAdminCommand,
+	Constants.RemoteNames.RequestPurchaseDevProduct,
 }
 
 local FUNCTIONS = {

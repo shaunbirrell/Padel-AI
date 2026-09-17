@@ -13,6 +13,8 @@ local DataService: any = nil
 local EconomyService: any = nil
 local AnalyticsService: any = nil
 local RemoteSetup: any = nil
+local TerritoryService: any = nil
+local MissionService: any = nil
 
 local function xpToNext(level: number, xp: number): number
 	local need = LevelConfig.GetXPRequiredForLevel(level)
@@ -36,6 +38,8 @@ function XPService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	AnalyticsService = deps.AnalyticsService
 	RemoteSetup = deps.RemoteSetup
+	TerritoryService = deps.TerritoryService
+	MissionService = deps.MissionService
 end
 
 function XPService.Push(player: Player)
@@ -57,6 +61,10 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 
 	if profile.Level >= LevelConfig.MaxLevel then
 		return false
+	end
+
+	if TerritoryService and TerritoryService.GetXPMult and reason ~= "achievement" then
+		amount = math.max(1, math.floor(amount * TerritoryService.GetXPMult(player)))
 	end
 
 	profile.XP += amount

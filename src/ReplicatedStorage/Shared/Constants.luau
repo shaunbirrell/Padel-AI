@@ -14,6 +14,7 @@ Constants.Tags = {
 	BasePlot = "WE_BasePlot",
 	UpgradeSlot = "WE_UpgradeSlot",
 	Territory = "WE_Territory",
+	CaptureZone = "WE_CaptureZone",
 	VehicleSpawn = "WE_VehicleSpawn",
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
@@ -33,6 +34,8 @@ Constants.RemoteNames = {
 	CombatStateUpdate = "CombatStateUpdate",
 	CombatHitFeedback = "CombatHitFeedback",
 	VehicleStateUpdate = "VehicleStateUpdate",
+	TerritoryStateUpdate = "TerritoryStateUpdate",
+	MissionStateUpdate = "MissionStateUpdate",
 	-- Client → Server (request/action only — NEVER GiveCash/GiveXP/GiveWeapon)
 	RequestPurchaseUpgrade = "RequestPurchaseUpgrade",
 	RequestClaimDailyReward = "RequestClaimDailyReward",
@@ -44,14 +47,16 @@ Constants.RemoteNames = {
 	RequestFire = "RequestFire",
 	RequestReload = "RequestReload",
 	RequestStartMission = "RequestStartMission",
+	RequestClaimMission = "RequestClaimMission",
 	RequestCaptureTerritory = "RequestCaptureTerritory",
 	RequestAdminCommand = "RequestAdminCommand",
+	RequestPurchaseDevProduct = "RequestPurchaseDevProduct",
 	GetPlayerState = "GetPlayerState",
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 1
+Constants.CURRENT_DATA_VERSION = 2
 
 Constants.AutosaveIntervalSeconds = 60
 Constants.DataStoreRetries = 3

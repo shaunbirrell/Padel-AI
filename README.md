@@ -3,7 +3,7 @@
 **BUILD. CONQUER. DOMINATE.**
 
 Commercial Roblox military tycoon / territory / vehicle collection game.  
-Rojo-ready Luau codebase — Phase 1–4 implemented (Foundation, Tycoon, Combat, Vehicles); later systems scaffolded.
+Rojo-ready Luau codebase — Phase 1–6 implemented (Foundation, Tycoon, Combat, Vehicles, Territory, Progression); Phase 7 monetization skeleton improved.
 
 ## Requirements
 
@@ -76,3 +76,25 @@ Join → profile load → plot assigned → HUD shows Cash/Gold/Level/XP → buy
 - Client: `CombatController` health bar, ammo/weapon strip, mobile fire button, hit flash.
 - Analytics: `FIRST_PVP`, `PLAYER_KILL`, `NPC_KILL`, `WEAPON_EQUIPPED`, `WEAPON_PURCHASED`.
 - Tunables: `CombatConfig.luau` + `WeaponConfig.luau`.
+
+
+## Phase 5 — Territory notes
+
+- `TerritoryService`: 7 territories from `TerritoryConfig`; states Neutral/Player/NPC/Clan/Contested.
+- Stand-in-zone capture (server tick); markers tagged `WE_Territory` + `WE_CaptureZone` via StudioSetup.
+- Ownership bonuses applied to passive income, XP, damage, vehicle cooldown, mission cash.
+- Balancing stubs: `MaxPersonalTerritories`, `ProtectionPeriodSeconds`.
+- Client: territory list + capture progress bar (`TerritoryController`).
+- Analytics: `FIRST_OUTPOST`, `TERRITORY_CAPTURED`, `TERRITORY_LOST`.
+
+## Phase 6 — Progression notes
+
+- Daily objective missions (`MissionConfig`) with server progress + claim.
+- 7-day daily login via `MissionService` + Missions UI (**M** / MISSIONS button).
+- Achievements: FirstUpgrade, Cash10k, Level10.
+- Combat / territory / upgrades / cash / vehicles feed mission ObjectiveTypes.
+
+## Phase 7 — Monetization skeleton
+
+- `ProcessReceipt` idempotent + profile `ProcessedReceipts`.
+- Shop UI (**P** / SHOP) lists DevProducts + GamePasses (placeholder IDs = 0).
