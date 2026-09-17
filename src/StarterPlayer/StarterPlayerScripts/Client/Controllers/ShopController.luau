@@ -223,6 +223,20 @@ function ShopController.Init()
 		)
 	end
 
+	
+
+	-- Policy-pending loot crates (display only — no purchase/grant path)
+	do
+		local ok, LootBoxConfig = pcall(function()
+			return require(Shared.Configs.LootBoxConfig)
+		end)
+		if ok and LootBoxConfig and LootBoxConfig.PolicyPending then
+			addRow("Supply Crate (locked)", "Random loot policy-pending — not for sale", function()
+				warn("[Shop] Loot boxes disabled (policy-pending)")
+			end)
+		end
+	end
+
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
 			return

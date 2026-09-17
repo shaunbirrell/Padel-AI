@@ -211,6 +211,22 @@ function ProgressionController.Init()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.Parent = player:WaitForChild("PlayerGui")
+
+	local scale = Instance.new("UIScale")
+	scale.Name = "MobileScale"
+	scale.Parent = screen
+	local function updateScale()
+		local cam = workspace.CurrentCamera
+		if not cam then
+			return
+		end
+		local size = cam.ViewportSize
+		scale.Scale = math.clamp(math.min(size.X, size.Y) / 900, 0.65, 1.1)
+	end
+	updateScale()
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+	end
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")

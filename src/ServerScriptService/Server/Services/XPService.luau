@@ -17,6 +17,7 @@ local TerritoryService: any = nil
 local MissionService: any = nil
 local MonetizationService: any = nil
 local BattlePassService: any = nil
+local SeasonService: any = nil
 
 local function xpToNext(level: number, xp: number): number
 	local need = LevelConfig.GetXPRequiredForLevel(level)
@@ -44,6 +45,7 @@ function XPService.Init(deps: { [string]: any })
 	MissionService = deps.MissionService
 	MonetizationService = deps.MonetizationService
 	BattlePassService = deps.BattlePassService
+	SeasonService = deps.SeasonService
 end
 
 function XPService.Push(player: Player)
@@ -58,6 +60,9 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		return false
 	end
 	amount = math.floor(amount)
+	if SeasonService and SeasonService.GetXPMult and reason ~= "admin" and reason ~= "battlepass" and reason ~= "daily" then
+		amount = math.max(1, math.floor(amount * SeasonService.GetXPMult()))
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return false

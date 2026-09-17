@@ -120,6 +120,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | **M** / MISSIONS | Daily missions + login claim |
 | **P** / SHOP | DevProducts + GamePasses |
 | **K** / PROGRESS | Prestige + Battle Pass + Clan |
+| **A** / ARMY | Recruit / dismiss soldiers |
 | LMB / FIRE | Fire equipped weapon |
 | **R** | Reload |
 
@@ -175,4 +176,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 
 - **Prestige:** Level 100+; resets progression currency/levels/base; keeps vehicles/weapons/gold; +Gold; cash mult via `EconomyConfig.PrestigeCashMultiplierPerLevel`.
 - **Clans:** Create/join/leave (**K**); roster persisted in DataStore `WarEmpire_Clans_v1` (name, owner, members) when Studio API Services are on; session-only fallback otherwise. `profile.ClanId` stamped onto captured territories for clan ownership checks.
+- **Army:** Recruit/dismiss soldiers (**A**); barracks upgrades raise cap; server cash spend only.
+- **Seasons:** Active season XP/Cash multipliers via SeasonService (server).
+- **Clan wars:** Declare war, score on territory captures, settle rewards.
 - **Battle Pass:** Dense Free/Premium tracks (L1–50) from `BattlePassConfig`; XP from gameplay; **K** panel shows claimable counts + track preview; CLAIM ALL Free/Premium (server ClaimAll). Premium via admin `grantpremium` or shop `PremiumPass` DevProduct (Id `0` → ProcessReceipt grants when live). **Never** client-granted.

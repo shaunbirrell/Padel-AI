@@ -11,6 +11,8 @@ local Types = require(Shared.Types)
 
 local EconomyService = {}
 
+local SeasonService: any = nil
+
 local DataService: any = nil
 local RemoteSetup: any = nil
 local MissionService: any = nil
@@ -26,6 +28,7 @@ local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 end
 
 function EconomyService.Init(deps: { [string]: any })
+	SeasonService = deps.SeasonService
 	DataService = deps.DataService
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
@@ -56,6 +59,9 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	local exempt = MonetizationConfig.CashMultExemptReasons
 	if MonetizationService and MonetizationService.GetCashMultiplier and not (exempt and exempt[reasonKey]) then
 		mult *= MonetizationService.GetCashMultiplier(player)
+	end
+	if SeasonService and SeasonService.GetCashMult and not (exempt and exempt[reasonKey]) then
+		mult *= SeasonService.GetCashMult()
 	end
 	local granted = math.floor(amount * mult)
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)

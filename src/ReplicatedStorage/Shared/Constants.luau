@@ -64,6 +64,13 @@ Constants.RemoteNames = {
 	ClanStateUpdate = "ClanStateUpdate",
 	RequestClaimBattlePassReward = "RequestClaimBattlePassReward",
 	BattlePassStateUpdate = "BattlePassStateUpdate",
+	-- Soldiers / Season / Clan War
+	RequestRecruitSoldiers = "RequestRecruitSoldiers",
+	RequestDismissSoldiers = "RequestDismissSoldiers",
+	SoldierStateUpdate = "SoldierStateUpdate",
+	SeasonStateUpdate = "SeasonStateUpdate",
+	RequestDeclareClanWar = "RequestDeclareClanWar",
+	ClanWarStateUpdate = "ClanWarStateUpdate",
 	GetPlayerState = "GetPlayerState",
 }
 

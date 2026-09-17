@@ -33,6 +33,9 @@ local ClanService = require(Services.ClanService)
 local MonetizationService = require(Services.MonetizationService)
 local TutorialService = require(Services.TutorialService)
 local BattlePassService = require(Services.BattlePassService)
+local SoldierService = require(Services.SoldierService)
+local SeasonService = require(Services.SeasonService)
+local ClanWarService = require(Services.ClanWarService)
 
 print("[WAR EMPIRE] Server Bootstrap starting...")
 
@@ -58,6 +61,9 @@ local deps: { [string]: any } = {
 	MonetizationService = MonetizationService,
 	TutorialService = TutorialService,
 	BattlePassService = BattlePassService,
+	SoldierService = SoldierService,
+	SeasonService = SeasonService,
+	ClanWarService = ClanWarService,
 }
 
 RateLimitService.Init()
@@ -84,6 +90,9 @@ MissionService.Init(deps)
 PrestigeService.Init(deps)
 ClanService.Init(deps)
 BattlePassService.Init(deps)
+SoldierService.Init(deps)
+SeasonService.Init(deps)
+ClanWarService.Init(deps)
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)

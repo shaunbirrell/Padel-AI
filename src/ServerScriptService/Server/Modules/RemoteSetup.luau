@@ -47,6 +47,12 @@ local EVENTS = {
 	Constants.RemoteNames.ClanStateUpdate,
 	Constants.RemoteNames.RequestClaimBattlePassReward,
 	Constants.RemoteNames.BattlePassStateUpdate,
+	Constants.RemoteNames.RequestRecruitSoldiers,
+	Constants.RemoteNames.RequestDismissSoldiers,
+	Constants.RemoteNames.SoldierStateUpdate,
+	Constants.RemoteNames.SeasonStateUpdate,
+	Constants.RemoteNames.RequestDeclareClanWar,
+	Constants.RemoteNames.ClanWarStateUpdate,
 }
 
 local FUNCTIONS = {

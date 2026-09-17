@@ -32,6 +32,8 @@ type TerritoryRuntime = {
 
 local TerritoryService = {}
 
+local ClanWarService: any = nil
+
 local DataService: any = nil
 local EconomyService: any = nil
 local XPService: any = nil
@@ -327,6 +329,9 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	rt.OwnerType = ownerTypes().Player
 	rt.OwnerUserId = player.UserId
 	rt.ClanId = profile.ClanId
+	if ClanWarService and ClanWarService.OnTerritoryCaptured then
+		ClanWarService.OnTerritoryCaptured(player)
+	end
 	rt.Progress = 0
 	rt.CapturingUserId = 0
 	rt.Contested = false
@@ -502,6 +507,7 @@ local function seedNpcOwners()
 end
 
 function TerritoryService.Init(deps: { [string]: any })
+	ClanWarService = deps.ClanWarService
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
 	XPService = deps.XPService
