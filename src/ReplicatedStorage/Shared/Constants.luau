@@ -20,6 +20,7 @@ Constants.Tags = {
 	EventSpawn = "WE_EventSpawn",
 	NPC = "WE_NPC",
 	Vehicle = "WE_Vehicle",
+	TutorialMarker = "WE_TutorialMarker",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -51,6 +52,9 @@ Constants.RemoteNames = {
 	RequestCaptureTerritory = "RequestCaptureTerritory",
 	RequestAdminCommand = "RequestAdminCommand",
 	RequestPurchaseDevProduct = "RequestPurchaseDevProduct",
+	RequestPurchaseGamePass = "RequestPurchaseGamePass",
+	RequestSkipTutorial = "RequestSkipTutorial",
+	TutorialStateUpdate = "TutorialStateUpdate",
 	GetPlayerState = "GetPlayerState",
 }
 

@@ -3,7 +3,7 @@
 **BUILD. CONQUER. DOMINATE.**
 
 Commercial Roblox military tycoon / territory / vehicle collection game.  
-Rojo-ready Luau codebase — Phase 1–6 implemented (Foundation, Tycoon, Combat, Vehicles, Territory, Progression); Phase 7 monetization skeleton improved.
+Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + polish).
 
 ## Requirements
 
@@ -17,7 +17,18 @@ Rojo-ready Luau codebase — Phase 1–6 implemented (Foundation, Tycoon, Combat
 2. From this folder: `rojo serve` (or `aftman install` then `rojo serve`).
 3. In Studio, connect the Rojo plugin and sync.
 4. Paste contents of `tools/StudioSetup.luau` into the **Command Bar** and run once.
-5. Press Play. You should spawn with **$5,000**, see the HUD, open **Base Upgrades** (or press **B**), buy structures, and earn passive income.
+5. Press Play. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP), open **Base Upgrades** (**B**), buy structures, and earn passive income.
+
+## Merging open PRs
+
+Two feature branches may be open against `main`:
+
+| PR | Branch | Contents |
+|----|--------|----------|
+| #1 | `phase-3-combat` | Phase 3 combat + Phase 4 vehicles |
+| #2 / polish | `phase-5-territory` → `phase-7-polish` | Phase 5–6 + Phase 7 monetization + MVP polish |
+
+**Recommended merge order:** merge PR #1 (`phase-3-combat`) into `main` first, then merge the Phase 5–7 PR (rebase/update if needed). Do **not** merge only one and ship — combat/vehicles and territory/progression/monetization are complementary. If both target `main`, resolve conflicts preferring the newer polish branch’s shared files (`Bootstrap`, `Constants`, `Remotes`, `README`).
 
 ## Admin UserIds
 
@@ -29,11 +40,46 @@ UserIds = {
 },
 ```
 
-Admin remotes: `RequestAdminCommand` with commands `givecash`, `givegold`, `givexp`, `setlevel`, `unlockall`, `resetbase`.
+Admin remotes: `RequestAdminCommand` with commands:
+
+| Command | Args | Effect |
+|---------|------|--------|
+| `givecash` | number | Add Cash |
+| `givegold` | number | Add Gold |
+| `givexp` | number | Add XP |
+| `setlevel` | number | Set level |
+| `unlockall` | — | Unlock all vehicles + weapons |
+| `resetbase` | — | Zero all structure levels |
+| `resettutorial` | — | Restart interactive tutorial |
+| `grantpass` | PassKey | Studio mock GamePass own (`VIP`, `DoubleCash`, `DoubleXP`) |
+
+## DevConfig (Studio-only)
+
+`src/ReplicatedStorage/Shared/Configs/DevConfig.luau` — applied only when `RunService:IsStudio()`:
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `SkipTutorial` | `false` | If `true`, mark tutorial complete on load |
+| `StudioBoostCash` | `false` | Boost starting Cash to `StudioBoostCashAmount` |
+| `FastPassiveIncome` | `false` | Passive tick every 1s |
+| `UnlockAllVehicles` / `UnlockAllWeapons` | `false` | Grant all on load |
+| `VerboseLogging` | `true` | Extra Bootstrap prints |
+| `MockOwnedGamePasses` | `{}` | Treat listed GamePass keys as owned when Ids are still `0` |
 
 ## Monetization product IDs
 
 All IDs are **0** placeholders in `MonetizationConfig.luau`. Create Developer Products / Game Passes in Creator Dashboard and replace IDs before shipping.
+
+**Security:** Currency/XP are **never** granted from client purchase confirmation. DevProducts grant only in `MarketplaceService.ProcessReceipt` (idempotent via `ProcessedReceipts`). GamePass benefits apply only after `UserOwnsGamePassAsync` (cached on join); `PromptGamePassPurchaseFinished` refreshes the cache only.
+
+| GamePass key | Effect |
+|--------------|--------|
+| `VIP` | +25% Cash earnings (`CashBonusMult`) |
+| `DoubleCash` | 2× Cash earnings (`CashMult`) |
+| `DoubleXP` | 2× XP (`XPMult`) |
+| `ExtraPlotCosmetic` | Cosmetic placeholder |
+
+Shop UI: **P** / SHOP — prompts `PromptProductPurchase` / `PromptGamePassPurchase`.
 
 ## Security notes
 
@@ -48,7 +94,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `src/ReplicatedStorage/Shared/Configs/` — all tunable configs
 - `src/ServerScriptService/Server/` — Bootstrap + Services + Modules
 - `src/StarterPlayer/.../Client/` — Bootstrap + Controllers (programmatic UI)
-- `tools/StudioSetup.luau` — map / bases / territories placeholders
+- `tools/StudioSetup.luau` — map / bases / territories / NPC / vehicle / tutorial markers
 
 ## Docs
 
@@ -56,45 +102,59 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `BALANCE.md` — economy / XP tuning notes
 - `MASTER_BUILD_SPEC.md` — product + technical spec
 
-## Play loop (MVP)
+## Keybinds (MVP)
 
-Join → profile load → plot assigned → HUD shows Cash/Gold/Level/XP → buy Command Center / Barracks → passive income ticks → **combat**: equip StarterRifle, fire (LMB / mobile FIRE), reload (R), fight NPCs / PvP → kill rewards → respawn at base → data autosaves / saves on leave.
+| Key / UI | Action |
+|----------|--------|
+| **B** / Base Upgrades | Base upgrade menu |
+| **G** / GARAGE | Vehicle garage (buy / spawn / despawn) |
+| **M** / MISSIONS | Daily missions + login claim |
+| **P** / SHOP | DevProducts + GamePasses |
+| LMB / FIRE | Fire equipped weapon |
+| **R** | Reload |
 
-## Phase 4 — Vehicles notes
+## Playtest checklist (Studio)
 
-- Garage UI (`G` / GARAGE button): list MVP 8 vehicles from `VehicleConfig`, BUY / SPAWN / DESPAWN.
-- Server `VehicleService` validates ownership, level, structure requirements, cash, spawn cooldown.
-- Spawn creates placeholder chassis + `VehicleSeat` near `WE_VehicleSpawn` or base plot.
-- Remotes: `RequestSpawnVehicle`, `RequestPurchaseVehicle`, `RequestDespawnVehicle`, `VehicleStateUpdate`.
-- One active vehicle per player; despawn on leave.
+1. **Setup** — Rojo sync → run `tools/StudioSetup.luau` once → enable API Services if testing DataStores.
+2. **Join** — Spawn with ~$5,000; HUD shows Cash / Gold / Level / XP; plot assigned.
+3. **Tutorial** — Steps: claim base → Command Center → income → Barracks → Jeep → outpost; **SKIP** works; gold beam/markers best-effort.
+4. **Tycoon** — **B**: buy Command Center, Barracks; passive income ticks; structures recolor.
+5. **Combat** — Equip StarterRifle; LMB fire; **R** reload; damage NPCs; kill rewards; death → respawn at base.
+6. **Vehicles** — **G**: SPAWN Military Jeep; seat/drive placeholder; despawn / one-active rule.
+7. **Territory** — Stand in capture zone; progress bar; ownership bonus; `FIRST_OUTPOST` path.
+8. **Missions** — **M**: daily objectives progress; claim rewards; daily login claim.
+9. **Shop** — **P**: list products/passes; with Id `0`, warn/notify only (no fake grants). With real Ids, ProcessReceipt / ownership only.
+10. **VIP / 2x** — Set `DevConfig.MockOwnedGamePasses` or admin `grantpass VIP` / `DoubleCash` / `DoubleXP`; confirm Cash/XP multipliers on earnings (not on `devproduct` grants).
+11. **Persistence** — Leave + rejoin with API Services on; Cash/upgrades restore; receipts not double-granted.
+12. **Admin** — `givecash` / `resettutorial` / `unlockall` only for `AdminConfig.UserIds`.
 
-## Phase 3 — Combat notes
+## Phase notes
+
+### Phase 3 — Combat
 
 - Server-authoritative: `CombatService` validates weapon ownership, fire rate, magazine, range; **never trusts client damage**.
 - Remotes (request-only): `RequestFire`, `RequestReload`, `RequestEquipWeapon`, `RequestPurchaseWeapon` — **no GiveWeapon**.
-- NPCs: spawn from `WE_NPCSpawn` markers (+ optional territory pads); capped pool; light aggro/shoot AI; rewards on kill.
-- Client: `CombatController` health bar, ammo/weapon strip, mobile fire button, hit flash.
-- Analytics: `FIRST_PVP`, `PLAYER_KILL`, `NPC_KILL`, `WEAPON_EQUIPPED`, `WEAPON_PURCHASED`.
-- Tunables: `CombatConfig.luau` + `WeaponConfig.luau`.
+- NPCs: spawn from `WE_NPCSpawn` markers; capped pool; light aggro/shoot AI; rewards on kill.
 
+### Phase 4 — Vehicles
 
-## Phase 5 — Territory notes
+- Garage UI (`G`): MVP vehicles from `VehicleConfig`; BUY / SPAWN / DESPAWN.
+- Server validates ownership, level, structure requirements, cash, spawn cooldown.
+- Placeholder chassis + `VehicleSeat` near `WE_VehicleSpawn` or base plot.
 
-- `TerritoryService`: 7 territories from `TerritoryConfig`; states Neutral/Player/NPC/Clan/Contested.
-- Stand-in-zone capture (server tick); markers tagged `WE_Territory` + `WE_CaptureZone` via StudioSetup.
-- Ownership bonuses applied to passive income, XP, damage, vehicle cooldown, mission cash.
-- Balancing stubs: `MaxPersonalTerritories`, `ProtectionPeriodSeconds`.
-- Client: territory list + capture progress bar (`TerritoryController`).
-- Analytics: `FIRST_OUTPOST`, `TERRITORY_CAPTURED`, `TERRITORY_LOST`.
+### Phase 5 — Territory
 
-## Phase 6 — Progression notes
+- `TerritoryService`: 7 territories; Neutral/Player/NPC/Clan/Contested.
+- Stand-in-zone capture; markers `WE_Territory` + `WE_CaptureZone` via StudioSetup.
+- Ownership bonuses on passive income, XP, damage, vehicle cooldown, mission cash.
 
-- Daily objective missions (`MissionConfig`) with server progress + claim.
-- 7-day daily login via `MissionService` + Missions UI (**M** / MISSIONS button).
+### Phase 6 — Progression
+
+- Daily objective missions + 7-day login (**M**).
 - Achievements: FirstUpgrade, Cash10k, Level10.
-- Combat / territory / upgrades / cash / vehicles feed mission ObjectiveTypes.
 
-## Phase 7 — Monetization skeleton
+### Phase 7 — Monetization + polish
 
-- `ProcessReceipt` idempotent + profile `ProcessedReceipts`.
-- Shop UI (**P** / SHOP) lists DevProducts + GamePasses (placeholder IDs = 0).
+- `ProcessReceipt` idempotent + `ProcessedReceipts`.
+- GamePass ownership cached on join; VIP / 2x Cash / 2x XP hooks in `EconomyService` / `XPService`.
+- Interactive `TutorialController` + `TutorialService`; notification toast polish; StudioSetup tutorial markers.

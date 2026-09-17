@@ -36,6 +36,9 @@ local EVENTS = {
 	Constants.RemoteNames.RequestCaptureTerritory,
 	Constants.RemoteNames.RequestAdminCommand,
 	Constants.RemoteNames.RequestPurchaseDevProduct,
+	Constants.RemoteNames.RequestPurchaseGamePass,
+	Constants.RemoteNames.RequestSkipTutorial,
+	Constants.RemoteNames.TutorialStateUpdate,
 }
 
 local FUNCTIONS = {

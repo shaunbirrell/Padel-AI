@@ -290,6 +290,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 			Upgrades = profile.BaseUpgrades,
 			PassiveIncomePerTick = BaseService.ComputePassiveIncomePerTick(profile, player),
 		},
+		TutorialStep = profile.TutorialStep,
 		TutorialComplete = profile.TutorialComplete,
 		Vehicles = profile.Vehicles,
 		Weapons = profile.Weapons,

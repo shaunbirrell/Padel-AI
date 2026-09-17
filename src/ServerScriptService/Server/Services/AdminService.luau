@@ -78,6 +78,18 @@ function AdminService.Init(deps: { [string]: any })
 					deps.BaseService.PushState(player)
 				end
 			end
+		elseif cmd == "resettutorial" then
+			if deps.TutorialService and deps.TutorialService.Reset then
+				deps.TutorialService.Reset(player)
+			end
+		elseif cmd == "grantpass" and typeof(arg1) == "string" then
+			-- Studio mock GamePass ownership (Ids may still be 0)
+			if deps.MonetizationService and deps.MonetizationService.SetMockGamePassOwned then
+				deps.MonetizationService.SetMockGamePassOwned(player, arg1, true)
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "Mock GamePass owned: " .. arg1, "Success")
+				end
+			end
 		end
 	end)
 end

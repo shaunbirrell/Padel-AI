@@ -31,6 +31,7 @@ local MissionService = require(Services.MissionService)
 local PrestigeService = require(Services.PrestigeService)
 local ClanService = require(Services.ClanService)
 local MonetizationService = require(Services.MonetizationService)
+local TutorialService = require(Services.TutorialService)
 
 print("[WAR EMPIRE] Server Bootstrap starting...")
 
@@ -54,6 +55,7 @@ local deps: { [string]: any } = {
 	PrestigeService = PrestigeService,
 	ClanService = ClanService,
 	MonetizationService = MonetizationService,
+	TutorialService = TutorialService,
 }
 
 RateLimitService.Init()
@@ -66,6 +68,8 @@ XPService.Init(deps)
 NotificationService.Init(deps)
 AntiExploitService.Init(deps)
 BaseService.Init(deps) -- registers OnProfileLoaded
+MonetizationService.Init(deps) -- GamePass cache on join
+TutorialService.Init(deps) -- tutorial step on join + upgrade hook
 
 -- Now load profiles (fires OnProfileLoaded for joiners)
 DataService.Init()
@@ -77,7 +81,6 @@ TerritoryService.Init(deps)
 MissionService.Init(deps)
 PrestigeService.Init(deps)
 ClanService.Init(deps)
-MonetizationService.Init(deps)
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)

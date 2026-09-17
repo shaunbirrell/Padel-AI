@@ -1,15 +1,20 @@
 --!strict
 --[[
-	ProcessReceipt — idempotent grants when product IDs are set.
-	Phase 7 skeleton: receipt persistence on profile + shop prompt remote.
+	Phase 7 — Monetization MVP
+	- ProcessReceipt: idempotent DevProduct grants from MonetizationConfig only
+	- GamePass ownership cached on join (MarketplaceService:UserOwnsGamePassAsync)
+	- VIP / 2x Cash / 2x XP multipliers for EconomyService / XPService
+	- NEVER grant currency from client purchase confirmation alone
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local DevConfig = require(Shared.Configs.DevConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local MonetizationService = {}
@@ -21,20 +26,29 @@ local RateLimitService: any = nil
 local NotificationService: any = nil
 local RemoteSetup: any = nil
 
--- Session cache; also mirrored to profile.ProcessedReceipts when present
+-- Session receipt cache; also mirrored to profile.ProcessedReceipts
 local processed: { [string]: boolean } = {}
+-- userId -> passKey -> owned
+local gamePassCache: { [number]: { [string]: boolean } } = {}
 
-local function findDevProduct(productId: number): any?
-	for _, def in pairs(MonetizationConfig.DevProducts) do
+local function findDevProduct(productId: number): (string?, any?)
+	if typeof(productId) ~= "number" or productId == 0 then
+		return nil, nil
+	end
+	for key, def in pairs(MonetizationConfig.DevProducts) do
 		if def.Id ~= 0 and def.Id == productId then
-			return def
+			return key, def
 		end
 	end
-	return nil
+	return nil, nil
 end
 
 local function findDevProductByKey(key: string): any?
 	return MonetizationConfig.DevProducts[key]
+end
+
+local function findGamePassByKey(key: string): any?
+	return MonetizationConfig.GamePasses[key]
 end
 
 local function hasProcessed(profile: any, receiptId: string): boolean
@@ -57,6 +71,84 @@ local function markProcessed(profile: any, receiptId: string)
 	end
 end
 
+local function mockOwns(passKey: string): boolean
+	if not RunService:IsStudio() then
+		return false
+	end
+	local mock = DevConfig.MockOwnedGamePasses
+	return typeof(mock) == "table" and mock[passKey] == true
+end
+
+function MonetizationService.RefreshGamePassCache(player: Player)
+	local userId = player.UserId
+	local cache: { [string]: boolean } = {}
+	for passKey, def in pairs(MonetizationConfig.GamePasses) do
+		local owned = false
+		if typeof(def.Id) == "number" and def.Id ~= 0 then
+			local ok, result = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(userId, def.Id)
+			end)
+			if ok and result == true then
+				owned = true
+			elseif not ok then
+				warn("[MonetizationService] UserOwnsGamePassAsync failed", passKey, result)
+			end
+		elseif mockOwns(passKey) then
+			owned = true
+		end
+		cache[passKey] = owned
+	end
+	gamePassCache[userId] = cache
+	return cache
+end
+
+function MonetizationService.PlayerOwnsGamePass(player: Player, passKey: string): boolean
+	local cache = gamePassCache[player.UserId]
+	if not cache then
+		cache = MonetizationService.RefreshGamePassCache(player)
+	end
+	return cache[passKey] == true
+end
+
+function MonetizationService.SetMockGamePassOwned(player: Player, passKey: string, owned: boolean)
+	if not RunService:IsStudio() then
+		return
+	end
+	if not findGamePassByKey(passKey) then
+		return
+	end
+	local cache = gamePassCache[player.UserId]
+	if not cache then
+		cache = {}
+		gamePassCache[player.UserId] = cache
+	end
+	cache[passKey] = owned
+end
+
+--[[ Cash multiplier from VIP (additive bonus) + DoubleCash (multiplicative). ]]
+function MonetizationService.GetCashMultiplier(player: Player): number
+	local mult = 1
+	local vip = MonetizationConfig.GamePasses.VIP
+	if vip and MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+		local bonus = tonumber(vip.CashBonusMult) or 0
+		mult += bonus
+	end
+	local doubleCash = MonetizationConfig.GamePasses.DoubleCash
+	if doubleCash and MonetizationService.PlayerOwnsGamePass(player, "DoubleCash") then
+		local m = tonumber(doubleCash.CashMult) or 2
+		mult *= m
+	end
+	return math.max(0, mult)
+end
+
+function MonetizationService.GetXPMultiplier(player: Player): number
+	local doubleXP = MonetizationConfig.GamePasses.DoubleXP
+	if doubleXP and MonetizationService.PlayerOwnsGamePass(player, "DoubleXP") then
+		return math.max(1, tonumber(doubleXP.XPMult) or 2)
+	end
+	return 1
+end
+
 function MonetizationService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
@@ -69,6 +161,7 @@ function MonetizationService.Init(deps: { [string]: any })
 		return MonetizationService.ProcessReceipt(receiptInfo)
 	end
 
+	-- Client may fire to log intent; grants still ONLY happen in ProcessReceipt
 	local shopRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseDevProduct) :: RemoteEvent
 	shopRemote.OnServerEvent:Connect(function(player: Player, productKey: any)
 		if not RateLimitService.Allow(player, "shop_prompt", 2, 3) then
@@ -83,6 +176,7 @@ function MonetizationService.Init(deps: { [string]: any })
 		end
 		if AnalyticsService then
 			AnalyticsService.Log(AnalyticsConfig.Events.SHOP_PROMPT, player.UserId, {
+				kind = "DevProduct",
 				key = productKey,
 				productId = def.Id,
 			})
@@ -90,6 +184,61 @@ function MonetizationService.Init(deps: { [string]: any })
 		if def.Id == 0 and NotificationService then
 			NotificationService.Notify(player, "Shop item not configured (placeholder ID).", "Warn")
 		end
+		-- Do NOT grant here. Client prompts Marketplace; ProcessReceipt grants.
+	end)
+
+	local passRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseGamePass) :: RemoteEvent
+	passRemote.OnServerEvent:Connect(function(player: Player, passKey: any)
+		if not RateLimitService.Allow(player, "shop_pass_prompt", 2, 3) then
+			return
+		end
+		if typeof(passKey) ~= "string" then
+			return
+		end
+		local def = findGamePassByKey(passKey)
+		if not def then
+			return
+		end
+		if AnalyticsService then
+			AnalyticsService.Log(AnalyticsConfig.Events.SHOP_PROMPT, player.UserId, {
+				kind = "GamePass",
+				key = passKey,
+				productId = def.Id,
+			})
+		end
+		if def.Id == 0 and NotificationService then
+			NotificationService.Notify(player, "GamePass not configured (placeholder ID).", "Warn")
+		end
+		-- Do NOT grant benefits from this remote — ownership cache only.
+	end)
+
+	-- Refresh ownership when Roblox reports a GamePass purchase finished (client signal is untrusted for grants)
+	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, wasPurchased: boolean)
+		if typeof(player) ~= "Instance" or not player:IsA("Player") then
+			return
+		end
+		-- Always refresh cache; never grant Cash/Gold/XP from wasPurchased alone
+		MonetizationService.RefreshGamePassCache(player)
+		if wasPurchased and NotificationService then
+			local name = "Game Pass"
+			for key, def in pairs(MonetizationConfig.GamePasses) do
+				if def.Id ~= 0 and def.Id == passId then
+					name = def.DisplayName or key
+					break
+				end
+			end
+			NotificationService.Notify(player, "Owned: " .. name .. " (benefits active)", "Success")
+		end
+	end)
+
+	DataService.OnProfileLoaded(function(player: Player, _profile: any)
+		task.spawn(function()
+			MonetizationService.RefreshGamePassCache(player)
+		end)
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		gamePassCache[player.UserId] = nil
 	end)
 end
 
@@ -110,10 +259,10 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
-	local product = findDevProduct(receiptInfo.ProductId)
+	local productKey, product = findDevProduct(receiptInfo.ProductId)
 	if not product then
-		warn("[MonetizationService] Unknown product", receiptInfo.ProductId)
-		-- Placeholder / unknown: grant to unblock queueed receipts only when Id was never configured
+		-- Unknown / placeholder Id: do not invent grants. Mark processed so Roblox queue drains.
+		warn("[MonetizationService] Unknown or unconfigured product", receiptInfo.ProductId)
 		markProcessed(profile, receiptId)
 		DataService.MarkDirty(player)
 		return Enum.ProductPurchaseDecision.PurchaseGranted
@@ -130,22 +279,18 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	DataService.MarkDirty(player)
 
 	if NotificationService then
-		NotificationService.Notify(player, "Purchase granted: " .. (product.DisplayName or "item"), "Reward")
+		NotificationService.Notify(player, "Purchase granted: " .. (product.DisplayName or productKey or "item"), "Reward")
 	end
 
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.PURCHASE_RECEIPT, player.UserId, {
 			productId = receiptInfo.ProductId,
+			productKey = productKey,
 			receiptId = receiptId,
 		})
 	end
 
 	return Enum.ProductPurchaseDecision.PurchaseGranted
-end
-
-function MonetizationService.PlayerOwnsGamePass(_player: Player, _passKey: string): boolean
-	-- TODO: MarketplaceService:UserOwnsGamePassAsync with caching when Ids != 0
-	return false
 end
 
 return MonetizationService

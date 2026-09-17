@@ -92,6 +92,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		ClanId = nil,
 		FirstJoinUnix = now,
 		LastJoinUnix = now,
+		ProcessedReceipts = {},
 	}
 end
 
@@ -166,6 +167,10 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		end
 		profile.DataVersion = 2
 		version = 2
+	end
+
+	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
+		(profile :: any).ProcessedReceipts = {}
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

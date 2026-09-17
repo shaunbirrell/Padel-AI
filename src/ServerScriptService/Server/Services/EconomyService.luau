@@ -14,6 +14,8 @@ local EconomyService = {}
 local DataService: any = nil
 local RemoteSetup: any = nil
 local MissionService: any = nil
+local MonetizationService: any = nil
+local TutorialService: any = nil
 
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
@@ -27,6 +29,8 @@ function EconomyService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
+	MonetizationService = deps.MonetizationService
+	TutorialService = deps.TutorialService
 end
 
 function EconomyService.Push(player: Player)
@@ -47,6 +51,12 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	end
 
 	local mult = 1 + (profile.Prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
+	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+	local reasonKey = reason or ""
+	local exempt = MonetizationConfig.CashMultExemptReasons
+	if MonetizationService and MonetizationService.GetCashMultiplier and not (exempt and exempt[reasonKey]) then
+		mult *= MonetizationService.GetCashMultiplier(player)
+	end
 	local granted = math.floor(amount * mult)
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += granted
@@ -55,6 +65,9 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	-- Feed daily EarnCash missions (skip recursive mission reward noise is fine)
 	if MissionService and MissionService.TrackProgress and reason ~= "mission" and reason ~= "achievement" then
 		MissionService.TrackProgress(player, "EarnCash", granted)
+	end
+	if reason == "passive" and TutorialService and TutorialService.Notify then
+		TutorialService.Notify(player, "PassiveIncome")
 	end
 	return true
 end

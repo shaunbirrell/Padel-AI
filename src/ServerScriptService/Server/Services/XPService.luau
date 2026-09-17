@@ -15,6 +15,7 @@ local AnalyticsService: any = nil
 local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
+local MonetizationService: any = nil
 
 local function xpToNext(level: number, xp: number): number
 	local need = LevelConfig.GetXPRequiredForLevel(level)
@@ -40,6 +41,7 @@ function XPService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
+	MonetizationService = deps.MonetizationService
 end
 
 function XPService.Push(player: Player)
@@ -65,6 +67,13 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 
 	if TerritoryService and TerritoryService.GetXPMult and reason ~= "achievement" then
 		amount = math.max(1, math.floor(amount * TerritoryService.GetXPMult(player)))
+	end
+
+	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+	local reasonKey = reason or ""
+	local xpExempt = MonetizationConfig.XPMultExemptReasons
+	if MonetizationService and MonetizationService.GetXPMultiplier and not (xpExempt and xpExempt[reasonKey]) then
+		amount = math.max(1, math.floor(amount * MonetizationService.GetXPMultiplier(player)))
 	end
 
 	profile.XP += amount

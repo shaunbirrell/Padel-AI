@@ -28,6 +28,7 @@ local NotificationService: any = nil
 local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
+local TutorialService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
@@ -359,6 +360,9 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "SpawnVehicle", 1)
 	end
+	if TutorialService and TutorialService.Notify then
+		TutorialService.Notify(player, "SpawnVehicle", vehicleId)
+	end
 	DataService.MarkDirty(player)
 
 	if AnalyticsService then
@@ -384,6 +388,7 @@ function VehicleService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
+	TutorialService = deps.TutorialService
 
 	ensureFolder()
 

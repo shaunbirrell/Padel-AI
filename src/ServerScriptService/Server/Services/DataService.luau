@@ -27,7 +27,7 @@ local loading: { [number]: boolean } = {}
 local dataStore: DataStore? = nil
 
 local AnalyticsService: any = nil
-local onProfileLoaded: ((Player, PlayerProfile) -> ())? = nil
+local onProfileLoadedCallbacks: { (Player, PlayerProfile) -> () } = {}
 
 local function getDataStore(): DataStore?
 	if dataStore then
@@ -67,13 +67,19 @@ function DataService.SetAnalytics(svc: any)
 end
 
 function DataService.OnProfileLoaded(cb: (Player, PlayerProfile) -> ())
-	onProfileLoaded = cb
+	table.insert(onProfileLoadedCallbacks, cb)
 	-- If profiles already loaded (init-order safety), fire immediately
 	for _, player in ipairs(Players:GetPlayers()) do
 		local profile = profiles[player.UserId]
 		if profile then
 			task.spawn(cb, player, profile)
 		end
+	end
+end
+
+local function fireProfileLoaded(player: Player, profile: PlayerProfile)
+	for _, cb in ipairs(onProfileLoadedCallbacks) do
+		task.spawn(cb, player, profile)
 	end
 end
 
@@ -179,9 +185,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	dirty[userId] = false
 	loading[userId] = false
 
-	if onProfileLoaded then
-		task.spawn(onProfileLoaded, player, profile)
-	end
+	fireProfileLoaded(player, profile)
 
 	return profile
 end

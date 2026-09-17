@@ -24,7 +24,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 11. **Vehicle / weapon names** — Generic military names only (no real-world brands).
 
-12. **Monetization** — `ProcessReceipt` grants known DevProducts; unknown/zero IDs are handled conservatively. GamePass checks stubbed.
+12. **Monetization** — `ProcessReceipt` grants known DevProducts only (idempotent `ProcessedReceipts`). Unknown/zero IDs drain the queue without inventing grants. GamePass ownership cached on join via `UserOwnsGamePassAsync`; VIP / DoubleCash / DoubleXP multipliers apply in Economy/XP (exempt: `devproduct` / `admin`). Never grant from client confirmation or `PromptGamePassPurchaseFinished` alone.
 
 13. **Loot boxes** — Explicitly `LootBoxPolicyPending = true`; not implemented.
 
@@ -71,3 +71,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 33. **Achievements** — Config-driven one-time grants checked on mission progress / level-up / upgrades / cash totals.
 
 34. **Shop** — Client prompts Marketplace with placeholder IDs; server ProcessReceipt is idempotent and stores `ProcessedReceipts` on profile when present.
+
+35. **Tutorial** — Steps: ClaimBase → CommandCenter → Income → Barracks → Jeep → Outpost. Server `TutorialService` advances; client shows panel + best-effort `WE_TutorialMarker` waypoints. `DevConfig.SkipTutorial` (Studio) or SKIP button completes. Default `SkipTutorial = false` for playtest.
+
+36. **Studio mock GamePasses** — `DevConfig.MockOwnedGamePasses` or admin `grantpass` only in Studio when product Ids are still 0.

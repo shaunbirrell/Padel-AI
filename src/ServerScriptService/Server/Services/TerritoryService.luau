@@ -39,6 +39,7 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local NotificationService: any = nil
 local MissionService: any = nil
+local TutorialService: any = nil
 local RemoteSetup: any = nil
 local BaseService: any = nil
 
@@ -355,6 +356,9 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "CaptureTerritory", 1)
 	end
+	if TutorialService and TutorialService.Notify then
+		TutorialService.Notify(player, "CaptureTerritory", rt.Id)
+	end
 
 	if BaseService then
 		BaseService.PushState(player)
@@ -508,6 +512,7 @@ function TerritoryService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	NotificationService = deps.NotificationService
 	MissionService = deps.MissionService
+	TutorialService = deps.TutorialService
 	RemoteSetup = deps.RemoteSetup
 	BaseService = deps.BaseService
 

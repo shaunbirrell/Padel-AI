@@ -89,6 +89,7 @@ export type PlayerProfile = {
 	ClanId: string?,
 	FirstJoinUnix: number,
 	LastJoinUnix: number,
+	ProcessedReceipts: { [string]: boolean }?,
 }
 
 export type EconomyUpdatePayload = {
@@ -117,6 +118,7 @@ export type PlayerStatePayload = {
 	Prestige: number,
 	Soldiers: number,
 	Base: BaseStatePayload,
+	TutorialStep: number?,
 	TutorialComplete: boolean,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },

@@ -1,5 +1,5 @@
 --!strict
---[[ Phase 7 skeleton — Shop UI with placeholder DevProduct / GamePass IDs ]]
+--[[ Phase 7 — Shop UI. Prompts Marketplace; grants only via server ProcessReceipt / GamePass ownership. ]]
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -52,10 +52,12 @@ local function promptGamePass(passKey: string)
 	if not def then
 		return
 	end
+	-- Log intent on server; NEVER treat client confirmation as a grant
+	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseGamePass):FireServer(passKey)
 	if def.Id and def.Id ~= 0 then
 		MarketplaceService:PromptGamePassPurchase(player, def.Id)
 	else
-		warn("[Shop] GamePass ID placeholder for", passKey)
+		warn("[Shop] GamePass ID placeholder for", passKey, "— set MonetizationConfig GamePass Ids")
 	end
 end
 
@@ -130,7 +132,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Product IDs are placeholders (0). Set MonetizationConfig before live purchases."
+	note.Text = "IDs are placeholders (0). Server ProcessReceipt / GamePass ownership grants only — never client."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")

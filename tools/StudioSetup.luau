@@ -8,6 +8,8 @@
 	- Upgrade slot Parts per structure tagged WE_UpgradeSlot
 	- Workspace/Territories (7) tagged WE_Territory
 	- Workspace/VehicleSpawns, NPCSpawns, EventSpawns
+	- Tutorial markers (WE_TutorialMarker) for claim/CC/income/barracks/jeep/outpost
+	- NPC placeholders + capture zones
 
 	Safe to re-run: clears previous WarEmpireSetup folders first.
 ]]
@@ -22,6 +24,7 @@ local TAG_CAPTURE = "WE_CaptureZone"
 local TAG_VEHICLE = "WE_VehicleSpawn"
 local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
+local TAG_TUTORIAL = "WE_TutorialMarker"
 
 local STRUCTURES = {
 	"CommandCenter",
@@ -278,4 +281,51 @@ for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 end
 
-print("[WAR EMPIRE] StudioSetup complete: 6 bases, 7 territories+capture zones, spawn pads under Workspace.WarEmpireSetup")
+
+-- Tutorial markers (best-effort waypoints for TutorialController)
+local tutorialFolder = ensureFolder("TutorialMarkers", root)
+local function tutorialMarker(name, pos, color, stepId)
+	local p = part({
+		Name = name,
+		Size = Vector3.new(6, 1, 6),
+		Position = pos,
+		Color = color,
+		Material = Enum.Material.Neon,
+		Transparency = 0.35,
+		CanCollide = false,
+		Parent = tutorialFolder,
+	})
+	p:SetAttribute("TutorialStepId", stepId or name)
+	CollectionService:AddTag(p, TAG_TUTORIAL)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(140, 28)
+	bb.StudsOffset = Vector3.new(0, 4, 0)
+	bb.AlwaysOnTop = true
+	bb.Parent = p
+	local t = Instance.new("TextLabel")
+	t.Size = UDim2.fromScale(1, 1)
+	t.BackgroundTransparency = 1
+	t.Text = "TUT: " .. name
+	t.TextColor3 = Color3.new(1, 1, 0.8)
+	t.TextScaled = true
+	t.Font = Enum.Font.GothamBold
+	t.Parent = bb
+	return p
+end
+
+local plot1 = PLOT_POSITIONS[1]
+tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 28), Color3.fromRGB(230, 200, 80), "ClaimBase")
+tutorialMarker("Tutorial_CommandCenter", plot1 + Vector3.new(-24, 3, -24), Color3.fromRGB(80, 200, 120), "CommandCenter")
+tutorialMarker("Tutorial_Income", plot1 + Vector3.new(0, 3, 0), Color3.fromRGB(80, 200, 160), "Income")
+tutorialMarker("Tutorial_Barracks", plot1 + Vector3.new(-8, 3, -24), Color3.fromRGB(100, 180, 220), "Barracks")
+-- Jeep: near first vehicle spawn if present
+local jeepPos = Vector3.new(80, 2, 0)
+local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
+if #vSpawns > 0 and vSpawns[1]:IsA("BasePart") then
+	jeepPos = vSpawns[1].Position + Vector3.new(0, 2, 0)
+end
+tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
+-- Outpost: CentralPlaza
+tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
+
+print("[WAR EMPIRE] StudioSetup complete: 6 bases, 7 territories+capture zones, tutorial markers, spawn pads under Workspace.WarEmpireSetup")
