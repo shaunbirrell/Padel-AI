@@ -108,12 +108,6 @@ function MissionService.Push(player: Player)
 
 	local today = yyyymmdd(os.time())
 	local already = profile.DailyLogin.LastClaimDay == today
-	local _nextDay = (profile.DailyLogin.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
-	if already then
-		nextDay = profile.DailyLogin.Streak
-	elseif profile.DailyLogin.Streak == 0 then
-		nextDay = 1
-	end
 
 	local payload: Types.MissionStatePayload = {
 		DayKey = profile.DailyMissions.DayKey,

@@ -274,7 +274,7 @@ function DataService.Init()
 		local deadline = os.clock() + 25
 		while os.clock() < deadline do
 			local anyAlive = false
-			for _, t in ipairs(threads) do
+			for _ in ipairs(threads) do
 				-- task status not always available; just wait
 				anyAlive = true
 				break

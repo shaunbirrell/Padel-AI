@@ -78,7 +78,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	return true
 end
 
-function EconomyService.SpendCash(player: Player, amount: number, reason: string?): (boolean, string?)
+function EconomyService.SpendCash(player: Player, amount: number, _reason: string?): (boolean, string?)
 	if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
 		return false, "InvalidAmount"
 	end
@@ -96,7 +96,7 @@ function EconomyService.SpendCash(player: Player, amount: number, reason: string
 	return true, nil
 end
 
-function EconomyService.AddGold(player: Player, amount: number, reason: string?): boolean
+function EconomyService.AddGold(player: Player, amount: number, _reason: string?): boolean
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return false
 	end
@@ -112,7 +112,7 @@ function EconomyService.AddGold(player: Player, amount: number, reason: string?)
 	return true
 end
 
-function EconomyService.SpendGold(player: Player, amount: number, reason: string?): (boolean, string?)
+function EconomyService.SpendGold(player: Player, amount: number, _reason: string?): (boolean, string?)
 	if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
 		return false, "InvalidAmount"
 	end

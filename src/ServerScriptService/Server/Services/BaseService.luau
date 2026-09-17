@@ -95,10 +95,6 @@ function BaseService.ReleasePlot(player: Player)
 			plotOwners[plotId] = nil
 		end
 	end
-	local profile = DataService.GetProfile(player)
-	if profile then
-		-- Keep BasePlotId in profile for preference on rejoin; clear occupancy only
-	end
 end
 
 function BaseService.GetOwnerUserId(plotId: number): number?
