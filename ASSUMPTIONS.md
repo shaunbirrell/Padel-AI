@@ -56,7 +56,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 26. **Territory ownership** — Runtime world state is authoritative (not only profile.Territories). Profile mirrors personal ownership for persistence/UI. On leave, ownership remains until contested/captured by others.
 
-27. **Territory states** — Neutral / Player / NPC / Clan / Contested. NPC seeds: EastArmory + RadarHill on server start. Clan ownership uses profile.ClanId when set (ClanService still stub).
+27. **Territory states** — Neutral / Player / NPC / Clan / Contested. NPC seeds: EastArmory + RadarHill on server start. Clan ownership uses profile.ClanId when set. ClanService creates/joins/leaves in-session; ClanId persists on profile. Session roster rehydrates soft stubs after server restart.
 
 28. **Capture** — Proximity stand-in-zone only (CollectionService `WE_CaptureZone` preferred, else `WE_Territory`). Progress is server tick-based; `RequestCaptureTerritory` is an optional UI ping.
 
@@ -75,3 +75,10 @@ Reversible engineering decisions made while implementing the MVP without blockin
 35. **Tutorial** — Steps: ClaimBase → CommandCenter → Income → Barracks → Jeep → Outpost. Server `TutorialService` advances; client shows panel + best-effort `WE_TutorialMarker` waypoints. `DevConfig.SkipTutorial` (Studio) or SKIP button completes. Default `SkipTutorial = false` for playtest.
 
 36. **Studio mock GamePasses** — `DevConfig.MockOwnedGamePasses` or admin `grantpass` only in Studio when product Ids are still 0.
+
+
+37. **Prestige** — Requires Level ≥ PrestigeConfig.MinLevelToPrestige (100). Resets Cash/Level/XP/BaseUpgrades; keeps Vehicles/Weapons/Gold; grants GoldBonusOnPrestige; Cash earnings use EconomyConfig.PrestigeCashMultiplierPerLevel. Admin `forceprestige` / `prestige`.
+
+38. **Battle Pass** — SeasonId from SeasonConfig; XP mirrored from XPService.AddXP; Free/Premium claim remotes; Premium only via admin `grantpremium` or future ProcessReceipt (PremiumProductId=0). Sparse reward milestones in BattlePassConfig.
+
+39. **Clan scaffolding** — Create/Join/Leave remotes; MaxMembers 20; territory capture stamps runtime.ClanId from profile.ClanId for same-clan friendly ownership checks.

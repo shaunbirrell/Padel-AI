@@ -24,6 +24,7 @@ local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
+local TutorialService: any = nil
 
 -- plotId -> userId
 local plotOwners: { [number]: number } = {}
@@ -312,6 +313,7 @@ function BaseService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
+	TutorialService = deps.TutorialService
 
 	getUpgradeChangedEvent()
 
@@ -334,6 +336,9 @@ function BaseService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		BaseService.AssignPlot(player)
+		if TutorialService and TutorialService.Notify then
+			TutorialService.Notify(player, "PlotAssigned")
+		end
 		BaseService.PushState(player)
 		EconomyService.Push(player)
 		if deps.XPService then

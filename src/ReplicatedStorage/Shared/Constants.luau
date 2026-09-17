@@ -55,6 +55,15 @@ Constants.RemoteNames = {
 	RequestPurchaseGamePass = "RequestPurchaseGamePass",
 	RequestSkipTutorial = "RequestSkipTutorial",
 	TutorialStateUpdate = "TutorialStateUpdate",
+	-- Prestige / Clan / Battle Pass
+	RequestPrestige = "RequestPrestige",
+	PrestigeStateUpdate = "PrestigeStateUpdate",
+	RequestCreateClan = "RequestCreateClan",
+	RequestJoinClan = "RequestJoinClan",
+	RequestLeaveClan = "RequestLeaveClan",
+	ClanStateUpdate = "ClanStateUpdate",
+	RequestClaimBattlePassReward = "RequestClaimBattlePassReward",
+	BattlePassStateUpdate = "BattlePassStateUpdate",
 	GetPlayerState = "GetPlayerState",
 }
 

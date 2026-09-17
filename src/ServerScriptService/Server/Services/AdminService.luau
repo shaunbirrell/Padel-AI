@@ -82,6 +82,44 @@ function AdminService.Init(deps: { [string]: any })
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
 			end
+		elseif cmd == "prestige" or cmd == "forceprestige" then
+			if deps.PrestigeService and deps.PrestigeService.DoPrestige then
+				-- force: temporarily ignore level gate via SetLevel first if needed
+				if cmd == "forceprestige" and deps.XPService then
+					local PrestigeConfig = require(ReplicatedStorage.Shared.Configs.PrestigeConfig)
+					deps.XPService.SetLevel(player, PrestigeConfig.MinLevelToPrestige)
+				end
+				local ok, err = deps.PrestigeService.DoPrestige(player)
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, if ok then "Prestige OK" else ("Prestige failed: " .. tostring(err)), if ok then "Success" else "Warn")
+				end
+			end
+		elseif cmd == "createclan" and typeof(arg1) == "string" then
+			if deps.ClanService and deps.ClanService.CreateClan then
+				local ok, err = deps.ClanService.CreateClan(player, arg1, if typeof(arg2) == "string" then arg2 else nil)
+				if not ok and deps.NotificationService then
+					deps.NotificationService.Notify(player, "Clan create failed: " .. tostring(err), "Warn")
+				end
+			end
+		elseif cmd == "joinclan" and typeof(arg1) == "string" then
+			if deps.ClanService then
+				deps.ClanService.JoinClan(player, arg1)
+			end
+		elseif cmd == "leaveclan" then
+			if deps.ClanService then
+				deps.ClanService.LeaveClan(player)
+			end
+		elseif cmd == "bpxp" and typeof(arg1) == "number" then
+			if deps.BattlePassService and deps.BattlePassService.AddXP then
+				deps.BattlePassService.AddXP(player, math.floor(arg1), "admin")
+			end
+		elseif cmd == "grantpremium" then
+			if deps.BattlePassService and deps.BattlePassService.SetPremium then
+				deps.BattlePassService.SetPremium(player, true)
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "Battle Pass Premium granted", "Success")
+				end
+			end
 		elseif cmd == "grantpass" and typeof(arg1) == "string" then
 			-- Studio mock GamePass ownership (Ids may still be 0)
 			if deps.MonetizationService and deps.MonetizationService.SetMockGamePassOwned then

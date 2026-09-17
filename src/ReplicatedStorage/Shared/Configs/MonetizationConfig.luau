@@ -43,9 +43,12 @@ local MonetizationConfig = {
 		devproduct = true,
 		admin = true,
 		purchase_refund = true,
+		prestige = true,
+		battlepass = true,
 	},
 	XPMultExemptReasons = {
 		admin = true,
+		battlepass = true,
 		achievement = true,
 	},
 }

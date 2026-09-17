@@ -16,6 +16,7 @@ local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
 local MonetizationService: any = nil
+local BattlePassService: any = nil
 
 local function xpToNext(level: number, xp: number): number
 	local need = LevelConfig.GetXPRequiredForLevel(level)
@@ -42,6 +43,7 @@ function XPService.Init(deps: { [string]: any })
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
 	MonetizationService = deps.MonetizationService
+	BattlePassService = deps.BattlePassService
 end
 
 function XPService.Push(player: Player)
@@ -100,6 +102,10 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 
 	DataService.MarkDirty(player)
 	pushXP(player, profile)
+	if BattlePassService and BattlePassService.AddXP and reason ~= "battlepass" then
+		-- Mirror a portion of gameplay XP into the battle pass track
+		BattlePassService.AddXP(player, amount, reason)
+	end
 	return true
 end
 

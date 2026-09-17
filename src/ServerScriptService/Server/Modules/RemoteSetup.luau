@@ -39,6 +39,14 @@ local EVENTS = {
 	Constants.RemoteNames.RequestPurchaseGamePass,
 	Constants.RemoteNames.RequestSkipTutorial,
 	Constants.RemoteNames.TutorialStateUpdate,
+	Constants.RemoteNames.RequestPrestige,
+	Constants.RemoteNames.PrestigeStateUpdate,
+	Constants.RemoteNames.RequestCreateClan,
+	Constants.RemoteNames.RequestJoinClan,
+	Constants.RemoteNames.RequestLeaveClan,
+	Constants.RemoteNames.ClanStateUpdate,
+	Constants.RemoteNames.RequestClaimBattlePassReward,
+	Constants.RemoteNames.BattlePassStateUpdate,
 }
 
 local FUNCTIONS = {

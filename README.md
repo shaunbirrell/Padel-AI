@@ -5,6 +5,10 @@
 Commercial Roblox military tycoon / territory / vehicle collection game.  
 Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + polish).
 
+## MVP status
+
+**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige / Clan scaffolding / Battle Pass track. Product IDs remain `0`. Validate with Rojo sync + StudioSetup; this environment cannot run Roblox Studio.
+
 ## Requirements
 
 - [Rojo](https://rojo.space/) 7.4+ (see `aftman.toml`)
@@ -52,6 +56,11 @@ Admin remotes: `RequestAdminCommand` with commands:
 | `resetbase` | — | Zero all structure levels |
 | `resettutorial` | — | Restart interactive tutorial |
 | `grantpass` | PassKey | Studio mock GamePass own (`VIP`, `DoubleCash`, `DoubleXP`) |
+| `prestige` / `forceprestige` | — | Prestige (force sets level gate first) |
+| `createclan` | name, tag? | Create clan |
+| `joinclan` / `leaveclan` | clanId? | Join / leave clan |
+| `bpxp` | number | Add Battle Pass XP |
+| `grantpremium` | — | Grant Battle Pass Premium flag |
 
 ## DevConfig (Studio-only)
 
@@ -110,6 +119,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | **G** / GARAGE | Vehicle garage (buy / spawn / despawn) |
 | **M** / MISSIONS | Daily missions + login claim |
 | **P** / SHOP | DevProducts + GamePasses |
+| **K** / PROGRESS | Prestige + Battle Pass + Clan |
 | LMB / FIRE | Fire equipped weapon |
 | **R** | Reload |
 
@@ -158,3 +168,10 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `ProcessReceipt` idempotent + `ProcessedReceipts`.
 - GamePass ownership cached on join; VIP / 2x Cash / 2x XP hooks in `EconomyService` / `XPService`.
 - Interactive `TutorialController` + `TutorialService`; notification toast polish; StudioSetup tutorial markers.
+
+
+### Prestige / Clan / Battle Pass (post–Phase 7)
+
+- **Prestige:** Level 100+; resets progression currency/levels/base; keeps vehicles/weapons/gold; +Gold; cash mult via `EconomyConfig.PrestigeCashMultiplierPerLevel`.
+- **Clans:** Create/join/leave; `profile.ClanId` stamped onto captured territories for clan ownership checks.
+- **Battle Pass:** XP from gameplay; claim free/premium milestones (**K**); Premium via admin until product IDs set.

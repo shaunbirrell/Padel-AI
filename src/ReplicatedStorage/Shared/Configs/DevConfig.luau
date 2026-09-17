@@ -10,7 +10,7 @@
 
 	Admin remotes (AdminConfig.UserIds only), via RequestAdminCommand:
 	  givecash <n>, givegold <n>, givexp <n>, setlevel <n>, unlockall, resetbase,
-	  resettutorial, grantpass <PassKey> (Studio mock ownership when Id=0)
+	  resettutorial, grantpass <PassKey>, prestige/forceprestige, createclan/joinclan/leaveclan, bpxp, grantpremium
 ]]
 
 local DevConfig = {

@@ -10,6 +10,7 @@ local TutorialController = require(script.Parent.TutorialController)
 local TerritoryController = require(script.Parent.TerritoryController)
 local MissionController = require(script.Parent.MissionController)
 local ShopController = require(script.Parent.ShopController)
+local ProgressionController = require(script.Parent.ProgressionController)
 
 function UIController.Init()
 	HUDController.Init()
@@ -19,6 +20,7 @@ function UIController.Init()
 	TerritoryController.Init()
 	MissionController.Init()
 	ShopController.Init()
+	ProgressionController.Init()
 end
 
 return UIController
