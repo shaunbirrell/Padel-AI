@@ -13,12 +13,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 local TutorialConfig = require(Shared.Configs.TutorialConfig)
 
 local TutorialController = {}
 
 local player = Players.LocalPlayer
-local gui: ScreenGui? = nil
+local _gui: ScreenGui? = nil
 local panel: Frame? = nil
 local titleLabel: TextLabel? = nil
 local hintLabel: TextLabel? = nil
@@ -163,11 +164,10 @@ function TutorialController.Init()
 	local pg = player:WaitForChild("PlayerGui")
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireTutorial"
-	screen.ResetOnSpawn = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.DisplayOrder = 20
 	screen.Parent = pg
-	gui = screen
+	UIUtil.PrepareScreen(screen, false)
+	_gui = screen
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"

@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BattlePassConfig = require(Shared.Configs.BattlePassConfig)
 local SeasonConfig = require(Shared.Configs.SeasonConfig)
+local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local BattlePassService = {}
 
@@ -18,6 +19,7 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
+local AntiExploitService: any = nil
 
 local function ensureSeason(profile: any)
 	local seasonId = SeasonConfig.CurrentSeasonId or BattlePassConfig.SeasonId
@@ -90,7 +92,7 @@ local function pushState(player: Player)
 	})
 end
 
-function BattlePassService.AddXP(player: Player, amount: number, reason: string?)
+function BattlePassService.AddXP(player: Player, amount: number, _reason: string?)
 	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
 		return
 	end
@@ -133,10 +135,17 @@ local function grantReward(player: Player, reward: any)
 end
 
 function BattlePassService.Claim(player: Player, level: number, track: string): (boolean, string?)
-	if typeof(level) ~= "number" or level ~= level then
+	if AntiExploitService and AntiExploitService.IsFiniteNumber then
+		if not AntiExploitService.IsFiniteNumber(level) then
+			return false, "InvalidLevel"
+		end
+	elseif typeof(level) ~= "number" or level ~= level then
 		return false, "InvalidLevel"
 	end
 	level = math.floor(level)
+	if level < 1 or level > 500 then
+		return false, "InvalidLevel"
+	end
 	if track ~= "free" and track ~= "premium" then
 		return false, "InvalidTrack"
 	end
@@ -180,7 +189,7 @@ function BattlePassService.Claim(player: Player, level: number, track: string): 
 		NotificationService.Notify(player, "Battle Pass reward claimed (L" .. key .. " " .. track .. ")", "Reward")
 	end
 	if AnalyticsService and AnalyticsService.Log then
-		AnalyticsService.Log("BATTLEPASS_CLAIM", player.UserId, { level = level, track = track })
+		AnalyticsService.Log(AnalyticsConfig.Events.BATTLEPASS_CLAIM or "BATTLEPASS_CLAIM", player.UserId, { level = level, track = track })
 	end
 	return true, nil
 end
@@ -220,7 +229,7 @@ function BattlePassService.ClaimAll(player: Player, track: string): (number, str
 					grantReward(player, reward)
 					claimed += 1
 					if AnalyticsService and AnalyticsService.Log then
-						AnalyticsService.Log("BATTLEPASS_CLAIM", player.UserId, { level = level, track = track, batch = true })
+						AnalyticsService.Log(AnalyticsConfig.Events.BATTLEPASS_CLAIM or "BATTLEPASS_CLAIM", player.UserId, { level = level, track = track, batch = true })
 					end
 				end
 			end
@@ -255,13 +264,17 @@ function BattlePassService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
+	AntiExploitService = deps.AntiExploitService
 
 	local claimRemote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimBattlePassReward) :: RemoteEvent
 	claimRemote.OnServerEvent:Connect(function(player: Player, level: any, track: any)
 		if not RateLimitService.Allow(player, "bp_claim", 4, 8) then
+			if AntiExploitService and AntiExploitService.Strike then
+				AntiExploitService.Strike(player, "bp_claim_rate")
+			end
 			return
 		end
-		if typeof(track) ~= "string" then
+		if typeof(track) ~= "string" or (track ~= "free" and track ~= "premium") then
 			return
 		end
 		-- level 0 / "all" = claim every reachable unclaimed reward on that track

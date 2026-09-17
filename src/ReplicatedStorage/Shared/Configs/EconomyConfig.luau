@@ -13,6 +13,9 @@ local EconomyConfig = {
 	MaxGold = 10_000_000,
 
 	-- Passive income: base + sum(structureLevel * rate)
+	-- Early-game pacing (first 10 min): start $5k → CC L1 ($1500) immediately →
+	-- base $25/tick (~$300/min) + CC $15 → Barracks L1 ($2500) in ~1 min →
+	-- then ~$60/tick sustains VehicleDepot / WeaponsFacility without feeling stuck.
 	PassiveIncome = {
 		TickSeconds = 5,
 		BaseCashPerTick = 25, -- alone: ~300/min → Barracks L1 (2500) in ~50s with upgrades help

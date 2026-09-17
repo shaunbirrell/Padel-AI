@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
+local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local SoldierService = {}
 
@@ -17,6 +18,9 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
+local AntiExploitService: any = nil
+
+local MAX_BATCH = 50
 
 local function barracksLevel(profile: any): number
 	local upgrades = profile.BaseUpgrades
@@ -38,14 +42,19 @@ local function pushState(player: Player)
 		return
 	end
 	local count = tonumber(profile.Soldiers) or 0
+	local cap = maxSoldiers(profile)
+	local cost = SoldierConfig.RecruitCostCash or 500
+	local room = math.max(0, cap - count)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.SoldierStateUpdate) :: RemoteEvent
 	remote:FireClient(player, {
 		Soldiers = count,
-		MaxSoldiers = maxSoldiers(profile),
+		MaxSoldiers = cap,
 		BarracksLevel = barracksLevel(profile),
-		RecruitCostCash = SoldierConfig.RecruitCostCash or 500,
+		RecruitCostCash = cost,
 		RecruitBatchSize = SoldierConfig.RecruitBatchSize or 1,
 		DismissRefundMult = SoldierConfig.DismissRefundMult or 0.25,
+		SlotsFree = room,
+		FillCost = cost * room,
 	})
 end
 
@@ -57,13 +66,25 @@ function SoldierService.GetCount(player: Player): number
 	return tonumber(profile.Soldiers) or 0
 end
 
-function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
-	if typeof(amount) ~= "number" or amount ~= amount then
-		return false, "InvalidAmount"
+local function sanitizeAmount(amount: any): (number?, string?)
+	if AntiExploitService and AntiExploitService.IsFiniteNumber then
+		if not AntiExploitService.IsFiniteNumber(amount) then
+			return nil, "InvalidAmount"
+		end
+	elseif typeof(amount) ~= "number" or amount ~= amount then
+		return nil, "InvalidAmount"
 	end
-	amount = math.floor(amount)
-	if amount < 1 or amount > 50 then
-		return false, "InvalidAmount"
+	local n = math.floor(amount :: number)
+	if n < 1 or n > MAX_BATCH then
+		return nil, "InvalidAmount"
+	end
+	return n, nil
+end
+
+function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
+	local n, serr = sanitizeAmount(amount)
+	if not n then
+		return false, serr
 	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -71,52 +92,65 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	end
 	local current = tonumber(profile.Soldiers) or 0
 	local cap = maxSoldiers(profile)
-	if current + amount > cap then
+	if current >= cap then
 		return false, "AtCap"
 	end
+	if current + n > cap then
+		n = cap - current -- clamp to remaining slots
+	end
 	local costEach = SoldierConfig.RecruitCostCash or 500
-	local total = costEach * amount
+	local total = costEach * n
 	local ok, err = EconomyService.SpendCash(player, total, "recruit_soldiers")
 	if not ok then
 		return false, err or "CannotAfford"
 	end
-	profile.Soldiers = current + amount
+	profile.Soldiers = current + n
 	DataService.MarkDirty(player)
 	pushState(player)
 	if NotificationService then
-		NotificationService.Notify(player, string.format("Recruited %d soldiers (-$%d)", amount, total), "Success")
+		NotificationService.Notify(
+			player,
+			string.format("Recruited %d · Army %d/%d (−$%d)", n, profile.Soldiers, cap, total),
+			"Success"
+		)
 	end
+	local eventName = if AnalyticsConfig.Events.SOLDIER_RECRUIT then AnalyticsConfig.Events.SOLDIER_RECRUIT else "SOLDIER_RECRUIT"
 	if AnalyticsService and AnalyticsService.Log then
-		AnalyticsService.Log("SOLDIER_RECRUIT", player.UserId, { amount = amount, cost = total })
+		AnalyticsService.Log(eventName, player.UserId, { amount = n, cost = total, total = profile.Soldiers })
 	end
 	return true, nil
 end
 
 function SoldierService.Dismiss(player: Player, amount: any): (boolean, string?)
-	if typeof(amount) ~= "number" or amount ~= amount then
-		return false, "InvalidAmount"
-	end
-	amount = math.floor(amount)
-	if amount < 1 or amount > 50 then
-		return false, "InvalidAmount"
+	local n, serr = sanitizeAmount(amount)
+	if not n then
+		return false, serr
 	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return false, "NoProfile"
 	end
 	local current = tonumber(profile.Soldiers) or 0
-	if amount > current then
+	if n > current then
 		return false, "NotEnoughSoldiers"
 	end
-	profile.Soldiers = current - amount
-	local refund = math.floor((SoldierConfig.RecruitCostCash or 500) * amount * (SoldierConfig.DismissRefundMult or 0.25))
+	profile.Soldiers = current - n
+	local refund = math.floor((SoldierConfig.RecruitCostCash or 500) * n * (SoldierConfig.DismissRefundMult or 0.25))
 	if refund > 0 then
 		EconomyService.AddCash(player, refund, "dismiss_soldiers")
 	end
 	DataService.MarkDirty(player)
 	pushState(player)
 	if NotificationService then
-		NotificationService.Notify(player, string.format("Dismissed %d soldiers (+$%d)", amount, refund), "Info")
+		NotificationService.Notify(
+			player,
+			string.format("Dismissed %d · Army %d (−refund $%d)", n, profile.Soldiers, refund),
+			"Info"
+		)
+	end
+	local eventName = if AnalyticsConfig.Events.SOLDIER_DISMISS then AnalyticsConfig.Events.SOLDIER_DISMISS else "SOLDIER_DISMISS"
+	if AnalyticsService and AnalyticsService.Log then
+		AnalyticsService.Log(eventName, player.UserId, { amount = n, refund = refund })
 	end
 	return true, nil
 end
@@ -132,21 +166,34 @@ function SoldierService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
+	AntiExploitService = deps.AntiExploitService
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
 		if not RateLimitService.Allow(player, "soldier_recruit", 2, 4) then
+			if AntiExploitService and AntiExploitService.Strike then
+				AntiExploitService.Strike(player, "soldier_recruit_rate")
+			end
 			return
 		end
 		local ok, err = SoldierService.Recruit(player, amount)
 		if not ok and NotificationService then
-			NotificationService.Notify(player, "Recruit failed: " .. tostring(err), "Warn")
+			local msg = "Recruit failed: " .. tostring(err)
+			if err == "AtCap" then
+				msg = "Army at capacity — upgrade Barracks"
+			elseif err == "InsufficientCash" or err == "CannotAfford" then
+				msg = "Not enough cash to recruit"
+			end
+			NotificationService.Notify(player, msg, "Warn")
 		end
 	end)
 
 	local dismissRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDismissSoldiers) :: RemoteEvent
 	dismissRemote.OnServerEvent:Connect(function(player: Player, amount: any)
 		if not RateLimitService.Allow(player, "soldier_dismiss", 2, 4) then
+			if AntiExploitService and AntiExploitService.Strike then
+				AntiExploitService.Strike(player, "soldier_dismiss_rate")
+			end
 			return
 		end
 		local ok, err = SoldierService.Dismiss(player, amount)

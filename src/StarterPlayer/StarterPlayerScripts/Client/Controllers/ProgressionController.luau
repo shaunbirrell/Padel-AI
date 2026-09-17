@@ -1,5 +1,5 @@
 --!strict
---[[ Progression UI — Prestige + Battle Pass + Clan (key K / PROGRESS button) ]]
+--[[ Progression UI — Prestige + Battle Pass + Clan + Clan War (key K / PROGRESS) ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 
 local ProgressionController = {}
 
@@ -17,17 +18,16 @@ local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
 local bpLabel: TextLabel? = nil
 local bpClaimHint: TextLabel? = nil
+local bpBarFill: Frame? = nil
 local clanLabel: TextLabel? = nil
+local warLabel: TextLabel? = nil
+local scoreboardLabel: TextLabel? = nil
 local trackList: ScrollingFrame? = nil
+local warIdBox: TextBox? = nil
 local prestigeState: any = nil
 local bpState: any = nil
 local clanState: any = nil
-
-local function corner(parent: Instance, r: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, r)
-	c.Parent = parent
-end
+local warState: any = nil
 
 local function formatReward(reward: any): string
 	if typeof(reward) ~= "table" then
@@ -79,7 +79,7 @@ local function rebuildTrackPreview()
 	table.sort(tiers)
 
 	local rows = 0
-	local maxRows = 12
+	local maxRows = 14
 	for _, tier in ipairs(tiers) do
 		if rows >= maxRows then
 			break
@@ -95,12 +95,7 @@ local function rebuildTrackPreview()
 			or premReady
 			or (reached and ((freeR ~= nil and not freeClaimed) or (premR ~= nil and not premClaimed)))
 			or (not reached and tier <= level + 6)
-		local skip = false
-		if not interesting and rows > 0 then
-			skip = true
-		elseif not interesting and rows == 0 and tier > level + 3 then
-			skip = true
-		end
+		local skip = (not interesting) and (rows > 0 or tier > level + 3)
 		if not skip then
 			rows += 1
 			local row = Instance.new("Frame")
@@ -109,7 +104,7 @@ local function rebuildTrackPreview()
 			row.BorderSizePixel = 0
 			row.LayoutOrder = tier
 			row.Parent = trackList
-			corner(row, 4)
+			UIUtil.Corner(row, 4)
 
 			local status = "locked"
 			if freeReady or premReady then
@@ -126,7 +121,7 @@ local function rebuildTrackPreview()
 			local lab = Instance.new("TextLabel")
 			lab.BackgroundTransparency = 1
 			lab.Position = UDim2.fromOffset(6, 0)
-			lab.Size = UDim2.new(1, -12, 1, 0)
+			lab.Size = UDim2.new(1, -70, 1, 0)
 			lab.Font = Enum.Font.Gotham
 			lab.TextSize = 11
 			lab.TextXAlignment = Enum.TextXAlignment.Left
@@ -139,6 +134,42 @@ local function rebuildTrackPreview()
 				status
 			)
 			lab.Parent = row
+
+			if freeReady then
+				local claimBtn = Instance.new("TextButton")
+				claimBtn.AnchorPoint = Vector2.new(1, 0.5)
+				claimBtn.Position = UDim2.new(1, -4, 0.5, 0)
+				claimBtn.Size = UDim2.fromOffset(52, 22)
+				claimBtn.BackgroundColor3 = Constants.Colors.Accent
+				claimBtn.Font = Enum.Font.GothamBold
+				claimBtn.TextSize = 10
+				claimBtn.TextColor3 = Constants.Colors.Text
+				claimBtn.Text = "CLAIM"
+				claimBtn.BorderSizePixel = 0
+				UIUtil.Corner(claimBtn, 4)
+				claimBtn.Parent = row
+				local claimTier = tier
+				claimBtn.MouseButton1Click:Connect(function()
+					Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(claimTier, "free")
+				end)
+			elseif premReady then
+				local claimBtn = Instance.new("TextButton")
+				claimBtn.AnchorPoint = Vector2.new(1, 0.5)
+				claimBtn.Position = UDim2.new(1, -4, 0.5, 0)
+				claimBtn.Size = UDim2.fromOffset(52, 22)
+				claimBtn.BackgroundColor3 = Constants.Colors.Gold
+				claimBtn.Font = Enum.Font.GothamBold
+				claimBtn.TextSize = 10
+				claimBtn.TextColor3 = Constants.Colors.Background
+				claimBtn.Text = "CLAIM"
+				claimBtn.BorderSizePixel = 0
+				UIUtil.Corner(claimBtn, 4)
+				claimBtn.Parent = row
+				local claimTier = tier
+				claimBtn.MouseButton1Click:Connect(function()
+					Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(claimTier, "premium")
+				end)
+			end
 		end
 	end
 end
@@ -155,22 +186,27 @@ local function refreshLabels()
 	if bpLabel and typeof(bpState) == "table" then
 		local claimFree = tonumber(bpState.ClaimableFree) or 0
 		local claimPrem = tonumber(bpState.ClaimablePremium) or 0
+		local xp = tonumber(bpState.XP) or 0
+		local need = tonumber(bpState.XPPerLevel) or 1000
 		bpLabel.Text = string.format(
 			"BP L%d  XP %d/%d  %s\nClaimable: %d free · %d premium",
 			tonumber(bpState.Level) or 0,
-			tonumber(bpState.XP) or 0,
-			tonumber(bpState.XPPerLevel) or 1000,
-			if bpState.Premium then "PREMIUM" else "Free (admin grantpremium / shop PremiumPass)",
+			xp,
+			need,
+			if bpState.Premium then "PREMIUM" else "Free (shop PremiumPass / admin)",
 			claimFree,
 			claimPrem
 		)
+		if bpBarFill and need > 0 then
+			bpBarFill.Size = UDim2.fromScale(math.clamp(xp / need, 0, 1), 1)
+		end
 	end
 	if bpClaimHint then
 		if typeof(bpState) == "table" then
 			local cf = tonumber(bpState.ClaimableFree) or 0
 			local cp = tonumber(bpState.ClaimablePremium) or 0
 			if cf + cp > 0 then
-				bpClaimHint.Text = string.format("Tap CLAIM ALL — %d rewards ready", cf + cp)
+				bpClaimHint.Text = string.format("Tap CLAIM ALL or CLAIM on a READY row — %d ready", cf + cp)
 				bpClaimHint.TextColor3 = Constants.Colors.Cash
 			else
 				bpClaimHint.Text = "No unclaimed rewards at current BP level"
@@ -192,6 +228,58 @@ local function refreshLabels()
 			clanLabel.Text = "Not in a clan — create one below"
 		end
 	end
+	if warLabel then
+		if typeof(warState) == "table" then
+			local war = warState.War
+			local cd = tonumber(warState.DeclareCooldownLeft) or 0
+			if typeof(war) == "table" and war.Active then
+				local left = math.max(0, (tonumber(war.EndUnix) or 0) - os.time())
+				warLabel.Text = string.format(
+					"WAR ACTIVE  %s vs %s\nScore %d – %d  ·  %dm left",
+					tostring(war.AttackerName or war.AttackerClanId),
+					tostring(war.DefenderName or war.DefenderClanId),
+					tonumber(war.AttackerScore) or 0,
+					tonumber(war.DefenderScore) or 0,
+					math.floor(left / 60)
+				)
+				warLabel.TextColor3 = Color3.fromRGB(230, 160, 60)
+			elseif typeof(war) == "table" and war.Settled then
+				warLabel.Text = string.format(
+					"Last war settled · Winner: %s\nCooldown: %ds before next declare",
+					tostring(war.WinnerClanId or "draw"),
+					cd
+				)
+				warLabel.TextColor3 = Constants.Colors.Muted
+			else
+				local rewards = warState.Rewards
+				local winCash = if typeof(rewards) == "table" then tonumber(rewards.WinCash) or 0 else 0
+				warLabel.Text = string.format(
+					"No active war. Leader declares vs clan Id.\nWin ≈ $%d · cooldown %ds · min members %d",
+					winCash,
+					cd,
+					tonumber(warState.MinMembers) or 2
+				)
+				warLabel.TextColor3 = Constants.Colors.Muted
+			end
+		else
+			warLabel.Text = "War state loading..."
+		end
+	end
+	if scoreboardLabel and typeof(warState) == "table" then
+		local board = warState.Scoreboard
+		if typeof(board) == "table" and #board > 0 then
+			local lines = { "Global war scoreboard:" }
+			for i, row in ipairs(board) do
+				if i > 5 then
+					break
+				end
+				table.insert(lines, string.format("  %d. %s — %d", i, tostring(row.Name or row.ClanId), tonumber(row.Score) or 0))
+			end
+			scoreboardLabel.Text = table.concat(lines, "\n")
+		else
+			scoreboardLabel.Text = "Scoreboard empty — capture territories with a clan"
+		end
+	end
 	rebuildTrackPreview()
 end
 
@@ -208,25 +296,8 @@ end
 function ProgressionController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireProgression"
-	screen.ResetOnSpawn = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.Parent = player:WaitForChild("PlayerGui")
-
-	local scale = Instance.new("UIScale")
-	scale.Name = "MobileScale"
-	scale.Parent = screen
-	local function updateScale()
-		local cam = workspace.CurrentCamera
-		if not cam then
-			return
-		end
-		local size = cam.ViewportSize
-		scale.Scale = math.clamp(math.min(size.X, size.Y) / 900, 0.65, 1.1)
-	end
-	updateScale()
-	if workspace.CurrentCamera then
-		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-	end
+	UIUtil.PrepareScreen(screen, false)
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")
@@ -240,7 +311,8 @@ function ProgressionController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "PROGRESS"
 	toggle.BorderSizePixel = 0
-	corner(toggle, 8)
+	UIUtil.Corner(toggle, 8)
+	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
 		setOpen(not menuOpen)
@@ -250,12 +322,23 @@ function ProgressionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(480, 560)
+	panel.Size = UDim2.fromOffset(500, 620)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
 	panel.Parent = screen
-	corner(panel, 10)
+	UIUtil.Corner(panel, 10)
+	UIUtil.Stroke(panel)
+
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "Content"
+	scroll.Position = UDim2.fromOffset(0, 44)
+	scroll.Size = UDim2.new(1, 0, 1, -52)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 5
+	scroll.CanvasSize = UDim2.fromOffset(0, 900)
+	scroll.Parent = panel
 
 	local title = Instance.new("TextLabel")
 	title.BackgroundTransparency = 1
@@ -277,13 +360,13 @@ function ProgressionController.Init()
 	close.Text = "X"
 	close.TextColor3 = Constants.Colors.Text
 	close.BorderSizePixel = 0
-	corner(close, 6)
+	UIUtil.Corner(close, 6)
 	close.Parent = panel
 	close.MouseButton1Click:Connect(function()
 		setOpen(false)
 	end)
 
-	local y = 48
+	local y = 8
 	local function section(text: string)
 		local lab = Instance.new("TextLabel")
 		lab.BackgroundTransparency = 1
@@ -294,7 +377,7 @@ function ProgressionController.Init()
 		lab.TextXAlignment = Enum.TextXAlignment.Left
 		lab.TextColor3 = Constants.Colors.Accent
 		lab.Text = text
-		lab.Parent = panel
+		lab.Parent = scroll
 		y += 22
 	end
 	local function body(h: number?): TextLabel
@@ -309,7 +392,7 @@ function ProgressionController.Init()
 		lab.TextYAlignment = Enum.TextYAlignment.Top
 		lab.TextColor3 = Constants.Colors.Muted
 		lab.Text = "..."
-		lab.Parent = panel
+		lab.Parent = scroll
 		y += (h or 40) + 4
 		return lab
 	end
@@ -323,8 +406,8 @@ function ProgressionController.Init()
 		b.TextColor3 = Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
-		corner(b, 6)
-		b.Parent = panel
+		UIUtil.Corner(b, 6)
+		b.Parent = scroll
 		b.MouseButton1Click:Connect(cb)
 		return b
 	end
@@ -338,9 +421,23 @@ function ProgressionController.Init()
 
 	section("BATTLE PASS")
 	bpLabel = body(44)
+	-- XP bar
+	local bpBg = Instance.new("Frame")
+	bpBg.Position = UDim2.fromOffset(16, y)
+	bpBg.Size = UDim2.new(1, -32, 0, 12)
+	bpBg.BackgroundColor3 = Constants.Colors.Background
+	bpBg.BorderSizePixel = 0
+	bpBg.Parent = scroll
+	UIUtil.Corner(bpBg, 4)
+	bpBarFill = Instance.new("Frame")
+	bpBarFill.Size = UDim2.fromScale(0, 1)
+	bpBarFill.BackgroundColor3 = Constants.Colors.XP
+	bpBarFill.BorderSizePixel = 0
+	bpBarFill.Parent = bpBg
+	UIUtil.Corner(bpBarFill, 4)
+	y += 16
 	bpClaimHint = body(18)
 	btn("CLAIM ALL FREE", 150, function()
-		-- level 0 = ClaimAll on server
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "free")
 	end)
 	local premBtn = btn("CLAIM ALL PREMIUM", 170, function()
@@ -360,23 +457,23 @@ function ProgressionController.Init()
 	trackTitle.TextSize = 11
 	trackTitle.TextXAlignment = Enum.TextXAlignment.Left
 	trackTitle.TextColor3 = Constants.Colors.Muted
-	trackTitle.Text = "Reward track (ready / upcoming)"
-	trackTitle.Parent = panel
+	trackTitle.Text = "Reward track (CLAIM on READY rows)"
+	trackTitle.Parent = scroll
 	y += 18
 
-	local scroll = Instance.new("ScrollingFrame")
-	scroll.Position = UDim2.fromOffset(12, y)
-	scroll.Size = UDim2.new(1, -24, 0, 110)
-	scroll.BackgroundTransparency = 1
-	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 4
-	scroll.CanvasSize = UDim2.fromOffset(0, 0)
-	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	scroll.Parent = panel
-	trackList = scroll
+	local trackScroll = Instance.new("ScrollingFrame")
+	trackScroll.Position = UDim2.fromOffset(12, y)
+	trackScroll.Size = UDim2.new(1, -24, 0, 110)
+	trackScroll.BackgroundTransparency = 1
+	trackScroll.BorderSizePixel = 0
+	trackScroll.ScrollBarThickness = 4
+	trackScroll.CanvasSize = UDim2.fromOffset(0, 0)
+	trackScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	trackScroll.Parent = scroll
+	trackList = trackScroll
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0, 3)
-	layout.Parent = scroll
+	layout.Parent = trackScroll
 	y += 118
 
 	section("CLAN")
@@ -392,8 +489,8 @@ function ProgressionController.Init()
 	nameBox.Text = ""
 	nameBox.ClearTextOnFocus = false
 	nameBox.BorderSizePixel = 0
-	corner(nameBox, 6)
-	nameBox.Parent = panel
+	UIUtil.Corner(nameBox, 6)
+	nameBox.Parent = scroll
 	local tagBox = Instance.new("TextBox")
 	tagBox.Position = UDim2.fromOffset(224, y)
 	tagBox.Size = UDim2.fromOffset(80, 28)
@@ -405,8 +502,8 @@ function ProgressionController.Init()
 	tagBox.Text = ""
 	tagBox.ClearTextOnFocus = false
 	tagBox.BorderSizePixel = 0
-	corner(tagBox, 6)
-	tagBox.Parent = panel
+	UIUtil.Corner(tagBox, 6)
+	tagBox.Parent = scroll
 	y += 36
 	btn("CREATE CLAN", 200, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestCreateClan):FireServer(nameBox.Text, tagBox.Text)
@@ -423,8 +520,8 @@ function ProgressionController.Init()
 	joinBox.Text = ""
 	joinBox.ClearTextOnFocus = false
 	joinBox.BorderSizePixel = 0
-	corner(joinBox, 6)
-	joinBox.Parent = panel
+	UIUtil.Corner(joinBox, 6)
+	joinBox.Parent = scroll
 	y += 36
 	btn("JOIN CLAN", 140, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestJoinClan):FireServer(joinBox.Text)
@@ -433,6 +530,32 @@ function ProgressionController.Init()
 		Remotes.GetEvent(Constants.RemoteNames.RequestLeaveClan):FireServer()
 	end)
 	leaveBtn.Position = UDim2.fromOffset(166, y)
+	y += 40
+
+	section("CLAN WAR")
+	warLabel = body(52)
+	scoreboardLabel = body(72)
+	warIdBox = Instance.new("TextBox")
+	warIdBox.Position = UDim2.fromOffset(16, y)
+	warIdBox.Size = UDim2.fromOffset(260, 28)
+	warIdBox.BackgroundColor3 = Constants.Colors.Background
+	warIdBox.Font = Enum.Font.Gotham
+	warIdBox.TextSize = 12
+	warIdBox.TextColor3 = Constants.Colors.Text
+	warIdBox.PlaceholderText = "Enemy clan Id to declare war"
+	warIdBox.Text = ""
+	warIdBox.ClearTextOnFocus = false
+	warIdBox.BorderSizePixel = 0
+	UIUtil.Corner(warIdBox, 6)
+	warIdBox.Parent = scroll
+	y += 36
+	btn("DECLARE WAR", 160, function()
+		if warIdBox and warIdBox.Text ~= "" then
+			Remotes.GetEvent(Constants.RemoteNames.RequestDeclareClanWar):FireServer(warIdBox.Text)
+		end
+	end)
+	y += 40
+	scroll.CanvasSize = UDim2.fromOffset(0, y + 20)
 
 	Remotes.GetEvent(Constants.RemoteNames.PrestigeStateUpdate).OnClientEvent:Connect(function(payload)
 		prestigeState = payload
@@ -444,6 +567,10 @@ function ProgressionController.Init()
 	end)
 	Remotes.GetEvent(Constants.RemoteNames.ClanStateUpdate).OnClientEvent:Connect(function(payload)
 		clanState = payload
+		refreshLabels()
+	end)
+	Remotes.GetEvent(Constants.RemoteNames.ClanWarStateUpdate).OnClientEvent:Connect(function(payload)
+		warState = payload
 		refreshLabels()
 	end)
 

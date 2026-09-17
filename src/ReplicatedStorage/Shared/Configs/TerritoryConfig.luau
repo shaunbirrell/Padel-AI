@@ -14,13 +14,15 @@ export type TerritoryDef = {
 }
 
 local TerritoryConfig = {
-	-- Balancing stubs (hooks for later tuning / soft locks)
+	-- Balance knobs
 	MaxPersonalTerritories = 3,
-	ProtectionPeriodSeconds = 45, -- after capture, progress against owner is slowed/blocked
+	ProtectionPeriodSeconds = 45, -- after capture, enemy capture rate slowed
 	CaptureTickSeconds = 0.5,
-	ProgressDecayPerSecond = 0.35, -- when empty / contested
-	ContestedProgressMult = 0, -- no progress while contested
+	ProgressDecayPerSecond = 0.35, -- when zone empty
+	ContestedProgressMult = 0, -- 0 = freeze progress + light decay while contested
+	ContestedDecayMult = 0.5, -- decay rate multiplier while contested (when ContestedProgressMult <= 0)
 	ProtectedCaptureMult = 0.25, -- capturing protected enemy territory is slower
+	RadarRevealRadius = 220, -- studs: Radar Hill highlights enemies in this radius
 	NPCOwnerId = -1, -- sentinel "NPC faction" controller
 	NeutralOwnerId = 0,
 
@@ -103,7 +105,7 @@ local TerritoryConfig = {
 		RadarHill = {
 			Id = "RadarHill",
 			DisplayName = "Radar Hill",
-			Description = "Reveal enemies on minimap (stub).",
+			Description = "Enemy radar: highlight nearby hostile players within range.",
 			CaptureTimeSeconds = 40,
 			BonusType = "MinimapReveal",
 			BonusValue = 1,

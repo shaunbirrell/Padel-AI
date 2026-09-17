@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local NotificationConfig = require(Shared.Configs.NotificationConfig)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 
 local NotificationController = {}
 
@@ -26,10 +27,9 @@ local TYPE_PREFIX = {
 function NotificationController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireNotifications"
-	gui.ResetOnSpawn = false
 	gui.DisplayOrder = 50
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = player:WaitForChild("PlayerGui")
+	UIUtil.PrepareScreen(gui, false)
 
 	local frame = Instance.new("Frame")
 	frame.Name = "Stack"

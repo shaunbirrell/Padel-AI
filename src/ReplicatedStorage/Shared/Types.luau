@@ -172,6 +172,8 @@ export type TerritoryStatePayload = {
 		Progress: number,
 		Capturing: boolean,
 	}?,
+	RadarReveal: boolean?,
+	RadarRadius: number?,
 }
 
 export type MissionEntryPayload = {

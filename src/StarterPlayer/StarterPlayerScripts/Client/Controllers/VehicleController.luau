@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
 
@@ -171,10 +172,9 @@ end
 local function buildGui()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireGarage"
-	screen.ResetOnSpawn = false
 	screen.Enabled = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.Parent = player:WaitForChild("PlayerGui")
+	UIUtil.PrepareScreen(screen, false)
 	screenGui = screen
 
 	local panel = Instance.new("Frame")

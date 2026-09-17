@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 
 local BaseController = {}
@@ -138,14 +139,9 @@ end
 function BaseController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireBaseUI"
-	gui.ResetOnSpawn = false
-	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.Parent = player:WaitForChild("PlayerGui")
+	UIUtil.PrepareScreen(gui, false)
 	screenGui = gui
-
-	local scale = Instance.new("UIScale")
-	scale.Scale = 1
-	scale.Parent = gui
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "ToggleUpgrades"

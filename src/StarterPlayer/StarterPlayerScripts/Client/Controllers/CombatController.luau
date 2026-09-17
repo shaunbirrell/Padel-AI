@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
 
@@ -49,25 +50,11 @@ end
 local function buildHud()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireCombatHUD"
+	screen.Parent = player:WaitForChild("PlayerGui")
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	screen.Parent = player:WaitForChild("PlayerGui")
-
-	local scale = Instance.new("UIScale")
-	scale.Parent = screen
-	local function updateScale()
-		local cam = Workspace.CurrentCamera
-		if not cam then
-			return
-		end
-		local size = cam.ViewportSize
-		scale.Scale = math.clamp(math.min(size.X, size.Y) / 800, 0.7, 1.15)
-	end
-	updateScale()
-	if Workspace.CurrentCamera then
-		Workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-	end
+	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 
 	-- Health (bottom center)
 	local healthPanel = Instance.new("Frame")

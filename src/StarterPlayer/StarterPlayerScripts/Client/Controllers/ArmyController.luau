@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 
 local ArmyController = {}
 
@@ -16,13 +17,9 @@ local player = Players.LocalPlayer
 local open = false
 local screenGui: ScreenGui? = nil
 local statusLabel: TextLabel? = nil
+local capFill: Frame? = nil
+local capLabel: TextLabel? = nil
 local armyState: any = nil
-
-local function corner(parent: Instance, r: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, r)
-	c.Parent = parent
-end
 
 local function refreshLabels()
 	if not statusLabel then
@@ -32,14 +29,27 @@ local function refreshLabels()
 		statusLabel.Text = "Loading army..."
 		return
 	end
+	local count = tonumber(armyState.Soldiers) or 0
+	local cap = tonumber(armyState.MaxSoldiers) or 0
+	local free = tonumber(armyState.SlotsFree) or math.max(0, cap - count)
+	local cost = tonumber(armyState.RecruitCostCash) or 500
+	local refundMult = tonumber(armyState.DismissRefundMult) or 0.25
 	statusLabel.Text = string.format(
-		"Soldiers: %d / %d\nBarracks Lv %d\nRecruit: $%d each (batch %d)",
-		tonumber(armyState.Soldiers) or 0,
-		tonumber(armyState.MaxSoldiers) or 0,
+		"Soldiers: %d / %d  (%d free)\nBarracks Lv %d\nRecruit $%d each · Dismiss refund %d%%",
+		count,
+		cap,
+		free,
 		tonumber(armyState.BarracksLevel) or 0,
-		tonumber(armyState.RecruitCostCash) or 500,
-		tonumber(armyState.RecruitBatchSize) or 1
+		cost,
+		math.floor(refundMult * 100)
 	)
+	if capFill and cap > 0 then
+		capFill.Size = UDim2.fromScale(math.clamp(count / cap, 0, 1), 1)
+		capFill.BackgroundColor3 = if count >= cap then Constants.Colors.Danger else Constants.Colors.Accent
+	end
+	if capLabel then
+		capLabel.Text = string.format("%d / %d", count, cap)
+	end
 end
 
 local function setOpen(isOpen: boolean)
@@ -55,33 +65,9 @@ end
 function ArmyController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireArmy"
-	screen.ResetOnSpawn = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	screen.IgnoreGuiInset = true
 	screen.Parent = player:WaitForChild("PlayerGui")
+	UIUtil.PrepareScreen(screen, true)
 	screenGui = screen
-
-	local scale = Instance.new("UIScale")
-	scale.Name = "MobileScale"
-	scale.Parent = screen
-	local function updateScale()
-		local cam = workspace.CurrentCamera
-		if not cam then
-			return
-		end
-		local size = cam.ViewportSize
-		scale.Scale = math.clamp(math.min(size.X, size.Y) / 900, 0.65, 1.1)
-	end
-	updateScale()
-	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-		updateScale()
-		if workspace.CurrentCamera then
-			workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-		end
-	end)
-	if workspace.CurrentCamera then
-		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-	end
 
 	local inset = GuiService:GetGuiInset()
 	local toggle = Instance.new("TextButton")
@@ -95,7 +81,8 @@ function ArmyController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "ARMY"
 	toggle.BorderSizePixel = 0
-	corner(toggle, 8)
+	UIUtil.Corner(toggle, 8)
+	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
 		setOpen(not open)
@@ -105,12 +92,13 @@ function ArmyController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(360, 280)
+	panel.Size = UDim2.fromOffset(380, 320)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
 	panel.Parent = screen
-	corner(panel, 10)
+	UIUtil.Corner(panel, 10)
+	UIUtil.Stroke(panel)
 
 	local title = Instance.new("TextLabel")
 	title.BackgroundTransparency = 1
@@ -132,7 +120,7 @@ function ArmyController.Init()
 	close.Text = "X"
 	close.TextColor3 = Constants.Colors.Text
 	close.BorderSizePixel = 0
-	corner(close, 6)
+	UIUtil.Corner(close, 6)
 	close.Parent = panel
 	close.MouseButton1Click:Connect(function()
 		setOpen(false)
@@ -141,7 +129,7 @@ function ArmyController.Init()
 	statusLabel = Instance.new("TextLabel")
 	statusLabel.BackgroundTransparency = 1
 	statusLabel.Position = UDim2.fromOffset(16, 48)
-	statusLabel.Size = UDim2.new(1, -32, 0, 80)
+	statusLabel.Size = UDim2.new(1, -32, 0, 64)
 	statusLabel.Font = Enum.Font.Gotham
 	statusLabel.TextSize = 14
 	statusLabel.TextWrapped = true
@@ -151,44 +139,76 @@ function ArmyController.Init()
 	statusLabel.Text = "..."
 	statusLabel.Parent = panel
 
-	local function makeBtn(label: string, x: number, y: number, cb: () -> ())
+	-- Cap bar
+	local capBg = Instance.new("Frame")
+	capBg.Position = UDim2.fromOffset(16, 118)
+	capBg.Size = UDim2.new(1, -32, 0, 16)
+	capBg.BackgroundColor3 = Constants.Colors.Background
+	capBg.BorderSizePixel = 0
+	capBg.Parent = panel
+	UIUtil.Corner(capBg, 4)
+
+	capFill = Instance.new("Frame")
+	capFill.Size = UDim2.fromScale(0, 1)
+	capFill.BackgroundColor3 = Constants.Colors.Accent
+	capFill.BorderSizePixel = 0
+	capFill.Parent = capBg
+	UIUtil.Corner(capFill, 4)
+
+	capLabel = Instance.new("TextLabel")
+	capLabel.BackgroundTransparency = 1
+	capLabel.Size = UDim2.fromScale(1, 1)
+	capLabel.Font = Enum.Font.GothamBold
+	capLabel.TextSize = 11
+	capLabel.TextColor3 = Constants.Colors.Text
+	capLabel.Text = "0 / 0"
+	capLabel.Parent = capBg
+
+	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> ())
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(x, y)
-		b.Size = UDim2.fromOffset(150, 36)
+		b.Size = UDim2.fromOffset(w, 34)
 		b.BackgroundColor3 = Constants.Colors.Accent
 		b.Font = Enum.Font.GothamBold
-		b.TextSize = 13
+		b.TextSize = 12
 		b.TextColor3 = Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
-		corner(b, 6)
+		UIUtil.Corner(b, 6)
 		b.Parent = panel
 		b.MouseButton1Click:Connect(cb)
+		return b
 	end
 
-	makeBtn("RECRUIT x1", 16, 140, function()
+	makeBtn("RECRUIT x1", 16, 150, 160, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(1)
 	end)
-	makeBtn("RECRUIT x5", 180, 140, function()
+	makeBtn("RECRUIT x5", 192, 150, 160, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end)
-	makeBtn("DISMISS x1", 16, 188, function()
+	makeBtn("FILL CAP", 16, 194, 160, function()
+		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
+		if free > 0 then
+			Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(math.min(free, 50))
+		end
+	end)
+	makeBtn("DISMISS x1", 192, 194, 160, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(1)
 	end)
-	makeBtn("DISMISS x5", 180, 188, function()
+	makeBtn("DISMISS x5", 16, 238, 160, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(5)
 	end)
 
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
-	note.Position = UDim2.fromOffset(16, 236)
-	note.Size = UDim2.new(1, -32, 0, 32)
+	note.Position = UDim2.fromOffset(16, 280)
+	note.Size = UDim2.new(1, -32, 0, 28)
 	note.Font = Enum.Font.Gotham
 	note.TextSize = 11
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Server validates cash + barracks cap. Key A toggles."
+	note.Text = "Server validates cash + barracks cap. Upgrade Barracks to raise cap. Key A."
 	note.Parent = panel
 
 	Remotes.GetEvent(Constants.RemoteNames.SoldierStateUpdate).OnClientEvent:Connect(function(payload)

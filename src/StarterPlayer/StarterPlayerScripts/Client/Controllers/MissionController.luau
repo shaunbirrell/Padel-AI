@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
+local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 
@@ -154,9 +155,8 @@ end
 function MissionController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireMissions"
-	screen.ResetOnSpawn = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.Parent = player:WaitForChild("PlayerGui")
+	UIUtil.PrepareScreen(screen, false)
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")

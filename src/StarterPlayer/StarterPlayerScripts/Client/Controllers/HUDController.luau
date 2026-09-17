@@ -11,17 +11,19 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
+local UIUtil = require(Shared.Util.UIUtil)
 
 local HUDController = {}
 
 local player = Players.LocalPlayer
-local gui: ScreenGui? = nil
+local _gui: ScreenGui? = nil
 local levelLabel: TextLabel? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
 local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
+local seasonLabel: TextLabel? = nil
 
 local function makeCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -39,35 +41,12 @@ end
 function HUDController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireHUD"
+	screen.Parent = player:WaitForChild("PlayerGui")
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	screen.Parent = player:WaitForChild("PlayerGui")
-	gui = screen
-
-	local scale = Instance.new("UIScale")
-	scale.Name = "MobileScale"
-	scale.Parent = screen
-
-	local function updateScale()
-		local cam = workspace.CurrentCamera
-		if not cam then
-			return
-		end
-		local size = cam.ViewportSize
-		local s = math.clamp(math.min(size.X, size.Y) / 800, 0.7, 1.15)
-		scale.Scale = s
-	end
-	updateScale()
-	if workspace.CurrentCamera then
-		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-	end
-	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-		updateScale()
-		if workspace.CurrentCamera then
-			workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
-		end
-	end)
+	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
+	_gui = screen
 
 	-- Top-left: Level + XP
 	local left = Instance.new("Frame")
@@ -177,6 +156,23 @@ function HUDController.Init()
 	passive.Parent = screen
 	passiveLabel = passive
 
+	local season = Instance.new("TextLabel")
+	season.Name = "SeasonLabel"
+	season.AnchorPoint = Vector2.new(0.5, 0)
+	season.Position = UDim2.new(0.5, 0, 0, 12)
+	season.Size = UDim2.fromOffset(280, 22)
+	season.BackgroundColor3 = Constants.Colors.Panel
+	season.BackgroundTransparency = 0.25
+	season.BorderSizePixel = 0
+	season.Font = Enum.Font.GothamBold
+	season.TextSize = 12
+	season.TextColor3 = Constants.Colors.Muted
+	season.Text = ""
+	season.Visible = false
+	season.Parent = screen
+	UIUtil.Corner(season, 6)
+	seasonLabel = season
+
 	-- Remotes
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
 		HUDController.SetEconomy(payload.Cash, payload.Gold)
@@ -193,6 +189,25 @@ function HUDController.Init()
 	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
 		if passiveLabel and base.PassiveIncomePerTick then
 			passiveLabel.Text = string.format("+%d$/tick", base.PassiveIncomePerTick)
+		end
+	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.SeasonStateUpdate).OnClientEvent:Connect(function(payload)
+		if not seasonLabel or typeof(payload) ~= "table" then
+			return
+		end
+		local active = payload.Active == true
+		local name = tostring(payload.DisplayName or payload.SeasonId or "Season")
+		if active then
+			local xpB = tonumber(payload.XPBonusMult) or 1
+			local cashB = tonumber(payload.CashBonusMult) or 1
+			seasonLabel.Visible = true
+			seasonLabel.TextColor3 = Constants.Colors.Cash
+			seasonLabel.Text = string.format("%s  ·  XP×%.2f Cash×%.2f", name, xpB, cashB)
+		else
+			seasonLabel.Visible = true
+			seasonLabel.TextColor3 = Constants.Colors.Muted
+			seasonLabel.Text = name .. "  ·  ENDED"
 		end
 	end)
 

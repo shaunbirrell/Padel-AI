@@ -35,8 +35,8 @@ local TerritoryService = {}
 local ClanWarService: any = nil
 
 local DataService: any = nil
-local EconomyService: any = nil
-local XPService: any = nil
+local _EconomyService: any = nil
+local _XPService: any = nil
 local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local NotificationService: any = nil
@@ -178,9 +178,17 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 		return a.Id < b.Id
 	end)
 
+	local radar = false
+	local radarRadius = TerritoryConfig.RadarRevealRadius or 220
+	if player then
+		radar = TerritoryService.HasRadarReveal(player)
+	end
+
 	return {
 		Territories = list,
 		LocalCapture = localCapture,
+		RadarReveal = radar,
+		RadarRadius = radarRadius,
 	}
 end
 
@@ -221,12 +229,8 @@ function TerritoryService.GetBonusesForPlayer(player: Player): { [string]: numbe
 	local clanId = if profile then profile.ClanId else nil
 
 	for _, rt in pairs(territories) do
-		local owns = false
-		if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId then
-			owns = true
-		elseif rt.OwnerType == ownerTypes().Clan and clanId and rt.ClanId == clanId then
-			owns = true
-		end
+		local owns = (rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId)
+			or (rt.OwnerType == ownerTypes().Clan and clanId ~= nil and rt.ClanId == clanId)
 		if owns then
 			-- Flat and multiplicative bonuses both accumulate additively into the map;
 			-- consumers interpret FlatPassiveCash/MinimapReveal as flat, *Mult as fractions.
@@ -265,6 +269,16 @@ function TerritoryService.GetMissionCashMult(player: Player): number
 	return 1 + (b.MissionCashMult or 0)
 end
 
+--[[ True when player (or their clan) controls a MinimapReveal territory (Radar Hill). ]]
+function TerritoryService.HasRadarReveal(player: Player): boolean
+	local b = TerritoryService.GetBonusesForPlayer(player)
+	return (b.MinimapReveal or 0) > 0
+end
+
+function TerritoryService.GetRadarRevealRadius(): number
+	return TerritoryConfig.RadarRevealRadius or 220
+end
+
 local function releaseOwnership(rt: TerritoryRuntime, reason: string)
 	local prevUserId = rt.OwnerUserId
 	local prevType = rt.OwnerType
@@ -299,7 +313,7 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 		return
 	end
 
-	-- Enforce max personal territories (balancing stub)
+	-- Enforce max personal territories
 	local owned = countPersonalTerritories(player.UserId)
 	-- If already owning this one (re-secure), skip max check
 	local alreadyOwns = rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId
@@ -341,7 +355,15 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	syncProfileOwnership(player)
 
 	if NotificationService then
-		NotificationService.Notify(player, "Captured " .. rt.Def.DisplayName .. "!", "Reward")
+		local bonusHint = rt.Def.Description or ""
+		if #bonusHint > 60 then
+			bonusHint = string.sub(bonusHint, 1, 57) .. "..."
+		end
+		NotificationService.Notify(
+			player,
+			string.format("Captured %s! %s", rt.Def.DisplayName, bonusHint),
+			"Reward"
+		)
 	end
 
 	if AnalyticsService then
@@ -423,11 +445,14 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 	if uniqueCount >= 2 then
 		rt.Contested = true
 		rt.OwnerType = if rt.OwnerUserId == TerritoryConfig.NeutralOwnerId then ot.Contested else rt.OwnerType
-		-- Contested: no capture progress (stub mult)
+		-- Contested: ContestedProgressMult scales capture; 0 freezes and applies ContestedDecayMult decay
 		local mult = TerritoryConfig.ContestedProgressMult
 		if mult <= 0 then
-			-- slight decay while contested
-			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * 0.5 * dt)
+			local decayMult = TerritoryConfig.ContestedDecayMult or 0.5
+			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * decayMult * dt)
+		else
+			-- Rare path: allow slow contested progress for both (not used at default 0)
+			rt.Progress += dt * mult
 		end
 		updateMarkerVisual(rt)
 		return
@@ -509,8 +534,8 @@ end
 function TerritoryService.Init(deps: { [string]: any })
 	ClanWarService = deps.ClanWarService
 	DataService = deps.DataService
-	EconomyService = deps.EconomyService
-	XPService = deps.XPService
+	_EconomyService = deps.EconomyService
+	_XPService = deps.XPService
 	AnalyticsService = deps.AnalyticsService
 	RateLimitService = deps.RateLimitService
 	NotificationService = deps.NotificationService

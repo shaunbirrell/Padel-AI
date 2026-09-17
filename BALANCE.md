@@ -85,3 +85,13 @@ Capture times 20–40s. Max personal territories: **3**. Protection: **45s**.
 ## Daily missions (Phase 6)
 
 See `MissionConfig.DailyMissions` — Kill NPC ×10, Capture ×1, Upgrade ×2, Earn $8k, Spawn vehicle, Kill players ×3 (L5+).
+
+
+## Phase 7 polish notes (early-game)
+
+- Starting $5,000 covers Command Center ($1,500) with runway for Barracks ($2,500).
+- Soldier recruit $500 each; barracks levels raise army cap (base 50 + 5/level) — intentional mid sink without blocking tycoon loop.
+- Season XP×1.1 / Cash×1.05 while active; multipliers clear when season ends (persisted).
+- Clan war win $25k + gold + score bonus; participation $2.5k + 2G; declare cooldown 300s after settle.
+- Radar Hill: real client Highlight on nearby enemies (not a stub description).
+- Do not radical-retune structure curves without playtest; prefer EconomyConfig / SoldierConfig / ClanWarConfig knobs.

@@ -3,7 +3,6 @@
 	Phase 6 — Daily missions, timed missions, daily login rewards, achievements.
 ]]
 
-local Players = game:GetService("Players")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -109,7 +108,7 @@ function MissionService.Push(player: Player)
 
 	local today = yyyymmdd(os.time())
 	local already = profile.DailyLogin.LastClaimDay == today
-	local nextDay = (profile.DailyLogin.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
+	local _nextDay = (profile.DailyLogin.Streak % DailyRewardConfig.StreakResetsAfterDay) + 1
 	if already then
 		nextDay = profile.DailyLogin.Streak
 	elseif profile.DailyLogin.Streak == 0 then

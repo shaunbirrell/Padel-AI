@@ -128,6 +128,20 @@ function AdminService.Init(deps: { [string]: any })
 					deps.NotificationService.Notify(player, "Mock GamePass owned: " .. arg1, "Success")
 				end
 			end
+		elseif cmd == "endseason" then
+			if deps.SeasonService and deps.SeasonService.EndSeason then
+				deps.SeasonService.EndSeason("admin:" .. tostring(player.UserId))
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "Season ended (admin)", "Info")
+				end
+			end
+		elseif cmd == "resumeseason" then
+			if deps.SeasonService and deps.SeasonService.ClearEndOverride then
+				deps.SeasonService.ClearEndOverride("admin:" .. tostring(player.UserId))
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "Season resumed (admin)", "Success")
+				end
+			end
 		end
 	end)
 end

@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local PrestigeService = {}
 
@@ -20,6 +21,7 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
+local AntiExploitService: any = nil
 
 local function pushState(player: Player)
 	local profile = DataService.GetProfile(player)
@@ -106,7 +108,7 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 		)
 	end
 	if AnalyticsService and AnalyticsService.Log then
-		AnalyticsService.Log("PRESTIGE", player.UserId, { prestige = profile.Prestige })
+		AnalyticsService.Log(AnalyticsConfig.Events.PRESTIGE or "PRESTIGE", player.UserId, { prestige = profile.Prestige })
 	end
 
 	return true, nil
@@ -125,10 +127,14 @@ function PrestigeService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
+	AntiExploitService = deps.AntiExploitService
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestPrestige) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player)
 		if not RateLimitService.Allow(player, "prestige", 1, 2) then
+			if AntiExploitService and AntiExploitService.Strike then
+				AntiExploitService.Strike(player, "prestige_rate")
+			end
 			return
 		end
 		local ok, err = PrestigeService.DoPrestige(player)

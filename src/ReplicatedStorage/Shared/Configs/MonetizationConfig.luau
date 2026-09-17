@@ -53,6 +53,9 @@ local MonetizationConfig = {
 		purchase_refund = true,
 		prestige = true,
 		battlepass = true,
+		dismiss_soldiers = true,
+		clan_war_win = true,
+		clan_war_participate = true,
 	},
 	XPMultExemptReasons = {
 		admin = true,

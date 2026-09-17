@@ -14,18 +14,10 @@ local EconomyService: any = nil
 local AnalyticsService: any = nil
 local RemoteSetup: any = nil
 local TerritoryService: any = nil
-local MissionService: any = nil
+local _MissionService: any = nil
 local MonetizationService: any = nil
 local BattlePassService: any = nil
 local SeasonService: any = nil
-
-local function xpToNext(level: number, xp: number): number
-	local need = LevelConfig.GetXPRequiredForLevel(level)
-	if need == math.huge then
-		return 0
-	end
-	return math.max(0, need - xp)
-end
 
 local function pushXP(player: Player, profile: Types.PlayerProfile)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.XPUpdate) :: RemoteEvent
@@ -42,7 +34,7 @@ function XPService.Init(deps: { [string]: any })
 	AnalyticsService = deps.AnalyticsService
 	RemoteSetup = deps.RemoteSetup
 	TerritoryService = deps.TerritoryService
-	MissionService = deps.MissionService
+	_MissionService = deps.MissionService
 	MonetizationService = deps.MonetizationService
 	BattlePassService = deps.BattlePassService
 	SeasonService = deps.SeasonService
@@ -84,7 +76,6 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 	end
 
 	profile.XP += amount
-	local leveled = false
 	while profile.Level < LevelConfig.MaxLevel do
 		local need = LevelConfig.GetXPRequiredForLevel(profile.Level)
 		if profile.XP < need then
@@ -92,7 +83,6 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		end
 		profile.XP -= need
 		profile.Level += 1
-		leveled = true
 		local reward = LevelConfig.GetLevelUpReward(profile.Level)
 		if reward.Cash > 0 then
 			EconomyService.AddCash(player, reward.Cash, "level_up")

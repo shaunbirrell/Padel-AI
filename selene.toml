@@ -1,0 +1,8 @@
+std = "roblox"
+
+[lints]
+shadowing = "allow"
+unused_variable = "warn"
+empty_if = "warn"
+incorrect_standard_library_use = "allow"
+global_usage = "allow"
