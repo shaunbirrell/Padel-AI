@@ -3,7 +3,7 @@
 **BUILD. CONQUER. DOMINATE.**
 
 Commercial Roblox military tycoon / territory / vehicle collection game.  
-Rojo-ready Luau codebase — Phase 1 (Foundation) + Phase 2 (Tycoon) + Phase 3 (Combat) implemented; later systems scaffolded.
+Rojo-ready Luau codebase — Phase 1–4 implemented (Foundation, Tycoon, Combat, Vehicles); later systems scaffolded.
 
 ## Requirements
 
@@ -59,6 +59,14 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 ## Play loop (MVP)
 
 Join → profile load → plot assigned → HUD shows Cash/Gold/Level/XP → buy Command Center / Barracks → passive income ticks → **combat**: equip StarterRifle, fire (LMB / mobile FIRE), reload (R), fight NPCs / PvP → kill rewards → respawn at base → data autosaves / saves on leave.
+
+## Phase 4 — Vehicles notes
+
+- Garage UI (`G` / GARAGE button): list MVP 8 vehicles from `VehicleConfig`, BUY / SPAWN / DESPAWN.
+- Server `VehicleService` validates ownership, level, structure requirements, cash, spawn cooldown.
+- Spawn creates placeholder chassis + `VehicleSeat` near `WE_VehicleSpawn` or base plot.
+- Remotes: `RequestSpawnVehicle`, `RequestPurchaseVehicle`, `RequestDespawnVehicle`, `VehicleStateUpdate`.
+- One active vehicle per player; despawn on leave.
 
 ## Phase 3 — Combat notes
 

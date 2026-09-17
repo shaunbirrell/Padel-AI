@@ -18,6 +18,7 @@ Constants.Tags = {
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
 	NPC = "WE_NPC",
+	Vehicle = "WE_Vehicle",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -31,10 +32,13 @@ Constants.RemoteNames = {
 	XPUpdate = "XPUpdate",
 	CombatStateUpdate = "CombatStateUpdate",
 	CombatHitFeedback = "CombatHitFeedback",
+	VehicleStateUpdate = "VehicleStateUpdate",
 	-- Client → Server (request/action only — NEVER GiveCash/GiveXP/GiveWeapon)
 	RequestPurchaseUpgrade = "RequestPurchaseUpgrade",
 	RequestClaimDailyReward = "RequestClaimDailyReward",
 	RequestSpawnVehicle = "RequestSpawnVehicle",
+	RequestPurchaseVehicle = "RequestPurchaseVehicle",
+	RequestDespawnVehicle = "RequestDespawnVehicle",
 	RequestEquipWeapon = "RequestEquipWeapon",
 	RequestPurchaseWeapon = "RequestPurchaseWeapon",
 	RequestFire = "RequestFire",

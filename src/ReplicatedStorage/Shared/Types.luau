@@ -133,6 +133,12 @@ export type CombatHitFeedbackPayload = {
 	IsHeadshot: boolean?,
 }
 
+export type VehicleStatePayload = {
+	Owned: { [string]: boolean },
+	ActiveVehicleId: string?,
+	CooldownRemaining: number,
+}
+
 export type FireRequestPayload = {
 	Direction: Vector3,
 	Origin: Vector3?,

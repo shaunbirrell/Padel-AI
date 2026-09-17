@@ -18,10 +18,13 @@ local EVENTS = {
 	Constants.RemoteNames.XPUpdate,
 	Constants.RemoteNames.CombatStateUpdate,
 	Constants.RemoteNames.CombatHitFeedback,
+	Constants.RemoteNames.VehicleStateUpdate,
 	-- Client requests
 	Constants.RemoteNames.RequestPurchaseUpgrade,
 	Constants.RemoteNames.RequestClaimDailyReward,
 	Constants.RemoteNames.RequestSpawnVehicle,
+	Constants.RemoteNames.RequestPurchaseVehicle,
+	Constants.RemoteNames.RequestDespawnVehicle,
 	Constants.RemoteNames.RequestEquipWeapon,
 	Constants.RemoteNames.RequestPurchaseWeapon,
 	Constants.RemoteNames.RequestFire,
