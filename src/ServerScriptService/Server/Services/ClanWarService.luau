@@ -410,10 +410,12 @@ function ClanWarService.Init(deps: { [string]: any })
 	task.spawn(function()
 		while true do
 			task.wait(15)
-			local now = os.time()
-			for _, war in pairs(wars) do
-				if war.Active and not war.Settled and now >= war.EndUnix then
-					settleWar(war)
+			if next(wars) ~= nil then
+				local now = os.time()
+				for _, war in pairs(wars) do
+					if war.Active and not war.Settled and now >= war.EndUnix then
+						settleWar(war)
+					end
 				end
 			end
 		end

@@ -174,8 +174,16 @@ function HUDController.Init()
 	seasonLabel = season
 
 	-- Remotes
+	local econToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		HUDController.SetEconomy(payload.Cash, payload.Gold)
+		econToken += 1
+		local my = econToken
+		local cash, gold = payload.Cash, payload.Gold
+		task.defer(function()
+			if my == econToken then
+				HUDController.SetEconomy(cash, gold)
+			end
+		end)
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)

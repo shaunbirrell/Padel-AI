@@ -182,3 +182,9 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - **Clan wars:** Declare (leader, min members, cooldown), score on captures, settle rewards + scoreboard (**K**).
 - **Radar Hill:** Enemy highlight within radius while owned.
 - **Battle Pass:** Dense Free/Premium tracks (L1–50) from `BattlePassConfig`; XP from gameplay; **K** panel shows claimable counts + track preview; CLAIM ALL Free/Premium (server ClaimAll). Premium via admin `grantpremium` or shop `PremiumPass` DevProduct (Id `0` → ProcessReceipt grants when live). **Never** client-granted.
+
+
+### Phase 7 polish
+- Module splits for Combat / Territory / Progression
+- DataVersion 3 migrations (clan / BP / soldiers / prestige)
+- Perf: tag cache, idle skips, client debounce

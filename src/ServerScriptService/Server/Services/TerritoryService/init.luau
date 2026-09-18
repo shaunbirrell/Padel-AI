@@ -5,7 +5,6 @@
 ]]
 
 local Players = game:GetService("Players")
-local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,6 +13,10 @@ local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+
+local TerritoryRadar = require(script.TerritoryRadar)
+local TerritoryOwnership = require(script.TerritoryOwnership)
+local TerritoryCapture = require(script.TerritoryCapture)
 
 type TerritoryDef = TerritoryConfig.TerritoryDef
 
@@ -48,6 +51,7 @@ local BaseService: any = nil
 local territories: { [string]: TerritoryRuntime } = {}
 local firstOutpostLogged: { [number]: boolean } = {}
 local lastPushAt = 0
+local pushDirty = true
 
 local function ownerTypes()
 	return TerritoryConfig.OwnerTypes
@@ -58,18 +62,7 @@ local function nowUnix(): number
 end
 
 local function findMarker(territoryId: string): BasePart?
-	-- Prefer dedicated capture zones
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.CaptureZone)) do
-		if inst:IsA("BasePart") and inst:GetAttribute("TerritoryId") == territoryId then
-			return inst
-		end
-	end
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.Territory)) do
-		if inst:IsA("BasePart") and (inst:GetAttribute("TerritoryId") == territoryId or inst.Name == territoryId) then
-			return inst
-		end
-	end
-	return nil
+	return TerritoryRadar.FindMarker(territoryId)
 end
 
 local function ensureRuntime()
@@ -271,8 +264,7 @@ end
 
 --[[ True when player (or their clan) controls a MinimapReveal territory (Radar Hill). ]]
 function TerritoryService.HasRadarReveal(player: Player): boolean
-	local b = TerritoryService.GetBonusesForPlayer(player)
-	return (b.MinimapReveal or 0) > 0
+	return TerritoryOwnership.HasRadar(player)
 end
 
 function TerritoryService.GetRadarRevealRadius(): number
@@ -392,28 +384,7 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 end
 
 local function playersInZone(rt: TerritoryRuntime): { Player }
-	local found: { Player } = {}
-	local marker = rt.Marker
-	local center = if marker then marker.Position else rt.Def.Position
-	local radius = rt.Def.Radius
-	if marker then
-		-- Use larger of config radius and half diagonal of part
-		local half = marker.Size.Magnitude * 0.5
-		radius = math.max(radius, half)
-	end
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		local character = player.Character
-		local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if root and humanoid and humanoid.Health > 0 then
-			local flat = Vector3.new(root.Position.X - center.X, 0, root.Position.Z - center.Z)
-			if flat.Magnitude <= radius then
-				table.insert(found, player)
-			end
-		end
-	end
-	return found
+	return TerritoryCapture.PlayersInZone(rt)
 end
 
 local function tickTerritory(rt: TerritoryRuntime, dt: number)
@@ -544,6 +515,12 @@ function TerritoryService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	BaseService = deps.BaseService
 
+	TerritoryOwnership.Bind({
+		territories = territories,
+		ownerTypes = ownerTypes,
+		DataService = DataService,
+	})
+
 	ensureRuntime()
 	seedNpcOwners()
 
@@ -580,12 +557,22 @@ function TerritoryService.Init(deps: { [string]: any })
 			local dt = tickSec
 			task.wait(dt)
 			ensureRuntime()
+			local anyProgress = false
 			for _, rt in pairs(territories) do
+				local before = rt.Progress
+				local beforeCap = rt.CapturingUserId
 				tickTerritory(rt, dt)
+				if rt.Progress ~= before or rt.CapturingUserId ~= beforeCap or rt.Contested then
+					anyProgress = true
+				end
 			end
-			-- Throttle full pushes
-			if os.clock() - lastPushAt >= 0.75 then
-				TerritoryService.PushAll()
+			-- Throttle full pushes; skip when idle and recently pushed
+			local now = os.clock()
+			if anyProgress or pushDirty or (now - lastPushAt >= 2.0) then
+				if now - lastPushAt >= (if anyProgress then 0.5 else 2.0) then
+					TerritoryService.PushAll()
+					pushDirty = false
+				end
 			end
 		end
 	end)

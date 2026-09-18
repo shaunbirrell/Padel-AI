@@ -19,6 +19,24 @@ local GameConfig = require(Shared.Configs.GameConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local CombatDamage = require(script.CombatDamage)
+local CombatNPC = require(script.CombatNPC)
+local CombatWeaponLogic = require(script.CombatWeaponLogic)
+
+-- Cached CollectionService:GetTagged results (invalidated on TTL)
+local _tagCache: { [string]: { at: number, list: { Instance } } } = {}
+local TAG_CACHE_TTL = 2.0
+local function getTaggedCached(tag: string): { Instance }
+	local now = os.clock()
+	local entry = _tagCache[tag]
+	if entry and (now - entry.at) < TAG_CACHE_TTL then
+		return entry.list
+	end
+	local list = CollectionService:GetTagged(tag)
+	_tagCache[tag] = { at = now, list = list }
+	return list
+end
+
 type WeaponDef = WeaponConfig.WeaponDef
 type NPCTypeDef = CombatConfig.NPCTypeDef
 type PlayerProfile = Types.PlayerProfile
@@ -69,24 +87,15 @@ local function clock(): number
 end
 
 local function weaponDef(id: string): WeaponDef?
-	return WeaponConfig.Weapons[id]
+	return CombatWeaponLogic.WeaponDef(id)
 end
 
 local function ensureStarter(profile: PlayerProfile)
-	local starter = WeaponConfig.DefaultWeapon
-	if typeof(profile.Weapons) ~= "table" then
-		profile.Weapons = {}
-	end
-	if not profile.Weapons[starter] then
-		profile.Weapons[starter] = true
-	end
-	if not profile.EquippedWeapon or not profile.Weapons[profile.EquippedWeapon] then
-		profile.EquippedWeapon = starter
-	end
+	CombatWeaponLogic.EnsureStarter(profile)
 end
 
 local function owns(profile: PlayerProfile, weaponId: string): boolean
-	return profile.Weapons ~= nil and profile.Weapons[weaponId] == true
+	return CombatWeaponLogic.Owns(profile, weaponId)
 end
 
 local function characterParts(player: Player): (Model?, Humanoid?, BasePart?)
@@ -148,40 +157,19 @@ local function getState(player: Player): CombatState?
 end
 
 local function damageFor(def: WeaponDef, attacker: Player?): number
-	local base = def.Damage * (def.Pellets or 1)
-	if attacker and TerritoryService and TerritoryService.GetDamageMult then
-		base = base * TerritoryService.GetDamageMult(attacker)
-	end
-	return base
+	return CombatDamage.DamageFor(def, attacker)
 end
 
 local function tagCreator(humanoid: Humanoid, attacker: Player)
-	local existing = humanoid:FindFirstChild("creator")
-	if existing then
-		existing:Destroy()
-	end
-	local tag = Instance.new("ObjectValue")
-	tag.Name = "creator"
-	tag.Value = attacker
-	tag.Parent = humanoid
-	task.delay(2, function()
-		if tag.Parent then
-			tag:Destroy()
-		end
-	end)
+	CombatDamage.TagCreator(humanoid, attacker)
 end
 
 local function raycast(origin: Vector3, direction: Vector3, range: number, ignore: { Instance }): RaycastResult?
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	params.FilterDescendantsInstances = ignore
-	params.IgnoreWater = true
-	local unit = if direction.Magnitude > 1e-4 then direction.Unit else Vector3.new(0, 0, -1)
-	return Workspace:Raycast(origin, unit * range, params)
+	return CombatDamage.Raycast(origin, direction, range, ignore)
 end
 
 function CombatService.GetPlotSpawnCFrame(plotId: number): CFrame?
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+	for _, inst in ipairs(getTaggedCached(Constants.Tags.BasePlot)) do
 		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
 			local folder = inst.Parent
 			if folder then
@@ -513,87 +501,12 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	return rec
 end
 
-local function nearestPlayer(position: Vector3, maxRange: number): (Player?, number)
-	local best: Player? = nil
-	local bestDist = maxRange
-	for _, player in ipairs(Players:GetPlayers()) do
-		local _, hum, root = characterParts(player)
-		if hum and root and hum.Health > 0 then
-			local d = (root.Position - position).Magnitude
-			if d < bestDist then
-				bestDist = d
-				best = player
-			end
-		end
-	end
-	return best, bestDist
-end
-
 local function thinkNPCs()
-	for _, rec in pairs(npcRecords) do
-		if rec.Alive and rec.Humanoid.Health > 0 and rec.Root.Parent then
-			local target, dist = nearestPlayer(rec.Root.Position, rec.Def.AggroRange)
-			if target then
-				local _, th, troot = characterParts(target)
-				if th and troot then
-					local look = CFrame.lookAt(
-						rec.Root.Position,
-						Vector3.new(troot.Position.X, rec.Root.Position.Y, troot.Position.Z)
-					)
-					rec.Root.CFrame = look
-					local gyro = rec.Root:FindFirstChildOfClass("BodyGyro")
-					if gyro then
-						gyro.CFrame = look
-					end
-					if dist > rec.Def.Range * 0.85 then
-						rec.Humanoid:MoveTo(troot.Position)
-					else
-						rec.Humanoid:MoveTo(rec.Root.Position)
-						local interval = 1 / math.max(rec.Def.FireRate, 0.1)
-						if clock() - rec.LastFireAt >= interval and dist <= rec.Def.Range then
-							rec.LastFireAt = clock()
-							local tState = combatStates[target.UserId]
-							if not (tState and clock() < tState.InvulnerableUntil) then
-								th:TakeDamage(rec.Def.Damage)
-								hitFeedback(target, {
-									Kind = if th.Health <= 0 then "Death" else "Damaged",
-									Damage = rec.Def.Damage,
-									TargetName = rec.Def.DisplayName,
-								})
-								pushState(target)
-							end
-						end
-					end
-				end
-			end
-		end
-	end
+	CombatNPC.Think()
 end
 
 local function gatherSpawns(): { CFrame }
-	local list: { CFrame } = {}
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.NPCSpawn)) do
-		if inst:IsA("BasePart") then
-			table.insert(list, inst.CFrame + Vector3.new(0, 3, 0))
-		end
-	end
-	if CombatConfig.NPCAlsoSpawnNearTerritories then
-		local added = 0
-		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.Territory)) do
-			if inst:IsA("BasePart") and added < CombatConfig.MaxTerritoryNPCSpawns then
-				local offset = Vector3.new(math.random(-20, 20), 3, math.random(-20, 20))
-				table.insert(list, inst.CFrame + offset)
-				added += 1
-			end
-		end
-	end
-	if #list == 0 then
-		for i = 1, 6 do
-			local angle = (i / 6) * math.pi * 2
-			table.insert(list, CFrame.new(100 + math.cos(angle) * 60, 4, 100 + math.sin(angle) * 60))
-		end
-	end
-	return list
+	return CombatNPC.GatherSpawns()
 end
 
 function CombatService.BootstrapNPCs()
@@ -911,6 +824,21 @@ function CombatService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
 	TerritoryService = deps.TerritoryService
+
+	CombatDamage.Bind({ TerritoryService = TerritoryService })
+	CombatNPC.Bind({
+		npcRecords = npcRecords,
+		combatStates = combatStates,
+		clock = clock,
+		characterParts = characterParts,
+		hitFeedback = hitFeedback,
+		pushState = pushState,
+		spawnNPC = function(typeId: string?, at: CFrame)
+			return CombatService.SpawnNPC(typeId, at)
+		end,
+		getTagged = getTaggedCached,
+	})
+
 
 	local equipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestEquipWeapon) :: RemoteEvent
 	equipRemote.OnServerEvent:Connect(function(player: Player, weaponId: any)

@@ -169,6 +169,69 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		version = 2
 	end
 
+
+	-- v2 → v3: ensure clan / season / battle pass / soldier / war-adjacent fields for older saves
+	if version < 3 then
+		if typeof(profile.Prestige) ~= "number" then
+			profile.Prestige = 0
+		end
+		if typeof(profile.Soldiers) ~= "number" then
+			profile.Soldiers = SoldierConfig.StartingSoldiers or 0
+		end
+		if profile.ClanId ~= nil and typeof(profile.ClanId) ~= "string" then
+			profile.ClanId = nil
+		end
+		if typeof(profile.BattlePass) ~= "table" then
+			profile.BattlePass = {
+				SeasonId = SeasonConfig.CurrentSeasonId,
+				XP = 0,
+				Level = 0,
+				Premium = false,
+				ClaimedFree = {},
+				ClaimedPremium = {},
+			}
+		else
+			local bp = profile.BattlePass
+			if typeof(bp.SeasonId) ~= "string" then
+				bp.SeasonId = SeasonConfig.CurrentSeasonId
+			end
+			if typeof(bp.XP) ~= "number" then
+				bp.XP = 0
+			end
+			if typeof(bp.Level) ~= "number" then
+				bp.Level = 0
+			end
+			if typeof(bp.Premium) ~= "boolean" then
+				bp.Premium = false
+			end
+			if typeof(bp.ClaimedFree) ~= "table" then
+				bp.ClaimedFree = {}
+			end
+			if typeof(bp.ClaimedPremium) ~= "table" then
+				bp.ClaimedPremium = {}
+			end
+		end
+		if typeof(profile.Stats) == "table" then
+			if typeof(profile.Stats.TerritoriesCaptured) ~= "number" then
+				profile.Stats.TerritoriesCaptured = 0
+			end
+			if typeof(profile.Stats.Kills) ~= "number" then
+				profile.Stats.Kills = 0
+			end
+			if typeof(profile.Stats.Deaths) ~= "number" then
+				profile.Stats.Deaths = 0
+			end
+		end
+		if typeof(profile.Territories) ~= "table" then
+			profile.Territories = {}
+		end
+		if typeof(profile.Achievements) ~= "table" then
+			profile.Achievements = {}
+		end
+		profile.DataVersion = 3
+		version = 3
+	end
+
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
 	end

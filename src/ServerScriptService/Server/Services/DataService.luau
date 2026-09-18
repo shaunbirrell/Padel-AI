@@ -264,31 +264,21 @@ function DataService.Init()
 	end)
 
 	game:BindToClose(function()
-		local threads = {}
-		for _, player in ipairs(Players:GetPlayers()) do
-			table.insert(threads, task.spawn(function()
+		local players = Players:GetPlayers()
+		local remaining = #players
+		if remaining == 0 then
+			return
+		end
+		for _, player in ipairs(players) do
+			task.spawn(function()
 				DataService.SaveProfile(player, true)
-			end))
+				remaining -= 1
+			end)
 		end
-		-- Yield briefly for saves
 		local deadline = os.clock() + 25
-		while os.clock() < deadline do
-			local anyAlive = false
-			for _ in ipairs(threads) do
-				-- task status not always available; just wait
-				anyAlive = true
-				break
-			end
-			if not anyAlive then
-				break
-			end
-			task.wait(0.2)
-			-- After first wait, assume saves progressing
-			if os.clock() > deadline - 20 then
-				break
-			end
+		while remaining > 0 and os.clock() < deadline do
+			task.wait(0.1)
 		end
-		task.wait(2)
 	end)
 end
 

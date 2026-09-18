@@ -76,7 +76,7 @@ Constants.RemoteNames = {
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 2
+Constants.CURRENT_DATA_VERSION = 3
 
 Constants.AutosaveIntervalSeconds = 60
 Constants.DataStoreRetries = 3

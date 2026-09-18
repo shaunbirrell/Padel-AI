@@ -252,12 +252,25 @@ function TerritoryController.Init()
 	list.Parent = panel
 	listFrame = list
 
+	local applyToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.TerritoryStateUpdate).OnClientEvent:Connect(function(payload: Types.TerritoryStatePayload)
-		TerritoryController.Apply(payload)
+		applyToken += 1
+		local my = applyToken
+		task.delay(0.1, function()
+			if my == applyToken then
+				TerritoryController.Apply(payload)
+			end
+		end)
 	end)
 
-	RunService.Heartbeat:Connect(function()
-		if radarActive then
+	local radarAccum = 0
+	RunService.Heartbeat:Connect(function(dt)
+		if not radarActive then
+			return
+		end
+		radarAccum += dt
+		if radarAccum >= 0.2 then
+			radarAccum = 0
 			updateRadar()
 		end
 	end)
