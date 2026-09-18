@@ -4,6 +4,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AdminConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.AdminConfig)
 local Constants = require(ReplicatedStorage:WaitForChild("Shared").Constants)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local AdminService = {}
 
 local EconomyService: any = nil
@@ -39,21 +41,38 @@ function AdminService.Init(deps: { [string]: any })
 			warn("[AdminService] Unauthorized admin attempt:", player.UserId)
 			return
 		end
-		if typeof(command) ~= "string" then
+		if not RemoteGuard.IsCommandString(command) then
+			return
+		end
+		-- Admin still requires a loaded profile for mutating commands
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 
-		local cmd = string.lower(command)
+		local cmd = string.lower(command :: string)
+		local ADMIN_GRANT_MAX = 1_000_000_000
 		AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = cmd })
 
-		if cmd == "givecash" and typeof(arg1) == "number" then
-			EconomyService.AddCash(player, math.floor(arg1), "admin")
-		elseif cmd == "givegold" and typeof(arg1) == "number" then
-			EconomyService.AddGold(player, math.floor(arg1), "admin")
-		elseif cmd == "givexp" and typeof(arg1) == "number" then
-			XPService.AddXP(player, math.floor(arg1), "admin")
-		elseif cmd == "setlevel" and typeof(arg1) == "number" then
-			XPService.SetLevel(player, math.floor(arg1))
+		if cmd == "givecash" then
+			local amt = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
+			if amt then
+				EconomyService.AddCash(player, amt, "admin")
+			end
+		elseif cmd == "givegold" then
+			local amt = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
+			if amt then
+				EconomyService.AddGold(player, amt, "admin")
+			end
+		elseif cmd == "givexp" then
+			local amt = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
+			if amt then
+				XPService.AddXP(player, amt, "admin")
+			end
+		elseif cmd == "setlevel" then
+			local lvl = RemoteGuard.ClampPositiveInt(arg1, 1000)
+			if lvl then
+				XPService.SetLevel(player, lvl)
+			end
 		elseif cmd == "unlockall" then
 			local profile = DataService.GetProfile(player)
 			if profile then
@@ -94,24 +113,26 @@ function AdminService.Init(deps: { [string]: any })
 					deps.NotificationService.Notify(player, if ok then "Prestige OK" else ("Prestige failed: " .. tostring(err)), if ok then "Success" else "Warn")
 				end
 			end
-		elseif cmd == "createclan" and typeof(arg1) == "string" then
+		elseif cmd == "createclan" and RemoteGuard.IsIdString(arg1, 32) then
 			if deps.ClanService and deps.ClanService.CreateClan then
-				local ok, err = deps.ClanService.CreateClan(player, arg1, if typeof(arg2) == "string" then arg2 else nil)
+				local tagArg = if RemoteGuard.IsIdString(arg2, 8) then arg2 :: string else nil
+				local ok, err = deps.ClanService.CreateClan(player, arg1 :: string, tagArg)
 				if not ok and deps.NotificationService then
 					deps.NotificationService.Notify(player, "Clan create failed: " .. tostring(err), "Warn")
 				end
 			end
-		elseif cmd == "joinclan" and typeof(arg1) == "string" then
+		elseif cmd == "joinclan" and RemoteGuard.IsIdString(arg1) then
 			if deps.ClanService then
-				deps.ClanService.JoinClan(player, arg1)
+				deps.ClanService.JoinClan(player, arg1 :: string)
 			end
 		elseif cmd == "leaveclan" then
 			if deps.ClanService then
 				deps.ClanService.LeaveClan(player)
 			end
-		elseif cmd == "bpxp" and typeof(arg1) == "number" then
-			if deps.BattlePassService and deps.BattlePassService.AddXP then
-				deps.BattlePassService.AddXP(player, math.floor(arg1), "admin")
+		elseif cmd == "bpxp" then
+			local amt = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
+			if amt and deps.BattlePassService and deps.BattlePassService.AddXP then
+				deps.BattlePassService.AddXP(player, amt, "admin")
 			end
 		elseif cmd == "grantpremium" then
 			if deps.BattlePassService and deps.BattlePassService.SetPremium then
@@ -120,10 +141,10 @@ function AdminService.Init(deps: { [string]: any })
 					deps.NotificationService.Notify(player, "Battle Pass Premium granted", "Success")
 				end
 			end
-		elseif cmd == "grantpass" and typeof(arg1) == "string" then
+		elseif cmd == "grantpass" and RemoteGuard.IsKeyString(arg1) then
 			-- Studio mock GamePass ownership (Ids may still be 0)
 			if deps.MonetizationService and deps.MonetizationService.SetMockGamePassOwned then
-				deps.MonetizationService.SetMockGamePassOwned(player, arg1, true)
+				deps.MonetizationService.SetMockGamePassOwned(player, arg1 :: string, true)
 				if deps.NotificationService then
 					deps.NotificationService.Notify(player, "Mock GamePass owned: " .. arg1, "Success")
 				end

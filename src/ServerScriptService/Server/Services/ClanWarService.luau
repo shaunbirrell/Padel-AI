@@ -11,6 +11,8 @@ local Constants = require(Shared.Constants)
 local ClanWarConfig = require(Shared.Configs.ClanWarConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local ClanWarService = {}
 
 export type WarRecord = {
@@ -280,12 +282,11 @@ function ClanWarService.OnEnemyKill(player: Player)
 end
 
 function ClanWarService.DeclareWar(player: Player, defenderClanId: any): (boolean, string?)
-	if typeof(defenderClanId) ~= "string" or defenderClanId == "" then
+	if not RemoteGuard.IsIdString(defenderClanId) then
 		return false, "InvalidDefender"
 	end
-	-- Sanitize length (anti-abuse)
-	if #defenderClanId > 64 then
-		return false, "InvalidDefender"
+	if not RemoteGuard.RequireProfile(DataService, player) then
+		return false, "NoProfile"
 	end
 	if not ClanService then
 		return false, "ClanServiceMissing"

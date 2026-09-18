@@ -13,6 +13,8 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local ClanConfig = require(Shared.Configs.ClanConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local ClanService = {}
 
 export type ClanRecord = {
@@ -331,7 +333,7 @@ function ClanService.CreateClan(leader: Player, name: string, tag: string?): (bo
 end
 
 function ClanService.JoinClan(player: Player, clanId: string): (boolean, string?)
-	if typeof(clanId) ~= "string" or clanId == "" then
+	if not RemoteGuard.IsIdString(clanId) then
 		return false, "InvalidClanId"
 	end
 	local profile = DataService.GetProfile(player)
@@ -416,10 +418,14 @@ function ClanService.Init(deps: { [string]: any })
 		if not RateLimitService.Allow(player, "clan_create", 1, 2) then
 			return
 		end
-		if typeof(name) ~= "string" then
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
-		local ok, err = ClanService.CreateClan(player, name, if typeof(tag) == "string" then tag else nil)
+		if not RemoteGuard.IsIdString(name, 32) then
+			return
+		end
+		local tagArg = if RemoteGuard.IsIdString(tag, 8) then tag :: string else nil
+		local ok, err = ClanService.CreateClan(player, name :: string, tagArg)
 		if not ok and NotificationService then
 			NotificationService.Notify(player, "Cannot create clan: " .. tostring(err), "Warn")
 		end
@@ -430,7 +436,13 @@ function ClanService.Init(deps: { [string]: any })
 		if not RateLimitService.Allow(player, "clan_join", 2, 3) then
 			return
 		end
-		local ok, err = ClanService.JoinClan(player, clanId)
+		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		if not RemoteGuard.IsIdString(clanId) then
+			return
+		end
+		local ok, err = ClanService.JoinClan(player, clanId :: string)
 		if not ok and NotificationService then
 			NotificationService.Notify(player, "Cannot join clan: " .. tostring(err), "Warn")
 		end
@@ -439,6 +451,9 @@ function ClanService.Init(deps: { [string]: any })
 	local leaveRemote = RemoteSetup.Get(Constants.RemoteNames.RequestLeaveClan) :: RemoteEvent
 	leaveRemote.OnServerEvent:Connect(function(player: Player)
 		if not RateLimitService.Allow(player, "clan_leave", 1, 2) then
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		ClanService.LeaveClan(player)

@@ -63,6 +63,8 @@ type NPCRecord = {
 	Alive: boolean,
 }
 
+local RemoteGuard = require(script.Parent.Parent.Parent.Modules.RemoteGuard)
+
 local CombatService = {}
 
 local DataService: any = nil
@@ -528,7 +530,7 @@ function CombatService.BootstrapNPCs()
 end
 
 function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, string?)
-	if typeof(weaponId) ~= "string" then
+	if not RemoteGuard.IsIdString(weaponId, 48) then
 		return false, "InvalidWeapon"
 	end
 	local profile = DataService.GetProfile(player)
@@ -562,7 +564,7 @@ function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, str
 end
 
 function CombatService.PurchaseWeapon(player: Player, weaponId: any): (boolean, string?)
-	if typeof(weaponId) ~= "string" then
+	if not RemoteGuard.IsIdString(weaponId, 48) then
 		return false, "InvalidWeapon"
 	end
 	local profile = DataService.GetProfile(player)
@@ -870,6 +872,9 @@ function CombatService.Init(deps: { [string]: any })
 	local reloadRemote = RemoteSetup.Get(Constants.RemoteNames.RequestReload) :: RemoteEvent
 	reloadRemote.OnServerEvent:Connect(function(player: Player)
 		if not RateLimitService.Allow(player, "reload", CombatConfig.ReloadRemoteRate, CombatConfig.ReloadRemoteBurst) then
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		CombatService.Reload(player)

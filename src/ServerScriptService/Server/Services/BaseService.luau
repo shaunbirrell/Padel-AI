@@ -15,6 +15,8 @@ local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 local Types = require(Shared.Types)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local BaseService = {}
 
 local DataService: any = nil
@@ -151,7 +153,7 @@ local function meetsRequirements(profile: Types.PlayerProfile, structureId: stri
 end
 
 function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types.PurchaseUpgradeResult
-	if typeof(structureId) ~= "string" then
+	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
 	end
 

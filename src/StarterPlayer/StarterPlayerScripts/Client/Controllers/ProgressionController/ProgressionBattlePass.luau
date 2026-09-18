@@ -15,7 +15,7 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 		return
 	end
 	for _, child in ipairs(trackList:GetChildren()) do
-		if child:IsA("Frame") then
+		if child:IsA("Frame") or (child:IsA("TextLabel") and child.Name == "EmptyState") then
 			child:Destroy()
 		end
 	end
@@ -138,6 +138,14 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				end)
 			end
 		end
+	end
+
+	if rows == 0 then
+		UIUtil.EmptyState(
+			trackList,
+			"No battle pass rows yet — earn XP from gameplay to unlock Free/Premium track rewards.",
+			0
+		)
 	end
 end
 

@@ -105,6 +105,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `src/ServerScriptService/Server/` — Bootstrap + Services + Modules
 - `src/StarterPlayer/.../Client/` — Bootstrap + Controllers (programmatic UI)
 - `tools/StudioSetup.luau` — map / bases / territories / NPC / vehicle / tutorial markers
+- `tools/SmokeTest.luau` — Play Solo command-bar smoke (remotes / configs / services; no currency exploits)
 
 ## Docs
 
@@ -122,24 +123,27 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | **P** / SHOP | DevProducts + GamePasses |
 | **K** / PROGRESS | Prestige + Battle Pass + Clan + Clan War declare / scoreboard |
 | **A** / ARMY | Recruit / dismiss / fill-cap soldiers |
+| **O** / SETTINGS | Music/SFX local toggles + keybind cheat-sheet |
 | LMB / FIRE | Fire equipped weapon |
 | **R** | Reload |
 
 ## Playtest checklist (Studio)
 
-1. **Setup** — Rojo sync → run `tools/StudioSetup.luau` once → enable API Services if testing DataStores.
-2. **Join** — Spawn with ~$5,000; HUD shows Cash / Gold / Level / XP; plot assigned.
-3. **Tutorial** — Steps: claim base → Command Center → income → Barracks → Jeep → outpost; **SKIP** works; gold beam/markers best-effort.
-4. **Tycoon** — **B**: buy Command Center, Barracks; passive income ticks; structures recolor.
-5. **Combat** — Equip StarterRifle; LMB fire; **R** reload; damage NPCs; kill rewards; death → respawn at base.
-6. **Vehicles** — **G**: SPAWN Military Jeep; seat/drive placeholder; despawn / one-active rule.
-7. **Territory** — Stand in capture zone; progress bar; ownership bonus; `FIRST_OUTPOST` path.
-8. **Missions** — **M**: daily objectives progress; claim rewards; daily login claim.
-9. **Shop** — **P**: list products/passes; with Id `0`, warn/notify only (no fake grants). With real Ids, ProcessReceipt / ownership only.
-10. **VIP / 2x** — Set `DevConfig.MockOwnedGamePasses` or admin `grantpass VIP` / `DoubleCash` / `DoubleXP`; confirm Cash/XP multipliers on earnings (not on `devproduct` grants).
-11. **Persistence** — Leave + rejoin with API Services on; Cash/upgrades restore; receipts not double-granted.
-12. **Admin** — `givecash` / `resettutorial` / `unlockall` / `bpxp` / `grantpremium` / `createclan` only for `AdminConfig.UserIds`.
-13. **Progression (K)** — Battle Pass claimable counts + CLAIM ALL; create/join clan; with API Services on, leave/rejoin and confirm clan roster persists.
+1. **Setup** — Rojo sync → run `tools/StudioSetup.luau` once (Edit mode) → enable API Services if testing DataStores.
+2. **Smoke** — Press Play Solo, then paste `tools/SmokeTest.luau` into the **Command Bar**. Confirms Remotes (no `Give*`), Shared configs, service modules, optional `GetPlayerState`, and a **safe** admin probe only if your UserId is in `AdminConfig` (never grants currency from smoke).
+3. **Join** — Spawn with ~$5,000; HUD shows Cash / Gold / Level / XP; plot assigned.
+4. **Tutorial** — Steps: claim base → Command Center → income → Barracks → Jeep → outpost; **SKIP** works; gold beam/markers best-effort.
+5. **Tycoon** — **B**: buy Command Center, Barracks; passive income ticks; structures recolor.
+6. **Combat** — Equip StarterRifle; LMB fire; **R** reload; damage NPCs; kill rewards; death → respawn at base.
+7. **Vehicles** — **G**: SPAWN Military Jeep; seat/drive placeholder; despawn / one-active rule.
+8. **Territory** — Stand in capture zone; progress bar; ownership bonus; `FIRST_OUTPOST` path.
+9. **Missions** — **M**: daily objectives progress; claim rewards; daily login claim. Empty list shows a friendly empty state.
+10. **Shop** — **P**: list products/passes; with Id `0`, warn/notify only (no fake grants). With real Ids, ProcessReceipt / ownership only.
+11. **VIP / 2x** — Set `DevConfig.MockOwnedGamePasses` or admin `grantpass VIP` / `DoubleCash` / `DoubleXP`; confirm Cash/XP multipliers on earnings (not on `devproduct` grants).
+12. **Persistence** — Leave + rejoin with API Services on; Cash/upgrades restore; receipts not double-granted.
+13. **Admin** — `givecash` / `resettutorial` / `unlockall` / `bpxp` / `grantpremium` / `createclan` only for `AdminConfig.UserIds`.
+14. **Progression (K)** — Battle Pass claimable counts + CLAIM ALL; create/join clan; with API Services on, leave/rejoin and confirm clan roster persists.
+15. **Settings (O)** — Music/SFX local-only toggles + keybind cheat-sheet (B/G/M/P/K/A/O + combat).
 
 ## Phase notes
 
@@ -188,3 +192,5 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - Module splits for Combat / Territory / Progression
 - DataVersion 3 migrations (clan / BP / soldiers / prestige)
 - Perf: tag cache, idle skips, client debounce
+- Remote validation audit (`RemoteGuard` + RateLimit on all Request*)
+- Settings panel (O) + empty states; `tools/SmokeTest.luau`

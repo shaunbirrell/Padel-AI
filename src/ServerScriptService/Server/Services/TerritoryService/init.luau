@@ -33,6 +33,8 @@ type TerritoryRuntime = {
 	Marker: BasePart?,
 }
 
+local RemoteGuard = require(script.Parent.Parent.Parent.Modules.RemoteGuard)
+
 local TerritoryService = {}
 
 local ClanWarService: any = nil
@@ -459,8 +461,11 @@ end
 	Optional explicit request — mainly for UI "begin capture" ping; actual progress is proximity-based.
 ]]
 function TerritoryService.BeginCapture(player: Player, territoryId: any): (boolean, string?)
-	if typeof(territoryId) ~= "string" then
+	if not RemoteGuard.IsIdString(territoryId, 48) then
 		return false, "InvalidTerritory"
+	end
+	if not RemoteGuard.RequireProfile(DataService, player) then
+		return false, "NoProfile"
 	end
 	ensureRuntime()
 	local rt = territories[territoryId]

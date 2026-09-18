@@ -237,6 +237,10 @@ function ShopController.Init()
 		end
 	end
 
+	if order == 0 then
+		UIUtil.EmptyState(list, "Shop catalog empty — MonetizationConfig has no DevProducts / GamePasses.", 0)
+	end
+
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
 			return

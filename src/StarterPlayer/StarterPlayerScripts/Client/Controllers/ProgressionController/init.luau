@@ -38,13 +38,17 @@ end
 local debouncedRefresh = ProgressionUI.Debounce(0.12)
 
 local function refreshLabelsImmediate()
-	if prestigeLabel and typeof(prestigeState) == "table" then
-		prestigeLabel.Text = string.format(
-			"Prestige P%d  |  Need Lv %d  |  Can: %s",
-			tonumber(prestigeState.Prestige) or 0,
-			tonumber(prestigeState.MinLevel) or 100,
-			if prestigeState.CanPrestige then "YES" else "no"
-		)
+	if prestigeLabel then
+		if typeof(prestigeState) == "table" then
+			prestigeLabel.Text = string.format(
+				"Prestige P%d  |  Need Lv %d  |  Can: %s",
+				tonumber(prestigeState.Prestige) or 0,
+				tonumber(prestigeState.MinLevel) or 100,
+				if prestigeState.CanPrestige then "YES" else "no"
+			)
+		else
+			prestigeLabel.Text = "Prestige data loading… reach max level later to prestige."
+		end
 	end
 	if bpLabel and typeof(bpState) == "table" then
 		local claimFree = tonumber(bpState.ClaimableFree) or 0
@@ -63,6 +67,9 @@ local function refreshLabelsImmediate()
 		if bpBarFill and need > 0 then
 			bpBarFill.Size = UDim2.fromScale(math.clamp(xp / need, 0, 1), 1)
 		end
+	end
+	if bpLabel and typeof(bpState) ~= "table" then
+		bpLabel.Text = "Battle Pass loading… play to earn BP XP."
 	end
 	if bpClaimHint then
 		if typeof(bpState) == "table" then

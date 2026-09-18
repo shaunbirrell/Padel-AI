@@ -17,6 +17,8 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local MonetizationService = {}
 
 local DataService: any = nil
@@ -169,10 +171,14 @@ function MonetizationService.Init(deps: { [string]: any })
 		if not RateLimitService.Allow(player, "shop_prompt", 2, 3) then
 			return
 		end
-		if typeof(productKey) ~= "string" then
+		-- Intent-only: never grants currency. Still validate + require profile loaded.
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
-		local def = findDevProductByKey(productKey)
+		if not RemoteGuard.IsKeyString(productKey) then
+			return
+		end
+		local def = findDevProductByKey(productKey :: string)
 		if not def then
 			return
 		end
@@ -194,10 +200,13 @@ function MonetizationService.Init(deps: { [string]: any })
 		if not RateLimitService.Allow(player, "shop_pass_prompt", 2, 3) then
 			return
 		end
-		if typeof(passKey) ~= "string" then
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
-		local def = findGamePassByKey(passKey)
+		if not RemoteGuard.IsKeyString(passKey) then
+			return
+		end
+		local def = findGamePassByKey(passKey :: string)
 		if not def then
 			return
 		end

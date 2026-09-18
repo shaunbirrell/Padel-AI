@@ -13,6 +13,8 @@ local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local TutorialService = {}
 
 local DataService: any = nil
@@ -168,6 +170,9 @@ function TutorialService.Init(deps: { [string]: any })
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
 		if not RateLimitService.Allow(player, "tutorial_skip", 1, 2) then
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		TutorialService.Complete(player)

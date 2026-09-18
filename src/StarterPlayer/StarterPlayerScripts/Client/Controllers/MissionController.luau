@@ -29,13 +29,17 @@ local function corner(parent: Instance, r: number)
 end
 
 local function refresh()
-	if not listFrame or not state then
+	if not listFrame then
 		return
 	end
 	for _, child in ipairs(listFrame:GetChildren()) do
-		if child:IsA("Frame") then
+		if child:IsA("Frame") or (child:IsA("TextLabel") and child.Name == "EmptyState") then
 			child:Destroy()
 		end
+	end
+	if not state then
+		UIUtil.EmptyState(listFrame, "Loading missions… stand by for server sync.", 0)
+		return
 	end
 	local layout = listFrame:FindFirstChildOfClass("UIListLayout")
 	if not layout then
@@ -43,6 +47,10 @@ local function refresh()
 		l.Padding = UDim.new(0, 6)
 		l.SortOrder = Enum.SortOrder.LayoutOrder
 		l.Parent = listFrame
+	end
+
+	if #state.Daily == 0 then
+		UIUtil.EmptyState(listFrame, "No daily missions right now — check back after UTC midnight refresh.", 0)
 	end
 
 	for i, mission in ipairs(state.Daily) do

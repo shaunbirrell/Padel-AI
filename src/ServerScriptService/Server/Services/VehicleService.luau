@@ -18,6 +18,8 @@ local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 type VehicleDef = VehicleConfig.VehicleDef
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local VehicleService = {}
 
 local DataService: any = nil
@@ -275,7 +277,7 @@ function VehicleService.GrantVehicle(player: Player, vehicleId: string)
 end
 
 function VehicleService.Purchase(player: Player, vehicleId: any): (boolean, string?)
-	if typeof(vehicleId) ~= "string" then
+	if not RemoteGuard.IsIdString(vehicleId, 48) then
 		return false, "InvalidId"
 	end
 	local def = getDef(vehicleId)
@@ -324,7 +326,7 @@ function VehicleService.Despawn(player: Player)
 end
 
 function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, string?)
-	if typeof(vehicleId) ~= "string" then
+	if not RemoteGuard.IsIdString(vehicleId, 48) then
 		return false, "InvalidId"
 	end
 	local def = getDef(vehicleId)

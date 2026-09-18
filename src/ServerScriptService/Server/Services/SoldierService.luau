@@ -10,6 +10,8 @@ local Constants = require(Shared.Constants)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local SoldierService = {}
 
 local DataService: any = nil
@@ -67,15 +69,8 @@ function SoldierService.GetCount(player: Player): number
 end
 
 local function sanitizeAmount(amount: any): (number?, string?)
-	if AntiExploitService and AntiExploitService.IsFiniteNumber then
-		if not AntiExploitService.IsFiniteNumber(amount) then
-			return nil, "InvalidAmount"
-		end
-	elseif typeof(amount) ~= "number" or amount ~= amount then
-		return nil, "InvalidAmount"
-	end
-	local n = math.floor(amount :: number)
-	if n < 1 or n > MAX_BATCH then
+	local n = RemoteGuard.ClampPositiveInt(amount, MAX_BATCH)
+	if not n then
 		return nil, "InvalidAmount"
 	end
 	return n, nil
@@ -176,6 +171,9 @@ function SoldierService.Init(deps: { [string]: any })
 			end
 			return
 		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
 		local ok, err = SoldierService.Recruit(player, amount)
 		if not ok and NotificationService then
 			local msg = "Recruit failed: " .. tostring(err)
@@ -194,6 +192,9 @@ function SoldierService.Init(deps: { [string]: any })
 			if AntiExploitService and AntiExploitService.Strike then
 				AntiExploitService.Strike(player, "soldier_dismiss_rate")
 			end
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		local ok, err = SoldierService.Dismiss(player, amount)

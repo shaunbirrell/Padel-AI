@@ -13,6 +13,8 @@ local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local AchievementConfig = require(Shared.Configs.AchievementConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local MissionService = {}
 
 local DataService: any = nil
@@ -224,7 +226,7 @@ function MissionService.TrackProgress(player: Player, objectiveType: string, amo
 end
 
 function MissionService.ClaimDailyMission(player: Player, missionId: string): (boolean, string?)
-	if typeof(missionId) ~= "string" then
+	if not RemoteGuard.IsIdString(missionId, 48) then
 		return false, "InvalidMission"
 	end
 	local profile = DataService.GetProfile(player)
@@ -327,7 +329,7 @@ function MissionService.ClaimDailyLogin(player: Player): (boolean, string?)
 end
 
 function MissionService.Start(player: Player, missionId: any): (boolean, string?)
-	if typeof(missionId) ~= "string" then
+	if not RemoteGuard.IsIdString(missionId, 48) then
 		return false, "InvalidMission"
 	end
 	local profile = DataService.GetProfile(player)

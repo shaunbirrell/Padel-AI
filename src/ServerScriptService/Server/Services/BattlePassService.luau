@@ -11,6 +11,8 @@ local BattlePassConfig = require(Shared.Configs.BattlePassConfig)
 local SeasonConfig = require(Shared.Configs.SeasonConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local BattlePassService = {}
 
 local DataService: any = nil
@@ -135,17 +137,12 @@ local function grantReward(player: Player, reward: any)
 end
 
 function BattlePassService.Claim(player: Player, level: number, track: string): (boolean, string?)
-	if AntiExploitService and AntiExploitService.IsFiniteNumber then
-		if not AntiExploitService.IsFiniteNumber(level) then
-			return false, "InvalidLevel"
-		end
-	elseif typeof(level) ~= "number" or level ~= level then
+	local maxLevel = BattlePassConfig.MaxLevel or 50
+	local clamped = RemoteGuard.ClampPositiveInt(level, maxLevel)
+	if not clamped then
 		return false, "InvalidLevel"
 	end
-	level = math.floor(level)
-	if level < 1 or level > 500 then
-		return false, "InvalidLevel"
-	end
+	level = clamped
 	if track ~= "free" and track ~= "premium" then
 		return false, "InvalidTrack"
 	end
@@ -272,6 +269,9 @@ function BattlePassService.Init(deps: { [string]: any })
 			if AntiExploitService and AntiExploitService.Strike then
 				AntiExploitService.Strike(player, "bp_claim_rate")
 			end
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		if typeof(track) ~= "string" or (track ~= "free" and track ~= "premium") then

@@ -73,4 +73,22 @@ function UIUtil.PrepareScreen(screen: ScreenGui, ignoreInset: boolean?)
 	UIUtil.AttachMobileScale(screen)
 end
 
+--[[ Lightweight empty-state label for list panels. ]]
+function UIUtil.EmptyState(parent: Instance, message: string, order: number?): TextLabel
+	local lab = Instance.new("TextLabel")
+	lab.Name = "EmptyState"
+	lab.Size = UDim2.new(1, -8, 0, 56)
+	lab.BackgroundTransparency = 1
+	lab.Font = Enum.Font.Gotham
+	lab.TextSize = 13
+	lab.TextWrapped = true
+	lab.TextXAlignment = Enum.TextXAlignment.Center
+	lab.TextYAlignment = Enum.TextYAlignment.Center
+	lab.TextColor3 = Color3.fromRGB(140, 150, 140)
+	lab.Text = message
+	lab.LayoutOrder = order or 0
+	lab.Parent = parent
+	return lab
+end
+
 return UIUtil

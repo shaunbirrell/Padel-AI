@@ -26,7 +26,7 @@ local function refreshLabels()
 		return
 	end
 	if typeof(armyState) ~= "table" then
-		statusLabel.Text = "Loading army..."
+		statusLabel.Text = "No army data yet — wait for SoldierStateUpdate, or press A after join."
 		return
 	end
 	local count = tonumber(armyState.Soldiers) or 0
@@ -34,15 +34,24 @@ local function refreshLabels()
 	local free = tonumber(armyState.SlotsFree) or math.max(0, cap - count)
 	local cost = tonumber(armyState.RecruitCostCash) or 500
 	local refundMult = tonumber(armyState.DismissRefundMult) or 0.25
-	statusLabel.Text = string.format(
-		"Soldiers: %d / %d  (%d free)\nBarracks Lv %d\nRecruit $%d each · Dismiss refund %d%%",
-		count,
-		cap,
-		free,
-		tonumber(armyState.BarracksLevel) or 0,
-		cost,
-		math.floor(refundMult * 100)
-	)
+	local barracks = tonumber(armyState.BarracksLevel) or 0
+	if count == 0 and barracks == 0 then
+		statusLabel.Text = string.format(
+			"Army empty — buy Barracks (B) to raise cap.\nBase cap %d · Recruit $%d each\nTip: FILL CAP spends cash up to free slots.",
+			cap,
+			cost
+		)
+	else
+		statusLabel.Text = string.format(
+			"Soldiers: %d / %d  (%d free)\nBarracks Lv %d\nRecruit $%d each · Dismiss refund %d%%",
+			count,
+			cap,
+			free,
+			barracks,
+			cost,
+			math.floor(refundMult * 100)
+		)
+	end
 	if capFill and cap > 0 then
 		capFill.Size = UDim2.fromScale(math.clamp(count / cap, 0, 1), 1)
 		capFill.BackgroundColor3 = if count >= cap then Constants.Colors.Danger else Constants.Colors.Accent

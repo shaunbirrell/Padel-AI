@@ -11,6 +11,8 @@ local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
 local PrestigeService = {}
 
 local DataService: any = nil
@@ -135,6 +137,9 @@ function PrestigeService.Init(deps: { [string]: any })
 			if AntiExploitService and AntiExploitService.Strike then
 				AntiExploitService.Strike(player, "prestige_rate")
 			end
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		local ok, err = PrestigeService.DoPrestige(player)
