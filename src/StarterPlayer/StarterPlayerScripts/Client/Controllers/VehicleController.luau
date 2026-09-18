@@ -1,6 +1,8 @@
 --!strict
 --[[
 	Phase 4 — Garage UI (G). Spawn / buy / despawn requests only.
+	Empty states via UIUtil.EmptyState when catalog/owned list is empty.
+	MobileScale via UIUtil.PrepareScreen (same as Army/Shop).
 ]]
 
 local Players = game:GetService("Players")
@@ -13,6 +15,8 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local VehicleConfig = require(Shared.Configs.VehicleConfig)
+
+local AudioController = require(script.Parent.Parent.Modules.AudioController)
 
 local VehicleController = {}
 
@@ -53,12 +57,20 @@ local function sortedIds(): { string }
 	return ids
 end
 
+local function ownedCount(): number
+	local n = 0
+	for _ in pairs(ownedMap) do
+		n += 1
+	end
+	return n
+end
+
 local function refresh()
 	if not listFrame then
 		return
 	end
 	for _, child in ipairs(listFrame:GetChildren()) do
-		if child:IsA("Frame") then
+		if child:IsA("Frame") or (child:IsA("TextLabel") and child.Name == "EmptyState") then
 			child:Destroy()
 		end
 	end
@@ -69,7 +81,27 @@ local function refresh()
 		layout.Parent = listFrame
 	end
 
-	for i, id in ipairs(sortedIds()) do
+	local ids = sortedIds()
+	if #ids == 0 then
+		UIUtil.EmptyState(listFrame, "Garage empty — no vehicles configured yet.", 0)
+		if cooldownLabel then
+			cooldownLabel.Text = if cooldownLeft > 0
+				then string.format("Spawn cooldown: %.0fs", cooldownLeft)
+				else "Spawn ready"
+		end
+		return
+	end
+
+	-- Friendly empty banner when nothing owned / nothing to spawn yet
+	if ownedCount() == 0 then
+		UIUtil.EmptyState(
+			listFrame,
+			"No owned vehicles yet — BUY a ride below, then SPAWN. Starter Jeep appears after join sync.",
+			0
+		)
+	end
+
+	for i, id in ipairs(ids) do
 		local def = VehicleConfig.Vehicles[id]
 		if def then
 			local row = Instance.new("Frame")
@@ -134,18 +166,21 @@ local function refresh()
 				btn.Text = "DESPAWN"
 				btn.BackgroundColor3 = Constants.Colors.Danger
 				btn.MouseButton1Click:Connect(function()
+					AudioController.PlayClick()
 					Remotes.GetEvent(Constants.RemoteNames.RequestDespawnVehicle):FireServer()
 				end)
 			elseif ownedMap[id] then
 				btn.Text = if cooldownLeft > 0 then string.format("%.0fs", cooldownLeft) else "SPAWN"
 				btn.BackgroundColor3 = Constants.Colors.Accent
 				btn.MouseButton1Click:Connect(function()
+					AudioController.PlayClick()
 					Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle):FireServer(id)
 				end)
 			else
 				btn.Text = "BUY"
 				btn.BackgroundColor3 = Constants.Colors.Cash
 				btn.MouseButton1Click:Connect(function()
+					AudioController.PlayClick()
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseVehicle):FireServer(id)
 				end)
 			end
@@ -212,6 +247,7 @@ local function buildGui()
 	closeBtn.Parent = panel
 	addCorner(closeBtn, 6)
 	closeBtn.MouseButton1Click:Connect(function()
+		AudioController.PlayClick()
 		setOpen(false)
 	end)
 
@@ -264,6 +300,7 @@ local function buildGui()
 	addCorner(garageBtn, 8)
 	addStroke(garageBtn)
 	garageBtn.MouseButton1Click:Connect(function()
+		AudioController.PlayClick()
 		setOpen(not isOpen)
 	end)
 end

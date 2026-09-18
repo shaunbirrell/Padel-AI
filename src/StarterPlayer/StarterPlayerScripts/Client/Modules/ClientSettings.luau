@@ -1,7 +1,8 @@
 --!strict
 --[[
 	Local-only client preferences (music/SFX flags).
-	No server sync yet — sound system may not exist; toggles are ready for when it does.
+	Session-scoped (no DataStore). AudioController listens via OnChanged
+	and mutes/restores volumes immediately. Economy stays server-authoritative.
 ]]
 
 local ClientSettings = {}

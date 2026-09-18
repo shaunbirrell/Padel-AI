@@ -123,7 +123,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | **P** / SHOP | DevProducts + GamePasses |
 | **K** / PROGRESS | Prestige + Battle Pass + Clan + Clan War declare / scoreboard |
 | **A** / ARMY | Recruit / dismiss / fill-cap soldiers |
-| **O** / SETTINGS | Music/SFX local toggles + keybind cheat-sheet |
+| **O** / SETTINGS | Music/SFX local toggles (wires AudioController mute) + keybind cheat-sheet |
 | LMB / FIRE | Fire equipped weapon |
 | **R** | Reload |
 
@@ -135,7 +135,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 4. **Tutorial** — Steps: claim base → Command Center → income → Barracks → Jeep → outpost; **SKIP** works; gold beam/markers best-effort.
 5. **Tycoon** — **B**: buy Command Center, Barracks; passive income ticks; structures recolor.
 6. **Combat** — Equip StarterRifle; LMB fire; **R** reload; damage NPCs; kill rewards; death → respawn at base.
-7. **Vehicles** — **G**: SPAWN Military Jeep; seat/drive placeholder; despawn / one-active rule.
+7. **Vehicles** — **G**: SPAWN Military Jeep; seat/drive placeholder; despawn / one-active rule. Empty catalog / no-owned shows `UIUtil.EmptyState` (MobileScale consistent).
 8. **Territory** — Stand in capture zone; progress bar; ownership bonus; `FIRST_OUTPOST` path.
 9. **Missions** — **M**: daily objectives progress; claim rewards; daily login claim. Empty list shows a friendly empty state.
 10. **Shop** — **P**: list products/passes; with Id `0`, warn/notify only (no fake grants). With real Ids, ProcessReceipt / ownership only.
@@ -143,7 +143,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 12. **Persistence** — Leave + rejoin with API Services on; Cash/upgrades restore; receipts not double-granted.
 13. **Admin** — `givecash` / `resettutorial` / `unlockall` / `bpxp` / `grantpremium` / `createclan` only for `AdminConfig.UserIds`.
 14. **Progression (K)** — Battle Pass claimable counts + CLAIM ALL; create/join clan; with API Services on, leave/rejoin and confirm clan roster persists.
-15. **Settings (O)** — Music/SFX local-only toggles + keybind cheat-sheet (B/G/M/P/K/A/O + combat).
+15. **Settings (O)** — Music/SFX local-only toggles mute/unmute `AudioController` immediately + keybind cheat-sheet (B/G/M/P/K/A/O + combat). Placeholder SoundIds — swap in Studio.
 
 ## Phase notes
 

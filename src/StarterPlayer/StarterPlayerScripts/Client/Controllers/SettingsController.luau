@@ -13,6 +13,7 @@ local Constants = require(Shared.Constants)
 local UIUtil = require(Shared.Util.UIUtil)
 
 local ClientSettings = require(script.Parent.Parent.Modules.ClientSettings)
+local AudioController = require(script.Parent.Parent.Modules.AudioController)
 
 local SettingsController = {}
 
@@ -77,6 +78,7 @@ function SettingsController.Init()
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
+		AudioController.PlayClick()
 		setOpen(not open)
 	end)
 
@@ -115,6 +117,7 @@ function SettingsController.Init()
 	UIUtil.Corner(close, 6)
 	close.Parent = panel
 	close.MouseButton1Click:Connect(function()
+		AudioController.PlayClick()
 		setOpen(false)
 	end)
 
@@ -127,7 +130,7 @@ function SettingsController.Init()
 	audioNote.TextWrapped = true
 	audioNote.TextXAlignment = Enum.TextXAlignment.Left
 	audioNote.TextColor3 = Constants.Colors.Muted
-	audioNote.Text = "Audio flags are local-only (no sound system wired yet). Controllers should check ClientSettings before playing."
+	audioNote.Text = "Music / SFX are local-only (session). Toggles mute/unmute AudioController immediately. Placeholder SoundIds — swap in Studio."
 	audioNote.Parent = panel
 
 	musicBtn = Instance.new("TextButton")
@@ -142,6 +145,7 @@ function SettingsController.Init()
 	musicBtn.MouseButton1Click:Connect(function()
 		ClientSettings.ToggleMusic()
 		refreshToggleLabels()
+		AudioController.PlayClick()
 	end)
 
 	sfxBtn = Instance.new("TextButton")
@@ -156,6 +160,7 @@ function SettingsController.Init()
 	sfxBtn.MouseButton1Click:Connect(function()
 		ClientSettings.ToggleSfx()
 		refreshToggleLabels()
+		AudioController.PlayClick()
 	end)
 
 	local bindsTitle = Instance.new("TextLabel")

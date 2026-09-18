@@ -11,6 +11,8 @@ local NotificationConfig = require(Shared.Configs.NotificationConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 
+local AudioController = require(script.Parent.Parent.Modules.AudioController)
+
 local NotificationController = {}
 
 local player = Players.LocalPlayer
@@ -55,6 +57,7 @@ function NotificationController.Show(message: string, notifType: string, duratio
 	if not stack then
 		return
 	end
+	AudioController.PlayNotification()
 	local typeDef = NotificationConfig.Types[notifType] or NotificationConfig.Types.Info
 	local prefix = TYPE_PREFIX[notifType] or ""
 

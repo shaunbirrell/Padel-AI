@@ -3,6 +3,7 @@
 
 local UIController = {}
 
+local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local HUDController = require(script.Parent.HUDController)
 local BaseController = require(script.Parent.BaseController)
 local NotificationController = require(script.Parent.NotificationController)
@@ -15,6 +16,7 @@ local ArmyController = require(script.Parent.ArmyController)
 local SettingsController = require(script.Parent.SettingsController)
 
 function UIController.Init()
+	AudioController.Init()
 	HUDController.Init()
 	BaseController.Init()
 	NotificationController.Init()
