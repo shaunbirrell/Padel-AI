@@ -125,6 +125,14 @@ local PrestigeConfig = {
 			GrantOwned = true,
 		},
 		{
+			AtPrestige = 16,
+			Flag = "FrigateGrant",
+			DisplayName = "Frigate (owned)",
+			Kind = "Vehicle",
+			Id = "Frigate",
+			GrantOwned = true,
+		},
+		{
 			AtPrestige = 20,
 			Flag = "StrikeWing",
 			DisplayName = "Strike Jet + Heavy Bomber gate",

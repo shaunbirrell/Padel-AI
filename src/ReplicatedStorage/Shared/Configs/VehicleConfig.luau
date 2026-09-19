@@ -1,5 +1,5 @@
 --!strict
---[[ Deep vehicle roster (~48): Ground / Air / Naval unlock ladder.
+--[[ Deep vehicle roster (~67): Ground / Air / Naval unlock ladder.
 	KitFamily drives VehicleService Part kits (grows to 100 without rewrite).
 	Generic military names only — no real brands, no MT names.
 ]]
@@ -244,6 +244,26 @@ local VehicleConfig = {
 			"NavalCapital",
 			{ Struct = N(5), Scale = 1.55, Prestige = 10, RebirthFlag = "EmpireFleet" }
 		),
+
+		-- ═══ DEPTH PASS 2 — toward 60–80 ═══
+		FlatbedHauler = V("FlatbedHauler", "Flatbed Hauler", "Ground", "Common", 4, 360, 44, 3, 22, 14000, "WheeledTruck", { Struct = D(1), Scale = 0.95 }),
+		AmmoCarrier = V("AmmoCarrier", "Ammo Carrier", "Ground", "Uncommon", 7, 460, 40, 4, 38, 32000, "WheeledTruck", { Struct = D(2) }),
+		WheeledIFV = V("WheeledIFV", "Wheeled IFV", "Ground", "Rare", 10, 950, 40, 6, 62, 65000, "WheeledAPC", { Struct = D(3), Scale = 1.05 }),
+		TankDestroyer = V("TankDestroyer", "Tank Destroyer", "Ground", "Epic", 16, 1500, 30, 3, 95, 200000, "TrackedMBT", { Struct = D(5), Scale = 1.08 }),
+		BridgeLayer = V("BridgeLayer", "Bridge Layer", "Ground", "Rare", 14, 1100, 26, 3, 70, 140000, "TrackedIFV", { Struct = D(4), Scale = 1.2 }),
+		MineClearer = V("MineClearer", "Mine Clearer", "Ground", "Uncommon", 9, 700, 28, 2, 50, 60000, "TrackedIFV", { Struct = D(3), Scale = 0.95 }),
+		RadarTruck = V("RadarTruck", "Radar Truck", "Ground", "Rare", 12, 650, 38, 3, 40, 92000, "WheeledTruck", { Struct = D(4) }),
+		AssaultGun = V("AssaultGun", "Assault Gun", "Ground", "Epic", 17, 1800, 24, 3, 115, 240000, "TrackedMBT", { Struct = D(5), Scale = 1.18 }),
+		LightTransportHeli = V("LightTransportHeli", "Light Transport Heli", "Air", "Rare", 12, 800, 58, 4, 22, 120000, "HeliTransport", { Struct = H(1), Scale = 0.9 }),
+		RescueHeli = V("RescueHeli", "Rescue Helicopter", "Air", "Uncommon", 11, 700, 60, 4, 20, 100000, "HeliLight", { Struct = H(1) }),
+		CASJet = V("CASJet", "Close Air Support Jet", "Air", "Epic", 20, 820, 100, 1, 30, 350000, "JetStrike", { Struct = A(3), Scale = 1.08 }),
+		TrainerJet = V("TrainerJet", "Trainer Jet", "Air", "Rare", 15, 550, 95, 2, 18, 180000, "JetFighter", { Struct = A(1), Scale = 0.9 }),
+		AWACSPlane = V("AWACSPlane", "AWACS Plane", "Air", "Legendary", 23, 1400, 80, 4, 45, 520000, "JetTransport", { Struct = A(4), Scale = 1.35, Prestige = 4 }),
+		RiverBoat = V("RiverBoat", "River Boat", "Naval", "Common", 5, 350, 42, 4, 18, 18000, "NavalPatrol", { Struct = N(1), Scale = 0.8 }),
+		MineLayer = V("MineLayer", "Mine Layer", "Naval", "Rare", 13, 1000, 32, 5, 55, 110000, "NavalGun", { Struct = N(3), Scale = 1.1 }),
+		Frigate = V("Frigate", "Frigate", "Naval", "Epic", 18, 2000, 40, 6, 100, 300000, "NavalCapital", { Struct = N(4), Scale = 0.9 }),
+		CarrierEscort = V("CarrierEscort", "Carrier Escort", "Naval", "Legendary", 22, 2600, 34, 8, 125, 420000, "NavalCapital", { Struct = N(5), Scale = 1.1, Prestige = 6 }),
+		HoverTransport = V("HoverTransport", "Hover Transport", "Naval", "Epic", 16, 1100, 50, 8, 40, 190000, "NavalLanding", { Struct = N(3), Scale = 1.05 }),
 	} :: { [string]: VehicleDef },
 
 	Categories = { "Ground", "Air", "Naval" } :: { VehicleCategory },

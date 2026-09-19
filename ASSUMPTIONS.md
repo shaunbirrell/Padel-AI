@@ -161,7 +161,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 79. **Naval vehicles + Dock** — `VehicleConfig` Category Ground/Air/Naval. `Dock` (VehicleDepot L2) gates naval ladder through Battleship. MapSetup coastal water band + `WE_NavalSpawn` pads (also `WE_VehicleSpawn`). VehicleService prefers naval pads; KitFamily Part kits; MeshAssetId hooks reserved. SubSurfaceRunner is a surface stub (no dive physics yet).
 
-80. **Expanded vehicle roster** — ~49 vehicles (26 Ground / 12 Air / 11 Naval). `KitFamily` on each def drives VehicleService builders (scalable toward 100). Garage filters category + rarity; soft cooldown refresh. Late units use RequiresPrestige / RequiresRebirthFlag. BALANCE.md summarizes curve.
+80. **Expanded vehicle roster** — ~67 vehicles (34 Ground / 17 Air / 16 Naval). `KitFamily` on each def drives VehicleService builders (scalable toward 100). Garage filters category + rarity; soft cooldown refresh. Late units use RequiresPrestige / RequiresRebirthFlag. BALANCE.md summarizes curve.
 
 81. **Rebirth cash stack** — AddCash order: base → prestige (1+P×0.10) → VIP/DoubleCash → season. Exempt reasons skip VIP/season only. Passive, training workers, capture stipend, combat rewards all go through AddCash.
 
