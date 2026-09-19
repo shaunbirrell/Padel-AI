@@ -230,7 +230,11 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 end
 
 local function applyKitVisuals(plinth: BasePart, structureId: string, level: number)
+	if not plinth or not plinth.Parent then
+		return
+	end
 	local palette = StructureVisualConfig.Palettes[structureId]
+	-- Missing palette / kit children is safe — plinth still scales
 	local baseSize = plinth:GetAttribute("BaseSize")
 	if typeof(baseSize) ~= "Vector3" then
 		baseSize = Vector3.new(8, 1.2, 8)
@@ -327,7 +331,10 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 			local p = inst:GetAttribute("PlotId")
 			local s = inst:GetAttribute("StructureId")
 			if p == plotId and s == structureId then
-				applyKitVisuals(inst, structureId, level)
+				local okApply, errApply = pcall(applyKitVisuals, inst, structureId, level)
+				if not okApply then
+					warn("[BaseService] applyKitVisuals failed", structureId, errApply)
+				end
 			end
 		end
 	end
@@ -338,7 +345,9 @@ function BaseService.RefreshAllVisuals(player: Player)
 	if not profile then
 		return
 	end
-	for structureId, level in pairs(profile.BaseUpgrades) do
+	-- Apply to every configured structure (missing kit slots safe; L0 = ghost)
+	for structureId in pairs(BaseConfig.Structures) do
+		local level = profile.BaseUpgrades[structureId] or 0
 		BaseService.UpdateVisuals(player, structureId, level)
 	end
 end

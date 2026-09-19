@@ -7,6 +7,7 @@
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local GuiService = game:GetService("GuiService")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -150,7 +151,13 @@ local function setOpen(open: boolean)
 		end
 	end
 	if toggleBtn then
-		toggleBtn.Text = if open then "Close Base" else "Base Upgrades  [B]"
+		local touch = UserInputService.TouchEnabled
+		if open then
+			toggleBtn.Text = "Close Base"
+		else
+			toggleBtn.Text = if touch then "BASE UPGRADES" else "Base Upgrades  [B]"
+		end
+		toggleBtn.Visible = true
 	end
 	if open then
 		refreshList()
@@ -219,24 +226,34 @@ end
 function BaseController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireBaseUI"
-	gui.DisplayOrder = 15
+	-- Above default chat / touch controls so mobile Base CTA stays tappable
+	gui.DisplayOrder = 45
 	gui.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(gui, false)
 	screenGui = gui
 
-	-- Big, obvious bottom CTA — purchases still require opening panel + BUY tap.
+	local touch = UserInputService.TouchEnabled
+	-- Lift above chat bar / thumb zone on mobile; desktop stays near bottom
+	local bottomPad = if touch then 96 else 28
+	local btnW = if touch then 280 else 260
+	local btnH = if touch then 58 else 56
+
+	-- Big, obvious bottom CTA — always Visible (esp. TouchEnabled); chat must not cover it.
 	local btn = Instance.new("TextButton")
 	btn.Name = "ToggleUpgrades"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -28)
-	btn.Size = UDim2.fromOffset(260, 56)
+	btn.Position = UDim2.new(0.5, 0, 1, -bottomPad)
+	btn.Size = UDim2.fromOffset(btnW, btnH)
 	btn.BackgroundColor3 = Constants.Colors.Accent
 	btn.TextColor3 = Constants.Colors.Text
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 18
-	btn.Text = "Base Upgrades  [B]"
+	btn.TextSize = if touch then 17 else 18
+	btn.Text = if touch then "BASE UPGRADES" else "Base Upgrades  [B]"
 	btn.BorderSizePixel = 0
-	btn.ZIndex = 5
+	btn.ZIndex = 20
+	btn.Visible = true
+	btn.Active = true
+	btn.AutoButtonColor = true
 	corner(btn, 10)
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Constants.Colors.Gold
@@ -244,9 +261,21 @@ function BaseController.Init()
 	stroke.Parent = btn
 	btn.Parent = gui
 	toggleBtn = btn
+	UIUtil.EnsureMinTouch(btn, 48)
 	btn.MouseButton1Click:Connect(function()
 		setOpen(not menuOpen)
 	end)
+
+	-- Re-assert visibility if chat / other UI toggles (TouchEnabled always keeps Base CTA)
+	if touch then
+		task.defer(function()
+			local inset = GuiService:GetGuiInset()
+			-- Extra lift if top inset implies phone notch / bottom home indicator style layout
+			local extra = math.clamp(inset.Y * 0.15, 0, 24)
+			btn.Position = UDim2.new(0.5, 0, 1, -(bottomPad + extra))
+			btn.Visible = true
+		end)
+	end
 
 	local panel = Instance.new("Frame")
 	panel.Name = "UpgradePanel"

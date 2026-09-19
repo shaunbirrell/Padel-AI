@@ -9,6 +9,7 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -35,6 +36,7 @@ local TutorialService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
+local airDriveConns: { [number]: RBXScriptConnection } = {}
 local vehicleFolder: Folder? = nil
 
 local function now(): number
@@ -95,11 +97,27 @@ local function pushState(player: Player)
 	remote:FireClient(player, payload)
 end
 
+local function stopAirDrive(userId: number)
+	local conn = airDriveConns[userId]
+	if conn then
+		conn:Disconnect()
+		airDriveConns[userId] = nil
+	end
+end
+
 local function destroyActive(userId: number)
+	stopAirDrive(userId)
 	local model = activeVehicles[userId]
 	activeVehicles[userId] = nil
-	if model and model.Parent then
-		model:Destroy()
+	if model then
+		-- Ensure kit parts / welds / seats are fully cleaned
+		if model.Parent then
+			model:Destroy()
+		else
+			pcall(function()
+				model:Destroy()
+			end)
+		end
 	end
 end
 
@@ -375,6 +393,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		seatOffset = CFrame.new(0, 2.0, -1)
 	end
 
+	local isAir = id == "AttackHelicopter" or id == "FighterJet"
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "DriverSeat"
 	seat.Size = Vector3.new(2, 0.8, 2)
@@ -384,11 +403,17 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	seat.Anchored = false
 	seat.CanCollide = true
 	seat.HeadsUpDisplay = false
-	seat.MaxSpeed = def.Speed
-	seat.Torque = 22
-	seat.TurnSpeed = 2.2
+	seat.Disabled = false
+	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) else def.Speed
+	seat.Torque = if isAir then 8 else 28
+	seat.TurnSpeed = if isAir then 1.4 else 2.4
 	seat.Parent = model
 	weldTo(body, seat)
+	model:SetAttribute("WE_DriveMode", if isAir then "AirPlaceholder" else "VehicleSeat")
+	-- Reserved MeshAssetId hook (0 / nil = Part kit; art pass may swap later)
+	if def.MeshAssetId and def.MeshAssetId ~= 0 then
+		model:SetAttribute("MeshAssetId", def.MeshAssetId)
+	end
 
 	local extra = math.max(0, (def.Seats or 1) - 1)
 	for i = 1, math.min(extra, 4) do
@@ -424,6 +449,78 @@ local function meetsStructureReq(profile: any, def: VehicleDef): (boolean, strin
 		return false, "MissingStructure"
 	end
 	return true, nil
+end
+
+
+local function startAirPlaceholderDrive(userId: number, model: Model, def: VehicleDef)
+	stopAirDrive(userId)
+	local body = model.PrimaryPart
+	local seat = model:FindFirstChild("DriverSeat")
+	if not (body and body:IsA("BasePart") and seat and seat:IsA("VehicleSeat")) then
+		return
+	end
+	-- Lightweight placeholder flight: throttle → forward, steer → yaw, slight hover
+	local attachment = body:FindFirstChild("WE_AirAttach") :: Attachment?
+	if not attachment then
+		attachment = Instance.new("Attachment")
+		attachment.Name = "WE_AirAttach"
+		attachment.Parent = body
+	end
+	local lv = body:FindFirstChild("WE_AirVelocity") :: LinearVelocity?
+	if not lv then
+		lv = Instance.new("LinearVelocity")
+		lv.Name = "WE_AirVelocity"
+		lv.Attachment0 = attachment
+		lv.RelativeTo = Enum.ActuatorRelativeTo.World
+		lv.MaxForce = 1e6
+		lv.VectorVelocity = Vector3.zero
+		lv.Parent = body
+	end
+	local av = body:FindFirstChild("WE_AirAngular") :: AngularVelocity?
+	if not av then
+		av = Instance.new("AngularVelocity")
+		av.Name = "WE_AirAngular"
+		av.Attachment0 = attachment
+		av.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+		av.MaxTorque = 1e5
+		av.AngularVelocity = Vector3.zero
+		av.Parent = body
+	end
+
+	local cruise = def.Speed
+	local hoverY = body.Position.Y
+	airDriveConns[userId] = RunService.Heartbeat:Connect(function(_dt)
+		if not model.Parent or not body.Parent then
+			stopAirDrive(userId)
+			return
+		end
+		local occupied = seat.Occupant ~= nil
+		if not occupied then
+			lv.VectorVelocity = Vector3.zero
+			av.AngularVelocity = Vector3.zero
+			return
+		end
+		local throttle = seat.ThrottleFloat
+		local steer = seat.SteerFloat
+		-- Hold altitude near spawn hover band; throttle climbs/dives a bit
+		local targetY = hoverY + throttle * 12
+		local yCorr = math.clamp((targetY - body.Position.Y) * 2.5, -40, 40)
+		local look = body.CFrame.LookVector
+		local flat = Vector3.new(look.X, 0, look.Z)
+		if flat.Magnitude < 0.05 then
+			flat = Vector3.new(0, 0, -1)
+		else
+			flat = flat.Unit
+		end
+		local speed = cruise * math.clamp(math.abs(throttle) + 0.15, 0.15, 1)
+		if throttle < 0 then
+			speed *= 0.55
+		end
+		local forwardSign = if throttle >= 0 then 1 else -0.4
+		local vel = flat * (speed * forwardSign) + Vector3.new(0, yCorr, 0)
+		lv.VectorVelocity = vel
+		av.AngularVelocity = Vector3.new(0, -steer * 1.8, 0)
+	end)
 end
 
 function VehicleService.Owns(player: Player, vehicleId: string): boolean
@@ -520,6 +617,10 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	local model = buildVehicleModel(def, findSpawnCFrame(player), player.UserId)
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
+	local driveMode = model:GetAttribute("WE_DriveMode")
+	if driveMode == "AirPlaceholder" then
+		startAirPlaceholderDrive(player.UserId, model, def)
+	end
 
 	if profile.Stats then
 		profile.Stats.VehiclesSpawned = (profile.Stats.VehiclesSpawned or 0) + 1

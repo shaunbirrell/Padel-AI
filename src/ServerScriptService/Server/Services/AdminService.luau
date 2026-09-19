@@ -95,6 +95,9 @@ function AdminService.Init(deps: { [string]: any })
 				DataService.MarkDirty(player)
 				if deps.BaseService then
 					deps.BaseService.PushState(player)
+					if deps.BaseService.RefreshAllVisuals then
+						deps.BaseService.RefreshAllVisuals(player)
+					end
 				end
 			end
 		elseif cmd == "resettutorial" then

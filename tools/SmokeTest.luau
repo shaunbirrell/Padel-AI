@@ -289,14 +289,71 @@ else
 	info("No LocalPlayer (Edit mode?) — remotes/config checks still valid; re-run in Play Solo for GetPlayerState")
 end
 
--- 6) Checklist summary for humans
+-- 6) Walk-over buy / world tags (StudioSetup) — always run
+do
+	local CS = game:GetService("CollectionService")
+	local slots = CS:GetTagged("WE_UpgradeSlot")
+	if #slots == 0 then
+		bad("No WE_UpgradeSlot tags — run tools/StudioSetup.luau in Command Bar")
+	else
+		ok("WE_UpgradeSlot count=" .. tostring(#slots))
+		local withBillboard, withStruct, withPlot, withBuyPrompt, withKitBody = 0, 0, 0, 0, 0
+		for _, inst in ipairs(slots) do
+			if inst:IsA("BasePart") then
+				if inst:FindFirstChild("WE_PriceBillboard") or inst:FindFirstChild("Label") then
+					withBillboard += 1
+				end
+				if typeof(inst:GetAttribute("StructureId")) == "string" then
+					withStruct += 1
+				end
+				if typeof(inst:GetAttribute("PlotId")) == "number" then
+					withPlot += 1
+				end
+				local prompt = inst:FindFirstChild("WE_WorldPrompt")
+				if prompt and prompt:IsA("ProximityPrompt") then
+					-- Buy prompts must NOT live on upgrade pads (walk-over only)
+					withBuyPrompt += 1
+				end
+				for _, ch in ipairs(inst:GetChildren()) do
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") == "Body" then
+						withKitBody += 1
+						break
+					end
+				end
+			end
+		end
+		ok("Upgrade slots with StructureId=" .. tostring(withStruct))
+		ok("Upgrade slots with PlotId=" .. tostring(withPlot))
+		ok("Upgrade slots with price billboard=" .. tostring(withBillboard))
+		ok("Upgrade slots with kit Body part=" .. tostring(withKitBody))
+		if withBuyPrompt > 0 then
+			bad("Upgrade pads still have WE_WorldPrompt buy prompts count=" .. tostring(withBuyPrompt) .. " (walk-over should remove them)")
+		else
+			ok("Walk-over buy: no buy ProximityPrompt on upgrade slots")
+		end
+	end
+	ok("WE_VehicleSpawn count=" .. tostring(#CS:GetTagged("WE_VehicleSpawn")))
+	ok("WE_BasePlot count=" .. tostring(#CS:GetTagged("WE_BasePlot")))
+	-- Client controller present after Rojo sync
+	local sps = game:GetService("StarterPlayer"):FindFirstChild("StarterPlayerScripts")
+	local client = sps and sps:FindFirstChild("Client")
+	local controllers = client and client:FindFirstChild("Controllers")
+	local wpc = controllers and controllers:FindFirstChild("WorldPromptController")
+	if wpc then
+		ok("WorldPromptController ModuleScript present")
+	else
+		info("WorldPromptController not under StarterPlayer yet (Rojo / Play sync)")
+	end
+end
+
+-- 7) Checklist summary for humans
 print("---------- PLAYTEST CHECKLIST ----------")
 print("1. Rojo sync + tools/StudioSetup.luau (Edit) once")
 print("2. Play Solo — HUD Cash/Level; plot assigned")
-print("3. Tutorial or SKIP; B buy Command Center / Barracks")
-print("4. Combat LMB + R; G spawn Jeep; stand in capture zone")
+print("3. WALK onto Command Center pad to buy; or B / BASE UPGRADES menu")
+print("4. Combat LMB + R; G spawn Jeep (seat/drive); heli/jet placeholder air OK")
 print("5. M missions; P shop (Id 0 warns only); K BP/clan; A army")
-print("6. O settings — music/SFX mute AudioController + keybind sheet; G garage empty-state when no owned")
+print("6. O settings — music/SFX mute; G garage empty-state; mobile BASE button visible")
 print("7. Persistence: leave/rejoin with API Services on")
 print("8. Admin only if your UserId is in AdminConfig")
 print("========================================")
@@ -304,28 +361,5 @@ print(string.format("[Smoke] DONE  pass=%d  fail=%d  info=%d", PASS, FAIL, INFO)
 if FAIL > 0 then
 	warn("[Smoke] FAILURES detected — fix before shipping playtest")
 else
-	
--- Walk-over buy / world tags (StudioSetup)
-do
-	local CS = game:GetService("CollectionService")
-	local slots = CS:GetTagged("WE_UpgradeSlot")
-	if #slots == 0 then
-		warn("[Smoke] No WE_UpgradeSlot tags — run tools/StudioSetup.luau in Command Bar")
-	else
-		ok("WE_UpgradeSlot count=" .. tostring(#slots))
-		local withBillboard = 0
-		for _, inst in ipairs(slots) do
-			if inst:IsA("BasePart") then
-				if inst:FindFirstChild("WE_PriceBillboard") or inst:FindFirstChild("Label") then
-					withBillboard += 1
-				end
-			end
-		end
-		ok("Upgrade slots with price billboard (setup)=" .. tostring(withBillboard))
-		ok("Walk-over buy: client WorldPromptController (no buy ProximityPrompt on slots)")
-	end
-	ok("WE_VehicleSpawn count=" .. tostring(#CS:GetTagged("WE_VehicleSpawn")))
-end
-
-print("[Smoke] All automated checks passed")
+	print("[Smoke] All automated checks passed")
 end

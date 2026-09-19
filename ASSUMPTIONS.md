@@ -115,3 +115,9 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 57. **Vehicle kits** — `VehicleService.buildVehicleModel` builds distinct Part kits per `VehicleConfig` id (Jeep/ArmedJeep wheels+bed+gun; Truck/APC; Light/HeavyTank tracks+turret+barrel; AttackHelicopter rotors+skids; FighterJet wings+tail). VehicleSeat remains driveable. No MeshIds.
 
+58. **Walk-over edge cases** — Respawn / CharacterRemoving clears overlap + pending. Seated in VehicleSeat/Seat skips pad buys (driving over pads). Overlap keyed by `plotId|structureId` so multi-plot / multi-part touches don't collide. Plot reassignment clears overlap. Standing on a pad retries after debounce (failed cash / sequential upgrades); MAX toast throttled. Touched/Prompt connections disconnect on AncestryChanged / tag remove (no leak). Billboard refresh throttled (~0.35s).
+
+59. **Vehicle drive modes** — Ground kits use Roblox VehicleSeat (Torque/MaxSpeed from def). Heli/Jet set `WE_DriveMode=AirPlaceholder` and a server Heartbeat LinearVelocity/AngularVelocity hover+throttle/steer loop while occupied; despawn disconnects the loop and Destroy()s the full kit model.
+
+60. **Base kit refresh** — `RefreshAllVisuals` applies `applyKitVisuals` for every `BaseConfig.Structures` id (L0 ghost if missing). Missing kit role children are no-ops; apply is pcall-guarded. Admin `resetbase` and prestige also refresh visuals.
+

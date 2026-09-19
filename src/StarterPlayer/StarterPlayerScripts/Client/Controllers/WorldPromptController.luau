@@ -3,11 +3,13 @@
 	World interactivity for StudioSetup-tagged parts.
 
 	Upgrade pads (WE_UpgradeSlot): WALK-OVER auto-purchase — Touched + Heartbeat
-	overlap fires RequestPurchaseUpgrade once per enter (debounced). Never grants on client.
-	BillboardGuis show Name / Lv X→Y / $cost (or MAX); throttled refresh on Base/Economy updates.
+	overlap fires RequestPurchaseUpgrade (debounced). Never grants on client.
+	Edge cases: respawn clears overlap; seated-in-vehicle skips buy; multi-part
+	touch uses pad keys; plot reassignment clears state; standing retry after
+	debounce for failed-purchase UX. Prompt/Touched connections disconnect on
+	part destroy. BillboardGuis throttled refresh on Base/Economy updates.
 
 	ProximityPrompts only for non-buy actions (Open Base, Open Garage, capture ping, tutorial).
-	Rebinds after character respawn.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -31,7 +33,7 @@ local PROMPT_NAME = "WE_WorldPrompt"
 local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.75
 local OVERLAP_MARGIN = 1.6 -- generous for mobile hitboxes
-local BILLBOARD_THROTTLE = 0.2
+local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -39,13 +41,44 @@ local cash = 0
 local myPlotId: number? = nil
 local attachedPrompt: { [Instance]: boolean } = {}
 local slotParts: { [BasePart]: boolean } = {}
-local lastPurchaseAt: { [string]: number } = {}
-local lastOverlap: { [string]: boolean } = {}
-local pendingPurchase: { [string]: boolean } = {} -- in-flight guard (double-fire race)
+local slotConns: { [BasePart]: { RBXScriptConnection } } = {}
+local promptConns: { [Instance]: { RBXScriptConnection } } = {}
+local lastPurchaseAt: { [string]: number } = {} -- keyed by structureId (server rate is global)
+local lastOverlap: { [string]: boolean } = {} -- keyed by padKey (plot|structure)
+local pendingPurchase: { [string]: boolean } = {} -- structureId in-flight
 local billboardDirty = false
 local lastBillboardRefresh = 0
 local overlapConn: RBXScriptConnection? = nil
 local tagsBound = false
+local maxToastAt: { [string]: number } = {} -- throttle MAX toasts while camping
+
+local function padKey(part: BasePart, structureId: string): string
+	local pid = part:GetAttribute("PlotId")
+	if typeof(pid) == "number" then
+		return tostring(pid) .. "|" .. structureId
+	end
+	return structureId
+end
+
+local function trackConn(bucket: { [Instance]: { RBXScriptConnection } }, owner: Instance, conn: RBXScriptConnection)
+	local list = bucket[owner]
+	if not list then
+		list = {}
+		bucket[owner] = list
+	end
+	table.insert(list, conn)
+end
+
+local function disconnectAll(bucket: { [Instance]: { RBXScriptConnection } }, owner: Instance)
+	local list = bucket[owner]
+	if not list then
+		return
+	end
+	for _, c in ipairs(list) do
+		c:Disconnect()
+	end
+	bucket[owner] = nil
+end
 
 local function makePrompt(parent: BasePart, actionText: string, objectText: string, hold: number?, maxDist: number?): ProximityPrompt
 	local existing = parent:FindFirstChild(PROMPT_NAME)
@@ -85,7 +118,6 @@ local function structureInfo(structureId: string): (string, number, number?, boo
 	if level >= def.MaxLevel then
 		return display, level, nil, true, nil
 	end
-	-- Prereq hint for billboard
 	local prereqHint: string? = nil
 	if def.Requires then
 		for _, req in ipairs(def.Requires) do
@@ -212,6 +244,7 @@ local function refreshAllBillboardsNow()
 	end
 	for _, p in ipairs(stale) do
 		slotParts[p] = nil
+		disconnectAll(slotConns, p)
 	end
 end
 
@@ -219,7 +252,27 @@ local function markBillboardsDirty()
 	billboardDirty = true
 end
 
-local function tryPurchase(structureId: string)
+local function isSeatedInVehicle(): boolean
+	local char = player.Character
+	if not char then
+		return false
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return false
+	end
+	local seat = hum.SeatPart
+	if seat == nil then
+		return false
+	end
+	-- Any seat (VehicleSeat or passenger Seat) — driving over pads must not buy
+	if seat:IsA("VehicleSeat") or seat:IsA("Seat") then
+		return true
+	end
+	return false
+end
+
+local function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 	local now = os.clock()
 	local last = lastPurchaseAt[structureId] or 0
 	if now - last < DEBOUNCE_SEC then
@@ -232,7 +285,12 @@ local function tryPurchase(structureId: string)
 	local _display, _level, _cost, isMax = structureInfo(structureId)
 	if isMax then
 		lastPurchaseAt[structureId] = now
-		NotificationController.Show("Already MAX", "Info", 2)
+		local silent = opts and opts.silentMax
+		local lastMax = maxToastAt[structureId] or 0
+		if not silent and (now - lastMax) >= 8 then
+			maxToastAt[structureId] = now
+			NotificationController.Show("Already MAX", "Info", 2)
+		end
 		return
 	end
 
@@ -241,7 +299,7 @@ local function tryPurchase(structureId: string)
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
-	-- Clear in-flight after debounce window (server toast handles result)
+	-- Clear in-flight after debounce (server toast handles success/fail UX)
 	task.delay(DEBOUNCE_SEC, function()
 		pendingPurchase[structureId] = nil
 	end)
@@ -267,28 +325,35 @@ local function isOwnPlot(part: BasePart): boolean
 	return pid == myPlotId
 end
 
-local function onEnterPad(part: BasePart, structureId: string)
+local function onEnterPad(part: BasePart, structureId: string, fromStandingRetry: boolean?)
+	if isSeatedInVehicle() then
+		return
+	end
+	local key = padKey(part, structureId)
 	if not isOwnPlot(part) then
-		-- Standing on another player's pad — show hint once per structure debounce
 		local now = os.clock()
 		local last = lastPurchaseAt[structureId] or 0
 		if now - last >= DEBOUNCE_SEC then
 			lastPurchaseAt[structureId] = now
 			NotificationController.Show("Not your base — walk your plot pads to buy", "Warn", 2.5)
 		end
-		lastOverlap[structureId] = true -- prevent spam until leave
+		lastOverlap[key] = true
 		return
 	end
-	if lastOverlap[structureId] then
+	if lastOverlap[key] and not fromStandingRetry then
 		return
 	end
-	lastOverlap[structureId] = true
-	tryPurchase(structureId)
+	lastOverlap[key] = true
+	tryPurchase(structureId, { silentMax = fromStandingRetry == true })
 end
 
-local function onLeavePad(structureId: string)
-	lastOverlap[structureId] = false
-	-- Leaving cancels "standing" state so re-enter can buy again after debounce
+local function onLeavePad(key: string)
+	lastOverlap[key] = false
+end
+
+local function detachUpgradeSlot(part: BasePart)
+	disconnectAll(slotConns, part)
+	slotParts[part] = nil
 end
 
 local function attachUpgradeSlot(part: BasePart)
@@ -304,103 +369,106 @@ local function attachUpgradeSlot(part: BasePart)
 
 	refreshSlotBillboard(part)
 
-	part.Touched:Connect(function(hit)
+	trackConn(slotConns, part, part.Touched:Connect(function(hit)
 		local char = player.Character
 		if not char then
 			return
 		end
-		local model = hit:FindFirstAncestorOfClass("Model")
-		if model ~= char then
+		-- Multi-part: only accept character descendants (any body part)
+		if not hit:IsDescendantOf(char) then
 			return
 		end
 		local structureId = part:GetAttribute("StructureId")
 		if typeof(structureId) == "string" then
 			onEnterPad(part, structureId)
 		end
-	end)
+	end))
 
-	part.TouchEnded:Connect(function(hit)
+	trackConn(slotConns, part, part.TouchEnded:Connect(function(hit)
 		local char = player.Character
 		if not char then
 			return
 		end
-		local model = hit:FindFirstAncestorOfClass("Model")
-		if model ~= char then
+		if not hit:IsDescendantOf(char) then
 			return
 		end
 		local structureId = part:GetAttribute("StructureId")
 		if typeof(structureId) ~= "string" then
 			return
 		end
+		local key = padKey(part, structureId)
 		task.defer(function()
 			local hrp = char:FindFirstChild("HumanoidRootPart")
 			if hrp and hrp:IsA("BasePart") and pointInPad(hrp.Position, part) then
+				-- Another character part still overlapping — keep overlap
 				return
 			end
-			onLeavePad(structureId)
+			onLeavePad(key)
 		end)
-	end)
+	end))
+
+	trackConn(slotConns, part, part.AncestryChanged:Connect(function(_, parent)
+		if parent == nil then
+			detachUpgradeSlot(part)
+		end
+	end))
 end
 
-local function attachBasePlot(part: BasePart)
+local function attachPromptOnce(part: BasePart, build: () -> ProximityPrompt, onTriggered: () -> ())
 	if attachedPrompt[part] then
 		return
 	end
 	attachedPrompt[part] = true
-	local plotId = part:GetAttribute("PlotId")
-	local label = if typeof(plotId) == "number" then ("Base Plot " .. tostring(plotId)) else "Base"
-	local prompt = makePrompt(part, "Open Base", label, 0, 14)
-	prompt.Triggered:Connect(function(who)
+	local prompt = build()
+	trackConn(promptConns, part, prompt.Triggered:Connect(function(who)
 		if who ~= player then
 			return
 		end
+		onTriggered()
+	end))
+	trackConn(promptConns, part, part.AncestryChanged:Connect(function(_, parent)
+		if parent == nil then
+			disconnectAll(promptConns, part)
+			attachedPrompt[part] = nil
+		end
+	end))
+end
+
+local function attachBasePlot(part: BasePart)
+	local plotId = part:GetAttribute("PlotId")
+	local label = if typeof(plotId) == "number" then ("Base Plot " .. tostring(plotId)) else "Base"
+	attachPromptOnce(part, function()
+		return makePrompt(part, "Open Base", label, 0, 14)
+	end, function()
 		BaseController.Open()
 	end)
 end
 
 local function attachCaptureZone(part: BasePart)
-	if attachedPrompt[part] then
-		return
-	end
-	attachedPrompt[part] = true
 	local territoryId = part:GetAttribute("TerritoryId")
 	local idStr = if typeof(territoryId) == "string" then territoryId else part.Name
-	local prompt = makePrompt(part, "Hold to capture", idStr, 0.4, 18)
-	prompt.Triggered:Connect(function(who)
-		if who ~= player then
-			return
-		end
+	attachPromptOnce(part, function()
+		return makePrompt(part, "Hold to capture", idStr, 0.4, 18)
+	end, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestCaptureTerritory):FireServer(idStr)
 		NotificationController.Show("Stand in the zone to capture — progress fills while you hold ground.", "Info", 3.5)
 	end)
 end
 
 local function attachVehicleSpawn(part: BasePart)
-	if attachedPrompt[part] then
-		return
-	end
-	attachedPrompt[part] = true
-	local prompt = makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
-	prompt.Triggered:Connect(function(who)
-		if who ~= player then
-			return
-		end
+	attachPromptOnce(part, function()
+		return makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
+	end, function()
 		VehicleController.Open()
 	end)
 end
 
 local function attachTutorialMarker(part: BasePart)
-	if attachedPrompt[part] then
-		return
-	end
-	attachedPrompt[part] = true
 	local stepId = part:GetAttribute("TutorialStepId")
 	local label = if typeof(stepId) == "string" then stepId else part.Name
-	local prompt = makePrompt(part, "Continue", "Tutorial: " .. tostring(label), 0, 10)
-	prompt.Triggered:Connect(function(who)
-		if who ~= player then
-			return
-		end
+	attachPromptOnce(part, function()
+		return makePrompt(part, "Continue", "Tutorial: " .. tostring(label), 0, 10)
+	end, function()
 		NotificationController.Show("Follow the gold beam / tutorial panel — or press SKIP.", "Info", 3.5)
 	end)
 end
@@ -414,6 +482,16 @@ local function bindTag(tag: string, handler: (BasePart) -> ())
 	CollectionService:GetInstanceAddedSignal(tag):Connect(function(inst)
 		if inst:IsA("BasePart") then
 			handler(inst)
+		end
+	end)
+	CollectionService:GetInstanceRemovedSignal(tag):Connect(function(inst)
+		if inst:IsA("BasePart") then
+			if tag == Constants.Tags.UpgradeSlot then
+				detachUpgradeSlot(inst)
+			else
+				disconnectAll(promptConns, inst)
+				attachedPrompt[inst] = nil
+			end
 		end
 	end)
 end
@@ -441,17 +519,32 @@ local function startOverlapLoop()
 		if not (hrp and hrp:IsA("BasePart")) then
 			return
 		end
-		-- Prefer HRP; also accept if any character part is close (mobile ragdoll edge)
+		if isSeatedInVehicle() then
+			-- Driving: clear any stuck overlap so stepping out can buy fresh
+			for key in pairs(lastOverlap) do
+				if lastOverlap[key] then
+					lastOverlap[key] = false
+				end
+			end
+			return
+		end
+
 		local pos = hrp.Position
 		for part in pairs(slotParts) do
 			if part.Parent then
 				local structureId = part:GetAttribute("StructureId")
 				if typeof(structureId) == "string" then
+					local key = padKey(part, structureId)
 					local inside = pointInPad(pos, part)
-					if inside and not lastOverlap[structureId] then
-						onEnterPad(part, structureId)
-					elseif not inside and lastOverlap[structureId] then
-						onLeavePad(structureId)
+					if inside then
+						if not lastOverlap[key] then
+							onEnterPad(part, structureId)
+						else
+							-- Standing retry: failed buy / cash refresh / sequential upgrades
+							onEnterPad(part, structureId, true)
+						end
+					elseif lastOverlap[key] then
+						onLeavePad(key)
 					end
 				end
 			end
@@ -475,6 +568,10 @@ function WorldPromptController.Init()
 	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
 		upgrades = base.Upgrades or upgrades
 		if typeof(base.PlotId) == "number" then
+			if myPlotId ~= nil and myPlotId ~= base.PlotId then
+				-- Plot reassignment — drop overlap so new pads can fire
+				clearOverlapState()
+			end
 			myPlotId = base.PlotId
 		end
 		markBillboardsDirty()
@@ -490,6 +587,9 @@ function WorldPromptController.Init()
 		if state.Base then
 			upgrades = state.Base.Upgrades
 			if typeof(state.Base.PlotId) == "number" then
+				if myPlotId ~= nil and myPlotId ~= state.Base.PlotId then
+					clearOverlapState()
+				end
 				myPlotId = state.Base.PlotId
 			end
 		end
@@ -498,11 +598,14 @@ function WorldPromptController.Init()
 
 	player.CharacterAdded:Connect(function()
 		clearOverlapState()
-		-- Character parts change; Heartbeat loop keeps working via new HRP
 		task.defer(function()
 			task.wait(0.3)
 			markBillboardsDirty()
 		end)
+	end)
+
+	player.CharacterRemoving:Connect(function()
+		clearOverlapState()
 	end)
 
 	task.defer(function()
