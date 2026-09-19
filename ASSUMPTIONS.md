@@ -77,7 +77,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 36. **Studio mock GamePasses** — `DevConfig.MockOwnedGamePasses` or admin `grantpass` only in Studio when product Ids are still 0.
 
 
-37. **Prestige** — Requires Level ≥ PrestigeConfig.MinLevelToPrestige (100). Resets Cash/Level/XP/BaseUpgrades; keeps Vehicles/Weapons/Gold; grants GoldBonusOnPrestige; Cash earnings use EconomyConfig.PrestigeCashMultiplierPerLevel. Admin `forceprestige` / `prestige`.
+37. **Prestige / Rebirth** — Requires Level ≥ PrestigeConfig.MinLevelToPrestige (100). Resets Cash/Level/XP/BaseUpgrades; keeps Vehicles/Weapons/Gold/RebirthUnlocks; grants GoldBonusOnPrestige; **+10% cash earnings per prestige** (stacking) via EconomyConfig.PrestigeCashMultiplierPerLevel. `DoRebirth` aliases `DoPrestige`. RebirthUnlocks track grants flags + optional vehicles. Admin `forceprestige` / `prestige`.
 
 38. **Battle Pass** — SeasonId from SeasonConfig; XP mirrored from XPService.AddXP; dense Free/Premium tracks (levels 1–50) in BattlePassConfig. Claim UX: CLAIM ALL (level 0 → ClaimAll) + track preview with claimable counts. Premium only via admin `grantpremium` or Monetization ProcessReceipt for `DevProducts.PremiumPass` (Id=0 placeholder; GrantsBattlePassPremium). Never client-granted.
 
@@ -158,4 +158,12 @@ Reversible engineering decisions made while implementing the MVP without blockin
 77. **Fortresses** — `FortIronclad` / `FortSandhold` in TerritoryConfig + MapSetup (walls/keep + FortGuard). Higher StipendCash (~10k). MaxPersonalTerritories raised to 6.
 
 78. **DataVersion 5** — Migrates `LastSpinnerClaimUnix`. Group/Discord shout intentionally skipped. MapSetup auto-on-Play + void-fall + ~2600 map preserved.
+
+79. **Naval vehicles + Dock** — `VehicleConfig` Category Ground/Air/Naval (~19 kits). `Dock` structure (VehicleDepot L2) gates PatrolBoat/Gunboat/LandingCraft/Destroyer. MapSetup builds coastal water strip + `WE_NavalSpawn` pads (also tagged `WE_VehicleSpawn` for garage prompts). VehicleService prefers naval pads for Category=Naval; Part kits (hull/cabin/seat); MeshAssetId hooks reserved.
+
+80. **Expanded vehicle roster** — ~19 vehicles (jeeps, trucks, APCs, tanks, artillery, helis, jets, boats). Garage UI filters All/Ground/Air/Naval. BALANCE.md lists costs/levels.
+
+81. **Rebirth cash stack** — AddCash order: base → prestige (1+P×0.10) → VIP/DoubleCash → season. Exempt reasons skip VIP/season only. Passive, training workers, capture stipend, combat rewards all go through AddCash.
+
+82. **DataVersion 6** — Migrates `RebirthUnlocks` table. Product IDs remain 0. No MT trademarks/assets.
 

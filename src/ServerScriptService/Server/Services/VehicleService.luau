@@ -2,7 +2,7 @@
 --[[
 	Phase 4 — Vehicles & garage (server-authoritative).
 	Validates ownership, level, structure requirements, cash, cooldown.
-	Spawns multi-part vehicle kits + VehicleSeat near plot / WE_VehicleSpawn.
+	Spawns multi-part vehicle kits + VehicleSeat near plot / WE_VehicleSpawn / WE_NavalSpawn.
 	Optional VehicleDef.MeshAssetId (non-zero) reserved for future MeshPart swap.
 ]]
 
@@ -121,23 +121,37 @@ local function destroyActive(userId: number)
 	end
 end
 
-local function findSpawnCFrame(player: Player): CFrame
+local function findSpawnCFrame(player: Player, category: string?): CFrame
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local origin = if root then root.Position else Vector3.zero
 	local best: CFrame? = nil
 	local bestDist = math.huge
+	local preferNaval = category == "Naval"
+	local tagList = if preferNaval
+		then { Constants.Tags.NavalSpawn, Constants.Tags.VehicleSpawn }
+		else { Constants.Tags.VehicleSpawn }
 
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.VehicleSpawn)) do
-		if inst:IsA("BasePart") then
-			local d = (inst.Position - origin).Magnitude
-			if d < bestDist then
-				bestDist = d
-				best = inst.CFrame + Vector3.new(0, 4, 0)
+	for _, tag in ipairs(tagList) do
+		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+			if inst:IsA("BasePart") then
+				local d = (inst.Position - origin).Magnitude
+				local yOff = if tag == Constants.Tags.NavalSpawn then 3 else 4
+				if d < bestDist then
+					bestDist = d
+					best = inst.CFrame + Vector3.new(0, yOff, 0)
+				end
 			end
 		end
+		-- Prefer nearest naval pad within 800 studs; don't fall through to land pads if found
+		if preferNaval and best and bestDist < 800 then
+			return best
+		end
+		if (not preferNaval) and best and bestDist < 250 then
+			return best
+		end
 	end
-	if best and bestDist < 250 then
+	if best and bestDist < 400 then
 		return best
 	end
 
@@ -273,10 +287,11 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	local seatOffset = CFrame.new(0, 2.0, -0.5)
 	local labelY = 4.5
 
-	if id == "MilitaryJeep" or id == "ArmedJeep" then
+	if id == "MilitaryJeep" or id == "ArmedJeep" or id == "ScoutCar" then
 		local armed = id == "ArmedJeep"
+		local scout = id == "ScoutCar"
 		body.Size = Vector3.new(5.2, 1.6, 8.5)
-		body.Color = if armed then Color3.fromRGB(48, 58, 42) else olive
+		body.Color = if armed then Color3.fromRGB(48, 58, 42) elseif scout then Color3.fromRGB(70, 85, 55) else olive
 		addPart(model, body, "Hood", Vector3.new(4.6, 0.7, 2.8), CFrame.new(0, 0.9, -2.6), oliveDark, Enum.Material.Metal, nil, false)
 		addPart(model, body, "Cabin", Vector3.new(4.4, 1.4, 2.8), CFrame.new(0, 1.3, 0.2), oliveDark, Enum.Material.SmoothPlastic, nil, true)
 		addPart(model, body, "Bed", Vector3.new(4.4, 0.9, 2.6), CFrame.new(0, 0.7, 2.6), olive, Enum.Material.Metal, nil, false)
@@ -294,12 +309,16 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		}, 1.05)
 		seatOffset = CFrame.new(0, 1.9, 0.1)
 		labelY = 4.2
-	elseif id == "ArmoredTruck" then
+	elseif id == "ArmoredTruck" or id == "SupplyTruck" then
+		local supply = id == "SupplyTruck"
 		body.Size = Vector3.new(6.2, 2.4, 11)
-		body.Color = armor
+		body.Color = if supply then sand else armor
 		addPart(model, body, "Cabin", Vector3.new(5.6, 2.0, 3.2), CFrame.new(0, 1.6, -3.2), armorDark, Enum.Material.Metal, nil, true)
-		addPart(model, body, "Cargo", Vector3.new(5.8, 2.6, 6.5), CFrame.new(0, 1.4, 2.0), sand, Enum.Material.Metal, nil, true)
-		addPart(model, body, "Accent", Vector3.new(5.9, 0.15, 0.4), CFrame.new(0, 2.5, -2.0), accent, Enum.Material.Neon, nil, false)
+		addPart(model, body, "Cargo", Vector3.new(5.8, 2.6, 6.5), CFrame.new(0, 1.4, 2.0), if supply then Color3.fromRGB(130, 115, 75) else sand, Enum.Material.Metal, nil, true)
+		addPart(model, body, "Accent", Vector3.new(5.9, 0.15, 0.4), CFrame.new(0, 2.5, -2.0), if supply then blueAcc else accent, Enum.Material.Neon, nil, false)
+		if supply then
+			addPart(model, body, "Crate", Vector3.new(3.5, 1.4, 3.5), CFrame.new(0, 3.0, 2.0), Color3.fromRGB(90, 75, 50), Enum.Material.Wood, nil, false)
+		end
 		addWheels(model, body, 1.15, {
 			Vector3.new(-2.8, -1.2, 3.5),
 			Vector3.new(2.8, -1.2, 3.5),
@@ -310,8 +329,9 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		}, 1.2)
 		seatOffset = CFrame.new(0, 2.4, -3.0)
 		labelY = 5.5
-	elseif id == "APC" then
-		body.Size = Vector3.new(6.5, 2.6, 10.5)
+	elseif id == "APC" or id == "InfantryCarrier" then
+		local carrier = id == "InfantryCarrier"
+		body.Size = Vector3.new(if carrier then 7.2 else 6.5, 2.6, if carrier then 12 else 10.5)
 		body.Color = armorDark
 		addPart(model, body, "HullTop", Vector3.new(5.8, 1.4, 8.5), CFrame.new(0, 1.8, 0), armor, Enum.Material.Metal, nil, true)
 		addPart(model, body, "Turret", Vector3.new(2.4, 1.2, 2.4), CFrame.new(0, 3.0, 0.5), Color3.fromRGB(50, 55, 48), Enum.Material.Metal, nil, false)
@@ -327,9 +347,11 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		}, 1.25)
 		seatOffset = CFrame.new(0, 2.2, -2.5)
 		labelY = 5.8
-	elseif id == "LightTank" or id == "HeavyTank" then
+	elseif id == "LightTank" or id == "MediumTank" or id == "HeavyTank" or id == "MobileArtillery" then
 		local heavy = id == "HeavyTank"
-		local s = if heavy then 1.25 else 1.0
+		local medium = id == "MediumTank"
+		local arty = id == "MobileArtillery"
+		local s = if heavy then 1.25 elseif medium then 1.12 elseif arty then 1.05 else 1.0
 		body.Size = Vector3.new(6.5 * s, 2.2 * s, 9.5 * s)
 		body.Color = if heavy then Color3.fromRGB(50, 55, 45) else armor
 		addPart(model, body, "TrackL", Vector3.new(1.2 * s, 1.6 * s, 9 * s), CFrame.new(-3.2 * s, -0.4, 0), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil, true)
@@ -379,6 +401,72 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		addPart(model, body, "GearR", Vector3.new(0.3, 0.8, 0.3), CFrame.new(1.5, -1.0, 1), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
 		seatOffset = CFrame.new(0, 1.3, -3.2)
 		labelY = 4.8
+	elseif id == "TransportHeli" then
+		body.Size = Vector3.new(4.5, 2.4, 12)
+		body.Color = Color3.fromRGB(60, 75, 90)
+		addPart(model, body, "Cockpit", Vector3.new(3.2, 1.8, 3.5), CFrame.new(0, 0.7, -3.5), Color3.fromRGB(45, 60, 75), Enum.Material.Glass, nil, true)
+		addPart(model, body, "Cabin", Vector3.new(4.0, 2.0, 5.5), CFrame.new(0, 0.5, 1.5), sky, Enum.Material.Metal, nil, true)
+		addPart(model, body, "Tail", Vector3.new(1.2, 1.2, 5), CFrame.new(0, 0.9, 7.5), sky, Enum.Material.Metal, nil, false)
+		addPart(model, body, "RotorHub", Vector3.new(1.4, 0.5, 1.4), CFrame.new(0, 2.2, 0), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
+		addPart(model, body, "RotorA", Vector3.new(16, 0.15, 0.7), CFrame.new(0, 2.55, 0), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil, false)
+		addPart(model, body, "RotorB", Vector3.new(0.7, 0.15, 16), CFrame.new(0, 2.6, 0), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil, false)
+		addPart(model, body, "SkidL", Vector3.new(0.3, 0.3, 8), CFrame.new(-2.0, -1.5, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
+		addPart(model, body, "SkidR", Vector3.new(0.3, 0.3, 8), CFrame.new(2.0, -1.5, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Accent", Vector3.new(3.5, 0.12, 0.35), CFrame.new(0, 1.4, -1), blueAcc, Enum.Material.Neon, nil, false)
+		seatOffset = CFrame.new(0, 1.4, -3.0)
+		labelY = 5.8
+	elseif id == "StrikeJet" then
+		body.Size = Vector3.new(2.6, 1.5, 13)
+		body.Color = Color3.fromRGB(75, 85, 95)
+		addPart(model, body, "Nose", Vector3.new(1.5, 1.0, 3.8), CFrame.new(0, 0.1, -7), Color3.fromRGB(55, 65, 75), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Cockpit", Vector3.new(1.7, 0.95, 2.4), CFrame.new(0, 0.95, -3.8), Color3.fromRGB(50, 90, 130), Enum.Material.Glass, nil, false)
+		addPart(model, body, "WingL", Vector3.new(8, 0.25, 3.0), CFrame.new(-4.5, 0, 0.8), Color3.fromRGB(70, 80, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "WingR", Vector3.new(8, 0.25, 3.0), CFrame.new(4.5, 0, 0.8), Color3.fromRGB(70, 80, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "TailFin", Vector3.new(0.25, 3.0, 2.2), CFrame.new(0, 1.9, 5.2), Color3.fromRGB(80, 88, 95), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(2.2, 0.1, 0.3), CFrame.new(0, 0.85, -1), redAcc, Enum.Material.Neon, nil, false)
+		addPart(model, body, "GearF", Vector3.new(0.3, 0.8, 0.3), CFrame.new(0, -1.0, -4.5), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
+		seatOffset = CFrame.new(0, 1.35, -3.5)
+		labelY = 5.0
+	elseif id == "PatrolBoat" or id == "Gunboat" then
+		local gun = id == "Gunboat"
+		local hull = Color3.fromRGB(45, 70, 85)
+		body.Size = Vector3.new(if gun then 6.5 else 5.5, 1.8, if gun then 14 else 11)
+		body.Color = hull
+		addPart(model, body, "Deck", Vector3.new(if gun then 5.8 else 4.8, 0.4, if gun then 11 else 8.5), CFrame.new(0, 1.0, 0), Color3.fromRGB(55, 80, 95), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Cabin", Vector3.new(3.2, 2.0, 3.5), CFrame.new(0, 2.2, -1.5), Color3.fromRGB(40, 60, 75), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Bow", Vector3.new(if gun then 4.5 else 3.8, 1.2, 3.0), CFrame.new(0, 0.4, if gun then -6.5 else -5.2), Color3.fromRGB(50, 75, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(4.0, 0.12, 0.35), CFrame.new(0, 1.5, -2), blueAcc, Enum.Material.Neon, nil, false)
+		if gun then
+			addPart(model, body, "Turret", Vector3.new(2.0, 1.0, 2.0), CFrame.new(0, 2.8, 2.5), Color3.fromRGB(35, 45, 50), Enum.Material.Metal, nil, false)
+			addPart(model, body, "Barrel", Vector3.new(0.35, 0.35, 3.5), CFrame.new(0, 3.0, 0.5), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
+		end
+		seatOffset = CFrame.new(0, 2.8, -1.2)
+		labelY = 5.5
+	elseif id == "LandingCraft" then
+		body.Size = Vector3.new(8, 2.0, 16)
+		body.Color = Color3.fromRGB(55, 65, 55)
+		addPart(model, body, "Deck", Vector3.new(7.2, 0.5, 13), CFrame.new(0, 1.1, 0.5), Color3.fromRGB(70, 80, 65), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Ramp", Vector3.new(6.5, 0.4, 4), CFrame.new(0, 0.6, -7.5) * CFrame.Angles(math.rad(-18), 0, 0), Color3.fromRGB(60, 70, 55), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Cabin", Vector3.new(3.5, 2.2, 3.0), CFrame.new(0, 2.3, 5.5), Color3.fromRGB(50, 60, 50), Enum.Material.Metal, nil, true)
+		addPart(model, body, "WallL", Vector3.new(0.4, 1.6, 12), CFrame.new(-3.6, 1.6, 0), oliveDark, Enum.Material.Metal, nil, false)
+		addPart(model, body, "WallR", Vector3.new(0.4, 1.6, 12), CFrame.new(3.6, 1.6, 0), oliveDark, Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(6.0, 0.12, 0.35), CFrame.new(0, 1.6, 4), accent, Enum.Material.Neon, nil, false)
+		seatOffset = CFrame.new(0, 3.0, 5.2)
+		labelY = 6.0
+	elseif id == "Destroyer" then
+		body.Size = Vector3.new(8, 2.4, 28)
+		body.Color = Color3.fromRGB(40, 55, 70)
+		addPart(model, body, "Deck", Vector3.new(7.2, 0.5, 24), CFrame.new(0, 1.3, 0), Color3.fromRGB(50, 65, 80), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Superstructure", Vector3.new(4.5, 3.5, 8), CFrame.new(0, 3.2, 2), Color3.fromRGB(45, 60, 75), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Bridge", Vector3.new(3.5, 2.0, 3.5), CFrame.new(0, 5.5, 1), Color3.fromRGB(55, 70, 85), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Bow", Vector3.new(5.5, 1.6, 5), CFrame.new(0, 0.6, -12), Color3.fromRGB(45, 60, 75), Enum.Material.Metal, nil, false)
+		addPart(model, body, "TurretF", Vector3.new(2.4, 1.2, 2.8), CFrame.new(0, 2.4, -6), Color3.fromRGB(35, 45, 55), Enum.Material.Metal, nil, false)
+		addPart(model, body, "BarrelF", Vector3.new(0.4, 0.4, 5), CFrame.new(0, 2.6, -9), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
+		addPart(model, body, "TurretA", Vector3.new(2.2, 1.1, 2.5), CFrame.new(0, 2.3, 8), Color3.fromRGB(35, 45, 55), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Stack", Vector3.new(1.8, 3.5, 1.8), CFrame.new(0, 5.5, 5), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(6.5, 0.15, 0.4), CFrame.new(0, 1.8, -2), redAcc, Enum.Material.Neon, nil, false)
+		seatOffset = CFrame.new(0, 6.2, 1)
+		labelY = 9.0
 	else
 		-- Fallback generic
 		body.Size = Vector3.new(6, 2, 10)
@@ -393,7 +481,9 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		seatOffset = CFrame.new(0, 2.0, -1)
 	end
 
-	local isAir = id == "AttackHelicopter" or id == "FighterJet"
+	local cat = def.Category or "Ground"
+	local isAir = cat == "Air" or id == "AttackHelicopter" or id == "FighterJet" or id == "TransportHeli" or id == "StrikeJet"
+	local isNaval = cat == "Naval"
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "DriverSeat"
 	seat.Size = Vector3.new(2, 0.8, 2)
@@ -404,12 +494,13 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	seat.CanCollide = true
 	seat.HeadsUpDisplay = false
 	seat.Disabled = false
-	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) else def.Speed
-	seat.Torque = if isAir then 8 else 28
-	seat.TurnSpeed = if isAir then 1.4 else 2.4
+	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) elseif isNaval then math.min(def.Speed, 55) else def.Speed
+	seat.Torque = if isAir then 8 elseif isNaval then 18 else 28
+	seat.TurnSpeed = if isAir then 1.4 elseif isNaval then 1.8 else 2.4
 	seat.Parent = model
 	weldTo(body, seat)
-	model:SetAttribute("WE_DriveMode", if isAir then "AirPlaceholder" else "VehicleSeat")
+	model:SetAttribute("WE_DriveMode", if isAir then "AirPlaceholder" elseif isNaval then "NavalSeat" else "VehicleSeat")
+	model:SetAttribute("WE_Category", cat)
 	-- Reserved MeshAssetId hook (0 / nil = Part kit; art pass may swap later)
 	if def.MeshAssetId and def.MeshAssetId ~= 0 then
 		model:SetAttribute("MeshAssetId", def.MeshAssetId)
@@ -447,6 +538,23 @@ local function meetsStructureReq(profile: any, def: VehicleDef): (boolean, strin
 	end
 	if level < req.Level then
 		return false, "MissingStructure"
+	end
+	return true, nil
+end
+
+local function meetsPrestigeReq(profile: any, def: VehicleDef): (boolean, string?)
+	local needP = def.RequiresPrestige
+	if typeof(needP) == "number" and needP > 0 then
+		if (profile.Prestige or 0) < needP then
+			return false, "PrestigeTooLow"
+		end
+	end
+	local flag = def.RequiresRebirthFlag
+	if typeof(flag) == "string" and flag ~= "" then
+		local unlocks = profile.RebirthUnlocks
+		if typeof(unlocks) ~= "table" or unlocks[flag] ~= true then
+			return false, "MissingRebirthUnlock"
+		end
 	end
 	return true, nil
 end
@@ -560,6 +668,10 @@ function VehicleService.Purchase(player: Player, vehicleId: any): (boolean, stri
 	if not okStruct then
 		return false, structErr
 	end
+	local okPres, presErr = meetsPrestigeReq(profile, def)
+	if not okPres then
+		return false, presErr
+	end
 	local cost = def.CostCash or 0
 	if cost > 0 then
 		local ok, err = EconomyService.SpendCash(player, cost, "vehicle_" .. vehicleId)
@@ -609,12 +721,16 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if not okStruct then
 		return false, structErr
 	end
+	local okPres, presErr = meetsPrestigeReq(profile, def)
+	if not okPres then
+		return false, presErr
+	end
 	if cooldownLeft(player.UserId, player) > 0 then
 		return false, "Cooldown"
 	end
 
 	destroyActive(player.UserId)
-	local model = buildVehicleModel(def, findSpawnCFrame(player), player.UserId)
+	local model = buildVehicleModel(def, findSpawnCFrame(player, def.Category), player.UserId)
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
 	local driveMode = model:GetAttribute("WE_DriveMode")

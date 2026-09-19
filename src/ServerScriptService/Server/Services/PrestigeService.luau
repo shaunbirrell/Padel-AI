@@ -1,7 +1,9 @@
 --!strict
 --[[
-	Prestige reset — server-authoritative.
-	Cash earnings mult applied in EconomyService via EconomyConfig.PrestigeCashMultiplierPerLevel.
+	Prestige / Rebirth — server-authoritative.
+	Each prestige: permanent +10% cash earnings (EconomyConfig.PrestigeCashMultiplierPerLevel).
+	RebirthUnlocks from PrestigeConfig applied into profile.RebirthUnlocks (+ optional vehicle/weapon grants).
+	Alias: DoRebirth == DoPrestige.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,6 +11,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -24,20 +27,74 @@ local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
 local AntiExploitService: any = nil
+local VehicleService: any = nil
+
+local function cashBonusPer(): number
+	return PrestigeConfig.CashBonusPerPrestige
+		or EconomyConfig.PrestigeCashMultiplierPerLevel
+		or 0.10
+end
+
+local function unlockListFor(prestige: number): { any }
+	local list = {}
+	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
+		table.insert(list, {
+			AtPrestige = u.AtPrestige,
+			Flag = u.Flag,
+			DisplayName = u.DisplayName,
+			Kind = u.Kind,
+			Id = u.Id,
+			Unlocked = prestige >= u.AtPrestige,
+		})
+	end
+	return list
+end
+
+local function applyUnlocks(player: Player, profile: any, newPrestige: number)
+	if typeof(profile.RebirthUnlocks) ~= "table" then
+		profile.RebirthUnlocks = {}
+	end
+	local newly: { string } = {}
+	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
+		if newPrestige >= u.AtPrestige and not profile.RebirthUnlocks[u.Flag] then
+			profile.RebirthUnlocks[u.Flag] = true
+			table.insert(newly, u.DisplayName or u.Flag)
+			if u.GrantOwned and typeof(u.Id) == "string" then
+				if u.Kind == "Vehicle" then
+					profile.Vehicles[u.Id] = true
+					if VehicleService and VehicleService.GrantVehicle then
+						-- GrantVehicle marks dirty + push; safe even if already owned
+						VehicleService.GrantVehicle(player, u.Id)
+					end
+				elseif u.Kind == "Weapon" then
+					profile.Weapons[u.Id] = true
+				end
+			end
+		end
+	end
+	return newly
+end
 
 local function pushState(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return
 	end
+	local bonus = cashBonusPer()
+	local nextMultPct = math.floor((profile.Prestige + 1) * bonus * 100)
+	local curMultPct = math.floor(profile.Prestige * bonus * 100)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.PrestigeStateUpdate) :: RemoteEvent
 	remote:FireClient(player, {
 		Prestige = profile.Prestige,
 		CanPrestige = PrestigeService.CanPrestige(player),
 		MinLevel = PrestigeConfig.MinLevelToPrestige,
 		MaxPrestige = PrestigeConfig.MaxPrestige,
-		CashBonusPerLevel = PrestigeConfig.CashBonusPerPrestige,
+		CashBonusPerLevel = bonus,
+		CashMultPercent = curMultPct,
+		NextCashMultPercent = nextMultPct,
 		GoldBonusOnPrestige = PrestigeConfig.GoldBonusOnPrestige,
+		RebirthUnlocks = profile.RebirthUnlocks or {},
+		UnlockTrack = unlockListFor(profile.Prestige),
 	})
 end
 
@@ -47,6 +104,14 @@ function PrestigeService.CanPrestige(player: Player): boolean
 		return false
 	end
 	return profile.Level >= PrestigeConfig.MinLevelToPrestige and profile.Prestige < PrestigeConfig.MaxPrestige
+end
+
+function PrestigeService.HasUnlock(player: Player, flag: string): boolean
+	local profile = DataService.GetProfile(player)
+	if not profile or typeof(profile.RebirthUnlocks) ~= "table" then
+		return false
+	end
+	return profile.RebirthUnlocks[flag] == true
 end
 
 function PrestigeService.DoPrestige(player: Player): (boolean, string?)
@@ -78,7 +143,9 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 			profile.BaseUpgrades[id] = 0
 		end
 	end
-	-- Vehicles / Weapons / Gold kept per Keep* flags (no-op when true)
+	-- Vehicles / Weapons / Gold / RebirthUnlocks kept per Keep* flags
+
+	local newly = applyUnlocks(player, profile, profile.Prestige)
 
 	DataService.MarkDirty(player)
 
@@ -101,19 +168,35 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 
 	pushState(player)
 
+	local bonusPct = math.floor(profile.Prestige * cashBonusPer() * 100)
+	local unlockNote = if #newly > 0 then (" Unlocked: " .. table.concat(newly, ", ") .. ".") else ""
 	if NotificationService then
 		NotificationService.Notify(
 			player,
-			string.format("Prestiged to P%d! +%d Gold. Cash earnings +%d%%.", profile.Prestige, PrestigeConfig.GoldBonusOnPrestige, math.floor(profile.Prestige * PrestigeConfig.CashBonusPerPrestige * 100)),
+			string.format(
+				"Rebirth P%d! +%d Gold. Cash earnings +%d%%%s",
+				profile.Prestige,
+				PrestigeConfig.GoldBonusOnPrestige,
+				bonusPct,
+				unlockNote
+			),
 			"Success",
-			6
+			7
 		)
 	end
 	if AnalyticsService and AnalyticsService.Log then
-		AnalyticsService.Log(AnalyticsConfig.Events.PRESTIGE or "PRESTIGE", player.UserId, { prestige = profile.Prestige })
+		AnalyticsService.Log(AnalyticsConfig.Events.PRESTIGE or "PRESTIGE", player.UserId, {
+			prestige = profile.Prestige,
+			unlocks = newly,
+		})
 	end
 
 	return true, nil
+end
+
+-- Alias for MT-inspired "rebirth" wording
+function PrestigeService.DoRebirth(player: Player): (boolean, string?)
+	return PrestigeService.DoPrestige(player)
 end
 
 function PrestigeService.Push(player: Player)
@@ -130,6 +213,7 @@ function PrestigeService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
 	AntiExploitService = deps.AntiExploitService
+	VehicleService = deps.VehicleService
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestPrestige) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player)
@@ -148,7 +232,13 @@ function PrestigeService.Init(deps: { [string]: any })
 		end
 	end)
 
-	DataService.OnProfileLoaded(function(player: Player, _profile: any)
+	DataService.OnProfileLoaded(function(player: Player, profile: any)
+		if typeof(profile.RebirthUnlocks) ~= "table" then
+			profile.RebirthUnlocks = {}
+			DataService.MarkDirty(player)
+		end
+		-- Re-apply unlock flags for current prestige (idempotent) in case config grew
+		applyUnlocks(player, profile, profile.Prestige or 0)
 		pushState(player)
 	end)
 end

@@ -16,6 +16,7 @@ local TAG_SLOT = "WE_UpgradeSlot"
 local TAG_TERRITORY = "WE_Territory"
 local TAG_CAPTURE = "WE_CaptureZone"
 local TAG_VEHICLE = "WE_VehicleSpawn"
+local TAG_NAVAL = "WE_NavalSpawn"
 local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
@@ -34,6 +35,7 @@ local STRUCTURES = {
 	{ Id = "VehicleDepot", Kit = "depot", Plinth = Color3.fromRGB(40, 48, 55), Body = Color3.fromRGB(58, 72, 88), Accent = Color3.fromRGB(90, 160, 220), Roof = Color3.fromRGB(45, 55, 65) },
 	{ Id = "WeaponsFacility", Kit = "lab", Plinth = Color3.fromRGB(48, 40, 38), Body = Color3.fromRGB(88, 58, 50), Accent = Color3.fromRGB(200, 90, 70), Roof = Color3.fromRGB(55, 42, 40) },
 	{ Id = "Helipad", Kit = "pad", Plinth = Color3.fromRGB(45, 50, 48), Body = Color3.fromRGB(60, 70, 65), Accent = Color3.fromRGB(220, 200, 80), Roof = Color3.fromRGB(50, 55, 52) },
+	{ Id = "Dock", Kit = "dock", Plinth = Color3.fromRGB(35, 48, 58), Body = Color3.fromRGB(50, 75, 95), Accent = Color3.fromRGB(70, 180, 220), Roof = Color3.fromRGB(40, 58, 70) },
 	{ Id = "Airfield", Kit = "pad", Plinth = Color3.fromRGB(50, 52, 48), Body = Color3.fromRGB(70, 72, 68), Accent = Color3.fromRGB(180, 190, 100), Roof = Color3.fromRGB(55, 58, 52) },
 	{ Id = "DefensiveWalls", Kit = "wall", Plinth = Color3.fromRGB(48, 48, 45), Body = Color3.fromRGB(85, 85, 78), Accent = Color3.fromRGB(120, 130, 110), Roof = Color3.fromRGB(60, 60, 55) },
 	{ Id = "Watchtowers", Kit = "tower", Plinth = Color3.fromRGB(44, 46, 40), Body = Color3.fromRGB(72, 78, 60), Accent = Color3.fromRGB(200, 160, 70), Roof = Color3.fromRGB(50, 52, 44) },
@@ -47,7 +49,7 @@ local STRUCTURES = {
 
 local STARTER_COST = {
 	CommandCenter = 1500, Barracks = 2500, VehicleDepot = 3000, WeaponsFacility = 2800,
-	Helipad = 5000, Airfield = 8000, DefensiveWalls = 2000, Watchtowers = 2200,
+	Helipad = 5000, Dock = 4500, Airfield = 8000, DefensiveWalls = 2000, Watchtowers = 2200,
 	Radar = 4000, ResearchLab = 4500, MissileDefense = 6000, PowerStation = 3500,
 	Warehouse = 3200, SpecialForcesFacility = 10000,
 }
@@ -342,6 +344,11 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 		kitPart(plinth, "Roof", Vector3.new(3.6, 0.5, 3.6), Vector3.new(0, 6.4, 0), def.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.2, 0.3), Vector3.new(0, 8.2, 0), def.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Accent", Vector3.new(3.2, 0.25, 3.2), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+	elseif kit == "dock" then
+		kitPart(plinth, "Body", Vector3.new(7.5, 0.5, 7.5), Vector3.new(0, 0.85, 0), def.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Pier", Vector3.new(8.5, 0.35, 2.2), Vector3.new(0, 1.1, 3.2), def.Roof, Enum.Material.Wood, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.0, 0.15, 0.4), Vector3.new(0, 1.2, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 2.5, 0.4), Vector3.new(3.2, 2.0, 2.5), def.Accent, Enum.Material.Metal, nil)
 	elseif kit == "pad" then
 		kitPart(plinth, "Body", Vector3.new(7.2, 0.4, 7.2), Vector3.new(0, 0.9, 0), def.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Accent", Vector3.new(6.5, 0.15, 0.5), Vector3.new(0, 1.15, 0), def.Accent, Enum.Material.Neon, nil)
@@ -769,6 +776,57 @@ function MapSetup.Run()
 	makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(280, 0, 280), COL_NPC, 320)
 	makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-280, 0, -280), COL_EVENT, 280)
 
+	-- Coastal water strip (south edge near SouthDocks) + naval spawn pads
+	do
+		local waterFolder = ensureFolder("CoastalWater", root)
+		local water = part({
+			Name = "WaterPlane",
+			Size = Vector3.new(GROUND_SIZE * 0.85, 1, 420),
+			Position = Vector3.new(0, 0.2, 980),
+			Color = Color3.fromRGB(35, 90, 130),
+			Material = Enum.Material.Glass,
+			Transparency = 0.35,
+			CanCollide = false,
+			Parent = waterFolder,
+		})
+		water.Name = "WaterPlane"
+		-- Shallow collide strip so boats have something under them
+		part({
+			Name = "HarborShelf",
+			Size = Vector3.new(GROUND_SIZE * 0.7, 1, 80),
+			Position = Vector3.new(0, 0.4, 820),
+			Color = Color3.fromRGB(40, 70, 90),
+			Material = Enum.Material.Slate,
+			Transparency = 0.15,
+			CanCollide = true,
+			Parent = waterFolder,
+		})
+		local navalFolder = ensureFolder("NavalSpawns", root)
+		local navalPositions = {
+			Vector3.new(-180, 1.5, 860),
+			Vector3.new(-60, 1.5, 880),
+			Vector3.new(60, 1.5, 880),
+			Vector3.new(180, 1.5, 860),
+			Vector3.new(0, 1.5, 920),
+			Vector3.new(-300, 1.5, 900),
+		}
+		for i, npos in ipairs(navalPositions) do
+			local np = part({
+				Name = "NavalPad_" .. i,
+				Size = Vector3.new(18, 1.2, 18),
+				Position = npos,
+				Color = Color3.fromRGB(40, 70, 95),
+				Material = Enum.Material.Concrete,
+				CanCollide = true,
+				Parent = navalFolder,
+			})
+			CollectionService:AddTag(np, TAG_NAVAL)
+			CollectionService:AddTag(np, TAG_VEHICLE) -- garage prompt also works
+			beacon(navalFolder, npos, Color3.fromRGB(70, 180, 220), "NavalBeacon" .. i)
+			plainBillboard(np, "NAVAL PAD · E / G", Vector2.new(170, 32), 5, Color3.fromRGB(160, 220, 255))
+		end
+	end
+
 	local npcFolder = ensureFolder("NPCPlaceholders", root)
 	for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do
 		if i > 4 then
@@ -1092,7 +1150,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " training yards + oil + forts + bank + kits under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " naval pads + dock + training/oil/forts/bank under Workspace.WarEmpireSetup")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

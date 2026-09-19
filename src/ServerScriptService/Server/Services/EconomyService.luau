@@ -1,6 +1,18 @@
 --!strict
 --[[
 	Server-only currency mutations. Client never sets Cash/Gold.
+
+	Cash multiplier stack order (AddCash, non-exempt reasons):
+	  1. Base amount (caller)
+	  2. Prestige: × (1 + Prestige * EconomyConfig.PrestigeCashMultiplierPerLevel)  -- +10%/rebirth
+	  3. Monetization VIP/DoubleCash: × MonetizationService.GetCashMultiplier
+	     (VIP additive +0.25 into a base of 1, then DoubleCash ×2)
+	  4. Season: × SeasonService.GetCashMult()
+	Exempt reasons (MonetizationConfig.CashMultExemptReasons) skip steps 3–4 only;
+	prestige mult still applies unless reason is listed — currently prestige gold path
+	uses AddGold; cash exempts (devproduct/admin/code/spinner/…) skip VIP/season only.
+	Passive / worker training / capture stipend / combat kill rewards all use AddCash
+	so prestige + VIP/2x + season stack consistently.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

@@ -9,7 +9,7 @@ export type StructurePalette = {
 	Body: Color3,
 	Accent: Color3,
 	Roof: Color3,
-	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "wall" | "power" | "warehouse" | "special",
+	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "dock" | "wall" | "power" | "warehouse" | "special",
 	-- Future Creator Store MeshPart (0 / nil = Part kit)
 	MeshAssetId: number?,
 }
@@ -56,6 +56,13 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 200, 80),
 			Roof = Color3.fromRGB(50, 55, 52),
 			Kit = "pad",
+		},
+		Dock = {
+			Plinth = Color3.fromRGB(35, 48, 58),
+			Body = Color3.fromRGB(50, 75, 95),
+			Accent = Color3.fromRGB(70, 180, 220),
+			Roof = Color3.fromRGB(40, 58, 70),
+			Kit = "dock",
 		},
 		Airfield = {
 			Plinth = Color3.fromRGB(50, 52, 48),

@@ -44,6 +44,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Level = 1,
 		XP = 0,
 		Prestige = 0,
+		RebirthUnlocks = {},
 		Soldiers = SoldierConfig.StartingSoldiers,
 		NationColorId = nil,
 		RedeemedCodes = {},
@@ -254,6 +255,16 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		end
 		profile.DataVersion = 5
 		version = 5
+	end
+
+
+	-- v5 → v6: rebirth unlock flags (prestige track)
+	if version < 6 then
+		if typeof((profile :: any).RebirthUnlocks) ~= "table" then
+			(profile :: any).RebirthUnlocks = {}
+		end
+		profile.DataVersion = 6
+		version = 6
 	end
 
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then

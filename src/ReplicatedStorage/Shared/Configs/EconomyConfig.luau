@@ -26,6 +26,7 @@ local EconomyConfig = {
 			VehicleDepot = 12,
 			WeaponsFacility = 10,
 			Helipad = 18,
+			Dock = 14,
 			Airfield = 22,
 			DefensiveWalls = 5,
 			Watchtowers = 6,
@@ -39,7 +40,7 @@ local EconomyConfig = {
 	},
 
 	-- Soft caps / multipliers
-	PrestigeCashMultiplierPerLevel = 0.05, -- +5% cash gains per prestige
+	PrestigeCashMultiplierPerLevel = 0.10, -- +10% cash gains per prestige (stacking; see PrestigeConfig)
 	DailyRewardCashBonus = true,
 
 	-- Capture stipend tuning lives in TerritoryConfig.CaptureStipend

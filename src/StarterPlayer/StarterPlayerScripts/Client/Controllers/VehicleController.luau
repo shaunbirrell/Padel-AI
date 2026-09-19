@@ -30,6 +30,7 @@ local isOpen = false
 local ownedMap: { [string]: boolean } = {}
 local activeId: string? = nil
 local cooldownLeft = 0
+local filterCategory: string = "All" -- All | Ground | Air | Naval
 
 local function addCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -46,8 +47,11 @@ end
 
 local function sortedIds(): { string }
 	local ids = {}
-	for id in pairs(VehicleConfig.Vehicles) do
-		table.insert(ids, id)
+	for id, def in pairs(VehicleConfig.Vehicles) do
+		local cat = if def then (def.Category or "Ground") else "Ground"
+		if filterCategory == "All" or cat == filterCategory then
+			table.insert(ids, id)
+		end
 	end
 	table.sort(ids, function(a, b)
 		local da = VehicleConfig.Vehicles[a]
@@ -142,7 +146,8 @@ local function refresh()
 				)
 			end
 			meta.Text = string.format(
-				"%s · Lv %d · $%s · Spd %d%s",
+				"%s · %s · Lv %d · $%s · Spd %d%s",
+				def.Category or "Ground",
 				def.Rarity,
 				def.UnlockLevel,
 				tostring(def.CostCash),
@@ -217,7 +222,7 @@ local function buildGui()
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(460, 420)
+	panel.Size = UDim2.fromOffset(500, 480)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
@@ -269,9 +274,44 @@ local function buildGui()
 	cd.Parent = panel
 	cooldownLabel = cd
 
+	local filters = Instance.new("Frame")
+	filters.Name = "Filters"
+	filters.Position = UDim2.fromOffset(12, 66)
+	filters.Size = UDim2.new(1, -24, 0, 32)
+	filters.BackgroundTransparency = 1
+	filters.Parent = panel
+	local layoutF = Instance.new("UIListLayout")
+	layoutF.FillDirection = Enum.FillDirection.Horizontal
+	layoutF.Padding = UDim.new(0, 6)
+	layoutF.Parent = filters
+	for _, cat in ipairs({ "All", "Ground", "Air", "Naval" }) do
+		local fb = Instance.new("TextButton")
+		fb.Name = "Filter_" .. cat
+		fb.Size = UDim2.fromOffset(88, 30)
+		fb.Font = Enum.Font.GothamBold
+		fb.TextSize = 12
+		fb.Text = cat:upper()
+		fb.TextColor3 = Constants.Colors.Text
+		fb.BorderSizePixel = 0
+		fb.BackgroundColor3 = if filterCategory == cat then Constants.Colors.Accent else Constants.Colors.Background
+		addCorner(fb, 6)
+		fb.Parent = filters
+		fb.MouseButton1Click:Connect(function()
+			AudioController.PlayClick()
+			filterCategory = cat
+			for _, child in ipairs(filters:GetChildren()) do
+				if child:IsA("TextButton") then
+					local name = string.gsub(child.Name, "Filter_", "")
+					child.BackgroundColor3 = if name == filterCategory then Constants.Colors.Accent else Constants.Colors.Background
+				end
+			end
+			refresh()
+		end)
+	end
+
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Position = UDim2.fromOffset(12, 70)
-	scroll.Size = UDim2.new(1, -24, 1, -110)
+	scroll.Position = UDim2.fromOffset(12, 104)
+	scroll.Size = UDim2.new(1, -24, 1, -144)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 4
@@ -289,7 +329,7 @@ local function buildGui()
 	hint.TextSize = 12
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextColor3 = Constants.Colors.Muted
-	hint.Text = "G / GARAGE · E on pad · Sit DriverSeat to drive"
+	hint.Text = "G · filters Ground/Air/Naval · E on pad · DriverSeat"
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")

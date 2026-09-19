@@ -50,12 +50,13 @@ Place id reference: Roblox experience **7180042682** (Military Tycoon).
 | Daily objectives | Mission / Daily Ops (`CaptureTerritory`, `KillNPC`, `RecruitSoldiers`) |
 | Nation / country color | `NationColorService` → captured flag tint |
 | Diamonds | Gold |
-| Rebirth | Prestige |
-| 100+ vehicles | Existing `VehicleConfig` catalog (expand over time; no MT IPs) |
+| Rebirth (+0.1 cash / rebirth theme) | Prestige / Rebirth — **+10%/prestige** + `RebirthUnlocks` track |
+| 100+ vehicles | `VehicleConfig` ~19 Ground/Air/Naval kits + Dock; Garage filters (no MT IPs) |
 | Loot crates / supply drops | `SupplyDropService` — periodic crates; stand to claim Cash |
 | Bank / raid building | `Empire Bank` + `BankRaidService` (vault hold + cooldown + BankGuard) |
 | Free spinner | `SpinnerService` — HUD/Settings claim every 4h (Cash/Gold table) |
 | Named fortresses | `FortIronclad` / `FortSandhold` (walls + FortGuard + higher stipend) |
+| Naval / harbor | `Dock` structure + coastal water + `WE_NavalSpawn` + PatrolBoat→Destroyer |
 | Group / Discord shout | **Skipped** — no Group API; no fake Discord |
 
 ---

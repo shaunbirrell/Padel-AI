@@ -16,6 +16,7 @@ Constants.Tags = {
 	Territory = "WE_Territory",
 	CaptureZone = "WE_CaptureZone",
 	VehicleSpawn = "WE_VehicleSpawn",
+	NavalSpawn = "WE_NavalSpawn",
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
 	SupplyDrop = "WE_SupplyDrop",
@@ -84,7 +85,7 @@ Constants.RemoteNames = {
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 5
+Constants.CURRENT_DATA_VERSION = 6
 
 Constants.AutosaveIntervalSeconds = 60
 Constants.DataStoreRetries = 3

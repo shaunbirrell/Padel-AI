@@ -7,7 +7,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 
 ## MVP status
 
-**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige / Clan scaffolding / Battle Pass track. Product IDs remain `0`. Validate with Rojo sync / `dist/WarEmpire.rbxlx` + Play (MapSetup auto); this environment cannot run Roblox Studio.
+**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige/Rebirth (+10% cash / unlocks) + ~19 vehicles (Ground/Air/Naval + Dock) / Clan / Battle Pass. Product IDs remain `0`. Validate with Rojo sync / `dist/WarEmpire.rbxlx` + Play (MapSetup auto); this environment cannot run Roblox Studio.
 
 ## Requirements
 
@@ -57,7 +57,7 @@ Admin remotes: `RequestAdminCommand` with commands:
 | `resetbase` | — | Zero all structure levels |
 | `resettutorial` | — | Restart interactive tutorial |
 | `grantpass` | PassKey | Studio mock GamePass own (`VIP`, `DoubleCash`, `DoubleXP`) |
-| `prestige` / `forceprestige` | — | Prestige (force sets level gate first) |
+| `prestige` / `forceprestige` | — | Rebirth/Prestige (force sets level gate first) |
 | `createclan` | name, tag? | Create clan |
 | `joinclan` / `leaveclan` | clanId? | Join / leave clan |
 | `bpxp` | number | Add Battle Pass XP |

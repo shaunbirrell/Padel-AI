@@ -1,6 +1,6 @@
 --!strict
 --[[
-	14 structure types, 5 levels each.
+	15 structure types, 5 levels each.
 	Barracks costs match spec: 2500, 10000, 35000, 100000, 300000.
 	Other structures use similar escalating curves.
 ]]
@@ -76,6 +76,15 @@ local BaseConfig = {
 			Description = "Landing pad for rotary-wing aircraft.",
 			MaxLevel = 5,
 			Costs = costs(5000, 20000, 70000, 200000, 500000),
+			Currency = "Cash",
+			Requires = { { StructureId = "VehicleDepot", Level = 2 } },
+		},
+		Dock = {
+			Id = "Dock",
+			DisplayName = "Naval Dock",
+			Description = "Harbor berth for patrol boats and warships.",
+			MaxLevel = 5,
+			Costs = costs(4500, 18000, 65000, 190000, 520000),
 			Currency = "Cash",
 			Requires = { { StructureId = "VehicleDepot", Level = 2 } },
 		},
@@ -175,6 +184,7 @@ local BaseConfig = {
 		"Radar",
 		"ResearchLab",
 		"Helipad",
+		"Dock",
 		"Airfield",
 		"MissileDefense",
 		"SpecialForcesFacility",

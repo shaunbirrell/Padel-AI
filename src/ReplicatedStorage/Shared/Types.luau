@@ -71,6 +71,7 @@ export type PlayerProfile = {
 	Level: number,
 	XP: number,
 	Prestige: number,
+	RebirthUnlocks: { [string]: boolean },
 	Soldiers: number,
 	NationColorId: string?,
 	RedeemedCodes: { [string]: boolean },

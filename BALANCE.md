@@ -40,18 +40,37 @@ Other structures use similar curves (see `BaseConfig.luau`). Command Center L1 i
 - To advance from level L: `floor(100 * L^1.45)`
 - Level-up reward: `$500 + 150*newLevel` cash; gold every 5 levels
 
-## Vehicles (MVP 8)
+## Vehicles (~19 — Ground / Air / Naval)
 
-| Vehicle            | Rarity    | Unlock Lv |
-|--------------------|-----------|-----------|
-| Military Jeep      | Common    | 1         |
-| Armed Jeep         | Common    | 3         |
-| Armored Truck      | Uncommon  | 5         |
-| APC                | Rare      | 8         |
-| Light Tank         | Rare      | 12        |
-| Heavy Tank         | Epic      | 15        |
-| Attack Helicopter  | Epic      | 18        |
-| Fighter Jet        | Legendary | 20        |
+| Vehicle            | Cat   | Rarity    | Lv | Cost     | Structure     |
+|--------------------|-------|-----------|----|----------|---------------|
+| Military Jeep      | Ground| Common    | 1  | 0        | —             |
+| Armed Jeep         | Ground| Common    | 3  | 8,000    | Depot L1      |
+| Scout Car          | Ground| Common    | 4  | 12,000   | Depot L1      |
+| Armored Truck      | Ground| Uncommon  | 5  | 20,000   | Depot L2      |
+| Supply Truck       | Ground| Uncommon  | 6  | 28,000   | Depot L2      |
+| Patrol Boat        | Naval | Uncommon  | 6  | 25,000   | Dock L1       |
+| APC                | Ground| Rare      | 8  | 45,000   | Depot L3      |
+| Infantry Carrier   | Ground| Rare      | 9  | 55,000   | Depot L3      |
+| Gunboat            | Naval | Rare      | 10 | 70,000   | Dock L2       |
+| Light Tank         | Ground| Rare      | 12 | 90,000   | Depot L4      |
+| Landing Craft      | Naval | Rare      | 12 | 95,000   | Dock L3       |
+| Medium Tank        | Ground| Epic      | 14 | 130,000  | Depot L4      |
+| Transport Heli     | Air   | Rare      | 14 | 160,000  | Helipad L2    |
+| Heavy Tank         | Ground| Epic      | 15 | 180,000  | Depot L5      |
+| Mobile Artillery   | Ground| Epic      | 16 | 220,000  | Depot L5      |
+| Destroyer          | Naval | Legendary | 17 | 280,000  | Dock L4       |
+| Attack Helicopter  | Air   | Epic      | 18 | 250,000  | Helipad L3    |
+| Strike Jet         | Air   | Epic      | 19 | 320,000  | Airfield L2   |
+| Fighter Jet        | Air   | Legendary | 20 | 400,000  | Airfield L3   |
+
+**Dock** structure: costs 4.5k / 18k / 65k / 190k / 520k (VehicleDepot L2 prereq).
+
+## Prestige / Rebirth
+
+- +**10%** cash earnings per prestige (stacking; P10 = +100%).
+- Unlock track grants ScoutCar / PatrolBoat / SupplyTruck / TransportHeli / Gunboat / Destroyer / StrikeJet (and EmpireElite flag) at configured prestige tiers — see `PrestigeConfig.RebirthUnlocks`.
+- Cash stack: prestige → VIP/DoubleCash → season (exempt reasons skip VIP/season).
 
 ## Tuning knobs
 

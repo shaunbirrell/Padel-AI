@@ -18,6 +18,8 @@ local player = Players.LocalPlayer
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
+local unlockLabel: TextLabel? = nil
+local prestigeConfirm: TextLabel? = nil
 local bpLabel: TextLabel? = nil
 local bpClaimHint: TextLabel? = nil
 local bpBarFill: Frame? = nil
@@ -40,14 +42,48 @@ local debouncedRefresh = ProgressionUI.Debounce(0.12)
 local function refreshLabelsImmediate()
 	if prestigeLabel then
 		if typeof(prestigeState) == "table" then
+			local p = tonumber(prestigeState.Prestige) or 0
+			local cur = tonumber(prestigeState.CashMultPercent)
+				or math.floor(p * (tonumber(prestigeState.CashBonusPerLevel) or 0.10) * 100)
+			local nxt = tonumber(prestigeState.NextCashMultPercent)
+				or math.floor((p + 1) * (tonumber(prestigeState.CashBonusPerLevel) or 0.10) * 100)
 			prestigeLabel.Text = string.format(
-				"Prestige P%d  |  Need Lv %d  |  Can: %s",
-				tonumber(prestigeState.Prestige) or 0,
+				"Rebirth P%d  |  Cash +%d%% now  |  Next +%d%%  |  Need Lv %d  |  Can: %s",
+				p,
+				cur,
+				nxt,
 				tonumber(prestigeState.MinLevel) or 100,
 				if prestigeState.CanPrestige then "YES" else "no"
 			)
 		else
-			prestigeLabel.Text = "Prestige data loading… reach max level later to prestige."
+			prestigeLabel.Text = "Rebirth data loading… reach max level to prestige (+10% cash / rebirth)."
+		end
+	end
+	if unlockLabel then
+		if typeof(prestigeState) == "table" and typeof(prestigeState.UnlockTrack) == "table" then
+			local lines = { "Unlock track:" }
+			for _, u in ipairs(prestigeState.UnlockTrack) do
+				local mark = if u.Unlocked then "✓" else "·"
+				table.insert(
+					lines,
+					string.format("  %s P%d — %s", mark, tonumber(u.AtPrestige) or 0, tostring(u.DisplayName or u.Flag))
+				)
+			end
+			if #lines == 1 then
+				table.insert(lines, "  (none configured)")
+			end
+			unlockLabel.Text = table.concat(lines, "\n")
+		else
+			unlockLabel.Text = "Unlock track loading…"
+		end
+	end
+	if prestigeConfirm then
+		if typeof(prestigeState) == "table" and prestigeState.CanPrestige then
+			prestigeConfirm.Text = "Confirm: resets Cash/Level/XP/Base. Keeps vehicles, weapons, gold, unlocks. +10% cash forever."
+			prestigeConfirm.TextColor3 = Constants.Colors.Gold
+		else
+			prestigeConfirm.Text = "Reach required level to unlock DoPrestige / Rebirth."
+			prestigeConfirm.TextColor3 = Constants.Colors.Muted
 		end
 	end
 	if bpLabel and typeof(bpState) == "table" then
@@ -196,7 +232,7 @@ function ProgressionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(500, 620)
+	panel.Size = UDim2.fromOffset(520, 660)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -211,7 +247,7 @@ function ProgressionController.Init()
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 5
-	scroll.CanvasSize = UDim2.fromOffset(0, 900)
+	scroll.CanvasSize = UDim2.fromOffset(0, 1100)
 	scroll.Parent = panel
 
 	local title = Instance.new("TextLabel")
@@ -286,9 +322,11 @@ function ProgressionController.Init()
 		return b
 	end
 
-	section("PRESTIGE")
-	prestigeLabel = body(32)
-	btn("PRESTIGE NOW", 200, function()
+	section("REBIRTH / PRESTIGE")
+	prestigeLabel = body(40)
+	unlockLabel = body(110)
+	prestigeConfirm = body(36)
+	btn("CONFIRM REBIRTH", 200, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
 	end)
 	y += 36
