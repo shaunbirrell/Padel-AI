@@ -644,6 +644,12 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	hum.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	hum.Parent = model
 	model.PrimaryPart = torso
+	-- Optional free Soldier catalog visual (skipped when StudioSkipWorldDressing)
+	pcall(function()
+		local vas = require(script.Parent.Parent.Services.VisualAssetService)
+		local kind = if typeof(npcType) == "string" and npcType ~= "" then npcType else "Soldier"
+		vas.TryAttachCharacterVisual(model, kind)
+	end)
 	model.Parent = parentFolder
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 	if labelText then
