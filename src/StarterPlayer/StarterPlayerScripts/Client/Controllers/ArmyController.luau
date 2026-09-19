@@ -42,14 +42,18 @@ local function refreshLabels()
 			cost
 		)
 	else
+		local trainTick = tonumber(armyState.TrainingIncomePerTick) or 0
+		local trainSec = tonumber(armyState.TrainingIncomePerSec) or 0
 		statusLabel.Text = string.format(
-			"Soldiers: %d / %d  (%d free)\nBarracks Lv %d\nRecruit $%d each · Dismiss refund %d%%",
+			"Soldiers: %d / %d  (%d free)\nBarracks Lv %d\nRecruit $%d each · Dismiss refund %d%%\nTraining Yard: +$%d/tick (~$%.1f/sec)",
 			count,
 			cap,
 			free,
 			barracks,
 			cost,
-			math.floor(refundMult * 100)
+			math.floor(refundMult * 100),
+			trainTick,
+			trainSec
 		)
 	end
 	if capFill and cap > 0 then
@@ -101,7 +105,7 @@ function ArmyController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(380, 340)
+	panel.Size = UDim2.fromOffset(380, 380)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -138,7 +142,7 @@ function ArmyController.Init()
 	statusLabel = Instance.new("TextLabel")
 	statusLabel.BackgroundTransparency = 1
 	statusLabel.Position = UDim2.fromOffset(16, 48)
-	statusLabel.Size = UDim2.new(1, -32, 0, 64)
+	statusLabel.Size = UDim2.new(1, -32, 0, 88)
 	statusLabel.Font = Enum.Font.Gotham
 	statusLabel.TextSize = 14
 	statusLabel.TextWrapped = true
@@ -150,7 +154,7 @@ function ArmyController.Init()
 
 	-- Cap bar
 	local capBg = Instance.new("Frame")
-	capBg.Position = UDim2.fromOffset(16, 118)
+	capBg.Position = UDim2.fromOffset(16, 142)
 	capBg.Size = UDim2.new(1, -32, 0, 16)
 	capBg.BackgroundColor3 = Constants.Colors.Background
 	capBg.BorderSizePixel = 0
@@ -189,22 +193,22 @@ function ArmyController.Init()
 		return b
 	end
 
-	local recruit1 = makeBtn("RECRUIT x1 $500", 16, 150, 168, function()
+	local recruit1 = makeBtn("RECRUIT x1 $500", 16, 174, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(1)
 	end)
-	local recruit5 = makeBtn("RECRUIT x5", 192, 150, 168, function()
+	local recruit5 = makeBtn("RECRUIT x5", 192, 174, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end)
-	makeBtn("FILL CAP", 16, 204, 168, function()
+	makeBtn("FILL CAP", 16, 228, 168, function()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then
 			Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(math.min(free, 50))
 		end
 	end)
-	makeBtn("DISMISS x1", 192, 204, 168, function()
+	makeBtn("DISMISS x1", 192, 228, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(1)
 	end)
-	makeBtn("DISMISS x5", 16, 258, 168, function()
+	makeBtn("DISMISS x5", 16, 282, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(5)
 	end)
 
@@ -223,14 +227,14 @@ function ArmyController.Init()
 
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
-	note.Position = UDim2.fromOffset(16, 308)
+	note.Position = UDim2.fromOffset(16, 336)
 	note.Size = UDim2.new(1, -32, 0, 28)
 	note.Font = Enum.Font.Gotham
 	note.TextSize = 11
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Server validates cash + barracks cap. Upgrade Barracks to raise cap. Key A."
+	note.Text = "Training Yard pays cash/sec from owned soldiers. Barracks raises cap. Key A."
 	note.Parent = panel
 
 	Remotes.GetEvent(Constants.RemoteNames.SoldierStateUpdate).OnClientEvent:Connect(function(payload)

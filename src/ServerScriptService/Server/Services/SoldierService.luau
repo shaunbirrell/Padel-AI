@@ -21,8 +21,25 @@ local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
 local AntiExploitService: any = nil
+local MissionService: any = nil
 
 local MAX_BATCH = 50
+
+local function trainingIncomePerTick(profile: any): number
+	local cfg = SoldierConfig.TrainingIncome
+	if not cfg then
+		return 0
+	end
+	local count = tonumber(profile.Soldiers) or 0
+	local minN = cfg.MinSoldiersForIncome or 1
+	if count < minN then
+		return 0
+	end
+	local per = cfg.CashPerSoldierPerTick or 0
+	local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)
+	return math.floor(count * per * prestigeMult)
+end
+
 
 local function barracksLevel(profile: any): number
 	local upgrades = profile.BaseUpgrades
@@ -48,6 +65,8 @@ local function pushState(player: Player)
 	local cost = SoldierConfig.RecruitCostCash or 500
 	local room = math.max(0, cap - count)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.SoldierStateUpdate) :: RemoteEvent
+	local training = trainingIncomePerTick(profile)
+	local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5
 	remote:FireClient(player, {
 		Soldiers = count,
 		MaxSoldiers = cap,
@@ -57,6 +76,9 @@ local function pushState(player: Player)
 		DismissRefundMult = SoldierConfig.DismissRefundMult or 0.25,
 		SlotsFree = room,
 		FillCost = cost * room,
+		TrainingIncomePerTick = training,
+		TrainingTickSeconds = tickSec,
+		TrainingIncomePerSec = if tickSec > 0 then training / tickSec else 0,
 	})
 end
 
@@ -101,6 +123,9 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	end
 	profile.Soldiers = current + n
 	DataService.MarkDirty(player)
+	if MissionService and MissionService.TrackProgress then
+		MissionService.TrackProgress(player, "RecruitSoldiers", n)
+	end
 	pushState(player)
 	if NotificationService then
 		NotificationService.Notify(
@@ -162,6 +187,7 @@ function SoldierService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
 	AntiExploitService = deps.AntiExploitService
+	MissionService = deps.MissionService
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
@@ -209,6 +235,24 @@ function SoldierService.Init(deps: { [string]: any })
 			DataService.MarkDirty(player)
 		end
 		pushState(player)
+	end)
+
+	-- Training Yard worker income (MT-inspired)
+	task.spawn(function()
+		local Players = game:GetService("Players")
+		while true do
+			local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5
+			task.wait(tickSec)
+			for _, player in ipairs(Players:GetPlayers()) do
+				local profile = DataService.GetProfile(player)
+				if profile then
+					local amount = trainingIncomePerTick(profile)
+					if amount > 0 then
+						EconomyService.AddCash(player, amount, "training")
+					end
+				end
+			end
+		end
 	end)
 end
 

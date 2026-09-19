@@ -49,6 +49,7 @@ local MissionService: any = nil
 local TutorialService: any = nil
 local RemoteSetup: any = nil
 local BaseService: any = nil
+local NationColorService: any = nil
 
 local territories: { [string]: TerritoryRuntime } = {}
 local firstOutpostLogged: { [number]: boolean } = {}
@@ -154,7 +155,8 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		ringTransparency = 0.35
 		flagLift = 13.5
 	elseif rt.OwnerType == ot.Player then
-		color = Color3.fromRGB(55, 210, 95)
+		local nation = if NationColorService and NationColorService.GetColor then NationColorService.GetColor(rt.OwnerUserId) else nil
+		color = nation or Color3.fromRGB(55, 210, 95)
 		markerTransparency = 0.35
 		flagTransparency = 0.0
 		ringTransparency = 0.45
@@ -607,7 +609,7 @@ end
 
 --[[ Seed a few territories as NPC-held for contested feel (Studio / empty servers). ]]
 local function seedNpcOwners()
-	local npcHeld = { "EastArmory", "RadarHill" }
+	local npcHeld = { "EastArmory", "RadarHill", "CoastalOilAlpha", "CoastalOilBravo" }
 	for _, id in ipairs(npcHeld) do
 		local rt = territories[id]
 		if rt and rt.OwnerType == ownerTypes().Neutral then
@@ -631,6 +633,7 @@ function TerritoryService.Init(deps: { [string]: any })
 	TutorialService = deps.TutorialService
 	RemoteSetup = deps.RemoteSetup
 	BaseService = deps.BaseService
+	NationColorService = deps.NationColorService
 
 	TerritoryOwnership.Bind({
 		territories = territories,

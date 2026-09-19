@@ -77,6 +77,9 @@ local TERRITORIES = {
 	{ Id = "WestDepot", Pos = Vector3.new(-720, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 45 },
 	{ Id = "OilFields", Pos = Vector3.new(520, 1, 520), Color = Color3.fromRGB(150, 110, 40), Radius = 55 },
 	{ Id = "RadarHill", Pos = Vector3.new(-520, 1, -520), Color = Color3.fromRGB(130, 70, 170), Radius = 50 },
+	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
+	{ Id = "CoastalOilAlpha", Pos = Vector3.new(980, 28, -420), Color = Color3.fromRGB(190, 145, 45), Radius = 42, OilRig = true },
+	{ Id = "CoastalOilBravo", Pos = Vector3.new(-980, 28, 420), Color = Color3.fromRGB(170, 125, 40), Radius = 42, OilRig = true },
 }
 
 local function ensureFolder(name, parent)
@@ -521,6 +524,57 @@ function MapSetup.Run()
 			local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
 			buildStructureKit(plotFolder, plotId, pos, offset, def)
 		end
+
+		-- Training Yard targets (soldiers "train" → server cash; visual only)
+		local yardFolder = Instance.new("Folder")
+		yardFolder.Name = "TrainingYard"
+		yardFolder.Parent = plotFolder
+		for ti = 1, 3 do
+			local tpos = pos + Vector3.new(-50 + ti * 18, 3.5, 48)
+			local target = part({
+				Name = "TrainingTarget" .. ti,
+				Size = Vector3.new(4, 6, 0.6),
+				Position = tpos,
+				Color = Color3.fromRGB(200, 60, 60),
+				Material = Enum.Material.Metal,
+				CanCollide = true,
+				Parent = yardFolder,
+			})
+			target:SetAttribute("PlotId", plotId)
+			target:SetAttribute("WE_TrainingTarget", true)
+			part({
+				Name = "TargetStand" .. ti,
+				Size = Vector3.new(1, 4, 1),
+				Position = tpos + Vector3.new(0, -5, 0),
+				Color = Color3.fromRGB(70, 70, 70),
+				Material = Enum.Material.Metal,
+				CanCollide = true,
+				Parent = yardFolder,
+			})
+			part({
+				Name = "TargetBullseye" .. ti,
+				Size = Vector3.new(1.6, 1.6, 0.35),
+				Position = tpos + Vector3.new(0, 0.5, -0.2),
+				Color = Color3.fromRGB(240, 220, 60),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+				Parent = yardFolder,
+			})
+		end
+		plainBillboard(
+			part({
+				Name = "YardAnchor",
+				Size = Vector3.new(1, 1, 1),
+				Position = pos + Vector3.new(-14, 8, 48),
+				Transparency = 1,
+				CanCollide = false,
+				Parent = yardFolder,
+			}),
+			"TRAINING YARD · Soldiers earn cash",
+			Vector2.new(260, 36),
+			8,
+			Color3.fromRGB(255, 200, 120)
+		)
 	end
 
 	local territories = ensureFolder("Territories", root)
@@ -579,6 +633,45 @@ function MapSetup.Run()
 		flag:SetAttribute("WE_Flag", true)
 
 		beacon(territories, def.Pos + Vector3.new(def.Radius * 0.6, 0, 0), def.Color, def.Id .. "_Beacon")
+
+		-- Coastal oil platform deck + legs + harder NPC guards
+		if def.OilRig then
+			local deckY = def.Pos.Y
+			local deck = part({
+				Name = def.Id .. "_Deck",
+				Size = Vector3.new(48, 2.5, 48),
+				Position = Vector3.new(def.Pos.X, deckY - 1.2, def.Pos.Z),
+				Color = Color3.fromRGB(90, 95, 100),
+				Material = Enum.Material.Metal,
+				Parent = territories,
+			})
+			deck:SetAttribute("TerritoryId", def.Id)
+			-- Support legs
+			local legOff = 18
+			for _, ox in ipairs({ -legOff, legOff }) do
+				for _, oz in ipairs({ -legOff, legOff }) do
+					part({
+						Name = def.Id .. "_Leg",
+						Size = Vector3.new(3, deckY, 3),
+						Position = Vector3.new(def.Pos.X + ox, deckY / 2, def.Pos.Z + oz),
+						Color = Color3.fromRGB(60, 65, 70),
+						Material = Enum.Material.Metal,
+						Parent = territories,
+					})
+				end
+			end
+			-- Derrick
+			part({
+				Name = def.Id .. "_Derrick",
+				Size = Vector3.new(4, 22, 4),
+				Position = Vector3.new(def.Pos.X + 14, deckY + 11, def.Pos.Z + 14),
+				Color = Color3.fromRGB(180, 140, 50),
+				Material = Enum.Material.Metal,
+				CanCollide = false,
+				Parent = territories,
+			})
+			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(280, 40), 14, Color3.fromRGB(255, 210, 120))
+		end
 	end
 
 	local function makeSpawnFolder(name, tag, count, center, color, ringRadius)
@@ -693,6 +786,60 @@ function MapSetup.Run()
 		plainBillboard(head, "HOSTILE", Vector2.new(90, 22), 1.5, Color3.fromRGB(255, 120, 100))
 	end
 
+
+	-- Oil rig guards (harder NPC placeholders on coastal platforms)
+	for _, def in ipairs(TERRITORIES) do
+		if def.OilRig then
+			for gi = 1, 4 do
+				local angle = (gi / 4) * math.pi * 2
+				local gpos = def.Pos + Vector3.new(math.cos(angle) * 16, 2.5, math.sin(angle) * 16)
+				local model = Instance.new("Model")
+				model.Name = def.Id .. "_Guard_" .. gi
+				model:SetAttribute("NPCId", def.Id .. "_guard_" .. gi)
+				model:SetAttribute("NPCType", "OilRigGuard")
+				local torso = part({
+					Name = "HumanoidRootPart",
+					Size = Vector3.new(2.2, 2.4, 1.3),
+					Color = Color3.fromRGB(110, 70, 35),
+					Material = Enum.Material.Fabric,
+					Anchored = true,
+					CanCollide = true,
+					CFrame = CFrame.new(gpos),
+					Parent = model,
+				})
+				local head = part({
+					Name = "Head",
+					Size = Vector3.new(1.2, 1.2, 1.2),
+					Color = Color3.fromRGB(95, 70, 55),
+					Material = Enum.Material.SmoothPlastic,
+					Anchored = true,
+					CanCollide = false,
+					CFrame = torso.CFrame + Vector3.new(0, 1.8, 0),
+					Shape = Enum.PartType.Ball,
+					Parent = model,
+				})
+				part({
+					Name = "Armor",
+					Size = Vector3.new(2.4, 1.2, 1.5),
+					Color = Color3.fromRGB(70, 55, 30),
+					Material = Enum.Material.Metal,
+					Anchored = true,
+					CanCollide = false,
+					CFrame = torso.CFrame + Vector3.new(0, 0.3, 0),
+					Parent = model,
+				})
+				local hum = Instance.new("Humanoid")
+				hum.MaxHealth = 200
+				hum.Health = 200
+				hum.Parent = model
+				model.PrimaryPart = torso
+				model.Parent = npcFolder
+				CollectionService:AddTag(model, TAG_NPC_ENTITY)
+				plainBillboard(head, "OIL GUARD", Vector2.new(100, 22), 2, Color3.fromRGB(255, 180, 80))
+			end
+		end
+	end
+
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
 		local p = part({
@@ -759,7 +906,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " kits/billboards/flags/lighting under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " training yards + coastal oil + kits under Workspace.WarEmpireSetup")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

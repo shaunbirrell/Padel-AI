@@ -41,6 +41,10 @@ local EconomyConfig = {
 	-- Soft caps / multipliers
 	PrestigeCashMultiplierPerLevel = 0.05, -- +5% cash gains per prestige
 	DailyRewardCashBonus = true,
+
+	-- Capture stipend tuning lives in TerritoryConfig.CaptureStipend
+	-- (periodic cash for owned territories / coastal oil).
 }
+
 
 return EconomyConfig

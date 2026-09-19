@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
+local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 
 local ClientSettings = require(script.Parent.Parent.Modules.ClientSettings)
@@ -31,6 +32,7 @@ local KEYBINDS = {
 	"K — Progression (BP / clan / war)",
 	"A — Army (soldiers)",
 	"O — Settings (this panel)",
+	"Codes — Settings redeem row",
 	"LMB — Fire · R — Reload",
 	"Sit VehicleSeat — Drive",
 }
@@ -86,7 +88,7 @@ function SettingsController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(380, 420)
+	panel.Size = UDim2.fromOffset(400, 520)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -163,9 +165,56 @@ function SettingsController.Init()
 		AudioController.PlayClick()
 	end)
 
+	-- Promo codes (server-validated, once each)
+	local codesTitle = Instance.new("TextLabel")
+	codesTitle.BackgroundTransparency = 1
+	codesTitle.Position = UDim2.fromOffset(16, 140)
+	codesTitle.Size = UDim2.new(1, -32, 0, 20)
+	codesTitle.Font = Enum.Font.GothamBold
+	codesTitle.TextSize = 14
+	codesTitle.TextXAlignment = Enum.TextXAlignment.Left
+	codesTitle.TextColor3 = Constants.Colors.Text
+	codesTitle.Text = "Redeem code"
+	codesTitle.Parent = panel
+
+	local codeBox = Instance.new("TextBox")
+	codeBox.Position = UDim2.fromOffset(16, 164)
+	codeBox.Size = UDim2.fromOffset(240, 40)
+	codeBox.BackgroundColor3 = Constants.Colors.Background
+	codeBox.Font = Enum.Font.Gotham
+	codeBox.TextSize = 14
+	codeBox.TextColor3 = Constants.Colors.Text
+	codeBox.PlaceholderText = "WARFOUNDING / BUILDCONQUER"
+	codeBox.PlaceholderColor3 = Constants.Colors.Muted
+	codeBox.Text = ""
+	codeBox.ClearTextOnFocus = false
+	codeBox.BorderSizePixel = 0
+	UIUtil.Corner(codeBox, 6)
+	codeBox.Parent = panel
+
+	local redeemBtn = Instance.new("TextButton")
+	redeemBtn.Position = UDim2.fromOffset(268, 164)
+	redeemBtn.Size = UDim2.fromOffset(116, 40)
+	redeemBtn.BackgroundColor3 = Constants.Colors.Accent
+	redeemBtn.Font = Enum.Font.GothamBold
+	redeemBtn.TextSize = 13
+	redeemBtn.TextColor3 = Constants.Colors.Text
+	redeemBtn.Text = "REDEEM"
+	redeemBtn.BorderSizePixel = 0
+	UIUtil.Corner(redeemBtn, 6)
+	redeemBtn.Parent = panel
+	redeemBtn.MouseButton1Click:Connect(function()
+		AudioController.PlayClick()
+		local code = codeBox.Text
+		if code and #code > 0 then
+			Remotes.GetEvent(Constants.RemoteNames.RequestRedeemCode):FireServer(code)
+			codeBox.Text = ""
+		end
+	end)
+
 	local bindsTitle = Instance.new("TextLabel")
 	bindsTitle.BackgroundTransparency = 1
-	bindsTitle.Position = UDim2.fromOffset(16, 136)
+	bindsTitle.Position = UDim2.fromOffset(16, 216)
 	bindsTitle.Size = UDim2.new(1, -32, 0, 22)
 	bindsTitle.Font = Enum.Font.GothamBold
 	bindsTitle.TextSize = 14
@@ -175,8 +224,8 @@ function SettingsController.Init()
 	bindsTitle.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
-	list.Position = UDim2.fromOffset(12, 164)
-	list.Size = UDim2.new(1, -24, 1, -176)
+	list.Position = UDim2.fromOffset(12, 244)
+	list.Size = UDim2.new(1, -24, 1, -256)
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
 	list.ScrollBarThickness = 4

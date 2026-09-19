@@ -366,6 +366,20 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),
 		Prestige = profile.Prestige,
 		Soldiers = profile.Soldiers,
+		NationColorId = profile.NationColorId,
+		TrainingIncomePerTick = (function()
+			local SoldierConfig = require(Shared.Configs.SoldierConfig)
+			local cfg = SoldierConfig.TrainingIncome
+			if not cfg then
+				return 0
+			end
+			local count = tonumber(profile.Soldiers) or 0
+			if count < (cfg.MinSoldiersForIncome or 1) then
+				return 0
+			end
+			local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)
+			return math.floor(count * (cfg.CashPerSoldierPerTick or 0) * prestigeMult)
+		end)(),
 		Base = {
 			PlotId = profile.BasePlotId,
 			Upgrades = profile.BaseUpgrades,

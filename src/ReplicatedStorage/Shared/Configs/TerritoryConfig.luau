@@ -1,5 +1,5 @@
 --!strict
---[[ 7 territories with control bonuses + balance stubs ]]
+--[[ Territories + coastal oil platforms with capture stipends. ]]
 
 export type TerritoryDef = {
 	Id: string,
@@ -11,22 +11,33 @@ export type TerritoryDef = {
 	Position: Vector3,
 	Radius: number,
 	Color: Color3,
+	StipendCash: number?,
+	IsOilRig: boolean?,
+	GuardNPCType: string?,
+	GuardCount: number?,
 }
 
 local TerritoryConfig = {
 	-- Balance knobs
-	MaxPersonalTerritories = 3,
-	ProtectionPeriodSeconds = 45, -- after capture, enemy capture rate slowed
+	MaxPersonalTerritories = 4, -- allow oil + fortresses
+	ProtectionPeriodSeconds = 45,
 	CaptureTickSeconds = 0.5,
-	ProgressDecayPerSecond = 0.35, -- when zone empty
-	ContestedProgressMult = 0, -- 0 = freeze progress + light decay while contested
-	ContestedDecayMult = 0.5, -- decay rate multiplier while contested (when ContestedProgressMult <= 0)
-	ProtectedCaptureMult = 0.25, -- capturing protected enemy territory is slower
-	RadarRevealRadius = 350, -- studs: Radar Hill highlights enemies (scaled for larger map)
-	NPCOwnerId = -1, -- sentinel "NPC faction" controller
+	ProgressDecayPerSecond = 0.35,
+	ContestedProgressMult = 0,
+	ContestedDecayMult = 0.5,
+	ProtectedCaptureMult = 0.25,
+	RadarRevealRadius = 350,
+	NPCOwnerId = -1,
 	NeutralOwnerId = 0,
 
-	-- OwnerType strings used by TerritoryService
+	-- Periodic stipend for owned territories (MT-style ~every 90s)
+	CaptureStipend = {
+		TickSeconds = 90,
+		DefaultCash = 4000,
+		OilRigCash = 14000,
+		NotifyOnPayout = true,
+	},
+
 	OwnerTypes = {
 		Neutral = "Neutral",
 		Player = "Player",
@@ -46,6 +57,7 @@ local TerritoryConfig = {
 			Position = Vector3.new(0, 1, 0),
 			Radius = 55,
 			Color = Color3.fromRGB(200, 200, 80),
+			StipendCash = 5000,
 		},
 		NorthRidge = {
 			Id = "NorthRidge",
@@ -57,6 +69,7 @@ local TerritoryConfig = {
 			Position = Vector3.new(0, 1, -720),
 			Radius = 50,
 			Color = Color3.fromRGB(80, 160, 220),
+			StipendCash = 4000,
 		},
 		SouthDocks = {
 			Id = "SouthDocks",
@@ -68,6 +81,7 @@ local TerritoryConfig = {
 			Position = Vector3.new(0, 1, 720),
 			Radius = 50,
 			Color = Color3.fromRGB(70, 140, 180),
+			StipendCash = 4000,
 		},
 		EastArmory = {
 			Id = "EastArmory",
@@ -79,6 +93,7 @@ local TerritoryConfig = {
 			Position = Vector3.new(720, 1, 0),
 			Radius = 45,
 			Color = Color3.fromRGB(200, 80, 80),
+			StipendCash = 4500,
 		},
 		WestDepot = {
 			Id = "WestDepot",
@@ -90,6 +105,7 @@ local TerritoryConfig = {
 			Position = Vector3.new(-720, 1, 0),
 			Radius = 45,
 			Color = Color3.fromRGB(100, 180, 100),
+			StipendCash = 4500,
 		},
 		OilFields = {
 			Id = "OilFields",
@@ -101,6 +117,7 @@ local TerritoryConfig = {
 			Position = Vector3.new(520, 1, 520),
 			Radius = 55,
 			Color = Color3.fromRGB(180, 140, 60),
+			StipendCash = 6000,
 		},
 		RadarHill = {
 			Id = "RadarHill",
@@ -112,6 +129,38 @@ local TerritoryConfig = {
 			Position = Vector3.new(-520, 1, -520),
 			Radius = 50,
 			Color = Color3.fromRGB(160, 100, 200),
+			StipendCash = 5500,
+		},
+		-- Coastal oil platforms (MT-inspired ×2 oil; WAR EMPIRE naming)
+		CoastalOilAlpha = {
+			Id = "CoastalOilAlpha",
+			DisplayName = "Coastal Oil Alpha",
+			Description = "Offshore oil platform — high capture stipend. Harder guards.",
+			CaptureTimeSeconds = 50,
+			BonusType = "FlatPassiveCash",
+			BonusValue = 100,
+			Position = Vector3.new(980, 28, -420), -- deck height matches MapSetup platform
+			Radius = 42,
+			Color = Color3.fromRGB(190, 145, 45),
+			StipendCash = 14000,
+			IsOilRig = true,
+			GuardNPCType = "OilRigGuard",
+			GuardCount = 4,
+		},
+		CoastalOilBravo = {
+			Id = "CoastalOilBravo",
+			DisplayName = "Coastal Oil Bravo",
+			Description = "Offshore oil platform — high capture stipend. Harder guards.",
+			CaptureTimeSeconds = 50,
+			BonusType = "FlatPassiveCash",
+			BonusValue = 100,
+			Position = Vector3.new(-980, 28, 420),
+			Radius = 42,
+			Color = Color3.fromRGB(170, 125, 40),
+			StipendCash = 14000,
+			IsOilRig = true,
+			GuardNPCType = "OilRigGuard",
+			GuardCount = 4,
 		},
 	} :: { [string]: TerritoryDef },
 }

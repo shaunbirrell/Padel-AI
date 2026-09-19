@@ -24,6 +24,19 @@ local cashLabel: TextLabel? = nil
 local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
 local seasonLabel: TextLabel? = nil
+local lastPassive = 0
+local lastTraining = 0
+
+local function refreshPassiveHint()
+	if not passiveLabel then
+		return
+	end
+	if lastTraining > 0 then
+		passiveLabel.Text = string.format("+%d$/tick · Train +%d$/tick", lastPassive, lastTraining)
+	else
+		passiveLabel.Text = string.format("+%d$/tick", lastPassive)
+	end
+end
 
 local function makeCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -147,7 +160,7 @@ function HUDController.Init()
 	passive.Name = "PassiveHint"
 	passive.AnchorPoint = Vector2.new(1, 0)
 	passive.Position = UDim2.new(1, -16, 0, 96)
-	passive.Size = UDim2.fromOffset(200, 18)
+	passive.Size = UDim2.fromOffset(280, 18)
 	passive.BackgroundTransparency = 1
 	passive.Font = Enum.Font.Gotham
 	passive.TextSize = 12
@@ -196,8 +209,15 @@ function HUDController.Init()
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
-		if passiveLabel and base.PassiveIncomePerTick then
-			passiveLabel.Text = string.format("+%d$/tick", base.PassiveIncomePerTick)
+		if base.PassiveIncomePerTick then
+			lastPassive = base.PassiveIncomePerTick
+			refreshPassiveHint()
+		end
+	end)
+	Remotes.GetEvent(Constants.RemoteNames.SoldierStateUpdate).OnClientEvent:Connect(function(payload)
+		if typeof(payload) == "table" then
+			lastTraining = tonumber(payload.TrainingIncomePerTick) or 0
+			refreshPassiveHint()
 		end
 	end)
 
@@ -267,9 +287,13 @@ end
 function HUDController.ApplyState(state: Types.PlayerStatePayload)
 	HUDController.SetEconomy(state.Cash, state.Gold)
 	HUDController.SetXP(state.Level, state.XP, state.XPToNext)
-	if passiveLabel and state.Base then
-		passiveLabel.Text = string.format("+%d$/tick", state.Base.PassiveIncomePerTick)
+	if state.Base then
+		lastPassive = state.Base.PassiveIncomePerTick or 0
 	end
+	if typeof(state.TrainingIncomePerTick) == "number" then
+		lastTraining = state.TrainingIncomePerTick
+	end
+	refreshPassiveHint()
 end
 
 return HUDController

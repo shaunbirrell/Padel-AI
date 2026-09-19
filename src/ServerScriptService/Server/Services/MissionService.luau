@@ -11,6 +11,7 @@ local Types = require(Shared.Types)
 local MissionConfig = require(Shared.Configs.MissionConfig)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local AchievementConfig = require(Shared.Configs.AchievementConfig)
+local DailyOpsConfig = require(Shared.Configs.DailyOpsConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -60,14 +61,43 @@ local function ensureDaily(profile: Types.PlayerProfile)
 	end
 end
 
+local function dailyOpDefs(): { [string]: any }
+	local map: { [string]: any } = {}
+	if DailyOpsConfig.Enabled then
+		for _, op in ipairs(DailyOpsConfig.Ops) do
+			map[op.Id] = op
+		end
+	end
+	return map
+end
+
+local function resolveMissionDef(id: string): any?
+	local ops = dailyOpDefs()
+	if ops[id] then
+		return ops[id]
+	end
+	return MissionConfig.DailyMissions[id]
+end
+
 local function activeDailyIds(profile: Types.PlayerProfile): { string }
 	local list: { string } = {}
 	local level = profile.Level or 1
+	local seen: { [string]: boolean } = {}
+	-- Daily Ops first (3 rotating MT-style gold ops)
+	if DailyOpsConfig.Enabled then
+		for _, op in ipairs(DailyOpsConfig.Ops) do
+			if level >= (op.MinLevel or 1) and not seen[op.Id] then
+				table.insert(list, op.Id)
+				seen[op.Id] = true
+			end
+		end
+	end
 	for _, id in ipairs(MissionConfig.DailyMissionOrder) do
 		local def = MissionConfig.DailyMissions[id]
-		if def and level >= def.MinLevel then
+		if def and level >= def.MinLevel and not seen[id] then
 			table.insert(list, id)
-			if #list >= (MissionConfig.MaxActiveDaily or 4) then
+			seen[id] = true
+			if #list >= (MissionConfig.MaxActiveDaily or 6) then
 				break
 			end
 		end
@@ -87,7 +117,7 @@ function MissionService.Push(player: Player)
 
 	local dailyPayload: { Types.MissionEntryPayload } = {}
 	for _, id in ipairs(activeDailyIds(profile)) do
-		local def = MissionConfig.DailyMissions[id]
+		local def = resolveMissionDef(id)
 		if def then
 			local progress = profile.DailyMissions.Progress[id] or 0
 			local claimed = profile.DailyMissions.Claimed[id] == true
@@ -196,7 +226,7 @@ function MissionService.TrackProgress(player: Player, objectiveType: string, amo
 
 	local changed = false
 	for _, id in ipairs(activeDailyIds(profile)) do
-		local def = MissionConfig.DailyMissions[id]
+		local def = resolveMissionDef(id)
 		if def and def.ObjectiveType == objectiveType then
 			local claimed = profile.DailyMissions.Claimed[id] == true
 			local prev = profile.DailyMissions.Progress[id] or 0
@@ -235,7 +265,7 @@ function MissionService.ClaimDailyMission(player: Player, missionId: string): (b
 	end
 	ensureDaily(profile)
 
-	local def = MissionConfig.DailyMissions[missionId]
+	local def = resolveMissionDef(missionId)
 	if not def then
 		return false, "UnknownMission"
 	end

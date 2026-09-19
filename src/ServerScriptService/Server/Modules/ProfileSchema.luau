@@ -45,6 +45,8 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		XP = 0,
 		Prestige = 0,
 		Soldiers = SoldierConfig.StartingSoldiers,
+		NationColorId = nil,
+		RedeemedCodes = {},
 		Vehicles = {
 			[VehicleConfig.StarterVehicle] = true,
 		},
@@ -230,6 +232,18 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		end
 		profile.DataVersion = 3
 		version = 3
+	end
+
+	-- v3 → v4: nation color + redeemed codes (MT-inspired systems)
+	if version < 4 then
+		if profile.NationColorId ~= nil and typeof(profile.NationColorId) ~= "string" then
+			profile.NationColorId = nil
+		end
+		if typeof(profile.RedeemedCodes) ~= "table" then
+			profile.RedeemedCodes = {}
+		end
+		profile.DataVersion = 4
+		version = 4
 	end
 
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then

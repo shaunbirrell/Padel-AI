@@ -115,6 +115,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `ASSUMPTIONS.md` — engineering decisions made for this build
 - `BALANCE.md` — economy / XP tuning notes
 - `MASTER_BUILD_SPEC.md` — product + technical spec
+- `docs/BENCHMARK_MILITARY_TYCOON.md` — public MT loop themes → WAR EMPIRE mapping (no asset copy)
 
 ## Keybinds (MVP)
 
@@ -128,7 +129,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | **P** / SHOP | DevProducts + GamePasses |
 | **K** / PROGRESS | Prestige + Battle Pass + Clan + Clan War declare / scoreboard |
 | **A** / ARMY | Recruit / dismiss / fill-cap soldiers |
-| **O** / SETTINGS | Music/SFX local toggles (wires AudioController mute) + keybind cheat-sheet |
+| **O** / SETTINGS | Music/SFX local toggles + **promo code redeem** + keybind cheat-sheet |
 | LMB / FIRE | Fire equipped weapon |
 | **R** | Reload |
 
@@ -148,7 +149,9 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 12. **Persistence** — Leave + rejoin with API Services on; Cash/upgrades restore; receipts not double-granted.
 13. **Admin** — `givecash` / `resettutorial` / `unlockall` / `bpxp` / `grantpremium` / `createclan` only for `AdminConfig.UserIds`.
 14. **Progression (K)** — Battle Pass claimable counts + CLAIM ALL; create/join clan; with API Services on, leave/rejoin and confirm clan roster persists.
-15. **Settings (O)** — Music/SFX local-only toggles mute/unmute `AudioController` immediately + keybind cheat-sheet (B/G/M/P/K/A/O + combat). Placeholder SoundIds — swap in Studio.
+15. **Settings (O)** — Music/SFX toggles + redeem `WARFOUNDING` / `BUILDCONQUER` (once each) + keybind cheat-sheet. Placeholder SoundIds — swap in Studio.
+16. **Training Yard** — Recruit soldiers (**A**); HUD shows Train +$/tick; targets visible on each base plot.
+17. **Coastal Oil** — Capture Coastal Oil Alpha/Bravo (elevated platforms, OilRigGuard); wait for capture stipend toast (~90s).
 
 ## Phase notes
 
@@ -186,7 +189,11 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 
 - **Prestige:** Level 100+; resets progression currency/levels/base; keeps vehicles/weapons/gold; +Gold; cash mult via `EconomyConfig.PrestigeCashMultiplierPerLevel`.
 - **Clans:** Create/join/leave (**K**); roster persisted in DataStore `WarEmpire_Clans_v1` (name, owner, members) when Studio API Services are on; session-only fallback otherwise. `profile.ClanId` stamped onto captured territories for clan ownership checks.
-- **Army:** Recruit/dismiss soldiers (**A**); barracks upgrades raise cap; server cash spend only.
+- **Army / Training Yard:** Recruit/dismiss soldiers (**A**); owned soldiers pay training cash/tick; barracks raise cap.
+- **Capture stipends / Coastal Oil:** Owned territories + Coastal Oil Alpha/Bravo pay periodic stipend; oil has harder guards.
+- **Codes:** Redeem in Settings (**O**) — sample `WARFOUNDING`, `BUILDCONQUER` (once each).
+- **Daily Ops:** Three gold ops (seize / clear / muster) in Missions (**M**).
+- **Nation color:** Assigned on join; tints your captured flags.
 - **Seasons:** Active season XP/Cash multipliers via SeasonService (DataStore-persisted end; HUD indicator).
 - **Clan wars:** Declare (leader, min members, cooldown), score on captures, settle rewards + scoreboard (**K**).
 - **Radar Hill:** Enemy highlight within radius while owned.

@@ -54,6 +54,7 @@ local MonetizationConfig = {
 		prestige = true,
 		battlepass = true,
 		dismiss_soldiers = true,
+		code = true,
 		clan_war_win = true,
 		clan_war_participate = true,
 	},

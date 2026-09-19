@@ -53,6 +53,9 @@ local EVENTS = {
 	Constants.RemoteNames.SeasonStateUpdate,
 	Constants.RemoteNames.RequestDeclareClanWar,
 	Constants.RemoteNames.ClanWarStateUpdate,
+	Constants.RemoteNames.RequestRedeemCode,
+	Constants.RemoteNames.CodeStateUpdate,
+	Constants.RemoteNames.NationColorUpdate,
 }
 
 local FUNCTIONS = {

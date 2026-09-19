@@ -7,7 +7,7 @@ export type DailyMissionDef = {
 	Id: string,
 	DisplayName: string,
 	Description: string,
-	ObjectiveType: string, -- KillNPC | KillPlayer | CaptureTerritory | PurchaseUpgrade | EarnCash | SpawnVehicle
+	ObjectiveType: string, -- KillNPC | KillPlayer | CaptureTerritory | PurchaseUpgrade | EarnCash | SpawnVehicle | RecruitSoldiers
 	Target: number,
 	RewardCash: number,
 	RewardXP: number,
@@ -28,7 +28,7 @@ export type MissionDef = {
 
 local MissionConfig = {
 	-- How many daily missions are offered (first N unlocked by level from DailyMissions order)
-	MaxActiveDaily = 4,
+	MaxActiveDaily = 6, -- includes Daily Ops when merged
 	RefreshOnUtcDayChange = true,
 
 	DailyMissions = {
@@ -98,11 +98,23 @@ local MissionConfig = {
 			RewardGold = 2,
 			MinLevel = 5,
 		},
+		DailyRecruit = {
+			Id = "DailyRecruit",
+			DisplayName = "Muster Troops",
+			Description = "Recruit 5 soldiers.",
+			ObjectiveType = "RecruitSoldiers",
+			Target = 5,
+			RewardCash = 2000,
+			RewardXP = 50,
+			RewardGold = 1,
+			MinLevel = 1,
+		},
 	} :: { [string]: DailyMissionDef },
 
 	DailyMissionOrder = {
 		"DailyKillNPC",
 		"DailyCapture",
+		"DailyRecruit",
 		"DailyUpgrade",
 		"DailyEarnCash",
 		"DailySpawnVehicle",
