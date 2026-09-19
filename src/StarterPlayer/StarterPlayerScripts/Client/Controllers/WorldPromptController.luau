@@ -3,7 +3,8 @@
 	World interactivity for StudioSetup-tagged parts.
 
 	Upgrade pads (WE_UpgradeSlot): WALK-OVER auto-purchase — Touched + Heartbeat
-	overlap fires RequestPurchaseUpgrade (debounced). Never grants on client.
+	overlap fires RequestPurchaseUpgrade (debounced) as SECONDARY path.
+	Server UpgradePadService is primary. Never grants on client.
 	Edge cases: respawn clears overlap; seated-in-vehicle skips buy; multi-part
 	touch uses pad keys; plot reassignment clears state; standing retry after
 	debounce for failed-purchase UX. Prompt/Touched connections disconnect on
@@ -16,6 +17,7 @@ local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -626,6 +628,13 @@ end
 
 local function bindAllTags()
 	if tagsBound then
+		-- Re-attach any slots that appeared since first bind (GetInstanceAdded covers
+		-- new tags, but stale/untagged-then-tagged races still need a GetTagged sweep)
+		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+			if inst:IsA("BasePart") then
+				attachUpgradeSlot(inst)
+			end
+		end
 		return
 	end
 	tagsBound = true
@@ -634,6 +643,27 @@ local function bindAllTags()
 	bindTag(Constants.Tags.CaptureZone, attachCaptureZone)
 	bindTag(Constants.Tags.VehicleSpawn, attachVehicleSpawn)
 	bindTag(Constants.Tags.TutorialMarker, attachTutorialMarker)
+end
+
+-- Attribute fallback: StructureId pads under WarEmpireSetup.Bases missing the tag
+local function rescanUntaggedSlots()
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		return
+	end
+	local bases = setup:FindFirstChild("Bases")
+	if not bases then
+		return
+	end
+	for _, desc in ipairs(bases:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			local sid = desc:GetAttribute("StructureId")
+			if typeof(sid) == "string" and not slotParts[desc] then
+				-- Attach even if CollectionService tag lagged / missing on client replica
+				attachUpgradeSlot(desc)
+			end
+		end
+	end
 end
 
 function WorldPromptController.Init()
@@ -681,10 +711,23 @@ function WorldPromptController.Init()
 	end)
 
 	task.defer(function()
-		task.wait(0.5)
+		-- Wait for map (MapSetup + MapDressing can take >0.5s on cold Studio Play)
+		local setup = Workspace:WaitForChild("WarEmpireSetup", 60)
+		if not setup then
+			warn("[WorldPromptController] WarEmpireSetup missing after 60s — binding tags anyway")
+		end
 		bindAllTags()
 		startOverlapLoop()
 		refreshAllBillboardsNow()
+		rescanUntaggedSlots()
+
+		-- Periodic rescan first ~20s for race / late-tagged pads
+		for _ = 1, 10 do
+			task.wait(2)
+			bindAllTags()
+			rescanUntaggedSlots()
+			refreshAllBillboardsNow()
+		end
 	end)
 end
 

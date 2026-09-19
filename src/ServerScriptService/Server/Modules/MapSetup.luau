@@ -403,8 +403,27 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	end
 
 	local cost = STARTER_COST[def.Id] or 0
-	local title = if isCC then ("★ " .. def.Id) else def.Id
-	priceBillboard(plinth, title, "$" .. tostring(cost), def.Accent)
+	-- Prefer readable DisplayName; client refreshSlotBillboard rewrites when attached
+	local displayNames = {
+		CommandCenter = "Command Center",
+		Barracks = "Barracks",
+		VehicleDepot = "Vehicle Depot",
+		WeaponsFacility = "Weapons Facility",
+		Helipad = "Helipad",
+		Dock = "Naval Dock",
+		Airfield = "Airfield",
+		DefensiveWalls = "Defensive Walls",
+		Watchtowers = "Watchtowers",
+		Radar = "Radar Station",
+		ResearchLab = "Research Lab",
+		MissileDefense = "Missile Defense",
+		PowerStation = "Power Station",
+		Warehouse = "Warehouse",
+		SpecialForcesFacility = "Special Forces",
+	}
+	local nice = displayNames[def.Id] or def.Id
+	local title = if isCC then ("★ " .. nice) else nice
+	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost), def.Accent)
 	return plinth
 end
 

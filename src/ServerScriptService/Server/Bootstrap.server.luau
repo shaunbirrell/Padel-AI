@@ -79,6 +79,7 @@ else
 	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run")
 	-- Re-assert gravity + Ground presence so scale upgrades / partial setups never void-fall
 	Workspace.Gravity = 196.2
+	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	local map = setup and setup:FindFirstChild("Map")
 	local ground = map and map:FindFirstChild("Ground")
@@ -92,6 +93,49 @@ else
 		end)
 		if not Workspace:FindFirstChild("WarEmpireSetup") then
 			ensureVoidFallback("Existing setup invalid and rebuild failed")
+		end
+	else
+		-- Ensure WE_UpgradeSlot tags exist (stale place files / partial builds skip MapSetup)
+		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+		local taggedCount = #tagged
+		if taggedCount == 0 then
+			local bases = setup and setup:FindFirstChild("Bases")
+			local retagged = 0
+			if bases then
+				for _, desc in ipairs(bases:GetDescendants()) do
+					if desc:IsA("BasePart") then
+						local sid = desc:GetAttribute("StructureId")
+						local pid = desc:GetAttribute("PlotId")
+						if typeof(sid) == "string" and typeof(pid) == "number" then
+							CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+							desc.CanTouch = true
+							retagged += 1
+						end
+					end
+				end
+			end
+			if retagged == 0 then
+				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
+				pcall(function()
+					if setup then
+						setup:Destroy()
+					end
+					MapSetup.Run()
+				end)
+				if not Workspace:FindFirstChild("WarEmpireSetup") then
+					ensureVoidFallback("Missing upgrade pads and rebuild failed")
+				end
+			else
+				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
+			end
+		else
+			-- Soft-heal: CanTouch on existing tagged pads
+			for _, inst in ipairs(tagged) do
+				if inst:IsA("BasePart") then
+					inst.CanTouch = true
+				end
+			end
+			print("[WAR EMPIRE] Upgrade slots OK:", taggedCount)
 		end
 	end
 end
@@ -125,6 +169,7 @@ local CaptureStipendService = require(Services.CaptureStipendService)
 local SupplyDropService = require(Services.SupplyDropService)
 local BankRaidService = require(Services.BankRaidService)
 local SpinnerService = require(Services.SpinnerService)
+local UpgradePadService = require(Services.UpgradePadService)
 
 RemoteSetup.Init()
 
@@ -157,6 +202,7 @@ local deps: { [string]: any } = {
 	SupplyDropService = SupplyDropService,
 	BankRaidService = BankRaidService,
 	SpinnerService = SpinnerService,
+	UpgradePadService = UpgradePadService,
 }
 
 RateLimitService.Init()
@@ -169,6 +215,7 @@ XPService.Init(deps)
 NotificationService.Init(deps)
 AntiExploitService.Init(deps)
 BaseService.Init(deps) -- registers OnProfileLoaded
+UpgradePadService.Init(deps) -- server walk-over buy (Touched + spatial)
 MonetizationService.Init(deps) -- GamePass cache on join
 TutorialService.Init(deps) -- tutorial step on join + upgrade hook
 

@@ -154,6 +154,62 @@ local function meetsRequirements(profile: Types.PlayerProfile, structureId: stri
 	return true, nil
 end
 
+
+function BaseService.GetPlotSpawnCFrame(plotId: number): CFrame?
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+			local folder = inst.Parent
+			if folder then
+				local spawn = folder:FindFirstChild("PlayerSpawn")
+				if spawn and spawn:IsA("BasePart") then
+					return spawn.CFrame + Vector3.new(0, 3, 0)
+				end
+			end
+			return inst.CFrame + Vector3.new(0, 5, 55)
+		end
+	end
+	local pos = BaseConfig.PlotPositions[plotId]
+	if typeof(pos) == "Vector3" then
+		return CFrame.new(pos + Vector3.new(0, 5, 55))
+	end
+	return nil
+end
+
+function BaseService.TeleportToPlot(player: Player)
+	local profile = DataService.GetProfile(player)
+	if not profile or not profile.BasePlotId then
+		return
+	end
+	local cf = BaseService.GetPlotSpawnCFrame(profile.BasePlotId)
+	if not cf then
+		return
+	end
+	local function apply(character: Model)
+		if character and character.Parent then
+			character:PivotTo(cf)
+		end
+	end
+	if player.Character then
+		apply(player.Character)
+	else
+		local conn: RBXScriptConnection?
+		conn = player.CharacterAdded:Connect(function(character)
+			if conn then
+				conn:Disconnect()
+			end
+			task.defer(function()
+				apply(character)
+			end)
+		end)
+		-- Safety: disconnect if still waiting after 30s
+		task.delay(30, function()
+			if conn then
+				conn:Disconnect()
+			end
+		end)
+	end
+end
+
 function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types.PurchaseUpgradeResult
 	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
@@ -467,6 +523,10 @@ function BaseService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		BaseService.AssignPlot(player)
+		-- Ensure player stands on THEIR plot (CombatService CharacterAdded may race before AssignPlot)
+		task.defer(function()
+			BaseService.TeleportToPlot(player)
+		end)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
