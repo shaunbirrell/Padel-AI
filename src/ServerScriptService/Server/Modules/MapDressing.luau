@@ -4,7 +4,9 @@
 	Fills the expanded ~4800 map between plots / ring / territories with
 	military Part-kit clusters (desert outposts, adobe, tents, hangars, depots, camps…).
 	Visual / immersion only — no gameplay tags that affect buy pads or capture.
-	Called from MapSetup.Run after bases/territories/spawns.
+	Called from MapSetup.Run after bases/territories/spawns (deferred).
+	Quality Low (~60–70% fewer clusters) vs Full. Studio usually SKIPS entirely
+	(DevConfig.StudioSkipWorldDressing) — ForceDress attribute to opt in.
 	Regenerate: delete WarEmpireSetup + Play, or admin resetmap.
 ]]
 
@@ -1057,111 +1059,126 @@ local function placeCluster(parent: Folder, name: string, origin: Vector3, build
 	end
 end
 
-function MapDressing.Dress(root: Instance)
+function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
+	local quality = string.lower(tostring((opts and opts.Quality) or "Low"))
+	local full = quality == "full"
 	local dressing = ensureFolder("WorldDressing", root)
 
-	-- 1) Road checkpoints on main axes (inside + outside plot ring)
-	local checkpoints = {
-		{ Name = "CP_N_Inner", Pos = Vector3.new(0, 0.5, -420), Yaw = 0, Label = "CHECKPOINT" },
-		{ Name = "CP_E_Inner", Pos = Vector3.new(420, 0.5, 0), Yaw = 90, Label = "CHECKPOINT" },
-		{ Name = "CP_S_Outer", Pos = Vector3.new(0, 0.5, 1050), Yaw = 180, Label = nil },
-		{ Name = "CP_W_Outer", Pos = Vector3.new(-1050, 0.5, 0), Yaw = -90, Label = nil },
-	}
+	-- PERF Low: ~60–70% fewer clusters than prior dense pass. CastShadow already false in p().
+
+	-- 1) Road checkpoints
+	local checkpoints = if full
+		then {
+			{ Name = "CP_N_Inner", Pos = Vector3.new(0, 0.5, -420), Yaw = 0, Label = "CHECKPOINT" },
+			{ Name = "CP_E_Inner", Pos = Vector3.new(420, 0.5, 0), Yaw = 90, Label = "CHECKPOINT" },
+			{ Name = "CP_S_Outer", Pos = Vector3.new(0, 0.5, 1050), Yaw = 180, Label = nil },
+			{ Name = "CP_W_Outer", Pos = Vector3.new(-1050, 0.5, 0), Yaw = -90, Label = nil },
+		}
+		else {
+			{ Name = "CP_N_Inner", Pos = Vector3.new(0, 0.5, -420), Yaw = 0, Label = "CHECKPOINT" },
+			{ Name = "CP_E_Inner", Pos = Vector3.new(420, 0.5, 0), Yaw = 90, Label = nil },
+		}
 	for _, cp in ipairs(checkpoints) do
 		placeCluster(dressing, cp.Name, cp.Pos, kitCheckpoint, cp.Yaw, cp.Label)
 	end
 
-	-- 2) Outposts near territories (offset from capture pads)
-	local outposts = {
-		{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
-		{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = "OUTPOST" },
-		{ Name = "OP_OilFields", Pos = Vector3.new(850, 0.5, 1080), Yaw = 45, Label = "OUTPOST" },
-		{ Name = "OP_MidNE", Pos = Vector3.new(550, 0.5, -550), Yaw = 20, Label = nil },
-	}
+	-- 2) Outposts
+	local outposts = if full
+		then {
+			{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
+			{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = "OUTPOST" },
+			{ Name = "OP_OilFields", Pos = Vector3.new(850, 0.5, 1080), Yaw = 45, Label = "OUTPOST" },
+			{ Name = "OP_MidNE", Pos = Vector3.new(550, 0.5, -550), Yaw = 20, Label = nil },
+		}
+		else {
+			{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
+			{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = nil },
+		}
 	for _, op in ipairs(outposts) do
 		placeCluster(dressing, op.Name, op.Pos, kitOutpost, op.Yaw, op.Label)
 	end
 
-	-- 3) Hangars + runway near air corridor (east of Central, toward EastArmory approach)
+	-- 3) Hangars (Low: 1 hangar + light fuel; Full: prior airfield)
 	do
 		local f = Instance.new("Folder")
 		f.Name = "AirfieldDressing"
 		f.Parent = dressing
 		kitHangar(f, Vector3.new(700, 0.5, -200), 90)
-		kitHangar(f, Vector3.new(700, 0.5, 200), 90)
-		kitRunway(f, Vector3.new(780, 0.5, 0), 0, 100)
-		kitFuelDepot(f, Vector3.new(640, 0.5, -280), 0)
-		kitVehicleSilhouette(f, Vector3.new(660, 0.5, -140), 90, "truck")
-		kitVehicleSilhouette(f, Vector3.new(660, 0.5, 140), 85, "jeep")
-		kitLightPole(f, Vector3.new(740, 0.5, -60))
-		kitLightPole(f, Vector3.new(740, 0.5, 60))
-		local anchor = p({
-			Name = "LabelAnchor",
-			Size = Vector3.new(1, 1, 1),
-			Position = Vector3.new(720, 8, 0),
-			Transparency = 1,
-			CastShadow = false,
-			Parent = f,
-		})
-		clusterLabel(anchor, "FIELD HANGARS")
+		if full then
+			kitHangar(f, Vector3.new(700, 0.5, 200), 90)
+			kitRunway(f, Vector3.new(780, 0.5, 0), 0, 100)
+			kitFuelDepot(f, Vector3.new(640, 0.5, -280), 0)
+			kitVehicleSilhouette(f, Vector3.new(660, 0.5, -140), 90, "truck")
+			kitVehicleSilhouette(f, Vector3.new(660, 0.5, 140), 85, "jeep")
+			kitLightPole(f, Vector3.new(740, 0.5, -60))
+			kitLightPole(f, Vector3.new(740, 0.5, 60))
+		else
+			kitFuelDepot(f, Vector3.new(640, 0.5, -280), 0)
+			kitLightPole(f, Vector3.new(740, 0.5, 0))
+		end
 	end
 
-	-- 4) Fuel / ammo depots along ring roads
-	local depots = {
-		{ Name = "Depot_NW", Pos = Vector3.new(-650, 0.5, -650), Yaw = 45, Kind = "fuel" },
-		{ Name = "Ammo_NE", Pos = Vector3.new(650, 0.5, -650), Yaw = 135, Kind = "ammo" },
-		{ Name = "Depot_FarE", Pos = Vector3.new(1600, 0.5, 200), Yaw = 0, Kind = "fuel" },
-	}
+	-- 4) Depots
+	local depots = if full
+		then {
+			{ Name = "Depot_NW", Pos = Vector3.new(-650, 0.5, -650), Yaw = 45, Kind = "fuel" },
+			{ Name = "Ammo_NE", Pos = Vector3.new(650, 0.5, -650), Yaw = 135, Kind = "ammo" },
+			{ Name = "Depot_FarE", Pos = Vector3.new(1600, 0.5, 200), Yaw = 0, Kind = "fuel" },
+		}
+		else {
+			{ Name = "Depot_NW", Pos = Vector3.new(-650, 0.5, -650), Yaw = 45, Kind = "fuel" },
+		}
 	for _, d in ipairs(depots) do
 		local f = Instance.new("Folder")
 		f.Name = d.Name
 		f.Parent = dressing
 		if d.Kind == "fuel" then
 			kitFuelDepot(f, d.Pos, d.Yaw)
-			kitOilDrums(f, d.Pos + Vector3.new(10, 0, 6), 4)
-			kitWireFence(f, d.Pos + Vector3.new(0, 0, -10), d.Yaw, 3)
+			kitOilDrums(f, d.Pos + Vector3.new(10, 0, 6), if full then 4 else 2)
 		else
 			kitAmmoShed(f, d.Pos, d.Yaw)
 			kitCrateStack(f, d.Pos + Vector3.new(8, 0, 4))
-			kitSandbagLine(f, d.Pos + Vector3.new(0, 0, -8), d.Yaw, 3)
 		end
 	end
 
-	-- 5) Radio towers on ridges / approaches
-	local radios = {
-		{ Name = "Radio_N", Pos = Vector3.new(180, 0.5, -1500), Yaw = 0 },
-		{ Name = "Radio_OilApproach", Pos = Vector3.new(1100, 0.5, 1100), Yaw = 45 },
-	}
-	for _, r in ipairs(radios) do
+	-- 5) Radio
+	do
 		local f = Instance.new("Folder")
-		f.Name = r.Name
+		f.Name = "Radio_N"
 		f.Parent = dressing
-		kitRadioTower(f, r.Pos, r.Yaw)
-		kitSandbagLine(f, r.Pos + Vector3.new(6, 0, -6), r.Yaw + 30, 3)
+		kitRadioTower(f, Vector3.new(180, 0.5, -1500), 0)
+		if full then
+			local f2 = Instance.new("Folder")
+			f2.Name = "Radio_OilApproach"
+			f2.Parent = dressing
+			kitRadioTower(f2, Vector3.new(1100, 0.5, 1100), 45)
+		end
 	end
 
-	-- 6) Camps between plot ring and mid-field
-	local camps = {
-		{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
-		{ Name = "Camp_E", Pos = Vector3.new(900, 0.5, -350), Yaw = 90 },
-		{ Name = "Camp_FarSE", Pos = Vector3.new(1400, 0.5, 900), Yaw = 40 },
-	}
+	-- 6) Camps
+	local camps = if full
+		then {
+			{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
+			{ Name = "Camp_E", Pos = Vector3.new(900, 0.5, -350), Yaw = 90 },
+			{ Name = "Camp_FarSE", Pos = Vector3.new(1400, 0.5, 900), Yaw = 40 },
+		}
+		else {
+			{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
+		}
 	for _, c in ipairs(camps) do
 		local f = Instance.new("Folder")
 		f.Name = c.Name
 		f.Parent = dressing
 		kitCamp(f, c.Pos, c.Yaw)
-		kitVehicleSilhouette(f, c.Pos + Vector3.new(14, 0, 4), c.Yaw + 10, "jeep")
-		kitLightPole(f, c.Pos + Vector3.new(-10, 0, 8))
 	end
 
-	-- 7) Dockside crates / drums / light poles near SouthDocks + naval shelf
+	-- 7) Dockside (Low: 2 piers; Full: 5)
 	do
 		local f = Instance.new("Folder")
 		f.Name = "DocksideDressing"
 		f.Parent = dressing
-		-- Pier extensions
-		for i, x in ipairs({ -200, -80, 80, 200, 350 }) do
+		local pierXs = if full then { -200, -80, 80, 200, 350 } else { -80, 80 }
+		for i, x in ipairs(pierXs) do
 			p({
 				Name = "Pier" .. i,
 				Size = Vector3.new(18, 1.2, 40),
@@ -1173,148 +1190,141 @@ function MapDressing.Dress(root: Instance)
 				Parent = f,
 			})
 			kitCrateStack(f, Vector3.new(x - 4, 1.5, 1410))
-			kitOilDrums(f, Vector3.new(x + 5, 1.5, 1405), 3)
-			kitLightPole(f, Vector3.new(x + 8, 0.5, 1440))
+			if full then
+				kitOilDrums(f, Vector3.new(x + 5, 1.5, 1405), 3)
+				kitLightPole(f, Vector3.new(x + 8, 0.5, 1440))
+			end
 		end
-		kitAmmoShed(f, Vector3.new(-320, 0.5, 1380), 0)
-		kitFuelDepot(f, Vector3.new(320, 0.5, 1380), 180)
-		kitVehicleSilhouette(f, Vector3.new(0, 0.5, 1360), 0, "truck")
-		kitSandbagLine(f, Vector3.new(0, 0.5, 1340), 0, 6)
-		kitWireFence(f, Vector3.new(-400, 0.5, 1400), 90, 4)
-		local anchor = p({
-			Name = "LabelAnchor",
-			Size = Vector3.new(1, 1, 1),
-			Position = Vector3.new(0, 8, 1420),
-			Transparency = 1,
-			CastShadow = false,
-			Parent = f,
-		})
-		clusterLabel(anchor, "HARBOR YARD")
+		if full then
+			kitAmmoShed(f, Vector3.new(-320, 0.5, 1380), 0)
+			kitFuelDepot(f, Vector3.new(320, 0.5, 1380), 180)
+			kitVehicleSilhouette(f, Vector3.new(0, 0.5, 1360), 0, "truck")
+			kitSandbagLine(f, Vector3.new(0, 0.5, 1340), 0, 6)
+		end
 	end
 
-	-- 8) Coastal oil approach props (ground-level approaches, not on elevated decks)
-	do
+	-- 8–9) Approaches — Full only (heavy part cost)
+	if full then
 		local f = Instance.new("Folder")
 		f.Name = "CoastalOilApproaches"
 		f.Parent = dressing
-		-- Alpha approach (east coast ~1800,-750)
 		kitCheckpoint(f, Vector3.new(1650, 0.5, -750), 90)
 		kitFuelDepot(f, Vector3.new(1580, 0.5, -820), 45)
 		kitOilDrums(f, Vector3.new(1600, 0.5, -680), 6)
-		kitWireFence(f, Vector3.new(1700, 0.5, -700), 0, 4)
-		-- Bravo approach (west coast ~-1800,750)
 		kitCheckpoint(f, Vector3.new(-1650, 0.5, 750), -90)
 		kitAmmoShed(f, Vector3.new(-1580, 0.5, 820), -45)
-		kitCrateStack(f, Vector3.new(-1600, 0.5, 680))
-		kitSandbagLine(f, Vector3.new(-1700, 0.5, 700), 180, 4)
+
+		local f2 = Instance.new("Folder")
+		f2.Name = "FortApproaches"
+		f2.Parent = dressing
+		kitRuinedWall(f2, Vector3.new(1320, 0.5, -1320), 45)
+		kitSandbagLine(f2, Vector3.new(1280, 0.5, -1450), 90, 5)
+		kitVehicleSilhouette(f2, Vector3.new(1250, 0.5, -1380), 40, "tank")
+		kitWatchtower(f2, Vector3.new(1200, 0.5, -1500), 30)
+		kitRuinedWall(f2, Vector3.new(-1320, 0.5, 1320), -135)
+		kitSandbagLine(f2, Vector3.new(-1280, 0.5, 1450), -90, 5)
+		kitWatchtower(f2, Vector3.new(-1200, 0.5, 1500), -150)
 	end
 
-	-- 9) Fort approaches — ruined walls + sandbags + decoy tanks
-	do
-		local f = Instance.new("Folder")
-		f.Name = "FortApproaches"
-		f.Parent = dressing
-		-- FortIronclad (1450,-1450)
-		kitRuinedWall(f, Vector3.new(1320, 0.5, -1320), 45)
-		kitRuinedWall(f, Vector3.new(1380, 0.5, -1550), -20)
-		kitSandbagLine(f, Vector3.new(1280, 0.5, -1450), 90, 5)
-		kitVehicleSilhouette(f, Vector3.new(1250, 0.5, -1380), 40, "tank")
-		kitWatchtower(f, Vector3.new(1200, 0.5, -1500), 30)
-		-- FortSandhold (-1450,1450)
-		kitRuinedWall(f, Vector3.new(-1320, 0.5, 1320), -135)
-		kitRuinedWall(f, Vector3.new(-1380, 0.5, 1550), 160)
-		kitSandbagLine(f, Vector3.new(-1280, 0.5, 1450), -90, 5)
-		kitVehicleSilhouette(f, Vector3.new(-1250, 0.5, 1380), -140, "tank")
-		kitWatchtower(f, Vector3.new(-1200, 0.5, 1500), -150)
-	end
-
-	-- 10) Road signs + light poles along main roads (batched, sparse)
+	-- 10) Road furniture (Low: 4 signs + 2 lights; Full: prior)
 	do
 		local f = Instance.new("Folder")
 		f.Name = "RoadFurniture"
 		f.Parent = dressing
-		local signSpots = {
-			{ Vector3.new(40, 0.5, -250), 0 },
-			{ Vector3.new(-40, 0.5, 250), 180 },
-			{ Vector3.new(250, 0.5, 40), 90 },
-			{ Vector3.new(-250, 0.5, -40), -90 },
-			{ Vector3.new(40, 0.5, -800), 0 },
-			{ Vector3.new(-40, 0.5, 800), 180 },
-			{ Vector3.new(800, 0.5, 40), 90 },
-			{ Vector3.new(-800, 0.5, -40), -90 },
-			{ Vector3.new(40, 0.5, -1600), 0 },
-			{ Vector3.new(-40, 0.5, 1600), 180 },
-			{ Vector3.new(1600, 0.5, 40), 90 },
-			{ Vector3.new(-1600, 0.5, -40), -90 },
-		}
+		local signSpots = if full
+			then {
+				{ Vector3.new(40, 0.5, -250), 0 },
+				{ Vector3.new(-40, 0.5, 250), 180 },
+				{ Vector3.new(250, 0.5, 40), 90 },
+				{ Vector3.new(-250, 0.5, -40), -90 },
+				{ Vector3.new(40, 0.5, -800), 0 },
+				{ Vector3.new(-40, 0.5, 800), 180 },
+				{ Vector3.new(800, 0.5, 40), 90 },
+				{ Vector3.new(-800, 0.5, -40), -90 },
+				{ Vector3.new(40, 0.5, -1600), 0 },
+				{ Vector3.new(-40, 0.5, 1600), 180 },
+				{ Vector3.new(1600, 0.5, 40), 90 },
+				{ Vector3.new(-1600, 0.5, -40), -90 },
+			}
+			else {
+				{ Vector3.new(40, 0.5, -250), 0 },
+				{ Vector3.new(250, 0.5, 40), 90 },
+				{ Vector3.new(40, 0.5, -800), 0 },
+				{ Vector3.new(800, 0.5, 40), 90 },
+			}
 		for _, s in ipairs(signSpots) do
 			kitRoadSign(f, s[1], s[2])
 		end
-		local lightSpots = {
-			Vector3.new(30, 0.5, -600),
-			Vector3.new(-30, 0.5, 600),
-			Vector3.new(600, 0.5, 30),
-			Vector3.new(-600, 0.5, -30),
-			Vector3.new(30, 0.5, -1200),
-			Vector3.new(-30, 0.5, 1200),
-			Vector3.new(1200, 0.5, 30),
-			Vector3.new(-1200, 0.5, -30),
-			Vector3.new(400, 0.5, -400),
-			Vector3.new(-400, 0.5, 400),
-			Vector3.new(400, 0.5, 400),
-			Vector3.new(-400, 0.5, -400),
-		}
+		local lightSpots = if full
+			then {
+				Vector3.new(30, 0.5, -600),
+				Vector3.new(-30, 0.5, 600),
+				Vector3.new(600, 0.5, 30),
+				Vector3.new(-600, 0.5, -30),
+				Vector3.new(30, 0.5, -1200),
+				Vector3.new(-30, 0.5, 1200),
+				Vector3.new(1200, 0.5, 30),
+				Vector3.new(-1200, 0.5, -30),
+				Vector3.new(400, 0.5, -400),
+				Vector3.new(-400, 0.5, 400),
+				Vector3.new(400, 0.5, 400),
+				Vector3.new(-400, 0.5, -400),
+			}
+			else {
+				Vector3.new(30, 0.5, -600),
+				Vector3.new(600, 0.5, 30),
+			}
 		for _, lp in ipairs(lightSpots) do
 			kitLightPole(f, lp)
 		end
-		-- Scattered decoy vehicles along roads
-		local decoys = {
-			{ Vector3.new(120, 0.5, -500), 5, "jeep" },
-			{ Vector3.new(500, 0.5, 120), 95, "jeep" },
-			{ Vector3.new(200, 0.5, -1100), 10, "tank" },
-			{ Vector3.new(1100, 0.5, 200), 100, "truck" },
-		}
-		for _, v in ipairs(decoys) do
-			kitVehicleSilhouette(f, v[1], v[2], v[3])
+		if full then
+			kitVehicleSilhouette(f, Vector3.new(120, 0.5, -500), 5, "jeep")
+			kitVehicleSilhouette(f, Vector3.new(500, 0.5, 120), 95, "jeep")
+			kitVehicleSilhouette(f, Vector3.new(200, 0.5, -1100), 10, "tank")
+			kitVehicleSilhouette(f, Vector3.new(1100, 0.5, 200), 100, "truck")
 		end
 	end
 
-	-- 11) Mid-ring bunker line (between plots and outer territories)
+	-- 11) Bunker line
 	do
 		local f = Instance.new("Folder")
 		f.Name = "BunkerLine"
 		f.Parent = dressing
-		local bunkers = {
-			{ Vector3.new(0, 0.5, -900), 0 },
-			{ Vector3.new(900, 0.5, 0), 90 },
-			{ Vector3.new(-450, 0.5, 900), 195 },
-		}
-		for i, b in ipairs(bunkers) do
+		local bunkers = if full
+			then {
+				{ Vector3.new(0, 0.5, -900), 0 },
+				{ Vector3.new(900, 0.5, 0), 90 },
+				{ Vector3.new(-450, 0.5, 900), 195 },
+			}
+			else {
+				{ Vector3.new(0, 0.5, -900), 0 },
+			}
+		for _, b in ipairs(bunkers) do
 			kitBunker(f, b[1], b[2])
-			kitSandbagLine(f, b[1] + Vector3.new(0, 0, if math.abs(b[2]) < 45 or math.abs(b[2] - 180) < 45 then -10 else 0), b[2], 4)
-			if i <= 4 then
-				kitWireFence(f, b[1] + Vector3.new(12, 0, 0), b[2] + 90, 2)
-			end
 		end
 	end
 
-	-- 12) Plot-ring perimeter sandbags (outside pads, not on upgrade slots)
+	-- 12) Plot-ring perimeter (Low: 3 edges)
 	do
 		local f = Instance.new("Folder")
 		f.Name = "PlotRingPerimeter"
 		f.Parent = dressing
-		-- Near each plot pad edge (PLOT_RING = 800, pad ~200)
-		local plotEdges = {
-			{ Vector3.new(-800, 0.5, -650), 0 }, -- Plot1 SW outer
-			{ Vector3.new(-800, 0.5, 650), 0 }, -- Plot2 NW
-			{ Vector3.new(0, 0.5, -950), 0 }, -- Plot3 S
-			{ Vector3.new(0, 0.5, 950), 180 }, -- Plot4 N
-			{ Vector3.new(800, 0.5, -650), 180 }, -- Plot5 SE
-			{ Vector3.new(800, 0.5, 650), 180 }, -- Plot6 NE
-		}
+		local plotEdges = if full
+			then {
+				{ Vector3.new(-800, 0.5, -650), 0 },
+				{ Vector3.new(-800, 0.5, 650), 0 },
+				{ Vector3.new(0, 0.5, -950), 0 },
+				{ Vector3.new(0, 0.5, 950), 180 },
+				{ Vector3.new(800, 0.5, -650), 180 },
+				{ Vector3.new(800, 0.5, 650), 180 },
+			}
+			else {
+				{ Vector3.new(-800, 0.5, -650), 0 },
+				{ Vector3.new(0, 0.5, -950), 0 },
+				{ Vector3.new(800, 0.5, 650), 180 },
+			}
 		for _, e in ipairs(plotEdges) do
-			kitSandbagLine(f, e[1], e[2], 4)
-			kitLightPole(f, e[1] + Vector3.new(15, 0, 8))
+			kitSandbagLine(f, e[1], e[2], if full then 4 else 2)
 		end
 	end
 
@@ -1322,9 +1332,10 @@ function MapDressing.Dress(root: Instance)
 	for _, d in ipairs(dressing:GetDescendants()) do
 		if d:IsA("BasePart") then
 			partCount += 1
+			d.CastShadow = false
 		end
 	end
-	print("[WAR EMPIRE] MapDressing complete: WorldDressing clusters under WarEmpireSetup (" .. tostring(partCount) .. " parts)")
+	print("[WAR EMPIRE] MapDressing complete: quality=" .. quality .. " parts=" .. tostring(partCount) .. " (CastShadow=false)")
 end
 
 return MapDressing

@@ -3,7 +3,9 @@
 	WAR EMPIRE — DesertFlora (procedural Part-kit vegetation)
 	Saguaro / Joshua / palm / barrel cactus / dry grass tufts.
 	Inspiration-only desert tycoon look — original Part kits, mobile-friendly counts.
-	Called from MapSetup.Run after MapDressing. CanCollide false on most flora.
+	Called from MapSetup.Run after MapDressing (deferred).
+	CanCollide false; CastShadow false on ALL flora (Studio/laptop perf).
+	Sparse mode default — ~70% fewer plants than prior dense pass.
 ]]
 
 local DesertFlora = {}
@@ -44,7 +46,7 @@ local function p(props: { [string]: any }): Part
 	part.CanCollide = if props.CanCollide ~= nil then props.CanCollide else false
 	part.CanQuery = false
 	part.CanTouch = false
-	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else true
+	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else false -- deco: never cast shadows (Studio perf)
 	if props.Name then
 		part.Name = props.Name
 	end
@@ -265,99 +267,83 @@ local function placeAt(folder: Folder, name: string, pos: Vector3, builder: (Fol
 	builder(cluster, pos, scale)
 end
 
-function DesertFlora.Dress(root: Instance)
+function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 	local flora = ensureFolder("DesertFlora", root)
+	local sparse = if opts and opts.Sparse ~= nil then opts.Sparse else true
 
-	-- Rim foothill belt — denser near mountain bases (inside Ground edge)
+	-- PERF: sparse by default. CastShadow=false on all flora parts (see p()).
+	local rimCount = if sparse then 6 else 12
 	local rimR = HALF - 180
-	local rimCount = 18
 	for i = 1, rimCount do
 		local ang = (i / rimCount) * math.pi * 2
 		local jitter = ((i * 37) % 50) - 25
 		local r = rimR + jitter
-		local x = math.cos(ang) * r
-		local z = math.sin(ang) * r
-		local pos = Vector3.new(x, GROUND_TOP_Y, z)
-		local kind = i % 5
+		local pos = Vector3.new(math.cos(ang) * r, GROUND_TOP_Y, math.sin(ang) * r)
+		local kind = i % 4
 		if kind == 0 then
-			placeAt(flora, "Saguaro_Rim_" .. i, pos, kitSaguaro, 0.85 + (i % 3) * 0.15)
+			placeAt(flora, "Saguaro_Rim_" .. i, pos, kitSaguaro, 0.9)
 		elseif kind == 1 then
-			placeAt(flora, "Joshua_Rim_" .. i, pos, kitJoshua, 0.9 + (i % 2) * 0.2)
+			placeAt(flora, "Joshua_Rim_" .. i, pos, kitJoshua, 0.95)
 		elseif kind == 2 then
-			placeAt(flora, "Palm_Rim_" .. i, pos, kitPalm, 0.75 + (i % 3) * 0.12)
-		elseif kind == 3 then
-			placeAt(flora, "Barrel_Rim_" .. i, pos, kitBarrel, 0.9 + (i % 2) * 0.2)
+			placeAt(flora, "Palm_Rim_" .. i, pos, kitPalm, 0.8)
 		else
-			local tuft = Instance.new("Folder")
-			tuft.Name = "Grass_Rim_" .. i
-			tuft.Parent = flora
-			kitGrassTuft(tuft, pos)
-			kitGrassTuft(tuft, pos + Vector3.new(3, 0, 2))
-		end
-		-- Occasional rock outcrop near rim
-		if i % 6 == 0 then
-			placeAt(flora, "Rock_Rim_" .. i, pos + Vector3.new(8, 0, -6), kitRockOutcrop, 0.8 + (i % 3) * 0.15)
+			placeAt(flora, "Barrel_Rim_" .. i, pos, kitBarrel, 0.95)
 		end
 	end
 
-	-- Sparse mid-map clusters (between plot ring ~800 and outer territories)
-	local midSpots = {
-		Vector3.new(350, GROUND_TOP_Y, 180),
-		Vector3.new(180, GROUND_TOP_Y, -480),
-		Vector3.new(620, GROUND_TOP_Y, -80),
-		Vector3.new(90, GROUND_TOP_Y, -720),
-		Vector3.new(480, GROUND_TOP_Y, 520),
-		Vector3.new(1100, GROUND_TOP_Y, 200),
-		Vector3.new(200, GROUND_TOP_Y, 1100),
-		Vector3.new(900, GROUND_TOP_Y, -900),
-		Vector3.new(1500, GROUND_TOP_Y, -400),
-		Vector3.new(400, GROUND_TOP_Y, 1500),
-	}
+	-- Mid-map: drastically cut (was 10 dual plants → 2–4 singles)
+	local midSpots = if sparse
+		then {
+			Vector3.new(480, GROUND_TOP_Y, 520),
+			Vector3.new(900, GROUND_TOP_Y, -900),
+		}
+		else {
+			Vector3.new(350, GROUND_TOP_Y, 180),
+			Vector3.new(180, GROUND_TOP_Y, -480),
+			Vector3.new(620, GROUND_TOP_Y, -80),
+			Vector3.new(480, GROUND_TOP_Y, 520),
+			Vector3.new(1100, GROUND_TOP_Y, 200),
+			Vector3.new(900, GROUND_TOP_Y, -900),
+		}
 	for i, pos in ipairs(midSpots) do
-		local kind = i % 4
-		if kind == 0 then
+		if i % 2 == 0 then
 			placeAt(flora, "Saguaro_Mid_" .. i, pos, kitSaguaro, 1.0)
-			placeAt(flora, "Barrel_Mid_" .. i, pos + Vector3.new(6, 0, 4), kitBarrel, 0.85)
-		elseif kind == 1 then
-			placeAt(flora, "Joshua_Mid_" .. i, pos, kitJoshua, 1.1)
+		else
+			placeAt(flora, "Palm_Mid_" .. i, pos, kitPalm, 0.95)
+		end
+		if not sparse and i == 1 then
+			placeAt(flora, "Rock_Mid_" .. i, pos + Vector3.new(10, 0, -8), kitRockOutcrop, 0.9)
 			local tuft = Instance.new("Folder")
 			tuft.Name = "Grass_Mid_" .. i
 			tuft.Parent = flora
-			kitGrassTuft(tuft, pos + Vector3.new(-4, 0, 3))
-		elseif kind == 2 then
-			placeAt(flora, "Palm_Mid_" .. i, pos, kitPalm, 0.95)
-			placeAt(flora, "Saguaro_MidB_" .. i, pos + Vector3.new(8, 0, -5), kitSaguaro, 0.7)
-		else
-			placeAt(flora, "Rock_Mid_" .. i, pos, kitRockOutcrop, 1.0)
-			placeAt(flora, "Barrel_MidB_" .. i, pos + Vector3.new(-5, 0, 6), kitBarrel, 1.0)
+			kitGrassTuft(tuft, pos + Vector3.new(-6, 0, 5))
 		end
 	end
 
-	-- Near plot pads (outside upgrade grids) — light desert dressing
-	local plotOffsets = {
-		Vector3.new(-800, GROUND_TOP_Y, -400),
-		Vector3.new(-800, GROUND_TOP_Y, 400),
-		Vector3.new(0, GROUND_TOP_Y, -1000),
-		Vector3.new(0, GROUND_TOP_Y, 1000),
-		Vector3.new(800, GROUND_TOP_Y, -400),
-		Vector3.new(800, GROUND_TOP_Y, 400),
-	}
+	-- Plot-adjacent flora: sparse = 2 palms only; full = 4
+	local plotOffsets = if sparse
+		then {
+			Vector3.new(-800, GROUND_TOP_Y, -400),
+			Vector3.new(800, GROUND_TOP_Y, 400),
+		}
+		else {
+			Vector3.new(-800, GROUND_TOP_Y, -400),
+			Vector3.new(-800, GROUND_TOP_Y, 400),
+			Vector3.new(800, GROUND_TOP_Y, -400),
+			Vector3.new(800, GROUND_TOP_Y, 400),
+		}
 	for i, pos in ipairs(plotOffsets) do
 		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
-		placeAt(flora, "Saguaro_Plot_" .. i, pos + Vector3.new(-105, 0, -35), kitSaguaro, 0.8)
-		local tuft = Instance.new("Folder")
-		tuft.Name = "Grass_Plot_" .. i
-		tuft.Parent = flora
-		kitGrassTuft(tuft, pos + Vector3.new(95, 0, -50))
 	end
 
 	local partCount = 0
 	for _, d in ipairs(flora:GetDescendants()) do
 		if d:IsA("BasePart") then
 			partCount += 1
+			d.CastShadow = false
 		end
 	end
-	print("[WAR EMPIRE] DesertFlora complete: " .. tostring(partCount) .. " flora parts under WarEmpireSetup.DesertFlora")
+	print("[WAR EMPIRE] DesertFlora complete: " .. tostring(partCount) .. " flora parts (sparse=" .. tostring(sparse) .. ", CastShadow=false)")
 end
 
 return DesertFlora

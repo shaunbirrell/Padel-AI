@@ -28,6 +28,20 @@ local DevConfig = {
 		-- DoubleCash = true,
 		-- DoubleXP = true,
 	} :: { [string]: boolean },
+
+	--[[ Studio / laptop PERF (phase-7)
+		StudioSkipWorldDressing = true → MapSetup skips MapDressing entirely in Studio
+		  (BIGGEST Play Solo win). Override: set Workspace attribute ForceDress=true
+		  OR StudioForceDress=true below, then resetmap / delete WarEmpireSetup + Play.
+		WorldDressQuality = "Low" when dressing does run (live or ForceDress): ~60–70% fewer clusters.
+		StudioSparseFlora = true → drastic DesertFlora cut in Studio.
+		MountainRingSegments = 14 (12–16 band); live can raise later.
+	]]
+	StudioSkipWorldDressing = true,
+	StudioForceDress = false,
+	WorldDressQuality = "Low", -- "Low" | "Full"
+	StudioSparseFlora = true,
+	MountainRingSegments = 14,
 }
 
 return DevConfig

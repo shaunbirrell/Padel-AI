@@ -8,11 +8,14 @@
 ]]
 
 local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 
 local MapDressing = require(script.Parent:WaitForChild("MapDressing"))
 local DesertFlora = require(script.Parent:WaitForChild("DesertFlora"))
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DevConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs"):WaitForChild("DevConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -143,6 +146,12 @@ local function part(props: { [string]: any })
 	end
 	if props.Parent ~= nil then
 		p.Parent = props.Parent
+	end
+	-- Deco/kits: shadows off by default (huge Studio GPU win). Opt-in via CastShadow=true.
+	if props.CastShadow ~= nil then
+		p.CastShadow = props.CastShadow
+	else
+		p.CastShadow = false
 	end
 
 	return p
@@ -684,7 +693,9 @@ local function buildMountainRing(root: Folder)
 
 	local half = GROUND_SIZE * 0.5
 	local ringR = half + 90
-	local segCount = 24
+	-- PERF: 12–16 segments (was 24). Studio laptops struggle with mesa*strata*cap parts.
+	local configured = tonumber(DevConfig.MountainRingSegments) or 14
+	local segCount = math.clamp(math.floor(configured), 12, 24)
 	local segArc = (math.pi * 2) / segCount
 	local segLen = ringR * segArc * 1.12
 
@@ -722,8 +733,8 @@ local function buildMountainRing(root: Folder)
 			Parent = folder,
 		})
 		ridge:SetAttribute("WE_Mountain", true)
-		-- Sedimentary striation bands (visual only)
-		if i % 2 == 0 then
+		-- Sedimentary striation bands (visual only) — every 3rd segment (perf)
+		if i % 3 == 0 then
 			local bandH = math.clamp(height * 0.12, 4, 10)
 			part({
 				Name = "Strata_" .. i,
@@ -737,8 +748,8 @@ local function buildMountainRing(root: Folder)
 				Parent = folder,
 			}):SetAttribute("WE_Mountain", true)
 		end
-		-- Flat mesa cap (butte top)
-		if i % 2 == 0 then
+		-- Flat mesa cap (butte top) — every 3rd segment (perf)
+		if i % 3 == 0 then
 			local tipH = 6 + (i % 5) * 2
 			part({
 				Name = "MesaCap_" .. i,
@@ -751,8 +762,8 @@ local function buildMountainRing(root: Folder)
 				Parent = folder,
 			}):SetAttribute("WE_Mountain", true)
 		end
-		-- Inner foothill shelf (sand) — collide continuity from berm
-		if i % 3 == 0 then
+		-- Inner foothill shelf (sand) — collide continuity from berm (sparser)
+		if i % 4 == 0 then
 			local footH = 12 + (i % 4) * 3
 			local footR = half + 35
 			local fx = math.cos(angle) * footR
@@ -771,7 +782,7 @@ local function buildMountainRing(root: Folder)
 	end
 
 	-- Mid-ground rocky outcrops just inside the ring (sandy floor props)
-	for oi = 1, 6 do
+	for oi = 1, 4 do
 		local ang = (oi / 12) * math.pi * 2 + 0.2
 		local orad = half - 220 - (oi % 4) * 40
 		local ox = math.cos(ang) * orad
@@ -790,15 +801,12 @@ local function buildMountainRing(root: Folder)
 	end
 
 	-- Corner massifs (extra bulk — flat-topped buttes)
+	-- Cardinal buttes only (was 8 incl. diagonals) — Studio collide/GPU win
 	local massifs = {
 		{ 0, -1, "N" },
 		{ 0, 1, "S" },
 		{ 1, 0, "E" },
 		{ -1, 0, "W" },
-		{ 0.7, -0.7, "NE" },
-		{ -0.7, -0.7, "NW" },
-		{ 0.7, 0.7, "SE" },
-		{ -0.7, 0.7, "SW" },
 	}
 	for mi, m in ipairs(massifs) do
 		local mx = m[1] * (half + 120)
@@ -814,17 +822,7 @@ local function buildMountainRing(root: Folder)
 			Anchored = true,
 			Parent = folder,
 		}):SetAttribute("WE_Mountain", true)
-		-- Flat cap
-		part({
-			Name = "ButteCap_" .. m[3],
-			Size = Vector3.new(120, 8, 120),
-			Position = Vector3.new(mx, GROUND_TOP_Y + mh + 2, mz),
-			Color = strataLight,
-			Material = Enum.Material.Sandstone,
-			CanCollide = false,
-			Anchored = true,
-			Parent = folder,
-		}):SetAttribute("WE_Mountain", true)
+		-- Flat caps omitted for perf (mesa segments already have caps)
 	end
 
 	print("[WAR EMPIRE] MapSetup: MountainRing mesas=" .. tostring(segCount) .. " + buttes/outcrops (desert terracotta)")
@@ -835,13 +833,7 @@ local function buildVisualFillPatches(mapFolder: Folder)
 	local patches = {
 		Vector3.new(400, GROUND_TOP_Y + 0.08, 200),
 		Vector3.new(-350, GROUND_TOP_Y + 0.08, -250),
-		Vector3.new(200, GROUND_TOP_Y + 0.08, -450),
-		Vector3.new(-500, GROUND_TOP_Y + 0.08, 350),
 		Vector3.new(600, GROUND_TOP_Y + 0.08, -100),
-		Vector3.new(-150, GROUND_TOP_Y + 0.08, 550),
-		Vector3.new(100, GROUND_TOP_Y + 0.08, -700),
-		Vector3.new(-650, GROUND_TOP_Y + 0.08, -50),
-		Vector3.new(450, GROUND_TOP_Y + 0.08, 500),
 		Vector3.new(-400, GROUND_TOP_Y + 0.08, -550),
 	}
 	for i, pos in ipairs(patches) do
@@ -1886,19 +1878,39 @@ function MapSetup.Run()
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
 
-	-- Military world dressing (visual only — outposts/bunkers/hangars/depots/camps)
-	-- Does not tag WE_UpgradeSlot / buy pads. Regenerate via resetmap or delete WarEmpireSetup.
-	-- Defer heavy world dressing to after first frame so Play Solo is usable in seconds
+	-- Military world dressing (visual only). Does not tag WE_UpgradeSlot / buy pads.
+	-- PERF: skip MapDressing entirely in Studio unless ForceDress (attribute or DevConfig).
+	-- Stagger after first frame so Play Solo is usable in seconds on laptop CPUs.
 	task.defer(function()
-		local okDress, errDress = pcall(function()
-			MapDressing.Dress(root)
-		end)
-		if not okDress then
-			warn("[WAR EMPIRE] MapDressing failed:", errDress)
+		task.wait() -- yield past first frame
+		local forceAttr = root:GetAttribute("ForceDress") == true
+			or (Workspace:GetAttribute("ForceDress") == true)
+		local forceDress = forceAttr or (DevConfig.StudioForceDress == true)
+		local inStudio = RunService:IsStudio()
+		local skipDress = inStudio and (DevConfig.StudioSkipWorldDressing ~= false) and not forceDress
+		local quality = tostring(DevConfig.WorldDressQuality or "Low")
+
+		print("[WAR EMPIRE] PERF note: deco kits use CastShadow=false. Studio Rendering → disable shadows / lower quality if still slow.")
+		if skipDress then
+			print("[WAR EMPIRE] PERF: MapDressing SKIPPED in Studio (StudioSkipWorldDressing). Set Workspace.WarEmpireSetup.ForceDress=true or DevConfig.StudioForceDress=true then resetmap to load dressing.")
+		else
+			task.wait(0.05)
+			local okDress, errDress = pcall(function()
+				MapDressing.Dress(root, { Quality = quality })
+			end)
+			if not okDress then
+				warn("[WAR EMPIRE] MapDressing failed:", errDress)
+			end
 		end
-		task.wait(0.05)
+
+		task.wait(0.1)
+		-- Sparse flora by default (Studio + Low). Full flora only when WorldDressQuality=Full outside Studio,
+		-- or StudioSparseFlora=false for intentional dense Studio art checks.
+		local wantFullFlora = ((not inStudio) and string.lower(tostring(DevConfig.WorldDressQuality or "Low")) == "full")
+			or (inStudio and DevConfig.StudioSparseFlora == false)
+		local sparseFlora = not wantFullFlora
 		local okFlora, errFlora = pcall(function()
-			DesertFlora.Dress(root)
+			DesertFlora.Dress(root, { Sparse = sparseFlora })
 		end)
 		if not okFlora then
 			warn("[WAR EMPIRE] DesertFlora failed:", errFlora)
@@ -1929,7 +1941,7 @@ function MapSetup.Run()
 	end
 
 		buildPadSupportShelves(root)
-	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas/flora/oil-ramps/berms + WorldDressing")
+	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas=" .. tostring(DevConfig.MountainRingSegments or 14) .. " (dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end
