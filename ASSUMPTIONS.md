@@ -104,3 +104,10 @@ Reversible engineering decisions made while implementing the MVP without blockin
 51. **Studio smoke** — `tools/SmokeTest.luau` is command-bar pasteable in Play Solo. Validates remotes/configs/services; may invoke `GetPlayerState`; admin probe fires a no-op `__smoke_ping__` only when LocalPlayer is in AdminConfig — never grants cash/gold/XP.
 
 52. **Garage empty states** — `VehicleController` uses `UIUtil.EmptyState` when the vehicle catalog is empty or the player owns nothing yet (clear copy + BUY hint). Screen uses `UIUtil.PrepareScreen` / MobileScale consistent with Army/Shop/Missions.
+
+53. **World prompts** — Client `WorldPromptController` attaches ProximityPrompts to `WE_BasePlot` / `WE_UpgradeSlot` / `WE_CaptureZone` / `WE_VehicleSpawn` / `WE_TutorialMarker` after load. Base/Garage prompts only open client UI (`BaseController.Open` / `VehicleController.Open`); purchases stay server-validated via existing remotes. Capture prompt pings `RequestCaptureTerritory` and shows a toast — stand-in-zone server tick remains authoritative.
+
+54. **Base upgrade UX** — **B** / big bottom **Base Upgrades** button only toggles the panel (respects chat `gameProcessed`). Purchase requires tapping **BUY $price** / **UP $price** on a row (Command Center first, gold-highlighted at L0). First-join toasts clarify pads are markers, not buttons. Session-once client hints (no DataStore).
+
+55. **StudioSetup visuals** — Placeholders use Grass ground, Concrete/Metal pads, neon accent edges, readable BillboardGui + backdrop, spawn beacons. Safe re-run clears `WarEmpireSetup`. Still placeholders pending art.
+

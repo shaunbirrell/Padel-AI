@@ -305,6 +305,22 @@ local function buildGui()
 	end)
 end
 
+function VehicleController.Open()
+	setOpen(true)
+end
+
+function VehicleController.Close()
+	setOpen(false)
+end
+
+function VehicleController.Toggle()
+	setOpen(not isOpen)
+end
+
+function VehicleController.IsOpen(): boolean
+	return isOpen
+end
+
 function VehicleController.Init()
 	buildGui()
 

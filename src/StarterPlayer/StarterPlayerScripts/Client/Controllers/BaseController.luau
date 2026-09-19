@@ -1,8 +1,12 @@
 --!strict
---[[ Upgrade menu UI → RequestPurchaseUpgrade remote ]]
+--[[ Upgrade menu UI → RequestPurchaseUpgrade remote.
+	B toggles the panel (respects gameProcessed / chat). Purchases happen only
+	after opening the menu and tapping BUY $price — pads are markers, not buy buttons.
+]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -11,6 +15,8 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
+
+local NotificationController = require(script.Parent.NotificationController)
 
 local BaseController = {}
 
@@ -21,6 +27,7 @@ local menuOpen = false
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
 local toggleBtn: TextButton? = nil
+local hintShown = false
 
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
@@ -62,10 +69,18 @@ local function refreshList()
 			row.Parent = listFrame
 			corner(row, 6)
 
+			-- Highlight first purchasable row (Command Center) when still L0
+			if structureId == "CommandCenter" and level == 0 then
+				local stroke = Instance.new("UIStroke")
+				stroke.Color = Constants.Colors.Gold
+				stroke.Thickness = 2
+				stroke.Parent = row
+			end
+
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
 			title.Position = UDim2.fromOffset(8, 4)
-			title.Size = UDim2.new(1, -100, 0, 22)
+			title.Size = UDim2.new(1, -110, 0, 22)
 			title.Font = Enum.Font.GothamBold
 			title.TextSize = 14
 			title.TextXAlignment = Enum.TextXAlignment.Left
@@ -76,7 +91,7 @@ local function refreshList()
 			local desc = Instance.new("TextLabel")
 			desc.BackgroundTransparency = 1
 			desc.Position = UDim2.fromOffset(8, 28)
-			desc.Size = UDim2.new(1, -100, 0, 20)
+			desc.Size = UDim2.new(1, -110, 0, 20)
 			desc.Font = Enum.Font.Gotham
 			desc.TextSize = 11
 			desc.TextXAlignment = Enum.TextXAlignment.Left
@@ -88,7 +103,7 @@ local function refreshList()
 			local btn = Instance.new("TextButton")
 			btn.AnchorPoint = Vector2.new(1, 0.5)
 			btn.Position = UDim2.new(1, -8, 0.5, 0)
-			btn.Size = UDim2.fromOffset(88, 36)
+			btn.Size = UDim2.fromOffset(96, 36)
 			btn.Font = Enum.Font.GothamBold
 			btn.TextSize = 12
 			btn.TextColor3 = Constants.Colors.Text
@@ -101,7 +116,12 @@ local function refreshList()
 				btn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
 				btn.Active = false
 			else
-				btn.Text = "$" .. tostring(cost)
+				-- Clear BUY path — not instant on B; tap this button to purchase.
+				if level == 0 then
+					btn.Text = "BUY $" .. tostring(cost)
+				else
+					btn.Text = "UP $" .. tostring(cost)
+				end
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.MouseButton1Click:Connect(function()
@@ -129,32 +149,98 @@ local function setOpen(open: boolean)
 		end
 	end
 	if toggleBtn then
-		toggleBtn.Text = if open then "Close Base" else "Base Upgrades"
+		toggleBtn.Text = if open then "Close Base" else "Base Upgrades  [B]"
 	end
 	if open then
 		refreshList()
 	end
 end
 
+local function flashToggle()
+	if not toggleBtn then
+		return
+	end
+	local btn = toggleBtn
+	local baseColor = Constants.Colors.Accent
+	btn.BackgroundColor3 = Constants.Colors.Gold
+	local tw = TweenService:Create(
+		btn,
+		TweenInfo.new(0.55, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 5, true),
+		{ BackgroundColor3 = baseColor }
+	)
+	tw:Play()
+	task.delay(6, function()
+		if toggleBtn == btn then
+			tw:Cancel()
+			btn.BackgroundColor3 = Constants.Colors.Accent
+		end
+	end)
+end
+
+local function showFirstJoinHints()
+	if hintShown then
+		return
+	end
+	hintShown = true
+	task.delay(1.2, function()
+		NotificationController.Show(
+			"Press B or tap Base Upgrades — then tap the $ price to buy",
+			"Info",
+			5
+		)
+	end)
+	task.delay(6.5, function()
+		NotificationController.Show(
+			"Pads are markers, not buttons — walk near them and press E, or use B / Base Upgrades",
+			"Warn",
+			5
+		)
+	end)
+	flashToggle()
+end
+
+function BaseController.Open()
+	setOpen(true)
+end
+
+function BaseController.Close()
+	setOpen(false)
+end
+
+function BaseController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function BaseController.IsOpen(): boolean
+	return menuOpen
+end
+
 function BaseController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireBaseUI"
+	gui.DisplayOrder = 15
 	gui.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(gui, false)
 	screenGui = gui
 
+	-- Big, obvious bottom CTA — purchases still require opening panel + BUY tap.
 	local btn = Instance.new("TextButton")
 	btn.Name = "ToggleUpgrades"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -24)
-	btn.Size = UDim2.fromOffset(160, 40)
-	btn.BackgroundColor3 = Constants.Colors.Panel
+	btn.Position = UDim2.new(0.5, 0, 1, -28)
+	btn.Size = UDim2.fromOffset(240, 56)
+	btn.BackgroundColor3 = Constants.Colors.Accent
 	btn.TextColor3 = Constants.Colors.Text
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 16
-	btn.Text = "Base Upgrades"
+	btn.TextSize = 18
+	btn.Text = "Base Upgrades  [B]"
 	btn.BorderSizePixel = 0
-	corner(btn, 8)
+	btn.ZIndex = 5
+	corner(btn, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Constants.Colors.Gold
+	stroke.Thickness = 2
+	stroke.Parent = btn
 	btn.Parent = gui
 	toggleBtn = btn
 	btn.MouseButton1Click:Connect(function()
@@ -165,7 +251,7 @@ function BaseController.Init()
 	panel.Name = "UpgradePanel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.48)
-	panel.Size = UDim2.fromOffset(420, 420)
+	panel.Size = UDim2.fromOffset(440, 440)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
@@ -184,10 +270,21 @@ function BaseController.Init()
 	title.Text = "BASE UPGRADES"
 	title.Parent = panel
 
+	local sub = Instance.new("TextLabel")
+	sub.BackgroundTransparency = 1
+	sub.Position = UDim2.fromOffset(14, 36)
+	sub.Size = UDim2.new(1, -28, 0, 18)
+	sub.Font = Enum.Font.Gotham
+	sub.TextSize = 12
+	sub.TextColor3 = Constants.Colors.Muted
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+	sub.Text = "Tap BUY $price on a row to purchase (B only opens this menu)"
+	sub.Parent = panel
+
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "List"
-	scroll.Position = UDim2.fromOffset(10, 48)
-	scroll.Size = UDim2.new(1, -20, 1, -58)
+	scroll.Position = UDim2.fromOffset(10, 58)
+	scroll.Size = UDim2.new(1, -20, 1, -68)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 4
@@ -217,6 +314,7 @@ function BaseController.Init()
 	end)
 
 	UserInputService.InputBegan:Connect(function(input, gp)
+		-- Respect chat / processed UI (gp true while typing in chat).
 		if gp then
 			return
 		end
@@ -224,6 +322,8 @@ function BaseController.Init()
 			setOpen(not menuOpen)
 		end
 	end)
+
+	showFirstJoinHints()
 end
 
 return BaseController
