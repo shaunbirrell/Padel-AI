@@ -137,108 +137,272 @@ local function findSpawnCFrame(player: Player): CFrame
 	return CFrame.new(0, 5, 0)
 end
 
+local function weldTo(body: BasePart, other: BasePart)
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = body
+	w.Part1 = other
+	w.Parent = body
+end
+
+local function addPart(
+	model: Model,
+	body: BasePart,
+	name: string,
+	size: Vector3,
+	offset: CFrame,
+	color: Color3,
+	material: Enum.Material?,
+	shape: Enum.PartType?,
+	collide: boolean?
+): BasePart
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.Color = color
+	p.Material = material or Enum.Material.Metal
+	p.CFrame = body.CFrame * offset
+	p.Anchored = false
+	p.CanCollide = if collide == nil then false else collide
+	p.Massless = true
+	if shape then
+		p.Shape = shape
+	end
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = model
+	weldTo(body, p)
+	return p
+end
+
+local function addWheels(model: Model, body: BasePart, scale: number, positions: { Vector3 }, radius: number?)
+	local r = radius or 1.1
+	for i, offset in ipairs(positions) do
+		local wheel = Instance.new("Part")
+		wheel.Name = "Wheel" .. i
+		wheel.Shape = Enum.PartType.Cylinder
+		wheel.Size = Vector3.new(r * 0.9, r * 1.8 * scale, r * 1.8 * scale)
+		wheel.Color = Color3.fromRGB(22, 22, 24)
+		wheel.Material = Enum.Material.SmoothPlastic
+		wheel.CFrame = body.CFrame * CFrame.new(offset * scale) * CFrame.Angles(0, 0, math.rad(90))
+		wheel.Anchored = false
+		wheel.CanCollide = true
+		wheel.Massless = false
+		wheel.Parent = model
+		weldTo(body, wheel)
+	end
+end
+
+local function addLabel(parent: BasePart, text: string, y: number)
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "VehicleLabel"
+	billboard.Size = UDim2.fromOffset(150, 36)
+	billboard.StudsOffset = Vector3.new(0, y, 0)
+	billboard.AlwaysOnTop = true
+	billboard.MaxDistance = 160
+	billboard.Parent = parent
+	local backdrop = Instance.new("Frame")
+	backdrop.Size = UDim2.fromScale(1, 1)
+	backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 16)
+	backdrop.BackgroundTransparency = 0.25
+	backdrop.BorderSizePixel = 0
+	backdrop.Parent = billboard
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 5)
+	c.Parent = backdrop
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(230, 190, 60)
+	stroke.Thickness = 1
+	stroke.Transparency = 0.35
+	stroke.Parent = backdrop
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.TextColor3 = Color3.fromRGB(235, 238, 242)
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.Text = text
+	label.Parent = backdrop
+end
+
 local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: number): Model
 	local model = Instance.new("Model")
 	model.Name = def.DisplayName
 	model:SetAttribute("VehicleId", def.Id)
 	model:SetAttribute("OwnerUserId", ownerUserId)
 
-	local scale = ({
-		Common = 1.0,
-		Uncommon = 1.1,
-		Rare = 1.25,
-		Epic = 1.4,
-		Legendary = 1.55,
-	})[def.Rarity] or 1.0
+	local id = def.Id
+	local olive = Color3.fromRGB(55, 70, 48)
+	local oliveDark = Color3.fromRGB(40, 50, 38)
+	local armor = Color3.fromRGB(62, 68, 55)
+	local armorDark = Color3.fromRGB(45, 50, 42)
+	local sand = Color3.fromRGB(110, 100, 70)
+	local accent = Color3.fromRGB(230, 190, 60)
+	local blueAcc = Color3.fromRGB(90, 160, 220)
+	local redAcc = Color3.fromRGB(200, 80, 60)
+	local sky = Color3.fromRGB(70, 90, 110)
 
 	local body = Instance.new("Part")
 	body.Name = "Chassis"
-	body.Size = Vector3.new(6 * scale, 2, 10 * scale)
-	body.Color = Color3.fromRGB(55, 70, 50)
-	body.Material = Enum.Material.Metal
-	body.CFrame = at
 	body.Anchored = false
 	body.CanCollide = true
+	body.Material = Enum.Material.Metal
+	body.TopSurface = Enum.SurfaceType.Smooth
+	body.BottomSurface = Enum.SurfaceType.Smooth
+	body.CFrame = at
 	body.Parent = model
 
-	local cabin = Instance.new("Part")
-	cabin.Name = "Cabin"
-	cabin.Size = Vector3.new(4 * scale, 1.5, 4)
-	cabin.Color = Color3.fromRGB(40, 50, 40)
-	cabin.Material = Enum.Material.SmoothPlastic
-	cabin.CFrame = at * CFrame.new(0, 1.75, -1)
-	cabin.CanCollide = true
-	cabin.Parent = model
+	local seatOffset = CFrame.new(0, 2.0, -0.5)
+	local labelY = 4.5
 
-	local weldCabin = Instance.new("WeldConstraint")
-	weldCabin.Part0 = body
-	weldCabin.Part1 = cabin
-	weldCabin.Parent = body
-
-	for _, offset in ipairs({
-		Vector3.new(-2.5, -1.2, 3),
-		Vector3.new(2.5, -1.2, 3),
-		Vector3.new(-2.5, -1.2, -3),
-		Vector3.new(2.5, -1.2, -3),
-	}) do
-		local wheel = Instance.new("Part")
-		wheel.Name = "Wheel"
-		wheel.Shape = Enum.PartType.Cylinder
-		wheel.Size = Vector3.new(1.2, 2.2, 2.2)
-		wheel.Color = Color3.fromRGB(25, 25, 25)
-		wheel.CFrame = at * CFrame.new(offset) * CFrame.Angles(0, 0, math.rad(90))
-		wheel.CanCollide = true
-		wheel.Parent = model
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = body
-		w.Part1 = wheel
-		w.Parent = body
+	if id == "MilitaryJeep" or id == "ArmedJeep" then
+		local armed = id == "ArmedJeep"
+		body.Size = Vector3.new(5.2, 1.6, 8.5)
+		body.Color = if armed then Color3.fromRGB(48, 58, 42) else olive
+		addPart(model, body, "Hood", Vector3.new(4.6, 0.7, 2.8), CFrame.new(0, 0.9, -2.6), oliveDark, Enum.Material.Metal, nil, false)
+		addPart(model, body, "Cabin", Vector3.new(4.4, 1.4, 2.8), CFrame.new(0, 1.3, 0.2), oliveDark, Enum.Material.SmoothPlastic, nil, true)
+		addPart(model, body, "Bed", Vector3.new(4.4, 0.9, 2.6), CFrame.new(0, 0.7, 2.6), olive, Enum.Material.Metal, nil, false)
+		addPart(model, body, "Bumper", Vector3.new(5.0, 0.5, 0.4), CFrame.new(0, -0.3, -4.3), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
+		addPart(model, body, "AccentStrip", Vector3.new(4.8, 0.12, 0.35), CFrame.new(0, 1.1, -1.2), if armed then redAcc else accent, Enum.Material.Neon, nil, false)
+		if armed then
+			addPart(model, body, "GunMount", Vector3.new(0.8, 0.8, 0.8), CFrame.new(0, 2.2, 0.4), Color3.fromRGB(35, 35, 35), Enum.Material.Metal, nil, false)
+			addPart(model, body, "Barrel", Vector3.new(0.25, 0.25, 2.4), CFrame.new(0, 2.5, -1.0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, false)
+		end
+		addWheels(model, body, 1, {
+			Vector3.new(-2.4, -0.9, 2.8),
+			Vector3.new(2.4, -0.9, 2.8),
+			Vector3.new(-2.4, -0.9, -2.8),
+			Vector3.new(2.4, -0.9, -2.8),
+		}, 1.05)
+		seatOffset = CFrame.new(0, 1.9, 0.1)
+		labelY = 4.2
+	elseif id == "ArmoredTruck" then
+		body.Size = Vector3.new(6.2, 2.4, 11)
+		body.Color = armor
+		addPart(model, body, "Cabin", Vector3.new(5.6, 2.0, 3.2), CFrame.new(0, 1.6, -3.2), armorDark, Enum.Material.Metal, nil, true)
+		addPart(model, body, "Cargo", Vector3.new(5.8, 2.6, 6.5), CFrame.new(0, 1.4, 2.0), sand, Enum.Material.Metal, nil, true)
+		addPart(model, body, "Accent", Vector3.new(5.9, 0.15, 0.4), CFrame.new(0, 2.5, -2.0), accent, Enum.Material.Neon, nil, false)
+		addWheels(model, body, 1.15, {
+			Vector3.new(-2.8, -1.2, 3.5),
+			Vector3.new(2.8, -1.2, 3.5),
+			Vector3.new(-2.8, -1.2, 0),
+			Vector3.new(2.8, -1.2, 0),
+			Vector3.new(-2.8, -1.2, -3.5),
+			Vector3.new(2.8, -1.2, -3.5),
+		}, 1.2)
+		seatOffset = CFrame.new(0, 2.4, -3.0)
+		labelY = 5.5
+	elseif id == "APC" then
+		body.Size = Vector3.new(6.5, 2.6, 10.5)
+		body.Color = armorDark
+		addPart(model, body, "HullTop", Vector3.new(5.8, 1.4, 8.5), CFrame.new(0, 1.8, 0), armor, Enum.Material.Metal, nil, true)
+		addPart(model, body, "Turret", Vector3.new(2.4, 1.2, 2.4), CFrame.new(0, 3.0, 0.5), Color3.fromRGB(50, 55, 48), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Barrel", Vector3.new(0.35, 0.35, 3.2), CFrame.new(0, 3.1, -2.0), Color3.fromRGB(35, 35, 35), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(6.0, 0.12, 0.35), CFrame.new(0, 2.6, -3), blueAcc, Enum.Material.Neon, nil, false)
+		addWheels(model, body, 1.2, {
+			Vector3.new(-3.0, -1.3, 3.2),
+			Vector3.new(3.0, -1.3, 3.2),
+			Vector3.new(-3.0, -1.3, 0.5),
+			Vector3.new(3.0, -1.3, 0.5),
+			Vector3.new(-3.0, -1.3, -2.5),
+			Vector3.new(3.0, -1.3, -2.5),
+		}, 1.25)
+		seatOffset = CFrame.new(0, 2.2, -2.5)
+		labelY = 5.8
+	elseif id == "LightTank" or id == "HeavyTank" then
+		local heavy = id == "HeavyTank"
+		local s = if heavy then 1.25 else 1.0
+		body.Size = Vector3.new(6.5 * s, 2.2 * s, 9.5 * s)
+		body.Color = if heavy then Color3.fromRGB(50, 55, 45) else armor
+		addPart(model, body, "TrackL", Vector3.new(1.2 * s, 1.6 * s, 9 * s), CFrame.new(-3.2 * s, -0.4, 0), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil, true)
+		addPart(model, body, "TrackR", Vector3.new(1.2 * s, 1.6 * s, 9 * s), CFrame.new(3.2 * s, -0.4, 0), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Turret", Vector3.new(3.6 * s, 1.6 * s, 4.2 * s), CFrame.new(0, 2.0 * s, 0.3), armorDark, Enum.Material.Metal, nil, true)
+		addPart(model, body, "Barrel", Vector3.new(0.45 * s, 0.45 * s, (if heavy then 6.5 else 5) * s), CFrame.new(0, 2.1 * s, -4.2 * s), Color3.fromRGB(35, 35, 35), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(3.2 * s, 0.12, 0.3), CFrame.new(0, 2.9 * s, 1.2), if heavy then redAcc else accent, Enum.Material.Neon, nil, false)
+		-- Road wheels (visual)
+		for i, z in ipairs({ 3.2, 1.0, -1.2, -3.2 }) do
+			addPart(model, body, "RoadL" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(-3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
+			addPart(model, body, "RoadR" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
+		end
+		seatOffset = CFrame.new(0, 2.6 * s, 0.2)
+		labelY = 5.5 * s
+	elseif id == "AttackHelicopter" then
+		body.Size = Vector3.new(3.2, 2.0, 10)
+		body.Color = sky
+		addPart(model, body, "Cockpit", Vector3.new(2.6, 1.6, 3.2), CFrame.new(0, 0.6, -3.2), Color3.fromRGB(40, 55, 70), Enum.Material.Glass, nil, true)
+		addPart(model, body, "Tail", Vector3.new(1.0, 1.0, 6), CFrame.new(0, 0.8, 6.5), sky, Enum.Material.Metal, nil, false)
+		addPart(model, body, "TailFin", Vector3.new(0.3, 2.4, 1.6), CFrame.new(0, 2.0, 9.0), Color3.fromRGB(50, 65, 80), Enum.Material.Metal, nil, false)
+		addPart(model, body, "RotorHub", Vector3.new(1.2, 0.6, 1.2), CFrame.new(0, 2.0, -0.5), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
+		addPart(model, body, "RotorA", Vector3.new(14, 0.15, 0.6), CFrame.new(0, 2.35, -0.5), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil, false)
+		addPart(model, body, "RotorB", Vector3.new(0.6, 0.15, 14), CFrame.new(0, 2.4, -0.5), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil, false)
+		addPart(model, body, "SkidL", Vector3.new(0.25, 0.25, 7), CFrame.new(-1.6, -1.3, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
+		addPart(model, body, "SkidR", Vector3.new(0.25, 0.25, 7), CFrame.new(1.6, -1.3, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
+		addPart(model, body, "Accent", Vector3.new(2.8, 0.12, 0.35), CFrame.new(0, 1.2, -1), redAcc, Enum.Material.Neon, nil, false)
+		addPart(model, body, "StubWingL", Vector3.new(3.5, 0.25, 1.2), CFrame.new(-2.5, 0, 0.5), Color3.fromRGB(55, 70, 85), Enum.Material.Metal, nil, false)
+		addPart(model, body, "StubWingR", Vector3.new(3.5, 0.25, 1.2), CFrame.new(2.5, 0, 0.5), Color3.fromRGB(55, 70, 85), Enum.Material.Metal, nil, false)
+		seatOffset = CFrame.new(0, 1.2, -2.8)
+		labelY = 5.5
+	elseif id == "FighterJet" then
+		body.Size = Vector3.new(2.4, 1.4, 12)
+		body.Color = Color3.fromRGB(90, 95, 100)
+		addPart(model, body, "Nose", Vector3.new(1.4, 1.0, 3.5), CFrame.new(0, 0.1, -6.5), Color3.fromRGB(70, 75, 80), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Cockpit", Vector3.new(1.6, 0.9, 2.2), CFrame.new(0, 0.9, -3.5), Color3.fromRGB(40, 80, 120), Enum.Material.Glass, nil, false)
+		addPart(model, body, "WingL", Vector3.new(7, 0.25, 2.8), CFrame.new(-4.0, 0, 0.5), Color3.fromRGB(80, 85, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "WingR", Vector3.new(7, 0.25, 2.8), CFrame.new(4.0, 0, 0.5), Color3.fromRGB(80, 85, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "TailFin", Vector3.new(0.25, 2.8, 2.0), CFrame.new(0, 1.8, 5.0), Color3.fromRGB(85, 90, 95), Enum.Material.Metal, nil, false)
+		addPart(model, body, "StabL", Vector3.new(2.5, 0.2, 1.2), CFrame.new(-1.5, 0.8, 5.0), Color3.fromRGB(80, 85, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "StabR", Vector3.new(2.5, 0.2, 1.2), CFrame.new(1.5, 0.8, 5.0), Color3.fromRGB(80, 85, 90), Enum.Material.Metal, nil, false)
+		addPart(model, body, "IntakeL", Vector3.new(0.9, 0.9, 2.5), CFrame.new(-1.3, -0.2, 1.5), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, false)
+		addPart(model, body, "IntakeR", Vector3.new(0.9, 0.9, 2.5), CFrame.new(1.3, -0.2, 1.5), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, false)
+		addPart(model, body, "Accent", Vector3.new(2.0, 0.1, 0.3), CFrame.new(0, 0.8, -1), accent, Enum.Material.Neon, nil, false)
+		-- Landing gear dots
+		addPart(model, body, "GearF", Vector3.new(0.3, 0.8, 0.3), CFrame.new(0, -1.0, -4), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
+		addPart(model, body, "GearL", Vector3.new(0.3, 0.8, 0.3), CFrame.new(-1.5, -1.0, 1), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
+		addPart(model, body, "GearR", Vector3.new(0.3, 0.8, 0.3), CFrame.new(1.5, -1.0, 1), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
+		seatOffset = CFrame.new(0, 1.3, -3.2)
+		labelY = 4.8
+	else
+		-- Fallback generic
+		body.Size = Vector3.new(6, 2, 10)
+		body.Color = olive
+		addPart(model, body, "Cabin", Vector3.new(4, 1.5, 4), CFrame.new(0, 1.5, -1), oliveDark, Enum.Material.SmoothPlastic, nil, true)
+		addWheels(model, body, 1, {
+			Vector3.new(-2.5, -1.2, 3),
+			Vector3.new(2.5, -1.2, 3),
+			Vector3.new(-2.5, -1.2, -3),
+			Vector3.new(2.5, -1.2, -3),
+		}, 1.1)
+		seatOffset = CFrame.new(0, 2.0, -1)
 	end
 
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "DriverSeat"
-	seat.Size = Vector3.new(2, 1, 2)
-	seat.Color = Color3.fromRGB(80, 90, 70)
-	seat.CFrame = at * CFrame.new(0, 2.2, -1)
+	seat.Size = Vector3.new(2, 0.8, 2)
+	seat.Color = Color3.fromRGB(70, 80, 60)
+	seat.Material = Enum.Material.SmoothPlastic
+	seat.CFrame = body.CFrame * seatOffset
+	seat.Anchored = false
+	seat.CanCollide = true
 	seat.HeadsUpDisplay = false
 	seat.MaxSpeed = def.Speed
-	seat.Torque = 20
-	seat.TurnSpeed = 2
+	seat.Torque = 22
+	seat.TurnSpeed = 2.2
 	seat.Parent = model
-
-	local weldSeat = Instance.new("WeldConstraint")
-	weldSeat.Part0 = body
-	weldSeat.Part1 = seat
-	weldSeat.Parent = body
+	weldTo(body, seat)
 
 	local extra = math.max(0, (def.Seats or 1) - 1)
-	for i = 1, math.min(extra, 3) do
+	for i = 1, math.min(extra, 4) do
 		local ps = Instance.new("Seat")
 		ps.Name = "PassengerSeat" .. i
-		ps.Size = Vector3.new(1.5, 0.6, 1.5)
-		ps.Color = Color3.fromRGB(70, 80, 60)
-		ps.CFrame = at * CFrame.new((i - 2) * 1.6, 2.0, 1.5)
+		ps.Size = Vector3.new(1.4, 0.5, 1.4)
+		ps.Color = Color3.fromRGB(60, 70, 55)
+		ps.CFrame = body.CFrame * CFrame.new((i % 2 == 0 and 1.4 or -1.4), seatOffset.Y, seatOffset.Z + 1.4 + math.floor((i - 1) / 2) * 1.5)
+		ps.Anchored = false
+		ps.CanCollide = true
 		ps.Parent = model
-		local ww = Instance.new("WeldConstraint")
-		ww.Part0 = body
-		ww.Part1 = ps
-		ww.Parent = body
+		weldTo(body, ps)
 	end
 
-	local billboard = Instance.new("BillboardGui")
-	billboard.Size = UDim2.fromOffset(140, 36)
-	billboard.StudsOffset = Vector3.new(0, 4, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = cabin
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 0.35
-	label.BackgroundColor3 = Color3.fromRGB(20, 24, 20)
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.Text = def.DisplayName
-	label.Parent = billboard
+	addLabel(body, def.DisplayName, labelY)
 
 	model.PrimaryPart = body
 	CollectionService:AddTag(model, Constants.Tags.Vehicle)

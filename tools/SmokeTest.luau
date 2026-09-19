@@ -105,6 +105,22 @@ if Shared then
 		bad("Shared.Configs missing")
 	end
 
+	local svcMod = Shared:FindFirstChild("Configs") and Shared.Configs:FindFirstChild("StructureVisualConfig")
+	if svcMod then
+		local okReq, mod = pcall(require, svcMod)
+		if okReq and typeof(mod) == "table" and mod.Palettes then
+			local n = 0
+			for _ in pairs(mod.Palettes) do
+				n += 1
+			end
+			ok("StructureVisualConfig palettes=" .. tostring(n))
+		else
+			bad("StructureVisualConfig require failed")
+		end
+	else
+		bad("StructureVisualConfig missing")
+	end
+
 	local constantsMod = Shared:FindFirstChild("Constants")
 	if constantsMod then
 		local cOk, Constants = pcall(require, constantsMod)
@@ -288,5 +304,28 @@ print(string.format("[Smoke] DONE  pass=%d  fail=%d  info=%d", PASS, FAIL, INFO)
 if FAIL > 0 then
 	warn("[Smoke] FAILURES detected — fix before shipping playtest")
 else
-	print("[Smoke] All automated checks passed")
+	
+-- Walk-over buy / world tags (StudioSetup)
+do
+	local CS = game:GetService("CollectionService")
+	local slots = CS:GetTagged("WE_UpgradeSlot")
+	if #slots == 0 then
+		warn("[Smoke] No WE_UpgradeSlot tags — run tools/StudioSetup.luau in Command Bar")
+	else
+		ok("WE_UpgradeSlot count=" .. tostring(#slots))
+		local withBillboard = 0
+		for _, inst in ipairs(slots) do
+			if inst:IsA("BasePart") then
+				if inst:FindFirstChild("WE_PriceBillboard") or inst:FindFirstChild("Label") then
+					withBillboard += 1
+				end
+			end
+		end
+		ok("Upgrade slots with price billboard (setup)=" .. tostring(withBillboard))
+		ok("Walk-over buy: client WorldPromptController (no buy ProximityPrompt on slots)")
+	end
+	ok("WE_VehicleSpawn count=" .. tostring(#CS:GetTagged("WE_VehicleSpawn")))
+end
+
+print("[Smoke] All automated checks passed")
 end

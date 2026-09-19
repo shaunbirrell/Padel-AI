@@ -21,7 +21,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 2. From this folder: `rojo serve` (or `aftman install` then `rojo serve`).
 3. In Studio, connect the Rojo plugin and sync.
 4. Paste contents of `tools/StudioSetup.luau` into the **Command Bar** and run once.
-5. Press Play. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP), open **Base Upgrades** (**B** or the big bottom button), then tap **BUY $price** on a row (B does **not** purchase instantly). Grey pads are markers — walk near them and press **E** (ProximityPrompt) or use **B** / **G**.
+5. Press Play. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP). **Walk onto glowing upgrade pads to BUY** (auto-purchase, server-validated). Prices float above each pad. Or open **Base Upgrades** (**B** / bottom button) and tap **BUY $price**. **E** on plot/garage pads opens menus; **G** = Garage.
 6. Optional lighting: Ambient ~(80,90,70), Brightness 2, ClockTime 14 for clearer military placeholders.
 
 ## Merging open PRs
@@ -119,7 +119,8 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | Key / UI | Action |
 |----------|--------|
 | **B** / Base Upgrades (big bottom button) | Opens upgrade menu — tap **BUY $price** to purchase |
-| **E** near pads | ProximityPrompt: Open Base / Upgrade / Garage / capture ping |
+| **Walk onto upgrade pad** | Auto-buy / upgrade (debounced; server validates) |
+| **E** near plot / garage / capture | ProximityPrompt: Open Base / Open Garage / capture ping |
 | **G** / GARAGE | Vehicle garage (buy / spawn / despawn) |
 | **M** / MISSIONS | Daily missions + login claim |
 | **P** / SHOP | DevProducts + GamePasses |
@@ -135,7 +136,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 2. **Smoke** — Press Play Solo, then paste `tools/SmokeTest.luau` into the **Command Bar**. Confirms Remotes (no `Give*`), Shared configs, service modules, optional `GetPlayerState`, and a **safe** admin probe only if your UserId is in `AdminConfig` (never grants currency from smoke).
 3. **Join** — Spawn with ~$5,000; HUD shows Cash / Gold / Level / XP; plot assigned.
 4. **Tutorial** — Steps: claim base → Command Center → income → Barracks → Jeep → outpost; **SKIP** works; gold beam/markers best-effort.
-5. **Tycoon** — Open Base Upgrades (**B** / bottom button / **E** on pad), then tap **BUY $1500** on Command Center (first row); Barracks next; passive income; structures recolor. Pads are not buy buttons.
+5. **Tycoon** — Walk onto **Command Center** pad to buy ($1500); prices on billboards; Barracks next; or use **B** menu BUY buttons. Structures grow kit detail per level. Passive income ticks.
 6. **Combat** — Equip StarterRifle; LMB fire; **R** reload; damage NPCs; kill rewards; death → respawn at base.
 7. **Vehicles** — **G**: SPAWN Military Jeep; seat/drive placeholder; despawn / one-active rule. Empty catalog / no-owned shows `UIUtil.EmptyState` (MobileScale consistent).
 8. **Territory** — Stand in capture zone; progress bar; ownership bonus; `FIRST_OUTPOST` path.
@@ -196,5 +197,6 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - Perf: tag cache, idle skips, client debounce
 - Remote validation audit (`RemoteGuard` + RateLimit on all Request*)
 - Settings panel (O) + empty states; `tools/SmokeTest.luau`
-- World ProximityPrompts (`WorldPromptController`) on tagged pads; StudioSetup visual polish (Grass/Metal/Concrete, neon edges, billboards, beacons)
-- First-join toast: open Base Upgrades then tap BUY (pads are markers)
+- Walk-over auto-buy on `WE_UpgradeSlot` + live price billboards; ProximityPrompts for Base/Garage/capture only
+- StudioSetup: structure kits, territory flags, vehicle H-pads, NPC kits, lighting; VehicleService multi-part chassis per type
+- First-join toast: walk onto pads to BUY

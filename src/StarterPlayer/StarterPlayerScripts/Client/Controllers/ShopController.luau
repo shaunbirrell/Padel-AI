@@ -73,7 +73,7 @@ function ShopController.Init()
 	toggle.Name = "ShopToggle"
 	toggle.AnchorPoint = Vector2.new(0, 1)
 	toggle.Position = UDim2.new(0, 136, 1, -16)
-	toggle.Size = UDim2.fromOffset(80, 36)
+	toggle.Size = UDim2.fromOffset(88, 44)
 	toggle.BackgroundColor3 = Constants.Colors.Panel
 	toggle.Font = Enum.Font.GothamBold
 	toggle.TextSize = 14
@@ -150,10 +150,10 @@ function ShopController.Init()
 	layout.Parent = list
 
 	local order = 0
-	local function addRow(label: string, sub: string, onClick: () -> ())
+	local function addRow(label: string, sub: string, onClick: () -> (), btnText: string?)
 		order += 1
 		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, -8, 0, 52)
+		row.Size = UDim2.new(1, -8, 0, 56)
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = order
@@ -163,7 +163,7 @@ function ShopController.Init()
 		local t = Instance.new("TextLabel")
 		t.BackgroundTransparency = 1
 		t.Position = UDim2.fromOffset(10, 6)
-		t.Size = UDim2.new(1, -100, 0, 20)
+		t.Size = UDim2.new(1, -110, 0, 20)
 		t.Font = Enum.Font.GothamBold
 		t.TextSize = 14
 		t.TextXAlignment = Enum.TextXAlignment.Left
@@ -174,7 +174,7 @@ function ShopController.Init()
 		local s = Instance.new("TextLabel")
 		s.BackgroundTransparency = 1
 		s.Position = UDim2.fromOffset(10, 28)
-		s.Size = UDim2.new(1, -100, 0, 16)
+		s.Size = UDim2.new(1, -110, 0, 16)
 		s.Font = Enum.Font.Gotham
 		s.TextSize = 11
 		s.TextXAlignment = Enum.TextXAlignment.Left
@@ -185,12 +185,12 @@ function ShopController.Init()
 		local btn = Instance.new("TextButton")
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
-		btn.Size = UDim2.fromOffset(72, 32)
-		btn.BackgroundColor3 = Constants.Colors.Accent
+		btn.Size = UDim2.fromOffset(96, 44)
+		btn.BackgroundColor3 = Constants.Colors.Gold
 		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 12
-		btn.TextColor3 = Constants.Colors.Text
-		btn.Text = "BUY"
+		btn.TextSize = 11
+		btn.TextColor3 = Color3.fromRGB(20, 22, 18)
+		btn.Text = btnText or "BUY"
 		btn.BorderSizePixel = 0
 		corner(btn, 6)
 		btn.Parent = row
@@ -208,9 +208,17 @@ function ShopController.Init()
 		else
 			sub = string.format("id=%d", def.Id or 0)
 		end
+		local btnLabel = "BUY"
+		if def.Cash and def.Cash > 0 then
+			btnLabel = "BUY $" .. tostring(def.Cash)
+		elseif def.Gold and def.Gold > 0 then
+			btnLabel = "BUY " .. tostring(def.Gold) .. "G"
+		elseif def.GrantsBattlePassPremium then
+			btnLabel = "BUY BP"
+		end
 		addRow(def.DisplayName, sub, function()
 			promptDevProduct(key)
-		end)
+		end, btnLabel)
 	end
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
@@ -219,7 +227,8 @@ function ShopController.Init()
 			(def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
 			function()
 				promptGamePass(key)
-			end
+			end,
+			"PASS"
 		)
 	end
 

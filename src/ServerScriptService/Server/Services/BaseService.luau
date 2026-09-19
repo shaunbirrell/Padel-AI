@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 local Types = require(Shared.Types)
@@ -27,6 +28,7 @@ local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
 local TutorialService: any = nil
+local NotificationService: any = nil
 
 -- plotId -> userId
 local plotOwners: { [number]: number } = {}
@@ -227,6 +229,92 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	}
 end
 
+local function applyKitVisuals(plinth: BasePart, structureId: string, level: number)
+	local palette = StructureVisualConfig.Palettes[structureId]
+	local baseSize = plinth:GetAttribute("BaseSize")
+	if typeof(baseSize) ~= "Vector3" then
+		baseSize = Vector3.new(8, 1.2, 8)
+		plinth:SetAttribute("BaseSize", baseSize)
+	end
+	local bs = baseSize :: Vector3
+	local lv = math.clamp(level, 0, 5)
+	local t = lv / 5
+	local ghost = StructureVisualConfig.GhostTransparency
+	local solid = StructureVisualConfig.SolidTransparency
+	local transparency = if lv == 0 then ghost else solid
+
+	-- Plinth grows slightly; kit body/roof scale with level
+	plinth.Size = Vector3.new(bs.X, bs.Y * (1 + t * 0.35), bs.Z)
+	if palette then
+		plinth.Color = palette.Plinth
+	else
+		plinth.Color = Color3.fromRGB(40 + math.floor(t * 40), 60 + math.floor(t * 80), 50)
+	end
+	plinth.Transparency = transparency
+	plinth.Material = Enum.Material.Concrete
+
+	local bodyScale = 1 + lv * 0.55
+	local accentScale = 1 + lv * 0.25
+
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") then
+			local role = child:GetAttribute("WE_KitRole")
+			if role == "Body" then
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				local b = bx :: Vector3
+				child.Size = Vector3.new(b.X * (0.9 + t * 0.15), b.Y * bodyScale, b.Z * (0.9 + t * 0.15))
+				if palette then
+					child.Color = palette.Body
+				end
+				child.Transparency = transparency
+				child.Material = Enum.Material.Metal
+			elseif role == "Accent" then
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				local b = bx :: Vector3
+				child.Size = Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale)
+				if palette then
+					child.Color = palette.Accent
+				end
+				child.Transparency = if lv == 0 then 0.55 else 0.05
+				child.Material = Enum.Material.Neon
+			elseif role == "Roof" or role == "Antenna" then
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				local b = bx :: Vector3
+				local yBoost = if role == "Antenna" then 1 + lv * 0.8 else 1 + lv * 0.4
+				child.Size = Vector3.new(b.X, b.Y * yBoost, b.Z)
+				-- Keep relative top position via attribute offset
+				local off = child:GetAttribute("WE_LocalOffset")
+				if typeof(off) == "Vector3" then
+					local yExtra = if role == "Antenna" then lv * 0.9 else lv * 0.35
+					child.CFrame = plinth.CFrame * CFrame.new((off :: Vector3) + Vector3.new(0, yExtra, 0))
+				end
+				if palette then
+					child.Color = if role == "Antenna" then palette.Accent else palette.Roof
+				end
+				child.Transparency = transparency
+				child.Material = if role == "Antenna" then Enum.Material.Neon else Enum.Material.Metal
+			elseif role == "Detail" then
+				child.Transparency = if lv == 0 then 0.7 else math.max(0, 0.4 - t * 0.35)
+				if palette then
+					child.Color = palette.Accent
+				end
+			end
+		end
+	end
+end
+
 function BaseService.UpdateVisuals(player: Player, structureId: string, level: number)
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
@@ -234,27 +322,12 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 	end
 	local plotId = profile.BasePlotId
 
-	-- Find upgrade slot parts tagged WE_UpgradeSlot with attributes PlotId + StructureId
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
 		if inst:IsA("BasePart") then
 			local p = inst:GetAttribute("PlotId")
 			local s = inst:GetAttribute("StructureId")
 			if p == plotId and s == structureId then
-				local baseSize = inst:GetAttribute("BaseSize")
-				if typeof(baseSize) ~= "Vector3" then
-					baseSize = Vector3.new(4, 1, 4)
-					inst:SetAttribute("BaseSize", baseSize)
-				end
-				local heightScale = 1 + level * 0.6
-				inst.Size = Vector3.new((baseSize :: Vector3).X, (baseSize :: Vector3).Y * heightScale, (baseSize :: Vector3).Z)
-				-- Recolor by level
-				local t = math.clamp(level / 5, 0, 1)
-				inst.Color = Color3.fromRGB(
-					math.floor(40 + t * 40),
-					math.floor(60 + t * 100),
-					math.floor(50 + t * 40)
-				)
-				inst.Transparency = if level == 0 then 0.5 else 0
+				applyKitVisuals(inst, structureId, level)
 			end
 		end
 	end
@@ -312,6 +385,7 @@ function BaseService.Init(deps: { [string]: any })
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
 	TutorialService = deps.TutorialService
+	NotificationService = deps.NotificationService
 
 	getUpgradeChangedEvent()
 
@@ -321,7 +395,34 @@ function BaseService.Init(deps: { [string]: any })
 			return
 		end
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
-		BaseService.PurchaseUpgrade(player, structureId)
+		local result = BaseService.PurchaseUpgrade(player, structureId)
+		if not NotificationService then
+			return
+		end
+		if result.Ok then
+			local def = BaseConfig.Structures[structureId]
+			local name = if def then def.DisplayName else tostring(structureId)
+			NotificationService.Notify(
+				player,
+				string.format("%s → Lv %d", name, result.NewLevel or 0),
+				"Success",
+				3
+			)
+		else
+			local err = result.Error or "Failed"
+			local msg = if err == "InsufficientCash"
+				then "Not enough cash"
+				elseif err == "InsufficientGold"
+				then "Not enough gold"
+				elseif err == "MaxLevel"
+				then "Already at MAX level"
+				elseif err == "MissingRequirement"
+				then "Missing prerequisite structure"
+				elseif err == "UnknownStructure" or err == "InvalidStructure"
+				then "Unknown structure"
+				else ("Purchase failed: " .. tostring(err))
+			NotificationService.Notify(player, msg, "Warn", 3.5)
+		end
 	end)
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction

@@ -83,7 +83,7 @@ function ArmyController.Init()
 	toggle.Name = "ArmyToggle"
 	toggle.AnchorPoint = Vector2.new(0, 1)
 	toggle.Position = UDim2.new(0, 16, 1, -16 - inset.Y)
-	toggle.Size = UDim2.fromOffset(88, 36)
+	toggle.Size = UDim2.fromOffset(88, 44)
 	toggle.BackgroundColor3 = Constants.Colors.Panel
 	toggle.Font = Enum.Font.GothamBold
 	toggle.TextSize = 13
@@ -101,7 +101,7 @@ function ArmyController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(380, 320)
+	panel.Size = UDim2.fromOffset(380, 340)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -176,7 +176,7 @@ function ArmyController.Init()
 	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> ())
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(x, y)
-		b.Size = UDim2.fromOffset(w, 34)
+		b.Size = UDim2.fromOffset(w, 44)
 		b.BackgroundColor3 = Constants.Colors.Accent
 		b.Font = Enum.Font.GothamBold
 		b.TextSize = 12
@@ -189,28 +189,41 @@ function ArmyController.Init()
 		return b
 	end
 
-	makeBtn("RECRUIT x1", 16, 150, 160, function()
+	local recruit1 = makeBtn("RECRUIT x1 $500", 16, 150, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(1)
 	end)
-	makeBtn("RECRUIT x5", 192, 150, 160, function()
+	local recruit5 = makeBtn("RECRUIT x5", 192, 150, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end)
-	makeBtn("FILL CAP", 16, 194, 160, function()
+	makeBtn("FILL CAP", 16, 204, 168, function()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then
 			Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(math.min(free, 50))
 		end
 	end)
-	makeBtn("DISMISS x1", 192, 194, 160, function()
+	makeBtn("DISMISS x1", 192, 204, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(1)
 	end)
-	makeBtn("DISMISS x5", 16, 238, 160, function()
+	makeBtn("DISMISS x5", 16, 258, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(5)
 	end)
 
+	-- Keep recruit labels priced
+	local prevRefresh = refreshLabels
+	refreshLabels = function()
+		prevRefresh()
+		local cost = if typeof(armyState) == "table" then tonumber(armyState.RecruitCostCash) or 500 else 500
+		if recruit1 then
+			recruit1.Text = string.format("RECRUIT x1 $%d", cost)
+		end
+		if recruit5 then
+			recruit5.Text = string.format("RECRUIT x5 $%d", cost * 5)
+		end
+	end
+
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
-	note.Position = UDim2.fromOffset(16, 280)
+	note.Position = UDim2.fromOffset(16, 308)
 	note.Size = UDim2.new(1, -32, 0, 28)
 	note.Font = Enum.Font.Gotham
 	note.TextSize = 11

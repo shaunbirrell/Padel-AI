@@ -91,4 +91,21 @@ function UIUtil.EmptyState(parent: Instance, message: string, order: number?): T
 	return lab
 end
 
+--[[ Ensure a GuiButton meets mobile min touch (44px). ]]
+function UIUtil.EnsureMinTouch(btn: GuiButton, minPx: number?)
+	local m = minPx or 44
+	local sz = btn.Size
+	local w = sz.X.Offset
+	local h = sz.Y.Offset
+	if w > 0 and w < m then
+		btn.Size = UDim2.new(sz.X.Scale, m, sz.Y.Scale, math.max(h, m))
+	elseif h > 0 and h < m then
+		btn.Size = UDim2.new(sz.X.Scale, math.max(w, m), sz.Y.Scale, m)
+	end
+end
+
+function UIUtil.GoldStroke(parent: Instance, thickness: number?): UIStroke
+	return UIUtil.Stroke(parent, Color3.fromRGB(230, 190, 60), thickness or 1.5)
+end
+
 return UIUtil

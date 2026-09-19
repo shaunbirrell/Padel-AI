@@ -105,9 +105,13 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 52. **Garage empty states** — `VehicleController` uses `UIUtil.EmptyState` when the vehicle catalog is empty or the player owns nothing yet (clear copy + BUY hint). Screen uses `UIUtil.PrepareScreen` / MobileScale consistent with Army/Shop/Missions.
 
-53. **World prompts** — Client `WorldPromptController` attaches ProximityPrompts to `WE_BasePlot` / `WE_UpgradeSlot` / `WE_CaptureZone` / `WE_VehicleSpawn` / `WE_TutorialMarker` after load. Base/Garage prompts only open client UI (`BaseController.Open` / `VehicleController.Open`); purchases stay server-validated via existing remotes. Capture prompt pings `RequestCaptureTerritory` and shows a toast — stand-in-zone server tick remains authoritative.
+53. **World prompts + walk-over buy** — `WorldPromptController` attaches ProximityPrompts only for non-buy actions (`WE_BasePlot` Open Base, `WE_VehicleSpawn` Open Garage, capture ping, tutorial). **Upgrade pads (`WE_UpgradeSlot`) use walk-over auto-buy**: Touched + Heartbeat HRP overlap → `RequestPurchaseUpgrade` once per enter with ~1.75s debounce + in-flight guard. Leaving the pad clears overlap so re-enter can buy again after debounce. Server validates cash/prereqs/max; `NotificationService` toasts success/fail. Never grants on client. Capture remain stand-in-zone authoritative.
 
-54. **Base upgrade UX** — **B** / big bottom **Base Upgrades** button only toggles the panel (respects chat `gameProcessed`). Purchase requires tapping **BUY $price** / **UP $price** on a row (Command Center first, gold-highlighted at L0). First-join toasts clarify pads are markers, not buttons. Session-once client hints (no DataStore).
+54. **Base upgrade UX** — Primary buy: walk onto pads (mobile-friendly, no hold). Alternate: **B** / Base Upgrades menu → **BUY $price** / **UP $price** (touch ≥44px). Price `WE_PriceBillboard` on every slot shows Name / Lv X→Y / $cost (or MAX / prereq hint); refreshes throttled on BaseStateUpdate / EconomyUpdate. Session-once toasts explain walk-to-buy.
 
-55. **StudioSetup visuals** — Placeholders use Grass ground, Concrete/Metal pads, neon accent edges, readable BillboardGui + backdrop, spawn beacons. Safe re-run clears `WarEmpireSetup`. Still placeholders pending art.
+55. **StudioSetup visuals** — Multi-part structure kits (plinth + body + accent neon + roof/antenna) per type, distinct palettes (`StructureVisualConfig`). Territories: rings + flag poles. Vehicle pads with H-marks. NPC infantry with helmet/rifle. Tutorial beacons + rings. Lighting/Atmosphere defaults. Price billboards. Safe re-run clears `WarEmpireSetup`.
+
+56. **Structure level visuals** — `BaseService.UpdateVisuals` / `applyKitVisuals` scales kit children (`WE_KitRole`) by level; ghost transparency at L0; neon accents brighten when owned.
+
+57. **Vehicle kits** — `VehicleService.buildVehicleModel` builds distinct Part kits per `VehicleConfig` id (Jeep/ArmedJeep wheels+bed+gun; Truck/APC; Light/HeavyTank tracks+turret+barrel; AttackHelicopter rotors+skids; FighterJet wings+tail). VehicleSeat remains driveable. No MeshIds.
 

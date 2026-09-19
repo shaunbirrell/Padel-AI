@@ -154,7 +154,7 @@ local function refresh()
 			local btn = Instance.new("TextButton")
 			btn.AnchorPoint = Vector2.new(1, 0.5)
 			btn.Position = UDim2.new(1, -10, 0.5, 0)
-			btn.Size = UDim2.fromOffset(90, 32)
+			btn.Size = UDim2.fromOffset(100, 44)
 			btn.Font = Enum.Font.GothamBold
 			btn.TextSize = 13
 			btn.TextColor3 = Constants.Colors.Text
@@ -177,8 +177,10 @@ local function refresh()
 					Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle):FireServer(id)
 				end)
 			else
-				btn.Text = "BUY"
-				btn.BackgroundColor3 = Constants.Colors.Cash
+				local price = def.CostCash or 0
+				btn.Text = if price <= 0 then "CLAIM" else ("BUY $" .. tostring(price))
+				btn.BackgroundColor3 = Constants.Colors.Gold
+				btn.TextColor3 = Color3.fromRGB(20, 22, 18)
 				btn.MouseButton1Click:Connect(function()
 					AudioController.PlayClick()
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseVehicle):FireServer(id)
@@ -221,7 +223,11 @@ local function buildGui()
 	panel.BorderSizePixel = 0
 	panel.Parent = screen
 	addCorner(panel, 10)
-	addStroke(panel)
+	local gst = Instance.new("UIStroke")
+	gst.Color = Constants.Colors.Gold
+	gst.Thickness = 1.5
+	gst.Transparency = 0.35
+	gst.Parent = panel
 
 	local title = Instance.new("TextLabel")
 	title.BackgroundTransparency = 1
@@ -283,13 +289,13 @@ local function buildGui()
 	hint.TextSize = 12
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextColor3 = Constants.Colors.Muted
-	hint.Text = "Press G to toggle · Sit in DriverSeat to drive (placeholder)"
+	hint.Text = "G / GARAGE · E on pad · Sit DriverSeat to drive"
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")
 	garageBtn.AnchorPoint = Vector2.new(0, 1)
 	garageBtn.Position = UDim2.new(0, 16, 1, -20)
-	garageBtn.Size = UDim2.fromOffset(100, 40)
+	garageBtn.Size = UDim2.fromOffset(110, 44)
 	garageBtn.BackgroundColor3 = Constants.Colors.Accent
 	garageBtn.Text = "GARAGE"
 	garageBtn.Font = Enum.Font.GothamBold

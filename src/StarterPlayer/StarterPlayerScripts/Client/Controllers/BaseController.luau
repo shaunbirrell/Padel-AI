@@ -1,7 +1,8 @@
 --!strict
 --[[ Upgrade menu UI → RequestPurchaseUpgrade remote.
-	B toggles the panel (respects gameProcessed / chat). Purchases happen only
-	after opening the menu and tapping BUY $price — pads are markers, not buy buttons.
+	B toggles the panel (respects gameProcessed / chat).
+	Primary buy path: WALK onto upgrade pads (WorldPromptController).
+	Menu BUY buttons remain as an alternate purchase path.
 ]]
 
 local Players = game:GetService("Players")
@@ -62,7 +63,7 @@ local function refreshList()
 
 			local row = Instance.new("Frame")
 			row.Name = structureId
-			row.Size = UDim2.new(1, -8, 0, 56)
+			row.Size = UDim2.new(1, -8, 0, 60)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
 			row.LayoutOrder = order
@@ -103,7 +104,7 @@ local function refreshList()
 			local btn = Instance.new("TextButton")
 			btn.AnchorPoint = Vector2.new(1, 0.5)
 			btn.Position = UDim2.new(1, -8, 0.5, 0)
-			btn.Size = UDim2.fromOffset(96, 36)
+			btn.Size = UDim2.fromOffset(108, 44)
 			btn.Font = Enum.Font.GothamBold
 			btn.TextSize = 12
 			btn.TextColor3 = Constants.Colors.Text
@@ -184,15 +185,15 @@ local function showFirstJoinHints()
 	hintShown = true
 	task.delay(1.2, function()
 		NotificationController.Show(
-			"Press B or tap Base Upgrades — then tap the $ price to buy",
+			"Walk onto glowing pads to BUY upgrades — prices float above each pad",
 			"Info",
 			5
 		)
 	end)
 	task.delay(6.5, function()
 		NotificationController.Show(
-			"Pads are markers, not buttons — walk near them and press E, or use B / Base Upgrades",
-			"Warn",
+			"Or tap Base Upgrades [B] for the full menu — BUY buttons work too",
+			"Info",
 			5
 		)
 	end)
@@ -228,7 +229,7 @@ function BaseController.Init()
 	btn.Name = "ToggleUpgrades"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
 	btn.Position = UDim2.new(0.5, 0, 1, -28)
-	btn.Size = UDim2.fromOffset(240, 56)
+	btn.Size = UDim2.fromOffset(260, 56)
 	btn.BackgroundColor3 = Constants.Colors.Accent
 	btn.TextColor3 = Constants.Colors.Text
 	btn.Font = Enum.Font.GothamBold
@@ -258,6 +259,13 @@ function BaseController.Init()
 	panel.Visible = false
 	panel.Parent = gui
 	corner(panel, 10)
+	do
+		local ps = Instance.new("UIStroke")
+		ps.Color = Constants.Colors.Gold
+		ps.Thickness = 1.5
+		ps.Transparency = 0.4
+		ps.Parent = panel
+	end
 
 	local title = Instance.new("TextLabel")
 	title.BackgroundTransparency = 1
@@ -278,7 +286,7 @@ function BaseController.Init()
 	sub.TextSize = 12
 	sub.TextColor3 = Constants.Colors.Muted
 	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.Text = "Tap BUY $price on a row to purchase (B only opens this menu)"
+	sub.Text = "Walk onto pads to auto-buy · or tap BUY $price here"
 	sub.Parent = panel
 
 	local scroll = Instance.new("ScrollingFrame")

@@ -138,6 +138,20 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	marker:SetAttribute("OwnerType", rt.OwnerType)
 	marker:SetAttribute("OwnerUserId", rt.OwnerUserId)
 	marker:SetAttribute("CaptureProgress", rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds))
+	local tid = marker:GetAttribute("TerritoryId")
+	if typeof(tid) == "string" then
+		local parent = marker.Parent
+		if parent then
+			local flag = parent:FindFirstChild(tid .. "_Flag")
+			if flag and flag:IsA("BasePart") then
+				flag.Color = marker.Color
+			end
+			local ring = parent:FindFirstChild(tid .. "_Ring")
+			if ring and ring:IsA("BasePart") then
+				ring.Color = marker.Color
+			end
+		end
+	end
 end
 
 local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePayload
