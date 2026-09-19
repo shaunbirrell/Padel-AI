@@ -24,14 +24,35 @@ local VisualAssetConfig = {
 	CharacterVisualScale = 1.0,
 
 	Vehicles = {
+		-- Free Jeep family
 		MilitaryJeep = { ModelAssetId = 59524622, Note = "Free Jeep (Creator Store)" } :: AssetRef,
+		ArmedJeep = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
+		UtilityQuad = { ModelAssetId = 59524622, Note = "Jeep reuse (scaled by kit)" } :: AssetRef,
+		ScoutCar = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
+		ReconBuggy = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
+		-- Free tank family
 		LightTank = { ModelAssetId = 26007709, Note = "Free tank (Creator Store)" } :: AssetRef,
+		MediumTank = { ModelAssetId = 26007709, Note = "Tank reuse" } :: AssetRef,
 		BattleTank = { ModelAssetId = 1379706428, Note = "Panzer IV free port" } :: AssetRef,
+		HeavyTank = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
+		SuperHeavyTank = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
+		TankDestroyer = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
+		AssaultGun = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
+		-- Free heli family
 		TransportHeli = { ModelAssetId = 9337454, Note = "UH-60 free helicopter" } :: AssetRef,
 		AttackHelicopter = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
 		LightTransportHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
 		NightAttackHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		LightScoutHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		GunshipHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		HeavyLiftHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		StealthHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 28912351, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
+		PatrolTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
+		ArmoredTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
+		APC = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
@@ -50,11 +71,13 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	KitFamilyFallback = {
-		WheeledLight = "_FallbackWheeled",
-		Truck = "_FallbackWheeled",
-		APC = "_FallbackWheeled",
+		WheeledLight = "MilitaryJeep",
+		WheeledTruck = "_FallbackWheeled",
+		WheeledAPC = "APC",
 		TrackedIFV = "LightTank",
 		TrackedMBT = "BattleTank",
+		TrackedSPAAG = "LightTank",
+		TrackedArtillery = "LightTank",
 		HeliTransport = "TransportHeli",
 		HeliAttack = "AttackHelicopter",
 		HeliLight = "TransportHeli",

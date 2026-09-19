@@ -14,6 +14,7 @@ local UIUtil = require(Shared.Util.UIUtil)
 local ArmyController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local open = false
 local screenGui: ScreenGui? = nil
 local statusLabel: TextLabel? = nil
@@ -99,7 +100,8 @@ function ArmyController.Init()
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle, Constants.Colors.Gold, 1.5)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not open)
 	end)
 
@@ -107,7 +109,7 @@ function ArmyController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(380, 380)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.7, 0) else UDim2.fromOffset(380, 380)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -137,7 +139,7 @@ function ArmyController.Init()
 	close.BorderSizePixel = 0
 	UIUtil.Corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -192,7 +194,7 @@ function ArmyController.Init()
 		UIUtil.Corner(b, 6)
 		UIUtil.Stroke(b, Constants.Colors.Gold, 1.25)
 		b.Parent = panel
-		b.MouseButton1Click:Connect(cb)
+		b.Activated:Connect(cb)
 		return b
 	end
 
