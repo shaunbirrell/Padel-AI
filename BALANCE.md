@@ -40,7 +40,7 @@ Other structures use similar curves (see `BaseConfig.luau`). Command Center L1 i
 - To advance from level L: `floor(100 * L^1.45)`
 - Level-up reward: `$500 + 150*newLevel` cash; gold every 5 levels
 
-## Vehicles (~99 — Ground 44 / Air 23 / Naval 19)
+## Vehicles (~99 — Ground 47 / Air 27 / Naval 25)
 
 Deep unlock ladder (level + structure + cash; late units also prestige / rebirth flags).
 ~99 units after depth pass 3 (target band 85–100). Full table in `VehicleConfig.luau` — summary curve:
