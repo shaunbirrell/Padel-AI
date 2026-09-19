@@ -77,6 +77,7 @@ function SettingsController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "SETTINGS"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
@@ -295,6 +296,23 @@ function SettingsController.Init()
 			setOpen(not open)
 		end
 	end)
+end
+
+
+function SettingsController.Toggle()
+	setOpen(not open)
+end
+
+function SettingsController.Open()
+	setOpen(true)
+end
+
+function SettingsController.Close()
+	setOpen(false)
+end
+
+function SettingsController.IsOpen(): boolean
+	return open
 end
 
 return SettingsController

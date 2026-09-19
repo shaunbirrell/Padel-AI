@@ -80,6 +80,7 @@ function ShopController.Init()
 	toggle.TextColor3 = Constants.Colors.Gold
 	toggle.Text = "SHOP"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	corner(toggle, 8)
 	local toggleStroke = Instance.new("UIStroke")
 	toggleStroke.Color = Constants.Colors.Gold
@@ -266,6 +267,23 @@ function ShopController.Init()
 			setOpen(not menuOpen)
 		end
 	end)
+end
+
+
+function ShopController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function ShopController.Open()
+	setOpen(true)
+end
+
+function ShopController.Close()
+	setOpen(false)
+end
+
+function ShopController.IsOpen(): boolean
+	return menuOpen
 end
 
 return ShopController

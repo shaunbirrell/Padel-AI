@@ -108,7 +108,8 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `src/StarterPlayer/.../Client/` — Bootstrap + Controllers (programmatic UI)
 - `src/ServerScriptService/Server/Modules/MapSetup.luau` — world build (auto on Play if `WarEmpireSetup` missing); ~6400×8 ground + SafetyCatch + mountain ring / plot ring ~800
 - `src/ServerScriptService/Server/Services/FallSafetyService.luau` — teleport to plot spawn if HRP Y < -30 (no void-Kill)
-- `src/ServerScriptService/Server/Modules/MapDressing.luau` — military Part-kit world dressing (outposts/bunkers/hangars/depots/camps) under `WarEmpireSetup.WorldDressing`; visual only
+- `src/ServerScriptService/Server/Modules/MapDressing.luau` — military Part-kit world dressing (desert outposts/adobe/tents/hangars/depots/camps) under `WarEmpireSetup.WorldDressing`; visual only
+- `src/ServerScriptService/Server/Modules/DesertFlora.luau` — procedural desert flora (saguaro/joshua/palm/barrel/grass) under `WarEmpireSetup.DesertFlora`
 - `tools/StudioSetup.luau` — short note only (paste obsolete; map auto-builds on Play)
 - `tools/SmokeTest.luau` — Play Solo command-bar smoke (remotes / configs / services; no currency exploits)
 

@@ -2967,6 +2967,7 @@ return {}
             <string name="Source"><![CDATA[--!strict
 --[[
 	Shared client UI helpers — consistent UIScale + dark military panel chrome.
+	MobileActionBar tiles: large rounded color-coded squares (≥64px touch).
 ]]
 
 local UIUtil = {}
@@ -3057,9 +3058,9 @@ function UIUtil.EmptyState(parent: Instance, message: string, order: number?): T
 	return lab
 end
 
---[[ Ensure a GuiButton meets mobile min touch (44px). ]]
+--[[ Ensure a GuiButton meets mobile min touch (default 64px for advanced HUD). ]]
 function UIUtil.EnsureMinTouch(btn: GuiButton, minPx: number?)
-	local m = minPx or 44
+	local m = minPx or 64
 	local sz = btn.Size
 	local w = sz.X.Offset
 	local h = sz.Y.Offset
@@ -3072,6 +3073,77 @@ end
 
 function UIUtil.GoldStroke(parent: Instance, thickness: number?): UIStroke
 	return UIUtil.Stroke(parent, Color3.fromRGB(230, 190, 60), thickness or 1.5)
+end
+
+--[[
+	Large rounded glossy action tile for mobile dock.
+	icon: short emoji/symbol string; label: caption under icon.
+]]
+function UIUtil.MakeActionTile(
+	parent: Instance,
+	props: {
+		Name: string,
+		Icon: string,
+		Label: string,
+		Color: Color3,
+		LayoutOrder: number?,
+		SizePx: number?,
+	}
+): TextButton
+	local size = props.SizePx or 72
+	local btn = Instance.new("TextButton")
+	btn.Name = props.Name
+	btn.Size = UDim2.fromOffset(size, size)
+	btn.BackgroundColor3 = props.Color
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = true
+	btn.Text = ""
+	btn.LayoutOrder = props.LayoutOrder or 0
+	btn.ZIndex = 10
+	btn.Parent = parent
+	UIUtil.Corner(btn, 16)
+	local stroke = UIUtil.Stroke(btn, Color3.fromRGB(255, 255, 255), 1.5)
+	stroke.Transparency = 0.45
+
+	-- Glossy top highlight
+	local gloss = Instance.new("Frame")
+	gloss.Name = "Gloss"
+	gloss.Size = UDim2.new(1, -8, 0, math.floor(size * 0.28))
+	gloss.Position = UDim2.fromOffset(4, 4)
+	gloss.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	gloss.BackgroundTransparency = 0.72
+	gloss.BorderSizePixel = 0
+	gloss.ZIndex = 11
+	gloss.Parent = btn
+	UIUtil.Corner(gloss, 10)
+
+	local icon = Instance.new("TextLabel")
+	icon.Name = "Icon"
+	icon.BackgroundTransparency = 1
+	icon.Size = UDim2.new(1, 0, 0, math.floor(size * 0.48))
+	icon.Position = UDim2.fromOffset(0, 6)
+	icon.Font = Enum.Font.GothamBold
+	icon.TextSize = math.floor(size * 0.36)
+	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+	icon.Text = props.Icon
+	icon.ZIndex = 12
+	icon.Parent = btn
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Label"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(1, -4, 0, 16)
+	label.Position = UDim2.new(0, 2, 1, -20)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 11
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextStrokeTransparency = 0.5
+	label.Text = props.Label
+	label.ZIndex = 12
+	label.Parent = btn
+
+	UIUtil.EnsureMinTouch(btn, 64)
+	return btn
 end
 
 return UIUtil
@@ -3380,12 +3452,391 @@ print("[WAR EMPIRE] Server Bootstrap ready.")
         </Properties>
         <Item class="ModuleScript" referent="46">
           <Properties>
+            <string name="Name">DesertFlora</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	WAR EMPIRE — DesertFlora (procedural Part-kit vegetation)
+	Saguaro / Joshua / palm / barrel cactus / dry grass tufts.
+	Inspiration-only desert tycoon look — original Part kits, mobile-friendly counts.
+	Called from MapSetup.Run after MapDressing. CanCollide false on most flora.
+]]
+
+local DesertFlora = {}
+
+local GROUND_TOP_Y = 0.5
+local HALF = 3200 -- matches MapSetup GROUND_SIZE/2
+
+local COL = {
+	Cactus = Color3.fromRGB(62, 110, 58),
+	CactusDark = Color3.fromRGB(48, 88, 48),
+	CactusLight = Color3.fromRGB(78, 130, 72),
+	JoshuaTrunk = Color3.fromRGB(95, 78, 52),
+	JoshuaLeaf = Color3.fromRGB(70, 95, 45),
+	PalmTrunk = Color3.fromRGB(110, 85, 55),
+	PalmLeaf = Color3.fromRGB(55, 120, 55),
+	Barrel = Color3.fromRGB(72, 105, 55),
+	Grass = Color3.fromRGB(150, 130, 70),
+	GrassDry = Color3.fromRGB(170, 145, 85),
+	Rock = Color3.fromRGB(160, 110, 75),
+}
+
+local function ensureFolder(name: string, parent: Instance): Folder
+	local existing = parent:FindFirstChild(name)
+	if existing then
+		existing:Destroy()
+	end
+	local f = Instance.new("Folder")
+	f.Name = name
+	f.Parent = parent
+	return f
+end
+
+local function p(props: { [string]: any }): Part
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.CanCollide = if props.CanCollide ~= nil then props.CanCollide else false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else true
+	if props.Name then
+		part.Name = props.Name
+	end
+	if props.Size then
+		part.Size = props.Size
+	end
+	if props.CFrame then
+		part.CFrame = props.CFrame
+	elseif props.Position then
+		part.Position = props.Position
+	end
+	if props.Color then
+		part.Color = props.Color
+	end
+	if props.Material then
+		part.Material = props.Material
+	end
+	if props.Transparency then
+		part.Transparency = props.Transparency
+	end
+	if props.Shape then
+		part.Shape = props.Shape
+	end
+	if props.Parent then
+		part.Parent = props.Parent
+	end
+	part:SetAttribute("WE_Decor", true)
+	part:SetAttribute("WE_Flora", true)
+	return part
+end
+
+local function kitSaguaro(folder: Folder, origin: Vector3, scale: number?)
+	local s = scale or 1
+	local h = 10 * s
+	p({
+		Name = "SaguaroTrunk",
+		Size = Vector3.new(1.4 * s, h, 1.4 * s),
+		Position = origin + Vector3.new(0, h * 0.5, 0),
+		Color = COL.Cactus,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+	-- Arms
+	local armY = h * 0.55
+	p({
+		Name = "SaguaroArmL",
+		Size = Vector3.new(0.9 * s, 4.2 * s, 0.9 * s),
+		CFrame = CFrame.new(origin + Vector3.new(-1.6 * s, armY + 1.2 * s, 0)),
+		Color = COL.CactusDark,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+	p({
+		Name = "SaguaroElbowL",
+		Size = Vector3.new(2.2 * s, 0.85 * s, 0.85 * s),
+		Position = origin + Vector3.new(-0.9 * s, armY, 0),
+		Color = COL.Cactus,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+	if s > 0.85 then
+		p({
+			Name = "SaguaroArmR",
+			Size = Vector3.new(0.85 * s, 3.4 * s, 0.85 * s),
+			Position = origin + Vector3.new(1.5 * s, armY + 0.6 * s, 0.2 * s),
+			Color = COL.CactusLight,
+			Material = Enum.Material.SmoothPlastic,
+			Parent = folder,
+		})
+		p({
+			Name = "SaguaroElbowR",
+			Size = Vector3.new(2.0 * s, 0.8 * s, 0.8 * s),
+			Position = origin + Vector3.new(0.85 * s, armY - 0.4 * s, 0.2 * s),
+			Color = COL.Cactus,
+			Material = Enum.Material.SmoothPlastic,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitJoshua(folder: Folder, origin: Vector3, scale: number?)
+	local s = scale or 1
+	local trunkH = 7 * s
+	p({
+		Name = "JoshuaTrunk",
+		Size = Vector3.new(1.1 * s, trunkH, 1.1 * s),
+		Position = origin + Vector3.new(0, trunkH * 0.5, 0),
+		Color = COL.JoshuaTrunk,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	-- Forked branches + spiky leaf clusters
+	local forks = {
+		{ 1.8, 0.6, 0.4, 25 },
+		{ -1.6, 0.4, -0.5, -30 },
+		{ 0.3, 1.0, 1.5, 10 },
+	}
+	for i, f in ipairs(forks) do
+		local bx, by, bz, yaw = f[1] * s, trunkH * 0.55 + f[2] * s, f[3] * s, f[4]
+		p({
+			Name = "JoshuaFork" .. i,
+			Size = Vector3.new(0.7 * s, 3.2 * s, 0.7 * s),
+			CFrame = CFrame.new(origin + Vector3.new(bx, by + 1.2 * s, bz)) * CFrame.Angles(0, math.rad(yaw), math.rad(18)),
+			Color = COL.JoshuaTrunk,
+			Material = Enum.Material.Wood,
+			Parent = folder,
+		})
+		p({
+			Name = "JoshuaLeaf" .. i,
+			Size = Vector3.new(2.4 * s, 0.35 * s, 2.4 * s),
+			Position = origin + Vector3.new(bx, by + 2.8 * s, bz),
+			Color = COL.JoshuaLeaf,
+			Material = Enum.Material.Grass,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitPalm(folder: Folder, origin: Vector3, scale: number?)
+	local s = scale or 1
+	local trunkH = 12 * s
+	p({
+		Name = "PalmTrunk",
+		Size = Vector3.new(1.2 * s, trunkH, 1.2 * s),
+		Position = origin + Vector3.new(0, trunkH * 0.5, 0),
+		Color = COL.PalmTrunk,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	-- Fronds as radial slabs
+	for i = 0, 5 do
+		local ang = i * 60
+		p({
+			Name = "PalmFrond" .. i,
+			Size = Vector3.new(0.35 * s, 0.25 * s, 5.5 * s),
+			CFrame = CFrame.new(origin + Vector3.new(0, trunkH + 0.2 * s, 0))
+				* CFrame.Angles(0, math.rad(ang), 0)
+				* CFrame.new(0, 0, -2.2 * s)
+				* CFrame.Angles(math.rad(-25), 0, 0),
+			Color = COL.PalmLeaf,
+			Material = Enum.Material.Grass,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "PalmCrown",
+		Size = Vector3.new(1.6 * s, 1.0 * s, 1.6 * s),
+		Position = origin + Vector3.new(0, trunkH + 0.4 * s, 0),
+		Color = COL.PalmLeaf,
+		Material = Enum.Material.Grass,
+		Parent = folder,
+	})
+end
+
+local function kitBarrel(folder: Folder, origin: Vector3, scale: number?)
+	local s = scale or 1
+	p({
+		Name = "BarrelBody",
+		Size = Vector3.new(2.4 * s, 2.2 * s, 2.4 * s),
+		CFrame = CFrame.new(origin + Vector3.new(0, 1.1 * s, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = COL.Barrel,
+		Material = Enum.Material.SmoothPlastic,
+		Shape = Enum.PartType.Cylinder,
+		Parent = folder,
+	})
+	p({
+		Name = "BarrelTop",
+		Size = Vector3.new(1.6 * s, 0.5 * s, 1.6 * s),
+		Position = origin + Vector3.new(0, 2.3 * s, 0),
+		Color = COL.CactusLight,
+		Material = Enum.Material.SmoothPlastic,
+		Parent = folder,
+	})
+end
+
+local function kitGrassTuft(folder: Folder, origin: Vector3)
+	for i = 0, 2 do
+		local ox = (i - 1) * 0.55
+		p({
+			Name = "GrassBlade",
+			Size = Vector3.new(0.25, 1.4 + (i % 2) * 0.5, 0.25),
+			CFrame = CFrame.new(origin + Vector3.new(ox, 0.9, (i % 2) * 0.3))
+				* CFrame.Angles(0, math.rad(i * 40), math.rad(8)),
+			Color = if i % 2 == 0 then COL.Grass else COL.GrassDry,
+			Material = Enum.Material.Grass,
+			CastShadow = false,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitRockOutcrop(folder: Folder, origin: Vector3, scale: number?)
+	local s = scale or 1
+	p({
+		Name = "Outcrop",
+		Size = Vector3.new(8 * s, 3.5 * s, 6 * s),
+		Position = origin + Vector3.new(0, 1.6 * s, 0),
+		Color = COL.Rock,
+		Material = Enum.Material.Sandstone,
+		CanCollide = true,
+		Parent = folder,
+	})
+	p({
+		Name = "OutcropCap",
+		Size = Vector3.new(5 * s, 1.8 * s, 4 * s),
+		Position = origin + Vector3.new(1.2 * s, 3.8 * s, -0.5 * s),
+		Color = COL.Rock:Lerp(Color3.fromRGB(180, 130, 90), 0.3),
+		Material = Enum.Material.Sandstone,
+		CanCollide = false,
+		Parent = folder,
+	})
+end
+
+local function placeAt(folder: Folder, name: string, pos: Vector3, builder: (Folder, Vector3, number?) -> (), scale: number?)
+	local cluster = Instance.new("Folder")
+	cluster.Name = name
+	cluster.Parent = folder
+	builder(cluster, pos, scale)
+end
+
+function DesertFlora.Dress(root: Instance)
+	local flora = ensureFolder("DesertFlora", root)
+
+	-- Rim foothill belt — denser near mountain bases (inside Ground edge)
+	local rimR = HALF - 180
+	local rimCount = 36
+	for i = 1, rimCount do
+		local ang = (i / rimCount) * math.pi * 2
+		local jitter = ((i * 37) % 50) - 25
+		local r = rimR + jitter
+		local x = math.cos(ang) * r
+		local z = math.sin(ang) * r
+		local pos = Vector3.new(x, GROUND_TOP_Y, z)
+		local kind = i % 5
+		if kind == 0 then
+			placeAt(flora, "Saguaro_Rim_" .. i, pos, kitSaguaro, 0.85 + (i % 3) * 0.15)
+		elseif kind == 1 then
+			placeAt(flora, "Joshua_Rim_" .. i, pos, kitJoshua, 0.9 + (i % 2) * 0.2)
+		elseif kind == 2 then
+			placeAt(flora, "Palm_Rim_" .. i, pos, kitPalm, 0.75 + (i % 3) * 0.12)
+		elseif kind == 3 then
+			placeAt(flora, "Barrel_Rim_" .. i, pos, kitBarrel, 0.9 + (i % 2) * 0.2)
+		else
+			local tuft = Instance.new("Folder")
+			tuft.Name = "Grass_Rim_" .. i
+			tuft.Parent = flora
+			kitGrassTuft(tuft, pos)
+			kitGrassTuft(tuft, pos + Vector3.new(3, 0, 2))
+		end
+		-- Occasional rock outcrop near rim
+		if i % 6 == 0 then
+			placeAt(flora, "Rock_Rim_" .. i, pos + Vector3.new(8, 0, -6), kitRockOutcrop, 0.8 + (i % 3) * 0.15)
+		end
+	end
+
+	-- Sparse mid-map clusters (between plot ring ~800 and outer territories)
+	local midSpots = {
+		Vector3.new(350, GROUND_TOP_Y, 180),
+		Vector3.new(-320, GROUND_TOP_Y, -220),
+		Vector3.new(180, GROUND_TOP_Y, -480),
+		Vector3.new(-480, GROUND_TOP_Y, 300),
+		Vector3.new(620, GROUND_TOP_Y, -80),
+		Vector3.new(-140, GROUND_TOP_Y, 560),
+		Vector3.new(90, GROUND_TOP_Y, -720),
+		Vector3.new(-680, GROUND_TOP_Y, -40),
+		Vector3.new(480, GROUND_TOP_Y, 520),
+		Vector3.new(-420, GROUND_TOP_Y, -560),
+		Vector3.new(1100, GROUND_TOP_Y, 200),
+		Vector3.new(-1100, GROUND_TOP_Y, -180),
+		Vector3.new(200, GROUND_TOP_Y, 1100),
+		Vector3.new(-250, GROUND_TOP_Y, -1100),
+		Vector3.new(900, GROUND_TOP_Y, -900),
+		Vector3.new(-900, GROUND_TOP_Y, 900),
+		Vector3.new(1500, GROUND_TOP_Y, -400),
+		Vector3.new(-1500, GROUND_TOP_Y, 400),
+		Vector3.new(400, GROUND_TOP_Y, 1500),
+		Vector3.new(-400, GROUND_TOP_Y, -1500),
+	}
+	for i, pos in ipairs(midSpots) do
+		local kind = i % 4
+		if kind == 0 then
+			placeAt(flora, "Saguaro_Mid_" .. i, pos, kitSaguaro, 1.0)
+			placeAt(flora, "Barrel_Mid_" .. i, pos + Vector3.new(6, 0, 4), kitBarrel, 0.85)
+		elseif kind == 1 then
+			placeAt(flora, "Joshua_Mid_" .. i, pos, kitJoshua, 1.1)
+			local tuft = Instance.new("Folder")
+			tuft.Name = "Grass_Mid_" .. i
+			tuft.Parent = flora
+			kitGrassTuft(tuft, pos + Vector3.new(-4, 0, 3))
+		elseif kind == 2 then
+			placeAt(flora, "Palm_Mid_" .. i, pos, kitPalm, 0.95)
+			placeAt(flora, "Saguaro_MidB_" .. i, pos + Vector3.new(8, 0, -5), kitSaguaro, 0.7)
+		else
+			placeAt(flora, "Rock_Mid_" .. i, pos, kitRockOutcrop, 1.0)
+			placeAt(flora, "Barrel_MidB_" .. i, pos + Vector3.new(-5, 0, 6), kitBarrel, 1.0)
+		end
+	end
+
+	-- Near plot pads (outside upgrade grids) — light desert dressing
+	local plotOffsets = {
+		Vector3.new(-800, GROUND_TOP_Y, -400),
+		Vector3.new(-800, GROUND_TOP_Y, 400),
+		Vector3.new(0, GROUND_TOP_Y, -1000),
+		Vector3.new(0, GROUND_TOP_Y, 1000),
+		Vector3.new(800, GROUND_TOP_Y, -400),
+		Vector3.new(800, GROUND_TOP_Y, 400),
+	}
+	for i, pos in ipairs(plotOffsets) do
+		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
+		placeAt(flora, "Saguaro_Plot_" .. i, pos + Vector3.new(-105, 0, -35), kitSaguaro, 0.8)
+		local tuft = Instance.new("Folder")
+		tuft.Name = "Grass_Plot_" .. i
+		tuft.Parent = flora
+		kitGrassTuft(tuft, pos + Vector3.new(95, 0, -50))
+	end
+
+	local partCount = 0
+	for _, d in ipairs(flora:GetDescendants()) do
+		if d:IsA("BasePart") then
+			partCount += 1
+		end
+	end
+	print("[WAR EMPIRE] DesertFlora complete: " .. tostring(partCount) .. " flora parts under WarEmpireSetup.DesertFlora")
+end
+
+return DesertFlora
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="47">
+          <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
 --[[
 	WAR EMPIRE — MapDressing (world visual substance)
 	Fills the expanded ~4800 map between plots / ring / territories with
-	military Part-kit clusters (outposts, bunkers, hangars, depots, camps…).
+	military Part-kit clusters (desert outposts, adobe, tents, hangars, depots, camps…).
 	Visual / immersion only — no gameplay tags that affect buy pads or capture.
 	Called from MapSetup.Run after bases/territories/spawns.
 	Regenerate: delete WarEmpireSetup + Play, or admin resetmap.
@@ -3424,7 +3875,17 @@ local COL = {
 	Light = Color3.fromRGB(255, 230, 160),
 	Sign = Color3.fromRGB(50, 55, 45),
 	SignFace = Color3.fromRGB(200, 180, 80),
-	Tent = Color3.fromRGB(75, 85, 60),
+	Tent = Color3.fromRGB(195, 175, 130),
+	TentDark = Color3.fromRGB(160, 140, 100),
+	TentPole = Color3.fromRGB(90, 70, 45),
+	Adobe = Color3.fromRGB(185, 150, 105),
+	AdobeDark = Color3.fromRGB(155, 120, 80),
+	AdobeWindow = Color3.fromRGB(70, 110, 130),
+	WoodTower = Color3.fromRGB(110, 85, 55),
+	WoodDark = Color3.fromRGB(85, 65, 42),
+	FlagCloth = Color3.fromRGB(200, 70, 55),
+	CampfireStone = Color3.fromRGB(110, 105, 95),
+	CampfireGlow = Color3.fromRGB(255, 140, 50),
 	Dock = Color3.fromRGB(50, 75, 95),
 }
 
@@ -3486,48 +3947,88 @@ end
 -- ── Kit builders (modest part counts) ─────────────────────────────────────
 
 local function kitWatchtower(folder: Folder, origin: Vector3, yawDeg: number)
+	-- Wooden desert watchtower + simple flag (original Part kit)
 	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	-- Four legs
+	for _, ox in ipairs({ -2.2, 2.2 }) do
+		for _, oz in ipairs({ -2.2, 2.2 }) do
+			p({
+				Name = "TowerLeg",
+				Size = Vector3.new(0.7, 16, 0.7),
+				CFrame = cf * CFrame.new(ox, 8, oz),
+				Color = COL.WoodTower,
+				Material = Enum.Material.Wood,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = folder,
+			})
+		end
+	end
+	-- Cross braces
 	p({
-		Name = "TowerLeg",
-		Size = Vector3.new(2.2, 14, 2.2),
-		CFrame = cf * CFrame.new(0, 7, 0),
-		Color = COL.Olive,
-		Material = Enum.Material.Metal,
-		CanCollide = true,
-		CanQuery = true,
+		Name = "TowerBrace",
+		Size = Vector3.new(5.2, 0.35, 0.35),
+		CFrame = cf * CFrame.new(0, 6, 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerBrace2",
+		Size = Vector3.new(0.35, 0.35, 5.2),
+		CFrame = cf * CFrame.new(0, 10, 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
 		Parent = folder,
 	})
 	p({
 		Name = "TowerCabin",
-		Size = Vector3.new(6, 3.2, 6),
-		CFrame = cf * CFrame.new(0, 15.2, 0),
-		Color = COL.OliveDark,
-		Material = Enum.Material.Metal,
+		Size = Vector3.new(6.5, 3.4, 6.5),
+		CFrame = cf * CFrame.new(0, 16.5, 0),
+		Color = COL.Adobe,
+		Material = Enum.Material.Wood,
 		CanCollide = true,
 		CanQuery = true,
 		Parent = folder,
 	})
 	p({
 		Name = "TowerRoof",
-		Size = Vector3.new(7, 0.5, 7),
-		CFrame = cf * CFrame.new(0, 17, 0),
-		Color = COL.ConcreteDark,
+		Size = Vector3.new(7.5, 0.55, 7.5),
+		CFrame = cf * CFrame.new(0, 18.4, 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerWindow",
+		Size = Vector3.new(1.4, 1.1, 0.25),
+		CFrame = cf * CFrame.new(0, 16.6, -3.3),
+		Color = COL.AdobeWindow,
+		Material = Enum.Material.Glass,
+		Parent = folder,
+	})
+	-- Flag pole + cloth
+	p({
+		Name = "FlagPole",
+		Size = Vector3.new(0.25, 7, 0.25),
+		CFrame = cf * CFrame.new(2.8, 22, 2.8),
+		Color = COL.MetalDark,
 		Material = Enum.Material.Metal,
 		Parent = folder,
 	})
 	p({
-		Name = "TowerAccent",
-		Size = Vector3.new(6.4, 0.25, 6.4),
-		CFrame = cf * CFrame.new(0, 13.7, 0),
-		Color = COL.NeonGold,
-		Material = Enum.Material.Neon,
+		Name = "FlagCloth",
+		Size = Vector3.new(2.8, 1.6, 0.12),
+		CFrame = cf * CFrame.new(4.2, 24.2, 2.8),
+		Color = COL.FlagCloth,
+		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
 	p({
-		Name = "TowerAntenna",
-		Size = Vector3.new(0.3, 5, 0.3),
-		CFrame = cf * CFrame.new(2, 19.5, 2),
-		Color = COL.NeonOrange,
+		Name = "TowerAccent",
+		Size = Vector3.new(6.7, 0.22, 6.7),
+		CFrame = cf * CFrame.new(0, 14.9, 0),
+		Color = COL.NeonGold,
 		Material = Enum.Material.Neon,
 		Parent = folder,
 	})
@@ -4105,53 +4606,185 @@ local function kitRoadSign(folder: Folder, origin: Vector3, yawDeg: number)
 	})
 end
 
-local function kitCamp(folder: Folder, origin: Vector3, yawDeg: number)
-	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	-- Tent A-frame (two slanted panels approximated as boxes)
+local function kitCampfire(folder: Folder, origin: Vector3)
+	-- Stone ring + glow
+	for i = 0, 5 do
+		local ang = i * 60
+		local rad = 1.6
+		p({
+			Name = "FireStone",
+			Size = Vector3.new(0.9, 0.55, 0.7),
+			CFrame = CFrame.new(origin + Vector3.new(math.cos(math.rad(ang)) * rad, 0.3, math.sin(math.rad(ang)) * rad)),
+			Color = COL.CampfireStone,
+			Material = Enum.Material.Slate,
+			Parent = folder,
+		})
+	end
 	p({
-		Name = "TentFloor",
-		Size = Vector3.new(8, 0.3, 6),
-		CFrame = cf * CFrame.new(0, 0.15, 0),
-		Color = COL.OliveDark,
-		Material = Enum.Material.Fabric,
+		Name = "CampGlow",
+		Size = Vector3.new(1.4, 0.7, 1.4),
+		Position = origin + Vector3.new(0, 0.55, 0),
+		Color = COL.CampfireGlow,
+		Material = Enum.Material.Neon,
 		Parent = folder,
 	})
 	p({
+		Name = "CampLog",
+		Size = Vector3.new(1.8, 0.35, 0.35),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, math.rad(30), 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+end
+
+local function kitAdobeBuilding(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "AdobeBody",
+		Size = Vector3.new(12, 7, 9),
+		CFrame = cf * CFrame.new(0, 3.5, 0),
+		Color = COL.Adobe,
+		Material = Enum.Material.Sandstone,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "AdobeRoof",
+		Size = Vector3.new(13.2, 1.0, 10.2),
+		CFrame = cf * CFrame.new(0, 7.3, 0),
+		Color = COL.AdobeDark,
+		Material = Enum.Material.Sandstone,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "AdobeDoor",
+		Size = Vector3.new(2.2, 3.4, 0.35),
+		CFrame = cf * CFrame.new(0, 1.8, -4.55),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	for _, ox in ipairs({ -3.5, 3.5 }) do
+		p({
+			Name = "AdobeWindow",
+			Size = Vector3.new(1.6, 1.4, 0.25),
+			CFrame = cf * CFrame.new(ox, 4.2, -4.5),
+			Color = COL.AdobeWindow,
+			Material = Enum.Material.Glass,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "AdobeAccent",
+		Size = Vector3.new(12.4, 0.2, 0.3),
+		CFrame = cf * CFrame.new(0, 6.8, -4.6),
+		Color = COL.NeonGold,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitRichTent(folder: Folder, origin: Vector3, yawDeg: number)
+	-- Canvas folds, poles, guy-line Parts (original — not copied meshes)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "TentFloor",
+		Size = Vector3.new(9, 0.25, 7),
+		CFrame = cf * CFrame.new(0, 0.12, 0),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
+		Parent = folder,
+	})
+	-- Main canvas body
+	p({
 		Name = "TentBody",
-		Size = Vector3.new(7.5, 3.5, 5.5),
-		CFrame = cf * CFrame.new(0, 2, 0),
+		Size = Vector3.new(8.2, 3.8, 6.2),
+		CFrame = cf * CFrame.new(0, 2.1, 0),
 		Color = COL.Tent,
 		Material = Enum.Material.Fabric,
 		CanCollide = true,
 		CanQuery = true,
 		Parent = folder,
 	})
+	-- Ridge / fold panels
 	p({
-		Name = "TentPeak",
-		Size = Vector3.new(7.8, 0.8, 1.2),
-		CFrame = cf * CFrame.new(0, 4, 0),
-		Color = COL.Olive,
+		Name = "TentRidge",
+		Size = Vector3.new(8.5, 0.7, 1.4),
+		CFrame = cf * CFrame.new(0, 4.3, 0),
+		Color = COL.TentDark,
 		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
 	p({
-		Name = "CampFireRing",
-		Size = Vector3.new(2.5, 0.4, 2.5),
-		CFrame = cf * CFrame.new(6, 0.3, 0),
-		Color = COL.ConcreteDark,
-		Material = Enum.Material.Slate,
+		Name = "TentFoldL",
+		Size = Vector3.new(0.35, 3.5, 6.0),
+		CFrame = cf * CFrame.new(-3.9, 2.0, 0),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
 	p({
-		Name = "CampGlow",
-		Size = Vector3.new(1.2, 0.5, 1.2),
-		CFrame = cf * CFrame.new(6, 0.6, 0),
-		Color = COL.NeonOrange,
-		Material = Enum.Material.Neon,
+		Name = "TentFoldR",
+		Size = Vector3.new(0.35, 3.5, 6.0),
+		CFrame = cf * CFrame.new(3.9, 2.0, 0),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
-	kitCrateStack(folder, (cf * CFrame.new(-6, 0, 2)).Position)
-	kitOilDrums(folder, (cf * CFrame.new(-5, 0, -3)).Position, 2)
+	-- Center + corner poles
+	p({
+		Name = "TentPole",
+		Size = Vector3.new(0.3, 5.2, 0.3),
+		CFrame = cf * CFrame.new(0, 2.6, 0),
+		Color = COL.TentPole,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	for _, ox in ipairs({ -4.2, 4.2 }) do
+		for _, oz in ipairs({ -3.2, 3.2 }) do
+			p({
+				Name = "TentStake",
+				Size = Vector3.new(0.22, 1.2, 0.22),
+				CFrame = cf * CFrame.new(ox, 0.6, oz),
+				Color = COL.TentPole,
+				Material = Enum.Material.Wood,
+				Parent = folder,
+			})
+			-- Guy lines (thin Parts)
+			p({
+				Name = "GuyLine",
+				Size = Vector3.new(0.08, 0.08, 4.2),
+				CFrame = cf * CFrame.new(ox * 0.5, 2.4, oz * 0.5) * CFrame.Angles(math.rad(28), 0, math.rad(ox > 0 and -12 or 12)),
+				Color = Color3.fromRGB(180, 170, 140),
+				Material = Enum.Material.Fabric,
+				CastShadow = false,
+				Parent = folder,
+			})
+		end
+	end
+	p({
+		Name = "TentDoorFlap",
+		Size = Vector3.new(2.0, 2.8, 0.2),
+		CFrame = cf * CFrame.new(0, 1.5, -3.15),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
+		Parent = folder,
+	})
+end
+
+local function kitCamp(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	kitRichTent(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
+	kitRichTent(folder, (cf * CFrame.new(12, 0, 4)).Position, yawDeg + 15)
+	kitAdobeBuilding(folder, (cf * CFrame.new(-14, 0, 2)).Position, yawDeg)
+	kitCampfire(folder, (cf * CFrame.new(6, 0, -6)).Position)
+	kitCrateStack(folder, (cf * CFrame.new(-6, 0, 6)).Position)
+	kitOilDrums(folder, (cf * CFrame.new(-5, 0, -5)).Position, 2)
+	kitSandbagLine(folder, (cf * CFrame.new(0, 0, 10)).Position, yawDeg, 4)
 end
 
 local function kitRunway(folder: Folder, origin: Vector3, yawDeg: number, length: number?)
@@ -4201,13 +4834,16 @@ end
 
 local function kitOutpost(folder: Folder, origin: Vector3, yawDeg: number)
 	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	-- Compact fortified outpost: bunker + tower + sandbags + fence
-	kitBunker(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
-	kitWatchtower(folder, (cf * CFrame.new(10, 0, 8)).Position, yawDeg + 20)
-	kitSandbagLine(folder, (cf * CFrame.new(0, 0, -8)).Position, yawDeg, 4)
-	kitWireFence(folder, (cf * CFrame.new(-10, 0, 0)).Position, yawDeg + 90, 3)
-	kitAmmoShed(folder, (cf * CFrame.new(-8, 0, 10)).Position, yawDeg)
-	kitLightPole(folder, (cf * CFrame.new(12, 0, -6)).Position)
+	-- Compact fortified desert outpost: adobe + wooden tower + tent + sandbags + fence
+	kitAdobeBuilding(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
+	kitWatchtower(folder, (cf * CFrame.new(12, 0, 10)).Position, yawDeg + 20)
+	kitRichTent(folder, (cf * CFrame.new(-12, 0, 6)).Position, yawDeg - 10)
+	kitSandbagLine(folder, (cf * CFrame.new(0, 0, -10)).Position, yawDeg, 5)
+	kitSandbagLine(folder, (cf * CFrame.new(8, 0, -8)).Position, yawDeg + 40, 3)
+	kitWireFence(folder, (cf * CFrame.new(-14, 0, -2)).Position, yawDeg + 90, 3)
+	kitAmmoShed(folder, (cf * CFrame.new(-8, 0, 14)).Position, yawDeg)
+	kitCampfire(folder, (cf * CFrame.new(6, 0, -6)).Position)
+	kitLightPole(folder, (cf * CFrame.new(14, 0, -8)).Position)
 end
 
 -- Sparse optional cluster label (short MaxDistance — mobile friendly)
@@ -4552,14 +5188,14 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="48">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
 --[[
 	WAR EMPIRE — MapSetup (shared world build)
 	Builds Workspace.WarEmpireSetup: map, plots, structure kits, territories,
-	spawns, tutorial markers, NPC placeholders, lighting, MapDressing world props.
+	spawns, tutorial markers, NPC placeholders, desert lighting, MapDressing + DesertFlora.
 	Called from Bootstrap when WarEmpireSetup is missing (Play Solo / server start).
 	Admin `resetmap` destroys WarEmpireSetup and re-runs.
 ]]
@@ -4569,6 +5205,7 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 
 local MapDressing = require(script.Parent:WaitForChild("MapDressing"))
+local DesertFlora = require(script.Parent:WaitForChild("DesertFlora"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -4581,7 +5218,7 @@ local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
 
-local COL_GROUND = Color3.fromRGB(28, 48, 26) -- darker grass; never reads as sky/void
+local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
 local COL_PAD = Color3.fromRGB(38, 44, 48)
 local COL_PAD_EDGE = Color3.fromRGB(70, 190, 110)
 local COL_VEHICLE = Color3.fromRGB(48, 62, 78)
@@ -4590,7 +5227,7 @@ local COL_EVENT = Color3.fromRGB(78, 64, 36)
 
 local STRUCTURES = {
 	{ Id = "CommandCenter", Kit = "hq", Plinth = Color3.fromRGB(36, 48, 40), Body = Color3.fromRGB(55, 78, 58), Accent = Color3.fromRGB(230, 190, 60), Roof = Color3.fromRGB(40, 55, 45) },
-	{ Id = "Barracks", Kit = "barracks", Plinth = Color3.fromRGB(42, 46, 38), Body = Color3.fromRGB(70, 78, 55), Accent = Color3.fromRGB(90, 160, 80), Roof = Color3.fromRGB(50, 55, 42) },
+	{ Id = "Barracks", Kit = "barracks", Plinth = Color3.fromRGB(150, 120, 80), Body = Color3.fromRGB(175, 145, 100), Accent = Color3.fromRGB(210, 170, 80), Roof = Color3.fromRGB(130, 100, 70) },
 	{ Id = "VehicleDepot", Kit = "depot", Plinth = Color3.fromRGB(40, 48, 55), Body = Color3.fromRGB(58, 72, 88), Accent = Color3.fromRGB(90, 160, 220), Roof = Color3.fromRGB(45, 55, 65) },
 	{ Id = "WeaponsFacility", Kit = "lab", Plinth = Color3.fromRGB(48, 40, 38), Body = Color3.fromRGB(88, 58, 50), Accent = Color3.fromRGB(200, 90, 70), Roof = Color3.fromRGB(55, 42, 40) },
 	{ Id = "Helipad", Kit = "pad", Plinth = Color3.fromRGB(45, 50, 48), Body = Color3.fromRGB(60, 70, 65), Accent = Color3.fromRGB(220, 200, 80), Roof = Color3.fromRGB(50, 55, 52) },
@@ -4602,7 +5239,7 @@ local STRUCTURES = {
 	{ Id = "ResearchLab", Kit = "lab", Plinth = Color3.fromRGB(38, 45, 55), Body = Color3.fromRGB(50, 70, 95), Accent = Color3.fromRGB(80, 180, 220), Roof = Color3.fromRGB(42, 55, 72) },
 	{ Id = "MissileDefense", Kit = "tower", Plinth = Color3.fromRGB(48, 42, 40), Body = Color3.fromRGB(75, 55, 50), Accent = Color3.fromRGB(220, 100, 60), Roof = Color3.fromRGB(55, 45, 42) },
 	{ Id = "PowerStation", Kit = "power", Plinth = Color3.fromRGB(50, 48, 35), Body = Color3.fromRGB(90, 85, 50), Accent = Color3.fromRGB(255, 210, 70), Roof = Color3.fromRGB(60, 55, 40) },
-	{ Id = "Warehouse", Kit = "warehouse", Plinth = Color3.fromRGB(45, 42, 38), Body = Color3.fromRGB(95, 80, 60), Accent = Color3.fromRGB(180, 140, 80), Roof = Color3.fromRGB(55, 50, 42) },
+	{ Id = "Warehouse", Kit = "warehouse", Plinth = Color3.fromRGB(140, 115, 75), Body = Color3.fromRGB(165, 135, 90), Accent = Color3.fromRGB(200, 160, 90), Roof = Color3.fromRGB(120, 95, 65) },
 	{ Id = "SpecialForcesFacility", Kit = "special", Plinth = Color3.fromRGB(35, 38, 42), Body = Color3.fromRGB(45, 55, 65), Accent = Color3.fromRGB(160, 80, 200), Roof = Color3.fromRGB(30, 35, 40) },
 }
 
@@ -4991,7 +5628,7 @@ end
 
 
 
--- Visual kits v2: shared infantry silhouette for MapSetup placeholders / workers
+-- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
 local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
 	local model = Instance.new("Model")
 	model.Name = name
@@ -5001,10 +5638,18 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	if npcType then
 		model:SetAttribute("NPCType", npcType)
 	end
+	-- Desert camo base (tan/khaki) blended with role color
+	local desertBase = Color3.fromRGB(145, 125, 85)
+	local camo = desertBase:Lerp(bodyColor, 0.45)
+	local camoDark = Color3.fromRGB(
+		math.clamp(math.floor(camo.R * 255) - 28, 20, 255),
+		math.clamp(math.floor(camo.G * 255) - 22, 20, 255),
+		math.clamp(math.floor(camo.B * 255) - 18, 20, 255)
+	)
 	local torso = part({
 		Name = "HumanoidRootPart",
-		Size = Vector3.new(2.05, 2.35, 1.2),
-		Color = bodyColor,
+		Size = Vector3.new(2.05, 2.4, 1.25),
+		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = true,
@@ -5014,80 +5659,136 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	local head = part({
 		Name = "Head",
 		Size = Vector3.new(1.1, 1.1, 1.1),
-		Color = Color3.fromRGB(95, 72, 55),
+		Color = Color3.fromRGB(110, 85, 62),
 		Material = Enum.Material.SmoothPlastic,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 1.7, 0),
+		CFrame = torso.CFrame + Vector3.new(0, 1.72, 0),
 		Shape = Enum.PartType.Ball,
 		Parent = model,
 	})
+	-- Helmet (desert tan)
 	part({
 		Name = "Helmet",
-		Size = Vector3.new(1.28, 0.5, 1.28),
-		Color = Color3.fromRGB(
-			math.clamp(math.floor(bodyColor.R * 255) - 25, 20, 255),
-			math.clamp(math.floor(bodyColor.G * 255) - 15, 20, 255),
-			math.clamp(math.floor(bodyColor.B * 255) - 10, 20, 255)
-		),
+		Size = Vector3.new(1.32, 0.55, 1.32),
+		Color = camoDark,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame + Vector3.new(0, 0.4, 0),
+		CFrame = head.CFrame + Vector3.new(0, 0.42, 0),
+		Parent = model,
+	})
+	-- Shemagh / scarf wrap (neck + cheek accent)
+	part({
+		Name = "Shemagh",
+		Size = Vector3.new(1.45, 0.55, 1.35),
+		Color = Color3.fromRGB(200, 185, 150),
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = head.CFrame + Vector3.new(0, -0.35, 0.05),
 		Parent = model,
 	})
 	part({
-		Name = "Vest",
-		Size = Vector3.new(2.15, 1.25, 1.35),
-		Color = Color3.fromRGB(
-			math.clamp(math.floor(bodyColor.R * 255) - 30, 20, 255),
-			math.clamp(math.floor(bodyColor.G * 255) - 20, 20, 255),
-			math.clamp(math.floor(bodyColor.B * 255) - 15, 20, 255)
-		),
-		Material = Enum.Material.Metal,
+		Name = "ShemaghTail",
+		Size = Vector3.new(0.7, 1.1, 0.25),
+		Color = Color3.fromRGB(190, 170, 130),
+		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 0.25, 0),
+		CFrame = torso.CFrame * CFrame.new(0.85, 0.85, -0.15),
+		Parent = model,
+	})
+	-- Plate carrier vest
+	part({
+		Name = "Vest",
+		Size = Vector3.new(2.2, 1.35, 1.4),
+		Color = camoDark,
+		Material = Enum.Material.Leather,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame + Vector3.new(0, 0.28, 0),
+		Parent = model,
+	})
+	part({
+		Name = "VestPouch",
+		Size = Vector3.new(1.6, 0.55, 0.35),
+		Color = Color3.fromRGB(90, 80, 55),
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0, 0.15, -0.7),
 		Parent = model,
 	})
 	part({
 		Name = "LegL",
-		Size = Vector3.new(0.65, 1.4, 0.65),
-		Color = bodyColor,
+		Size = Vector3.new(0.68, 1.45, 0.68),
+		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(-0.45, -1.75, 0),
+		CFrame = torso.CFrame * CFrame.new(-0.45, -1.78, 0),
 		Parent = model,
 	})
 	part({
 		Name = "LegR",
-		Size = Vector3.new(0.65, 1.4, 0.65),
-		Color = bodyColor,
+		Size = Vector3.new(0.68, 1.45, 0.68),
+		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.45, -1.75, 0),
+		CFrame = torso.CFrame * CFrame.new(0.45, -1.78, 0),
+		Parent = model,
+	})
+	-- Clearer rifle silhouette (stock + barrel + optic)
+	part({
+		Name = "RifleStock",
+		Size = Vector3.new(0.35, 0.45, 1.1),
+		Color = Color3.fromRGB(55, 48, 38),
+		Material = Enum.Material.Wood,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.2, 0.15),
 		Parent = model,
 	})
 	part({
 		Name = "Rifle",
-		Size = Vector3.new(0.26, 0.26, 2.3),
-		Color = Color3.fromRGB(30, 30, 32),
+		Size = Vector3.new(0.28, 0.28, 2.8),
+		Color = Color3.fromRGB(32, 34, 36),
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.15, -0.75),
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.25, -1.15),
+		Parent = model,
+	})
+	part({
+		Name = "RifleBarrel",
+		Size = Vector3.new(0.16, 0.16, 1.2),
+		Color = Color3.fromRGB(25, 25, 28),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.28, -2.5),
+		Parent = model,
+	})
+	part({
+		Name = "RifleOptic",
+		Size = Vector3.new(0.22, 0.35, 0.55),
+		Color = Color3.fromRGB(40, 42, 45),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.55, -0.9),
 		Parent = model,
 	})
 	part({
 		Name = "Accent",
 		Size = Vector3.new(1.7, 0.12, 0.3),
-		Color = labelColor or Color3.fromRGB(200, 80, 60),
+		Color = labelColor or Color3.fromRGB(200, 140, 60),
 		Material = Enum.Material.Neon,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.9, -0.55),
+		CFrame = torso.CFrame * CFrame.new(0, 0.95, -0.55),
 		Parent = model,
 	})
 	local hum = Instance.new("Humanoid")
@@ -5098,7 +5799,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	model.Parent = parentFolder
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 	if labelText then
-		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 180, 140))
+		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 200, 140))
 	end
 	return model
 end
@@ -5140,8 +5841,8 @@ local function buildEdgeBerms(mapFolder: Folder)
 			Name = s.Name,
 			Size = s.Size,
 			Position = s.Pos,
-			Color = Color3.fromRGB(42, 58, 36),
-			Material = Enum.Material.Grass,
+			Color = Color3.fromRGB(185, 155, 105),
+			Material = Enum.Material.Sand,
 			CanCollide = true,
 			Anchored = true,
 			Parent = mapFolder,
@@ -5151,57 +5852,57 @@ end
 
 local function buildMountainRing(root: Folder)
 	--[[
-		Segmented Part-kit hills/ridges around Ground perimeter.
-		Varied heights ~40–120 studs; rock/slate/grass; CanCollide on outer berm.
-		Not one giant wall — mobile-friendly (~64–80 segments + peak caps).
+		Desert mesa / butte rim — terracotta / sienna / reddish-brown layered Part kits.
+		Flat-topped sedimentary striations; varied heights; foothills + collide berm.
+		Keeps continuous floor / CanCollide perimeter from void-fall fix (4021025).
 	]]
 	local folder = Instance.new("Folder")
 	folder.Name = "MountainRing"
 	folder.Parent = root
 
-	local rockColors = {
-		Color3.fromRGB(72, 68, 58),
-		Color3.fromRGB(58, 62, 52),
-		Color3.fromRGB(90, 82, 68),
-		Color3.fromRGB(48, 55, 42),
-		Color3.fromRGB(80, 75, 62),
-		Color3.fromRGB(55, 48, 40),
+	local mesaColors = {
+		Color3.fromRGB(168, 95, 58), -- terracotta
+		Color3.fromRGB(145, 78, 48), -- burnt sienna
+		Color3.fromRGB(185, 110, 70), -- warm sandstone
+		Color3.fromRGB(130, 72, 48), -- deep clay
+		Color3.fromRGB(175, 105, 65), -- mesa orange
+		Color3.fromRGB(155, 88, 55), -- red rock
 	}
-	local grassTint = Color3.fromRGB(40, 62, 34)
-	local slateTint = Color3.fromRGB(62, 66, 72)
+	local strataLight = Color3.fromRGB(200, 145, 100)
+	local strataDark = Color3.fromRGB(110, 62, 40)
+	local sandFoothill = Color3.fromRGB(195, 160, 110)
 
 	local half = GROUND_SIZE * 0.5
-	-- Ring sits just outside playable Ground so players can't stroll into sky
 	local ringR = half + 90
-	local segCount = 48 -- perimeter segments
+	local segCount = 48
 	local segArc = (math.pi * 2) / segCount
-	local segLen = ringR * segArc * 1.12 -- slight overlap
+	local segLen = ringR * segArc * 1.12
 
 	for i = 1, segCount do
 		local angle = (i - 0.5) * segArc
 		local cx = math.cos(angle) * ringR
 		local cz = math.sin(angle) * ringR
-		-- Pseudo-random but stable heights (40–120)
 		local hSeed = ((i * 17 + 31) % 80) + 40
 		local height = hSeed
 		if i % 7 == 0 then
-			height = math.min(120, height + 28)
+			height = math.min(125, height + 32)
 		elseif i % 5 == 0 then
-			height = math.max(40, height - 18)
+			height = math.max(42, height - 16)
 		end
-		local depth = 55 + (i % 5) * 8
+		-- Flat-topped mesa: slightly shorter + wider top silhouette
+		local depth = 58 + (i % 5) * 9
 		local yaw = -angle + math.pi * 0.5
-		local col = rockColors[((i - 1) % #rockColors) + 1]
-		local mat = Enum.Material.Rock
+		local col = mesaColors[((i - 1) % #mesaColors) + 1]
+		local mat = Enum.Material.Sandstone
 		if i % 3 == 0 then
-			mat = Enum.Material.Slate
-			col = slateTint:Lerp(col, 0.45)
+			mat = Enum.Material.Rock
+			col = col:Lerp(strataDark, 0.25)
 		elseif i % 4 == 0 then
-			mat = Enum.Material.Grass
-			col = grassTint:Lerp(col, 0.35)
+			mat = Enum.Material.Slate
+			col = col:Lerp(Color3.fromRGB(140, 95, 70), 0.3)
 		end
 		local ridge = part({
-			Name = "Ridge_" .. i,
+			Name = "Mesa_" .. i,
 			Size = Vector3.new(segLen, height, depth),
 			CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.5 - 2, cz) * CFrame.Angles(0, yaw, 0),
 			Color = col,
@@ -5211,32 +5912,47 @@ local function buildMountainRing(root: Folder)
 			Parent = folder,
 		})
 		ridge:SetAttribute("WE_Mountain", true)
-		-- Peak cap / secondary knob for silhouette variety (no collide needed on tiny tip)
+		-- Sedimentary striation bands (visual only)
 		if i % 2 == 0 then
-			local tipH = 12 + (i % 6) * 4
+			local bandH = math.clamp(height * 0.12, 4, 10)
 			part({
-				Name = "Peak_" .. i,
-				Size = Vector3.new(segLen * 0.45, tipH, depth * 0.55),
-				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.35 - 2, cz) * CFrame.Angles(0, yaw, 0),
-				Color = col:Lerp(Color3.fromRGB(120, 115, 100), 0.2),
-				Material = Enum.Material.Rock,
+				Name = "Strata_" .. i,
+				Size = Vector3.new(segLen * 1.02, bandH, depth * 0.98),
+				CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.38, cz) * CFrame.Angles(0, yaw, 0),
+				Color = if i % 4 == 0 then strataLight else strataDark,
+				Material = Enum.Material.Sandstone,
+				CanCollide = false,
+				Anchored = true,
+				Transparency = 0.08,
+				Parent = folder,
+			}):SetAttribute("WE_Mountain", true)
+		end
+		-- Flat mesa cap (butte top)
+		if i % 2 == 0 then
+			local tipH = 6 + (i % 5) * 2
+			part({
+				Name = "MesaCap_" .. i,
+				Size = Vector3.new(segLen * 0.72, tipH, depth * 0.7),
+				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.25 - 2, cz) * CFrame.Angles(0, yaw, 0),
+				Color = col:Lerp(strataLight, 0.35),
+				Material = Enum.Material.Sandstone,
 				CanCollide = false,
 				Anchored = true,
 				Parent = folder,
 			}):SetAttribute("WE_Mountain", true)
 		end
-		-- Inner foothill shelf (collide) so walk-up from berm feels continuous
+		-- Inner foothill shelf (sand) — collide continuity from berm
 		if i % 3 == 0 then
-			local footH = 14 + (i % 4) * 3
+			local footH = 12 + (i % 4) * 3
 			local footR = half + 35
 			local fx = math.cos(angle) * footR
 			local fz = math.sin(angle) * footR
 			part({
 				Name = "Foothill_" .. i,
-				Size = Vector3.new(segLen * 0.9, footH, 36),
+				Size = Vector3.new(segLen * 0.9, footH, 38),
 				CFrame = CFrame.new(fx, GROUND_TOP_Y + footH * 0.5 - 1, fz) * CFrame.Angles(0, yaw, 0),
-				Color = grassTint,
-				Material = Enum.Material.Grass,
+				Color = sandFoothill,
+				Material = Enum.Material.Sand,
 				CanCollide = true,
 				Anchored = true,
 				Parent = folder,
@@ -5244,7 +5960,26 @@ local function buildMountainRing(root: Folder)
 		end
 	end
 
-	-- Corner massifs (extra bulk at N/E/S/W so ring never reads as thin wall)
+	-- Mid-ground rocky outcrops just inside the ring (sandy floor props)
+	for oi = 1, 12 do
+		local ang = (oi / 12) * math.pi * 2 + 0.2
+		local orad = half - 220 - (oi % 4) * 40
+		local ox = math.cos(ang) * orad
+		local oz = math.sin(ang) * orad
+		local oh = 10 + (oi % 5) * 4
+		part({
+			Name = "Outcrop_" .. oi,
+			Size = Vector3.new(28 + (oi % 3) * 8, oh, 22 + (oi % 2) * 6),
+			Position = Vector3.new(ox, GROUND_TOP_Y + oh * 0.5 - 1, oz),
+			Color = mesaColors[((oi - 1) % #mesaColors) + 1],
+			Material = Enum.Material.Sandstone,
+			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		}):SetAttribute("WE_Mountain", true)
+	end
+
+	-- Corner massifs (extra bulk — flat-topped buttes)
 	local massifs = {
 		{ 0, -1, "N" },
 		{ 0, 1, "S" },
@@ -5258,20 +5993,31 @@ local function buildMountainRing(root: Folder)
 	for mi, m in ipairs(massifs) do
 		local mx = m[1] * (half + 120)
 		local mz = m[2] * (half + 120)
-		local mh = 70 + (mi % 4) * 12
+		local mh = 75 + (mi % 4) * 14
 		part({
-			Name = "Massif_" .. m[3],
-			Size = Vector3.new(140, mh, 140),
+			Name = "Butte_" .. m[3],
+			Size = Vector3.new(150, mh, 150),
 			Position = Vector3.new(mx, GROUND_TOP_Y + mh * 0.5 - 4, mz),
-			Color = rockColors[((mi - 1) % #rockColors) + 1],
-			Material = Enum.Material.Rock,
+			Color = mesaColors[((mi - 1) % #mesaColors) + 1],
+			Material = Enum.Material.Sandstone,
 			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		}):SetAttribute("WE_Mountain", true)
+		-- Flat cap
+		part({
+			Name = "ButteCap_" .. m[3],
+			Size = Vector3.new(120, 8, 120),
+			Position = Vector3.new(mx, GROUND_TOP_Y + mh + 2, mz),
+			Color = strataLight,
+			Material = Enum.Material.Sandstone,
+			CanCollide = false,
 			Anchored = true,
 			Parent = folder,
 		}):SetAttribute("WE_Mountain", true)
 	end
 
-	print("[WAR EMPIRE] MapSetup: MountainRing segments=" .. tostring(segCount) .. " + massifs around Ground perimeter")
+	print("[WAR EMPIRE] MapSetup: MountainRing mesas=" .. tostring(segCount) .. " + buttes/outcrops (desert terracotta)")
 end
 
 local function buildVisualFillPatches(mapFolder: Folder)
@@ -5295,8 +6041,8 @@ local function buildVisualFillPatches(mapFolder: Folder)
 			Name = "FillPatch_" .. i,
 			Size = Vector3.new(w, 0.2, d),
 			Position = pos,
-			Color = if i % 2 == 0 then Color3.fromRGB(36, 52, 30) else Color3.fromRGB(48, 50, 44),
-			Material = if i % 2 == 0 then Enum.Material.Grass else Enum.Material.Concrete,
+			Color = if i % 2 == 0 then Color3.fromRGB(220, 195, 140) else Color3.fromRGB(195, 165, 115),
+			Material = if i % 2 == 0 then Enum.Material.Sand else Enum.Material.Sandstone,
 			CanCollide = false,
 			Anchored = true,
 			Transparency = 0.05,
@@ -5400,7 +6146,7 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		repaired = true
 	end
 	ground.Color = COL_GROUND
-	ground.Material = Enum.Material.Grass
+	ground.Material = Enum.Material.Sand
 
 	local catch = map:FindFirstChild("SafetyCatch")
 	if not (catch and catch:IsA("BasePart")) then
@@ -5438,17 +6184,17 @@ function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
 
-	-- Lighting / sky / atmosphere — large map readable at distance + gentle day/night
-	Lighting.Ambient = Color3.fromRGB(72, 82, 68)
-	Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82)
-	Lighting.Brightness = 2.25
-	Lighting.ClockTime = 15.0
-	Lighting.GeographicLatitude = 28
-	Lighting.EnvironmentDiffuseScale = 0.5
-	Lighting.EnvironmentSpecularScale = 0.32
-	Lighting.FogColor = Color3.fromRGB(145, 158, 135)
-	Lighting.FogStart = 800
-	Lighting.FogEnd = 4400
+	-- Lighting / sky / atmosphere — bright midday desert (inspiration only)
+	Lighting.Ambient = Color3.fromRGB(165, 145, 110)
+	Lighting.OutdoorAmbient = Color3.fromRGB(185, 165, 130)
+	Lighting.Brightness = 3.15
+	Lighting.ClockTime = 12.5 -- intense midday sun
+	Lighting.GeographicLatitude = 22
+	Lighting.EnvironmentDiffuseScale = 0.55
+	Lighting.EnvironmentSpecularScale = 0.42
+	Lighting.FogColor = Color3.fromRGB(210, 195, 160)
+	Lighting.FogStart = 1200
+	Lighting.FogEnd = 5200
 	pcall(function()
 		Lighting.GlobalShadows = true
 	end)
@@ -5460,8 +6206,8 @@ function MapSetup.Run()
 	end
 	sky.Name = "WE_Sky"
 	sky.CelestialBodiesShown = true
-	sky.StarCount = 3000
-	sky.SunAngularSize = 14
+	sky.StarCount = 2500
+	sky.SunAngularSize = 18 -- larger desert sun
 	sky.MoonAngularSize = 9
 
 	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
@@ -5469,14 +6215,14 @@ function MapSetup.Run()
 		atm = Instance.new("Atmosphere")
 		atm.Parent = Lighting
 	end
-	atm.Density = 0.22
-	atm.Offset = 0.12
-	atm.Color = Color3.fromRGB(155, 168, 145)
-	atm.Decay = Color3.fromRGB(95, 108, 88)
-	atm.Glare = 0.18
-	atm.Haze = 1.85
+	atm.Density = 0.14
+	atm.Offset = 0.08
+	atm.Color = Color3.fromRGB(200, 185, 150) -- warm haze near horizon
+	atm.Decay = Color3.fromRGB(95, 130, 190) -- deep blue sky fade
+	atm.Glare = 0.32
+	atm.Haze = 1.15 -- low haze, high contrast
 
-	-- Cancel prior day/night loop on resetmap, then start a gentle cycle (~20 min full day)
+	-- Cancel prior day/night loop on resetmap; gentle cycle biased to bright desert day
 	local dayMarker = Lighting:FindFirstChild("WE_DayNightMarker")
 	if dayMarker then
 		dayMarker:Destroy()
@@ -5485,12 +6231,17 @@ function MapSetup.Run()
 	dayMarker.Name = "WE_DayNightMarker"
 	dayMarker.Parent = Lighting
 	task.spawn(function()
-		local STEP = 0.035 -- hours per tick
+		local STEP = 0.03
 		local WAIT = 1.5
+		local dayAmb = Color3.fromRGB(165, 145, 110)
+		local dayOut = Color3.fromRGB(185, 165, 130)
+		local dayFog = Color3.fromRGB(210, 195, 160)
+		local nightAmb = Color3.fromRGB(40, 45, 70)
+		local nightOut = Color3.fromRGB(50, 55, 85)
+		local nightFog = Color3.fromRGB(55, 60, 90)
 		while dayMarker.Parent do
 			local t = (Lighting.ClockTime + STEP) % 24
 			Lighting.ClockTime = t
-			-- Night dip: cooler ambient + thicker haze; day stays readable on large map
 			local night = 0
 			if t < 5 or t > 20 then
 				night = 1
@@ -5499,16 +6250,17 @@ function MapSetup.Run()
 			elseif t > 18 then
 				night = (t - 18) / 2
 			end
-			Lighting.Brightness = 2.35 - night * 1.55
-			Lighting.Ambient = Color3.fromRGB(72, 82, 68):Lerp(Color3.fromRGB(28, 34, 55), night)
-			Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82):Lerp(Color3.fromRGB(36, 42, 70), night)
-			Lighting.FogColor = Color3.fromRGB(145, 158, 135):Lerp(Color3.fromRGB(40, 48, 72), night)
-			Lighting.FogStart = 800 - night * 180
-			Lighting.FogEnd = 4400 - night * 600
-			atm.Density = 0.20 + night * 0.12
-			atm.Haze = 1.7 + night * 0.9
-			atm.Color = Color3.fromRGB(155, 168, 145):Lerp(Color3.fromRGB(70, 80, 120), night)
-			atm.Glare = 0.18 - night * 0.1
+			Lighting.Brightness = 3.2 - night * 2.1
+			Lighting.Ambient = dayAmb:Lerp(nightAmb, night)
+			Lighting.OutdoorAmbient = dayOut:Lerp(nightOut, night)
+			Lighting.FogColor = dayFog:Lerp(nightFog, night)
+			Lighting.FogStart = 1200 - night * 250
+			Lighting.FogEnd = 5200 - night * 800
+			atm.Density = 0.13 + night * 0.14
+			atm.Haze = 1.1 + night * 1.0
+			atm.Color = Color3.fromRGB(200, 185, 150):Lerp(Color3.fromRGB(70, 80, 120), night)
+			atm.Decay = Color3.fromRGB(95, 130, 190):Lerp(Color3.fromRGB(40, 50, 90), night)
+			atm.Glare = 0.32 - night * 0.2
 			task.wait(WAIT)
 		end
 	end)
@@ -5521,7 +6273,7 @@ function MapSetup.Run()
 		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
 		Position = Vector3.new(0, groundCenterY(), 0),
 		Color = COL_GROUND,
-		Material = Enum.Material.Grass,
+		Material = Enum.Material.Sand,
 		CanCollide = true,
 		Anchored = true,
 		Parent = map,
@@ -5942,9 +6694,9 @@ function MapSetup.Run()
 			Name = "WaterPlane",
 			Size = Vector3.new(GROUND_SIZE * 0.9, 1, 720),
 			Position = Vector3.new(0, 0.2, 1850),
-			Color = Color3.fromRGB(35, 90, 130),
+			Color = Color3.fromRGB(45, 120, 145),
 			Material = Enum.Material.Glass,
-			Transparency = 0.35,
+			Transparency = 0.32,
 			CanCollide = false,
 			Parent = waterFolder,
 		})
@@ -5954,9 +6706,9 @@ function MapSetup.Run()
 			Name = "HarborShelf",
 			Size = Vector3.new(GROUND_SIZE * 0.75, 1, 120),
 			Position = Vector3.new(0, 0.4, 1520),
-			Color = Color3.fromRGB(40, 70, 90),
-			Material = Enum.Material.Slate,
-			Transparency = 0.15,
+			Color = Color3.fromRGB(55, 95, 105),
+			Material = Enum.Material.Sandstone,
+			Transparency = 0.12,
 			CanCollide = true,
 			Parent = waterFolder,
 		})
@@ -6190,6 +6942,7 @@ function MapSetup.Run()
 	-- Military world dressing (visual only — outposts/bunkers/hangars/depots/camps)
 	-- Does not tag WE_UpgradeSlot / buy pads. Regenerate via resetmap or delete WarEmpireSetup.
 	MapDressing.Dress(root)
+	DesertFlora.Dress(root)
 
 	-- Guarantee at least one Neutral Duration=0 spawn near origin
 	local hasNeutralSpawn = false
@@ -6214,7 +6967,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " safetyY=" .. tostring(SAFETY_FLOOR_Y) .. " plotRing=" .. tostring(PLOT_RING) .. " mountains/oil-ramps/berms + WorldDressing")
+	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas/flora/oil-ramps/berms + WorldDressing")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end
@@ -6223,7 +6976,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -6522,7 +7275,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -6590,7 +7343,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -6704,7 +7457,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -6832,11 +7585,11 @@ return SessionLock
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="52">
+      <Item class="Folder" referent="53">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -7047,7 +7800,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -7096,7 +7849,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -7146,7 +7899,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -7308,7 +8061,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -7893,7 +8646,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8206,7 +8959,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8311,7 +9064,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8812,7 +9565,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9244,7 +9997,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9397,7 +10150,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10399,7 +11152,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="64">
+          <Item class="ModuleScript" referent="65">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -10456,7 +11209,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="65">
+          <Item class="ModuleScript" referent="66">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -10619,7 +11372,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="66">
+          <Item class="ModuleScript" referent="67">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -10673,7 +11426,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10964,7 +11717,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11125,7 +11878,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11217,7 +11970,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11713,7 +12466,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12030,7 +12783,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12140,7 +12893,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12175,7 +12928,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12427,7 +13180,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12479,7 +13232,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12743,7 +13496,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13008,7 +13761,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13171,7 +13924,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13477,7 +14230,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14193,7 +14946,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -14234,7 +14987,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -14311,7 +15064,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="83">
+          <Item class="ModuleScript" referent="84">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -14367,7 +15120,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14596,7 +15349,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14953,7 +15706,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15974,7 +16727,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16109,19 +16862,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="88">
+  <Item class="StarterPlayer" referent="89">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="89">
+    <Item class="StarterPlayerScripts" referent="90">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="90">
+      <Item class="Folder" referent="91">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="91">
+        <Item class="LocalScript" referent="92">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -16148,11 +16901,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="92">
+        <Item class="Folder" referent="93">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -16251,6 +17004,7 @@ function ArmyController.Init()
 	toggle.TextColor3 = Constants.Colors.Gold
 	toggle.Text = "ARMY"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle, Constants.Colors.Gold, 1.5)
 	toggle.Parent = screen
@@ -16410,11 +17164,28 @@ function ArmyController.Init()
 	end)
 end
 
+
+function ArmyController.Toggle()
+	setOpen(not open)
+end
+
+function ArmyController.Open()
+	setOpen(true)
+end
+
+function ArmyController.Close()
+	setOpen(false)
+end
+
+function ArmyController.IsOpen(): boolean
+	return open
+end
+
 return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -16787,7 +17558,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -17141,7 +17912,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -17364,16 +18135,18 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
 --[[
-	Programmatic HUD: Level+XP top-left, Cash+Gold top-right.
-	Dark military theme + UIScale for mobile.
+	Programmatic HUD: Level+XP top-left, currency pill bottom-left,
+	mobile action dock (large color-coded squares) bottom-right.
+	Inspiration-only layout quality — WAR EMPIRE features/hotkeys kept.
 ]]
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -17394,6 +18167,7 @@ local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
 local seasonLabel: TextLabel? = nil
 local spinnerBtn: TextButton? = nil
+local actionDock: Frame? = nil
 local spinnerReady = false
 local spinnerCooldown = 0
 local lastPassive = 0
@@ -17411,17 +18185,15 @@ local function refreshPassiveHint()
 end
 
 local function makeCorner(parent: Instance, radius: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
-	c.Parent = parent
+	UIUtil.Corner(parent, radius)
 end
 
 local function makeStroke(parent: Instance, gold: boolean?)
-	local s = Instance.new("UIStroke")
-	s.Color = if gold then Constants.Colors.Gold else Color3.fromRGB(55, 65, 55)
-	s.Thickness = if gold then 1.5 else 1
-	s.Transparency = if gold then 0.35 else 0
-	s.Parent = parent
+	if gold then
+		UIUtil.GoldStroke(parent, 1.5)
+	else
+		UIUtil.Stroke(parent)
+	end
 end
 
 function HUDController.Init()
@@ -17431,20 +18203,23 @@ function HUDController.Init()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
+	screen.DisplayOrder = 40
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 	_gui = screen
 
-	-- Top-left: Level + XP
+	local touch = UserInputService.TouchEnabled
+
+	-- Top-left: Level + XP (compact)
 	local left = Instance.new("Frame")
 	left.Name = "LevelPanel"
 	left.AnchorPoint = Vector2.new(0, 0)
 	left.Position = UDim2.fromOffset(16, 16)
 	left.Size = UDim2.fromOffset(220, 64)
 	left.BackgroundColor3 = Constants.Colors.Panel
-	left.BackgroundTransparency = 0.15
+	left.BackgroundTransparency = 0.12
 	left.BorderSizePixel = 0
 	left.Parent = screen
-	makeCorner(left, 8)
+	makeCorner(left, 10)
 	makeStroke(left, true)
 
 	local lvl = Instance.new("TextLabel")
@@ -17489,54 +18264,58 @@ function HUDController.Init()
 	xpLbl.Parent = xpBg
 	xpText = xpLbl
 
-	-- Top-right: Cash + Gold
-	local right = Instance.new("Frame")
-	right.Name = "EconomyPanel"
-	right.AnchorPoint = Vector2.new(1, 0)
-	right.Position = UDim2.new(1, -16, 0, 16)
-	right.Size = UDim2.fromOffset(200, 72)
-	right.BackgroundColor3 = Constants.Colors.Panel
-	right.BackgroundTransparency = 0.15
-	right.BorderSizePixel = 0
-	right.Parent = screen
-	makeCorner(right, 8)
-	makeStroke(right, true)
+	-- Bottom-left: currency pill (cash + gold) — thumb-friendly
+	local pill = Instance.new("Frame")
+	pill.Name = "CurrencyPill"
+	pill.AnchorPoint = Vector2.new(0, 1)
+	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
+	pill.Size = UDim2.fromOffset(200, 56)
+	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
+	pill.BackgroundTransparency = 0.08
+	pill.BorderSizePixel = 0
+	pill.ZIndex = 12
+	pill.Parent = screen
+	makeCorner(pill, 28)
+	local pillStroke = UIUtil.Stroke(pill, Color3.fromRGB(255, 210, 90), 2)
+	pillStroke.Transparency = 0.25
 
 	local cash = Instance.new("TextLabel")
 	cash.Name = "CashLabel"
 	cash.BackgroundTransparency = 1
-	cash.Position = UDim2.fromOffset(10, 8)
-	cash.Size = UDim2.new(1, -20, 0, 24)
+	cash.Position = UDim2.fromOffset(18, 4)
+	cash.Size = UDim2.new(1, -28, 0, 26)
 	cash.Font = Enum.Font.GothamBold
 	cash.TextSize = 20
-	cash.TextXAlignment = Enum.TextXAlignment.Right
+	cash.TextXAlignment = Enum.TextXAlignment.Left
 	cash.TextColor3 = Constants.Colors.Cash
 	cash.Text = "$5,000"
-	cash.Parent = right
+	cash.ZIndex = 13
+	cash.Parent = pill
 	cashLabel = cash
 
 	local gold = Instance.new("TextLabel")
 	gold.Name = "GoldLabel"
 	gold.BackgroundTransparency = 1
-	gold.Position = UDim2.fromOffset(10, 34)
-	gold.Size = UDim2.new(1, -20, 0, 20)
+	gold.Position = UDim2.fromOffset(18, 28)
+	gold.Size = UDim2.new(1, -28, 0, 20)
 	gold.Font = Enum.Font.GothamMedium
-	gold.TextSize = 16
-	gold.TextXAlignment = Enum.TextXAlignment.Right
+	gold.TextSize = 15
+	gold.TextXAlignment = Enum.TextXAlignment.Left
 	gold.TextColor3 = Constants.Colors.Gold
 	gold.Text = "◆ 0"
-	gold.Parent = right
+	gold.ZIndex = 13
+	gold.Parent = pill
 	goldLabel = gold
 
 	local passive = Instance.new("TextLabel")
 	passive.Name = "PassiveHint"
-	passive.AnchorPoint = Vector2.new(1, 0)
-	passive.Position = UDim2.new(1, -16, 0, 96)
-	passive.Size = UDim2.fromOffset(280, 18)
+	passive.AnchorPoint = Vector2.new(0, 1)
+	passive.Position = UDim2.new(0, 16, 1, if touch then -160 else -80)
+	passive.Size = UDim2.fromOffset(240, 18)
 	passive.BackgroundTransparency = 1
 	passive.Font = Enum.Font.Gotham
 	passive.TextSize = 12
-	passive.TextXAlignment = Enum.TextXAlignment.Right
+	passive.TextXAlignment = Enum.TextXAlignment.Left
 	passive.TextColor3 = Constants.Colors.Muted
 	passive.Text = ""
 	passive.Parent = screen
@@ -17559,21 +18338,23 @@ function HUDController.Init()
 	UIUtil.Corner(season, 6)
 	seasonLabel = season
 
-	-- Free Supply Spinner (MT-inspired timed free reward)
+	-- Spinner chip beside currency pill
 	local spin = Instance.new("TextButton")
 	spin.Name = "SpinnerButton"
 	spin.AnchorPoint = Vector2.new(0, 1)
-	spin.Position = UDim2.new(0, 16, 1, -16)
-	spin.Size = UDim2.fromOffset(120, 44)
+	spin.Position = UDim2.new(0, 228, 1, if touch then -100 else -20)
+	spin.Size = UDim2.fromOffset(72, 56)
 	spin.BackgroundColor3 = Constants.Colors.Panel
 	spin.Font = Enum.Font.GothamBold
-	spin.TextSize = 12
+	spin.TextSize = 11
 	spin.TextColor3 = Constants.Colors.Text
-	spin.Text = "SPINNER"
+	spin.Text = "SPIN"
 	spin.BorderSizePixel = 0
+	spin.ZIndex = 12
 	spin.Parent = screen
-	makeCorner(spin, 8)
+	makeCorner(spin, 14)
 	makeStroke(spin, true)
+	UIUtil.EnsureMinTouch(spin, 56)
 	spinnerBtn = spin
 	spin.MouseButton1Click:Connect(function()
 		if spinnerReady then
@@ -17581,17 +18362,35 @@ function HUDController.Init()
 		end
 	end)
 
+	-- Bottom-right action dock (tiles bound by BindActionBar)
+	local dock = Instance.new("Frame")
+	dock.Name = "MobileActionBar"
+	dock.AnchorPoint = Vector2.new(1, 1)
+	dock.Position = UDim2.new(1, -16, 1, if touch then -24 else -20)
+	dock.Size = UDim2.fromOffset(400, 80)
+	dock.BackgroundTransparency = 1
+	dock.ZIndex = 12
+	dock.Parent = screen
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = dock
+	actionDock = dock
+
 	local function refreshSpinnerBtn()
 		if not spinnerBtn then
 			return
 		end
 		if spinnerReady then
-			spinnerBtn.Text = "SPINNER READY"
+			spinnerBtn.Text = "READY"
 			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
 			spinnerBtn.TextColor3 = Constants.Colors.Text
 		else
 			local mins = math.ceil(math.max(0, spinnerCooldown) / 60)
-			spinnerBtn.Text = string.format("SPIN %dm", mins)
+			spinnerBtn.Text = string.format("%dm", mins)
 			spinnerBtn.BackgroundColor3 = Constants.Colors.Panel
 			spinnerBtn.TextColor3 = Constants.Colors.Muted
 		end
@@ -17607,15 +18406,14 @@ function HUDController.Init()
 		refreshSpinnerBtn()
 	end)
 
-	-- Remotes
 	local econToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
 		econToken += 1
 		local my = econToken
-		local cash, gold = payload.Cash, payload.Gold
+		local cashAmt, goldAmt = payload.Cash, payload.Gold
 		task.defer(function()
 			if my == econToken then
-				HUDController.SetEconomy(cash, gold)
+				HUDController.SetEconomy(cashAmt, goldAmt)
 			end
 		end)
 	end)
@@ -17660,7 +18458,6 @@ function HUDController.Init()
 		end
 	end)
 
-	-- Initial fetch
 	task.spawn(function()
 		local ok, state = pcall(function()
 			return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
@@ -17669,6 +18466,34 @@ function HUDController.Init()
 			HUDController.ApplyState(state :: Types.PlayerStatePayload)
 		end
 	end)
+end
+
+--[[
+	Wire large color-coded action tiles after other controllers Init.
+	actions: { { Name, Icon, Label, Color, OnClick }, ... }
+]]
+function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
+	if not actionDock then
+		return
+	end
+	for _, child in ipairs(actionDock:GetChildren()) do
+		if child:IsA("GuiButton") then
+			child:Destroy()
+		end
+	end
+	local tileSize = if UserInputService.TouchEnabled then 76 else 72
+	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 10) + 8, tileSize + 8)
+	for i, def in ipairs(actions) do
+		local btn = UIUtil.MakeActionTile(actionDock, {
+			Name = def.Name,
+			Icon = def.Icon,
+			Label = def.Label,
+			Color = def.Color,
+			LayoutOrder = i,
+			SizePx = tileSize,
+		})
+		btn.MouseButton1Click:Connect(def.OnClick)
+	end
 end
 
 local function formatCash(n: number): string
@@ -17720,7 +18545,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -17903,6 +18728,7 @@ function MissionController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "MISSIONS"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	corner(toggle, 8)
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
@@ -18011,11 +18837,28 @@ function MissionController.Init()
 	end)
 end
 
+
+function MissionController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function MissionController.Open()
+	setOpen(true)
+end
+
+function MissionController.Close()
+	setOpen(false)
+end
+
+function MissionController.IsOpen(): boolean
+	return menuOpen
+end
+
 return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18164,7 +19007,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18390,6 +19233,7 @@ function ProgressionController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "PROGRESS"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
@@ -18665,10 +19509,27 @@ function ProgressionController.Init()
 	end)
 end
 
+
+function ProgressionController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function ProgressionController.Open()
+	setOpen(true)
+end
+
+function ProgressionController.Close()
+	setOpen(false)
+end
+
+function ProgressionController.IsOpen(): boolean
+	return menuOpen
+end
+
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="101">
+            <Item class="ModuleScript" referent="102">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -18827,7 +19688,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="102">
+            <Item class="ModuleScript" referent="103">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -18867,7 +19728,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18949,6 +19810,7 @@ function SettingsController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "SETTINGS"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
@@ -19169,11 +20031,28 @@ function SettingsController.Init()
 	end)
 end
 
+
+function SettingsController.Toggle()
+	setOpen(not open)
+end
+
+function SettingsController.Open()
+	setOpen(true)
+end
+
+function SettingsController.Close()
+	setOpen(false)
+end
+
+function SettingsController.IsOpen(): boolean
+	return open
+end
+
 return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19258,6 +20137,7 @@ function ShopController.Init()
 	toggle.TextColor3 = Constants.Colors.Gold
 	toggle.Text = "SHOP"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	corner(toggle, 8)
 	local toggleStroke = Instance.new("UIStroke")
 	toggleStroke.Color = Constants.Colors.Gold
@@ -19446,11 +20326,28 @@ function ShopController.Init()
 	end)
 end
 
+
+function ShopController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function ShopController.Open()
+	setOpen(true)
+end
+
+function ShopController.Close()
+	setOpen(false)
+end
+
+function ShopController.IsOpen(): boolean
+	return menuOpen
+end
+
 return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19803,7 +20700,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20094,11 +20991,11 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
---[[ Root UI coordinator ]]
+--[[ Root UI coordinator — wires mobile action dock after panel controllers Init. ]]
 
 local UIController = {}
 
@@ -20131,13 +21028,68 @@ function UIController.Init()
 	SettingsController.Init()
 	WorldPromptController.Init()
 	CompassController.Init()
+
+	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
+	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
+	HUDController.BindActionBar({
+		{
+			Name = "DockShop",
+			Icon = "🛒",
+			Label = "SHOP",
+			Color = Color3.fromRGB(230, 170, 50),
+			OnClick = function()
+				AudioController.PlayClick()
+				ShopController.Toggle()
+			end,
+		},
+		{
+			Name = "DockRebirth",
+			Icon = "♻",
+			Label = "REBIRTH",
+			Color = Color3.fromRGB(150, 90, 220),
+			OnClick = function()
+				AudioController.PlayClick()
+				ProgressionController.Toggle()
+			end,
+		},
+		{
+			Name = "DockOrders",
+			Icon = "📋",
+			Label = "ORDERS",
+			Color = Color3.fromRGB(70, 160, 220),
+			OnClick = function()
+				AudioController.PlayClick()
+				MissionController.Toggle()
+			end,
+		},
+		{
+			Name = "DockArmy",
+			Icon = "⚔",
+			Label = "ARMY",
+			Color = Color3.fromRGB(90, 140, 70),
+			OnClick = function()
+				AudioController.PlayClick()
+				ArmyController.Toggle()
+			end,
+		},
+		{
+			Name = "DockSettings",
+			Icon = "⚙",
+			Label = "SETTINGS",
+			Color = Color3.fromRGB(70, 78, 90),
+			OnClick = function()
+				AudioController.PlayClick()
+				SettingsController.Toggle()
+			end,
+		},
+	})
 end
 
 return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20662,7 +21614,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21403,11 +22355,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="110">
+        <Item class="Folder" referent="111">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21550,7 +22502,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -21622,7 +22574,7 @@ return ClientSettings
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="113">
+  <Item class="Workspace" referent="114">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

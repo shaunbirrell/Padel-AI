@@ -178,6 +178,7 @@ function MissionController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "MISSIONS"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	corner(toggle, 8)
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
@@ -284,6 +285,23 @@ function MissionController.Init()
 			setOpen(not menuOpen)
 		end
 	end)
+end
+
+
+function MissionController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function MissionController.Open()
+	setOpen(true)
+end
+
+function MissionController.Close()
+	setOpen(false)
+end
+
+function MissionController.IsOpen(): boolean
+	return menuOpen
 end
 
 return MissionController

@@ -2,7 +2,7 @@
 --[[
 	WAR EMPIRE — MapSetup (shared world build)
 	Builds Workspace.WarEmpireSetup: map, plots, structure kits, territories,
-	spawns, tutorial markers, NPC placeholders, lighting, MapDressing world props.
+	spawns, tutorial markers, NPC placeholders, desert lighting, MapDressing + DesertFlora.
 	Called from Bootstrap when WarEmpireSetup is missing (Play Solo / server start).
 	Admin `resetmap` destroys WarEmpireSetup and re-runs.
 ]]
@@ -12,6 +12,7 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 
 local MapDressing = require(script.Parent:WaitForChild("MapDressing"))
+local DesertFlora = require(script.Parent:WaitForChild("DesertFlora"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -24,7 +25,7 @@ local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
 
-local COL_GROUND = Color3.fromRGB(28, 48, 26) -- darker grass; never reads as sky/void
+local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
 local COL_PAD = Color3.fromRGB(38, 44, 48)
 local COL_PAD_EDGE = Color3.fromRGB(70, 190, 110)
 local COL_VEHICLE = Color3.fromRGB(48, 62, 78)
@@ -33,7 +34,7 @@ local COL_EVENT = Color3.fromRGB(78, 64, 36)
 
 local STRUCTURES = {
 	{ Id = "CommandCenter", Kit = "hq", Plinth = Color3.fromRGB(36, 48, 40), Body = Color3.fromRGB(55, 78, 58), Accent = Color3.fromRGB(230, 190, 60), Roof = Color3.fromRGB(40, 55, 45) },
-	{ Id = "Barracks", Kit = "barracks", Plinth = Color3.fromRGB(42, 46, 38), Body = Color3.fromRGB(70, 78, 55), Accent = Color3.fromRGB(90, 160, 80), Roof = Color3.fromRGB(50, 55, 42) },
+	{ Id = "Barracks", Kit = "barracks", Plinth = Color3.fromRGB(150, 120, 80), Body = Color3.fromRGB(175, 145, 100), Accent = Color3.fromRGB(210, 170, 80), Roof = Color3.fromRGB(130, 100, 70) },
 	{ Id = "VehicleDepot", Kit = "depot", Plinth = Color3.fromRGB(40, 48, 55), Body = Color3.fromRGB(58, 72, 88), Accent = Color3.fromRGB(90, 160, 220), Roof = Color3.fromRGB(45, 55, 65) },
 	{ Id = "WeaponsFacility", Kit = "lab", Plinth = Color3.fromRGB(48, 40, 38), Body = Color3.fromRGB(88, 58, 50), Accent = Color3.fromRGB(200, 90, 70), Roof = Color3.fromRGB(55, 42, 40) },
 	{ Id = "Helipad", Kit = "pad", Plinth = Color3.fromRGB(45, 50, 48), Body = Color3.fromRGB(60, 70, 65), Accent = Color3.fromRGB(220, 200, 80), Roof = Color3.fromRGB(50, 55, 52) },
@@ -45,7 +46,7 @@ local STRUCTURES = {
 	{ Id = "ResearchLab", Kit = "lab", Plinth = Color3.fromRGB(38, 45, 55), Body = Color3.fromRGB(50, 70, 95), Accent = Color3.fromRGB(80, 180, 220), Roof = Color3.fromRGB(42, 55, 72) },
 	{ Id = "MissileDefense", Kit = "tower", Plinth = Color3.fromRGB(48, 42, 40), Body = Color3.fromRGB(75, 55, 50), Accent = Color3.fromRGB(220, 100, 60), Roof = Color3.fromRGB(55, 45, 42) },
 	{ Id = "PowerStation", Kit = "power", Plinth = Color3.fromRGB(50, 48, 35), Body = Color3.fromRGB(90, 85, 50), Accent = Color3.fromRGB(255, 210, 70), Roof = Color3.fromRGB(60, 55, 40) },
-	{ Id = "Warehouse", Kit = "warehouse", Plinth = Color3.fromRGB(45, 42, 38), Body = Color3.fromRGB(95, 80, 60), Accent = Color3.fromRGB(180, 140, 80), Roof = Color3.fromRGB(55, 50, 42) },
+	{ Id = "Warehouse", Kit = "warehouse", Plinth = Color3.fromRGB(140, 115, 75), Body = Color3.fromRGB(165, 135, 90), Accent = Color3.fromRGB(200, 160, 90), Roof = Color3.fromRGB(120, 95, 65) },
 	{ Id = "SpecialForcesFacility", Kit = "special", Plinth = Color3.fromRGB(35, 38, 42), Body = Color3.fromRGB(45, 55, 65), Accent = Color3.fromRGB(160, 80, 200), Roof = Color3.fromRGB(30, 35, 40) },
 }
 
@@ -434,7 +435,7 @@ end
 
 
 
--- Visual kits v2: shared infantry silhouette for MapSetup placeholders / workers
+-- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
 local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
 	local model = Instance.new("Model")
 	model.Name = name
@@ -444,10 +445,18 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	if npcType then
 		model:SetAttribute("NPCType", npcType)
 	end
+	-- Desert camo base (tan/khaki) blended with role color
+	local desertBase = Color3.fromRGB(145, 125, 85)
+	local camo = desertBase:Lerp(bodyColor, 0.45)
+	local camoDark = Color3.fromRGB(
+		math.clamp(math.floor(camo.R * 255) - 28, 20, 255),
+		math.clamp(math.floor(camo.G * 255) - 22, 20, 255),
+		math.clamp(math.floor(camo.B * 255) - 18, 20, 255)
+	)
 	local torso = part({
 		Name = "HumanoidRootPart",
-		Size = Vector3.new(2.05, 2.35, 1.2),
-		Color = bodyColor,
+		Size = Vector3.new(2.05, 2.4, 1.25),
+		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = true,
@@ -457,80 +466,136 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	local head = part({
 		Name = "Head",
 		Size = Vector3.new(1.1, 1.1, 1.1),
-		Color = Color3.fromRGB(95, 72, 55),
+		Color = Color3.fromRGB(110, 85, 62),
 		Material = Enum.Material.SmoothPlastic,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 1.7, 0),
+		CFrame = torso.CFrame + Vector3.new(0, 1.72, 0),
 		Shape = Enum.PartType.Ball,
 		Parent = model,
 	})
+	-- Helmet (desert tan)
 	part({
 		Name = "Helmet",
-		Size = Vector3.new(1.28, 0.5, 1.28),
-		Color = Color3.fromRGB(
-			math.clamp(math.floor(bodyColor.R * 255) - 25, 20, 255),
-			math.clamp(math.floor(bodyColor.G * 255) - 15, 20, 255),
-			math.clamp(math.floor(bodyColor.B * 255) - 10, 20, 255)
-		),
+		Size = Vector3.new(1.32, 0.55, 1.32),
+		Color = camoDark,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame + Vector3.new(0, 0.4, 0),
+		CFrame = head.CFrame + Vector3.new(0, 0.42, 0),
+		Parent = model,
+	})
+	-- Shemagh / scarf wrap (neck + cheek accent)
+	part({
+		Name = "Shemagh",
+		Size = Vector3.new(1.45, 0.55, 1.35),
+		Color = Color3.fromRGB(200, 185, 150),
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = head.CFrame + Vector3.new(0, -0.35, 0.05),
 		Parent = model,
 	})
 	part({
-		Name = "Vest",
-		Size = Vector3.new(2.15, 1.25, 1.35),
-		Color = Color3.fromRGB(
-			math.clamp(math.floor(bodyColor.R * 255) - 30, 20, 255),
-			math.clamp(math.floor(bodyColor.G * 255) - 20, 20, 255),
-			math.clamp(math.floor(bodyColor.B * 255) - 15, 20, 255)
-		),
-		Material = Enum.Material.Metal,
+		Name = "ShemaghTail",
+		Size = Vector3.new(0.7, 1.1, 0.25),
+		Color = Color3.fromRGB(190, 170, 130),
+		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 0.25, 0),
+		CFrame = torso.CFrame * CFrame.new(0.85, 0.85, -0.15),
+		Parent = model,
+	})
+	-- Plate carrier vest
+	part({
+		Name = "Vest",
+		Size = Vector3.new(2.2, 1.35, 1.4),
+		Color = camoDark,
+		Material = Enum.Material.Leather,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame + Vector3.new(0, 0.28, 0),
+		Parent = model,
+	})
+	part({
+		Name = "VestPouch",
+		Size = Vector3.new(1.6, 0.55, 0.35),
+		Color = Color3.fromRGB(90, 80, 55),
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0, 0.15, -0.7),
 		Parent = model,
 	})
 	part({
 		Name = "LegL",
-		Size = Vector3.new(0.65, 1.4, 0.65),
-		Color = bodyColor,
+		Size = Vector3.new(0.68, 1.45, 0.68),
+		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(-0.45, -1.75, 0),
+		CFrame = torso.CFrame * CFrame.new(-0.45, -1.78, 0),
 		Parent = model,
 	})
 	part({
 		Name = "LegR",
-		Size = Vector3.new(0.65, 1.4, 0.65),
-		Color = bodyColor,
+		Size = Vector3.new(0.68, 1.45, 0.68),
+		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.45, -1.75, 0),
+		CFrame = torso.CFrame * CFrame.new(0.45, -1.78, 0),
+		Parent = model,
+	})
+	-- Clearer rifle silhouette (stock + barrel + optic)
+	part({
+		Name = "RifleStock",
+		Size = Vector3.new(0.35, 0.45, 1.1),
+		Color = Color3.fromRGB(55, 48, 38),
+		Material = Enum.Material.Wood,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.2, 0.15),
 		Parent = model,
 	})
 	part({
 		Name = "Rifle",
-		Size = Vector3.new(0.26, 0.26, 2.3),
-		Color = Color3.fromRGB(30, 30, 32),
+		Size = Vector3.new(0.28, 0.28, 2.8),
+		Color = Color3.fromRGB(32, 34, 36),
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.15, -0.75),
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.25, -1.15),
+		Parent = model,
+	})
+	part({
+		Name = "RifleBarrel",
+		Size = Vector3.new(0.16, 0.16, 1.2),
+		Color = Color3.fromRGB(25, 25, 28),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.28, -2.5),
+		Parent = model,
+	})
+	part({
+		Name = "RifleOptic",
+		Size = Vector3.new(0.22, 0.35, 0.55),
+		Color = Color3.fromRGB(40, 42, 45),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.55, -0.9),
 		Parent = model,
 	})
 	part({
 		Name = "Accent",
 		Size = Vector3.new(1.7, 0.12, 0.3),
-		Color = labelColor or Color3.fromRGB(200, 80, 60),
+		Color = labelColor or Color3.fromRGB(200, 140, 60),
 		Material = Enum.Material.Neon,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.9, -0.55),
+		CFrame = torso.CFrame * CFrame.new(0, 0.95, -0.55),
 		Parent = model,
 	})
 	local hum = Instance.new("Humanoid")
@@ -541,7 +606,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	model.Parent = parentFolder
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 	if labelText then
-		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 180, 140))
+		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 200, 140))
 	end
 	return model
 end
@@ -583,8 +648,8 @@ local function buildEdgeBerms(mapFolder: Folder)
 			Name = s.Name,
 			Size = s.Size,
 			Position = s.Pos,
-			Color = Color3.fromRGB(42, 58, 36),
-			Material = Enum.Material.Grass,
+			Color = Color3.fromRGB(185, 155, 105),
+			Material = Enum.Material.Sand,
 			CanCollide = true,
 			Anchored = true,
 			Parent = mapFolder,
@@ -594,57 +659,57 @@ end
 
 local function buildMountainRing(root: Folder)
 	--[[
-		Segmented Part-kit hills/ridges around Ground perimeter.
-		Varied heights ~40–120 studs; rock/slate/grass; CanCollide on outer berm.
-		Not one giant wall — mobile-friendly (~64–80 segments + peak caps).
+		Desert mesa / butte rim — terracotta / sienna / reddish-brown layered Part kits.
+		Flat-topped sedimentary striations; varied heights; foothills + collide berm.
+		Keeps continuous floor / CanCollide perimeter from void-fall fix (4021025).
 	]]
 	local folder = Instance.new("Folder")
 	folder.Name = "MountainRing"
 	folder.Parent = root
 
-	local rockColors = {
-		Color3.fromRGB(72, 68, 58),
-		Color3.fromRGB(58, 62, 52),
-		Color3.fromRGB(90, 82, 68),
-		Color3.fromRGB(48, 55, 42),
-		Color3.fromRGB(80, 75, 62),
-		Color3.fromRGB(55, 48, 40),
+	local mesaColors = {
+		Color3.fromRGB(168, 95, 58), -- terracotta
+		Color3.fromRGB(145, 78, 48), -- burnt sienna
+		Color3.fromRGB(185, 110, 70), -- warm sandstone
+		Color3.fromRGB(130, 72, 48), -- deep clay
+		Color3.fromRGB(175, 105, 65), -- mesa orange
+		Color3.fromRGB(155, 88, 55), -- red rock
 	}
-	local grassTint = Color3.fromRGB(40, 62, 34)
-	local slateTint = Color3.fromRGB(62, 66, 72)
+	local strataLight = Color3.fromRGB(200, 145, 100)
+	local strataDark = Color3.fromRGB(110, 62, 40)
+	local sandFoothill = Color3.fromRGB(195, 160, 110)
 
 	local half = GROUND_SIZE * 0.5
-	-- Ring sits just outside playable Ground so players can't stroll into sky
 	local ringR = half + 90
-	local segCount = 48 -- perimeter segments
+	local segCount = 48
 	local segArc = (math.pi * 2) / segCount
-	local segLen = ringR * segArc * 1.12 -- slight overlap
+	local segLen = ringR * segArc * 1.12
 
 	for i = 1, segCount do
 		local angle = (i - 0.5) * segArc
 		local cx = math.cos(angle) * ringR
 		local cz = math.sin(angle) * ringR
-		-- Pseudo-random but stable heights (40–120)
 		local hSeed = ((i * 17 + 31) % 80) + 40
 		local height = hSeed
 		if i % 7 == 0 then
-			height = math.min(120, height + 28)
+			height = math.min(125, height + 32)
 		elseif i % 5 == 0 then
-			height = math.max(40, height - 18)
+			height = math.max(42, height - 16)
 		end
-		local depth = 55 + (i % 5) * 8
+		-- Flat-topped mesa: slightly shorter + wider top silhouette
+		local depth = 58 + (i % 5) * 9
 		local yaw = -angle + math.pi * 0.5
-		local col = rockColors[((i - 1) % #rockColors) + 1]
-		local mat = Enum.Material.Rock
+		local col = mesaColors[((i - 1) % #mesaColors) + 1]
+		local mat = Enum.Material.Sandstone
 		if i % 3 == 0 then
-			mat = Enum.Material.Slate
-			col = slateTint:Lerp(col, 0.45)
+			mat = Enum.Material.Rock
+			col = col:Lerp(strataDark, 0.25)
 		elseif i % 4 == 0 then
-			mat = Enum.Material.Grass
-			col = grassTint:Lerp(col, 0.35)
+			mat = Enum.Material.Slate
+			col = col:Lerp(Color3.fromRGB(140, 95, 70), 0.3)
 		end
 		local ridge = part({
-			Name = "Ridge_" .. i,
+			Name = "Mesa_" .. i,
 			Size = Vector3.new(segLen, height, depth),
 			CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.5 - 2, cz) * CFrame.Angles(0, yaw, 0),
 			Color = col,
@@ -654,32 +719,47 @@ local function buildMountainRing(root: Folder)
 			Parent = folder,
 		})
 		ridge:SetAttribute("WE_Mountain", true)
-		-- Peak cap / secondary knob for silhouette variety (no collide needed on tiny tip)
+		-- Sedimentary striation bands (visual only)
 		if i % 2 == 0 then
-			local tipH = 12 + (i % 6) * 4
+			local bandH = math.clamp(height * 0.12, 4, 10)
 			part({
-				Name = "Peak_" .. i,
-				Size = Vector3.new(segLen * 0.45, tipH, depth * 0.55),
-				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.35 - 2, cz) * CFrame.Angles(0, yaw, 0),
-				Color = col:Lerp(Color3.fromRGB(120, 115, 100), 0.2),
-				Material = Enum.Material.Rock,
+				Name = "Strata_" .. i,
+				Size = Vector3.new(segLen * 1.02, bandH, depth * 0.98),
+				CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.38, cz) * CFrame.Angles(0, yaw, 0),
+				Color = if i % 4 == 0 then strataLight else strataDark,
+				Material = Enum.Material.Sandstone,
+				CanCollide = false,
+				Anchored = true,
+				Transparency = 0.08,
+				Parent = folder,
+			}):SetAttribute("WE_Mountain", true)
+		end
+		-- Flat mesa cap (butte top)
+		if i % 2 == 0 then
+			local tipH = 6 + (i % 5) * 2
+			part({
+				Name = "MesaCap_" .. i,
+				Size = Vector3.new(segLen * 0.72, tipH, depth * 0.7),
+				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.25 - 2, cz) * CFrame.Angles(0, yaw, 0),
+				Color = col:Lerp(strataLight, 0.35),
+				Material = Enum.Material.Sandstone,
 				CanCollide = false,
 				Anchored = true,
 				Parent = folder,
 			}):SetAttribute("WE_Mountain", true)
 		end
-		-- Inner foothill shelf (collide) so walk-up from berm feels continuous
+		-- Inner foothill shelf (sand) — collide continuity from berm
 		if i % 3 == 0 then
-			local footH = 14 + (i % 4) * 3
+			local footH = 12 + (i % 4) * 3
 			local footR = half + 35
 			local fx = math.cos(angle) * footR
 			local fz = math.sin(angle) * footR
 			part({
 				Name = "Foothill_" .. i,
-				Size = Vector3.new(segLen * 0.9, footH, 36),
+				Size = Vector3.new(segLen * 0.9, footH, 38),
 				CFrame = CFrame.new(fx, GROUND_TOP_Y + footH * 0.5 - 1, fz) * CFrame.Angles(0, yaw, 0),
-				Color = grassTint,
-				Material = Enum.Material.Grass,
+				Color = sandFoothill,
+				Material = Enum.Material.Sand,
 				CanCollide = true,
 				Anchored = true,
 				Parent = folder,
@@ -687,7 +767,26 @@ local function buildMountainRing(root: Folder)
 		end
 	end
 
-	-- Corner massifs (extra bulk at N/E/S/W so ring never reads as thin wall)
+	-- Mid-ground rocky outcrops just inside the ring (sandy floor props)
+	for oi = 1, 12 do
+		local ang = (oi / 12) * math.pi * 2 + 0.2
+		local orad = half - 220 - (oi % 4) * 40
+		local ox = math.cos(ang) * orad
+		local oz = math.sin(ang) * orad
+		local oh = 10 + (oi % 5) * 4
+		part({
+			Name = "Outcrop_" .. oi,
+			Size = Vector3.new(28 + (oi % 3) * 8, oh, 22 + (oi % 2) * 6),
+			Position = Vector3.new(ox, GROUND_TOP_Y + oh * 0.5 - 1, oz),
+			Color = mesaColors[((oi - 1) % #mesaColors) + 1],
+			Material = Enum.Material.Sandstone,
+			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		}):SetAttribute("WE_Mountain", true)
+	end
+
+	-- Corner massifs (extra bulk — flat-topped buttes)
 	local massifs = {
 		{ 0, -1, "N" },
 		{ 0, 1, "S" },
@@ -701,20 +800,31 @@ local function buildMountainRing(root: Folder)
 	for mi, m in ipairs(massifs) do
 		local mx = m[1] * (half + 120)
 		local mz = m[2] * (half + 120)
-		local mh = 70 + (mi % 4) * 12
+		local mh = 75 + (mi % 4) * 14
 		part({
-			Name = "Massif_" .. m[3],
-			Size = Vector3.new(140, mh, 140),
+			Name = "Butte_" .. m[3],
+			Size = Vector3.new(150, mh, 150),
 			Position = Vector3.new(mx, GROUND_TOP_Y + mh * 0.5 - 4, mz),
-			Color = rockColors[((mi - 1) % #rockColors) + 1],
-			Material = Enum.Material.Rock,
+			Color = mesaColors[((mi - 1) % #mesaColors) + 1],
+			Material = Enum.Material.Sandstone,
 			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		}):SetAttribute("WE_Mountain", true)
+		-- Flat cap
+		part({
+			Name = "ButteCap_" .. m[3],
+			Size = Vector3.new(120, 8, 120),
+			Position = Vector3.new(mx, GROUND_TOP_Y + mh + 2, mz),
+			Color = strataLight,
+			Material = Enum.Material.Sandstone,
+			CanCollide = false,
 			Anchored = true,
 			Parent = folder,
 		}):SetAttribute("WE_Mountain", true)
 	end
 
-	print("[WAR EMPIRE] MapSetup: MountainRing segments=" .. tostring(segCount) .. " + massifs around Ground perimeter")
+	print("[WAR EMPIRE] MapSetup: MountainRing mesas=" .. tostring(segCount) .. " + buttes/outcrops (desert terracotta)")
 end
 
 local function buildVisualFillPatches(mapFolder: Folder)
@@ -738,8 +848,8 @@ local function buildVisualFillPatches(mapFolder: Folder)
 			Name = "FillPatch_" .. i,
 			Size = Vector3.new(w, 0.2, d),
 			Position = pos,
-			Color = if i % 2 == 0 then Color3.fromRGB(36, 52, 30) else Color3.fromRGB(48, 50, 44),
-			Material = if i % 2 == 0 then Enum.Material.Grass else Enum.Material.Concrete,
+			Color = if i % 2 == 0 then Color3.fromRGB(220, 195, 140) else Color3.fromRGB(195, 165, 115),
+			Material = if i % 2 == 0 then Enum.Material.Sand else Enum.Material.Sandstone,
 			CanCollide = false,
 			Anchored = true,
 			Transparency = 0.05,
@@ -843,7 +953,7 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		repaired = true
 	end
 	ground.Color = COL_GROUND
-	ground.Material = Enum.Material.Grass
+	ground.Material = Enum.Material.Sand
 
 	local catch = map:FindFirstChild("SafetyCatch")
 	if not (catch and catch:IsA("BasePart")) then
@@ -881,17 +991,17 @@ function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
 
-	-- Lighting / sky / atmosphere — large map readable at distance + gentle day/night
-	Lighting.Ambient = Color3.fromRGB(72, 82, 68)
-	Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82)
-	Lighting.Brightness = 2.25
-	Lighting.ClockTime = 15.0
-	Lighting.GeographicLatitude = 28
-	Lighting.EnvironmentDiffuseScale = 0.5
-	Lighting.EnvironmentSpecularScale = 0.32
-	Lighting.FogColor = Color3.fromRGB(145, 158, 135)
-	Lighting.FogStart = 800
-	Lighting.FogEnd = 4400
+	-- Lighting / sky / atmosphere — bright midday desert (inspiration only)
+	Lighting.Ambient = Color3.fromRGB(165, 145, 110)
+	Lighting.OutdoorAmbient = Color3.fromRGB(185, 165, 130)
+	Lighting.Brightness = 3.15
+	Lighting.ClockTime = 12.5 -- intense midday sun
+	Lighting.GeographicLatitude = 22
+	Lighting.EnvironmentDiffuseScale = 0.55
+	Lighting.EnvironmentSpecularScale = 0.42
+	Lighting.FogColor = Color3.fromRGB(210, 195, 160)
+	Lighting.FogStart = 1200
+	Lighting.FogEnd = 5200
 	pcall(function()
 		Lighting.GlobalShadows = true
 	end)
@@ -903,8 +1013,8 @@ function MapSetup.Run()
 	end
 	sky.Name = "WE_Sky"
 	sky.CelestialBodiesShown = true
-	sky.StarCount = 3000
-	sky.SunAngularSize = 14
+	sky.StarCount = 2500
+	sky.SunAngularSize = 18 -- larger desert sun
 	sky.MoonAngularSize = 9
 
 	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
@@ -912,14 +1022,14 @@ function MapSetup.Run()
 		atm = Instance.new("Atmosphere")
 		atm.Parent = Lighting
 	end
-	atm.Density = 0.22
-	atm.Offset = 0.12
-	atm.Color = Color3.fromRGB(155, 168, 145)
-	atm.Decay = Color3.fromRGB(95, 108, 88)
-	atm.Glare = 0.18
-	atm.Haze = 1.85
+	atm.Density = 0.14
+	atm.Offset = 0.08
+	atm.Color = Color3.fromRGB(200, 185, 150) -- warm haze near horizon
+	atm.Decay = Color3.fromRGB(95, 130, 190) -- deep blue sky fade
+	atm.Glare = 0.32
+	atm.Haze = 1.15 -- low haze, high contrast
 
-	-- Cancel prior day/night loop on resetmap, then start a gentle cycle (~20 min full day)
+	-- Cancel prior day/night loop on resetmap; gentle cycle biased to bright desert day
 	local dayMarker = Lighting:FindFirstChild("WE_DayNightMarker")
 	if dayMarker then
 		dayMarker:Destroy()
@@ -928,12 +1038,17 @@ function MapSetup.Run()
 	dayMarker.Name = "WE_DayNightMarker"
 	dayMarker.Parent = Lighting
 	task.spawn(function()
-		local STEP = 0.035 -- hours per tick
+		local STEP = 0.03
 		local WAIT = 1.5
+		local dayAmb = Color3.fromRGB(165, 145, 110)
+		local dayOut = Color3.fromRGB(185, 165, 130)
+		local dayFog = Color3.fromRGB(210, 195, 160)
+		local nightAmb = Color3.fromRGB(40, 45, 70)
+		local nightOut = Color3.fromRGB(50, 55, 85)
+		local nightFog = Color3.fromRGB(55, 60, 90)
 		while dayMarker.Parent do
 			local t = (Lighting.ClockTime + STEP) % 24
 			Lighting.ClockTime = t
-			-- Night dip: cooler ambient + thicker haze; day stays readable on large map
 			local night = 0
 			if t < 5 or t > 20 then
 				night = 1
@@ -942,16 +1057,17 @@ function MapSetup.Run()
 			elseif t > 18 then
 				night = (t - 18) / 2
 			end
-			Lighting.Brightness = 2.35 - night * 1.55
-			Lighting.Ambient = Color3.fromRGB(72, 82, 68):Lerp(Color3.fromRGB(28, 34, 55), night)
-			Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82):Lerp(Color3.fromRGB(36, 42, 70), night)
-			Lighting.FogColor = Color3.fromRGB(145, 158, 135):Lerp(Color3.fromRGB(40, 48, 72), night)
-			Lighting.FogStart = 800 - night * 180
-			Lighting.FogEnd = 4400 - night * 600
-			atm.Density = 0.20 + night * 0.12
-			atm.Haze = 1.7 + night * 0.9
-			atm.Color = Color3.fromRGB(155, 168, 145):Lerp(Color3.fromRGB(70, 80, 120), night)
-			atm.Glare = 0.18 - night * 0.1
+			Lighting.Brightness = 3.2 - night * 2.1
+			Lighting.Ambient = dayAmb:Lerp(nightAmb, night)
+			Lighting.OutdoorAmbient = dayOut:Lerp(nightOut, night)
+			Lighting.FogColor = dayFog:Lerp(nightFog, night)
+			Lighting.FogStart = 1200 - night * 250
+			Lighting.FogEnd = 5200 - night * 800
+			atm.Density = 0.13 + night * 0.14
+			atm.Haze = 1.1 + night * 1.0
+			atm.Color = Color3.fromRGB(200, 185, 150):Lerp(Color3.fromRGB(70, 80, 120), night)
+			atm.Decay = Color3.fromRGB(95, 130, 190):Lerp(Color3.fromRGB(40, 50, 90), night)
+			atm.Glare = 0.32 - night * 0.2
 			task.wait(WAIT)
 		end
 	end)
@@ -964,7 +1080,7 @@ function MapSetup.Run()
 		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
 		Position = Vector3.new(0, groundCenterY(), 0),
 		Color = COL_GROUND,
-		Material = Enum.Material.Grass,
+		Material = Enum.Material.Sand,
 		CanCollide = true,
 		Anchored = true,
 		Parent = map,
@@ -1385,9 +1501,9 @@ function MapSetup.Run()
 			Name = "WaterPlane",
 			Size = Vector3.new(GROUND_SIZE * 0.9, 1, 720),
 			Position = Vector3.new(0, 0.2, 1850),
-			Color = Color3.fromRGB(35, 90, 130),
+			Color = Color3.fromRGB(45, 120, 145),
 			Material = Enum.Material.Glass,
-			Transparency = 0.35,
+			Transparency = 0.32,
 			CanCollide = false,
 			Parent = waterFolder,
 		})
@@ -1397,9 +1513,9 @@ function MapSetup.Run()
 			Name = "HarborShelf",
 			Size = Vector3.new(GROUND_SIZE * 0.75, 1, 120),
 			Position = Vector3.new(0, 0.4, 1520),
-			Color = Color3.fromRGB(40, 70, 90),
-			Material = Enum.Material.Slate,
-			Transparency = 0.15,
+			Color = Color3.fromRGB(55, 95, 105),
+			Material = Enum.Material.Sandstone,
+			Transparency = 0.12,
 			CanCollide = true,
 			Parent = waterFolder,
 		})
@@ -1633,6 +1749,7 @@ function MapSetup.Run()
 	-- Military world dressing (visual only — outposts/bunkers/hangars/depots/camps)
 	-- Does not tag WE_UpgradeSlot / buy pads. Regenerate via resetmap or delete WarEmpireSetup.
 	MapDressing.Dress(root)
+	DesertFlora.Dress(root)
 
 	-- Guarantee at least one Neutral Duration=0 spawn near origin
 	local hasNeutralSpawn = false
@@ -1657,7 +1774,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " safetyY=" .. tostring(SAFETY_FLOOR_Y) .. " plotRing=" .. tostring(PLOT_RING) .. " mountains/oil-ramps/berms + WorldDressing")
+	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas/flora/oil-ramps/berms + WorldDressing")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

@@ -221,6 +221,7 @@ function ProgressionController.Init()
 	toggle.TextColor3 = Constants.Colors.Text
 	toggle.Text = "PROGRESS"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
@@ -494,6 +495,23 @@ function ProgressionController.Init()
 			setOpen(not menuOpen)
 		end
 	end)
+end
+
+
+function ProgressionController.Toggle()
+	setOpen(not menuOpen)
+end
+
+function ProgressionController.Open()
+	setOpen(true)
+end
+
+function ProgressionController.Close()
+	setOpen(false)
+end
+
+function ProgressionController.IsOpen(): boolean
+	return menuOpen
 end
 
 return ProgressionController

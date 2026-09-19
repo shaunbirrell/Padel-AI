@@ -94,6 +94,7 @@ function ArmyController.Init()
 	toggle.TextColor3 = Constants.Colors.Gold
 	toggle.Text = "ARMY"
 	toggle.BorderSizePixel = 0
+	toggle.Visible = false -- docked in HUD MobileActionBar
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle, Constants.Colors.Gold, 1.5)
 	toggle.Parent = screen
@@ -251,6 +252,23 @@ function ArmyController.Init()
 			setOpen(not open)
 		end
 	end)
+end
+
+
+function ArmyController.Toggle()
+	setOpen(not open)
+end
+
+function ArmyController.Open()
+	setOpen(true)
+end
+
+function ArmyController.Close()
+	setOpen(false)
+end
+
+function ArmyController.IsOpen(): boolean
+	return open
 end
 
 return ArmyController

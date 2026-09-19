@@ -2,7 +2,7 @@
 --[[
 	WAR EMPIRE — MapDressing (world visual substance)
 	Fills the expanded ~4800 map between plots / ring / territories with
-	military Part-kit clusters (outposts, bunkers, hangars, depots, camps…).
+	military Part-kit clusters (desert outposts, adobe, tents, hangars, depots, camps…).
 	Visual / immersion only — no gameplay tags that affect buy pads or capture.
 	Called from MapSetup.Run after bases/territories/spawns.
 	Regenerate: delete WarEmpireSetup + Play, or admin resetmap.
@@ -41,7 +41,17 @@ local COL = {
 	Light = Color3.fromRGB(255, 230, 160),
 	Sign = Color3.fromRGB(50, 55, 45),
 	SignFace = Color3.fromRGB(200, 180, 80),
-	Tent = Color3.fromRGB(75, 85, 60),
+	Tent = Color3.fromRGB(195, 175, 130),
+	TentDark = Color3.fromRGB(160, 140, 100),
+	TentPole = Color3.fromRGB(90, 70, 45),
+	Adobe = Color3.fromRGB(185, 150, 105),
+	AdobeDark = Color3.fromRGB(155, 120, 80),
+	AdobeWindow = Color3.fromRGB(70, 110, 130),
+	WoodTower = Color3.fromRGB(110, 85, 55),
+	WoodDark = Color3.fromRGB(85, 65, 42),
+	FlagCloth = Color3.fromRGB(200, 70, 55),
+	CampfireStone = Color3.fromRGB(110, 105, 95),
+	CampfireGlow = Color3.fromRGB(255, 140, 50),
 	Dock = Color3.fromRGB(50, 75, 95),
 }
 
@@ -103,48 +113,88 @@ end
 -- ── Kit builders (modest part counts) ─────────────────────────────────────
 
 local function kitWatchtower(folder: Folder, origin: Vector3, yawDeg: number)
+	-- Wooden desert watchtower + simple flag (original Part kit)
 	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	-- Four legs
+	for _, ox in ipairs({ -2.2, 2.2 }) do
+		for _, oz in ipairs({ -2.2, 2.2 }) do
+			p({
+				Name = "TowerLeg",
+				Size = Vector3.new(0.7, 16, 0.7),
+				CFrame = cf * CFrame.new(ox, 8, oz),
+				Color = COL.WoodTower,
+				Material = Enum.Material.Wood,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = folder,
+			})
+		end
+	end
+	-- Cross braces
 	p({
-		Name = "TowerLeg",
-		Size = Vector3.new(2.2, 14, 2.2),
-		CFrame = cf * CFrame.new(0, 7, 0),
-		Color = COL.Olive,
-		Material = Enum.Material.Metal,
-		CanCollide = true,
-		CanQuery = true,
+		Name = "TowerBrace",
+		Size = Vector3.new(5.2, 0.35, 0.35),
+		CFrame = cf * CFrame.new(0, 6, 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerBrace2",
+		Size = Vector3.new(0.35, 0.35, 5.2),
+		CFrame = cf * CFrame.new(0, 10, 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
 		Parent = folder,
 	})
 	p({
 		Name = "TowerCabin",
-		Size = Vector3.new(6, 3.2, 6),
-		CFrame = cf * CFrame.new(0, 15.2, 0),
-		Color = COL.OliveDark,
-		Material = Enum.Material.Metal,
+		Size = Vector3.new(6.5, 3.4, 6.5),
+		CFrame = cf * CFrame.new(0, 16.5, 0),
+		Color = COL.Adobe,
+		Material = Enum.Material.Wood,
 		CanCollide = true,
 		CanQuery = true,
 		Parent = folder,
 	})
 	p({
 		Name = "TowerRoof",
-		Size = Vector3.new(7, 0.5, 7),
-		CFrame = cf * CFrame.new(0, 17, 0),
-		Color = COL.ConcreteDark,
+		Size = Vector3.new(7.5, 0.55, 7.5),
+		CFrame = cf * CFrame.new(0, 18.4, 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerWindow",
+		Size = Vector3.new(1.4, 1.1, 0.25),
+		CFrame = cf * CFrame.new(0, 16.6, -3.3),
+		Color = COL.AdobeWindow,
+		Material = Enum.Material.Glass,
+		Parent = folder,
+	})
+	-- Flag pole + cloth
+	p({
+		Name = "FlagPole",
+		Size = Vector3.new(0.25, 7, 0.25),
+		CFrame = cf * CFrame.new(2.8, 22, 2.8),
+		Color = COL.MetalDark,
 		Material = Enum.Material.Metal,
 		Parent = folder,
 	})
 	p({
-		Name = "TowerAccent",
-		Size = Vector3.new(6.4, 0.25, 6.4),
-		CFrame = cf * CFrame.new(0, 13.7, 0),
-		Color = COL.NeonGold,
-		Material = Enum.Material.Neon,
+		Name = "FlagCloth",
+		Size = Vector3.new(2.8, 1.6, 0.12),
+		CFrame = cf * CFrame.new(4.2, 24.2, 2.8),
+		Color = COL.FlagCloth,
+		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
 	p({
-		Name = "TowerAntenna",
-		Size = Vector3.new(0.3, 5, 0.3),
-		CFrame = cf * CFrame.new(2, 19.5, 2),
-		Color = COL.NeonOrange,
+		Name = "TowerAccent",
+		Size = Vector3.new(6.7, 0.22, 6.7),
+		CFrame = cf * CFrame.new(0, 14.9, 0),
+		Color = COL.NeonGold,
 		Material = Enum.Material.Neon,
 		Parent = folder,
 	})
@@ -722,53 +772,185 @@ local function kitRoadSign(folder: Folder, origin: Vector3, yawDeg: number)
 	})
 end
 
-local function kitCamp(folder: Folder, origin: Vector3, yawDeg: number)
-	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	-- Tent A-frame (two slanted panels approximated as boxes)
+local function kitCampfire(folder: Folder, origin: Vector3)
+	-- Stone ring + glow
+	for i = 0, 5 do
+		local ang = i * 60
+		local rad = 1.6
+		p({
+			Name = "FireStone",
+			Size = Vector3.new(0.9, 0.55, 0.7),
+			CFrame = CFrame.new(origin + Vector3.new(math.cos(math.rad(ang)) * rad, 0.3, math.sin(math.rad(ang)) * rad)),
+			Color = COL.CampfireStone,
+			Material = Enum.Material.Slate,
+			Parent = folder,
+		})
+	end
 	p({
-		Name = "TentFloor",
-		Size = Vector3.new(8, 0.3, 6),
-		CFrame = cf * CFrame.new(0, 0.15, 0),
-		Color = COL.OliveDark,
-		Material = Enum.Material.Fabric,
+		Name = "CampGlow",
+		Size = Vector3.new(1.4, 0.7, 1.4),
+		Position = origin + Vector3.new(0, 0.55, 0),
+		Color = COL.CampfireGlow,
+		Material = Enum.Material.Neon,
 		Parent = folder,
 	})
 	p({
+		Name = "CampLog",
+		Size = Vector3.new(1.8, 0.35, 0.35),
+		CFrame = CFrame.new(origin + Vector3.new(0, 0.4, 0)) * CFrame.Angles(0, math.rad(30), 0),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+end
+
+local function kitAdobeBuilding(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "AdobeBody",
+		Size = Vector3.new(12, 7, 9),
+		CFrame = cf * CFrame.new(0, 3.5, 0),
+		Color = COL.Adobe,
+		Material = Enum.Material.Sandstone,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "AdobeRoof",
+		Size = Vector3.new(13.2, 1.0, 10.2),
+		CFrame = cf * CFrame.new(0, 7.3, 0),
+		Color = COL.AdobeDark,
+		Material = Enum.Material.Sandstone,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "AdobeDoor",
+		Size = Vector3.new(2.2, 3.4, 0.35),
+		CFrame = cf * CFrame.new(0, 1.8, -4.55),
+		Color = COL.WoodDark,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	for _, ox in ipairs({ -3.5, 3.5 }) do
+		p({
+			Name = "AdobeWindow",
+			Size = Vector3.new(1.6, 1.4, 0.25),
+			CFrame = cf * CFrame.new(ox, 4.2, -4.5),
+			Color = COL.AdobeWindow,
+			Material = Enum.Material.Glass,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "AdobeAccent",
+		Size = Vector3.new(12.4, 0.2, 0.3),
+		CFrame = cf * CFrame.new(0, 6.8, -4.6),
+		Color = COL.NeonGold,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitRichTent(folder: Folder, origin: Vector3, yawDeg: number)
+	-- Canvas folds, poles, guy-line Parts (original — not copied meshes)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "TentFloor",
+		Size = Vector3.new(9, 0.25, 7),
+		CFrame = cf * CFrame.new(0, 0.12, 0),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
+		Parent = folder,
+	})
+	-- Main canvas body
+	p({
 		Name = "TentBody",
-		Size = Vector3.new(7.5, 3.5, 5.5),
-		CFrame = cf * CFrame.new(0, 2, 0),
+		Size = Vector3.new(8.2, 3.8, 6.2),
+		CFrame = cf * CFrame.new(0, 2.1, 0),
 		Color = COL.Tent,
 		Material = Enum.Material.Fabric,
 		CanCollide = true,
 		CanQuery = true,
 		Parent = folder,
 	})
+	-- Ridge / fold panels
 	p({
-		Name = "TentPeak",
-		Size = Vector3.new(7.8, 0.8, 1.2),
-		CFrame = cf * CFrame.new(0, 4, 0),
-		Color = COL.Olive,
+		Name = "TentRidge",
+		Size = Vector3.new(8.5, 0.7, 1.4),
+		CFrame = cf * CFrame.new(0, 4.3, 0),
+		Color = COL.TentDark,
 		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
 	p({
-		Name = "CampFireRing",
-		Size = Vector3.new(2.5, 0.4, 2.5),
-		CFrame = cf * CFrame.new(6, 0.3, 0),
-		Color = COL.ConcreteDark,
-		Material = Enum.Material.Slate,
+		Name = "TentFoldL",
+		Size = Vector3.new(0.35, 3.5, 6.0),
+		CFrame = cf * CFrame.new(-3.9, 2.0, 0),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
 	p({
-		Name = "CampGlow",
-		Size = Vector3.new(1.2, 0.5, 1.2),
-		CFrame = cf * CFrame.new(6, 0.6, 0),
-		Color = COL.NeonOrange,
-		Material = Enum.Material.Neon,
+		Name = "TentFoldR",
+		Size = Vector3.new(0.35, 3.5, 6.0),
+		CFrame = cf * CFrame.new(3.9, 2.0, 0),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
 		Parent = folder,
 	})
-	kitCrateStack(folder, (cf * CFrame.new(-6, 0, 2)).Position)
-	kitOilDrums(folder, (cf * CFrame.new(-5, 0, -3)).Position, 2)
+	-- Center + corner poles
+	p({
+		Name = "TentPole",
+		Size = Vector3.new(0.3, 5.2, 0.3),
+		CFrame = cf * CFrame.new(0, 2.6, 0),
+		Color = COL.TentPole,
+		Material = Enum.Material.Wood,
+		Parent = folder,
+	})
+	for _, ox in ipairs({ -4.2, 4.2 }) do
+		for _, oz in ipairs({ -3.2, 3.2 }) do
+			p({
+				Name = "TentStake",
+				Size = Vector3.new(0.22, 1.2, 0.22),
+				CFrame = cf * CFrame.new(ox, 0.6, oz),
+				Color = COL.TentPole,
+				Material = Enum.Material.Wood,
+				Parent = folder,
+			})
+			-- Guy lines (thin Parts)
+			p({
+				Name = "GuyLine",
+				Size = Vector3.new(0.08, 0.08, 4.2),
+				CFrame = cf * CFrame.new(ox * 0.5, 2.4, oz * 0.5) * CFrame.Angles(math.rad(28), 0, math.rad(ox > 0 and -12 or 12)),
+				Color = Color3.fromRGB(180, 170, 140),
+				Material = Enum.Material.Fabric,
+				CastShadow = false,
+				Parent = folder,
+			})
+		end
+	end
+	p({
+		Name = "TentDoorFlap",
+		Size = Vector3.new(2.0, 2.8, 0.2),
+		CFrame = cf * CFrame.new(0, 1.5, -3.15),
+		Color = COL.TentDark,
+		Material = Enum.Material.Fabric,
+		Parent = folder,
+	})
+end
+
+local function kitCamp(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	kitRichTent(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
+	kitRichTent(folder, (cf * CFrame.new(12, 0, 4)).Position, yawDeg + 15)
+	kitAdobeBuilding(folder, (cf * CFrame.new(-14, 0, 2)).Position, yawDeg)
+	kitCampfire(folder, (cf * CFrame.new(6, 0, -6)).Position)
+	kitCrateStack(folder, (cf * CFrame.new(-6, 0, 6)).Position)
+	kitOilDrums(folder, (cf * CFrame.new(-5, 0, -5)).Position, 2)
+	kitSandbagLine(folder, (cf * CFrame.new(0, 0, 10)).Position, yawDeg, 4)
 end
 
 local function kitRunway(folder: Folder, origin: Vector3, yawDeg: number, length: number?)
@@ -818,13 +1000,16 @@ end
 
 local function kitOutpost(folder: Folder, origin: Vector3, yawDeg: number)
 	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	-- Compact fortified outpost: bunker + tower + sandbags + fence
-	kitBunker(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
-	kitWatchtower(folder, (cf * CFrame.new(10, 0, 8)).Position, yawDeg + 20)
-	kitSandbagLine(folder, (cf * CFrame.new(0, 0, -8)).Position, yawDeg, 4)
-	kitWireFence(folder, (cf * CFrame.new(-10, 0, 0)).Position, yawDeg + 90, 3)
-	kitAmmoShed(folder, (cf * CFrame.new(-8, 0, 10)).Position, yawDeg)
-	kitLightPole(folder, (cf * CFrame.new(12, 0, -6)).Position)
+	-- Compact fortified desert outpost: adobe + wooden tower + tent + sandbags + fence
+	kitAdobeBuilding(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
+	kitWatchtower(folder, (cf * CFrame.new(12, 0, 10)).Position, yawDeg + 20)
+	kitRichTent(folder, (cf * CFrame.new(-12, 0, 6)).Position, yawDeg - 10)
+	kitSandbagLine(folder, (cf * CFrame.new(0, 0, -10)).Position, yawDeg, 5)
+	kitSandbagLine(folder, (cf * CFrame.new(8, 0, -8)).Position, yawDeg + 40, 3)
+	kitWireFence(folder, (cf * CFrame.new(-14, 0, -2)).Position, yawDeg + 90, 3)
+	kitAmmoShed(folder, (cf * CFrame.new(-8, 0, 14)).Position, yawDeg)
+	kitCampfire(folder, (cf * CFrame.new(6, 0, -6)).Position)
+	kitLightPole(folder, (cf * CFrame.new(14, 0, -8)).Position)
 end
 
 -- Sparse optional cluster label (short MaxDistance — mobile friendly)

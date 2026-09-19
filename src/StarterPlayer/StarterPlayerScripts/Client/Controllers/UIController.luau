@@ -1,5 +1,5 @@
 --!strict
---[[ Root UI coordinator ]]
+--[[ Root UI coordinator — wires mobile action dock after panel controllers Init. ]]
 
 local UIController = {}
 
@@ -32,6 +32,61 @@ function UIController.Init()
 	SettingsController.Init()
 	WorldPromptController.Init()
 	CompassController.Init()
+
+	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
+	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
+	HUDController.BindActionBar({
+		{
+			Name = "DockShop",
+			Icon = "🛒",
+			Label = "SHOP",
+			Color = Color3.fromRGB(230, 170, 50),
+			OnClick = function()
+				AudioController.PlayClick()
+				ShopController.Toggle()
+			end,
+		},
+		{
+			Name = "DockRebirth",
+			Icon = "♻",
+			Label = "REBIRTH",
+			Color = Color3.fromRGB(150, 90, 220),
+			OnClick = function()
+				AudioController.PlayClick()
+				ProgressionController.Toggle()
+			end,
+		},
+		{
+			Name = "DockOrders",
+			Icon = "📋",
+			Label = "ORDERS",
+			Color = Color3.fromRGB(70, 160, 220),
+			OnClick = function()
+				AudioController.PlayClick()
+				MissionController.Toggle()
+			end,
+		},
+		{
+			Name = "DockArmy",
+			Icon = "⚔",
+			Label = "ARMY",
+			Color = Color3.fromRGB(90, 140, 70),
+			OnClick = function()
+				AudioController.PlayClick()
+				ArmyController.Toggle()
+			end,
+		},
+		{
+			Name = "DockSettings",
+			Icon = "⚙",
+			Label = "SETTINGS",
+			Color = Color3.fromRGB(70, 78, 90),
+			OnClick = function()
+				AudioController.PlayClick()
+				SettingsController.Toggle()
+			end,
+		},
+	})
 end
 
 return UIController

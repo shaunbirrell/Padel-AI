@@ -1,6 +1,7 @@
 --!strict
 --[[
 	Shared client UI helpers — consistent UIScale + dark military panel chrome.
+	MobileActionBar tiles: large rounded color-coded squares (≥64px touch).
 ]]
 
 local UIUtil = {}
@@ -91,9 +92,9 @@ function UIUtil.EmptyState(parent: Instance, message: string, order: number?): T
 	return lab
 end
 
---[[ Ensure a GuiButton meets mobile min touch (44px). ]]
+--[[ Ensure a GuiButton meets mobile min touch (default 64px for advanced HUD). ]]
 function UIUtil.EnsureMinTouch(btn: GuiButton, minPx: number?)
-	local m = minPx or 44
+	local m = minPx or 64
 	local sz = btn.Size
 	local w = sz.X.Offset
 	local h = sz.Y.Offset
@@ -106,6 +107,77 @@ end
 
 function UIUtil.GoldStroke(parent: Instance, thickness: number?): UIStroke
 	return UIUtil.Stroke(parent, Color3.fromRGB(230, 190, 60), thickness or 1.5)
+end
+
+--[[
+	Large rounded glossy action tile for mobile dock.
+	icon: short emoji/symbol string; label: caption under icon.
+]]
+function UIUtil.MakeActionTile(
+	parent: Instance,
+	props: {
+		Name: string,
+		Icon: string,
+		Label: string,
+		Color: Color3,
+		LayoutOrder: number?,
+		SizePx: number?,
+	}
+): TextButton
+	local size = props.SizePx or 72
+	local btn = Instance.new("TextButton")
+	btn.Name = props.Name
+	btn.Size = UDim2.fromOffset(size, size)
+	btn.BackgroundColor3 = props.Color
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = true
+	btn.Text = ""
+	btn.LayoutOrder = props.LayoutOrder or 0
+	btn.ZIndex = 10
+	btn.Parent = parent
+	UIUtil.Corner(btn, 16)
+	local stroke = UIUtil.Stroke(btn, Color3.fromRGB(255, 255, 255), 1.5)
+	stroke.Transparency = 0.45
+
+	-- Glossy top highlight
+	local gloss = Instance.new("Frame")
+	gloss.Name = "Gloss"
+	gloss.Size = UDim2.new(1, -8, 0, math.floor(size * 0.28))
+	gloss.Position = UDim2.fromOffset(4, 4)
+	gloss.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+	gloss.BackgroundTransparency = 0.72
+	gloss.BorderSizePixel = 0
+	gloss.ZIndex = 11
+	gloss.Parent = btn
+	UIUtil.Corner(gloss, 10)
+
+	local icon = Instance.new("TextLabel")
+	icon.Name = "Icon"
+	icon.BackgroundTransparency = 1
+	icon.Size = UDim2.new(1, 0, 0, math.floor(size * 0.48))
+	icon.Position = UDim2.fromOffset(0, 6)
+	icon.Font = Enum.Font.GothamBold
+	icon.TextSize = math.floor(size * 0.36)
+	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
+	icon.Text = props.Icon
+	icon.ZIndex = 12
+	icon.Parent = btn
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Label"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(1, -4, 0, 16)
+	label.Position = UDim2.new(0, 2, 1, -20)
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 11
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextStrokeTransparency = 0.5
+	label.Text = props.Label
+	label.ZIndex = 12
+	label.Parent = btn
+
+	UIUtil.EnsureMinTouch(btn, 64)
+	return btn
 end
 
 return UIUtil

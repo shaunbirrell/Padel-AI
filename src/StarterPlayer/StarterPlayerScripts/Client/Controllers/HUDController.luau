@@ -1,10 +1,12 @@
 --!strict
 --[[
-	Programmatic HUD: Level+XP top-left, Cash+Gold top-right.
-	Dark military theme + UIScale for mobile.
+	Programmatic HUD: Level+XP top-left, currency pill bottom-left,
+	mobile action dock (large color-coded squares) bottom-right.
+	Inspiration-only layout quality — WAR EMPIRE features/hotkeys kept.
 ]]
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -25,6 +27,7 @@ local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
 local seasonLabel: TextLabel? = nil
 local spinnerBtn: TextButton? = nil
+local actionDock: Frame? = nil
 local spinnerReady = false
 local spinnerCooldown = 0
 local lastPassive = 0
@@ -42,17 +45,15 @@ local function refreshPassiveHint()
 end
 
 local function makeCorner(parent: Instance, radius: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius)
-	c.Parent = parent
+	UIUtil.Corner(parent, radius)
 end
 
 local function makeStroke(parent: Instance, gold: boolean?)
-	local s = Instance.new("UIStroke")
-	s.Color = if gold then Constants.Colors.Gold else Color3.fromRGB(55, 65, 55)
-	s.Thickness = if gold then 1.5 else 1
-	s.Transparency = if gold then 0.35 else 0
-	s.Parent = parent
+	if gold then
+		UIUtil.GoldStroke(parent, 1.5)
+	else
+		UIUtil.Stroke(parent)
+	end
 end
 
 function HUDController.Init()
@@ -62,20 +63,23 @@ function HUDController.Init()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
+	screen.DisplayOrder = 40
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 	_gui = screen
 
-	-- Top-left: Level + XP
+	local touch = UserInputService.TouchEnabled
+
+	-- Top-left: Level + XP (compact)
 	local left = Instance.new("Frame")
 	left.Name = "LevelPanel"
 	left.AnchorPoint = Vector2.new(0, 0)
 	left.Position = UDim2.fromOffset(16, 16)
 	left.Size = UDim2.fromOffset(220, 64)
 	left.BackgroundColor3 = Constants.Colors.Panel
-	left.BackgroundTransparency = 0.15
+	left.BackgroundTransparency = 0.12
 	left.BorderSizePixel = 0
 	left.Parent = screen
-	makeCorner(left, 8)
+	makeCorner(left, 10)
 	makeStroke(left, true)
 
 	local lvl = Instance.new("TextLabel")
@@ -120,54 +124,58 @@ function HUDController.Init()
 	xpLbl.Parent = xpBg
 	xpText = xpLbl
 
-	-- Top-right: Cash + Gold
-	local right = Instance.new("Frame")
-	right.Name = "EconomyPanel"
-	right.AnchorPoint = Vector2.new(1, 0)
-	right.Position = UDim2.new(1, -16, 0, 16)
-	right.Size = UDim2.fromOffset(200, 72)
-	right.BackgroundColor3 = Constants.Colors.Panel
-	right.BackgroundTransparency = 0.15
-	right.BorderSizePixel = 0
-	right.Parent = screen
-	makeCorner(right, 8)
-	makeStroke(right, true)
+	-- Bottom-left: currency pill (cash + gold) — thumb-friendly
+	local pill = Instance.new("Frame")
+	pill.Name = "CurrencyPill"
+	pill.AnchorPoint = Vector2.new(0, 1)
+	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
+	pill.Size = UDim2.fromOffset(200, 56)
+	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
+	pill.BackgroundTransparency = 0.08
+	pill.BorderSizePixel = 0
+	pill.ZIndex = 12
+	pill.Parent = screen
+	makeCorner(pill, 28)
+	local pillStroke = UIUtil.Stroke(pill, Color3.fromRGB(255, 210, 90), 2)
+	pillStroke.Transparency = 0.25
 
 	local cash = Instance.new("TextLabel")
 	cash.Name = "CashLabel"
 	cash.BackgroundTransparency = 1
-	cash.Position = UDim2.fromOffset(10, 8)
-	cash.Size = UDim2.new(1, -20, 0, 24)
+	cash.Position = UDim2.fromOffset(18, 4)
+	cash.Size = UDim2.new(1, -28, 0, 26)
 	cash.Font = Enum.Font.GothamBold
 	cash.TextSize = 20
-	cash.TextXAlignment = Enum.TextXAlignment.Right
+	cash.TextXAlignment = Enum.TextXAlignment.Left
 	cash.TextColor3 = Constants.Colors.Cash
 	cash.Text = "$5,000"
-	cash.Parent = right
+	cash.ZIndex = 13
+	cash.Parent = pill
 	cashLabel = cash
 
 	local gold = Instance.new("TextLabel")
 	gold.Name = "GoldLabel"
 	gold.BackgroundTransparency = 1
-	gold.Position = UDim2.fromOffset(10, 34)
-	gold.Size = UDim2.new(1, -20, 0, 20)
+	gold.Position = UDim2.fromOffset(18, 28)
+	gold.Size = UDim2.new(1, -28, 0, 20)
 	gold.Font = Enum.Font.GothamMedium
-	gold.TextSize = 16
-	gold.TextXAlignment = Enum.TextXAlignment.Right
+	gold.TextSize = 15
+	gold.TextXAlignment = Enum.TextXAlignment.Left
 	gold.TextColor3 = Constants.Colors.Gold
 	gold.Text = "◆ 0"
-	gold.Parent = right
+	gold.ZIndex = 13
+	gold.Parent = pill
 	goldLabel = gold
 
 	local passive = Instance.new("TextLabel")
 	passive.Name = "PassiveHint"
-	passive.AnchorPoint = Vector2.new(1, 0)
-	passive.Position = UDim2.new(1, -16, 0, 96)
-	passive.Size = UDim2.fromOffset(280, 18)
+	passive.AnchorPoint = Vector2.new(0, 1)
+	passive.Position = UDim2.new(0, 16, 1, if touch then -160 else -80)
+	passive.Size = UDim2.fromOffset(240, 18)
 	passive.BackgroundTransparency = 1
 	passive.Font = Enum.Font.Gotham
 	passive.TextSize = 12
-	passive.TextXAlignment = Enum.TextXAlignment.Right
+	passive.TextXAlignment = Enum.TextXAlignment.Left
 	passive.TextColor3 = Constants.Colors.Muted
 	passive.Text = ""
 	passive.Parent = screen
@@ -190,21 +198,23 @@ function HUDController.Init()
 	UIUtil.Corner(season, 6)
 	seasonLabel = season
 
-	-- Free Supply Spinner (MT-inspired timed free reward)
+	-- Spinner chip beside currency pill
 	local spin = Instance.new("TextButton")
 	spin.Name = "SpinnerButton"
 	spin.AnchorPoint = Vector2.new(0, 1)
-	spin.Position = UDim2.new(0, 16, 1, -16)
-	spin.Size = UDim2.fromOffset(120, 44)
+	spin.Position = UDim2.new(0, 228, 1, if touch then -100 else -20)
+	spin.Size = UDim2.fromOffset(72, 56)
 	spin.BackgroundColor3 = Constants.Colors.Panel
 	spin.Font = Enum.Font.GothamBold
-	spin.TextSize = 12
+	spin.TextSize = 11
 	spin.TextColor3 = Constants.Colors.Text
-	spin.Text = "SPINNER"
+	spin.Text = "SPIN"
 	spin.BorderSizePixel = 0
+	spin.ZIndex = 12
 	spin.Parent = screen
-	makeCorner(spin, 8)
+	makeCorner(spin, 14)
 	makeStroke(spin, true)
+	UIUtil.EnsureMinTouch(spin, 56)
 	spinnerBtn = spin
 	spin.MouseButton1Click:Connect(function()
 		if spinnerReady then
@@ -212,17 +222,35 @@ function HUDController.Init()
 		end
 	end)
 
+	-- Bottom-right action dock (tiles bound by BindActionBar)
+	local dock = Instance.new("Frame")
+	dock.Name = "MobileActionBar"
+	dock.AnchorPoint = Vector2.new(1, 1)
+	dock.Position = UDim2.new(1, -16, 1, if touch then -24 else -20)
+	dock.Size = UDim2.fromOffset(400, 80)
+	dock.BackgroundTransparency = 1
+	dock.ZIndex = 12
+	dock.Parent = screen
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 10)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = dock
+	actionDock = dock
+
 	local function refreshSpinnerBtn()
 		if not spinnerBtn then
 			return
 		end
 		if spinnerReady then
-			spinnerBtn.Text = "SPINNER READY"
+			spinnerBtn.Text = "READY"
 			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
 			spinnerBtn.TextColor3 = Constants.Colors.Text
 		else
 			local mins = math.ceil(math.max(0, spinnerCooldown) / 60)
-			spinnerBtn.Text = string.format("SPIN %dm", mins)
+			spinnerBtn.Text = string.format("%dm", mins)
 			spinnerBtn.BackgroundColor3 = Constants.Colors.Panel
 			spinnerBtn.TextColor3 = Constants.Colors.Muted
 		end
@@ -238,15 +266,14 @@ function HUDController.Init()
 		refreshSpinnerBtn()
 	end)
 
-	-- Remotes
 	local econToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
 		econToken += 1
 		local my = econToken
-		local cash, gold = payload.Cash, payload.Gold
+		local cashAmt, goldAmt = payload.Cash, payload.Gold
 		task.defer(function()
 			if my == econToken then
-				HUDController.SetEconomy(cash, gold)
+				HUDController.SetEconomy(cashAmt, goldAmt)
 			end
 		end)
 	end)
@@ -291,7 +318,6 @@ function HUDController.Init()
 		end
 	end)
 
-	-- Initial fetch
 	task.spawn(function()
 		local ok, state = pcall(function()
 			return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
@@ -300,6 +326,34 @@ function HUDController.Init()
 			HUDController.ApplyState(state :: Types.PlayerStatePayload)
 		end
 	end)
+end
+
+--[[
+	Wire large color-coded action tiles after other controllers Init.
+	actions: { { Name, Icon, Label, Color, OnClick }, ... }
+]]
+function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
+	if not actionDock then
+		return
+	end
+	for _, child in ipairs(actionDock:GetChildren()) do
+		if child:IsA("GuiButton") then
+			child:Destroy()
+		end
+	end
+	local tileSize = if UserInputService.TouchEnabled then 76 else 72
+	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 10) + 8, tileSize + 8)
+	for i, def in ipairs(actions) do
+		local btn = UIUtil.MakeActionTile(actionDock, {
+			Name = def.Name,
+			Icon = def.Icon,
+			Label = def.Label,
+			Color = def.Color,
+			LayoutOrder = i,
+			SizePx = tileSize,
+		})
+		btn.MouseButton1Click:Connect(def.OnClick)
+	end
 end
 
 local function formatCash(n: number): string
