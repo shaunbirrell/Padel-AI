@@ -1,12 +1,16 @@
 --!strict
 --[[
-	Command-bar / CI-style static checks for BUY wiring.
+	Command-bar / CI-style static checks for BUY + Army + Garage wiring.
 	Paste in Studio Play Solo OR run mentally against repo — does not grant currency.
-	Prints PASS/FAIL for remote + controller presence + catalog config sanity.
+	Prints PASS/FAIL for remotes, monetization Id=0 stubs, catalog, pad tags, GUIs.
+
+	Live playtest automation notes: docs/LIVE_PLAYTEST_AUTOMATION.md
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
 
 local function ok(msg: string)
 	print("[BuyPathVerify] PASS", msg)
@@ -16,6 +20,9 @@ local function bad(msg: string)
 end
 local function soft(msg: string)
 	print("[BuyPathVerify] WAIT", msg)
+end
+local function note(msg: string)
+	print("[BuyPathVerify] NOTE", msg)
 end
 
 local Shared = ReplicatedStorage:FindFirstChild("Shared")
@@ -27,25 +34,120 @@ end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 
+-- 1) Core BUY + Army + Garage remotes
 local need = {
 	Constants.RemoteNames.RequestPurchaseUpgrade,
 	Constants.RemoteNames.RequestPurchaseVehicle,
 	Constants.RemoteNames.RequestPurchaseWeapon,
+	Constants.RemoteNames.RequestSpawnVehicle,
+	Constants.RemoteNames.RequestDespawnVehicle,
+	Constants.RemoteNames.RequestRecruitSoldiers,
+	Constants.RemoteNames.RequestDismissSoldiers,
+	Constants.RemoteNames.RequestPurchaseDevProduct,
+	Constants.RemoteNames.RequestPurchaseGamePass,
+	Constants.RemoteNames.RequestPrestige,
 	Constants.RemoteNames.BaseStateUpdate,
 	Constants.RemoteNames.VehicleStateUpdate,
+	Constants.RemoteNames.SoldierStateUpdate,
 	Constants.RemoteNames.EconomyUpdate,
-	Constants.RemoteNames.RequestPrestige,
+	Constants.RemoteNames.Notification,
 }
 for _, name in ipairs(need) do
-	local ev = Remotes.GetEvent(name)
-	if ev then
+	local okEv, ev = pcall(function()
+		return Remotes.GetEvent(name)
+	end)
+	if okEv and ev then
 		ok("Remote " .. name)
 	else
 		bad("Remote missing " .. name)
 	end
 end
 
--- VisualAssetConfig free-ID sanity (config only — does not InsertService)
+-- No Give* remotes (anti-exploit stub)
+do
+	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
+	if folder then
+		local giveHits = 0
+		for _, child in ipairs(folder:GetChildren()) do
+			if string.find(string.lower(child.Name), "give", 1, true) then
+				giveHits += 1
+				bad("Forbidden Give* remote: " .. child.Name)
+			end
+		end
+		if giveHits == 0 then
+			ok("No Give* remotes in folder")
+		end
+	else
+		bad("Remotes folder missing")
+	end
+end
+
+-- 2) Monetization stubs — ALL product Ids MUST stay 0 until Creator Dashboard
+do
+	local okCfg, MonetizationConfig = pcall(function()
+		return require(Shared.Configs.MonetizationConfig)
+	end)
+	if not okCfg or typeof(MonetizationConfig) ~= "table" then
+		bad("MonetizationConfig require failed")
+	else
+		local nonzero = 0
+		local checked = 0
+		for key, def in pairs(MonetizationConfig.DevProducts or {}) do
+			checked += 1
+			local id = tonumber(def.Id) or -1
+			if id ~= 0 then
+				nonzero += 1
+				bad(string.format("DevProduct %s Id=%s (want 0 stub)", key, tostring(id)))
+			end
+		end
+		for key, def in pairs(MonetizationConfig.GamePasses or {}) do
+			checked += 1
+			local id = tonumber(def.Id) or -1
+			if id ~= 0 then
+				nonzero += 1
+				bad(string.format("GamePass %s Id=%s (want 0 stub)", key, tostring(id)))
+			end
+		end
+		if nonzero == 0 and checked > 0 then
+			ok(string.format("Monetization stubs clear — %d product Ids all 0", checked))
+		elseif checked == 0 then
+			bad("MonetizationConfig empty DevProducts/GamePasses")
+		end
+		if MonetizationConfig.LootBoxPolicyPending ~= true then
+			bad("LootBoxPolicyPending should stay true")
+		else
+			ok("LootBoxPolicyPending=true (no loot-box grants)")
+		end
+	end
+	local okBp, BattlePassConfig = pcall(function()
+		return require(Shared.Configs.BattlePassConfig)
+	end)
+	if okBp and typeof(BattlePassConfig) == "table" then
+		if (tonumber(BattlePassConfig.PremiumProductId) or -1) == 0 then
+			ok("BattlePass PremiumProductId=0 stub")
+		else
+			bad("BattlePass PremiumProductId non-zero")
+		end
+	end
+end
+
+-- 3) PERF flag — keep StudioSkipWorldDressing
+do
+	local okDev, DevConfig = pcall(function()
+		return require(Shared.Configs.DevConfig)
+	end)
+	if okDev and typeof(DevConfig) == "table" then
+		if DevConfig.StudioSkipWorldDressing == true then
+			ok("DevConfig.StudioSkipWorldDressing=true (8GB PERF)")
+		else
+			bad("StudioSkipWorldDressing should stay true for laptop PERF")
+		end
+	else
+		bad("DevConfig require failed")
+	end
+end
+
+-- 4) VisualAssetConfig free-ID sanity (config only — does not InsertService)
 do
 	local okCfg, VisualAssetConfig = pcall(function()
 		return require(Shared.Configs.VisualAssetConfig)
@@ -99,11 +201,52 @@ do
 	end
 end
 
+-- 5) World tags — garage / army pads (spawn reliability)
+do
+	local function countTag(tag: string): number
+		local n = 0
+		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+			if inst:IsA("BasePart") then
+				n += 1
+			end
+		end
+		return n
+	end
+	local vehiclePads = countTag(Constants.Tags.VehicleSpawn)
+	local navalPads = countTag(Constants.Tags.NavalSpawn)
+	local upgradePads = countTag(Constants.Tags.UpgradeSlot)
+	local plots = countTag(Constants.Tags.BasePlot)
+	if vehiclePads >= 4 then
+		ok(string.format("WE_VehicleSpawn pads=%d", vehiclePads))
+	elseif vehiclePads > 0 then
+		soft(string.format("WE_VehicleSpawn pads=%d (thin — MapSetup done?)", vehiclePads))
+	else
+		soft("WE_VehicleSpawn pads=0 (ok if MapSetup not finished yet)")
+	end
+	if navalPads >= 1 then
+		ok(string.format("WE_NavalSpawn pads=%d", navalPads))
+	else
+		soft("WE_NavalSpawn pads=0")
+	end
+	if upgradePads >= 6 then
+		ok(string.format("WE_UpgradeSlot pads=%d", upgradePads))
+	else
+		soft(string.format("WE_UpgradeSlot pads=%d", upgradePads))
+	end
+	if plots >= 1 then
+		ok(string.format("WE_BasePlot pads=%d", plots))
+	else
+		soft("WE_BasePlot pads=0")
+	end
+end
+
+-- 6) Client GUIs + Activated path notes
 local pg = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
 if pg then
 	for _, guiName in ipairs({
 		"WE_PadBuyGui",
 		"WarEmpireGarage",
+		"WarEmpireArmy",
 		"WarEmpireCombatHUD",
 		"WarEmpireTerritory",
 		"WarEmpireShop",
@@ -113,25 +256,23 @@ if pg then
 		local g = pg:FindFirstChild(guiName)
 		if g then
 			ok("Gui present " .. guiName)
-			-- Soft: prefer Activated-wired TextButtons when present
-			local activated = 0
-			local mb1 = 0
+			local buttons = 0
 			for _, d in ipairs(g:GetDescendants()) do
 				if d:IsA("TextButton") or d:IsA("ImageButton") then
-					-- Cannot introspect connections easily; presence is enough
-					activated += 1
+					buttons += 1
+					if d.Active ~= true then
+						soft(string.format("GuiButton %s.%s Active=false", guiName, d.Name))
+					end
 				end
 			end
-			if activated > 0 then
-				ok(string.format("Gui %s has %d GuiButtons", guiName, activated))
+			if buttons > 0 then
+				ok(string.format("Gui %s has %d GuiButtons", guiName, buttons))
 			end
-			mb1 = mb1 -- silence
 		else
 			soft("Gui not yet: " .. guiName .. " (ok if early)")
 		end
 	end
 
-	-- Pad BUY must be Activated path (WorldPromptController)
 	local buyGui = pg:FindFirstChild("WE_PadBuyGui")
 	if buyGui then
 		local buyBtn = buyGui:FindFirstChild("BuyButton", true) or buyGui:FindFirstChildWhichIsA("TextButton", true)
@@ -146,7 +287,28 @@ if pg then
 			soft("Pad BUY button not visible yet (stand on own pad)")
 		end
 	end
+
+	local garage = pg:FindFirstChild("WarEmpireGarage")
+	if garage then
+		local spawnish = 0
+		for _, d in ipairs(garage:GetDescendants()) do
+			if d:IsA("TextButton") and (d.Text == "SPAWN" or d.Text == "BUY" or string.find(d.Text, "BUY", 1, true) or d.Text == "DESPAWN" or d.Name == "GarageToggle") then
+				spawnish += 1
+			end
+		end
+		if spawnish > 0 then
+			ok(string.format("Garage action buttons visible≈%d (open panel / OWNED filter)", spawnish))
+		else
+			soft("Garage SPAWN/BUY not visible yet — open GARAGE (G) after VehicleStateUpdate")
+		end
+	end
+else
+	soft("LocalPlayer.PlayerGui missing (run on client / Play Solo)")
 end
 
+note(string.format("Studio=%s Server=%s Client=%s", tostring(RunService:IsStudio()), tostring(RunService:IsServer()), tostring(RunService:IsClient())))
 print("[BuyPathVerify] Done — stand on YOUR pad and tap BUY; Output should show [WorldPrompt] BUY + [BaseService] Remote BUY result Ok=true")
+print("[BuyPathVerify] Army: dock ARMY / key A → RECRUIT; expect SoldierStateUpdate + Success toast")
+print("[BuyPathVerify] Garage: G / E on pad → OWNED Jeep SPAWN; expect Deployed toast + DriverSeat model")
 print("[BuyPathVerify] Shop/Rebirth: dock tiles use Activated; panels DisplayOrder 60 above HUD dock 55")
+print("[BuyPathVerify] Automation: docs/LIVE_PLAYTEST_AUTOMATION.md + tools/SmokeTest.luau")

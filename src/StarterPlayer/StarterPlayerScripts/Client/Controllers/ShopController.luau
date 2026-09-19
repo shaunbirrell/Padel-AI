@@ -141,7 +141,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "IDs are placeholders (0). Server ProcessReceipt / GamePass ownership grants only — never client."
+	note.Text = "STUBS: all product Ids=0 — prompts log intent only; no real charges until Creator Dashboard IDs."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
@@ -222,13 +222,19 @@ function ShopController.Init()
 		else
 			sub = string.format("id=%d", def.Id or 0)
 		end
-		local btnLabel = "BUY"
-		if def.Cash and def.Cash > 0 then
-			btnLabel = "BUY $" .. tostring(def.Cash)
-		elseif def.Gold and def.Gold > 0 then
-			btnLabel = "BUY " .. tostring(def.Gold) .. "G"
-		elseif def.GrantsBattlePassPremium then
-			btnLabel = "BUY BP"
+		local stub = (tonumber(def.Id) or 0) == 0
+		local btnLabel = if stub then "STUB" else "BUY"
+		if not stub then
+			if def.Cash and def.Cash > 0 then
+				btnLabel = "BUY $" .. tostring(def.Cash)
+			elseif def.Gold and def.Gold > 0 then
+				btnLabel = "BUY " .. tostring(def.Gold) .. "G"
+			elseif def.GrantsBattlePassPremium then
+				btnLabel = "BUY BP"
+			end
+		end
+		if stub then
+			sub = "STUB id=0 — " .. sub
 		end
 		addRow(def.DisplayName, sub, function()
 			promptDevProduct(key)
@@ -236,13 +242,14 @@ function ShopController.Init()
 	end
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
+		local stub = (tonumber(def.Id) or 0) == 0
 		addRow(
 			"Pass: " .. def.DisplayName,
-			(def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
+			(if stub then "STUB id=0 — " else "") .. (def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
 			function()
 				promptGamePass(key)
 			end,
-			"PASS"
+			if stub then "STUB" else "PASS"
 		)
 	end
 

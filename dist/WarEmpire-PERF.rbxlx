@@ -14280,6 +14280,19 @@ function SoldierService.Init(deps: { [string]: any })
 			DataService.MarkDirty(player)
 		end
 		pushState(player)
+		-- Re-push after client controllers connect (missed SoldierStateUpdate race)
+		task.delay(1.5, function()
+			if player.Parent then
+				pushState(player)
+			end
+		end)
+		player.CharacterAdded:Connect(function()
+			task.defer(function()
+				if player.Parent then
+					pushState(player)
+				end
+			end)
+		end)
 	end)
 
 	-- Training Yard worker income (MT-inspired)
@@ -16480,12 +16493,13 @@ local function destroyActive(userId: number)
 	end
 end
 
-local function findSpawnCFrame(player: Player, category: string?): CFrame
+local function findSpawnCFrame(player: Player, category: string?): (CFrame, string)
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local origin = if root then root.Position else Vector3.zero
 	local best: CFrame? = nil
 	local bestDist = math.huge
+	local bestSource = "none"
 	local preferNaval = category == "Naval"
 	local tagList = if preferNaval
 		then { Constants.Tags.NavalSpawn, Constants.Tags.VehicleSpawn }
@@ -16493,40 +16507,43 @@ local function findSpawnCFrame(player: Player, category: string?): CFrame
 
 	for _, tag in ipairs(tagList) do
 		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
-			if inst:IsA("BasePart") then
+			if inst:IsA("BasePart") and inst.Parent then
 				local d = (inst.Position - origin).Magnitude
-				local yOff = if tag == Constants.Tags.NavalSpawn then 3 else 4
+				local yOff = if tag == Constants.Tags.NavalSpawn then 4 else 5
+				-- Lift clear of pad / terrain so kits never spawn inside plinth
+				local cf = inst.CFrame + Vector3.new(0, yOff + math.max(0, inst.Size.Y * 0.5), 0)
 				if d < bestDist then
 					bestDist = d
-					best = inst.CFrame + Vector3.new(0, yOff, 0)
+					best = cf
+					bestSource = tag
 				end
 			end
 		end
-		-- Prefer nearest naval pad within 800 studs; don't fall through to land pads if found
+		-- Prefer nearest naval pad within 1400 studs; don't fall through to land pads if found
 		if preferNaval and best and bestDist < 1400 then
-			return best
+			return best, bestSource
 		end
-		if (not preferNaval) and best and bestDist < 500 then
-			return best
+		if (not preferNaval) and best and bestDist < 700 then
+			return best, bestSource
 		end
 	end
-	if best and bestDist < 800 then
-		return best
+	if best and bestDist < 1200 then
+		return best, bestSource
 	end
 
 	local profile = DataService.GetProfile(player)
 	if profile and profile.BasePlotId then
 		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
 			if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
-				return inst.CFrame + Vector3.new(0, 5, 40)
+				return inst.CFrame + Vector3.new(0, 6, 45), "BasePlot"
 			end
 		end
 	end
 
 	if root then
-		return root.CFrame * CFrame.new(0, 3, -12)
+		return root.CFrame * CFrame.new(0, 4, -14), "PlayerFront"
 	end
-	return CFrame.new(0, 5, 0)
+	return CFrame.new(0, 8, 0), "WorldOrigin"
 end
 
 local function weldTo(body: BasePart, other: BasePart)
@@ -17283,7 +17300,30 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 
 	destroyActive(player.UserId)
-	local model = buildVehicleModel(def, findSpawnCFrame(player, def.Category), player.UserId)
+	local at, source = findSpawnCFrame(player, def.Category)
+	local buildOk, modelOrErr = pcall(function()
+		return buildVehicleModel(def, at, player.UserId)
+	end)
+	if not buildOk or typeof(modelOrErr) ~= "Instance" then
+		warn("[VehicleService] buildVehicleModel failed", vehicleId, modelOrErr)
+		return false, "SpawnBuildFailed"
+	end
+	local model = modelOrErr :: Model
+	if not model.PrimaryPart or not model:FindFirstChild("DriverSeat") then
+		warn("[VehicleService] spawn kit incomplete", vehicleId, "PrimaryPart/DriverSeat missing")
+		pcall(function()
+			model:Destroy()
+		end)
+		return false, "SpawnKitIncomplete"
+	end
+	if not model.Parent then
+		warn("[VehicleService] spawn model unparented", vehicleId)
+		pcall(function()
+			model:Destroy()
+		end)
+		return false, "SpawnOrphaned"
+	end
+
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
 	local driveMode = model:GetAttribute("WE_DriveMode")
@@ -17303,10 +17343,22 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	DataService.MarkDirty(player)
 
 	if AnalyticsService then
-		AnalyticsService.Log(AnalyticsConfig.Events.VEHICLE_SPAWNED, player.UserId, { vehicle = vehicleId })
+		AnalyticsService.Log(AnalyticsConfig.Events.VEHICLE_SPAWNED, player.UserId, {
+			vehicle = vehicleId,
+			source = source,
+		})
 	end
+	print(string.format(
+		"[VehicleService] SPAWN ok %s → %s @ %s (%.0f,%.0f,%.0f)",
+		player.Name,
+		tostring(vehicleId),
+		source,
+		at.Position.X,
+		at.Position.Y,
+		at.Position.Z
+	))
 	if NotificationService then
-		NotificationService.Notify(player, "Deployed " .. def.DisplayName, "Info")
+		NotificationService.Notify(player, "Deployed " .. def.DisplayName, "Success")
 	end
 	pushState(player)
 	return true, nil
@@ -17332,11 +17384,24 @@ function VehicleService.Init(deps: { [string]: any })
 	local spawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSpawnVehicle) :: RemoteEvent
 	spawnRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)
 		if not RateLimitService.Allow(player, "spawn_vehicle", 1, 2) then
+			if NotificationService then
+				NotificationService.Notify(player, "Spawn too fast — wait a moment", "Warn", 2)
+			end
 			return
 		end
+		print(string.format("[VehicleService] Remote SPAWN attempt %s → %s", player.Name, tostring(vehicleId)))
 		local ok, err = VehicleService.RequestSpawn(player, vehicleId)
+		print(string.format("[VehicleService] Remote SPAWN result %s → Ok=%s Err=%s", player.Name, tostring(ok), tostring(err)))
 		if not ok and NotificationService and err then
-			NotificationService.Notify(player, "Cannot spawn: " .. tostring(err), "Warn")
+			local msg = "Cannot spawn: " .. tostring(err)
+			if err == "Cooldown" then
+				msg = "Vehicle spawn cooling down"
+			elseif err == "NotOwned" then
+				msg = "Buy this vehicle first"
+			elseif err == "SpawnBuildFailed" or err == "SpawnKitIncomplete" or err == "SpawnOrphaned" then
+				msg = "Spawn failed — try again near a garage pad"
+			end
+			NotificationService.Notify(player, msg, "Warn")
 		end
 	end)
 
@@ -17938,6 +18003,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
+local SoldierConfig = require(Shared.Configs.SoldierConfig)
+
+local NotificationController = require(script.Parent.NotificationController)
 
 local ArmyController = {}
 
@@ -17949,8 +18017,60 @@ local statusLabel: TextLabel? = nil
 local capFill: Frame? = nil
 local capLabel: TextLabel? = nil
 local armyState: any = nil
+local requestingState = false
+local refreshLabels: () -> ()
 
-local function refreshLabels()
+local function synthesizeFromPlayerState(state: any)
+	if typeof(state) ~= "table" then
+		return
+	end
+	local barracks = 0
+	if typeof(state.Base) == "table" and typeof(state.Base.Upgrades) == "table" then
+		barracks = tonumber(state.Base.Upgrades.Barracks) or 0
+	end
+	local count = tonumber(state.Soldiers) or 0
+	local baseCap = SoldierConfig.MaxSoldiersBase or 50
+	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
+	local cap = baseCap + barracks * per
+	local cost = SoldierConfig.RecruitCostCash or 500
+	local room = math.max(0, cap - count)
+	local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5
+	local perSoldier = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.CashPerSoldierPerTick) or 0
+	local minN = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.MinSoldiersForIncome) or 1
+	local training = if count >= minN then math.floor(count * perSoldier) else 0
+	armyState = {
+		Soldiers = count,
+		MaxSoldiers = cap,
+		BarracksLevel = barracks,
+		RecruitCostCash = cost,
+		RecruitBatchSize = SoldierConfig.RecruitBatchSize or 1,
+		DismissRefundMult = SoldierConfig.DismissRefundMult or 0.25,
+		SlotsFree = room,
+		FillCost = cost * room,
+		TrainingIncomePerTick = training,
+		TrainingTickSeconds = tickSec,
+		TrainingIncomePerSec = if tickSec > 0 then training / tickSec else 0,
+	}
+end
+
+local function ensureArmyState()
+	if typeof(armyState) == "table" or requestingState then
+		return
+	end
+	requestingState = true
+	task.spawn(function()
+		local okInvoke, state = pcall(function()
+			return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+		end)
+		requestingState = false
+		if okInvoke and typeof(state) == "table" then
+			synthesizeFromPlayerState(state)
+			refreshLabels()
+		end
+	end)
+end
+
+refreshLabels = function()
 	if not statusLabel then
 		return
 	end
@@ -18001,6 +18121,10 @@ local function setOpen(isOpen: boolean)
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = isOpen
 		end
+	end
+	if isOpen then
+		ensureArmyState()
+		refreshLabels()
 	end
 end
 
@@ -18119,9 +18243,12 @@ function ArmyController.Init()
 		b.TextColor3 = if goldAccent then Constants.Colors.Gold else Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
+		b.Active = true
+		b.AutoButtonColor = true
 		UIUtil.Corner(b, 6)
 		UIUtil.Stroke(b, Constants.Colors.Gold, 1.25)
 		b.Parent = panel
+		UIUtil.EnsureMinTouch(b, 44)
 		b.Activated:Connect(cb)
 		return b
 	end
@@ -18133,9 +18260,12 @@ function ArmyController.Init()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end, true)
 	makeBtn("FILL CAP", 16, 228, 168, function()
+		ensureArmyState()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then
 			Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(math.min(free, 50))
+		else
+			NotificationController.Show("Army full or no slots — upgrade Barracks (B)", "Warn", 3)
 		end
 	end)
 	makeBtn("DISMISS x1", 192, 228, 168, function()
@@ -18174,6 +18304,22 @@ function ArmyController.Init()
 		armyState = payload
 		refreshLabels()
 	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state)
+		if typeof(armyState) ~= "table" then
+			synthesizeFromPlayerState(state)
+			refreshLabels()
+		elseif typeof(state) == "table" and typeof(state.Soldiers) == "number" then
+			-- Keep count fresh if SoldierStateUpdate was missed mid-session
+			armyState.Soldiers = state.Soldiers
+			local cap = tonumber(armyState.MaxSoldiers) or 0
+			armyState.SlotsFree = math.max(0, cap - state.Soldiers)
+			refreshLabels()
+		end
+	end)
+
+	task.defer(ensureArmyState)
+	print("[WAR EMPIRE] ArmyController ready (Activated recruit + state hydrate)")
 
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
@@ -21493,7 +21639,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "IDs are placeholders (0). Server ProcessReceipt / GamePass ownership grants only — never client."
+	note.Text = "STUBS: all product Ids=0 — prompts log intent only; no real charges until Creator Dashboard IDs."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
@@ -21574,13 +21720,19 @@ function ShopController.Init()
 		else
 			sub = string.format("id=%d", def.Id or 0)
 		end
-		local btnLabel = "BUY"
-		if def.Cash and def.Cash > 0 then
-			btnLabel = "BUY $" .. tostring(def.Cash)
-		elseif def.Gold and def.Gold > 0 then
-			btnLabel = "BUY " .. tostring(def.Gold) .. "G"
-		elseif def.GrantsBattlePassPremium then
-			btnLabel = "BUY BP"
+		local stub = (tonumber(def.Id) or 0) == 0
+		local btnLabel = if stub then "STUB" else "BUY"
+		if not stub then
+			if def.Cash and def.Cash > 0 then
+				btnLabel = "BUY $" .. tostring(def.Cash)
+			elseif def.Gold and def.Gold > 0 then
+				btnLabel = "BUY " .. tostring(def.Gold) .. "G"
+			elseif def.GrantsBattlePassPremium then
+				btnLabel = "BUY BP"
+			end
+		end
+		if stub then
+			sub = "STUB id=0 — " .. sub
 		end
 		addRow(def.DisplayName, sub, function()
 			promptDevProduct(key)
@@ -21588,13 +21740,14 @@ function ShopController.Init()
 	end
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
+		local stub = (tonumber(def.Id) or 0) == 0
 		addRow(
 			"Pass: " .. def.DisplayName,
-			(def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
+			(if stub then "STUB id=0 — " else "") .. (def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
 			function()
 				promptGamePass(key)
 			end,
-			"PASS"
+			if stub then "STUB" else "PASS"
 		)
 	end
 
@@ -22629,11 +22782,46 @@ local function catalogCount(): number
 	return n
 end
 
+local lastSpawnRequestAt = 0.0
+local SPAWN_CLIENT_DEBOUNCE = 0.85
+
 local function bindTap(btn: GuiButton, fn: () -> ())
 	btn.Activated:Connect(function()
 		AudioController.PlayClick()
 		fn()
 	end)
+end
+
+local function fireSpawn(vehicleId: string)
+	local now = os.clock()
+	if now - lastSpawnRequestAt < SPAWN_CLIENT_DEBOUNCE then
+		if statusLabel then
+			statusLabel.Text = "Spawn request cooling down…"
+		end
+		return
+	end
+	if cooldownLeft > 0 then
+		if statusLabel then
+			statusLabel.Text = string.format("Server cooldown %.0fs", cooldownLeft)
+		end
+		return
+	end
+	lastSpawnRequestAt = now
+	local okRemote, remote = pcall(function()
+		return Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle)
+	end)
+	if not okRemote or not remote then
+		warn("[VehicleController] RequestSpawnVehicle remote missing")
+		if statusLabel then
+			statusLabel.Text = "Spawn remote missing — resync Rojo"
+		end
+		return
+	end
+	print("[VehicleController] SPAWN request", vehicleId)
+	if statusLabel then
+		statusLabel.Text = "Deploying " .. vehicleId .. "…"
+	end
+	remote:FireServer(vehicleId)
 end
 
 local function refresh()
@@ -22831,8 +23019,9 @@ local function refresh()
 			elseif ownedMap[id] then
 				btn.Text = if cooldownLeft > 0 then string.format("%.0fs", cooldownLeft) else "SPAWN"
 				btn.BackgroundColor3 = Constants.Colors.Accent
+				btn.Active = cooldownLeft <= 0
 				bindTap(btn, function()
-					Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle):FireServer(id)
+					fireSpawn(id)
 				end)
 			else
 				local price = def.CostCash or 0
@@ -22864,6 +23053,7 @@ local function setOpen(value: boolean)
 	end
 	if value then
 		refresh()
+		print("[WAR EMPIRE] Garage opened — owned=", ownedCount(), "active=", tostring(activeId))
 	end
 end
 

@@ -235,6 +235,19 @@ function SoldierService.Init(deps: { [string]: any })
 			DataService.MarkDirty(player)
 		end
 		pushState(player)
+		-- Re-push after client controllers connect (missed SoldierStateUpdate race)
+		task.delay(1.5, function()
+			if player.Parent then
+				pushState(player)
+			end
+		end)
+		player.CharacterAdded:Connect(function()
+			task.defer(function()
+				if player.Parent then
+					pushState(player)
+				end
+			end)
+		end)
 	end)
 
 	-- Training Yard worker income (MT-inspired)

@@ -123,12 +123,13 @@ local function destroyActive(userId: number)
 	end
 end
 
-local function findSpawnCFrame(player: Player, category: string?): CFrame
+local function findSpawnCFrame(player: Player, category: string?): (CFrame, string)
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 	local origin = if root then root.Position else Vector3.zero
 	local best: CFrame? = nil
 	local bestDist = math.huge
+	local bestSource = "none"
 	local preferNaval = category == "Naval"
 	local tagList = if preferNaval
 		then { Constants.Tags.NavalSpawn, Constants.Tags.VehicleSpawn }
@@ -136,40 +137,43 @@ local function findSpawnCFrame(player: Player, category: string?): CFrame
 
 	for _, tag in ipairs(tagList) do
 		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
-			if inst:IsA("BasePart") then
+			if inst:IsA("BasePart") and inst.Parent then
 				local d = (inst.Position - origin).Magnitude
-				local yOff = if tag == Constants.Tags.NavalSpawn then 3 else 4
+				local yOff = if tag == Constants.Tags.NavalSpawn then 4 else 5
+				-- Lift clear of pad / terrain so kits never spawn inside plinth
+				local cf = inst.CFrame + Vector3.new(0, yOff + math.max(0, inst.Size.Y * 0.5), 0)
 				if d < bestDist then
 					bestDist = d
-					best = inst.CFrame + Vector3.new(0, yOff, 0)
+					best = cf
+					bestSource = tag
 				end
 			end
 		end
-		-- Prefer nearest naval pad within 800 studs; don't fall through to land pads if found
+		-- Prefer nearest naval pad within 1400 studs; don't fall through to land pads if found
 		if preferNaval and best and bestDist < 1400 then
-			return best
+			return best, bestSource
 		end
-		if (not preferNaval) and best and bestDist < 500 then
-			return best
+		if (not preferNaval) and best and bestDist < 700 then
+			return best, bestSource
 		end
 	end
-	if best and bestDist < 800 then
-		return best
+	if best and bestDist < 1200 then
+		return best, bestSource
 	end
 
 	local profile = DataService.GetProfile(player)
 	if profile and profile.BasePlotId then
 		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
 			if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
-				return inst.CFrame + Vector3.new(0, 5, 40)
+				return inst.CFrame + Vector3.new(0, 6, 45), "BasePlot"
 			end
 		end
 	end
 
 	if root then
-		return root.CFrame * CFrame.new(0, 3, -12)
+		return root.CFrame * CFrame.new(0, 4, -14), "PlayerFront"
 	end
-	return CFrame.new(0, 5, 0)
+	return CFrame.new(0, 8, 0), "WorldOrigin"
 end
 
 local function weldTo(body: BasePart, other: BasePart)
@@ -926,7 +930,30 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 
 	destroyActive(player.UserId)
-	local model = buildVehicleModel(def, findSpawnCFrame(player, def.Category), player.UserId)
+	local at, source = findSpawnCFrame(player, def.Category)
+	local buildOk, modelOrErr = pcall(function()
+		return buildVehicleModel(def, at, player.UserId)
+	end)
+	if not buildOk or typeof(modelOrErr) ~= "Instance" then
+		warn("[VehicleService] buildVehicleModel failed", vehicleId, modelOrErr)
+		return false, "SpawnBuildFailed"
+	end
+	local model = modelOrErr :: Model
+	if not model.PrimaryPart or not model:FindFirstChild("DriverSeat") then
+		warn("[VehicleService] spawn kit incomplete", vehicleId, "PrimaryPart/DriverSeat missing")
+		pcall(function()
+			model:Destroy()
+		end)
+		return false, "SpawnKitIncomplete"
+	end
+	if not model.Parent then
+		warn("[VehicleService] spawn model unparented", vehicleId)
+		pcall(function()
+			model:Destroy()
+		end)
+		return false, "SpawnOrphaned"
+	end
+
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
 	local driveMode = model:GetAttribute("WE_DriveMode")
@@ -946,10 +973,22 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	DataService.MarkDirty(player)
 
 	if AnalyticsService then
-		AnalyticsService.Log(AnalyticsConfig.Events.VEHICLE_SPAWNED, player.UserId, { vehicle = vehicleId })
+		AnalyticsService.Log(AnalyticsConfig.Events.VEHICLE_SPAWNED, player.UserId, {
+			vehicle = vehicleId,
+			source = source,
+		})
 	end
+	print(string.format(
+		"[VehicleService] SPAWN ok %s → %s @ %s (%.0f,%.0f,%.0f)",
+		player.Name,
+		tostring(vehicleId),
+		source,
+		at.Position.X,
+		at.Position.Y,
+		at.Position.Z
+	))
 	if NotificationService then
-		NotificationService.Notify(player, "Deployed " .. def.DisplayName, "Info")
+		NotificationService.Notify(player, "Deployed " .. def.DisplayName, "Success")
 	end
 	pushState(player)
 	return true, nil
@@ -975,11 +1014,24 @@ function VehicleService.Init(deps: { [string]: any })
 	local spawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSpawnVehicle) :: RemoteEvent
 	spawnRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)
 		if not RateLimitService.Allow(player, "spawn_vehicle", 1, 2) then
+			if NotificationService then
+				NotificationService.Notify(player, "Spawn too fast — wait a moment", "Warn", 2)
+			end
 			return
 		end
+		print(string.format("[VehicleService] Remote SPAWN attempt %s → %s", player.Name, tostring(vehicleId)))
 		local ok, err = VehicleService.RequestSpawn(player, vehicleId)
+		print(string.format("[VehicleService] Remote SPAWN result %s → Ok=%s Err=%s", player.Name, tostring(ok), tostring(err)))
 		if not ok and NotificationService and err then
-			NotificationService.Notify(player, "Cannot spawn: " .. tostring(err), "Warn")
+			local msg = "Cannot spawn: " .. tostring(err)
+			if err == "Cooldown" then
+				msg = "Vehicle spawn cooling down"
+			elseif err == "NotOwned" then
+				msg = "Buy this vehicle first"
+			elseif err == "SpawnBuildFailed" or err == "SpawnKitIncomplete" or err == "SpawnOrphaned" then
+				msg = "Spawn failed — try again near a garage pad"
+			end
+			NotificationService.Notify(player, msg, "Warn")
 		end
 	end)
 

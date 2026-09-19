@@ -101,11 +101,46 @@ local function catalogCount(): number
 	return n
 end
 
+local lastSpawnRequestAt = 0.0
+local SPAWN_CLIENT_DEBOUNCE = 0.85
+
 local function bindTap(btn: GuiButton, fn: () -> ())
 	btn.Activated:Connect(function()
 		AudioController.PlayClick()
 		fn()
 	end)
+end
+
+local function fireSpawn(vehicleId: string)
+	local now = os.clock()
+	if now - lastSpawnRequestAt < SPAWN_CLIENT_DEBOUNCE then
+		if statusLabel then
+			statusLabel.Text = "Spawn request cooling down…"
+		end
+		return
+	end
+	if cooldownLeft > 0 then
+		if statusLabel then
+			statusLabel.Text = string.format("Server cooldown %.0fs", cooldownLeft)
+		end
+		return
+	end
+	lastSpawnRequestAt = now
+	local okRemote, remote = pcall(function()
+		return Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle)
+	end)
+	if not okRemote or not remote then
+		warn("[VehicleController] RequestSpawnVehicle remote missing")
+		if statusLabel then
+			statusLabel.Text = "Spawn remote missing — resync Rojo"
+		end
+		return
+	end
+	print("[VehicleController] SPAWN request", vehicleId)
+	if statusLabel then
+		statusLabel.Text = "Deploying " .. vehicleId .. "…"
+	end
+	remote:FireServer(vehicleId)
 end
 
 local function refresh()
@@ -303,8 +338,9 @@ local function refresh()
 			elseif ownedMap[id] then
 				btn.Text = if cooldownLeft > 0 then string.format("%.0fs", cooldownLeft) else "SPAWN"
 				btn.BackgroundColor3 = Constants.Colors.Accent
+				btn.Active = cooldownLeft <= 0
 				bindTap(btn, function()
-					Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle):FireServer(id)
+					fireSpawn(id)
 				end)
 			else
 				local price = def.CostCash or 0
@@ -336,6 +372,7 @@ local function setOpen(value: boolean)
 	end
 	if value then
 		refresh()
+		print("[WAR EMPIRE] Garage opened — owned=", ownedCount(), "active=", tostring(activeId))
 	end
 end
 

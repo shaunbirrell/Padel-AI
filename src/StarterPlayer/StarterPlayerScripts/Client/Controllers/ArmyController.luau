@@ -10,6 +10,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
+local SoldierConfig = require(Shared.Configs.SoldierConfig)
+
+local NotificationController = require(script.Parent.NotificationController)
 
 local ArmyController = {}
 
@@ -21,8 +24,60 @@ local statusLabel: TextLabel? = nil
 local capFill: Frame? = nil
 local capLabel: TextLabel? = nil
 local armyState: any = nil
+local requestingState = false
+local refreshLabels: () -> ()
 
-local function refreshLabels()
+local function synthesizeFromPlayerState(state: any)
+	if typeof(state) ~= "table" then
+		return
+	end
+	local barracks = 0
+	if typeof(state.Base) == "table" and typeof(state.Base.Upgrades) == "table" then
+		barracks = tonumber(state.Base.Upgrades.Barracks) or 0
+	end
+	local count = tonumber(state.Soldiers) or 0
+	local baseCap = SoldierConfig.MaxSoldiersBase or 50
+	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
+	local cap = baseCap + barracks * per
+	local cost = SoldierConfig.RecruitCostCash or 500
+	local room = math.max(0, cap - count)
+	local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5
+	local perSoldier = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.CashPerSoldierPerTick) or 0
+	local minN = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.MinSoldiersForIncome) or 1
+	local training = if count >= minN then math.floor(count * perSoldier) else 0
+	armyState = {
+		Soldiers = count,
+		MaxSoldiers = cap,
+		BarracksLevel = barracks,
+		RecruitCostCash = cost,
+		RecruitBatchSize = SoldierConfig.RecruitBatchSize or 1,
+		DismissRefundMult = SoldierConfig.DismissRefundMult or 0.25,
+		SlotsFree = room,
+		FillCost = cost * room,
+		TrainingIncomePerTick = training,
+		TrainingTickSeconds = tickSec,
+		TrainingIncomePerSec = if tickSec > 0 then training / tickSec else 0,
+	}
+end
+
+local function ensureArmyState()
+	if typeof(armyState) == "table" or requestingState then
+		return
+	end
+	requestingState = true
+	task.spawn(function()
+		local okInvoke, state = pcall(function()
+			return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+		end)
+		requestingState = false
+		if okInvoke and typeof(state) == "table" then
+			synthesizeFromPlayerState(state)
+			refreshLabels()
+		end
+	end)
+end
+
+refreshLabels = function()
 	if not statusLabel then
 		return
 	end
@@ -73,6 +128,10 @@ local function setOpen(isOpen: boolean)
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = isOpen
 		end
+	end
+	if isOpen then
+		ensureArmyState()
+		refreshLabels()
 	end
 end
 
@@ -191,9 +250,12 @@ function ArmyController.Init()
 		b.TextColor3 = if goldAccent then Constants.Colors.Gold else Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
+		b.Active = true
+		b.AutoButtonColor = true
 		UIUtil.Corner(b, 6)
 		UIUtil.Stroke(b, Constants.Colors.Gold, 1.25)
 		b.Parent = panel
+		UIUtil.EnsureMinTouch(b, 44)
 		b.Activated:Connect(cb)
 		return b
 	end
@@ -205,9 +267,12 @@ function ArmyController.Init()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end, true)
 	makeBtn("FILL CAP", 16, 228, 168, function()
+		ensureArmyState()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then
 			Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(math.min(free, 50))
+		else
+			NotificationController.Show("Army full or no slots — upgrade Barracks (B)", "Warn", 3)
 		end
 	end)
 	makeBtn("DISMISS x1", 192, 228, 168, function()
@@ -246,6 +311,22 @@ function ArmyController.Init()
 		armyState = payload
 		refreshLabels()
 	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state)
+		if typeof(armyState) ~= "table" then
+			synthesizeFromPlayerState(state)
+			refreshLabels()
+		elseif typeof(state) == "table" and typeof(state.Soldiers) == "number" then
+			-- Keep count fresh if SoldierStateUpdate was missed mid-session
+			armyState.Soldiers = state.Soldiers
+			local cap = tonumber(armyState.MaxSoldiers) or 0
+			armyState.SlotsFree = math.max(0, cap - state.Soldiers)
+			refreshLabels()
+		end
+	end)
+
+	task.defer(ensureArmyState)
+	print("[WAR EMPIRE] ArmyController ready (Activated recruit + state hydrate)")
 
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
