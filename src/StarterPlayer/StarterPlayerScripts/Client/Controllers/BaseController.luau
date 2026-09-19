@@ -190,16 +190,17 @@ local function showFirstJoinHints()
 		return
 	end
 	hintShown = true
-	task.delay(1.2, function()
+	-- Session-once onboarding after MapSetup world is up
+	task.delay(1.4, function()
 		NotificationController.Show(
-			"Walk onto glowing pads to BUY upgrades — prices float above each pad",
+			"Walk to glowing pads to buy · B/G menus",
 			"Info",
-			5
+			6
 		)
 	end)
-	task.delay(6.5, function()
+	task.delay(7.5, function()
 		NotificationController.Show(
-			"Or tap Base Upgrades [B] for the full menu — BUY buttons work too",
+			"Prices float above pads · Base [B] · Garage [G] / E on pads",
 			"Info",
 			5
 		)

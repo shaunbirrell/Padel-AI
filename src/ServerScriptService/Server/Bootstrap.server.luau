@@ -38,9 +38,10 @@ local function ensureVoidFallback(reason: string)
 	folder.Name = "WE_VoidFallback"
 	folder.Parent = Workspace
 
+	-- Match playtest ground scale (~2600) so large-map void-fall still lands on plate
 	local baseplate = Instance.new("Part")
 	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(2048, 4, 2048)
+	baseplate.Size = Vector3.new(2800, 4, 2800)
 	baseplate.Position = Vector3.new(0, -2, 0)
 	baseplate.Anchored = true
 	baseplate.CanCollide = true
@@ -76,6 +77,23 @@ if not Workspace:FindFirstChild("WarEmpireSetup") then
 	end
 else
 	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run")
+	-- Re-assert gravity + Ground presence so scale upgrades / partial setups never void-fall
+	Workspace.Gravity = 196.2
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local map = setup and setup:FindFirstChild("Map")
+	local ground = map and map:FindFirstChild("Ground")
+	if not (ground and ground:IsA("BasePart") and ground.Size.X >= 1000) then
+		warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small — rebuilding via MapSetup")
+		pcall(function()
+			if setup then
+				setup:Destroy()
+			end
+			MapSetup.Run()
+		end)
+		if not Workspace:FindFirstChild("WarEmpireSetup") then
+			ensureVoidFallback("Existing setup invalid and rebuild failed")
+		end
+	end
 end
 
 -- ── Remotes + services (AFTER map so require failures don't block terrain) ─

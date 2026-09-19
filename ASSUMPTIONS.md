@@ -111,7 +111,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 55. **MapSetup auto-build** — `Modules/MapSetup.luau` builds the world (structure kits, territories, pads, NPCs, tutorial beacons, lighting, price billboards). Bootstrap runs it when `Workspace.WarEmpireSetup` is missing (Play / server start) — no command-bar paste (Studio truncates long pastes). Safe re-run clears `WarEmpireSetup`. Admin `resetmap` (Studio) or delete folder + Play to regenerate. `tools/StudioSetup.luau` is a short note only.
 
-55b. **Map scale** — Ground ~2600×2600 studs; 6 base plots on ring radius ~450 with ~140-stud pads; upgrade pads on a 4-col grid with ~30-stud gaps (less cramped). Territories out to ~720 with larger capture radii. Vehicle/NPC/Event spawn rings ~160–200. `BaseConfig.PlotPositions` / `TerritoryConfig` stay in sync with MapSetup. Fog/Atmosphere tuned so distant bases stay readable. Respawn/teleport use tagged `PlayerSpawn` on each plot.
+55b. **Map scale** — Ground ~2600×2600 studs; 6 base plots on ring radius ~450 with ~140-stud pads; upgrade pads on a 4-col grid with ~30-stud gaps (less cramped). Territories out to ~720 with larger capture radii. Vehicle garage pads on ring ~380 (16-stud pads); NPC ~320; Event ~280. `BaseConfig.PlotPositions` / `TerritoryConfig` stay in sync with MapSetup. Fog/Atmosphere tuned so distant bases stay readable. Respawn/teleport use tagged `PlayerSpawn` on each plot.
 
 56. **Structure level visuals** — `BaseService.UpdateVisuals` / `applyKitVisuals` scales kit children (`WE_KitRole`) by level; ghost transparency at L0; neon accents brighten when owned.
 
@@ -122,4 +122,14 @@ Reversible engineering decisions made while implementing the MVP without blockin
 59. **Vehicle drive modes** — Ground kits use Roblox VehicleSeat (Torque/MaxSpeed from def). Heli/Jet set `WE_DriveMode=AirPlaceholder` and a server Heartbeat LinearVelocity/AngularVelocity hover+throttle/steer loop while occupied; despawn disconnects the loop and Destroy()s the full kit model.
 
 60. **Base kit refresh** — `RefreshAllVisuals` applies `applyKitVisuals` for every `BaseConfig.Structures` id (L0 ghost if missing). Missing kit role children are no-ops; apply is pcall-guarded. Admin `resetbase` and prestige also refresh visuals.
+
+61. **Compass HUD** — Client `CompassController` shows direction + distance to assigned base plot and nearest unowned/neutral territory (camera-relative N/NE/…). Lightweight; no minimap mesh.
+
+62. **Day/night** — MapSetup installs Sky + Atmosphere and a cancelable `WE_DayNightMarker` loop (~20 min full day). Night cools ambient/fog; day stays readable on large map. `resetmap` destroys the marker to stop prior loops.
+
+63. **Territory ownership visuals** — `updateMarkerVisual` raises/sizes flags, PointLight, ring thickness, billboard `[OWNED/CONTESTED/HOSTILE NPC/NEUTRAL]` text by owner state.
+
+64. **Onboarding toast** — Session-once after join: `Walk to glowing pads to buy · B/G menus` then a follow-up for prices / B / G / E.
+
+65. **Void-fall (large map)** — Emergency baseplate ~2800×2800. If `WarEmpireSetup` exists but Ground missing/small, Bootstrap rebuilds via MapSetup before services.
 

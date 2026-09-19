@@ -15,6 +15,7 @@ local ProgressionController = require(script.Parent.ProgressionController)
 local ArmyController = require(script.Parent.ArmyController)
 local SettingsController = require(script.Parent.SettingsController)
 local WorldPromptController = require(script.Parent.WorldPromptController)
+local CompassController = require(script.Parent.CompassController)
 
 function UIController.Init()
 	AudioController.Init()
@@ -30,6 +31,7 @@ function UIController.Init()
 	ArmyController.Init()
 	SettingsController.Init()
 	WorldPromptController.Init()
+	CompassController.Init()
 end
 
 return UIController

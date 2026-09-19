@@ -21,7 +21,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 2. From this folder: `rojo serve` (or `aftman install` then `rojo serve`), **or** skip Rojo and open the built `dist/WarEmpire.rbxlx`.
 3. In Studio, connect the Rojo plugin and sync (if using live sync).
 4. Press **Play** — map auto-builds via `MapSetup` when `Workspace.WarEmpireSetup` is missing (no command-bar paste). Map is large (~2600-stud ground, plot ring ~450). Long Studio pastes of `tools/StudioSetup.luau` truncate (~488 lines); paste is obsolete.
-5. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP). **Walk onto glowing upgrade pads to BUY** (auto-purchase, server-validated). Prices float above each pad. Or open **Base Upgrades** (**B** / bottom button) and tap **BUY $price**. **E** on plot/garage pads opens menus; **G** = Garage.
+5. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP). **Walk onto glowing upgrade pads to BUY** (auto-purchase, server-validated). Prices float above each pad. Or open **Base Upgrades** (**B** / bottom button) and tap **BUY $price**. **E** on plot/garage pads opens menus; **G** = Garage. Top-right compass hints point to your base and nearest unowned outpost. Soft day/night cycle runs from MapSetup.
 6. To regenerate the map: delete `Workspace.WarEmpireSetup` and Play again, or admin `resetmap` (Studio). `tools/StudioSetup.luau` only prints this note if pasted.
 
 ## Merging open PRs

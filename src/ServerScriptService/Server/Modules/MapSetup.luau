@@ -374,7 +374,7 @@ function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
 
-	-- Lighting / atmosphere — tuned for ~2600-stud map (distant bases readable via haze)
+	-- Lighting / sky / atmosphere — large map readable at distance + gentle day/night
 	Lighting.Ambient = Color3.fromRGB(72, 82, 68)
 	Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82)
 	Lighting.Brightness = 2.25
@@ -388,6 +388,18 @@ function MapSetup.Run()
 	pcall(function()
 		Lighting.GlobalShadows = true
 	end)
+
+	local sky = Lighting:FindFirstChildOfClass("Sky")
+	if not sky then
+		sky = Instance.new("Sky")
+		sky.Parent = Lighting
+	end
+	sky.Name = "WE_Sky"
+	sky.CelestialBodiesShown = true
+	sky.StarCount = 3000
+	sky.SunAngularSize = 14
+	sky.MoonAngularSize = 9
+
 	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
 	if not atm then
 		atm = Instance.new("Atmosphere")
@@ -399,6 +411,43 @@ function MapSetup.Run()
 	atm.Decay = Color3.fromRGB(95, 108, 88)
 	atm.Glare = 0.18
 	atm.Haze = 1.85
+
+	-- Cancel prior day/night loop on resetmap, then start a gentle cycle (~20 min full day)
+	local dayMarker = Lighting:FindFirstChild("WE_DayNightMarker")
+	if dayMarker then
+		dayMarker:Destroy()
+	end
+	dayMarker = Instance.new("Folder")
+	dayMarker.Name = "WE_DayNightMarker"
+	dayMarker.Parent = Lighting
+	task.spawn(function()
+		local STEP = 0.035 -- hours per tick
+		local WAIT = 1.5
+		while dayMarker.Parent do
+			local t = (Lighting.ClockTime + STEP) % 24
+			Lighting.ClockTime = t
+			-- Night dip: cooler ambient + thicker haze; day stays readable on large map
+			local night = 0
+			if t < 5 or t > 20 then
+				night = 1
+			elseif t < 7 then
+				night = 1 - (t - 5) / 2
+			elseif t > 18 then
+				night = (t - 18) / 2
+			end
+			Lighting.Brightness = 2.35 - night * 1.55
+			Lighting.Ambient = Color3.fromRGB(72, 82, 68):Lerp(Color3.fromRGB(28, 34, 55), night)
+			Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82):Lerp(Color3.fromRGB(36, 42, 70), night)
+			Lighting.FogColor = Color3.fromRGB(145, 158, 135):Lerp(Color3.fromRGB(40, 48, 72), night)
+			Lighting.FogStart = 450 - night * 120
+			Lighting.FogEnd = 2400 - night * 400
+			atm.Density = 0.20 + night * 0.12
+			atm.Haze = 1.7 + night * 0.9
+			atm.Color = Color3.fromRGB(155, 168, 145):Lerp(Color3.fromRGB(70, 80, 120), night)
+			atm.Glare = 0.18 - night * 0.1
+			task.wait(WAIT)
+		end
+	end)
 
 	local root = ensureFolder("WarEmpireSetup", Workspace)
 	local map = ensureFolder("Map", root)
@@ -538,9 +587,10 @@ function MapSetup.Run()
 		for i = 1, count do
 			local angle = (i / count) * math.pi * 2
 			local pos = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
+			local padSize = if tag == TAG_VEHICLE then 16 else 12
 			local p = part({
 				Name = name .. i,
-				Size = Vector3.new(12, 1.2, 12),
+				Size = Vector3.new(padSize, 1.2, padSize),
 				Position = pos,
 				Color = color,
 				Material = Enum.Material.Concrete,
@@ -577,9 +627,10 @@ function MapSetup.Run()
 		end
 	end
 
-	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 6, Vector3.new(0, 0, 0), COL_VEHICLE, 200)
-	makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(220, 0, 220), COL_NPC, 180)
-	makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-220, 0, -220), COL_EVENT, 160)
+	-- Rings scaled for ~2600 ground: garage pads ~380 apart on circle, not stacked near plaza
+	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 6, Vector3.new(0, 0, 0), COL_VEHICLE, 380)
+	makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(280, 0, 280), COL_NPC, 320)
+	makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-280, 0, -280), COL_EVENT, 280)
 
 	local npcFolder = ensureFolder("NPCPlaceholders", root)
 	for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do

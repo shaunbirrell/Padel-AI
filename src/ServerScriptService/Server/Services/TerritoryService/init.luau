@@ -118,38 +118,136 @@ local function syncProfileOwnership(player: Player)
 	DataService.MarkDirty(player)
 end
 
+local function ownerStateLabel(rt: TerritoryRuntime): string
+	local ot = ownerTypes()
+	if rt.Contested or rt.OwnerType == ot.Contested then
+		return "CONTESTED"
+	elseif rt.OwnerType == ot.Player then
+		local plr = Players:GetPlayerByUserId(rt.OwnerUserId)
+		return if plr then ("OWNED · " .. plr.DisplayName) else "OWNED"
+	elseif rt.OwnerType == ot.NPC then
+		return "HOSTILE NPC"
+	elseif rt.OwnerType == ot.Clan then
+		return "CLAN"
+	end
+	return "NEUTRAL · Stand to capture"
+end
+
 local function updateMarkerVisual(rt: TerritoryRuntime)
 	local marker = rt.Marker
 	if not marker then
 		return
 	end
 	local ot = ownerTypes()
-	if rt.Contested or rt.OwnerType == ot.Contested then
-		marker.Color = Color3.fromRGB(220, 120, 40)
+	local contested = rt.Contested or rt.OwnerType == ot.Contested
+	local color: Color3
+	local markerTransparency = 0.45
+	local flagTransparency = 0.15
+	local flagMaterial = Enum.Material.Neon
+	local ringTransparency = 0.65
+	local flagLift = 12 -- studs above ground for flag center
+
+	if contested then
+		color = Color3.fromRGB(255, 140, 35)
+		markerTransparency = 0.28
+		flagTransparency = 0.05
+		ringTransparency = 0.35
+		flagLift = 13.5
 	elseif rt.OwnerType == ot.Player then
-		marker.Color = Color3.fromRGB(70, 160, 90)
+		color = Color3.fromRGB(55, 210, 95)
+		markerTransparency = 0.35
+		flagTransparency = 0.0
+		ringTransparency = 0.45
+		flagLift = 14.5
 	elseif rt.OwnerType == ot.NPC then
-		marker.Color = Color3.fromRGB(160, 60, 60)
+		color = Color3.fromRGB(210, 45, 45)
+		markerTransparency = 0.32
+		flagTransparency = 0.05
+		ringTransparency = 0.4
+		flagLift = 13.2
 	elseif rt.OwnerType == ot.Clan then
-		marker.Color = Color3.fromRGB(90, 110, 200)
+		color = Color3.fromRGB(70, 120, 240)
+		markerTransparency = 0.35
+		flagTransparency = 0.0
+		ringTransparency = 0.45
+		flagLift = 14.0
 	else
-		marker.Color = rt.Def.Color
+		color = rt.Def.Color
+		flagMaterial = Enum.Material.SmoothPlastic
+		flagTransparency = 0.35
+		flagLift = 11.0
 	end
-	marker:SetAttribute("OwnerType", rt.OwnerType)
+
+	marker.Color = color
+	marker.Transparency = markerTransparency
+	marker.Material = Enum.Material.Neon
+	marker:SetAttribute("OwnerType", if contested then ot.Contested else rt.OwnerType)
 	marker:SetAttribute("OwnerUserId", rt.OwnerUserId)
 	marker:SetAttribute("CaptureProgress", rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds))
+
 	local tid = marker:GetAttribute("TerritoryId")
-	if typeof(tid) == "string" then
-		local parent = marker.Parent
-		if parent then
-			local flag = parent:FindFirstChild(tid .. "_Flag")
-			if flag and flag:IsA("BasePart") then
-				flag.Color = marker.Color
+	if typeof(tid) ~= "string" then
+		return
+	end
+	local parent = marker.Parent
+	if not parent then
+		return
+	end
+
+	local flag = parent:FindFirstChild(tid .. "_Flag")
+	if flag and flag:IsA("BasePart") then
+		flag.Color = color
+		flag.Material = flagMaterial
+		flag.Transparency = flagTransparency
+		-- Raise owned flags; lower neutral so ownership reads at a glance
+		local basePos = marker.Position
+		flag.Size = if contested then Vector3.new(6.2, 3.6, 0.3) elseif rt.OwnerType == ot.Neutral then Vector3.new(4.2, 2.4, 0.22) else Vector3.new(5.5, 3.2, 0.28)
+		flag.Position = Vector3.new(basePos.X + flag.Size.X * 0.5 + 0.2, flagLift, basePos.Z)
+		-- Ownership flash light (brief)
+		local lightInst = flag:FindFirstChild("WE_OwnerLight")
+		local light: PointLight
+		if lightInst and lightInst:IsA("PointLight") then
+			light = lightInst
+		else
+			if lightInst then
+				lightInst:Destroy()
 			end
-			local ring = parent:FindFirstChild(tid .. "_Ring")
-			if ring and ring:IsA("BasePart") then
-				ring.Color = marker.Color
-			end
+			light = Instance.new("PointLight")
+			light.Name = "WE_OwnerLight"
+			light.Range = 28
+			light.Parent = flag
+		end
+		light.Color = color
+		light.Brightness = if contested then 3.2 elseif rt.OwnerType == ot.Neutral then 0.4 else 2.4
+		light.Enabled = true
+	end
+
+	local ring = parent:FindFirstChild(tid .. "_Ring")
+	if ring and ring:IsA("BasePart") then
+		ring.Color = color
+		ring.Transparency = ringTransparency
+		ring.Material = if contested then Enum.Material.Neon else Enum.Material.SmoothPlastic
+		local d = (rt.Def.Radius or 30) * 2
+		ring.Size = if contested then Vector3.new(d + 14, 0.55, d + 14) else Vector3.new(d + 8, 0.4, d + 8)
+	end
+
+	local pole = parent:FindFirstChild(tid .. "_FlagPole")
+	if pole and pole:IsA("BasePart") then
+		pole.Color = if contested then Color3.fromRGB(180, 90, 30) elseif rt.OwnerType == ot.Neutral then Color3.fromRGB(55, 55, 55) else Color3.fromRGB(40, 45, 40)
+	end
+
+	-- Billboard state line
+	local labelGui = marker:FindFirstChild("Label")
+	if labelGui and labelGui:IsA("BillboardGui") then
+		local backdrop = labelGui:FindFirstChild("Backdrop")
+		local textLabel = backdrop and backdrop:FindFirstChild("Text")
+		if textLabel and textLabel:IsA("TextLabel") then
+			textLabel.Text = rt.Def.DisplayName .. "  [" .. ownerStateLabel(rt) .. "]"
+			textLabel.TextColor3 = if contested then Color3.fromRGB(255, 200, 120) elseif rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
+		end
+		local stroke = backdrop and backdrop:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Color = color
 		end
 	end
 end
