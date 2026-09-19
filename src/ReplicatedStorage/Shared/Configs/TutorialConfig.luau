@@ -1,5 +1,5 @@
 --!strict
---[[ Interactive tutorial steps for MVP polish. ]]
+--[[ Interactive tutorial steps for MVP polish. Mobile-first CTAs + pad targeting. ]]
 
 export type TutorialStepDef = {
 	Id: string,
@@ -7,53 +7,72 @@ export type TutorialStepDef = {
 	Hint: string,
 	MarkerName: string, -- Workspace tutorial marker name (best-effort)
 	HighlightHint: string?, -- UI highlight target hint (placeholder)
+	-- When set, client beams to the player's WE_UpgradeSlot with this StructureId
+	PadStructureId: string?,
+	-- Client CTA: "PadBuy" | "OpenBase" | "OpenGarage" | "WatchHud" | "Capture"
+	CtaAction: string?,
+	CtaLabel: string?,
 }
 
 local TutorialConfig = {
 	Enabled = true,
-	-- Step indices match profile.TutorialStep (0-based before complete)
+	-- Step indices match profile.TutorialStep (1-based while active)
 	Steps = {
 		{
 			Id = "ClaimBase",
 			Title = "Claim your base",
-			Hint = "Your plot is assigned on join. Walk to your glowing base pad.",
+			Hint = "Your plot is assigned on join. Follow the gold beam to your glowing base pad.",
 			MarkerName = "Tutorial_ClaimBase",
 			HighlightHint = "BasePad",
+			CtaAction = "WatchHud",
+			CtaLabel = "FOLLOW BEAM",
 		},
 		{
 			Id = "CommandCenter",
-			Title = "Build Command Center",
-			Hint = "Walk onto the Command Center pad (or tap BUY / press B) — pads show +$/tick.",
+			Title = "Buy Command Center",
+			Hint = "Stand on the Command Center pad, then tap the big BUY button (or B for base menu). Pads show +$/tick.",
 			MarkerName = "Tutorial_CommandCenter",
 			HighlightHint = "BaseMenu",
+			PadStructureId = "CommandCenter",
+			CtaAction = "PadBuy",
+			CtaLabel = "BUY ON PAD",
 		},
 		{
 			Id = "Income",
-			Title = "Collect income",
-			Hint = "Watch HUD Cash tick up every few seconds — your first +$/tick from Command Center.",
+			Title = "Watch your income",
+			Hint = "HUD Cash ticks every few seconds from your Command Center +$/tick. Wait for the first payday.",
 			MarkerName = "Tutorial_Income",
 			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "WATCH CASH",
 		},
 		{
 			Id = "Barracks",
-			Title = "Build Barracks",
-			Hint = "Buy Barracks on its pad (needs CC) — bigger +$/tick on the billboard.",
+			Title = "Buy Barracks",
+			Hint = "Needs Command Center. Walk onto the Barracks pad and tap BUY — bigger +$/tick on the billboard.",
 			MarkerName = "Tutorial_Barracks",
 			HighlightHint = "BaseMenu",
+			PadStructureId = "Barracks",
+			CtaAction = "PadBuy",
+			CtaLabel = "BUY BARRACKS",
 		},
 		{
 			Id = "Jeep",
 			Title = "Spawn a Jeep",
-			Hint = "Press G (Garage) and SPAWN your Military Jeep.",
+			Hint = "Open Garage (G or dock) and tap SPAWN on Military Jeep. Starter Jeep is already owned.",
 			MarkerName = "Tutorial_Jeep",
 			HighlightHint = "Garage",
+			CtaAction = "OpenGarage",
+			CtaLabel = "OPEN GARAGE",
 		},
 		{
 			Id = "Outpost",
 			Title = "Capture an outpost",
-			Hint = "Stand in a territory capture zone until you own it.",
+			Hint = "Follow the beam to a territory zone. Stand inside until capture completes — you own it.",
 			MarkerName = "Tutorial_Outpost",
 			HighlightHint = "Territory",
+			CtaAction = "Capture",
+			CtaLabel = "FIND OUTPOST",
 		},
 	} :: { TutorialStepDef },
 }

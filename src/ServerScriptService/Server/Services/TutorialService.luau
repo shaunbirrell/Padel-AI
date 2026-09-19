@@ -53,6 +53,9 @@ local function pushTutorial(player: Player)
 		Hint = if stepDef then stepDef.Hint else nil,
 		MarkerName = if stepDef then stepDef.MarkerName else nil,
 		HighlightHint = if stepDef then stepDef.HighlightHint else nil,
+		PadStructureId = if stepDef then stepDef.PadStructureId else nil,
+		CtaAction = if stepDef then stepDef.CtaAction else nil,
+		CtaLabel = if stepDef then stepDef.CtaLabel else nil,
 	})
 end
 
