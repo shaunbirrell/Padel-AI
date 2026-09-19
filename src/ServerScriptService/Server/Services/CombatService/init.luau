@@ -22,7 +22,7 @@ local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
 local CombatWeaponLogic = require(script.CombatWeaponLogic)
-local VisualAssetService = require(script.Parent.Parent.VisualAssetService)
+local VisualAssetService = require(script.Parent.VisualAssetService)
 
 -- Cached CollectionService:GetTagged results (invalidated on TTL)
 local _tagCache: { [string]: { at: number, list: { Instance } } } = {}

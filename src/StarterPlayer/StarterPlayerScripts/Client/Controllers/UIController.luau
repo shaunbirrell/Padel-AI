@@ -19,20 +19,27 @@ local CompassController = require(script.Parent.CompassController)
 local VehicleController = require(script.Parent.VehicleController)
 
 function UIController.Init()
-	AudioController.Init()
-	HUDController.Init()
+	local function safeInit(name: string, fn: () -> ())
+		local ok, err = pcall(fn)
+		if not ok then
+			warn("[WAR EMPIRE] UI Init failed:", name, err)
+		end
+	end
+	safeInit("Audio", AudioController.Init)
+	safeInit("HUD", HUDController.Init)
 	-- Notifications before Base so first-join toasts have a stack ready.
-	NotificationController.Init()
-	BaseController.Init()
-	TutorialController.Init()
-	TerritoryController.Init()
-	MissionController.Init()
-	ShopController.Init()
-	ProgressionController.Init()
-	ArmyController.Init()
-	SettingsController.Init()
-	WorldPromptController.Init()
-	CompassController.Init()
+	safeInit("Notification", NotificationController.Init)
+	safeInit("Base", BaseController.Init)
+	safeInit("Tutorial", TutorialController.Init)
+	safeInit("Territory", TerritoryController.Init)
+	safeInit("Mission", MissionController.Init)
+	safeInit("Shop", ShopController.Init)
+	safeInit("Progression", ProgressionController.Init)
+	safeInit("Army", ArmyController.Init)
+	safeInit("Settings", SettingsController.Init)
+	-- BUY pads MUST init even if HUD remotes fail
+	safeInit("WorldPrompt", WorldPromptController.Init)
+	safeInit("Compass", CompassController.Init)
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).

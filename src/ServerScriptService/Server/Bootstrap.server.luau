@@ -187,6 +187,8 @@ end
 
 -- ── Remotes + services (AFTER map so require failures don't block terrain) ─
 local RemoteSetup = require(Modules.RemoteSetup)
+RemoteSetup.Init() -- MUST run before any service require that can throw
+
 local DataService = require(Services.DataService)
 local EconomyService = require(Services.EconomyService)
 local BaseService = require(Services.BaseService)

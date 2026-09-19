@@ -66,7 +66,13 @@ local FUNCTIONS = {
 	Constants.RemoteNames.GetPlayerState,
 }
 
-function RemoteSetup.Init(): Folder
+local _initialized = false
+
+function RemoteSetup.Init()
+	if _initialized then
+		return
+	end
+	_initialized = true: Folder
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
 	if not folder then
 		folder = Instance.new("Folder")
