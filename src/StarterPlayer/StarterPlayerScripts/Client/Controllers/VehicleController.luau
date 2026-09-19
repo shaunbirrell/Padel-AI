@@ -1,8 +1,8 @@
 --!strict
 --[[
-	Phase 4 — Garage UI (G). Spawn / buy / despawn requests only.
-	Empty states via UIUtil.EmptyState when catalog/owned list is empty.
-	MobileScale via UIUtil.PrepareScreen (same as Army/Shop).
+	Phase 4/7 — Garage UI (G). Spawn / buy / despawn requests only.
+	Category + rarity filters for large roster (~50+). ScrollingFrame AutomaticCanvasSize.
+	Empty states via UIUtil.EmptyState. MobileScale via UIUtil.PrepareScreen.
 ]]
 
 local Players = game:GetService("Players")
@@ -31,6 +31,14 @@ local ownedMap: { [string]: boolean } = {}
 local activeId: string? = nil
 local cooldownLeft = 0
 local filterCategory: string = "All" -- All | Ground | Air | Naval
+local filterRarity: string = "All" -- All | Common | Uncommon | Rare | Epic | Legendary
+local rarityColors: { [string]: Color3 } = {
+	Common = Color3.fromRGB(160, 165, 170),
+	Uncommon = Color3.fromRGB(90, 180, 110),
+	Rare = Color3.fromRGB(80, 140, 220),
+	Epic = Color3.fromRGB(170, 90, 220),
+	Legendary = Color3.fromRGB(230, 170, 60),
+}
 
 local function addCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -49,14 +57,22 @@ local function sortedIds(): { string }
 	local ids = {}
 	for id, def in pairs(VehicleConfig.Vehicles) do
 		local cat = if def then (def.Category or "Ground") else "Ground"
-		if filterCategory == "All" or cat == filterCategory then
+		local rar = if def then (def.Rarity or "Common") else "Common"
+		local catOk = filterCategory == "All" or cat == filterCategory
+		local rarOk = filterRarity == "All" or rar == filterRarity
+		if catOk and rarOk then
 			table.insert(ids, id)
 		end
 	end
 	table.sort(ids, function(a, b)
 		local da = VehicleConfig.Vehicles[a]
 		local db = VehicleConfig.Vehicles[b]
-		return (da and da.UnlockLevel or 0) < (db and db.UnlockLevel or 0)
+		local la = da and da.UnlockLevel or 0
+		local lb = db and db.UnlockLevel or 0
+		if la == lb then
+			return a < b
+		end
+		return la < lb
 	end)
 	return ids
 end
@@ -116,10 +132,18 @@ local function refresh()
 			row.Parent = listFrame
 			addCorner(row, 6)
 
+			local rarBar = Instance.new("Frame")
+			rarBar.Size = UDim2.new(0, 4, 1, -8)
+			rarBar.Position = UDim2.fromOffset(4, 4)
+			rarBar.BorderSizePixel = 0
+			rarBar.BackgroundColor3 = rarityColors[def.Rarity] or Constants.Colors.Muted
+			rarBar.Parent = row
+			addCorner(rarBar, 2)
+
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(10, 6)
-			title.Size = UDim2.new(1, -120, 0, 20)
+			title.Position = UDim2.fromOffset(14, 6)
+			title.Size = UDim2.new(1, -124, 0, 20)
 			title.Font = Enum.Font.GothamBold
 			title.TextSize = 14
 			title.TextXAlignment = Enum.TextXAlignment.Left
@@ -129,10 +153,10 @@ local function refresh()
 
 			local meta = Instance.new("TextLabel")
 			meta.BackgroundTransparency = 1
-			meta.Position = UDim2.fromOffset(10, 28)
-			meta.Size = UDim2.new(1, -120, 0, 36)
+			meta.Position = UDim2.fromOffset(14, 28)
+			meta.Size = UDim2.new(1, -124, 0, 36)
 			meta.Font = Enum.Font.Gotham
-			meta.TextSize = 12
+			meta.TextSize = 11
 			meta.TextXAlignment = Enum.TextXAlignment.Left
 			meta.TextYAlignment = Enum.TextYAlignment.Top
 			meta.TextColor3 = Constants.Colors.Muted
@@ -140,10 +164,16 @@ local function refresh()
 			local req = ""
 			if def.RequiresStructure then
 				req = string.format(
-					" | Needs %s L%d",
+					" | %s L%d",
 					def.RequiresStructure.StructureId,
 					def.RequiresStructure.Level
 				)
+			end
+			if typeof(def.RequiresPrestige) == "number" and (def.RequiresPrestige :: number) > 0 then
+				req ..= string.format(" | P%d+", def.RequiresPrestige :: number)
+			end
+			if typeof(def.RequiresRebirthFlag) == "string" and (def.RequiresRebirthFlag :: string) ~= "" then
+				req ..= " | Rebirth"
 			end
 			meta.Text = string.format(
 				"%s · %s · Lv %d · $%s · Spd %d%s",
@@ -222,7 +252,7 @@ local function buildGui()
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(500, 480)
+	panel.Size = UDim2.fromOffset(540, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
@@ -277,19 +307,19 @@ local function buildGui()
 	local filters = Instance.new("Frame")
 	filters.Name = "Filters"
 	filters.Position = UDim2.fromOffset(12, 66)
-	filters.Size = UDim2.new(1, -24, 0, 32)
+	filters.Size = UDim2.new(1, -24, 0, 30)
 	filters.BackgroundTransparency = 1
 	filters.Parent = panel
 	local layoutF = Instance.new("UIListLayout")
 	layoutF.FillDirection = Enum.FillDirection.Horizontal
-	layoutF.Padding = UDim.new(0, 6)
+	layoutF.Padding = UDim.new(0, 5)
 	layoutF.Parent = filters
 	for _, cat in ipairs({ "All", "Ground", "Air", "Naval" }) do
 		local fb = Instance.new("TextButton")
 		fb.Name = "Filter_" .. cat
-		fb.Size = UDim2.fromOffset(88, 30)
+		fb.Size = UDim2.fromOffset(78, 28)
 		fb.Font = Enum.Font.GothamBold
-		fb.TextSize = 12
+		fb.TextSize = 11
 		fb.Text = cat:upper()
 		fb.TextColor3 = Constants.Colors.Text
 		fb.BorderSizePixel = 0
@@ -309,9 +339,55 @@ local function buildGui()
 		end)
 	end
 
+	local rarFilters = Instance.new("Frame")
+	rarFilters.Name = "RarityFilters"
+	rarFilters.Position = UDim2.fromOffset(12, 98)
+	rarFilters.Size = UDim2.new(1, -24, 0, 26)
+	rarFilters.BackgroundTransparency = 1
+	rarFilters.Parent = panel
+	local layoutR = Instance.new("UIListLayout")
+	layoutR.FillDirection = Enum.FillDirection.Horizontal
+	layoutR.Padding = UDim.new(0, 4)
+	layoutR.Parent = rarFilters
+	local rarList = { "All", "Common", "Uncommon", "Rare", "Epic", "Legendary" }
+	if typeof(VehicleConfig.Rarities) == "table" then
+		rarList = { "All" }
+		for _, r in ipairs(VehicleConfig.Rarities) do
+			table.insert(rarList, r)
+		end
+	end
+	for _, rar in ipairs(rarList) do
+		local rb = Instance.new("TextButton")
+		rb.Name = "Rarity_" .. rar
+		rb.Size = UDim2.fromOffset(if rar == "Legendary" then 78 else 68, 24)
+		rb.Font = Enum.Font.GothamBold
+		rb.TextSize = 10
+		rb.Text = if rar == "All" then "ALL ★" else string.upper(string.sub(rar, 1, 3))
+		rb.TextColor3 = Constants.Colors.Text
+		rb.BorderSizePixel = 0
+		rb.BackgroundColor3 = if filterRarity == rar then (rarityColors[rar] or Constants.Colors.Accent) else Constants.Colors.Background
+		addCorner(rb, 5)
+		rb.Parent = rarFilters
+		rb.MouseButton1Click:Connect(function()
+			AudioController.PlayClick()
+			filterRarity = rar
+			for _, child in ipairs(rarFilters:GetChildren()) do
+				if child:IsA("TextButton") then
+					local name = string.gsub(child.Name, "Rarity_", "")
+					child.BackgroundColor3 = if name == filterRarity
+						then (rarityColors[name] or Constants.Colors.Accent)
+						else Constants.Colors.Background
+				end
+			end
+			refresh()
+		end)
+	end
+
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Position = UDim2.fromOffset(12, 104)
-	scroll.Size = UDim2.new(1, -24, 1, -144)
+	scroll.Position = UDim2.fromOffset(12, 130)
+	scroll.Size = UDim2.new(1, -24, 1, -170)
+	scroll.ScrollingDirection = Enum.ScrollingDirection.Y
+	scroll.ElasticBehavior = Enum.ElasticBehavior.Always
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 4
@@ -329,7 +405,7 @@ local function buildGui()
 	hint.TextSize = 12
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextColor3 = Constants.Colors.Muted
-	hint.Text = "G · filters Ground/Air/Naval · E on pad · DriverSeat"
+	hint.Text = "G · Cat + Rarity filters · scroll · E on pad · DriverSeat"
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")
@@ -394,9 +470,19 @@ function VehicleController.Init()
 		while true do
 			task.wait(0.5)
 			if cooldownLeft > 0 then
+				local prev = cooldownLeft
 				cooldownLeft = math.max(0, cooldownLeft - 0.5)
-				if isOpen then
-					refresh()
+				if isOpen and listFrame then
+					-- Soft update: avoid full list rebuild every tick on large roster
+					if cooldownLabel then
+						cooldownLabel.Text = if cooldownLeft > 0
+							then string.format("Spawn cooldown: %.0fs", cooldownLeft)
+							else "Spawn ready"
+					end
+					if cooldownLeft == 0 or math.floor(prev) ~= math.floor(cooldownLeft) then
+						-- Rebuild when crossing whole seconds or hitting ready (button labels)
+						refresh()
+					end
 				end
 			end
 		end

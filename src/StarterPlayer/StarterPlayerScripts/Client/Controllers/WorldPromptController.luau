@@ -151,7 +151,7 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	bb.Size = UDim2.fromOffset(168, 58)
 	bb.StudsOffset = Vector3.new(0, 4.5, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 320
+	bb.MaxDistance = 650
 	bb.Parent = part
 
 	local backdrop = Instance.new("Frame")

@@ -22,15 +22,15 @@ end
 
 local BaseConfig = {
 	MaxPlots = 6,
-	PlotSize = Vector3.new(140, 1, 140),
-	-- World positions — keep in sync with MapSetup PLOT_POSITIONS (ring ~450)
+	PlotSize = Vector3.new(200, 1, 200),
+	-- World positions — keep in sync with MapSetup PLOT_POSITIONS (ring ~800, ground ~4800)
 	PlotPositions = {
-		Vector3.new(-450, 0.5, -225),
-		Vector3.new(-450, 0.5, 225),
-		Vector3.new(0, 0.5, -450),
-		Vector3.new(0, 0.5, 450),
-		Vector3.new(450, 0.5, -225),
-		Vector3.new(450, 0.5, 225),
+		Vector3.new(-800, 0.5, -400),
+		Vector3.new(-800, 0.5, 400),
+		Vector3.new(0, 0.5, -800),
+		Vector3.new(0, 0.5, 800),
+		Vector3.new(800, 0.5, -400),
+		Vector3.new(800, 0.5, 400),
 	} :: { Vector3 },
 
 	Structures = {

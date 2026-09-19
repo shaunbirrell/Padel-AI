@@ -10,19 +10,19 @@ local OilRigConfig = {
 	LegCount = 4,
 	GuardNPCType = "OilRigGuard",
 	GuardCount = 4,
-	CaptureRadius = 42,
-	-- Positions (offshore on ~2600 map)
+	CaptureRadius = 48,
+	-- Positions (offshore on ~4800 map)
 	Rigs = {
 		{
 			Id = "CoastalOilAlpha",
 			DisplayName = "Coastal Oil Alpha",
-			Position = Vector3.new(980, 1, -420),
+			Position = Vector3.new(1800, 1, -750),
 			Color = Color3.fromRGB(190, 145, 45),
 		},
 		{
 			Id = "CoastalOilBravo",
 			DisplayName = "Coastal Oil Bravo",
-			Position = Vector3.new(-980, 1, 420),
+			Position = Vector3.new(-1800, 1, 750),
 			Color = Color3.fromRGB(170, 125, 40),
 		},
 	},

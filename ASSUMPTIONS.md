@@ -111,11 +111,11 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 55. **MapSetup auto-build** — `Modules/MapSetup.luau` builds the world (structure kits, territories, pads, NPCs, tutorial beacons, lighting, price billboards). Bootstrap runs it when `Workspace.WarEmpireSetup` is missing (Play / server start) — no command-bar paste (Studio truncates long pastes). Safe re-run clears `WarEmpireSetup`. Admin `resetmap` (Studio) or delete folder + Play to regenerate. `tools/StudioSetup.luau` is a short note only.
 
-55b. **Map scale** — Ground ~2600×2600 studs; 6 base plots on ring radius ~450 with ~140-stud pads; upgrade pads on a 4-col grid with ~30-stud gaps (less cramped). Territories out to ~720 with larger capture radii. Vehicle garage pads on ring ~380 (16-stud pads); NPC ~320; Event ~280. `BaseConfig.PlotPositions` / `TerritoryConfig` stay in sync with MapSetup. Fog/Atmosphere tuned so distant bases stay readable. Respawn/teleport use tagged `PlayerSpawn` on each plot.
+55b. **Map scale** — Ground ~4800×4800 studs; 6 base plots on ring radius ~800 with ~200-stud pads; upgrade pads on a 4-col grid with ~42-stud gaps. Territories out to ~1300–1450; coastal oil ~1800; forts ~1450. Vehicle garage pads on ring ~650 (×10); NPC ~550; Event ~500; naval pads along south water band (~z 1580–1720). `BaseConfig.PlotPositions` / `TerritoryConfig` / `OilRigConfig` / void fallback (~5000) stay in sync. FogStart/End ~800/4400; billboard MaxDistance ~900; RadarRevealRadius 550. Respawn/teleport use tagged `PlayerSpawn` on each plot.
 
 56. **Structure level visuals** — `BaseService.UpdateVisuals` / `applyKitVisuals` scales kit children (`WE_KitRole`) by level; ghost transparency at L0; neon accents brighten when owned.
 
-57. **Vehicle kits** — `VehicleService.buildVehicleModel` builds distinct Part kits per `VehicleConfig` id (Jeep/ArmedJeep wheels+bed+gun; Truck/APC; Light/HeavyTank tracks+turret+barrel; AttackHelicopter rotors+skids; FighterJet wings+tail). VehicleSeat remains driveable. No MeshIds.
+57. **Vehicle kits** — `VehicleService.buildVehicleModel` dispatches on `VehicleDef.KitFamily` (WheeledLight/Truck/APC, TrackedIFV/MBT/SPAAG/Artillery, Heli*, Jet*, Naval*). `KitScale` + id accents differentiate within a family. VehicleSeat remains driveable. No MeshIds.
 
 58. **Walk-over edge cases** — Respawn / CharacterRemoving clears overlap + pending. Seated in VehicleSeat/Seat skips pad buys (driving over pads). Overlap keyed by `plotId|structureId` so multi-plot / multi-part touches don't collide. Plot reassignment clears overlap. Standing on a pad retries after debounce (failed cash / sequential upgrades); MAX toast throttled. Touched/Prompt connections disconnect on AncestryChanged / tag remove (no leak). Billboard refresh throttled (~0.35s).
 
@@ -157,13 +157,16 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 77. **Fortresses** — `FortIronclad` / `FortSandhold` in TerritoryConfig + MapSetup (walls/keep + FortGuard). Higher StipendCash (~10k). MaxPersonalTerritories raised to 6.
 
-78. **DataVersion 5** — Migrates `LastSpinnerClaimUnix`. Group/Discord shout intentionally skipped. MapSetup auto-on-Play + void-fall + ~2600 map preserved.
+78. **DataVersion 5** — Migrates `LastSpinnerClaimUnix`. Group/Discord shout intentionally skipped. MapSetup auto-on-Play + void-fall preserved (map now ~4800).
 
-79. **Naval vehicles + Dock** — `VehicleConfig` Category Ground/Air/Naval (~19 kits). `Dock` structure (VehicleDepot L2) gates PatrolBoat/Gunboat/LandingCraft/Destroyer. MapSetup builds coastal water strip + `WE_NavalSpawn` pads (also tagged `WE_VehicleSpawn` for garage prompts). VehicleService prefers naval pads for Category=Naval; Part kits (hull/cabin/seat); MeshAssetId hooks reserved.
+79. **Naval vehicles + Dock** — `VehicleConfig` Category Ground/Air/Naval. `Dock` (VehicleDepot L2) gates naval ladder through Battleship. MapSetup coastal water band + `WE_NavalSpawn` pads (also `WE_VehicleSpawn`). VehicleService prefers naval pads; KitFamily Part kits; MeshAssetId hooks reserved. SubSurfaceRunner is a surface stub (no dive physics yet).
 
-80. **Expanded vehicle roster** — ~19 vehicles (jeeps, trucks, APCs, tanks, artillery, helis, jets, boats). Garage UI filters All/Ground/Air/Naval. BALANCE.md lists costs/levels.
+80. **Expanded vehicle roster** — ~49 vehicles (26 Ground / 12 Air / 11 Naval). `KitFamily` on each def drives VehicleService builders (scalable toward 100). Garage filters category + rarity; soft cooldown refresh. Late units use RequiresPrestige / RequiresRebirthFlag. BALANCE.md summarizes curve.
 
 81. **Rebirth cash stack** — AddCash order: base → prestige (1+P×0.10) → VIP/DoubleCash → season. Exempt reasons skip VIP/season only. Passive, training workers, capture stipend, combat rewards all go through AddCash.
 
 82. **DataVersion 6** — Migrates `RebirthUnlocks` table. Product IDs remain 0. No MT trademarks/assets.
 
+83. **Map expansion ~4800** — Second scale-up after ~2600 toward Military Tycoon–feel footprint. Plot ring 800, pads 200, STRUCT_GAP 42. POIs/oil/forts/bank/supply/naval spread. Bootstrap `WE_VoidFallback` baseplate 5000×5000. Delete `WarEmpireSetup` or admin `resetmap` to regenerate.
+
+84. **Vehicle depth ladder** — Target roster grows via config-only adds (KitFamily already wired). Product IDs remain 0. No real brands / no MT names.

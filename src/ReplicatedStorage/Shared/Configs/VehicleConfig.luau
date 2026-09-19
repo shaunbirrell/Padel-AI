@@ -1,7 +1,31 @@
 --!strict
---[[ Expanded vehicle roster (~19): ground / air / naval — no real-world brand names ]]
+--[[ Deep vehicle roster (~48): Ground / Air / Naval unlock ladder.
+	KitFamily drives VehicleService Part kits (grows to 100 without rewrite).
+	Generic military names only — no real brands, no MT names.
+]]
 
 export type VehicleCategory = "Ground" | "Air" | "Naval"
+
+export type KitFamily =
+	"WheeledLight"
+	| "WheeledTruck"
+	| "WheeledAPC"
+	| "TrackedIFV"
+	| "TrackedMBT"
+	| "TrackedSPAAG"
+	| "TrackedArtillery"
+	| "HeliLight"
+	| "HeliTransport"
+	| "HeliAttack"
+	| "JetFighter"
+	| "JetStrike"
+	| "JetBomber"
+	| "JetTransport"
+	| "NavalPatrol"
+	| "NavalGun"
+	| "NavalLanding"
+	| "NavalCapital"
+	| "NavalSub"
 
 export type VehicleDef = {
 	Id: string,
@@ -14,273 +38,218 @@ export type VehicleDef = {
 	Seats: number,
 	Armor: number,
 	CostCash: number,
+	KitFamily: KitFamily,
+	KitScale: number?, -- visual scale mult (default 1)
 	RequiresStructure: { StructureId: string, Level: number }?,
-	RequiresPrestige: number?, -- min Prestige to purchase/spawn (nil = 0)
-	RequiresRebirthFlag: string?, -- profile.RebirthUnlocks[flag] must be true
-	-- Optional future Creator Store / uploaded MeshPart ids (0 = use Part kit)
+	RequiresPrestige: number?,
+	RequiresRebirthFlag: string?,
 	MeshAssetId: number?,
 	TextureAssetId: number?,
 }
 
+local function V(
+	id: string,
+	name: string,
+	cat: VehicleCategory,
+	rarity: string,
+	level: number,
+	health: number,
+	speed: number,
+	seats: number,
+	armor: number,
+	cost: number,
+	kit: KitFamily,
+	opts: {
+		Scale: number?,
+		Struct: { StructureId: string, Level: number }?,
+		Prestige: number?,
+		RebirthFlag: string?,
+	}?
+): VehicleDef
+	local scale: number? = nil
+	local struct: { StructureId: string, Level: number }? = nil
+	local prestige: number? = nil
+	local rebirthFlag: string? = nil
+	if opts then
+		scale = opts.Scale
+		struct = opts.Struct
+		prestige = opts.Prestige
+		rebirthFlag = opts.RebirthFlag
+	end
+	return {
+		Id = id,
+		DisplayName = name,
+		Category = cat,
+		Rarity = rarity,
+		UnlockLevel = level,
+		Health = health,
+		Speed = speed,
+		Seats = seats,
+		Armor = armor,
+		CostCash = cost,
+		KitFamily = kit,
+		KitScale = scale,
+		RequiresStructure = struct,
+		RequiresPrestige = prestige,
+		RequiresRebirthFlag = rebirthFlag,
+	}
+end
+
+local D = function(l: number): { StructureId: string, Level: number }
+	return { StructureId = "VehicleDepot", Level = l }
+end
+local H = function(l: number): { StructureId: string, Level: number }
+	return { StructureId = "Helipad", Level = l }
+end
+local A = function(l: number): { StructureId: string, Level: number }
+	return { StructureId = "Airfield", Level = l }
+end
+local N = function(l: number): { StructureId: string, Level: number }
+	return { StructureId = "Dock", Level = l }
+end
+
 local VehicleConfig = {
 	Vehicles = {
-		-- Ground progression
-		MilitaryJeep = {
-			Id = "MilitaryJeep",
-			DisplayName = "Military Jeep",
-			Category = "Ground",
-			Rarity = "Common",
-			UnlockLevel = 1,
-			Health = 200,
-			Speed = 55,
-			Seats = 4,
-			Armor = 10,
-			CostCash = 0,
-			RequiresStructure = nil,
-		},
-		ArmedJeep = {
-			Id = "ArmedJeep",
-			DisplayName = "Armed Jeep",
-			Category = "Ground",
-			Rarity = "Common",
-			UnlockLevel = 3,
-			Health = 250,
-			Speed = 52,
-			Seats = 4,
-			Armor = 15,
-			CostCash = 8000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 1 },
-		},
-		ScoutCar = {
-			Id = "ScoutCar",
-			DisplayName = "Scout Car",
-			Category = "Ground",
-			Rarity = "Common",
-			UnlockLevel = 4,
-			Health = 280,
-			Speed = 62,
-			Seats = 3,
-			Armor = 18,
-			CostCash = 12000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 1 },
-		},
-		ArmoredTruck = {
-			Id = "ArmoredTruck",
-			DisplayName = "Armored Truck",
-			Category = "Ground",
-			Rarity = "Uncommon",
-			UnlockLevel = 5,
-			Health = 500,
-			Speed = 40,
-			Seats = 6,
-			Armor = 40,
-			CostCash = 20000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 2 },
-		},
-		SupplyTruck = {
-			Id = "SupplyTruck",
-			DisplayName = "Supply Truck",
-			Category = "Ground",
-			Rarity = "Uncommon",
-			UnlockLevel = 6,
-			Health = 420,
-			Speed = 42,
-			Seats = 5,
-			Armor = 30,
-			CostCash = 28000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 2 },
-		},
-		APC = {
-			Id = "APC",
-			DisplayName = "APC",
-			Category = "Ground",
-			Rarity = "Rare",
-			UnlockLevel = 8,
-			Health = 800,
-			Speed = 38,
-			Seats = 8,
-			Armor = 60,
-			CostCash = 45000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 3 },
-		},
-		InfantryCarrier = {
-			Id = "InfantryCarrier",
-			DisplayName = "Infantry Carrier",
-			Category = "Ground",
-			Rarity = "Rare",
-			UnlockLevel = 9,
-			Health = 900,
-			Speed = 36,
-			Seats = 10,
-			Armor = 55,
-			CostCash = 55000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 3 },
-		},
-		LightTank = {
-			Id = "LightTank",
-			DisplayName = "Light Tank",
-			Category = "Ground",
-			Rarity = "Rare",
-			UnlockLevel = 12,
-			Health = 1200,
-			Speed = 32,
-			Seats = 3,
-			Armor = 80,
-			CostCash = 90000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 4 },
-		},
-		MediumTank = {
-			Id = "MediumTank",
-			DisplayName = "Medium Tank",
-			Category = "Ground",
-			Rarity = "Epic",
-			UnlockLevel = 14,
-			Health = 1600,
-			Speed = 28,
-			Seats = 3,
-			Armor = 100,
-			CostCash = 130000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 4 },
-		},
-		HeavyTank = {
-			Id = "HeavyTank",
-			DisplayName = "Heavy Tank",
-			Category = "Ground",
-			Rarity = "Epic",
-			UnlockLevel = 15,
-			Health = 2000,
-			Speed = 25,
-			Seats = 3,
-			Armor = 120,
-			CostCash = 180000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 5 },
-		},
-		MobileArtillery = {
-			Id = "MobileArtillery",
-			DisplayName = "Mobile Artillery",
-			Category = "Ground",
-			Rarity = "Epic",
-			UnlockLevel = 16,
-			Health = 1100,
-			Speed = 22,
-			Seats = 2,
-			Armor = 70,
-			CostCash = 220000,
-			RequiresStructure = { StructureId = "VehicleDepot", Level = 5 },
-		},
-		-- Air
-		TransportHeli = {
-			Id = "TransportHeli",
-			DisplayName = "Transport Helicopter",
-			Category = "Air",
-			Rarity = "Rare",
-			UnlockLevel = 14,
-			Health = 1000,
-			Speed = 55,
-			Seats = 6,
-			Armor = 30,
-			CostCash = 160000,
-			RequiresStructure = { StructureId = "Helipad", Level = 2 },
-		},
-		AttackHelicopter = {
-			Id = "AttackHelicopter",
-			DisplayName = "Attack Helicopter",
-			Category = "Air",
-			Rarity = "Epic",
-			UnlockLevel = 18,
-			Health = 900,
-			Speed = 70,
-			Seats = 2,
-			Armor = 35,
-			CostCash = 250000,
-			RequiresStructure = { StructureId = "Helipad", Level = 3 },
-		},
-		StrikeJet = {
-			Id = "StrikeJet",
-			DisplayName = "Strike Jet",
-			Category = "Air",
-			Rarity = "Epic",
-			UnlockLevel = 19,
-			Health = 750,
-			Speed = 105,
-			Seats = 1,
-			Armor = 28,
-			CostCash = 320000,
-			RequiresStructure = { StructureId = "Airfield", Level = 2 },
-		},
-		FighterJet = {
-			Id = "FighterJet",
-			DisplayName = "Fighter Jet",
-			Category = "Air",
-			Rarity = "Legendary",
-			UnlockLevel = 20,
-			Health = 700,
-			Speed = 120,
-			Seats = 1,
-			Armor = 25,
-			CostCash = 400000,
-			RequiresStructure = { StructureId = "Airfield", Level = 3 },
-		},
-		-- Naval (Dock / Harbor)
-		PatrolBoat = {
-			Id = "PatrolBoat",
-			DisplayName = "Patrol Boat",
-			Category = "Naval",
-			Rarity = "Uncommon",
-			UnlockLevel = 6,
-			Health = 450,
-			Speed = 48,
-			Seats = 4,
-			Armor = 25,
-			CostCash = 25000,
-			RequiresStructure = { StructureId = "Dock", Level = 1 },
-		},
-		Gunboat = {
-			Id = "Gunboat",
-			DisplayName = "Gunboat",
-			Category = "Naval",
-			Rarity = "Rare",
-			UnlockLevel = 10,
-			Health = 700,
-			Speed = 42,
-			Seats = 5,
-			Armor = 45,
-			CostCash = 70000,
-			RequiresStructure = { StructureId = "Dock", Level = 2 },
-		},
-		LandingCraft = {
-			Id = "LandingCraft",
-			DisplayName = "Landing Craft",
-			Category = "Naval",
-			Rarity = "Rare",
-			UnlockLevel = 12,
-			Health = 900,
-			Speed = 35,
-			Seats = 8,
-			Armor = 50,
-			CostCash = 95000,
-			RequiresStructure = { StructureId = "Dock", Level = 3 },
-		},
-		Destroyer = {
-			Id = "Destroyer",
-			DisplayName = "Destroyer",
-			Category = "Naval",
-			Rarity = "Legendary",
-			UnlockLevel = 17,
-			Health = 2200,
-			Speed = 38,
-			Seats = 6,
-			Armor = 110,
-			CostCash = 280000,
-			RequiresStructure = { StructureId = "Dock", Level = 4 },
-			RequiresPrestige = 0, -- purchasable by level; prestige may grant early ownership
-		},
+		-- ═══ GROUND — early wheeled ═══
+		MilitaryJeep = V("MilitaryJeep", "Military Jeep", "Ground", "Common", 1, 200, 55, 4, 10, 0, "WheeledLight", nil),
+		UtilityQuad = V("UtilityQuad", "Utility Quad", "Ground", "Common", 2, 160, 58, 2, 8, 3500, "WheeledLight", { Struct = D(1), Scale = 0.75 }),
+		ArmedJeep = V("ArmedJeep", "Armed Jeep", "Ground", "Common", 3, 250, 52, 4, 15, 8000, "WheeledLight", { Struct = D(1) }),
+		ScoutCar = V("ScoutCar", "Scout Car", "Ground", "Common", 4, 280, 62, 3, 18, 12000, "WheeledLight", { Struct = D(1) }),
+		PatrolTruck = V("PatrolTruck", "Patrol Truck", "Ground", "Common", 5, 380, 48, 5, 25, 16000, "WheeledTruck", { Struct = D(1), Scale = 0.9 }),
+		ArmoredTruck = V("ArmoredTruck", "Armored Truck", "Ground", "Uncommon", 5, 500, 40, 6, 40, 20000, "WheeledTruck", { Struct = D(2) }),
+		SupplyTruck = V("SupplyTruck", "Supply Truck", "Ground", "Uncommon", 6, 420, 42, 5, 30, 28000, "WheeledTruck", { Struct = D(2) }),
+		ReconBuggy = V("ReconBuggy", "Recon Buggy", "Ground", "Uncommon", 6, 300, 68, 2, 20, 24000, "WheeledLight", { Struct = D(2), Scale = 0.85 }),
+		FuelTanker = V("FuelTanker", "Fuel Tanker", "Ground", "Uncommon", 7, 480, 38, 3, 35, 35000, "WheeledTruck", { Struct = D(2), Scale = 1.1 }),
+		EngineeringTruck = V("EngineeringTruck", "Engineering Truck", "Ground", "Uncommon", 8, 520, 36, 4, 42, 40000, "WheeledTruck", { Struct = D(3) }),
+		-- mid IFV / APC
+		APC = V("APC", "APC", "Ground", "Rare", 8, 800, 38, 8, 60, 45000, "WheeledAPC", { Struct = D(3) }),
+		InfantryCarrier = V("InfantryCarrier", "Infantry Carrier", "Ground", "Rare", 9, 900, 36, 10, 55, 55000, "WheeledAPC", { Struct = D(3), Scale = 1.1 }),
+		CombatIFV = V("CombatIFV", "Combat IFV", "Ground", "Rare", 10, 1000, 34, 7, 70, 70000, "TrackedIFV", { Struct = D(3) }),
+		CommandVehicle = V("CommandVehicle", "Command Vehicle", "Ground", "Rare", 11, 850, 32, 6, 65, 80000, "WheeledAPC", { Struct = D(3), Scale = 1.05 }),
+		MissileTruck = V("MissileTruck", "Missile Truck", "Ground", "Rare", 11, 700, 34, 3, 45, 85000, "WheeledTruck", { Struct = D(4), Scale = 1.05 }),
+		AntiAirTruck = V("AntiAirTruck", "Anti-Air Truck", "Ground", "Rare", 12, 750, 36, 3, 50, 88000, "WheeledTruck", { Struct = D(4) }),
+		-- tanks / SPAAG / arty
+		LightTank = V("LightTank", "Light Tank", "Ground", "Rare", 12, 1200, 32, 3, 80, 90000, "TrackedMBT", { Struct = D(4), Scale = 0.95 }),
+		SPAAG = V("SPAAG", "Mobile SPAAG", "Ground", "Rare", 13, 950, 30, 3, 65, 110000, "TrackedSPAAG", { Struct = D(4) }),
+		MortarCarrier = V("MortarCarrier", "Mortar Carrier", "Ground", "Rare", 13, 900, 28, 3, 55, 105000, "TrackedArtillery", { Struct = D(4), Scale = 0.9 }),
+		MediumTank = V("MediumTank", "Medium Tank", "Ground", "Epic", 14, 1600, 28, 3, 100, 130000, "TrackedMBT", { Struct = D(4), Scale = 1.12 }),
+		AssaultIFV = V("AssaultIFV", "Assault IFV", "Ground", "Epic", 15, 1400, 33, 6, 90, 150000, "TrackedIFV", { Struct = D(5), Scale = 1.1 }),
+		HeavyTank = V("HeavyTank", "Heavy Tank", "Ground", "Epic", 15, 2000, 25, 3, 120, 180000, "TrackedMBT", { Struct = D(5), Scale = 1.25 }),
+		MobileArtillery = V("MobileArtillery", "Mobile Artillery", "Ground", "Epic", 16, 1100, 22, 2, 70, 220000, "TrackedArtillery", { Struct = D(5) }),
+		BattleTank = V("BattleTank", "Battle Tank", "Ground", "Epic", 18, 2400, 26, 3, 140, 280000, "TrackedMBT", { Struct = D(5), Scale = 1.35 }),
+		RocketArtillery = V("RocketArtillery", "Rocket Artillery", "Ground", "Epic", 19, 1300, 24, 2, 75, 300000, "TrackedArtillery", { Struct = D(5), Scale = 1.15 }),
+		SuperHeavyTank = V(
+			"SuperHeavyTank",
+			"Super Heavy Tank",
+			"Ground",
+			"Legendary",
+			22,
+			3200,
+			20,
+			4,
+			180,
+			450000,
+			"TrackedMBT",
+			{ Struct = D(5), Scale = 1.5, Prestige = 5, RebirthFlag = "EmpireElite" }
+		),
+
+		-- ═══ AIR ═══
+		LightScoutHeli = V("LightScoutHeli", "Scout Helicopter", "Air", "Rare", 10, 600, 65, 2, 18, 95000, "HeliLight", { Struct = H(1), Scale = 0.85 }),
+		TransportHeli = V("TransportHeli", "Transport Helicopter", "Air", "Rare", 14, 1000, 55, 6, 30, 160000, "HeliTransport", { Struct = H(2) }),
+		GunshipHeli = V("GunshipHeli", "Gunship Helicopter", "Air", "Epic", 16, 950, 62, 3, 32, 210000, "HeliAttack", { Struct = H(2), Scale = 1.05 }),
+		AttackHelicopter = V("AttackHelicopter", "Attack Helicopter", "Air", "Epic", 18, 900, 70, 2, 35, 250000, "HeliAttack", { Struct = H(3) }),
+		HeavyLiftHeli = V("HeavyLiftHeli", "Heavy Lift Helicopter", "Air", "Epic", 20, 1400, 48, 8, 40, 310000, "HeliTransport", { Struct = H(4), Scale = 1.25 }),
+		StealthHeli = V(
+			"StealthHeli",
+			"Stealth Helicopter",
+			"Air",
+			"Legendary",
+			24,
+			1100,
+			75,
+			2,
+			38,
+			420000,
+			"HeliAttack",
+			{ Struct = H(5), Scale = 1.1, Prestige = 3 }
+		),
+		CargoPlane = V("CargoPlane", "Cargo Plane", "Air", "Epic", 18, 1600, 90, 6, 35, 290000, "JetTransport", { Struct = A(2), Scale = 1.3 }),
+		StrikeJet = V("StrikeJet", "Strike Jet", "Air", "Epic", 19, 750, 105, 1, 28, 320000, "JetStrike", { Struct = A(2) }),
+		FighterJet = V("FighterJet", "Fighter Jet", "Air", "Legendary", 20, 700, 120, 1, 25, 400000, "JetFighter", { Struct = A(3) }),
+		InterceptorJet = V("InterceptorJet", "Interceptor Jet", "Air", "Legendary", 21, 680, 135, 1, 22, 440000, "JetFighter", { Struct = A(3), Scale = 1.05 }),
+		StrikeBomber = V("StrikeBomber", "Strike Bomber", "Air", "Legendary", 22, 1200, 95, 2, 40, 480000, "JetBomber", { Struct = A(4), Scale = 1.2 }),
+		HeavyBomber = V(
+			"HeavyBomber",
+			"Heavy Bomber",
+			"Air",
+			"Legendary",
+			25,
+			1800,
+			85,
+			4,
+			55,
+			600000,
+			"JetBomber",
+			{ Struct = A(5), Scale = 1.45, Prestige = 8, RebirthFlag = "StrikeWing" }
+		),
+
+		-- ═══ NAVAL ═══
+		PatrolBoat = V("PatrolBoat", "Patrol Boat", "Naval", "Uncommon", 6, 450, 48, 4, 25, 25000, "NavalPatrol", { Struct = N(1) }),
+		FastAttackCraft = V("FastAttackCraft", "Fast Attack Craft", "Naval", "Uncommon", 8, 500, 55, 3, 30, 42000, "NavalPatrol", { Struct = N(1), Scale = 0.9 }),
+		Gunboat = V("Gunboat", "Gunboat", "Naval", "Rare", 10, 700, 42, 5, 45, 70000, "NavalGun", { Struct = N(2) }),
+		MissileBoat = V("MissileBoat", "Missile Boat", "Naval", "Rare", 12, 750, 44, 4, 48, 95000, "NavalGun", { Struct = N(2), Scale = 1.05 }),
+		LandingCraft = V("LandingCraft", "Landing Craft", "Naval", "Rare", 12, 900, 35, 8, 50, 95000, "NavalLanding", { Struct = N(3) }),
+		AssaultLanding = V("AssaultLanding", "Assault Landing", "Naval", "Epic", 15, 1200, 32, 10, 65, 160000, "NavalLanding", { Struct = N(3), Scale = 1.15 }),
+		Corvette = V("Corvette", "Corvette", "Naval", "Epic", 16, 1600, 40, 5, 85, 220000, "NavalCapital", { Struct = N(4), Scale = 0.75 }),
+		Destroyer = V("Destroyer", "Destroyer", "Naval", "Legendary", 17, 2200, 38, 6, 110, 280000, "NavalCapital", { Struct = N(4) }),
+		SubSurfaceRunner = V(
+			"SubSurfaceRunner",
+			"Sub Surface Runner",
+			"Naval",
+			"Epic",
+			18,
+			1400,
+			36,
+			4,
+			90,
+			260000,
+			"NavalSub",
+			{ Struct = N(4), Scale = 1.0 }
+		),
+		Cruiser = V(
+			"Cruiser",
+			"Cruiser",
+			"Naval",
+			"Legendary",
+			20,
+			2800,
+			36,
+			8,
+			140,
+			380000,
+			"NavalCapital",
+			{ Struct = N(5), Scale = 1.2, Prestige = 2 }
+		),
+		Battleship = V(
+			"Battleship",
+			"Battleship",
+			"Naval",
+			"Legendary",
+			25,
+			4000,
+			30,
+			10,
+			200,
+			650000,
+			"NavalCapital",
+			{ Struct = N(5), Scale = 1.55, Prestige = 10, RebirthFlag = "EmpireFleet" }
+		),
 	} :: { [string]: VehicleDef },
 
 	Categories = { "Ground", "Air", "Naval" } :: { VehicleCategory },
+	Rarities = { "Common", "Uncommon", "Rare", "Epic", "Legendary" },
 	StarterVehicle = "MilitaryJeep",
 	SpawnCooldownSeconds = 15,
-	-- When MeshAssetId set on a def, VehicleService may prefer MeshPart over Part kit (Phase art).
 	UseMeshKitsWhenAssetIdNonZero = true,
 }
 

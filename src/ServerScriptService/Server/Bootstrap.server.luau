@@ -38,10 +38,10 @@ local function ensureVoidFallback(reason: string)
 	folder.Name = "WE_VoidFallback"
 	folder.Parent = Workspace
 
-	-- Match playtest ground scale (~2600) so large-map void-fall still lands on plate
+	-- Match playtest ground scale (~4800) so large-map void-fall still lands on plate
 	local baseplate = Instance.new("Part")
 	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(2800, 4, 2800)
+	baseplate.Size = Vector3.new(5000, 4, 5000)
 	baseplate.Position = Vector3.new(0, -2, 0)
 	baseplate.Anchored = true
 	baseplate.CanCollide = true
@@ -82,8 +82,8 @@ else
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	local map = setup and setup:FindFirstChild("Map")
 	local ground = map and map:FindFirstChild("Ground")
-	if not (ground and ground:IsA("BasePart") and ground.Size.X >= 1000) then
-		warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small — rebuilding via MapSetup")
+	if not (ground and ground:IsA("BasePart") and ground.Size.X >= 4000) then
+		warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small (<4800 scale) — rebuilding via MapSetup")
 		pcall(function()
 			if setup then
 				setup:Destroy()

@@ -24,7 +24,7 @@ local listFrame: ScrollingFrame? = nil
 local radarBadge: TextLabel? = nil
 local lastAlert = ""
 local radarActive = false
-local radarRadius = 350
+local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
 local lastCapturePct = -1
 

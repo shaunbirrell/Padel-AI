@@ -31,7 +31,7 @@ Place id reference: Roblox experience **7180042682** (Military Tycoon).
 7. **Daily ops / missions** — Rotating short objectives (kills, captures, recruit) with gold/cash rewards.
 8. **Diamonds → Gold** — Secondary currency for cosmetics / skips / premium tracks. WAR EMPIRE uses **Gold**.
 9. **Rebirth → Prestige** — Reset base progression for a permanent cash multiplier and unlocks. WAR EMPIRE `PrestigeService` already covers this theme.
-10. **Desert / island map POIs** — Fortresses, oil coasts, ridges, docks. WAR EMPIRE expanded desert-style ground (~2600) with territories + **Coastal Oil Alpha/Bravo** + **Fort Ironclad / Fort Sandhold**.
+10. **Desert / island map POIs** — Fortresses, oil coasts, ridges, docks. WAR EMPIRE expanded desert-style ground (~4800) with territories + **Coastal Oil Alpha/Bravo** + **Fort Ironclad / Fort Sandhold**.
 11. **Loot crates / supply drops** — Periodic world crates; stand nearby to claim cash. WAR EMPIRE `SupplyDropService` (not paid RNG boxes).
 12. **Bank / high-value raid** — Contested building with guards; loot cash on a cooldown. WAR EMPIRE `Empire Bank` stub (`BankRaidService`).
 13. **Free spinner / timed reward** — Claim cash/gold every few hours from HUD/Settings. WAR EMPIRE `SpinnerService` (distinct from policy-pending paid loot boxes).
@@ -51,7 +51,7 @@ Place id reference: Roblox experience **7180042682** (Military Tycoon).
 | Nation / country color | `NationColorService` → captured flag tint |
 | Diamonds | Gold |
 | Rebirth (+0.1 cash / rebirth theme) | Prestige / Rebirth — **+10%/prestige** + `RebirthUnlocks` track |
-| 100+ vehicles | `VehicleConfig` ~19 Ground/Air/Naval kits + Dock; Garage filters (no MT IPs) |
+| 100+ vehicles | `VehicleConfig` ~49 Ground/Air/Naval kits + KitFamily ladder toward 100; Garage cat/rarity filters (no MT IPs) |
 | Loot crates / supply drops | `SupplyDropService` — periodic crates; stand to claim Cash |
 | Bank / raid building | `Empire Bank` + `BankRaidService` (vault hold + cooldown + BankGuard) |
 | Free spinner | `SpinnerService` — HUD/Settings claim every 4h (Cash/Gold table) |

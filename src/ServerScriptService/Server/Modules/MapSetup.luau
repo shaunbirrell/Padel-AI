@@ -54,13 +54,13 @@ local STARTER_COST = {
 	Warehouse = 3200, SpecialForcesFacility = 10000,
 }
 
--- Map scale: ground ~2600, plot ring ~450, pads ~140 (was 900 / ~200 / 90)
-local GROUND_SIZE = 2600
-local PLOT_PAD_SIZE = 140
-local PLOT_RING = 450
+-- Map scale: ground ~4800, plot ring ~800, pads ~200 (was 2600 / 450 / 140)
+local GROUND_SIZE = 4800
+local PLOT_PAD_SIZE = 200
+local PLOT_RING = 800
 local STRUCT_COLS = 4
-local STRUCT_GAP = 30 -- studs between upgrade pad centers (was 18)
-local STRUCT_ORIGIN = Vector3.new(-45, 1.6, -45) -- CommandCenter grid origin on each plot
+local STRUCT_GAP = 42 -- studs between upgrade pad centers (was 30)
+local STRUCT_ORIGIN = Vector3.new(-63, 1.6, -63) -- CommandCenter grid origin on each plot
 
 local PLOT_POSITIONS = {
 	Vector3.new(-PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot1 SW
@@ -72,18 +72,18 @@ local PLOT_POSITIONS = {
 }
 
 local TERRITORIES = {
-	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 55 },
-	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -720), Color = Color3.fromRGB(55, 120, 180), Radius = 50 },
-	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 720), Color = Color3.fromRGB(45, 110, 150), Radius = 50 },
-	{ Id = "EastArmory", Pos = Vector3.new(720, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 45 },
-	{ Id = "WestDepot", Pos = Vector3.new(-720, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 45 },
-	{ Id = "OilFields", Pos = Vector3.new(520, 1, 520), Color = Color3.fromRGB(150, 110, 40), Radius = 55 },
-	{ Id = "RadarHill", Pos = Vector3.new(-520, 1, -520), Color = Color3.fromRGB(130, 70, 170), Radius = 50 },
+	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 70 },
+	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -1300), Color = Color3.fromRGB(55, 120, 180), Radius = 60 },
+	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 1300), Color = Color3.fromRGB(45, 110, 150), Radius = 60 },
+	{ Id = "EastArmory", Pos = Vector3.new(1300, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 55 },
+	{ Id = "WestDepot", Pos = Vector3.new(-1300, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 55 },
+	{ Id = "OilFields", Pos = Vector3.new(950, 1, 950), Color = Color3.fromRGB(150, 110, 40), Radius = 65 },
+	{ Id = "RadarHill", Pos = Vector3.new(-950, 1, -950), Color = Color3.fromRGB(130, 70, 170), Radius = 60 },
 	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
-	{ Id = "CoastalOilAlpha", Pos = Vector3.new(980, 28, -420), Color = Color3.fromRGB(190, 145, 45), Radius = 42, OilRig = true },
-	{ Id = "CoastalOilBravo", Pos = Vector3.new(-980, 28, 420), Color = Color3.fromRGB(170, 125, 40), Radius = 42, OilRig = true },
-	{ Id = "FortIronclad", Pos = Vector3.new(780, 1, -780), Color = Color3.fromRGB(140, 145, 155), Radius = 48, Fortress = true },
-	{ Id = "FortSandhold", Pos = Vector3.new(-780, 1, 780), Color = Color3.fromRGB(190, 155, 90), Radius = 48, Fortress = true },
+	{ Id = "CoastalOilAlpha", Pos = Vector3.new(1800, 28, -750), Color = Color3.fromRGB(190, 145, 45), Radius = 48, OilRig = true },
+	{ Id = "CoastalOilBravo", Pos = Vector3.new(-1800, 28, 750), Color = Color3.fromRGB(170, 125, 40), Radius = 48, OilRig = true },
+	{ Id = "FortIronclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true },
+	{ Id = "FortSandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true },
 }
 
 local function ensureFolder(name, parent)
@@ -191,7 +191,7 @@ local function priceBillboard(parent, title, costLine, accent)
 	bb.Size = UDim2.fromOffset(170, 60)
 	bb.StudsOffset = Vector3.new(0, 5.2, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 520
+	bb.MaxDistance = 900
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -236,7 +236,7 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	bb.Size = UDim2.fromOffset(size.X, size.Y)
 	bb.StudsOffset = Vector3.new(0, offsetY, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 560
+	bb.MaxDistance = 950
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -395,8 +395,8 @@ function MapSetup.Run()
 	Lighting.EnvironmentDiffuseScale = 0.5
 	Lighting.EnvironmentSpecularScale = 0.32
 	Lighting.FogColor = Color3.fromRGB(145, 158, 135)
-	Lighting.FogStart = 450
-	Lighting.FogEnd = 2400
+	Lighting.FogStart = 800
+	Lighting.FogEnd = 4400
 	pcall(function()
 		Lighting.GlobalShadows = true
 	end)
@@ -451,8 +451,8 @@ function MapSetup.Run()
 			Lighting.Ambient = Color3.fromRGB(72, 82, 68):Lerp(Color3.fromRGB(28, 34, 55), night)
 			Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82):Lerp(Color3.fromRGB(36, 42, 70), night)
 			Lighting.FogColor = Color3.fromRGB(145, 158, 135):Lerp(Color3.fromRGB(40, 48, 72), night)
-			Lighting.FogStart = 450 - night * 120
-			Lighting.FogEnd = 2400 - night * 400
+			Lighting.FogStart = 800 - night * 180
+			Lighting.FogEnd = 4400 - night * 600
 			atm.Density = 0.20 + night * 0.12
 			atm.Haze = 1.7 + night * 0.9
 			atm.Color = Color3.fromRGB(155, 168, 145):Lerp(Color3.fromRGB(70, 80, 120), night)
@@ -731,7 +731,7 @@ function MapSetup.Run()
 		for i = 1, count do
 			local angle = (i / count) * math.pi * 2
 			local pos = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
-			local padSize = if tag == TAG_VEHICLE then 16 else 12
+			local padSize = if tag == TAG_VEHICLE then 20 else 14
 			local p = part({
 				Name = name .. i,
 				Size = Vector3.new(padSize, 1.2, padSize),
@@ -771,18 +771,18 @@ function MapSetup.Run()
 		end
 	end
 
-	-- Rings scaled for ~2600 ground: garage pads ~380 apart on circle, not stacked near plaza
-	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 6, Vector3.new(0, 0, 0), COL_VEHICLE, 380)
-	makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(280, 0, 280), COL_NPC, 320)
-	makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-280, 0, -280), COL_EVENT, 280)
+	-- Rings scaled for ~4800 ground: garage pads spread; more pads for large roster testing
+	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 10, Vector3.new(0, 0, 0), COL_VEHICLE, 650)
+	makeSpawnFolder("NPCSpawns", TAG_NPC, 10, Vector3.new(480, 0, 480), COL_NPC, 550)
+	makeSpawnFolder("EventSpawns", TAG_EVENT, 6, Vector3.new(-480, 0, -480), COL_EVENT, 500)
 
-	-- Coastal water strip (south edge near SouthDocks) + naval spawn pads
+	-- Coastal water band (south of SouthDocks on ~4800 map) + naval spawn pads
 	do
 		local waterFolder = ensureFolder("CoastalWater", root)
 		local water = part({
 			Name = "WaterPlane",
-			Size = Vector3.new(GROUND_SIZE * 0.85, 1, 420),
-			Position = Vector3.new(0, 0.2, 980),
+			Size = Vector3.new(GROUND_SIZE * 0.9, 1, 720),
+			Position = Vector3.new(0, 0.2, 1850),
 			Color = Color3.fromRGB(35, 90, 130),
 			Material = Enum.Material.Glass,
 			Transparency = 0.35,
@@ -793,8 +793,8 @@ function MapSetup.Run()
 		-- Shallow collide strip so boats have something under them
 		part({
 			Name = "HarborShelf",
-			Size = Vector3.new(GROUND_SIZE * 0.7, 1, 80),
-			Position = Vector3.new(0, 0.4, 820),
+			Size = Vector3.new(GROUND_SIZE * 0.75, 1, 120),
+			Position = Vector3.new(0, 0.4, 1520),
 			Color = Color3.fromRGB(40, 70, 90),
 			Material = Enum.Material.Slate,
 			Transparency = 0.15,
@@ -803,12 +803,15 @@ function MapSetup.Run()
 		})
 		local navalFolder = ensureFolder("NavalSpawns", root)
 		local navalPositions = {
-			Vector3.new(-180, 1.5, 860),
-			Vector3.new(-60, 1.5, 880),
-			Vector3.new(60, 1.5, 880),
-			Vector3.new(180, 1.5, 860),
-			Vector3.new(0, 1.5, 920),
-			Vector3.new(-300, 1.5, 900),
+			Vector3.new(-420, 1.5, 1580),
+			Vector3.new(-240, 1.5, 1620),
+			Vector3.new(-80, 1.5, 1640),
+			Vector3.new(80, 1.5, 1640),
+			Vector3.new(240, 1.5, 1620),
+			Vector3.new(420, 1.5, 1580),
+			Vector3.new(0, 1.5, 1720),
+			Vector3.new(-560, 1.5, 1680),
+			Vector3.new(560, 1.5, 1680),
 		}
 		for i, npos in ipairs(navalPositions) do
 			local np = part({
@@ -998,7 +1001,7 @@ function MapSetup.Run()
 
 	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
 	local bankFolder = ensureFolder("EmpireBank", root)
-	local bankPos = Vector3.new(220, 1, -220)
+	local bankPos = Vector3.new(420, 1, -420)
 	local bankPad = part({
 		Name = "BankPlaza",
 		Size = Vector3.new(36, 1.2, 36),
