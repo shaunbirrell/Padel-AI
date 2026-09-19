@@ -3099,13 +3099,15 @@ function UIUtil.MakeActionTile(
 	btn.AutoButtonColor = true
 	btn.Text = ""
 	btn.LayoutOrder = props.LayoutOrder or 0
-	btn.ZIndex = 10
+	btn.ZIndex = 20
+	btn.Active = true
+	btn.Selectable = true
 	btn.Parent = parent
 	UIUtil.Corner(btn, 16)
 	local stroke = UIUtil.Stroke(btn, Color3.fromRGB(255, 255, 255), 1.5)
 	stroke.Transparency = 0.45
 
-	-- Glossy top highlight
+	-- Glossy top highlight — Active=false so it never steals Activated/clicks
 	local gloss = Instance.new("Frame")
 	gloss.Name = "Gloss"
 	gloss.Size = UDim2.new(1, -8, 0, math.floor(size * 0.28))
@@ -3113,7 +3115,8 @@ function UIUtil.MakeActionTile(
 	gloss.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	gloss.BackgroundTransparency = 0.72
 	gloss.BorderSizePixel = 0
-	gloss.ZIndex = 11
+	gloss.ZIndex = 21
+	gloss.Active = false
 	gloss.Parent = btn
 	UIUtil.Corner(gloss, 10)
 
@@ -3126,7 +3129,8 @@ function UIUtil.MakeActionTile(
 	icon.TextSize = math.floor(size * 0.36)
 	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
 	icon.Text = props.Icon
-	icon.ZIndex = 12
+	icon.ZIndex = 22
+	icon.Active = false
 	icon.Parent = btn
 
 	local label = Instance.new("TextLabel")
@@ -3139,7 +3143,8 @@ function UIUtil.MakeActionTile(
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	label.TextStrokeTransparency = 0.5
 	label.Text = props.Label
-	label.ZIndex = 12
+	label.ZIndex = 22
+	label.Active = false
 	label.Parent = btn
 
 	UIUtil.EnsureMinTouch(btn, 64)
@@ -3457,7 +3462,7 @@ if DevConfig.VerboseLogging then
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
-print("[WAR EMPIRE] CHECKLIST: 1) resetmap once if pads/void stale  2) stand on YOUR Command Center pad to buy  3) bank guards should chase+shoot  4) load should be faster")
+print("[WAR EMPIRE] CHECKLIST: 1) resetmap if pads stale (WE_UpgradeSlot>0)  2) stand on YOUR Command Center pad — Output shows [UpgradePad] BUY ATTEMPT/OK  3) dock tiles toast 'Shop opened' etc  4) B menu BUY works")
 ]]></string>
         </Properties>
       </Item>
@@ -8610,14 +8615,18 @@ function BaseService.Init(deps: { [string]: any })
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+			print(string.format("[BaseService] Remote BUY rate-limit %s", player.Name))
 			if NotificationService then
 				NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
 			end
 			return
 		end
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		print(string.format("[BaseService] Remote BUY attempt %s → %s", player.Name, tostring(structureId)))
 		local result = BaseService.PurchaseUpgrade(player, structureId)
+		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s", player.Name, tostring(result.Ok), tostring(result.Error)))
 		if not NotificationService then
+			warn("[BaseService] NotificationService nil — purchase toast skipped")
 			return
 		end
 		if result.Ok then
@@ -15613,6 +15622,7 @@ end
 local function tryServerPurchase(player: Player, part: BasePart, structureId: string, fromStanding: boolean?)
 	local profile = DataService.GetProfile(player)
 	if not profile then
+		print(string.format("[UpgradePad] BUY FAIL %s %s — NoProfile", player.Name, structureId))
 		return
 	end
 
@@ -15638,6 +15648,7 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			if BaseService and BaseService.TeleportToPlot then
 				BaseService.TeleportToPlot(player)
 			end
+			print(string.format("[UpgradePad] WrongPlot %s tried plot=%s own=%s → teleport", player.Name, tostring(pid), tostring(profile.BasePlotId)))
 			if NotificationService then
 				NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
 			end
@@ -15665,13 +15676,20 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	lastAttempt[key] = now
 
 	if RateLimitService and not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+		print(string.format("[UpgradePad] BUY RATE-LIMIT %s %s", player.Name, structureId))
 		if NotificationService and not fromStanding then
 			NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
 		end
 		return
 	end
 
+	print(string.format("[UpgradePad] BUY ATTEMPT %s %s plot=%s standing=%s", player.Name, structureId, tostring(profile.BasePlotId), tostring(fromStanding == true)))
 	local result = BaseService.PurchaseUpgrade(player, structureId)
+	if result.Ok then
+		print(string.format("[UpgradePad] BUY OK %s %s → Lv %s", player.Name, structureId, tostring(result.NewLevel)))
+	else
+		print(string.format("[UpgradePad] BUY FAIL %s %s → %s", player.Name, structureId, tostring(result.Error)))
+	end
 	notifyPurchaseResult(player, structureId, result)
 	if result.Ok then
 		flashPad(part)
@@ -17184,6 +17202,7 @@ function ArmyController.Init()
 	screen.Name = "WarEmpireArmy"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, true)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local inset = GuiService:GetGuiInset()
@@ -17510,7 +17529,10 @@ local function refreshList()
 				end
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
-				btn.MouseButton1Click:Connect(function()
+				btn.Active = true
+				btn.Activated:Connect(function()
+					print("[WAR EMPIRE] Base menu BUY:", structureId, "cost=", cost)
+					NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
@@ -17612,28 +17634,32 @@ function BaseController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireBaseUI"
 	-- Above default chat / touch controls so mobile Base CTA stays tappable
-	gui.DisplayOrder = 45
+	gui.DisplayOrder = 58 -- above HUD dock (55); CTA parked left of dock so no click steal
 	gui.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(gui, false)
 	screenGui = gui
 
 	local touch = UserInputService.TouchEnabled
-	-- Lift above chat bar / thumb zone on mobile; desktop stays near bottom
-	local bottomPad = if touch then 96 else 28
-	local btnW = if touch then 280 else 260
-	local btnH = if touch then 58 else 56
+	-- CRITICAL: do NOT park Base CTA over the right action dock (Shop/Rebirth/…).
+	-- Mobile → bottom-LEFT above currency pill; desktop → bottom-center (dock is right-only).
+	local btnW = if touch then 168 else 260
+	local btnH = if touch then 52 else 56
 
-	-- Big, obvious bottom CTA — always Visible (esp. TouchEnabled); chat must not cover it.
 	local btn = Instance.new("TextButton")
 	btn.Name = "ToggleUpgrades"
-	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -bottomPad)
+	if touch then
+		btn.AnchorPoint = Vector2.new(0, 1)
+		btn.Position = UDim2.new(0, 16, 1, -176)
+	else
+		btn.AnchorPoint = Vector2.new(0.5, 1)
+		btn.Position = UDim2.new(0.5, 0, 1, -28)
+	end
 	btn.Size = UDim2.fromOffset(btnW, btnH)
 	btn.BackgroundColor3 = Constants.Colors.Accent
 	btn.TextColor3 = Constants.Colors.Text
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = if touch then 17 else 18
-	btn.Text = if touch then "BASE UPGRADES" else "Base Upgrades  [B]"
+	btn.TextSize = if touch then 15 else 18
+	btn.Text = if touch then "BASE [B]" else "Base Upgrades  [B]"
 	btn.BorderSizePixel = 0
 	btn.ZIndex = 20
 	btn.Visible = true
@@ -17647,18 +17673,18 @@ function BaseController.Init()
 	btn.Parent = gui
 	toggleBtn = btn
 	UIUtil.EnsureMinTouch(btn, 48)
-	btn.MouseButton1Click:Connect(function()
+	btn.Activated:Connect(function()
+		print("[WAR EMPIRE] Base CTA toggled →", not menuOpen)
 		setOpen(not menuOpen)
 	end)
 
-	-- Re-assert visibility if chat / other UI toggles (TouchEnabled always keeps Base CTA)
 	if touch then
 		task.defer(function()
 			local inset = GuiService:GetGuiInset()
-			-- Extra lift if top inset implies phone notch / bottom home indicator style layout
 			local extra = math.clamp(inset.Y * 0.15, 0, 24)
-			btn.Position = UDim2.new(0.5, 0, 1, -(bottomPad + extra))
+			btn.Position = UDim2.new(0, 16, 1, -(176 + extra))
 			btn.Visible = true
+			btn.Active = true
 		end)
 	end
 
@@ -17746,6 +17772,7 @@ function BaseController.Init()
 	end)
 
 	showFirstJoinHints()
+	print("[WAR EMPIRE] BaseController ready (CTA clear of dock, BUY via Activated)")
 end
 
 return BaseController
@@ -17811,6 +17838,7 @@ local function buildHud()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
+	screen.DisplayOrder = 30 -- below HUD dock (55) so dock clicks win
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 
 	-- Health (bottom center)
@@ -17856,7 +17884,8 @@ local function buildHud()
 	local weaponPanel = Instance.new("Frame")
 	weaponPanel.Name = "WeaponPanel"
 	weaponPanel.AnchorPoint = Vector2.new(1, 1)
-	weaponPanel.Position = UDim2.new(1, -16, 1, -20)
+	-- Lift above MobileActionBar (dock ~80px + pad) so ammo is not under tiles
+	weaponPanel.Position = UDim2.new(1, -16, 1, if UserInputService.TouchEnabled then -120 else -20)
 	weaponPanel.Size = UDim2.fromOffset(200, 56)
 	weaponPanel.BackgroundColor3 = Constants.Colors.Panel
 	weaponPanel.BackgroundTransparency = 0.15
@@ -17889,7 +17918,7 @@ local function buildHud()
 	ammoLbl.Parent = weaponPanel
 	ammoLabel = ammoLbl
 
-	-- Hit flash
+	-- Hit flash — MUST NOT sink clicks (full-screen overlay)
 	local flash = Instance.new("Frame")
 	flash.Name = "HitFlash"
 	flash.BackgroundColor3 = Constants.Colors.Danger
@@ -17897,6 +17926,7 @@ local function buildHud()
 	flash.BorderSizePixel = 0
 	flash.Size = UDim2.fromScale(1, 1)
 	flash.ZIndex = 20
+	flash.Active = false
 	flash.Parent = screen
 	hitFlash = flash
 
@@ -17904,7 +17934,7 @@ local function buildHud()
 	local fireBtn = Instance.new("TextButton")
 	fireBtn.Name = "FireButton"
 	fireBtn.AnchorPoint = Vector2.new(1, 1)
-	fireBtn.Position = UDim2.new(1, -16, 1, -96)
+	fireBtn.Position = UDim2.new(1, -16, 1, if UserInputService.TouchEnabled then -200 else -96)
 	fireBtn.Size = UDim2.fromOffset(72, 72)
 	fireBtn.BackgroundColor3 = Constants.Colors.Danger
 	fireBtn.BackgroundTransparency = 0.2
@@ -18397,7 +18427,8 @@ function HUDController.Init()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	screen.DisplayOrder = 40
+	-- Above Base CTA (45) so dock tiles receive clicks; below modal panels (60+)
+	screen.DisplayOrder = 55
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 	_gui = screen
 
@@ -18668,15 +18699,20 @@ end
 ]]
 function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
 	if not actionDock then
+		warn("[HUDController] BindActionBar: actionDock nil — Init order broken?")
 		return
 	end
+	actionDock.Active = false -- children buttons receive input; frame must not sink
 	for _, child in ipairs(actionDock:GetChildren()) do
 		if child:IsA("GuiButton") then
 			child:Destroy()
 		end
 	end
-	local tileSize = if UserInputService.TouchEnabled then 76 else 72
+	-- Always ≥64px; touch gets larger hit targets
+	local tileSize = if UserInputService.TouchEnabled then 76 else 68
+	tileSize = math.max(tileSize, 64)
 	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 10) + 8, tileSize + 8)
+	actionDock.ZIndex = 30
 	for i, def in ipairs(actions) do
 		local btn = UIUtil.MakeActionTile(actionDock, {
 			Name = def.Name,
@@ -18686,8 +18722,15 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 			LayoutOrder = i,
 			SizePx = tileSize,
 		})
-		btn.MouseButton1Click:Connect(def.OnClick)
+		btn.Active = true
+		btn.ZIndex = 31
+		-- Activated = mouse + touch + gamepad (MouseButton1Click alone misses some touch paths)
+		btn.Activated:Connect(function()
+			def.OnClick()
+		end)
 	end
+	local order = if _gui then _gui.DisplayOrder else -1
+	print(string.format("[HUDController] BindActionBar: %d tiles Active size=%d DisplayOrder=%d", #actions, tileSize, order))
 end
 
 local function formatCash(n: number): string
@@ -18909,6 +18952,7 @@ function MissionController.Init()
 	screen.Name = "WarEmpireMissions"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")
@@ -19086,7 +19130,7 @@ local TYPE_PREFIX = {
 function NotificationController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireNotifications"
-	gui.DisplayOrder = 50
+	gui.DisplayOrder = 70 -- above modal panels (60)
 	gui.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(gui, false)
 
@@ -19096,6 +19140,7 @@ function NotificationController.Init()
 	frame.Position = UDim2.new(0.5, 0, 0, 72)
 	frame.Size = UDim2.fromOffset(360, 240)
 	frame.BackgroundTransparency = 1
+	frame.Active = false -- never block HUD / dock clicks
 	frame.Parent = gui
 	stack = frame
 
@@ -19414,6 +19459,7 @@ function ProgressionController.Init()
 	screen.Name = "WarEmpireProgression"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")
@@ -19991,6 +20037,7 @@ function SettingsController.Init()
 	screen.Name = "WarEmpireSettings"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")
@@ -20318,6 +20365,7 @@ function ShopController.Init()
 	screen.Name = "WarEmpireShop"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")
@@ -21225,6 +21273,17 @@ function UIController.Init()
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
+	local function dockPress(label: string, toggleFn: () -> ())
+		print("[WAR EMPIRE] Dock pressed:", label)
+		NotificationController.Show(label .. " opened", "Info", 1.6)
+		pcall(AudioController.PlayClick)
+		local ok, err = pcall(toggleFn)
+		if not ok then
+			warn("[WAR EMPIRE] Dock Toggle failed:", label, err)
+			NotificationController.Show(label .. " failed — check Output", "Warn", 3)
+		end
+	end
+
 	HUDController.BindActionBar({
 		{
 			Name = "DockShop",
@@ -21232,8 +21291,7 @@ function UIController.Init()
 			Label = "SHOP",
 			Color = Color3.fromRGB(230, 170, 50),
 			OnClick = function()
-				AudioController.PlayClick()
-				ShopController.Toggle()
+				dockPress("Shop", ShopController.Toggle)
 			end,
 		},
 		{
@@ -21242,8 +21300,7 @@ function UIController.Init()
 			Label = "REBIRTH",
 			Color = Color3.fromRGB(150, 90, 220),
 			OnClick = function()
-				AudioController.PlayClick()
-				ProgressionController.Toggle()
+				dockPress("Rebirth", ProgressionController.Toggle)
 			end,
 		},
 		{
@@ -21252,8 +21309,7 @@ function UIController.Init()
 			Label = "ORDERS",
 			Color = Color3.fromRGB(70, 160, 220),
 			OnClick = function()
-				AudioController.PlayClick()
-				MissionController.Toggle()
+				dockPress("Orders", MissionController.Toggle)
 			end,
 		},
 		{
@@ -21262,8 +21318,7 @@ function UIController.Init()
 			Label = "ARMY",
 			Color = Color3.fromRGB(90, 140, 70),
 			OnClick = function()
-				AudioController.PlayClick()
-				ArmyController.Toggle()
+				dockPress("Army", ArmyController.Toggle)
 			end,
 		},
 		{
@@ -21272,11 +21327,11 @@ function UIController.Init()
 			Label = "SETTINGS",
 			Color = Color3.fromRGB(70, 78, 90),
 			OnClick = function()
-				AudioController.PlayClick()
-				SettingsController.Toggle()
+				dockPress("Settings", SettingsController.Toggle)
 			end,
 		},
 	})
+	print("[WAR EMPIRE] UIController: action dock bound (Shop/Rebirth/Orders/Army/Settings)")
 end
 
 return UIController
@@ -21549,7 +21604,11 @@ end
 local function setOpen(value: boolean)
 	isOpen = value
 	if screenGui then
-		screenGui.Enabled = value
+		screenGui.Enabled = true -- keep ScreenGui alive so GARAGE CTA stays clickable
+		local panel = screenGui:FindFirstChild("GaragePanel")
+		if panel and panel:IsA("GuiObject") then
+			panel.Visible = value
+		end
 	end
 	if value then
 		refresh()
@@ -21559,18 +21618,21 @@ end
 local function buildGui()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireGarage"
-	screen.Enabled = false
+	screen.Enabled = true
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local panel = Instance.new("Frame")
+	panel.Name = "GaragePanel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
 	panel.Size = UDim2.fromOffset(540, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
+	panel.Visible = false
 	panel.Parent = screen
 	addCorner(panel, 10)
 	local gst = Instance.new("UIStroke")
@@ -21724,8 +21786,10 @@ local function buildGui()
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")
+	garageBtn.Name = "GarageToggle"
 	garageBtn.AnchorPoint = Vector2.new(0, 1)
-	garageBtn.Position = UDim2.new(0, 16, 1, -20)
+	-- Bottom-left, above currency pill / clear of right dock
+	garageBtn.Position = UDim2.new(0, 16, 1, -88)
 	garageBtn.Size = UDim2.fromOffset(110, 44)
 	garageBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	garageBtn.Text = "GARAGE"
@@ -21733,11 +21797,14 @@ local function buildGui()
 	garageBtn.TextSize = 14
 	garageBtn.TextColor3 = Constants.Colors.Gold
 	garageBtn.BorderSizePixel = 0
+	garageBtn.Active = true
+	garageBtn.ZIndex = 25
 	garageBtn.Parent = screen
 	addCorner(garageBtn, 8)
 	addStroke(garageBtn, Constants.Colors.Gold, 1.5)
-	garageBtn.MouseButton1Click:Connect(function()
+	garageBtn.Activated:Connect(function()
 		AudioController.PlayClick()
+		print("[WAR EMPIRE] Garage CTA toggled →", not isOpen)
 		setOpen(not isOpen)
 	end)
 end
@@ -22182,6 +22249,7 @@ local function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
+	print("[WorldPrompt] FireServer RequestPurchaseUpgrade", structureId)
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
@@ -22533,6 +22601,11 @@ function WorldPromptController.Init()
 		startOverlapLoop()
 		refreshAllBillboardsNow()
 		rescanUntaggedSlots()
+		local n = 0
+		for _ in pairs(slotParts) do
+			n += 1
+		end
+		print(string.format("[WorldPrompt] bound upgrade slots=%d tagged=%d", n, #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)))
 
 		-- Periodic rescan first ~20s for race / late-tagged pads
 		for _ = 1, 10 do
@@ -22541,6 +22614,11 @@ function WorldPromptController.Init()
 			rescanUntaggedSlots()
 			refreshAllBillboardsNow()
 		end
+		local n2 = 0
+		for _ in pairs(slotParts) do
+			n2 += 1
+		end
+		print(string.format("[WorldPrompt] after rescan slots=%d", n2))
 	end)
 end
 

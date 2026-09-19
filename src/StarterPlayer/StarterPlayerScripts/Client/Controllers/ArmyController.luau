@@ -80,6 +80,7 @@ function ArmyController.Init()
 	screen.Name = "WarEmpireArmy"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, true)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local inset = GuiService:GetGuiInset()

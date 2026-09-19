@@ -133,13 +133,15 @@ function UIUtil.MakeActionTile(
 	btn.AutoButtonColor = true
 	btn.Text = ""
 	btn.LayoutOrder = props.LayoutOrder or 0
-	btn.ZIndex = 10
+	btn.ZIndex = 20
+	btn.Active = true
+	btn.Selectable = true
 	btn.Parent = parent
 	UIUtil.Corner(btn, 16)
 	local stroke = UIUtil.Stroke(btn, Color3.fromRGB(255, 255, 255), 1.5)
 	stroke.Transparency = 0.45
 
-	-- Glossy top highlight
+	-- Glossy top highlight — Active=false so it never steals Activated/clicks
 	local gloss = Instance.new("Frame")
 	gloss.Name = "Gloss"
 	gloss.Size = UDim2.new(1, -8, 0, math.floor(size * 0.28))
@@ -147,7 +149,8 @@ function UIUtil.MakeActionTile(
 	gloss.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	gloss.BackgroundTransparency = 0.72
 	gloss.BorderSizePixel = 0
-	gloss.ZIndex = 11
+	gloss.ZIndex = 21
+	gloss.Active = false
 	gloss.Parent = btn
 	UIUtil.Corner(gloss, 10)
 
@@ -160,7 +163,8 @@ function UIUtil.MakeActionTile(
 	icon.TextSize = math.floor(size * 0.36)
 	icon.TextColor3 = Color3.fromRGB(255, 255, 255)
 	icon.Text = props.Icon
-	icon.ZIndex = 12
+	icon.ZIndex = 22
+	icon.Active = false
 	icon.Parent = btn
 
 	local label = Instance.new("TextLabel")
@@ -173,7 +177,8 @@ function UIUtil.MakeActionTile(
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	label.TextStrokeTransparency = 0.5
 	label.Text = props.Label
-	label.ZIndex = 12
+	label.ZIndex = 22
+	label.Active = false
 	label.Parent = btn
 
 	UIUtil.EnsureMinTouch(btn, 64)

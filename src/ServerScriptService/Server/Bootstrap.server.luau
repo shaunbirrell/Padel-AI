@@ -290,4 +290,4 @@ if DevConfig.VerboseLogging then
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
-print("[WAR EMPIRE] CHECKLIST: 1) resetmap once if pads/void stale  2) stand on YOUR Command Center pad to buy  3) bank guards should chase+shoot  4) load should be faster")
+print("[WAR EMPIRE] CHECKLIST: 1) resetmap if pads stale (WE_UpgradeSlot>0)  2) stand on YOUR Command Center pad — Output shows [UpgradePad] BUY ATTEMPT/OK  3) dock tiles toast 'Shop opened' etc  4) B menu BUY works")

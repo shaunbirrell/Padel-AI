@@ -29,7 +29,7 @@ local TYPE_PREFIX = {
 function NotificationController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireNotifications"
-	gui.DisplayOrder = 50
+	gui.DisplayOrder = 70 -- above modal panels (60)
 	gui.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(gui, false)
 
@@ -39,6 +39,7 @@ function NotificationController.Init()
 	frame.Position = UDim2.new(0.5, 0, 0, 72)
 	frame.Size = UDim2.fromOffset(360, 240)
 	frame.BackgroundTransparency = 1
+	frame.Active = false -- never block HUD / dock clicks
 	frame.Parent = gui
 	stack = frame
 

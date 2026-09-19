@@ -35,6 +35,17 @@ function UIController.Init()
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
+	local function dockPress(label: string, toggleFn: () -> ())
+		print("[WAR EMPIRE] Dock pressed:", label)
+		NotificationController.Show(label .. " opened", "Info", 1.6)
+		pcall(AudioController.PlayClick)
+		local ok, err = pcall(toggleFn)
+		if not ok then
+			warn("[WAR EMPIRE] Dock Toggle failed:", label, err)
+			NotificationController.Show(label .. " failed — check Output", "Warn", 3)
+		end
+	end
+
 	HUDController.BindActionBar({
 		{
 			Name = "DockShop",
@@ -42,8 +53,7 @@ function UIController.Init()
 			Label = "SHOP",
 			Color = Color3.fromRGB(230, 170, 50),
 			OnClick = function()
-				AudioController.PlayClick()
-				ShopController.Toggle()
+				dockPress("Shop", ShopController.Toggle)
 			end,
 		},
 		{
@@ -52,8 +62,7 @@ function UIController.Init()
 			Label = "REBIRTH",
 			Color = Color3.fromRGB(150, 90, 220),
 			OnClick = function()
-				AudioController.PlayClick()
-				ProgressionController.Toggle()
+				dockPress("Rebirth", ProgressionController.Toggle)
 			end,
 		},
 		{
@@ -62,8 +71,7 @@ function UIController.Init()
 			Label = "ORDERS",
 			Color = Color3.fromRGB(70, 160, 220),
 			OnClick = function()
-				AudioController.PlayClick()
-				MissionController.Toggle()
+				dockPress("Orders", MissionController.Toggle)
 			end,
 		},
 		{
@@ -72,8 +80,7 @@ function UIController.Init()
 			Label = "ARMY",
 			Color = Color3.fromRGB(90, 140, 70),
 			OnClick = function()
-				AudioController.PlayClick()
-				ArmyController.Toggle()
+				dockPress("Army", ArmyController.Toggle)
 			end,
 		},
 		{
@@ -82,11 +89,11 @@ function UIController.Init()
 			Label = "SETTINGS",
 			Color = Color3.fromRGB(70, 78, 90),
 			OnClick = function()
-				AudioController.PlayClick()
-				SettingsController.Toggle()
+				dockPress("Settings", SettingsController.Toggle)
 			end,
 		},
 	})
+	print("[WAR EMPIRE] UIController: action dock bound (Shop/Rebirth/Orders/Army/Settings)")
 end
 
 return UIController

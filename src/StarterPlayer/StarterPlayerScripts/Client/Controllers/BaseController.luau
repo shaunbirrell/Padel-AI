@@ -126,7 +126,10 @@ local function refreshList()
 				end
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
-				btn.MouseButton1Click:Connect(function()
+				btn.Active = true
+				btn.Activated:Connect(function()
+					print("[WAR EMPIRE] Base menu BUY:", structureId, "cost=", cost)
+					NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
@@ -228,28 +231,32 @@ function BaseController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireBaseUI"
 	-- Above default chat / touch controls so mobile Base CTA stays tappable
-	gui.DisplayOrder = 45
+	gui.DisplayOrder = 58 -- above HUD dock (55); CTA parked left of dock so no click steal
 	gui.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(gui, false)
 	screenGui = gui
 
 	local touch = UserInputService.TouchEnabled
-	-- Lift above chat bar / thumb zone on mobile; desktop stays near bottom
-	local bottomPad = if touch then 96 else 28
-	local btnW = if touch then 280 else 260
-	local btnH = if touch then 58 else 56
+	-- CRITICAL: do NOT park Base CTA over the right action dock (Shop/Rebirth/…).
+	-- Mobile → bottom-LEFT above currency pill; desktop → bottom-center (dock is right-only).
+	local btnW = if touch then 168 else 260
+	local btnH = if touch then 52 else 56
 
-	-- Big, obvious bottom CTA — always Visible (esp. TouchEnabled); chat must not cover it.
 	local btn = Instance.new("TextButton")
 	btn.Name = "ToggleUpgrades"
-	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -bottomPad)
+	if touch then
+		btn.AnchorPoint = Vector2.new(0, 1)
+		btn.Position = UDim2.new(0, 16, 1, -176)
+	else
+		btn.AnchorPoint = Vector2.new(0.5, 1)
+		btn.Position = UDim2.new(0.5, 0, 1, -28)
+	end
 	btn.Size = UDim2.fromOffset(btnW, btnH)
 	btn.BackgroundColor3 = Constants.Colors.Accent
 	btn.TextColor3 = Constants.Colors.Text
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = if touch then 17 else 18
-	btn.Text = if touch then "BASE UPGRADES" else "Base Upgrades  [B]"
+	btn.TextSize = if touch then 15 else 18
+	btn.Text = if touch then "BASE [B]" else "Base Upgrades  [B]"
 	btn.BorderSizePixel = 0
 	btn.ZIndex = 20
 	btn.Visible = true
@@ -263,18 +270,18 @@ function BaseController.Init()
 	btn.Parent = gui
 	toggleBtn = btn
 	UIUtil.EnsureMinTouch(btn, 48)
-	btn.MouseButton1Click:Connect(function()
+	btn.Activated:Connect(function()
+		print("[WAR EMPIRE] Base CTA toggled →", not menuOpen)
 		setOpen(not menuOpen)
 	end)
 
-	-- Re-assert visibility if chat / other UI toggles (TouchEnabled always keeps Base CTA)
 	if touch then
 		task.defer(function()
 			local inset = GuiService:GetGuiInset()
-			-- Extra lift if top inset implies phone notch / bottom home indicator style layout
 			local extra = math.clamp(inset.Y * 0.15, 0, 24)
-			btn.Position = UDim2.new(0.5, 0, 1, -(bottomPad + extra))
+			btn.Position = UDim2.new(0, 16, 1, -(176 + extra))
 			btn.Visible = true
+			btn.Active = true
 		end)
 	end
 
@@ -362,6 +369,7 @@ function BaseController.Init()
 	end)
 
 	showFirstJoinHints()
+	print("[WAR EMPIRE] BaseController ready (CTA clear of dock, BUY via Activated)")
 end
 
 return BaseController

@@ -54,6 +54,7 @@ local function buildHud()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
+	screen.DisplayOrder = 30 -- below HUD dock (55) so dock clicks win
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 
 	-- Health (bottom center)
@@ -99,7 +100,8 @@ local function buildHud()
 	local weaponPanel = Instance.new("Frame")
 	weaponPanel.Name = "WeaponPanel"
 	weaponPanel.AnchorPoint = Vector2.new(1, 1)
-	weaponPanel.Position = UDim2.new(1, -16, 1, -20)
+	-- Lift above MobileActionBar (dock ~80px + pad) so ammo is not under tiles
+	weaponPanel.Position = UDim2.new(1, -16, 1, if UserInputService.TouchEnabled then -120 else -20)
 	weaponPanel.Size = UDim2.fromOffset(200, 56)
 	weaponPanel.BackgroundColor3 = Constants.Colors.Panel
 	weaponPanel.BackgroundTransparency = 0.15
@@ -132,7 +134,7 @@ local function buildHud()
 	ammoLbl.Parent = weaponPanel
 	ammoLabel = ammoLbl
 
-	-- Hit flash
+	-- Hit flash — MUST NOT sink clicks (full-screen overlay)
 	local flash = Instance.new("Frame")
 	flash.Name = "HitFlash"
 	flash.BackgroundColor3 = Constants.Colors.Danger
@@ -140,6 +142,7 @@ local function buildHud()
 	flash.BorderSizePixel = 0
 	flash.Size = UDim2.fromScale(1, 1)
 	flash.ZIndex = 20
+	flash.Active = false
 	flash.Parent = screen
 	hitFlash = flash
 
@@ -147,7 +150,7 @@ local function buildHud()
 	local fireBtn = Instance.new("TextButton")
 	fireBtn.Name = "FireButton"
 	fireBtn.AnchorPoint = Vector2.new(1, 1)
-	fireBtn.Position = UDim2.new(1, -16, 1, -96)
+	fireBtn.Position = UDim2.new(1, -16, 1, if UserInputService.TouchEnabled then -200 else -96)
 	fireBtn.Size = UDim2.fromOffset(72, 72)
 	fireBtn.BackgroundColor3 = Constants.Colors.Danger
 	fireBtn.BackgroundTransparency = 0.2

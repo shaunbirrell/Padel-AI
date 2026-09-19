@@ -152,6 +152,7 @@ end
 local function tryServerPurchase(player: Player, part: BasePart, structureId: string, fromStanding: boolean?)
 	local profile = DataService.GetProfile(player)
 	if not profile then
+		print(string.format("[UpgradePad] BUY FAIL %s %s — NoProfile", player.Name, structureId))
 		return
 	end
 
@@ -177,6 +178,7 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			if BaseService and BaseService.TeleportToPlot then
 				BaseService.TeleportToPlot(player)
 			end
+			print(string.format("[UpgradePad] WrongPlot %s tried plot=%s own=%s → teleport", player.Name, tostring(pid), tostring(profile.BasePlotId)))
 			if NotificationService then
 				NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
 			end
@@ -204,13 +206,20 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	lastAttempt[key] = now
 
 	if RateLimitService and not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+		print(string.format("[UpgradePad] BUY RATE-LIMIT %s %s", player.Name, structureId))
 		if NotificationService and not fromStanding then
 			NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
 		end
 		return
 	end
 
+	print(string.format("[UpgradePad] BUY ATTEMPT %s %s plot=%s standing=%s", player.Name, structureId, tostring(profile.BasePlotId), tostring(fromStanding == true)))
 	local result = BaseService.PurchaseUpgrade(player, structureId)
+	if result.Ok then
+		print(string.format("[UpgradePad] BUY OK %s %s → Lv %s", player.Name, structureId, tostring(result.NewLevel)))
+	else
+		print(string.format("[UpgradePad] BUY FAIL %s %s → %s", player.Name, structureId, tostring(result.Error)))
+	end
 	notifyPurchaseResult(player, structureId, result)
 	if result.Ok then
 		flashPad(part)

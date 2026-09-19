@@ -369,6 +369,7 @@ local function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
+	print("[WorldPrompt] FireServer RequestPurchaseUpgrade", structureId)
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
@@ -720,6 +721,11 @@ function WorldPromptController.Init()
 		startOverlapLoop()
 		refreshAllBillboardsNow()
 		rescanUntaggedSlots()
+		local n = 0
+		for _ in pairs(slotParts) do
+			n += 1
+		end
+		print(string.format("[WorldPrompt] bound upgrade slots=%d tagged=%d", n, #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)))
 
 		-- Periodic rescan first ~20s for race / late-tagged pads
 		for _ = 1, 10 do
@@ -728,6 +734,11 @@ function WorldPromptController.Init()
 			rescanUntaggedSlots()
 			refreshAllBillboardsNow()
 		end
+		local n2 = 0
+		for _ in pairs(slotParts) do
+			n2 += 1
+		end
+		print(string.format("[WorldPrompt] after rescan slots=%d", n2))
 	end)
 end
 

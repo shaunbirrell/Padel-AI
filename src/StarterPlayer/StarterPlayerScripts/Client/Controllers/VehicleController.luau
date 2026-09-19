@@ -261,7 +261,11 @@ end
 local function setOpen(value: boolean)
 	isOpen = value
 	if screenGui then
-		screenGui.Enabled = value
+		screenGui.Enabled = true -- keep ScreenGui alive so GARAGE CTA stays clickable
+		local panel = screenGui:FindFirstChild("GaragePanel")
+		if panel and panel:IsA("GuiObject") then
+			panel.Visible = value
+		end
 	end
 	if value then
 		refresh()
@@ -271,18 +275,21 @@ end
 local function buildGui()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireGarage"
-	screen.Enabled = false
+	screen.Enabled = true
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local panel = Instance.new("Frame")
+	panel.Name = "GaragePanel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
 	panel.Size = UDim2.fromOffset(540, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
+	panel.Visible = false
 	panel.Parent = screen
 	addCorner(panel, 10)
 	local gst = Instance.new("UIStroke")
@@ -436,8 +443,10 @@ local function buildGui()
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")
+	garageBtn.Name = "GarageToggle"
 	garageBtn.AnchorPoint = Vector2.new(0, 1)
-	garageBtn.Position = UDim2.new(0, 16, 1, -20)
+	-- Bottom-left, above currency pill / clear of right dock
+	garageBtn.Position = UDim2.new(0, 16, 1, -88)
 	garageBtn.Size = UDim2.fromOffset(110, 44)
 	garageBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	garageBtn.Text = "GARAGE"
@@ -445,11 +454,14 @@ local function buildGui()
 	garageBtn.TextSize = 14
 	garageBtn.TextColor3 = Constants.Colors.Gold
 	garageBtn.BorderSizePixel = 0
+	garageBtn.Active = true
+	garageBtn.ZIndex = 25
 	garageBtn.Parent = screen
 	addCorner(garageBtn, 8)
 	addStroke(garageBtn, Constants.Colors.Gold, 1.5)
-	garageBtn.MouseButton1Click:Connect(function()
+	garageBtn.Activated:Connect(function()
 		AudioController.PlayClick()
+		print("[WAR EMPIRE] Garage CTA toggled →", not isOpen)
 		setOpen(not isOpen)
 	end)
 end

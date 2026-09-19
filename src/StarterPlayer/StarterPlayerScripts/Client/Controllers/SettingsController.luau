@@ -64,6 +64,7 @@ function SettingsController.Init()
 	screen.Name = "WarEmpireSettings"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
 	local toggle = Instance.new("TextButton")

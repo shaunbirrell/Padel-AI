@@ -63,7 +63,8 @@ function HUDController.Init()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	screen.DisplayOrder = 40
+	-- Above Base CTA (45) so dock tiles receive clicks; below modal panels (60+)
+	screen.DisplayOrder = 55
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 	_gui = screen
 
@@ -334,15 +335,20 @@ end
 ]]
 function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
 	if not actionDock then
+		warn("[HUDController] BindActionBar: actionDock nil — Init order broken?")
 		return
 	end
+	actionDock.Active = false -- children buttons receive input; frame must not sink
 	for _, child in ipairs(actionDock:GetChildren()) do
 		if child:IsA("GuiButton") then
 			child:Destroy()
 		end
 	end
-	local tileSize = if UserInputService.TouchEnabled then 76 else 72
+	-- Always ≥64px; touch gets larger hit targets
+	local tileSize = if UserInputService.TouchEnabled then 76 else 68
+	tileSize = math.max(tileSize, 64)
 	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 10) + 8, tileSize + 8)
+	actionDock.ZIndex = 30
 	for i, def in ipairs(actions) do
 		local btn = UIUtil.MakeActionTile(actionDock, {
 			Name = def.Name,
@@ -352,8 +358,15 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 			LayoutOrder = i,
 			SizePx = tileSize,
 		})
-		btn.MouseButton1Click:Connect(def.OnClick)
+		btn.Active = true
+		btn.ZIndex = 31
+		-- Activated = mouse + touch + gamepad (MouseButton1Click alone misses some touch paths)
+		btn.Activated:Connect(function()
+			def.OnClick()
+		end)
 	end
+	local order = if _gui then _gui.DisplayOrder else -1
+	print(string.format("[HUDController] BindActionBar: %d tiles Active size=%d DisplayOrder=%d", #actions, tileSize, order))
 end
 
 local function formatCash(n: number): string
