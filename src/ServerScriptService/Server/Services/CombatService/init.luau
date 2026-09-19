@@ -22,6 +22,7 @@ local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
 local CombatWeaponLogic = require(script.CombatWeaponLogic)
+local VisualAssetService = require(script.Parent.Parent.VisualAssetService)
 
 -- Cached CollectionService:GetTagged results (invalidated on TTL)
 local _tagCache: { [string]: { at: number, list: { Instance } } } = {}
@@ -531,6 +532,11 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	corner.Parent = lbl
 
 	model.PrimaryPart = root
+	-- Optional free Soldier catalog visual (scripts stripped); Part kit stays authoritative
+	pcall(function()
+		local kind = if isSpecial then tid else "Soldier"
+		VisualAssetService.TryAttachCharacterVisual(model, kind)
+	end)
 	CollectionService:AddTag(model, Constants.Tags.NPC)
 	model.Parent = ensureNPCFolder()
 	-- Server owns physics so MoveTo works reliably

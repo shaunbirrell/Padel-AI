@@ -22,6 +22,7 @@ local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 type VehicleDef = VehicleConfig.VehicleDef
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local VisualAssetService = require(script.Parent.VisualAssetService)
 
 local VehicleService = {}
 
@@ -713,6 +714,10 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	addLabel(body, def.DisplayName, labelY)
 
 	model.PrimaryPart = body
+	-- Optional free Creator Store visual (non-colliding); Part kit stays authoritative
+	pcall(function()
+		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family)
+	end)
 	CollectionService:AddTag(model, Constants.Tags.Vehicle)
 	model.Parent = ensureFolder()
 	return model

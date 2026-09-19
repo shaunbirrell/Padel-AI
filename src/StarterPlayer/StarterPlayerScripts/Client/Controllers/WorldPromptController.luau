@@ -144,6 +144,28 @@ local tryPurchase: (structureId: string, opts: { silentMax: boolean }?) -> ()
 local isSeatedInVehicle: () -> boolean
 local isOwnPlotPad: (part: BasePart) -> boolean
 
+
+local padBuyFlashToken = 0
+local lastPadLevels: { [string]: number } = {}
+local function flashPadBuyBought(displayName: string)
+	local btn = buyBtn
+	if not btn or not btn.Visible then
+		return
+	end
+	padBuyFlashToken += 1
+	local my = padBuyFlashToken
+	btn.Text = string.format("BOUGHT %s ✓", displayName)
+	btn.BackgroundColor3 = Color3.fromRGB(30, 70, 40)
+	btn.TextColor3 = Constants.Colors.Cash
+	-- Standing Heartbeat refreshPadBuyButton rewrites label after flash window
+	task.delay(1.0, function()
+		if my ~= padBuyFlashToken then
+			return
+		end
+		-- no-op; next pad refresh overwrites
+	end)
+end
+
 local function hidePadBuyButton()
 	activeBuyStructureId = nil
 	activeBuyPart = nil
@@ -255,13 +277,21 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	activeBuyPart = part
 	local canAfford = cash >= cost
 	local incomeStr = formatIncomeRate(structureId)
-	if incomeStr then
+	if not canAfford then
+		local need = cost - cash
+		if incomeStr then
+			btn.Text = string.format("NEED %s · %s · %s", formatCost(cost), display, incomeStr)
+		else
+			btn.Text = string.format("NEED %s more · %s", formatCost(need), display)
+		end
+	elseif incomeStr then
 		btn.Text = string.format("BUY %s · %s · %s", display, formatCost(cost), incomeStr)
 	else
 		btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
 	end
 	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
 	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
+	btn.AutoButtonColor = canAfford
 	btn.Visible = true
 end
 
@@ -856,6 +886,7 @@ end
 
 function WorldPromptController.Init()
 	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
+		local prev = upgrades
 		upgrades = base.Upgrades or upgrades
 		if typeof(base.PlotId) == "number" then
 			if myPlotId ~= nil and myPlotId ~= base.PlotId then
@@ -863,6 +894,18 @@ function WorldPromptController.Init()
 				clearOverlapState()
 			end
 			myPlotId = base.PlotId
+		end
+		-- BUY edge: flash BOUGHT when standing on a pad that just leveled
+		if activeBuyStructureId and typeof(upgrades) == "table" then
+			local sid = activeBuyStructureId
+			local before = if typeof(prev) == "table" then (prev[sid] or 0) else 0
+			local after = upgrades[sid] or 0
+			if after > before then
+				local def = BaseConfig.Structures[sid]
+				local name = if def then def.DisplayName else sid
+				flashPadBuyBought(name)
+				print(string.format("[WorldPrompt] BUY OK flash %s %d→%d", sid, before, after))
+			end
 		end
 		markBillboardsDirty()
 	end)

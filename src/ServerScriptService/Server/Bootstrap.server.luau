@@ -216,6 +216,7 @@ local BankRaidService = require(Services.BankRaidService)
 local SpinnerService = require(Services.SpinnerService)
 local UpgradePadService = require(Services.UpgradePadService)
 local FallSafetyService = require(Services.FallSafetyService)
+local VisualAssetService = require(Services.VisualAssetService)
 
 RemoteSetup.Init()
 
@@ -271,6 +272,7 @@ TutorialService.Init(deps) -- tutorial step on join + upgrade hook
 DataService.Init()
 
 AdminService.Init(deps)
+VisualAssetService.Init()
 CombatService.Init(deps)
 VehicleService.Init(deps)
 NationColorService.Init(deps)
