@@ -131,7 +131,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 64. **Onboarding toast** — Session-once after join: `Walk to glowing pads to buy · B/G menus` then a follow-up for prices / B / G / E.
 
-65. **Void-fall (large map)** — Emergency baseplate ~2800×2800. If `WarEmpireSetup` exists but Ground missing/small, Bootstrap rebuilds via MapSetup before services.
+65. **Void-fall (large map)** — Continuous Ground ≥6400×8 (top ~Y=0.5) + invisible SafetyCatch 8000 at Y=-40 + edge berms + MountainRing (~48 ridge segments, heights 40–120). Coastal oil decks have stepped ramps to ground. `FallSafetyService` teleports to plot spawn if HRP Y < -30. Bootstrap soft-heals Ground size/CanCollide/SafetyCatch/mountains or rebuilds. Emergency void fallback baseplate ~7000.
 
 66. **Training Yard / worker income** — Owned soldiers generate Cash each `SoldierConfig.TrainingIncome` tick (`CashPerSoldierPerTick`). MapSetup places TrainingYard targets per base plot (visual only). HUD + Army UI show training income/sec. Prestige mult applies via AddCash path.
 

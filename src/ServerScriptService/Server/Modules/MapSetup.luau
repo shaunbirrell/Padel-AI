@@ -24,7 +24,7 @@ local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
 
-local COL_GROUND = Color3.fromRGB(32, 44, 30)
+local COL_GROUND = Color3.fromRGB(28, 48, 26) -- darker grass; never reads as sky/void
 local COL_PAD = Color3.fromRGB(38, 44, 48)
 local COL_PAD_EDGE = Color3.fromRGB(70, 190, 110)
 local COL_VEHICLE = Color3.fromRGB(48, 62, 78)
@@ -56,8 +56,13 @@ local STARTER_COST = {
 	Warehouse = 3200, SpecialForcesFacility = 10000,
 }
 
--- Map scale: ground ~4800, plot ring ~800, pads ~200 (was 2600 / 450 / 140)
-local GROUND_SIZE = 4800
+-- Map scale: ground ≥6000 continuous floor, plot ring ~800, pads ~200
+-- Top of Ground sits ~Y=0.5 so plot pads (Y=0.5) sit flush.
+local GROUND_SIZE = 6400
+local GROUND_THICKNESS = 8
+local GROUND_TOP_Y = 0.5
+local SAFETY_FLOOR_SIZE = 8000
+local SAFETY_FLOOR_Y = -40
 local PLOT_PAD_SIZE = 200
 local PLOT_RING = 800
 local STRUCT_COLS = 4
@@ -541,7 +546,336 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	return model
 end
 
+
+-- Continuous floor + safety catch + perimeter mountain ring (mobile-friendly part count)
+local function groundCenterY(): number
+	return GROUND_TOP_Y - GROUND_THICKNESS * 0.5
+end
+
+local function buildSafetyUnderfloor(mapFolder: Folder)
+	part({
+		Name = "SafetyCatch",
+		Size = Vector3.new(SAFETY_FLOOR_SIZE, 4, SAFETY_FLOOR_SIZE),
+		Position = Vector3.new(0, SAFETY_FLOOR_Y, 0),
+		Color = Color3.fromRGB(18, 22, 18),
+		Material = Enum.Material.Slate,
+		Transparency = 0.92,
+		CanCollide = true,
+		Anchored = true,
+		Parent = mapFolder,
+	})
+end
+
+local function buildEdgeBerms(mapFolder: Folder)
+	-- Soft inner berm just inside Ground edge (keeps stroll-off from feeling like cliff)
+	local half = GROUND_SIZE * 0.5 - 40
+	local bermH = 18
+	local bermT = 28
+	local bermY = GROUND_TOP_Y + bermH * 0.5
+	local sides = {
+		{ Name = "EdgeBermN", Size = Vector3.new(GROUND_SIZE - 80, bermH, bermT), Pos = Vector3.new(0, bermY, -half) },
+		{ Name = "EdgeBermS", Size = Vector3.new(GROUND_SIZE - 80, bermH, bermT), Pos = Vector3.new(0, bermY, half) },
+		{ Name = "EdgeBermE", Size = Vector3.new(bermT, bermH, GROUND_SIZE - 80), Pos = Vector3.new(half, bermY, 0) },
+		{ Name = "EdgeBermW", Size = Vector3.new(bermT, bermH, GROUND_SIZE - 80), Pos = Vector3.new(-half, bermY, 0) },
+	}
+	for _, s in ipairs(sides) do
+		part({
+			Name = s.Name,
+			Size = s.Size,
+			Position = s.Pos,
+			Color = Color3.fromRGB(42, 58, 36),
+			Material = Enum.Material.Grass,
+			CanCollide = true,
+			Anchored = true,
+			Parent = mapFolder,
+		})
+	end
+end
+
+local function buildMountainRing(root: Folder)
+	--[[
+		Segmented Part-kit hills/ridges around Ground perimeter.
+		Varied heights ~40–120 studs; rock/slate/grass; CanCollide on outer berm.
+		Not one giant wall — mobile-friendly (~64–80 segments + peak caps).
+	]]
+	local folder = Instance.new("Folder")
+	folder.Name = "MountainRing"
+	folder.Parent = root
+
+	local rockColors = {
+		Color3.fromRGB(72, 68, 58),
+		Color3.fromRGB(58, 62, 52),
+		Color3.fromRGB(90, 82, 68),
+		Color3.fromRGB(48, 55, 42),
+		Color3.fromRGB(80, 75, 62),
+		Color3.fromRGB(55, 48, 40),
+	}
+	local grassTint = Color3.fromRGB(40, 62, 34)
+	local slateTint = Color3.fromRGB(62, 66, 72)
+
+	local half = GROUND_SIZE * 0.5
+	-- Ring sits just outside playable Ground so players can't stroll into sky
+	local ringR = half + 90
+	local segCount = 48 -- perimeter segments
+	local segArc = (math.pi * 2) / segCount
+	local segLen = ringR * segArc * 1.12 -- slight overlap
+
+	for i = 1, segCount do
+		local angle = (i - 0.5) * segArc
+		local cx = math.cos(angle) * ringR
+		local cz = math.sin(angle) * ringR
+		-- Pseudo-random but stable heights (40–120)
+		local hSeed = ((i * 17 + 31) % 80) + 40
+		local height = hSeed
+		if i % 7 == 0 then
+			height = math.min(120, height + 28)
+		elseif i % 5 == 0 then
+			height = math.max(40, height - 18)
+		end
+		local depth = 55 + (i % 5) * 8
+		local yaw = -angle + math.pi * 0.5
+		local col = rockColors[((i - 1) % #rockColors) + 1]
+		local mat = Enum.Material.Rock
+		if i % 3 == 0 then
+			mat = Enum.Material.Slate
+			col = slateTint:Lerp(col, 0.45)
+		elseif i % 4 == 0 then
+			mat = Enum.Material.Grass
+			col = grassTint:Lerp(col, 0.35)
+		end
+		local ridge = part({
+			Name = "Ridge_" .. i,
+			Size = Vector3.new(segLen, height, depth),
+			CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.5 - 2, cz) * CFrame.Angles(0, yaw, 0),
+			Color = col,
+			Material = mat,
+			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		})
+		ridge:SetAttribute("WE_Mountain", true)
+		-- Peak cap / secondary knob for silhouette variety (no collide needed on tiny tip)
+		if i % 2 == 0 then
+			local tipH = 12 + (i % 6) * 4
+			part({
+				Name = "Peak_" .. i,
+				Size = Vector3.new(segLen * 0.45, tipH, depth * 0.55),
+				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.35 - 2, cz) * CFrame.Angles(0, yaw, 0),
+				Color = col:Lerp(Color3.fromRGB(120, 115, 100), 0.2),
+				Material = Enum.Material.Rock,
+				CanCollide = false,
+				Anchored = true,
+				Parent = folder,
+			}):SetAttribute("WE_Mountain", true)
+		end
+		-- Inner foothill shelf (collide) so walk-up from berm feels continuous
+		if i % 3 == 0 then
+			local footH = 14 + (i % 4) * 3
+			local footR = half + 35
+			local fx = math.cos(angle) * footR
+			local fz = math.sin(angle) * footR
+			part({
+				Name = "Foothill_" .. i,
+				Size = Vector3.new(segLen * 0.9, footH, 36),
+				CFrame = CFrame.new(fx, GROUND_TOP_Y + footH * 0.5 - 1, fz) * CFrame.Angles(0, yaw, 0),
+				Color = grassTint,
+				Material = Enum.Material.Grass,
+				CanCollide = true,
+				Anchored = true,
+				Parent = folder,
+			}):SetAttribute("WE_Mountain", true)
+		end
+	end
+
+	-- Corner massifs (extra bulk at N/E/S/W so ring never reads as thin wall)
+	local massifs = {
+		{ 0, -1, "N" },
+		{ 0, 1, "S" },
+		{ 1, 0, "E" },
+		{ -1, 0, "W" },
+		{ 0.7, -0.7, "NE" },
+		{ -0.7, -0.7, "NW" },
+		{ 0.7, 0.7, "SE" },
+		{ -0.7, 0.7, "SW" },
+	}
+	for mi, m in ipairs(massifs) do
+		local mx = m[1] * (half + 120)
+		local mz = m[2] * (half + 120)
+		local mh = 70 + (mi % 4) * 12
+		part({
+			Name = "Massif_" .. m[3],
+			Size = Vector3.new(140, mh, 140),
+			Position = Vector3.new(mx, GROUND_TOP_Y + mh * 0.5 - 4, mz),
+			Color = rockColors[((mi - 1) % #rockColors) + 1],
+			Material = Enum.Material.Rock,
+			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		}):SetAttribute("WE_Mountain", true)
+	end
+
+	print("[WAR EMPIRE] MapSetup: MountainRing segments=" .. tostring(segCount) .. " + massifs around Ground perimeter")
+end
+
+local function buildVisualFillPatches(mapFolder: Folder)
+	-- Low-cost ground patches between plot ring and mid-map so dead space doesn't look empty
+	local patches = {
+		Vector3.new(400, GROUND_TOP_Y + 0.08, 200),
+		Vector3.new(-350, GROUND_TOP_Y + 0.08, -250),
+		Vector3.new(200, GROUND_TOP_Y + 0.08, -450),
+		Vector3.new(-500, GROUND_TOP_Y + 0.08, 350),
+		Vector3.new(600, GROUND_TOP_Y + 0.08, -100),
+		Vector3.new(-150, GROUND_TOP_Y + 0.08, 550),
+		Vector3.new(100, GROUND_TOP_Y + 0.08, -700),
+		Vector3.new(-650, GROUND_TOP_Y + 0.08, -50),
+		Vector3.new(450, GROUND_TOP_Y + 0.08, 500),
+		Vector3.new(-400, GROUND_TOP_Y + 0.08, -550),
+	}
+	for i, pos in ipairs(patches) do
+		local w = 80 + (i % 4) * 25
+		local d = 55 + (i % 3) * 20
+		part({
+			Name = "FillPatch_" .. i,
+			Size = Vector3.new(w, 0.2, d),
+			Position = pos,
+			Color = if i % 2 == 0 then Color3.fromRGB(36, 52, 30) else Color3.fromRGB(48, 50, 44),
+			Material = if i % 2 == 0 then Enum.Material.Grass else Enum.Material.Concrete,
+			CanCollide = false,
+			Anchored = true,
+			Transparency = 0.05,
+			Parent = mapFolder,
+		})
+	end
+end
+
+local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Vector3, towardCenter: Vector3)
+	--[[
+		Stepped collide stairs from elevated oil deck (~Y=28) down to ground.
+		towardCenter = horizontal direction from deck toward map center (inland).
+	]]
+	local dir = Vector3.new(towardCenter.X, 0, towardCenter.Z)
+	if dir.Magnitude < 0.1 then
+		dir = Vector3.new(if deckPos.X >= 0 then -1 else 1, 0, 0)
+	end
+	dir = dir.Unit
+	local deckTopY = deckPos.Y
+	local steps = 10
+	local rise = (deckTopY - GROUND_TOP_Y) / steps
+	local run = 9
+	local stepW = 22
+	local stepT = 7.5
+	-- Start just outside the 48-stud deck toward inland
+	local edge = Vector3.new(deckPos.X, 0, deckPos.Z) - dir * 26
+	for s = 1, steps do
+		local y = deckTopY - rise * s + 0.6
+		local horiz = edge - dir * (run * s)
+		local pos = Vector3.new(horiz.X, y, horiz.Z)
+		part({
+			Name = territoryId .. "_RampStep" .. s,
+			Size = Vector3.new(stepW, 1.3, stepT),
+			CFrame = CFrame.lookAt(pos, pos + dir),
+			Color = Color3.fromRGB(75, 78, 82),
+			Material = Enum.Material.Metal,
+			CanCollide = true,
+			Anchored = true,
+			Parent = parent,
+		})
+	end
+	local midHoriz = edge - dir * (run * 5)
+	part({
+		Name = territoryId .. "_RampShelf",
+		Size = Vector3.new(28, 1.4, 14),
+		Position = Vector3.new(midHoriz.X, deckTopY - rise * 5, midHoriz.Z),
+		Color = Color3.fromRGB(70, 74, 78),
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		Anchored = true,
+		Parent = parent,
+	})
+	local approach = edge - dir * (run * steps + 10)
+	part({
+		Name = territoryId .. "_RampApproach",
+		Size = Vector3.new(30, 1, 18),
+		Position = Vector3.new(approach.X, GROUND_TOP_Y + 0.45, approach.Z),
+		Color = Color3.fromRGB(55, 60, 55),
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		Anchored = true,
+		Parent = parent,
+	})
+end
+
+
 local MapSetup = {}
+
+-- Exported for Bootstrap ground heal / verify
+MapSetup.GROUND_SIZE = GROUND_SIZE
+MapSetup.GROUND_THICKNESS = GROUND_THICKNESS
+MapSetup.GROUND_TOP_Y = GROUND_TOP_Y
+MapSetup.SAFETY_FLOOR_SIZE = SAFETY_FLOOR_SIZE
+MapSetup.SAFETY_FLOOR_Y = SAFETY_FLOOR_Y
+
+function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
+	--[[
+		Soft-heal existing WarEmpireSetup Ground / SafetyCatch.
+		Returns true if healthy (or repaired in place), false if caller should rebuild.
+	]]
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return false
+	end
+	local ground = map:FindFirstChild("Ground")
+	if not (ground and ground:IsA("BasePart")) then
+		return false
+	end
+	local repaired = false
+	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5 then
+		ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
+		ground.Position = Vector3.new(0, groundCenterY(), 0)
+		repaired = true
+	end
+	if ground.CanCollide ~= true then
+		ground.CanCollide = true
+		repaired = true
+	end
+	if ground.Anchored ~= true then
+		ground.Anchored = true
+		repaired = true
+	end
+	ground.Color = COL_GROUND
+	ground.Material = Enum.Material.Grass
+
+	local catch = map:FindFirstChild("SafetyCatch")
+	if not (catch and catch:IsA("BasePart")) then
+		buildSafetyUnderfloor(map :: Folder)
+		repaired = true
+	else
+		catch.Size = Vector3.new(SAFETY_FLOOR_SIZE, 4, SAFETY_FLOOR_SIZE)
+		catch.Position = Vector3.new(0, SAFETY_FLOOR_Y, 0)
+		catch.CanCollide = true
+		catch.Anchored = true
+		catch.Transparency = 0.92
+	end
+
+	if not setup:FindFirstChild("MountainRing") then
+		buildMountainRing(setup :: Folder)
+		repaired = true
+	end
+	if not map:FindFirstChild("EdgeBermN") then
+		buildEdgeBerms(map :: Folder)
+		repaired = true
+	end
+
+	print(string.format(
+		"[WAR EMPIRE] Ground heal: ok size=%.0fx%.0fx%.0f CanCollide=%s repaired=%s",
+		ground.Size.X,
+		ground.Size.Y,
+		ground.Size.Z,
+		tostring(ground.CanCollide),
+		tostring(repaired)
+	))
+	return true
+end
 
 function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
@@ -624,20 +958,27 @@ function MapSetup.Run()
 
 	local root = ensureFolder("WarEmpireSetup", Workspace)
 	local map = ensureFolder("Map", root)
+	-- Continuous collide floor: thick, large, explicit CanCollide — never reads as sky
 	part({
 		Name = "Ground",
-		Size = Vector3.new(GROUND_SIZE, 1, GROUND_SIZE),
-		Position = Vector3.new(0, 0, 0),
+		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
+		Position = Vector3.new(0, groundCenterY(), 0),
 		Color = COL_GROUND,
 		Material = Enum.Material.Grass,
+		CanCollide = true,
+		Anchored = true,
 		Parent = map,
 	})
+	buildSafetyUnderfloor(map)
+	buildEdgeBerms(map)
+	buildVisualFillPatches(map)
+	buildMountainRing(root)
 	-- Road grid scaled to plot ring (optional visual guide)
 	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
 		part({
 			Name = "RoadZ" .. z,
 			Size = Vector3.new(GROUND_SIZE, 0.15, 14),
-			Position = Vector3.new(0, 0.55, z),
+			Position = Vector3.new(0, GROUND_TOP_Y + 0.05, z),
 			Color = Color3.fromRGB(50, 52, 48),
 			Material = Enum.Material.Asphalt,
 			CanCollide = false,
@@ -648,7 +989,7 @@ function MapSetup.Run()
 		part({
 			Name = "RoadX" .. x,
 			Size = Vector3.new(14, 0.15, GROUND_SIZE),
-			Position = Vector3.new(x, 0.55, 0),
+			Position = Vector3.new(x, GROUND_TOP_Y + 0.05, 0),
 			Color = Color3.fromRGB(50, 52, 48),
 			Material = Enum.Material.Asphalt,
 			CanCollide = false,
@@ -913,6 +1254,9 @@ function MapSetup.Run()
 				Parent = territories,
 			})
 			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(300, 44), 14, Color3.fromRGB(255, 210, 120))
+			-- Stairs from deck down to ground (prevent 28-stud death plunge)
+			local inland = Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+			buildOilDeckRamp(territories, def.Id, def.Pos, inland)
 		end
 
 		-- Fortress walls / keep (named forts with higher stipend)
@@ -1313,7 +1657,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " naval/dock/training/oil/forts/bank + WorldDressing under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " safetyY=" .. tostring(SAFETY_FLOOR_Y) .. " plotRing=" .. tostring(PLOT_RING) .. " mountains/oil-ramps/berms + WorldDressing")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

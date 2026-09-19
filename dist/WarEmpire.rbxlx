@@ -3133,11 +3133,11 @@ local function ensureVoidFallback(reason: string)
 	folder.Name = "WE_VoidFallback"
 	folder.Parent = Workspace
 
-	-- Match playtest ground scale (~4800) so large-map void-fall still lands on plate
+	-- Match playtest ground scale (≥6000) so large-map void-fall still lands on plate
 	local baseplate = Instance.new("Part")
 	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(5000, 4, 5000)
-	baseplate.Position = Vector3.new(0, -2, 0)
+	baseplate.Size = Vector3.new(7000, 6, 7000)
+	baseplate.Position = Vector3.new(0, -3, 0)
 	baseplate.Anchored = true
 	baseplate.CanCollide = true
 	baseplate.Material = Enum.Material.Grass
@@ -3171,30 +3171,60 @@ if not Workspace:FindFirstChild("WarEmpireSetup") then
 		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
 	end
 else
-	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run")
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (heal Ground if needed)")
 	-- Re-assert gravity + Ground presence so scale upgrades / partial setups never void-fall
 	Workspace.Gravity = 196.2
 	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local targetSize = MapSetup.GROUND_SIZE or 6400
 	local map = setup and setup:FindFirstChild("Map")
 	local ground = map and map:FindFirstChild("Ground")
-	if not (ground and ground:IsA("BasePart") and ground.Size.X >= 4000) then
-		warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small (<4800 scale) — rebuilding via MapSetup")
-		pcall(function()
-			if setup then
-				setup:Destroy()
-			end
-			MapSetup.Run()
-		end)
-		if not Workspace:FindFirstChild("WarEmpireSetup") then
-			ensureVoidFallback("Existing setup invalid and rebuild failed")
+	local groundOk = ground
+		and ground:IsA("BasePart")
+		and ground.Size.X >= targetSize - 1
+		and ground.Size.Y >= (MapSetup.GROUND_THICKNESS or 8) - 0.5
+		and ground.CanCollide == true
+
+	if not groundOk then
+		-- Prefer soft heal (resize / CanCollide / SafetyCatch / MountainRing) before full rebuild
+		local healed = false
+		if setup and MapSetup.EnsureGroundHealthy then
+			local okHeal, healResult = pcall(function()
+				return MapSetup.EnsureGroundHealthy(setup)
+			end)
+			healed = okHeal and healResult == true
 		end
+		if not healed then
+			warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small/non-collide — rebuilding via MapSetup")
+			pcall(function()
+				if setup then
+					setup:Destroy()
+				end
+				MapSetup.Run()
+			end)
+			if not Workspace:FindFirstChild("WarEmpireSetup") then
+				ensureVoidFallback("Existing setup invalid and rebuild failed")
+			end
+		else
+			print("[WAR EMPIRE] Ground soft-healed to ≥" .. tostring(targetSize) .. " thick collide floor + safety/mountains")
+		end
+		setup = Workspace:FindFirstChild("WarEmpireSetup")
 	else
+		-- Still ensure SafetyCatch / MountainRing / berms exist on older place files
+		if setup and MapSetup.EnsureGroundHealthy then
+			pcall(function()
+				MapSetup.EnsureGroundHealthy(setup)
+			end)
+		end
+	end
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if setup then
 		-- Ensure WE_UpgradeSlot tags exist (stale place files / partial builds skip MapSetup)
 		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
 		local taggedCount = #tagged
 		if taggedCount == 0 then
-			local bases = setup and setup:FindFirstChild("Bases")
+			local bases = setup:FindFirstChild("Bases")
 			local retagged = 0
 			if bases then
 				for _, desc in ipairs(bases:GetDescendants()) do
@@ -3212,9 +3242,7 @@ else
 			if retagged == 0 then
 				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
 				pcall(function()
-					if setup then
-						setup:Destroy()
-					end
+					setup:Destroy()
 					MapSetup.Run()
 				end)
 				if not Workspace:FindFirstChild("WarEmpireSetup") then
@@ -3265,6 +3293,7 @@ local SupplyDropService = require(Services.SupplyDropService)
 local BankRaidService = require(Services.BankRaidService)
 local SpinnerService = require(Services.SpinnerService)
 local UpgradePadService = require(Services.UpgradePadService)
+local FallSafetyService = require(Services.FallSafetyService)
 
 RemoteSetup.Init()
 
@@ -3298,6 +3327,7 @@ local deps: { [string]: any } = {
 	BankRaidService = BankRaidService,
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
+	FallSafetyService = FallSafetyService,
 }
 
 RateLimitService.Init()
@@ -3311,6 +3341,7 @@ NotificationService.Init(deps)
 AntiExploitService.Init(deps)
 BaseService.Init(deps) -- registers OnProfileLoaded
 UpgradePadService.Init(deps) -- server walk-over buy (Touched + spatial)
+FallSafetyService.Init(deps) -- void fall → teleport to plot spawn
 MonetizationService.Init(deps) -- GamePass cache on join
 TutorialService.Init(deps) -- tutorial step on join + upgrade hook
 
@@ -4550,7 +4581,7 @@ local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
 
-local COL_GROUND = Color3.fromRGB(32, 44, 30)
+local COL_GROUND = Color3.fromRGB(28, 48, 26) -- darker grass; never reads as sky/void
 local COL_PAD = Color3.fromRGB(38, 44, 48)
 local COL_PAD_EDGE = Color3.fromRGB(70, 190, 110)
 local COL_VEHICLE = Color3.fromRGB(48, 62, 78)
@@ -4582,8 +4613,13 @@ local STARTER_COST = {
 	Warehouse = 3200, SpecialForcesFacility = 10000,
 }
 
--- Map scale: ground ~4800, plot ring ~800, pads ~200 (was 2600 / 450 / 140)
-local GROUND_SIZE = 4800
+-- Map scale: ground ≥6000 continuous floor, plot ring ~800, pads ~200
+-- Top of Ground sits ~Y=0.5 so plot pads (Y=0.5) sit flush.
+local GROUND_SIZE = 6400
+local GROUND_THICKNESS = 8
+local GROUND_TOP_Y = 0.5
+local SAFETY_FLOOR_SIZE = 8000
+local SAFETY_FLOOR_Y = -40
 local PLOT_PAD_SIZE = 200
 local PLOT_RING = 800
 local STRUCT_COLS = 4
@@ -5067,7 +5103,336 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	return model
 end
 
+
+-- Continuous floor + safety catch + perimeter mountain ring (mobile-friendly part count)
+local function groundCenterY(): number
+	return GROUND_TOP_Y - GROUND_THICKNESS * 0.5
+end
+
+local function buildSafetyUnderfloor(mapFolder: Folder)
+	part({
+		Name = "SafetyCatch",
+		Size = Vector3.new(SAFETY_FLOOR_SIZE, 4, SAFETY_FLOOR_SIZE),
+		Position = Vector3.new(0, SAFETY_FLOOR_Y, 0),
+		Color = Color3.fromRGB(18, 22, 18),
+		Material = Enum.Material.Slate,
+		Transparency = 0.92,
+		CanCollide = true,
+		Anchored = true,
+		Parent = mapFolder,
+	})
+end
+
+local function buildEdgeBerms(mapFolder: Folder)
+	-- Soft inner berm just inside Ground edge (keeps stroll-off from feeling like cliff)
+	local half = GROUND_SIZE * 0.5 - 40
+	local bermH = 18
+	local bermT = 28
+	local bermY = GROUND_TOP_Y + bermH * 0.5
+	local sides = {
+		{ Name = "EdgeBermN", Size = Vector3.new(GROUND_SIZE - 80, bermH, bermT), Pos = Vector3.new(0, bermY, -half) },
+		{ Name = "EdgeBermS", Size = Vector3.new(GROUND_SIZE - 80, bermH, bermT), Pos = Vector3.new(0, bermY, half) },
+		{ Name = "EdgeBermE", Size = Vector3.new(bermT, bermH, GROUND_SIZE - 80), Pos = Vector3.new(half, bermY, 0) },
+		{ Name = "EdgeBermW", Size = Vector3.new(bermT, bermH, GROUND_SIZE - 80), Pos = Vector3.new(-half, bermY, 0) },
+	}
+	for _, s in ipairs(sides) do
+		part({
+			Name = s.Name,
+			Size = s.Size,
+			Position = s.Pos,
+			Color = Color3.fromRGB(42, 58, 36),
+			Material = Enum.Material.Grass,
+			CanCollide = true,
+			Anchored = true,
+			Parent = mapFolder,
+		})
+	end
+end
+
+local function buildMountainRing(root: Folder)
+	--[[
+		Segmented Part-kit hills/ridges around Ground perimeter.
+		Varied heights ~40–120 studs; rock/slate/grass; CanCollide on outer berm.
+		Not one giant wall — mobile-friendly (~64–80 segments + peak caps).
+	]]
+	local folder = Instance.new("Folder")
+	folder.Name = "MountainRing"
+	folder.Parent = root
+
+	local rockColors = {
+		Color3.fromRGB(72, 68, 58),
+		Color3.fromRGB(58, 62, 52),
+		Color3.fromRGB(90, 82, 68),
+		Color3.fromRGB(48, 55, 42),
+		Color3.fromRGB(80, 75, 62),
+		Color3.fromRGB(55, 48, 40),
+	}
+	local grassTint = Color3.fromRGB(40, 62, 34)
+	local slateTint = Color3.fromRGB(62, 66, 72)
+
+	local half = GROUND_SIZE * 0.5
+	-- Ring sits just outside playable Ground so players can't stroll into sky
+	local ringR = half + 90
+	local segCount = 48 -- perimeter segments
+	local segArc = (math.pi * 2) / segCount
+	local segLen = ringR * segArc * 1.12 -- slight overlap
+
+	for i = 1, segCount do
+		local angle = (i - 0.5) * segArc
+		local cx = math.cos(angle) * ringR
+		local cz = math.sin(angle) * ringR
+		-- Pseudo-random but stable heights (40–120)
+		local hSeed = ((i * 17 + 31) % 80) + 40
+		local height = hSeed
+		if i % 7 == 0 then
+			height = math.min(120, height + 28)
+		elseif i % 5 == 0 then
+			height = math.max(40, height - 18)
+		end
+		local depth = 55 + (i % 5) * 8
+		local yaw = -angle + math.pi * 0.5
+		local col = rockColors[((i - 1) % #rockColors) + 1]
+		local mat = Enum.Material.Rock
+		if i % 3 == 0 then
+			mat = Enum.Material.Slate
+			col = slateTint:Lerp(col, 0.45)
+		elseif i % 4 == 0 then
+			mat = Enum.Material.Grass
+			col = grassTint:Lerp(col, 0.35)
+		end
+		local ridge = part({
+			Name = "Ridge_" .. i,
+			Size = Vector3.new(segLen, height, depth),
+			CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.5 - 2, cz) * CFrame.Angles(0, yaw, 0),
+			Color = col,
+			Material = mat,
+			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		})
+		ridge:SetAttribute("WE_Mountain", true)
+		-- Peak cap / secondary knob for silhouette variety (no collide needed on tiny tip)
+		if i % 2 == 0 then
+			local tipH = 12 + (i % 6) * 4
+			part({
+				Name = "Peak_" .. i,
+				Size = Vector3.new(segLen * 0.45, tipH, depth * 0.55),
+				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.35 - 2, cz) * CFrame.Angles(0, yaw, 0),
+				Color = col:Lerp(Color3.fromRGB(120, 115, 100), 0.2),
+				Material = Enum.Material.Rock,
+				CanCollide = false,
+				Anchored = true,
+				Parent = folder,
+			}):SetAttribute("WE_Mountain", true)
+		end
+		-- Inner foothill shelf (collide) so walk-up from berm feels continuous
+		if i % 3 == 0 then
+			local footH = 14 + (i % 4) * 3
+			local footR = half + 35
+			local fx = math.cos(angle) * footR
+			local fz = math.sin(angle) * footR
+			part({
+				Name = "Foothill_" .. i,
+				Size = Vector3.new(segLen * 0.9, footH, 36),
+				CFrame = CFrame.new(fx, GROUND_TOP_Y + footH * 0.5 - 1, fz) * CFrame.Angles(0, yaw, 0),
+				Color = grassTint,
+				Material = Enum.Material.Grass,
+				CanCollide = true,
+				Anchored = true,
+				Parent = folder,
+			}):SetAttribute("WE_Mountain", true)
+		end
+	end
+
+	-- Corner massifs (extra bulk at N/E/S/W so ring never reads as thin wall)
+	local massifs = {
+		{ 0, -1, "N" },
+		{ 0, 1, "S" },
+		{ 1, 0, "E" },
+		{ -1, 0, "W" },
+		{ 0.7, -0.7, "NE" },
+		{ -0.7, -0.7, "NW" },
+		{ 0.7, 0.7, "SE" },
+		{ -0.7, 0.7, "SW" },
+	}
+	for mi, m in ipairs(massifs) do
+		local mx = m[1] * (half + 120)
+		local mz = m[2] * (half + 120)
+		local mh = 70 + (mi % 4) * 12
+		part({
+			Name = "Massif_" .. m[3],
+			Size = Vector3.new(140, mh, 140),
+			Position = Vector3.new(mx, GROUND_TOP_Y + mh * 0.5 - 4, mz),
+			Color = rockColors[((mi - 1) % #rockColors) + 1],
+			Material = Enum.Material.Rock,
+			CanCollide = true,
+			Anchored = true,
+			Parent = folder,
+		}):SetAttribute("WE_Mountain", true)
+	end
+
+	print("[WAR EMPIRE] MapSetup: MountainRing segments=" .. tostring(segCount) .. " + massifs around Ground perimeter")
+end
+
+local function buildVisualFillPatches(mapFolder: Folder)
+	-- Low-cost ground patches between plot ring and mid-map so dead space doesn't look empty
+	local patches = {
+		Vector3.new(400, GROUND_TOP_Y + 0.08, 200),
+		Vector3.new(-350, GROUND_TOP_Y + 0.08, -250),
+		Vector3.new(200, GROUND_TOP_Y + 0.08, -450),
+		Vector3.new(-500, GROUND_TOP_Y + 0.08, 350),
+		Vector3.new(600, GROUND_TOP_Y + 0.08, -100),
+		Vector3.new(-150, GROUND_TOP_Y + 0.08, 550),
+		Vector3.new(100, GROUND_TOP_Y + 0.08, -700),
+		Vector3.new(-650, GROUND_TOP_Y + 0.08, -50),
+		Vector3.new(450, GROUND_TOP_Y + 0.08, 500),
+		Vector3.new(-400, GROUND_TOP_Y + 0.08, -550),
+	}
+	for i, pos in ipairs(patches) do
+		local w = 80 + (i % 4) * 25
+		local d = 55 + (i % 3) * 20
+		part({
+			Name = "FillPatch_" .. i,
+			Size = Vector3.new(w, 0.2, d),
+			Position = pos,
+			Color = if i % 2 == 0 then Color3.fromRGB(36, 52, 30) else Color3.fromRGB(48, 50, 44),
+			Material = if i % 2 == 0 then Enum.Material.Grass else Enum.Material.Concrete,
+			CanCollide = false,
+			Anchored = true,
+			Transparency = 0.05,
+			Parent = mapFolder,
+		})
+	end
+end
+
+local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Vector3, towardCenter: Vector3)
+	--[[
+		Stepped collide stairs from elevated oil deck (~Y=28) down to ground.
+		towardCenter = horizontal direction from deck toward map center (inland).
+	]]
+	local dir = Vector3.new(towardCenter.X, 0, towardCenter.Z)
+	if dir.Magnitude < 0.1 then
+		dir = Vector3.new(if deckPos.X >= 0 then -1 else 1, 0, 0)
+	end
+	dir = dir.Unit
+	local deckTopY = deckPos.Y
+	local steps = 10
+	local rise = (deckTopY - GROUND_TOP_Y) / steps
+	local run = 9
+	local stepW = 22
+	local stepT = 7.5
+	-- Start just outside the 48-stud deck toward inland
+	local edge = Vector3.new(deckPos.X, 0, deckPos.Z) - dir * 26
+	for s = 1, steps do
+		local y = deckTopY - rise * s + 0.6
+		local horiz = edge - dir * (run * s)
+		local pos = Vector3.new(horiz.X, y, horiz.Z)
+		part({
+			Name = territoryId .. "_RampStep" .. s,
+			Size = Vector3.new(stepW, 1.3, stepT),
+			CFrame = CFrame.lookAt(pos, pos + dir),
+			Color = Color3.fromRGB(75, 78, 82),
+			Material = Enum.Material.Metal,
+			CanCollide = true,
+			Anchored = true,
+			Parent = parent,
+		})
+	end
+	local midHoriz = edge - dir * (run * 5)
+	part({
+		Name = territoryId .. "_RampShelf",
+		Size = Vector3.new(28, 1.4, 14),
+		Position = Vector3.new(midHoriz.X, deckTopY - rise * 5, midHoriz.Z),
+		Color = Color3.fromRGB(70, 74, 78),
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		Anchored = true,
+		Parent = parent,
+	})
+	local approach = edge - dir * (run * steps + 10)
+	part({
+		Name = territoryId .. "_RampApproach",
+		Size = Vector3.new(30, 1, 18),
+		Position = Vector3.new(approach.X, GROUND_TOP_Y + 0.45, approach.Z),
+		Color = Color3.fromRGB(55, 60, 55),
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		Anchored = true,
+		Parent = parent,
+	})
+end
+
+
 local MapSetup = {}
+
+-- Exported for Bootstrap ground heal / verify
+MapSetup.GROUND_SIZE = GROUND_SIZE
+MapSetup.GROUND_THICKNESS = GROUND_THICKNESS
+MapSetup.GROUND_TOP_Y = GROUND_TOP_Y
+MapSetup.SAFETY_FLOOR_SIZE = SAFETY_FLOOR_SIZE
+MapSetup.SAFETY_FLOOR_Y = SAFETY_FLOOR_Y
+
+function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
+	--[[
+		Soft-heal existing WarEmpireSetup Ground / SafetyCatch.
+		Returns true if healthy (or repaired in place), false if caller should rebuild.
+	]]
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return false
+	end
+	local ground = map:FindFirstChild("Ground")
+	if not (ground and ground:IsA("BasePart")) then
+		return false
+	end
+	local repaired = false
+	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5 then
+		ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
+		ground.Position = Vector3.new(0, groundCenterY(), 0)
+		repaired = true
+	end
+	if ground.CanCollide ~= true then
+		ground.CanCollide = true
+		repaired = true
+	end
+	if ground.Anchored ~= true then
+		ground.Anchored = true
+		repaired = true
+	end
+	ground.Color = COL_GROUND
+	ground.Material = Enum.Material.Grass
+
+	local catch = map:FindFirstChild("SafetyCatch")
+	if not (catch and catch:IsA("BasePart")) then
+		buildSafetyUnderfloor(map :: Folder)
+		repaired = true
+	else
+		catch.Size = Vector3.new(SAFETY_FLOOR_SIZE, 4, SAFETY_FLOOR_SIZE)
+		catch.Position = Vector3.new(0, SAFETY_FLOOR_Y, 0)
+		catch.CanCollide = true
+		catch.Anchored = true
+		catch.Transparency = 0.92
+	end
+
+	if not setup:FindFirstChild("MountainRing") then
+		buildMountainRing(setup :: Folder)
+		repaired = true
+	end
+	if not map:FindFirstChild("EdgeBermN") then
+		buildEdgeBerms(map :: Folder)
+		repaired = true
+	end
+
+	print(string.format(
+		"[WAR EMPIRE] Ground heal: ok size=%.0fx%.0fx%.0f CanCollide=%s repaired=%s",
+		ground.Size.X,
+		ground.Size.Y,
+		ground.Size.Z,
+		tostring(ground.CanCollide),
+		tostring(repaired)
+	))
+	return true
+end
 
 function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
@@ -5150,20 +5515,27 @@ function MapSetup.Run()
 
 	local root = ensureFolder("WarEmpireSetup", Workspace)
 	local map = ensureFolder("Map", root)
+	-- Continuous collide floor: thick, large, explicit CanCollide — never reads as sky
 	part({
 		Name = "Ground",
-		Size = Vector3.new(GROUND_SIZE, 1, GROUND_SIZE),
-		Position = Vector3.new(0, 0, 0),
+		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
+		Position = Vector3.new(0, groundCenterY(), 0),
 		Color = COL_GROUND,
 		Material = Enum.Material.Grass,
+		CanCollide = true,
+		Anchored = true,
 		Parent = map,
 	})
+	buildSafetyUnderfloor(map)
+	buildEdgeBerms(map)
+	buildVisualFillPatches(map)
+	buildMountainRing(root)
 	-- Road grid scaled to plot ring (optional visual guide)
 	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
 		part({
 			Name = "RoadZ" .. z,
 			Size = Vector3.new(GROUND_SIZE, 0.15, 14),
-			Position = Vector3.new(0, 0.55, z),
+			Position = Vector3.new(0, GROUND_TOP_Y + 0.05, z),
 			Color = Color3.fromRGB(50, 52, 48),
 			Material = Enum.Material.Asphalt,
 			CanCollide = false,
@@ -5174,7 +5546,7 @@ function MapSetup.Run()
 		part({
 			Name = "RoadX" .. x,
 			Size = Vector3.new(14, 0.15, GROUND_SIZE),
-			Position = Vector3.new(x, 0.55, 0),
+			Position = Vector3.new(x, GROUND_TOP_Y + 0.05, 0),
 			Color = Color3.fromRGB(50, 52, 48),
 			Material = Enum.Material.Asphalt,
 			CanCollide = false,
@@ -5439,6 +5811,9 @@ function MapSetup.Run()
 				Parent = territories,
 			})
 			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(300, 44), 14, Color3.fromRGB(255, 210, 120))
+			-- Stairs from deck down to ground (prevent 28-stud death plunge)
+			local inland = Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+			buildOilDeckRamp(territories, def.Id, def.Pos, inland)
 		end
 
 		-- Fortress walls / keep (named forts with higher stipend)
@@ -5839,7 +6214,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " naval/dock/training/oil/forts/bank + WorldDressing under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " safetyY=" .. tostring(SAFETY_FLOOR_Y) .. " plotRing=" .. tostring(PLOT_RING) .. " mountains/oil-ramps/berms + WorldDressing")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end
@@ -10752,6 +11127,98 @@ return EconomyService
         </Item>
         <Item class="ModuleScript" referent="69">
           <Properties>
+            <string name="Name">FallSafetyService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	FallSafetyService — teleport to plot spawn instead of void-Kill when
+	HumanoidRootPart falls below FALL_Y (e.g. off oil decks / past Ground).
+	Does not replace collide floor / SafetyCatch; soft recovery layer.
+]]
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local FallSafetyService = {}
+
+local FALL_Y = -30
+local COOLDOWN_SEC = 2.5
+
+local BaseService: any = nil
+local NotificationService: any = nil
+
+local lastRescueAt: { [number]: number } = {}
+
+local function rescue(player: Player, root: BasePart)
+	local now = os.clock()
+	local last = lastRescueAt[player.UserId] or 0
+	if now - last < COOLDOWN_SEC then
+		return
+	end
+	lastRescueAt[player.UserId] = now
+
+	-- Stop downward velocity before teleport
+	root.AssemblyLinearVelocity = Vector3.zero
+	root.AssemblyAngularVelocity = Vector3.zero
+
+	if BaseService and BaseService.TeleportToPlot then
+		BaseService.TeleportToPlot(player)
+	else
+		-- Fallback: origin above Ground
+		local character = player.Character
+		if character then
+			character:PivotTo(CFrame.new(0, 8, 0))
+		end
+	end
+
+	if NotificationService and NotificationService.Notify then
+		NotificationService.Notify(player, "Rescued from fall — returned to base.", "Info", 3)
+	end
+end
+
+function FallSafetyService.Init(deps: { [string]: any })
+	BaseService = deps.BaseService
+	NotificationService = deps.NotificationService
+
+	-- Stepped heartbeat: cheap Y check only
+	local accum = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accum += dt
+		if accum < 0.2 then
+			return
+		end
+		accum = 0
+		for _, player in ipairs(Players:GetPlayers()) do
+			local character = player.Character
+			if not character then
+				continue
+			end
+			local root = character:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if not root then
+				continue
+			end
+			local hum = character:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health <= 0 then
+				continue
+			end
+			if root.Position.Y < FALL_Y then
+				rescue(player, root)
+			end
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		lastRescueAt[player.UserId] = nil
+	end)
+
+	print("[WAR EMPIRE] FallSafetyService ready (teleport if Y < " .. tostring(FALL_Y) .. ")")
+end
+
+return FallSafetyService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="70">
+          <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -11246,7 +11713,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11563,7 +12030,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11673,7 +12140,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11708,7 +12175,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11960,7 +12427,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12012,7 +12479,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12276,7 +12743,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12541,7 +13008,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12704,7 +13171,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13010,7 +13477,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13726,7 +14193,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="80">
+          <Item class="ModuleScript" referent="81">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -13767,7 +14234,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="81">
+          <Item class="ModuleScript" referent="82">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -13844,7 +14311,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="82">
+          <Item class="ModuleScript" referent="83">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -13900,7 +14367,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14129,7 +14596,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14486,7 +14953,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15507,7 +15974,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15642,19 +16109,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="87">
+  <Item class="StarterPlayer" referent="88">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="88">
+    <Item class="StarterPlayerScripts" referent="89">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="89">
+      <Item class="Folder" referent="90">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="90">
+        <Item class="LocalScript" referent="91">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -15681,11 +16148,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="91">
+        <Item class="Folder" referent="92">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -15947,7 +16414,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -16320,7 +16787,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -16674,7 +17141,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -16897,7 +17364,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -17253,7 +17720,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -17548,7 +18015,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -17697,7 +18164,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18201,7 +18668,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="100">
+            <Item class="ModuleScript" referent="101">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -18360,7 +18827,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="101">
+            <Item class="ModuleScript" referent="102">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -18400,7 +18867,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18706,7 +19173,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18983,7 +19450,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19336,7 +19803,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19627,7 +20094,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19670,7 +20137,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20195,7 +20662,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20936,11 +21403,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="109">
+        <Item class="Folder" referent="110">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21083,7 +21550,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -21155,7 +21622,7 @@ return ClientSettings
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="112">
+  <Item class="Workspace" referent="113">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

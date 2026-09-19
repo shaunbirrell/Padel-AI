@@ -38,11 +38,11 @@ local function ensureVoidFallback(reason: string)
 	folder.Name = "WE_VoidFallback"
 	folder.Parent = Workspace
 
-	-- Match playtest ground scale (~4800) so large-map void-fall still lands on plate
+	-- Match playtest ground scale (≥6000) so large-map void-fall still lands on plate
 	local baseplate = Instance.new("Part")
 	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(5000, 4, 5000)
-	baseplate.Position = Vector3.new(0, -2, 0)
+	baseplate.Size = Vector3.new(7000, 6, 7000)
+	baseplate.Position = Vector3.new(0, -3, 0)
 	baseplate.Anchored = true
 	baseplate.CanCollide = true
 	baseplate.Material = Enum.Material.Grass
@@ -76,30 +76,60 @@ if not Workspace:FindFirstChild("WarEmpireSetup") then
 		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
 	end
 else
-	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run")
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (heal Ground if needed)")
 	-- Re-assert gravity + Ground presence so scale upgrades / partial setups never void-fall
 	Workspace.Gravity = 196.2
 	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local targetSize = MapSetup.GROUND_SIZE or 6400
 	local map = setup and setup:FindFirstChild("Map")
 	local ground = map and map:FindFirstChild("Ground")
-	if not (ground and ground:IsA("BasePart") and ground.Size.X >= 4000) then
-		warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small (<4800 scale) — rebuilding via MapSetup")
-		pcall(function()
-			if setup then
-				setup:Destroy()
-			end
-			MapSetup.Run()
-		end)
-		if not Workspace:FindFirstChild("WarEmpireSetup") then
-			ensureVoidFallback("Existing setup invalid and rebuild failed")
+	local groundOk = ground
+		and ground:IsA("BasePart")
+		and ground.Size.X >= targetSize - 1
+		and ground.Size.Y >= (MapSetup.GROUND_THICKNESS or 8) - 0.5
+		and ground.CanCollide == true
+
+	if not groundOk then
+		-- Prefer soft heal (resize / CanCollide / SafetyCatch / MountainRing) before full rebuild
+		local healed = false
+		if setup and MapSetup.EnsureGroundHealthy then
+			local okHeal, healResult = pcall(function()
+				return MapSetup.EnsureGroundHealthy(setup)
+			end)
+			healed = okHeal and healResult == true
 		end
+		if not healed then
+			warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small/non-collide — rebuilding via MapSetup")
+			pcall(function()
+				if setup then
+					setup:Destroy()
+				end
+				MapSetup.Run()
+			end)
+			if not Workspace:FindFirstChild("WarEmpireSetup") then
+				ensureVoidFallback("Existing setup invalid and rebuild failed")
+			end
+		else
+			print("[WAR EMPIRE] Ground soft-healed to ≥" .. tostring(targetSize) .. " thick collide floor + safety/mountains")
+		end
+		setup = Workspace:FindFirstChild("WarEmpireSetup")
 	else
+		-- Still ensure SafetyCatch / MountainRing / berms exist on older place files
+		if setup and MapSetup.EnsureGroundHealthy then
+			pcall(function()
+				MapSetup.EnsureGroundHealthy(setup)
+			end)
+		end
+	end
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if setup then
 		-- Ensure WE_UpgradeSlot tags exist (stale place files / partial builds skip MapSetup)
 		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
 		local taggedCount = #tagged
 		if taggedCount == 0 then
-			local bases = setup and setup:FindFirstChild("Bases")
+			local bases = setup:FindFirstChild("Bases")
 			local retagged = 0
 			if bases then
 				for _, desc in ipairs(bases:GetDescendants()) do
@@ -117,9 +147,7 @@ else
 			if retagged == 0 then
 				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
 				pcall(function()
-					if setup then
-						setup:Destroy()
-					end
+					setup:Destroy()
 					MapSetup.Run()
 				end)
 				if not Workspace:FindFirstChild("WarEmpireSetup") then
@@ -170,6 +198,7 @@ local SupplyDropService = require(Services.SupplyDropService)
 local BankRaidService = require(Services.BankRaidService)
 local SpinnerService = require(Services.SpinnerService)
 local UpgradePadService = require(Services.UpgradePadService)
+local FallSafetyService = require(Services.FallSafetyService)
 
 RemoteSetup.Init()
 
@@ -203,6 +232,7 @@ local deps: { [string]: any } = {
 	BankRaidService = BankRaidService,
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
+	FallSafetyService = FallSafetyService,
 }
 
 RateLimitService.Init()
@@ -216,6 +246,7 @@ NotificationService.Init(deps)
 AntiExploitService.Init(deps)
 BaseService.Init(deps) -- registers OnProfileLoaded
 UpgradePadService.Init(deps) -- server walk-over buy (Touched + spatial)
+FallSafetyService.Init(deps) -- void fall → teleport to plot spawn
 MonetizationService.Init(deps) -- GamePass cache on join
 TutorialService.Init(deps) -- tutorial step on join + upgrade hook
 
