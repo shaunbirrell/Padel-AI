@@ -243,7 +243,7 @@ local function buildGui()
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.Position = UDim2.new(1, -12, 0, 12)
-	closeBtn.Size = UDim2.fromOffset(32, 32)
+	closeBtn.Size = UDim2.fromOffset(44, 44)
 	closeBtn.Text = "X"
 	closeBtn.Font = Enum.Font.GothamBold
 	closeBtn.TextSize = 16

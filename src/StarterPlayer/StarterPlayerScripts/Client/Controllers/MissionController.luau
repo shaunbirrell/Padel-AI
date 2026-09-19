@@ -99,7 +99,7 @@ local function refresh()
 		local btn = Instance.new("TextButton")
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
-		btn.Size = UDim2.fromOffset(80, 36)
+		btn.Size = UDim2.fromOffset(88, 44)
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 12
 		btn.TextColor3 = Constants.Colors.Text
@@ -171,7 +171,7 @@ function MissionController.Init()
 	toggle.Name = "MissionsToggle"
 	toggle.AnchorPoint = Vector2.new(0, 1)
 	toggle.Position = UDim2.new(0, 16, 1, -16)
-	toggle.Size = UDim2.fromOffset(110, 36)
+	toggle.Size = UDim2.fromOffset(110, 44)
 	toggle.BackgroundColor3 = Constants.Colors.Panel
 	toggle.Font = Enum.Font.GothamBold
 	toggle.TextSize = 14
@@ -244,7 +244,7 @@ function MissionController.Init()
 	local dBtn = Instance.new("TextButton")
 	dBtn.AnchorPoint = Vector2.new(1, 0.5)
 	dBtn.Position = UDim2.new(1, -8, 0.5, 0)
-	dBtn.Size = UDim2.fromOffset(100, 32)
+	dBtn.Size = UDim2.fromOffset(110, 44)
 	dBtn.Font = Enum.Font.GothamBold
 	dBtn.TextSize = 11
 	dBtn.Text = "CLAIM DAILY"

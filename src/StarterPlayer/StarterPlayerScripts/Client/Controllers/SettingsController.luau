@@ -67,7 +67,7 @@ function SettingsController.Init()
 	toggle.Name = "SettingsToggle"
 	toggle.AnchorPoint = Vector2.new(1, 1)
 	toggle.Position = UDim2.new(1, -16, 1, -16)
-	toggle.Size = UDim2.fromOffset(96, 36)
+	toggle.Size = UDim2.fromOffset(96, 44)
 	toggle.BackgroundColor3 = Constants.Colors.Panel
 	toggle.Font = Enum.Font.GothamBold
 	toggle.TextSize = 12
@@ -135,7 +135,7 @@ function SettingsController.Init()
 
 	musicBtn = Instance.new("TextButton")
 	musicBtn.Position = UDim2.fromOffset(16, 88)
-	musicBtn.Size = UDim2.fromOffset(160, 34)
+	musicBtn.Size = UDim2.fromOffset(160, 44)
 	musicBtn.Font = Enum.Font.GothamBold
 	musicBtn.TextSize = 13
 	musicBtn.TextColor3 = Constants.Colors.Text
@@ -150,7 +150,7 @@ function SettingsController.Init()
 
 	sfxBtn = Instance.new("TextButton")
 	sfxBtn.Position = UDim2.fromOffset(192, 88)
-	sfxBtn.Size = UDim2.fromOffset(160, 34)
+	sfxBtn.Size = UDim2.fromOffset(160, 44)
 	sfxBtn.Font = Enum.Font.GothamBold
 	sfxBtn.TextSize = 13
 	sfxBtn.TextColor3 = Constants.Colors.Text

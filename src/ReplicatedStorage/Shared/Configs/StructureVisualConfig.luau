@@ -10,12 +10,16 @@ export type StructurePalette = {
 	Accent: Color3,
 	Roof: Color3,
 	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "wall" | "power" | "warehouse" | "special",
+	-- Future Creator Store MeshPart (0 / nil = Part kit)
+	MeshAssetId: number?,
 }
 
 local StructureVisualConfig = {
 	-- Level 0 = ghost/placeholder; ≥1 solid + taller body
 	GhostTransparency = 0.45,
 	SolidTransparency = 0,
+	-- When true and palette.MeshAssetId ~= 0, BaseService may swap kit for MeshPart (art pass).
+	PreferMeshWhenAssetIdSet = true,
 
 	Palettes = {
 		CommandCenter = {
