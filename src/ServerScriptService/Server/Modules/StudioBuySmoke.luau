@@ -199,6 +199,56 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 
 			if result.Ok == true then
 				smokeLine("OK", string.format("newCash=%d level=%d structure=%s", cashAfter, levelAfter, STRUCTURE_ID))
+				-- Follow-up: Barracks buy path (~2s later) so pad chain is exercised
+				task.delay(2.0, function()
+					if not player.Parent then
+						return
+					end
+					local barracksId = "Barracks"
+					local prof2 = DataService.GetProfile(player)
+					if not prof2 then
+						smokeLine("FAIL", "Barracks follow-up NoProfile")
+						return
+					end
+					local lvlB = tonumber(prof2.BaseUpgrades and prof2.BaseUpgrades[barracksId]) or 0
+					local cashB = tonumber(prof2.Cash) or 0
+					local Shared2 = ReplicatedStorage:FindFirstChild("Shared")
+					if Shared2 then
+						local okCfg2, BaseConfig2 = pcall(function()
+							return require(Shared2.Configs.BaseConfig)
+						end)
+						if okCfg2 and typeof(BaseConfig2) == "table" then
+							local defB = BaseConfig2.Structures and BaseConfig2.Structures[barracksId]
+							local maxB = if defB then (tonumber(defB.MaxLevel) or 5) else 5
+							if lvlB >= maxB then
+								prof2.BaseUpgrades[barracksId] = maxB - 1
+								lvlB = maxB - 1
+								DataService.MarkDirty(player)
+							end
+							local nextB = lvlB + 1
+							local costB = defB and defB.Costs and defB.Costs[nextB]
+							if typeof(costB) == "number" and cashB < costB and EconomyService and EconomyService.AddCash then
+								EconomyService.AddCash(player, costB - cashB, "studio_smoke_buy_barracks")
+								prof2 = DataService.GetProfile(player) or prof2
+								cashB = tonumber(prof2.Cash) or cashB
+							end
+						end
+					end
+					smokeLine("START", string.format("follow-up structure=%s cash=%d level=%d", barracksId, cashB, lvlB))
+					local okB, resB = pcall(function()
+						return BaseService.PurchaseUpgrade(player, barracksId)
+					end)
+					if not okB then
+						smokeLine("FAIL", "Barracks pcall: " .. tostring(resB))
+						return
+					end
+					if typeof(resB) == "table" and resB.Ok == true then
+						smokeLine("OK", string.format("follow-up Barracks newLevel=%s cash=%s", tostring(resB.NewLevel), tostring(resB.Cash)))
+					else
+						local errB = if typeof(resB) == "table" then tostring(resB.Error) else typeof(resB)
+						smokeLine("FAIL", "Barracks follow-up err=" .. errB)
+					end
+				end)
 			else
 				smokeLine("FAIL", string.format("err=%s cash=%d level=%d", tostring(result.Error), cashAfter, levelAfter))
 			end

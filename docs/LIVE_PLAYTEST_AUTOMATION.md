@@ -38,6 +38,8 @@ teleports home, calls `BaseService.PurchaseUpgrade("CommandCenter")`, then:
 ```
 or `[SMOKE] BUY FAIL ...`.
 
+After CC OK, a second smoke (~+2s) buys **Barracks** the same way (`START`/`OK`/`FAIL`).
+
 HttpService / `%TEMP%` file writes from Studio Luau are unreliable — do not depend on them.
 
 ## Expected Output markers
