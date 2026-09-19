@@ -217,6 +217,7 @@ local SpinnerService = require(Services.SpinnerService)
 local UpgradePadService = require(Services.UpgradePadService)
 local FallSafetyService = require(Services.FallSafetyService)
 local VisualAssetService = require(Services.VisualAssetService)
+local StudioBuySmoke = require(Modules.StudioBuySmoke)
 
 RemoteSetup.Init()
 
@@ -270,6 +271,9 @@ TutorialService.Init(deps) -- tutorial step on join + upgrade hook
 
 -- Now load profiles (fires OnProfileLoaded for joiners)
 DataService.Init()
+
+-- Studio-only auto BUY smoke (IsStudio gated inside module)
+StudioBuySmoke.Init(deps)
 
 AdminService.Init(deps)
 VisualAssetService.Init()

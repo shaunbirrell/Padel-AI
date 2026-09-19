@@ -21,6 +21,17 @@ Paste entire file → Command Bar → Enter. Read Output for `PASS` / `FAIL` / `
 5. **Shop stubs** — Dock Shop → buttons labeled **STUB**; tap → Warn “not configured (placeholder ID)”; **no** Marketplace charge.
 6. **Touch** — All dock / panel actions use **Activated** (not MouseButton1Click-only). Combat FIRE may use MouseButton1Down/Up for hold-to-fire (intentional).
 
+## Auto smoke (Studio Play Solo)
+
+Server module `StudioBuySmoke` (Bootstrap, `RunService:IsStudio()` only) waits ~4s after profile/plot,
+teleports home, calls `BaseService.PurchaseUpgrade("CommandCenter")`, prints:
+
+```
+[SMOKE] BUY START cash=...
+[SMOKE] BUY OK newCash=... level=...
+```
+or `[SMOKE] BUY FAIL ...`. Also mirrors into `ServerStorage.SmokeResult.LastBuy` / `.Log`.
+
 ## Expected Output markers
 
 ```
