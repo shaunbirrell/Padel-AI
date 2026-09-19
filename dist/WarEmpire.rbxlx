@@ -1953,7 +1953,7 @@ return TerritoryConfig
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
---[[ Interactive tutorial steps for MVP polish. ]]
+--[[ Interactive tutorial steps for MVP polish. Mobile-first CTAs + pad targeting. ]]
 
 export type TutorialStepDef = {
 	Id: string,
@@ -1961,53 +1961,72 @@ export type TutorialStepDef = {
 	Hint: string,
 	MarkerName: string, -- Workspace tutorial marker name (best-effort)
 	HighlightHint: string?, -- UI highlight target hint (placeholder)
+	-- When set, client beams to the player's WE_UpgradeSlot with this StructureId
+	PadStructureId: string?,
+	-- Client CTA: "PadBuy" | "OpenBase" | "OpenGarage" | "WatchHud" | "Capture"
+	CtaAction: string?,
+	CtaLabel: string?,
 }
 
 local TutorialConfig = {
 	Enabled = true,
-	-- Step indices match profile.TutorialStep (0-based before complete)
+	-- Step indices match profile.TutorialStep (1-based while active)
 	Steps = {
 		{
 			Id = "ClaimBase",
 			Title = "Claim your base",
-			Hint = "Your plot is assigned on join. Walk to your glowing base pad.",
+			Hint = "Your plot is assigned on join. Follow the gold beam to your glowing base pad.",
 			MarkerName = "Tutorial_ClaimBase",
 			HighlightHint = "BasePad",
+			CtaAction = "WatchHud",
+			CtaLabel = "FOLLOW BEAM",
 		},
 		{
 			Id = "CommandCenter",
-			Title = "Build Command Center",
-			Hint = "Walk onto the Command Center pad (or tap BUY / press B) — pads show +$/tick.",
+			Title = "Buy Command Center",
+			Hint = "Stand on the Command Center pad, then tap the big BUY button (or B for base menu). Pads show +$/tick.",
 			MarkerName = "Tutorial_CommandCenter",
 			HighlightHint = "BaseMenu",
+			PadStructureId = "CommandCenter",
+			CtaAction = "PadBuy",
+			CtaLabel = "BUY ON PAD",
 		},
 		{
 			Id = "Income",
-			Title = "Collect income",
-			Hint = "Watch HUD Cash tick up every few seconds — your first +$/tick from Command Center.",
+			Title = "Watch your income",
+			Hint = "HUD Cash ticks every few seconds from your Command Center +$/tick. Wait for the first payday.",
 			MarkerName = "Tutorial_Income",
 			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "WATCH CASH",
 		},
 		{
 			Id = "Barracks",
-			Title = "Build Barracks",
-			Hint = "Buy Barracks on its pad (needs CC) — bigger +$/tick on the billboard.",
+			Title = "Buy Barracks",
+			Hint = "Needs Command Center. Walk onto the Barracks pad and tap BUY — bigger +$/tick on the billboard.",
 			MarkerName = "Tutorial_Barracks",
 			HighlightHint = "BaseMenu",
+			PadStructureId = "Barracks",
+			CtaAction = "PadBuy",
+			CtaLabel = "BUY BARRACKS",
 		},
 		{
 			Id = "Jeep",
 			Title = "Spawn a Jeep",
-			Hint = "Press G (Garage) and SPAWN your Military Jeep.",
+			Hint = "Open Garage (G or dock) and tap SPAWN on Military Jeep. Starter Jeep is already owned.",
 			MarkerName = "Tutorial_Jeep",
 			HighlightHint = "Garage",
+			CtaAction = "OpenGarage",
+			CtaLabel = "OPEN GARAGE",
 		},
 		{
 			Id = "Outpost",
 			Title = "Capture an outpost",
-			Hint = "Stand in a territory capture zone until you own it.",
+			Hint = "Follow the beam to a territory zone. Stand inside until capture completes — you own it.",
 			MarkerName = "Tutorial_Outpost",
 			HighlightHint = "Territory",
+			CtaAction = "Capture",
+			CtaLabel = "FIND OUTPOST",
 		},
 	} :: { TutorialStepDef },
 }
@@ -16273,6 +16292,9 @@ local function pushTutorial(player: Player)
 		Hint = if stepDef then stepDef.Hint else nil,
 		MarkerName = if stepDef then stepDef.MarkerName else nil,
 		HighlightHint = if stepDef then stepDef.HighlightHint else nil,
+		PadStructureId = if stepDef then stepDef.PadStructureId else nil,
+		CtaAction = if stepDef then stepDef.CtaAction else nil,
+		CtaLabel = if stepDef then stepDef.CtaLabel else nil,
 	})
 end
 
@@ -23032,12 +23054,13 @@ return TerritoryController
               <string name="Source"><![CDATA[--!strict
 --[[
 	Interactive tutorial UI: claim base → command center → income → barracks → jeep → outpost
-	Skip button; waypoints/highlights are best-effort via StudioSetup WE_TutorialMarker placeholders.
+	Skip + mobile CTA (BUY ON PAD / OPEN GARAGE / …); pad StructureId fallback when markers missing.
 ]]
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -23050,16 +23073,23 @@ local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local TutorialController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
+
 local _gui: ScreenGui? = nil
 local panel: Frame? = nil
 local titleLabel: TextLabel? = nil
 local hintLabel: TextLabel? = nil
 local progressLabel: TextLabel? = nil
+local dotsFrame: Frame? = nil
+local ctaBtn: TextButton? = nil
 local beam: Beam? = nil
 local attach0: Attachment? = nil
 local attach1: Attachment? = nil
 local highlightPart: BasePart? = nil
 local currentMarkerName: string? = nil
+local currentPadStructureId: string? = nil
+local currentCtaAction: string? = nil
+local myPlotId: any = nil
 
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
@@ -23090,17 +23120,52 @@ local function clearWaypoint()
 	currentMarkerName = nil
 end
 
-local function findMarker(markerName: string?): BasePart?
+local function findPadByStructure(structureId: string?): BasePart?
+	if not structureId or structureId == "" then
+		return nil
+	end
+	local best: BasePart? = nil
+	local bestDist = math.huge
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("StructureId") == structureId then
+			local plotOk = true
+			if myPlotId ~= nil then
+				local pid = inst:GetAttribute("PlotId")
+				-- Prefer own plot when known; still accept untagged Studio pads
+				if pid ~= nil and pid ~= myPlotId then
+					plotOk = false
+				end
+			end
+			if plotOk then
+				local d = (inst.Position - origin).Magnitude
+				if d < bestDist then
+					bestDist = d
+					best = inst
+				end
+			end
+		end
+	end
+	return best
+end
+
+local function findMarker(markerName: string?, padStructureId: string?): BasePart?
+	-- Prefer live upgrade pad for buy steps (always present after MapSetup)
+	local pad = findPadByStructure(padStructureId)
+	if pad then
+		return pad
+	end
 	if not markerName or markerName == "" then
 		return nil
 	end
-	-- Prefer CollectionService tag
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.TutorialMarker)) do
 		if inst:IsA("BasePart") and (inst.Name == markerName or inst:GetAttribute("TutorialStepId") == markerName) then
 			return inst
 		end
 	end
-	-- Fallback: search under WarEmpireSetup
 	local root = Workspace:FindFirstChild("WarEmpireSetup")
 	if root then
 		local found = root:FindFirstChild(markerName, true)
@@ -23112,16 +23177,39 @@ local function findMarker(markerName: string?): BasePart?
 	if any and any:IsA("BasePart") then
 		return any
 	end
+	-- Last resort: nearest territory capture zone for outpost step
+	if markerName == "Tutorial_Outpost" then
+		local nearest: BasePart? = nil
+		local nd = math.huge
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+		for _, tag in ipairs({ Constants.Tags.Territory, Constants.Tags.CaptureZone }) do
+			local ok, tagged = pcall(function()
+				return CollectionService:GetTagged(tag)
+			end)
+			if ok and tagged then
+				for _, inst in ipairs(tagged) do
+					if inst:IsA("BasePart") then
+						local d = (inst.Position - origin).Magnitude
+						if d < nd then
+							nd = d
+							nearest = inst
+						end
+					end
+				end
+			end
+		end
+		return nearest
+	end
 	return nil
 end
 
-local function setWaypoint(markerName: string?)
+local function setWaypoint(markerName: string?, padStructureId: string?)
 	clearWaypoint()
-	if not markerName then
-		return
-	end
 	currentMarkerName = markerName
-	local target = findMarker(markerName)
+	currentPadStructureId = padStructureId
+	local target = findMarker(markerName, padStructureId)
 	if not target then
 		return
 	end
@@ -23130,7 +23218,7 @@ local function setWaypoint(markerName: string?)
 	sel.Name = "WE_TutorialHighlight"
 	sel.Adornee = target
 	sel.Color3 = Constants.Colors.Gold
-	sel.LineThickness = 0.05
+	sel.LineThickness = 0.06
 	sel.Parent = target
 
 	local char = player.Character
@@ -23151,10 +23239,10 @@ local function setWaypoint(markerName: string?)
 	beam.Attachment0 = attach0
 	beam.Attachment1 = attach1
 	beam.FaceCamera = true
-	beam.Width0 = 0.4
-	beam.Width1 = 0.4
+	beam.Width0 = 0.45
+	beam.Width1 = 0.45
 	beam.Color = ColorSequence.new(Constants.Colors.Gold)
-	beam.Transparency = NumberSequence.new(0.25)
+	beam.Transparency = NumberSequence.new(0.2)
 	beam.Parent = hrp
 end
 
@@ -23164,6 +23252,64 @@ local function setVisible(open: boolean)
 	end
 	if not open then
 		clearWaypoint()
+		if ctaBtn then
+			ctaBtn.Visible = false
+		end
+	end
+end
+
+local function refreshDots(step: number, total: number)
+	local frame = dotsFrame
+	if not frame then
+		return
+	end
+	for _, child in ipairs(frame:GetChildren()) do
+		if child:IsA("Frame") then
+			child:Destroy()
+		end
+	end
+	local layout = frame:FindFirstChildOfClass("UIListLayout")
+	if not layout then
+		local l = Instance.new("UIListLayout")
+		l.FillDirection = Enum.FillDirection.Horizontal
+		l.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		l.Padding = UDim.new(0, 6)
+		l.Parent = frame
+	end
+	for i = 1, total do
+		local dot = Instance.new("Frame")
+		dot.Name = "Dot" .. i
+		dot.Size = UDim2.fromOffset(10, 10)
+		dot.BorderSizePixel = 0
+		dot.BackgroundColor3 = if i == step then Constants.Colors.Gold elseif i < step then Constants.Colors.Accent else Constants.Colors.Muted
+		dot.BackgroundTransparency = if i <= step then 0 else 0.45
+		corner(dot, 5)
+		dot.Parent = frame
+	end
+end
+
+local function runCta()
+	local action = currentCtaAction
+	print("[Tutorial] CTA", tostring(action), "pad=", tostring(currentPadStructureId))
+	if action == "PadBuy" or action == "OpenBase" then
+		-- Re-aim beam at the buy pad; open base menu as secondary path (B)
+		setWaypoint(currentMarkerName, currentPadStructureId)
+		local ok, BaseController = pcall(function()
+			return require(script.Parent.BaseController)
+		end)
+		if ok and BaseController and BaseController.Open then
+			BaseController.Open()
+		end
+	elseif action == "OpenGarage" then
+		local ok, VehicleController = pcall(function()
+			return require(script.Parent.VehicleController)
+		end)
+		if ok and VehicleController and VehicleController.Open then
+			VehicleController.Open()
+		end
+	else
+		-- Capture / WatchHud / unknown: re-aim beam
+		setWaypoint(currentMarkerName, currentPadStructureId)
 	end
 end
 
@@ -23177,6 +23323,7 @@ local function applyState(payload: any)
 		setVisible(false)
 		clearWaypoint()
 		lastAnnouncedId = nil
+		currentCtaAction = nil
 		return
 	end
 	setVisible(true)
@@ -23186,19 +23333,33 @@ local function applyState(payload: any)
 	if hintLabel then
 		hintLabel.Text = tostring(payload.Hint or "")
 	end
+	local step = tonumber(payload.Step) or 0
+	local total = tonumber(payload.Total) or TutorialConfig.StepCount()
 	if progressLabel then
-		local step = tonumber(payload.Step) or 0
-		local total = tonumber(payload.Total) or TutorialConfig.StepCount()
 		progressLabel.Text = string.format("Step %d / %d", math.clamp(step, 1, total), total)
 	end
-	setWaypoint(payload.MarkerName)
+	refreshDots(math.clamp(step, 1, total), total)
 
-	-- One-shot polish toast for first buy / first income steps
+	local padSid = if typeof(payload.PadStructureId) == "string" then payload.PadStructureId else nil
+	local marker = if typeof(payload.MarkerName) == "string" then payload.MarkerName else nil
+	currentCtaAction = if typeof(payload.CtaAction) == "string" then payload.CtaAction else nil
+	setWaypoint(marker, padSid)
+
+	if ctaBtn then
+		local label = if typeof(payload.CtaLabel) == "string" and payload.CtaLabel ~= ""
+			then payload.CtaLabel
+			else "CONTINUE"
+		ctaBtn.Text = label
+		ctaBtn.Visible = currentCtaAction ~= nil and currentCtaAction ~= ""
+	end
+
 	local id = if typeof(payload.Id) == "string" then payload.Id else nil
 	if id and id ~= lastAnnouncedId then
 		lastAnnouncedId = id
-		if id == "CommandCenter" then
-			print("[Tutorial] Step CommandCenter — walk pad / tap BUY / B menu")
+		if id == "CommandCenter" or id == "Barracks" then
+			print("[Tutorial] Step", id, "— stand on pad → tap BUY (or CTA / B menu)")
+		elseif id == "Jeep" then
+			print("[Tutorial] Step Jeep — OPEN GARAGE CTA / G → SPAWN")
 		elseif id == "Income" then
 			print("[Tutorial] Step Income — watch HUD +$/tick")
 		end
@@ -23214,12 +23375,18 @@ function TutorialController.Init()
 	UIUtil.PrepareScreen(screen, false)
 	_gui = screen
 
+	local panelH = if isTouch then 168 else 148
+	local panelW = if isTouch then 0 else 460
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 1)
-	-- Lift above pad BUY button (~108 from bottom) + mobile dock
-	frame.Position = UDim2.new(0.5, 0, 1, -196)
-	frame.Size = UDim2.fromOffset(440, 118)
+	-- Lift above pad BUY (~108) + mobile dock
+	frame.Position = UDim2.new(0.5, 0, 1, if isTouch then -210 else -196)
+	if isTouch then
+		frame.Size = UDim2.new(0.94, 0, 0, panelH)
+	else
+		frame.Size = UDim2.fromOffset(panelW, panelH)
+	end
 	frame.BackgroundColor3 = Constants.Colors.Panel
 	frame.BorderSizePixel = 0
 	frame.Visible = false
@@ -23235,23 +23402,31 @@ function TutorialController.Init()
 	local prog = Instance.new("TextLabel")
 	prog.Name = "Progress"
 	prog.BackgroundTransparency = 1
-	prog.Position = UDim2.fromOffset(14, 8)
-	prog.Size = UDim2.new(1, -120, 0, 16)
+	prog.Position = UDim2.fromOffset(14, 6)
+	prog.Size = UDim2.new(1, -120, 0, 14)
 	prog.Font = Enum.Font.Gotham
-	prog.TextSize = 12
+	prog.TextSize = 11
 	prog.TextXAlignment = Enum.TextXAlignment.Left
 	prog.TextColor3 = Constants.Colors.Muted
 	prog.Text = ""
 	prog.Parent = frame
 	progressLabel = prog
 
+	local dots = Instance.new("Frame")
+	dots.Name = "Dots"
+	dots.BackgroundTransparency = 1
+	dots.Position = UDim2.fromOffset(14, 22)
+	dots.Size = UDim2.new(1, -130, 0, 12)
+	dots.Parent = frame
+	dotsFrame = dots
+
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(14, 28)
-	title.Size = UDim2.new(1, -120, 0, 22)
+	title.Position = UDim2.fromOffset(14, 38)
+	title.Size = UDim2.new(1, -120, 0, 20)
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 16
+	title.TextSize = if isTouch then 15 else 16
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Constants.Colors.Text
 	title.Text = "Tutorial"
@@ -23261,10 +23436,10 @@ function TutorialController.Init()
 	local hint = Instance.new("TextLabel")
 	hint.Name = "Hint"
 	hint.BackgroundTransparency = 1
-	hint.Position = UDim2.fromOffset(14, 52)
-	hint.Size = UDim2.new(1, -120, 0, 48)
+	hint.Position = UDim2.fromOffset(14, 58)
+	hint.Size = UDim2.new(1, -120, 0, if isTouch then 40 else 34)
 	hint.Font = Enum.Font.Gotham
-	hint.TextSize = 13
+	hint.TextSize = if isTouch then 12 else 13
 	hint.TextWrapped = true
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextYAlignment = Enum.TextYAlignment.Top
@@ -23276,7 +23451,7 @@ function TutorialController.Init()
 	local skip = Instance.new("TextButton")
 	skip.Name = "Skip"
 	skip.AnchorPoint = Vector2.new(1, 0)
-	skip.Position = UDim2.new(1, -12, 0, 10)
+	skip.Position = UDim2.new(1, -12, 0, 8)
 	skip.Size = UDim2.fromOffset(72, 28)
 	skip.BackgroundColor3 = Constants.Colors.Background
 	skip.Font = Enum.Font.GothamBold
@@ -23292,7 +23467,28 @@ function TutorialController.Init()
 		Remotes.GetEvent(Constants.RemoteNames.RequestSkipTutorial):FireServer()
 	end)
 
-	-- Soft pulse on panel when shown
+	local cta = Instance.new("TextButton")
+	cta.Name = "Cta"
+	cta.AnchorPoint = Vector2.new(0.5, 1)
+	cta.Position = UDim2.new(0.5, 0, 1, -10)
+	cta.Size = UDim2.new(1, -24, 0, if isTouch then 44 else 36)
+	cta.BackgroundColor3 = Constants.Colors.Gold
+	cta.Font = Enum.Font.GothamBold
+	cta.TextSize = if isTouch then 14 else 13
+	cta.TextColor3 = Color3.fromRGB(20, 22, 18)
+	cta.Text = "CONTINUE"
+	cta.BorderSizePixel = 0
+	cta.Visible = false
+	cta.AutoButtonColor = true
+	corner(cta, 8)
+	cta.Parent = frame
+	UIUtil.EnsureMinTouch(cta, 44)
+	ctaBtn = cta
+	cta.Activated:Connect(function()
+		runCta()
+	end)
+
+	-- Soft pulse on panel + CTA when shown
 	task.spawn(function()
 		while screen.Parent do
 			if frame.Visible then
@@ -23300,11 +23496,22 @@ function TutorialController.Init()
 					Transparency = 0.55,
 				})
 				tw:Play()
+				local ctaTw: Tween? = nil
+				if cta.Visible then
+					ctaTw = TweenService:Create(cta, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+						BackgroundColor3 = Color3.fromRGB(255, 230, 120),
+					})
+					ctaTw:Play()
+				end
 				while frame.Visible and screen.Parent do
 					task.wait(0.5)
 				end
 				tw:Cancel()
 				stroke.Transparency = 0
+				if ctaTw then
+					ctaTw:Cancel()
+					cta.BackgroundColor3 = Constants.Colors.Gold
+				end
 			end
 			task.wait(0.25)
 		end
@@ -23312,19 +23519,29 @@ function TutorialController.Init()
 
 	Remotes.GetEvent(Constants.RemoteNames.TutorialStateUpdate).OnClientEvent:Connect(applyState)
 
-	-- Also hide soft-complete from PlayerStateUpdate
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: any)
-		if typeof(state) == "table" and state.TutorialComplete == true then
+		if typeof(state) ~= "table" then
+			return
+		end
+		if state.TutorialComplete == true then
 			setVisible(false)
 			clearWaypoint()
+		end
+		if state.BasePlotId ~= nil then
+			myPlotId = state.BasePlotId
+			-- Re-bind pad beam once plot is known
+			if panel and panel.Visible and currentPadStructureId then
+				task.defer(function()
+					setWaypoint(currentMarkerName, currentPadStructureId)
+				end)
+			end
 		end
 	end)
 
 	player.CharacterAdded:Connect(function()
-		-- Re-bind beam to new character if tutorial active
 		if currentMarkerName and panel and panel.Visible then
 			task.defer(function()
-				setWaypoint(currentMarkerName)
+				setWaypoint(currentMarkerName, currentPadStructureId)
 			end)
 		end
 	end)
