@@ -2,7 +2,8 @@
 --[[
 	Phase 4 — Vehicles & garage (server-authoritative).
 	Validates ownership, level, structure requirements, cash, cooldown.
-	Spawns placeholder chassis + VehicleSeat near plot / WE_VehicleSpawn.
+	Spawns multi-part vehicle kits + VehicleSeat near plot / WE_VehicleSpawn.
+	Optional VehicleDef.MeshAssetId (non-zero) reserved for future MeshPart swap.
 ]]
 
 local Players = game:GetService("Players")

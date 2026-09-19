@@ -420,31 +420,44 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 
 	local root = Instance.new("Part")
 	root.Name = "HumanoidRootPart"
-	root.Size = Vector3.new(2, 2, 1)
+	root.Size = Vector3.new(2, 2.2, 1.2)
 	root.CFrame = at
 	root.Anchored = false
 	root.CanCollide = true
 	root.Color = def.Color
-	root.Material = Enum.Material.SmoothPlastic
+	root.Material = Enum.Material.Fabric
 	root.Parent = model
 
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Size = Vector3.new(1.2, 1.2, 1.2)
-	head.CFrame = at * CFrame.new(0, 1.6, 0)
-	head.CanCollide = false
-	head.Color = Color3.fromRGB(
-		math.clamp(math.floor(def.Color.R * 255) + 20, 0, 255),
-		math.clamp(math.floor(def.Color.G * 255), 0, 255),
-		math.clamp(math.floor(def.Color.B * 255), 0, 255)
-	)
-	head.Material = Enum.Material.SmoothPlastic
-	head.Parent = model
+	local function weldPart(name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material, shape: Enum.PartType?): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = at * offset
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.Color = color
+		p.Material = material
+		if shape then
+			p.Shape = shape
+		end
+		p.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = p
+		w.Parent = root
+		return p
+	end
 
-	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = root
-	weld.Part1 = head
-	weld.Parent = root
+	local skin = Color3.fromRGB(
+		math.clamp(math.floor(def.Color.R * 255) + 30, 0, 255),
+		math.clamp(math.floor(def.Color.G * 255) + 15, 0, 255),
+		math.clamp(math.floor(def.Color.B * 255) + 10, 0, 255)
+	)
+	weldPart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, 1.7, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	weldPart("Helmet", Vector3.new(1.25, 0.5, 1.25), CFrame.new(0, 2.05, 0), Color3.fromRGB(40, 48, 36), Enum.Material.Metal, nil)
+	weldPart("Rifle", Vector3.new(0.28, 0.28, 2.3), CFrame.new(0.85, 0.25, -0.7), Color3.fromRGB(32, 32, 32), Enum.Material.Metal, nil)
+	weldPart("Accent", Vector3.new(1.8, 0.12, 0.35), CFrame.new(0, 0.9, -0.55), Color3.fromRGB(200, 80, 60), Enum.Material.Neon, nil)
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = def.Health

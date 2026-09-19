@@ -31,10 +31,11 @@ local function makeCorner(parent: Instance, radius: number)
 	c.Parent = parent
 end
 
-local function makeStroke(parent: Instance)
+local function makeStroke(parent: Instance, gold: boolean?)
 	local s = Instance.new("UIStroke")
-	s.Color = Color3.fromRGB(55, 65, 55)
-	s.Thickness = 1
+	s.Color = if gold then Constants.Colors.Gold else Color3.fromRGB(55, 65, 55)
+	s.Thickness = if gold then 1.5 else 1
+	s.Transparency = if gold then 0.35 else 0
 	s.Parent = parent
 end
 
@@ -59,7 +60,7 @@ function HUDController.Init()
 	left.BorderSizePixel = 0
 	left.Parent = screen
 	makeCorner(left, 8)
-	makeStroke(left)
+	makeStroke(left, true)
 
 	local lvl = Instance.new("TextLabel")
 	lvl.Name = "LevelLabel"
@@ -114,7 +115,7 @@ function HUDController.Init()
 	right.BorderSizePixel = 0
 	right.Parent = screen
 	makeCorner(right, 8)
-	makeStroke(right)
+	makeStroke(right, true)
 
 	local cash = Instance.new("TextLabel")
 	cash.Name = "CashLabel"

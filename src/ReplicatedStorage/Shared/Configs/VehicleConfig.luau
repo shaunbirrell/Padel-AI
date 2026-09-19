@@ -12,6 +12,9 @@ export type VehicleDef = {
 	Armor: number,
 	CostCash: number,
 	RequiresStructure: { StructureId: string, Level: number }?,
+	-- Optional future Creator Store / uploaded MeshPart ids (0 = use Part kit)
+	MeshAssetId: number?,
+	TextureAssetId: number?,
 }
 
 local VehicleConfig = {
@@ -116,6 +119,8 @@ local VehicleConfig = {
 
 	StarterVehicle = "MilitaryJeep",
 	SpawnCooldownSeconds = 15,
+	-- When MeshAssetId set on a def, VehicleService may prefer MeshPart over Part kit (Phase art).
+	UseMeshKitsWhenAssetIdNonZero = true,
 }
 
 return VehicleConfig

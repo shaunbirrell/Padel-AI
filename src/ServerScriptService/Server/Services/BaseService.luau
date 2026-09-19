@@ -391,7 +391,7 @@ function BaseService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
-		if not RateLimitService.Allow(player, "purchase_upgrade", 4, 6) then
+		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
 			return
 		end
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload

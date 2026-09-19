@@ -36,6 +36,7 @@ local BILLBOARD_THROTTLE = 0.2
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
 local cash = 0
+local myPlotId: number? = nil
 local attachedPrompt: { [Instance]: boolean } = {}
 local slotParts: { [BasePart]: boolean } = {}
 local lastPurchaseAt: { [string]: number } = {}
@@ -255,7 +256,29 @@ local function pointInPad(hrpPos: Vector3, part: BasePart): boolean
 		and localPos.Y <= half.Y + 8
 end
 
-local function onEnterPad(structureId: string)
+local function isOwnPlot(part: BasePart): boolean
+	if myPlotId == nil then
+		return true -- until plot assigned, allow (solo / loading)
+	end
+	local pid = part:GetAttribute("PlotId")
+	if typeof(pid) ~= "number" then
+		return true
+	end
+	return pid == myPlotId
+end
+
+local function onEnterPad(part: BasePart, structureId: string)
+	if not isOwnPlot(part) then
+		-- Standing on another player's pad — show hint once per structure debounce
+		local now = os.clock()
+		local last = lastPurchaseAt[structureId] or 0
+		if now - last >= DEBOUNCE_SEC then
+			lastPurchaseAt[structureId] = now
+			NotificationController.Show("Not your base — walk your plot pads to buy", "Warn", 2.5)
+		end
+		lastOverlap[structureId] = true -- prevent spam until leave
+		return
+	end
 	if lastOverlap[structureId] then
 		return
 	end
@@ -292,7 +315,7 @@ local function attachUpgradeSlot(part: BasePart)
 		end
 		local structureId = part:GetAttribute("StructureId")
 		if typeof(structureId) == "string" then
-			onEnterPad(structureId)
+			onEnterPad(part, structureId)
 		end
 	end)
 
@@ -426,7 +449,7 @@ local function startOverlapLoop()
 				if typeof(structureId) == "string" then
 					local inside = pointInPad(pos, part)
 					if inside and not lastOverlap[structureId] then
-						onEnterPad(structureId)
+						onEnterPad(part, structureId)
 					elseif not inside and lastOverlap[structureId] then
 						onLeavePad(structureId)
 					end
@@ -451,6 +474,9 @@ end
 function WorldPromptController.Init()
 	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
 		upgrades = base.Upgrades or upgrades
+		if typeof(base.PlotId) == "number" then
+			myPlotId = base.PlotId
+		end
 		markBillboardsDirty()
 	end)
 
@@ -463,6 +489,9 @@ function WorldPromptController.Init()
 		cash = state.Cash
 		if state.Base then
 			upgrades = state.Base.Upgrades
+			if typeof(state.Base.PlotId) == "number" then
+				myPlotId = state.Base.PlotId
+			end
 		end
 		markBillboardsDirty()
 	end)
