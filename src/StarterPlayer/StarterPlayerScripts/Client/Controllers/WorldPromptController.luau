@@ -31,9 +31,11 @@ local WorldPromptController = {}
 
 local PROMPT_NAME = "WE_WorldPrompt"
 local BILLBOARD_NAME = "WE_PriceBillboard"
-local DEBOUNCE_SEC = 1.75
-local OVERLAP_MARGIN = 1.6 -- generous for mobile hitboxes
+local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
+local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
+local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(200, 70) -- readable on phones when close
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -135,40 +137,60 @@ local function structureInfo(structureId: string): (string, number, number?, boo
 	return display, level, cost, false, prereqHint
 end
 
+local function setBillboardNearOnly(bb: BillboardGui)
+	bb.Size = PRICE_BILLBOARD_SIZE
+	bb.StudsOffset = Vector3.new(0, 5.2, 0)
+	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
+	-- AlwaysOnTop only helps when already near (short MaxDistance); avoid map-wide stack
+	bb.AlwaysOnTop = true
+end
+
+local function hidePriceBillboard(part: BasePart)
+	local existing = part:FindFirstChild(BILLBOARD_NAME)
+	if existing and existing:IsA("BillboardGui") then
+		existing.Enabled = false
+	end
+	local legacy = part:FindFirstChild("Label")
+	if legacy and legacy:IsA("BillboardGui") and legacy.Name ~= BILLBOARD_NAME then
+		-- MapSetup may leave a non-price Label on other parts; ignore here
+	end
+end
+
 local function ensurePriceBillboard(part: BasePart): BillboardGui
 	local existing = part:FindFirstChild(BILLBOARD_NAME)
 	if existing and existing:IsA("BillboardGui") then
+		setBillboardNearOnly(existing)
+		existing.Enabled = true
 		return existing
 	end
 	local legacy = part:FindFirstChild("Label")
 	if legacy and legacy:IsA("BillboardGui") then
 		legacy.Name = BILLBOARD_NAME
+		setBillboardNearOnly(legacy)
+		legacy.Enabled = true
 		return legacy
 	end
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = BILLBOARD_NAME
-	bb.Size = UDim2.fromOffset(168, 58)
-	bb.StudsOffset = Vector3.new(0, 4.5, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 650
+	setBillboardNearOnly(bb)
 	bb.Parent = part
 
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
 	backdrop.BackgroundColor3 = Color3.fromRGB(10, 12, 14)
-	backdrop.BackgroundTransparency = 0.2
+	backdrop.BackgroundTransparency = 0.12
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
+	c.CornerRadius = UDim.new(0, 8)
 	c.Parent = backdrop
 	local stroke = Instance.new("UIStroke")
 	stroke.Name = "Stroke"
 	stroke.Color = Constants.Colors.Gold
-	stroke.Thickness = 1.5
-	stroke.Transparency = 0.25
+	stroke.Thickness = 2
+	stroke.Transparency = 0.15
 	stroke.Parent = backdrop
 
 	local label = Instance.new("TextLabel")
@@ -178,17 +200,61 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
 	label.TextColor3 = Constants.Colors.Text
-	label.TextStrokeTransparency = 0.5
+	label.TextStrokeTransparency = 0.45
 	label.Text = "…"
 	label.Parent = backdrop
 	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 4)
-	pad.PaddingRight = UDim.new(0, 4)
-	pad.PaddingTop = UDim.new(0, 2)
-	pad.PaddingBottom = UDim.new(0, 2)
+	pad.PaddingLeft = UDim.new(0, 6)
+	pad.PaddingRight = UDim.new(0, 6)
+	pad.PaddingTop = UDim.new(0, 4)
+	pad.PaddingBottom = UDim.new(0, 4)
 	pad.Parent = backdrop
 
 	return bb
+end
+
+local function applyBillboardCopy(
+	bb: BillboardGui,
+	titleLine: string,
+	detailLine: string,
+	textColor: Color3,
+	strokeColor: Color3
+)
+	local stroke = bb:FindFirstChild("Stroke", true)
+	if stroke and stroke:IsA("UIStroke") then
+		stroke.Color = strokeColor
+	end
+
+	-- MapSetup price cards use Title + Cost; client-created use Text
+	local titleLab = bb:FindFirstChild("Title", true)
+	local costLab = bb:FindFirstChild("Cost", true)
+	local textLab = bb:FindFirstChild("Text", true)
+
+	if titleLab and titleLab:IsA("TextLabel") and costLab and costLab:IsA("TextLabel") then
+		titleLab.Text = titleLine
+		titleLab.TextColor3 = Color3.fromRGB(245, 245, 248)
+		costLab.Text = detailLine
+		costLab.TextColor3 = textColor
+	elseif textLab and textLab:IsA("TextLabel") then
+		if detailLine ~= "" then
+			textLab.Text = titleLine .. "\n" .. detailLine
+		else
+			textLab.Text = titleLine
+		end
+		textLab.TextColor3 = textColor
+	end
+end
+
+local function isOwnPlotPad(part: BasePart): boolean
+	-- Hide / skip refresh for other players' plots once we know our PlotId
+	if myPlotId == nil then
+		return true -- loading / solo until assigned
+	end
+	local pid = part:GetAttribute("PlotId")
+	if typeof(pid) ~= "number" then
+		return true
+	end
+	return pid == myPlotId
 end
 
 local function refreshSlotBillboard(part: BasePart)
@@ -196,39 +262,44 @@ local function refreshSlotBillboard(part: BasePart)
 	if typeof(structureId) ~= "string" then
 		return
 	end
-	local bb = ensurePriceBillboard(part)
-	local textLabel = bb:FindFirstChild("Text", true)
-	if not (textLabel and textLabel:IsA("TextLabel")) then
+
+	if not isOwnPlotPad(part) then
+		hidePriceBillboard(part)
 		return
 	end
 
+	local bb = ensurePriceBillboard(part)
 	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
-	local stroke = bb:FindFirstChild("Stroke", true)
+
 	if isMax then
-		textLabel.Text = string.format("%s\nLv %d  MAX", display, level)
-		textLabel.TextColor3 = Constants.Colors.Muted
-		if stroke and stroke:IsA("UIStroke") then
-			stroke.Color = Color3.fromRGB(70, 80, 70)
-		end
+		applyBillboardCopy(
+			bb,
+			display,
+			string.format("Lv %d  MAX", level),
+			Constants.Colors.Muted,
+			Color3.fromRGB(70, 80, 70)
+		)
 	elseif prereqHint then
 		local costStr = if cost then formatCost(cost) else ""
-		textLabel.Text = string.format("%s\nLv %d → %d %s\n%s", display, level, level + 1, costStr, prereqHint)
-		textLabel.TextColor3 = Color3.fromRGB(200, 170, 120)
-		if stroke and stroke:IsA("UIStroke") then
-			stroke.Color = Color3.fromRGB(160, 130, 70)
-		end
+		applyBillboardCopy(
+			bb,
+			display,
+			string.format("Lv %d → %d %s\n%s", level, level + 1, costStr, prereqHint),
+			Color3.fromRGB(200, 170, 120),
+			Color3.fromRGB(160, 130, 70)
+		)
 	elseif cost then
-		textLabel.Text = string.format("%s\nLv %d → %d\n%s", display, level, level + 1, formatCost(cost))
 		local canAfford = cash >= cost
-		textLabel.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140)
-		if stroke and stroke:IsA("UIStroke") then
-			stroke.Color = if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
-		end
+		applyBillboardCopy(
+			bb,
+			display,
+			string.format("Lv %d → %d\n%s", level, level + 1, formatCost(cost)),
+			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
+			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
+		)
 	else
-		textLabel.Text = display
+		applyBillboardCopy(bb, display, "", Constants.Colors.Text, Constants.Colors.Gold)
 	end
-	bb.Size = UDim2.fromOffset(168, 58)
-	bb.StudsOffset = Vector3.new(0, 4.5, 0)
 end
 
 local function refreshAllBillboardsNow()
@@ -242,9 +313,9 @@ local function refreshAllBillboardsNow()
 			table.insert(stale, part)
 		end
 	end
-	for _, p in ipairs(stale) do
-		slotParts[p] = nil
-		disconnectAll(slotConns, p)
+	for _, part in ipairs(stale) do
+		slotParts[part] = nil
+		disconnectAll(slotConns, part)
 	end
 end
 
@@ -361,6 +432,7 @@ local function attachUpgradeSlot(part: BasePart)
 		return
 	end
 	slotParts[part] = true
+	part.CanTouch = true -- walk-over buy must receive Touched
 
 	local existing = part:FindFirstChild(PROMPT_NAME)
 	if existing then

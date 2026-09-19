@@ -191,8 +191,8 @@ local function priceBillboard(parent, title, costLine, accent)
 	bb.Name = "WE_PriceBillboard"
 	bb.Size = UDim2.fromOffset(200, 72)
 	bb.StudsOffset = Vector3.new(0, 6.0, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 1000
+	bb.AlwaysOnTop = true -- only useful nearby (short MaxDistance)
+	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -243,8 +243,8 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	bb.Name = "Label"
 	bb.Size = UDim2.fromOffset(size.X, size.Y)
 	bb.StudsOffset = Vector3.new(0, offsetY, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 950
+	bb.AlwaysOnTop = true -- short range only
+	bb.MaxDistance = 70 -- base/zone labels near-only (was 950)
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -321,6 +321,7 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 		CanCollide = true,
 		Parent = plotFolder,
 	})
+	plinth.CanTouch = true -- walk-over buy (Touched + Heartbeat)
 	plinth:SetAttribute("PlotId", plotId)
 	plinth:SetAttribute("StructureId", def.Id)
 	plinth:SetAttribute("BaseSize", plinthSize)

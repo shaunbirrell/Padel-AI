@@ -421,6 +421,9 @@ function BaseService.Init(deps: { [string]: any })
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+			if NotificationService then
+				NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
+			end
 			return
 		end
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
