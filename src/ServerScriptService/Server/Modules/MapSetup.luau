@@ -52,23 +52,31 @@ local STARTER_COST = {
 	Warehouse = 3200, SpecialForcesFacility = 10000,
 }
 
+-- Map scale: ground ~2600, plot ring ~450, pads ~140 (was 900 / ~200 / 90)
+local GROUND_SIZE = 2600
+local PLOT_PAD_SIZE = 140
+local PLOT_RING = 450
+local STRUCT_COLS = 4
+local STRUCT_GAP = 30 -- studs between upgrade pad centers (was 18)
+local STRUCT_ORIGIN = Vector3.new(-45, 1.6, -45) -- CommandCenter grid origin on each plot
+
 local PLOT_POSITIONS = {
-	Vector3.new(-200, 0.5, -100),
-	Vector3.new(-200, 0.5, 100),
-	Vector3.new(0, 0.5, -200),
-	Vector3.new(0, 0.5, 200),
-	Vector3.new(200, 0.5, -100),
-	Vector3.new(200, 0.5, 100),
+	Vector3.new(-PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot1 SW
+	Vector3.new(-PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot2 NW
+	Vector3.new(0, 0.5, -PLOT_RING), -- Plot3 S
+	Vector3.new(0, 0.5, PLOT_RING), -- Plot4 N
+	Vector3.new(PLOT_RING, 0.5, -PLOT_RING * 0.5), -- Plot5 SE
+	Vector3.new(PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot6 NE
 }
 
 local TERRITORIES = {
-	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 40 },
-	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -350), Color = Color3.fromRGB(55, 120, 180), Radius = 35 },
-	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 350), Color = Color3.fromRGB(45, 110, 150), Radius = 35 },
-	{ Id = "EastArmory", Pos = Vector3.new(350, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 30 },
-	{ Id = "WestDepot", Pos = Vector3.new(-350, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 30 },
-	{ Id = "OilFields", Pos = Vector3.new(250, 1, 250), Color = Color3.fromRGB(150, 110, 40), Radius = 40 },
-	{ Id = "RadarHill", Pos = Vector3.new(-250, 1, -250), Color = Color3.fromRGB(130, 70, 170), Radius = 35 },
+	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 55 },
+	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -720), Color = Color3.fromRGB(55, 120, 180), Radius = 50 },
+	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 720), Color = Color3.fromRGB(45, 110, 150), Radius = 50 },
+	{ Id = "EastArmory", Pos = Vector3.new(720, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 45 },
+	{ Id = "WestDepot", Pos = Vector3.new(-720, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 45 },
+	{ Id = "OilFields", Pos = Vector3.new(520, 1, 520), Color = Color3.fromRGB(150, 110, 40), Radius = 55 },
+	{ Id = "RadarHill", Pos = Vector3.new(-520, 1, -520), Color = Color3.fromRGB(130, 70, 170), Radius = 50 },
 }
 
 local function ensureFolder(name, parent)
@@ -176,7 +184,7 @@ local function priceBillboard(parent, title, costLine, accent)
 	bb.Size = UDim2.fromOffset(170, 60)
 	bb.StudsOffset = Vector3.new(0, 5.2, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 200
+	bb.MaxDistance = 380
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -221,7 +229,7 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	bb.Size = UDim2.fromOffset(size.X, size.Y)
 	bb.StudsOffset = Vector3.new(0, offsetY, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 240
+	bb.MaxDistance = 420
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -366,14 +374,17 @@ function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
 
-	-- Lighting
-	Lighting.Ambient = Color3.fromRGB(78, 88, 70)
-	Lighting.OutdoorAmbient = Color3.fromRGB(90, 100, 80)
-	Lighting.Brightness = 2.1
-	Lighting.ClockTime = 14.5
-	Lighting.GeographicLatitude = 25
-	Lighting.EnvironmentDiffuseScale = 0.55
-	Lighting.EnvironmentSpecularScale = 0.35
+	-- Lighting / atmosphere — tuned for ~2600-stud map (distant bases readable via haze)
+	Lighting.Ambient = Color3.fromRGB(72, 82, 68)
+	Lighting.OutdoorAmbient = Color3.fromRGB(88, 98, 82)
+	Lighting.Brightness = 2.25
+	Lighting.ClockTime = 15.0
+	Lighting.GeographicLatitude = 28
+	Lighting.EnvironmentDiffuseScale = 0.5
+	Lighting.EnvironmentSpecularScale = 0.32
+	Lighting.FogColor = Color3.fromRGB(145, 158, 135)
+	Lighting.FogStart = 450
+	Lighting.FogEnd = 2400
 	pcall(function()
 		Lighting.GlobalShadows = true
 	end)
@@ -382,27 +393,28 @@ function MapSetup.Run()
 		atm = Instance.new("Atmosphere")
 		atm.Parent = Lighting
 	end
-	atm.Density = 0.28
-	atm.Offset = 0.1
-	atm.Color = Color3.fromRGB(160, 170, 140)
-	atm.Decay = Color3.fromRGB(100, 110, 90)
-	atm.Glare = 0.15
-	atm.Haze = 1.2
+	atm.Density = 0.22
+	atm.Offset = 0.12
+	atm.Color = Color3.fromRGB(155, 168, 145)
+	atm.Decay = Color3.fromRGB(95, 108, 88)
+	atm.Glare = 0.18
+	atm.Haze = 1.85
 
 	local root = ensureFolder("WarEmpireSetup", Workspace)
 	local map = ensureFolder("Map", root)
 	part({
 		Name = "Ground",
-		Size = Vector3.new(900, 1, 900),
+		Size = Vector3.new(GROUND_SIZE, 1, GROUND_SIZE),
 		Position = Vector3.new(0, 0, 0),
 		Color = COL_GROUND,
 		Material = Enum.Material.Grass,
 		Parent = map,
 	})
-	for _, z in ipairs({ -200, 0, 200 }) do
+	-- Road grid scaled to plot ring (optional visual guide)
+	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
 		part({
 			Name = "RoadZ" .. z,
-			Size = Vector3.new(900, 0.15, 10),
+			Size = Vector3.new(GROUND_SIZE, 0.15, 14),
 			Position = Vector3.new(0, 0.55, z),
 			Color = Color3.fromRGB(50, 52, 48),
 			Material = Enum.Material.Asphalt,
@@ -410,10 +422,10 @@ function MapSetup.Run()
 			Parent = map,
 		})
 	end
-	for _, x in ipairs({ -200, 0, 200 }) do
+	for _, x in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
 		part({
 			Name = "RoadX" .. x,
-			Size = Vector3.new(10, 0.15, 900),
+			Size = Vector3.new(14, 0.15, GROUND_SIZE),
 			Position = Vector3.new(x, 0.55, 0),
 			Color = Color3.fromRGB(50, 52, 48),
 			Material = Enum.Material.Asphalt,
@@ -430,7 +442,7 @@ function MapSetup.Run()
 
 		local pad = part({
 			Name = "PlotPad",
-			Size = Vector3.new(90, 1, 90),
+			Size = Vector3.new(PLOT_PAD_SIZE, 1, PLOT_PAD_SIZE),
 			Position = pos,
 			Color = COL_PAD,
 			Material = Enum.Material.Concrete,
@@ -438,12 +450,12 @@ function MapSetup.Run()
 		})
 		pad:SetAttribute("PlotId", plotId)
 		CollectionService:AddTag(pad, TAG_BASE)
-		neonEdge(pad, COL_PAD_EDGE, 0.45)
+		neonEdge(pad, COL_PAD_EDGE, 0.55)
 
 		local spawn = Instance.new("SpawnLocation")
 		spawn.Name = "PlayerSpawn"
-		spawn.Size = Vector3.new(8, 1, 8)
-		spawn.Position = pos + Vector3.new(0, 2, 34)
+		spawn.Size = Vector3.new(10, 1, 10)
+		spawn.Position = pos + Vector3.new(0, 2, 55)
 		spawn.Anchored = true
 		spawn.Neutral = true
 		spawn.Duration = 0
@@ -451,14 +463,13 @@ function MapSetup.Run()
 		spawn.Material = Enum.Material.Neon
 		spawn.Parent = plotFolder
 
-		plainBillboard(pad, "BASE " .. plotId .. "  ·  Walk pads to BUY  ·  E / B menu", Vector2.new(260, 42), 12, Color3.fromRGB(200, 230, 200))
-		beacon(plotFolder, pos + Vector3.new(0, 0, -40), COL_PAD_EDGE, "PlotBeacon")
+		plainBillboard(pad, "BASE " .. plotId .. "  ·  Walk pads to BUY  ·  E / B menu", Vector2.new(280, 44), 16, Color3.fromRGB(200, 230, 200))
+		beacon(plotFolder, pos + Vector3.new(0, 0, -62), COL_PAD_EDGE, "PlotBeacon")
 
-		local cols = 4
 		for i, def in ipairs(STRUCTURES) do
-			local col = (i - 1) % cols
-			local row = math.floor((i - 1) / cols)
-			local offset = Vector3.new(-28 + col * 18, 1.6, -28 + row * 18)
+			local col = (i - 1) % STRUCT_COLS
+			local row = math.floor((i - 1) / STRUCT_COLS)
+			local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
 			buildStructureKit(plotFolder, plotId, pos, offset, def)
 		end
 	end
@@ -521,11 +532,12 @@ function MapSetup.Run()
 		beacon(territories, def.Pos + Vector3.new(def.Radius * 0.6, 0, 0), def.Color, def.Id .. "_Beacon")
 	end
 
-	local function makeSpawnFolder(name, tag, count, center, color)
+	local function makeSpawnFolder(name, tag, count, center, color, ringRadius)
 		local folder = ensureFolder(name, root)
+		local ring = ringRadius or 200
 		for i = 1, count do
 			local angle = (i / count) * math.pi * 2
-			local pos = center + Vector3.new(math.cos(angle) * 80, 1, math.sin(angle) * 80)
+			local pos = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
 			local p = part({
 				Name = name .. i,
 				Size = Vector3.new(12, 1.2, 12),
@@ -565,9 +577,9 @@ function MapSetup.Run()
 		end
 	end
 
-	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 6, Vector3.new(0, 0, 0), COL_VEHICLE)
-	makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(100, 0, 100), COL_NPC)
-	makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-100, 0, -100), COL_EVENT)
+	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 6, Vector3.new(0, 0, 0), COL_VEHICLE, 200)
+	makeSpawnFolder("NPCSpawns", TAG_NPC, 8, Vector3.new(220, 0, 220), COL_NPC, 180)
+	makeSpawnFolder("EventSpawns", TAG_EVENT, 4, Vector3.new(-220, 0, -220), COL_EVENT, 160)
 
 	local npcFolder = ensureFolder("NPCPlaceholders", root)
 	for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do
@@ -660,11 +672,12 @@ function MapSetup.Run()
 	end
 
 	local plot1 = PLOT_POSITIONS[1]
-	tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 32), Color3.fromRGB(230, 200, 80), "ClaimBase")
-	tutorialMarker("Tutorial_CommandCenter", plot1 + Vector3.new(-28, 3, -28), Color3.fromRGB(80, 200, 120), "CommandCenter")
+	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps)
+	tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
+	tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
 	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(0, 3, 0), Color3.fromRGB(80, 200, 160), "Income")
-	tutorialMarker("Tutorial_Barracks", plot1 + Vector3.new(-10, 3, -28), Color3.fromRGB(100, 180, 220), "Barracks")
-	local jeepPos = Vector3.new(80, 2, 0)
+	tutorialMarker("Tutorial_Barracks", plot1 + STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0), Color3.fromRGB(100, 180, 220), "Barracks")
+	local jeepPos = Vector3.new(200, 2, 0)
 	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
 	if #vSpawns > 0 and vSpawns[1]:IsA("BasePart") then
 		jeepPos = vSpawns[1].Position + Vector3.new(0, 2, 0)
@@ -695,7 +708,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: structure kits, price billboards, flags, lighting under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " kits/billboards/flags/lighting under Workspace.WarEmpireSetup")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

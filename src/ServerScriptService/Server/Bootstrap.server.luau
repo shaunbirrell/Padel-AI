@@ -40,7 +40,7 @@ local function ensureVoidFallback(reason: string)
 
 	local baseplate = Instance.new("Part")
 	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(512, 4, 512)
+	baseplate.Size = Vector3.new(2048, 4, 2048)
 	baseplate.Position = Vector3.new(0, -2, 0)
 	baseplate.Anchored = true
 	baseplate.CanCollide = true

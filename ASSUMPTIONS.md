@@ -111,6 +111,8 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 55. **MapSetup auto-build** — `Modules/MapSetup.luau` builds the world (structure kits, territories, pads, NPCs, tutorial beacons, lighting, price billboards). Bootstrap runs it when `Workspace.WarEmpireSetup` is missing (Play / server start) — no command-bar paste (Studio truncates long pastes). Safe re-run clears `WarEmpireSetup`. Admin `resetmap` (Studio) or delete folder + Play to regenerate. `tools/StudioSetup.luau` is a short note only.
 
+55b. **Map scale** — Ground ~2600×2600 studs; 6 base plots on ring radius ~450 with ~140-stud pads; upgrade pads on a 4-col grid with ~30-stud gaps (less cramped). Territories out to ~720 with larger capture radii. Vehicle/NPC/Event spawn rings ~160–200. `BaseConfig.PlotPositions` / `TerritoryConfig` stay in sync with MapSetup. Fog/Atmosphere tuned so distant bases stay readable. Respawn/teleport use tagged `PlayerSpawn` on each plot.
+
 56. **Structure level visuals** — `BaseService.UpdateVisuals` / `applyKitVisuals` scales kit children (`WE_KitRole`) by level; ghost transparency at L0; neon accents brighten when owned.
 
 57. **Vehicle kits** — `VehicleService.buildVehicleModel` builds distinct Part kits per `VehicleConfig` id (Jeep/ArmedJeep wheels+bed+gun; Truck/APC; Light/HeavyTank tracks+turret+barrel; AttackHelicopter rotors+skids; FighterJet wings+tail). VehicleSeat remains driveable. No MeshIds.

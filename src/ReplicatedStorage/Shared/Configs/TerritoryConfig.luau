@@ -22,7 +22,7 @@ local TerritoryConfig = {
 	ContestedProgressMult = 0, -- 0 = freeze progress + light decay while contested
 	ContestedDecayMult = 0.5, -- decay rate multiplier while contested (when ContestedProgressMult <= 0)
 	ProtectedCaptureMult = 0.25, -- capturing protected enemy territory is slower
-	RadarRevealRadius = 220, -- studs: Radar Hill highlights enemies in this radius
+	RadarRevealRadius = 350, -- studs: Radar Hill highlights enemies (scaled for larger map)
 	NPCOwnerId = -1, -- sentinel "NPC faction" controller
 	NeutralOwnerId = 0,
 
@@ -44,7 +44,7 @@ local TerritoryConfig = {
 			BonusType = "PassiveCashMult",
 			BonusValue = 0.10,
 			Position = Vector3.new(0, 1, 0),
-			Radius = 40,
+			Radius = 55,
 			Color = Color3.fromRGB(200, 200, 80),
 		},
 		NorthRidge = {
@@ -54,8 +54,8 @@ local TerritoryConfig = {
 			CaptureTimeSeconds = 25,
 			BonusType = "XPMult",
 			BonusValue = 0.05,
-			Position = Vector3.new(0, 1, -350),
-			Radius = 35,
+			Position = Vector3.new(0, 1, -720),
+			Radius = 50,
 			Color = Color3.fromRGB(80, 160, 220),
 		},
 		SouthDocks = {
@@ -65,8 +65,8 @@ local TerritoryConfig = {
 			CaptureTimeSeconds = 25,
 			BonusType = "MissionCashMult",
 			BonusValue = 0.15,
-			Position = Vector3.new(0, 1, 350),
-			Radius = 35,
+			Position = Vector3.new(0, 1, 720),
+			Radius = 50,
 			Color = Color3.fromRGB(70, 140, 180),
 		},
 		EastArmory = {
@@ -76,8 +76,8 @@ local TerritoryConfig = {
 			CaptureTimeSeconds = 30,
 			BonusType = "DamageMult",
 			BonusValue = 0.10,
-			Position = Vector3.new(350, 1, 0),
-			Radius = 30,
+			Position = Vector3.new(720, 1, 0),
+			Radius = 45,
 			Color = Color3.fromRGB(200, 80, 80),
 		},
 		WestDepot = {
@@ -87,8 +87,8 @@ local TerritoryConfig = {
 			CaptureTimeSeconds = 30,
 			BonusType = "VehicleCooldownMult",
 			BonusValue = -0.20,
-			Position = Vector3.new(-350, 1, 0),
-			Radius = 30,
+			Position = Vector3.new(-720, 1, 0),
+			Radius = 45,
 			Color = Color3.fromRGB(100, 180, 100),
 		},
 		OilFields = {
@@ -98,8 +98,8 @@ local TerritoryConfig = {
 			CaptureTimeSeconds = 35,
 			BonusType = "FlatPassiveCash",
 			BonusValue = 50,
-			Position = Vector3.new(250, 1, 250),
-			Radius = 40,
+			Position = Vector3.new(520, 1, 520),
+			Radius = 55,
 			Color = Color3.fromRGB(180, 140, 60),
 		},
 		RadarHill = {
@@ -109,8 +109,8 @@ local TerritoryConfig = {
 			CaptureTimeSeconds = 40,
 			BonusType = "MinimapReveal",
 			BonusValue = 1,
-			Position = Vector3.new(-250, 1, -250),
-			Radius = 35,
+			Position = Vector3.new(-520, 1, -520),
+			Radius = 50,
 			Color = Color3.fromRGB(160, 100, 200),
 		},
 	} :: { [string]: TerritoryDef },

@@ -180,12 +180,12 @@ function CombatService.GetPlotSpawnCFrame(plotId: number): CFrame?
 					return spawn.CFrame + Vector3.new(0, 3, 0)
 				end
 			end
-			return inst.CFrame + Vector3.new(0, 5, 30)
+			return inst.CFrame + Vector3.new(0, 5, 55)
 		end
 	end
 	local pos = BaseConfig.PlotPositions[plotId]
 	if pos then
-		return CFrame.new(pos + Vector3.new(0, 5, 30))
+		return CFrame.new(pos + Vector3.new(0, 5, 55))
 	end
 	return nil
 end

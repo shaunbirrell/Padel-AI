@@ -20,7 +20,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 1. Open a blank Baseplate place in Roblox Studio (or open `dist/WarEmpire.rbxlx`).
 2. From this folder: `rojo serve` (or `aftman install` then `rojo serve`), **or** skip Rojo and open the built `dist/WarEmpire.rbxlx`.
 3. In Studio, connect the Rojo plugin and sync (if using live sync).
-4. Press **Play** — map auto-builds via `MapSetup` when `Workspace.WarEmpireSetup` is missing (no command-bar paste). Long Studio pastes of `tools/StudioSetup.luau` truncate (~488 lines); paste is obsolete.
+4. Press **Play** — map auto-builds via `MapSetup` when `Workspace.WarEmpireSetup` is missing (no command-bar paste). Map is large (~2600-stud ground, plot ring ~450). Long Studio pastes of `tools/StudioSetup.luau` truncate (~488 lines); paste is obsolete.
 5. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP). **Walk onto glowing upgrade pads to BUY** (auto-purchase, server-validated). Prices float above each pad. Or open **Base Upgrades** (**B** / bottom button) and tap **BUY $price**. **E** on plot/garage pads opens menus; **G** = Garage.
 6. To regenerate the map: delete `Workspace.WarEmpireSetup` and Play again, or admin `resetmap` (Studio). `tools/StudioSetup.luau` only prints this note if pasted.
 
@@ -106,7 +106,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `src/ReplicatedStorage/Shared/Configs/` — all tunable configs
 - `src/ServerScriptService/Server/` — Bootstrap + Services + Modules
 - `src/StarterPlayer/.../Client/` — Bootstrap + Controllers (programmatic UI)
-- `src/ServerScriptService/Server/Modules/MapSetup.luau` — world build (auto on Play if `WarEmpireSetup` missing)
+- `src/ServerScriptService/Server/Modules/MapSetup.luau` — world build (auto on Play if `WarEmpireSetup` missing); ~2600 ground / plot ring ~450
 - `tools/StudioSetup.luau` — short note only (paste obsolete; map auto-builds on Play)
 - `tools/SmokeTest.luau` — Play Solo command-bar smoke (remotes / configs / services; no currency exploits)
 
