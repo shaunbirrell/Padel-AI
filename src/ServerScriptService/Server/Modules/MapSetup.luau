@@ -184,7 +184,7 @@ local function priceBillboard(parent, title, costLine, accent)
 	bb.Size = UDim2.fromOffset(170, 60)
 	bb.StudsOffset = Vector3.new(0, 5.2, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 380
+	bb.MaxDistance = 520
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -229,7 +229,7 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	bb.Size = UDim2.fromOffset(size.X, size.Y)
 	bb.StudsOffset = Vector3.new(0, offsetY, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 420
+	bb.MaxDistance = 560
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")

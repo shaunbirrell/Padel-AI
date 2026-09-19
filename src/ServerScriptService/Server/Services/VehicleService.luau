@@ -217,7 +217,7 @@ local function addLabel(parent: BasePart, text: string, y: number)
 	billboard.Size = UDim2.fromOffset(150, 36)
 	billboard.StudsOffset = Vector3.new(0, y, 0)
 	billboard.AlwaysOnTop = true
-	billboard.MaxDistance = 160
+	billboard.MaxDistance = 280
 	billboard.Parent = parent
 	local backdrop = Instance.new("Frame")
 	backdrop.Size = UDim2.fromScale(1, 1)

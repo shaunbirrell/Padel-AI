@@ -115,16 +115,24 @@ local function tickCompass()
 	local bPos = baseWorldPos()
 	if bPos then
 		local dist = (bPos - pos).Magnitude
-		local dir = bearingLabel(pos, bPos, look)
-		baseLabel.Text = string.format("⌂ BASE  %s  %s", dir, formatDist(dist))
+		if dist < 45 then
+			baseLabel.Text = "⌂ BASE  HERE"
+		else
+			local dir = bearingLabel(pos, bPos, look)
+			baseLabel.Text = string.format("⌂ BASE  %s  %s", dir, formatDist(dist))
+		end
 	else
 		baseLabel.Text = "⌂ BASE  …"
 	end
 
 	local name, tPos, dist = nearestUnowned(pos)
 	if name and tPos and dist then
-		local dir = bearingLabel(pos, tPos, look)
-		outpostLabel.Text = string.format("◎ %s  %s  %s", name, dir, formatDist(dist))
+		if dist < 55 then
+			outpostLabel.Text = string.format("◎ %s  HERE", name)
+		else
+			local dir = bearingLabel(pos, tPos, look)
+			outpostLabel.Text = string.format("◎ %s  %s  %s", name, dir, formatDist(dist))
+		end
 	else
 		outpostLabel.Text = "◎ OUTPOST  all held"
 	end
