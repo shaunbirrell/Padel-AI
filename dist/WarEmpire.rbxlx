@@ -627,7 +627,7 @@ local CombatConfig = {
 	PurchaseWeaponRate = 2,
 	PurchaseWeaponBurst = 3,
 
-	MaxActiveNPCs = 12,
+	MaxActiveNPCs = 18,
 	NPCRespawnSeconds = 18,
 	NPCThinkInterval = 0.35,
 	NPCAlsoSpawnNearTerritories = true,
@@ -676,15 +676,15 @@ local CombatConfig = {
 		BankGuard = {
 			Id = "BankGuard",
 			DisplayName = "Bank Guard",
-			Health = 160,
-			Damage = 18,
-			FireRate = 1.8,
-			Range = 80,
-			WalkSpeed = 11,
-			AggroRange = 100,
-			CashReward = 110,
-			XPReward = 32,
-			Color = Color3.fromRGB(60, 70, 110),
+			Health = 220,
+			Damage = 28,
+			FireRate = 2.2,
+			Range = 90,
+			WalkSpeed = 14,
+			AggroRange = 130,
+			CashReward = 150,
+			XPReward = 45,
+			Color = Color3.fromRGB(55, 65, 120),
 		},
 		FortGuard = {
 			Id = "FortGuard",
@@ -3282,11 +3282,25 @@ else
 		end
 		setup = Workspace:FindFirstChild("WarEmpireSetup")
 	else
-		-- Still ensure SafetyCatch / MountainRing / berms exist on older place files
+		-- ALWAYS soft-heal Ground + SafetyCatch even when size looks OK (stale holes / CanCollide flips)
 		if setup and MapSetup.EnsureGroundHealthy then
 			pcall(function()
 				MapSetup.EnsureGroundHealthy(setup)
 			end)
+		end
+		-- Force Ground collide + thickness every Play
+		local mapFolder = setup and setup:FindFirstChild("Map")
+		local g = mapFolder and mapFolder:FindFirstChild("Ground")
+		if g and g:IsA("BasePart") then
+			g.CanCollide = true
+			g.Anchored = true
+			local ts = MapSetup.GROUND_SIZE or 6400
+			local th = MapSetup.GROUND_THICKNESS or 8
+			if g.Size.X < ts - 1 or g.Size.Y < th - 0.5 then
+				g.Size = Vector3.new(ts, th, ts)
+			end
+		elseif setup and MapSetup.EnsureGroundHealthy then
+			warn("[WAR EMPIRE] Ground missing after heal — recommend resetmap in Output")
 		end
 	end
 
@@ -3443,6 +3457,7 @@ if DevConfig.VerboseLogging then
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
+print("[WAR EMPIRE] CHECKLIST: 1) resetmap once if pads/void stale  2) stand on YOUR Command Center pad to buy  3) bank guards should chase+shoot  4) load should be faster")
 ]]></string>
         </Properties>
       </Item>
@@ -3725,7 +3740,7 @@ function DesertFlora.Dress(root: Instance)
 
 	-- Rim foothill belt — denser near mountain bases (inside Ground edge)
 	local rimR = HALF - 180
-	local rimCount = 36
+	local rimCount = 18
 	for i = 1, rimCount do
 		local ang = (i / rimCount) * math.pi * 2
 		local jitter = ((i * 37) % 50) - 25
@@ -3758,25 +3773,15 @@ function DesertFlora.Dress(root: Instance)
 	-- Sparse mid-map clusters (between plot ring ~800 and outer territories)
 	local midSpots = {
 		Vector3.new(350, GROUND_TOP_Y, 180),
-		Vector3.new(-320, GROUND_TOP_Y, -220),
 		Vector3.new(180, GROUND_TOP_Y, -480),
-		Vector3.new(-480, GROUND_TOP_Y, 300),
 		Vector3.new(620, GROUND_TOP_Y, -80),
-		Vector3.new(-140, GROUND_TOP_Y, 560),
 		Vector3.new(90, GROUND_TOP_Y, -720),
-		Vector3.new(-680, GROUND_TOP_Y, -40),
 		Vector3.new(480, GROUND_TOP_Y, 520),
-		Vector3.new(-420, GROUND_TOP_Y, -560),
 		Vector3.new(1100, GROUND_TOP_Y, 200),
-		Vector3.new(-1100, GROUND_TOP_Y, -180),
 		Vector3.new(200, GROUND_TOP_Y, 1100),
-		Vector3.new(-250, GROUND_TOP_Y, -1100),
 		Vector3.new(900, GROUND_TOP_Y, -900),
-		Vector3.new(-900, GROUND_TOP_Y, 900),
 		Vector3.new(1500, GROUND_TOP_Y, -400),
-		Vector3.new(-1500, GROUND_TOP_Y, 400),
 		Vector3.new(400, GROUND_TOP_Y, 1500),
-		Vector3.new(-400, GROUND_TOP_Y, -1500),
 	}
 	for i, pos in ipairs(midSpots) do
 		local kind = i % 4
@@ -3908,7 +3913,7 @@ local function p(props: { [string]: any }): Part
 	part.CanCollide = if props.CanCollide ~= nil then props.CanCollide else false
 	part.CanQuery = if props.CanQuery ~= nil then props.CanQuery else false
 	part.CanTouch = false
-	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else true
+	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else false
 	if props.Name then
 		part.Name = props.Name
 	end
@@ -4897,12 +4902,8 @@ function MapDressing.Dress(root: Instance)
 	-- 1) Road checkpoints on main axes (inside + outside plot ring)
 	local checkpoints = {
 		{ Name = "CP_N_Inner", Pos = Vector3.new(0, 0.5, -420), Yaw = 0, Label = "CHECKPOINT" },
-		{ Name = "CP_S_Inner", Pos = Vector3.new(0, 0.5, 420), Yaw = 180, Label = "CHECKPOINT" },
 		{ Name = "CP_E_Inner", Pos = Vector3.new(420, 0.5, 0), Yaw = 90, Label = "CHECKPOINT" },
-		{ Name = "CP_W_Inner", Pos = Vector3.new(-420, 0.5, 0), Yaw = -90, Label = "CHECKPOINT" },
-		{ Name = "CP_N_Outer", Pos = Vector3.new(0, 0.5, -1050), Yaw = 0, Label = nil },
 		{ Name = "CP_S_Outer", Pos = Vector3.new(0, 0.5, 1050), Yaw = 180, Label = nil },
-		{ Name = "CP_E_Outer", Pos = Vector3.new(1050, 0.5, 0), Yaw = 90, Label = nil },
 		{ Name = "CP_W_Outer", Pos = Vector3.new(-1050, 0.5, 0), Yaw = -90, Label = nil },
 	}
 	for _, cp in ipairs(checkpoints) do
@@ -4912,13 +4913,9 @@ function MapDressing.Dress(root: Instance)
 	-- 2) Outposts near territories (offset from capture pads)
 	local outposts = {
 		{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
-		{ Name = "OP_SouthDocks", Pos = Vector3.new(-100, 0.5, 1180), Yaw = 200, Label = "OUTPOST" },
 		{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = "OUTPOST" },
-		{ Name = "OP_WestDepot", Pos = Vector3.new(-1180, 0.5, -80), Yaw = -80, Label = "OUTPOST" },
 		{ Name = "OP_OilFields", Pos = Vector3.new(850, 0.5, 1080), Yaw = 45, Label = "OUTPOST" },
-		{ Name = "OP_RadarHill", Pos = Vector3.new(-850, 0.5, -1080), Yaw = -135, Label = "OUTPOST" },
 		{ Name = "OP_MidNE", Pos = Vector3.new(550, 0.5, -550), Yaw = 20, Label = nil },
-		{ Name = "OP_MidSW", Pos = Vector3.new(-550, 0.5, 550), Yaw = 200, Label = nil },
 	}
 	for _, op in ipairs(outposts) do
 		placeCluster(dressing, op.Name, op.Pos, kitOutpost, op.Yaw, op.Label)
@@ -4951,11 +4948,8 @@ function MapDressing.Dress(root: Instance)
 	-- 4) Fuel / ammo depots along ring roads
 	local depots = {
 		{ Name = "Depot_NW", Pos = Vector3.new(-650, 0.5, -650), Yaw = 45, Kind = "fuel" },
-		{ Name = "Depot_SE", Pos = Vector3.new(650, 0.5, 650), Yaw = -135, Kind = "fuel" },
 		{ Name = "Ammo_NE", Pos = Vector3.new(650, 0.5, -650), Yaw = 135, Kind = "ammo" },
-		{ Name = "Ammo_SW", Pos = Vector3.new(-650, 0.5, 650), Yaw = -45, Kind = "ammo" },
 		{ Name = "Depot_FarE", Pos = Vector3.new(1600, 0.5, 200), Yaw = 0, Kind = "fuel" },
-		{ Name = "Depot_FarW", Pos = Vector3.new(-1600, 0.5, -200), Yaw = 180, Kind = "ammo" },
 	}
 	for _, d in ipairs(depots) do
 		local f = Instance.new("Folder")
@@ -4975,8 +4969,6 @@ function MapDressing.Dress(root: Instance)
 	-- 5) Radio towers on ridges / approaches
 	local radios = {
 		{ Name = "Radio_N", Pos = Vector3.new(180, 0.5, -1500), Yaw = 0 },
-		{ Name = "Radio_S", Pos = Vector3.new(-180, 0.5, 1500), Yaw = 180 },
-		{ Name = "Radio_RadarApproach", Pos = Vector3.new(-1100, 0.5, -1100), Yaw = -45 },
 		{ Name = "Radio_OilApproach", Pos = Vector3.new(1100, 0.5, 1100), Yaw = 45 },
 	}
 	for _, r in ipairs(radios) do
@@ -4990,11 +4982,8 @@ function MapDressing.Dress(root: Instance)
 	-- 6) Camps between plot ring and mid-field
 	local camps = {
 		{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
-		{ Name = "Camp_S", Pos = Vector3.new(280, 0.5, 700), Yaw = 195 },
 		{ Name = "Camp_E", Pos = Vector3.new(900, 0.5, -350), Yaw = 90 },
-		{ Name = "Camp_W", Pos = Vector3.new(-900, 0.5, 350), Yaw = -90 },
 		{ Name = "Camp_FarSE", Pos = Vector3.new(1400, 0.5, 900), Yaw = 40 },
-		{ Name = "Camp_FarNW", Pos = Vector3.new(-1400, 0.5, -900), Yaw = -140 },
 	}
 	for _, c in ipairs(camps) do
 		local f = Instance.new("Folder")
@@ -5120,13 +5109,9 @@ function MapDressing.Dress(root: Instance)
 		-- Scattered decoy vehicles along roads
 		local decoys = {
 			{ Vector3.new(120, 0.5, -500), 5, "jeep" },
-			{ Vector3.new(-120, 0.5, 500), 185, "truck" },
 			{ Vector3.new(500, 0.5, 120), 95, "jeep" },
-			{ Vector3.new(-500, 0.5, -120), -85, "truck" },
 			{ Vector3.new(200, 0.5, -1100), 10, "tank" },
-			{ Vector3.new(-200, 0.5, 1100), 190, "jeep" },
 			{ Vector3.new(1100, 0.5, 200), 100, "truck" },
-			{ Vector3.new(-1100, 0.5, -200), -80, "jeep" },
 		}
 		for _, v in ipairs(decoys) do
 			kitVehicleSilhouette(f, v[1], v[2], v[3])
@@ -5140,10 +5125,7 @@ function MapDressing.Dress(root: Instance)
 		f.Parent = dressing
 		local bunkers = {
 			{ Vector3.new(0, 0.5, -900), 0 },
-			{ Vector3.new(0, 0.5, 900), 180 },
 			{ Vector3.new(900, 0.5, 0), 90 },
-			{ Vector3.new(-900, 0.5, 0), -90 },
-			{ Vector3.new(450, 0.5, -900), 15 },
 			{ Vector3.new(-450, 0.5, 900), 195 },
 		}
 		for i, b in ipairs(bunkers) do
@@ -5355,6 +5337,9 @@ local function kitPart(parentPlinth, role, size, localOffset, color, material, s
 	if shape then
 		p.Shape = shape
 	end
+	p.CanTouch = false -- never steal walk-buy Touched from plinth
+	p.CanQuery = false
+	p.CastShadow = false
 	p:SetAttribute("WE_KitRole", role)
 	p:SetAttribute("WE_BaseSize", size)
 	p:SetAttribute("WE_LocalOffset", localOffset)
@@ -5874,7 +5859,7 @@ local function buildMountainRing(root: Folder)
 
 	local half = GROUND_SIZE * 0.5
 	local ringR = half + 90
-	local segCount = 48
+	local segCount = 24
 	local segArc = (math.pi * 2) / segCount
 	local segLen = ringR * segArc * 1.12
 
@@ -5961,7 +5946,7 @@ local function buildMountainRing(root: Folder)
 	end
 
 	-- Mid-ground rocky outcrops just inside the ring (sandy floor props)
-	for oi = 1, 12 do
+	for oi = 1, 6 do
 		local ang = (oi / 12) * math.pi * 2 + 0.2
 		local orad = half - 220 - (oi % 4) * 40
 		local ox = math.cos(ang) * orad
@@ -6132,11 +6117,17 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		return false
 	end
 	local repaired = false
-	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5 then
+	-- Always force full-size collide Ground every Play (bulletproof void floor)
+	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5
+		or ground.CanCollide ~= true
+	then
 		ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
 		ground.Position = Vector3.new(0, groundCenterY(), 0)
 		repaired = true
 	end
+	-- Even when size OK, re-assert collide / anchor every start
+	ground.Size = Vector3.new(GROUND_SIZE, math.max(ground.Size.Y, GROUND_THICKNESS), GROUND_SIZE)
+	ground.Position = Vector3.new(0, groundCenterY(), 0)
 	if ground.CanCollide ~= true then
 		ground.CanCollide = true
 		repaired = true
@@ -6804,7 +6795,7 @@ function MapSetup.Run()
 
 	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
 	local bankFolder = ensureFolder("EmpireBank", root)
-	local bankPos = Vector3.new(420, 1, -420)
+	local bankPos = Vector3.new(220, 1, -220) -- matches BankRaidConfig.Position -- matches BankRaidConfig.Position
 	local bankPad = part({
 		Name = "BankPlaza",
 		Size = Vector3.new(36, 1.2, 36),
@@ -6880,21 +6871,8 @@ function MapSetup.Run()
 	CollectionService:AddTag(vault, "WE_BankVault")
 	plainBillboard(vault, "EMPIRE BANK · Stand to RAID cash", Vector2.new(280, 40), 8, Color3.fromRGB(255, 220, 120))
 	beacon(bankFolder, bankPos + Vector3.new(14, 0, 14), Color3.fromRGB(90, 130, 220), "BankBeacon")
-	for gi = 1, 5 do
-		local angle = (gi / 5) * math.pi * 2
-		local gpos = bankPos + Vector3.new(math.cos(angle) * 18, 2.6, math.sin(angle) * 18)
-		makeSoldierKit(
-			bankFolder,
-			"BankGuard_" .. gi,
-			CFrame.new(gpos),
-			Color3.fromRGB(60, 70, 110),
-			"BANK GUARD",
-			Color3.fromRGB(140, 180, 255),
-			160,
-			"BankGuard",
-			"bank_guard_" .. gi
-		)
-	end
+	-- Bank guards spawned live via CombatService.SpawnNPC("BankGuard", cf) in BankRaidService
+	-- (static makeSoldierKit props removed — they were Anchored stick figures with double nametags)
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
@@ -6941,8 +6919,22 @@ function MapSetup.Run()
 
 	-- Military world dressing (visual only — outposts/bunkers/hangars/depots/camps)
 	-- Does not tag WE_UpgradeSlot / buy pads. Regenerate via resetmap or delete WarEmpireSetup.
-	MapDressing.Dress(root)
-	DesertFlora.Dress(root)
+	-- Defer heavy world dressing to after first frame so Play Solo is usable in seconds
+	task.defer(function()
+		local okDress, errDress = pcall(function()
+			MapDressing.Dress(root)
+		end)
+		if not okDress then
+			warn("[WAR EMPIRE] MapDressing failed:", errDress)
+		end
+		task.wait(0.05)
+		local okFlora, errFlora = pcall(function()
+			DesertFlora.Dress(root)
+		end)
+		if not okFlora then
+			warn("[WAR EMPIRE] DesertFlora failed:", errFlora)
+		end
+	end)
 
 	-- Guarantee at least one Neutral Duration=0 spawn near origin
 	local hasNeutralSpawn = false
@@ -7904,7 +7896,8 @@ return AntiExploitService
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
-	Empire Bank raid stub — stand on vault to loot Cash; per-player cooldown; NPC guards from MapSetup.
+	Empire Bank raid — stand on vault to loot Cash; per-player cooldown.
+	Bank guards are living CombatService NPCs (MoveTo + shoot), not static MapSetup props.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -7923,10 +7916,12 @@ local EconomyService: any = nil
 local NotificationService: any = nil
 local AnalyticsService: any = nil
 local RemoteSetup: any = nil
+local CombatService: any = nil
 
 local vaultPart: BasePart? = nil
-local holdProgress: { [number]: number } = {} -- userId -> seconds
-local cooldownUntil: { [number]: number } = {} -- userId -> unix
+local holdProgress: { [number]: number } = {}
+local cooldownUntil: { [number]: number } = {}
+local guardsSpawned = false
 
 local function findVault(): BasePart?
 	if vaultPart and vaultPart.Parent then
@@ -7939,6 +7934,34 @@ local function findVault(): BasePart?
 		end
 	end
 	return nil
+end
+
+local function spawnBankGuards()
+	if guardsSpawned then
+		return
+	end
+	if not CombatService or not CombatService.SpawnNPC then
+		warn("[WAR EMPIRE] BankRaidService: CombatService.SpawnNPC missing")
+		return
+	end
+	guardsSpawned = true
+
+	local vault = findVault()
+	local origin = if vault then vault.Position else (BankRaidConfig.Position or Vector3.new(220, 1, -220))
+	local count = BankRaidConfig.GuardCount or 4
+	local ring = BankRaidConfig.GuardRingRadius or 16
+	local typeId = BankRaidConfig.GuardNPCType or "BankGuard"
+	local spawned = 0
+	for i = 1, count do
+		local angle = (i / count) * math.pi * 2 + 0.35
+		local pos = origin + Vector3.new(math.cos(angle) * ring, 3.2, math.sin(angle) * ring)
+		local cf = CFrame.new(pos) * CFrame.Angles(0, -angle + math.pi, 0)
+		local rec = CombatService.SpawnNPC(typeId, cf)
+		if rec then
+			spawned += 1
+		end
+	end
+	print(string.format("[WAR EMPIRE] BankRaidService: spawned %d %s combat NPCs at bank", spawned, typeId))
 end
 
 local function pushState(player: Player)
@@ -7975,11 +7998,22 @@ local function completeRaid(player: Player)
 		)
 	end
 	if AnalyticsService then
-		AnalyticsService.Log(AnalyticsConfig.Events.BANK_RAID, player.UserId, {
-			cash = cash,
-		})
+		local ev = (AnalyticsConfig.Events and AnalyticsConfig.Events.BANK_RAID) or "BANK_RAID"
+		AnalyticsService.Log(ev, player.UserId, { cash = cash })
 	end
 	pushState(player)
+end
+
+local function isUnderFire(player: Player): boolean
+	local char = player.Character
+	if not char then
+		return true
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return true
+	end
+	return hum.Health < hum.MaxHealth * 0.95
 end
 
 function BankRaidService.Push(player: Player)
@@ -7991,13 +8025,16 @@ function BankRaidService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	AnalyticsService = deps.AnalyticsService
 	RemoteSetup = deps.RemoteSetup
+	CombatService = deps.CombatService
 
 	if not BankRaidConfig.Enabled then
 		return
 	end
 
 	task.defer(function()
+		task.wait(2)
 		findVault()
+		spawnBankGuards()
 	end)
 
 	local accum = 0
@@ -8028,10 +8065,12 @@ function BankRaidService.Init(deps: { [string]: any })
 				if hrp and hum and hum.Health > 0 then
 					if (hrp.Position - pos).Magnitude <= radius then
 						nearby[player.UserId] = true
-						local prog = (holdProgress[player.UserId] or 0) + step
-						holdProgress[player.UserId] = prog
-						if prog >= need then
-							completeRaid(player)
+						if not isUnderFire(player) then
+							local prog = (holdProgress[player.UserId] or 0) + step
+							holdProgress[player.UserId] = prog
+							if prog >= need then
+								completeRaid(player)
+							end
 						end
 					end
 				end
@@ -8055,6 +8094,8 @@ function BankRaidService.Init(deps: { [string]: any })
 			pushState(player)
 		end)
 	end
+
+	print("[WAR EMPIRE] BankRaidService ready (live BankGuard combat NPCs)")
 end
 
 return BankRaidService
@@ -8243,8 +8284,16 @@ end
 
 function BaseService.TeleportToPlot(player: Player)
 	local profile = DataService.GetProfile(player)
-	if not profile or not profile.BasePlotId then
+	if not profile then
 		return
+	end
+	-- Studio solo: never leave BasePlotId nil
+	if profile.BasePlotId == nil then
+		BaseService.AssignPlot(player)
+		profile = DataService.GetProfile(player) or profile
+		if profile.BasePlotId == nil then
+			profile.BasePlotId = 1
+		end
 	end
 	local cf = BaseService.GetPlotSpawnCFrame(profile.BasePlotId)
 	if not cf then
@@ -8253,10 +8302,29 @@ function BaseService.TeleportToPlot(player: Player)
 	local function apply(character: Model)
 		if character and character.Parent then
 			character:PivotTo(cf)
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if hrp and hrp:IsA("BasePart") then
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.AssemblyAngularVelocity = Vector3.zero
+			end
 		end
 	end
+	local function applyWithRetries(character: Model)
+		apply(character)
+		-- Retry: CharacterAdded / physics settle can undo first PivotTo
+		task.delay(0.35, function()
+			if player.Character == character and character.Parent then
+				apply(character)
+			end
+		end)
+		task.delay(1.0, function()
+			if player.Character == character and character.Parent then
+				apply(character)
+			end
+		end)
+	end
 	if player.Character then
-		apply(player.Character)
+		applyWithRetries(player.Character)
 	else
 		local conn: RBXScriptConnection?
 		conn = player.CharacterAdded:Connect(function(character)
@@ -8264,10 +8332,9 @@ function BaseService.TeleportToPlot(player: Player)
 				conn:Disconnect()
 			end
 			task.defer(function()
-				apply(character)
+				applyWithRetries(character)
 			end)
 		end)
-		-- Safety: disconnect if still waiting after 30s
 		task.delay(30, function()
 			if conn then
 				conn:Disconnect()
@@ -8589,9 +8656,14 @@ function BaseService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		BaseService.AssignPlot(player)
-		-- Ensure player stands on THEIR plot (CombatService CharacterAdded may race before AssignPlot)
+		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
 		task.defer(function()
 			BaseService.TeleportToPlot(player)
+		end)
+		task.delay(1.5, function()
+			if player.Parent then
+				BaseService.TeleportToPlot(player)
+			end
 		end)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
@@ -10617,8 +10689,14 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	)
 	local isHeavy = tid == "HeavyInfantry" or tid == "OilRigGuard" or tid == "FortGuard"
 	local isBank = tid == "BankGuard"
-	weldPart("Head", Vector3.new(1.1, 1.1, 1.1), CFrame.new(0, 1.65, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	weldPart("Helmet", Vector3.new(1.28, 0.55, 1.28), CFrame.new(0, 2.05, 0), helmCol, Enum.Material.Metal, nil)
+	local headPart = weldPart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, 1.7, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	-- Simple face (no third-party meshes)
+	local face = Instance.new("Decal")
+	face.Name = "face"
+	face.Face = Enum.NormalId.Front
+	face.Texture = "rbxasset://textures/face.png"
+	face.Parent = headPart
+	weldPart("Helmet", Vector3.new(1.32, 0.55, 1.32), CFrame.new(0, 2.1, 0), helmCol, Enum.Material.Metal, nil)
 	weldPart("Visor", Vector3.new(1.05, 0.22, 0.35), CFrame.new(0, 1.95, -0.55), Color3.fromRGB(30, 35, 40), Enum.Material.Glass, nil)
 	weldPart("Vest", Vector3.new(2.15, 1.35, 1.35), CFrame.new(0, 0.35, 0), Color3.fromRGB(
 		math.clamp(math.floor(def.Color.R * 255) - 25, 25, 255),
@@ -10648,13 +10726,40 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	humanoid.MaxHealth = def.Health
 	humanoid.Health = def.Health
 	humanoid.WalkSpeed = def.WalkSpeed
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Subject
-	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOn
+	-- Kill double nametags: Humanoid nameplate OFF; one clean Billboard only
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
+
+	-- Single clean nameplate
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "NPCLabel"
+	bb.Size = UDim2.fromOffset(140, 28)
+	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 90
+	bb.Parent = root
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+	lbl.BackgroundTransparency = 0.25
+	lbl.Text = def.DisplayName
+	lbl.TextColor3 = Color3.fromRGB(230, 235, 255)
+	lbl.TextScaled = true
+	lbl.Font = Enum.Font.GothamBold
+	lbl.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = lbl
 
 	model.PrimaryPart = root
 	CollectionService:AddTag(model, Constants.Tags.NPC)
 	model.Parent = ensureNPCFolder()
+	-- Server owns physics so MoveTo works reliably
+	pcall(function()
+		root:SetNetworkOwner(nil)
+	end)
 
 	local gyro = Instance.new("BodyGyro")
 	gyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
@@ -10713,8 +10818,10 @@ function CombatService.BootstrapNPCs()
 	local points = gatherSpawns()
 	local types = { "Infantry", "Infantry", "HeavyInfantry" }
 	local spawned = 0
+	-- Reserve slots for BankGuard / special spawns (BankRaidService)
+	local fieldCap = math.max(4, (CombatConfig.MaxActiveNPCs or 18) - 6)
 	for i, cf in ipairs(points) do
-		if spawned >= CombatConfig.MaxActiveNPCs then
+		if spawned >= fieldCap then
 			break
 		end
 		local typeId = types[((i - 1) % #types) + 1]
@@ -11893,7 +12000,7 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = -30
+local FALL_Y = -8
 local COOLDOWN_SEC = 2.5
 
 local BaseService: any = nil
@@ -15356,15 +15463,16 @@ return TutorialService
 --[[
 	SERVER-AUTHORITATIVE walk-over upgrade purchase.
 
-	Primary buy path: Touched on WE_UpgradeSlot plinths + 0.25s spatial HRP check.
-	Validates PlotId == profile.BasePlotId, debounces per player+structure (~1s),
-	then BaseService.PurchaseUpgrade + same Success/Warn toasts as the remote.
-	Client WorldPromptController FireServer remains a secondary path (B-menu / backup).
+	Primary buy path: Touched on WE_UpgradeSlot plinths + spatial HRP check.
+	Validates PlotId == profile.BasePlotId (Studio: teleport home instead of silent fail),
+	debounces per player+structure, then BaseService.PurchaseUpgrade.
+	Client WorldPromptController FireServer remains secondary (B-menu / backup).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -15380,15 +15488,12 @@ local RateLimitService: any = nil
 
 local TAG = Constants.Tags.UpgradeSlot
 local DEBOUNCE_SEC = 1.0
-local OVERLAP_MARGIN = 2.4
-local SPATIAL_INTERVAL = 0.25
+local OVERLAP_MARGIN = 4.0 -- wide AABB so kits / edges never miss
+local SPATIAL_INTERVAL = 0.2
 
--- userId|structureId -> last attempt clock
 local lastAttempt: { [string]: number } = {}
--- part -> connected
 local attached: { [BasePart]: boolean } = {}
 local partConns: { [BasePart]: { RBXScriptConnection } } = {}
--- padKey -> currently overlapping (for enter-edge)
 local lastOverlap: { [string]: boolean } = {}
 
 local function attemptKey(userId: number, structureId: string): string
@@ -15423,13 +15528,25 @@ local function detach(part: BasePart)
 	attached[part] = nil
 end
 
+local function hardenPad(part: BasePart)
+	part.CanTouch = true
+	part.CanCollide = true
+	part.CanQuery = true
+	for _, child in ipairs(part:GetDescendants()) do
+		if child:IsA("BasePart") then
+			child.CanTouch = false
+			child.CanQuery = false
+		end
+	end
+end
+
 local function pointInPad(hrpPos: Vector3, part: BasePart): boolean
 	local localPos = part.CFrame:PointToObjectSpace(hrpPos)
 	local half = part.Size * 0.5
 	return math.abs(localPos.X) <= half.X + OVERLAP_MARGIN
 		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
-		and localPos.Y >= -half.Y - 3
-		and localPos.Y <= half.Y + 8
+		and localPos.Y >= -half.Y - 4
+		and localPos.Y <= half.Y + 12
 end
 
 local function isSeated(character: Model): boolean
@@ -15444,6 +15561,19 @@ local function isSeated(character: Model): boolean
 	return seat:IsA("VehicleSeat") or seat:IsA("Seat")
 end
 
+local function flashPad(part: BasePart)
+	local original = part.Color
+	local originalMat = part.Material
+	part.Color = Color3.fromRGB(80, 255, 120)
+	part.Material = Enum.Material.Neon
+	task.delay(0.35, function()
+		if part.Parent then
+			part.Color = original
+			part.Material = originalMat
+		end
+	end)
+end
+
 local function notifyPurchaseResult(player: Player, structureId: string, result: any)
 	if not NotificationService then
 		return
@@ -15453,9 +15583,9 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 		local name = if def then def.DisplayName else tostring(structureId)
 		NotificationService.Notify(
 			player,
-			string.format("%s → Lv %d", name, result.NewLevel or 0),
+			string.format("✓ %s → Lv %d", name, result.NewLevel or 0),
 			"Success",
-			3
+			4
 		)
 	else
 		local err = result.Error or "Failed"
@@ -15472,7 +15602,6 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 			elseif err == "WrongPlot"
 			then "Not your base — walk your plot pads to buy"
 			else ("Purchase failed: " .. tostring(err))
-		-- Soft-fail MaxLevel while camping: throttle
 		if err == "MaxLevel" then
 			NotificationService.Notify(player, msg, "Info", 2)
 		else
@@ -15487,6 +15616,17 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
+	-- Studio solo: if BasePlotId nil, force-assign plot 1
+	if RunService:IsStudio() and profile.BasePlotId == nil then
+		if BaseService and BaseService.AssignPlot then
+			BaseService.AssignPlot(player)
+			profile = DataService.GetProfile(player) or profile
+		end
+		if profile.BasePlotId == nil then
+			profile.BasePlotId = 1
+		end
+	end
+
 	local pid = part:GetAttribute("PlotId")
 	if typeof(pid) == "number" and profile.BasePlotId ~= nil and pid ~= profile.BasePlotId then
 		local key = attemptKey(player.UserId, structureId)
@@ -15494,8 +15634,12 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		local last = lastAttempt[key] or 0
 		if now - last >= DEBOUNCE_SEC then
 			lastAttempt[key] = now
+			-- Always teleport + toast so WrongPlot never silent-fails (esp. Studio)
+			if BaseService and BaseService.TeleportToPlot then
+				BaseService.TeleportToPlot(player)
+			end
 			if NotificationService then
-				NotificationService.Notify(player, "Not your base — walk your plot pads to buy", "Warn", 2.5)
+				NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
 			end
 		end
 		return
@@ -15508,7 +15652,6 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
-	-- Early MaxLevel / missing def — no rate-limit burn while camping
 	local def = BaseConfig.Structures[structureId]
 	local current = profile.BaseUpgrades[structureId] or 0
 	if def and current >= def.MaxLevel then
@@ -15521,7 +15664,6 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 
 	lastAttempt[key] = now
 
-	-- Soft rate limit shared with remote path (avoid spam)
 	if RateLimitService and not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
 		if NotificationService and not fromStanding then
 			NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
@@ -15531,6 +15673,9 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 
 	local result = BaseService.PurchaseUpgrade(player, structureId)
 	notifyPurchaseResult(player, structureId, result)
+	if result.Ok then
+		flashPad(part)
+	end
 end
 
 local function onPadTouched(part: BasePart, hit: BasePart)
@@ -15551,7 +15696,7 @@ local function onPadTouched(part: BasePart, hit: BasePart)
 	end
 	local key = padKey(part, structureId) .. "|" .. tostring(player.UserId)
 	if lastOverlap[key] then
-		return -- enter-edge only; standing handled by spatial loop
+		return
 	end
 	lastOverlap[key] = true
 	tryServerPurchase(player, part, structureId, false)
@@ -15559,6 +15704,7 @@ end
 
 local function attachSlot(part: BasePart)
 	if attached[part] then
+		hardenPad(part)
 		return
 	end
 	if not part:IsA("BasePart") then
@@ -15570,7 +15716,7 @@ local function attachSlot(part: BasePart)
 	end
 
 	attached[part] = true
-	part.CanTouch = true
+	hardenPad(part)
 
 	trackConn(part, part.Touched:Connect(function(hit)
 		if hit:IsA("BasePart") then
@@ -15611,6 +15757,43 @@ local function attachSlot(part: BasePart)
 	end))
 end
 
+local function countAttached(): number
+	local n = 0
+	for part in pairs(attached) do
+		if part.Parent then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function scanAndTagFromSetup(): number
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		return 0
+	end
+	local bases = setup:FindFirstChild("Bases")
+	if not bases then
+		return 0
+	end
+	local retagged = 0
+	for _, desc in ipairs(bases:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			local sid = desc:GetAttribute("StructureId")
+			local pid = desc:GetAttribute("PlotId")
+			if typeof(sid) == "string" and typeof(pid) == "number" then
+				if not CollectionService:HasTag(desc, TAG) then
+					CollectionService:AddTag(desc, TAG)
+				end
+				hardenPad(desc)
+				attachSlot(desc)
+				retagged += 1
+			end
+		end
+	end
+	return retagged
+end
+
 local function bindExistingAndFuture()
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
 		if inst:IsA("BasePart") then
@@ -15642,7 +15825,6 @@ local function startSpatialLoop()
 			local character = player.Character
 			if character then
 				if isSeated(character) then
-					-- Clear overlap so stepping out can buy
 					local uid = tostring(player.UserId)
 					local suffix = "|" .. uid
 					for key in pairs(lastOverlap) do
@@ -15687,9 +15869,15 @@ function UpgradePadService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 
 	bindExistingAndFuture()
+	local initCount = countAttached()
+	print(string.format("[WAR EMPIRE] UpgradePadService Init: attached=%d tagged=%d", initCount, #CollectionService:GetTagged(TAG)))
+	if initCount == 0 then
+		local scanned = scanAndTagFromSetup()
+		print(string.format("[WAR EMPIRE] UpgradePadService: scanned Bases → attached=%d", scanned))
+	end
+
 	startSpatialLoop()
 
-	-- Late map / retag: re-scan shortly after init
 	task.defer(function()
 		task.wait(1)
 		for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
@@ -15697,9 +15885,15 @@ function UpgradePadService.Init(deps: { [string]: any })
 				attachSlot(inst)
 			end
 		end
+		local after = countAttached()
+		print(string.format("[WAR EMPIRE] UpgradePadService after-map: attached=%d", after))
+		if after == 0 then
+			local scanned = scanAndTagFromSetup()
+			warn(string.format("[WAR EMPIRE] UpgradePadService: ZERO pads after map — Bases scan attached=%d", scanned))
+		end
 	end)
 
-	print("[WAR EMPIRE] UpgradePadService ready (server walk-over buy)")
+	print("[WAR EMPIRE] UpgradePadService ready (server walk-over buy, margin=" .. tostring(OVERLAP_MARGIN) .. ")")
 end
 
 return UpgradePadService

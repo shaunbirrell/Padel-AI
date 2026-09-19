@@ -74,7 +74,7 @@ local function p(props: { [string]: any }): Part
 	part.CanCollide = if props.CanCollide ~= nil then props.CanCollide else false
 	part.CanQuery = if props.CanQuery ~= nil then props.CanQuery else false
 	part.CanTouch = false
-	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else true
+	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else false
 	if props.Name then
 		part.Name = props.Name
 	end
@@ -1063,12 +1063,8 @@ function MapDressing.Dress(root: Instance)
 	-- 1) Road checkpoints on main axes (inside + outside plot ring)
 	local checkpoints = {
 		{ Name = "CP_N_Inner", Pos = Vector3.new(0, 0.5, -420), Yaw = 0, Label = "CHECKPOINT" },
-		{ Name = "CP_S_Inner", Pos = Vector3.new(0, 0.5, 420), Yaw = 180, Label = "CHECKPOINT" },
 		{ Name = "CP_E_Inner", Pos = Vector3.new(420, 0.5, 0), Yaw = 90, Label = "CHECKPOINT" },
-		{ Name = "CP_W_Inner", Pos = Vector3.new(-420, 0.5, 0), Yaw = -90, Label = "CHECKPOINT" },
-		{ Name = "CP_N_Outer", Pos = Vector3.new(0, 0.5, -1050), Yaw = 0, Label = nil },
 		{ Name = "CP_S_Outer", Pos = Vector3.new(0, 0.5, 1050), Yaw = 180, Label = nil },
-		{ Name = "CP_E_Outer", Pos = Vector3.new(1050, 0.5, 0), Yaw = 90, Label = nil },
 		{ Name = "CP_W_Outer", Pos = Vector3.new(-1050, 0.5, 0), Yaw = -90, Label = nil },
 	}
 	for _, cp in ipairs(checkpoints) do
@@ -1078,13 +1074,9 @@ function MapDressing.Dress(root: Instance)
 	-- 2) Outposts near territories (offset from capture pads)
 	local outposts = {
 		{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
-		{ Name = "OP_SouthDocks", Pos = Vector3.new(-100, 0.5, 1180), Yaw = 200, Label = "OUTPOST" },
 		{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = "OUTPOST" },
-		{ Name = "OP_WestDepot", Pos = Vector3.new(-1180, 0.5, -80), Yaw = -80, Label = "OUTPOST" },
 		{ Name = "OP_OilFields", Pos = Vector3.new(850, 0.5, 1080), Yaw = 45, Label = "OUTPOST" },
-		{ Name = "OP_RadarHill", Pos = Vector3.new(-850, 0.5, -1080), Yaw = -135, Label = "OUTPOST" },
 		{ Name = "OP_MidNE", Pos = Vector3.new(550, 0.5, -550), Yaw = 20, Label = nil },
-		{ Name = "OP_MidSW", Pos = Vector3.new(-550, 0.5, 550), Yaw = 200, Label = nil },
 	}
 	for _, op in ipairs(outposts) do
 		placeCluster(dressing, op.Name, op.Pos, kitOutpost, op.Yaw, op.Label)
@@ -1117,11 +1109,8 @@ function MapDressing.Dress(root: Instance)
 	-- 4) Fuel / ammo depots along ring roads
 	local depots = {
 		{ Name = "Depot_NW", Pos = Vector3.new(-650, 0.5, -650), Yaw = 45, Kind = "fuel" },
-		{ Name = "Depot_SE", Pos = Vector3.new(650, 0.5, 650), Yaw = -135, Kind = "fuel" },
 		{ Name = "Ammo_NE", Pos = Vector3.new(650, 0.5, -650), Yaw = 135, Kind = "ammo" },
-		{ Name = "Ammo_SW", Pos = Vector3.new(-650, 0.5, 650), Yaw = -45, Kind = "ammo" },
 		{ Name = "Depot_FarE", Pos = Vector3.new(1600, 0.5, 200), Yaw = 0, Kind = "fuel" },
-		{ Name = "Depot_FarW", Pos = Vector3.new(-1600, 0.5, -200), Yaw = 180, Kind = "ammo" },
 	}
 	for _, d in ipairs(depots) do
 		local f = Instance.new("Folder")
@@ -1141,8 +1130,6 @@ function MapDressing.Dress(root: Instance)
 	-- 5) Radio towers on ridges / approaches
 	local radios = {
 		{ Name = "Radio_N", Pos = Vector3.new(180, 0.5, -1500), Yaw = 0 },
-		{ Name = "Radio_S", Pos = Vector3.new(-180, 0.5, 1500), Yaw = 180 },
-		{ Name = "Radio_RadarApproach", Pos = Vector3.new(-1100, 0.5, -1100), Yaw = -45 },
 		{ Name = "Radio_OilApproach", Pos = Vector3.new(1100, 0.5, 1100), Yaw = 45 },
 	}
 	for _, r in ipairs(radios) do
@@ -1156,11 +1143,8 @@ function MapDressing.Dress(root: Instance)
 	-- 6) Camps between plot ring and mid-field
 	local camps = {
 		{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
-		{ Name = "Camp_S", Pos = Vector3.new(280, 0.5, 700), Yaw = 195 },
 		{ Name = "Camp_E", Pos = Vector3.new(900, 0.5, -350), Yaw = 90 },
-		{ Name = "Camp_W", Pos = Vector3.new(-900, 0.5, 350), Yaw = -90 },
 		{ Name = "Camp_FarSE", Pos = Vector3.new(1400, 0.5, 900), Yaw = 40 },
-		{ Name = "Camp_FarNW", Pos = Vector3.new(-1400, 0.5, -900), Yaw = -140 },
 	}
 	for _, c in ipairs(camps) do
 		local f = Instance.new("Folder")
@@ -1286,13 +1270,9 @@ function MapDressing.Dress(root: Instance)
 		-- Scattered decoy vehicles along roads
 		local decoys = {
 			{ Vector3.new(120, 0.5, -500), 5, "jeep" },
-			{ Vector3.new(-120, 0.5, 500), 185, "truck" },
 			{ Vector3.new(500, 0.5, 120), 95, "jeep" },
-			{ Vector3.new(-500, 0.5, -120), -85, "truck" },
 			{ Vector3.new(200, 0.5, -1100), 10, "tank" },
-			{ Vector3.new(-200, 0.5, 1100), 190, "jeep" },
 			{ Vector3.new(1100, 0.5, 200), 100, "truck" },
-			{ Vector3.new(-1100, 0.5, -200), -80, "jeep" },
 		}
 		for _, v in ipairs(decoys) do
 			kitVehicleSilhouette(f, v[1], v[2], v[3])
@@ -1306,10 +1286,7 @@ function MapDressing.Dress(root: Instance)
 		f.Parent = dressing
 		local bunkers = {
 			{ Vector3.new(0, 0.5, -900), 0 },
-			{ Vector3.new(0, 0.5, 900), 180 },
 			{ Vector3.new(900, 0.5, 0), 90 },
-			{ Vector3.new(-900, 0.5, 0), -90 },
-			{ Vector3.new(450, 0.5, -900), 15 },
 			{ Vector3.new(-450, 0.5, 900), 195 },
 		}
 		for i, b in ipairs(bunkers) do

@@ -162,6 +162,9 @@ local function kitPart(parentPlinth, role, size, localOffset, color, material, s
 	if shape then
 		p.Shape = shape
 	end
+	p.CanTouch = false -- never steal walk-buy Touched from plinth
+	p.CanQuery = false
+	p.CastShadow = false
 	p:SetAttribute("WE_KitRole", role)
 	p:SetAttribute("WE_BaseSize", size)
 	p:SetAttribute("WE_LocalOffset", localOffset)
@@ -681,7 +684,7 @@ local function buildMountainRing(root: Folder)
 
 	local half = GROUND_SIZE * 0.5
 	local ringR = half + 90
-	local segCount = 48
+	local segCount = 24
 	local segArc = (math.pi * 2) / segCount
 	local segLen = ringR * segArc * 1.12
 
@@ -768,7 +771,7 @@ local function buildMountainRing(root: Folder)
 	end
 
 	-- Mid-ground rocky outcrops just inside the ring (sandy floor props)
-	for oi = 1, 12 do
+	for oi = 1, 6 do
 		local ang = (oi / 12) * math.pi * 2 + 0.2
 		local orad = half - 220 - (oi % 4) * 40
 		local ox = math.cos(ang) * orad
@@ -939,11 +942,17 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		return false
 	end
 	local repaired = false
-	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5 then
+	-- Always force full-size collide Ground every Play (bulletproof void floor)
+	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5
+		or ground.CanCollide ~= true
+	then
 		ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
 		ground.Position = Vector3.new(0, groundCenterY(), 0)
 		repaired = true
 	end
+	-- Even when size OK, re-assert collide / anchor every start
+	ground.Size = Vector3.new(GROUND_SIZE, math.max(ground.Size.Y, GROUND_THICKNESS), GROUND_SIZE)
+	ground.Position = Vector3.new(0, groundCenterY(), 0)
 	if ground.CanCollide ~= true then
 		ground.CanCollide = true
 		repaired = true
@@ -1611,7 +1620,7 @@ function MapSetup.Run()
 
 	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
 	local bankFolder = ensureFolder("EmpireBank", root)
-	local bankPos = Vector3.new(420, 1, -420)
+	local bankPos = Vector3.new(220, 1, -220) -- matches BankRaidConfig.Position -- matches BankRaidConfig.Position
 	local bankPad = part({
 		Name = "BankPlaza",
 		Size = Vector3.new(36, 1.2, 36),
@@ -1687,21 +1696,8 @@ function MapSetup.Run()
 	CollectionService:AddTag(vault, "WE_BankVault")
 	plainBillboard(vault, "EMPIRE BANK · Stand to RAID cash", Vector2.new(280, 40), 8, Color3.fromRGB(255, 220, 120))
 	beacon(bankFolder, bankPos + Vector3.new(14, 0, 14), Color3.fromRGB(90, 130, 220), "BankBeacon")
-	for gi = 1, 5 do
-		local angle = (gi / 5) * math.pi * 2
-		local gpos = bankPos + Vector3.new(math.cos(angle) * 18, 2.6, math.sin(angle) * 18)
-		makeSoldierKit(
-			bankFolder,
-			"BankGuard_" .. gi,
-			CFrame.new(gpos),
-			Color3.fromRGB(60, 70, 110),
-			"BANK GUARD",
-			Color3.fromRGB(140, 180, 255),
-			160,
-			"BankGuard",
-			"bank_guard_" .. gi
-		)
-	end
+	-- Bank guards spawned live via CombatService.SpawnNPC("BankGuard", cf) in BankRaidService
+	-- (static makeSoldierKit props removed — they were Anchored stick figures with double nametags)
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
@@ -1748,8 +1744,22 @@ function MapSetup.Run()
 
 	-- Military world dressing (visual only — outposts/bunkers/hangars/depots/camps)
 	-- Does not tag WE_UpgradeSlot / buy pads. Regenerate via resetmap or delete WarEmpireSetup.
-	MapDressing.Dress(root)
-	DesertFlora.Dress(root)
+	-- Defer heavy world dressing to after first frame so Play Solo is usable in seconds
+	task.defer(function()
+		local okDress, errDress = pcall(function()
+			MapDressing.Dress(root)
+		end)
+		if not okDress then
+			warn("[WAR EMPIRE] MapDressing failed:", errDress)
+		end
+		task.wait(0.05)
+		local okFlora, errFlora = pcall(function()
+			DesertFlora.Dress(root)
+		end)
+		if not okFlora then
+			warn("[WAR EMPIRE] DesertFlora failed:", errFlora)
+		end
+	end)
 
 	-- Guarantee at least one Neutral Duration=0 spawn near origin
 	local hasNeutralSpawn = false

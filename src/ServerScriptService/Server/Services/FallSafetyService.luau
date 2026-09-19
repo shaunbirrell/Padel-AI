@@ -10,7 +10,7 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = -30
+local FALL_Y = -8
 local COOLDOWN_SEC = 2.5
 
 local BaseService: any = nil

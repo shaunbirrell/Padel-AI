@@ -1,6 +1,7 @@
 --!strict
 --[[
-	Empire Bank raid stub — stand on vault to loot Cash; per-player cooldown; NPC guards from MapSetup.
+	Empire Bank raid — stand on vault to loot Cash; per-player cooldown.
+	Bank guards are living CombatService NPCs (MoveTo + shoot), not static MapSetup props.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -19,10 +20,12 @@ local EconomyService: any = nil
 local NotificationService: any = nil
 local AnalyticsService: any = nil
 local RemoteSetup: any = nil
+local CombatService: any = nil
 
 local vaultPart: BasePart? = nil
-local holdProgress: { [number]: number } = {} -- userId -> seconds
-local cooldownUntil: { [number]: number } = {} -- userId -> unix
+local holdProgress: { [number]: number } = {}
+local cooldownUntil: { [number]: number } = {}
+local guardsSpawned = false
 
 local function findVault(): BasePart?
 	if vaultPart and vaultPart.Parent then
@@ -35,6 +38,34 @@ local function findVault(): BasePart?
 		end
 	end
 	return nil
+end
+
+local function spawnBankGuards()
+	if guardsSpawned then
+		return
+	end
+	if not CombatService or not CombatService.SpawnNPC then
+		warn("[WAR EMPIRE] BankRaidService: CombatService.SpawnNPC missing")
+		return
+	end
+	guardsSpawned = true
+
+	local vault = findVault()
+	local origin = if vault then vault.Position else (BankRaidConfig.Position or Vector3.new(220, 1, -220))
+	local count = BankRaidConfig.GuardCount or 4
+	local ring = BankRaidConfig.GuardRingRadius or 16
+	local typeId = BankRaidConfig.GuardNPCType or "BankGuard"
+	local spawned = 0
+	for i = 1, count do
+		local angle = (i / count) * math.pi * 2 + 0.35
+		local pos = origin + Vector3.new(math.cos(angle) * ring, 3.2, math.sin(angle) * ring)
+		local cf = CFrame.new(pos) * CFrame.Angles(0, -angle + math.pi, 0)
+		local rec = CombatService.SpawnNPC(typeId, cf)
+		if rec then
+			spawned += 1
+		end
+	end
+	print(string.format("[WAR EMPIRE] BankRaidService: spawned %d %s combat NPCs at bank", spawned, typeId))
 end
 
 local function pushState(player: Player)
@@ -71,11 +102,22 @@ local function completeRaid(player: Player)
 		)
 	end
 	if AnalyticsService then
-		AnalyticsService.Log(AnalyticsConfig.Events.BANK_RAID, player.UserId, {
-			cash = cash,
-		})
+		local ev = (AnalyticsConfig.Events and AnalyticsConfig.Events.BANK_RAID) or "BANK_RAID"
+		AnalyticsService.Log(ev, player.UserId, { cash = cash })
 	end
 	pushState(player)
+end
+
+local function isUnderFire(player: Player): boolean
+	local char = player.Character
+	if not char then
+		return true
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return true
+	end
+	return hum.Health < hum.MaxHealth * 0.95
 end
 
 function BankRaidService.Push(player: Player)
@@ -87,13 +129,16 @@ function BankRaidService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	AnalyticsService = deps.AnalyticsService
 	RemoteSetup = deps.RemoteSetup
+	CombatService = deps.CombatService
 
 	if not BankRaidConfig.Enabled then
 		return
 	end
 
 	task.defer(function()
+		task.wait(2)
 		findVault()
+		spawnBankGuards()
 	end)
 
 	local accum = 0
@@ -124,10 +169,12 @@ function BankRaidService.Init(deps: { [string]: any })
 				if hrp and hum and hum.Health > 0 then
 					if (hrp.Position - pos).Magnitude <= radius then
 						nearby[player.UserId] = true
-						local prog = (holdProgress[player.UserId] or 0) + step
-						holdProgress[player.UserId] = prog
-						if prog >= need then
-							completeRaid(player)
+						if not isUnderFire(player) then
+							local prog = (holdProgress[player.UserId] or 0) + step
+							holdProgress[player.UserId] = prog
+							if prog >= need then
+								completeRaid(player)
+							end
 						end
 					end
 				end
@@ -151,6 +198,8 @@ function BankRaidService.Init(deps: { [string]: any })
 			pushState(player)
 		end)
 	end
+
+	print("[WAR EMPIRE] BankRaidService ready (live BankGuard combat NPCs)")
 end
 
 return BankRaidService

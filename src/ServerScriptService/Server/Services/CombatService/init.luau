@@ -462,8 +462,14 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	)
 	local isHeavy = tid == "HeavyInfantry" or tid == "OilRigGuard" or tid == "FortGuard"
 	local isBank = tid == "BankGuard"
-	weldPart("Head", Vector3.new(1.1, 1.1, 1.1), CFrame.new(0, 1.65, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	weldPart("Helmet", Vector3.new(1.28, 0.55, 1.28), CFrame.new(0, 2.05, 0), helmCol, Enum.Material.Metal, nil)
+	local headPart = weldPart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, 1.7, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	-- Simple face (no third-party meshes)
+	local face = Instance.new("Decal")
+	face.Name = "face"
+	face.Face = Enum.NormalId.Front
+	face.Texture = "rbxasset://textures/face.png"
+	face.Parent = headPart
+	weldPart("Helmet", Vector3.new(1.32, 0.55, 1.32), CFrame.new(0, 2.1, 0), helmCol, Enum.Material.Metal, nil)
 	weldPart("Visor", Vector3.new(1.05, 0.22, 0.35), CFrame.new(0, 1.95, -0.55), Color3.fromRGB(30, 35, 40), Enum.Material.Glass, nil)
 	weldPart("Vest", Vector3.new(2.15, 1.35, 1.35), CFrame.new(0, 0.35, 0), Color3.fromRGB(
 		math.clamp(math.floor(def.Color.R * 255) - 25, 25, 255),
@@ -493,13 +499,40 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	humanoid.MaxHealth = def.Health
 	humanoid.Health = def.Health
 	humanoid.WalkSpeed = def.WalkSpeed
-	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.Subject
-	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOn
+	-- Kill double nametags: Humanoid nameplate OFF; one clean Billboard only
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
+
+	-- Single clean nameplate
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "NPCLabel"
+	bb.Size = UDim2.fromOffset(140, 28)
+	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 90
+	bb.Parent = root
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
+	lbl.BackgroundTransparency = 0.25
+	lbl.Text = def.DisplayName
+	lbl.TextColor3 = Color3.fromRGB(230, 235, 255)
+	lbl.TextScaled = true
+	lbl.Font = Enum.Font.GothamBold
+	lbl.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = lbl
 
 	model.PrimaryPart = root
 	CollectionService:AddTag(model, Constants.Tags.NPC)
 	model.Parent = ensureNPCFolder()
+	-- Server owns physics so MoveTo works reliably
+	pcall(function()
+		root:SetNetworkOwner(nil)
+	end)
 
 	local gyro = Instance.new("BodyGyro")
 	gyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
@@ -558,8 +591,10 @@ function CombatService.BootstrapNPCs()
 	local points = gatherSpawns()
 	local types = { "Infantry", "Infantry", "HeavyInfantry" }
 	local spawned = 0
+	-- Reserve slots for BankGuard / special spawns (BankRaidService)
+	local fieldCap = math.max(4, (CombatConfig.MaxActiveNPCs or 18) - 6)
 	for i, cf in ipairs(points) do
-		if spawned >= CombatConfig.MaxActiveNPCs then
+		if spawned >= fieldCap then
 			break
 		end
 		local typeId = types[((i - 1) % #types) + 1]

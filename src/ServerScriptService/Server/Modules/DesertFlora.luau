@@ -270,7 +270,7 @@ function DesertFlora.Dress(root: Instance)
 
 	-- Rim foothill belt — denser near mountain bases (inside Ground edge)
 	local rimR = HALF - 180
-	local rimCount = 36
+	local rimCount = 18
 	for i = 1, rimCount do
 		local ang = (i / rimCount) * math.pi * 2
 		local jitter = ((i * 37) % 50) - 25
@@ -303,25 +303,15 @@ function DesertFlora.Dress(root: Instance)
 	-- Sparse mid-map clusters (between plot ring ~800 and outer territories)
 	local midSpots = {
 		Vector3.new(350, GROUND_TOP_Y, 180),
-		Vector3.new(-320, GROUND_TOP_Y, -220),
 		Vector3.new(180, GROUND_TOP_Y, -480),
-		Vector3.new(-480, GROUND_TOP_Y, 300),
 		Vector3.new(620, GROUND_TOP_Y, -80),
-		Vector3.new(-140, GROUND_TOP_Y, 560),
 		Vector3.new(90, GROUND_TOP_Y, -720),
-		Vector3.new(-680, GROUND_TOP_Y, -40),
 		Vector3.new(480, GROUND_TOP_Y, 520),
-		Vector3.new(-420, GROUND_TOP_Y, -560),
 		Vector3.new(1100, GROUND_TOP_Y, 200),
-		Vector3.new(-1100, GROUND_TOP_Y, -180),
 		Vector3.new(200, GROUND_TOP_Y, 1100),
-		Vector3.new(-250, GROUND_TOP_Y, -1100),
 		Vector3.new(900, GROUND_TOP_Y, -900),
-		Vector3.new(-900, GROUND_TOP_Y, 900),
 		Vector3.new(1500, GROUND_TOP_Y, -400),
-		Vector3.new(-1500, GROUND_TOP_Y, 400),
 		Vector3.new(400, GROUND_TOP_Y, 1500),
-		Vector3.new(-400, GROUND_TOP_Y, -1500),
 	}
 	for i, pos in ipairs(midSpots) do
 		local kind = i % 4

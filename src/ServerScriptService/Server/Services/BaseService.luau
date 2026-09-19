@@ -177,8 +177,16 @@ end
 
 function BaseService.TeleportToPlot(player: Player)
 	local profile = DataService.GetProfile(player)
-	if not profile or not profile.BasePlotId then
+	if not profile then
 		return
+	end
+	-- Studio solo: never leave BasePlotId nil
+	if profile.BasePlotId == nil then
+		BaseService.AssignPlot(player)
+		profile = DataService.GetProfile(player) or profile
+		if profile.BasePlotId == nil then
+			profile.BasePlotId = 1
+		end
 	end
 	local cf = BaseService.GetPlotSpawnCFrame(profile.BasePlotId)
 	if not cf then
@@ -187,10 +195,29 @@ function BaseService.TeleportToPlot(player: Player)
 	local function apply(character: Model)
 		if character and character.Parent then
 			character:PivotTo(cf)
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if hrp and hrp:IsA("BasePart") then
+				hrp.AssemblyLinearVelocity = Vector3.zero
+				hrp.AssemblyAngularVelocity = Vector3.zero
+			end
 		end
 	end
+	local function applyWithRetries(character: Model)
+		apply(character)
+		-- Retry: CharacterAdded / physics settle can undo first PivotTo
+		task.delay(0.35, function()
+			if player.Character == character and character.Parent then
+				apply(character)
+			end
+		end)
+		task.delay(1.0, function()
+			if player.Character == character and character.Parent then
+				apply(character)
+			end
+		end)
+	end
 	if player.Character then
-		apply(player.Character)
+		applyWithRetries(player.Character)
 	else
 		local conn: RBXScriptConnection?
 		conn = player.CharacterAdded:Connect(function(character)
@@ -198,10 +225,9 @@ function BaseService.TeleportToPlot(player: Player)
 				conn:Disconnect()
 			end
 			task.defer(function()
-				apply(character)
+				applyWithRetries(character)
 			end)
 		end)
-		-- Safety: disconnect if still waiting after 30s
 		task.delay(30, function()
 			if conn then
 				conn:Disconnect()
@@ -523,9 +549,14 @@ function BaseService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		BaseService.AssignPlot(player)
-		-- Ensure player stands on THEIR plot (CombatService CharacterAdded may race before AssignPlot)
+		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
 		task.defer(function()
 			BaseService.TeleportToPlot(player)
+		end)
+		task.delay(1.5, function()
+			if player.Parent then
+				BaseService.TeleportToPlot(player)
+			end
 		end)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")

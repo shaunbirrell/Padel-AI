@@ -2,15 +2,16 @@
 --[[
 	SERVER-AUTHORITATIVE walk-over upgrade purchase.
 
-	Primary buy path: Touched on WE_UpgradeSlot plinths + 0.25s spatial HRP check.
-	Validates PlotId == profile.BasePlotId, debounces per player+structure (~1s),
-	then BaseService.PurchaseUpgrade + same Success/Warn toasts as the remote.
-	Client WorldPromptController FireServer remains a secondary path (B-menu / backup).
+	Primary buy path: Touched on WE_UpgradeSlot plinths + spatial HRP check.
+	Validates PlotId == profile.BasePlotId (Studio: teleport home instead of silent fail),
+	debounces per player+structure, then BaseService.PurchaseUpgrade.
+	Client WorldPromptController FireServer remains secondary (B-menu / backup).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -26,15 +27,12 @@ local RateLimitService: any = nil
 
 local TAG = Constants.Tags.UpgradeSlot
 local DEBOUNCE_SEC = 1.0
-local OVERLAP_MARGIN = 2.4
-local SPATIAL_INTERVAL = 0.25
+local OVERLAP_MARGIN = 4.0 -- wide AABB so kits / edges never miss
+local SPATIAL_INTERVAL = 0.2
 
--- userId|structureId -> last attempt clock
 local lastAttempt: { [string]: number } = {}
--- part -> connected
 local attached: { [BasePart]: boolean } = {}
 local partConns: { [BasePart]: { RBXScriptConnection } } = {}
--- padKey -> currently overlapping (for enter-edge)
 local lastOverlap: { [string]: boolean } = {}
 
 local function attemptKey(userId: number, structureId: string): string
@@ -69,13 +67,25 @@ local function detach(part: BasePart)
 	attached[part] = nil
 end
 
+local function hardenPad(part: BasePart)
+	part.CanTouch = true
+	part.CanCollide = true
+	part.CanQuery = true
+	for _, child in ipairs(part:GetDescendants()) do
+		if child:IsA("BasePart") then
+			child.CanTouch = false
+			child.CanQuery = false
+		end
+	end
+end
+
 local function pointInPad(hrpPos: Vector3, part: BasePart): boolean
 	local localPos = part.CFrame:PointToObjectSpace(hrpPos)
 	local half = part.Size * 0.5
 	return math.abs(localPos.X) <= half.X + OVERLAP_MARGIN
 		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
-		and localPos.Y >= -half.Y - 3
-		and localPos.Y <= half.Y + 8
+		and localPos.Y >= -half.Y - 4
+		and localPos.Y <= half.Y + 12
 end
 
 local function isSeated(character: Model): boolean
@@ -90,6 +100,19 @@ local function isSeated(character: Model): boolean
 	return seat:IsA("VehicleSeat") or seat:IsA("Seat")
 end
 
+local function flashPad(part: BasePart)
+	local original = part.Color
+	local originalMat = part.Material
+	part.Color = Color3.fromRGB(80, 255, 120)
+	part.Material = Enum.Material.Neon
+	task.delay(0.35, function()
+		if part.Parent then
+			part.Color = original
+			part.Material = originalMat
+		end
+	end)
+end
+
 local function notifyPurchaseResult(player: Player, structureId: string, result: any)
 	if not NotificationService then
 		return
@@ -99,9 +122,9 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 		local name = if def then def.DisplayName else tostring(structureId)
 		NotificationService.Notify(
 			player,
-			string.format("%s → Lv %d", name, result.NewLevel or 0),
+			string.format("✓ %s → Lv %d", name, result.NewLevel or 0),
 			"Success",
-			3
+			4
 		)
 	else
 		local err = result.Error or "Failed"
@@ -118,7 +141,6 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 			elseif err == "WrongPlot"
 			then "Not your base — walk your plot pads to buy"
 			else ("Purchase failed: " .. tostring(err))
-		-- Soft-fail MaxLevel while camping: throttle
 		if err == "MaxLevel" then
 			NotificationService.Notify(player, msg, "Info", 2)
 		else
@@ -133,6 +155,17 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
+	-- Studio solo: if BasePlotId nil, force-assign plot 1
+	if RunService:IsStudio() and profile.BasePlotId == nil then
+		if BaseService and BaseService.AssignPlot then
+			BaseService.AssignPlot(player)
+			profile = DataService.GetProfile(player) or profile
+		end
+		if profile.BasePlotId == nil then
+			profile.BasePlotId = 1
+		end
+	end
+
 	local pid = part:GetAttribute("PlotId")
 	if typeof(pid) == "number" and profile.BasePlotId ~= nil and pid ~= profile.BasePlotId then
 		local key = attemptKey(player.UserId, structureId)
@@ -140,8 +173,12 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		local last = lastAttempt[key] or 0
 		if now - last >= DEBOUNCE_SEC then
 			lastAttempt[key] = now
+			-- Always teleport + toast so WrongPlot never silent-fails (esp. Studio)
+			if BaseService and BaseService.TeleportToPlot then
+				BaseService.TeleportToPlot(player)
+			end
 			if NotificationService then
-				NotificationService.Notify(player, "Not your base — walk your plot pads to buy", "Warn", 2.5)
+				NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
 			end
 		end
 		return
@@ -154,7 +191,6 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
-	-- Early MaxLevel / missing def — no rate-limit burn while camping
 	local def = BaseConfig.Structures[structureId]
 	local current = profile.BaseUpgrades[structureId] or 0
 	if def and current >= def.MaxLevel then
@@ -167,7 +203,6 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 
 	lastAttempt[key] = now
 
-	-- Soft rate limit shared with remote path (avoid spam)
 	if RateLimitService and not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
 		if NotificationService and not fromStanding then
 			NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
@@ -177,6 +212,9 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 
 	local result = BaseService.PurchaseUpgrade(player, structureId)
 	notifyPurchaseResult(player, structureId, result)
+	if result.Ok then
+		flashPad(part)
+	end
 end
 
 local function onPadTouched(part: BasePart, hit: BasePart)
@@ -197,7 +235,7 @@ local function onPadTouched(part: BasePart, hit: BasePart)
 	end
 	local key = padKey(part, structureId) .. "|" .. tostring(player.UserId)
 	if lastOverlap[key] then
-		return -- enter-edge only; standing handled by spatial loop
+		return
 	end
 	lastOverlap[key] = true
 	tryServerPurchase(player, part, structureId, false)
@@ -205,6 +243,7 @@ end
 
 local function attachSlot(part: BasePart)
 	if attached[part] then
+		hardenPad(part)
 		return
 	end
 	if not part:IsA("BasePart") then
@@ -216,7 +255,7 @@ local function attachSlot(part: BasePart)
 	end
 
 	attached[part] = true
-	part.CanTouch = true
+	hardenPad(part)
 
 	trackConn(part, part.Touched:Connect(function(hit)
 		if hit:IsA("BasePart") then
@@ -257,6 +296,43 @@ local function attachSlot(part: BasePart)
 	end))
 end
 
+local function countAttached(): number
+	local n = 0
+	for part in pairs(attached) do
+		if part.Parent then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function scanAndTagFromSetup(): number
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		return 0
+	end
+	local bases = setup:FindFirstChild("Bases")
+	if not bases then
+		return 0
+	end
+	local retagged = 0
+	for _, desc in ipairs(bases:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			local sid = desc:GetAttribute("StructureId")
+			local pid = desc:GetAttribute("PlotId")
+			if typeof(sid) == "string" and typeof(pid) == "number" then
+				if not CollectionService:HasTag(desc, TAG) then
+					CollectionService:AddTag(desc, TAG)
+				end
+				hardenPad(desc)
+				attachSlot(desc)
+				retagged += 1
+			end
+		end
+	end
+	return retagged
+end
+
 local function bindExistingAndFuture()
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
 		if inst:IsA("BasePart") then
@@ -288,7 +364,6 @@ local function startSpatialLoop()
 			local character = player.Character
 			if character then
 				if isSeated(character) then
-					-- Clear overlap so stepping out can buy
 					local uid = tostring(player.UserId)
 					local suffix = "|" .. uid
 					for key in pairs(lastOverlap) do
@@ -333,9 +408,15 @@ function UpgradePadService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 
 	bindExistingAndFuture()
+	local initCount = countAttached()
+	print(string.format("[WAR EMPIRE] UpgradePadService Init: attached=%d tagged=%d", initCount, #CollectionService:GetTagged(TAG)))
+	if initCount == 0 then
+		local scanned = scanAndTagFromSetup()
+		print(string.format("[WAR EMPIRE] UpgradePadService: scanned Bases → attached=%d", scanned))
+	end
+
 	startSpatialLoop()
 
-	-- Late map / retag: re-scan shortly after init
 	task.defer(function()
 		task.wait(1)
 		for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
@@ -343,9 +424,15 @@ function UpgradePadService.Init(deps: { [string]: any })
 				attachSlot(inst)
 			end
 		end
+		local after = countAttached()
+		print(string.format("[WAR EMPIRE] UpgradePadService after-map: attached=%d", after))
+		if after == 0 then
+			local scanned = scanAndTagFromSetup()
+			warn(string.format("[WAR EMPIRE] UpgradePadService: ZERO pads after map — Bases scan attached=%d", scanned))
+		end
 	end)
 
-	print("[WAR EMPIRE] UpgradePadService ready (server walk-over buy)")
+	print("[WAR EMPIRE] UpgradePadService ready (server walk-over buy, margin=" .. tostring(OVERLAP_MARGIN) .. ")")
 end
 
 return UpgradePadService

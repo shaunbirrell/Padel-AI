@@ -115,11 +115,25 @@ else
 		end
 		setup = Workspace:FindFirstChild("WarEmpireSetup")
 	else
-		-- Still ensure SafetyCatch / MountainRing / berms exist on older place files
+		-- ALWAYS soft-heal Ground + SafetyCatch even when size looks OK (stale holes / CanCollide flips)
 		if setup and MapSetup.EnsureGroundHealthy then
 			pcall(function()
 				MapSetup.EnsureGroundHealthy(setup)
 			end)
+		end
+		-- Force Ground collide + thickness every Play
+		local mapFolder = setup and setup:FindFirstChild("Map")
+		local g = mapFolder and mapFolder:FindFirstChild("Ground")
+		if g and g:IsA("BasePart") then
+			g.CanCollide = true
+			g.Anchored = true
+			local ts = MapSetup.GROUND_SIZE or 6400
+			local th = MapSetup.GROUND_THICKNESS or 8
+			if g.Size.X < ts - 1 or g.Size.Y < th - 0.5 then
+				g.Size = Vector3.new(ts, th, ts)
+			end
+		elseif setup and MapSetup.EnsureGroundHealthy then
+			warn("[WAR EMPIRE] Ground missing after heal — recommend resetmap in Output")
 		end
 	end
 
@@ -276,3 +290,4 @@ if DevConfig.VerboseLogging then
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
+print("[WAR EMPIRE] CHECKLIST: 1) resetmap once if pads/void stale  2) stand on YOUR Command Center pad to buy  3) bank guards should chase+shoot  4) load should be faster")
