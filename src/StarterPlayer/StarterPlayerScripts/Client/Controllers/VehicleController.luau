@@ -1,8 +1,10 @@
 --!strict
 --[[
 	Phase 4/7 — Garage UI (G). Spawn / buy / despawn requests only.
-	Category + rarity filters for large roster (~50+). ScrollingFrame AutomaticCanvasSize.
+	Category + rarity + Owned filters for large roster (~99). ScrollingFrame AutomaticCanvasSize.
 	Empty states via UIUtil.EmptyState. MobileScale via UIUtil.PrepareScreen.
+	Mobile: ≥48px filter chips, ≥52px row actions, Activated (not MouseButton1 only),
+	responsive panel, clear empty / filter-empty / no-owned banners.
 ]]
 
 local Players = game:GetService("Players")
@@ -21,10 +23,13 @@ local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local VehicleController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
 local cooldownLabel: TextLabel? = nil
+local statusLabel: TextLabel? = nil
+local panelFrame: Frame? = nil
 local isOpen = false
 
 local ownedMap: { [string]: boolean } = {}
@@ -32,6 +37,7 @@ local activeId: string? = nil
 local cooldownLeft = 0
 local filterCategory: string = "All" -- All | Ground | Air | Naval
 local filterRarity: string = "All" -- All | Common | Uncommon | Rare | Epic | Legendary
+local filterOwnedOnly = false
 local rarityColors: { [string]: Color3 } = {
 	Common = Color3.fromRGB(160, 165, 170),
 	Uncommon = Color3.fromRGB(90, 180, 110),
@@ -61,7 +67,8 @@ local function sortedIds(): { string }
 		local rar = if def then (def.Rarity or "Common") else "Common"
 		local catOk = filterCategory == "All" or cat == filterCategory
 		local rarOk = filterRarity == "All" or rar == filterRarity
-		if catOk and rarOk then
+		local ownedOk = not filterOwnedOnly or ownedMap[id] == true
+		if catOk and rarOk and ownedOk then
 			table.insert(ids, id)
 		end
 	end
@@ -86,6 +93,21 @@ local function ownedCount(): number
 	return n
 end
 
+local function catalogCount(): number
+	local n = 0
+	for _ in pairs(VehicleConfig.Vehicles) do
+		n += 1
+	end
+	return n
+end
+
+local function bindTap(btn: GuiButton, fn: () -> ())
+	btn.Activated:Connect(function()
+		AudioController.PlayClick()
+		fn()
+	end)
+end
+
 local function refresh()
 	if not listFrame then
 		return
@@ -97,13 +119,26 @@ local function refresh()
 	end
 	if not listFrame:FindFirstChildOfClass("UIListLayout") then
 		local layout = Instance.new("UIListLayout")
-		layout.Padding = UDim.new(0, 6)
+		layout.Padding = UDim.new(0, if isTouch then 8 else 6)
 		layout.SortOrder = Enum.SortOrder.LayoutOrder
 		layout.Parent = listFrame
 	end
 
 	local ids = sortedIds()
-	if #ids == 0 then
+	local ownedN = ownedCount()
+	local catalogN = catalogCount()
+
+	if statusLabel then
+		statusLabel.Text = string.format(
+			"%d shown · %d owned · %d in catalog%s",
+			#ids,
+			ownedN,
+			catalogN,
+			if filterOwnedOnly then " · OWNED filter" else ""
+		)
+	end
+
+	if catalogN == 0 then
 		UIUtil.EmptyState(listFrame, "Garage empty — no vehicles configured yet.", 0)
 		if cooldownLabel then
 			cooldownLabel.Text = if cooldownLeft > 0
@@ -113,25 +148,57 @@ local function refresh()
 		return
 	end
 
-	-- Friendly empty banner when nothing owned / nothing to spawn yet
-	if ownedCount() == 0 then
+	if #ids == 0 then
+		local msg = if filterOwnedOnly
+			then "No owned vehicles match these filters — turn off OWNED or pick All."
+			else "No vehicles match these filters — tap All / clear rarity."
+		UIUtil.EmptyState(listFrame, msg, 0)
+		if cooldownLabel then
+			cooldownLabel.Text = if cooldownLeft > 0
+				then string.format("Spawn cooldown: %.0fs", cooldownLeft)
+				else "Spawn ready"
+		end
+		return
+	end
+
+	-- Friendly empty banner when nothing owned yet (full catalog still listed below)
+	if ownedN == 0 and not filterOwnedOnly then
 		UIUtil.EmptyState(
 			listFrame,
-			"No owned vehicles yet — BUY a ride below, then SPAWN. Starter Jeep appears after join sync.",
+			"No owned vehicles yet — tap gold BUY, then SPAWN. Starter Jeep syncs after join.",
 			0
 		)
+	elseif ownedN > 0 and filterOwnedOnly == false then
+		-- soft tip only when filters hide all owned
+		local ownedVisible = 0
+		for _, id in ipairs(ids) do
+			if ownedMap[id] then
+				ownedVisible += 1
+			end
+		end
+		if ownedVisible == 0 then
+			UIUtil.EmptyState(
+				listFrame,
+				"None of your rides match these filters — tap OWNED or All to find them.",
+				0
+			)
+		end
 	end
+
+	local rowH = if isTouch then 92 else 78
+	local btnW = if isTouch then 118 else 100
+	local btnH = if isTouch then 52 else 44
 
 	for i, id in ipairs(ids) do
 		local def = VehicleConfig.Vehicles[id]
 		if def then
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, -8, 0, 78)
+			row.Size = UDim2.new(1, -8, 0, rowH)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
 			row.LayoutOrder = i
 			row.Parent = listFrame
-			addCorner(row, 6)
+			addCorner(row, 8)
 
 			local rarBar = Instance.new("Frame")
 			rarBar.Size = UDim2.new(0, 4, 1, -8)
@@ -144,15 +211,15 @@ local function refresh()
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
 			title.Position = UDim2.fromOffset(14, 4)
-			title.Size = UDim2.new(1, -124, 0, 18)
+			title.Size = UDim2.new(1, -(btnW + 28), 0, 18)
 			title.Font = Enum.Font.GothamBold
-			title.TextSize = 14
+			title.TextSize = if isTouch then 15 else 14
 			title.TextXAlignment = Enum.TextXAlignment.Left
 			title.TextColor3 = Constants.Colors.Text
 			title.Text = def.DisplayName
+			title.TextTruncate = Enum.TextTruncate.AtEnd
 			title.Parent = row
 
-			-- Category + rarity color chips (visual kits v2)
 			local cat = def.Category or "Ground"
 			local catCol = if cat == "Air"
 				then Constants.Colors.CategoryAir
@@ -182,10 +249,10 @@ local function refresh()
 
 			local meta = Instance.new("TextLabel")
 			meta.BackgroundTransparency = 1
-			meta.Position = UDim2.fromOffset(14, 42)
-			meta.Size = UDim2.new(1, -124, 0, 26)
+			meta.Position = UDim2.fromOffset(14, if isTouch then 46 else 42)
+			meta.Size = UDim2.new(1, -(btnW + 28), 0, if isTouch then 36 else 26)
 			meta.Font = Enum.Font.Gotham
-			meta.TextSize = 11
+			meta.TextSize = if isTouch then 12 else 11
 			meta.TextXAlignment = Enum.TextXAlignment.Left
 			meta.TextYAlignment = Enum.TextYAlignment.Top
 			meta.TextColor3 = Constants.Colors.Muted
@@ -216,26 +283,27 @@ local function refresh()
 			local btn = Instance.new("TextButton")
 			btn.AnchorPoint = Vector2.new(1, 0.5)
 			btn.Position = UDim2.new(1, -10, 0.5, 0)
-			btn.Size = UDim2.fromOffset(100, 44)
+			btn.Size = UDim2.fromOffset(btnW, btnH)
 			btn.Font = Enum.Font.GothamBold
-			btn.TextSize = 13
+			btn.TextSize = if isTouch then 14 else 13
 			btn.TextColor3 = Constants.Colors.Text
 			btn.BorderSizePixel = 0
+			btn.AutoButtonColor = true
+			btn.Active = true
 			btn.Parent = row
-			addCorner(btn, 6)
+			addCorner(btn, 8)
+			UIUtil.EnsureMinTouch(btn, if isTouch then 48 else 44)
 
 			if activeId == id then
 				btn.Text = "DESPAWN"
 				btn.BackgroundColor3 = Constants.Colors.Danger
-				btn.MouseButton1Click:Connect(function()
-					AudioController.PlayClick()
+				bindTap(btn, function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestDespawnVehicle):FireServer()
 				end)
 			elseif ownedMap[id] then
 				btn.Text = if cooldownLeft > 0 then string.format("%.0fs", cooldownLeft) else "SPAWN"
 				btn.BackgroundColor3 = Constants.Colors.Accent
-				btn.MouseButton1Click:Connect(function()
-					AudioController.PlayClick()
+				bindTap(btn, function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestSpawnVehicle):FireServer(id)
 				end)
 			else
@@ -243,8 +311,7 @@ local function refresh()
 				btn.Text = if price <= 0 then "CLAIM" else ("BUY $" .. tostring(price))
 				btn.BackgroundColor3 = Constants.Colors.Gold
 				btn.TextColor3 = Color3.fromRGB(20, 22, 18)
-				btn.MouseButton1Click:Connect(function()
-					AudioController.PlayClick()
+				bindTap(btn, function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseVehicle):FireServer(id)
 				end)
 			end
@@ -285,25 +352,35 @@ local function buildGui()
 	panel.Name = "GaragePanel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(540, 560)
+	-- Phone-friendly: use scale with max offset so it fits portrait
+	if isTouch then
+		panel.Size = UDim2.new(0.94, 0, 0.82, 0)
+	else
+		panel.Size = UDim2.fromOffset(540, 560)
+	end
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
 	panel.Visible = false
 	panel.Parent = screen
+	panelFrame = panel
 	addCorner(panel, 10)
 	local gst = Instance.new("UIStroke")
 	gst.Color = Constants.Colors.Gold
 	gst.Thickness = 1.5
 	gst.Transparency = 0.35
 	gst.Parent = panel
+	local sizeCon = Instance.new("UISizeConstraint")
+	sizeCon.MaxSize = Vector2.new(560, 640)
+	sizeCon.MinSize = Vector2.new(280, 360)
+	sizeCon.Parent = panel
 
 	local title = Instance.new("TextLabel")
 	title.BackgroundTransparency = 1
 	title.Position = UDim2.fromOffset(16, 12)
 	title.Size = UDim2.new(1, -100, 0, 28)
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 22
+	title.TextSize = if isTouch then 20 else 22
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Constants.Colors.Text
 	title.Text = "GARAGE"
@@ -312,7 +389,7 @@ local function buildGui()
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.Position = UDim2.new(1, -12, 0, 12)
-	closeBtn.Size = UDim2.fromOffset(44, 44)
+	closeBtn.Size = UDim2.fromOffset(if isTouch then 48 else 44, if isTouch then 48 else 44)
 	closeBtn.Text = "X"
 	closeBtn.Font = Enum.Font.GothamBold
 	closeBtn.TextSize = 16
@@ -321,15 +398,15 @@ local function buildGui()
 	closeBtn.BorderSizePixel = 0
 	closeBtn.Parent = panel
 	addCorner(closeBtn, 6)
-	closeBtn.MouseButton1Click:Connect(function()
-		AudioController.PlayClick()
+	UIUtil.EnsureMinTouch(closeBtn, 44)
+	bindTap(closeBtn, function()
 		setOpen(false)
 	end)
 
 	local cd = Instance.new("TextLabel")
 	cd.BackgroundTransparency = 1
 	cd.Position = UDim2.fromOffset(16, 44)
-	cd.Size = UDim2.new(1, -32, 0, 18)
+	cd.Size = UDim2.new(1, -32, 0, 16)
 	cd.Font = Enum.Font.Gotham
 	cd.TextSize = 12
 	cd.TextXAlignment = Enum.TextXAlignment.Left
@@ -338,45 +415,88 @@ local function buildGui()
 	cd.Parent = panel
 	cooldownLabel = cd
 
+	local status = Instance.new("TextLabel")
+	status.Name = "StatusLine"
+	status.BackgroundTransparency = 1
+	status.Position = UDim2.fromOffset(16, 60)
+	status.Size = UDim2.new(1, -32, 0, 14)
+	status.Font = Enum.Font.Gotham
+	status.TextSize = 11
+	status.TextXAlignment = Enum.TextXAlignment.Left
+	status.TextColor3 = Constants.Colors.Muted
+	status.Text = ""
+	status.Parent = panel
+	statusLabel = status
+
+	local chipH = if isTouch then 36 else 28
 	local filters = Instance.new("Frame")
 	filters.Name = "Filters"
-	filters.Position = UDim2.fromOffset(12, 66)
-	filters.Size = UDim2.new(1, -24, 0, 30)
+	filters.Position = UDim2.fromOffset(12, 78)
+	filters.Size = UDim2.new(1, -24, 0, chipH)
 	filters.BackgroundTransparency = 1
 	filters.Parent = panel
 	local layoutF = Instance.new("UIListLayout")
 	layoutF.FillDirection = Enum.FillDirection.Horizontal
 	layoutF.Padding = UDim.new(0, 5)
 	layoutF.Parent = filters
+	local function paintCatFilters()
+		for _, child in ipairs(filters:GetChildren()) do
+			if child:IsA("TextButton") then
+				local name = string.gsub(child.Name, "Filter_", "")
+				if name == "Owned" then
+					child.BackgroundColor3 = if filterOwnedOnly then Constants.Colors.Gold else Constants.Colors.Background
+					child.TextColor3 = if filterOwnedOnly then Color3.fromRGB(20, 22, 18) else Constants.Colors.Text
+				else
+					child.BackgroundColor3 = if name == filterCategory then Constants.Colors.Accent else Constants.Colors.Background
+					child.TextColor3 = Constants.Colors.Text
+				end
+			end
+		end
+	end
 	for _, cat in ipairs({ "All", "Ground", "Air", "Naval" }) do
 		local fb = Instance.new("TextButton")
 		fb.Name = "Filter_" .. cat
-		fb.Size = UDim2.fromOffset(78, 28)
+		fb.Size = UDim2.fromOffset(if isTouch then 72 else 70, chipH - 2)
 		fb.Font = Enum.Font.GothamBold
-		fb.TextSize = 11
+		fb.TextSize = if isTouch then 12 else 11
 		fb.Text = cat:upper()
 		fb.TextColor3 = Constants.Colors.Text
 		fb.BorderSizePixel = 0
-		fb.BackgroundColor3 = if filterCategory == cat then Constants.Colors.Accent else Constants.Colors.Background
+		fb.AutoButtonColor = true
 		addCorner(fb, 6)
 		fb.Parent = filters
-		fb.MouseButton1Click:Connect(function()
-			AudioController.PlayClick()
+		UIUtil.EnsureMinTouch(fb, if isTouch then 36 else 28)
+		bindTap(fb, function()
 			filterCategory = cat
-			for _, child in ipairs(filters:GetChildren()) do
-				if child:IsA("TextButton") then
-					local name = string.gsub(child.Name, "Filter_", "")
-					child.BackgroundColor3 = if name == filterCategory then Constants.Colors.Accent else Constants.Colors.Background
-				end
-			end
+			paintCatFilters()
 			refresh()
 		end)
 	end
+	-- OWNED toggle chip
+	local ownedChip = Instance.new("TextButton")
+	ownedChip.Name = "Filter_Owned"
+	ownedChip.Size = UDim2.fromOffset(if isTouch then 78 else 72, chipH - 2)
+	ownedChip.Font = Enum.Font.GothamBold
+	ownedChip.TextSize = if isTouch then 12 else 11
+	ownedChip.Text = "OWNED"
+	ownedChip.TextColor3 = Constants.Colors.Text
+	ownedChip.BorderSizePixel = 0
+	ownedChip.AutoButtonColor = true
+	ownedChip.BackgroundColor3 = Constants.Colors.Background
+	addCorner(ownedChip, 6)
+	ownedChip.Parent = filters
+	UIUtil.EnsureMinTouch(ownedChip, if isTouch then 36 else 28)
+	bindTap(ownedChip, function()
+		filterOwnedOnly = not filterOwnedOnly
+		paintCatFilters()
+		refresh()
+	end)
+	paintCatFilters()
 
 	local rarFilters = Instance.new("Frame")
 	rarFilters.Name = "RarityFilters"
-	rarFilters.Position = UDim2.fromOffset(12, 98)
-	rarFilters.Size = UDim2.new(1, -24, 0, 26)
+	rarFilters.Position = UDim2.fromOffset(12, 78 + chipH + 6)
+	rarFilters.Size = UDim2.new(1, -24, 0, if isTouch then 32 else 26)
 	rarFilters.BackgroundTransparency = 1
 	rarFilters.Parent = panel
 	local layoutR = Instance.new("UIListLayout")
@@ -390,41 +510,46 @@ local function buildGui()
 			table.insert(rarList, r)
 		end
 	end
+	local function paintRarity()
+		for _, child in ipairs(rarFilters:GetChildren()) do
+			if child:IsA("TextButton") then
+				local name = string.gsub(child.Name, "Rarity_", "")
+				child.BackgroundColor3 = if name == filterRarity
+					then (rarityColors[name] or Constants.Colors.Accent)
+					else Constants.Colors.Background
+			end
+		end
+	end
 	for _, rar in ipairs(rarList) do
 		local rb = Instance.new("TextButton")
 		rb.Name = "Rarity_" .. rar
-		rb.Size = UDim2.fromOffset(if rar == "Legendary" then 78 else 68, 24)
+		rb.Size = UDim2.fromOffset(if rar == "Legendary" then 78 else (if isTouch then 64 else 60), if isTouch then 30 else 24)
 		rb.Font = Enum.Font.GothamBold
-		rb.TextSize = 10
+		rb.TextSize = if isTouch then 11 else 10
 		rb.Text = if rar == "All" then "ALL ★" else string.upper(string.sub(rar, 1, 3))
 		rb.TextColor3 = Constants.Colors.Text
 		rb.BorderSizePixel = 0
-		rb.BackgroundColor3 = if filterRarity == rar then (rarityColors[rar] or Constants.Colors.Accent) else Constants.Colors.Background
+		rb.AutoButtonColor = true
 		addCorner(rb, 5)
 		rb.Parent = rarFilters
-		rb.MouseButton1Click:Connect(function()
-			AudioController.PlayClick()
+		UIUtil.EnsureMinTouch(rb, if isTouch then 30 else 24)
+		bindTap(rb, function()
 			filterRarity = rar
-			for _, child in ipairs(rarFilters:GetChildren()) do
-				if child:IsA("TextButton") then
-					local name = string.gsub(child.Name, "Rarity_", "")
-					child.BackgroundColor3 = if name == filterRarity
-						then (rarityColors[name] or Constants.Colors.Accent)
-						else Constants.Colors.Background
-				end
-			end
+			paintRarity()
 			refresh()
 		end)
 	end
+	paintRarity()
 
+	local listTop = 78 + chipH + 6 + (if isTouch then 36 else 30) + 8
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Position = UDim2.fromOffset(12, 130)
-	scroll.Size = UDim2.new(1, -24, 1, -170)
+	scroll.Position = UDim2.fromOffset(12, listTop)
+	scroll.Size = UDim2.new(1, -24, 1, -(listTop + 36))
 	scroll.ScrollingDirection = Enum.ScrollingDirection.Y
 	scroll.ElasticBehavior = Enum.ElasticBehavior.Always
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 4
+	scroll.ScrollBarThickness = if isTouch then 6 else 4
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.CanvasSize = UDim2.fromOffset(0, 0)
 	scroll.Parent = panel
@@ -433,13 +558,15 @@ local function buildGui()
 	local hint = Instance.new("TextLabel")
 	hint.BackgroundTransparency = 1
 	hint.AnchorPoint = Vector2.new(0, 1)
-	hint.Position = UDim2.new(0, 16, 1, -12)
+	hint.Position = UDim2.new(0, 16, 1, -10)
 	hint.Size = UDim2.new(1, -32, 0, 18)
 	hint.Font = Enum.Font.Gotham
-	hint.TextSize = 12
+	hint.TextSize = if isTouch then 11 else 12
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextColor3 = Constants.Colors.Muted
-	hint.Text = "G · Cat + Rarity filters · scroll · E on pad · DriverSeat"
+	hint.Text = if isTouch
+		then "Tap BUY → SPAWN · filters · E on pad · DriverSeat"
+		else "G · Cat + Rarity + OWNED · scroll · E on pad · DriverSeat"
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")
@@ -447,7 +574,7 @@ local function buildGui()
 	garageBtn.AnchorPoint = Vector2.new(0, 1)
 	-- Bottom-left, above currency pill / clear of right dock
 	garageBtn.Position = UDim2.new(0, 16, 1, -88)
-	garageBtn.Size = UDim2.fromOffset(110, 44)
+	garageBtn.Size = UDim2.fromOffset(if isTouch then 120 else 110, if isTouch then 48 else 44)
 	garageBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	garageBtn.Text = "GARAGE"
 	garageBtn.Font = Enum.Font.GothamBold
@@ -459,6 +586,7 @@ local function buildGui()
 	garageBtn.Parent = screen
 	addCorner(garageBtn, 8)
 	addStroke(garageBtn, Constants.Colors.Gold, 1.5)
+	UIUtil.EnsureMinTouch(garageBtn, 44)
 	garageBtn.Activated:Connect(function()
 		AudioController.PlayClick()
 		print("[WAR EMPIRE] Garage CTA toggled →", not isOpen)
