@@ -2,9 +2,13 @@
 --[[
 	WAR EMPIRE — Server Bootstrap
 	Wires remotes + services. Request/action remotes only.
+
+	CRITICAL: MapSetup runs BEFORE heavy service requires so a failed
+	Combat/Vehicle/etc. module never leaves the player falling in void.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -14,8 +18,68 @@ local ServerFolder = script.Parent
 local Modules = ServerFolder:WaitForChild("Modules")
 local Services = ServerFolder:WaitForChild("Services")
 
-local RemoteSetup = require(Modules.RemoteSetup)
+print("[WAR EMPIRE] Server Bootstrap starting...")
+
+-- ── Map FIRST (before any heavy service require) ──────────────────────────
 local MapSetup = require(Modules.MapSetup)
+
+local function ensureVoidFallback(reason: string)
+	warn("[WAR EMPIRE] CRITICAL: MapSetup failed — installing void fallback. Reason: " .. tostring(reason))
+	print("[WAR EMPIRE] ERROR: MapSetup did not build WarEmpireSetup. Creating emergency baseplate + spawn so players do not void-fall.")
+
+	Workspace.Gravity = 196.2
+
+	local existing = Workspace:FindFirstChild("WE_VoidFallback")
+	if existing then
+		existing:Destroy()
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "WE_VoidFallback"
+	folder.Parent = Workspace
+
+	local baseplate = Instance.new("Part")
+	baseplate.Name = "Baseplate"
+	baseplate.Size = Vector3.new(512, 4, 512)
+	baseplate.Position = Vector3.new(0, -2, 0)
+	baseplate.Anchored = true
+	baseplate.CanCollide = true
+	baseplate.Material = Enum.Material.Grass
+	baseplate.Color = Color3.fromRGB(40, 80, 40)
+	baseplate.TopSurface = Enum.SurfaceType.Smooth
+	baseplate.BottomSurface = Enum.SurfaceType.Smooth
+	baseplate.Parent = folder
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "EmergencySpawn"
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.Position = Vector3.new(0, 5, 0)
+	spawn.Anchored = true
+	spawn.CanCollide = true
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.BrickColor = BrickColor.new("Bright green")
+	spawn.Material = Enum.Material.Neon
+	spawn.Parent = folder
+
+	print("[WAR EMPIRE] Void fallback ready: WE_VoidFallback Baseplate + EmergencySpawn at (0,5,0)")
+end
+
+if not Workspace:FindFirstChild("WarEmpireSetup") then
+	local ok, err = pcall(function()
+		MapSetup.Run()
+	end)
+	if not ok then
+		ensureVoidFallback(err)
+	elseif not Workspace:FindFirstChild("WarEmpireSetup") then
+		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
+	end
+else
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run")
+end
+
+-- ── Remotes + services (AFTER map so require failures don't block terrain) ─
+local RemoteSetup = require(Modules.RemoteSetup)
 local DataService = require(Services.DataService)
 local EconomyService = require(Services.EconomyService)
 local BaseService = require(Services.BaseService)
@@ -37,14 +101,6 @@ local BattlePassService = require(Services.BattlePassService)
 local SoldierService = require(Services.SoldierService)
 local SeasonService = require(Services.SeasonService)
 local ClanWarService = require(Services.ClanWarService)
-
-print("[WAR EMPIRE] Server Bootstrap starting...")
-
--- Build map/tags before services that depend on CollectionService tags
-local Workspace = game:GetService("Workspace")
-if not Workspace:FindFirstChild("WarEmpireSetup") then
-	MapSetup.Run()
-end
 
 RemoteSetup.Init()
 

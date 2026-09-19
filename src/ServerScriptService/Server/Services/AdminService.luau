@@ -180,8 +180,21 @@ function AdminService.Init(deps: { [string]: any })
 			if existing then
 				existing:Destroy()
 			end
+			local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
+			if voidFb then
+				voidFb:Destroy()
+			end
 			local MapSetup = require(script.Parent.Parent.Modules.MapSetup)
-			MapSetup.Run()
+			local ok, err = pcall(function()
+				MapSetup.Run()
+			end)
+			if not ok then
+				warn("[WAR EMPIRE] resetmap MapSetup failed: " .. tostring(err))
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "MapSetup failed — check Output", "Error")
+				end
+				return
+			end
 			if deps.NotificationService then
 				deps.NotificationService.Notify(player, "Map regenerated (MapSetup)", "Success")
 			end

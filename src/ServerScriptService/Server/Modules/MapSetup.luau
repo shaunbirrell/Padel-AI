@@ -82,14 +82,46 @@ local function ensureFolder(name, parent)
 	return f
 end
 
-local function part(props)
+local function part(props: { [string]: any })
 	local p = Instance.new("Part")
 	p.Anchored = true
 	p.TopSurface = Enum.SurfaceType.Smooth
 	p.BottomSurface = Enum.SurfaceType.Smooth
-	for k, v in pairs(props) do
-		(p :: any)[k] = v
+
+	-- Explicit safe assignment (avoid (p :: any)[k] = v strict/runtime quirks)
+	if props.Name ~= nil then
+		p.Name = props.Name
 	end
+	if props.Size ~= nil then
+		p.Size = props.Size
+	end
+	if props.CFrame ~= nil then
+		p.CFrame = props.CFrame
+	elseif props.Position ~= nil then
+		p.Position = props.Position
+	end
+	if props.Color ~= nil then
+		p.Color = props.Color
+	end
+	if props.Material ~= nil then
+		p.Material = props.Material
+	end
+	if props.Transparency ~= nil then
+		p.Transparency = props.Transparency
+	end
+	if props.CanCollide ~= nil then
+		p.CanCollide = props.CanCollide
+	end
+	if props.Anchored ~= nil then
+		p.Anchored = props.Anchored
+	end
+	if props.Shape ~= nil then
+		p.Shape = props.Shape
+	end
+	if props.Parent ~= nil then
+		p.Parent = props.Parent
+	end
+
 	return p
 end
 
@@ -331,6 +363,9 @@ end
 local MapSetup = {}
 
 function MapSetup.Run()
+	-- Normal gravity so characters fall onto terrain (not float/void)
+	Workspace.Gravity = 196.2
+
 	-- Lighting
 	Lighting.Ambient = Color3.fromRGB(78, 88, 70)
 	Lighting.OutdoorAmbient = Color3.fromRGB(90, 100, 80)
@@ -637,7 +672,31 @@ function MapSetup.Run()
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
 
+	-- Guarantee at least one Neutral Duration=0 spawn near origin
+	local hasNeutralSpawn = false
+	for _, inst in ipairs(root:GetDescendants()) do
+		if inst:IsA("SpawnLocation") and inst.Neutral and inst.Duration == 0 then
+			hasNeutralSpawn = true
+			break
+		end
+	end
+	if not hasNeutralSpawn then
+		local fallbackSpawn = Instance.new("SpawnLocation")
+		fallbackSpawn.Name = "NeutralSpawn"
+		fallbackSpawn.Size = Vector3.new(12, 1, 12)
+		fallbackSpawn.Position = Vector3.new(0, 5, 0)
+		fallbackSpawn.Anchored = true
+		fallbackSpawn.CanCollide = true
+		fallbackSpawn.Neutral = true
+		fallbackSpawn.Duration = 0
+		fallbackSpawn.BrickColor = BrickColor.new("Bright green")
+		fallbackSpawn.Material = Enum.Material.Neon
+		fallbackSpawn.Parent = root
+		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
+	end
+
 	print("[WAR EMPIRE] MapSetup complete: structure kits, price billboards, flags, lighting under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end
 
