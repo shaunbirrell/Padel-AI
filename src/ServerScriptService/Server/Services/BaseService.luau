@@ -611,7 +611,12 @@ function BaseService.Init(deps: { [string]: any })
 				if profile then
 					local amount = BaseService.ComputePassiveIncomePerTick(profile, player)
 					if amount > 0 then
-						EconomyService.AddCash(player, amount, "passive")
+						-- Accrue to Money Collector pending (not auto Cash)
+						if EconomyService.AccruePendingCash then
+							EconomyService.AccruePendingCash(player, amount, "passive")
+						else
+							EconomyService.AddCash(player, amount, "passive")
+						end
 					end
 				end
 			end

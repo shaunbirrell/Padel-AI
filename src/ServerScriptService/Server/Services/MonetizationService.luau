@@ -128,16 +128,65 @@ function MonetizationService.SetMockGamePassOwned(player: Player, passKey: strin
 	cache[passKey] = owned
 end
 
+
+local function ensureEntitlements(profile: any)
+	if typeof(profile.Entitlements) ~= "table" then
+		profile.Entitlements = {}
+	end
+	return profile.Entitlements
+end
+
+function MonetizationService.GrantEntitlement(player: Player, key: string)
+	local profile = DataService.GetProfile(player)
+	if not profile or typeof(key) ~= "string" or key == "" then
+		return
+	end
+	local ents = ensureEntitlements(profile)
+	ents[key] = true
+	-- Mirror common keys into GamePass session cache so multipliers apply immediately
+	if key == "VIP" or key == "DoubleCash" or key == "DoubleXP" or key == "AutoCollect" then
+		local cache = gamePassCache[player.UserId]
+		if not cache then
+			cache = {}
+			gamePassCache[player.UserId] = cache
+		end
+		cache[key] = true
+	end
+	-- InstantBarracks: bump Barracks to at least 1
+	if key == "InstantBarracks" and typeof(profile.BaseUpgrades) == "table" then
+		local cur = profile.BaseUpgrades.Barracks or 0
+		if cur < 1 then
+			profile.BaseUpgrades.Barracks = 1
+		end
+	end
+	DataService.MarkDirty(player)
+end
+
+function MonetizationService.PlayerOwnsEntitlement(player: Player, key: string): boolean
+	if MonetizationService.PlayerOwnsGamePass(player, key) then
+		return true
+	end
+	local profile = DataService.GetProfile(player)
+	if profile and typeof(profile.Entitlements) == "table" and profile.Entitlements[key] == true then
+		return true
+	end
+	return false
+end
+
 --[[ Cash multiplier from VIP (additive bonus) + DoubleCash (multiplicative). ]]
 function MonetizationService.GetCashMultiplier(player: Player): number
 	local mult = 1
 	local vip = MonetizationConfig.GamePasses.VIP
-	if vip and MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+	local hasVip = MonetizationService.PlayerOwnsEntitlement(player, "VIP")
+		or MonetizationService.PlayerOwnsGamePass(player, "VIP")
+	if vip and hasVip then
 		local bonus = tonumber(vip.CashBonusMult) or 0
 		mult += bonus
 	end
 	local doubleCash = MonetizationConfig.GamePasses.DoubleCash
-	if doubleCash and MonetizationService.PlayerOwnsGamePass(player, "DoubleCash") then
+	local hasDouble = MonetizationService.PlayerOwnsEntitlement(player, "DoubleCash")
+		or MonetizationService.PlayerOwnsGamePass(player, "DoubleCash")
+	if doubleCash and hasDouble then
 		local m = tonumber(doubleCash.CashMult) or 2
 		mult *= m
 	end
@@ -242,9 +291,19 @@ function MonetizationService.Init(deps: { [string]: any })
 		end
 	end)
 
-	DataService.OnProfileLoaded(function(player: Player, _profile: any)
+	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		task.spawn(function()
 			MonetizationService.RefreshGamePassCache(player)
+			-- Rehydrate session cache from persisted Entitlements
+			if typeof(profile) == "table" and typeof(profile.Entitlements) == "table" then
+				local cache = gamePassCache[player.UserId] or {}
+				for k, v in pairs(profile.Entitlements) do
+					if v == true then
+						cache[k] = true
+					end
+				end
+				gamePassCache[player.UserId] = cache
+			end
 		end)
 	end)
 
@@ -288,6 +347,10 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	-- Battle Pass Premium: server-only via ProcessReceipt (never client confirmation)
 	if product.GrantsBattlePassPremium == true and BattlePassService and BattlePassService.SetPremium then
 		BattlePassService.SetPremium(player, true)
+	end
+	-- DevProduct entitlement flags (AutoCollect / DoubleCash / VIP / etc.)
+	if typeof(product.GrantEntitlement) == "string" and product.GrantEntitlement ~= "" then
+		MonetizationService.GrantEntitlement(player, product.GrantEntitlement)
 	end
 
 	markProcessed(profile, receiptId)

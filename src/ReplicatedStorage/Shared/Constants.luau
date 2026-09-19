@@ -24,6 +24,7 @@ Constants.Tags = {
 	NPC = "WE_NPC",
 	Vehicle = "WE_Vehicle",
 	TutorialMarker = "WE_TutorialMarker",
+	MoneyCollector = "WE_MoneyCollector",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -87,7 +88,7 @@ Constants.RemoteNames = {
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 6
+Constants.CURRENT_DATA_VERSION = 7
 
 Constants.AutosaveIntervalSeconds = 60
 Constants.DataStoreRetries = 3
@@ -114,6 +115,11 @@ Constants.Colors = {
 	CategoryGround = Color3.fromRGB(90, 130, 80),
 	CategoryAir = Color3.fromRGB(90, 160, 220),
 	CategoryNaval = Color3.fromRGB(70, 180, 200),
+	-- High-contrast (never pale yellow on sand/green)
+	TextOnDark = Color3.fromRGB(245, 248, 252),
+	TextDark = Color3.fromRGB(18, 20, 24),
+	PlateDark = Color3.fromRGB(12, 14, 18),
+	GoldBright = Color3.fromRGB(255, 210, 90),
 }
 
 return Constants

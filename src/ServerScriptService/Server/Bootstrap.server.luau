@@ -227,6 +227,7 @@ local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
 local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
+local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.MoneyCollectorService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
@@ -263,6 +264,7 @@ local deps: { [string]: any } = {
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
 	FallSafetyService = FallSafetyService,
+	MoneyCollectorService = MoneyCollectorService,
 }
 
 local function safeInit(label: string, svc: any, ...: any)
@@ -290,14 +292,15 @@ if DataService and AnalyticsService and DataService.SetAnalytics then
 end
 
 -- Init services that OnProfileLoaded depends on BEFORE DataService loads players
-safeInit("EconomyService", EconomyService, deps)
-safeInit("XPService", XPService, deps)
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
+safeInit("MonetizationService", MonetizationService, deps)
+safeInit("EconomyService", EconomyService, deps)
+safeInit("XPService", XPService, deps)
+safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
 safeInit("FallSafetyService", FallSafetyService, deps)
-safeInit("MonetizationService", MonetizationService, deps)
 safeInit("TutorialService", TutorialService, deps)
 
 -- Now load profiles (fires OnProfileLoaded for joiners)

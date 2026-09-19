@@ -40,6 +40,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 	return {
 		DataVersion = Constants.CURRENT_DATA_VERSION,
 		Cash = EconomyConfig.StartingCash,
+		PendingCash = 0,
 		Gold = EconomyConfig.StartingGold,
 		Level = 1,
 		XP = 0,
@@ -97,6 +98,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		FirstJoinUnix = now,
 		LastJoinUnix = now,
 		ProcessedReceipts = {},
+		Entitlements = {},
 	}
 end
 
@@ -267,8 +269,27 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		version = 6
 	end
 
+
+	-- v6 → v7: Money Collector pending cash + entitlements flags
+	if version < 7 then
+		if typeof((profile :: any).PendingCash) ~= "number" then
+			(profile :: any).PendingCash = 0
+		end
+		if typeof((profile :: any).Entitlements) ~= "table" then
+			(profile :: any).Entitlements = {}
+		end
+		profile.DataVersion = 7
+		version = 7
+	end
+
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
+	end
+	if typeof((profile :: any).PendingCash) ~= "number" then
+		(profile :: any).PendingCash = 0
+	end
+	if typeof((profile :: any).Entitlements) ~= "table" then
+		(profile :: any).Entitlements = {}
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

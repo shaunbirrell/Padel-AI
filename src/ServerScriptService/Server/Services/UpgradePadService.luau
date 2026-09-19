@@ -113,7 +113,7 @@ local function flashPad(part: BasePart)
 	end)
 end
 
-local function notifyPurchaseResult(player: Player, structureId: string, result: any)
+local function notifyPurchaseResult(player: Player, structureId: string, result: any, fromStanding: boolean?)
 	if not NotificationService then
 		return
 	end
@@ -141,10 +141,21 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 			elseif err == "WrongPlot"
 			then "Not your base — walk your plot pads to buy"
 			else ("Purchase failed: " .. tostring(err))
+		-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
+		local cd = if fromStanding then 1.1 else 0.75
+		local key = "pad|" .. err .. "|" .. structureId
 		if err == "MaxLevel" then
-			NotificationService.Notify(player, msg, "Info", 2)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Info", 2, 8, key)
+			else
+				NotificationService.Notify(player, msg, "Info", 2)
+			end
 		else
-			NotificationService.Notify(player, msg, "Warn", 3.5)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, cd, key)
+			else
+				NotificationService.Notify(player, msg, "Warn", 3.5)
+			end
 		end
 	end
 end
@@ -180,7 +191,11 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			end
 			print(string.format("[UpgradePad] WrongPlot %s tried plot=%s own=%s → teleport", player.Name, tostring(pid), tostring(profile.BasePlotId)))
 			if NotificationService then
+				if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, "Not your base — teleported to YOUR plot", "Warn", 2.5, 1.2, "wrongplot")
+			else
 				NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
+			end
 			end
 		end
 		return
@@ -220,7 +235,7 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	else
 		print(string.format("[UpgradePad] BUY FAIL %s %s → %s", player.Name, structureId, tostring(result.Error)))
 	end
-	notifyPurchaseResult(player, structureId, result)
+	notifyPurchaseResult(player, structureId, result, fromStanding)
 	if result.Ok then
 		flashPad(part)
 	end

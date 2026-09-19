@@ -141,7 +141,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "STUBS: all product Ids=0 — prompts log intent only; no real charges until Creator Dashboard IDs."
+	note.Text = "Prices shown in Robux. Id=0 items log intent only (no charge) until Creator Dashboard IDs are set."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
@@ -198,7 +198,7 @@ function ShopController.Init()
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 11
-		btn.TextColor3 = Constants.Colors.Gold
+		btn.TextColor3 = Color3.fromRGB(255, 248, 230)
 		btn.Text = btnText or "BUY"
 		btn.BorderSizePixel = 0
 		corner(btn, 6)
@@ -212,30 +212,22 @@ function ShopController.Init()
 	end
 
 	for key, def in pairs(MonetizationConfig.DevProducts) do
-		local sub = ""
-		if def.GrantsBattlePassPremium then
-			sub = string.format("Unlocks BP Premium track (id=%d) — grant via ProcessReceipt only", def.Id or 0)
-		elseif def.Cash and def.Cash > 0 then
-			sub = string.format("$%d  (id=%d)", def.Cash, def.Id or 0)
-		elseif def.Gold and def.Gold > 0 then
-			sub = string.format("%d Gold  (id=%d)", def.Gold, def.Id or 0)
-		else
-			sub = string.format("id=%d", def.Id or 0)
-		end
+		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = (tonumber(def.Id) or 0) == 0
-		local btnLabel = if stub then "STUB" else "BUY"
-		if not stub then
-			if def.Cash and def.Cash > 0 then
-				btnLabel = "BUY $" .. tostring(def.Cash)
-			elseif def.Gold and def.Gold > 0 then
-				btnLabel = "BUY " .. tostring(def.Gold) .. "G"
-			elseif def.GrantsBattlePassPremium then
-				btnLabel = "BUY BP"
-			end
+		local sub = def.Description or ""
+		if def.GrantsBattlePassPremium then
+			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
+		elseif def.GrantEntitlement then
+			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement))) 
+		elseif def.Cash and def.Cash > 0 then
+			sub = string.format("+$%d Cash", def.Cash)
+		elseif def.Gold and def.Gold > 0 then
+			sub = string.format("+%d Gold", def.Gold)
 		end
 		if stub then
-			sub = "STUB id=0 — " .. sub
+			sub = sub .. " · coming soon (no charge)"
 		end
+		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
 		addRow(def.DisplayName, sub, function()
 			promptDevProduct(key)
 		end, btnLabel)
@@ -243,14 +235,12 @@ function ShopController.Init()
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
 		local stub = (tonumber(def.Id) or 0) == 0
-		addRow(
-			"Pass: " .. def.DisplayName,
-			(if stub then "STUB id=0 — " else "") .. (def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
-			function()
-				promptGamePass(key)
-			end,
-			if stub then "STUB" else "PASS"
-		)
+		local robux = tonumber(def.RobuxPrice) or 0
+		local sub = (def.Description or "") .. (if stub then " · coming soon (no charge)" else "")
+		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
+		addRow("Pass: " .. def.DisplayName, sub, function()
+			promptGamePass(key)
+		end, btnLabel)
 	end
 
 	

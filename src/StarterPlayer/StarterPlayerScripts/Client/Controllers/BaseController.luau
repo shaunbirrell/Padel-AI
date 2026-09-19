@@ -27,6 +27,7 @@ local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
 local cash = 0
 local menuOpen = false
+local menuFailToastAt = 0
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
 local toggleBtn: TextButton? = nil
@@ -139,7 +140,11 @@ local function refreshList()
 				local function onMenuBuy()
 					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
 					if cash < cost then
-						NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+						local now = os.clock()
+						if now - menuFailToastAt >= 0.9 then
+							menuFailToastAt = now
+							NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+						end
 						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
 					else
 						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)

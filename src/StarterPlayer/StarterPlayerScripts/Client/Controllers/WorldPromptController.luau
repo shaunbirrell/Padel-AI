@@ -62,6 +62,8 @@ local lastBillboardRefresh = 0
 local overlapConn: RBXScriptConnection? = nil
 local tagsBound = false
 local maxToastAt: { [string]: number } = {} -- throttle MAX toasts while camping
+local failToastAt: { [string]: number } = {} -- throttle Not enough / prereq (~0.85s)
+local FAIL_TOAST_CD = 0.9
 local _buyGui: ScreenGui? = nil
 local buyBtn: TextButton? = nil
 local activeBuyStructureId: string? = nil
@@ -190,7 +192,7 @@ local function ensurePadBuyGui(): TextButton
 	screen.IgnoreGuiInset = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- Above HUD dock (55); below modal panels (60+)
-	screen.DisplayOrder = 100 -- above dock/HUD; BUY must never be buried
+	screen.DisplayOrder = 65 -- above dock (55); below toast (70); avoids burying notifications
 	screen.Parent = pg
 	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
 	_buyGui = screen
@@ -205,7 +207,7 @@ local function ensurePadBuyGui(): TextButton
 	btn.AutoButtonColor = true
 	btn.Font = Enum.Font.GothamBold
 	btn.TextSize = 28
-	btn.TextColor3 = Constants.Colors.Gold
+	btn.TextColor3 = Color3.fromRGB(255, 250, 235)
 	btn.TextStrokeTransparency = 0.55
 	btn.Text = "BUY"
 	btn.Visible = false
@@ -291,8 +293,8 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	else
 		btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
 	end
-	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
-	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
+	btn.TextColor3 = if canAfford then Color3.fromRGB(255, 252, 240) else Color3.fromRGB(255, 200, 200)
+	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(28, 24, 10) else Color3.fromRGB(42, 16, 16)
 	btn.AutoButtonColor = canAfford
 	btn.Visible = true
 end
@@ -363,8 +365,8 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(10, 12, 14)
-	backdrop.BackgroundTransparency = 0.12
+	backdrop.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
+	backdrop.BackgroundTransparency = 0.02
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local c = Instance.new("UICorner")
@@ -489,8 +491,8 @@ local function refreshSlotBillboard(part: BasePart)
 			bb,
 			display,
 			string.format("Lv %d → %d  %s%s\nStand or tap BUY", level, level + 1, formatCost(cost), incomeLine),
-			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
-			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
+			if canAfford then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if canAfford then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	else
 		applyBillboardCopy(bb, display, incomeStr or "", Constants.Colors.Text, Constants.Colors.Gold)
@@ -568,14 +570,24 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 	if prereqHint then
 		lastPurchaseAt[structureId] = now
 		if not (opts and opts.silentMax) then
-			NotificationController.Show(prereqHint, "Warn", 3)
+			local fk = "prereq|" .. structureId
+			local lastFail = failToastAt[fk] or 0
+			if (now - lastFail) >= FAIL_TOAST_CD then
+				failToastAt[fk] = now
+				NotificationController.Show(prereqHint, "Warn", 3)
+			end
 			print("[WorldPrompt] BUY FAIL prereq", structureId, prereqHint)
 		end
 		return
 	end
 	if cost and cash < cost and not (opts and opts.silentMax) then
-		-- Soft client hint; server still authoritative
-		NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
+		-- Soft client hint; throttled so standing on pad does not spam
+		local fk = "cash|" .. structureId
+		local lastFail = failToastAt[fk] or 0
+		if (now - lastFail) >= FAIL_TOAST_CD then
+			failToastAt[fk] = now
+			NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
+		end
 		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
 	end
 

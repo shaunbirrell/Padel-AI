@@ -67,6 +67,7 @@ export type BattlePassProgress = {
 export type PlayerProfile = {
 	DataVersion: number,
 	Cash: number,
+	PendingCash: number,
 	Gold: number,
 	Level: number,
 	XP: number,
@@ -94,11 +95,13 @@ export type PlayerProfile = {
 	FirstJoinUnix: number,
 	LastJoinUnix: number,
 	ProcessedReceipts: { [string]: boolean }?,
+	Entitlements: { [string]: boolean }?,
 }
 
 export type EconomyUpdatePayload = {
 	Cash: number,
 	Gold: number,
+	PendingCash: number?,
 }
 
 export type XPUpdatePayload = {
