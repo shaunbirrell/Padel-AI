@@ -928,6 +928,94 @@ MapSetup.GROUND_TOP_Y = GROUND_TOP_Y
 MapSetup.SAFETY_FLOOR_SIZE = SAFETY_FLOOR_SIZE
 MapSetup.SAFETY_FLOOR_Y = SAFETY_FLOOR_Y
 
+local function buildPadSupportShelves(setup: Folder)
+	--[[
+		Collide shelves under elevated upgrade pads / decks so players never
+		treat CanCollide=false kit deco as floor. Fills air gap pad→Ground.
+	]]
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return
+	end
+	local folder = map:FindFirstChild("PadSupports")
+	if folder then
+		folder:Destroy()
+	end
+	folder = Instance.new("Folder")
+	folder.Name = "PadSupports"
+	folder.Parent = map
+
+	local CollectionService = game:GetService("CollectionService")
+	local TAG = TAG_SLOT
+	local count = 0
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		if inst:IsA("BasePart") and inst:IsDescendantOf(setup) then
+			local topY = inst.Position.Y + inst.Size.Y * 0.5
+			local gap = topY - GROUND_TOP_Y
+			if gap > 2.5 then
+				local shelfH = math.clamp(gap - 0.5, 1, 40)
+				local shelfY = GROUND_TOP_Y + shelfH * 0.5
+				part({
+					Name = "PadShelf_" .. tostring(count),
+					Size = Vector3.new(math.max(inst.Size.X + 4, 12), shelfH, math.max(inst.Size.Z + 4, 12)),
+					Position = Vector3.new(inst.Position.X, shelfY, inst.Position.Z),
+					Color = Color3.fromRGB(90, 85, 70),
+					Material = Enum.Material.Concrete,
+					CanCollide = true,
+					Anchored = true,
+					Parent = folder,
+				})
+				count += 1
+			end
+		end
+	end
+	-- Also sweep StructureId parts under Bases (tag may lag)
+	local bases = setup:FindFirstChild("Bases")
+	if bases then
+		for _, desc in ipairs(bases:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				local sid = desc:GetAttribute("StructureId")
+				if typeof(sid) == "string" then
+					local topY = desc.Position.Y + desc.Size.Y * 0.5
+					local gap = topY - GROUND_TOP_Y
+					if gap > 2.5 then
+						-- Skip if already covered by a nearby shelf
+						local covered = false
+						for _, child in ipairs(folder:GetChildren()) do
+							if child:IsA("BasePart") then
+								local dx = child.Position.X - desc.Position.X
+								local dz = child.Position.Z - desc.Position.Z
+								if dx * dx + dz * dz < 25 then
+									covered = true
+									break
+								end
+							end
+						end
+						if not covered then
+							local shelfH = math.clamp(gap - 0.5, 1, 40)
+							local shelfY = GROUND_TOP_Y + shelfH * 0.5
+							part({
+								Name = "PadShelf_" .. tostring(count),
+								Size = Vector3.new(math.max(desc.Size.X + 4, 12), shelfH, math.max(desc.Size.Z + 4, 12)),
+								Position = Vector3.new(desc.Position.X, shelfY, desc.Position.Z),
+								Color = Color3.fromRGB(90, 85, 70),
+								Material = Enum.Material.Concrete,
+								CanCollide = true,
+								Anchored = true,
+								Parent = folder,
+							})
+							count += 1
+						end
+					end
+				end
+			end
+		end
+	end
+	if count > 0 then
+		print("[WAR EMPIRE] MapSetup: PadSupports shelves=" .. tostring(count) .. " (collide fillers under elevated pads)")
+	end
+end
+
 function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 	--[[
 		Soft-heal existing WarEmpireSetup Ground / SafetyCatch.
@@ -951,7 +1039,7 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		repaired = true
 	end
 	-- Even when size OK, re-assert collide / anchor every start
-	ground.Size = Vector3.new(GROUND_SIZE, math.max(ground.Size.Y, GROUND_THICKNESS), GROUND_SIZE)
+	ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
 	ground.Position = Vector3.new(0, groundCenterY(), 0)
 	if ground.CanCollide ~= true then
 		ground.CanCollide = true
@@ -985,6 +1073,8 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		repaired = true
 	end
 
+	buildPadSupportShelves(setup :: Folder)
+
 	print(string.format(
 		"[WAR EMPIRE] Ground heal: ok size=%.0fx%.0fx%.0f CanCollide=%s repaired=%s",
 		ground.Size.X,
@@ -994,6 +1084,60 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		tostring(repaired)
 	))
 	return true
+end
+
+
+
+
+function MapSetup.ForceRebuildGround(setup: Instance): boolean
+	--[[
+		Hard rebuild: destroy Map.Ground + SafetyCatch and recreate them.
+		Use every Play when soft-heal is not enough (stale holes / void gaps).
+		Does NOT rebuild the whole WarEmpireSetup — only the collide floor layers.
+	]]
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return false
+	end
+	local oldGround = map:FindFirstChild("Ground")
+	if oldGround then
+		oldGround:Destroy()
+	end
+	local oldCatch = map:FindFirstChild("SafetyCatch")
+	if oldCatch then
+		oldCatch:Destroy()
+	end
+
+	local ground = part({
+		Name = "Ground",
+		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
+		Position = Vector3.new(0, groundCenterY(), 0),
+		Color = COL_GROUND,
+		Material = Enum.Material.Sand,
+		CanCollide = true,
+		Anchored = true,
+		Parent = map,
+	})
+	ground.CanCollide = true
+	ground.Anchored = true
+	buildSafetyUnderfloor(map :: Folder)
+	if not map:FindFirstChild("EdgeBermN") then
+		buildEdgeBerms(map :: Folder)
+	end
+	if not setup:FindFirstChild("MountainRing") then
+		buildMountainRing(setup :: Folder)
+	end
+	buildPadSupportShelves(setup :: Folder)
+
+	print(string.format(
+		"[WAR EMPIRE] Ground FORCE-REBUILT: size=%.0fx%.0fx%.0f CanCollide=%s Anchored=%s",
+		ground.Size.X,
+		ground.Size.Y,
+		ground.Size.Z,
+		tostring(ground.CanCollide),
+		tostring(ground.Anchored)
+	))
+	return ground.CanCollide == true and ground.Size.X >= GROUND_SIZE - 1 and ground.Size.Y >= GROUND_THICKNESS - 0.5
 end
 
 function MapSetup.Run()
@@ -1784,6 +1928,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
+		buildPadSupportShelves(root)
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas/flora/oil-ramps/berms + WorldDressing")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")

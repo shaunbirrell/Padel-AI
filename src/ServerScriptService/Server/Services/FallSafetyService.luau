@@ -10,8 +10,8 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = -8
-local COOLDOWN_SEC = 2.5
+local FALL_Y = -2
+local COOLDOWN_SEC = 1.5
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -53,7 +53,7 @@ function FallSafetyService.Init(deps: { [string]: any })
 	local accum = 0
 	RunService.Heartbeat:Connect(function(dt)
 		accum += dt
-		if accum < 0.2 then
+		if accum < 0.1 then
 			return
 		end
 		accum = 0

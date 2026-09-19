@@ -76,31 +76,28 @@ if not Workspace:FindFirstChild("WarEmpireSetup") then
 		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
 	end
 else
-	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (heal Ground if needed)")
-	-- Re-assert gravity + Ground presence so scale upgrades / partial setups never void-fall
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
+	-- Re-assert gravity; soft-heal first, then ALWAYS delete+recreate Ground/SafetyCatch
+	-- so stale place files / prior soft-heals cannot leave void holes.
 	Workspace.Gravity = 196.2
 	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	local targetSize = MapSetup.GROUND_SIZE or 6400
-	local map = setup and setup:FindFirstChild("Map")
-	local ground = map and map:FindFirstChild("Ground")
-	local groundOk = ground
-		and ground:IsA("BasePart")
-		and ground.Size.X >= targetSize - 1
-		and ground.Size.Y >= (MapSetup.GROUND_THICKNESS or 8) - 0.5
-		and ground.CanCollide == true
 
-	if not groundOk then
-		-- Prefer soft heal (resize / CanCollide / SafetyCatch / MountainRing) before full rebuild
-		local healed = false
-		if setup and MapSetup.EnsureGroundHealthy then
-			local okHeal, healResult = pcall(function()
-				return MapSetup.EnsureGroundHealthy(setup)
-			end)
-			healed = okHeal and healResult == true
-		end
-		if not healed then
-			warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small/non-collide — rebuilding via MapSetup")
+	if setup and MapSetup.EnsureGroundHealthy then
+		pcall(function()
+			MapSetup.EnsureGroundHealthy(setup)
+		end)
+	end
+
+	local rebuilt = false
+	if setup and MapSetup.ForceRebuildGround then
+		local okRebuild, rebuildResult = pcall(function()
+			return MapSetup.ForceRebuildGround(setup)
+		end)
+		rebuilt = okRebuild and rebuildResult == true
+		if not rebuilt then
+			warn("[WAR EMPIRE] ForceRebuildGround failed — full MapSetup.Run rebuild")
 			pcall(function()
 				if setup then
 					setup:Destroy()
@@ -108,33 +105,38 @@ else
 				MapSetup.Run()
 			end)
 			if not Workspace:FindFirstChild("WarEmpireSetup") then
-				ensureVoidFallback("Existing setup invalid and rebuild failed")
+				ensureVoidFallback("ForceRebuildGround failed and full rebuild failed")
 			end
-		else
-			print("[WAR EMPIRE] Ground soft-healed to ≥" .. tostring(targetSize) .. " thick collide floor + safety/mountains")
 		end
-		setup = Workspace:FindFirstChild("WarEmpireSetup")
+	elseif setup then
+		warn("[WAR EMPIRE] ForceRebuildGround missing — full MapSetup.Run rebuild")
+		pcall(function()
+			setup:Destroy()
+			MapSetup.Run()
+		end)
+	end
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	-- Mandatory Output status after heal/rebuild
+	local mapFolder = setup and setup:FindFirstChild("Map")
+	local g = mapFolder and mapFolder:FindFirstChild("Ground")
+	local catch = mapFolder and mapFolder:FindFirstChild("SafetyCatch")
+	if g and g:IsA("BasePart") then
+		g.CanCollide = true
+		g.Anchored = true
+		print(string.format(
+			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
+			g.Size.X,
+			g.Size.Y,
+			g.Size.Z,
+			tostring(g.CanCollide),
+			tostring(catch ~= nil)
+		))
+		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
+			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
+		end
 	else
-		-- ALWAYS soft-heal Ground + SafetyCatch even when size looks OK (stale holes / CanCollide flips)
-		if setup and MapSetup.EnsureGroundHealthy then
-			pcall(function()
-				MapSetup.EnsureGroundHealthy(setup)
-			end)
-		end
-		-- Force Ground collide + thickness every Play
-		local mapFolder = setup and setup:FindFirstChild("Map")
-		local g = mapFolder and mapFolder:FindFirstChild("Ground")
-		if g and g:IsA("BasePart") then
-			g.CanCollide = true
-			g.Anchored = true
-			local ts = MapSetup.GROUND_SIZE or 6400
-			local th = MapSetup.GROUND_THICKNESS or 8
-			if g.Size.X < ts - 1 or g.Size.Y < th - 0.5 then
-				g.Size = Vector3.new(ts, th, ts)
-			end
-		elseif setup and MapSetup.EnsureGroundHealthy then
-			warn("[WAR EMPIRE] Ground missing after heal — recommend resetmap in Output")
-		end
+		warn("[WAR EMPIRE] Ground MISSING after force rebuild — run admin resetmap (Studio) MANDATORY")
 	end
 
 	setup = Workspace:FindFirstChild("WarEmpireSetup")
@@ -181,6 +183,7 @@ else
 		end
 	end
 end
+
 
 -- ── Remotes + services (AFTER map so require failures don't block terrain) ─
 local RemoteSetup = require(Modules.RemoteSetup)
@@ -290,4 +293,4 @@ if DevConfig.VerboseLogging then
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
-print("[WAR EMPIRE] CHECKLIST: 1) resetmap if pads stale (WE_UpgradeSlot>0)  2) stand on YOUR Command Center pad — Output shows [UpgradePad] BUY ATTEMPT/OK  3) dock tiles toast 'Shop opened' etc  4) B menu BUY works")
+print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists (stale WarEmpireSetup keeps old holes)  2) Output must show Ground AFTER heal size/CanCollide  3) stand on YOUR Command Center pad — big BUY button + [UpgradePad] BUY ATTEMPT/OK  4) dock tiles toast + B menu BUY")

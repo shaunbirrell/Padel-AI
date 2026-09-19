@@ -2,13 +2,16 @@
 --[[
 	World interactivity for StudioSetup-tagged parts.
 
-	Upgrade pads (WE_UpgradeSlot): WALK-OVER auto-purchase — Touched + Heartbeat
-	overlap fires RequestPurchaseUpgrade (debounced) as SECONDARY path.
-	Server UpgradePadService is primary. Never grants on client.
+	Upgrade pads (WE_UpgradeSlot):
+	  PRIMARY UX (mobile): large bottom ScreenGui BUY button while standing on
+	  own-plot pad → RequestPurchaseUpgrade (Activated / touch).
+	  BACKUP: walk-over auto-purchase — Touched + Heartbeat overlap (debounced).
+	  Server UpgradePadService remains authoritative walk-over path. Never grants on client.
 	Edge cases: respawn clears overlap; seated-in-vehicle skips buy; multi-part
 	touch uses pad keys; plot reassignment clears state; standing retry after
 	debounce for failed-purchase UX. Prompt/Touched connections disconnect on
 	part destroy. BillboardGuis throttled refresh on Base/Economy updates.
+	Billboard subtitle: "Stand or tap BUY". Hide BUY for leave / wrong plot / MAX / prereq.
 
 	ProximityPrompts only for non-buy actions (Open Base, Open Garage, capture ping, tutorial).
 ]]
@@ -28,6 +31,7 @@ local Types = require(Shared.Types)
 local BaseController = require(script.Parent.BaseController)
 local VehicleController = require(script.Parent.VehicleController)
 local NotificationController = require(script.Parent.NotificationController)
+local UIUtil = require(Shared.Util.UIUtil)
 
 local WorldPromptController = {}
 
@@ -37,7 +41,9 @@ local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(200, 70) -- readable on phones when close
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(210, 90) -- room for "Stand or tap BUY"
+local BUY_GUI_NAME = "WE_PadBuyGui"
+local BUY_BTN_MIN_H = 72
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -55,6 +61,10 @@ local lastBillboardRefresh = 0
 local overlapConn: RBXScriptConnection? = nil
 local tagsBound = false
 local maxToastAt: { [string]: number } = {} -- throttle MAX toasts while camping
+local _buyGui: ScreenGui? = nil
+local buyBtn: TextButton? = nil
+local activeBuyStructureId: string? = nil
+local activeBuyPart: BasePart? = nil
 
 local function padKey(part: BasePart, structureId: string): string
 	local pid = part:GetAttribute("PlotId")
@@ -112,7 +122,128 @@ local function formatCost(cost: number): string
 	return "$" .. tostring(cost)
 end
 
-local function structureInfo(structureId: string): (string, number, number?, boolean, string?)
+local structureInfo: (structureId: string) -> (string, number, number?, boolean, string?)
+local tryPurchase: (structureId: string, opts: { silentMax: boolean }?) -> ()
+local isSeatedInVehicle: () -> boolean
+local isOwnPlotPad: (part: BasePart) -> boolean
+
+local function hidePadBuyButton()
+	activeBuyStructureId = nil
+	activeBuyPart = nil
+	if buyBtn then
+		buyBtn.Visible = false
+	end
+end
+
+local function ensurePadBuyGui(): TextButton
+	if buyBtn and buyBtn.Parent then
+		return buyBtn
+	end
+	local pg = player:WaitForChild("PlayerGui")
+	local existing = pg:FindFirstChild(BUY_GUI_NAME)
+	if existing and existing:IsA("ScreenGui") then
+		existing:Destroy()
+	end
+
+	local screen = Instance.new("ScreenGui")
+	screen.Name = BUY_GUI_NAME
+	screen.ResetOnSpawn = false
+	screen.IgnoreGuiInset = false
+	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	-- Above HUD dock (55); below modal panels (60+)
+	screen.DisplayOrder = 56
+	screen.Parent = pg
+	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
+	_buyGui = screen
+
+	local btn = Instance.new("TextButton")
+	btn.Name = "BuyButton"
+	btn.AnchorPoint = Vector2.new(0.5, 1)
+	btn.Position = UDim2.new(0.5, 0, 1, -108)
+	btn.Size = UDim2.fromOffset(360, BUY_BTN_MIN_H)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = true
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 26
+	btn.TextColor3 = Constants.Colors.Gold
+	btn.TextStrokeTransparency = 0.55
+	btn.Text = "BUY"
+	btn.Visible = false
+	btn.Active = true
+	btn.Selectable = true
+	btn.ZIndex = 40
+	btn.Parent = screen
+	UIUtil.Corner(btn, 16)
+	local stroke = UIUtil.GoldStroke(btn, 3)
+	stroke.Transparency = 0.05
+	UIUtil.EnsureMinTouch(btn, BUY_BTN_MIN_H)
+
+	local gloss = Instance.new("Frame")
+	gloss.Name = "Gloss"
+	gloss.Size = UDim2.new(1, -12, 0, 18)
+	gloss.Position = UDim2.fromOffset(6, 6)
+	gloss.BackgroundColor3 = Color3.fromRGB(255, 230, 140)
+	gloss.BackgroundTransparency = 0.78
+	gloss.BorderSizePixel = 0
+	gloss.Active = false
+	gloss.ZIndex = 41
+	gloss.Parent = btn
+	UIUtil.Corner(gloss, 10)
+
+	btn.Activated:Connect(function()
+		local sid = activeBuyStructureId
+		if typeof(sid) ~= "string" then
+			return
+		end
+		local display, _level, cost, isMax, prereqHint = structureInfo(sid)
+		if isMax or prereqHint or cost == nil then
+			hidePadBuyButton()
+			return
+		end
+		-- Intentional tap: clear walk-over debounce so BUY always fires
+		lastPurchaseAt[sid] = 0
+		pendingPurchase[sid] = nil
+		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
+		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s cost=%s", sid, tostring(cost)))
+		tryPurchase(sid)
+	end)
+
+	buyBtn = btn
+	return btn
+end
+
+local function refreshPadBuyButton(part: BasePart?, structureId: string?)
+	if part == nil or structureId == nil then
+		hidePadBuyButton()
+		return
+	end
+	if isSeatedInVehicle() then
+		hidePadBuyButton()
+		return
+	end
+	if not isOwnPlotPad(part) then
+		hidePadBuyButton()
+		return
+	end
+
+	local display, _level, cost, isMax, prereqHint = structureInfo(structureId)
+	if isMax or prereqHint or cost == nil then
+		hidePadBuyButton()
+		return
+	end
+
+	local btn = ensurePadBuyGui()
+	activeBuyStructureId = structureId
+	activeBuyPart = part
+	local canAfford = cash >= cost
+	btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
+	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
+	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
+	btn.Visible = true
+end
+
+function structureInfo(structureId: string): (string, number, number?, boolean, string?)
 	local def = BaseConfig.Structures[structureId]
 	local display = if def then def.DisplayName else structureId
 	local level = upgrades[structureId] or 0
@@ -247,7 +378,7 @@ local function applyBillboardCopy(
 	end
 end
 
-local function isOwnPlotPad(part: BasePart): boolean
+function isOwnPlotPad(part: BasePart): boolean
 	-- Hide / skip refresh for other players' plots once we know our PlotId
 	if myPlotId == nil then
 		return true -- loading / solo until assigned
@@ -295,7 +426,7 @@ local function refreshSlotBillboard(part: BasePart)
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d → %d\n%s", level, level + 1, formatCost(cost)),
+			string.format("Lv %d → %d  %s\nStand or tap BUY", level, level + 1, formatCost(cost)),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
 		)
@@ -319,13 +450,17 @@ local function refreshAllBillboardsNow()
 		slotParts[part] = nil
 		disconnectAll(slotConns, part)
 	end
+	-- Keep BUY label/cost in sync while camping the pad
+	if activeBuyPart and activeBuyStructureId and activeBuyPart.Parent then
+		refreshPadBuyButton(activeBuyPart, activeBuyStructureId)
+	end
 end
 
 local function markBillboardsDirty()
 	billboardDirty = true
 end
 
-local function isSeatedInVehicle(): boolean
+function isSeatedInVehicle(): boolean
 	local char = player.Character
 	if not char then
 		return false
@@ -345,7 +480,7 @@ local function isSeatedInVehicle(): boolean
 	return false
 end
 
-local function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
+function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 	local now = os.clock()
 	local last = lastPurchaseAt[structureId] or 0
 	if now - last < DEBOUNCE_SEC then
@@ -574,6 +709,7 @@ end
 local function clearOverlapState()
 	table.clear(lastOverlap)
 	table.clear(pendingPurchase)
+	hidePadBuyButton()
 end
 
 local function startOverlapLoop()
@@ -588,10 +724,12 @@ local function startOverlapLoop()
 
 		local char = player.Character
 		if not char then
+			hidePadBuyButton()
 			return
 		end
 		local hrp = char:FindFirstChild("HumanoidRootPart")
 		if not (hrp and hrp:IsA("BasePart")) then
+			hidePadBuyButton()
 			return
 		end
 		if isSeatedInVehicle() then
@@ -601,10 +739,13 @@ local function startOverlapLoop()
 					lastOverlap[key] = false
 				end
 			end
+			hidePadBuyButton()
 			return
 		end
 
 		local pos = hrp.Position
+		local bestPart: BasePart? = nil
+		local bestSid: string? = nil
 		for part in pairs(slotParts) do
 			if part.Parent then
 				local structureId = part:GetAttribute("StructureId")
@@ -618,12 +759,18 @@ local function startOverlapLoop()
 							-- Standing retry: failed buy / cash refresh / sequential upgrades
 							onEnterPad(part, structureId, true)
 						end
+						-- Prefer own-plot pad for BUY button (first match is fine; typically one pad)
+						if isOwnPlot(part) and bestPart == nil then
+							bestPart = part
+							bestSid = structureId
+						end
 					elseif lastOverlap[key] then
 						onLeavePad(key)
 					end
 				end
 			end
 		end
+		refreshPadBuyButton(bestPart, bestSid)
 	end)
 end
 

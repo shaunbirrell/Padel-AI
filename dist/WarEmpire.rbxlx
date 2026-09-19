@@ -3248,31 +3248,28 @@ if not Workspace:FindFirstChild("WarEmpireSetup") then
 		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
 	end
 else
-	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (heal Ground if needed)")
-	-- Re-assert gravity + Ground presence so scale upgrades / partial setups never void-fall
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
+	-- Re-assert gravity; soft-heal first, then ALWAYS delete+recreate Ground/SafetyCatch
+	-- so stale place files / prior soft-heals cannot leave void holes.
 	Workspace.Gravity = 196.2
 	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	local targetSize = MapSetup.GROUND_SIZE or 6400
-	local map = setup and setup:FindFirstChild("Map")
-	local ground = map and map:FindFirstChild("Ground")
-	local groundOk = ground
-		and ground:IsA("BasePart")
-		and ground.Size.X >= targetSize - 1
-		and ground.Size.Y >= (MapSetup.GROUND_THICKNESS or 8) - 0.5
-		and ground.CanCollide == true
 
-	if not groundOk then
-		-- Prefer soft heal (resize / CanCollide / SafetyCatch / MountainRing) before full rebuild
-		local healed = false
-		if setup and MapSetup.EnsureGroundHealthy then
-			local okHeal, healResult = pcall(function()
-				return MapSetup.EnsureGroundHealthy(setup)
-			end)
-			healed = okHeal and healResult == true
-		end
-		if not healed then
-			warn("[WAR EMPIRE] WarEmpireSetup present but Ground missing/small/non-collide — rebuilding via MapSetup")
+	if setup and MapSetup.EnsureGroundHealthy then
+		pcall(function()
+			MapSetup.EnsureGroundHealthy(setup)
+		end)
+	end
+
+	local rebuilt = false
+	if setup and MapSetup.ForceRebuildGround then
+		local okRebuild, rebuildResult = pcall(function()
+			return MapSetup.ForceRebuildGround(setup)
+		end)
+		rebuilt = okRebuild and rebuildResult == true
+		if not rebuilt then
+			warn("[WAR EMPIRE] ForceRebuildGround failed — full MapSetup.Run rebuild")
 			pcall(function()
 				if setup then
 					setup:Destroy()
@@ -3280,33 +3277,38 @@ else
 				MapSetup.Run()
 			end)
 			if not Workspace:FindFirstChild("WarEmpireSetup") then
-				ensureVoidFallback("Existing setup invalid and rebuild failed")
+				ensureVoidFallback("ForceRebuildGround failed and full rebuild failed")
 			end
-		else
-			print("[WAR EMPIRE] Ground soft-healed to ≥" .. tostring(targetSize) .. " thick collide floor + safety/mountains")
 		end
-		setup = Workspace:FindFirstChild("WarEmpireSetup")
+	elseif setup then
+		warn("[WAR EMPIRE] ForceRebuildGround missing — full MapSetup.Run rebuild")
+		pcall(function()
+			setup:Destroy()
+			MapSetup.Run()
+		end)
+	end
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	-- Mandatory Output status after heal/rebuild
+	local mapFolder = setup and setup:FindFirstChild("Map")
+	local g = mapFolder and mapFolder:FindFirstChild("Ground")
+	local catch = mapFolder and mapFolder:FindFirstChild("SafetyCatch")
+	if g and g:IsA("BasePart") then
+		g.CanCollide = true
+		g.Anchored = true
+		print(string.format(
+			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
+			g.Size.X,
+			g.Size.Y,
+			g.Size.Z,
+			tostring(g.CanCollide),
+			tostring(catch ~= nil)
+		))
+		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
+			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
+		end
 	else
-		-- ALWAYS soft-heal Ground + SafetyCatch even when size looks OK (stale holes / CanCollide flips)
-		if setup and MapSetup.EnsureGroundHealthy then
-			pcall(function()
-				MapSetup.EnsureGroundHealthy(setup)
-			end)
-		end
-		-- Force Ground collide + thickness every Play
-		local mapFolder = setup and setup:FindFirstChild("Map")
-		local g = mapFolder and mapFolder:FindFirstChild("Ground")
-		if g and g:IsA("BasePart") then
-			g.CanCollide = true
-			g.Anchored = true
-			local ts = MapSetup.GROUND_SIZE or 6400
-			local th = MapSetup.GROUND_THICKNESS or 8
-			if g.Size.X < ts - 1 or g.Size.Y < th - 0.5 then
-				g.Size = Vector3.new(ts, th, ts)
-			end
-		elseif setup and MapSetup.EnsureGroundHealthy then
-			warn("[WAR EMPIRE] Ground missing after heal — recommend resetmap in Output")
-		end
+		warn("[WAR EMPIRE] Ground MISSING after force rebuild — run admin resetmap (Studio) MANDATORY")
 	end
 
 	setup = Workspace:FindFirstChild("WarEmpireSetup")
@@ -3353,6 +3355,7 @@ else
 		end
 	end
 end
+
 
 -- ── Remotes + services (AFTER map so require failures don't block terrain) ─
 local RemoteSetup = require(Modules.RemoteSetup)
@@ -3462,7 +3465,7 @@ if DevConfig.VerboseLogging then
 end
 
 print("[WAR EMPIRE] Server Bootstrap ready.")
-print("[WAR EMPIRE] CHECKLIST: 1) resetmap if pads stale (WE_UpgradeSlot>0)  2) stand on YOUR Command Center pad — Output shows [UpgradePad] BUY ATTEMPT/OK  3) dock tiles toast 'Shop opened' etc  4) B menu BUY works")
+print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists (stale WarEmpireSetup keeps old holes)  2) Output must show Ground AFTER heal size/CanCollide  3) stand on YOUR Command Center pad — big BUY button + [UpgradePad] BUY ATTEMPT/OK  4) dock tiles toast + B menu BUY")
 ]]></string>
         </Properties>
       </Item>
@@ -6108,6 +6111,94 @@ MapSetup.GROUND_TOP_Y = GROUND_TOP_Y
 MapSetup.SAFETY_FLOOR_SIZE = SAFETY_FLOOR_SIZE
 MapSetup.SAFETY_FLOOR_Y = SAFETY_FLOOR_Y
 
+local function buildPadSupportShelves(setup: Folder)
+	--[[
+		Collide shelves under elevated upgrade pads / decks so players never
+		treat CanCollide=false kit deco as floor. Fills air gap pad→Ground.
+	]]
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return
+	end
+	local folder = map:FindFirstChild("PadSupports")
+	if folder then
+		folder:Destroy()
+	end
+	folder = Instance.new("Folder")
+	folder.Name = "PadSupports"
+	folder.Parent = map
+
+	local CollectionService = game:GetService("CollectionService")
+	local TAG = TAG_SLOT
+	local count = 0
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		if inst:IsA("BasePart") and inst:IsDescendantOf(setup) then
+			local topY = inst.Position.Y + inst.Size.Y * 0.5
+			local gap = topY - GROUND_TOP_Y
+			if gap > 2.5 then
+				local shelfH = math.clamp(gap - 0.5, 1, 40)
+				local shelfY = GROUND_TOP_Y + shelfH * 0.5
+				part({
+					Name = "PadShelf_" .. tostring(count),
+					Size = Vector3.new(math.max(inst.Size.X + 4, 12), shelfH, math.max(inst.Size.Z + 4, 12)),
+					Position = Vector3.new(inst.Position.X, shelfY, inst.Position.Z),
+					Color = Color3.fromRGB(90, 85, 70),
+					Material = Enum.Material.Concrete,
+					CanCollide = true,
+					Anchored = true,
+					Parent = folder,
+				})
+				count += 1
+			end
+		end
+	end
+	-- Also sweep StructureId parts under Bases (tag may lag)
+	local bases = setup:FindFirstChild("Bases")
+	if bases then
+		for _, desc in ipairs(bases:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				local sid = desc:GetAttribute("StructureId")
+				if typeof(sid) == "string" then
+					local topY = desc.Position.Y + desc.Size.Y * 0.5
+					local gap = topY - GROUND_TOP_Y
+					if gap > 2.5 then
+						-- Skip if already covered by a nearby shelf
+						local covered = false
+						for _, child in ipairs(folder:GetChildren()) do
+							if child:IsA("BasePart") then
+								local dx = child.Position.X - desc.Position.X
+								local dz = child.Position.Z - desc.Position.Z
+								if dx * dx + dz * dz < 25 then
+									covered = true
+									break
+								end
+							end
+						end
+						if not covered then
+							local shelfH = math.clamp(gap - 0.5, 1, 40)
+							local shelfY = GROUND_TOP_Y + shelfH * 0.5
+							part({
+								Name = "PadShelf_" .. tostring(count),
+								Size = Vector3.new(math.max(desc.Size.X + 4, 12), shelfH, math.max(desc.Size.Z + 4, 12)),
+								Position = Vector3.new(desc.Position.X, shelfY, desc.Position.Z),
+								Color = Color3.fromRGB(90, 85, 70),
+								Material = Enum.Material.Concrete,
+								CanCollide = true,
+								Anchored = true,
+								Parent = folder,
+							})
+							count += 1
+						end
+					end
+				end
+			end
+		end
+	end
+	if count > 0 then
+		print("[WAR EMPIRE] MapSetup: PadSupports shelves=" .. tostring(count) .. " (collide fillers under elevated pads)")
+	end
+end
+
 function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 	--[[
 		Soft-heal existing WarEmpireSetup Ground / SafetyCatch.
@@ -6131,7 +6222,7 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		repaired = true
 	end
 	-- Even when size OK, re-assert collide / anchor every start
-	ground.Size = Vector3.new(GROUND_SIZE, math.max(ground.Size.Y, GROUND_THICKNESS), GROUND_SIZE)
+	ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
 	ground.Position = Vector3.new(0, groundCenterY(), 0)
 	if ground.CanCollide ~= true then
 		ground.CanCollide = true
@@ -6165,6 +6256,8 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		repaired = true
 	end
 
+	buildPadSupportShelves(setup :: Folder)
+
 	print(string.format(
 		"[WAR EMPIRE] Ground heal: ok size=%.0fx%.0fx%.0f CanCollide=%s repaired=%s",
 		ground.Size.X,
@@ -6174,6 +6267,60 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		tostring(repaired)
 	))
 	return true
+end
+
+
+
+
+function MapSetup.ForceRebuildGround(setup: Instance): boolean
+	--[[
+		Hard rebuild: destroy Map.Ground + SafetyCatch and recreate them.
+		Use every Play when soft-heal is not enough (stale holes / void gaps).
+		Does NOT rebuild the whole WarEmpireSetup — only the collide floor layers.
+	]]
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return false
+	end
+	local oldGround = map:FindFirstChild("Ground")
+	if oldGround then
+		oldGround:Destroy()
+	end
+	local oldCatch = map:FindFirstChild("SafetyCatch")
+	if oldCatch then
+		oldCatch:Destroy()
+	end
+
+	local ground = part({
+		Name = "Ground",
+		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
+		Position = Vector3.new(0, groundCenterY(), 0),
+		Color = COL_GROUND,
+		Material = Enum.Material.Sand,
+		CanCollide = true,
+		Anchored = true,
+		Parent = map,
+	})
+	ground.CanCollide = true
+	ground.Anchored = true
+	buildSafetyUnderfloor(map :: Folder)
+	if not map:FindFirstChild("EdgeBermN") then
+		buildEdgeBerms(map :: Folder)
+	end
+	if not setup:FindFirstChild("MountainRing") then
+		buildMountainRing(setup :: Folder)
+	end
+	buildPadSupportShelves(setup :: Folder)
+
+	print(string.format(
+		"[WAR EMPIRE] Ground FORCE-REBUILT: size=%.0fx%.0fx%.0f CanCollide=%s Anchored=%s",
+		ground.Size.X,
+		ground.Size.Y,
+		ground.Size.Z,
+		tostring(ground.CanCollide),
+		tostring(ground.Anchored)
+	))
+	return ground.CanCollide == true and ground.Size.X >= GROUND_SIZE - 1 and ground.Size.Y >= GROUND_THICKNESS - 0.5
 end
 
 function MapSetup.Run()
@@ -6964,6 +7111,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
+		buildPadSupportShelves(root)
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas/flora/oil-ramps/berms + WorldDressing")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
@@ -12009,8 +12157,8 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = -8
-local COOLDOWN_SEC = 2.5
+local FALL_Y = -2
+local COOLDOWN_SEC = 1.5
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -12052,7 +12200,7 @@ function FallSafetyService.Init(deps: { [string]: any })
 	local accum = 0
 	RunService.Heartbeat:Connect(function(dt)
 		accum += dt
-		if accum < 0.2 then
+		if accum < 0.1 then
 			return
 		end
 		accum = 0
@@ -21882,13 +22030,16 @@ return VehicleController
 --[[
 	World interactivity for StudioSetup-tagged parts.
 
-	Upgrade pads (WE_UpgradeSlot): WALK-OVER auto-purchase — Touched + Heartbeat
-	overlap fires RequestPurchaseUpgrade (debounced) as SECONDARY path.
-	Server UpgradePadService is primary. Never grants on client.
+	Upgrade pads (WE_UpgradeSlot):
+	  PRIMARY UX (mobile): large bottom ScreenGui BUY button while standing on
+	  own-plot pad → RequestPurchaseUpgrade (Activated / touch).
+	  BACKUP: walk-over auto-purchase — Touched + Heartbeat overlap (debounced).
+	  Server UpgradePadService remains authoritative walk-over path. Never grants on client.
 	Edge cases: respawn clears overlap; seated-in-vehicle skips buy; multi-part
 	touch uses pad keys; plot reassignment clears state; standing retry after
 	debounce for failed-purchase UX. Prompt/Touched connections disconnect on
 	part destroy. BillboardGuis throttled refresh on Base/Economy updates.
+	Billboard subtitle: "Stand or tap BUY". Hide BUY for leave / wrong plot / MAX / prereq.
 
 	ProximityPrompts only for non-buy actions (Open Base, Open Garage, capture ping, tutorial).
 ]]
@@ -21908,6 +22059,7 @@ local Types = require(Shared.Types)
 local BaseController = require(script.Parent.BaseController)
 local VehicleController = require(script.Parent.VehicleController)
 local NotificationController = require(script.Parent.NotificationController)
+local UIUtil = require(Shared.Util.UIUtil)
 
 local WorldPromptController = {}
 
@@ -21917,7 +22069,9 @@ local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(200, 70) -- readable on phones when close
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(210, 90) -- room for "Stand or tap BUY"
+local BUY_GUI_NAME = "WE_PadBuyGui"
+local BUY_BTN_MIN_H = 72
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -21935,6 +22089,10 @@ local lastBillboardRefresh = 0
 local overlapConn: RBXScriptConnection? = nil
 local tagsBound = false
 local maxToastAt: { [string]: number } = {} -- throttle MAX toasts while camping
+local _buyGui: ScreenGui? = nil
+local buyBtn: TextButton? = nil
+local activeBuyStructureId: string? = nil
+local activeBuyPart: BasePart? = nil
 
 local function padKey(part: BasePart, structureId: string): string
 	local pid = part:GetAttribute("PlotId")
@@ -21992,7 +22150,128 @@ local function formatCost(cost: number): string
 	return "$" .. tostring(cost)
 end
 
-local function structureInfo(structureId: string): (string, number, number?, boolean, string?)
+local structureInfo: (structureId: string) -> (string, number, number?, boolean, string?)
+local tryPurchase: (structureId: string, opts: { silentMax: boolean }?) -> ()
+local isSeatedInVehicle: () -> boolean
+local isOwnPlotPad: (part: BasePart) -> boolean
+
+local function hidePadBuyButton()
+	activeBuyStructureId = nil
+	activeBuyPart = nil
+	if buyBtn then
+		buyBtn.Visible = false
+	end
+end
+
+local function ensurePadBuyGui(): TextButton
+	if buyBtn and buyBtn.Parent then
+		return buyBtn
+	end
+	local pg = player:WaitForChild("PlayerGui")
+	local existing = pg:FindFirstChild(BUY_GUI_NAME)
+	if existing and existing:IsA("ScreenGui") then
+		existing:Destroy()
+	end
+
+	local screen = Instance.new("ScreenGui")
+	screen.Name = BUY_GUI_NAME
+	screen.ResetOnSpawn = false
+	screen.IgnoreGuiInset = false
+	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	-- Above HUD dock (55); below modal panels (60+)
+	screen.DisplayOrder = 56
+	screen.Parent = pg
+	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
+	_buyGui = screen
+
+	local btn = Instance.new("TextButton")
+	btn.Name = "BuyButton"
+	btn.AnchorPoint = Vector2.new(0.5, 1)
+	btn.Position = UDim2.new(0.5, 0, 1, -108)
+	btn.Size = UDim2.fromOffset(360, BUY_BTN_MIN_H)
+	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = true
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 26
+	btn.TextColor3 = Constants.Colors.Gold
+	btn.TextStrokeTransparency = 0.55
+	btn.Text = "BUY"
+	btn.Visible = false
+	btn.Active = true
+	btn.Selectable = true
+	btn.ZIndex = 40
+	btn.Parent = screen
+	UIUtil.Corner(btn, 16)
+	local stroke = UIUtil.GoldStroke(btn, 3)
+	stroke.Transparency = 0.05
+	UIUtil.EnsureMinTouch(btn, BUY_BTN_MIN_H)
+
+	local gloss = Instance.new("Frame")
+	gloss.Name = "Gloss"
+	gloss.Size = UDim2.new(1, -12, 0, 18)
+	gloss.Position = UDim2.fromOffset(6, 6)
+	gloss.BackgroundColor3 = Color3.fromRGB(255, 230, 140)
+	gloss.BackgroundTransparency = 0.78
+	gloss.BorderSizePixel = 0
+	gloss.Active = false
+	gloss.ZIndex = 41
+	gloss.Parent = btn
+	UIUtil.Corner(gloss, 10)
+
+	btn.Activated:Connect(function()
+		local sid = activeBuyStructureId
+		if typeof(sid) ~= "string" then
+			return
+		end
+		local display, _level, cost, isMax, prereqHint = structureInfo(sid)
+		if isMax or prereqHint or cost == nil then
+			hidePadBuyButton()
+			return
+		end
+		-- Intentional tap: clear walk-over debounce so BUY always fires
+		lastPurchaseAt[sid] = 0
+		pendingPurchase[sid] = nil
+		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
+		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s cost=%s", sid, tostring(cost)))
+		tryPurchase(sid)
+	end)
+
+	buyBtn = btn
+	return btn
+end
+
+local function refreshPadBuyButton(part: BasePart?, structureId: string?)
+	if part == nil or structureId == nil then
+		hidePadBuyButton()
+		return
+	end
+	if isSeatedInVehicle() then
+		hidePadBuyButton()
+		return
+	end
+	if not isOwnPlotPad(part) then
+		hidePadBuyButton()
+		return
+	end
+
+	local display, _level, cost, isMax, prereqHint = structureInfo(structureId)
+	if isMax or prereqHint or cost == nil then
+		hidePadBuyButton()
+		return
+	end
+
+	local btn = ensurePadBuyGui()
+	activeBuyStructureId = structureId
+	activeBuyPart = part
+	local canAfford = cash >= cost
+	btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
+	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
+	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
+	btn.Visible = true
+end
+
+function structureInfo(structureId: string): (string, number, number?, boolean, string?)
 	local def = BaseConfig.Structures[structureId]
 	local display = if def then def.DisplayName else structureId
 	local level = upgrades[structureId] or 0
@@ -22127,7 +22406,7 @@ local function applyBillboardCopy(
 	end
 end
 
-local function isOwnPlotPad(part: BasePart): boolean
+function isOwnPlotPad(part: BasePart): boolean
 	-- Hide / skip refresh for other players' plots once we know our PlotId
 	if myPlotId == nil then
 		return true -- loading / solo until assigned
@@ -22175,7 +22454,7 @@ local function refreshSlotBillboard(part: BasePart)
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d → %d\n%s", level, level + 1, formatCost(cost)),
+			string.format("Lv %d → %d  %s\nStand or tap BUY", level, level + 1, formatCost(cost)),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
 		)
@@ -22199,13 +22478,17 @@ local function refreshAllBillboardsNow()
 		slotParts[part] = nil
 		disconnectAll(slotConns, part)
 	end
+	-- Keep BUY label/cost in sync while camping the pad
+	if activeBuyPart and activeBuyStructureId and activeBuyPart.Parent then
+		refreshPadBuyButton(activeBuyPart, activeBuyStructureId)
+	end
 end
 
 local function markBillboardsDirty()
 	billboardDirty = true
 end
 
-local function isSeatedInVehicle(): boolean
+function isSeatedInVehicle(): boolean
 	local char = player.Character
 	if not char then
 		return false
@@ -22225,7 +22508,7 @@ local function isSeatedInVehicle(): boolean
 	return false
 end
 
-local function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
+function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 	local now = os.clock()
 	local last = lastPurchaseAt[structureId] or 0
 	if now - last < DEBOUNCE_SEC then
@@ -22454,6 +22737,7 @@ end
 local function clearOverlapState()
 	table.clear(lastOverlap)
 	table.clear(pendingPurchase)
+	hidePadBuyButton()
 end
 
 local function startOverlapLoop()
@@ -22468,10 +22752,12 @@ local function startOverlapLoop()
 
 		local char = player.Character
 		if not char then
+			hidePadBuyButton()
 			return
 		end
 		local hrp = char:FindFirstChild("HumanoidRootPart")
 		if not (hrp and hrp:IsA("BasePart")) then
+			hidePadBuyButton()
 			return
 		end
 		if isSeatedInVehicle() then
@@ -22481,10 +22767,13 @@ local function startOverlapLoop()
 					lastOverlap[key] = false
 				end
 			end
+			hidePadBuyButton()
 			return
 		end
 
 		local pos = hrp.Position
+		local bestPart: BasePart? = nil
+		local bestSid: string? = nil
 		for part in pairs(slotParts) do
 			if part.Parent then
 				local structureId = part:GetAttribute("StructureId")
@@ -22498,12 +22787,18 @@ local function startOverlapLoop()
 							-- Standing retry: failed buy / cash refresh / sequential upgrades
 							onEnterPad(part, structureId, true)
 						end
+						-- Prefer own-plot pad for BUY button (first match is fine; typically one pad)
+						if isOwnPlot(part) and bestPart == nil then
+							bestPart = part
+							bestSid = structureId
+						end
 					elseif lastOverlap[key] then
 						onLeavePad(key)
 					end
 				end
 			end
 		end
+		refreshPadBuyButton(bestPart, bestSid)
 	end)
 end
 
