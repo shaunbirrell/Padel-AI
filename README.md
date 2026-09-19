@@ -129,7 +129,8 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 | **P** / SHOP | DevProducts + GamePasses |
 | **K** / PROGRESS | Prestige + Battle Pass + Clan + Clan War declare / scoreboard |
 | **A** / ARMY | Recruit / dismiss / fill-cap soldiers |
-| **O** / SETTINGS | Music/SFX local toggles + **promo code redeem** + keybind cheat-sheet |
+| **O** / SETTINGS | Music/SFX local toggles + **promo code redeem** + **Supply Spinner** + keybind cheat-sheet |
+| **SPINNER** (HUD) | Free Cash/Gold every 4h when ready |
 | LMB / FIRE | Fire equipped weapon |
 | **R** | Reload |
 
@@ -152,6 +153,10 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 15. **Settings (O)** — Music/SFX toggles + redeem `WARFOUNDING` / `BUILDCONQUER` (once each) + keybind cheat-sheet. Placeholder SoundIds — swap in Studio.
 16. **Training Yard** — Recruit soldiers (**A**); HUD shows Train +$/tick; targets visible on each base plot.
 17. **Coastal Oil** — Capture Coastal Oil Alpha/Bravo (elevated platforms, OilRigGuard); wait for capture stipend toast (~90s).
+18. **Supply Drop** — Wait for glowing crate spawn; stand nearby ~2.5s to claim Cash.
+19. **Empire Bank** — Stand on vault pad (~8s) for raid cash; BankGuards; 5 min cooldown.
+20. **Spinner** — HUD SPINNER / Settings when READY; claim free Cash/Gold (4h cooldown).
+21. **Forts** — Capture Fort Ironclad / Fort Sandhold for higher stipend.
 
 ## Phase notes
 
@@ -194,6 +199,8 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - **Codes:** Redeem in Settings (**O**) — sample `WARFOUNDING`, `BUILDCONQUER` (once each).
 - **Daily Ops:** Three gold ops (seize / clear / muster) in Missions (**M**).
 - **Nation color:** Assigned on join; tints your captured flags.
+- **Supply drops / Bank raid / Spinner / Forts:** World crates; Empire Bank vault cooldown raid; free 4h spinner; Fort Ironclad + Fort Sandhold.
+- **Skipped:** Roblox Group join / Discord shout rewards (no fake Discord).
 - **Seasons:** Active season XP/Cash multipliers via SeasonService (DataStore-persisted end; HUD indicator).
 - **Clan wars:** Declare (leader, min members, cooldown), score on captures, settle rewards + scoreboard (**K**).
 - **Radar Hill:** Enemy highlight within radius while owned.

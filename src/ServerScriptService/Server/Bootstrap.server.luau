@@ -122,6 +122,9 @@ local ClanWarService = require(Services.ClanWarService)
 local CodesService = require(Services.CodesService)
 local NationColorService = require(Services.NationColorService)
 local CaptureStipendService = require(Services.CaptureStipendService)
+local SupplyDropService = require(Services.SupplyDropService)
+local BankRaidService = require(Services.BankRaidService)
+local SpinnerService = require(Services.SpinnerService)
 
 RemoteSetup.Init()
 
@@ -151,6 +154,9 @@ local deps: { [string]: any } = {
 	CodesService = CodesService,
 	NationColorService = NationColorService,
 	CaptureStipendService = CaptureStipendService,
+	SupplyDropService = SupplyDropService,
+	BankRaidService = BankRaidService,
+	SpinnerService = SpinnerService,
 }
 
 RateLimitService.Init()
@@ -183,6 +189,9 @@ SeasonService.Init(deps)
 ClanWarService.Init(deps)
 CodesService.Init(deps)
 CaptureStipendService.Init(deps)
+SupplyDropService.Init(deps)
+BankRaidService.Init(deps)
+SpinnerService.Init(deps)
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)

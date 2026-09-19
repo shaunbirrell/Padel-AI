@@ -25,6 +25,9 @@ local function stipendForDef(def: any): number
 	if def.IsOilRig then
 		return cfg.OilRigCash or 14000
 	end
+	if def.IsFortress then
+		return cfg.FortressCash or 10000
+	end
 	return cfg.DefaultCash or 4000
 end
 

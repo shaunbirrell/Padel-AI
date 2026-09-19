@@ -24,6 +24,9 @@ local cashLabel: TextLabel? = nil
 local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
 local seasonLabel: TextLabel? = nil
+local spinnerBtn: TextButton? = nil
+local spinnerReady = false
+local spinnerCooldown = 0
 local lastPassive = 0
 local lastTraining = 0
 
@@ -186,6 +189,54 @@ function HUDController.Init()
 	season.Parent = screen
 	UIUtil.Corner(season, 6)
 	seasonLabel = season
+
+	-- Free Supply Spinner (MT-inspired timed free reward)
+	local spin = Instance.new("TextButton")
+	spin.Name = "SpinnerButton"
+	spin.AnchorPoint = Vector2.new(0, 1)
+	spin.Position = UDim2.new(0, 16, 1, -16)
+	spin.Size = UDim2.fromOffset(120, 44)
+	spin.BackgroundColor3 = Constants.Colors.Panel
+	spin.Font = Enum.Font.GothamBold
+	spin.TextSize = 12
+	spin.TextColor3 = Constants.Colors.Text
+	spin.Text = "SPINNER"
+	spin.BorderSizePixel = 0
+	spin.Parent = screen
+	makeCorner(spin, 8)
+	makeStroke(spin, true)
+	spinnerBtn = spin
+	spin.MouseButton1Click:Connect(function()
+		if spinnerReady then
+			Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
+		end
+	end)
+
+	local function refreshSpinnerBtn()
+		if not spinnerBtn then
+			return
+		end
+		if spinnerReady then
+			spinnerBtn.Text = "SPINNER READY"
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
+			spinnerBtn.TextColor3 = Constants.Colors.Text
+		else
+			local mins = math.ceil(math.max(0, spinnerCooldown) / 60)
+			spinnerBtn.Text = string.format("SPIN %dm", mins)
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Panel
+			spinnerBtn.TextColor3 = Constants.Colors.Muted
+		end
+	end
+	refreshSpinnerBtn()
+
+	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		spinnerReady = payload.Ready == true
+		spinnerCooldown = tonumber(payload.CooldownRemaining) or 0
+		refreshSpinnerBtn()
+	end)
 
 	-- Remotes
 	local econToken = 0

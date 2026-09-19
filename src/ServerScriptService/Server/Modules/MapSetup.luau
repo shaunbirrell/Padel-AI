@@ -80,6 +80,8 @@ local TERRITORIES = {
 	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
 	{ Id = "CoastalOilAlpha", Pos = Vector3.new(980, 28, -420), Color = Color3.fromRGB(190, 145, 45), Radius = 42, OilRig = true },
 	{ Id = "CoastalOilBravo", Pos = Vector3.new(-980, 28, 420), Color = Color3.fromRGB(170, 125, 40), Radius = 42, OilRig = true },
+	{ Id = "FortIronclad", Pos = Vector3.new(780, 1, -780), Color = Color3.fromRGB(140, 145, 155), Radius = 48, Fortress = true },
+	{ Id = "FortSandhold", Pos = Vector3.new(-780, 1, 780), Color = Color3.fromRGB(190, 155, 90), Radius = 48, Fortress = true },
 }
 
 local function ensureFolder(name, parent)
@@ -672,6 +674,48 @@ function MapSetup.Run()
 			})
 			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(280, 40), 14, Color3.fromRGB(255, 210, 120))
 		end
+
+		-- Fortress walls / keep (named forts with higher stipend)
+		if def.Fortress then
+			local wallH = 8
+			local wallT = 2.2
+			local span = (def.Radius or 48) * 1.35
+			local wallDefs = {
+				{ Vector3.new(span * 2, wallH, wallT), Vector3.new(0, wallH / 2, span) },
+				{ Vector3.new(span * 2, wallH, wallT), Vector3.new(0, wallH / 2, -span) },
+				{ Vector3.new(wallT, wallH, span * 2), Vector3.new(span, wallH / 2, 0) },
+				{ Vector3.new(wallT, wallH, span * 2), Vector3.new(-span, wallH / 2, 0) },
+			}
+			for wi, wd in ipairs(wallDefs) do
+				part({
+					Name = def.Id .. "_Wall" .. wi,
+					Size = wd[1],
+					Position = def.Pos + wd[2],
+					Color = Color3.fromRGB(95, 90, 75),
+					Material = Enum.Material.Concrete,
+					Parent = territories,
+				})
+			end
+			local keep = part({
+				Name = def.Id .. "_Keep",
+				Size = Vector3.new(14, 16, 14),
+				Position = def.Pos + Vector3.new(0, 8, 0),
+				Color = def.Color,
+				Material = Enum.Material.Brick,
+				Parent = territories,
+			})
+			keep:SetAttribute("TerritoryId", def.Id)
+			part({
+				Name = def.Id .. "_KeepRoof",
+				Size = Vector3.new(16, 1.5, 16),
+				Position = def.Pos + Vector3.new(0, 16.5, 0),
+				Color = Color3.fromRGB(70, 65, 55),
+				Material = Enum.Material.Metal,
+				CanCollide = false,
+				Parent = territories,
+			})
+			plainBillboard(keep, def.Id .. "  ·  FORTRESS  ·  High stipend", Vector2.new(280, 40), 12, Color3.fromRGB(230, 210, 160))
+		end
 	end
 
 	local function makeSpawnFolder(name, tag, count, center, color, ringRadius)
@@ -840,6 +884,148 @@ function MapSetup.Run()
 		end
 	end
 
+
+	-- Fort guards
+	for _, def in ipairs(TERRITORIES) do
+		if def.Fortress then
+			for gi = 1, 4 do
+				local angle = (gi / 4) * math.pi * 2
+				local gpos = def.Pos + Vector3.new(math.cos(angle) * 22, 2.5, math.sin(angle) * 22)
+				local model = Instance.new("Model")
+				model.Name = def.Id .. "_Guard_" .. gi
+				model:SetAttribute("NPCId", def.Id .. "_guard_" .. gi)
+				model:SetAttribute("NPCType", "FortGuard")
+				local torso = part({
+					Name = "HumanoidRootPart",
+					Size = Vector3.new(2.1, 2.3, 1.25),
+					Color = Color3.fromRGB(100, 95, 70),
+					Material = Enum.Material.Fabric,
+					Anchored = true,
+					CanCollide = true,
+					CFrame = CFrame.new(gpos),
+					Parent = model,
+				})
+				local head = part({
+					Name = "Head",
+					Size = Vector3.new(1.15, 1.15, 1.15),
+					Color = Color3.fromRGB(95, 70, 55),
+					Material = Enum.Material.SmoothPlastic,
+					Anchored = true,
+					CanCollide = false,
+					CFrame = torso.CFrame + Vector3.new(0, 1.75, 0),
+					Shape = Enum.PartType.Ball,
+					Parent = model,
+				})
+				part({
+					Name = "Helmet",
+					Size = Vector3.new(1.3, 0.5, 1.3),
+					Color = Color3.fromRGB(70, 75, 60),
+					Material = Enum.Material.Metal,
+					Anchored = true,
+					CanCollide = false,
+					CFrame = head.CFrame + Vector3.new(0, 0.35, 0),
+					Parent = model,
+				})
+				local hum = Instance.new("Humanoid")
+				hum.MaxHealth = 170
+				hum.Health = 170
+				hum.Parent = model
+				model.PrimaryPart = torso
+				model.Parent = npcFolder
+				CollectionService:AddTag(model, TAG_NPC_ENTITY)
+				plainBillboard(head, "FORT GUARD", Vector2.new(100, 22), 2, Color3.fromRGB(220, 200, 140))
+			end
+		end
+	end
+
+	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
+	local bankFolder = ensureFolder("EmpireBank", root)
+	local bankPos = Vector3.new(220, 1, -220)
+	local bankPad = part({
+		Name = "BankPlaza",
+		Size = Vector3.new(36, 1.2, 36),
+		Position = bankPos,
+		Color = Color3.fromRGB(45, 50, 70),
+		Material = Enum.Material.Concrete,
+		Parent = bankFolder,
+	})
+	neonEdge(bankPad, Color3.fromRGB(90, 120, 200), 0.4)
+	part({
+		Name = "BankBuilding",
+		Size = Vector3.new(22, 14, 18),
+		Position = bankPos + Vector3.new(0, 7.5, -4),
+		Color = Color3.fromRGB(55, 62, 85),
+		Material = Enum.Material.Metal,
+		Parent = bankFolder,
+	})
+	part({
+		Name = "BankRoof",
+		Size = Vector3.new(24, 1.2, 20),
+		Position = bankPos + Vector3.new(0, 15, -4),
+		Color = Color3.fromRGB(40, 45, 60),
+		Material = Enum.Material.Metal,
+		Parent = bankFolder,
+	})
+	local vault = part({
+		Name = "VaultPad",
+		Size = Vector3.new(10, 1.4, 10),
+		Position = bankPos + Vector3.new(0, 1.2, 8),
+		Color = Color3.fromRGB(200, 170, 60),
+		Material = Enum.Material.Neon,
+		Parent = bankFolder,
+	})
+	vault:SetAttribute("BankId", "EmpireBank")
+	CollectionService:AddTag(vault, "WE_BankVault")
+	plainBillboard(vault, "EMPIRE BANK · Stand to RAID cash", Vector2.new(280, 40), 8, Color3.fromRGB(255, 220, 120))
+	beacon(bankFolder, bankPos + Vector3.new(14, 0, 14), Color3.fromRGB(90, 130, 220), "BankBeacon")
+	for gi = 1, 5 do
+		local angle = (gi / 5) * math.pi * 2
+		local gpos = bankPos + Vector3.new(math.cos(angle) * 18, 2.5, math.sin(angle) * 18)
+		local model = Instance.new("Model")
+		model.Name = "BankGuard_" .. gi
+		model:SetAttribute("NPCId", "bank_guard_" .. gi)
+		model:SetAttribute("NPCType", "BankGuard")
+		local torso = part({
+			Name = "HumanoidRootPart",
+			Size = Vector3.new(2.1, 2.3, 1.25),
+			Color = Color3.fromRGB(60, 70, 110),
+			Material = Enum.Material.Fabric,
+			Anchored = true,
+			CanCollide = true,
+			CFrame = CFrame.new(gpos),
+			Parent = model,
+		})
+		local head = part({
+			Name = "Head",
+			Size = Vector3.new(1.15, 1.15, 1.15),
+			Color = Color3.fromRGB(95, 70, 55),
+			Material = Enum.Material.SmoothPlastic,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame + Vector3.new(0, 1.75, 0),
+			Shape = Enum.PartType.Ball,
+			Parent = model,
+		})
+		part({
+			Name = "Vest",
+			Size = Vector3.new(2.3, 1.1, 1.4),
+			Color = Color3.fromRGB(40, 50, 90),
+			Material = Enum.Material.Metal,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame + Vector3.new(0, 0.3, 0),
+			Parent = model,
+		})
+		local hum = Instance.new("Humanoid")
+		hum.MaxHealth = 160
+		hum.Health = 160
+		hum.Parent = model
+		model.PrimaryPart = torso
+		model.Parent = npcFolder
+		CollectionService:AddTag(model, TAG_NPC_ENTITY)
+		plainBillboard(head, "BANK GUARD", Vector2.new(100, 22), 2, Color3.fromRGB(140, 170, 255))
+	end
+
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
 		local p = part({
@@ -906,7 +1092,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " training yards + coastal oil + kits under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " training yards + oil + forts + bank + kits under Workspace.WarEmpireSetup")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

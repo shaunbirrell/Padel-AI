@@ -13,13 +13,14 @@ export type TerritoryDef = {
 	Color: Color3,
 	StipendCash: number?,
 	IsOilRig: boolean?,
+	IsFortress: boolean?,
 	GuardNPCType: string?,
 	GuardCount: number?,
 }
 
 local TerritoryConfig = {
 	-- Balance knobs
-	MaxPersonalTerritories = 4, -- allow oil + fortresses
+	MaxPersonalTerritories = 6, -- oil + fortresses + land POIs
 	ProtectionPeriodSeconds = 45,
 	CaptureTickSeconds = 0.5,
 	ProgressDecayPerSecond = 0.35,
@@ -35,6 +36,7 @@ local TerritoryConfig = {
 		TickSeconds = 90,
 		DefaultCash = 4000,
 		OilRigCash = 14000,
+		FortressCash = 10000,
 		NotifyOnPayout = true,
 	},
 
@@ -160,6 +162,37 @@ local TerritoryConfig = {
 			StipendCash = 14000,
 			IsOilRig = true,
 			GuardNPCType = "OilRigGuard",
+			GuardCount = 4,
+		},
+		-- Named fortresses (MT-inspired desert forts; higher stipend)
+		FortIronclad = {
+			Id = "FortIronclad",
+			DisplayName = "Fort Ironclad",
+			Description = "Fortress stronghold — high capture stipend. Fort guards.",
+			CaptureTimeSeconds = 40,
+			BonusType = "PassiveCashMult",
+			BonusValue = 0.08,
+			Position = Vector3.new(780, 1, -780),
+			Radius = 48,
+			Color = Color3.fromRGB(140, 145, 155),
+			StipendCash = 10000,
+			IsFortress = true,
+			GuardNPCType = "FortGuard",
+			GuardCount = 4,
+		},
+		FortSandhold = {
+			Id = "FortSandhold",
+			DisplayName = "Fort Sandhold",
+			Description = "Desert fortress — high capture stipend. Fort guards.",
+			CaptureTimeSeconds = 40,
+			BonusType = "PassiveCashMult",
+			BonusValue = 0.08,
+			Position = Vector3.new(-780, 1, 780),
+			Radius = 48,
+			Color = Color3.fromRGB(190, 155, 90),
+			StipendCash = 10000,
+			IsFortress = true,
+			GuardNPCType = "FortGuard",
 			GuardCount = 4,
 		},
 	} :: { [string]: TerritoryDef },

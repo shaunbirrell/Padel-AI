@@ -47,6 +47,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Soldiers = SoldierConfig.StartingSoldiers,
 		NationColorId = nil,
 		RedeemedCodes = {},
+		LastSpinnerClaimUnix = 0,
 		Vehicles = {
 			[VehicleConfig.StarterVehicle] = true,
 		},
@@ -244,6 +245,15 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		end
 		profile.DataVersion = 4
 		version = 4
+	end
+
+	-- v4 → v5: free supply spinner cooldown stamp
+	if version < 5 then
+		if typeof((profile :: any).LastSpinnerClaimUnix) ~= "number" then
+			(profile :: any).LastSpinnerClaimUnix = 0
+		end
+		profile.DataVersion = 5
+		version = 5
 	end
 
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then

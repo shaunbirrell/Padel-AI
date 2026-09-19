@@ -74,6 +74,7 @@ export type PlayerProfile = {
 	Soldiers: number,
 	NationColorId: string?,
 	RedeemedCodes: { [string]: boolean },
+	LastSpinnerClaimUnix: number,
 	Vehicles: { [string]: boolean },
 	Weapons: { [string]: boolean },
 	EquippedWeapon: string?,

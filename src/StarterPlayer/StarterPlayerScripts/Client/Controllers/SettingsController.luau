@@ -33,6 +33,7 @@ local KEYBINDS = {
 	"A — Army (soldiers)",
 	"O — Settings (this panel)",
 	"Codes — Settings redeem row",
+	"Spinner — HUD / Settings free reward",
 	"LMB — Fire · R — Reload",
 	"Sit VehicleSeat — Drive",
 }
@@ -88,7 +89,7 @@ function SettingsController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(400, 520)
+	panel.Size = UDim2.fromOffset(400, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -212,9 +213,39 @@ function SettingsController.Init()
 		end
 	end)
 
+	local spinnerBtn = Instance.new("TextButton")
+	spinnerBtn.Name = "SpinnerClaim"
+	spinnerBtn.Position = UDim2.fromOffset(16, 212)
+	spinnerBtn.Size = UDim2.new(1, -32, 0, 40)
+	spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
+	spinnerBtn.Font = Enum.Font.GothamBold
+	spinnerBtn.TextSize = 13
+	spinnerBtn.TextColor3 = Constants.Colors.Text
+	spinnerBtn.Text = "SUPPLY SPINNER — Claim free Cash/Gold"
+	spinnerBtn.BorderSizePixel = 0
+	UIUtil.Corner(spinnerBtn, 6)
+	spinnerBtn.Parent = panel
+	spinnerBtn.MouseButton1Click:Connect(function()
+		AudioController.PlayClick()
+		Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
+	end)
+	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		if payload.Ready == true then
+			spinnerBtn.Text = "SUPPLY SPINNER — READY (claim)"
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
+		else
+			local mins = math.ceil((tonumber(payload.CooldownRemaining) or 0) / 60)
+			spinnerBtn.Text = string.format("SUPPLY SPINNER — ready in %dm", mins)
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Background
+		end
+	end)
+
 	local bindsTitle = Instance.new("TextLabel")
 	bindsTitle.BackgroundTransparency = 1
-	bindsTitle.Position = UDim2.fromOffset(16, 216)
+	bindsTitle.Position = UDim2.fromOffset(16, 260)
 	bindsTitle.Size = UDim2.new(1, -32, 0, 22)
 	bindsTitle.Font = Enum.Font.GothamBold
 	bindsTitle.TextSize = 14
@@ -224,8 +255,8 @@ function SettingsController.Init()
 	bindsTitle.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
-	list.Position = UDim2.fromOffset(12, 244)
-	list.Size = UDim2.new(1, -24, 1, -256)
+	list.Position = UDim2.fromOffset(12, 288)
+	list.Size = UDim2.new(1, -24, 1, -300)
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
 	list.ScrollBarThickness = 4

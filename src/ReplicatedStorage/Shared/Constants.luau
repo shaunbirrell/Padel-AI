@@ -18,6 +18,8 @@ Constants.Tags = {
 	VehicleSpawn = "WE_VehicleSpawn",
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
+	SupplyDrop = "WE_SupplyDrop",
+	BankVault = "WE_BankVault",
 	NPC = "WE_NPC",
 	Vehicle = "WE_Vehicle",
 	TutorialMarker = "WE_TutorialMarker",
@@ -74,12 +76,15 @@ Constants.RemoteNames = {
 	RequestRedeemCode = "RequestRedeemCode",
 	CodeStateUpdate = "CodeStateUpdate",
 	NationColorUpdate = "NationColorUpdate",
+	RequestClaimSpinner = "RequestClaimSpinner",
+	SpinnerStateUpdate = "SpinnerStateUpdate",
+	BankRaidStateUpdate = "BankRaidStateUpdate",
 	GetPlayerState = "GetPlayerState",
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 4
+Constants.CURRENT_DATA_VERSION = 5
 
 Constants.AutosaveIntervalSeconds = 60
 Constants.DataStoreRetries = 3
