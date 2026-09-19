@@ -136,7 +136,7 @@ local function refreshList()
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
 				UIUtil.EnsureMinTouch(btn, 44)
-				btn.Activated:Connect(function()
+				local function onMenuBuy()
 					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
 					if cash < cost then
 						NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
@@ -147,7 +147,9 @@ local function refreshList()
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
-				end)
+				end
+				btn.Activated:Connect(onMenuBuy)
+				btn.MouseButton1Click:Connect(onMenuBuy)
 			end
 			btn.Parent = row
 		end

@@ -190,7 +190,7 @@ local function ensurePadBuyGui(): TextButton
 	screen.IgnoreGuiInset = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- Above HUD dock (55); below modal panels (60+)
-	screen.DisplayOrder = 56
+	screen.DisplayOrder = 100 -- above dock/HUD; BUY must never be buried
 	screen.Parent = pg
 	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
 	_buyGui = screen
@@ -198,13 +198,13 @@ local function ensurePadBuyGui(): TextButton
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyButton"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -108)
-	btn.Size = UDim2.fromOffset(360, BUY_BTN_MIN_H)
+	btn.Position = UDim2.new(0.5, 0, 1, -120)
+	btn.Size = UDim2.fromOffset(420, 88)
 	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = true
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 26
+	btn.TextSize = 28
 	btn.TextColor3 = Constants.Colors.Gold
 	btn.TextStrokeTransparency = 0.55
 	btn.Text = "BUY"
@@ -230,7 +230,7 @@ local function ensurePadBuyGui(): TextButton
 	gloss.Parent = btn
 	UIUtil.Corner(gloss, 10)
 
-	btn.Activated:Connect(function()
+	local function onBuyPressed()
 		local sid = activeBuyStructureId
 		if typeof(sid) ~= "string" then
 			return
@@ -246,7 +246,9 @@ local function ensurePadBuyGui(): TextButton
 		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s cost=%s", sid, tostring(cost)))
 		tryPurchase(sid)
-	end)
+	end
+	btn.Activated:Connect(onBuyPressed)
+	btn.MouseButton1Click:Connect(onBuyPressed)
 
 	buyBtn = btn
 	return btn
@@ -428,13 +430,18 @@ local function applyBillboardCopy(
 end
 
 function isOwnPlotPad(part: BasePart): boolean
-	-- Hide / skip refresh for other players' plots once we know our PlotId
+	-- Hide / skip refresh for other players' plots once we know our PlotId.
+	-- Studio / ambiguous PlotId: ALWAYS show BUY (never suppress CTA).
 	if myPlotId == nil then
 		return true -- loading / solo until assigned
 	end
 	local pid = part:GetAttribute("PlotId")
 	if typeof(pid) ~= "number" then
-		return true
+		-- Also accept BasePlotId attribute some kits use
+		pid = part:GetAttribute("BasePlotId")
+	end
+	if typeof(pid) ~= "number" then
+		return true -- ambiguous → show BUY
 	end
 	return pid == myPlotId
 end
@@ -599,7 +606,10 @@ local function isOwnPlot(part: BasePart): boolean
 	end
 	local pid = part:GetAttribute("PlotId")
 	if typeof(pid) ~= "number" then
-		return true
+		pid = part:GetAttribute("BasePlotId")
+	end
+	if typeof(pid) ~= "number" then
+		return true -- ambiguous → allow buy
 	end
 	return pid == myPlotId
 end

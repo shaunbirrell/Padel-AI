@@ -33,7 +33,7 @@ type TerritoryRuntime = {
 	Marker: BasePart?,
 }
 
-local RemoteGuard = require(script.Parent.Parent.Parent.Modules.RemoteGuard)
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local TerritoryService = {}
 

@@ -2918,6 +2918,8 @@ return Constants
 --[[
 	Client/server helper to fetch remotes created by RemoteSetup.
 	Does not create remotes on the client.
+	Waits patiently — Rojo ships an empty Remotes folder; server may still
+	be running MapSetup before RemoteSetup.Init. Never hard-assert after 10s.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -2927,22 +2929,41 @@ local Remotes = {}
 
 local function getFolder(): Folder
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
+	if folder and folder:IsA("Folder") then
+		return folder :: Folder
+	end
+	folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName, 120)
 	assert(folder and folder:IsA("Folder"), "Remotes folder missing — server Bootstrap must run first")
 	return folder :: Folder
 end
 
-function Remotes.GetEvent(name: string): RemoteEvent
+local function waitForRemote(name: string, className: string): Instance
 	local folder = getFolder()
-	local remote = folder:WaitForChild(name, 10)
-	assert(remote and remote:IsA("RemoteEvent"), "RemoteEvent missing: " .. name)
-	return remote :: RemoteEvent
+	local existing = folder:FindFirstChild(name)
+	if existing and existing:IsA(className) then
+		return existing
+	end
+	-- Poll with warns — map/service load can exceed 10s on cold Studio Play
+	local waited = 0
+	while waited < 180 do
+		local remote = folder:WaitForChild(name, 5)
+		if remote and remote:IsA(className) then
+			return remote
+		end
+		waited += 5
+		warn(string.format("[Remotes] Waiting for %s %s… (%ds)", className, name, waited))
+	end
+	local remote = folder:WaitForChild(name)
+	assert(remote and remote:IsA(className), className .. " missing: " .. name)
+	return remote
+end
+
+function Remotes.GetEvent(name: string): RemoteEvent
+	return waitForRemote(name, "RemoteEvent") :: RemoteEvent
 end
 
 function Remotes.GetFunction(name: string): RemoteFunction
-	local folder = getFolder()
-	local remote = folder:WaitForChild(name, 10)
-	assert(remote and remote:IsA("RemoteFunction"), "RemoteFunction missing: " .. name)
-	return remote :: RemoteFunction
+	return waitForRemote(name, "RemoteFunction") :: RemoteFunction
 end
 
 return Remotes
@@ -3587,43 +3608,52 @@ else
 end
 
 
--- ── Remotes + services (AFTER map so require failures don't block terrain) ─
+-- ── Remotes FIRST (before any service require that can throw) ───────────────
 local RemoteSetup = require(Modules.RemoteSetup)
-RemoteSetup.Init() -- MUST run before any service require that can throw
+RemoteSetup.Init() -- client Remotes.GetEvent must never hang on empty folder
 
-local DataService = require(Services.DataService)
-local EconomyService = require(Services.EconomyService)
-local BaseService = require(Services.BaseService)
-local XPService = require(Services.XPService)
-local RateLimitService = require(Services.RateLimitService)
-local AnalyticsService = require(Services.AnalyticsService)
-local AdminService = require(Services.AdminService)
-local NotificationService = require(Services.NotificationService)
-local AntiExploitService = require(Services.AntiExploitService)
-local CombatService = require(Services.CombatService)
-local VehicleService = require(Services.VehicleService)
-local TerritoryService = require(Services.TerritoryService)
-local MissionService = require(Services.MissionService)
-local PrestigeService = require(Services.PrestigeService)
-local ClanService = require(Services.ClanService)
-local MonetizationService = require(Services.MonetizationService)
-local TutorialService = require(Services.TutorialService)
-local BattlePassService = require(Services.BattlePassService)
-local SoldierService = require(Services.SoldierService)
-local SeasonService = require(Services.SeasonService)
-local ClanWarService = require(Services.ClanWarService)
-local CodesService = require(Services.CodesService)
-local NationColorService = require(Services.NationColorService)
-local CaptureStipendService = require(Services.CaptureStipendService)
-local SupplyDropService = require(Services.SupplyDropService)
-local BankRaidService = require(Services.BankRaidService)
-local SpinnerService = require(Services.SpinnerService)
-local UpgradePadService = require(Services.UpgradePadService)
-local FallSafetyService = require(Services.FallSafetyService)
-local VisualAssetService = require(Services.VisualAssetService)
-local StudioBuySmoke = require(Modules.StudioBuySmoke)
+local function safeRequire(label: string, moduleScript: ModuleScript): any
+	local ok, mod = pcall(require, moduleScript)
+	if not ok then
+		warn("[WAR EMPIRE] require FAILED:", label, mod)
+		return nil
+	end
+	return mod
+end
 
-RemoteSetup.Init()
+local DataService = safeRequire("DataService", Services.DataService)
+local EconomyService = safeRequire("EconomyService", Services.EconomyService)
+local BaseService = safeRequire("BaseService", Services.BaseService)
+local XPService = safeRequire("XPService", Services.XPService)
+local RateLimitService = safeRequire("RateLimitService", Services.RateLimitService)
+local AnalyticsService = safeRequire("AnalyticsService", Services.AnalyticsService)
+local AdminService = safeRequire("AdminService", Services.AdminService)
+local NotificationService = safeRequire("NotificationService", Services.NotificationService)
+local AntiExploitService = safeRequire("AntiExploitService", Services.AntiExploitService)
+local CombatService = safeRequire("CombatService", Services.CombatService)
+local VehicleService = safeRequire("VehicleService", Services.VehicleService)
+local TerritoryService = safeRequire("TerritoryService", Services.TerritoryService)
+local MissionService = safeRequire("MissionService", Services.MissionService)
+local PrestigeService = safeRequire("PrestigeService", Services.PrestigeService)
+local ClanService = safeRequire("ClanService", Services.ClanService)
+local MonetizationService = safeRequire("MonetizationService", Services.MonetizationService)
+local TutorialService = safeRequire("TutorialService", Services.TutorialService)
+local BattlePassService = safeRequire("BattlePassService", Services.BattlePassService)
+local SoldierService = safeRequire("SoldierService", Services.SoldierService)
+local SeasonService = safeRequire("SeasonService", Services.SeasonService)
+local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
+local CodesService = safeRequire("CodesService", Services.CodesService)
+local NationColorService = safeRequire("NationColorService", Services.NationColorService)
+local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
+local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
+local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
+local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
+local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
+local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
+local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
+local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
+
+RemoteSetup.Init() -- idempotent; ensure remotes still present after requires
 
 local deps: { [string]: any } = {
 	RemoteSetup = RemoteSetup,
@@ -3658,45 +3688,65 @@ local deps: { [string]: any } = {
 	FallSafetyService = FallSafetyService,
 }
 
-RateLimitService.Init()
-AnalyticsService.Init()
-DataService.SetAnalytics(AnalyticsService)
+local function safeInit(label: string, svc: any, ...: any)
+	if svc == nil then
+		warn("[WAR EMPIRE] skip Init (nil):", label)
+		return
+	end
+	local args = { ... }
+	local ok, err = pcall(function()
+		if #args > 0 then
+			svc.Init(table.unpack(args))
+		else
+			svc.Init()
+		end
+	end)
+	if not ok then
+		warn("[WAR EMPIRE] Init FAILED:", label, err)
+	end
+end
+
+safeInit("RateLimitService", RateLimitService)
+safeInit("AnalyticsService", AnalyticsService)
+if DataService and AnalyticsService and DataService.SetAnalytics then
+	pcall(DataService.SetAnalytics, AnalyticsService)
+end
 
 -- Init services that OnProfileLoaded depends on BEFORE DataService loads players
-EconomyService.Init(deps)
-XPService.Init(deps)
-NotificationService.Init(deps)
-AntiExploitService.Init(deps)
-BaseService.Init(deps) -- registers OnProfileLoaded
-UpgradePadService.Init(deps) -- server walk-over buy (Touched + spatial)
-FallSafetyService.Init(deps) -- void fall → teleport to plot spawn
-MonetizationService.Init(deps) -- GamePass cache on join
-TutorialService.Init(deps) -- tutorial step on join + upgrade hook
+safeInit("EconomyService", EconomyService, deps)
+safeInit("XPService", XPService, deps)
+safeInit("NotificationService", NotificationService, deps)
+safeInit("AntiExploitService", AntiExploitService, deps)
+safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
+safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
+safeInit("FallSafetyService", FallSafetyService, deps)
+safeInit("MonetizationService", MonetizationService, deps)
+safeInit("TutorialService", TutorialService, deps)
 
 -- Now load profiles (fires OnProfileLoaded for joiners)
-DataService.Init()
+safeInit("DataService", DataService)
 
 -- Studio-only auto BUY smoke (IsStudio gated inside module)
-StudioBuySmoke.Init(deps)
+safeInit("StudioBuySmoke", StudioBuySmoke, deps)
 
-AdminService.Init(deps)
-VisualAssetService.Init()
-CombatService.Init(deps)
-VehicleService.Init(deps)
-NationColorService.Init(deps)
-TerritoryService.Init(deps)
-MissionService.Init(deps)
-PrestigeService.Init(deps)
-ClanService.Init(deps)
-BattlePassService.Init(deps)
-SoldierService.Init(deps)
-SeasonService.Init(deps)
-ClanWarService.Init(deps)
-CodesService.Init(deps)
-CaptureStipendService.Init(deps)
-SupplyDropService.Init(deps)
-BankRaidService.Init(deps)
-SpinnerService.Init(deps)
+safeInit("AdminService", AdminService, deps)
+safeInit("VisualAssetService", VisualAssetService)
+safeInit("CombatService", CombatService, deps)
+safeInit("VehicleService", VehicleService, deps)
+safeInit("NationColorService", NationColorService, deps)
+safeInit("TerritoryService", TerritoryService, deps)
+safeInit("MissionService", MissionService, deps)
+safeInit("PrestigeService", PrestigeService, deps)
+safeInit("ClanService", ClanService, deps)
+safeInit("BattlePassService", BattlePassService, deps)
+safeInit("SoldierService", SoldierService, deps)
+safeInit("SeasonService", SeasonService, deps)
+safeInit("ClanWarService", ClanWarService, deps)
+safeInit("CodesService", CodesService, deps)
+safeInit("CaptureStipendService", CaptureStipendService, deps)
+safeInit("SupplyDropService", SupplyDropService, deps)
+safeInit("BankRaidService", BankRaidService, deps)
+safeInit("SpinnerService", SpinnerService, deps)
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)
@@ -7886,11 +7936,7 @@ local FUNCTIONS = {
 
 local _initialized = false
 
-function RemoteSetup.Init()
-	if _initialized then
-		return
-	end
-	_initialized = true: Folder
+function RemoteSetup.Init(): Folder
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
 	if not folder then
 		folder = Instance.new("Folder")
@@ -7898,6 +7944,7 @@ function RemoteSetup.Init()
 		folder.Parent = ReplicatedStorage
 	end
 
+	-- Always ensure every remote exists (idempotent; cheap if already present)
 	for _, name in ipairs(EVENTS) do
 		if not folder:FindFirstChild(name) then
 			local ev = Instance.new("RemoteEvent")
@@ -7922,8 +7969,14 @@ function RemoteSetup.Init()
 		end
 	end
 
+	if not _initialized then
+		_initialized = true
+		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions", #EVENTS, #FUNCTIONS))
+	end
+
 	return folder :: Folder
 end
+
 
 function RemoteSetup.Get(name: string): Instance
 	local folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName)
@@ -11066,7 +11119,7 @@ type NPCRecord = {
 	Alive: boolean,
 }
 
-local RemoteGuard = require(script.Parent.Parent.Parent.Modules.RemoteGuard)
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local CombatService = {}
 
@@ -15179,7 +15232,7 @@ type TerritoryRuntime = {
 	Marker: BasePart?,
 }
 
-local RemoteGuard = require(script.Parent.Parent.Parent.Modules.RemoteGuard)
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local TerritoryService = {}
 
@@ -18850,7 +18903,7 @@ local function refreshList()
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
 				UIUtil.EnsureMinTouch(btn, 44)
-				btn.Activated:Connect(function()
+				local function onMenuBuy()
 					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
 					if cash < cost then
 						NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
@@ -18861,7 +18914,9 @@ local function refreshList()
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
-				end)
+				end
+				btn.Activated:Connect(onMenuBuy)
+				btn.MouseButton1Click:Connect(onMenuBuy)
 			end
 			btn.Parent = row
 		end
@@ -22974,9 +23029,11 @@ function UIController.Init()
 		end
 	end
 	safeInit("Audio", AudioController.Init)
-	safeInit("HUD", HUDController.Init)
 	-- Notifications before Base so first-join toasts have a stack ready.
 	safeInit("Notification", NotificationController.Init)
+	-- BUY pads BEFORE HUD — HUD may WaitForChild remotes; never block pad CTA
+	safeInit("WorldPrompt", WorldPromptController.Init)
+	safeInit("HUD", HUDController.Init)
 	safeInit("Base", BaseController.Init)
 	safeInit("Tutorial", TutorialController.Init)
 	safeInit("Territory", TerritoryController.Init)
@@ -22985,8 +23042,6 @@ function UIController.Init()
 	safeInit("Progression", ProgressionController.Init)
 	safeInit("Army", ArmyController.Init)
 	safeInit("Settings", SettingsController.Init)
-	-- BUY pads MUST init even if HUD remotes fail
-	safeInit("WorldPrompt", WorldPromptController.Init)
 	safeInit("Compass", CompassController.Init)
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
@@ -23972,7 +24027,7 @@ local function ensurePadBuyGui(): TextButton
 	screen.IgnoreGuiInset = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- Above HUD dock (55); below modal panels (60+)
-	screen.DisplayOrder = 56
+	screen.DisplayOrder = 100 -- above dock/HUD; BUY must never be buried
 	screen.Parent = pg
 	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
 	_buyGui = screen
@@ -23980,13 +24035,13 @@ local function ensurePadBuyGui(): TextButton
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyButton"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -108)
-	btn.Size = UDim2.fromOffset(360, BUY_BTN_MIN_H)
+	btn.Position = UDim2.new(0.5, 0, 1, -120)
+	btn.Size = UDim2.fromOffset(420, 88)
 	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = true
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 26
+	btn.TextSize = 28
 	btn.TextColor3 = Constants.Colors.Gold
 	btn.TextStrokeTransparency = 0.55
 	btn.Text = "BUY"
@@ -24012,7 +24067,7 @@ local function ensurePadBuyGui(): TextButton
 	gloss.Parent = btn
 	UIUtil.Corner(gloss, 10)
 
-	btn.Activated:Connect(function()
+	local function onBuyPressed()
 		local sid = activeBuyStructureId
 		if typeof(sid) ~= "string" then
 			return
@@ -24028,7 +24083,9 @@ local function ensurePadBuyGui(): TextButton
 		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s cost=%s", sid, tostring(cost)))
 		tryPurchase(sid)
-	end)
+	end
+	btn.Activated:Connect(onBuyPressed)
+	btn.MouseButton1Click:Connect(onBuyPressed)
 
 	buyBtn = btn
 	return btn
@@ -24210,13 +24267,18 @@ local function applyBillboardCopy(
 end
 
 function isOwnPlotPad(part: BasePart): boolean
-	-- Hide / skip refresh for other players' plots once we know our PlotId
+	-- Hide / skip refresh for other players' plots once we know our PlotId.
+	-- Studio / ambiguous PlotId: ALWAYS show BUY (never suppress CTA).
 	if myPlotId == nil then
 		return true -- loading / solo until assigned
 	end
 	local pid = part:GetAttribute("PlotId")
 	if typeof(pid) ~= "number" then
-		return true
+		-- Also accept BasePlotId attribute some kits use
+		pid = part:GetAttribute("BasePlotId")
+	end
+	if typeof(pid) ~= "number" then
+		return true -- ambiguous → show BUY
 	end
 	return pid == myPlotId
 end
@@ -24381,7 +24443,10 @@ local function isOwnPlot(part: BasePart): boolean
 	end
 	local pid = part:GetAttribute("PlotId")
 	if typeof(pid) ~= "number" then
-		return true
+		pid = part:GetAttribute("BasePlotId")
+	end
+	if typeof(pid) ~= "number" then
+		return true -- ambiguous → allow buy
 	end
 	return pid == myPlotId
 end

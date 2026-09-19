@@ -64,7 +64,7 @@ type NPCRecord = {
 	Alive: boolean,
 }
 
-local RemoteGuard = require(script.Parent.Parent.Parent.Modules.RemoteGuard)
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local CombatService = {}
 

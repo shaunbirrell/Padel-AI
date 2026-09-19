@@ -185,43 +185,52 @@ else
 end
 
 
--- ── Remotes + services (AFTER map so require failures don't block terrain) ─
+-- ── Remotes FIRST (before any service require that can throw) ───────────────
 local RemoteSetup = require(Modules.RemoteSetup)
-RemoteSetup.Init() -- MUST run before any service require that can throw
+RemoteSetup.Init() -- client Remotes.GetEvent must never hang on empty folder
 
-local DataService = require(Services.DataService)
-local EconomyService = require(Services.EconomyService)
-local BaseService = require(Services.BaseService)
-local XPService = require(Services.XPService)
-local RateLimitService = require(Services.RateLimitService)
-local AnalyticsService = require(Services.AnalyticsService)
-local AdminService = require(Services.AdminService)
-local NotificationService = require(Services.NotificationService)
-local AntiExploitService = require(Services.AntiExploitService)
-local CombatService = require(Services.CombatService)
-local VehicleService = require(Services.VehicleService)
-local TerritoryService = require(Services.TerritoryService)
-local MissionService = require(Services.MissionService)
-local PrestigeService = require(Services.PrestigeService)
-local ClanService = require(Services.ClanService)
-local MonetizationService = require(Services.MonetizationService)
-local TutorialService = require(Services.TutorialService)
-local BattlePassService = require(Services.BattlePassService)
-local SoldierService = require(Services.SoldierService)
-local SeasonService = require(Services.SeasonService)
-local ClanWarService = require(Services.ClanWarService)
-local CodesService = require(Services.CodesService)
-local NationColorService = require(Services.NationColorService)
-local CaptureStipendService = require(Services.CaptureStipendService)
-local SupplyDropService = require(Services.SupplyDropService)
-local BankRaidService = require(Services.BankRaidService)
-local SpinnerService = require(Services.SpinnerService)
-local UpgradePadService = require(Services.UpgradePadService)
-local FallSafetyService = require(Services.FallSafetyService)
-local VisualAssetService = require(Services.VisualAssetService)
-local StudioBuySmoke = require(Modules.StudioBuySmoke)
+local function safeRequire(label: string, moduleScript: ModuleScript): any
+	local ok, mod = pcall(require, moduleScript)
+	if not ok then
+		warn("[WAR EMPIRE] require FAILED:", label, mod)
+		return nil
+	end
+	return mod
+end
 
-RemoteSetup.Init()
+local DataService = safeRequire("DataService", Services.DataService)
+local EconomyService = safeRequire("EconomyService", Services.EconomyService)
+local BaseService = safeRequire("BaseService", Services.BaseService)
+local XPService = safeRequire("XPService", Services.XPService)
+local RateLimitService = safeRequire("RateLimitService", Services.RateLimitService)
+local AnalyticsService = safeRequire("AnalyticsService", Services.AnalyticsService)
+local AdminService = safeRequire("AdminService", Services.AdminService)
+local NotificationService = safeRequire("NotificationService", Services.NotificationService)
+local AntiExploitService = safeRequire("AntiExploitService", Services.AntiExploitService)
+local CombatService = safeRequire("CombatService", Services.CombatService)
+local VehicleService = safeRequire("VehicleService", Services.VehicleService)
+local TerritoryService = safeRequire("TerritoryService", Services.TerritoryService)
+local MissionService = safeRequire("MissionService", Services.MissionService)
+local PrestigeService = safeRequire("PrestigeService", Services.PrestigeService)
+local ClanService = safeRequire("ClanService", Services.ClanService)
+local MonetizationService = safeRequire("MonetizationService", Services.MonetizationService)
+local TutorialService = safeRequire("TutorialService", Services.TutorialService)
+local BattlePassService = safeRequire("BattlePassService", Services.BattlePassService)
+local SoldierService = safeRequire("SoldierService", Services.SoldierService)
+local SeasonService = safeRequire("SeasonService", Services.SeasonService)
+local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
+local CodesService = safeRequire("CodesService", Services.CodesService)
+local NationColorService = safeRequire("NationColorService", Services.NationColorService)
+local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
+local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
+local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
+local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
+local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
+local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
+local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
+local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
+
+RemoteSetup.Init() -- idempotent; ensure remotes still present after requires
 
 local deps: { [string]: any } = {
 	RemoteSetup = RemoteSetup,
@@ -256,45 +265,65 @@ local deps: { [string]: any } = {
 	FallSafetyService = FallSafetyService,
 }
 
-RateLimitService.Init()
-AnalyticsService.Init()
-DataService.SetAnalytics(AnalyticsService)
+local function safeInit(label: string, svc: any, ...: any)
+	if svc == nil then
+		warn("[WAR EMPIRE] skip Init (nil):", label)
+		return
+	end
+	local args = { ... }
+	local ok, err = pcall(function()
+		if #args > 0 then
+			svc.Init(table.unpack(args))
+		else
+			svc.Init()
+		end
+	end)
+	if not ok then
+		warn("[WAR EMPIRE] Init FAILED:", label, err)
+	end
+end
+
+safeInit("RateLimitService", RateLimitService)
+safeInit("AnalyticsService", AnalyticsService)
+if DataService and AnalyticsService and DataService.SetAnalytics then
+	pcall(DataService.SetAnalytics, AnalyticsService)
+end
 
 -- Init services that OnProfileLoaded depends on BEFORE DataService loads players
-EconomyService.Init(deps)
-XPService.Init(deps)
-NotificationService.Init(deps)
-AntiExploitService.Init(deps)
-BaseService.Init(deps) -- registers OnProfileLoaded
-UpgradePadService.Init(deps) -- server walk-over buy (Touched + spatial)
-FallSafetyService.Init(deps) -- void fall → teleport to plot spawn
-MonetizationService.Init(deps) -- GamePass cache on join
-TutorialService.Init(deps) -- tutorial step on join + upgrade hook
+safeInit("EconomyService", EconomyService, deps)
+safeInit("XPService", XPService, deps)
+safeInit("NotificationService", NotificationService, deps)
+safeInit("AntiExploitService", AntiExploitService, deps)
+safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
+safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
+safeInit("FallSafetyService", FallSafetyService, deps)
+safeInit("MonetizationService", MonetizationService, deps)
+safeInit("TutorialService", TutorialService, deps)
 
 -- Now load profiles (fires OnProfileLoaded for joiners)
-DataService.Init()
+safeInit("DataService", DataService)
 
 -- Studio-only auto BUY smoke (IsStudio gated inside module)
-StudioBuySmoke.Init(deps)
+safeInit("StudioBuySmoke", StudioBuySmoke, deps)
 
-AdminService.Init(deps)
-VisualAssetService.Init()
-CombatService.Init(deps)
-VehicleService.Init(deps)
-NationColorService.Init(deps)
-TerritoryService.Init(deps)
-MissionService.Init(deps)
-PrestigeService.Init(deps)
-ClanService.Init(deps)
-BattlePassService.Init(deps)
-SoldierService.Init(deps)
-SeasonService.Init(deps)
-ClanWarService.Init(deps)
-CodesService.Init(deps)
-CaptureStipendService.Init(deps)
-SupplyDropService.Init(deps)
-BankRaidService.Init(deps)
-SpinnerService.Init(deps)
+safeInit("AdminService", AdminService, deps)
+safeInit("VisualAssetService", VisualAssetService)
+safeInit("CombatService", CombatService, deps)
+safeInit("VehicleService", VehicleService, deps)
+safeInit("NationColorService", NationColorService, deps)
+safeInit("TerritoryService", TerritoryService, deps)
+safeInit("MissionService", MissionService, deps)
+safeInit("PrestigeService", PrestigeService, deps)
+safeInit("ClanService", ClanService, deps)
+safeInit("BattlePassService", BattlePassService, deps)
+safeInit("SoldierService", SoldierService, deps)
+safeInit("SeasonService", SeasonService, deps)
+safeInit("ClanWarService", ClanWarService, deps)
+safeInit("CodesService", CodesService, deps)
+safeInit("CaptureStipendService", CaptureStipendService, deps)
+safeInit("SupplyDropService", SupplyDropService, deps)
+safeInit("BankRaidService", BankRaidService, deps)
+safeInit("SpinnerService", SpinnerService, deps)
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)

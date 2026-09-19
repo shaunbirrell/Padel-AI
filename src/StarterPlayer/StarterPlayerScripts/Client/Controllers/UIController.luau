@@ -26,9 +26,11 @@ function UIController.Init()
 		end
 	end
 	safeInit("Audio", AudioController.Init)
-	safeInit("HUD", HUDController.Init)
 	-- Notifications before Base so first-join toasts have a stack ready.
 	safeInit("Notification", NotificationController.Init)
+	-- BUY pads BEFORE HUD — HUD may WaitForChild remotes; never block pad CTA
+	safeInit("WorldPrompt", WorldPromptController.Init)
+	safeInit("HUD", HUDController.Init)
 	safeInit("Base", BaseController.Init)
 	safeInit("Tutorial", TutorialController.Init)
 	safeInit("Territory", TerritoryController.Init)
@@ -37,8 +39,6 @@ function UIController.Init()
 	safeInit("Progression", ProgressionController.Init)
 	safeInit("Army", ArmyController.Init)
 	safeInit("Settings", SettingsController.Init)
-	-- BUY pads MUST init even if HUD remotes fail
-	safeInit("WorldPrompt", WorldPromptController.Init)
 	safeInit("Compass", CompassController.Init)
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)

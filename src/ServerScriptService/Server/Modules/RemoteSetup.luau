@@ -68,11 +68,7 @@ local FUNCTIONS = {
 
 local _initialized = false
 
-function RemoteSetup.Init()
-	if _initialized then
-		return
-	end
-	_initialized = true: Folder
+function RemoteSetup.Init(): Folder
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
 	if not folder then
 		folder = Instance.new("Folder")
@@ -80,6 +76,7 @@ function RemoteSetup.Init()
 		folder.Parent = ReplicatedStorage
 	end
 
+	-- Always ensure every remote exists (idempotent; cheap if already present)
 	for _, name in ipairs(EVENTS) do
 		if not folder:FindFirstChild(name) then
 			local ev = Instance.new("RemoteEvent")
@@ -104,8 +101,14 @@ function RemoteSetup.Init()
 		end
 	end
 
+	if not _initialized then
+		_initialized = true
+		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions", #EVENTS, #FUNCTIONS))
+	end
+
 	return folder :: Folder
 end
+
 
 function RemoteSetup.Get(name: string): Instance
 	local folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName)
