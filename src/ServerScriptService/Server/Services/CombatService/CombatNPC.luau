@@ -74,13 +74,13 @@ function CombatNPC.Think()
 			if target then
 				local _, th, troot = B.characterParts(target)
 				if th and troot then
+					-- Face via yaw gyro only — never set Root.CFrame (fights MoveTo physics)
 					local look = CFrame.lookAt(
 						rec.Root.Position,
 						Vector3.new(troot.Position.X, rec.Root.Position.Y, troot.Position.Z)
 					)
-					rec.Root.CFrame = look
-					local gyro = rec.Root:FindFirstChildOfClass("BodyGyro")
-					if gyro then
+					local gyro = rec.Root:FindFirstChild("NPCFaceGyro") or rec.Root:FindFirstChildOfClass("BodyGyro")
+					if gyro and gyro:IsA("BodyGyro") then
 						gyro.CFrame = look
 					end
 					if dist > rec.Def.Range * 0.85 then

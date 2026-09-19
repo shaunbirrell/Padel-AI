@@ -502,6 +502,10 @@ function BaseService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
+		if not RemoteGuard.RequireProfile(DataService, player) then
+			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
+			return
+		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
 			print(string.format("[BaseService] Remote BUY rate-limit %s", player.Name))
 			if NotificationService then
@@ -510,6 +514,10 @@ function BaseService.Init(deps: { [string]: any })
 			return
 		end
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		if not RemoteGuard.IsIdString(structureId, 48) then
+			print(string.format("[BaseService] Remote BUY bad-id %s → %s", player.Name, tostring(structureId)))
+			return
+		end
 		print(string.format("[BaseService] Remote BUY attempt %s → %s", player.Name, tostring(structureId)))
 		local result = BaseService.PurchaseUpgrade(player, structureId)
 		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s", player.Name, tostring(result.Ok), tostring(result.Error)))

@@ -9364,6 +9364,10 @@ function BaseService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
+		if not RemoteGuard.RequireProfile(DataService, player) then
+			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
+			return
+		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
 			print(string.format("[BaseService] Remote BUY rate-limit %s", player.Name))
 			if NotificationService then
@@ -9372,6 +9376,10 @@ function BaseService.Init(deps: { [string]: any })
 			return
 		end
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		if not RemoteGuard.IsIdString(structureId, 48) then
+			print(string.format("[BaseService] Remote BUY bad-id %s → %s", player.Name, tostring(structureId)))
+			return
+		end
 		print(string.format("[BaseService] Remote BUY attempt %s → %s", player.Name, tostring(structureId)))
 		local result = BaseService.PurchaseUpgrade(player, structureId)
 		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s", player.Name, tostring(result.Ok), tostring(result.Error)))
@@ -11490,6 +11498,8 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	humanoid.MaxHealth = def.Health
 	humanoid.Health = def.Health
 	humanoid.WalkSpeed = def.WalkSpeed
+	humanoid.AutoRotate = true
+	humanoid.HipHeight = 2 -- R6-ish Part kit (root mid-torso; legs welded massless)
 	-- Kill double nametags: Humanoid nameplate OFF; one clean Billboard only
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
@@ -11530,9 +11540,12 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		root:SetNetworkOwner(nil)
 	end)
 
+	-- Yaw-only BodyGyro so Humanoid:MoveTo can walk (full XYZ torque pins feet)
 	local gyro = Instance.new("BodyGyro")
-	gyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-	gyro.P = 3000
+	gyro.Name = "NPCFaceGyro"
+	gyro.MaxTorque = Vector3.new(0, 4e5, 0)
+	gyro.P = 5000
+	gyro.D = 500
 	gyro.CFrame = at
 	gyro.Parent = root
 
@@ -12164,13 +12177,13 @@ function CombatNPC.Think()
 			if target then
 				local _, th, troot = B.characterParts(target)
 				if th and troot then
+					-- Face via yaw gyro only — never set Root.CFrame (fights MoveTo physics)
 					local look = CFrame.lookAt(
 						rec.Root.Position,
 						Vector3.new(troot.Position.X, rec.Root.Position.Y, troot.Position.Z)
 					)
-					rec.Root.CFrame = look
-					local gyro = rec.Root:FindFirstChildOfClass("BodyGyro")
-					if gyro then
+					local gyro = rec.Root:FindFirstChild("NPCFaceGyro") or rec.Root:FindFirstChildOfClass("BodyGyro")
+					if gyro and gyro:IsA("BodyGyro") then
 						gyro.CFrame = look
 					end
 					if dist > rec.Def.Range * 0.85 then

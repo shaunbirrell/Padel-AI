@@ -504,6 +504,8 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	humanoid.MaxHealth = def.Health
 	humanoid.Health = def.Health
 	humanoid.WalkSpeed = def.WalkSpeed
+	humanoid.AutoRotate = true
+	humanoid.HipHeight = 2 -- R6-ish Part kit (root mid-torso; legs welded massless)
 	-- Kill double nametags: Humanoid nameplate OFF; one clean Billboard only
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
@@ -544,9 +546,12 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		root:SetNetworkOwner(nil)
 	end)
 
+	-- Yaw-only BodyGyro so Humanoid:MoveTo can walk (full XYZ torque pins feet)
 	local gyro = Instance.new("BodyGyro")
-	gyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
-	gyro.P = 3000
+	gyro.Name = "NPCFaceGyro"
+	gyro.MaxTorque = Vector3.new(0, 4e5, 0)
+	gyro.P = 5000
+	gyro.D = 500
 	gyro.CFrame = at
 	gyro.Parent = root
 

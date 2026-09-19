@@ -8,6 +8,7 @@ Linux agents cannot run Roblox Studio. Use these Studio-side harnesses after ope
 | Tool | When | What |
 |------|------|------|
 | `tools/SmokeTest.luau` | After Bootstrap | Remotes + configs + services present; no Give* remotes |
+| `tools/BuyPathStatic.py` | Box CLI (`python3`) | Source wiring: BUY path, BankGuard MoveTo, HUD Visible/Activated, PERF flag |
 | `tools/BuyPathVerify.luau` | Play Solo client | BUY/Army/Garage remotes, **all product Ids=0**, pad tags, GUIs, PERF flag, StudioSmokeLog |
 
 Paste entire file → Command Bar → Enter. Read Output for `PASS` / `FAIL` / `WAIT`.

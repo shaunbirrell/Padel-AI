@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""CLI static wiring checks for BUY + BankGuard + mobile HUD (no Roblox runtime).
+Run: python3 tools/BuyPathStatic.py
+Exit 0 if all PASS; 1 if any FAIL.
+"""
+from __future__ import annotations
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PASS = 0
+FAIL = 0
+
+def ok(msg: str) -> None:
+    global PASS
+    PASS += 1
+    print("[BuyPathStatic] PASS", msg)
+
+def bad(msg: str) -> None:
+    global FAIL
+    FAIL += 1
+    print("[BuyPathStatic] FAIL", msg, file=sys.stderr)
+
+def read(rel: str) -> str | None:
+    p = ROOT / rel
+    if not p.is_file():
+        return None
+    return p.read_text(encoding="utf-8")
+
+def must_contain(rel: str, needle: str, label: str) -> None:
+    body = read(rel)
+    if body is None:
+        bad(f"{label} — missing file {rel}")
+        return
+    if needle in body:
+        ok(label)
+    else:
+        bad(f"{label} — missing `{needle}` in {rel}")
+
+def must_not_contain(rel: str, needle: str, label: str) -> None:
+    body = read(rel)
+    if body is None:
+        bad(f"{label} — missing file {rel}")
+        return
+    if needle in body:
+        bad(f"{label} — found forbidden `{needle}` in {rel}")
+    else:
+        ok(label)
+
+# 1) BUY path
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", "RequestPurchaseUpgrade", "Constants.RequestPurchaseUpgrade")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "RequestPurchaseUpgrade", "RemoteSetup lists RequestPurchaseUpgrade")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "function BaseService.PurchaseUpgrade", "BaseService.PurchaseUpgrade")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RemoteGuard.IsIdString", "BaseService uses RemoteGuard.IsIdString")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RemoteGuard.RequireProfile", "BaseService remote RequireProfile")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RequestPurchaseUpgrade", "BaseService binds RequestPurchaseUpgrade")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "BaseService.PurchaseUpgrade", "UpgradePadService → PurchaseUpgrade")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RequestPurchaseUpgrade", "WorldPrompt BUY FireServer")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "btn.Activated", "WorldPrompt BUY Activated")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "RequestPurchaseUpgrade", "Base menu BUY FireServer")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "btn.Activated", "Base menu BUY Activated")
+
+# 2) PERF
+must_contain("src/ReplicatedStorage/Shared/Configs/DevConfig.luau", "StudioSkipWorldDressing = true", "StudioSkipWorldDressing=true")
+
+# 3) BankGuard
+must_contain("src/ReplicatedStorage/Shared/Configs/CombatConfig.luau", "BankGuard", "CombatConfig.BankGuard")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "BankGuard", "VisualAssetConfig.Characters.BankGuard")
+must_contain("src/ServerScriptService/Server/Services/BankRaidService.luau", "CombatService.SpawnNPC", "BankRaidService SpawnNPC")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "TryAttachCharacterVisual", "SpawnNPC VisualAsset attach")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "MaxTorque = Vector3.new(0, 4e5, 0)", "BodyGyro yaw-only (MoveTo)")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau", "Humanoid:MoveTo", "CombatNPC MoveTo")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau", "TakeDamage", "CombatNPC shoots (TakeDamage)")
+must_not_contain("src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau", "rec.Root.CFrame = look", "Think must not teleport Root.CFrame")
+
+# 4) Mobile HUD
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "DisplayOrder = 55", "HUD dock DisplayOrder 55")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "btn.Activated", "Dock tiles Activated")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "BindActionBar", "UIController BindActionBar")
+for name, rel in [
+    ("Shop", "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau"),
+    ("Army", "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmyController.luau"),
+    ("Progression", "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau"),
+    ("Garage", "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau"),
+    ("Base", "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau"),
+]:
+    must_contain(rel, "panel.Visible", f"{name} panel.Visible")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DisplayOrder = 60", "Shop DisplayOrder 60")
+
+# 5) Monetization stubs
+body = read("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
+if body is None:
+    bad("MonetizationConfig missing")
+else:
+    ids = [int(x) for x in re.findall(r"Id\s*=\s*(\d+)", body)]
+    nonzero = [i for i in ids if i != 0]
+    if not nonzero:
+        ok(f"MonetizationConfig product Ids all 0 (checked {len(ids)})")
+    else:
+        bad(f"MonetizationConfig non-zero Ids: {nonzero}")
+
+print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
+sys.exit(1 if FAIL else 0)
