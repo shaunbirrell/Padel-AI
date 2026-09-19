@@ -532,10 +532,10 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	corner.Parent = lbl
 
 	model.PrimaryPart = root
-	-- Optional free Soldier catalog visual (scripts stripped); Part kit stays authoritative
+	-- Optional free catalog character visual (scripts stripped); Part kit stays authoritative.
+	-- Resolve by NPC type id (Infantry/BankGuard/…); VisualAssetService falls back to Soldier.
 	pcall(function()
-		local kind = if isSpecial then tid else "Soldier"
-		VisualAssetService.TryAttachCharacterVisual(model, kind)
+		VisualAssetService.TryAttachCharacterVisual(model, tid)
 	end)
 	CollectionService:AddTag(model, Constants.Tags.NPC)
 	model.Parent = ensureNPCFolder()

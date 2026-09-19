@@ -6,7 +6,8 @@
 	Studio PERF: when DevConfig.StudioSkipWorldDressing and not StudioForceDress,
 	VisualAssetService skips catalog inserts (8GB laptop). Live servers may load.
 
-	IDs researched as Free / Get Model on Creator Store (economy sale=false price=nil).
+	IDs researched as Free / Get Model on Creator Store (economy IsForSale=false Price=nil).
+	Never paid / never MT-branded. AssetId=0 means skip insert (Part kit only).
 	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
 	(and AllowInsertFreeAssets where required) for third-party models.
 ]]
@@ -20,7 +21,7 @@ export type AssetRef = {
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
-	MaxLoadAttempts = 36,
+	MaxLoadAttempts = 48,
 	VehicleVisualScale = 1.0,
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0,
@@ -134,24 +135,32 @@ local VisualAssetConfig = {
 		VTOLTransport = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
 		HeavyBomber = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
 		StealthStrike = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
+		-- Depth-pass capital / bomber IDs previously missing from catalog map
+		Cruiser = { ModelAssetId = 13195201090, Note = "Boat template capital" } :: AssetRef,
+		MissileCruiser = { ModelAssetId = 13195201090, Note = "Boat template capital" } :: AssetRef,
+		FleetCarrier = { ModelAssetId = 13195201090, Note = "Boat template carrier" } :: AssetRef,
+		StrategicBomber = { ModelAssetId = 297267045, Note = "USAF free jet bomber silhouette" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
-		-- Official Roblox Soldier NPC kit (free)
+		-- Free Get Model / Roblox official — scripts stripped at insert. Part kits remain fallback.
 		Soldier = { ModelAssetId = 3924234975, Note = "Official Roblox Soldier (Rthro)" } :: AssetRef,
-		Guard = { ModelAssetId = 3924234975, Note = "Soldier reuse for guards" } :: AssetRef,
-		BankGuard = { ModelAssetId = 3924234975, Note = "Soldier reuse" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 3924234975, Note = "Soldier reuse" } :: AssetRef,
-		FortGuard = { ModelAssetId = 3924234975, Note = "Soldier reuse" } :: AssetRef,
+		Infantry = { ModelAssetId = 3924234975, Note = "Soldier reuse (Infantry NPC)" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (free)" } :: AssetRef,
+		Guard = { ModelAssetId = 128233894407390, Note = "SWAT AI NPC (free Get Model)" } :: AssetRef,
+		BankGuard = { ModelAssetId = 120734659944613, Note = "Police AI NPC (free Get Model)" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 118042531165372, Note = "SWAT AI NPC 2 (free Get Model)" } :: AssetRef,
+		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (fort)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Buildings = {
-		-- Free Barracks / Military Base (Get Model). Part kits remain primary fallback.
-		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model" } :: AssetRef,
+		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
+		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model (HQ)" } :: AssetRef,
 		Barracks = { ModelAssetId = 9424782, Note = "Barracks free Get Model (2009)" } :: AssetRef,
-		VehicleDepot = { ModelAssetId = 9424782, Note = "Barracks reuse (depot)" } :: AssetRef,
+		VehicleDepot = { ModelAssetId = 12120702, Note = "Classic Warehouse free (depot)" } :: AssetRef,
 		WeaponsFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
-		Warehouse = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		Warehouse = { ModelAssetId = 12120702, Note = "Classic Warehouse free Get Model" } :: AssetRef,
+		Hangar = { ModelAssetId = 66269964, Note = "Warehouse hangar-like free Get Model" } :: AssetRef,
 		ResearchLab = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
 		SpecialForcesFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
 		Watchtowers = { ModelAssetId = 16659447, Note = "Free bunker/tower-ish model" } :: AssetRef,
@@ -159,9 +168,10 @@ local VisualAssetConfig = {
 		MissileDefense = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
 		DefensiveWalls = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
 		PowerStation = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
-		Helipad = { ModelAssetId = 0, Note = "Part kit primary (pad silhouette)" } :: AssetRef,
-		Airfield = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
-		Dock = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+		Bunker = { ModelAssetId = 16659447, Note = "Destructible Movil Bunker free" } :: AssetRef,
+		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
+		Airfield = { ModelAssetId = 12370174722, Note = "Airport Model free Get Model" } :: AssetRef,
+		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {

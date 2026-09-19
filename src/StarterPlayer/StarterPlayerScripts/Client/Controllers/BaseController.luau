@@ -135,6 +135,7 @@ local function refreshList()
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
+				UIUtil.EnsureMinTouch(btn, 44)
 				btn.Activated:Connect(function()
 					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
 					if cash < cost then

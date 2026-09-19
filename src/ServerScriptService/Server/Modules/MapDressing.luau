@@ -252,7 +252,7 @@ end
 
 local function kitHangar(folder: Folder, origin: Vector3, yawDeg: number)
 	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	p({
+	local hangarPad = p({
 		Name = "HangarPad",
 		Size = Vector3.new(28, 0.6, 22),
 		CFrame = cf * CFrame.new(0, 0.3, 0),
@@ -296,6 +296,13 @@ local function kitHangar(folder: Folder, origin: Vector3, yawDeg: number)
 		Material = Enum.Material.Neon,
 		Parent = folder,
 	})
+	-- Optional free Hangar catalog overlay (skipped when StudioSkipWorldDressing)
+	pcall(function()
+		local vas = require(script.Parent.Parent.Services.VisualAssetService)
+		if hangarPad and hangarPad:IsA("BasePart") then
+			vas.TryAttachBuildingVisual(hangarPad, "Hangar")
+		end
+	end)
 end
 
 local function kitFuelDepot(folder: Folder, origin: Vector3, yawDeg: number)
