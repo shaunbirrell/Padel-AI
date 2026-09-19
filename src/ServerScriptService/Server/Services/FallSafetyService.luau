@@ -10,8 +10,8 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = 0 -- Ground top ~0.5; rescue as soon as under floor plane
-local COOLDOWN_SEC = 1.25
+local FALL_Y = 0.15 -- Ground top ~0.5; rescue as soon as under / through floor plane
+local COOLDOWN_SEC = 0.9
 
 local BaseService: any = nil
 local NotificationService: any = nil

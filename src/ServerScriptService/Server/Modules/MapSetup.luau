@@ -29,6 +29,7 @@ local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
+local TAG_COLLECTOR = "WE_MoneyCollector"
 
 local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
 local COL_PAD = Color3.fromRGB(38, 44, 48)
@@ -64,11 +65,11 @@ local STARTER_COST = {
 
 -- Map scale: ground ≥6000 continuous floor, plot ring ~800, pads ~200
 -- Top of Ground sits ~Y=0.5 so plot pads (Y=0.5) sit flush.
-local GROUND_SIZE = 6400
+local GROUND_SIZE = 7200
 local GROUND_THICKNESS = 8
 local GROUND_TOP_Y = 0.5
-local SAFETY_FLOOR_SIZE = 8000
-local SAFETY_FLOOR_Y = -40
+local SAFETY_FLOOR_SIZE = 10000
+local SAFETY_FLOOR_Y = -28
 local PLOT_PAD_SIZE = 200
 local PLOT_RING = 800
 local STRUCT_COLS = 4
@@ -712,6 +713,34 @@ local function buildEdgeBerms(mapFolder: Folder)
 	end
 end
 
+
+local function buildInvisibleWalls(mapFolder: Folder)
+	-- Tall invisible perimeter so players cannot walk off Ground into void/water
+	local half = GROUND_SIZE * 0.5 - 8
+	local wallH = 80
+	local wallT = 12
+	local wallY = GROUND_TOP_Y + wallH * 0.5
+	local sides = {
+		{ Name = "VoidWallN", Size = Vector3.new(GROUND_SIZE, wallH, wallT), Pos = Vector3.new(0, wallY, -half) },
+		{ Name = "VoidWallS", Size = Vector3.new(GROUND_SIZE, wallH, wallT), Pos = Vector3.new(0, wallY, half) },
+		{ Name = "VoidWallE", Size = Vector3.new(wallT, wallH, GROUND_SIZE), Pos = Vector3.new(half, wallY, 0) },
+		{ Name = "VoidWallW", Size = Vector3.new(wallT, wallH, GROUND_SIZE), Pos = Vector3.new(-half, wallY, 0) },
+	}
+	for _, s in ipairs(sides) do
+		part({
+			Name = s.Name,
+			Size = s.Size,
+			Position = s.Pos,
+			Color = Color3.fromRGB(40, 50, 40),
+			Material = Enum.Material.SmoothPlastic,
+			Transparency = 1,
+			CanCollide = true,
+			Anchored = true,
+			Parent = mapFolder,
+		end)
+	end
+end
+
 local function buildMountainRing(root: Folder)
 	--[[
 		Desert mesa / butte rim — terracotta / sienna / reddish-brown layered Part kits.
@@ -1107,6 +1136,10 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		buildEdgeBerms(map :: Folder)
 		repaired = true
 	end
+	if not map:FindFirstChild("VoidWallN") then
+		buildInvisibleWalls(map :: Folder)
+		repaired = true
+	end
 
 	buildPadSupportShelves(setup :: Folder)
 
@@ -1156,9 +1189,15 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 	ground.CanCollide = true
 	ground.Anchored = true
 	buildSafetyUnderfloor(map :: Folder)
-	if not map:FindFirstChild("EdgeBermN") then
-		buildEdgeBerms(map :: Folder)
+	-- Refresh berms + invisible void walls every force rebuild
+	for _, name in ipairs({ "EdgeBermN", "EdgeBermS", "EdgeBermE", "EdgeBermW", "VoidWallN", "VoidWallS", "VoidWallE", "VoidWallW" }) do
+		local oldP = map:FindFirstChild(name)
+		if oldP then
+			oldP:Destroy()
+		end
 	end
+	buildEdgeBerms(map :: Folder)
+	buildInvisibleWalls(map :: Folder)
 	if not setup:FindFirstChild("MountainRing") then
 		buildMountainRing(setup :: Folder)
 	end
@@ -1275,6 +1314,7 @@ function MapSetup.Run()
 	})
 	buildSafetyUnderfloor(map)
 	buildEdgeBerms(map)
+	buildInvisibleWalls(map)
 	buildVisualFillPatches(map)
 	buildMountainRing(root)
 	-- Road grid scaled to plot ring (optional visual guide)
@@ -1931,7 +1971,8 @@ function MapSetup.Run()
 		local forceDress = forceAttr or (DevConfig.StudioForceDress == true)
 		local inStudio = RunService:IsStudio()
 		local skipDress = inStudio and (DevConfig.StudioSkipWorldDressing ~= false) and not forceDress
-		local quality = tostring(DevConfig.WorldDressQuality or "Low")
+		-- Live / non-Studio: Full warzone dressing. Studio ForceDress uses DevConfig quality.
+		local quality = if (not inStudio) then "Full" else tostring(DevConfig.WorldDressQuality or "Low")
 
 		print("[WAR EMPIRE] PERF note: deco kits use CastShadow=false. Studio Rendering → disable shadows / lower quality if still slow.")
 		if skipDress then

@@ -225,7 +225,8 @@ local function addWheels(model: Model, body: BasePart, scale: number, positions:
 		wheel.CFrame = body.CFrame * CFrame.new(offset * scale) * CFrame.Angles(0, 0, math.rad(90))
 		wheel.Anchored = false
 		wheel.CanCollide = true
-		wheel.Massless = false
+		wheel.Massless = true
+		wheel.CustomPhysicalProperties = PhysicalProperties.new(0.3, 1.2, 0.1, 1, 1)
 		wheel.Parent = model
 		weldTo(body, wheel)
 		-- Hub cap accent (visual kits v2)
@@ -352,6 +353,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	body.TopSurface = Enum.SurfaceType.Smooth
 	body.BottomSurface = Enum.SurfaceType.Smooth
 	body.CFrame = at
+	body.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.5, 0.2, 1, 1)
 	body.Parent = model
 
 	local seatOffset = CFrame.new(0, 2.0, -0.5)
@@ -690,9 +692,11 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	seat.CanCollide = true
 	seat.HeadsUpDisplay = false
 	seat.Disabled = false
-	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) elseif isNaval then math.min(def.Speed, 55) else def.Speed
-	seat.Torque = if isAir then 8 elseif isNaval then 18 else 28
-	seat.TurnSpeed = if isAir then 1.4 elseif isNaval then 1.8 else 2.4
+	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) elseif isNaval then math.min(def.Speed, 55) else math.max(def.Speed, 45)
+	seat.Torque = if isAir then 10 elseif isNaval then 22 else 55
+	seat.TurnSpeed = if isAir then 1.6 elseif isNaval then 2.0 else 3.2
+	seat.Disabled = false
+	seat:SetAttribute("WE_DriverSeat", true)
 	seat.Parent = model
 	weldTo(body, seat)
 	model:SetAttribute("WE_DriveMode", if isAir then "AirPlaceholder" elseif isNaval then "NavalSeat" else "VehicleSeat")
@@ -959,6 +963,44 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	local driveMode = model:GetAttribute("WE_DriveMode")
 	if driveMode == "AirPlaceholder" then
 		startAirPlaceholderDrive(player.UserId, model, def)
+	end
+
+	-- Driveability: network ownership + auto-sit DriverSeat so garage SPAWN is immediately usable
+	do
+		local chassis = model.PrimaryPart
+		local seat = model:FindFirstChild("DriverSeat")
+		if chassis and chassis:IsA("BasePart") then
+			chassis.Anchored = false
+			pcall(function()
+				chassis:SetNetworkOwner(player)
+			end)
+		end
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.Anchored = false
+			end
+		end
+		if seat and seat:IsA("VehicleSeat") then
+			seat.Disabled = false
+			seat.Anchored = false
+			task.defer(function()
+				if not player.Parent or not model.Parent then
+					return
+				end
+				local character = player.Character
+				local hum = character and character:FindFirstChildOfClass("Humanoid")
+				if hum and seat.Parent and seat.Occupant == nil then
+					pcall(function()
+						seat:Sit(hum)
+					end)
+				end
+				if chassis and chassis:IsA("BasePart") then
+					pcall(function()
+						chassis:SetNetworkOwner(player)
+					end)
+				end
+			end)
+		end
 	end
 
 	if profile.Stats then

@@ -446,7 +446,7 @@ function TutorialController.Init()
 				local ctaTw: Tween? = nil
 				if cta.Visible then
 					ctaTw = TweenService:Create(cta, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-						BackgroundColor3 = Color3.fromRGB(255, 230, 120),
+						BackgroundColor3 = Color3.fromRGB(28, 32, 38),
 					})
 					ctaTw:Play()
 				end

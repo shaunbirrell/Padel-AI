@@ -1178,48 +1178,115 @@ return MissionConfig
             <string name="Name">MonetizationConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[ Placeholder product IDs = 0 until created in Creator Dashboard.
-	Grants ONLY via server ProcessReceipt / GamePass ownership checks — never client confirmation. ]]
+	Grants ONLY via server ProcessReceipt / GamePass ownership checks — never client confirmation.
+	DevProducts may set Entitlements flags (AutoCollect, DoubleCash, etc.) on profile. ]]
 
 local MonetizationConfig = {
 	GamePasses = {
 		VIP = {
 			Id = 0,
 			DisplayName = "VIP",
+			RobuxPrice = 199,
 			CashBonusMult = 0.25, -- additive +25% cash earnings
 			Description = "+25% Cash earnings",
 		},
 		DoubleCash = {
 			Id = 0,
 			DisplayName = "2x Cash",
+			RobuxPrice = 149,
 			CashMult = 2, -- multiplicative 2x cash earnings
 			Description = "2x Cash earnings",
 		},
 		DoubleXP = {
 			Id = 0,
 			DisplayName = "Double XP",
+			RobuxPrice = 99,
 			XPMult = 2,
 			Description = "2x XP",
 		},
 		ExtraPlotCosmetic = {
 			Id = 0,
 			DisplayName = "Elite Base Theme",
+			RobuxPrice = 79,
 			Description = "Cosmetic base theme",
+		},
+		AutoCollect = {
+			Id = 0,
+			DisplayName = "Auto Collect",
+			RobuxPrice = 99,
+			Description = "Auto-claims Money Collector without touch",
 		},
 	},
 	DevProducts = {
-		CashSmall = { Id = 0, DisplayName = "Cash Pack S", Cash = 10000, Gold = 0 },
-		CashMedium = { Id = 0, DisplayName = "Cash Pack M", Cash = 50000, Gold = 0 },
-		CashLarge = { Id = 0, DisplayName = "Cash Pack L", Cash = 200000, Gold = 0 },
-		GoldSmall = { Id = 0, DisplayName = "Gold Pack S", Cash = 0, Gold = 50 },
-		GoldMedium = { Id = 0, DisplayName = "Gold Pack M", Cash = 0, Gold = 200 },
-		GoldLarge = { Id = 0, DisplayName = "Gold Pack L", Cash = 0, Gold = 500 },
+		CashSmall = { Id = 0, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
+		CashMedium = { Id = 0, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
+		CashLarge = { Id = 0, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
+		GoldSmall = { Id = 0, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50 },
+		GoldMedium = { Id = 0, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200 },
+		GoldLarge = { Id = 0, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500 },
 		-- Placeholder Id=0: ProcessReceipt sets Battle Pass Premium when Id is live; Studio uses admin grantpremium
 		PremiumPass = {
 			Id = 0,
 			DisplayName = "Battle Pass Premium",
+			RobuxPrice = 499,
 			Cash = 0,
 			Gold = 0,
 			GrantsBattlePassPremium = true,
+		},
+		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
+		AutoCollect = {
+			Id = 0,
+			DisplayName = "Auto Collect",
+			RobuxPrice = 99,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "AutoCollect",
+			Description = "Auto-claims Money Collector without touch",
+		},
+		DoubleCash = {
+			Id = 0,
+			DisplayName = "2x Money",
+			RobuxPrice = 149,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "DoubleCash",
+			Description = "2x Cash earnings (permanent flag)",
+		},
+		ExtraSoldierSlot = {
+			Id = 0,
+			DisplayName = "Extra Soldier Slot",
+			RobuxPrice = 79,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "ExtraSoldierSlot",
+			Description = "+1 soldier capacity",
+		},
+		InstantBarracks = {
+			Id = 0,
+			DisplayName = "Instant Barracks",
+			RobuxPrice = 129,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "InstantBarracks",
+			Description = "Unlocks Barracks L1 instantly (server grant)",
+		},
+		VIPBoost = {
+			Id = 0,
+			DisplayName = "VIP Boost",
+			RobuxPrice = 199,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "VIP",
+			Description = "+25% Cash earnings (permanent flag)",
+		},
+		StarterBundle = {
+			Id = 0,
+			DisplayName = "Commander Starter Bundle",
+			RobuxPrice = 249,
+			Cash = 25000,
+			Gold = 25,
+			GrantEntitlement = "StarterBundle",
+			Description = "Cash + Gold jumpstart pack",
 		},
 	},
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
@@ -1238,6 +1305,7 @@ local MonetizationConfig = {
 		bank_raid = true,
 		clan_war_win = true,
 		clan_war_participate = true,
+		collector = true, -- pending already multiplied at accrue time
 	},
 	XPMultExemptReasons = {
 		admin = true,
@@ -2834,6 +2902,7 @@ Constants.Tags = {
 	NPC = "WE_NPC",
 	Vehicle = "WE_Vehicle",
 	TutorialMarker = "WE_TutorialMarker",
+	MoneyCollector = "WE_MoneyCollector",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -2897,7 +2966,7 @@ Constants.RemoteNames = {
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 6
+Constants.CURRENT_DATA_VERSION = 7
 
 Constants.AutosaveIntervalSeconds = 60
 Constants.DataStoreRetries = 3
@@ -2924,6 +2993,11 @@ Constants.Colors = {
 	CategoryGround = Color3.fromRGB(90, 130, 80),
 	CategoryAir = Color3.fromRGB(90, 160, 220),
 	CategoryNaval = Color3.fromRGB(70, 180, 200),
+	-- High-contrast (never pale yellow on sand/green)
+	TextOnDark = Color3.fromRGB(245, 248, 252),
+	TextDark = Color3.fromRGB(18, 20, 24),
+	PlateDark = Color3.fromRGB(12, 14, 18),
+	GoldBright = Color3.fromRGB(255, 210, 90),
 }
 
 return Constants
@@ -3061,6 +3135,7 @@ export type BattlePassProgress = {
 export type PlayerProfile = {
 	DataVersion: number,
 	Cash: number,
+	PendingCash: number,
 	Gold: number,
 	Level: number,
 	XP: number,
@@ -3088,11 +3163,13 @@ export type PlayerProfile = {
 	FirstJoinUnix: number,
 	LastJoinUnix: number,
 	ProcessedReceipts: { [string]: boolean }?,
+	Entitlements: { [string]: boolean }?,
 }
 
 export type EconomyUpdatePayload = {
 	Cash: number,
 	Gold: number,
+	PendingCash: number?,
 }
 
 export type XPUpdatePayload = {
@@ -3669,6 +3746,7 @@ local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
 local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
+local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.MoneyCollectorService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
@@ -3705,6 +3783,7 @@ local deps: { [string]: any } = {
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
 	FallSafetyService = FallSafetyService,
+	MoneyCollectorService = MoneyCollectorService,
 }
 
 local function safeInit(label: string, svc: any, ...: any)
@@ -3732,14 +3811,15 @@ if DataService and AnalyticsService and DataService.SetAnalytics then
 end
 
 -- Init services that OnProfileLoaded depends on BEFORE DataService loads players
-safeInit("EconomyService", EconomyService, deps)
-safeInit("XPService", XPService, deps)
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
+safeInit("MonetizationService", MonetizationService, deps)
+safeInit("EconomyService", EconomyService, deps)
+safeInit("XPService", XPService, deps)
+safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
 safeInit("FallSafetyService", FallSafetyService, deps)
-safeInit("MonetizationService", MonetizationService, deps)
 safeInit("TutorialService", TutorialService, deps)
 
 -- Now load profiles (fires OnProfileLoaded for joiners)
@@ -5503,6 +5583,54 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+
+	-- 13) Mid-map warzone fill (Low + Full) — sandbags, crates, trenches, debris near roads
+	do
+		local f = Instance.new("Folder")
+		f.Name = "WarzoneFill"
+		f.Parent = dressing
+		local fills = if full
+			then {
+				Vector3.new(200, 0.5, -200), Vector3.new(-200, 0.5, 200), Vector3.new(350, 0.5, 350),
+				Vector3.new(-350, 0.5, -350), Vector3.new(0, 0.5, -550), Vector3.new(550, 0.5, 0),
+				Vector3.new(-550, 0.5, 0), Vector3.new(0, 0.5, 550), Vector3.new(750, 0.5, -400),
+				Vector3.new(-750, 0.5, 400), Vector3.new(400, 0.5, -900), Vector3.new(-400, 0.5, 900),
+			}
+			else {
+				Vector3.new(200, 0.5, -200), Vector3.new(-200, 0.5, 200), Vector3.new(0, 0.5, -550),
+				Vector3.new(550, 0.5, 0), Vector3.new(-550, 0.5, 0), Vector3.new(350, 0.5, 350),
+			}
+		for i, origin in ipairs(fills) do
+			kitSandbagLine(f, origin, (i * 37) % 180, if full then 5 else 3)
+			kitCrateStack(f, origin + Vector3.new(8, 0, 4))
+			kitOilDrums(f, origin + Vector3.new(-6, 0, 6), if full then 3 else 2)
+			-- Simple trench cut (visual depression plate + berm)
+			p({
+				Name = "Trench" .. i,
+				Size = Vector3.new(18, 1.2, 4),
+				Position = origin + Vector3.new(0, 0.2, -10),
+				Color = COL.Sandbag,
+				Material = Enum.Material.Sand,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			p({
+				Name = "Debris" .. i,
+				Size = Vector3.new(3 + (i % 3), 0.7, 2),
+				Position = origin + Vector3.new(12, 0.6, -4),
+				Color = COL.Ruin,
+				Material = Enum.Material.Slate,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			if full or i % 2 == 0 then
+				kitBunker(f, origin + Vector3.new(-14, 0, 12), i * 40)
+			end
+		end
+	end
+
 	local partCount = 0
 	for _, d in ipairs(dressing:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -5551,6 +5679,7 @@ local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
+local TAG_COLLECTOR = "WE_MoneyCollector"
 
 local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
 local COL_PAD = Color3.fromRGB(38, 44, 48)
@@ -5586,11 +5715,11 @@ local STARTER_COST = {
 
 -- Map scale: ground ≥6000 continuous floor, plot ring ~800, pads ~200
 -- Top of Ground sits ~Y=0.5 so plot pads (Y=0.5) sit flush.
-local GROUND_SIZE = 6400
+local GROUND_SIZE = 7200
 local GROUND_THICKNESS = 8
 local GROUND_TOP_Y = 0.5
-local SAFETY_FLOOR_SIZE = 8000
-local SAFETY_FLOOR_Y = -40
+local SAFETY_FLOOR_SIZE = 10000
+local SAFETY_FLOOR_Y = -28
 local PLOT_PAD_SIZE = 200
 local PLOT_RING = 800
 local STRUCT_COLS = 4
@@ -6234,6 +6363,34 @@ local function buildEdgeBerms(mapFolder: Folder)
 	end
 end
 
+
+local function buildInvisibleWalls(mapFolder: Folder)
+	-- Tall invisible perimeter so players cannot walk off Ground into void/water
+	local half = GROUND_SIZE * 0.5 - 8
+	local wallH = 80
+	local wallT = 12
+	local wallY = GROUND_TOP_Y + wallH * 0.5
+	local sides = {
+		{ Name = "VoidWallN", Size = Vector3.new(GROUND_SIZE, wallH, wallT), Pos = Vector3.new(0, wallY, -half) },
+		{ Name = "VoidWallS", Size = Vector3.new(GROUND_SIZE, wallH, wallT), Pos = Vector3.new(0, wallY, half) },
+		{ Name = "VoidWallE", Size = Vector3.new(wallT, wallH, GROUND_SIZE), Pos = Vector3.new(half, wallY, 0) },
+		{ Name = "VoidWallW", Size = Vector3.new(wallT, wallH, GROUND_SIZE), Pos = Vector3.new(-half, wallY, 0) },
+	}
+	for _, s in ipairs(sides) do
+		part({
+			Name = s.Name,
+			Size = s.Size,
+			Position = s.Pos,
+			Color = Color3.fromRGB(40, 50, 40),
+			Material = Enum.Material.SmoothPlastic,
+			Transparency = 1,
+			CanCollide = true,
+			Anchored = true,
+			Parent = mapFolder,
+		end)
+	end
+end
+
 local function buildMountainRing(root: Folder)
 	--[[
 		Desert mesa / butte rim — terracotta / sienna / reddish-brown layered Part kits.
@@ -6629,6 +6786,10 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 		buildEdgeBerms(map :: Folder)
 		repaired = true
 	end
+	if not map:FindFirstChild("VoidWallN") then
+		buildInvisibleWalls(map :: Folder)
+		repaired = true
+	end
 
 	buildPadSupportShelves(setup :: Folder)
 
@@ -6678,9 +6839,15 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 	ground.CanCollide = true
 	ground.Anchored = true
 	buildSafetyUnderfloor(map :: Folder)
-	if not map:FindFirstChild("EdgeBermN") then
-		buildEdgeBerms(map :: Folder)
+	-- Refresh berms + invisible void walls every force rebuild
+	for _, name in ipairs({ "EdgeBermN", "EdgeBermS", "EdgeBermE", "EdgeBermW", "VoidWallN", "VoidWallS", "VoidWallE", "VoidWallW" }) do
+		local oldP = map:FindFirstChild(name)
+		if oldP then
+			oldP:Destroy()
+		end
 	end
+	buildEdgeBerms(map :: Folder)
+	buildInvisibleWalls(map :: Folder)
 	if not setup:FindFirstChild("MountainRing") then
 		buildMountainRing(setup :: Folder)
 	end
@@ -6797,6 +6964,7 @@ function MapSetup.Run()
 	})
 	buildSafetyUnderfloor(map)
 	buildEdgeBerms(map)
+	buildInvisibleWalls(map)
 	buildVisualFillPatches(map)
 	buildMountainRing(root)
 	-- Road grid scaled to plot ring (optional visual guide)
@@ -7453,7 +7621,8 @@ function MapSetup.Run()
 		local forceDress = forceAttr or (DevConfig.StudioForceDress == true)
 		local inStudio = RunService:IsStudio()
 		local skipDress = inStudio and (DevConfig.StudioSkipWorldDressing ~= false) and not forceDress
-		local quality = tostring(DevConfig.WorldDressQuality or "Low")
+		-- Live / non-Studio: Full warzone dressing. Studio ForceDress uses DevConfig quality.
+		local quality = if (not inStudio) then "Full" else tostring(DevConfig.WorldDressQuality or "Low")
 
 		print("[WAR EMPIRE] PERF note: deco kits use CastShadow=false. Studio Rendering → disable shadows / lower quality if still slow.")
 		if skipDress then
@@ -7560,6 +7729,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 	return {
 		DataVersion = Constants.CURRENT_DATA_VERSION,
 		Cash = EconomyConfig.StartingCash,
+		PendingCash = 0,
 		Gold = EconomyConfig.StartingGold,
 		Level = 1,
 		XP = 0,
@@ -7617,6 +7787,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		FirstJoinUnix = now,
 		LastJoinUnix = now,
 		ProcessedReceipts = {},
+		Entitlements = {},
 	}
 end
 
@@ -7787,8 +7958,27 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		version = 6
 	end
 
+
+	-- v6 → v7: Money Collector pending cash + entitlements flags
+	if version < 7 then
+		if typeof((profile :: any).PendingCash) ~= "number" then
+			(profile :: any).PendingCash = 0
+		end
+		if typeof((profile :: any).Entitlements) ~= "table" then
+			(profile :: any).Entitlements = {}
+		end
+		profile.DataVersion = 7
+		version = 7
+	end
+
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
+	end
+	if typeof((profile :: any).PendingCash) ~= "number" then
+		(profile :: any).PendingCash = 0
+	end
+	if typeof((profile :: any).Entitlements) ~= "table" then
+		(profile :: any).Entitlements = {}
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
@@ -9678,7 +9868,12 @@ function BaseService.Init(deps: { [string]: any })
 				if profile then
 					local amount = BaseService.ComputePassiveIncomePerTick(profile, player)
 					if amount > 0 then
-						EconomyService.AddCash(player, amount, "passive")
+						-- Accrue to Money Collector pending (not auto Cash)
+						if EconomyService.AccruePendingCash then
+							EconomyService.AccruePendingCash(player, amount, "passive")
+						else
+							EconomyService.AddCash(player, amount, "passive")
+						end
 					end
 				end
 			end
@@ -12816,19 +13011,14 @@ return DataService
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
-	Server-only currency mutations. Client never sets Cash/Gold.
+	Server-only currency mutations. Client never sets Cash/Gold/PendingCash.
 
-	Cash multiplier stack order (AddCash, non-exempt reasons):
+	Cash multiplier stack order (AddCash / AccruePendingCash, non-exempt reasons):
 	  1. Base amount (caller)
-	  2. Prestige: × (1 + Prestige * EconomyConfig.PrestigeCashMultiplierPerLevel)  -- +10%/rebirth
+	  2. Prestige: × (1 + Prestige * EconomyConfig.PrestigeCashMultiplierPerLevel)
 	  3. Monetization VIP/DoubleCash: × MonetizationService.GetCashMultiplier
-	     (VIP additive +0.25 into a base of 1, then DoubleCash ×2)
 	  4. Season: × SeasonService.GetCashMult()
-	Exempt reasons (MonetizationConfig.CashMultExemptReasons) skip steps 3–4 only;
-	prestige mult still applies unless reason is listed — currently prestige gold path
-	uses AddGold; cash exempts (devproduct/admin/code/spinner/…) skip VIP/season only.
-	Passive / worker training / capture stipend / combat kill rewards all use AddCash
-	so prestige + VIP/2x + season stack consistently.
+	Passive income accrues to PendingCash (Money Collector); CollectPendingCash grants Cash.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12840,19 +13030,34 @@ local Types = require(Shared.Types)
 local EconomyService = {}
 
 local SeasonService: any = nil
-
 local DataService: any = nil
 local RemoteSetup: any = nil
 local MissionService: any = nil
 local MonetizationService: any = nil
 local TutorialService: any = nil
+local MoneyCollectorService: any = nil
 
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
 	remote:FireClient(player, {
 		Cash = profile.Cash,
 		Gold = profile.Gold,
+		PendingCash = tonumber((profile :: any).PendingCash) or 0,
 	} :: Types.EconomyUpdatePayload)
+end
+
+local function applyCashMult(player: Player, profile: any, amount: number, reason: string?): number
+	local mult = 1 + (profile.Prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
+	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+	local reasonKey = reason or ""
+	local exempt = MonetizationConfig.CashMultExemptReasons
+	if MonetizationService and MonetizationService.GetCashMultiplier and not (exempt and exempt[reasonKey]) then
+		mult *= MonetizationService.GetCashMultiplier(player)
+	end
+	if SeasonService and SeasonService.GetCashMult and not (exempt and exempt[reasonKey]) then
+		mult *= SeasonService.GetCashMult()
+	end
+	return math.floor(amount * mult)
 end
 
 function EconomyService.Init(deps: { [string]: any })
@@ -12862,6 +13067,7 @@ function EconomyService.Init(deps: { [string]: any })
 	MissionService = deps.MissionService
 	MonetizationService = deps.MonetizationService
 	TutorialService = deps.TutorialService
+	MoneyCollectorService = deps.MoneyCollectorService
 end
 
 function EconomyService.Push(player: Player)
@@ -12881,29 +13087,68 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 		return false
 	end
 
-	local mult = 1 + (profile.Prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
-	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
-	local reasonKey = reason or ""
-	local exempt = MonetizationConfig.CashMultExemptReasons
-	if MonetizationService and MonetizationService.GetCashMultiplier and not (exempt and exempt[reasonKey]) then
-		mult *= MonetizationService.GetCashMultiplier(player)
-	end
-	if SeasonService and SeasonService.GetCashMult and not (exempt and exempt[reasonKey]) then
-		mult *= SeasonService.GetCashMult()
-	end
-	local granted = math.floor(amount * mult)
+	local granted = applyCashMult(player, profile, amount, reason)
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += granted
 	DataService.MarkDirty(player)
 	pushEconomy(player, profile)
-	-- Feed daily EarnCash missions (skip recursive mission reward noise is fine)
 	if MissionService and MissionService.TrackProgress and reason ~= "mission" and reason ~= "achievement" then
 		MissionService.TrackProgress(player, "EarnCash", granted)
 	end
-	if reason == "passive" and TutorialService and TutorialService.Notify then
+	if reason == "collector" and TutorialService and TutorialService.Notify then
 		TutorialService.Notify(player, "PassiveIncome")
 	end
 	return true
+end
+
+--[[ Accrue passive / stipend into PendingCash (not spendable until Money Collector). ]]
+function EconomyService.AccruePendingCash(player: Player, amount: number, reason: string?): boolean
+	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
+		return false
+	end
+	amount = math.floor(amount)
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false
+	end
+	local granted = applyCashMult(player, profile, amount, reason)
+	local pending = tonumber((profile :: any).PendingCash) or 0
+	(profile :: any).PendingCash = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
+	DataService.MarkDirty(player)
+	pushEconomy(player, profile)
+	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
+		MoneyCollectorService.RefreshForPlayer(player)
+	end
+	return true
+end
+
+function EconomyService.CollectPendingCash(player: Player): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	if pending <= 0 then
+		return 0
+	end
+	(profile :: any).PendingCash = 0
+	-- Pending already had mult applied at accrue; grant with exempt reason
+	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
+	profile.Stats.TotalCashEarned += pending
+	DataService.MarkDirty(player)
+	pushEconomy(player, profile)
+	if MissionService and MissionService.TrackProgress then
+		MissionService.TrackProgress(player, "EarnCash", pending)
+	end
+	return pending
+end
+
+function EconomyService.GetPendingCash(player: Player): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	return math.floor(tonumber((profile :: any).PendingCash) or 0)
 end
 
 function EconomyService.SpendCash(player: Player, amount: number, _reason: string?): (boolean, string?)
@@ -12987,8 +13232,8 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = 0 -- Ground top ~0.5; rescue as soon as under floor plane
-local COOLDOWN_SEC = 1.25
+local FALL_Y = 0.15 -- Ground top ~0.5; rescue as soon as under / through floor plane
+local COOLDOWN_SEC = 0.9
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -13694,16 +13939,65 @@ function MonetizationService.SetMockGamePassOwned(player: Player, passKey: strin
 	cache[passKey] = owned
 end
 
+
+local function ensureEntitlements(profile: any)
+	if typeof(profile.Entitlements) ~= "table" then
+		profile.Entitlements = {}
+	end
+	return profile.Entitlements
+end
+
+function MonetizationService.GrantEntitlement(player: Player, key: string)
+	local profile = DataService.GetProfile(player)
+	if not profile or typeof(key) ~= "string" or key == "" then
+		return
+	end
+	local ents = ensureEntitlements(profile)
+	ents[key] = true
+	-- Mirror common keys into GamePass session cache so multipliers apply immediately
+	if key == "VIP" or key == "DoubleCash" or key == "DoubleXP" or key == "AutoCollect" then
+		local cache = gamePassCache[player.UserId]
+		if not cache then
+			cache = {}
+			gamePassCache[player.UserId] = cache
+		end
+		cache[key] = true
+	end
+	-- InstantBarracks: bump Barracks to at least 1
+	if key == "InstantBarracks" and typeof(profile.BaseUpgrades) == "table" then
+		local cur = profile.BaseUpgrades.Barracks or 0
+		if cur < 1 then
+			profile.BaseUpgrades.Barracks = 1
+		end
+	end
+	DataService.MarkDirty(player)
+end
+
+function MonetizationService.PlayerOwnsEntitlement(player: Player, key: string): boolean
+	if MonetizationService.PlayerOwnsGamePass(player, key) then
+		return true
+	end
+	local profile = DataService.GetProfile(player)
+	if profile and typeof(profile.Entitlements) == "table" and profile.Entitlements[key] == true then
+		return true
+	end
+	return false
+end
+
 --[[ Cash multiplier from VIP (additive bonus) + DoubleCash (multiplicative). ]]
 function MonetizationService.GetCashMultiplier(player: Player): number
 	local mult = 1
 	local vip = MonetizationConfig.GamePasses.VIP
-	if vip and MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+	local hasVip = MonetizationService.PlayerOwnsEntitlement(player, "VIP")
+		or MonetizationService.PlayerOwnsGamePass(player, "VIP")
+	if vip and hasVip then
 		local bonus = tonumber(vip.CashBonusMult) or 0
 		mult += bonus
 	end
 	local doubleCash = MonetizationConfig.GamePasses.DoubleCash
-	if doubleCash and MonetizationService.PlayerOwnsGamePass(player, "DoubleCash") then
+	local hasDouble = MonetizationService.PlayerOwnsEntitlement(player, "DoubleCash")
+		or MonetizationService.PlayerOwnsGamePass(player, "DoubleCash")
+	if doubleCash and hasDouble then
 		local m = tonumber(doubleCash.CashMult) or 2
 		mult *= m
 	end
@@ -13808,9 +14102,19 @@ function MonetizationService.Init(deps: { [string]: any })
 		end
 	end)
 
-	DataService.OnProfileLoaded(function(player: Player, _profile: any)
+	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		task.spawn(function()
 			MonetizationService.RefreshGamePassCache(player)
+			-- Rehydrate session cache from persisted Entitlements
+			if typeof(profile) == "table" and typeof(profile.Entitlements) == "table" then
+				local cache = gamePassCache[player.UserId] or {}
+				for k, v in pairs(profile.Entitlements) do
+					if v == true then
+						cache[k] = true
+					end
+				end
+				gamePassCache[player.UserId] = cache
+			end
 		end)
 	end)
 
@@ -13855,6 +14159,10 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	if product.GrantsBattlePassPremium == true and BattlePassService and BattlePassService.SetPremium then
 		BattlePassService.SetPremium(player, true)
 	end
+	-- DevProduct entitlement flags (AutoCollect / DoubleCash / VIP / etc.)
+	if typeof(product.GrantEntitlement) == "string" and product.GrantEntitlement ~= "" then
+		MonetizationService.GrantEntitlement(player, product.GrantEntitlement)
+	end
 
 	markProcessed(profile, receiptId)
 	DataService.MarkDirty(player)
@@ -13879,6 +14187,308 @@ return MonetizationService
           </Properties>
         </Item>
         <Item class="ModuleScript" referent="75">
+          <Properties>
+            <string name="Name">MoneyCollectorService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Money Collector — passive income accrues to PendingCash until the player
+	touches their plot's WE_MoneyCollector (or owns AutoCollect entitlement).
+	Server-authoritative only.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+
+local MoneyCollectorService = {}
+
+local DataService: any = nil
+local EconomyService: any = nil
+local NotificationService: any = nil
+local MonetizationService: any = nil
+local TutorialService: any = nil
+
+local TAG = Constants.Tags.MoneyCollector
+local OVERLAP_MARGIN = 3.5
+local SPATIAL_INTERVAL = 0.25
+local AUTO_COLLECT_INTERVAL = 2.0
+
+local lastOverlap: { [string]: boolean } = {}
+local billboardCache: { [BasePart]: BillboardGui } = {}
+
+local function hasAutoCollect(player: Player): boolean
+	if MonetizationService and MonetizationService.PlayerOwnsEntitlement then
+		if MonetizationService.PlayerOwnsEntitlement(player, "AutoCollect") then
+			return true
+		end
+	end
+	if MonetizationService and MonetizationService.PlayerOwnsGamePass then
+		if MonetizationService.PlayerOwnsGamePass(player, "AutoCollect") then
+			return true
+		end
+	end
+	local profile = DataService.GetProfile(player)
+	if profile and typeof(profile.Entitlements) == "table" and profile.Entitlements.AutoCollect == true then
+		return true
+	end
+	return false
+end
+
+local function ensureBillboard(part: BasePart): BillboardGui
+	local existing = billboardCache[part]
+	if existing and existing.Parent then
+		return existing
+	end
+	local old = part:FindFirstChild("WE_CollectorBillboard")
+	if old and old:IsA("BillboardGui") then
+		billboardCache[part] = old
+		return old
+	end
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_CollectorBillboard"
+	bb.Size = UDim2.fromOffset(200, 64)
+	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 90
+	bb.Parent = part
+
+	local backdrop = Instance.new("Frame")
+	backdrop.Name = "Backdrop"
+	backdrop.Size = UDim2.fromScale(1, 1)
+	backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+	backdrop.BackgroundTransparency = 0.08
+	backdrop.BorderSizePixel = 0
+	backdrop.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 8)
+	corner.Parent = backdrop
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(80, 200, 120)
+	stroke.Thickness = 2
+	stroke.Parent = backdrop
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(1, -8, 0.45, 0)
+	title.Position = UDim2.fromOffset(4, 2)
+	title.BackgroundTransparency = 1
+	title.Font = Enum.Font.GothamBold
+	title.TextScaled = true
+	title.TextColor3 = Color3.fromRGB(235, 238, 242)
+	title.Text = "MONEY COLLECTOR"
+	title.Parent = backdrop
+
+	local amount = Instance.new("TextLabel")
+	amount.Name = "Amount"
+	amount.Size = UDim2.new(1, -8, 0.5, 0)
+	amount.Position = UDim2.fromOffset(4, 28)
+	amount.BackgroundTransparency = 1
+	amount.Font = Enum.Font.GothamBold
+	amount.TextScaled = true
+	amount.TextColor3 = Color3.fromRGB(80, 220, 120)
+	amount.Text = "$0"
+	amount.Parent = backdrop
+
+	billboardCache[part] = bb
+	return bb
+end
+
+local function refreshBillboard(part: BasePart, pending: number)
+	local bb = ensureBillboard(part)
+	local amount = bb:FindFirstChild("Amount", true)
+	if amount and amount:IsA("TextLabel") then
+		amount.Text = string.format("$%s pending", tostring(math.floor(pending)))
+		if pending > 0 then
+			amount.TextColor3 = Color3.fromRGB(90, 240, 130)
+		else
+			amount.TextColor3 = Color3.fromRGB(160, 170, 180)
+		end
+	end
+end
+
+local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
+	local localPos = part.CFrame:PointToObjectSpace(hrpPos)
+	local half = part.Size * 0.5
+	return math.abs(localPos.X) <= half.X + OVERLAP_MARGIN
+		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
+		and localPos.Y >= -half.Y - 4
+		and localPos.Y <= half.Y + 10
+end
+
+function MoneyCollectorService.Collect(player: Player): (boolean, number)
+	if not EconomyService or not EconomyService.CollectPendingCash then
+		return false, 0
+	end
+	local granted = EconomyService.CollectPendingCash(player)
+	if granted > 0 then
+		if NotificationService then
+			NotificationService.Notify(player, string.format("Collected $%d", granted), "Success", 3)
+		end
+		if TutorialService and TutorialService.Notify then
+			TutorialService.Notify(player, "PassiveIncome")
+		end
+		return true, granted
+	end
+	return false, 0
+end
+
+function MoneyCollectorService.RefreshAllBillboards()
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		if inst:IsA("BasePart") and inst.Parent then
+			local plotId = inst:GetAttribute("PlotId")
+			local pending = 0
+			if typeof(plotId) == "number" then
+				for _, player in ipairs(Players:GetPlayers()) do
+					local profile = DataService.GetProfile(player)
+					if profile and profile.BasePlotId == plotId then
+						pending = tonumber(profile.PendingCash) or 0
+						break
+					end
+				end
+			end
+			refreshBillboard(inst, pending)
+		end
+	end
+end
+
+function MoneyCollectorService.RefreshForPlayer(player: Player)
+	local profile = DataService.GetProfile(player)
+	if not profile or profile.BasePlotId == nil then
+		return
+	end
+	local pending = tonumber(profile.PendingCash) or 0
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
+			refreshBillboard(inst, pending)
+		end
+	end
+end
+
+function MoneyCollectorService.Init(deps: { [string]: any })
+	DataService = deps.DataService
+	EconomyService = deps.EconomyService
+	NotificationService = deps.NotificationService
+	MonetizationService = deps.MonetizationService
+	TutorialService = deps.TutorialService
+
+	-- Touch + spatial collect
+	local function tryCollectFromPart(player: Player, part: BasePart)
+		local profile = DataService.GetProfile(player)
+		if not profile then
+			return
+		end
+		local plotId = part:GetAttribute("PlotId")
+		if typeof(plotId) == "number" and profile.BasePlotId ~= nil and plotId ~= profile.BasePlotId then
+			return
+		end
+		local pending = tonumber(profile.PendingCash) or 0
+		if pending <= 0 then
+			return
+		end
+		MoneyCollectorService.Collect(player)
+		MoneyCollectorService.RefreshForPlayer(player)
+	end
+
+	local attached: { [BasePart]: boolean } = {}
+	local function attach(part: BasePart)
+		if attached[part] then
+			return
+		end
+		attached[part] = true
+		part.CanTouch = true
+		part.CanCollide = true
+		ensureBillboard(part)
+		part.Touched:Connect(function(hit)
+			if not hit:IsA("BasePart") then
+				return
+			end
+			local character = hit:FindFirstAncestorOfClass("Model")
+			if not character then
+				return
+			end
+			local player = Players:GetPlayerFromCharacter(character)
+			if not player then
+				return
+			end
+			local key = tostring(player.UserId) .. "|" .. part:GetFullName()
+			if lastOverlap[key] then
+				return
+			end
+			lastOverlap[key] = true
+			tryCollectFromPart(player, part)
+		end)
+		part.TouchEnded:Connect(function(hit)
+			if not hit:IsA("BasePart") then
+				return
+			end
+			local character = hit:FindFirstAncestorOfClass("Model")
+			local player = character and Players:GetPlayerFromCharacter(character)
+			if player then
+				lastOverlap[tostring(player.UserId) .. "|" .. part:GetFullName()] = false
+			end
+		end)
+	end
+
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		if inst:IsA("BasePart") then
+			attach(inst)
+		end
+	end
+	CollectionService:GetInstanceAddedSignal(TAG):Connect(function(inst)
+		if inst:IsA("BasePart") then
+			attach(inst)
+		end
+	end)
+
+	local acc = 0
+	local autoAcc = 0
+	RunService.Heartbeat:Connect(function(dt)
+		acc += dt
+		autoAcc += dt
+		if acc >= SPATIAL_INTERVAL then
+			acc = 0
+			for _, player in ipairs(Players:GetPlayers()) do
+				local character = player.Character
+				local hrp = character and character:FindFirstChild("HumanoidRootPart")
+				if hrp and hrp:IsA("BasePart") then
+					local profile = DataService.GetProfile(player)
+					if profile and (tonumber(profile.PendingCash) or 0) > 0 then
+						for part in pairs(attached) do
+							if part.Parent and pointInPart(hrp.Position, part) then
+								tryCollectFromPart(player, part)
+							end
+						end
+					end
+				end
+			end
+			MoneyCollectorService.RefreshAllBillboards()
+		end
+		if autoAcc >= AUTO_COLLECT_INTERVAL then
+			autoAcc = 0
+			for _, player in ipairs(Players:GetPlayers()) do
+				if hasAutoCollect(player) then
+					local profile = DataService.GetProfile(player)
+					if profile and (tonumber(profile.PendingCash) or 0) > 0 then
+						MoneyCollectorService.Collect(player)
+						MoneyCollectorService.RefreshForPlayer(player)
+					end
+				end
+			end
+		end
+	end)
+
+	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector)")
+end
+
+return MoneyCollectorService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13988,10 +14598,11 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
+--[[ Server → client toast. NotifyThrottled debounces identical messages per player. ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Constants = require(ReplicatedStorage:WaitForChild("Shared").Constants)
@@ -13999,6 +14610,10 @@ local Constants = require(ReplicatedStorage:WaitForChild("Shared").Constants)
 local NotificationService = {}
 
 local RemoteSetup: any = nil
+
+-- userId|messageType → last fire clock
+local lastByKey: { [string]: number } = {}
+local DEFAULT_COOLDOWN = 0.85 -- Shaun: ~1/2–1s between identical pad toasts
 
 function NotificationService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
@@ -14013,17 +14628,47 @@ function NotificationService.Notify(player: Player, message: string, notifType: 
 	})
 end
 
+--[[ Throttle by message text (or explicit key). Returns true if sent. ]]
+function NotificationService.NotifyThrottled(
+	player: Player,
+	message: string,
+	notifType: string?,
+	duration: number?,
+	cooldownSec: number?,
+	keySuffix: string?
+): boolean
+	local cd = cooldownSec or DEFAULT_COOLDOWN
+	local key = tostring(player.UserId) .. "|" .. (keySuffix or message)
+	local now = os.clock()
+	local last = lastByKey[key] or 0
+	if now - last < cd then
+		return false
+	end
+	lastByKey[key] = now
+	NotificationService.Notify(player, message, notifType, duration)
+	return true
+end
+
 function NotificationService.NotifyAll(message: string, notifType: string?)
 	for _, player in ipairs(game:GetService("Players"):GetPlayers()) do
 		NotificationService.Notify(player, message, notifType)
 	end
 end
 
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	local prefix = tostring(player.UserId) .. "|"
+	for k in pairs(lastByKey) do
+		if string.sub(k, 1, #prefix) == prefix then
+			lastByKey[k] = nil
+		end
+	end
+end)
+
 return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14275,7 +14920,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14327,7 +14972,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14591,7 +15236,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14869,7 +15514,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15032,7 +15677,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15338,7 +15983,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16060,7 +16705,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="84">
+          <Item class="ModuleScript" referent="85">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -16101,7 +16746,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -16178,7 +16823,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -16234,7 +16879,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16466,7 +17111,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16584,7 +17229,7 @@ local function flashPad(part: BasePart)
 	end)
 end
 
-local function notifyPurchaseResult(player: Player, structureId: string, result: any)
+local function notifyPurchaseResult(player: Player, structureId: string, result: any, fromStanding: boolean?)
 	if not NotificationService then
 		return
 	end
@@ -16612,10 +17257,21 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 			elseif err == "WrongPlot"
 			then "Not your base — walk your plot pads to buy"
 			else ("Purchase failed: " .. tostring(err))
+		-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
+		local cd = if fromStanding then 1.1 else 0.75
+		local key = "pad|" .. err .. "|" .. structureId
 		if err == "MaxLevel" then
-			NotificationService.Notify(player, msg, "Info", 2)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Info", 2, 8, key)
+			else
+				NotificationService.Notify(player, msg, "Info", 2)
+			end
 		else
-			NotificationService.Notify(player, msg, "Warn", 3.5)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, cd, key)
+			else
+				NotificationService.Notify(player, msg, "Warn", 3.5)
+			end
 		end
 	end
 end
@@ -16651,7 +17307,11 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			end
 			print(string.format("[UpgradePad] WrongPlot %s tried plot=%s own=%s → teleport", player.Name, tostring(pid), tostring(profile.BasePlotId)))
 			if NotificationService then
+				if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, "Not your base — teleported to YOUR plot", "Warn", 2.5, 1.2, "wrongplot")
+			else
 				NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
+			end
 			end
 		end
 		return
@@ -16691,7 +17351,7 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	else
 		print(string.format("[UpgradePad] BUY FAIL %s %s → %s", player.Name, structureId, tostring(result.Error)))
 	end
-	notifyPurchaseResult(player, structureId, result)
+	notifyPurchaseResult(player, structureId, result, fromStanding)
 	if result.Ok then
 		flashPad(part)
 	end
@@ -16919,7 +17579,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17149,7 +17809,8 @@ local function addWheels(model: Model, body: BasePart, scale: number, positions:
 		wheel.CFrame = body.CFrame * CFrame.new(offset * scale) * CFrame.Angles(0, 0, math.rad(90))
 		wheel.Anchored = false
 		wheel.CanCollide = true
-		wheel.Massless = false
+		wheel.Massless = true
+		wheel.CustomPhysicalProperties = PhysicalProperties.new(0.3, 1.2, 0.1, 1, 1)
 		wheel.Parent = model
 		weldTo(body, wheel)
 		-- Hub cap accent (visual kits v2)
@@ -17276,6 +17937,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	body.TopSurface = Enum.SurfaceType.Smooth
 	body.BottomSurface = Enum.SurfaceType.Smooth
 	body.CFrame = at
+	body.CustomPhysicalProperties = PhysicalProperties.new(0.7, 0.5, 0.2, 1, 1)
 	body.Parent = model
 
 	local seatOffset = CFrame.new(0, 2.0, -0.5)
@@ -17614,9 +18276,11 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	seat.CanCollide = true
 	seat.HeadsUpDisplay = false
 	seat.Disabled = false
-	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) elseif isNaval then math.min(def.Speed, 55) else def.Speed
-	seat.Torque = if isAir then 8 elseif isNaval then 18 else 28
-	seat.TurnSpeed = if isAir then 1.4 elseif isNaval then 1.8 else 2.4
+	seat.MaxSpeed = if isAir then math.min(def.Speed, 40) elseif isNaval then math.min(def.Speed, 55) else math.max(def.Speed, 45)
+	seat.Torque = if isAir then 10 elseif isNaval then 22 else 55
+	seat.TurnSpeed = if isAir then 1.6 elseif isNaval then 2.0 else 3.2
+	seat.Disabled = false
+	seat:SetAttribute("WE_DriverSeat", true)
 	seat.Parent = model
 	weldTo(body, seat)
 	model:SetAttribute("WE_DriveMode", if isAir then "AirPlaceholder" elseif isNaval then "NavalSeat" else "VehicleSeat")
@@ -17885,6 +18549,44 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 		startAirPlaceholderDrive(player.UserId, model, def)
 	end
 
+	-- Driveability: network ownership + auto-sit DriverSeat so garage SPAWN is immediately usable
+	do
+		local chassis = model.PrimaryPart
+		local seat = model:FindFirstChild("DriverSeat")
+		if chassis and chassis:IsA("BasePart") then
+			chassis.Anchored = false
+			pcall(function()
+				chassis:SetNetworkOwner(player)
+			end)
+		end
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.Anchored = false
+			end
+		end
+		if seat and seat:IsA("VehicleSeat") then
+			seat.Disabled = false
+			seat.Anchored = false
+			task.defer(function()
+				if not player.Parent or not model.Parent then
+					return
+				end
+				local character = player.Character
+				local hum = character and character:FindFirstChildOfClass("Humanoid")
+				if hum and seat.Parent and seat.Occupant == nil then
+					pcall(function()
+						seat:Sit(hum)
+					end)
+				end
+				if chassis and chassis:IsA("BasePart") then
+					pcall(function()
+						chassis:SetNetworkOwner(player)
+					end)
+				end
+			end)
+		end
+	end
+
 	if profile.Stats then
 		profile.Stats.VehiclesSpawned = (profile.Stats.VehiclesSpawned or 0) + 1
 	end
@@ -17997,7 +18699,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18364,7 +19066,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18499,19 +19201,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="92">
+  <Item class="StarterPlayer" referent="93">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="93">
+    <Item class="StarterPlayerScripts" referent="94">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="94">
+      <Item class="Folder" referent="95">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="95">
+        <Item class="LocalScript" referent="96">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -18541,11 +19243,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="96">
+        <Item class="Folder" referent="97">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -18909,7 +19611,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19120,7 +19822,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19152,6 +19854,7 @@ local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
 local cash = 0
 local menuOpen = false
+local menuFailToastAt = 0
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
 local toggleBtn: TextButton? = nil
@@ -19264,7 +19967,11 @@ local function refreshList()
 				local function onMenuBuy()
 					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
 					if cash < cost then
-						NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+						local now = os.clock()
+						if now - menuFailToastAt >= 0.9 then
+							menuFailToastAt = now
+							NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+						end
 						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
 					else
 						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
@@ -19517,7 +20224,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19587,7 +20294,7 @@ local function buildHud()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	screen.DisplayOrder = 30 -- below HUD dock (55) so dock clicks win
+	screen.DisplayOrder = 25 -- below HUD dock (55) / toast (70); FIRE must not cover jump
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 
 	-- Center reticle (aim assist visual — camera center)
@@ -19699,7 +20406,7 @@ local function buildHud()
 	local weaponPanel = Instance.new("Frame")
 	weaponPanel.Name = "WeaponPanel"
 	weaponPanel.AnchorPoint = Vector2.new(1, 1)
-	weaponPanel.Position = UDim2.new(1, -16, 1, if isTouch then -280 else -20)
+	weaponPanel.Position = UDim2.new(1, -16, 1, if isTouch then -360 else -20)
 	weaponPanel.Size = UDim2.fromOffset(if isTouch then 210 else 200, if isTouch then 64 else 56)
 	weaponPanel.BackgroundColor3 = Constants.Colors.Panel
 	weaponPanel.BackgroundTransparency = 0.15
@@ -19736,7 +20443,7 @@ local function buildHud()
 	lowHint.Name = "LowAmmo"
 	lowHint.BackgroundTransparency = 1
 	lowHint.AnchorPoint = Vector2.new(1, 1)
-	lowHint.Position = UDim2.new(1, -16, 1, if isTouch then -348 else -80)
+	lowHint.Position = UDim2.new(1, -16, 1, if isTouch then -420 else -80)
 	lowHint.Size = UDim2.fromOffset(160, 18)
 	lowHint.Font = Enum.Font.GothamBold
 	lowHint.TextSize = 12
@@ -19763,15 +20470,16 @@ local function buildHud()
 	if isTouch then
 		local fireBtn = Instance.new("TextButton")
 		fireBtn.Name = "FireButton"
+		-- Above Roblox jump + HUD dock (never cover jump)
 		fireBtn.AnchorPoint = Vector2.new(1, 1)
-		fireBtn.Position = UDim2.new(1, -16, 1, -100)
-		fireBtn.Size = UDim2.fromOffset(84, 84)
+		fireBtn.Position = UDim2.new(1, -18, 1, -250)
+		fireBtn.Size = UDim2.fromOffset(88, 88)
 		fireBtn.BackgroundColor3 = Constants.Colors.Danger
 		fireBtn.BackgroundTransparency = 0.15
 		fireBtn.Text = "FIRE"
 		fireBtn.Font = Enum.Font.GothamBold
 		fireBtn.TextSize = 18
-		fireBtn.TextColor3 = Constants.Colors.Text
+		fireBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		fireBtn.AutoButtonColor = true
 		fireBtn.Active = true
 		fireBtn.ZIndex = 25
@@ -19793,7 +20501,7 @@ local function buildHud()
 		local reloadBtn = Instance.new("TextButton")
 		reloadBtn.Name = "ReloadButton"
 		reloadBtn.AnchorPoint = Vector2.new(1, 1)
-		reloadBtn.Position = UDim2.new(1, -110, 1, -108)
+		reloadBtn.Position = UDim2.new(1, -118, 1, -258)
 		reloadBtn.Size = UDim2.fromOffset(64, 64)
 		reloadBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 		reloadBtn.Text = "R"
@@ -19814,7 +20522,7 @@ local function buildHud()
 		local prevBtn = Instance.new("TextButton")
 		prevBtn.Name = "WeaponPrev"
 		prevBtn.AnchorPoint = Vector2.new(1, 1)
-		prevBtn.Position = UDim2.new(1, -184, 1, -108)
+		prevBtn.Position = UDim2.new(1, -192, 1, -258)
 		prevBtn.Size = UDim2.fromOffset(52, 52)
 		prevBtn.BackgroundColor3 = Constants.Colors.GunmetalLight
 		prevBtn.Text = "◀"
@@ -19833,7 +20541,7 @@ local function buildHud()
 		local nextBtn = Instance.new("TextButton")
 		nextBtn.Name = "WeaponNext"
 		nextBtn.AnchorPoint = Vector2.new(1, 1)
-		nextBtn.Position = UDim2.new(1, -184, 1, -168)
+		nextBtn.Position = UDim2.new(1, -192, 1, -318)
 		nextBtn.Size = UDim2.fromOffset(52, 52)
 		nextBtn.BackgroundColor3 = Constants.Colors.GunmetalLight
 		nextBtn.Text = "▶"
@@ -20085,7 +20793,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20308,7 +21016,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20540,8 +21248,8 @@ function HUDController.Init()
 	local dock = Instance.new("Frame")
 	dock.Name = "MobileActionBar"
 	dock.AnchorPoint = Vector2.new(1, 1)
-	dock.Position = UDim2.new(1, -16, 1, if touch then -24 else -20)
-	dock.Size = UDim2.fromOffset(400, 80)
+	dock.Position = UDim2.new(1, -16, 1, if touch then -28 else -22)
+	dock.Size = UDim2.fromOffset(420, 78)
 	dock.BackgroundTransparency = 1
 	dock.ZIndex = 12
 	dock.Parent = screen
@@ -20549,7 +21257,7 @@ function HUDController.Init()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 10)
+	layout.Padding = UDim.new(0, 12)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = dock
 	actionDock = dock
@@ -20734,7 +21442,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21053,7 +21761,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21203,7 +21911,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21754,7 +22462,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="106">
+            <Item class="ModuleScript" referent="107">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -21915,7 +22623,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="107">
+            <Item class="ModuleScript" referent="108">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -21955,7 +22663,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -22287,7 +22995,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -22433,7 +23141,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "STUBS: all product Ids=0 — prompts log intent only; no real charges until Creator Dashboard IDs."
+	note.Text = "Prices shown in Robux. Id=0 items log intent only (no charge) until Creator Dashboard IDs are set."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
@@ -22490,7 +23198,7 @@ function ShopController.Init()
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 11
-		btn.TextColor3 = Constants.Colors.Gold
+		btn.TextColor3 = Color3.fromRGB(255, 248, 230)
 		btn.Text = btnText or "BUY"
 		btn.BorderSizePixel = 0
 		corner(btn, 6)
@@ -22504,30 +23212,22 @@ function ShopController.Init()
 	end
 
 	for key, def in pairs(MonetizationConfig.DevProducts) do
-		local sub = ""
-		if def.GrantsBattlePassPremium then
-			sub = string.format("Unlocks BP Premium track (id=%d) — grant via ProcessReceipt only", def.Id or 0)
-		elseif def.Cash and def.Cash > 0 then
-			sub = string.format("$%d  (id=%d)", def.Cash, def.Id or 0)
-		elseif def.Gold and def.Gold > 0 then
-			sub = string.format("%d Gold  (id=%d)", def.Gold, def.Id or 0)
-		else
-			sub = string.format("id=%d", def.Id or 0)
-		end
+		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = (tonumber(def.Id) or 0) == 0
-		local btnLabel = if stub then "STUB" else "BUY"
-		if not stub then
-			if def.Cash and def.Cash > 0 then
-				btnLabel = "BUY $" .. tostring(def.Cash)
-			elseif def.Gold and def.Gold > 0 then
-				btnLabel = "BUY " .. tostring(def.Gold) .. "G"
-			elseif def.GrantsBattlePassPremium then
-				btnLabel = "BUY BP"
-			end
+		local sub = def.Description or ""
+		if def.GrantsBattlePassPremium then
+			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
+		elseif def.GrantEntitlement then
+			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement))) 
+		elseif def.Cash and def.Cash > 0 then
+			sub = string.format("+$%d Cash", def.Cash)
+		elseif def.Gold and def.Gold > 0 then
+			sub = string.format("+%d Gold", def.Gold)
 		end
 		if stub then
-			sub = "STUB id=0 — " .. sub
+			sub = sub .. " · coming soon (no charge)"
 		end
+		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
 		addRow(def.DisplayName, sub, function()
 			promptDevProduct(key)
 		end, btnLabel)
@@ -22535,14 +23235,12 @@ function ShopController.Init()
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
 		local stub = (tonumber(def.Id) or 0) == 0
-		addRow(
-			"Pass: " .. def.DisplayName,
-			(if stub then "STUB id=0 — " else "") .. (def.Description or "") .. string.format(" (id=%d)", def.Id or 0),
-			function()
-				promptGamePass(key)
-			end,
-			if stub then "STUB" else "PASS"
-		)
+		local robux = tonumber(def.RobuxPrice) or 0
+		local sub = (def.Description or "") .. (if stub then " · coming soon (no charge)" else "")
+		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
+		addRow("Pass: " .. def.DisplayName, sub, function()
+			promptGamePass(key)
+		end, btnLabel)
 	end
 
 	
@@ -22594,7 +23292,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23048,7 +23746,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23499,7 +24197,7 @@ function TutorialController.Init()
 				local ctaTw: Tween? = nil
 				if cta.Visible then
 					ctaTw = TweenService:Create(cta, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-						BackgroundColor3 = Color3.fromRGB(255, 230, 120),
+						BackgroundColor3 = Color3.fromRGB(28, 32, 38),
 					})
 					ctaTw:Play()
 				end
@@ -23551,7 +24249,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23684,7 +24382,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24387,7 +25085,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24454,6 +25152,8 @@ local lastBillboardRefresh = 0
 local overlapConn: RBXScriptConnection? = nil
 local tagsBound = false
 local maxToastAt: { [string]: number } = {} -- throttle MAX toasts while camping
+local failToastAt: { [string]: number } = {} -- throttle Not enough / prereq (~0.85s)
+local FAIL_TOAST_CD = 0.9
 local _buyGui: ScreenGui? = nil
 local buyBtn: TextButton? = nil
 local activeBuyStructureId: string? = nil
@@ -24582,7 +25282,7 @@ local function ensurePadBuyGui(): TextButton
 	screen.IgnoreGuiInset = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	-- Above HUD dock (55); below modal panels (60+)
-	screen.DisplayOrder = 100 -- above dock/HUD; BUY must never be buried
+	screen.DisplayOrder = 65 -- above dock (55); below toast (70); avoids burying notifications
 	screen.Parent = pg
 	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
 	_buyGui = screen
@@ -24597,7 +25297,7 @@ local function ensurePadBuyGui(): TextButton
 	btn.AutoButtonColor = true
 	btn.Font = Enum.Font.GothamBold
 	btn.TextSize = 28
-	btn.TextColor3 = Constants.Colors.Gold
+	btn.TextColor3 = Color3.fromRGB(255, 250, 235)
 	btn.TextStrokeTransparency = 0.55
 	btn.Text = "BUY"
 	btn.Visible = false
@@ -24683,8 +25383,8 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	else
 		btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
 	end
-	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
-	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
+	btn.TextColor3 = if canAfford then Color3.fromRGB(255, 252, 240) else Color3.fromRGB(255, 200, 200)
+	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(28, 24, 10) else Color3.fromRGB(42, 16, 16)
 	btn.AutoButtonColor = canAfford
 	btn.Visible = true
 end
@@ -24755,8 +25455,8 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(10, 12, 14)
-	backdrop.BackgroundTransparency = 0.12
+	backdrop.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
+	backdrop.BackgroundTransparency = 0.02
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local c = Instance.new("UICorner")
@@ -24881,8 +25581,8 @@ local function refreshSlotBillboard(part: BasePart)
 			bb,
 			display,
 			string.format("Lv %d → %d  %s%s\nStand or tap BUY", level, level + 1, formatCost(cost), incomeLine),
-			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
-			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
+			if canAfford then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if canAfford then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	else
 		applyBillboardCopy(bb, display, incomeStr or "", Constants.Colors.Text, Constants.Colors.Gold)
@@ -24960,14 +25660,24 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 	if prereqHint then
 		lastPurchaseAt[structureId] = now
 		if not (opts and opts.silentMax) then
-			NotificationController.Show(prereqHint, "Warn", 3)
+			local fk = "prereq|" .. structureId
+			local lastFail = failToastAt[fk] or 0
+			if (now - lastFail) >= FAIL_TOAST_CD then
+				failToastAt[fk] = now
+				NotificationController.Show(prereqHint, "Warn", 3)
+			end
 			print("[WorldPrompt] BUY FAIL prereq", structureId, prereqHint)
 		end
 		return
 	end
 	if cost and cash < cost and not (opts and opts.silentMax) then
-		-- Soft client hint; server still authoritative
-		NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
+		-- Soft client hint; throttled so standing on pad does not spam
+		local fk = "cash|" .. structureId
+		local lastFail = failToastAt[fk] or 0
+		if (now - lastFail) >= FAIL_TOAST_CD then
+			failToastAt[fk] = now
+			NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
+		end
 		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
 	end
 
@@ -25379,11 +26089,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="115">
+        <Item class="Folder" referent="116">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -25526,7 +26236,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -25594,7 +26304,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -25663,7 +26373,7 @@ return StudioSmokeClient
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="119">
+  <Item class="Workspace" referent="120">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

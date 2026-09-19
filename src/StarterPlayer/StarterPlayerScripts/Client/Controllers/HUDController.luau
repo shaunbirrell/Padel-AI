@@ -227,8 +227,8 @@ function HUDController.Init()
 	local dock = Instance.new("Frame")
 	dock.Name = "MobileActionBar"
 	dock.AnchorPoint = Vector2.new(1, 1)
-	dock.Position = UDim2.new(1, -16, 1, if touch then -24 else -20)
-	dock.Size = UDim2.fromOffset(400, 80)
+	dock.Position = UDim2.new(1, -16, 1, if touch then -28 else -22)
+	dock.Size = UDim2.fromOffset(420, 78)
 	dock.BackgroundTransparency = 1
 	dock.ZIndex = 12
 	dock.Parent = screen
@@ -236,7 +236,7 @@ function HUDController.Init()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 10)
+	layout.Padding = UDim.new(0, 12)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = dock
 	actionDock = dock

@@ -1335,6 +1335,54 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+
+	-- 13) Mid-map warzone fill (Low + Full) — sandbags, crates, trenches, debris near roads
+	do
+		local f = Instance.new("Folder")
+		f.Name = "WarzoneFill"
+		f.Parent = dressing
+		local fills = if full
+			then {
+				Vector3.new(200, 0.5, -200), Vector3.new(-200, 0.5, 200), Vector3.new(350, 0.5, 350),
+				Vector3.new(-350, 0.5, -350), Vector3.new(0, 0.5, -550), Vector3.new(550, 0.5, 0),
+				Vector3.new(-550, 0.5, 0), Vector3.new(0, 0.5, 550), Vector3.new(750, 0.5, -400),
+				Vector3.new(-750, 0.5, 400), Vector3.new(400, 0.5, -900), Vector3.new(-400, 0.5, 900),
+			}
+			else {
+				Vector3.new(200, 0.5, -200), Vector3.new(-200, 0.5, 200), Vector3.new(0, 0.5, -550),
+				Vector3.new(550, 0.5, 0), Vector3.new(-550, 0.5, 0), Vector3.new(350, 0.5, 350),
+			}
+		for i, origin in ipairs(fills) do
+			kitSandbagLine(f, origin, (i * 37) % 180, if full then 5 else 3)
+			kitCrateStack(f, origin + Vector3.new(8, 0, 4))
+			kitOilDrums(f, origin + Vector3.new(-6, 0, 6), if full then 3 else 2)
+			-- Simple trench cut (visual depression plate + berm)
+			p({
+				Name = "Trench" .. i,
+				Size = Vector3.new(18, 1.2, 4),
+				Position = origin + Vector3.new(0, 0.2, -10),
+				Color = COL.Sandbag,
+				Material = Enum.Material.Sand,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			p({
+				Name = "Debris" .. i,
+				Size = Vector3.new(3 + (i % 3), 0.7, 2),
+				Position = origin + Vector3.new(12, 0.6, -4),
+				Color = COL.Ruin,
+				Material = Enum.Material.Slate,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			if full or i % 2 == 0 then
+				kitBunker(f, origin + Vector3.new(-14, 0, 12), i * 40)
+			end
+		end
+	end
+
 	local partCount = 0
 	for _, d in ipairs(dressing:GetDescendants()) do
 		if d:IsA("BasePart") then

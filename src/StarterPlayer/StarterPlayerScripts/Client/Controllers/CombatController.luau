@@ -65,7 +65,7 @@ local function buildHud()
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	screen.DisplayOrder = 30 -- below HUD dock (55) so dock clicks win
+	screen.DisplayOrder = 25 -- below HUD dock (55) / toast (70); FIRE must not cover jump
 	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
 
 	-- Center reticle (aim assist visual — camera center)
@@ -177,7 +177,7 @@ local function buildHud()
 	local weaponPanel = Instance.new("Frame")
 	weaponPanel.Name = "WeaponPanel"
 	weaponPanel.AnchorPoint = Vector2.new(1, 1)
-	weaponPanel.Position = UDim2.new(1, -16, 1, if isTouch then -280 else -20)
+	weaponPanel.Position = UDim2.new(1, -16, 1, if isTouch then -360 else -20)
 	weaponPanel.Size = UDim2.fromOffset(if isTouch then 210 else 200, if isTouch then 64 else 56)
 	weaponPanel.BackgroundColor3 = Constants.Colors.Panel
 	weaponPanel.BackgroundTransparency = 0.15
@@ -214,7 +214,7 @@ local function buildHud()
 	lowHint.Name = "LowAmmo"
 	lowHint.BackgroundTransparency = 1
 	lowHint.AnchorPoint = Vector2.new(1, 1)
-	lowHint.Position = UDim2.new(1, -16, 1, if isTouch then -348 else -80)
+	lowHint.Position = UDim2.new(1, -16, 1, if isTouch then -420 else -80)
 	lowHint.Size = UDim2.fromOffset(160, 18)
 	lowHint.Font = Enum.Font.GothamBold
 	lowHint.TextSize = 12
@@ -241,15 +241,16 @@ local function buildHud()
 	if isTouch then
 		local fireBtn = Instance.new("TextButton")
 		fireBtn.Name = "FireButton"
+		-- Above Roblox jump + HUD dock (never cover jump)
 		fireBtn.AnchorPoint = Vector2.new(1, 1)
-		fireBtn.Position = UDim2.new(1, -16, 1, -100)
-		fireBtn.Size = UDim2.fromOffset(84, 84)
+		fireBtn.Position = UDim2.new(1, -18, 1, -250)
+		fireBtn.Size = UDim2.fromOffset(88, 88)
 		fireBtn.BackgroundColor3 = Constants.Colors.Danger
 		fireBtn.BackgroundTransparency = 0.15
 		fireBtn.Text = "FIRE"
 		fireBtn.Font = Enum.Font.GothamBold
 		fireBtn.TextSize = 18
-		fireBtn.TextColor3 = Constants.Colors.Text
+		fireBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		fireBtn.AutoButtonColor = true
 		fireBtn.Active = true
 		fireBtn.ZIndex = 25
@@ -271,7 +272,7 @@ local function buildHud()
 		local reloadBtn = Instance.new("TextButton")
 		reloadBtn.Name = "ReloadButton"
 		reloadBtn.AnchorPoint = Vector2.new(1, 1)
-		reloadBtn.Position = UDim2.new(1, -110, 1, -108)
+		reloadBtn.Position = UDim2.new(1, -118, 1, -258)
 		reloadBtn.Size = UDim2.fromOffset(64, 64)
 		reloadBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 		reloadBtn.Text = "R"
@@ -292,7 +293,7 @@ local function buildHud()
 		local prevBtn = Instance.new("TextButton")
 		prevBtn.Name = "WeaponPrev"
 		prevBtn.AnchorPoint = Vector2.new(1, 1)
-		prevBtn.Position = UDim2.new(1, -184, 1, -108)
+		prevBtn.Position = UDim2.new(1, -192, 1, -258)
 		prevBtn.Size = UDim2.fromOffset(52, 52)
 		prevBtn.BackgroundColor3 = Constants.Colors.GunmetalLight
 		prevBtn.Text = "◀"
@@ -311,7 +312,7 @@ local function buildHud()
 		local nextBtn = Instance.new("TextButton")
 		nextBtn.Name = "WeaponNext"
 		nextBtn.AnchorPoint = Vector2.new(1, 1)
-		nextBtn.Position = UDim2.new(1, -184, 1, -168)
+		nextBtn.Position = UDim2.new(1, -192, 1, -318)
 		nextBtn.Size = UDim2.fromOffset(52, 52)
 		nextBtn.BackgroundColor3 = Constants.Colors.GunmetalLight
 		nextBtn.Text = "▶"
