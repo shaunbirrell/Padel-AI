@@ -107,6 +107,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `src/ServerScriptService/Server/` — Bootstrap + Services + Modules
 - `src/StarterPlayer/.../Client/` — Bootstrap + Controllers (programmatic UI)
 - `src/ServerScriptService/Server/Modules/MapSetup.luau` — world build (auto on Play if `WarEmpireSetup` missing); ~4800 ground / plot ring ~800
+- `src/ServerScriptService/Server/Modules/MapDressing.luau` — military Part-kit world dressing (outposts/bunkers/hangars/depots/camps) under `WarEmpireSetup.WorldDressing`; visual only
 - `tools/StudioSetup.luau` — short note only (paste obsolete; map auto-builds on Play)
 - `tools/SmokeTest.luau` — Play Solo command-bar smoke (remotes / configs / services; no currency exploits)
 
@@ -209,6 +210,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 
 ### Phase 7 polish
 - Module splits for Combat / Territory / Progression
+- World dressing (`MapDressing`): outposts, bunkers, hangars, fuel/ammo depots, checkpoints, camps, dockside props between plots and territories (regenerate with `resetmap` / delete `WarEmpireSetup`).
 - DataVersion 3 migrations (clan / BP / soldiers / prestige)
 - Perf: tag cache, idle skips, client debounce
 - Remote validation audit (`RemoteGuard` + RateLimit on all Request*)

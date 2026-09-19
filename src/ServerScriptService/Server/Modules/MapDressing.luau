@@ -1,0 +1,1168 @@
+--!strict
+--[[
+	WAR EMPIRE — MapDressing (world visual substance)
+	Fills the expanded ~4800 map between plots / ring / territories with
+	military Part-kit clusters (outposts, bunkers, hangars, depots, camps…).
+	Visual / immersion only — no gameplay tags that affect buy pads or capture.
+	Called from MapSetup.Run after bases/territories/spawns.
+	Regenerate: delete WarEmpireSetup + Play, or admin resetmap.
+]]
+
+local MapDressing = {}
+
+-- Palette aligned with StructureVisualConfig / MapSetup (Concrete / Metal / Neon)
+local COL = {
+	Concrete = Color3.fromRGB(85, 85, 78),
+	ConcreteDark = Color3.fromRGB(60, 60, 55),
+	Metal = Color3.fromRGB(58, 72, 88),
+	MetalDark = Color3.fromRGB(45, 50, 55),
+	Olive = Color3.fromRGB(70, 78, 55),
+	OliveDark = Color3.fromRGB(50, 55, 42),
+	Sand = Color3.fromRGB(150, 130, 90),
+	Sandbag = Color3.fromRGB(130, 115, 80),
+	Rust = Color3.fromRGB(120, 70, 45),
+	Fuel = Color3.fromRGB(180, 140, 50),
+	Ammo = Color3.fromRGB(88, 58, 50),
+	NeonGold = Color3.fromRGB(230, 190, 60),
+	NeonBlue = Color3.fromRGB(90, 160, 220),
+	NeonCyan = Color3.fromRGB(70, 180, 220),
+	NeonGreen = Color3.fromRGB(90, 160, 80),
+	NeonOrange = Color3.fromRGB(220, 140, 60),
+	NeonRed = Color3.fromRGB(200, 90, 70),
+	Asphalt = Color3.fromRGB(48, 50, 46),
+	Wood = Color3.fromRGB(95, 75, 50),
+	Wire = Color3.fromRGB(100, 105, 95),
+	Crate = Color3.fromRGB(95, 80, 55),
+	Drum = Color3.fromRGB(70, 85, 55),
+	DrumAccent = Color3.fromRGB(200, 90, 50),
+	Vehicle = Color3.fromRGB(55, 65, 48),
+	VehicleAccent = Color3.fromRGB(90, 140, 70),
+	Ruin = Color3.fromRGB(95, 90, 75),
+	Light = Color3.fromRGB(255, 230, 160),
+	Sign = Color3.fromRGB(50, 55, 45),
+	SignFace = Color3.fromRGB(200, 180, 80),
+	Tent = Color3.fromRGB(75, 85, 60),
+	Dock = Color3.fromRGB(50, 75, 95),
+}
+
+local function ensureFolder(name: string, parent: Instance): Folder
+	local existing = parent:FindFirstChild(name)
+	if existing then
+		existing:Destroy()
+	end
+	local f = Instance.new("Folder")
+	f.Name = name
+	f.Parent = parent
+	return f
+end
+
+local function p(props: { [string]: any }): Part
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	part.CanCollide = if props.CanCollide ~= nil then props.CanCollide else false
+	part.CanQuery = if props.CanQuery ~= nil then props.CanQuery else false
+	part.CanTouch = false
+	part.CastShadow = if props.CastShadow ~= nil then props.CastShadow else true
+	if props.Name then
+		part.Name = props.Name
+	end
+	if props.Size then
+		part.Size = props.Size
+	end
+	if props.CFrame then
+		part.CFrame = props.CFrame
+	elseif props.Position then
+		part.Position = props.Position
+	end
+	if props.Color then
+		part.Color = props.Color
+	end
+	if props.Material then
+		part.Material = props.Material
+	end
+	if props.Transparency then
+		part.Transparency = props.Transparency
+	end
+	if props.Shape then
+		part.Shape = props.Shape
+	end
+	if props.Parent then
+		part.Parent = props.Parent
+	end
+	part:SetAttribute("WE_Decor", true)
+	return part
+end
+
+local function at(origin: Vector3, ox: number, oy: number, oz: number): Vector3
+	return origin + Vector3.new(ox, oy, oz)
+end
+
+
+-- ── Kit builders (modest part counts) ─────────────────────────────────────
+
+local function kitWatchtower(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "TowerLeg",
+		Size = Vector3.new(2.2, 14, 2.2),
+		CFrame = cf * CFrame.new(0, 7, 0),
+		Color = COL.Olive,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerCabin",
+		Size = Vector3.new(6, 3.2, 6),
+		CFrame = cf * CFrame.new(0, 15.2, 0),
+		Color = COL.OliveDark,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerRoof",
+		Size = Vector3.new(7, 0.5, 7),
+		CFrame = cf * CFrame.new(0, 17, 0),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerAccent",
+		Size = Vector3.new(6.4, 0.25, 6.4),
+		CFrame = cf * CFrame.new(0, 13.7, 0),
+		Color = COL.NeonGold,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	p({
+		Name = "TowerAntenna",
+		Size = Vector3.new(0.3, 5, 0.3),
+		CFrame = cf * CFrame.new(2, 19.5, 2),
+		Color = COL.NeonOrange,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitBunker(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "BunkerBody",
+		Size = Vector3.new(14, 5, 10),
+		CFrame = cf * CFrame.new(0, 2.5, 0),
+		Color = COL.Concrete,
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "BunkerRoof",
+		Size = Vector3.new(15.5, 1.2, 11.5),
+		CFrame = cf * CFrame.new(0, 5.6, 0),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "BunkerDoor",
+		Size = Vector3.new(2.4, 3.2, 0.4),
+		CFrame = cf * CFrame.new(0, 1.8, -5.1),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "BunkerSlit",
+		Size = Vector3.new(4, 0.6, 0.35),
+		CFrame = cf * CFrame.new(0, 3.8, -5.15),
+		Color = COL.NeonGreen,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	p({
+		Name = "BunkerAccent",
+		Size = Vector3.new(14.5, 0.2, 0.35),
+		CFrame = cf * CFrame.new(0, 5.1, -5.4),
+		Color = COL.NeonGold,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitHangar(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "HangarPad",
+		Size = Vector3.new(28, 0.6, 22),
+		CFrame = cf * CFrame.new(0, 0.3, 0),
+		Color = COL.Asphalt,
+		Material = Enum.Material.Asphalt,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "HangarBody",
+		Size = Vector3.new(24, 10, 18),
+		CFrame = cf * CFrame.new(0, 5.3, 0),
+		Color = COL.Metal,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "HangarRoof",
+		Size = Vector3.new(26, 1, 20),
+		CFrame = cf * CFrame.new(0, 10.8, 0),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "HangarDoor",
+		Size = Vector3.new(16, 8, 0.5),
+		CFrame = cf * CFrame.new(0, 4.2, -9.1),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "HangarAccent",
+		Size = Vector3.new(16.5, 0.3, 0.4),
+		CFrame = cf * CFrame.new(0, 8.5, -9.2),
+		Color = COL.NeonBlue,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitFuelDepot(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "FuelPad",
+		Size = Vector3.new(16, 0.5, 12),
+		CFrame = cf * CFrame.new(0, 0.25, 0),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	for i, ox in ipairs({ -4.5, 0, 4.5 }) do
+		p({
+			Name = "FuelTank" .. i,
+			Size = Vector3.new(7, 3.6, 3.6),
+			-- Cylinder default axis is +X; rotate so tanks stand upright
+			CFrame = cf * CFrame.new(ox, 3.8, 0) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = COL.Fuel,
+			Material = Enum.Material.Metal,
+			Shape = Enum.PartType.Cylinder,
+			CanCollide = true,
+			CanQuery = true,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "FuelShed",
+		Size = Vector3.new(5, 4, 5),
+		CFrame = cf * CFrame.new(0, 2.2, 5.5),
+		Color = COL.OliveDark,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "FuelAccent",
+		Size = Vector3.new(15, 0.2, 0.3),
+		CFrame = cf * CFrame.new(0, 0.6, -5.5),
+		Color = COL.NeonOrange,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitAmmoShed(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "AmmoBody",
+		Size = Vector3.new(10, 5, 8),
+		CFrame = cf * CFrame.new(0, 2.7, 0),
+		Color = COL.Ammo,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "AmmoRoof",
+		Size = Vector3.new(11, 0.6, 9),
+		CFrame = cf * CFrame.new(0, 5.5, 0),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "AmmoDoor",
+		Size = Vector3.new(2.2, 3, 0.35),
+		CFrame = cf * CFrame.new(0, 1.7, -4.1),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "AmmoAccent",
+		Size = Vector3.new(10.4, 0.2, 0.3),
+		CFrame = cf * CFrame.new(0, 5.2, -4.2),
+		Color = COL.NeonRed,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	-- Crate stack beside shed
+	for i = 0, 2 do
+		p({
+			Name = "AmmoCrate",
+			Size = Vector3.new(2.2, 1.4, 1.8),
+			CFrame = cf * CFrame.new(6.5, 0.9 + i * 1.45, -1 + (i % 2) * 0.4),
+			Color = COL.Crate,
+			Material = Enum.Material.Wood,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitRadioTower(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "RadioBase",
+		Size = Vector3.new(4, 1.2, 4),
+		CFrame = cf * CFrame.new(0, 0.6, 0),
+		Color = COL.Concrete,
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "RadioMast",
+		Size = Vector3.new(0.8, 28, 0.8),
+		CFrame = cf * CFrame.new(0, 15, 0),
+		Color = COL.Metal,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "RadioDish",
+		Size = Vector3.new(0.4, 5, 5),
+		CFrame = cf * CFrame.new(0, 22, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		Shape = Enum.PartType.Cylinder,
+		Parent = folder,
+	})
+	p({
+		Name = "RadioTip",
+		Size = Vector3.new(1.2, 1.2, 1.2),
+		CFrame = cf * CFrame.new(0, 29.5, 0),
+		Color = COL.NeonCyan,
+		Material = Enum.Material.Neon,
+		Shape = Enum.PartType.Ball,
+		Parent = folder,
+	})
+	p({
+		Name = "RadioHut",
+		Size = Vector3.new(5, 3.5, 5),
+		CFrame = cf * CFrame.new(5, 1.9, 0),
+		Color = COL.Olive,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+end
+
+local function kitCheckpoint(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	-- Gate posts
+	for _, ox in ipairs({ -8, 8 }) do
+		p({
+			Name = "GatePost",
+			Size = Vector3.new(1.4, 8, 1.4),
+			CFrame = cf * CFrame.new(ox, 4, 0),
+			Color = COL.Concrete,
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			CanQuery = true,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "GateBar",
+		Size = Vector3.new(14, 0.5, 0.5),
+		CFrame = cf * CFrame.new(0, 3.5, 0),
+		Color = COL.NeonOrange,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	p({
+		Name = "GateBooth",
+		Size = Vector3.new(4, 4, 4),
+		CFrame = cf * CFrame.new(-12, 2.2, 2),
+		Color = COL.OliveDark,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "GateRoof",
+		Size = Vector3.new(4.5, 0.4, 4.5),
+		CFrame = cf * CFrame.new(-12, 4.4, 2),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "GateAccent",
+		Size = Vector3.new(4.6, 0.2, 0.3),
+		CFrame = cf * CFrame.new(-12, 4.2, 0),
+		Color = COL.NeonGold,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	-- Barrier arms beside road
+	p({
+		Name = "BarrierArm",
+		Size = Vector3.new(10, 0.35, 0.35),
+		CFrame = cf * CFrame.new(3, 1.2, 3),
+		Color = COL.NeonOrange,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitSandbagLine(folder: Folder, origin: Vector3, yawDeg: number, length: number?)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local n = length or 5
+	for i = 0, n - 1 do
+		p({
+			Name = "Sandbag",
+			Size = Vector3.new(2.4, 1.1, 1.4),
+			CFrame = cf * CFrame.new((i - (n - 1) / 2) * 2.5, 0.55, 0),
+			Color = COL.Sandbag,
+			Material = Enum.Material.Sand,
+			CanCollide = true,
+			CanQuery = true,
+			Parent = folder,
+		})
+		p({
+			Name = "SandbagTop",
+			Size = Vector3.new(2.2, 1.0, 1.2),
+			CFrame = cf * CFrame.new((i - (n - 1) / 2) * 2.5, 1.5, 0.1),
+			Color = COL.Sand,
+			Material = Enum.Material.Sand,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitWireFence(folder: Folder, origin: Vector3, yawDeg: number, segments: number?)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local n = segments or 4
+	for i = 0, n do
+		p({
+			Name = "WirePost",
+			Size = Vector3.new(0.35, 3.2, 0.35),
+			CFrame = cf * CFrame.new((i - n / 2) * 4, 1.6, 0),
+			Color = COL.Wire,
+			Material = Enum.Material.Metal,
+			CanCollide = true,
+			CanQuery = true,
+			Parent = folder,
+		})
+	end
+	for row = 0, 2 do
+		p({
+			Name = "WireRail",
+			Size = Vector3.new(n * 4 + 0.5, 0.12, 0.12),
+			CFrame = cf * CFrame.new(0, 0.6 + row * 0.9, 0),
+			Color = COL.Wire,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitRuinedWall(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "RuinA",
+		Size = Vector3.new(12, 6, 1.8),
+		CFrame = cf * CFrame.new(-3, 3, 0),
+		Color = COL.Ruin,
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "RuinB",
+		Size = Vector3.new(5, 3.5, 1.6),
+		CFrame = cf * CFrame.new(6, 1.75, 0.4),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "RuinRubble",
+		Size = Vector3.new(4, 1.2, 3),
+		CFrame = cf * CFrame.new(4, 0.6, 2),
+		Color = COL.Sandbag,
+		Material = Enum.Material.Slate,
+		Parent = folder,
+	})
+end
+
+local function kitVehicleSilhouette(folder: Folder, origin: Vector3, yawDeg: number, kind: string?)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local k = kind or "jeep"
+	if k == "truck" then
+		p({
+			Name = "DecoyCab",
+			Size = Vector3.new(4, 3.2, 5),
+			CFrame = cf * CFrame.new(0, 2.2, -4),
+			Color = COL.Vehicle,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+		p({
+			Name = "DecoyBed",
+			Size = Vector3.new(4.2, 2.2, 8),
+			CFrame = cf * CFrame.new(0, 1.6, 3),
+			Color = COL.OliveDark,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+	elseif k == "tank" then
+		p({
+			Name = "DecoyHull",
+			Size = Vector3.new(6, 2.4, 10),
+			CFrame = cf * CFrame.new(0, 1.6, 0),
+			Color = COL.Vehicle,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+		p({
+			Name = "DecoyTurret",
+			Size = Vector3.new(4, 1.8, 4),
+			CFrame = cf * CFrame.new(0, 3.4, -0.5),
+			Color = COL.Olive,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+		p({
+			Name = "DecoyBarrel",
+			Size = Vector3.new(0.55, 0.55, 7),
+			CFrame = cf * CFrame.new(0, 3.5, -5),
+			Color = COL.MetalDark,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+	else
+		-- jeep
+		p({
+			Name = "DecoyBody",
+			Size = Vector3.new(3.6, 1.8, 6.5),
+			CFrame = cf * CFrame.new(0, 1.4, 0),
+			Color = COL.Vehicle,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+		p({
+			Name = "DecoyCabin",
+			Size = Vector3.new(3.4, 1.5, 2.8),
+			CFrame = cf * CFrame.new(0, 2.8, -0.8),
+			Color = COL.OliveDark,
+			Material = Enum.Material.Metal,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "DecoyAccent",
+		Size = Vector3.new(2.5, 0.15, 0.3),
+		CFrame = cf * CFrame.new(0, 2.4, -3.2),
+		Color = COL.VehicleAccent,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	-- Wheels (deco)
+	for _, ox in ipairs({ -1.6, 1.6 }) do
+		for _, oz in ipairs({ -2.2, 2.2 }) do
+			p({
+				Name = "DecoyWheel",
+				Size = Vector3.new(0.7, 1.4, 1.4),
+				CFrame = cf * CFrame.new(ox, 0.7, oz),
+				Color = COL.MetalDark,
+				Material = Enum.Material.Rubber,
+				Shape = Enum.PartType.Cylinder,
+				Parent = folder,
+			})
+		end
+	end
+end
+
+local function kitOilDrums(folder: Folder, origin: Vector3, count: number?)
+	local n = count or 4
+	for i = 0, n - 1 do
+		local ox = (i % 2) * 1.8
+		local oz = math.floor(i / 2) * 1.8
+		p({
+			Name = "OilDrum",
+			Size = Vector3.new(2.2, 1.4, 1.4),
+			CFrame = CFrame.new(at(origin, ox, 1.1, oz)) * CFrame.Angles(0, 0, math.rad(90)),
+			Color = if i % 2 == 0 then COL.Drum else COL.DrumAccent,
+			Material = Enum.Material.Metal,
+			Shape = Enum.PartType.Cylinder,
+			Parent = folder,
+		})
+	end
+end
+
+local function kitCrateStack(folder: Folder, origin: Vector3)
+	for i = 0, 3 do
+		p({
+			Name = "Crate",
+			Size = Vector3.new(2.4, 1.6, 2.0),
+			Position = at(origin, (i % 2) * 2.5, 0.8 + math.floor(i / 2) * 1.65, (i % 2) * 0.3),
+			Color = COL.Crate,
+			Material = Enum.Material.Wood,
+			Parent = folder,
+		})
+	end
+	p({
+		Name = "CrateAccent",
+		Size = Vector3.new(2.2, 0.12, 0.2),
+		Position = at(origin, 0, 2.5, 0),
+		Color = COL.NeonGold,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitLightPole(folder: Folder, origin: Vector3)
+	p({
+		Name = "Pole",
+		Size = Vector3.new(0.4, 12, 0.4),
+		Position = at(origin, 0, 6, 0),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "Arm",
+		Size = Vector3.new(3.5, 0.3, 0.3),
+		Position = at(origin, 1.5, 11.5, 0),
+		Color = COL.Metal,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "Lamp",
+		Size = Vector3.new(1.2, 0.6, 1.2),
+		Position = at(origin, 3, 11.2, 0),
+		Color = COL.Light,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitRoadSign(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	p({
+		Name = "SignPost",
+		Size = Vector3.new(0.35, 6, 0.35),
+		CFrame = cf * CFrame.new(0, 3, 0),
+		Color = COL.MetalDark,
+		Material = Enum.Material.Metal,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "SignFace",
+		Size = Vector3.new(4, 2.2, 0.25),
+		CFrame = cf * CFrame.new(0, 5.5, 0),
+		Color = COL.Sign,
+		Material = Enum.Material.Metal,
+		Parent = folder,
+	})
+	p({
+		Name = "SignStripe",
+		Size = Vector3.new(3.6, 0.35, 0.28),
+		CFrame = cf * CFrame.new(0, 5.5, 0),
+		Color = COL.SignFace,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitCamp(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	-- Tent A-frame (two slanted panels approximated as boxes)
+	p({
+		Name = "TentFloor",
+		Size = Vector3.new(8, 0.3, 6),
+		CFrame = cf * CFrame.new(0, 0.15, 0),
+		Color = COL.OliveDark,
+		Material = Enum.Material.Fabric,
+		Parent = folder,
+	})
+	p({
+		Name = "TentBody",
+		Size = Vector3.new(7.5, 3.5, 5.5),
+		CFrame = cf * CFrame.new(0, 2, 0),
+		Color = COL.Tent,
+		Material = Enum.Material.Fabric,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	p({
+		Name = "TentPeak",
+		Size = Vector3.new(7.8, 0.8, 1.2),
+		CFrame = cf * CFrame.new(0, 4, 0),
+		Color = COL.Olive,
+		Material = Enum.Material.Fabric,
+		Parent = folder,
+	})
+	p({
+		Name = "CampFireRing",
+		Size = Vector3.new(2.5, 0.4, 2.5),
+		CFrame = cf * CFrame.new(6, 0.3, 0),
+		Color = COL.ConcreteDark,
+		Material = Enum.Material.Slate,
+		Parent = folder,
+	})
+	p({
+		Name = "CampGlow",
+		Size = Vector3.new(1.2, 0.5, 1.2),
+		CFrame = cf * CFrame.new(6, 0.6, 0),
+		Color = COL.NeonOrange,
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	kitCrateStack(folder, (cf * CFrame.new(-6, 0, 2)).Position)
+	kitOilDrums(folder, (cf * CFrame.new(-5, 0, -3)).Position, 2)
+end
+
+local function kitRunway(folder: Folder, origin: Vector3, yawDeg: number, length: number?)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local len = length or 80
+	p({
+		Name = "RunwayPad",
+		Size = Vector3.new(14, 0.25, len),
+		CFrame = cf * CFrame.new(0, 0.2, 0),
+		Color = COL.Asphalt,
+		Material = Enum.Material.Asphalt,
+		CanCollide = true,
+		CanQuery = true,
+		Parent = folder,
+	})
+	-- Centerline dashes
+	local dashes = math.floor(len / 12)
+	for i = 0, dashes - 1 do
+		local z = -len / 2 + 6 + i * 12
+		p({
+			Name = "RunwayDash",
+			Size = Vector3.new(1.2, 0.15, 6),
+			CFrame = cf * CFrame.new(0, 0.35, z),
+			Color = COL.NeonGold,
+			Material = Enum.Material.Neon,
+			Parent = folder,
+		})
+	end
+	-- Threshold chevrons
+	p({
+		Name = "RunwayThresh",
+		Size = Vector3.new(12, 0.15, 2),
+		CFrame = cf * CFrame.new(0, 0.35, -len / 2 + 4),
+		Color = Color3.fromRGB(240, 240, 240),
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+	p({
+		Name = "RunwayThresh2",
+		Size = Vector3.new(12, 0.15, 2),
+		CFrame = cf * CFrame.new(0, 0.35, len / 2 - 4),
+		Color = Color3.fromRGB(240, 240, 240),
+		Material = Enum.Material.Neon,
+		Parent = folder,
+	})
+end
+
+local function kitOutpost(folder: Folder, origin: Vector3, yawDeg: number)
+	local cf = CFrame.new(origin) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	-- Compact fortified outpost: bunker + tower + sandbags + fence
+	kitBunker(folder, (cf * CFrame.new(0, 0, 0)).Position, yawDeg)
+	kitWatchtower(folder, (cf * CFrame.new(10, 0, 8)).Position, yawDeg + 20)
+	kitSandbagLine(folder, (cf * CFrame.new(0, 0, -8)).Position, yawDeg, 4)
+	kitWireFence(folder, (cf * CFrame.new(-10, 0, 0)).Position, yawDeg + 90, 3)
+	kitAmmoShed(folder, (cf * CFrame.new(-8, 0, 10)).Position, yawDeg)
+	kitLightPole(folder, (cf * CFrame.new(12, 0, -6)).Position)
+end
+
+-- Sparse optional cluster label (short MaxDistance — mobile friendly)
+local function clusterLabel(parent: BasePart, text: string)
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "DressLabel"
+	bb.Size = UDim2.fromOffset(160, 28)
+	bb.StudsOffset = Vector3.new(0, 8, 0)
+	bb.AlwaysOnTop = false
+	bb.MaxDistance = 55
+	bb.Parent = parent
+	local lab = Instance.new("TextLabel")
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.BackgroundColor3 = Color3.fromRGB(10, 12, 14)
+	lab.BackgroundTransparency = 0.35
+	lab.Text = text
+	lab.TextColor3 = Color3.fromRGB(220, 230, 210)
+	lab.TextScaled = true
+	lab.Font = Enum.Font.GothamBold
+	lab.BorderSizePixel = 0
+	lab.Parent = bb
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 4)
+	c.Parent = lab
+end
+
+-- ── Placement plan ────────────────────────────────────────────────────────
+
+local function placeCluster(parent: Folder, name: string, origin: Vector3, builder: (Folder, Vector3, number) -> (), yawDeg: number, label: string?)
+	local folder = Instance.new("Folder")
+	folder.Name = name
+	folder.Parent = parent
+	builder(folder, origin, yawDeg)
+	if label then
+		local anchor = p({
+			Name = "LabelAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = origin + Vector3.new(0, 6, 0),
+			Transparency = 1,
+			CanCollide = false,
+			CastShadow = false,
+			Parent = folder,
+		})
+		clusterLabel(anchor, label)
+	end
+end
+
+function MapDressing.Dress(root: Instance)
+	local dressing = ensureFolder("WorldDressing", root)
+
+	-- 1) Road checkpoints on main axes (inside + outside plot ring)
+	local checkpoints = {
+		{ Name = "CP_N_Inner", Pos = Vector3.new(0, 0.5, -420), Yaw = 0, Label = "CHECKPOINT" },
+		{ Name = "CP_S_Inner", Pos = Vector3.new(0, 0.5, 420), Yaw = 180, Label = "CHECKPOINT" },
+		{ Name = "CP_E_Inner", Pos = Vector3.new(420, 0.5, 0), Yaw = 90, Label = "CHECKPOINT" },
+		{ Name = "CP_W_Inner", Pos = Vector3.new(-420, 0.5, 0), Yaw = -90, Label = "CHECKPOINT" },
+		{ Name = "CP_N_Outer", Pos = Vector3.new(0, 0.5, -1050), Yaw = 0, Label = nil },
+		{ Name = "CP_S_Outer", Pos = Vector3.new(0, 0.5, 1050), Yaw = 180, Label = nil },
+		{ Name = "CP_E_Outer", Pos = Vector3.new(1050, 0.5, 0), Yaw = 90, Label = nil },
+		{ Name = "CP_W_Outer", Pos = Vector3.new(-1050, 0.5, 0), Yaw = -90, Label = nil },
+	}
+	for _, cp in ipairs(checkpoints) do
+		placeCluster(dressing, cp.Name, cp.Pos, kitCheckpoint, cp.Yaw, cp.Label)
+	end
+
+	-- 2) Outposts near territories (offset from capture pads)
+	local outposts = {
+		{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
+		{ Name = "OP_SouthDocks", Pos = Vector3.new(-100, 0.5, 1180), Yaw = 200, Label = "OUTPOST" },
+		{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = "OUTPOST" },
+		{ Name = "OP_WestDepot", Pos = Vector3.new(-1180, 0.5, -80), Yaw = -80, Label = "OUTPOST" },
+		{ Name = "OP_OilFields", Pos = Vector3.new(850, 0.5, 1080), Yaw = 45, Label = "OUTPOST" },
+		{ Name = "OP_RadarHill", Pos = Vector3.new(-850, 0.5, -1080), Yaw = -135, Label = "OUTPOST" },
+		{ Name = "OP_MidNE", Pos = Vector3.new(550, 0.5, -550), Yaw = 20, Label = nil },
+		{ Name = "OP_MidSW", Pos = Vector3.new(-550, 0.5, 550), Yaw = 200, Label = nil },
+	}
+	for _, op in ipairs(outposts) do
+		placeCluster(dressing, op.Name, op.Pos, kitOutpost, op.Yaw, op.Label)
+	end
+
+	-- 3) Hangars + runway near air corridor (east of Central, toward EastArmory approach)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "AirfieldDressing"
+		f.Parent = dressing
+		kitHangar(f, Vector3.new(700, 0.5, -200), 90)
+		kitHangar(f, Vector3.new(700, 0.5, 200), 90)
+		kitRunway(f, Vector3.new(780, 0.5, 0), 0, 100)
+		kitFuelDepot(f, Vector3.new(640, 0.5, -280), 0)
+		kitVehicleSilhouette(f, Vector3.new(660, 0.5, -140), 90, "truck")
+		kitVehicleSilhouette(f, Vector3.new(660, 0.5, 140), 85, "jeep")
+		kitLightPole(f, Vector3.new(740, 0.5, -60))
+		kitLightPole(f, Vector3.new(740, 0.5, 60))
+		local anchor = p({
+			Name = "LabelAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = Vector3.new(720, 8, 0),
+			Transparency = 1,
+			CastShadow = false,
+			Parent = f,
+		})
+		clusterLabel(anchor, "FIELD HANGARS")
+	end
+
+	-- 4) Fuel / ammo depots along ring roads
+	local depots = {
+		{ Name = "Depot_NW", Pos = Vector3.new(-650, 0.5, -650), Yaw = 45, Kind = "fuel" },
+		{ Name = "Depot_SE", Pos = Vector3.new(650, 0.5, 650), Yaw = -135, Kind = "fuel" },
+		{ Name = "Ammo_NE", Pos = Vector3.new(650, 0.5, -650), Yaw = 135, Kind = "ammo" },
+		{ Name = "Ammo_SW", Pos = Vector3.new(-650, 0.5, 650), Yaw = -45, Kind = "ammo" },
+		{ Name = "Depot_FarE", Pos = Vector3.new(1600, 0.5, 200), Yaw = 0, Kind = "fuel" },
+		{ Name = "Depot_FarW", Pos = Vector3.new(-1600, 0.5, -200), Yaw = 180, Kind = "ammo" },
+	}
+	for _, d in ipairs(depots) do
+		local f = Instance.new("Folder")
+		f.Name = d.Name
+		f.Parent = dressing
+		if d.Kind == "fuel" then
+			kitFuelDepot(f, d.Pos, d.Yaw)
+			kitOilDrums(f, d.Pos + Vector3.new(10, 0, 6), 4)
+			kitWireFence(f, d.Pos + Vector3.new(0, 0, -10), d.Yaw, 3)
+		else
+			kitAmmoShed(f, d.Pos, d.Yaw)
+			kitCrateStack(f, d.Pos + Vector3.new(8, 0, 4))
+			kitSandbagLine(f, d.Pos + Vector3.new(0, 0, -8), d.Yaw, 3)
+		end
+	end
+
+	-- 5) Radio towers on ridges / approaches
+	local radios = {
+		{ Name = "Radio_N", Pos = Vector3.new(180, 0.5, -1500), Yaw = 0 },
+		{ Name = "Radio_S", Pos = Vector3.new(-180, 0.5, 1500), Yaw = 180 },
+		{ Name = "Radio_RadarApproach", Pos = Vector3.new(-1100, 0.5, -1100), Yaw = -45 },
+		{ Name = "Radio_OilApproach", Pos = Vector3.new(1100, 0.5, 1100), Yaw = 45 },
+	}
+	for _, r in ipairs(radios) do
+		local f = Instance.new("Folder")
+		f.Name = r.Name
+		f.Parent = dressing
+		kitRadioTower(f, r.Pos, r.Yaw)
+		kitSandbagLine(f, r.Pos + Vector3.new(6, 0, -6), r.Yaw + 30, 3)
+	end
+
+	-- 6) Camps between plot ring and mid-field
+	local camps = {
+		{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
+		{ Name = "Camp_S", Pos = Vector3.new(280, 0.5, 700), Yaw = 195 },
+		{ Name = "Camp_E", Pos = Vector3.new(900, 0.5, -350), Yaw = 90 },
+		{ Name = "Camp_W", Pos = Vector3.new(-900, 0.5, 350), Yaw = -90 },
+		{ Name = "Camp_FarSE", Pos = Vector3.new(1400, 0.5, 900), Yaw = 40 },
+		{ Name = "Camp_FarNW", Pos = Vector3.new(-1400, 0.5, -900), Yaw = -140 },
+	}
+	for _, c in ipairs(camps) do
+		local f = Instance.new("Folder")
+		f.Name = c.Name
+		f.Parent = dressing
+		kitCamp(f, c.Pos, c.Yaw)
+		kitVehicleSilhouette(f, c.Pos + Vector3.new(14, 0, 4), c.Yaw + 10, "jeep")
+		kitLightPole(f, c.Pos + Vector3.new(-10, 0, 8))
+	end
+
+	-- 7) Dockside crates / drums / light poles near SouthDocks + naval shelf
+	do
+		local f = Instance.new("Folder")
+		f.Name = "DocksideDressing"
+		f.Parent = dressing
+		-- Pier extensions
+		for i, x in ipairs({ -200, -80, 80, 200, 350 }) do
+			p({
+				Name = "Pier" .. i,
+				Size = Vector3.new(18, 1.2, 40),
+				Position = Vector3.new(x, 0.8, 1420),
+				Color = COL.Dock,
+				Material = Enum.Material.Wood,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			kitCrateStack(f, Vector3.new(x - 4, 1.5, 1410))
+			kitOilDrums(f, Vector3.new(x + 5, 1.5, 1405), 3)
+			kitLightPole(f, Vector3.new(x + 8, 0.5, 1440))
+		end
+		kitAmmoShed(f, Vector3.new(-320, 0.5, 1380), 0)
+		kitFuelDepot(f, Vector3.new(320, 0.5, 1380), 180)
+		kitVehicleSilhouette(f, Vector3.new(0, 0.5, 1360), 0, "truck")
+		kitSandbagLine(f, Vector3.new(0, 0.5, 1340), 0, 6)
+		kitWireFence(f, Vector3.new(-400, 0.5, 1400), 90, 4)
+		local anchor = p({
+			Name = "LabelAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = Vector3.new(0, 8, 1420),
+			Transparency = 1,
+			CastShadow = false,
+			Parent = f,
+		})
+		clusterLabel(anchor, "HARBOR YARD")
+	end
+
+	-- 8) Coastal oil approach props (ground-level approaches, not on elevated decks)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "CoastalOilApproaches"
+		f.Parent = dressing
+		-- Alpha approach (east coast ~1800,-750)
+		kitCheckpoint(f, Vector3.new(1650, 0.5, -750), 90)
+		kitFuelDepot(f, Vector3.new(1580, 0.5, -820), 45)
+		kitOilDrums(f, Vector3.new(1600, 0.5, -680), 6)
+		kitWireFence(f, Vector3.new(1700, 0.5, -700), 0, 4)
+		-- Bravo approach (west coast ~-1800,750)
+		kitCheckpoint(f, Vector3.new(-1650, 0.5, 750), -90)
+		kitAmmoShed(f, Vector3.new(-1580, 0.5, 820), -45)
+		kitCrateStack(f, Vector3.new(-1600, 0.5, 680))
+		kitSandbagLine(f, Vector3.new(-1700, 0.5, 700), 180, 4)
+	end
+
+	-- 9) Fort approaches — ruined walls + sandbags + decoy tanks
+	do
+		local f = Instance.new("Folder")
+		f.Name = "FortApproaches"
+		f.Parent = dressing
+		-- FortIronclad (1450,-1450)
+		kitRuinedWall(f, Vector3.new(1320, 0.5, -1320), 45)
+		kitRuinedWall(f, Vector3.new(1380, 0.5, -1550), -20)
+		kitSandbagLine(f, Vector3.new(1280, 0.5, -1450), 90, 5)
+		kitVehicleSilhouette(f, Vector3.new(1250, 0.5, -1380), 40, "tank")
+		kitWatchtower(f, Vector3.new(1200, 0.5, -1500), 30)
+		-- FortSandhold (-1450,1450)
+		kitRuinedWall(f, Vector3.new(-1320, 0.5, 1320), -135)
+		kitRuinedWall(f, Vector3.new(-1380, 0.5, 1550), 160)
+		kitSandbagLine(f, Vector3.new(-1280, 0.5, 1450), -90, 5)
+		kitVehicleSilhouette(f, Vector3.new(-1250, 0.5, 1380), -140, "tank")
+		kitWatchtower(f, Vector3.new(-1200, 0.5, 1500), -150)
+	end
+
+	-- 10) Road signs + light poles along main roads (batched, sparse)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "RoadFurniture"
+		f.Parent = dressing
+		local signSpots = {
+			{ Vector3.new(40, 0.5, -250), 0 },
+			{ Vector3.new(-40, 0.5, 250), 180 },
+			{ Vector3.new(250, 0.5, 40), 90 },
+			{ Vector3.new(-250, 0.5, -40), -90 },
+			{ Vector3.new(40, 0.5, -800), 0 },
+			{ Vector3.new(-40, 0.5, 800), 180 },
+			{ Vector3.new(800, 0.5, 40), 90 },
+			{ Vector3.new(-800, 0.5, -40), -90 },
+			{ Vector3.new(40, 0.5, -1600), 0 },
+			{ Vector3.new(-40, 0.5, 1600), 180 },
+			{ Vector3.new(1600, 0.5, 40), 90 },
+			{ Vector3.new(-1600, 0.5, -40), -90 },
+		}
+		for _, s in ipairs(signSpots) do
+			kitRoadSign(f, s[1], s[2])
+		end
+		local lightSpots = {
+			Vector3.new(30, 0.5, -600),
+			Vector3.new(-30, 0.5, 600),
+			Vector3.new(600, 0.5, 30),
+			Vector3.new(-600, 0.5, -30),
+			Vector3.new(30, 0.5, -1200),
+			Vector3.new(-30, 0.5, 1200),
+			Vector3.new(1200, 0.5, 30),
+			Vector3.new(-1200, 0.5, -30),
+			Vector3.new(400, 0.5, -400),
+			Vector3.new(-400, 0.5, 400),
+			Vector3.new(400, 0.5, 400),
+			Vector3.new(-400, 0.5, -400),
+		}
+		for _, lp in ipairs(lightSpots) do
+			kitLightPole(f, lp)
+		end
+		-- Scattered decoy vehicles along roads
+		local decoys = {
+			{ Vector3.new(120, 0.5, -500), 5, "jeep" },
+			{ Vector3.new(-120, 0.5, 500), 185, "truck" },
+			{ Vector3.new(500, 0.5, 120), 95, "jeep" },
+			{ Vector3.new(-500, 0.5, -120), -85, "truck" },
+			{ Vector3.new(200, 0.5, -1100), 10, "tank" },
+			{ Vector3.new(-200, 0.5, 1100), 190, "jeep" },
+			{ Vector3.new(1100, 0.5, 200), 100, "truck" },
+			{ Vector3.new(-1100, 0.5, -200), -80, "jeep" },
+		}
+		for _, v in ipairs(decoys) do
+			kitVehicleSilhouette(f, v[1], v[2], v[3])
+		end
+	end
+
+	-- 11) Mid-ring bunker line (between plots and outer territories)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "BunkerLine"
+		f.Parent = dressing
+		local bunkers = {
+			{ Vector3.new(0, 0.5, -900), 0 },
+			{ Vector3.new(0, 0.5, 900), 180 },
+			{ Vector3.new(900, 0.5, 0), 90 },
+			{ Vector3.new(-900, 0.5, 0), -90 },
+			{ Vector3.new(450, 0.5, -900), 15 },
+			{ Vector3.new(-450, 0.5, 900), 195 },
+		}
+		for i, b in ipairs(bunkers) do
+			kitBunker(f, b[1], b[2])
+			kitSandbagLine(f, b[1] + Vector3.new(0, 0, if math.abs(b[2]) < 45 or math.abs(b[2] - 180) < 45 then -10 else 0), b[2], 4)
+			if i <= 4 then
+				kitWireFence(f, b[1] + Vector3.new(12, 0, 0), b[2] + 90, 2)
+			end
+		end
+	end
+
+	-- 12) Plot-ring perimeter sandbags (outside pads, not on upgrade slots)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "PlotRingPerimeter"
+		f.Parent = dressing
+		-- Near each plot pad edge (PLOT_RING = 800, pad ~200)
+		local plotEdges = {
+			{ Vector3.new(-800, 0.5, -650), 0 }, -- Plot1 SW outer
+			{ Vector3.new(-800, 0.5, 650), 0 }, -- Plot2 NW
+			{ Vector3.new(0, 0.5, -950), 0 }, -- Plot3 S
+			{ Vector3.new(0, 0.5, 950), 180 }, -- Plot4 N
+			{ Vector3.new(800, 0.5, -650), 180 }, -- Plot5 SE
+			{ Vector3.new(800, 0.5, 650), 180 }, -- Plot6 NE
+		}
+		for _, e in ipairs(plotEdges) do
+			kitSandbagLine(f, e[1], e[2], 4)
+			kitLightPole(f, e[1] + Vector3.new(15, 0, 8))
+		end
+	end
+
+	local partCount = 0
+	for _, d in ipairs(dressing:GetDescendants()) do
+		if d:IsA("BasePart") then
+			partCount += 1
+		end
+	end
+	print("[WAR EMPIRE] MapDressing complete: WorldDressing clusters under WarEmpireSetup (" .. tostring(partCount) .. " parts)")
+end
+
+return MapDressing

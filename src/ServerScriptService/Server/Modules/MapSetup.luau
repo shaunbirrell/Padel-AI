@@ -2,7 +2,7 @@
 --[[
 	WAR EMPIRE — MapSetup (shared world build)
 	Builds Workspace.WarEmpireSetup: map, plots, structure kits, territories,
-	spawns, tutorial markers, NPC placeholders, lighting.
+	spawns, tutorial markers, NPC placeholders, lighting, MapDressing world props.
 	Called from Bootstrap when WarEmpireSetup is missing (Play Solo / server start).
 	Admin `resetmap` destroys WarEmpireSetup and re-runs.
 ]]
@@ -10,6 +10,8 @@
 local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+
+local MapDressing = require(script.Parent:WaitForChild("MapDressing"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -1265,6 +1267,10 @@ function MapSetup.Run()
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
 
+	-- Military world dressing (visual only — outposts/bunkers/hangars/depots/camps)
+	-- Does not tag WE_UpgradeSlot / buy pads. Regenerate via resetmap or delete WarEmpireSetup.
+	MapDressing.Dress(root)
+
 	-- Guarantee at least one Neutral Duration=0 spawn near origin
 	local hasNeutralSpawn = false
 	for _, inst in ipairs(root:GetDescendants()) do
@@ -1288,7 +1294,7 @@ function MapSetup.Run()
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " naval pads + dock + training/oil/forts/bank under Workspace.WarEmpireSetup")
+	print("[WAR EMPIRE] MapSetup complete: ground=" .. tostring(GROUND_SIZE) .. " plotRing=" .. tostring(PLOT_RING) .. " naval/dock/training/oil/forts/bank + WorldDressing under Workspace.WarEmpireSetup")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end
