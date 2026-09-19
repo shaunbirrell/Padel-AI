@@ -397,10 +397,14 @@ local function damageNPC(attacker: Player, npcId: string, damage: number, weapon
 end
 
 function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
-	if aliveNPCCount() >= CombatConfig.MaxActiveNPCs then
+	local tid = typeId or CombatConfig.DefaultNPCType
+	local isSpecial = tid == "BankGuard" or tid == "OilRigGuard" or tid == "FortGuard"
+	local cap = CombatConfig.MaxActiveNPCs or 18
+	-- Special guards may exceed soft field pool by +4 so bank always gets guards
+	if aliveNPCCount() >= (if isSpecial then cap + 4 else cap) then
+		print(string.format("[CombatService] SpawnNPC blocked at cap alive=%d tid=%s", aliveNPCCount(), tostring(tid)))
 		return nil
 	end
-	local tid = typeId or CombatConfig.DefaultNPCType
 	local def = CombatConfig.NPCTypes[tid]
 	if not def then
 		tid = CombatConfig.DefaultNPCType
@@ -420,7 +424,8 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 
 	local root = Instance.new("Part")
 	root.Name = "HumanoidRootPart"
-	root.Size = Vector3.new(2, 2.4, 1.25)
+	-- Classic R6 torso proportions (2×2×1)
+	root.Size = Vector3.new(2, 2, 1)
 	root.CFrame = at
 	root.Anchored = false
 	root.CanCollide = true
@@ -462,30 +467,29 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	)
 	local isHeavy = tid == "HeavyInfantry" or tid == "OilRigGuard" or tid == "FortGuard"
 	local isBank = tid == "BankGuard"
-	local headPart = weldPart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, 1.7, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	-- Simple face (no third-party meshes)
+	-- R6-ish: head +1.5, arms ±1.5, legs ±0.5 @ -2
+	local headPart = weldPart("Head", Vector3.new(1.05, 1.05, 1.05), CFrame.new(0, 1.55, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	local face = Instance.new("Decal")
 	face.Name = "face"
 	face.Face = Enum.NormalId.Front
 	face.Texture = "rbxasset://textures/face.png"
 	face.Parent = headPart
-	weldPart("Helmet", Vector3.new(1.32, 0.55, 1.32), CFrame.new(0, 2.1, 0), helmCol, Enum.Material.Metal, nil)
-	weldPart("Visor", Vector3.new(1.05, 0.22, 0.35), CFrame.new(0, 1.95, -0.55), Color3.fromRGB(30, 35, 40), Enum.Material.Glass, nil)
-	weldPart("Vest", Vector3.new(2.15, 1.35, 1.35), CFrame.new(0, 0.35, 0), Color3.fromRGB(
+	weldPart("Helmet", Vector3.new(1.2, 0.5, 1.2), CFrame.new(0, 1.95, 0), helmCol, Enum.Material.Metal, nil)
+	weldPart("Visor", Vector3.new(0.95, 0.2, 0.3), CFrame.new(0, 1.75, -0.5), Color3.fromRGB(30, 35, 40), Enum.Material.Glass, nil)
+	weldPart("Vest", Vector3.new(2.1, 1.2, 1.15), CFrame.new(0, 0.15, 0), Color3.fromRGB(
 		math.clamp(math.floor(def.Color.R * 255) - 25, 25, 255),
 		math.clamp(math.floor(def.Color.G * 255) - 15, 25, 255),
 		math.clamp(math.floor(def.Color.B * 255) - 10, 25, 255)
 	), Enum.Material.Metal, nil)
-	weldPart("LegL", Vector3.new(0.7, 1.5, 0.7), CFrame.new(-0.45, -1.7, 0), def.Color, Enum.Material.Fabric, nil)
-	weldPart("LegR", Vector3.new(0.7, 1.5, 0.7), CFrame.new(0.45, -1.7, 0), def.Color, Enum.Material.Fabric, nil)
-	weldPart("BootL", Vector3.new(0.75, 0.35, 0.95), CFrame.new(-0.45, -2.5, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
-	weldPart("BootR", Vector3.new(0.75, 0.35, 0.95), CFrame.new(0.45, -2.5, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
-	weldPart("ArmL", Vector3.new(0.55, 1.3, 0.55), CFrame.new(-1.25, 0.2, 0), def.Color, Enum.Material.Fabric, nil)
-	weldPart("ArmR", Vector3.new(0.55, 1.3, 0.55), CFrame.new(1.25, 0.2, 0), def.Color, Enum.Material.Fabric, nil)
-	-- Rifle + stock
-	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(0.95, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
-	weldPart("Stock", Vector3.new(0.28, 0.35, 0.7), CFrame.new(0.95, 0.2, 0.55), Color3.fromRGB(45, 40, 32), Enum.Material.Wood, nil)
-	weldPart("BarrelTip", Vector3.new(0.18, 0.18, 0.35), CFrame.new(0.95, 0.15, -2.05), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil)
+	weldPart("LegL", Vector3.new(1, 2, 1), CFrame.new(-0.5, -2, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("LegR", Vector3.new(1, 2, 1), CFrame.new(0.5, -2, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("BootL", Vector3.new(1.05, 0.35, 1.15), CFrame.new(-0.5, -3.1, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
+	weldPart("BootR", Vector3.new(1.05, 0.35, 1.15), CFrame.new(0.5, -3.1, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
+	weldPart("ArmL", Vector3.new(1, 2, 1), CFrame.new(-1.5, 0, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("ArmR", Vector3.new(1, 2, 1), CFrame.new(1.5, 0, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
+	weldPart("Stock", Vector3.new(0.28, 0.35, 0.7), CFrame.new(1.15, 0.2, 0.55), Color3.fromRGB(45, 40, 32), Enum.Material.Wood, nil)
+	weldPart("BarrelTip", Vector3.new(0.18, 0.18, 0.35), CFrame.new(1.15, 0.15, -2.05), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil)
 	local accent = if isBank
 		then Color3.fromRGB(90, 140, 220)
 		elseif isHeavy then Color3.fromRGB(230, 160, 50)
@@ -509,7 +513,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "NPCLabel"
 	bb.Size = UDim2.fromOffset(140, 28)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.StudsOffset = Vector3.new(0, 3.6, 0)
 	bb.AlwaysOnTop = true
 	bb.MaxDistance = 90
 	bb.Parent = root

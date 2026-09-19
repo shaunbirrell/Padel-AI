@@ -25,6 +25,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 
@@ -41,7 +42,7 @@ local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(210, 90) -- room for "Stand or tap BUY"
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(220, 108) -- room for cost + +$/tick + BUY hint
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
 
@@ -120,6 +121,22 @@ local function formatCost(cost: number): string
 		return string.format("$%dk", math.floor(cost / 1000))
 	end
 	return "$" .. tostring(cost)
+end
+
+local function incomePerLevel(structureId: string): number
+	local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+	if typeof(rates) ~= "table" then
+		return 0
+	end
+	return tonumber(rates[structureId]) or 0
+end
+
+local function formatIncomeRate(structureId: string): string?
+	local rate = incomePerLevel(structureId)
+	if rate <= 0 then
+		return nil
+	end
+	return string.format("+$%d/tick", rate)
 end
 
 local structureInfo: (structureId: string) -> (string, number, number?, boolean, string?)
@@ -237,7 +254,12 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	activeBuyStructureId = structureId
 	activeBuyPart = part
 	local canAfford = cash >= cost
-	btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
+	local incomeStr = formatIncomeRate(structureId)
+	if incomeStr then
+		btn.Text = string.format("BUY %s · %s · %s", display, formatCost(cost), incomeStr)
+	else
+		btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
+	end
 	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
 	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
 	btn.Visible = true
@@ -283,10 +305,7 @@ local function hidePriceBillboard(part: BasePart)
 	if existing and existing:IsA("BillboardGui") then
 		existing.Enabled = false
 	end
-	local legacy = part:FindFirstChild("Label")
-	if legacy and legacy:IsA("BillboardGui") and legacy.Name ~= BILLBOARD_NAME then
-		-- MapSetup may leave a non-price Label on other parts; ignore here
-	end
+	-- MapSetup non-price Label billboards on other parts are left alone
 end
 
 local function ensurePriceBillboard(part: BasePart): BillboardGui
@@ -404,11 +423,17 @@ local function refreshSlotBillboard(part: BasePart)
 	local bb = ensurePriceBillboard(part)
 	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
 
+	local incomeStr = formatIncomeRate(structureId)
+	local incomeLine = if incomeStr then (" · " .. incomeStr) else ""
+
 	if isMax then
+		local ownedIncome = if incomePerLevel(structureId) > 0
+			then string.format("  +$%d/tick", incomePerLevel(structureId) * level)
+			else ""
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d  MAX", level),
+			string.format("Lv %d  MAX%s", level, ownedIncome),
 			Constants.Colors.Muted,
 			Color3.fromRGB(70, 80, 70)
 		)
@@ -417,7 +442,7 @@ local function refreshSlotBillboard(part: BasePart)
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d → %d %s\n%s", level, level + 1, costStr, prereqHint),
+			string.format("Lv %d → %d %s%s\n%s", level, level + 1, costStr, incomeLine, prereqHint),
 			Color3.fromRGB(200, 170, 120),
 			Color3.fromRGB(160, 130, 70)
 		)
@@ -426,12 +451,12 @@ local function refreshSlotBillboard(part: BasePart)
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d → %d  %s\nStand or tap BUY", level, level + 1, formatCost(cost)),
+			string.format("Lv %d → %d  %s%s\nStand or tap BUY", level, level + 1, formatCost(cost), incomeLine),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
 		)
 	else
-		applyBillboardCopy(bb, display, "", Constants.Colors.Text, Constants.Colors.Gold)
+		applyBillboardCopy(bb, display, incomeStr or "", Constants.Colors.Text, Constants.Colors.Gold)
 	end
 end
 
@@ -487,10 +512,11 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		return
 	end
 	if pendingPurchase[structureId] then
+		print("[WorldPrompt] BUY skip in-flight", structureId)
 		return
 	end
 
-	local _display, _level, _cost, isMax = structureInfo(structureId)
+	local display, _level, cost, isMax, prereqHint = structureInfo(structureId)
 	if isMax then
 		lastPurchaseAt[structureId] = now
 		local silent = opts and opts.silentMax
@@ -498,13 +524,27 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		if not silent and (now - lastMax) >= 8 then
 			maxToastAt[structureId] = now
 			NotificationController.Show("Already MAX", "Info", 2)
+			print("[WorldPrompt] BUY FAIL MAX", structureId)
 		end
 		return
+	end
+	if prereqHint then
+		lastPurchaseAt[structureId] = now
+		if not (opts and opts.silentMax) then
+			NotificationController.Show(prereqHint, "Warn", 3)
+			print("[WorldPrompt] BUY FAIL prereq", structureId, prereqHint)
+		end
+		return
+	end
+	if cost and cash < cost and not (opts and opts.silentMax) then
+		-- Soft client hint; server still authoritative
+		NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
+		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
 	end
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
-	print("[WorldPrompt] FireServer RequestPurchaseUpgrade", structureId)
+	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), cash))
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)

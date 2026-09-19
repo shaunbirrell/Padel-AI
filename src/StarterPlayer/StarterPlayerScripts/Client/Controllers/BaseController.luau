@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
@@ -119,17 +120,29 @@ local function refreshList()
 				btn.Active = false
 			else
 				-- Clear BUY path — not instant on B; tap this button to purchase.
+				local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+				local rate = if typeof(rates) == "table" then (tonumber(rates[structureId]) or 0) else 0
+				local incomeSuffix = if rate > 0 then (" +" .. tostring(rate) .. "/t") else ""
+				-- Wider button when income shown
+				if rate > 0 then
+					btn.Size = UDim2.fromOffset(128, 44)
+				end
 				if level == 0 then
-					btn.Text = "BUY $" .. tostring(cost)
+					btn.Text = "BUY $" .. tostring(cost) .. incomeSuffix
 				else
-					btn.Text = "UP $" .. tostring(cost)
+					btn.Text = "UP $" .. tostring(cost) .. incomeSuffix
 				end
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
 				btn.Activated:Connect(function()
-					print("[WAR EMPIRE] Base menu BUY:", structureId, "cost=", cost)
-					NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
+					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
+					if cash < cost then
+						NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
+					else
+						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
+					end
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
@@ -323,7 +336,7 @@ function BaseController.Init()
 	sub.TextSize = 12
 	sub.TextColor3 = Constants.Colors.Muted
 	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.Text = "Walk onto pads to auto-buy · or tap BUY $price here"
+	sub.Text = "Walk/tap BUY on pads · B menu · +$/tick shown"
 	sub.Parent = panel
 
 	local scroll = Instance.new("ScrollingFrame")

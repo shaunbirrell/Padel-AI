@@ -66,6 +66,15 @@ local function spawnBankGuards()
 		end
 	end
 	print(string.format("[WAR EMPIRE] BankRaidService: spawned %d %s combat NPCs at bank", spawned, typeId))
+	if spawned == 0 then
+		warn("[WAR EMPIRE] BankRaidService: ZERO BankGuards — will retry once in 3s")
+		guardsSpawned = false
+		task.delay(3, function()
+			if not guardsSpawned then
+				spawnBankGuards()
+			end
+		end)
+	end
 end
 
 local function pushState(player: Player)

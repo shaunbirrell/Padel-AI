@@ -15,7 +15,9 @@ local Lighting = game:GetService("Lighting")
 local MapDressing = require(script.Parent:WaitForChild("MapDressing"))
 local DesertFlora = require(script.Parent:WaitForChild("DesertFlora"))
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local DevConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs"):WaitForChild("DevConfig"))
+local SharedConfigs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
+local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
+local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -209,7 +211,7 @@ local function priceBillboard(parent, title, costLine, accent)
 	-- Visual kits v2: larger readable price cards
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(200, 72)
+	bb.Size = UDim2.fromOffset(220, 96)
 	bb.StudsOffset = Vector3.new(0, 6.0, 0)
 	bb.AlwaysOnTop = true -- only useful nearby (short MaxDistance)
 	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
@@ -246,7 +248,7 @@ local function priceBillboard(parent, title, costLine, accent)
 
 	local costLab = Instance.new("TextLabel")
 	costLab.Name = "Cost"
-	costLab.Size = UDim2.new(1, -10, 0, 34)
+	costLab.Size = UDim2.new(1, -10, 0, 56)
 	costLab.Position = UDim2.fromOffset(5, 30)
 	costLab.BackgroundTransparency = 1
 	costLab.Text = "Lv 0 → 1\n" .. costLine
@@ -441,7 +443,10 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	}
 	local nice = displayNames[def.Id] or def.Id
 	local title = if isCC then ("★ " .. nice) else nice
-	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost), def.Accent)
+	local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
+	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
+	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
 	return plinth
 end
 
@@ -449,6 +454,8 @@ end
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
 local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
+	-- Visual props for Training Yard / static kits. R6-ish proportions (~5 stud tall).
+	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
 	local model = Instance.new("Model")
 	model.Name = name
 	if npcId then
@@ -457,7 +464,6 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	if npcType then
 		model:SetAttribute("NPCType", npcType)
 	end
-	-- Desert camo base (tan/khaki) blended with role color
 	local desertBase = Color3.fromRGB(145, 125, 85)
 	local camo = desertBase:Lerp(bodyColor, 0.45)
 	local camoDark = Color3.fromRGB(
@@ -465,9 +471,10 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		math.clamp(math.floor(camo.G * 255) - 22, 20, 255),
 		math.clamp(math.floor(camo.B * 255) - 18, 20, 255)
 	)
+	-- R6 torso = 2×2×1; lift so feet sit on ground (cf is approx mid-body)
 	local torso = part({
 		Name = "HumanoidRootPart",
-		Size = Vector3.new(2.05, 2.4, 1.25),
+		Size = Vector3.new(2, 2, 1),
 		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
@@ -477,148 +484,173 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	})
 	local head = part({
 		Name = "Head",
-		Size = Vector3.new(1.1, 1.1, 1.1),
+		Size = Vector3.new(1.05, 1.05, 1.05),
 		Color = Color3.fromRGB(110, 85, 62),
 		Material = Enum.Material.SmoothPlastic,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 1.72, 0),
+		CFrame = torso.CFrame * CFrame.new(0, 1.55, 0),
 		Shape = Enum.PartType.Ball,
 		Parent = model,
 	})
-	-- Helmet (desert tan)
 	part({
 		Name = "Helmet",
-		Size = Vector3.new(1.32, 0.55, 1.32),
+		Size = Vector3.new(1.2, 0.5, 1.2),
 		Color = camoDark,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame + Vector3.new(0, 0.42, 0),
+		CFrame = head.CFrame * CFrame.new(0, 0.38, 0),
 		Parent = model,
 	})
-	-- Shemagh / scarf wrap (neck + cheek accent)
 	part({
 		Name = "Shemagh",
-		Size = Vector3.new(1.45, 0.55, 1.35),
+		Size = Vector3.new(1.25, 0.45, 1.15),
 		Color = Color3.fromRGB(200, 185, 150),
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame + Vector3.new(0, -0.35, 0.05),
+		CFrame = head.CFrame * CFrame.new(0, -0.32, 0.05),
 		Parent = model,
 	})
-	part({
-		Name = "ShemaghTail",
-		Size = Vector3.new(0.7, 1.1, 0.25),
-		Color = Color3.fromRGB(190, 170, 130),
-		Material = Enum.Material.Fabric,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.85, 0.85, -0.15),
-		Parent = model,
-	})
-	-- Plate carrier vest
 	part({
 		Name = "Vest",
-		Size = Vector3.new(2.2, 1.35, 1.4),
+		Size = Vector3.new(2.1, 1.2, 1.15),
 		Color = camoDark,
 		Material = Enum.Material.Leather,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 0.28, 0),
+		CFrame = torso.CFrame * CFrame.new(0, 0.15, 0),
 		Parent = model,
 	})
 	part({
 		Name = "VestPouch",
-		Size = Vector3.new(1.6, 0.55, 0.35),
+		Size = Vector3.new(1.5, 0.45, 0.3),
 		Color = Color3.fromRGB(90, 80, 55),
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.15, -0.7),
+		CFrame = torso.CFrame * CFrame.new(0, 0.05, -0.6),
 		Parent = model,
 	})
+	-- R6 arms 1×2×1
 	part({
-		Name = "LegL",
-		Size = Vector3.new(0.68, 1.45, 0.68),
+		Name = "ArmL",
+		Size = Vector3.new(1, 2, 1),
 		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(-0.45, -1.78, 0),
+		CFrame = torso.CFrame * CFrame.new(-1.5, 0, 0),
+		Parent = model,
+	})
+	part({
+		Name = "ArmR",
+		Size = Vector3.new(1, 2, 1),
+		Color = camo,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(1.5, 0, 0),
+		Parent = model,
+	})
+	-- R6 legs 1×2×1
+	part({
+		Name = "LegL",
+		Size = Vector3.new(1, 2, 1),
+		Color = camo,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(-0.5, -2, 0),
 		Parent = model,
 	})
 	part({
 		Name = "LegR",
-		Size = Vector3.new(0.68, 1.45, 0.68),
+		Size = Vector3.new(1, 2, 1),
 		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.45, -1.78, 0),
+		CFrame = torso.CFrame * CFrame.new(0.5, -2, 0),
 		Parent = model,
 	})
-	-- Clearer rifle silhouette (stock + barrel + optic)
+	part({
+		Name = "BootL",
+		Size = Vector3.new(1.05, 0.35, 1.15),
+		Color = Color3.fromRGB(35, 32, 28),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(-0.5, -3.1, 0.1),
+		Parent = model,
+	})
+	part({
+		Name = "BootR",
+		Size = Vector3.new(1.05, 0.35, 1.15),
+		Color = Color3.fromRGB(35, 32, 28),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.5, -3.1, 0.1),
+		Parent = model,
+	})
 	part({
 		Name = "RifleStock",
-		Size = Vector3.new(0.35, 0.45, 1.1),
+		Size = Vector3.new(0.3, 0.4, 0.9),
 		Color = Color3.fromRGB(55, 48, 38),
 		Material = Enum.Material.Wood,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.2, 0.15),
+		CFrame = torso.CFrame * CFrame.new(1.15, 0.15, 0.35),
 		Parent = model,
 	})
 	part({
 		Name = "Rifle",
-		Size = Vector3.new(0.28, 0.28, 2.8),
+		Size = Vector3.new(0.25, 0.25, 2.4),
 		Color = Color3.fromRGB(32, 34, 36),
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.25, -1.15),
+		CFrame = torso.CFrame * CFrame.new(1.15, 0.2, -0.95),
 		Parent = model,
 	})
 	part({
 		Name = "RifleBarrel",
-		Size = Vector3.new(0.16, 0.16, 1.2),
+		Size = Vector3.new(0.14, 0.14, 0.9),
 		Color = Color3.fromRGB(25, 25, 28),
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.28, -2.5),
-		Parent = model,
-	})
-	part({
-		Name = "RifleOptic",
-		Size = Vector3.new(0.22, 0.35, 0.55),
-		Color = Color3.fromRGB(40, 42, 45),
-		Material = Enum.Material.Metal,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.55, -0.9),
+		CFrame = torso.CFrame * CFrame.new(1.15, 0.22, -2.25),
 		Parent = model,
 	})
 	part({
 		Name = "Accent",
-		Size = Vector3.new(1.7, 0.12, 0.3),
+		Size = Vector3.new(1.6, 0.1, 0.28),
 		Color = labelColor or Color3.fromRGB(200, 140, 60),
 		Material = Enum.Material.Neon,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.95, -0.55),
+		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
 		Parent = model,
 	})
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = health or 100
 	hum.Health = health or 100
+	-- Single nametag only via Billboard — kill default Humanoid nameplate
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	hum.Parent = model
 	model.PrimaryPart = torso
 	model.Parent = parentFolder
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 	if labelText then
-		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 200, 140))
+		-- One clean label on head (not also on torso)
+		local bb = plainBillboard(head, labelText, Vector2.new(120, 24), 2.2, labelColor or Color3.fromRGB(255, 200, 140))
+		bb.Name = "NPCLabel"
+		bb.MaxDistance = 70
 	end
 	return model
 end

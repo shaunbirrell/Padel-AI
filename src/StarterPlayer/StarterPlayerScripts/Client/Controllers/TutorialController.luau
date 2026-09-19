@@ -136,6 +136,8 @@ local function setVisible(open: boolean)
 	end
 end
 
+local lastAnnouncedId: string? = nil
+
 local function applyState(payload: any)
 	if typeof(payload) ~= "table" then
 		return
@@ -143,6 +145,7 @@ local function applyState(payload: any)
 	if payload.Complete == true then
 		setVisible(false)
 		clearWaypoint()
+		lastAnnouncedId = nil
 		return
 	end
 	setVisible(true)
@@ -158,6 +161,17 @@ local function applyState(payload: any)
 		progressLabel.Text = string.format("Step %d / %d", math.clamp(step, 1, total), total)
 	end
 	setWaypoint(payload.MarkerName)
+
+	-- One-shot polish toast for first buy / first income steps
+	local id = if typeof(payload.Id) == "string" then payload.Id else nil
+	if id and id ~= lastAnnouncedId then
+		lastAnnouncedId = id
+		if id == "CommandCenter" then
+			print("[Tutorial] Step CommandCenter — walk pad / tap BUY / B menu")
+		elseif id == "Income" then
+			print("[Tutorial] Step Income — watch HUD +$/tick")
+		end
+	end
 end
 
 function TutorialController.Init()
@@ -172,8 +186,9 @@ function TutorialController.Init()
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 1)
-	frame.Position = UDim2.new(0.5, 0, 1, -24)
-	frame.Size = UDim2.fromOffset(420, 110)
+	-- Lift above pad BUY button (~108 from bottom) + mobile dock
+	frame.Position = UDim2.new(0.5, 0, 1, -196)
+	frame.Size = UDim2.fromOffset(440, 118)
 	frame.BackgroundColor3 = Constants.Colors.Panel
 	frame.BorderSizePixel = 0
 	frame.Visible = false
@@ -240,7 +255,9 @@ function TutorialController.Init()
 	skip.BorderSizePixel = 0
 	corner(skip, 6)
 	skip.Parent = frame
-	skip.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(skip, 44)
+	skip.Activated:Connect(function()
+		print("[Tutorial] SKIP pressed")
 		Remotes.GetEvent(Constants.RemoteNames.RequestSkipTutorial):FireServer()
 	end)
 

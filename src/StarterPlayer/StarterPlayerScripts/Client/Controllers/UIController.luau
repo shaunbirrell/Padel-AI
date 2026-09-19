@@ -48,6 +48,15 @@ function UIController.Init()
 
 	HUDController.BindActionBar({
 		{
+			Name = "DockBase",
+			Icon = "🏗",
+			Label = "BASE",
+			Color = Color3.fromRGB(50, 160, 110),
+			OnClick = function()
+				dockPress("Base", BaseController.Toggle)
+			end,
+		},
+		{
 			Name = "DockShop",
 			Icon = "🛒",
 			Label = "SHOP",
@@ -93,7 +102,7 @@ function UIController.Init()
 			end,
 		},
 	})
-	print("[WAR EMPIRE] UIController: action dock bound (Shop/Rebirth/Orders/Army/Settings)")
+	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Settings)")
 end
 
 return UIController

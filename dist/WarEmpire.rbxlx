@@ -1977,21 +1977,21 @@ local TutorialConfig = {
 		{
 			Id = "CommandCenter",
 			Title = "Build Command Center",
-			Hint = "Press B (or Base Upgrades) and buy Command Center.",
+			Hint = "Walk onto the Command Center pad (or tap BUY / press B) — pads show +$/tick.",
 			MarkerName = "Tutorial_CommandCenter",
 			HighlightHint = "BaseMenu",
 		},
 		{
 			Id = "Income",
 			Title = "Collect income",
-			Hint = "Watch Cash tick up from passive income on the HUD.",
+			Hint = "Watch HUD Cash tick up every few seconds — your first +$/tick from Command Center.",
 			MarkerName = "Tutorial_Income",
 			HighlightHint = "CashHUD",
 		},
 		{
 			Id = "Barracks",
 			Title = "Build Barracks",
-			Hint = "Upgrade Barracks (requires Command Center) to boost income.",
+			Hint = "Buy Barracks on its pad (needs CC) — bigger +$/tick on the billboard.",
 			MarkerName = "Tutorial_Barracks",
 			HighlightHint = "BaseMenu",
 		},
@@ -5209,7 +5209,9 @@ local Lighting = game:GetService("Lighting")
 local MapDressing = require(script.Parent:WaitForChild("MapDressing"))
 local DesertFlora = require(script.Parent:WaitForChild("DesertFlora"))
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local DevConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs"):WaitForChild("DevConfig"))
+local SharedConfigs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
+local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
+local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -5403,7 +5405,7 @@ local function priceBillboard(parent, title, costLine, accent)
 	-- Visual kits v2: larger readable price cards
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(200, 72)
+	bb.Size = UDim2.fromOffset(220, 96)
 	bb.StudsOffset = Vector3.new(0, 6.0, 0)
 	bb.AlwaysOnTop = true -- only useful nearby (short MaxDistance)
 	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
@@ -5440,7 +5442,7 @@ local function priceBillboard(parent, title, costLine, accent)
 
 	local costLab = Instance.new("TextLabel")
 	costLab.Name = "Cost"
-	costLab.Size = UDim2.new(1, -10, 0, 34)
+	costLab.Size = UDim2.new(1, -10, 0, 56)
 	costLab.Position = UDim2.fromOffset(5, 30)
 	costLab.BackgroundTransparency = 1
 	costLab.Text = "Lv 0 → 1\n" .. costLine
@@ -5635,7 +5637,10 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	}
 	local nice = displayNames[def.Id] or def.Id
 	local title = if isCC then ("★ " .. nice) else nice
-	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost), def.Accent)
+	local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
+	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
+	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
 	return plinth
 end
 
@@ -5643,6 +5648,8 @@ end
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
 local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
+	-- Visual props for Training Yard / static kits. R6-ish proportions (~5 stud tall).
+	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
 	local model = Instance.new("Model")
 	model.Name = name
 	if npcId then
@@ -5651,7 +5658,6 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	if npcType then
 		model:SetAttribute("NPCType", npcType)
 	end
-	-- Desert camo base (tan/khaki) blended with role color
 	local desertBase = Color3.fromRGB(145, 125, 85)
 	local camo = desertBase:Lerp(bodyColor, 0.45)
 	local camoDark = Color3.fromRGB(
@@ -5659,9 +5665,10 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		math.clamp(math.floor(camo.G * 255) - 22, 20, 255),
 		math.clamp(math.floor(camo.B * 255) - 18, 20, 255)
 	)
+	-- R6 torso = 2×2×1; lift so feet sit on ground (cf is approx mid-body)
 	local torso = part({
 		Name = "HumanoidRootPart",
-		Size = Vector3.new(2.05, 2.4, 1.25),
+		Size = Vector3.new(2, 2, 1),
 		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
@@ -5671,148 +5678,173 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	})
 	local head = part({
 		Name = "Head",
-		Size = Vector3.new(1.1, 1.1, 1.1),
+		Size = Vector3.new(1.05, 1.05, 1.05),
 		Color = Color3.fromRGB(110, 85, 62),
 		Material = Enum.Material.SmoothPlastic,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 1.72, 0),
+		CFrame = torso.CFrame * CFrame.new(0, 1.55, 0),
 		Shape = Enum.PartType.Ball,
 		Parent = model,
 	})
-	-- Helmet (desert tan)
 	part({
 		Name = "Helmet",
-		Size = Vector3.new(1.32, 0.55, 1.32),
+		Size = Vector3.new(1.2, 0.5, 1.2),
 		Color = camoDark,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame + Vector3.new(0, 0.42, 0),
+		CFrame = head.CFrame * CFrame.new(0, 0.38, 0),
 		Parent = model,
 	})
-	-- Shemagh / scarf wrap (neck + cheek accent)
 	part({
 		Name = "Shemagh",
-		Size = Vector3.new(1.45, 0.55, 1.35),
+		Size = Vector3.new(1.25, 0.45, 1.15),
 		Color = Color3.fromRGB(200, 185, 150),
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame + Vector3.new(0, -0.35, 0.05),
+		CFrame = head.CFrame * CFrame.new(0, -0.32, 0.05),
 		Parent = model,
 	})
-	part({
-		Name = "ShemaghTail",
-		Size = Vector3.new(0.7, 1.1, 0.25),
-		Color = Color3.fromRGB(190, 170, 130),
-		Material = Enum.Material.Fabric,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.85, 0.85, -0.15),
-		Parent = model,
-	})
-	-- Plate carrier vest
 	part({
 		Name = "Vest",
-		Size = Vector3.new(2.2, 1.35, 1.4),
+		Size = Vector3.new(2.1, 1.2, 1.15),
 		Color = camoDark,
 		Material = Enum.Material.Leather,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame + Vector3.new(0, 0.28, 0),
+		CFrame = torso.CFrame * CFrame.new(0, 0.15, 0),
 		Parent = model,
 	})
 	part({
 		Name = "VestPouch",
-		Size = Vector3.new(1.6, 0.55, 0.35),
+		Size = Vector3.new(1.5, 0.45, 0.3),
 		Color = Color3.fromRGB(90, 80, 55),
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.15, -0.7),
+		CFrame = torso.CFrame * CFrame.new(0, 0.05, -0.6),
 		Parent = model,
 	})
+	-- R6 arms 1×2×1
 	part({
-		Name = "LegL",
-		Size = Vector3.new(0.68, 1.45, 0.68),
+		Name = "ArmL",
+		Size = Vector3.new(1, 2, 1),
 		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(-0.45, -1.78, 0),
+		CFrame = torso.CFrame * CFrame.new(-1.5, 0, 0),
+		Parent = model,
+	})
+	part({
+		Name = "ArmR",
+		Size = Vector3.new(1, 2, 1),
+		Color = camo,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(1.5, 0, 0),
+		Parent = model,
+	})
+	-- R6 legs 1×2×1
+	part({
+		Name = "LegL",
+		Size = Vector3.new(1, 2, 1),
+		Color = camo,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(-0.5, -2, 0),
 		Parent = model,
 	})
 	part({
 		Name = "LegR",
-		Size = Vector3.new(0.68, 1.45, 0.68),
+		Size = Vector3.new(1, 2, 1),
 		Color = camo,
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.45, -1.78, 0),
+		CFrame = torso.CFrame * CFrame.new(0.5, -2, 0),
 		Parent = model,
 	})
-	-- Clearer rifle silhouette (stock + barrel + optic)
+	part({
+		Name = "BootL",
+		Size = Vector3.new(1.05, 0.35, 1.15),
+		Color = Color3.fromRGB(35, 32, 28),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(-0.5, -3.1, 0.1),
+		Parent = model,
+	})
+	part({
+		Name = "BootR",
+		Size = Vector3.new(1.05, 0.35, 1.15),
+		Color = Color3.fromRGB(35, 32, 28),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.5, -3.1, 0.1),
+		Parent = model,
+	})
 	part({
 		Name = "RifleStock",
-		Size = Vector3.new(0.35, 0.45, 1.1),
+		Size = Vector3.new(0.3, 0.4, 0.9),
 		Color = Color3.fromRGB(55, 48, 38),
 		Material = Enum.Material.Wood,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.2, 0.15),
+		CFrame = torso.CFrame * CFrame.new(1.15, 0.15, 0.35),
 		Parent = model,
 	})
 	part({
 		Name = "Rifle",
-		Size = Vector3.new(0.28, 0.28, 2.8),
+		Size = Vector3.new(0.25, 0.25, 2.4),
 		Color = Color3.fromRGB(32, 34, 36),
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.25, -1.15),
+		CFrame = torso.CFrame * CFrame.new(1.15, 0.2, -0.95),
 		Parent = model,
 	})
 	part({
 		Name = "RifleBarrel",
-		Size = Vector3.new(0.16, 0.16, 1.2),
+		Size = Vector3.new(0.14, 0.14, 0.9),
 		Color = Color3.fromRGB(25, 25, 28),
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.28, -2.5),
-		Parent = model,
-	})
-	part({
-		Name = "RifleOptic",
-		Size = Vector3.new(0.22, 0.35, 0.55),
-		Color = Color3.fromRGB(40, 42, 45),
-		Material = Enum.Material.Metal,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.95, 0.55, -0.9),
+		CFrame = torso.CFrame * CFrame.new(1.15, 0.22, -2.25),
 		Parent = model,
 	})
 	part({
 		Name = "Accent",
-		Size = Vector3.new(1.7, 0.12, 0.3),
+		Size = Vector3.new(1.6, 0.1, 0.28),
 		Color = labelColor or Color3.fromRGB(200, 140, 60),
 		Material = Enum.Material.Neon,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.95, -0.55),
+		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
 		Parent = model,
 	})
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = health or 100
 	hum.Health = health or 100
+	-- Single nametag only via Billboard — kill default Humanoid nameplate
+	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	hum.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	hum.Parent = model
 	model.PrimaryPart = torso
 	model.Parent = parentFolder
 	CollectionService:AddTag(model, TAG_NPC_ENTITY)
 	if labelText then
-		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 200, 140))
+		-- One clean label on head (not also on torso)
+		local bb = plainBillboard(head, labelText, Vector2.new(120, 24), 2.2, labelColor or Color3.fromRGB(255, 200, 140))
+		bb.Name = "NPCLabel"
+		bb.MaxDistance = 70
 	end
 	return model
 end
@@ -8138,6 +8170,15 @@ local function spawnBankGuards()
 		end
 	end
 	print(string.format("[WAR EMPIRE] BankRaidService: spawned %d %s combat NPCs at bank", spawned, typeId))
+	if spawned == 0 then
+		warn("[WAR EMPIRE] BankRaidService: ZERO BankGuards — will retry once in 3s")
+		guardsSpawned = false
+		task.delay(3, function()
+			if not guardsSpawned then
+				spawnBankGuards()
+			end
+		end)
+	end
 end
 
 local function pushState(player: Player)
@@ -10804,10 +10845,14 @@ local function damageNPC(attacker: Player, npcId: string, damage: number, weapon
 end
 
 function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
-	if aliveNPCCount() >= CombatConfig.MaxActiveNPCs then
+	local tid = typeId or CombatConfig.DefaultNPCType
+	local isSpecial = tid == "BankGuard" or tid == "OilRigGuard" or tid == "FortGuard"
+	local cap = CombatConfig.MaxActiveNPCs or 18
+	-- Special guards may exceed soft field pool by +4 so bank always gets guards
+	if aliveNPCCount() >= (if isSpecial then cap + 4 else cap) then
+		print(string.format("[CombatService] SpawnNPC blocked at cap alive=%d tid=%s", aliveNPCCount(), tostring(tid)))
 		return nil
 	end
-	local tid = typeId or CombatConfig.DefaultNPCType
 	local def = CombatConfig.NPCTypes[tid]
 	if not def then
 		tid = CombatConfig.DefaultNPCType
@@ -10827,7 +10872,8 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 
 	local root = Instance.new("Part")
 	root.Name = "HumanoidRootPart"
-	root.Size = Vector3.new(2, 2.4, 1.25)
+	-- Classic R6 torso proportions (2×2×1)
+	root.Size = Vector3.new(2, 2, 1)
 	root.CFrame = at
 	root.Anchored = false
 	root.CanCollide = true
@@ -10869,30 +10915,29 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	)
 	local isHeavy = tid == "HeavyInfantry" or tid == "OilRigGuard" or tid == "FortGuard"
 	local isBank = tid == "BankGuard"
-	local headPart = weldPart("Head", Vector3.new(1.15, 1.15, 1.15), CFrame.new(0, 1.7, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	-- Simple face (no third-party meshes)
+	-- R6-ish: head +1.5, arms ±1.5, legs ±0.5 @ -2
+	local headPart = weldPart("Head", Vector3.new(1.05, 1.05, 1.05), CFrame.new(0, 1.55, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	local face = Instance.new("Decal")
 	face.Name = "face"
 	face.Face = Enum.NormalId.Front
 	face.Texture = "rbxasset://textures/face.png"
 	face.Parent = headPart
-	weldPart("Helmet", Vector3.new(1.32, 0.55, 1.32), CFrame.new(0, 2.1, 0), helmCol, Enum.Material.Metal, nil)
-	weldPart("Visor", Vector3.new(1.05, 0.22, 0.35), CFrame.new(0, 1.95, -0.55), Color3.fromRGB(30, 35, 40), Enum.Material.Glass, nil)
-	weldPart("Vest", Vector3.new(2.15, 1.35, 1.35), CFrame.new(0, 0.35, 0), Color3.fromRGB(
+	weldPart("Helmet", Vector3.new(1.2, 0.5, 1.2), CFrame.new(0, 1.95, 0), helmCol, Enum.Material.Metal, nil)
+	weldPart("Visor", Vector3.new(0.95, 0.2, 0.3), CFrame.new(0, 1.75, -0.5), Color3.fromRGB(30, 35, 40), Enum.Material.Glass, nil)
+	weldPart("Vest", Vector3.new(2.1, 1.2, 1.15), CFrame.new(0, 0.15, 0), Color3.fromRGB(
 		math.clamp(math.floor(def.Color.R * 255) - 25, 25, 255),
 		math.clamp(math.floor(def.Color.G * 255) - 15, 25, 255),
 		math.clamp(math.floor(def.Color.B * 255) - 10, 25, 255)
 	), Enum.Material.Metal, nil)
-	weldPart("LegL", Vector3.new(0.7, 1.5, 0.7), CFrame.new(-0.45, -1.7, 0), def.Color, Enum.Material.Fabric, nil)
-	weldPart("LegR", Vector3.new(0.7, 1.5, 0.7), CFrame.new(0.45, -1.7, 0), def.Color, Enum.Material.Fabric, nil)
-	weldPart("BootL", Vector3.new(0.75, 0.35, 0.95), CFrame.new(-0.45, -2.5, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
-	weldPart("BootR", Vector3.new(0.75, 0.35, 0.95), CFrame.new(0.45, -2.5, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
-	weldPart("ArmL", Vector3.new(0.55, 1.3, 0.55), CFrame.new(-1.25, 0.2, 0), def.Color, Enum.Material.Fabric, nil)
-	weldPart("ArmR", Vector3.new(0.55, 1.3, 0.55), CFrame.new(1.25, 0.2, 0), def.Color, Enum.Material.Fabric, nil)
-	-- Rifle + stock
-	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(0.95, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
-	weldPart("Stock", Vector3.new(0.28, 0.35, 0.7), CFrame.new(0.95, 0.2, 0.55), Color3.fromRGB(45, 40, 32), Enum.Material.Wood, nil)
-	weldPart("BarrelTip", Vector3.new(0.18, 0.18, 0.35), CFrame.new(0.95, 0.15, -2.05), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil)
+	weldPart("LegL", Vector3.new(1, 2, 1), CFrame.new(-0.5, -2, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("LegR", Vector3.new(1, 2, 1), CFrame.new(0.5, -2, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("BootL", Vector3.new(1.05, 0.35, 1.15), CFrame.new(-0.5, -3.1, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
+	weldPart("BootR", Vector3.new(1.05, 0.35, 1.15), CFrame.new(0.5, -3.1, 0.1), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, nil)
+	weldPart("ArmL", Vector3.new(1, 2, 1), CFrame.new(-1.5, 0, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("ArmR", Vector3.new(1, 2, 1), CFrame.new(1.5, 0, 0), def.Color, Enum.Material.Fabric, nil)
+	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
+	weldPart("Stock", Vector3.new(0.28, 0.35, 0.7), CFrame.new(1.15, 0.2, 0.55), Color3.fromRGB(45, 40, 32), Enum.Material.Wood, nil)
+	weldPart("BarrelTip", Vector3.new(0.18, 0.18, 0.35), CFrame.new(1.15, 0.15, -2.05), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil)
 	local accent = if isBank
 		then Color3.fromRGB(90, 140, 220)
 		elseif isHeavy then Color3.fromRGB(230, 160, 50)
@@ -10916,7 +10961,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "NPCLabel"
 	bb.Size = UDim2.fromOffset(140, 28)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.StudsOffset = Vector3.new(0, 3.6, 0)
 	bb.AlwaysOnTop = true
 	bb.MaxDistance = 90
 	bb.Parent = root
@@ -17588,6 +17633,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
@@ -17693,17 +17739,29 @@ local function refreshList()
 				btn.Active = false
 			else
 				-- Clear BUY path — not instant on B; tap this button to purchase.
+				local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+				local rate = if typeof(rates) == "table" then (tonumber(rates[structureId]) or 0) else 0
+				local incomeSuffix = if rate > 0 then (" +" .. tostring(rate) .. "/t") else ""
+				-- Wider button when income shown
+				if rate > 0 then
+					btn.Size = UDim2.fromOffset(128, 44)
+				end
 				if level == 0 then
-					btn.Text = "BUY $" .. tostring(cost)
+					btn.Text = "BUY $" .. tostring(cost) .. incomeSuffix
 				else
-					btn.Text = "UP $" .. tostring(cost)
+					btn.Text = "UP $" .. tostring(cost) .. incomeSuffix
 				end
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
 				btn.Activated:Connect(function()
-					print("[WAR EMPIRE] Base menu BUY:", structureId, "cost=", cost)
-					NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
+					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
+					if cash < cost then
+						NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
+					else
+						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
+					end
 					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
@@ -17897,7 +17955,7 @@ function BaseController.Init()
 	sub.TextSize = 12
 	sub.TextColor3 = Constants.Colors.Muted
 	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.Text = "Walk onto pads to auto-buy · or tap BUY $price here"
+	sub.Text = "Walk/tap BUY on pads · B menu · +$/tick shown"
 	sub.Parent = panel
 
 	local scroll = Instance.new("ScrollingFrame")
@@ -21254,6 +21312,8 @@ local function setVisible(open: boolean)
 	end
 end
 
+local lastAnnouncedId: string? = nil
+
 local function applyState(payload: any)
 	if typeof(payload) ~= "table" then
 		return
@@ -21261,6 +21321,7 @@ local function applyState(payload: any)
 	if payload.Complete == true then
 		setVisible(false)
 		clearWaypoint()
+		lastAnnouncedId = nil
 		return
 	end
 	setVisible(true)
@@ -21276,6 +21337,17 @@ local function applyState(payload: any)
 		progressLabel.Text = string.format("Step %d / %d", math.clamp(step, 1, total), total)
 	end
 	setWaypoint(payload.MarkerName)
+
+	-- One-shot polish toast for first buy / first income steps
+	local id = if typeof(payload.Id) == "string" then payload.Id else nil
+	if id and id ~= lastAnnouncedId then
+		lastAnnouncedId = id
+		if id == "CommandCenter" then
+			print("[Tutorial] Step CommandCenter — walk pad / tap BUY / B menu")
+		elseif id == "Income" then
+			print("[Tutorial] Step Income — watch HUD +$/tick")
+		end
+	end
 end
 
 function TutorialController.Init()
@@ -21290,8 +21362,9 @@ function TutorialController.Init()
 	local frame = Instance.new("Frame")
 	frame.Name = "Panel"
 	frame.AnchorPoint = Vector2.new(0.5, 1)
-	frame.Position = UDim2.new(0.5, 0, 1, -24)
-	frame.Size = UDim2.fromOffset(420, 110)
+	-- Lift above pad BUY button (~108 from bottom) + mobile dock
+	frame.Position = UDim2.new(0.5, 0, 1, -196)
+	frame.Size = UDim2.fromOffset(440, 118)
 	frame.BackgroundColor3 = Constants.Colors.Panel
 	frame.BorderSizePixel = 0
 	frame.Visible = false
@@ -21358,7 +21431,9 @@ function TutorialController.Init()
 	skip.BorderSizePixel = 0
 	corner(skip, 6)
 	skip.Parent = frame
-	skip.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(skip, 44)
+	skip.Activated:Connect(function()
+		print("[Tutorial] SKIP pressed")
 		Remotes.GetEvent(Constants.RemoteNames.RequestSkipTutorial):FireServer()
 	end)
 
@@ -21457,6 +21532,15 @@ function UIController.Init()
 
 	HUDController.BindActionBar({
 		{
+			Name = "DockBase",
+			Icon = "🏗",
+			Label = "BASE",
+			Color = Color3.fromRGB(50, 160, 110),
+			OnClick = function()
+				dockPress("Base", BaseController.Toggle)
+			end,
+		},
+		{
 			Name = "DockShop",
 			Icon = "🛒",
 			Label = "SHOP",
@@ -21502,7 +21586,7 @@ function UIController.Init()
 			end,
 		},
 	})
-	print("[WAR EMPIRE] UIController: action dock bound (Shop/Rebirth/Orders/Army/Settings)")
+	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Settings)")
 end
 
 return UIController
@@ -22076,6 +22160,7 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 
@@ -22092,7 +22177,7 @@ local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(210, 90) -- room for "Stand or tap BUY"
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(220, 108) -- room for cost + +$/tick + BUY hint
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
 
@@ -22171,6 +22256,22 @@ local function formatCost(cost: number): string
 		return string.format("$%dk", math.floor(cost / 1000))
 	end
 	return "$" .. tostring(cost)
+end
+
+local function incomePerLevel(structureId: string): number
+	local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+	if typeof(rates) ~= "table" then
+		return 0
+	end
+	return tonumber(rates[structureId]) or 0
+end
+
+local function formatIncomeRate(structureId: string): string?
+	local rate = incomePerLevel(structureId)
+	if rate <= 0 then
+		return nil
+	end
+	return string.format("+$%d/tick", rate)
 end
 
 local structureInfo: (structureId: string) -> (string, number, number?, boolean, string?)
@@ -22288,7 +22389,12 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	activeBuyStructureId = structureId
 	activeBuyPart = part
 	local canAfford = cash >= cost
-	btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
+	local incomeStr = formatIncomeRate(structureId)
+	if incomeStr then
+		btn.Text = string.format("BUY %s · %s · %s", display, formatCost(cost), incomeStr)
+	else
+		btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
+	end
 	btn.TextColor3 = if canAfford then Constants.Colors.Gold else Color3.fromRGB(255, 170, 170)
 	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(48, 38, 8) else Color3.fromRGB(48, 22, 22)
 	btn.Visible = true
@@ -22455,11 +22561,17 @@ local function refreshSlotBillboard(part: BasePart)
 	local bb = ensurePriceBillboard(part)
 	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
 
+	local incomeStr = formatIncomeRate(structureId)
+	local incomeLine = if incomeStr then (" · " .. incomeStr) else ""
+
 	if isMax then
+		local ownedIncome = if incomePerLevel(structureId) > 0
+			then string.format("  +$%d/tick", incomePerLevel(structureId) * level)
+			else ""
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d  MAX", level),
+			string.format("Lv %d  MAX%s", level, ownedIncome),
 			Constants.Colors.Muted,
 			Color3.fromRGB(70, 80, 70)
 		)
@@ -22468,7 +22580,7 @@ local function refreshSlotBillboard(part: BasePart)
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d → %d %s\n%s", level, level + 1, costStr, prereqHint),
+			string.format("Lv %d → %d %s%s\n%s", level, level + 1, costStr, incomeLine, prereqHint),
 			Color3.fromRGB(200, 170, 120),
 			Color3.fromRGB(160, 130, 70)
 		)
@@ -22477,12 +22589,12 @@ local function refreshSlotBillboard(part: BasePart)
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d → %d  %s\nStand or tap BUY", level, level + 1, formatCost(cost)),
+			string.format("Lv %d → %d  %s%s\nStand or tap BUY", level, level + 1, formatCost(cost), incomeLine),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(220, 140, 140),
 			if canAfford then Constants.Colors.Gold else Color3.fromRGB(160, 70, 70)
 		)
 	else
-		applyBillboardCopy(bb, display, "", Constants.Colors.Text, Constants.Colors.Gold)
+		applyBillboardCopy(bb, display, incomeStr or "", Constants.Colors.Text, Constants.Colors.Gold)
 	end
 end
 
@@ -22538,10 +22650,11 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		return
 	end
 	if pendingPurchase[structureId] then
+		print("[WorldPrompt] BUY skip in-flight", structureId)
 		return
 	end
 
-	local _display, _level, _cost, isMax = structureInfo(structureId)
+	local display, _level, cost, isMax, prereqHint = structureInfo(structureId)
 	if isMax then
 		lastPurchaseAt[structureId] = now
 		local silent = opts and opts.silentMax
@@ -22549,13 +22662,27 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		if not silent and (now - lastMax) >= 8 then
 			maxToastAt[structureId] = now
 			NotificationController.Show("Already MAX", "Info", 2)
+			print("[WorldPrompt] BUY FAIL MAX", structureId)
 		end
 		return
+	end
+	if prereqHint then
+		lastPurchaseAt[structureId] = now
+		if not (opts and opts.silentMax) then
+			NotificationController.Show(prereqHint, "Warn", 3)
+			print("[WorldPrompt] BUY FAIL prereq", structureId, prereqHint)
+		end
+		return
+	end
+	if cost and cash < cost and not (opts and opts.silentMax) then
+		-- Soft client hint; server still authoritative
+		NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
+		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
 	end
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
-	print("[WorldPrompt] FireServer RequestPurchaseUpgrade", structureId)
+	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), cash))
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
