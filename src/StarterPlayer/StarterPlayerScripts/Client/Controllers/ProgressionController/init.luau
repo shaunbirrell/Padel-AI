@@ -243,6 +243,12 @@ function ProgressionController.Init()
 	panel.Parent = screen
 	UIUtil.Corner(panel, 10)
 	UIUtil.Stroke(panel)
+	if isTouch then
+		local sizeConstraint = Instance.new("UISizeConstraint")
+		sizeConstraint.MinSize = Vector2.new(280, 360)
+		sizeConstraint.MaxSize = Vector2.new(720, 900)
+		sizeConstraint.Parent = panel
+	end
 
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "Content"
@@ -262,7 +268,7 @@ function ProgressionController.Init()
 	title.TextSize = 20
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Constants.Colors.Text
-	title.Text = "Progression"
+	title.Text = if isTouch then "Rebirth / Progression" else "Progression"
 	title.Parent = panel
 
 	local close = Instance.new("TextButton")
@@ -332,14 +338,18 @@ function ProgressionController.Init()
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
 	prestigeConfirm = body(36)
-	local rebirthBtn = btn("CONFIRM REBIRTH", 220, function()
+	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
 	end)
 	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	rebirthBtn.TextColor3 = Constants.Colors.Gold
 	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5)
-	y += if isTouch then 52 else 40
+	if isTouch then
+		rebirthBtn.Size = UDim2.new(1, -32, 0, 52)
+		UIUtil.EnsureMinTouch(rebirthBtn, 52)
+	end
+	y += if isTouch then 60 else 40
 
 	section("BATTLE PASS")
 	bpLabel = body(44)
@@ -359,17 +369,27 @@ function ProgressionController.Init()
 	UIUtil.Corner(bpBarFill, 4)
 	y += 16
 	bpClaimHint = body(18)
-	btn("CLAIM ALL FREE", 150, function()
+	local freeClaim = btn("CLAIM ALL FREE", 150, function()
+		print("[Progression] CLAIM ALL FREE tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "free")
 	end)
 	local premBtn = btn("CLAIM ALL PREMIUM", 170, function()
+		print("[Progression] CLAIM ALL PREMIUM tap")
 		if typeof(bpState) == "table" and not bpState.Premium then
 			return
 		end
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "premium")
 	end)
-	premBtn.Position = UDim2.fromOffset(176, y)
-	y += 36
+	if isTouch then
+		freeClaim.Size = UDim2.new(1, -32, 0, 48)
+		y += 52
+		premBtn.Position = UDim2.fromOffset(16, y)
+		premBtn.Size = UDim2.new(1, -32, 0, 48)
+		y += 56
+	else
+		premBtn.Position = UDim2.fromOffset(176, y)
+		y += 36
+	end
 
 	local trackTitle = Instance.new("TextLabel")
 	trackTitle.BackgroundTransparency = 1

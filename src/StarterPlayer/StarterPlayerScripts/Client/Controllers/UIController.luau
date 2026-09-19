@@ -16,6 +16,7 @@ local ArmyController = require(script.Parent.ArmyController)
 local SettingsController = require(script.Parent.SettingsController)
 local WorldPromptController = require(script.Parent.WorldPromptController)
 local CompassController = require(script.Parent.CompassController)
+local VehicleController = require(script.Parent.VehicleController)
 
 function UIController.Init()
 	AudioController.Init()
@@ -93,6 +94,15 @@ function UIController.Init()
 			end,
 		},
 		{
+			Name = "DockGarage",
+			Icon = "🚗",
+			Label = "GARAGE",
+			Color = Color3.fromRGB(90, 160, 200),
+			OnClick = function()
+				dockPress("Garage", VehicleController.Toggle)
+			end,
+		},
+		{
 			Name = "DockSettings",
 			Icon = "⚙",
 			Label = "SETTINGS",
@@ -102,7 +112,7 @@ function UIController.Init()
 			end,
 		},
 	})
-	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Settings)")
+	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Garage/Settings)")
 end
 
 return UIController

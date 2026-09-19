@@ -80,6 +80,8 @@ Constants.RemoteNames = {
 	RequestClaimSpinner = "RequestClaimSpinner",
 	SpinnerStateUpdate = "SpinnerStateUpdate",
 	BankRaidStateUpdate = "BankRaidStateUpdate",
+	-- Studio-only BUY smoke → client Output (Play Solo)
+	StudioSmokeLog = "StudioSmokeLog",
 	GetPlayerState = "GetPlayerState",
 }
 

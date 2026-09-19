@@ -2536,6 +2536,45 @@ local VisualAssetConfig = {
 		AircraftCarrier = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
 		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
+		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
+		SupplyTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		FuelTanker = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		EngineeringTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		FlatbedHauler = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		AmmoCarrier = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		MissileTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		AntiAirTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		RadarTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		CargoVan = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		TroopTransport = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		RecoveryTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		EscortTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		InfantryCarrier = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
+		CommandVehicle = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
+		WheeledIFV = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
+		AmphibiousAPC = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
+		CombatIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
+		AssaultIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
+		BridgeLayer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
+		MineClearer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
+		FlameCarrier = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
+		SPAAG = { ModelAssetId = 26007709, Note = "Tank SPAAG reuse" } :: AssetRef,
+		MobileSAM = { ModelAssetId = 26007709, Note = "Tank SAM reuse" } :: AssetRef,
+		MortarCarrier = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
+		MobileArtillery = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
+		RocketArtillery = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
+		HowitzerTruck = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
+		SiegeMortar = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
+		LightScoutTank = { ModelAssetId = 26007709, Note = "Light tank reuse" } :: AssetRef,
+		FortressTank = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
+		RailgunCarrier = { ModelAssetId = 1379706428, Note = "Panzer/arty reuse" } :: AssetRef,
+		DispatchCar = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
+		UtilityHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		EscortHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		VTOLTransport = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		HeavyBomber = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
+		StealthStrike = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
@@ -2822,6 +2861,8 @@ Constants.RemoteNames = {
 	RequestClaimSpinner = "RequestClaimSpinner",
 	SpinnerStateUpdate = "SpinnerStateUpdate",
 	BankRaidStateUpdate = "BankRaidStateUpdate",
+	-- Studio-only BUY smoke → client Output (Play Solo)
+	StudioSmokeLog = "StudioSmokeLog",
 	GetPlayerState = "GetPlayerState",
 }
 
@@ -7817,6 +7858,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestClaimSpinner,
 	Constants.RemoteNames.SpinnerStateUpdate,
 	Constants.RemoteNames.BankRaidStateUpdate,
+	Constants.RemoteNames.StudioSmokeLog,
 }
 
 local FUNCTIONS = {
@@ -8001,20 +8043,41 @@ return SessionLock
 --[[
 	Studio-only auto BUY smoke.
 	After profile + plot assign (~3–5s): teleport to plot, PurchaseUpgrade(CommandCenter),
-	print unmistakable [SMOKE] BUY lines and mirror into ServerStorage.SmokeResult.
+	print unmistakable [SMOKE] BUY lines, mirror into ServerStorage.SmokeResult,
+	and FireAllClients(StudioSmokeLog) so Play Solo client Output also shows the result.
 
 	NEVER runs outside RunService:IsStudio(). Product Ids stay 0 (no Marketplace).
+	HttpService / %TEMP% file writes are unreliable from Studio Luau — prefer prints + remote.
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local StudioBuySmoke = {}
 
 local STRUCTURE_ID = "CommandCenter"
 local DELAY_SEC = 4.0
 local ranFor: { [number]: boolean } = {}
+
+local smokeRemote: RemoteEvent? = nil
+
+local function resolveSmokeRemote(): RemoteEvent?
+	if smokeRemote and smokeRemote.Parent then
+		return smokeRemote
+	end
+	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	if not folder then
+		return nil
+	end
+	local ev = folder:FindFirstChild("StudioSmokeLog")
+	if ev and ev:IsA("RemoteEvent") then
+		smokeRemote = ev
+		return ev
+	end
+	return nil
+end
 
 local function writeResult(line: string)
 	local folder = ServerStorage:FindFirstChild("SmokeResult")
@@ -8043,10 +8106,25 @@ local function writeResult(line: string)
 	log.Value = prev .. (if prev ~= "" then "\n" else "") .. line
 end
 
+local function broadcast(kind: string, line: string)
+	local ev = resolveSmokeRemote()
+	if ev then
+		ev:FireAllClients(kind, line, os.clock())
+	end
+end
+
 local function smokeLine(kind: string, detail: string)
 	local line = string.format("[SMOKE] BUY %s %s", kind, detail)
+	-- Louder than a single print: banner + warn on FAIL so Output filter can't miss it
+	print("========== " .. line .. " ==========")
 	print(line)
+	if kind == "FAIL" then
+		warn(line)
+	elseif kind == "OK" then
+		print("[SMOKE] ★★★ BUY PATH OK ★★★")
+	end
 	writeResult(line)
+	broadcast(kind, line)
 	return line
 end
 
@@ -8059,10 +8137,22 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 	local BaseService = deps.BaseService
 	if not DataService or not BaseService then
 		warn("[SMOKE] BUY FAIL deps missing DataService/BaseService")
+		broadcast("FAIL", "[SMOKE] BUY FAIL deps missing DataService/BaseService")
 		return
 	end
 
+	-- Resolve remote early (RemoteSetup runs before this)
+	task.defer(function()
+		local ev = resolveSmokeRemote()
+		if ev then
+			print("[SMOKE] StudioSmokeLog remote ready — client Output will mirror BUY lines")
+		else
+			warn("[SMOKE] StudioSmokeLog remote missing — server prints only")
+		end
+	end)
+
 	print("[SMOKE] StudioBuySmoke armed (IsStudio=true) — will auto-BUY CommandCenter ~4s after plot assign")
+	print("[SMOKE] Watch Output for: [SMOKE] BUY START / OK / FAIL  (also FireAllClients StudioSmokeLog)")
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: any)
 		if ranFor[player.UserId] then
@@ -8096,7 +8186,7 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 
 			-- Studio-only: ensure one upgrade can succeed (cash + not already MaxLevel)
 			local EconomyService = deps.EconomyService
-			local Shared = game:GetService("ReplicatedStorage"):FindFirstChild("Shared")
+			local Shared = ReplicatedStorage:FindFirstChild("Shared")
 			if Shared then
 				local okCfg, BaseConfig = pcall(function()
 					return require(Shared.Configs.BaseConfig)
@@ -8119,7 +8209,14 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 				end
 			end
 
-			smokeLine("START", string.format("cash=%d level=%d structure=%s plot=%s", cashBefore, levelBefore, STRUCTURE_ID, tostring(profile.BasePlotId)))
+			smokeLine("START", string.format(
+				"player=%s cash=%d level=%d structure=%s plot=%s",
+				player.Name,
+				cashBefore,
+				levelBefore,
+				STRUCTURE_ID,
+				tostring(profile.BasePlotId)
+			))
 
 			local okCall, resultOrErr = pcall(function()
 				return BaseService.PurchaseUpgrade(player, STRUCTURE_ID)
@@ -8142,7 +8239,7 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 				or levelBefore
 
 			if result.Ok == true then
-				smokeLine("OK", string.format("newCash=%d level=%d", cashAfter, levelAfter))
+				smokeLine("OK", string.format("newCash=%d level=%d structure=%s", cashAfter, levelAfter, STRUCTURE_ID))
 			else
 				smokeLine("FAIL", string.format("err=%s cash=%d level=%d", tostring(result.Error), cashAfter, levelAfter))
 			end
@@ -12605,8 +12702,8 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = -2
-local COOLDOWN_SEC = 1.5
+local FALL_Y = 0 -- Ground top ~0.5; rescue as soon as under floor plane
+local COOLDOWN_SEC = 1.25
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -12638,6 +12735,7 @@ local function rescue(player: Player, root: BasePart)
 	if NotificationService and NotificationService.Notify then
 		NotificationService.Notify(player, "Rescued from fall — returned to base.", "Info", 3)
 	end
+	print("[FallSafety] rescued", player.Name, "from Y<", FALL_Y)
 end
 
 function FallSafetyService.Init(deps: { [string]: any })
@@ -12675,7 +12773,7 @@ function FallSafetyService.Init(deps: { [string]: any })
 		lastRescueAt[player.UserId] = nil
 	end)
 
-	print("[WAR EMPIRE] FallSafetyService ready (teleport if Y < " .. tostring(FALL_Y) .. ")")
+	print("[WAR EMPIRE] FallSafetyService ready (teleport if Y < " .. tostring(FALL_Y) .. "; SafetyCatch underfloor remains)")
 end
 
 return FallSafetyService
@@ -18138,15 +18236,18 @@ ReplicatedStorage:WaitForChild("Shared")
 ReplicatedStorage:WaitForChild("Remotes")
 
 local Controllers = script.Parent:WaitForChild("Controllers")
+local Modules = script.Parent:WaitForChild("Modules")
 local UIController = require(Controllers.UIController)
 local CombatController = require(Controllers.CombatController)
 local VehicleController = require(Controllers.VehicleController)
+local StudioSmokeClient = require(Modules.StudioSmokeClient)
 
 print("[WAR EMPIRE] Client Bootstrap starting...")
 
 UIController.Init()
 CombatController.Init()
 VehicleController.Init()
+StudioSmokeClient.Init()
 
 print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
@@ -20054,10 +20155,13 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 			child:Destroy()
 		end
 	end
-	-- Always ≥64px; touch gets larger hit targets
+	-- Always ≥56px; touch larger; shrink when many tiles so dock fits phone width
 	local tileSize = if UserInputService.TouchEnabled then 76 else 68
-	tileSize = math.max(tileSize, 64)
-	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 10) + 8, tileSize + 8)
+	if #actions >= 7 then
+		tileSize = if UserInputService.TouchEnabled then 64 else 58
+	end
+	tileSize = math.max(tileSize, 56)
+	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 8) + 8, tileSize + 8)
 	actionDock.ZIndex = 30
 	for i, def in ipairs(actions) do
 		local btn = UIUtil.MakeActionTile(actionDock, {
@@ -20845,6 +20949,12 @@ function ProgressionController.Init()
 	panel.Parent = screen
 	UIUtil.Corner(panel, 10)
 	UIUtil.Stroke(panel)
+	if isTouch then
+		local sizeConstraint = Instance.new("UISizeConstraint")
+		sizeConstraint.MinSize = Vector2.new(280, 360)
+		sizeConstraint.MaxSize = Vector2.new(720, 900)
+		sizeConstraint.Parent = panel
+	end
 
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "Content"
@@ -20864,7 +20974,7 @@ function ProgressionController.Init()
 	title.TextSize = 20
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Constants.Colors.Text
-	title.Text = "Progression"
+	title.Text = if isTouch then "Rebirth / Progression" else "Progression"
 	title.Parent = panel
 
 	local close = Instance.new("TextButton")
@@ -20934,14 +21044,18 @@ function ProgressionController.Init()
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
 	prestigeConfirm = body(36)
-	local rebirthBtn = btn("CONFIRM REBIRTH", 220, function()
+	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
 	end)
 	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	rebirthBtn.TextColor3 = Constants.Colors.Gold
 	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5)
-	y += if isTouch then 52 else 40
+	if isTouch then
+		rebirthBtn.Size = UDim2.new(1, -32, 0, 52)
+		UIUtil.EnsureMinTouch(rebirthBtn, 52)
+	end
+	y += if isTouch then 60 else 40
 
 	section("BATTLE PASS")
 	bpLabel = body(44)
@@ -20961,17 +21075,27 @@ function ProgressionController.Init()
 	UIUtil.Corner(bpBarFill, 4)
 	y += 16
 	bpClaimHint = body(18)
-	btn("CLAIM ALL FREE", 150, function()
+	local freeClaim = btn("CLAIM ALL FREE", 150, function()
+		print("[Progression] CLAIM ALL FREE tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "free")
 	end)
 	local premBtn = btn("CLAIM ALL PREMIUM", 170, function()
+		print("[Progression] CLAIM ALL PREMIUM tap")
 		if typeof(bpState) == "table" and not bpState.Premium then
 			return
 		end
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "premium")
 	end)
-	premBtn.Position = UDim2.fromOffset(176, y)
-	y += 36
+	if isTouch then
+		freeClaim.Size = UDim2.new(1, -32, 0, 48)
+		y += 52
+		premBtn.Position = UDim2.fromOffset(16, y)
+		premBtn.Size = UDim2.new(1, -32, 0, 48)
+		y += 56
+	else
+		premBtn.Position = UDim2.fromOffset(176, y)
+		y += 36
+	end
 
 	local trackTitle = Instance.new("TextLabel")
 	trackTitle.BackgroundTransparency = 1
@@ -22751,6 +22875,7 @@ local ArmyController = require(script.Parent.ArmyController)
 local SettingsController = require(script.Parent.SettingsController)
 local WorldPromptController = require(script.Parent.WorldPromptController)
 local CompassController = require(script.Parent.CompassController)
+local VehicleController = require(script.Parent.VehicleController)
 
 function UIController.Init()
 	AudioController.Init()
@@ -22828,6 +22953,15 @@ function UIController.Init()
 			end,
 		},
 		{
+			Name = "DockGarage",
+			Icon = "🚗",
+			Label = "GARAGE",
+			Color = Color3.fromRGB(90, 160, 200),
+			OnClick = function()
+				dockPress("Garage", VehicleController.Toggle)
+			end,
+		},
+		{
 			Name = "DockSettings",
 			Icon = "⚙",
 			Label = "SETTINGS",
@@ -22837,7 +22971,7 @@ function UIController.Init()
 			end,
 		},
 	})
-	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Settings)")
+	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Garage/Settings)")
 end
 
 return UIController
@@ -23469,6 +23603,7 @@ local function buildGui()
 	garageBtn.BorderSizePixel = 0
 	garageBtn.Active = true
 	garageBtn.ZIndex = 25
+	garageBtn.Visible = not isTouch -- touch uses HUD dock GARAGE tile
 	garageBtn.Parent = screen
 	addCorner(garageBtn, 8)
 	addStroke(garageBtn, Constants.Colors.Gold, 1.5)
@@ -24743,11 +24878,76 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
+          <Item class="ModuleScript" referent="117">
+            <Properties>
+              <string name="Name">StudioSmokeClient</string>
+              <string name="Source"><![CDATA[--!strict
+--[[
+	Studio-only: listen for StudioSmokeLog RemoteEvent and print loud [SMOKE] lines
+	in the *client* Output window (Play Solo). Server prints alone can be easy to miss
+	when the Output filter is set to Client.
+]]
+
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local StudioSmokeClient = {}
+
+function StudioSmokeClient.Init()
+	if not RunService:IsStudio() then
+		return
+	end
+
+	task.spawn(function()
+		local Shared = ReplicatedStorage:WaitForChild("Shared", 30)
+		if not Shared then
+			return
+		end
+		local okC, Constants = pcall(function()
+			return require(Shared.Constants)
+		end)
+		local okR, Remotes = pcall(function()
+			return require(Shared.Remotes)
+		end)
+		if not (okC and okR and Constants and Remotes) then
+			warn("[SMOKE] client listener: Constants/Remotes require failed")
+			return
+		end
+		local name = Constants.RemoteNames and Constants.RemoteNames.StudioSmokeLog
+		if typeof(name) ~= "string" then
+			return
+		end
+		local okEv, ev = pcall(function()
+			return Remotes.GetEvent(name)
+		end)
+		if not okEv or not ev then
+			warn("[SMOKE] client listener: StudioSmokeLog remote missing")
+			return
+		end
+
+		print("[SMOKE] client listener armed — will echo StudioSmokeLog here")
+		ev.OnClientEvent:Connect(function(kind: any, line: any, _t: any)
+			local text = if typeof(line) == "string" then line else string.format("[SMOKE] BUY %s", tostring(kind))
+			print("========== CLIENT " .. text .. " ==========")
+			print(text)
+			if tostring(kind) == "FAIL" then
+				warn(text)
+			elseif tostring(kind) == "OK" then
+				print("[SMOKE] ★★★ CLIENT SAW BUY OK ★★★")
+			end
+		end)
+	end)
+end
+
+return StudioSmokeClient
+]]></string>
+            </Properties>
+          </Item>
         </Item>
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="117">
+  <Item class="Workspace" referent="118">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

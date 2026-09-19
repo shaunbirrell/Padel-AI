@@ -51,6 +51,7 @@ local need = {
 	Constants.RemoteNames.SoldierStateUpdate,
 	Constants.RemoteNames.EconomyUpdate,
 	Constants.RemoteNames.Notification,
+	Constants.RemoteNames.StudioSmokeLog,
 }
 for _, name in ipairs(need) do
 	local okEv, ev = pcall(function()
@@ -131,6 +132,20 @@ do
 	end
 end
 
+-- 2b) Studio BUY smoke remote (Play Solo client Output mirror)
+do
+	local name = Constants.RemoteNames.StudioSmokeLog
+	local okEv, ev = pcall(function()
+		return Remotes.GetEvent(name)
+	end)
+	if okEv and ev then
+		ok("StudioSmokeLog remote present (StudioBuySmoke → FireAllClients)")
+	else
+		bad("StudioSmokeLog remote missing")
+	end
+	note("Play Solo: expect [SMOKE] BUY START/OK in server AND client Output ~4s after plot")
+end
+
 -- 3) PERF flag — keep StudioSkipWorldDressing
 do
 	local okDev, DevConfig = pcall(function()
@@ -172,7 +187,9 @@ do
 		local b = countPositive(VisualAssetConfig.Buildings)
 		local d = countPositive(VisualAssetConfig.DesertProps)
 		local c = countPositive(VisualAssetConfig.Characters)
-		if v >= 20 then
+		if v >= 60 then
+			ok(string.format("Vehicles free IDs mapped=%d (full roster aliases)", v))
+		elseif v >= 20 then
 			ok(string.format("Vehicles free IDs mapped=%d", v))
 		else
 			bad(string.format("Vehicles free IDs thin=%d (want ≥20)", v))

@@ -59,6 +59,7 @@ local EVENTS = {
 	Constants.RemoteNames.RequestClaimSpinner,
 	Constants.RemoteNames.SpinnerStateUpdate,
 	Constants.RemoteNames.BankRaidStateUpdate,
+	Constants.RemoteNames.StudioSmokeLog,
 }
 
 local FUNCTIONS = {

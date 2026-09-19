@@ -10,8 +10,8 @@ local RunService = game:GetService("RunService")
 
 local FallSafetyService = {}
 
-local FALL_Y = -2
-local COOLDOWN_SEC = 1.5
+local FALL_Y = 0 -- Ground top ~0.5; rescue as soon as under floor plane
+local COOLDOWN_SEC = 1.25
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -43,6 +43,7 @@ local function rescue(player: Player, root: BasePart)
 	if NotificationService and NotificationService.Notify then
 		NotificationService.Notify(player, "Rescued from fall — returned to base.", "Info", 3)
 	end
+	print("[FallSafety] rescued", player.Name, "from Y<", FALL_Y)
 end
 
 function FallSafetyService.Init(deps: { [string]: any })
@@ -80,7 +81,7 @@ function FallSafetyService.Init(deps: { [string]: any })
 		lastRescueAt[player.UserId] = nil
 	end)
 
-	print("[WAR EMPIRE] FallSafetyService ready (teleport if Y < " .. tostring(FALL_Y) .. ")")
+	print("[WAR EMPIRE] FallSafetyService ready (teleport if Y < " .. tostring(FALL_Y) .. "; SafetyCatch underfloor remains)")
 end
 
 return FallSafetyService

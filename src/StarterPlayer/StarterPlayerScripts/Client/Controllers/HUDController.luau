@@ -344,10 +344,13 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 			child:Destroy()
 		end
 	end
-	-- Always ≥64px; touch gets larger hit targets
+	-- Always ≥56px; touch larger; shrink when many tiles so dock fits phone width
 	local tileSize = if UserInputService.TouchEnabled then 76 else 68
-	tileSize = math.max(tileSize, 64)
-	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 10) + 8, tileSize + 8)
+	if #actions >= 7 then
+		tileSize = if UserInputService.TouchEnabled then 64 else 58
+	end
+	tileSize = math.max(tileSize, 56)
+	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 8) + 8, tileSize + 8)
 	actionDock.ZIndex = 30
 	for i, def in ipairs(actions) do
 		local btn = UIUtil.MakeActionTile(actionDock, {

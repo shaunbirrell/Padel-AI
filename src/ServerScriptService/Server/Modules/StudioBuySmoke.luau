@@ -2,20 +2,41 @@
 --[[
 	Studio-only auto BUY smoke.
 	After profile + plot assign (~3–5s): teleport to plot, PurchaseUpgrade(CommandCenter),
-	print unmistakable [SMOKE] BUY lines and mirror into ServerStorage.SmokeResult.
+	print unmistakable [SMOKE] BUY lines, mirror into ServerStorage.SmokeResult,
+	and FireAllClients(StudioSmokeLog) so Play Solo client Output also shows the result.
 
 	NEVER runs outside RunService:IsStudio(). Product Ids stay 0 (no Marketplace).
+	HttpService / %TEMP% file writes are unreliable from Studio Luau — prefer prints + remote.
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local StudioBuySmoke = {}
 
 local STRUCTURE_ID = "CommandCenter"
 local DELAY_SEC = 4.0
 local ranFor: { [number]: boolean } = {}
+
+local smokeRemote: RemoteEvent? = nil
+
+local function resolveSmokeRemote(): RemoteEvent?
+	if smokeRemote and smokeRemote.Parent then
+		return smokeRemote
+	end
+	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	if not folder then
+		return nil
+	end
+	local ev = folder:FindFirstChild("StudioSmokeLog")
+	if ev and ev:IsA("RemoteEvent") then
+		smokeRemote = ev
+		return ev
+	end
+	return nil
+end
 
 local function writeResult(line: string)
 	local folder = ServerStorage:FindFirstChild("SmokeResult")
@@ -44,10 +65,25 @@ local function writeResult(line: string)
 	log.Value = prev .. (if prev ~= "" then "\n" else "") .. line
 end
 
+local function broadcast(kind: string, line: string)
+	local ev = resolveSmokeRemote()
+	if ev then
+		ev:FireAllClients(kind, line, os.clock())
+	end
+end
+
 local function smokeLine(kind: string, detail: string)
 	local line = string.format("[SMOKE] BUY %s %s", kind, detail)
+	-- Louder than a single print: banner + warn on FAIL so Output filter can't miss it
+	print("========== " .. line .. " ==========")
 	print(line)
+	if kind == "FAIL" then
+		warn(line)
+	elseif kind == "OK" then
+		print("[SMOKE] ★★★ BUY PATH OK ★★★")
+	end
 	writeResult(line)
+	broadcast(kind, line)
 	return line
 end
 
@@ -60,10 +96,22 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 	local BaseService = deps.BaseService
 	if not DataService or not BaseService then
 		warn("[SMOKE] BUY FAIL deps missing DataService/BaseService")
+		broadcast("FAIL", "[SMOKE] BUY FAIL deps missing DataService/BaseService")
 		return
 	end
 
+	-- Resolve remote early (RemoteSetup runs before this)
+	task.defer(function()
+		local ev = resolveSmokeRemote()
+		if ev then
+			print("[SMOKE] StudioSmokeLog remote ready — client Output will mirror BUY lines")
+		else
+			warn("[SMOKE] StudioSmokeLog remote missing — server prints only")
+		end
+	end)
+
 	print("[SMOKE] StudioBuySmoke armed (IsStudio=true) — will auto-BUY CommandCenter ~4s after plot assign")
+	print("[SMOKE] Watch Output for: [SMOKE] BUY START / OK / FAIL  (also FireAllClients StudioSmokeLog)")
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: any)
 		if ranFor[player.UserId] then
@@ -97,7 +145,7 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 
 			-- Studio-only: ensure one upgrade can succeed (cash + not already MaxLevel)
 			local EconomyService = deps.EconomyService
-			local Shared = game:GetService("ReplicatedStorage"):FindFirstChild("Shared")
+			local Shared = ReplicatedStorage:FindFirstChild("Shared")
 			if Shared then
 				local okCfg, BaseConfig = pcall(function()
 					return require(Shared.Configs.BaseConfig)
@@ -120,7 +168,14 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 				end
 			end
 
-			smokeLine("START", string.format("cash=%d level=%d structure=%s plot=%s", cashBefore, levelBefore, STRUCTURE_ID, tostring(profile.BasePlotId)))
+			smokeLine("START", string.format(
+				"player=%s cash=%d level=%d structure=%s plot=%s",
+				player.Name,
+				cashBefore,
+				levelBefore,
+				STRUCTURE_ID,
+				tostring(profile.BasePlotId)
+			))
 
 			local okCall, resultOrErr = pcall(function()
 				return BaseService.PurchaseUpgrade(player, STRUCTURE_ID)
@@ -143,7 +198,7 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 				or levelBefore
 
 			if result.Ok == true then
-				smokeLine("OK", string.format("newCash=%d level=%d", cashAfter, levelAfter))
+				smokeLine("OK", string.format("newCash=%d level=%d structure=%s", cashAfter, levelAfter, STRUCTURE_ID))
 			else
 				smokeLine("FAIL", string.format("err=%s cash=%d level=%d", tostring(result.Error), cashAfter, levelAfter))
 			end

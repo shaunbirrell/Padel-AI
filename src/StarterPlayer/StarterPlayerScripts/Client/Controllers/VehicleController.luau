@@ -620,6 +620,7 @@ local function buildGui()
 	garageBtn.BorderSizePixel = 0
 	garageBtn.Active = true
 	garageBtn.ZIndex = 25
+	garageBtn.Visible = not isTouch -- touch uses HUD dock GARAGE tile
 	garageBtn.Parent = screen
 	addCorner(garageBtn, 8)
 	addStroke(garageBtn, Constants.Colors.Gold, 1.5)
