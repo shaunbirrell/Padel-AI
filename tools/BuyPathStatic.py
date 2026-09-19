@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI static wiring checks for BUY + BankGuard + mobile HUD (no Roblox runtime).
+"""CLI static wiring checks for BUY + BankGuard + BankRaid HUD + mobile HUD (no Roblox runtime).
 Run: python3 tools/BuyPathStatic.py
 Exit 0 if all PASS; 1 if any FAIL.
 """
@@ -88,7 +88,15 @@ for name, rel in [
     must_contain(rel, "panel.Visible", f"{name} panel.Visible")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DisplayOrder = 60", "Shop DisplayOrder 60")
 
-# 5) Monetization stubs
+# 5) BankRaid HUD
+must_contain("src/ServerScriptService/Server/Services/BankRaidService.luau", "HoldProgress", "BankRaidService HoldProgress payload")
+must_contain("src/ServerScriptService/Server/Services/BankRaidService.luau", "UnderFire", "BankRaidService UnderFire payload")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BankRaidController.luau", "BankRaidStateUpdate", "BankRaidController listens BankRaidStateUpdate")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "BankRaidController", "UIController wires BankRaidController")
+must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "Waiting for", "Remotes patient WaitForChild poll")
+
+# 6) Monetization stubs
+
 body = read("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
 if body is None:
     bad("MonetizationConfig missing")

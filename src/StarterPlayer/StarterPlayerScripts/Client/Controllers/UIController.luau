@@ -17,6 +17,7 @@ local SettingsController = require(script.Parent.SettingsController)
 local WorldPromptController = require(script.Parent.WorldPromptController)
 local CompassController = require(script.Parent.CompassController)
 local VehicleController = require(script.Parent.VehicleController)
+local BankRaidController = require(script.Parent.BankRaidController)
 
 function UIController.Init()
 	local function safeInit(name: string, fn: () -> ())
@@ -40,6 +41,7 @@ function UIController.Init()
 	safeInit("Army", ArmyController.Init)
 	safeInit("Settings", SettingsController.Init)
 	safeInit("Compass", CompassController.Init)
+	safeInit("BankRaid", BankRaidController.Init)
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).

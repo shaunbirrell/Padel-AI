@@ -2,6 +2,7 @@
 --[[
 	Empire Bank raid — stand on vault to loot Cash; per-player cooldown.
 	Bank guards are living CombatService NPCs (MoveTo + shoot), not static MapSetup props.
+	Pushes HoldProgress / UnderFire / InVault to clients for BankRaidController HUD.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -25,7 +26,11 @@ local CombatService: any = nil
 local vaultPart: BasePart? = nil
 local holdProgress: { [number]: number } = {}
 local cooldownUntil: { [number]: number } = {}
+local inVaultNow: { [number]: boolean } = {}
+local underFireNow: { [number]: boolean } = {}
+local lastPushedProgress: { [number]: number } = {}
 local guardsSpawned = false
+local billboardLabel: TextLabel? = nil
 
 local function findVault(): BasePart?
 	if vaultPart and vaultPart.Parent then
@@ -38,6 +43,61 @@ local function findVault(): BasePart?
 		end
 	end
 	return nil
+end
+
+local function ensureVaultBillboard(vault: BasePart)
+	local existing = vault:FindFirstChild("WE_BankRaidStatus")
+	if existing and existing:IsA("BillboardGui") then
+		local lbl = existing:FindFirstChild("Status")
+		if lbl and lbl:IsA("TextLabel") then
+			billboardLabel = lbl
+			return
+		end
+	end
+	if existing then
+		existing:Destroy()
+	end
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_BankRaidStatus"
+	bb.Size = UDim2.fromOffset(300, 48)
+	bb.StudsOffset = Vector3.new(0, 10, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 220
+	bb.Parent = vault
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Status"
+	lbl.BackgroundTransparency = 1
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 18
+	lbl.TextColor3 = Color3.fromRGB(255, 220, 120)
+	lbl.TextStrokeTransparency = 0.4
+	lbl.Text = "EMPIRE BANK — STAND TO LOOT"
+	lbl.Parent = bb
+	billboardLabel = lbl
+end
+
+local function refreshBillboardHint()
+	local lbl = billboardLabel
+	if not lbl then
+		return
+	end
+	-- Prefer a short public hint; per-player cooldown stays on the ScreenGui.
+	local anyRaiding = false
+	for uid, inv in pairs(inVaultNow) do
+		if inv and (holdProgress[uid] or 0) > 0 then
+			anyRaiding = true
+			break
+		end
+	end
+	if anyRaiding then
+		lbl.Text = "EMPIRE BANK — RAID IN PROGRESS"
+		lbl.TextColor3 = Color3.fromRGB(255, 180, 80)
+	else
+		lbl.Text = "EMPIRE BANK — STAND TO LOOT"
+		lbl.TextColor3 = Color3.fromRGB(255, 220, 120)
+	end
 end
 
 local function spawnBankGuards()
@@ -77,22 +137,32 @@ local function spawnBankGuards()
 	end
 end
 
-local function pushState(player: Player)
+local function pushState(player: Player, opts: { InVault: boolean?, UnderFire: boolean? }?)
 	if not RemoteSetup then
 		return
 	end
 	local now = os.time()
 	local untilT = cooldownUntil[player.UserId] or 0
 	local remaining = math.max(0, untilT - now)
+	local need = BankRaidConfig.RaidHoldSeconds or 8
+	local prog = holdProgress[player.UserId] or 0
+	local inVault = if opts and opts.InVault ~= nil then opts.InVault else (inVaultNow[player.UserId] == true)
+	local underFire = if opts and opts.UnderFire ~= nil then opts.UnderFire else (underFireNow[player.UserId] == true)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.BankRaidStateUpdate) :: RemoteEvent
 	remote:FireClient(player, {
 		BankId = BankRaidConfig.BankId,
 		DisplayName = BankRaidConfig.DisplayName,
+		Enabled = BankRaidConfig.Enabled == true,
 		CooldownRemaining = remaining,
-		RaidHoldSeconds = BankRaidConfig.RaidHoldSeconds,
+		RaidHoldSeconds = need,
+		HoldNeed = need,
+		HoldProgress = prog,
+		InVault = inVault,
+		UnderFire = underFire,
 		CashHintMin = BankRaidConfig.CashMin,
 		CashHintMax = BankRaidConfig.CashMax,
 	})
+	lastPushedProgress[player.UserId] = prog
 end
 
 local function completeRaid(player: Player)
@@ -103,6 +173,8 @@ local function completeRaid(player: Player)
 	local cd = BankRaidConfig.CooldownSeconds or 300
 	cooldownUntil[player.UserId] = os.time() + cd
 	holdProgress[player.UserId] = nil
+	inVaultNow[player.UserId] = false
+	underFireNow[player.UserId] = false
 	if BankRaidConfig.NotifyOnRaid and NotificationService then
 		NotificationService.Notify(
 			player,
@@ -114,7 +186,7 @@ local function completeRaid(player: Player)
 		local ev = (AnalyticsConfig.Events and AnalyticsConfig.Events.BANK_RAID) or "BANK_RAID"
 		AnalyticsService.Log(ev, player.UserId, { cash = cash })
 	end
-	pushState(player)
+	pushState(player, { InVault = false, UnderFire = false })
 end
 
 local function isUnderFire(player: Player): boolean
@@ -146,7 +218,10 @@ function BankRaidService.Init(deps: { [string]: any })
 
 	task.defer(function()
 		task.wait(2)
-		findVault()
+		local vault = findVault()
+		if vault then
+			ensureVaultBillboard(vault)
+		end
 		spawnBankGuards()
 	end)
 
@@ -163,29 +238,66 @@ function BankRaidService.Init(deps: { [string]: any })
 		if not vault then
 			return
 		end
+		if not billboardLabel then
+			ensureVaultBillboard(vault)
+		end
 		local radius = BankRaidConfig.VaultRadius or 12
 		local need = BankRaidConfig.RaidHoldSeconds or 8
 		local nowUnix = os.time()
 		local pos = vault.Position
 		local nearby: { [number]: boolean } = {}
+		local toPush: { Player } = {}
 
 		for _, player in ipairs(Players:GetPlayers()) do
-			local untilT = cooldownUntil[player.UserId] or 0
-			if untilT <= nowUnix then
-				local char = player.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
-				local hum = char and char:FindFirstChildOfClass("Humanoid")
-				if hrp and hum and hum.Health > 0 then
-					if (hrp.Position - pos).Magnitude <= radius then
-						nearby[player.UserId] = true
-						if not isUnderFire(player) then
-							local prog = (holdProgress[player.UserId] or 0) + step
-							holdProgress[player.UserId] = prog
-							if prog >= need then
-								completeRaid(player)
-							end
-						end
+			local uid = player.UserId
+			local untilT = cooldownUntil[uid] or 0
+			local onCooldown = untilT > nowUnix
+			local char = player.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			local inside = false
+			local fired = false
+
+			if hrp and hum and hum.Health > 0 then
+				inside = (hrp.Position - pos).Magnitude <= radius
+			end
+
+			if inside and not onCooldown then
+				nearby[uid] = true
+				fired = isUnderFire(player)
+				underFireNow[uid] = fired
+				inVaultNow[uid] = true
+				if not fired then
+					local prog = (holdProgress[uid] or 0) + step
+					holdProgress[uid] = prog
+					if prog >= need then
+						completeRaid(player)
+						-- completeRaid already pushed
+					else
+						table.insert(toPush, player)
 					end
+				else
+					-- Under fire: progress frozen but HUD must show the block
+					table.insert(toPush, player)
+				end
+			elseif inside and onCooldown then
+				-- Standing on vault while cooling down — still show cooldown HUD
+				inVaultNow[uid] = true
+				underFireNow[uid] = false
+				nearby[uid] = true
+				table.insert(toPush, player)
+			else
+				local wasIn = inVaultNow[uid] == true
+				local hadProg = (holdProgress[uid] or 0) > 0
+				if wasIn or hadProg then
+					-- Left vault / progress reset — push once so client hides bar
+					inVaultNow[uid] = false
+					underFireNow[uid] = false
+					holdProgress[uid] = nil
+					table.insert(toPush, player)
+				else
+					inVaultNow[uid] = false
+					underFireNow[uid] = false
 				end
 			end
 		end
@@ -195,6 +307,12 @@ function BankRaidService.Init(deps: { [string]: any })
 				holdProgress[uid] = nil
 			end
 		end
+
+		for _, player in ipairs(toPush) do
+			pushState(player)
+		end
+
+		refreshBillboardHint()
 	end)
 
 	Players.PlayerAdded:Connect(function(player)
@@ -202,13 +320,20 @@ function BankRaidService.Init(deps: { [string]: any })
 			pushState(player)
 		end)
 	end)
+	Players.PlayerRemoving:Connect(function(player)
+		local uid = player.UserId
+		holdProgress[uid] = nil
+		inVaultNow[uid] = nil
+		underFireNow[uid] = nil
+		lastPushedProgress[uid] = nil
+	end)
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.defer(function()
 			pushState(player)
 		end)
 	end
 
-	print("[WAR EMPIRE] BankRaidService ready (live BankGuard combat NPCs)")
+	print("[WAR EMPIRE] BankRaidService ready (live BankGuard combat NPCs + HoldProgress HUD)")
 end
 
 return BankRaidService
