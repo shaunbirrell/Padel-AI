@@ -3,7 +3,8 @@
 	Phase 4/7 — Vehicles & garage (server-authoritative).
 	Validates ownership, level, structure, prestige/rebirth flags, cash, cooldown.
 	Spawns Part kits by VehicleDef.KitFamily (scalable to 100+) near WE_VehicleSpawn / WE_NavalSpawn.
-	Optional MeshAssetId reserved for future MeshPart swap.
+	Visual kits v2: multi-part silhouettes (cabin/wheels/turret/lights/exhaust; air rotors+disc; naval wake).
+	Optional MeshAssetId reserved for future MeshPart swap (0 = Part kit).
 ]]
 
 local Players = game:GetService("Players")
@@ -222,7 +223,63 @@ local function addWheels(model: Model, body: BasePart, scale: number, positions:
 		wheel.Massless = false
 		wheel.Parent = model
 		weldTo(body, wheel)
+		-- Hub cap accent (visual kits v2)
+		local hub = Instance.new("Part")
+		hub.Name = "Hub" .. i
+		hub.Shape = Enum.PartType.Cylinder
+		hub.Size = Vector3.new(r * 0.35, r * 0.7 * scale, r * 0.7 * scale)
+		hub.Color = Color3.fromRGB(90, 95, 100)
+		hub.Material = Enum.Material.Metal
+		hub.CFrame = wheel.CFrame
+		hub.Anchored = false
+		hub.CanCollide = false
+		hub.Massless = true
+		hub.Parent = model
+		weldTo(body, hub)
 	end
+end
+
+-- Visual kits v2 shared accents (keep part counts modest)
+local function addHeadlights(model: Model, body: BasePart, s: number, zFront: number, y: number, spacing: number, col: Color3?)
+	local c = col or Color3.fromRGB(255, 240, 180)
+	addPart(model, body, "LightL", Vector3.new(0.45 * s, 0.35 * s, 0.35 * s), CFrame.new(-spacing * s, y * s, zFront * s), c, Enum.Material.Neon, nil, false)
+	addPart(model, body, "LightR", Vector3.new(0.45 * s, 0.35 * s, 0.35 * s), CFrame.new(spacing * s, y * s, zFront * s), c, Enum.Material.Neon, nil, false)
+end
+
+local function addTaillights(model: Model, body: BasePart, s: number, zRear: number, y: number, spacing: number)
+	local c = Color3.fromRGB(220, 50, 40)
+	addPart(model, body, "TailL", Vector3.new(0.4 * s, 0.3 * s, 0.25 * s), CFrame.new(-spacing * s, y * s, zRear * s), c, Enum.Material.Neon, nil, false)
+	addPart(model, body, "TailR", Vector3.new(0.4 * s, 0.3 * s, 0.25 * s), CFrame.new(spacing * s, y * s, zRear * s), c, Enum.Material.Neon, nil, false)
+end
+
+local function addExhaust(model: Model, body: BasePart, s: number, offset: CFrame, accent: Color3)
+	addPart(model, body, "Exhaust", Vector3.new(0.35 * s, 0.35 * s, 1.4 * s), offset, Color3.fromRGB(35, 35, 38), Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	addPart(model, body, "ExhaustGlow", Vector3.new(0.28 * s, 0.28 * s, 0.35 * s), offset * CFrame.new(0, 0, 0.7 * s), accent, Enum.Material.Neon, Enum.PartType.Cylinder, false)
+end
+
+local function addRotorDisc(model: Model, body: BasePart, s: number, y: number, radius: number, accent: Color3)
+	-- Thin neon disc under rotor (silhouette read at distance)
+	local disc = addPart(
+		model,
+		body,
+		"RotorDisc",
+		Vector3.new(0.08 * s, radius * 2 * s, radius * 2 * s),
+		CFrame.new(0, y * s, -0.3 * s) * CFrame.Angles(0, 0, math.rad(90)),
+		accent,
+		Enum.Material.Neon,
+		Enum.PartType.Cylinder,
+		false
+	)
+	disc.Transparency = 0.55
+end
+
+local function addWakeStrip(model: Model, body: BasePart, s: number, length: number, accent: Color3)
+	addPart(model, body, "WakeNeon", Vector3.new(0.35 * s, 0.12 * s, length * s), CFrame.new(0, -0.7 * s, 0.5 * s), accent, Enum.Material.Neon, nil, false)
+end
+
+local function addSideRails(model: Model, body: BasePart, s: number, length: number, height: number, width: number, color: Color3)
+	addPart(model, body, "RailL", Vector3.new(0.2 * s, 0.25 * s, length * s), CFrame.new(-width * s, height * s, 0), color, Enum.Material.Metal, nil, false)
+	addPart(model, body, "RailR", Vector3.new(0.2 * s, 0.25 * s, length * s), CFrame.new(width * s, height * s, 0), color, Enum.Material.Metal, nil, false)
 end
 
 local function addLabel(parent: BasePart, text: string, y: number)
@@ -319,6 +376,10 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			Vector3.new(-2.4, -0.9, -2.6),
 			Vector3.new(2.4, -0.9, -2.6),
 		}, 1.05)
+		addHeadlights(model, body, s, -4.1, 0.2, 1.8)
+		addTaillights(model, body, s, if quad then 3.0 else 4.0, 0.15, 1.9)
+		addExhaust(model, body, s, CFrame.new(1.8 * s, -0.2 * s, 3.2 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
+		addSideRails(model, body, s, if quad then 4.5 else 5.5, 0.6, 2.5, oliveDark)
 		seatOffset = CFrame.new(0, 1.9 * s, 0.1 * s)
 		labelY = 4.2 * s
 	end
@@ -342,6 +403,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		elseif eng then
 			addPart(model, body, "Crane", Vector3.new(0.5 * s, 4.0 * s, 0.5 * s), CFrame.new(1.5 * s, 4.0 * s, 1.0 * s), Color3.fromRGB(200, 160, 60), Enum.Material.Metal, nil, false)
 		end
+		addPart(model, body, "Bumper", Vector3.new(6.0 * s, 0.55 * s, 0.45 * s), CFrame.new(0, -0.6 * s, -5.2 * s), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil, false)
 		addWheels(model, body, 1.15 * s, {
 			Vector3.new(-2.8, -1.2, 3.5),
 			Vector3.new(2.8, -1.2, 3.5),
@@ -350,6 +412,9 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			Vector3.new(-2.8, -1.2, -3.5),
 			Vector3.new(2.8, -1.2, -3.5),
 		}, 1.2)
+		addHeadlights(model, body, s, -5.3, 0.4, 2.2)
+		addTaillights(model, body, s, 5.2, 0.3, 2.4)
+		addExhaust(model, body, s, CFrame.new(2.4 * s, -0.4 * s, 4.5 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
 		seatOffset = CFrame.new(0, 2.4 * s, -3.0 * s)
 		labelY = 5.5 * s
 	end
@@ -366,6 +431,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		if cmd then
 			addPart(model, body, "Dish", Vector3.new(2.2 * s, 0.3 * s, 2.2 * s), CFrame.new(0, 4.0 * s, 1.5 * s), Color3.fromRGB(80, 90, 100), Enum.Material.Metal, Enum.PartType.Cylinder, false)
 		end
+		addPart(model, body, "Bumper", Vector3.new(6.2 * s, 0.6 * s, 0.5 * s), CFrame.new(0, -0.7 * s, -5.0 * s), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil, false)
 		addWheels(model, body, 1.2 * s, {
 			Vector3.new(-3.0, -1.3, 3.2),
 			Vector3.new(3.0, -1.3, 3.2),
@@ -374,6 +440,9 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			Vector3.new(-3.0, -1.3, -2.5),
 			Vector3.new(3.0, -1.3, -2.5),
 		}, 1.25)
+		addHeadlights(model, body, s, -5.1, 0.2, 2.4)
+		addTaillights(model, body, s, 4.8, 0.2, 2.5)
+		addExhaust(model, body, s, CFrame.new(2.8 * s, 0.2 * s, 4.0 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
 		seatOffset = CFrame.new(0, 2.2 * s, -2.5 * s)
 		labelY = 5.8 * s
 	end
@@ -407,6 +476,9 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "Barrel", Vector3.new(0.45 * s, 0.45 * s, 5.5 * s), CFrame.new(0, 2.1 * s, -4.2 * s), Color3.fromRGB(35, 35, 35), Enum.Material.Metal, nil, false)
 		end
 		addPart(model, body, "Accent", Vector3.new(3.2 * s, 0.12 * s, 0.3 * s), CFrame.new(0, 2.9 * s, 1.2 * s), accentCol, Enum.Material.Neon, nil, false)
+		addPart(model, body, "Mantlet", Vector3.new(2.2 * s, 1.0 * s, 0.6 * s), CFrame.new(0, 2.1 * s, -1.6 * s), armorDark, Enum.Material.Metal, nil, false)
+		addHeadlights(model, body, s, -4.6, 0.4, 2.2, Color3.fromRGB(255, 230, 160))
+		addExhaust(model, body, s, CFrame.new(2.6 * s, 0.8 * s, 4.0 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
 		for i, z in ipairs({ 3.2, 1.0, -1.2, -3.2 }) do
 			addPart(model, body, "RoadL" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(-3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
 			addPart(model, body, "RoadR" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
@@ -435,7 +507,11 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		addPart(model, body, "RotorB", Vector3.new(0.6 * s, 0.15 * s, rotor * s), CFrame.new(0, 2.4 * s, -0.3 * s), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil, false)
 		addPart(model, body, "SkidL", Vector3.new(0.25 * s, 0.25 * s, 7 * s), CFrame.new(-wid * 0.5 * s, -1.3 * s, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
 		addPart(model, body, "SkidR", Vector3.new(0.25 * s, 0.25 * s, 7 * s), CFrame.new(wid * 0.5 * s, -1.3 * s, 0), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, true)
+		addPart(model, body, "SkidPadL", Vector3.new(0.9 * s, 0.2 * s, 1.2 * s), CFrame.new(-wid * 0.5 * s, -1.45 * s, 2 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, true)
+		addPart(model, body, "SkidPadR", Vector3.new(0.9 * s, 0.2 * s, 1.2 * s), CFrame.new(wid * 0.5 * s, -1.45 * s, 2 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, true)
+		addRotorDisc(model, body, s, 2.2, rotor * 0.48, accentCol)
 		addPart(model, body, "Accent", Vector3.new((wid - 0.4) * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.2 * s, -1 * s), accentCol, Enum.Material.Neon, nil, false)
+		addPart(model, body, "NavLight", Vector3.new(0.35 * s, 0.35 * s, 0.35 * s), CFrame.new(0, 1.6 * s, len * 0.4 * s), Color3.fromRGB(255, 60, 50), Enum.Material.Neon, Enum.PartType.Ball, false)
 		if attack then
 			addPart(model, body, "StubWingL", Vector3.new(3.5 * s, 0.25 * s, 1.2 * s), CFrame.new(-2.5 * s, 0, 0.5 * s), Color3.fromRGB(55, 70, 85), Enum.Material.Metal, nil, false)
 			addPart(model, body, "StubWingR", Vector3.new(3.5 * s, 0.25 * s, 1.2 * s), CFrame.new(2.5 * s, 0, 0.5 * s), Color3.fromRGB(55, 70, 85), Enum.Material.Metal, nil, false)
@@ -470,9 +546,13 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "Bay", Vector3.new((wid - 0.4) * s, 0.8 * s, 4 * s), CFrame.new(0, -0.6 * s, 0.5 * s), Color3.fromRGB(45, 48, 52), Enum.Material.Metal, nil, false)
 		end
 		addPart(model, body, "Accent", Vector3.new(2.0 * s, 0.1 * s, 0.3 * s), CFrame.new(0, 0.8 * s, -1 * s), accentCol, Enum.Material.Neon, nil, false)
+		addPart(model, body, "EngineGlow", Vector3.new((wid - 0.6) * s, 0.7 * s, 0.5 * s), CFrame.new(0, 0, len * 0.42 * s), accentCol, Enum.Material.Neon, nil, false)
 		addPart(model, body, "GearF", Vector3.new(0.3 * s, 0.8 * s, 0.3 * s), CFrame.new(0, -1.0 * s, -len * 0.3 * s), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
+		addPart(model, body, "WheelF", Vector3.new(0.5 * s, 0.9 * s, 0.9 * s), CFrame.new(0, -1.5 * s, -len * 0.3 * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 28), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
 		addPart(model, body, "GearL", Vector3.new(0.3 * s, 0.8 * s, 0.3 * s), CFrame.new(-1.5 * s, -1.0 * s, 1 * s), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
 		addPart(model, body, "GearR", Vector3.new(0.3 * s, 0.8 * s, 0.3 * s), CFrame.new(1.5 * s, -1.0 * s, 1 * s), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, true)
+		addPart(model, body, "WingTipL", Vector3.new(0.3 * s, 0.3 * s, 0.3 * s), CFrame.new(-wingSpan * 0.95 * s, 0.1 * s, 0.5 * s), Color3.fromRGB(255, 60, 50), Enum.Material.Neon, Enum.PartType.Ball, false)
+		addPart(model, body, "WingTipR", Vector3.new(0.3 * s, 0.3 * s, 0.3 * s), CFrame.new(wingSpan * 0.95 * s, 0.1 * s, 0.5 * s), Color3.fromRGB(60, 255, 90), Enum.Material.Neon, Enum.PartType.Ball, false)
 		seatOffset = CFrame.new(0, 1.3 * s, -len * 0.26 * s)
 		labelY = 4.8 * s
 	end
@@ -487,6 +567,8 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "WallL", Vector3.new(0.4 * s, 1.6 * s, 12 * s), CFrame.new(-3.6 * s, 1.6 * s, 0), oliveDark, Enum.Material.Metal, nil, false)
 			addPart(model, body, "WallR", Vector3.new(0.4 * s, 1.6 * s, 12 * s), CFrame.new(3.6 * s, 1.6 * s, 0), oliveDark, Enum.Material.Metal, nil, false)
 			addPart(model, body, "Accent", Vector3.new(6.0 * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.6 * s, 4 * s), accentCol, Enum.Material.Neon, nil, false)
+			addWakeStrip(model, body, s, 12, accentCol)
+			addPart(model, body, "GunMount", Vector3.new(1.2 * s, 0.8 * s, 1.2 * s), CFrame.new(0, 2.6 * s, -2 * s), Color3.fromRGB(40, 45, 40), Enum.Material.Metal, nil, false)
 			seatOffset = CFrame.new(0, 3.0 * s, 5.2 * s)
 			labelY = 6.0 * s
 		elseif kind == "Sub" then
@@ -496,6 +578,8 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "Sail", Vector3.new(1.8 * s, 2.8 * s, 4 * s), CFrame.new(0, 2.4 * s, -1 * s), Color3.fromRGB(35, 45, 55), Enum.Material.Metal, nil, true)
 			addPart(model, body, "Bow", Vector3.new(3.5 * s, 1.6 * s, 4 * s), CFrame.new(0, 0.2 * s, -8 * s), Color3.fromRGB(28, 38, 45), Enum.Material.Metal, nil, false)
 			addPart(model, body, "Accent", Vector3.new(4.0 * s, 0.12 * s, 0.3 * s), CFrame.new(0, 1.2 * s, 2 * s), accentCol, Enum.Material.Neon, nil, false)
+			addWakeStrip(model, body, s, 14, accentCol)
+			addPart(model, body, "Periscope", Vector3.new(0.25 * s, 2.2 * s, 0.25 * s), CFrame.new(0, 4.2 * s, -1 * s), Color3.fromRGB(50, 55, 60), Enum.Material.Metal, nil, false)
 			seatOffset = CFrame.new(0, 3.5 * s, -1 * s)
 			labelY = 6.5 * s
 		elseif kind == "Capital" then
@@ -510,6 +594,9 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "TurretA", Vector3.new(2.2 * s, 1.1 * s, 2.5 * s), CFrame.new(0, 2.3 * s, 8 * s), Color3.fromRGB(35, 45, 55), Enum.Material.Metal, nil, false)
 			addPart(model, body, "Stack", Vector3.new(1.8 * s, 3.5 * s, 1.8 * s), CFrame.new(0, 5.5 * s, 5 * s), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil, false)
 			addPart(model, body, "Accent", Vector3.new(6.5 * s, 0.15 * s, 0.4 * s), CFrame.new(0, 1.8 * s, -2 * s), accentCol, Enum.Material.Neon, nil, false)
+			addWakeStrip(model, body, s, 22, accentCol)
+			addPart(model, body, "Mast", Vector3.new(0.35 * s, 6 * s, 0.35 * s), CFrame.new(0, 8.5 * s, 2 * s), Color3.fromRGB(55, 60, 70), Enum.Material.Metal, nil, false)
+			addPart(model, body, "RadarDish", Vector3.new(2.4 * s, 0.35 * s, 2.4 * s), CFrame.new(0, 11.5 * s, 2 * s), accentCol, Enum.Material.Neon, Enum.PartType.Cylinder, false)
 			seatOffset = CFrame.new(0, 6.2 * s, 1 * s)
 			labelY = 9.0 * s
 		else
@@ -522,9 +609,12 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "Cabin", Vector3.new(3.2 * s, 2.0 * s, 3.5 * s), CFrame.new(0, 2.2 * s, -1.5 * s), Color3.fromRGB(40, 60, 75), Enum.Material.Metal, nil, true)
 			addPart(model, body, "Bow", Vector3.new((if gun then 4.5 else 3.8) * s, 1.2 * s, 3.0 * s), CFrame.new(0, 0.4 * s, (if gun then -6.5 else -5.2) * s), Color3.fromRGB(50, 75, 90), Enum.Material.Metal, nil, false)
 			addPart(model, body, "Accent", Vector3.new(4.0 * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.5 * s, -2 * s), accentCol, Enum.Material.Neon, nil, false)
+			addWakeStrip(model, body, s, if gun then 11 else 8, accentCol)
+			addPart(model, body, "BridgeGlass", Vector3.new(2.8 * s, 0.9 * s, 0.3 * s), CFrame.new(0, 2.8 * s, -3.0 * s), Color3.fromRGB(60, 100, 130), Enum.Material.Glass, nil, false)
 			if gun then
 				addPart(model, body, "Turret", Vector3.new(2.0 * s, 1.0 * s, 2.0 * s), CFrame.new(0, 2.8 * s, 2.5 * s), Color3.fromRGB(35, 45, 50), Enum.Material.Metal, nil, false)
 				addPart(model, body, "Barrel", Vector3.new(0.35 * s, 0.35 * s, 3.5 * s), CFrame.new(0, 3.0 * s, 0.5 * s), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
+				addPart(model, body, "GunShield", Vector3.new(1.6 * s, 1.0 * s, 0.25 * s), CFrame.new(0, 3.2 * s, 1.4 * s), Color3.fromRGB(40, 50, 55), Enum.Material.Metal, nil, false)
 			end
 			seatOffset = CFrame.new(0, 2.8 * s, -1.2 * s)
 			labelY = 5.5 * s

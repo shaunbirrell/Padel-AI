@@ -88,14 +88,14 @@ function ArmyController.Init()
 	toggle.AnchorPoint = Vector2.new(0, 1)
 	toggle.Position = UDim2.new(0, 16, 1, -16 - inset.Y)
 	toggle.Size = UDim2.fromOffset(88, 44)
-	toggle.BackgroundColor3 = Constants.Colors.Panel
+	toggle.BackgroundColor3 = Constants.Colors.Gunmetal
 	toggle.Font = Enum.Font.GothamBold
 	toggle.TextSize = 13
-	toggle.TextColor3 = Constants.Colors.Text
+	toggle.TextColor3 = Constants.Colors.Gold
 	toggle.Text = "ARMY"
 	toggle.BorderSizePixel = 0
 	UIUtil.Corner(toggle, 8)
-	UIUtil.Stroke(toggle)
+	UIUtil.Stroke(toggle, Constants.Colors.Gold, 1.5)
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
 		setOpen(not open)
@@ -177,17 +177,18 @@ function ArmyController.Init()
 	capLabel.Text = "0 / 0"
 	capLabel.Parent = capBg
 
-	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> ())
+	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> (), goldAccent: boolean?)
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(x, y)
 		b.Size = UDim2.fromOffset(w, 44)
-		b.BackgroundColor3 = Constants.Colors.Accent
+		b.BackgroundColor3 = Constants.Colors.Gunmetal
 		b.Font = Enum.Font.GothamBold
 		b.TextSize = 12
-		b.TextColor3 = Constants.Colors.Text
+		b.TextColor3 = if goldAccent then Constants.Colors.Gold else Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
 		UIUtil.Corner(b, 6)
+		UIUtil.Stroke(b, Constants.Colors.Gold, 1.25)
 		b.Parent = panel
 		b.MouseButton1Click:Connect(cb)
 		return b
@@ -195,10 +196,10 @@ function ArmyController.Init()
 
 	local recruit1 = makeBtn("RECRUIT x1 $500", 16, 174, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(1)
-	end)
+	end, true)
 	local recruit5 = makeBtn("RECRUIT x5", 192, 174, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
-	end)
+	end, true)
 	makeBtn("FILL CAP", 16, 228, 168, function()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then

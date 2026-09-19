@@ -148,7 +148,7 @@ local function kitPart(parentPlinth, role, size, localOffset, color, material, s
 		Color = color,
 		Material = material or Enum.Material.Metal,
 		CanCollide = false,
-		Transparency = 0.45,
+		Transparency = 0.32, -- visual kits v2: less washout
 		Parent = parentPlinth,
 	})
 	if shape then
@@ -186,47 +186,55 @@ local function neonEdge(parentPart, color, thickness)
 end
 
 local function priceBillboard(parent, title, costLine, accent)
+	-- Visual kits v2: larger readable price cards
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(170, 60)
-	bb.StudsOffset = Vector3.new(0, 5.2, 0)
+	bb.Size = UDim2.fromOffset(200, 72)
+	bb.StudsOffset = Vector3.new(0, 6.0, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 900
+	bb.MaxDistance = 1000
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(10, 12, 14)
-	backdrop.BackgroundTransparency = 0.18
+	backdrop.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
+	backdrop.BackgroundTransparency = 0.08
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
+	c.CornerRadius = UDim.new(0, 8)
 	c.Parent = backdrop
 	local stroke = Instance.new("UIStroke")
 	stroke.Name = "Stroke"
 	stroke.Color = accent
-	stroke.Thickness = 1.5
-	stroke.Transparency = 0.2
+	stroke.Thickness = 2
+	stroke.Transparency = 0.1
 	stroke.Parent = backdrop
 
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = title .. "\nLv 0 → 1\n" .. costLine
-	label.TextColor3 = Color3.fromRGB(235, 220, 140)
-	label.TextScaled = true
-	label.Font = Enum.Font.GothamBold
-	label.TextStrokeTransparency = 0.55
-	label.Parent = backdrop
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 5)
-	pad.PaddingRight = UDim.new(0, 5)
-	pad.PaddingTop = UDim.new(0, 3)
-	pad.PaddingBottom = UDim.new(0, 3)
-	pad.Parent = backdrop
+	local titleLab = Instance.new("TextLabel")
+	titleLab.Name = "Title"
+	titleLab.Size = UDim2.new(1, -10, 0, 26)
+	titleLab.Position = UDim2.fromOffset(5, 4)
+	titleLab.BackgroundTransparency = 1
+	titleLab.Text = title
+	titleLab.TextColor3 = Color3.fromRGB(245, 245, 248)
+	titleLab.TextScaled = true
+	titleLab.Font = Enum.Font.GothamBold
+	titleLab.TextStrokeTransparency = 0.4
+	titleLab.Parent = backdrop
+
+	local costLab = Instance.new("TextLabel")
+	costLab.Name = "Cost"
+	costLab.Size = UDim2.new(1, -10, 0, 34)
+	costLab.Position = UDim2.fromOffset(5, 30)
+	costLab.BackgroundTransparency = 1
+	costLab.Text = "Lv 0 → 1\n" .. costLine
+	costLab.TextColor3 = Color3.fromRGB(255, 215, 110)
+	costLab.TextScaled = true
+	costLab.Font = Enum.Font.GothamBold
+	costLab.TextStrokeTransparency = 0.35
+	costLab.Parent = backdrop
 	return bb
 end
 
@@ -308,7 +316,7 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 		Size = plinthSize,
 		Position = pos + offset,
 		Color = def.Plinth,
-		Transparency = 0.45,
+		Transparency = 0.32,
 		Material = Enum.Material.Concrete,
 		CanCollide = true,
 		Parent = plotFolder,
@@ -319,58 +327,76 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	CollectionService:AddTag(plinth, TAG_SLOT)
 
 	local kit = def.Kit
+	-- Visual kits v2: distinct silhouettes, neon accents, doors/windows (modest part count)
 	if kit == "hq" then
-		kitPart(plinth, "Body", Vector3.new(5.5, 3.2, 5.5), Vector3.new(0, 2.2, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(6.2, 0.6, 6.2), Vector3.new(0, 4.1, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.5, 0.35), Vector3.new(1.8, 6.5, 1.8), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.4, 0.25, 6.4), Vector3.new(0, 0.75, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.2, 1.2, 1.2), Vector3.new(-2, 3.5, -2), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Body", Vector3.new(5.5, 3.4, 5.5), Vector3.new(0, 2.3, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(6.4, 0.55, 6.4), Vector3.new(0, 4.3, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.8, 0.35), Vector3.new(1.8, 6.8, 1.8), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.6, 0.22, 6.6), Vector3.new(0, 0.72, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Door", Vector3.new(1.6, 2.2, 0.25), Vector3.new(0, 1.7, -2.85), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(1.4, 1.0, 0.2), Vector3.new(2.0, 2.6, -2.8), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
 	elseif kit == "barracks" then
-		kitPart(plinth, "Body", Vector3.new(6.5, 2.4, 4.2), Vector3.new(0, 1.8, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(7, 0.5, 4.8), Vector3.new(0, 3.2, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.8, 0.2, 4.6), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.8, 1.6, 0.8), Vector3.new(-2.8, 2.2, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(6.6, 2.6, 4.4), Vector3.new(0, 1.9, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.1, 0.5, 5.0), Vector3.new(0, 3.35, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.9, 0.18, 4.7), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), def.Accent, Enum.Material.Neon, nil)
 	elseif kit == "depot" then
-		kitPart(plinth, "Body", Vector3.new(6.8, 2.0, 5.5), Vector3.new(0, 1.6, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.2, 0.35, 6), Vector3.new(0, 2.8, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(3, 0.3, 5.8), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(6.9, 2.2, 5.6), Vector3.new(0, 1.7, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "lab" then
-		kitPart(plinth, "Body", Vector3.new(5, 3.0, 5), Vector3.new(0, 2.1, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(5.4, 0.5, 5.4), Vector3.new(0, 3.8, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.5, 0.4), Vector3.new(0, 5.8, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(5.6, 0.2, 5.6), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(5.7, 0.2, 5.7), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Window", Vector3.new(1.5, 1.2, 0.2), Vector3.new(0, 2.6, -2.6), Color3.fromRGB(80, 160, 200), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.9, 0.9, 0.9), Vector3.new(2.0, 3.5, 2.0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "tower" then
-		kitPart(plinth, "Body", Vector3.new(2.8, 5.5, 2.8), Vector3.new(0, 3.4, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(3.6, 0.5, 3.6), Vector3.new(0, 6.4, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.2, 0.3), Vector3.new(0, 8.2, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(3.2, 0.25, 3.2), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(2.9, 5.8, 2.9), Vector3.new(0, 3.5, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(3.8, 0.5, 3.8), Vector3.new(0, 6.6, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.5, 0.3), Vector3.new(0, 8.5, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(3.3, 0.22, 3.3), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Window", Vector3.new(1.0, 0.8, 0.2), Vector3.new(0, 4.5, -1.5), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.7, 0.7, 0.7), Vector3.new(0, 7.0, 0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "dock" then
-		kitPart(plinth, "Body", Vector3.new(7.5, 0.5, 7.5), Vector3.new(0, 0.85, 0), def.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Pier", Vector3.new(8.5, 0.35, 2.2), Vector3.new(0, 1.1, 3.2), def.Roof, Enum.Material.Wood, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.0, 0.15, 0.4), Vector3.new(0, 1.2, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.2, 2.5, 0.4), Vector3.new(3.2, 2.0, 2.5), def.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(7.5, 0.55, 7.5), Vector3.new(0, 0.9, 0), def.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Pier", Vector3.new(8.8, 0.4, 2.4), Vector3.new(0, 1.15, 3.3), def.Roof, Enum.Material.Wood, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.2, 0.14, 0.4), Vector3.new(0, 1.25, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 2.8, 0.4), Vector3.new(3.3, 2.1, 2.6), def.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Door", Vector3.new(1.8, 0.3, 1.2), Vector3.new(0, 1.35, 4.2), Color3.fromRGB(40, 55, 70), Enum.Material.Metal, nil)
 	elseif kit == "pad" then
-		kitPart(plinth, "Body", Vector3.new(7.2, 0.4, 7.2), Vector3.new(0, 0.9, 0), def.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.5, 0.15, 0.5), Vector3.new(0, 1.15, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.5, 0.15, 6.5), Vector3.new(0, 1.15, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Roof", Vector3.new(1.5, 0.3, 1.5), Vector3.new(0, 1.3, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(7.3, 0.45, 7.3), Vector3.new(0, 0.92, 0), def.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.5, 0.14, 6.6), Vector3.new(0, 1.18, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.8, 1.4, 2.8), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "wall" then
-		kitPart(plinth, "Body", Vector3.new(7.5, 2.8, 1.4), Vector3.new(0, 2.0, 0), def.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.6, 0.25, 1.6), Vector3.new(0, 3.5, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.5, 0.4, 1.8), Vector3.new(0, 3.7, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(7.5, 3.0, 1.5), Vector3.new(0, 2.1, 0), def.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.7, 0.25, 1.7), Vector3.new(0, 3.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.5, 0.4, 1.9), Vector3.new(0, 3.9, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.8, 1.2, 0.8), Vector3.new(-3.2, 3.2, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.8, 1.2, 0.8), Vector3.new(3.2, 3.2, 0), def.Accent, Enum.Material.Neon, nil)
 	elseif kit == "power" then
-		kitPart(plinth, "Body", Vector3.new(4.5, 3.5, 4.5), Vector3.new(0, 2.4, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(2.2, 2.2, 2.2), Vector3.new(0, 4.5, 0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
-		kitPart(plinth, "Roof", Vector3.new(5, 0.4, 5), Vector3.new(0, 4.3, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(4.6, 3.6, 4.6), Vector3.new(0, 2.5, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Roof", Vector3.new(5.1, 0.4, 5.1), Vector3.new(0, 4.4, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.6, 2.5, 0.6), Vector3.new(2.0, 2.8, 2.0), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
 	elseif kit == "warehouse" then
-		kitPart(plinth, "Body", Vector3.new(7, 2.6, 5.5), Vector3.new(0, 1.9, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.4, 0.5, 6), Vector3.new(0, 3.4, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.2, 0.2, 5.8), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(7.1, 2.8, 5.6), Vector3.new(0, 2.0, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.5, 0.5, 6.1), Vector3.new(0, 3.55, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.3, 0.2, 5.9), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(2.6, 2.2, 0.3), Vector3.new(0, 1.7, -2.95), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil)
 	else
-		kitPart(plinth, "Body", Vector3.new(5.2, 3.4, 5.2), Vector3.new(0, 2.3, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(4, 1.2, 4), Vector3.new(0, 4.5, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4, 0.35), Vector3.new(0, 7, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(5.8, 0.25, 5.8), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(5.3, 3.5, 5.3), Vector3.new(0, 2.4, 0), def.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(4.2, 1.2, 4.2), Vector3.new(0, 4.6, 0), def.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.2, 0.35), Vector3.new(0, 7.2, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(5.9, 0.22, 5.9), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.0, 3.5, -2.0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	end
 
 	local cost = STARTER_COST[def.Id] or 0
@@ -379,6 +405,119 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	return plinth
 end
 
+
+
+-- Visual kits v2: shared infantry silhouette for MapSetup placeholders / workers
+local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
+	local model = Instance.new("Model")
+	model.Name = name
+	if npcId then
+		model:SetAttribute("NPCId", npcId)
+	end
+	if npcType then
+		model:SetAttribute("NPCType", npcType)
+	end
+	local torso = part({
+		Name = "HumanoidRootPart",
+		Size = Vector3.new(2.05, 2.35, 1.2),
+		Color = bodyColor,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = true,
+		CFrame = cf,
+		Parent = model,
+	})
+	local head = part({
+		Name = "Head",
+		Size = Vector3.new(1.1, 1.1, 1.1),
+		Color = Color3.fromRGB(95, 72, 55),
+		Material = Enum.Material.SmoothPlastic,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame + Vector3.new(0, 1.7, 0),
+		Shape = Enum.PartType.Ball,
+		Parent = model,
+	})
+	part({
+		Name = "Helmet",
+		Size = Vector3.new(1.28, 0.5, 1.28),
+		Color = Color3.fromRGB(
+			math.clamp(math.floor(bodyColor.R * 255) - 25, 20, 255),
+			math.clamp(math.floor(bodyColor.G * 255) - 15, 20, 255),
+			math.clamp(math.floor(bodyColor.B * 255) - 10, 20, 255)
+		),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = head.CFrame + Vector3.new(0, 0.4, 0),
+		Parent = model,
+	})
+	part({
+		Name = "Vest",
+		Size = Vector3.new(2.15, 1.25, 1.35),
+		Color = Color3.fromRGB(
+			math.clamp(math.floor(bodyColor.R * 255) - 30, 20, 255),
+			math.clamp(math.floor(bodyColor.G * 255) - 20, 20, 255),
+			math.clamp(math.floor(bodyColor.B * 255) - 15, 20, 255)
+		),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame + Vector3.new(0, 0.25, 0),
+		Parent = model,
+	})
+	part({
+		Name = "LegL",
+		Size = Vector3.new(0.65, 1.4, 0.65),
+		Color = bodyColor,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(-0.45, -1.75, 0),
+		Parent = model,
+	})
+	part({
+		Name = "LegR",
+		Size = Vector3.new(0.65, 1.4, 0.65),
+		Color = bodyColor,
+		Material = Enum.Material.Fabric,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.45, -1.75, 0),
+		Parent = model,
+	})
+	part({
+		Name = "Rifle",
+		Size = Vector3.new(0.26, 0.26, 2.3),
+		Color = Color3.fromRGB(30, 30, 32),
+		Material = Enum.Material.Metal,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0.95, 0.15, -0.75),
+		Parent = model,
+	})
+	part({
+		Name = "Accent",
+		Size = Vector3.new(1.7, 0.12, 0.3),
+		Color = labelColor or Color3.fromRGB(200, 80, 60),
+		Material = Enum.Material.Neon,
+		Anchored = true,
+		CanCollide = false,
+		CFrame = torso.CFrame * CFrame.new(0, 0.9, -0.55),
+		Parent = model,
+	})
+	local hum = Instance.new("Humanoid")
+	hum.MaxHealth = health or 100
+	hum.Health = health or 100
+	hum.Parent = model
+	model.PrimaryPart = torso
+	model.Parent = parentFolder
+	CollectionService:AddTag(model, TAG_NPC_ENTITY)
+	if labelText then
+		plainBillboard(head, labelText, Vector2.new(110, 22), 2, labelColor or Color3.fromRGB(255, 180, 140))
+	end
+	return model
+end
 
 local MapSetup = {}
 
@@ -570,6 +709,31 @@ function MapSetup.Run()
 				Parent = yardFolder,
 			})
 		end
+		-- Training workers (visual only — income is SoldierService tick)
+		for wi = 1, 2 do
+			local wpos = pos + Vector3.new(-40 + wi * 20, 2.6, 42)
+			makeSoldierKit(
+				yardFolder,
+				"TrainingWorker" .. wi,
+				CFrame.new(wpos) * CFrame.Angles(0, math.rad(180), 0),
+				Color3.fromRGB(70, 85, 55),
+				"WORKER",
+				Color3.fromRGB(180, 220, 120),
+				50,
+				nil,
+				nil
+			)
+		end
+		-- Target ring + base plate polish
+		part({
+			Name = "YardPad",
+			Size = Vector3.new(55, 0.6, 18),
+			Position = pos + Vector3.new(-14, 0.4, 48),
+			Color = Color3.fromRGB(48, 52, 42),
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			Parent = yardFolder,
+		})
 		plainBillboard(
 			part({
 				Name = "YardAnchor",
@@ -580,7 +744,7 @@ function MapSetup.Run()
 				Parent = yardFolder,
 			}),
 			"TRAINING YARD · Soldiers earn cash",
-			Vector2.new(260, 36),
+			Vector2.new(280, 40),
 			8,
 			Color3.fromRGB(255, 200, 120)
 		)
@@ -630,16 +794,36 @@ function MapSetup.Run()
 		})
 		local flag = part({
 			Name = def.Id .. "_Flag",
-			Size = Vector3.new(5, 3, 0.25),
-			Position = def.Pos + Vector3.new(2.6, 12, 0),
+			Size = Vector3.new(5.5, 3.2, 0.22),
+			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
 			Color = def.Color,
 			Material = Enum.Material.Neon,
 			CanCollide = false,
-			Transparency = 0.15,
+			Transparency = 0.08,
 			Parent = territories,
 		})
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
+		part({
+			Name = def.Id .. "_FlagStripe",
+			Size = Vector3.new(5.5, 0.45, 0.28),
+			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
+			Color = Color3.fromRGB(245, 245, 245),
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			Transparency = 0.15,
+			Parent = territories,
+		})
+		part({
+			Name = def.Id .. "_Finial",
+			Size = Vector3.new(0.7, 0.7, 0.7),
+			Position = def.Pos + Vector3.new(0, 14.4, 0),
+			Color = Color3.fromRGB(230, 190, 60),
+			Material = Enum.Material.Neon,
+			Shape = Enum.PartType.Ball,
+			CanCollide = false,
+			Parent = territories,
+		})
 
 		beacon(territories, def.Pos + Vector3.new(def.Radius * 0.6, 0, 0), def.Color, def.Id .. "_Beacon")
 
@@ -669,7 +853,7 @@ function MapSetup.Run()
 					})
 				end
 			end
-			-- Derrick
+			-- Derrick + crane tip + neon rim (visual kits v2)
 			part({
 				Name = def.Id .. "_Derrick",
 				Size = Vector3.new(4, 22, 4),
@@ -679,7 +863,34 @@ function MapSetup.Run()
 				CanCollide = false,
 				Parent = territories,
 			})
-			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(280, 40), 14, Color3.fromRGB(255, 210, 120))
+			part({
+				Name = def.Id .. "_CraneArm",
+				Size = Vector3.new(14, 1.2, 1.2),
+				Position = Vector3.new(def.Pos.X + 7, deckY + 20, def.Pos.Z + 14),
+				Color = Color3.fromRGB(160, 120, 45),
+				Material = Enum.Material.Metal,
+				CanCollide = false,
+				Parent = territories,
+			})
+			part({
+				Name = def.Id .. "_HelipadMark",
+				Size = Vector3.new(10, 0.3, 10),
+				Position = Vector3.new(def.Pos.X - 12, deckY + 0.2, def.Pos.Z - 12),
+				Color = Color3.fromRGB(40, 45, 50),
+				Material = Enum.Material.Metal,
+				CanCollide = false,
+				Parent = territories,
+			})
+			part({
+				Name = def.Id .. "_NeonRim",
+				Size = Vector3.new(46, 0.35, 0.5),
+				Position = Vector3.new(def.Pos.X, deckY + 0.3, def.Pos.Z + 23),
+				Color = Color3.fromRGB(255, 180, 60),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+				Parent = territories,
+			})
+			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(300, 44), 14, Color3.fromRGB(255, 210, 120))
 		end
 
 		-- Fortress walls / keep (named forts with higher stipend)
@@ -721,7 +932,32 @@ function MapSetup.Run()
 				CanCollide = false,
 				Parent = territories,
 			})
-			plainBillboard(keep, def.Id .. "  ·  FORTRESS  ·  High stipend", Vector2.new(280, 40), 12, Color3.fromRGB(230, 210, 160))
+			-- Corner towers + gate neon
+			for _, corner in ipairs({
+				Vector3.new(span, 0, span),
+				Vector3.new(span, 0, -span),
+				Vector3.new(-span, 0, span),
+				Vector3.new(-span, 0, -span),
+			}) do
+				part({
+					Name = def.Id .. "_Tower",
+					Size = Vector3.new(5, 12, 5),
+					Position = def.Pos + corner + Vector3.new(0, 6, 0),
+					Color = Color3.fromRGB(85, 80, 65),
+					Material = Enum.Material.Brick,
+					Parent = territories,
+				})
+			end
+			part({
+				Name = def.Id .. "_GateNeon",
+				Size = Vector3.new(8, 0.4, 0.5),
+				Position = def.Pos + Vector3.new(0, 1.5, span),
+				Color = def.Color,
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+				Parent = territories,
+			})
+			plainBillboard(keep, def.Id .. "  ·  FORTRESS  ·  High stipend", Vector2.new(300, 44), 12, Color3.fromRGB(230, 210, 160))
 		end
 	end
 
@@ -835,166 +1071,58 @@ function MapSetup.Run()
 		if i > 4 then
 			break
 		end
-		local model = Instance.new("Model")
-		model.Name = "HostileInfantry_" .. i
-		model:SetAttribute("NPCId", "studio_npc_" .. i)
-		model:SetAttribute("NPCType", "Infantry")
-
-		local torso = part({
-			Name = "HumanoidRootPart",
-			Size = Vector3.new(2, 2.2, 1.2),
-			Color = Color3.fromRGB(70, 45, 40),
-			Material = Enum.Material.Fabric,
-			Anchored = true,
-			CanCollide = true,
-			CFrame = spawnPart.CFrame + Vector3.new(0, 3.2, 0),
-			Parent = model,
-		})
-		local head = part({
-			Name = "Head",
-			Size = Vector3.new(1.15, 1.15, 1.15),
-			Color = Color3.fromRGB(95, 70, 55),
-			Material = Enum.Material.SmoothPlastic,
-			Anchored = true,
-			CanCollide = false,
-			CFrame = torso.CFrame + Vector3.new(0, 1.7, 0),
-			Shape = Enum.PartType.Ball,
-			Parent = model,
-		})
-		part({
-			Name = "Helmet",
-			Size = Vector3.new(1.25, 0.55, 1.25),
-			Color = Color3.fromRGB(45, 55, 40),
-			Material = Enum.Material.Metal,
-			Anchored = true,
-			CanCollide = false,
-			CFrame = head.CFrame + Vector3.new(0, 0.35, 0),
-			Parent = model,
-		})
-		part({
-			Name = "Rifle",
-			Size = Vector3.new(0.3, 0.3, 2.4),
-			Color = Color3.fromRGB(35, 35, 35),
-			Material = Enum.Material.Metal,
-			Anchored = true,
-			CanCollide = false,
-			CFrame = torso.CFrame * CFrame.new(0.9, 0.2, -0.8),
-			Parent = model,
-		})
-		local hum = Instance.new("Humanoid")
-		hum.MaxHealth = 80
-		hum.Health = 80
-		hum.Parent = model
-		model.PrimaryPart = torso
-		model.Parent = npcFolder
-		CollectionService:AddTag(model, TAG_NPC_ENTITY)
-		plainBillboard(head, "HOSTILE", Vector2.new(90, 22), 1.5, Color3.fromRGB(255, 120, 100))
+		makeSoldierKit(
+			npcFolder,
+			"HostileInfantry_" .. i,
+			spawnPart.CFrame + Vector3.new(0, 3.2, 0),
+			Color3.fromRGB(140, 55, 55),
+			"HOSTILE",
+			Color3.fromRGB(255, 120, 100),
+			80,
+			"Infantry",
+			"studio_npc_" .. i
+		)
 	end
 
 
-	-- Oil rig guards (harder NPC placeholders on coastal platforms)
+	-- Oil rig guards (harder NPC placeholders — visual kits v2 infantry)
 	for _, def in ipairs(TERRITORIES) do
 		if def.OilRig then
 			for gi = 1, 4 do
 				local angle = (gi / 4) * math.pi * 2
-				local gpos = def.Pos + Vector3.new(math.cos(angle) * 16, 2.5, math.sin(angle) * 16)
-				local model = Instance.new("Model")
-				model.Name = def.Id .. "_Guard_" .. gi
-				model:SetAttribute("NPCId", def.Id .. "_guard_" .. gi)
-				model:SetAttribute("NPCType", "OilRigGuard")
-				local torso = part({
-					Name = "HumanoidRootPart",
-					Size = Vector3.new(2.2, 2.4, 1.3),
-					Color = Color3.fromRGB(110, 70, 35),
-					Material = Enum.Material.Fabric,
-					Anchored = true,
-					CanCollide = true,
-					CFrame = CFrame.new(gpos),
-					Parent = model,
-				})
-				local head = part({
-					Name = "Head",
-					Size = Vector3.new(1.2, 1.2, 1.2),
-					Color = Color3.fromRGB(95, 70, 55),
-					Material = Enum.Material.SmoothPlastic,
-					Anchored = true,
-					CanCollide = false,
-					CFrame = torso.CFrame + Vector3.new(0, 1.8, 0),
-					Shape = Enum.PartType.Ball,
-					Parent = model,
-				})
-				part({
-					Name = "Armor",
-					Size = Vector3.new(2.4, 1.2, 1.5),
-					Color = Color3.fromRGB(70, 55, 30),
-					Material = Enum.Material.Metal,
-					Anchored = true,
-					CanCollide = false,
-					CFrame = torso.CFrame + Vector3.new(0, 0.3, 0),
-					Parent = model,
-				})
-				local hum = Instance.new("Humanoid")
-				hum.MaxHealth = 200
-				hum.Health = 200
-				hum.Parent = model
-				model.PrimaryPart = torso
-				model.Parent = npcFolder
-				CollectionService:AddTag(model, TAG_NPC_ENTITY)
-				plainBillboard(head, "OIL GUARD", Vector2.new(100, 22), 2, Color3.fromRGB(255, 180, 80))
+				local gpos = def.Pos + Vector3.new(math.cos(angle) * 16, 2.6, math.sin(angle) * 16)
+				makeSoldierKit(
+					npcFolder,
+					def.Id .. "_Guard_" .. gi,
+					CFrame.new(gpos),
+					Color3.fromRGB(110, 70, 35),
+					"OIL GUARD",
+					Color3.fromRGB(255, 180, 80),
+					200,
+					"OilRigGuard",
+					def.Id .. "_guard_" .. gi
+				)
 			end
 		end
 	end
-
 
 	-- Fort guards
 	for _, def in ipairs(TERRITORIES) do
 		if def.Fortress then
 			for gi = 1, 4 do
 				local angle = (gi / 4) * math.pi * 2
-				local gpos = def.Pos + Vector3.new(math.cos(angle) * 22, 2.5, math.sin(angle) * 22)
-				local model = Instance.new("Model")
-				model.Name = def.Id .. "_Guard_" .. gi
-				model:SetAttribute("NPCId", def.Id .. "_guard_" .. gi)
-				model:SetAttribute("NPCType", "FortGuard")
-				local torso = part({
-					Name = "HumanoidRootPart",
-					Size = Vector3.new(2.1, 2.3, 1.25),
-					Color = Color3.fromRGB(100, 95, 70),
-					Material = Enum.Material.Fabric,
-					Anchored = true,
-					CanCollide = true,
-					CFrame = CFrame.new(gpos),
-					Parent = model,
-				})
-				local head = part({
-					Name = "Head",
-					Size = Vector3.new(1.15, 1.15, 1.15),
-					Color = Color3.fromRGB(95, 70, 55),
-					Material = Enum.Material.SmoothPlastic,
-					Anchored = true,
-					CanCollide = false,
-					CFrame = torso.CFrame + Vector3.new(0, 1.75, 0),
-					Shape = Enum.PartType.Ball,
-					Parent = model,
-				})
-				part({
-					Name = "Helmet",
-					Size = Vector3.new(1.3, 0.5, 1.3),
-					Color = Color3.fromRGB(70, 75, 60),
-					Material = Enum.Material.Metal,
-					Anchored = true,
-					CanCollide = false,
-					CFrame = head.CFrame + Vector3.new(0, 0.35, 0),
-					Parent = model,
-				})
-				local hum = Instance.new("Humanoid")
-				hum.MaxHealth = 170
-				hum.Health = 170
-				hum.Parent = model
-				model.PrimaryPart = torso
-				model.Parent = npcFolder
-				CollectionService:AddTag(model, TAG_NPC_ENTITY)
-				plainBillboard(head, "FORT GUARD", Vector2.new(100, 22), 2, Color3.fromRGB(220, 200, 140))
+				local gpos = def.Pos + Vector3.new(math.cos(angle) * 22, 2.6, math.sin(angle) * 22)
+				makeSoldierKit(
+					npcFolder,
+					def.Id .. "_Guard_" .. gi,
+					CFrame.new(gpos),
+					Color3.fromRGB(100, 95, 70),
+					"FORT GUARD",
+					Color3.fromRGB(220, 200, 140),
+					170,
+					"FortGuard",
+					def.Id .. "_guard_" .. gi
+				)
 			end
 		end
 	end
@@ -1027,6 +1155,34 @@ function MapSetup.Run()
 		Material = Enum.Material.Metal,
 		Parent = bankFolder,
 	})
+	-- Columns + entrance neon (visual kits v2)
+	for _, ox in ipairs({ -8, -2.5, 2.5, 8 }) do
+		part({
+			Name = "BankColumn",
+			Size = Vector3.new(1.4, 12, 1.4),
+			Position = bankPos + Vector3.new(ox, 6.5, 5.5),
+			Color = Color3.fromRGB(70, 78, 100),
+			Material = Enum.Material.Marble,
+			Parent = bankFolder,
+		})
+	end
+	part({
+		Name = "BankDoor",
+		Size = Vector3.new(4.5, 6, 0.4),
+		Position = bankPos + Vector3.new(0, 3.5, 5.2),
+		Color = Color3.fromRGB(30, 35, 50),
+		Material = Enum.Material.Metal,
+		Parent = bankFolder,
+	})
+	part({
+		Name = "BankSign",
+		Size = Vector3.new(10, 1.2, 0.4),
+		Position = bankPos + Vector3.new(0, 12.5, 5.2),
+		Color = Color3.fromRGB(230, 190, 60),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
 	local vault = part({
 		Name = "VaultPad",
 		Size = Vector3.new(10, 1.4, 10),
@@ -1035,56 +1191,34 @@ function MapSetup.Run()
 		Material = Enum.Material.Neon,
 		Parent = bankFolder,
 	})
+	part({
+		Name = "VaultRing",
+		Size = Vector3.new(12, 0.35, 12),
+		Position = bankPos + Vector3.new(0, 1.9, 8),
+		Color = Color3.fromRGB(90, 140, 220),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		Transparency = 0.35,
+		Parent = bankFolder,
+	})
 	vault:SetAttribute("BankId", "EmpireBank")
 	CollectionService:AddTag(vault, "WE_BankVault")
 	plainBillboard(vault, "EMPIRE BANK · Stand to RAID cash", Vector2.new(280, 40), 8, Color3.fromRGB(255, 220, 120))
 	beacon(bankFolder, bankPos + Vector3.new(14, 0, 14), Color3.fromRGB(90, 130, 220), "BankBeacon")
 	for gi = 1, 5 do
 		local angle = (gi / 5) * math.pi * 2
-		local gpos = bankPos + Vector3.new(math.cos(angle) * 18, 2.5, math.sin(angle) * 18)
-		local model = Instance.new("Model")
-		model.Name = "BankGuard_" .. gi
-		model:SetAttribute("NPCId", "bank_guard_" .. gi)
-		model:SetAttribute("NPCType", "BankGuard")
-		local torso = part({
-			Name = "HumanoidRootPart",
-			Size = Vector3.new(2.1, 2.3, 1.25),
-			Color = Color3.fromRGB(60, 70, 110),
-			Material = Enum.Material.Fabric,
-			Anchored = true,
-			CanCollide = true,
-			CFrame = CFrame.new(gpos),
-			Parent = model,
-		})
-		local head = part({
-			Name = "Head",
-			Size = Vector3.new(1.15, 1.15, 1.15),
-			Color = Color3.fromRGB(95, 70, 55),
-			Material = Enum.Material.SmoothPlastic,
-			Anchored = true,
-			CanCollide = false,
-			CFrame = torso.CFrame + Vector3.new(0, 1.75, 0),
-			Shape = Enum.PartType.Ball,
-			Parent = model,
-		})
-		part({
-			Name = "Vest",
-			Size = Vector3.new(2.3, 1.1, 1.4),
-			Color = Color3.fromRGB(40, 50, 90),
-			Material = Enum.Material.Metal,
-			Anchored = true,
-			CanCollide = false,
-			CFrame = torso.CFrame + Vector3.new(0, 0.3, 0),
-			Parent = model,
-		})
-		local hum = Instance.new("Humanoid")
-		hum.MaxHealth = 160
-		hum.Health = 160
-		hum.Parent = model
-		model.PrimaryPart = torso
-		model.Parent = npcFolder
-		CollectionService:AddTag(model, TAG_NPC_ENTITY)
-		plainBillboard(head, "BANK GUARD", Vector2.new(100, 22), 2, Color3.fromRGB(140, 170, 255))
+		local gpos = bankPos + Vector3.new(math.cos(angle) * 18, 2.6, math.sin(angle) * 18)
+		makeSoldierKit(
+			bankFolder,
+			"BankGuard_" .. gi,
+			CFrame.new(gpos),
+			Color3.fromRGB(60, 70, 110),
+			"BANK GUARD",
+			Color3.fromRGB(140, 180, 255),
+			160,
+			"BankGuard",
+			"bank_guard_" .. gi
+		)
 	end
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)

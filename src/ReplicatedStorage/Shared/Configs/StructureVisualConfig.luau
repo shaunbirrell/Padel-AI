@@ -1,6 +1,7 @@
 --!strict
 --[[
 	Part-kit silhouettes + palettes for base structures (placeholders, no MeshIds).
+	Visual kits v2: richer MapSetup kits + clearer plinths / less ghost washout.
 	StudioSetup mirrors these colors; BaseService.UpdateVisuals scales detail by level.
 ]]
 
@@ -16,7 +17,7 @@ export type StructurePalette = {
 
 local StructureVisualConfig = {
 	-- Level 0 = ghost/placeholder; ≥1 solid + taller body
-	GhostTransparency = 0.45,
+	GhostTransparency = 0.32,
 	SolidTransparency = 0,
 	-- When true and palette.MeshAssetId ~= 0, BaseService may swap kit for MeshPart (art pass).
 	PreferMeshWhenAssetIdSet = true,

@@ -216,3 +216,4 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - Walk-over auto-buy on `WE_UpgradeSlot` + live price billboards; ProximityPrompts for Base/Garage/capture only
 - StudioSetup: structure kits, territory flags, vehicle H-pads, NPC kits, lighting; VehicleService multi-part chassis per type
 - First-join toast: walk onto pads to BUY
+- **Visual kits v2:** richer Part kits (vehicles / soldiers / HQ–dock structures / oil–fort–bank–supply props); garage category+rarity chips; Army/Shop gunmetal–gold buttons. No stolen Creator Store meshes (`MeshAssetId=0`). Play only; admin `resetmap` to refresh MapSetup kits.

@@ -46,11 +46,12 @@ local function addCorner(parent: Instance, radius: number)
 	c.Parent = parent
 end
 
-local function addStroke(parent: Instance)
+local function addStroke(parent: Instance, color: Color3?, thickness: number?)
 	local s = Instance.new("UIStroke")
-	s.Color = Color3.fromRGB(55, 65, 55)
-	s.Thickness = 1
+	s.Color = color or Color3.fromRGB(55, 65, 55)
+	s.Thickness = thickness or 1
 	s.Parent = parent
+	return s
 end
 
 local function sortedIds(): { string }
@@ -125,7 +126,7 @@ local function refresh()
 		local def = VehicleConfig.Vehicles[id]
 		if def then
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, -8, 0, 72)
+			row.Size = UDim2.new(1, -8, 0, 78)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
 			row.LayoutOrder = i
@@ -142,8 +143,8 @@ local function refresh()
 
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(14, 6)
-			title.Size = UDim2.new(1, -124, 0, 20)
+			title.Position = UDim2.fromOffset(14, 4)
+			title.Size = UDim2.new(1, -124, 0, 18)
 			title.Font = Enum.Font.GothamBold
 			title.TextSize = 14
 			title.TextXAlignment = Enum.TextXAlignment.Left
@@ -151,10 +152,38 @@ local function refresh()
 			title.Text = def.DisplayName
 			title.Parent = row
 
+			-- Category + rarity color chips (visual kits v2)
+			local cat = def.Category or "Ground"
+			local catCol = if cat == "Air"
+				then Constants.Colors.CategoryAir
+				elseif cat == "Naval" then Constants.Colors.CategoryNaval
+				else Constants.Colors.CategoryGround
+			local chipY = 24
+			local function makeChip(label: string, color: Color3, x: number): number
+				local chip = Instance.new("Frame")
+				chip.Size = UDim2.fromOffset(58, 16)
+				chip.Position = UDim2.fromOffset(x, chipY)
+				chip.BackgroundColor3 = color
+				chip.BorderSizePixel = 0
+				chip.Parent = row
+				addCorner(chip, 4)
+				local lab = Instance.new("TextLabel")
+				lab.BackgroundTransparency = 1
+				lab.Size = UDim2.fromScale(1, 1)
+				lab.Font = Enum.Font.GothamBold
+				lab.TextSize = 9
+				lab.TextColor3 = Color3.fromRGB(12, 14, 16)
+				lab.Text = label
+				lab.Parent = chip
+				return x + 62
+			end
+			local nextX = makeChip(string.upper(string.sub(cat, 1, 3)), catCol, 14)
+			makeChip(string.upper(string.sub(def.Rarity or "Common", 1, 4)), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
+
 			local meta = Instance.new("TextLabel")
 			meta.BackgroundTransparency = 1
-			meta.Position = UDim2.fromOffset(14, 28)
-			meta.Size = UDim2.new(1, -124, 0, 36)
+			meta.Position = UDim2.fromOffset(14, 42)
+			meta.Size = UDim2.new(1, -124, 0, 26)
 			meta.Font = Enum.Font.Gotham
 			meta.TextSize = 11
 			meta.TextXAlignment = Enum.TextXAlignment.Left
@@ -176,9 +205,7 @@ local function refresh()
 				req ..= " | Rebirth"
 			end
 			meta.Text = string.format(
-				"%s · %s · Lv %d · $%s · Spd %d%s",
-				def.Category or "Ground",
-				def.Rarity,
+				"Lv %d · $%s · Spd %d%s",
 				def.UnlockLevel,
 				tostring(def.CostCash),
 				def.Speed,
@@ -412,15 +439,15 @@ local function buildGui()
 	garageBtn.AnchorPoint = Vector2.new(0, 1)
 	garageBtn.Position = UDim2.new(0, 16, 1, -20)
 	garageBtn.Size = UDim2.fromOffset(110, 44)
-	garageBtn.BackgroundColor3 = Constants.Colors.Accent
+	garageBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	garageBtn.Text = "GARAGE"
 	garageBtn.Font = Enum.Font.GothamBold
 	garageBtn.TextSize = 14
-	garageBtn.TextColor3 = Constants.Colors.Text
+	garageBtn.TextColor3 = Constants.Colors.Gold
 	garageBtn.BorderSizePixel = 0
 	garageBtn.Parent = screen
 	addCorner(garageBtn, 8)
-	addStroke(garageBtn)
+	addStroke(garageBtn, Constants.Colors.Gold, 1.5)
 	garageBtn.MouseButton1Click:Connect(function()
 		AudioController.PlayClick()
 		setOpen(not isOpen)

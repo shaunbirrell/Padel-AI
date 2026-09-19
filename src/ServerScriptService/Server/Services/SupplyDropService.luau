@@ -142,6 +142,27 @@ local function spawnDrop()
 	crate:SetAttribute("ClaimCash", cash)
 	CollectionService:AddTag(crate, Constants.Tags.SupplyDrop)
 
+	-- Visual kits v2: straps + lid + neon ring
+	local function decor(name: string, size: Vector3, offset: CFrame, color: Color3, mat: Enum.Material, shape: Enum.PartType?)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Anchored = true
+		p.CanCollide = false
+		p.Material = mat
+		p.Color = color
+		if shape then
+			p.Shape = shape
+		end
+		p.CFrame = crate.CFrame * offset
+		p.Parent = crate
+		return p
+	end
+	decor("StrapX", Vector3.new(crate.Size.X + 0.2, 0.35, 0.35), CFrame.new(0, 0.2, 0), Color3.fromRGB(40, 40, 42), Enum.Material.Metal, nil)
+	decor("StrapZ", Vector3.new(0.35, 0.35, crate.Size.Z + 0.2), CFrame.new(0, 0.2, 0), Color3.fromRGB(40, 40, 42), Enum.Material.Metal, nil)
+	decor("Lid", Vector3.new(crate.Size.X * 0.92, 0.4, crate.Size.Z * 0.92), CFrame.new(0, crate.Size.Y * 0.5 + 0.1, 0), Color3.fromRGB(180, 140, 50), Enum.Material.Metal, nil)
+	decor("Ring", Vector3.new(crate.Size.X + 1.5, 0.25, crate.Size.Z + 1.5), CFrame.new(0, -crate.Size.Y * 0.45, 0), Color3.fromRGB(255, 200, 80), Enum.Material.Neon, nil)
+
 	local tip = Instance.new("Part")
 	tip.Name = "Beacon"
 	tip.Size = Vector3.new(1.4, 1.4, 1.4)

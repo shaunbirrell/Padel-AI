@@ -106,6 +106,12 @@ Constants.Colors = {
 	Ammo = Color3.fromRGB(220, 200, 120),
 	Text = Color3.fromRGB(235, 238, 242),
 	Muted = Color3.fromRGB(150, 158, 170),
+	-- Visual kits v2 UI
+	Gunmetal = Color3.fromRGB(42, 48, 55),
+	GunmetalLight = Color3.fromRGB(58, 66, 74),
+	CategoryGround = Color3.fromRGB(90, 130, 80),
+	CategoryAir = Color3.fromRGB(90, 160, 220),
+	CategoryNaval = Color3.fromRGB(70, 180, 200),
 }
 
 return Constants

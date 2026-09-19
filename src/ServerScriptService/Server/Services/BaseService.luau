@@ -287,7 +287,8 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				if palette then
 					child.Color = palette.Accent
 				end
-				child.Transparency = if lv == 0 then 0.55 else 0.05
+				-- Visual kits v2: less washout on ghost accents
+				child.Transparency = if lv == 0 then 0.35 else 0.02
 				child.Material = Enum.Material.Neon
 			elseif role == "Roof" or role == "Antenna" then
 				local bx = child:GetAttribute("WE_BaseSize")
@@ -309,10 +310,15 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				end
 				child.Transparency = transparency
 				child.Material = if role == "Antenna" then Enum.Material.Neon else Enum.Material.Metal
-			elseif role == "Detail" then
-				child.Transparency = if lv == 0 then 0.7 else math.max(0, 0.4 - t * 0.35)
+			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
+				child.Transparency = if lv == 0 then 0.4 else math.max(0, 0.2 - t * 0.2)
 				if palette then
-					child.Color = palette.Accent
+					child.Color = if role == "Window" then Color3.fromRGB(80, 120, 150) else palette.Accent
+				end
+				if role == "Window" then
+					child.Material = Enum.Material.Glass
+				elseif role == "Door" or role == "Pier" then
+					child.Material = Enum.Material.Metal
 				end
 			end
 		end

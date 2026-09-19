@@ -74,13 +74,17 @@ function ShopController.Init()
 	toggle.AnchorPoint = Vector2.new(0, 1)
 	toggle.Position = UDim2.new(0, 136, 1, -16)
 	toggle.Size = UDim2.fromOffset(88, 44)
-	toggle.BackgroundColor3 = Constants.Colors.Panel
+	toggle.BackgroundColor3 = Constants.Colors.Gunmetal
 	toggle.Font = Enum.Font.GothamBold
 	toggle.TextSize = 14
 	toggle.TextColor3 = Constants.Colors.Gold
 	toggle.Text = "SHOP"
 	toggle.BorderSizePixel = 0
 	corner(toggle, 8)
+	local toggleStroke = Instance.new("UIStroke")
+	toggleStroke.Color = Constants.Colors.Gold
+	toggleStroke.Thickness = 1.5
+	toggleStroke.Parent = toggle
 	toggle.Parent = screen
 	toggle.MouseButton1Click:Connect(function()
 		setOpen(not menuOpen)
@@ -186,13 +190,17 @@ function ShopController.Init()
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
 		btn.Size = UDim2.fromOffset(96, 44)
-		btn.BackgroundColor3 = Constants.Colors.Gold
+		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 11
-		btn.TextColor3 = Color3.fromRGB(20, 22, 18)
+		btn.TextColor3 = Constants.Colors.Gold
 		btn.Text = btnText or "BUY"
 		btn.BorderSizePixel = 0
 		corner(btn, 6)
+		local btnStroke = Instance.new("UIStroke")
+		btnStroke.Color = Constants.Colors.Gold
+		btnStroke.Thickness = 1.25
+		btnStroke.Parent = btn
 		btn.Parent = row
 		btn.MouseButton1Click:Connect(onClick)
 	end
