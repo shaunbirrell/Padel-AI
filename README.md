@@ -7,7 +7,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 
 ## MVP status
 
-**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige / Clan scaffolding / Battle Pass track. Product IDs remain `0`. Validate with Rojo sync + StudioSetup; this environment cannot run Roblox Studio.
+**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige / Clan scaffolding / Battle Pass track. Product IDs remain `0`. Validate with Rojo sync / `dist/WarEmpire.rbxlx` + Play (MapSetup auto); this environment cannot run Roblox Studio.
 
 ## Requirements
 
@@ -17,12 +17,12 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 
 ## Quick start
 
-1. Open a blank Baseplate place in Roblox Studio.
-2. From this folder: `rojo serve` (or `aftman install` then `rojo serve`).
-3. In Studio, connect the Rojo plugin and sync.
-4. Paste contents of `tools/StudioSetup.luau` into the **Command Bar** and run once.
-5. Press Play. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP). **Walk onto glowing upgrade pads to BUY** (auto-purchase, server-validated). Prices float above each pad. Or open **Base Upgrades** (**B** / bottom button) and tap **BUY $price**. **E** on plot/garage pads opens menus; **G** = Garage.
-6. Optional lighting: Ambient ~(80,90,70), Brightness 2, ClockTime 14 for clearer military placeholders.
+1. Open a blank Baseplate place in Roblox Studio (or open `dist/WarEmpire.rbxlx`).
+2. From this folder: `rojo serve` (or `aftman install` then `rojo serve`), **or** skip Rojo and open the built `dist/WarEmpire.rbxlx`.
+3. In Studio, connect the Rojo plugin and sync (if using live sync).
+4. Press **Play** — map auto-builds via `MapSetup` when `Workspace.WarEmpireSetup` is missing (no command-bar paste). Long Studio pastes of `tools/StudioSetup.luau` truncate (~488 lines); paste is obsolete.
+5. You should spawn with **$5,000**, see the HUD, follow the tutorial (or SKIP). **Walk onto glowing upgrade pads to BUY** (auto-purchase, server-validated). Prices float above each pad. Or open **Base Upgrades** (**B** / bottom button) and tap **BUY $price**. **E** on plot/garage pads opens menus; **G** = Garage.
+6. To regenerate the map: delete `Workspace.WarEmpireSetup` and Play again, or admin `resetmap` (Studio). `tools/StudioSetup.luau` only prints this note if pasted.
 
 ## Merging open PRs
 
@@ -63,6 +63,7 @@ Admin remotes: `RequestAdminCommand` with commands:
 | `bpxp` | number | Add Battle Pass XP |
 | `grantpremium` | — | Grant Battle Pass Premium flag |
 | `endseason` / `resumeseason` | — | Persist season end / clear end override |
+| `resetmap` | — | Studio-only: destroy `WarEmpireSetup` and re-run `MapSetup` |
 
 ## DevConfig (Studio-only)
 
@@ -105,7 +106,8 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 - `src/ReplicatedStorage/Shared/Configs/` — all tunable configs
 - `src/ServerScriptService/Server/` — Bootstrap + Services + Modules
 - `src/StarterPlayer/.../Client/` — Bootstrap + Controllers (programmatic UI)
-- `tools/StudioSetup.luau` — map / bases / territories / NPC / vehicle / tutorial markers
+- `src/ServerScriptService/Server/Modules/MapSetup.luau` — world build (auto on Play if `WarEmpireSetup` missing)
+- `tools/StudioSetup.luau` — short note only (paste obsolete; map auto-builds on Play)
 - `tools/SmokeTest.luau` — Play Solo command-bar smoke (remotes / configs / services; no currency exploits)
 
 ## Docs
@@ -132,7 +134,7 @@ See `MASTER_BUILD_SPEC.md` for the full architecture. Key paths:
 
 ## Playtest checklist (Studio)
 
-1. **Setup** — Rojo sync → run `tools/StudioSetup.luau` once (Edit mode) → enable API Services if testing DataStores.
+1. **Setup** — Rojo sync or open `dist/WarEmpire.rbxlx` → **Play** (map auto-builds; no StudioSetup paste) → enable API Services if testing DataStores. Regenerate: delete `WarEmpireSetup` + Play, or admin `resetmap`.
 2. **Smoke** — Press Play Solo, then paste `tools/SmokeTest.luau` into the **Command Bar**. Confirms Remotes (no `Give*`), Shared configs, service modules, optional `GetPlayerState`, and a **safe** admin probe only if your UserId is in `AdminConfig` (never grants currency from smoke).
 3. **Join** — Spawn with ~$5,000; HUD shows Cash / Gold / Level / XP; plot assigned.
 4. **Tutorial** — Steps: claim base → Command Center → income → Barracks → Jeep → outpost; **SKIP** works; gold beam/markers best-effort.

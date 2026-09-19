@@ -294,7 +294,7 @@ do
 	local CS = game:GetService("CollectionService")
 	local slots = CS:GetTagged("WE_UpgradeSlot")
 	if #slots == 0 then
-		bad("No WE_UpgradeSlot tags — run tools/StudioSetup.luau in Command Bar")
+		bad("No WE_UpgradeSlot tags — MapSetup should auto-run on Play; delete WarEmpireSetup and replay / admin resetmap")
 	else
 		ok("WE_UpgradeSlot count=" .. tostring(#slots))
 		local withBillboard, withStruct, withPlot, withBuyPrompt, withKitBody = 0, 0, 0, 0, 0

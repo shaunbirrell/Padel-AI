@@ -43,7 +43,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 20. **Respawn** — After death, wait `GameConfig.RespawnTimeSeconds`, `LoadCharacter`, teleport to assigned plot `PlayerSpawn` (or plot pad + offset).
 
-21. **NPC pool** — Runtime models tagged `WE_NPC`; StudioSetup may place a few placeholders. Cap `CombatConfig.MaxActiveNPCs`; respawn after `NPCRespawnSeconds`.
+21. **NPC pool** — Runtime models tagged `WE_NPC`; MapSetup places a few placeholders on Play. Cap `CombatConfig.MaxActiveNPCs`; respawn after `NPCRespawnSeconds`.
 
 22. **PvP** — Gated by `GameConfig.PvPEnabled`; friendly fire by `GameConfig.FriendlyFire`. First PvP engagement logs `FIRST_PVP` once per user session/account flag.
 
@@ -109,7 +109,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 54. **Base upgrade UX** — Primary buy: walk onto pads (mobile-friendly, no hold). Alternate: **B** / Base Upgrades menu → **BUY $price** / **UP $price** (touch ≥44px). Price `WE_PriceBillboard` on every slot shows Name / Lv X→Y / $cost (or MAX / prereq hint); refreshes throttled on BaseStateUpdate / EconomyUpdate. Session-once toasts explain walk-to-buy.
 
-55. **StudioSetup visuals** — Multi-part structure kits (plinth + body + accent neon + roof/antenna) per type, distinct palettes (`StructureVisualConfig`). Territories: rings + flag poles. Vehicle pads with H-marks. NPC infantry with helmet/rifle. Tutorial beacons + rings. Lighting/Atmosphere defaults. Price billboards. Safe re-run clears `WarEmpireSetup`.
+55. **MapSetup auto-build** — `Modules/MapSetup.luau` builds the world (structure kits, territories, pads, NPCs, tutorial beacons, lighting, price billboards). Bootstrap runs it when `Workspace.WarEmpireSetup` is missing (Play / server start) — no command-bar paste (Studio truncates long pastes). Safe re-run clears `WarEmpireSetup`. Admin `resetmap` (Studio) or delete folder + Play to regenerate. `tools/StudioSetup.luau` is a short note only.
 
 56. **Structure level visuals** — `BaseService.UpdateVisuals` / `applyKitVisuals` scales kit children (`WE_KitRole`) by level; ghost transparency at L0; neon accents brighten when owned.
 

@@ -1,6 +1,8 @@
 --!strict
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 local AdminConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.AdminConfig)
 local Constants = require(ReplicatedStorage:WaitForChild("Shared").Constants)
 
@@ -165,6 +167,23 @@ function AdminService.Init(deps: { [string]: any })
 				if deps.NotificationService then
 					deps.NotificationService.Notify(player, "Season resumed (admin)", "Success")
 				end
+			end
+		elseif cmd == "resetmap" then
+			-- Studio: destroy WarEmpireSetup and rebuild via MapSetup
+			if not RunService:IsStudio() then
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, "resetmap is Studio-only", "Warn")
+				end
+				return
+			end
+			local existing = Workspace:FindFirstChild("WarEmpireSetup")
+			if existing then
+				existing:Destroy()
+			end
+			local MapSetup = require(script.Parent.Parent.Modules.MapSetup)
+			MapSetup.Run()
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, "Map regenerated (MapSetup)", "Success")
 			end
 		end
 	end)

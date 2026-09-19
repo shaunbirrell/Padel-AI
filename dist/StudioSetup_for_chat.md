@@ -1,3 +1,10 @@
+# StudioSetup (obsolete paste)
+
+Map auto-builds on **Play** via `MapSetup` when `Workspace.WarEmpireSetup` is missing.
+
+Do **not** paste the old ~640-line script (Studio truncates ~488 lines).
+
+```lua
 --[[
 	WAR EMPIRE — StudioSetup (legacy command-bar note)
 
@@ -15,3 +22,5 @@
 
 print("[WAR EMPIRE] Auto-setup runs on Play; delete Workspace.WarEmpireSetup and replay to regenerate")
 print("[WAR EMPIRE] Or admin resetmap / require(game.ServerScriptService.Server.Modules.MapSetup).Run() in Play")
+
+```

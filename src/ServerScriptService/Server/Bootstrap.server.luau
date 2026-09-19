@@ -15,6 +15,7 @@ local Modules = ServerFolder:WaitForChild("Modules")
 local Services = ServerFolder:WaitForChild("Services")
 
 local RemoteSetup = require(Modules.RemoteSetup)
+local MapSetup = require(Modules.MapSetup)
 local DataService = require(Services.DataService)
 local EconomyService = require(Services.EconomyService)
 local BaseService = require(Services.BaseService)
@@ -38,6 +39,12 @@ local SeasonService = require(Services.SeasonService)
 local ClanWarService = require(Services.ClanWarService)
 
 print("[WAR EMPIRE] Server Bootstrap starting...")
+
+-- Build map/tags before services that depend on CollectionService tags
+local Workspace = game:GetService("Workspace")
+if not Workspace:FindFirstChild("WarEmpireSetup") then
+	MapSetup.Run()
+end
 
 RemoteSetup.Init()
 
