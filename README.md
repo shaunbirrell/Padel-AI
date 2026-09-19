@@ -9,7 +9,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 
 **READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige/Rebirth (+10% cash / unlocks) + ~99 vehicles (Ground/Air/Naval + Dock) + ~6400 map / Clan / Battle Pass. Product IDs remain `0`. Validate with Rojo sync / `dist/WarEmpire.rbxlx` + Play (MapSetup auto); this environment cannot run Roblox Studio.
 
-**Phone / PERF build:** `dist/WarEmpire-PERF.rbxlx` (same as `WarEmpire.rbxlx`). Copy to `C:\Users\laura\Downloads\WarEmpire-PERF.rbxlx`. Keep `StudioSkipWorldDressing` for 8GB laptops. Optional free Creator Store meshes via `VisualAssetConfig` + `VisualAssetService` (skipped while dressing skipped). Phone checklist: `docs/PUBLISH_CHECKLIST_PHONE.md`.
+**Phone / PERF build:** `dist/WarEmpire-PERF.rbxlx` (same as `WarEmpire.rbxlx`). Parent CopyFromBox → laptop `C:\Users\laura\Downloads\WarEmpire-PERF.rbxlx` (also `WarEmpire.rbxlx`). Keep `StudioSkipWorldDressing` for 8GB laptops. Optional free Creator Store meshes via `VisualAssetConfig` + `VisualAssetService` (skipped while dressing skipped). Phone checklist: `docs/PUBLISH_CHECKLIST_PHONE.md`.
 
 
 ## Requirements

@@ -6,8 +6,9 @@
 	Studio PERF: when DevConfig.StudioSkipWorldDressing and not StudioForceDress,
 	VisualAssetService skips catalog inserts (8GB laptop). Live servers may load.
 
-	IDs researched as Free on Creator Store (verify in Studio; enable
-	Game Settings → Security → Allow Loading Third Party Assets for third-party models).
+	IDs researched as Free / Get Model on Creator Store (economy sale=false price=nil).
+	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
+	(and AllowInsertFreeAssets where required) for third-party models.
 ]]
 
 export type AssetRef = {
@@ -19,9 +20,11 @@ export type AssetRef = {
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
-	MaxLoadAttempts = 24,
+	MaxLoadAttempts = 36,
 	VehicleVisualScale = 1.0,
 	CharacterVisualScale = 1.0,
+	BuildingVisualScale = 1.0,
+	PropVisualScale = 1.0,
 
 	Vehicles = {
 		-- Free Jeep family
@@ -53,6 +56,45 @@ local VisualAssetConfig = {
 		PatrolTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
 		ArmoredTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
 		APC = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
+		-- Free jet family (classic + named free fighter)
+		_FallbackJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
+		FighterJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
+		InterceptorJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		TrainerJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		ReconPlane = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		LightFighter = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		StrikeJet = { ModelAssetId = 28574422, Note = "P-38 Lightning free Get Model" } :: AssetRef,
+		CASJet = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
+		StealthStrikeJet = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
+		StrikeBomber = { ModelAssetId = 297267045, Note = "[USAF] Free Fighter jet" } :: AssetRef,
+		CargoPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse (transport silhouette)" } :: AssetRef,
+		AWACSPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
+		TankerPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
+		-- Free naval family
+		_FallbackNaval = { ModelAssetId = 15786579439, Note = "Free Boat (Creator Store)" } :: AssetRef,
+		PatrolBoat = { ModelAssetId = 15786579439, Note = "Free Boat" } :: AssetRef,
+		FastAttackCraft = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		RiverBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		CoastCutter = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		TorpedoBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		Gunboat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		MissileBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		MineLayer = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		CoastalMonitor = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		LandingCraft = { ModelAssetId = 13195201090, Note = "Build a Boat Template (free)" } :: AssetRef,
+		AssaultLanding = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		HoverTransport = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		HospitalShip = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		SupplyShip = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		AmphibAssault = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		Corvette = { ModelAssetId = 13195201090, Note = "Boat template reuse (capital)" } :: AssetRef,
+		Destroyer = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		Frigate = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		CarrierEscort = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		Battleship = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		AircraftCarrier = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
+		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
@@ -65,9 +107,28 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Buildings = {
-		CommandCenter = { ModelAssetId = 0, Note = "Part kit primary — set free HQ model when chosen" } :: AssetRef,
-		Barracks = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
-		VehicleDepot = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+		-- Free Barracks / Military Base (Get Model). Part kits remain primary fallback.
+		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model" } :: AssetRef,
+		Barracks = { ModelAssetId = 9424782, Note = "Barracks free Get Model (2009)" } :: AssetRef,
+		VehicleDepot = { ModelAssetId = 9424782, Note = "Barracks reuse (depot)" } :: AssetRef,
+		WeaponsFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		Warehouse = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		ResearchLab = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		SpecialForcesFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		Watchtowers = { ModelAssetId = 16659447, Note = "Free bunker/tower-ish model" } :: AssetRef,
+		Radar = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		MissileDefense = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		PowerStation = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		Helipad = { ModelAssetId = 0, Note = "Part kit primary (pad silhouette)" } :: AssetRef,
+		Airfield = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+		Dock = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	DesertProps = {
+		Cactus = { ModelAssetId = 121029612, Note = "Free Cactus Get Model" } :: AssetRef,
+		CactusBase = { ModelAssetId = 16354482789, Note = "CactusBase2 free Get Model" } :: AssetRef,
+		DesertPlants = { ModelAssetId = 108556425657107, Note = "Realistic Desert Plants free pack" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	KitFamilyFallback = {
@@ -81,6 +142,15 @@ local VisualAssetConfig = {
 		HeliTransport = "TransportHeli",
 		HeliAttack = "AttackHelicopter",
 		HeliLight = "TransportHeli",
+		JetFighter = "_FallbackJet",
+		JetStrike = "StrikeJet",
+		JetBomber = "StrikeBomber",
+		JetTransport = "CargoPlane",
+		NavalPatrol = "_FallbackNaval",
+		NavalGun = "_FallbackNaval",
+		NavalLanding = "LandingCraft",
+		NavalCapital = "LandingCraft",
+		NavalSub = "_FallbackNaval",
 	} :: { [string]: string },
 }
 

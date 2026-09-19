@@ -15,6 +15,7 @@ local ProgressionBattlePass = require(script.ProgressionBattlePass)
 local ProgressionController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
@@ -226,7 +227,8 @@ function ProgressionController.Init()
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not menuOpen)
 	end)
 
@@ -234,7 +236,7 @@ function ProgressionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(520, 660)
+	panel.Size = if isTouch then UDim2.new(0.94, 0, 0.82, 0) else UDim2.fromOffset(520, 660)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -266,7 +268,7 @@ function ProgressionController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(32, 28)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -274,7 +276,8 @@ function ProgressionController.Init()
 	close.BorderSizePixel = 0
 	UIUtil.Corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -311,16 +314,17 @@ function ProgressionController.Init()
 	local function btn(label: string, w: number, cb: () -> ()): TextButton
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(16, y)
-		b.Size = UDim2.fromOffset(w, 30)
+		b.Size = UDim2.fromOffset(math.max(w, if isTouch then 160 else w), if isTouch then 44 else 36)
 		b.BackgroundColor3 = Constants.Colors.Accent
 		b.Font = Enum.Font.GothamBold
-		b.TextSize = 12
+		b.TextSize = if isTouch then 13 else 12
 		b.TextColor3 = Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
 		UIUtil.Corner(b, 6)
 		b.Parent = scroll
-		b.MouseButton1Click:Connect(cb)
+		UIUtil.EnsureMinTouch(b, 44)
+		b.Activated:Connect(cb)
 		return b
 	end
 
@@ -328,10 +332,14 @@ function ProgressionController.Init()
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
 	prestigeConfirm = body(36)
-	btn("CONFIRM REBIRTH", 200, function()
+	local rebirthBtn = btn("CONFIRM REBIRTH", 220, function()
+		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
 	end)
-	y += 36
+	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
+	rebirthBtn.TextColor3 = Constants.Colors.Gold
+	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5)
+	y += if isTouch then 52 else 40
 
 	section("BATTLE PASS")
 	bpLabel = body(44)

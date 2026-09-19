@@ -15,6 +15,7 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local ShopController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 
@@ -88,7 +89,8 @@ function ShopController.Init()
 	toggleStroke.Thickness = 1.5
 	toggleStroke.Parent = toggle
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not menuOpen)
 	end)
 
@@ -96,7 +98,7 @@ function ShopController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(400, 360)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(400, 360)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -117,7 +119,7 @@ function ShopController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(44, 44)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -125,7 +127,8 @@ function ShopController.Init()
 	close.BorderSizePixel = 0
 	corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -191,7 +194,7 @@ function ShopController.Init()
 		local btn = Instance.new("TextButton")
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
-		btn.Size = UDim2.fromOffset(96, 44)
+		btn.Size = UDim2.fromOffset(if isTouch then 110 else 96, 48)
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 11
@@ -204,7 +207,8 @@ function ShopController.Init()
 		btnStroke.Thickness = 1.25
 		btnStroke.Parent = btn
 		btn.Parent = row
-		btn.MouseButton1Click:Connect(onClick)
+		UIUtil.EnsureMinTouch(btn, 44)
+		btn.Activated:Connect(onClick)
 	end
 
 	for key, def in pairs(MonetizationConfig.DevProducts) do

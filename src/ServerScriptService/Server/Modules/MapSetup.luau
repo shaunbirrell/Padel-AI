@@ -447,6 +447,11 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
 	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
 	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
+	-- Optional free Creator Store building visual (skipped when StudioSkipWorldDressing)
+	pcall(function()
+		local vas = require(script.Parent.Parent.Services.VisualAssetService)
+		vas.TryAttachBuildingVisual(plinth, def.Id)
+	end)
 	return plinth
 end
 

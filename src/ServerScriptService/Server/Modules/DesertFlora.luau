@@ -336,6 +336,34 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
 	end
 
+	-- Optional free cactus catalog overlays (InsertService; skipped when StudioSkipWorldDressing)
+	-- Cap attempts so PERF stays Part-kit-first even on live.
+	do
+		local attached = 0
+		local maxAttach = if sparse then 2 else 4
+		local okVas, vas = pcall(function()
+			return require(script.Parent.Parent.Services.VisualAssetService)
+		end)
+		if okVas and vas and vas.IsInsertEnabled and vas.IsInsertEnabled() then
+			for _, d in ipairs(flora:GetDescendants()) do
+				if attached >= maxAttach then
+					break
+				end
+				if d:IsA("BasePart") and d.Name == "SaguaroTrunk" then
+					local okAtt = pcall(function()
+						return vas.TryAttachPropVisual(d, if attached % 2 == 0 then "Cactus" else "CactusBase")
+					end)
+					if okAtt then
+						attached += 1
+					end
+				end
+			end
+			if attached > 0 then
+				print("[WAR EMPIRE] DesertFlora catalog props attached:", attached)
+			end
+		end
+	end
+
 	local partCount = 0
 	for _, d in ipairs(flora:GetDescendants()) do
 		if d:IsA("BasePart") then

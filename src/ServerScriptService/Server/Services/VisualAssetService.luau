@@ -71,7 +71,7 @@ local function loadModel(assetId: number): Model?
 	if shouldSkipInserts() then
 		return nil
 	end
-	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 24) then
+	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
 		return nil
 	end
 	loadAttempts += 1
@@ -148,6 +148,45 @@ local function loadModel(assetId: number): Model?
 	return model
 end
 
+local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: string): boolean
+	stripScripts(clone)
+	clone.Name = cloneName
+
+	-- Remove competing Humanoids / tools / seats / scripts from catalog meshes
+	for _, d in ipairs(clone:GetDescendants()) do
+		if
+			d:IsA("Humanoid")
+			or d:IsA("Tool")
+			or d:IsA("VehicleSeat")
+			or d:IsA("Seat")
+			or d:IsA("BaseScript")
+			or d:IsA("ModuleScript")
+		then
+			d:Destroy()
+		end
+	end
+
+	pcall(function()
+		clone:PivotTo(primary.CFrame)
+	end)
+
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = false
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.Massless = true
+			d.CastShadow = false
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = primary
+			weld.Part1 = d
+			weld.Parent = d
+		end
+	end
+	return true
+end
+
 function VisualAssetService.IsInsertEnabled(): boolean
 	return not shouldSkipInserts()
 end
@@ -175,6 +214,22 @@ function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
 	return nil
 end
 
+function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
+	local ref = VisualAssetConfig.Buildings[structureId]
+	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
+		return ref.ModelAssetId
+	end
+	return nil
+end
+
+function VisualAssetService.ResolvePropAssetId(propKey: string): number?
+	local ref = VisualAssetConfig.DesertProps[propKey]
+	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
+		return ref.ModelAssetId
+	end
+	return nil
+end
+
 --[[
 	Clone catalog visual under hostModel, welded to primary, non-colliding.
 	Returns true if attached. Never destroys host Part kit.
@@ -194,44 +249,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	end
 
 	local clone = template:Clone()
-	clone.Name = "WE_CatalogVisual"
-	stripScripts(clone)
-
-	-- Hide host body mesh slightly? Keep for collision — hide only decorative duplicates
-	local cf = primary.CFrame
-	if clone.PrimaryPart then
-		clone:PivotTo(cf)
-	else
-		local first: BasePart? = nil
-		for _, d in ipairs(clone:GetDescendants()) do
-			if d:IsA("BasePart") then
-				first = d
-				break
-			end
-		end
-		if first then
-			clone:PivotTo(cf)
-		end
-	end
-
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Anchored = false
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-			d.Massless = true
-			d.CastShadow = false
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = primary
-			weld.Part1 = d
-			weld.Parent = d
-		elseif d:IsA("VehicleSeat") or d:IsA("Seat") then
-			-- Disable nested seats from catalog — we own DriverSeat
-			d:Destroy()
-		elseif d:IsA("Humanoid") then
-			d:Destroy()
-		end
+	if not weldCloneToPrimary(clone, primary, "WE_CatalogVisual") then
+		clone:Destroy()
+		return false
 	end
 
 	clone.Parent = hostModel
@@ -260,33 +280,72 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 	end
 
 	local clone = template:Clone()
-	clone.Name = "WE_CatalogCharacter"
-	stripScripts(clone)
-
-	-- Remove competing Humanoids / tools / scripts
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("Humanoid") or d:IsA("Tool") or d:IsA("BaseScript") or d:IsA("ModuleScript") then
-			d:Destroy()
-		end
-	end
-
-	clone:PivotTo((primary :: BasePart).CFrame)
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Anchored = false
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-			d.Massless = true
-			d.CastShadow = false
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = primary :: BasePart
-			weld.Part1 = d
-			weld.Parent = d
-		end
+	if not weldCloneToPrimary(clone, primary :: BasePart, "WE_CatalogCharacter") then
+		clone:Destroy()
+		return false
 	end
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
+	return true
+end
+
+--[[
+	Optional building visual overlay for structure plinth Part kits.
+	Welded non-colliding; plinth remains authoritative for walk-buy.
+]]
+function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false -- already dressed
+	end
+	local assetId = VisualAssetService.ResolveBuildingAssetId(structureId)
+	if not assetId then
+		return false
+	end
+	local template = loadModel(assetId)
+	if not template then
+		return false
+	end
+
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogBuilding") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	-- Soften kit body parts so catalog silhouette reads
+	for _, child in ipairs(hostPart:GetChildren()) do
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
+			child.Transparency = math.max(child.Transparency, 0.45)
+		end
+	end
+	return true
+end
+
+--[[
+	Optional desert prop overlay (cactus etc.) welded to a flora host part.
+]]
+function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: string): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local assetId = VisualAssetService.ResolvePropAssetId(propKey)
+	if not assetId then
+		return false
+	end
+	local template = loadModel(assetId)
+	if not template then
+		return false
+	end
+
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
 	return true
 end
 

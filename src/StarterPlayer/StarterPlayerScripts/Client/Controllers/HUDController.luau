@@ -217,7 +217,7 @@ function HUDController.Init()
 	makeStroke(spin, true)
 	UIUtil.EnsureMinTouch(spin, 56)
 	spinnerBtn = spin
-	spin.MouseButton1Click:Connect(function()
+	spin.Activated:Connect(function()
 		if spinnerReady then
 			Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
 		end

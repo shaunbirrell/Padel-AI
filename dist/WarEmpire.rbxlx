@@ -2447,8 +2447,9 @@ return VehicleConfig
 	Studio PERF: when DevConfig.StudioSkipWorldDressing and not StudioForceDress,
 	VisualAssetService skips catalog inserts (8GB laptop). Live servers may load.
 
-	IDs researched as Free on Creator Store (verify in Studio; enable
-	Game Settings → Security → Allow Loading Third Party Assets for third-party models).
+	IDs researched as Free / Get Model on Creator Store (economy sale=false price=nil).
+	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
+	(and AllowInsertFreeAssets where required) for third-party models.
 ]]
 
 export type AssetRef = {
@@ -2460,9 +2461,11 @@ export type AssetRef = {
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
-	MaxLoadAttempts = 24,
+	MaxLoadAttempts = 36,
 	VehicleVisualScale = 1.0,
 	CharacterVisualScale = 1.0,
+	BuildingVisualScale = 1.0,
+	PropVisualScale = 1.0,
 
 	Vehicles = {
 		-- Free Jeep family
@@ -2494,6 +2497,45 @@ local VisualAssetConfig = {
 		PatrolTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
 		ArmoredTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
 		APC = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
+		-- Free jet family (classic + named free fighter)
+		_FallbackJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
+		FighterJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
+		InterceptorJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		TrainerJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		ReconPlane = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		LightFighter = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
+		StrikeJet = { ModelAssetId = 28574422, Note = "P-38 Lightning free Get Model" } :: AssetRef,
+		CASJet = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
+		StealthStrikeJet = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
+		StrikeBomber = { ModelAssetId = 297267045, Note = "[USAF] Free Fighter jet" } :: AssetRef,
+		CargoPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse (transport silhouette)" } :: AssetRef,
+		AWACSPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
+		TankerPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
+		-- Free naval family
+		_FallbackNaval = { ModelAssetId = 15786579439, Note = "Free Boat (Creator Store)" } :: AssetRef,
+		PatrolBoat = { ModelAssetId = 15786579439, Note = "Free Boat" } :: AssetRef,
+		FastAttackCraft = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		RiverBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		CoastCutter = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		TorpedoBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		Gunboat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		MissileBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		MineLayer = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		CoastalMonitor = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		LandingCraft = { ModelAssetId = 13195201090, Note = "Build a Boat Template (free)" } :: AssetRef,
+		AssaultLanding = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		HoverTransport = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		HospitalShip = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		SupplyShip = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		AmphibAssault = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		Corvette = { ModelAssetId = 13195201090, Note = "Boat template reuse (capital)" } :: AssetRef,
+		Destroyer = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		Frigate = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		CarrierEscort = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		Battleship = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		AircraftCarrier = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
+		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
@@ -2506,9 +2548,28 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Buildings = {
-		CommandCenter = { ModelAssetId = 0, Note = "Part kit primary — set free HQ model when chosen" } :: AssetRef,
-		Barracks = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
-		VehicleDepot = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+		-- Free Barracks / Military Base (Get Model). Part kits remain primary fallback.
+		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model" } :: AssetRef,
+		Barracks = { ModelAssetId = 9424782, Note = "Barracks free Get Model (2009)" } :: AssetRef,
+		VehicleDepot = { ModelAssetId = 9424782, Note = "Barracks reuse (depot)" } :: AssetRef,
+		WeaponsFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		Warehouse = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		ResearchLab = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		SpecialForcesFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
+		Watchtowers = { ModelAssetId = 16659447, Note = "Free bunker/tower-ish model" } :: AssetRef,
+		Radar = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		MissileDefense = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		PowerStation = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		Helipad = { ModelAssetId = 0, Note = "Part kit primary (pad silhouette)" } :: AssetRef,
+		Airfield = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+		Dock = { ModelAssetId = 0, Note = "Part kit primary" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	DesertProps = {
+		Cactus = { ModelAssetId = 121029612, Note = "Free Cactus Get Model" } :: AssetRef,
+		CactusBase = { ModelAssetId = 16354482789, Note = "CactusBase2 free Get Model" } :: AssetRef,
+		DesertPlants = { ModelAssetId = 108556425657107, Note = "Realistic Desert Plants free pack" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	KitFamilyFallback = {
@@ -2522,6 +2583,15 @@ local VisualAssetConfig = {
 		HeliTransport = "TransportHeli",
 		HeliAttack = "AttackHelicopter",
 		HeliLight = "TransportHeli",
+		JetFighter = "_FallbackJet",
+		JetStrike = "StrikeJet",
+		JetBomber = "StrikeBomber",
+		JetTransport = "CargoPlane",
+		NavalPatrol = "_FallbackNaval",
+		NavalGun = "_FallbackNaval",
+		NavalLanding = "LandingCraft",
+		NavalCapital = "LandingCraft",
+		NavalSub = "_FallbackNaval",
 	} :: { [string]: string },
 }
 
@@ -3923,6 +3993,34 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		}
 	for i, pos in ipairs(plotOffsets) do
 		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
+	end
+
+	-- Optional free cactus catalog overlays (InsertService; skipped when StudioSkipWorldDressing)
+	-- Cap attempts so PERF stays Part-kit-first even on live.
+	do
+		local attached = 0
+		local maxAttach = if sparse then 2 else 4
+		local okVas, vas = pcall(function()
+			return require(script.Parent.Parent.Services.VisualAssetService)
+		end)
+		if okVas and vas and vas.IsInsertEnabled and vas.IsInsertEnabled() then
+			for _, d in ipairs(flora:GetDescendants()) do
+				if attached >= maxAttach then
+					break
+				end
+				if d:IsA("BasePart") and d.Name == "SaguaroTrunk" then
+					local okAtt = pcall(function()
+						return vas.TryAttachPropVisual(d, if attached % 2 == 0 then "Cactus" else "CactusBase")
+					end)
+					if okAtt then
+						attached += 1
+					end
+				end
+			end
+			if attached > 0 then
+				print("[WAR EMPIRE] DesertFlora catalog props attached:", attached)
+			end
+		end
 	end
 
 	local partCount = 0
@@ -5738,6 +5836,11 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
 	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
 	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
+	-- Optional free Creator Store building visual (skipped when StudioSkipWorldDressing)
+	pcall(function()
+		local vas = require(script.Parent.Parent.Services.VisualAssetService)
+		vas.TryAttachBuildingVisual(plinth, def.Id)
+	end)
 	return plinth
 end
 
@@ -17351,7 +17454,7 @@ local function loadModel(assetId: number): Model?
 	if shouldSkipInserts() then
 		return nil
 	end
-	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 24) then
+	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
 		return nil
 	end
 	loadAttempts += 1
@@ -17428,6 +17531,45 @@ local function loadModel(assetId: number): Model?
 	return model
 end
 
+local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: string): boolean
+	stripScripts(clone)
+	clone.Name = cloneName
+
+	-- Remove competing Humanoids / tools / seats / scripts from catalog meshes
+	for _, d in ipairs(clone:GetDescendants()) do
+		if
+			d:IsA("Humanoid")
+			or d:IsA("Tool")
+			or d:IsA("VehicleSeat")
+			or d:IsA("Seat")
+			or d:IsA("BaseScript")
+			or d:IsA("ModuleScript")
+		then
+			d:Destroy()
+		end
+	end
+
+	pcall(function()
+		clone:PivotTo(primary.CFrame)
+	end)
+
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = false
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.Massless = true
+			d.CastShadow = false
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = primary
+			weld.Part1 = d
+			weld.Parent = d
+		end
+	end
+	return true
+end
+
 function VisualAssetService.IsInsertEnabled(): boolean
 	return not shouldSkipInserts()
 end
@@ -17455,6 +17597,22 @@ function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
 	return nil
 end
 
+function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
+	local ref = VisualAssetConfig.Buildings[structureId]
+	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
+		return ref.ModelAssetId
+	end
+	return nil
+end
+
+function VisualAssetService.ResolvePropAssetId(propKey: string): number?
+	local ref = VisualAssetConfig.DesertProps[propKey]
+	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
+		return ref.ModelAssetId
+	end
+	return nil
+end
+
 --[[
 	Clone catalog visual under hostModel, welded to primary, non-colliding.
 	Returns true if attached. Never destroys host Part kit.
@@ -17474,44 +17632,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	end
 
 	local clone = template:Clone()
-	clone.Name = "WE_CatalogVisual"
-	stripScripts(clone)
-
-	-- Hide host body mesh slightly? Keep for collision — hide only decorative duplicates
-	local cf = primary.CFrame
-	if clone.PrimaryPart then
-		clone:PivotTo(cf)
-	else
-		local first: BasePart? = nil
-		for _, d in ipairs(clone:GetDescendants()) do
-			if d:IsA("BasePart") then
-				first = d
-				break
-			end
-		end
-		if first then
-			clone:PivotTo(cf)
-		end
-	end
-
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Anchored = false
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-			d.Massless = true
-			d.CastShadow = false
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = primary
-			weld.Part1 = d
-			weld.Parent = d
-		elseif d:IsA("VehicleSeat") or d:IsA("Seat") then
-			-- Disable nested seats from catalog — we own DriverSeat
-			d:Destroy()
-		elseif d:IsA("Humanoid") then
-			d:Destroy()
-		end
+	if not weldCloneToPrimary(clone, primary, "WE_CatalogVisual") then
+		clone:Destroy()
+		return false
 	end
 
 	clone.Parent = hostModel
@@ -17540,33 +17663,72 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 	end
 
 	local clone = template:Clone()
-	clone.Name = "WE_CatalogCharacter"
-	stripScripts(clone)
-
-	-- Remove competing Humanoids / tools / scripts
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("Humanoid") or d:IsA("Tool") or d:IsA("BaseScript") or d:IsA("ModuleScript") then
-			d:Destroy()
-		end
-	end
-
-	clone:PivotTo((primary :: BasePart).CFrame)
-	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Anchored = false
-			d.CanCollide = false
-			d.CanQuery = false
-			d.CanTouch = false
-			d.Massless = true
-			d.CastShadow = false
-			local weld = Instance.new("WeldConstraint")
-			weld.Part0 = primary :: BasePart
-			weld.Part1 = d
-			weld.Parent = d
-		end
+	if not weldCloneToPrimary(clone, primary :: BasePart, "WE_CatalogCharacter") then
+		clone:Destroy()
+		return false
 	end
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
+	return true
+end
+
+--[[
+	Optional building visual overlay for structure plinth Part kits.
+	Welded non-colliding; plinth remains authoritative for walk-buy.
+]]
+function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false -- already dressed
+	end
+	local assetId = VisualAssetService.ResolveBuildingAssetId(structureId)
+	if not assetId then
+		return false
+	end
+	local template = loadModel(assetId)
+	if not template then
+		return false
+	end
+
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogBuilding") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	-- Soften kit body parts so catalog silhouette reads
+	for _, child in ipairs(hostPart:GetChildren()) do
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
+			child.Transparency = math.max(child.Transparency, 0.45)
+		end
+	end
+	return true
+end
+
+--[[
+	Optional desert prop overlay (cactus etc.) welded to a flora host part.
+]]
+function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: string): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local assetId = VisualAssetService.ResolvePropAssetId(propKey)
+	if not assetId then
+		return false
+	end
+	local template = loadModel(assetId)
+	if not template then
+		return false
+	end
+
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
 	return true
 end
 
@@ -19451,7 +19613,7 @@ function HUDController.Init()
 	makeStroke(spin, true)
 	UIUtil.EnsureMinTouch(spin, 56)
 	spinnerBtn = spin
-	spin.MouseButton1Click:Connect(function()
+	spin.Activated:Connect(function()
 		if spinnerReady then
 			Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
 		end
@@ -19672,6 +19834,7 @@ local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local MissionController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
@@ -19771,7 +19934,8 @@ local function refresh()
 		elseif mission.Complete then
 			btn.Text = "CLAIM"
 			btn.BackgroundColor3 = Constants.Colors.Accent
-			btn.MouseButton1Click:Connect(function()
+			UIUtil.EnsureMinTouch(btn, 44)
+			btn.Activated:Connect(function()
 				Remotes.GetEvent(Constants.RemoteNames.RequestClaimMission):FireServer(mission.Id)
 			end)
 		else
@@ -19839,7 +20003,8 @@ function MissionController.Init()
 	toggle.Visible = false -- docked in HUD MobileActionBar
 	corner(toggle, 8)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not menuOpen)
 	end)
 
@@ -19847,7 +20012,7 @@ function MissionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(420, 380)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(420, 380)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -19868,7 +20033,7 @@ function MissionController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(32, 28)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -19876,7 +20041,8 @@ function MissionController.Init()
 	close.BorderSizePixel = 0
 	corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -19913,7 +20079,8 @@ function MissionController.Init()
 	corner(dBtn, 6)
 	dBtn.Parent = dailyRow
 	dailyBtn = dBtn
-	dBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(dBtn, 44)
+	dBtn.Activated:Connect(function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimDailyReward):FireServer()
 	end)
 
@@ -20136,6 +20303,7 @@ local ProgressionBattlePass = require(script.ProgressionBattlePass)
 local ProgressionController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
@@ -20347,7 +20515,8 @@ function ProgressionController.Init()
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not menuOpen)
 	end)
 
@@ -20355,7 +20524,7 @@ function ProgressionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(520, 660)
+	panel.Size = if isTouch then UDim2.new(0.94, 0, 0.82, 0) else UDim2.fromOffset(520, 660)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -20387,7 +20556,7 @@ function ProgressionController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(32, 28)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -20395,7 +20564,8 @@ function ProgressionController.Init()
 	close.BorderSizePixel = 0
 	UIUtil.Corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -20432,16 +20602,17 @@ function ProgressionController.Init()
 	local function btn(label: string, w: number, cb: () -> ()): TextButton
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(16, y)
-		b.Size = UDim2.fromOffset(w, 30)
+		b.Size = UDim2.fromOffset(math.max(w, if isTouch then 160 else w), if isTouch then 44 else 36)
 		b.BackgroundColor3 = Constants.Colors.Accent
 		b.Font = Enum.Font.GothamBold
-		b.TextSize = 12
+		b.TextSize = if isTouch then 13 else 12
 		b.TextColor3 = Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
 		UIUtil.Corner(b, 6)
 		b.Parent = scroll
-		b.MouseButton1Click:Connect(cb)
+		UIUtil.EnsureMinTouch(b, 44)
+		b.Activated:Connect(cb)
 		return b
 	end
 
@@ -20449,10 +20620,14 @@ function ProgressionController.Init()
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
 	prestigeConfirm = body(36)
-	btn("CONFIRM REBIRTH", 200, function()
+	local rebirthBtn = btn("CONFIRM REBIRTH", 220, function()
+		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
 	end)
-	y += 36
+	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
+	rebirthBtn.TextColor3 = Constants.Colors.Gold
+	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5)
+	y += if isTouch then 52 else 40
 
 	section("BATTLE PASS")
 	bpLabel = body(44)
@@ -20710,7 +20885,7 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 		if not skip then
 			rows += 1
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, -6, 0, 28)
+			row.Size = UDim2.new(1, -6, 0, 40)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
 			row.LayoutOrder = tier
@@ -20750,7 +20925,7 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				local claimBtn = Instance.new("TextButton")
 				claimBtn.AnchorPoint = Vector2.new(1, 0.5)
 				claimBtn.Position = UDim2.new(1, -4, 0.5, 0)
-				claimBtn.Size = UDim2.fromOffset(52, 22)
+				claimBtn.Size = UDim2.fromOffset(64, 36)
 				claimBtn.BackgroundColor3 = Constants.Colors.Accent
 				claimBtn.Font = Enum.Font.GothamBold
 				claimBtn.TextSize = 10
@@ -20760,14 +20935,15 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				UIUtil.Corner(claimBtn, 4)
 				claimBtn.Parent = row
 				local claimTier = tier
-				claimBtn.MouseButton1Click:Connect(function()
+				UIUtil.EnsureMinTouch(claimBtn, 36)
+				claimBtn.Activated:Connect(function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(claimTier, "free")
 				end)
 			elseif premReady then
 				local claimBtn = Instance.new("TextButton")
 				claimBtn.AnchorPoint = Vector2.new(1, 0.5)
 				claimBtn.Position = UDim2.new(1, -4, 0.5, 0)
-				claimBtn.Size = UDim2.fromOffset(52, 22)
+				claimBtn.Size = UDim2.fromOffset(64, 36)
 				claimBtn.BackgroundColor3 = Constants.Colors.Gold
 				claimBtn.Font = Enum.Font.GothamBold
 				claimBtn.TextSize = 10
@@ -20777,7 +20953,8 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				UIUtil.Corner(claimBtn, 4)
 				claimBtn.Parent = row
 				local claimTier = tier
-				claimBtn.MouseButton1Click:Connect(function()
+				UIUtil.EnsureMinTouch(claimBtn, 36)
+				claimBtn.Activated:Connect(function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(claimTier, "premium")
 				end)
 			end
@@ -20862,6 +21039,7 @@ local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local SettingsController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local open = false
 local screenGui: ScreenGui? = nil
 local musicBtn: TextButton? = nil
@@ -20925,7 +21103,8 @@ function SettingsController.Init()
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		AudioController.PlayClick()
 		setOpen(not open)
 	end)
@@ -20934,7 +21113,7 @@ function SettingsController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(400, 560)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.78, 0) else UDim2.fromOffset(400, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -20956,7 +21135,7 @@ function SettingsController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(32, 28)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -20964,7 +21143,8 @@ function SettingsController.Init()
 	close.BorderSizePixel = 0
 	UIUtil.Corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		AudioController.PlayClick()
 		setOpen(false)
 	end)
@@ -20990,7 +21170,8 @@ function SettingsController.Init()
 	musicBtn.BorderSizePixel = 0
 	UIUtil.Corner(musicBtn, 6)
 	musicBtn.Parent = panel
-	musicBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(musicBtn, 44)
+	musicBtn.Activated:Connect(function()
 		ClientSettings.ToggleMusic()
 		refreshToggleLabels()
 		AudioController.PlayClick()
@@ -21005,7 +21186,8 @@ function SettingsController.Init()
 	sfxBtn.BorderSizePixel = 0
 	UIUtil.Corner(sfxBtn, 6)
 	sfxBtn.Parent = panel
-	sfxBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(sfxBtn, 44)
+	sfxBtn.Activated:Connect(function()
 		ClientSettings.ToggleSfx()
 		refreshToggleLabels()
 		AudioController.PlayClick()
@@ -21049,7 +21231,8 @@ function SettingsController.Init()
 	redeemBtn.BorderSizePixel = 0
 	UIUtil.Corner(redeemBtn, 6)
 	redeemBtn.Parent = panel
-	redeemBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(redeemBtn, 44)
+	redeemBtn.Activated:Connect(function()
 		AudioController.PlayClick()
 		local code = codeBox.Text
 		if code and #code > 0 then
@@ -21070,7 +21253,8 @@ function SettingsController.Init()
 	spinnerBtn.BorderSizePixel = 0
 	UIUtil.Corner(spinnerBtn, 6)
 	spinnerBtn.Parent = panel
-	spinnerBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(spinnerBtn, 44)
+	spinnerBtn.Activated:Connect(function()
 		AudioController.PlayClick()
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
 	end)
@@ -21183,6 +21367,7 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local ShopController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 
@@ -21256,7 +21441,8 @@ function ShopController.Init()
 	toggleStroke.Thickness = 1.5
 	toggleStroke.Parent = toggle
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not menuOpen)
 	end)
 
@@ -21264,7 +21450,7 @@ function ShopController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(400, 360)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(400, 360)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -21285,7 +21471,7 @@ function ShopController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(44, 44)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -21293,7 +21479,8 @@ function ShopController.Init()
 	close.BorderSizePixel = 0
 	corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -21359,7 +21546,7 @@ function ShopController.Init()
 		local btn = Instance.new("TextButton")
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
-		btn.Size = UDim2.fromOffset(96, 44)
+		btn.Size = UDim2.fromOffset(if isTouch then 110 else 96, 48)
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 11
@@ -21372,7 +21559,8 @@ function ShopController.Init()
 		btnStroke.Thickness = 1.25
 		btnStroke.Parent = btn
 		btn.Parent = row
-		btn.MouseButton1Click:Connect(onClick)
+		UIUtil.EnsureMinTouch(btn, 44)
+		btn.Activated:Connect(onClick)
 	end
 
 	for key, def in pairs(MonetizationConfig.DevProducts) do

@@ -19,6 +19,7 @@ local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local SettingsController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local open = false
 local screenGui: ScreenGui? = nil
 local musicBtn: TextButton? = nil
@@ -82,7 +83,8 @@ function SettingsController.Init()
 	UIUtil.Corner(toggle, 8)
 	UIUtil.Stroke(toggle)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		AudioController.PlayClick()
 		setOpen(not open)
 	end)
@@ -91,7 +93,7 @@ function SettingsController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(400, 560)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.78, 0) else UDim2.fromOffset(400, 560)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -113,7 +115,7 @@ function SettingsController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(32, 28)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -121,7 +123,8 @@ function SettingsController.Init()
 	close.BorderSizePixel = 0
 	UIUtil.Corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		AudioController.PlayClick()
 		setOpen(false)
 	end)
@@ -147,7 +150,8 @@ function SettingsController.Init()
 	musicBtn.BorderSizePixel = 0
 	UIUtil.Corner(musicBtn, 6)
 	musicBtn.Parent = panel
-	musicBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(musicBtn, 44)
+	musicBtn.Activated:Connect(function()
 		ClientSettings.ToggleMusic()
 		refreshToggleLabels()
 		AudioController.PlayClick()
@@ -162,7 +166,8 @@ function SettingsController.Init()
 	sfxBtn.BorderSizePixel = 0
 	UIUtil.Corner(sfxBtn, 6)
 	sfxBtn.Parent = panel
-	sfxBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(sfxBtn, 44)
+	sfxBtn.Activated:Connect(function()
 		ClientSettings.ToggleSfx()
 		refreshToggleLabels()
 		AudioController.PlayClick()
@@ -206,7 +211,8 @@ function SettingsController.Init()
 	redeemBtn.BorderSizePixel = 0
 	UIUtil.Corner(redeemBtn, 6)
 	redeemBtn.Parent = panel
-	redeemBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(redeemBtn, 44)
+	redeemBtn.Activated:Connect(function()
 		AudioController.PlayClick()
 		local code = codeBox.Text
 		if code and #code > 0 then
@@ -227,7 +233,8 @@ function SettingsController.Init()
 	spinnerBtn.BorderSizePixel = 0
 	UIUtil.Corner(spinnerBtn, 6)
 	spinnerBtn.Parent = panel
-	spinnerBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(spinnerBtn, 44)
+	spinnerBtn.Activated:Connect(function()
 		AudioController.PlayClick()
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
 	end)

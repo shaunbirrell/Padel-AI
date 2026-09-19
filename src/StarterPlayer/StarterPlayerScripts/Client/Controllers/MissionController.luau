@@ -15,6 +15,7 @@ local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local MissionController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
@@ -114,7 +115,8 @@ local function refresh()
 		elseif mission.Complete then
 			btn.Text = "CLAIM"
 			btn.BackgroundColor3 = Constants.Colors.Accent
-			btn.MouseButton1Click:Connect(function()
+			UIUtil.EnsureMinTouch(btn, 44)
+			btn.Activated:Connect(function()
 				Remotes.GetEvent(Constants.RemoteNames.RequestClaimMission):FireServer(mission.Id)
 			end)
 		else
@@ -182,7 +184,8 @@ function MissionController.Init()
 	toggle.Visible = false -- docked in HUD MobileActionBar
 	corner(toggle, 8)
 	toggle.Parent = screen
-	toggle.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(toggle, 44)
+	toggle.Activated:Connect(function()
 		setOpen(not menuOpen)
 	end)
 
@@ -190,7 +193,7 @@ function MissionController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.fromOffset(420, 380)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(420, 380)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -211,7 +214,7 @@ function MissionController.Init()
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
 	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(32, 28)
+	close.Size = UDim2.fromOffset(48, 48)
 	close.BackgroundColor3 = Constants.Colors.Background
 	close.Font = Enum.Font.GothamBold
 	close.Text = "X"
@@ -219,7 +222,8 @@ function MissionController.Init()
 	close.BorderSizePixel = 0
 	corner(close, 6)
 	close.Parent = panel
-	close.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(close, 48)
+	close.Activated:Connect(function()
 		setOpen(false)
 	end)
 
@@ -256,7 +260,8 @@ function MissionController.Init()
 	corner(dBtn, 6)
 	dBtn.Parent = dailyRow
 	dailyBtn = dBtn
-	dBtn.MouseButton1Click:Connect(function()
+	UIUtil.EnsureMinTouch(dBtn, 44)
+	dBtn.Activated:Connect(function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestClaimDailyReward):FireServer()
 	end)
 

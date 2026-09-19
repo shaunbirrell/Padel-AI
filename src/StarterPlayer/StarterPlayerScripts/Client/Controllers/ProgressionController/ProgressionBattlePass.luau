@@ -66,7 +66,7 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 		if not skip then
 			rows += 1
 			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, -6, 0, 28)
+			row.Size = UDim2.new(1, -6, 0, 40)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
 			row.LayoutOrder = tier
@@ -106,7 +106,7 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				local claimBtn = Instance.new("TextButton")
 				claimBtn.AnchorPoint = Vector2.new(1, 0.5)
 				claimBtn.Position = UDim2.new(1, -4, 0.5, 0)
-				claimBtn.Size = UDim2.fromOffset(52, 22)
+				claimBtn.Size = UDim2.fromOffset(64, 36)
 				claimBtn.BackgroundColor3 = Constants.Colors.Accent
 				claimBtn.Font = Enum.Font.GothamBold
 				claimBtn.TextSize = 10
@@ -116,14 +116,15 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				UIUtil.Corner(claimBtn, 4)
 				claimBtn.Parent = row
 				local claimTier = tier
-				claimBtn.MouseButton1Click:Connect(function()
+				UIUtil.EnsureMinTouch(claimBtn, 36)
+				claimBtn.Activated:Connect(function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(claimTier, "free")
 				end)
 			elseif premReady then
 				local claimBtn = Instance.new("TextButton")
 				claimBtn.AnchorPoint = Vector2.new(1, 0.5)
 				claimBtn.Position = UDim2.new(1, -4, 0.5, 0)
-				claimBtn.Size = UDim2.fromOffset(52, 22)
+				claimBtn.Size = UDim2.fromOffset(64, 36)
 				claimBtn.BackgroundColor3 = Constants.Colors.Gold
 				claimBtn.Font = Enum.Font.GothamBold
 				claimBtn.TextSize = 10
@@ -133,7 +134,8 @@ function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, b
 				UIUtil.Corner(claimBtn, 4)
 				claimBtn.Parent = row
 				local claimTier = tier
-				claimBtn.MouseButton1Click:Connect(function()
+				UIUtil.EnsureMinTouch(claimBtn, 36)
+				claimBtn.Activated:Connect(function()
 					Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(claimTier, "premium")
 				end)
 			end
