@@ -177,6 +177,8 @@ export type TerritoryStatePayload = {
 		TerritoryId: string?,
 		Progress: number,
 		Capturing: boolean,
+		Contested: boolean?,
+		Protected: boolean?,
 	}?,
 	RadarReveal: boolean?,
 	RadarRadius: number?,

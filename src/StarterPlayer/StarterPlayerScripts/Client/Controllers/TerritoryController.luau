@@ -1,8 +1,12 @@
 --!strict
---[[ Phase 5 — Territory HUD, capture progress, Radar Hill enemy highlights ]]
+--[[ Phase 5/7 — Territory HUD, capture progress, Radar Hill enemy highlights.
+	Mobile: larger capture bar, STAND IN ZONE / CONTESTED / PROTECTED status,
+	% + ETA, list collapses on touch, clear of dock / pad BUY / combat HP.
+]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -15,18 +19,23 @@ local UIUtil = require(Shared.Util.UIUtil)
 local TerritoryController = {}
 
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local _gui: ScreenGui? = nil
 local progressFrame: Frame? = nil
 local progressFill: Frame? = nil
 local progressLabel: TextLabel? = nil
+local statusLabel: TextLabel? = nil
+local pctLabel: TextLabel? = nil
 local alertLabel: TextLabel? = nil
 local listFrame: ScrollingFrame? = nil
+local listPanel: Frame? = nil
 local radarBadge: TextLabel? = nil
 local lastAlert = ""
 local radarActive = false
 local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
 local lastCapturePct = -1
+local listCollapsed = isTouch -- start collapsed on phone
 
 local function setProgressVisible(visible: boolean)
 	if progressFrame then
@@ -114,12 +123,17 @@ local function refreshList(payload: Types.TerritoryStatePayload)
 		l.Parent = listFrame
 	end
 
+	if #payload.Territories == 0 then
+		UIUtil.EmptyState(listFrame, "No territories yet — explore the map.", 0)
+		return
+	end
+
 	for i, entry in ipairs(payload.Territories) do
 		local row = Instance.new("TextLabel")
-		row.Size = UDim2.new(1, -4, 0, 18)
+		row.Size = UDim2.new(1, -4, 0, if isTouch then 22 else 18)
 		row.BackgroundTransparency = 1
 		row.Font = Enum.Font.Gotham
-		row.TextSize = 12
+		row.TextSize = if isTouch then 13 else 12
 		row.TextXAlignment = Enum.TextXAlignment.Left
 		row.TextColor3 = Constants.Colors.Text
 		row.LayoutOrder = i
@@ -130,9 +144,31 @@ local function refreshList(payload: Types.TerritoryStatePayload)
 		elseif entry.Contested then
 			owner = "CONTESTED"
 			row.TextColor3 = Color3.fromRGB(230, 160, 60)
+		elseif entry.OwnerType == "NPC" then
+			row.TextColor3 = Constants.Colors.Danger
+		elseif entry.OwnerType == "Neutral" or entry.OwnerType == nil then
+			row.TextColor3 = Constants.Colors.Muted
+			owner = "NEUTRAL"
 		end
 		row.Text = string.format("%s — %s", entry.DisplayName, owner)
 		row.Parent = listFrame
+	end
+end
+
+local function applyListCollapsed()
+	if not listPanel or not listFrame then
+		return
+	end
+	if listCollapsed then
+		listPanel.Size = UDim2.fromOffset(if isTouch then 160 else 200, 36)
+		listFrame.Visible = false
+	else
+		listPanel.Size = UDim2.fromOffset(if isTouch then 200 else 200, if isTouch then 160 else 140)
+		listFrame.Visible = true
+	end
+	local toggle = listPanel:FindFirstChild("CollapseToggle")
+	if toggle and toggle:IsA("TextButton") then
+		toggle.Text = if listCollapsed then "TERRITORIES ▾" else "TERRITORIES ▴"
 	end
 end
 
@@ -141,39 +177,69 @@ function TerritoryController.Init()
 	screen.Name = "WarEmpireTerritory"
 	screen.Parent = player:WaitForChild("PlayerGui")
 	UIUtil.PrepareScreen(screen, false)
+	screen.DisplayOrder = 28 -- below combat HUD cluster / pad BUY
 	_gui = screen
 
-	-- Capture progress (center-bottom)
+	-- Capture progress — above pad BUY (-108) and combat HP (-188 on touch)
 	local prog = Instance.new("Frame")
 	prog.Name = "CaptureProgress"
 	prog.AnchorPoint = Vector2.new(0.5, 1)
-	prog.Position = UDim2.new(0.5, 0, 1, -120)
-	prog.Size = UDim2.fromOffset(300, 52)
+	prog.Position = UDim2.new(0.5, 0, 1, if isTouch then -250 else -120)
+	prog.Size = UDim2.fromOffset(if isTouch then 340 else 300, if isTouch then 78 else 52)
 	prog.BackgroundColor3 = Constants.Colors.Panel
-	prog.BackgroundTransparency = 0.08
+	prog.BackgroundTransparency = 0.05
 	prog.BorderSizePixel = 0
 	prog.Visible = false
+	prog.ZIndex = 12
 	prog.Parent = screen
-	UIUtil.Corner(prog, 8)
-	UIUtil.Stroke(prog, Color3.fromRGB(90, 100, 60), 1)
+	UIUtil.Corner(prog, 10)
+	UIUtil.Stroke(prog, Constants.Colors.Gold, 2)
 	progressFrame = prog
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(10, 4)
-	title.Size = UDim2.new(1, -20, 0, 18)
+	title.Position = UDim2.fromOffset(12, 6)
+	title.Size = UDim2.new(1, -90, 0, if isTouch then 20 else 18)
 	title.Font = Enum.Font.GothamBold
-	title.TextSize = 13
+	title.TextSize = if isTouch then 15 else 13
 	title.TextColor3 = Constants.Colors.Text
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Text = "Capturing..."
+	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.Parent = prog
 	progressLabel = title
 
+	local pct = Instance.new("TextLabel")
+	pct.Name = "Pct"
+	pct.BackgroundTransparency = 1
+	pct.AnchorPoint = Vector2.new(1, 0)
+	pct.Position = UDim2.new(1, -12, 0, 6)
+	pct.Size = UDim2.fromOffset(72, if isTouch then 22 else 18)
+	pct.Font = Enum.Font.GothamBold
+	pct.TextSize = if isTouch then 18 else 14
+	pct.TextColor3 = Constants.Colors.Gold
+	pct.TextXAlignment = Enum.TextXAlignment.Right
+	pct.Text = "0%"
+	pct.Parent = prog
+	pctLabel = pct
+
+	local status = Instance.new("TextLabel")
+	status.Name = "Status"
+	status.BackgroundTransparency = 1
+	status.Position = UDim2.fromOffset(12, if isTouch then 28 else 24)
+	status.Size = UDim2.new(1, -24, 0, 16)
+	status.Font = Enum.Font.GothamBold
+	status.TextSize = if isTouch then 12 else 11
+	status.TextColor3 = Color3.fromRGB(200, 210, 140)
+	status.TextXAlignment = Enum.TextXAlignment.Left
+	status.Text = "STAND IN THE ZONE"
+	status.Parent = prog
+	statusLabel = status
+
 	local bg = Instance.new("Frame")
-	bg.Position = UDim2.fromOffset(10, 28)
-	bg.Size = UDim2.new(1, -20, 0, 14)
+	bg.Position = UDim2.fromOffset(12, if isTouch then 50 else 36)
+	bg.Size = UDim2.new(1, -24, 0, if isTouch then 18 else 14)
 	bg.BackgroundColor3 = Constants.Colors.Background
 	bg.BorderSizePixel = 0
 	bg.Parent = prog
@@ -191,11 +257,11 @@ function TerritoryController.Init()
 	local alert = Instance.new("TextLabel")
 	alert.Name = "TerritoryAlert"
 	alert.AnchorPoint = Vector2.new(0.5, 0)
-	alert.Position = UDim2.new(0.5, 0, 0, 100)
-	alert.Size = UDim2.fromOffset(360, 28)
+	alert.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 100)
+	alert.Size = UDim2.fromOffset(if isTouch then 340 else 360, if isTouch then 32 else 28)
 	alert.BackgroundTransparency = 1
 	alert.Font = Enum.Font.GothamBold
-	alert.TextSize = 16
+	alert.TextSize = if isTouch then 15 else 16
 	alert.TextColor3 = Color3.fromRGB(230, 200, 80)
 	alert.Text = ""
 	alert.TextStrokeTransparency = 0.5
@@ -206,7 +272,7 @@ function TerritoryController.Init()
 	local badge = Instance.new("TextLabel")
 	badge.Name = "RadarBadge"
 	badge.AnchorPoint = Vector2.new(0, 0)
-	badge.Position = UDim2.fromOffset(16, 248)
+	badge.Position = UDim2.fromOffset(16, if isTouch then 56 else 248)
 	badge.Size = UDim2.fromOffset(200, 20)
 	badge.BackgroundTransparency = 1
 	badge.Font = Enum.Font.GothamBold
@@ -218,10 +284,10 @@ function TerritoryController.Init()
 	badge.Parent = screen
 	radarBadge = badge
 
-	-- Compact territory list (left side)
+	-- Compact territory list (left) — collapsible on mobile
 	local panel = Instance.new("Frame")
 	panel.Name = "TerritoryList"
-	panel.Position = UDim2.fromOffset(16, 100)
+	panel.Position = UDim2.fromOffset(16, if isTouch then 80 else 100)
 	panel.Size = UDim2.fromOffset(200, 140)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.25
@@ -229,28 +295,37 @@ function TerritoryController.Init()
 	panel.Parent = screen
 	UIUtil.Corner(panel, 8)
 	UIUtil.Stroke(panel)
+	listPanel = panel
 
-	local header = Instance.new("TextLabel")
-	header.BackgroundTransparency = 1
-	header.Size = UDim2.new(1, -8, 0, 20)
-	header.Position = UDim2.fromOffset(6, 4)
-	header.Font = Enum.Font.GothamBold
-	header.TextSize = 12
-	header.TextXAlignment = Enum.TextXAlignment.Left
-	header.TextColor3 = Constants.Colors.Muted
-	header.Text = "TERRITORIES"
-	header.Parent = panel
+	local toggle = Instance.new("TextButton")
+	toggle.Name = "CollapseToggle"
+	toggle.BackgroundTransparency = 1
+	toggle.Size = UDim2.new(1, -8, 0, 28)
+	toggle.Position = UDim2.fromOffset(4, 4)
+	toggle.Font = Enum.Font.GothamBold
+	toggle.TextSize = if isTouch then 13 else 12
+	toggle.TextXAlignment = Enum.TextXAlignment.Left
+	toggle.TextColor3 = Constants.Colors.Muted
+	toggle.Text = "TERRITORIES"
+	toggle.AutoButtonColor = true
+	toggle.Parent = panel
+	UIUtil.EnsureMinTouch(toggle, 28)
+	toggle.Activated:Connect(function()
+		listCollapsed = not listCollapsed
+		applyListCollapsed()
+	end)
 
 	local list = Instance.new("ScrollingFrame")
-	list.Position = UDim2.fromOffset(4, 24)
-	list.Size = UDim2.new(1, -8, 1, -28)
+	list.Position = UDim2.fromOffset(4, 32)
+	list.Size = UDim2.new(1, -8, 1, -36)
 	list.BackgroundTransparency = 1
 	list.BorderSizePixel = 0
-	list.ScrollBarThickness = 3
+	list.ScrollBarThickness = if isTouch then 5 else 3
 	list.CanvasSize = UDim2.fromOffset(0, 0)
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.Parent = panel
 	listFrame = list
+	applyListCollapsed()
 
 	local applyToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.TerritoryStateUpdate).OnClientEvent:Connect(function(payload: Types.TerritoryStatePayload)
@@ -303,19 +378,45 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 		local def = TerritoryConfig.Territories[localCap.TerritoryId]
 		local name = if def then def.DisplayName else localCap.TerritoryId
 		local pct = math.floor(localCap.Progress * 100)
+		local contested = localCap.Contested == true
+		local protected = localCap.Protected == true
 		if progressLabel then
-			progressLabel.Text = string.format("Capturing %s — %d%%", name, pct)
+			progressLabel.Text = string.format("Capturing %s", name)
+		end
+		if pctLabel then
+			pctLabel.Text = string.format("%d%%", pct)
+		end
+		if statusLabel then
+			if contested then
+				statusLabel.Text = "CONTESTED — clear enemies!"
+				statusLabel.TextColor3 = Color3.fromRGB(230, 140, 60)
+			elseif protected then
+				statusLabel.Text = "PROTECTED — capture slowed"
+				statusLabel.TextColor3 = Color3.fromRGB(140, 180, 255)
+			else
+				statusLabel.Text = "STAND IN THE ZONE — don't leave"
+				statusLabel.TextColor3 = Color3.fromRGB(200, 210, 140)
+			end
 		end
 		if progressFill then
 			progressFill.Size = UDim2.fromScale(math.clamp(localCap.Progress, 0, 1), 1)
-			-- Warm color as capture nears complete
 			local t = math.clamp(localCap.Progress, 0, 1)
-			progressFill.BackgroundColor3 = Color3.fromRGB(200 - 40 * t, 180 + 40 * t, 60)
+			if contested then
+				progressFill.BackgroundColor3 = Color3.fromRGB(230, 120, 50)
+			else
+				progressFill.BackgroundColor3 = Color3.fromRGB(200 - 40 * t, 180 + 50 * t, 60)
+			end
+		end
+		if progressFrame then
+			local stroke = progressFrame:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = if contested then Color3.fromRGB(230, 120, 50) else Constants.Colors.Gold
+			end
 		end
 		-- Milestone toast at 50% / 90%
 		if alertLabel and pct ~= lastCapturePct then
 			if pct >= 90 and lastCapturePct < 90 then
-				alertLabel.Text = "Almost captured!"
+				alertLabel.Text = "Almost captured — stay in zone!"
 			elseif pct >= 50 and lastCapturePct < 50 then
 				alertLabel.Text = "Capture halfway..."
 			end

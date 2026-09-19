@@ -260,6 +260,8 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 		TerritoryId = nil :: string?,
 		Progress = 0,
 		Capturing = false,
+		Contested = false,
+		Protected = false,
 	}
 
 	for _, rt in pairs(territories) do
@@ -280,6 +282,10 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			localCapture.TerritoryId = rt.Id
 			localCapture.Progress = math.clamp(rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds), 0, 1)
 			localCapture.Capturing = true
+			localCapture.Contested = rt.Contested == true
+			localCapture.Protected = rt.ProtectedUntil > nowUnix()
+				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
+				and rt.OwnerUserId ~= player.UserId
 		end
 	end
 
