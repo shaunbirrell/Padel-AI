@@ -1,5 +1,5 @@
 --!strict
---[[ Deep vehicle roster (~67): Ground / Air / Naval unlock ladder.
+--[[ Deep vehicle roster (~95): Ground / Air / Naval unlock ladder.
 	KitFamily drives VehicleService Part kits (grows to 100 without rewrite).
 	Generic military names only — no real brands, no MT names.
 ]]
@@ -264,6 +264,136 @@ local VehicleConfig = {
 		Frigate = V("Frigate", "Frigate", "Naval", "Epic", 18, 2000, 40, 6, 100, 300000, "NavalCapital", { Struct = N(4), Scale = 0.9 }),
 		CarrierEscort = V("CarrierEscort", "Carrier Escort", "Naval", "Legendary", 22, 2600, 34, 8, 125, 420000, "NavalCapital", { Struct = N(5), Scale = 1.1, Prestige = 6 }),
 		HoverTransport = V("HoverTransport", "Hover Transport", "Naval", "Epic", 16, 1100, 50, 8, 40, 190000, "NavalLanding", { Struct = N(3), Scale = 1.05 }),
+
+		-- ═══ DEPTH PASS 3 — toward 85–100 ═══
+		-- Ground
+		DispatchCar = V("DispatchCar", "Dispatch Car", "Ground", "Common", 2, 180, 60, 3, 10, 4500, "WheeledLight", { Struct = D(1), Scale = 0.8 }),
+		CargoVan = V("CargoVan", "Cargo Van", "Ground", "Common", 3, 320, 46, 5, 20, 9000, "WheeledTruck", { Struct = D(1), Scale = 0.85 }),
+		TroopTransport = V("TroopTransport", "Troop Transport", "Ground", "Uncommon", 6, 450, 44, 8, 28, 26000, "WheeledTruck", { Struct = D(2), Scale = 1.05 }),
+		RecoveryTruck = V("RecoveryTruck", "Recovery Truck", "Ground", "Uncommon", 8, 560, 34, 3, 45, 42000, "WheeledTruck", { Struct = D(3), Scale = 1.1 }),
+		EscortTruck = V("EscortTruck", "Escort Truck", "Ground", "Uncommon", 7, 500, 42, 5, 38, 36000, "WheeledTruck", { Struct = D(2) }),
+		AmphibiousAPC = V("AmphibiousAPC", "Amphibious APC", "Ground", "Rare", 11, 920, 34, 8, 58, 75000, "WheeledAPC", { Struct = D(3), Scale = 1.08 }),
+		FlameCarrier = V("FlameCarrier", "Flame Carrier", "Ground", "Rare", 13, 1000, 30, 3, 68, 115000, "TrackedIFV", { Struct = D(4), Scale = 1.0 }),
+		HowitzerTruck = V("HowitzerTruck", "Howitzer Truck", "Ground", "Rare", 14, 980, 28, 3, 60, 145000, "TrackedArtillery", { Struct = D(4), Scale = 1.05 }),
+		LightScoutTank = V("LightScoutTank", "Light Scout Tank", "Ground", "Rare", 11, 1050, 36, 3, 72, 78000, "TrackedMBT", { Struct = D(3), Scale = 0.88 }),
+		SiegeMortar = V("SiegeMortar", "Siege Mortar", "Ground", "Epic", 18, 1250, 20, 2, 80, 260000, "TrackedArtillery", { Struct = D(5), Scale = 1.2 }),
+		MobileSAM = V("MobileSAM", "Mobile SAM", "Ground", "Epic", 17, 1100, 28, 3, 75, 230000, "TrackedSPAAG", { Struct = D(5), Scale = 1.1 }),
+		FortressTank = V(
+			"FortressTank",
+			"Fortress Tank",
+			"Ground",
+			"Legendary",
+			23,
+			3600,
+			18,
+			4,
+			200,
+			520000,
+			"TrackedMBT",
+			{ Struct = D(5), Scale = 1.6, Prestige = 7 }
+		),
+		RailgunCarrier = V(
+			"RailgunCarrier",
+			"Railgun Carrier",
+			"Ground",
+			"Legendary",
+			24,
+			2800,
+			22,
+			3,
+			160,
+			580000,
+			"TrackedArtillery",
+			{ Struct = D(5), Scale = 1.35, Prestige = 12, RebirthFlag = "EmpireElite" }
+		),
+
+		-- Air
+		UtilityHeli = V("UtilityHeli", "Utility Helicopter", "Air", "Uncommon", 10, 650, 58, 3, 16, 85000, "HeliLight", { Struct = H(1), Scale = 0.9 }),
+		MedevacHeli = V("MedevacHeli", "Medevac Helicopter", "Air", "Rare", 13, 750, 56, 5, 20, 130000, "HeliTransport", { Struct = H(2), Scale = 0.95 }),
+		EscortHeli = V("EscortHeli", "Escort Helicopter", "Air", "Rare", 15, 850, 64, 3, 28, 175000, "HeliAttack", { Struct = H(2) }),
+		NightAttackHeli = V("NightAttackHeli", "Night Attack Helicopter", "Air", "Epic", 19, 980, 68, 2, 36, 270000, "HeliAttack", { Struct = H(3), Scale = 1.08 }),
+		VTOLTransport = V("VTOLTransport", "VTOL Transport", "Air", "Epic", 21, 1500, 70, 8, 42, 340000, "HeliTransport", { Struct = H(4), Scale = 1.2 }),
+		ReconPlane = V("ReconPlane", "Recon Plane", "Air", "Rare", 14, 500, 110, 1, 15, 160000, "JetFighter", { Struct = A(1), Scale = 0.85 }),
+		LightFighter = V("LightFighter", "Light Fighter", "Air", "Rare", 17, 620, 115, 1, 20, 240000, "JetFighter", { Struct = A(2), Scale = 0.92 }),
+		TankerPlane = V("TankerPlane", "Tanker Plane", "Air", "Epic", 19, 1700, 88, 3, 38, 300000, "JetTransport", { Struct = A(3), Scale = 1.25 }),
+		StealthStrike = V(
+			"StealthStrike",
+			"Stealth Strike Jet",
+			"Air",
+			"Legendary",
+			23,
+			780,
+			125,
+			1,
+			30,
+			500000,
+			"JetStrike",
+			{ Struct = A(4), Scale = 1.05, Prestige = 5 }
+		),
+		StrategicBomber = V(
+			"StrategicBomber",
+			"Strategic Bomber",
+			"Air",
+			"Legendary",
+			26,
+			2200,
+			80,
+			5,
+			60,
+			680000,
+			"JetBomber",
+			{ Struct = A(5), Scale = 1.55, Prestige = 10, RebirthFlag = "StrikeWing" }
+		),
+
+		-- Naval
+		CoastCutter = V("CoastCutter", "Coast Cutter", "Naval", "Common", 5, 400, 45, 5, 20, 20000, "NavalPatrol", { Struct = N(1), Scale = 0.85 }),
+		TorpedoBoat = V("TorpedoBoat", "Torpedo Boat", "Naval", "Uncommon", 9, 480, 58, 3, 28, 48000, "NavalPatrol", { Struct = N(1), Scale = 0.88 }),
+		HospitalShip = V("HospitalShip", "Hospital Ship", "Naval", "Rare", 11, 1100, 30, 10, 35, 90000, "NavalLanding", { Struct = N(2), Scale = 1.2 }),
+		SupplyShip = V("SupplyShip", "Supply Ship", "Naval", "Rare", 13, 1300, 28, 6, 45, 120000, "NavalLanding", { Struct = N(3), Scale = 1.15 }),
+		CoastalMonitor = V("CoastalMonitor", "Coastal Monitor", "Naval", "Rare", 14, 1500, 26, 5, 80, 150000, "NavalGun", { Struct = N(3), Scale = 1.1 }),
+		AmphibAssault = V("AmphibAssault", "Amphib Assault Ship", "Naval", "Epic", 17, 1800, 30, 12, 70, 250000, "NavalLanding", { Struct = N(4), Scale = 1.3 }),
+		AttackSub = V(
+			"AttackSub",
+			"Attack Sub",
+			"Naval",
+			"Legendary",
+			21,
+			1600,
+			38,
+			4,
+			100,
+			360000,
+			"NavalSub",
+			{ Struct = N(4), Scale = 1.1, Prestige = 4 }
+		),
+		MissileCruiser = V(
+			"MissileCruiser",
+			"Missile Cruiser",
+			"Naval",
+			"Legendary",
+			22,
+			3000,
+			34,
+			8,
+			150,
+			480000,
+			"NavalCapital",
+			{ Struct = N(5), Scale = 1.25, Prestige = 8 }
+		),
+		FleetCarrier = V(
+			"FleetCarrier",
+			"Fleet Carrier",
+			"Naval",
+			"Legendary",
+			26,
+			4500,
+			28,
+			14,
+			180,
+			720000,
+			"NavalCapital",
+			{ Struct = N(5), Scale = 1.7, Prestige = 15, RebirthFlag = "EmpireFleet" }
+		),
 	} :: { [string]: VehicleDef },
 
 	Categories = { "Ground", "Air", "Naval" } :: { VehicleCategory },

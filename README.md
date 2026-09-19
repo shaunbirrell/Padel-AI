@@ -7,7 +7,7 @@ Rojo-ready Luau codebase — Phase 1–7 MVP (Foundation → Monetization + poli
 
 ## MVP status
 
-**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige/Rebirth (+10% cash / unlocks) + ~49 vehicles (Ground/Air/Naval + Dock) + ~4800 map / Clan / Battle Pass. Product IDs remain `0`. Validate with Rojo sync / `dist/WarEmpire.rbxlx` + Play (MapSetup auto); this environment cannot run Roblox Studio.
+**READY_FOR_STUDIO_PLAYTEST** — Phases 1–7 playable loop + Prestige/Rebirth (+10% cash / unlocks) + ~99 vehicles (Ground/Air/Naval + Dock) + ~4800 map / Clan / Battle Pass. Product IDs remain `0`. Validate with Rojo sync / `dist/WarEmpire.rbxlx` + Play (MapSetup auto); this environment cannot run Roblox Studio.
 
 ## Requirements
 

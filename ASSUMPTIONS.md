@@ -161,7 +161,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 79. **Naval vehicles + Dock** — `VehicleConfig` Category Ground/Air/Naval. `Dock` (VehicleDepot L2) gates naval ladder through Battleship. MapSetup coastal water band + `WE_NavalSpawn` pads (also `WE_VehicleSpawn`). VehicleService prefers naval pads; KitFamily Part kits; MeshAssetId hooks reserved. SubSurfaceRunner is a surface stub (no dive physics yet).
 
-80. **Expanded vehicle roster** — ~67 vehicles (34 Ground / 17 Air / 16 Naval). `KitFamily` on each def drives VehicleService builders (scalable toward 100). Garage filters category + rarity; soft cooldown refresh. Late units use RequiresPrestige / RequiresRebirthFlag. BALANCE.md summarizes curve.
+80. **Expanded vehicle roster** — ~99 vehicles (44 Ground / 23 Air / 19 Naval). `KitFamily` on each def drives VehicleService builders (at ~100 ceiling). Garage filters category + rarity; soft cooldown refresh. Late units use RequiresPrestige / RequiresRebirthFlag. BALANCE.md summarizes curve.
 
 81. **Rebirth cash stack** — AddCash order: base → prestige (1+P×0.10) → VIP/DoubleCash → season. Exempt reasons skip VIP/season only. Passive, training workers, capture stipend, combat rewards all go through AddCash.
 
@@ -169,4 +169,4 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 83. **Map expansion ~4800** — Second scale-up after ~2600 toward Military Tycoon–feel footprint. Plot ring 800, pads 200, STRUCT_GAP 42. POIs/oil/forts/bank/supply/naval spread. Bootstrap `WE_VoidFallback` baseplate 5000×5000. Delete `WarEmpireSetup` or admin `resetmap` to regenerate.
 
-84. **Vehicle depth ladder** — Target roster grows via config-only adds (KitFamily already wired). Product IDs remain 0. No real brands / no MT names.
+84. **Vehicle depth ladder** — Depth pass 3 reached ~99 (85–100 band) via config-only KitFamily adds. Product IDs remain 0. No real brands / no MT names.

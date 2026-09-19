@@ -40,24 +40,24 @@ Other structures use similar curves (see `BaseConfig.luau`). Command Center L1 i
 - To advance from level L: `floor(100 * L^1.45)`
 - Level-up reward: `$500 + 150*newLevel` cash; gold every 5 levels
 
-## Vehicles (~67 — Ground 34 / Air 17 / Naval 16)
+## Vehicles (~99 — Ground 44 / Air 23 / Naval 19)
 
 Deep unlock ladder (level + structure + cash; late units also prestige / rebirth flags).
-~67 units after depth pass 2 (toward 80–100). Full table in `VehicleConfig.luau` — summary curve:
+~99 units after depth pass 3 (target band 85–100). Full table in `VehicleConfig.luau` — summary curve:
 
 | Band | Levels | Examples | Structure |
 |------|--------|----------|-----------|
-| Early ground | 1–7 | Jeep, Quad, Scout, Trucks, Tanker | Depot L1–2 |
-| Mid armor | 8–13 | APC, IFV, Light Tank, SPAAG, Mortar | Depot L3–4 |
-| Late ground | 14–22 | Medium/Heavy/Battle Tank, Rocket Arty, Super Heavy | Depot L4–5 + P/Rebirth |
-| Air | 10–25 | Scout/Transport/Attack heli, Jets, Bombers | Helipad / Airfield |
-| Naval | 6–25 | Patrol → Gunboat → Landing → Destroyer → Battleship | Dock L1–5 |
+| Early ground | 1–7 | Jeep, Quad, Scout, Trucks, Tanker, Dispatch | Depot L1–2 |
+| Mid armor | 8–14 | APC, IFV, Light Tank, SPAAG, Amphib APC, Howitzer | Depot L3–4 |
+| Late ground | 15–24 | Heavy/Battle/Fortress Tank, Rocket Arty, Railgun, SAM | Depot L4–5 + P/Rebirth |
+| Air | 10–26 | Scout/Transport/Attack heli, Jets, Stealth Strike, Strategic Bomber | Helipad / Airfield |
+| Naval | 5–26 | Cutter → Patrol → Gunboat → Landing → Sub → Carrier | Dock L1–5 |
 
 **Progression curve notes**
-- Cash costs ~3.5k early → ~650k legendary capital ships / bombers.
+- Cash costs ~3.5k early → ~720k legendary Fleet Carrier / Strategic Bomber.
 - Structure gates: Depot / Helipad / Airfield / Dock levels 1–5 (existing BaseConfig curves).
-- Rebirth gates: Super Heavy (EmpireElite P10), Battleship (EmpireFleet P12), Heavy Bomber (StrikeWing P20). Cruiser needs Prestige ≥2.
-- KitFamily (`WheeledLight` … `NavalSub`) lets roster grow toward 100 without VehicleService rewrite.
+- Prestige / rebirth gates (examples): Fortress Tank P7; Railgun Carrier EmpireElite; Stealth Strike P5; Strategic Bomber StrikeWing; Attack Sub P4; Missile Cruiser P8; Fleet Carrier EmpireFleet P15; Super Heavy / Battleship / Heavy Bomber as before.
+- KitFamily (`WheeledLight` … `NavalSub`) keeps garage spawn kits scalable; no VehicleService rewrite.
 - Garage: category + rarity filters; soft cooldown refresh for large lists.
 
 **Dock** structure: costs 4.5k / 18k / 65k / 190k / 520k (VehicleDepot L2 prereq).
