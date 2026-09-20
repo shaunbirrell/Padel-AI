@@ -30,6 +30,7 @@ local PrestigeConfig = {
 		KeepWeapons = true,
 		KeepGold = true,
 		KeepRebirthUnlocks = true,
+		-- KeepTerritories / KeepOutpostIncomeStacks: implicit (fields never cleared in PrestigeService)
 	},
 	StartingCashAfterPrestige = 10000,
 

@@ -19,6 +19,8 @@ local KIT_GEN = 21 -- STRUCTURE_SCALE_WIRE Part kit footprints
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
+local CEILING_FOLDER = "WE_BaseCeiling"
+local CEILING_UNLOCK_WALLS = 3 -- DefensiveWalls ≥ L3 unlocks anti-heli roof
 
 local function makePart(props: { [string]: any }): BasePart
 	local p = Instance.new("Part")
@@ -696,6 +698,278 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 
 end
 
+
+--[[ Base Ceiling — competitor anti-heli roof over plot core (ATM + main buildings).
+	Unlock: DefensiveWalls ≥ L3 (wallsLevel). Gate-front spawn road stays open (no seal).
+	Part-kit gunmetal/olive translucent collide plate. Optional mesh only if VisualAssetConfig.Buildings.BaseCeiling has a free ID.
+]]
+function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
+	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	local pad = findPlotPad(plotId)
+	if not plotFolder or not pad then
+		return
+	end
+
+	local existing = plotFolder:FindFirstChild(CEILING_FOLDER)
+	if wallsLevel < CEILING_UNLOCK_WALLS then
+		if existing then
+			existing:Destroy()
+		end
+		plotFolder:SetAttribute("WE_BaseCeiling", false)
+		return
+	end
+
+	local folder: Folder
+	if existing and existing:IsA("Folder") then
+		existing:ClearAllChildren()
+		folder = existing
+	else
+		if existing then
+			existing:Destroy()
+		end
+		folder = Instance.new("Folder")
+		folder.Name = CEILING_FOLDER
+		folder.Parent = plotFolder
+	end
+
+	local lv = math.clamp(wallsLevel, CEILING_UNLOCK_WALLS, 5)
+	local halfX = pad.Size.X * 0.5
+	local halfZ = pad.Size.Z * 0.5
+	local cx, cz = pad.Position.X, pad.Position.Z
+	local padTop = pad.Position.Y + pad.Size.Y * 0.5
+
+	-- Reuse gate facing from perimeter attrs when present (keeps spawn road open)
+	local peri = plotFolder:FindFirstChild(PERIMETER_FOLDER)
+	local gateAxis = "Z"
+	local gateSign = 1
+	if peri then
+		local ax = peri:GetAttribute("WE_GateAxis")
+		local sg = peri:GetAttribute("WE_GateSign")
+		if typeof(ax) == "string" and (ax == "X" or ax == "Z") then
+			gateAxis = ax
+		end
+		if typeof(sg) == "number" then
+			gateSign = if (sg :: number) >= 0 then 1 else -1
+		end
+	else
+		local spawnPart = plotFolder:FindFirstChild("PlayerSpawn")
+		local dx, dz = 0.0, 1.0
+		if spawnPart and spawnPart:IsA("BasePart") then
+			dx = spawnPart.Position.X - cx
+			dz = spawnPart.Position.Z - cz
+		else
+			local look = pad.CFrame.LookVector
+			dx, dz = look.X, look.Z
+		end
+		if math.abs(dx) >= math.abs(dz) then
+			gateAxis = "X"
+			gateSign = if dx >= 0 then 1 else -1
+		else
+			gateAxis = "Z"
+			gateSign = if dz >= 0 then 1 else -1
+		end
+	end
+
+	-- Cover core (~70% pad) but stop short of gate face so spawn road stays fly/walk open
+	local GATE_FRONT_OPEN = 34 -- studs from gate-edge pad rim left uncovered
+	local coverFrac = 0.72
+	local roofThick = 1.1 + lv * 0.08
+	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
+	local wallH = 6.5 + lv * 2.2
+	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
+
+	local sizeX: number
+	local sizeZ: number
+	local posX: number
+	local posZ: number
+	if gateAxis == "Z" then
+		sizeX = halfX * 2 * coverFrac
+		sizeZ = halfZ * 2 * coverFrac - GATE_FRONT_OPEN * 0.55
+		sizeZ = math.max(sizeZ, halfZ * 0.85)
+		posX = cx
+		-- Shift toward CLOSED face (opposite gateSign)
+		local closedEdge = cz - gateSign * halfZ
+		local openEdge = cz + gateSign * halfZ
+		-- Roof center: midway between closed edge and (open edge - GATE_FRONT_OPEN)
+		local coveredOpen = openEdge - gateSign * GATE_FRONT_OPEN
+		posZ = (closedEdge + coveredOpen) * 0.5
+		-- Clamp size so roof does not spill past coveredOpen
+		local span = math.abs(coveredOpen - closedEdge)
+		sizeZ = math.min(sizeZ, span - 4)
+		sizeZ = math.max(sizeZ, 40)
+	else
+		sizeZ = halfZ * 2 * coverFrac
+		sizeX = halfX * 2 * coverFrac - GATE_FRONT_OPEN * 0.55
+		sizeX = math.max(sizeX, halfX * 0.85)
+		posZ = cz
+		local closedEdge = cx - gateSign * halfX
+		local openEdge = cx + gateSign * halfX
+		local coveredOpen = openEdge - gateSign * GATE_FRONT_OPEN
+		posX = (closedEdge + coveredOpen) * 0.5
+		local span = math.abs(coveredOpen - closedEdge)
+		sizeX = math.min(sizeX, span - 4)
+		sizeX = math.max(sizeX, 40)
+	end
+
+	-- Gunmetal / olive translucent anti-heli plate
+	local roofColor = Color3.fromRGB(58, 68, 55) -- olive gunmetal
+	local accentColor = Color3.fromRGB(90, 100, 88)
+	local roof = makePart({
+		Name = "CeilingPlate",
+		Size = Vector3.new(sizeX, roofThick, sizeZ),
+		Position = Vector3.new(posX, roofY, posZ),
+		Color = roofColor,
+		Material = Enum.Material.Metal,
+		Transparency = 0.28,
+		CanCollide = true,
+		Parent = folder,
+	})
+	roof.CanTouch = false
+	roof.CanQuery = true
+	roof.CastShadow = true
+	roof:SetAttribute("WE_BaseCeiling", true)
+	roof:SetAttribute("PlotId", plotId)
+	roof:SetAttribute("WE_CeilingLevel", lv)
+
+	-- Edge trim (visual only)
+	local trimH = 0.55
+	local trimY = roofY + roofThick * 0.5 + trimH * 0.5
+	for _, edge in ipairs({
+		{ Name = "TrimN", Size = Vector3.new(sizeX + 1.2, trimH, 1.0), Pos = Vector3.new(posX, trimY, posZ - sizeZ * 0.5) },
+		{ Name = "TrimS", Size = Vector3.new(sizeX + 1.2, trimH, 1.0), Pos = Vector3.new(posX, trimY, posZ + sizeZ * 0.5) },
+		{ Name = "TrimE", Size = Vector3.new(1.0, trimH, sizeZ + 1.2), Pos = Vector3.new(posX + sizeX * 0.5, trimY, posZ) },
+		{ Name = "TrimW", Size = Vector3.new(1.0, trimH, sizeZ + 1.2), Pos = Vector3.new(posX - sizeX * 0.5, trimY, posZ) },
+	}) do
+		local t = makePart({
+			Name = edge.Name,
+			Size = edge.Size,
+			Position = edge.Pos,
+			Color = accentColor,
+			Material = Enum.Material.Neon,
+			Transparency = 0.35,
+			CanCollide = false,
+			Parent = folder,
+		})
+		t:SetAttribute("WE_BaseCeiling", true)
+	end
+
+	-- Support posts under closed-side corners (not gate side) — visual only
+	local postH = roofY - padTop - roofThick * 0.5
+	postH = math.max(postH, 8)
+	local postY = padTop + postH * 0.5
+	local insetX = sizeX * 0.42
+	local insetZ = sizeZ * 0.42
+	local posts = {
+		Vector3.new(posX - insetX, postY, posZ - insetZ),
+		Vector3.new(posX + insetX, postY, posZ - insetZ),
+		Vector3.new(posX - insetX, postY, posZ + insetZ),
+		Vector3.new(posX + insetX, postY, posZ + insetZ),
+	}
+	for i, ppos in ipairs(posts) do
+		-- Skip posts near gate face
+		local nearGate = false
+		if gateAxis == "Z" then
+			nearGate = (gateSign > 0 and ppos.Z > posZ + sizeZ * 0.15) or (gateSign < 0 and ppos.Z < posZ - sizeZ * 0.15)
+		else
+			nearGate = (gateSign > 0 and ppos.X > posX + sizeX * 0.15) or (gateSign < 0 and ppos.X < posX - sizeX * 0.15)
+		end
+		if not nearGate then
+			local post = makePart({
+				Name = "CeilingPost" .. i,
+				Size = Vector3.new(1.4, postH, 1.4),
+				Position = ppos,
+				Color = Color3.fromRGB(48, 52, 46),
+				Material = Enum.Material.Metal,
+				Transparency = 0.05,
+				CanCollide = false,
+				Parent = folder,
+			})
+			post.CastShadow = true
+			post:SetAttribute("WE_BaseCeiling", true)
+		end
+	end
+
+	folder:SetAttribute("WE_GateAxis", gateAxis)
+	folder:SetAttribute("WE_GateSign", gateSign)
+	folder:SetAttribute("WE_CeilingLevel", lv)
+	plotFolder:SetAttribute("WE_BaseCeiling", true)
+
+	-- Roof helipad dress (competitor-style vertical base): Part-kit H pad + optional Helipad catalog mesh
+	local heliSize = math.clamp(math.min(sizeX, sizeZ) * 0.28, 18, 28)
+	local heliY = roofY + roofThick * 0.5 + 0.35
+	-- Place helipad toward CLOSED side (away from gate front)
+	local heliX, heliZ = posX, posZ
+	if gateAxis == "Z" then
+		heliZ = posZ - gateSign * (sizeZ * 0.18)
+	else
+		heliX = posX - gateSign * (sizeX * 0.18)
+	end
+	local heliPad = makePart({
+		Name = "RoofHelipad",
+		Size = Vector3.new(heliSize, 0.55, heliSize),
+		Position = Vector3.new(heliX, heliY, heliZ),
+		Color = Color3.fromRGB(48, 52, 48),
+		Material = Enum.Material.Concrete,
+		Transparency = 0.05,
+		CanCollide = true,
+		Parent = folder,
+	})
+	heliPad.CastShadow = true
+	heliPad:SetAttribute("WE_BaseCeiling", true)
+	heliPad:SetAttribute("WE_RoofHelipad", true)
+	-- Yellow H marking
+	makePart({
+		Name = "RoofHelipadH",
+		Size = Vector3.new(heliSize * 0.12, 0.2, heliSize * 0.55),
+		Position = Vector3.new(heliX, heliY + 0.4, heliZ),
+		Color = Color3.fromRGB(230, 200, 60),
+		Material = Enum.Material.Neon,
+		Transparency = 0.1,
+		CanCollide = false,
+		Parent = folder,
+	}):SetAttribute("WE_BaseCeiling", true)
+	makePart({
+		Name = "RoofHelipadHBar",
+		Size = Vector3.new(heliSize * 0.42, 0.2, heliSize * 0.12),
+		Position = Vector3.new(heliX, heliY + 0.4, heliZ),
+		Color = Color3.fromRGB(230, 200, 60),
+		Material = Enum.Material.Neon,
+		Transparency = 0.1,
+		CanCollide = false,
+		Parent = folder,
+	}):SetAttribute("WE_BaseCeiling", true)
+	-- Ring
+	makePart({
+		Name = "RoofHelipadRing",
+		Size = Vector3.new(heliSize * 0.92, 0.15, heliSize * 0.92),
+		Position = Vector3.new(heliX, heliY + 0.28, heliZ),
+		Color = Color3.fromRGB(200, 180, 50),
+		Material = Enum.Material.Neon,
+		Transparency = 0.45,
+		CanCollide = false,
+		Parent = folder,
+	}):SetAttribute("WE_BaseCeiling", true)
+
+	-- Optional catalog: BaseCeiling mesh (if any) + Helipad dress on roof pad (existing free ID only)
+	task.defer(function()
+		pcall(function()
+			local vac = require(Shared.Configs.VisualAssetConfig)
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			local ref = vac.Buildings and vac.Buildings.BaseCeiling
+			local aid = ref and tonumber(ref.ModelAssetId) or 0
+			if aid and aid > 0 then
+				vas.TryAttachBuildingVisual(roof, "BaseCeiling", lv)
+			end
+			-- Helipad 14313845338 already in VisualAssetConfig.Buildings — dress roof pad
+			local heliRef = vac.Buildings and vac.Buildings.Helipad
+			local heliAid = heliRef and tonumber(heliRef.ModelAssetId) or 0
+			if heliAid and heliAid > 0 and heliPad.Parent then
+				vas.TryAttachBuildingVisual(heliPad, "Helipad", 1)
+			end
+		end)
+	end)
+end
+
 function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)
@@ -799,6 +1073,7 @@ end
 function StructureKitBuilder.ClearPlotExtras(plotId: number)
 	StructureKitBuilder.SyncPerimeterWalls(plotId, 0)
 	StructureKitBuilder.SyncCornerTowers(plotId, 0)
+	StructureKitBuilder.SyncBaseCeiling(plotId, 0)
 end
 
 return StructureKitBuilder

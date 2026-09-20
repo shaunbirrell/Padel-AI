@@ -339,3 +339,10 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 102. **Siegeable gates** — `GateDefenseConfig.GateMaxHealthByWallsLevel` + `GateDefenseService` spawns collide `GateBarrier` leaves across GatePost opening (HP billboard). Enemy weapon hits validated server-side (`CombatService` → `ApplyDamage`). On 0 HP: CanCollide false + rubble tint + owner toast "Gate breached!"; auto-rebuild after `GateRebuildSeconds` OR owner ProximityPrompt repair (`GateRepairCashCost`) OR walls re-upgrade SyncPlot. Guards/AutoGuns keep shooting. Does **not** edit StructureKitBuilder ScaleTo / AtmRaid.
 103. **Near-plot oil pumps** — `PlotOilPumpService` auto-spawns 1–2 pumpjacks outside walls toward warzone when DefensiveWalls ≥ 2. Accrues PendingCash (`plot_oil`). Floating $+ billboard. Part kit + IndustrialPack dress. OilRig Alpha/Bravo untouched.
 104. **Death shop offer (P1 light)** — On PvP death, server Notify + `DeathShopOffer` remote; ShopController opens shop and prompts DoubleCash/SpeedBoost only if DevProduct Id ≠ 0 (stubs Id=0).
+
+## 2026-09-20 — Base Ceiling anti-heli roof + polish (live v25)
+105. **Base Ceiling** — Unlocks at `DefensiveWalls ≥ L3`. `StructureKitBuilder.SyncBaseCeiling` builds `WE_BaseCeiling` gunmetal/olive translucent collide roof over plot core (ATM + main buildings). Gate-front spawn road left open (`GATE_FRONT_OPEN`). Sync on join / UpdateVisuals from walls level. Part-kit authoritative; `VisualAssetConfig.Buildings.BaseCeiling` AssetId=0 (no invented paid IDs). Roof helipad Part-kit H pad + optional existing Helipad mesh dress (`14313845338`).
+106. **OutpostIncomeStacks survive prestige** — PrestigeService does not clear `OutpostIncomeStacks` or `Territories`; re-calls `SyncOutpostIncomeStacks` after rebirth. PrestigeConfig RebirthUnlocks unchanged.
+107. **HUD rebirth progress** — Goal line shows `Rebirth Lv/Min (pct%)` until MinLevelToPrestige (40), then READY.
+108. **Capture zone billboards** — MapSetup TERRITORIES use DisplayName + larger MaxDistance for clarity.
+

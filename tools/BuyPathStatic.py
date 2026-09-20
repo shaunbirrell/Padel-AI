@@ -325,6 +325,20 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "De
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "SpeedBoost", "MonetizationConfig SpeedBoost stub")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", "DeathShopOffer", "Constants DeathShopOffer remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DeathShopOffer", "ShopController DeathShopOffer listener")
+# --- v25 Base Ceiling + prestige income keep + HUD rebirth progress ---
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "function StructureKitBuilder.SyncBaseCeiling", "SyncBaseCeiling")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_BaseCeiling", "WE_BaseCeiling folder")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofHelipad", "Ceiling roof helipad dress")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "SyncBaseCeiling", "BaseService SyncBaseCeiling wire")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "PlotOilPumpService", "Bootstrap PlotOilPump still wired")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "GateDefenseService", "Bootstrap GateDefense still wired")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "SyncOutpostIncomeStacks", "Prestige keeps OutpostIncomeStacks")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "OutpostIncomeStacks", "Prestige OutpostIncomeStacks comment")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "Rebirth", "HUD rebirth progress")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "BaseCeiling", "VisualAssetConfig BaseCeiling")
+must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "MinLevelToPrestige = 40", "PrestigeConfig MinLevel 40 no-regress")
+must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "RebirthUnlocks", "PrestigeConfig unlocks no-regress")
+
 # No-regress
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.SyncPlot", "GateDefense SyncPlot no-regress")

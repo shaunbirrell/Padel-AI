@@ -181,6 +181,8 @@ local VisualAssetConfig = {
 		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
 		Airfield = { ModelAssetId = 0, Note = "COMPOSITE runway+Hangar 6015472062; REJECT 12370174722" } :: AssetRef,
 		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
+		-- Anti-heli Base Ceiling: Part-kit only (no invented / paid roof IDs)
+		BaseCeiling = { ModelAssetId = 0, Note = "Part-kit gunmetal/olive translucent roof — no free dedicated roof Model" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- JeepFallback 59524622 DELETED (Design P0 REJECT). Part kit physics if mesh fails.

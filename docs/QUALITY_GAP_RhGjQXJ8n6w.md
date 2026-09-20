@@ -92,3 +92,39 @@ Loop: income → weapons/troops → Orders walkie → capture towns for +% → r
 | **Oil pumpjacks outside walls** | oil POIs far | P0 — near-plot pump income pads |
 | Frustration shop UX after death | stubs | P1 — Speed boost + 2x prompt on death |
 | Base ceiling vs air | missing | P1 |
+
+
+## Late frames ~17–21m (2026-09-20; full 16–24 watch failed then clipped)
+
+- Rooftop/platform with yellow rail — elevated base floors / ceiling buy path
+- Leaderboard shows Money + Rebirths columns
+- Missions icon in sidebar (WE may lack dedicated Missions dock)
+- Barriers $4K floor pads expand perimeter outward
+- Squad stalls with tarp + crates still mid-game identity
+- Multiple Purchase SUCCESSFUL stacked (debounce already in WE)
+
+### Remaining vs WE v24
+| Gap | Action |
+|-----|--------|
+| Base ceiling / roof | Shipping v25 |
+| Missions dock | P1 backlog |
+| Rebirth column on leaderboard | P1 |
+| Barriers outward expansion spectacle | Walls exist — ensure L2+ visible fence grow |
+
+
+## Late clip ~16–20min watch (2026-09-20)
+
+Rebirth loop: base completion % → 100% → pay fee ($250k analog) → wipe base, keep Rebirth count + retained army → capture for +% income that survives rebirth.
+Vertical expansion: stairs + concrete ceiling + roof barracks + helipad on roof.
+Monetization: Mega Pack cash for Robux mid-grind (frictionless).
+Missions: cash sink to unlock unique units/vehicles.
+Orders + contested caps already in WE.
+
+### Backlog after WE v24/v25 ceiling
+| Priority | Feature | WE status |
+|----------|---------|-----------|
+| P0 | Rebirth at % base complete + fee UI | Prestige exists @ L40 — tighten to completion % + clear fee toast |
+| P0 | Hard-currency cash packs | Monetization stubs — need live DevProduct IDs |
+| P1 | Vertical roof barracks / helipad on ceiling | Ceiling shipping; add roof pad slots |
+| P1 | Missions cash-sink UI | MissionConfig may exist — dock entry |
+| P1 | Income buff survives rebirth | Verify OutpostIncomeStacks persist through prestige |

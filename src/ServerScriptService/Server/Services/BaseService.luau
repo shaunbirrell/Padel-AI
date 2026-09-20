@@ -631,11 +631,16 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 		end
 	end
 
-	-- Plot-scale fortifications (DefensiveWalls / Watchtowers)
+	-- Plot-scale fortifications (DefensiveWalls / Watchtowers / BaseCeiling)
 	if structureId == "DefensiveWalls" then
 		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, level)
 		if not okW then
 			warn("[BaseService] SyncPerimeterWalls failed", errW)
+		end
+		-- Anti-heli Base Ceiling unlocks at DefensiveWalls ≥ L3
+		local okC, errC = pcall(StructureKitBuilder.SyncBaseCeiling, plotId, level)
+		if not okC then
+			warn("[BaseService] SyncBaseCeiling failed", errC)
 		end
 	elseif structureId == "Watchtowers" then
 		local okT, errT = pcall(StructureKitBuilder.SyncCornerTowers, plotId, level)
@@ -655,10 +660,11 @@ function BaseService.RefreshAllVisuals(player: Player)
 		local level = profile.BaseUpgrades[structureId] or 0
 		BaseService.UpdateVisuals(player, structureId, level)
 	end
-	-- DefensiveWalls / Watchtowers extras also driven if present
+	-- DefensiveWalls / Watchtowers / BaseCeiling extras also driven if present
 	if profile.BasePlotId then
 		local wallsLv = profile.BaseUpgrades.DefensiveWalls or 0
 		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
+		pcall(StructureKitBuilder.SyncBaseCeiling, profile.BasePlotId, wallsLv)
 		local towerLv = profile.BaseUpgrades.Watchtowers or 0
 		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
 	end

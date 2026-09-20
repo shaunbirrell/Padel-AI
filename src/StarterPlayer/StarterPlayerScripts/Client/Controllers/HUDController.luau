@@ -15,6 +15,7 @@ local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
 local LevelConfig = require(Shared.Configs.LevelConfig)
+local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 
 local HUDController = {}
 
@@ -466,10 +467,24 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 			xpText.Text = string.format("%d / %d", xp, xpToNext)
 		end
 	end
-	if goalLabel and typeof(hudGoal) == "string" and hudGoal ~= "" then
-		goalLabel.Text = hudGoal
-	elseif goalLabel and level >= 40 then
-		goalLabel.Text = "GOAL: Prestige for +10% cash · dominate territories"
+	-- Rebirth progress toward PrestigeConfig.MinLevelToPrestige (default 40)
+	local minPrestige = (PrestigeConfig and PrestigeConfig.MinLevelToPrestige) or 40
+	if goalLabel then
+		if level >= minPrestige then
+			if typeof(hudGoal) == "string" and hudGoal ~= "" then
+				goalLabel.Text = hudGoal
+			else
+				goalLabel.Text = "GOAL: Rebirth READY — press K · Do Prestige (+10% cash forever)"
+			end
+		else
+			local pct = math.clamp(math.floor((level / minPrestige) * 100), 0, 99)
+			local rebirthLine = string.format("Rebirth %d/%d (%d%%)", level, minPrestige, pct)
+			if typeof(hudGoal) == "string" and hudGoal ~= "" then
+				goalLabel.Text = rebirthLine .. "  ·  " .. hudGoal
+			else
+				goalLabel.Text = "GOAL: " .. rebirthLine .. " — press K for unlock track"
+			end
+		end
 	end
 end
 

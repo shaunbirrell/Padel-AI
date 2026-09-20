@@ -143,7 +143,9 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 			profile.BaseUpgrades[id] = 0
 		end
 	end
-	-- Vehicles / Weapons / Gold / RebirthUnlocks kept per Keep* flags
+	-- Vehicles / Weapons / Gold / RebirthUnlocks kept per Keep* flags.
+	-- Income buffs survive rebirth: OutpostIncomeStacks + Territories are NOT reset
+	-- (competitor-style permanent outpost income). PrestigeConfig unlocks unchanged.
 
 	local newly = applyUnlocks(player, profile, profile.Prestige)
 
@@ -151,6 +153,11 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 
 	if PrestigeConfig.GoldBonusOnPrestige > 0 then
 		EconomyService.AddGold(player, PrestigeConfig.GoldBonusOnPrestige, "prestige")
+	end
+
+	-- Reaffirm outpost stacks from owned Territories (never wipe stacks on prestige)
+	if EconomyService.SyncOutpostIncomeStacks then
+		pcall(EconomyService.SyncOutpostIncomeStacks, player)
 	end
 
 	if EconomyService.Push then
@@ -240,6 +247,18 @@ function PrestigeService.Init(deps: { [string]: any })
 		-- Re-apply unlock flags for current prestige (idempotent) in case config grew
 		applyUnlocks(player, profile, profile.Prestige or 0)
 		pushState(player)
+		-- UX: remind eligible commanders (MinLevelToPrestige = 40) that Rebirth is ready
+		if PrestigeService.CanPrestige(player) and NotificationService then
+			local msg = string.format(
+				"REBIRTH READY (Lv %d) — press K · Do Prestige (+10%% cash forever)",
+				tonumber(profile.Level) or PrestigeConfig.MinLevelToPrestige
+			)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Success", 6, 120, "prestige_ready_join")
+			else
+				NotificationService.Notify(player, msg, "Success", 6)
+			end
+		end
 	end)
 end
 

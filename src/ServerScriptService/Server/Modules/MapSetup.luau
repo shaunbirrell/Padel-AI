@@ -86,18 +86,18 @@ local PLOT_POSITIONS = {
 }
 
 local TERRITORIES = {
-	{ Id = "CentralPlaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 70 },
-	{ Id = "NorthRidge", Pos = Vector3.new(0, 1, -1300), Color = Color3.fromRGB(55, 120, 180), Radius = 60 },
-	{ Id = "SouthDocks", Pos = Vector3.new(0, 1, 1300), Color = Color3.fromRGB(45, 110, 150), Radius = 60 },
-	{ Id = "EastArmory", Pos = Vector3.new(1300, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 55 },
-	{ Id = "WestDepot", Pos = Vector3.new(-1300, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 55 },
-	{ Id = "OilFields", Pos = Vector3.new(950, 1, 950), Color = Color3.fromRGB(150, 110, 40), Radius = 65 },
-	{ Id = "RadarHill", Pos = Vector3.new(-950, 1, -950), Color = Color3.fromRGB(130, 70, 170), Radius = 60 },
+	{ Id = "CentralPlaza", DisplayName = "Central Plaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 70 },
+	{ Id = "NorthRidge", DisplayName = "North Ridge", Pos = Vector3.new(0, 1, -1300), Color = Color3.fromRGB(55, 120, 180), Radius = 60 },
+	{ Id = "SouthDocks", DisplayName = "South Docks", Pos = Vector3.new(0, 1, 1300), Color = Color3.fromRGB(45, 110, 150), Radius = 60 },
+	{ Id = "EastArmory", DisplayName = "East Armory", Pos = Vector3.new(1300, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 55 },
+	{ Id = "WestDepot", DisplayName = "West Depot", Pos = Vector3.new(-1300, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 55 },
+	{ Id = "OilFields", DisplayName = "Oil Fields", Pos = Vector3.new(950, 1, 950), Color = Color3.fromRGB(150, 110, 40), Radius = 65 },
+	{ Id = "RadarHill", DisplayName = "Radar Hill", Pos = Vector3.new(-950, 1, -950), Color = Color3.fromRGB(130, 70, 170), Radius = 60 },
 	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
-	{ Id = "CoastalOilAlpha", Pos = Vector3.new(1800, 28, -750), Color = Color3.fromRGB(190, 145, 45), Radius = 48, OilRig = true },
-	{ Id = "CoastalOilBravo", Pos = Vector3.new(-1800, 28, 750), Color = Color3.fromRGB(170, 125, 40), Radius = 48, OilRig = true },
-	{ Id = "FortIronclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true },
-	{ Id = "FortSandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true },
+	{ Id = "CoastalOilAlpha", DisplayName = "Coastal Oil Alpha", Pos = Vector3.new(1800, 28, -750), Color = Color3.fromRGB(190, 145, 45), Radius = 48, OilRig = true },
+	{ Id = "CoastalOilBravo", DisplayName = "Coastal Oil Bravo", Pos = Vector3.new(-1800, 28, 750), Color = Color3.fromRGB(170, 125, 40), Radius = 48, OilRig = true },
+	{ Id = "FortIronclad", DisplayName = "Fort Ironclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true },
+	{ Id = "FortSandhold", DisplayName = "Fort Sandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true },
 }
 
 local function ensureFolder(name, parent)
@@ -2011,7 +2011,14 @@ function MapSetup.Run()
 		CollectionService:AddTag(marker, TAG_TERRITORY)
 		CollectionService:AddTag(marker, TAG_CAPTURE)
 
-		plainBillboard(marker, def.Id .. "  [NEUTRAL]  ·  Stand to capture", Vector2.new(240, 42), 10, Color3.new(1, 1, 1))
+		do
+			local zoneName = def.DisplayName or def.Id
+			local bb = plainBillboard(marker, zoneName .. "  [NEUTRAL]  ·  Stand to capture", Vector2.new(280, 48), 12, Color3.new(1, 1, 1))
+			if typeof(bb) == "Instance" and bb:IsA("BillboardGui") then
+				bb.MaxDistance = 220 -- named capture zones readable from farther
+				bb.StudsOffset = Vector3.new(0, 14, 0)
+			end
+		end
 
 		part({
 			Name = def.Id .. "_Ring",
