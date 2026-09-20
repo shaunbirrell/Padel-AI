@@ -377,3 +377,16 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 - PlotOilPump GoldenPumpjack entitlement gold dress (Id=0 stub pad)
 - docs/LIVE_PLACE.md product table; experience WAR EMPIRE; API Services noted
 - BuyPathStatic PASS=273; no-regress jeep LV / GateDefense / AtmRaid
+
+## 2026-09-20 — Death shop toast + producer polish (live v30 — Open Cloud Published versionNumber=30)
+
+- **Death shop offers** — PvP death → mobile toast (`DeathShopToast`) with live DoubleCash GamePass + SpeedBoost DevProduct buttons; server+client debounce; PromptGamePassPurchase / PromptProductPurchase only on tap
+- **GoldenPumpjack** — Id=0 → MapSetup `premiumOfferIdLive` hides GoldenPump pad; ProcessReceipt/GrantEntitlement + PlotOilPump SyncPlot ready when Id pasted
+- **Floating $** — Oil pumps show `+$N/tick` billboard + `WE_OilCashPop` on accrue; TrainingYard existing earn billboard/pop kept
+- **Floor chevrons** — PlotFloorChevrons extend to ATM/premium cluster
+- **Army UI** — ★ COMMANDER PACK (StarterBundle) + ExtraSoldierSlot Robux rows above free recruits
+- **Mobile Orders** — larger SizeTouch walkie + MinTouchPx 52
+- **Shop** — Id=0 DevProducts skipped (HideFromShop duplicates AutoCollect/DoubleCash/VIPBoost/GoldenPumpjack)
+- ExtraSoldierSlot +1 cap; SpeedBoost 1.25× WalkSpeed on grant/respawn
+- BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids
+

@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -11,6 +12,7 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local NotificationController = require(script.Parent.NotificationController)
 local OrdersController = require(script.Parent.OrdersController)
@@ -172,7 +174,7 @@ function ArmyController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.7, 0) else UDim2.fromOffset(380, 380)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.78, 0) else UDim2.fromOffset(380, 460)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -244,33 +246,71 @@ function ArmyController.Init()
 	capLabel.Text = "0 / 0"
 	capLabel.Parent = capBg
 
-	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> (), goldAccent: boolean?)
+	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> (), goldAccent: boolean?, robuxAccent: boolean?)
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(x, y)
 		b.Size = UDim2.fromOffset(w, 44)
-		b.BackgroundColor3 = Constants.Colors.Gunmetal
+		b.BackgroundColor3 = if robuxAccent then Color3.fromRGB(40, 32, 12) else Constants.Colors.Gunmetal
 		b.Font = Enum.Font.GothamBold
 		b.TextSize = 12
-		b.TextColor3 = if goldAccent then Constants.Colors.Gold else Constants.Colors.Text
+		b.TextColor3 = if robuxAccent or goldAccent then Constants.Colors.Gold else Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
 		b.Active = true
 		b.AutoButtonColor = true
 		UIUtil.Corner(b, 6)
-		UIUtil.Stroke(b, Constants.Colors.Gold, 1.25)
+		UIUtil.Stroke(b, if robuxAccent then Color3.fromRGB(255, 200, 60) else Constants.Colors.Gold, if robuxAccent then 2 else 1.25)
 		b.Parent = panel
 		UIUtil.EnsureMinTouch(b, 44)
 		b.Activated:Connect(cb)
 		return b
 	end
 
-	local recruit1 = makeBtn("RECRUIT x1 $500", 16, 174, 168, function()
+	-- v30 P2W visibility (Reaper-style): Commander Pack / Extra Slot at top — free recruits unchanged below
+	local function promptArmyRobux(productKey: string)
+		local def = MonetizationConfig.DevProducts[productKey]
+		if not def or (tonumber(def.Id) or 0) == 0 then
+			NotificationController.Show("Offer coming soon", "Info", 2)
+			return
+		end
+		Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseDevProduct):FireServer(productKey)
+		pcall(function()
+			MarketplaceService:PromptProductPurchase(player, def.Id)
+		end)
+	end
+
+	local starter = MonetizationConfig.DevProducts.StarterBundle
+	local extraSlot = MonetizationConfig.DevProducts.ExtraSoldierSlot
+	local robuxY = 168
+	if starter and (tonumber(starter.Id) or 0) ~= 0 then
+		local price = tonumber(starter.RobuxPrice) or 249
+		makeBtn(string.format("★ COMMANDER PACK  %d R$", price), 16, robuxY, 344, function()
+			promptArmyRobux("StarterBundle")
+		end, true, true)
+		robuxY += 50
+	elseif extraSlot and (tonumber(extraSlot.Id) or 0) ~= 0 then
+		local price = tonumber(extraSlot.RobuxPrice) or 79
+		makeBtn(string.format("★ EXTRA SOLDIER SLOT  %d R$", price), 16, robuxY, 344, function()
+			promptArmyRobux("ExtraSoldierSlot")
+		end, true, true)
+		robuxY += 50
+	end
+	-- Secondary ExtraSoldierSlot chip when StarterBundle already shown
+	if starter and (tonumber(starter.Id) or 0) ~= 0 and extraSlot and (tonumber(extraSlot.Id) or 0) ~= 0 then
+		local price = tonumber(extraSlot.RobuxPrice) or 79
+		makeBtn(string.format("+1 SLOT  %d R$", price), 16, robuxY, 344, function()
+			promptArmyRobux("ExtraSoldierSlot")
+		end, true, true)
+		robuxY += 50
+	end
+
+	local recruit1 = makeBtn("RECRUIT x1 $500", 16, robuxY, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(1)
 	end, true)
-	local recruit5 = makeBtn("RECRUIT x5", 192, 174, 168, function()
+	local recruit5 = makeBtn("RECRUIT x5", 192, robuxY, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end, true)
-	makeBtn("FILL CAP", 16, 228, 168, function()
+	makeBtn("FILL CAP", 16, robuxY + 54, 168, function()
 		ensureArmyState()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then
@@ -279,10 +319,10 @@ function ArmyController.Init()
 			NotificationController.Show("Army full or no slots — upgrade Barracks (B)", "Warn", 3)
 		end
 	end)
-	makeBtn("DISMISS x1", 192, 228, 168, function()
+	makeBtn("DISMISS x1", 192, robuxY + 54, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(1)
 	end)
-	makeBtn("DISMISS x5", 16, 282, 168, function()
+	makeBtn("DISMISS x5", 16, robuxY + 108, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(5)
 	end)
 
@@ -301,14 +341,14 @@ function ArmyController.Init()
 
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
-	note.Position = UDim2.fromOffset(16, 336)
+	note.Position = UDim2.fromOffset(16, 420)
 	note.Size = UDim2.new(1, -32, 0, 28)
 	note.Font = Enum.Font.Gotham
 	note.TextSize = 11
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Training Yard pays cash/sec from owned soldiers. Barracks raises cap. Key A."
+	note.Text = "Free recruits below. ★ Robux packs optional. Training Yard pays +$/tick. Key A."
 	note.Parent = panel
 
 	Remotes.GetEvent(Constants.RemoteNames.SoldierStateUpdate).OnClientEvent:Connect(function(payload)

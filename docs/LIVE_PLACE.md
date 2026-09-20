@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=29** (2026-09-20 Europe/Madrid) — premium ATM pads, CashMega BEST OFFER, live Robux product IDs, rebirth keep-Robux banner
+- **Live Published:** Open Cloud **versionNumber=30** (2026-09-20 Europe/Madrid) — death shop toast, hide GoldenPump Id=0, oil floating $, Army Commander Pack, mobile Orders
 - **API Services:** enabled (DataStores)
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
@@ -35,7 +35,7 @@
 | InstantBarracks | 3713839278 | 129 |
 | SpeedBoost | 3713839342 | 99 |
 | StarterBundle | 3713839505 | 249 |
-| GoldenPumpjack | 0 (stub) | 49 |
+| GoldenPumpjack | 0 (pad hidden until Id) | 49 |
 
 Duplicate DevProduct SKUs AutoCollect / DoubleCash / VIPBoost are **HideFromShop** (GamePasses cover them).
 

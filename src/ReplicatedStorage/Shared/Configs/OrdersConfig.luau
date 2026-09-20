@@ -40,9 +40,11 @@ local OrdersConfig = {
 	DisplayName = "Squad",
 
 	Walkie = {
-		PositionTouch = UDim2.new(0, 16, 1, -220),
+		PositionTouch = UDim2.new(0, 12, 1, -248),
 		PositionDesktop = UDim2.new(0, 16, 1, -110),
 		Size = UDim2.fromOffset(200, 168),
+		SizeTouch = UDim2.fromOffset(248, 220),
+		MinTouchPx = 52,
 	},
 }
 

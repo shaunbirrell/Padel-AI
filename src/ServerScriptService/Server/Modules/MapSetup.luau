@@ -18,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedConfigs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
 local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
 local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
+local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -1272,7 +1273,7 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		return idx
 	end
 
-	-- Path nodes: PlayerSpawn → CC → Barracks → VehicleDepot → WeaponsFacility (first unlocks)
+	-- Path nodes: PlayerSpawn → CC → Barracks → Depot → Weapons → ATM/premium cluster
 	local spawnPos = plotOrigin + Vector3.new(0, 0.5, 55)
 	local nodes = {
 		spawnPos,
@@ -1286,18 +1287,33 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
 		table.insert(nodes, plotOrigin + offset + Vector3.new(0, 0.5, 0))
 	end
+	-- Guide toward MoneyCollector + premium Robux pads (unpaid ATM cluster)
+	local atmCluster = plotOrigin + Vector3.new(28, 0.5, 8)
+	table.insert(nodes, atmCluster)
 
 	local idx = 1
 	for i = 1, #nodes - 1 do
-		local steps = if i == 1 then 5 else 3
+		local steps = if i == 1 then 5 elseif i == #nodes - 1 then 4 else 3
 		idx = paintPath(nodes[i], nodes[i + 1], steps, idx)
 	end
 end
 
 
 
+local function premiumOfferIdLive(kind: string, key: string): boolean
+	-- Hide pads until Creator Dashboard Id exists (GoldenPumpjack Id=0 → no pad)
+	if kind == "GamePass" then
+		local def = MonetizationConfig.GamePasses[key]
+		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
+	elseif kind == "DevProduct" then
+		local def = MonetizationConfig.DevProducts[key]
+		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
+	end
+	return false
+end
+
 local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
-	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed, gold pumpjack cosmetic
+	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed; GoldenPump only if Id≠0
 	local offers = {
 		{ Key = "AutoCollect", Kind = "GamePass", Label = "AUTO COLLECT", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
 		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x CASH", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
@@ -1305,6 +1321,9 @@ local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
 		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "GOLDEN PUMP", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
 	}
 	for _, offer in ipairs(offers) do
+		if not premiumOfferIdLive(offer.Kind, offer.Key) then
+			continue
+		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
 			Size = Vector3.new(7, 0.45, 7),

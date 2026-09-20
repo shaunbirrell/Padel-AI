@@ -136,6 +136,22 @@ local function ensureEntitlements(profile: any)
 	return profile.Entitlements
 end
 
+local SPEED_BOOST_MULT = 1.25
+
+local function applySpeedBoostToCharacter(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	local GameConfig = require(Shared.Configs.GameConfig)
+	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	hum.WalkSpeed = base * SPEED_BOOST_MULT
+end
+
 function MonetizationService.GrantEntitlement(player: Player, key: string)
 	local profile = DataService.GetProfile(player)
 	if not profile or typeof(key) ~= "string" or key == "" then
@@ -158,6 +174,21 @@ function MonetizationService.GrantEntitlement(player: Player, key: string)
 		if cur < 1 then
 			profile.BaseUpgrades.Barracks = 1
 		end
+	end
+	-- GoldenPumpjack: re-dress plot oil pumps when product Id is live + granted
+	if key == "GoldenPumpjack" and typeof(profile.BasePlotId) == "number" then
+		task.defer(function()
+			local ok, pumpSvc = pcall(function()
+				return require(script.Parent.PlotOilPumpService)
+			end)
+			if ok and pumpSvc and pumpSvc.SyncPlot then
+				pumpSvc.SyncPlot(profile.BasePlotId)
+			end
+		end)
+	end
+	-- SpeedBoost: permanent move-speed on current character
+	if key == "SpeedBoost" then
+		applySpeedBoostToCharacter(player)
 	end
 	DataService.MarkDirty(player)
 end
@@ -310,6 +341,29 @@ function MonetizationService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player)
 		gamePassCache[player.UserId] = nil
 	end)
+
+	-- Re-apply SpeedBoost WalkSpeed on respawn
+	local function hookSpeed(player: Player)
+		player.CharacterAdded:Connect(function()
+			task.defer(function()
+				task.wait(0.3)
+				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+					applySpeedBoostToCharacter(player)
+				end
+			end)
+		end)
+		if player.Character then
+			task.defer(function()
+				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+					applySpeedBoostToCharacter(player)
+				end
+			end)
+		end
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		hookSpeed(p)
+	end
+	Players.PlayerAdded:Connect(hookSpeed)
 end
 
 function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurchaseDecision

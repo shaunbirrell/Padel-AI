@@ -129,7 +129,7 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 	lbl.Size = UDim2.fromScale(1, 1)
 	lbl.BackgroundColor3 = Color3.fromRGB(20, 40, 25)
 	lbl.BackgroundTransparency = 0.25
-	lbl.Text = "+$" .. tostring(PlotOilPumpConfig.CashPerTick or 18)
+	lbl.Text = "+$" .. tostring(PlotOilPumpConfig.CashPerTick or 18) .. "/tick"
 	lbl.TextColor3 = Color3.fromRGB(120, 255, 140)
 	lbl.TextScaled = true
 	lbl.Font = Enum.Font.GothamBold
@@ -323,6 +323,39 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 						end
 						if n > 0 then
 							EconomyService.AccruePendingCash(owner, cash * n, reason)
+							-- Floating +$/tick pops on each pump (competitor video feel)
+							for _, ch in ipairs(folder:GetChildren()) do
+								if ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
+									local incomePad = ch:FindFirstChild("IncomePad")
+									local anchor = if incomePad and incomePad:IsA("BasePart") then incomePad else ch.PrimaryPart
+									if anchor and anchor:IsA("BasePart") then
+										local pop = Instance.new("BillboardGui")
+										pop.Name = "WE_OilCashPop"
+										pop.Size = UDim2.fromOffset(90, 26)
+										pop.StudsOffset = Vector3.new(0, 4.5, 0)
+										pop.AlwaysOnTop = false
+										pop.MaxDistance = 28
+										pop.Parent = anchor
+										local popLab = Instance.new("TextLabel")
+										popLab.Size = UDim2.fromScale(1, 1)
+										popLab.BackgroundTransparency = 1
+										popLab.Font = Enum.Font.GothamBold
+										popLab.TextScaled = true
+										popLab.TextColor3 = Color3.fromRGB(100, 255, 140)
+										popLab.TextStrokeTransparency = 0.35
+										popLab.Text = string.format("+$%d", cash)
+										popLab.Parent = pop
+										task.spawn(function()
+											for i = 1, 6 do
+												pop.StudsOffset = Vector3.new(0, 4.5 + i * 0.35, 0)
+												popLab.TextTransparency = i / 7
+												task.wait(0.1)
+											end
+											pop:Destroy()
+										end)
+									end
+								end
+							end
 						end
 					end
 				end

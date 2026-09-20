@@ -858,6 +858,22 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	return true
 end
 
+local lastDeathShopAt: { [number]: number } = {}
+local DEATH_SHOP_DEBOUNCE = 12
+
+local function resolveDeathOfferLive(MonetizationConfig: any, key: string): (boolean, string?)
+	-- Prefer GamePass Id (DoubleCash), then DevProduct Id (SpeedBoost)
+	local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+	if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+		return true, gp.DisplayName or key
+	end
+	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
+	if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 then
+		return true, dp.DisplayName or key
+	end
+	return false, nil
+end
+
 local function onPlayerDeath(victim: Player, killer: Player?)
 	local state = combatStates[victim.UserId]
 	if state then
@@ -874,29 +890,35 @@ local function onPlayerDeath(victim: Player, killer: Player?)
 		end
 	end
 	
-	-- P1 light: enemy kill → client shop toast (2x Money / Speed if products exist; Id=0 stubs OK)
+	-- v30: PvP death → DeathShopOffer toast (DoubleCash GP + SpeedBoost DP; live Ids only; debounced)
 	if killer and killer ~= victim and NotificationService then
-		local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
-		local offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
-		local labels = {}
-		for _, key in ipairs(offers) do
-			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
-				or MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
-			if def then
-				table.insert(labels, def.DisplayName or key)
+		local now = os.clock()
+		local prev = lastDeathShopAt[victim.UserId] or 0
+		if now - prev >= DEATH_SHOP_DEBOUNCE then
+			lastDeathShopAt[victim.UserId] = now
+			local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
+			local offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
+			local liveOffers = {}
+			local labels = {}
+			for _, key in ipairs(offers) do
+				local live, label = resolveDeathOfferLive(MonetizationConfig, key)
+				if live and label then
+					table.insert(liveOffers, key)
+					table.insert(labels, label)
+				end
 			end
-		end
-		if #labels > 0 then
-			NotificationService.Notify(
-				victim,
-				"Shop: " .. table.concat(labels, " / ") .. " — open Shop to boost",
-				"Info",
-				5
-			)
-			if RemoteSetup then
-				local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
-				if remote then
-					(remote :: RemoteEvent):FireClient(victim, { Offers = offers })
+			if #liveOffers > 0 then
+				NotificationService.Notify(
+					victim,
+					"Boost? " .. table.concat(labels, " / ") .. " — tap toast",
+					"Info",
+					5
+				)
+				if RemoteSetup then
+					local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+					if remote then
+						(remote :: RemoteEvent):FireClient(victim, { Offers = liveOffers })
+					end
 				end
 			end
 		end

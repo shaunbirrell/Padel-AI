@@ -55,7 +55,12 @@ end
 local function maxSoldiers(profile: any): number
 	local base = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
-	return base + barracksLevel(profile) * per
+	local cap = base + barracksLevel(profile) * per
+	-- ExtraSoldierSlot DevProduct entitlement (+1 capacity)
+	if typeof(profile.Entitlements) == "table" and profile.Entitlements.ExtraSoldierSlot == true then
+		cap += 1
+	end
+	return cap
 end
 
 local function pushState(player: Player)

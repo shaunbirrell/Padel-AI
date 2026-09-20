@@ -426,5 +426,32 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingJoist", "BaseCeiling joists")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "Keep all your Robux Items!", "Rebirth exact keep banner")
 
+
+# --- v30 death shop toast / GoldenPump hide / Army Robux / oil float / mobile Orders ---
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DeathShopToast", "Death shop toast UI")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DEATH_TOAST_DEBOUNCE", "Death shop client debounce")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "PromptGamePassPurchase", "Death/shop GamePass prompt")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "DEATH_SHOP_DEBOUNCE", "Death shop server debounce")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "resolveDeathOfferLive", "Death shop live Id filter")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "premiumOfferIdLive", "Premium pad Id≠0 gate")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "atmCluster", "Chevrons to ATM/premium cluster")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "WE_OilCashPop", "Oil pump floating +$ pop")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", '"+$" .. tostring(PlotOilPumpConfig.CashPerTick or 18) .. "/tick"', "Oil billboard +$/tick")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmyController.luau", "COMMANDER PACK", "Army Commander Pack Robux row")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmyController.luau", "ExtraSoldierSlot", "Army ExtraSoldierSlot offer")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "SizeTouch", "Orders mobile SizeTouch")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "SizeTouch", "OrdersConfig SizeTouch")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "HideFromShop = true", "HideFromShop duplicate DevProducts")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "GoldenPumpjack", "GrantEntitlement GoldenPumpjack sync")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "SpeedBoost", "SpeedBoost WalkSpeed apply")
+must_contain("src/ServerScriptService/Server/Services/SoldierService.luau", "ExtraSoldierSlot", "ExtraSoldierSlot +1 cap")
+# No-regress v30
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v30")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v30")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v30")
+must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v30")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713838952", "CashMega Id no-regress")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash GamePass Id no-regress")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

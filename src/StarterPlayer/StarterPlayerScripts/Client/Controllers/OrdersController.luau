@@ -129,8 +129,8 @@ function OrdersController.Init()
 	local frame = Instance.new("Frame")
 	frame.Name = "Walkie"
 	frame.AnchorPoint = Vector2.new(0, 1)
-	frame.Position = if isTouch then (walkie.PositionTouch or UDim2.new(0, 16, 1, -220)) else (walkie.PositionDesktop or UDim2.new(0, 16, 1, -110))
-	frame.Size = walkie.Size or UDim2.fromOffset(200, 168)
+	frame.Position = if isTouch then (walkie.PositionTouch or UDim2.new(0, 12, 1, -248)) else (walkie.PositionDesktop or UDim2.new(0, 16, 1, -110))
+	frame.Size = if isTouch then (walkie.SizeTouch or UDim2.fromOffset(248, 220)) else (walkie.Size or UDim2.fromOffset(200, 168))
 	frame.BackgroundColor3 = Constants.Colors.Gunmetal
 	frame.BackgroundTransparency = 0.08
 	frame.BorderSizePixel = 0
@@ -181,7 +181,7 @@ function OrdersController.Init()
 		btn.LayoutOrder = i
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 12
+		btn.TextSize = if isTouch then 14 else 12
 		btn.TextColor3 = Constants.Colors.Text
 		local hotHint = ({ Attack = "1", Hold = "2", Follow = "3", Retreat = "4" })[def.Id]
 		btn.Text = if (not isTouch) and hotHint then (def.Label .. " [" .. hotHint .. "]") else def.Label
@@ -189,7 +189,7 @@ function OrdersController.Init()
 		btn.AutoButtonColor = true
 		UIUtil.Corner(btn, 8)
 		UIUtil.Stroke(btn, Constants.Colors.Olive, 1)
-		UIUtil.EnsureMinTouch(btn, 44)
+		UIUtil.EnsureMinTouch(btn, if isTouch then (walkie.MinTouchPx or 52) else 44)
 		btn.Parent = grid
 		btn.Activated:Connect(function()
 			fireOrder(def.Id)

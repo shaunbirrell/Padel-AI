@@ -117,7 +117,8 @@ local MonetizationConfig = {
 			GrantEntitlement = "SpeedBoost",
 			Description = "Permanent move-speed boost",
 		},
-		-- Cosmetic oil pump gold dress (Id=0 until Creator Dashboard mint)
+		-- Cosmetic oil pump gold dress — Id=0: MapSetup hides GoldenPump pad until Id set;
+		-- ProcessReceipt + GrantEntitlement ready when Creator Dashboard Id is pasted
 		GoldenPumpjack = {
 			Id = 0,
 			DisplayName = "Golden Pumpjack",
@@ -126,7 +127,7 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "GoldenPumpjack",
 			HideFromShop = true,
-			Description = "Gold-dress plot oil pumps (pad offer; Id pending)",
+			Description = "Gold-dress plot oil pumps (pad hidden while Id=0)",
 		},
 		StarterBundle = {
 			Id = 3713839505,
@@ -139,7 +140,7 @@ local MonetizationConfig = {
 		},
 	},
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
-	-- P1: on PvP death, client toast linking these shop keys (Ids may be 0 stubs)
+	-- v30: PvP death toast — DoubleCash GamePass + SpeedBoost DevProduct (live Ids)
 	DeathShopOffers = { "DoubleCash", "SpeedBoost" },
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)

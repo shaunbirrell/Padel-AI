@@ -65,32 +65,178 @@ end
 
 function ShopController.Init()
 
-	-- P1: on PvP death, server fires DeathShopOffer → open shop (prompt only if product Id ~= 0)
+	-- v30: PvP death → mobile-friendly toast (DoubleCash GP + SpeedBoost DP). Debounced; no auto-spam Marketplace.
 	do
+		local lastDeathToastAt = 0
+		local DEATH_TOAST_DEBOUNCE = 10
+		local deathToast: Frame? = nil
+
+		local function resolveOfferPrompt(key: string): (string?, string?, number?, string?)
+			-- Prefer live GamePass, then live DevProduct (DoubleCash is GP; SpeedBoost is DP)
+			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+			if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+				return "GamePass", key, gp.Id, gp.DisplayName or key
+			end
+			local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
+			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 and dp.HideFromShop ~= true then
+				return "DevProduct", key, dp.Id, dp.DisplayName or key
+			end
+			-- SpeedBoost / other: allow DevProduct even if HideFromShop when explicitly offered
+			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 then
+				return "DevProduct", key, dp.Id, dp.DisplayName or key
+			end
+			return nil, nil, nil, nil
+		end
+
+		local function destroyDeathToast()
+			if deathToast then
+				deathToast:Destroy()
+				deathToast = nil
+			end
+		end
+
+		local function showDeathOfferToast(offerKeys: { string })
+			local now = os.clock()
+			if now - lastDeathToastAt < DEATH_TOAST_DEBOUNCE then
+				return
+			end
+			lastDeathToastAt = now
+			destroyDeathToast()
+
+			local live: { { Kind: string, Key: string, Id: number, Name: string } } = {}
+			for _, key in ipairs(offerKeys) do
+				local kind, k, id, name = resolveOfferPrompt(key)
+				if kind and k and id and name then
+					table.insert(live, { Kind = kind, Key = k, Id = id, Name = name })
+				end
+			end
+			if #live == 0 then
+				return
+			end
+
+			local host = screenGui
+			if not host then
+				local pg = player:FindFirstChild("PlayerGui")
+				local existing = pg and pg:FindFirstChild("WarEmpireShop")
+				if existing and existing:IsA("ScreenGui") then
+					host = existing
+					screenGui = existing
+				else
+					return
+				end
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "DeathShopToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 132) else UDim2.fromOffset(360, 120)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Constants.Colors.Gold
+			stroke.Thickness = 1.5
+			stroke.Parent = toast
+			toast.Parent = host
+			deathToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -56, 0, 22)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 16 else 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Constants.Colors.Gold
+			title.Text = "Boost after death?"
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local sub = Instance.new("TextLabel")
+			sub.BackgroundTransparency = 1
+			sub.Position = UDim2.fromOffset(12, 30)
+			sub.Size = UDim2.new(1, -24, 0, 18)
+			sub.Font = Enum.Font.Gotham
+			sub.TextSize = 11
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextColor3 = Constants.Colors.Muted
+			sub.Text = "Tap a Robux offer — grants via ProcessReceipt / GamePass only"
+			sub.ZIndex = 81
+			sub.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(36, 36)
+			dismiss.BackgroundColor3 = Constants.Colors.Background
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.Text = "X"
+			dismiss.TextColor3 = Constants.Colors.Text
+			dismiss.BorderSizePixel = 0
+			dismiss.ZIndex = 82
+			corner(dismiss, 6)
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyDeathToast)
+
+			local rowY = 56
+			local btnH = if isTouch then 48 else 40
+			local gap = 8
+			local btnW = if isTouch then math.floor((toast.AbsoluteSize.X > 0 and toast.AbsoluteSize.X or 340) / #live) - gap - 8 else math.floor(336 / #live) - gap
+			-- Use scale-friendly equal split
+			for i, offer in ipairs(live) do
+				local btn = Instance.new("TextButton")
+				btn.Name = "DeathOffer_" .. offer.Key
+				btn.Position = UDim2.new((i - 1) / #live, 8, 0, rowY)
+				btn.Size = UDim2.new(1 / #live, -12, 0, btnH)
+				btn.BackgroundColor3 = Constants.Colors.Gunmetal
+				btn.Font = Enum.Font.GothamBold
+				btn.TextSize = if isTouch then 13 else 12
+				btn.TextColor3 = Constants.Colors.Gold
+				btn.Text = offer.Name
+				btn.TextWrapped = true
+				btn.BorderSizePixel = 0
+				btn.ZIndex = 82
+				corner(btn, 8)
+				local bs = Instance.new("UIStroke")
+				bs.Color = Constants.Colors.Gold
+				bs.Thickness = 1.25
+				bs.Parent = btn
+				btn.Parent = toast
+				UIUtil.EnsureMinTouch(btn, if isTouch then 48 else 44)
+				local kind, key = offer.Kind, offer.Key
+				btn.Activated:Connect(function()
+					destroyDeathToast()
+					if kind == "GamePass" then
+						promptGamePass(key)
+					else
+						promptDevProduct(key)
+					end
+				end)
+			end
+
+			task.delay(12, function()
+				if deathToast == toast then
+					destroyDeathToast()
+				end
+			end)
+		end
+
 		local remote = Remotes.GetEvent(Constants.RemoteNames.DeathShopOffer)
 		if remote then
 			remote.OnClientEvent:Connect(function(payload: any)
-				ShopController.Open()
 				local offers = if typeof(payload) == "table" then (payload :: any).Offers else nil
 				if typeof(offers) ~= "table" then
 					offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
 				end
-				for _, key in ipairs(offers :: { string }) do
-					local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
-					if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
-						pcall(function()
-							MarketplaceService:PromptGamePassPurchase(player, gp.Id)
-						end)
-						break
+				-- Wait for screenGui (Init continues below); defer one frame if needed
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.15)
 					end
-					local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
-					if def and typeof(def.Id) == "number" and def.Id ~= 0 then
-						pcall(function()
-							MarketplaceService:PromptProductPurchase(player, def.Id)
-						end)
-						break
-					end
-				end
+					showDeathOfferToast(offers :: { string })
+				end)
 			end)
 		end
 	end
@@ -245,8 +391,12 @@ function ShopController.Init()
 		if def.HideFromShop == true then
 			return
 		end
+		-- Id=0 stubs (AutoCollect/DoubleCash/VIPBoost/GoldenPumpjack) stay out of Shop — GamePasses / pads cover them
+		if (tonumber(def.Id) or 0) == 0 then
+			return
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
-		local stub = (tonumber(def.Id) or 0) == 0
+		local stub = false -- kept for "coming soon" path if ever re-enabled
 		local sub = def.Description or ""
 		if def.GrantsBattlePassPremium then
 			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
