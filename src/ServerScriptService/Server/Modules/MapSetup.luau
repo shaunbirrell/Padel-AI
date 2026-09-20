@@ -168,7 +168,7 @@ local function kitPart(parentPlinth, role, size, localOffset, color, material, s
 		Color = color,
 		Material = material or Enum.Material.Metal,
 		CanCollide = false,
-		Transparency = 0.32, -- visual kits v2: less washout
+		Transparency = 1, -- hidden until BaseService.applyKitVisuals (L0 faint / L1+ solid)
 		Parent = parentPlinth,
 	})
 	if shape then

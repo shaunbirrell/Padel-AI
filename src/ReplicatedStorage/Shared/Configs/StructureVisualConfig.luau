@@ -16,8 +16,8 @@ export type StructurePalette = {
 }
 
 local StructureVisualConfig = {
-	-- Level 0 = ghost/placeholder; ≥1 solid + taller body
-	GhostTransparency = 0.32,
+	-- Level 0 = faint placeholder (BaseService may raise further); ≥1 solid built kit
+	GhostTransparency = 0.72,
 	SolidTransparency = 0,
 	-- When true and palette.MeshAssetId ~= 0, BaseService may swap kit for MeshPart (art pass).
 	PreferMeshWhenAssetIdSet = true,

@@ -1661,8 +1661,8 @@ export type StructurePalette = {
 }
 
 local StructureVisualConfig = {
-	-- Level 0 = ghost/placeholder; ≥1 solid + taller body
-	GhostTransparency = 0.32,
+	-- Level 0 = faint placeholder (BaseService may raise further); ≥1 solid built kit
+	GhostTransparency = 0.72,
 	SolidTransparency = 0,
 	-- When true and palette.MeshAssetId ~= 0, BaseService may swap kit for MeshPart (art pass).
 	PreferMeshWhenAssetIdSet = true,
@@ -5868,7 +5868,7 @@ local function kitPart(parentPlinth, role, size, localOffset, color, material, s
 		Color = color,
 		Material = material or Enum.Material.Metal,
 		CanCollide = false,
-		Transparency = 0.32, -- visual kits v2: less washout
+		Transparency = 1, -- hidden until BaseService.applyKitVisuals (L0 faint / L1+ solid)
 		Parent = parentPlinth,
 	})
 	if shape then
@@ -8375,6 +8375,436 @@ return SessionLock
         </Item>
         <Item class="ModuleScript" referent="54">
           <Properties>
+            <string name="Name">StructureKitBuilder</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Part-kit builders for base structures (no MeshIds required).
+	Used by BaseService to ENSURE visible kits exist on purchase / join rehydrate,
+	even if MapSetup plinths are bare or kits were stripped.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
+local Constants = require(Shared.Constants)
+
+local StructureKitBuilder = {}
+
+local PERIMETER_FOLDER = "WE_PerimeterWalls"
+local CORNER_FOLDER = "WE_CornerTowers"
+
+local function makePart(props: { [string]: any }): BasePart
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Name = props.Name or "Part"
+	if props.Size then
+		p.Size = props.Size
+	end
+	if props.CFrame then
+		p.CFrame = props.CFrame
+	elseif props.Position then
+		p.Position = props.Position
+	end
+	if props.Color then
+		p.Color = props.Color
+	end
+	if props.Material then
+		p.Material = props.Material
+	end
+	if props.Transparency ~= nil then
+		p.Transparency = props.Transparency
+	end
+	if props.CanCollide ~= nil then
+		p.CanCollide = props.CanCollide
+	else
+		p.CanCollide = false
+	end
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	if props.Shape then
+		p.Shape = props.Shape
+	end
+	p.Parent = props.Parent
+	return p
+end
+
+local function kitPart(plinth: BasePart, role: string, size: Vector3, localOffset: Vector3, color: Color3, material: Enum.Material?, shape: Enum.PartType?)
+	local p = makePart({
+		Name = role,
+		Size = size,
+		CFrame = plinth.CFrame * CFrame.new(localOffset),
+		Color = color,
+		Material = material or Enum.Material.Metal,
+		Transparency = 1, -- hidden until BaseService.applyKitVisuals (L0 ghost / L1+ solid)
+		CanCollide = false,
+		Parent = plinth,
+		Shape = shape,
+	})
+	p:SetAttribute("WE_KitRole", role)
+	p:SetAttribute("WE_BaseSize", size)
+	p:SetAttribute("WE_LocalOffset", localOffset)
+	p:SetAttribute("WE_Decor", true)
+	return p
+end
+
+export type KitPalette = {
+	Plinth: Color3,
+	Body: Color3,
+	Accent: Color3,
+	Roof: Color3,
+	Kit: string,
+}
+
+local function paletteFor(structureId: string): KitPalette
+	local p = StructureVisualConfig.Palettes[structureId]
+	if p then
+		return p
+	end
+	return {
+		Plinth = Color3.fromRGB(50, 55, 48),
+		Body = Color3.fromRGB(70, 80, 65),
+		Accent = Color3.fromRGB(200, 180, 80),
+		Roof = Color3.fromRGB(45, 50, 42),
+		Kit = "special",
+	}
+end
+
+local function clearKitChildren(plinth: BasePart)
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") ~= nil then
+			child:Destroy()
+		end
+	end
+end
+
+local function countKitRoles(plinth: BasePart): number
+	local n = 0
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") ~= nil then
+			n += 1
+		end
+	end
+	return n
+end
+
+--[[ Build Part kit silhouette on plinth. Replaces any existing WE_KitRole children. ]]
+function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: string)
+	local pal = paletteFor(structureId)
+	local kit = pal.Kit
+	clearKitChildren(plinth)
+
+	if kit == "hq" then
+		kitPart(plinth, "Body", Vector3.new(5.5, 3.4, 5.5), Vector3.new(0, 2.3, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(6.4, 0.55, 6.4), Vector3.new(0, 4.3, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.8, 0.35), Vector3.new(1.8, 6.8, 1.8), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.6, 0.22, 6.6), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Door", Vector3.new(1.6, 2.2, 0.25), Vector3.new(0, 1.7, -2.85), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(1.4, 1.0, 0.2), Vector3.new(2.0, 2.6, -2.8), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
+	elseif kit == "barracks" then
+		kitPart(plinth, "Body", Vector3.new(6.6, 2.6, 4.4), Vector3.new(0, 1.9, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.1, 0.5, 5.0), Vector3.new(0, 3.35, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.9, 0.18, 4.7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), pal.Accent, Enum.Material.Neon, nil)
+	elseif kit == "depot" then
+		kitPart(plinth, "Body", Vector3.new(6.9, 2.2, 5.6), Vector3.new(0, 1.7, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "lab" then
+		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(5.7, 0.2, 5.7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Window", Vector3.new(1.5, 1.2, 0.2), Vector3.new(0, 2.6, -2.6), Color3.fromRGB(80, 160, 200), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.9, 0.9, 0.9), Vector3.new(2.0, 3.5, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "tower" then
+		kitPart(plinth, "Body", Vector3.new(2.9, 5.8, 2.9), Vector3.new(0, 3.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(3.8, 0.5, 3.8), Vector3.new(0, 6.6, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.5, 0.3), Vector3.new(0, 8.5, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(3.3, 0.22, 3.3), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Window", Vector3.new(1.0, 0.8, 0.2), Vector3.new(0, 4.5, -1.5), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.7, 0.7, 0.7), Vector3.new(0, 7.0, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "dock" then
+		kitPart(plinth, "Body", Vector3.new(7.5, 0.55, 7.5), Vector3.new(0, 0.9, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Pier", Vector3.new(8.8, 0.4, 2.4), Vector3.new(0, 1.15, 3.3), pal.Roof, Enum.Material.Wood, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.2, 0.14, 0.4), Vector3.new(0, 1.25, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 2.8, 0.4), Vector3.new(3.3, 2.1, 2.6), pal.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Door", Vector3.new(1.8, 0.3, 1.2), Vector3.new(0, 1.35, 4.2), Color3.fromRGB(40, 55, 70), Enum.Material.Metal, nil)
+	elseif kit == "pad" then
+		kitPart(plinth, "Body", Vector3.new(7.3, 0.45, 7.3), Vector3.new(0, 0.92, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.5, 0.14, 6.6), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.8, 1.4, 2.8), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "wall" then
+		-- Pad-local wall segment (perimeter walls are separate)
+		kitPart(plinth, "Body", Vector3.new(7.5, 3.2, 1.8), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.7, 0.28, 2.0), Vector3.new(0, 3.9, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.5, 0.45, 2.2), Vector3.new(0, 4.15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.9, 1.4, 0.9), Vector3.new(-3.2, 3.4, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.9, 1.4, 0.9), Vector3.new(3.2, 3.4, 0), pal.Accent, Enum.Material.Neon, nil)
+	elseif kit == "power" then
+		kitPart(plinth, "Body", Vector3.new(4.6, 3.6, 4.6), Vector3.new(0, 2.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Roof", Vector3.new(5.1, 0.4, 5.1), Vector3.new(0, 4.4, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.6, 2.5, 0.6), Vector3.new(2.0, 2.8, 2.0), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
+	elseif kit == "warehouse" then
+		kitPart(plinth, "Body", Vector3.new(7.1, 2.8, 5.6), Vector3.new(0, 2.0, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(7.5, 0.5, 6.1), Vector3.new(0, 3.55, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.3, 0.2, 5.9), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(2.6, 2.2, 0.3), Vector3.new(0, 1.7, -2.95), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil)
+	else
+		kitPart(plinth, "Body", Vector3.new(5.3, 3.5, 5.3), Vector3.new(0, 2.4, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(4.2, 1.2, 4.2), Vector3.new(0, 4.6, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.2, 0.35), Vector3.new(0, 7.2, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(5.9, 0.22, 5.9), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.0, 3.5, -2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+	end
+end
+
+--[[ Ensure plinth has kit children; rebuild if missing/incomplete. Returns role count. ]]
+function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): number
+	local n = countKitRoles(plinth)
+	-- Expect at least Body + one more for all kits
+	if n < 2 then
+		StructureKitBuilder.BuildKitOnPlinth(plinth, structureId)
+		n = countKitRoles(plinth)
+	end
+	return n
+end
+
+local function findPlotPad(plotId: number): BasePart?
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+			return inst
+		end
+	end
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local bases = setup and setup:FindFirstChild("Bases")
+	local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+	if plotFolder then
+		local pad = plotFolder:FindFirstChild("PlotPad")
+		if pad and pad:IsA("BasePart") then
+			return pad
+		end
+	end
+	return nil
+end
+
+function StructureKitBuilder.FindPlotFolder(plotId: number): Folder?
+	local pad = findPlotPad(plotId)
+	if pad and pad.Parent and pad.Parent:IsA("Folder") then
+		return pad.Parent
+	end
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local bases = setup and setup:FindFirstChild("Bases")
+	local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+	if plotFolder and plotFolder:IsA("Folder") then
+		return plotFolder
+	end
+	return nil
+end
+
+--[[ Perimeter fortification around PlotPad. level 0 clears; 1+ builds wall ring with +Z gate. ]]
+function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
+	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	local pad = findPlotPad(plotId)
+	if not plotFolder or not pad then
+		return
+	end
+
+	local existing = plotFolder:FindFirstChild(PERIMETER_FOLDER)
+	if level <= 0 then
+		if existing then
+			existing:Destroy()
+		end
+		return
+	end
+
+	local folder: Folder
+	if existing and existing:IsA("Folder") then
+		existing:ClearAllChildren()
+		folder = existing
+	else
+		if existing then
+			existing:Destroy()
+		end
+		folder = Instance.new("Folder")
+		folder.Name = PERIMETER_FOLDER
+		folder.Parent = plotFolder
+	end
+
+	local pal = paletteFor("DefensiveWalls")
+	local lv = math.clamp(level, 1, 5)
+	local half = math.max(pad.Size.X, pad.Size.Z) * 0.5 - 1.5 -- just inside pad edge
+	local thickness = 2.2 + lv * 0.45
+	local height = 6.5 + lv * 2.2
+	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
+	local gateHalf = 14 -- walk gap on +Z (spawn) side
+	local cx, cz = pad.Position.X, pad.Position.Z
+
+	local function wall(name: string, size: Vector3, pos: Vector3)
+		local w = makePart({
+			Name = name,
+			Size = size,
+			Position = pos,
+			Color = pal.Body,
+			Material = Enum.Material.Concrete,
+			Transparency = 0,
+			CanCollide = true,
+			Parent = folder,
+		})
+		w.CanTouch = false
+		w.CanQuery = true
+		w.CastShadow = true
+		w:SetAttribute("WE_Perimeter", true)
+		w:SetAttribute("PlotId", plotId)
+		w:SetAttribute("WE_WallLevel", lv)
+		-- Cap / battlement strip
+		local capH = 0.45 + lv * 0.08
+		local cap = makePart({
+			Name = name .. "_Cap",
+			Size = Vector3.new(size.X + 0.4, capH, size.Z + 0.4),
+			Position = Vector3.new(pos.X, pos.Y + height * 0.5 + capH * 0.5, pos.Z),
+			Color = pal.Accent,
+			Material = Enum.Material.Neon,
+			Transparency = 0.05,
+			CanCollide = false,
+			Parent = folder,
+		})
+		cap:SetAttribute("WE_Perimeter", true)
+		return w
+	end
+
+	-- North (-Z), East (+X), West (-X): full spans
+	wall("WallN", Vector3.new(half * 2, height, thickness), Vector3.new(cx, y, cz - half))
+	wall("WallE", Vector3.new(thickness, height, half * 2), Vector3.new(cx + half, y, cz))
+	wall("WallW", Vector3.new(thickness, height, half * 2), Vector3.new(cx - half, y, cz))
+	-- South (+Z): split around gate
+	local span = half - gateHalf
+	if span > 4 then
+		local mid = (half + gateHalf) * 0.5
+		wall("WallS_L", Vector3.new(span * 2 - 2, height, thickness), Vector3.new(cx - mid, y, cz + half))
+		wall("WallS_R", Vector3.new(span * 2 - 2, height, thickness), Vector3.new(cx + mid, y, cz + half))
+	end
+	-- Gate posts
+	local postW = 2.4 + lv * 0.2
+	local postH = height + 2
+	for _, sx in ipairs({ -gateHalf, gateHalf }) do
+		local post = makePart({
+			Name = "GatePost",
+			Size = Vector3.new(postW, postH, postW),
+			Position = Vector3.new(cx + sx, pad.Position.Y + pad.Size.Y * 0.5 + postH * 0.5, cz + half),
+			Color = pal.Roof,
+			Material = Enum.Material.Metal,
+			Transparency = 0,
+			CanCollide = true,
+			Parent = folder,
+		})
+		post:SetAttribute("WE_Perimeter", true)
+		post.CastShadow = true
+	end
+end
+
+--[[ Corner watchtowers when Watchtowers upgraded. ]]
+function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
+	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	local pad = findPlotPad(plotId)
+	if not plotFolder or not pad then
+		return
+	end
+
+	local existing = plotFolder:FindFirstChild(CORNER_FOLDER)
+	if level <= 0 then
+		if existing then
+			existing:Destroy()
+		end
+		return
+	end
+
+	local folder: Folder
+	if existing and existing:IsA("Folder") then
+		existing:ClearAllChildren()
+		folder = existing
+	else
+		if existing then
+			existing:Destroy()
+		end
+		folder = Instance.new("Folder")
+		folder.Name = CORNER_FOLDER
+		folder.Parent = plotFolder
+	end
+
+	local pal = paletteFor("Watchtowers")
+	local lv = math.clamp(level, 1, 5)
+	local half = math.max(pad.Size.X, pad.Size.Z) * 0.5 - 3
+	local towerW = 4.5 + lv * 0.3
+	local towerH = 10 + lv * 2.5
+	local y = pad.Position.Y + pad.Size.Y * 0.5 + towerH * 0.5
+	local cx, cz = pad.Position.X, pad.Position.Z
+	local corners = {
+		Vector3.new(cx - half, y, cz - half),
+		Vector3.new(cx + half, y, cz - half),
+		Vector3.new(cx - half, y, cz + half),
+		Vector3.new(cx + half, y, cz + half),
+	}
+	for i, pos in ipairs(corners) do
+		local body = makePart({
+			Name = "CornerTower" .. i,
+			Size = Vector3.new(towerW, towerH, towerW),
+			Position = pos,
+			Color = pal.Body,
+			Material = Enum.Material.Concrete,
+			Transparency = 0,
+			CanCollide = true,
+			Parent = folder,
+		})
+		body.CastShadow = true
+		body:SetAttribute("WE_CornerTower", true)
+		makePart({
+			Name = "TowerCap" .. i,
+			Size = Vector3.new(towerW + 1.2, 0.6, towerW + 1.2),
+			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 + 0.35, pos.Z),
+			Color = pal.Roof,
+			Material = Enum.Material.Metal,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		makePart({
+			Name = "TowerBeacon" .. i,
+			Size = Vector3.new(0.6, 2.2 + lv * 0.4, 0.6),
+			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 + 2, pos.Z),
+			Color = pal.Accent,
+			Material = Enum.Material.Neon,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+	end
+end
+
+function StructureKitBuilder.ClearPlotExtras(plotId: number)
+	StructureKitBuilder.SyncPerimeterWalls(plotId, 0)
+	StructureKitBuilder.SyncCornerTowers(plotId, 0)
+end
+
+return StructureKitBuilder
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="55">
+          <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -8643,11 +9073,11 @@ return StudioBuySmoke
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="55">
+      <Item class="Folder" referent="56">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8858,7 +9288,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8907,7 +9337,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -8957,7 +9387,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9302,7 +9732,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -9313,6 +9743,7 @@ return BankRaidService
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -9324,6 +9755,7 @@ local DevConfig = require(Shared.Configs.DevConfig)
 local Types = require(Shared.Types)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
 
 local BaseService = {}
 
@@ -9403,6 +9835,9 @@ function BaseService.ReleasePlot(player: Player)
 	local userId = player.UserId
 	for plotId, owner in pairs(plotOwners) do
 		if owner == userId then
+			pcall(function()
+				StructureKitBuilder.ClearPlotExtras(plotId)
+			end)
 			plotOwners[plotId] = nil
 		end
 	end
@@ -9618,12 +10053,49 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	}
 end
 
+local function findUpgradeSlots(plotId: number, structureId: string): { BasePart }
+	local found: { BasePart } = {}
+	local seen: { [BasePart]: boolean } = {}
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+		if inst:IsA("BasePart") then
+			local p = inst:GetAttribute("PlotId")
+			local s = inst:GetAttribute("StructureId")
+			if p == plotId and s == structureId then
+				seen[inst] = true
+				table.insert(found, inst)
+			end
+		end
+	end
+	-- Fallback: attribute scan under Bases (tags can lag / stale place files)
+	if #found == 0 then
+		local setup = Workspace:FindFirstChild("WarEmpireSetup")
+		local bases = setup and setup:FindFirstChild("Bases")
+		local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+		if plotFolder then
+			for _, desc in ipairs(plotFolder:GetDescendants()) do
+				if desc:IsA("BasePart") and not seen[desc] then
+					if desc:GetAttribute("StructureId") == structureId and desc:GetAttribute("PlotId") == plotId then
+						CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+						table.insert(found, desc)
+					end
+				end
+			end
+		end
+	end
+	return found
+end
+
 local function applyKitVisuals(plinth: BasePart, structureId: string, level: number)
 	if not plinth or not plinth.Parent then
 		return
 	end
+	-- Ensure Part-kit silhouette exists (spawn if bare plinth / stripped children)
+	local okEnsure, ensureCountOrErr = pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
+	if not okEnsure then
+		warn("[BaseService] EnsureKit failed", structureId, ensureCountOrErr)
+	end
+
 	local palette = StructureVisualConfig.Palettes[structureId]
-	-- Missing palette / kit children is safe — plinth still scales
 	local baseSize = plinth:GetAttribute("BaseSize")
 	if typeof(baseSize) ~= "Vector3" then
 		baseSize = Vector3.new(8, 1.2, 8)
@@ -9632,18 +10104,19 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	local bs = baseSize :: Vector3
 	local lv = math.clamp(level, 0, 5)
 	local t = lv / 5
-	local ghost = StructureVisualConfig.GhostTransparency
+	-- L0 = nearly invisible placeholder; L1+ solid "built" structure (spawn-on-buy feel)
+	local ghost = math.max(StructureVisualConfig.GhostTransparency, 0.72)
 	local solid = StructureVisualConfig.SolidTransparency
 	local transparency = if lv == 0 then ghost else solid
 
-	-- Plinth grows slightly; kit body/roof scale with level
 	plinth.Size = Vector3.new(bs.X, bs.Y * (1 + t * 0.35), bs.Z)
 	if palette then
 		plinth.Color = palette.Plinth
 	else
 		plinth.Color = Color3.fromRGB(40 + math.floor(t * 40), 60 + math.floor(t * 80), 50)
 	end
-	plinth.Transparency = transparency
+	-- Plinth stays walkable; keep slightly visible at L0 so pads remain findable
+	plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
 	plinth.Material = Enum.Material.Concrete
 
 	local bodyScale = 1 + lv * 0.55
@@ -9665,6 +10138,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				end
 				child.Transparency = transparency
 				child.Material = Enum.Material.Metal
+				child.CastShadow = lv > 0
 			elseif role == "Accent" then
 				local bx = child:GetAttribute("WE_BaseSize")
 				if typeof(bx) ~= "Vector3" then
@@ -9676,8 +10150,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				if palette then
 					child.Color = palette.Accent
 				end
-				-- Visual kits v2: less washout on ghost accents
-				child.Transparency = if lv == 0 then 0.35 else 0.02
+				child.Transparency = if lv == 0 then 0.85 else 0.02
 				child.Material = Enum.Material.Neon
 			elseif role == "Roof" or role == "Antenna" then
 				local bx = child:GetAttribute("WE_BaseSize")
@@ -9688,7 +10161,6 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				local b = bx :: Vector3
 				local yBoost = if role == "Antenna" then 1 + lv * 0.8 else 1 + lv * 0.4
 				child.Size = Vector3.new(b.X, b.Y * yBoost, b.Z)
-				-- Keep relative top position via attribute offset
 				local off = child:GetAttribute("WE_LocalOffset")
 				if typeof(off) == "Vector3" then
 					local yExtra = if role == "Antenna" then lv * 0.9 else lv * 0.35
@@ -9700,7 +10172,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				child.Transparency = transparency
 				child.Material = if role == "Antenna" then Enum.Material.Neon else Enum.Material.Metal
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
-				child.Transparency = if lv == 0 then 0.4 else math.max(0, 0.2 - t * 0.2)
+				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
 					child.Color = if role == "Window" then Color3.fromRGB(80, 120, 150) else palette.Accent
 				end
@@ -9712,25 +10184,44 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 			end
 		end
 	end
+
+	-- Optional catalog overlay once built (never blocks Part kits)
+	if lv >= 1 then
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService)
+			vas.TryAttachBuildingVisual(plinth, structureId)
+		end)
+	end
 end
 
 function BaseService.UpdateVisuals(player: Player, structureId: string, level: number)
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
+		warn("[BaseService] UpdateVisuals skipped — no plot", player.Name, structureId)
 		return
 	end
 	local plotId = profile.BasePlotId
+	local slots = findUpgradeSlots(plotId, structureId)
+	if #slots == 0 then
+		warn("[BaseService] UpdateVisuals: no slot for", structureId, "plot", plotId)
+	end
+	for _, inst in ipairs(slots) do
+		local okApply, errApply = pcall(applyKitVisuals, inst, structureId, level)
+		if not okApply then
+			warn("[BaseService] applyKitVisuals failed", structureId, errApply)
+		end
+	end
 
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
-		if inst:IsA("BasePart") then
-			local p = inst:GetAttribute("PlotId")
-			local s = inst:GetAttribute("StructureId")
-			if p == plotId and s == structureId then
-				local okApply, errApply = pcall(applyKitVisuals, inst, structureId, level)
-				if not okApply then
-					warn("[BaseService] applyKitVisuals failed", structureId, errApply)
-				end
-			end
+	-- Plot-scale fortifications (DefensiveWalls / Watchtowers)
+	if structureId == "DefensiveWalls" then
+		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, level)
+		if not okW then
+			warn("[BaseService] SyncPerimeterWalls failed", errW)
+		end
+	elseif structureId == "Watchtowers" then
+		local okT, errT = pcall(StructureKitBuilder.SyncCornerTowers, plotId, level)
+		if not okT then
+			warn("[BaseService] SyncCornerTowers failed", errT)
 		end
 	end
 end
@@ -9740,10 +10231,17 @@ function BaseService.RefreshAllVisuals(player: Player)
 	if not profile then
 		return
 	end
-	-- Apply to every configured structure (missing kit slots safe; L0 = ghost)
+	-- Apply every structure from profile (L0 = faint placeholder; L1+ spawn/solid kit)
 	for structureId in pairs(BaseConfig.Structures) do
 		local level = profile.BaseUpgrades[structureId] or 0
 		BaseService.UpdateVisuals(player, structureId, level)
+	end
+	-- DefensiveWalls / Watchtowers extras also driven if present
+	if profile.BasePlotId then
+		local wallsLv = profile.BaseUpgrades.DefensiveWalls or 0
+		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
+		local towerLv = profile.BaseUpgrades.Watchtowers or 0
+		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
 	end
 end
 
@@ -9890,8 +10388,19 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
+		-- Rehydrate structure kits + perimeter from profile (retry: map tags may lag)
 		task.defer(function()
 			BaseService.RefreshAllVisuals(player)
+		end)
+		task.delay(1.0, function()
+			if player.Parent then
+				BaseService.RefreshAllVisuals(player)
+			end
+		end)
+		task.delay(3.0, function()
+			if player.Parent then
+				BaseService.RefreshAllVisuals(player)
+			end
 		end)
 		if AnalyticsService then
 			AnalyticsService.Log("PLAYER_JOIN", player.UserId, { plot = _profile.BasePlotId })
@@ -9935,7 +10444,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10248,7 +10757,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10353,7 +10862,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10854,7 +11363,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11286,7 +11795,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11439,7 +11948,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12491,7 +13000,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="67">
+          <Item class="ModuleScript" referent="68">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -12548,7 +13057,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="68">
+          <Item class="ModuleScript" referent="69">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -12711,7 +13220,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="69">
+          <Item class="ModuleScript" referent="70">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -12765,7 +13274,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13056,7 +13565,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13267,7 +13776,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13360,7 +13869,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13856,7 +14365,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14236,7 +14745,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14538,7 +15047,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14648,7 +15157,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14718,7 +15227,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14970,7 +15479,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15022,7 +15531,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15286,7 +15795,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15564,7 +16073,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15727,7 +16236,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16033,7 +16542,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16755,7 +17264,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="85">
+          <Item class="ModuleScript" referent="86">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -16796,7 +17305,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="87">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -16873,7 +17382,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="88">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -16929,7 +17438,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17161,7 +17670,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17629,7 +18138,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18749,7 +19258,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19116,7 +19625,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19251,19 +19760,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="93">
+  <Item class="StarterPlayer" referent="94">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="94">
+    <Item class="StarterPlayerScripts" referent="95">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="95">
+      <Item class="Folder" referent="96">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="96">
+        <Item class="LocalScript" referent="97">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -19293,11 +19802,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="97">
+        <Item class="Folder" referent="98">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19661,7 +20170,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -19872,7 +20381,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20274,7 +20783,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -20843,7 +21352,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21066,7 +21575,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21492,7 +22001,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21811,7 +22320,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -21961,7 +22470,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -22512,7 +23021,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="107">
+            <Item class="ModuleScript" referent="108">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -22673,7 +23182,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="108">
+            <Item class="ModuleScript" referent="109">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -22713,7 +23222,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23045,7 +23554,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23342,7 +23851,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23796,7 +24305,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24299,7 +24808,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24432,7 +24941,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -25135,7 +25644,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26139,11 +26648,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="116">
+        <Item class="Folder" referent="117">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26286,7 +26795,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -26354,7 +26863,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -26423,7 +26932,7 @@ return StudioSmokeClient
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="120">
+  <Item class="Workspace" referent="121">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

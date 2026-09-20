@@ -6,6 +6,7 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -17,6 +18,7 @@ local DevConfig = require(Shared.Configs.DevConfig)
 local Types = require(Shared.Types)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
 
 local BaseService = {}
 
@@ -96,6 +98,9 @@ function BaseService.ReleasePlot(player: Player)
 	local userId = player.UserId
 	for plotId, owner in pairs(plotOwners) do
 		if owner == userId then
+			pcall(function()
+				StructureKitBuilder.ClearPlotExtras(plotId)
+			end)
 			plotOwners[plotId] = nil
 		end
 	end
@@ -311,12 +316,49 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	}
 end
 
+local function findUpgradeSlots(plotId: number, structureId: string): { BasePart }
+	local found: { BasePart } = {}
+	local seen: { [BasePart]: boolean } = {}
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+		if inst:IsA("BasePart") then
+			local p = inst:GetAttribute("PlotId")
+			local s = inst:GetAttribute("StructureId")
+			if p == plotId and s == structureId then
+				seen[inst] = true
+				table.insert(found, inst)
+			end
+		end
+	end
+	-- Fallback: attribute scan under Bases (tags can lag / stale place files)
+	if #found == 0 then
+		local setup = Workspace:FindFirstChild("WarEmpireSetup")
+		local bases = setup and setup:FindFirstChild("Bases")
+		local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+		if plotFolder then
+			for _, desc in ipairs(plotFolder:GetDescendants()) do
+				if desc:IsA("BasePart") and not seen[desc] then
+					if desc:GetAttribute("StructureId") == structureId and desc:GetAttribute("PlotId") == plotId then
+						CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+						table.insert(found, desc)
+					end
+				end
+			end
+		end
+	end
+	return found
+end
+
 local function applyKitVisuals(plinth: BasePart, structureId: string, level: number)
 	if not plinth or not plinth.Parent then
 		return
 	end
+	-- Ensure Part-kit silhouette exists (spawn if bare plinth / stripped children)
+	local okEnsure, ensureCountOrErr = pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
+	if not okEnsure then
+		warn("[BaseService] EnsureKit failed", structureId, ensureCountOrErr)
+	end
+
 	local palette = StructureVisualConfig.Palettes[structureId]
-	-- Missing palette / kit children is safe — plinth still scales
 	local baseSize = plinth:GetAttribute("BaseSize")
 	if typeof(baseSize) ~= "Vector3" then
 		baseSize = Vector3.new(8, 1.2, 8)
@@ -325,18 +367,19 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	local bs = baseSize :: Vector3
 	local lv = math.clamp(level, 0, 5)
 	local t = lv / 5
-	local ghost = StructureVisualConfig.GhostTransparency
+	-- L0 = nearly invisible placeholder; L1+ solid "built" structure (spawn-on-buy feel)
+	local ghost = math.max(StructureVisualConfig.GhostTransparency, 0.72)
 	local solid = StructureVisualConfig.SolidTransparency
 	local transparency = if lv == 0 then ghost else solid
 
-	-- Plinth grows slightly; kit body/roof scale with level
 	plinth.Size = Vector3.new(bs.X, bs.Y * (1 + t * 0.35), bs.Z)
 	if palette then
 		plinth.Color = palette.Plinth
 	else
 		plinth.Color = Color3.fromRGB(40 + math.floor(t * 40), 60 + math.floor(t * 80), 50)
 	end
-	plinth.Transparency = transparency
+	-- Plinth stays walkable; keep slightly visible at L0 so pads remain findable
+	plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
 	plinth.Material = Enum.Material.Concrete
 
 	local bodyScale = 1 + lv * 0.55
@@ -358,6 +401,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				end
 				child.Transparency = transparency
 				child.Material = Enum.Material.Metal
+				child.CastShadow = lv > 0
 			elseif role == "Accent" then
 				local bx = child:GetAttribute("WE_BaseSize")
 				if typeof(bx) ~= "Vector3" then
@@ -369,8 +413,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				if palette then
 					child.Color = palette.Accent
 				end
-				-- Visual kits v2: less washout on ghost accents
-				child.Transparency = if lv == 0 then 0.35 else 0.02
+				child.Transparency = if lv == 0 then 0.85 else 0.02
 				child.Material = Enum.Material.Neon
 			elseif role == "Roof" or role == "Antenna" then
 				local bx = child:GetAttribute("WE_BaseSize")
@@ -381,7 +424,6 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				local b = bx :: Vector3
 				local yBoost = if role == "Antenna" then 1 + lv * 0.8 else 1 + lv * 0.4
 				child.Size = Vector3.new(b.X, b.Y * yBoost, b.Z)
-				-- Keep relative top position via attribute offset
 				local off = child:GetAttribute("WE_LocalOffset")
 				if typeof(off) == "Vector3" then
 					local yExtra = if role == "Antenna" then lv * 0.9 else lv * 0.35
@@ -393,7 +435,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				child.Transparency = transparency
 				child.Material = if role == "Antenna" then Enum.Material.Neon else Enum.Material.Metal
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
-				child.Transparency = if lv == 0 then 0.4 else math.max(0, 0.2 - t * 0.2)
+				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
 					child.Color = if role == "Window" then Color3.fromRGB(80, 120, 150) else palette.Accent
 				end
@@ -405,25 +447,44 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 			end
 		end
 	end
+
+	-- Optional catalog overlay once built (never blocks Part kits)
+	if lv >= 1 then
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService)
+			vas.TryAttachBuildingVisual(plinth, structureId)
+		end)
+	end
 end
 
 function BaseService.UpdateVisuals(player: Player, structureId: string, level: number)
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
+		warn("[BaseService] UpdateVisuals skipped — no plot", player.Name, structureId)
 		return
 	end
 	local plotId = profile.BasePlotId
+	local slots = findUpgradeSlots(plotId, structureId)
+	if #slots == 0 then
+		warn("[BaseService] UpdateVisuals: no slot for", structureId, "plot", plotId)
+	end
+	for _, inst in ipairs(slots) do
+		local okApply, errApply = pcall(applyKitVisuals, inst, structureId, level)
+		if not okApply then
+			warn("[BaseService] applyKitVisuals failed", structureId, errApply)
+		end
+	end
 
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
-		if inst:IsA("BasePart") then
-			local p = inst:GetAttribute("PlotId")
-			local s = inst:GetAttribute("StructureId")
-			if p == plotId and s == structureId then
-				local okApply, errApply = pcall(applyKitVisuals, inst, structureId, level)
-				if not okApply then
-					warn("[BaseService] applyKitVisuals failed", structureId, errApply)
-				end
-			end
+	-- Plot-scale fortifications (DefensiveWalls / Watchtowers)
+	if structureId == "DefensiveWalls" then
+		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, level)
+		if not okW then
+			warn("[BaseService] SyncPerimeterWalls failed", errW)
+		end
+	elseif structureId == "Watchtowers" then
+		local okT, errT = pcall(StructureKitBuilder.SyncCornerTowers, plotId, level)
+		if not okT then
+			warn("[BaseService] SyncCornerTowers failed", errT)
 		end
 	end
 end
@@ -433,10 +494,17 @@ function BaseService.RefreshAllVisuals(player: Player)
 	if not profile then
 		return
 	end
-	-- Apply to every configured structure (missing kit slots safe; L0 = ghost)
+	-- Apply every structure from profile (L0 = faint placeholder; L1+ spawn/solid kit)
 	for structureId in pairs(BaseConfig.Structures) do
 		local level = profile.BaseUpgrades[structureId] or 0
 		BaseService.UpdateVisuals(player, structureId, level)
+	end
+	-- DefensiveWalls / Watchtowers extras also driven if present
+	if profile.BasePlotId then
+		local wallsLv = profile.BaseUpgrades.DefensiveWalls or 0
+		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
+		local towerLv = profile.BaseUpgrades.Watchtowers or 0
+		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
 	end
 end
 
@@ -583,8 +651,19 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
+		-- Rehydrate structure kits + perimeter from profile (retry: map tags may lag)
 		task.defer(function()
 			BaseService.RefreshAllVisuals(player)
+		end)
+		task.delay(1.0, function()
+			if player.Parent then
+				BaseService.RefreshAllVisuals(player)
+			end
+		end)
+		task.delay(3.0, function()
+			if player.Parent then
+				BaseService.RefreshAllVisuals(player)
+			end
 		end)
 		if AnalyticsService then
 			AnalyticsService.Log("PLAYER_JOIN", player.UserId, { plot = _profile.BasePlotId })
