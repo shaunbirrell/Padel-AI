@@ -13,6 +13,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local ServerModules = script.Parent.Parent.Modules
+local RemoteSetup = require(ServerModules.RemoteSetup)
 
 local MoneyCollectorService = {}
 
@@ -188,16 +191,27 @@ local function findOwnerByPlot(plotId: number): Player?
 	return nil
 end
 
-local function raidOnCooldown(thiefId: number, victimId: number, cooldownSec: number): boolean
+local function raidCooldownRemaining(thiefId: number, victimId: number): number
 	local byVictim = atmRaidCooldownUntil[thiefId]
 	if not byVictim then
-		return false
+		return 0
 	end
 	local untilT = byVictim[victimId]
 	if not untilT then
-		return false
+		return 0
 	end
-	return os.clock() < untilT
+	return math.max(0, untilT - os.clock())
+end
+
+local function raidOnCooldown(thiefId: number, victimId: number, _cooldownSec: number): boolean
+	return raidCooldownRemaining(thiefId, victimId) > 0
+end
+
+local function pushAtmRaidState(player: Player, payload: { [string]: any })
+	local remote = RemoteSetup.Get(Constants.RemoteNames.AtmRaidStateUpdate)
+	if remote and remote:IsA("RemoteEvent") then
+		(remote :: RemoteEvent):FireClient(player, payload)
+	end
 end
 
 local function setRaidCooldown(thiefId: number, victimId: number, cooldownSec: number)
@@ -248,7 +262,17 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 		return false, 0
 	end
 	local cooldownSec = cfg.AtmRaidCooldownSeconds or 60
-	if raidOnCooldown(thief.UserId, victim.UserId, cooldownSec) then
+	local remain = raidCooldownRemaining(thief.UserId, victim.UserId)
+	if remain > 0 then
+		if NotificationService then
+			local cdToast = cfg.ToastCooldown or "ATM raid cooldown — %ds left"
+			NotificationService.Notify(thief, string.format(cdToast, math.ceil(remain)), "Warn", 2.5)
+		end
+		pushAtmRaidState(thief, {
+			CooldownRemaining = math.ceil(remain),
+			CooldownTotal = cooldownSec,
+			Success = false,
+		})
 		return false, 0
 	end
 	local victimPending = 0
@@ -276,11 +300,25 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 	end
 	setRaidCooldown(thief.UserId, victim.UserId, cooldownSec)
 	if NotificationService then
-		local thiefToast = cfg.ToastThief or "Stole $%d from %s"
-		local victimToast = cfg.ToastVictim or "ATM raided −$%d"
-		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 4)
-		NotificationService.Notify(victim, string.format(victimToast, transferred), "Warn", 4)
+		local thiefToast = cfg.ToastThief or "ATM RAID +$%d (10%%) from %s — 1m cooldown"
+		local victimToast = cfg.ToastVictim or "ATM RAIDED −$%d (10%% stolen)"
+		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 5)
+		NotificationService.Notify(victim, string.format(victimToast, transferred), "Warn", 5)
 	end
+	pushAtmRaidState(thief, {
+		CooldownRemaining = cooldownSec,
+		CooldownTotal = cooldownSec,
+		Success = true,
+		Stolen = transferred,
+		VictimName = victim.DisplayName,
+	})
+	pushAtmRaidState(victim, {
+		CooldownRemaining = 0,
+		CooldownTotal = cooldownSec,
+		Success = false,
+		Stolen = transferred,
+		Raided = true,
+	})
 	return true, transferred
 end
 
@@ -295,6 +333,49 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 		end
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PassiveIncome")
+		end
+		-- v33: one-shot soft AutoCollect GamePass offer after first manual collect
+		do
+			local profile = DataService.GetProfile(player)
+			local offerCfg = (MonetizationConfig :: any).AutoCollectOffer
+			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.AutoCollect
+			if (
+				profile
+				and offerCfg
+				and gp
+				and typeof(gp.Id) == "number"
+				and gp.Id ~= 0
+				and profile.AutoCollectOffered ~= true
+				and not hasAutoCollect(player)
+			) then
+				profile.AutoCollectOffered = true
+				DataService.MarkDirty(player)
+				task.delay(tonumber(offerCfg.DelaySeconds) or 1.2, function()
+					if not player.Parent then
+						return
+					end
+					if hasAutoCollect(player) then
+						return
+					end
+					local remote = RemoteSetup.Get(Constants.RemoteNames.AutoCollectOffer)
+					if remote and remote:IsA("RemoteEvent") then
+						(remote :: RemoteEvent):FireClient(player, {
+							ProductKey = "AutoCollect",
+							GamePassId = gp.Id,
+							DisplayName = gp.DisplayName or "Auto Collect",
+							RobuxPrice = gp.RobuxPrice,
+						})
+					end
+					if NotificationService then
+						NotificationService.Notify(
+							player,
+							"Tired of walking to the ATM? Auto Collect available",
+							"Info",
+							4.5
+						)
+					end
+				end)
+			end
 		end
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)

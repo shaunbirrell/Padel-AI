@@ -410,3 +410,14 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 120. **Garage ArmedJeep** — Lists with DisplayName "Armed Jeep" + ARMED chip; same `WheeledLight` kit + `startGroundDrive` as MilitaryJeep.
 121. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial.
 
+## 2026-09-20 — Quality pack: names, kits, gates, ATM raid UX (live v33 — Open Cloud Published versionNumber=33)
+
+122. **Structure name readability** — WorldPrompt BUY boards: AlwaysOnTop within MaxDistance 56, larger 300×132 high-contrast board, UPPERCASE gold titles + TextStroke; `ensurePadNameSurface` now applied every refresh (SurfaceGui on pad top).
+123. **Airfield / Warehouse / Watchtowers** — StructureKit KIT_GEN/BuildingDressGen **22**; taller tower 10×28 + deck/ladder; runway chevrons + larger hangar; warehouse bay + crates; corner towers taller. Mesh IDs unchanged (Design Bot).
+124. **Gate guards polish** — Clear rifle props (stock/mag/barrel/sight) + larger AlwaysOnTop GATE GUARD + WeaponLabel billboard. AutoGuns / SyncPlot / ApplyDamage unchanged.
+125. **ATM raid UX** — Explicit 10% / 1m toasts; cooldown Notify + `AtmRaidStateUpdate` → ShopController AtmRaidHud chip.
+126. **Capture steal clarity** — Steal vs secure toasts (`ToastStealGain` / `ToastStolenFromYou`); loser gets zone-named Outpost lost toast.
+127. **Monetization soft touch** — One-shot AutoCollect GamePass soft offer after first manual ATM collect (`AutoCollectOffered`); existing Id 1985115501 only.
+128. **Map dressing** — `dressPlotPadSandbags` berms + mini-chevrons near first 6 BUY pads + ATM.
+129. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial.
+

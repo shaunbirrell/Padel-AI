@@ -1300,6 +1300,79 @@ end
 
 
 
+local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
+	--[[
+		v33: cheap MapDressing-style sandbag berms + extra chevrons near early BUY pads.
+		Visual-only; does not tag WE_UpgradeSlot.
+	]]
+	local folder = Instance.new("Folder")
+	folder.Name = "PlotPadDressing"
+	folder.Parent = plotFolder
+
+	local function sandbag(at: Vector3, yaw: number, idx: number)
+		local cf = CFrame.new(at) * CFrame.Angles(0, yaw, 0)
+		part({
+			Name = "PadSandbag" .. idx,
+			Size = Vector3.new(4.2, 1.1, 1.4),
+			CFrame = cf,
+			Color = Color3.fromRGB(130, 115, 80),
+			Material = Enum.Material.Sand,
+			CanCollide = false,
+			Transparency = 0,
+			Parent = folder,
+		})
+		part({
+			Name = "PadSandbagTop" .. idx,
+			Size = Vector3.new(3.4, 0.7, 1.1),
+			CFrame = cf * CFrame.new(0, 0.85, 0),
+			Color = Color3.fromRGB(145, 125, 88),
+			Material = Enum.Material.Sand,
+			CanCollide = false,
+			Transparency = 0,
+			Parent = folder,
+		})
+	end
+
+	local function miniChevron(at: Vector3, yaw: number, idx: number)
+		local cf = CFrame.new(at) * CFrame.Angles(0, yaw, 0)
+		part({
+			Name = "PadChevron" .. idx,
+			Size = Vector3.new(2.4, 0.1, 1.6),
+			CFrame = cf,
+			Color = Color3.fromRGB(245, 245, 250),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			Transparency = 0.2,
+			Parent = folder,
+		})
+	end
+
+	local idx = 1
+	-- First 6 structure pads get flanking sandbags + approach chevron
+	for i, def in ipairs(STRUCTURES) do
+		if i > 6 then
+			break
+		end
+		local col = (i - 1) % STRUCT_COLS
+		local row = math.floor((i - 1) / STRUCT_COLS)
+		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
+		local padPos = plotOrigin + offset
+		sandbag(padPos + Vector3.new(-7, 0.7, 4), math.rad(15), idx)
+		idx += 1
+		sandbag(padPos + Vector3.new(7, 0.7, 4), math.rad(-15), idx)
+		idx += 1
+		miniChevron(padPos + Vector3.new(0, 0.55, 9), math.rad(180), idx)
+		idx += 1
+	end
+	-- ATM approach berm
+	local atm = plotOrigin + Vector3.new(28, 0.7, 8)
+	sandbag(atm + Vector3.new(-6, 0, 6), 0, idx)
+	idx += 1
+	sandbag(atm + Vector3.new(6, 0, 6), 0, idx)
+end
+
+
+
 local function premiumOfferIdLive(kind: string, key: string): boolean
 	-- Hide pads until Creator Dashboard Id exists (GoldenPumpjack Id=0 → no pad)
 	if kind == "GamePass" then
@@ -1673,6 +1746,7 @@ function MapSetup.Run()
 		end
 
 		paintPlotFloorChevrons(plotFolder, pos)
+		dressPlotPadSandbags(plotFolder, pos)
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)
 		local yardFolder = Instance.new("Folder")

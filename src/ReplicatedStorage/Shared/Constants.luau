@@ -90,6 +90,8 @@ Constants.RemoteNames = {
 	StudioSmokeLog = "StudioSmokeLog",
 	DeathShopOffer = "DeathShopOffer",
 	StarterBundleOffer = "StarterBundleOffer",
+	AutoCollectOffer = "AutoCollectOffer",
+	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
 }

@@ -42,9 +42,9 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 48
+local PRICE_BILLBOARD_MAX_DIST = 56 -- v33: farther readable name/cost boards
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(260, 120) -- room for cost + +$/tick + BUY hint
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(300, 132) -- v33: larger high-contrast name board
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
 
@@ -330,10 +330,10 @@ end
 
 local function setBillboardNearOnly(bb: BillboardGui)
 	bb.Size = PRICE_BILLBOARD_SIZE
-	bb.StudsOffset = Vector3.new(0, 9.5, 0)
+	bb.StudsOffset = Vector3.new(0, 10.5, 0)
 	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
-	-- AlwaysOnTop only helps when already near (short MaxDistance); avoid map-wide stack
-	bb.AlwaysOnTop = false -- P0: never stack over ATM
+	-- v33: AlwaysOnTop within short MaxDistance so names stay readable behind kits
+	bb.AlwaysOnTop = true
 end
 
 local function hidePriceBillboard(part: BasePart)
@@ -375,7 +375,10 @@ local function ensurePadNameSurface(part: BasePart, displayName: string)
 	if existing and existing:IsA("SurfaceGui") then
 		local lab = existing:FindFirstChild("Name", true)
 		if lab and lab:IsA("TextLabel") then
-			lab.Text = displayName
+			lab.Text = string.upper(displayName)
+			lab.TextColor3 = Color3.fromRGB(255, 245, 180)
+			lab.TextStrokeTransparency = 0.2
+			lab.BackgroundTransparency = 0.12
 		end
 		return
 	end
@@ -383,18 +386,26 @@ local function ensurePadNameSurface(part: BasePart, displayName: string)
 	sg.Name = "WE_PadNameGui"
 	sg.Face = Enum.NormalId.Top
 	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-	sg.PixelsPerStud = 50
+	sg.PixelsPerStud = 60
+	sg.LightInfluence = 0
 	sg.Parent = part
 	local lab = Instance.new("TextLabel")
 	lab.Name = "Name"
 	lab.Size = UDim2.fromScale(1, 1)
-	lab.BackgroundTransparency = 0.35
-	lab.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
-	lab.Text = displayName
-	lab.TextColor3 = Color3.fromRGB(255, 230, 140)
+	lab.BackgroundTransparency = 0.12
+	lab.BackgroundColor3 = Color3.fromRGB(6, 8, 10)
+	lab.Text = string.upper(displayName)
+	lab.TextColor3 = Color3.fromRGB(255, 245, 180)
+	lab.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	lab.TextStrokeTransparency = 0.2
 	lab.Font = Enum.Font.GothamBold
 	lab.TextScaled = true
 	lab.Parent = sg
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(230, 190, 60)
+	stroke.Thickness = 2
+	stroke.Transparency = 0.25
+	stroke.Parent = lab
 end
 
 local function ensurePriceBillboard(part: BasePart): BillboardGui
@@ -445,7 +456,8 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
 	label.TextColor3 = Constants.Colors.Text
-	label.TextStrokeTransparency = 0.45
+	label.TextStrokeTransparency = 0.2
+	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
 	label.Text = "…"
 	label.Parent = backdrop
 	local pad = Instance.new("UIPadding")
@@ -476,17 +488,22 @@ local function applyBillboardCopy(
 	local textLab = bb:FindFirstChild("Text", true)
 
 	if titleLab and titleLab:IsA("TextLabel") and costLab and costLab:IsA("TextLabel") then
-		titleLab.Text = titleLine
-		titleLab.TextColor3 = Color3.fromRGB(245, 245, 248)
+		titleLab.Text = string.upper(titleLine)
+		titleLab.TextColor3 = Color3.fromRGB(255, 245, 180)
+		titleLab.TextStrokeTransparency = 0.25
+		titleLab.Font = Enum.Font.GothamBold
 		costLab.Text = detailLine
 		costLab.TextColor3 = textColor
+		costLab.TextStrokeTransparency = 0.35
 	elseif textLab and textLab:IsA("TextLabel") then
 		if detailLine ~= "" then
-			textLab.Text = titleLine .. "\n" .. detailLine
+			textLab.Text = string.upper(titleLine) .. "\n" .. detailLine
 		else
-			textLab.Text = titleLine
+			textLab.Text = string.upper(titleLine)
 		end
 		textLab.TextColor3 = textColor
+		textLab.TextStrokeTransparency = 0.25
+		textLab.Font = Enum.Font.GothamBold
 	end
 end
 
@@ -520,6 +537,7 @@ local function refreshSlotBillboard(part: BasePart)
 
 	local bb = ensurePriceBillboard(part)
 	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
+	ensurePadNameSurface(part, display)
 
 	local incomeStr = formatIncomeRate(structureId)
 	local incomeLine = if incomeStr then (" · " .. incomeStr) else ""

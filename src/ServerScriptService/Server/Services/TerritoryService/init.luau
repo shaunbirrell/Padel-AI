@@ -518,14 +518,17 @@ local function releaseOwnership(rt: TerritoryRuntime, reason: string)
 				_EconomyService.SyncOutpostIncomeStacks(prevPlayer)
 			end
 			if NotificationService then
-				local lostToast = "Outpost lost"
+				local zoneName = if rt.Def and rt.Def.DisplayName then rt.Def.DisplayName else "Outpost"
+				local lostToast = string.format("Outpost lost: %s stolen — Income buff dropped", zoneName)
 				pcall(function()
 					local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-					if buff and typeof(buff.ToastLost) == "string" then
+					if buff and typeof(buff.ToastStolenFromYou) == "string" then
+						lostToast = string.format(buff.ToastStolenFromYou, zoneName)
+					elseif buff and typeof(buff.ToastLost) == "string" then
 						lostToast = buff.ToastLost
 					end
 				end)
-				NotificationService.Notify(prevPlayer, lostToast, "Warn")
+				NotificationService.Notify(prevPlayer, lostToast, "Warn", 4.5)
 			end
 			if AnalyticsService then
 				AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_LOST, prevUserId, {
@@ -568,8 +571,10 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 		end
 	end
 
-	-- Previous owner loses it
+	-- Previous owner loses it (v33: mark steal for toast clarity)
+	local stoleFromPlayer = false
 	if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId ~= player.UserId and rt.OwnerUserId > 0 then
+		stoleFromPlayer = true
 		releaseOwnership(rt, "captured")
 	end
 
@@ -605,14 +610,24 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	end
 
 	if NotificationService then
+		local zoneName = rt.Def.DisplayName
+		local wasSteal = stoleFromPlayer
 		if incomeToastShown then
-			-- v31: one clear toast — zone name + income buff (avoid double spam)
-			NotificationService.Notify(
-				player,
-				string.format("%s secured — +%d%% Income", rt.Def.DisplayName, incomePct),
-				"Reward",
-				4.5
-			)
+			-- v33: explicit who gets the +income
+			local stealTpl = nil
+			pcall(function()
+				local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+				if buff then
+					stealTpl = buff.ToastStealGain
+				end
+			end)
+			local msg
+			if wasSteal and typeof(stealTpl) == "string" then
+				msg = string.format(stealTpl, zoneName, incomePct)
+			else
+				msg = string.format("%s secured — +%d%% Income (yours)", zoneName, incomePct)
+			end
+			NotificationService.Notify(player, msg, "Reward", 5)
 		else
 			local bonusHint = rt.Def.Description or ""
 			if #bonusHint > 60 then
@@ -620,7 +635,7 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 			end
 			NotificationService.Notify(
 				player,
-				string.format("Captured %s! %s", rt.Def.DisplayName, bonusHint),
+				string.format("Captured %s! %s", zoneName, bonusHint),
 				"Reward"
 			)
 		end

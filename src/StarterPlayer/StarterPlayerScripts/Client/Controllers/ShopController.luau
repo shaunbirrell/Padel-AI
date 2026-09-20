@@ -689,6 +689,218 @@ function ShopController.Init()
 		end
 	end
 
+	-- v33: one-shot AutoCollect soft offer after first manual ATM collect
+	do
+		local acToast: Frame? = nil
+		local lastAcToastAt = 0.0
+		local AC_TOAST_DEBOUNCE = 30
+
+		local function destroyAcToast()
+			if acToast then
+				acToast:Destroy()
+				acToast = nil
+			end
+		end
+
+		local function showAutoCollectToast(payload: any)
+			local now = os.clock()
+			if now - lastAcToastAt < AC_TOAST_DEBOUNCE then
+				return
+			end
+			lastAcToastAt = now
+			destroyAcToast()
+
+			local displayName = "Auto Collect"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.AutoCollect
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+
+			local host = screenGui
+			if not host then
+				return
+			end
+
+			local toast = Instance.new("Frame")
+			toast.Name = "AutoCollectToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(220, 80, 80)
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			acToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -56, 0, 22)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 16 else 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(255, 160, 140)
+			title.Text = "Skip the walk to the ATM?"
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local sub = Instance.new("TextLabel")
+			sub.BackgroundTransparency = 1
+			sub.Position = UDim2.fromOffset(12, 30)
+			sub.Size = UDim2.new(1, -24, 0, 18)
+			sub.Font = Enum.Font.Gotham
+			sub.TextSize = 11
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextColor3 = Constants.Colors.Muted
+			sub.Text = displayName .. (if robux then string.format(" · %d R$", robux) else "")
+			sub.ZIndex = 81
+			sub.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(36, 36)
+			dismiss.BackgroundColor3 = Constants.Colors.Background
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.Text = "X"
+			dismiss.TextColor3 = Constants.Colors.Text
+			dismiss.BorderSizePixel = 0
+			dismiss.ZIndex = 82
+			corner(dismiss, 6)
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyAcToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 240, 240)
+			buy.Text = "Get Auto Collect"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyAcToast()
+				promptGamePass("AutoCollect")
+			end)
+
+			task.delay(12, function()
+				if acToast == toast then
+					destroyAcToast()
+				end
+			end)
+		end
+
+		local remote = Remotes.GetEvent(Constants.RemoteNames.AutoCollectOffer)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showAutoCollectToast(payload)
+				end)
+			end)
+		end
+	end
+
+	-- v33: ATM raid success / cooldown HUD chip
+	do
+		local chip: Frame? = nil
+		local hideToken = 0
+
+		local function showAtmRaidHud(payload: any)
+			if typeof(payload) ~= "table" then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			if chip then
+				chip:Destroy()
+				chip = nil
+			end
+			local success = (payload :: any).Success == true
+			local raided = (payload :: any).Raided == true
+			local cd = math.max(0, math.floor(tonumber((payload :: any).CooldownRemaining) or 0))
+			local stolen = math.floor(tonumber((payload :: any).Stolen) or 0)
+			local victim = tostring((payload :: any).VictimName or "")
+
+			local frame = Instance.new("Frame")
+			frame.Name = "AtmRaidHud"
+			frame.AnchorPoint = Vector2.new(0.5, 1)
+			frame.Position = UDim2.new(0.5, 0, 1, if isTouch then -110 else -96)
+			frame.Size = if isTouch then UDim2.new(0.9, 0, 0, 52) else UDim2.fromOffset(340, 48)
+			frame.BackgroundColor3 = if success then Color3.fromRGB(30, 70, 40) elseif raided then Color3.fromRGB(80, 30, 30) else Color3.fromRGB(40, 40, 28)
+			frame.BorderSizePixel = 0
+			frame.ZIndex = 75
+			corner(frame, 8)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = if success then Color3.fromRGB(120, 220, 140) elseif raided then Color3.fromRGB(255, 120, 100) else Color3.fromRGB(230, 200, 80)
+			stroke.Thickness = 1.4
+			stroke.Parent = frame
+			frame.Parent = host
+			chip = frame
+
+			local lab = Instance.new("TextLabel")
+			lab.BackgroundTransparency = 1
+			lab.Size = UDim2.fromScale(1, 1)
+			lab.Font = Enum.Font.GothamBold
+			lab.TextSize = if isTouch then 15 else 14
+			lab.TextColor3 = Color3.fromRGB(245, 245, 240)
+			lab.TextStrokeTransparency = 0.35
+			lab.ZIndex = 76
+			if success then
+				lab.Text = string.format("ATM RAID +$%d%s · cooldown 1m", stolen, if victim ~= "" then (" from " .. victim) else "")
+			elseif raided then
+				lab.Text = string.format("ATM RAIDED −$%d (10%%)", stolen)
+			else
+				lab.Text = string.format("ATM raid cooldown — %ds", cd)
+			end
+			lab.Parent = frame
+
+			hideToken += 1
+			local token = hideToken
+			local hold = if success or raided then 5.5 else math.clamp(cd, 2, 8)
+			task.delay(hold, function()
+				if token == hideToken and chip == frame then
+					frame:Destroy()
+					if chip == frame then
+						chip = nil
+					end
+				end
+			end)
+		end
+
+		local remote = Remotes.GetEvent(Constants.RemoteNames.AtmRaidStateUpdate)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showAtmRaidHud(payload)
+				end)
+			end)
+		end
+	end
+
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
 	do
 		local remote = Remotes.GetEvent(Constants.RemoteNames.PromptPremiumPad)

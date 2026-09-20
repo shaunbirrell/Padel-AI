@@ -98,6 +98,7 @@ export type PlayerProfile = {
 	Entitlements: { [string]: boolean }?,
 	OutpostIncomeStacks: number?,
 	StarterBundleOffered: boolean?,
+	AutoCollectOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {

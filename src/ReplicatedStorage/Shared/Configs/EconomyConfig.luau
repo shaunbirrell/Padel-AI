@@ -50,10 +50,12 @@ local EconomyConfig = {
 	OutpostIncomeBuff = {
 		MultPerStack = 0.10, -- +10% per stack
 		MaxStacks = 5, -- cap +50%
-		ToastSecured = "Outpost secured — +%d%% Income",
-		ToastLost = "Outpost lost — Income buff reduced",
+		ToastSecured = "Outpost secured — +%d%% Income (yours)",
+		ToastLost = "Outpost lost — Income buff dropped (stolen)",
+		ToastStolenFromYou = "%s stolen by enemy — −Income buff",
+		ToastStealGain = "Stole %s — +%d%% Income is now yours",
 		-- Legacy alias kept for older callers
-		ToastTemplate = "Outpost secured — +%d%% Income",
+		ToastTemplate = "Outpost secured — +%d%% Income (yours)",
 	},
 
 	-- PvP ATM raid: touch another player's WE_MoneyCollector to steal PendingCash.
@@ -63,8 +65,9 @@ local EconomyConfig = {
 		AtmRaidCooldownSeconds = 60, -- per thief→victim pair
 		MaxDistanceStuds = 14, -- server distance check to collector part
 		MinStealCash = 1,
-		ToastThief = "Stole $%d from %s",
-		ToastVictim = "ATM raided −$%d",
+		ToastThief = "ATM RAID +$%d (10%%) from %s — 1m cooldown",
+		ToastVictim = "ATM RAIDED −$%d (10%% stolen)",
+		ToastCooldown = "ATM raid cooldown — %ds left",
 	},
 }
 

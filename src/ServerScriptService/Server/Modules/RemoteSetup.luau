@@ -64,6 +64,8 @@ local EVENTS = {
 	Constants.RemoteNames.StudioSmokeLog,
 	Constants.RemoteNames.DeathShopOffer,
 	Constants.RemoteNames.StarterBundleOffer,
+	Constants.RemoteNames.AutoCollectOffer,
+	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
 }
 

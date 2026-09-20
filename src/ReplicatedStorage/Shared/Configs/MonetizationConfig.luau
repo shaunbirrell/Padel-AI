@@ -148,6 +148,10 @@ local MonetizationConfig = {
 		CashBelow = 12000, -- StartingCash*2 + buffer
 		NewProfileMaxAgeSeconds = 600, -- FirstJoin→LastJoin span treats as new
 	},
+	-- v33: one-shot soft offer after first manual ATM collect (server marks AutoCollectOffered)
+	AutoCollectOffer = {
+		DelaySeconds = 1.2,
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {

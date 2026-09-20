@@ -21,7 +21,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 21,
+	BuildingDressGen = 22,
 
 	Palettes = {
 		CommandCenter = {
@@ -84,7 +84,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(180, 190, 100),
 			Roof = Color3.fromRGB(55, 58, 52),
 			Kit = "airfield",
-			TargetFootprint = Vector3.new(70, 1, 10),
+			TargetFootprint = Vector3.new(72, 1, 14),
 			MeshAssetId = 0, -- COMPOSITE runway + Hangar 6015472062; REJECT 12370174722
 		},
 		DefensiveWalls = {
@@ -103,7 +103,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(200, 160, 70),
 			Roof = Color3.fromRGB(50, 52, 44),
 			Kit = "tower",
-			TargetFootprint = Vector3.new(10, 32, 10),
+			TargetFootprint = Vector3.new(10, 34, 10),
 			MeshAssetId = 108525417345747,
 		},
 		Radar = {
@@ -148,7 +148,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(180, 140, 80),
 			Roof = Color3.fromRGB(55, 50, 42),
 			Kit = "warehouse",
-			TargetFootprint = Vector3.new(36, 14, 22),
+			TargetFootprint = Vector3.new(38, 16, 24),
 			MeshAssetId = 6015472062,
 		},
 		SpecialForcesFacility = {

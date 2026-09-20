@@ -343,7 +343,12 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 	weldPart("LegR", Vector3.new(1, 2, 1), CFrame.new(0.5, -2, 0), olive, Enum.Material.Fabric, nil)
 	weldPart("ArmL", Vector3.new(1, 2, 1), CFrame.new(-1.5, 0, 0), olive, Enum.Material.Fabric, nil)
 	weldPart("ArmR", Vector3.new(1, 2, 1), CFrame.new(1.5, 0, 0), olive, Enum.Material.Fabric, nil)
-	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
+	-- v33: clear rifle prop (receiver + barrel + mag + stock) so guards read as armed
+	weldPart("Rifle", Vector3.new(0.32, 0.28, 2.6), CFrame.new(1.2, 0.2, -0.9), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
+	weldPart("RifleStock", Vector3.new(0.28, 0.35, 0.7), CFrame.new(1.2, 0.15, 0.55), Color3.fromRGB(55, 45, 30), Enum.Material.Wood, nil)
+	weldPart("RifleMag", Vector3.new(0.22, 0.55, 0.35), CFrame.new(1.2, -0.15, -0.35), Color3.fromRGB(40, 40, 42), Enum.Material.Metal, nil)
+	weldPart("RifleBarrel", Vector3.new(0.16, 0.16, 0.9), CFrame.new(1.2, 0.22, -2.15), Color3.fromRGB(50, 50, 55), Enum.Material.Metal, nil)
+	weldPart("RifleSight", Vector3.new(0.12, 0.22, 0.35), CFrame.new(1.2, 0.45, -0.5), Color3.fromRGB(35, 35, 38), Enum.Material.Metal, nil)
 
 	local humanoid = Instance.new("Humanoid")
 	humanoid.MaxHealth = stats.GuardHealth
@@ -358,23 +363,28 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "GateGuardLabel"
-	bb.Size = UDim2.fromOffset(110, 22)
-	bb.StudsOffset = Vector3.new(0, 3.4, 0)
-	bb.AlwaysOnTop = false
-	bb.MaxDistance = 70
+	bb.Size = UDim2.fromOffset(140, 36)
+	bb.StudsOffset = Vector3.new(0, 3.8, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 90
 	bb.Parent = root
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(25, 30, 22)
-	lbl.BackgroundTransparency = 0.3
-	lbl.Text = "GATE GUARD"
-	lbl.TextColor3 = Color3.fromRGB(190, 220, 150)
+	lbl.BackgroundColor3 = Color3.fromRGB(18, 22, 14)
+	lbl.BackgroundTransparency = 0.15
+	lbl.Text = "GATE GUARD\n" .. tostring(stats.WeaponLabel or "Rifle")
+	lbl.TextColor3 = Color3.fromRGB(210, 240, 160)
+	lbl.TextStrokeTransparency = 0.3
 	lbl.TextScaled = true
 	lbl.Font = Enum.Font.GothamBold
 	lbl.Parent = bb
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 4)
 	corner.Parent = lbl
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(120, 160, 80)
+	stroke.Thickness = 1.4
+	stroke.Parent = lbl
 
 	model.PrimaryPart = root
 	-- Do NOT tag WE_NPC — CombatNPC would aggro owner

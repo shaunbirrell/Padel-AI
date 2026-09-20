@@ -101,6 +101,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Entitlements = {},
 		OutpostIncomeStacks = 0,
 		StarterBundleOffered = false,
+		AutoCollectOffered = false,
 	}
 end
 
@@ -308,6 +309,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if (profile :: any).StarterBundleOffered == nil then
 		(profile :: any).StarterBundleOffered = false
+	end
+	if (profile :: any).AutoCollectOffered == nil then
+		(profile :: any).AutoCollectOffered = false
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

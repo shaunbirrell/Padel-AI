@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 21 -- STRUCTURE_SCALE_WIRE Part kit footprints
+local KIT_GEN = 22 -- v33: taller towers + denser airfield/warehouse silhouettes
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -306,12 +306,16 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Window", Vector3.new(1.5, 1.2, 0.2), Vector3.new(0, 2.6, -2.6), Color3.fromRGB(80, 160, 200), Enum.Material.Glass, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.9, 0.9, 0.9), Vector3.new(2.0, 3.5, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "tower" then
-		kitPart(plinth, "Body", Vector3.new(8, 22, 8), Vector3.new(0, 11.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(3.8, 0.5, 3.8), Vector3.new(0, 6.6, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.5, 0.3), Vector3.new(0, 8.5, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(3.3, 0.22, 3.3), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Window", Vector3.new(1.0, 0.8, 0.2), Vector3.new(0, 4.5, -1.5), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.7, 0.7, 0.7), Vector3.new(0, 7.0, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		-- v33: ≥28–32 stud sniper tower (walkable ladder + platform), not a stub
+		kitPart(plinth, "Body", Vector3.new(10, 28, 10), Vector3.new(0, 14.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(14, 0.6, 14), Vector3.new(0, 29.2, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(16, 0.45, 16), Vector3.new(0, 27.8, 0), pal.Roof, Enum.Material.Metal, nil) -- lookout deck
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 5.5, 0.4), Vector3.new(0, 32.5, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(10.4, 0.25, 10.4), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Window", Vector3.new(2.2, 1.4, 0.25), Vector3.new(0, 24, -5.1), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
+		kitPart(plinth, "Window", Vector3.new(2.2, 1.4, 0.25), Vector3.new(0, 18, -5.1), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
+		kitPart(plinth, "Door", Vector3.new(2.4, 3.6, 0.35), Vector3.new(0, 2.4, -5.15), Color3.fromRGB(40, 42, 36), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.55, 26, 0.55), Vector3.new(5.2, 13.5, 5.2), Color3.fromRGB(55, 58, 48), Enum.Material.Metal, nil) -- ladder rail
 	elseif kit == "dock" then
 		kitPart(plinth, "Body", Vector3.new(20, 1.2, 14), Vector3.new(0, 1.1, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Pier", Vector3.new(36, 0.8, 8), Vector3.new(0, 1.4, 18), pal.Roof, Enum.Material.Wood, nil)
@@ -335,14 +339,19 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Window", Vector3.new(0.8, 0.8, 0.8), Vector3.new(-9, 5.4, -9), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
 		kitPart(plinth, "Window", Vector3.new(0.8, 0.8, 0.8), Vector3.new(9, 5.4, 9), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "airfield" then
-		-- Runway silhouette ~70×10 + taxi + hangar box (mesh composite dresses on top)
-		kitPart(plinth, "Body", Vector3.new(70, 0.7, 12), Vector3.new(0, 0.95, 18), Color3.fromRGB(48, 50, 52), Enum.Material.Asphalt, nil)
-		kitPart(plinth, "Accent", Vector3.new(60, 0.12, 0.5), Vector3.new(0, 1.35, 18), Color3.fromRGB(240, 240, 200), Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(24, 0.55, 16), Vector3.new(0, 0.95, -8), Color3.fromRGB(55, 58, 55), Enum.Material.Concrete, nil) -- taxi
-		kitPart(plinth, "Roof", Vector3.new(36, 16, 24), Vector3.new(0, 9, -22), pal.Roof, Enum.Material.Metal, nil) -- hangar shed
-		kitPart(plinth, "Door", Vector3.new(0.5, 12, 18), Vector3.new(0, 7, -10), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.4, 8, 0.4), Vector3.new(20, 5, 18), pal.Accent, Enum.Material.Metal, nil) -- windsock pole
-		kitPart(plinth, "Window", Vector3.new(1.2, 1.2, 1.2), Vector3.new(20, 9, 18), Color3.fromRGB(255, 180, 60), Enum.Material.Neon, Enum.PartType.Ball)
+		-- v33: readable runway + taxi + large hangar volume (mesh composite dresses on top)
+		kitPart(plinth, "Body", Vector3.new(72, 0.85, 14), Vector3.new(0, 0.95, 20), Color3.fromRGB(42, 44, 46), Enum.Material.Asphalt, nil)
+		kitPart(plinth, "Accent", Vector3.new(64, 0.14, 0.55), Vector3.new(0, 1.42, 20), Color3.fromRGB(245, 245, 210), Enum.Material.Neon, nil)
+		-- runway edge lights / chevron dashes
+		for i = -3, 3 do
+			kitPart(plinth, "Detail", Vector3.new(3.2, 0.12, 0.7), Vector3.new(i * 9, 1.4, 20), Color3.fromRGB(255, 255, 230), Enum.Material.Neon, nil)
+		end
+		kitPart(plinth, "Detail", Vector3.new(28, 0.6, 18), Vector3.new(0, 0.95, -6), Color3.fromRGB(55, 58, 55), Enum.Material.Concrete, nil) -- taxi
+		kitPart(plinth, "Roof", Vector3.new(40, 18, 28), Vector3.new(0, 10, -24), pal.Roof, Enum.Material.Metal, nil) -- hangar shed
+		kitPart(plinth, "Door", Vector3.new(0.55, 14, 22), Vector3.new(0, 8, -10), Color3.fromRGB(28, 30, 26), Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.45, 10, 0.45), Vector3.new(24, 6, 20), pal.Accent, Enum.Material.Metal, nil) -- windsock pole
+		kitPart(plinth, "Window", Vector3.new(1.4, 1.4, 1.4), Vector3.new(24, 11, 20), Color3.fromRGB(255, 180, 60), Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Detail", Vector3.new(8, 1.2, 4), Vector3.new(-28, 1.4, 12), Color3.fromRGB(70, 72, 60), Enum.Material.Metal, nil) -- ops hut
 	elseif kit == "hangar" then
 		kitPart(plinth, "Body", Vector3.new(40, 18, 28), Vector3.new(0, 9.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(42, 1.2, 30), Vector3.new(0, 19, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -377,11 +386,15 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Roof", Vector3.new(26, 0.8, 20), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.2, 6, 1.2), Vector3.new(8, 5, 6), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
 	elseif kit == "warehouse" then
-		kitPart(plinth, "Body", Vector3.new(36, 14, 22), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(38, 1, 24), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(36, 0.25, 22), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Door", Vector3.new(10, 10, 0.4), Vector3.new(0, 5.5, -11.2), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil) -- roll door
-		kitPart(plinth, "Detail", Vector3.new(12, 1.2, 6), Vector3.new(0, 1.2, -14), Color3.fromRGB(70, 72, 68), Enum.Material.Concrete, nil) -- loading dock
+		-- v33: large logistics bay volume + loading dock + crates (walkable footprint feel)
+		kitPart(plinth, "Body", Vector3.new(38, 16, 24), Vector3.new(0, 8.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(40, 1.2, 26), Vector3.new(0, 17, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(38, 0.3, 24), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(12, 12, 0.45), Vector3.new(0, 6.5, -12.2), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil) -- roll door
+		kitPart(plinth, "Detail", Vector3.new(16, 1.4, 8), Vector3.new(0, 1.3, -16), Color3.fromRGB(70, 72, 68), Enum.Material.Concrete, nil) -- loading dock
+		kitPart(plinth, "Detail", Vector3.new(3.2, 2.4, 2.4), Vector3.new(-14, 1.8, -14), Color3.fromRGB(120, 95, 55), Enum.Material.Wood, nil)
+		kitPart(plinth, "Detail", Vector3.new(3.0, 2.2, 2.2), Vector3.new(-10.5, 1.7, -14), Color3.fromRGB(110, 90, 50), Enum.Material.Wood, nil)
+		kitPart(plinth, "Window", Vector3.new(3.5, 1.8, 0.25), Vector3.new(10, 10, -12.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
 	else
 		kitPart(plinth, "Body", Vector3.new(5.3, 3.5, 5.3), Vector3.new(0, 2.4, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(4.2, 1.2, 4.2), Vector3.new(0, 4.6, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -1184,7 +1197,7 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 	local lv = math.clamp(level, 1, 5)
 	local half = math.max(pad.Size.X, pad.Size.Z) * 0.5 - 3
 	local towerW = 7 + lv * 0.5
-	local towerH = 22 + lv * 2.5 -- ≥18–28 studs (STRUCTURE_SCALE_WIRE)
+	local towerH = 26 + lv * 2.8 -- v33: taller corner watchtowers (≥28–40)
 	local y = pad.Position.Y + pad.Size.Y * 0.5 + towerH * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 	local corners = {
