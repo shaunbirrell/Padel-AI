@@ -58,6 +58,11 @@ safeInit("Orders", OrdersController.Init)
 		end
 	end
 
+	-- Cash HUD `+` / pending pill → Shop (lists stubs; Prompt only when Id ~= 0)
+	HUDController.BindShopOpener(function()
+		dockPress("Shop", ShopController.Open)
+	end)
+
 	HUDController.BindActionBar({
 		{
 			Name = "DockBase",

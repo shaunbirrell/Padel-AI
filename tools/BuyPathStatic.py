@@ -361,5 +361,23 @@ must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau"
 must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "function SquadOrdersService.SetOrder", "Orders no-regress")
 
 
+
+# --- v27 polish: cash HUD `+` opens Shop (premium pads skipped while Ids=0) ---
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "CashPlus", "HUD CashPlus button")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "BindShopOpener", "HUD BindShopOpener")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "BindShopOpener", "UIController wires cash+ to Shop")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "coming soon", "Shop lists Id=0 stubs as coming soon")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "PromptProductPurchase", "Shop PromptProductPurchase when Id set")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"VehicleService\"", "Bootstrap VehicleService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"GateDefenseService\"", "Bootstrap GateDefenseService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"ManualDropperService\"", "Bootstrap ManualDropperService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"PlotOilPumpService\"", "Bootstrap PlotOilPumpService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"PrestigeService\"", "Bootstrap PrestigeService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"MissionService\"", "Bootstrap MissionService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"SquadOrdersService\"", "Bootstrap SquadOrdersService")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"MoneyCollectorService\"", "Bootstrap MoneyCollectorService")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "ProcessReceipt", "Monetization ProcessReceipt wired")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "VehicleService LV drive (v27)")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

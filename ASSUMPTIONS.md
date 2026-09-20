@@ -358,3 +358,9 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
     2. When any `WE_DriveHinge` existed, `LinearVelocity.MaxForce` was forced to **0**, removing the scripted backup — jeep sat as a static prop after Sit.
     3. Physics wheels were Z-rotated 90° (cylinder stood on end); axle no longer along body X.
     **Fix:** Authoritative `LinearVelocity` + `AngularVelocity` always on (MaxForce/MaxTorque kept). Hinge motors use **same throttle sign both sides** + steer differential. Cylinder wheels identity-oriented (axle = local X = body X). Mesh `125916936788670` remains dress-only (StripScripts / no collide). `SetNetworkOwner(player)` + auto-Sit + `WE_DrivePrompt` unchanged. ArmedJeep shares `WheeledLight` kit.
+
+## 2026-09-20 — Quality audit polish (live v28 — Open Cloud Published versionNumber=28)
+
+113. **Cash HUD `+` → Shop** — Competitor pattern: `CashPlus` on currency pill + pending-cash line open Shop via `HUDController.BindShopOpener` (UIController). Shop still lists Id=0 stubs as coming soon; PromptProductPurchase only when Id≠0. MonetizationConfig Ids unchanged.
+114. **Premium floor pads deferred** — AutoCollect/2x pads skipped while all Monetization Ids=0 (would confuse). Documented in `docs/QUALITY_AUDIT_v27.md`.
+115. **Bootstrap audit** — Vehicle / GateDefense / ManualDropper / PlotOilPump / Prestige / Missions / Orders / MoneyCollector / Monetization ProcessReceipt all wired. Experience rename still pending (`LIVE_PLACE.md`).

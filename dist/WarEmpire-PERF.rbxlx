@@ -28311,7 +28311,7 @@ local goalLabel: TextLabel? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
-local pendingLabel: TextLabel? = nil
+local pendingLabel: TextButton? = nil
 local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
 local lastPending = 0
@@ -28322,6 +28322,7 @@ local spinnerReady = false
 local spinnerCooldown = 0
 local lastPassive = 0
 local lastTraining = 0
+local shopOpener: (() -> ())? = nil
 
 local function refreshPassiveHint()
 	if not passiveLabel then
@@ -28430,12 +28431,18 @@ function HUDController.Init()
 	goal.Parent = left
 	goalLabel = goal
 
-	-- Bottom-left: currency pill (cash + gold) — thumb-friendly
+	-- Bottom-left: currency pill (cash + gold) + Robux shop entry — competitor pattern
+	local function openShopFromHud()
+		if shopOpener then
+			pcall(shopOpener)
+		end
+	end
+
 	local pill = Instance.new("Frame")
 	pill.Name = "CurrencyPill"
 	pill.AnchorPoint = Vector2.new(0, 1)
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
-	pill.Size = UDim2.fromOffset(210, 64)
+	pill.Size = UDim2.fromOffset(248, 64)
 	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
 	pill.BackgroundTransparency = 0.12
 	pill.BorderSizePixel = 0
@@ -28449,7 +28456,7 @@ function HUDController.Init()
 	cash.Name = "CashLabel"
 	cash.BackgroundTransparency = 1
 	cash.Position = UDim2.fromOffset(18, 4)
-	cash.Size = UDim2.new(1, -28, 0, 26)
+	cash.Size = UDim2.new(1, -56, 0, 26)
 	cash.Font = Enum.Font.GothamBold
 	cash.TextSize = 20
 	cash.TextXAlignment = Enum.TextXAlignment.Left
@@ -28459,26 +28466,29 @@ function HUDController.Init()
 	cash.Parent = pill
 	cashLabel = cash
 
-	local pending = Instance.new("TextLabel")
+	-- Pending cash line doubles as shop entry (AutoCollect / packs once Ids live)
+	local pending = Instance.new("TextButton")
 	pending.Name = "PendingLabel"
 	pending.BackgroundTransparency = 1
 	pending.Position = UDim2.fromOffset(18, 28)
-	pending.Size = UDim2.new(1, -28, 0, 14)
+	pending.Size = UDim2.new(1, -56, 0, 14)
 	pending.Font = Enum.Font.GothamMedium
 	pending.TextSize = 12
 	pending.TextXAlignment = Enum.TextXAlignment.Left
 	pending.TextColor3 = Color3.fromRGB(90, 200, 130)
 	pending.Text = ""
 	pending.Visible = false
+	pending.AutoButtonColor = false
 	pending.ZIndex = 13
 	pending.Parent = pill
 	pendingLabel = pending
+	pending.Activated:Connect(openShopFromHud)
 
 	local gold = Instance.new("TextLabel")
 	gold.Name = "GoldLabel"
 	gold.BackgroundTransparency = 1
 	gold.Position = UDim2.fromOffset(18, 40)
-	gold.Size = UDim2.new(1, -28, 0, 16)
+	gold.Size = UDim2.new(1, -56, 0, 16)
 	gold.Font = Enum.Font.GothamMedium
 	gold.TextSize = 15
 	gold.TextXAlignment = Enum.TextXAlignment.Left
@@ -28487,6 +28497,26 @@ function HUDController.Init()
 	gold.ZIndex = 13
 	gold.Parent = pill
 	goldLabel = gold
+
+	-- Cash HUD `+` opens Shop (Prompt only when Monetization Ids ~= 0)
+	local cashPlus = Instance.new("TextButton")
+	cashPlus.Name = "CashPlus"
+	cashPlus.AnchorPoint = Vector2.new(1, 0.5)
+	cashPlus.Position = UDim2.new(1, -8, 0.5, 0)
+	cashPlus.Size = UDim2.fromOffset(40, 40)
+	cashPlus.BackgroundColor3 = Constants.Colors.Gunmetal
+	cashPlus.Font = Enum.Font.GothamBold
+	cashPlus.TextSize = 22
+	cashPlus.TextColor3 = Constants.Colors.GoldBright
+	cashPlus.Text = "+"
+	cashPlus.BorderSizePixel = 0
+	cashPlus.ZIndex = 14
+	cashPlus.Parent = pill
+	makeCorner(cashPlus, 20)
+	local plusStroke = UIUtil.Stroke(cashPlus, Constants.Colors.GoldBright, 1.5)
+	plusStroke.Transparency = 0.1
+	UIUtil.EnsureMinTouch(cashPlus, 44)
+	cashPlus.Activated:Connect(openShopFromHud)
 
 	local passive = Instance.new("TextLabel")
 	passive.Name = "PassiveHint"
@@ -28784,6 +28814,12 @@ function HUDController.ApplyState(state: Types.PlayerStatePayload)
 		lastTraining = state.TrainingIncomePerTick
 	end
 	refreshPassiveHint()
+end
+
+
+--[[ Wire cash-pill `+` / pending line → ShopController.Open (after Shop Init). ]]
+function HUDController.BindShopOpener(fn: () -> ())
+	shopOpener = fn
 end
 
 return HUDController
@@ -31961,6 +31997,11 @@ safeInit("Orders", OrdersController.Init)
 			NotificationController.Show(label .. " failed — check Output", "Warn", 3)
 		end
 	end
+
+	-- Cash HUD `+` / pending pill → Shop (lists stubs; Prompt only when Id ~= 0)
+	HUDController.BindShopOpener(function()
+		dockPress("Shop", ShopController.Open)
+	end)
 
 	HUDController.BindActionBar({
 		{

@@ -4,6 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
+- **Live Published:** Open Cloud **versionNumber=28** (2026-09-20 Europe/Madrid) — cash HUD `+` → Shop; jeep drive fix remains from v27
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
 
