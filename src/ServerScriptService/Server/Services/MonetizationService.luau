@@ -478,4 +478,76 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
+
+--[[ v35: one-shot VIP soft toast at mid-game (level≥MinLevel OR structure≥MinStructureLevel). ]]
+function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
+	if not player or not player.Parent then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	if profile.VIPOffered == true then
+		return
+	end
+	local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.VIP
+	if not gp or typeof(gp.Id) ~= "number" or gp.Id == 0 then
+		return
+	end
+	if MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+		return
+	end
+	local offerCfg = (MonetizationConfig :: any).VIPOffer
+	if not offerCfg then
+		return
+	end
+	local minLevel = tonumber(offerCfg.MinLevel) or 10
+	local minStruct = tonumber(offerCfg.MinStructureLevel) or 3
+	local level = tonumber(profile.Level) or 1
+	local maxStruct = 0
+	if typeof(profile.BaseUpgrades) == "table" then
+		for _, lv in pairs(profile.BaseUpgrades) do
+			local n = tonumber(lv) or 0
+			if n > maxStruct then
+				maxStruct = n
+			end
+		end
+	end
+	if level < minLevel and maxStruct < minStruct then
+		return
+	end
+	profile.VIPOffered = true
+	DataService.MarkDirty(player)
+	local delaySec = tonumber(offerCfg.DelaySeconds) or 2.0
+	task.delay(delaySec, function()
+		if not player.Parent then
+			return
+		end
+		if MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+			return
+		end
+		if RemoteSetup then
+			local remote = RemoteSetup.Get(Constants.RemoteNames.VIPOffer)
+			if remote and remote:IsA("RemoteEvent") then
+				(remote :: RemoteEvent):FireClient(player, {
+					ProductKey = "VIP",
+					GamePassId = gp.Id,
+					DisplayName = gp.DisplayName or "VIP",
+					RobuxPrice = gp.RobuxPrice,
+					Reason = reason or "midgame",
+				})
+			end
+		end
+		if NotificationService then
+			NotificationService.Notify(
+				player,
+				"Commander status unlocked — VIP boosts cash & prestige",
+				"Info",
+				4.5
+			)
+		end
+	end)
+end
+
 return MonetizationService

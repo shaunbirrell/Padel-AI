@@ -66,6 +66,7 @@ local EVENTS = {
 	Constants.RemoteNames.StarterBundleOffer,
 	Constants.RemoteNames.AutoCollectOffer,
 	Constants.RemoteNames.DoubleCashOffer,
+	Constants.RemoteNames.VIPOffer,
 	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
 }

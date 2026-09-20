@@ -21,7 +21,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 23,
+	BuildingDressGen = 24,
 
 	Palettes = {
 		CommandCenter = {
@@ -66,7 +66,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 200, 80),
 			Roof = Color3.fromRGB(50, 55, 52),
 			Kit = "helipad",
-			TargetFootprint = Vector3.new(22, 3, 22),
+			TargetFootprint = Vector3.new(28, 4, 28),
 			MeshAssetId = 14313845338,
 		},
 		Dock = {
@@ -75,7 +75,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(70, 180, 220),
 			Roof = Color3.fromRGB(40, 58, 70),
 			Kit = "dock",
-			TargetFootprint = Vector3.new(40, 8, 16),
+			TargetFootprint = Vector3.new(44, 10, 28),
 			MeshAssetId = 17701461178,
 		},
 		Airfield = {
@@ -157,7 +157,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(160, 80, 200),
 			Roof = Color3.fromRGB(30, 35, 40),
 			Kit = "special",
-			TargetFootprint = Vector3.new(26, 14, 16),
+			TargetFootprint = Vector3.new(32, 16, 20),
 			MeshAssetId = 18798977801,
 		},
 	} :: { [string]: StructurePalette },

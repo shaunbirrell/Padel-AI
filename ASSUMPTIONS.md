@@ -432,3 +432,13 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 136. **Mobile UX** — Orders walkie SizeTouch 268×236, MinTouchPx 56, raised above dock. Shop/Orders touch targets remain large.
 137. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED.
 
+## 2026-09-20 — Legitimacy / late-game presence pack (live v35 — Open Cloud Published versionNumber=35)
+
+138. **SpecialForcesFacility densify** — KIT_GEN / BuildingDressGen **24**. Proper `special` kit: dark ops hall + annex wings + watch post + training range targets + dress hosts (was generic cube fallback).
+139. **Helipad / Dock densify** — Helipad ~28 stud pad + circle markings + 4 floodlights + windsock + ops hut; Dock longer pier + bollards + crane + warehouse shed + tire fenders. TrainingYard remains MapSetup (not a BaseConfig structure key). Readable DisplayNames unchanged (Helipad / Naval Dock / Special Forces Facility).
+140. **Map landmarks** — `Landmarks_v35`: wrecked jeep/truck cluster + scorch + crates/drums/sandbags; extra bunker silhouette; Full quality adds radio tower + second bunker.
+141. **Gate AutoGuns visual** — Part-kit HMG tripod + shield + long barrel + neon muzzle; always-on `WE_TurretMarker` ring + AUTO GUN billboard even when catalog mesh loads.
+142. **VIP soft offer** — One-shot toast for GamePass VIP Id **1985475542** after level ≥10 or first structure L3 (`VIPOffered`); existing Id only; not spammy.
+143. **Oil pump spectacle** — PlotOilPump walking beam + HorseHead bob together (faster amp); $+$/tick billboards unchanged.
+144. **Death / shop continuity** — DeathShopToast kept; Open Shop · Cash Mega opens shop with CashMega row highlight.
+145. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v34 kits.

@@ -18,12 +18,45 @@ local ShopController = {}
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
+local pendingCashMegaHighlight = false
+local shopListFrame: ScrollingFrame? = nil
 local screenGui: ScreenGui? = nil
 
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = parent
+end
+
+local function highlightCashMegaRow()
+	local list = shopListFrame
+	if not list then
+		return
+	end
+	local row = list:FindFirstChild("ShopRow_CashMega")
+	if not row or not row:IsA("GuiObject") then
+		return
+	end
+	row.BackgroundColor3 = Color3.fromRGB(90, 70, 30)
+	local stroke = row:FindFirstChildOfClass("UIStroke")
+	if not stroke then
+		stroke = Instance.new("UIStroke")
+		stroke.Parent = row
+	end
+	stroke.Color = Constants.Colors.Gold
+	stroke.Thickness = 2.5
+	-- Scroll to top (CashMega is first)
+	if list:IsA("ScrollingFrame") then
+		list.CanvasPosition = Vector2.new(0, 0)
+	end
+	task.delay(4, function()
+		if row.Parent then
+			row.BackgroundColor3 = Constants.Colors.Background
+			if stroke and stroke.Parent then
+				stroke.Thickness = 0
+			end
+		end
+	end)
 end
 
 local function setOpen(open: boolean)
@@ -33,6 +66,11 @@ local function setOpen(open: boolean)
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = open
 		end
+	end
+	-- v35: optional CashMega highlight when shop opens from death continuity
+	if open and pendingCashMegaHighlight then
+		pendingCashMegaHighlight = false
+		task.defer(highlightCashMegaRow)
 	end
 end
 
@@ -141,6 +179,7 @@ function ShopController.Init()
 			stroke.Parent = toast
 			toast.Parent = host
 			deathToast = toast
+			pendingCashMegaHighlight = true -- v35: CashMega highlight if shop opens
 
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
@@ -211,7 +250,32 @@ function ShopController.Init()
 						promptGamePass(key)
 					else
 						promptDevProduct(key)
-					end
+				end
+				end)
+			end
+
+			-- v35: optional open shop → CashMega highlight continuity
+			do
+				local shopBtn = Instance.new("TextButton")
+				shopBtn.Name = "DeathOffer_OpenShop"
+				shopBtn.Position = UDim2.fromOffset(12, rowY + btnH + 6)
+				shopBtn.Size = UDim2.new(1, -24, 0, if isTouch then 36 else 28)
+				shopBtn.BackgroundColor3 = Constants.Colors.Background
+				shopBtn.Font = Enum.Font.GothamBold
+				shopBtn.TextSize = 12
+				shopBtn.TextColor3 = Constants.Colors.Gold
+				shopBtn.Text = "Open Shop · Cash Mega"
+				shopBtn.BorderSizePixel = 0
+				shopBtn.ZIndex = 82
+				corner(shopBtn, 6)
+				shopBtn.Parent = toast
+				-- Grow toast a bit for the extra row
+				toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 168) else UDim2.fromOffset(360, 156)
+				UIUtil.EnsureMinTouch(shopBtn, 44)
+				shopBtn.Activated:Connect(function()
+					destroyDeathToast()
+					pendingCashMegaHighlight = true
+					setOpen(true)
 				end)
 			end
 
@@ -328,15 +392,17 @@ function ShopController.Init()
 	list.CanvasSize = UDim2.fromOffset(0, 0)
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.Parent = panel
+	shopListFrame = list
 
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0, 6)
 	layout.Parent = list
 
 	local order = 0
-	local function addRow(label: string, sub: string, onClick: () -> (), btnText: string?)
+	local function addRow(label: string, sub: string, onClick: () -> (), btnText: string?, rowKey: string?)
 		order += 1
 		local row = Instance.new("Frame")
+		row.Name = if rowKey then ("ShopRow_" .. rowKey) else ("ShopRow_" .. tostring(order))
 		row.Size = UDim2.new(1, -8, 0, 56)
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
@@ -417,7 +483,7 @@ function ShopController.Init()
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
 		addRow(title, sub, function()
 			promptDevProduct(key)
-		end, btnLabel)
+		end, btnLabel, key)
 	end
 
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
@@ -940,6 +1006,133 @@ function ShopController.Init()
 						task.wait(0.2)
 					end
 					showDoubleCashToast(payload)
+				end)
+			end)
+		end
+	end
+
+
+	-- v35: one-shot VIP soft offer toast (existing GamePass Id 1985475542 only)
+	do
+		local vipToast: Frame? = nil
+		local lastVipToastAt = 0.0
+		local VIP_TOAST_DEBOUNCE = 12.0
+
+		local function destroyVipToast()
+			if vipToast then
+				vipToast:Destroy()
+				vipToast = nil
+			end
+		end
+
+		local function showVIPToast(payload: any)
+			local now = os.clock()
+			if now - lastVipToastAt < VIP_TOAST_DEBOUNCE then
+				return
+			end
+			lastVipToastAt = now
+			destroyVipToast()
+			local displayName = "VIP"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.VIP
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "VIPToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Constants.Colors.Gold
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			vipToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -48, 0, 24)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 17 else 16
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Constants.Colors.Gold
+			title.Text = "★ Soft offer · " .. displayName
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local body = Instance.new("TextLabel")
+			body.BackgroundTransparency = 1
+			body.Position = UDim2.fromOffset(12, 32)
+			body.Size = UDim2.new(1, -24, 0, 22)
+			body.Font = Enum.Font.Gotham
+			body.TextSize = if isTouch then 13 else 12
+			body.TextXAlignment = Enum.TextXAlignment.Left
+			body.TextColor3 = Constants.Colors.Muted
+			body.Text = if robux then string.format("+25%% cash · prestige presence · %d R$", robux) else "+25% cash · prestige presence"
+			body.ZIndex = 81
+			body.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(32, 32)
+			dismiss.BackgroundTransparency = 1
+			dismiss.Text = "✕"
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.TextSize = 18
+			dismiss.TextColor3 = Constants.Colors.Muted
+			dismiss.ZIndex = 82
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyVipToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(180, 140, 40)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
+			buy.Text = "Get VIP"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyVipToast()
+				promptGamePass("VIP")
+			end)
+
+			task.delay(12, function()
+				if vipToast == toast then
+					destroyVipToast()
+				end
+			end)
+		end
+
+		local vipRemote = Remotes.GetEvent(Constants.RemoteNames.VIPOffer)
+		if vipRemote then
+			vipRemote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showVIPToast(payload)
 				end)
 			end)
 		end

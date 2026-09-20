@@ -445,39 +445,108 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 end
 
 local function partKitAutoGun(at: CFrame, parent: Instance): (Model, BasePart)
+	-- v35: obvious HMG tripod + long barrel + muzzle tip (readable at gate flanks)
 	local model = Instance.new("Model")
 	model.Name = "GateAutoGun_Fallback"
 	local base = Instance.new("Part")
 	base.Name = "Base"
-	base.Size = Vector3.new(2, 0.4, 2)
+	base.Size = Vector3.new(2.4, 0.45, 2.4)
 	base.CFrame = at
 	base.Anchored = true
 	base.CanCollide = false
 	base.Color = Color3.fromRGB(64, 69, 71)
 	base.Material = Enum.Material.Metal
 	base.Parent = model
+	-- Tripod legs
+	for i, ang in ipairs({ 0, 120, 240 }) do
+		local leg = Instance.new("Part")
+		leg.Name = "TripodLeg" .. i
+		leg.Size = Vector3.new(0.25, 2.2, 0.25)
+		leg.CFrame = at * CFrame.Angles(0, math.rad(ang), 0) * CFrame.new(0.9, 0.9, 0) * CFrame.Angles(0, 0, math.rad(25))
+		leg.Anchored = true
+		leg.CanCollide = false
+		leg.Color = Color3.fromRGB(50, 52, 48)
+		leg.Material = Enum.Material.Metal
+		leg.Parent = model
+	end
 	local yaw = Instance.new("Part")
 	yaw.Name = "Yaw"
-	yaw.Size = Vector3.new(1.2, 0.6, 1.2)
-	yaw.CFrame = at * CFrame.new(0, 0.5, 0)
+	yaw.Size = Vector3.new(1.4, 0.7, 1.4)
+	yaw.CFrame = at * CFrame.new(0, 1.35, 0)
 	yaw.Anchored = true
 	yaw.CanCollide = false
 	yaw.Color = Color3.fromRGB(55, 58, 60)
 	yaw.Material = Enum.Material.Metal
 	yaw.Parent = model
+	-- Gun shield plate
+	local shield = Instance.new("Part")
+	shield.Name = "Shield"
+	shield.Size = Vector3.new(2.2, 1.4, 0.18)
+	shield.CFrame = yaw.CFrame * CFrame.new(0, 0.5, -0.7)
+	shield.Anchored = true
+	shield.CanCollide = false
+	shield.Color = Color3.fromRGB(70, 75, 68)
+	shield.Material = Enum.Material.Metal
+	shield.Parent = model
 	local barrel = Instance.new("Part")
 	barrel.Name = "Barrel"
 	barrel.Shape = Enum.PartType.Cylinder
-	barrel.Size = Vector3.new(3, 0.3, 0.3)
-	barrel.CFrame = yaw.CFrame * CFrame.new(0, 0.15, -1.4) * CFrame.Angles(0, 0, math.rad(90))
+	barrel.Size = Vector3.new(4.2, 0.35, 0.35)
+	barrel.CFrame = yaw.CFrame * CFrame.new(0, 0.35, -2.2) * CFrame.Angles(0, 0, math.rad(90))
 	barrel.Anchored = true
 	barrel.CanCollide = false
-	barrel.Color = Color3.fromRGB(40, 42, 44)
+	barrel.Color = Color3.fromRGB(35, 37, 40)
 	barrel.Material = Enum.Material.Metal
 	barrel.Parent = model
+	local muzzle = Instance.new("Part")
+	muzzle.Name = "MuzzleTip"
+	muzzle.Shape = Enum.PartType.Ball
+	muzzle.Size = Vector3.new(0.55, 0.55, 0.55)
+	muzzle.CFrame = yaw.CFrame * CFrame.new(0, 0.35, -4.3)
+	muzzle.Anchored = true
+	muzzle.CanCollide = false
+	muzzle.Color = Color3.fromRGB(255, 160, 40)
+	muzzle.Material = Enum.Material.Neon
+	muzzle.Parent = model
 	model.PrimaryPart = yaw
 	model.Parent = parent
 	return model, yaw
+end
+
+local function attachTurretVisualMarker(model: Model, at: CFrame)
+	-- Always-on neon ring so upgraded AutoGuns read clearly even when catalog mesh loads
+	if model:FindFirstChild("WE_TurretMarker") then
+		return
+	end
+	local ring = Instance.new("Part")
+	ring.Name = "WE_TurretMarker"
+	ring.Size = Vector3.new(3.2, 0.18, 3.2)
+	ring.CFrame = at * CFrame.new(0, 0.15, 0)
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.Color = Color3.fromRGB(255, 90, 40)
+	ring.Material = Enum.Material.Neon
+	ring.Transparency = 0.25
+	ring.Parent = model
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_AutoGunBillboard"
+	bb.Size = UDim2.fromOffset(90, 22)
+	bb.StudsOffset = Vector3.new(0, 4.5, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 90
+	bb.Parent = model.PrimaryPart or ring
+	local lab = Instance.new("TextLabel")
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.BackgroundColor3 = Color3.fromRGB(30, 20, 10)
+	lab.BackgroundTransparency = 0.2
+	lab.Font = Enum.Font.GothamBold
+	lab.TextScaled = true
+	lab.TextColor3 = Color3.fromRGB(255, 180, 80)
+	lab.Text = "AUTO GUN"
+	lab.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = lab
 end
 
 local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
@@ -520,6 +589,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 
 	model:SetAttribute("GateAutoGun", true)
 	model:SetAttribute("FriendlyGate", true)
+	attachTurretVisualMarker(model, at)
 
 	-- Sandbag nest dress under gun
 	if gd and gd.SandbagNest and typeof(gd.SandbagNest.ModelAssetId) == "number" then

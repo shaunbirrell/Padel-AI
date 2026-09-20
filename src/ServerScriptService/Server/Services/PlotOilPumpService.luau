@@ -149,14 +149,21 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 		end)
 	end
 
+	-- v35: pumpjack spectacle — walking beam + horse head bob together
 	task.spawn(function()
 		local t0 = os.clock()
 		while model.Parent do
 			local t = os.clock() - t0
+			local ang = math.sin(t * 1.1) * 14 -- degrees
 			if beam.Parent then
-				beam.CFrame = at * CFrame.new(0, 14.2, 0) * CFrame.Angles(0, 0, math.rad(math.sin(t * 0.7) * 12))
+				beam.CFrame = at * CFrame.new(0, 14.2, 0) * CFrame.Angles(0, 0, math.rad(ang))
 			end
-			task.wait(0.12)
+			if head.Parent then
+				-- Tip of beam (~4.2 studs along X) follows tilt
+				local tip = CFrame.new(4.2, 0, 0)
+				head.CFrame = at * CFrame.new(0, 14.2, 0) * CFrame.Angles(0, 0, math.rad(ang)) * tip * CFrame.new(0, -0.6, 0)
+			end
+			task.wait(0.08)
 		end
 	end)
 

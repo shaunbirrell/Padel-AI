@@ -400,7 +400,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 23 -- v34: sync with StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 24 -- v35: sync with StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)

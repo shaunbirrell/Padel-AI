@@ -31,6 +31,7 @@ local TerritoryService: any = nil
 local MissionService: any = nil
 local TutorialService: any = nil
 local NotificationService: any = nil
+local MonetizationService: any = nil
 
 -- plotId -> userId
 local plotOwners: { [number]: number } = {}
@@ -304,6 +305,13 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 
 	BaseService.PushState(player)
 	BaseService.UpdateVisuals(player, structureId, targetLevel)
+
+	-- v35: mid-game VIP soft offer on first structure L3+
+	if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
+		pcall(function()
+			MonetizationService.TrySoftOfferVIP(player, "structure_l3")
+		end)
+	end
 
 	getUpgradeChangedEvent():Fire(player.UserId, profile.BasePlotId, structureId, targetLevel)
 
@@ -728,6 +736,7 @@ function BaseService.Init(deps: { [string]: any })
 	MissionService = deps.MissionService
 	TutorialService = deps.TutorialService
 	NotificationService = deps.NotificationService
+	MonetizationService = deps.MonetizationService
 
 	getUpgradeChangedEvent()
 

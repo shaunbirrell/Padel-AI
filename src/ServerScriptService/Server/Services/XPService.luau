@@ -102,6 +102,12 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		if AnalyticsService then
 			AnalyticsService.Log("LEVEL_UP", player.UserId, { level = profile.Level, reason = reason })
 		end
+		-- v35: mid-game VIP soft offer (level≥10)
+		if MonetizationService and MonetizationService.TrySoftOfferVIP then
+			pcall(function()
+				MonetizationService.TrySoftOfferVIP(player, "level")
+			end)
+		end
 		-- Push per level-up so HUD goal / unlock toast refresh immediately
 		pushXP(player, profile, unlockMsg)
 	end

@@ -157,6 +157,12 @@ local MonetizationConfig = {
 		DelaySeconds = 1.8,
 		MinCollectCash = 2500, -- only after a solid collect
 	},
+	-- v35: one-shot VIP soft offer at mid-game (level≥10 OR first structure L3); not spammy
+	VIPOffer = {
+		DelaySeconds = 2.0,
+		MinLevel = 10,
+		MinStructureLevel = 3,
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {

@@ -1756,6 +1756,12 @@ local MonetizationConfig = {
 		DelaySeconds = 1.8,
 		MinCollectCash = 2500, -- only after a solid collect
 	},
+	-- v35: one-shot VIP soft offer at mid-game (level≥10 OR first structure L3); not spammy
+	VIPOffer = {
+		DelaySeconds = 2.0,
+		MinLevel = 10,
+		MinStructureLevel = 3,
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
@@ -2282,7 +2288,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 23,
+	BuildingDressGen = 24,
 
 	Palettes = {
 		CommandCenter = {
@@ -2327,7 +2333,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 200, 80),
 			Roof = Color3.fromRGB(50, 55, 52),
 			Kit = "helipad",
-			TargetFootprint = Vector3.new(22, 3, 22),
+			TargetFootprint = Vector3.new(28, 4, 28),
 			MeshAssetId = 14313845338,
 		},
 		Dock = {
@@ -2336,7 +2342,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(70, 180, 220),
 			Roof = Color3.fromRGB(40, 58, 70),
 			Kit = "dock",
-			TargetFootprint = Vector3.new(40, 8, 16),
+			TargetFootprint = Vector3.new(44, 10, 28),
 			MeshAssetId = 17701461178,
 		},
 		Airfield = {
@@ -2418,7 +2424,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(160, 80, 200),
 			Roof = Color3.fromRGB(30, 35, 40),
 			Kit = "special",
-			TargetFootprint = Vector3.new(26, 14, 16),
+			TargetFootprint = Vector3.new(32, 16, 20),
 			MeshAssetId = 18798977801,
 		},
 	} :: { [string]: StructurePalette },
@@ -3759,6 +3765,7 @@ Constants.RemoteNames = {
 	StarterBundleOffer = "StarterBundleOffer",
 	AutoCollectOffer = "AutoCollectOffer",
 	DoubleCashOffer = "DoubleCashOffer",
+	VIPOffer = "VIPOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
@@ -3976,6 +3983,7 @@ export type PlayerProfile = {
 	StarterBundleOffered: boolean?,
 	AutoCollectOffered: boolean?,
 	DoubleCashOffered: boolean?,
+	VIPOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {
@@ -6466,6 +6474,37 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			kitVehicleSilhouette(f, Vector3.new(500, 0.5, 120), 95, "jeep")
 			kitVehicleSilhouette(f, Vector3.new(200, 0.5, -1100), 10, "tank")
 			kitVehicleSilhouette(f, Vector3.new(1100, 0.5, 200), 100, "truck")
+		end
+	end
+
+
+	-- 10b) v35 landmarks — wrecked vehicle cluster + extra bunker / radio silhouette (perf-light)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "Landmarks_v35"
+		f.Parent = dressing
+		-- Wrecked vehicle prop cluster (mid-warzone)
+		local wreckOrigin = Vector3.new(-350, 0.5, -450)
+		kitVehicleSilhouette(f, wreckOrigin, 25, "jeep")
+		kitVehicleSilhouette(f, wreckOrigin + Vector3.new(10, 0, 4), 110, "truck")
+		kitCrateStack(f, wreckOrigin + Vector3.new(-6, 0, 6))
+		kitOilDrums(f, wreckOrigin + Vector3.new(4, 0, -5), 3)
+		kitSandbagLine(f, wreckOrigin + Vector3.new(0, 0, 12), 15, if full then 3 else 2)
+		-- Scorch / debris pads
+		p({
+			Name = "WreckScorch",
+			Size = Vector3.new(18, 0.2, 14),
+			CFrame = CFrame.new(wreckOrigin + Vector3.new(2, 0.05, 2)),
+			Color = Color3.fromRGB(35, 32, 28),
+			Material = Enum.Material.Asphalt,
+			CanCollide = false,
+			Parent = f,
+		})
+		-- Extra bunker silhouette (SW approach)
+		kitBunker(f, Vector3.new(-700, 0.5, 600), 210)
+		if full then
+			kitRadioTower(f, Vector3.new(-1200, 0.5, 200), 30)
+			kitBunker(f, Vector3.new(550, 0.5, -700), 45)
 		end
 	end
 
@@ -9670,6 +9709,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		StarterBundleOffered = false,
 		AutoCollectOffered = false,
 		DoubleCashOffered = false,
+		VIPOffered = false,
 	}
 end
 
@@ -9884,6 +9924,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if (profile :: any).DoubleCashOffered == nil then
 		(profile :: any).DoubleCashOffered = false
 	end
+	if (profile :: any).VIPOffered == nil then
+		(profile :: any).VIPOffered = false
+	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
 	return profile
@@ -10047,6 +10090,7 @@ local EVENTS = {
 	Constants.RemoteNames.StarterBundleOffer,
 	Constants.RemoteNames.AutoCollectOffer,
 	Constants.RemoteNames.DoubleCashOffer,
+	Constants.RemoteNames.VIPOffer,
 	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
 }
@@ -10348,7 +10392,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 23 -- v34: denser HQ / Barracks / WeaponsFacility (armory) presence
+local KIT_GEN = 24 -- v35: denser SpecialForcesFacility + Helipad/Dock presence
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -10661,27 +10705,70 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Door", Vector3.new(2.4, 3.6, 0.35), Vector3.new(0, 2.4, -5.15), Color3.fromRGB(40, 42, 36), Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.55, 26, 0.55), Vector3.new(5.2, 13.5, 5.2), Color3.fromRGB(55, 58, 48), Enum.Material.Metal, nil) -- ladder rail
 	elseif kit == "dock" then
-		kitPart(plinth, "Body", Vector3.new(20, 1.2, 14), Vector3.new(0, 1.1, 0), pal.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Pier", Vector3.new(36, 0.8, 8), Vector3.new(0, 1.4, 18), pal.Roof, Enum.Material.Wood, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.2, 0.14, 0.4), Vector3.new(0, 1.25, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.2, 2.8, 0.4), Vector3.new(3.3, 2.1, 2.6), pal.Accent, Enum.Material.Metal, nil)
-		kitPart(plinth, "Door", Vector3.new(1.8, 0.3, 1.2), Vector3.new(0, 1.35, 4.2), Color3.fromRGB(40, 55, 70), Enum.Material.Metal, nil)
+		-- v35: naval pier + bollards + crane silhouette + warehouse shed (readable Naval Dock)
+		kitPart(plinth, "Body", Vector3.new(24, 1.4, 16), Vector3.new(0, 1.2, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Pier", Vector3.new(44, 0.9, 10), Vector3.new(0, 1.5, 20), pal.Roof, Enum.Material.Wood, nil)
+		kitPart(plinth, "Accent", Vector3.new(20, 0.16, 0.5), Vector3.new(0, 1.35, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- Bollards along pier
+		for bi, bx in ipairs({ -16, -8, 0, 8, 16 }) do
+			kitPart(plinth, "Detail", Vector3.new(1.1, 1.6, 1.1), Vector3.new(bx, 2.4, 24), Color3.fromRGB(50, 55, 60), Enum.Material.Metal, nil)
+		end
+		-- Crane mast + boom
+		kitPart(plinth, "Antenna", Vector3.new(1.2, 16, 1.2), Vector3.new(-10, 9, 8), Color3.fromRGB(200, 140, 50), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(18, 0.6, 0.6), Vector3.new(-1, 16.5, 8), Color3.fromRGB(210, 150, 55), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.4, 4, 0.4), Vector3.new(7, 14, 8), Color3.fromRGB(80, 80, 75), Enum.Material.Metal, nil) -- cable
+		-- Shore warehouse shed
+		kitPart(plinth, "Roof", Vector3.new(14, 8, 10), Vector3.new(10, 5, -2), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Door", Vector3.new(6, 6, 0.4), Vector3.new(10, 3.5, 3.2), Color3.fromRGB(40, 55, 70), Enum.Material.Metal, nil)
+		-- Tire fenders
+		for _, fx in ipairs({ -12, 0, 12 }) do
+			kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 0.6), Vector3.new(fx, 1.8, 25.2), Color3.fromRGB(35, 35, 35), Enum.Material.Rubber, Enum.PartType.Cylinder)
+		end
+		-- Shipping crate dress hosts
+		do
+			local hosts = {
+				{ "WE_DressHost_Crate", Vector3.new(1.8, 1.4, 1.8), Vector3.new(6, 1.8, 12), "MilitaryCrate" },
+				{ "WE_DressHost_Fuel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(-6, 1.6, 10), "FuelCans" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "pad" then
 		kitPart(plinth, "Body", Vector3.new(7.3, 0.45, 7.3), Vector3.new(0, 0.92, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.5, 0.14, 6.6), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), pal.Roof, Enum.Material.Metal, nil)
 	elseif kit == "helipad" then
-		-- ~22 stud marked pad + H + floodlights (not a tiny cube)
-		kitPart(plinth, "Body", Vector3.new(22, 0.6, 22), Vector3.new(0, 0.95, 0), pal.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(18, 0.12, 1.2), Vector3.new(0, 1.3, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.2, 0.12, 14), Vector3.new(0, 1.3, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Roof", Vector3.new(3.5, 0.2, 0.6), Vector3.new(0, 1.35, 0), Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, nil) -- H bar
-		kitPart(plinth, "Detail", Vector3.new(0.6, 0.2, 3.5), Vector3.new(0, 1.35, 0), Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.5, 0.35), Vector3.new(-9, 3.2, -9), pal.Accent, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.5, 0.35), Vector3.new(9, 3.2, 9), pal.Accent, Enum.Material.Metal, nil)
-		kitPart(plinth, "Window", Vector3.new(0.8, 0.8, 0.8), Vector3.new(-9, 5.4, -9), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
-		kitPart(plinth, "Window", Vector3.new(0.8, 0.8, 0.8), Vector3.new(9, 5.4, 9), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
+		-- v35: ~28 stud marked pad + circle ring + H + 4 floodlights + windsock (readable air ops)
+		kitPart(plinth, "Body", Vector3.new(28, 0.65, 28), Vector3.new(0, 0.95, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(22, 0.12, 1.4), Vector3.new(0, 1.32, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.4, 0.12, 18), Vector3.new(0, 1.32, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- Circle ring (4 arcs as flat bars)
+		for _, angOff in ipairs({ 0, 45, 90, 135 }) do
+			local rad = math.rad(angOff)
+			local ox = math.cos(rad) * 10
+			local oz = math.sin(rad) * 10
+			kitPart(plinth, "Detail", Vector3.new(8, 0.1, 0.7), Vector3.new(ox, 1.28, oz), Color3.fromRGB(245, 245, 200), Enum.Material.Neon, nil)
+		end
+		kitPart(plinth, "Roof", Vector3.new(4.2, 0.22, 0.7), Vector3.new(0, 1.38, 0), Color3.fromRGB(245, 245, 245), Enum.Material.SmoothPlastic, nil) -- H bar
+		kitPart(plinth, "Detail", Vector3.new(0.7, 0.22, 4.2), Vector3.new(0, 1.38, 0), Color3.fromRGB(245, 245, 245), Enum.Material.SmoothPlastic, nil)
+		-- Four corner floodlights
+		for _, corner in ipairs({ Vector3.new(-11, 3.2, -11), Vector3.new(11, 3.2, -11), Vector3.new(-11, 3.2, 11), Vector3.new(11, 3.2, 11) }) do
+			kitPart(plinth, "Antenna", Vector3.new(0.35, 5.0, 0.35), corner, pal.Accent, Enum.Material.Metal, nil)
+			kitPart(plinth, "Window", Vector3.new(0.9, 0.9, 0.9), corner + Vector3.new(0, 2.6, 0), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
+		end
+		-- Windsock pole
+		kitPart(plinth, "Antenna", Vector3.new(0.3, 6, 0.3), Vector3.new(12, 3.5, 0), Color3.fromRGB(70, 72, 68), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(2.4, 0.9, 0.15), Vector3.new(13.2, 6.2, 0), Color3.fromRGB(220, 80, 50), Enum.Material.Fabric, nil)
+		-- Ops hut
+		kitPart(plinth, "Detail", Vector3.new(6, 3.5, 4), Vector3.new(-14, 2.2, 10), Color3.fromRGB(55, 60, 55), Enum.Material.Metal, nil)
 	elseif kit == "airfield" then
 		-- v33: readable runway + taxi + large hangar volume (mesh composite dresses on top)
 		kitPart(plinth, "Body", Vector3.new(72, 0.85, 14), Vector3.new(0, 0.95, 20), Color3.fromRGB(42, 44, 46), Enum.Material.Asphalt, nil)
@@ -10769,6 +10856,48 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(3.2, 2.4, 2.4), Vector3.new(-14, 1.8, -14), Color3.fromRGB(120, 95, 55), Enum.Material.Wood, nil)
 		kitPart(plinth, "Detail", Vector3.new(3.0, 2.2, 2.2), Vector3.new(-10.5, 1.7, -14), Color3.fromRGB(110, 90, 50), Enum.Material.Wood, nil)
 		kitPart(plinth, "Window", Vector3.new(3.5, 1.8, 0.25), Vector3.new(10, 10, -12.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+	elseif kit == "special" then
+		-- v35: Special Forces compound (~28×16×18) — dark ops hall + range + watch post
+		kitPart(plinth, "Body", Vector3.new(28, 14, 16), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(30, 1.2, 18), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(28, 0.28, 16), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(3.6, 5.0, 0.4), Vector3.new(0, 3.2, -8.2), Color3.fromRGB(25, 28, 32), Enum.Material.Metal, nil)
+		-- Side annex (armory wing)
+		kitPart(plinth, "Detail", Vector3.new(12, 10, 10), Vector3.new(-18, 5.5, 2), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(10, 8, 8), Vector3.new(16, 4.5, -2), Color3.fromRGB(40, 48, 55), Enum.Material.Metal, nil)
+		-- Watch post / tower stub
+		kitPart(plinth, "Antenna", Vector3.new(4, 18, 4), Vector3.new(12, 10, 10), Color3.fromRGB(38, 42, 48), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(2.2, 1.4, 0.25), Vector3.new(12, 16, 7.9), Color3.fromRGB(100, 160, 200), Enum.Material.Glass, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 6, 0.35), Vector3.new(12, 22, 10), pal.Accent, Enum.Material.Neon, nil)
+		-- Training range silhouette (targets + berm)
+		kitPart(plinth, "Detail", Vector3.new(16, 1.2, 3), Vector3.new(0, 1.2, 12), Color3.fromRGB(90, 85, 60), Enum.Material.Sand, nil)
+		for _, tx in ipairs({ -6, 0, 6 }) do
+			kitPart(plinth, "Detail", Vector3.new(0.8, 2.4, 0.3), Vector3.new(tx, 2.4, 13.5), Color3.fromRGB(180, 60, 50), Enum.Material.Metal, nil)
+		end
+		-- Windows + flag
+		kitPart(plinth, "Window", Vector3.new(2.4, 1.6, 0.25), Vector3.new(-6, 8, -8.1), Color3.fromRGB(70, 100, 140), Enum.Material.Glass, nil)
+		kitPart(plinth, "Window", Vector3.new(2.4, 1.6, 0.25), Vector3.new(6, 8, -8.1), Color3.fromRGB(70, 100, 140), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.8, 5, 0.8), Vector3.new(-12, 4, 8), pal.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(2.2, 1.3, 0.2), Vector3.new(-12, 7.2, 8), Color3.fromRGB(120, 50, 160), Enum.Material.Fabric, nil)
+		-- Dress hosts
+		do
+			local hosts = {
+				{ "WE_DressHost_Ammo", Vector3.new(1.4, 1.0, 1.0), Vector3.new(-10, 1.4, 6), "AmmoBox" },
+				{ "WE_DressHost_Crate", Vector3.new(1.6, 1.2, 1.6), Vector3.new(-6, 1.5, 7), "MilitaryCrate" },
+				{ "WE_DressHost_Sandbag", Vector3.new(3.0, 1.0, 1.2), Vector3.new(4, 1.2, 10), "Sandbag" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(10, 3.0, 4), "Lantern" },
+				{ "WE_DressHost_Flood", Vector3.new(0.7, 1.4, 0.7), Vector3.new(-14, 5.0, -6), "Floodlight" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	else
 		kitPart(plinth, "Body", Vector3.new(5.3, 3.5, 5.3), Vector3.new(0, 2.4, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(4.2, 1.2, 4.2), Vector3.new(0, 4.6, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -10800,7 +10929,7 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" then
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
@@ -12614,6 +12743,7 @@ local TerritoryService: any = nil
 local MissionService: any = nil
 local TutorialService: any = nil
 local NotificationService: any = nil
+local MonetizationService: any = nil
 
 -- plotId -> userId
 local plotOwners: { [number]: number } = {}
@@ -12887,6 +13017,13 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 
 	BaseService.PushState(player)
 	BaseService.UpdateVisuals(player, structureId, targetLevel)
+
+	-- v35: mid-game VIP soft offer on first structure L3+
+	if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
+		pcall(function()
+			MonetizationService.TrySoftOfferVIP(player, "structure_l3")
+		end)
+	end
 
 	getUpgradeChangedEvent():Fire(player.UserId, profile.BasePlotId, structureId, targetLevel)
 
@@ -13311,6 +13448,7 @@ function BaseService.Init(deps: { [string]: any })
 	MissionService = deps.MissionService
 	TutorialService = deps.TutorialService
 	NotificationService = deps.NotificationService
+	MonetizationService = deps.MonetizationService
 
 	getUpgradeChangedEvent()
 
@@ -17557,39 +17695,108 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 end
 
 local function partKitAutoGun(at: CFrame, parent: Instance): (Model, BasePart)
+	-- v35: obvious HMG tripod + long barrel + muzzle tip (readable at gate flanks)
 	local model = Instance.new("Model")
 	model.Name = "GateAutoGun_Fallback"
 	local base = Instance.new("Part")
 	base.Name = "Base"
-	base.Size = Vector3.new(2, 0.4, 2)
+	base.Size = Vector3.new(2.4, 0.45, 2.4)
 	base.CFrame = at
 	base.Anchored = true
 	base.CanCollide = false
 	base.Color = Color3.fromRGB(64, 69, 71)
 	base.Material = Enum.Material.Metal
 	base.Parent = model
+	-- Tripod legs
+	for i, ang in ipairs({ 0, 120, 240 }) do
+		local leg = Instance.new("Part")
+		leg.Name = "TripodLeg" .. i
+		leg.Size = Vector3.new(0.25, 2.2, 0.25)
+		leg.CFrame = at * CFrame.Angles(0, math.rad(ang), 0) * CFrame.new(0.9, 0.9, 0) * CFrame.Angles(0, 0, math.rad(25))
+		leg.Anchored = true
+		leg.CanCollide = false
+		leg.Color = Color3.fromRGB(50, 52, 48)
+		leg.Material = Enum.Material.Metal
+		leg.Parent = model
+	end
 	local yaw = Instance.new("Part")
 	yaw.Name = "Yaw"
-	yaw.Size = Vector3.new(1.2, 0.6, 1.2)
-	yaw.CFrame = at * CFrame.new(0, 0.5, 0)
+	yaw.Size = Vector3.new(1.4, 0.7, 1.4)
+	yaw.CFrame = at * CFrame.new(0, 1.35, 0)
 	yaw.Anchored = true
 	yaw.CanCollide = false
 	yaw.Color = Color3.fromRGB(55, 58, 60)
 	yaw.Material = Enum.Material.Metal
 	yaw.Parent = model
+	-- Gun shield plate
+	local shield = Instance.new("Part")
+	shield.Name = "Shield"
+	shield.Size = Vector3.new(2.2, 1.4, 0.18)
+	shield.CFrame = yaw.CFrame * CFrame.new(0, 0.5, -0.7)
+	shield.Anchored = true
+	shield.CanCollide = false
+	shield.Color = Color3.fromRGB(70, 75, 68)
+	shield.Material = Enum.Material.Metal
+	shield.Parent = model
 	local barrel = Instance.new("Part")
 	barrel.Name = "Barrel"
 	barrel.Shape = Enum.PartType.Cylinder
-	barrel.Size = Vector3.new(3, 0.3, 0.3)
-	barrel.CFrame = yaw.CFrame * CFrame.new(0, 0.15, -1.4) * CFrame.Angles(0, 0, math.rad(90))
+	barrel.Size = Vector3.new(4.2, 0.35, 0.35)
+	barrel.CFrame = yaw.CFrame * CFrame.new(0, 0.35, -2.2) * CFrame.Angles(0, 0, math.rad(90))
 	barrel.Anchored = true
 	barrel.CanCollide = false
-	barrel.Color = Color3.fromRGB(40, 42, 44)
+	barrel.Color = Color3.fromRGB(35, 37, 40)
 	barrel.Material = Enum.Material.Metal
 	barrel.Parent = model
+	local muzzle = Instance.new("Part")
+	muzzle.Name = "MuzzleTip"
+	muzzle.Shape = Enum.PartType.Ball
+	muzzle.Size = Vector3.new(0.55, 0.55, 0.55)
+	muzzle.CFrame = yaw.CFrame * CFrame.new(0, 0.35, -4.3)
+	muzzle.Anchored = true
+	muzzle.CanCollide = false
+	muzzle.Color = Color3.fromRGB(255, 160, 40)
+	muzzle.Material = Enum.Material.Neon
+	muzzle.Parent = model
 	model.PrimaryPart = yaw
 	model.Parent = parent
 	return model, yaw
+end
+
+local function attachTurretVisualMarker(model: Model, at: CFrame)
+	-- Always-on neon ring so upgraded AutoGuns read clearly even when catalog mesh loads
+	if model:FindFirstChild("WE_TurretMarker") then
+		return
+	end
+	local ring = Instance.new("Part")
+	ring.Name = "WE_TurretMarker"
+	ring.Size = Vector3.new(3.2, 0.18, 3.2)
+	ring.CFrame = at * CFrame.new(0, 0.15, 0)
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.Color = Color3.fromRGB(255, 90, 40)
+	ring.Material = Enum.Material.Neon
+	ring.Transparency = 0.25
+	ring.Parent = model
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_AutoGunBillboard"
+	bb.Size = UDim2.fromOffset(90, 22)
+	bb.StudsOffset = Vector3.new(0, 4.5, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 90
+	bb.Parent = model.PrimaryPart or ring
+	local lab = Instance.new("TextLabel")
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.BackgroundColor3 = Color3.fromRGB(30, 20, 10)
+	lab.BackgroundTransparency = 0.2
+	lab.Font = Enum.Font.GothamBold
+	lab.TextScaled = true
+	lab.TextColor3 = Color3.fromRGB(255, 180, 80)
+	lab.Text = "AUTO GUN"
+	lab.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = lab
 end
 
 local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
@@ -17632,6 +17839,7 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 
 	model:SetAttribute("GateAutoGun", true)
 	model:SetAttribute("FriendlyGate", true)
+	attachTurretVisualMarker(model, at)
 
 	-- Sandbag nest dress under gun
 	if gd and gd.SandbagNest and typeof(gd.SandbagNest.ModelAssetId) == "number" then
@@ -19698,6 +19906,78 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
+
+--[[ v35: one-shot VIP soft toast at mid-game (level≥MinLevel OR structure≥MinStructureLevel). ]]
+function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
+	if not player or not player.Parent then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	if profile.VIPOffered == true then
+		return
+	end
+	local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.VIP
+	if not gp or typeof(gp.Id) ~= "number" or gp.Id == 0 then
+		return
+	end
+	if MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+		return
+	end
+	local offerCfg = (MonetizationConfig :: any).VIPOffer
+	if not offerCfg then
+		return
+	end
+	local minLevel = tonumber(offerCfg.MinLevel) or 10
+	local minStruct = tonumber(offerCfg.MinStructureLevel) or 3
+	local level = tonumber(profile.Level) or 1
+	local maxStruct = 0
+	if typeof(profile.BaseUpgrades) == "table" then
+		for _, lv in pairs(profile.BaseUpgrades) do
+			local n = tonumber(lv) or 0
+			if n > maxStruct then
+				maxStruct = n
+			end
+		end
+	end
+	if level < minLevel and maxStruct < minStruct then
+		return
+	end
+	profile.VIPOffered = true
+	DataService.MarkDirty(player)
+	local delaySec = tonumber(offerCfg.DelaySeconds) or 2.0
+	task.delay(delaySec, function()
+		if not player.Parent then
+			return
+		end
+		if MonetizationService.PlayerOwnsGamePass(player, "VIP") then
+			return
+		end
+		if RemoteSetup then
+			local remote = RemoteSetup.Get(Constants.RemoteNames.VIPOffer)
+			if remote and remote:IsA("RemoteEvent") then
+				(remote :: RemoteEvent):FireClient(player, {
+					ProductKey = "VIP",
+					GamePassId = gp.Id,
+					DisplayName = gp.DisplayName or "VIP",
+					RobuxPrice = gp.RobuxPrice,
+					Reason = reason or "midgame",
+				})
+			end
+		end
+		if NotificationService then
+			NotificationService.Notify(
+				player,
+				"Commander status unlocked — VIP boosts cash & prestige",
+				"Info",
+				4.5
+			)
+		end
+	end)
+end
+
 return MonetizationService
 ]]></string>
           </Properties>
@@ -20684,14 +20964,21 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 		end)
 	end
 
+	-- v35: pumpjack spectacle — walking beam + horse head bob together
 	task.spawn(function()
 		local t0 = os.clock()
 		while model.Parent do
 			local t = os.clock() - t0
+			local ang = math.sin(t * 1.1) * 14 -- degrees
 			if beam.Parent then
-				beam.CFrame = at * CFrame.new(0, 14.2, 0) * CFrame.Angles(0, 0, math.rad(math.sin(t * 0.7) * 12))
+				beam.CFrame = at * CFrame.new(0, 14.2, 0) * CFrame.Angles(0, 0, math.rad(ang))
 			end
-			task.wait(0.12)
+			if head.Parent then
+				-- Tip of beam (~4.2 studs along X) follows tilt
+				local tip = CFrame.new(4.2, 0, 0)
+				head.CFrame = at * CFrame.new(0, 14.2, 0) * CFrame.Angles(0, 0, math.rad(ang)) * tip * CFrame.new(0, -0.6, 0)
+			end
+			task.wait(0.08)
 		end
 	end)
 
@@ -26994,7 +27281,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 23 -- v34: sync with StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 24 -- v35: sync with StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -27769,6 +28056,12 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		end
 		if AnalyticsService then
 			AnalyticsService.Log("LEVEL_UP", player.UserId, { level = profile.Level, reason = reason })
+		end
+		-- v35: mid-game VIP soft offer (level≥10)
+		if MonetizationService and MonetizationService.TrySoftOfferVIP then
+			pcall(function()
+				MonetizationService.TrySoftOfferVIP(player, "level")
+			end)
 		end
 		-- Push per level-up so HUD goal / unlock toast refresh immediately
 		pushXP(player, profile, unlockMsg)
@@ -32117,12 +32410,45 @@ local ShopController = {}
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
+local pendingCashMegaHighlight = false
+local shopListFrame: ScrollingFrame? = nil
 local screenGui: ScreenGui? = nil
 
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = parent
+end
+
+local function highlightCashMegaRow()
+	local list = shopListFrame
+	if not list then
+		return
+	end
+	local row = list:FindFirstChild("ShopRow_CashMega")
+	if not row or not row:IsA("GuiObject") then
+		return
+	end
+	row.BackgroundColor3 = Color3.fromRGB(90, 70, 30)
+	local stroke = row:FindFirstChildOfClass("UIStroke")
+	if not stroke then
+		stroke = Instance.new("UIStroke")
+		stroke.Parent = row
+	end
+	stroke.Color = Constants.Colors.Gold
+	stroke.Thickness = 2.5
+	-- Scroll to top (CashMega is first)
+	if list:IsA("ScrollingFrame") then
+		list.CanvasPosition = Vector2.new(0, 0)
+	end
+	task.delay(4, function()
+		if row.Parent then
+			row.BackgroundColor3 = Constants.Colors.Background
+			if stroke and stroke.Parent then
+				stroke.Thickness = 0
+			end
+		end
+	end)
 end
 
 local function setOpen(open: boolean)
@@ -32132,6 +32458,11 @@ local function setOpen(open: boolean)
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = open
 		end
+	end
+	-- v35: optional CashMega highlight when shop opens from death continuity
+	if open and pendingCashMegaHighlight then
+		pendingCashMegaHighlight = false
+		task.defer(highlightCashMegaRow)
 	end
 end
 
@@ -32240,6 +32571,7 @@ function ShopController.Init()
 			stroke.Parent = toast
 			toast.Parent = host
 			deathToast = toast
+			pendingCashMegaHighlight = true -- v35: CashMega highlight if shop opens
 
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
@@ -32310,7 +32642,32 @@ function ShopController.Init()
 						promptGamePass(key)
 					else
 						promptDevProduct(key)
-					end
+				end
+				end)
+			end
+
+			-- v35: optional open shop → CashMega highlight continuity
+			do
+				local shopBtn = Instance.new("TextButton")
+				shopBtn.Name = "DeathOffer_OpenShop"
+				shopBtn.Position = UDim2.fromOffset(12, rowY + btnH + 6)
+				shopBtn.Size = UDim2.new(1, -24, 0, if isTouch then 36 else 28)
+				shopBtn.BackgroundColor3 = Constants.Colors.Background
+				shopBtn.Font = Enum.Font.GothamBold
+				shopBtn.TextSize = 12
+				shopBtn.TextColor3 = Constants.Colors.Gold
+				shopBtn.Text = "Open Shop · Cash Mega"
+				shopBtn.BorderSizePixel = 0
+				shopBtn.ZIndex = 82
+				corner(shopBtn, 6)
+				shopBtn.Parent = toast
+				-- Grow toast a bit for the extra row
+				toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 168) else UDim2.fromOffset(360, 156)
+				UIUtil.EnsureMinTouch(shopBtn, 44)
+				shopBtn.Activated:Connect(function()
+					destroyDeathToast()
+					pendingCashMegaHighlight = true
+					setOpen(true)
 				end)
 			end
 
@@ -32427,15 +32784,17 @@ function ShopController.Init()
 	list.CanvasSize = UDim2.fromOffset(0, 0)
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	list.Parent = panel
+	shopListFrame = list
 
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0, 6)
 	layout.Parent = list
 
 	local order = 0
-	local function addRow(label: string, sub: string, onClick: () -> (), btnText: string?)
+	local function addRow(label: string, sub: string, onClick: () -> (), btnText: string?, rowKey: string?)
 		order += 1
 		local row = Instance.new("Frame")
+		row.Name = if rowKey then ("ShopRow_" .. rowKey) else ("ShopRow_" .. tostring(order))
 		row.Size = UDim2.new(1, -8, 0, 56)
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
@@ -32516,7 +32875,7 @@ function ShopController.Init()
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
 		addRow(title, sub, function()
 			promptDevProduct(key)
-		end, btnLabel)
+		end, btnLabel, key)
 	end
 
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
@@ -33039,6 +33398,133 @@ function ShopController.Init()
 						task.wait(0.2)
 					end
 					showDoubleCashToast(payload)
+				end)
+			end)
+		end
+	end
+
+
+	-- v35: one-shot VIP soft offer toast (existing GamePass Id 1985475542 only)
+	do
+		local vipToast: Frame? = nil
+		local lastVipToastAt = 0.0
+		local VIP_TOAST_DEBOUNCE = 12.0
+
+		local function destroyVipToast()
+			if vipToast then
+				vipToast:Destroy()
+				vipToast = nil
+			end
+		end
+
+		local function showVIPToast(payload: any)
+			local now = os.clock()
+			if now - lastVipToastAt < VIP_TOAST_DEBOUNCE then
+				return
+			end
+			lastVipToastAt = now
+			destroyVipToast()
+			local displayName = "VIP"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.VIP
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "VIPToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Constants.Colors.Gold
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			vipToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -48, 0, 24)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 17 else 16
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Constants.Colors.Gold
+			title.Text = "★ Soft offer · " .. displayName
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local body = Instance.new("TextLabel")
+			body.BackgroundTransparency = 1
+			body.Position = UDim2.fromOffset(12, 32)
+			body.Size = UDim2.new(1, -24, 0, 22)
+			body.Font = Enum.Font.Gotham
+			body.TextSize = if isTouch then 13 else 12
+			body.TextXAlignment = Enum.TextXAlignment.Left
+			body.TextColor3 = Constants.Colors.Muted
+			body.Text = if robux then string.format("+25%% cash · prestige presence · %d R$", robux) else "+25% cash · prestige presence"
+			body.ZIndex = 81
+			body.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(32, 32)
+			dismiss.BackgroundTransparency = 1
+			dismiss.Text = "✕"
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.TextSize = 18
+			dismiss.TextColor3 = Constants.Colors.Muted
+			dismiss.ZIndex = 82
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyVipToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(180, 140, 40)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
+			buy.Text = "Get VIP"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyVipToast()
+				promptGamePass("VIP")
+			end)
+
+			task.delay(12, function()
+				if vipToast == toast then
+					destroyVipToast()
+				end
+			end)
+		end
+
+		local vipRemote = Remotes.GetEvent(Constants.RemoteNames.VIPOffer)
+		if vipRemote then
+			vipRemote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showVIPToast(payload)
 				end)
 			end)
 		end

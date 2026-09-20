@@ -1292,6 +1292,37 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+
+	-- 10b) v35 landmarks — wrecked vehicle cluster + extra bunker / radio silhouette (perf-light)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "Landmarks_v35"
+		f.Parent = dressing
+		-- Wrecked vehicle prop cluster (mid-warzone)
+		local wreckOrigin = Vector3.new(-350, 0.5, -450)
+		kitVehicleSilhouette(f, wreckOrigin, 25, "jeep")
+		kitVehicleSilhouette(f, wreckOrigin + Vector3.new(10, 0, 4), 110, "truck")
+		kitCrateStack(f, wreckOrigin + Vector3.new(-6, 0, 6))
+		kitOilDrums(f, wreckOrigin + Vector3.new(4, 0, -5), 3)
+		kitSandbagLine(f, wreckOrigin + Vector3.new(0, 0, 12), 15, if full then 3 else 2)
+		-- Scorch / debris pads
+		p({
+			Name = "WreckScorch",
+			Size = Vector3.new(18, 0.2, 14),
+			CFrame = CFrame.new(wreckOrigin + Vector3.new(2, 0.05, 2)),
+			Color = Color3.fromRGB(35, 32, 28),
+			Material = Enum.Material.Asphalt,
+			CanCollide = false,
+			Parent = f,
+		})
+		-- Extra bunker silhouette (SW approach)
+		kitBunker(f, Vector3.new(-700, 0.5, 600), 210)
+		if full then
+			kitRadioTower(f, Vector3.new(-1200, 0.5, 200), 30)
+			kitBunker(f, Vector3.new(550, 0.5, -700), 45)
+		end
+	end
+
 	-- 11) Bunker line
 	do
 		local f = Instance.new("Folder")

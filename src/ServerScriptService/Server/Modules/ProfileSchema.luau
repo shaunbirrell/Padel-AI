@@ -103,6 +103,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		StarterBundleOffered = false,
 		AutoCollectOffered = false,
 		DoubleCashOffered = false,
+		VIPOffered = false,
 	}
 end
 
@@ -316,6 +317,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if (profile :: any).DoubleCashOffered == nil then
 		(profile :: any).DoubleCashOffered = false
+	end
+	if (profile :: any).VIPOffered == nil then
+		(profile :: any).VIPOffered = false
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

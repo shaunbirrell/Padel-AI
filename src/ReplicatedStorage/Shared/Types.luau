@@ -100,6 +100,7 @@ export type PlayerProfile = {
 	StarterBundleOffered: boolean?,
 	AutoCollectOffered: boolean?,
 	DoubleCashOffered: boolean?,
+	VIPOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {
