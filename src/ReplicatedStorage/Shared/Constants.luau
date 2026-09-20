@@ -88,7 +88,7 @@ Constants.RemoteNames = {
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 7
+Constants.CURRENT_DATA_VERSION = 8
 
 Constants.AutosaveIntervalSeconds = 60
 -- Session lock: refresh often; steal if age >= TTL (rejoin after crash ~30–45s)

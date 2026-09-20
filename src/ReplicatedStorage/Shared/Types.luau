@@ -96,6 +96,7 @@ export type PlayerProfile = {
 	LastJoinUnix: number,
 	ProcessedReceipts: { [string]: boolean }?,
 	Entitlements: { [string]: boolean }?,
+	OutpostIncomeStacks: number?,
 }
 
 export type EconomyUpdatePayload = {

@@ -468,6 +468,20 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
 
+	-- Permanent income buff stack (PendingCash / structure / training paths)
+	if _EconomyService and _EconomyService.GrantOutpostIncomeStack then
+		local granted, _stacks, pct = _EconomyService.GrantOutpostIncomeStack(player)
+		if granted and NotificationService and pct > 0 then
+			local buff = nil
+			pcall(function()
+				local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+				buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+			end)
+			local template = (buff and buff.ToastTemplate) or "+%d%% Income — Outpost secured"
+			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+		end
+	end
+
 	if NotificationService then
 		local bonusHint = rt.Def.Description or ""
 		if #bonusHint > 60 then

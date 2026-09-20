@@ -45,7 +45,13 @@ local EconomyConfig = {
 
 	-- Capture stipend tuning lives in TerritoryConfig.CaptureStipend
 	-- (periodic cash for owned territories / coastal oil).
-}
 
+	-- Permanent multiplicative income from capturing outposts (persisted stacks).
+	OutpostIncomeBuff = {
+		MultPerStack = 0.10, -- +10% per stack
+		MaxStacks = 5, -- cap +50%
+		ToastTemplate = "+%d%% Income — Outpost secured",
+	},
+}
 
 return EconomyConfig

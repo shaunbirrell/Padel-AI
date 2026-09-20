@@ -99,6 +99,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		LastJoinUnix = now,
 		ProcessedReceipts = {},
 		Entitlements = {},
+		OutpostIncomeStacks = 0,
 	}
 end
 
@@ -282,6 +283,16 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		version = 7
 	end
 
+
+	-- v7 → v8: permanent outpost income buff stacks
+	if version < 8 then
+		if typeof((profile :: any).OutpostIncomeStacks) ~= "number" then
+			(profile :: any).OutpostIncomeStacks = 0
+		end
+		profile.DataVersion = 8
+		version = 8
+	end
+
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
 	end
@@ -290,6 +301,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if typeof((profile :: any).Entitlements) ~= "table" then
 		(profile :: any).Entitlements = {}
+	end
+	if typeof((profile :: any).OutpostIncomeStacks) ~= "number" then
+		(profile :: any).OutpostIncomeStacks = 0
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

@@ -316,6 +316,7 @@ local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
 local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
 local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.MoneyCollectorService)
+local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
@@ -353,6 +354,8 @@ local deps: { [string]: any } = {
 	UpgradePadService = UpgradePadService,
 	FallSafetyService = FallSafetyService,
 	MoneyCollectorService = MoneyCollectorService,
+	VisualAssetService = VisualAssetService,
+	ManualDropperService = ManualDropperService,
 }
 
 local function safeInit(label: string, svc: any, ...: any)
@@ -386,6 +389,7 @@ safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
 safeInit("XPService", XPService, deps)
 safeInit("MoneyCollectorService", MoneyCollectorService, deps)
+safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
 safeInit("FallSafetyService", FallSafetyService, deps)

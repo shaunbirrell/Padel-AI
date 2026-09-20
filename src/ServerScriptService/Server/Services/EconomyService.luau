@@ -7,6 +7,7 @@
 	  2. Prestige: × (1 + Prestige * EconomyConfig.PrestigeCashMultiplierPerLevel)
 	  3. Monetization VIP/DoubleCash: × MonetizationService.GetCashMultiplier
 	  4. Season: × SeasonService.GetCashMult()
+	  5. OutpostIncomeStacks: × (1 + stacks * OutpostIncomeBuff.MultPerStack)
 	Passive income accrues to PendingCash (Money Collector); CollectPendingCash grants Cash.
 ]]
 
@@ -40,11 +41,22 @@ local function applyCashMult(player: Player, profile: any, amount: number, reaso
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
 	local exempt = MonetizationConfig.CashMultExemptReasons
-	if MonetizationService and MonetizationService.GetCashMultiplier and not (exempt and exempt[reasonKey]) then
-		mult *= MonetizationService.GetCashMultiplier(player)
-	end
-	if SeasonService and SeasonService.GetCashMult and not (exempt and exempt[reasonKey]) then
-		mult *= SeasonService.GetCashMult()
+	local isExempt = exempt and exempt[reasonKey]
+	if not isExempt then
+		-- Permanent outpost capture stacks (passive / structure / training AccruePendingCash)
+		local buff = EconomyConfig.OutpostIncomeBuff
+		if buff then
+			local stacks = math.clamp(math.floor(tonumber(profile.OutpostIncomeStacks) or 0), 0, buff.MaxStacks or 5)
+			if stacks > 0 then
+				mult *= (1 + stacks * (buff.MultPerStack or 0.10))
+			end
+		end
+		if MonetizationService and MonetizationService.GetCashMultiplier then
+			mult *= MonetizationService.GetCashMultiplier(player)
+		end
+		if SeasonService and SeasonService.GetCashMult then
+			mult *= SeasonService.GetCashMult()
+		end
 	end
 	return math.floor(amount * mult)
 end
@@ -200,6 +212,41 @@ end
 function EconomyService.GetGold(player: Player): number
 	local profile = DataService.GetProfile(player)
 	return if profile then profile.Gold else 0
+end
+
+function EconomyService.GetOutpostIncomeMultiplier(player: Player): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 1
+	end
+	local buff = EconomyConfig.OutpostIncomeBuff
+	if not buff then
+		return 1
+	end
+	local stacks = math.clamp(math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0), 0, buff.MaxStacks or 5)
+	return 1 + stacks * (buff.MultPerStack or 0.10)
+end
+
+--[[ Grant one permanent outpost income stack (capped). Returns (granted, newStacks, percentAdded). ]]
+function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, number, number)
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false, 0, 0
+	end
+	local buff = EconomyConfig.OutpostIncomeBuff
+	if not buff then
+		return false, 0, 0
+	end
+	local maxStacks = buff.MaxStacks or 5
+	local stacks = math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0)
+	if stacks >= maxStacks then
+		return false, stacks, 0
+	end
+	stacks += 1
+	(profile :: any).OutpostIncomeStacks = stacks
+	DataService.MarkDirty(player)
+	local pct = math.floor((buff.MultPerStack or 0.10) * 100)
+	return true, stacks, pct
 end
 
 return EconomyService

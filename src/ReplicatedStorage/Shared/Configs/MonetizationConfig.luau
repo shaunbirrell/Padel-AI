@@ -128,6 +128,7 @@ local MonetizationConfig = {
 		clan_war_win = true,
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
+		manual_dropper = true, -- fixed click awards stay $10–25
 	},
 	XPMultExemptReasons = {
 		admin = true,
