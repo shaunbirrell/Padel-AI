@@ -1351,6 +1351,33 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	light.Range = 20
 	light.Parent = body
 	plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 8.2, Color3.fromRGB(90, 240, 130))
+	-- Lime Collect circle on ground (touch radius visual)
+	local collectCircle = part({
+		Name = "CollectCircle",
+		Size = Vector3.new(14, 0.25, 14),
+		Position = pos + Vector3.new(28, 0.55, 8),
+		Color = Color3.fromRGB(90, 255, 110),
+		Material = Enum.Material.Neon,
+		Transparency = 0.55,
+		CanCollide = false,
+		Shape = Enum.PartType.Cylinder,
+		Parent = folder,
+	})
+	-- Cylinder default axis is X — rotate to lie flat on ground
+	collectCircle.CFrame = CFrame.new(pos + Vector3.new(28, 0.55, 8)) * CFrame.Angles(0, 0, math.rad(90))
+	collectCircle:SetAttribute("PlotId", plotId)
+	local ring = part({
+		Name = "CollectRing",
+		Size = Vector3.new(15.5, 0.2, 15.5),
+		Color = Color3.fromRGB(60, 220, 90),
+		Material = Enum.Material.Neon,
+		Transparency = 0.35,
+		CanCollide = false,
+		Shape = Enum.PartType.Cylinder,
+		Parent = folder,
+	})
+	ring.CFrame = CFrame.new(pos + Vector3.new(28, 0.45, 8)) * CFrame.Angles(0, 0, math.rad(90))
+
 	-- Optional ATM catalog mesh dress (Part kit remains authoritative)
 	task.defer(function()
 		pcall(function()
@@ -1488,7 +1515,22 @@ function MapSetup.Run()
 			Parent = map,
 		})
 	end
-	-- Yellow centerline dashes (asphalt polish — competitor desert roads)
+	-- Asphalt Decal texture on road strips (MapDressing.AsphaltDecal)
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if not (vas and vas.ApplyAsphaltDecal) then
+				return
+			end
+			for _, ch in ipairs(map:GetChildren()) do
+				if ch:IsA("BasePart") and (string.sub(ch.Name, 1, 5) == "RoadZ" or string.sub(ch.Name, 1, 5) == "RoadX") then
+					vas.ApplyAsphaltDecal(ch)
+				end
+			end
+		end)
+	end)
+
+		-- Yellow centerline dashes (asphalt polish — competitor desert roads)
 	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
 		for i = -8, 8 do
 			if i ~= 0 then
@@ -1624,6 +1666,139 @@ function MapSetup.Run()
 			CanCollide = true,
 			Parent = yardFolder,
 		})
+		-- Design Bot quality wire: 2–3 SquadStall kits (Tent + crates + sandbags + Infantry)
+		do
+			local stallFolder = Instance.new("Folder")
+			stallFolder.Name = "SquadStalls"
+			stallFolder.Parent = yardFolder
+			local stallOffsets = {
+				Vector3.new(-36, 0, 36),
+				Vector3.new(-18, 0, 36),
+				Vector3.new(0, 0, 36),
+			}
+			for si, soff in ipairs(stallOffsets) do
+				local sOrigin = pos + soff
+				local stall = Instance.new("Folder")
+				stall.Name = "SquadStall" .. si
+				stall.Parent = stallFolder
+				-- Floor plate
+				part({
+					Name = "StallFloor",
+					Size = Vector3.new(12, 0.4, 10),
+					Position = sOrigin + Vector3.new(0, 0.35, 0),
+					Color = Color3.fromRGB(70, 68, 52),
+					Material = Enum.Material.WoodPlanks,
+					CanCollide = true,
+					Parent = stall,
+				})
+				-- Tent host (catalog Tent via TryAttachPropVisual)
+				local tentHost = part({
+					Name = "TentHost",
+					Size = Vector3.new(8, 4, 6),
+					Position = sOrigin + Vector3.new(0, 2.4, -1),
+					Color = Color3.fromRGB(90, 100, 70),
+					Material = Enum.Material.Fabric,
+					CanCollide = false,
+					Transparency = 0.35,
+					Parent = stall,
+				})
+				-- Crate stack hosts
+				local crateA = part({
+					Name = "CrateHostA",
+					Size = Vector3.new(2.2, 2.0, 2.2),
+					Position = sOrigin + Vector3.new(4.5, 1.2, 2),
+					Color = Color3.fromRGB(95, 80, 55),
+					Material = Enum.Material.Wood,
+					CanCollide = true,
+					Parent = stall,
+				})
+				local crateB = part({
+					Name = "CrateHostB",
+					Size = Vector3.new(2.0, 1.8, 2.0),
+					Position = sOrigin + Vector3.new(4.5, 3.0, 2),
+					Color = Color3.fromRGB(85, 70, 48),
+					Material = Enum.Material.Wood,
+					CanCollide = true,
+					Parent = stall,
+				})
+				local milCrate = part({
+					Name = "MilCrateHost",
+					Size = Vector3.new(2.4, 1.6, 1.8),
+					Position = sOrigin + Vector3.new(-4.2, 1.0, 2.2),
+					Color = Color3.fromRGB(55, 70, 50),
+					Material = Enum.Material.Metal,
+					CanCollide = true,
+					Parent = stall,
+				})
+				-- Sandbags
+				local sandHost = part({
+					Name = "SandbagHost",
+					Size = Vector3.new(6, 1.1, 1.3),
+					Position = sOrigin + Vector3.new(0, 0.75, 4.2),
+					Color = Color3.fromRGB(130, 115, 80),
+					Material = Enum.Material.Sand,
+					CanCollide = true,
+					Parent = stall,
+				})
+				-- Lantern host
+				local lanternHost = part({
+					Name = "LanternHost",
+					Size = Vector3.new(0.6, 1.2, 0.6),
+					Position = sOrigin + Vector3.new(-3.5, 2.2, -2.5),
+					Color = Color3.fromRGB(180, 140, 60),
+					Material = Enum.Material.Metal,
+					CanCollide = false,
+					Parent = stall,
+				})
+				local lanternLight = Instance.new("PointLight")
+				lanternLight.Color = Color3.fromRGB(255, 200, 120)
+				lanternLight.Brightness = 0.8
+				lanternLight.Range = 14
+				lanternLight.Parent = lanternHost
+				-- Infantry clone at stall (T-pose OK; crouch anim optional)
+				local soldierCf = CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
+				makeSoldierKit(
+					stall,
+					"StallInfantry" .. si,
+					soldierCf,
+					Color3.fromRGB(70, 85, 55),
+					"INFANTRY",
+					Color3.fromRGB(180, 220, 120),
+					80,
+					"Infantry",
+					nil
+				)
+				-- Optional crouch: Humanoid Sit as lightweight proxy (full crouch AnimationId TBD)
+				pcall(function()
+					local m = stall:FindFirstChild("StallInfantry" .. si)
+					if m and m:IsA("Model") then
+						local hum = m:FindFirstChildOfClass("Humanoid")
+						if hum then
+							hum.Sit = false
+							hum.WalkSpeed = 0
+							-- Note: T-pose/catalog pose OK — crouch AnimationId not wired this pass
+							m:SetAttribute("WE_PoseNote", "TPose_CrouchAnimPending")
+						end
+					end
+				end)
+				-- Catalog prop dress (pcall — Part kits remain if InsertService fails)
+				task.defer(function()
+					pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if not vas or not vas.TryAttachPropVisual then
+							return
+						end
+						vas.TryAttachPropVisual(tentHost, "Tent")
+						vas.TryAttachPropVisual(crateA, "Crate")
+						vas.TryAttachPropVisual(crateB, "MilitaryCrate")
+						vas.TryAttachPropVisual(milCrate, "MilitaryCrate")
+						vas.TryAttachPropVisual(sandHost, "Sandbag")
+						vas.TryAttachPropVisual(lanternHost, "Lantern")
+				end)
+				end)
+			end
+		end
+
 		local yardAnchor = part({
 			Name = "YardAnchor",
 			Size = Vector3.new(1, 1, 1),
@@ -1739,13 +1914,30 @@ function MapSetup.Run()
 					end
 				end
 				-- Optional catalog floodlight tower / flag (never clears pads on fail)
-				pcall(function()
-					local vas = require(script.Parent.Parent.Services.VisualAssetService)
-					local host = wz:FindFirstChildWhichIsA("BasePart")
-					if host and vas.TryAttachPropVisual then
-						vas.TryAttachPropVisual(host, "FloodlightTower")
-					end
-				end)
+								pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if not (vas and vas.TryAttachPropVisual) then
+							return
+						end
+						-- WZ densify catalog: sandbags / crates / desert flora hosts
+						for _, ch in ipairs(wz:GetChildren()) do
+							if ch:IsA("BasePart") then
+								if string.find(ch.Name, "Sandbag", 1, true) then
+									vas.TryAttachPropVisual(ch, "Sandbag")
+								elseif string.find(ch.Name, "Crate", 1, true) then
+									vas.TryAttachPropVisual(ch, "Crate")
+								elseif string.find(ch.Name, "Drum", 1, true) then
+									vas.TryAttachPropVisual(ch, "OilBarrel")
+								elseif string.find(ch.Name, "Barrier", 1, true) then
+									vas.TryAttachPropVisual(ch, "ConcreteBarrier")
+								end
+							end
+						end
+						local host = wz:FindFirstChildWhichIsA("BasePart")
+						if host then
+							vas.TryAttachPropVisual(host, "FloodlightTower")
+						end
+					end)
 			end)
 			if not okDress then
 				warn("[MapSetup] PlotWarzone densify failed (pads intact):", errDress)

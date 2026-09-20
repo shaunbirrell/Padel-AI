@@ -478,6 +478,27 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		arch:SetAttribute("WE_Perimeter", true)
 		arch:SetAttribute("WE_GateVisual", true)
 	end
+
+	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
+	if lv >= 3 then
+		task.defer(function()
+			pcall(function()
+				local vas = require(script.Parent.Parent.Services.VisualAssetService)
+				local dressed = 0
+				for _, ch in ipairs(folder:GetChildren()) do
+					if dressed >= 4 then
+						break
+					end
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_Perimeter") == true and not ch:GetAttribute("WE_GateVisual") then
+						if vas.TryAttachBuildingVisual(ch, "DefensiveWalls", lv) then
+							dressed += 1
+						end
+					end
+				end
+			end)
+		end)
+	end
+
 end
 
 function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)

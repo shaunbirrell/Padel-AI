@@ -561,7 +561,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	if preferMesh and lv >= meshMin then
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
-			vas.TryAttachBuildingVisual(plinth, structureId)
+			vas.TryAttachBuildingVisual(plinth, structureId, lv)
 			if structureId == "VehicleDepot" and vas.TryAttachShowroomVisual then
 				vas.TryAttachShowroomVisual(plinth)
 			end

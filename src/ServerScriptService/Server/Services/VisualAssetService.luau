@@ -234,17 +234,35 @@ function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
 	return nil
 end
 
-function VisualAssetService.ResolvePropAssetId(propKey: string): number?
-	local warzone = (VisualAssetConfig :: any).WarzoneProps
-	if typeof(warzone) == "table" then
-		local refW = warzone[propKey]
-		if refW and typeof(refW.ModelAssetId) == "number" and (refW.ModelAssetId :: number) > 0 then
-			return refW.ModelAssetId
+local function lookupPropRef(propKey: string): any
+	local buckets = {
+		(VisualAssetConfig :: any).WarzoneProps,
+		VisualAssetConfig.DesertProps,
+		(VisualAssetConfig :: any).MapDressing,
+	}
+	for _, bucket in ipairs(buckets) do
+		if typeof(bucket) == "table" then
+			local ref = bucket[propKey]
+			if typeof(ref) == "table" then
+				return ref
+			end
 		end
 	end
-	local ref = VisualAssetConfig.DesertProps[propKey]
+	return nil
+end
+
+function VisualAssetService.ResolvePropAssetId(propKey: string): number?
+	local ref = lookupPropRef(propKey)
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
+	end
+	return nil
+end
+
+function VisualAssetService.ResolvePropMeshId(propKey: string): number?
+	local ref = lookupPropRef(propKey)
+	if ref and typeof(ref.MeshId) == "number" and (ref.MeshId :: number) > 0 then
+		return ref.MeshId
 	end
 	return nil
 end
@@ -348,11 +366,30 @@ end
 	Optional building visual overlay for structure plinth Part kits.
 	Welded non-colliding; plinth remains authoritative for walk-buy.
 ]]
-function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string): boolean
+function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	if hostPart:GetAttribute("WE_CatalogAssetId") then
 		return false -- already dressed
 	end
 	local assetId = VisualAssetService.ResolveBuildingAssetId(structureId)
+	-- DefensiveWalls L3+: prefer heavy wall mesh 9703136850 (Buildings.DefensiveWallsL3)
+	local lv = tonumber(level) or 0
+	if structureId == "DefensiveWalls" and lv >= 3 then
+		local l3 = VisualAssetConfig.Buildings.DefensiveWallsL3
+		if l3 and typeof(l3.ModelAssetId) == "number" and (l3.ModelAssetId :: number) > 0 then
+			assetId = l3.ModelAssetId
+		else
+			-- StructureVisualConfig.MeshAssetIdL3 fallback
+			local okSvc, StructureVisualConfig = pcall(function()
+				return require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
+			end)
+			if okSvc and StructureVisualConfig then
+				local pal = StructureVisualConfig.Palettes and StructureVisualConfig.Palettes.DefensiveWalls
+				if pal and typeof(pal.MeshAssetIdL3) == "number" and pal.MeshAssetIdL3 > 0 then
+					assetId = pal.MeshAssetIdL3
+				end
+			end
+		end
+	end
 	if not assetId then
 		return false
 	end
@@ -380,16 +417,101 @@ end
 --[[
 	Optional desert prop overlay (cactus etc.) welded to a flora host part.
 ]]
-function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: string): boolean
-	if hostPart:GetAttribute("WE_CatalogAssetId") then
+--[[
+	Attach MeshPart dress when catalog entry is MeshId-only (AssetType 40).
+	Falls back to SpecialMesh on a Part if MeshPart.MeshId set fails.
+]]
+function VisualAssetService.TryAttachMeshPartVisual(hostPart: BasePart, meshId: number, label: string?): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") or hostPart:GetAttribute("WE_MeshId") then
 		return false
 	end
+	if meshId <= 0 or shouldSkipInserts() then
+		return false
+	end
+	local ok, err = pcall(function()
+		local mp = Instance.new("MeshPart")
+		mp.Name = label or "WE_CatalogMeshPart"
+		mp.Size = hostPart.Size
+		mp.Anchored = true
+		mp.CanCollide = false
+		mp.CanQuery = false
+		mp.CanTouch = false
+		mp.CastShadow = false
+		mp.Massless = true
+		-- MeshId via rbxassetid; if InsertService Model fails for type-40 assets
+		mp.MeshId = "rbxassetid://" .. tostring(meshId)
+		mp.TextureID = ""
+		mp.CFrame = hostPart.CFrame
+		mp.Parent = hostPart
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = hostPart
+		weld.Part1 = mp
+		weld.Parent = mp
+	end)
+	if not ok then
+		-- Fallback: Part + SpecialMesh
+		local ok2 = pcall(function()
+			local holder = Instance.new("Part")
+			holder.Name = label or "WE_CatalogMeshHolder"
+			holder.Size = hostPart.Size
+			holder.Transparency = 1
+			holder.Anchored = true
+			holder.CanCollide = false
+			holder.CanQuery = false
+			holder.CanTouch = false
+			holder.Massless = true
+			holder.CFrame = hostPart.CFrame
+			holder.Parent = hostPart
+			local sm = Instance.new("SpecialMesh")
+			sm.MeshType = Enum.MeshType.FileMesh
+			sm.MeshId = "rbxassetid://" .. tostring(meshId)
+			sm.Scale = Vector3.new(1, 1, 1)
+			sm.Parent = holder
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = hostPart
+			weld.Part1 = holder
+			weld.Parent = holder
+		end)
+		if not ok2 then
+			warn("[VisualAssetService] MeshPart pipeline failed", meshId, err)
+			return false
+		end
+	end
+	hostPart:SetAttribute("WE_MeshId", meshId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.7)
+	return true
+end
+
+function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: string): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") or hostPart:GetAttribute("WE_MeshId") then
+		return false
+	end
+	-- MeshPart-only keys (DesertRock): prefer MeshId pipeline
+	local meshId = VisualAssetService.ResolvePropMeshId(propKey)
 	local assetId = VisualAssetService.ResolvePropAssetId(propKey)
+	if (not assetId or assetId <= 0) and meshId then
+		return VisualAssetService.TryAttachMeshPartVisual(hostPart, meshId, "WE_CatalogProp_" .. propKey)
+	end
 	if not assetId then
 		return false
 	end
 	local template = loadModel(assetId)
+	-- Palm → PalmAlt fallback (Design Bot wire)
+	if not template and (propKey == "Palm" or propKey == "Tent") then
+		local altKey = if propKey == "Palm" then "PalmAlt" else "TentAlt"
+		local altId = VisualAssetService.ResolvePropAssetId(altKey)
+		if altId then
+			template = loadModel(altId)
+			if template then
+				assetId = altId
+			end
+		end
+	end
 	if not template then
+		-- Last resort MeshId if both Model inserts fail
+		if meshId then
+			return VisualAssetService.TryAttachMeshPartVisual(hostPart, meshId, "WE_CatalogProp_" .. propKey)
+		end
 		return false
 	end
 
@@ -402,6 +524,33 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
 	return true
+end
+
+--[[
+	Paint asphalt Decal (Texture) on road Part faces. Uses MapDressing.AsphaltDecal MeshId as Decal texture id.
+]]
+function VisualAssetService.ApplyAsphaltDecal(roadPart: BasePart): boolean
+	if roadPart:GetAttribute("WE_AsphaltDecal") then
+		return false
+	end
+	local texId = VisualAssetService.ResolvePropMeshId("AsphaltDecal")
+	if not texId or texId <= 0 then
+		return false
+	end
+	local ok = pcall(function()
+		for _, face in ipairs({ Enum.NormalId.Top, Enum.NormalId.Bottom }) do
+			local d = Instance.new("Decal")
+			d.Name = "WE_AsphaltDecal"
+			d.Face = face
+			d.Texture = "rbxassetid://" .. tostring(texId)
+			d.Transparency = 0.15
+			d.Parent = roadPart
+		end
+	end)
+	if ok then
+		roadPart:SetAttribute("WE_AsphaltDecal", texId)
+	end
+	return ok
 end
 
 local function collectAssetIds(primaryKey: string, fallbackKey: string?, altsKey: string?): { number }

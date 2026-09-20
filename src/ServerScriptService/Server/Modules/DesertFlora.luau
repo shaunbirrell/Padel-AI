@@ -336,11 +336,11 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
 	end
 
-	-- Optional free cactus catalog overlays (InsertService; skipped when StudioSkipWorldDressing)
+	-- Catalog overlays: DesertPlants / Palm(+PalmAlt) / Cactus / DesertRock MeshPart
 	-- Cap attempts so PERF stays Part-kit-first even on live.
 	do
 		local attached = 0
-		local maxAttach = if sparse then 2 else 4
+		local maxAttach = if sparse then 6 else 12
 		local okVas, vas = pcall(function()
 			return require(script.Parent.Parent.Services.VisualAssetService)
 		end)
@@ -349,12 +349,22 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 				if attached >= maxAttach then
 					break
 				end
-				if d:IsA("BasePart") and d.Name == "SaguaroTrunk" then
-					local okAtt = pcall(function()
-						return vas.TryAttachPropVisual(d, if attached % 2 == 0 then "Cactus" else "CactusBase")
-					end)
-					if okAtt then
-						attached += 1
+				if d:IsA("BasePart") then
+					local key: string? = nil
+					if d.Name == "SaguaroTrunk" then
+						key = if attached % 3 == 0 then "DesertPlants" elseif attached % 3 == 1 then "Cactus" else "CactusBase"
+					elseif d.Name == "PalmTrunk" then
+						key = "Palm" -- PalmAlt fallback inside TryAttachPropVisual
+					elseif d.Name == "Outcrop" or d.Name == "OutcropCap" then
+						key = "DesertRock"
+					end
+					if key then
+						local okAtt = pcall(function()
+							return vas.TryAttachPropVisual(d, key :: string)
+						end)
+						if okAtt then
+							attached += 1
+						end
 					end
 				end
 			end

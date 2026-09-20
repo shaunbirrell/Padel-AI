@@ -13,6 +13,8 @@ export type StructurePalette = {
 	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "dock" | "wall" | "power" | "warehouse" | "special",
 	-- Future Creator Store MeshPart (0 / nil = Part kit)
 	MeshAssetId: number?,
+	-- Optional L3+ mesh override (DefensiveWalls heavy)
+	MeshAssetIdL3: number?,
 }
 
 local StructureVisualConfig = {
@@ -86,7 +88,8 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(120, 130, 110),
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
-			MeshAssetId = 208197704,
+			MeshAssetId = 208197704, -- L1–2 grey military wall
+			MeshAssetIdL3 = 9703136850, -- L3+ heavy duty military wall
 		},
 		Watchtowers = {
 			Plinth = Color3.fromRGB(44, 46, 40),

@@ -171,7 +171,8 @@ local VisualAssetConfig = {
 		Watchtowers = { ModelAssetId = 3330023556, Note = "Watchtower" } :: AssetRef,
 		Radar = { ModelAssetId = 9559610195, Note = "Radar" } :: AssetRef,
 		MissileDefense = { ModelAssetId = 108525417345747, Note = "Missile defense (fallback 16659447)" } :: AssetRef,
-		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls L1–2; L3+ uses 9703136850 via StructureVisualConfig" } :: AssetRef,
+		DefensiveWallsL3 = { ModelAssetId = 9703136850, Note = "Heavy duty military wall (DefensiveWalls L3+)" } :: AssetRef,
 		PowerStation = { ModelAssetId = 14000967030, Note = "Power station" } :: AssetRef,
 		Bunker = { ModelAssetId = 16659447, Note = "Destructible Movil Bunker free" } :: AssetRef,
 		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
@@ -219,6 +220,8 @@ local VisualAssetConfig = {
 		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
 		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
 		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		Lantern = { ModelAssetId = 10121519149, Note = "Stall lantern (StripScripts; mesh only)" } :: AssetRef,
+		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
 		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
 		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
@@ -235,6 +238,21 @@ local VisualAssetConfig = {
 		Cactus = { ModelAssetId = 121029612, Note = "Free Cactus Get Model" } :: AssetRef,
 		CactusBase = { ModelAssetId = 16354482789, Note = "CactusBase2 free Get Model" } :: AssetRef,
 		DesertPlants = { ModelAssetId = 108556425657107, Note = "Realistic Desert Plants free pack" } :: AssetRef,
+		Palm = { ModelAssetId = 96059329869678, Note = "Palm Trees Realistic pack (horizon)" } :: AssetRef,
+		PalmAlt = { ModelAssetId = 105982075286356, Note = "Low Poly Palm alt if Palm insert fails" } :: AssetRef,
+		-- MeshPart AssetType 40 — VisualAssetService MeshPart pipeline (not InsertService Model)
+		DesertRock = { ModelAssetId = 0, MeshId = 6562523344, Note = "Low Poly Rocks MeshPart (MeshId pipeline)" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	-- MapDressing keys (Decal / non-Model assets)
+	MapDressing = {
+		AsphaltDecal = { ModelAssetId = 0, MeshId = 10197707775, Note = "Asphalt road Decal Texture on road Parts" } :: AssetRef,
+		ChevronArrow = { ModelAssetId = 0, Note = "Part-kit floor chevrons (no free Model)" } :: AssetRef,
+		DesertRock = { ModelAssetId = 0, MeshId = 6562523344, Note = "alias → DesertProps.DesertRock MeshPart" } :: AssetRef,
+		Palm = { ModelAssetId = 96059329869678, Note = "alias → DesertProps.Palm" } :: AssetRef,
+		PalmAlt = { ModelAssetId = 105982075286356, Note = "alias → DesertProps.PalmAlt" } :: AssetRef,
+		DesertPlants = { ModelAssetId = 108556425657107, Note = "alias → DesertProps.DesertPlants" } :: AssetRef,
+		Cactus = { ModelAssetId = 121029612, Note = "alias → DesertProps.Cactus" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	KitFamilyFallback = {

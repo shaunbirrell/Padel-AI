@@ -287,3 +287,17 @@ Reversible engineering decisions made while implementing the MVP without blockin
 116. **Levels/prestige** — Milestones + HUD GoalLabel (existing); `MinLevelToPrestige=40`; structure unlock gates remain in `BaseConfig.Requires`.
 
 **Open Cloud live v15 (2026-09-20 Europe/Madrid):** Quality leap P0 + Design Bot soldier/ArmedJeep wire. Place `97112936860418` Published versionNumber=15.
+
+## Design Bot quality-gap spawn wire (2026-09-20 live v16)
+
+**Open Cloud live v16 (2026-09-20 Europe/Madrid):** Place `97112936860418` Published versionNumber=**16**.
+
+- **VisualAssetConfig adds:** `DesertProps.Palm` / `PalmAlt`, `DesertRock` (MeshId pipeline), `MapDressing.AsphaltDecal`, `WarzoneProps.Lantern` / `TentAlt`, `Buildings.DefensiveWallsL3` = 9703136850
+- **TrainingYard SquadStalls:** 2–3 kits per plot — Tent + crate stacks + sandbags + Lantern + Infantry (`9104381136`) via `TryAttachPropVisual` / `TryAttachCharacterVisual`. Crouch anim deferred (T-pose OK; `WE_PoseNote=TPose_CrouchAnimPending`)
+- **CollectCircle** lime disc at MoneyCollector; ATM still `75368157644109`
+- **Floor chevrons** unchanged (v15); asphalt Decal on RoadX/Z strips; DesertFlora densifies Palm/DesertPlants/Cactus/DesertRock
+- **DefensiveWalls L3+** prefer heavy mesh `9703136850` (L1 keeps `208197704`); PreferMesh L1+ stays; StripScripts on inserts
+- **No regression:** MilitaryJeep / ArmedJeep / Soldier IDs; PlotFloorChevrons; toast contrast
+
+**InsertService risks:** Palm pack / DesertRock MeshPart / heavy wall may fail if third-party inserts disabled — Part kits remain. MeshPart AssetType 40 uses MeshId pipeline (not LoadAsset Model).
+
