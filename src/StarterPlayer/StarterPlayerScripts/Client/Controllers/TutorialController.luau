@@ -67,6 +67,29 @@ local function clearWaypoint()
 	currentMarkerName = nil
 end
 
+-- Show only the active tutorial marker (hide billboards/parts for other steps)
+local function syncMarkerVisibility(activeName: string?)
+	local tag = Constants.Tags.TutorialMarker
+	for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+		if inst:IsA("BasePart") then
+			local stepAttr = inst:GetAttribute("TutorialStepId")
+			local isActive = activeName ~= nil and (
+				inst.Name == activeName
+					or stepAttr == activeName
+					or (typeof(stepAttr) == "string" and ("Tutorial_" .. stepAttr) == activeName)
+			)
+			-- MapSetup starts Transparency=1; must set Transparency (not only LocalTransparencyModifier)
+			inst.Transparency = if isActive then 0.25 else 1
+			inst.LocalTransparencyModifier = 0
+			for _, child in ipairs(inst:GetDescendants()) do
+				if child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
+					child.Enabled = isActive == true
+				end
+			end
+	end
+	end
+end
+
 local function findPadByStructure(structureId: string?): BasePart?
 	if not structureId or structureId == "" then
 		return nil
@@ -156,6 +179,7 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	clearWaypoint()
 	currentMarkerName = markerName
 	currentPadStructureId = padStructureId
+	syncMarkerVisibility(markerName)
 	local target = findMarker(markerName, padStructureId)
 	if not target then
 		return
@@ -199,6 +223,7 @@ local function setVisible(open: boolean)
 	end
 	if not open then
 		clearWaypoint()
+		syncMarkerVisibility(nil)
 		if ctaBtn then
 			ctaBtn.Visible = false
 		end
@@ -237,7 +262,7 @@ end
 
 local function runCta()
 	local action = currentCtaAction
-	print("[Tutorial] CTA", tostring(action), "pad=", tostring(currentPadStructureId))
+	-- CTA silent (avoid Output spam)
 	if action == "PadBuy" or action == "OpenBase" then
 		-- Re-aim beam at the buy pad; open base menu as secondary path (B)
 		setWaypoint(currentMarkerName, currentPadStructureId)
@@ -261,14 +286,23 @@ local function runCta()
 end
 
 local lastAnnouncedId: string? = nil
+local lastApplyAt = 0.0
+local APPLY_DEBOUNCE = 0.2
 
 local function applyState(payload: any)
 	if typeof(payload) ~= "table" then
 		return
 	end
+	local now = os.clock()
+	if (now - lastApplyAt) < APPLY_DEBOUNCE and payload.Complete ~= true then
+		-- coalesce bursty pushes; always allow Complete through
+		return
+	end
+	lastApplyAt = now
 	if payload.Complete == true then
 		setVisible(false)
 		clearWaypoint()
+		syncMarkerVisibility(nil)
 		lastAnnouncedId = nil
 		currentCtaAction = nil
 		return
@@ -303,13 +337,6 @@ local function applyState(payload: any)
 	local id = if typeof(payload.Id) == "string" then payload.Id else nil
 	if id and id ~= lastAnnouncedId then
 		lastAnnouncedId = id
-		if id == "CommandCenter" or id == "Barracks" then
-			print("[Tutorial] Step", id, "— stand on pad → tap BUY (or CTA / B menu)")
-		elseif id == "Jeep" then
-			print("[Tutorial] Step Jeep — OPEN GARAGE CTA / G → SPAWN")
-		elseif id == "Income" then
-			print("[Tutorial] Step Income — watch HUD +$/tick")
-		end
 	end
 end
 
@@ -317,7 +344,7 @@ function TutorialController.Init()
 	local pg = player:WaitForChild("PlayerGui")
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireTutorial"
-	screen.DisplayOrder = 20
+	screen.DisplayOrder = 50 -- below WorldPrompt BUY (65); above most HUD
 	screen.Parent = pg
 	UIUtil.PrepareScreen(screen, false)
 	_gui = screen
@@ -410,7 +437,10 @@ function TutorialController.Init()
 	skip.Parent = frame
 	UIUtil.EnsureMinTouch(skip, 44)
 	skip.Activated:Connect(function()
-		print("[Tutorial] SKIP pressed")
+		-- Optimistic hide so SKIP always feels reliable; server confirms Complete
+		setVisible(false)
+		clearWaypoint()
+		syncMarkerVisibility(nil)
 		Remotes.GetEvent(Constants.RemoteNames.RequestSkipTutorial):FireServer()
 	end)
 

@@ -237,7 +237,10 @@ function StructureKitBuilder.FindPlotFolder(plotId: number): Folder?
 	return nil
 end
 
---[[ Perimeter fortification around PlotPad. level 0 clears; 1+ builds wall ring with +Z gate. ]]
+--[[ Perimeter fortification around PlotPad.
+	level 0 clears; 1+ builds a collide wall ring with a walkable gate facing PlayerSpawn.
+	BUGFIX: prior WallS used span*2 which overlapped and sealed the gate on 200-stud pads.
+]]
 function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)
@@ -268,12 +271,48 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 
 	local pal = paletteFor("DefensiveWalls")
 	local lv = math.clamp(level, 1, 5)
-	local half = math.max(pad.Size.X, pad.Size.Z) * 0.5 - 1.5 -- just inside pad edge
+	local halfX = pad.Size.X * 0.5 - 1.5
+	local halfZ = pad.Size.Z * 0.5 - 1.5
 	local thickness = 2.2 + lv * 0.45
 	local height = 6.5 + lv * 2.2
 	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
-	local gateHalf = 14 -- walk gap on +Z (spawn) side
 	local cx, cz = pad.Position.X, pad.Position.Z
+
+	-- Clear walkable opening (8–12 studs). Posts/arch are visual-only outside this span.
+	local GATE_CLEAR = 10
+	local gateHalf = GATE_CLEAR * 0.5
+
+	-- Gate faces PlayerSpawn (plot-local). Fallback: PlotForward attr, else pad LookVector / +Z.
+	local gateAxis = "Z" -- gate on ±Z face; "X" = gate on ±X face
+	local gateSign = 1
+	local spawnPart = plotFolder:FindFirstChild("PlayerSpawn")
+	local dx, dz = 0.0, 1.0
+	if spawnPart and spawnPart:IsA("BasePart") then
+		dx = spawnPart.Position.X - cx
+		dz = spawnPart.Position.Z - cz
+	else
+		local attrFwd = plotFolder:GetAttribute("PlotForward")
+		if typeof(attrFwd) == "Vector3" then
+			dx = (attrFwd :: Vector3).X
+			dz = (attrFwd :: Vector3).Z
+		else
+			local look = pad.CFrame.LookVector
+			dx, dz = look.X, look.Z
+			if math.abs(dx) < 0.05 and math.abs(dz) < 0.05 then
+				dx, dz = 0, 1
+			end
+		end
+	end
+	if math.abs(dx) >= math.abs(dz) then
+		gateAxis = "X"
+		gateSign = if dx >= 0 then 1 else -1
+	else
+		gateAxis = "Z"
+		gateSign = if dz >= 0 then 1 else -1
+	end
+	folder:SetAttribute("WE_GateAxis", gateAxis)
+	folder:SetAttribute("WE_GateSign", gateSign)
+	folder:SetAttribute("WE_GateClear", GATE_CLEAR)
 
 	local function wall(name: string, size: Vector3, pos: Vector3)
 		local w = makePart({
@@ -292,7 +331,6 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		w:SetAttribute("WE_Perimeter", true)
 		w:SetAttribute("PlotId", plotId)
 		w:SetAttribute("WE_WallLevel", lv)
-		-- Cap / battlement strip
 		local capH = 0.45 + lv * 0.08
 		local cap = makePart({
 			Name = name .. "_Cap",
@@ -308,37 +346,100 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		return w
 	end
 
-	-- North (-Z), East (+X), West (-X): full spans
-	wall("WallN", Vector3.new(half * 2, height, thickness), Vector3.new(cx, y, cz - half))
-	wall("WallE", Vector3.new(thickness, height, half * 2), Vector3.new(cx + half, y, cz))
-	wall("WallW", Vector3.new(thickness, height, half * 2), Vector3.new(cx - half, y, cz))
-	-- South (+Z): split around gate
-	local span = half - gateHalf
-	if span > 4 then
-		local mid = (half + gateHalf) * 0.5
-		wall("WallS_L", Vector3.new(span * 2 - 2, height, thickness), Vector3.new(cx - mid, y, cz + half))
-		wall("WallS_R", Vector3.new(span * 2 - 2, height, thickness), Vector3.new(cx + mid, y, cz + half))
+	-- Segment from outer corner to gate edge: length = alongHalf - gateHalf (NOT *2 — that sealed the gate).
+	local function gateFaceSegments(alongHalf: number): (number, number)
+		local segLen = math.max(alongHalf - gateHalf, 2)
+		local mid = (alongHalf + gateHalf) * 0.5
+		return segLen, mid
 	end
-	-- Gate posts
-	local postW = 2.4 + lv * 0.2
-	local postH = height + 2
-	for _, sx in ipairs({ -gateHalf, gateHalf }) do
-		local post = makePart({
-			Name = "GatePost",
-			Size = Vector3.new(postW, postH, postW),
-			Position = Vector3.new(cx + sx, pad.Position.Y + pad.Size.Y * 0.5 + postH * 0.5, cz + half),
-			Color = pal.Roof,
+
+	if gateAxis == "Z" then
+		local closedZ = cz - gateSign * halfZ
+		local openZ = cz + gateSign * halfZ
+		wall("WallClosed", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, closedZ))
+		wall("WallE", Vector3.new(thickness, height, halfZ * 2), Vector3.new(cx + halfX, y, cz))
+		wall("WallW", Vector3.new(thickness, height, halfZ * 2), Vector3.new(cx - halfX, y, cz))
+		local segLen, mid = gateFaceSegments(halfX)
+		if segLen > 2 then
+			wall("WallGate_L", Vector3.new(segLen, height, thickness), Vector3.new(cx - mid, y, openZ))
+			wall("WallGate_R", Vector3.new(segLen, height, thickness), Vector3.new(cx + mid, y, openZ))
+		end
+		local postW = 2.2 + lv * 0.15
+		local postH = height + 1.5
+		local postY = pad.Position.Y + pad.Size.Y * 0.5 + postH * 0.5
+		local postInset = gateHalf + postW * 0.5 -- outside clear opening
+		for _, sx in ipairs({ -postInset, postInset }) do
+			local post = makePart({
+				Name = "GatePost",
+				Size = Vector3.new(postW, postH, postW),
+				Position = Vector3.new(cx + sx, postY, openZ),
+				Color = pal.Roof,
+				Material = Enum.Material.Metal,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			post:SetAttribute("WE_Perimeter", true)
+			post:SetAttribute("WE_GateVisual", true)
+			post.CastShadow = true
+		end
+		local arch = makePart({
+			Name = "GateArch",
+			Size = Vector3.new(GATE_CLEAR + postW * 2, 1.2, thickness + 0.6),
+			Position = Vector3.new(cx, pad.Position.Y + pad.Size.Y * 0.5 + height + 0.4, openZ),
+			Color = pal.Accent,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
-			CanCollide = true,
+			CanCollide = false,
 			Parent = folder,
 		})
-		post:SetAttribute("WE_Perimeter", true)
-		post.CastShadow = true
+		arch:SetAttribute("WE_Perimeter", true)
+		arch:SetAttribute("WE_GateVisual", true)
+	else
+		local closedX = cx - gateSign * halfX
+		local openX = cx + gateSign * halfX
+		wall("WallClosed", Vector3.new(thickness, height, halfZ * 2), Vector3.new(closedX, y, cz))
+		wall("WallN", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, cz - halfZ))
+		wall("WallS", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, cz + halfZ))
+		local segLen, mid = gateFaceSegments(halfZ)
+		if segLen > 2 then
+			wall("WallGate_L", Vector3.new(thickness, height, segLen), Vector3.new(openX, y, cz - mid))
+			wall("WallGate_R", Vector3.new(thickness, height, segLen), Vector3.new(openX, y, cz + mid))
+		end
+		local postW = 2.2 + lv * 0.15
+		local postH = height + 1.5
+		local postY = pad.Position.Y + pad.Size.Y * 0.5 + postH * 0.5
+		local postInset = gateHalf + postW * 0.5
+		for _, sz in ipairs({ -postInset, postInset }) do
+			local post = makePart({
+				Name = "GatePost",
+				Size = Vector3.new(postW, postH, postW),
+				Position = Vector3.new(openX, postY, cz + sz),
+				Color = pal.Roof,
+				Material = Enum.Material.Metal,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			post:SetAttribute("WE_Perimeter", true)
+			post:SetAttribute("WE_GateVisual", true)
+			post.CastShadow = true
+		end
+		local arch = makePart({
+			Name = "GateArch",
+			Size = Vector3.new(thickness + 0.6, 1.2, GATE_CLEAR + postW * 2),
+			Position = Vector3.new(openX, pad.Position.Y + pad.Size.Y * 0.5 + height + 0.4, cz),
+			Color = pal.Accent,
+			Material = Enum.Material.Metal,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		arch:SetAttribute("WE_Perimeter", true)
+		arch:SetAttribute("WE_GateVisual", true)
 	end
 end
 
---[[ Corner watchtowers when Watchtowers upgraded. ]]
 function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)

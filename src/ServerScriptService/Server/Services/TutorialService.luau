@@ -29,6 +29,10 @@ local STEP_BARRACKS = 4
 local STEP_JEEP = 5
 local STEP_OUTPOST = 6
 
+-- Debounce rapid Notify spam (collector ticks, double hooks)
+local lastAdvanceAt: { [number]: number } = {}
+local ADVANCE_COOLDOWN = 0.75
+
 local function tutorialEnabled(): boolean
 	if not GameConfig.TutorialEnabled or not TutorialConfig.Enabled then
 		return false
@@ -90,15 +94,18 @@ local function advanceTo(player: Player, targetStep: number)
 	if profile.TutorialStep ~= targetStep then
 		return
 	end
+	local now = os.clock()
+	local last = lastAdvanceAt[player.UserId]
+	if last and (now - last) < ADVANCE_COOLDOWN then
+		return
+	end
+	lastAdvanceAt[player.UserId] = now
 	local nextStep = targetStep + 1
 	if nextStep > TutorialConfig.StepCount() then
 		setStep(player, nextStep, true)
 	else
+		-- Panel update only — no toast spam per step
 		setStep(player, nextStep, false)
-		local def = TutorialConfig.GetStep(nextStep)
-		if def and NotificationService then
-			NotificationService.Notify(player, def.Title .. ": " .. def.Hint, "Info", 6)
-		end
 	end
 end
 
@@ -112,7 +119,7 @@ function TutorialService.Complete(player: Player)
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 	if NotificationService then
-		NotificationService.Notify(player, "Tutorial skipped.", "Info")
+		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
 end
 
@@ -221,6 +228,10 @@ function TutorialService.Init(deps: { [string]: any })
 			end
 		end)
 	end
+
+	Players.PlayerRemoving:Connect(function(player: Player)
+		lastAdvanceAt[player.UserId] = nil
+	end)
 end
 
 return TutorialService

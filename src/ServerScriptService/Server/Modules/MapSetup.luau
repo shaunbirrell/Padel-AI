@@ -1920,30 +1920,24 @@ function MapSetup.Run()
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
+		-- Hidden by default; TutorialController reveals only the active step (no billboard spam)
 		local p = part({
 			Name = name,
 			Size = Vector3.new(7, 1.2, 7),
 			Position = pos,
 			Color = color,
 			Material = Enum.Material.Neon,
-			Transparency = 0.2,
+			Transparency = 1,
 			CanCollide = false,
 			Parent = tutorialFolder,
 		})
 		p:SetAttribute("TutorialStepId", stepId or name)
 		CollectionService:AddTag(p, TAG_TUTORIAL)
-		plainBillboard(p, "TUT · " .. name:gsub("Tutorial_", ""), Vector2.new(200, 34), 6, Color3.fromRGB(255, 245, 180))
-		beacon(tutorialFolder, pos, color, name .. "_Beacon")
-		part({
-			Name = name .. "_Ring",
-			Size = Vector3.new(10, 0.25, 10),
-			Position = pos + Vector3.new(0, -0.4, 0),
-			Color = color,
-			Transparency = 0.5,
-			CanCollide = false,
-			Material = Enum.Material.Neon,
-			Parent = tutorialFolder,
-		})
+		local bb = plainBillboard(p, "TUT · " .. name:gsub("Tutorial_", ""), Vector2.new(200, 34), 6, Color3.fromRGB(255, 245, 180))
+		if typeof(bb) == "Instance" and bb:IsA("BillboardGui") then
+			bb.Enabled = false
+		end
+		-- No beacon / ring clutter — waypoint beam is enough
 		return p
 	end
 

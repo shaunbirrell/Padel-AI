@@ -765,14 +765,8 @@ local function attachVehicleSpawn(part: BasePart)
 	end)
 end
 
-local function attachTutorialMarker(part: BasePart)
-	local stepId = part:GetAttribute("TutorialStepId")
-	local label = if typeof(stepId) == "string" then stepId else part.Name
-	attachPromptOnce(part, function()
-		return makePrompt(part, "Continue", "Tutorial: " .. tostring(label), 0, 10)
-	end, function()
-		NotificationController.Show("Follow the gold beam / tutorial panel — or press SKIP.", "Info", 3.5)
-	end)
+local function attachTutorialMarker(_part: BasePart)
+	-- No proximity prompts / toasts on tutorial markers — TutorialController owns UX
 end
 
 local function bindTag(tag: string, handler: (BasePart) -> ())
