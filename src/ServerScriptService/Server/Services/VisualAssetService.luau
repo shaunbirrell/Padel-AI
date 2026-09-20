@@ -400,7 +400,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 28 -- v41: walls mesh=0 + gate prop; sync StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 29 -- v42: Hangar≠Warehouse≠Depot, Missile≠Tower; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -453,7 +453,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			Dock = Vector3.new(40, 8, 16),
 			PowerStation = Vector3.new(28, 16, 20),
 			DefensiveWalls = Vector3.new(24, 8, 3),
-			MissileDefense = Vector3.new(12, 22, 12),
+			MissileDefense = Vector3.new(14, 10, 18),
 			SpecialForcesFacility = Vector3.new(26, 14, 16),
 			BaseGate = Vector3.new(16, 12, 4),
 		}

@@ -2318,7 +2318,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 28, -- v41 DressGen: DefensiveWalls mesh=0 + gate prop; kits stay visible
+	BuildingDressGen = 29, -- v42 DressGen: Hangar≠Warehouse≠Depot, Missile≠Tower; kits stay visible
 
 	Palettes = {
 		CommandCenter = {
@@ -2346,7 +2346,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(45, 55, 65),
 			Kit = "depot",
 			TargetFootprint = Vector3.new(32, 14, 24),
-			MeshAssetId = 6015472062,
+			MeshAssetId = 12208876851, -- v42 arched depot ≠ Hangar
 		},
 		WeaponsFacility = {
 			Plinth = Color3.fromRGB(48, 40, 38),
@@ -2427,8 +2427,8 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 100, 60),
 			Roof = Color3.fromRGB(55, 45, 42),
 			Kit = "tower",
-			TargetFootprint = Vector3.new(12, 22, 12),
-			MeshAssetId = 108525417345747,
+			TargetFootprint = Vector3.new(14, 10, 18), -- v42 launcher mass, not tower height
+			MeshAssetId = 11962508154, -- Missile Battery ≠ Watchtower
 		},
 		PowerStation = {
 			Plinth = Color3.fromRGB(50, 48, 35),
@@ -2446,7 +2446,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(55, 50, 42),
 			Kit = "warehouse",
 			TargetFootprint = Vector3.new(38, 16, 24),
-			MeshAssetId = 6015472062,
+			MeshAssetId = 15942568272, -- v42 hangar shed ≠ Hangar
 		},
 		SpecialForcesFacility = {
 			Plinth = Color3.fromRGB(35, 38, 42),
@@ -3268,7 +3268,7 @@ local VisualAssetConfig = {
 		ReconBuggy = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		-- Free tank family
 		LightTank = { ModelAssetId = 76055078503396, Note = "v41 IFV/tank mesh — DisplayName Light Tank" } :: AssetRef,
-		MediumTank = { ModelAssetId = 26007709, Note = "Classic tank soft keep until better MBT" } :: AssetRef,
+		MediumTank = { ModelAssetId = 26007709, Note = "Classic free tank — Medium only" } :: AssetRef,
 		BattleTank = { ModelAssetId = 19297043, Note = "Mammoth MBT" } :: AssetRef,
 		HeavyTank = { ModelAssetId = 19297043, Note = "Mammoth heavy" } :: AssetRef,
 		SuperHeavyTank = { ModelAssetId = 19297043, Note = "Mammoth super heavy" } :: AssetRef,
@@ -3320,11 +3320,11 @@ local VisualAssetConfig = {
 		HospitalShip = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
 		SupplyShip = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
 		AmphibAssault = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
-		Corvette = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		Destroyer = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		Frigate = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		CarrierEscort = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		Battleship = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		Corvette = { ModelAssetId = 12794395111, Note = "Frigate scaled" } :: AssetRef,
+		Destroyer = { ModelAssetId = 2048010298, Note = "Destroyer" } :: AssetRef,
+		Frigate = { ModelAssetId = 12794395111, Note = "Multipurpose Frigate" } :: AssetRef,
+		CarrierEscort = { ModelAssetId = 12794395111, Note = "Frigate escort" } :: AssetRef,
+		Battleship = { ModelAssetId = 2048010298, Note = "Destroyer scaled capital" } :: AssetRef,
 		AircraftCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
 		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
@@ -3347,17 +3347,17 @@ local VisualAssetConfig = {
 		AmphibiousAPC = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
 		CombatIFV = { ModelAssetId = 76055078503396, Note = "v41 Combat IFV" } :: AssetRef,
 		AssaultIFV = { ModelAssetId = 76055078503396, Note = "v41 Assault IFV" } :: AssetRef,
-		BridgeLayer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
-		MineClearer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
-		FlameCarrier = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
-		SPAAG = { ModelAssetId = 26007709, Note = "Tank SPAAG reuse" } :: AssetRef,
-		MobileSAM = { ModelAssetId = 26007709, Note = "Tank SAM reuse" } :: AssetRef,
-		MortarCarrier = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
-		MobileArtillery = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
-		RocketArtillery = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
-		HowitzerTruck = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
-		SiegeMortar = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
-		LightScoutTank = { ModelAssetId = 26007709, Note = "Light tank reuse" } :: AssetRef,
+		BridgeLayer = { ModelAssetId = 76055078503396, Note = "Engineer Track" } :: AssetRef,
+		MineClearer = { ModelAssetId = 76055078503396, Note = "Engineer Track" } :: AssetRef,
+		FlameCarrier = { ModelAssetId = 76055078503396, Note = "Engineer Track" } :: AssetRef,
+		SPAAG = { ModelAssetId = 15618784436, Note = "AA Gun" } :: AssetRef,
+		MobileSAM = { ModelAssetId = 14074034450, Note = "Mobile SAM TEL" } :: AssetRef,
+		MortarCarrier = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
+		MobileArtillery = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
+		RocketArtillery = { ModelAssetId = 18406068364, Note = "Rocket Artillery MLRS" } :: AssetRef,
+		HowitzerTruck = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
+		SiegeMortar = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
+		LightScoutTank = { ModelAssetId = 76055078503396, Note = "v42 Scout Tank" } :: AssetRef,
 		FortressTank = { ModelAssetId = 19297043, Note = "Mammoth fortress" } :: AssetRef,
 		RailgunCarrier = { ModelAssetId = 19297043, Note = "Mammoth railgun" } :: AssetRef,
 		DispatchCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
@@ -3368,8 +3368,8 @@ local VisualAssetConfig = {
 		HeavyBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 		StealthStrike = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
-		Cruiser = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		MissileCruiser = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		Cruiser = { ModelAssetId = 74585287273804, Note = "Cruiser" } :: AssetRef,
+		MissileCruiser = { ModelAssetId = 74585287273804, Note = "Cruiser" } :: AssetRef,
 		FleetCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
 		StrategicBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 	} :: { [string]: AssetRef },
@@ -3397,17 +3397,17 @@ local VisualAssetConfig = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
 		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model (HQ)" } :: AssetRef,
 		Barracks = { ModelAssetId = 18798977801, Note = "Barracks free Get Model (2009)" } :: AssetRef,
-		VehicleDepot = { ModelAssetId = 6015472062, Note = "Classic Warehouse free (depot)" } :: AssetRef,
+		VehicleDepot = { ModelAssetId = 12208876851, Note = "Arched depot/garage ≠ Hangar" } :: AssetRef,
 		WeaponsFacility = { ModelAssetId = 4120970784, Note = "Weapons facility" } :: AssetRef,
-		Warehouse = { ModelAssetId = 6015472062, Note = "Warehouse" } :: AssetRef,
-		Hangar = { ModelAssetId = 6015472062, Note = "Hangar primary; alt 12208876851" } :: AssetRef,
+		Warehouse = { ModelAssetId = 15942568272, Note = "Hangar shed multi-bay warehouse ≠ Hangar" } :: AssetRef,
+		Hangar = { ModelAssetId = 6015472062, Note = "Aircraft bay hangar KEEP primary" } :: AssetRef,
 		HangarAlt = { ModelAssetId = 12208876851, Note = "Hangar insert fallback" } :: AssetRef,
 		BaseGate = { ModelAssetId = 85138026, Note = "Gate arch prop ONLY — DisplayName Base Gate" } :: AssetRef,
 		ResearchLab = { ModelAssetId = 17725725, Note = "Research lab" } :: AssetRef,
 		SpecialForcesFacility = { ModelAssetId = 18798977801, Note = "Special forces facility" } :: AssetRef,
 		Watchtowers = { ModelAssetId = 108525417345747, Note = "Watchtower" } :: AssetRef,
 		Radar = { ModelAssetId = 9559610195, Note = "Radar" } :: AssetRef,
-		MissileDefense = { ModelAssetId = 108525417345747, Note = "Missile defense (fallback 16659447)" } :: AssetRef,
+		MissileDefense = { ModelAssetId = 11962508154, Note = "Missile Battery launcher ≠ Watchtower; alt 14074034450" } :: AssetRef,
 		DefensiveWalls = { ModelAssetId = 0, Note = "v41: no Wall* segment catalog dress" } :: AssetRef,
 		DefensiveWallsL3 = { ModelAssetId = 0, Note = "v41: Part-kit heavy walls" } :: AssetRef,
 		PowerStation = { ModelAssetId = 14000967030, Note = "Power station" } :: AssetRef,
@@ -28091,7 +28091,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 28 -- v41: walls mesh=0 + gate prop; sync StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 29 -- v42: Hangar≠Warehouse≠Depot, Missile≠Tower; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -28144,7 +28144,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			Dock = Vector3.new(40, 8, 16),
 			PowerStation = Vector3.new(28, 16, 20),
 			DefensiveWalls = Vector3.new(24, 8, 3),
-			MissileDefense = Vector3.new(12, 22, 12),
+			MissileDefense = Vector3.new(14, 10, 18),
 			SpecialForcesFacility = Vector3.new(26, 14, 16),
 			BaseGate = Vector3.new(16, 12, 4),
 		}

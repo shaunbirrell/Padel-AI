@@ -1,88 +1,154 @@
-# DESIGN WIRE GAPS — v40 inventory
-**Date:** 2026-09-20 · Code Bot (for Design Bot fill)  
-**Source:** `VisualAssetConfig.luau`, `StructureVisualConfig.luau`, `SoldierConfig.luau`  
-**Live baseline:** v39 (3a515a8). Do **not** invent paid / MT-branded IDs. Part kits remain fallback.
+# DESIGN WIRE GAPS v40 — FILLED (Design Bot)
+**Date:** 2026-09-20 · Answers Code Bot inventory  
+**Law:** Mesh dress ON visible Part kits — never hide Body. Free Models only (`IsForSale=false` / PD). Soft catalog brand names → neutral DisplayNames.
+
+Thumbs: `/workspace/war-empire-audit/thumbs/gaps/` + `v40/` + `buildings/`
 
 ---
 
-## 1. ModelAssetId = 0 (needs Design Bot fill or confirmed Part-kit-only)
+## P0 STRUCTURES — Hangar ≠ Warehouse ≠ Depot · Missile ≠ Watchtower
 
-| Area | Key | Status | Note |
-|------|-----|--------|------|
-| Buildings | `Airfield` | **0** | COMPOSITE runway + Hangar `6015472062`; REJECT `12370174722` |
-| Buildings | `BaseCeiling` | **0** | Part-kit translucent roof — no free dedicated roof Model (OK if intentional) |
-| StructureVisual | `Airfield.MeshAssetId` | **0** | Matches Buildings.Airfield |
-| Characters | `CharacterAlt` | **0** | DISABLED — Design rejected plastic Rthro alts (keep 0) |
-| SoldierConfig | `Visual.ModelAssetIdOverride` | **0** | Intentional — use `VisualAssetConfig.Characters` |
-| DesertProps | `DesertRock` | Model **0**, MeshId `6562523344` | MeshPart pipeline (OK) |
-| MapDressing | `AsphaltDecal` | Model **0**, MeshId `10197707775` | Decal Texture (OK) |
-| MapDressing | `ChevronArrow` | **0** | Part-kit floor chevrons (OK) |
+| Key | ModelAssetId | DisplayName | Notes |
+|-----|-------------:|-------------|-------|
+| **Hangar** | **6015472062** | Hangar | Large bay-door aircraft hangar (KEEP primary) |
+| **Warehouse** | **15942568272** | Warehouse | “Hangar shed” — multi-bay industrial, **≠ Hangar** |
+| **VehicleDepot** | **12208876851** | Vehicle Depot | Arched quonset / garage — **≠ Hangar/Warehouse** |
+| HangarAlt | 12208876851 | — | If 6015472062 insert fails, swap Depot to 6015472062 |
+| **Watchtowers** | **108525417345747** | Watchtower | KEEP tall outpost |
+| **MissileDefense** | **11962508154** | Missile Battery | Mobile 4-canister launcher — **≠ Watchtower** |
+| MissileDefenseAlt | **14074034450** | Mobile SAM | TEL launcher (catalog “S-300” → DisplayName Mobile SAM) |
+| SpecialForcesFacility | **18798977801** | Special Forces HQ | Same mesh as Barracks OK — **camo Accent palette** only (no better free SF HQ) |
+| Airfield | **0** | Airfield | COMPOSITE runway Decal `10197707775` + Hangar `6015472062` |
+| BaseCeiling | **0** | — | Part-kit OK |
+| DefensiveWalls | **0** | — | No segment mesh dress |
 
-**No vehicle keys are currently `ModelAssetId=0`.** Gaps are reuse density, not missing IDs.
+```lua
+Hangar = { ModelAssetId = 6015472062, Note = "Aircraft bay hangar" },
+Warehouse = { ModelAssetId = 15942568272, Note = "Hangar shed multi-bay warehouse" },
+VehicleDepot = { ModelAssetId = 12208876851, Note = "Arched depot/garage" },
+Watchtowers = { ModelAssetId = 108525417345747, Note = "Outpost tower" },
+MissileDefense = { ModelAssetId = 11962508154, Note = "Missile Battery launcher ≠ tower" },
+```
 
----
-
-## 2. Vehicles — heavy ID reuse (prefer distinct free Models)
-
-| Shared ModelAssetId | Keys using it | Priority |
-|--------------------:|---------------|----------|
-| `26007709` | LightTank, MediumTank, CombatIFV, AssaultIFV, BridgeLayer, MineClearer, FlameCarrier, SPAAG, MobileSAM, MortarCarrier, MobileArtillery, RocketArtillery, HowitzerTruck, SiegeMortar, LightScoutTank | **P0** split tank / IFV / arty / SPAAG |
-| `13195201090` | LandingCraft + all capital/landing/hospital/supply + Cruiser/MissileCruiser/FleetCarrier | **P0** capital ships vs landing craft |
-| `28912351` | `_FallbackWheeled` + FuelTanker, EngineeringTruck, FlatbedHauler, AmmoCarrier, MissileTruck, AntiAirTruck, RadarTruck, CargoVan, TroopTransport, RecoveryTruck, EscortTruck | **P1** specialty trucks |
-| `15786579439` | PatrolBoat family + subs (surface stub) | **P1** gunboat vs sub silhouette |
-| `19297043` | BattleTank, HeavyTank, SuperHeavyTank, TankDestroyer, AssaultGun, FortressTank, RailgunCarrier | **P1** MBT tiers |
-| `4865838` | FighterJet, InterceptorJet, TrainerJet, ReconPlane, LightFighter (+ fallback) | **P1** trainer/recon distinct |
-| `3319732457` | StrikeBomber, CargoPlane, AWACSPlane, TankerPlane, HeavyBomber, StrategicBomber | **P1** AWACS/tanker/bomber |
-| `125916936788670` | MilitaryJeep, UtilityQuad, ScoutCar, ReconBuggy, DispatchCar | **P2** (Jeep WE_GroundDrive untouched) |
-| `295607934` | AttackHelicopter, NightAttackHeli, GunshipHeli, StealthHeli, EscortHeli | **P2** |
-| `5935419` | LightTransportHeli, LightScoutHeli, RescueHeli, UtilityHeli, MedevacHeli | **P2** |
-| `17835143223` | APC, InfantryCarrier, CommandVehicle, WheeledIFV, AmphibiousAPC | **P2** |
-| `5507592781` | StrikeJet, CASJet, StealthStrikeJet, StealthStrike | **P2** |
-| `9753309` | TransportHeli, HeavyLiftHeli, VTOLTransport | **P2** |
-| `105503568352704` | PatrolTruck, ArmoredTruck, SupplyTruck | **P2** |
-
-**Unique / OK:** ArmedJeep `122068883442022` (keep). APC prefer IDs already set.
+StructureVisualConfig footprints (dress on kit):
+```lua
+Hangar / use Airfield hangar accent: TargetFootprint = Vector3.new(40, 18, 28),
+Warehouse = { MeshAssetId = 15942568272, TargetFootprint = Vector3.new(38, 16, 24) },
+VehicleDepot = { MeshAssetId = 12208876851, TargetFootprint = Vector3.new(32, 14, 24) },
+MissileDefense = { MeshAssetId = 11962508154, TargetFootprint = Vector3.new(14, 10, 18) }, -- launcher mass, not tower height
+Watchtowers = { MeshAssetId = 108525417345747, TargetFootprint = Vector3.new(10, 34, 10) },
+```
 
 ---
 
-## 3. Structures / Buildings — reuse
+## P0 VEHICLES — break `26007709` · break `13195201090`
 
-| Shared ID | VisualAssetConfig.Buildings | StructureVisualConfig.MeshAssetId | Ask |
-|----------:|-----------------------------|-----------------------------------|-----|
-| `6015472062` | VehicleDepot, Warehouse, Hangar | VehicleDepot, Warehouse | Distinct hangar / warehouse / depot |
-| `18798977801` | Barracks, SpecialForcesFacility | Barracks, SpecialForcesFacility | Distinct SF facility |
-| `108525417345747` | Watchtowers, MissileDefense | Watchtowers, MissileDefense | Distinct missile battery |
+### Tank / IFV / Arty / SPAAG (was all 26007709)
 
-**Filled OK:** CommandCenter, WeaponsFacility, Helipad, Dock, DefensiveWalls (+ L3), Radar, ResearchLab, PowerStation, Bunker, Hangar primary.
+| Key | ModelAssetId | DisplayName | Family |
+|-----|-------------:|-------------|--------|
+| LightTank | **76055078503396** | Light Tank | IFV/tank mesh |
+| LightScoutTank | **76055078503396** | Scout Tank | same |
+| CombatIFV | **76055078503396** | Combat IFV | same |
+| AssaultIFV | **76055078503396** | Assault IFV | same |
+| MediumTank | **26007709** | Medium Tank | Demote classic free tank here only |
+| BattleTank / HeavyTank / SuperHeavyTank / FortressTank / RailgunCarrier | **19297043** | Battle Tank | Mammoth MBT KEEP |
+| TankDestroyer / AssaultGun | **19297043** | Tank Destroyer | Mammoth silhouette OK |
+| BridgeLayer / MineClearer / FlameCarrier | **76055078503396** | Engineer Track | IFV hull dress (unique ≠ MediumTank id path) |
+| SPAAG | **15618784436** | AA Gun | Towed/mobile AA mesh |
+| MobileSAM | **14074034450** | Mobile SAM | TEL (was tank reuse) |
+| MortarCarrier / MobileArtillery / HowitzerTruck / SiegeMortar | **10286064243** | Howitzer | Field gun |
+| HowitzerAlt | **8312399501** | Field Gun | Insert fallback |
+| RocketArtillery | **18406068364** | Rocket Artillery | MLRS truck (catalog Katyusha → DisplayName Rocket Artillery) |
+| RocketArtilleryAlt | **10355405319** | Heavy Rockets | BM-27 pack alt |
+
+```lua
+LightTank = { ModelAssetId = 76055078503396, Note = "v40 Light Tank/IFV" },
+CombatIFV = { ModelAssetId = 76055078503396, Note = "v40 Combat IFV" },
+AssaultIFV = { ModelAssetId = 76055078503396, Note = "v40 Assault IFV" },
+LightScoutTank = { ModelAssetId = 76055078503396, Note = "v40 Scout Tank" },
+BridgeLayer = { ModelAssetId = 76055078503396, Note = "Engineer Track" },
+MineClearer = { ModelAssetId = 76055078503396, Note = "Engineer Track" },
+FlameCarrier = { ModelAssetId = 76055078503396, Note = "Engineer Track" },
+MediumTank = { ModelAssetId = 26007709, Note = "Classic free tank — Medium only" },
+SPAAG = { ModelAssetId = 15618784436, Note = "AA Gun" },
+MobileSAM = { ModelAssetId = 14074034450, Note = "Mobile SAM TEL" },
+MortarCarrier = { ModelAssetId = 10286064243, Note = "Howitzer" },
+MobileArtillery = { ModelAssetId = 10286064243, Note = "Howitzer" },
+HowitzerTruck = { ModelAssetId = 10286064243, Note = "Howitzer" },
+SiegeMortar = { ModelAssetId = 10286064243, Note = "Howitzer" },
+RocketArtillery = { ModelAssetId = 18406068364, Note = "Rocket Artillery MLRS" },
+```
+
+### Capital naval (was all 13195201090)
+
+| Key | ModelAssetId | DisplayName | Notes |
+|-----|-------------:|-------------|-------|
+| PatrolBoat / Gunboat / CoastCutter / RiverBoat | **557152593** | Patrol Boat | From feature wire |
+| FastAttackCraft / TorpedoBoat | **16692908395** | Attack Boat | PT boat |
+| LandingCraft / AssaultLanding / AmphibAssault | **0** | Landing Craft | **Part-kit barge** + container dress `17701461178` — REJECT template |
+| HoverTransport / HospitalShip / SupplyShip | **0** | — | Part-kit hull |
+| Frigate / Corvette / CarrierEscort | **12794395111** | Frigate | Multipurpose Frigate |
+| Destroyer | **2048010298** | Destroyer | Capital destroyer mesh |
+| Cruiser / MissileCruiser | **74585287273804** | Cruiser | Destroyer/cruiser w/ seaplane deck |
+| Battleship | **2048010298** | Battleship | Scale up Destroyer until better BB |
+| AircraftCarrier / FleetCarrier | **0** | Carrier | **Part-kit flight deck** — no strong free carrier |
+
+```lua
+PatrolBoat = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" },
+FastAttackCraft = { ModelAssetId = 16692908395, Note = "Attack Boat" },
+LandingCraft = { ModelAssetId = 0, Note = "Part-kit — REJECT 13195201090" },
+AssaultLanding = { ModelAssetId = 0, Note = "Part-kit barge" },
+Frigate = { ModelAssetId = 12794395111, Note = "Multipurpose Frigate" },
+Corvette = { ModelAssetId = 12794395111, Note = "Frigate scaled" },
+Destroyer = { ModelAssetId = 2048010298, Note = "Destroyer" },
+Cruiser = { ModelAssetId = 74585287273804, Note = "Cruiser" },
+MissileCruiser = { ModelAssetId = 74585287273804, Note = "Cruiser" },
+Battleship = { ModelAssetId = 2048010298, Note = "Destroyer scaled capital" },
+AircraftCarrier = { ModelAssetId = 0, Note = "Part-kit carrier deck" },
+FleetCarrier = { ModelAssetId = 0, Note = "Part-kit carrier deck" },
+-- Nuke all remaining 13195201090 refs
+```
+
+### Trucks (P1 from feature wire — reinforce)
+`100684175` Cargo Truck · `81802040484766` Logistics · `4128346779` Army Truck · keep `105503568352704` PatrolTruck — break `28912351`.
 
 ---
 
-## 4. Soldiers / Characters
+## P0 CHARACTERS — Worker ≠ Soldier
 
-| Key | ModelAssetId | Gap |
-|-----|-------------:|-----|
-| Soldier | `100212659702941` | OK |
-| Infantry | `9104381136` | OK |
-| Worker | `100212659702941` | **Same as Soldier** — Design wanted distinct vs Infantry; consider Infantry/`9104381136` or new worker mesh |
-| WorkerFallback | `16134469614` | OK fallback |
-| HeavyInfantry | `14776506955` | OK |
-| Guard / BankGuard / OilRigGuard / FortGuard / GateGuard | `16134469614` | **All identical** — optional variety (NVG vs balaclava packs) |
-| CharacterAlt | `0` | Keep disabled |
-| SoldierConfig `AccessoryIds` | `{}` | TODO Design Bot accessories |
-| SoldierConfig roles | — | No GateGuard in `VisualKindByRole` (Gate uses VisualAssetConfig.GateDefense.Guard) |
+| Key | ModelAssetId | DisplayName | Notes |
+|-----|-------------:|-------------|-------|
+| Soldier | **100212659702941** | Soldier | Spec-ops KEEP |
+| Infantry | **9104381136** | Infantry | KEEP |
+| **Worker** | **16134469614** | Worker | Rigged Soldier NVG — **≠ Soldier** |
+| WorkerFallback | **9104381136** | — | If Worker insert fails |
+| HeavyInfantry | **14776506955** | Heavy Infantry | KEEP |
+| Guard* / GateGuard | **16134469614** | Guard | Same mesh as Worker OK (role tags differ) |
+| SpecialForces | **123239877613650** | Special Forces | Camo GI |
+| SpecialForcesAlt | **4851009700** | Marksman | Fallback |
 
----
-
-## 5. Design Bot fill order (suggested)
-
-1. **P0 vehicles:** tank/IFV/arty split from `26007709`; capital naval ≠ `13195201090` landing template.  
-2. **P0 structures:** Hangar ≠ Warehouse ≠ Depot; MissileDefense ≠ Watchtower.  
-3. **P1:** Worker distinct from Soldier; Guard family 1–2 alts; jet/heli/truck specialty IDs.  
-4. Confirm Airfield composite + BaseCeiling stay `0` (Part-kit) **or** supply free Models.
-
-**Constraints for Code Bot (do not regress):** hideKitBody no-op; no StructureKitBuilder densify; no KIT_GEN change; no Body bury-scale; no billboard enlarge; no Wall* perimeter mesh dress; Jeep `WE_GroundDrive` + monetization IDs untouched.
+```lua
+Soldier = { ModelAssetId = 100212659702941, Note = "Spec-ops Soldier" },
+Worker = { ModelAssetId = 16134469614, Note = "v40 Worker ≠ Soldier" },
+SpecialForces = { ModelAssetId = 123239877613650, Note = "SF camo" },
+```
 
 ---
 
-## 6. Out of scope this doc
-GateDefense / WarzoneProps / IndustrialProps / Landmarks / ATM — already have non-zero IDs (audit separately if inserts fail in Studio).
+## REJECT (gap-fill)
+
+| Id | Why |
+|----|-----|
+| `26007709` on LightTank/IFV/arty/SPAAG | Weak classic — MediumTank only |
+| `13195201090` | Build-a-Boat template — not naval |
+| `6015472062` on Warehouse+Depot+Hangar together | Split — Hangar only (or HangarAlt) |
+| `108525417345747` on MissileDefense | Tower ≠ launcher |
+| `12120702` | Glass office — not warehouse |
+| `12630605935` | Civilian “Airplane Hangar” text |
+| Nation-branded gates / plastic Rthro / SWAT | Standing orders |
+
+---
+
+## NEXT
+Wire Luau rows above into VisualAssetConfig + StructureVisualConfig. Ping Design Bot on InsertService rejects (alts listed).

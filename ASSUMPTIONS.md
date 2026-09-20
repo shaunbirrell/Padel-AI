@@ -504,3 +504,11 @@ Do not regress: WE_GroundDrive, monetization IDs, AtmRaid, GateDefense, Tutorial
 182. **Safety no-regress** — hideKitBody remains no-op; placeKitPart bottom-anchored; monetization IDs untouched; billboards ≤160.
 183. BuyPathStatic PASS; InsertService-risk IDs (ping Design Bot on reject): `76055078503396`, `81802040484766`, `123239877613650`, `16692908395`, `13525922265`, `4128346779`, `100684175`, `85138026`.
 
+## 2026-09-20 — Design Wire Gaps fill v42 (live v42 — Open Cloud Published versionNumber=42)
+
+184. **Structures uniqueness** — Hangar KEEP `6015472062`. Warehouse → `15942568272`. VehicleDepot → `12208876851`. MissileDefense → `11962508154` (footprint `14×10×18`, ≠ Watchtower `108525417345747`). DefensiveWalls MeshAssetId=0 + BaseGate GateArch-only unchanged.
+185. **Vehicles uniqueness** — LightTank/IFV/EngineerTrack/Scout KEEP/extend `76055078503396`. MediumTank only `26007709`. SPAAG `15618784436`. MobileSAM `14074034450`. Howitzer family `10286064243`. RocketArtillery `18406068364`. Frigate/Corvette/CarrierEscort `12794395111`. Destroyer/Battleship `2048010298`. Cruiser/MissileCruiser `74585287273804`. LandingCraft/Carrier/FleetCarrier stay **0** (REJECT `13195201090`). Capital keys already existed in VisualAssetConfig — ModelAssetId set only; VehicleService spawn path unchanged.
+186. **Soldiers** — Worker KEEP `16134469614` ≠ Soldier `100212659702941`.
+187. **Safety no-regress** — hideKitBody remains no-op; KIT_GEN stays **27**; BuildingDressGen / VAS DRESS_GEN **29**; Jeep WE_GroundDrive + monetization IDs untouched; billboards ≤160.
+188. BuyPathStatic PASS; InsertService-risk NEW IDs (ping Design Bot on reject): `15942568272`, `12208876851`, `11962508154`, `15618784436`, `14074034450`, `10286064243`, `18406068364`, `12794395111`, `2048010298`, `74585287273804`. Alts: MissileDefenseAlt `14074034450`, HowitzerAlt `8312399501`, RocketArtilleryAlt `10355405319`.
+

@@ -21,7 +21,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 28, -- v41 DressGen: DefensiveWalls mesh=0 + gate prop; kits stay visible
+	BuildingDressGen = 29, -- v42 DressGen: Hangar≠Warehouse≠Depot, Missile≠Tower; kits stay visible
 
 	Palettes = {
 		CommandCenter = {
@@ -49,7 +49,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(45, 55, 65),
 			Kit = "depot",
 			TargetFootprint = Vector3.new(32, 14, 24),
-			MeshAssetId = 6015472062,
+			MeshAssetId = 12208876851, -- v42 arched depot ≠ Hangar
 		},
 		WeaponsFacility = {
 			Plinth = Color3.fromRGB(48, 40, 38),
@@ -130,8 +130,8 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 100, 60),
 			Roof = Color3.fromRGB(55, 45, 42),
 			Kit = "tower",
-			TargetFootprint = Vector3.new(12, 22, 12),
-			MeshAssetId = 108525417345747,
+			TargetFootprint = Vector3.new(14, 10, 18), -- v42 launcher mass, not tower height
+			MeshAssetId = 11962508154, -- Missile Battery ≠ Watchtower
 		},
 		PowerStation = {
 			Plinth = Color3.fromRGB(50, 48, 35),
@@ -149,7 +149,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(55, 50, 42),
 			Kit = "warehouse",
 			TargetFootprint = Vector3.new(38, 16, 24),
-			MeshAssetId = 6015472062,
+			MeshAssetId = 15942568272, -- v42 hangar shed ≠ Hangar
 		},
 		SpecialForcesFacility = {
 			Plinth = Color3.fromRGB(35, 38, 42),

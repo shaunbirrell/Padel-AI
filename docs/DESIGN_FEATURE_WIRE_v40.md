@@ -1,8 +1,56 @@
 # DESIGN FEATURE WIRE v40 — Design Bot → Code Bot
-**Date:** 2026-09-20 · Shaun: design back on features · Live v39 KIT_GEN 27  
-**Law:** Part kits stay **visible**. Catalog mesh is **optional dress ON TOP** of the kit silhouette — never hide Body/Roof. No `Wall*` catalog dress on perimeter **segments**. Scale so mesh sits **on** the pad (Pivot Y+ / ScaleTo TargetFootprint), not buried.
+**Date:** 2026-09-20 · **AMENDED** gap-fill (Hangar≠Warehouse≠Depot, Missile≠Tower, tank/arty/naval split, Worker≠Soldier)  
+**See also:** `DESIGN_WIRE_GAPS_v40.md` (filled)  
+**Law:** Part kits stay **visible**. Catalog mesh is **optional dress ON TOP** — never hide Body/Roof.
 
-Thumbs QA: `/workspace/war-empire-audit/thumbs/v40/`
+---
+
+## AMENDMENT — P0 uniqueness (wire these)
+
+### Structures
+| Key | ModelAssetId | DisplayName |
+|-----|-------------:|-------------|
+| Hangar | **6015472062** | Hangar |
+| Warehouse | **15942568272** | Warehouse |
+| VehicleDepot | **12208876851** | Vehicle Depot |
+| MissileDefense | **11962508154** | Missile Battery |
+| MissileDefenseAlt | 14074034450 | Mobile SAM |
+| Watchtowers | 108525417345747 | Watchtower |
+
+### Vehicles (break 26007709 / 13195201090)
+| Key | ModelAssetId | DisplayName |
+|-----|-------------:|-------------|
+| LightTank / CombatIFV / AssaultIFV / LightScoutTank / BridgeLayer / MineClearer / FlameCarrier | **76055078503396** | Light Tank / IFV / Engineer Track |
+| MediumTank | **26007709** | Medium Tank |
+| SPAAG | **15618784436** | AA Gun |
+| MobileSAM | **14074034450** | Mobile SAM |
+| MortarCarrier / MobileArtillery / HowitzerTruck / SiegeMortar | **10286064243** | Howitzer |
+| RocketArtillery | **18406068364** | Rocket Artillery |
+| Frigate / Corvette | **12794395111** | Frigate |
+| Destroyer / Battleship | **2048010298** | Destroyer |
+| Cruiser / MissileCruiser | **74585287273804** | Cruiser |
+| LandingCraft / Carrier / FleetCarrier | **0** | Part-kit — REJECT 13195201090 |
+
+### Characters
+| Key | ModelAssetId |
+|-----|-------------:|
+| Soldier | 100212659702941 |
+| Worker | **16134469614** (≠ Soldier) |
+| SpecialForces | 123239877613650 |
+
+```lua
+-- StructureVisualConfig
+Warehouse = { MeshAssetId = 15942568272, TargetFootprint = Vector3.new(38, 16, 24) },
+VehicleDepot = { MeshAssetId = 12208876851, TargetFootprint = Vector3.new(32, 14, 24) },
+MissileDefense = { MeshAssetId = 11962508154, TargetFootprint = Vector3.new(14, 10, 18) },
+-- VisualAssetConfig.Buildings
+Hangar = { ModelAssetId = 6015472062 },
+Warehouse = { ModelAssetId = 15942568272 },
+VehicleDepot = { ModelAssetId = 12208876851 },
+MissileDefense = { ModelAssetId = 11962508154 },
+-- Characters
+Worker = { ModelAssetId = 16134469614, Note = "≠ Soldier" },
+```
 
 ---
 
