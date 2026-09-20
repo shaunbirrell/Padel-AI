@@ -48,11 +48,16 @@ local OrdersConfig = {
 	},
 
 	Walkie = {
-		PositionTouch = UDim2.new(0, 10, 1, -240), -- v39: clear of dock; less screen cover
+		PositionTouch = UDim2.new(0, 10, 1, -240), -- clear of dock; less screen cover
 		PositionDesktop = UDim2.new(0, 16, 1, -110),
 		Size = UDim2.fromOffset(180, 152),
-		SizeTouch = UDim2.fromOffset(200, 176), -- was 268×236 covering half left
+		-- v40: Shaun SQUAD ORDERS huge on left — cap ~220px; MinTouch 56; MobileScale max lower
+		SizeTouch = UDim2.fromOffset(200, 168),
 		MinTouchPx = 56,
+		PanelMaxWidth = 220,
+		PanelMaxHeight = 190,
+		MobileScaleMax = 0.85, -- was PrepareScreen default 1.1 blowing up walkie
+		MobileScaleMin = 0.65,
 	},
 }
 

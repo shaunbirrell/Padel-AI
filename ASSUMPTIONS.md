@@ -486,3 +486,9 @@ Shaun playtest screenshots (flat grey pad, giant AIRFIELD/RADAR/HELIPAD/HQ/BARRA
 172. **Orders panel** — SizeTouch `200×176` (was 268×236).
 
 Do not regress: WE_GroundDrive, monetization IDs, AtmRaid, GateDefense, Tutorial.
+
+## 2026-09-20 — Orders/UI polish + design gaps (live v40 — Open Cloud Published versionNumber=40)
+
+173. **Orders walkie** — SizeTouch `200×168`, `PanelMaxWidth=220` / `PanelMaxHeight=190` UISizeConstraint, `MobileScaleMax=0.85` (no PrepareScreen 1.1 blow-up). MinTouchPx 56 + hotkeys 1–4/T unchanged.
+174. **WorldPrompt chips** — `PRICE_CHIP_MAX_W=160` + `clampChipSize` defensive clamp (sizes already 160×52 / owned 120×32).
+175. **Design gaps** — `docs/DESIGN_WIRE_GAPS_v40.md` lists ModelAssetId=0 + reused vehicle/structure/soldier IDs for Design Bot. No kit / hideKitBody / KIT_GEN / Jeep / monetization changes.

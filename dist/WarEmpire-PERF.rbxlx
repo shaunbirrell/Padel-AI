@@ -1953,11 +1953,16 @@ local OrdersConfig = {
 	},
 
 	Walkie = {
-		PositionTouch = UDim2.new(0, 10, 1, -240), -- v39: clear of dock; less screen cover
+		PositionTouch = UDim2.new(0, 10, 1, -240), -- clear of dock; less screen cover
 		PositionDesktop = UDim2.new(0, 16, 1, -110),
 		Size = UDim2.fromOffset(180, 152),
-		SizeTouch = UDim2.fromOffset(200, 176), -- was 268×236 covering half left
+		-- v40: Shaun SQUAD ORDERS huge on left — cap ~220px; MinTouch 56; MobileScale max lower
+		SizeTouch = UDim2.fromOffset(200, 168),
 		MinTouchPx = 56,
+		PanelMaxWidth = 220,
+		PanelMaxHeight = 190,
+		MobileScaleMax = 0.85, -- was PrepareScreen default 1.1 blowing up walkie
+		MobileScaleMin = 0.65,
 	},
 }
 
@@ -32106,17 +32111,21 @@ function OrdersController.Init()
 	screen.Name = "WarEmpireOrders"
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screen.IgnoreGuiInset = true
 	screen.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(screen, true)
+	-- v40: do NOT use PrepareScreen default maxScale 1.1 — walkie blew up on phone left
+	local walkie = OrdersConfig.Walkie or {}
+	local scaleMax = if isTouch then (tonumber(walkie.MobileScaleMax) or 0.85) else 1.0
+	local scaleMin = tonumber(walkie.MobileScaleMin) or 0.65
+	UIUtil.AttachMobileScale(screen, 900, scaleMin, scaleMax)
 	screen.DisplayOrder = 52 -- below HUD dock (55) / Army modal (60); above world
 	screenGui = screen
 
-	local walkie = OrdersConfig.Walkie or {}
 	local frame = Instance.new("Frame")
 	frame.Name = "Walkie"
 	frame.AnchorPoint = Vector2.new(0, 1)
 	frame.Position = if isTouch then (walkie.PositionTouch or UDim2.new(0, 12, 1, -248)) else (walkie.PositionDesktop or UDim2.new(0, 16, 1, -110))
-	frame.Size = if isTouch then (walkie.SizeTouch or UDim2.fromOffset(248, 220)) else (walkie.Size or UDim2.fromOffset(200, 168))
+	frame.Size = if isTouch then (walkie.SizeTouch or UDim2.fromOffset(200, 168)) else (walkie.Size or UDim2.fromOffset(180, 152))
 	frame.BackgroundColor3 = Constants.Colors.Gunmetal
 	frame.BackgroundTransparency = 0.08
 	frame.BorderSizePixel = 0
@@ -32124,6 +32133,11 @@ function OrdersController.Init()
 	frame.Parent = screen
 	UIUtil.Corner(frame, 10)
 	UIUtil.Stroke(frame, Constants.Colors.Olive, 1.5)
+	-- Hard cap so MobileScale cannot push AbsoluteSize past ~220×190
+	local sizeCap = Instance.new("UISizeConstraint")
+	sizeCap.MaxSize = Vector2.new(tonumber(walkie.PanelMaxWidth) or 220, tonumber(walkie.PanelMaxHeight) or 190)
+	sizeCap.MinSize = Vector2.new(140, 120)
+	sizeCap.Parent = frame
 	panel = frame
 
 	local title = Instance.new("TextLabel")
@@ -36872,9 +36886,10 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 42 -- v39: near-only chips (was 56)
+local PRICE_BILLBOARD_MAX_DIST = 42 -- near-only chips (was 56)
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- v39: phone-readable chip (was giant 300×132)
+local PRICE_CHIP_MAX_W = 160 -- v40: hard clamp — never wider than 160
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- phone-readable chip (was giant 300×132)
 local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(120, 32) -- owned L1+: tiny roof chip, never half-screen
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
@@ -37159,18 +37174,35 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	return display, level, cost, false, prereqHint
 end
 
+local function clampChipSize(size: UDim2): UDim2
+	-- v40: if any path left chips >160 wide, force clamp
+	local w = size.X.Offset
+	local h = size.Y.Offset
+	if w <= 0 then
+		return size
+	end
+	if w > PRICE_CHIP_MAX_W then
+		return UDim2.fromOffset(PRICE_CHIP_MAX_W, if h > 0 then h else 52)
+	end
+	return size
+end
+
 local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
-	-- v39 P0: never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but small
+	-- never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but ≤160 wide
 	if ownedChip then
-		bb.Size = PRICE_BILLBOARD_OWNED_SIZE
+		bb.Size = clampChipSize(PRICE_BILLBOARD_OWNED_SIZE)
 		bb.StudsOffset = Vector3.new(0, 6, 0)
 		bb.MaxDistance = 28
 		bb.AlwaysOnTop = false
 	else
-		bb.Size = PRICE_BILLBOARD_SIZE
+		bb.Size = clampChipSize(PRICE_BILLBOARD_SIZE)
 		bb.StudsOffset = Vector3.new(0, 5.5, 0)
 		bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
 		bb.AlwaysOnTop = false
+	end
+	-- Defensive: legacy / stale oversized chips
+	if bb.Size.X.Offset > PRICE_CHIP_MAX_W then
+		bb.Size = clampChipSize(bb.Size)
 	end
 end
 

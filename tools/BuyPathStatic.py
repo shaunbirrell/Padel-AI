@@ -711,6 +711,22 @@ must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "Tu
 
 # --- v39 P0 hotfix: billboards + walls + Part-kit visibility ---
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52)", "v39 price billboard chip 160x52")
+
+# --- v40 Orders panel scale + chip clamp + design gaps doc ---
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "PanelMaxWidth = 220", "v40 Orders PanelMaxWidth")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MobileScaleMax = 0.85", "v40 Orders MobileScaleMax")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MinTouchPx = 56", "v40 Orders MinTouchPx 56")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "UISizeConstraint", "v40 Orders UISizeConstraint")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "AttachMobileScale", "v40 Orders custom MobileScale")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "HOTKEY_ORDERS", "v40 Orders hotkeys intact")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "KeyCode.T", "v40 Orders T cycle intact")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 160", "v40 chip max width 160")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "clampChipSize", "v40 clampChipSize")
+must_contain("docs/DESIGN_WIRE_GAPS_v40.md", "ModelAssetId = 0", "v40 design gaps doc")
+must_contain("docs/DESIGN_WIRE_GAPS_v40.md", "26007709", "v40 tank reuse gap listed")
+# Constraints: no hideKitBody densify / KIT_GEN / monetization / Jeep drive edits this pass
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "hideKitBody", "no-regress hideKitBody present")
+
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_OWNED_SIZE", "v39 owned billboard chip size")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "bb.AlwaysOnTop = false", "v39 price boards never AlwaysOnTop")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 27", "v39 KIT_GEN 27")
@@ -721,7 +737,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "placeK
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'role == "Crate"', "v39 Warehouse Crate role visible")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "NEVER ghost Part-kit silhouettes", "v39 hideKitBody no-op")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 27", "v39 BuildingDressGen 27")
-must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "SizeTouch = UDim2.fromOffset(200, 176)", "v39 Orders panel scaled down")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "SizeTouch = UDim2.fromOffset(200, 168)", "v40 Orders SizeTouch 200x168")
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "UDim2.fromOffset(300, 132)", "v39 no giant 300x132 boards")
 # No-regress v39
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v39")

@@ -42,9 +42,10 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 42 -- v39: near-only chips (was 56)
+local PRICE_BILLBOARD_MAX_DIST = 42 -- near-only chips (was 56)
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- v39: phone-readable chip (was giant 300×132)
+local PRICE_CHIP_MAX_W = 160 -- v40: hard clamp — never wider than 160
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- phone-readable chip (was giant 300×132)
 local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(120, 32) -- owned L1+: tiny roof chip, never half-screen
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
@@ -329,18 +330,35 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	return display, level, cost, false, prereqHint
 end
 
+local function clampChipSize(size: UDim2): UDim2
+	-- v40: if any path left chips >160 wide, force clamp
+	local w = size.X.Offset
+	local h = size.Y.Offset
+	if w <= 0 then
+		return size
+	end
+	if w > PRICE_CHIP_MAX_W then
+		return UDim2.fromOffset(PRICE_CHIP_MAX_W, if h > 0 then h else 52)
+	end
+	return size
+end
+
 local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
-	-- v39 P0: never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but small
+	-- never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but ≤160 wide
 	if ownedChip then
-		bb.Size = PRICE_BILLBOARD_OWNED_SIZE
+		bb.Size = clampChipSize(PRICE_BILLBOARD_OWNED_SIZE)
 		bb.StudsOffset = Vector3.new(0, 6, 0)
 		bb.MaxDistance = 28
 		bb.AlwaysOnTop = false
 	else
-		bb.Size = PRICE_BILLBOARD_SIZE
+		bb.Size = clampChipSize(PRICE_BILLBOARD_SIZE)
 		bb.StudsOffset = Vector3.new(0, 5.5, 0)
 		bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
 		bb.AlwaysOnTop = false
+	end
+	-- Defensive: legacy / stale oversized chips
+	if bb.Size.X.Offset > PRICE_CHIP_MAX_W then
+		bb.Size = clampChipSize(bb.Size)
 	end
 end
 

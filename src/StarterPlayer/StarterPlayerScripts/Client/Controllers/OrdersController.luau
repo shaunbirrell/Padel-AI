@@ -120,17 +120,21 @@ function OrdersController.Init()
 	screen.Name = "WarEmpireOrders"
 	screen.ResetOnSpawn = false
 	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screen.IgnoreGuiInset = true
 	screen.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(screen, true)
+	-- v40: do NOT use PrepareScreen default maxScale 1.1 — walkie blew up on phone left
+	local walkie = OrdersConfig.Walkie or {}
+	local scaleMax = if isTouch then (tonumber(walkie.MobileScaleMax) or 0.85) else 1.0
+	local scaleMin = tonumber(walkie.MobileScaleMin) or 0.65
+	UIUtil.AttachMobileScale(screen, 900, scaleMin, scaleMax)
 	screen.DisplayOrder = 52 -- below HUD dock (55) / Army modal (60); above world
 	screenGui = screen
 
-	local walkie = OrdersConfig.Walkie or {}
 	local frame = Instance.new("Frame")
 	frame.Name = "Walkie"
 	frame.AnchorPoint = Vector2.new(0, 1)
 	frame.Position = if isTouch then (walkie.PositionTouch or UDim2.new(0, 12, 1, -248)) else (walkie.PositionDesktop or UDim2.new(0, 16, 1, -110))
-	frame.Size = if isTouch then (walkie.SizeTouch or UDim2.fromOffset(248, 220)) else (walkie.Size or UDim2.fromOffset(200, 168))
+	frame.Size = if isTouch then (walkie.SizeTouch or UDim2.fromOffset(200, 168)) else (walkie.Size or UDim2.fromOffset(180, 152))
 	frame.BackgroundColor3 = Constants.Colors.Gunmetal
 	frame.BackgroundTransparency = 0.08
 	frame.BorderSizePixel = 0
@@ -138,6 +142,11 @@ function OrdersController.Init()
 	frame.Parent = screen
 	UIUtil.Corner(frame, 10)
 	UIUtil.Stroke(frame, Constants.Colors.Olive, 1.5)
+	-- Hard cap so MobileScale cannot push AbsoluteSize past ~220×190
+	local sizeCap = Instance.new("UISizeConstraint")
+	sizeCap.MaxSize = Vector2.new(tonumber(walkie.PanelMaxWidth) or 220, tonumber(walkie.PanelMaxHeight) or 190)
+	sizeCap.MinSize = Vector2.new(140, 120)
+	sizeCap.Parent = frame
 	panel = frame
 
 	local title = Instance.new("TextLabel")
