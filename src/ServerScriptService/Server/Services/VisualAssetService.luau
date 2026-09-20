@@ -152,7 +152,7 @@ local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: st
 	stripScripts(clone)
 	clone.Name = cloneName
 
-	-- Remove competing Humanoids / tools / seats / scripts from catalog meshes
+	-- Strip seats / humanoids / scripts / constraints — mesh is dress-only, never drive
 	for _, d in ipairs(clone:GetDescendants()) do
 		if
 			d:IsA("Humanoid")
@@ -161,6 +161,14 @@ local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: st
 			or d:IsA("Seat")
 			or d:IsA("BaseScript")
 			or d:IsA("ModuleScript")
+			or d:IsA("HingeConstraint")
+			or d:IsA("CylindricalConstraint")
+			or d:IsA("SpringConstraint")
+			or d:IsA("PrismaticConstraint")
+			or d:IsA("RodConstraint")
+			or d:IsA("VectorForce")
+			or d:IsA("LinearVelocity")
+			or d:IsA("AngularVelocity")
 		then
 			d:Destroy()
 		end
@@ -282,8 +290,21 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
-	-- Soften host body visibility so catalog mesh reads better (olive kit stays until mesh loads)
-	primary.Transparency = math.max(primary.Transparency, 0.55)
+	-- Soften host body so catalog mesh reads; keep Part-kit physics wheels (hidden)
+	primary.Transparency = math.max(primary.Transparency, 0.72)
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("WE_PhysicsWheel") == true then
+			d.Transparency = 1 -- physics collider/motor only; mesh provides visible tires
+			d.CanCollide = true
+			d.Massless = false
+		elseif d:IsA("BasePart") and d:GetAttribute("WE_KitCosmetic") == true then
+			d.Transparency = math.max(d.Transparency, 0.85)
+		end
+	end
+	-- Re-assert DriverSeat still present after mesh dress
+	if not hostModel:FindFirstChild("DriverSeat") then
+		warn("[VisualAssetService] DriverSeat missing after mesh attach — host kit corrupted")
+	end
 	return true
 end
 

@@ -15226,7 +15226,7 @@ local function ensureBillboard(part: BasePart): BillboardGui
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 12
 	title.TextColor3 = Color3.fromRGB(200, 210, 200)
-	title.Text = "ATM · TOUCH TO COLLECT"
+	title.Text = "ATM · TOUCH TO COLLECT · Codes in Settings"
 	title.Parent = backdrop
 
 	local amount = Instance.new("TextLabel")
@@ -18715,7 +18715,7 @@ local TutorialService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
-local airDriveConns: { [number]: RBXScriptConnection } = {}
+local driveConns: { [number]: RBXScriptConnection } = {}
 local vehicleFolder: Folder? = nil
 
 local function now(): number
@@ -18776,16 +18776,16 @@ local function pushState(player: Player)
 	remote:FireClient(player, payload)
 end
 
-local function stopAirDrive(userId: number)
-	local conn = airDriveConns[userId]
+local function stopDrive(userId: number)
+	local conn = driveConns[userId]
 	if conn then
 		conn:Disconnect()
-		airDriveConns[userId] = nil
+		driveConns[userId] = nil
 	end
 end
 
 local function destroyActive(userId: number)
-	stopAirDrive(userId)
+	stopDrive(userId)
 	local model = activeVehicles[userId]
 	activeVehicles[userId] = nil
 	if model then
@@ -18891,22 +18891,49 @@ local function addPart(
 end
 
 local function addWheels(model: Model, body: BasePart, scale: number, positions: { Vector3 }, radius: number?)
+	-- Authoritative physics wheels: HingeConstraint motors (NOT welded).
+	-- Catalog mesh wheels stay cosmetic-only via VisualAssetService (CanCollide false).
 	local r = radius or 1.1
 	for i, offset in ipairs(positions) do
 		local wheel = Instance.new("Part")
 		wheel.Name = "Wheel" .. i
 		wheel.Shape = Enum.PartType.Cylinder
-		wheel.Size = Vector3.new(r * 0.9, r * 1.8 * scale, r * 1.8 * scale)
+		-- Cylinder X-axis = axle; rotate 90° so axle aligns with body X
+		wheel.Size = Vector3.new(r * 0.85, r * 1.8 * scale, r * 1.8 * scale)
 		wheel.Color = Color3.fromRGB(22, 22, 24)
 		wheel.Material = Enum.Material.SmoothPlastic
 		wheel.CFrame = body.CFrame * CFrame.new(offset * scale) * CFrame.Angles(0, 0, math.rad(90))
 		wheel.Anchored = false
 		wheel.CanCollide = true
-		wheel.Massless = true
-		wheel.CustomPhysicalProperties = PhysicalProperties.new(0.3, 1.2, 0.1, 1, 1)
+		wheel.Massless = false
+		wheel.CustomPhysicalProperties = PhysicalProperties.new(0.8, 1.4, 0.15, 1, 1)
+		wheel:SetAttribute("WE_PhysicsWheel", true)
 		wheel.Parent = model
-		weldTo(body, wheel)
-		-- Hub cap accent (visual kits v2)
+
+		local att0 = Instance.new("Attachment")
+		att0.Name = "WE_WheelAttBody" .. i
+		-- Identity rotation → Attachment.Axis (1,0,0) = body right = axle
+		att0.CFrame = CFrame.new(offset * scale)
+		att0.Parent = body
+
+		local att1 = Instance.new("Attachment")
+		att1.Name = "WE_WheelAtt" .. i
+		-- Undo cylinder Z-rot so hinge axis matches body X
+		att1.CFrame = CFrame.Angles(0, 0, math.rad(-90))
+		att1.Parent = wheel
+
+		local hinge = Instance.new("HingeConstraint")
+		hinge.Name = "WE_DriveHinge" .. i
+		hinge.Attachment0 = att0
+		hinge.Attachment1 = att1
+		hinge.ActuatorType = Enum.ActuatorType.Motor
+		hinge.MotorMaxTorque = 120000
+		hinge.MotorMaxAcceleration = 100
+		hinge.AngularVelocity = 0
+		hinge:SetAttribute("WE_DriveHinge", true)
+		hinge:SetAttribute("WE_WheelSide", if offset.X < 0 then -1 else 1)
+		hinge.Parent = wheel
+
 		local hub = Instance.new("Part")
 		hub.Name = "Hub" .. i
 		hub.Shape = Enum.PartType.Cylinder
@@ -18918,7 +18945,10 @@ local function addWheels(model: Model, body: BasePart, scale: number, positions:
 		hub.CanCollide = false
 		hub.Massless = true
 		hub.Parent = model
-		weldTo(body, hub)
+		local hubWeld = Instance.new("WeldConstraint")
+		hubWeld.Part0 = wheel
+		hubWeld.Part1 = hub
+		hubWeld.Parent = hub
 	end
 end
 
@@ -19443,7 +19473,7 @@ end
 
 
 local function startAirPlaceholderDrive(userId: number, model: Model, def: VehicleDef)
-	stopAirDrive(userId)
+	stopDrive(userId)
 	local body = model.PrimaryPart
 	local seat = model:FindFirstChild("DriverSeat")
 	if not (body and body:IsA("BasePart") and seat and seat:IsA("VehicleSeat")) then
@@ -19479,9 +19509,9 @@ local function startAirPlaceholderDrive(userId: number, model: Model, def: Vehic
 
 	local cruise = def.Speed
 	local hoverY = body.Position.Y
-	airDriveConns[userId] = RunService.Heartbeat:Connect(function(_dt)
+	driveConns[userId] = RunService.Heartbeat:Connect(function(_dt)
 		if not model.Parent or not body.Parent then
-			stopAirDrive(userId)
+			stopDrive(userId)
 			return
 		end
 		local occupied = seat.Occupant ~= nil
@@ -19512,6 +19542,128 @@ local function startAirPlaceholderDrive(userId: number, model: Model, def: Vehic
 		av.AngularVelocity = Vector3.new(0, -steer * 1.8, 0)
 	end)
 end
+
+
+-- Ground drive: VehicleSeat Throttle/Steer → HingeConstraint motors (differential).
+-- Mesh visuals never participate; only WE_DriveHinge on Part-kit wheels.
+local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
+	stopDrive(userId)
+	local body = model.PrimaryPart
+	local seat = model:FindFirstChild("DriverSeat")
+	if not (body and body:IsA("BasePart") and seat and seat:IsA("VehicleSeat")) then
+		return
+	end
+
+	local hinges: { HingeConstraint } = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("HingeConstraint") and d:GetAttribute("WE_DriveHinge") == true then
+			table.insert(hinges, d)
+		end
+	end
+
+	-- Disable legacy VehicleSeat chassis shove — hinges / scripted LV are authoritative
+	seat.Torque = 0
+	seat.TurnSpeed = 0
+	seat.MaxSpeed = 0
+	seat.Disabled = false
+	body.Massless = false
+	seat.Massless = false
+	body.Anchored = false
+	seat.Anchored = false
+
+	local maxWheelSpeed = math.clamp(def.Speed * 0.55, 18, 48) -- rad/s
+	local steerMix = 0.42
+	local cruise = math.max(def.Speed, 40)
+
+	-- Scripted LV backup (tracked kits / hinge failure) — still not mesh-driven
+	local attach = body:FindFirstChild("WE_GroundAttach") :: Attachment?
+	if not attach then
+		attach = Instance.new("Attachment")
+		attach.Name = "WE_GroundAttach"
+		attach.Parent = body
+	end
+	local lv = body:FindFirstChild("WE_GroundVelocity") :: LinearVelocity?
+	if not lv then
+		lv = Instance.new("LinearVelocity")
+		lv.Name = "WE_GroundVelocity"
+		lv.Attachment0 = attach
+		lv.RelativeTo = Enum.ActuatorRelativeTo.World
+		lv.MaxForce = 1e6
+		lv.VectorVelocity = Vector3.zero
+		lv.Parent = body
+	end
+	local av = body:FindFirstChild("WE_GroundAngular") :: AngularVelocity?
+	if not av then
+		av = Instance.new("AngularVelocity")
+		av.Name = "WE_GroundAngular"
+		av.Attachment0 = attach
+		av.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
+		av.MaxTorque = 1e5
+		av.AngularVelocity = Vector3.zero
+		av.Parent = body
+	end
+
+	local useHinges = #hinges > 0
+	if useHinges then
+		-- Hinges provide thrust; damp LV so systems don't fight
+		lv.MaxForce = 0
+		av.MaxTorque = 0
+	else
+		warn("[VehicleService] ground drive: no hinges on", def.Id, "— using scripted LV")
+		lv.MaxForce = 1e6
+		av.MaxTorque = 1e5
+	end
+
+	model:SetAttribute("WE_GroundDrive", if useHinges then "HingeMotor" else "ScriptedLV")
+
+	driveConns[userId] = RunService.Heartbeat:Connect(function(_dt)
+		if not model.Parent or not body.Parent or not seat.Parent then
+			stopDrive(userId)
+			return
+		end
+		if seat.Occupant == nil then
+			for _, h in ipairs(hinges) do
+				if h.Parent then
+					h.AngularVelocity = 0
+				end
+			end
+			lv.VectorVelocity = Vector3.zero
+			av.AngularVelocity = Vector3.zero
+			return
+		end
+		local throttle = seat.ThrottleFloat
+		local steer = seat.SteerFloat
+		if useHinges then
+			for _, h in ipairs(hinges) do
+				if h.Parent then
+					local side = tonumber(h:GetAttribute("WE_WheelSide")) or 1
+					local spin = (throttle * maxWheelSpeed) + (steer * side * maxWheelSpeed * steerMix)
+					h.AngularVelocity = -spin * side
+				end
+			end
+		else
+			local look = body.CFrame.LookVector
+			local flat = Vector3.new(look.X, 0, look.Z)
+			if flat.Magnitude < 0.05 then
+				flat = Vector3.new(0, 0, -1)
+			else
+				flat = flat.Unit
+			end
+			local speed = cruise * math.clamp(math.abs(throttle), 0, 1)
+			if throttle < 0 then
+				speed *= 0.5
+			end
+			local sign = if throttle >= 0 then 1 else -1
+			if math.abs(throttle) < 0.05 then
+				lv.VectorVelocity = Vector3.zero
+			else
+				lv.VectorVelocity = flat * (speed * sign)
+			end
+			av.AngularVelocity = Vector3.new(0, -steer * 2.4, 0)
+		end
+	end)
+end
+
 
 function VehicleService.Owns(player: Player, vehicleId: string): boolean
 	local profile = DataService.GetProfile(player)
@@ -19641,6 +19793,8 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	local driveMode = model:GetAttribute("WE_DriveMode")
 	if driveMode == "AirPlaceholder" then
 		startAirPlaceholderDrive(player.UserId, model, def)
+	elseif driveMode == "VehicleSeat" then
+		startGroundDrive(player.UserId, model, def)
 	end
 
 	-- Driveability: network ownership + auto-sit DriverSeat so garage SPAWN is immediately usable
@@ -19691,20 +19845,29 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 				end
 				local character = player.Character
 				local hum = character and character:FindFirstChildOfClass("Humanoid")
+				local hrp = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 				if hum and seat.Occupant == nil then
+					if hrp then
+						-- Place character on seat so Sit always has a valid near-seat humanoid
+						hrp.CFrame = seat.CFrame * CFrame.new(0, 2.5, 0)
+					end
 					pcall(function()
 						seat:Sit(hum)
 					end)
 				end
-				if chassis and chassis:IsA("BasePart") then
-					pcall(function()
-						chassis:SetNetworkOwner(player)
-					end)
+				for _, d in ipairs(model:GetDescendants()) do
+					if d:IsA("BasePart") and not d.Anchored then
+						pcall(function()
+							d:SetNetworkOwner(player)
+						end)
+					end
 				end
 			end
 			task.defer(trySit)
-			task.delay(0.35, trySit)
+			task.delay(0.2, trySit)
+			task.delay(0.5, trySit)
 			task.delay(1.0, trySit)
+			task.delay(2.0, trySit)
 		end
 	end
 
@@ -19977,7 +20140,7 @@ local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: st
 	stripScripts(clone)
 	clone.Name = cloneName
 
-	-- Remove competing Humanoids / tools / seats / scripts from catalog meshes
+	-- Strip seats / humanoids / scripts / constraints — mesh is dress-only, never drive
 	for _, d in ipairs(clone:GetDescendants()) do
 		if
 			d:IsA("Humanoid")
@@ -19986,6 +20149,14 @@ local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: st
 			or d:IsA("Seat")
 			or d:IsA("BaseScript")
 			or d:IsA("ModuleScript")
+			or d:IsA("HingeConstraint")
+			or d:IsA("CylindricalConstraint")
+			or d:IsA("SpringConstraint")
+			or d:IsA("PrismaticConstraint")
+			or d:IsA("RodConstraint")
+			or d:IsA("VectorForce")
+			or d:IsA("LinearVelocity")
+			or d:IsA("AngularVelocity")
 		then
 			d:Destroy()
 		end
@@ -20107,8 +20278,21 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
-	-- Soften host body visibility so catalog mesh reads better (olive kit stays until mesh loads)
-	primary.Transparency = math.max(primary.Transparency, 0.55)
+	-- Soften host body so catalog mesh reads; keep Part-kit physics wheels (hidden)
+	primary.Transparency = math.max(primary.Transparency, 0.72)
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("WE_PhysicsWheel") == true then
+			d.Transparency = 1 -- physics collider/motor only; mesh provides visible tires
+			d.CanCollide = true
+			d.Massless = false
+		elseif d:IsA("BasePart") and d:GetAttribute("WE_KitCosmetic") == true then
+			d.Transparency = math.max(d.Transparency, 0.85)
+		end
+	end
+	-- Re-assert DriverSeat still present after mesh dress
+	if not hostModel:FindFirstChild("DriverSeat") then
+		warn("[VisualAssetService] DriverSeat missing after mesh attach — host kit corrupted")
+	end
 	return true
 end
 

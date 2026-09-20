@@ -89,7 +89,7 @@ local function ensureBillboard(part: BasePart): BillboardGui
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 12
 	title.TextColor3 = Color3.fromRGB(200, 210, 200)
-	title.Text = "ATM · TOUCH TO COLLECT"
+	title.Text = "ATM · TOUCH TO COLLECT · Codes in Settings"
 	title.Parent = backdrop
 
 	local amount = Instance.new("TextLabel")
