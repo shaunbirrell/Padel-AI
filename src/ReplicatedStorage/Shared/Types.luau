@@ -119,6 +119,7 @@ export type BaseStatePayload = {
 export type PlayerStatePayload = {
 	Cash: number,
 	Gold: number,
+	PendingCash: number?,
 	Level: number,
 	XP: number,
 	XPToNext: number,

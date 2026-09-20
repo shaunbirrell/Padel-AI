@@ -759,7 +759,11 @@ end
 
 local function attachVehicleSpawn(part: BasePart)
 	attachPromptOnce(part, function()
-		return makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
+		local prompt = makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		-- Secondary Drive hint via ObjectText when vehicles nearby (seat has its own Drive prompt)
+		prompt.ObjectText = "Garage · seat has Drive"
+		return prompt
 	end, function()
 		VehicleController.Open()
 	end)

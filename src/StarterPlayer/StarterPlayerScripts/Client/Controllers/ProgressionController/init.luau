@@ -53,7 +53,7 @@ local function refreshLabelsImmediate()
 				p,
 				cur,
 				nxt,
-				tonumber(prestigeState.MinLevel) or 100,
+				tonumber(prestigeState.MinLevel) or 40,
 				if prestigeState.CanPrestige then "YES" else "no"
 			)
 		else

@@ -1,5 +1,7 @@
 --!strict
---[[ Interactive tutorial steps — short plain copy, one step at a time. ]]
+--[[ Interactive tutorial steps — short plain copy, one step at a time.
+	Worker-first: CC → Recruit → Collect → Barracks → Jeep → Outpost.
+]]
 
 export type TutorialStepDef = {
 	Id: string,
@@ -35,9 +37,18 @@ local TutorialConfig = {
 			CtaLabel = "BUY",
 		},
 		{
+			Id = "RecruitSoldiers",
+			Title = "Recruit workers",
+			Hint = "Open Army and recruit a soldier. Workers earn cash at the Training Yard.",
+			MarkerName = "Tutorial_Recruit",
+			HighlightHint = "Army",
+			CtaAction = "OpenArmy",
+			CtaLabel = "ARMY",
+		},
+		{
 			Id = "Income",
 			Title = "Collect cash",
-			Hint = "Tap the Money Collector on your base to collect income.",
+			Hint = "Touch the Money Collector (green screen) to claim pending cash.",
 			MarkerName = "Tutorial_Income",
 			HighlightHint = "CashHUD",
 			CtaAction = "WatchHud",

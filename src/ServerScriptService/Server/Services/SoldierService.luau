@@ -22,6 +22,7 @@ local RemoteSetup: any = nil
 local AnalyticsService: any = nil
 local AntiExploitService: any = nil
 local MissionService: any = nil
+local TutorialService: any = nil
 
 local MAX_BATCH = 50
 
@@ -126,6 +127,9 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "RecruitSoldiers", n)
 	end
+	if TutorialService and TutorialService.Notify then
+		TutorialService.Notify(player, "RecruitSoldiers", n)
+	end
 	pushState(player)
 	if NotificationService then
 		NotificationService.Notify(
@@ -179,6 +183,90 @@ function SoldierService.Push(player: Player)
 	pushState(player)
 end
 
+
+local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmount: number)
+	local plotId = profile.BasePlotId
+	if typeof(plotId) ~= "number" then
+		return
+	end
+	local setup = game:GetService("Workspace"):FindFirstChild("WarEmpireSetup")
+	if not setup then
+		return
+	end
+	local bases = setup:FindFirstChild("Bases")
+	if not bases then
+		return
+	end
+	local plotFolder = bases:FindFirstChild("Plot" .. tostring(plotId))
+	if not plotFolder then
+		return
+	end
+	local yard = plotFolder:FindFirstChild("TrainingYard")
+	if not yard then
+		return
+	end
+	local anchor = yard:FindFirstChild("YardEarnAnchor") or yard:FindFirstChild("YardAnchor")
+	if not anchor or not anchor:IsA("BasePart") then
+		return
+	end
+	local bb = anchor:FindFirstChild("WE_TrainingEarnBillboard")
+	if not bb or not bb:IsA("BillboardGui") then
+		bb = Instance.new("BillboardGui")
+		bb.Name = "WE_TrainingEarnBillboard"
+		bb.Size = UDim2.fromOffset(180, 48)
+		bb.StudsOffset = Vector3.new(0, 4, 0)
+		bb.AlwaysOnTop = true
+		bb.MaxDistance = 80
+		bb.Parent = anchor
+		local label = Instance.new("TextLabel")
+		label.Name = "Amount"
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBold
+		label.TextScaled = true
+		label.TextColor3 = Color3.fromRGB(90, 240, 130)
+		label.TextStrokeTransparency = 0.4
+		label.Parent = bb
+	end
+	local amountLabel = bb:FindFirstChild("Amount")
+	if amountLabel and amountLabel:IsA("TextLabel") then
+		local perTick = trainingIncomePerTick(profile)
+		amountLabel.Text = string.format("+$%d/tick", perTick)
+		amountLabel.TextTransparency = 0
+		-- brief pulse so workers "feel" like they earn
+		task.delay(0.35, function()
+			if amountLabel.Parent then
+				amountLabel.TextTransparency = 0.15
+			end
+		end)
+	end
+	-- Floating +$ popup on tick (cosmetic)
+	local pop = Instance.new("BillboardGui")
+	pop.Name = "WE_TrainCashPop"
+	pop.Size = UDim2.fromOffset(100, 28)
+	pop.StudsOffset = Vector3.new(0, 6, 0)
+	pop.AlwaysOnTop = true
+	pop.MaxDistance = 60
+	pop.Parent = anchor
+	local popLab = Instance.new("TextLabel")
+	popLab.Size = UDim2.fromScale(1, 1)
+	popLab.BackgroundTransparency = 1
+	popLab.Font = Enum.Font.GothamBold
+	popLab.TextScaled = true
+	popLab.TextColor3 = Color3.fromRGB(100, 255, 140)
+	popLab.TextStrokeTransparency = 0.35
+	popLab.Text = string.format("+$%d", tickAmount)
+	popLab.Parent = pop
+	task.spawn(function()
+		for i = 1, 8 do
+			pop.StudsOffset = Vector3.new(0, 6 + i * 0.35, 0)
+			popLab.TextTransparency = i / 10
+			task.wait(0.06)
+		end
+		pop:Destroy()
+	end)
+end
+
 function SoldierService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
@@ -188,6 +276,7 @@ function SoldierService.Init(deps: { [string]: any })
 	AnalyticsService = deps.AnalyticsService
 	AntiExploitService = deps.AntiExploitService
 	MissionService = deps.MissionService
+	TutorialService = deps.TutorialService
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
@@ -261,7 +350,13 @@ function SoldierService.Init(deps: { [string]: any })
 				if profile then
 					local amount = trainingIncomePerTick(profile)
 					if amount > 0 then
-						EconomyService.AddCash(player, amount, "training")
+						-- AFK training → PendingCash (Money Collector / AutoCollect). Not AddCash bypass.
+						if EconomyService.AccruePendingCash then
+							EconomyService.AccruePendingCash(player, amount, "training")
+						else
+							EconomyService.AddCash(player, amount, "training")
+						end
+						refreshTrainingYardFeedback(player, profile, amount)
 					end
 				end
 			end

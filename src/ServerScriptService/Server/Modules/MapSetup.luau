@@ -1214,6 +1214,67 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 	return ground.CanCollide == true and ground.Size.X >= GROUND_SIZE - 1 and ground.Size.Y >= GROUND_THICKNESS - 0.5
 end
 
+
+local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
+	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
+	local folder = Instance.new("Folder")
+	folder.Name = "MoneyCollector"
+	folder.Parent = plotFolder
+	local body = part({
+		Name = "CollectorBody",
+		Size = Vector3.new(6, 8, 4),
+		Position = pos + Vector3.new(28, 4.5, 8),
+		Color = Color3.fromRGB(92, 96, 100),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = true,
+		Parent = folder,
+	})
+	body:SetAttribute("PlotId", plotId)
+	CollectionService:AddTag(body, TAG_COLLECTOR)
+	part({
+		Name = "CollectorBase",
+		Size = Vector3.new(7.5, 0.6, 5.5),
+		Position = pos + Vector3.new(28, 0.8, 8),
+		Color = Color3.fromRGB(70, 74, 78),
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		Parent = folder,
+	})
+	local screen = part({
+		Name = "CollectorScreen",
+		Size = Vector3.new(4.2, 2.8, 0.35),
+		Position = pos + Vector3.new(28, 5.2, 8 - 2.15),
+		Color = Color3.fromRGB(20, 90, 45),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = folder,
+	})
+	-- Green digit SurfaceGui (live $ filled by MoneyCollectorService billboard on body too)
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "WE_ATMScreen"
+	sg.Face = Enum.NormalId.Front
+	sg.CanvasSize = Vector2.new(240, 160)
+	sg.LightInfluence = 0
+	sg.Parent = screen
+	local digits = Instance.new("TextLabel")
+	digits.Name = "Digits"
+	digits.Size = UDim2.fromScale(1, 1)
+	digits.BackgroundColor3 = Color3.fromRGB(8, 40, 18)
+	digits.BackgroundTransparency = 0.15
+	digits.Font = Enum.Font.Code
+	digits.TextScaled = true
+	digits.TextColor3 = Color3.fromRGB(70, 255, 120)
+	digits.Text = "$0"
+	digits.Parent = sg
+	local light = Instance.new("PointLight")
+	light.Name = "ATMGlow"
+	light.Color = Color3.fromRGB(60, 220, 100)
+	light.Brightness = 0.6
+	light.Range = 14
+	light.Parent = body
+	plainBillboard(body, "MONEY COLLECTOR · Touch to claim", Vector2.new(220, 36), 7.5, Color3.fromRGB(90, 240, 130))
+end
+
 function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
@@ -1441,20 +1502,58 @@ function MapSetup.Run()
 			CanCollide = true,
 			Parent = yardFolder,
 		})
+		local yardAnchor = part({
+			Name = "YardAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = pos + Vector3.new(-14, 8, 48),
+			Transparency = 1,
+			CanCollide = false,
+			Parent = yardFolder,
+		})
 		plainBillboard(
-			part({
-				Name = "YardAnchor",
-				Size = Vector3.new(1, 1, 1),
-				Position = pos + Vector3.new(-14, 8, 48),
-				Transparency = 1,
-				CanCollide = false,
-				Parent = yardFolder,
-			}),
-			"TRAINING YARD · Soldiers earn cash",
+			yardAnchor,
+			"TRAINING YARD · Workers earn cash",
 			Vector2.new(280, 40),
 			8,
 			Color3.fromRGB(255, 200, 120)
 		)
+		local earnAnchor = part({
+			Name = "YardEarnAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = pos + Vector3.new(-14, 6, 42),
+			Transparency = 1,
+			CanCollide = false,
+			Parent = yardFolder,
+		})
+		-- Light beams worker → target (visual income feedback)
+		for wi = 1, 2 do
+			local worker = yardFolder:FindFirstChild("TrainingWorker" .. wi)
+			local target = yardFolder:FindFirstChild("TrainingTarget" .. wi)
+			if worker and target and worker:IsA("Model") and target:IsA("BasePart") then
+				local root = worker.PrimaryPart or worker:FindFirstChildWhichIsA("BasePart")
+				if root and root:IsA("BasePart") then
+					local a0 = Instance.new("Attachment")
+					a0.Name = "WE_TrainBeam0"
+					a0.Position = Vector3.new(0, 1.2, 0)
+					a0.Parent = root
+					local a1 = Instance.new("Attachment")
+					a1.Name = "WE_TrainBeam1"
+					a1.Parent = target
+					local beam = Instance.new("Beam")
+					beam.Name = "WE_TrainBeam"
+					beam.Attachment0 = a0
+					beam.Attachment1 = a1
+					beam.Color = ColorSequence.new(Color3.fromRGB(255, 200, 80))
+					beam.Width0 = 0.15
+					beam.Width1 = 0.05
+					beam.FaceCamera = true
+					beam.LightEmission = 0.4
+					beam.Transparency = NumberSequence.new(0.35)
+					beam.Parent = root
+				end
+			end
+		end
+		buildMoneyCollector(plotFolder, plotId, pos)
 	end
 
 	local territories = ensureFolder("Territories", root)
@@ -1945,7 +2044,8 @@ function MapSetup.Run()
 	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps)
 	tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
 	tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
-	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(0, 3, 0), Color3.fromRGB(80, 200, 160), "Income")
+	tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
+	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(28, 3, 8), Color3.fromRGB(80, 200, 160), "Income")
 	tutorialMarker("Tutorial_Barracks", plot1 + STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
 	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)

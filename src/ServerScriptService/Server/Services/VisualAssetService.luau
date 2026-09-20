@@ -223,6 +223,13 @@ function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
 end
 
 function VisualAssetService.ResolvePropAssetId(propKey: string): number?
+	local warzone = (VisualAssetConfig :: any).WarzoneProps
+	if typeof(warzone) == "table" then
+		local refW = warzone[propKey]
+		if refW and typeof(refW.ModelAssetId) == "number" and (refW.ModelAssetId :: number) > 0 then
+			return refW.ModelAssetId
+		end
+	end
 	local ref = VisualAssetConfig.DesertProps[propKey]
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
@@ -240,8 +247,27 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		return false
 	end
 	local template = loadModel(assetId)
+	-- Jeep family: prefer Military Car; classic 59524622 fallback only if primary fails
 	if not template then
-		return false
+		local jeepIds = {
+			MilitaryJeep = true,
+			ArmedJeep = true,
+			ScoutCar = true,
+			ReconBuggy = true,
+			DispatchCar = true,
+			UtilityQuad = true,
+		}
+		local fb = (VisualAssetConfig :: any).JeepFallback
+		local fbId = if fb and typeof(fb.ModelAssetId) == "number" then fb.ModelAssetId else 59524622
+		if jeepIds[vehicleId] and fbId and fbId > 0 and fbId ~= assetId then
+			template = loadModel(fbId)
+			if template then
+				assetId = fbId
+			end
+		end
+	end
+	if not template then
+		return false -- Part kit remains authoritative
 	end
 	local primary = hostModel.PrimaryPart
 	if not primary then
@@ -256,7 +282,7 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
-	-- Soften host body visibility so catalog mesh reads better
+	-- Soften host body visibility so catalog mesh reads better (olive kit stays until mesh loads)
 	primary.Transparency = math.max(primary.Transparency, 0.55)
 	return true
 end

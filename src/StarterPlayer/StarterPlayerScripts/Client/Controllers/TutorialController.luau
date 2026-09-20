@@ -1,7 +1,7 @@
 --!strict
 --[[
-	Interactive tutorial UI: claim base → command center → income → barracks → jeep → outpost
-	Skip + mobile CTA (BUY ON PAD / OPEN GARAGE / …); pad StructureId fallback when markers missing.
+	Interactive tutorial UI: claim → CC → recruit → collect → barracks → jeep → outpost
+	Skip + mobile CTA (BUY / ARMY / GARAGE / …); pad StructureId fallback when markers missing.
 ]]
 
 local Players = game:GetService("Players")
@@ -279,6 +279,14 @@ local function runCta()
 		if ok and VehicleController and VehicleController.Open then
 			VehicleController.Open()
 		end
+	elseif action == "OpenArmy" then
+		local ok, ArmyController = pcall(function()
+			return require(script.Parent.ArmyController)
+		end)
+		if ok and ArmyController and ArmyController.Open then
+			ArmyController.Open()
+		end
+		setWaypoint(currentMarkerName, currentPadStructureId)
 	else
 		-- Capture / WatchHud / unknown: re-aim beam
 		setWaypoint(currentMarkerName, currentPadStructureId)

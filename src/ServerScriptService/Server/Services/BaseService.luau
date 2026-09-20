@@ -517,6 +517,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 	return {
 		Cash = profile.Cash,
 		Gold = profile.Gold,
+		PendingCash = tonumber((profile :: any).PendingCash) or 0,
 		Level = profile.Level,
 		XP = profile.XP,
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),

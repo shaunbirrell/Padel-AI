@@ -70,6 +70,8 @@ Deep unlock ladder (level + structure + cash; late units also prestige / rebirth
 
 ## Prestige / Rebirth
 
+- First prestige at **Level ≥ 40** (`MinLevelToPrestige`; was 100 — reversible, ASSUMPTIONS #108).
+- Training + structure passive → **PendingCash** (Money Collector / AutoCollect).
 - +**10%** cash earnings per prestige (stacking; P10 = +100%).
 - Unlock track: ScoutCar / PatrolBoat / SupplyTruck / MissileBoat / TransportHeli / Gunboat / AssaultIFV / EmpireElite / EmpireFleet / Destroyer / Cruiser / StrikeJet(+HeavyBomber gate) — see `PrestigeConfig.RebirthUnlocks`.
 - Cash stack: prestige → VIP/DoubleCash → season (exempt reasons skip VIP/season).

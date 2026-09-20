@@ -372,7 +372,8 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "Bed", Vector3.new(4.4 * s, 0.9 * s, 2.6 * s), CFrame.new(0, 0.7 * s, 2.6 * s), olive, Enum.Material.Metal, nil, false)
 		end
 		addPart(model, body, "Bumper", Vector3.new(5.0 * s, 0.5 * s, 0.4 * s), CFrame.new(0, -0.3 * s, -4.0 * s), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
-		addPart(model, body, "AccentStrip", Vector3.new(4.8 * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.1 * s, -1.2 * s), if armed then redAcc else accentCol, Enum.Material.Neon, nil, false)
+		-- Olive metal trim (no neon green/gold until mesh loads)
+		addPart(model, body, "AccentStrip", Vector3.new(4.8 * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.1 * s, -1.2 * s), if armed then Color3.fromRGB(90, 55, 45) else oliveDark, Enum.Material.Metal, nil, false)
 		if armed then
 			addPart(model, body, "GunMount", Vector3.new(0.8 * s, 0.8 * s, 0.8 * s), CFrame.new(0, 2.2 * s, 0.4 * s), Color3.fromRGB(35, 35, 35), Enum.Material.Metal, nil, false)
 			addPart(model, body, "Barrel", Vector3.new(0.25 * s, 0.25 * s, 2.4 * s), CFrame.new(0, 2.5 * s, -1.0 * s), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, false)
@@ -385,7 +386,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		}, 1.05)
 		addHeadlights(model, body, s, -4.1, 0.2, 1.8)
 		addTaillights(model, body, s, if quad then 3.0 else 4.0, 0.15, 1.9)
-		addExhaust(model, body, s, CFrame.new(1.8 * s, -0.2 * s, 3.2 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
+		addExhaust(model, body, s, CFrame.new(1.8 * s, -0.2 * s, 3.2 * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(50, 55, 45))
 		addSideRails(model, body, s, if quad then 4.5 else 5.5, 0.6, 2.5, oliveDark)
 		seatOffset = CFrame.new(0, 1.9 * s, 0.1 * s)
 		labelY = 4.2 * s
@@ -983,13 +984,37 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 		if seat and seat:IsA("VehicleSeat") then
 			seat.Disabled = false
 			seat.Anchored = false
-			task.defer(function()
-				if not player.Parent or not model.Parent then
+			seat.CanTouch = true
+			-- Drive prompt if auto-sit misses (mobile / late character)
+			if not seat:FindFirstChild("WE_DrivePrompt") then
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.Name = "WE_DrivePrompt"
+				prompt.ActionText = "Drive"
+				prompt.ObjectText = def.DisplayName or "Vehicle"
+				prompt.HoldDuration = 0
+				prompt.MaxActivationDistance = 14
+				prompt.RequiresLineOfSight = false
+				prompt.Parent = seat
+				prompt.Triggered:Connect(function(who: Player)
+					if who ~= player then
+						return
+					end
+					local ch = who.Character
+					local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+					if hum and seat.Occupant == nil then
+						pcall(function()
+							seat:Sit(hum)
+						end)
+					end
+				end)
+			end
+			local function trySit()
+				if not player.Parent or not model.Parent or not seat.Parent then
 					return
 				end
 				local character = player.Character
 				local hum = character and character:FindFirstChildOfClass("Humanoid")
-				if hum and seat.Parent and seat.Occupant == nil then
+				if hum and seat.Occupant == nil then
 					pcall(function()
 						seat:Sit(hum)
 					end)
@@ -999,7 +1024,10 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 						chassis:SetNetworkOwner(player)
 					end)
 				end
-			end)
+			end
+			task.defer(trySit)
+			task.delay(0.35, trySit)
+			task.delay(1.0, trySit)
 		end
 	end
 

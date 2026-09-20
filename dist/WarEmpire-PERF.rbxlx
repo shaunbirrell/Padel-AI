@@ -1431,7 +1431,9 @@ export type RebirthUnlockDef = {
 }
 
 local PrestigeConfig = {
-	MinLevelToPrestige = 100,
+	-- P0 competitive: earlier first rebirth feel (was 100). Reversible — bump back if economy too fast.
+	-- See ASSUMPTIONS #108. AdminPlaytestCash 50M unchanged.
+	MinLevelToPrestige = 40,
 	MaxPrestige = 50,
 	-- +10% cash earnings per prestige (stacking). Keep in sync with EconomyConfig.PrestigeCashMultiplierPerLevel.
 	CashBonusPerPrestige = 0.10,
@@ -1678,6 +1680,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(230, 190, 60),
 			Roof = Color3.fromRGB(40, 55, 45),
 			Kit = "hq",
+			MeshAssetId = 138331074285379,
 		},
 		Barracks = {
 			Plinth = Color3.fromRGB(42, 46, 38),
@@ -1685,6 +1688,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(90, 160, 80),
 			Roof = Color3.fromRGB(50, 55, 42),
 			Kit = "barracks",
+			MeshAssetId = 9424782,
 		},
 		VehicleDepot = {
 			Plinth = Color3.fromRGB(40, 48, 55),
@@ -1692,6 +1696,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(90, 160, 220),
 			Roof = Color3.fromRGB(45, 55, 65),
 			Kit = "depot",
+			MeshAssetId = 12120702,
 		},
 		WeaponsFacility = {
 			Plinth = Color3.fromRGB(48, 40, 38),
@@ -1699,6 +1704,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(200, 90, 70),
 			Roof = Color3.fromRGB(55, 42, 40),
 			Kit = "lab",
+			MeshAssetId = 4120970784,
 		},
 		Helipad = {
 			Plinth = Color3.fromRGB(45, 50, 48),
@@ -1706,6 +1712,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 200, 80),
 			Roof = Color3.fromRGB(50, 55, 52),
 			Kit = "pad",
+			MeshAssetId = 14313845338,
 		},
 		Dock = {
 			Plinth = Color3.fromRGB(35, 48, 58),
@@ -1713,6 +1720,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(70, 180, 220),
 			Roof = Color3.fromRGB(40, 58, 70),
 			Kit = "dock",
+			MeshAssetId = 17701461178,
 		},
 		Airfield = {
 			Plinth = Color3.fromRGB(50, 52, 48),
@@ -1720,6 +1728,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(180, 190, 100),
 			Roof = Color3.fromRGB(55, 58, 52),
 			Kit = "pad",
+			MeshAssetId = 12370174722, -- hangar overlay 6015472062 via VisualAssetConfig.Buildings.Hangar
 		},
 		DefensiveWalls = {
 			Plinth = Color3.fromRGB(48, 48, 45),
@@ -1727,6 +1736,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(120, 130, 110),
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
+			MeshAssetId = 208197704,
 		},
 		Watchtowers = {
 			Plinth = Color3.fromRGB(44, 46, 40),
@@ -1734,6 +1744,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(200, 160, 70),
 			Roof = Color3.fromRGB(50, 52, 44),
 			Kit = "tower",
+			MeshAssetId = 3330023556,
 		},
 		Radar = {
 			Plinth = Color3.fromRGB(40, 42, 55),
@@ -1741,6 +1752,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(100, 200, 255),
 			Roof = Color3.fromRGB(45, 48, 70),
 			Kit = "tower",
+			MeshAssetId = 9559610195,
 		},
 		ResearchLab = {
 			Plinth = Color3.fromRGB(38, 45, 55),
@@ -1748,6 +1760,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(80, 180, 220),
 			Roof = Color3.fromRGB(42, 55, 72),
 			Kit = "lab",
+			MeshAssetId = 17725725,
 		},
 		MissileDefense = {
 			Plinth = Color3.fromRGB(48, 42, 40),
@@ -1755,6 +1768,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 100, 60),
 			Roof = Color3.fromRGB(55, 45, 42),
 			Kit = "tower",
+			MeshAssetId = 108525417345747,
 		},
 		PowerStation = {
 			Plinth = Color3.fromRGB(50, 48, 35),
@@ -1762,6 +1776,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(255, 210, 70),
 			Roof = Color3.fromRGB(60, 55, 40),
 			Kit = "power",
+			MeshAssetId = 14000967030,
 		},
 		Warehouse = {
 			Plinth = Color3.fromRGB(45, 42, 38),
@@ -1769,6 +1784,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(180, 140, 80),
 			Roof = Color3.fromRGB(55, 50, 42),
 			Kit = "warehouse",
+			MeshAssetId = 66269964,
 		},
 		SpecialForcesFacility = {
 			Plinth = Color3.fromRGB(35, 38, 42),
@@ -1776,6 +1792,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(160, 80, 200),
 			Roof = Color3.fromRGB(30, 35, 40),
 			Kit = "special",
+			MeshAssetId = 18798977801,
 		},
 	} :: { [string]: StructurePalette },
 }
@@ -2025,7 +2042,9 @@ return TerritoryConfig
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
---[[ Interactive tutorial steps — short plain copy, one step at a time. ]]
+--[[ Interactive tutorial steps — short plain copy, one step at a time.
+	Worker-first: CC → Recruit → Collect → Barracks → Jeep → Outpost.
+]]
 
 export type TutorialStepDef = {
 	Id: string,
@@ -2061,9 +2080,18 @@ local TutorialConfig = {
 			CtaLabel = "BUY",
 		},
 		{
+			Id = "RecruitSoldiers",
+			Title = "Recruit workers",
+			Hint = "Open Army and recruit a soldier. Workers earn cash at the Training Yard.",
+			MarkerName = "Tutorial_Recruit",
+			HighlightHint = "Army",
+			CtaAction = "OpenArmy",
+			CtaLabel = "ARMY",
+		},
+		{
 			Id = "Income",
 			Title = "Collect cash",
-			Hint = "Tap the Money Collector on your base to collect income.",
+			Hint = "Touch the Money Collector (green screen) to claim pending cash.",
 			MarkerName = "Tutorial_Income",
 			HighlightHint = "CashHUD",
 			CtaAction = "WatchHud",
@@ -2558,34 +2586,34 @@ local VisualAssetConfig = {
 
 	Vehicles = {
 		-- Free Jeep family
-		MilitaryJeep = { ModelAssetId = 59524622, Note = "Free Jeep (Creator Store)" } :: AssetRef,
-		ArmedJeep = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
-		UtilityQuad = { ModelAssetId = 59524622, Note = "Jeep reuse (scaled by kit)" } :: AssetRef,
-		ScoutCar = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
-		ReconBuggy = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
+		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car (prefer); fallback 59524622" } :: AssetRef,
+		ArmedJeep = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
+		UtilityQuad = { ModelAssetId = 125916936788670, Note = "Military Car reuse (scaled)" } :: AssetRef,
+		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
+		ReconBuggy = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		-- Free tank family
 		LightTank = { ModelAssetId = 26007709, Note = "Free tank (Creator Store)" } :: AssetRef,
 		MediumTank = { ModelAssetId = 26007709, Note = "Tank reuse" } :: AssetRef,
-		BattleTank = { ModelAssetId = 1379706428, Note = "Panzer IV free port" } :: AssetRef,
-		HeavyTank = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
-		SuperHeavyTank = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
-		TankDestroyer = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
-		AssaultGun = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
+		BattleTank = { ModelAssetId = 19297043, Note = "Mammoth MBT" } :: AssetRef,
+		HeavyTank = { ModelAssetId = 19297043, Note = "Mammoth heavy" } :: AssetRef,
+		SuperHeavyTank = { ModelAssetId = 19297043, Note = "Mammoth super heavy" } :: AssetRef,
+		TankDestroyer = { ModelAssetId = 19297043, Note = "Mammoth TD" } :: AssetRef,
+		AssaultGun = { ModelAssetId = 19297043, Note = "Mammoth AG" } :: AssetRef,
 		-- Free heli family
-		TransportHeli = { ModelAssetId = 9337454, Note = "UH-60 free helicopter" } :: AssetRef,
-		AttackHelicopter = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		LightTransportHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		NightAttackHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		LightScoutHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		GunshipHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		HeavyLiftHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		RescueHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		StealthHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
+		TransportHeli = { ModelAssetId = 9753309, Note = "Transport heli" } :: AssetRef,
+		AttackHelicopter = { ModelAssetId = 295607934, Note = "Gunship heli" } :: AssetRef,
+		LightTransportHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
+		NightAttackHeli = { ModelAssetId = 295607934, Note = "Gunship heli" } :: AssetRef,
+		LightScoutHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
+		GunshipHeli = { ModelAssetId = 295607934, Note = "Gunship heli" } :: AssetRef,
+		HeavyLiftHeli = { ModelAssetId = 9753309, Note = "Transport heli heavy-lift" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
+		StealthHeli = { ModelAssetId = 295607934, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 28912351, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
-		PatrolTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
-		ArmoredTruck = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
-		APC = { ModelAssetId = 28912351, Note = "Mesh pack" } :: AssetRef,
+		PatrolTruck = { ModelAssetId = 105503568352704, Note = "Military truck prefer" } :: AssetRef,
+		ArmoredTruck = { ModelAssetId = 105503568352704, Note = "Military truck prefer" } :: AssetRef,
+		APC = { ModelAssetId = 17835143223, Note = "APC prefer" } :: AssetRef,
 		-- Free jet family (classic + named free fighter)
 		_FallbackJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
 		FighterJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
@@ -2593,13 +2621,13 @@ local VisualAssetConfig = {
 		TrainerJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
 		ReconPlane = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
 		LightFighter = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
-		StrikeJet = { ModelAssetId = 28574422, Note = "P-38 Lightning free Get Model" } :: AssetRef,
-		CASJet = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
-		StealthStrikeJet = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
-		StrikeBomber = { ModelAssetId = 297267045, Note = "[USAF] Free Fighter jet" } :: AssetRef,
-		CargoPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse (transport silhouette)" } :: AssetRef,
-		AWACSPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
-		TankerPlane = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
+		StrikeJet = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
+		CASJet = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
+		StealthStrikeJet = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
+		StrikeBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		CargoPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		AWACSPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		TankerPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 		-- Free naval family
 		_FallbackNaval = { ModelAssetId = 15786579439, Note = "Free Boat (Creator Store)" } :: AssetRef,
 		PatrolBoat = { ModelAssetId = 15786579439, Note = "Free Boat" } :: AssetRef,
@@ -2626,7 +2654,7 @@ local VisualAssetConfig = {
 		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
-		SupplyTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		SupplyTruck = { ModelAssetId = 107381977457431, Note = "Military supply truck prefer" } :: AssetRef,
 		FuelTanker = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
@@ -2655,20 +2683,20 @@ local VisualAssetConfig = {
 		HowitzerTruck = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
 		SiegeMortar = { ModelAssetId = 26007709, Note = "Artillery reuse" } :: AssetRef,
 		LightScoutTank = { ModelAssetId = 26007709, Note = "Light tank reuse" } :: AssetRef,
-		FortressTank = { ModelAssetId = 1379706428, Note = "Panzer reuse" } :: AssetRef,
-		RailgunCarrier = { ModelAssetId = 1379706428, Note = "Panzer/arty reuse" } :: AssetRef,
-		DispatchCar = { ModelAssetId = 59524622, Note = "Jeep reuse" } :: AssetRef,
-		UtilityHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		MedevacHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		EscortHeli = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		VTOLTransport = { ModelAssetId = 9337454, Note = "UH-60 reuse" } :: AssetRef,
-		HeavyBomber = { ModelAssetId = 297267045, Note = "USAF free jet reuse" } :: AssetRef,
-		StealthStrike = { ModelAssetId = 28574422, Note = "P-38 reuse" } :: AssetRef,
+		FortressTank = { ModelAssetId = 19297043, Note = "Mammoth fortress" } :: AssetRef,
+		RailgunCarrier = { ModelAssetId = 19297043, Note = "Mammoth railgun" } :: AssetRef,
+		DispatchCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
+		UtilityHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
+		EscortHeli = { ModelAssetId = 295607934, Note = "Gunship escort" } :: AssetRef,
+		VTOLTransport = { ModelAssetId = 9753309, Note = "Transport heli VTOL" } :: AssetRef,
+		HeavyBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		StealthStrike = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
 		Cruiser = { ModelAssetId = 13195201090, Note = "Boat template capital" } :: AssetRef,
 		MissileCruiser = { ModelAssetId = 13195201090, Note = "Boat template capital" } :: AssetRef,
 		FleetCarrier = { ModelAssetId = 13195201090, Note = "Boat template carrier" } :: AssetRef,
-		StrategicBomber = { ModelAssetId = 297267045, Note = "USAF free jet bomber silhouette" } :: AssetRef,
+		StrategicBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
@@ -2676,9 +2704,9 @@ local VisualAssetConfig = {
 		Soldier = { ModelAssetId = 3924234975, Note = "Official Roblox Soldier (Rthro)" } :: AssetRef,
 		Infantry = { ModelAssetId = 3924234975, Note = "Soldier reuse (Infantry NPC)" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (free)" } :: AssetRef,
-		Guard = { ModelAssetId = 128233894407390, Note = "SWAT AI NPC (free Get Model)" } :: AssetRef,
-		BankGuard = { ModelAssetId = 120734659944613, Note = "Police AI NPC (free Get Model)" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 118042531165372, Note = "SWAT AI NPC 2 (free Get Model)" } :: AssetRef,
+		Guard = { ModelAssetId = 91299598767068, Note = "Guard (Respawn Soldiers / alt 23231587)" } :: AssetRef,
+		BankGuard = { ModelAssetId = 91299598767068, Note = "BankGuard (alt 23231587)" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 91299598767068, Note = "OilRigGuard (alt 23231587)" } :: AssetRef,
 		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (fort)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
@@ -2687,20 +2715,37 @@ local VisualAssetConfig = {
 		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model (HQ)" } :: AssetRef,
 		Barracks = { ModelAssetId = 9424782, Note = "Barracks free Get Model (2009)" } :: AssetRef,
 		VehicleDepot = { ModelAssetId = 12120702, Note = "Classic Warehouse free (depot)" } :: AssetRef,
-		WeaponsFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
-		Warehouse = { ModelAssetId = 12120702, Note = "Classic Warehouse free Get Model" } :: AssetRef,
-		Hangar = { ModelAssetId = 66269964, Note = "Warehouse hangar-like free Get Model" } :: AssetRef,
-		ResearchLab = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
-		SpecialForcesFacility = { ModelAssetId = 9424782, Note = "Barracks reuse" } :: AssetRef,
-		Watchtowers = { ModelAssetId = 16659447, Note = "Free bunker/tower-ish model" } :: AssetRef,
-		Radar = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
-		MissileDefense = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
-		DefensiveWalls = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
-		PowerStation = { ModelAssetId = 16659447, Note = "Bunker reuse" } :: AssetRef,
+		WeaponsFacility = { ModelAssetId = 4120970784, Note = "Weapons facility" } :: AssetRef,
+		Warehouse = { ModelAssetId = 66269964, Note = "Warehouse" } :: AssetRef,
+		Hangar = { ModelAssetId = 6015472062, Note = "Hangar overlay" } :: AssetRef,
+		ResearchLab = { ModelAssetId = 17725725, Note = "Research lab" } :: AssetRef,
+		SpecialForcesFacility = { ModelAssetId = 18798977801, Note = "Special forces facility" } :: AssetRef,
+		Watchtowers = { ModelAssetId = 3330023556, Note = "Watchtower" } :: AssetRef,
+		Radar = { ModelAssetId = 9559610195, Note = "Radar" } :: AssetRef,
+		MissileDefense = { ModelAssetId = 108525417345747, Note = "Missile defense (fallback 16659447)" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls" } :: AssetRef,
+		PowerStation = { ModelAssetId = 14000967030, Note = "Power station" } :: AssetRef,
 		Bunker = { ModelAssetId = 16659447, Note = "Destructible Movil Bunker free" } :: AssetRef,
 		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
 		Airfield = { ModelAssetId = 12370174722, Note = "Airport Model free Get Model" } :: AssetRef,
 		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	JeepFallback = { ModelAssetId = 59524622, Note = "Classic free Jeep fallback only" } :: AssetRef,
+
+	WarzoneProps = {
+		Sandbags = { ModelAssetId = 3525056989, Note = "Warzone prop" } :: AssetRef,
+		Crate = { ModelAssetId = 12651656400, Note = "Warzone prop" } :: AssetRef,
+		Barrier = { ModelAssetId = 25733125, Note = "Warzone prop" } :: AssetRef,
+		Cone = { ModelAssetId = 91071319, Note = "Warzone prop" } :: AssetRef,
+		Drum = { ModelAssetId = 53591587, Note = "Warzone prop" } :: AssetRef,
+		Pallet = { ModelAssetId = 976333542, Note = "Warzone prop" } :: AssetRef,
+		CamoNet = { ModelAssetId = 16382915010, Note = "Warzone prop" } :: AssetRef,
+		Fence = { ModelAssetId = 25623924, Note = "Warzone prop" } :: AssetRef,
+		AmmoBox = { ModelAssetId = 1291725699, Note = "Warzone prop" } :: AssetRef,
+		Tent = { ModelAssetId = 6883609157, Note = "Warzone prop" } :: AssetRef,
+		Radio = { ModelAssetId = 19277831, Note = "Warzone prop" } :: AssetRef,
+		Lamp = { ModelAssetId = 116763933, Note = "Warzone prop" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {
@@ -3193,6 +3238,7 @@ export type BaseStatePayload = {
 export type PlayerStatePayload = {
 	Cash: number,
 	Gold: number,
+	PendingCash: number?,
 	Level: number,
 	XP: number,
 	XPToNext: number,
@@ -6918,6 +6964,67 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 	return ground.CanCollide == true and ground.Size.X >= GROUND_SIZE - 1 and ground.Size.Y >= GROUND_THICKNESS - 0.5
 end
 
+
+local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
+	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
+	local folder = Instance.new("Folder")
+	folder.Name = "MoneyCollector"
+	folder.Parent = plotFolder
+	local body = part({
+		Name = "CollectorBody",
+		Size = Vector3.new(6, 8, 4),
+		Position = pos + Vector3.new(28, 4.5, 8),
+		Color = Color3.fromRGB(92, 96, 100),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = true,
+		Parent = folder,
+	})
+	body:SetAttribute("PlotId", plotId)
+	CollectionService:AddTag(body, TAG_COLLECTOR)
+	part({
+		Name = "CollectorBase",
+		Size = Vector3.new(7.5, 0.6, 5.5),
+		Position = pos + Vector3.new(28, 0.8, 8),
+		Color = Color3.fromRGB(70, 74, 78),
+		Material = Enum.Material.Concrete,
+		CanCollide = true,
+		Parent = folder,
+	})
+	local screen = part({
+		Name = "CollectorScreen",
+		Size = Vector3.new(4.2, 2.8, 0.35),
+		Position = pos + Vector3.new(28, 5.2, 8 - 2.15),
+		Color = Color3.fromRGB(20, 90, 45),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = folder,
+	})
+	-- Green digit SurfaceGui (live $ filled by MoneyCollectorService billboard on body too)
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "WE_ATMScreen"
+	sg.Face = Enum.NormalId.Front
+	sg.CanvasSize = Vector2.new(240, 160)
+	sg.LightInfluence = 0
+	sg.Parent = screen
+	local digits = Instance.new("TextLabel")
+	digits.Name = "Digits"
+	digits.Size = UDim2.fromScale(1, 1)
+	digits.BackgroundColor3 = Color3.fromRGB(8, 40, 18)
+	digits.BackgroundTransparency = 0.15
+	digits.Font = Enum.Font.Code
+	digits.TextScaled = true
+	digits.TextColor3 = Color3.fromRGB(70, 255, 120)
+	digits.Text = "$0"
+	digits.Parent = sg
+	local light = Instance.new("PointLight")
+	light.Name = "ATMGlow"
+	light.Color = Color3.fromRGB(60, 220, 100)
+	light.Brightness = 0.6
+	light.Range = 14
+	light.Parent = body
+	plainBillboard(body, "MONEY COLLECTOR · Touch to claim", Vector2.new(220, 36), 7.5, Color3.fromRGB(90, 240, 130))
+end
+
 function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
@@ -7145,20 +7252,58 @@ function MapSetup.Run()
 			CanCollide = true,
 			Parent = yardFolder,
 		})
+		local yardAnchor = part({
+			Name = "YardAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = pos + Vector3.new(-14, 8, 48),
+			Transparency = 1,
+			CanCollide = false,
+			Parent = yardFolder,
+		})
 		plainBillboard(
-			part({
-				Name = "YardAnchor",
-				Size = Vector3.new(1, 1, 1),
-				Position = pos + Vector3.new(-14, 8, 48),
-				Transparency = 1,
-				CanCollide = false,
-				Parent = yardFolder,
-			}),
-			"TRAINING YARD · Soldiers earn cash",
+			yardAnchor,
+			"TRAINING YARD · Workers earn cash",
 			Vector2.new(280, 40),
 			8,
 			Color3.fromRGB(255, 200, 120)
 		)
+		local earnAnchor = part({
+			Name = "YardEarnAnchor",
+			Size = Vector3.new(1, 1, 1),
+			Position = pos + Vector3.new(-14, 6, 42),
+			Transparency = 1,
+			CanCollide = false,
+			Parent = yardFolder,
+		})
+		-- Light beams worker → target (visual income feedback)
+		for wi = 1, 2 do
+			local worker = yardFolder:FindFirstChild("TrainingWorker" .. wi)
+			local target = yardFolder:FindFirstChild("TrainingTarget" .. wi)
+			if worker and target and worker:IsA("Model") and target:IsA("BasePart") then
+				local root = worker.PrimaryPart or worker:FindFirstChildWhichIsA("BasePart")
+				if root and root:IsA("BasePart") then
+					local a0 = Instance.new("Attachment")
+					a0.Name = "WE_TrainBeam0"
+					a0.Position = Vector3.new(0, 1.2, 0)
+					a0.Parent = root
+					local a1 = Instance.new("Attachment")
+					a1.Name = "WE_TrainBeam1"
+					a1.Parent = target
+					local beam = Instance.new("Beam")
+					beam.Name = "WE_TrainBeam"
+					beam.Attachment0 = a0
+					beam.Attachment1 = a1
+					beam.Color = ColorSequence.new(Color3.fromRGB(255, 200, 80))
+					beam.Width0 = 0.15
+					beam.Width1 = 0.05
+					beam.FaceCamera = true
+					beam.LightEmission = 0.4
+					beam.Transparency = NumberSequence.new(0.35)
+					beam.Parent = root
+				end
+			end
+		end
+		buildMoneyCollector(plotFolder, plotId, pos)
 	end
 
 	local territories = ensureFolder("Territories", root)
@@ -7649,7 +7794,8 @@ function MapSetup.Run()
 	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps)
 	tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
 	tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
-	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(0, 3, 0), Color3.fromRGB(80, 200, 160), "Income")
+	tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
+	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(28, 3, 8), Color3.fromRGB(80, 200, 160), "Income")
 	tutorialMarker("Tutorial_Barracks", plot1 + STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
 	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
@@ -10446,6 +10592,7 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 	return {
 		Cash = profile.Cash,
 		Gold = profile.Gold,
+		PendingCash = tonumber((profile :: any).PendingCash) or 0,
 		Level = profile.Level,
 		XP = profile.XP,
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),
@@ -15042,71 +15189,108 @@ local function ensureBillboard(part: BasePart): BillboardGui
 	if existing and existing.Parent then
 		return existing
 	end
-	local old = part:FindFirstChild("WE_CollectorBillboard")
-	if old and old:IsA("BillboardGui") then
-		billboardCache[part] = old
-		return old
+	local oldBb = part:FindFirstChild("WE_CollectorBillboard")
+	if oldBb and oldBb:IsA("BillboardGui") then
+		billboardCache[part] = oldBb
+		return oldBb
 	end
+	-- ATM-like green digit billboard
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_CollectorBillboard"
-	bb.Size = UDim2.fromOffset(200, 64)
-	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	bb.Size = UDim2.fromOffset(220, 72)
+	bb.StudsOffset = Vector3.new(0, 7.2, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 90
+	bb.MaxDistance = 100
 	bb.Parent = part
 
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
-	backdrop.BackgroundTransparency = 0.08
+	backdrop.BackgroundColor3 = Color3.fromRGB(18, 22, 20)
+	backdrop.BackgroundTransparency = 0.05
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
+	corner.CornerRadius = UDim.new(0, 6)
 	corner.Parent = backdrop
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(80, 200, 120)
-	stroke.Thickness = 2
+	stroke.Color = Color3.fromRGB(60, 200, 100)
+	stroke.Thickness = 2.5
 	stroke.Parent = backdrop
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, -8, 0.45, 0)
-	title.Position = UDim2.fromOffset(4, 2)
+	title.Size = UDim2.new(1, -10, 0, 18)
+	title.Position = UDim2.fromOffset(5, 4)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBold
-	title.TextScaled = true
-	title.TextColor3 = Color3.fromRGB(235, 238, 242)
-	title.Text = "MONEY COLLECTOR"
+	title.TextSize = 12
+	title.TextColor3 = Color3.fromRGB(200, 210, 200)
+	title.Text = "ATM · TOUCH TO COLLECT"
 	title.Parent = backdrop
 
 	local amount = Instance.new("TextLabel")
 	amount.Name = "Amount"
-	amount.Size = UDim2.new(1, -8, 0.5, 0)
-	amount.Position = UDim2.fromOffset(4, 28)
-	amount.BackgroundTransparency = 1
-	amount.Font = Enum.Font.GothamBold
+	amount.Size = UDim2.new(1, -10, 0, 42)
+	amount.Position = UDim2.fromOffset(5, 24)
+	amount.BackgroundColor3 = Color3.fromRGB(6, 48, 22)
+	amount.BackgroundTransparency = 0.2
+	amount.Font = Enum.Font.Code
 	amount.TextScaled = true
-	amount.TextColor3 = Color3.fromRGB(80, 220, 120)
+	amount.TextColor3 = Color3.fromRGB(70, 255, 120)
 	amount.Text = "$0"
 	amount.Parent = backdrop
+	local ac = Instance.new("UICorner")
+	ac.CornerRadius = UDim.new(0, 4)
+	ac.Parent = amount
 
 	billboardCache[part] = bb
 	return bb
+end
+
+local function syncAtmScreen(part: BasePart, pending: number)
+	local folder = part.Parent
+	if not folder then
+		return
+	end
+	local screen = folder:FindFirstChild("CollectorScreen")
+	if not (screen and screen:IsA("BasePart")) then
+		return
+	end
+	local sg = screen:FindFirstChild("WE_ATMScreen")
+	local digits = sg and sg:FindFirstChild("Digits")
+	if digits and digits:IsA("TextLabel") then
+		digits.Text = string.format("$%s", tostring(math.floor(pending)))
+		digits.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(40, 120, 70)
+	end
+	local light = part:FindFirstChild("ATMGlow")
+	if light and light:IsA("PointLight") then
+		if pending >= 500 then
+			light.Brightness = 1.4
+			light.Range = 18
+		elseif pending > 0 then
+			light.Brightness = 0.9
+			light.Range = 14
+		else
+			light.Brightness = 0.35
+			light.Range = 10
+		end
+	end
 end
 
 local function refreshBillboard(part: BasePart, pending: number)
 	local bb = ensureBillboard(part)
 	local amount = bb:FindFirstChild("Amount", true)
 	if amount and amount:IsA("TextLabel") then
-		amount.Text = string.format("$%s pending", tostring(math.floor(pending)))
 		if pending > 0 then
-			amount.TextColor3 = Color3.fromRGB(90, 240, 130)
+			amount.Text = string.format("$%s", tostring(math.floor(pending)))
+			amount.TextColor3 = Color3.fromRGB(70, 255, 120)
 		else
-			amount.TextColor3 = Color3.fromRGB(160, 170, 180)
+			amount.Text = "$0"
+			amount.TextColor3 = Color3.fromRGB(100, 140, 110)
 		end
 	end
+	syncAtmScreen(part, pending)
 end
 
 local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
@@ -16062,6 +16246,7 @@ local RemoteSetup: any = nil
 local AnalyticsService: any = nil
 local AntiExploitService: any = nil
 local MissionService: any = nil
+local TutorialService: any = nil
 
 local MAX_BATCH = 50
 
@@ -16166,6 +16351,9 @@ function SoldierService.Recruit(player: Player, amount: any): (boolean, string?)
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "RecruitSoldiers", n)
 	end
+	if TutorialService and TutorialService.Notify then
+		TutorialService.Notify(player, "RecruitSoldiers", n)
+	end
 	pushState(player)
 	if NotificationService then
 		NotificationService.Notify(
@@ -16219,6 +16407,90 @@ function SoldierService.Push(player: Player)
 	pushState(player)
 end
 
+
+local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmount: number)
+	local plotId = profile.BasePlotId
+	if typeof(plotId) ~= "number" then
+		return
+	end
+	local setup = game:GetService("Workspace"):FindFirstChild("WarEmpireSetup")
+	if not setup then
+		return
+	end
+	local bases = setup:FindFirstChild("Bases")
+	if not bases then
+		return
+	end
+	local plotFolder = bases:FindFirstChild("Plot" .. tostring(plotId))
+	if not plotFolder then
+		return
+	end
+	local yard = plotFolder:FindFirstChild("TrainingYard")
+	if not yard then
+		return
+	end
+	local anchor = yard:FindFirstChild("YardEarnAnchor") or yard:FindFirstChild("YardAnchor")
+	if not anchor or not anchor:IsA("BasePart") then
+		return
+	end
+	local bb = anchor:FindFirstChild("WE_TrainingEarnBillboard")
+	if not bb or not bb:IsA("BillboardGui") then
+		bb = Instance.new("BillboardGui")
+		bb.Name = "WE_TrainingEarnBillboard"
+		bb.Size = UDim2.fromOffset(180, 48)
+		bb.StudsOffset = Vector3.new(0, 4, 0)
+		bb.AlwaysOnTop = true
+		bb.MaxDistance = 80
+		bb.Parent = anchor
+		local label = Instance.new("TextLabel")
+		label.Name = "Amount"
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBold
+		label.TextScaled = true
+		label.TextColor3 = Color3.fromRGB(90, 240, 130)
+		label.TextStrokeTransparency = 0.4
+		label.Parent = bb
+	end
+	local amountLabel = bb:FindFirstChild("Amount")
+	if amountLabel and amountLabel:IsA("TextLabel") then
+		local perTick = trainingIncomePerTick(profile)
+		amountLabel.Text = string.format("+$%d/tick", perTick)
+		amountLabel.TextTransparency = 0
+		-- brief pulse so workers "feel" like they earn
+		task.delay(0.35, function()
+			if amountLabel.Parent then
+				amountLabel.TextTransparency = 0.15
+			end
+		end)
+	end
+	-- Floating +$ popup on tick (cosmetic)
+	local pop = Instance.new("BillboardGui")
+	pop.Name = "WE_TrainCashPop"
+	pop.Size = UDim2.fromOffset(100, 28)
+	pop.StudsOffset = Vector3.new(0, 6, 0)
+	pop.AlwaysOnTop = true
+	pop.MaxDistance = 60
+	pop.Parent = anchor
+	local popLab = Instance.new("TextLabel")
+	popLab.Size = UDim2.fromScale(1, 1)
+	popLab.BackgroundTransparency = 1
+	popLab.Font = Enum.Font.GothamBold
+	popLab.TextScaled = true
+	popLab.TextColor3 = Color3.fromRGB(100, 255, 140)
+	popLab.TextStrokeTransparency = 0.35
+	popLab.Text = string.format("+$%d", tickAmount)
+	popLab.Parent = pop
+	task.spawn(function()
+		for i = 1, 8 do
+			pop.StudsOffset = Vector3.new(0, 6 + i * 0.35, 0)
+			popLab.TextTransparency = i / 10
+			task.wait(0.06)
+		end
+		pop:Destroy()
+	end)
+end
+
 function SoldierService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
@@ -16228,6 +16500,7 @@ function SoldierService.Init(deps: { [string]: any })
 	AnalyticsService = deps.AnalyticsService
 	AntiExploitService = deps.AntiExploitService
 	MissionService = deps.MissionService
+	TutorialService = deps.TutorialService
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
@@ -16301,7 +16574,13 @@ function SoldierService.Init(deps: { [string]: any })
 				if profile then
 					local amount = trainingIncomePerTick(profile)
 					if amount > 0 then
-						EconomyService.AddCash(player, amount, "training")
+						-- AFK training → PendingCash (Money Collector / AutoCollect). Not AddCash bypass.
+						if EconomyService.AccruePendingCash then
+							EconomyService.AccruePendingCash(player, amount, "training")
+						else
+							EconomyService.AddCash(player, amount, "training")
+						end
+						refreshTrainingYardFeedback(player, profile, amount)
 					end
 				end
 			end
@@ -17683,8 +17962,9 @@ return TerritoryRadar
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
-	MVP interactive tutorial: claim base → command center → income → barracks → jeep → outpost
-	Server-authoritative step advancement; client shows UI + optional markers.
+	MVP interactive tutorial (worker-first):
+	claim base → command center → recruit → collect → barracks → jeep → outpost
+	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
 ]]
 
 local Players = game:GetService("Players")
@@ -17707,10 +17987,11 @@ local RateLimitService: any = nil
 
 local STEP_CLAIM = 1
 local STEP_COMMAND = 2
-local STEP_INCOME = 3
-local STEP_BARRACKS = 4
-local STEP_JEEP = 5
-local STEP_OUTPOST = 6
+local STEP_RECRUIT = 3
+local STEP_INCOME = 4
+local STEP_BARRACKS = 5
+local STEP_JEEP = 6
+local STEP_OUTPOST = 7
 
 -- Debounce rapid Notify spam (collector ticks, double hooks)
 local lastAdvanceAt: { [number]: number } = {}
@@ -17818,7 +18099,7 @@ function TutorialService.Reset(player: Player)
 end
 
 --[[
-	event types: PlotAssigned | Upgrade | PassiveIncome | SpawnVehicle | CaptureTerritory
+	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | SpawnVehicle | CaptureTerritory
 ]]
 function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	if not tutorialEnabled() then
@@ -17844,6 +18125,8 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 		elseif detail == "Barracks" and step == STEP_BARRACKS then
 			advanceTo(player, STEP_BARRACKS)
 		end
+	elseif eventType == "RecruitSoldiers" and step == STEP_RECRUIT then
+		advanceTo(player, STEP_RECRUIT)
 	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
 		advanceTo(player, STEP_INCOME)
 	elseif eventType == "SpawnVehicle" and step == STEP_JEEP then
@@ -18766,7 +19049,8 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			addPart(model, body, "Bed", Vector3.new(4.4 * s, 0.9 * s, 2.6 * s), CFrame.new(0, 0.7 * s, 2.6 * s), olive, Enum.Material.Metal, nil, false)
 		end
 		addPart(model, body, "Bumper", Vector3.new(5.0 * s, 0.5 * s, 0.4 * s), CFrame.new(0, -0.3 * s, -4.0 * s), Color3.fromRGB(30, 30, 30), Enum.Material.Metal, nil, false)
-		addPart(model, body, "AccentStrip", Vector3.new(4.8 * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.1 * s, -1.2 * s), if armed then redAcc else accentCol, Enum.Material.Neon, nil, false)
+		-- Olive metal trim (no neon green/gold until mesh loads)
+		addPart(model, body, "AccentStrip", Vector3.new(4.8 * s, 0.12 * s, 0.35 * s), CFrame.new(0, 1.1 * s, -1.2 * s), if armed then Color3.fromRGB(90, 55, 45) else oliveDark, Enum.Material.Metal, nil, false)
 		if armed then
 			addPart(model, body, "GunMount", Vector3.new(0.8 * s, 0.8 * s, 0.8 * s), CFrame.new(0, 2.2 * s, 0.4 * s), Color3.fromRGB(35, 35, 35), Enum.Material.Metal, nil, false)
 			addPart(model, body, "Barrel", Vector3.new(0.25 * s, 0.25 * s, 2.4 * s), CFrame.new(0, 2.5 * s, -1.0 * s), Color3.fromRGB(40, 40, 40), Enum.Material.Metal, nil, false)
@@ -18779,7 +19063,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		}, 1.05)
 		addHeadlights(model, body, s, -4.1, 0.2, 1.8)
 		addTaillights(model, body, s, if quad then 3.0 else 4.0, 0.15, 1.9)
-		addExhaust(model, body, s, CFrame.new(1.8 * s, -0.2 * s, 3.2 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
+		addExhaust(model, body, s, CFrame.new(1.8 * s, -0.2 * s, 3.2 * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(50, 55, 45))
 		addSideRails(model, body, s, if quad then 4.5 else 5.5, 0.6, 2.5, oliveDark)
 		seatOffset = CFrame.new(0, 1.9 * s, 0.1 * s)
 		labelY = 4.2 * s
@@ -19377,13 +19661,37 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 		if seat and seat:IsA("VehicleSeat") then
 			seat.Disabled = false
 			seat.Anchored = false
-			task.defer(function()
-				if not player.Parent or not model.Parent then
+			seat.CanTouch = true
+			-- Drive prompt if auto-sit misses (mobile / late character)
+			if not seat:FindFirstChild("WE_DrivePrompt") then
+				local prompt = Instance.new("ProximityPrompt")
+				prompt.Name = "WE_DrivePrompt"
+				prompt.ActionText = "Drive"
+				prompt.ObjectText = def.DisplayName or "Vehicle"
+				prompt.HoldDuration = 0
+				prompt.MaxActivationDistance = 14
+				prompt.RequiresLineOfSight = false
+				prompt.Parent = seat
+				prompt.Triggered:Connect(function(who: Player)
+					if who ~= player then
+						return
+					end
+					local ch = who.Character
+					local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+					if hum and seat.Occupant == nil then
+						pcall(function()
+							seat:Sit(hum)
+						end)
+					end
+				end)
+			end
+			local function trySit()
+				if not player.Parent or not model.Parent or not seat.Parent then
 					return
 				end
 				local character = player.Character
 				local hum = character and character:FindFirstChildOfClass("Humanoid")
-				if hum and seat.Parent and seat.Occupant == nil then
+				if hum and seat.Occupant == nil then
 					pcall(function()
 						seat:Sit(hum)
 					end)
@@ -19393,7 +19701,10 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 						chassis:SetNetworkOwner(player)
 					end)
 				end
-			end)
+			end
+			task.defer(trySit)
+			task.delay(0.35, trySit)
+			task.delay(1.0, trySit)
 		end
 	end
 
@@ -19737,6 +20048,13 @@ function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
 end
 
 function VisualAssetService.ResolvePropAssetId(propKey: string): number?
+	local warzone = (VisualAssetConfig :: any).WarzoneProps
+	if typeof(warzone) == "table" then
+		local refW = warzone[propKey]
+		if refW and typeof(refW.ModelAssetId) == "number" and (refW.ModelAssetId :: number) > 0 then
+			return refW.ModelAssetId
+		end
+	end
 	local ref = VisualAssetConfig.DesertProps[propKey]
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
@@ -19754,8 +20072,27 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		return false
 	end
 	local template = loadModel(assetId)
+	-- Jeep family: prefer Military Car; classic 59524622 fallback only if primary fails
 	if not template then
-		return false
+		local jeepIds = {
+			MilitaryJeep = true,
+			ArmedJeep = true,
+			ScoutCar = true,
+			ReconBuggy = true,
+			DispatchCar = true,
+			UtilityQuad = true,
+		}
+		local fb = (VisualAssetConfig :: any).JeepFallback
+		local fbId = if fb and typeof(fb.ModelAssetId) == "number" then fb.ModelAssetId else 59524622
+		if jeepIds[vehicleId] and fbId and fbId > 0 and fbId ~= assetId then
+			template = loadModel(fbId)
+			if template then
+				assetId = fbId
+			end
+		end
+	end
+	if not template then
+		return false -- Part kit remains authoritative
 	end
 	local primary = hostModel.PrimaryPart
 	if not primary then
@@ -19770,7 +20107,7 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
-	-- Soften host body visibility so catalog mesh reads better
+	-- Soften host body visibility so catalog mesh reads better (olive kit stays until mesh loads)
 	primary.Transparency = math.max(primary.Transparency, 0.55)
 	return true
 end
@@ -21854,8 +22191,10 @@ local levelLabel: TextLabel? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
+local pendingLabel: TextLabel? = nil
 local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
+local lastPending = 0
 local seasonLabel: TextLabel? = nil
 local spinnerBtn: TextButton? = nil
 local actionDock: Frame? = nil
@@ -21961,7 +22300,7 @@ function HUDController.Init()
 	pill.Name = "CurrencyPill"
 	pill.AnchorPoint = Vector2.new(0, 1)
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
-	pill.Size = UDim2.fromOffset(200, 56)
+	pill.Size = UDim2.fromOffset(210, 64)
 	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
 	pill.BackgroundTransparency = 0.08
 	pill.BorderSizePixel = 0
@@ -21985,11 +22324,26 @@ function HUDController.Init()
 	cash.Parent = pill
 	cashLabel = cash
 
+	local pending = Instance.new("TextLabel")
+	pending.Name = "PendingLabel"
+	pending.BackgroundTransparency = 1
+	pending.Position = UDim2.fromOffset(18, 28)
+	pending.Size = UDim2.new(1, -28, 0, 14)
+	pending.Font = Enum.Font.GothamMedium
+	pending.TextSize = 12
+	pending.TextXAlignment = Enum.TextXAlignment.Left
+	pending.TextColor3 = Color3.fromRGB(90, 200, 130)
+	pending.Text = ""
+	pending.Visible = false
+	pending.ZIndex = 13
+	pending.Parent = pill
+	pendingLabel = pending
+
 	local gold = Instance.new("TextLabel")
 	gold.Name = "GoldLabel"
 	gold.BackgroundTransparency = 1
-	gold.Position = UDim2.fromOffset(18, 28)
-	gold.Size = UDim2.new(1, -28, 0, 20)
+	gold.Position = UDim2.fromOffset(18, 40)
+	gold.Size = UDim2.new(1, -28, 0, 16)
 	gold.Font = Enum.Font.GothamMedium
 	gold.TextSize = 15
 	gold.TextXAlignment = Enum.TextXAlignment.Left
@@ -22103,9 +22457,10 @@ function HUDController.Init()
 		econToken += 1
 		local my = econToken
 		local cashAmt, goldAmt = payload.Cash, payload.Gold
+		local pendingAmt = tonumber(payload.PendingCash) or 0
 		task.defer(function()
 			if my == econToken then
-				HUDController.SetEconomy(cashAmt, goldAmt)
+				HUDController.SetEconomy(cashAmt, goldAmt, pendingAmt)
 			end
 		end)
 	end)
@@ -22209,9 +22564,22 @@ local function formatCash(n: number): string
 	return "$" .. formatted
 end
 
-function HUDController.SetEconomy(cash: number, gold: number)
+function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
 	if cashLabel then
 		cashLabel.Text = formatCash(cash)
+	end
+	if typeof(pending) == "number" then
+		lastPending = pending
+	end
+	if pendingLabel then
+		if lastPending > 0 then
+			pendingLabel.Visible = true
+			pendingLabel.Text = string.format("+$%s pending", tostring(math.floor(lastPending)))
+			pendingLabel.TextColor3 = Color3.fromRGB(90, 230, 130)
+		else
+			pendingLabel.Visible = false
+			pendingLabel.Text = ""
+		end
 	end
 	if goldLabel then
 		goldLabel.Text = "◆ " .. tostring(math.floor(gold))
@@ -22237,7 +22605,7 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number)
 end
 
 function HUDController.ApplyState(state: Types.PlayerStatePayload)
-	HUDController.SetEconomy(state.Cash, state.Gold)
+	HUDController.SetEconomy(state.Cash, state.Gold, (state :: any).PendingCash)
 	HUDController.SetXP(state.Level, state.XP, state.XPToNext)
 	if state.Base then
 		lastPassive = state.Base.PassiveIncomePerTick or 0
@@ -22779,7 +23147,7 @@ local function refreshLabelsImmediate()
 				p,
 				cur,
 				nxt,
-				tonumber(prestigeState.MinLevel) or 100,
+				tonumber(prestigeState.MinLevel) or 40,
 				if prestigeState.CanPrestige then "YES" else "no"
 			)
 		else
@@ -24561,8 +24929,8 @@ return TerritoryController
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
 --[[
-	Interactive tutorial UI: claim base → command center → income → barracks → jeep → outpost
-	Skip + mobile CTA (BUY ON PAD / OPEN GARAGE / …); pad StructureId fallback when markers missing.
+	Interactive tutorial UI: claim → CC → recruit → collect → barracks → jeep → outpost
+	Skip + mobile CTA (BUY / ARMY / GARAGE / …); pad StructureId fallback when markers missing.
 ]]
 
 local Players = game:GetService("Players")
@@ -24840,6 +25208,14 @@ local function runCta()
 		if ok and VehicleController and VehicleController.Open then
 			VehicleController.Open()
 		end
+	elseif action == "OpenArmy" then
+		local ok, ArmyController = pcall(function()
+			return require(script.Parent.ArmyController)
+		end)
+		if ok and ArmyController and ArmyController.Open then
+			ArmyController.Open()
+		end
+		setWaypoint(currentMarkerName, currentPadStructureId)
 	else
 		-- Capture / WatchHud / unknown: re-aim beam
 		setWaypoint(currentMarkerName, currentPadStructureId)
@@ -26689,7 +27065,11 @@ end
 
 local function attachVehicleSpawn(part: BasePart)
 	attachPromptOnce(part, function()
-		return makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
+		local prompt = makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		-- Secondary Drive hint via ObjectText when vehicles nearby (seat has its own Drive prompt)
+		prompt.ObjectText = "Garage · seat has Drive"
+		return prompt
 	end, function()
 		VehicleController.Open()
 	end)

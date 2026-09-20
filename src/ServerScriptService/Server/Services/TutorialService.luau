@@ -1,7 +1,8 @@
 --!strict
 --[[
-	MVP interactive tutorial: claim base → command center → income → barracks → jeep → outpost
-	Server-authoritative step advancement; client shows UI + optional markers.
+	MVP interactive tutorial (worker-first):
+	claim base → command center → recruit → collect → barracks → jeep → outpost
+	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
 ]]
 
 local Players = game:GetService("Players")
@@ -24,10 +25,11 @@ local RateLimitService: any = nil
 
 local STEP_CLAIM = 1
 local STEP_COMMAND = 2
-local STEP_INCOME = 3
-local STEP_BARRACKS = 4
-local STEP_JEEP = 5
-local STEP_OUTPOST = 6
+local STEP_RECRUIT = 3
+local STEP_INCOME = 4
+local STEP_BARRACKS = 5
+local STEP_JEEP = 6
+local STEP_OUTPOST = 7
 
 -- Debounce rapid Notify spam (collector ticks, double hooks)
 local lastAdvanceAt: { [number]: number } = {}
@@ -135,7 +137,7 @@ function TutorialService.Reset(player: Player)
 end
 
 --[[
-	event types: PlotAssigned | Upgrade | PassiveIncome | SpawnVehicle | CaptureTerritory
+	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | SpawnVehicle | CaptureTerritory
 ]]
 function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	if not tutorialEnabled() then
@@ -161,6 +163,8 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 		elseif detail == "Barracks" and step == STEP_BARRACKS then
 			advanceTo(player, STEP_BARRACKS)
 		end
+	elseif eventType == "RecruitSoldiers" and step == STEP_RECRUIT then
+		advanceTo(player, STEP_RECRUIT)
 	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
 		advanceTo(player, STEP_INCOME)
 	elseif eventType == "SpawnVehicle" and step == STEP_JEEP then

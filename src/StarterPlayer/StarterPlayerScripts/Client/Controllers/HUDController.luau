@@ -23,8 +23,10 @@ local levelLabel: TextLabel? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
+local pendingLabel: TextLabel? = nil
 local goldLabel: TextLabel? = nil
 local passiveLabel: TextLabel? = nil
+local lastPending = 0
 local seasonLabel: TextLabel? = nil
 local spinnerBtn: TextButton? = nil
 local actionDock: Frame? = nil
@@ -130,7 +132,7 @@ function HUDController.Init()
 	pill.Name = "CurrencyPill"
 	pill.AnchorPoint = Vector2.new(0, 1)
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
-	pill.Size = UDim2.fromOffset(200, 56)
+	pill.Size = UDim2.fromOffset(210, 64)
 	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
 	pill.BackgroundTransparency = 0.08
 	pill.BorderSizePixel = 0
@@ -154,11 +156,26 @@ function HUDController.Init()
 	cash.Parent = pill
 	cashLabel = cash
 
+	local pending = Instance.new("TextLabel")
+	pending.Name = "PendingLabel"
+	pending.BackgroundTransparency = 1
+	pending.Position = UDim2.fromOffset(18, 28)
+	pending.Size = UDim2.new(1, -28, 0, 14)
+	pending.Font = Enum.Font.GothamMedium
+	pending.TextSize = 12
+	pending.TextXAlignment = Enum.TextXAlignment.Left
+	pending.TextColor3 = Color3.fromRGB(90, 200, 130)
+	pending.Text = ""
+	pending.Visible = false
+	pending.ZIndex = 13
+	pending.Parent = pill
+	pendingLabel = pending
+
 	local gold = Instance.new("TextLabel")
 	gold.Name = "GoldLabel"
 	gold.BackgroundTransparency = 1
-	gold.Position = UDim2.fromOffset(18, 28)
-	gold.Size = UDim2.new(1, -28, 0, 20)
+	gold.Position = UDim2.fromOffset(18, 40)
+	gold.Size = UDim2.new(1, -28, 0, 16)
 	gold.Font = Enum.Font.GothamMedium
 	gold.TextSize = 15
 	gold.TextXAlignment = Enum.TextXAlignment.Left
@@ -272,9 +289,10 @@ function HUDController.Init()
 		econToken += 1
 		local my = econToken
 		local cashAmt, goldAmt = payload.Cash, payload.Gold
+		local pendingAmt = tonumber(payload.PendingCash) or 0
 		task.defer(function()
 			if my == econToken then
-				HUDController.SetEconomy(cashAmt, goldAmt)
+				HUDController.SetEconomy(cashAmt, goldAmt, pendingAmt)
 			end
 		end)
 	end)
@@ -378,9 +396,22 @@ local function formatCash(n: number): string
 	return "$" .. formatted
 end
 
-function HUDController.SetEconomy(cash: number, gold: number)
+function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
 	if cashLabel then
 		cashLabel.Text = formatCash(cash)
+	end
+	if typeof(pending) == "number" then
+		lastPending = pending
+	end
+	if pendingLabel then
+		if lastPending > 0 then
+			pendingLabel.Visible = true
+			pendingLabel.Text = string.format("+$%s pending", tostring(math.floor(lastPending)))
+			pendingLabel.TextColor3 = Color3.fromRGB(90, 230, 130)
+		else
+			pendingLabel.Visible = false
+			pendingLabel.Text = ""
+		end
 	end
 	if goldLabel then
 		goldLabel.Text = "◆ " .. tostring(math.floor(gold))
@@ -406,7 +437,7 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number)
 end
 
 function HUDController.ApplyState(state: Types.PlayerStatePayload)
-	HUDController.SetEconomy(state.Cash, state.Gold)
+	HUDController.SetEconomy(state.Cash, state.Gold, (state :: any).PendingCash)
 	HUDController.SetXP(state.Level, state.XP, state.XPToNext)
 	if state.Base then
 		lastPassive = state.Base.PassiveIncomePerTick or 0

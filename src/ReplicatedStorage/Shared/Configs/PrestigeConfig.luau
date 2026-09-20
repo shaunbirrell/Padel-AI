@@ -14,7 +14,9 @@ export type RebirthUnlockDef = {
 }
 
 local PrestigeConfig = {
-	MinLevelToPrestige = 100,
+	-- P0 competitive: earlier first rebirth feel (was 100). Reversible — bump back if economy too fast.
+	-- See ASSUMPTIONS #108. AdminPlaytestCash 50M unchanged.
+	MinLevelToPrestige = 40,
 	MaxPrestige = 50,
 	-- +10% cash earnings per prestige (stacking). Keep in sync with EconomyConfig.PrestigeCashMultiplierPerLevel.
 	CashBonusPerPrestige = 0.10,

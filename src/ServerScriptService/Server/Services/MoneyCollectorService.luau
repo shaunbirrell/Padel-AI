@@ -52,71 +52,108 @@ local function ensureBillboard(part: BasePart): BillboardGui
 	if existing and existing.Parent then
 		return existing
 	end
-	local old = part:FindFirstChild("WE_CollectorBillboard")
-	if old and old:IsA("BillboardGui") then
-		billboardCache[part] = old
-		return old
+	local oldBb = part:FindFirstChild("WE_CollectorBillboard")
+	if oldBb and oldBb:IsA("BillboardGui") then
+		billboardCache[part] = oldBb
+		return oldBb
 	end
+	-- ATM-like green digit billboard
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_CollectorBillboard"
-	bb.Size = UDim2.fromOffset(200, 64)
-	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	bb.Size = UDim2.fromOffset(220, 72)
+	bb.StudsOffset = Vector3.new(0, 7.2, 0)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 90
+	bb.MaxDistance = 100
 	bb.Parent = part
 
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
-	backdrop.BackgroundTransparency = 0.08
+	backdrop.BackgroundColor3 = Color3.fromRGB(18, 22, 20)
+	backdrop.BackgroundTransparency = 0.05
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 8)
+	corner.CornerRadius = UDim.new(0, 6)
 	corner.Parent = backdrop
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(80, 200, 120)
-	stroke.Thickness = 2
+	stroke.Color = Color3.fromRGB(60, 200, 100)
+	stroke.Thickness = 2.5
 	stroke.Parent = backdrop
 
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, -8, 0.45, 0)
-	title.Position = UDim2.fromOffset(4, 2)
+	title.Size = UDim2.new(1, -10, 0, 18)
+	title.Position = UDim2.fromOffset(5, 4)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBold
-	title.TextScaled = true
-	title.TextColor3 = Color3.fromRGB(235, 238, 242)
-	title.Text = "MONEY COLLECTOR"
+	title.TextSize = 12
+	title.TextColor3 = Color3.fromRGB(200, 210, 200)
+	title.Text = "ATM · TOUCH TO COLLECT"
 	title.Parent = backdrop
 
 	local amount = Instance.new("TextLabel")
 	amount.Name = "Amount"
-	amount.Size = UDim2.new(1, -8, 0.5, 0)
-	amount.Position = UDim2.fromOffset(4, 28)
-	amount.BackgroundTransparency = 1
-	amount.Font = Enum.Font.GothamBold
+	amount.Size = UDim2.new(1, -10, 0, 42)
+	amount.Position = UDim2.fromOffset(5, 24)
+	amount.BackgroundColor3 = Color3.fromRGB(6, 48, 22)
+	amount.BackgroundTransparency = 0.2
+	amount.Font = Enum.Font.Code
 	amount.TextScaled = true
-	amount.TextColor3 = Color3.fromRGB(80, 220, 120)
+	amount.TextColor3 = Color3.fromRGB(70, 255, 120)
 	amount.Text = "$0"
 	amount.Parent = backdrop
+	local ac = Instance.new("UICorner")
+	ac.CornerRadius = UDim.new(0, 4)
+	ac.Parent = amount
 
 	billboardCache[part] = bb
 	return bb
+end
+
+local function syncAtmScreen(part: BasePart, pending: number)
+	local folder = part.Parent
+	if not folder then
+		return
+	end
+	local screen = folder:FindFirstChild("CollectorScreen")
+	if not (screen and screen:IsA("BasePart")) then
+		return
+	end
+	local sg = screen:FindFirstChild("WE_ATMScreen")
+	local digits = sg and sg:FindFirstChild("Digits")
+	if digits and digits:IsA("TextLabel") then
+		digits.Text = string.format("$%s", tostring(math.floor(pending)))
+		digits.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(40, 120, 70)
+	end
+	local light = part:FindFirstChild("ATMGlow")
+	if light and light:IsA("PointLight") then
+		if pending >= 500 then
+			light.Brightness = 1.4
+			light.Range = 18
+		elseif pending > 0 then
+			light.Brightness = 0.9
+			light.Range = 14
+		else
+			light.Brightness = 0.35
+			light.Range = 10
+		end
+	end
 end
 
 local function refreshBillboard(part: BasePart, pending: number)
 	local bb = ensureBillboard(part)
 	local amount = bb:FindFirstChild("Amount", true)
 	if amount and amount:IsA("TextLabel") then
-		amount.Text = string.format("$%s pending", tostring(math.floor(pending)))
 		if pending > 0 then
-			amount.TextColor3 = Color3.fromRGB(90, 240, 130)
+			amount.Text = string.format("$%s", tostring(math.floor(pending)))
+			amount.TextColor3 = Color3.fromRGB(70, 255, 120)
 		else
-			amount.TextColor3 = Color3.fromRGB(160, 170, 180)
+			amount.Text = "$0"
+			amount.TextColor3 = Color3.fromRGB(100, 140, 110)
 		end
 	end
+	syncAtmScreen(part, pending)
 end
 
 local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
