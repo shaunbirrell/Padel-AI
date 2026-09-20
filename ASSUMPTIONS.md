@@ -351,7 +351,7 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 110. **Missions HUD dock** — Dock tile `MISSIONS` (gunmetal) opens existing `MissionController` (MissionConfig daily list). Replaces mislabeled ORDERS dock entry; squad Orders walkie unchanged (auto-shows with soldiers).
 111. **Rebirth fee clarity** — `PrestigeConfig.CashFee` (default 0) + `BuildFeeSummary`; PrestigeState pushes `FeeSummary` / `BaseCompletionPercent` (owned structures / max). Confirm copy + CanPrestige join toast show fee/reset/keeps. MinLevel 40 + RebirthUnlocks + OutpostIncomeStacks keep unchanged.
 
-## 2026-09-20 — Jeep drivability fix (live v27 target)
+## 2026-09-20 — Jeep drivability fix (live v27 — Open Cloud Published versionNumber=27)
 
 112. **MilitaryJeep / ArmedJeep undrivable on live** — Verified root cause (not hunch):
     1. `startGroundDrive` set `h.AngularVelocity = -spin * WE_WheelSide`, so under pure throttle left/right hinges **counter-rotated and canceled**.
