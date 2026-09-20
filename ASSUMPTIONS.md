@@ -365,12 +365,15 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 114. **Premium floor pads deferred** — AutoCollect/2x pads skipped while all Monetization Ids=0 (would confuse). Documented in `docs/QUALITY_AUDIT_v27.md`.
 115. **Bootstrap audit** — Vehicle / GateDefense / ManualDropper / PlotOilPump / Prestige / Missions / Orders / MoneyCollector / Monetization ProcessReceipt all wired. Experience rename still pending (`LIVE_PLACE.md`).
 
-## 2026-09-20 — Monetization live + ATM premium pads (live v29 — Open Cloud Published versionNumber=29)
+## 2026-09-20 — Monetization live + video-feel polish (live v29 — Open Cloud Published versionNumber=29)
 
 - MonetizationConfig live GamePass/DevProduct Ids; HideFromShop duplicate AutoCollect/DoubleCash/VIPBoost DevProducts
 - MapSetup ATM-cluster premium pads (AutoCollect / 2x Cash / SpeedBoost / GoldenPumpjack) + PremiumPadService → PromptPremiumPad
-- Shop CashMega ★ BEST OFFER hero; PromptPremiumPad client prompts real Robux
-- Rebirth blue banner: Keep all Robux Items / Game Passes
+- Shop CashMega ★ BEST OFFER hero first among cash; PromptPremiumPad client prompts real Robux
+- Rebirth confirm: prominent `★ Keep all your Robux Items!` banner (Entitlements survive prestige)
+- Orders hotkeys: 1–4 = Attack/Hold/Follow/Retreat when walkie open or Radio equipped; T cycles
+- Contested capture billboard: `⚠ CONTESTED` badge + progress% + enemy present
+- BaseCeiling SyncBaseCeiling: thicker plate + beams/joists/braces (not flat slab)
 - PlotOilPump GoldenPumpjack entitlement gold dress (Id=0 stub pad)
 - docs/LIVE_PLACE.md product table; experience WAR EMPIRE; API Services noted
-- No-regress: jeep LV, gates, ATM raid
+- BuyPathStatic PASS=273; no-regress jeep LV / GateDefense / AtmRaid
