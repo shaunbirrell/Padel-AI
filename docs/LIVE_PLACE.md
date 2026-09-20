@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=35** (2026-09-20 Europe/Madrid) — SpecialForces/Helipad/Dock densify, map landmarks, gate AutoGun visuals, VIP soft offer, oil pumpjack bob, death→CashMega shop continuity
+- **Live Published:** Open Cloud **versionNumber=36** (2026-09-20 Europe/Madrid) — Warzone road density, LightTank LV+HingeMotor, ArmedJeep ARMED cue, thicker walls/gate, watchtower snipers, SpeedBoost soft offer, HUD cash contrast
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

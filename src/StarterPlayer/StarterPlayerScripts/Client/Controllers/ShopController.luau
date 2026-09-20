@@ -1138,6 +1138,132 @@ function ShopController.Init()
 		end
 	end
 
+	-- v36: one-shot SpeedBoost soft offer toast (existing DevProduct Id 3713839342 only)
+	do
+		local sbToast: Frame? = nil
+		local lastSbToastAt = 0.0
+		local SB_TOAST_DEBOUNCE = 12.0
+
+		local function destroySbToast()
+			if sbToast then
+				sbToast:Destroy()
+				sbToast = nil
+			end
+		end
+
+		local function showSpeedBoostToast(payload: any)
+			local now = os.clock()
+			if now - lastSbToastAt < SB_TOAST_DEBOUNCE then
+				return
+			end
+			lastSbToastAt = now
+			destroySbToast()
+			local displayName = "Speed Boost"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.SpeedBoost
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "SpeedBoostToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(90, 200, 255)
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			sbToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -48, 0, 24)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 17 else 16
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(140, 220, 255)
+			title.Text = "★ Soft offer · " .. displayName
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local body = Instance.new("TextLabel")
+			body.BackgroundTransparency = 1
+			body.Position = UDim2.fromOffset(12, 32)
+			body.Size = UDim2.new(1, -24, 0, 22)
+			body.Font = Enum.Font.Gotham
+			body.TextSize = if isTouch then 13 else 12
+			body.TextXAlignment = Enum.TextXAlignment.Left
+			body.TextColor3 = Constants.Colors.Muted
+			body.Text = if robux then string.format("Permanent move-speed · %d R$", robux) else "Permanent move-speed boost"
+			body.ZIndex = 81
+			body.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(32, 32)
+			dismiss.BackgroundTransparency = 1
+			dismiss.Text = "✕"
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.TextSize = 18
+			dismiss.TextColor3 = Constants.Colors.Muted
+			dismiss.ZIndex = 82
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroySbToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(40, 120, 160)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
+			buy.Text = "Get Speed Boost"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroySbToast()
+				promptDevProduct("SpeedBoost")
+			end)
+
+			task.delay(12, function()
+				if sbToast == toast then
+					destroySbToast()
+				end
+			end)
+		end
+
+		local sbRemote = Remotes.GetEvent(Constants.RemoteNames.SpeedBoostOffer)
+		if sbRemote then
+			sbRemote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showSpeedBoostToast(payload)
+				end)
+			end)
+		end
+	end
+
 	-- v33: ATM raid success / cooldown HUD chip
 	do
 		local chip: Frame? = nil

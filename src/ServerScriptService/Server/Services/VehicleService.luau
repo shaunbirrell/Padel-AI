@@ -37,6 +37,7 @@ local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
 local TutorialService: any = nil
+local MonetizationService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
@@ -534,10 +535,25 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		addPart(model, body, "Mantlet", Vector3.new(2.2 * s, 1.0 * s, 0.6 * s), CFrame.new(0, 2.1 * s, -1.6 * s), armorDark, Enum.Material.Metal, nil, false)
 		addHeadlights(model, body, s, -4.6, 0.4, 2.2, Color3.fromRGB(255, 230, 160))
 		addExhaust(model, body, s, CFrame.new(2.6 * s, 0.8 * s, 4.0 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
-		for i, z in ipairs({ 3.2, 1.0, -1.2, -3.2 }) do
-			addPart(model, body, "RoadL" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(-3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
-			addPart(model, body, "RoadR" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
+		-- v36: hinged road wheels → same WE_GroundDrive LV+HingeMotor path as MilitaryJeep (tracks are dress skirts)
+		local trackL = model:FindFirstChild("TrackL")
+		local trackR = model:FindFirstChild("TrackR")
+		if trackL and trackL:IsA("BasePart") then
+			trackL.CanCollide = false
 		end
+		if trackR and trackR:IsA("BasePart") then
+			trackR.CanCollide = false
+		end
+		addWheels(model, body, s, {
+			Vector3.new(-3.2, -1.0, 3.2),
+			Vector3.new(3.2, -1.0, 3.2),
+			Vector3.new(-3.2, -1.0, 1.0),
+			Vector3.new(3.2, -1.0, 1.0),
+			Vector3.new(-3.2, -1.0, -1.2),
+			Vector3.new(3.2, -1.0, -1.2),
+			Vector3.new(-3.2, -1.0, -3.2),
+			Vector3.new(3.2, -1.0, -3.2),
+		}, 0.9)
 		seatOffset = CFrame.new(0, 2.6 * s, 0.2 * s)
 		labelY = 5.5 * s
 	end
@@ -769,7 +785,37 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 
 	do
 		local tip = if isAir then "Sit · throttle / steer" elseif isNaval then "Sit · WASD to pilot" else "Sit · WASD to drive"
+		if id == "ArmedJeep" then
+			tip = "ARMED · Sit · WASD"
+		elseif family == "WheeledAPC" or id == "APC" then
+			tip = "APC · Sit · WASD"
+		elseif typeof(family) == "string" and string.find(family, "Tracked") ~= nil then
+			tip = "TRACKED · Sit · WASD (slow)"
+		end
 		addLabel(body, def.DisplayName, labelY, tip)
+		-- v36 ArmedJeep: static ARMED billboard on barrel (no fire logic yet)
+		if id == "ArmedJeep" then
+			local barrel = model:FindFirstChild("Barrel")
+			if barrel and barrel:IsA("BasePart") then
+				local abb = Instance.new("BillboardGui")
+				abb.Name = "WE_ArmedCue"
+				abb.Size = UDim2.fromOffset(90, 22)
+				abb.StudsOffset = Vector3.new(0, 1.2, 0)
+				abb.AlwaysOnTop = false
+				abb.MaxDistance = 60
+				abb.Parent = barrel
+				local al = Instance.new("TextLabel")
+				al.Size = UDim2.fromScale(1, 1)
+				al.BackgroundColor3 = Color3.fromRGB(40, 20, 16)
+				al.BackgroundTransparency = 0.2
+				al.Text = "ARMED"
+				al.TextColor3 = Color3.fromRGB(255, 180, 100)
+				al.TextStrokeTransparency = 0.35
+				al.Font = Enum.Font.GothamBold
+				al.TextScaled = true
+				al.Parent = abb
+			end
+		end
 	end
 
 	model.PrimaryPart = body
@@ -919,7 +965,11 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 
 	local maxWheelSpeed = math.clamp(def.Speed * 0.55, 18, 48) -- rad/s
 	local steerMix = 0.35
-	local cruise = math.max(def.Speed, 40)
+	local kitFam = model:GetAttribute("WE_KitFamily")
+	local isTracked = typeof(kitFam) == "string" and string.find(kitFam :: string, "Tracked") ~= nil
+	-- v36: tracked tanks/APC IFVs keep slower LV cruise; wheeled jeep path unchanged (max 40+)
+	local cruise = if isTracked then math.clamp(def.Speed, 18, 36) else math.max(def.Speed, 40)
+	local steerRate = if isTracked then 1.55 else 2.6
 
 	local attach = body:FindFirstChild("WE_GroundAttach") :: Attachment?
 	if not attach then
@@ -991,7 +1041,7 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 		else
 			lv.VectorVelocity = flat * (speed * sign)
 		end
-		av.AngularVelocity = Vector3.new(0, -steer * 2.6, 0)
+		av.AngularVelocity = Vector3.new(0, -steer * steerRate, 0)
 
 		-- Hinge motors: SAME throttle sign both sides (axles parallel +X). Steer = differential.
 		-- Previous bug: AngularVelocity = -spin * side → left/right fought under throttle.
@@ -1229,8 +1279,38 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 					return
 				end
 				driveTipShown[player.UserId] = true
+				local vid = model:GetAttribute("VehicleId")
+				local tipMsg = "Press WASD to drive"
+				if vid == "ArmedJeep" then
+					tipMsg = "ARMED Jeep — Press WASD to drive"
+					-- Brief muzzle flash cue (cosmetic; no fire logic)
+					local barrel = model:FindFirstChild("Barrel")
+					if barrel and barrel:IsA("BasePart") then
+						local flash = Instance.new("PointLight")
+						flash.Name = "WE_MuzzleFlash"
+						flash.Color = Color3.fromRGB(255, 200, 120)
+						flash.Brightness = 4
+						flash.Range = 14
+						flash.Parent = barrel
+						task.delay(0.18, function()
+							if flash.Parent then
+								flash:Destroy()
+							end
+						end)
+					end
+				elseif typeof(model:GetAttribute("WE_KitFamily")) == "string"
+					and string.find(model:GetAttribute("WE_KitFamily") :: string, "Tracked") ~= nil
+				then
+					tipMsg = "TRACKED — Press WASD (slow)"
+				end
 				if NotificationService then
-					NotificationService.Notify(player, "Press WASD to drive", "Info", 4)
+					NotificationService.Notify(player, tipMsg, "Info", 4)
+				end
+				-- v36: one-shot SpeedBoost soft offer after first jeep/vehicle sit
+				if MonetizationService and MonetizationService.TrySoftOfferSpeedBoost then
+					task.defer(function()
+						MonetizationService.TrySoftOfferSpeedBoost(player, "vehicle_sit")
+					end)
 				end
 				if tipConn then
 					tipConn:Disconnect()
@@ -1286,6 +1366,7 @@ function VehicleService.Init(deps: { [string]: any })
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
 	TutorialService = deps.TutorialService
+	MonetizationService = deps.MonetizationService
 
 	ensureFolder()
 

@@ -1762,6 +1762,10 @@ local MonetizationConfig = {
 		MinLevel = 10,
 		MinStructureLevel = 3,
 	},
+	-- v36: one-shot SpeedBoost soft offer after first jeep sit / walk-speed moment (existing Id only)
+	SpeedBoostOffer = {
+		DelaySeconds = 1.5,
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
@@ -3766,6 +3770,7 @@ Constants.RemoteNames = {
 	AutoCollectOffer = "AutoCollectOffer",
 	DoubleCashOffer = "DoubleCashOffer",
 	VIPOffer = "VIPOffer",
+	SpeedBoostOffer = "SpeedBoostOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
@@ -3789,7 +3794,7 @@ Constants.Colors = {
 	Background = Color3.fromRGB(18, 20, 24),
 	Panel = Color3.fromRGB(28, 32, 38),
 	Accent = Color3.fromRGB(70, 130, 80),
-	Cash = Color3.fromRGB(80, 200, 120),
+	Cash = Color3.fromRGB(130, 255, 170), -- v36 high-contrast cash (not yellow)
 	Gold = Color3.fromRGB(230, 190, 60),
 	XP = Color3.fromRGB(90, 160, 220),
 	Danger = Color3.fromRGB(200, 70, 70),
@@ -3984,6 +3989,7 @@ export type PlayerProfile = {
 	AutoCollectOffered: boolean?,
 	DoubleCashOffered: boolean?,
 	VIPOffered: boolean?,
+	SpeedBoostOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {
@@ -6624,6 +6630,70 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			})
 			if full or i % 2 == 0 then
 				kitBunker(f, origin + Vector3.new(-14, 0, 12), i * 40)
+			end
+		end
+	end
+
+	-- 14) v36 road warzone density — crater / sandbag / chevron clusters between plots (reuse kits)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "RoadWarzone_v36"
+		f.Parent = dressing
+		-- Roads between the 6 plot ring (~radius 800); keep part count modest
+		local roadSpots = if full
+			then {
+				Vector3.new(-400, 0.5, -400), Vector3.new(400, 0.5, -400),
+				Vector3.new(-400, 0.5, 400), Vector3.new(400, 0.5, 400),
+				Vector3.new(0, 0.5, -400), Vector3.new(0, 0.5, 400),
+				Vector3.new(-400, 0.5, 0), Vector3.new(400, 0.5, 0),
+				Vector3.new(-200, 0.5, -600), Vector3.new(200, 0.5, 600),
+				Vector3.new(-600, 0.5, 200), Vector3.new(600, 0.5, -200),
+				Vector3.new(-150, 0.5, -150), Vector3.new(150, 0.5, 150),
+			}
+			else {
+				Vector3.new(-400, 0.5, -400), Vector3.new(400, 0.5, 400),
+				Vector3.new(0, 0.5, -400), Vector3.new(-400, 0.5, 0),
+				Vector3.new(200, 0.5, 200), Vector3.new(-200, 0.5, 600),
+				Vector3.new(600, 0.5, -200), Vector3.new(-150, 0.5, -150),
+			}
+		for i, origin in ipairs(roadSpots) do
+			local yaw = (i * 41) % 180
+			-- Crater scorch plate
+			p({
+				Name = "RoadCrater" .. i,
+				Size = Vector3.new(10 + (i % 4), 0.18, 8 + (i % 3)),
+				CFrame = CFrame.new(origin + Vector3.new(0, 0.04, 0)),
+				Color = Color3.fromRGB(40, 36, 30),
+				Material = Enum.Material.Asphalt,
+				CanCollide = false,
+				Parent = f,
+			})
+			p({
+				Name = "RoadCraterRim" .. i,
+				Size = Vector3.new(3.5, 0.8, 3.5),
+				Position = origin + Vector3.new(2, 0.3, -1),
+				Color = COL.Ruin,
+				Material = Enum.Material.Slate,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			kitSandbagLine(f, origin + Vector3.new(6, 0, 2), yaw, if full then 4 else 2)
+			-- Chevron road marking (military approach stripe)
+			p({
+				Name = "RoadChevron" .. i,
+				Size = Vector3.new(6, 0.12, 1.4),
+				CFrame = CFrame.new(origin + Vector3.new(-4, 0.08, 0)) * CFrame.Angles(0, math.rad(yaw), 0),
+				Color = Color3.fromRGB(230, 200, 80),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+				Parent = f,
+			})
+			if full or i % 2 == 0 then
+				kitCrateStack(f, origin + Vector3.new(-8, 0, 5))
+			end
+			if full and i % 3 == 0 then
+				kitOilDrums(f, origin + Vector3.new(5, 0, -6), 2)
 			end
 		end
 	end
@@ -9710,6 +9780,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		AutoCollectOffered = false,
 		DoubleCashOffered = false,
 		VIPOffered = false,
+		SpeedBoostOffered = false,
 	}
 end
 
@@ -9927,6 +9998,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if (profile :: any).VIPOffered == nil then
 		(profile :: any).VIPOffered = false
 	end
+	if (profile :: any).SpeedBoostOffered == nil then
+		(profile :: any).SpeedBoostOffered = false
+	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
 	return profile
@@ -10091,6 +10165,7 @@ local EVENTS = {
 	Constants.RemoteNames.AutoCollectOffer,
 	Constants.RemoteNames.DoubleCashOffer,
 	Constants.RemoteNames.VIPOffer,
+	Constants.RemoteNames.SpeedBoostOffer,
 	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
 }
@@ -11026,8 +11101,9 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local lv = math.clamp(level, 1, 5)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
-	local thickness = 2.2 + lv * 0.45
-	local height = 6.5 + lv * 2.2
+	-- v36: thicker/taller defensive walls at higher levels
+	local thickness = 2.8 + lv * 0.7
+	local height = 7.5 + lv * 2.8
 	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 
@@ -11136,11 +11212,12 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			post:SetAttribute("WE_GateVisual", true)
 			post.CastShadow = true
 		end
+		local archY = pad.Position.Y + pad.Size.Y * 0.5 + height + 0.9
 		local arch = makePart({
 			Name = "GateArch",
-			Size = Vector3.new(GATE_CLEAR + postW * 2, 1.2, thickness + 0.6),
-			Position = Vector3.new(cx, pad.Position.Y + pad.Size.Y * 0.5 + height + 0.4, openZ),
-			Color = pal.Accent,
+			Size = Vector3.new(GATE_CLEAR + postW * 2, 2.0 + lv * 0.25, thickness + 1.2),
+			Position = Vector3.new(cx, archY, openZ),
+			Color = pal.Roof,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
 			CanCollide = false,
@@ -11148,6 +11225,36 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		})
 		arch:SetAttribute("WE_Perimeter", true)
 		arch:SetAttribute("WE_GateVisual", true)
+		-- v36 military gate: chevron stripe + GATE sign
+		makePart({
+			Name = "GateChevron",
+			Size = Vector3.new(GATE_CLEAR + postW, 0.35, thickness + 1.6),
+			Position = Vector3.new(cx, archY + 0.9, openZ),
+			Color = Color3.fromRGB(210, 170, 50),
+			Material = Enum.Material.Neon,
+			Transparency = 0.05,
+			CanCollide = false,
+			Parent = folder,
+		}):SetAttribute("WE_GateVisual", true)
+		do
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "WE_GateSign"
+			bb.Size = UDim2.fromOffset(120, 28)
+			bb.StudsOffset = Vector3.new(0, 1.6, 0)
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 110
+			bb.Parent = arch
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.fromScale(1, 1)
+			lbl.BackgroundColor3 = Color3.fromRGB(24, 28, 18)
+			lbl.BackgroundTransparency = 0.15
+			lbl.Text = "GATE · L" .. tostring(lv)
+			lbl.TextColor3 = Color3.fromRGB(230, 210, 120)
+			lbl.TextStrokeTransparency = 0.3
+			lbl.Font = Enum.Font.GothamBold
+			lbl.TextScaled = true
+			lbl.Parent = bb
+		end
 	else
 		local closedX = cx - gateSign * halfX
 		local openX = cx + gateSign * halfX
@@ -11178,11 +11285,12 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			post:SetAttribute("WE_GateVisual", true)
 			post.CastShadow = true
 		end
+		local archY = pad.Position.Y + pad.Size.Y * 0.5 + height + 0.9
 		local arch = makePart({
 			Name = "GateArch",
-			Size = Vector3.new(thickness + 0.6, 1.2, GATE_CLEAR + postW * 2),
-			Position = Vector3.new(openX, pad.Position.Y + pad.Size.Y * 0.5 + height + 0.4, cz),
-			Color = pal.Accent,
+			Size = Vector3.new(thickness + 1.2, 2.0 + lv * 0.25, GATE_CLEAR + postW * 2),
+			Position = Vector3.new(openX, archY, cz),
+			Color = pal.Roof,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
 			CanCollide = false,
@@ -11190,6 +11298,35 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		})
 		arch:SetAttribute("WE_Perimeter", true)
 		arch:SetAttribute("WE_GateVisual", true)
+		makePart({
+			Name = "GateChevron",
+			Size = Vector3.new(thickness + 1.6, 0.35, GATE_CLEAR + postW),
+			Position = Vector3.new(openX, archY + 0.9, cz),
+			Color = Color3.fromRGB(210, 170, 50),
+			Material = Enum.Material.Neon,
+			Transparency = 0.05,
+			CanCollide = false,
+			Parent = folder,
+		}):SetAttribute("WE_GateVisual", true)
+		do
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "WE_GateSign"
+			bb.Size = UDim2.fromOffset(120, 28)
+			bb.StudsOffset = Vector3.new(0, 1.6, 0)
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 110
+			bb.Parent = arch
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.fromScale(1, 1)
+			lbl.BackgroundColor3 = Color3.fromRGB(24, 28, 18)
+			lbl.BackgroundTransparency = 0.15
+			lbl.Text = "GATE · L" .. tostring(lv)
+			lbl.TextColor3 = Color3.fromRGB(230, 210, 120)
+			lbl.TextStrokeTransparency = 0.3
+			lbl.Font = Enum.Font.GothamBold
+			lbl.TextScaled = true
+			lbl.Parent = bb
+		end
 	end
 
 	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
@@ -11765,6 +11902,61 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 			CanCollide = false,
 			Parent = folder,
 		})
+		-- v36: 1–2 static sniper silhouettes on tower platforms (presence; GateDefense handles combat)
+		local deckY = pos.Y + towerH * 0.5 - 0.6
+		local shooterCount = if lv >= 3 then 2 else 1
+		for s = 1, shooterCount do
+			local ox = if s == 1 then -1.4 else 1.4
+			local torso = makePart({
+				Name = "TowerShooter" .. i .. "_" .. s,
+				Size = Vector3.new(1.1, 1.6, 0.7),
+				Position = Vector3.new(pos.X + ox, deckY + 1.0, pos.Z),
+				Color = Color3.fromRGB(45, 55, 40),
+				Material = Enum.Material.SmoothPlastic,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			torso:SetAttribute("WE_TowerShooter", true)
+			makePart({
+				Name = "TowerShooterHead" .. i .. "_" .. s,
+				Size = Vector3.new(0.7, 0.7, 0.7),
+				Position = Vector3.new(pos.X + ox, deckY + 2.05, pos.Z),
+				Color = Color3.fromRGB(55, 65, 50),
+				Material = Enum.Material.SmoothPlastic,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			makePart({
+				Name = "TowerRifle" .. i .. "_" .. s,
+				Size = Vector3.new(0.2, 0.2, 2.2),
+				Position = Vector3.new(pos.X + ox, deckY + 1.35, pos.Z - 1.3),
+				Color = Color3.fromRGB(30, 30, 32),
+				Material = Enum.Material.Metal,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			if s == 1 then
+				local bb = Instance.new("BillboardGui")
+				bb.Name = "WE_SniperCue"
+				bb.Size = UDim2.fromOffset(100, 22)
+				bb.StudsOffset = Vector3.new(0, 2.4, 0)
+				bb.MaxDistance = 80
+				bb.Parent = torso
+				local lbl = Instance.new("TextLabel")
+				lbl.Size = UDim2.fromScale(1, 1)
+				lbl.BackgroundColor3 = Color3.fromRGB(18, 22, 14)
+				lbl.BackgroundTransparency = 0.2
+				lbl.Text = "SNIPER"
+				lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
+				lbl.TextStrokeTransparency = 0.35
+				lbl.Font = Enum.Font.GothamBold
+				lbl.TextScaled = true
+				lbl.Parent = bb
+			end
+		end
 	end
 end
 
@@ -19823,13 +20015,20 @@ function MonetizationService.Init(deps: { [string]: any })
 		gamePassCache[player.UserId] = nil
 	end)
 
-	-- Re-apply SpeedBoost WalkSpeed on respawn
+	-- Re-apply SpeedBoost WalkSpeed on respawn + v36 soft offer on first walk-speed moment
 	local function hookSpeed(player: Player)
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				task.wait(0.3)
 				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
 					applySpeedBoostToCharacter(player)
+				else
+					-- First character walk moment (session): soft toast if not yet offered
+					task.delay(4.0, function()
+						if player.Parent and MonetizationService.TrySoftOfferSpeedBoost then
+							MonetizationService.TrySoftOfferSpeedBoost(player, "walk_speed")
+						end
+					end)
 				end
 			end)
 		end)
@@ -19973,6 +20172,64 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 				"Commander status unlocked — VIP boosts cash & prestige",
 				"Info",
 				4.5
+			)
+		end
+	end)
+end
+
+
+
+--[[ v36: one-shot SpeedBoost soft toast after first jeep sit / walk-speed moment (existing DevProduct Id). ]]
+function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: string?)
+	if not player or not player.Parent then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	if profile.SpeedBoostOffered == true then
+		return
+	end
+	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.SpeedBoost
+	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
+		return
+	end
+	if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+		return
+	end
+	local offerCfg = (MonetizationConfig :: any).SpeedBoostOffer
+	if not offerCfg then
+		return
+	end
+	profile.SpeedBoostOffered = true
+	DataService.MarkDirty(player)
+	local delaySec = tonumber(offerCfg.DelaySeconds) or 1.5
+	task.delay(delaySec, function()
+		if not player.Parent then
+			return
+		end
+		if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+			return
+		end
+		if RemoteSetup then
+			local remote = RemoteSetup.Get(Constants.RemoteNames.SpeedBoostOffer)
+			if remote and remote:IsA("RemoteEvent") then
+				(remote :: RemoteEvent):FireClient(player, {
+					ProductKey = "SpeedBoost",
+					ProductId = dp.Id,
+					DisplayName = dp.DisplayName or "Speed Boost",
+					RobuxPrice = dp.RobuxPrice,
+					Reason = reason or "vehicle_sit",
+				})
+			end
+		end
+		if NotificationService then
+			NotificationService.Notify(
+				player,
+				"Move faster — Speed Boost available",
+				"Info",
+				4.0
 			)
 		end
 	end)
@@ -25561,6 +25818,7 @@ local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
 local TutorialService: any = nil
+local MonetizationService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
@@ -26058,10 +26316,25 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		addPart(model, body, "Mantlet", Vector3.new(2.2 * s, 1.0 * s, 0.6 * s), CFrame.new(0, 2.1 * s, -1.6 * s), armorDark, Enum.Material.Metal, nil, false)
 		addHeadlights(model, body, s, -4.6, 0.4, 2.2, Color3.fromRGB(255, 230, 160))
 		addExhaust(model, body, s, CFrame.new(2.6 * s, 0.8 * s, 4.0 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
-		for i, z in ipairs({ 3.2, 1.0, -1.2, -3.2 }) do
-			addPart(model, body, "RoadL" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(-3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
-			addPart(model, body, "RoadR" .. i, Vector3.new(0.7 * s, 1.3 * s, 1.3 * s), CFrame.new(3.2 * s, -1.0 * s, z * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, true)
+		-- v36: hinged road wheels → same WE_GroundDrive LV+HingeMotor path as MilitaryJeep (tracks are dress skirts)
+		local trackL = model:FindFirstChild("TrackL")
+		local trackR = model:FindFirstChild("TrackR")
+		if trackL and trackL:IsA("BasePart") then
+			trackL.CanCollide = false
 		end
+		if trackR and trackR:IsA("BasePart") then
+			trackR.CanCollide = false
+		end
+		addWheels(model, body, s, {
+			Vector3.new(-3.2, -1.0, 3.2),
+			Vector3.new(3.2, -1.0, 3.2),
+			Vector3.new(-3.2, -1.0, 1.0),
+			Vector3.new(3.2, -1.0, 1.0),
+			Vector3.new(-3.2, -1.0, -1.2),
+			Vector3.new(3.2, -1.0, -1.2),
+			Vector3.new(-3.2, -1.0, -3.2),
+			Vector3.new(3.2, -1.0, -3.2),
+		}, 0.9)
 		seatOffset = CFrame.new(0, 2.6 * s, 0.2 * s)
 		labelY = 5.5 * s
 	end
@@ -26293,7 +26566,37 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 
 	do
 		local tip = if isAir then "Sit · throttle / steer" elseif isNaval then "Sit · WASD to pilot" else "Sit · WASD to drive"
+		if id == "ArmedJeep" then
+			tip = "ARMED · Sit · WASD"
+		elseif family == "WheeledAPC" or id == "APC" then
+			tip = "APC · Sit · WASD"
+		elseif typeof(family) == "string" and string.find(family, "Tracked") ~= nil then
+			tip = "TRACKED · Sit · WASD (slow)"
+		end
 		addLabel(body, def.DisplayName, labelY, tip)
+		-- v36 ArmedJeep: static ARMED billboard on barrel (no fire logic yet)
+		if id == "ArmedJeep" then
+			local barrel = model:FindFirstChild("Barrel")
+			if barrel and barrel:IsA("BasePart") then
+				local abb = Instance.new("BillboardGui")
+				abb.Name = "WE_ArmedCue"
+				abb.Size = UDim2.fromOffset(90, 22)
+				abb.StudsOffset = Vector3.new(0, 1.2, 0)
+				abb.AlwaysOnTop = false
+				abb.MaxDistance = 60
+				abb.Parent = barrel
+				local al = Instance.new("TextLabel")
+				al.Size = UDim2.fromScale(1, 1)
+				al.BackgroundColor3 = Color3.fromRGB(40, 20, 16)
+				al.BackgroundTransparency = 0.2
+				al.Text = "ARMED"
+				al.TextColor3 = Color3.fromRGB(255, 180, 100)
+				al.TextStrokeTransparency = 0.35
+				al.Font = Enum.Font.GothamBold
+				al.TextScaled = true
+				al.Parent = abb
+			end
+		end
 	end
 
 	model.PrimaryPart = body
@@ -26443,7 +26746,11 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 
 	local maxWheelSpeed = math.clamp(def.Speed * 0.55, 18, 48) -- rad/s
 	local steerMix = 0.35
-	local cruise = math.max(def.Speed, 40)
+	local kitFam = model:GetAttribute("WE_KitFamily")
+	local isTracked = typeof(kitFam) == "string" and string.find(kitFam :: string, "Tracked") ~= nil
+	-- v36: tracked tanks/APC IFVs keep slower LV cruise; wheeled jeep path unchanged (max 40+)
+	local cruise = if isTracked then math.clamp(def.Speed, 18, 36) else math.max(def.Speed, 40)
+	local steerRate = if isTracked then 1.55 else 2.6
 
 	local attach = body:FindFirstChild("WE_GroundAttach") :: Attachment?
 	if not attach then
@@ -26515,7 +26822,7 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 		else
 			lv.VectorVelocity = flat * (speed * sign)
 		end
-		av.AngularVelocity = Vector3.new(0, -steer * 2.6, 0)
+		av.AngularVelocity = Vector3.new(0, -steer * steerRate, 0)
 
 		-- Hinge motors: SAME throttle sign both sides (axles parallel +X). Steer = differential.
 		-- Previous bug: AngularVelocity = -spin * side → left/right fought under throttle.
@@ -26753,8 +27060,38 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 					return
 				end
 				driveTipShown[player.UserId] = true
+				local vid = model:GetAttribute("VehicleId")
+				local tipMsg = "Press WASD to drive"
+				if vid == "ArmedJeep" then
+					tipMsg = "ARMED Jeep — Press WASD to drive"
+					-- Brief muzzle flash cue (cosmetic; no fire logic)
+					local barrel = model:FindFirstChild("Barrel")
+					if barrel and barrel:IsA("BasePart") then
+						local flash = Instance.new("PointLight")
+						flash.Name = "WE_MuzzleFlash"
+						flash.Color = Color3.fromRGB(255, 200, 120)
+						flash.Brightness = 4
+						flash.Range = 14
+						flash.Parent = barrel
+						task.delay(0.18, function()
+							if flash.Parent then
+								flash:Destroy()
+							end
+						end)
+					end
+				elseif typeof(model:GetAttribute("WE_KitFamily")) == "string"
+					and string.find(model:GetAttribute("WE_KitFamily") :: string, "Tracked") ~= nil
+				then
+					tipMsg = "TRACKED — Press WASD (slow)"
+				end
 				if NotificationService then
-					NotificationService.Notify(player, "Press WASD to drive", "Info", 4)
+					NotificationService.Notify(player, tipMsg, "Info", 4)
+				end
+				-- v36: one-shot SpeedBoost soft offer after first jeep/vehicle sit
+				if MonetizationService and MonetizationService.TrySoftOfferSpeedBoost then
+					task.defer(function()
+						MonetizationService.TrySoftOfferSpeedBoost(player, "vehicle_sit")
+					end)
 				end
 				if tipConn then
 					tipConn:Disconnect()
@@ -26810,6 +27147,7 @@ function VehicleService.Init(deps: { [string]: any })
 	TerritoryService = deps.TerritoryService
 	MissionService = deps.MissionService
 	TutorialService = deps.TutorialService
+	MonetizationService = deps.MonetizationService
 
 	ensureFolder()
 
@@ -30124,8 +30462,8 @@ function HUDController.Init()
 	pill.AnchorPoint = Vector2.new(0, 1)
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
 	pill.Size = UDim2.fromOffset(248, 64)
-	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
-	pill.BackgroundTransparency = 0.12
+	pill.BackgroundColor3 = Color3.fromRGB(14, 18, 22)
+	pill.BackgroundTransparency = 0.05 -- v36 darker pill for cash contrast
 	pill.BorderSizePixel = 0
 	pill.ZIndex = 12
 	pill.Parent = screen
@@ -30139,9 +30477,12 @@ function HUDController.Init()
 	cash.Position = UDim2.fromOffset(18, 4)
 	cash.Size = UDim2.new(1, -56, 0, 26)
 	cash.Font = Enum.Font.GothamBold
-	cash.TextSize = 20
+	cash.TextSize = 21
 	cash.TextXAlignment = Enum.TextXAlignment.Left
-	cash.TextColor3 = Constants.Colors.Cash
+	-- v36: high-contrast cash (bright mint + dark stroke — not yellow/gold)
+	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
+	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
+	cash.TextStrokeTransparency = 0.25
 	cash.Text = "$5,000"
 	cash.ZIndex = 13
 	cash.Parent = pill
@@ -30156,7 +30497,10 @@ function HUDController.Init()
 	pending.Font = Enum.Font.GothamMedium
 	pending.TextSize = 12
 	pending.TextXAlignment = Enum.TextXAlignment.Left
-	pending.TextColor3 = Color3.fromRGB(90, 200, 130)
+	-- v36 pending cash contrast
+	pending.TextColor3 = Color3.fromRGB(120, 240, 160)
+	pending.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
+	pending.TextStrokeTransparency = 0.35
 	pending.Text = ""
 	pending.Visible = false
 	pending.AutoButtonColor = false
@@ -30173,7 +30517,9 @@ function HUDController.Init()
 	gold.Font = Enum.Font.GothamMedium
 	gold.TextSize = 15
 	gold.TextXAlignment = Enum.TextXAlignment.Left
-	gold.TextColor3 = Constants.Colors.Gold
+	gold.TextColor3 = Color3.fromRGB(255, 230, 140)
+	gold.TextStrokeColor3 = Color3.fromRGB(20, 14, 4)
+	gold.TextStrokeTransparency = 0.35
 	gold.Text = "◆ 0"
 	gold.ZIndex = 13
 	gold.Parent = pill
@@ -33525,6 +33871,132 @@ function ShopController.Init()
 						task.wait(0.2)
 					end
 					showVIPToast(payload)
+				end)
+			end)
+		end
+	end
+
+	-- v36: one-shot SpeedBoost soft offer toast (existing DevProduct Id 3713839342 only)
+	do
+		local sbToast: Frame? = nil
+		local lastSbToastAt = 0.0
+		local SB_TOAST_DEBOUNCE = 12.0
+
+		local function destroySbToast()
+			if sbToast then
+				sbToast:Destroy()
+				sbToast = nil
+			end
+		end
+
+		local function showSpeedBoostToast(payload: any)
+			local now = os.clock()
+			if now - lastSbToastAt < SB_TOAST_DEBOUNCE then
+				return
+			end
+			lastSbToastAt = now
+			destroySbToast()
+			local displayName = "Speed Boost"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.SpeedBoost
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "SpeedBoostToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(90, 200, 255)
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			sbToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -48, 0, 24)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 17 else 16
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(140, 220, 255)
+			title.Text = "★ Soft offer · " .. displayName
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local body = Instance.new("TextLabel")
+			body.BackgroundTransparency = 1
+			body.Position = UDim2.fromOffset(12, 32)
+			body.Size = UDim2.new(1, -24, 0, 22)
+			body.Font = Enum.Font.Gotham
+			body.TextSize = if isTouch then 13 else 12
+			body.TextXAlignment = Enum.TextXAlignment.Left
+			body.TextColor3 = Constants.Colors.Muted
+			body.Text = if robux then string.format("Permanent move-speed · %d R$", robux) else "Permanent move-speed boost"
+			body.ZIndex = 81
+			body.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(32, 32)
+			dismiss.BackgroundTransparency = 1
+			dismiss.Text = "✕"
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.TextSize = 18
+			dismiss.TextColor3 = Constants.Colors.Muted
+			dismiss.ZIndex = 82
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroySbToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(40, 120, 160)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
+			buy.Text = "Get Speed Boost"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroySbToast()
+				promptDevProduct("SpeedBoost")
+			end)
+
+			task.delay(12, function()
+				if sbToast == toast then
+					destroySbToast()
+				end
+			end)
+		end
+
+		local sbRemote = Remotes.GetEvent(Constants.RemoteNames.SpeedBoostOffer)
+		if sbRemote then
+			sbRemote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showSpeedBoostToast(payload)
 				end)
 			end)
 		end

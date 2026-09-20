@@ -649,8 +649,9 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local lv = math.clamp(level, 1, 5)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
-	local thickness = 2.2 + lv * 0.45
-	local height = 6.5 + lv * 2.2
+	-- v36: thicker/taller defensive walls at higher levels
+	local thickness = 2.8 + lv * 0.7
+	local height = 7.5 + lv * 2.8
 	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 
@@ -759,11 +760,12 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			post:SetAttribute("WE_GateVisual", true)
 			post.CastShadow = true
 		end
+		local archY = pad.Position.Y + pad.Size.Y * 0.5 + height + 0.9
 		local arch = makePart({
 			Name = "GateArch",
-			Size = Vector3.new(GATE_CLEAR + postW * 2, 1.2, thickness + 0.6),
-			Position = Vector3.new(cx, pad.Position.Y + pad.Size.Y * 0.5 + height + 0.4, openZ),
-			Color = pal.Accent,
+			Size = Vector3.new(GATE_CLEAR + postW * 2, 2.0 + lv * 0.25, thickness + 1.2),
+			Position = Vector3.new(cx, archY, openZ),
+			Color = pal.Roof,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
 			CanCollide = false,
@@ -771,6 +773,36 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		})
 		arch:SetAttribute("WE_Perimeter", true)
 		arch:SetAttribute("WE_GateVisual", true)
+		-- v36 military gate: chevron stripe + GATE sign
+		makePart({
+			Name = "GateChevron",
+			Size = Vector3.new(GATE_CLEAR + postW, 0.35, thickness + 1.6),
+			Position = Vector3.new(cx, archY + 0.9, openZ),
+			Color = Color3.fromRGB(210, 170, 50),
+			Material = Enum.Material.Neon,
+			Transparency = 0.05,
+			CanCollide = false,
+			Parent = folder,
+		}):SetAttribute("WE_GateVisual", true)
+		do
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "WE_GateSign"
+			bb.Size = UDim2.fromOffset(120, 28)
+			bb.StudsOffset = Vector3.new(0, 1.6, 0)
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 110
+			bb.Parent = arch
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.fromScale(1, 1)
+			lbl.BackgroundColor3 = Color3.fromRGB(24, 28, 18)
+			lbl.BackgroundTransparency = 0.15
+			lbl.Text = "GATE · L" .. tostring(lv)
+			lbl.TextColor3 = Color3.fromRGB(230, 210, 120)
+			lbl.TextStrokeTransparency = 0.3
+			lbl.Font = Enum.Font.GothamBold
+			lbl.TextScaled = true
+			lbl.Parent = bb
+		end
 	else
 		local closedX = cx - gateSign * halfX
 		local openX = cx + gateSign * halfX
@@ -801,11 +833,12 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			post:SetAttribute("WE_GateVisual", true)
 			post.CastShadow = true
 		end
+		local archY = pad.Position.Y + pad.Size.Y * 0.5 + height + 0.9
 		local arch = makePart({
 			Name = "GateArch",
-			Size = Vector3.new(thickness + 0.6, 1.2, GATE_CLEAR + postW * 2),
-			Position = Vector3.new(openX, pad.Position.Y + pad.Size.Y * 0.5 + height + 0.4, cz),
-			Color = pal.Accent,
+			Size = Vector3.new(thickness + 1.2, 2.0 + lv * 0.25, GATE_CLEAR + postW * 2),
+			Position = Vector3.new(openX, archY, cz),
+			Color = pal.Roof,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
 			CanCollide = false,
@@ -813,6 +846,35 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		})
 		arch:SetAttribute("WE_Perimeter", true)
 		arch:SetAttribute("WE_GateVisual", true)
+		makePart({
+			Name = "GateChevron",
+			Size = Vector3.new(thickness + 1.6, 0.35, GATE_CLEAR + postW),
+			Position = Vector3.new(openX, archY + 0.9, cz),
+			Color = Color3.fromRGB(210, 170, 50),
+			Material = Enum.Material.Neon,
+			Transparency = 0.05,
+			CanCollide = false,
+			Parent = folder,
+		}):SetAttribute("WE_GateVisual", true)
+		do
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "WE_GateSign"
+			bb.Size = UDim2.fromOffset(120, 28)
+			bb.StudsOffset = Vector3.new(0, 1.6, 0)
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 110
+			bb.Parent = arch
+			local lbl = Instance.new("TextLabel")
+			lbl.Size = UDim2.fromScale(1, 1)
+			lbl.BackgroundColor3 = Color3.fromRGB(24, 28, 18)
+			lbl.BackgroundTransparency = 0.15
+			lbl.Text = "GATE · L" .. tostring(lv)
+			lbl.TextColor3 = Color3.fromRGB(230, 210, 120)
+			lbl.TextStrokeTransparency = 0.3
+			lbl.Font = Enum.Font.GothamBold
+			lbl.TextScaled = true
+			lbl.Parent = bb
+		end
 	end
 
 	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
@@ -1388,6 +1450,61 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 			CanCollide = false,
 			Parent = folder,
 		})
+		-- v36: 1–2 static sniper silhouettes on tower platforms (presence; GateDefense handles combat)
+		local deckY = pos.Y + towerH * 0.5 - 0.6
+		local shooterCount = if lv >= 3 then 2 else 1
+		for s = 1, shooterCount do
+			local ox = if s == 1 then -1.4 else 1.4
+			local torso = makePart({
+				Name = "TowerShooter" .. i .. "_" .. s,
+				Size = Vector3.new(1.1, 1.6, 0.7),
+				Position = Vector3.new(pos.X + ox, deckY + 1.0, pos.Z),
+				Color = Color3.fromRGB(45, 55, 40),
+				Material = Enum.Material.SmoothPlastic,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			torso:SetAttribute("WE_TowerShooter", true)
+			makePart({
+				Name = "TowerShooterHead" .. i .. "_" .. s,
+				Size = Vector3.new(0.7, 0.7, 0.7),
+				Position = Vector3.new(pos.X + ox, deckY + 2.05, pos.Z),
+				Color = Color3.fromRGB(55, 65, 50),
+				Material = Enum.Material.SmoothPlastic,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			makePart({
+				Name = "TowerRifle" .. i .. "_" .. s,
+				Size = Vector3.new(0.2, 0.2, 2.2),
+				Position = Vector3.new(pos.X + ox, deckY + 1.35, pos.Z - 1.3),
+				Color = Color3.fromRGB(30, 30, 32),
+				Material = Enum.Material.Metal,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+			if s == 1 then
+				local bb = Instance.new("BillboardGui")
+				bb.Name = "WE_SniperCue"
+				bb.Size = UDim2.fromOffset(100, 22)
+				bb.StudsOffset = Vector3.new(0, 2.4, 0)
+				bb.MaxDistance = 80
+				bb.Parent = torso
+				local lbl = Instance.new("TextLabel")
+				lbl.Size = UDim2.fromScale(1, 1)
+				lbl.BackgroundColor3 = Color3.fromRGB(18, 22, 14)
+				lbl.BackgroundTransparency = 0.2
+				lbl.Text = "SNIPER"
+				lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
+				lbl.TextStrokeTransparency = 0.35
+				lbl.Font = Enum.Font.GothamBold
+				lbl.TextScaled = true
+				lbl.Parent = bb
+			end
+		end
 	end
 end
 

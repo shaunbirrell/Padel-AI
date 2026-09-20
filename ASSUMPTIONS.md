@@ -442,3 +442,15 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 143. **Oil pump spectacle** — PlotOilPump walking beam + HorseHead bob together (faster amp); $+$/tick billboards unchanged.
 144. **Death / shop continuity** — DeathShopToast kept; Open Shop · Cash Mega opens shop with CashMega row highlight.
 145. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v34 kits.
+
+## 2026-09-20 — Warzone density + late vehicle/presence pack (live v36 — Open Cloud Published versionNumber=36)
+
+146. **LightTank / TrackedMBT drive** — Tracked kits use hinged road wheels + same `startGroundDrive` LV+HingeMotor path as MilitaryJeep; slower cruise/steer (`isTracked`); DisplayName tip `TRACKED · Sit · WASD (slow)`. Mesh dress via existing VisualAssetConfig Ids (LightTank 26007709). Jeep LV+HingeMotor unchanged.
+147. **ArmedJeep combat cue** — Sit tip `ARMED · Sit · WASD` + `WE_ArmedCue` billboard + brief `WE_MuzzleFlash` PointLight on Occupant (no fire logic yet).
+148. **Warzone MapDressing density** — `RoadWarzone_v36`: crater/sandbag/chevron clusters on roads between plots (Full denser; Low modest). Landmarks_v35 kept.
+149. **Defensive Walls upgrade visual** — Thicker/taller by level; military GateArch + GateChevron + GATE · L# sign.
+150. **Watchtower shooters** — 1–2 static sniper silhouette Parts on corner tower decks (`WE_TowerShooter` + SNIPER billboard). GateDefense combat path unchanged.
+151. **SpeedBoost soft offer** — One-shot toast for DevProduct Id **3713839342** after first jeep sit or walk-speed moment (`SpeedBoostOffered`); existing Id only.
+152. **HUD cash contrast** — Bright mint Cash/Pending + dark TextStroke; darker currency pill (not yellow/gold readability).
+153. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v35 kits/landmarks.
+

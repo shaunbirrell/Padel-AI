@@ -1443,6 +1443,70 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
+	-- 14) v36 road warzone density — crater / sandbag / chevron clusters between plots (reuse kits)
+	do
+		local f = Instance.new("Folder")
+		f.Name = "RoadWarzone_v36"
+		f.Parent = dressing
+		-- Roads between the 6 plot ring (~radius 800); keep part count modest
+		local roadSpots = if full
+			then {
+				Vector3.new(-400, 0.5, -400), Vector3.new(400, 0.5, -400),
+				Vector3.new(-400, 0.5, 400), Vector3.new(400, 0.5, 400),
+				Vector3.new(0, 0.5, -400), Vector3.new(0, 0.5, 400),
+				Vector3.new(-400, 0.5, 0), Vector3.new(400, 0.5, 0),
+				Vector3.new(-200, 0.5, -600), Vector3.new(200, 0.5, 600),
+				Vector3.new(-600, 0.5, 200), Vector3.new(600, 0.5, -200),
+				Vector3.new(-150, 0.5, -150), Vector3.new(150, 0.5, 150),
+			}
+			else {
+				Vector3.new(-400, 0.5, -400), Vector3.new(400, 0.5, 400),
+				Vector3.new(0, 0.5, -400), Vector3.new(-400, 0.5, 0),
+				Vector3.new(200, 0.5, 200), Vector3.new(-200, 0.5, 600),
+				Vector3.new(600, 0.5, -200), Vector3.new(-150, 0.5, -150),
+			}
+		for i, origin in ipairs(roadSpots) do
+			local yaw = (i * 41) % 180
+			-- Crater scorch plate
+			p({
+				Name = "RoadCrater" .. i,
+				Size = Vector3.new(10 + (i % 4), 0.18, 8 + (i % 3)),
+				CFrame = CFrame.new(origin + Vector3.new(0, 0.04, 0)),
+				Color = Color3.fromRGB(40, 36, 30),
+				Material = Enum.Material.Asphalt,
+				CanCollide = false,
+				Parent = f,
+			})
+			p({
+				Name = "RoadCraterRim" .. i,
+				Size = Vector3.new(3.5, 0.8, 3.5),
+				Position = origin + Vector3.new(2, 0.3, -1),
+				Color = COL.Ruin,
+				Material = Enum.Material.Slate,
+				CanCollide = true,
+				CanQuery = true,
+				Parent = f,
+			})
+			kitSandbagLine(f, origin + Vector3.new(6, 0, 2), yaw, if full then 4 else 2)
+			-- Chevron road marking (military approach stripe)
+			p({
+				Name = "RoadChevron" .. i,
+				Size = Vector3.new(6, 0.12, 1.4),
+				CFrame = CFrame.new(origin + Vector3.new(-4, 0.08, 0)) * CFrame.Angles(0, math.rad(yaw), 0),
+				Color = Color3.fromRGB(230, 200, 80),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+				Parent = f,
+			})
+			if full or i % 2 == 0 then
+				kitCrateStack(f, origin + Vector3.new(-8, 0, 5))
+			end
+			if full and i % 3 == 0 then
+				kitOilDrums(f, origin + Vector3.new(5, 0, -6), 2)
+			end
+		end
+	end
+
 	local partCount = 0
 	for _, d in ipairs(dressing:GetDescendants()) do
 		if d:IsA("BasePart") then

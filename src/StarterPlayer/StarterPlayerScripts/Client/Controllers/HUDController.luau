@@ -158,8 +158,8 @@ function HUDController.Init()
 	pill.AnchorPoint = Vector2.new(0, 1)
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
 	pill.Size = UDim2.fromOffset(248, 64)
-	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
-	pill.BackgroundTransparency = 0.12
+	pill.BackgroundColor3 = Color3.fromRGB(14, 18, 22)
+	pill.BackgroundTransparency = 0.05 -- v36 darker pill for cash contrast
 	pill.BorderSizePixel = 0
 	pill.ZIndex = 12
 	pill.Parent = screen
@@ -173,9 +173,12 @@ function HUDController.Init()
 	cash.Position = UDim2.fromOffset(18, 4)
 	cash.Size = UDim2.new(1, -56, 0, 26)
 	cash.Font = Enum.Font.GothamBold
-	cash.TextSize = 20
+	cash.TextSize = 21
 	cash.TextXAlignment = Enum.TextXAlignment.Left
-	cash.TextColor3 = Constants.Colors.Cash
+	-- v36: high-contrast cash (bright mint + dark stroke — not yellow/gold)
+	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
+	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
+	cash.TextStrokeTransparency = 0.25
 	cash.Text = "$5,000"
 	cash.ZIndex = 13
 	cash.Parent = pill
@@ -190,7 +193,10 @@ function HUDController.Init()
 	pending.Font = Enum.Font.GothamMedium
 	pending.TextSize = 12
 	pending.TextXAlignment = Enum.TextXAlignment.Left
-	pending.TextColor3 = Color3.fromRGB(90, 200, 130)
+	-- v36 pending cash contrast
+	pending.TextColor3 = Color3.fromRGB(120, 240, 160)
+	pending.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
+	pending.TextStrokeTransparency = 0.35
 	pending.Text = ""
 	pending.Visible = false
 	pending.AutoButtonColor = false
@@ -207,7 +213,9 @@ function HUDController.Init()
 	gold.Font = Enum.Font.GothamMedium
 	gold.TextSize = 15
 	gold.TextXAlignment = Enum.TextXAlignment.Left
-	gold.TextColor3 = Constants.Colors.Gold
+	gold.TextColor3 = Color3.fromRGB(255, 230, 140)
+	gold.TextStrokeColor3 = Color3.fromRGB(20, 14, 4)
+	gold.TextStrokeTransparency = 0.35
 	gold.Text = "◆ 0"
 	gold.ZIndex = 13
 	gold.Parent = pill

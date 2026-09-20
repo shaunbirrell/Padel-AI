@@ -163,6 +163,10 @@ local MonetizationConfig = {
 		MinLevel = 10,
 		MinStructureLevel = 3,
 	},
+	-- v36: one-shot SpeedBoost soft offer after first jeep sit / walk-speed moment (existing Id only)
+	SpeedBoostOffer = {
+		DelaySeconds = 1.5,
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {

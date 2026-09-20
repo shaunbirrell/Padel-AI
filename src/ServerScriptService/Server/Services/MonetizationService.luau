@@ -395,13 +395,20 @@ function MonetizationService.Init(deps: { [string]: any })
 		gamePassCache[player.UserId] = nil
 	end)
 
-	-- Re-apply SpeedBoost WalkSpeed on respawn
+	-- Re-apply SpeedBoost WalkSpeed on respawn + v36 soft offer on first walk-speed moment
 	local function hookSpeed(player: Player)
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				task.wait(0.3)
 				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
 					applySpeedBoostToCharacter(player)
+				else
+					-- First character walk moment (session): soft toast if not yet offered
+					task.delay(4.0, function()
+						if player.Parent and MonetizationService.TrySoftOfferSpeedBoost then
+							MonetizationService.TrySoftOfferSpeedBoost(player, "walk_speed")
+						end
+					end)
 				end
 			end)
 		end)
@@ -545,6 +552,64 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 				"Commander status unlocked — VIP boosts cash & prestige",
 				"Info",
 				4.5
+			)
+		end
+	end)
+end
+
+
+
+--[[ v36: one-shot SpeedBoost soft toast after first jeep sit / walk-speed moment (existing DevProduct Id). ]]
+function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: string?)
+	if not player or not player.Parent then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	if profile.SpeedBoostOffered == true then
+		return
+	end
+	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.SpeedBoost
+	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
+		return
+	end
+	if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+		return
+	end
+	local offerCfg = (MonetizationConfig :: any).SpeedBoostOffer
+	if not offerCfg then
+		return
+	end
+	profile.SpeedBoostOffered = true
+	DataService.MarkDirty(player)
+	local delaySec = tonumber(offerCfg.DelaySeconds) or 1.5
+	task.delay(delaySec, function()
+		if not player.Parent then
+			return
+		end
+		if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+			return
+		end
+		if RemoteSetup then
+			local remote = RemoteSetup.Get(Constants.RemoteNames.SpeedBoostOffer)
+			if remote and remote:IsA("RemoteEvent") then
+				(remote :: RemoteEvent):FireClient(player, {
+					ProductKey = "SpeedBoost",
+					ProductId = dp.Id,
+					DisplayName = dp.DisplayName or "Speed Boost",
+					RobuxPrice = dp.RobuxPrice,
+					Reason = reason or "vehicle_sit",
+				})
+			end
+		end
+		if NotificationService then
+			NotificationService.Notify(
+				player,
+				"Move faster — Speed Boost available",
+				"Info",
+				4.0
 			)
 		end
 	end)
