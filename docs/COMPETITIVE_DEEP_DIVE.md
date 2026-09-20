@@ -324,3 +324,117 @@ Concrete file/system targets. Inspiration-only naming.
 ---
 
 *End of deep dive. Update this doc after live playtests with stopwatch timings.*
+
+
+---
+
+## Pass 2 — mid/late game, monetization UX, garage flow, and driveability
+
+**Research sweep:** 2026-09-20 (Europe/Madrid). Public wiki/guide pages and Roblox Creator documentation only; no live competitor session was performed. Treat competitor prices and exact unlock numbers as snapshots, not requirements to copy.
+
+### 8. War Tycoon: the mid/late-game pattern
+
+War Tycoon makes the base itself the progression map, not just a cash source:
+
+- **Base producers compound by rebirth:** the first base has multiple large oil extractors; Rebirth 2 adds bunker oil drills; Rebirth 4 adds the gas generator. These are visible rooms/props with different output and risk profiles, so the player can see why the next rebirth matters.
+- **Rebirth is a content-room gate:** completing the base and paying the rebirth cost resets cash/base purchases but preserves gamepasses and operation progress. Rebirth 1 opens the Vehicle Bay; later rebirths open the bunker, hangars, helicopter/plane systems, and Tank Factory. The reward is a new verb and a new room, not only a multiplier.
+- **Garage as a protected showroom:** the Vehicle Bay has an owner-only entrance/gate, a safe spawn interior, and a selector that can show owned and locked ground vehicles. The player can select/modify/view a vehicle, then drive it through the gate. Tank Garage repeats the same pattern with research, part storage, and a protected spawn.
+- **Operations bridge catalog and play:** missions unlock vehicles and give the player a reason to use the new category. Open-world oil barrels and contested rigs supplement—but do not replace—the base producer loop.
+
+**WE implication:** `VehicleDepot` should eventually be a readable room/console with a preview and a gated exit. Prestige should unlock *rooms and verbs* (for example, a Vehicle Bay, Air Wing, or Deep Command), while cash/level gates determine individual vehicles inside those rooms. Do not add 99 more catalog rows without making the room and unlock ceremony legible.
+
+Sources: [War Tycoon Rebirthing](https://war-tycoon-roblox.fandom.com/wiki/Rebirthing), [War Tycoon Oil Extractors](https://war-tycoon-roblox.fandom.com/wiki/Oil_Extractors), [War Tycoon Vehicle Bay](https://war-tycoon-roblox.fandom.com/wiki/Vehicle_Bay), [War Tycoon Tank Garage](https://war-tycoon-roblox.fandom.com/wiki/Tank_Garage), [War Tycoon beginner guide](https://noleep.com/en/war-tycoon-roblox-beginners-guide/).
+
+### 9. Military Tycoon: more mid/late-game detail
+
+The public MT progression pattern is more explicit than the first-ten-minute loop suggests:
+
+- The **Garage** is a buildable base structure for land vehicles. Helicopters use the adjacent helipad; aircraft and ships use separate airfield/dock spaces. This makes the base silhouette advertise the next catalog category before the player opens a menu.
+- The **Vehicle Manager** is the UX layer: browse owned and locked vehicles, inspect stats, equip/buy skins where available, and spawn the selected vehicle. Spawn-to-driver-seat is the expected happy path; the player should not have to hunt for a seat after pressing spawn.
+- **Rebirth resets purchases but preserves long-term catalog progress** (gamepass/event units remain) and unlocks increasingly strong vehicles, weapons, bunker systems, and defensive layers. Guides repeatedly recommend buying workers/income before cosmetics and vehicles, then using a guide arrow/affordability path to find the next purchasable item.
+- **Oil rigs are a mid/late skill check:** guards, AA, and naval defenses make a helicopter/boat or ranged approach useful. The rig flag remains a simple, readable capture verb and the stipend creates a reason to return.
+- **Late-game spectacle is spatial:** bunker access, rooftop AA, upgraded airfield, docks, vault/defense layers, and large vehicles create “my base changed” screenshots. The catalog is stronger because the room, spawn point, and unlock are visible—not because every vehicle has a unique menu treatment.
+
+**WE implication:** show `Category`, `Speed`, `Armor`, `Seats`, `UnlockLevel`, `RequiresStructure`, and `RequiresPrestige` on every garage card. Locked cards should explain the missing room/level/prestige rather than only showing a disabled SPAWN button. A vehicle spawn should place the player at the driver seat or provide one obvious **Drive** prompt, with a clean pad exit and one-active-vehicle rule.
+
+Sources: [MT Base](https://military-tycoon.fandom.com/wiki/Base_(Tycoon)), [MT Vehicle Manager](https://military-tycoon.fandom.com/wiki/Vehicle_Manager), [MT Rebirths](https://military-tycoon.fandom.com/wiki/Rebirths), [MT Oil Rigs](https://military-tycoon.fandom.com/wiki/Oil_Rigs), [MT rebirth guide](https://progameguides.com/roblox/how-to-rebirth-fast-in-roblox-military-tycoon/).
+
+### 10. Monetization UX: sell reduced friction at the moment of friction
+
+The useful competitor pattern is **one premium product per friction**, surfaced where the friction occurs:
+
+| Friction | Competitor pattern | WE Pass-2 action |
+|---|---|---|
+| Returning to base to collect | MT Auto Collect; War Tycoon Auto Collect can be toggled in settings | Keep AutoCollect as the first collector CTA; show an explicit on/off state and “collects PendingCash” copy. |
+| Slow compounding | MT/War Tycoon 2x Cash; guides consistently position it above cash packs | Hero-sort DoubleCash above flat Cash/Gold packs; show a simple before/after rate, not a fake scarcity timer. |
+| Identity/status | MT VIP combines cash, HP/tag, and sometimes vehicle/social perks | Keep a clearly explained WE-original VIP bundle: tag + modest survivability/cosmetic, not raw PvP dominance. |
+| Waiting for a base category | Vehicle passes are presented as conditional (for example, “must have access to garage area first”) | Never let a vehicle SKU imply it bypasses `VehicleDepot`/prestige structure requirements. |
+| Early income gap | War Tycoon’s low-price Speedy Oil Extractor is a small producer upgrade, not a full skip | If we add a producer SKU later, make it a visible extra worker/structure with a cap; do not bypass collector or tutorial. |
+
+**UX rules for WAR EMPIRE:** pin AutoCollect, DoubleCash, and VIP in that order; explain the benefit in one line; show purchase only after the player has seen the underlying system once; preserve Id=0 safety; keep loot boxes off while `LootBoxPolicyPending`; and log impressions → opens → purchases → seven-day retention. A garage/vehicle pass should be a later conversion after the player has used a free Jeep and understands the category.
+
+Sources: [MT VIP](https://military-tycoon.fandom.com/wiki/VIP), [MT VIP on Rolimon's](https://www.rolimons.com/gamepass/75751464), [MT gamepasses](https://military-tycoon.fandom.com/wiki/Gamepasses), [War Tycoon gamepasses](https://war-tycoon-roblox.fandom.com/wiki/Gamepasses), [War Tycoon Speedy Oil Extractor](https://www.roblox.com/game-pass/16699457/Speedy-Oil-Extractor).
+
+### 11. Garage flow: what to copy as a UX shape, not as IP
+
+A competitive happy path is:
+
+1. **Enter a readable room/pad** that says category and ownership requirement.
+2. **Open a selector** with Owned first, then Available/Locked; categories and rarity are filters, not separate hidden menus.
+3. **Inspect a large preview** with name, role, speed/armor/seats, next requirement, and optional skin/cosmetic slot.
+4. **Buy once, then spawn once:** after purchase the card becomes OWNED and SPAWN; do not require a second confirmation for a starter vehicle.
+5. **Spawn inside a safe bay/marked pad, face the exit, and auto-seat the owner.** A visible Drive prompt is the fallback for mobile/late character replication.
+6. **Exit through an obvious gate, despawn from the garage or HUD, and prevent a second active vehicle.**
+
+WE already has the useful skeleton (`G`, `E`, owned filtering, BUY → SPAWN, auto-seat, one active model, `DriverSeat`). The Pass-2 gap is presentation and physics integrity: the garage needs a real “preview/requirement/room” story, and SPAWN must produce a car that moves, steers, and looks like one vehicle rather than a seat welded to a kit.
+
+### 12. VehicleSeat vs mesh model — why Shaun’s Jeep is still broken
+
+**Current WE diagnosis (documentation-only; do not edit the contested `VehicleService` branch here):**
+
+- `VehicleService` creates one `Chassis` part, a `VehicleSeat`, and wheel Parts. `addWheels()` currently makes each wheel a cylinder and attaches it to the chassis with a `WeldConstraint`; the seat is also welded to the chassis.
+- `VisualAssetService` treats a Creator Store model as a **non-colliding visual overlay**: it strips seats/scripts, makes descendants massless/non-colliding, and welds them to the authoritative chassis. That is a sensible render/physics separation, but it does not supply wheel motors, suspension, steering, or vehicle input handling.
+- A `VehicleSeat` exposes `ThrottleFloat`/`SteerFloat` and can detect hinges; it is not a complete car chassis. With wheels rigidly welded to the same chassis, the wheels cannot rotate relative to it. Unless a separate propulsion controller moves the chassis, pressing W only changes seat input; it does not create wheel force. This explains the “spawn/seated but jeep does not drive” symptom.
+- The catalog mesh may also have the wrong pivot, scale, forward axis, or seat alignment. Because the mesh overlay is welded to the chassis and all its collisions are disabled, it can look good while hiding a bad authoritative body—or look offset while the Part kit is physically correct.
+
+**Public Roblox patterns for a working custom-mesh vehicle:**
+
+- **Simple VehicleSeat + joints:** keep an unanchored chassis and seat as one assembly; use hinge/motor joints for powered wheels and a separate steering joint/axis for front wheels. VehicleSeat supplies input, but the joints/scripts apply torque.
+- **Constraint chassis (recommended for the Jeep):** use invisible primitive wheel colliders (cylinders or spheres) for physics, with visible mesh wheels welded to those colliders. Give each wheel matching, centered attachments; use a `CylindricalConstraint` plus spring/suspension travel, or the equivalent prismatic + hinge arrangement. Rotate the front steering attachments smoothly; do not drive by directly teleporting the whole model each frame.
+- **Mesh/body separation:** keep the attractive body MeshParts massless and `CanCollide=false`; use a simple box/hull chassis and primitive wheel colliders for reliable contact. Avoid precise mesh collision for fast wheels unless there is a specific gameplay need.
+- **Ownership:** when `DriverSeat.Occupant` changes, assign network ownership of the unanchored vehicle assembly to the driver for responsiveness, restore automatic ownership when empty, and validate speed/position/teleport/contact-sensitive events on the server. All rigid parts must be unanchored and connected; an anchored part prevents ownership changes.
+- **Tuning:** wheel radius/attachment centers, wheel density/friction, suspension stiffness/damping, chassis center of mass, and collision groups matter more than adding extra decorative mesh. Test straight-line acceleration, reverse, full-lock steering, bumps, spawn overlap, flip/recovery, and mobile controls before dressing the other 98 vehicles.
+
+Public patterns: [VehicleSeat API](https://create.roblox.com/docs/reference/engine/classes/VehicleSeat), [Roblox network ownership](https://create.roblox.com/docs/physics/network-ownership), [Roblox assemblies](https://create.roblox.com/docs/physics/assemblies), [Roblox meshes/collision fidelity](https://create.roblox.com/docs/parts/meshes), [Constraint Chassis community resource](https://devforum.roblox.com/t/constraint-chassis/221717), [How to Rig a Car](https://devforum.roblox.com/t/how-to-rig-a-car/523855), and [2025 constraint vehicle tutorial](https://devforum.roblox.com/t/how-to-implement-vehicle-mechanics-using-constraints/3575431).
+
+### 13. Pass-2 P1 backlog — priority order
+
+These are **documentation priorities only**. Keep the jeep implementation and any contested `VehicleService` edits on the existing fix branch; this commit changes this document only.
+
+| Priority | P1 item | Definition of done / reason |
+|---|---|---|
+| **P1-V1** | **Make MilitaryJeep a real test vehicle** | Replace welded wheel-only behavior with a minimal constraint/scripted chassis: four primitive colliders, centered attachments, powered rear/all wheels, front steering, brake/reverse, and mobile input. W/S/A/D or thumbstick must move the chassis on terrain; no need to generalize until this passes. Highest priority because every garage/monetization promise depends on it. |
+| **P1-V2** | **Separate physics contract from render contract** | `Chassis` + `VehicleSeat` + colliders are authoritative; catalog body and wheel meshes are cosmetic, non-colliding, correctly pivoted, and visibly follow the colliders. Add a per-asset forward/seat/wheel alignment check. Part-kit fallback remains spawn-safe if asset load fails. |
+| **P1-V3** | **Driver ownership and server validation** | On Occupant change, give the whole unanchored assembly to the driver and return to automatic ownership when empty. Validate max speed, excessive displacement, spawn bounds, and capture/damage events server-side. Verify with one driver plus one passenger; do not rely on client-owned `Touched` for rewards/damage. |
+| **P1-V4** | **Garage showroom flow** | Turn `VehicleDepot`/garage into a readable room or console: preview, Owned/Available/Locked tabs, stats, requirement copy, BUY → SPAWN, auto-seat, Drive fallback, marked exit, DESPAWN, and one-active rule. This is the War Tycoon/MT parity beat that makes the catalog feel valuable. |
+| **P1-V5** | **Garage/Jeep regression harness** | Add a Studio/manual checklist or automation assertion for: spawn clear of pad; seat occupant; forward/reverse; left/right steering; stop; despawn; respawn after cooldown; mesh-load failure fallback; no flip/jitter on a small ramp; mobile control. Keep logs keyed to `VehicleId` and drive mode. |
+| **P1-V6** | **Monetization placement** | Hero-sort AutoCollect → DoubleCash → VIP; show the product after the player has collected/trained once; make AutoCollect state and PendingCash copy explicit; keep vehicle offers gated behind the free garage experience and structure requirements. Record funnel events before changing prices. |
+| **P1-V7** | **Prestige rooms and late-game category unlocks** | Use a WE-original Vehicle Bay/Air Wing/Deep Command room unlock at selected prestige milestones. Put the next category, operations, and preview vehicles in the room; do not make prestige only a Level-100 multiplier reset. |
+| **P1-V8** | **Catalog polish after physics** | Once V1–V5 pass, add mesh/PBR/LOD, animated wheels/rotors, lights, exhaust/wake, camera preview, and vehicle-specific silhouettes. Decorative mesh cannot be the acceptance criterion for “driveable.” |
+
+**Recommended ship sequence:** V1 → V2 → V3 → V5 → V4 → V6 → V7 → V8. Do not spend time tuning late-game vehicle stats or adding paid vehicle SKUs while the starter Jeep fails the first 30-second drive test.
+
+### Pass-2 top five recommendations
+
+1. **Fix the Jeep physics contract first:** VehicleSeat input plus welded wheels is not a car; use primitive colliders and real wheel joints/forces.
+2. **Keep mesh visuals non-colliding and separate:** chassis/colliders drive; meshes follow, with an asset alignment contract and safe Part-kit fallback.
+3. **Make the garage a showroom and a safe spawn:** preview → requirement → buy → auto-seat → obvious exit, matching both MT’s Vehicle Manager and War Tycoon’s protected Vehicle Bay pattern.
+4. **Make prestige unlock rooms and verbs:** use Vehicle Bay/Air Wing/Deep Command style milestones rather than only another multiplier or another hidden catalog row.
+5. **Place monetization at experienced friction:** AutoCollect, DoubleCash, then original VIP; no vehicle bypasses the free garage/structure gate, and no loot-box dependency.
+
+### Pass-2 source notes
+
+- Competitor facts are public wiki/guide observations and can drift with live updates; prices and exact counts are not balance commitments.
+- Roblox Creator documentation confirms `VehicleSeat` input properties, assembly/root behavior, network-ownership trade-offs, and mesh collision-fidelity costs.
+- Community vehicle resources consistently separate visible mesh from primitive physics wheels and use centered attachments plus constraints/scripting for steering and drive force.
+- No source authorizes copying competitor meshes, names, branding, or UI art. Inspiration remains systems-level only.
