@@ -416,5 +416,15 @@ must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v29")
 
 
+
+# --- v29 video-feel polish (Orders hotkeys / Contested billboard / Ceiling beams) ---
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "HOTKEY_ORDERS", "Orders hotkeys 1-4")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "KeyCode.T", "Orders T cycle")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "CONTESTED", "Territory Contested billboard")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "ContestedBadge", "Territory ContestedBadge")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingBeamLong", "BaseCeiling beams")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingJoist", "BaseCeiling joists")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "Keep all your Robux Items!", "Rebirth exact keep banner")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)
