@@ -163,10 +163,10 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "125
 
 
 # 10) Design visual overhaul wire + levels progression
-must_not_contain = getattr(__import__('builtins'), 'must_not_contain', None)
 def must_absent(path, needle, label):
     global PASS, FAIL
-    text = open(path, encoding="utf-8").read()
+    fp = ROOT / path if not Path(path).is_absolute() else Path(path)
+    text = fp.read_text(encoding="utf-8")
     # allow REJECT comments mentioning the id
     lines = [ln for ln in text.splitlines() if needle in ln and "REJECT" not in ln and "DELETED" not in ln and "NO JeepFallback" not in ln]
     # also allow comment-only lines with Design P0
@@ -284,6 +284,22 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIContro
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "MissionController.Toggle", "Dock Orders stays MissionController")
 must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "WE_ManualDropper", "ManualDropper no-regress")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_Radio", "StructureKitBuilder DressHosts no-regress")
+
+
+# --- Gate Defense ---
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "ProtectCollectorRadius", "GateDefenseConfig ProtectCollectorRadius")
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "AutoGunMinWallsLevel", "GateDefenseConfig AutoGunMinWallsLevel")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "GateDefense", "VisualAssetConfig.GateDefense")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "4923345827", "GateAutoGun Machine Gun Nest")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "8980890767", "SandbagNest")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "GateGuard", "Characters.GateGuard")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.SyncPlot", "GateDefenseService.SyncPlot")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "GatePost", "GateDefense reads GatePost")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "ProtectCollectorRadius", "GateDefense ATM aggro")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "TryAttachCharacterVisual", "GateGuard visual attach")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "GateDefenseService", "Bootstrap GateDefenseService")
+must_not_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "SyncPerimeterWalls", "GateDefense must not call SyncPerimeterWalls")
+must_not_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "TargetFootprint", "GateDefense must not touch TargetFootprint")
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)
