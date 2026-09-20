@@ -63,6 +63,7 @@ local EVENTS = {
 	Constants.RemoteNames.BankRaidStateUpdate,
 	Constants.RemoteNames.StudioSmokeLog,
 	Constants.RemoteNames.DeathShopOffer,
+	Constants.RemoteNames.PromptPremiumPad,
 }
 
 local FUNCTIONS = {

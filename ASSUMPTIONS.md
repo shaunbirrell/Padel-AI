@@ -364,3 +364,13 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 113. **Cash HUD `+` → Shop** — Competitor pattern: `CashPlus` on currency pill + pending-cash line open Shop via `HUDController.BindShopOpener` (UIController). Shop still lists Id=0 stubs as coming soon; PromptProductPurchase only when Id≠0. MonetizationConfig Ids unchanged.
 114. **Premium floor pads deferred** — AutoCollect/2x pads skipped while all Monetization Ids=0 (would confuse). Documented in `docs/QUALITY_AUDIT_v27.md`.
 115. **Bootstrap audit** — Vehicle / GateDefense / ManualDropper / PlotOilPump / Prestige / Missions / Orders / MoneyCollector / Monetization ProcessReceipt all wired. Experience rename still pending (`LIVE_PLACE.md`).
+
+## 2026-09-20 — Monetization live + ATM premium pads (live v29 — Open Cloud Published versionNumber=29)
+
+- MonetizationConfig live GamePass/DevProduct Ids; HideFromShop duplicate AutoCollect/DoubleCash/VIPBoost DevProducts
+- MapSetup ATM-cluster premium pads (AutoCollect / 2x Cash / SpeedBoost / GoldenPumpjack) + PremiumPadService → PromptPremiumPad
+- Shop CashMega ★ BEST OFFER hero; PromptPremiumPad client prompts real Robux
+- Rebirth blue banner: Keep all Robux Items / Game Passes
+- PlotOilPump GoldenPumpjack entitlement gold dress (Id=0 stub pad)
+- docs/LIVE_PLACE.md product table; experience WAR EMPIRE; API Services noted
+- No-regress: jeep LV, gates, ATM raid

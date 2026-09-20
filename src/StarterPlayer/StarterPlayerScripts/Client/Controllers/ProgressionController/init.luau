@@ -21,6 +21,7 @@ local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
 local unlockLabel: TextLabel? = nil
 local prestigeConfirm: TextLabel? = nil
+local prestigeKeepBanner: TextLabel? = nil
 local bpLabel: TextLabel? = nil
 local bpClaimHint: TextLabel? = nil
 local bpBarFill: Frame? = nil
@@ -93,7 +94,7 @@ local function refreshLabelsImmediate()
 					if pct ~= nil then string.format(" · Base %d%%", math.floor(pct)) else ""
 				)
 			end
-			prestigeConfirm.Text = "Confirm Rebirth: " .. feeLine .. " · +10% cash forever."
+			prestigeConfirm.Text = "Confirm Rebirth: " .. feeLine .. " · +10% cash forever. Keep all Robux purchases / Game Passes."
 			prestigeConfirm.TextColor3 = Constants.Colors.Gold
 		else
 			local need = 40
@@ -103,6 +104,12 @@ local function refreshLabelsImmediate()
 			prestigeConfirm.Text = string.format("Reach Lv %d to unlock Rebirth. Fee shown here when ready.", need)
 			prestigeConfirm.TextColor3 = Constants.Colors.Muted
 		end
+	end
+
+	if prestigeKeepBanner then
+		prestigeKeepBanner.Text = "★ Keep all your Robux Items!"
+		prestigeKeepBanner.TextColor3 = Constants.Colors.GoldBright or Constants.Colors.Gold
+		prestigeKeepBanner.Visible = true
 	end
 	if bpLabel and typeof(bpState) == "table" then
 		local claimFree = tonumber(bpState.ClaimableFree) or 0
@@ -355,6 +362,26 @@ function ProgressionController.Init()
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
 	prestigeConfirm = body(52)
+	-- Competitor rebirth trust cue (Entitlements / GamePasses never cleared on prestige)
+	do
+		local keep = Instance.new("TextLabel")
+		keep.Name = "KeepRobuxBanner"
+		keep.Position = UDim2.fromOffset(16, y)
+		keep.Size = UDim2.new(1, -32, 0, if isTouch then 40 else 32)
+		keep.BackgroundColor3 = Color3.fromRGB(28, 72, 36)
+		keep.BackgroundTransparency = 0.05
+		keep.BorderSizePixel = 0
+		keep.Font = Enum.Font.GothamBold
+		keep.TextSize = if isTouch then 16 else 15
+		keep.TextColor3 = Constants.Colors.GoldBright
+		keep.Text = "★ Keep all your Robux Items!"
+		keep.TextXAlignment = Enum.TextXAlignment.Center
+		keep.Parent = scroll
+		UIUtil.Corner(keep, 6)
+		UIUtil.Stroke(keep, Constants.Colors.Gold, 2)
+		prestigeKeepBanner = keep
+		y += if isTouch then 46 else 38
+	end
 	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()

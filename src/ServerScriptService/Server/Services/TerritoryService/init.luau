@@ -238,18 +238,75 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		pole.Color = if contested then Color3.fromRGB(180, 90, 30) elseif rt.OwnerType == ot.Neutral then Color3.fromRGB(55, 55, 55) else Color3.fromRGB(40, 45, 40)
 	end
 
-	-- Billboard state line
+	-- Billboard state line (CONTESTED reads loud — progress + enemy presence)
 	local labelGui = marker:FindFirstChild("Label")
 	if labelGui and labelGui:IsA("BillboardGui") then
 		local backdrop = labelGui:FindFirstChild("Backdrop")
 		local textLabel = backdrop and backdrop:FindFirstChild("Text")
-		if textLabel and textLabel:IsA("TextLabel") then
-			textLabel.Text = rt.Def.DisplayName .. "  [" .. ownerStateLabel(rt) .. "]"
-			textLabel.TextColor3 = if contested then Color3.fromRGB(255, 200, 120) elseif rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
+		local pct = math.floor((rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds)) * 100)
+		if contested then
+			-- Enlarge billboard while contested so it reads at range
+			labelGui.Size = UDim2.fromOffset(220, 64)
+			labelGui.StudsOffset = Vector3.new(0, 10, 0)
+			labelGui.MaxDistance = 120
+			if backdrop and backdrop:IsA("Frame") then
+				backdrop.BackgroundColor3 = Color3.fromRGB(55, 28, 8)
+				backdrop.BackgroundTransparency = 0.08
+			end
+			-- Ensure a second "CONTESTED" badge line
+			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
+			if backdrop and (not badge or not badge:IsA("TextLabel")) then
+				if badge then
+					badge:Destroy()
+				end
+				local b = Instance.new("TextLabel")
+				b.Name = "ContestedBadge"
+				b.BackgroundTransparency = 1
+				b.Position = UDim2.fromScale(0, 0)
+				b.Size = UDim2.new(1, 0, 0.42, 0)
+				b.Font = Enum.Font.GothamBold
+				b.TextScaled = true
+				b.TextColor3 = Color3.fromRGB(255, 170, 60)
+				b.TextStrokeTransparency = 0.4
+				b.Text = "⚠ CONTESTED"
+				b.Parent = backdrop
+				badge = b
+				if textLabel and textLabel:IsA("TextLabel") then
+					textLabel.Position = UDim2.fromScale(0, 0.42)
+					textLabel.Size = UDim2.new(1, 0, 0.58, 0)
+				end
+			elseif badge and badge:IsA("TextLabel") then
+				badge.Visible = true
+				badge.Text = "⚠ CONTESTED"
+			end
+			if textLabel and textLabel:IsA("TextLabel") then
+				local enemyNote = "enemy present"
+				textLabel.Text = string.format("%s · %d%% · %s", rt.Def.DisplayName, pct, enemyNote)
+				textLabel.TextColor3 = Color3.fromRGB(255, 210, 140)
+			end
+		else
+			labelGui.Size = UDim2.fromOffset(180, 40)
+			labelGui.StudsOffset = Vector3.new(0, 8, 0)
+			labelGui.MaxDistance = 70
+			if backdrop and backdrop:IsA("Frame") then
+				backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 16)
+				backdrop.BackgroundTransparency = 0.22
+			end
+			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
+			if badge and badge:IsA("GuiObject") then
+				badge.Visible = false
+			end
+			if textLabel and textLabel:IsA("TextLabel") then
+				textLabel.Position = UDim2.fromScale(0, 0)
+				textLabel.Size = UDim2.fromScale(1, 1)
+				textLabel.Text = rt.Def.DisplayName .. "  [" .. ownerStateLabel(rt) .. "]"
+				textLabel.TextColor3 = if rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
+			end
 		end
 		local stroke = backdrop and backdrop:FindFirstChildOfClass("UIStroke")
 		if stroke then
 			stroke.Color = color
+			stroke.Thickness = if contested then 2 else 1
 		end
 	end
 end

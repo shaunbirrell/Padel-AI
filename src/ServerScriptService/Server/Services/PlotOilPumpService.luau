@@ -22,6 +22,7 @@ local BaseService: any = nil
 local DataService: any = nil
 local EconomyService: any = nil
 local VisualAssetService: any = nil
+local MonetizationService: any = nil
 
 local pumpsByPlot: { [number]: Folder } = {}
 local accum = 0
@@ -159,7 +160,25 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 		end
 	end)
 
+
 	return model
+end
+
+local function applyGoldenDress(model: Model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if d.Name == "Pad" or d.Name == "Derrick" or d.Name == "WalkingBeam" or d.Name == "HorseHead" then
+				d.Color = Color3.fromRGB(255, 195, 60)
+				d.Material = Enum.Material.Neon
+			elseif d.Name == "IncomePad" then
+				d.Color = Color3.fromRGB(255, 210, 80)
+			end
+		elseif d:IsA("TextLabel") and d.Name == "Label" then
+			d.TextColor3 = Color3.fromRGB(255, 230, 120)
+			d.BackgroundColor3 = Color3.fromRGB(60, 45, 10)
+		end
+	end
+	model:SetAttribute("WE_GoldenPump", true)
 end
 
 function PlotOilPumpService.SyncPlot(plotId: number)
@@ -215,6 +234,13 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 		local pump = buildPumpKit(look, folder, i)
 		pump:SetAttribute("PlotId", plotId)
 		pump:SetAttribute("OwnerUserId", ownerUserId)
+		local hasGold = owner
+			and MonetizationService
+			and MonetizationService.PlayerOwnsEntitlement
+			and MonetizationService.PlayerOwnsEntitlement(owner, "GoldenPumpjack")
+		if hasGold then
+			applyGoldenDress(pump)
+		end
 		pcall(function()
 			CollectionService:AddTag(pump, TAG)
 		end)
@@ -230,6 +256,7 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
 	VisualAssetService = deps.VisualAssetService
+	MonetizationService = deps.MonetizationService
 
 	if not PlotOilPumpConfig.Enabled then
 		return

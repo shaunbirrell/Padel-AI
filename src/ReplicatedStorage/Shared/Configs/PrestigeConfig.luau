@@ -159,7 +159,7 @@ function PrestigeConfig.BuildFeeSummary(opts: { BaseCompletionPercent: number? }
 		string.format("Cash → $%s after", tostring(startCash)),
 		string.format("+%d Gold", gold),
 		"resets Level/XP/Base",
-		"keeps vehicles/weapons/gold/unlocks/outposts",
+		"keeps Robux items + vehicles/weapons/gold/unlocks/outposts",
 	}
 	local pct = opts and tonumber(opts.BaseCompletionPercent)
 	if pct ~= nil then

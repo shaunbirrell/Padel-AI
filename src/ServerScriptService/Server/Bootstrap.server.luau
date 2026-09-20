@@ -315,6 +315,7 @@ local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropSe
 local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
+local PremiumPadService = safeRequire("PremiumPadService", Services.PremiumPadService)
 local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
 local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.MoneyCollectorService)
 local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
@@ -356,6 +357,7 @@ local deps: { [string]: any } = {
 	BankRaidService = BankRaidService,
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
+	PremiumPadService = PremiumPadService,
 	FallSafetyService = FallSafetyService,
 	MoneyCollectorService = MoneyCollectorService,
 	VisualAssetService = VisualAssetService,
@@ -398,6 +400,7 @@ safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
+safeInit("PremiumPadService", PremiumPadService, deps) -- ATM-cluster Robux pads
 safeInit("FallSafetyService", FallSafetyService, deps)
 safeInit("TutorialService", TutorialService, deps)
 

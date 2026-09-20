@@ -1,54 +1,55 @@
 --!strict
---[[ Placeholder product IDs = 0 until created in Creator Dashboard.
+--[[ Live Robux product IDs (Creator Dashboard / Open Cloud). Id=0 = stub / hidden duplicate.
 	Grants ONLY via server ProcessReceipt / GamePass ownership checks — never client confirmation.
-	DevProducts may set Entitlements flags (AutoCollect, DoubleCash, etc.) on profile. ]]
+	DevProducts AutoCollect/DoubleCash/VIPBoost are HideFromShop (GamePasses cover them). ]]
 
 local MonetizationConfig = {
 	GamePasses = {
 		VIP = {
-			Id = 0,
+			Id = 1985475542,
 			DisplayName = "VIP",
 			RobuxPrice = 199,
 			CashBonusMult = 0.25, -- additive +25% cash earnings
 			Description = "+25% Cash earnings",
 		},
 		DoubleCash = {
-			Id = 0,
+			Id = 1982865711,
 			DisplayName = "2x Cash",
 			RobuxPrice = 149,
 			CashMult = 2, -- multiplicative 2x cash earnings
 			Description = "2x Cash earnings",
 		},
 		DoubleXP = {
-			Id = 0,
+			Id = 1982487698,
 			DisplayName = "Double XP",
 			RobuxPrice = 99,
 			XPMult = 2,
 			Description = "2x XP",
 		},
 		ExtraPlotCosmetic = {
-			Id = 0,
+			Id = 1983357731,
 			DisplayName = "Elite Base Theme",
 			RobuxPrice = 79,
 			Description = "Cosmetic base theme",
 		},
 		AutoCollect = {
-			Id = 0,
+			Id = 1985115501,
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
 			Description = "Auto-claims Money Collector without touch",
 		},
 	},
 	DevProducts = {
-		CashSmall = { Id = 0, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
-		CashMedium = { Id = 0, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
-		CashLarge = { Id = 0, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
-		GoldSmall = { Id = 0, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50 },
-		GoldMedium = { Id = 0, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200 },
-		GoldLarge = { Id = 0, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500 },
+		CashSmall = { Id = 3713838744, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
+		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
+		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
+		CashMega = { Id = 3713838952, DisplayName = "Cash Pack Mega", RobuxPrice = 799, Cash = 2000000, Gold = 0 },
+		GoldSmall = { Id = 3713839003, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50 },
+		GoldMedium = { Id = 3713839048, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200 },
+		GoldLarge = { Id = 3713839090, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500 },
 		-- Placeholder Id=0: ProcessReceipt sets Battle Pass Premium when Id is live; Studio uses admin grantpremium
 		PremiumPass = {
-			Id = 0,
+			Id = 3713839151,
 			DisplayName = "Battle Pass Premium",
 			RobuxPrice = 499,
 			Cash = 0,
@@ -56,6 +57,7 @@ local MonetizationConfig = {
 			GrantsBattlePassPremium = true,
 		},
 		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
+		-- Covered by GamePass AutoCollect — keep stub for ProcessReceipt compat; hidden in shop
 		AutoCollect = {
 			Id = 0,
 			DisplayName = "Auto Collect",
@@ -63,8 +65,10 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "AutoCollect",
+			HideFromShop = true,
 			Description = "Auto-claims Money Collector without touch",
 		},
+		-- Covered by GamePass DoubleCash — hidden in shop
 		DoubleCash = {
 			Id = 0,
 			DisplayName = "2x Money",
@@ -72,10 +76,11 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "DoubleCash",
+			HideFromShop = true,
 			Description = "2x Cash earnings (permanent flag)",
 		},
 		ExtraSoldierSlot = {
-			Id = 0,
+			Id = 3713839210,
 			DisplayName = "Extra Soldier Slot",
 			RobuxPrice = 79,
 			Cash = 0,
@@ -84,7 +89,7 @@ local MonetizationConfig = {
 			Description = "+1 soldier capacity",
 		},
 		InstantBarracks = {
-			Id = 0,
+			Id = 3713839278,
 			DisplayName = "Instant Barracks",
 			RobuxPrice = 129,
 			Cash = 0,
@@ -92,6 +97,7 @@ local MonetizationConfig = {
 			GrantEntitlement = "InstantBarracks",
 			Description = "Unlocks Barracks L1 instantly (server grant)",
 		},
+		-- Covered by GamePass VIP — hidden in shop
 		VIPBoost = {
 			Id = 0,
 			DisplayName = "VIP Boost",
@@ -99,19 +105,31 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "VIP",
+			HideFromShop = true,
 			Description = "+25% Cash earnings (permanent flag)",
 		},
 		SpeedBoost = {
-			Id = 0,
+			Id = 3713839342,
 			DisplayName = "Speed Boost",
 			RobuxPrice = 99,
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
-			Description = "Permanent move-speed boost (stub Id=0 until Creator Dashboard)",
+			Description = "Permanent move-speed boost",
+		},
+		-- Cosmetic oil pump gold dress (Id=0 until Creator Dashboard mint)
+		GoldenPumpjack = {
+			Id = 0,
+			DisplayName = "Golden Pumpjack",
+			RobuxPrice = 49,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "GoldenPumpjack",
+			HideFromShop = true,
+			Description = "Gold-dress plot oil pumps (pad offer; Id pending)",
 		},
 		StarterBundle = {
-			Id = 0,
+			Id = 3713839505,
 			DisplayName = "Commander Starter Bundle",
 			RobuxPrice = 249,
 			Cash = 25000,

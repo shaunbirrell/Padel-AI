@@ -1,17 +1,48 @@
 # WAR EMPIRE — Live place (created 2026-09-20)
 
-- **Experience name (fix):** still showing *Untitled Experience* in Studio — rename to **WAR EMPIRE** in Creator Hub / Game Settings.
+- **Experience name:** **WAR EMPIRE**
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=28** (2026-09-20 Europe/Madrid) — cash HUD `+` → Shop; jeep drive fix remains from v27
+- **Live Published:** Open Cloud **versionNumber=29** (2026-09-20 Europe/Madrid) — premium ATM pads, CashMega BEST OFFER, live Robux product IDs, rebirth keep-Robux banner
+- **API Services:** enabled (DataStores)
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
 
+## Product IDs (MonetizationConfig)
+
+### GamePasses
+| Key | Id | Robux |
+|-----|-----|-------|
+| VIP | 1985475542 | 199 |
+| DoubleCash | 1982865711 | 149 |
+| DoubleXP | 1982487698 | 99 |
+| ExtraPlotCosmetic | 1983357731 | 79 |
+| AutoCollect | 1985115501 | 99 |
+
+### DevProducts
+| Key | Id | Robux |
+|-----|-----|-------|
+| CashSmall | 3713838744 | 49 |
+| CashMedium | 3713838815 | 149 |
+| CashLarge | 3713838888 | 399 |
+| CashMega (BEST OFFER) | 3713838952 | 799 |
+| GoldSmall | 3713839003 | 49 |
+| GoldMedium | 3713839048 | 149 |
+| GoldLarge | 3713839090 | 349 |
+| PremiumPass | 3713839151 | 499 |
+| ExtraSoldierSlot | 3713839210 | 79 |
+| InstantBarracks | 3713839278 | 129 |
+| SpeedBoost | 3713839342 | 99 |
+| StarterBundle | 3713839505 | 249 |
+| GoldenPumpjack | 0 (stub) | 49 |
+
+Duplicate DevProduct SKUs AutoCollect / DoubleCash / VIPBoost are **HideFromShop** (GamePasses cover them).
+
 ## After rename / for mobile
 
-1. Creator Dashboard → experience → rename to WAR EMPIRE.
-2. Enable **API Services** (DataStores) under Security / Configure.
+1. Creator Dashboard → experience → confirm name **WAR EMPIRE**.
+2. Confirm **API Services** (DataStores) under Security / Configure.
 3. On phone: open the Play URL while logged into the same Roblox account (`shaunie6`), or set Private → Friends if others join.
 
 ## Open Cloud republish

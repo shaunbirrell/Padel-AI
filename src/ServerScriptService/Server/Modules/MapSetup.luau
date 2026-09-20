@@ -30,6 +30,7 @@ local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
 local TAG_COLLECTOR = "WE_MoneyCollector"
+local TAG_PREMIUM = "WE_PremiumPad"
 
 local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
 local COL_PAD = Color3.fromRGB(38, 44, 48)
@@ -1294,6 +1295,43 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 end
 
 
+
+local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
+	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed, gold pumpjack cosmetic
+	local offers = {
+		{ Key = "AutoCollect", Kind = "GamePass", Label = "AUTO COLLECT", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
+		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x CASH", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
+		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "SPEED BOOST", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
+		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "GOLDEN PUMP", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
+	}
+	for _, offer in ipairs(offers) do
+		local pad = part({
+			Name = "PremiumPad_" .. offer.Key,
+			Size = Vector3.new(7, 0.45, 7),
+			Position = atmPos + offer.Offset,
+			Color = offer.Color,
+			Material = Enum.Material.Neon,
+			CanCollide = true,
+			Parent = folder,
+		})
+		pad:SetAttribute("PlotId", plotId)
+		pad:SetAttribute("OfferKey", offer.Key)
+		pad:SetAttribute("OfferKind", offer.Kind)
+		CollectionService:AddTag(pad, TAG_PREMIUM)
+		local glow = Instance.new("PointLight")
+		glow.Color = offer.Color
+		glow.Brightness = 1.4
+		glow.Range = 14
+		glow.Parent = pad
+		local bb = plainBillboard(pad, offer.Label .. "  ·  R$", Vector2.new(160, 32), 3.2, offer.Color)
+		if bb then
+			bb.Name = "WE_PremiumBillboard"
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 36
+		end
+	end
+end
+
 local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
 	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
 	local folder = Instance.new("Folder")
@@ -1396,6 +1434,8 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 			end
 		end)
 	end)
+	-- ATM-cluster premium Robux pads (AutoCollect / 2x / Speed / GoldenPump)
+	buildPremiumPads(folder, plotId, pos + Vector3.new(28, 0, 8))
 end
 
 function MapSetup.Run()

@@ -95,18 +95,38 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BankRaid
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "BankRaidController", "UIController wires BankRaidController")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "Waiting for", "Remotes patient WaitForChild poll")
 
-# 6) Monetization stubs
+# 6) Monetization live Ids (v29+)
 
 body = read("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau")
 if body is None:
     bad("MonetizationConfig missing")
 else:
-    ids = [int(x) for x in re.findall(r"Id\s*=\s*(\d+)", body)]
-    nonzero = [i for i in ids if i != 0]
-    if not nonzero:
-        ok(f"MonetizationConfig product Ids all 0 (checked {len(ids)})")
+    # Named blocks must be non-zero for live SKUs
+    required = {
+        "VIP": 1985475542,
+        "DoubleCash": 1982865711,
+        "AutoCollect": 1985115501,
+        "CashMega": 3713838952,
+        "SpeedBoost": 3713839342,
+        "CashSmall": 3713838744,
+    }
+    for key, expect in required.items():
+        m = re.search(rf"{key}\s*=\s*\{{[^}}]*?Id\s*=\s*(\d+)", body, re.S)
+        if not m:
+            bad(f"MonetizationConfig missing Id for {key}")
+        else:
+            got = int(m.group(1))
+            if got == 0:
+                bad(f"MonetizationConfig {key} Id still 0")
+            elif got != expect:
+                # allow mismatch but require non-zero
+                ok(f"MonetizationConfig {key} Id live ({got})")
+            else:
+                ok(f"MonetizationConfig {key} Id={got}")
+    if "HideFromShop = true" not in body:
+        bad("MonetizationConfig HideFromShop for duplicate DevProducts")
     else:
-        bad(f"MonetizationConfig non-zero Ids: {nonzero}")
+        ok("MonetizationConfig HideFromShop duplicates")
 
 
 # 7) Structure kit spawn / perimeter (BaseService visual pipeline)
@@ -378,6 +398,23 @@ must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"MoneyCollectorService\"", "Bootstrap MoneyCollectorService")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "ProcessReceipt", "Monetization ProcessReceipt wired")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "VehicleService LV drive (v27)")
+
+# --- v29 premium pads + Mega hero + rebirth keep-Robux ---
+must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPadService PromptPremiumPad")
+must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "WE_PremiumPad", "PremiumPadService tag")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "buildPremiumPads", "MapSetup buildPremiumPads")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "AutoCollect", "MapSetup AutoCollect pad")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "PremiumPadService", "Bootstrap PremiumPadService")
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", "PromptPremiumPad", "Constants PromptPremiumPad")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "BEST OFFER", "Shop CashMega BEST OFFER")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "HideFromShop", "Shop hides duplicate DevProducts")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "PromptPremiumPad", "Shop listens PromptPremiumPad")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "Keep all Robux", "Rebirth keep Robux banner/copy")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "GoldenPumpjack", "PlotOilPump GoldenPumpjack dress")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"VehicleService\"", "Bootstrap VehicleService no-regress")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v29")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v29")
+
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

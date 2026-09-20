@@ -76,6 +76,13 @@ function ShopController.Init()
 					offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
 				end
 				for _, key in ipairs(offers :: { string }) do
+					local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+					if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+						pcall(function()
+							MarketplaceService:PromptGamePassPurchase(player, gp.Id)
+						end)
+						break
+					end
 					local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
 					if def and typeof(def.Id) == "number" and def.Id ~= 0 then
 						pcall(function()
@@ -164,7 +171,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Prices shown in Robux. Id=0 items log intent only (no charge) until Creator Dashboard IDs are set."
+	note.Text = "Prices in Robux. Live products charge on confirm. Passes persist after Rebirth."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
@@ -234,14 +241,17 @@ function ShopController.Init()
 		btn.Activated:Connect(onClick)
 	end
 
-	for key, def in pairs(MonetizationConfig.DevProducts) do
+	local function addDevRow(key: string, def: any, heroLabel: string?)
+		if def.HideFromShop == true then
+			return
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = (tonumber(def.Id) or 0) == 0
 		local sub = def.Description or ""
 		if def.GrantsBattlePassPremium then
 			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
 		elseif def.GrantEntitlement then
-			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement))) 
+			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
 		elseif def.Cash and def.Cash > 0 then
 			sub = string.format("+$%d Cash", def.Cash)
 		elseif def.Gold and def.Gold > 0 then
@@ -250,10 +260,40 @@ function ShopController.Init()
 		if stub then
 			sub = sub .. " · coming soon (no charge)"
 		end
+		local title = def.DisplayName
+		if heroLabel then
+			title = heroLabel .. " · " .. title
+			sub = "BEST OFFER — " .. sub
+		end
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
-		addRow(def.DisplayName, sub, function()
+		addRow(title, sub, function()
 			promptDevProduct(key)
 		end, btnLabel)
+	end
+
+	-- Hero CashMega first, then remaining cash packs, then other DevProducts
+	local cashOrder = { "CashMega", "CashLarge", "CashMedium", "CashSmall" }
+	local listed: { [string]: boolean } = {}
+	do
+		local mega = MonetizationConfig.DevProducts.CashMega
+		if mega then
+			addDevRow("CashMega", mega, "★ BEST OFFER")
+			listed.CashMega = true
+		end
+	end
+	for _, key in ipairs(cashOrder) do
+		if not listed[key] then
+			local def = MonetizationConfig.DevProducts[key]
+			if def then
+				addDevRow(key, def, nil)
+				listed[key] = true
+			end
+		end
+	end
+	for key, def in pairs(MonetizationConfig.DevProducts) do
+		if not listed[key] then
+			addDevRow(key, def, nil)
+		end
 	end
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
@@ -276,6 +316,29 @@ function ShopController.Init()
 		if ok and LootBoxConfig and LootBoxConfig.PolicyPending then
 			addRow("Supply Crate (locked)", "Random loot policy-pending — not for sale", function()
 				warn("[Shop] Loot boxes disabled (policy-pending)")
+			end)
+		end
+	end
+
+
+	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
+	do
+		local remote = Remotes.GetEvent(Constants.RemoteNames.PromptPremiumPad)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				if typeof(payload) ~= "table" then
+					return
+				end
+				local kind = payload.Kind
+				local key = payload.Key
+				if typeof(kind) ~= "string" or typeof(key) ~= "string" then
+					return
+				end
+				if kind == "GamePass" then
+					promptGamePass(key)
+				elseif kind == "DevProduct" then
+					promptDevProduct(key)
+				end
 			end)
 		end
 	end

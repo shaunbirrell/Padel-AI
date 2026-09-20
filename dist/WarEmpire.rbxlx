@@ -1595,56 +1595,57 @@ return MissionConfig
           <Properties>
             <string name="Name">MonetizationConfig</string>
             <string name="Source"><![CDATA[--!strict
---[[ Placeholder product IDs = 0 until created in Creator Dashboard.
+--[[ Live Robux product IDs (Creator Dashboard / Open Cloud). Id=0 = stub / hidden duplicate.
 	Grants ONLY via server ProcessReceipt / GamePass ownership checks — never client confirmation.
-	DevProducts may set Entitlements flags (AutoCollect, DoubleCash, etc.) on profile. ]]
+	DevProducts AutoCollect/DoubleCash/VIPBoost are HideFromShop (GamePasses cover them). ]]
 
 local MonetizationConfig = {
 	GamePasses = {
 		VIP = {
-			Id = 0,
+			Id = 1985475542,
 			DisplayName = "VIP",
 			RobuxPrice = 199,
 			CashBonusMult = 0.25, -- additive +25% cash earnings
 			Description = "+25% Cash earnings",
 		},
 		DoubleCash = {
-			Id = 0,
+			Id = 1982865711,
 			DisplayName = "2x Cash",
 			RobuxPrice = 149,
 			CashMult = 2, -- multiplicative 2x cash earnings
 			Description = "2x Cash earnings",
 		},
 		DoubleXP = {
-			Id = 0,
+			Id = 1982487698,
 			DisplayName = "Double XP",
 			RobuxPrice = 99,
 			XPMult = 2,
 			Description = "2x XP",
 		},
 		ExtraPlotCosmetic = {
-			Id = 0,
+			Id = 1983357731,
 			DisplayName = "Elite Base Theme",
 			RobuxPrice = 79,
 			Description = "Cosmetic base theme",
 		},
 		AutoCollect = {
-			Id = 0,
+			Id = 1985115501,
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
 			Description = "Auto-claims Money Collector without touch",
 		},
 	},
 	DevProducts = {
-		CashSmall = { Id = 0, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
-		CashMedium = { Id = 0, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
-		CashLarge = { Id = 0, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
-		GoldSmall = { Id = 0, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50 },
-		GoldMedium = { Id = 0, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200 },
-		GoldLarge = { Id = 0, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500 },
+		CashSmall = { Id = 3713838744, DisplayName = "Cash Pack S", RobuxPrice = 49, Cash = 10000, Gold = 0 },
+		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
+		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
+		CashMega = { Id = 3713838952, DisplayName = "Cash Pack Mega", RobuxPrice = 799, Cash = 2000000, Gold = 0 },
+		GoldSmall = { Id = 3713839003, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50 },
+		GoldMedium = { Id = 3713839048, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200 },
+		GoldLarge = { Id = 3713839090, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500 },
 		-- Placeholder Id=0: ProcessReceipt sets Battle Pass Premium when Id is live; Studio uses admin grantpremium
 		PremiumPass = {
-			Id = 0,
+			Id = 3713839151,
 			DisplayName = "Battle Pass Premium",
 			RobuxPrice = 499,
 			Cash = 0,
@@ -1652,6 +1653,7 @@ local MonetizationConfig = {
 			GrantsBattlePassPremium = true,
 		},
 		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
+		-- Covered by GamePass AutoCollect — keep stub for ProcessReceipt compat; hidden in shop
 		AutoCollect = {
 			Id = 0,
 			DisplayName = "Auto Collect",
@@ -1659,8 +1661,10 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "AutoCollect",
+			HideFromShop = true,
 			Description = "Auto-claims Money Collector without touch",
 		},
+		-- Covered by GamePass DoubleCash — hidden in shop
 		DoubleCash = {
 			Id = 0,
 			DisplayName = "2x Money",
@@ -1668,10 +1672,11 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "DoubleCash",
+			HideFromShop = true,
 			Description = "2x Cash earnings (permanent flag)",
 		},
 		ExtraSoldierSlot = {
-			Id = 0,
+			Id = 3713839210,
 			DisplayName = "Extra Soldier Slot",
 			RobuxPrice = 79,
 			Cash = 0,
@@ -1680,7 +1685,7 @@ local MonetizationConfig = {
 			Description = "+1 soldier capacity",
 		},
 		InstantBarracks = {
-			Id = 0,
+			Id = 3713839278,
 			DisplayName = "Instant Barracks",
 			RobuxPrice = 129,
 			Cash = 0,
@@ -1688,6 +1693,7 @@ local MonetizationConfig = {
 			GrantEntitlement = "InstantBarracks",
 			Description = "Unlocks Barracks L1 instantly (server grant)",
 		},
+		-- Covered by GamePass VIP — hidden in shop
 		VIPBoost = {
 			Id = 0,
 			DisplayName = "VIP Boost",
@@ -1695,19 +1701,31 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "VIP",
+			HideFromShop = true,
 			Description = "+25% Cash earnings (permanent flag)",
 		},
 		SpeedBoost = {
-			Id = 0,
+			Id = 3713839342,
 			DisplayName = "Speed Boost",
 			RobuxPrice = 99,
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
-			Description = "Permanent move-speed boost (stub Id=0 until Creator Dashboard)",
+			Description = "Permanent move-speed boost",
+		},
+		-- Cosmetic oil pump gold dress (Id=0 until Creator Dashboard mint)
+		GoldenPumpjack = {
+			Id = 0,
+			DisplayName = "Golden Pumpjack",
+			RobuxPrice = 49,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "GoldenPumpjack",
+			HideFromShop = true,
+			Description = "Gold-dress plot oil pumps (pad offer; Id pending)",
 		},
 		StarterBundle = {
-			Id = 0,
+			Id = 3713839505,
 			DisplayName = "Commander Starter Bundle",
 			RobuxPrice = 249,
 			Cash = 25000,
@@ -2089,7 +2107,7 @@ function PrestigeConfig.BuildFeeSummary(opts: { BaseCompletionPercent: number? }
 		string.format("Cash → $%s after", tostring(startCash)),
 		string.format("+%d Gold", gold),
 		"resets Level/XP/Base",
-		"keeps vehicles/weapons/gold/unlocks/outposts",
+		"keeps Robux items + vehicles/weapons/gold/unlocks/outposts",
 	}
 	local pct = opts and tonumber(opts.BaseCompletionPercent)
 	if pct ~= nil then
@@ -3643,6 +3661,7 @@ Constants.Tags = {
 	MoneyCollector = "WE_MoneyCollector",
 	GateBarrier = "WE_GateBarrier",
 	PlotOilPump = "WE_PlotOilPump",
+	PremiumPad = "WE_PremiumPad",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -3704,6 +3723,7 @@ Constants.RemoteNames = {
 	-- Studio-only BUY smoke → client Output (Play Solo)
 	StudioSmokeLog = "StudioSmokeLog",
 	DeathShopOffer = "DeathShopOffer",
+	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
 }
 
@@ -4589,6 +4609,7 @@ local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropSe
 local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
+local PremiumPadService = safeRequire("PremiumPadService", Services.PremiumPadService)
 local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
 local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.MoneyCollectorService)
 local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
@@ -4630,6 +4651,7 @@ local deps: { [string]: any } = {
 	BankRaidService = BankRaidService,
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
+	PremiumPadService = PremiumPadService,
 	FallSafetyService = FallSafetyService,
 	MoneyCollectorService = MoneyCollectorService,
 	VisualAssetService = VisualAssetService,
@@ -4672,6 +4694,7 @@ safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
+safeInit("PremiumPadService", PremiumPadService, deps) -- ATM-cluster Robux pads
 safeInit("FallSafetyService", FallSafetyService, deps)
 safeInit("TutorialService", TutorialService, deps)
 
@@ -6575,6 +6598,7 @@ local TAG_EVENT = "WE_EventSpawn"
 local TAG_TUTORIAL = "WE_TutorialMarker"
 local TAG_NPC_ENTITY = "WE_NPC"
 local TAG_COLLECTOR = "WE_MoneyCollector"
+local TAG_PREMIUM = "WE_PremiumPad"
 
 local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
 local COL_PAD = Color3.fromRGB(38, 44, 48)
@@ -7839,6 +7863,43 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 end
 
 
+
+local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
+	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed, gold pumpjack cosmetic
+	local offers = {
+		{ Key = "AutoCollect", Kind = "GamePass", Label = "AUTO COLLECT", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
+		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x CASH", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
+		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "SPEED BOOST", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
+		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "GOLDEN PUMP", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
+	}
+	for _, offer in ipairs(offers) do
+		local pad = part({
+			Name = "PremiumPad_" .. offer.Key,
+			Size = Vector3.new(7, 0.45, 7),
+			Position = atmPos + offer.Offset,
+			Color = offer.Color,
+			Material = Enum.Material.Neon,
+			CanCollide = true,
+			Parent = folder,
+		})
+		pad:SetAttribute("PlotId", plotId)
+		pad:SetAttribute("OfferKey", offer.Key)
+		pad:SetAttribute("OfferKind", offer.Kind)
+		CollectionService:AddTag(pad, TAG_PREMIUM)
+		local glow = Instance.new("PointLight")
+		glow.Color = offer.Color
+		glow.Brightness = 1.4
+		glow.Range = 14
+		glow.Parent = pad
+		local bb = plainBillboard(pad, offer.Label .. "  ·  R$", Vector2.new(160, 32), 3.2, offer.Color)
+		if bb then
+			bb.Name = "WE_PremiumBillboard"
+			bb.AlwaysOnTop = false
+			bb.MaxDistance = 36
+		end
+	end
+end
+
 local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
 	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
 	local folder = Instance.new("Folder")
@@ -7941,6 +8002,8 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 			end
 		end)
 	end)
+	-- ATM-cluster premium Robux pads (AutoCollect / 2x / Speed / GoldenPump)
+	buildPremiumPads(folder, plotId, pos + Vector3.new(28, 0, 8))
 end
 
 function MapSetup.Run()
@@ -9793,6 +9856,7 @@ local EVENTS = {
 	Constants.RemoteNames.BankRaidStateUpdate,
 	Constants.RemoteNames.StudioSmokeLog,
 	Constants.RemoteNames.DeathShopOffer,
+	Constants.RemoteNames.PromptPremiumPad,
 }
 
 local FUNCTIONS = {
@@ -10850,7 +10914,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	-- Cover core (~70% pad) but stop short of gate face so spawn road stays fly/walk open
 	local GATE_FRONT_OPEN = 34 -- studs from gate-edge pad rim left uncovered
 	local coverFrac = 0.72
-	local roofThick = 1.1 + lv * 0.08
+	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
 	local wallH = 6.5 + lv * 2.2
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
@@ -10897,7 +10961,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 		Position = Vector3.new(posX, roofY, posZ),
 		Color = roofColor,
 		Material = Enum.Material.Metal,
-		Transparency = 0.28,
+		Transparency = 0.18,
 		CanCollide = true,
 		Parent = folder,
 	})
@@ -10963,6 +11027,104 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 			})
 			post.CastShadow = true
 			post:SetAttribute("WE_BaseCeiling", true)
+		end
+	end
+
+	-- Cross beams + joists under plate so roof reads as structure (not a flat slab)
+	do
+		local beamColor = Color3.fromRGB(42, 48, 40)
+		local beamY = roofY - roofThick * 0.5 - 0.55
+		local beamThick = 0.9
+		local beamDeep = 1.35
+		-- Longitudinal beams (along longer roof axis)
+		local longCount = 3
+		for i = 1, longCount do
+			local t = (i - 1) / math.max(1, longCount - 1) -- 0..1
+			if sizeX >= sizeZ then
+				-- beams run along X, spaced on Z
+				local zOff = (t - 0.5) * sizeZ * 0.7
+				local b = makePart({
+					Name = "CeilingBeamLong" .. i,
+					Size = Vector3.new(sizeX * 0.92, beamDeep, beamThick),
+					Position = Vector3.new(posX, beamY, posZ + zOff),
+					Color = beamColor,
+					Material = Enum.Material.Metal,
+					Transparency = 0.05,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b.CastShadow = true
+				b:SetAttribute("WE_BaseCeiling", true)
+			else
+				local xOff = (t - 0.5) * sizeX * 0.7
+				local b = makePart({
+					Name = "CeilingBeamLong" .. i,
+					Size = Vector3.new(beamThick, beamDeep, sizeZ * 0.92),
+					Position = Vector3.new(posX + xOff, beamY, posZ),
+					Color = beamColor,
+					Material = Enum.Material.Metal,
+					Transparency = 0.05,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b.CastShadow = true
+				b:SetAttribute("WE_BaseCeiling", true)
+			end
+		end
+		-- Cross joists
+		local crossCount = 4
+		for i = 1, crossCount do
+			local t = (i - 0.5) / crossCount -- centered segments
+			if sizeX >= sizeZ then
+				local xOff = (t - 0.5) * sizeX * 0.85
+				local b = makePart({
+					Name = "CeilingJoist" .. i,
+					Size = Vector3.new(beamThick * 0.85, beamDeep * 0.85, sizeZ * 0.88),
+					Position = Vector3.new(posX + xOff, beamY - 0.15, posZ),
+					Color = Color3.fromRGB(52, 58, 48),
+					Material = Enum.Material.Metal,
+					Transparency = 0.08,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b:SetAttribute("WE_BaseCeiling", true)
+			else
+				local zOff = (t - 0.5) * sizeZ * 0.85
+				local b = makePart({
+					Name = "CeilingJoist" .. i,
+					Size = Vector3.new(sizeX * 0.88, beamDeep * 0.85, beamThick * 0.85),
+					Position = Vector3.new(posX, beamY - 0.15, posZ + zOff),
+					Color = Color3.fromRGB(52, 58, 48),
+					Material = Enum.Material.Metal,
+					Transparency = 0.08,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b:SetAttribute("WE_BaseCeiling", true)
+			end
+		end
+		-- Corner diagonal braces (closed-side posts → plate)
+		for i, ppos in ipairs(posts) do
+			local nearGate = false
+			if gateAxis == "Z" then
+				nearGate = (gateSign > 0 and ppos.Z > posZ + sizeZ * 0.15) or (gateSign < 0 and ppos.Z < posZ - sizeZ * 0.15)
+			else
+				nearGate = (gateSign > 0 and ppos.X > posX + sizeX * 0.15) or (gateSign < 0 and ppos.X < posX - sizeX * 0.15)
+			end
+			if not nearGate then
+				local mid = Vector3.new((ppos.X + posX) * 0.5, beamY - 1.2, (ppos.Z + posZ) * 0.5)
+				local brace = makePart({
+					Name = "CeilingBrace" .. i,
+					Size = Vector3.new(0.7, 2.8, 0.7),
+					Position = mid,
+					Color = beamColor,
+					Material = Enum.Material.Metal,
+					Transparency = 0.1,
+					CanCollide = false,
+					Parent = folder,
+				})
+				brace:SetAttribute("WE_BaseCeiling", true)
+			end
 		end
 	end
 
@@ -19851,6 +20013,7 @@ local BaseService: any = nil
 local DataService: any = nil
 local EconomyService: any = nil
 local VisualAssetService: any = nil
+local MonetizationService: any = nil
 
 local pumpsByPlot: { [number]: Folder } = {}
 local accum = 0
@@ -19988,7 +20151,25 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 		end
 	end)
 
+
 	return model
+end
+
+local function applyGoldenDress(model: Model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if d.Name == "Pad" or d.Name == "Derrick" or d.Name == "WalkingBeam" or d.Name == "HorseHead" then
+				d.Color = Color3.fromRGB(255, 195, 60)
+				d.Material = Enum.Material.Neon
+			elseif d.Name == "IncomePad" then
+				d.Color = Color3.fromRGB(255, 210, 80)
+			end
+		elseif d:IsA("TextLabel") and d.Name == "Label" then
+			d.TextColor3 = Color3.fromRGB(255, 230, 120)
+			d.BackgroundColor3 = Color3.fromRGB(60, 45, 10)
+		end
+	end
+	model:SetAttribute("WE_GoldenPump", true)
 end
 
 function PlotOilPumpService.SyncPlot(plotId: number)
@@ -20044,6 +20225,13 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 		local pump = buildPumpKit(look, folder, i)
 		pump:SetAttribute("PlotId", plotId)
 		pump:SetAttribute("OwnerUserId", ownerUserId)
+		local hasGold = owner
+			and MonetizationService
+			and MonetizationService.PlayerOwnsEntitlement
+			and MonetizationService.PlayerOwnsEntitlement(owner, "GoldenPumpjack")
+		if hasGold then
+			applyGoldenDress(pump)
+		end
 		pcall(function()
 			CollectionService:AddTag(pump, TAG)
 		end)
@@ -20059,6 +20247,7 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
 	VisualAssetService = deps.VisualAssetService
+	MonetizationService = deps.MonetizationService
 
 	if not PlotOilPumpConfig.Enabled then
 		return
@@ -20140,6 +20329,366 @@ return PlotOilPumpService
           </Properties>
         </Item>
         <Item class="ModuleScript" referent="86">
+          <Properties>
+            <string name="Name">PremiumPadService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	ATM-cluster premium pads (AutoCollect / DoubleCash / SpeedBoost / GoldenPumpjack).
+	Server validates own-plot + debounce, then FireClient PromptPremiumPad.
+	Client prompts Marketplace; grants only via ProcessReceipt / GamePass ownership.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+
+local PremiumPadService = {}
+
+local DataService: any = nil
+local NotificationService: any = nil
+local RateLimitService: any = nil
+local RemoteSetup: any = nil
+local MonetizationService: any = nil
+local BaseService: any = nil
+
+local TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
+local DEBOUNCE_SEC = 2.5
+local OVERLAP_MARGIN = 3.5
+local SPATIAL_INTERVAL = 0.25
+
+local lastAttempt: { [string]: number } = {}
+local lastOverlap: { [string]: boolean } = {}
+local attached: { [BasePart]: boolean } = {}
+local partConns: { [BasePart]: { RBXScriptConnection } } = {}
+local promptRemote: RemoteEvent? = nil
+
+local function attemptKey(userId: number, offerKey: string): string
+	return tostring(userId) .. "|prem|" .. offerKey
+end
+
+local function trackConn(part: BasePart, conn: RBXScriptConnection)
+	local list = partConns[part]
+	if not list then
+		list = {}
+		partConns[part] = list
+	end
+	table.insert(list, conn)
+end
+
+local function detach(part: BasePart)
+	local list = partConns[part]
+	if list then
+		for _, c in ipairs(list) do
+			c:Disconnect()
+		end
+		partConns[part] = nil
+	end
+	attached[part] = nil
+end
+
+local function hardenPad(part: BasePart)
+	part.CanTouch = true
+	part.CanCollide = true
+	part.CanQuery = true
+end
+
+local function pointInPad(hrpPos: Vector3, part: BasePart): boolean
+	local localPos = part.CFrame:PointToObjectSpace(hrpPos)
+	local half = part.Size * 0.5
+	return math.abs(localPos.X) <= half.X + OVERLAP_MARGIN
+		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
+		and localPos.Y >= -half.Y - 4
+		and localPos.Y <= half.Y + 12
+end
+
+local function isSeated(character: Model): boolean
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return false
+	end
+	local seat = hum.SeatPart
+	if seat == nil then
+		return false
+	end
+	return seat:IsA("VehicleSeat") or seat:IsA("Seat")
+end
+
+local function alreadyOwns(player: Player, kind: string, key: string): boolean
+	if not MonetizationService then
+		return false
+	end
+	if kind == "GamePass" then
+		if MonetizationService.PlayerOwnsGamePass and MonetizationService.PlayerOwnsGamePass(player, key) then
+			return true
+		end
+		if MonetizationService.PlayerOwnsEntitlement and MonetizationService.PlayerOwnsEntitlement(player, key) then
+			return true
+		end
+	elseif kind == "DevProduct" then
+		local def = MonetizationConfig.DevProducts[key]
+		local ent = def and def.GrantEntitlement
+		if typeof(ent) == "string" and MonetizationService.PlayerOwnsEntitlement then
+			return MonetizationService.PlayerOwnsEntitlement(player, ent) == true
+		end
+	end
+	return false
+end
+
+local function resolveOffer(kind: string, key: string): (number?, string?)
+	if kind == "GamePass" then
+		local def = MonetizationConfig.GamePasses[key]
+		if def and typeof(def.Id) == "number" then
+			return def.Id, def.DisplayName or key
+		end
+	elseif kind == "DevProduct" then
+		local def = MonetizationConfig.DevProducts[key]
+		if def and typeof(def.Id) == "number" then
+			return def.Id, def.DisplayName or key
+		end
+	end
+	return nil, nil
+end
+
+local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+
+	if RunService:IsStudio() and profile.BasePlotId == nil then
+		if BaseService and BaseService.AssignPlot then
+			BaseService.AssignPlot(player)
+			profile = DataService.GetProfile(player) or profile
+		end
+		if profile.BasePlotId == nil then
+			profile.BasePlotId = 1
+		end
+	end
+
+	local pid = part:GetAttribute("PlotId")
+	if typeof(pid) == "number" and profile.BasePlotId ~= nil and pid ~= profile.BasePlotId then
+		local key = attemptKey(player.UserId, "wrongplot")
+		local now = os.clock()
+		if now - (lastAttempt[key] or 0) >= DEBOUNCE_SEC then
+			lastAttempt[key] = now
+			if BaseService and BaseService.TeleportToPlot then
+				BaseService.TeleportToPlot(player)
+			end
+			if NotificationService then
+				if NotificationService.NotifyThrottled then
+					NotificationService.NotifyThrottled(player, "Not your base — teleported to YOUR plot", "Warn", 2.5, 1.5, "prem_wrongplot")
+				else
+					NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
+				end
+			end
+		end
+		return
+	end
+
+	local kind = part:GetAttribute("OfferKind")
+	local offerKey = part:GetAttribute("OfferKey")
+	if typeof(kind) ~= "string" or typeof(offerKey) ~= "string" then
+		return
+	end
+
+	local akey = attemptKey(player.UserId, offerKey)
+	local now = os.clock()
+	if now - (lastAttempt[akey] or 0) < DEBOUNCE_SEC then
+		return
+	end
+	lastAttempt[akey] = now
+
+	if RateLimitService and not RateLimitService.Allow(player, "premium_pad", 3, 6) then
+		return
+	end
+
+	if alreadyOwns(player, kind, offerKey) then
+		if NotificationService and not fromStanding then
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, "Already owned", "Info", 2, 4, "prem_owned_" .. offerKey)
+			else
+				NotificationService.Notify(player, "Already owned", "Info", 2)
+			end
+		end
+		return
+	end
+
+	local productId, displayName = resolveOffer(kind, offerKey)
+	if productId == nil then
+		return
+	end
+	if productId == 0 then
+		if NotificationService then
+			NotificationService.NotifyThrottled
+				and NotificationService.NotifyThrottled(player, (displayName or offerKey) .. " — coming soon", "Info", 2.5, 4, "prem_stub_" .. offerKey)
+				or NotificationService.Notify(player, (displayName or offerKey) .. " — coming soon", "Info", 2.5)
+		end
+		return
+	end
+
+	if promptRemote then
+		promptRemote:FireClient(player, {
+			Kind = kind,
+			Key = offerKey,
+			ProductId = productId,
+			DisplayName = displayName,
+		})
+	end
+end
+
+local function onPadTouched(part: BasePart, hit: BasePart)
+	local character = hit:FindFirstAncestorOfClass("Model")
+	if not character then
+		return
+	end
+	local player = Players:GetPlayerFromCharacter(character)
+	if not player then
+		return
+	end
+	if isSeated(character) then
+		return
+	end
+	local offerKey = part:GetAttribute("OfferKey")
+	if typeof(offerKey) ~= "string" then
+		return
+	end
+	local okey = tostring(part:GetAttribute("PlotId") or 0) .. "|" .. offerKey .. "|" .. tostring(player.UserId)
+	if lastOverlap[okey] then
+		return
+	end
+	lastOverlap[okey] = true
+	tryPrompt(player, part, false)
+end
+
+local function attachPad(part: BasePart)
+	if attached[part] then
+		hardenPad(part)
+		return
+	end
+	if not part:IsA("BasePart") then
+		return
+	end
+	if typeof(part:GetAttribute("OfferKey")) ~= "string" then
+		return
+	end
+	attached[part] = true
+	hardenPad(part)
+
+	trackConn(part, part.Touched:Connect(function(hit)
+		if hit:IsA("BasePart") then
+			onPadTouched(part, hit)
+		end
+	end))
+
+	trackConn(part, part.TouchEnded:Connect(function(hit)
+		if not hit:IsA("BasePart") then
+			return
+		end
+		local character = hit:FindFirstAncestorOfClass("Model")
+		if not character then
+			return
+		end
+		local player = Players:GetPlayerFromCharacter(character)
+		if not player then
+			return
+		end
+		local offerKey = part:GetAttribute("OfferKey")
+		if typeof(offerKey) ~= "string" then
+			return
+		end
+		local okey = tostring(part:GetAttribute("PlotId") or 0) .. "|" .. offerKey .. "|" .. tostring(player.UserId)
+		task.defer(function()
+			local hrp = character:FindFirstChild("HumanoidRootPart")
+			if hrp and hrp:IsA("BasePart") and pointInPad(hrp.Position, part) then
+				return
+			end
+			lastOverlap[okey] = false
+		end)
+	end))
+
+	trackConn(part, part.AncestryChanged:Connect(function(_, parent)
+		if parent == nil then
+			detach(part)
+		end
+	end))
+end
+
+function PremiumPadService.Init(deps: { [string]: any })
+	DataService = deps.DataService
+	NotificationService = deps.NotificationService
+	RateLimitService = deps.RateLimitService
+	RemoteSetup = deps.RemoteSetup
+	MonetizationService = deps.MonetizationService
+	BaseService = deps.BaseService
+
+	promptRemote = RemoteSetup.Get(Constants.RemoteNames.PromptPremiumPad) :: RemoteEvent
+
+	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+		if inst:IsA("BasePart") then
+			attachPad(inst)
+		end
+	end
+	CollectionService:GetInstanceAddedSignal(TAG):Connect(function(inst)
+		if inst:IsA("BasePart") then
+			attachPad(inst)
+		end
+	end)
+	CollectionService:GetInstanceRemovedSignal(TAG):Connect(function(inst)
+		if inst:IsA("BasePart") then
+			detach(inst)
+		end
+	end)
+
+	-- Spatial standing check (debounce like UpgradePadService)
+	local accum = 0
+	RunService.Heartbeat:Connect(function(dt)
+		accum += dt
+		if accum < SPATIAL_INTERVAL then
+			return
+		end
+		accum = 0
+		for part, _ in pairs(attached) do
+			if not part.Parent then
+				continue
+			end
+			for _, player in ipairs(Players:GetPlayers()) do
+				local character = player.Character
+				if not character or isSeated(character) then
+					continue
+				end
+				local hrp = character:FindFirstChild("HumanoidRootPart")
+				if not hrp or not hrp:IsA("BasePart") then
+					continue
+				end
+				local offerKey = part:GetAttribute("OfferKey")
+				if typeof(offerKey) ~= "string" then
+					continue
+				end
+				local okey = tostring(part:GetAttribute("PlotId") or 0) .. "|" .. offerKey .. "|" .. tostring(player.UserId)
+				local inside = pointInPad(hrp.Position, part)
+				if inside and not lastOverlap[okey] then
+					lastOverlap[okey] = true
+					tryPrompt(player, part, true)
+				elseif not inside then
+					lastOverlap[okey] = false
+				end
+			end
+		end
+	end)
+
+	print("[WAR EMPIRE] PremiumPadService ready (ATM-cluster Robux pads)")
+end
+
+return PremiumPadService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20467,7 +21016,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20519,7 +21068,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20783,7 +21332,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21169,7 +21718,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21332,7 +21881,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21971,7 +22520,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22284,7 +22833,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22527,18 +23076,75 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		pole.Color = if contested then Color3.fromRGB(180, 90, 30) elseif rt.OwnerType == ot.Neutral then Color3.fromRGB(55, 55, 55) else Color3.fromRGB(40, 45, 40)
 	end
 
-	-- Billboard state line
+	-- Billboard state line (CONTESTED reads loud — progress + enemy presence)
 	local labelGui = marker:FindFirstChild("Label")
 	if labelGui and labelGui:IsA("BillboardGui") then
 		local backdrop = labelGui:FindFirstChild("Backdrop")
 		local textLabel = backdrop and backdrop:FindFirstChild("Text")
-		if textLabel and textLabel:IsA("TextLabel") then
-			textLabel.Text = rt.Def.DisplayName .. "  [" .. ownerStateLabel(rt) .. "]"
-			textLabel.TextColor3 = if contested then Color3.fromRGB(255, 200, 120) elseif rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
+		local pct = math.floor((rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds)) * 100)
+		if contested then
+			-- Enlarge billboard while contested so it reads at range
+			labelGui.Size = UDim2.fromOffset(220, 64)
+			labelGui.StudsOffset = Vector3.new(0, 10, 0)
+			labelGui.MaxDistance = 120
+			if backdrop and backdrop:IsA("Frame") then
+				backdrop.BackgroundColor3 = Color3.fromRGB(55, 28, 8)
+				backdrop.BackgroundTransparency = 0.08
+			end
+			-- Ensure a second "CONTESTED" badge line
+			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
+			if backdrop and (not badge or not badge:IsA("TextLabel")) then
+				if badge then
+					badge:Destroy()
+				end
+				local b = Instance.new("TextLabel")
+				b.Name = "ContestedBadge"
+				b.BackgroundTransparency = 1
+				b.Position = UDim2.fromScale(0, 0)
+				b.Size = UDim2.new(1, 0, 0.42, 0)
+				b.Font = Enum.Font.GothamBold
+				b.TextScaled = true
+				b.TextColor3 = Color3.fromRGB(255, 170, 60)
+				b.TextStrokeTransparency = 0.4
+				b.Text = "⚠ CONTESTED"
+				b.Parent = backdrop
+				badge = b
+				if textLabel and textLabel:IsA("TextLabel") then
+					textLabel.Position = UDim2.fromScale(0, 0.42)
+					textLabel.Size = UDim2.new(1, 0, 0.58, 0)
+				end
+			elseif badge and badge:IsA("TextLabel") then
+				badge.Visible = true
+				badge.Text = "⚠ CONTESTED"
+			end
+			if textLabel and textLabel:IsA("TextLabel") then
+				local enemyNote = "enemy present"
+				textLabel.Text = string.format("%s · %d%% · %s", rt.Def.DisplayName, pct, enemyNote)
+				textLabel.TextColor3 = Color3.fromRGB(255, 210, 140)
+			end
+		else
+			labelGui.Size = UDim2.fromOffset(180, 40)
+			labelGui.StudsOffset = Vector3.new(0, 8, 0)
+			labelGui.MaxDistance = 70
+			if backdrop and backdrop:IsA("Frame") then
+				backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 16)
+				backdrop.BackgroundTransparency = 0.22
+			end
+			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
+			if badge and badge:IsA("GuiObject") then
+				badge.Visible = false
+			end
+			if textLabel and textLabel:IsA("TextLabel") then
+				textLabel.Position = UDim2.fromScale(0, 0)
+				textLabel.Size = UDim2.fromScale(1, 1)
+				textLabel.Text = rt.Def.DisplayName .. "  [" .. ownerStateLabel(rt) .. "]"
+				textLabel.TextColor3 = if rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
+			end
 		end
 		local stroke = backdrop and backdrop:FindFirstChildOfClass("UIStroke")
 		if stroke then
 			stroke.Color = color
+			stroke.Thickness = if contested then 2 else 1
 		end
 	end
 end
@@ -23041,7 +23647,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -23082,7 +23688,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -23159,7 +23765,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -23215,7 +23821,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="97">
+        <Item class="ModuleScript" referent="98">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23462,7 +24068,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="98">
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23930,7 +24536,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="99">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -25241,7 +25847,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="100">
+        <Item class="ModuleScript" referent="101">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -26315,7 +26921,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="101">
+        <Item class="ModuleScript" referent="102">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -26461,19 +27067,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="102">
+  <Item class="StarterPlayer" referent="103">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="103">
+    <Item class="StarterPlayerScripts" referent="104">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="104">
+      <Item class="Folder" referent="105">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="105">
+        <Item class="LocalScript" referent="106">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -26503,11 +27109,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="106">
+        <Item class="Folder" referent="107">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26875,7 +27481,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27086,7 +27692,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27488,7 +28094,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -28057,7 +28663,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -28280,7 +28886,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -28826,7 +29432,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29145,7 +29751,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29309,7 +29915,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29350,6 +29956,34 @@ local ORDER_DEFS = {
 	{ Id = "Hold", Label = "HOLD" },
 	{ Id = "Retreat", Label = "RETREAT" },
 }
+
+local HOTKEY_ORDERS = {
+	[Enum.KeyCode.One] = "Attack",
+	[Enum.KeyCode.Two] = "Hold",
+	[Enum.KeyCode.Three] = "Follow",
+	[Enum.KeyCode.Four] = "Retreat",
+}
+
+local HOTKEY_CYCLE = { "Attack", "Hold", "Follow", "Retreat" }
+
+local function radioEquipped(): boolean
+	local char = player.Character
+	if not char then
+		return false
+	end
+	local tool = char:FindFirstChildOfClass("Tool")
+	if not tool then
+		return false
+	end
+	local n = string.lower(tool.Name)
+	return string.find(n, "radio", 1, true) ~= nil
+		or string.find(n, "walkie", 1, true) ~= nil
+		or tool:GetAttribute("WE_Radio") == true
+end
+
+local function ordersHotkeysActive(): boolean
+	return visible == true or radioEquipped()
+end
 
 local function shouldShow(): boolean
 	if not OrdersConfig.Enabled then
@@ -29434,7 +30068,7 @@ function OrdersController.Init()
 	title.TextSize = 14
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Constants.Colors.Gold
-	title.Text = "📡 ORDERS"
+	title.Text = if isTouch then "📡 ORDERS" else "📡 ORDERS  [1-4/T]"
 	title.Parent = frame
 
 	statusLabel = Instance.new("TextLabel")
@@ -29469,7 +30103,8 @@ function OrdersController.Init()
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 12
 		btn.TextColor3 = Constants.Colors.Text
-		btn.Text = def.Label
+		local hotHint = ({ Attack = "1", Hold = "2", Follow = "3", Retreat = "4" })[def.Id]
+		btn.Text = if (not isTouch) and hotHint then (def.Label .. " [" .. hotHint .. "]") else def.Label
 		btn.BorderSizePixel = 0
 		btn.AutoButtonColor = true
 		UIUtil.Corner(btn, 8)
@@ -29506,6 +30141,36 @@ function OrdersController.Init()
 		end
 	end)
 
+
+	UserInputService.InputBegan:Connect(function(input, gp)
+		if gp then
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then
+			return
+		end
+		if not ordersHotkeysActive() then
+			return
+		end
+		local mapped = HOTKEY_ORDERS[input.KeyCode]
+		if mapped then
+			fireOrder(mapped)
+			return
+		end
+		-- T cycles Attack → Hold → Follow → Retreat
+		if input.KeyCode == Enum.KeyCode.T then
+			local idx = 1
+			for i, id in ipairs(HOTKEY_CYCLE) do
+				if id == currentOrder then
+					idx = i
+					break
+				end
+			end
+			local nextId = HOTKEY_CYCLE[(idx % #HOTKEY_CYCLE) + 1]
+			fireOrder(nextId)
+		end
+	end)
+
 	refreshStatus()
 	refreshVisible()
 	print("[WAR EMPIRE] OrdersController ready (walkie Follow/Attack/Hold/Retreat)")
@@ -29515,7 +30180,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -29541,6 +30206,7 @@ local screenGui: ScreenGui? = nil
 local prestigeLabel: TextLabel? = nil
 local unlockLabel: TextLabel? = nil
 local prestigeConfirm: TextLabel? = nil
+local prestigeKeepBanner: TextLabel? = nil
 local bpLabel: TextLabel? = nil
 local bpClaimHint: TextLabel? = nil
 local bpBarFill: Frame? = nil
@@ -29613,7 +30279,7 @@ local function refreshLabelsImmediate()
 					if pct ~= nil then string.format(" · Base %d%%", math.floor(pct)) else ""
 				)
 			end
-			prestigeConfirm.Text = "Confirm Rebirth: " .. feeLine .. " · +10% cash forever."
+			prestigeConfirm.Text = "Confirm Rebirth: " .. feeLine .. " · +10% cash forever. Keep all Robux purchases / Game Passes."
 			prestigeConfirm.TextColor3 = Constants.Colors.Gold
 		else
 			local need = 40
@@ -29623,6 +30289,12 @@ local function refreshLabelsImmediate()
 			prestigeConfirm.Text = string.format("Reach Lv %d to unlock Rebirth. Fee shown here when ready.", need)
 			prestigeConfirm.TextColor3 = Constants.Colors.Muted
 		end
+	end
+
+	if prestigeKeepBanner then
+		prestigeKeepBanner.Text = "★ Keep all your Robux Items!"
+		prestigeKeepBanner.TextColor3 = Constants.Colors.GoldBright or Constants.Colors.Gold
+		prestigeKeepBanner.Visible = true
 	end
 	if bpLabel and typeof(bpState) == "table" then
 		local claimFree = tonumber(bpState.ClaimableFree) or 0
@@ -29875,6 +30547,26 @@ function ProgressionController.Init()
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
 	prestigeConfirm = body(52)
+	-- Competitor rebirth trust cue (Entitlements / GamePasses never cleared on prestige)
+	do
+		local keep = Instance.new("TextLabel")
+		keep.Name = "KeepRobuxBanner"
+		keep.Position = UDim2.fromOffset(16, y)
+		keep.Size = UDim2.new(1, -32, 0, if isTouch then 40 else 32)
+		keep.BackgroundColor3 = Color3.fromRGB(28, 72, 36)
+		keep.BackgroundTransparency = 0.05
+		keep.BorderSizePixel = 0
+		keep.Font = Enum.Font.GothamBold
+		keep.TextSize = if isTouch then 16 else 15
+		keep.TextColor3 = Constants.Colors.GoldBright
+		keep.Text = "★ Keep all your Robux Items!"
+		keep.TextXAlignment = Enum.TextXAlignment.Center
+		keep.Parent = scroll
+		UIUtil.Corner(keep, 6)
+		UIUtil.Stroke(keep, Constants.Colors.Gold, 2)
+		prestigeKeepBanner = keep
+		y += if isTouch then 46 else 38
+	end
 	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
@@ -30083,7 +30775,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="117">
+            <Item class="ModuleScript" referent="118">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -30244,7 +30936,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="118">
+            <Item class="ModuleScript" referent="119">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -30284,7 +30976,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30616,7 +31308,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30697,6 +31389,13 @@ function ShopController.Init()
 					offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
 				end
 				for _, key in ipairs(offers :: { string }) do
+					local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+					if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+						pcall(function()
+							MarketplaceService:PromptGamePassPurchase(player, gp.Id)
+						end)
+						break
+					end
 					local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
 					if def and typeof(def.Id) == "number" and def.Id ~= 0 then
 						pcall(function()
@@ -30785,7 +31484,7 @@ function ShopController.Init()
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Prices shown in Robux. Id=0 items log intent only (no charge) until Creator Dashboard IDs are set."
+	note.Text = "Prices in Robux. Live products charge on confirm. Passes persist after Rebirth."
 	note.Parent = panel
 
 	local list = Instance.new("ScrollingFrame")
@@ -30855,14 +31554,17 @@ function ShopController.Init()
 		btn.Activated:Connect(onClick)
 	end
 
-	for key, def in pairs(MonetizationConfig.DevProducts) do
+	local function addDevRow(key: string, def: any, heroLabel: string?)
+		if def.HideFromShop == true then
+			return
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = (tonumber(def.Id) or 0) == 0
 		local sub = def.Description or ""
 		if def.GrantsBattlePassPremium then
 			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
 		elseif def.GrantEntitlement then
-			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement))) 
+			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
 		elseif def.Cash and def.Cash > 0 then
 			sub = string.format("+$%d Cash", def.Cash)
 		elseif def.Gold and def.Gold > 0 then
@@ -30871,10 +31573,40 @@ function ShopController.Init()
 		if stub then
 			sub = sub .. " · coming soon (no charge)"
 		end
+		local title = def.DisplayName
+		if heroLabel then
+			title = heroLabel .. " · " .. title
+			sub = "BEST OFFER — " .. sub
+		end
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
-		addRow(def.DisplayName, sub, function()
+		addRow(title, sub, function()
 			promptDevProduct(key)
 		end, btnLabel)
+	end
+
+	-- Hero CashMega first, then remaining cash packs, then other DevProducts
+	local cashOrder = { "CashMega", "CashLarge", "CashMedium", "CashSmall" }
+	local listed: { [string]: boolean } = {}
+	do
+		local mega = MonetizationConfig.DevProducts.CashMega
+		if mega then
+			addDevRow("CashMega", mega, "★ BEST OFFER")
+			listed.CashMega = true
+		end
+	end
+	for _, key in ipairs(cashOrder) do
+		if not listed[key] then
+			local def = MonetizationConfig.DevProducts[key]
+			if def then
+				addDevRow(key, def, nil)
+				listed[key] = true
+			end
+		end
+	end
+	for key, def in pairs(MonetizationConfig.DevProducts) do
+		if not listed[key] then
+			addDevRow(key, def, nil)
+		end
 	end
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
@@ -30897,6 +31629,29 @@ function ShopController.Init()
 		if ok and LootBoxConfig and LootBoxConfig.PolicyPending then
 			addRow("Supply Crate (locked)", "Random loot policy-pending — not for sale", function()
 				warn("[Shop] Loot boxes disabled (policy-pending)")
+			end)
+		end
+	end
+
+
+	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
+	do
+		local remote = Remotes.GetEvent(Constants.RemoteNames.PromptPremiumPad)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				if typeof(payload) ~= "table" then
+					return
+				end
+				local kind = payload.Kind
+				local key = payload.Key
+				if typeof(kind) ~= "string" or typeof(key) ~= "string" then
+					return
+				end
+				if kind == "GamePass" then
+					promptGamePass(key)
+				elseif kind == "DevProduct" then
+					promptDevProduct(key)
+				end
 			end)
 		end
 	end
@@ -30939,7 +31694,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31393,7 +32148,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31935,7 +32690,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32075,7 +32830,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32778,7 +33533,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33908,11 +34663,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="126">
+        <Item class="Folder" referent="127">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="127">
+          <Item class="ModuleScript" referent="128">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34055,7 +34810,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="128">
+          <Item class="ModuleScript" referent="129">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -34123,7 +34878,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="129">
+          <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -34192,7 +34947,7 @@ return StudioSmokeClient
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="130">
+  <Item class="Workspace" referent="131">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

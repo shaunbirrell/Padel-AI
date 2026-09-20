@@ -37,6 +37,34 @@ local ORDER_DEFS = {
 	{ Id = "Retreat", Label = "RETREAT" },
 }
 
+local HOTKEY_ORDERS = {
+	[Enum.KeyCode.One] = "Attack",
+	[Enum.KeyCode.Two] = "Hold",
+	[Enum.KeyCode.Three] = "Follow",
+	[Enum.KeyCode.Four] = "Retreat",
+}
+
+local HOTKEY_CYCLE = { "Attack", "Hold", "Follow", "Retreat" }
+
+local function radioEquipped(): boolean
+	local char = player.Character
+	if not char then
+		return false
+	end
+	local tool = char:FindFirstChildOfClass("Tool")
+	if not tool then
+		return false
+	end
+	local n = string.lower(tool.Name)
+	return string.find(n, "radio", 1, true) ~= nil
+		or string.find(n, "walkie", 1, true) ~= nil
+		or tool:GetAttribute("WE_Radio") == true
+end
+
+local function ordersHotkeysActive(): boolean
+	return visible == true or radioEquipped()
+end
+
 local function shouldShow(): boolean
 	if not OrdersConfig.Enabled then
 		return false
@@ -120,7 +148,7 @@ function OrdersController.Init()
 	title.TextSize = 14
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.TextColor3 = Constants.Colors.Gold
-	title.Text = "📡 ORDERS"
+	title.Text = if isTouch then "📡 ORDERS" else "📡 ORDERS  [1-4/T]"
 	title.Parent = frame
 
 	statusLabel = Instance.new("TextLabel")
@@ -155,7 +183,8 @@ function OrdersController.Init()
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 12
 		btn.TextColor3 = Constants.Colors.Text
-		btn.Text = def.Label
+		local hotHint = ({ Attack = "1", Hold = "2", Follow = "3", Retreat = "4" })[def.Id]
+		btn.Text = if (not isTouch) and hotHint then (def.Label .. " [" .. hotHint .. "]") else def.Label
 		btn.BorderSizePixel = 0
 		btn.AutoButtonColor = true
 		UIUtil.Corner(btn, 8)
@@ -189,6 +218,36 @@ function OrdersController.Init()
 			soldierCount = payload.Soldiers
 			refreshStatus()
 			refreshVisible()
+		end
+	end)
+
+
+	UserInputService.InputBegan:Connect(function(input, gp)
+		if gp then
+			return
+		end
+		if input.UserInputType ~= Enum.UserInputType.Keyboard then
+			return
+		end
+		if not ordersHotkeysActive() then
+			return
+		end
+		local mapped = HOTKEY_ORDERS[input.KeyCode]
+		if mapped then
+			fireOrder(mapped)
+			return
+		end
+		-- T cycles Attack → Hold → Follow → Retreat
+		if input.KeyCode == Enum.KeyCode.T then
+			local idx = 1
+			for i, id in ipairs(HOTKEY_CYCLE) do
+				if id == currentOrder then
+					idx = i
+					break
+				end
+			end
+			local nextId = HOTKEY_CYCLE[(idx % #HOTKEY_CYCLE) + 1]
+			fireOrder(nextId)
 		end
 	end)
 

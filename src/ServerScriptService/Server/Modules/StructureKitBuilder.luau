@@ -773,7 +773,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	-- Cover core (~70% pad) but stop short of gate face so spawn road stays fly/walk open
 	local GATE_FRONT_OPEN = 34 -- studs from gate-edge pad rim left uncovered
 	local coverFrac = 0.72
-	local roofThick = 1.1 + lv * 0.08
+	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
 	local wallH = 6.5 + lv * 2.2
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
@@ -820,7 +820,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 		Position = Vector3.new(posX, roofY, posZ),
 		Color = roofColor,
 		Material = Enum.Material.Metal,
-		Transparency = 0.28,
+		Transparency = 0.18,
 		CanCollide = true,
 		Parent = folder,
 	})
@@ -886,6 +886,104 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 			})
 			post.CastShadow = true
 			post:SetAttribute("WE_BaseCeiling", true)
+		end
+	end
+
+	-- Cross beams + joists under plate so roof reads as structure (not a flat slab)
+	do
+		local beamColor = Color3.fromRGB(42, 48, 40)
+		local beamY = roofY - roofThick * 0.5 - 0.55
+		local beamThick = 0.9
+		local beamDeep = 1.35
+		-- Longitudinal beams (along longer roof axis)
+		local longCount = 3
+		for i = 1, longCount do
+			local t = (i - 1) / math.max(1, longCount - 1) -- 0..1
+			if sizeX >= sizeZ then
+				-- beams run along X, spaced on Z
+				local zOff = (t - 0.5) * sizeZ * 0.7
+				local b = makePart({
+					Name = "CeilingBeamLong" .. i,
+					Size = Vector3.new(sizeX * 0.92, beamDeep, beamThick),
+					Position = Vector3.new(posX, beamY, posZ + zOff),
+					Color = beamColor,
+					Material = Enum.Material.Metal,
+					Transparency = 0.05,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b.CastShadow = true
+				b:SetAttribute("WE_BaseCeiling", true)
+			else
+				local xOff = (t - 0.5) * sizeX * 0.7
+				local b = makePart({
+					Name = "CeilingBeamLong" .. i,
+					Size = Vector3.new(beamThick, beamDeep, sizeZ * 0.92),
+					Position = Vector3.new(posX + xOff, beamY, posZ),
+					Color = beamColor,
+					Material = Enum.Material.Metal,
+					Transparency = 0.05,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b.CastShadow = true
+				b:SetAttribute("WE_BaseCeiling", true)
+			end
+		end
+		-- Cross joists
+		local crossCount = 4
+		for i = 1, crossCount do
+			local t = (i - 0.5) / crossCount -- centered segments
+			if sizeX >= sizeZ then
+				local xOff = (t - 0.5) * sizeX * 0.85
+				local b = makePart({
+					Name = "CeilingJoist" .. i,
+					Size = Vector3.new(beamThick * 0.85, beamDeep * 0.85, sizeZ * 0.88),
+					Position = Vector3.new(posX + xOff, beamY - 0.15, posZ),
+					Color = Color3.fromRGB(52, 58, 48),
+					Material = Enum.Material.Metal,
+					Transparency = 0.08,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b:SetAttribute("WE_BaseCeiling", true)
+			else
+				local zOff = (t - 0.5) * sizeZ * 0.85
+				local b = makePart({
+					Name = "CeilingJoist" .. i,
+					Size = Vector3.new(sizeX * 0.88, beamDeep * 0.85, beamThick * 0.85),
+					Position = Vector3.new(posX, beamY - 0.15, posZ + zOff),
+					Color = Color3.fromRGB(52, 58, 48),
+					Material = Enum.Material.Metal,
+					Transparency = 0.08,
+					CanCollide = false,
+					Parent = folder,
+				})
+				b:SetAttribute("WE_BaseCeiling", true)
+			end
+		end
+		-- Corner diagonal braces (closed-side posts → plate)
+		for i, ppos in ipairs(posts) do
+			local nearGate = false
+			if gateAxis == "Z" then
+				nearGate = (gateSign > 0 and ppos.Z > posZ + sizeZ * 0.15) or (gateSign < 0 and ppos.Z < posZ - sizeZ * 0.15)
+			else
+				nearGate = (gateSign > 0 and ppos.X > posX + sizeX * 0.15) or (gateSign < 0 and ppos.X < posX - sizeX * 0.15)
+			end
+			if not nearGate then
+				local mid = Vector3.new((ppos.X + posX) * 0.5, beamY - 1.2, (ppos.Z + posZ) * 0.5)
+				local brace = makePart({
+					Name = "CeilingBrace" .. i,
+					Size = Vector3.new(0.7, 2.8, 0.7),
+					Position = mid,
+					Color = beamColor,
+					Material = Enum.Material.Metal,
+					Transparency = 0.1,
+					CanCollide = false,
+					Parent = folder,
+				})
+				brace:SetAttribute("WE_BaseCeiling", true)
+			end
 		end
 	end
 

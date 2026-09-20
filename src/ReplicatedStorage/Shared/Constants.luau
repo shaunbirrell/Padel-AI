@@ -27,6 +27,7 @@ Constants.Tags = {
 	MoneyCollector = "WE_MoneyCollector",
 	GateBarrier = "WE_GateBarrier",
 	PlotOilPump = "WE_PlotOilPump",
+	PremiumPad = "WE_PremiumPad",
 }
 
 -- Remote folder / names (created by RemoteSetup)
@@ -88,6 +89,7 @@ Constants.RemoteNames = {
 	-- Studio-only BUY smoke → client Output (Play Solo)
 	StudioSmokeLog = "StudioSmokeLog",
 	DeathShopOffer = "DeathShopOffer",
+	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
 }
 
