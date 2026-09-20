@@ -24,6 +24,8 @@ local BaseService: any = nil
 local DataService: any = nil
 local VisualAssetService: any = nil
 local NationColorService: any = nil
+local EconomyService: any = nil
+local NotificationService: any = nil
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local DEFENSE_FOLDER = "WE_GateDefense"
@@ -57,6 +59,12 @@ type PlotDefense = {
 	Turrets: { TurretUnit },
 	GateCf: CFrame,
 	CollectorPos: Vector3?,
+	GateHealth: number,
+	GateMaxHealth: number,
+	GateBreached: boolean,
+	GateBarriers: { BasePart },
+	GateRebuildAt: number?,
+	LastRegenAt: number,
 }
 
 local defenses: { [number]: PlotDefense } = {}
@@ -664,6 +672,233 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 	hum:TakeDamage(amount)
 end
 
+
+local function gateMaxHealthForWalls(wallsLevel: number): number
+	local map = GateDefenseConfig.GateMaxHealthByWallsLevel
+	if typeof(map) == "table" then
+		local h = (map :: any)[math.clamp(math.floor(wallsLevel), 1, 5)]
+		if typeof(h) == "number" then
+			return h :: number
+		end
+	end
+	return 800 + math.max(wallsLevel, 1) * 400
+end
+
+local function setGateBarrierOpen(parts: { BasePart }, open: boolean)
+	for _, p in ipairs(parts) do
+		if p and p.Parent then
+			p.CanCollide = not open
+			p.Transparency = if open then 0.55 else 0.15
+			p:SetAttribute("GateBreached", open)
+			if open then
+				p.Color = Color3.fromRGB(90, 70, 55)
+				p.Material = Enum.Material.Concrete
+			else
+				p.Color = Color3.fromRGB(55, 58, 62)
+				p.Material = Enum.Material.Metal
+			end
+		end
+	end
+end
+
+local function updateGateBillboard(parts: { BasePart }, health: number, maxHealth: number, breached: boolean)
+	for _, p in ipairs(parts) do
+		local bb = p:FindFirstChild("WE_GateHP")
+		if bb and bb:IsA("BillboardGui") then
+			local lbl = bb:FindFirstChild("Label")
+			if lbl and lbl:IsA("TextLabel") then
+				if breached then
+					lbl.Text = "GATE OPEN — repair / rebuild"
+					lbl.TextColor3 = Color3.fromRGB(255, 160, 80)
+				else
+					lbl.Text = string.format("GATE %d/%d", math.floor(health), math.floor(maxHealth))
+					lbl.TextColor3 = Color3.fromRGB(200, 220, 255)
+				end
+			end
+		end
+	end
+end
+
+local function spawnGateBarriers(gateCf: CFrame, wallsLevel: number, parent: Folder, plotId: number, ownerUserId: number): ({ BasePart }, number)
+	local clear = GateDefenseConfig.GateClearStuds or 10
+	local thickness = GateDefenseConfig.GateBarrierThickness or 1.6
+	local height = GateDefenseConfig.GateBarrierHeight or 9
+	local maxHp = gateMaxHealthForWalls(wallsLevel)
+	local parts: { BasePart } = {}
+	local leafW = clear * 0.5 - 0.15
+	for i, sx in ipairs({ -leafW * 0.5 - 0.1, leafW * 0.5 + 0.1 }) do
+		local leaf = Instance.new("Part")
+		leaf.Name = "GateBarrier_" .. tostring(i)
+		leaf.Size = Vector3.new(leafW, height, thickness)
+		leaf.CFrame = gateCf * CFrame.new(sx, height * 0.5 - 0.5, 0)
+		leaf.Anchored = true
+		leaf.CanCollide = true
+		leaf.CanTouch = false
+		leaf.CanQuery = true
+		leaf.Color = Color3.fromRGB(55, 58, 62)
+		leaf.Material = Enum.Material.Metal
+		leaf.Transparency = 0.15
+		leaf.CastShadow = true
+		leaf:SetAttribute("PlotId", plotId)
+		leaf:SetAttribute("OwnerUserId", ownerUserId)
+		leaf:SetAttribute("GateBarrier", true)
+		leaf:SetAttribute("GateHealth", maxHp)
+		leaf:SetAttribute("GateMaxHealth", maxHp)
+		leaf:SetAttribute("GateBreached", false)
+		leaf.Parent = parent
+		local tag = GateDefenseConfig.GateDamageTag or (Constants.Tags and Constants.Tags.GateBarrier) or "WE_GateBarrier"
+		pcall(function()
+			CollectionService:AddTag(leaf, tag)
+		end)
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "WE_GateHP"
+		bb.Size = UDim2.fromOffset(140, 22)
+		bb.StudsOffset = Vector3.new(0, height * 0.55, 0)
+		bb.AlwaysOnTop = false
+		bb.MaxDistance = 90
+		bb.Parent = leaf
+		local lbl = Instance.new("TextLabel")
+		lbl.Name = "Label"
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundColor3 = Color3.fromRGB(20, 24, 30)
+		lbl.BackgroundTransparency = 0.35
+		lbl.Text = string.format("GATE %d/%d", maxHp, maxHp)
+		lbl.TextColor3 = Color3.fromRGB(200, 220, 255)
+		lbl.TextScaled = true
+		lbl.Font = Enum.Font.GothamBold
+		lbl.Parent = bb
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = lbl
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "GateRepairPrompt"
+		prompt.ActionText = "Repair Gate"
+		prompt.ObjectText = "$" .. tostring(GateDefenseConfig.GateRepairCashCost or 750)
+		prompt.HoldDuration = 0.6
+		prompt.MaxActivationDistance = 14
+		prompt.RequiresLineOfSight = false
+		prompt.Enabled = false
+		prompt.Parent = leaf
+		table.insert(parts, leaf)
+	end
+	return parts, maxHp
+end
+
+local function rebuildGate(def: PlotDefense)
+	def.GateBreached = false
+	def.GateHealth = def.GateMaxHealth
+	def.GateRebuildAt = nil
+	setGateBarrierOpen(def.GateBarriers, false)
+	for _, p in ipairs(def.GateBarriers) do
+		if p and p.Parent then
+			p:SetAttribute("GateHealth", def.GateHealth)
+			p:SetAttribute("GateBreached", false)
+			local prompt = p:FindFirstChild("GateRepairPrompt")
+			if prompt and prompt:IsA("ProximityPrompt") then
+				prompt.Enabled = false
+			end
+		end
+	end
+	updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, false)
+end
+
+local function breachGate(def: PlotDefense)
+	if def.GateBreached then
+		return
+	end
+	def.GateBreached = true
+	def.GateHealth = 0
+	def.GateRebuildAt = os.clock() + (GateDefenseConfig.GateRebuildSeconds or 50)
+	setGateBarrierOpen(def.GateBarriers, true)
+	for _, p in ipairs(def.GateBarriers) do
+		if p and p.Parent then
+			p:SetAttribute("GateHealth", 0)
+			p:SetAttribute("GateBreached", true)
+			local prompt = p:FindFirstChild("GateRepairPrompt")
+			if prompt and prompt:IsA("ProximityPrompt") then
+				prompt.Enabled = true
+			end
+		end
+	end
+	updateGateBillboard(def.GateBarriers, 0, def.GateMaxHealth, true)
+	local owner = Players:GetPlayerByUserId(def.OwnerUserId)
+	if owner and NotificationService then
+		NotificationService.Notify(owner, GateDefenseConfig.GateBreachToast or "Gate breached!", "Warn")
+	end
+end
+
+function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?): boolean
+	if typeof(amount) ~= "number" or amount <= 0 then
+		return false
+	end
+	if not hitPart or hitPart:GetAttribute("GateBarrier") ~= true then
+		return false
+	end
+	local plotId = hitPart:GetAttribute("PlotId")
+	if typeof(plotId) ~= "number" then
+		return false
+	end
+	local def = defenses[plotId :: number]
+	if not def or def.GateBreached then
+		return false
+	end
+	if attacker.UserId == def.OwnerUserId then
+		return false
+	end
+	if sameNation(def.OwnerUserId, attacker.UserId) then
+		return false
+	end
+	local char = attacker.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return false
+	end
+	if (root.Position - hitPart.Position).Magnitude > 120 then
+		return false
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return false
+	end
+
+	def.GateHealth = math.max(0, def.GateHealth - amount)
+	for _, p in ipairs(def.GateBarriers) do
+		if p and p.Parent then
+			p:SetAttribute("GateHealth", def.GateHealth)
+		end
+	end
+	updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, false)
+	if def.GateHealth <= 0 then
+		breachGate(def)
+	end
+	return true
+end
+
+function GateDefenseService.TryRepair(player: Player, plotId: number): boolean
+	local def = defenses[plotId]
+	if not def or not def.GateBreached then
+		return false
+	end
+	if player.UserId ~= def.OwnerUserId then
+		return false
+	end
+	local cost = GateDefenseConfig.GateRepairCashCost or 750
+	if EconomyService and EconomyService.SpendCash then
+		local ok = EconomyService.SpendCash(player, cost, "gate_repair")
+		if not ok then
+			if NotificationService then
+				NotificationService.Notify(player, "Need $" .. tostring(cost) .. " to repair gate", "Warn")
+			end
+			return false
+		end
+	end
+	rebuildGate(def)
+	if NotificationService then
+		NotificationService.Notify(player, GateDefenseConfig.GateRepairedToast or "Gate repaired", "Success")
+	end
+	return true
+end
+
 function GateDefenseService.SyncPlot(plotId: number)
 	if not GateDefenseConfig.Enabled then
 		clearDefense(plotId)
@@ -734,6 +969,16 @@ function GateDefenseService.SyncPlot(plotId: number)
 		end
 	end
 
+	local barriers, maxHp = spawnGateBarriers(gateCf, wallsLevel, folder, plotId, ownerUserId)
+	for _, leaf in ipairs(barriers) do
+		local prompt = leaf:FindFirstChild("GateRepairPrompt")
+		if prompt and prompt:IsA("ProximityPrompt") then
+			prompt.Triggered:Connect(function(who: Player)
+				GateDefenseService.TryRepair(who, plotId)
+			end)
+		end
+	end
+
 	defenses[plotId] = {
 		PlotId = plotId,
 		OwnerUserId = ownerUserId,
@@ -743,6 +988,12 @@ function GateDefenseService.SyncPlot(plotId: number)
 		Turrets = turrets,
 		GateCf = gateCf,
 		CollectorPos = findCollectorPos(plotId),
+		GateHealth = maxHp,
+		GateMaxHealth = maxHp,
+		GateBreached = false,
+		GateBarriers = barriers,
+		GateRebuildAt = nil,
+		LastRegenAt = os.clock(),
 	}
 
 	if RunService:IsStudio() then
@@ -858,6 +1109,8 @@ function GateDefenseService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	VisualAssetService = deps.VisualAssetService
 	NationColorService = deps.NationColorService
+	EconomyService = deps.EconomyService
+	NotificationService = deps.NotificationService
 
 	if not GateDefenseConfig.Enabled then
 		return
@@ -927,11 +1180,30 @@ function GateDefenseService.Init(deps: { [string]: any })
 				for _, tur in ipairs(def.Turrets) do
 					thinkTurret(def, tur, stats, tnow)
 				end
+				-- Gate regen / auto-rebuild (guards keep shooting either way)
+				if def.GateBreached then
+					if def.GateRebuildAt and tnow >= def.GateRebuildAt then
+						rebuildGate(def)
+					end
+				elseif def.GateHealth < def.GateMaxHealth then
+					local regen = GateDefenseConfig.GateRegenPerSecond or 0
+					if regen > 0 then
+						local dtRegen = tnow - (def.LastRegenAt or tnow)
+						def.LastRegenAt = tnow
+						def.GateHealth = math.min(def.GateMaxHealth, def.GateHealth + regen * dtRegen)
+						for _, bp in ipairs(def.GateBarriers) do
+							if bp and bp.Parent then
+								bp:SetAttribute("GateHealth", def.GateHealth)
+							end
+						end
+						updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, false)
+					end
+				end
 			end
 		end
 	end)
 
-	print("[WAR EMPIRE] GateDefenseService ready (walls≥1 → 2 GateGuards; walls≥4 → AutoGun nests)")
+	print("[WAR EMPIRE] GateDefenseService ready (walls≥1 → GateGuards + siegeable GateBarrier HP; walls≥4 → AutoGun nests)")
 end
 
 return GateDefenseService

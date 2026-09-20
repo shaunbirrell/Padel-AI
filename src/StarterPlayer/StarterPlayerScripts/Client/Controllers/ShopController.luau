@@ -64,6 +64,29 @@ local function promptGamePass(passKey: string)
 end
 
 function ShopController.Init()
+
+	-- P1: on PvP death, server fires DeathShopOffer → open shop (prompt only if product Id ~= 0)
+	do
+		local remote = Remotes.GetEvent(Constants.RemoteNames.DeathShopOffer)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				ShopController.Open()
+				local offers = if typeof(payload) == "table" then (payload :: any).Offers else nil
+				if typeof(offers) ~= "table" then
+					offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
+				end
+				for _, key in ipairs(offers :: { string }) do
+					local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
+					if def and typeof(def.Id) == "number" and def.Id ~= 0 then
+						pcall(function()
+							MarketplaceService:PromptProductPurchase(player, def.Id)
+						end)
+						break
+					end
+				end
+			end)
+		end
+	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireShop"
 	screen.Parent = player:WaitForChild("PlayerGui")
@@ -270,6 +293,9 @@ function ShopController.Init()
 		end
 	end)
 end
+
+
+
 
 
 function ShopController.Toggle()

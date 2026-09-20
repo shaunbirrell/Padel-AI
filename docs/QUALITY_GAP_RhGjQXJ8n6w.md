@@ -71,3 +71,24 @@ Confirmed: stylized low-poly desert with sculpted terrain (not flat baseplate); 
 2. Capture outpost → permanent income buff
 3. Squad Orders (Follow/Attack/Hold/Retreat) walkie UI
 4. Sculpted dunes + rock border enclosure (not void edge)
+
+
+## Mid clip 8–16min watch (2026-09-20)
+
+Loop: income → weapons/troops → Orders walkie → capture towns for +% → raid enemy bases.
+- Pumpjacks outside walls as cash spectacle
+- Heavy gate + fences + ceiling enclose compound
+- PvP skirmishes at named zones; frontal gate assaults
+- Frustration Robux (2x Money, Fast Speed, Golden Pumpjack) one click after loss
+- Helicopters in air drive need for ceiling
+
+### Gaps vs WE (post v23)
+| Gap | WE status | Next |
+|-----|-----------|------|
+| Contested +10% zones | v22 shipped | polish zone names/flags |
+| Orders walkie | v20 shipped | OK |
+| Gate guards / HMG | v23 shipped | OK |
+| **Siegeable gates** (damage/breach) | v24 shipped | OK — GateBarrier HP + breach/rebuild |
+| **Oil pumpjacks outside walls** | oil POIs far | P0 — near-plot pump income pads |
+| Frustration shop UX after death | stubs | P1 — Speed boost + 2x prompt on death |
+| Base ceiling vs air | missing | P1 |

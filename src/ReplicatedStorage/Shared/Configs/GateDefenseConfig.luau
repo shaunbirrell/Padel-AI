@@ -126,6 +126,27 @@ local GateDefenseConfig = {
 			DesignTier = "L1",
 		},
 	} :: { [number]: LevelStats },
+
+	-- Siegeable gate barrier (HP). Spawned by GateDefenseService — does not edit StructureKitBuilder ScaleTo.
+	GateMaxHealthByWallsLevel = {
+		[1] = 800,
+		[2] = 1200,
+		[3] = 1800,
+		[4] = 2600,
+		[5] = 3600,
+	},
+	GateRegenPerSecond = 1.5, -- slow regen while intact / after rebuild
+	GateRebuildSeconds = 50,
+	GateRepairCashCost = 750, -- owner Collect repair while breached
+	GateBreachToast = "Gate breached!",
+	GateRepairedToast = "Gate repaired",
+	GateBarrierThickness = 1.6,
+	GateBarrierHeight = 9,
+	GateClearStuds = 10, -- match StructureKitBuilder GATE_CLEAR
+	GateDamageTag = "WE_GateBarrier",
+	GateDamageToolAttribute = "WE_Weapon", -- tool/tag validation
+	AllowTroopGateDamage = true,
+
 }
 
 function GateDefenseConfig.GetLevelStats(wallsLevel: number): LevelStats?

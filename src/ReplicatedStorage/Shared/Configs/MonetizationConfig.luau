@@ -101,6 +101,15 @@ local MonetizationConfig = {
 			GrantEntitlement = "VIP",
 			Description = "+25% Cash earnings (permanent flag)",
 		},
+		SpeedBoost = {
+			Id = 0,
+			DisplayName = "Speed Boost",
+			RobuxPrice = 99,
+			Cash = 0,
+			Gold = 0,
+			GrantEntitlement = "SpeedBoost",
+			Description = "Permanent move-speed boost (stub Id=0 until Creator Dashboard)",
+		},
 		StarterBundle = {
 			Id = 0,
 			DisplayName = "Commander Starter Bundle",
@@ -112,6 +121,8 @@ local MonetizationConfig = {
 		},
 	},
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
+	-- P1: on PvP death, client toast linking these shop keys (Ids may be 0 stubs)
+	DeathShopOffers = { "DoubleCash", "SpeedBoost" },
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
@@ -129,7 +140,8 @@ local MonetizationConfig = {
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
 		manual_dropper = true, -- fixed click awards stay $10–25
-		atm_raid = true, -- stolen PendingCash already multiplied at accrue
+		atm_raid = true,
+		plot_oil = true, -- plot pump PendingCash via AccruePendingCash
 	},
 	XPMultExemptReasons = {
 		admin = true,

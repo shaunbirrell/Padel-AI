@@ -333,3 +333,9 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 
 ## 2026-09-20 — Gate defense door guards + HMG nests (live v23)
 101. **GateDefense** — When `DefensiveWalls ≥ 1`, `GateDefenseService` spawns 2 GateGuards (`Characters.GateGuard` / Guard `16134469614`) at GatePost flanks (±6, Design Bot). Patrol along gate; server MoveTo + rifle/SMG damage vs enemy players (not owner, not same nation). Aggro also covers `ProtectCollectorRadius` around plot MoneyCollector (ATM raid deterrent). Walls L4–L5 = Design L1 AutoGuns (`4923345827` Machine Gun Nest, StripScripts + ScaleTo ~5.5 stud) + sandbag nest `8980890767` + sandbags `3525056989`. Part-kit HMG fallback only if insert fails. Elevated tower IDs (`71964514000054` / `10354803684`) NOT used on door flanks. Reads GatePost CFrames only — no StructureKitBuilder / ScaleTo / AtmRaid edits. Config: `GateDefenseConfig`. Recreate from walls level on join.
+
+## 2026-09-20 — Siegeable gates + near-plot oil + death shop (live v24)
+
+102. **Siegeable gates** — `GateDefenseConfig.GateMaxHealthByWallsLevel` + `GateDefenseService` spawns collide `GateBarrier` leaves across GatePost opening (HP billboard). Enemy weapon hits validated server-side (`CombatService` → `ApplyDamage`). On 0 HP: CanCollide false + rubble tint + owner toast "Gate breached!"; auto-rebuild after `GateRebuildSeconds` OR owner ProximityPrompt repair (`GateRepairCashCost`) OR walls re-upgrade SyncPlot. Guards/AutoGuns keep shooting. Does **not** edit StructureKitBuilder ScaleTo / AtmRaid.
+103. **Near-plot oil pumps** — `PlotOilPumpService` auto-spawns 1–2 pumpjacks outside walls toward warzone when DefensiveWalls ≥ 2. Accrues PendingCash (`plot_oil`). Floating $+ billboard. Part kit + IndustrialPack dress. OilRig Alpha/Bravo untouched.
+104. **Death shop offer (P1 light)** — On PvP death, server Notify + `DeathShopOffer` remote; ShopController opens shop and prompts DoubleCash/SpeedBoost only if DevProduct Id ≠ 0 (stubs Id=0).

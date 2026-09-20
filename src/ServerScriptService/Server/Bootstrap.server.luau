@@ -320,6 +320,7 @@ local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.Mone
 local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local GateDefenseService = safeRequire("GateDefenseService", Services.GateDefenseService)
+local PlotOilPumpService = safeRequire("PlotOilPumpService", Services.PlotOilPumpService)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
 RemoteSetup.Init() -- idempotent; ensure remotes still present after requires
@@ -360,6 +361,7 @@ local deps: { [string]: any } = {
 	VisualAssetService = VisualAssetService,
 	ManualDropperService = ManualDropperService,
 	GateDefenseService = GateDefenseService,
+	PlotOilPumpService = PlotOilPumpService,
 }
 
 local function safeInit(label: string, svc: any, ...: any)
@@ -424,6 +426,7 @@ safeInit("CaptureStipendService", CaptureStipendService, deps)
 safeInit("SupplyDropService", SupplyDropService, deps)
 safeInit("BankRaidService", BankRaidService, deps)
 safeInit("GateDefenseService", GateDefenseService, deps)
+safeInit("PlotOilPumpService", PlotOilPumpService, deps)
 safeInit("SpinnerService", SpinnerService, deps)
 
 if DevConfig.VerboseLogging then

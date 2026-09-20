@@ -75,6 +75,8 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local AntiExploitService: any = nil
 local NotificationService: any = nil
+local GateDefenseService: any = nil
+local MonetizationConfig: any = nil
 local RemoteSetup: any = nil
 local MissionService: any = nil
 local TerritoryService: any = nil
@@ -818,6 +820,15 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 				end
 			end
 		end
+		-- Siegeable plot gate barrier (server-validated)
+		if not hitSomething then
+			local hitInst = result.Instance
+			if hitInst and hitInst:IsA("BasePart") and hitInst:GetAttribute("GateBarrier") == true then
+				if GateDefenseService and GateDefenseService.ApplyDamage then
+					hitSomething = GateDefenseService.ApplyDamage(player, hitInst, damage, state.WeaponId) == true
+				end
+			end
+		end
 	else
 		local targetUserId = payload.TargetUserId
 		local targetNpcId = payload.TargetNpcId
@@ -862,6 +873,35 @@ local function onPlayerDeath(victim: Player, killer: Player?)
 			DataService.MarkDirty(victim)
 		end
 	end
+	
+	-- P1 light: enemy kill → client shop toast (2x Money / Speed if products exist; Id=0 stubs OK)
+	if killer and killer ~= victim and NotificationService then
+		local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
+		local offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
+		local labels = {}
+		for _, key in ipairs(offers) do
+			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
+				or MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+			if def then
+				table.insert(labels, def.DisplayName or key)
+			end
+		end
+		if #labels > 0 then
+			NotificationService.Notify(
+				victim,
+				"Shop: " .. table.concat(labels, " / ") .. " — open Shop to boost",
+				"Info",
+				5
+			)
+			if RemoteSetup then
+				local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+				if remote then
+					(remote :: RemoteEvent):FireClient(victim, { Offers = offers })
+				end
+			end
+		end
+	end
+
 	task.delay(GameConfig.RespawnTimeSeconds, function()
 		if victim.Parent then
 			victim:LoadCharacter()
@@ -916,6 +956,7 @@ function CombatService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	AntiExploitService = deps.AntiExploitService
 	NotificationService = deps.NotificationService
+	GateDefenseService = deps.GateDefenseService
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
 	TerritoryService = deps.TerritoryService

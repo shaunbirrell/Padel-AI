@@ -301,5 +301,37 @@ must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "GateDefens
 must_not_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "SyncPerimeterWalls", "GateDefense must not call SyncPerimeterWalls")
 must_not_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "TargetFootprint", "GateDefense must not touch TargetFootprint")
 
+
+
+# --- P0 Siegeable gates + near-plot oil + P1 death shop ---
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "GateMaxHealthByWallsLevel", "GateDefenseConfig GateMaxHealthByWallsLevel")
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "GateRebuildSeconds", "GateDefenseConfig GateRebuildSeconds")
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "GateRepairCashCost", "GateDefenseConfig GateRepairCashCost")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefenseService.ApplyDamage")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "spawnGateBarriers", "GateDefenseService spawnGateBarriers")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "GateBreached", "GateDefenseService GateBreached")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "TryRepair", "GateDefenseService TryRepair")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "GateDefenseService.ApplyDamage", "CombatService fires gate ApplyDamage")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "DeathShopOffer", "CombatService DeathShopOffer on PvP death")
+must_contain("src/ReplicatedStorage/Shared/Configs/PlotOilPumpConfig.luau", "MinWallsLevel", "PlotOilPumpConfig MinWallsLevel")
+must_contain("src/ReplicatedStorage/Shared/Configs/PlotOilPumpConfig.luau", "CashPerTick", "PlotOilPumpConfig CashPerTick")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "function PlotOilPumpService.SyncPlot", "PlotOilPumpService.SyncPlot")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "AccruePendingCash", "PlotOilPump AccruePendingCash")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "IndustrialPack", "PlotOilPump IndustrialPack dress key")
+must_not_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "OilRigAlpha", "PlotOilPump must not touch OilRigAlpha")
+must_not_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "OilRigBravo", "PlotOilPump must not touch OilRigBravo")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "PlotOilPumpService", "Bootstrap PlotOilPumpService")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "DeathShopOffers", "MonetizationConfig DeathShopOffers")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "SpeedBoost", "MonetizationConfig SpeedBoost stub")
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", "DeathShopOffer", "Constants DeathShopOffer remote")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DeathShopOffer", "ShopController DeathShopOffer listener")
+# No-regress
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.SyncPlot", "GateDefense SyncPlot no-regress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ScaleTo", "STRUCTURE_SCALE ScaleTo no-regress")
+must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "AccruePendingCash", "ManualDropper no-regress")
+must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "function SquadOrdersService.SetOrder", "Orders no-regress")
+
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)
