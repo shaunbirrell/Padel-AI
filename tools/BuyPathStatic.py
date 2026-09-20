@@ -222,5 +222,31 @@ must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "Outpo
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", "CURRENT_DATA_VERSION = 8", "Data version 8")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "manual_dropper", "manual_dropper cash-mult exempt")
 
+
+# --- Design Bot QUALITY TIER 2 ---
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "103734805361054", "IndustrialPack oil spectacle")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "131322292868756", "RustyPipes")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 25623924", "OilBarrel ring")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 119021509", "RadioTower landmark")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 67444725", "SmallFort landmark")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Ultrapump 1837698074 REJECT", "REJECT Ultrapump")
+must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "1837698074", "No Ultrapump ModelAssetId")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "ShowroomPedestalHost", "Showroom densify pedestals")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "TryDressStructureInterior", "HQ interior dress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_CommandDesk", "Gunmetal HQ desk")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_Radio", "HQ RadioAntenna host")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ShowroomPedestalHost", "Depot pedestal hosts")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ShowroomFlagHost", "Depot flag host")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "OilSpectacle", "Near-plot oil spectacle")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "WarzoneLandmarks", "Map landmarks folder")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "SquadStalls", "TrainingYard Tent stalls")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "96059329869678", "Palm MapDressing")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "10197707775", "AsphaltDecal")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MeshId = 6562523344", "DesertRock MeshPart")
+# No-regress P0
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 9104381136", "Worker/Infantry unchanged")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 122068883442022", "ArmedJeep unchanged")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 125916936788670", "MilitaryJeep unchanged")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

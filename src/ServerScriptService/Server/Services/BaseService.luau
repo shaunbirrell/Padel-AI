@@ -523,6 +523,15 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				end
 				child.Transparency = transparency
 				child.Material = Enum.Material.Metal -- Design: reject neon antenna accents
+			elseif role == "DressHost" then
+				-- Tier 2 interior/prop hosts: gunmetal, no neon wash
+				child.Transparency = if lv == 0 then 0.95 else 0.72
+				child.Color = Color3.fromRGB(55, 60, 58)
+				child.Material = Enum.Material.Metal
+				if child:GetAttribute("WE_GunmetalDesk") or string.find(child.Name, "CommandDesk", 1, true) then
+					child.Transparency = if lv == 0 then 0.9 else 0.05
+					child.Color = Color3.fromRGB(55, 60, 58)
+				end
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then

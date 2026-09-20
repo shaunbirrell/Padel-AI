@@ -142,12 +142,43 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 				{ "WE_DressHost_Fuel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(-2.2, 1.4, -0.2), "FuelCans" },
 			}
 			for _, h in ipairs(hosts) do
-				local hp = kitPart(plinth, "Detail", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
 				if hp then
 					hp.Name = h[1]
 					hp:SetAttribute("WE_DressProp", h[4])
 					hp.Transparency = 0.85
 					hp.CanCollide = false
+				end
+			end
+			-- Gunmetal command desk fallback (no free desk Model — Part kit + SurfaceGui map)
+			local desk = kitPart(plinth, "DressHost", Vector3.new(3.2, 1.1, 1.6), Vector3.new(0, 1.35, 0.4), Color3.fromRGB(55, 60, 58), Enum.Material.Metal, nil)
+			if desk then
+				desk.Name = "WE_CommandDesk"
+				desk:SetAttribute("WE_GunmetalDesk", true)
+				desk.CanCollide = false
+				local top = kitPart(plinth, "DressHost", Vector3.new(3.4, 0.12, 1.8), Vector3.new(0, 1.95, 0.4), Color3.fromRGB(45, 50, 48), Enum.Material.Metal, nil)
+				if top then
+					top.Name = "WE_CommandDeskTop"
+					top.CanCollide = false
+					local sg = Instance.new("SurfaceGui")
+					sg.Name = "WE_MapSurface"
+					sg.Face = Enum.NormalId.Top
+					sg.CanvasSize = Vector2.new(256, 128)
+					sg.Parent = top
+					local mapFrame = Instance.new("Frame")
+					mapFrame.Name = "MapPanel"
+					mapFrame.Size = UDim2.fromScale(1, 1)
+					mapFrame.BackgroundColor3 = Color3.fromRGB(40, 55, 42)
+					mapFrame.BorderSizePixel = 0
+					mapFrame.Parent = sg
+					local grid = Instance.new("TextLabel")
+					grid.Size = UDim2.fromScale(1, 1)
+					grid.BackgroundTransparency = 1
+					grid.Text = "▌ TERRITORY MAP ▌\nN ◆ ◆ ◆\n◆ HQ ◆ ◆\n◆ ◆ ◆ S"
+					grid.TextColor3 = Color3.fromRGB(120, 200, 90)
+					grid.TextScaled = true
+					grid.Font = Enum.Font.Code
+					grid.Parent = mapFrame
 				end
 			end
 		end
@@ -158,6 +189,25 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), pal.Accent, Enum.Material.Neon, nil)
+		-- Tier 2 Barracks interior dress hosts
+		do
+			local hosts = {
+				{ "WE_DressHost_Crate", Vector3.new(1.5, 1.1, 1.5), Vector3.new(2.4, 1.4, 1.4), "Crate" },
+				{ "WE_DressHost_MilCrate", Vector3.new(1.4, 1.0, 1.2), Vector3.new(-2.4, 1.35, 1.4), "MilitaryCrate" },
+				{ "WE_DressHost_Ammo", Vector3.new(1.2, 0.9, 0.9), Vector3.new(2.2, 1.3, -1.5), "AmmoBox" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(-2.6, 2.4, -1.2), "Lantern" },
+				{ "WE_DressHost_Sandbag", Vector3.new(2.4, 1.0, 1.2), Vector3.new(0, 1.2, 1.8), "Sandbag" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "depot" then
 		kitPart(plinth, "Body", Vector3.new(6.9, 2.2, 5.6), Vector3.new(0, 1.7, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -217,20 +267,34 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 				ped.Transparency = 0.55
 			end
 		end
-		local flagHost = kitPart(plinth, "Detail", Vector3.new(0.4, 4.5, 0.4), Vector3.new(-3.6, 3.2, -2.8), Color3.fromRGB(180, 180, 180), Enum.Material.Metal, nil)
+		local flagHost = kitPart(plinth, "DressHost", Vector3.new(0.4, 4.5, 0.4), Vector3.new(-3.6, 3.2, -2.8), Color3.fromRGB(180, 180, 180), Enum.Material.Metal, nil)
 		if flagHost then
 			flagHost.Name = "ShowroomFlagHost"
 			flagHost:SetAttribute("WE_DressProp", "FlagPole")
 			flagHost.Transparency = 0.7
 			flagHost.CanCollide = false
 		end
-		local floodHost = kitPart(plinth, "Detail", Vector3.new(0.6, 1.2, 0.6), Vector3.new(3.4, 3.4, -2.6), Color3.fromRGB(200, 200, 180), Enum.Material.Metal, nil)
+		local floodHost = kitPart(plinth, "DressHost", Vector3.new(0.6, 1.2, 0.6), Vector3.new(3.4, 3.4, -2.6), Color3.fromRGB(200, 200, 180), Enum.Material.Metal, nil)
 		if floodHost then
 			floodHost.Name = "WE_DressHost_DepotFlood"
 			floodHost:SetAttribute("WE_DressProp", "FloodlightAlt")
 			floodHost.Transparency = 0.7
 		end
-elseif kit == "lab" then
+		-- Second bay floodlight
+		local floodHost2 = kitPart(plinth, "DressHost", Vector3.new(0.6, 1.2, 0.6), Vector3.new(-3.4, 3.4, -2.6), Color3.fromRGB(200, 200, 180), Enum.Material.Metal, nil)
+		if floodHost2 then
+			floodHost2.Name = "WE_DressHost_DepotFlood2"
+			floodHost2:SetAttribute("WE_DressProp", "Floodlight")
+			floodHost2.Transparency = 0.7
+		end
+		local fuelHost = kitPart(plinth, "DressHost", Vector3.new(1.3, 1.0, 1.3), Vector3.new(3.2, 1.3, 2.4), Color3.fromRGB(70, 65, 45), Enum.Material.Metal, nil)
+		if fuelHost then
+			fuelHost.Name = "WE_DressHost_DepotFuel"
+			fuelHost:SetAttribute("WE_DressProp", "FuelCans")
+			fuelHost.Transparency = 0.75
+			fuelHost.CanCollide = false
+		end
+	elseif kit == "lab" then
 		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -268,6 +332,13 @@ elseif kit == "lab" then
 		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 		kitPart(plinth, "Roof", Vector3.new(5.1, 0.4, 5.1), Vector3.new(0, 4.4, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.6, 2.5, 0.6), Vector3.new(2.0, 2.8, 2.0), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
+		local fuel = kitPart(plinth, "DressHost", Vector3.new(1.4, 1.1, 1.4), Vector3.new(-2.2, 1.4, 1.8), Color3.fromRGB(70, 65, 45), Enum.Material.Metal, nil)
+		if fuel then
+			fuel.Name = "WE_DressHost_Fuel"
+			fuel:SetAttribute("WE_DressProp", "FuelCans")
+			fuel.Transparency = 0.8
+			fuel.CanCollide = false
+		end
 	elseif kit == "warehouse" then
 		kitPart(plinth, "Body", Vector3.new(7.1, 2.8, 5.6), Vector3.new(0, 2.0, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.5, 0.5, 6.1), Vector3.new(0, 3.55, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -285,8 +356,23 @@ end
 --[[ Ensure plinth has kit children; rebuild if missing/incomplete. Returns role count. ]]
 function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): number
 	local n = countKitRoles(plinth)
+	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
+	local needsDress = false
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" then
+		local hasDress = false
+		for _, child in ipairs(plinth:GetChildren()) do
+			if child:IsA("BasePart") then
+				local nm = child.Name
+				if string.sub(nm, 1, 12) == "WE_DressHost" or nm == "WE_CommandDesk" or nm == "ShowroomPedestalHost2" or nm == "ShowroomFlagHost" then
+					hasDress = true
+					break
+				end
+			end
+		end
+		needsDress = not hasDress
+	end
 	-- Expect at least Body + one more for all kits
-	if n < 2 then
+	if n < 2 or needsDress then
 		StructureKitBuilder.BuildKitOnPlinth(plinth, structureId)
 		n = countKitRoles(plinth)
 	end

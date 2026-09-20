@@ -1839,7 +1839,7 @@ function MapSetup.Run()
 						vas.TryAttachPropVisual(milCrate, "MilitaryCrate")
 						vas.TryAttachPropVisual(sandHost, "Sandbag")
 						vas.TryAttachPropVisual(lanternHost, "Lantern")
-				end)
+					end)
 				end)
 			end
 		end

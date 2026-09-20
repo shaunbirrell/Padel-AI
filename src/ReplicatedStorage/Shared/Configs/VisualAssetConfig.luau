@@ -285,6 +285,7 @@ local VisualAssetConfig = {
 		CommandCenter = { "RadioAntenna", "RadioAntennaAlt", "AmmoBox", "Crate", "MilitaryCrate", "Lantern", "Floodlight", "FuelCans" },
 		Barracks = { "Crate", "MilitaryCrate", "AmmoBox", "Lantern", "Sandbag" },
 		VehicleDepot = { "FloodlightAlt", "Floodlight", "FlagPole", "FuelCans" },
+		PowerStation = { "FuelCans" },
 	} :: { [string]: { string } },
 
 	KitFamilyFallback = {

@@ -770,7 +770,6 @@ function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
 			end
 		end
 	end
-	return attached
 
 	-- Tier 2 densify: extra pedestals (ghost locked stands) + entrance flag
 	for pi = 2, 3 do
@@ -790,6 +789,7 @@ function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
 								d.CanCollide = false
 							end
 						end
+						attached = true
 					else
 						clone:Destroy()
 					end
@@ -800,10 +800,13 @@ function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
 	local flagHost = plinth:FindFirstChild("ShowroomFlagHost")
 	if flagHost and flagHost:IsA("BasePart") then
 		pcall(function()
-			VisualAssetService.TryAttachPropVisual(flagHost, "FlagPole")
+			if VisualAssetService.TryAttachPropVisual(flagHost, "FlagPole") then
+				attached = true
+			end
 		end)
 	end
 
+	return attached
 end
 
 --[[

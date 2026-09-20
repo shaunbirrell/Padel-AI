@@ -310,3 +310,15 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 - **HUD:** READY chip above cash pill (no overlap); dock tiles gunmetal + gold 1px stroke + olive icons.
 
 **Open Cloud live v18 (2026-09-20 Europe/Madrid):** Place `97112936860418` Published versionNumber=**18** (P0 UI+Worker).
+
+## 2026-09-20 — Squad Orders walkie (competitor P0)
+92. **Squad Orders** — When `Soldiers > 0` (or Army panel open), client shows a compact walkie Orders panel (Follow / Attack / Hold / Retreat). Server `SquadOrdersService` is authoritative: rate-limited `RequestSquadOrder`, field units derived from `SoldierService` count (capped), AI extends Combat MoveTo patterns. Not a second army economy — recruit/dismiss stay in SoldierService. Config: `OrdersConfig`. Remotes: `RequestSquadOrder`, `SquadOrderStateUpdate`. HUD dock / WorldPrompt / TrainingYard billboards untouched.
+
+## 2026-09-20 — Design Bot QUALITY TIER 2 (live v19)
+93. **HQ interior** — CommandCenter DressHost props (RadioAntenna×2, AmmoBox, Crate, MilitaryCrate, Lantern, Floodlight, FuelCans) + gunmetal Part desk (`WE_CommandDesk`) with SurfaceGui map fallback.
+94. **Depot showroom densify** — podium+rotator + ShowroomPedestalHost2/3 (ghost 0.55) + FlagPole + dual floodlights; `TryAttachShowroomVisual` densify no longer dead-after-return.
+95. **Oil spectacle** — MapSetup `OilSpectacle` pads: IndustrialPack 103734805361054 + RustyPipes 131322292868756 + OilBarrel ring; Ultrapump REJECT.
+96. **Landmarks** — RadioTower 119021509, SmallFort 67444725, Bunker 16659447 on map hosts (`WarzoneLandmarks`).
+97. **MapDressing deferred** — Palm/PalmAlt, DesertRock MeshPart, AsphaltDecal, TrainingYard Tent stalls already wired (v16–v18); EnsureKit rebuilds kits missing dress hosts.
+
+**Open Cloud live v19 (2026-09-20 Europe/Madrid):** Place `97112936860418` Published versionNumber=**19** (QUALITY TIER 2).

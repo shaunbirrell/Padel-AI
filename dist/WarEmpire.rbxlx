@@ -904,8 +904,14 @@ local EconomyConfig = {
 
 	-- Capture stipend tuning lives in TerritoryConfig.CaptureStipend
 	-- (periodic cash for owned territories / coastal oil).
-}
 
+	-- Permanent multiplicative income from capturing outposts (persisted stacks).
+	OutpostIncomeBuff = {
+		MultPerStack = 0.10, -- +10% per stack
+		MaxStacks = 5, -- cap +50%
+		ToastTemplate = "+%d%% Income — Outpost secured",
+	},
+}
 
 return EconomyConfig
 ]]></string>
@@ -1200,6 +1206,48 @@ return LootBoxConfig
         </Item>
         <Item class="ModuleScript" referent="22">
           <Properties>
+            <string name="Name">ManualDropperConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Early-game manual click/proximity droppers near Money Collector + Training Yard.
+	Server-authoritative; client only fires ClickDetector / ProximityPrompt.
+]]
+
+local ManualDropperConfig = {
+	Enabled = true,
+
+	-- Award (PendingCash). Prefer AwardAmount; else random [MinAward, MaxAward].
+	MinAward = 10,
+	MaxAward = 25,
+	AwardAmount = 15,
+
+	CooldownSeconds = 0.35,
+	RateLimitRate = 4,
+	RateLimitBurst = 3,
+
+	CollectorOffset = Vector3.new(-5.5, 0, 4),
+	YardOffset = Vector3.new(6, 0, -4),
+
+	PromptActionText = "Grab Cash",
+	PromptObjectText = "Cash Drop",
+	PromptMaxDistance = 12,
+	PromptHoldDuration = 0,
+
+	PartSize = Vector3.new(2.4, 1.2, 2.4),
+	PartColor = Color3.fromRGB(40, 140, 70),
+	NeonAccentColor = Color3.fromRGB(90, 255, 120),
+	BillboardLabel = "CLICK · $",
+
+	PopupDuration = 0.55,
+	PopupRiseStuds = 3.2,
+}
+
+return ManualDropperConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="23">
+          <Properties>
             <string name="Name">MissionConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -1363,7 +1411,7 @@ return MissionConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="23">
+        <Item class="ModuleScript" referent="24">
           <Properties>
             <string name="Name">MonetizationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1496,6 +1544,7 @@ local MonetizationConfig = {
 		clan_war_win = true,
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
+		manual_dropper = true, -- fixed click awards stay $10–25
 	},
 	XPMultExemptReasons = {
 		admin = true,
@@ -1508,7 +1557,7 @@ return MonetizationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="24">
+        <Item class="ModuleScript" referent="25">
           <Properties>
             <string name="Name">NationColorConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1540,7 +1589,7 @@ return NationColorConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="25">
+        <Item class="ModuleScript" referent="26">
           <Properties>
             <string name="Name">NotificationConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1564,7 +1613,7 @@ return NotificationConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="26">
+        <Item class="ModuleScript" referent="27">
           <Properties>
             <string name="Name">OilRigConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1601,7 +1650,65 @@ return OilRigConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="27">
+        <Item class="ModuleScript" referent="28">
+          <Properties>
+            <string name="Name">OrdersConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Squad Orders (walkie) — Follow / Attack / Hold / Retreat.
+	Field units project SoldierService army counts (not a second recruit economy).
+]]
+
+local OrdersConfig = {
+	Enabled = true,
+
+	MinSoldiersToShow = 1,
+	MaxFieldUnits = 5,
+	UnitsPerSoldier = 1,
+
+	OrderRatePerSec = 2,
+	OrderBurst = 4,
+
+	DefaultOrder = "Follow",
+
+	Orders = {
+		Follow = true,
+		Attack = true,
+		Hold = true,
+		Retreat = true,
+	},
+
+	ThinkInterval = 0.4,
+	FollowDistance = 10,
+	FollowStopDistance = 6,
+	FormationSpacing = 3.5,
+	AttackAggroRange = 120,
+	AttackRange = 55,
+	AttackDamage = 8,
+	AttackFireRate = 1.8,
+	HoldLeashStuds = 14,
+	UnitHealth = 90,
+	UnitWalkSpeed = 14,
+	UnitColor = Color3.fromRGB(70, 90, 55),
+
+	VisualKind = "Infantry",
+	DisplayName = "Squad",
+
+	-- Client walkie layout (avoid CurrencyPill bottom-left)
+	Walkie = {
+		AnchorPoint = Vector2.new(0, 1),
+		-- Above spinner + cash pill on touch; above pill on desktop
+		PositionTouch = UDim2.new(0, 16, 1, -220),
+		PositionDesktop = UDim2.new(0, 16, 1, -110),
+		Size = UDim2.fromOffset(200, 168),
+	},
+}
+
+return OrdersConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="29">
           <Properties>
             <string name="Name">PrestigeConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1755,7 +1862,7 @@ return PrestigeConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="28">
+        <Item class="ModuleScript" referent="30">
           <Properties>
             <string name="Name">SeasonConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1776,7 +1883,7 @@ return SeasonConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="29">
+        <Item class="ModuleScript" referent="31">
           <Properties>
             <string name="Name">SoldierConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1814,7 +1921,7 @@ local SoldierConfig = {
 		Rig = "R15", -- preferred attach target; Part kit remains R6-ish fallback proportions
 		VisualKindDefault = "Soldier",
 		VisualKindByRole = {
-			Worker = "Soldier",
+			Worker = "Infantry", -- P0: realistic layered soldier (not Part-kit bricks)
 			Infantry = "Infantry",
 			Heavy = "HeavyInfantry",
 			Guard = "Guard",
@@ -1841,7 +1948,7 @@ return SoldierConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="30">
+        <Item class="ModuleScript" referent="32">
           <Properties>
             <string name="Name">SpinnerConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1869,7 +1976,7 @@ return SpinnerConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="31">
+        <Item class="ModuleScript" referent="33">
           <Properties>
             <string name="Name">StructureVisualConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -1887,6 +1994,8 @@ export type StructurePalette = {
 	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "dock" | "wall" | "power" | "warehouse" | "special",
 	-- Future Creator Store MeshPart (0 / nil = Part kit)
 	MeshAssetId: number?,
+	-- Optional L3+ mesh override (DefensiveWalls heavy)
+	MeshAssetIdL3: number?,
 }
 
 local StructureVisualConfig = {
@@ -1960,7 +2069,8 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(120, 130, 110),
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
-			MeshAssetId = 208197704,
+			MeshAssetId = 208197704, -- L1–2 grey military wall
+			MeshAssetIdL3 = 9703136850, -- L3+ heavy duty military wall
 		},
 		Watchtowers = {
 			Plinth = Color3.fromRGB(44, 46, 40),
@@ -2025,7 +2135,7 @@ return StructureVisualConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="32">
+        <Item class="ModuleScript" referent="34">
           <Properties>
             <string name="Name">SupplyDropConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2055,7 +2165,7 @@ return SupplyDropConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="33">
+        <Item class="ModuleScript" referent="35">
           <Properties>
             <string name="Name">TerritoryConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2262,7 +2372,7 @@ return TerritoryConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="34">
+        <Item class="ModuleScript" referent="36">
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2364,7 +2474,7 @@ return TutorialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="35">
+        <Item class="ModuleScript" referent="37">
           <Properties>
             <string name="Name">VehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2776,7 +2886,7 @@ return VehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="36">
+        <Item class="ModuleScript" referent="38">
           <Properties>
             <string name="Name">VisualAssetConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -2929,6 +3039,8 @@ local VisualAssetConfig = {
 		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
 		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
 		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
+		Worker = { ModelAssetId = 9104381136, Note = "TrainingYard worker — realistic layered soldier (P0)" } :: AssetRef,
+		WorkerFallback = { ModelAssetId = 16134469614, Note = "Worker fallback Rigged Soldier if Infantry insert fails" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
@@ -2952,7 +3064,8 @@ local VisualAssetConfig = {
 		Watchtowers = { ModelAssetId = 3330023556, Note = "Watchtower" } :: AssetRef,
 		Radar = { ModelAssetId = 9559610195, Note = "Radar" } :: AssetRef,
 		MissileDefense = { ModelAssetId = 108525417345747, Note = "Missile defense (fallback 16659447)" } :: AssetRef,
-		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls L1–2; L3+ uses 9703136850 via StructureVisualConfig" } :: AssetRef,
+		DefensiveWallsL3 = { ModelAssetId = 9703136850, Note = "Heavy duty military wall (DefensiveWalls L3+)" } :: AssetRef,
 		PowerStation = { ModelAssetId = 14000967030, Note = "Power station" } :: AssetRef,
 		Bunker = { ModelAssetId = 16659447, Note = "Destructible Movil Bunker free" } :: AssetRef,
 		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
@@ -3000,6 +3113,13 @@ local VisualAssetConfig = {
 		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
 		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
 		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		Lantern = { ModelAssetId = 10121519149, Note = "Stall lantern (StripScripts; mesh only)" } :: AssetRef,
+		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
+		RadioAntennaAlt = { ModelAssetId = 42209845, Note = "HQ roof antenna alt" } :: AssetRef,
+		FloodlightAlt = { ModelAssetId = 4893998573, Note = "Depot bay floodlight" } :: AssetRef,
+		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans + oil barrels pack" } :: AssetRef,
+		FlagPole = { ModelAssetId = 1679839739, Note = "Depot/HQ flag pole" } :: AssetRef,
+		FlagPoleHD = { ModelAssetId = 1454179642, Note = "HQ prestige flag pole" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
 		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
 		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
@@ -3016,7 +3136,48 @@ local VisualAssetConfig = {
 		Cactus = { ModelAssetId = 121029612, Note = "Free Cactus Get Model" } :: AssetRef,
 		CactusBase = { ModelAssetId = 16354482789, Note = "CactusBase2 free Get Model" } :: AssetRef,
 		DesertPlants = { ModelAssetId = 108556425657107, Note = "Realistic Desert Plants free pack" } :: AssetRef,
+		Palm = { ModelAssetId = 96059329869678, Note = "Palm Trees Realistic pack (horizon)" } :: AssetRef,
+		PalmAlt = { ModelAssetId = 105982075286356, Note = "Low Poly Palm alt if Palm insert fails" } :: AssetRef,
+		-- MeshPart AssetType 40 — VisualAssetService MeshPart pipeline (not InsertService Model)
+		DesertRock = { ModelAssetId = 0, MeshId = 6562523344, Note = "Low Poly Rocks MeshPart (MeshId pipeline)" } :: AssetRef,
 	} :: { [string]: AssetRef },
+
+	-- MapDressing keys (Decal / non-Model assets)
+	MapDressing = {
+		AsphaltDecal = { ModelAssetId = 0, MeshId = 10197707775, Note = "Asphalt road Decal Texture on road Parts" } :: AssetRef,
+		ChevronArrow = { ModelAssetId = 0, Note = "Part-kit floor chevrons (no free Model)" } :: AssetRef,
+		DesertRock = { ModelAssetId = 0, MeshId = 6562523344, Note = "alias → DesertProps.DesertRock MeshPart" } :: AssetRef,
+		Palm = { ModelAssetId = 96059329869678, Note = "alias → DesertProps.Palm" } :: AssetRef,
+		PalmAlt = { ModelAssetId = 105982075286356, Note = "alias → DesertProps.PalmAlt" } :: AssetRef,
+		DesertPlants = { ModelAssetId = 108556425657107, Note = "alias → DesertProps.DesertPlants" } :: AssetRef,
+		Cactus = { ModelAssetId = 121029612, Note = "alias → DesertProps.Cactus" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+
+	-- Tier 2: oil spectacle + map landmarks (REJECT Ultrapump 1837698074)
+	IndustrialProps = {
+		IndustrialPack = { ModelAssetId = 103734805361054, Note = "Realistic Industrial Props Pack (oil spectacle)" } :: AssetRef,
+		RustyPipes = { ModelAssetId = 131322292868756, Note = "Rusty pipes runs to derrick silhouette" } :: AssetRef,
+		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
+		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans cluster" } :: AssetRef,
+		-- GasStation 5149705639 OPTIONAL heavy — not default
+		-- Ultrapump 1837698074 REJECT
+	} :: { [string]: AssetRef },
+
+	Landmarks = {
+		RadioTower = { ModelAssetId = 119021509, Note = "Map ridge radio tower POI" } :: AssetRef,
+		Bunker = { ModelAssetId = 16659447, Note = "Desert approach bunker" } :: AssetRef,
+		SpyBunker = { ModelAssetId = 55228082, Note = "Optional spy bunker POI" } :: AssetRef,
+		SmallFort = { ModelAssetId = 67444725, Note = "Mid-map small fort landmark" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	-- HQ / Barracks interior dress keys (hosts in StructureKitBuilder)
+	StructureDress = {
+		CommandCenter = { "RadioAntenna", "RadioAntennaAlt", "AmmoBox", "Crate", "MilitaryCrate", "Lantern", "Floodlight", "FuelCans" },
+		Barracks = { "Crate", "MilitaryCrate", "AmmoBox", "Lantern", "Sandbag" },
+		VehicleDepot = { "FloodlightAlt", "Floodlight", "FlagPole", "FuelCans" },
+		PowerStation = { "FuelCans" },
+	} :: { [string]: { string } },
 
 	KitFamilyFallback = {
 		WheeledLight = "MilitaryJeep",
@@ -3045,7 +3206,7 @@ return VisualAssetConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="37">
+        <Item class="ModuleScript" referent="39">
           <Properties>
             <string name="Name">WeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -3183,7 +3344,7 @@ return WeaponConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="38">
+      <Item class="ModuleScript" referent="40">
         <Properties>
           <string name="Name">Constants</string>
           <string name="Source"><![CDATA[--!strict
@@ -3276,7 +3437,7 @@ Constants.RemoteNames = {
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v1"
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
-Constants.CURRENT_DATA_VERSION = 7
+Constants.CURRENT_DATA_VERSION = 8
 
 Constants.AutosaveIntervalSeconds = 60
 -- Session lock: refresh often; steal if age >= TTL (rejoin after crash ~30–45s)
@@ -3320,7 +3481,7 @@ return Constants
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="39">
+      <Item class="ModuleScript" referent="41">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--!strict
@@ -3381,7 +3542,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="40">
+      <Item class="ModuleScript" referent="42">
         <Properties>
           <string name="Name">Types</string>
           <string name="Source"><![CDATA[--!strict
@@ -3482,6 +3643,7 @@ export type PlayerProfile = {
 	LastJoinUnix: number,
 	ProcessedReceipts: { [string]: boolean }?,
 	Entitlements: { [string]: boolean }?,
+	OutpostIncomeStacks: number?,
 }
 
 export type EconomyUpdatePayload = {
@@ -3625,11 +3787,11 @@ return {}
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="41">
+      <Item class="Folder" referent="43">
         <Properties>
           <string name="Name">Util</string>
         </Properties>
-        <Item class="ModuleScript" referent="42">
+        <Item class="ModuleScript" referent="44">
           <Properties>
             <string name="Name">UIUtil</string>
             <string name="Source"><![CDATA[--!strict
@@ -3826,15 +3988,15 @@ return UIUtil
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="43">
+  <Item class="ServerScriptService" referent="45">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="44">
+    <Item class="Folder" referent="46">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="45">
+      <Item class="Script" referent="47">
         <Properties>
           <string name="Name">Bootstrap</string>
           <token name="RunContext">0</token>
@@ -4156,6 +4318,7 @@ local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
 local FallSafetyService = safeRequire("FallSafetyService", Services.FallSafetyService)
 local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.MoneyCollectorService)
+local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
@@ -4193,6 +4356,8 @@ local deps: { [string]: any } = {
 	UpgradePadService = UpgradePadService,
 	FallSafetyService = FallSafetyService,
 	MoneyCollectorService = MoneyCollectorService,
+	VisualAssetService = VisualAssetService,
+	ManualDropperService = ManualDropperService,
 }
 
 local function safeInit(label: string, svc: any, ...: any)
@@ -4226,6 +4391,7 @@ safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
 safeInit("XPService", XPService, deps)
 safeInit("MoneyCollectorService", MoneyCollectorService, deps)
+safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
 safeInit("FallSafetyService", FallSafetyService, deps)
@@ -4265,11 +4431,11 @@ print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="46">
+      <Item class="Folder" referent="48">
         <Properties>
           <string name="Name">Modules</string>
         </Properties>
-        <Item class="ModuleScript" referent="47">
+        <Item class="ModuleScript" referent="49">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -4610,11 +4776,11 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
 	end
 
-	-- Optional free cactus catalog overlays (InsertService; skipped when StudioSkipWorldDressing)
+	-- Catalog overlays: DesertPlants / Palm(+PalmAlt) / Cactus / DesertRock MeshPart
 	-- Cap attempts so PERF stays Part-kit-first even on live.
 	do
 		local attached = 0
-		local maxAttach = if sparse then 2 else 4
+		local maxAttach = if sparse then 6 else 12
 		local okVas, vas = pcall(function()
 			return require(script.Parent.Parent.Services.VisualAssetService)
 		end)
@@ -4623,12 +4789,22 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 				if attached >= maxAttach then
 					break
 				end
-				if d:IsA("BasePart") and d.Name == "SaguaroTrunk" then
-					local okAtt = pcall(function()
-						return vas.TryAttachPropVisual(d, if attached % 2 == 0 then "Cactus" else "CactusBase")
-					end)
-					if okAtt then
-						attached += 1
+				if d:IsA("BasePart") then
+					local key: string? = nil
+					if d.Name == "SaguaroTrunk" then
+						key = if attached % 3 == 0 then "DesertPlants" elseif attached % 3 == 1 then "Cactus" else "CactusBase"
+					elseif d.Name == "PalmTrunk" then
+						key = "Palm" -- PalmAlt fallback inside TryAttachPropVisual
+					elseif d.Name == "Outcrop" or d.Name == "OutcropCap" then
+						key = "DesertRock"
+					end
+					if key then
+						local okAtt = pcall(function()
+							return vas.TryAttachPropVisual(d, key :: string)
+						end)
+						if okAtt then
+							attached += 1
+						end
 					end
 				end
 			end
@@ -4652,7 +4828,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="48">
+        <Item class="ModuleScript" referent="50">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -6083,7 +6259,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="49">
+        <Item class="ModuleScript" referent="51">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -6301,8 +6477,8 @@ local function priceBillboard(parent, title, costLine, accent)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
 	bb.Size = UDim2.fromOffset(220, 96)
-	bb.StudsOffset = Vector3.new(0, 6.0, 0)
-	bb.AlwaysOnTop = true -- only useful nearby (short MaxDistance)
+	bb.StudsOffset = Vector3.new(0, 5.2, 0)
+	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
 	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
 	bb.Parent = parent
 
@@ -6354,7 +6530,7 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	bb.Name = "Label"
 	bb.Size = UDim2.fromOffset(size.X, size.Y)
 	bb.StudsOffset = Vector3.new(0, offsetY, 0)
-	bb.AlwaysOnTop = true -- short range only
+	bb.AlwaysOnTop = false -- P0: only ATM may AlwaysOnTop when nearest
 	bb.MaxDistance = 70 -- base/zone labels near-only (was 950)
 	bb.Parent = parent
 
@@ -6751,7 +6927,9 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		-- One clean label on head (not also on torso)
 		local bb = plainBillboard(head, labelText, Vector2.new(120, 24), 2.2, labelColor or Color3.fromRGB(255, 200, 140))
 		bb.Name = "NPCLabel"
-		bb.MaxDistance = 70
+		bb.AlwaysOnTop = false
+		bb.MaxDistance = 18
+		bb.StudsOffset = Vector3.new(0, 2.4, 0)
 	end
 	return model
 end
@@ -7438,7 +7616,41 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	light.Brightness = 1.15
 	light.Range = 20
 	light.Parent = body
-	plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 8.2, Color3.fromRGB(90, 240, 130))
+	do
+		local bb = plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 6.5, Color3.fromRGB(90, 240, 130))
+		if bb then
+			bb.Name = "WE_CollectBillboard"
+			bb.AlwaysOnTop = true -- P0: ATM primary when nearest
+			bb.MaxDistance = 28
+		end
+	end
+	-- Lime Collect circle on ground (touch radius visual)
+	local collectCircle = part({
+		Name = "CollectCircle",
+		Size = Vector3.new(14, 0.25, 14),
+		Position = pos + Vector3.new(28, 0.55, 8),
+		Color = Color3.fromRGB(90, 255, 110),
+		Material = Enum.Material.Neon,
+		Transparency = 0.55,
+		CanCollide = false,
+		Shape = Enum.PartType.Cylinder,
+		Parent = folder,
+	})
+	-- Cylinder default axis is X — rotate to lie flat on ground
+	collectCircle.CFrame = CFrame.new(pos + Vector3.new(28, 0.55, 8)) * CFrame.Angles(0, 0, math.rad(90))
+	collectCircle:SetAttribute("PlotId", plotId)
+	local ring = part({
+		Name = "CollectRing",
+		Size = Vector3.new(15.5, 0.2, 15.5),
+		Color = Color3.fromRGB(60, 220, 90),
+		Material = Enum.Material.Neon,
+		Transparency = 0.35,
+		CanCollide = false,
+		Shape = Enum.PartType.Cylinder,
+		Parent = folder,
+	})
+	ring.CFrame = CFrame.new(pos + Vector3.new(28, 0.45, 8)) * CFrame.Angles(0, 0, math.rad(90))
+
 	-- Optional ATM catalog mesh dress (Part kit remains authoritative)
 	task.defer(function()
 		pcall(function()
@@ -7576,7 +7788,22 @@ function MapSetup.Run()
 			Parent = map,
 		})
 	end
-	-- Yellow centerline dashes (asphalt polish — competitor desert roads)
+	-- Asphalt Decal texture on road strips (MapDressing.AsphaltDecal)
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if not (vas and vas.ApplyAsphaltDecal) then
+				return
+			end
+			for _, ch in ipairs(map:GetChildren()) do
+				if ch:IsA("BasePart") and (string.sub(ch.Name, 1, 5) == "RoadZ" or string.sub(ch.Name, 1, 5) == "RoadX") then
+					vas.ApplyAsphaltDecal(ch)
+				end
+			end
+		end)
+	end)
+
+		-- Yellow centerline dashes (asphalt polish — competitor desert roads)
 	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
 		for i = -8, 8 do
 			if i ~= 0 then
@@ -7690,17 +7917,31 @@ function MapSetup.Run()
 		-- Training workers (visual only — income is SoldierService tick)
 		for wi = 1, 2 do
 			local wpos = pos + Vector3.new(-40 + wi * 20, 2.6, 42)
-			makeSoldierKit(
+			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
+			local worker = makeSoldierKit(
 				yardFolder,
 				"TrainingWorker" .. wi,
 				CFrame.new(wpos) * CFrame.Angles(0, math.rad(180), 0),
 				Color3.fromRGB(70, 85, 55),
-				"WORKER",
-				Color3.fromRGB(180, 220, 120),
+				"TRAINING",
+				Color3.fromRGB(140, 150, 130), -- muted
 				50,
-				nil,
+				"Worker",
 				nil
 			)
+			if worker then
+				local head = worker:FindFirstChild("Head")
+				if head then
+					local bb = head:FindFirstChild("NPCLabel") or head:FindFirstChildWhichIsA("BillboardGui")
+					if bb and bb:IsA("BillboardGui") then
+						bb.Name = "WE_WorkerTag"
+						bb.AlwaysOnTop = false
+						bb.MaxDistance = 18
+						bb.StudsOffset = Vector3.new(0, 2.4, 0)
+						bb.Size = UDim2.fromOffset(90, 18)
+					end
+				end
+			end
 		end
 		-- Target ring + base plate polish
 		part({
@@ -7712,6 +7953,161 @@ function MapSetup.Run()
 			CanCollide = true,
 			Parent = yardFolder,
 		})
+		do
+			local yp = yardFolder:FindFirstChild("YardPad")
+			if yp and yp:IsA("BasePart") then
+				local ebb = Instance.new("BillboardGui")
+				ebb.Name = "WE_TrainingEarnBillboard"
+				ebb.Size = UDim2.fromOffset(140, 28)
+				ebb.StudsOffset = Vector3.new(0, 3.2, 0)
+				ebb.AlwaysOnTop = false
+				ebb.MaxDistance = 22
+				ebb.Parent = yp
+				local el = Instance.new("TextLabel")
+				el.Size = UDim2.fromScale(1, 1)
+				el.BackgroundTransparency = 0.35
+				el.BackgroundColor3 = Color3.fromRGB(20, 28, 18)
+				el.BorderSizePixel = 0
+				el.Font = Enum.Font.GothamBold
+				el.TextSize = 14
+				el.TextColor3 = Color3.fromRGB(160, 220, 120)
+				el.Text = "+$/tick"
+				el.Parent = ebb
+			end
+		end
+		-- Design Bot quality wire: 2–3 SquadStall kits (Tent + crates + sandbags + Infantry)
+		do
+			local stallFolder = Instance.new("Folder")
+			stallFolder.Name = "SquadStalls"
+			stallFolder.Parent = yardFolder
+			local stallOffsets = {
+				Vector3.new(-36, 0, 36),
+				Vector3.new(-18, 0, 36),
+				Vector3.new(0, 0, 36),
+			}
+			for si, soff in ipairs(stallOffsets) do
+				local sOrigin = pos + soff
+				local stall = Instance.new("Folder")
+				stall.Name = "SquadStall" .. si
+				stall.Parent = stallFolder
+				-- Floor plate
+				part({
+					Name = "StallFloor",
+					Size = Vector3.new(12, 0.4, 10),
+					Position = sOrigin + Vector3.new(0, 0.35, 0),
+					Color = Color3.fromRGB(70, 68, 52),
+					Material = Enum.Material.WoodPlanks,
+					CanCollide = true,
+					Parent = stall,
+				})
+				-- Tent host (catalog Tent via TryAttachPropVisual)
+				local tentHost = part({
+					Name = "TentHost",
+					Size = Vector3.new(8, 4, 6),
+					Position = sOrigin + Vector3.new(0, 2.4, -1),
+					Color = Color3.fromRGB(90, 100, 70),
+					Material = Enum.Material.Fabric,
+					CanCollide = false,
+					Transparency = 0.35,
+					Parent = stall,
+				})
+				-- Crate stack hosts
+				local crateA = part({
+					Name = "CrateHostA",
+					Size = Vector3.new(2.2, 2.0, 2.2),
+					Position = sOrigin + Vector3.new(4.5, 1.2, 2),
+					Color = Color3.fromRGB(95, 80, 55),
+					Material = Enum.Material.Wood,
+					CanCollide = true,
+					Parent = stall,
+				})
+				local crateB = part({
+					Name = "CrateHostB",
+					Size = Vector3.new(2.0, 1.8, 2.0),
+					Position = sOrigin + Vector3.new(4.5, 3.0, 2),
+					Color = Color3.fromRGB(85, 70, 48),
+					Material = Enum.Material.Wood,
+					CanCollide = true,
+					Parent = stall,
+				})
+				local milCrate = part({
+					Name = "MilCrateHost",
+					Size = Vector3.new(2.4, 1.6, 1.8),
+					Position = sOrigin + Vector3.new(-4.2, 1.0, 2.2),
+					Color = Color3.fromRGB(55, 70, 50),
+					Material = Enum.Material.Metal,
+					CanCollide = true,
+					Parent = stall,
+				})
+				-- Sandbags
+				local sandHost = part({
+					Name = "SandbagHost",
+					Size = Vector3.new(6, 1.1, 1.3),
+					Position = sOrigin + Vector3.new(0, 0.75, 4.2),
+					Color = Color3.fromRGB(130, 115, 80),
+					Material = Enum.Material.Sand,
+					CanCollide = true,
+					Parent = stall,
+				})
+				-- Lantern host
+				local lanternHost = part({
+					Name = "LanternHost",
+					Size = Vector3.new(0.6, 1.2, 0.6),
+					Position = sOrigin + Vector3.new(-3.5, 2.2, -2.5),
+					Color = Color3.fromRGB(180, 140, 60),
+					Material = Enum.Material.Metal,
+					CanCollide = false,
+					Parent = stall,
+				})
+				local lanternLight = Instance.new("PointLight")
+				lanternLight.Color = Color3.fromRGB(255, 200, 120)
+				lanternLight.Brightness = 0.8
+				lanternLight.Range = 14
+				lanternLight.Parent = lanternHost
+				-- Infantry clone at stall (T-pose OK; crouch anim optional)
+				local soldierCf = CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
+				makeSoldierKit(
+					stall,
+					"StallInfantry" .. si,
+					soldierCf,
+					Color3.fromRGB(70, 85, 55),
+					"INFANTRY",
+					Color3.fromRGB(180, 220, 120),
+					80,
+					"Infantry",
+					nil
+				)
+				-- Optional crouch: Humanoid Sit as lightweight proxy (full crouch AnimationId TBD)
+				pcall(function()
+					local m = stall:FindFirstChild("StallInfantry" .. si)
+					if m and m:IsA("Model") then
+						local hum = m:FindFirstChildOfClass("Humanoid")
+						if hum then
+							hum.Sit = false
+							hum.WalkSpeed = 0
+							-- Note: T-pose/catalog pose OK — crouch AnimationId not wired this pass
+							m:SetAttribute("WE_PoseNote", "TPose_CrouchAnimPending")
+						end
+					end
+				end)
+				-- Catalog prop dress (pcall — Part kits remain if InsertService fails)
+				task.defer(function()
+					pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if not vas or not vas.TryAttachPropVisual then
+							return
+						end
+						vas.TryAttachPropVisual(tentHost, "Tent")
+						vas.TryAttachPropVisual(crateA, "Crate")
+						vas.TryAttachPropVisual(crateB, "MilitaryCrate")
+						vas.TryAttachPropVisual(milCrate, "MilitaryCrate")
+						vas.TryAttachPropVisual(sandHost, "Sandbag")
+						vas.TryAttachPropVisual(lanternHost, "Lantern")
+					end)
+				end)
+			end
+		end
+
 		local yardAnchor = part({
 			Name = "YardAnchor",
 			Size = Vector3.new(1, 1, 1),
@@ -7827,13 +8223,30 @@ function MapSetup.Run()
 					end
 				end
 				-- Optional catalog floodlight tower / flag (never clears pads on fail)
-				pcall(function()
-					local vas = require(script.Parent.Parent.Services.VisualAssetService)
-					local host = wz:FindFirstChildWhichIsA("BasePart")
-					if host and vas.TryAttachPropVisual then
-						vas.TryAttachPropVisual(host, "FloodlightTower")
-					end
-				end)
+								pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if not (vas and vas.TryAttachPropVisual) then
+							return
+						end
+						-- WZ densify catalog: sandbags / crates / desert flora hosts
+						for _, ch in ipairs(wz:GetChildren()) do
+							if ch:IsA("BasePart") then
+								if string.find(ch.Name, "Sandbag", 1, true) then
+									vas.TryAttachPropVisual(ch, "Sandbag")
+								elseif string.find(ch.Name, "Crate", 1, true) then
+									vas.TryAttachPropVisual(ch, "Crate")
+								elseif string.find(ch.Name, "Drum", 1, true) then
+									vas.TryAttachPropVisual(ch, "OilBarrel")
+								elseif string.find(ch.Name, "Barrier", 1, true) then
+									vas.TryAttachPropVisual(ch, "ConcreteBarrier")
+								end
+							end
+						end
+						local host = wz:FindFirstChildWhichIsA("BasePart")
+						if host then
+							vas.TryAttachPropVisual(host, "FloodlightTower")
+						end
+					end)
 			end)
 			if not okDress then
 				warn("[MapSetup] PlotWarzone densify failed (pads intact):", errDress)
@@ -8474,6 +8887,145 @@ function MapSetup.Run()
 	end
 
 		buildPadSupportShelves(root)
+
+	-- Tier 2: near-plot oil spectacle (IndustrialPack + pipes + barrel ring). REJECT Ultrapump.
+	do
+		local okOil, errOil = pcall(function()
+			local oilFolder = Instance.new("Folder")
+			oilFolder.Name = "OilSpectacle"
+			oilFolder.Parent = root
+			local pads = {
+				Vector3.new(-520, 0.5, -180),
+				Vector3.new(520, 0.5, 180),
+				Vector3.new(-200, 0.5, 620),
+			}
+			for oi, opos in ipairs(pads) do
+				local pad = part({
+					Name = "OilPad" .. oi,
+					Size = Vector3.new(28, 0.6, 28),
+					Position = opos,
+					Color = Color3.fromRGB(42, 44, 40),
+					Material = Enum.Material.Asphalt,
+					CanCollide = true,
+					Parent = oilFolder,
+				})
+				plainBillboard(pad, "OIL FIELD", Vector2.new(160, 32), 12, Color3.fromRGB(255, 180, 60))
+				-- Amber landmark light
+				local light = Instance.new("PointLight")
+				light.Color = Color3.fromRGB(255, 160, 40)
+				light.Brightness = 1.2
+				light.Range = 40
+				light.Parent = pad
+				-- Walking-beam silhouette (Part kit derrick)
+				local tower = part({
+					Name = "DerrickTower" .. oi,
+					Size = Vector3.new(1.2, 18, 1.2),
+					Position = opos + Vector3.new(0, 9.5, 0),
+					Color = Color3.fromRGB(70, 72, 68),
+					Material = Enum.Material.Metal,
+					CanCollide = false,
+					Parent = oilFolder,
+				})
+				local beam = part({
+					Name = "WalkingBeam" .. oi,
+					Size = Vector3.new(14, 0.7, 0.7),
+					Position = opos + Vector3.new(0, 17, 0),
+					Color = Color3.fromRGB(90, 70, 50),
+					Material = Enum.Material.Metal,
+					CanCollide = false,
+					Parent = oilFolder,
+				})
+				beam:SetAttribute("WE_OilBeam", true)
+				-- Barrel ring
+				for bi = 1, 8 do
+					local ang = (bi / 8) * math.pi * 2
+					local bpos = opos + Vector3.new(math.cos(ang) * 9, 1.1, math.sin(ang) * 9)
+					part({
+						Name = "OilBarrel" .. oi .. "_" .. bi,
+						Size = Vector3.new(1.6, 2.2, 1.6),
+						Position = bpos,
+						Color = Color3.fromRGB(45, 70, 45),
+						Material = Enum.Material.Metal,
+						Shape = Enum.PartType.Cylinder,
+						CanCollide = true,
+						Parent = oilFolder,
+					})
+				end
+				-- Catalog dress (IndustrialPack / RustyPipes / OilBarrel)
+				task.defer(function()
+					pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if not vas then
+							return
+						end
+						vas.TryAttachPropVisual(tower, "IndustrialPack")
+						vas.TryAttachPropVisual(beam, "RustyPipes")
+						for _, ch in ipairs(oilFolder:GetChildren()) do
+							if ch:IsA("BasePart") and string.find(ch.Name, "OilBarrel" .. oi, 1, true) then
+								vas.TryAttachPropVisual(ch, "OilBarrel")
+							end
+						end
+					end)
+				end)
+			end
+			-- Slow walking-beam sway
+			task.spawn(function()
+				local t0 = os.clock()
+				while oilFolder.Parent do
+					local t = os.clock() - t0
+					for _, ch in ipairs(oilFolder:GetChildren()) do
+						if ch:IsA("BasePart") and ch:GetAttribute("WE_OilBeam") then
+							ch.CFrame = CFrame.new(ch.Position) * CFrame.Angles(0, 0, math.rad(math.sin(t * 0.7) * 12))
+						end
+					end
+					task.wait(0.1)
+				end
+			end)
+		end)
+		if not okOil then
+			warn("[MapSetup] OilSpectacle failed:", errOil)
+		end
+	end
+
+	-- Tier 2: warzone landmarks (RadioTower / SmallFort / Bunker)
+	do
+		local okLm, errLm = pcall(function()
+			local lm = Instance.new("Folder")
+			lm.Name = "WarzoneLandmarks"
+			lm.Parent = root
+			local spots = {
+				{ Name = "RadioTower", Key = "RadioTower", Pos = Vector3.new(0, 0.5, -1400), Size = Vector3.new(4, 28, 4) },
+				{ Name = "SmallFort", Key = "SmallFort", Pos = Vector3.new(1100, 0.5, -1100), Size = Vector3.new(18, 10, 18) },
+				{ Name = "BunkerApproach", Key = "Bunker", Pos = Vector3.new(-1100, 0.5, 900), Size = Vector3.new(14, 6, 14) },
+			}
+			for _, s in ipairs(spots) do
+				local host = part({
+					Name = s.Name .. "Host",
+					Size = s.Size,
+					Position = s.Pos + Vector3.new(0, s.Size.Y * 0.5, 0),
+					Color = Color3.fromRGB(80, 78, 70),
+					Material = Enum.Material.Concrete,
+					CanCollide = true,
+					Transparency = 0.25,
+					Parent = lm,
+				})
+				plainBillboard(host, string.upper(s.Name), Vector2.new(180, 32), 14, Color3.fromRGB(220, 200, 140))
+				task.defer(function()
+					pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if vas and vas.TryAttachPropVisual then
+							vas.TryAttachPropVisual(host, s.Key)
+						end
+					end)
+				end)
+			end
+		end)
+		if not okLm then
+			warn("[MapSetup] WarzoneLandmarks failed:", errLm)
+		end
+	end
+
+
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas=" .. tostring(DevConfig.MountainRingSegments or 14) .. " (dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
@@ -8483,7 +9035,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="50">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -8587,6 +9139,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		LastJoinUnix = now,
 		ProcessedReceipts = {},
 		Entitlements = {},
+		OutpostIncomeStacks = 0,
 	}
 end
 
@@ -8770,6 +9323,16 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		version = 7
 	end
 
+
+	-- v7 → v8: permanent outpost income buff stacks
+	if version < 8 then
+		if typeof((profile :: any).OutpostIncomeStacks) ~= "number" then
+			(profile :: any).OutpostIncomeStacks = 0
+		end
+		profile.DataVersion = 8
+		version = 8
+	end
+
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
 	end
@@ -8778,6 +9341,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if typeof((profile :: any).Entitlements) ~= "table" then
 		(profile :: any).Entitlements = {}
+	end
+	if typeof((profile :: any).OutpostIncomeStacks) ~= "number" then
+		(profile :: any).OutpostIncomeStacks = 0
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
@@ -8803,7 +9369,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -8871,7 +9437,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -8995,7 +9561,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -9215,7 +9781,7 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -9349,6 +9915,59 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 		kitPart(plinth, "Door", Vector3.new(1.6, 2.2, 0.25), Vector3.new(0, 1.7, -2.85), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.4, 1.0, 0.2), Vector3.new(2.0, 2.6, -2.8), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
+		-- Tier 2 HQ interior / roof dress hosts (catalog via TryDressStructureInterior)
+		do
+			local hosts = {
+				{ "WE_DressHost_Radio", Vector3.new(0.6, 2.2, 0.6), Vector3.new(-1.8, 5.2, 1.6), "RadioAntenna" },
+				{ "WE_DressHost_RadioRoof", Vector3.new(0.5, 1.8, 0.5), Vector3.new(1.6, 5.4, -1.4), "RadioAntennaAlt" },
+				{ "WE_DressHost_Ammo", Vector3.new(1.4, 1.0, 1.0), Vector3.new(-1.6, 1.4, 1.8), "AmmoBox" },
+				{ "WE_DressHost_Crate", Vector3.new(1.6, 1.2, 1.6), Vector3.new(1.8, 1.5, 1.6), "Crate" },
+				{ "WE_DressHost_MilCrate", Vector3.new(1.5, 1.1, 1.3), Vector3.new(1.8, 1.45, -1.5), "MilitaryCrate" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(-2.0, 2.8, -1.8), "Lantern" },
+				{ "WE_DressHost_Flood", Vector3.new(0.7, 1.4, 0.7), Vector3.new(-2.6, 4.2, -2.6), "Floodlight" },
+				{ "WE_DressHost_Fuel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(-2.2, 1.4, -0.2), "FuelCans" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+			-- Gunmetal command desk fallback (no free desk Model — Part kit + SurfaceGui map)
+			local desk = kitPart(plinth, "DressHost", Vector3.new(3.2, 1.1, 1.6), Vector3.new(0, 1.35, 0.4), Color3.fromRGB(55, 60, 58), Enum.Material.Metal, nil)
+			if desk then
+				desk.Name = "WE_CommandDesk"
+				desk:SetAttribute("WE_GunmetalDesk", true)
+				desk.CanCollide = false
+				local top = kitPart(plinth, "DressHost", Vector3.new(3.4, 0.12, 1.8), Vector3.new(0, 1.95, 0.4), Color3.fromRGB(45, 50, 48), Enum.Material.Metal, nil)
+				if top then
+					top.Name = "WE_CommandDeskTop"
+					top.CanCollide = false
+					local sg = Instance.new("SurfaceGui")
+					sg.Name = "WE_MapSurface"
+					sg.Face = Enum.NormalId.Top
+					sg.CanvasSize = Vector2.new(256, 128)
+					sg.Parent = top
+					local mapFrame = Instance.new("Frame")
+					mapFrame.Name = "MapPanel"
+					mapFrame.Size = UDim2.fromScale(1, 1)
+					mapFrame.BackgroundColor3 = Color3.fromRGB(40, 55, 42)
+					mapFrame.BorderSizePixel = 0
+					mapFrame.Parent = sg
+					local grid = Instance.new("TextLabel")
+					grid.Size = UDim2.fromScale(1, 1)
+					grid.BackgroundTransparency = 1
+					grid.Text = "▌ TERRITORY MAP ▌\nN ◆ ◆ ◆\n◆ HQ ◆ ◆\n◆ ◆ ◆ S"
+					grid.TextColor3 = Color3.fromRGB(120, 200, 90)
+					grid.TextScaled = true
+					grid.Font = Enum.Font.Code
+					grid.Parent = mapFrame
+				end
+			end
+		end
 	elseif kit == "barracks" then
 		kitPart(plinth, "Body", Vector3.new(6.6, 2.6, 4.4), Vector3.new(0, 1.9, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.1, 0.5, 5.0), Vector3.new(0, 3.35, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -9356,6 +9975,25 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), pal.Accent, Enum.Material.Neon, nil)
+		-- Tier 2 Barracks interior dress hosts
+		do
+			local hosts = {
+				{ "WE_DressHost_Crate", Vector3.new(1.5, 1.1, 1.5), Vector3.new(2.4, 1.4, 1.4), "Crate" },
+				{ "WE_DressHost_MilCrate", Vector3.new(1.4, 1.0, 1.2), Vector3.new(-2.4, 1.35, 1.4), "MilitaryCrate" },
+				{ "WE_DressHost_Ammo", Vector3.new(1.2, 0.9, 0.9), Vector3.new(2.2, 1.3, -1.5), "AmmoBox" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(-2.6, 2.4, -1.2), "Lantern" },
+				{ "WE_DressHost_Sandbag", Vector3.new(2.4, 1.0, 1.2), Vector3.new(0, 1.2, 1.8), "Sandbag" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "depot" then
 		kitPart(plinth, "Body", Vector3.new(6.9, 2.2, 5.6), Vector3.new(0, 1.7, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -9402,6 +10040,46 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 			corner.CornerRadius = UDim.new(0, 4)
 			corner.Parent = lab
 		end
+	
+		-- Tier 2: extra pedestal hosts + flag (densify showroom)
+		for pi, ox in ipairs({ -4.2, 4.2 }) do
+			local ped = kitPart(plinth, "Podium", Vector3.new(2.4, 0.4, 2.4), Vector3.new(ox, 0.9, 4.0), Color3.fromRGB(40, 48, 55), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+			if ped then
+				ped.Name = "ShowroomPedestalHost" .. (pi + 1)
+				local off = ped:GetAttribute("WE_LocalOffset")
+				if typeof(off) == "Vector3" then
+					ped.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+				end
+				ped.Transparency = 0.55
+			end
+		end
+		local flagHost = kitPart(plinth, "DressHost", Vector3.new(0.4, 4.5, 0.4), Vector3.new(-3.6, 3.2, -2.8), Color3.fromRGB(180, 180, 180), Enum.Material.Metal, nil)
+		if flagHost then
+			flagHost.Name = "ShowroomFlagHost"
+			flagHost:SetAttribute("WE_DressProp", "FlagPole")
+			flagHost.Transparency = 0.7
+			flagHost.CanCollide = false
+		end
+		local floodHost = kitPart(plinth, "DressHost", Vector3.new(0.6, 1.2, 0.6), Vector3.new(3.4, 3.4, -2.6), Color3.fromRGB(200, 200, 180), Enum.Material.Metal, nil)
+		if floodHost then
+			floodHost.Name = "WE_DressHost_DepotFlood"
+			floodHost:SetAttribute("WE_DressProp", "FloodlightAlt")
+			floodHost.Transparency = 0.7
+		end
+		-- Second bay floodlight
+		local floodHost2 = kitPart(plinth, "DressHost", Vector3.new(0.6, 1.2, 0.6), Vector3.new(-3.4, 3.4, -2.6), Color3.fromRGB(200, 200, 180), Enum.Material.Metal, nil)
+		if floodHost2 then
+			floodHost2.Name = "WE_DressHost_DepotFlood2"
+			floodHost2:SetAttribute("WE_DressProp", "Floodlight")
+			floodHost2.Transparency = 0.7
+		end
+		local fuelHost = kitPart(plinth, "DressHost", Vector3.new(1.3, 1.0, 1.3), Vector3.new(3.2, 1.3, 2.4), Color3.fromRGB(70, 65, 45), Enum.Material.Metal, nil)
+		if fuelHost then
+			fuelHost.Name = "WE_DressHost_DepotFuel"
+			fuelHost:SetAttribute("WE_DressProp", "FuelCans")
+			fuelHost.Transparency = 0.75
+			fuelHost.CanCollide = false
+		end
 	elseif kit == "lab" then
 		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -9440,6 +10118,13 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 		kitPart(plinth, "Roof", Vector3.new(5.1, 0.4, 5.1), Vector3.new(0, 4.4, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.6, 2.5, 0.6), Vector3.new(2.0, 2.8, 2.0), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
+		local fuel = kitPart(plinth, "DressHost", Vector3.new(1.4, 1.1, 1.4), Vector3.new(-2.2, 1.4, 1.8), Color3.fromRGB(70, 65, 45), Enum.Material.Metal, nil)
+		if fuel then
+			fuel.Name = "WE_DressHost_Fuel"
+			fuel:SetAttribute("WE_DressProp", "FuelCans")
+			fuel.Transparency = 0.8
+			fuel.CanCollide = false
+		end
 	elseif kit == "warehouse" then
 		kitPart(plinth, "Body", Vector3.new(7.1, 2.8, 5.6), Vector3.new(0, 2.0, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.5, 0.5, 6.1), Vector3.new(0, 3.55, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -9457,8 +10142,23 @@ end
 --[[ Ensure plinth has kit children; rebuild if missing/incomplete. Returns role count. ]]
 function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): number
 	local n = countKitRoles(plinth)
+	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
+	local needsDress = false
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" then
+		local hasDress = false
+		for _, child in ipairs(plinth:GetChildren()) do
+			if child:IsA("BasePart") then
+				local nm = child.Name
+				if string.sub(nm, 1, 12) == "WE_DressHost" or nm == "WE_CommandDesk" or nm == "ShowroomPedestalHost2" or nm == "ShowroomFlagHost" then
+					hasDress = true
+					break
+				end
+			end
+		end
+		needsDress = not hasDress
+	end
 	-- Expect at least Body + one more for all kits
-	if n < 2 then
+	if n < 2 or needsDress then
 		StructureKitBuilder.BuildKitOnPlinth(plinth, structureId)
 		n = countKitRoles(plinth)
 	end
@@ -9698,6 +10398,27 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		arch:SetAttribute("WE_Perimeter", true)
 		arch:SetAttribute("WE_GateVisual", true)
 	end
+
+	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
+	if lv >= 3 then
+		task.defer(function()
+			pcall(function()
+				local vas = require(script.Parent.Parent.Services.VisualAssetService)
+				local dressed = 0
+				for _, ch in ipairs(folder:GetChildren()) do
+					if dressed >= 4 then
+						break
+					end
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_Perimeter") == true and not ch:GetAttribute("WE_GateVisual") then
+						if vas.TryAttachBuildingVisual(ch, "DefensiveWalls", lv) then
+							dressed += 1
+						end
+					end
+				end
+			end)
+		end)
+	end
+
 end
 
 function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
@@ -9786,7 +10507,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -10056,11 +10777,11 @@ return StudioBuySmoke
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="56">
+      <Item class="Folder" referent="58">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10271,7 +10992,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10320,7 +11041,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10370,7 +11091,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -10715,7 +11436,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11243,6 +11964,15 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				end
 				child.Transparency = transparency
 				child.Material = Enum.Material.Metal -- Design: reject neon antenna accents
+			elseif role == "DressHost" then
+				-- Tier 2 interior/prop hosts: gunmetal, no neon wash
+				child.Transparency = if lv == 0 then 0.95 else 0.72
+				child.Color = Color3.fromRGB(55, 60, 58)
+				child.Material = Enum.Material.Metal
+				if child:GetAttribute("WE_GunmetalDesk") or string.find(child.Name, "CommandDesk", 1, true) then
+					child.Transparency = if lv == 0 then 0.9 else 0.05
+					child.Color = Color3.fromRGB(55, 60, 58)
+				end
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
@@ -11281,9 +12011,12 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	if preferMesh and lv >= meshMin then
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
-			vas.TryAttachBuildingVisual(plinth, structureId)
+			vas.TryAttachBuildingVisual(plinth, structureId, lv)
 			if structureId == "VehicleDepot" and vas.TryAttachShowroomVisual then
 				vas.TryAttachShowroomVisual(plinth)
+			end
+			if vas.TryDressStructureInterior then
+				vas.TryDressStructureInterior(plinth, structureId)
 			end
 		end)
 	end
@@ -11578,7 +12311,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11891,7 +12624,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -11996,7 +12729,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12497,7 +13230,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -12929,7 +13662,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13082,7 +13815,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14134,7 +14867,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="68">
+          <Item class="ModuleScript" referent="70">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -14191,7 +14924,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="69">
+          <Item class="ModuleScript" referent="71">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -14354,7 +15087,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="70">
+          <Item class="ModuleScript" referent="72">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -14408,7 +15141,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14747,7 +15480,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -14759,6 +15492,7 @@ return DataService
 	  2. Prestige: × (1 + Prestige * EconomyConfig.PrestigeCashMultiplierPerLevel)
 	  3. Monetization VIP/DoubleCash: × MonetizationService.GetCashMultiplier
 	  4. Season: × SeasonService.GetCashMult()
+	  5. OutpostIncomeStacks: × (1 + stacks * OutpostIncomeBuff.MultPerStack)
 	Passive income accrues to PendingCash (Money Collector); CollectPendingCash grants Cash.
 ]]
 
@@ -14792,11 +15526,22 @@ local function applyCashMult(player: Player, profile: any, amount: number, reaso
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
 	local exempt = MonetizationConfig.CashMultExemptReasons
-	if MonetizationService and MonetizationService.GetCashMultiplier and not (exempt and exempt[reasonKey]) then
-		mult *= MonetizationService.GetCashMultiplier(player)
-	end
-	if SeasonService and SeasonService.GetCashMult and not (exempt and exempt[reasonKey]) then
-		mult *= SeasonService.GetCashMult()
+	local isExempt = exempt and exempt[reasonKey]
+	if not isExempt then
+		-- Permanent outpost capture stacks (passive / structure / training AccruePendingCash)
+		local buff = EconomyConfig.OutpostIncomeBuff
+		if buff then
+			local stacks = math.clamp(math.floor(tonumber(profile.OutpostIncomeStacks) or 0), 0, buff.MaxStacks or 5)
+			if stacks > 0 then
+				mult *= (1 + stacks * (buff.MultPerStack or 0.10))
+			end
+		end
+		if MonetizationService and MonetizationService.GetCashMultiplier then
+			mult *= MonetizationService.GetCashMultiplier(player)
+		end
+		if SeasonService and SeasonService.GetCashMult then
+			mult *= SeasonService.GetCashMult()
+		end
 	end
 	return math.floor(amount * mult)
 end
@@ -14954,11 +15699,46 @@ function EconomyService.GetGold(player: Player): number
 	return if profile then profile.Gold else 0
 end
 
+function EconomyService.GetOutpostIncomeMultiplier(player: Player): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 1
+	end
+	local buff = EconomyConfig.OutpostIncomeBuff
+	if not buff then
+		return 1
+	end
+	local stacks = math.clamp(math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0), 0, buff.MaxStacks or 5)
+	return 1 + stacks * (buff.MultPerStack or 0.10)
+end
+
+--[[ Grant one permanent outpost income stack (capped). Returns (granted, newStacks, percentAdded). ]]
+function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, number, number)
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return false, 0, 0
+	end
+	local buff = EconomyConfig.OutpostIncomeBuff
+	if not buff then
+		return false, 0, 0
+	end
+	local maxStacks = buff.MaxStacks or 5
+	local stacks = math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0)
+	if stacks >= maxStacks then
+		return false, stacks, 0
+	end
+	stacks += 1
+	(profile :: any).OutpostIncomeStacks = stacks
+	DataService.MarkDirty(player)
+	local pct = math.floor((buff.MultPerStack or 0.10) * 100)
+	return true, stacks, pct
+end
+
 return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="75">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15051,7 +15831,382 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="74">
+        <Item class="ModuleScript" referent="76">
+          <Properties>
+            <string name="Name">ManualDropperService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Early-game manual cash droppers at each plot (Money Collector + Training Yard).
+	ClickDetector / ProximityPrompt → AccruePendingCash. Server cooldown + rate limit.
+]]
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local ManualDropperConfig = require(Shared.Configs.ManualDropperConfig)
+
+local ManualDropperService = {}
+
+local DataService: any = nil
+local EconomyService: any = nil
+local RateLimitService: any = nil
+local VisualAssetService: any = nil
+
+local TAG_COLLECTOR = Constants.Tags.MoneyCollector
+local TAG_DROPPER = "WE_ManualDropper"
+
+local lastAwardAt: { [string]: number } = {}
+local wired: { [BasePart]: boolean } = {}
+
+local function pickAward(): number
+	local fixed = ManualDropperConfig.AwardAmount
+	if typeof(fixed) == "number" and fixed > 0 then
+		return math.floor(fixed)
+	end
+	local lo = math.floor(ManualDropperConfig.MinAward or 10)
+	local hi = math.floor(ManualDropperConfig.MaxAward or 25)
+	if hi < lo then
+		hi = lo
+	end
+	return math.random(lo, hi)
+end
+
+local function cooldownKey(player: Player, dropper: BasePart): string
+	return tostring(player.UserId) .. "|" .. dropper:GetFullName()
+end
+
+local function ownsPlot(player: Player, plotId: any): boolean
+	if typeof(plotId) ~= "number" then
+		return false
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return false
+	end
+	return profile.BasePlotId == plotId
+end
+
+local function spawnFloatingCash(parent: Instance, amount: number, at: Vector3)
+	local anchor = Instance.new("Part")
+	anchor.Name = "WE_DropCashPop"
+	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
+	anchor.Transparency = 1
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanQuery = false
+	anchor.CanTouch = false
+	anchor.CFrame = CFrame.new(at + Vector3.new(0, 2.2, 0))
+	anchor.Parent = parent
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "CashPop"
+	bb.Size = UDim2.fromOffset(110, 36)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 70
+	bb.Parent = anchor
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundTransparency = 1
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(90, 255, 130)
+	label.TextStrokeTransparency = 0.35
+	label.TextStrokeColor3 = Color3.fromRGB(10, 40, 18)
+	label.Text = string.format("+$%d", amount)
+	label.Parent = bb
+
+	local rise = ManualDropperConfig.PopupRiseStuds or 3.2
+	local dur = ManualDropperConfig.PopupDuration or 0.55
+	task.spawn(function()
+		local steps = 10
+		for i = 1, steps do
+			if not anchor.Parent then
+				return
+			end
+			local t = i / steps
+			anchor.CFrame = CFrame.new(at + Vector3.new(0, 2.2 + rise * t, 0))
+			label.TextTransparency = t * 0.85
+			label.TextStrokeTransparency = 0.35 + t * 0.55
+			task.wait(dur / steps)
+		end
+		anchor:Destroy()
+	end)
+
+	pcall(function()
+		if VisualAssetService and VisualAssetService.PlayMoneyBagFX then
+			VisualAssetService.PlayMoneyBagFX(at + Vector3.new(0, 1.5, 0), parent)
+		end
+	end)
+end
+
+local function tryAward(player: Player, dropper: BasePart)
+	if not ManualDropperConfig.Enabled then
+		return
+	end
+	if not player or not player.Parent then
+		return
+	end
+	local plotId = dropper:GetAttribute("PlotId")
+	if not ownsPlot(player, plotId) then
+		return
+	end
+
+	local key = cooldownKey(player, dropper)
+	local now = os.clock()
+	local cd = ManualDropperConfig.CooldownSeconds or 0.35
+	local last = lastAwardAt[key]
+	if last and (now - last) < cd then
+		return
+	end
+
+	if RateLimitService and RateLimitService.Allow then
+		local rate = ManualDropperConfig.RateLimitRate or 4
+		local burst = ManualDropperConfig.RateLimitBurst or 3
+		if not RateLimitService.Allow(player, "manual_dropper", rate, burst) then
+			return
+		end
+	end
+
+	lastAwardAt[key] = now
+	local amount = pickAward()
+	if not EconomyService or not EconomyService.AccruePendingCash then
+		return
+	end
+	local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")
+	if ok then
+		spawnFloatingCash(dropper.Parent or dropper, amount, dropper.Position)
+	end
+end
+
+local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3, plotId: number): BasePart
+	local existing = parent:FindFirstChild(name)
+	if existing and existing:IsA("BasePart") then
+		existing:SetAttribute("PlotId", plotId)
+		return existing
+	end
+
+	local size = ManualDropperConfig.PartSize or Vector3.new(2.4, 1.2, 2.4)
+	local pad = Instance.new("Part")
+	pad.Name = name
+	pad.Size = size
+	pad.Anchored = true
+	pad.CanCollide = true
+	pad.CanTouch = false
+	pad.Material = Enum.Material.SmoothPlastic
+	pad.Color = ManualDropperConfig.PartColor or Color3.fromRGB(40, 140, 70)
+	pad.CFrame = CFrame.new(worldPos + Vector3.new(0, size.Y * 0.5 + 0.15, 0))
+	pad:SetAttribute("PlotId", plotId)
+	pad:SetAttribute("WE_ManualDropper", true)
+	pad.Parent = parent
+	CollectionService:AddTag(pad, TAG_DROPPER)
+
+	local neon = Instance.new("Part")
+	neon.Name = "DropNeon"
+	neon.Size = Vector3.new(size.X * 0.7, 0.2, size.Z * 0.7)
+	neon.Anchored = true
+	neon.CanCollide = false
+	neon.Material = Enum.Material.Neon
+	neon.Color = ManualDropperConfig.NeonAccentColor or Color3.fromRGB(90, 255, 120)
+	neon.CFrame = pad.CFrame * CFrame.new(0, size.Y * 0.5 + 0.05, 0)
+	neon.Parent = pad
+
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(100, 255, 130)
+	light.Brightness = 0.7
+	light.Range = 10
+	light.Parent = pad
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_DropperLabel"
+	bb.Size = UDim2.fromOffset(140, 32)
+	bb.StudsOffset = Vector3.new(0, 2.4, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 55
+	bb.Parent = pad
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromScale(1, 1)
+	label.BackgroundColor3 = Color3.fromRGB(12, 28, 16)
+	label.BackgroundTransparency = 0.25
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(100, 255, 140)
+	local shown = ManualDropperConfig.AwardAmount or ManualDropperConfig.MinAward or 10
+	label.Text = (ManualDropperConfig.BillboardLabel or "CLICK · $") .. tostring(shown)
+	label.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = label
+
+	local click = Instance.new("ClickDetector")
+	click.Name = "DropClick"
+	click.MaxActivationDistance = ManualDropperConfig.PromptMaxDistance or 12
+	click.Parent = pad
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "DropPrompt"
+	prompt.ActionText = ManualDropperConfig.PromptActionText or "Grab Cash"
+	prompt.ObjectText = ManualDropperConfig.PromptObjectText or "Cash Drop"
+	prompt.HoldDuration = ManualDropperConfig.PromptHoldDuration or 0
+	prompt.MaxActivationDistance = ManualDropperConfig.PromptMaxDistance or 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = pad
+
+	return pad
+end
+
+local function wireDropper(pad: BasePart)
+	if wired[pad] then
+		return
+	end
+	wired[pad] = true
+
+	local click = pad:FindFirstChild("DropClick")
+	if click and click:IsA("ClickDetector") then
+		click.MouseClick:Connect(function(player: Player)
+			tryAward(player, pad)
+		end)
+	end
+	local prompt = pad:FindFirstChild("DropPrompt")
+	if prompt and prompt:IsA("ProximityPrompt") then
+		prompt.Triggered:Connect(function(player: Player)
+			tryAward(player, pad)
+		end)
+	end
+end
+
+local function groundYForPlot(plotFolder: Instance, fallbackY: number): number
+	local plotPad = plotFolder:FindFirstChild("PlotPad")
+	if plotPad and plotPad:IsA("BasePart") then
+		return plotPad.Position.Y + plotPad.Size.Y * 0.5
+	end
+	return fallbackY
+end
+
+local function ensureDropperNearCollector(collector: BasePart)
+	local plotId = collector:GetAttribute("PlotId")
+	if typeof(plotId) ~= "number" then
+		return
+	end
+	local parent = collector.Parent or collector
+	local offset = ManualDropperConfig.CollectorOffset or Vector3.new(-5.5, 0, 4)
+	local gy = collector.Position.Y - collector.Size.Y * 0.5
+	local plotFolder = parent.Parent
+	if plotFolder then
+		gy = groundYForPlot(plotFolder, gy)
+	end
+	local pos = Vector3.new(collector.Position.X + offset.X, gy, collector.Position.Z + offset.Z)
+	local pad = buildDropperKit(parent, "ManualDropper_Collector", pos, plotId)
+	wireDropper(pad)
+end
+
+local function ensureDropperNearYard(plotFolder: Instance, plotId: number)
+	local yard = plotFolder:FindFirstChild("TrainingYard")
+	if not yard then
+		return
+	end
+	local anchor = yard:FindFirstChild("YardEarnAnchor")
+		or yard:FindFirstChild("YardAnchor")
+		or yard:FindFirstChildWhichIsA("BasePart", true)
+	if not anchor or not anchor:IsA("BasePart") then
+		return
+	end
+	local offset = ManualDropperConfig.YardOffset or Vector3.new(6, 0, -4)
+	local gy = groundYForPlot(plotFolder, anchor.Position.Y - 6)
+	local pos = Vector3.new(anchor.Position.X + offset.X, gy, anchor.Position.Z + offset.Z)
+	local pad = buildDropperKit(yard, "ManualDropper_Yard", pos, plotId)
+	wireDropper(pad)
+end
+
+local function scanPlots()
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		return
+	end
+	local bases = setup:FindFirstChild("Bases")
+	if not bases then
+		return
+	end
+	for _, plotFolder in ipairs(bases:GetChildren()) do
+		if plotFolder:IsA("Folder") or plotFolder:IsA("Model") then
+			local plotIdAttr = plotFolder:GetAttribute("PlotId")
+			local plotId: number? = if typeof(plotIdAttr) == "number" then plotIdAttr else tonumber(string.match(plotFolder.Name, "%d+"))
+			if typeof(plotId) == "number" then
+				ensureDropperNearYard(plotFolder, plotId)
+			end
+		end
+	end
+end
+
+function ManualDropperService.Init(deps: { [string]: any })
+	DataService = deps.DataService
+	EconomyService = deps.EconomyService
+	RateLimitService = deps.RateLimitService
+	VisualAssetService = deps.VisualAssetService
+
+	if not ManualDropperConfig.Enabled then
+		print("[WAR EMPIRE] ManualDropperService disabled by config")
+		return
+	end
+
+	for _, inst in ipairs(CollectionService:GetTagged(TAG_COLLECTOR)) do
+		if inst:IsA("BasePart") then
+			ensureDropperNearCollector(inst)
+		end
+	end
+	CollectionService:GetInstanceAddedSignal(TAG_COLLECTOR):Connect(function(inst)
+		if inst:IsA("BasePart") then
+			task.defer(function()
+				ensureDropperNearCollector(inst)
+			end)
+		end
+	end)
+
+	for _, inst in ipairs(CollectionService:GetTagged(TAG_DROPPER)) do
+		if inst:IsA("BasePart") then
+			wireDropper(inst)
+		end
+	end
+	CollectionService:GetInstanceAddedSignal(TAG_DROPPER):Connect(function(inst)
+		if inst:IsA("BasePart") then
+			wireDropper(inst)
+		end
+	end)
+
+	scanPlots()
+	task.spawn(function()
+		for _ = 1, 15 do
+			task.wait(1)
+			scanPlots()
+			for _, inst in ipairs(CollectionService:GetTagged(TAG_COLLECTOR)) do
+				if inst:IsA("BasePart") then
+					ensureDropperNearCollector(inst)
+				end
+			end
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		local prefix = tostring(player.UserId) .. "|"
+		for key in pairs(lastAwardAt) do
+			if string.sub(key, 1, #prefix) == prefix then
+				lastAwardAt[key] = nil
+			end
+		end
+	end)
+
+	print("[WAR EMPIRE] ManualDropperService ready (click/prompt → PendingCash)")
+end
+
+return ManualDropperService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15547,7 +16702,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15927,7 +17082,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16299,7 +17454,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16409,7 +17564,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16479,7 +17634,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16731,7 +17886,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16783,7 +17938,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17047,7 +18202,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17257,7 +18412,10 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	if not yard then
 		return
 	end
-	local anchor = yard:FindFirstChild("YardEarnAnchor") or yard:FindFirstChild("YardAnchor")
+	-- P0: parent earn board to YardPad (not worker heads); short MaxDistance; never AlwaysOnTop
+	local anchor = yard:FindFirstChild("YardPad")
+		or yard:FindFirstChild("YardEarnAnchor")
+		or yard:FindFirstChild("YardAnchor")
 	if not anchor or not anchor:IsA("BasePart") then
 		return
 	end
@@ -17265,10 +18423,10 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	if not bb or not bb:IsA("BillboardGui") then
 		bb = Instance.new("BillboardGui")
 		bb.Name = "WE_TrainingEarnBillboard"
-		bb.Size = UDim2.fromOffset(180, 48)
-		bb.StudsOffset = Vector3.new(0, 4, 0)
-		bb.AlwaysOnTop = true
-		bb.MaxDistance = 80
+		bb.Size = UDim2.fromOffset(140, 28)
+		bb.StudsOffset = Vector3.new(0, 3.2, 0)
+		bb.AlwaysOnTop = false
+		bb.MaxDistance = 22
 		bb.Parent = anchor
 		local label = Instance.new("TextLabel")
 		label.Name = "Amount"
@@ -17297,8 +18455,9 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	pop.Name = "WE_TrainCashPop"
 	pop.Size = UDim2.fromOffset(100, 28)
 	pop.StudsOffset = Vector3.new(0, 6, 0)
-	pop.AlwaysOnTop = true
-	pop.MaxDistance = 60
+	-- P0: short-lived pop (0.6s), not AlwaysOnTop, no persistent stack
+	pop.AlwaysOnTop = false
+	pop.MaxDistance = 22
 	pop.Parent = anchor
 	local popLab = Instance.new("TextLabel")
 	popLab.Size = UDim2.fromScale(1, 1)
@@ -17310,10 +18469,10 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	popLab.Text = string.format("+$%d", tickAmount)
 	popLab.Parent = pop
 	task.spawn(function()
-		for i = 1, 8 do
-			pop.StudsOffset = Vector3.new(0, 6 + i * 0.35, 0)
-			popLab.TextTransparency = i / 10
-			task.wait(0.06)
+		for i = 1, 6 do
+			pop.StudsOffset = Vector3.new(0, 3.5 + i * 0.4, 0)
+			popLab.TextTransparency = i / 7
+			task.wait(0.1)
 		end
 		pop:Destroy()
 	end)
@@ -17420,7 +18579,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17583,7 +18742,650 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="87">
+          <Properties>
+            <string name="Name">SquadOrdersService</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	Squad Orders — server-authoritative Follow / Attack / Hold / Retreat.
+	Extends SoldierService counts + Combat MoveTo patterns. Not a second army economy.
+]]
+
+local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
+local OrdersConfig = require(Shared.Configs.OrdersConfig)
+
+local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+
+local SquadOrdersService = {}
+
+local DataService: any = nil
+local SoldierService: any = nil
+local NotificationService: any = nil
+local RateLimitService: any = nil
+local RemoteSetup: any = nil
+local AntiExploitService: any = nil
+local VisualAssetService: any = nil
+local BaseService: any = nil
+
+export type OrderId = "Follow" | "Attack" | "Hold" | "Retreat"
+
+type SquadUnit = {
+	Id: string,
+	Model: Model,
+	Humanoid: Humanoid,
+	Root: BasePart,
+	OwnerUserId: number,
+	Slot: number,
+	LastFireAt: number,
+	HoldPos: Vector3?,
+	Alive: boolean,
+}
+
+type SquadState = {
+	Order: OrderId,
+	Units: { SquadUnit },
+	DesiredCount: number,
+}
+
+local VALID: { [string]: boolean } = {
+	Follow = true,
+	Attack = true,
+	Hold = true,
+	Retreat = true,
+}
+
+local squadByUser: { [number]: SquadState } = {}
+local unitSerial = 0
+local squadFolder: Folder? = nil
+local TAG_SQUAD = "WE_SquadUnit"
+
+local function ensureFolder(): Folder
+	if squadFolder and squadFolder.Parent then
+		return squadFolder :: Folder
+	end
+	local existing = Workspace:FindFirstChild("WarEmpireSquads")
+	if existing and existing:IsA("Folder") then
+		squadFolder = existing
+		return existing
+	end
+	local f = Instance.new("Folder")
+	f.Name = "WarEmpireSquads"
+	f.Parent = Workspace
+	squadFolder = f
+	return f
+end
+
+local function characterRoot(player: Player): BasePart?
+	local character = player.Character
+	if not character then
+		return nil
+	end
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if hum and root and root:IsA("BasePart") and hum.Health > 0 then
+		return root
+	end
+	return nil
+end
+
+local function plotRetreatCFrame(player: Player): CFrame?
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return nil
+	end
+	local plotId = tonumber(profile.BasePlotId)
+	if not plotId then
+		return nil
+	end
+	if BaseService and BaseService.GetPlotSpawnCFrame then
+		return BaseService.GetPlotSpawnCFrame(plotId)
+	end
+	return nil
+end
+
+local function pushState(player: Player)
+	if not RemoteSetup then
+		return
+	end
+	local st = squadByUser[player.UserId]
+	local remote = RemoteSetup.Get(Constants.RemoteNames.SquadOrderStateUpdate) :: RemoteEvent
+	local soldiers = if SoldierService then SoldierService.GetCount(player) else 0
+	local alive = 0
+	if st then
+		for _, u in ipairs(st.Units) do
+			if u.Alive then
+				alive += 1
+			end
+		end
+	end
+	local show = OrdersConfig.Enabled == true and soldiers >= (OrdersConfig.MinSoldiersToShow or 1)
+	remote:FireClient(player, {
+		Enabled = OrdersConfig.Enabled == true,
+		Order = if st then st.Order else (OrdersConfig.DefaultOrder or "Follow"),
+		Soldiers = soldiers,
+		FieldUnits = alive,
+		MaxFieldUnits = OrdersConfig.MaxFieldUnits or 5,
+		ShowPanel = show,
+	})
+end
+
+local function destroyUnit(unit: SquadUnit)
+	unit.Alive = false
+	if unit.Model and unit.Model.Parent then
+		unit.Model:Destroy()
+	end
+end
+
+local function clearSquad(userId: number)
+	local st = squadByUser[userId]
+	if not st then
+		return
+	end
+	for _, u in ipairs(st.Units) do
+		destroyUnit(u)
+	end
+	st.Units = {}
+	st.DesiredCount = 0
+end
+
+local function formationOffset(slot: number): Vector3
+	local spacing = OrdersConfig.FormationSpacing or 3.5
+	local row = math.ceil(slot / 3)
+	local col = ((slot - 1) % 3) - 1
+	return Vector3.new(col * spacing, 0, 6 + (row - 1) * spacing)
+end
+
+local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
+	unitSerial += 1
+	local id = string.format("squad_%d_%d", owner.UserId, unitSerial)
+
+	local model = Instance.new("Model")
+	model.Name = (OrdersConfig.DisplayName or "Squad") .. tostring(slot)
+	model:SetAttribute("SquadUnitId", id)
+	model:SetAttribute("OwnerUserId", owner.UserId)
+	model:SetAttribute("SquadSlot", slot)
+	model:SetAttribute("FriendlySquad", true)
+
+	local root = Instance.new("Part")
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.CFrame = at
+	root.Anchored = false
+	root.CanCollide = true
+	root.Color = OrdersConfig.UnitColor or Color3.fromRGB(70, 90, 55)
+	root.Material = Enum.Material.Fabric
+	root.Parent = model
+
+	local function weldPart(name: string, size: Vector3, offset: CFrame, color: Color3, material: Enum.Material, shape: Enum.PartType?): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.CFrame = at * offset
+		p.Anchored = false
+		p.CanCollide = false
+		p.Massless = true
+		p.Color = color
+		p.Material = material
+		if shape then
+			p.Shape = shape
+		end
+		p.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = root
+		w.Part1 = p
+		w.Parent = root
+		return p
+	end
+
+	local olive = OrdersConfig.UnitColor or Color3.fromRGB(70, 90, 55)
+	local skin = Color3.fromRGB(190, 160, 120)
+	local head = weldPart("Head", Vector3.new(1.05, 1.05, 1.05), CFrame.new(0, 1.55, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	local face = Instance.new("Decal")
+	face.Name = "face"
+	face.Face = Enum.NormalId.Front
+	face.Texture = "rbxasset://textures/face.png"
+	face.Parent = head
+	weldPart("Helmet", Vector3.new(1.2, 0.5, 1.2), CFrame.new(0, 1.95, 0), Color3.fromRGB(55, 70, 45), Enum.Material.Metal, nil)
+	weldPart("Vest", Vector3.new(2.1, 1.2, 1.15), CFrame.new(0, 0.15, 0), olive, Enum.Material.Fabric, nil)
+	weldPart("LegL", Vector3.new(1, 2, 1), CFrame.new(-0.5, -2, 0), olive, Enum.Material.Fabric, nil)
+	weldPart("LegR", Vector3.new(1, 2, 1), CFrame.new(0.5, -2, 0), olive, Enum.Material.Fabric, nil)
+	weldPart("ArmL", Vector3.new(1, 2, 1), CFrame.new(-1.5, 0, 0), olive, Enum.Material.Fabric, nil)
+	weldPart("ArmR", Vector3.new(1, 2, 1), CFrame.new(1.5, 0, 0), olive, Enum.Material.Fabric, nil)
+	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
+
+	local humanoid = Instance.new("Humanoid")
+	humanoid.MaxHealth = OrdersConfig.UnitHealth or 90
+	humanoid.Health = humanoid.MaxHealth
+	humanoid.WalkSpeed = OrdersConfig.UnitWalkSpeed or 14
+	humanoid.AutoRotate = true
+	humanoid.HipHeight = 2
+	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
+	humanoid.Parent = model
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "SquadLabel"
+	bb.Size = UDim2.fromOffset(100, 22)
+	bb.StudsOffset = Vector3.new(0, 3.4, 0)
+	bb.AlwaysOnTop = false
+	bb.MaxDistance = 60
+	bb.Parent = root
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundColor3 = Color3.fromRGB(28, 36, 28)
+	lbl.BackgroundTransparency = 0.3
+	lbl.Text = "SQUAD"
+	lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
+	lbl.TextScaled = true
+	lbl.Font = Enum.Font.GothamBold
+	lbl.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 4)
+	corner.Parent = lbl
+
+	model.PrimaryPart = root
+	if VisualAssetService and VisualAssetService.TryAttachCharacterVisual then
+		pcall(function()
+			VisualAssetService.TryAttachCharacterVisual(model, OrdersConfig.VisualKind or "Infantry")
+		end)
+	end
+	-- Friendly only — do NOT tag as WE_NPC (CombatNPC would aggro players)
+	CollectionService:AddTag(model, TAG_SQUAD)
+	model.Parent = ensureFolder()
+	pcall(function()
+		root:SetNetworkOwner(nil)
+	end)
+
+	local gyro = Instance.new("BodyGyro")
+	gyro.Name = "NPCFaceGyro"
+	gyro.MaxTorque = Vector3.new(0, 4e5, 0)
+	gyro.P = 5000
+	gyro.D = 500
+	gyro.CFrame = at
+	gyro.Parent = root
+
+	local unit: SquadUnit = {
+		Id = id,
+		Model = model,
+		Humanoid = humanoid,
+		Root = root,
+		OwnerUserId = owner.UserId,
+		Slot = slot,
+		LastFireAt = 0,
+		HoldPos = nil,
+		Alive = true,
+	}
+
+	humanoid.Died:Connect(function()
+		if not unit.Alive then
+			return
+		end
+		unit.Alive = false
+		task.delay(0.35, function()
+			if unit.Model and unit.Model.Parent then
+				unit.Model:Destroy()
+			end
+		end)
+		task.delay(8, function()
+			local plr = Players:GetPlayerByUserId(owner.UserId)
+			if plr then
+				SquadOrdersService.SyncArmy(plr)
+			end
+		end)
+	end)
+
+	return unit
+end
+
+local function nearestHostile(fromPos: Vector3, maxRange: number): (Humanoid?, BasePart?, number)
+	local bestHum: Humanoid? = nil
+	local bestRoot: BasePart? = nil
+	local bestDist = maxRange
+	local npcTag = Constants.Tags.NPC
+	for _, inst in ipairs(CollectionService:GetTagged(npcTag)) do
+		if inst:IsA("Model") and not inst:GetAttribute("FriendlySquad") and not inst:GetAttribute("OwnerUserId") then
+			local hum = inst:FindFirstChildOfClass("Humanoid")
+			local root = inst:FindFirstChild("HumanoidRootPart")
+			if hum and root and root:IsA("BasePart") and hum.Health > 0 then
+				local d = (root.Position - fromPos).Magnitude
+				if d < bestDist then
+					bestDist = d
+					bestHum = hum
+					bestRoot = root
+				end
+			end
+		end
+	end
+	if not bestRoot then
+		local zoneTag = Constants.Tags.CaptureZone
+		if zoneTag then
+			for _, inst in ipairs(CollectionService:GetTagged(zoneTag)) do
+				if inst:IsA("BasePart") then
+					local d = (inst.Position - fromPos).Magnitude
+					if d < bestDist then
+						bestDist = d
+						bestHum = nil
+						bestRoot = inst
+					end
+				end
+			end
+		end
+	end
+	return bestHum, bestRoot, bestDist
+end
+
+local function faceYaw(root: BasePart, lookAt: Vector3)
+	local look = CFrame.lookAt(root.Position, Vector3.new(lookAt.X, root.Position.Y, lookAt.Z))
+	local gyro = root:FindFirstChild("NPCFaceGyro")
+	if gyro and gyro:IsA("BodyGyro") then
+		gyro.CFrame = look
+	end
+end
+
+local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: number)
+	if not unit.Alive or unit.Humanoid.Health <= 0 or not unit.Root.Parent then
+		return
+	end
+	local order = st.Order
+	local playerRoot = characterRoot(player)
+
+	if order == "Follow" then
+		if not playerRoot then
+			return
+		end
+		local offset = formationOffset(unit.Slot)
+		local target = (playerRoot.CFrame * CFrame.new(offset)).Position
+		local dist = (unit.Root.Position - playerRoot.Position).Magnitude
+		local stop = OrdersConfig.FollowStopDistance or 6
+		if dist > (OrdersConfig.FollowDistance or 10) then
+			unit.Humanoid:MoveTo(target)
+			faceYaw(unit.Root, playerRoot.Position)
+		elseif dist > stop then
+			unit.Humanoid:MoveTo(target)
+		else
+			unit.Humanoid:MoveTo(unit.Root.Position)
+		end
+		return
+	end
+
+	if order == "Hold" then
+		if not unit.HoldPos then
+			unit.HoldPos = unit.Root.Position
+		end
+		local leash = OrdersConfig.HoldLeashStuds or 14
+		local dist = (unit.Root.Position - (unit.HoldPos :: Vector3)).Magnitude
+		if dist > leash * 0.4 then
+			unit.Humanoid:MoveTo(unit.HoldPos :: Vector3)
+		else
+			unit.Humanoid:MoveTo(unit.Root.Position)
+		end
+		return
+	end
+
+	if order == "Retreat" then
+		local cf = plotRetreatCFrame(player)
+		if cf then
+			local dest = cf.Position
+			local dist = (unit.Root.Position - dest).Magnitude
+			if dist > 6 then
+				unit.Humanoid:MoveTo(dest)
+				faceYaw(unit.Root, dest)
+			else
+				unit.Humanoid:MoveTo(unit.Root.Position)
+				unit.HoldPos = unit.Root.Position
+			end
+		elseif playerRoot then
+			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, 8)).Position)
+		end
+		return
+	end
+
+	if order == "Attack" then
+		local aggro = OrdersConfig.AttackAggroRange or 120
+		local range = OrdersConfig.AttackRange or 55
+		local th, troot, dist = nearestHostile(unit.Root.Position, aggro)
+		if troot then
+			faceYaw(unit.Root, troot.Position)
+			if dist > range * 0.85 then
+				unit.Humanoid:MoveTo(troot.Position)
+			else
+				unit.Humanoid:MoveTo(unit.Root.Position)
+				if th and th.Health > 0 then
+					local interval = 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+					if now - unit.LastFireAt >= interval and dist <= range then
+						unit.LastFireAt = now
+						th:TakeDamage(OrdersConfig.AttackDamage or 8)
+					end
+				end
+			end
+		elseif playerRoot then
+			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+		end
+		return
+	end
+end
+
+function SquadOrdersService.SyncArmy(player: Player)
+	if not OrdersConfig.Enabled then
+		clearSquad(player.UserId)
+		pushState(player)
+		return
+	end
+	local soldiers = if SoldierService then SoldierService.GetCount(player) else 0
+	local maxField = OrdersConfig.MaxFieldUnits or 5
+	local per = OrdersConfig.UnitsPerSoldier or 1
+	local desired = math.clamp(math.floor(soldiers * per), 0, maxField)
+	if soldiers < (OrdersConfig.MinSoldiersToShow or 1) then
+		desired = 0
+	end
+
+	local st = squadByUser[player.UserId]
+	if not st then
+		st = {
+			Order = (OrdersConfig.DefaultOrder :: any) or "Follow",
+			Units = {},
+			DesiredCount = 0,
+		}
+		squadByUser[player.UserId] = st
+	end
+	st.DesiredCount = desired
+
+	local living: { SquadUnit } = {}
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Model.Parent and u.Humanoid.Health > 0 then
+			table.insert(living, u)
+		else
+			destroyUnit(u)
+		end
+	end
+	st.Units = living
+
+	while #st.Units > desired do
+		local u = table.remove(st.Units)
+		if u then
+			destroyUnit(u)
+		end
+	end
+
+	local root = characterRoot(player)
+	local baseCf: CFrame? = if root then root.CFrame else plotRetreatCFrame(player)
+	if not baseCf then
+		pushState(player)
+		return
+	end
+	while #st.Units < desired do
+		local slot = #st.Units + 1
+		local offset = formationOffset(slot)
+		local at = (baseCf :: CFrame) * CFrame.new(offset) + Vector3.new(0, 2, 0)
+		local unit = spawnUnit(player, slot, at)
+		if unit then
+			table.insert(st.Units, unit)
+		else
+			break
+		end
+	end
+
+	pushState(player)
+end
+
+function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, string?)
+	if not OrdersConfig.Enabled then
+		return false, "Disabled"
+	end
+	if typeof(orderRaw) ~= "string" then
+		return false, "InvalidOrder"
+	end
+	local order = orderRaw :: string
+	if not VALID[order] then
+		return false, "InvalidOrder"
+	end
+	local flags = OrdersConfig.Orders
+	if typeof(flags) == "table" and (flags :: any)[order] == false then
+		return false, "OrderDisabled"
+	end
+	local soldiers = if SoldierService then SoldierService.GetCount(player) else 0
+	if soldiers < (OrdersConfig.MinSoldiersToShow or 1) then
+		return false, "NoSoldiers"
+	end
+
+	local st = squadByUser[player.UserId]
+	if not st then
+		SquadOrdersService.SyncArmy(player)
+		st = squadByUser[player.UserId]
+	end
+	if not st then
+		return false, "NoSquad"
+	end
+
+	st.Order = order :: OrderId
+	if order == "Hold" then
+		for _, u in ipairs(st.Units) do
+			if u.Alive then
+				u.HoldPos = u.Root.Position
+			end
+		end
+	else
+		for _, u in ipairs(st.Units) do
+			u.HoldPos = nil
+		end
+	end
+
+	pushState(player)
+	if NotificationService then
+		local labels = {
+			Follow = "Squad: FOLLOW",
+			Attack = "Squad: ATTACK nearest hostile",
+			Hold = "Squad: HOLD position",
+			Retreat = "Squad: RETREAT to plot",
+		}
+		NotificationService.Notify(player, labels[order] or ("Squad: " .. order), "Info")
+	end
+	return true, nil
+end
+
+function SquadOrdersService.Push(player: Player)
+	pushState(player)
+end
+
+function SquadOrdersService.Init(deps: { [string]: any })
+	DataService = deps.DataService
+	SoldierService = deps.SoldierService
+	NotificationService = deps.NotificationService
+	RateLimitService = deps.RateLimitService
+	RemoteSetup = deps.RemoteSetup
+	AntiExploitService = deps.AntiExploitService
+	VisualAssetService = deps.VisualAssetService
+	BaseService = deps.BaseService
+
+	if not OrdersConfig.Enabled then
+		print("[WAR EMPIRE] SquadOrdersService disabled (OrdersConfig.Enabled=false)")
+		return
+	end
+
+	ensureFolder()
+
+	local orderRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSquadOrder) :: RemoteEvent
+	orderRemote.OnServerEvent:Connect(function(player: Player, orderId: any)
+		local rate = OrdersConfig.OrderRatePerSec or 2
+		local burst = OrdersConfig.OrderBurst or 4
+		if not RateLimitService.Allow(player, "squad_order", rate, burst) then
+			if AntiExploitService and AntiExploitService.Strike then
+				AntiExploitService.Strike(player, "squad_order_rate")
+			end
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		local ok, err = SquadOrdersService.SetOrder(player, orderId)
+		if not ok and NotificationService then
+			local msg = "Order failed"
+			if err == "NoSoldiers" then
+				msg = "Recruit soldiers first (Army)"
+			elseif err == "InvalidOrder" then
+				msg = "Invalid squad order"
+			end
+			NotificationService.Notify(player, msg, "Warn")
+		end
+	end)
+
+	DataService.OnProfileLoaded(function(player: Player, _profile: any)
+		task.defer(function()
+			if player.Parent then
+				SquadOrdersService.SyncArmy(player)
+			end
+		end)
+		task.delay(2, function()
+			if player.Parent then
+				SquadOrdersService.SyncArmy(player)
+			end
+		end)
+		player.CharacterAdded:Connect(function()
+			task.delay(1, function()
+				if player.Parent then
+					SquadOrdersService.SyncArmy(player)
+				end
+			end)
+		end)
+	end)
+
+	Players.PlayerRemoving:Connect(function(player: Player)
+		clearSquad(player.UserId)
+		squadByUser[player.UserId] = nil
+	end)
+
+	task.spawn(function()
+		while true do
+			local interval = OrdersConfig.ThinkInterval or 0.4
+			task.wait(interval)
+			local now = os.clock()
+			for _, player in ipairs(Players:GetPlayers()) do
+				local st = squadByUser[player.UserId]
+				if st and #st.Units > 0 then
+					for _, unit in ipairs(st.Units) do
+						thinkUnit(player, st, unit, now)
+					end
+				end
+			end
+		end
+	end)
+
+	print("[WAR EMPIRE] SquadOrdersService ready (Follow/Attack/Hold/Retreat)")
+end
+
+return SquadOrdersService
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17896,7 +19698,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18369,6 +20171,20 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
 
+	-- Permanent income buff stack (PendingCash / structure / training paths)
+	if _EconomyService and _EconomyService.GrantOutpostIncomeStack then
+		local granted, _stacks, pct = _EconomyService.GrantOutpostIncomeStack(player)
+		if granted and NotificationService and pct > 0 then
+			local buff = nil
+			pcall(function()
+				local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+				buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+			end)
+			local template = (buff and buff.ToastTemplate) or "+%d%% Income — Outpost secured"
+			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+		end
+	end
+
 	if NotificationService then
 		local bonusHint = rt.Def.Description or ""
 		if #bonusHint > 60 then
@@ -18618,7 +20434,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="86">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -18659,7 +20475,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="87">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -18736,7 +20552,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -18792,7 +20608,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19039,7 +20855,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19507,7 +21323,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20818,7 +22634,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="96">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20884,14 +22700,15 @@ local function stripScripts(root: Instance)
 	end
 end
 
-local function loadModel(assetId: number): Model?
+local function loadModel(assetId: number, forceInsert: boolean?): Model?
 	if assetId == 0 or failed[assetId] then
 		return nil
 	end
 	if cache[assetId] then
 		return cache[assetId]
 	end
-	if shouldSkipInserts() then
+	-- P0: character dress MUST run even when StudioSkipWorldDressing (workers never brown bricks)
+	if shouldSkipInserts() and not forceInsert then
 		return nil
 	end
 	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
@@ -21038,7 +22855,13 @@ function VisualAssetService.ResolveVehicleAssetId(vehicleId: string, kitFamily: 
 end
 
 function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
-	local ref = VisualAssetConfig.Characters[kind] or VisualAssetConfig.Characters.Soldier
+	local ref = VisualAssetConfig.Characters[kind]
+	if not ref and kind == "Worker" then
+		ref = VisualAssetConfig.Characters.Infantry or VisualAssetConfig.Characters.Soldier
+	end
+	if not ref then
+		ref = VisualAssetConfig.Characters.Soldier
+	end
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
 	end
@@ -21057,17 +22880,37 @@ function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
 	return nil
 end
 
-function VisualAssetService.ResolvePropAssetId(propKey: string): number?
-	local warzone = (VisualAssetConfig :: any).WarzoneProps
-	if typeof(warzone) == "table" then
-		local refW = warzone[propKey]
-		if refW and typeof(refW.ModelAssetId) == "number" and (refW.ModelAssetId :: number) > 0 then
-			return refW.ModelAssetId
+local function lookupPropRef(propKey: string): any
+	local buckets = {
+		(VisualAssetConfig :: any).WarzoneProps,
+		VisualAssetConfig.DesertProps,
+		(VisualAssetConfig :: any).MapDressing,
+		(VisualAssetConfig :: any).IndustrialProps,
+		(VisualAssetConfig :: any).Landmarks,
+	}
+	for _, bucket in ipairs(buckets) do
+		if typeof(bucket) == "table" then
+			local ref = bucket[propKey]
+			if typeof(ref) == "table" then
+				return ref
+			end
 		end
 	end
-	local ref = VisualAssetConfig.DesertProps[propKey]
+	return nil
+end
+
+function VisualAssetService.ResolvePropAssetId(propKey: string): number?
+	local ref = lookupPropRef(propKey)
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
+	end
+	return nil
+end
+
+function VisualAssetService.ResolvePropMeshId(propKey: string): number?
+	local ref = lookupPropRef(propKey)
+	if ref and typeof(ref.MeshId) == "number" and (ref.MeshId :: number) > 0 then
+		return ref.MeshId
 	end
 	return nil
 end
@@ -21122,19 +22965,32 @@ end
 	Attaches non-colliding clone; host HumanoidRootPart stays authoritative.
 ]]
 function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: string): boolean
+	-- P0: always attempt character catalog inserts (bypass StudioSkipWorldDressing)
+	local forceChar = true
 	local assetId = VisualAssetService.ResolveCharacterAssetId(kind)
 	if not assetId then
 		return false
 	end
-	local template = loadModel(assetId)
-	-- Optional CharacterAlt only if primary insert fails
+	local template = loadModel(assetId, forceChar)
+	-- Worker/Infantry → WorkerFallback (16134469614) → never leave brown Part bricks
 	if not template then
-		local alt = (VisualAssetConfig :: any).CharacterAlt
-		local altId = if alt and typeof(alt.ModelAssetId) == "number" then alt.ModelAssetId else 0
-		if typeof(altId) == "number" and altId > 0 and altId ~= assetId then
-			template = loadModel(altId)
+		local fb = (VisualAssetConfig.Characters :: any).WorkerFallback
+		local fbId = if fb and typeof(fb.ModelAssetId) == "number" then fb.ModelAssetId else 0
+		if typeof(fbId) == "number" and fbId > 0 and fbId ~= assetId then
+			template = loadModel(fbId, forceChar)
 			if template then
-				assetId = altId
+				assetId = fbId
+			end
+		end
+	end
+	if not template and (kind == "Worker" or kind == "Infantry") then
+		-- Final realistic fallback: Guard mesh
+		local guard = VisualAssetConfig.Characters.Guard
+		local gId = if guard and typeof(guard.ModelAssetId) == "number" then guard.ModelAssetId else 0
+		if typeof(gId) == "number" and gId > 0 then
+			template = loadModel(gId, forceChar)
+			if template then
+				assetId = gId
 			end
 		end
 	end
@@ -21171,11 +23027,30 @@ end
 	Optional building visual overlay for structure plinth Part kits.
 	Welded non-colliding; plinth remains authoritative for walk-buy.
 ]]
-function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string): boolean
+function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	if hostPart:GetAttribute("WE_CatalogAssetId") then
 		return false -- already dressed
 	end
 	local assetId = VisualAssetService.ResolveBuildingAssetId(structureId)
+	-- DefensiveWalls L3+: prefer heavy wall mesh 9703136850 (Buildings.DefensiveWallsL3)
+	local lv = tonumber(level) or 0
+	if structureId == "DefensiveWalls" and lv >= 3 then
+		local l3 = VisualAssetConfig.Buildings.DefensiveWallsL3
+		if l3 and typeof(l3.ModelAssetId) == "number" and (l3.ModelAssetId :: number) > 0 then
+			assetId = l3.ModelAssetId
+		else
+			-- StructureVisualConfig.MeshAssetIdL3 fallback
+			local okSvc, StructureVisualConfig = pcall(function()
+				return require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
+			end)
+			if okSvc and StructureVisualConfig then
+				local pal = StructureVisualConfig.Palettes and StructureVisualConfig.Palettes.DefensiveWalls
+				if pal and typeof(pal.MeshAssetIdL3) == "number" and pal.MeshAssetIdL3 > 0 then
+					assetId = pal.MeshAssetIdL3
+				end
+			end
+		end
+	end
 	if not assetId then
 		return false
 	end
@@ -21203,16 +23078,101 @@ end
 --[[
 	Optional desert prop overlay (cactus etc.) welded to a flora host part.
 ]]
-function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: string): boolean
-	if hostPart:GetAttribute("WE_CatalogAssetId") then
+--[[
+	Attach MeshPart dress when catalog entry is MeshId-only (AssetType 40).
+	Falls back to SpecialMesh on a Part if MeshPart.MeshId set fails.
+]]
+function VisualAssetService.TryAttachMeshPartVisual(hostPart: BasePart, meshId: number, label: string?): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") or hostPart:GetAttribute("WE_MeshId") then
 		return false
 	end
+	if meshId <= 0 or shouldSkipInserts() then
+		return false
+	end
+	local ok, err = pcall(function()
+		local mp = Instance.new("MeshPart")
+		mp.Name = label or "WE_CatalogMeshPart"
+		mp.Size = hostPart.Size
+		mp.Anchored = true
+		mp.CanCollide = false
+		mp.CanQuery = false
+		mp.CanTouch = false
+		mp.CastShadow = false
+		mp.Massless = true
+		-- MeshId via rbxassetid; if InsertService Model fails for type-40 assets
+		mp.MeshId = "rbxassetid://" .. tostring(meshId)
+		mp.TextureID = ""
+		mp.CFrame = hostPart.CFrame
+		mp.Parent = hostPart
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = hostPart
+		weld.Part1 = mp
+		weld.Parent = mp
+	end)
+	if not ok then
+		-- Fallback: Part + SpecialMesh
+		local ok2 = pcall(function()
+			local holder = Instance.new("Part")
+			holder.Name = label or "WE_CatalogMeshHolder"
+			holder.Size = hostPart.Size
+			holder.Transparency = 1
+			holder.Anchored = true
+			holder.CanCollide = false
+			holder.CanQuery = false
+			holder.CanTouch = false
+			holder.Massless = true
+			holder.CFrame = hostPart.CFrame
+			holder.Parent = hostPart
+			local sm = Instance.new("SpecialMesh")
+			sm.MeshType = Enum.MeshType.FileMesh
+			sm.MeshId = "rbxassetid://" .. tostring(meshId)
+			sm.Scale = Vector3.new(1, 1, 1)
+			sm.Parent = holder
+			local weld = Instance.new("WeldConstraint")
+			weld.Part0 = hostPart
+			weld.Part1 = holder
+			weld.Parent = holder
+		end)
+		if not ok2 then
+			warn("[VisualAssetService] MeshPart pipeline failed", meshId, err)
+			return false
+		end
+	end
+	hostPart:SetAttribute("WE_MeshId", meshId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.7)
+	return true
+end
+
+function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: string): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") or hostPart:GetAttribute("WE_MeshId") then
+		return false
+	end
+	-- MeshPart-only keys (DesertRock): prefer MeshId pipeline
+	local meshId = VisualAssetService.ResolvePropMeshId(propKey)
 	local assetId = VisualAssetService.ResolvePropAssetId(propKey)
+	if (not assetId or assetId <= 0) and meshId then
+		return VisualAssetService.TryAttachMeshPartVisual(hostPart, meshId, "WE_CatalogProp_" .. propKey)
+	end
 	if not assetId then
 		return false
 	end
 	local template = loadModel(assetId)
+	-- Palm → PalmAlt fallback (Design Bot wire)
+	if not template and (propKey == "Palm" or propKey == "Tent") then
+		local altKey = if propKey == "Palm" then "PalmAlt" else "TentAlt"
+		local altId = VisualAssetService.ResolvePropAssetId(altKey)
+		if altId then
+			template = loadModel(altId)
+			if template then
+				assetId = altId
+			end
+		end
+	end
 	if not template then
+		-- Last resort MeshId if both Model inserts fail
+		if meshId then
+			return VisualAssetService.TryAttachMeshPartVisual(hostPart, meshId, "WE_CatalogProp_" .. propKey)
+		end
 		return false
 	end
 
@@ -21225,6 +23185,33 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
 	return true
+end
+
+--[[
+	Paint asphalt Decal (Texture) on road Part faces. Uses MapDressing.AsphaltDecal MeshId as Decal texture id.
+]]
+function VisualAssetService.ApplyAsphaltDecal(roadPart: BasePart): boolean
+	if roadPart:GetAttribute("WE_AsphaltDecal") then
+		return false
+	end
+	local texId = VisualAssetService.ResolvePropMeshId("AsphaltDecal")
+	if not texId or texId <= 0 then
+		return false
+	end
+	local ok = pcall(function()
+		for _, face in ipairs({ Enum.NormalId.Top, Enum.NormalId.Bottom }) do
+			local d = Instance.new("Decal")
+			d.Name = "WE_AsphaltDecal"
+			d.Face = face
+			d.Texture = "rbxassetid://" .. tostring(texId)
+			d.Transparency = 0.15
+			d.Parent = roadPart
+		end
+	end)
+	if ok then
+		roadPart:SetAttribute("WE_AsphaltDecal", texId)
+	end
+	return ok
 end
 
 local function collectAssetIds(primaryKey: string, fallbackKey: string?, altsKey: string?): { number }
@@ -21422,6 +23409,42 @@ function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
 			end
 		end
 	end
+
+	-- Tier 2 densify: extra pedestals (ghost locked stands) + entrance flag
+	for pi = 2, 3 do
+		local host = plinth:FindFirstChild("ShowroomPedestalHost" .. pi)
+		if host and host:IsA("BasePart") and not host:GetAttribute("WE_CatalogAssetId") then
+			pcall(function()
+				local template, assetId = loadFirst(collectAssetIds("ShowroomPedestal", nil, nil))
+				if template and assetId then
+					local clone = template:Clone()
+					if weldCloneToPrimary(clone, host, "WE_CatalogPedestal") then
+						clone.Parent = host
+						host:SetAttribute("WE_CatalogAssetId", assetId)
+						host.Transparency = math.max(host.Transparency, 0.55)
+						for _, d in ipairs(clone:GetDescendants()) do
+							if d:IsA("BasePart") then
+								d.Transparency = math.max(d.Transparency, 0.55)
+								d.CanCollide = false
+							end
+						end
+						attached = true
+					else
+						clone:Destroy()
+					end
+				end
+			end)
+		end
+	end
+	local flagHost = plinth:FindFirstChild("ShowroomFlagHost")
+	if flagHost and flagHost:IsA("BasePart") then
+		pcall(function()
+			if VisualAssetService.TryAttachPropVisual(flagHost, "FlagPole") then
+				attached = true
+			end
+		end)
+	end
+
 	return attached
 end
 
@@ -21446,6 +23469,43 @@ function VisualAssetService.TryAttachTutorialArrow(hostPart: BasePart): boolean
 	return true
 end
 
+
+--[[
+	Tier 2: attach HQ/Barracks/Depot interior props onto WE_DressHost_* kit parts.
+	Part kit hosts remain; catalog inserts optional.
+]]
+function VisualAssetService.TryDressStructureInterior(plinth: BasePart, structureId: string): number
+	if shouldSkipInserts() then
+		return 0
+	end
+	local dress = (VisualAssetConfig :: any).StructureDress
+	if typeof(dress) ~= "table" then
+		return 0
+	end
+	local keys = dress[structureId]
+	if typeof(keys) ~= "table" then
+		return 0
+	end
+	local attached = 0
+	local keyIdx = 1
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") and string.sub(child.Name, 1, 12) == "WE_DressHost" then
+			local propKey = child:GetAttribute("WE_DressProp")
+			if typeof(propKey) ~= "string" or propKey == "" then
+				propKey = keys[((keyIdx - 1) % #keys) + 1]
+				keyIdx += 1
+			end
+			local ok = pcall(function()
+				return VisualAssetService.TryAttachPropVisual(child, propKey :: string)
+			end)
+			if ok then
+				attached += 1
+			end
+		end
+	end
+	return attached
+end
+
 function VisualAssetService.Init()
 	ensureFolder()
 	if shouldSkipInserts() then
@@ -21459,7 +23519,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="97">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21605,19 +23665,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="94">
+  <Item class="StarterPlayer" referent="98">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="95">
+    <Item class="StarterPlayerScripts" referent="99">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="96">
+      <Item class="Folder" referent="100">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="97">
+        <Item class="LocalScript" referent="101">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -21647,11 +23707,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="98">
+        <Item class="Folder" referent="102">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -22015,7 +24075,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="104">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -22226,7 +24286,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="105">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -22628,7 +24688,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="106">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23197,7 +25257,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="103">
+          <Item class="ModuleScript" referent="107">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23420,7 +25480,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="104">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -23658,24 +25718,27 @@ function HUDController.Init()
 	UIUtil.Corner(season, 6)
 	seasonLabel = season
 
-	-- Spinner chip beside currency pill
+	-- P0: READY/SPIN chip LEFT of cash pill (never overlaps cash text)
 	local spin = Instance.new("TextButton")
 	spin.Name = "SpinnerButton"
 	spin.AnchorPoint = Vector2.new(0, 1)
-	spin.Position = UDim2.new(0, 228, 1, if touch then -100 else -20)
-	spin.Size = UDim2.fromOffset(72, 56)
-	spin.BackgroundColor3 = Constants.Colors.Panel
+	spin.Position = UDim2.new(0, 16, 1, if touch then -168 else -88)
+	spin.Size = UDim2.fromOffset(88, 36)
+	spin.BackgroundColor3 = Constants.Colors.Gunmetal
 	spin.Font = Enum.Font.GothamBold
-	spin.TextSize = 11
+	spin.TextSize = 12
 	spin.TextColor3 = Constants.Colors.Text
 	spin.Text = "SPIN"
 	spin.BorderSizePixel = 0
 	spin.ZIndex = 12
 	spin.Parent = screen
-	makeCorner(spin, 14)
-	makeStroke(spin, true)
-	UIUtil.EnsureMinTouch(spin, 56)
+	makeCorner(spin, 10)
+	local spinStroke = UIUtil.Stroke(spin, Constants.Colors.GoldBright, 1)
+	spinStroke.Transparency = 0.25
+	UIUtil.EnsureMinTouch(spin, 44)
 	spinnerBtn = spin
+	-- Shift cash pill up slightly so READY sits above it cleanly on touch
+	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
 	spin.Activated:Connect(function()
 		if spinnerReady then
 			Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
@@ -23706,12 +25769,12 @@ function HUDController.Init()
 		end
 		if spinnerReady then
 			spinnerBtn.Text = "READY"
-			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
-			spinnerBtn.TextColor3 = Constants.Colors.Text
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent -- olive
+			spinnerBtn.TextColor3 = Color3.fromRGB(245, 248, 240)
 		else
 			local mins = math.ceil(math.max(0, spinnerCooldown) / 60)
 			spinnerBtn.Text = string.format("%dm", mins)
-			spinnerBtn.BackgroundColor3 = Constants.Colors.Panel
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 			spinnerBtn.TextColor3 = Constants.Colors.Muted
 		end
 	end
@@ -23823,6 +25886,18 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 		})
 		btn.Active = true
 		btn.ZIndex = 31
+		-- P0 dock: gunmetal tiles + gold 1px stroke (no rainbow candy)
+		btn.BackgroundColor3 = Constants.Colors.Gunmetal
+		local st = btn:FindFirstChildOfClass("UIStroke")
+		if st then
+			st.Color = Constants.Colors.GoldBright
+			st.Thickness = 1
+			st.Transparency = 0.2
+		end
+		local ic = btn:FindFirstChild("Icon")
+		if ic and ic:IsA("TextLabel") then
+			ic.TextColor3 = Constants.Colors.Olive
+		end
 		-- Activated = mouse + touch + gamepad (MouseButton1Click alone misses some touch paths)
 		btn.Activated:Connect(function()
 			def.OnClick()
@@ -23900,7 +25975,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="105">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24219,7 +26294,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="106">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24383,7 +26458,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -24934,7 +27009,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="108">
+            <Item class="ModuleScript" referent="112">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -25095,7 +27170,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="109">
+            <Item class="ModuleScript" referent="113">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -25135,7 +27210,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -25467,7 +27542,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -25764,7 +27839,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26218,7 +28293,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26760,7 +28835,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -26893,7 +28968,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="119">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27596,7 +29671,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="120">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -27619,6 +29694,7 @@ return VehicleController
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -27642,7 +29718,8 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
+local PRICE_BILLBOARD_MAX_DIST = 48
+local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
 local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(220, 108) -- room for cost + +$/tick + BUY hint
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
@@ -27932,7 +30009,7 @@ local function setBillboardNearOnly(bb: BillboardGui)
 	bb.StudsOffset = Vector3.new(0, 5.2, 0)
 	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
 	-- AlwaysOnTop only helps when already near (short MaxDistance); avoid map-wide stack
-	bb.AlwaysOnTop = true
+	bb.AlwaysOnTop = false -- P0: never stack over ATM
 end
 
 local function hidePriceBillboard(part: BasePart)
@@ -28409,6 +30486,37 @@ local function startOverlapLoop()
 		overlapConn = nil
 	end
 	overlapConn = RunService.Heartbeat:Connect(function()
+
+	-- P0: hide structure price boards when near MoneyCollector ATM
+	do
+		local nearAtm = false
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp and hrp:IsA("BasePart") then
+			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
+				if inst:IsA("BasePart") then
+					local d = (inst.Position - hrp.Position).Magnitude
+					if d <= ATM_HIDE_PRICE_STUDS then
+						nearAtm = true
+						break
+					end
+				end
+			end
+		end
+		for _, part in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+			if part:IsA("BasePart") then
+				local bb = part:FindFirstChild(BILLBOARD_NAME)
+				if bb and bb:IsA("BillboardGui") then
+					if nearAtm then
+						bb.Enabled = false
+					elseif bb.Enabled == false and part:GetAttribute("WE_PriceForceHidden") ~= true then
+						-- re-enable only if still in range logic elsewhere; soft restore
+						bb.Enabled = true
+					end
+				end
+			end
+		end
+	end
 		if billboardDirty and (os.clock() - lastBillboardRefresh) >= BILLBOARD_THROTTLE then
 			refreshAllBillboardsNow()
 		end
@@ -28598,11 +30706,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="117">
+        <Item class="Folder" referent="121">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="118">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -28745,7 +30853,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="119">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -28813,7 +30921,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -28882,7 +30990,7 @@ return StudioSmokeClient
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="121">
+  <Item class="Workspace" referent="125">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
