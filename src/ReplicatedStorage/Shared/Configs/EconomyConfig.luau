@@ -50,10 +50,10 @@ local EconomyConfig = {
 	OutpostIncomeBuff = {
 		MultPerStack = 0.10, -- +10% per stack
 		MaxStacks = 5, -- cap +50%
-		ToastSecured = "Outpost secured +%d%% Income",
-		ToastLost = "Outpost lost",
+		ToastSecured = "Outpost secured — +%d%% Income",
+		ToastLost = "Outpost lost — Income buff reduced",
 		-- Legacy alias kept for older callers
-		ToastTemplate = "Outpost secured +%d%% Income",
+		ToastTemplate = "Outpost secured — +%d%% Income",
 	},
 
 	-- PvP ATM raid: touch another player's WE_MoneyCollector to steal PendingCash.

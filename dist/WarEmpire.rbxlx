@@ -909,10 +909,10 @@ local EconomyConfig = {
 	OutpostIncomeBuff = {
 		MultPerStack = 0.10, -- +10% per stack
 		MaxStacks = 5, -- cap +50%
-		ToastSecured = "Outpost secured +%d%% Income",
-		ToastLost = "Outpost lost",
+		ToastSecured = "Outpost secured — +%d%% Income",
+		ToastLost = "Outpost lost — Income buff reduced",
 		-- Legacy alias kept for older callers
-		ToastTemplate = "Outpost secured +%d%% Income",
+		ToastTemplate = "Outpost secured — +%d%% Income",
 	},
 
 	-- PvP ATM raid: touch another player's WE_MoneyCollector to steal PendingCash.
@@ -1713,7 +1713,8 @@ local MonetizationConfig = {
 			GrantEntitlement = "SpeedBoost",
 			Description = "Permanent move-speed boost",
 		},
-		-- Cosmetic oil pump gold dress (Id=0 until Creator Dashboard mint)
+		-- Cosmetic oil pump gold dress — Id=0: MapSetup hides GoldenPump pad until Id set;
+		-- ProcessReceipt + GrantEntitlement ready when Creator Dashboard Id is pasted
 		GoldenPumpjack = {
 			Id = 0,
 			DisplayName = "Golden Pumpjack",
@@ -1722,7 +1723,7 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "GoldenPumpjack",
 			HideFromShop = true,
-			Description = "Gold-dress plot oil pumps (pad offer; Id pending)",
+			Description = "Gold-dress plot oil pumps (pad hidden while Id=0)",
 		},
 		StarterBundle = {
 			Id = 3713839505,
@@ -1735,7 +1736,7 @@ local MonetizationConfig = {
 		},
 	},
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
-	-- P1: on PvP death, client toast linking these shop keys (Ids may be 0 stubs)
+	-- v30: PvP death toast — DoubleCash GamePass + SpeedBoost DevProduct (live Ids)
 	DeathShopOffers = { "DoubleCash", "SpeedBoost" },
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
@@ -1906,9 +1907,11 @@ local OrdersConfig = {
 	DisplayName = "Squad",
 
 	Walkie = {
-		PositionTouch = UDim2.new(0, 16, 1, -220),
+		PositionTouch = UDim2.new(0, 12, 1, -248),
 		PositionDesktop = UDim2.new(0, 16, 1, -110),
 		Size = UDim2.fromOffset(200, 168),
+		SizeTouch = UDim2.fromOffset(248, 220),
+		MinTouchPx = 52,
 	},
 }
 
@@ -2648,7 +2651,8 @@ return TerritoryConfig
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[ Interactive tutorial steps — short plain copy, one step at a time.
-	Worker-first: CC → Recruit → Collect → Barracks → Jeep → Outpost.
+	v31 first-2-min: Claim → MoneyCollector → ClickDropper → CommandCenter buy,
+	then Recruit → Barracks → Jeep → Outpost.
 ]]
 
 export type TutorialStepDef = {
@@ -2675,6 +2679,24 @@ local TutorialConfig = {
 			CtaLabel = "GO TO BASE",
 		},
 		{
+			Id = "Income",
+			Title = "Collect cash",
+			Hint = "Touch the Money Collector (green ATM screen) to claim pending cash.",
+			MarkerName = "Tutorial_Income",
+			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "COLLECT",
+		},
+		{
+			Id = "ClickDropper",
+			Title = "Grab cash drops",
+			Hint = "Click the green CLICK drop next to the ATM for quick cash.",
+			MarkerName = "Tutorial_Dropper",
+			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "CLICK DROP",
+		},
+		{
 			Id = "CommandCenter",
 			Title = "Command Center",
 			Hint = "Stand on the Command Center pad and tap BUY.",
@@ -2692,15 +2714,6 @@ local TutorialConfig = {
 			HighlightHint = "Army",
 			CtaAction = "OpenArmy",
 			CtaLabel = "ARMY",
-		},
-		{
-			Id = "Income",
-			Title = "Collect cash",
-			Hint = "Touch the Money Collector (green screen) to claim pending cash.",
-			MarkerName = "Tutorial_Income",
-			HighlightHint = "CashHUD",
-			CtaAction = "WatchHud",
-			CtaLabel = "COLLECT",
 		},
 		{
 			Id = "Barracks",
@@ -6586,6 +6599,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedConfigs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
 local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
 local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
+local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -7840,7 +7854,7 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		return idx
 	end
 
-	-- Path nodes: PlayerSpawn → CC → Barracks → VehicleDepot → WeaponsFacility (first unlocks)
+	-- Path nodes: PlayerSpawn → CC → Barracks → Depot → Weapons → ATM/premium cluster
 	local spawnPos = plotOrigin + Vector3.new(0, 0.5, 55)
 	local nodes = {
 		spawnPos,
@@ -7854,25 +7868,44 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
 		table.insert(nodes, plotOrigin + offset + Vector3.new(0, 0.5, 0))
 	end
+	-- Guide toward MoneyCollector + premium Robux pads (unpaid ATM cluster)
+	local atmCluster = plotOrigin + Vector3.new(28, 0.5, 8)
+	table.insert(nodes, atmCluster)
 
 	local idx = 1
 	for i = 1, #nodes - 1 do
-		local steps = if i == 1 then 5 else 3
+		local steps = if i == 1 then 5 elseif i == #nodes - 1 then 4 else 3
 		idx = paintPath(nodes[i], nodes[i + 1], steps, idx)
 	end
 end
 
 
 
+local function premiumOfferIdLive(kind: string, key: string): boolean
+	-- Hide pads until Creator Dashboard Id exists (GoldenPumpjack Id=0 → no pad)
+	if kind == "GamePass" then
+		local def = MonetizationConfig.GamePasses[key]
+		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
+	elseif kind == "DevProduct" then
+		local def = MonetizationConfig.DevProducts[key]
+		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
+	end
+	return false
+end
+
 local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
-	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed, gold pumpjack cosmetic
+	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed; GoldenPump only if Id≠0
 	local offers = {
 		{ Key = "AutoCollect", Kind = "GamePass", Label = "AUTO COLLECT", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
+		{ Key = "VIP", Kind = "GamePass", Label = "VIP", Color = Color3.fromRGB(180, 60, 220), Offset = Vector3.new(-18, 0.55, 8) },
 		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x CASH", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
 		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "SPEED BOOST", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
 		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "GOLDEN PUMP", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
 	}
 	for _, offer in ipairs(offers) do
+		if not premiumOfferIdLive(offer.Kind, offer.Key) then
+			continue
+		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
 			Size = Vector3.new(7, 0.45, 7),
@@ -9096,6 +9129,8 @@ function MapSetup.Run()
 	local mCC = tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
 	local mRecruit = tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
 	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(28, 3, 8), Color3.fromRGB(80, 200, 160), "Income")
+	-- Click dropper sits near ATM (ManualDropper CollectorOffset ≈ -5.5, 0, 4 from collector body)
+	tutorialMarker("Tutorial_Dropper", plot1 + Vector3.new(28 - 5.5, 2.5, 8 + 4), Color3.fromRGB(70, 220, 100), "ClickDropper")
 	-- Pads first / beams first 3 beats: dress arrow meshes on early markers
 	task.defer(function()
 		pcall(function()
@@ -15580,6 +15615,22 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	return true
 end
 
+local lastDeathShopAt: { [number]: number } = {}
+local DEATH_SHOP_DEBOUNCE = 12
+
+local function resolveDeathOfferLive(MonetizationConfig: any, key: string): (boolean, string?)
+	-- Prefer GamePass Id (DoubleCash), then DevProduct Id (SpeedBoost)
+	local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+	if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+		return true, gp.DisplayName or key
+	end
+	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
+	if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 then
+		return true, dp.DisplayName or key
+	end
+	return false, nil
+end
+
 local function onPlayerDeath(victim: Player, killer: Player?)
 	local state = combatStates[victim.UserId]
 	if state then
@@ -15596,29 +15647,35 @@ local function onPlayerDeath(victim: Player, killer: Player?)
 		end
 	end
 	
-	-- P1 light: enemy kill → client shop toast (2x Money / Speed if products exist; Id=0 stubs OK)
+	-- v30: PvP death → DeathShopOffer toast (DoubleCash GP + SpeedBoost DP; live Ids only; debounced)
 	if killer and killer ~= victim and NotificationService then
-		local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
-		local offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
-		local labels = {}
-		for _, key in ipairs(offers) do
-			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
-				or MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
-			if def then
-				table.insert(labels, def.DisplayName or key)
+		local now = os.clock()
+		local prev = lastDeathShopAt[victim.UserId] or 0
+		if now - prev >= DEATH_SHOP_DEBOUNCE then
+			lastDeathShopAt[victim.UserId] = now
+			local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
+			local offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
+			local liveOffers = {}
+			local labels = {}
+			for _, key in ipairs(offers) do
+				local live, label = resolveDeathOfferLive(MonetizationConfig, key)
+				if live and label then
+					table.insert(liveOffers, key)
+					table.insert(labels, label)
+				end
 			end
-		end
-		if #labels > 0 then
-			NotificationService.Notify(
-				victim,
-				"Shop: " .. table.concat(labels, " / ") .. " — open Shop to boost",
-				"Info",
-				5
-			)
-			if RemoteSetup then
-				local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
-				if remote then
-					(remote :: RemoteEvent):FireClient(victim, { Offers = offers })
+			if #liveOffers > 0 then
+				NotificationService.Notify(
+					victim,
+					"Boost? " .. table.concat(labels, " / ") .. " — tap toast",
+					"Info",
+					5
+				)
+				if RemoteSetup then
+					local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+					if remote then
+						(remote :: RemoteEvent):FireClient(victim, { Offers = liveOffers })
+					end
 				end
 			end
 		end
@@ -18078,6 +18135,7 @@ local DataService: any = nil
 local EconomyService: any = nil
 local RateLimitService: any = nil
 local VisualAssetService: any = nil
+local TutorialService: any = nil
 
 local TAG_COLLECTOR = Constants.Tags.MoneyCollector
 local TAG_DROPPER = "WE_ManualDropper"
@@ -18203,6 +18261,9 @@ local function tryAward(player: Player, dropper: BasePart)
 	local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")
 	if ok then
 		spawnFloatingCash(dropper.Parent or dropper, amount, dropper.Position)
+		if TutorialService and TutorialService.Notify then
+			TutorialService.Notify(player, "ManualDrop")
+		end
 	end
 end
 
@@ -18370,6 +18431,7 @@ function ManualDropperService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	RateLimitService = deps.RateLimitService
 	VisualAssetService = deps.VisualAssetService
+	TutorialService = deps.TutorialService
 
 	if not ManualDropperConfig.Enabled then
 		print("[WAR EMPIRE] ManualDropperService disabled by config")
@@ -19066,6 +19128,22 @@ local function ensureEntitlements(profile: any)
 	return profile.Entitlements
 end
 
+local SPEED_BOOST_MULT = 1.25
+
+local function applySpeedBoostToCharacter(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	local GameConfig = require(Shared.Configs.GameConfig)
+	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	hum.WalkSpeed = base * SPEED_BOOST_MULT
+end
+
 function MonetizationService.GrantEntitlement(player: Player, key: string)
 	local profile = DataService.GetProfile(player)
 	if not profile or typeof(key) ~= "string" or key == "" then
@@ -19088,6 +19166,21 @@ function MonetizationService.GrantEntitlement(player: Player, key: string)
 		if cur < 1 then
 			profile.BaseUpgrades.Barracks = 1
 		end
+	end
+	-- GoldenPumpjack: re-dress plot oil pumps when product Id is live + granted
+	if key == "GoldenPumpjack" and typeof(profile.BasePlotId) == "number" then
+		task.defer(function()
+			local ok, pumpSvc = pcall(function()
+				return require(script.Parent.PlotOilPumpService)
+			end)
+			if ok and pumpSvc and pumpSvc.SyncPlot then
+				pumpSvc.SyncPlot(profile.BasePlotId)
+			end
+		end)
+	end
+	-- SpeedBoost: permanent move-speed on current character
+	if key == "SpeedBoost" then
+		applySpeedBoostToCharacter(player)
 	end
 	DataService.MarkDirty(player)
 end
@@ -19240,6 +19333,29 @@ function MonetizationService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player)
 		gamePassCache[player.UserId] = nil
 	end)
+
+	-- Re-apply SpeedBoost WalkSpeed on respawn
+	local function hookSpeed(player: Player)
+		player.CharacterAdded:Connect(function()
+			task.defer(function()
+				task.wait(0.3)
+				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+					applySpeedBoostToCharacter(player)
+				end
+			end)
+		end)
+		if player.Character then
+			task.defer(function()
+				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+					applySpeedBoostToCharacter(player)
+				end
+			end)
+		end
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		hookSpeed(p)
+	end
+	Players.PlayerAdded:Connect(hookSpeed)
 end
 
 function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurchaseDecision
@@ -20120,7 +20236,7 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 	lbl.Size = UDim2.fromScale(1, 1)
 	lbl.BackgroundColor3 = Color3.fromRGB(20, 40, 25)
 	lbl.BackgroundTransparency = 0.25
-	lbl.Text = "+$" .. tostring(PlotOilPumpConfig.CashPerTick or 18)
+	lbl.Text = "+$" .. tostring(PlotOilPumpConfig.CashPerTick or 18) .. "/tick"
 	lbl.TextColor3 = Color3.fromRGB(120, 255, 140)
 	lbl.TextScaled = true
 	lbl.Font = Enum.Font.GothamBold
@@ -20314,6 +20430,39 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 						end
 						if n > 0 then
 							EconomyService.AccruePendingCash(owner, cash * n, reason)
+							-- Floating +$/tick pops on each pump (competitor video feel)
+							for _, ch in ipairs(folder:GetChildren()) do
+								if ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
+									local incomePad = ch:FindFirstChild("IncomePad")
+									local anchor = if incomePad and incomePad:IsA("BasePart") then incomePad else ch.PrimaryPart
+									if anchor and anchor:IsA("BasePart") then
+										local pop = Instance.new("BillboardGui")
+										pop.Name = "WE_OilCashPop"
+										pop.Size = UDim2.fromOffset(90, 26)
+										pop.StudsOffset = Vector3.new(0, 4.5, 0)
+										pop.AlwaysOnTop = false
+										pop.MaxDistance = 28
+										pop.Parent = anchor
+										local popLab = Instance.new("TextLabel")
+										popLab.Size = UDim2.fromScale(1, 1)
+										popLab.BackgroundTransparency = 1
+										popLab.Font = Enum.Font.GothamBold
+										popLab.TextScaled = true
+										popLab.TextColor3 = Color3.fromRGB(100, 255, 140)
+										popLab.TextStrokeTransparency = 0.35
+										popLab.Text = string.format("+$%d", cash)
+										popLab.Parent = pop
+										task.spawn(function()
+											for i = 1, 6 do
+												pop.StudsOffset = Vector3.new(0, 4.5 + i * 0.35, 0)
+												popLab.TextTransparency = i / 7
+												task.wait(0.1)
+											end
+											pop:Destroy()
+										end)
+									end
+								end
+							end
 						end
 					end
 				end
@@ -20510,9 +20659,9 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 	if alreadyOwns(player, kind, offerKey) then
 		if NotificationService and not fromStanding then
 			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, "Already owned", "Info", 2, 4, "prem_owned_" .. offerKey)
+				NotificationService.NotifyThrottled(player, "OWNED", "Info", 2, 4, "prem_owned_" .. offerKey)
 			else
-				NotificationService.Notify(player, "Already owned", "Info", 2)
+				NotificationService.Notify(player, "OWNED", "Info", 2)
 			end
 		end
 		return
@@ -21392,7 +21541,12 @@ end
 local function maxSoldiers(profile: any): number
 	local base = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
-	return base + barracksLevel(profile) * per
+	local cap = base + barracksLevel(profile) * per
+	-- ExtraSoldierSlot DevProduct entitlement (+1 capacity)
+	if typeof(profile.Entitlements) == "table" and profile.Entitlements.ExtraSoldierSlot == true then
+		cap += 1
+	end
+	return cap
 end
 
 local function pushState(player: Player)
@@ -22702,9 +22856,10 @@ local function spawnDrop()
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "Label"
 	bb.Size = UDim2.fromOffset(200, 40)
-	bb.StudsOffset = Vector3.new(0, 8, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 500
+	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	-- v31: never AlwaysOnTop — was covering structure name billboards on approach
+	bb.AlwaysOnTop = false
+	bb.MaxDistance = 90
 	bb.Parent = crate
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
@@ -22721,7 +22876,7 @@ local function spawnDrop()
 	corner.Parent = label
 
 	local ttl = SupplyDropConfig.LifetimeSeconds or 75
-		pcall(function()
+	pcall(function()
 		local vas = require(script.Parent.VisualAssetService)
 		if vas and vas.TryAttachCashCrateVisual then
 			vas.TryAttachCashCrateVisual(crate)
@@ -23375,36 +23530,42 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	syncProfileOwnership(player)
 
 	-- Contested income buff: recount stacks from owned zones (stealable by re-capture)
+	local incomeToastShown = false
+	local incomePct = 0
 	if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
 		local oldStacks, newStacks, pct = _EconomyService.SyncOutpostIncomeStacks(player)
-		if newStacks > oldStacks and NotificationService and pct > 0 then
-			local template = "Outpost secured +%d%% Income"
-			pcall(function()
-				local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-				if buff then
-					template = buff.ToastSecured or buff.ToastTemplate or template
-				end
-			end)
-			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+		if newStacks > oldStacks and pct > 0 then
+			incomePct = pct
+			incomeToastShown = true
 		end
 	elseif _EconomyService and _EconomyService.GrantOutpostIncomeStack then
-		-- Fallback if Sync missing
 		local granted, _stacks, pct = _EconomyService.GrantOutpostIncomeStack(player)
-		if granted and NotificationService and pct > 0 then
-			NotificationService.Notify(player, string.format("Outpost secured +%d%% Income", pct), "Reward", 4)
+		if granted and pct > 0 then
+			incomePct = pct
+			incomeToastShown = true
 		end
 	end
 
 	if NotificationService then
-		local bonusHint = rt.Def.Description or ""
-		if #bonusHint > 60 then
-			bonusHint = string.sub(bonusHint, 1, 57) .. "..."
+		if incomeToastShown then
+			-- v31: one clear toast — zone name + income buff (avoid double spam)
+			NotificationService.Notify(
+				player,
+				string.format("%s secured — +%d%% Income", rt.Def.DisplayName, incomePct),
+				"Reward",
+				4.5
+			)
+		else
+			local bonusHint = rt.Def.Description or ""
+			if #bonusHint > 60 then
+				bonusHint = string.sub(bonusHint, 1, 57) .. "..."
+			end
+			NotificationService.Notify(
+				player,
+				string.format("Captured %s! %s", rt.Def.DisplayName, bonusHint),
+				"Reward"
+			)
 		end
-		NotificationService.Notify(
-			player,
-			string.format("Captured %s! %s", rt.Def.DisplayName, bonusHint),
-			"Reward"
-		)
 	end
 
 	if AnalyticsService then
@@ -23826,8 +23987,8 @@ return TerritoryRadar
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
 --[[
-	MVP interactive tutorial (worker-first):
-	claim base → command center → recruit → collect → barracks → jeep → outpost
+	MVP interactive tutorial (v31 first-2-min):
+	claim → MoneyCollector → ClickDropper → CommandCenter buy → recruit → barracks → jeep → outpost
 	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
 ]]
 
@@ -23850,12 +24011,13 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 
 local STEP_CLAIM = 1
-local STEP_COMMAND = 2
-local STEP_RECRUIT = 3
-local STEP_INCOME = 4
-local STEP_BARRACKS = 5
-local STEP_JEEP = 6
-local STEP_OUTPOST = 7
+local STEP_INCOME = 2
+local STEP_DROPPER = 3
+local STEP_COMMAND = 4
+local STEP_RECRUIT = 5
+local STEP_BARRACKS = 6
+local STEP_JEEP = 7
+local STEP_OUTPOST = 8
 
 -- Debounce rapid Notify spam (collector ticks, double hooks)
 local lastAdvanceAt: { [number]: number } = {}
@@ -23963,7 +24125,7 @@ function TutorialService.Reset(player: Player)
 end
 
 --[[
-	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | SpawnVehicle | CaptureTerritory
+	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | ManualDrop | SpawnVehicle | CaptureTerritory
 ]]
 function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	if not tutorialEnabled() then
@@ -23983,6 +24145,10 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 
 	if eventType == "PlotAssigned" and step == STEP_CLAIM then
 		advanceTo(player, STEP_CLAIM)
+	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
+		advanceTo(player, STEP_INCOME)
+	elseif eventType == "ManualDrop" and step == STEP_DROPPER then
+		advanceTo(player, STEP_DROPPER)
 	elseif eventType == "Upgrade" and typeof(detail) == "string" then
 		if detail == "CommandCenter" and step == STEP_COMMAND then
 			advanceTo(player, STEP_COMMAND)
@@ -23991,8 +24157,6 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 		end
 	elseif eventType == "RecruitSoldiers" and step == STEP_RECRUIT then
 		advanceTo(player, STEP_RECRUIT)
-	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
-		advanceTo(player, STEP_INCOME)
 	elseif eventType == "SpawnVehicle" and step == STEP_JEEP then
 		-- MilitaryJeep or any vehicle spawn satisfies jeep step
 		advanceTo(player, STEP_JEEP)
@@ -24566,6 +24730,8 @@ local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local VisualAssetService = require(script.Parent.VisualAssetService)
 
 local VehicleService = {}
+
+local driveTipShown: { [number]: boolean } = {}
 
 local DataService: any = nil
 local EconomyService: any = nil
@@ -25732,6 +25898,32 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			task.delay(0.5, trySit)
 			task.delay(1.0, trySit)
 			task.delay(2.0, trySit)
+			-- v31: one-shot drive tip after Sit (session)
+			local tipConn: RBXScriptConnection? = nil
+			tipConn = seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+				local occ = seat.Occupant
+				if not occ then
+					return
+				end
+				local char = occ.Parent
+				local plr = if char then Players:GetPlayerFromCharacter(char) else nil
+				if plr ~= player then
+					return
+				end
+				if driveTipShown[player.UserId] then
+					if tipConn then
+						tipConn:Disconnect()
+					end
+					return
+				end
+				driveTipShown[player.UserId] = true
+				if NotificationService then
+					NotificationService.Notify(player, "Press WASD to drive", "Info", 4)
+				end
+				if tipConn then
+					tipConn:Disconnect()
+				end
+			end)
 		end
 	end
 
@@ -25840,6 +26032,7 @@ function VehicleService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player)
 		destroyActive(player.UserId)
 		lastSpawnAt[player.UserId] = nil
+		driveTipShown[player.UserId] = nil
 	end)
 end
 
@@ -27122,6 +27315,7 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -27129,6 +27323,7 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local NotificationController = require(script.Parent.NotificationController)
 local OrdersController = require(script.Parent.OrdersController)
@@ -27290,7 +27485,7 @@ function ArmyController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.7, 0) else UDim2.fromOffset(380, 380)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.78, 0) else UDim2.fromOffset(380, 460)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -27362,33 +27557,71 @@ function ArmyController.Init()
 	capLabel.Text = "0 / 0"
 	capLabel.Parent = capBg
 
-	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> (), goldAccent: boolean?)
+	local function makeBtn(label: string, x: number, y: number, w: number, cb: () -> (), goldAccent: boolean?, robuxAccent: boolean?)
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(x, y)
 		b.Size = UDim2.fromOffset(w, 44)
-		b.BackgroundColor3 = Constants.Colors.Gunmetal
+		b.BackgroundColor3 = if robuxAccent then Color3.fromRGB(40, 32, 12) else Constants.Colors.Gunmetal
 		b.Font = Enum.Font.GothamBold
 		b.TextSize = 12
-		b.TextColor3 = if goldAccent then Constants.Colors.Gold else Constants.Colors.Text
+		b.TextColor3 = if robuxAccent or goldAccent then Constants.Colors.Gold else Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
 		b.Active = true
 		b.AutoButtonColor = true
 		UIUtil.Corner(b, 6)
-		UIUtil.Stroke(b, Constants.Colors.Gold, 1.25)
+		UIUtil.Stroke(b, if robuxAccent then Color3.fromRGB(255, 200, 60) else Constants.Colors.Gold, if robuxAccent then 2 else 1.25)
 		b.Parent = panel
 		UIUtil.EnsureMinTouch(b, 44)
 		b.Activated:Connect(cb)
 		return b
 	end
 
-	local recruit1 = makeBtn("RECRUIT x1 $500", 16, 174, 168, function()
+	-- v30 P2W visibility (Reaper-style): Commander Pack / Extra Slot at top — free recruits unchanged below
+	local function promptArmyRobux(productKey: string)
+		local def = MonetizationConfig.DevProducts[productKey]
+		if not def or (tonumber(def.Id) or 0) == 0 then
+			NotificationController.Show("Offer coming soon", "Info", 2)
+			return
+		end
+		Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseDevProduct):FireServer(productKey)
+		pcall(function()
+			MarketplaceService:PromptProductPurchase(player, def.Id)
+		end)
+	end
+
+	local starter = MonetizationConfig.DevProducts.StarterBundle
+	local extraSlot = MonetizationConfig.DevProducts.ExtraSoldierSlot
+	local robuxY = 168
+	if starter and (tonumber(starter.Id) or 0) ~= 0 then
+		local price = tonumber(starter.RobuxPrice) or 249
+		makeBtn(string.format("★ COMMANDER PACK  %d R$", price), 16, robuxY, 344, function()
+			promptArmyRobux("StarterBundle")
+		end, true, true)
+		robuxY += 50
+	elseif extraSlot and (tonumber(extraSlot.Id) or 0) ~= 0 then
+		local price = tonumber(extraSlot.RobuxPrice) or 79
+		makeBtn(string.format("★ EXTRA SOLDIER SLOT  %d R$", price), 16, robuxY, 344, function()
+			promptArmyRobux("ExtraSoldierSlot")
+		end, true, true)
+		robuxY += 50
+	end
+	-- Secondary ExtraSoldierSlot chip when StarterBundle already shown
+	if starter and (tonumber(starter.Id) or 0) ~= 0 and extraSlot and (tonumber(extraSlot.Id) or 0) ~= 0 then
+		local price = tonumber(extraSlot.RobuxPrice) or 79
+		makeBtn(string.format("+1 SLOT  %d R$", price), 16, robuxY, 344, function()
+			promptArmyRobux("ExtraSoldierSlot")
+		end, true, true)
+		robuxY += 50
+	end
+
+	local recruit1 = makeBtn("RECRUIT x1 $500", 16, robuxY, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(1)
 	end, true)
-	local recruit5 = makeBtn("RECRUIT x5", 192, 174, 168, function()
+	local recruit5 = makeBtn("RECRUIT x5", 192, robuxY, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestRecruitSoldiers):FireServer(5)
 	end, true)
-	makeBtn("FILL CAP", 16, 228, 168, function()
+	makeBtn("FILL CAP", 16, robuxY + 54, 168, function()
 		ensureArmyState()
 		local free = if typeof(armyState) == "table" then tonumber(armyState.SlotsFree) or 0 else 0
 		if free > 0 then
@@ -27397,10 +27630,10 @@ function ArmyController.Init()
 			NotificationController.Show("Army full or no slots — upgrade Barracks (B)", "Warn", 3)
 		end
 	end)
-	makeBtn("DISMISS x1", 192, 228, 168, function()
+	makeBtn("DISMISS x1", 192, robuxY + 54, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(1)
 	end)
-	makeBtn("DISMISS x5", 16, 282, 168, function()
+	makeBtn("DISMISS x5", 16, robuxY + 108, 168, function()
 		Remotes.GetEvent(Constants.RemoteNames.RequestDismissSoldiers):FireServer(5)
 	end)
 
@@ -27419,14 +27652,14 @@ function ArmyController.Init()
 
 	local note = Instance.new("TextLabel")
 	note.BackgroundTransparency = 1
-	note.Position = UDim2.fromOffset(16, 336)
+	note.Position = UDim2.fromOffset(16, 420)
 	note.Size = UDim2.new(1, -32, 0, 28)
 	note.Font = Enum.Font.Gotham
 	note.TextSize = 11
 	note.TextWrapped = true
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Training Yard pays cash/sec from owned soldiers. Barracks raises cap. Key A."
+	note.Text = "Free recruits below. ★ Robux packs optional. Training Yard pays +$/tick. Key A."
 	note.Parent = panel
 
 	Remotes.GetEvent(Constants.RemoteNames.SoldierStateUpdate).OnClientEvent:Connect(function(payload)
@@ -29144,13 +29377,14 @@ function HUDController.Init()
 	season.Position = UDim2.new(0.5, 0, 0, 4) -- top safe; hide near pads via WorldPrompt
 	season.Size = UDim2.fromOffset(240, 18)
 	season.BackgroundColor3 = Constants.Colors.Panel
-	season.BackgroundTransparency = 0.15
+	season.BackgroundTransparency = 0.35 -- v31: lighter so world names read through
 	season.BorderSizePixel = 0
 	season.Font = Enum.Font.GothamBold
-	season.TextSize = 12
+	season.TextSize = 11
 	season.TextColor3 = Constants.Colors.Muted
 	season.Text = ""
 	season.Visible = false
+	season.ZIndex = 2 -- below dock (12); never steal structure-name attention
 	season.Parent = screen
 	UIUtil.Corner(season, 6)
 	seasonLabel = season
@@ -30049,8 +30283,8 @@ function OrdersController.Init()
 	local frame = Instance.new("Frame")
 	frame.Name = "Walkie"
 	frame.AnchorPoint = Vector2.new(0, 1)
-	frame.Position = if isTouch then (walkie.PositionTouch or UDim2.new(0, 16, 1, -220)) else (walkie.PositionDesktop or UDim2.new(0, 16, 1, -110))
-	frame.Size = walkie.Size or UDim2.fromOffset(200, 168)
+	frame.Position = if isTouch then (walkie.PositionTouch or UDim2.new(0, 12, 1, -248)) else (walkie.PositionDesktop or UDim2.new(0, 16, 1, -110))
+	frame.Size = if isTouch then (walkie.SizeTouch or UDim2.fromOffset(248, 220)) else (walkie.Size or UDim2.fromOffset(200, 168))
 	frame.BackgroundColor3 = Constants.Colors.Gunmetal
 	frame.BackgroundTransparency = 0.08
 	frame.BorderSizePixel = 0
@@ -30101,7 +30335,7 @@ function OrdersController.Init()
 		btn.LayoutOrder = i
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 12
+		btn.TextSize = if isTouch then 14 else 12
 		btn.TextColor3 = Constants.Colors.Text
 		local hotHint = ({ Attack = "1", Hold = "2", Follow = "3", Retreat = "4" })[def.Id]
 		btn.Text = if (not isTouch) and hotHint then (def.Label .. " [" .. hotHint .. "]") else def.Label
@@ -30109,7 +30343,7 @@ function OrdersController.Init()
 		btn.AutoButtonColor = true
 		UIUtil.Corner(btn, 8)
 		UIUtil.Stroke(btn, Constants.Colors.Olive, 1)
-		UIUtil.EnsureMinTouch(btn, 44)
+		UIUtil.EnsureMinTouch(btn, if isTouch then (walkie.MinTouchPx or 52) else 44)
 		btn.Parent = grid
 		btn.Activated:Connect(function()
 			fireOrder(def.Id)
@@ -31316,6 +31550,7 @@ return SettingsController
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
+local CollectionService = game:GetService("CollectionService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -31378,32 +31613,178 @@ end
 
 function ShopController.Init()
 
-	-- P1: on PvP death, server fires DeathShopOffer → open shop (prompt only if product Id ~= 0)
+	-- v30: PvP death → mobile-friendly toast (DoubleCash GP + SpeedBoost DP). Debounced; no auto-spam Marketplace.
 	do
+		local lastDeathToastAt = 0
+		local DEATH_TOAST_DEBOUNCE = 10
+		local deathToast: Frame? = nil
+
+		local function resolveOfferPrompt(key: string): (string?, string?, number?, string?)
+			-- Prefer live GamePass, then live DevProduct (DoubleCash is GP; SpeedBoost is DP)
+			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+			if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+				return "GamePass", key, gp.Id, gp.DisplayName or key
+			end
+			local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
+			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 and dp.HideFromShop ~= true then
+				return "DevProduct", key, dp.Id, dp.DisplayName or key
+			end
+			-- SpeedBoost / other: allow DevProduct even if HideFromShop when explicitly offered
+			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 then
+				return "DevProduct", key, dp.Id, dp.DisplayName or key
+			end
+			return nil, nil, nil, nil
+		end
+
+		local function destroyDeathToast()
+			if deathToast then
+				deathToast:Destroy()
+				deathToast = nil
+			end
+		end
+
+		local function showDeathOfferToast(offerKeys: { string })
+			local now = os.clock()
+			if now - lastDeathToastAt < DEATH_TOAST_DEBOUNCE then
+				return
+			end
+			lastDeathToastAt = now
+			destroyDeathToast()
+
+			local live: { { Kind: string, Key: string, Id: number, Name: string } } = {}
+			for _, key in ipairs(offerKeys) do
+				local kind, k, id, name = resolveOfferPrompt(key)
+				if kind and k and id and name then
+					table.insert(live, { Kind = kind, Key = k, Id = id, Name = name })
+				end
+			end
+			if #live == 0 then
+				return
+			end
+
+			local host = screenGui
+			if not host then
+				local pg = player:FindFirstChild("PlayerGui")
+				local existing = pg and pg:FindFirstChild("WarEmpireShop")
+				if existing and existing:IsA("ScreenGui") then
+					host = existing
+					screenGui = existing
+				else
+					return
+				end
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "DeathShopToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 132) else UDim2.fromOffset(360, 120)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Constants.Colors.Gold
+			stroke.Thickness = 1.5
+			stroke.Parent = toast
+			toast.Parent = host
+			deathToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -56, 0, 22)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 16 else 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Constants.Colors.Gold
+			title.Text = "Boost after death?"
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local sub = Instance.new("TextLabel")
+			sub.BackgroundTransparency = 1
+			sub.Position = UDim2.fromOffset(12, 30)
+			sub.Size = UDim2.new(1, -24, 0, 18)
+			sub.Font = Enum.Font.Gotham
+			sub.TextSize = 11
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextColor3 = Constants.Colors.Muted
+			sub.Text = "Tap a Robux offer — grants via ProcessReceipt / GamePass only"
+			sub.ZIndex = 81
+			sub.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(36, 36)
+			dismiss.BackgroundColor3 = Constants.Colors.Background
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.Text = "X"
+			dismiss.TextColor3 = Constants.Colors.Text
+			dismiss.BorderSizePixel = 0
+			dismiss.ZIndex = 82
+			corner(dismiss, 6)
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyDeathToast)
+
+			local rowY = 56
+			local btnH = if isTouch then 48 else 40
+			local gap = 8
+			local btnW = if isTouch then math.floor((toast.AbsoluteSize.X > 0 and toast.AbsoluteSize.X or 340) / #live) - gap - 8 else math.floor(336 / #live) - gap
+			-- Use scale-friendly equal split
+			for i, offer in ipairs(live) do
+				local btn = Instance.new("TextButton")
+				btn.Name = "DeathOffer_" .. offer.Key
+				btn.Position = UDim2.new((i - 1) / #live, 8, 0, rowY)
+				btn.Size = UDim2.new(1 / #live, -12, 0, btnH)
+				btn.BackgroundColor3 = Constants.Colors.Gunmetal
+				btn.Font = Enum.Font.GothamBold
+				btn.TextSize = if isTouch then 13 else 12
+				btn.TextColor3 = Constants.Colors.Gold
+				btn.Text = offer.Name
+				btn.TextWrapped = true
+				btn.BorderSizePixel = 0
+				btn.ZIndex = 82
+				corner(btn, 8)
+				local bs = Instance.new("UIStroke")
+				bs.Color = Constants.Colors.Gold
+				bs.Thickness = 1.25
+				bs.Parent = btn
+				btn.Parent = toast
+				UIUtil.EnsureMinTouch(btn, if isTouch then 48 else 44)
+				local kind, key = offer.Kind, offer.Key
+				btn.Activated:Connect(function()
+					destroyDeathToast()
+					if kind == "GamePass" then
+						promptGamePass(key)
+					else
+						promptDevProduct(key)
+					end
+				end)
+			end
+
+			task.delay(12, function()
+				if deathToast == toast then
+					destroyDeathToast()
+				end
+			end)
+		end
+
 		local remote = Remotes.GetEvent(Constants.RemoteNames.DeathShopOffer)
 		if remote then
 			remote.OnClientEvent:Connect(function(payload: any)
-				ShopController.Open()
 				local offers = if typeof(payload) == "table" then (payload :: any).Offers else nil
 				if typeof(offers) ~= "table" then
 					offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
 				end
-				for _, key in ipairs(offers :: { string }) do
-					local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
-					if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
-						pcall(function()
-							MarketplaceService:PromptGamePassPurchase(player, gp.Id)
-						end)
-						break
+				-- Wait for screenGui (Init continues below); defer one frame if needed
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.15)
 					end
-					local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
-					if def and typeof(def.Id) == "number" and def.Id ~= 0 then
-						pcall(function()
-							MarketplaceService:PromptProductPurchase(player, def.Id)
-						end)
-						break
-					end
-				end
+					showDeathOfferToast(offers :: { string })
+				end)
 			end)
 		end
 	end
@@ -31558,8 +31939,12 @@ function ShopController.Init()
 		if def.HideFromShop == true then
 			return
 		end
+		-- Id=0 stubs (AutoCollect/DoubleCash/VIPBoost/GoldenPumpjack) stay out of Shop — GamePasses / pads cover them
+		if (tonumber(def.Id) or 0) == 0 then
+			return
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
-		local stub = (tonumber(def.Id) or 0) == 0
+		local stub = false -- kept for "coming soon" path if ever re-enabled
 		local sub = def.Description or ""
 		if def.GrantsBattlePassPremium then
 			sub = "Unlocks Battle Pass Premium (ProcessReceipt only)"
@@ -31633,6 +32018,83 @@ function ShopController.Init()
 		end
 	end
 
+
+
+	-- v31: VIP / AutoCollect / other GamePass pads → OWNED (hide R$ prompt look)
+	do
+		local ownedCache: { [string]: boolean } = {}
+		local function queryOwnsGamePass(key: string): boolean
+			if ownedCache[key] ~= nil then
+				return ownedCache[key] == true
+			end
+			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+			local id = def and tonumber(def.Id) or 0
+			if id == 0 then
+				ownedCache[key] = false
+				return false
+			end
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+			end)
+			ownedCache[key] = ok and owns == true
+			return ownedCache[key] == true
+		end
+
+		local function applyOwnedVisual(part: BasePart, owned: boolean)
+			local bb = part:FindFirstChild("WE_PremiumBillboard")
+			if not bb then
+				bb = part:FindFirstChildWhichIsA("BillboardGui")
+			end
+			if bb and bb:IsA("BillboardGui") then
+				local label = bb:FindFirstChildWhichIsA("TextLabel", true)
+				if owned then
+					if label and label:IsA("TextLabel") then
+						label.Text = "OWNED"
+						label.TextColor3 = Color3.fromRGB(180, 255, 160)
+					end
+					part.LocalTransparencyModifier = 0.45
+					part:SetAttribute("WE_LocalOwned", true)
+				else
+					part.LocalTransparencyModifier = 0
+					part:SetAttribute("WE_LocalOwned", false)
+				end
+			elseif owned then
+				part.LocalTransparencyModifier = 0.45
+				part:SetAttribute("WE_LocalOwned", true)
+			end
+		end
+
+		local function refreshPremiumOwned()
+			local tag = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
+			for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+				if inst:IsA("BasePart") then
+					local kind = inst:GetAttribute("OfferKind")
+					local key = inst:GetAttribute("OfferKey")
+					if kind == "GamePass" and typeof(key) == "string" then
+						applyOwnedVisual(inst, queryOwnsGamePass(key))
+					end
+				end
+			end
+		end
+
+		task.spawn(function()
+			task.wait(1.5)
+			refreshPremiumOwned()
+		end)
+		task.spawn(function()
+			while true do
+				task.wait(20)
+				-- Re-query occasionally (purchase mid-session)
+				table.clear(ownedCache)
+				refreshPremiumOwned()
+			end
+		end)
+		CollectionService:GetInstanceAddedSignal((Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"):Connect(function(inst)
+			if inst:IsA("BasePart") then
+				task.defer(refreshPremiumOwned)
+			end
+		end)
+	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
 	do
@@ -32153,7 +32615,7 @@ return TerritoryController
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
 --[[
-	Interactive tutorial UI: claim → CC → recruit → collect → barracks → jeep → outpost
+	Interactive tutorial UI (v31): claim → collect → click-dropper → CC → recruit → barracks → jeep → outpost
 	Skip + mobile CTA (BUY / ARMY / GARAGE / …); pad StructureId fallback when markers missing.
 ]]
 
@@ -32239,7 +32701,7 @@ local function syncMarkerVisibility(activeName: string?)
 					child.Enabled = isActive == true
 				end
 			end
-	end
+		end
 	end
 end
 
@@ -32299,6 +32761,40 @@ local function findMarker(markerName: string?, padStructureId: string?): BasePar
 	local any = Workspace:FindFirstChild(markerName, true)
 	if any and any:IsA("BasePart") then
 		return any
+	end
+	-- Click-dropper: nearest WE_ManualDropper on own plot
+	if markerName == "Tutorial_Dropper" then
+		local nearest: BasePart? = nil
+		local nd = math.huge
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+		local ok, tagged = pcall(function()
+			return CollectionService:GetTagged("WE_ManualDropper")
+		end)
+		if ok and tagged then
+			for _, inst in ipairs(tagged) do
+				if inst:IsA("BasePart") then
+					local plotOk = true
+					if myPlotId ~= nil then
+						local pid = inst:GetAttribute("PlotId")
+						if pid ~= nil and pid ~= myPlotId then
+							plotOk = false
+						end
+					end
+					if plotOk then
+						local d = (inst.Position - origin).Magnitude
+						if d < nd then
+							nd = d
+							nearest = inst
+						end
+					end
+				end
+			end
+		end
+		if nearest then
+			return nearest
+		end
 	end
 	-- Last resort: nearest territory capture zone for outpost step
 	if markerName == "Tutorial_Outpost" then
@@ -34435,12 +34931,36 @@ local function startOverlapLoop()
 				end
 			end
 		end
-		-- Season banner: tuck to top safe when near pads
+		-- Season banner: tuck/hide when near pads (never cover structure names)
 		local pg = player:FindFirstChildOfClass("PlayerGui")
 		local hud = pg and pg:FindFirstChild("WE_HUD")
 		local season = hud and hud:FindFirstChild("SeasonLabel", true)
 		if season and season:IsA("GuiObject") then
 			season.Visible = not nearPad and season.Text ~= ""
+			if season:IsA("GuiObject") then
+				season.ZIndex = 2 -- keep below dock/action chrome
+			end
+		end
+		-- v31: Supply Drop labels — hide when near upgrade pads / ATM so structure names win
+		local supplyTag = (Constants.Tags and Constants.Tags.SupplyDrop) or "WE_SupplyDrop"
+		local okSup, supplies = pcall(function()
+			return CollectionService:GetTagged(supplyTag)
+		end)
+		if okSup and supplies then
+			for _, crate in ipairs(supplies) do
+				if crate:IsA("BasePart") then
+					for _, d in ipairs(crate:GetDescendants()) do
+						if d:IsA("BillboardGui") then
+							d.AlwaysOnTop = false
+							if nearPad then
+								d.Enabled = false
+							elseif d.MaxDistance > 0 then
+								d.Enabled = true
+							end
+						end
+					end
+				end
+			end
 		end
 	end
 

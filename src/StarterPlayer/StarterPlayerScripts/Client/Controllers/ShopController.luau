@@ -3,6 +3,7 @@
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
+local CollectionService = game:GetService("CollectionService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -470,6 +471,83 @@ function ShopController.Init()
 		end
 	end
 
+
+
+	-- v31: VIP / AutoCollect / other GamePass pads → OWNED (hide R$ prompt look)
+	do
+		local ownedCache: { [string]: boolean } = {}
+		local function queryOwnsGamePass(key: string): boolean
+			if ownedCache[key] ~= nil then
+				return ownedCache[key] == true
+			end
+			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
+			local id = def and tonumber(def.Id) or 0
+			if id == 0 then
+				ownedCache[key] = false
+				return false
+			end
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
+			end)
+			ownedCache[key] = ok and owns == true
+			return ownedCache[key] == true
+		end
+
+		local function applyOwnedVisual(part: BasePart, owned: boolean)
+			local bb = part:FindFirstChild("WE_PremiumBillboard")
+			if not bb then
+				bb = part:FindFirstChildWhichIsA("BillboardGui")
+			end
+			if bb and bb:IsA("BillboardGui") then
+				local label = bb:FindFirstChildWhichIsA("TextLabel", true)
+				if owned then
+					if label and label:IsA("TextLabel") then
+						label.Text = "OWNED"
+						label.TextColor3 = Color3.fromRGB(180, 255, 160)
+					end
+					part.LocalTransparencyModifier = 0.45
+					part:SetAttribute("WE_LocalOwned", true)
+				else
+					part.LocalTransparencyModifier = 0
+					part:SetAttribute("WE_LocalOwned", false)
+				end
+			elseif owned then
+				part.LocalTransparencyModifier = 0.45
+				part:SetAttribute("WE_LocalOwned", true)
+			end
+		end
+
+		local function refreshPremiumOwned()
+			local tag = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
+			for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+				if inst:IsA("BasePart") then
+					local kind = inst:GetAttribute("OfferKind")
+					local key = inst:GetAttribute("OfferKey")
+					if kind == "GamePass" and typeof(key) == "string" then
+						applyOwnedVisual(inst, queryOwnsGamePass(key))
+					end
+				end
+			end
+		end
+
+		task.spawn(function()
+			task.wait(1.5)
+			refreshPremiumOwned()
+		end)
+		task.spawn(function()
+			while true do
+				task.wait(20)
+				-- Re-query occasionally (purchase mid-session)
+				table.clear(ownedCache)
+				refreshPremiumOwned()
+			end
+		end)
+		CollectionService:GetInstanceAddedSignal((Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"):Connect(function(inst)
+			if inst:IsA("BasePart") then
+				task.defer(refreshPremiumOwned)
+			end
+		end)
+	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
 	do

@@ -26,6 +26,8 @@ local VisualAssetService = require(script.Parent.VisualAssetService)
 
 local VehicleService = {}
 
+local driveTipShown: { [number]: boolean } = {}
+
 local DataService: any = nil
 local EconomyService: any = nil
 local AnalyticsService: any = nil
@@ -1191,6 +1193,32 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			task.delay(0.5, trySit)
 			task.delay(1.0, trySit)
 			task.delay(2.0, trySit)
+			-- v31: one-shot drive tip after Sit (session)
+			local tipConn: RBXScriptConnection? = nil
+			tipConn = seat:GetPropertyChangedSignal("Occupant"):Connect(function()
+				local occ = seat.Occupant
+				if not occ then
+					return
+				end
+				local char = occ.Parent
+				local plr = if char then Players:GetPlayerFromCharacter(char) else nil
+				if plr ~= player then
+					return
+				end
+				if driveTipShown[player.UserId] then
+					if tipConn then
+						tipConn:Disconnect()
+					end
+					return
+				end
+				driveTipShown[player.UserId] = true
+				if NotificationService then
+					NotificationService.Notify(player, "Press WASD to drive", "Info", 4)
+				end
+				if tipConn then
+					tipConn:Disconnect()
+				end
+			end)
 		end
 	end
 
@@ -1299,6 +1327,7 @@ function VehicleService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player)
 		destroyActive(player.UserId)
 		lastSpawnAt[player.UserId] = nil
+		driveTipShown[player.UserId] = nil
 	end)
 end
 

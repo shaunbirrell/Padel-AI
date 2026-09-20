@@ -177,9 +177,9 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 	if alreadyOwns(player, kind, offerKey) then
 		if NotificationService and not fromStanding then
 			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, "Already owned", "Info", 2, 4, "prem_owned_" .. offerKey)
+				NotificationService.NotifyThrottled(player, "OWNED", "Info", 2, 4, "prem_owned_" .. offerKey)
 			else
-				NotificationService.Notify(player, "Already owned", "Info", 2)
+				NotificationService.Notify(player, "OWNED", "Info", 2)
 			end
 		end
 		return

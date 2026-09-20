@@ -177,9 +177,10 @@ local function spawnDrop()
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "Label"
 	bb.Size = UDim2.fromOffset(200, 40)
-	bb.StudsOffset = Vector3.new(0, 8, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 500
+	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	-- v31: never AlwaysOnTop — was covering structure name billboards on approach
+	bb.AlwaysOnTop = false
+	bb.MaxDistance = 90
 	bb.Parent = crate
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
@@ -196,7 +197,7 @@ local function spawnDrop()
 	corner.Parent = label
 
 	local ttl = SupplyDropConfig.LifetimeSeconds or 75
-		pcall(function()
+	pcall(function()
 		local vas = require(script.Parent.VisualAssetService)
 		if vas and vas.TryAttachCashCrateVisual then
 			vas.TryAttachCashCrateVisual(crate)

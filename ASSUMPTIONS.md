@@ -390,3 +390,13 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 - ExtraSoldierSlot +1 cap; SpeedBoost 1.25× WalkSpeed on grant/respawn
 - BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids
 
+
+## 2026-09-20 — Onboarding + overlay polish (live v31 — Open Cloud Published versionNumber=31)
+
+- **Tutorial first-2-min** — Reordered: Claim → MoneyCollector → ClickDropper → CommandCenter buy → Recruit → Barracks → Jeep → Outpost. ManualDropper fires `TutorialService.Notify("ManualDrop")`. MapSetup `Tutorial_Dropper` marker.
+- **Supply Drop / Season** — SupplyDrop BillboardGui `AlwaysOnTop=false` + MaxDistance 90; WorldPrompt hides supply labels near pads; SeasonLabel lighter/ZIndex 2 + still hides near pads.
+- **Capture toast** — Single clear `{Zone} secured — +10% Income` when outpost income stack increases (no double Captured spam).
+- **Jeep WASD tip** — One-shot `Press WASD to drive` after VehicleSeat Occupant (session).
+- **VIP / AutoCollect OWNED** — VIP premium pad added; GamePass pads show OWNED via client `UserOwnsGamePassAsync` + LocalTransparencyModifier; server toast "OWNED".
+- **DataStore/API** — Documented only (`docs/LIVE_PLACE.md`); API Services remain enabled.
+- BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids.

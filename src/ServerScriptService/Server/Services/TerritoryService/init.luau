@@ -537,36 +537,42 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	syncProfileOwnership(player)
 
 	-- Contested income buff: recount stacks from owned zones (stealable by re-capture)
+	local incomeToastShown = false
+	local incomePct = 0
 	if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
 		local oldStacks, newStacks, pct = _EconomyService.SyncOutpostIncomeStacks(player)
-		if newStacks > oldStacks and NotificationService and pct > 0 then
-			local template = "Outpost secured +%d%% Income"
-			pcall(function()
-				local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-				if buff then
-					template = buff.ToastSecured or buff.ToastTemplate or template
-				end
-			end)
-			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+		if newStacks > oldStacks and pct > 0 then
+			incomePct = pct
+			incomeToastShown = true
 		end
 	elseif _EconomyService and _EconomyService.GrantOutpostIncomeStack then
-		-- Fallback if Sync missing
 		local granted, _stacks, pct = _EconomyService.GrantOutpostIncomeStack(player)
-		if granted and NotificationService and pct > 0 then
-			NotificationService.Notify(player, string.format("Outpost secured +%d%% Income", pct), "Reward", 4)
+		if granted and pct > 0 then
+			incomePct = pct
+			incomeToastShown = true
 		end
 	end
 
 	if NotificationService then
-		local bonusHint = rt.Def.Description or ""
-		if #bonusHint > 60 then
-			bonusHint = string.sub(bonusHint, 1, 57) .. "..."
+		if incomeToastShown then
+			-- v31: one clear toast — zone name + income buff (avoid double spam)
+			NotificationService.Notify(
+				player,
+				string.format("%s secured — +%d%% Income", rt.Def.DisplayName, incomePct),
+				"Reward",
+				4.5
+			)
+		else
+			local bonusHint = rt.Def.Description or ""
+			if #bonusHint > 60 then
+				bonusHint = string.sub(bonusHint, 1, 57) .. "..."
+			end
+			NotificationService.Notify(
+				player,
+				string.format("Captured %s! %s", rt.Def.DisplayName, bonusHint),
+				"Reward"
+			)
 		end
-		NotificationService.Notify(
-			player,
-			string.format("Captured %s! %s", rt.Def.DisplayName, bonusHint),
-			"Reward"
-		)
 	end
 
 	if AnalyticsService then

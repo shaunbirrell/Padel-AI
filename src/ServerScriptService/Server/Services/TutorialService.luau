@@ -1,7 +1,7 @@
 --!strict
 --[[
-	MVP interactive tutorial (worker-first):
-	claim base → command center → recruit → collect → barracks → jeep → outpost
+	MVP interactive tutorial (v31 first-2-min):
+	claim → MoneyCollector → ClickDropper → CommandCenter buy → recruit → barracks → jeep → outpost
 	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
 ]]
 
@@ -24,12 +24,13 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 
 local STEP_CLAIM = 1
-local STEP_COMMAND = 2
-local STEP_RECRUIT = 3
-local STEP_INCOME = 4
-local STEP_BARRACKS = 5
-local STEP_JEEP = 6
-local STEP_OUTPOST = 7
+local STEP_INCOME = 2
+local STEP_DROPPER = 3
+local STEP_COMMAND = 4
+local STEP_RECRUIT = 5
+local STEP_BARRACKS = 6
+local STEP_JEEP = 7
+local STEP_OUTPOST = 8
 
 -- Debounce rapid Notify spam (collector ticks, double hooks)
 local lastAdvanceAt: { [number]: number } = {}
@@ -137,7 +138,7 @@ function TutorialService.Reset(player: Player)
 end
 
 --[[
-	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | SpawnVehicle | CaptureTerritory
+	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | ManualDrop | SpawnVehicle | CaptureTerritory
 ]]
 function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	if not tutorialEnabled() then
@@ -157,6 +158,10 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 
 	if eventType == "PlotAssigned" and step == STEP_CLAIM then
 		advanceTo(player, STEP_CLAIM)
+	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
+		advanceTo(player, STEP_INCOME)
+	elseif eventType == "ManualDrop" and step == STEP_DROPPER then
+		advanceTo(player, STEP_DROPPER)
 	elseif eventType == "Upgrade" and typeof(detail) == "string" then
 		if detail == "CommandCenter" and step == STEP_COMMAND then
 			advanceTo(player, STEP_COMMAND)
@@ -165,8 +170,6 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 		end
 	elseif eventType == "RecruitSoldiers" and step == STEP_RECRUIT then
 		advanceTo(player, STEP_RECRUIT)
-	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
-		advanceTo(player, STEP_INCOME)
 	elseif eventType == "SpawnVehicle" and step == STEP_JEEP then
 		-- MilitaryJeep or any vehicle spawn satisfies jeep step
 		advanceTo(player, STEP_JEEP)

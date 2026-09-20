@@ -19,6 +19,7 @@ local DataService: any = nil
 local EconomyService: any = nil
 local RateLimitService: any = nil
 local VisualAssetService: any = nil
+local TutorialService: any = nil
 
 local TAG_COLLECTOR = Constants.Tags.MoneyCollector
 local TAG_DROPPER = "WE_ManualDropper"
@@ -144,6 +145,9 @@ local function tryAward(player: Player, dropper: BasePart)
 	local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")
 	if ok then
 		spawnFloatingCash(dropper.Parent or dropper, amount, dropper.Position)
+		if TutorialService and TutorialService.Notify then
+			TutorialService.Notify(player, "ManualDrop")
+		end
 	end
 end
 
@@ -311,6 +315,7 @@ function ManualDropperService.Init(deps: { [string]: any })
 	EconomyService = deps.EconomyService
 	RateLimitService = deps.RateLimitService
 	VisualAssetService = deps.VisualAssetService
+	TutorialService = deps.TutorialService
 
 	if not ManualDropperConfig.Enabled then
 		print("[WAR EMPIRE] ManualDropperService disabled by config")

@@ -253,13 +253,14 @@ function HUDController.Init()
 	season.Position = UDim2.new(0.5, 0, 0, 4) -- top safe; hide near pads via WorldPrompt
 	season.Size = UDim2.fromOffset(240, 18)
 	season.BackgroundColor3 = Constants.Colors.Panel
-	season.BackgroundTransparency = 0.15
+	season.BackgroundTransparency = 0.35 -- v31: lighter so world names read through
 	season.BorderSizePixel = 0
 	season.Font = Enum.Font.GothamBold
-	season.TextSize = 12
+	season.TextSize = 11
 	season.TextColor3 = Constants.Colors.Muted
 	season.Text = ""
 	season.Visible = false
+	season.ZIndex = 2 -- below dock (12); never steal structure-name attention
 	season.Parent = screen
 	UIUtil.Corner(season, 6)
 	seasonLabel = season

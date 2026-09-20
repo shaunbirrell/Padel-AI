@@ -1,6 +1,7 @@
 --!strict
 --[[ Interactive tutorial steps — short plain copy, one step at a time.
-	Worker-first: CC → Recruit → Collect → Barracks → Jeep → Outpost.
+	v31 first-2-min: Claim → MoneyCollector → ClickDropper → CommandCenter buy,
+	then Recruit → Barracks → Jeep → Outpost.
 ]]
 
 export type TutorialStepDef = {
@@ -27,6 +28,24 @@ local TutorialConfig = {
 			CtaLabel = "GO TO BASE",
 		},
 		{
+			Id = "Income",
+			Title = "Collect cash",
+			Hint = "Touch the Money Collector (green ATM screen) to claim pending cash.",
+			MarkerName = "Tutorial_Income",
+			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "COLLECT",
+		},
+		{
+			Id = "ClickDropper",
+			Title = "Grab cash drops",
+			Hint = "Click the green CLICK drop next to the ATM for quick cash.",
+			MarkerName = "Tutorial_Dropper",
+			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "CLICK DROP",
+		},
+		{
 			Id = "CommandCenter",
 			Title = "Command Center",
 			Hint = "Stand on the Command Center pad and tap BUY.",
@@ -44,15 +63,6 @@ local TutorialConfig = {
 			HighlightHint = "Army",
 			CtaAction = "OpenArmy",
 			CtaLabel = "ARMY",
-		},
-		{
-			Id = "Income",
-			Title = "Collect cash",
-			Hint = "Touch the Money Collector (green screen) to claim pending cash.",
-			MarkerName = "Tutorial_Income",
-			HighlightHint = "CashHUD",
-			CtaAction = "WatchHud",
-			CtaLabel = "COLLECT",
 		},
 		{
 			Id = "Barracks",

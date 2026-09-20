@@ -1,6 +1,6 @@
 --!strict
 --[[
-	Interactive tutorial UI: claim → CC → recruit → collect → barracks → jeep → outpost
+	Interactive tutorial UI (v31): claim → collect → click-dropper → CC → recruit → barracks → jeep → outpost
 	Skip + mobile CTA (BUY / ARMY / GARAGE / …); pad StructureId fallback when markers missing.
 ]]
 
@@ -86,7 +86,7 @@ local function syncMarkerVisibility(activeName: string?)
 					child.Enabled = isActive == true
 				end
 			end
-	end
+		end
 	end
 end
 
@@ -146,6 +146,40 @@ local function findMarker(markerName: string?, padStructureId: string?): BasePar
 	local any = Workspace:FindFirstChild(markerName, true)
 	if any and any:IsA("BasePart") then
 		return any
+	end
+	-- Click-dropper: nearest WE_ManualDropper on own plot
+	if markerName == "Tutorial_Dropper" then
+		local nearest: BasePart? = nil
+		local nd = math.huge
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+		local ok, tagged = pcall(function()
+			return CollectionService:GetTagged("WE_ManualDropper")
+		end)
+		if ok and tagged then
+			for _, inst in ipairs(tagged) do
+				if inst:IsA("BasePart") then
+					local plotOk = true
+					if myPlotId ~= nil then
+						local pid = inst:GetAttribute("PlotId")
+						if pid ~= nil and pid ~= myPlotId then
+							plotOk = false
+						end
+					end
+					if plotOk then
+						local d = (inst.Position - origin).Magnitude
+						if d < nd then
+							nd = d
+							nearest = inst
+						end
+					end
+				end
+			end
+		end
+		if nearest then
+			return nearest
+		end
 	end
 	-- Last resort: nearest territory capture zone for outpost step
 	if markerName == "Tutorial_Outpost" then

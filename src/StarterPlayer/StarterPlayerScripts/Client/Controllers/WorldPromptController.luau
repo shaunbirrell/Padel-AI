@@ -897,12 +897,36 @@ local function startOverlapLoop()
 				end
 			end
 		end
-		-- Season banner: tuck to top safe when near pads
+		-- Season banner: tuck/hide when near pads (never cover structure names)
 		local pg = player:FindFirstChildOfClass("PlayerGui")
 		local hud = pg and pg:FindFirstChild("WE_HUD")
 		local season = hud and hud:FindFirstChild("SeasonLabel", true)
 		if season and season:IsA("GuiObject") then
 			season.Visible = not nearPad and season.Text ~= ""
+			if season:IsA("GuiObject") then
+				season.ZIndex = 2 -- keep below dock/action chrome
+			end
+		end
+		-- v31: Supply Drop labels — hide when near upgrade pads / ATM so structure names win
+		local supplyTag = (Constants.Tags and Constants.Tags.SupplyDrop) or "WE_SupplyDrop"
+		local okSup, supplies = pcall(function()
+			return CollectionService:GetTagged(supplyTag)
+		end)
+		if okSup and supplies then
+			for _, crate in ipairs(supplies) do
+				if crate:IsA("BasePart") then
+					for _, d in ipairs(crate:GetDescendants()) do
+						if d:IsA("BillboardGui") then
+							d.AlwaysOnTop = false
+							if nearPad then
+								d.Enabled = false
+							elseif d.MaxDistance > 0 then
+								d.Enabled = true
+							end
+						end
+					end
+				end
+			end
 		end
 	end
 
