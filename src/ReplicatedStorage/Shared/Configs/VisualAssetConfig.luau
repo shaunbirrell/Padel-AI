@@ -176,19 +176,52 @@ local VisualAssetConfig = {
 
 	JeepFallback = { ModelAssetId = 59524622, Note = "Classic free Jeep fallback only" } :: AssetRef,
 
+	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
+	MoneyCollector = { ModelAssetId = 75368157644109, Note = "ATM hero prefer; fallback 175462478" } :: AssetRef,
+	MoneyCollectorFallback = { ModelAssetId = 175462478, Note = "ATM fallback classic" } :: AssetRef,
+	MoneyCollectorAlts = {
+		{ ModelAssetId = 90362241548850, Note = "ATM alt A" } :: AssetRef,
+		{ ModelAssetId = 76846072091295, Note = "ATM alt B" } :: AssetRef,
+		{ ModelAssetId = 35409899, Note = "ATM alt C" } :: AssetRef,
+	},
+	MoneyBagFX = { ModelAssetId = 38451313, Note = "Collect cash burst VFX (StripScripts)" } :: AssetRef,
+	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
+	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
+	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
+	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
+	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
+	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
+	ShowroomRotator = { ModelAssetId = 5389482912, Note = "Showroom rotator / turntable" } :: AssetRef,
+	-- Tutorial guidance
+	TutorialArrow = { ModelAssetId = 1143305733, Note = "Tutorial arrow prefer; alt 6333395014" } :: AssetRef,
+	TutorialArrowAlt = { ModelAssetId = 6333395014, Note = "Tutorial arrow alt" } :: AssetRef,
+	TutorialBeam = { ModelAssetId = 88687072714005, Note = "Tutorial neon beam mesh/texture" } :: AssetRef,
+
+	-- KEY LABELS fixed (IDs unchanged); legacy aliases kept for callers
 	WarzoneProps = {
-		Sandbags = { ModelAssetId = 3525056989, Note = "Warzone prop" } :: AssetRef,
-		Crate = { ModelAssetId = 12651656400, Note = "Warzone prop" } :: AssetRef,
-		Barrier = { ModelAssetId = 25733125, Note = "Warzone prop" } :: AssetRef,
-		Cone = { ModelAssetId = 91071319, Note = "Warzone prop" } :: AssetRef,
-		Drum = { ModelAssetId = 53591587, Note = "Warzone prop" } :: AssetRef,
-		Pallet = { ModelAssetId = 976333542, Note = "Warzone prop" } :: AssetRef,
-		CamoNet = { ModelAssetId = 16382915010, Note = "Warzone prop" } :: AssetRef,
-		Fence = { ModelAssetId = 25623924, Note = "Warzone prop" } :: AssetRef,
-		AmmoBox = { ModelAssetId = 1291725699, Note = "Warzone prop" } :: AssetRef,
-		Tent = { ModelAssetId = 6883609157, Note = "Warzone prop" } :: AssetRef,
-		Radio = { ModelAssetId = 19277831, Note = "Warzone prop" } :: AssetRef,
-		Lamp = { ModelAssetId = 116763933, Note = "Warzone prop" } :: AssetRef,
+		Sandbag = { ModelAssetId = 3525056989, Note = "Warzone Sandbag" } :: AssetRef,
+		SandbagBarrier = { ModelAssetId = 12651656400, Note = "Warzone SandbagBarrier" } :: AssetRef,
+		SandbagWall = { ModelAssetId = 25733125, Note = "Warzone SandbagWall" } :: AssetRef,
+		ConcreteBarrier = { ModelAssetId = 91071319, Note = "Warzone ConcreteBarrier" } :: AssetRef,
+		Crate = { ModelAssetId = 53591587, Note = "Warzone Crate" } :: AssetRef,
+		MilitaryCrate = { ModelAssetId = 976333542, Note = "Warzone MilitaryCrate" } :: AssetRef,
+		AmmoBox = { ModelAssetId = 16382915010, Note = "Warzone AmmoBox" } :: AssetRef,
+		OilBarrel = { ModelAssetId = 25623924, Note = "Warzone OilBarrel" } :: AssetRef,
+		BarbedWire = { ModelAssetId = 1291725699, Note = "Warzone BarbedWire" } :: AssetRef,
+		Tent = { ModelAssetId = 6883609157, Note = "Warzone Tent" } :: AssetRef,
+		RadioAntenna = { ModelAssetId = 19277831, Note = "Warzone RadioAntenna" } :: AssetRef,
+		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
+		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		-- Legacy key aliases (same IDs)
+		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
+		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
+		Cone = { ModelAssetId = 91071319, Note = "alias → ConcreteBarrier" } :: AssetRef,
+		Drum = { ModelAssetId = 53591587, Note = "alias → Crate" } :: AssetRef,
+		Pallet = { ModelAssetId = 976333542, Note = "alias → MilitaryCrate" } :: AssetRef,
+		CamoNet = { ModelAssetId = 16382915010, Note = "alias → AmmoBox" } :: AssetRef,
+		Fence = { ModelAssetId = 25623924, Note = "alias → OilBarrel" } :: AssetRef,
+		Radio = { ModelAssetId = 19277831, Note = "alias → RadioAntenna" } :: AssetRef,
+		Lamp = { ModelAssetId = 116763933, Note = "alias → Floodlight" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {

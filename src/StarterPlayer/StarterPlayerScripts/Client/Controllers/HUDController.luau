@@ -79,7 +79,7 @@ function HUDController.Init()
 	left.Position = UDim2.fromOffset(16, 16)
 	left.Size = UDim2.fromOffset(220, 64)
 	left.BackgroundColor3 = Constants.Colors.Panel
-	left.BackgroundTransparency = 0.12
+	left.BackgroundTransparency = 0.15 -- panel α≤0.15
 	left.BorderSizePixel = 0
 	left.Parent = screen
 	makeCorner(left, 10)
@@ -93,7 +93,7 @@ function HUDController.Init()
 	lvl.Font = Enum.Font.GothamBold
 	lvl.TextSize = 18
 	lvl.TextXAlignment = Enum.TextXAlignment.Left
-	lvl.TextColor3 = Constants.Colors.Text
+	lvl.TextColor3 = Constants.Colors.TextOnDark
 	lvl.Text = "LVL 1"
 	lvl.Parent = left
 	levelLabel = lvl
@@ -134,13 +134,13 @@ function HUDController.Init()
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
 	pill.Size = UDim2.fromOffset(210, 64)
 	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
-	pill.BackgroundTransparency = 0.08
+	pill.BackgroundTransparency = 0.12
 	pill.BorderSizePixel = 0
 	pill.ZIndex = 12
 	pill.Parent = screen
 	makeCorner(pill, 28)
-	local pillStroke = UIUtil.Stroke(pill, Color3.fromRGB(255, 210, 90), 2)
-	pillStroke.Transparency = 0.25
+	local pillStroke = UIUtil.Stroke(pill, Constants.Colors.GoldBright, 2)
+	pillStroke.Transparency = 0.15
 
 	local cash = Instance.new("TextLabel")
 	cash.Name = "CashLabel"
@@ -205,7 +205,7 @@ function HUDController.Init()
 	season.Position = UDim2.new(0.5, 0, 0, 12)
 	season.Size = UDim2.fromOffset(280, 22)
 	season.BackgroundColor3 = Constants.Colors.Panel
-	season.BackgroundTransparency = 0.25
+	season.BackgroundTransparency = 0.15
 	season.BorderSizePixel = 0
 	season.Font = Enum.Font.GothamBold
 	season.TextSize = 12
@@ -253,7 +253,7 @@ function HUDController.Init()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 12)
+	layout.Padding = UDim.new(0, 8) -- dock≤8
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = dock
 	actionDock = dock

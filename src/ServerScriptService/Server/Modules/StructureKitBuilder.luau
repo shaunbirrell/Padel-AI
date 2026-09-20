@@ -142,6 +142,46 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		-- Showroom podium: PlateDark cylinder + GoldBright ring + rarity billboard host
+		local podium = kitPart(plinth, "Podium", Vector3.new(3.6, 0.55, 3.6), Vector3.new(0, 0.95, 4.2), Constants.Colors.PlateDark, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Cylinder default axis X — stand upright
+		if podium then
+			local off = podium:GetAttribute("WE_LocalOffset")
+			if typeof(off) == "Vector3" then
+				podium.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+			end
+		end
+		local ring = kitPart(plinth, "PodiumRing", Vector3.new(4.2, 0.18, 4.2), Vector3.new(0, 1.15, 4.2), Constants.Colors.GoldBright, Enum.Material.Neon, Enum.PartType.Cylinder)
+		if ring then
+			local off = ring:GetAttribute("WE_LocalOffset")
+			if typeof(off) == "Vector3" then
+				ring.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+			end
+		end
+		local display = kitPart(plinth, "ShowroomMesh", Vector3.new(2.4, 1.1, 4.0), Vector3.new(0, 1.85, 4.2), Color3.fromRGB(70, 88, 62), Enum.Material.Metal, nil)
+		if display then
+			display:SetAttribute("WE_ShowroomSpin", true)
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "WE_RarityBillboard"
+			bb.Size = UDim2.fromOffset(140, 28)
+			bb.StudsOffset = Vector3.new(0, 2.4, 0)
+			bb.AlwaysOnTop = true
+			bb.MaxDistance = 80
+			bb.Parent = display
+			local lab = Instance.new("TextLabel")
+			lab.Size = UDim2.fromScale(1, 1)
+			lab.BackgroundColor3 = Constants.Colors.PlateDark
+			lab.BackgroundTransparency = 0.15
+			lab.BorderSizePixel = 0
+			lab.Font = Enum.Font.GothamBold
+			lab.TextScaled = true
+			lab.TextColor3 = Constants.Colors.GoldBright
+			lab.Text = "COMMON · JEEP"
+			lab.Parent = bb
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 4)
+			corner.Parent = lab
+		end
 	elseif kit == "lab" then
 		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)

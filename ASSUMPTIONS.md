@@ -232,3 +232,15 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 - **Root cause:** Modern Roblox `VehicleSeat` Torque/MaxSpeed does **not** propel welded Massless wheel kits — Sit/mesh could succeed while the jeep stayed a static prop.
 - **Fix:** Authoritative Part chassis + `HingeConstraint` Motor wheels (`WE_DriveHinge`) driven from `VehicleSeat` Throttle/Steer; scripted `LinearVelocity` fallback if no hinges. Catalog mesh (`125916936788670`) is dress-only (CanCollide false, Massless, constraints stripped). Physics wheels hidden when mesh attaches.
+
+
+## Design competitive pass P0/P1 (2026-09-20)
+
+- **ATM:** prefer `75368157644109` (fallback `175462478`, alts `90362241548850` / `76846072091295` / `35409899`); lime PointLight landmark + COLLECT billboard; `MoneyBagFX` `38451313` + sparkles `4221608224` (StripScripts).
+- **CashCrate** alt `16803204916` on supply drops.
+- **WarzoneProps** key labels fixed (IDs unchanged): Sandbag / SandbagBarrier / SandbagWall / ConcreteBarrier / Crate / MilitaryCrate / AmmoBox / OilBarrel / BarbedWire / Tent / RadioAntenna / Floodlight (+ Flag).
+- **VehicleDepot showroom:** Part-kit PlateDark podium + GoldBright ring + rarity billboard; catalog podium `5267267960` / pedestal `130578088310000` / rotator `5389482912`; slow rotate.
+- **Upgrade pops:** L2 light/trim, L4 sandbag ring, L5 flag `1679839739` + floodlight + roof smoke.
+- **Tutorial:** NeonAccent beam; path collector→CC→Depot; arrow `1143305733` (alt `6333395014`) on first 3 pads; beam asset attr `88687072714005`.
+- **HUD:** margin≥16, panel α≤0.15, touch≥56, dock≤8, GoldBright currency stroke, TextOnDark on level panel.
+- **Jeep** ModelAssetId stays `125916936788670` (HingeConstraint drive from cb31f57).

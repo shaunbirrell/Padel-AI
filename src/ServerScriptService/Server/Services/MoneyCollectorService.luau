@@ -89,7 +89,7 @@ local function ensureBillboard(part: BasePart): BillboardGui
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 12
 	title.TextColor3 = Color3.fromRGB(200, 210, 200)
-	title.Text = "ATM · TOUCH TO COLLECT · Codes in Settings"
+	title.Text = "COLLECT · ATM · Codes in Settings"
 	title.Parent = backdrop
 
 	local amount = Instance.new("TextLabel")
@@ -128,6 +128,7 @@ local function syncAtmScreen(part: BasePart, pending: number)
 	end
 	local light = part:FindFirstChild("ATMGlow")
 	if light and light:IsA("PointLight") then
+		light.Color = Color3.fromRGB(120, 255, 90)
 		if pending >= 500 then
 			light.Brightness = 1.4
 			light.Range = 18
@@ -177,6 +178,30 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PassiveIncome")
 		end
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService)
+			local profile = DataService.GetProfile(player)
+			local pos: Vector3? = nil
+			local parent: Instance? = nil
+			if profile and profile.BasePlotId ~= nil then
+				for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+					if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
+						pos = inst.Position + Vector3.new(0, 4, 0)
+						parent = inst.Parent
+						break
+					end
+				end
+			end
+			if not pos then
+				local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+				if hrp and hrp:IsA("BasePart") then
+					pos = hrp.Position
+				end
+			end
+			if pos and vas and vas.PlayMoneyBagFX then
+				vas.PlayMoneyBagFX(pos, parent)
+			end
+		end)
 		return true, granted
 	end
 	return false, 0
@@ -248,6 +273,14 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		part.CanTouch = true
 		part.CanCollide = true
 		ensureBillboard(part)
+		task.defer(function()
+			pcall(function()
+				local vas = require(script.Parent.VisualAssetService)
+				if vas and vas.TryAttachCollectorVisual then
+					vas.TryAttachCollectorVisual(part)
+				end
+			end)
+		end)
 		part.Touched:Connect(function(hit)
 			if not hit:IsA("BasePart") then
 				return

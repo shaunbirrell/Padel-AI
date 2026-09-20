@@ -1224,12 +1224,13 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		Name = "CollectorBody",
 		Size = Vector3.new(6, 8, 4),
 		Position = pos + Vector3.new(28, 4.5, 8),
-		Color = Color3.fromRGB(92, 96, 100),
+		Color = Color3.fromRGB(70, 78, 72),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = true,
 		Parent = folder,
 	})
 	body:SetAttribute("PlotId", plotId)
+	body:SetAttribute("WE_LimeLandmark", true)
 	CollectionService:AddTag(body, TAG_COLLECTOR)
 	part({
 		Name = "CollectorBase",
@@ -1244,8 +1245,8 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		Name = "CollectorScreen",
 		Size = Vector3.new(4.2, 2.8, 0.35),
 		Position = pos + Vector3.new(28, 5.2, 8 - 2.15),
-		Color = Color3.fromRGB(20, 90, 45),
-		Material = Enum.Material.SmoothPlastic,
+		Color = Color3.fromRGB(40, 160, 70),
+		Material = Enum.Material.Neon,
 		CanCollide = false,
 		Parent = folder,
 	})
@@ -1268,11 +1269,20 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	digits.Parent = sg
 	local light = Instance.new("PointLight")
 	light.Name = "ATMGlow"
-	light.Color = Color3.fromRGB(60, 220, 100)
-	light.Brightness = 0.6
-	light.Range = 14
+	light.Color = Color3.fromRGB(120, 255, 90)
+	light.Brightness = 1.15
+	light.Range = 20
 	light.Parent = body
-	plainBillboard(body, "MONEY COLLECTOR · Touch to claim", Vector2.new(220, 36), 7.5, Color3.fromRGB(90, 240, 130))
+	plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 8.2, Color3.fromRGB(90, 240, 130))
+	-- Optional ATM catalog mesh dress (Part kit remains authoritative)
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if vas and vas.TryAttachCollectorVisual then
+				vas.TryAttachCollectorVisual(body)
+			end
+		end)
+	end)
 end
 
 function MapSetup.Run()
@@ -2042,10 +2052,23 @@ function MapSetup.Run()
 
 	local plot1 = PLOT_POSITIONS[1]
 	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps)
-	tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
-	tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
-	tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
+	local mClaim = tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
+	local mCC = tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
+	local mRecruit = tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
 	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(28, 3, 8), Color3.fromRGB(80, 200, 160), "Income")
+	-- Pads first / beams first 3 beats: dress arrow meshes on early markers
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if vas and vas.TryAttachTutorialArrow then
+				for _, m in ipairs({ mClaim, mCC, mRecruit }) do
+					if m then
+						vas.TryAttachTutorialArrow(m)
+					end
+				end
+			end
+		end)
+	end)
 	tutorialMarker("Tutorial_Barracks", plot1 + STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
 	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
@@ -2054,6 +2077,57 @@ function MapSetup.Run()
 	end
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
+
+	-- Neon Accent guide beams: collector → CommandCenter → VehicleDepot (Plot1 landmark path)
+	do
+		local neon = Color3.fromRGB(80, 255, 160)
+		local collectorPos = plot1 + Vector3.new(28, 5, 8)
+		local ccPos = plot1 + STRUCT_ORIGIN + Vector3.new(0, 4, 0)
+		local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
+		local depotCol = (depotIdx - 1) % STRUCT_COLS
+		local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
+		local depotPos = plot1 + STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 4, depotRow * STRUCT_GAP)
+		local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
+			local a0p = part({
+				Name = name .. "_A0",
+				Size = Vector3.new(0.4, 0.4, 0.4),
+				Position = fromPos,
+				Color = neon,
+				Material = Enum.Material.Neon,
+				Transparency = 1,
+				CanCollide = false,
+				Parent = tutorialFolder,
+			end)
+			local a1p = part({
+				Name = name .. "_A1",
+				Size = Vector3.new(0.4, 0.4, 0.4),
+				Position = toPos,
+				Color = neon,
+				Material = Enum.Material.Neon,
+				Transparency = 1,
+				CanCollide = false,
+				Parent = tutorialFolder,
+			end)
+			local att0 = Instance.new("Attachment")
+			att0.Parent = a0p
+			local att1 = Instance.new("Attachment")
+			att1.Parent = a1p
+			local beam = Instance.new("Beam")
+			beam.Name = name
+			beam.Attachment0 = att0
+			beam.Attachment1 = att1
+			beam:SetAttribute("WE_TutorialBeamAsset", 88687072714005)
+			beam.FaceCamera = true
+			beam.Width0 = 0.35
+			beam.Width1 = 0.35
+			beam.Color = ColorSequence.new(neon)
+			beam.Transparency = NumberSequence.new(0.35)
+			beam.LightEmission = 0.9
+			beam.Parent = a0p
+		end
+		neonBeam(collectorPos, ccPos, "WE_NeonPath_CollectorToCC")
+		neonBeam(ccPos, depotPos, "WE_NeonPath_CCToDepot")
+	end
 
 	-- Military world dressing (visual only). Does not tag WE_UpgradeSlot / buy pads.
 	-- PERF: skip MapDressing entirely in Studio unless ForceDress (attribute or DevConfig).

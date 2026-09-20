@@ -348,6 +348,95 @@ local function findUpgradeSlots(plotId: number, structureId: string): { BasePart
 	return found
 end
 
+local showroomSpinConn: RBXScriptConnection? = nil
+
+local function ensureShowroomSpin()
+	if showroomSpinConn then
+		return
+	end
+	local RunService = game:GetService("RunService")
+	showroomSpinConn = RunService.Heartbeat:Connect(function(dt)
+		for _, inst in ipairs(CollectionService:GetTagged("WE_UpgradeSlot")) do
+			if inst:IsA("BasePart") then
+				for _, child in ipairs(inst:GetChildren()) do
+					if child:IsA("BasePart") and child:GetAttribute("WE_ShowroomSpin") == true and child.Transparency < 0.5 then
+						child.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)
+					end
+				end
+			end
+		end
+	end)
+end
+
+local function syncUpgradePops(plinth: BasePart, structureId: string, lv: number)
+	-- Clear prior pop folder
+	local old = plinth:FindFirstChild("WE_UpgradePops")
+	if old then
+		old:Destroy()
+	end
+	if lv < 2 then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "WE_UpgradePops"
+	folder.Parent = plinth
+
+	local function popPart(name: string, size: Vector3, offset: Vector3, color: Color3, material: Enum.Material, shape: Enum.PartType?): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanTouch = false
+		p.CanQuery = false
+		p.Color = color
+		p.Material = material
+		if shape then
+			p.Shape = shape
+		end
+		p.CFrame = plinth.CFrame * CFrame.new(offset)
+		p.Parent = folder
+		p:SetAttribute("WE_KitRole", name)
+		return p
+	end
+
+	-- L2+: light + trim accent
+	if lv >= 2 then
+		popPart("UpgradeLight", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.6, 4.2, 2.2), Constants.Colors.GoldBright, Enum.Material.Neon, Enum.PartType.Ball)
+		popPart("UpgradeTrim", Vector3.new(6.8, 0.14, 0.35), Vector3.new(0, 3.6, -2.7), Constants.Colors.GoldBright, Enum.Material.Neon, nil)
+	end
+	-- L4+: sandbag ring around plinth
+	if lv >= 4 then
+		local sand = Color3.fromRGB(130, 115, 80)
+		for i = 0, 7 do
+			local ang = (i / 8) * math.pi * 2
+			local r = 5.2
+			local ox = math.cos(ang) * r
+			local oz = math.sin(ang) * r
+			popPart("SandbagRing", Vector3.new(1.6, 0.9, 0.9), Vector3.new(ox, 0.7, oz), sand, Enum.Material.Sand, nil)
+		end
+	end
+	-- L5: flag + floodlight
+	if lv >= 5 then
+		local pole = popPart("UpgradeFlag", Vector3.new(0.25, 7.5, 0.25), Vector3.new(-3.2, 4.2, 3.2), Color3.fromRGB(60, 60, 65), Enum.Material.Metal, nil)
+		local cloth = popPart("UpgradeFlag", Vector3.new(2.4, 1.4, 0.12), Vector3.new(-2.0, 7.2, 3.2), Constants.Colors.GoldBright, Enum.Material.Fabric, nil)
+		local flood = popPart("UpgradeFloodlight", Vector3.new(1.2, 0.4, 0.8), Vector3.new(3.0, 5.5, -2.5), Color3.fromRGB(220, 220, 200), Enum.Material.Metal, nil)
+		local glow = Instance.new("PointLight")
+		glow.Name = "FloodGlow"
+		glow.Brightness = 2.2
+		glow.Range = 28
+		glow.Color = Color3.fromRGB(255, 245, 210)
+		glow.Parent = flood
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService)
+			if vas.TryAttachPropVisual then
+				vas.TryAttachPropVisual(cloth, "Flag")
+				vas.TryAttachPropVisual(flood, "Floodlight")
+			end
+		end)
+	end
+end
+
 local function applyKitVisuals(plinth: BasePart, structureId: string, level: number)
 	if not plinth or not plinth.Parent then
 		return
@@ -444,20 +533,73 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				elseif role == "Door" or role == "Pier" then
 					child.Material = Enum.Material.Metal
 				end
+			elseif role == "Podium" or role == "PodiumRing" or role == "ShowroomMesh" then
+				-- VehicleDepot showroom — visible once depot built
+				child.Transparency = if lv == 0 then 1 else 0.05
+				if role == "PodiumRing" then
+					child.Color = Constants.Colors.GoldBright
+					child.Material = Enum.Material.Neon
+				elseif role == "Podium" then
+					child.Color = Constants.Colors.PlateDark
+				end
+			elseif role == "UpgradeLight" or role == "UpgradeTrim" then
+				child.Transparency = if lv >= 2 then 0.05 else 1
+			elseif role == "SandbagRing" then
+				child.Transparency = if lv >= 4 then 0.05 else 1
+			elseif role == "UpgradeFlag" or role == "UpgradeFloodlight" then
+				child.Transparency = if lv >= 5 then 0.05 else 1
 			end
 		end
 	end
+
+	-- Upgrade pop extras (idempotent Part kits; never required for gameplay)
+	syncUpgradePops(plinth, structureId, lv)
 
 	-- Optional catalog overlay once built (never blocks Part kits)
 	if lv >= 1 then
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
 			vas.TryAttachBuildingVisual(plinth, structureId)
+			if structureId == "VehicleDepot" and vas.TryAttachShowroomVisual then
+				vas.TryAttachShowroomVisual(plinth)
+			end
 		end)
+	end
+
+	-- L0 ghost → max: roof smoke plume at L5 (typed neon chimney)
+	if lv >= 5 then
+		local smokeHost = plinth:FindFirstChild("Roof")
+		if smokeHost and smokeHost:IsA("BasePart") and not smokeHost:FindFirstChild("WE_MaxSmoke") then
+			local emitter = Instance.new("ParticleEmitter")
+			emitter.Name = "WE_MaxSmoke"
+			emitter.Rate = 8
+			emitter.Lifetime = NumberRange.new(1.2, 2.0)
+			emitter.Speed = NumberRange.new(1.5, 3.0)
+			emitter.SpreadAngle = Vector2.new(12, 12)
+			emitter.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.4),
+				NumberSequenceKeypoint.new(1, 1.6),
+			})
+			emitter.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.4),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			emitter.Color = ColorSequence.new(Color3.fromRGB(90, 95, 100))
+			emitter.Parent = smokeHost
+		end
+	else
+		local roof = plinth:FindFirstChild("Roof")
+		if roof then
+			local sm = roof:FindFirstChild("WE_MaxSmoke")
+			if sm then
+				sm:Destroy()
+			end
+		end
 	end
 end
 
 function BaseService.UpdateVisuals(player: Player, structureId: string, level: number)
+	ensureShowroomSpin()
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
 		warn("[BaseService] UpdateVisuals skipped — no plot", player.Name, structureId)

@@ -396,6 +396,216 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	return true
 end
 
+local function collectAssetIds(primaryKey: string, fallbackKey: string?, altsKey: string?): { number }
+	local ids: { number } = {}
+	local seen: { [number]: boolean } = {}
+	local function push(id: any)
+		if typeof(id) == "number" and id > 0 and not seen[id] then
+			seen[id] = true
+			table.insert(ids, id)
+		end
+	end
+	local primary = (VisualAssetConfig :: any)[primaryKey]
+	if primary then
+		push(primary.ModelAssetId)
+	end
+	if fallbackKey then
+		local fb = (VisualAssetConfig :: any)[fallbackKey]
+		if fb then
+			push(fb.ModelAssetId)
+		end
+	end
+	if altsKey then
+		local alts = (VisualAssetConfig :: any)[altsKey]
+		if typeof(alts) == "table" then
+			for _, ref in ipairs(alts) do
+				if typeof(ref) == "table" then
+					push(ref.ModelAssetId)
+				end
+			end
+		end
+	end
+	return ids
+end
+
+local function loadFirst(ids: { number }): (Model?, number?)
+	for _, id in ipairs(ids) do
+		local template = loadModel(id)
+		if template then
+			return template, id
+		end
+	end
+	return nil, nil
+end
+
+--[[
+	Dress WE_MoneyCollector with ATM catalog mesh (cosmetic only).
+	Prefer Design Bot hero 75368157644109 → 175462478 → alts.
+]]
+function VisualAssetService.TryAttachCollectorVisual(hostPart: BasePart): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local template, assetId = loadFirst(collectAssetIds("MoneyCollector", "MoneyCollectorFallback", "MoneyCollectorAlts"))
+	if not template or not assetId then
+		return false
+	end
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogATM") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
+	-- Lime landmark glow (typed neon)
+	local glow = hostPart:FindFirstChild("ATMGlow")
+	if not (glow and glow:IsA("PointLight")) then
+		local light = Instance.new("PointLight")
+		light.Name = "ATMGlow"
+		light.Color = Color3.fromRGB(120, 255, 90)
+		light.Brightness = 1.1
+		light.Range = 18
+		light.Parent = hostPart
+	else
+		(glow :: PointLight).Color = Color3.fromRGB(120, 255, 90)
+		(glow :: PointLight).Brightness = math.max((glow :: PointLight).Brightness, 1.0)
+	end
+	return true
+end
+
+--[[
+	One-shot collect burst FX — MoneyBagFX then VfxSparkles, then neon motes.
+]]
+function VisualAssetService.PlayMoneyBagFX(at: Vector3, parent: Instance?): boolean
+	local ids = collectAssetIds("MoneyBagFX", "VfxSparkles", nil)
+	local template, assetId = loadFirst(ids)
+	if not template then
+		local folder = Instance.new("Folder")
+		folder.Name = "WE_MoneyBagFallback"
+		folder.Parent = parent or game:GetService("Workspace")
+		for i = 1, 6 do
+			local mote = Instance.new("Part")
+			mote.Name = "CashMote" .. i
+			mote.Size = Vector3.new(0.35, 0.2, 0.55)
+			mote.Color = Color3.fromRGB(120, 255, 90)
+			mote.Material = Enum.Material.Neon
+			mote.Anchored = true
+			mote.CanCollide = false
+			mote.CFrame = CFrame.new(at + Vector3.new((i - 3.5) * 0.4, 0.5, (i % 3 - 1) * 0.35))
+			mote.Parent = folder
+		end
+		task.delay(0.85, function()
+			folder:Destroy()
+		end)
+		return true
+	end
+	local clone = template:Clone()
+	clone.Name = "WE_MoneyBagFX"
+	clone:PivotTo(CFrame.new(at + Vector3.new(0, 1.5, 0)))
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.Massless = true
+		elseif d:IsA("BaseScript") or d:IsA("ModuleScript") then
+			d:Destroy()
+		end
+	end
+	clone.Parent = parent or game:GetService("Workspace")
+	if assetId then
+		clone:SetAttribute("WE_CatalogAssetId", assetId)
+	end
+	task.delay(1.2, function()
+		if clone.Parent then
+			clone:Destroy()
+		end
+	end)
+	return true
+end
+
+--[[
+	Optional CashCrate overlay for supply / world crates.
+]]
+function VisualAssetService.TryAttachCashCrateVisual(hostPart: BasePart): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local ref = (VisualAssetConfig :: any).CashCrate
+	local assetId = if ref and typeof(ref.ModelAssetId) == "number" then ref.ModelAssetId else 0
+	if not assetId or assetId <= 0 then
+		return false
+	end
+	local template = loadModel(assetId)
+	if not template then
+		return false
+	end
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogCashCrate") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
+	return true
+end
+
+--[[
+	Dress VehicleDepot showroom hosts with podium / pedestal / rotator meshes.
+]]
+function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
+	local attached = false
+	local map = {
+		Podium = "ShowroomPodium",
+		PodiumRing = "ShowroomPedestal",
+		ShowroomMesh = "ShowroomRotator",
+	}
+	for role, cfgKey in pairs(map) do
+		local host = plinth:FindFirstChild(role)
+		if host and host:IsA("BasePart") and not host:GetAttribute("WE_CatalogAssetId") then
+			local ref = (VisualAssetConfig :: any)[cfgKey]
+			local id = if ref and typeof(ref.ModelAssetId) == "number" then ref.ModelAssetId else 0
+			if id > 0 then
+				local template = loadModel(id)
+				if template then
+					local clone = template:Clone()
+					if weldCloneToPrimary(clone, host, "WE_CatalogShowroom") then
+						clone.Parent = host
+						host:SetAttribute("WE_CatalogAssetId", id)
+						host.Transparency = math.max(host.Transparency, 0.65)
+						attached = true
+					else
+						clone:Destroy()
+					end
+				end
+			end
+		end
+	end
+	return attached
+end
+
+--[[
+	Dress tutorial marker with arrow mesh (first beats).
+]]
+function VisualAssetService.TryAttachTutorialArrow(hostPart: BasePart): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local template, assetId = loadFirst(collectAssetIds("TutorialArrow", "TutorialArrowAlt", nil))
+	if not template or not assetId then
+		return false
+	end
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogTutArrow") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	return true
+end
+
 function VisualAssetService.Init()
 	ensureFolder()
 	if shouldSkipInserts() then

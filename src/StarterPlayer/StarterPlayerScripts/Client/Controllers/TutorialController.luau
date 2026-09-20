@@ -210,10 +210,11 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	beam.Attachment0 = attach0
 	beam.Attachment1 = attach1
 	beam.FaceCamera = true
-	beam.Width0 = 0.45
-	beam.Width1 = 0.45
-	beam.Color = ColorSequence.new(Constants.Colors.Gold)
-	beam.Transparency = NumberSequence.new(0.2)
+	beam.Width0 = 0.55
+	beam.Width1 = 0.35
+	beam.Color = ColorSequence.new(Constants.Colors.NeonAccent or Constants.Colors.Accent)
+	beam.Transparency = NumberSequence.new(0.15)
+	beam.LightEmission = 0.85
 	beam.Parent = hrp
 end
 

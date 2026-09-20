@@ -2733,19 +2733,52 @@ local VisualAssetConfig = {
 
 	JeepFallback = { ModelAssetId = 59524622, Note = "Classic free Jeep fallback only" } :: AssetRef,
 
+	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
+	MoneyCollector = { ModelAssetId = 75368157644109, Note = "ATM hero prefer; fallback 175462478" } :: AssetRef,
+	MoneyCollectorFallback = { ModelAssetId = 175462478, Note = "ATM fallback classic" } :: AssetRef,
+	MoneyCollectorAlts = {
+		{ ModelAssetId = 90362241548850, Note = "ATM alt A" } :: AssetRef,
+		{ ModelAssetId = 76846072091295, Note = "ATM alt B" } :: AssetRef,
+		{ ModelAssetId = 35409899, Note = "ATM alt C" } :: AssetRef,
+	},
+	MoneyBagFX = { ModelAssetId = 38451313, Note = "Collect cash burst VFX (StripScripts)" } :: AssetRef,
+	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
+	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
+	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
+	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
+	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
+	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
+	ShowroomRotator = { ModelAssetId = 5389482912, Note = "Showroom rotator / turntable" } :: AssetRef,
+	-- Tutorial guidance
+	TutorialArrow = { ModelAssetId = 1143305733, Note = "Tutorial arrow prefer; alt 6333395014" } :: AssetRef,
+	TutorialArrowAlt = { ModelAssetId = 6333395014, Note = "Tutorial arrow alt" } :: AssetRef,
+	TutorialBeam = { ModelAssetId = 88687072714005, Note = "Tutorial neon beam mesh/texture" } :: AssetRef,
+
+	-- KEY LABELS fixed (IDs unchanged); legacy aliases kept for callers
 	WarzoneProps = {
-		Sandbags = { ModelAssetId = 3525056989, Note = "Warzone prop" } :: AssetRef,
-		Crate = { ModelAssetId = 12651656400, Note = "Warzone prop" } :: AssetRef,
-		Barrier = { ModelAssetId = 25733125, Note = "Warzone prop" } :: AssetRef,
-		Cone = { ModelAssetId = 91071319, Note = "Warzone prop" } :: AssetRef,
-		Drum = { ModelAssetId = 53591587, Note = "Warzone prop" } :: AssetRef,
-		Pallet = { ModelAssetId = 976333542, Note = "Warzone prop" } :: AssetRef,
-		CamoNet = { ModelAssetId = 16382915010, Note = "Warzone prop" } :: AssetRef,
-		Fence = { ModelAssetId = 25623924, Note = "Warzone prop" } :: AssetRef,
-		AmmoBox = { ModelAssetId = 1291725699, Note = "Warzone prop" } :: AssetRef,
-		Tent = { ModelAssetId = 6883609157, Note = "Warzone prop" } :: AssetRef,
-		Radio = { ModelAssetId = 19277831, Note = "Warzone prop" } :: AssetRef,
-		Lamp = { ModelAssetId = 116763933, Note = "Warzone prop" } :: AssetRef,
+		Sandbag = { ModelAssetId = 3525056989, Note = "Warzone Sandbag" } :: AssetRef,
+		SandbagBarrier = { ModelAssetId = 12651656400, Note = "Warzone SandbagBarrier" } :: AssetRef,
+		SandbagWall = { ModelAssetId = 25733125, Note = "Warzone SandbagWall" } :: AssetRef,
+		ConcreteBarrier = { ModelAssetId = 91071319, Note = "Warzone ConcreteBarrier" } :: AssetRef,
+		Crate = { ModelAssetId = 53591587, Note = "Warzone Crate" } :: AssetRef,
+		MilitaryCrate = { ModelAssetId = 976333542, Note = "Warzone MilitaryCrate" } :: AssetRef,
+		AmmoBox = { ModelAssetId = 16382915010, Note = "Warzone AmmoBox" } :: AssetRef,
+		OilBarrel = { ModelAssetId = 25623924, Note = "Warzone OilBarrel" } :: AssetRef,
+		BarbedWire = { ModelAssetId = 1291725699, Note = "Warzone BarbedWire" } :: AssetRef,
+		Tent = { ModelAssetId = 6883609157, Note = "Warzone Tent" } :: AssetRef,
+		RadioAntenna = { ModelAssetId = 19277831, Note = "Warzone RadioAntenna" } :: AssetRef,
+		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
+		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
+		-- Legacy key aliases (same IDs)
+		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
+		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
+		Cone = { ModelAssetId = 91071319, Note = "alias → ConcreteBarrier" } :: AssetRef,
+		Drum = { ModelAssetId = 53591587, Note = "alias → Crate" } :: AssetRef,
+		Pallet = { ModelAssetId = 976333542, Note = "alias → MilitaryCrate" } :: AssetRef,
+		CamoNet = { ModelAssetId = 16382915010, Note = "alias → AmmoBox" } :: AssetRef,
+		Fence = { ModelAssetId = 25623924, Note = "alias → OilBarrel" } :: AssetRef,
+		Radio = { ModelAssetId = 19277831, Note = "alias → RadioAntenna" } :: AssetRef,
+		Lamp = { ModelAssetId = 116763933, Note = "alias → Floodlight" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	DesertProps = {
@@ -3047,6 +3080,9 @@ Constants.Colors = {
 	TextDark = Color3.fromRGB(18, 20, 24),
 	PlateDark = Color3.fromRGB(12, 14, 18),
 	GoldBright = Color3.fromRGB(255, 210, 90),
+	NeonAccent = Color3.fromRGB(80, 255, 160),
+	Olive = Color3.fromRGB(72, 88, 58),
+	Sand = Color3.fromRGB(196, 170, 120),
 }
 
 return Constants
@@ -6974,12 +7010,13 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		Name = "CollectorBody",
 		Size = Vector3.new(6, 8, 4),
 		Position = pos + Vector3.new(28, 4.5, 8),
-		Color = Color3.fromRGB(92, 96, 100),
+		Color = Color3.fromRGB(70, 78, 72),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = true,
 		Parent = folder,
 	})
 	body:SetAttribute("PlotId", plotId)
+	body:SetAttribute("WE_LimeLandmark", true)
 	CollectionService:AddTag(body, TAG_COLLECTOR)
 	part({
 		Name = "CollectorBase",
@@ -6994,8 +7031,8 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		Name = "CollectorScreen",
 		Size = Vector3.new(4.2, 2.8, 0.35),
 		Position = pos + Vector3.new(28, 5.2, 8 - 2.15),
-		Color = Color3.fromRGB(20, 90, 45),
-		Material = Enum.Material.SmoothPlastic,
+		Color = Color3.fromRGB(40, 160, 70),
+		Material = Enum.Material.Neon,
 		CanCollide = false,
 		Parent = folder,
 	})
@@ -7018,11 +7055,20 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	digits.Parent = sg
 	local light = Instance.new("PointLight")
 	light.Name = "ATMGlow"
-	light.Color = Color3.fromRGB(60, 220, 100)
-	light.Brightness = 0.6
-	light.Range = 14
+	light.Color = Color3.fromRGB(120, 255, 90)
+	light.Brightness = 1.15
+	light.Range = 20
 	light.Parent = body
-	plainBillboard(body, "MONEY COLLECTOR · Touch to claim", Vector2.new(220, 36), 7.5, Color3.fromRGB(90, 240, 130))
+	plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 8.2, Color3.fromRGB(90, 240, 130))
+	-- Optional ATM catalog mesh dress (Part kit remains authoritative)
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if vas and vas.TryAttachCollectorVisual then
+				vas.TryAttachCollectorVisual(body)
+			end
+		end)
+	end)
 end
 
 function MapSetup.Run()
@@ -7792,10 +7838,23 @@ function MapSetup.Run()
 
 	local plot1 = PLOT_POSITIONS[1]
 	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps)
-	tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
-	tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
-	tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
+	local mClaim = tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
+	local mCC = tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
+	local mRecruit = tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
 	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(28, 3, 8), Color3.fromRGB(80, 200, 160), "Income")
+	-- Pads first / beams first 3 beats: dress arrow meshes on early markers
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if vas and vas.TryAttachTutorialArrow then
+				for _, m in ipairs({ mClaim, mCC, mRecruit }) do
+					if m then
+						vas.TryAttachTutorialArrow(m)
+					end
+				end
+			end
+		end)
+	end)
 	tutorialMarker("Tutorial_Barracks", plot1 + STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
 	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
@@ -7804,6 +7863,57 @@ function MapSetup.Run()
 	end
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
+
+	-- Neon Accent guide beams: collector → CommandCenter → VehicleDepot (Plot1 landmark path)
+	do
+		local neon = Color3.fromRGB(80, 255, 160)
+		local collectorPos = plot1 + Vector3.new(28, 5, 8)
+		local ccPos = plot1 + STRUCT_ORIGIN + Vector3.new(0, 4, 0)
+		local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
+		local depotCol = (depotIdx - 1) % STRUCT_COLS
+		local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
+		local depotPos = plot1 + STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 4, depotRow * STRUCT_GAP)
+		local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
+			local a0p = part({
+				Name = name .. "_A0",
+				Size = Vector3.new(0.4, 0.4, 0.4),
+				Position = fromPos,
+				Color = neon,
+				Material = Enum.Material.Neon,
+				Transparency = 1,
+				CanCollide = false,
+				Parent = tutorialFolder,
+			end)
+			local a1p = part({
+				Name = name .. "_A1",
+				Size = Vector3.new(0.4, 0.4, 0.4),
+				Position = toPos,
+				Color = neon,
+				Material = Enum.Material.Neon,
+				Transparency = 1,
+				CanCollide = false,
+				Parent = tutorialFolder,
+			end)
+			local att0 = Instance.new("Attachment")
+			att0.Parent = a0p
+			local att1 = Instance.new("Attachment")
+			att1.Parent = a1p
+			local beam = Instance.new("Beam")
+			beam.Name = name
+			beam.Attachment0 = att0
+			beam.Attachment1 = att1
+			beam:SetAttribute("WE_TutorialBeamAsset", 88687072714005)
+			beam.FaceCamera = true
+			beam.Width0 = 0.35
+			beam.Width1 = 0.35
+			beam.Color = ColorSequence.new(neon)
+			beam.Transparency = NumberSequence.new(0.35)
+			beam.LightEmission = 0.9
+			beam.Parent = a0p
+		end
+		neonBeam(collectorPos, ccPos, "WE_NeonPath_CollectorToCC")
+		neonBeam(ccPos, depotPos, "WE_NeonPath_CCToDepot")
+	end
 
 	-- Military world dressing (visual only). Does not tag WE_UpgradeSlot / buy pads.
 	-- PERF: skip MapDressing entirely in Studio unless ForceDress (attribute or DevConfig).
@@ -8757,6 +8867,46 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		-- Showroom podium: PlateDark cylinder + GoldBright ring + rarity billboard host
+		local podium = kitPart(plinth, "Podium", Vector3.new(3.6, 0.55, 3.6), Vector3.new(0, 0.95, 4.2), Constants.Colors.PlateDark, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Cylinder default axis X — stand upright
+		if podium then
+			local off = podium:GetAttribute("WE_LocalOffset")
+			if typeof(off) == "Vector3" then
+				podium.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+			end
+		end
+		local ring = kitPart(plinth, "PodiumRing", Vector3.new(4.2, 0.18, 4.2), Vector3.new(0, 1.15, 4.2), Constants.Colors.GoldBright, Enum.Material.Neon, Enum.PartType.Cylinder)
+		if ring then
+			local off = ring:GetAttribute("WE_LocalOffset")
+			if typeof(off) == "Vector3" then
+				ring.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+			end
+		end
+		local display = kitPart(plinth, "ShowroomMesh", Vector3.new(2.4, 1.1, 4.0), Vector3.new(0, 1.85, 4.2), Color3.fromRGB(70, 88, 62), Enum.Material.Metal, nil)
+		if display then
+			display:SetAttribute("WE_ShowroomSpin", true)
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "WE_RarityBillboard"
+			bb.Size = UDim2.fromOffset(140, 28)
+			bb.StudsOffset = Vector3.new(0, 2.4, 0)
+			bb.AlwaysOnTop = true
+			bb.MaxDistance = 80
+			bb.Parent = display
+			local lab = Instance.new("TextLabel")
+			lab.Size = UDim2.fromScale(1, 1)
+			lab.BackgroundColor3 = Constants.Colors.PlateDark
+			lab.BackgroundTransparency = 0.15
+			lab.BorderSizePixel = 0
+			lab.Font = Enum.Font.GothamBold
+			lab.TextScaled = true
+			lab.TextColor3 = Constants.Colors.GoldBright
+			lab.Text = "COMMON · JEEP"
+			lab.Parent = bb
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 4)
+			corner.Parent = lab
+		end
 	elseif kit == "lab" then
 		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -10423,6 +10573,95 @@ local function findUpgradeSlots(plotId: number, structureId: string): { BasePart
 	return found
 end
 
+local showroomSpinConn: RBXScriptConnection? = nil
+
+local function ensureShowroomSpin()
+	if showroomSpinConn then
+		return
+	end
+	local RunService = game:GetService("RunService")
+	showroomSpinConn = RunService.Heartbeat:Connect(function(dt)
+		for _, inst in ipairs(CollectionService:GetTagged("WE_UpgradeSlot")) do
+			if inst:IsA("BasePart") then
+				for _, child in ipairs(inst:GetChildren()) do
+					if child:IsA("BasePart") and child:GetAttribute("WE_ShowroomSpin") == true and child.Transparency < 0.5 then
+						child.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)
+					end
+				end
+			end
+		end
+	end)
+end
+
+local function syncUpgradePops(plinth: BasePart, structureId: string, lv: number)
+	-- Clear prior pop folder
+	local old = plinth:FindFirstChild("WE_UpgradePops")
+	if old then
+		old:Destroy()
+	end
+	if lv < 2 then
+		return
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "WE_UpgradePops"
+	folder.Parent = plinth
+
+	local function popPart(name: string, size: Vector3, offset: Vector3, color: Color3, material: Enum.Material, shape: Enum.PartType?): BasePart
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanTouch = false
+		p.CanQuery = false
+		p.Color = color
+		p.Material = material
+		if shape then
+			p.Shape = shape
+		end
+		p.CFrame = plinth.CFrame * CFrame.new(offset)
+		p.Parent = folder
+		p:SetAttribute("WE_KitRole", name)
+		return p
+	end
+
+	-- L2+: light + trim accent
+	if lv >= 2 then
+		popPart("UpgradeLight", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.6, 4.2, 2.2), Constants.Colors.GoldBright, Enum.Material.Neon, Enum.PartType.Ball)
+		popPart("UpgradeTrim", Vector3.new(6.8, 0.14, 0.35), Vector3.new(0, 3.6, -2.7), Constants.Colors.GoldBright, Enum.Material.Neon, nil)
+	end
+	-- L4+: sandbag ring around plinth
+	if lv >= 4 then
+		local sand = Color3.fromRGB(130, 115, 80)
+		for i = 0, 7 do
+			local ang = (i / 8) * math.pi * 2
+			local r = 5.2
+			local ox = math.cos(ang) * r
+			local oz = math.sin(ang) * r
+			popPart("SandbagRing", Vector3.new(1.6, 0.9, 0.9), Vector3.new(ox, 0.7, oz), sand, Enum.Material.Sand, nil)
+		end
+	end
+	-- L5: flag + floodlight
+	if lv >= 5 then
+		local pole = popPart("UpgradeFlag", Vector3.new(0.25, 7.5, 0.25), Vector3.new(-3.2, 4.2, 3.2), Color3.fromRGB(60, 60, 65), Enum.Material.Metal, nil)
+		local cloth = popPart("UpgradeFlag", Vector3.new(2.4, 1.4, 0.12), Vector3.new(-2.0, 7.2, 3.2), Constants.Colors.GoldBright, Enum.Material.Fabric, nil)
+		local flood = popPart("UpgradeFloodlight", Vector3.new(1.2, 0.4, 0.8), Vector3.new(3.0, 5.5, -2.5), Color3.fromRGB(220, 220, 200), Enum.Material.Metal, nil)
+		local glow = Instance.new("PointLight")
+		glow.Name = "FloodGlow"
+		glow.Brightness = 2.2
+		glow.Range = 28
+		glow.Color = Color3.fromRGB(255, 245, 210)
+		glow.Parent = flood
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService)
+			if vas.TryAttachPropVisual then
+				vas.TryAttachPropVisual(cloth, "Flag")
+				vas.TryAttachPropVisual(flood, "Floodlight")
+			end
+		end)
+	end
+end
+
 local function applyKitVisuals(plinth: BasePart, structureId: string, level: number)
 	if not plinth or not plinth.Parent then
 		return
@@ -10519,20 +10758,73 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				elseif role == "Door" or role == "Pier" then
 					child.Material = Enum.Material.Metal
 				end
+			elseif role == "Podium" or role == "PodiumRing" or role == "ShowroomMesh" then
+				-- VehicleDepot showroom — visible once depot built
+				child.Transparency = if lv == 0 then 1 else 0.05
+				if role == "PodiumRing" then
+					child.Color = Constants.Colors.GoldBright
+					child.Material = Enum.Material.Neon
+				elseif role == "Podium" then
+					child.Color = Constants.Colors.PlateDark
+				end
+			elseif role == "UpgradeLight" or role == "UpgradeTrim" then
+				child.Transparency = if lv >= 2 then 0.05 else 1
+			elseif role == "SandbagRing" then
+				child.Transparency = if lv >= 4 then 0.05 else 1
+			elseif role == "UpgradeFlag" or role == "UpgradeFloodlight" then
+				child.Transparency = if lv >= 5 then 0.05 else 1
 			end
 		end
 	end
+
+	-- Upgrade pop extras (idempotent Part kits; never required for gameplay)
+	syncUpgradePops(plinth, structureId, lv)
 
 	-- Optional catalog overlay once built (never blocks Part kits)
 	if lv >= 1 then
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
 			vas.TryAttachBuildingVisual(plinth, structureId)
+			if structureId == "VehicleDepot" and vas.TryAttachShowroomVisual then
+				vas.TryAttachShowroomVisual(plinth)
+			end
 		end)
+	end
+
+	-- L0 ghost → max: roof smoke plume at L5 (typed neon chimney)
+	if lv >= 5 then
+		local smokeHost = plinth:FindFirstChild("Roof")
+		if smokeHost and smokeHost:IsA("BasePart") and not smokeHost:FindFirstChild("WE_MaxSmoke") then
+			local emitter = Instance.new("ParticleEmitter")
+			emitter.Name = "WE_MaxSmoke"
+			emitter.Rate = 8
+			emitter.Lifetime = NumberRange.new(1.2, 2.0)
+			emitter.Speed = NumberRange.new(1.5, 3.0)
+			emitter.SpreadAngle = Vector2.new(12, 12)
+			emitter.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.4),
+				NumberSequenceKeypoint.new(1, 1.6),
+			})
+			emitter.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.4),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			emitter.Color = ColorSequence.new(Color3.fromRGB(90, 95, 100))
+			emitter.Parent = smokeHost
+		end
+	else
+		local roof = plinth:FindFirstChild("Roof")
+		if roof then
+			local sm = roof:FindFirstChild("WE_MaxSmoke")
+			if sm then
+				sm:Destroy()
+			end
+		end
 	end
 end
 
 function BaseService.UpdateVisuals(player: Player, structureId: string, level: number)
+	ensureShowroomSpin()
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
 		warn("[BaseService] UpdateVisuals skipped — no plot", player.Name, structureId)
@@ -15226,7 +15518,7 @@ local function ensureBillboard(part: BasePart): BillboardGui
 	title.Font = Enum.Font.GothamBold
 	title.TextSize = 12
 	title.TextColor3 = Color3.fromRGB(200, 210, 200)
-	title.Text = "ATM · TOUCH TO COLLECT · Codes in Settings"
+	title.Text = "COLLECT · ATM · Codes in Settings"
 	title.Parent = backdrop
 
 	local amount = Instance.new("TextLabel")
@@ -15265,6 +15557,7 @@ local function syncAtmScreen(part: BasePart, pending: number)
 	end
 	local light = part:FindFirstChild("ATMGlow")
 	if light and light:IsA("PointLight") then
+		light.Color = Color3.fromRGB(120, 255, 90)
 		if pending >= 500 then
 			light.Brightness = 1.4
 			light.Range = 18
@@ -15314,6 +15607,30 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PassiveIncome")
 		end
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService)
+			local profile = DataService.GetProfile(player)
+			local pos: Vector3? = nil
+			local parent: Instance? = nil
+			if profile and profile.BasePlotId ~= nil then
+				for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
+					if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
+						pos = inst.Position + Vector3.new(0, 4, 0)
+						parent = inst.Parent
+						break
+					end
+				end
+			end
+			if not pos then
+				local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+				if hrp and hrp:IsA("BasePart") then
+					pos = hrp.Position
+				end
+			end
+			if pos and vas and vas.PlayMoneyBagFX then
+				vas.PlayMoneyBagFX(pos, parent)
+			end
+		end)
 		return true, granted
 	end
 	return false, 0
@@ -15385,6 +15702,14 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		part.CanTouch = true
 		part.CanCollide = true
 		ensureBillboard(part)
+		task.defer(function()
+			pcall(function()
+				local vas = require(script.Parent.VisualAssetService)
+				if vas and vas.TryAttachCollectorVisual then
+					vas.TryAttachCollectorVisual(part)
+				end
+			end)
+		end)
 		part.Touched:Connect(function(hit)
 			if not hit:IsA("BasePart") then
 				return
@@ -16956,6 +17281,13 @@ local function spawnDrop()
 	corner.Parent = label
 
 	local ttl = SupplyDropConfig.LifetimeSeconds or 75
+		pcall(function()
+		local vas = require(script.Parent.VisualAssetService)
+		if vas and vas.TryAttachCashCrateVisual then
+			vas.TryAttachCashCrateVisual(crate)
+		end
+	end)
+
 	active[id] = {
 		Id = id,
 		Part = crate,
@@ -20384,6 +20716,216 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	return true
 end
 
+local function collectAssetIds(primaryKey: string, fallbackKey: string?, altsKey: string?): { number }
+	local ids: { number } = {}
+	local seen: { [number]: boolean } = {}
+	local function push(id: any)
+		if typeof(id) == "number" and id > 0 and not seen[id] then
+			seen[id] = true
+			table.insert(ids, id)
+		end
+	end
+	local primary = (VisualAssetConfig :: any)[primaryKey]
+	if primary then
+		push(primary.ModelAssetId)
+	end
+	if fallbackKey then
+		local fb = (VisualAssetConfig :: any)[fallbackKey]
+		if fb then
+			push(fb.ModelAssetId)
+		end
+	end
+	if altsKey then
+		local alts = (VisualAssetConfig :: any)[altsKey]
+		if typeof(alts) == "table" then
+			for _, ref in ipairs(alts) do
+				if typeof(ref) == "table" then
+					push(ref.ModelAssetId)
+				end
+			end
+		end
+	end
+	return ids
+end
+
+local function loadFirst(ids: { number }): (Model?, number?)
+	for _, id in ipairs(ids) do
+		local template = loadModel(id)
+		if template then
+			return template, id
+		end
+	end
+	return nil, nil
+end
+
+--[[
+	Dress WE_MoneyCollector with ATM catalog mesh (cosmetic only).
+	Prefer Design Bot hero 75368157644109 → 175462478 → alts.
+]]
+function VisualAssetService.TryAttachCollectorVisual(hostPart: BasePart): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local template, assetId = loadFirst(collectAssetIds("MoneyCollector", "MoneyCollectorFallback", "MoneyCollectorAlts"))
+	if not template or not assetId then
+		return false
+	end
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogATM") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
+	-- Lime landmark glow (typed neon)
+	local glow = hostPart:FindFirstChild("ATMGlow")
+	if not (glow and glow:IsA("PointLight")) then
+		local light = Instance.new("PointLight")
+		light.Name = "ATMGlow"
+		light.Color = Color3.fromRGB(120, 255, 90)
+		light.Brightness = 1.1
+		light.Range = 18
+		light.Parent = hostPart
+	else
+		(glow :: PointLight).Color = Color3.fromRGB(120, 255, 90)
+		(glow :: PointLight).Brightness = math.max((glow :: PointLight).Brightness, 1.0)
+	end
+	return true
+end
+
+--[[
+	One-shot collect burst FX — MoneyBagFX then VfxSparkles, then neon motes.
+]]
+function VisualAssetService.PlayMoneyBagFX(at: Vector3, parent: Instance?): boolean
+	local ids = collectAssetIds("MoneyBagFX", "VfxSparkles", nil)
+	local template, assetId = loadFirst(ids)
+	if not template then
+		local folder = Instance.new("Folder")
+		folder.Name = "WE_MoneyBagFallback"
+		folder.Parent = parent or game:GetService("Workspace")
+		for i = 1, 6 do
+			local mote = Instance.new("Part")
+			mote.Name = "CashMote" .. i
+			mote.Size = Vector3.new(0.35, 0.2, 0.55)
+			mote.Color = Color3.fromRGB(120, 255, 90)
+			mote.Material = Enum.Material.Neon
+			mote.Anchored = true
+			mote.CanCollide = false
+			mote.CFrame = CFrame.new(at + Vector3.new((i - 3.5) * 0.4, 0.5, (i % 3 - 1) * 0.35))
+			mote.Parent = folder
+		end
+		task.delay(0.85, function()
+			folder:Destroy()
+		end)
+		return true
+	end
+	local clone = template:Clone()
+	clone.Name = "WE_MoneyBagFX"
+	clone:PivotTo(CFrame.new(at + Vector3.new(0, 1.5, 0)))
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.Massless = true
+		elseif d:IsA("BaseScript") or d:IsA("ModuleScript") then
+			d:Destroy()
+		end
+	end
+	clone.Parent = parent or game:GetService("Workspace")
+	if assetId then
+		clone:SetAttribute("WE_CatalogAssetId", assetId)
+	end
+	task.delay(1.2, function()
+		if clone.Parent then
+			clone:Destroy()
+		end
+	end)
+	return true
+end
+
+--[[
+	Optional CashCrate overlay for supply / world crates.
+]]
+function VisualAssetService.TryAttachCashCrateVisual(hostPart: BasePart): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local ref = (VisualAssetConfig :: any).CashCrate
+	local assetId = if ref and typeof(ref.ModelAssetId) == "number" then ref.ModelAssetId else 0
+	if not assetId or assetId <= 0 then
+		return false
+	end
+	local template = loadModel(assetId)
+	if not template then
+		return false
+	end
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogCashCrate") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
+	return true
+end
+
+--[[
+	Dress VehicleDepot showroom hosts with podium / pedestal / rotator meshes.
+]]
+function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
+	local attached = false
+	local map = {
+		Podium = "ShowroomPodium",
+		PodiumRing = "ShowroomPedestal",
+		ShowroomMesh = "ShowroomRotator",
+	}
+	for role, cfgKey in pairs(map) do
+		local host = plinth:FindFirstChild(role)
+		if host and host:IsA("BasePart") and not host:GetAttribute("WE_CatalogAssetId") then
+			local ref = (VisualAssetConfig :: any)[cfgKey]
+			local id = if ref and typeof(ref.ModelAssetId) == "number" then ref.ModelAssetId else 0
+			if id > 0 then
+				local template = loadModel(id)
+				if template then
+					local clone = template:Clone()
+					if weldCloneToPrimary(clone, host, "WE_CatalogShowroom") then
+						clone.Parent = host
+						host:SetAttribute("WE_CatalogAssetId", id)
+						host.Transparency = math.max(host.Transparency, 0.65)
+						attached = true
+					else
+						clone:Destroy()
+					end
+				end
+			end
+		end
+	end
+	return attached
+end
+
+--[[
+	Dress tutorial marker with arrow mesh (first beats).
+]]
+function VisualAssetService.TryAttachTutorialArrow(hostPart: BasePart): boolean
+	if hostPart:GetAttribute("WE_CatalogAssetId") then
+		return false
+	end
+	local template, assetId = loadFirst(collectAssetIds("TutorialArrow", "TutorialArrowAlt", nil))
+	if not template or not assetId then
+		return false
+	end
+	local clone = template:Clone()
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogTutArrow") then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostPart
+	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+	return true
+end
+
 function VisualAssetService.Init()
 	ensureFolder()
 	if shouldSkipInserts() then
@@ -22431,7 +22973,7 @@ function HUDController.Init()
 	left.Position = UDim2.fromOffset(16, 16)
 	left.Size = UDim2.fromOffset(220, 64)
 	left.BackgroundColor3 = Constants.Colors.Panel
-	left.BackgroundTransparency = 0.12
+	left.BackgroundTransparency = 0.15 -- panel α≤0.15
 	left.BorderSizePixel = 0
 	left.Parent = screen
 	makeCorner(left, 10)
@@ -22445,7 +22987,7 @@ function HUDController.Init()
 	lvl.Font = Enum.Font.GothamBold
 	lvl.TextSize = 18
 	lvl.TextXAlignment = Enum.TextXAlignment.Left
-	lvl.TextColor3 = Constants.Colors.Text
+	lvl.TextColor3 = Constants.Colors.TextOnDark
 	lvl.Text = "LVL 1"
 	lvl.Parent = left
 	levelLabel = lvl
@@ -22486,13 +23028,13 @@ function HUDController.Init()
 	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
 	pill.Size = UDim2.fromOffset(210, 64)
 	pill.BackgroundColor3 = Color3.fromRGB(22, 26, 32)
-	pill.BackgroundTransparency = 0.08
+	pill.BackgroundTransparency = 0.12
 	pill.BorderSizePixel = 0
 	pill.ZIndex = 12
 	pill.Parent = screen
 	makeCorner(pill, 28)
-	local pillStroke = UIUtil.Stroke(pill, Color3.fromRGB(255, 210, 90), 2)
-	pillStroke.Transparency = 0.25
+	local pillStroke = UIUtil.Stroke(pill, Constants.Colors.GoldBright, 2)
+	pillStroke.Transparency = 0.15
 
 	local cash = Instance.new("TextLabel")
 	cash.Name = "CashLabel"
@@ -22557,7 +23099,7 @@ function HUDController.Init()
 	season.Position = UDim2.new(0.5, 0, 0, 12)
 	season.Size = UDim2.fromOffset(280, 22)
 	season.BackgroundColor3 = Constants.Colors.Panel
-	season.BackgroundTransparency = 0.25
+	season.BackgroundTransparency = 0.15
 	season.BorderSizePixel = 0
 	season.Font = Enum.Font.GothamBold
 	season.TextSize = 12
@@ -22605,7 +23147,7 @@ function HUDController.Init()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 12)
+	layout.Padding = UDim.new(0, 8) -- dock≤8
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = dock
 	actionDock = dock
@@ -25323,10 +25865,11 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	beam.Attachment0 = attach0
 	beam.Attachment1 = attach1
 	beam.FaceCamera = true
-	beam.Width0 = 0.45
-	beam.Width1 = 0.45
-	beam.Color = ColorSequence.new(Constants.Colors.Gold)
-	beam.Transparency = NumberSequence.new(0.2)
+	beam.Width0 = 0.55
+	beam.Width1 = 0.35
+	beam.Color = ColorSequence.new(Constants.Colors.NeonAccent or Constants.Colors.Accent)
+	beam.Transparency = NumberSequence.new(0.15)
+	beam.LightEmission = 0.85
 	beam.Parent = hrp
 end
 

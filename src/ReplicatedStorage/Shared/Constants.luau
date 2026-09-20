@@ -123,6 +123,9 @@ Constants.Colors = {
 	TextDark = Color3.fromRGB(18, 20, 24),
 	PlateDark = Color3.fromRGB(12, 14, 18),
 	GoldBright = Color3.fromRGB(255, 210, 90),
+	NeonAccent = Color3.fromRGB(80, 255, 160),
+	Olive = Color3.fromRGB(72, 88, 58),
+	Sand = Color3.fromRGB(196, 170, 120),
 }
 
 return Constants

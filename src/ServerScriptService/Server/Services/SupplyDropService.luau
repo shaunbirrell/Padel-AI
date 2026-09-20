@@ -196,6 +196,13 @@ local function spawnDrop()
 	corner.Parent = label
 
 	local ttl = SupplyDropConfig.LifetimeSeconds or 75
+		pcall(function()
+		local vas = require(script.Parent.VisualAssetService)
+		if vas and vas.TryAttachCashCrateVisual then
+			vas.TryAttachCashCrateVisual(crate)
+		end
+	end)
+
 	active[id] = {
 		Id = id,
 		Part = crate,
