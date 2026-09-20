@@ -443,35 +443,44 @@ end
 	Prefer Design Bot hero 75368157644109 → 175462478 → alts.
 ]]
 function VisualAssetService.TryAttachCollectorVisual(hostPart: BasePart): boolean
-	if hostPart:GetAttribute("WE_CatalogAssetId") then
+	-- NEVER throw — Part kit ATM remains if Design Bot hero mesh / InsertService fails.
+	local ok, result = pcall(function(): boolean
+		if hostPart:GetAttribute("WE_CatalogAssetId") then
+			return false
+		end
+		local template, assetId = loadFirst(collectAssetIds("MoneyCollector", "MoneyCollectorFallback", "MoneyCollectorAlts"))
+		if not template or not assetId then
+			return false -- Part kit only
+		end
+		local clone = template:Clone()
+		if not weldCloneToPrimary(clone, hostPart, "WE_CatalogATM") then
+			clone:Destroy()
+			return false
+		end
+		clone.Parent = hostPart
+		hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+		hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
+		-- Lime landmark glow (typed neon)
+		local glow = hostPart:FindFirstChild("ATMGlow")
+		if not (glow and glow:IsA("PointLight")) then
+			local light = Instance.new("PointLight")
+			light.Name = "ATMGlow"
+			light.Color = Color3.fromRGB(120, 255, 90)
+			light.Brightness = 1.1
+			light.Range = 18
+			light.Parent = hostPart
+		else
+			local pl = glow :: PointLight
+			pl.Color = Color3.fromRGB(120, 255, 90)
+			pl.Brightness = math.max(pl.Brightness, 1.0)
+		end
+		return true
+	end)
+	if not ok then
+		warn("[VisualAssetService] TryAttachCollectorVisual failed (Part kit kept):", result)
 		return false
 	end
-	local template, assetId = loadFirst(collectAssetIds("MoneyCollector", "MoneyCollectorFallback", "MoneyCollectorAlts"))
-	if not template or not assetId then
-		return false
-	end
-	local clone = template:Clone()
-	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogATM") then
-		clone:Destroy()
-		return false
-	end
-	clone.Parent = hostPart
-	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
-	hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
-	-- Lime landmark glow (typed neon)
-	local glow = hostPart:FindFirstChild("ATMGlow")
-	if not (glow and glow:IsA("PointLight")) then
-		local light = Instance.new("PointLight")
-		light.Name = "ATMGlow"
-		light.Color = Color3.fromRGB(120, 255, 90)
-		light.Brightness = 1.1
-		light.Range = 18
-		light.Parent = hostPart
-	else
-		(glow :: PointLight).Color = Color3.fromRGB(120, 255, 90)
-		(glow :: PointLight).Brightness = math.max((glow :: PointLight).Brightness, 1.0)
-	end
-	return true
+	return result == true
 end
 
 --[[

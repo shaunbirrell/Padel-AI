@@ -191,7 +191,7 @@ else
 				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
 				pcall(function()
 					setup:Destroy()
-			end)
+				end)
 				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
 			else
 				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
@@ -210,20 +210,60 @@ end
 
 
 -- PlayerAdded: heal map if somehow missing (late join / rare destroy)
+-- Also rebuild if WarEmpireSetup exists but upgrade pads are gone (v11 parse abort left void grass).
 do
 	local Players = game:GetService("Players")
+	local CollectionService = game:GetService("CollectionService")
 	local function ensureMapForPlayer(player: Player)
 		task.defer(function()
-			if not Workspace:FindFirstChild("WarEmpireSetup") and not Workspace:FindFirstChild("WE_VoidFallback") then
-				warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
-				healOrRebuildMap("PlayerAdded:" .. player.Name)
-			elseif Workspace:FindFirstChild("WarEmpireSetup") and MapSetup and MapSetup.EnsureGroundHealthy then
+			local okHeal, errHeal = pcall(function()
 				local setup = Workspace:FindFirstChild("WarEmpireSetup")
-				if setup then
-					pcall(function()
-						MapSetup.EnsureGroundHealthy(setup)
-					end)
+				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
+					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
+					healOrRebuildMap("PlayerAdded:" .. player.Name)
+					return
 				end
+				if not setup then
+					return
+				end
+				-- Missing pads → full rebuild (never leave green void plate as "setup")
+				local padCount = 0
+				pcall(function()
+					padCount = #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+				end)
+				if padCount == 0 then
+					local bases = setup:FindFirstChild("Bases")
+					local hasPlotPad = false
+					if bases then
+						for _, d in ipairs(bases:GetDescendants()) do
+							if d:IsA("BasePart") and d.Name == "PlotPad" then
+								hasPlotPad = true
+								break
+							end
+						end
+					end
+					if not hasPlotPad then
+						warn("[WAR EMPIRE] PlayerAdded: WarEmpireSetup has no PlotPad/upgrade pads — full MapSetup rebuild for", player.Name)
+						pcall(function()
+							setup:Destroy()
+						end)
+						-- Destroy void fallback too so Run replaces grass plate
+						local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
+						if voidFb then
+							pcall(function()
+								voidFb:Destroy()
+							end)
+						end
+						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
+						return
+					end
+				end
+				if MapSetup and MapSetup.EnsureGroundHealthy then
+					MapSetup.EnsureGroundHealthy(setup)
+				end
+			end)
+			if not okHeal then
+				warn("[WAR EMPIRE] PlayerAdded map heal error (remotes continue):", errHeal)
 			end
 		end)
 	end

@@ -3798,7 +3798,7 @@ else
 				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
 				pcall(function()
 					setup:Destroy()
-			end)
+				end)
 				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
 			else
 				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
@@ -3817,20 +3817,60 @@ end
 
 
 -- PlayerAdded: heal map if somehow missing (late join / rare destroy)
+-- Also rebuild if WarEmpireSetup exists but upgrade pads are gone (v11 parse abort left void grass).
 do
 	local Players = game:GetService("Players")
+	local CollectionService = game:GetService("CollectionService")
 	local function ensureMapForPlayer(player: Player)
 		task.defer(function()
-			if not Workspace:FindFirstChild("WarEmpireSetup") and not Workspace:FindFirstChild("WE_VoidFallback") then
-				warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
-				healOrRebuildMap("PlayerAdded:" .. player.Name)
-			elseif Workspace:FindFirstChild("WarEmpireSetup") and MapSetup and MapSetup.EnsureGroundHealthy then
+			local okHeal, errHeal = pcall(function()
 				local setup = Workspace:FindFirstChild("WarEmpireSetup")
-				if setup then
-					pcall(function()
-						MapSetup.EnsureGroundHealthy(setup)
-					end)
+				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
+					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
+					healOrRebuildMap("PlayerAdded:" .. player.Name)
+					return
 				end
+				if not setup then
+					return
+				end
+				-- Missing pads → full rebuild (never leave green void plate as "setup")
+				local padCount = 0
+				pcall(function()
+					padCount = #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+				end)
+				if padCount == 0 then
+					local bases = setup:FindFirstChild("Bases")
+					local hasPlotPad = false
+					if bases then
+						for _, d in ipairs(bases:GetDescendants()) do
+							if d:IsA("BasePart") and d.Name == "PlotPad" then
+								hasPlotPad = true
+								break
+							end
+						end
+					end
+					if not hasPlotPad then
+						warn("[WAR EMPIRE] PlayerAdded: WarEmpireSetup has no PlotPad/upgrade pads — full MapSetup rebuild for", player.Name)
+						pcall(function()
+							setup:Destroy()
+						end)
+						-- Destroy void fallback too so Run replaces grass plate
+						local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
+						if voidFb then
+							pcall(function()
+								voidFb:Destroy()
+							end)
+						end
+						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
+						return
+					end
+				end
+				if MapSetup and MapSetup.EnsureGroundHealthy then
+					MapSetup.EnsureGroundHealthy(setup)
+				end
+			end)
+			if not okHeal then
+				warn("[WAR EMPIRE] PlayerAdded map heal error (remotes continue):", errHeal)
 			end
 		end)
 	end
@@ -7866,53 +7906,58 @@ function MapSetup.Run()
 
 	-- Neon Accent guide beams: collector → CommandCenter → VehicleDepot (Plot1 landmark path)
 	do
-		local neon = Color3.fromRGB(80, 255, 160)
-		local collectorPos = plot1 + Vector3.new(28, 5, 8)
-		local ccPos = plot1 + STRUCT_ORIGIN + Vector3.new(0, 4, 0)
-		local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
-		local depotCol = (depotIdx - 1) % STRUCT_COLS
-		local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
-		local depotPos = plot1 + STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 4, depotRow * STRUCT_GAP)
-		local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
-			local a0p = part({
-				Name = name .. "_A0",
-				Size = Vector3.new(0.4, 0.4, 0.4),
-				Position = fromPos,
-				Color = neon,
-				Material = Enum.Material.Neon,
-				Transparency = 1,
-				CanCollide = false,
-				Parent = tutorialFolder,
-			end)
-			local a1p = part({
-				Name = name .. "_A1",
-				Size = Vector3.new(0.4, 0.4, 0.4),
-				Position = toPos,
-				Color = neon,
-				Material = Enum.Material.Neon,
-				Transparency = 1,
-				CanCollide = false,
-				Parent = tutorialFolder,
-			end)
-			local att0 = Instance.new("Attachment")
-			att0.Parent = a0p
-			local att1 = Instance.new("Attachment")
-			att1.Parent = a1p
-			local beam = Instance.new("Beam")
-			beam.Name = name
-			beam.Attachment0 = att0
-			beam.Attachment1 = att1
-			beam:SetAttribute("WE_TutorialBeamAsset", 88687072714005)
-			beam.FaceCamera = true
-			beam.Width0 = 0.35
-			beam.Width1 = 0.35
-			beam.Color = ColorSequence.new(neon)
-			beam.Transparency = NumberSequence.new(0.35)
-			beam.LightEmission = 0.9
-			beam.Parent = a0p
+		local okNeon, errNeon = pcall(function()
+			local neon = Color3.fromRGB(80, 255, 160)
+			local collectorPos = plot1 + Vector3.new(28, 5, 8)
+			local ccPos = plot1 + STRUCT_ORIGIN + Vector3.new(0, 4, 0)
+			local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
+			local depotCol = (depotIdx - 1) % STRUCT_COLS
+			local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
+			local depotPos = plot1 + STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 4, depotRow * STRUCT_GAP)
+			local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
+				local a0p = part({
+					Name = name .. "_A0",
+					Size = Vector3.new(0.4, 0.4, 0.4),
+					Position = fromPos,
+					Color = neon,
+					Material = Enum.Material.Neon,
+					Transparency = 1,
+					CanCollide = false,
+					Parent = tutorialFolder,
+				})
+				local a1p = part({
+					Name = name .. "_A1",
+					Size = Vector3.new(0.4, 0.4, 0.4),
+					Position = toPos,
+					Color = neon,
+					Material = Enum.Material.Neon,
+					Transparency = 1,
+					CanCollide = false,
+					Parent = tutorialFolder,
+				})
+				local att0 = Instance.new("Attachment")
+				att0.Parent = a0p
+				local att1 = Instance.new("Attachment")
+				att1.Parent = a1p
+				local beam = Instance.new("Beam")
+				beam.Name = name
+				beam.Attachment0 = att0
+				beam.Attachment1 = att1
+				beam:SetAttribute("WE_TutorialBeamAsset", 88687072714005)
+				beam.FaceCamera = true
+				beam.Width0 = 0.35
+				beam.Width1 = 0.35
+				beam.Color = ColorSequence.new(neon)
+				beam.Transparency = NumberSequence.new(0.35)
+				beam.LightEmission = 0.9
+				beam.Parent = a0p
+			end
+			neonBeam(collectorPos, ccPos, "WE_NeonPath_CollectorToCC")
+			neonBeam(ccPos, depotPos, "WE_NeonPath_CCToDepot")
+		end)
+		if not okNeon then
+			warn("[WAR EMPIRE] MapSetup neon/tutorial path failed (pads already built):", errNeon)
 		end
-		neonBeam(collectorPos, ccPos, "WE_NeonPath_CollectorToCC")
-		neonBeam(ccPos, depotPos, "WE_NeonPath_CCToDepot")
 	end
 
 	-- Military world dressing (visual only). Does not tag WE_UpgradeSlot / buy pads.
@@ -20763,35 +20808,44 @@ end
 	Prefer Design Bot hero 75368157644109 → 175462478 → alts.
 ]]
 function VisualAssetService.TryAttachCollectorVisual(hostPart: BasePart): boolean
-	if hostPart:GetAttribute("WE_CatalogAssetId") then
+	-- NEVER throw — Part kit ATM remains if Design Bot hero mesh / InsertService fails.
+	local ok, result = pcall(function(): boolean
+		if hostPart:GetAttribute("WE_CatalogAssetId") then
+			return false
+		end
+		local template, assetId = loadFirst(collectAssetIds("MoneyCollector", "MoneyCollectorFallback", "MoneyCollectorAlts"))
+		if not template or not assetId then
+			return false -- Part kit only
+		end
+		local clone = template:Clone()
+		if not weldCloneToPrimary(clone, hostPart, "WE_CatalogATM") then
+			clone:Destroy()
+			return false
+		end
+		clone.Parent = hostPart
+		hostPart:SetAttribute("WE_CatalogAssetId", assetId)
+		hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
+		-- Lime landmark glow (typed neon)
+		local glow = hostPart:FindFirstChild("ATMGlow")
+		if not (glow and glow:IsA("PointLight")) then
+			local light = Instance.new("PointLight")
+			light.Name = "ATMGlow"
+			light.Color = Color3.fromRGB(120, 255, 90)
+			light.Brightness = 1.1
+			light.Range = 18
+			light.Parent = hostPart
+		else
+			local pl = glow :: PointLight
+			pl.Color = Color3.fromRGB(120, 255, 90)
+			pl.Brightness = math.max(pl.Brightness, 1.0)
+		end
+		return true
+	end)
+	if not ok then
+		warn("[VisualAssetService] TryAttachCollectorVisual failed (Part kit kept):", result)
 		return false
 	end
-	local template, assetId = loadFirst(collectAssetIds("MoneyCollector", "MoneyCollectorFallback", "MoneyCollectorAlts"))
-	if not template or not assetId then
-		return false
-	end
-	local clone = template:Clone()
-	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogATM") then
-		clone:Destroy()
-		return false
-	end
-	clone.Parent = hostPart
-	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
-	hostPart.Transparency = math.max(hostPart.Transparency, 0.55)
-	-- Lime landmark glow (typed neon)
-	local glow = hostPart:FindFirstChild("ATMGlow")
-	if not (glow and glow:IsA("PointLight")) then
-		local light = Instance.new("PointLight")
-		light.Name = "ATMGlow"
-		light.Color = Color3.fromRGB(120, 255, 90)
-		light.Brightness = 1.1
-		light.Range = 18
-		light.Parent = hostPart
-	else
-		(glow :: PointLight).Color = Color3.fromRGB(120, 255, 90)
-		(glow :: PointLight).Brightness = math.max((glow :: PointLight).Brightness, 1.0)
-	end
-	return true
+	return result == true
 end
 
 --[[

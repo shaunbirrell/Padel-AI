@@ -234,7 +234,10 @@ Reversible engineering decisions made while implementing the MVP without blockin
 - **Fix:** Authoritative Part chassis + `HingeConstraint` Motor wheels (`WE_DriveHinge`) driven from `VehicleSeat` Throttle/Steer; scripted `LinearVelocity` fallback if no hinges. Catalog mesh (`125916936788670`) is dress-only (CanCollide false, Massless, constraints stripped). Physics wheels hidden when mesh attaches.
 
 
-## Design competitive pass P0/P1 (2026-09-20 live v11)
+## Design competitive pass P0/P1 (2026-09-20 live v12 — map parse hotfix)
+
+**HOTFIX v12 (2026-09-20):** v11 `MapSetup` failed to parse (`neonBeam` table closed with `end)` instead of `}`), so Bootstrap installed the green void-fallback plate — no PlotPad / upgrade pads. Also fixed `VisualAssetService` invalid `(glow :: PointLight).X =` cast-assignments (parse abort). ATM mesh attach is pcall-wrapped (Part kit always remains). PlayerAdded rebuilds if pads missing. Open Cloud Published **versionNumber=12**.
+
 
 - **ATM:** prefer `75368157644109` (fallback `175462478`, alts `90362241548850` / `76846072091295` / `35409899`); lime PointLight landmark + COLLECT billboard; `MoneyBagFX` `38451313` + sparkles `4221608224` (StripScripts).
 - **CashCrate** alt `16803204916` on supply drops.
