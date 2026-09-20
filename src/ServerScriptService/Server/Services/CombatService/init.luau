@@ -495,7 +495,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		then Color3.fromRGB(90, 140, 220)
 		elseif isHeavy then Color3.fromRGB(230, 160, 50)
 		else Color3.fromRGB(200, 80, 60)
-	weldPart("Accent", Vector3.new(1.9, 0.12, 0.35), CFrame.new(0, 0.95, -0.6), accent, Enum.Material.Neon, nil)
+	weldPart("Accent", Vector3.new(1.9, 0.12, 0.35), CFrame.new(0, 0.95, -0.6), accent, Enum.Material.Metal, nil)
 	if isHeavy then
 		weldPart("Pack", Vector3.new(1.4, 1.5, 0.7), CFrame.new(0, 0.4, 0.85), Color3.fromRGB(40, 42, 38), Enum.Material.Metal, nil)
 	end

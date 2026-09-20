@@ -247,3 +247,21 @@ Reversible engineering decisions made while implementing the MVP without blockin
 - **Tutorial:** NeonAccent beam; path collector→CC→Depot; arrow `1143305733` (alt `6333395014`) on first 3 pads; beam asset attr `88687072714005`.
 - **HUD:** margin≥16, panel α≤0.15, touch≥56, dock≤8, GoldBright currency stroke, TextOnDark on level panel.
 - **Jeep** ModelAssetId stays `125916936788670` (HingeConstraint drive from cb31f57).
+
+
+## Design visual overhaul + levels (2026-09-20 live v13)
+
+**Design P0 wire (REJECT):** JeepFallback `59524622`; SWAT/police IDs; blocky soldiers `115637567537381`/`23231587`; `107381977457431` as **vehicle** (rehomed to FloodlightTower **prop**); neon Part jeep as primary look.
+
+**WIRE:**
+- Jeep family → `125916936788670` dress-only (hinge chassis kept)
+- PatrolTruck / SupplyTruck / ArmoredTruck → `105503568352704`
+- APC / InfantryCarrier / WheeledIFV / CommandVehicle → `17835143223`
+- Soldier/Infantry/Heavy/Guards → `91299598767068` primary; `CharacterAlt` `3924234975` only if primary fails
+- PreferMeshMinLevel=1 for all structure MeshAssetIds
+- ATM `75368157644109`; ShowroomPodium `5267267960` + Rotator `5389482912`; FloodlightTower `107381977457431`; Flag `1679839739` L5
+- Warzone densify 8–12/plot (MapDressing + always-on MapSetup PlotWarzone Part kits, pcall)
+
+**Levels/progression:** `LevelConfig.Milestones` + `GetHudGoal` / `GetUnlockMessage`; XPService toasts; HUD GoalLabel. Prestige objective at L40; territory goals in milestone copy. Soft guidance only — hard gates remain in Vehicle/Weapon/Base/Prestige configs.
+
+**ASSUMPTION:** Catalog mesh scale clamped 0.85–1.2 via VehicleVisualScale; StripScripts; pads never vanish (pcall inserts).

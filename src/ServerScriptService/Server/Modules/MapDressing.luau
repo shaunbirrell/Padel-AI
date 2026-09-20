@@ -1311,11 +1311,19 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
-	-- 12) Plot-ring perimeter (Low: 3 edges)
+	-- 12) Plot-ring perimeter + Design densify 8–12 warzone props / plot (no neon/flat SWAT)
 	do
 		local f = Instance.new("Folder")
 		f.Name = "PlotRingPerimeter"
 		f.Parent = dressing
+		local plotCenters = {
+			Vector3.new(-800, 0.5, -400),
+			Vector3.new(-800, 0.5, 400),
+			Vector3.new(0, 0.5, -800),
+			Vector3.new(0, 0.5, 800),
+			Vector3.new(800, 0.5, -400),
+			Vector3.new(800, 0.5, 400),
+		}
 		local plotEdges = if full
 			then {
 				{ Vector3.new(-800, 0.5, -650), 0 },
@@ -1332,6 +1340,27 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			}
 		for _, e in ipairs(plotEdges) do
 			kitSandbagLine(f, e[1], e[2], if full then 4 else 2)
+		end
+		-- 8–12 clusters per plot (always; Low still gets 8)
+		local densify = Instance.new("Folder")
+		densify.Name = "PlotWarzoneDensify"
+		densify.Parent = dressing
+		local perPlot = if full then 12 else 8
+		for pi, center in ipairs(plotCenters) do
+			for i = 1, perPlot do
+				local ang = (i / perPlot) * math.pi * 2 + pi * 0.35
+				local rad = 55 + (i % 4) * 12
+				local origin = center + Vector3.new(math.cos(ang) * rad, 0, math.sin(ang) * rad)
+				local yaw = (i * 41 + pi * 17) % 180
+				if i % 3 == 0 then
+					kitSandbagLine(densify, origin, yaw, if full then 4 else 3)
+				elseif i % 3 == 1 then
+					kitCrateStack(densify, origin)
+					kitOilDrums(densify, origin + Vector3.new(4, 0, 2), 2)
+				else
+					kitBunker(densify, origin, yaw)
+				end
+			end
 		end
 	end
 

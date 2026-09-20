@@ -108,6 +108,8 @@ export type XPUpdatePayload = {
 	Level: number,
 	XP: number,
 	XPToNext: number,
+	HudGoal: string?,
+	UnlockMessage: string?,
 }
 
 export type BaseStatePayload = {

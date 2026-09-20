@@ -635,7 +635,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		Name = "Accent",
 		Size = Vector3.new(1.6, 0.1, 0.28),
 		Color = labelColor or Color3.fromRGB(200, 140, 60),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
 		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
@@ -1561,6 +1561,82 @@ function MapSetup.Run()
 					beam.Transparency = NumberSequence.new(0.35)
 					beam.Parent = root
 				end
+			end
+		end
+		-- Design densify: 8–12 realistic warzone props per plot (always-on Part kits; pcall catalog)
+		do
+			local okDress, errDress = pcall(function()
+				local wz = Instance.new("Folder")
+				wz.Name = "PlotWarzone"
+				wz.Parent = plotFolder
+				local count = 10
+				for i = 1, count do
+					local ang = (i / count) * math.pi * 2
+					local rad = 58 + (i % 3) * 10
+					local o = pos + Vector3.new(math.cos(ang) * rad, 0.6, math.sin(ang) * rad)
+					if i % 3 == 0 then
+						-- sandbag berm (Metal/Sand — no neon)
+						part({
+							Name = "WZ_Sandbag" .. i,
+							Size = Vector3.new(6, 1.2, 1.4),
+							Position = o,
+							Color = Color3.fromRGB(130, 115, 80),
+							Material = Enum.Material.Sand,
+							CanCollide = true,
+							Parent = wz,
+						})
+						part({
+							Name = "WZ_SandbagTop" .. i,
+							Size = Vector3.new(5.2, 0.9, 1.1),
+							Position = o + Vector3.new(0, 1.0, 0),
+							Color = Color3.fromRGB(120, 105, 75),
+							Material = Enum.Material.Sand,
+							CanCollide = true,
+							Parent = wz,
+						})
+					elseif i % 3 == 1 then
+						part({
+							Name = "WZ_Crate" .. i,
+							Size = Vector3.new(2.2, 2.0, 2.2),
+							Position = o + Vector3.new(0, 1.0, 0),
+							Color = Color3.fromRGB(95, 80, 55),
+							Material = Enum.Material.Wood,
+							CanCollide = true,
+							Parent = wz,
+						})
+						part({
+							Name = "WZ_Drum" .. i,
+							Size = Vector3.new(1.4, 2.2, 1.4),
+							Position = o + Vector3.new(3, 1.1, 1),
+							Color = Color3.fromRGB(55, 70, 50),
+							Material = Enum.Material.Metal,
+							Shape = Enum.PartType.Cylinder,
+							CanCollide = true,
+							Parent = wz,
+						})
+					else
+						part({
+							Name = "WZ_Barrier" .. i,
+							Size = Vector3.new(5, 1.4, 0.7),
+							Position = o + Vector3.new(0, 0.7, 0),
+							Color = Color3.fromRGB(110, 105, 90),
+							Material = Enum.Material.Concrete,
+							CanCollide = true,
+							Parent = wz,
+						})
+					end
+				end
+				-- Optional catalog floodlight tower / flag (never clears pads on fail)
+				pcall(function()
+					local vas = require(script.Parent.Parent.Services.VisualAssetService)
+					local host = wz:FindFirstChildWhichIsA("BasePart")
+					if host and vas.TryAttachPropVisual then
+						vas.TryAttachPropVisual(host, "FloodlightTower")
+					end
+				end)
+			end)
+			if not okDress then
+				warn("[MapSetup] PlotWarzone densify failed (pads intact):", errDress)
 			end
 		end
 		buildMoneyCollector(plotFolder, plotId, pos)

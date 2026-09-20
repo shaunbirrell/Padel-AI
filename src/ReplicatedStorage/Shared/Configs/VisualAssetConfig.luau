@@ -8,6 +8,7 @@
 
 	IDs researched as Free / Get Model on Creator Store (economy IsForSale=false Price=nil).
 	Never paid / never MT-branded. AssetId=0 means skip insert (Part kit only).
+	Design P0 REJECT: JeepFallback 59524622; SWAT/police; blocky soldiers; 107381 as vehicle.
 	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
 	(and AllowInsertFreeAssets where required) for third-party models.
 ]]
@@ -22,14 +23,14 @@ local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
 	MaxLoadAttempts = 48,
-	VehicleVisualScale = 1.0,
+	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0,
 	PropVisualScale = 1.0,
 
 	Vehicles = {
 		-- Free Jeep family
-		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car (prefer); fallback 59524622" } :: AssetRef,
+		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car dress-only (NO JeepFallback)" } :: AssetRef,
 		ArmedJeep = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		UtilityQuad = { ModelAssetId = 125916936788670, Note = "Military Car reuse (scaled)" } :: AssetRef,
 		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
@@ -97,7 +98,7 @@ local VisualAssetConfig = {
 		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
-		SupplyTruck = { ModelAssetId = 107381977457431, Note = "Military supply truck prefer" } :: AssetRef,
+		SupplyTruck = { ModelAssetId = 105503568352704, Note = "Military truck (same as PatrolTruck)" } :: AssetRef,
 		FuelTanker = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
@@ -109,10 +110,10 @@ local VisualAssetConfig = {
 		TroopTransport = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		RecoveryTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		EscortTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		InfantryCarrier = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
-		CommandVehicle = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
-		WheeledIFV = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
-		AmphibiousAPC = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
+		InfantryCarrier = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
+		CommandVehicle = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
+		WheeledIFV = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
+		AmphibiousAPC = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
 		CombatIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
 		AssaultIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
 		BridgeLayer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
@@ -143,15 +144,18 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Characters = {
-		-- Free Get Model / Roblox official — scripts stripped at insert. Part kits remain fallback.
-		Soldier = { ModelAssetId = 3924234975, Note = "Official Roblox Soldier (Rthro)" } :: AssetRef,
-		Infantry = { ModelAssetId = 3924234975, Note = "Soldier reuse (Infantry NPC)" } :: AssetRef,
-		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (free)" } :: AssetRef,
-		Guard = { ModelAssetId = 91299598767068, Note = "Guard (Respawn Soldiers / alt 23231587)" } :: AssetRef,
-		BankGuard = { ModelAssetId = 91299598767068, Note = "BankGuard (alt 23231587)" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 91299598767068, Note = "OilRigGuard (alt 23231587)" } :: AssetRef,
-		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (fort)" } :: AssetRef,
+		-- Design P0: Respawn Soldiers pack primary. REJECT blocky/SWAT/police. StripScripts on insert.
+		Soldier = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		Infantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		Guard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		BankGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
 	} :: { [string]: AssetRef },
+
+	-- Optional character alt ONLY (never primary). Used if primary insert fails.
+	CharacterAlt = { ModelAssetId = 3924234975, Note = "Official Soldier alt only" } :: AssetRef,
 
 	Buildings = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
@@ -174,7 +178,7 @@ local VisualAssetConfig = {
 		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
-	JeepFallback = { ModelAssetId = 59524622, Note = "Classic free Jeep fallback only" } :: AssetRef,
+	-- JeepFallback 59524622 DELETED (Design P0 REJECT). Part kit physics if mesh fails.
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	MoneyCollector = { ModelAssetId = 75368157644109, Note = "ATM hero prefer; fallback 175462478" } :: AssetRef,
@@ -188,6 +192,7 @@ local VisualAssetConfig = {
 	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
 	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
 	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
+	FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower PROP (not vehicle)" } :: AssetRef,
 	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
 	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
 	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
@@ -211,6 +216,7 @@ local VisualAssetConfig = {
 		Tent = { ModelAssetId = 6883609157, Note = "Warzone Tent" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, Note = "Warzone RadioAntenna" } :: AssetRef,
 		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
+		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
 		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
 		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,

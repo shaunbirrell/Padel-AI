@@ -14,12 +14,14 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
+local LevelConfig = require(Shared.Configs.LevelConfig)
 
 local HUDController = {}
 
 local player = Players.LocalPlayer
 local _gui: ScreenGui? = nil
 local levelLabel: TextLabel? = nil
+local goalLabel: TextLabel? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
@@ -77,7 +79,7 @@ function HUDController.Init()
 	left.Name = "LevelPanel"
 	left.AnchorPoint = Vector2.new(0, 0)
 	left.Position = UDim2.fromOffset(16, 16)
-	left.Size = UDim2.fromOffset(220, 64)
+	left.Size = UDim2.fromOffset(268, 86)
 	left.BackgroundColor3 = Constants.Colors.Panel
 	left.BackgroundTransparency = 0.15 -- panel α≤0.15
 	left.BorderSizePixel = 0
@@ -126,6 +128,21 @@ function HUDController.Init()
 	xpLbl.Text = "0 / 100"
 	xpLbl.Parent = xpBg
 	xpText = xpLbl
+
+	local goal = Instance.new("TextLabel")
+	goal.Name = "GoalLabel"
+	goal.BackgroundTransparency = 1
+	goal.Position = UDim2.fromOffset(10, 52)
+	goal.Size = UDim2.new(1, -20, 0, 28)
+	goal.Font = Enum.Font.Gotham
+	goal.TextSize = 11
+	goal.TextXAlignment = Enum.TextXAlignment.Left
+	goal.TextYAlignment = Enum.TextYAlignment.Top
+	goal.TextWrapped = true
+	goal.TextColor3 = Constants.Colors.GoldBright
+	goal.Text = "GOAL: Claim base → BUY Command Center"
+	goal.Parent = left
+	goalLabel = goal
 
 	-- Bottom-left: currency pill (cash + gold) — thumb-friendly
 	local pill = Instance.new("Frame")
@@ -298,7 +315,7 @@ function HUDController.Init()
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
-		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext)
+		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
@@ -418,7 +435,7 @@ function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
 	end
 end
 
-function HUDController.SetXP(level: number, xp: number, xpToNext: number)
+function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoal: string?)
 	if levelLabel then
 		levelLabel.Text = "LVL " .. tostring(level)
 	end
@@ -434,11 +451,17 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number)
 			xpText.Text = string.format("%d / %d", xp, xpToNext)
 		end
 	end
+	if goalLabel and typeof(hudGoal) == "string" and hudGoal ~= "" then
+		goalLabel.Text = hudGoal
+	elseif goalLabel and level >= 40 then
+		goalLabel.Text = "GOAL: Prestige for +10% cash · dominate territories"
+	end
 end
 
 function HUDController.ApplyState(state: Types.PlayerStatePayload)
 	HUDController.SetEconomy(state.Cash, state.Gold, (state :: any).PendingCash)
-	HUDController.SetXP(state.Level, state.XP, state.XPToNext)
+	local goal = LevelConfig.GetHudGoal(state.Level)
+	HUDController.SetXP(state.Level, state.XP, state.XPToNext, goal)
 	if state.Base then
 		lastPassive = state.Base.PassiveIncomePerTick or 0
 	end

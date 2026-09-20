@@ -8,3 +8,7 @@ sourcemap.json
 .idea/
 *.lock
 roblox.yml
+
+# Competitor reference media (too large for GitHub)
+docs/ref/*.mp4
+docs/ref/*.mov

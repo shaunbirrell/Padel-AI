@@ -19,8 +19,9 @@ local StructureVisualConfig = {
 	-- Level 0 = faint placeholder (BaseService may raise further); ≥1 solid built kit
 	GhostTransparency = 0.72,
 	SolidTransparency = 0,
-	-- When true and palette.MeshAssetId ~= 0, BaseService may swap kit for MeshPart (art pass).
+	-- When true and palette.MeshAssetId ~= 0, BaseService attaches catalog mesh at PreferMeshMinLevel+.
 	PreferMeshWhenAssetIdSet = true,
+	PreferMeshMinLevel = 1, -- Design P0: enforce mesh dress for ALL structure MeshAssetIds at L1+
 
 	Palettes = {
 		CommandCenter = {

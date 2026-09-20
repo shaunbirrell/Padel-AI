@@ -522,7 +522,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child.Color = if role == "Antenna" then palette.Accent else palette.Roof
 				end
 				child.Transparency = transparency
-				child.Material = if role == "Antenna" then Enum.Material.Neon else Enum.Material.Metal
+				child.Material = Enum.Material.Metal -- Design: reject neon antenna accents
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
@@ -555,8 +555,10 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	-- Upgrade pop extras (idempotent Part kits; never required for gameplay)
 	syncUpgradePops(plinth, structureId, lv)
 
-	-- Optional catalog overlay once built (never blocks Part kits)
-	if lv >= 1 then
+	-- Design P0: PreferMesh L1+ for all structure MeshAssetIds (Part kit always remains)
+	local preferMesh = StructureVisualConfig.PreferMeshWhenAssetIdSet ~= false
+	local meshMin = tonumber((StructureVisualConfig :: any).PreferMeshMinLevel) or 1
+	if preferMesh and lv >= meshMin then
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
 			vas.TryAttachBuildingVisual(plinth, structureId)

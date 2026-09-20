@@ -18,13 +18,17 @@ local _MissionService: any = nil
 local MonetizationService: any = nil
 local BattlePassService: any = nil
 local SeasonService: any = nil
+local NotificationService: any = nil
 
-local function pushXP(player: Player, profile: Types.PlayerProfile)
+local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessage: string?)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.XPUpdate) :: RemoteEvent
+	local hudGoal = LevelConfig.GetHudGoal(profile.Level)
 	remote:FireClient(player, {
 		Level = profile.Level,
 		XP = profile.XP,
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),
+		HudGoal = hudGoal,
+		UnlockMessage = unlockMessage,
 	} :: Types.XPUpdatePayload)
 end
 
@@ -38,6 +42,7 @@ function XPService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	BattlePassService = deps.BattlePassService
 	SeasonService = deps.SeasonService
+	NotificationService = deps.NotificationService
 end
 
 function XPService.Push(player: Player)
@@ -90,13 +95,19 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		if reward.Gold > 0 then
 			EconomyService.AddGold(player, reward.Gold, "level_up")
 		end
+		local unlockMsg = LevelConfig.GetUnlockMessage(profile.Level)
+		if unlockMsg and NotificationService and NotificationService.Notify then
+			NotificationService.Notify(player, unlockMsg, "Success", 5)
+		end
 		if AnalyticsService then
 			AnalyticsService.Log("LEVEL_UP", player.UserId, { level = profile.Level, reason = reason })
 		end
+		-- Push per level-up so HUD goal / unlock toast refresh immediately
+		pushXP(player, profile, unlockMsg)
 	end
 
 	DataService.MarkDirty(player)
-	pushXP(player, profile)
+	pushXP(player, profile, nil)
 	if BattlePassService and BattlePassService.AddXP and reason ~= "battlepass" then
 		-- Mirror a portion of gameplay XP into the battle pass track
 		BattlePassService.AddXP(player, amount, reason)

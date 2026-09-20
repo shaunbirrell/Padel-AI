@@ -219,6 +219,10 @@ function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
 	end
+	local alt = (VisualAssetConfig :: any).CharacterAlt
+	if alt and typeof(alt.ModelAssetId) == "number" and (alt.ModelAssetId :: number) > 0 then
+		return alt.ModelAssetId
+	end
 	return nil
 end
 
@@ -255,27 +259,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		return false
 	end
 	local template = loadModel(assetId)
-	-- Jeep family: prefer Military Car; classic 59524622 fallback only if primary fails
+	-- Design P0: NO JeepFallback 59524622. Part-kit hinge chassis remains if mesh fails.
 	if not template then
-		local jeepIds = {
-			MilitaryJeep = true,
-			ArmedJeep = true,
-			ScoutCar = true,
-			ReconBuggy = true,
-			DispatchCar = true,
-			UtilityQuad = true,
-		}
-		local fb = (VisualAssetConfig :: any).JeepFallback
-		local fbId = if fb and typeof(fb.ModelAssetId) == "number" then fb.ModelAssetId else 59524622
-		if jeepIds[vehicleId] and fbId and fbId > 0 and fbId ~= assetId then
-			template = loadModel(fbId)
-			if template then
-				assetId = fbId
-			end
-		end
-	end
-	if not template then
-		return false -- Part kit remains authoritative
+		return false -- Part kit remains authoritative (hinge-drive)
 	end
 	local primary = hostModel.PrimaryPart
 	if not primary then
@@ -318,6 +304,17 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 		return false
 	end
 	local template = loadModel(assetId)
+	-- Optional CharacterAlt only if primary insert fails
+	if not template then
+		local alt = (VisualAssetConfig :: any).CharacterAlt
+		local altId = if alt and typeof(alt.ModelAssetId) == "number" then alt.ModelAssetId else 0
+		if typeof(altId) == "number" and altId > 0 and altId ~= assetId then
+			template = loadModel(altId)
+			if template then
+				assetId = altId
+			end
+		end
+	end
 	if not template then
 		return false
 	end
@@ -333,6 +330,17 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 	end
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
+	-- Soften Part-kit body so realistic soldier mesh reads (dress-only)
+	if primary:IsA("BasePart") then
+		primary.Transparency = math.max(primary.Transparency, 0.85)
+	end
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d.Parent ~= clone and not d:IsDescendantOf(clone) then
+			if d.Name ~= "HumanoidRootPart" then
+				d.Transparency = math.max(d.Transparency, 0.92)
+			end
+		end
+	end
 	return true
 end
 

@@ -943,7 +943,19 @@ return GameConfig
 	Levels 1–100 via formula.
 	XP to go from level L to L+1: floor(100 * L ^ 1.45)
 	Rewards granted on level-up (cash + optional gold every 5).
+
+	Milestones: clear unlock messages + HUD next-goal text (Design/Code P0).
+	ASSUMPTION: milestone UnlockText is cosmetic guidance; actual gates live in
+	VehicleConfig / WeaponConfig / BaseConfig / PrestigeConfig / TerritoryConfig.
 ]]
+
+export type MilestoneDef = {
+	Level: number,
+	Title: string,
+	UnlockText: string, -- toast on level-up
+	HudGoal: string, -- shown until this level is reached (as "next")
+	Kind: "Weapon" | "Vehicle" | "Base" | "Territory" | "Prestige" | "Army" | "General",
+}
 
 local LevelConfig = {}
 
@@ -982,6 +994,180 @@ for i = 1, 20 do
 		XPToNext = LevelConfig.GetXPRequiredForLevel(i),
 		Reward = LevelConfig.GetLevelUpReward(i + 1),
 	}
+end
+
+--[[
+	Ordered milestones. GetNextMilestone(level) returns the first with Level > current.
+	Prestige objective: reach PrestigeConfig.MinLevelToPrestige (40) then rebirth.
+	Territory objective: capture Central Plaza / any POI (soft goal, not hard gate).
+]]
+LevelConfig.Milestones = {
+	{
+		Level = 1,
+		Title = "Recruit",
+		UnlockText = "Welcome, Commander — claim your base, buy Command Center, recruit soldiers.",
+		HudGoal = "GOAL: Claim base → BUY Command Center → Recruit soldiers",
+		Kind = "Army",
+	},
+	{
+		Level = 2,
+		Title = "Motor Pool",
+		UnlockText = "LVL 2 — Utility Quad / Dispatch Car unlock in Garage.",
+		HudGoal = "GOAL: Reach L2 · unlock Utility Quad",
+		Kind = "Vehicle",
+	},
+	{
+		Level = 3,
+		Title = "Assault Rifle",
+		UnlockText = "LVL 3 — Assault Rifle unlocked. Buy or equip from combat loadout.",
+		HudGoal = "GOAL: Reach L3 · unlock Assault Rifle",
+		Kind = "Weapon",
+	},
+	{
+		Level = 4,
+		Title = "Scout",
+		UnlockText = "LVL 4 — Scout Car + SMG unlock.",
+		HudGoal = "GOAL: Reach L4 · Scout Car / SMG",
+		Kind = "Vehicle",
+	},
+	{
+		Level = 5,
+		Title = "Patrol",
+		UnlockText = "LVL 5 — Patrol Truck unlock. Capture Central Plaza for +10% passive cash.",
+		HudGoal = "GOAL: Reach L5 · Patrol Truck · capture Central Plaza",
+		Kind = "Territory",
+	},
+	{
+		Level = 6,
+		Title = "Shotgun + Supply",
+		UnlockText = "LVL 6 — Combat Shotgun + Supply Truck unlock.",
+		HudGoal = "GOAL: Reach L6 · Shotgun / Supply Truck",
+		Kind = "Weapon",
+	},
+	{
+		Level = 8,
+		Title = "APC Gate",
+		UnlockText = "LVL 8 — APC unlock. Fortify with Defensive Walls when cash allows.",
+		HudGoal = "GOAL: Reach L8 · unlock APC",
+		Kind = "Vehicle",
+	},
+	{
+		Level = 10,
+		Title = "IFV + Sniper",
+		UnlockText = "LVL 10 — Combat IFV + Sniper path open. Hold 2 territories for stipends.",
+		HudGoal = "GOAL: Reach L10 · IFV · hold 2 territories",
+		Kind = "Territory",
+	},
+	{
+		Level = 12,
+		Title = "Light Armor",
+		UnlockText = "LVL 12 — Light Tank unlock. Push oil rigs for big stipends.",
+		HudGoal = "GOAL: Reach L12 · Light Tank · contest an oil rig",
+		Kind = "Vehicle",
+	},
+	{
+		Level = 15,
+		Title = "Heavy Push",
+		UnlockText = "LVL 15 — Heavy Tank / Assault IFV band. Build Helipad for air ops.",
+		HudGoal = "GOAL: Reach L15 · Heavy armor · Helipad L1",
+		Kind = "Base",
+	},
+	{
+		Level = 20,
+		Title = "Air Superiority",
+		UnlockText = "LVL 20 — Fighter / CAS jet band. Dominate air + naval docks.",
+		HudGoal = "GOAL: Reach L20 · jets · Dock L1",
+		Kind = "Vehicle",
+	},
+	{
+		Level = 25,
+		Title = "Empire Mid",
+		UnlockText = "LVL 25 — Mid-game empire. Max Barracks, stack territory stipends.",
+		HudGoal = "GOAL: Reach L25 · Barracks L3+ · 3 territories",
+		Kind = "Army",
+	},
+	{
+		Level = 30,
+		Title = "War Machine",
+		UnlockText = "LVL 30 — Capital vehicles band. Prep Research Lab / Special Forces.",
+		HudGoal = "GOAL: Reach L30 · Research Lab · 4 territories",
+		Kind = "Base",
+	},
+	{
+		Level = 40,
+		Title = "Prestige Ready",
+		UnlockText = "LVL 40 — PRESTIGE UNLOCKED. Rebirth for +10% cash forever (K panel).",
+		HudGoal = "GOAL: L40 reached — open K · Do Prestige / Rebirth (+10% cash)",
+		Kind = "Prestige",
+	},
+	{
+		Level = 50,
+		Title = "Veteran",
+		UnlockText = "LVL 50 — Veteran commander. Push prestige track unlocks.",
+		HudGoal = "GOAL: Prestige again · climb rebirth unlock track",
+		Kind = "Prestige",
+	},
+	{
+		Level = 75,
+		Title = "High Command",
+		UnlockText = "LVL 75 — High Command. Max structures, hold forts + oil.",
+		HudGoal = "GOAL: Max key structures · hold fortress + oil",
+		Kind = "Territory",
+	},
+	{
+		Level = 100,
+		Title = "Max Level",
+		UnlockText = "LVL 100 — MAX. Prestige to reset level and stack cash mult.",
+		HudGoal = "GOAL: Prestige at max · stack +10% cash / rebirth",
+		Kind = "Prestige",
+	},
+} :: { MilestoneDef }
+
+function LevelConfig.GetMilestoneAt(level: number): MilestoneDef?
+	local best: MilestoneDef? = nil
+	for _, m in ipairs(LevelConfig.Milestones) do
+		if m.Level == level then
+			return m
+		end
+		if m.Level < level then
+			best = m
+		end
+	end
+	return best
+end
+
+function LevelConfig.GetNextMilestone(level: number): MilestoneDef?
+	for _, m in ipairs(LevelConfig.Milestones) do
+		if m.Level > level then
+			return m
+		end
+	end
+	-- At/above last milestone — prestige objective
+	return LevelConfig.Milestones[#LevelConfig.Milestones]
+end
+
+function LevelConfig.GetHudGoal(level: number): string
+	local nxt = LevelConfig.GetNextMilestone(level)
+	if not nxt then
+		return "GOAL: Prestige for +10% cash · dominate territories"
+	end
+	if nxt.Level <= level then
+		return nxt.HudGoal
+	end
+	return nxt.HudGoal
+end
+
+function LevelConfig.GetUnlockMessage(newLevel: number): string?
+	for _, m in ipairs(LevelConfig.Milestones) do
+		if m.Level == newLevel then
+			return m.UnlockText
+		end
+	end
+	-- Generic every 5 levels
+	if newLevel % 5 == 0 then
+		return string.format("LVL %d — rank up! Check Garage / Weapons for new unlocks.", newLevel)
+	end
+	return nil
 end
 
 return LevelConfig
@@ -1670,8 +1856,9 @@ local StructureVisualConfig = {
 	-- Level 0 = faint placeholder (BaseService may raise further); ≥1 solid built kit
 	GhostTransparency = 0.72,
 	SolidTransparency = 0,
-	-- When true and palette.MeshAssetId ~= 0, BaseService may swap kit for MeshPart (art pass).
+	-- When true and palette.MeshAssetId ~= 0, BaseService attaches catalog mesh at PreferMeshMinLevel+.
 	PreferMeshWhenAssetIdSet = true,
+	PreferMeshMinLevel = 1, -- Design P0: enforce mesh dress for ALL structure MeshAssetIds at L1+
 
 	Palettes = {
 		CommandCenter = {
@@ -2565,6 +2752,7 @@ return VehicleConfig
 
 	IDs researched as Free / Get Model on Creator Store (economy IsForSale=false Price=nil).
 	Never paid / never MT-branded. AssetId=0 means skip insert (Part kit only).
+	Design P0 REJECT: JeepFallback 59524622; SWAT/police; blocky soldiers; 107381 as vehicle.
 	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
 	(and AllowInsertFreeAssets where required) for third-party models.
 ]]
@@ -2579,14 +2767,14 @@ local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
 	MaxLoadAttempts = 48,
-	VehicleVisualScale = 1.0,
+	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0,
 	PropVisualScale = 1.0,
 
 	Vehicles = {
 		-- Free Jeep family
-		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car (prefer); fallback 59524622" } :: AssetRef,
+		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car dress-only (NO JeepFallback)" } :: AssetRef,
 		ArmedJeep = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		UtilityQuad = { ModelAssetId = 125916936788670, Note = "Military Car reuse (scaled)" } :: AssetRef,
 		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
@@ -2654,7 +2842,7 @@ local VisualAssetConfig = {
 		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
-		SupplyTruck = { ModelAssetId = 107381977457431, Note = "Military supply truck prefer" } :: AssetRef,
+		SupplyTruck = { ModelAssetId = 105503568352704, Note = "Military truck (same as PatrolTruck)" } :: AssetRef,
 		FuelTanker = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
@@ -2666,10 +2854,10 @@ local VisualAssetConfig = {
 		TroopTransport = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		RecoveryTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		EscortTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		InfantryCarrier = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
-		CommandVehicle = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
-		WheeledIFV = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
-		AmphibiousAPC = { ModelAssetId = 28912351, Note = "APC/mesh pack" } :: AssetRef,
+		InfantryCarrier = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
+		CommandVehicle = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
+		WheeledIFV = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
+		AmphibiousAPC = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
 		CombatIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
 		AssaultIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
 		BridgeLayer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
@@ -2700,15 +2888,18 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Characters = {
-		-- Free Get Model / Roblox official — scripts stripped at insert. Part kits remain fallback.
-		Soldier = { ModelAssetId = 3924234975, Note = "Official Roblox Soldier (Rthro)" } :: AssetRef,
-		Infantry = { ModelAssetId = 3924234975, Note = "Soldier reuse (Infantry NPC)" } :: AssetRef,
-		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (free)" } :: AssetRef,
-		Guard = { ModelAssetId = 91299598767068, Note = "Guard (Respawn Soldiers / alt 23231587)" } :: AssetRef,
-		BankGuard = { ModelAssetId = 91299598767068, Note = "BankGuard (alt 23231587)" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 91299598767068, Note = "OilRigGuard (alt 23231587)" } :: AssetRef,
-		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers pack (fort)" } :: AssetRef,
+		-- Design P0: Respawn Soldiers pack primary. REJECT blocky/SWAT/police. StripScripts on insert.
+		Soldier = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		Infantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		Guard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		BankGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
 	} :: { [string]: AssetRef },
+
+	-- Optional character alt ONLY (never primary). Used if primary insert fails.
+	CharacterAlt = { ModelAssetId = 3924234975, Note = "Official Soldier alt only" } :: AssetRef,
 
 	Buildings = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
@@ -2731,7 +2922,7 @@ local VisualAssetConfig = {
 		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
-	JeepFallback = { ModelAssetId = 59524622, Note = "Classic free Jeep fallback only" } :: AssetRef,
+	-- JeepFallback 59524622 DELETED (Design P0 REJECT). Part kit physics if mesh fails.
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	MoneyCollector = { ModelAssetId = 75368157644109, Note = "ATM hero prefer; fallback 175462478" } :: AssetRef,
@@ -2745,6 +2936,7 @@ local VisualAssetConfig = {
 	VfxSparkles = { ModelAssetId = 4221608224, Note = "Collect/upgrade sparkles VFX" } :: AssetRef,
 	CashCrate = { ModelAssetId = 16803204916, Note = "Cash crate alt overlay" } :: AssetRef,
 	UpgradeFlag = { ModelAssetId = 1679839739, Note = "L5 structure flag pop" } :: AssetRef,
+	FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower PROP (not vehicle)" } :: AssetRef,
 	-- VehicleDepot showroom catalog (Part-kit podium remains fallback)
 	ShowroomPodium = { ModelAssetId = 5267267960, Note = "Showroom podium mesh" } :: AssetRef,
 	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
@@ -2768,6 +2960,7 @@ local VisualAssetConfig = {
 		Tent = { ModelAssetId = 6883609157, Note = "Warzone Tent" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, Note = "Warzone RadioAntenna" } :: AssetRef,
 		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
+		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
 		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
 		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
@@ -3263,6 +3456,8 @@ export type XPUpdatePayload = {
 	Level: number,
 	XP: number,
 	XPToNext: number,
+	HudGoal: string?,
+	UnlockMessage: string?,
 }
 
 export type BaseStatePayload = {
@@ -5735,11 +5930,19 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
-	-- 12) Plot-ring perimeter (Low: 3 edges)
+	-- 12) Plot-ring perimeter + Design densify 8–12 warzone props / plot (no neon/flat SWAT)
 	do
 		local f = Instance.new("Folder")
 		f.Name = "PlotRingPerimeter"
 		f.Parent = dressing
+		local plotCenters = {
+			Vector3.new(-800, 0.5, -400),
+			Vector3.new(-800, 0.5, 400),
+			Vector3.new(0, 0.5, -800),
+			Vector3.new(0, 0.5, 800),
+			Vector3.new(800, 0.5, -400),
+			Vector3.new(800, 0.5, 400),
+		}
 		local plotEdges = if full
 			then {
 				{ Vector3.new(-800, 0.5, -650), 0 },
@@ -5756,6 +5959,27 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			}
 		for _, e in ipairs(plotEdges) do
 			kitSandbagLine(f, e[1], e[2], if full then 4 else 2)
+		end
+		-- 8–12 clusters per plot (always; Low still gets 8)
+		local densify = Instance.new("Folder")
+		densify.Name = "PlotWarzoneDensify"
+		densify.Parent = dressing
+		local perPlot = if full then 12 else 8
+		for pi, center in ipairs(plotCenters) do
+			for i = 1, perPlot do
+				local ang = (i / perPlot) * math.pi * 2 + pi * 0.35
+				local rad = 55 + (i % 4) * 12
+				local origin = center + Vector3.new(math.cos(ang) * rad, 0, math.sin(ang) * rad)
+				local yaw = (i * 41 + pi * 17) % 180
+				if i % 3 == 0 then
+					kitSandbagLine(densify, origin, yaw, if full then 4 else 3)
+				elseif i % 3 == 1 then
+					kitCrateStack(densify, origin)
+					kitOilDrums(densify, origin + Vector3.new(4, 0, 2), 2)
+				else
+					kitBunker(densify, origin, yaw)
+				end
+			end
 		end
 	end
 
@@ -6461,7 +6685,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		Name = "Accent",
 		Size = Vector3.new(1.6, 0.1, 0.28),
 		Color = labelColor or Color3.fromRGB(200, 140, 60),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
 		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
@@ -7387,6 +7611,82 @@ function MapSetup.Run()
 					beam.Transparency = NumberSequence.new(0.35)
 					beam.Parent = root
 				end
+			end
+		end
+		-- Design densify: 8–12 realistic warzone props per plot (always-on Part kits; pcall catalog)
+		do
+			local okDress, errDress = pcall(function()
+				local wz = Instance.new("Folder")
+				wz.Name = "PlotWarzone"
+				wz.Parent = plotFolder
+				local count = 10
+				for i = 1, count do
+					local ang = (i / count) * math.pi * 2
+					local rad = 58 + (i % 3) * 10
+					local o = pos + Vector3.new(math.cos(ang) * rad, 0.6, math.sin(ang) * rad)
+					if i % 3 == 0 then
+						-- sandbag berm (Metal/Sand — no neon)
+						part({
+							Name = "WZ_Sandbag" .. i,
+							Size = Vector3.new(6, 1.2, 1.4),
+							Position = o,
+							Color = Color3.fromRGB(130, 115, 80),
+							Material = Enum.Material.Sand,
+							CanCollide = true,
+							Parent = wz,
+						})
+						part({
+							Name = "WZ_SandbagTop" .. i,
+							Size = Vector3.new(5.2, 0.9, 1.1),
+							Position = o + Vector3.new(0, 1.0, 0),
+							Color = Color3.fromRGB(120, 105, 75),
+							Material = Enum.Material.Sand,
+							CanCollide = true,
+							Parent = wz,
+						})
+					elseif i % 3 == 1 then
+						part({
+							Name = "WZ_Crate" .. i,
+							Size = Vector3.new(2.2, 2.0, 2.2),
+							Position = o + Vector3.new(0, 1.0, 0),
+							Color = Color3.fromRGB(95, 80, 55),
+							Material = Enum.Material.Wood,
+							CanCollide = true,
+							Parent = wz,
+						})
+						part({
+							Name = "WZ_Drum" .. i,
+							Size = Vector3.new(1.4, 2.2, 1.4),
+							Position = o + Vector3.new(3, 1.1, 1),
+							Color = Color3.fromRGB(55, 70, 50),
+							Material = Enum.Material.Metal,
+							Shape = Enum.PartType.Cylinder,
+							CanCollide = true,
+							Parent = wz,
+						})
+					else
+						part({
+							Name = "WZ_Barrier" .. i,
+							Size = Vector3.new(5, 1.4, 0.7),
+							Position = o + Vector3.new(0, 0.7, 0),
+							Color = Color3.fromRGB(110, 105, 90),
+							Material = Enum.Material.Concrete,
+							CanCollide = true,
+							Parent = wz,
+						})
+					end
+				end
+				-- Optional catalog floodlight tower / flag (never clears pads on fail)
+				pcall(function()
+					local vas = require(script.Parent.Parent.Services.VisualAssetService)
+					local host = wz:FindFirstChildWhichIsA("BasePart")
+					if host and vas.TryAttachPropVisual then
+						vas.TryAttachPropVisual(host, "FloodlightTower")
+					end
+				end)
+			end)
+			if not okDress then
+				warn("[MapSetup] PlotWarzone densify failed (pads intact):", errDress)
 			end
 		end
 		buildMoneyCollector(plotFolder, plotId, pos)
@@ -10792,7 +11092,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child.Color = if role == "Antenna" then palette.Accent else palette.Roof
 				end
 				child.Transparency = transparency
-				child.Material = if role == "Antenna" then Enum.Material.Neon else Enum.Material.Metal
+				child.Material = Enum.Material.Metal -- Design: reject neon antenna accents
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
@@ -10825,8 +11125,10 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	-- Upgrade pop extras (idempotent Part kits; never required for gameplay)
 	syncUpgradePops(plinth, structureId, lv)
 
-	-- Optional catalog overlay once built (never blocks Part kits)
-	if lv >= 1 then
+	-- Design P0: PreferMesh L1+ for all structure MeshAssetIds (Part kit always remains)
+	local preferMesh = StructureVisualConfig.PreferMeshWhenAssetIdSet ~= false
+	local meshMin = tonumber((StructureVisualConfig :: any).PreferMeshMinLevel) or 1
+	if preferMesh and lv >= meshMin then
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
 			vas.TryAttachBuildingVisual(plinth, structureId)
@@ -13124,7 +13426,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		then Color3.fromRGB(90, 140, 220)
 		elseif isHeavy then Color3.fromRGB(230, 160, 50)
 		else Color3.fromRGB(200, 80, 60)
-	weldPart("Accent", Vector3.new(1.9, 0.12, 0.35), CFrame.new(0, 0.95, -0.6), accent, Enum.Material.Neon, nil)
+	weldPart("Accent", Vector3.new(1.9, 0.12, 0.35), CFrame.new(0, 0.95, -0.6), accent, Enum.Material.Metal, nil)
 	if isHeavy then
 		weldPart("Pack", Vector3.new(1.4, 1.5, 0.7), CFrame.new(0, 0.4, 0.85), Color3.fromRGB(40, 42, 38), Enum.Material.Metal, nil)
 	end
@@ -20584,6 +20886,10 @@ function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
 	end
+	local alt = (VisualAssetConfig :: any).CharacterAlt
+	if alt and typeof(alt.ModelAssetId) == "number" and (alt.ModelAssetId :: number) > 0 then
+		return alt.ModelAssetId
+	end
 	return nil
 end
 
@@ -20620,27 +20926,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		return false
 	end
 	local template = loadModel(assetId)
-	-- Jeep family: prefer Military Car; classic 59524622 fallback only if primary fails
+	-- Design P0: NO JeepFallback 59524622. Part-kit hinge chassis remains if mesh fails.
 	if not template then
-		local jeepIds = {
-			MilitaryJeep = true,
-			ArmedJeep = true,
-			ScoutCar = true,
-			ReconBuggy = true,
-			DispatchCar = true,
-			UtilityQuad = true,
-		}
-		local fb = (VisualAssetConfig :: any).JeepFallback
-		local fbId = if fb and typeof(fb.ModelAssetId) == "number" then fb.ModelAssetId else 59524622
-		if jeepIds[vehicleId] and fbId and fbId > 0 and fbId ~= assetId then
-			template = loadModel(fbId)
-			if template then
-				assetId = fbId
-			end
-		end
-	end
-	if not template then
-		return false -- Part kit remains authoritative
+		return false -- Part kit remains authoritative (hinge-drive)
 	end
 	local primary = hostModel.PrimaryPart
 	if not primary then
@@ -20683,6 +20971,17 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 		return false
 	end
 	local template = loadModel(assetId)
+	-- Optional CharacterAlt only if primary insert fails
+	if not template then
+		local alt = (VisualAssetConfig :: any).CharacterAlt
+		local altId = if alt and typeof(alt.ModelAssetId) == "number" then alt.ModelAssetId else 0
+		if typeof(altId) == "number" and altId > 0 and altId ~= assetId then
+			template = loadModel(altId)
+			if template then
+				assetId = altId
+			end
+		end
+	end
 	if not template then
 		return false
 	end
@@ -20698,6 +20997,17 @@ function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: str
 	end
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
+	-- Soften Part-kit body so realistic soldier mesh reads (dress-only)
+	if primary:IsA("BasePart") then
+		primary.Transparency = math.max(primary.Transparency, 0.85)
+	end
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d.Parent ~= clone and not d:IsDescendantOf(clone) then
+			if d.Name ~= "HumanoidRootPart" then
+				d.Transparency = math.max(d.Transparency, 0.92)
+			end
+		end
+	end
 	return true
 end
 
@@ -21016,13 +21326,17 @@ local _MissionService: any = nil
 local MonetizationService: any = nil
 local BattlePassService: any = nil
 local SeasonService: any = nil
+local NotificationService: any = nil
 
-local function pushXP(player: Player, profile: Types.PlayerProfile)
+local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessage: string?)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.XPUpdate) :: RemoteEvent
+	local hudGoal = LevelConfig.GetHudGoal(profile.Level)
 	remote:FireClient(player, {
 		Level = profile.Level,
 		XP = profile.XP,
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),
+		HudGoal = hudGoal,
+		UnlockMessage = unlockMessage,
 	} :: Types.XPUpdatePayload)
 end
 
@@ -21036,6 +21350,7 @@ function XPService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	BattlePassService = deps.BattlePassService
 	SeasonService = deps.SeasonService
+	NotificationService = deps.NotificationService
 end
 
 function XPService.Push(player: Player)
@@ -21088,13 +21403,19 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		if reward.Gold > 0 then
 			EconomyService.AddGold(player, reward.Gold, "level_up")
 		end
+		local unlockMsg = LevelConfig.GetUnlockMessage(profile.Level)
+		if unlockMsg and NotificationService and NotificationService.Notify then
+			NotificationService.Notify(player, unlockMsg, "Success", 5)
+		end
 		if AnalyticsService then
 			AnalyticsService.Log("LEVEL_UP", player.UserId, { level = profile.Level, reason = reason })
 		end
+		-- Push per level-up so HUD goal / unlock toast refresh immediately
+		pushXP(player, profile, unlockMsg)
 	end
 
 	DataService.MarkDirty(player)
-	pushXP(player, profile)
+	pushXP(player, profile, nil)
 	if BattlePassService and BattlePassService.AddXP and reason ~= "battlepass" then
 		-- Mirror a portion of gameplay XP into the battle pass track
 		BattlePassService.AddXP(player, amount, reason)
@@ -22962,12 +23283,14 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
+local LevelConfig = require(Shared.Configs.LevelConfig)
 
 local HUDController = {}
 
 local player = Players.LocalPlayer
 local _gui: ScreenGui? = nil
 local levelLabel: TextLabel? = nil
+local goalLabel: TextLabel? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
@@ -23025,7 +23348,7 @@ function HUDController.Init()
 	left.Name = "LevelPanel"
 	left.AnchorPoint = Vector2.new(0, 0)
 	left.Position = UDim2.fromOffset(16, 16)
-	left.Size = UDim2.fromOffset(220, 64)
+	left.Size = UDim2.fromOffset(268, 86)
 	left.BackgroundColor3 = Constants.Colors.Panel
 	left.BackgroundTransparency = 0.15 -- panel α≤0.15
 	left.BorderSizePixel = 0
@@ -23074,6 +23397,21 @@ function HUDController.Init()
 	xpLbl.Text = "0 / 100"
 	xpLbl.Parent = xpBg
 	xpText = xpLbl
+
+	local goal = Instance.new("TextLabel")
+	goal.Name = "GoalLabel"
+	goal.BackgroundTransparency = 1
+	goal.Position = UDim2.fromOffset(10, 52)
+	goal.Size = UDim2.new(1, -20, 0, 28)
+	goal.Font = Enum.Font.Gotham
+	goal.TextSize = 11
+	goal.TextXAlignment = Enum.TextXAlignment.Left
+	goal.TextYAlignment = Enum.TextYAlignment.Top
+	goal.TextWrapped = true
+	goal.TextColor3 = Constants.Colors.GoldBright
+	goal.Text = "GOAL: Claim base → BUY Command Center"
+	goal.Parent = left
+	goalLabel = goal
 
 	-- Bottom-left: currency pill (cash + gold) — thumb-friendly
 	local pill = Instance.new("Frame")
@@ -23246,7 +23584,7 @@ function HUDController.Init()
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
-		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext)
+		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
@@ -23366,7 +23704,7 @@ function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
 	end
 end
 
-function HUDController.SetXP(level: number, xp: number, xpToNext: number)
+function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoal: string?)
 	if levelLabel then
 		levelLabel.Text = "LVL " .. tostring(level)
 	end
@@ -23382,11 +23720,17 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number)
 			xpText.Text = string.format("%d / %d", xp, xpToNext)
 		end
 	end
+	if goalLabel and typeof(hudGoal) == "string" and hudGoal ~= "" then
+		goalLabel.Text = hudGoal
+	elseif goalLabel and level >= 40 then
+		goalLabel.Text = "GOAL: Prestige for +10% cash · dominate territories"
+	end
 end
 
 function HUDController.ApplyState(state: Types.PlayerStatePayload)
 	HUDController.SetEconomy(state.Cash, state.Gold, (state :: any).PendingCash)
-	HUDController.SetXP(state.Level, state.XP, state.XPToNext)
+	local goal = LevelConfig.GetHudGoal(state.Level)
+	HUDController.SetXP(state.Level, state.XP, state.XPToNext, goal)
 	if state.Base then
 		lastPassive = state.Base.PassiveIncomePerTick or 0
 	end
