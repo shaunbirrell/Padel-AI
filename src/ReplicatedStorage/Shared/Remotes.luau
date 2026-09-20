@@ -37,8 +37,10 @@ local function waitForRemote(name: string, className: string): Instance
 		waited += 5
 		warn(string.format("[Remotes] Waiting for %s %s… (%ds)", className, name, waited))
 	end
-	local remote = folder:WaitForChild(name)
-	assert(remote and remote:IsA(className), className .. " missing: " .. name)
+	local remote = folder:WaitForChild(name, 30)
+	if not (remote and remote:IsA(className)) then
+		error(className .. " missing after wait: " .. name .. " (server Bootstrap may have aborted — check Output)", 0)
+	end
 	return remote
 end
 

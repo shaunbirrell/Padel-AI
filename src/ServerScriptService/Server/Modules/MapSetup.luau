@@ -737,7 +737,7 @@ local function buildInvisibleWalls(mapFolder: Folder)
 			CanCollide = true,
 			Anchored = true,
 			Parent = mapFolder,
-		end)
+		})
 	end
 end
 

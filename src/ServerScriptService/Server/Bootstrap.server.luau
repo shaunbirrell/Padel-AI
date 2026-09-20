@@ -21,7 +21,16 @@ local Services = ServerFolder:WaitForChild("Services")
 print("[WAR EMPIRE] Server Bootstrap starting...")
 
 -- ── Map FIRST (before any heavy service require) ──────────────────────────
-local MapSetup = require(Modules.MapSetup)
+-- NEVER let MapSetup parse/require failure abort remotes + HUD (live void bug).
+local MapSetup: any = nil
+do
+	local okMap, mapOrErr = pcall(require, Modules.MapSetup)
+	if okMap then
+		MapSetup = mapOrErr
+	else
+		warn("[WAR EMPIRE] CRITICAL: require(MapSetup) FAILED — remotes will still init. Err:", mapOrErr)
+	end
+end
 
 local function ensureVoidFallback(reason: string)
 	warn("[WAR EMPIRE] CRITICAL: MapSetup failed — installing void fallback. Reason: " .. tostring(reason))
@@ -66,7 +75,11 @@ local function ensureVoidFallback(reason: string)
 	print("[WAR EMPIRE] Void fallback ready: WE_VoidFallback Baseplate + EmergencySpawn at (0,5,0)")
 end
 
-if not Workspace:FindFirstChild("WarEmpireSetup") then
+local function runMapSetupOrFallback(reasonIfNil: string)
+	if MapSetup == nil then
+		ensureVoidFallback(reasonIfNil)
+		return
+	end
 	local ok, err = pcall(function()
 		MapSetup.Run()
 	end)
@@ -75,6 +88,50 @@ if not Workspace:FindFirstChild("WarEmpireSetup") then
 	elseif not Workspace:FindFirstChild("WarEmpireSetup") then
 		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
 	end
+end
+
+local function healOrRebuildMap(label: string)
+	--[[ Idempotent: ensure WarEmpireSetup + collide Ground exist (server start + PlayerAdded). ]]
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		print("[WAR EMPIRE] Map heal (" .. label .. "): WarEmpireSetup missing — Run()")
+		runMapSetupOrFallback("MapSetup nil during heal (" .. label .. ")")
+		return
+	end
+	if MapSetup == nil then
+		-- Keep existing setup; still force a collide plate if Ground gone
+		local map = setup:FindFirstChild("Map")
+		local g = map and map:FindFirstChild("Ground")
+		if not (g and g:IsA("BasePart") and g.CanCollide) then
+			ensureVoidFallback("MapSetup nil and Ground unhealthy (" .. label .. ")")
+		end
+		return
+	end
+	Workspace.Gravity = 196.2
+	if MapSetup.EnsureGroundHealthy then
+		pcall(function()
+			MapSetup.EnsureGroundHealthy(setup)
+		end)
+	end
+	if MapSetup.ForceRebuildGround then
+		local okRebuild, rebuildResult = pcall(function()
+			return MapSetup.ForceRebuildGround(setup)
+		end)
+		if not (okRebuild and rebuildResult == true) then
+			warn("[WAR EMPIRE] ForceRebuildGround failed (" .. label .. ") — full MapSetup.Run")
+			pcall(function()
+				setup:Destroy()
+				MapSetup.Run()
+			end)
+			if not Workspace:FindFirstChild("WarEmpireSetup") then
+				ensureVoidFallback("ForceRebuildGround failed (" .. label .. ")")
+			end
+		end
+	end
+end
+
+if not Workspace:FindFirstChild("WarEmpireSetup") then
+	runMapSetupOrFallback("MapSetup module failed to load")
 else
 	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
 	-- Re-assert gravity; soft-heal first, then ALWAYS delete+recreate Ground/SafetyCatch
@@ -82,39 +139,9 @@ else
 	Workspace.Gravity = 196.2
 	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	local targetSize = MapSetup.GROUND_SIZE or 6400
+	local targetSize = (MapSetup and MapSetup.GROUND_SIZE) or 6400
 
-	if setup and MapSetup.EnsureGroundHealthy then
-		pcall(function()
-			MapSetup.EnsureGroundHealthy(setup)
-		end)
-	end
-
-	local rebuilt = false
-	if setup and MapSetup.ForceRebuildGround then
-		local okRebuild, rebuildResult = pcall(function()
-			return MapSetup.ForceRebuildGround(setup)
-		end)
-		rebuilt = okRebuild and rebuildResult == true
-		if not rebuilt then
-			warn("[WAR EMPIRE] ForceRebuildGround failed — full MapSetup.Run rebuild")
-			pcall(function()
-				if setup then
-					setup:Destroy()
-				end
-				MapSetup.Run()
-			end)
-			if not Workspace:FindFirstChild("WarEmpireSetup") then
-				ensureVoidFallback("ForceRebuildGround failed and full rebuild failed")
-			end
-		end
-	elseif setup then
-		warn("[WAR EMPIRE] ForceRebuildGround missing — full MapSetup.Run rebuild")
-		pcall(function()
-			setup:Destroy()
-			MapSetup.Run()
-		end)
-	end
+	healOrRebuildMap("bootstrap-existing")
 
 	setup = Workspace:FindFirstChild("WarEmpireSetup")
 	-- Mandatory Output status after heal/rebuild
@@ -164,11 +191,8 @@ else
 				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
 				pcall(function()
 					setup:Destroy()
-					MapSetup.Run()
-				end)
-				if not Workspace:FindFirstChild("WarEmpireSetup") then
-					ensureVoidFallback("Missing upgrade pads and rebuild failed")
-				end
+			end)
+				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
 			else
 				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
 			end
@@ -184,6 +208,30 @@ else
 	end
 end
 
+
+-- PlayerAdded: heal map if somehow missing (late join / rare destroy)
+do
+	local Players = game:GetService("Players")
+	local function ensureMapForPlayer(player: Player)
+		task.defer(function()
+			if not Workspace:FindFirstChild("WarEmpireSetup") and not Workspace:FindFirstChild("WE_VoidFallback") then
+				warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
+				healOrRebuildMap("PlayerAdded:" .. player.Name)
+			elseif Workspace:FindFirstChild("WarEmpireSetup") and MapSetup and MapSetup.EnsureGroundHealthy then
+				local setup = Workspace:FindFirstChild("WarEmpireSetup")
+				if setup then
+					pcall(function()
+						MapSetup.EnsureGroundHealthy(setup)
+					end)
+				end
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(ensureMapForPlayer)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		ensureMapForPlayer(plr)
+	end
+end
 
 -- ── Remotes FIRST (before any service require that can throw) ───────────────
 local RemoteSetup = require(Modules.RemoteSetup)
