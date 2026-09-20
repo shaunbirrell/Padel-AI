@@ -336,21 +336,59 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 				textLabel.TextColor3 = Color3.fromRGB(255, 210, 140)
 			end
 		else
-			labelGui.Size = UDim2.fromOffset(180, 40)
+			-- v34: brief progress/owner chip when capture in progress; otherwise owner state
+			local capturing = (rt.Progress or 0) > 0.02 and (rt.CapturingUserId or 0) > 0
+			labelGui.Size = if capturing then UDim2.fromOffset(200, 56) else UDim2.fromOffset(180, 40)
 			labelGui.StudsOffset = Vector3.new(0, 8, 0)
-			labelGui.MaxDistance = 70
+			labelGui.MaxDistance = if capturing then 90 else 70
 			if backdrop and backdrop:IsA("Frame") then
-				backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 16)
-				backdrop.BackgroundTransparency = 0.22
+				backdrop.BackgroundColor3 = if capturing then Color3.fromRGB(28, 40, 22) else Color3.fromRGB(12, 14, 16)
+				backdrop.BackgroundTransparency = 0.18
 			end
 			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
 			if badge and badge:IsA("GuiObject") then
 				badge.Visible = false
 			end
+			-- Owner / progress chip
+			local chip = backdrop and backdrop:FindFirstChild("OwnerChip")
+			if backdrop and (not chip or not chip:IsA("TextLabel")) then
+				if chip then chip:Destroy() end
+				local c = Instance.new("TextLabel")
+				c.Name = "OwnerChip"
+				c.BackgroundTransparency = 1
+				c.Position = UDim2.fromScale(0, 0)
+				c.Size = UDim2.new(1, 0, 0.4, 0)
+				c.Font = Enum.Font.GothamBold
+				c.TextScaled = true
+				c.TextStrokeTransparency = 0.45
+				c.Parent = backdrop
+				chip = c
+			end
+			if chip and chip:IsA("TextLabel") then
+				if capturing then
+					chip.Visible = true
+					chip.Text = string.format("CAPTURING · %d%%", pct)
+					chip.TextColor3 = Color3.fromRGB(200, 230, 120)
+					if textLabel and textLabel:IsA("TextLabel") then
+						textLabel.Position = UDim2.fromScale(0, 0.4)
+						textLabel.Size = UDim2.new(1, 0, 0.6, 0)
+					end
+				else
+					chip.Visible = true
+					chip.Text = ownerStateLabel(rt)
+					chip.TextColor3 = if rt.OwnerType == ot.Player then Color3.fromRGB(140, 230, 160) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 150, 140) else Color3.fromRGB(180, 180, 180)
+					if textLabel and textLabel:IsA("TextLabel") then
+						textLabel.Position = UDim2.fromScale(0, 0.4)
+						textLabel.Size = UDim2.new(1, 0, 0.6, 0)
+					end
+				end
+			end
 			if textLabel and textLabel:IsA("TextLabel") then
-				textLabel.Position = UDim2.fromScale(0, 0)
-				textLabel.Size = UDim2.fromScale(1, 1)
-				textLabel.Text = rt.Def.DisplayName .. "  [" .. ownerStateLabel(rt) .. "]"
+				if capturing then
+					textLabel.Text = string.format("%s · was %s", rt.Def.DisplayName, ownerStateLabel(rt))
+				else
+					textLabel.Text = rt.Def.DisplayName
+				end
 				textLabel.TextColor3 = if rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
 			end
 		end

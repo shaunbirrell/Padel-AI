@@ -501,19 +501,22 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 	-- Rebirth progress toward PrestigeConfig.MinLevelToPrestige (default 40)
 	local minPrestige = (PrestigeConfig and PrestigeConfig.MinLevelToPrestige) or 40
 	if goalLabel then
+		local fee = tonumber(PrestigeConfig and PrestigeConfig.CashFee) or 0
+		local feeBit = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
 		if level >= minPrestige then
+			local ready = string.format("GOAL: Rebirth READY · %s · +10%% cash forever · keep Robux · press K", feeBit)
 			if typeof(hudGoal) == "string" and hudGoal ~= "" then
-				goalLabel.Text = hudGoal
+				goalLabel.Text = ready .. " · " .. hudGoal
 			else
-				goalLabel.Text = "GOAL: Rebirth READY — press K · Do Prestige (+10% cash forever)"
+				goalLabel.Text = ready
 			end
 		else
 			local pct = math.clamp(math.floor((level / minPrestige) * 100), 0, 99)
-			local rebirthLine = string.format("Rebirth %d/%d (%d%%)", level, minPrestige, pct)
+			local rebirthLine = string.format("Rebirth %d/%d (%d%%) · %s · +10%%/P", level, minPrestige, pct, feeBit)
 			if typeof(hudGoal) == "string" and hudGoal ~= "" then
 				goalLabel.Text = rebirthLine .. "  ·  " .. hudGoal
 			else
-				goalLabel.Text = "GOAL: " .. rebirthLine .. " — press K for unlock track"
+				goalLabel.Text = "GOAL: " .. rebirthLine .. " — press K / REBIRTH dock"
 			end
 		end
 	end

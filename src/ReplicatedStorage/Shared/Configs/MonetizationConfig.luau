@@ -152,6 +152,11 @@ local MonetizationConfig = {
 	AutoCollectOffer = {
 		DelaySeconds = 1.2,
 	},
+	-- v34: one-shot DoubleCash soft offer after meaningful ATM collect (not spammy)
+	DoubleCashOffer = {
+		DelaySeconds = 1.8,
+		MinCollectCash = 2500, -- only after a solid collect
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {

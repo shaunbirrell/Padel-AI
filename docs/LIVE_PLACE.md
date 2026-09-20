@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=33** (2026-09-20 Europe/Madrid) — Structure name readability, Airfield/Warehouse/Watchtower kit scale, gate guard weapons, ATM raid cooldown HUD, capture steal toasts, AutoCollect soft offer, pad sandbag dressing
+- **Live Published:** Open Cloud **versionNumber=34** (2026-09-20 Europe/Madrid) — HQ/Barracks/WeaponsFacility kit presence, soldier variety, garage drive tips, rebirth fee HUD, DoubleCash soft offer, capture progress chip, Orders mobile touch
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

@@ -102,6 +102,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		OutpostIncomeStacks = 0,
 		StarterBundleOffered = false,
 		AutoCollectOffered = false,
+		DoubleCashOffered = false,
 	}
 end
 
@@ -312,6 +313,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if (profile :: any).AutoCollectOffered == nil then
 		(profile :: any).AutoCollectOffered = false
+	end
+	if (profile :: any).DoubleCashOffered == nil then
+		(profile :: any).DoubleCashOffered = false
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

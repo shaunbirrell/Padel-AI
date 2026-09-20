@@ -158,12 +158,13 @@ function PrestigeConfig.BuildFeeSummary(opts: { BaseCompletionPercent: number? }
 		feePart,
 		string.format("Cash → $%s after", tostring(startCash)),
 		string.format("+%d Gold", gold),
+		"+10% cash forever",
 		"resets Level/XP/Base",
 		"keeps Robux items + vehicles/weapons/gold/unlocks/outposts",
 	}
 	local pct = opts and tonumber(opts.BaseCompletionPercent)
 	if pct ~= nil then
-		table.insert(parts, string.format("Base %d%%", math.floor(pct)))
+		table.insert(parts, 1, string.format("Base %d%% complete", math.floor(pct)))
 	end
 	return table.concat(parts, " · ")
 end

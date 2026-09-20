@@ -421,3 +421,14 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 128. **Map dressing** — `dressPlotPadSandbags` berms + mini-chevrons near first 6 BUY pads + ATM.
 129. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial.
 
+## 2026-09-20 — Competitor-feel legitimacy pack (live v34 — Open Cloud Published versionNumber=34)
+
+130. **HQ / Barracks / WeaponsFacility kits** — KIT_GEN / BuildingDressGen **23**. CommandCenter compound wings + entry; Barracks bunk windows + sandbag berm; WeaponsFacility 3-story armory + gun racks + dress hosts. Mesh IDs unchanged (Design Bot VisualAssetConfig).
+131. **Soldier variety** — Worker ModelAssetId → Soldier mesh `100212659702941` (distinct from Infantry `9104381136`); stalls cycle Infantry / HeavyInfantry / Guard; Part helmet/vest/accent dress by role when mesh fails.
+132. **Garage vehicle labels** — World billboard DisplayName + Sit/WASD tip; garage rows show drive tip + DisplayName. MilitaryJeep WE_GroundDrive LV+hinge unchanged.
+133. **Rebirth / Missions polish** — HUD goal shows Fee: none · +10%/P · keep Robux; FeeSummary leads with Base % + "+10% cash forever".
+134. **Monetization soft touch** — One-shot DoubleCash GamePass soft offer after ATM collect ≥ $2500 once AutoCollect already teased/owned (`DoubleCashOffered`); existing Id 1982865711 only.
+135. **Capture zone chip** — Non-contested capturing shows OwnerChip `CAPTURING · N%` + owner was-state; contested billboard kept.
+136. **Mobile UX** — Orders walkie SizeTouch 268×236, MinTouchPx 56, raised above dock. Shop/Orders touch targets remain large.
+137. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED.
+

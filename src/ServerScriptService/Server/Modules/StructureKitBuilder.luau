@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 22 -- v33: taller towers + denser airfield/warehouse silhouettes
+local KIT_GEN = 23 -- v34: denser HQ / Barracks / WeaponsFacility (armory) presence
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -126,13 +126,19 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 	clearKitChildren(plinth)
 
 	if kit == "hq" then
-		kitPart(plinth, "Body", Vector3.new(16, 10, 14), Vector3.new(0, 5.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(18, 1.2, 16), Vector3.new(0, 11.2, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.8, 0.35), Vector3.new(1.8, 6.8, 1.8), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.6, 0.22, 6.6), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
-		kitPart(plinth, "Door", Vector3.new(1.6, 2.2, 0.25), Vector3.new(0, 1.7, -2.85), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
-		kitPart(plinth, "Window", Vector3.new(1.4, 1.0, 0.2), Vector3.new(2.0, 2.6, -2.8), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
+		-- v34: compound-scale HQ (~TargetFootprint 36×16×28), not a player-sized cube
+		kitPart(plinth, "Body", Vector3.new(28, 14, 22), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(12, 10, 10), Vector3.new(-18, 5.5, 4), pal.Body, Enum.Material.Metal, nil) -- west wing
+		kitPart(plinth, "Detail", Vector3.new(10, 8, 10), Vector3.new(16, 4.5, -2), pal.Roof, Enum.Material.Metal, nil) -- east annex
+		kitPart(plinth, "Roof", Vector3.new(30, 1.4, 24), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.45, 8, 0.45), Vector3.new(2.2, 19.5, 2.2), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 6, 0.35), Vector3.new(-18, 12, 4), pal.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(28, 0.28, 22), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.4, 1.4, 1.4), Vector3.new(-4, 10, -8), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Door", Vector3.new(3.2, 4.5, 0.4), Vector3.new(0, 3.0, -11.2), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(2.4, 1.6, 0.25), Vector3.new(6, 8, -11.1), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
+		kitPart(plinth, "Window", Vector3.new(2.4, 1.6, 0.25), Vector3.new(-6, 8, -11.1), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
+		kitPart(plinth, "Detail", Vector3.new(4, 1.2, 2), Vector3.new(0, 1.2, -14), Color3.fromRGB(55, 58, 50), Enum.Material.Concrete, nil) -- entry steps
 		-- Tier 2 HQ interior / roof dress hosts (catalog via TryDressStructureInterior)
 		do
 			local hosts = {
@@ -187,12 +193,17 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 			end
 		end
 	elseif kit == "barracks" then
-		kitPart(plinth, "Body", Vector3.new(28, 10, 14), Vector3.new(0, 5.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(30, 1, 16), Vector3.new(0, 11, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.9, 0.18, 4.7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
-		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), pal.Accent, Enum.Material.Neon, nil)
+		-- v34: long troop housing silhouette (~28×12×16) + bunk windows + yard
+		kitPart(plinth, "Body", Vector3.new(30, 12, 16), Vector3.new(0, 6.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(32, 1.2, 18), Vector3.new(0, 13, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(30, 0.25, 16), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(2.4, 3.6, 0.35), Vector3.new(0, 2.4, -8.2), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
+		for wi, wx in ipairs({ -10, -5, 5, 10 }) do
+			kitPart(plinth, "Window", Vector3.new(2.0, 1.2, 0.22), Vector3.new(wx, 7.5, -8.1), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
+		end
+		kitPart(plinth, "Detail", Vector3.new(0.9, 4.5, 0.9), Vector3.new(-14, 4, 4), pal.Accent, Enum.Material.Neon, nil) -- flag pole
+		kitPart(plinth, "Detail", Vector3.new(2.4, 1.4, 0.2), Vector3.new(-14, 7.2, 4), Color3.fromRGB(40, 90, 50), Enum.Material.Fabric, nil) -- flag
+		kitPart(plinth, "Detail", Vector3.new(14, 1.0, 3.5), Vector3.new(0, 1.1, 10), Color3.fromRGB(90, 85, 60), Enum.Material.Sand, nil) -- sandbag berm
 		-- Tier 2 Barracks interior dress hosts
 		do
 			local hosts = {
@@ -358,13 +369,43 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Door", Vector3.new(0.5, 14, 22), Vector3.new(0, 8, 14.2), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil)
 		kitPart(plinth, "Accent", Vector3.new(40, 0.3, 28), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 	elseif kit == "armory" then
-		kitPart(plinth, "Body", Vector3.new(28, 14, 18), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(30, 1, 20), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Door", Vector3.new(3.2, 4.5, 0.4), Vector3.new(0, 3.2, -9.2), Color3.fromRGB(40, 35, 32), Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(28, 0.25, 18), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(2.2, 1.4, 1.6), Vector3.new(-8, 1.2, -11), Color3.fromRGB(70, 65, 50), Enum.Material.Metal, nil) -- ammo crate
-		kitPart(plinth, "Detail", Vector3.new(2.0, 1.2, 1.4), Vector3.new(-5.5, 1.1, -11), Color3.fromRGB(70, 65, 50), Enum.Material.Metal, nil)
-		kitPart(plinth, "Window", Vector3.new(2.4, 1.6, 0.25), Vector3.new(6, 8, -9.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+		-- v34: 3-story weapons inventory / armory (~28×18×18) + racks + ammo yard
+		kitPart(plinth, "Body", Vector3.new(28, 18, 18), Vector3.new(0, 9.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(30, 1.3, 20), Vector3.new(0, 19, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Door", Vector3.new(4.0, 5.5, 0.45), Vector3.new(0, 3.6, -9.2), Color3.fromRGB(40, 35, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(28, 0.3, 18), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- Floor rings read as stories
+		kitPart(plinth, "Detail", Vector3.new(28.4, 0.25, 18.4), Vector3.new(0, 6.5, 0), Color3.fromRGB(55, 50, 42), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(28.4, 0.25, 18.4), Vector3.new(0, 12.5, 0), Color3.fromRGB(55, 50, 42), Enum.Material.Metal, nil)
+		-- Ammo crates + gun-rack silhouette
+		kitPart(plinth, "Detail", Vector3.new(2.4, 1.6, 1.8), Vector3.new(-10, 1.3, -11.5), Color3.fromRGB(70, 65, 50), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(2.2, 1.4, 1.6), Vector3.new(-7.2, 1.2, -11.5), Color3.fromRGB(75, 68, 52), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(2.0, 1.2, 1.4), Vector3.new(-4.5, 1.1, -11.5), Color3.fromRGB(65, 60, 48), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.35, 3.2, 6), Vector3.new(10, 2.2, -8), Color3.fromRGB(45, 48, 42), Enum.Material.Metal, nil) -- rack
+		for ri = 0, 3 do
+			kitPart(plinth, "Detail", Vector3.new(0.18, 0.18, 2.6), Vector3.new(9.4, 1.4 + ri * 0.7, -8), Color3.fromRGB(30, 32, 34), Enum.Material.Metal, nil)
+		end
+		kitPart(plinth, "Window", Vector3.new(2.6, 1.8, 0.25), Vector3.new(6, 10, -9.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+		kitPart(plinth, "Window", Vector3.new(2.6, 1.8, 0.25), Vector3.new(-6, 10, -9.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 5, 0.4), Vector3.new(12, 21.5, 6), pal.Accent, Enum.Material.Neon, nil)
+		-- Dress hosts for catalog props
+		do
+			local hosts = {
+				{ "WE_DressHost_Ammo", Vector3.new(1.4, 1.0, 1.0), Vector3.new(-10, 1.4, 6), "AmmoBox" },
+				{ "WE_DressHost_Crate", Vector3.new(1.6, 1.2, 1.6), Vector3.new(-6, 1.5, 7), "MilitaryCrate" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(10, 3.0, 6), "Lantern" },
+				{ "WE_DressHost_Sandbag", Vector3.new(3.0, 1.0, 1.2), Vector3.new(0, 1.2, 10), "Sandbag" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "radar" then
 		-- Dish / tower silhouette ≥20 studs (not a neon stick)
 		kitPart(plinth, "Body", Vector3.new(6, 14, 6), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
@@ -426,7 +467,7 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" then
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then

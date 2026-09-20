@@ -321,10 +321,10 @@ local function addSideRails(model: Model, body: BasePart, s: number, length: num
 	addPart(model, body, "RailR", Vector3.new(0.2 * s, 0.25 * s, length * s), CFrame.new(width * s, height * s, 0), color, Enum.Material.Metal, nil, false)
 end
 
-local function addLabel(parent: BasePart, text: string, y: number)
+local function addLabel(parent: BasePart, text: string, y: number, driveTip: string?)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "VehicleLabel"
-	billboard.Size = UDim2.fromOffset(150, 36)
+	billboard.Size = UDim2.fromOffset(170, if driveTip and driveTip ~= "" then 48 else 36)
 	billboard.StudsOffset = Vector3.new(0, y, 0)
 	billboard.AlwaysOnTop = true
 	billboard.MaxDistance = 280
@@ -343,14 +343,28 @@ local function addLabel(parent: BasePart, text: string, y: number)
 	stroke.Thickness = 1
 	stroke.Transparency = 0.35
 	stroke.Parent = backdrop
+	local tip = driveTip or ""
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
+	label.Name = "Name"
+	label.Size = if tip ~= "" then UDim2.new(1, 0, 0.58, 0) else UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
 	label.TextColor3 = Color3.fromRGB(235, 238, 242)
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
 	label.Text = text
 	label.Parent = backdrop
+	if tip ~= "" then
+		local tipLab = Instance.new("TextLabel")
+		tipLab.Name = "DriveTip"
+		tipLab.Position = UDim2.fromScale(0, 0.55)
+		tipLab.Size = UDim2.new(1, 0, 0.42, 0)
+		tipLab.BackgroundTransparency = 1
+		tipLab.TextColor3 = Color3.fromRGB(200, 190, 120)
+		tipLab.Font = Enum.Font.Gotham
+		tipLab.TextScaled = true
+		tipLab.Text = tip
+		tipLab.Parent = backdrop
+	end
 end
 
 local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: number): Model
@@ -753,7 +767,10 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		weldTo(body, ps)
 	end
 
-	addLabel(body, def.DisplayName, labelY)
+	do
+		local tip = if isAir then "Sit · throttle / steer" elseif isNaval then "Sit · WASD to pilot" else "Sit · WASD to drive"
+		addLabel(body, def.DisplayName, labelY, tip)
+	end
 
 	model.PrimaryPart = body
 	-- Optional free Creator Store visual (non-colliding); Part kit stays authoritative

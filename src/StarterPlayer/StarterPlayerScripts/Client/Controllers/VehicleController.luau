@@ -311,8 +311,10 @@ local function refresh()
 			if typeof(def.RequiresRebirthFlag) == "string" and (def.RequiresRebirthFlag :: string) ~= "" then
 				req ..= " | Rebirth"
 			end
+			local driveTip = if cat == "Air" then "Sit · throttle/steer" elseif cat == "Naval" then "Sit · WASD pilot" else "Sit · WASD drive"
 			meta.Text = string.format(
-				"Lv %d · $%s · Spd %d%s",
+				"%s · Lv %d · $%s · Spd %d%s",
+				driveTip,
 				def.UnlockLevel,
 				tostring(def.CostCash),
 				def.Speed,
@@ -608,8 +610,8 @@ local function buildGui()
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextColor3 = Constants.Colors.Muted
 	hint.Text = if isTouch
-		then "Tap BUY → SPAWN · filters · E on pad · DriverSeat"
-		else "G · Cat + Rarity + OWNED · scroll · E on pad · DriverSeat"
+		then "Tap BUY → SPAWN · Sit · WASD · filters · E on pad"
+		else "G · DisplayName rows · Sit · WASD · E on pad"
 	hint.Parent = panel
 
 	local garageBtn = Instance.new("TextButton")

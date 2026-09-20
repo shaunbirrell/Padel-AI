@@ -148,7 +148,7 @@ local VisualAssetConfig = {
 		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
 		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
 		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
-		Worker = { ModelAssetId = 9104381136, Note = "TrainingYard worker — realistic layered soldier (P0)" } :: AssetRef,
+		Worker = { ModelAssetId = 100212659702941, Note = "v34: distinct from Infantry — Soldier StarterCharacter mesh" } :: AssetRef,
 		WorkerFallback = { ModelAssetId = 16134469614, Note = "Worker fallback Rigged Soldier if Infantry insert fails" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
@@ -298,6 +298,7 @@ local VisualAssetConfig = {
 	StructureDress = {
 		CommandCenter = { "RadioAntenna", "RadioAntennaAlt", "AmmoBox", "Crate", "MilitaryCrate", "Lantern", "Floodlight", "FuelCans" },
 		Barracks = { "Crate", "MilitaryCrate", "AmmoBox", "Lantern", "Sandbag" },
+		WeaponsFacility = { "AmmoBox", "MilitaryCrate", "Lantern", "Sandbag" },
 		VehicleDepot = { "FloodlightAlt", "Floodlight", "FlagPole", "FuelCans" },
 		PowerStation = { "FuelCans" },
 	} :: { [string]: { string } },

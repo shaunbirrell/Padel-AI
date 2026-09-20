@@ -54,6 +54,24 @@ local function hasAutoCollect(player: Player): boolean
 	return false
 end
 
+local function hasDoubleCash(player: Player): boolean
+	if MonetizationService and MonetizationService.PlayerOwnsEntitlement then
+		if MonetizationService.PlayerOwnsEntitlement(player, "DoubleCash") then
+			return true
+		end
+	end
+	if MonetizationService and MonetizationService.PlayerOwnsGamePass then
+		if MonetizationService.PlayerOwnsGamePass(player, "DoubleCash") then
+			return true
+		end
+	end
+	local profile = DataService.GetProfile(player)
+	if profile and typeof(profile.Entitlements) == "table" and profile.Entitlements.DoubleCash == true then
+		return true
+	end
+	return false
+end
+
 local function ensureBillboard(part: BasePart): BillboardGui
 	local existing = billboardCache[part]
 	if existing and existing.Parent then
@@ -370,6 +388,54 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 						NotificationService.Notify(
 							player,
 							"Tired of walking to the ATM? Auto Collect available",
+							"Info",
+							4.5
+						)
+					end
+				end)
+			end
+		end
+		-- v34: one-shot DoubleCash soft offer after meaningful collect (existing Id only; not spammy)
+		do
+			local profile = DataService.GetProfile(player)
+			local offerCfg = (MonetizationConfig :: any).DoubleCashOffer
+			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.DoubleCash
+			local minCash = tonumber(offerCfg and offerCfg.MinCollectCash) or 2500
+			-- Prefer after AutoCollect already teased/owned so we don't stack two toasts on first collect
+			local acReady = profile and (profile.AutoCollectOffered == true or hasAutoCollect(player))
+			if (
+				profile
+				and offerCfg
+				and gp
+				and typeof(gp.Id) == "number"
+				and gp.Id ~= 0
+				and granted >= minCash
+				and acReady
+				and profile.DoubleCashOffered ~= true
+				and not hasDoubleCash(player)
+			) then
+				profile.DoubleCashOffered = true
+				DataService.MarkDirty(player)
+				task.delay(tonumber(offerCfg.DelaySeconds) or 1.8, function()
+					if not player.Parent then
+						return
+					end
+					if hasDoubleCash(player) then
+						return
+					end
+					local remote = RemoteSetup.Get(Constants.RemoteNames.DoubleCashOffer)
+					if remote and remote:IsA("RemoteEvent") then
+						(remote :: RemoteEvent):FireClient(player, {
+							ProductKey = "DoubleCash",
+							GamePassId = gp.Id,
+							DisplayName = gp.DisplayName or "2x Cash",
+							RobuxPrice = gp.RobuxPrice,
+						})
+					end
+					if NotificationService then
+						NotificationService.Notify(
+							player,
+							"Big collect! Double your cash with 2x Cash",
 							"Info",
 							4.5
 						)

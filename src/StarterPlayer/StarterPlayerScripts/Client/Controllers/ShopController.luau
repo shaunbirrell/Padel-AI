@@ -819,6 +819,132 @@ function ShopController.Init()
 		end
 	end
 
+	-- v34: one-shot DoubleCash soft offer toast (existing GamePass Id only)
+	do
+		local dcToast: Frame? = nil
+		local lastDcToastAt = 0.0
+		local DC_TOAST_DEBOUNCE = 8.0
+
+		local function destroyDcToast()
+			if dcToast then
+				dcToast:Destroy()
+				dcToast = nil
+			end
+		end
+
+		local function showDoubleCashToast(payload: any)
+			local now = os.clock()
+			if now - lastDcToastAt < DC_TOAST_DEBOUNCE then
+				return
+			end
+			lastDcToastAt = now
+			destroyDcToast()
+			local displayName = "2x Cash"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.DoubleCash
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "DoubleCashToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(255, 90, 50)
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			dcToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -48, 0, 24)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 17 else 16
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(255, 200, 120)
+			title.Text = "★ Soft offer · " .. displayName
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local body = Instance.new("TextLabel")
+			body.BackgroundTransparency = 1
+			body.Position = UDim2.fromOffset(12, 32)
+			body.Size = UDim2.new(1, -24, 0, 22)
+			body.Font = Enum.Font.Gotham
+			body.TextSize = if isTouch then 13 else 12
+			body.TextXAlignment = Enum.TextXAlignment.Left
+			body.TextColor3 = Constants.Colors.Muted
+			body.Text = if robux then string.format("Double all cash earnings · %d R$", robux) else "Double all cash earnings"
+			body.ZIndex = 81
+			body.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(32, 32)
+			dismiss.BackgroundTransparency = 1
+			dismiss.Text = "✕"
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.TextSize = 18
+			dismiss.TextColor3 = Constants.Colors.Muted
+			dismiss.ZIndex = 82
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyDcToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(220, 70, 40)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 240, 240)
+			buy.Text = "Get 2x Cash"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyDcToast()
+				promptGamePass("DoubleCash")
+			end)
+
+			task.delay(12, function()
+				if dcToast == toast then
+					destroyDcToast()
+				end
+			end)
+		end
+
+		local dcRemote = Remotes.GetEvent(Constants.RemoteNames.DoubleCashOffer)
+		if dcRemote then
+			dcRemote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showDoubleCashToast(payload)
+				end)
+			end)
+		end
+	end
+
 	-- v33: ATM raid success / cooldown HUD chip
 	do
 		local chip: Frame? = nil

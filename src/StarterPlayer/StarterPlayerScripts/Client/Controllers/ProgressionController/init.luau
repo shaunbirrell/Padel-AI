@@ -101,7 +101,7 @@ local function refreshLabelsImmediate()
 			if typeof(prestigeState) == "table" then
 				need = tonumber(prestigeState.MinLevel) or 40
 			end
-			prestigeConfirm.Text = string.format("Reach Lv %d to unlock Rebirth. Fee shown here when ready.", need)
+			prestigeConfirm.Text = string.format("Reach Lv %d to unlock Rebirth · Fee: none · +10%% cash forever · keep all Robux items.", need)
 			prestigeConfirm.TextColor3 = Constants.Colors.Muted
 		end
 	end

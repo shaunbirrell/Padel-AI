@@ -480,6 +480,28 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		math.clamp(math.floor(camo.G * 255) - 22, 20, 255),
 		math.clamp(math.floor(camo.B * 255) - 18, 20, 255)
 	)
+	-- v34: role Part-dress differentiation when mesh IDs reuse / insert fails
+	local helmCol = camoDark
+	local vestCol = camoDark
+	local accentCol = labelColor or Color3.fromRGB(200, 140, 60)
+	local role = if typeof(npcType) == "string" then npcType else ""
+	if role == "Worker" then
+		helmCol = Color3.fromRGB(95, 85, 55) -- soft tan helmet
+		vestCol = Color3.fromRGB(80, 95, 60)
+		accentCol = Color3.fromRGB(160, 200, 90)
+	elseif role == "Infantry" then
+		helmCol = Color3.fromRGB(45, 70, 40) -- olive steel
+		vestCol = Color3.fromRGB(55, 75, 45)
+		accentCol = Color3.fromRGB(180, 220, 120)
+	elseif role == "HeavyInfantry" or role == "Heavy" then
+		helmCol = Color3.fromRGB(35, 38, 42) -- dark armor helm
+		vestCol = Color3.fromRGB(40, 45, 50)
+		accentCol = Color3.fromRGB(230, 160, 50)
+	elseif role == "Guard" or role == "GateGuard" or role == "BankGuard" then
+		helmCol = Color3.fromRGB(30, 40, 55) -- navy / NVG
+		vestCol = Color3.fromRGB(40, 50, 65)
+		accentCol = Color3.fromRGB(90, 140, 220)
+	end
 	-- R6 torso = 2×2×1; lift so feet sit on ground (cf is approx mid-body)
 	local torso = part({
 		Name = "HumanoidRootPart",
@@ -505,7 +527,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	part({
 		Name = "Helmet",
 		Size = Vector3.new(1.2, 0.5, 1.2),
-		Color = camoDark,
+		Color = helmCol,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
@@ -525,7 +547,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	part({
 		Name = "Vest",
 		Size = Vector3.new(2.1, 1.2, 1.15),
-		Color = camoDark,
+		Color = vestCol,
 		Material = Enum.Material.Leather,
 		Anchored = true,
 		CanCollide = false,
@@ -637,13 +659,25 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 	part({
 		Name = "Accent",
 		Size = Vector3.new(1.6, 0.1, 0.28),
-		Color = labelColor or Color3.fromRGB(200, 140, 60),
+		Color = accentCol,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
 		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
 		Parent = model,
 	})
+	if role == "HeavyInfantry" or role == "Heavy" then
+		part({
+			Name = "Pack",
+			Size = Vector3.new(1.4, 1.5, 0.7),
+			Color = Color3.fromRGB(40, 42, 38),
+			Material = Enum.Material.Metal,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0, 0.4, 0.85),
+			Parent = model,
+		})
+	end
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = health or 100
 	hum.Health = health or 100
@@ -1934,22 +1968,28 @@ function MapSetup.Run()
 				lanternLight.Brightness = 0.8
 				lanternLight.Range = 14
 				lanternLight.Parent = lanternHost
-				-- Infantry clone at stall (T-pose OK; crouch anim optional)
+				-- v34: stall roles use distinct VisualAssetConfig Character IDs + Part dress
+				local stallRoles = {
+					{ Kind = "Infantry", Label = "INFANTRY", Body = Color3.fromRGB(70, 85, 55), Accent = Color3.fromRGB(180, 220, 120) },
+					{ Kind = "HeavyInfantry", Label = "HEAVY", Body = Color3.fromRGB(50, 55, 48), Accent = Color3.fromRGB(230, 160, 50) },
+					{ Kind = "Guard", Label = "GUARD", Body = Color3.fromRGB(45, 55, 70), Accent = Color3.fromRGB(90, 140, 220) },
+				}
+				local roleDef = stallRoles[((si - 1) % #stallRoles) + 1]
 				local soldierCf = CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
 				makeSoldierKit(
 					stall,
-					"StallInfantry" .. si,
+					"Stall" .. roleDef.Kind .. si,
 					soldierCf,
-					Color3.fromRGB(70, 85, 55),
-					"INFANTRY",
-					Color3.fromRGB(180, 220, 120),
+					roleDef.Body,
+					roleDef.Label,
+					roleDef.Accent,
 					80,
-					"Infantry",
+					roleDef.Kind,
 					nil
 				)
 				-- Optional crouch: Humanoid Sit as lightweight proxy (full crouch AnimationId TBD)
 				pcall(function()
-					local m = stall:FindFirstChild("StallInfantry" .. si)
+					local m = stall:FindFirstChild("Stall" .. roleDef.Kind .. si)
 					if m and m:IsA("Model") then
 						local hum = m:FindFirstChildOfClass("Humanoid")
 						if hum then

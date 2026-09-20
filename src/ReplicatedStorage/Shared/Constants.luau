@@ -91,6 +91,7 @@ Constants.RemoteNames = {
 	DeathShopOffer = "DeathShopOffer",
 	StarterBundleOffer = "StarterBundleOffer",
 	AutoCollectOffer = "AutoCollectOffer",
+	DoubleCashOffer = "DoubleCashOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",

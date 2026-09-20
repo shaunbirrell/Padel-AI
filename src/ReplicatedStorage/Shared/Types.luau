@@ -99,6 +99,7 @@ export type PlayerProfile = {
 	OutpostIncomeStacks: number?,
 	StarterBundleOffered: boolean?,
 	AutoCollectOffered: boolean?,
+	DoubleCashOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {

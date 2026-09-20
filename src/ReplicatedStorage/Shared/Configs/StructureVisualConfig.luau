@@ -21,7 +21,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 22,
+	BuildingDressGen = 23,
 
 	Palettes = {
 		CommandCenter = {
