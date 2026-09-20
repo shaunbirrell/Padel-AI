@@ -322,3 +322,7 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 97. **MapDressing deferred** — Palm/PalmAlt, DesertRock MeshPart, AsphaltDecal, TrainingYard Tent stalls already wired (v16–v18); EnsureKit rebuilds kits missing dress hosts.
 
 **Open Cloud live v19 (2026-09-20 Europe/Madrid):** Place `97112936860418` Published versionNumber=**19** (QUALITY TIER 2).
+
+
+## 2026-09-20 — Squad Orders walkie (minimal ship → live v20)
+98. **Squad Orders** — Minimal walkie (Follow/Attack/Hold/Retreat) when soldiers>0 or Army open. Server `SquadOrdersService` authoritative + rate-limited `RequestSquadOrder`; field units derive from `SoldierService` (capped). Remotes: `RequestSquadOrder`, `SquadOrderStateUpdate`. Config: `OrdersConfig`. HUD dock ORDERS remains MissionController. No edits to StructureKitBuilder / ManualDropper / WorldPrompt / TrainingYard billboards.

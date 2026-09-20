@@ -305,6 +305,7 @@ local MonetizationService = safeRequire("MonetizationService", Services.Monetiza
 local TutorialService = safeRequire("TutorialService", Services.TutorialService)
 local BattlePassService = safeRequire("BattlePassService", Services.BattlePassService)
 local SoldierService = safeRequire("SoldierService", Services.SoldierService)
+local SquadOrdersService = safeRequire("SquadOrdersService", Services.SquadOrdersService)
 local SeasonService = safeRequire("SeasonService", Services.SeasonService)
 local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
 local CodesService = safeRequire("CodesService", Services.CodesService)
@@ -343,6 +344,7 @@ local deps: { [string]: any } = {
 	TutorialService = TutorialService,
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
+	SquadOrdersService = SquadOrdersService,
 	SeasonService = SeasonService,
 	ClanWarService = ClanWarService,
 	CodesService = CodesService,
@@ -412,6 +414,7 @@ safeInit("PrestigeService", PrestigeService, deps)
 safeInit("ClanService", ClanService, deps)
 safeInit("BattlePassService", BattlePassService, deps)
 safeInit("SoldierService", SoldierService, deps)
+safeInit("SquadOrdersService", SquadOrdersService, deps)
 safeInit("SeasonService", SeasonService, deps)
 safeInit("ClanWarService", ClanWarService, deps)
 safeInit("CodesService", CodesService, deps)

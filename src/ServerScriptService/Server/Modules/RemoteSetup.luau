@@ -50,6 +50,8 @@ local EVENTS = {
 	Constants.RemoteNames.RequestRecruitSoldiers,
 	Constants.RemoteNames.RequestDismissSoldiers,
 	Constants.RemoteNames.SoldierStateUpdate,
+	Constants.RemoteNames.RequestSquadOrder,
+	Constants.RemoteNames.SquadOrderStateUpdate,
 	Constants.RemoteNames.SeasonStateUpdate,
 	Constants.RemoteNames.RequestDeclareClanWar,
 	Constants.RemoteNames.ClanWarStateUpdate,

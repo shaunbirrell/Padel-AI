@@ -14,6 +14,8 @@ local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local SoldierService = {}
 
+local armyChangedListeners: { (Player) -> () } = {}
+
 local DataService: any = nil
 local EconomyService: any = nil
 local NotificationService: any = nil
@@ -81,6 +83,9 @@ local function pushState(player: Player)
 		TrainingTickSeconds = tickSec,
 		TrainingIncomePerSec = if tickSec > 0 then training / tickSec else 0,
 	})
+	for _, cb in ipairs(armyChangedListeners) do
+		task.defer(cb, player)
+	end
 end
 
 function SoldierService.GetCount(player: Player): number
@@ -181,6 +186,10 @@ end
 
 function SoldierService.Push(player: Player)
 	pushState(player)
+end
+
+function SoldierService.OnArmyChanged(cb: (Player) -> ())
+	table.insert(armyChangedListeners, cb)
 end
 
 

@@ -13,6 +13,7 @@ local UIUtil = require(Shared.Util.UIUtil)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 
 local NotificationController = require(script.Parent.NotificationController)
+local OrdersController = require(script.Parent.OrdersController)
 
 local ArmyController = {}
 
@@ -123,6 +124,9 @@ end
 
 local function setOpen(isOpen: boolean)
 	open = isOpen
+	pcall(function()
+		OrdersController.SetArmyOpen(isOpen)
+	end)
 	if screenGui then
 		local panel = screenGui:FindFirstChild("Panel")
 		if panel and panel:IsA("GuiObject") then

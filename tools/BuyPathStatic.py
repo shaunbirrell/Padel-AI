@@ -248,5 +248,25 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Mod
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 122068883442022", "ArmedJeep unchanged")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 125916936788670", "MilitaryJeep unchanged")
 
+
+# --- P0 Squad Orders walkie ---
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "Follow", "OrdersConfig Follow")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "Attack", "OrdersConfig Attack")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "Hold", "OrdersConfig Hold")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "Retreat", "OrdersConfig Retreat")
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", "RequestSquadOrder", "Constants RequestSquadOrder")
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", "SquadOrderStateUpdate", "Constants SquadOrderStateUpdate")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "RequestSquadOrder", "RemoteSetup RequestSquadOrder")
+must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "function SquadOrdersService.SetOrder", "SquadOrdersService.SetOrder")
+must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "function SquadOrdersService.SyncArmy", "SquadOrdersService.SyncArmy")
+must_contain("src/ServerScriptService/Server/Services/SoldierService.luau", "OnArmyChanged", "SoldierService OnArmyChanged")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "SquadOrdersService", "Bootstrap SquadOrdersService")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "ORDERS", "OrdersController walkie")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "RequestSquadOrder", "OrdersController fires RequestSquadOrder")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "OrdersController", "UIController inits Orders")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "MissionController.Toggle", "Dock Orders stays MissionController")
+must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "WE_ManualDropper", "ManualDropper no-regress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_Radio", "StructureKitBuilder DressHosts no-regress")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)
