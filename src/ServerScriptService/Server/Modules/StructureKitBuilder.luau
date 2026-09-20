@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 29 -- v44 P0: force rebuild; tall walls + solid kits at spawn (no Transparency=1 Body)
+local KIT_GEN = 30 -- v44b: force rebuild; classic tall formula max(12, 7.5+lv*2.8); Size Y=height
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -541,12 +541,12 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Window", Vector3.new(3, 3, 3), Vector3.new(0, 22, 0), Color3.fromRGB(100, 200, 255), Enum.Material.Neon, Enum.PartType.Ball)
 		kitPart(plinth, "Accent", Vector3.new(7, 0.25, 7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 	elseif kit == "wall" then
-		-- Pad-local wall segment (perimeter walls are separate)
-		kitPart(plinth, "Body", Vector3.new(24, 8, 3), Vector3.new(0, 4.5, 0), pal.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(24.4, 0.35, 3.4), Vector3.new(0, 8.7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Roof", Vector3.new(24, 0.5, 3.6), Vector3.new(0, 9.1, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.4, 2.2, 1.4), Vector3.new(-10, 7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.4, 2.2, 1.4), Vector3.new(10, 7, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- Pad-local wall sample (perimeter is SyncPerimeterWalls). Tall so pad never reads as flat slab.
+		kitPart(plinth, "Body", Vector3.new(24, 16, 3), Vector3.new(0, 8.5, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(24.4, 0.35, 3.4), Vector3.new(0, 16.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(24, 0.5, 3.6), Vector3.new(0, 17.1, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.4, 2.2, 1.4), Vector3.new(-10, 15, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.4, 2.2, 1.4), Vector3.new(10, 15, 0), pal.Accent, Enum.Material.Neon, nil)
 	elseif kit == "power" then
 		kitPart(plinth, "Body", Vector3.new(24, 14, 18), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Accent", Vector3.new(4, 4, 4), Vector3.new(0, 16, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
@@ -809,8 +809,19 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		periGen = tonumber(existing:GetAttribute("WE_PerimeterGen")) or 0
 		periParts = #existing:GetChildren()
 	end
-	-- v43: rebuild when gen stale or empty (never keep invisible/stale walls)
-	local mustRebuild = (not existing) or (not existing:IsA("Folder")) or periGen < KIT_GEN or periParts < 4
+	-- v43/v44b: rebuild when gen stale, empty, OR any Wall* is short on Y (flat slabs)
+	local shortWall = false
+	if existing and existing:IsA("Folder") then
+		for _, ch in ipairs(existing:GetChildren()) do
+			if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
+				if ch.Size.Y < 12 then
+					shortWall = true
+					break
+				end
+			end
+		end
+	end
+	local mustRebuild = (not existing) or (not existing:IsA("Folder")) or periGen < KIT_GEN or periParts < 4 or shortWall
 	if existing and existing:IsA("Folder") then
 		if mustRebuild then
 			existing:ClearAllChildren()
@@ -854,15 +865,14 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
 	-- v36: thicker/taller defensive walls at higher levels
-	-- v44 P0: TALL vertical perimeter — L1 ≥ 12 studs, L5 ≥ 20. Size Y = height (not flat slabs).
-	-- Bottom of wall sits on pad top: y = padTop + height/2.
+	-- v44b Shaun: restore TALL vertical perimeter (fully-bought walls went HIGH before).
+	-- height = max(12, 7.5+lv*2.8) → L1≥12, L5=21.5. Size = (length, height, thickness) with height on Y.
+	-- Bottom sits on pad top: y = padTop + height/2 (never buried / flat slabs).
 	local thickness = 2.8 + lv * 0.7
-	local height = math.max(12, 10 + lv * 2.5) -- L1=12.5→12min, L5=22.5≥20
-	if lv >= 5 then
-		height = math.max(height, 20)
-	end
+	local height = math.max(12, 7.5 + lv * 2.8)
 	local padTop = pad.Position.Y + pad.Size.Y * 0.5
 	local y = padTop + height * 0.5
+	print(string.format("[StructureKitBuilder] SyncPerimeterWalls level=%d height=%.1f padTop=%.1f", lv, height, padTop))
 	local cx, cz = pad.Position.X, pad.Position.Z
 
 	-- Clear walkable opening (8–12 studs). Posts/arch are visual-only outside this span.
@@ -1208,7 +1218,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	local coverFrac = 0.72
 	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
-	local wallH = math.max(12, 10 + lv * 2.5) -- v44 mirror SyncPerimeterWalls
+	local wallH = math.max(12, 7.5 + lv * 2.8) -- v44b mirror SyncPerimeterWalls
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
 
 	local sizeX: number

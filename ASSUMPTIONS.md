@@ -531,3 +531,11 @@ Shaun playtest (admin $50M, LVL2, many pads, Orders OK): flat TAN wall blocks on
 194. **ROOT CAUSE — empty pads** — Part kits spawned at `Transparency=1` until `applyKitVisuals`; PreferMesh InsertService + VAS host fade (`Transparency=math.max(...,0.55–0.7)`) left ghost/missing silhouettes when mesh failed. **Fix:** kitPart Body/Roof spawn at SolidTransparency; EnsureKit solidifies immediately; `PreferMeshWhenAssetIdSet=false`; VAS `keepKitSolid` + never raise structure host Transparency; NuclearRehydrateKits on join; RefreshAllVisuals walls-first at 0/0.35/1/2/4s.
 195. MissileDefense dedicated launcher Body+Roof kit (not watchtower). No new Design mesh IDs.
 196. BuyPathStatic PASS (KIT_GEN≥29, PreferMesh off, wall height≥12, EnsureKit solid path).
+
+## 2026-09-20 — v44b tall-wall restore (Open Cloud versionNumber=45)
+
+Shaun: previously fully-bought walls went HIGH; now only short tan slabs.
+197. **Wall height** — `height = math.max(12, 7.5 + lv * 2.8)` (L5≈21.5); Size `(len, height, thick)` with height on **Y**; y=padTop+height/2.
+198. **KIT_GEN 30** + rebuild if any Wall* Size.Y < 12 (flat slabs never kept).
+199. DefensiveWalls pad kit Body raised 8→16 studs so pad sample is not a ground slab.
+200. PreferMesh structures still OFF; Part kits solid at EnsureKit unchanged.
