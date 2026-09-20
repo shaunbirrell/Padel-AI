@@ -31,7 +31,7 @@ local VisualAssetConfig = {
 	Vehicles = {
 		-- Free Jeep family
 		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car dress-only (NO JeepFallback)" } :: AssetRef,
-		ArmedJeep = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
+		ArmedJeep = { ModelAssetId = 122068883442022, Note = "Tan turreted Armed Jeep (DisplayName Armed Jeep; Design Bot P0)" } :: AssetRef,
 		UtilityQuad = { ModelAssetId = 125916936788670, Note = "Military Car reuse (scaled)" } :: AssetRef,
 		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		ReconBuggy = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
@@ -144,18 +144,18 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Characters = {
-		-- Design P0: Respawn Soldiers pack primary. REJECT blocky/SWAT/police. StripScripts on insert.
-		Soldier = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		Infantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		Guard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		BankGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
+		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
+		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
+		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		FortGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
-	-- Optional character alt ONLY (never primary). Used if primary insert fails.
-	CharacterAlt = { ModelAssetId = 3924234975, Note = "Official Soldier alt only" } :: AssetRef,
+	-- No plastic CharacterAlt — primary insert failure falls back to Part kit / olive drab.
+	CharacterAlt = { ModelAssetId = 0, Note = "DISABLED — Design Bot rejected plastic Rthro alts" } :: AssetRef,
 
 	Buildings = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.

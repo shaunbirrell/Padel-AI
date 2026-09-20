@@ -226,7 +226,7 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 109. **Tutorial worker-first (P0)** — Steps: ClaimBase → CommandCenter → **RecruitSoldiers** → Income (collector) → Barracks → Jeep → Outpost. SKIP kept. Army CTA opens ArmyController. Recruit advances on `SoldierService.Recruit` → `TutorialService.Notify("RecruitSoldiers")`.
 
-110. **Brand mesh pack (Design Bot)** — VisualAssetConfig: MilitaryJeep/ArmedJeep/Scout/Recon/Dispatch/Quad → **125916936788670** (fallback JeepFallback **59524622**); Mammoth MBT **19297043**; gunships **295607934**; transport heli **9753309**; light heli **5935419**; Strike/CAS **5507592781**; bomber/cargo/AWACS **3319732457**; trucks **105503568352704** / **107381977457431**; APC **17835143223**. StructureVisualConfig MeshAssetIds wired per Design list. WarzoneProps IDs catalogued. Characters: Soldier 3924234975; Guard/BankGuard/OilRigGuard → 91299598767068. StripScripts=true; Part kit if load fails. Jeep Part kit olive Metal (no neon green accents) until mesh loads. Drive: auto-Sit retries + WE_DrivePrompt on DriverSeat; garage pad still Open Garage.
+110. **Brand mesh pack (Design Bot)** — VisualAssetConfig: MilitaryJeep/ArmedJeep/Scout/Recon/Dispatch/Quad → **125916936788670** (fallback JeepFallback **59524622**); Mammoth MBT **19297043**; gunships **295607934**; transport heli **9753309**; light heli **5935419**; Strike/CAS **5507592781**; bomber/cargo/AWACS **3319732457**; trucks **105503568352704** / **107381977457431**; APC **17835143223**. StructureVisualConfig MeshAssetIds wired per Design list. WarzoneProps IDs catalogued. Characters: Soldier 100212659702941; Infantry 9104381136; Heavy 14776506955; Guards 16134469614; CharacterAlt disabled (rejected plastic/Respawn). StripScripts=true; Part kit if load fails. Jeep Part kit olive Metal (no neon green accents) until mesh loads. Drive: auto-Sit retries + WE_DrivePrompt on DriverSeat; garage pad still Open Garage.
 
 ## Jeep drive (2026-09-20 live v10)
 
@@ -265,3 +265,9 @@ Reversible engineering decisions made while implementing the MVP without blockin
 **Levels/progression:** `LevelConfig.Milestones` + `GetHudGoal` / `GetUnlockMessage`; XPService toasts; HUD GoalLabel. Prestige objective at L40; territory goals in milestone copy. Soft guidance only — hard gates remain in Vehicle/Weapon/Base/Prestige configs.
 
 **ASSUMPTION:** Catalog mesh scale clamped 0.85–1.2 via VehicleVisualScale; StripScripts; pads never vanish (pcall inserts).
+
+## Design Bot soldier/jeep upgrade (2026-09-20)
+- Rejected primary: `3924234975` (plastic Rthro), `91299598767068` (Respawn pack).
+- Soldier `100212659702941`, Infantry `9104381136`, Guards `16134469614`, HeavyInfantry `14776506955`.
+- MilitaryJeep keeps `125916936788670`; ArmedJeep `122068883442022` (DisplayName Armed Jeep).
+- CharacterAlt disabled (`0`) — no plastic fallback.

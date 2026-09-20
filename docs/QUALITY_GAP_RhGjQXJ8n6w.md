@@ -60,3 +60,14 @@ Require: desert warzone dressing, camo R15 squads at stalls, crate/tarp props, m
 ## Next
 - Finish clip watch (0–8, then 8–16 / 16–24)
 - Fold into `DESIGN_COMPETITIVE_DEEP_DIVE.md` + live ship checklist
+
+
+## Full 0–8min clip watch (2026-09-20)
+
+Confirmed: stylized low-poly desert with sculpted terrain (not flat baseplate); Part-kit buildings OK within that aesthetic; blocky troops but formation/salute/pathfind; no vehicle drive in first 8m; no text tutorial — green pads + Free Dropper; premium colored pads (yellow speed, red auto/2x); walkie Orders UI; outpost capture → +10% Income.
+
+### Extra P0s from watch
+1. Manual early click-dropper ($10) to kill AFK boredom
+2. Capture outpost → permanent income buff
+3. Squad Orders (Follow/Attack/Hold/Retreat) walkie UI
+4. Sculpted dunes + rock border enclosure (not void edge)
