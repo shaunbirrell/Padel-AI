@@ -91,6 +91,9 @@ Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
 Constants.CURRENT_DATA_VERSION = 7
 
 Constants.AutosaveIntervalSeconds = 60
+-- Session lock: refresh often; steal if age >= TTL (rejoin after crash ~30–45s)
+Constants.SessionLockTtlSeconds = 45
+Constants.SessionLockRefreshSeconds = 15
 Constants.DataStoreRetries = 3
 Constants.DataStoreRetryDelay = 1.5
 

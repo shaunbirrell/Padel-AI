@@ -13,6 +13,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
 local DevConfig = require(Shared.Configs.DevConfig)
+local AdminConfig = require(Shared.Configs.AdminConfig)
 
 local ProfileSchema = require(script.Parent.Parent.Modules.ProfileSchema)
 local SessionLock = require(script.Parent.Parent.Modules.SessionLock)
@@ -133,6 +134,31 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
+local function isAdminUserId(userId: number): boolean
+	for _, id in ipairs(AdminConfig.UserIds) do
+		if id == userId then
+			return true
+		end
+	end
+	return false
+end
+
+--- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
+local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
+	local target = AdminConfig.AdminPlaytestCash
+	if typeof(target) ~= "number" or target <= 0 then
+		return false
+	end
+	if not isAdminUserId(userId) then
+		return false
+	end
+	if profile.Cash < target then
+		profile.Cash = target
+		return true
+	end
+	return false
+end
+
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
@@ -180,9 +206,10 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		profile.FirstJoinUnix = os.time()
 	end
 	applyStudioDevFlags(profile)
+	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
 
 	profiles[userId] = profile
-	dirty[userId] = false
+	dirty[userId] = adminCashApplied
 	loading[userId] = false
 
 	fireProfileLoaded(player, profile)
@@ -229,7 +256,12 @@ end
 
 function DataService.UnloadProfile(player: Player)
 	local userId = player.UserId
-	DataService.SaveProfile(player, true)
+	if profiles[userId] then
+		DataService.SaveProfile(player, true)
+	else
+		-- Still release if load was in-flight or profile missing (never soft-lock forever)
+		SessionLock.Release(userId)
+	end
 	profiles[userId] = nil
 	dirty[userId] = nil
 	loading[userId] = nil
@@ -249,6 +281,19 @@ function DataService.Init()
 		task.spawn(DataService.LoadProfile, player)
 	end
 
+	-- Session-lock heartbeat (must be < SessionLockTtlSeconds so live locks stay fresh)
+	task.spawn(function()
+		local refreshEvery = Constants.SessionLockRefreshSeconds
+		while true do
+			task.wait(refreshEvery)
+			for _, player in ipairs(Players:GetPlayers()) do
+				if profiles[player.UserId] then
+					SessionLock.Refresh(player.UserId)
+				end
+			end
+		end
+	end)
+
 	-- Autosave
 	task.spawn(function()
 		while true do
@@ -256,8 +301,6 @@ function DataService.Init()
 			for _, player in ipairs(Players:GetPlayers()) do
 				if dirty[player.UserId] and profiles[player.UserId] then
 					DataService.SaveProfile(player, false)
-				else
-					SessionLock.Refresh(player.UserId)
 				end
 			end
 		end
@@ -271,7 +314,12 @@ function DataService.Init()
 		end
 		for _, player in ipairs(players) do
 			task.spawn(function()
-				DataService.SaveProfile(player, true)
+				local userId = player.UserId
+				if profiles[userId] then
+					DataService.SaveProfile(player, true)
+				else
+					SessionLock.ForceReleaseIfStaleOrOurs(userId)
+				end
 				remaining -= 1
 			end)
 		end
