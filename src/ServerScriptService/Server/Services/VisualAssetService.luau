@@ -238,6 +238,16 @@ function VisualAssetService.ResolveBuildingAssetId(structureId: string): number?
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
 	end
+	-- Fallback StructureVisualConfig.MeshAssetId (0 = composite / Part kit only)
+	local ok, svc = pcall(function()
+		return require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
+	end)
+	if ok and svc and svc.Palettes then
+		local pal = svc.Palettes[structureId]
+		if pal and typeof(pal.MeshAssetId) == "number" and (pal.MeshAssetId :: number) > 0 then
+			return pal.MeshAssetId
+		end
+	end
 	return nil
 end
 
@@ -389,18 +399,197 @@ end
 	Welded non-colliding; plinth remains authoritative for walk-buy.
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
-	if hostPart:GetAttribute("WE_CatalogAssetId") then
-		return false -- already dressed
+	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
+	local DRESS_GEN = 21
+	local REJECTED: { [number]: boolean } = {
+		[12370174722] = true, -- blockout Airport Model (Design REJECT)
+		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
+	}
+
+	local existingGen = tonumber(hostPart:GetAttribute("WE_BuildingDressGen"))
+	if hostPart:GetAttribute("WE_CatalogAssetId") and existingGen == DRESS_GEN then
+		return false
 	end
+	if existingGen ~= DRESS_GEN then
+		for _, ch in ipairs(hostPart:GetChildren()) do
+			if ch:IsA("Model") and (ch.Name == "WE_CatalogBuilding" or ch.Name == "WE_AirfieldComposite" or string.sub(ch.Name, 1, 14) == "WE_CatalogBuild") then
+				ch:Destroy()
+			elseif ch:IsA("BasePart") and ch:GetAttribute("WE_AirfieldComposite") == true then
+				ch:Destroy()
+			end
+		end
+		hostPart:SetAttribute("WE_CatalogAssetId", nil)
+	end
+
+	local function hideKitBody()
+		for _, child in ipairs(hostPart:GetChildren()) do
+			if child:IsA("BasePart") then
+				local role = child:GetAttribute("WE_KitRole")
+				if role == "Body" or role == "Roof" or role == "Door" or role == "Window" or role == "Pier" or role == "Detail" or role == "Antenna" then
+					child.Transparency = math.max(child.Transparency, 0.92)
+					child.CanCollide = false
+				elseif role == "Accent" then
+					child.Transparency = math.max(child.Transparency, 0.75)
+				end
+			end
+		end
+	end
+
+	local function footprintFor(id: string): Vector3
+		local ok, svc = pcall(function()
+			return require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
+		end)
+		if ok and svc and svc.Palettes and svc.Palettes[id] and typeof(svc.Palettes[id].TargetFootprint) == "Vector3" then
+			return svc.Palettes[id].TargetFootprint
+		end
+		local defaults: { [string]: Vector3 } = {
+			CommandCenter = Vector3.new(36, 16, 28),
+			Barracks = Vector3.new(28, 12, 16),
+			VehicleDepot = Vector3.new(32, 14, 24),
+			WeaponsFacility = Vector3.new(28, 18, 18),
+			Warehouse = Vector3.new(36, 14, 22),
+			Hangar = Vector3.new(40, 18, 28),
+			Helipad = Vector3.new(22, 3, 22),
+			Airfield = Vector3.new(70, 1, 10),
+			Watchtowers = Vector3.new(10, 32, 10),
+			Radar = Vector3.new(14, 18, 14),
+			ResearchLab = Vector3.new(22, 12, 16),
+			Dock = Vector3.new(40, 8, 16),
+			PowerStation = Vector3.new(28, 16, 20),
+			DefensiveWalls = Vector3.new(24, 8, 3),
+			MissileDefense = Vector3.new(12, 22, 12),
+			SpecialForcesFacility = Vector3.new(26, 14, 16),
+		}
+		return defaults[id] or Vector3.new(28, 14, 20)
+	end
+
+	local function scaleModelToFootprint(model: Model, target: Vector3): number
+		local ext = model:GetExtentsSize()
+		local factor = math.min(target.X / math.max(ext.X, 0.05), target.Y / math.max(ext.Y, 0.05), target.Z / math.max(ext.Z, 0.05))
+		factor = math.clamp(factor, 0.05, 80)
+		local okScale = pcall(function()
+			model:ScaleTo(factor)
+		end)
+		if not okScale then
+			warn("[VisualAssetService] ScaleTo failed", structureId, factor)
+		end
+		return factor
+	end
+
+	local function weldScaledBuilding(clone: Model, target: Vector3, cloneName: string): boolean
+		scaleModelToFootprint(clone, target)
+		local topY = hostPart.Position.Y + hostPart.Size.Y * 0.5
+		pcall(function()
+			local ext = clone:GetExtentsSize()
+			clone:PivotTo(CFrame.new(hostPart.Position.X, topY + ext.Y * 0.5, hostPart.Position.Z) * (hostPart.CFrame - hostPart.Position))
+		end)
+		if not weldCloneToPrimary(clone, hostPart, cloneName) then
+			return false
+		end
+		clone.Parent = hostPart
+		return true
+	end
+
+	-- Airfield COMPOSITE: runway 70×1×10 + asphalt decal + Hangar 6015472062
+	if structureId == "Airfield" then
+		local folder = Instance.new("Model")
+		folder.Name = "WE_AirfieldComposite"
+		folder.Parent = hostPart
+
+		local runway = Instance.new("Part")
+		runway.Name = "WE_Runway"
+		runway.Size = Vector3.new(70, 1, 10)
+		runway.Anchored = true
+		runway.CanCollide = false
+		runway.CanQuery = false
+		runway.CanTouch = false
+		runway.Material = Enum.Material.Asphalt
+		runway.Color = Color3.fromRGB(45, 48, 52)
+		runway.CastShadow = true
+		local look = hostPart.CFrame.LookVector
+		runway.CFrame = CFrame.new(hostPart.Position + look * 28 + Vector3.new(0, 0.55, 0)) * (hostPart.CFrame - hostPart.Position)
+		runway:SetAttribute("WE_AirfieldComposite", true)
+		runway.Parent = folder
+		pcall(function()
+			VisualAssetService.ApplyAsphaltDecal(runway)
+		end)
+		for i = -3, 3 do
+			local dash = Instance.new("Part")
+			dash.Name = "WE_RunwayDash"
+			dash.Size = Vector3.new(4, 0.12, 0.55)
+			dash.Anchored = true
+			dash.CanCollide = false
+			dash.CanQuery = false
+			dash.Material = Enum.Material.SmoothPlastic
+			dash.Color = Color3.fromRGB(240, 240, 220)
+			dash.CFrame = runway.CFrame * CFrame.new(i * 8, 0.56, 0)
+			dash:SetAttribute("WE_AirfieldComposite", true)
+			dash.Parent = folder
+		end
+
+		local hangarId = 6015472062
+		local hangarTemplate = loadModel(hangarId)
+		if hangarTemplate then
+			local hangar = hangarTemplate:Clone()
+			scaleModelToFootprint(hangar, footprintFor("Hangar"))
+			local ext = hangar:GetExtentsSize()
+			pcall(function()
+				hangar:PivotTo(runway.CFrame * CFrame.new(32, ext.Y * 0.5, 0))
+			end)
+			stripScripts(hangar)
+			hangar.Name = "WE_CatalogHangar"
+			for _, d in ipairs(hangar:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.Anchored = false
+					d.CanCollide = false
+					d.CanQuery = false
+					d.CanTouch = false
+					d.Massless = true
+					local w = Instance.new("WeldConstraint")
+					w.Part0 = hostPart
+					w.Part1 = d
+					w.Parent = d
+				end
+			end
+			hangar.Parent = folder
+		else
+			warn("[VisualAssetService] Hangar insert failed — Part shed fallback", hangarId)
+			local shed = Instance.new("Part")
+			shed.Name = "WE_HangarShed"
+			shed.Size = Vector3.new(40, 18, 28)
+			shed.Anchored = true
+			shed.CanCollide = false
+			shed.Material = Enum.Material.Metal
+			shed.Color = Color3.fromRGB(70, 75, 68)
+			shed.CFrame = runway.CFrame * CFrame.new(32, 9, 0)
+			shed:SetAttribute("WE_AirfieldComposite", true)
+			shed.Parent = folder
+			local mouth = Instance.new("Part")
+			mouth.Name = "WE_HangarMouth"
+			mouth.Size = Vector3.new(0.4, 14, 22)
+			mouth.Anchored = true
+			mouth.CanCollide = false
+			mouth.Material = Enum.Material.Metal
+			mouth.Color = Color3.fromRGB(30, 32, 28)
+			mouth.CFrame = shed.CFrame * CFrame.new(-20.2, -1, 0)
+			mouth:SetAttribute("WE_AirfieldComposite", true)
+			mouth.Parent = folder
+			hangarId = -6015472062
+		end
+
+		hideKitBody()
+		hostPart:SetAttribute("WE_CatalogAssetId", hangarId)
+		hostPart:SetAttribute("WE_BuildingDressGen", DRESS_GEN)
+		return true
+	end
+
 	local assetId = VisualAssetService.ResolveBuildingAssetId(structureId)
-	-- DefensiveWalls L3+: prefer heavy wall mesh 9703136850 (Buildings.DefensiveWallsL3)
 	local lv = tonumber(level) or 0
 	if structureId == "DefensiveWalls" and lv >= 3 then
 		local l3 = VisualAssetConfig.Buildings.DefensiveWallsL3
 		if l3 and typeof(l3.ModelAssetId) == "number" and (l3.ModelAssetId :: number) > 0 then
 			assetId = l3.ModelAssetId
 		else
-			-- StructureVisualConfig.MeshAssetIdL3 fallback
 			local okSvc, StructureVisualConfig = pcall(function()
 				return require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
 			end)
@@ -412,29 +601,29 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			end
 		end
 	end
-	if not assetId then
+	if not assetId or assetId <= 0 or REJECTED[assetId] == true then
+		if assetId and REJECTED[assetId] then
+			warn("[VisualAssetService] REJECTED building asset", structureId, assetId)
+		end
 		return false
 	end
 	local template = loadModel(assetId)
 	if not template then
+		warn("[VisualAssetService] Insert failed — Part kit remains", structureId, assetId)
 		return false
 	end
 
 	local clone = template:Clone()
-	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogBuilding") then
+	if not weldScaledBuilding(clone, footprintFor(structureId), "WE_CatalogBuilding") then
 		clone:Destroy()
 		return false
 	end
-	clone.Parent = hostPart
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
-	-- Soften kit body parts so catalog silhouette reads
-	for _, child in ipairs(hostPart:GetChildren()) do
-		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
-			child.Transparency = math.max(child.Transparency, 0.45)
-		end
-	end
+	hostPart:SetAttribute("WE_BuildingDressGen", DRESS_GEN)
+	hideKitBody()
 	return true
 end
+
 
 --[[
 	Optional desert prop overlay (cactus etc.) welded to a flora host part.

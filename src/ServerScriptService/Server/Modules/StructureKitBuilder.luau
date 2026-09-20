@@ -15,6 +15,8 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
+local KIT_GEN = 21 -- STRUCTURE_SCALE_WIRE Part kit footprints
+
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
 
@@ -122,8 +124,8 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 	clearKitChildren(plinth)
 
 	if kit == "hq" then
-		kitPart(plinth, "Body", Vector3.new(5.5, 3.4, 5.5), Vector3.new(0, 2.3, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(6.4, 0.55, 6.4), Vector3.new(0, 4.3, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(16, 10, 14), Vector3.new(0, 5.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(18, 1.2, 16), Vector3.new(0, 11.2, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.8, 0.35), Vector3.new(1.8, 6.8, 1.8), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Accent", Vector3.new(6.6, 0.22, 6.6), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
@@ -183,8 +185,8 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 			end
 		end
 	elseif kit == "barracks" then
-		kitPart(plinth, "Body", Vector3.new(6.6, 2.6, 4.4), Vector3.new(0, 1.9, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.1, 0.5, 5.0), Vector3.new(0, 3.35, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(28, 10, 14), Vector3.new(0, 5.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(30, 1, 16), Vector3.new(0, 11, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Accent", Vector3.new(6.9, 0.18, 4.7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
@@ -209,7 +211,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 			end
 		end
 	elseif kit == "depot" then
-		kitPart(plinth, "Body", Vector3.new(6.9, 2.2, 5.6), Vector3.new(0, 1.7, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(32, 12, 22), Vector3.new(0, 6.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
@@ -295,22 +297,22 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 			fuelHost.CanCollide = false
 		end
 	elseif kit == "lab" then
-		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(20, 10, 14), Vector3.new(0, 5.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Accent", Vector3.new(5.7, 0.2, 5.7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Window", Vector3.new(1.5, 1.2, 0.2), Vector3.new(0, 2.6, -2.6), Color3.fromRGB(80, 160, 200), Enum.Material.Glass, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.9, 0.9, 0.9), Vector3.new(2.0, 3.5, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "tower" then
-		kitPart(plinth, "Body", Vector3.new(2.9, 5.8, 2.9), Vector3.new(0, 3.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(8, 22, 8), Vector3.new(0, 11.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(3.8, 0.5, 3.8), Vector3.new(0, 6.6, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.5, 0.3), Vector3.new(0, 8.5, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Accent", Vector3.new(3.3, 0.22, 3.3), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Window", Vector3.new(1.0, 0.8, 0.2), Vector3.new(0, 4.5, -1.5), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.7, 0.7, 0.7), Vector3.new(0, 7.0, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	elseif kit == "dock" then
-		kitPart(plinth, "Body", Vector3.new(7.5, 0.55, 7.5), Vector3.new(0, 0.9, 0), pal.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Pier", Vector3.new(8.8, 0.4, 2.4), Vector3.new(0, 1.15, 3.3), pal.Roof, Enum.Material.Wood, nil)
+		kitPart(plinth, "Body", Vector3.new(20, 1.2, 14), Vector3.new(0, 1.1, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Pier", Vector3.new(36, 0.8, 8), Vector3.new(0, 1.4, 18), pal.Roof, Enum.Material.Wood, nil)
 		kitPart(plinth, "Accent", Vector3.new(7.2, 0.14, 0.4), Vector3.new(0, 1.25, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.2, 2.8, 0.4), Vector3.new(3.3, 2.1, 2.6), pal.Accent, Enum.Material.Metal, nil)
 		kitPart(plinth, "Door", Vector3.new(1.8, 0.3, 1.2), Vector3.new(0, 1.35, 4.2), Color3.fromRGB(40, 55, 70), Enum.Material.Metal, nil)
@@ -319,31 +321,65 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.5, 0.14, 6.6), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Window", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.8, 1.4, 2.8), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "helipad" then
+		-- ~22 stud marked pad + H + floodlights (not a tiny cube)
+		kitPart(plinth, "Body", Vector3.new(22, 0.6, 22), Vector3.new(0, 0.95, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(18, 0.12, 1.2), Vector3.new(0, 1.3, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 0.12, 14), Vector3.new(0, 1.3, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(3.5, 0.2, 0.6), Vector3.new(0, 1.35, 0), Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, nil) -- H bar
+		kitPart(plinth, "Detail", Vector3.new(0.6, 0.2, 3.5), Vector3.new(0, 1.35, 0), Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.5, 0.35), Vector3.new(-9, 3.2, -9), pal.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.5, 0.35), Vector3.new(9, 3.2, 9), pal.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(0.8, 0.8, 0.8), Vector3.new(-9, 5.4, -9), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Window", Vector3.new(0.8, 0.8, 0.8), Vector3.new(9, 5.4, 9), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "airfield" then
+		-- Runway silhouette ~70×10 + taxi + hangar box (mesh composite dresses on top)
+		kitPart(plinth, "Body", Vector3.new(70, 0.7, 12), Vector3.new(0, 0.95, 18), Color3.fromRGB(48, 50, 52), Enum.Material.Asphalt, nil)
+		kitPart(plinth, "Accent", Vector3.new(60, 0.12, 0.5), Vector3.new(0, 1.35, 18), Color3.fromRGB(240, 240, 200), Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(24, 0.55, 16), Vector3.new(0, 0.95, -8), Color3.fromRGB(55, 58, 55), Enum.Material.Concrete, nil) -- taxi
+		kitPart(plinth, "Roof", Vector3.new(36, 16, 24), Vector3.new(0, 9, -22), pal.Roof, Enum.Material.Metal, nil) -- hangar shed
+		kitPart(plinth, "Door", Vector3.new(0.5, 12, 18), Vector3.new(0, 7, -10), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 8, 0.4), Vector3.new(20, 5, 18), pal.Accent, Enum.Material.Metal, nil) -- windsock pole
+		kitPart(plinth, "Window", Vector3.new(1.2, 1.2, 1.2), Vector3.new(20, 9, 18), Color3.fromRGB(255, 180, 60), Enum.Material.Neon, Enum.PartType.Ball)
+	elseif kit == "hangar" then
+		kitPart(plinth, "Body", Vector3.new(40, 18, 28), Vector3.new(0, 9.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(42, 1.2, 30), Vector3.new(0, 19, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Door", Vector3.new(0.5, 14, 22), Vector3.new(0, 8, 14.2), Color3.fromRGB(30, 32, 28), Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(40, 0.3, 28), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+	elseif kit == "armory" then
+		kitPart(plinth, "Body", Vector3.new(28, 14, 18), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(30, 1, 20), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Door", Vector3.new(3.2, 4.5, 0.4), Vector3.new(0, 3.2, -9.2), Color3.fromRGB(40, 35, 32), Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(28, 0.25, 18), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(2.2, 1.4, 1.6), Vector3.new(-8, 1.2, -11), Color3.fromRGB(70, 65, 50), Enum.Material.Metal, nil) -- ammo crate
+		kitPart(plinth, "Detail", Vector3.new(2.0, 1.2, 1.4), Vector3.new(-5.5, 1.1, -11), Color3.fromRGB(70, 65, 50), Enum.Material.Metal, nil)
+		kitPart(plinth, "Window", Vector3.new(2.4, 1.6, 0.25), Vector3.new(6, 8, -9.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+	elseif kit == "radar" then
+		-- Dish / tower silhouette ≥20 studs (not a neon stick)
+		kitPart(plinth, "Body", Vector3.new(6, 14, 6), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(10, 1, 10), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.6, 8, 0.6), Vector3.new(0, 19, 0), pal.Accent, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(12, 1.2, 12), Vector3.new(0, 22, 0), pal.Accent, Enum.Material.Metal, Enum.PartType.Cylinder) -- dish
+		kitPart(plinth, "Window", Vector3.new(3, 3, 3), Vector3.new(0, 22, 0), Color3.fromRGB(100, 200, 255), Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Accent", Vector3.new(7, 0.25, 7), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 	elseif kit == "wall" then
 		-- Pad-local wall segment (perimeter walls are separate)
-		kitPart(plinth, "Body", Vector3.new(7.5, 3.2, 1.8), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.7, 0.28, 2.0), Vector3.new(0, 3.9, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.5, 0.45, 2.2), Vector3.new(0, 4.15, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.9, 1.4, 0.9), Vector3.new(-3.2, 3.4, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.9, 1.4, 0.9), Vector3.new(3.2, 3.4, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Body", Vector3.new(24, 8, 3), Vector3.new(0, 4.5, 0), pal.Body, Enum.Material.Concrete, nil)
+		kitPart(plinth, "Accent", Vector3.new(24.4, 0.35, 3.4), Vector3.new(0, 8.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Roof", Vector3.new(24, 0.5, 3.6), Vector3.new(0, 9.1, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.4, 2.2, 1.4), Vector3.new(-10, 7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.4, 2.2, 1.4), Vector3.new(10, 7, 0), pal.Accent, Enum.Material.Neon, nil)
 	elseif kit == "power" then
-		kitPart(plinth, "Body", Vector3.new(4.6, 3.6, 4.6), Vector3.new(0, 2.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
-		kitPart(plinth, "Roof", Vector3.new(5.1, 0.4, 5.1), Vector3.new(0, 4.4, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.6, 2.5, 0.6), Vector3.new(2.0, 2.8, 2.0), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
-		local fuel = kitPart(plinth, "DressHost", Vector3.new(1.4, 1.1, 1.4), Vector3.new(-2.2, 1.4, 1.8), Color3.fromRGB(70, 65, 45), Enum.Material.Metal, nil)
-		if fuel then
-			fuel.Name = "WE_DressHost_Fuel"
-			fuel:SetAttribute("WE_DressProp", "FuelCans")
-			fuel.Transparency = 0.8
-			fuel.CanCollide = false
-		end
+		kitPart(plinth, "Body", Vector3.new(24, 14, 18), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(4, 4, 4), Vector3.new(0, 16, 0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Roof", Vector3.new(26, 0.8, 20), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 6, 1.2), Vector3.new(8, 5, 6), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
 	elseif kit == "warehouse" then
-		kitPart(plinth, "Body", Vector3.new(7.1, 2.8, 5.6), Vector3.new(0, 2.0, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.5, 0.5, 6.1), Vector3.new(0, 3.55, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.3, 0.2, 5.9), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Door", Vector3.new(2.6, 2.2, 0.3), Vector3.new(0, 1.7, -2.95), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil)
+		kitPart(plinth, "Body", Vector3.new(36, 14, 22), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(38, 1, 24), Vector3.new(0, 15, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(36, 0.25, 22), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(10, 10, 0.4), Vector3.new(0, 5.5, -11.2), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil) -- roll door
+		kitPart(plinth, "Detail", Vector3.new(12, 1.2, 6), Vector3.new(0, 1.2, -14), Color3.fromRGB(70, 72, 68), Enum.Material.Concrete, nil) -- loading dock
 	else
 		kitPart(plinth, "Body", Vector3.new(5.3, 3.5, 5.3), Vector3.new(0, 2.4, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(4.2, 1.2, 4.2), Vector3.new(0, 4.6, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -351,11 +387,28 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Accent", Vector3.new(5.9, 0.22, 5.9), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.0, 3.5, -2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 	end
+	plinth:SetAttribute("WE_KitGen", KIT_GEN)
 end
 
 --[[ Ensure plinth has kit children; rebuild if missing/incomplete. Returns role count. ]]
 function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): number
 	local n = countKitRoles(plinth)
+	local gen = tonumber(plinth:GetAttribute("WE_KitGen")) or 0
+	local needsRebuild = gen < KIT_GEN
+
+	-- Footprint too small (legacy pad-sized cubes) → rebuild
+	if not needsRebuild then
+		for _, child in ipairs(plinth:GetChildren()) do
+			if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
+				local s = child.Size
+				if math.max(s.X, s.Y, s.Z) < 12 then
+					needsRebuild = true
+				end
+				break
+			end
+		end
+	end
+
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
 	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" then
@@ -371,9 +424,17 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 		end
 		needsDress = not hasDress
 	end
-	-- Expect at least Body + one more for all kits
-	if n < 2 or needsDress then
+	if n < 2 or needsDress or needsRebuild then
+		-- Clear stale catalog dress so ScaleTo re-applies
+		plinth:SetAttribute("WE_CatalogAssetId", nil)
+		plinth:SetAttribute("WE_BuildingDressGen", nil)
+		for _, ch in ipairs(plinth:GetChildren()) do
+			if ch:IsA("Model") and (ch.Name == "WE_CatalogBuilding" or ch.Name == "WE_AirfieldComposite") then
+				ch:Destroy()
+			end
+		end
 		StructureKitBuilder.BuildKitOnPlinth(plinth, structureId)
+		plinth:SetAttribute("WE_KitGen", KIT_GEN)
 		n = countKitRoles(plinth)
 	end
 	return n
@@ -666,8 +727,8 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 	local pal = paletteFor("Watchtowers")
 	local lv = math.clamp(level, 1, 5)
 	local half = math.max(pad.Size.X, pad.Size.Z) * 0.5 - 3
-	local towerW = 4.5 + lv * 0.3
-	local towerH = 10 + lv * 2.5
+	local towerW = 7 + lv * 0.5
+	local towerH = 22 + lv * 2.5 -- ≥18–28 studs (STRUCTURE_SCALE_WIRE)
 	local y = pad.Position.Y + pad.Size.Y * 0.5 + towerH * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 	local corners = {
@@ -699,6 +760,29 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 			CanCollide = false,
 			Parent = folder,
 		})
+		makePart({
+			Name = "TowerPlatform" .. i,
+			Size = Vector3.new(towerW + 3, 0.5, towerW + 3),
+			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 - 1.2, pos.Z),
+			Color = pal.Roof,
+			Material = Enum.Material.Metal,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		-- Rail ring
+		for _, off in ipairs({ Vector3.new(towerW * 0.7, 0, 0), Vector3.new(-towerW * 0.7, 0, 0), Vector3.new(0, 0, towerW * 0.7), Vector3.new(0, 0, -towerW * 0.7) }) do
+			makePart({
+				Name = "TowerRail" .. i,
+				Size = Vector3.new(if math.abs(off.X) > 0 then 0.35 else towerW + 2.5, 1.6, if math.abs(off.Z) > 0 then 0.35 else towerW + 2.5),
+				Position = Vector3.new(pos.X + off.X, pos.Y + towerH * 0.5 - 0.2, pos.Z + off.Z),
+				Color = pal.Accent,
+				Material = Enum.Material.Metal,
+				Transparency = 0,
+				CanCollide = false,
+				Parent = folder,
+			})
+		end
 		makePart({
 			Name = "TowerBeacon" .. i,
 			Size = Vector3.new(0.6, 2.2 + lv * 0.4, 0.6),

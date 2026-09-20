@@ -44,7 +44,7 @@ local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 48
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(220, 108) -- room for cost + +$/tick + BUY hint
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(260, 120) -- room for cost + +$/tick + BUY hint
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
 
@@ -330,7 +330,7 @@ end
 
 local function setBillboardNearOnly(bb: BillboardGui)
 	bb.Size = PRICE_BILLBOARD_SIZE
-	bb.StudsOffset = Vector3.new(0, 5.2, 0)
+	bb.StudsOffset = Vector3.new(0, 9.5, 0)
 	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
 	-- AlwaysOnTop only helps when already near (short MaxDistance); avoid map-wide stack
 	bb.AlwaysOnTop = false -- P0: never stack over ATM
@@ -344,9 +344,65 @@ local function hidePriceBillboard(part: BasePart)
 	-- MapSetup non-price Label billboards on other parts are left alone
 end
 
+local function resolveBillboardAdornee(part: BasePart): BasePart
+	local host = part:FindFirstChild("WE_BillboardHost")
+	if host and host:IsA("BasePart") then
+		return host
+	end
+	-- Prefer tall invisible host above kit roof so geometry never occludes BUY name
+	local roofY = 0
+	for _, ch in ipairs(part:GetChildren()) do
+		if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") == "Roof" then
+			roofY = math.max(roofY, (ch.Position.Y - part.Position.Y) + ch.Size.Y * 0.5)
+		end
+	end
+	host = Instance.new("Part")
+	host.Name = "WE_BillboardHost"
+	host.Size = Vector3.new(0.4, 0.4, 0.4)
+	host.Transparency = 1
+	host.Anchored = true
+	host.CanCollide = false
+	host.CanQuery = false
+	host.CanTouch = false
+	host.Massless = true
+	host.CFrame = part.CFrame * CFrame.new(0, math.max(roofY + 2, 8), 0)
+	host.Parent = part
+	return host
+end
+
+local function ensurePadNameSurface(part: BasePart, displayName: string)
+	local existing = part:FindFirstChild("WE_PadNameGui")
+	if existing and existing:IsA("SurfaceGui") then
+		local lab = existing:FindFirstChild("Name", true)
+		if lab and lab:IsA("TextLabel") then
+			lab.Text = displayName
+		end
+		return
+	end
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "WE_PadNameGui"
+	sg.Face = Enum.NormalId.Top
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 50
+	sg.Parent = part
+	local lab = Instance.new("TextLabel")
+	lab.Name = "Name"
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.BackgroundTransparency = 0.35
+	lab.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
+	lab.Text = displayName
+	lab.TextColor3 = Color3.fromRGB(255, 230, 140)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextScaled = true
+	lab.Parent = sg
+end
+
 local function ensurePriceBillboard(part: BasePart): BillboardGui
-	local existing = part:FindFirstChild(BILLBOARD_NAME)
+	local adornee = resolveBillboardAdornee(part)
+	local existing = adornee:FindFirstChild(BILLBOARD_NAME) or part:FindFirstChild(BILLBOARD_NAME)
 	if existing and existing:IsA("BillboardGui") then
+		existing.Adornee = adornee
+		existing.Parent = adornee
 		setBillboardNearOnly(existing)
 		existing.Enabled = true
 		return existing
@@ -362,7 +418,8 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	local bb = Instance.new("BillboardGui")
 	bb.Name = BILLBOARD_NAME
 	setBillboardNearOnly(bb)
-	bb.Parent = part
+	bb.Adornee = adornee
+	bb.Parent = adornee
 
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
@@ -811,7 +868,45 @@ local function startOverlapLoop()
 	end
 	overlapConn = RunService.Heartbeat:Connect(function()
 
-	-- P0: hide structure price boards when near MoneyCollector ATM
+	
+	-- P0 STRUCTURE_SCALE: hide WORKER/TRAINING tags near ATM or upgrade pads (stop name stack)
+	do
+		local cam = workspace.CurrentCamera
+		local camPos = if cam then cam.CFrame.Position else nil
+		local nearPad = false
+		if camPos then
+			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+				if inst:IsA("BasePart") and (inst.Position - camPos).Magnitude <= 20 then
+					nearPad = true
+					break
+				end
+			end
+		end
+		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
+			if inst:IsA("BasePart") and camPos and (inst.Position - camPos).Magnitude <= 14 then
+				nearPad = true
+				break
+			end
+		end
+		for _, bb in ipairs(workspace:GetDescendants()) do
+			if bb:IsA("BillboardGui") and (bb.Name == "WE_WorkerTag" or bb.Name == "WE_TrainingEarnBillboard") then
+				if nearPad then
+					bb.Enabled = false
+				elseif bb.MaxDistance > 0 then
+					bb.Enabled = true
+				end
+			end
+		end
+		-- Season banner: tuck to top safe when near pads
+		local pg = player:FindFirstChildOfClass("PlayerGui")
+		local hud = pg and pg:FindFirstChild("WE_HUD")
+		local season = hud and hud:FindFirstChild("SeasonLabel", true)
+		if season and season:IsA("GuiObject") then
+			season.Visible = not nearPad and season.Text ~= ""
+		end
+	end
+
+-- P0: hide structure price boards when near MoneyCollector ATM
 	do
 		local nearAtm = false
 		local char = player.Character

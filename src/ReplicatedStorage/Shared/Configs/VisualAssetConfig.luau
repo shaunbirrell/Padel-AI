@@ -26,7 +26,7 @@ local VisualAssetConfig = {
 	MaxLoadAttempts = 48,
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
-	BuildingVisualScale = 1.0,
+	BuildingVisualScale = 1.0, -- ScaleTo uses TargetFootprint; do NOT squash to plinth
 	PropVisualScale = 1.0,
 
 	Vehicles = {
@@ -155,6 +155,7 @@ local VisualAssetConfig = {
 		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		OilRigGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		FortGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		GateGuard = { ModelAssetId = 16134469614, Note = "Gate patrol — Rigged Soldier NVG/balaclava" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- No plastic CharacterAlt — primary insert failure falls back to Part kit / olive drab.
@@ -163,14 +164,14 @@ local VisualAssetConfig = {
 	Buildings = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
 		CommandCenter = { ModelAssetId = 138331074285379, Note = "Military Base free Get Model (HQ)" } :: AssetRef,
-		Barracks = { ModelAssetId = 9424782, Note = "Barracks free Get Model (2009)" } :: AssetRef,
-		VehicleDepot = { ModelAssetId = 12120702, Note = "Classic Warehouse free (depot)" } :: AssetRef,
+		Barracks = { ModelAssetId = 18798977801, Note = "Barracks free Get Model (2009)" } :: AssetRef,
+		VehicleDepot = { ModelAssetId = 6015472062, Note = "Classic Warehouse free (depot)" } :: AssetRef,
 		WeaponsFacility = { ModelAssetId = 4120970784, Note = "Weapons facility" } :: AssetRef,
-		Warehouse = { ModelAssetId = 66269964, Note = "Warehouse" } :: AssetRef,
-		Hangar = { ModelAssetId = 6015472062, Note = "Hangar overlay" } :: AssetRef,
+		Warehouse = { ModelAssetId = 6015472062, Note = "Warehouse" } :: AssetRef,
+		Hangar = { ModelAssetId = 6015472062, Note = "Hangar primary; REJECT 46981739 tiny" } :: AssetRef,
 		ResearchLab = { ModelAssetId = 17725725, Note = "Research lab" } :: AssetRef,
 		SpecialForcesFacility = { ModelAssetId = 18798977801, Note = "Special forces facility" } :: AssetRef,
-		Watchtowers = { ModelAssetId = 3330023556, Note = "Watchtower" } :: AssetRef,
+		Watchtowers = { ModelAssetId = 108525417345747, Note = "Watchtower" } :: AssetRef,
 		Radar = { ModelAssetId = 9559610195, Note = "Radar" } :: AssetRef,
 		MissileDefense = { ModelAssetId = 108525417345747, Note = "Missile defense (fallback 16659447)" } :: AssetRef,
 		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls L1–2; L3+ uses 9703136850 via StructureVisualConfig" } :: AssetRef,
@@ -178,11 +179,22 @@ local VisualAssetConfig = {
 		PowerStation = { ModelAssetId = 14000967030, Note = "Power station" } :: AssetRef,
 		Bunker = { ModelAssetId = 16659447, Note = "Destructible Movil Bunker free" } :: AssetRef,
 		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
-		Airfield = { ModelAssetId = 12370174722, Note = "Airport Model free Get Model" } :: AssetRef,
+		Airfield = { ModelAssetId = 0, Note = "COMPOSITE runway+Hangar 6015472062; REJECT 12370174722" } :: AssetRef,
 		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- JeepFallback 59524622 DELETED (Design P0 REJECT). Part kit physics if mesh fails.
+
+	-- Gate defense (Design Bot GATE_DEFENSE_WIRE 2026-09-20)
+	GateDefense = {
+		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier — gate patrol" } :: AssetRef,
+		AutoGun = { ModelAssetId = 4923345827, Note = "Machine Gun Nest tripod HMG — ScaleTo 4–6 stud" } :: AssetRef,
+		-- L2 elevated ONLY (not door flanks):
+		AutoGunElevated = { ModelAssetId = 71964514000054, Note = "L2 tower+gun — strip scripts; NOT door flanks" } :: AssetRef,
+		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
+		SandbagNest = { ModelAssetId = 8980890767, Note = "Circular sandbag ring under HMG" } :: AssetRef,
+		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
+	},
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	MoneyCollector = { ModelAssetId = 75368157644109, Note = "ATM hero prefer; fallback 175462478" } :: AssetRef,

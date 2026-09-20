@@ -219,8 +219,8 @@ function HUDController.Init()
 	local season = Instance.new("TextLabel")
 	season.Name = "SeasonLabel"
 	season.AnchorPoint = Vector2.new(0.5, 0)
-	season.Position = UDim2.new(0.5, 0, 0, 12)
-	season.Size = UDim2.fromOffset(280, 22)
+	season.Position = UDim2.new(0.5, 0, 0, 4) -- top safe; hide near pads via WorldPrompt
+	season.Size = UDim2.fromOffset(240, 18)
 	season.BackgroundColor3 = Constants.Colors.Panel
 	season.BackgroundTransparency = 0.15
 	season.BorderSizePixel = 0

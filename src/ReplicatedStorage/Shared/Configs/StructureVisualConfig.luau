@@ -1,8 +1,8 @@
 --!strict
 --[[
-	Part-kit silhouettes + palettes for base structures (placeholders, no MeshIds).
-	Visual kits v2: richer MapSetup kits + clearer plinths / less ghost washout.
-	StudioSetup mirrors these colors; BaseService.UpdateVisuals scales detail by level.
+	Part-kit silhouettes + palettes for base structures.
+	STRUCTURE_SCALE_WIRE v21: TargetFootprint drives VisualAssetService ScaleTo.
+	Part kits remain fallback; catalog mesh NEVER sized to host plinth.
 ]]
 
 export type StructurePalette = {
@@ -10,20 +10,18 @@ export type StructurePalette = {
 	Body: Color3,
 	Accent: Color3,
 	Roof: Color3,
-	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "dock" | "wall" | "power" | "warehouse" | "special",
-	-- Future Creator Store MeshPart (0 / nil = Part kit)
+	Kit: "hq" | "barracks" | "depot" | "lab" | "tower" | "pad" | "dock" | "wall" | "power" | "warehouse" | "special" | "airfield" | "helipad" | "hangar" | "armory" | "radar",
+	TargetFootprint: Vector3?,
 	MeshAssetId: number?,
-	-- Optional L3+ mesh override (DefensiveWalls heavy)
 	MeshAssetIdL3: number?,
 }
 
 local StructureVisualConfig = {
-	-- Level 0 = faint placeholder (BaseService may raise further); ≥1 solid built kit
 	GhostTransparency = 0.72,
 	SolidTransparency = 0,
-	-- When true and palette.MeshAssetId ~= 0, BaseService attaches catalog mesh at PreferMeshMinLevel+.
 	PreferMeshWhenAssetIdSet = true,
-	PreferMeshMinLevel = 1, -- Design P0: enforce mesh dress for ALL structure MeshAssetIds at L1+
+	PreferMeshMinLevel = 1,
+	BuildingDressGen = 21,
 
 	Palettes = {
 		CommandCenter = {
@@ -32,6 +30,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(230, 190, 60),
 			Roof = Color3.fromRGB(40, 55, 45),
 			Kit = "hq",
+			TargetFootprint = Vector3.new(36, 16, 28),
 			MeshAssetId = 138331074285379,
 		},
 		Barracks = {
@@ -40,7 +39,8 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(90, 160, 80),
 			Roof = Color3.fromRGB(50, 55, 42),
 			Kit = "barracks",
-			MeshAssetId = 9424782,
+			TargetFootprint = Vector3.new(28, 12, 16),
+			MeshAssetId = 18798977801,
 		},
 		VehicleDepot = {
 			Plinth = Color3.fromRGB(40, 48, 55),
@@ -48,14 +48,16 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(90, 160, 220),
 			Roof = Color3.fromRGB(45, 55, 65),
 			Kit = "depot",
-			MeshAssetId = 12120702,
+			TargetFootprint = Vector3.new(32, 14, 24),
+			MeshAssetId = 6015472062,
 		},
 		WeaponsFacility = {
 			Plinth = Color3.fromRGB(48, 40, 38),
 			Body = Color3.fromRGB(88, 58, 50),
 			Accent = Color3.fromRGB(200, 90, 70),
 			Roof = Color3.fromRGB(55, 42, 40),
-			Kit = "lab",
+			Kit = "armory",
+			TargetFootprint = Vector3.new(28, 18, 18),
 			MeshAssetId = 4120970784,
 		},
 		Helipad = {
@@ -63,7 +65,8 @@ local StructureVisualConfig = {
 			Body = Color3.fromRGB(60, 70, 65),
 			Accent = Color3.fromRGB(220, 200, 80),
 			Roof = Color3.fromRGB(50, 55, 52),
-			Kit = "pad",
+			Kit = "helipad",
+			TargetFootprint = Vector3.new(22, 3, 22),
 			MeshAssetId = 14313845338,
 		},
 		Dock = {
@@ -72,6 +75,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(70, 180, 220),
 			Roof = Color3.fromRGB(40, 58, 70),
 			Kit = "dock",
+			TargetFootprint = Vector3.new(40, 8, 16),
 			MeshAssetId = 17701461178,
 		},
 		Airfield = {
@@ -79,8 +83,9 @@ local StructureVisualConfig = {
 			Body = Color3.fromRGB(70, 72, 68),
 			Accent = Color3.fromRGB(180, 190, 100),
 			Roof = Color3.fromRGB(55, 58, 52),
-			Kit = "pad",
-			MeshAssetId = 12370174722, -- hangar overlay 6015472062 via VisualAssetConfig.Buildings.Hangar
+			Kit = "airfield",
+			TargetFootprint = Vector3.new(70, 1, 10),
+			MeshAssetId = 0, -- COMPOSITE runway + Hangar 6015472062; REJECT 12370174722
 		},
 		DefensiveWalls = {
 			Plinth = Color3.fromRGB(48, 48, 45),
@@ -88,8 +93,9 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(120, 130, 110),
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
-			MeshAssetId = 208197704, -- L1–2 grey military wall
-			MeshAssetIdL3 = 9703136850, -- L3+ heavy duty military wall
+			TargetFootprint = Vector3.new(24, 8, 3),
+			MeshAssetId = 208197704,
+			MeshAssetIdL3 = 9703136850,
 		},
 		Watchtowers = {
 			Plinth = Color3.fromRGB(44, 46, 40),
@@ -97,14 +103,16 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(200, 160, 70),
 			Roof = Color3.fromRGB(50, 52, 44),
 			Kit = "tower",
-			MeshAssetId = 3330023556,
+			TargetFootprint = Vector3.new(10, 32, 10),
+			MeshAssetId = 108525417345747,
 		},
 		Radar = {
 			Plinth = Color3.fromRGB(40, 42, 55),
 			Body = Color3.fromRGB(55, 60, 90),
 			Accent = Color3.fromRGB(100, 200, 255),
 			Roof = Color3.fromRGB(45, 48, 70),
-			Kit = "tower",
+			Kit = "radar",
+			TargetFootprint = Vector3.new(14, 18, 14),
 			MeshAssetId = 9559610195,
 		},
 		ResearchLab = {
@@ -113,6 +121,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(80, 180, 220),
 			Roof = Color3.fromRGB(42, 55, 72),
 			Kit = "lab",
+			TargetFootprint = Vector3.new(22, 12, 16),
 			MeshAssetId = 17725725,
 		},
 		MissileDefense = {
@@ -121,6 +130,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(220, 100, 60),
 			Roof = Color3.fromRGB(55, 45, 42),
 			Kit = "tower",
+			TargetFootprint = Vector3.new(12, 22, 12),
 			MeshAssetId = 108525417345747,
 		},
 		PowerStation = {
@@ -129,6 +139,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(255, 210, 70),
 			Roof = Color3.fromRGB(60, 55, 40),
 			Kit = "power",
+			TargetFootprint = Vector3.new(28, 16, 20),
 			MeshAssetId = 14000967030,
 		},
 		Warehouse = {
@@ -137,7 +148,8 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(180, 140, 80),
 			Roof = Color3.fromRGB(55, 50, 42),
 			Kit = "warehouse",
-			MeshAssetId = 66269964,
+			TargetFootprint = Vector3.new(36, 14, 22),
+			MeshAssetId = 6015472062,
 		},
 		SpecialForcesFacility = {
 			Plinth = Color3.fromRGB(35, 38, 42),
@@ -145,6 +157,7 @@ local StructureVisualConfig = {
 			Accent = Color3.fromRGB(160, 80, 200),
 			Roof = Color3.fromRGB(30, 35, 40),
 			Kit = "special",
+			TargetFootprint = Vector3.new(26, 14, 16),
 			MeshAssetId = 18798977801,
 		},
 	} :: { [string]: StructurePalette },

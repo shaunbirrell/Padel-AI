@@ -177,7 +177,7 @@ local function spawnDrop()
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "Label"
 	bb.Size = UDim2.fromOffset(200, 40)
-	bb.StudsOffset = Vector3.new(0, 5.5, 0)
+	bb.StudsOffset = Vector3.new(0, 8, 0)
 	bb.AlwaysOnTop = true
 	bb.MaxDistance = 500
 	bb.Parent = crate
