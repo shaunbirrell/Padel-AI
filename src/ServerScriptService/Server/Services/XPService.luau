@@ -19,6 +19,7 @@ local MonetizationService: any = nil
 local BattlePassService: any = nil
 local SeasonService: any = nil
 local NotificationService: any = nil
+local PrestigeService: any = nil
 
 local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessage: string?, leveledUp: boolean?)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.XPUpdate) :: RemoteEvent
@@ -44,6 +45,7 @@ function XPService.Init(deps: { [string]: any })
 	BattlePassService = deps.BattlePassService
 	SeasonService = deps.SeasonService
 	NotificationService = deps.NotificationService
+	PrestigeService = deps.PrestigeService
 end
 
 function XPService.Push(player: Player)
@@ -112,6 +114,12 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		if MonetizationService and MonetizationService.TrySoftOfferVIP then
 			pcall(function()
 				MonetizationService.TrySoftOfferVIP(player, "level")
+			end)
+		end
+		-- v38: soft rebirth CTA when near MinLevelToPrestige
+		if PrestigeService and PrestigeService.MaybeNearPrestigeToast then
+			pcall(function()
+				PrestigeService.MaybeNearPrestigeToast(player)
 			end)
 		end
 		-- Push per level-up so HUD goal / unlock toast refresh immediately

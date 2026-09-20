@@ -257,6 +257,45 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 	return true, nil
 end
 
+
+-- v38: soft rebirth CTA when Level is within NearPrestigeLevels of Min
+function PrestigeService.MaybeNearPrestigeToast(player: Player)
+	if not NotificationService then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local minLv = PrestigeConfig.MinLevelToPrestige or 40
+	local near = PrestigeConfig.NearPrestigeLevels or 2
+	local level = tonumber(profile.Level) or 1
+	local prestige = tonumber(profile.Prestige) or 0
+	local maxP = PrestigeConfig.MaxPrestige or 50
+	if prestige >= maxP then
+		return
+	end
+	if level >= minLv then
+		return -- CanPrestige join toast covers READY
+	end
+	if level < (minLv - near) then
+		return
+	end
+	local remain = minLv - level
+	local msg = string.format(
+		"Rebirth almost ready (Lv %d/%d) — %d level%s left · Keep all Robux Items · press K",
+		level,
+		minLv,
+		remain,
+		if remain == 1 then "" else "s"
+	)
+	if NotificationService.NotifyThrottled then
+		NotificationService.NotifyThrottled(player, msg, "Info", 5.5, 90, "prestige_near")
+	else
+		NotificationService.Notify(player, msg, "Info", 5.5)
+	end
+end
+
 -- Alias for MT-inspired "rebirth" wording
 function PrestigeService.DoRebirth(player: Player): (boolean, string?)
 	return PrestigeService.DoPrestige(player)
@@ -315,6 +354,8 @@ function PrestigeService.Init(deps: { [string]: any })
 			else
 				NotificationService.Notify(player, msg, "Success", 6)
 			end
+		else
+			PrestigeService.MaybeNearPrestigeToast(player)
 		end
 	end)
 end

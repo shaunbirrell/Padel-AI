@@ -33,6 +33,23 @@ local BattlePassService: any = nil
 local processed: { [string]: boolean } = {}
 -- userId -> passKey -> owned
 local gamePassCache: { [number]: { [string]: boolean } } = {}
+-- v38: session soft-offer spam gate (one toast max per SoftOfferSessionCooldownSeconds)
+local lastSoftOfferAt: { [number]: number } = {}
+
+function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
+	if not player then
+		return false
+	end
+	local cd = tonumber((MonetizationConfig :: any).SoftOfferSessionCooldownSeconds) or 60
+	local now = os.clock()
+	local last = lastSoftOfferAt[player.UserId] or 0
+	if now - last < cd then
+		return false
+	end
+	lastSoftOfferAt[player.UserId] = now
+	return true
+end
+
 
 local function findDevProduct(productId: number): (string?, any?)
 	if typeof(productId) ~= "number" or productId == 0 then
@@ -363,6 +380,9 @@ function MonetizationService.Init(deps: { [string]: any })
 							if MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle") then
 								return
 							end
+							if not MonetizationService.ClaimSoftOfferSlot(player) then
+								return
+							end
 							live.StarterBundleOffered = true
 							DataService.MarkDirty(player)
 							if RemoteSetup then
@@ -393,6 +413,7 @@ function MonetizationService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		gamePassCache[player.UserId] = nil
+		lastSoftOfferAt[player.UserId] = nil
 	end)
 
 	-- Re-apply SpeedBoost WalkSpeed on respawn + v36 soft offer on first walk-speed moment
@@ -524,6 +545,9 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 	if level < minLevel and maxStruct < minStruct then
 		return
 	end
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
+		return
+	end
 	profile.VIPOffered = true
 	DataService.MarkDirty(player)
 	local delaySec = tonumber(offerCfg.DelaySeconds) or 2.0
@@ -580,6 +604,9 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 	end
 	local offerCfg = (MonetizationConfig :: any).SpeedBoostOffer
 	if not offerCfg then
+		return
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return
 	end
 	profile.SpeedBoostOffered = true
@@ -640,6 +667,9 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 	local amt = tonumber(grantedOrPending) or 0
 	-- Death path bypasses amount threshold; collect path requires high amount
 	if reason ~= "death" and amt < minNeed then
+		return
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return
 	end
 	profile.CashMegaOffered = true

@@ -24,6 +24,8 @@ local player = Players.LocalPlayer
 local _gui: ScreenGui? = nil
 local levelLabel: TextLabel? = nil
 local goalLabel: TextLabel? = nil
+local nearPrestigeBanner: Frame? = nil
+local levelUpBanner: Frame? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
@@ -419,6 +421,101 @@ end
 	Wire large color-coded action tiles after other controllers Init.
 	actions: { { Name, Icon, Label, Color, OnClick }, ... }
 ]]
+
+--[[ v37/v38: brief high-contrast level-up celebration banner ]]
+function HUDController.ShowLevelUpCelebration(level: number, unlockMessage: string?)
+	local host = _gui
+	if not host then
+		return
+	end
+	if levelUpBanner then
+		levelUpBanner:Destroy()
+		levelUpBanner = nil
+	end
+	local frame = Instance.new("Frame")
+	frame.Name = "LevelUpCelebration"
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.Position = UDim2.new(0.5, 0, 0, if UserInputService.TouchEnabled then 88 else 72)
+	frame.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 360 else 320, 56)
+	frame.BackgroundColor3 = Color3.fromRGB(20, 45, 28)
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 90
+	frame.Parent = host
+	UIUtil.Corner(frame, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Constants.Colors.GoldBright or Color3.fromRGB(255, 210, 80)
+	stroke.Thickness = 2
+	stroke.Parent = frame
+	local lab = Instance.new("TextLabel")
+	lab.BackgroundTransparency = 1
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextSize = if UserInputService.TouchEnabled then 18 else 16
+	lab.TextColor3 = Color3.fromRGB(255, 245, 200)
+	lab.TextStrokeTransparency = 0.4
+	lab.ZIndex = 91
+	local msg = string.format("★ LEVEL %d!", math.floor(level))
+	if typeof(unlockMessage) == "string" and unlockMessage ~= "" then
+		msg = msg .. "  " .. unlockMessage
+	end
+	lab.Text = msg
+	lab.Parent = frame
+	levelUpBanner = frame
+	task.delay(3.2, function()
+		if levelUpBanner == frame then
+			frame:Destroy()
+			levelUpBanner = nil
+		end
+	end)
+end
+
+--[[ v38: soft rebirth CTA when Level >= Min-2 ]]
+function HUDController.ShowNearPrestigeBanner(level: number, minLevel: number)
+	local host = _gui
+	if not host then
+		return
+	end
+	if nearPrestigeBanner then
+		nearPrestigeBanner:Destroy()
+		nearPrestigeBanner = nil
+	end
+	local remain = math.max(0, minLevel - level)
+	local frame = Instance.new("Frame")
+	frame.Name = "NearPrestigeBanner"
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.Position = UDim2.new(0.5, 0, 0, if UserInputService.TouchEnabled then 150 else 132)
+	frame.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 380 else 340, 48)
+	frame.BackgroundColor3 = Color3.fromRGB(40, 32, 18)
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 85
+	frame.Parent = host
+	UIUtil.Corner(frame, 8)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Constants.Colors.Gold or Color3.fromRGB(220, 180, 60)
+	stroke.Thickness = 1.5
+	stroke.Parent = frame
+	local lab = Instance.new("TextLabel")
+	lab.BackgroundTransparency = 1
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextSize = if UserInputService.TouchEnabled then 14 else 13
+	lab.TextColor3 = Color3.fromRGB(255, 230, 160)
+	lab.TextStrokeTransparency = 0.45
+	lab.ZIndex = 86
+	lab.Text = string.format(
+		"Rebirth dock · %d to go · Keep all Robux Items · press K",
+		remain
+	)
+	lab.Parent = frame
+	nearPrestigeBanner = frame
+	task.delay(6.5, function()
+		if nearPrestigeBanner == frame then
+			frame:Destroy()
+			nearPrestigeBanner = nil
+		end
+	end)
+end
+
 function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
 	if not actionDock then
 		warn("[HUDController] BindActionBar: actionDock nil — Init order broken?")
@@ -516,6 +613,7 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 	end
 	-- Rebirth progress toward PrestigeConfig.MinLevelToPrestige (default 40)
 	local minPrestige = (PrestigeConfig and PrestigeConfig.MinLevelToPrestige) or 40
+	local nearBand = (PrestigeConfig and PrestigeConfig.NearPrestigeLevels) or 2
 	if goalLabel then
 		local fee = tonumber(PrestigeConfig and PrestigeConfig.CashFee) or 0
 		local feeBit = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
@@ -533,6 +631,17 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 				goalLabel.Text = rebirthLine .. "  ·  " .. hudGoal
 			else
 				goalLabel.Text = "GOAL: " .. rebirthLine .. " — press K / REBIRTH dock"
+			end
+			-- v38: soft banner when nearly at MinLevelToPrestige
+			if level >= (minPrestige - nearBand) then
+				local host = _gui
+				local lastShown = if host then tonumber(host:GetAttribute("WE_NearPrestigeShownAt")) or 0 else 0
+				if os.clock() - lastShown > 75 then
+					if host then
+						host:SetAttribute("WE_NearPrestigeShownAt", os.clock())
+					end
+					HUDController.ShowNearPrestigeBanner(level, minPrestige)
+				end
 			end
 		end
 	end

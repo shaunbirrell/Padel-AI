@@ -36,6 +36,10 @@ local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
 local lastCapturePct = -1
 local listCollapsed = isTouch -- start collapsed on phone
+-- v38: contested dual-color pulse cache
+local contestedPulseActive = false
+local contestedColA: Color3? = nil
+local contestedColB: Color3? = nil
 
 local function setProgressVisible(visible: boolean)
 	if progressFrame then
@@ -340,6 +344,11 @@ function TerritoryController.Init()
 
 	local radarAccum = 0
 	RunService.Heartbeat:Connect(function(dt)
+		-- v38: continuous contested dual-color pulse on capture bar
+		if contestedPulseActive and progressFill and contestedColA and contestedColB then
+			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+			progressFill.BackgroundColor3 = contestedColA:Lerp(contestedColB, pulse)
+		end
 		if not radarActive then
 			return
 		end
@@ -402,8 +411,22 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 			progressFill.Size = UDim2.fromScale(math.clamp(localCap.Progress, 0, 1), 1)
 			local t = math.clamp(localCap.Progress, 0, 1)
 			if contested then
-				progressFill.BackgroundColor3 = Color3.fromRGB(230, 120, 50)
+				contestedPulseActive = true
+				local ca = (localCap :: any).ContesterColorA
+				local cb = (localCap :: any).ContesterColorB
+				if typeof(ca) == "table" and typeof(cb) == "table" and #ca >= 3 and #cb >= 3 then
+					contestedColA = Color3.new(ca[1], ca[2], ca[3])
+					contestedColB = Color3.new(cb[1], cb[2], cb[3])
+				else
+					contestedColA = Color3.fromRGB(230, 120, 50)
+					contestedColB = Color3.fromRGB(80, 140, 255)
+				end
+				local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+				progressFill.BackgroundColor3 = (contestedColA :: Color3):Lerp(contestedColB :: Color3, pulse)
 			else
+				contestedPulseActive = false
+				contestedColA = nil
+				contestedColB = nil
 				progressFill.BackgroundColor3 = Color3.fromRGB(200 - 40 * t, 180 + 50 * t, 60)
 			end
 		end
@@ -425,6 +448,9 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 	else
 		setProgressVisible(false)
 		lastCapturePct = -1
+		contestedPulseActive = false
+		contestedColA = nil
+		contestedColB = nil
 	end
 
 	local owned = 0

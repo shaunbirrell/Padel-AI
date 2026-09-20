@@ -1442,7 +1442,12 @@ function ShopController.Init()
 			if success then
 				lab.Text = string.format("ATM RAID +$%d%s · cooldown 1m", stolen, if victim ~= "" then (" from " .. victim) else "")
 			elseif raided then
-				lab.Text = string.format("ATM RAIDED −$%d (10%%)", stolen)
+				local thief = tostring((payload :: any).ThiefName or "")
+				if thief ~= "" then
+					lab.Text = string.format("ATM RAIDED −10%% by %s (−$%d)", thief, stolen)
+				else
+					lab.Text = string.format("ATM RAIDED −10%% (−$%d)", stolen)
+				end
 			else
 				lab.Text = string.format("ATM raid cooldown — %ds", cd)
 			end

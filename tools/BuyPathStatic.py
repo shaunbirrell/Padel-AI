@@ -463,7 +463,7 @@ must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "Tutorial_D
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'Key = "VIP"', "MapSetup VIP premium pad")
 must_contain("src/ServerScriptService/Server/Services/SupplyDropService.luau", "AlwaysOnTop = false", "SupplyDrop AlwaysOnTop false")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "SupplyDrop", "WorldPrompt hides SupplyDrop near pads")
-must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "secured — +%d%% Income", "Capture income toast clarity")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "SECURED", "Capture SECURED celebration toast")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "Press WASD to drive", "Jeep WASD sit tip")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "WE_LocalOwned", "Premium pad OWNED visual")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "UserOwnsGamePassAsync", "OWNED via PlayerOwnsGamePass check")
@@ -508,7 +508,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "37
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface", "Pad name SurfaceGui helper")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface(part, display)", "Pad name applied on billboard refresh")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "AlwaysOnTop = true", "BUY name billboard AlwaysOnTop near")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "StructureKit KIT_GEN 25")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "StructureKit KIT_GEN 26")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "airfield"', "Airfield kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "warehouse"', "Warehouse kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Vector3.new(10, 28, 10)", "Watchtower body tall silhouette")
@@ -536,7 +536,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 
 
 # --- v34 legitimacy pack: HQ/Barracks/Armory kits, soldier variety, garage tips, DoubleCash soft, capture chip, rebirth copy, mobile Orders ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "v34→v37 KIT_GEN 25")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "v38 KIT_GEN 26")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "armory"', "WeaponsFacility armory kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "3-story weapons inventory", "Armory densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "compound-scale HQ", "HQ densify comment")
@@ -568,7 +568,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 
 
 # --- v35 legitimacy / late-game presence: SF densify, Helipad/Dock, landmarks, gate guns, VIP soft, oil bob, death CashMega ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "v37 KIT_GEN 25 (was v35 24)")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "v38 KIT_GEN 26 (was v37 25)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SpecialForcesFacility special kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Special Forces compound", "SF densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: ~28 stud marked pad", "Helipad densify")
@@ -634,7 +634,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v36")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect Id no-regress v36")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "v35 landmarks no-regress")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "KIT_GEN no-regress v37")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "KIT_GEN no-regress v38")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v36")
 
 
@@ -675,6 +675,38 @@ must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "Tu
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SF kit no-regress v37")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isTracked", "LightTank tracked no-regress v37")
 
+
+
+# --- v38 combat feel + prestige/monetization polish ---
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "DEF HIT", "Gate defense owner hit toast")
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "BREACHED", "Gate BREACHED toast config")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "BREACHED", "Gate BREACHED billboard")
+must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "ATM RAIDED −10%% by %s", "ATM raid victim toast with thief")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "ThiefName", "ATM raid ThiefName payload")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "ContesterA", "Capture contested ContesterA")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "colA:Lerp(colB", "Capture contested dual nation pulse")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau", "contestedPulseActive", "Client contested pulse")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "MaybeNearPrestigeToast", "Prestige near CTA")
+must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "NearPrestigeLevels", "NearPrestigeLevels config")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "ShowNearPrestigeBanner", "HUD near prestige banner")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "Keep all Robux Items", "Near prestige Keep Robux copy")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "SoftOfferSessionCooldownSeconds", "Soft offer session cooldown")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "ClaimSoftOfferSlot", "Soft offer ClaimSoftOfferSlot")
+must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "flashOrderBillboard", "Squad order billboard")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "FOLLOWING", "Orders FOLLOWING label")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kitPart(plinth, "Crate"', "Warehouse crate Part props")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'structureId == "Warehouse"', "Warehouse EnsureKit densify")
+# No-regress v38
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v38")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LV+HingeMotor", "Jeep LV+HingeMotor no-regress v38")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isTracked", "LightTank tracked no-regress v38")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v38")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v38")
+must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v38")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v38")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713839505", "StarterBundle Id no invent v38")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713838952", "CashMega Id no invent v38")
+must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v38")
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

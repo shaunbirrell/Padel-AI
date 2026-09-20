@@ -17,6 +17,8 @@ local PrestigeConfig = {
 	-- P0 competitive: earlier first rebirth feel (was 100). Reversible — bump back if economy too fast.
 	-- See ASSUMPTIONS #108. AdminPlaytestCash 50M unchanged.
 	MinLevelToPrestige = 40,
+	-- v38: soft rebirth CTA when Level >= Min - NearPrestigeLevels
+	NearPrestigeLevels = 2,
 	MaxPrestige = 50,
 	-- +10% cash earnings per prestige (stacking). Keep in sync with EconomyConfig.PrestigeCashMultiplierPerLevel.
 	CashBonusPerPrestige = 0.10,

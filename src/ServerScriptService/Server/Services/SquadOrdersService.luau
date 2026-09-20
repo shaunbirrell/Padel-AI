@@ -478,6 +478,66 @@ function SquadOrdersService.SyncArmy(player: Player)
 	pushState(player)
 end
 
+
+local function flashOrderBillboard(player: Player, st: SquadState, order: OrderId)
+	local labels = (OrdersConfig :: any).OrderLabels or {
+		Follow = "FOLLOWING",
+		Attack = "ATTACKING",
+		Hold = "HOLDING",
+		Retreat = "RETREATING",
+	}
+	local textLabel = labels[order] or string.upper(order)
+	local root = characterRoot(player)
+	local best: SquadUnit? = nil
+	local bestDist = math.huge
+	local origin = if root then root.Position else nil
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root and u.Root.Parent then
+			local d = if origin then (u.Root.Position - origin).Magnitude else u.Slot
+			if d < bestDist then
+				bestDist = d
+				best = u
+			end
+		end
+	end
+	if not best then
+		return
+	end
+	local bb = best.Root:FindFirstChild("SquadLabel")
+	if not (bb and bb:IsA("BillboardGui")) then
+		return
+	end
+	local lbl = bb:FindFirstChildOfClass("TextLabel")
+	if not lbl then
+		return
+	end
+	local prev = lbl.Text
+	local prevColor = lbl.TextColor3
+	lbl.Text = textLabel
+	lbl.TextColor3 = Color3.fromRGB(255, 230, 120)
+	bb.StudsOffset = Vector3.new(0, 4.2, 0)
+	bb.AlwaysOnTop = true
+	local hold = tonumber((OrdersConfig :: any).OrderBillboardSeconds) or 2.8
+	local token = tostring(os.clock())
+	best.Root:SetAttribute("WE_OrderFlash", token)
+	task.delay(hold, function()
+		if not best or not best.Root or not best.Root.Parent then
+			return
+		end
+		if best.Root:GetAttribute("WE_OrderFlash") ~= token then
+			return
+		end
+		if lbl and lbl.Parent then
+			lbl.Text = prev
+			lbl.TextColor3 = prevColor
+		end
+		if bb and bb.Parent then
+			bb.StudsOffset = Vector3.new(0, 3.4, 0)
+			bb.AlwaysOnTop = false
+		end
+	end)
+end
+
 function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, string?)
 	if not OrdersConfig.Enabled then
 		return false, "Disabled"
@@ -521,6 +581,7 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	end
 
 	pushState(player)
+	flashOrderBillboard(player, st, order :: OrderId)
 	if NotificationService then
 		local labels = {
 			Follow = "Squad: FOLLOW",

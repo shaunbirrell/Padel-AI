@@ -319,9 +319,10 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 	setRaidCooldown(thief.UserId, victim.UserId, cooldownSec)
 	if NotificationService then
 		local thiefToast = cfg.ToastThief or "ATM RAID +$%d (10%%) from %s — 1m cooldown"
-		local victimToast = cfg.ToastVictim or "ATM RAIDED −$%d (10%% stolen)"
+		local victimToast = cfg.ToastVictim or "ATM RAIDED −10%% by %s (−$%d)"
 		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 5)
-		NotificationService.Notify(victim, string.format(victimToast, transferred), "Warn", 5)
+		-- v38: clear red defender alert with thief display name
+		NotificationService.Notify(victim, string.format(victimToast, thief.DisplayName, transferred), "Warn", 5.5)
 	end
 	pushAtmRaidState(thief, {
 		CooldownRemaining = cooldownSec,
@@ -336,6 +337,7 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 		Success = false,
 		Stolen = transferred,
 		Raided = true,
+		ThiefName = thief.DisplayName,
 	})
 	return true, transferred
 end
@@ -365,6 +367,7 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 				and gp.Id ~= 0
 				and profile.AutoCollectOffered ~= true
 				and not hasAutoCollect(player)
+				and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
 			) then
 				profile.AutoCollectOffered = true
 				DataService.MarkDirty(player)
@@ -413,6 +416,7 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 				and acReady
 				and profile.DoubleCashOffered ~= true
 				and not hasDoubleCash(player)
+				and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
 			) then
 				profile.DoubleCashOffered = true
 				DataService.MarkDirty(player)

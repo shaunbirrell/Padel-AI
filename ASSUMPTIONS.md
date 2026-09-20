@@ -464,3 +464,15 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 159. **CashMega soft offer** — One-shot toast for DevProduct Id **3713838952** after pending collect ≥ $15k OR death path if not offered (`CashMegaOffered`); existing Id only.
 160. **Garage empty state** — Clear "buy Vehicle Depot / unlock Military Jeep" guidance when nothing owned.
 161. BuyPathStatic PASS; no-regress jeep LV+HingeMotor / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v36 kits/landmarks.
+
+## 2026-09-20 — Combat feel + prestige/monetization polish (live v38 — Open Cloud Published versionNumber=38)
+
+162. **Gate defense feedback** — When GateGuards/AutoGuns hit an enemy player, owner gets throttled `DEF HIT · Name (−N HP)` toast. Gate HP=0 billboard/toast clear **BREACHED** (repair/rebuild path unchanged).
+163. **ATM raid defender alert** — Victim toast `ATM RAIDED −10% by {thief} (−$N)` + `AtmRaidStateUpdate.ThiefName` for red HUD chip.
+164. **Capture zone combat** — Contested stores ContesterA/B; world flag + capture bar pulse between both nation colors; secure toast `★ SECURED …`.
+165. **Prestige near CTA** — `NearPrestigeLevels=2`; soft toast + HUD banner “Keep all Robux Items · press K” when Level ≥ Min−2.
+166. **Soft offer anti-spam** — `SoftOfferSessionCooldownSeconds=60` + `ClaimSoftOfferSlot` shared across StarterBundle/VIP/SpeedBoost/CashMega/AutoCollect/DoubleCash (Offered flags still one-shot).
+167. **Soldier Orders feel** — On order, nearest squad unit billboard flashes FOLLOWING / HOLDING / ATTACKING / RETREATING (~2.8s).
+168. **Warehouse crates** — KIT_GEN 26 densifies Warehouse interior with Crate Part props + dress hosts (L1+ via EnsureKit).
+169. BuyPathStatic PASS; no-regress jeep LV+HingeMotor / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v37 kits/soft offers/parked presence.
+

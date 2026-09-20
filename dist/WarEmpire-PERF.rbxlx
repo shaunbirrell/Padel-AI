@@ -925,7 +925,7 @@ local EconomyConfig = {
 		MaxDistanceStuds = 14, -- server distance check to collector part
 		MinStealCash = 1,
 		ToastThief = "ATM RAID +$%d (10%%) from %s — 1m cooldown",
-		ToastVictim = "ATM RAIDED −$%d (10%% stolen)",
+		ToastVictim = "ATM RAIDED −10%% by %s (−$%d)",
 		ToastCooldown = "ATM raid cooldown — %ds left",
 	},
 }
@@ -1101,8 +1101,11 @@ local GateDefenseConfig = {
 	GateRegenPerSecond = 1.5, -- slow regen while intact / after rebuild
 	GateRebuildSeconds = 50,
 	GateRepairCashCost = 750, -- owner Collect repair while breached
-	GateBreachToast = "Gate breached!",
+	GateBreachToast = "⚠ BREACHED — gate open! Repair or wait rebuild",
 	GateRepairedToast = "Gate repaired",
+	-- v38: owner feedback when guards/AutoGuns land a hit on an enemy player
+	GateHitOwnerToast = "DEF HIT · %s (−%d HP)",
+	GateHitOwnerToastCooldown = 1.2,
 	GateBarrierThickness = 1.6,
 	GateBarrierHeight = 9,
 	GateClearStuds = 10, -- match StructureKitBuilder GATE_CLEAR
@@ -1771,6 +1774,8 @@ local MonetizationConfig = {
 		DelaySeconds = 1.8,
 		MinPendingCollect = 15000, -- pending/granted threshold
 	},
+	-- v38: one soft-offer toast max per session minute (shared across Starter/VIP/Speed/CashMega/AC/2x)
+	SoftOfferSessionCooldownSeconds = 60,
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
@@ -1938,6 +1943,14 @@ local OrdersConfig = {
 
 	VisualKind = "Infantry",
 	DisplayName = "Squad",
+	-- v38: brief order state over nearest soldier
+	OrderBillboardSeconds = 2.8,
+	OrderLabels = {
+		Follow = "FOLLOWING",
+		Attack = "ATTACKING",
+		Hold = "HOLDING",
+		Retreat = "RETREATING",
+	},
 
 	Walkie = {
 		PositionTouch = UDim2.new(0, 12, 1, -268), -- clear of dock / ATM chips
@@ -2001,6 +2014,8 @@ local PrestigeConfig = {
 	-- P0 competitive: earlier first rebirth feel (was 100). Reversible — bump back if economy too fast.
 	-- See ASSUMPTIONS #108. AdminPlaytestCash 50M unchanged.
 	MinLevelToPrestige = 40,
+	-- v38: soft rebirth CTA when Level >= Min - NearPrestigeLevels
+	NearPrestigeLevels = 2,
 	MaxPrestige = 50,
 	-- +10% cash earnings per prestige (stacking). Keep in sync with EconomyConfig.PrestigeCashMultiplierPerLevel.
 	CashBonusPerPrestige = 0.10,
@@ -10480,7 +10495,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 25 -- v37: parked heli/boat presence + airfield runway markings
+local KIT_GEN = 26 -- v38: densify Warehouse interior crate props
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -10997,6 +11012,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(1.2, 6, 1.2), Vector3.new(8, 5, 6), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
 	elseif kit == "warehouse" then
 		-- v33: large logistics bay volume + loading dock + crates (walkable footprint feel)
+		-- v38: densify interior crate stacks at L1+ (Part props — CanCollide false)
 		kitPart(plinth, "Body", Vector3.new(38, 16, 24), Vector3.new(0, 8.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(40, 1.2, 26), Vector3.new(0, 17, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Accent", Vector3.new(38, 0.3, 24), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -11005,6 +11021,45 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(3.2, 2.4, 2.4), Vector3.new(-14, 1.8, -14), Color3.fromRGB(120, 95, 55), Enum.Material.Wood, nil)
 		kitPart(plinth, "Detail", Vector3.new(3.0, 2.2, 2.2), Vector3.new(-10.5, 1.7, -14), Color3.fromRGB(110, 90, 50), Enum.Material.Wood, nil)
 		kitPart(plinth, "Window", Vector3.new(3.5, 1.8, 0.25), Vector3.new(10, 10, -12.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+		-- Interior crate rows (olive / wood / gunmetal stacks)
+		do
+			local crateColors = {
+				Color3.fromRGB(120, 95, 55),
+				Color3.fromRGB(95, 100, 70),
+				Color3.fromRGB(70, 75, 80),
+				Color3.fromRGB(110, 85, 45),
+			}
+			local positions = {
+				Vector3.new(-12, 1.6, 6), Vector3.new(-8.5, 1.6, 6), Vector3.new(-5, 1.6, 6),
+				Vector3.new(-12, 1.6, 9.5), Vector3.new(-8.5, 1.6, 9.5),
+				Vector3.new(10, 1.5, 5), Vector3.new(13.5, 1.5, 5), Vector3.new(10, 1.5, 8.5),
+				Vector3.new(-12, 3.6, 6), Vector3.new(-8.5, 3.6, 6), -- stacked
+				Vector3.new(6, 1.4, -6), Vector3.new(9.5, 1.4, -6), Vector3.new(13, 1.4, -6),
+				Vector3.new(-14, 1.5, 0), Vector3.new(-14, 1.5, 3.5),
+			}
+			for i, pos in ipairs(positions) do
+				local col = crateColors[((i - 1) % #crateColors) + 1]
+				local sz = if i % 3 == 0 then Vector3.new(2.8, 2.0, 2.4) elseif i % 2 == 0 then Vector3.new(2.4, 1.8, 2.2) else Vector3.new(3.0, 2.2, 2.6)
+				kitPart(plinth, "Crate", sz, pos, col, Enum.Material.Wood, nil)
+			end
+			-- Dress hosts for catalog crate overlays
+			local hosts = {
+				{ "WE_DressHost_Crate", Vector3.new(1.6, 1.2, 1.6), Vector3.new(-6, 1.5, 8), "MilitaryCrate" },
+				{ "WE_DressHost_MilCrate", Vector3.new(1.5, 1.1, 1.3), Vector3.new(8, 1.45, 7), "MilitaryCrate" },
+				{ "WE_DressHost_Ammo", Vector3.new(1.4, 1.0, 1.0), Vector3.new(4, 1.3, -4), "AmmoBox" },
+				{ "WE_DressHost_Fuel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(-10, 1.3, -4), "FuelCans" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(14, 4.0, 8), "Lantern" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "special" then
 		-- v35: Special Forces compound (~28×16×18) — dark ops hall + range + watch post
 		kitPart(plinth, "Body", Vector3.new(28, 14, 16), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
@@ -11078,7 +11133,7 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" then
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "Warehouse" then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
@@ -18222,6 +18277,10 @@ local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): b
 	return false
 end
 
+
+-- v38: throttle owner DEF HIT toasts per plot
+local lastGateHitToastAt: { [number]: number } = {}
+
 local function rateLimitVictim(userId: number): boolean
 	local t = nowClock()
 	local last = victimHitAt[userId] or 0
@@ -18269,7 +18328,7 @@ local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, s
 	return bestPlr, bestHum, bestRoot, bestDist
 end
 
-local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceModel: Model)
+local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceModel: Model, plotId: number?)
 	if amount <= 0 or hum.Health <= 0 then
 		return
 	end
@@ -18282,6 +18341,27 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 		return
 	end
 	hum:TakeDamage(amount)
+	-- v38: brief damage toast for gate owner when guards/AutoGuns hit an enemy
+	local ownerUid = tonumber(sourceModel:GetAttribute("OwnerUserId"))
+	if ownerUid and NotificationService then
+		local owner = Players:GetPlayerByUserId(ownerUid)
+		if owner and owner ~= player then
+			local pid = plotId or 0
+			local cd = GateDefenseConfig.GateHitOwnerToastCooldown or 1.2
+			local now = os.clock()
+			local last = lastGateHitToastAt[pid] or 0
+			if now - last >= cd then
+				lastGateHitToastAt[pid] = now
+				local tpl = GateDefenseConfig.GateHitOwnerToast or "DEF HIT · %s (−%d HP)"
+				NotificationService.Notify(
+					owner,
+					string.format(tpl, player.DisplayName, math.floor(amount)),
+					"Success",
+					1.6
+				)
+			end
+		end
+	end
 end
 
 
@@ -18320,7 +18400,7 @@ local function updateGateBillboard(parts: { BasePart }, health: number, maxHealt
 			local lbl = bb:FindFirstChild("Label")
 			if lbl and lbl:IsA("TextLabel") then
 				if breached then
-					lbl.Text = "GATE OPEN — repair / rebuild"
+					lbl.Text = "⚠ BREACHED — repair / rebuild"
 					lbl.TextColor3 = Color3.fromRGB(255, 160, 80)
 				else
 					lbl.Text = string.format("GATE %d/%d", math.floor(health), math.floor(maxHealth))
@@ -18642,7 +18722,7 @@ local function thinkGuard(def: PlotDefense, g: GuardUnit, stats: any, tnow: numb
 			if tnow - g.LastFireAt >= interval and dist <= range then
 				if hasLos(g.Root.Position, troot.Position, ignore) then
 					g.LastFireAt = tnow
-					dealDamage(plr, hum, stats.GuardDamage or 14, g.Model)
+					dealDamage(plr, hum, stats.GuardDamage or 14, g.Model, def.PlotId)
 				end
 			end
 		end
@@ -18711,7 +18791,7 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 		local ignore = { t.Model, def.Folder, plr.Character :: Instance }
 		if hasLos(fromPos, troot.Position, ignore) then
 			t.LastFireAt = tnow
-			dealDamage(plr, hum, stats.TurretDamage or 22, t.Model)
+			dealDamage(plr, hum, stats.TurretDamage or 22, t.Model, def.PlotId)
 		end
 	end
 end
@@ -19743,6 +19823,23 @@ local BattlePassService: any = nil
 local processed: { [string]: boolean } = {}
 -- userId -> passKey -> owned
 local gamePassCache: { [number]: { [string]: boolean } } = {}
+-- v38: session soft-offer spam gate (one toast max per SoftOfferSessionCooldownSeconds)
+local lastSoftOfferAt: { [number]: number } = {}
+
+function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
+	if not player then
+		return false
+	end
+	local cd = tonumber((MonetizationConfig :: any).SoftOfferSessionCooldownSeconds) or 60
+	local now = os.clock()
+	local last = lastSoftOfferAt[player.UserId] or 0
+	if now - last < cd then
+		return false
+	end
+	lastSoftOfferAt[player.UserId] = now
+	return true
+end
+
 
 local function findDevProduct(productId: number): (string?, any?)
 	if typeof(productId) ~= "number" or productId == 0 then
@@ -20073,6 +20170,9 @@ function MonetizationService.Init(deps: { [string]: any })
 							if MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle") then
 								return
 							end
+							if not MonetizationService.ClaimSoftOfferSlot(player) then
+								return
+							end
 							live.StarterBundleOffered = true
 							DataService.MarkDirty(player)
 							if RemoteSetup then
@@ -20103,6 +20203,7 @@ function MonetizationService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		gamePassCache[player.UserId] = nil
+		lastSoftOfferAt[player.UserId] = nil
 	end)
 
 	-- Re-apply SpeedBoost WalkSpeed on respawn + v36 soft offer on first walk-speed moment
@@ -20234,6 +20335,9 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 	if level < minLevel and maxStruct < minStruct then
 		return
 	end
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
+		return
+	end
 	profile.VIPOffered = true
 	DataService.MarkDirty(player)
 	local delaySec = tonumber(offerCfg.DelaySeconds) or 2.0
@@ -20290,6 +20394,9 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 	end
 	local offerCfg = (MonetizationConfig :: any).SpeedBoostOffer
 	if not offerCfg then
+		return
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return
 	end
 	profile.SpeedBoostOffered = true
@@ -20350,6 +20457,9 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 	local amt = tonumber(grantedOrPending) or 0
 	-- Death path bypasses amount threshold; collect path requires high amount
 	if reason ~= "death" and amt < minNeed then
+		return
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(player) then
 		return
 	end
 	profile.CashMegaOffered = true
@@ -20711,9 +20821,10 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 	setRaidCooldown(thief.UserId, victim.UserId, cooldownSec)
 	if NotificationService then
 		local thiefToast = cfg.ToastThief or "ATM RAID +$%d (10%%) from %s — 1m cooldown"
-		local victimToast = cfg.ToastVictim or "ATM RAIDED −$%d (10%% stolen)"
+		local victimToast = cfg.ToastVictim or "ATM RAIDED −10%% by %s (−$%d)"
 		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 5)
-		NotificationService.Notify(victim, string.format(victimToast, transferred), "Warn", 5)
+		-- v38: clear red defender alert with thief display name
+		NotificationService.Notify(victim, string.format(victimToast, thief.DisplayName, transferred), "Warn", 5.5)
 	end
 	pushAtmRaidState(thief, {
 		CooldownRemaining = cooldownSec,
@@ -20728,6 +20839,7 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 		Success = false,
 		Stolen = transferred,
 		Raided = true,
+		ThiefName = thief.DisplayName,
 	})
 	return true, transferred
 end
@@ -20757,6 +20869,7 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 				and gp.Id ~= 0
 				and profile.AutoCollectOffered ~= true
 				and not hasAutoCollect(player)
+				and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
 			) then
 				profile.AutoCollectOffered = true
 				DataService.MarkDirty(player)
@@ -20805,6 +20918,7 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 				and acReady
 				and profile.DoubleCashOffered ~= true
 				and not hasDoubleCash(player)
+				and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
 			) then
 				profile.DoubleCashOffered = true
 				DataService.MarkDirty(player)
@@ -22225,6 +22339,45 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 	return true, nil
 end
 
+
+-- v38: soft rebirth CTA when Level is within NearPrestigeLevels of Min
+function PrestigeService.MaybeNearPrestigeToast(player: Player)
+	if not NotificationService then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local minLv = PrestigeConfig.MinLevelToPrestige or 40
+	local near = PrestigeConfig.NearPrestigeLevels or 2
+	local level = tonumber(profile.Level) or 1
+	local prestige = tonumber(profile.Prestige) or 0
+	local maxP = PrestigeConfig.MaxPrestige or 50
+	if prestige >= maxP then
+		return
+	end
+	if level >= minLv then
+		return -- CanPrestige join toast covers READY
+	end
+	if level < (minLv - near) then
+		return
+	end
+	local remain = minLv - level
+	local msg = string.format(
+		"Rebirth almost ready (Lv %d/%d) — %d level%s left · Keep all Robux Items · press K",
+		level,
+		minLv,
+		remain,
+		if remain == 1 then "" else "s"
+	)
+	if NotificationService.NotifyThrottled then
+		NotificationService.NotifyThrottled(player, msg, "Info", 5.5, 90, "prestige_near")
+	else
+		NotificationService.Notify(player, msg, "Info", 5.5)
+	end
+end
+
 -- Alias for MT-inspired "rebirth" wording
 function PrestigeService.DoRebirth(player: Player): (boolean, string?)
 	return PrestigeService.DoPrestige(player)
@@ -22283,6 +22436,8 @@ function PrestigeService.Init(deps: { [string]: any })
 			else
 				NotificationService.Notify(player, msg, "Success", 6)
 			end
+		else
+			PrestigeService.MaybeNearPrestigeToast(player)
 		end
 	end)
 end
@@ -23644,6 +23799,66 @@ function SquadOrdersService.SyncArmy(player: Player)
 	pushState(player)
 end
 
+
+local function flashOrderBillboard(player: Player, st: SquadState, order: OrderId)
+	local labels = (OrdersConfig :: any).OrderLabels or {
+		Follow = "FOLLOWING",
+		Attack = "ATTACKING",
+		Hold = "HOLDING",
+		Retreat = "RETREATING",
+	}
+	local textLabel = labels[order] or string.upper(order)
+	local root = characterRoot(player)
+	local best: SquadUnit? = nil
+	local bestDist = math.huge
+	local origin = if root then root.Position else nil
+	for _, u in ipairs(st.Units) do
+		if u.Alive and u.Root and u.Root.Parent then
+			local d = if origin then (u.Root.Position - origin).Magnitude else u.Slot
+			if d < bestDist then
+				bestDist = d
+				best = u
+			end
+		end
+	end
+	if not best then
+		return
+	end
+	local bb = best.Root:FindFirstChild("SquadLabel")
+	if not (bb and bb:IsA("BillboardGui")) then
+		return
+	end
+	local lbl = bb:FindFirstChildOfClass("TextLabel")
+	if not lbl then
+		return
+	end
+	local prev = lbl.Text
+	local prevColor = lbl.TextColor3
+	lbl.Text = textLabel
+	lbl.TextColor3 = Color3.fromRGB(255, 230, 120)
+	bb.StudsOffset = Vector3.new(0, 4.2, 0)
+	bb.AlwaysOnTop = true
+	local hold = tonumber((OrdersConfig :: any).OrderBillboardSeconds) or 2.8
+	local token = tostring(os.clock())
+	best.Root:SetAttribute("WE_OrderFlash", token)
+	task.delay(hold, function()
+		if not best or not best.Root or not best.Root.Parent then
+			return
+		end
+		if best.Root:GetAttribute("WE_OrderFlash") ~= token then
+			return
+		end
+		if lbl and lbl.Parent then
+			lbl.Text = prev
+			lbl.TextColor3 = prevColor
+		end
+		if bb and bb.Parent then
+			bb.StudsOffset = Vector3.new(0, 3.4, 0)
+			bb.AlwaysOnTop = false
+		end
+	end)
+end
+
 function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, string?)
 	if not OrdersConfig.Enabled then
 		return false, "Disabled"
@@ -23687,6 +23902,7 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	end
 
 	pushState(player)
+	flashOrderBillboard(player, st, order :: OrderId)
 	if NotificationService then
 		local labels = {
 			Follow = "Squad: FOLLOW",
@@ -24149,6 +24365,9 @@ type TerritoryRuntime = {
 	CapturingUserId: number, -- 0 if none
 	ProtectedUntil: number, -- unix
 	Contested: boolean,
+	-- v38: up to two contester UserIds for dual nation-color pulse
+	ContesterA: number?,
+	ContesterB: number?,
 	Marker: BasePart?,
 }
 
@@ -24268,7 +24487,20 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	local flagLift = 12 -- studs above ground for flag center
 
 	if contested then
-		color = Color3.fromRGB(255, 140, 35)
+		-- v38: pulse between both nation colors when two contesting players known
+		local ca = rt.ContesterA or 0
+		local cb = rt.ContesterB or 0
+		local colA = if ca > 0 and NationColorService and NationColorService.GetColor then NationColorService.GetColor(ca) else nil
+		local colB = if cb > 0 and NationColorService and NationColorService.GetColor then NationColorService.GetColor(cb) else nil
+		if colA and colB then
+			local pulse = (math.sin(os.clock() * 4) + 1) * 0.5
+			color = colA:Lerp(colB, pulse)
+		elseif colA then
+			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+			color = colA:Lerp(Color3.fromRGB(255, 140, 35), pulse)
+		else
+			color = Color3.fromRGB(255, 140, 35)
+		end
 		markerTransparency = 0.28
 		flagTransparency = 0.05
 		ringTransparency = 0.35
@@ -24549,6 +24781,21 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			localCapture.Capturing = true
 			localCapture.Contested = rt.Contested == true
 			localCapture.Protected = rt.ProtectedUntil > nowUnix()
+			-- v38: dual nation colors for contested pulse HUD
+			if rt.Contested then
+				local function packColor(uid: number?): { number }?
+					if not uid or uid <= 0 then
+						return nil
+					end
+					local c = if NationColorService and NationColorService.GetColor then NationColorService.GetColor(uid) else nil
+					if not c then
+						return nil
+					end
+					return { c.R, c.G, c.B }
+				end
+				;(localCapture :: any).ContesterColorA = packColor(rt.ContesterA)
+				;(localCapture :: any).ContesterColorB = packColor(rt.ContesterB)
+			end
 				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
 				and rt.OwnerUserId ~= player.UserId
 		end
@@ -24744,6 +24991,8 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	rt.Progress = 0
 	rt.CapturingUserId = 0
 	rt.Contested = false
+	rt.ContesterA = nil
+	rt.ContesterB = nil
 	rt.ProtectedUntil = nowUnix() + TerritoryConfig.ProtectionPeriodSeconds
 
 	profile.Stats.TerritoriesCaptured += 1
@@ -24782,7 +25031,7 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 			if wasSteal and typeof(stealTpl) == "string" then
 				msg = string.format(stealTpl, zoneName, incomePct)
 			else
-				msg = string.format("%s secured — +%d%% Income (yours)", zoneName, incomePct)
+				msg = string.format("★ SECURED %s — +%d%% Income (yours)", zoneName, incomePct)
 			end
 			NotificationService.Notify(player, msg, "Reward", 5)
 		else
@@ -24792,8 +25041,9 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 			end
 			NotificationService.Notify(
 				player,
-				string.format("Captured %s! %s", zoneName, bonusHint),
-				"Reward"
+				string.format("★ SECURED %s! %s", zoneName, bonusHint),
+				"Reward",
+				5
 			)
 		end
 	end
@@ -24833,6 +25083,8 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 
 	if #inside == 0 then
 		rt.Contested = false
+		rt.ContesterA = nil
+		rt.ContesterB = nil
 		if rt.Progress > 0 then
 			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * dt)
 		end
@@ -24855,6 +25107,16 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 
 	if uniqueCount >= 2 then
 		rt.Contested = true
+		-- v38: remember first two contesting players for dual-color pulse
+		do
+			local ids: { number } = {}
+			for uid in pairs(unique) do
+				table.insert(ids, uid)
+			end
+			table.sort(ids)
+			rt.ContesterA = ids[1]
+			rt.ContesterB = ids[2]
+		end
 		rt.OwnerType = if rt.OwnerUserId == TerritoryConfig.NeutralOwnerId then ot.Contested else rt.OwnerType
 		-- Contested: ContestedProgressMult scales capture; 0 freezes and applies ContestedDecayMult decay
 		local mult = TerritoryConfig.ContestedProgressMult
@@ -24870,6 +25132,8 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 	end
 
 	rt.Contested = false
+	rt.ContesterA = nil
+	rt.ContesterB = nil
 	local capturer = inside[1]
 	-- If capturer already owns it, just refresh presence (no progress needed)
 	if rt.OwnerType == ot.Player and rt.OwnerUserId == capturer.UserId then
@@ -28521,6 +28785,7 @@ local MonetizationService: any = nil
 local BattlePassService: any = nil
 local SeasonService: any = nil
 local NotificationService: any = nil
+local PrestigeService: any = nil
 
 local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessage: string?, leveledUp: boolean?)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.XPUpdate) :: RemoteEvent
@@ -28546,6 +28811,7 @@ function XPService.Init(deps: { [string]: any })
 	BattlePassService = deps.BattlePassService
 	SeasonService = deps.SeasonService
 	NotificationService = deps.NotificationService
+	PrestigeService = deps.PrestigeService
 end
 
 function XPService.Push(player: Player)
@@ -28614,6 +28880,12 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 		if MonetizationService and MonetizationService.TrySoftOfferVIP then
 			pcall(function()
 				MonetizationService.TrySoftOfferVIP(player, "level")
+			end)
+		end
+		-- v38: soft rebirth CTA when near MinLevelToPrestige
+		if PrestigeService and PrestigeService.MaybeNearPrestigeToast then
+			pcall(function()
+				PrestigeService.MaybeNearPrestigeToast(player)
 			end)
 		end
 		-- Push per level-up so HUD goal / unlock toast refresh immediately
@@ -30543,6 +30815,8 @@ local player = Players.LocalPlayer
 local _gui: ScreenGui? = nil
 local levelLabel: TextLabel? = nil
 local goalLabel: TextLabel? = nil
+local nearPrestigeBanner: Frame? = nil
+local levelUpBanner: Frame? = nil
 local xpBarFill: Frame? = nil
 local xpText: TextLabel? = nil
 local cashLabel: TextLabel? = nil
@@ -30938,6 +31212,101 @@ end
 	Wire large color-coded action tiles after other controllers Init.
 	actions: { { Name, Icon, Label, Color, OnClick }, ... }
 ]]
+
+--[[ v37/v38: brief high-contrast level-up celebration banner ]]
+function HUDController.ShowLevelUpCelebration(level: number, unlockMessage: string?)
+	local host = _gui
+	if not host then
+		return
+	end
+	if levelUpBanner then
+		levelUpBanner:Destroy()
+		levelUpBanner = nil
+	end
+	local frame = Instance.new("Frame")
+	frame.Name = "LevelUpCelebration"
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.Position = UDim2.new(0.5, 0, 0, if UserInputService.TouchEnabled then 88 else 72)
+	frame.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 360 else 320, 56)
+	frame.BackgroundColor3 = Color3.fromRGB(20, 45, 28)
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 90
+	frame.Parent = host
+	UIUtil.Corner(frame, 10)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Constants.Colors.GoldBright or Color3.fromRGB(255, 210, 80)
+	stroke.Thickness = 2
+	stroke.Parent = frame
+	local lab = Instance.new("TextLabel")
+	lab.BackgroundTransparency = 1
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextSize = if UserInputService.TouchEnabled then 18 else 16
+	lab.TextColor3 = Color3.fromRGB(255, 245, 200)
+	lab.TextStrokeTransparency = 0.4
+	lab.ZIndex = 91
+	local msg = string.format("★ LEVEL %d!", math.floor(level))
+	if typeof(unlockMessage) == "string" and unlockMessage ~= "" then
+		msg = msg .. "  " .. unlockMessage
+	end
+	lab.Text = msg
+	lab.Parent = frame
+	levelUpBanner = frame
+	task.delay(3.2, function()
+		if levelUpBanner == frame then
+			frame:Destroy()
+			levelUpBanner = nil
+		end
+	end)
+end
+
+--[[ v38: soft rebirth CTA when Level >= Min-2 ]]
+function HUDController.ShowNearPrestigeBanner(level: number, minLevel: number)
+	local host = _gui
+	if not host then
+		return
+	end
+	if nearPrestigeBanner then
+		nearPrestigeBanner:Destroy()
+		nearPrestigeBanner = nil
+	end
+	local remain = math.max(0, minLevel - level)
+	local frame = Instance.new("Frame")
+	frame.Name = "NearPrestigeBanner"
+	frame.AnchorPoint = Vector2.new(0.5, 0)
+	frame.Position = UDim2.new(0.5, 0, 0, if UserInputService.TouchEnabled then 150 else 132)
+	frame.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 380 else 340, 48)
+	frame.BackgroundColor3 = Color3.fromRGB(40, 32, 18)
+	frame.BorderSizePixel = 0
+	frame.ZIndex = 85
+	frame.Parent = host
+	UIUtil.Corner(frame, 8)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Constants.Colors.Gold or Color3.fromRGB(220, 180, 60)
+	stroke.Thickness = 1.5
+	stroke.Parent = frame
+	local lab = Instance.new("TextLabel")
+	lab.BackgroundTransparency = 1
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextSize = if UserInputService.TouchEnabled then 14 else 13
+	lab.TextColor3 = Color3.fromRGB(255, 230, 160)
+	lab.TextStrokeTransparency = 0.45
+	lab.ZIndex = 86
+	lab.Text = string.format(
+		"Rebirth dock · %d to go · Keep all Robux Items · press K",
+		remain
+	)
+	lab.Parent = frame
+	nearPrestigeBanner = frame
+	task.delay(6.5, function()
+		if nearPrestigeBanner == frame then
+			frame:Destroy()
+			nearPrestigeBanner = nil
+		end
+	end)
+end
+
 function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
 	if not actionDock then
 		warn("[HUDController] BindActionBar: actionDock nil — Init order broken?")
@@ -31035,6 +31404,7 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 	end
 	-- Rebirth progress toward PrestigeConfig.MinLevelToPrestige (default 40)
 	local minPrestige = (PrestigeConfig and PrestigeConfig.MinLevelToPrestige) or 40
+	local nearBand = (PrestigeConfig and PrestigeConfig.NearPrestigeLevels) or 2
 	if goalLabel then
 		local fee = tonumber(PrestigeConfig and PrestigeConfig.CashFee) or 0
 		local feeBit = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
@@ -31052,6 +31422,17 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 				goalLabel.Text = rebirthLine .. "  ·  " .. hudGoal
 			else
 				goalLabel.Text = "GOAL: " .. rebirthLine .. " — press K / REBIRTH dock"
+			end
+			-- v38: soft banner when nearly at MinLevelToPrestige
+			if level >= (minPrestige - nearBand) then
+				local host = _gui
+				local lastShown = if host then tonumber(host:GetAttribute("WE_NearPrestigeShownAt")) or 0 else 0
+				if os.clock() - lastShown > 75 then
+					if host then
+						host:SetAttribute("WE_NearPrestigeShownAt", os.clock())
+					end
+					HUDController.ShowNearPrestigeBanner(level, minPrestige)
+				end
 			end
 		end
 	end
@@ -34424,7 +34805,12 @@ function ShopController.Init()
 			if success then
 				lab.Text = string.format("ATM RAID +$%d%s · cooldown 1m", stolen, if victim ~= "" then (" from " .. victim) else "")
 			elseif raided then
-				lab.Text = string.format("ATM RAIDED −$%d (10%%)", stolen)
+				local thief = tostring((payload :: any).ThiefName or "")
+				if thief ~= "" then
+					lab.Text = string.format("ATM RAIDED −10%% by %s (−$%d)", thief, stolen)
+				else
+					lab.Text = string.format("ATM RAIDED −10%% (−$%d)", stolen)
+				end
 			else
 				lab.Text = string.format("ATM raid cooldown — %ds", cd)
 			end
@@ -34557,6 +34943,10 @@ local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
 local lastCapturePct = -1
 local listCollapsed = isTouch -- start collapsed on phone
+-- v38: contested dual-color pulse cache
+local contestedPulseActive = false
+local contestedColA: Color3? = nil
+local contestedColB: Color3? = nil
 
 local function setProgressVisible(visible: boolean)
 	if progressFrame then
@@ -34861,6 +35251,11 @@ function TerritoryController.Init()
 
 	local radarAccum = 0
 	RunService.Heartbeat:Connect(function(dt)
+		-- v38: continuous contested dual-color pulse on capture bar
+		if contestedPulseActive and progressFill and contestedColA and contestedColB then
+			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+			progressFill.BackgroundColor3 = contestedColA:Lerp(contestedColB, pulse)
+		end
 		if not radarActive then
 			return
 		end
@@ -34923,8 +35318,22 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 			progressFill.Size = UDim2.fromScale(math.clamp(localCap.Progress, 0, 1), 1)
 			local t = math.clamp(localCap.Progress, 0, 1)
 			if contested then
-				progressFill.BackgroundColor3 = Color3.fromRGB(230, 120, 50)
+				contestedPulseActive = true
+				local ca = (localCap :: any).ContesterColorA
+				local cb = (localCap :: any).ContesterColorB
+				if typeof(ca) == "table" and typeof(cb) == "table" and #ca >= 3 and #cb >= 3 then
+					contestedColA = Color3.new(ca[1], ca[2], ca[3])
+					contestedColB = Color3.new(cb[1], cb[2], cb[3])
+				else
+					contestedColA = Color3.fromRGB(230, 120, 50)
+					contestedColB = Color3.fromRGB(80, 140, 255)
+				end
+				local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+				progressFill.BackgroundColor3 = (contestedColA :: Color3):Lerp(contestedColB :: Color3, pulse)
 			else
+				contestedPulseActive = false
+				contestedColA = nil
+				contestedColB = nil
 				progressFill.BackgroundColor3 = Color3.fromRGB(200 - 40 * t, 180 + 50 * t, 60)
 			end
 		end
@@ -34946,6 +35355,9 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 	else
 		setProgressVisible(false)
 		lastCapturePct = -1
+		contestedPulseActive = false
+		contestedColA = nil
+		contestedColB = nil
 	end
 
 	local owned = 0

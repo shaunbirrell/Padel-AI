@@ -38,6 +38,14 @@ local OrdersConfig = {
 
 	VisualKind = "Infantry",
 	DisplayName = "Squad",
+	-- v38: brief order state over nearest soldier
+	OrderBillboardSeconds = 2.8,
+	OrderLabels = {
+		Follow = "FOLLOWING",
+		Attack = "ATTACKING",
+		Hold = "HOLDING",
+		Retreat = "RETREATING",
+	},
 
 	Walkie = {
 		PositionTouch = UDim2.new(0, 12, 1, -268), -- clear of dock / ATM chips

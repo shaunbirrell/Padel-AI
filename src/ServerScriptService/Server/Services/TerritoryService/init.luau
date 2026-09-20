@@ -30,6 +30,9 @@ type TerritoryRuntime = {
 	CapturingUserId: number, -- 0 if none
 	ProtectedUntil: number, -- unix
 	Contested: boolean,
+	-- v38: up to two contester UserIds for dual nation-color pulse
+	ContesterA: number?,
+	ContesterB: number?,
 	Marker: BasePart?,
 }
 
@@ -149,7 +152,20 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	local flagLift = 12 -- studs above ground for flag center
 
 	if contested then
-		color = Color3.fromRGB(255, 140, 35)
+		-- v38: pulse between both nation colors when two contesting players known
+		local ca = rt.ContesterA or 0
+		local cb = rt.ContesterB or 0
+		local colA = if ca > 0 and NationColorService and NationColorService.GetColor then NationColorService.GetColor(ca) else nil
+		local colB = if cb > 0 and NationColorService and NationColorService.GetColor then NationColorService.GetColor(cb) else nil
+		if colA and colB then
+			local pulse = (math.sin(os.clock() * 4) + 1) * 0.5
+			color = colA:Lerp(colB, pulse)
+		elseif colA then
+			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
+			color = colA:Lerp(Color3.fromRGB(255, 140, 35), pulse)
+		else
+			color = Color3.fromRGB(255, 140, 35)
+		end
 		markerTransparency = 0.28
 		flagTransparency = 0.05
 		ringTransparency = 0.35
@@ -430,6 +446,21 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			localCapture.Capturing = true
 			localCapture.Contested = rt.Contested == true
 			localCapture.Protected = rt.ProtectedUntil > nowUnix()
+			-- v38: dual nation colors for contested pulse HUD
+			if rt.Contested then
+				local function packColor(uid: number?): { number }?
+					if not uid or uid <= 0 then
+						return nil
+					end
+					local c = if NationColorService and NationColorService.GetColor then NationColorService.GetColor(uid) else nil
+					if not c then
+						return nil
+					end
+					return { c.R, c.G, c.B }
+				end
+				;(localCapture :: any).ContesterColorA = packColor(rt.ContesterA)
+				;(localCapture :: any).ContesterColorB = packColor(rt.ContesterB)
+			end
 				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
 				and rt.OwnerUserId ~= player.UserId
 		end
@@ -625,6 +656,8 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	rt.Progress = 0
 	rt.CapturingUserId = 0
 	rt.Contested = false
+	rt.ContesterA = nil
+	rt.ContesterB = nil
 	rt.ProtectedUntil = nowUnix() + TerritoryConfig.ProtectionPeriodSeconds
 
 	profile.Stats.TerritoriesCaptured += 1
@@ -663,7 +696,7 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 			if wasSteal and typeof(stealTpl) == "string" then
 				msg = string.format(stealTpl, zoneName, incomePct)
 			else
-				msg = string.format("%s secured — +%d%% Income (yours)", zoneName, incomePct)
+				msg = string.format("★ SECURED %s — +%d%% Income (yours)", zoneName, incomePct)
 			end
 			NotificationService.Notify(player, msg, "Reward", 5)
 		else
@@ -673,8 +706,9 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 			end
 			NotificationService.Notify(
 				player,
-				string.format("Captured %s! %s", zoneName, bonusHint),
-				"Reward"
+				string.format("★ SECURED %s! %s", zoneName, bonusHint),
+				"Reward",
+				5
 			)
 		end
 	end
@@ -714,6 +748,8 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 
 	if #inside == 0 then
 		rt.Contested = false
+		rt.ContesterA = nil
+		rt.ContesterB = nil
 		if rt.Progress > 0 then
 			rt.Progress = math.max(0, rt.Progress - TerritoryConfig.ProgressDecayPerSecond * dt)
 		end
@@ -736,6 +772,16 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 
 	if uniqueCount >= 2 then
 		rt.Contested = true
+		-- v38: remember first two contesting players for dual-color pulse
+		do
+			local ids: { number } = {}
+			for uid in pairs(unique) do
+				table.insert(ids, uid)
+			end
+			table.sort(ids)
+			rt.ContesterA = ids[1]
+			rt.ContesterB = ids[2]
+		end
 		rt.OwnerType = if rt.OwnerUserId == TerritoryConfig.NeutralOwnerId then ot.Contested else rt.OwnerType
 		-- Contested: ContestedProgressMult scales capture; 0 freezes and applies ContestedDecayMult decay
 		local mult = TerritoryConfig.ContestedProgressMult
@@ -751,6 +797,8 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 	end
 
 	rt.Contested = false
+	rt.ContesterA = nil
+	rt.ContesterB = nil
 	local capturer = inside[1]
 	-- If capturer already owns it, just refresh presence (no progress needed)
 	if rt.OwnerType == ot.Player and rt.OwnerUserId == capturer.UserId then

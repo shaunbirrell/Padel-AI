@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 25 -- v37: parked heli/boat presence + airfield runway markings
+local KIT_GEN = 26 -- v38: densify Warehouse interior crate props
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -532,6 +532,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(1.2, 6, 1.2), Vector3.new(8, 5, 6), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
 	elseif kit == "warehouse" then
 		-- v33: large logistics bay volume + loading dock + crates (walkable footprint feel)
+		-- v38: densify interior crate stacks at L1+ (Part props — CanCollide false)
 		kitPart(plinth, "Body", Vector3.new(38, 16, 24), Vector3.new(0, 8.5, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(40, 1.2, 26), Vector3.new(0, 17, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Accent", Vector3.new(38, 0.3, 24), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -540,6 +541,45 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(3.2, 2.4, 2.4), Vector3.new(-14, 1.8, -14), Color3.fromRGB(120, 95, 55), Enum.Material.Wood, nil)
 		kitPart(plinth, "Detail", Vector3.new(3.0, 2.2, 2.2), Vector3.new(-10.5, 1.7, -14), Color3.fromRGB(110, 90, 50), Enum.Material.Wood, nil)
 		kitPart(plinth, "Window", Vector3.new(3.5, 1.8, 0.25), Vector3.new(10, 10, -12.1), Color3.fromRGB(80, 120, 140), Enum.Material.Glass, nil)
+		-- Interior crate rows (olive / wood / gunmetal stacks)
+		do
+			local crateColors = {
+				Color3.fromRGB(120, 95, 55),
+				Color3.fromRGB(95, 100, 70),
+				Color3.fromRGB(70, 75, 80),
+				Color3.fromRGB(110, 85, 45),
+			}
+			local positions = {
+				Vector3.new(-12, 1.6, 6), Vector3.new(-8.5, 1.6, 6), Vector3.new(-5, 1.6, 6),
+				Vector3.new(-12, 1.6, 9.5), Vector3.new(-8.5, 1.6, 9.5),
+				Vector3.new(10, 1.5, 5), Vector3.new(13.5, 1.5, 5), Vector3.new(10, 1.5, 8.5),
+				Vector3.new(-12, 3.6, 6), Vector3.new(-8.5, 3.6, 6), -- stacked
+				Vector3.new(6, 1.4, -6), Vector3.new(9.5, 1.4, -6), Vector3.new(13, 1.4, -6),
+				Vector3.new(-14, 1.5, 0), Vector3.new(-14, 1.5, 3.5),
+			}
+			for i, pos in ipairs(positions) do
+				local col = crateColors[((i - 1) % #crateColors) + 1]
+				local sz = if i % 3 == 0 then Vector3.new(2.8, 2.0, 2.4) elseif i % 2 == 0 then Vector3.new(2.4, 1.8, 2.2) else Vector3.new(3.0, 2.2, 2.6)
+				kitPart(plinth, "Crate", sz, pos, col, Enum.Material.Wood, nil)
+			end
+			-- Dress hosts for catalog crate overlays
+			local hosts = {
+				{ "WE_DressHost_Crate", Vector3.new(1.6, 1.2, 1.6), Vector3.new(-6, 1.5, 8), "MilitaryCrate" },
+				{ "WE_DressHost_MilCrate", Vector3.new(1.5, 1.1, 1.3), Vector3.new(8, 1.45, 7), "MilitaryCrate" },
+				{ "WE_DressHost_Ammo", Vector3.new(1.4, 1.0, 1.0), Vector3.new(4, 1.3, -4), "AmmoBox" },
+				{ "WE_DressHost_Fuel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(-10, 1.3, -4), "FuelCans" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(14, 4.0, 8), "Lantern" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "DressHost", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "special" then
 		-- v35: Special Forces compound (~28×16×18) — dark ops hall + range + watch post
 		kitPart(plinth, "Body", Vector3.new(28, 14, 16), Vector3.new(0, 7.5, 0), pal.Body, Enum.Material.Metal, nil)
@@ -613,7 +653,7 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" then
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "Warehouse" then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then

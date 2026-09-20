@@ -66,7 +66,7 @@ local EconomyConfig = {
 		MaxDistanceStuds = 14, -- server distance check to collector part
 		MinStealCash = 1,
 		ToastThief = "ATM RAID +$%d (10%%) from %s — 1m cooldown",
-		ToastVictim = "ATM RAIDED −$%d (10%% stolen)",
+		ToastVictim = "ATM RAIDED −10%% by %s (−$%d)",
 		ToastCooldown = "ATM raid cooldown — %ds left",
 	},
 }

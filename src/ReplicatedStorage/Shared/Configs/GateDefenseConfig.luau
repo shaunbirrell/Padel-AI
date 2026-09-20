@@ -138,8 +138,11 @@ local GateDefenseConfig = {
 	GateRegenPerSecond = 1.5, -- slow regen while intact / after rebuild
 	GateRebuildSeconds = 50,
 	GateRepairCashCost = 750, -- owner Collect repair while breached
-	GateBreachToast = "Gate breached!",
+	GateBreachToast = "⚠ BREACHED — gate open! Repair or wait rebuild",
 	GateRepairedToast = "Gate repaired",
+	-- v38: owner feedback when guards/AutoGuns land a hit on an enemy player
+	GateHitOwnerToast = "DEF HIT · %s (−%d HP)",
+	GateHitOwnerToastCooldown = 1.2,
 	GateBarrierThickness = 1.6,
 	GateBarrierHeight = 9,
 	GateClearStuds = 10, -- match StructureKitBuilder GATE_CLEAR

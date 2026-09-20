@@ -690,6 +690,10 @@ local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): b
 	return false
 end
 
+
+-- v38: throttle owner DEF HIT toasts per plot
+local lastGateHitToastAt: { [number]: number } = {}
+
 local function rateLimitVictim(userId: number): boolean
 	local t = nowClock()
 	local last = victimHitAt[userId] or 0
@@ -737,7 +741,7 @@ local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, s
 	return bestPlr, bestHum, bestRoot, bestDist
 end
 
-local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceModel: Model)
+local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceModel: Model, plotId: number?)
 	if amount <= 0 or hum.Health <= 0 then
 		return
 	end
@@ -750,6 +754,27 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 		return
 	end
 	hum:TakeDamage(amount)
+	-- v38: brief damage toast for gate owner when guards/AutoGuns hit an enemy
+	local ownerUid = tonumber(sourceModel:GetAttribute("OwnerUserId"))
+	if ownerUid and NotificationService then
+		local owner = Players:GetPlayerByUserId(ownerUid)
+		if owner and owner ~= player then
+			local pid = plotId or 0
+			local cd = GateDefenseConfig.GateHitOwnerToastCooldown or 1.2
+			local now = os.clock()
+			local last = lastGateHitToastAt[pid] or 0
+			if now - last >= cd then
+				lastGateHitToastAt[pid] = now
+				local tpl = GateDefenseConfig.GateHitOwnerToast or "DEF HIT · %s (−%d HP)"
+				NotificationService.Notify(
+					owner,
+					string.format(tpl, player.DisplayName, math.floor(amount)),
+					"Success",
+					1.6
+				)
+			end
+		end
+	end
 end
 
 
@@ -788,7 +813,7 @@ local function updateGateBillboard(parts: { BasePart }, health: number, maxHealt
 			local lbl = bb:FindFirstChild("Label")
 			if lbl and lbl:IsA("TextLabel") then
 				if breached then
-					lbl.Text = "GATE OPEN — repair / rebuild"
+					lbl.Text = "⚠ BREACHED — repair / rebuild"
 					lbl.TextColor3 = Color3.fromRGB(255, 160, 80)
 				else
 					lbl.Text = string.format("GATE %d/%d", math.floor(health), math.floor(maxHealth))
@@ -1110,7 +1135,7 @@ local function thinkGuard(def: PlotDefense, g: GuardUnit, stats: any, tnow: numb
 			if tnow - g.LastFireAt >= interval and dist <= range then
 				if hasLos(g.Root.Position, troot.Position, ignore) then
 					g.LastFireAt = tnow
-					dealDamage(plr, hum, stats.GuardDamage or 14, g.Model)
+					dealDamage(plr, hum, stats.GuardDamage or 14, g.Model, def.PlotId)
 				end
 			end
 		end
@@ -1179,7 +1204,7 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 		local ignore = { t.Model, def.Folder, plr.Character :: Instance }
 		if hasLos(fromPos, troot.Position, ignore) then
 			t.LastFireAt = tnow
-			dealDamage(plr, hum, stats.TurretDamage or 22, t.Model)
+			dealDamage(plr, hum, stats.TurretDamage or 22, t.Model, def.PlotId)
 		end
 	end
 end

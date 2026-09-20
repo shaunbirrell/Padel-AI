@@ -172,6 +172,8 @@ local MonetizationConfig = {
 		DelaySeconds = 1.8,
 		MinPendingCollect = 15000, -- pending/granted threshold
 	},
+	-- v38: one soft-offer toast max per session minute (shared across Starter/VIP/Speed/CashMega/AC/2x)
+	SoftOfferSessionCooldownSeconds = 60,
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
