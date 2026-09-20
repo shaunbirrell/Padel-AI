@@ -339,6 +339,20 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Bas
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "MinLevelToPrestige = 40", "PrestigeConfig MinLevel 40 no-regress")
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "RebirthUnlocks", "PrestigeConfig unlocks no-regress")
 
+# --- v26 Roof barracks + Missions dock + rebirth fee clarity ---
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofBarracksPad", "Ceiling roof barracks pads")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_RoofBarracks", "WE_RoofBarracks attribute")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "TryAttachBuildingVisual(bp, \"Barracks\"", "Roof barracks Barracks mesh dress")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "DockMissions", "HUD dock Missions tile")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "MissionController.Toggle", "Missions dock opens MissionController")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "Label = \"MISSIONS\"", "Missions dock label")
+must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "CashFee", "PrestigeConfig CashFee")
+must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "BuildFeeSummary", "PrestigeConfig BuildFeeSummary")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "FeeSummary", "PrestigeService FeeSummary push")
+must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "BaseCompletionPercent", "PrestigeService BaseCompletionPercent")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "FeeSummary", "Progression confirm FeeSummary")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau", "function MissionController.Toggle", "MissionController.Toggle exists")
+
 # No-regress
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.SyncPlot", "GateDefense SyncPlot no-regress")

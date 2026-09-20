@@ -346,3 +346,7 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 107. **HUD rebirth progress** — Goal line shows `Rebirth Lv/Min (pct%)` until MinLevelToPrestige (40), then READY.
 108. **Capture zone billboards** — MapSetup TERRITORIES use DisplayName + larger MaxDistance for clarity.
 
+## 2026-09-20 — Roof barracks + Missions dock + rebirth fee (live v26)
+109. **Roof barracks slots** — On `WE_BaseCeiling` (walls L3+), SyncBaseCeiling places 1 (L3–4) or 2 (L5) small Barracks-style Part-kit pads on the roof, offset from RoofHelipad; optional Barracks mesh dress (`18798977801`). Gate-front stay open (no seal).
+110. **Missions HUD dock** — Dock tile `MISSIONS` (gunmetal) opens existing `MissionController` (MissionConfig daily list). Replaces mislabeled ORDERS dock entry; squad Orders walkie unchanged (auto-shows with soldiers).
+111. **Rebirth fee clarity** — `PrestigeConfig.CashFee` (default 0) + `BuildFeeSummary`; PrestigeState pushes `FeeSummary` / `BaseCompletionPercent` (owned structures / max). Confirm copy + CanPrestige join toast show fee/reset/keeps. MinLevel 40 + RebirthUnlocks + OutpostIncomeStacks keep unchanged.

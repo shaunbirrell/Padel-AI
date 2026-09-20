@@ -21,6 +21,8 @@ local PrestigeConfig = {
 	-- +10% cash earnings per prestige (stacking). Keep in sync with EconomyConfig.PrestigeCashMultiplierPerLevel.
 	CashBonusPerPrestige = 0.10,
 	GoldBonusOnPrestige = 50,
+	-- Upfront cash fee to prestige (0 = none). Cash still resets to StartingCashAfterPrestige when ResetOnPrestige.Cash.
+	CashFee = 0,
 	ResetOnPrestige = {
 		Cash = true,
 		Level = true,
@@ -145,5 +147,25 @@ local PrestigeConfig = {
 		},
 	} :: { RebirthUnlockDef },
 }
+
+--[[ Build player-facing fee / confirm copy from config (client + server toasts). ]]
+function PrestigeConfig.BuildFeeSummary(opts: { BaseCompletionPercent: number? }?): string
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	local startCash = tonumber(PrestigeConfig.StartingCashAfterPrestige) or 0
+	local gold = tonumber(PrestigeConfig.GoldBonusOnPrestige) or 0
+	local feePart = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
+	local parts = {
+		feePart,
+		string.format("Cash → $%s after", tostring(startCash)),
+		string.format("+%d Gold", gold),
+		"resets Level/XP/Base",
+		"keeps vehicles/weapons/gold/unlocks/outposts",
+	}
+	local pct = opts and tonumber(opts.BaseCompletionPercent)
+	if pct ~= nil then
+		table.insert(parts, string.format("Base %d%%", math.floor(pct)))
+	end
+	return table.concat(parts, " · ")
+end
 
 return PrestigeConfig

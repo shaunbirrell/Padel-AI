@@ -45,7 +45,7 @@ safeInit("Orders", OrdersController.Init)
 	safeInit("Compass", CompassController.Init)
 	safeInit("BankRaid", BankRaidController.Init)
 
-	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
+	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Missions / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
 	local function dockPress(label: string, toggleFn: () -> ())
 		print("[WAR EMPIRE] Dock pressed:", label)
@@ -87,12 +87,12 @@ safeInit("Orders", OrdersController.Init)
 			end,
 		},
 		{
-			Name = "DockOrders",
+			Name = "DockMissions",
 			Icon = "📋",
-			Label = "ORDERS",
-			Color = Color3.fromRGB(70, 160, 220),
+			Label = "MISSIONS",
+			Color = Color3.fromRGB(42, 48, 55), -- gunmetal
 			OnClick = function()
-				dockPress("Orders", MissionController.Toggle)
+				dockPress("Missions", MissionController.Toggle)
 			end,
 		},
 		{
@@ -123,7 +123,7 @@ safeInit("Orders", OrdersController.Init)
 			end,
 		},
 	})
-	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Garage/Settings)")
+	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Missions/Army/Garage/Settings)")
 end
 
 return UIController

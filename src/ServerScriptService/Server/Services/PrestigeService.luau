@@ -35,6 +35,43 @@ local function cashBonusPer(): number
 		or 0.10
 end
 
+
+local function baseCompletionPercent(profile: any): number
+	local owned = 0
+	local maxN = 0
+	local upgrades = profile.BaseUpgrades
+	if typeof(upgrades) ~= "table" then
+		upgrades = {}
+	end
+	for id, _def in pairs(BaseConfig.Structures) do
+		maxN += 1
+		if (tonumber(upgrades[id]) or 0) > 0 then
+			owned += 1
+		end
+	end
+	if maxN <= 0 then
+		return 0
+	end
+	return math.floor((owned / maxN) * 100)
+end
+
+local function feeSummaryFor(profile: any): string
+	local pct = baseCompletionPercent(profile)
+	if PrestigeConfig.BuildFeeSummary then
+		return PrestigeConfig.BuildFeeSummary({ BaseCompletionPercent = pct })
+	end
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	local feePart = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
+	return string.format(
+		"%s · Cash → $%s after · +%d Gold · Base %d%%",
+		feePart,
+		tostring(PrestigeConfig.StartingCashAfterPrestige or 0),
+		tonumber(PrestigeConfig.GoldBonusOnPrestige) or 0,
+		pct
+	)
+end
+
+
 local function unlockListFor(prestige: number): { any }
 	local list = {}
 	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
@@ -84,6 +121,7 @@ local function pushState(player: Player)
 	local nextMultPct = math.floor((profile.Prestige + 1) * bonus * 100)
 	local curMultPct = math.floor(profile.Prestige * bonus * 100)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.PrestigeStateUpdate) :: RemoteEvent
+	local basePct = baseCompletionPercent(profile)
 	remote:FireClient(player, {
 		Prestige = profile.Prestige,
 		CanPrestige = PrestigeService.CanPrestige(player),
@@ -93,6 +131,10 @@ local function pushState(player: Player)
 		CashMultPercent = curMultPct,
 		NextCashMultPercent = nextMultPct,
 		GoldBonusOnPrestige = PrestigeConfig.GoldBonusOnPrestige,
+		CashFee = tonumber(PrestigeConfig.CashFee) or 0,
+		StartingCashAfter = PrestigeConfig.StartingCashAfterPrestige,
+		BaseCompletionPercent = basePct,
+		FeeSummary = feeSummaryFor(profile),
 		RebirthUnlocks = profile.RebirthUnlocks or {},
 		UnlockTrack = unlockListFor(profile.Prestige),
 	})
@@ -103,7 +145,14 @@ function PrestigeService.CanPrestige(player: Player): boolean
 	if not profile then
 		return false
 	end
-	return profile.Level >= PrestigeConfig.MinLevelToPrestige and profile.Prestige < PrestigeConfig.MaxPrestige
+	if profile.Level < PrestigeConfig.MinLevelToPrestige or profile.Prestige >= PrestigeConfig.MaxPrestige then
+		return false
+	end
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	if fee > 0 and (tonumber(profile.Cash) or 0) < fee then
+		return false
+	end
+	return true
 end
 
 function PrestigeService.HasUnlock(player: Player, flag: string): boolean
@@ -125,10 +174,17 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 	if profile.Level < PrestigeConfig.MinLevelToPrestige then
 		return false, "LevelTooLow"
 	end
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	if fee > 0 and (tonumber(profile.Cash) or 0) < fee then
+		return false, "NeedCashFee"
+	end
 
 	local reset = PrestigeConfig.ResetOnPrestige
 	profile.Prestige += 1
 
+	if fee > 0 then
+		profile.Cash = math.max(0, (tonumber(profile.Cash) or 0) - fee)
+	end
 	if reset.Cash then
 		profile.Cash = PrestigeConfig.StartingCashAfterPrestige
 	end
@@ -250,8 +306,9 @@ function PrestigeService.Init(deps: { [string]: any })
 		-- UX: remind eligible commanders (MinLevelToPrestige = 40) that Rebirth is ready
 		if PrestigeService.CanPrestige(player) and NotificationService then
 			local msg = string.format(
-				"REBIRTH READY (Lv %d) — press K · Do Prestige (+10%% cash forever)",
-				tonumber(profile.Level) or PrestigeConfig.MinLevelToPrestige
+				"REBIRTH READY (Lv %d) — %s — press K · Do Prestige (+10%% cash forever)",
+				tonumber(profile.Level) or PrestigeConfig.MinLevelToPrestige,
+				feeSummaryFor(profile)
 			)
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, msg, "Success", 6, 120, "prestige_ready_join")

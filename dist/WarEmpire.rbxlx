@@ -1951,6 +1951,8 @@ local PrestigeConfig = {
 	-- +10% cash earnings per prestige (stacking). Keep in sync with EconomyConfig.PrestigeCashMultiplierPerLevel.
 	CashBonusPerPrestige = 0.10,
 	GoldBonusOnPrestige = 50,
+	-- Upfront cash fee to prestige (0 = none). Cash still resets to StartingCashAfterPrestige when ResetOnPrestige.Cash.
+	CashFee = 0,
 	ResetOnPrestige = {
 		Cash = true,
 		Level = true,
@@ -2075,6 +2077,26 @@ local PrestigeConfig = {
 		},
 	} :: { RebirthUnlockDef },
 }
+
+--[[ Build player-facing fee / confirm copy from config (client + server toasts). ]]
+function PrestigeConfig.BuildFeeSummary(opts: { BaseCompletionPercent: number? }?): string
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	local startCash = tonumber(PrestigeConfig.StartingCashAfterPrestige) or 0
+	local gold = tonumber(PrestigeConfig.GoldBonusOnPrestige) or 0
+	local feePart = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
+	local parts = {
+		feePart,
+		string.format("Cash → $%s after", tostring(startCash)),
+		string.format("+%d Gold", gold),
+		"resets Level/XP/Base",
+		"keeps vehicles/weapons/gold/unlocks/outposts",
+	}
+	local pct = opts and tonumber(opts.BaseCompletionPercent)
+	if pct ~= nil then
+		table.insert(parts, string.format("Base %d%%", math.floor(pct)))
+	end
+	return table.concat(parts, " · ")
+end
 
 return PrestigeConfig
 ]]></string>
@@ -11005,7 +11027,81 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 		Parent = folder,
 	}):SetAttribute("WE_BaseCeiling", true)
 
-	-- Optional catalog: BaseCeiling mesh (if any) + Helipad dress on roof pad (existing free ID only)
+	-- Roof barracks slots (1–2 small Barracks-style pads) — visual dress only; gate front stays open
+	local barracksPads: { BasePart } = {}
+	do
+		local padSz = math.clamp(math.min(sizeX, sizeZ) * 0.14, 9, 14)
+		local padY = roofY + roofThick * 0.5 + 0.38
+		local bodyH = 3.6
+		local spots: { Vector3 } = {}
+		if gateAxis == "Z" then
+			-- Flank left/right of roof; slight shift toward gate so they clear helipad (closed side)
+			table.insert(spots, Vector3.new(posX - sizeX * 0.30, padY, posZ + gateSign * (sizeZ * 0.08)))
+			table.insert(spots, Vector3.new(posX + sizeX * 0.30, padY, posZ + gateSign * (sizeZ * 0.08)))
+		else
+			table.insert(spots, Vector3.new(posX + gateSign * (sizeX * 0.08), padY, posZ - sizeZ * 0.30))
+			table.insert(spots, Vector3.new(posX + gateSign * (sizeX * 0.08), padY, posZ + sizeZ * 0.30))
+		end
+		local nSlots = if lv >= 5 then 2 else 1
+		for i = 1, math.min(nSlots, #spots) do
+			local spos = spots[i]
+			-- Skip if too close to helipad center
+			local dx = spos.X - heliX
+			local dz = spos.Z - heliZ
+			if (dx * dx + dz * dz) < (heliSize * 0.55) ^ 2 then
+				continue
+			end
+			local bPad = makePart({
+				Name = "RoofBarracksPad" .. i,
+				Size = Vector3.new(padSz, 0.5, padSz * 0.72),
+				Position = spos,
+				Color = Color3.fromRGB(62, 72, 58),
+				Material = Enum.Material.Concrete,
+				Transparency = 0.05,
+				CanCollide = true,
+				Parent = folder,
+			})
+			bPad.CastShadow = true
+			bPad:SetAttribute("WE_BaseCeiling", true)
+			bPad:SetAttribute("WE_RoofBarracks", true)
+			bPad:SetAttribute("PlotId", plotId)
+			-- Mini Barracks silhouette (Part-kit fallback)
+			makePart({
+				Name = "RoofBarracksBody" .. i,
+				Size = Vector3.new(padSz * 0.78, bodyH, padSz * 0.48),
+				Position = Vector3.new(spos.X, padY + 0.25 + bodyH * 0.5, spos.Z),
+				Color = Color3.fromRGB(70, 82, 64),
+				Material = Enum.Material.Metal,
+				Transparency = 0.08,
+				CanCollide = false,
+				Parent = folder,
+			}):SetAttribute("WE_BaseCeiling", true)
+			makePart({
+				Name = "RoofBarracksRoof" .. i,
+				Size = Vector3.new(padSz * 0.86, 0.45, padSz * 0.55),
+				Position = Vector3.new(spos.X, padY + 0.25 + bodyH + 0.3, spos.Z),
+				Color = Color3.fromRGB(48, 54, 46),
+				Material = Enum.Material.Metal,
+				Transparency = 0.05,
+				CanCollide = false,
+				Parent = folder,
+			}):SetAttribute("WE_BaseCeiling", true)
+			makePart({
+				Name = "RoofBarracksAccent" .. i,
+				Size = Vector3.new(padSz * 0.35, 0.18, padSz * 0.22),
+				Position = Vector3.new(spos.X, padY + 0.55, spos.Z),
+				Color = Color3.fromRGB(200, 180, 70),
+				Material = Enum.Material.Neon,
+				Transparency = 0.25,
+				CanCollide = false,
+				Parent = folder,
+			}):SetAttribute("WE_BaseCeiling", true)
+			table.insert(barracksPads, bPad)
+		end
+		folder:SetAttribute("WE_RoofBarracksSlots", #barracksPads)
+	end
+
+	-- Optional catalog: BaseCeiling mesh + Helipad + Barracks dress on roof pads (existing free IDs only)
 	task.defer(function()
 		pcall(function()
 			local vac = require(Shared.Configs.VisualAssetConfig)
@@ -11020,6 +11116,16 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 			local heliAid = heliRef and tonumber(heliRef.ModelAssetId) or 0
 			if heliAid and heliAid > 0 and heliPad.Parent then
 				vas.TryAttachBuildingVisual(heliPad, "Helipad", 1)
+			end
+			-- Barracks 18798977801 — dress roof barracks pads when free catalog ID present
+			local barRef = vac.Buildings and vac.Buildings.Barracks
+			local barAid = barRef and tonumber(barRef.ModelAssetId) or 0
+			if barAid and barAid > 0 then
+				for _, bp in ipairs(barracksPads) do
+					if bp.Parent then
+						vas.TryAttachBuildingVisual(bp, "Barracks", 1)
+					end
+				end
 			end
 		end)
 	end)
@@ -20073,6 +20179,43 @@ local function cashBonusPer(): number
 		or 0.10
 end
 
+
+local function baseCompletionPercent(profile: any): number
+	local owned = 0
+	local maxN = 0
+	local upgrades = profile.BaseUpgrades
+	if typeof(upgrades) ~= "table" then
+		upgrades = {}
+	end
+	for id, _def in pairs(BaseConfig.Structures) do
+		maxN += 1
+		if (tonumber(upgrades[id]) or 0) > 0 then
+			owned += 1
+		end
+	end
+	if maxN <= 0 then
+		return 0
+	end
+	return math.floor((owned / maxN) * 100)
+end
+
+local function feeSummaryFor(profile: any): string
+	local pct = baseCompletionPercent(profile)
+	if PrestigeConfig.BuildFeeSummary then
+		return PrestigeConfig.BuildFeeSummary({ BaseCompletionPercent = pct })
+	end
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	local feePart = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
+	return string.format(
+		"%s · Cash → $%s after · +%d Gold · Base %d%%",
+		feePart,
+		tostring(PrestigeConfig.StartingCashAfterPrestige or 0),
+		tonumber(PrestigeConfig.GoldBonusOnPrestige) or 0,
+		pct
+	)
+end
+
+
 local function unlockListFor(prestige: number): { any }
 	local list = {}
 	for _, u in ipairs(PrestigeConfig.RebirthUnlocks or {}) do
@@ -20122,6 +20265,7 @@ local function pushState(player: Player)
 	local nextMultPct = math.floor((profile.Prestige + 1) * bonus * 100)
 	local curMultPct = math.floor(profile.Prestige * bonus * 100)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.PrestigeStateUpdate) :: RemoteEvent
+	local basePct = baseCompletionPercent(profile)
 	remote:FireClient(player, {
 		Prestige = profile.Prestige,
 		CanPrestige = PrestigeService.CanPrestige(player),
@@ -20131,6 +20275,10 @@ local function pushState(player: Player)
 		CashMultPercent = curMultPct,
 		NextCashMultPercent = nextMultPct,
 		GoldBonusOnPrestige = PrestigeConfig.GoldBonusOnPrestige,
+		CashFee = tonumber(PrestigeConfig.CashFee) or 0,
+		StartingCashAfter = PrestigeConfig.StartingCashAfterPrestige,
+		BaseCompletionPercent = basePct,
+		FeeSummary = feeSummaryFor(profile),
 		RebirthUnlocks = profile.RebirthUnlocks or {},
 		UnlockTrack = unlockListFor(profile.Prestige),
 	})
@@ -20141,7 +20289,14 @@ function PrestigeService.CanPrestige(player: Player): boolean
 	if not profile then
 		return false
 	end
-	return profile.Level >= PrestigeConfig.MinLevelToPrestige and profile.Prestige < PrestigeConfig.MaxPrestige
+	if profile.Level < PrestigeConfig.MinLevelToPrestige or profile.Prestige >= PrestigeConfig.MaxPrestige then
+		return false
+	end
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	if fee > 0 and (tonumber(profile.Cash) or 0) < fee then
+		return false
+	end
+	return true
 end
 
 function PrestigeService.HasUnlock(player: Player, flag: string): boolean
@@ -20163,10 +20318,17 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 	if profile.Level < PrestigeConfig.MinLevelToPrestige then
 		return false, "LevelTooLow"
 	end
+	local fee = tonumber(PrestigeConfig.CashFee) or 0
+	if fee > 0 and (tonumber(profile.Cash) or 0) < fee then
+		return false, "NeedCashFee"
+	end
 
 	local reset = PrestigeConfig.ResetOnPrestige
 	profile.Prestige += 1
 
+	if fee > 0 then
+		profile.Cash = math.max(0, (tonumber(profile.Cash) or 0) - fee)
+	end
 	if reset.Cash then
 		profile.Cash = PrestigeConfig.StartingCashAfterPrestige
 	end
@@ -20288,8 +20450,9 @@ function PrestigeService.Init(deps: { [string]: any })
 		-- UX: remind eligible commanders (MinLevelToPrestige = 40) that Rebirth is ready
 		if PrestigeService.CanPrestige(player) and NotificationService then
 			local msg = string.format(
-				"REBIRTH READY (Lv %d) — press K · Do Prestige (+10%% cash forever)",
-				tonumber(profile.Level) or PrestigeConfig.MinLevelToPrestige
+				"REBIRTH READY (Lv %d) — %s — press K · Do Prestige (+10%% cash forever)",
+				tonumber(profile.Level) or PrestigeConfig.MinLevelToPrestige,
+				feeSummaryFor(profile)
 			)
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, msg, "Success", 6, 120, "prestige_ready_join")
@@ -29401,10 +29564,27 @@ local function refreshLabelsImmediate()
 	end
 	if prestigeConfirm then
 		if typeof(prestigeState) == "table" and prestigeState.CanPrestige then
-			prestigeConfirm.Text = "Confirm: resets Cash/Level/XP/Base. Keeps vehicles, weapons, gold, unlocks. +10% cash forever."
+			local feeLine = prestigeState.FeeSummary
+			if typeof(feeLine) ~= "string" or feeLine == "" then
+				local fee = tonumber(prestigeState.CashFee) or 0
+				local feePart = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
+				local pct = tonumber(prestigeState.BaseCompletionPercent)
+				feeLine = string.format(
+					"%s · Cash → $%s after · +%d Gold%s",
+					feePart,
+					tostring(prestigeState.StartingCashAfter or 10000),
+					tonumber(prestigeState.GoldBonusOnPrestige) or 50,
+					if pct ~= nil then string.format(" · Base %d%%", math.floor(pct)) else ""
+				)
+			end
+			prestigeConfirm.Text = "Confirm Rebirth: " .. feeLine .. " · +10% cash forever."
 			prestigeConfirm.TextColor3 = Constants.Colors.Gold
 		else
-			prestigeConfirm.Text = "Reach required level to unlock DoPrestige / Rebirth."
+			local need = 40
+			if typeof(prestigeState) == "table" then
+				need = tonumber(prestigeState.MinLevel) or 40
+			end
+			prestigeConfirm.Text = string.format("Reach Lv %d to unlock Rebirth. Fee shown here when ready.", need)
 			prestigeConfirm.TextColor3 = Constants.Colors.Muted
 		end
 	end
@@ -29658,7 +29838,7 @@ function ProgressionController.Init()
 	section("REBIRTH / PRESTIGE")
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
-	prestigeConfirm = body(36)
+	prestigeConfirm = body(52)
 	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
@@ -31769,7 +31949,7 @@ safeInit("Orders", OrdersController.Init)
 	safeInit("Compass", CompassController.Init)
 	safeInit("BankRaid", BankRaidController.Init)
 
-	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Orders / Army / Settings)
+	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Missions / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
 	local function dockPress(label: string, toggleFn: () -> ())
 		print("[WAR EMPIRE] Dock pressed:", label)
@@ -31811,12 +31991,12 @@ safeInit("Orders", OrdersController.Init)
 			end,
 		},
 		{
-			Name = "DockOrders",
+			Name = "DockMissions",
 			Icon = "📋",
-			Label = "ORDERS",
-			Color = Color3.fromRGB(70, 160, 220),
+			Label = "MISSIONS",
+			Color = Color3.fromRGB(42, 48, 55), -- gunmetal
 			OnClick = function()
-				dockPress("Orders", MissionController.Toggle)
+				dockPress("Missions", MissionController.Toggle)
 			end,
 		},
 		{
@@ -31847,7 +32027,7 @@ safeInit("Orders", OrdersController.Init)
 			end,
 		},
 	})
-	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Orders/Army/Garage/Settings)")
+	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Missions/Army/Garage/Settings)")
 end
 
 return UIController

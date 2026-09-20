@@ -950,7 +950,81 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 		Parent = folder,
 	}):SetAttribute("WE_BaseCeiling", true)
 
-	-- Optional catalog: BaseCeiling mesh (if any) + Helipad dress on roof pad (existing free ID only)
+	-- Roof barracks slots (1–2 small Barracks-style pads) — visual dress only; gate front stays open
+	local barracksPads: { BasePart } = {}
+	do
+		local padSz = math.clamp(math.min(sizeX, sizeZ) * 0.14, 9, 14)
+		local padY = roofY + roofThick * 0.5 + 0.38
+		local bodyH = 3.6
+		local spots: { Vector3 } = {}
+		if gateAxis == "Z" then
+			-- Flank left/right of roof; slight shift toward gate so they clear helipad (closed side)
+			table.insert(spots, Vector3.new(posX - sizeX * 0.30, padY, posZ + gateSign * (sizeZ * 0.08)))
+			table.insert(spots, Vector3.new(posX + sizeX * 0.30, padY, posZ + gateSign * (sizeZ * 0.08)))
+		else
+			table.insert(spots, Vector3.new(posX + gateSign * (sizeX * 0.08), padY, posZ - sizeZ * 0.30))
+			table.insert(spots, Vector3.new(posX + gateSign * (sizeX * 0.08), padY, posZ + sizeZ * 0.30))
+		end
+		local nSlots = if lv >= 5 then 2 else 1
+		for i = 1, math.min(nSlots, #spots) do
+			local spos = spots[i]
+			-- Skip if too close to helipad center
+			local dx = spos.X - heliX
+			local dz = spos.Z - heliZ
+			if (dx * dx + dz * dz) < (heliSize * 0.55) ^ 2 then
+				continue
+			end
+			local bPad = makePart({
+				Name = "RoofBarracksPad" .. i,
+				Size = Vector3.new(padSz, 0.5, padSz * 0.72),
+				Position = spos,
+				Color = Color3.fromRGB(62, 72, 58),
+				Material = Enum.Material.Concrete,
+				Transparency = 0.05,
+				CanCollide = true,
+				Parent = folder,
+			})
+			bPad.CastShadow = true
+			bPad:SetAttribute("WE_BaseCeiling", true)
+			bPad:SetAttribute("WE_RoofBarracks", true)
+			bPad:SetAttribute("PlotId", plotId)
+			-- Mini Barracks silhouette (Part-kit fallback)
+			makePart({
+				Name = "RoofBarracksBody" .. i,
+				Size = Vector3.new(padSz * 0.78, bodyH, padSz * 0.48),
+				Position = Vector3.new(spos.X, padY + 0.25 + bodyH * 0.5, spos.Z),
+				Color = Color3.fromRGB(70, 82, 64),
+				Material = Enum.Material.Metal,
+				Transparency = 0.08,
+				CanCollide = false,
+				Parent = folder,
+			}):SetAttribute("WE_BaseCeiling", true)
+			makePart({
+				Name = "RoofBarracksRoof" .. i,
+				Size = Vector3.new(padSz * 0.86, 0.45, padSz * 0.55),
+				Position = Vector3.new(spos.X, padY + 0.25 + bodyH + 0.3, spos.Z),
+				Color = Color3.fromRGB(48, 54, 46),
+				Material = Enum.Material.Metal,
+				Transparency = 0.05,
+				CanCollide = false,
+				Parent = folder,
+			}):SetAttribute("WE_BaseCeiling", true)
+			makePart({
+				Name = "RoofBarracksAccent" .. i,
+				Size = Vector3.new(padSz * 0.35, 0.18, padSz * 0.22),
+				Position = Vector3.new(spos.X, padY + 0.55, spos.Z),
+				Color = Color3.fromRGB(200, 180, 70),
+				Material = Enum.Material.Neon,
+				Transparency = 0.25,
+				CanCollide = false,
+				Parent = folder,
+			}):SetAttribute("WE_BaseCeiling", true)
+			table.insert(barracksPads, bPad)
+		end
+		folder:SetAttribute("WE_RoofBarracksSlots", #barracksPads)
+	end
+
+	-- Optional catalog: BaseCeiling mesh + Helipad + Barracks dress on roof pads (existing free IDs only)
 	task.defer(function()
 		pcall(function()
 			local vac = require(Shared.Configs.VisualAssetConfig)
@@ -965,6 +1039,16 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 			local heliAid = heliRef and tonumber(heliRef.ModelAssetId) or 0
 			if heliAid and heliAid > 0 and heliPad.Parent then
 				vas.TryAttachBuildingVisual(heliPad, "Helipad", 1)
+			end
+			-- Barracks 18798977801 — dress roof barracks pads when free catalog ID present
+			local barRef = vac.Buildings and vac.Buildings.Barracks
+			local barAid = barRef and tonumber(barRef.ModelAssetId) or 0
+			if barAid and barAid > 0 then
+				for _, bp in ipairs(barracksPads) do
+					if bp.Parent then
+						vas.TryAttachBuildingVisual(bp, "Barracks", 1)
+					end
+				end
 			end
 		end)
 	end)

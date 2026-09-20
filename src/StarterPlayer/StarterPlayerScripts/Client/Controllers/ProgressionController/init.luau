@@ -80,10 +80,27 @@ local function refreshLabelsImmediate()
 	end
 	if prestigeConfirm then
 		if typeof(prestigeState) == "table" and prestigeState.CanPrestige then
-			prestigeConfirm.Text = "Confirm: resets Cash/Level/XP/Base. Keeps vehicles, weapons, gold, unlocks. +10% cash forever."
+			local feeLine = prestigeState.FeeSummary
+			if typeof(feeLine) ~= "string" or feeLine == "" then
+				local fee = tonumber(prestigeState.CashFee) or 0
+				local feePart = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
+				local pct = tonumber(prestigeState.BaseCompletionPercent)
+				feeLine = string.format(
+					"%s · Cash → $%s after · +%d Gold%s",
+					feePart,
+					tostring(prestigeState.StartingCashAfter or 10000),
+					tonumber(prestigeState.GoldBonusOnPrestige) or 50,
+					if pct ~= nil then string.format(" · Base %d%%", math.floor(pct)) else ""
+				)
+			end
+			prestigeConfirm.Text = "Confirm Rebirth: " .. feeLine .. " · +10% cash forever."
 			prestigeConfirm.TextColor3 = Constants.Colors.Gold
 		else
-			prestigeConfirm.Text = "Reach required level to unlock DoPrestige / Rebirth."
+			local need = 40
+			if typeof(prestigeState) == "table" then
+				need = tonumber(prestigeState.MinLevel) or 40
+			end
+			prestigeConfirm.Text = string.format("Reach Lv %d to unlock Rebirth. Fee shown here when ready.", need)
 			prestigeConfirm.TextColor3 = Constants.Colors.Muted
 		end
 	end
@@ -337,7 +354,7 @@ function ProgressionController.Init()
 	section("REBIRTH / PRESTIGE")
 	prestigeLabel = body(40)
 	unlockLabel = body(110)
-	prestigeConfirm = body(36)
+	prestigeConfirm = body(52)
 	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
 		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
