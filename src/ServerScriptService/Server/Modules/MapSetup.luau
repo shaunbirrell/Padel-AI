@@ -460,7 +460,8 @@ end
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
 local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
-	-- Visual props for Training Yard / static kits. R6-ish proportions (~5 stud tall).
+	-- Visual props for Training Yard / static kits. R15-ready catalog overlay via VisualAssetConfig;
+	-- Part-kit military placeholder (R6-ish ~5 stud) when mesh IDs missing / StudioSkipWorldDressing.
 	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
 	local model = Instance.new("Model")
 	model.Name = name
@@ -1215,6 +1216,82 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 end
 
 
+
+local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
+	--[[
+		Permanent white >>>> chevrons on plot floor guiding spawn → CommandCenter → next pads.
+		Visual-only (CanCollide false). Competitor pattern from QUALITY_GAP.
+	]]
+	local folder = Instance.new("Folder")
+	folder.Name = "PlotFloorChevrons"
+	folder.Parent = plotFolder
+
+	local function chevronAt(worldPos: Vector3, yawRad: number, idx: number)
+		-- Wedge-ish arrow: wide rear + tip (two parts read as >>>)
+		local cf = CFrame.new(worldPos) * CFrame.Angles(0, yawRad, 0)
+		part({
+			Name = "ChevronBody" .. idx,
+			Size = Vector3.new(3.2, 0.12, 2.2),
+			CFrame = cf,
+			Color = Color3.fromRGB(245, 245, 250),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			Transparency = 0.15,
+			Parent = folder,
+		})
+		part({
+			Name = "ChevronTip" .. idx,
+			Size = Vector3.new(1.6, 0.14, 1.6),
+			CFrame = cf * CFrame.new(0, 0.02, -1.4) * CFrame.Angles(0, math.rad(45), 0),
+			Color = Color3.fromRGB(255, 255, 255),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			Transparency = 0.05,
+			Parent = folder,
+		})
+	end
+
+	local function paintPath(from: Vector3, to: Vector3, count: number, startIdx: number): number
+		local delta = to - from
+		local flat = Vector3.new(delta.X, 0, delta.Z)
+		if flat.Magnitude < 4 then
+			return startIdx
+		end
+		-- Face along path (Roblox look = -Z); atan2(x,z) matches CFrame.Angles Y
+		local yaw = math.atan2(flat.X, flat.Z)
+		local idx = startIdx
+		for i = 1, count do
+			local alpha = i / (count + 1)
+			local pos = from:Lerp(to, alpha) + Vector3.new(0, 0.55, 0)
+			chevronAt(pos, yaw, idx)
+			idx += 1
+		end
+		return idx
+	end
+
+	-- Path nodes: PlayerSpawn → CC → Barracks → VehicleDepot → WeaponsFacility (first unlocks)
+	local spawnPos = plotOrigin + Vector3.new(0, 0.5, 55)
+	local nodes = {
+		spawnPos,
+	}
+	for i, def in ipairs(STRUCTURES) do
+		if i > 5 then
+			break
+		end
+		local col = (i - 1) % STRUCT_COLS
+		local row = math.floor((i - 1) / STRUCT_COLS)
+		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
+		table.insert(nodes, plotOrigin + offset + Vector3.new(0, 0.5, 0))
+	end
+
+	local idx = 1
+	for i = 1, #nodes - 1 do
+		local steps = if i == 1 then 5 else 3
+		idx = paintPath(nodes[i], nodes[i + 1], steps, idx)
+	end
+end
+
+
 local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
 	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
 	local folder = Instance.new("Folder")
@@ -1411,6 +1488,39 @@ function MapSetup.Run()
 			Parent = map,
 		})
 	end
+	-- Yellow centerline dashes (asphalt polish — competitor desert roads)
+	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
+		for i = -8, 8 do
+			if i ~= 0 then
+				part({
+					Name = "RoadDashZ" .. z .. "_" .. i,
+					Size = Vector3.new(8, 0.12, 1.2),
+					Position = Vector3.new(i * 90, GROUND_TOP_Y + 0.12, z),
+					Color = Color3.fromRGB(240, 210, 60),
+					Material = Enum.Material.Neon,
+					CanCollide = false,
+					Transparency = 0.25,
+					Parent = map,
+				})
+			end
+		end
+	end
+	for _, x in ipairs({ -PLOT_RING, PLOT_RING }) do
+		for i = -8, 8 do
+			if i ~= 0 then
+				part({
+					Name = "RoadDashX" .. x .. "_" .. i,
+					Size = Vector3.new(1.2, 0.12, 8),
+					Position = Vector3.new(x, GROUND_TOP_Y + 0.12, i * 90),
+					Color = Color3.fromRGB(240, 210, 60),
+					Material = Enum.Material.Neon,
+					CanCollide = false,
+					Transparency = 0.25,
+					Parent = map,
+				})
+			end
+		end
+	end
 
 	local bases = ensureFolder("Bases", root)
 	for plotId, pos in ipairs(PLOT_POSITIONS) do
@@ -1450,6 +1560,8 @@ function MapSetup.Run()
 			local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
 			buildStructureKit(plotFolder, plotId, pos, offset, def)
 		end
+
+		paintPlotFloorChevrons(plotFolder, pos)
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)
 		local yardFolder = Instance.new("Folder")
@@ -1569,7 +1681,7 @@ function MapSetup.Run()
 				local wz = Instance.new("Folder")
 				wz.Name = "PlotWarzone"
 				wz.Parent = plotFolder
-				local count = 10
+				local count = 12
 				for i = 1, count do
 					local ang = (i / count) * math.pi * 2
 					local rad = 58 + (i % 3) * 10

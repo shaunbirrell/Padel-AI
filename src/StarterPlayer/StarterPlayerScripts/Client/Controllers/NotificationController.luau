@@ -1,5 +1,7 @@
 --!strict
---[[ Toast stack with fade-in, type colors, and capped stacking. ]]
+--[[ Toast stack with fade-in, type colors, and capped stacking.
+	P0: high-contrast Success/Collect fills (Purchase SUCCESSFUL / Collected readability).
+]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,10 +23,14 @@ local stack: Frame? = nil
 local TYPE_PREFIX = {
 	Info = "ℹ ",
 	Success = "✓ ",
+	Collect = "$ ",
 	Warn = "! ",
 	Error = "✕ ",
 	Reward = "★ ",
 }
+
+-- Marker for BuyPathStatic / QA: Purchase SUCCESSFUL toast uses Success type styling below
+local HIGH_CONTRAST_SUCCESS = true
 
 function NotificationController.Init()
 	local gui = Instance.new("ScreenGui")
@@ -37,7 +43,7 @@ function NotificationController.Init()
 	frame.Name = "Stack"
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.Position = UDim2.new(0.5, 0, 0, 72)
-	frame.Size = UDim2.fromOffset(360, 240)
+	frame.Size = UDim2.fromOffset(380, 260)
 	frame.BackgroundTransparency = 1
 	frame.Active = false -- never block HUD / dock clicks
 	frame.Parent = gui
@@ -61,12 +67,19 @@ function NotificationController.Show(message: string, notifType: string, duratio
 	AudioController.PlayNotification()
 	local typeDef = NotificationConfig.Types[notifType] or NotificationConfig.Types.Info
 	local prefix = TYPE_PREFIX[notifType] or ""
+	local isPunchy = HIGH_CONTRAST_SUCCESS and (notifType == "Success" or notifType == "Collect")
 
 	local toast = Instance.new("Frame")
 	toast.Name = "Toast"
-	toast.Size = UDim2.fromOffset(340, 44)
-	toast.BackgroundColor3 = Constants.Colors.Panel
-	toast.BackgroundTransparency = 0.05
+	toast.Size = UDim2.fromOffset(if isPunchy then 360 else 340, if isPunchy then 52 else 44)
+	-- High-contrast fill for Success/Collect (dark green plate + bright stroke)
+	if isPunchy and typeof((typeDef :: any).Fill) == "Color3" then
+		toast.BackgroundColor3 = (typeDef :: any).Fill
+		toast.BackgroundTransparency = 0.05
+	else
+		toast.BackgroundColor3 = Constants.Colors.Panel
+		toast.BackgroundTransparency = 0.05
+	end
 	toast.BorderSizePixel = 0
 	toast.LayoutOrder = os.clock() * 1000
 	local c = Instance.new("UICorner")
@@ -75,11 +88,11 @@ function NotificationController.Show(message: string, notifType: string, duratio
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = typeDef.Color
-	stroke.Thickness = 2
+	stroke.Thickness = if isPunchy then 3 else 2
 	stroke.Parent = toast
 
 	local accent = Instance.new("Frame")
-	accent.Size = UDim2.new(0, 4, 1, 0)
+	accent.Size = UDim2.new(0, if isPunchy then 6 else 4, 1, 0)
 	accent.BackgroundColor3 = typeDef.Color
 	accent.BorderSizePixel = 0
 	accent.Parent = toast
@@ -89,12 +102,12 @@ function NotificationController.Show(message: string, notifType: string, duratio
 
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromOffset(14, 0)
-	label.Size = UDim2.new(1, -20, 1, 0)
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 14
+	label.Position = UDim2.fromOffset(16, 0)
+	label.Size = UDim2.new(1, -24, 1, 0)
+	label.Font = if isPunchy then Enum.Font.GothamBold else Enum.Font.GothamMedium
+	label.TextSize = if isPunchy then 16 else 14
 	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextColor3 = Constants.Colors.Text
+	label.TextColor3 = if isPunchy then Color3.fromRGB(230, 255, 235) else Constants.Colors.Text
 	label.Text = prefix .. message
 	label.TextTransparency = 1
 	label.Parent = toast
@@ -119,9 +132,10 @@ function NotificationController.Show(message: string, notifType: string, duratio
 		oldest:Destroy()
 	end
 
-	local fadeIn = TweenService:Create(toast, TweenInfo.new(0.2), { BackgroundTransparency = 0.05 })
-	local strokeIn = TweenService:Create(stroke, TweenInfo.new(0.2), { Transparency = 0 })
-	local textIn = TweenService:Create(label, TweenInfo.new(0.2), { TextTransparency = 0 })
+	local targetBg = if isPunchy then 0.02 else 0.05
+	local fadeIn = TweenService:Create(toast, TweenInfo.new(0.18), { BackgroundTransparency = targetBg })
+	local strokeIn = TweenService:Create(stroke, TweenInfo.new(0.18), { Transparency = 0 })
+	local textIn = TweenService:Create(label, TweenInfo.new(0.18), { TextTransparency = 0 })
 	fadeIn:Play()
 	strokeIn:Play()
 	textIn:Play()

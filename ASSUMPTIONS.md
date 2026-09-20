@@ -271,3 +271,19 @@ Reversible engineering decisions made while implementing the MVP without blockin
 - Soldier `100212659702941`, Infantry `9104381136`, Guards `16134469614`, HeavyInfantry `14776506955`.
 - MilitaryJeep keeps `125916936788670`; ArmedJeep `122068883442022` (DisplayName Armed Jeep).
 - CharacterAlt disabled (`0`) — no plastic fallback.
+
+## Quality leap P0 (2026-09-20 — QUALITY_GAP_RhGjQXJ8n6w)
+
+111. **Plot floor chevrons** — `MapSetup.paintPlotFloorChevrons` paints permanent white `>>>>` Neon arrows on each plot floor: PlayerSpawn → CommandCenter → Barracks → Depot → Weapons (first 5 pads). Visual-only (`PlotFloorChevrons` folder). Complements tutorial beam; does not gate buys.
+
+112. **Asphalt road dashes** — Yellow Neon centerline dashes on plot-ring asphalt roads (RoadDashZ/X). Void walls + SafetyCatch unchanged.
+
+113. **Toast UX** — `NotificationConfig` Success/Collect high-contrast green Fill + bright stroke. Client `NotificationController` punchy GothamBold for Success/Collect. Pad/menu buys toast **"Purchase SUCCESSFUL! …"**. Collect uses type `Collect`. Can't-afford debounced via `NotifyThrottled` (UpgradePad ~0.75–1.1s; BaseService remote ~0.9s).
+
+114. **Soldier visual path** — `SoldierConfig.Visual` R15-ready keys (`Rig`, `VisualKindByRole`, `VisualPlaceholder`, `ModelAssetIdOverride=0`, empty `AccessoryIds` TODO). Catalog IDs only in `VisualAssetConfig.Characters` (Design Bot wire). Part-kit military placeholder when mesh fails / StudioSkipWorldDressing.
+
+115. **Design Bot IDs (supersede)** — Soldier `100212659702941`; Infantry `9104381136`; HeavyInfantry `14776506955`; Guard family `16134469614`. REJECT primary `3924234975` / `91299598767068`. MilitaryJeep `125916936788670`; ArmedJeep `122068883442022`. CharacterAlt `0`.
+
+116. **Levels/prestige** — Milestones + HUD GoalLabel (existing); `MinLevelToPrestige=40`; structure unlock gates remain in `BaseConfig.Requires`.
+
+**Open Cloud live v15 (2026-09-20 Europe/Madrid):** Quality leap P0 + Design Bot soldier/ArmedJeep wire. Place `97112936860418` Published versionNumber=15.

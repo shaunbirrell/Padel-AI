@@ -122,7 +122,7 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 		local name = if def then def.DisplayName else tostring(structureId)
 		NotificationService.Notify(
 			player,
-			string.format("✓ %s → Lv %d", name, result.NewLevel or 0),
+			string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
 			"Success",
 			4
 		)

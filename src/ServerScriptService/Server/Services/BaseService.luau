@@ -743,9 +743,9 @@ function BaseService.Init(deps: { [string]: any })
 			local name = if def then def.DisplayName else tostring(structureId)
 			NotificationService.Notify(
 				player,
-				string.format("%s → Lv %d", name, result.NewLevel or 0),
+				string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
 				"Success",
-				3
+				3.5
 			)
 		else
 			local err = result.Error or "Failed"
@@ -760,7 +760,13 @@ function BaseService.Init(deps: { [string]: any })
 				elseif err == "UnknownStructure" or err == "InvalidStructure"
 				then "Unknown structure"
 				else ("Purchase failed: " .. tostring(err))
-			NotificationService.Notify(player, msg, "Warn", 3.5)
+			-- Debounce can't-afford / fail spam from menu + pad
+			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
+			else
+				NotificationService.Notify(player, msg, "Warn", 3.5)
+			end
 		end
 	end)
 

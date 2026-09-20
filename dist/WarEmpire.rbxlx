@@ -1544,16 +1544,19 @@ return NationColorConfig
           <Properties>
             <string name="Name">NotificationConfig</string>
             <string name="Source"><![CDATA[--!strict
+--[[ Toast type colors — Success/Collect are high-contrast green (competitive P0). ]]
 
 local NotificationConfig = {
 	DefaultDuration = 4,
 	MaxStacked = 4,
 	Types = {
-		Info = { Color = Color3.fromRGB(90, 160, 220) },
-		Success = { Color = Color3.fromRGB(80, 200, 120) },
-		Warn = { Color = Color3.fromRGB(230, 190, 60) },
-		Error = { Color = Color3.fromRGB(200, 70, 70) },
-		Reward = { Color = Color3.fromRGB(200, 160, 80) },
+		Info = { Color = Color3.fromRGB(90, 160, 220), Fill = Color3.fromRGB(18, 28, 40) },
+		-- High-contrast success (competitor "Purchase SUCCESSFUL!" readability)
+		Success = { Color = Color3.fromRGB(40, 255, 120), Fill = Color3.fromRGB(8, 48, 22) },
+		Collect = { Color = Color3.fromRGB(60, 255, 140), Fill = Color3.fromRGB(6, 42, 20) },
+		Warn = { Color = Color3.fromRGB(255, 200, 60), Fill = Color3.fromRGB(40, 32, 10) },
+		Error = { Color = Color3.fromRGB(255, 80, 80), Fill = Color3.fromRGB(48, 12, 12) },
+		Reward = { Color = Color3.fromRGB(255, 210, 90), Fill = Color3.fromRGB(40, 32, 12) },
 	},
 }
 
@@ -1779,6 +1782,8 @@ return SeasonConfig
             <string name="Source"><![CDATA[--!strict
 --[[
 	Army + Training Yard worker income (MT-inspired: soldiers generate cash while "training").
+	Visual: R15-ready config keys; catalog IDs live in VisualAssetConfig.Characters.
+	If ModelAssetId missing/0 → military Part-kit placeholder (MapSetup.makeSoldierKit / CombatService).
 ]]
 
 local SoldierConfig = {
@@ -1797,6 +1802,38 @@ local SoldierConfig = {
 		TickSeconds = 5,
 		CashPerSoldierPerTick = 8, -- 5 soldiers ≈ $8/s effective over tick (40/5s)
 		MinSoldiersForIncome = 1,
+	},
+
+	--[[
+		R15-ready visual path (Design Bot / Code P0).
+		VisualKind maps → VisualAssetConfig.Characters[kind].
+		VisualPlaceholder = Part-kit camo soldier when catalog ID is 0 / insert fails.
+		Do NOT invent Creator Store IDs here — leave slots; wire in VisualAssetConfig only.
+	]]
+	Visual = {
+		Rig = "R15", -- preferred attach target; Part kit remains R6-ish fallback proportions
+		VisualKindDefault = "Soldier",
+		VisualKindByRole = {
+			Worker = "Soldier",
+			Infantry = "Infantry",
+			Heavy = "HeavyInfantry",
+			Guard = "Guard",
+			BankGuard = "BankGuard",
+			OilRigGuard = "OilRigGuard",
+			FortGuard = "FortGuard",
+		},
+		-- Placeholder palette when mesh missing (olive drab / desert camo)
+		VisualPlaceholder = {
+			Enabled = true,
+			BodyColor = Color3.fromRGB(70, 85, 55),
+			AccentColor = Color3.fromRGB(180, 220, 120),
+			Helmet = true,
+			Rifle = true,
+			Note = "MapSetup.makeSoldierKit + CombatService Part kit until Design Bot mesh loads",
+		},
+		-- Optional future slots (TODO — no invented IDs)
+		ModelAssetIdOverride = 0, -- 0 = use VisualAssetConfig.Characters
+		AccessoryIds = {} :: { number }, -- TODO Design Bot
 	},
 }
 
@@ -2753,6 +2790,7 @@ return VehicleConfig
 	IDs researched as Free / Get Model on Creator Store (economy IsForSale=false Price=nil).
 	Never paid / never MT-branded. AssetId=0 means skip insert (Part kit only).
 	Design P0 REJECT: JeepFallback 59524622; SWAT/police; blocky soldiers; 107381 as vehicle.
+	Design P0 REJECT primary: 3924234975 plastic Rthro; 91299598767068 Respawn Soldiers pack.
 	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
 	(and AllowInsertFreeAssets where required) for third-party models.
 ]]
@@ -2775,7 +2813,7 @@ local VisualAssetConfig = {
 	Vehicles = {
 		-- Free Jeep family
 		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car dress-only (NO JeepFallback)" } :: AssetRef,
-		ArmedJeep = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
+		ArmedJeep = { ModelAssetId = 122068883442022, Note = "Tan turreted Armed Jeep (DisplayName Armed Jeep; Design Bot P0)" } :: AssetRef,
 		UtilityQuad = { ModelAssetId = 125916936788670, Note = "Military Car reuse (scaled)" } :: AssetRef,
 		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		ReconBuggy = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
@@ -2888,18 +2926,18 @@ local VisualAssetConfig = {
 	} :: { [string]: AssetRef },
 
 	Characters = {
-		-- Design P0: Respawn Soldiers pack primary. REJECT blocky/SWAT/police. StripScripts on insert.
-		Soldier = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		Infantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		HeavyInfantry = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		Guard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		BankGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		OilRigGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
-		FortGuard = { ModelAssetId = 91299598767068, Note = "Respawn Soldiers primary" } :: AssetRef,
+		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
+		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
+		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
+		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		OilRigGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
+		FortGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
-	-- Optional character alt ONLY (never primary). Used if primary insert fails.
-	CharacterAlt = { ModelAssetId = 3924234975, Note = "Official Soldier alt only" } :: AssetRef,
+	-- No plastic CharacterAlt — primary insert failure falls back to Part kit / olive drab.
+	CharacterAlt = { ModelAssetId = 0, Note = "DISABLED — Design Bot rejected plastic Rthro alts" } :: AssetRef,
 
 	Buildings = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
@@ -6510,7 +6548,8 @@ end
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
 local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
-	-- Visual props for Training Yard / static kits. R6-ish proportions (~5 stud tall).
+	-- Visual props for Training Yard / static kits. R15-ready catalog overlay via VisualAssetConfig;
+	-- Part-kit military placeholder (R6-ish ~5 stud) when mesh IDs missing / StudioSkipWorldDressing.
 	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
 	local model = Instance.new("Model")
 	model.Name = name
@@ -7265,6 +7304,82 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 end
 
 
+
+local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
+	--[[
+		Permanent white >>>> chevrons on plot floor guiding spawn → CommandCenter → next pads.
+		Visual-only (CanCollide false). Competitor pattern from QUALITY_GAP.
+	]]
+	local folder = Instance.new("Folder")
+	folder.Name = "PlotFloorChevrons"
+	folder.Parent = plotFolder
+
+	local function chevronAt(worldPos: Vector3, yawRad: number, idx: number)
+		-- Wedge-ish arrow: wide rear + tip (two parts read as >>>)
+		local cf = CFrame.new(worldPos) * CFrame.Angles(0, yawRad, 0)
+		part({
+			Name = "ChevronBody" .. idx,
+			Size = Vector3.new(3.2, 0.12, 2.2),
+			CFrame = cf,
+			Color = Color3.fromRGB(245, 245, 250),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			Transparency = 0.15,
+			Parent = folder,
+		})
+		part({
+			Name = "ChevronTip" .. idx,
+			Size = Vector3.new(1.6, 0.14, 1.6),
+			CFrame = cf * CFrame.new(0, 0.02, -1.4) * CFrame.Angles(0, math.rad(45), 0),
+			Color = Color3.fromRGB(255, 255, 255),
+			Material = Enum.Material.Neon,
+			CanCollide = false,
+			Transparency = 0.05,
+			Parent = folder,
+		})
+	end
+
+	local function paintPath(from: Vector3, to: Vector3, count: number, startIdx: number): number
+		local delta = to - from
+		local flat = Vector3.new(delta.X, 0, delta.Z)
+		if flat.Magnitude < 4 then
+			return startIdx
+		end
+		-- Face along path (Roblox look = -Z); atan2(x,z) matches CFrame.Angles Y
+		local yaw = math.atan2(flat.X, flat.Z)
+		local idx = startIdx
+		for i = 1, count do
+			local alpha = i / (count + 1)
+			local pos = from:Lerp(to, alpha) + Vector3.new(0, 0.55, 0)
+			chevronAt(pos, yaw, idx)
+			idx += 1
+		end
+		return idx
+	end
+
+	-- Path nodes: PlayerSpawn → CC → Barracks → VehicleDepot → WeaponsFacility (first unlocks)
+	local spawnPos = plotOrigin + Vector3.new(0, 0.5, 55)
+	local nodes = {
+		spawnPos,
+	}
+	for i, def in ipairs(STRUCTURES) do
+		if i > 5 then
+			break
+		end
+		local col = (i - 1) % STRUCT_COLS
+		local row = math.floor((i - 1) / STRUCT_COLS)
+		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
+		table.insert(nodes, plotOrigin + offset + Vector3.new(0, 0.5, 0))
+	end
+
+	local idx = 1
+	for i = 1, #nodes - 1 do
+		local steps = if i == 1 then 5 else 3
+		idx = paintPath(nodes[i], nodes[i + 1], steps, idx)
+	end
+end
+
+
 local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
 	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
 	local folder = Instance.new("Folder")
@@ -7461,6 +7576,39 @@ function MapSetup.Run()
 			Parent = map,
 		})
 	end
+	-- Yellow centerline dashes (asphalt polish — competitor desert roads)
+	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
+		for i = -8, 8 do
+			if i ~= 0 then
+				part({
+					Name = "RoadDashZ" .. z .. "_" .. i,
+					Size = Vector3.new(8, 0.12, 1.2),
+					Position = Vector3.new(i * 90, GROUND_TOP_Y + 0.12, z),
+					Color = Color3.fromRGB(240, 210, 60),
+					Material = Enum.Material.Neon,
+					CanCollide = false,
+					Transparency = 0.25,
+					Parent = map,
+				})
+			end
+		end
+	end
+	for _, x in ipairs({ -PLOT_RING, PLOT_RING }) do
+		for i = -8, 8 do
+			if i ~= 0 then
+				part({
+					Name = "RoadDashX" .. x .. "_" .. i,
+					Size = Vector3.new(1.2, 0.12, 8),
+					Position = Vector3.new(x, GROUND_TOP_Y + 0.12, i * 90),
+					Color = Color3.fromRGB(240, 210, 60),
+					Material = Enum.Material.Neon,
+					CanCollide = false,
+					Transparency = 0.25,
+					Parent = map,
+				})
+			end
+		end
+	end
 
 	local bases = ensureFolder("Bases", root)
 	for plotId, pos in ipairs(PLOT_POSITIONS) do
@@ -7500,6 +7648,8 @@ function MapSetup.Run()
 			local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
 			buildStructureKit(plotFolder, plotId, pos, offset, def)
 		end
+
+		paintPlotFloorChevrons(plotFolder, pos)
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)
 		local yardFolder = Instance.new("Folder")
@@ -7619,7 +7769,7 @@ function MapSetup.Run()
 				local wz = Instance.new("Folder")
 				wz.Name = "PlotWarzone"
 				wz.Parent = plotFolder
-				local count = 10
+				local count = 12
 				for i = 1, count do
 					local ang = (i / count) * math.pi * 2
 					local rad = 58 + (i % 3) * 10
@@ -11313,9 +11463,9 @@ function BaseService.Init(deps: { [string]: any })
 			local name = if def then def.DisplayName else tostring(structureId)
 			NotificationService.Notify(
 				player,
-				string.format("%s → Lv %d", name, result.NewLevel or 0),
+				string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
 				"Success",
-				3
+				3.5
 			)
 		else
 			local err = result.Error or "Failed"
@@ -11330,7 +11480,13 @@ function BaseService.Init(deps: { [string]: any })
 				elseif err == "UnknownStructure" or err == "InvalidStructure"
 				then "Unknown structure"
 				else ("Purchase failed: " .. tostring(err))
-			NotificationService.Notify(player, msg, "Warn", 3.5)
+			-- Debounce can't-afford / fail spam from menu + pad
+			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
+			else
+				NotificationService.Notify(player, msg, "Warn", 3.5)
+			end
 		end
 	end)
 
@@ -15949,7 +16105,7 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 	local granted = EconomyService.CollectPendingCash(player)
 	if granted > 0 then
 		if NotificationService then
-			NotificationService.Notify(player, string.format("Collected $%d", granted), "Success", 3)
+			NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3)
 		end
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PassiveIncome")
@@ -19010,7 +19166,7 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 		local name = if def then def.DisplayName else tostring(structureId)
 		NotificationService.Notify(
 			player,
-			string.format("✓ %s → Lv %d", name, result.NewLevel or 0),
+			string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
 			"Success",
 			4
 		)
@@ -24067,7 +24223,9 @@ return MissionController
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
---[[ Toast stack with fade-in, type colors, and capped stacking. ]]
+--[[ Toast stack with fade-in, type colors, and capped stacking.
+	P0: high-contrast Success/Collect fills (Purchase SUCCESSFUL / Collected readability).
+]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24089,10 +24247,14 @@ local stack: Frame? = nil
 local TYPE_PREFIX = {
 	Info = "ℹ ",
 	Success = "✓ ",
+	Collect = "$ ",
 	Warn = "! ",
 	Error = "✕ ",
 	Reward = "★ ",
 }
+
+-- Marker for BuyPathStatic / QA: Purchase SUCCESSFUL toast uses Success type styling below
+local HIGH_CONTRAST_SUCCESS = true
 
 function NotificationController.Init()
 	local gui = Instance.new("ScreenGui")
@@ -24105,7 +24267,7 @@ function NotificationController.Init()
 	frame.Name = "Stack"
 	frame.AnchorPoint = Vector2.new(0.5, 0)
 	frame.Position = UDim2.new(0.5, 0, 0, 72)
-	frame.Size = UDim2.fromOffset(360, 240)
+	frame.Size = UDim2.fromOffset(380, 260)
 	frame.BackgroundTransparency = 1
 	frame.Active = false -- never block HUD / dock clicks
 	frame.Parent = gui
@@ -24129,12 +24291,19 @@ function NotificationController.Show(message: string, notifType: string, duratio
 	AudioController.PlayNotification()
 	local typeDef = NotificationConfig.Types[notifType] or NotificationConfig.Types.Info
 	local prefix = TYPE_PREFIX[notifType] or ""
+	local isPunchy = HIGH_CONTRAST_SUCCESS and (notifType == "Success" or notifType == "Collect")
 
 	local toast = Instance.new("Frame")
 	toast.Name = "Toast"
-	toast.Size = UDim2.fromOffset(340, 44)
-	toast.BackgroundColor3 = Constants.Colors.Panel
-	toast.BackgroundTransparency = 0.05
+	toast.Size = UDim2.fromOffset(if isPunchy then 360 else 340, if isPunchy then 52 else 44)
+	-- High-contrast fill for Success/Collect (dark green plate + bright stroke)
+	if isPunchy and typeof((typeDef :: any).Fill) == "Color3" then
+		toast.BackgroundColor3 = (typeDef :: any).Fill
+		toast.BackgroundTransparency = 0.05
+	else
+		toast.BackgroundColor3 = Constants.Colors.Panel
+		toast.BackgroundTransparency = 0.05
+	end
 	toast.BorderSizePixel = 0
 	toast.LayoutOrder = os.clock() * 1000
 	local c = Instance.new("UICorner")
@@ -24143,11 +24312,11 @@ function NotificationController.Show(message: string, notifType: string, duratio
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = typeDef.Color
-	stroke.Thickness = 2
+	stroke.Thickness = if isPunchy then 3 else 2
 	stroke.Parent = toast
 
 	local accent = Instance.new("Frame")
-	accent.Size = UDim2.new(0, 4, 1, 0)
+	accent.Size = UDim2.new(0, if isPunchy then 6 else 4, 1, 0)
 	accent.BackgroundColor3 = typeDef.Color
 	accent.BorderSizePixel = 0
 	accent.Parent = toast
@@ -24157,12 +24326,12 @@ function NotificationController.Show(message: string, notifType: string, duratio
 
 	local label = Instance.new("TextLabel")
 	label.BackgroundTransparency = 1
-	label.Position = UDim2.fromOffset(14, 0)
-	label.Size = UDim2.new(1, -20, 1, 0)
-	label.Font = Enum.Font.GothamMedium
-	label.TextSize = 14
+	label.Position = UDim2.fromOffset(16, 0)
+	label.Size = UDim2.new(1, -24, 1, 0)
+	label.Font = if isPunchy then Enum.Font.GothamBold else Enum.Font.GothamMedium
+	label.TextSize = if isPunchy then 16 else 14
 	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextColor3 = Constants.Colors.Text
+	label.TextColor3 = if isPunchy then Color3.fromRGB(230, 255, 235) else Constants.Colors.Text
 	label.Text = prefix .. message
 	label.TextTransparency = 1
 	label.Parent = toast
@@ -24187,9 +24356,10 @@ function NotificationController.Show(message: string, notifType: string, duratio
 		oldest:Destroy()
 	end
 
-	local fadeIn = TweenService:Create(toast, TweenInfo.new(0.2), { BackgroundTransparency = 0.05 })
-	local strokeIn = TweenService:Create(stroke, TweenInfo.new(0.2), { Transparency = 0 })
-	local textIn = TweenService:Create(label, TweenInfo.new(0.2), { TextTransparency = 0 })
+	local targetBg = if isPunchy then 0.02 else 0.05
+	local fadeIn = TweenService:Create(toast, TweenInfo.new(0.18), { BackgroundTransparency = targetBg })
+	local strokeIn = TweenService:Create(stroke, TweenInfo.new(0.18), { Transparency = 0 })
+	local textIn = TweenService:Create(label, TweenInfo.new(0.18), { TextTransparency = 0 })
 	fadeIn:Play()
 	strokeIn:Play()
 	textIn:Play()

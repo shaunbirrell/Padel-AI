@@ -9,6 +9,7 @@
 	IDs researched as Free / Get Model on Creator Store (economy IsForSale=false Price=nil).
 	Never paid / never MT-branded. AssetId=0 means skip insert (Part kit only).
 	Design P0 REJECT: JeepFallback 59524622; SWAT/police; blocky soldiers; 107381 as vehicle.
+	Design P0 REJECT primary: 3924234975 plastic Rthro; 91299598767068 Respawn Soldiers pack.
 	Verify in Studio; enable Game Settings → Security → Allow Loading Third Party Assets
 	(and AllowInsertFreeAssets where required) for third-party models.
 ]]

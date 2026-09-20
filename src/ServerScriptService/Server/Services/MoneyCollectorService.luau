@@ -173,7 +173,7 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 	local granted = EconomyService.CollectPendingCash(player)
 	if granted > 0 then
 		if NotificationService then
-			NotificationService.Notify(player, string.format("Collected $%d", granted), "Success", 3)
+			NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3)
 		end
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PassiveIncome")
