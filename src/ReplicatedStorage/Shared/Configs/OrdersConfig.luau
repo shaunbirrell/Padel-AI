@@ -48,10 +48,10 @@ local OrdersConfig = {
 	},
 
 	Walkie = {
-		PositionTouch = UDim2.new(0, 12, 1, -268), -- clear of dock / ATM chips
+		PositionTouch = UDim2.new(0, 10, 1, -240), -- v39: clear of dock; less screen cover
 		PositionDesktop = UDim2.new(0, 16, 1, -110),
-		Size = UDim2.fromOffset(200, 168),
-		SizeTouch = UDim2.fromOffset(268, 236),
+		Size = UDim2.fromOffset(180, 152),
+		SizeTouch = UDim2.fromOffset(200, 176), -- was 268×236 covering half left
 		MinTouchPx = 56,
 	},
 }

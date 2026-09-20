@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=38** (2026-09-20 Europe/Madrid) — Gate DEF HIT + BREACHED, ATM raid thief alert, contested dual-nation pulse + SECURED toast, prestige near CTA, soft-offer session cooldown, squad order billboards, Warehouse crates
+- **Live Published:** Open Cloud **versionNumber=39** (2026-09-20 Europe/Madrid) — P0 hotfix: shrink structure name boards, restore Part-kit buildings + DefensiveWalls perimeter, Orders panel scale
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

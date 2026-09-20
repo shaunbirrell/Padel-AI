@@ -479,8 +479,29 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
 	plinth.Material = Enum.Material.Concrete
 
-	local bodyScale = 1 + lv * 0.55
-	local accentScale = 1 + lv * 0.25
+	-- v39: mild level scale (was 0.55/lv → L5 Body 3.75× buried underground)
+	local bodyScale = 1 + lv * 0.12
+	local accentScale = 1 + lv * 0.08
+
+	local function placeKitPart(child: BasePart, newSize: Vector3, yExtra: number?)
+		local bx = child:GetAttribute("WE_BaseSize")
+		if typeof(bx) ~= "Vector3" then
+			bx = child.Size
+			child:SetAttribute("WE_BaseSize", bx)
+		end
+		local off = child:GetAttribute("WE_LocalOffset")
+		if typeof(off) == "Vector3" then
+			local o = off :: Vector3
+			local b = bx :: Vector3
+			-- Keep bottom at original base bottom so scale grows upward, not into the pad
+			local bottom = o.Y - b.Y * 0.5
+			local newOffY = bottom + newSize.Y * 0.5 + (yExtra or 0)
+			child.Size = newSize
+			child.CFrame = plinth.CFrame * CFrame.new(o.X, newOffY, o.Z)
+		else
+			child.Size = newSize
+		end
+	end
 
 	for _, child in ipairs(plinth:GetChildren()) do
 		if child:IsA("BasePart") then
@@ -492,7 +513,8 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				child.Size = Vector3.new(b.X * (0.9 + t * 0.15), b.Y * bodyScale, b.Z * (0.9 + t * 0.15))
+				local newSize = Vector3.new(b.X * (0.95 + t * 0.08), b.Y * bodyScale, b.Z * (0.95 + t * 0.08))
+				placeKitPart(child, newSize, nil)
 				if palette then
 					child.Color = palette.Body
 				end
@@ -506,7 +528,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				child.Size = Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale)
+				placeKitPart(child, Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale), nil)
 				if palette then
 					child.Color = palette.Accent
 				end
@@ -519,18 +541,25 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				local yBoost = if role == "Antenna" then 1 + lv * 0.8 else 1 + lv * 0.4
-				child.Size = Vector3.new(b.X, b.Y * yBoost, b.Z)
-				local off = child:GetAttribute("WE_LocalOffset")
-				if typeof(off) == "Vector3" then
-					local yExtra = if role == "Antenna" then lv * 0.9 else lv * 0.35
-					child.CFrame = plinth.CFrame * CFrame.new((off :: Vector3) + Vector3.new(0, yExtra, 0))
-				end
+				local yBoost = if role == "Antenna" then 1 + lv * 0.25 else 1 + lv * 0.1
+				local yExtra = if role == "Antenna" then lv * 0.35 else lv * 0.12
+				placeKitPart(child, Vector3.new(b.X, b.Y * yBoost, b.Z), yExtra)
 				if palette then
 					child.Color = if role == "Antenna" then palette.Accent else palette.Roof
 				end
 				child.Transparency = transparency
 				child.Material = Enum.Material.Metal -- Design: reject neon antenna accents
+			elseif role == "Crate" then
+				-- Warehouse interior crates — were stuck Transparency=1 (unhandled role)
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				placeKitPart(child, bx :: Vector3, nil)
+				child.Transparency = if lv == 0 then 1 else 0.05
+				child.Material = Enum.Material.Wood
+				child.CastShadow = lv > 0
 			elseif role == "DressHost" then
 				-- Tier 2 interior/prop hosts: gunmetal, no neon wash
 				child.Transparency = if lv == 0 then 0.95 else 0.72
@@ -546,7 +575,13 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				child.Material = Enum.Material.Metal
 				child.CastShadow = lv > 0
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
-				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				placeKitPart(child, bx :: Vector3, nil)
+				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.08 - t * 0.08)
 				if palette then
 					child.Color = if role == "Window" then Color3.fromRGB(80, 120, 150) else palette.Accent
 				end
@@ -555,6 +590,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				elseif role == "Door" or role == "Pier" then
 					child.Material = Enum.Material.Metal
 				end
+				child.CastShadow = lv > 0
 			elseif role == "Podium" or role == "PodiumRing" or role == "ShowroomMesh" then
 				-- VehicleDepot showroom — visible once depot built
 				child.Transparency = if lv == 0 then 1 else 0.05

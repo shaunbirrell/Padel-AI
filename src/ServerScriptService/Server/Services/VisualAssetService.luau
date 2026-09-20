@@ -400,7 +400,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 25 -- v37: sync with StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 27 -- v39: keep Part kits visible; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -421,18 +421,10 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 		hostPart:SetAttribute("WE_CatalogAssetId", nil)
 	end
 
+	-- v39 P0: NEVER ghost Part-kit silhouettes. Catalog mesh is optional dress on top.
+	-- Prior hideKitBody (Transparency≥0.92) left empty pads when mesh failed/mis-scaled.
 	local function hideKitBody()
-		for _, child in ipairs(hostPart:GetChildren()) do
-			if child:IsA("BasePart") then
-				local role = child:GetAttribute("WE_KitRole")
-				if role == "Body" or role == "Roof" or role == "Door" or role == "Window" or role == "Pier" or role == "Detail" or role == "Antenna" then
-					child.Transparency = math.max(child.Transparency, 0.92)
-					child.CanCollide = false
-				elseif role == "Accent" then
-					child.Transparency = math.max(child.Transparency, 0.75)
-				end
-			end
-		end
+		-- no-op: Part kits stay solid olive/military buildings
 	end
 
 	local function footprintFor(id: string): Vector3
@@ -1098,11 +1090,12 @@ function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureI
 							if weldCloneToPrimary(clone, child, "WE_ParkedCatalog") then
 								clone.Parent = child
 								child:SetAttribute("WE_ParkedAssetId", assetId)
+								-- v39: keep Part-kit parked silhouette visible under optional mesh
 								for _, sib in ipairs(plinth:GetChildren()) do
 									if sib:IsA("BasePart") then
 										local role = sib:GetAttribute("WE_KitRole")
 										if role == "ParkedHeli" or role == "ParkedBoat" then
-											sib.Transparency = math.max(sib.Transparency, 0.88)
+											sib.Transparency = math.min(sib.Transparency, 0.35)
 										end
 									end
 								end

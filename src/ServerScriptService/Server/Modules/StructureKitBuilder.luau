@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 26 -- v38: densify Warehouse interior crate props
+local KIT_GEN = 27 -- v39: force rebuild kits after hideKitBody ghost bug; walls hardened
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -722,6 +722,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)
 	if not plotFolder or not pad then
+		warn("[StructureKitBuilder] SyncPerimeterWalls skipped — no plot/pad", plotId, plotFolder ~= nil, pad ~= nil)
 		return
 	end
 
@@ -978,25 +979,11 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		end
 	end
 
-	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
-	if lv >= 3 then
-		task.defer(function()
-			pcall(function()
-				local vas = require(script.Parent.Parent.Services.VisualAssetService)
-				local dressed = 0
-				for _, ch in ipairs(folder:GetChildren()) do
-					if dressed >= 4 then
-						break
-					end
-					if ch:IsA("BasePart") and ch:GetAttribute("WE_Perimeter") == true and not ch:GetAttribute("WE_GateVisual") then
-						if vas.TryAttachBuildingVisual(ch, "DefensiveWalls", lv) then
-							dressed += 1
-						end
-					end
-				end
-			end)
-		end)
-	end
+	-- v39: do NOT catalog-dress perimeter segments (Part walls are the visible fortification).
+	-- Prior TryAttachBuildingVisual on Wall* parts caused empty/mis-scaled dress on live.
+	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
+	folder:SetAttribute("WE_WallLevel", lv)
+	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d parts=%d", plotId, lv, #folder:GetChildren()))
 
 end
 

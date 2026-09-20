@@ -42,9 +42,10 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 56 -- v33: farther readable name/cost boards
+local PRICE_BILLBOARD_MAX_DIST = 42 -- v39: near-only chips (was 56)
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(300, 132) -- v33: larger high-contrast name board
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- v39: phone-readable chip (was giant 300×132)
+local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(120, 32) -- owned L1+: tiny roof chip, never half-screen
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
 
@@ -328,16 +329,24 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	return display, level, cost, false, prereqHint
 end
 
-local function setBillboardNearOnly(bb: BillboardGui)
-	bb.Size = PRICE_BILLBOARD_SIZE
-	bb.StudsOffset = Vector3.new(0, 10.5, 0)
-	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
-	-- v33: AlwaysOnTop within short MaxDistance so names stay readable behind kits
-	bb.AlwaysOnTop = true
+local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
+	-- v39 P0: never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but small
+	if ownedChip then
+		bb.Size = PRICE_BILLBOARD_OWNED_SIZE
+		bb.StudsOffset = Vector3.new(0, 6, 0)
+		bb.MaxDistance = 28
+		bb.AlwaysOnTop = false
+	else
+		bb.Size = PRICE_BILLBOARD_SIZE
+		bb.StudsOffset = Vector3.new(0, 5.5, 0)
+		bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
+		bb.AlwaysOnTop = false
+	end
 end
 
 local function hidePriceBillboard(part: BasePart)
-	local existing = part:FindFirstChild(BILLBOARD_NAME)
+	local host = part:FindFirstChild("WE_BillboardHost")
+	local existing = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
 	if existing and existing:IsA("BillboardGui") then
 		existing.Enabled = false
 	end
@@ -365,7 +374,7 @@ local function resolveBillboardAdornee(part: BasePart): BasePart
 	host.CanQuery = false
 	host.CanTouch = false
 	host.Massless = true
-	host.CFrame = part.CFrame * CFrame.new(0, math.max(roofY + 2, 8), 0)
+	host.CFrame = part.CFrame * CFrame.new(0, math.max(roofY + 1.2, 5), 0) -- v39: keep chip near roof
 	host.Parent = part
 	return host
 end
@@ -535,23 +544,44 @@ local function refreshSlotBillboard(part: BasePart)
 		return
 	end
 
-	local bb = ensurePriceBillboard(part)
 	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
-	ensurePadNameSurface(part, display)
+	local owned = level >= 1
+	-- Owned: pad SurfaceGui name is enough for L0 buy; skip giant top-of-pad wash when built
+	if owned then
+		local padName = part:FindFirstChild("WE_PadNameGui")
+		if padName then
+			padName:Destroy()
+		end
+	else
+		ensurePadNameSurface(part, display)
+	end
+
+	local bb = ensurePriceBillboard(part)
+	setBillboardNearOnly(bb, owned)
 
 	local incomeStr = formatIncomeRate(structureId)
 	local incomeLine = if incomeStr then (" · " .. incomeStr) else ""
 
 	if isMax then
+		-- v39: tiny roof chip only — never dominate screen over the building
 		local ownedIncome = if incomePerLevel(structureId) > 0
-			then string.format("  +$%d/tick", incomePerLevel(structureId) * level)
+			then string.format(" +$%d/t", incomePerLevel(structureId) * level)
 			else ""
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d  MAX%s", level, ownedIncome),
+			string.format("L%d MAX%s", level, ownedIncome),
 			Constants.Colors.Muted,
 			Color3.fromRGB(70, 80, 70)
+		)
+	elseif owned and cost then
+		-- L1+ upgradeable: small chip, not AlwaysOnTop billboard wall
+		applyBillboardCopy(
+			bb,
+			display,
+			string.format("L%d→%d %s%s", level, level + 1, formatCost(cost), incomeLine),
+			if cash >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if cash >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	elseif prereqHint then
 		local costStr = if cost then formatCost(cost) else ""
@@ -966,7 +996,8 @@ local function startOverlapLoop()
 		end
 		for _, part in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
 			if part:IsA("BasePart") then
-				local bb = part:FindFirstChild(BILLBOARD_NAME)
+				local host = part:FindFirstChild("WE_BillboardHost")
+				local bb = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
 				if bb and bb:IsA("BillboardGui") then
 					if nearAtm then
 						bb.Enabled = false

@@ -507,12 +507,12 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "37
 # --- v33 quality pack: name readability, kit scale, gate polish, ATM raid UX, capture steal, AutoCollect soft, pad dressing ---
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface", "Pad name SurfaceGui helper")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface(part, display)", "Pad name applied on billboard refresh")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "AlwaysOnTop = true", "BUY name billboard AlwaysOnTop near")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "StructureKit KIT_GEN 26")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "AlwaysOnTop = false", "BUY name billboard never AlwaysOnTop (v39)")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 27", "StructureKit KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "airfield"', "Airfield kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "warehouse"', "Warehouse kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Vector3.new(10, 28, 10)", "Watchtower body tall silhouette")
-must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 25", "BuildingDressGen 25")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 27", "BuildingDressGen 27")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "RifleBarrel", "GateGuard clear weapon barrel")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "RifleMag", "GateGuard clear weapon mag")
 must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "ToastCooldown", "AtmRaid ToastCooldown")
@@ -536,7 +536,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 
 
 # --- v34 legitimacy pack: HQ/Barracks/Armory kits, soldier variety, garage tips, DoubleCash soft, capture chip, rebirth copy, mobile Orders ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "v38 KIT_GEN 26")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 27", "KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "armory"', "WeaponsFacility armory kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "3-story weapons inventory", "Armory densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "compound-scale HQ", "HQ densify comment")
@@ -568,12 +568,12 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 
 
 # --- v35 legitimacy / late-game presence: SF densify, Helipad/Dock, landmarks, gate guns, VIP soft, oil bob, death CashMega ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "v38 KIT_GEN 26 (was v37 25)")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 27", "KIT_GEN 27 (v39 hotfix)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SpecialForcesFacility special kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Special Forces compound", "SF densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: ~28 stud marked pad", "Helipad densify")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: naval pier + bollards", "Dock densify")
-must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 25", "v37 BuildingDressGen 25 (was v35 24)")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 27", "BuildingDressGen 27 (v39)")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "Map landmarks folder")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "WreckScorch", "Wrecked vehicle landmark")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "attachTurretVisualMarker", "Gate auto-gun visual marker")
@@ -634,7 +634,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v36")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect Id no-regress v36")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "v35 landmarks no-regress")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 26", "KIT_GEN no-regress v38")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 27", "KIT_GEN no-regress →27")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v36")
 
 
@@ -707,6 +707,28 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713839505", "StarterBundle Id no invent v38")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713838952", "CashMega Id no invent v38")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v38")
+
+
+# --- v39 P0 hotfix: billboards + walls + Part-kit visibility ---
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52)", "v39 price billboard chip 160x52")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_OWNED_SIZE", "v39 owned billboard chip size")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "bb.AlwaysOnTop = false", "v39 price boards never AlwaysOnTop")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 27", "v39 KIT_GEN 27")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "function StructureKitBuilder.SyncPerimeterWalls", "v39 SyncPerimeterWalls present")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_PerimeterGen", "v39 perimeter gen attr")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "SyncPerimeterWalls", "v39 BaseService calls SyncPerimeterWalls")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "placeKitPart", "v39 bottom-anchored kit place")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'role == "Crate"', "v39 Warehouse Crate role visible")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "NEVER ghost Part-kit silhouettes", "v39 hideKitBody no-op")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 27", "v39 BuildingDressGen 27")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "SizeTouch = UDim2.fromOffset(200, 176)", "v39 Orders panel scaled down")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "UDim2.fromOffset(300, 132)", "v39 no giant 300x132 boards")
+# No-regress v39
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v39")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v39")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v39")
+must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v39")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v39")
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

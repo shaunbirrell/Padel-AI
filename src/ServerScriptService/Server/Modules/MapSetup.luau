@@ -214,10 +214,10 @@ local function priceBillboard(parent, title, costLine, accent)
 	-- Visual kits v2: larger readable price cards
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(260, 110)
-	bb.StudsOffset = Vector3.new(0, 9.5, 0)
+	bb.Size = UDim2.fromOffset(160, 52) -- v39: match client chip size (was 260×110)
+	bb.StudsOffset = Vector3.new(0, 5.5, 0)
 	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
-	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
+	bb.MaxDistance = 42 -- mobile: price cards near-only
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")

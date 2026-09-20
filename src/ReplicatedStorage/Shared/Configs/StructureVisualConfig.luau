@@ -21,7 +21,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 25, -- v37 parked heli/boat + runway markings
+	BuildingDressGen = 27, -- v39 Part kits stay visible under optional mesh dress
 
 	Palettes = {
 		CommandCenter = {

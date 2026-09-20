@@ -476,3 +476,13 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 168. **Warehouse crates** — KIT_GEN 26 densifies Warehouse interior with Crate Part props + dress hosts (L1+ via EnsureKit).
 169. BuyPathStatic PASS; no-regress jeep LV+HingeMotor / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v37 kits/soft offers/parked presence.
 
+## 2026-09-20 — P0 live hotfix v39 (billboards / walls / building kits)
+
+Shaun playtest screenshots (flat grey pad, giant AIRFIELD/RADAR/HELIPAD/HQ/BARRACKS black tabs, crates/sandbags only, no hangars/walls):
+
+169. **Giant structure name boards** — Root: v33 `PRICE_BILLBOARD_SIZE` 300×132 + `AlwaysOnTop=true` + owned MAX still full boards. Fix: chip `160×52` (owned `120×32`), `AlwaysOnTop=false`, StudsOffset Y~5.5, MaxDistance 42; owned strips pad SurfaceGui wash.
+170. **Missing buildings** — Root: `VisualAssetService.hideKitBody` set Body/Roof Transparency≥0.92 after catalog mesh attach; meshes often invisible/mis-scaled → empty pads with neon Accent rings + sandbag pops only. Also Body `bodyScale=1+lv*0.55` buried kits without LocalOffset re-place. Fix: hideKitBody no-op (Part kits stay solid); bottom-anchored `placeKitPart`; bodyScale `1+lv*0.12`; Warehouse `Crate` role handled; KIT_GEN/BuildingDressGen **27**.
+171. **Missing DefensiveWalls perimeter** — SyncPerimeterWalls hardened (warn if no pad); removed L3+ catalog dress on Wall* segments (Part walls authoritative); `WE_PerimeterGen` attr; still called from UpdateVisuals + RefreshAllVisuals.
+172. **Orders panel** — SizeTouch `200×176` (was 268×236).
+
+Do not regress: WE_GroundDrive, monetization IDs, AtmRaid, GateDefense, Tutorial.

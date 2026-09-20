@@ -1953,10 +1953,10 @@ local OrdersConfig = {
 	},
 
 	Walkie = {
-		PositionTouch = UDim2.new(0, 12, 1, -268), -- clear of dock / ATM chips
+		PositionTouch = UDim2.new(0, 10, 1, -240), -- v39: clear of dock; less screen cover
 		PositionDesktop = UDim2.new(0, 16, 1, -110),
-		Size = UDim2.fromOffset(200, 168),
-		SizeTouch = UDim2.fromOffset(268, 236),
+		Size = UDim2.fromOffset(180, 152),
+		SizeTouch = UDim2.fromOffset(200, 176), -- was 268×236 covering half left
 		MinTouchPx = 56,
 	},
 }
@@ -2312,7 +2312,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 25, -- v37 parked heli/boat + runway markings
+	BuildingDressGen = 27, -- v39 Part kits stay visible under optional mesh dress
 
 	Palettes = {
 		CommandCenter = {
@@ -6954,10 +6954,10 @@ local function priceBillboard(parent, title, costLine, accent)
 	-- Visual kits v2: larger readable price cards
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(260, 110)
-	bb.StudsOffset = Vector3.new(0, 9.5, 0)
+	bb.Size = UDim2.fromOffset(160, 52) -- v39: match client chip size (was 260×110)
+	bb.StudsOffset = Vector3.new(0, 5.5, 0)
 	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
-	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
+	bb.MaxDistance = 42 -- mobile: price cards near-only
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -10495,7 +10495,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 26 -- v38: densify Warehouse interior crate props
+local KIT_GEN = 27 -- v39: force rebuild kits after hideKitBody ghost bug; walls hardened
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -11202,6 +11202,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)
 	if not plotFolder or not pad then
+		warn("[StructureKitBuilder] SyncPerimeterWalls skipped — no plot/pad", plotId, plotFolder ~= nil, pad ~= nil)
 		return
 	end
 
@@ -11458,25 +11459,11 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		end
 	end
 
-	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
-	if lv >= 3 then
-		task.defer(function()
-			pcall(function()
-				local vas = require(script.Parent.Parent.Services.VisualAssetService)
-				local dressed = 0
-				for _, ch in ipairs(folder:GetChildren()) do
-					if dressed >= 4 then
-						break
-					end
-					if ch:IsA("BasePart") and ch:GetAttribute("WE_Perimeter") == true and not ch:GetAttribute("WE_GateVisual") then
-						if vas.TryAttachBuildingVisual(ch, "DefensiveWalls", lv) then
-							dressed += 1
-						end
-					end
-				end
-			end)
-		end)
-	end
+	-- v39: do NOT catalog-dress perimeter segments (Part walls are the visible fortification).
+	-- Prior TryAttachBuildingVisual on Wall* parts caused empty/mis-scaled dress on live.
+	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
+	folder:SetAttribute("WE_WallLevel", lv)
+	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d parts=%d", plotId, lv, #folder:GetChildren()))
 
 end
 
@@ -13512,8 +13499,29 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
 	plinth.Material = Enum.Material.Concrete
 
-	local bodyScale = 1 + lv * 0.55
-	local accentScale = 1 + lv * 0.25
+	-- v39: mild level scale (was 0.55/lv → L5 Body 3.75× buried underground)
+	local bodyScale = 1 + lv * 0.12
+	local accentScale = 1 + lv * 0.08
+
+	local function placeKitPart(child: BasePart, newSize: Vector3, yExtra: number?)
+		local bx = child:GetAttribute("WE_BaseSize")
+		if typeof(bx) ~= "Vector3" then
+			bx = child.Size
+			child:SetAttribute("WE_BaseSize", bx)
+		end
+		local off = child:GetAttribute("WE_LocalOffset")
+		if typeof(off) == "Vector3" then
+			local o = off :: Vector3
+			local b = bx :: Vector3
+			-- Keep bottom at original base bottom so scale grows upward, not into the pad
+			local bottom = o.Y - b.Y * 0.5
+			local newOffY = bottom + newSize.Y * 0.5 + (yExtra or 0)
+			child.Size = newSize
+			child.CFrame = plinth.CFrame * CFrame.new(o.X, newOffY, o.Z)
+		else
+			child.Size = newSize
+		end
+	end
 
 	for _, child in ipairs(plinth:GetChildren()) do
 		if child:IsA("BasePart") then
@@ -13525,7 +13533,8 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				child.Size = Vector3.new(b.X * (0.9 + t * 0.15), b.Y * bodyScale, b.Z * (0.9 + t * 0.15))
+				local newSize = Vector3.new(b.X * (0.95 + t * 0.08), b.Y * bodyScale, b.Z * (0.95 + t * 0.08))
+				placeKitPart(child, newSize, nil)
 				if palette then
 					child.Color = palette.Body
 				end
@@ -13539,7 +13548,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				child.Size = Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale)
+				placeKitPart(child, Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale), nil)
 				if palette then
 					child.Color = palette.Accent
 				end
@@ -13552,18 +13561,25 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				local yBoost = if role == "Antenna" then 1 + lv * 0.8 else 1 + lv * 0.4
-				child.Size = Vector3.new(b.X, b.Y * yBoost, b.Z)
-				local off = child:GetAttribute("WE_LocalOffset")
-				if typeof(off) == "Vector3" then
-					local yExtra = if role == "Antenna" then lv * 0.9 else lv * 0.35
-					child.CFrame = plinth.CFrame * CFrame.new((off :: Vector3) + Vector3.new(0, yExtra, 0))
-				end
+				local yBoost = if role == "Antenna" then 1 + lv * 0.25 else 1 + lv * 0.1
+				local yExtra = if role == "Antenna" then lv * 0.35 else lv * 0.12
+				placeKitPart(child, Vector3.new(b.X, b.Y * yBoost, b.Z), yExtra)
 				if palette then
 					child.Color = if role == "Antenna" then palette.Accent else palette.Roof
 				end
 				child.Transparency = transparency
 				child.Material = Enum.Material.Metal -- Design: reject neon antenna accents
+			elseif role == "Crate" then
+				-- Warehouse interior crates — were stuck Transparency=1 (unhandled role)
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				placeKitPart(child, bx :: Vector3, nil)
+				child.Transparency = if lv == 0 then 1 else 0.05
+				child.Material = Enum.Material.Wood
+				child.CastShadow = lv > 0
 			elseif role == "DressHost" then
 				-- Tier 2 interior/prop hosts: gunmetal, no neon wash
 				child.Transparency = if lv == 0 then 0.95 else 0.72
@@ -13579,7 +13595,13 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				child.Material = Enum.Material.Metal
 				child.CastShadow = lv > 0
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
-				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
+				local bx = child:GetAttribute("WE_BaseSize")
+				if typeof(bx) ~= "Vector3" then
+					bx = child.Size
+					child:SetAttribute("WE_BaseSize", bx)
+				end
+				placeKitPart(child, bx :: Vector3, nil)
+				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.08 - t * 0.08)
 				if palette then
 					child.Color = if role == "Window" then Color3.fromRGB(80, 120, 150) else palette.Accent
 				end
@@ -13588,6 +13610,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				elseif role == "Door" or role == "Pier" then
 					child.Material = Enum.Material.Metal
 				end
+				child.CastShadow = lv > 0
 			elseif role == "Podium" or role == "PodiumRing" or role == "ShowroomMesh" then
 				-- VehicleDepot showroom — visible once depot built
 				child.Transparency = if lv == 0 then 1 else 0.05
@@ -28037,7 +28060,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 25 -- v37: sync with StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 27 -- v39: keep Part kits visible; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -28058,18 +28081,10 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 		hostPart:SetAttribute("WE_CatalogAssetId", nil)
 	end
 
+	-- v39 P0: NEVER ghost Part-kit silhouettes. Catalog mesh is optional dress on top.
+	-- Prior hideKitBody (Transparency≥0.92) left empty pads when mesh failed/mis-scaled.
 	local function hideKitBody()
-		for _, child in ipairs(hostPart:GetChildren()) do
-			if child:IsA("BasePart") then
-				local role = child:GetAttribute("WE_KitRole")
-				if role == "Body" or role == "Roof" or role == "Door" or role == "Window" or role == "Pier" or role == "Detail" or role == "Antenna" then
-					child.Transparency = math.max(child.Transparency, 0.92)
-					child.CanCollide = false
-				elseif role == "Accent" then
-					child.Transparency = math.max(child.Transparency, 0.75)
-				end
-			end
-		end
+		-- no-op: Part kits stay solid olive/military buildings
 	end
 
 	local function footprintFor(id: string): Vector3
@@ -28735,11 +28750,12 @@ function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureI
 							if weldCloneToPrimary(clone, child, "WE_ParkedCatalog") then
 								clone.Parent = child
 								child:SetAttribute("WE_ParkedAssetId", assetId)
+								-- v39: keep Part-kit parked silhouette visible under optional mesh
 								for _, sib in ipairs(plinth:GetChildren()) do
 									if sib:IsA("BasePart") then
 										local role = sib:GetAttribute("WE_KitRole")
 										if role == "ParkedHeli" or role == "ParkedBoat" then
-											sib.Transparency = math.max(sib.Transparency, 0.88)
+											sib.Transparency = math.min(sib.Transparency, 0.35)
 										end
 									end
 								end
@@ -36856,9 +36872,10 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 56 -- v33: farther readable name/cost boards
+local PRICE_BILLBOARD_MAX_DIST = 42 -- v39: near-only chips (was 56)
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(300, 132) -- v33: larger high-contrast name board
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- v39: phone-readable chip (was giant 300×132)
+local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(120, 32) -- owned L1+: tiny roof chip, never half-screen
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
 
@@ -37142,16 +37159,24 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	return display, level, cost, false, prereqHint
 end
 
-local function setBillboardNearOnly(bb: BillboardGui)
-	bb.Size = PRICE_BILLBOARD_SIZE
-	bb.StudsOffset = Vector3.new(0, 10.5, 0)
-	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
-	-- v33: AlwaysOnTop within short MaxDistance so names stay readable behind kits
-	bb.AlwaysOnTop = true
+local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
+	-- v39 P0: never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but small
+	if ownedChip then
+		bb.Size = PRICE_BILLBOARD_OWNED_SIZE
+		bb.StudsOffset = Vector3.new(0, 6, 0)
+		bb.MaxDistance = 28
+		bb.AlwaysOnTop = false
+	else
+		bb.Size = PRICE_BILLBOARD_SIZE
+		bb.StudsOffset = Vector3.new(0, 5.5, 0)
+		bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
+		bb.AlwaysOnTop = false
+	end
 end
 
 local function hidePriceBillboard(part: BasePart)
-	local existing = part:FindFirstChild(BILLBOARD_NAME)
+	local host = part:FindFirstChild("WE_BillboardHost")
+	local existing = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
 	if existing and existing:IsA("BillboardGui") then
 		existing.Enabled = false
 	end
@@ -37179,7 +37204,7 @@ local function resolveBillboardAdornee(part: BasePart): BasePart
 	host.CanQuery = false
 	host.CanTouch = false
 	host.Massless = true
-	host.CFrame = part.CFrame * CFrame.new(0, math.max(roofY + 2, 8), 0)
+	host.CFrame = part.CFrame * CFrame.new(0, math.max(roofY + 1.2, 5), 0) -- v39: keep chip near roof
 	host.Parent = part
 	return host
 end
@@ -37349,23 +37374,44 @@ local function refreshSlotBillboard(part: BasePart)
 		return
 	end
 
-	local bb = ensurePriceBillboard(part)
 	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
-	ensurePadNameSurface(part, display)
+	local owned = level >= 1
+	-- Owned: pad SurfaceGui name is enough for L0 buy; skip giant top-of-pad wash when built
+	if owned then
+		local padName = part:FindFirstChild("WE_PadNameGui")
+		if padName then
+			padName:Destroy()
+		end
+	else
+		ensurePadNameSurface(part, display)
+	end
+
+	local bb = ensurePriceBillboard(part)
+	setBillboardNearOnly(bb, owned)
 
 	local incomeStr = formatIncomeRate(structureId)
 	local incomeLine = if incomeStr then (" · " .. incomeStr) else ""
 
 	if isMax then
+		-- v39: tiny roof chip only — never dominate screen over the building
 		local ownedIncome = if incomePerLevel(structureId) > 0
-			then string.format("  +$%d/tick", incomePerLevel(structureId) * level)
+			then string.format(" +$%d/t", incomePerLevel(structureId) * level)
 			else ""
 		applyBillboardCopy(
 			bb,
 			display,
-			string.format("Lv %d  MAX%s", level, ownedIncome),
+			string.format("L%d MAX%s", level, ownedIncome),
 			Constants.Colors.Muted,
 			Color3.fromRGB(70, 80, 70)
+		)
+	elseif owned and cost then
+		-- L1+ upgradeable: small chip, not AlwaysOnTop billboard wall
+		applyBillboardCopy(
+			bb,
+			display,
+			string.format("L%d→%d %s%s", level, level + 1, formatCost(cost), incomeLine),
+			if cash >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if cash >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	elseif prereqHint then
 		local costStr = if cost then formatCost(cost) else ""
@@ -37780,7 +37826,8 @@ local function startOverlapLoop()
 		end
 		for _, part in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
 			if part:IsA("BasePart") then
-				local bb = part:FindFirstChild(BILLBOARD_NAME)
+				local host = part:FindFirstChild("WE_BillboardHost")
+				local bb = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
 				if bb and bb:IsA("BillboardGui") then
 					if nearAtm then
 						bb.Enabled = false
