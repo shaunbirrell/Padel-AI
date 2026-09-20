@@ -33,13 +33,14 @@ local SoldierConfig = {
 		Rig = "R15", -- preferred attach target; Part kit remains R6-ish fallback proportions
 		VisualKindDefault = "Soldier",
 		VisualKindByRole = {
-			Worker = "Soldier", -- v34: distinct ModelAssetId from Infantry
+			Worker = "Worker", -- v41: VisualAssetConfig.Characters.Worker 16134469614
 			Infantry = "Infantry",
 			Heavy = "HeavyInfantry",
 			Guard = "Guard",
 			BankGuard = "BankGuard",
 			OilRigGuard = "OilRigGuard",
 			FortGuard = "FortGuard",
+			SpecialForces = "SpecialForces", -- v41 SF unit VisualKind
 		},
 		-- Placeholder palette when mesh missing (olive drab / desert camo)
 		VisualPlaceholder = {

@@ -13,7 +13,7 @@ local PlotOilPumpConfig = {
 	CashPerTick = 18,
 	TickSeconds = 5,
 	BillboardMaxDistance = 80,
-	VisualPropKey = "IndustrialPack",
+	VisualPropKey = "OilPumpjack", -- v41 realistic nodding donkey (alt OilPumpjackAlt)
 	FolderName = "WE_PlotOilPumps",
 	Reason = "plot_oil",
 }

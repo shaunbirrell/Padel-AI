@@ -21,7 +21,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 27, -- v39 Part kits stay visible under optional mesh dress
+	BuildingDressGen = 28, -- v41 DressGen: DefensiveWalls mesh=0 + gate prop; kits stay visible
 
 	Palettes = {
 		CommandCenter = {
@@ -94,8 +94,8 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
 			TargetFootprint = Vector3.new(24, 8, 3),
-			MeshAssetId = 208197704,
-			MeshAssetIdL3 = 9703136850,
+			MeshAssetId = 0, -- v41: NO Wall* segment catalog dress (Part-kit walls only)
+			MeshAssetIdL3 = 0, -- v41: Part-kit heavy walls
 		},
 		Watchtowers = {
 			Plinth = Color3.fromRGB(44, 46, 40),

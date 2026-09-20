@@ -400,10 +400,14 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 27 -- v39: keep Part kits visible; sync StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 28 -- v41: walls mesh=0 + gate prop; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
+		[13195201090] = true, -- Build-a-Boat template (Design REJECT capital)
+		[12630605935] = true, -- civilian Airplane Hangar text (not ceiling)
+		[11399477618] = true, -- nation-branded gate
+		[10339789720] = true, -- nation-branded gate
 	}
 
 	local existingGen = tonumber(hostPart:GetAttribute("WE_BuildingDressGen"))
@@ -451,6 +455,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			DefensiveWalls = Vector3.new(24, 8, 3),
 			MissileDefense = Vector3.new(12, 22, 12),
 			SpecialForcesFacility = Vector3.new(26, 14, 16),
+			BaseGate = Vector3.new(16, 12, 4),
 		}
 		return defaults[id] or Vector3.new(28, 14, 20)
 	end
@@ -612,6 +617,13 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 	end
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	hostPart:SetAttribute("WE_BuildingDressGen", DRESS_GEN)
+	if structureId == "BaseGate" then
+		hostPart:SetAttribute("WE_DisplayName", "Base Gate")
+		local dressed = hostPart:FindFirstChild("WE_CatalogBuilding")
+		if dressed and dressed:IsA("Model") then
+			dressed.Name = "WE_BaseGate"
+		end
+	end
 	hideKitBody()
 	return true
 end
@@ -699,9 +711,9 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 	local template = loadModel(assetId)
-	-- Palm → PalmAlt fallback (Design Bot wire)
-	if not template and (propKey == "Palm" or propKey == "Tent") then
-		local altKey = if propKey == "Palm" then "PalmAlt" else "TentAlt"
+	-- Palm/Tent/OilPumpjack alt fallback (Design Bot wire)
+	if not template and (propKey == "Palm" or propKey == "Tent" or propKey == "OilPumpjack") then
+		local altKey = if propKey == "Palm" then "PalmAlt" elseif propKey == "Tent" then "TentAlt" else "OilPumpjackAlt"
 		local altId = VisualAssetService.ResolvePropAssetId(altKey)
 		if altId then
 			template = loadModel(altId)

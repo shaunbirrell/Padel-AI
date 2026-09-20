@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 27 -- v39: force rebuild kits after hideKitBody ghost bug; walls hardened
+local KIT_GEN = 27 -- v39 hotfix; v41 prefers DressGen bump + GateArch BaseGate attach (no wall wipe)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -985,6 +985,25 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	folder:SetAttribute("WE_WallLevel", lv)
 	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d parts=%d", plotId, lv, #folder:GetChildren()))
 
+	-- v41: BaseGate catalog prop on GateArch ONLY (not Wall* segments). StripScripts via VAS.
+	-- Prefer DressGen/attach without KIT_GEN bump so walls are not wiped.
+	task.defer(function()
+		pcall(function()
+			local vac = require(Shared.Configs.VisualAssetConfig)
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			local ref = vac.Buildings and vac.Buildings.BaseGate
+			local aid = ref and tonumber(ref.ModelAssetId) or 0
+			if not aid or aid <= 0 then
+				return
+			end
+			for _, ch in ipairs(folder:GetChildren()) do
+				if ch:IsA("BasePart") and ch.Name == "GateArch" then
+					ch:SetAttribute("WE_DisplayName", "Base Gate")
+					vas.TryAttachBuildingVisual(ch, "BaseGate", lv)
+				end
+			end
+		end)
+	end)
 end
 
 

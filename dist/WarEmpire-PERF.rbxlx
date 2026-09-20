@@ -1988,7 +1988,7 @@ local PlotOilPumpConfig = {
 	CashPerTick = 18,
 	TickSeconds = 5,
 	BillboardMaxDistance = 80,
-	VisualPropKey = "IndustrialPack",
+	VisualPropKey = "OilPumpjack", -- v41 realistic nodding donkey (alt OilPumpjackAlt)
 	FolderName = "WE_PlotOilPumps",
 	Reason = "plot_oil",
 }
@@ -2236,13 +2236,14 @@ local SoldierConfig = {
 		Rig = "R15", -- preferred attach target; Part kit remains R6-ish fallback proportions
 		VisualKindDefault = "Soldier",
 		VisualKindByRole = {
-			Worker = "Soldier", -- v34: distinct ModelAssetId from Infantry
+			Worker = "Worker", -- v41: VisualAssetConfig.Characters.Worker 16134469614
 			Infantry = "Infantry",
 			Heavy = "HeavyInfantry",
 			Guard = "Guard",
 			BankGuard = "BankGuard",
 			OilRigGuard = "OilRigGuard",
 			FortGuard = "FortGuard",
+			SpecialForces = "SpecialForces", -- v41 SF unit VisualKind
 		},
 		-- Placeholder palette when mesh missing (olive drab / desert camo)
 		VisualPlaceholder = {
@@ -2317,7 +2318,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 27, -- v39 Part kits stay visible under optional mesh dress
+	BuildingDressGen = 28, -- v41 DressGen: DefensiveWalls mesh=0 + gate prop; kits stay visible
 
 	Palettes = {
 		CommandCenter = {
@@ -2390,8 +2391,8 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
 			TargetFootprint = Vector3.new(24, 8, 3),
-			MeshAssetId = 208197704,
-			MeshAssetIdL3 = 9703136850,
+			MeshAssetId = 0, -- v41: NO Wall* segment catalog dress (Part-kit walls only)
+			MeshAssetIdL3 = 0, -- v41: Part-kit heavy walls
 		},
 		Watchtowers = {
 			Plinth = Color3.fromRGB(44, 46, 40),
@@ -3266,8 +3267,8 @@ local VisualAssetConfig = {
 		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		ReconBuggy = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
 		-- Free tank family
-		LightTank = { ModelAssetId = 26007709, Note = "Free tank (Creator Store)" } :: AssetRef,
-		MediumTank = { ModelAssetId = 26007709, Note = "Tank reuse" } :: AssetRef,
+		LightTank = { ModelAssetId = 76055078503396, Note = "v41 IFV/tank mesh — DisplayName Light Tank" } :: AssetRef,
+		MediumTank = { ModelAssetId = 26007709, Note = "Classic tank soft keep until better MBT" } :: AssetRef,
 		BattleTank = { ModelAssetId = 19297043, Note = "Mammoth MBT" } :: AssetRef,
 		HeavyTank = { ModelAssetId = 19297043, Note = "Mammoth heavy" } :: AssetRef,
 		SuperHeavyTank = { ModelAssetId = 19297043, Note = "Mammoth super heavy" } :: AssetRef,
@@ -3304,48 +3305,48 @@ local VisualAssetConfig = {
 		TankerPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 		-- Free naval family
 		_FallbackNaval = { ModelAssetId = 15786579439, Note = "Free Boat (Creator Store)" } :: AssetRef,
-		PatrolBoat = { ModelAssetId = 15786579439, Note = "Free Boat" } :: AssetRef,
-		FastAttackCraft = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		PatrolBoat = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" } :: AssetRef,
+		FastAttackCraft = { ModelAssetId = 16692908395, Note = "Attack Boat PT" } :: AssetRef,
 		RiverBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		CoastCutter = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		TorpedoBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		Gunboat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		CoastCutter = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" } :: AssetRef,
+		TorpedoBoat = { ModelAssetId = 16692908395, Note = "Attack Boat PT" } :: AssetRef,
+		Gunboat = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" } :: AssetRef,
 		MissileBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
 		MineLayer = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
 		CoastalMonitor = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		LandingCraft = { ModelAssetId = 13195201090, Note = "Build a Boat Template (free)" } :: AssetRef,
-		AssaultLanding = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		HoverTransport = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		HospitalShip = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		SupplyShip = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		AmphibAssault = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		Corvette = { ModelAssetId = 13195201090, Note = "Boat template reuse (capital)" } :: AssetRef,
-		Destroyer = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		Frigate = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		CarrierEscort = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		Battleship = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
-		AircraftCarrier = { ModelAssetId = 13195201090, Note = "Boat template reuse" } :: AssetRef,
+		LandingCraft = { ModelAssetId = 0, Note = "Part-kit barge — REJECT 13195201090 template" } :: AssetRef,
+		AssaultLanding = { ModelAssetId = 0, Note = "Part-kit — REJECT 13195201090" } :: AssetRef,
+		HoverTransport = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
+		HospitalShip = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
+		SupplyShip = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
+		AmphibAssault = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
+		Corvette = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		Destroyer = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		Frigate = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		CarrierEscort = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		Battleship = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		AircraftCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
 		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
 		SupplyTruck = { ModelAssetId = 105503568352704, Note = "Military truck (same as PatrolTruck)" } :: AssetRef,
-		FuelTanker = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		EngineeringTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		FlatbedHauler = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		AmmoCarrier = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		MissileTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		FuelTanker = { ModelAssetId = 100684175, Note = "Cargo Truck olive 6x6 — not 28912351" } :: AssetRef,
+		EngineeringTruck = { ModelAssetId = 100684175, Note = "Cargo Truck" } :: AssetRef,
+		FlatbedHauler = { ModelAssetId = 100684175, Note = "Cargo Truck" } :: AssetRef,
+		AmmoCarrier = { ModelAssetId = 81802040484766, Note = "Logistics Truck PBR" } :: AssetRef,
+		MissileTruck = { ModelAssetId = 81802040484766, Note = "Logistics Truck PBR" } :: AssetRef,
 		AntiAirTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		RadarTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		RadarTruck = { ModelAssetId = 81802040484766, Note = "Logistics Truck PBR" } :: AssetRef,
 		CargoVan = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		TroopTransport = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
+		TroopTransport = { ModelAssetId = 4128346779, Note = "Army Truck mesh unique" } :: AssetRef,
 		RecoveryTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		EscortTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
 		InfantryCarrier = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
 		CommandVehicle = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
 		WheeledIFV = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
 		AmphibiousAPC = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
-		CombatIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
-		AssaultIFV = { ModelAssetId = 26007709, Note = "Tank family IFV" } :: AssetRef,
+		CombatIFV = { ModelAssetId = 76055078503396, Note = "v41 Combat IFV" } :: AssetRef,
+		AssaultIFV = { ModelAssetId = 76055078503396, Note = "v41 Assault IFV" } :: AssetRef,
 		BridgeLayer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
 		MineClearer = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
 		FlameCarrier = { ModelAssetId = 26007709, Note = "Tracked reuse" } :: AssetRef,
@@ -3367,9 +3368,9 @@ local VisualAssetConfig = {
 		HeavyBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 		StealthStrike = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
-		Cruiser = { ModelAssetId = 13195201090, Note = "Boat template capital" } :: AssetRef,
-		MissileCruiser = { ModelAssetId = 13195201090, Note = "Boat template capital" } :: AssetRef,
-		FleetCarrier = { ModelAssetId = 13195201090, Note = "Boat template carrier" } :: AssetRef,
+		Cruiser = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		MissileCruiser = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
+		FleetCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
 		StrategicBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
@@ -3377,14 +3378,16 @@ local VisualAssetConfig = {
 		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
 		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
 		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
-		Worker = { ModelAssetId = 100212659702941, Note = "v34: distinct from Infantry — Soldier StarterCharacter mesh" } :: AssetRef,
-		WorkerFallback = { ModelAssetId = 16134469614, Note = "Worker fallback Rigged Soldier if Infantry insert fails" } :: AssetRef,
+		Worker = { ModelAssetId = 16134469614, Note = "v41 distinct Worker (Rigged Soldier NVG)" } :: AssetRef,
+		WorkerFallback = { ModelAssetId = 9104381136, Note = "Worker fallback Infantry mesh if Guard insert fails" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		OilRigGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		FortGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		GateGuard = { ModelAssetId = 16134469614, Note = "Gate patrol — Rigged Soldier NVG/balaclava" } :: AssetRef,
+		SpecialForces = { ModelAssetId = 123239877613650, Note = "Army Soldier Camo — SF" } :: AssetRef,
+		SpecialForcesAlt = { ModelAssetId = 4851009700, Note = "Sniper Soldier fallback" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- No plastic CharacterAlt — primary insert failure falls back to Part kit / olive drab.
@@ -3397,21 +3400,23 @@ local VisualAssetConfig = {
 		VehicleDepot = { ModelAssetId = 6015472062, Note = "Classic Warehouse free (depot)" } :: AssetRef,
 		WeaponsFacility = { ModelAssetId = 4120970784, Note = "Weapons facility" } :: AssetRef,
 		Warehouse = { ModelAssetId = 6015472062, Note = "Warehouse" } :: AssetRef,
-		Hangar = { ModelAssetId = 6015472062, Note = "Hangar primary; REJECT 46981739 tiny" } :: AssetRef,
+		Hangar = { ModelAssetId = 6015472062, Note = "Hangar primary; alt 12208876851" } :: AssetRef,
+		HangarAlt = { ModelAssetId = 12208876851, Note = "Hangar insert fallback" } :: AssetRef,
+		BaseGate = { ModelAssetId = 85138026, Note = "Gate arch prop ONLY — DisplayName Base Gate" } :: AssetRef,
 		ResearchLab = { ModelAssetId = 17725725, Note = "Research lab" } :: AssetRef,
 		SpecialForcesFacility = { ModelAssetId = 18798977801, Note = "Special forces facility" } :: AssetRef,
 		Watchtowers = { ModelAssetId = 108525417345747, Note = "Watchtower" } :: AssetRef,
 		Radar = { ModelAssetId = 9559610195, Note = "Radar" } :: AssetRef,
 		MissileDefense = { ModelAssetId = 108525417345747, Note = "Missile defense (fallback 16659447)" } :: AssetRef,
-		DefensiveWalls = { ModelAssetId = 208197704, Note = "Defensive walls L1–2; L3+ uses 9703136850 via StructureVisualConfig" } :: AssetRef,
-		DefensiveWallsL3 = { ModelAssetId = 9703136850, Note = "Heavy duty military wall (DefensiveWalls L3+)" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 0, Note = "v41: no Wall* segment catalog dress" } :: AssetRef,
+		DefensiveWallsL3 = { ModelAssetId = 0, Note = "v41: Part-kit heavy walls" } :: AssetRef,
 		PowerStation = { ModelAssetId = 14000967030, Note = "Power station" } :: AssetRef,
 		Bunker = { ModelAssetId = 16659447, Note = "Destructible Movil Bunker free" } :: AssetRef,
 		Helipad = { ModelAssetId = 14313845338, Note = "Airport free Get Model (pad/hangar)" } :: AssetRef,
 		Airfield = { ModelAssetId = 0, Note = "COMPOSITE runway+Hangar 6015472062; REJECT 12370174722" } :: AssetRef,
 		Dock = { ModelAssetId = 17701461178, Note = "Shipping Containers free (dockside)" } :: AssetRef,
 		-- Anti-heli Base Ceiling: Part-kit only (no invented / paid roof IDs)
-		BaseCeiling = { ModelAssetId = 0, Note = "Part-kit gunmetal/olive translucent roof — no free dedicated roof Model" } :: AssetRef,
+		BaseCeiling = { ModelAssetId = 0, Note = "Part-kit anti-heli roof — no free dedicated Model" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- JeepFallback 59524622 DELETED (Design P0 REJECT). Part kit physics if mesh fails.
@@ -3509,6 +3514,8 @@ local VisualAssetConfig = {
 	-- Tier 2: oil spectacle + map landmarks (REJECT Ultrapump 1837698074)
 	IndustrialProps = {
 		IndustrialPack = { ModelAssetId = 103734805361054, Note = "Realistic Industrial Props Pack (oil spectacle)" } :: AssetRef,
+		OilPumpjack = { ModelAssetId = 13525922265, Note = "Realistic Oil Pumpjack" } :: AssetRef,
+		OilPumpjackAlt = { ModelAssetId = 15192621369, Note = "Oil Rig / Pumpjack alt" } :: AssetRef,
 		RustyPipes = { ModelAssetId = 131322292868756, Note = "Rusty pipes runs to derrick silhouette" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans cluster" } :: AssetRef,
@@ -10500,7 +10507,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 27 -- v39: force rebuild kits after hideKitBody ghost bug; walls hardened
+local KIT_GEN = 27 -- v39 hotfix; v41 prefers DressGen bump + GateArch BaseGate attach (no wall wipe)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -11470,6 +11477,25 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	folder:SetAttribute("WE_WallLevel", lv)
 	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d parts=%d", plotId, lv, #folder:GetChildren()))
 
+	-- v41: BaseGate catalog prop on GateArch ONLY (not Wall* segments). StripScripts via VAS.
+	-- Prefer DressGen/attach without KIT_GEN bump so walls are not wiped.
+	task.defer(function()
+		pcall(function()
+			local vac = require(Shared.Configs.VisualAssetConfig)
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			local ref = vac.Buildings and vac.Buildings.BaseGate
+			local aid = ref and tonumber(ref.ModelAssetId) or 0
+			if not aid or aid <= 0 then
+				return
+			end
+			for _, ch in ipairs(folder:GetChildren()) do
+				if ch:IsA("BasePart") and ch.Name == "GateArch" then
+					ch:SetAttribute("WE_DisplayName", "Base Gate")
+					vas.TryAttachBuildingVisual(ch, "BaseGate", lv)
+				end
+			end
+		end)
+	end)
 end
 
 
@@ -28065,10 +28091,14 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 27 -- v39: keep Part kits visible; sync StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 28 -- v41: walls mesh=0 + gate prop; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
+		[13195201090] = true, -- Build-a-Boat template (Design REJECT capital)
+		[12630605935] = true, -- civilian Airplane Hangar text (not ceiling)
+		[11399477618] = true, -- nation-branded gate
+		[10339789720] = true, -- nation-branded gate
 	}
 
 	local existingGen = tonumber(hostPart:GetAttribute("WE_BuildingDressGen"))
@@ -28116,6 +28146,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			DefensiveWalls = Vector3.new(24, 8, 3),
 			MissileDefense = Vector3.new(12, 22, 12),
 			SpecialForcesFacility = Vector3.new(26, 14, 16),
+			BaseGate = Vector3.new(16, 12, 4),
 		}
 		return defaults[id] or Vector3.new(28, 14, 20)
 	end
@@ -28277,6 +28308,13 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 	end
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	hostPart:SetAttribute("WE_BuildingDressGen", DRESS_GEN)
+	if structureId == "BaseGate" then
+		hostPart:SetAttribute("WE_DisplayName", "Base Gate")
+		local dressed = hostPart:FindFirstChild("WE_CatalogBuilding")
+		if dressed and dressed:IsA("Model") then
+			dressed.Name = "WE_BaseGate"
+		end
+	end
 	hideKitBody()
 	return true
 end
@@ -28364,9 +28402,9 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 	local template = loadModel(assetId)
-	-- Palm → PalmAlt fallback (Design Bot wire)
-	if not template and (propKey == "Palm" or propKey == "Tent") then
-		local altKey = if propKey == "Palm" then "PalmAlt" else "TentAlt"
+	-- Palm/Tent/OilPumpjack alt fallback (Design Bot wire)
+	if not template and (propKey == "Palm" or propKey == "Tent" or propKey == "OilPumpjack") then
+		local altKey = if propKey == "Palm" then "PalmAlt" elseif propKey == "Tent" then "TentAlt" else "OilPumpjackAlt"
 		local altId = VisualAssetService.ResolvePropAssetId(altKey)
 		if altId then
 			template = loadModel(altId)

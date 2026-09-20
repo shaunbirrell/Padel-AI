@@ -492,3 +492,15 @@ Do not regress: WE_GroundDrive, monetization IDs, AtmRaid, GateDefense, Tutorial
 173. **Orders walkie** — SizeTouch `200×168`, `PanelMaxWidth=220` / `PanelMaxHeight=190` UISizeConstraint, `MobileScaleMax=0.85` (no PrepareScreen 1.1 blow-up). MinTouchPx 56 + hotkeys 1–4/T unchanged.
 174. **WorldPrompt chips** — `PRICE_CHIP_MAX_W=160` + `clampChipSize` defensive clamp (sizes already 160×52 / owned 120×32).
 175. **Design gaps** — `docs/DESIGN_WIRE_GAPS_v40.md` lists ModelAssetId=0 + reused vehicle/structure/soldier IDs for Design Bot. No kit / hideKitBody / KIT_GEN / Jeep / monetization changes.
+
+## 2026-09-20 — Design Feature Wire v41 (live v41 — Open Cloud Published versionNumber=41)
+
+176. **Structures KEEP** — HQ/Barracks/Depot/Warehouse/Hangar/Weapons/Helipad/Dock/Watchtowers/Radar/Power/Research/MissileDefense/Bunker mesh IDs unchanged from live. Airfield composite MeshAssetId=0. BaseCeiling Part-kit only.
+177. **DefensiveWalls = 0** — `StructureVisualConfig` + `VisualAssetConfig.Buildings` MeshAssetId / L3 / ModelAssetId all **0**. No Wall* segment catalog dress (v39 safety). Part-kit perimeter only.
+178. **BaseGate prop** — `VisualAssetConfig.Buildings.BaseGate = 85138026` (DisplayName **Base Gate**). `SyncPerimeterWalls` dresses **GateArch** only via `TryAttachBuildingVisual` + StripScripts. Nation arches rejected. KIT_GEN stays **27** (no wall wipe); BuildingDressGen / VAS DRESS_GEN **28**.
+179. **Vehicles uniqueness** — LightTank/CombatIFV/AssaultIFV → `76055078503396`; cargo trucks → `100684175`; logistics → `81802040484766`; TroopTransport → `4128346779`; PatrolBoat/Gunboat/CoastCutter → `557152593`; FastAttack/Torpedo → `16692908395`; LandingCraft + capital ships → **0** (REJECT `13195201090`). MediumTank soft-keep `26007709`. Jeep WE_GroundDrive untouched.
+180. **Soldiers** — Worker → `16134469614` (VisualKind Worker); SpecialForces → `123239877613650` (+ Alt `4851009700`); Infantry/Heavy/Guard KEEP.
+181. **OilPumpjack** — `IndustrialProps.OilPumpjack = 13525922265` (+ Alt); `PlotOilPumpConfig.VisualPropKey = "OilPumpjack"`.
+182. **Safety no-regress** — hideKitBody remains no-op; placeKitPart bottom-anchored; monetization IDs untouched; billboards ≤160.
+183. BuyPathStatic PASS; InsertService-risk IDs (ping Design Bot on reject): `76055078503396`, `81802040484766`, `123239877613650`, `16692908395`, `13525922265`, `4128346779`, `100684175`, `85138026`.
+
