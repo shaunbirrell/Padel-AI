@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 
 local MoneyCollectorService = {}
 
@@ -20,6 +21,7 @@ local EconomyService: any = nil
 local NotificationService: any = nil
 local MonetizationService: any = nil
 local TutorialService: any = nil
+local RateLimitService: any = nil
 
 local TAG = Constants.Tags.MoneyCollector
 local OVERLAP_MARGIN = 3.5
@@ -28,6 +30,8 @@ local AUTO_COLLECT_INTERVAL = 2.0
 
 local lastOverlap: { [string]: boolean } = {}
 local billboardCache: { [BasePart]: BillboardGui } = {}
+-- thiefUserId → victimUserId → cooldownUntil (os.clock)
+local atmRaidCooldownUntil: { [number]: { [number]: number } } = {}
 
 local function hasAutoCollect(player: Player): boolean
 	if MonetizationService and MonetizationService.PlayerOwnsEntitlement then
@@ -166,6 +170,120 @@ local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
 		and localPos.Y <= half.Y + 10
 end
 
+local function getAtmRaidConfig()
+	local cfg = EconomyConfig.AtmRaid
+	if not cfg or cfg.Enabled == false then
+		return nil
+	end
+	return cfg
+end
+
+local function findOwnerByPlot(plotId: number): Player?
+	for _, player in ipairs(Players:GetPlayers()) do
+		local profile = DataService.GetProfile(player)
+		if profile and profile.BasePlotId == plotId then
+			return player
+		end
+	end
+	return nil
+end
+
+local function raidOnCooldown(thiefId: number, victimId: number, cooldownSec: number): boolean
+	local byVictim = atmRaidCooldownUntil[thiefId]
+	if not byVictim then
+		return false
+	end
+	local untilT = byVictim[victimId]
+	if not untilT then
+		return false
+	end
+	return os.clock() < untilT
+end
+
+local function setRaidCooldown(thiefId: number, victimId: number, cooldownSec: number)
+	local byVictim = atmRaidCooldownUntil[thiefId]
+	if not byVictim then
+		byVictim = {}
+		atmRaidCooldownUntil[thiefId] = byVictim
+	end
+	byVictim[victimId] = os.clock() + cooldownSec
+end
+
+--[[
+	Enemy touches WE_MoneyCollector belonging to another player → steal 10% PendingCash.
+	Server-authoritative; distance + rate-limit + per thief→victim cooldown.
+]]
+function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boolean, number)
+	local cfg = getAtmRaidConfig()
+	if not cfg then
+		return false, 0
+	end
+	local plotId = part:GetAttribute("PlotId")
+	if typeof(plotId) ~= "number" then
+		return false, 0
+	end
+	local thiefProfile = DataService.GetProfile(thief)
+	if not thiefProfile then
+		return false, 0
+	end
+	-- Must not be owner
+	if thiefProfile.BasePlotId ~= nil and thiefProfile.BasePlotId == plotId then
+		return false, 0
+	end
+	local victim = findOwnerByPlot(plotId)
+	if not victim or victim == thief then
+		return false, 0
+	end
+	-- Distance check
+	local character = thief.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then
+		return false, 0
+	end
+	local maxDist = cfg.MaxDistanceStuds or 14
+	if (hrp.Position - part.Position).Magnitude > maxDist + OVERLAP_MARGIN then
+		return false, 0
+	end
+	if RateLimitService and not RateLimitService.Allow(thief, "atm_raid", 1, 2) then
+		return false, 0
+	end
+	local cooldownSec = cfg.AtmRaidCooldownSeconds or 60
+	if raidOnCooldown(thief.UserId, victim.UserId, cooldownSec) then
+		return false, 0
+	end
+	local victimPending = 0
+	if EconomyService and EconomyService.GetPendingCash then
+		victimPending = EconomyService.GetPendingCash(victim)
+	else
+		local vp = DataService.GetProfile(victim)
+		victimPending = if vp then math.floor(tonumber((vp :: any).PendingCash) or 0) else 0
+	end
+	local minSteal = cfg.MinStealCash or 1
+	if victimPending < minSteal then
+		return false, 0
+	end
+	local fraction = cfg.StealFraction or 0.10
+	local stealAmount = math.floor(victimPending * fraction)
+	if stealAmount < minSteal then
+		return false, 0
+	end
+	local transferred = 0
+	if EconomyService and EconomyService.TransferPendingCash then
+		transferred = EconomyService.TransferPendingCash(victim, thief, stealAmount)
+	end
+	if transferred <= 0 then
+		return false, 0
+	end
+	setRaidCooldown(thief.UserId, victim.UserId, cooldownSec)
+	if NotificationService then
+		local thiefToast = cfg.ToastThief or "Stole $%d from %s"
+		local victimToast = cfg.ToastVictim or "ATM raided −$%d"
+		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 4)
+		NotificationService.Notify(victim, string.format(victimToast, transferred), "Warn", 4)
+	end
+	return true, transferred
+end
+
 function MoneyCollectorService.Collect(player: Player): (boolean, number)
 	if not EconomyService or not EconomyService.CollectPendingCash then
 		return false, 0
@@ -245,6 +363,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	MonetizationService = deps.MonetizationService
 	TutorialService = deps.TutorialService
+	RateLimitService = deps.RateLimitService
 
 	-- Touch + spatial collect
 	local function tryCollectFromPart(player: Player, part: BasePart)
@@ -253,7 +372,9 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 			return
 		end
 		local plotId = part:GetAttribute("PlotId")
-		if typeof(plotId) == "number" and profile.BasePlotId ~= nil and plotId ~= profile.BasePlotId then
+		-- Enemy ATM: attempt raid (10% PendingCash steal)
+		if typeof(plotId) == "number" and (profile.BasePlotId == nil or plotId ~= profile.BasePlotId) then
+			MoneyCollectorService.TryAtmRaid(player, part)
 			return
 		end
 		local pending = tonumber(profile.PendingCash) or 0
@@ -335,7 +456,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 				local hrp = character and character:FindFirstChild("HumanoidRootPart")
 				if hrp and hrp:IsA("BasePart") then
 					local profile = DataService.GetProfile(player)
-					if profile and (tonumber(profile.PendingCash) or 0) > 0 then
+					if profile then
 						for part in pairs(attached) do
 							if part.Parent and pointInPart(hrp.Position, part) then
 								tryCollectFromPart(player, part)
@@ -360,7 +481,15 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		end
 	end)
 
-	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector)")
+	Players.PlayerRemoving:Connect(function(player)
+		atmRaidCooldownUntil[player.UserId] = nil
+		-- Also drop entries where this player was victim
+		for thiefId, byVictim in pairs(atmRaidCooldownUntil) do
+			byVictim[player.UserId] = nil
+		end
+	end)
+
+	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector; AtmRaid 10%)")
 end
 
 return MoneyCollectorService

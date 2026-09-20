@@ -326,3 +326,7 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 
 ## 2026-09-20 — Squad Orders walkie (minimal ship → live v20)
 98. **Squad Orders** — Minimal walkie (Follow/Attack/Hold/Retreat) when soldiers>0 or Army open. Server `SquadOrdersService` authoritative + rate-limited `RequestSquadOrder`; field units derive from `SoldierService` (capped). Remotes: `RequestSquadOrder`, `SquadOrderStateUpdate`. Config: `OrdersConfig`. HUD dock ORDERS remains MissionController. No edits to StructureKitBuilder / ManualDropper / WorldPrompt / TrainingYard billboards.
+
+## 2026-09-20 — PvP economy P0: contested outposts + ATM raid (live v22+)
+99. **Contested outposts** — `OutpostIncomeStacks` recount from `profile.Territories` via `EconomyService.SyncOutpostIncomeStacks` on capture/loss/profile load. Capturing a zone owned by another player steals that stack contribution. Toasts: `Outpost lost` / `Outpost secured +10% Income`. OwnerUserId already on zone runtime + marker attributes.
+100. **ATM raid** — Enemy touching another player's `WE_MoneyCollector` steals 10% of victim `PendingCash` → thief `PendingCash` (`TransferPendingCash`, no remult). 60s cooldown per thief→victim (`EconomyConfig.AtmRaid.AtmRaidCooldownSeconds`). Distance + RateLimit. Own collect / ManualDropper / GrantOutpost path preserved.

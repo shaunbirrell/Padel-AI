@@ -46,11 +46,25 @@ local EconomyConfig = {
 	-- Capture stipend tuning lives in TerritoryConfig.CaptureStipend
 	-- (periodic cash for owned territories / coastal oil).
 
-	-- Permanent multiplicative income from capturing outposts (persisted stacks).
+	-- Contested outpost income: stacks recount from owned territories (stealable).
 	OutpostIncomeBuff = {
 		MultPerStack = 0.10, -- +10% per stack
 		MaxStacks = 5, -- cap +50%
-		ToastTemplate = "+%d%% Income — Outpost secured",
+		ToastSecured = "Outpost secured +%d%% Income",
+		ToastLost = "Outpost lost",
+		-- Legacy alias kept for older callers
+		ToastTemplate = "Outpost secured +%d%% Income",
+	},
+
+	-- PvP ATM raid: touch another player's WE_MoneyCollector to steal PendingCash.
+	AtmRaid = {
+		Enabled = true,
+		StealFraction = 0.10, -- 10% of victim PendingCash
+		AtmRaidCooldownSeconds = 60, -- per thief→victim pair
+		MaxDistanceStuds = 14, -- server distance check to collector part
+		MinStealCash = 1,
+		ToastThief = "Stole $%d from %s",
+		ToastVictim = "ATM raided −$%d",
 	},
 }
 

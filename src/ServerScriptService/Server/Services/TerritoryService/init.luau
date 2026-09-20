@@ -405,8 +405,19 @@ local function releaseOwnership(rt: TerritoryRuntime, reason: string)
 		local prevPlayer = Players:GetPlayerByUserId(prevUserId)
 		if prevPlayer then
 			syncProfileOwnership(prevPlayer)
+			-- Contested: recount OutpostIncomeStacks from remaining owned zones
+			if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+				_EconomyService.SyncOutpostIncomeStacks(prevPlayer)
+			end
 			if NotificationService then
-				NotificationService.Notify(prevPlayer, "Lost control of " .. rt.Def.DisplayName, "Warn")
+				local lostToast = "Outpost lost"
+				pcall(function()
+					local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+					if buff and typeof(buff.ToastLost) == "string" then
+						lostToast = buff.ToastLost
+					end
+				end)
+				NotificationService.Notify(prevPlayer, lostToast, "Warn")
 			end
 			if AnalyticsService then
 				AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_LOST, prevUserId, {
@@ -468,17 +479,24 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
 
-	-- Permanent income buff stack (PendingCash / structure / training paths)
-	if _EconomyService and _EconomyService.GrantOutpostIncomeStack then
+	-- Contested income buff: recount stacks from owned zones (stealable by re-capture)
+	if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+		local oldStacks, newStacks, pct = _EconomyService.SyncOutpostIncomeStacks(player)
+		if newStacks > oldStacks and NotificationService and pct > 0 then
+			local template = "Outpost secured +%d%% Income"
+			pcall(function()
+				local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+				if buff then
+					template = buff.ToastSecured or buff.ToastTemplate or template
+				end
+			end)
+			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+		end
+	elseif _EconomyService and _EconomyService.GrantOutpostIncomeStack then
+		-- Fallback if Sync missing
 		local granted, _stacks, pct = _EconomyService.GrantOutpostIncomeStack(player)
 		if granted and NotificationService and pct > 0 then
-			local buff = nil
-			pcall(function()
-				local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
-				buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-			end)
-			local template = (buff and buff.ToastTemplate) or "+%d%% Income — Outpost secured"
-			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+			NotificationService.Notify(player, string.format("Outpost secured +%d%% Income", pct), "Reward", 4)
 		end
 	end
 
@@ -682,6 +700,9 @@ function TerritoryService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		syncProfileOwnership(player)
+		if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+			_EconomyService.SyncOutpostIncomeStacks(player)
+		end
 		TerritoryService.PushPlayer(player)
 	end)
 

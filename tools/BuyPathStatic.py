@@ -222,6 +222,23 @@ must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "Outpo
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", "CURRENT_DATA_VERSION = 8", "Data version 8")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "manual_dropper", "manual_dropper cash-mult exempt")
 
+# --- P0 PvP economy: contested outposts + ATM raid ---
+must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "AtmRaid", "EconomyConfig AtmRaid")
+must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "AtmRaidCooldownSeconds", "AtmRaidCooldownSeconds")
+must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "ToastSecured", "Outpost ToastSecured")
+must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "ToastLost", "Outpost ToastLost")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "SyncOutpostIncomeStacks", "EconomyService SyncOutpostIncomeStacks")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "TransferPendingCash", "EconomyService TransferPendingCash")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "GrantOutpostIncomeStack", "GrantOutpostIncomeStack kept")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "SyncOutpostIncomeStacks", "TerritoryService SyncOutpostIncomeStacks")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "Outpost lost", "Territory outpost lost toast")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "MoneyCollector TryAtmRaid")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TransferPendingCash", "MoneyCollector uses TransferPendingCash")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "atm_raid", "atm_raid cash-mult exempt")
+# No-regress ManualDropper / own collect
+must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "AccruePendingCash", "ManualDropper AccruePendingCash no-regress")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "CollectPendingCash", "Own collect CollectPendingCash no-regress")
+
 
 # --- Design Bot QUALITY TIER 2 ---
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "103734805361054", "IndustrialPack oil spectacle")

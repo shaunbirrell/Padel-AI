@@ -905,11 +905,25 @@ local EconomyConfig = {
 	-- Capture stipend tuning lives in TerritoryConfig.CaptureStipend
 	-- (periodic cash for owned territories / coastal oil).
 
-	-- Permanent multiplicative income from capturing outposts (persisted stacks).
+	-- Contested outpost income: stacks recount from owned territories (stealable).
 	OutpostIncomeBuff = {
 		MultPerStack = 0.10, -- +10% per stack
 		MaxStacks = 5, -- cap +50%
-		ToastTemplate = "+%d%% Income — Outpost secured",
+		ToastSecured = "Outpost secured +%d%% Income",
+		ToastLost = "Outpost lost",
+		-- Legacy alias kept for older callers
+		ToastTemplate = "Outpost secured +%d%% Income",
+	},
+
+	-- PvP ATM raid: touch another player's WE_MoneyCollector to steal PendingCash.
+	AtmRaid = {
+		Enabled = true,
+		StealFraction = 0.10, -- 10% of victim PendingCash
+		AtmRaidCooldownSeconds = 60, -- per thief→victim pair
+		MaxDistanceStuds = 14, -- server distance check to collector part
+		MinStealCash = 1,
+		ToastThief = "Stole $%d from %s",
+		ToastVictim = "ATM raided −$%d",
 	},
 }
 
@@ -1690,6 +1704,7 @@ local MonetizationConfig = {
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
 		manual_dropper = true, -- fixed click awards stay $10–25
+		atm_raid = true, -- stolen PendingCash already multiplied at accrue
 	},
 	XPMultExemptReasons = {
 		admin = true,
@@ -15751,7 +15766,9 @@ return DataService
 	  3. Monetization VIP/DoubleCash: × MonetizationService.GetCashMultiplier
 	  4. Season: × SeasonService.GetCashMult()
 	  5. OutpostIncomeStacks: × (1 + stacks * OutpostIncomeBuff.MultPerStack)
+	     (stacks recount from owned territories — contested / stealable)
 	Passive income accrues to PendingCash (Money Collector); CollectPendingCash grants Cash.
+	ATM raid transfers PendingCash thief←victim without re-applying multipliers.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15970,7 +15987,7 @@ function EconomyService.GetOutpostIncomeMultiplier(player: Player): number
 	return 1 + stacks * (buff.MultPerStack or 0.10)
 end
 
---[[ Grant one permanent outpost income stack (capped). Returns (granted, newStacks, percentAdded). ]]
+--[[ Grant one outpost income stack (capped). Prefer SyncOutpostIncomeStacks for contested ownership. ]]
 function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, number, number)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -15990,6 +16007,69 @@ function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, numbe
 	DataService.MarkDirty(player)
 	local pct = math.floor((buff.MultPerStack or 0.10) * 100)
 	return true, stacks, pct
+end
+
+--[[
+	Recount OutpostIncomeStacks from profile.Territories (owned zone ids).
+	Returns (oldStacks, newStacks, percentPerStack).
+]]
+function EconomyService.SyncOutpostIncomeStacks(player: Player): (number, number, number)
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0, 0, 0
+	end
+	local buff = EconomyConfig.OutpostIncomeBuff
+	local maxStacks = if buff then (buff.MaxStacks or 5) else 5
+	local pct = math.floor(((buff and buff.MultPerStack) or 0.10) * 100)
+	local owned = 0
+	if typeof(profile.Territories) == "table" then
+		for _ in pairs(profile.Territories) do
+			owned += 1
+		end
+	end
+	local newStacks = math.clamp(owned, 0, maxStacks)
+	local oldStacks = math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0)
+	if oldStacks ~= newStacks then
+		(profile :: any).OutpostIncomeStacks = newStacks
+		DataService.MarkDirty(player)
+	end
+	return oldStacks, newStacks, pct
+end
+
+--[[
+	Move PendingCash from victim → thief without cash multipliers (already accrued).
+	Returns amount transferred (0 if none).
+]]
+function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player, amount: number): number
+	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 then
+		return 0
+	end
+	amount = math.floor(amount)
+	local fromProfile = DataService.GetProfile(fromPlayer)
+	local toProfile = DataService.GetProfile(toPlayer)
+	if not fromProfile or not toProfile then
+		return 0
+	end
+	local fromPending = math.floor(tonumber((fromProfile :: any).PendingCash) or 0)
+	if fromPending <= 0 then
+		return 0
+	end
+	local take = math.min(amount, fromPending)
+	if take <= 0 then
+		return 0
+	end
+	(fromProfile :: any).PendingCash = fromPending - take
+	local toPending = math.floor(tonumber((toProfile :: any).PendingCash) or 0)
+	(toProfile :: any).PendingCash = math.clamp(toPending + take, 0, EconomyConfig.MaxCash)
+	DataService.MarkDirty(fromPlayer)
+	DataService.MarkDirty(toPlayer)
+	pushEconomy(fromPlayer, fromProfile)
+	pushEconomy(toPlayer, toProfile)
+	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
+		MoneyCollectorService.RefreshForPlayer(fromPlayer)
+		MoneyCollectorService.RefreshForPlayer(toPlayer)
+	end
+	return take
 end
 
 return EconomyService
@@ -17357,6 +17437,7 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 
 local MoneyCollectorService = {}
 
@@ -17365,6 +17446,7 @@ local EconomyService: any = nil
 local NotificationService: any = nil
 local MonetizationService: any = nil
 local TutorialService: any = nil
+local RateLimitService: any = nil
 
 local TAG = Constants.Tags.MoneyCollector
 local OVERLAP_MARGIN = 3.5
@@ -17373,6 +17455,8 @@ local AUTO_COLLECT_INTERVAL = 2.0
 
 local lastOverlap: { [string]: boolean } = {}
 local billboardCache: { [BasePart]: BillboardGui } = {}
+-- thiefUserId → victimUserId → cooldownUntil (os.clock)
+local atmRaidCooldownUntil: { [number]: { [number]: number } } = {}
 
 local function hasAutoCollect(player: Player): boolean
 	if MonetizationService and MonetizationService.PlayerOwnsEntitlement then
@@ -17511,6 +17595,120 @@ local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
 		and localPos.Y <= half.Y + 10
 end
 
+local function getAtmRaidConfig()
+	local cfg = EconomyConfig.AtmRaid
+	if not cfg or cfg.Enabled == false then
+		return nil
+	end
+	return cfg
+end
+
+local function findOwnerByPlot(plotId: number): Player?
+	for _, player in ipairs(Players:GetPlayers()) do
+		local profile = DataService.GetProfile(player)
+		if profile and profile.BasePlotId == plotId then
+			return player
+		end
+	end
+	return nil
+end
+
+local function raidOnCooldown(thiefId: number, victimId: number, cooldownSec: number): boolean
+	local byVictim = atmRaidCooldownUntil[thiefId]
+	if not byVictim then
+		return false
+	end
+	local untilT = byVictim[victimId]
+	if not untilT then
+		return false
+	end
+	return os.clock() < untilT
+end
+
+local function setRaidCooldown(thiefId: number, victimId: number, cooldownSec: number)
+	local byVictim = atmRaidCooldownUntil[thiefId]
+	if not byVictim then
+		byVictim = {}
+		atmRaidCooldownUntil[thiefId] = byVictim
+	end
+	byVictim[victimId] = os.clock() + cooldownSec
+end
+
+--[[
+	Enemy touches WE_MoneyCollector belonging to another player → steal 10% PendingCash.
+	Server-authoritative; distance + rate-limit + per thief→victim cooldown.
+]]
+function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boolean, number)
+	local cfg = getAtmRaidConfig()
+	if not cfg then
+		return false, 0
+	end
+	local plotId = part:GetAttribute("PlotId")
+	if typeof(plotId) ~= "number" then
+		return false, 0
+	end
+	local thiefProfile = DataService.GetProfile(thief)
+	if not thiefProfile then
+		return false, 0
+	end
+	-- Must not be owner
+	if thiefProfile.BasePlotId ~= nil and thiefProfile.BasePlotId == plotId then
+		return false, 0
+	end
+	local victim = findOwnerByPlot(plotId)
+	if not victim or victim == thief then
+		return false, 0
+	end
+	-- Distance check
+	local character = thief.Character
+	local hrp = character and character:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then
+		return false, 0
+	end
+	local maxDist = cfg.MaxDistanceStuds or 14
+	if (hrp.Position - part.Position).Magnitude > maxDist + OVERLAP_MARGIN then
+		return false, 0
+	end
+	if RateLimitService and not RateLimitService.Allow(thief, "atm_raid", 1, 2) then
+		return false, 0
+	end
+	local cooldownSec = cfg.AtmRaidCooldownSeconds or 60
+	if raidOnCooldown(thief.UserId, victim.UserId, cooldownSec) then
+		return false, 0
+	end
+	local victimPending = 0
+	if EconomyService and EconomyService.GetPendingCash then
+		victimPending = EconomyService.GetPendingCash(victim)
+	else
+		local vp = DataService.GetProfile(victim)
+		victimPending = if vp then math.floor(tonumber((vp :: any).PendingCash) or 0) else 0
+	end
+	local minSteal = cfg.MinStealCash or 1
+	if victimPending < minSteal then
+		return false, 0
+	end
+	local fraction = cfg.StealFraction or 0.10
+	local stealAmount = math.floor(victimPending * fraction)
+	if stealAmount < minSteal then
+		return false, 0
+	end
+	local transferred = 0
+	if EconomyService and EconomyService.TransferPendingCash then
+		transferred = EconomyService.TransferPendingCash(victim, thief, stealAmount)
+	end
+	if transferred <= 0 then
+		return false, 0
+	end
+	setRaidCooldown(thief.UserId, victim.UserId, cooldownSec)
+	if NotificationService then
+		local thiefToast = cfg.ToastThief or "Stole $%d from %s"
+		local victimToast = cfg.ToastVictim or "ATM raided −$%d"
+		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 4)
+		NotificationService.Notify(victim, string.format(victimToast, transferred), "Warn", 4)
+	end
+	return true, transferred
+end
+
 function MoneyCollectorService.Collect(player: Player): (boolean, number)
 	if not EconomyService or not EconomyService.CollectPendingCash then
 		return false, 0
@@ -17590,6 +17788,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	MonetizationService = deps.MonetizationService
 	TutorialService = deps.TutorialService
+	RateLimitService = deps.RateLimitService
 
 	-- Touch + spatial collect
 	local function tryCollectFromPart(player: Player, part: BasePart)
@@ -17598,7 +17797,9 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 			return
 		end
 		local plotId = part:GetAttribute("PlotId")
-		if typeof(plotId) == "number" and profile.BasePlotId ~= nil and plotId ~= profile.BasePlotId then
+		-- Enemy ATM: attempt raid (10% PendingCash steal)
+		if typeof(plotId) == "number" and (profile.BasePlotId == nil or plotId ~= profile.BasePlotId) then
+			MoneyCollectorService.TryAtmRaid(player, part)
 			return
 		end
 		local pending = tonumber(profile.PendingCash) or 0
@@ -17680,7 +17881,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 				local hrp = character and character:FindFirstChild("HumanoidRootPart")
 				if hrp and hrp:IsA("BasePart") then
 					local profile = DataService.GetProfile(player)
-					if profile and (tonumber(profile.PendingCash) or 0) > 0 then
+					if profile then
 						for part in pairs(attached) do
 							if part.Parent and pointInPart(hrp.Position, part) then
 								tryCollectFromPart(player, part)
@@ -17705,7 +17906,15 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		end
 	end)
 
-	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector)")
+	Players.PlayerRemoving:Connect(function(player)
+		atmRaidCooldownUntil[player.UserId] = nil
+		-- Also drop entries where this player was victim
+		for thiefId, byVictim in pairs(atmRaidCooldownUntil) do
+			byVictim[player.UserId] = nil
+		end
+	end)
+
+	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector; AtmRaid 10%)")
 end
 
 return MoneyCollectorService
@@ -20371,8 +20580,19 @@ local function releaseOwnership(rt: TerritoryRuntime, reason: string)
 		local prevPlayer = Players:GetPlayerByUserId(prevUserId)
 		if prevPlayer then
 			syncProfileOwnership(prevPlayer)
+			-- Contested: recount OutpostIncomeStacks from remaining owned zones
+			if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+				_EconomyService.SyncOutpostIncomeStacks(prevPlayer)
+			end
 			if NotificationService then
-				NotificationService.Notify(prevPlayer, "Lost control of " .. rt.Def.DisplayName, "Warn")
+				local lostToast = "Outpost lost"
+				pcall(function()
+					local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+					if buff and typeof(buff.ToastLost) == "string" then
+						lostToast = buff.ToastLost
+					end
+				end)
+				NotificationService.Notify(prevPlayer, lostToast, "Warn")
 			end
 			if AnalyticsService then
 				AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_LOST, prevUserId, {
@@ -20434,17 +20654,24 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
 
-	-- Permanent income buff stack (PendingCash / structure / training paths)
-	if _EconomyService and _EconomyService.GrantOutpostIncomeStack then
+	-- Contested income buff: recount stacks from owned zones (stealable by re-capture)
+	if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+		local oldStacks, newStacks, pct = _EconomyService.SyncOutpostIncomeStacks(player)
+		if newStacks > oldStacks and NotificationService and pct > 0 then
+			local template = "Outpost secured +%d%% Income"
+			pcall(function()
+				local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
+				if buff then
+					template = buff.ToastSecured or buff.ToastTemplate or template
+				end
+			end)
+			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+		end
+	elseif _EconomyService and _EconomyService.GrantOutpostIncomeStack then
+		-- Fallback if Sync missing
 		local granted, _stacks, pct = _EconomyService.GrantOutpostIncomeStack(player)
 		if granted and NotificationService and pct > 0 then
-			local buff = nil
-			pcall(function()
-				local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
-				buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-			end)
-			local template = (buff and buff.ToastTemplate) or "+%d%% Income — Outpost secured"
-			NotificationService.Notify(player, string.format(template, pct), "Reward", 4)
+			NotificationService.Notify(player, string.format("Outpost secured +%d%% Income", pct), "Reward", 4)
 		end
 	end
 
@@ -20648,6 +20875,9 @@ function TerritoryService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		syncProfileOwnership(player)
+		if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+			_EconomyService.SyncOutpostIncomeStacks(player)
+		end
 		TerritoryService.PushPlayer(player)
 	end)
 

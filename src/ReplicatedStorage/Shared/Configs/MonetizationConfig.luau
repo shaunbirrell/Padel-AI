@@ -129,6 +129,7 @@ local MonetizationConfig = {
 		clan_war_participate = true,
 		collector = true, -- pending already multiplied at accrue time
 		manual_dropper = true, -- fixed click awards stay $10–25
+		atm_raid = true, -- stolen PendingCash already multiplied at accrue
 	},
 	XPMultExemptReasons = {
 		admin = true,
