@@ -69,9 +69,9 @@ local function spawnFloatingCash(parent: Instance, amount: number, at: Vector3)
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "CashPop"
-	bb.Size = UDim2.fromOffset(110, 36)
+	bb.Size = UDim2.fromOffset(132, 44)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 70
+	bb.MaxDistance = 90
 	bb.Parent = anchor
 
 	local label = Instance.new("TextLabel")
@@ -79,11 +79,18 @@ local function spawnFloatingCash(parent: Instance, amount: number, at: Vector3)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(90, 255, 130)
-	label.TextStrokeTransparency = 0.35
-	label.TextStrokeColor3 = Color3.fromRGB(10, 40, 18)
+	label.TextColor3 = Color3.fromRGB(80, 255, 120)
+	label.TextStrokeTransparency = 0.25
+	label.TextStrokeColor3 = Color3.fromRGB(8, 36, 14)
 	label.Text = string.format("+$%d", amount)
 	label.Parent = bb
+	-- Competitor-style floating green $ pop (glow stroke)
+	local glow = Instance.new("UIStroke")
+	glow.Name = "CashPopGlow"
+	glow.Color = Color3.fromRGB(40, 200, 80)
+	glow.Thickness = 1.4
+	glow.Transparency = 0.35
+	glow.Parent = label
 
 	local rise = ManualDropperConfig.PopupRiseStuds or 3.2
 	local dur = ManualDropperConfig.PopupDuration or 0.55

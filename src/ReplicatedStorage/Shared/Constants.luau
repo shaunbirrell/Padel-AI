@@ -89,6 +89,7 @@ Constants.RemoteNames = {
 	-- Studio-only BUY smoke → client Output (Play Solo)
 	StudioSmokeLog = "StudioSmokeLog",
 	DeathShopOffer = "DeathShopOffer",
+	StarterBundleOffer = "StarterBundleOffer",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
 }

@@ -97,6 +97,7 @@ export type PlayerProfile = {
 	ProcessedReceipts: { [string]: boolean }?,
 	Entitlements: { [string]: boolean }?,
 	OutpostIncomeStacks: number?,
+	StarterBundleOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {

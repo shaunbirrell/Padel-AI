@@ -280,7 +280,12 @@ local function refresh()
 				return x + 62
 			end
 			local nextX = makeChip(string.upper(string.sub(cat, 1, 3)), catCol, 14)
-			makeChip(string.upper(string.sub(def.Rarity or "Common", 1, 4)), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
+			nextX = makeChip(string.upper(string.sub(def.Rarity or "Common", 1, 4)), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
+			-- v32: ArmedJeep lists with explicit DisplayName + ARMED chip (same WheeledLight drive as MilitaryJeep)
+			if id == "ArmedJeep" then
+				title.Text = def.DisplayName or "Armed Jeep"
+				makeChip("ARMED", Color3.fromRGB(180, 70, 55), nextX)
+			end
 
 			local meta = Instance.new("TextLabel")
 			meta.BackgroundTransparency = 1
@@ -365,7 +370,7 @@ local function setOpen(value: boolean)
 	isOpen = value
 	if screenGui then
 		screenGui.Enabled = true -- keep ScreenGui alive so GARAGE CTA stays clickable
-		local panel = screenGui:FindFirstChild("GaragePanel")
+		local panel = panelFrame or screenGui:FindFirstChild("GaragePanel")
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = value
 		end
@@ -401,6 +406,7 @@ local function buildGui()
 	panel.Visible = false
 	panel.Parent = screen
 	panelFrame = panel
+	-- panelFrame is canonical garage root for open/close
 	addCorner(panel, 10)
 	local gst = Instance.new("UIStroke")
 	gst.Color = Constants.Colors.Gold

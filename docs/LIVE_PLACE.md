@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=31** (2026-09-20 Europe/Madrid) — tutorial first-2-min (Collector+Dropper+CC), SupplyDrop/Season overlay harden, capture +10% Income toast, jeep WASD tip, VIP/AutoCollect OWNED pads
+- **Live Published:** Open Cloud **versionNumber=32** (2026-09-20 Europe/Madrid) — VIP CashBonusMult verify, StarterBundle first-join soft offer, capture flag nation diamond, dropper $ glow, ArmedJeep garage DisplayName
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

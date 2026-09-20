@@ -1738,6 +1738,12 @@ local MonetizationConfig = {
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
 	-- v30: PvP death toast — DoubleCash GamePass + SpeedBoost DevProduct (live Ids)
 	DeathShopOffers = { "DoubleCash", "SpeedBoost" },
+	-- v32: one-shot soft offer on first join / low cash (server marks StarterBundleOffered)
+	StarterBundleOffer = {
+		DelaySeconds = 8,
+		CashBelow = 12000, -- StartingCash*2 + buffer
+		NewProfileMaxAgeSeconds = 600, -- FirstJoin→LastJoin span treats as new
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
@@ -3736,6 +3742,7 @@ Constants.RemoteNames = {
 	-- Studio-only BUY smoke → client Output (Play Solo)
 	StudioSmokeLog = "StudioSmokeLog",
 	DeathShopOffer = "DeathShopOffer",
+	StarterBundleOffer = "StarterBundleOffer",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
 }
@@ -3949,6 +3956,7 @@ export type PlayerProfile = {
 	ProcessedReceipts: { [string]: boolean }?,
 	Entitlements: { [string]: boolean }?,
 	OutpostIncomeStacks: number?,
+	StarterBundleOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {
@@ -9526,6 +9534,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		ProcessedReceipts = {},
 		Entitlements = {},
 		OutpostIncomeStacks = 0,
+		StarterBundleOffered = false,
 	}
 end
 
@@ -9731,6 +9740,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if typeof((profile :: any).OutpostIncomeStacks) ~= "number" then
 		(profile :: any).OutpostIncomeStacks = 0
 	end
+	if (profile :: any).StarterBundleOffered == nil then
+		(profile :: any).StarterBundleOffered = false
+	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
 	return profile
@@ -9891,6 +9903,7 @@ local EVENTS = {
 	Constants.RemoteNames.BankRaidStateUpdate,
 	Constants.RemoteNames.StudioSmokeLog,
 	Constants.RemoteNames.DeathShopOffer,
+	Constants.RemoteNames.StarterBundleOffer,
 	Constants.RemoteNames.PromptPremiumPad,
 }
 
@@ -18185,9 +18198,9 @@ local function spawnFloatingCash(parent: Instance, amount: number, at: Vector3)
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "CashPop"
-	bb.Size = UDim2.fromOffset(110, 36)
+	bb.Size = UDim2.fromOffset(132, 44)
 	bb.AlwaysOnTop = true
-	bb.MaxDistance = 70
+	bb.MaxDistance = 90
 	bb.Parent = anchor
 
 	local label = Instance.new("TextLabel")
@@ -18195,11 +18208,18 @@ local function spawnFloatingCash(parent: Instance, amount: number, at: Vector3)
 	label.BackgroundTransparency = 1
 	label.Font = Enum.Font.GothamBold
 	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(90, 255, 130)
-	label.TextStrokeTransparency = 0.35
-	label.TextStrokeColor3 = Color3.fromRGB(10, 40, 18)
+	label.TextColor3 = Color3.fromRGB(80, 255, 120)
+	label.TextStrokeTransparency = 0.25
+	label.TextStrokeColor3 = Color3.fromRGB(8, 36, 14)
 	label.Text = string.format("+$%d", amount)
 	label.Parent = bb
+	-- Competitor-style floating green $ pop (glow stroke)
+	local glow = Instance.new("UIStroke")
+	glow.Name = "CashPopGlow"
+	glow.Color = Color3.fromRGB(40, 200, 80)
+	glow.Thickness = 1.4
+	glow.Transparency = 0.35
+	glow.Parent = label
 
 	local rise = ManualDropperConfig.PopupRiseStuds or 3.2
 	local dur = ManualDropperConfig.PopupDuration or 0.55
@@ -19326,6 +19346,59 @@ function MonetizationService.Init(deps: { [string]: any })
 					end
 				end
 				gamePassCache[player.UserId] = cache
+			end
+
+			-- v32: one-shot StarterBundle soft offer (new profile / low cash). Marks profile so it never repeats.
+			local offerCfg = (MonetizationConfig :: any).StarterBundleOffer
+			local bundle = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.StarterBundle
+			if offerCfg and bundle and typeof(bundle.Id) == "number" and bundle.Id ~= 0 and typeof(profile) == "table" then
+				local alreadyOffered = profile.StarterBundleOffered == true
+				local ownsBundle = MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle")
+				if not alreadyOffered and not ownsBundle then
+					local cash = tonumber(profile.Cash) or 0
+					local cashBelow = tonumber(offerCfg.CashBelow) or 12000
+					local firstJoin = tonumber(profile.FirstJoinUnix) or 0
+					local lastJoin = tonumber(profile.LastJoinUnix) or firstJoin
+					local maxAge = tonumber(offerCfg.NewProfileMaxAgeSeconds) or 600
+					local isNewish = firstJoin > 0 and (lastJoin - firstJoin) <= maxAge
+					local cashLow = cash <= cashBelow
+					if isNewish or cashLow then
+						local delaySec = tonumber(offerCfg.DelaySeconds) or 8
+						task.delay(delaySec, function()
+							if not player.Parent then
+								return
+							end
+							local live = DataService.GetProfile(player)
+							if not live or live.StarterBundleOffered == true then
+								return
+							end
+							if MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle") then
+								return
+							end
+							live.StarterBundleOffered = true
+							DataService.MarkDirty(player)
+							if RemoteSetup then
+								local remote = RemoteSetup.Get(Constants.RemoteNames.StarterBundleOffer)
+								if remote and remote:IsA("RemoteEvent") then
+									(remote :: RemoteEvent):FireClient(player, {
+										ProductKey = "StarterBundle",
+										ProductId = bundle.Id,
+										DisplayName = bundle.DisplayName or "Starter Bundle",
+										RobuxPrice = bundle.RobuxPrice,
+									})
+								end
+							end
+							if NotificationService then
+								NotificationService.Notify(
+									player,
+									"Commander Starter Bundle available — tap toast to jumpstart",
+									"Info",
+									5
+								)
+							end
+						end)
+					end
+				end
 			end
 		end)
 	end)
@@ -23215,6 +23288,57 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		light.Color = color
 		light.Brightness = if contested then 3.2 elseif rt.OwnerType == ot.Neutral then 0.4 else 2.4
 		light.Enabled = true
+
+		-- Keep stripe locked to flag (nation color visibility polish)
+		local stripe = parent:FindFirstChild(tid .. "_FlagStripe")
+		if stripe and stripe:IsA("BasePart") then
+			stripe.Size = Vector3.new(flag.Size.X, math.max(0.35, flag.Size.Y * 0.14), flag.Size.Z + 0.06)
+			stripe.Position = flag.Position
+			stripe.Color = Color3.fromRGB(245, 245, 245)
+			stripe.Transparency = if rt.OwnerType == ot.Neutral then 0.45 else 0.08
+		end
+
+		-- Floating nation-color flag marker (AlwaysOnTop billboard) for long-range read
+		local flagBbInst = flag:FindFirstChild("WE_FlagBillboard")
+		local flagBb: BillboardGui
+		if flagBbInst and flagBbInst:IsA("BillboardGui") then
+			flagBb = flagBbInst
+		else
+			if flagBbInst then
+				flagBbInst:Destroy()
+			end
+			local created = Instance.new("BillboardGui")
+			created.Name = "WE_FlagBillboard"
+			created.Size = UDim2.fromOffset(52, 52)
+			created.StudsOffset = Vector3.new(0, 2.2, 0)
+			created.AlwaysOnTop = true
+			created.MaxDistance = 160
+			created.Parent = flag
+			local diamond = Instance.new("Frame")
+			diamond.Name = "NationDiamond"
+			diamond.AnchorPoint = Vector2.new(0.5, 0.5)
+			diamond.Position = UDim2.fromScale(0.5, 0.5)
+			diamond.Size = UDim2.fromScale(0.62, 0.62)
+			diamond.Rotation = 45
+			diamond.BorderSizePixel = 0
+			diamond.Parent = created
+			local ds = Instance.new("UIStroke")
+			ds.Name = "DiamondStroke"
+			ds.Thickness = 2
+			ds.Color = Color3.fromRGB(255, 255, 255)
+			ds.Parent = diamond
+			flagBb = created
+		end
+		flagBb.Enabled = rt.OwnerType ~= ot.Neutral or contested
+		flagBb.MaxDistance = if contested then 180 else 150
+		local diamond = flagBb:FindFirstChild("NationDiamond")
+		if diamond and diamond:IsA("Frame") then
+			diamond.BackgroundColor3 = color
+			local ds = diamond:FindFirstChild("DiamondStroke")
+			if ds and ds:IsA("UIStroke") then
+				ds.Color = if contested then Color3.fromRGB(255, 200, 80) else Color3.fromRGB(255, 255, 255)
+			end
+		end
 	end
 
 	local ring = parent:FindFirstChild(tid .. "_Ring")
@@ -31730,9 +31854,7 @@ function ShopController.Init()
 
 			local rowY = 56
 			local btnH = if isTouch then 48 else 40
-			local gap = 8
-			local btnW = if isTouch then math.floor((toast.AbsoluteSize.X > 0 and toast.AbsoluteSize.X or 340) / #live) - gap - 8 else math.floor(336 / #live) - gap
-			-- Use scale-friendly equal split
+			-- Equal-split buttons via scale (no fixed btnW)
 			for i, offer in ipairs(live) do
 				local btn = Instance.new("TextButton")
 				btn.Name = "DeathOffer_" .. offer.Key
@@ -32094,6 +32216,148 @@ function ShopController.Init()
 				task.defer(refreshPremiumOwned)
 			end
 		end)
+	end
+
+
+	-- v32: one-shot StarterBundle soft offer (server fires once per profile)
+	do
+		local starterToast: Frame? = nil
+		local lastStarterToastAt = 0.0
+		local STARTER_TOAST_DEBOUNCE = 30
+
+		local function destroyStarterToast()
+			if starterToast then
+				starterToast:Destroy()
+				starterToast = nil
+			end
+		end
+
+		local function showStarterBundleToast(payload: any)
+			local now = os.clock()
+			if now - lastStarterToastAt < STARTER_TOAST_DEBOUNCE then
+				return
+			end
+			lastStarterToastAt = now
+			destroyStarterToast()
+
+			local productId = if typeof(payload) == "table" then tonumber((payload :: any).ProductId) else nil
+			local displayName = if typeof(payload) == "table" then tostring((payload :: any).DisplayName or "Starter Bundle") else "Starter Bundle"
+			local robux = if typeof(payload) == "table" then tonumber((payload :: any).RobuxPrice) else nil
+			if not productId or productId == 0 then
+				local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.StarterBundle
+				if def and typeof(def.Id) == "number" and def.Id ~= 0 then
+					productId = def.Id
+					displayName = def.DisplayName or displayName
+					robux = def.RobuxPrice or robux
+				else
+					return
+				end
+			end
+
+			local host = screenGui
+			if not host then
+				local pg = player:FindFirstChild("PlayerGui")
+				local existing = pg and pg:FindFirstChild("WarEmpireShop")
+				if existing and existing:IsA("ScreenGui") then
+					host = existing
+					screenGui = existing
+				else
+					return
+				end
+			end
+
+			local toast = Instance.new("Frame")
+			toast.Name = "StarterBundleToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(80, 200, 120)
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			starterToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -56, 0, 22)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 16 else 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(120, 255, 160)
+			title.Text = "Jumpstart your base?"
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local sub = Instance.new("TextLabel")
+			sub.BackgroundTransparency = 1
+			sub.Position = UDim2.fromOffset(12, 30)
+			sub.Size = UDim2.new(1, -24, 0, 18)
+			sub.Font = Enum.Font.Gotham
+			sub.TextSize = 11
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextColor3 = Constants.Colors.Muted
+			sub.Text = displayName .. (if robux then string.format(" · %d R$", robux) else "")
+			sub.ZIndex = 81
+			sub.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(36, 36)
+			dismiss.BackgroundColor3 = Constants.Colors.Background
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.Text = "X"
+			dismiss.TextColor3 = Constants.Colors.Text
+			dismiss.BorderSizePixel = 0
+			dismiss.ZIndex = 82
+			corner(dismiss, 6)
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyStarterToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(240, 255, 245)
+			buy.Text = "Get Starter Bundle"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyStarterToast()
+				-- PromptProductPurchase only — grants via ProcessReceipt
+				promptDevProduct("StarterBundle")
+			end)
+
+			task.delay(14, function()
+				if starterToast == toast then
+					destroyStarterToast()
+				end
+			end)
+		end
+
+		local remote = Remotes.GetEvent(Constants.RemoteNames.StarterBundleOffer)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showStarterBundleToast(payload)
+				end)
+			end)
+		end
 	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
@@ -33611,7 +33875,12 @@ local function refresh()
 				return x + 62
 			end
 			local nextX = makeChip(string.upper(string.sub(cat, 1, 3)), catCol, 14)
-			makeChip(string.upper(string.sub(def.Rarity or "Common", 1, 4)), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
+			nextX = makeChip(string.upper(string.sub(def.Rarity or "Common", 1, 4)), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
+			-- v32: ArmedJeep lists with explicit DisplayName + ARMED chip (same WheeledLight drive as MilitaryJeep)
+			if id == "ArmedJeep" then
+				title.Text = def.DisplayName or "Armed Jeep"
+				makeChip("ARMED", Color3.fromRGB(180, 70, 55), nextX)
+			end
 
 			local meta = Instance.new("TextLabel")
 			meta.BackgroundTransparency = 1
@@ -33696,7 +33965,7 @@ local function setOpen(value: boolean)
 	isOpen = value
 	if screenGui then
 		screenGui.Enabled = true -- keep ScreenGui alive so GARAGE CTA stays clickable
-		local panel = screenGui:FindFirstChild("GaragePanel")
+		local panel = panelFrame or screenGui:FindFirstChild("GaragePanel")
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = value
 		end
@@ -33732,6 +34001,7 @@ local function buildGui()
 	panel.Visible = false
 	panel.Parent = screen
 	panelFrame = panel
+	-- panelFrame is canonical garage root for open/close
 	addCorner(panel, 10)
 	local gst = Instance.new("UIStroke")
 	gst.Color = Constants.Colors.Gold

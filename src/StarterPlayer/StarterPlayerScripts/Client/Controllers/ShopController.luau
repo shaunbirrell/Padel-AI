@@ -183,9 +183,7 @@ function ShopController.Init()
 
 			local rowY = 56
 			local btnH = if isTouch then 48 else 40
-			local gap = 8
-			local btnW = if isTouch then math.floor((toast.AbsoluteSize.X > 0 and toast.AbsoluteSize.X or 340) / #live) - gap - 8 else math.floor(336 / #live) - gap
-			-- Use scale-friendly equal split
+			-- Equal-split buttons via scale (no fixed btnW)
 			for i, offer in ipairs(live) do
 				local btn = Instance.new("TextButton")
 				btn.Name = "DeathOffer_" .. offer.Key
@@ -547,6 +545,148 @@ function ShopController.Init()
 				task.defer(refreshPremiumOwned)
 			end
 		end)
+	end
+
+
+	-- v32: one-shot StarterBundle soft offer (server fires once per profile)
+	do
+		local starterToast: Frame? = nil
+		local lastStarterToastAt = 0.0
+		local STARTER_TOAST_DEBOUNCE = 30
+
+		local function destroyStarterToast()
+			if starterToast then
+				starterToast:Destroy()
+				starterToast = nil
+			end
+		end
+
+		local function showStarterBundleToast(payload: any)
+			local now = os.clock()
+			if now - lastStarterToastAt < STARTER_TOAST_DEBOUNCE then
+				return
+			end
+			lastStarterToastAt = now
+			destroyStarterToast()
+
+			local productId = if typeof(payload) == "table" then tonumber((payload :: any).ProductId) else nil
+			local displayName = if typeof(payload) == "table" then tostring((payload :: any).DisplayName or "Starter Bundle") else "Starter Bundle"
+			local robux = if typeof(payload) == "table" then tonumber((payload :: any).RobuxPrice) else nil
+			if not productId or productId == 0 then
+				local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.StarterBundle
+				if def and typeof(def.Id) == "number" and def.Id ~= 0 then
+					productId = def.Id
+					displayName = def.DisplayName or displayName
+					robux = def.RobuxPrice or robux
+				else
+					return
+				end
+			end
+
+			local host = screenGui
+			if not host then
+				local pg = player:FindFirstChild("PlayerGui")
+				local existing = pg and pg:FindFirstChild("WarEmpireShop")
+				if existing and existing:IsA("ScreenGui") then
+					host = existing
+					screenGui = existing
+				else
+					return
+				end
+			end
+
+			local toast = Instance.new("Frame")
+			toast.Name = "StarterBundleToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Constants.Colors.Panel
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(80, 200, 120)
+			stroke.Thickness = 1.6
+			stroke.Parent = toast
+			toast.Parent = host
+			starterToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -56, 0, 22)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 16 else 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(120, 255, 160)
+			title.Text = "Jumpstart your base?"
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local sub = Instance.new("TextLabel")
+			sub.BackgroundTransparency = 1
+			sub.Position = UDim2.fromOffset(12, 30)
+			sub.Size = UDim2.new(1, -24, 0, 18)
+			sub.Font = Enum.Font.Gotham
+			sub.TextSize = 11
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextColor3 = Constants.Colors.Muted
+			sub.Text = displayName .. (if robux then string.format(" · %d R$", robux) else "")
+			sub.ZIndex = 81
+			sub.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.AnchorPoint = Vector2.new(1, 0)
+			dismiss.Position = UDim2.new(1, -8, 0, 6)
+			dismiss.Size = UDim2.fromOffset(36, 36)
+			dismiss.BackgroundColor3 = Constants.Colors.Background
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.Text = "X"
+			dismiss.TextColor3 = Constants.Colors.Text
+			dismiss.BorderSizePixel = 0
+			dismiss.ZIndex = 82
+			corner(dismiss, 6)
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyStarterToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(240, 255, 245)
+			buy.Text = "Get Starter Bundle"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyStarterToast()
+				-- PromptProductPurchase only — grants via ProcessReceipt
+				promptDevProduct("StarterBundle")
+			end)
+
+			task.delay(14, function()
+				if starterToast == toast then
+					destroyStarterToast()
+				end
+			end)
+		end
+
+		local remote = Remotes.GetEvent(Constants.RemoteNames.StarterBundleOffer)
+		if remote then
+			remote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showStarterBundleToast(payload)
+				end)
+			end)
+		end
 	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)

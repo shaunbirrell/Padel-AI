@@ -100,6 +100,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		ProcessedReceipts = {},
 		Entitlements = {},
 		OutpostIncomeStacks = 0,
+		StarterBundleOffered = false,
 	}
 end
 
@@ -304,6 +305,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if typeof((profile :: any).OutpostIncomeStacks) ~= "number" then
 		(profile :: any).OutpostIncomeStacks = 0
+	end
+	if (profile :: any).StarterBundleOffered == nil then
+		(profile :: any).StarterBundleOffered = false
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

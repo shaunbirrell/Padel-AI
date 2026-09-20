@@ -142,6 +142,12 @@ local MonetizationConfig = {
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
 	-- v30: PvP death toast — DoubleCash GamePass + SpeedBoost DevProduct (live Ids)
 	DeathShopOffers = { "DoubleCash", "SpeedBoost" },
+	-- v32: one-shot soft offer on first join / low cash (server marks StarterBundleOffered)
+	StarterBundleOffer = {
+		DelaySeconds = 8,
+		CashBelow = 12000, -- StartingCash*2 + buffer
+		NewProfileMaxAgeSeconds = 600, -- FirstJoin→LastJoin span treats as new
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {

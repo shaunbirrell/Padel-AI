@@ -400,3 +400,13 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 - **VIP / AutoCollect OWNED** — VIP premium pad added; GamePass pads show OWNED via client `UserOwnsGamePassAsync` + LocalTransparencyModifier; server toast "OWNED".
 - **DataStore/API** — Documented only (`docs/LIVE_PLACE.md`); API Services remain enabled.
 - BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids.
+
+## 2026-09-20 — VIP mult + StarterBundle offer + capture flag polish (live v32 — Open Cloud Published versionNumber=32)
+
+116. **VIP CashBonusMult** — Confirmed `MonetizationService.GetCashMultiplier` applies GamePass VIP `CashBonusMult` (+0.25 additive) when owned (GamePass cache or Entitlement); `EconomyService` stacks it on AccruePendingCash / AddCash (non-exempt). VIP premium pad OWNED path unchanged.
+117. **StarterBundle first-join offer** — Once per profile (`StarterBundleOffered`). Server delays ~8s after load; if cash ≤ 12k or newish profile and not owned, fires `StarterBundleOffer` + soft Notify. Client toast → `PromptProductPurchase` StarterBundle Id live (3713839505). Never auto-prompts Marketplace.
+118. **Capture zone floating flag** — TerritoryService syncs `_FlagStripe` to flag; nation-color AlwaysOnTop diamond billboard (`WE_FlagBillboard`) when owned/contested via NationColorService color.
+119. **Manual dropper green $** — Larger AlwaysOnTop `+$N` pop + `CashPopGlow` stroke (competitor-style).
+120. **Garage ArmedJeep** — Lists with DisplayName "Armed Jeep" + ARMED chip; same `WheeledLight` kit + `startGroundDrive` as MilitaryJeep.
+121. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial.
+

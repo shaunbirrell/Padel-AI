@@ -335,6 +335,59 @@ function MonetizationService.Init(deps: { [string]: any })
 				end
 				gamePassCache[player.UserId] = cache
 			end
+
+			-- v32: one-shot StarterBundle soft offer (new profile / low cash). Marks profile so it never repeats.
+			local offerCfg = (MonetizationConfig :: any).StarterBundleOffer
+			local bundle = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.StarterBundle
+			if offerCfg and bundle and typeof(bundle.Id) == "number" and bundle.Id ~= 0 and typeof(profile) == "table" then
+				local alreadyOffered = profile.StarterBundleOffered == true
+				local ownsBundle = MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle")
+				if not alreadyOffered and not ownsBundle then
+					local cash = tonumber(profile.Cash) or 0
+					local cashBelow = tonumber(offerCfg.CashBelow) or 12000
+					local firstJoin = tonumber(profile.FirstJoinUnix) or 0
+					local lastJoin = tonumber(profile.LastJoinUnix) or firstJoin
+					local maxAge = tonumber(offerCfg.NewProfileMaxAgeSeconds) or 600
+					local isNewish = firstJoin > 0 and (lastJoin - firstJoin) <= maxAge
+					local cashLow = cash <= cashBelow
+					if isNewish or cashLow then
+						local delaySec = tonumber(offerCfg.DelaySeconds) or 8
+						task.delay(delaySec, function()
+							if not player.Parent then
+								return
+							end
+							local live = DataService.GetProfile(player)
+							if not live or live.StarterBundleOffered == true then
+								return
+							end
+							if MonetizationService.PlayerOwnsEntitlement(player, "StarterBundle") then
+								return
+							end
+							live.StarterBundleOffered = true
+							DataService.MarkDirty(player)
+							if RemoteSetup then
+								local remote = RemoteSetup.Get(Constants.RemoteNames.StarterBundleOffer)
+								if remote and remote:IsA("RemoteEvent") then
+									(remote :: RemoteEvent):FireClient(player, {
+										ProductKey = "StarterBundle",
+										ProductId = bundle.Id,
+										DisplayName = bundle.DisplayName or "Starter Bundle",
+										RobuxPrice = bundle.RobuxPrice,
+									})
+								end
+							end
+							if NotificationService then
+								NotificationService.Notify(
+									player,
+									"Commander Starter Bundle available — tap toast to jumpstart",
+									"Info",
+									5
+								)
+							end
+						end)
+					end
+				end
+			end
 		end)
 	end)
 

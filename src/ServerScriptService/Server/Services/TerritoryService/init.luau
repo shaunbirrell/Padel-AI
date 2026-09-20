@@ -222,6 +222,57 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		light.Color = color
 		light.Brightness = if contested then 3.2 elseif rt.OwnerType == ot.Neutral then 0.4 else 2.4
 		light.Enabled = true
+
+		-- Keep stripe locked to flag (nation color visibility polish)
+		local stripe = parent:FindFirstChild(tid .. "_FlagStripe")
+		if stripe and stripe:IsA("BasePart") then
+			stripe.Size = Vector3.new(flag.Size.X, math.max(0.35, flag.Size.Y * 0.14), flag.Size.Z + 0.06)
+			stripe.Position = flag.Position
+			stripe.Color = Color3.fromRGB(245, 245, 245)
+			stripe.Transparency = if rt.OwnerType == ot.Neutral then 0.45 else 0.08
+		end
+
+		-- Floating nation-color flag marker (AlwaysOnTop billboard) for long-range read
+		local flagBbInst = flag:FindFirstChild("WE_FlagBillboard")
+		local flagBb: BillboardGui
+		if flagBbInst and flagBbInst:IsA("BillboardGui") then
+			flagBb = flagBbInst
+		else
+			if flagBbInst then
+				flagBbInst:Destroy()
+			end
+			local created = Instance.new("BillboardGui")
+			created.Name = "WE_FlagBillboard"
+			created.Size = UDim2.fromOffset(52, 52)
+			created.StudsOffset = Vector3.new(0, 2.2, 0)
+			created.AlwaysOnTop = true
+			created.MaxDistance = 160
+			created.Parent = flag
+			local diamond = Instance.new("Frame")
+			diamond.Name = "NationDiamond"
+			diamond.AnchorPoint = Vector2.new(0.5, 0.5)
+			diamond.Position = UDim2.fromScale(0.5, 0.5)
+			diamond.Size = UDim2.fromScale(0.62, 0.62)
+			diamond.Rotation = 45
+			diamond.BorderSizePixel = 0
+			diamond.Parent = created
+			local ds = Instance.new("UIStroke")
+			ds.Name = "DiamondStroke"
+			ds.Thickness = 2
+			ds.Color = Color3.fromRGB(255, 255, 255)
+			ds.Parent = diamond
+			flagBb = created
+		end
+		flagBb.Enabled = rt.OwnerType ~= ot.Neutral or contested
+		flagBb.MaxDistance = if contested then 180 else 150
+		local diamond = flagBb:FindFirstChild("NationDiamond")
+		if diamond and diamond:IsA("Frame") then
+			diamond.BackgroundColor3 = color
+			local ds = diamond:FindFirstChild("DiamondStroke")
+			if ds and ds:IsA("UIStroke") then
+				ds.Color = if contested then Color3.fromRGB(255, 200, 80) else Color3.fromRGB(255, 255, 255)
+			end
+		end
 	end
 
 	local ring = parent:FindFirstChild(tid .. "_Ring")
