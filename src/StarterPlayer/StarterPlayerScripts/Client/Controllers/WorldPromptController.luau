@@ -18,6 +18,7 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
+local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -41,7 +42,8 @@ local BILLBOARD_NAME = "WE_PriceBillboard"
 local DEBOUNCE_SEC = 1.1 -- mobile standing-retry; still under server rate (6/8s)
 local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
-local PRICE_BILLBOARD_MAX_DIST = 48 -- near-only (was 650) — mobile screen clutter
+local PRICE_BILLBOARD_MAX_DIST = 48
+local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
 local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(220, 108) -- room for cost + +$/tick + BUY hint
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 72
@@ -331,7 +333,7 @@ local function setBillboardNearOnly(bb: BillboardGui)
 	bb.StudsOffset = Vector3.new(0, 5.2, 0)
 	bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
 	-- AlwaysOnTop only helps when already near (short MaxDistance); avoid map-wide stack
-	bb.AlwaysOnTop = true
+	bb.AlwaysOnTop = false -- P0: never stack over ATM
 end
 
 local function hidePriceBillboard(part: BasePart)
@@ -808,6 +810,37 @@ local function startOverlapLoop()
 		overlapConn = nil
 	end
 	overlapConn = RunService.Heartbeat:Connect(function()
+
+	-- P0: hide structure price boards when near MoneyCollector ATM
+	do
+		local nearAtm = false
+		local char = player.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp and hrp:IsA("BasePart") then
+			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
+				if inst:IsA("BasePart") then
+					local d = (inst.Position - hrp.Position).Magnitude
+					if d <= ATM_HIDE_PRICE_STUDS then
+						nearAtm = true
+						break
+					end
+				end
+			end
+		end
+		for _, part in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+			if part:IsA("BasePart") then
+				local bb = part:FindFirstChild(BILLBOARD_NAME)
+				if bb and bb:IsA("BillboardGui") then
+					if nearAtm then
+						bb.Enabled = false
+					elseif bb.Enabled == false and part:GetAttribute("WE_PriceForceHidden") ~= true then
+						-- re-enable only if still in range logic elsewhere; soft restore
+						bb.Enabled = true
+					end
+				end
+			end
+		end
+	end
 		if billboardDirty and (os.clock() - lastBillboardRefresh) >= BILLBOARD_THROTTLE then
 			refreshAllBillboardsNow()
 		end

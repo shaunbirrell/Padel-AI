@@ -301,3 +301,12 @@ Reversible engineering decisions made while implementing the MVP without blockin
 
 **InsertService risks:** Palm pack / DesertRock MeshPart / heavy wall may fail if third-party inserts disabled — Part kits remain. MeshPart AssetType 40 uses MeshId pipeline (not LoadAsset Model).
 
+## P0 UI + Worker mesh fix (2026-09-20)
+
+Shaun screenshot: stacked billboards + brown Part-kit workers.
+
+- **Workers:** `VisualKindByRole.Worker="Infantry"`; `Characters.Worker=9104381136`; `TryAttachCharacterVisual` **force-inserts even when StudioSkipWorldDressing**; fallback `WorkerFallback/Guard=16134469614` — never leave brown bricks.
+- **Billboards:** price `AlwaysOnTop=false`; ATM `WE_CollectBillboard` AlwaysOnTop+MaxDist 28; hide price boards within 12 studs of MoneyCollector; training `+$/tick` on YardPad MaxDist 22 offset Y=3.2; WORKER→TRAINING tags MaxDist 18 offset Y=2.4 muted.
+- **HUD:** READY chip above cash pill (no overlap); dock tiles gunmetal + gold 1px stroke + olive icons.
+
+**Open Cloud live v18 (2026-09-20 Europe/Madrid):** Place `97112936860418` Published versionNumber=**18** (P0 UI+Worker).

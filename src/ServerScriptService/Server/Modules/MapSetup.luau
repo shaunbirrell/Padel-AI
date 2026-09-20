@@ -213,8 +213,8 @@ local function priceBillboard(parent, title, costLine, accent)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
 	bb.Size = UDim2.fromOffset(220, 96)
-	bb.StudsOffset = Vector3.new(0, 6.0, 0)
-	bb.AlwaysOnTop = true -- only useful nearby (short MaxDistance)
+	bb.StudsOffset = Vector3.new(0, 5.2, 0)
+	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
 	bb.MaxDistance = 48 -- mobile: price cards near-only (was 1000)
 	bb.Parent = parent
 
@@ -266,7 +266,7 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	bb.Name = "Label"
 	bb.Size = UDim2.fromOffset(size.X, size.Y)
 	bb.StudsOffset = Vector3.new(0, offsetY, 0)
-	bb.AlwaysOnTop = true -- short range only
+	bb.AlwaysOnTop = false -- P0: only ATM may AlwaysOnTop when nearest
 	bb.MaxDistance = 70 -- base/zone labels near-only (was 950)
 	bb.Parent = parent
 
@@ -663,7 +663,9 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labe
 		-- One clean label on head (not also on torso)
 		local bb = plainBillboard(head, labelText, Vector2.new(120, 24), 2.2, labelColor or Color3.fromRGB(255, 200, 140))
 		bb.Name = "NPCLabel"
-		bb.MaxDistance = 70
+		bb.AlwaysOnTop = false
+		bb.MaxDistance = 18
+		bb.StudsOffset = Vector3.new(0, 2.4, 0)
 	end
 	return model
 end
@@ -1350,7 +1352,14 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	light.Brightness = 1.15
 	light.Range = 20
 	light.Parent = body
-	plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 8.2, Color3.fromRGB(90, 240, 130))
+	do
+		local bb = plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 6.5, Color3.fromRGB(90, 240, 130))
+		if bb then
+			bb.Name = "WE_CollectBillboard"
+			bb.AlwaysOnTop = true -- P0: ATM primary when nearest
+			bb.MaxDistance = 28
+		end
+	end
 	-- Lime Collect circle on ground (touch radius visual)
 	local collectCircle = part({
 		Name = "CollectCircle",
@@ -1644,17 +1653,31 @@ function MapSetup.Run()
 		-- Training workers (visual only — income is SoldierService tick)
 		for wi = 1, 2 do
 			local wpos = pos + Vector3.new(-40 + wi * 20, 2.6, 42)
-			makeSoldierKit(
+			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
+			local worker = makeSoldierKit(
 				yardFolder,
 				"TrainingWorker" .. wi,
 				CFrame.new(wpos) * CFrame.Angles(0, math.rad(180), 0),
 				Color3.fromRGB(70, 85, 55),
-				"WORKER",
-				Color3.fromRGB(180, 220, 120),
+				"TRAINING",
+				Color3.fromRGB(140, 150, 130), -- muted
 				50,
-				nil,
+				"Worker",
 				nil
 			)
+			if worker then
+				local head = worker:FindFirstChild("Head")
+				if head then
+					local bb = head:FindFirstChild("NPCLabel") or head:FindFirstChildWhichIsA("BillboardGui")
+					if bb and bb:IsA("BillboardGui") then
+						bb.Name = "WE_WorkerTag"
+						bb.AlwaysOnTop = false
+						bb.MaxDistance = 18
+						bb.StudsOffset = Vector3.new(0, 2.4, 0)
+						bb.Size = UDim2.fromOffset(90, 18)
+					end
+				end
+			end
 		end
 		-- Target ring + base plate polish
 		part({
@@ -1666,6 +1689,28 @@ function MapSetup.Run()
 			CanCollide = true,
 			Parent = yardFolder,
 		})
+		do
+			local yp = yardFolder:FindFirstChild("YardPad")
+			if yp and yp:IsA("BasePart") then
+				local ebb = Instance.new("BillboardGui")
+				ebb.Name = "WE_TrainingEarnBillboard"
+				ebb.Size = UDim2.fromOffset(140, 28)
+				ebb.StudsOffset = Vector3.new(0, 3.2, 0)
+				ebb.AlwaysOnTop = false
+				ebb.MaxDistance = 22
+				ebb.Parent = yp
+				local el = Instance.new("TextLabel")
+				el.Size = UDim2.fromScale(1, 1)
+				el.BackgroundTransparency = 0.35
+				el.BackgroundColor3 = Color3.fromRGB(20, 28, 18)
+				el.BorderSizePixel = 0
+				el.Font = Enum.Font.GothamBold
+				el.TextSize = 14
+				el.TextColor3 = Color3.fromRGB(160, 220, 120)
+				el.Text = "+$/tick"
+				el.Parent = ebb
+			end
+		end
 		-- Design Bot quality wire: 2–3 SquadStall kits (Tent + crates + sandbags + Infantry)
 		do
 			local stallFolder = Instance.new("Folder")
@@ -2578,6 +2623,145 @@ function MapSetup.Run()
 	end
 
 		buildPadSupportShelves(root)
+
+	-- Tier 2: near-plot oil spectacle (IndustrialPack + pipes + barrel ring). REJECT Ultrapump.
+	do
+		local okOil, errOil = pcall(function()
+			local oilFolder = Instance.new("Folder")
+			oilFolder.Name = "OilSpectacle"
+			oilFolder.Parent = root
+			local pads = {
+				Vector3.new(-520, 0.5, -180),
+				Vector3.new(520, 0.5, 180),
+				Vector3.new(-200, 0.5, 620),
+			}
+			for oi, opos in ipairs(pads) do
+				local pad = part({
+					Name = "OilPad" .. oi,
+					Size = Vector3.new(28, 0.6, 28),
+					Position = opos,
+					Color = Color3.fromRGB(42, 44, 40),
+					Material = Enum.Material.Asphalt,
+					CanCollide = true,
+					Parent = oilFolder,
+				})
+				plainBillboard(pad, "OIL FIELD", Vector2.new(160, 32), 12, Color3.fromRGB(255, 180, 60))
+				-- Amber landmark light
+				local light = Instance.new("PointLight")
+				light.Color = Color3.fromRGB(255, 160, 40)
+				light.Brightness = 1.2
+				light.Range = 40
+				light.Parent = pad
+				-- Walking-beam silhouette (Part kit derrick)
+				local tower = part({
+					Name = "DerrickTower" .. oi,
+					Size = Vector3.new(1.2, 18, 1.2),
+					Position = opos + Vector3.new(0, 9.5, 0),
+					Color = Color3.fromRGB(70, 72, 68),
+					Material = Enum.Material.Metal,
+					CanCollide = false,
+					Parent = oilFolder,
+				})
+				local beam = part({
+					Name = "WalkingBeam" .. oi,
+					Size = Vector3.new(14, 0.7, 0.7),
+					Position = opos + Vector3.new(0, 17, 0),
+					Color = Color3.fromRGB(90, 70, 50),
+					Material = Enum.Material.Metal,
+					CanCollide = false,
+					Parent = oilFolder,
+				})
+				beam:SetAttribute("WE_OilBeam", true)
+				-- Barrel ring
+				for bi = 1, 8 do
+					local ang = (bi / 8) * math.pi * 2
+					local bpos = opos + Vector3.new(math.cos(ang) * 9, 1.1, math.sin(ang) * 9)
+					part({
+						Name = "OilBarrel" .. oi .. "_" .. bi,
+						Size = Vector3.new(1.6, 2.2, 1.6),
+						Position = bpos,
+						Color = Color3.fromRGB(45, 70, 45),
+						Material = Enum.Material.Metal,
+						Shape = Enum.PartType.Cylinder,
+						CanCollide = true,
+						Parent = oilFolder,
+					})
+				end
+				-- Catalog dress (IndustrialPack / RustyPipes / OilBarrel)
+				task.defer(function()
+					pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if not vas then
+							return
+						end
+						vas.TryAttachPropVisual(tower, "IndustrialPack")
+						vas.TryAttachPropVisual(beam, "RustyPipes")
+						for _, ch in ipairs(oilFolder:GetChildren()) do
+							if ch:IsA("BasePart") and string.find(ch.Name, "OilBarrel" .. oi, 1, true) then
+								vas.TryAttachPropVisual(ch, "OilBarrel")
+							end
+						end
+					end)
+				end)
+			end
+			-- Slow walking-beam sway
+			task.spawn(function()
+				local t0 = os.clock()
+				while oilFolder.Parent do
+					local t = os.clock() - t0
+					for _, ch in ipairs(oilFolder:GetChildren()) do
+						if ch:IsA("BasePart") and ch:GetAttribute("WE_OilBeam") then
+							ch.CFrame = CFrame.new(ch.Position) * CFrame.Angles(0, 0, math.rad(math.sin(t * 0.7) * 12))
+						end
+					end
+					task.wait(0.1)
+				end
+			end)
+		end)
+		if not okOil then
+			warn("[MapSetup] OilSpectacle failed:", errOil)
+		end
+	end
+
+	-- Tier 2: warzone landmarks (RadioTower / SmallFort / Bunker)
+	do
+		local okLm, errLm = pcall(function()
+			local lm = Instance.new("Folder")
+			lm.Name = "WarzoneLandmarks"
+			lm.Parent = root
+			local spots = {
+				{ Name = "RadioTower", Key = "RadioTower", Pos = Vector3.new(0, 0.5, -1400), Size = Vector3.new(4, 28, 4) },
+				{ Name = "SmallFort", Key = "SmallFort", Pos = Vector3.new(1100, 0.5, -1100), Size = Vector3.new(18, 10, 18) },
+				{ Name = "BunkerApproach", Key = "Bunker", Pos = Vector3.new(-1100, 0.5, 900), Size = Vector3.new(14, 6, 14) },
+			}
+			for _, s in ipairs(spots) do
+				local host = part({
+					Name = s.Name .. "Host",
+					Size = s.Size,
+					Position = s.Pos + Vector3.new(0, s.Size.Y * 0.5, 0),
+					Color = Color3.fromRGB(80, 78, 70),
+					Material = Enum.Material.Concrete,
+					CanCollide = true,
+					Transparency = 0.25,
+					Parent = lm,
+				})
+				plainBillboard(host, string.upper(s.Name), Vector2.new(180, 32), 14, Color3.fromRGB(220, 200, 140))
+				task.defer(function()
+					pcall(function()
+						local vas = require(script.Parent.Parent.Services.VisualAssetService)
+						if vas and vas.TryAttachPropVisual then
+							vas.TryAttachPropVisual(host, s.Key)
+						end
+					end)
+				end)
+			end
+		end)
+		if not okLm then
+			warn("[MapSetup] WarzoneLandmarks failed:", errLm)
+		end
+	end
+
+
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas=" .. tostring(DevConfig.MountainRingSegments or 14) .. " (dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")

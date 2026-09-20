@@ -233,24 +233,27 @@ function HUDController.Init()
 	UIUtil.Corner(season, 6)
 	seasonLabel = season
 
-	-- Spinner chip beside currency pill
+	-- P0: READY/SPIN chip LEFT of cash pill (never overlaps cash text)
 	local spin = Instance.new("TextButton")
 	spin.Name = "SpinnerButton"
 	spin.AnchorPoint = Vector2.new(0, 1)
-	spin.Position = UDim2.new(0, 228, 1, if touch then -100 else -20)
-	spin.Size = UDim2.fromOffset(72, 56)
-	spin.BackgroundColor3 = Constants.Colors.Panel
+	spin.Position = UDim2.new(0, 16, 1, if touch then -168 else -88)
+	spin.Size = UDim2.fromOffset(88, 36)
+	spin.BackgroundColor3 = Constants.Colors.Gunmetal
 	spin.Font = Enum.Font.GothamBold
-	spin.TextSize = 11
+	spin.TextSize = 12
 	spin.TextColor3 = Constants.Colors.Text
 	spin.Text = "SPIN"
 	spin.BorderSizePixel = 0
 	spin.ZIndex = 12
 	spin.Parent = screen
-	makeCorner(spin, 14)
-	makeStroke(spin, true)
-	UIUtil.EnsureMinTouch(spin, 56)
+	makeCorner(spin, 10)
+	local spinStroke = UIUtil.Stroke(spin, Constants.Colors.GoldBright, 1)
+	spinStroke.Transparency = 0.25
+	UIUtil.EnsureMinTouch(spin, 44)
 	spinnerBtn = spin
+	-- Shift cash pill up slightly so READY sits above it cleanly on touch
+	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
 	spin.Activated:Connect(function()
 		if spinnerReady then
 			Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
@@ -281,12 +284,12 @@ function HUDController.Init()
 		end
 		if spinnerReady then
 			spinnerBtn.Text = "READY"
-			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent
-			spinnerBtn.TextColor3 = Constants.Colors.Text
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent -- olive
+			spinnerBtn.TextColor3 = Color3.fromRGB(245, 248, 240)
 		else
 			local mins = math.ceil(math.max(0, spinnerCooldown) / 60)
 			spinnerBtn.Text = string.format("%dm", mins)
-			spinnerBtn.BackgroundColor3 = Constants.Colors.Panel
+			spinnerBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 			spinnerBtn.TextColor3 = Constants.Colors.Muted
 		end
 	end
@@ -398,6 +401,18 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 		})
 		btn.Active = true
 		btn.ZIndex = 31
+		-- P0 dock: gunmetal tiles + gold 1px stroke (no rainbow candy)
+		btn.BackgroundColor3 = Constants.Colors.Gunmetal
+		local st = btn:FindFirstChildOfClass("UIStroke")
+		if st then
+			st.Color = Constants.Colors.GoldBright
+			st.Thickness = 1
+			st.Transparency = 0.2
+		end
+		local ic = btn:FindFirstChild("Icon")
+		if ic and ic:IsA("TextLabel") then
+			ic.TextColor3 = Constants.Colors.Olive
+		end
 		-- Activated = mouse + touch + gamepad (MouseButton1Click alone misses some touch paths)
 		btn.Activated:Connect(function()
 			def.OnClick()

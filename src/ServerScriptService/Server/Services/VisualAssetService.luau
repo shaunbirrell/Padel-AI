@@ -61,14 +61,15 @@ local function stripScripts(root: Instance)
 	end
 end
 
-local function loadModel(assetId: number): Model?
+local function loadModel(assetId: number, forceInsert: boolean?): Model?
 	if assetId == 0 or failed[assetId] then
 		return nil
 	end
 	if cache[assetId] then
 		return cache[assetId]
 	end
-	if shouldSkipInserts() then
+	-- P0: character dress MUST run even when StudioSkipWorldDressing (workers never brown bricks)
+	if shouldSkipInserts() and not forceInsert then
 		return nil
 	end
 	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
@@ -215,7 +216,13 @@ function VisualAssetService.ResolveVehicleAssetId(vehicleId: string, kitFamily: 
 end
 
 function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
-	local ref = VisualAssetConfig.Characters[kind] or VisualAssetConfig.Characters.Soldier
+	local ref = VisualAssetConfig.Characters[kind]
+	if not ref and kind == "Worker" then
+		ref = VisualAssetConfig.Characters.Infantry or VisualAssetConfig.Characters.Soldier
+	end
+	if not ref then
+		ref = VisualAssetConfig.Characters.Soldier
+	end
 	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
 		return ref.ModelAssetId
 	end
@@ -239,6 +246,8 @@ local function lookupPropRef(propKey: string): any
 		(VisualAssetConfig :: any).WarzoneProps,
 		VisualAssetConfig.DesertProps,
 		(VisualAssetConfig :: any).MapDressing,
+		(VisualAssetConfig :: any).IndustrialProps,
+		(VisualAssetConfig :: any).Landmarks,
 	}
 	for _, bucket in ipairs(buckets) do
 		if typeof(bucket) == "table" then
@@ -317,19 +326,32 @@ end
 	Attaches non-colliding clone; host HumanoidRootPart stays authoritative.
 ]]
 function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: string): boolean
+	-- P0: always attempt character catalog inserts (bypass StudioSkipWorldDressing)
+	local forceChar = true
 	local assetId = VisualAssetService.ResolveCharacterAssetId(kind)
 	if not assetId then
 		return false
 	end
-	local template = loadModel(assetId)
-	-- Optional CharacterAlt only if primary insert fails
+	local template = loadModel(assetId, forceChar)
+	-- Worker/Infantry → WorkerFallback (16134469614) → never leave brown Part bricks
 	if not template then
-		local alt = (VisualAssetConfig :: any).CharacterAlt
-		local altId = if alt and typeof(alt.ModelAssetId) == "number" then alt.ModelAssetId else 0
-		if typeof(altId) == "number" and altId > 0 and altId ~= assetId then
-			template = loadModel(altId)
+		local fb = (VisualAssetConfig.Characters :: any).WorkerFallback
+		local fbId = if fb and typeof(fb.ModelAssetId) == "number" then fb.ModelAssetId else 0
+		if typeof(fbId) == "number" and fbId > 0 and fbId ~= assetId then
+			template = loadModel(fbId, forceChar)
 			if template then
-				assetId = altId
+				assetId = fbId
+			end
+		end
+	end
+	if not template and (kind == "Worker" or kind == "Infantry") then
+		-- Final realistic fallback: Guard mesh
+		local guard = VisualAssetConfig.Characters.Guard
+		local gId = if guard and typeof(guard.ModelAssetId) == "number" then guard.ModelAssetId else 0
+		if typeof(gId) == "number" and gId > 0 then
+			template = loadModel(gId, forceChar)
+			if template then
+				assetId = gId
 			end
 		end
 	end
@@ -749,6 +771,39 @@ function VisualAssetService.TryAttachShowroomVisual(plinth: BasePart): boolean
 		end
 	end
 	return attached
+
+	-- Tier 2 densify: extra pedestals (ghost locked stands) + entrance flag
+	for pi = 2, 3 do
+		local host = plinth:FindFirstChild("ShowroomPedestalHost" .. pi)
+		if host and host:IsA("BasePart") and not host:GetAttribute("WE_CatalogAssetId") then
+			pcall(function()
+				local template, assetId = loadFirst(collectAssetIds("ShowroomPedestal", nil, nil))
+				if template and assetId then
+					local clone = template:Clone()
+					if weldCloneToPrimary(clone, host, "WE_CatalogPedestal") then
+						clone.Parent = host
+						host:SetAttribute("WE_CatalogAssetId", assetId)
+						host.Transparency = math.max(host.Transparency, 0.55)
+						for _, d in ipairs(clone:GetDescendants()) do
+							if d:IsA("BasePart") then
+								d.Transparency = math.max(d.Transparency, 0.55)
+								d.CanCollide = false
+							end
+						end
+					else
+						clone:Destroy()
+					end
+				end
+			end)
+		end
+	end
+	local flagHost = plinth:FindFirstChild("ShowroomFlagHost")
+	if flagHost and flagHost:IsA("BasePart") then
+		pcall(function()
+			VisualAssetService.TryAttachPropVisual(flagHost, "FlagPole")
+		end)
+	end
+
 end
 
 --[[
@@ -770,6 +825,43 @@ function VisualAssetService.TryAttachTutorialArrow(hostPart: BasePart): boolean
 	clone.Parent = hostPart
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	return true
+end
+
+
+--[[
+	Tier 2: attach HQ/Barracks/Depot interior props onto WE_DressHost_* kit parts.
+	Part kit hosts remain; catalog inserts optional.
+]]
+function VisualAssetService.TryDressStructureInterior(plinth: BasePart, structureId: string): number
+	if shouldSkipInserts() then
+		return 0
+	end
+	local dress = (VisualAssetConfig :: any).StructureDress
+	if typeof(dress) ~= "table" then
+		return 0
+	end
+	local keys = dress[structureId]
+	if typeof(keys) ~= "table" then
+		return 0
+	end
+	local attached = 0
+	local keyIdx = 1
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") and string.sub(child.Name, 1, 12) == "WE_DressHost" then
+			local propKey = child:GetAttribute("WE_DressProp")
+			if typeof(propKey) ~= "string" or propKey == "" then
+				propKey = keys[((keyIdx - 1) % #keys) + 1]
+				keyIdx += 1
+			end
+			local ok = pcall(function()
+				return VisualAssetService.TryAttachPropVisual(child, propKey :: string)
+			end)
+			if ok then
+				attached += 1
+			end
+		end
+	end
+	return attached
 end
 
 function VisualAssetService.Init()

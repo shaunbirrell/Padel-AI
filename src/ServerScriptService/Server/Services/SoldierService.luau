@@ -205,7 +205,10 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	if not yard then
 		return
 	end
-	local anchor = yard:FindFirstChild("YardEarnAnchor") or yard:FindFirstChild("YardAnchor")
+	-- P0: parent earn board to YardPad (not worker heads); short MaxDistance; never AlwaysOnTop
+	local anchor = yard:FindFirstChild("YardPad")
+		or yard:FindFirstChild("YardEarnAnchor")
+		or yard:FindFirstChild("YardAnchor")
 	if not anchor or not anchor:IsA("BasePart") then
 		return
 	end
@@ -213,10 +216,10 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	if not bb or not bb:IsA("BillboardGui") then
 		bb = Instance.new("BillboardGui")
 		bb.Name = "WE_TrainingEarnBillboard"
-		bb.Size = UDim2.fromOffset(180, 48)
-		bb.StudsOffset = Vector3.new(0, 4, 0)
-		bb.AlwaysOnTop = true
-		bb.MaxDistance = 80
+		bb.Size = UDim2.fromOffset(140, 28)
+		bb.StudsOffset = Vector3.new(0, 3.2, 0)
+		bb.AlwaysOnTop = false
+		bb.MaxDistance = 22
 		bb.Parent = anchor
 		local label = Instance.new("TextLabel")
 		label.Name = "Amount"
@@ -245,8 +248,9 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	pop.Name = "WE_TrainCashPop"
 	pop.Size = UDim2.fromOffset(100, 28)
 	pop.StudsOffset = Vector3.new(0, 6, 0)
-	pop.AlwaysOnTop = true
-	pop.MaxDistance = 60
+	-- P0: short-lived pop (0.6s), not AlwaysOnTop, no persistent stack
+	pop.AlwaysOnTop = false
+	pop.MaxDistance = 22
 	pop.Parent = anchor
 	local popLab = Instance.new("TextLabel")
 	popLab.Size = UDim2.fromScale(1, 1)
@@ -258,10 +262,10 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	popLab.Text = string.format("+$%d", tickAmount)
 	popLab.Parent = pop
 	task.spawn(function()
-		for i = 1, 8 do
-			pop.StudsOffset = Vector3.new(0, 6 + i * 0.35, 0)
-			popLab.TextTransparency = i / 10
-			task.wait(0.06)
+		for i = 1, 6 do
+			pop.StudsOffset = Vector3.new(0, 3.5 + i * 0.4, 0)
+			popLab.TextTransparency = i / 7
+			task.wait(0.1)
 		end
 		pop:Destroy()
 	end)

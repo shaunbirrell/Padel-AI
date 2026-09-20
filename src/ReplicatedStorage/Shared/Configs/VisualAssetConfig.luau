@@ -148,6 +148,8 @@ local VisualAssetConfig = {
 		-- Design Bot 2026-09-20: realistic human mesh. REJECT plastic 3924234975 + Respawn 91299598767068.
 		Soldier = { ModelAssetId = 100212659702941, Note = "Realistic soldier StarterCharacter (gas-mask/spec-ops)" } :: AssetRef,
 		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
+		Worker = { ModelAssetId = 9104381136, Note = "TrainingYard worker — realistic layered soldier (P0)" } :: AssetRef,
+		WorkerFallback = { ModelAssetId = 16134469614, Note = "Worker fallback Rigged Soldier if Infantry insert fails" } :: AssetRef,
 		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
@@ -222,6 +224,11 @@ local VisualAssetConfig = {
 		Flag = { ModelAssetId = 1679839739, Note = "L5 upgrade flag" } :: AssetRef,
 		Lantern = { ModelAssetId = 10121519149, Note = "Stall lantern (StripScripts; mesh only)" } :: AssetRef,
 		TentAlt = { ModelAssetId = 3133150032, Note = "Tent alt if primary Tent fails" } :: AssetRef,
+		RadioAntennaAlt = { ModelAssetId = 42209845, Note = "HQ roof antenna alt" } :: AssetRef,
+		FloodlightAlt = { ModelAssetId = 4893998573, Note = "Depot bay floodlight" } :: AssetRef,
+		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans + oil barrels pack" } :: AssetRef,
+		FlagPole = { ModelAssetId = 1679839739, Note = "Depot/HQ flag pole" } :: AssetRef,
+		FlagPoleHD = { ModelAssetId = 1454179642, Note = "HQ prestige flag pole" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
 		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
 		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
@@ -254,6 +261,31 @@ local VisualAssetConfig = {
 		DesertPlants = { ModelAssetId = 108556425657107, Note = "alias → DesertProps.DesertPlants" } :: AssetRef,
 		Cactus = { ModelAssetId = 121029612, Note = "alias → DesertProps.Cactus" } :: AssetRef,
 	} :: { [string]: AssetRef },
+
+
+	-- Tier 2: oil spectacle + map landmarks (REJECT Ultrapump 1837698074)
+	IndustrialProps = {
+		IndustrialPack = { ModelAssetId = 103734805361054, Note = "Realistic Industrial Props Pack (oil spectacle)" } :: AssetRef,
+		RustyPipes = { ModelAssetId = 131322292868756, Note = "Rusty pipes runs to derrick silhouette" } :: AssetRef,
+		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
+		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans cluster" } :: AssetRef,
+		-- GasStation 5149705639 OPTIONAL heavy — not default
+		-- Ultrapump 1837698074 REJECT
+	} :: { [string]: AssetRef },
+
+	Landmarks = {
+		RadioTower = { ModelAssetId = 119021509, Note = "Map ridge radio tower POI" } :: AssetRef,
+		Bunker = { ModelAssetId = 16659447, Note = "Desert approach bunker" } :: AssetRef,
+		SpyBunker = { ModelAssetId = 55228082, Note = "Optional spy bunker POI" } :: AssetRef,
+		SmallFort = { ModelAssetId = 67444725, Note = "Mid-map small fort landmark" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	-- HQ / Barracks interior dress keys (hosts in StructureKitBuilder)
+	StructureDress = {
+		CommandCenter = { "RadioAntenna", "RadioAntennaAlt", "AmmoBox", "Crate", "MilitaryCrate", "Lantern", "Floodlight", "FuelCans" },
+		Barracks = { "Crate", "MilitaryCrate", "AmmoBox", "Lantern", "Sandbag" },
+		VehicleDepot = { "FloodlightAlt", "Floodlight", "FlagPole", "FuelCans" },
+	} :: { [string]: { string } },
 
 	KitFamilyFallback = {
 		WheeledLight = "MilitaryJeep",

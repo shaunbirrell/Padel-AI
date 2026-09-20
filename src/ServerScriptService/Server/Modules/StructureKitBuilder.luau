@@ -129,6 +129,28 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 		kitPart(plinth, "Door", Vector3.new(1.6, 2.2, 0.25), Vector3.new(0, 1.7, -2.85), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.4, 1.0, 0.2), Vector3.new(2.0, 2.6, -2.8), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
+		-- Tier 2 HQ interior / roof dress hosts (catalog via TryDressStructureInterior)
+		do
+			local hosts = {
+				{ "WE_DressHost_Radio", Vector3.new(0.6, 2.2, 0.6), Vector3.new(-1.8, 5.2, 1.6), "RadioAntenna" },
+				{ "WE_DressHost_RadioRoof", Vector3.new(0.5, 1.8, 0.5), Vector3.new(1.6, 5.4, -1.4), "RadioAntennaAlt" },
+				{ "WE_DressHost_Ammo", Vector3.new(1.4, 1.0, 1.0), Vector3.new(-1.6, 1.4, 1.8), "AmmoBox" },
+				{ "WE_DressHost_Crate", Vector3.new(1.6, 1.2, 1.6), Vector3.new(1.8, 1.5, 1.6), "Crate" },
+				{ "WE_DressHost_MilCrate", Vector3.new(1.5, 1.1, 1.3), Vector3.new(1.8, 1.45, -1.5), "MilitaryCrate" },
+				{ "WE_DressHost_Lantern", Vector3.new(0.5, 1.0, 0.5), Vector3.new(-2.0, 2.8, -1.8), "Lantern" },
+				{ "WE_DressHost_Flood", Vector3.new(0.7, 1.4, 0.7), Vector3.new(-2.6, 4.2, -2.6), "Floodlight" },
+				{ "WE_DressHost_Fuel", Vector3.new(1.2, 1.0, 1.2), Vector3.new(-2.2, 1.4, -0.2), "FuelCans" },
+			}
+			for _, h in ipairs(hosts) do
+				local hp = kitPart(plinth, "Detail", h[2], h[3], Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+				if hp then
+					hp.Name = h[1]
+					hp:SetAttribute("WE_DressProp", h[4])
+					hp.Transparency = 0.85
+					hp.CanCollide = false
+				end
+			end
+		end
 	elseif kit == "barracks" then
 		kitPart(plinth, "Body", Vector3.new(6.6, 2.6, 4.4), Vector3.new(0, 1.9, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.1, 0.5, 5.0), Vector3.new(0, 3.35, 0), pal.Roof, Enum.Material.Metal, nil)
@@ -182,7 +204,33 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 			corner.CornerRadius = UDim.new(0, 4)
 			corner.Parent = lab
 		end
-	elseif kit == "lab" then
+	
+		-- Tier 2: extra pedestal hosts + flag (densify showroom)
+		for pi, ox in ipairs({ -4.2, 4.2 }) do
+			local ped = kitPart(plinth, "Podium", Vector3.new(2.4, 0.4, 2.4), Vector3.new(ox, 0.9, 4.0), Color3.fromRGB(40, 48, 55), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+			if ped then
+				ped.Name = "ShowroomPedestalHost" .. (pi + 1)
+				local off = ped:GetAttribute("WE_LocalOffset")
+				if typeof(off) == "Vector3" then
+					ped.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+				end
+				ped.Transparency = 0.55
+			end
+		end
+		local flagHost = kitPart(plinth, "Detail", Vector3.new(0.4, 4.5, 0.4), Vector3.new(-3.6, 3.2, -2.8), Color3.fromRGB(180, 180, 180), Enum.Material.Metal, nil)
+		if flagHost then
+			flagHost.Name = "ShowroomFlagHost"
+			flagHost:SetAttribute("WE_DressProp", "FlagPole")
+			flagHost.Transparency = 0.7
+			flagHost.CanCollide = false
+		end
+		local floodHost = kitPart(plinth, "Detail", Vector3.new(0.6, 1.2, 0.6), Vector3.new(3.4, 3.4, -2.6), Color3.fromRGB(200, 200, 180), Enum.Material.Metal, nil)
+		if floodHost then
+			floodHost.Name = "WE_DressHost_DepotFlood"
+			floodHost:SetAttribute("WE_DressProp", "FloodlightAlt")
+			floodHost.Transparency = 0.7
+		end
+elseif kit == "lab" then
 		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), pal.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), pal.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), pal.Accent, Enum.Material.Neon, nil)

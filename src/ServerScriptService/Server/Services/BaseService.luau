@@ -565,6 +565,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 			if structureId == "VehicleDepot" and vas.TryAttachShowroomVisual then
 				vas.TryAttachShowroomVisual(plinth)
 			end
+			if vas.TryDressStructureInterior then
+				vas.TryDressStructureInterior(plinth, structureId)
+			end
 		end)
 	end
 
