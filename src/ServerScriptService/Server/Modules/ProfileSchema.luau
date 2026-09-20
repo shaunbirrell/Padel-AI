@@ -105,6 +105,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		DoubleCashOffered = false,
 		VIPOffered = false,
 		SpeedBoostOffered = false,
+		CashMegaOffered = false,
 	}
 end
 
@@ -324,6 +325,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if (profile :: any).SpeedBoostOffered == nil then
 		(profile :: any).SpeedBoostOffered = false
+	end
+	if (profile :: any).CashMegaOffered == nil then
+		(profile :: any).CashMegaOffered = false
 	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION

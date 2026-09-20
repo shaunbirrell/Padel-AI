@@ -56,7 +56,7 @@ local function refresh()
 
 	for i, mission in ipairs(state.Daily) do
 		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, -8, 0, 72)
+		row.Size = UDim2.new(1, -8, 0, 78) -- v37 progress chip
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = i
@@ -86,15 +86,36 @@ local function refresh()
 		desc.TextTruncate = Enum.TextTruncate.AtEnd
 		desc.Parent = row
 
+		-- v37: progress chip bar + clearer reward copy
+		local chipBg = Instance.new("Frame")
+		chipBg.Name = "ProgressChip"
+		chipBg.Position = UDim2.fromOffset(8, 48)
+		chipBg.Size = UDim2.new(0.42, 0, 0, 14)
+		chipBg.BackgroundColor3 = Color3.fromRGB(35, 40, 48)
+		chipBg.BorderSizePixel = 0
+		chipBg.Parent = row
+		corner(chipBg, 4)
+		local pct = 0
+		if mission.Target > 0 then
+			pct = math.clamp(mission.Progress / mission.Target, 0, 1)
+		end
+		local chipFill = Instance.new("Frame")
+		chipFill.Size = UDim2.new(pct, 0, 1, 0)
+		chipFill.BackgroundColor3 = if mission.Claimed then Constants.Colors.Muted elseif pct >= 1 then Constants.Colors.Cash else Constants.Colors.XP
+		chipFill.BorderSizePixel = 0
+		chipFill.Parent = chipBg
+		corner(chipFill, 4)
 		local prog = Instance.new("TextLabel")
 		prog.BackgroundTransparency = 1
-		prog.Position = UDim2.fromOffset(8, 46)
-		prog.Size = UDim2.new(1, -100, 0, 18)
-		prog.Font = Enum.Font.GothamMedium
-		prog.TextSize = 12
+		prog.Position = UDim2.new(0.42, 12, 0, 44)
+		prog.Size = UDim2.new(0.58, -112, 0, 22)
+		prog.Font = Enum.Font.GothamBold
+		prog.TextSize = 11
 		prog.TextXAlignment = Enum.TextXAlignment.Left
-		prog.TextColor3 = Constants.Colors.XP
-		prog.Text = string.format("%d / %d  ·  $%d + %dXP", mission.Progress, mission.Target, mission.RewardCash, mission.RewardXP)
+		prog.TextColor3 = Constants.Colors.Gold
+		local goldBit = if (mission.RewardGold or 0) > 0 then string.format(" · %dg", mission.RewardGold) else ""
+		prog.Text = string.format("%d/%d  ★ $%s + %dXP%s", mission.Progress, mission.Target, tostring(mission.RewardCash), mission.RewardXP, goldBit)
+		prog.TextTruncate = Enum.TextTruncate.AtEnd
 		prog.Parent = row
 
 		local btn = Instance.new("TextButton")

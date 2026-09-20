@@ -94,6 +94,7 @@ Constants.RemoteNames = {
 	DoubleCashOffer = "DoubleCashOffer",
 	VIPOffer = "VIPOffer",
 	SpeedBoostOffer = "SpeedBoostOffer",
+	CashMegaOffer = "CashMegaOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",

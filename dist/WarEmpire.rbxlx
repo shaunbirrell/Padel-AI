@@ -1491,9 +1491,9 @@ local MissionConfig = {
 		DailyUpgrade = {
 			Id = "DailyUpgrade",
 			DisplayName = "Fortify Base",
-			Description = "Purchase 2 base upgrades.",
+			Description = "Buy 1 base upgrade — reward $3,000 + 100 XP.",
 			ObjectiveType = "PurchaseUpgrade",
-			Target = 2,
+			Target = 1, -- v37: completable in first ~5 min
 			RewardCash = 3000,
 			RewardXP = 100,
 			RewardGold = 0,
@@ -1513,7 +1513,7 @@ local MissionConfig = {
 		DailySpawnVehicle = {
 			Id = "DailySpawnVehicle",
 			DisplayName = "Mobilize",
-			Description = "Spawn a vehicle from the garage.",
+			Description = "Spawn 1 vehicle from the garage — reward $1,500 + 40 XP.",
 			ObjectiveType = "SpawnVehicle",
 			Target = 1,
 			RewardCash = 1500,
@@ -1535,9 +1535,9 @@ local MissionConfig = {
 		DailyRecruit = {
 			Id = "DailyRecruit",
 			DisplayName = "Muster Troops",
-			Description = "Recruit 5 soldiers.",
+			Description = "Recruit 1 soldier — reward $2,000 + 50 XP + 1 Gold.",
 			ObjectiveType = "RecruitSoldiers",
-			Target = 5,
+			Target = 1, -- v37: first-5-min friendly
 			RewardCash = 2000,
 			RewardXP = 50,
 			RewardGold = 1,
@@ -1546,12 +1546,12 @@ local MissionConfig = {
 	} :: { [string]: DailyMissionDef },
 
 	DailyMissionOrder = {
+		"DailyUpgrade", -- v37: first 5-min completable
+		"DailyRecruit",
+		"DailySpawnVehicle",
 		"DailyKillNPC",
 		"DailyCapture",
-		"DailyRecruit",
-		"DailyUpgrade",
 		"DailyEarnCash",
-		"DailySpawnVehicle",
 		"DailyKillPlayer",
 	},
 
@@ -1765,6 +1765,11 @@ local MonetizationConfig = {
 	-- v36: one-shot SpeedBoost soft offer after first jeep sit / walk-speed moment (existing Id only)
 	SpeedBoostOffer = {
 		DelaySeconds = 1.5,
+	},
+	-- v37: one-shot CashMega soft toast after big pending collect OR death path (existing Id 3713838952 only)
+	CashMegaOffer = {
+		DelaySeconds = 1.8,
+		MinPendingCollect = 15000, -- pending/granted threshold
 	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
@@ -2292,7 +2297,7 @@ local StructureVisualConfig = {
 	SolidTransparency = 0,
 	PreferMeshWhenAssetIdSet = true,
 	PreferMeshMinLevel = 1,
-	BuildingDressGen = 24,
+	BuildingDressGen = 25, -- v37 parked heli/boat + runway markings
 
 	Palettes = {
 		CommandCenter = {
@@ -3771,6 +3776,7 @@ Constants.RemoteNames = {
 	DoubleCashOffer = "DoubleCashOffer",
 	VIPOffer = "VIPOffer",
 	SpeedBoostOffer = "SpeedBoostOffer",
+	CashMegaOffer = "CashMegaOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
 	GetPlayerState = "GetPlayerState",
@@ -3990,6 +3996,7 @@ export type PlayerProfile = {
 	DoubleCashOffered: boolean?,
 	VIPOffered: boolean?,
 	SpeedBoostOffered: boolean?,
+	CashMegaOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {
@@ -4004,6 +4011,7 @@ export type XPUpdatePayload = {
 	XPToNext: number,
 	HudGoal: string?,
 	UnlockMessage: string?,
+	LevelUp: boolean?, -- v37 celebration toast
 }
 
 export type BaseStatePayload = {
@@ -9781,6 +9789,7 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		DoubleCashOffered = false,
 		VIPOffered = false,
 		SpeedBoostOffered = false,
+		CashMegaOffered = false,
 	}
 end
 
@@ -10001,6 +10010,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if (profile :: any).SpeedBoostOffered == nil then
 		(profile :: any).SpeedBoostOffered = false
 	end
+	if (profile :: any).CashMegaOffered == nil then
+		(profile :: any).CashMegaOffered = false
+	end
 
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
 	return profile
@@ -10166,6 +10178,7 @@ local EVENTS = {
 	Constants.RemoteNames.DoubleCashOffer,
 	Constants.RemoteNames.VIPOffer,
 	Constants.RemoteNames.SpeedBoostOffer,
+	Constants.RemoteNames.CashMegaOffer,
 	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
 }
@@ -10467,7 +10480,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 24 -- v35: denser SpecialForcesFacility + Helipad/Dock presence
+local KIT_GEN = 25 -- v37: parked heli/boat presence + airfield runway markings
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -10815,6 +10828,23 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 				end
 			end
 		end
+		-- v37: static naval boat Part-kit at pier end + DressHost for PatrolBoat mesh
+		do
+			local bx, bz = 0, 28
+			kitPart(plinth, "ParkedBoat", Vector3.new(12, 2.2, 4.2), Vector3.new(bx, 2.4, bz), Color3.fromRGB(45, 55, 70), Enum.Material.Metal, nil) -- hull
+			kitPart(plinth, "ParkedBoat", Vector3.new(3.5, 1.4, 3.2), Vector3.new(bx + 6.5, 2.6, bz), Color3.fromRGB(50, 60, 75), Enum.Material.Metal, nil) -- bow
+			kitPart(plinth, "ParkedBoat", Vector3.new(4.5, 2.0, 3.0), Vector3.new(bx - 1, 4.0, bz), Color3.fromRGB(55, 62, 58), Enum.Material.Metal, nil) -- cabin
+			kitPart(plinth, "ParkedBoat", Vector3.new(0.4, 2.5, 0.4), Vector3.new(bx - 2, 5.8, bz), Color3.fromRGB(70, 75, 70), Enum.Material.Metal, nil) -- mast
+			kitPart(plinth, "ParkedBoat", Vector3.new(0.8, 0.35, 2.8), Vector3.new(bx + 2, 3.6, bz + 2.4), Color3.fromRGB(40, 48, 55), Enum.Material.Metal, nil) -- gunwale
+			local host = kitPart(plinth, "DressHost", Vector3.new(2.8, 1.2, 2.0), Vector3.new(bx, 2.2, bz), Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+			if host then
+				host.Name = "WE_DressHost_ParkedBoat"
+				host:SetAttribute("WE_DressVehicle", "PatrolBoat")
+				host:SetAttribute("WE_ParkedPresence", "Dock")
+				host.Transparency = 0.9
+				host.CanCollide = false
+			end
+		end
 	elseif kit == "pad" then
 		kitPart(plinth, "Body", Vector3.new(7.3, 0.45, 7.3), Vector3.new(0, 0.92, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -10822,6 +10852,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), pal.Roof, Enum.Material.Metal, nil)
 	elseif kit == "helipad" then
 		-- v35: ~28 stud marked pad + circle ring + H + 4 floodlights + windsock (readable air ops)
+		-- v37: static parked heli Part-kit silhouette + DressHost for VisualAssetConfig mesh
 		kitPart(plinth, "Body", Vector3.new(28, 0.65, 28), Vector3.new(0, 0.95, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Accent", Vector3.new(22, 0.12, 1.4), Vector3.new(0, 1.32, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.4, 0.12, 18), Vector3.new(0, 1.32, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -10844,13 +10875,56 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(2.4, 0.9, 0.15), Vector3.new(13.2, 6.2, 0), Color3.fromRGB(220, 80, 50), Enum.Material.Fabric, nil)
 		-- Ops hut
 		kitPart(plinth, "Detail", Vector3.new(6, 3.5, 4), Vector3.new(-14, 2.2, 10), Color3.fromRGB(55, 60, 55), Enum.Material.Metal, nil)
+		-- v37: parked transport heli silhouette (static; not flyable) offset on pad
+		do
+			local hx, hz = 4, -4
+			kitPart(plinth, "ParkedHeli", Vector3.new(8.5, 2.4, 3.2), Vector3.new(hx, 2.6, hz), Color3.fromRGB(55, 70, 50), Enum.Material.Metal, nil) -- fuselage
+			kitPart(plinth, "ParkedHeli", Vector3.new(2.2, 1.6, 2.4), Vector3.new(hx + 4.2, 2.8, hz), Color3.fromRGB(50, 62, 48), Enum.Material.Metal, nil) -- nose
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.35, 1.8, 0.35), Vector3.new(hx, 4.2, hz), Color3.fromRGB(40, 45, 40), Enum.Material.Metal, nil) -- mast
+			kitPart(plinth, "ParkedHeli", Vector3.new(10, 0.12, 0.55), Vector3.new(hx, 5.1, hz), Color3.fromRGB(70, 75, 65), Enum.Material.Metal, nil) -- main rotor
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.55, 0.12, 3.5), Vector3.new(hx, 5.1, hz), Color3.fromRGB(70, 75, 65), Enum.Material.Metal, nil)
+			kitPart(plinth, "ParkedHeli", Vector3.new(5.5, 0.15, 0.35), Vector3.new(hx - 5.5, 3.4, hz), Color3.fromRGB(45, 50, 42), Enum.Material.Metal, nil) -- tail boom
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.15, 1.4, 0.8), Vector3.new(hx - 8.2, 3.8, hz), Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil) -- tail rotor
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.25, 1.0, 4.5), Vector3.new(hx - 1.5, 1.55, hz), Color3.fromRGB(35, 38, 32), Enum.Material.Metal, nil) -- skid L
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.25, 1.0, 4.5), Vector3.new(hx + 1.5, 1.55, hz), Color3.fromRGB(35, 38, 32), Enum.Material.Metal, nil) -- skid R
+			local host = kitPart(plinth, "DressHost", Vector3.new(2.5, 1.2, 2.5), Vector3.new(hx, 2.2, hz), Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+			if host then
+				host.Name = "WE_DressHost_ParkedHeli"
+				host:SetAttribute("WE_DressVehicle", "TransportHeli")
+				host:SetAttribute("WE_ParkedPresence", "Helipad")
+				host.Transparency = 0.9
+				host.CanCollide = false
+			end
+		end
 	elseif kit == "airfield" then
 		-- v33: readable runway + taxi + large hangar volume (mesh composite dresses on top)
+		-- v37: centerline dashes + threshold chevrons + taxi edge lights
 		kitPart(plinth, "Body", Vector3.new(72, 0.85, 14), Vector3.new(0, 0.95, 20), Color3.fromRGB(42, 44, 46), Enum.Material.Asphalt, nil)
 		kitPart(plinth, "Accent", Vector3.new(64, 0.14, 0.55), Vector3.new(0, 1.42, 20), Color3.fromRGB(245, 245, 210), Enum.Material.Neon, nil)
-		-- runway edge lights / chevron dashes
+		-- v37: runway centerline dashed stripes (white Neon)
+		for i = -5, 5 do
+			if i ~= 0 then
+				kitPart(plinth, "Detail", Vector3.new(2.6, 0.1, 0.45), Vector3.new(i * 5.5, 1.42, 20), Color3.fromRGB(255, 255, 245), Enum.Material.Neon, nil)
+			end
+		end
+		-- v37: threshold chevrons at both runway ends (>>>> style)
+		for _, side in ipairs({ -1, 1 }) do
+			local baseX = side * 30
+			for ci = 0, 3 do
+				local ox = baseX - side * (ci * 2.2)
+				kitPart(plinth, "Detail", Vector3.new(1.6, 0.11, 0.55), Vector3.new(ox, 1.43, 20 - 3.2), Color3.fromRGB(255, 255, 220), Enum.Material.Neon, nil)
+				kitPart(plinth, "Detail", Vector3.new(1.6, 0.11, 0.55), Vector3.new(ox, 1.43, 20 + 3.2), Color3.fromRGB(255, 255, 220), Enum.Material.Neon, nil)
+			end
+		end
+		-- runway edge lights / chevron dashes (kept)
 		for i = -3, 3 do
 			kitPart(plinth, "Detail", Vector3.new(3.2, 0.12, 0.7), Vector3.new(i * 9, 1.4, 20), Color3.fromRGB(255, 255, 230), Enum.Material.Neon, nil)
+		end
+		-- v37: taxi edge lights (amber balls along taxi apron)
+		for _, tz in ipairs({ -12, -6, 0, 6 }) do
+			for _, tx in ipairs({ -12, 12 }) do
+				kitPart(plinth, "Window", Vector3.new(0.55, 0.55, 0.55), Vector3.new(tx, 1.55, tz), Color3.fromRGB(255, 190, 60), Enum.Material.Neon, Enum.PartType.Ball)
+			end
 		end
 		kitPart(plinth, "Detail", Vector3.new(28, 0.6, 18), Vector3.new(0, 0.95, -6), Color3.fromRGB(55, 58, 55), Enum.Material.Concrete, nil) -- taxi
 		kitPart(plinth, "Roof", Vector3.new(40, 18, 28), Vector3.new(0, 10, -24), pal.Roof, Enum.Material.Metal, nil) -- hangar shed
@@ -11004,12 +11078,12 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" then
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
 				local nm = child.Name
-				if string.sub(nm, 1, 12) == "WE_DressHost" or nm == "WE_CommandDesk" or nm == "ShowroomPedestalHost2" or nm == "ShowroomFlagHost" then
+				if string.sub(nm, 1, 12) == "WE_DressHost" or nm == "WE_CommandDesk" or nm == "ShowroomPedestalHost2" or nm == "ShowroomFlagHost" or child:GetAttribute("WE_KitRole") == "ParkedHeli" or child:GetAttribute("WE_KitRole") == "ParkedBoat" then
 					hasDress = true
 					break
 				end
@@ -13444,6 +13518,11 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child.Transparency = if lv == 0 then 0.9 else 0.05
 					child.Color = Color3.fromRGB(55, 60, 58)
 				end
+			elseif role == "ParkedHeli" or role == "ParkedBoat" then
+				-- v37: static parked presence — solid at L1+ (mesh may soften later)
+				child.Transparency = if lv == 0 then 1 else 0.08
+				child.Material = Enum.Material.Metal
+				child.CastShadow = lv > 0
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
@@ -13488,6 +13567,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 			end
 			if vas.TryDressStructureInterior then
 				vas.TryDressStructureInterior(plinth, structureId)
+			end
+			if vas.TryAttachParkedPresence then
+				vas.TryAttachParkedPresence(plinth, structureId, lv)
 			end
 		end)
 	end
@@ -15373,6 +15455,7 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local AntiExploitService: any = nil
 local NotificationService: any = nil
+local MonetizationService: any = nil
 local GateDefenseService: any = nil
 local MonetizationConfig: any = nil
 local RemoteSetup: any = nil
@@ -16219,6 +16302,12 @@ local function onPlayerDeath(victim: Player, killer: Player?)
 					end
 				end
 			end
+			-- v37: CashMega soft offer on death path if not already offered (existing Id only)
+			if MonetizationService and MonetizationService.TrySoftOfferCashMega then
+				pcall(function()
+					MonetizationService.TrySoftOfferCashMega(victim, "death", 0)
+				end)
+			end
 		end
 	end
 
@@ -16276,6 +16365,7 @@ function CombatService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	AntiExploitService = deps.AntiExploitService
 	NotificationService = deps.NotificationService
+	MonetizationService = deps.MonetizationService
 	GateDefenseService = deps.GateDefenseService
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
@@ -20235,6 +20325,64 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 	end)
 end
 
+
+--[[ v37: one-shot CashMega soft toast after high pending collect OR death path (existing DevProduct Id only). ]]
+function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string?, grantedOrPending: number?)
+	if not player or not player.Parent then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	if profile.CashMegaOffered == true then
+		return
+	end
+	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
+	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
+		return
+	end
+	local offerCfg = (MonetizationConfig :: any).CashMegaOffer
+	if not offerCfg then
+		return
+	end
+	local minNeed = tonumber(offerCfg.MinPendingCollect) or 15000
+	local amt = tonumber(grantedOrPending) or 0
+	-- Death path bypasses amount threshold; collect path requires high amount
+	if reason ~= "death" and amt < minNeed then
+		return
+	end
+	profile.CashMegaOffered = true
+	DataService.MarkDirty(player)
+	local delaySec = tonumber(offerCfg.DelaySeconds) or 1.8
+	task.delay(delaySec, function()
+		if not player.Parent then
+			return
+		end
+		if RemoteSetup then
+			local remote = RemoteSetup.Get(Constants.RemoteNames.CashMegaOffer)
+			if remote and remote:IsA("RemoteEvent") then
+				(remote :: RemoteEvent):FireClient(player, {
+					ProductKey = "CashMega",
+					ProductId = dp.Id,
+					DisplayName = dp.DisplayName or "Cash Pack Mega",
+					RobuxPrice = dp.RobuxPrice,
+					Reason = reason or "pending_collect",
+				})
+			end
+		end
+		if NotificationService then
+			NotificationService.Notify(
+				player,
+				"★ BEST OFFER — Cash Mega pack ready in Shop",
+				"Info",
+				4.5
+			)
+		end
+	end)
+end
+
+
 return MonetizationService
 ]]></string>
           </Properties>
@@ -20686,6 +20834,12 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 					end
 				end)
 			end
+		end
+		-- v37: one-shot CashMega soft offer after high pending collect (existing Id only)
+		if MonetizationService and MonetizationService.TrySoftOfferCashMega then
+			pcall(function()
+				MonetizationService.TrySoftOfferCashMega(player, "pending_collect", granted)
+			end)
 		end
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
@@ -27619,7 +27773,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 24 -- v35: sync with StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 25 -- v37: sync with StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -28284,6 +28438,61 @@ function VisualAssetService.Init()
 	end
 end
 
+
+--[[
+	v37: static parked aircraft/boat mesh on Helipad/Dock DressHosts.
+	Uses existing VisualAssetConfig vehicle ModelAssetIds (TransportHeli / PatrolBoat).
+	Part-kit ParkedHeli/ParkedBoat silhouette remains if insert skipped/fails.
+]]
+function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureId: string, level: number?): boolean
+	if not plinth or not plinth.Parent then
+		return false
+	end
+	local lv = tonumber(level) or 0
+	if lv < 1 then
+		return false
+	end
+	if structureId ~= "Helipad" and structureId ~= "Dock" then
+		return false
+	end
+	local attached = false
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") then
+			local vehicleId = child:GetAttribute("WE_DressVehicle")
+			if typeof(vehicleId) == "string" and (vehicleId :: string) ~= "" then
+				if child:FindFirstChild("WE_ParkedCatalog") then
+					attached = true
+				else
+					local assetId = VisualAssetService.ResolveVehicleAssetId(vehicleId :: string, nil)
+					if assetId then
+						local template = loadModel(assetId)
+						if template then
+							local clone = template:Clone()
+							if weldCloneToPrimary(clone, child, "WE_ParkedCatalog") then
+								clone.Parent = child
+								child:SetAttribute("WE_ParkedAssetId", assetId)
+								for _, sib in ipairs(plinth:GetChildren()) do
+									if sib:IsA("BasePart") then
+										local role = sib:GetAttribute("WE_KitRole")
+										if role == "ParkedHeli" or role == "ParkedBoat" then
+											sib.Transparency = math.max(sib.Transparency, 0.88)
+										end
+									end
+								end
+								attached = true
+							else
+								clone:Destroy()
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return attached
+end
+
+
 return VisualAssetService
 ]]></string>
           </Properties>
@@ -28313,7 +28522,7 @@ local BattlePassService: any = nil
 local SeasonService: any = nil
 local NotificationService: any = nil
 
-local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessage: string?)
+local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessage: string?, leveledUp: boolean?)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.XPUpdate) :: RemoteEvent
 	local hudGoal = LevelConfig.GetHudGoal(profile.Level)
 	remote:FireClient(player, {
@@ -28322,6 +28531,7 @@ local function pushXP(player: Player, profile: Types.PlayerProfile, unlockMessag
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),
 		HudGoal = hudGoal,
 		UnlockMessage = unlockMessage,
+		LevelUp = leveledUp == true,
 	} :: Types.XPUpdatePayload)
 end
 
@@ -28389,8 +28599,13 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 			EconomyService.AddGold(player, reward.Gold, "level_up")
 		end
 		local unlockMsg = LevelConfig.GetUnlockMessage(profile.Level)
-		if unlockMsg and NotificationService and NotificationService.Notify then
-			NotificationService.Notify(player, unlockMsg, "Success", 5)
+		-- v37: high-contrast level-up celebration toast (client also plays SFX on LevelUp flag)
+		if NotificationService and NotificationService.Notify then
+			local celeb = string.format("★ LEVEL %d!", profile.Level)
+			if unlockMsg then
+				celeb = celeb .. " — " .. unlockMsg
+			end
+			NotificationService.Notify(player, celeb, "Success", 5)
 		end
 		if AnalyticsService then
 			AnalyticsService.Log("LEVEL_UP", player.UserId, { level = profile.Level, reason = reason })
@@ -28402,7 +28617,7 @@ function XPService.AddXP(player: Player, amount: number, reason: string?): boole
 			end)
 		end
 		-- Push per level-up so HUD goal / unlock toast refresh immediately
-		pushXP(player, profile, unlockMsg)
+		pushXP(player, profile, unlockMsg, true)
 	end
 
 	DataService.MarkDirty(player)
@@ -30318,6 +30533,7 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
+local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 
@@ -30663,6 +30879,13 @@ function HUDController.Init()
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
 		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
+		-- v37: brief high-contrast level-up celebration + SFX
+		if (payload :: any).LevelUp == true then
+			pcall(function()
+				AudioController.PlayNotification()
+			end)
+			HUDController.ShowLevelUpCelebration(payload.Level, (payload :: any).UnlockMessage)
+		end
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
@@ -30918,7 +31141,7 @@ local function refresh()
 
 	for i, mission in ipairs(state.Daily) do
 		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, -8, 0, 72)
+		row.Size = UDim2.new(1, -8, 0, 78) -- v37 progress chip
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = i
@@ -30948,15 +31171,36 @@ local function refresh()
 		desc.TextTruncate = Enum.TextTruncate.AtEnd
 		desc.Parent = row
 
+		-- v37: progress chip bar + clearer reward copy
+		local chipBg = Instance.new("Frame")
+		chipBg.Name = "ProgressChip"
+		chipBg.Position = UDim2.fromOffset(8, 48)
+		chipBg.Size = UDim2.new(0.42, 0, 0, 14)
+		chipBg.BackgroundColor3 = Color3.fromRGB(35, 40, 48)
+		chipBg.BorderSizePixel = 0
+		chipBg.Parent = row
+		corner(chipBg, 4)
+		local pct = 0
+		if mission.Target > 0 then
+			pct = math.clamp(mission.Progress / mission.Target, 0, 1)
+		end
+		local chipFill = Instance.new("Frame")
+		chipFill.Size = UDim2.new(pct, 0, 1, 0)
+		chipFill.BackgroundColor3 = if mission.Claimed then Constants.Colors.Muted elseif pct >= 1 then Constants.Colors.Cash else Constants.Colors.XP
+		chipFill.BorderSizePixel = 0
+		chipFill.Parent = chipBg
+		corner(chipFill, 4)
 		local prog = Instance.new("TextLabel")
 		prog.BackgroundTransparency = 1
-		prog.Position = UDim2.fromOffset(8, 46)
-		prog.Size = UDim2.new(1, -100, 0, 18)
-		prog.Font = Enum.Font.GothamMedium
-		prog.TextSize = 12
+		prog.Position = UDim2.new(0.42, 12, 0, 44)
+		prog.Size = UDim2.new(0.58, -112, 0, 22)
+		prog.Font = Enum.Font.GothamBold
+		prog.TextSize = 11
 		prog.TextXAlignment = Enum.TextXAlignment.Left
-		prog.TextColor3 = Constants.Colors.XP
-		prog.Text = string.format("%d / %d  ·  $%d + %dXP", mission.Progress, mission.Target, mission.RewardCash, mission.RewardXP)
+		prog.TextColor3 = Constants.Colors.Gold
+		local goldBit = if (mission.RewardGold or 0) > 0 then string.format(" · %dg", mission.RewardGold) else ""
+		prog.Text = string.format("%d/%d  ★ $%s + %dXP%s", mission.Progress, mission.Target, tostring(mission.RewardCash), mission.RewardXP, goldBit)
+		prog.TextTruncate = Enum.TextTruncate.AtEnd
 		prog.Parent = row
 
 		local btn = Instance.new("TextButton")
@@ -34002,6 +34246,134 @@ function ShopController.Init()
 		end
 	end
 
+	-- v37: one-shot CashMega soft offer toast (existing DevProduct Id 3713838952 only)
+	do
+		local megaToast: Frame? = nil
+		local lastMegaToastAt = 0.0
+		local MEGA_TOAST_DEBOUNCE = 14.0
+
+		local function destroyMegaToast()
+			if megaToast then
+				megaToast:Destroy()
+				megaToast = nil
+			end
+		end
+
+		local function showCashMegaToast(payload: any)
+			local now = os.clock()
+			if now - lastMegaToastAt < MEGA_TOAST_DEBOUNCE then
+				return
+			end
+			lastMegaToastAt = now
+			destroyMegaToast()
+			local displayName = "Cash Pack Mega"
+			local robux = nil
+			if typeof(payload) == "table" then
+				displayName = tostring((payload :: any).DisplayName or displayName)
+				robux = tonumber((payload :: any).RobuxPrice)
+			end
+			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
+			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local toast = Instance.new("Frame")
+			toast.Name = "CashMegaToast"
+			toast.AnchorPoint = Vector2.new(0.5, 0)
+			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
+			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
+			toast.BackgroundColor3 = Color3.fromRGB(28, 42, 28)
+			toast.BorderSizePixel = 0
+			toast.ZIndex = 80
+			corner(toast, 10)
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = Color3.fromRGB(130, 255, 170)
+			stroke.Thickness = 1.8
+			stroke.Parent = toast
+			toast.Parent = host
+			megaToast = toast
+
+			local title = Instance.new("TextLabel")
+			title.BackgroundTransparency = 1
+			title.Position = UDim2.fromOffset(12, 8)
+			title.Size = UDim2.new(1, -48, 0, 24)
+			title.Font = Enum.Font.GothamBold
+			title.TextSize = if isTouch then 16 else 15
+			title.TextXAlignment = Enum.TextXAlignment.Left
+			title.TextColor3 = Color3.fromRGB(255, 250, 230)
+			title.Text = "★ BEST OFFER — " .. displayName
+			title.ZIndex = 81
+			title.Parent = toast
+
+			local sub = Instance.new("TextLabel")
+			sub.BackgroundTransparency = 1
+			sub.Position = UDim2.fromOffset(12, 32)
+			sub.Size = UDim2.new(1, -24, 0, 20)
+			sub.Font = Enum.Font.Gotham
+			sub.TextSize = 12
+			sub.TextXAlignment = Enum.TextXAlignment.Left
+			sub.TextColor3 = Color3.fromRGB(180, 220, 190)
+			sub.Text = if robux then string.format("Jumpstart · %d R$ · tap below", robux) else "Jumpstart cash pack · tap below"
+			sub.ZIndex = 81
+			sub.Parent = toast
+
+			local dismiss = Instance.new("TextButton")
+			dismiss.Position = UDim2.new(1, -36, 0, 6)
+			dismiss.Size = UDim2.fromOffset(28, 28)
+			dismiss.BackgroundColor3 = Color3.fromRGB(50, 55, 50)
+			dismiss.Font = Enum.Font.GothamBold
+			dismiss.TextSize = 16
+			dismiss.TextColor3 = Color3.fromRGB(220, 220, 220)
+			dismiss.Text = "×"
+			dismiss.BorderSizePixel = 0
+			dismiss.ZIndex = 82
+			corner(dismiss, 6)
+			dismiss.Parent = toast
+			UIUtil.EnsureMinTouch(dismiss, 44)
+			dismiss.Activated:Connect(destroyMegaToast)
+
+			local buy = Instance.new("TextButton")
+			buy.Position = UDim2.fromOffset(12, 58)
+			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
+			buy.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
+			buy.Font = Enum.Font.GothamBold
+			buy.TextSize = if isTouch then 15 else 14
+			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
+			buy.Text = "Get Cash Mega"
+			buy.BorderSizePixel = 0
+			buy.ZIndex = 82
+			corner(buy, 8)
+			buy.Parent = toast
+			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
+			buy.Activated:Connect(function()
+				destroyMegaToast()
+				pendingCashMegaHighlight = true
+				promptDevProduct("CashMega")
+			end)
+
+			task.delay(12, function()
+				if megaToast == toast then
+					destroyMegaToast()
+				end
+			end)
+		end
+
+		local megaRemote = Remotes.GetEvent(Constants.RemoteNames.CashMegaOffer)
+		if megaRemote then
+			megaRemote.OnClientEvent:Connect(function(payload: any)
+				task.defer(function()
+					if not screenGui then
+						task.wait(0.2)
+					end
+					showCashMegaToast(payload)
+				end)
+			end)
+		end
+	end
+
 	-- v33: ATM raid success / cooldown HUD chip
 	do
 		local chip: Frame? = nil
@@ -35504,7 +35876,7 @@ local function refresh()
 
 	if #ids == 0 then
 		local msg = if filterOwnedOnly
-			then "No owned vehicles match these filters — turn off OWNED or pick All."
+			then "No owned rides yet — buy Vehicle Depot / unlock Military Jeep, or turn off OWNED."
 			else "No vehicles match these filters — tap All / clear rarity."
 		UIUtil.EmptyState(listFrame, msg, 0)
 		if cooldownLabel then
@@ -35519,7 +35891,7 @@ local function refresh()
 	if ownedN == 0 and not filterOwnedOnly then
 		UIUtil.EmptyState(
 			listFrame,
-			"No owned vehicles yet — tap gold BUY, then SPAWN. Starter Jeep syncs after join.",
+			"Garage empty — buy Vehicle Depot / unlock Military Jeep (gold BUY → SPAWN). Starter Jeep syncs after join.",
 			0
 		)
 	elseif ownedN > 0 and filterOwnedOnly == false then

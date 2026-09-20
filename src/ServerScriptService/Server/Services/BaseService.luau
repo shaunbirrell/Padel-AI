@@ -540,6 +540,11 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child.Transparency = if lv == 0 then 0.9 else 0.05
 					child.Color = Color3.fromRGB(55, 60, 58)
 				end
+			elseif role == "ParkedHeli" or role == "ParkedBoat" then
+				-- v37: static parked presence — solid at L1+ (mesh may soften later)
+				child.Transparency = if lv == 0 then 1 else 0.08
+				child.Material = Enum.Material.Metal
+				child.CastShadow = lv > 0
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				child.Transparency = if lv == 0 then 0.9 else math.max(0, 0.15 - t * 0.15)
 				if palette then
@@ -584,6 +589,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 			end
 			if vas.TryDressStructureInterior then
 				vas.TryDressStructureInterior(plinth, structureId)
+			end
+			if vas.TryAttachParkedPresence then
+				vas.TryAttachParkedPresence(plinth, structureId, lv)
 			end
 		end)
 	end

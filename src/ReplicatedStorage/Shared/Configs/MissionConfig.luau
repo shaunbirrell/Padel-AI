@@ -57,9 +57,9 @@ local MissionConfig = {
 		DailyUpgrade = {
 			Id = "DailyUpgrade",
 			DisplayName = "Fortify Base",
-			Description = "Purchase 2 base upgrades.",
+			Description = "Buy 1 base upgrade — reward $3,000 + 100 XP.",
 			ObjectiveType = "PurchaseUpgrade",
-			Target = 2,
+			Target = 1, -- v37: completable in first ~5 min
 			RewardCash = 3000,
 			RewardXP = 100,
 			RewardGold = 0,
@@ -79,7 +79,7 @@ local MissionConfig = {
 		DailySpawnVehicle = {
 			Id = "DailySpawnVehicle",
 			DisplayName = "Mobilize",
-			Description = "Spawn a vehicle from the garage.",
+			Description = "Spawn 1 vehicle from the garage — reward $1,500 + 40 XP.",
 			ObjectiveType = "SpawnVehicle",
 			Target = 1,
 			RewardCash = 1500,
@@ -101,9 +101,9 @@ local MissionConfig = {
 		DailyRecruit = {
 			Id = "DailyRecruit",
 			DisplayName = "Muster Troops",
-			Description = "Recruit 5 soldiers.",
+			Description = "Recruit 1 soldier — reward $2,000 + 50 XP + 1 Gold.",
 			ObjectiveType = "RecruitSoldiers",
-			Target = 5,
+			Target = 1, -- v37: first-5-min friendly
 			RewardCash = 2000,
 			RewardXP = 50,
 			RewardGold = 1,
@@ -112,12 +112,12 @@ local MissionConfig = {
 	} :: { [string]: DailyMissionDef },
 
 	DailyMissionOrder = {
+		"DailyUpgrade", -- v37: first 5-min completable
+		"DailyRecruit",
+		"DailySpawnVehicle",
 		"DailyKillNPC",
 		"DailyCapture",
-		"DailyRecruit",
-		"DailyUpgrade",
 		"DailyEarnCash",
-		"DailySpawnVehicle",
 		"DailyKillPlayer",
 	},
 

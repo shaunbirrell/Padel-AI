@@ -167,6 +167,11 @@ local MonetizationConfig = {
 	SpeedBoostOffer = {
 		DelaySeconds = 1.5,
 	},
+	-- v37: one-shot CashMega soft toast after big pending collect OR death path (existing Id 3713838952 only)
+	CashMegaOffer = {
+		DelaySeconds = 1.8,
+		MinPendingCollect = 15000, -- pending/granted threshold
+	},
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {

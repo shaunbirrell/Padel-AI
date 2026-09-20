@@ -443,6 +443,12 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 				end)
 			end
 		end
+		-- v37: one-shot CashMega soft offer after high pending collect (existing Id only)
+		if MonetizationService and MonetizationService.TrySoftOfferCashMega then
+			pcall(function()
+				MonetizationService.TrySoftOfferCashMega(player, "pending_collect", granted)
+			end)
+		end
 		pcall(function()
 			local vas = require(script.Parent.VisualAssetService)
 			local profile = DataService.GetProfile(player)

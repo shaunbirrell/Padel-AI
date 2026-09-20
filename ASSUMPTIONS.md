@@ -454,3 +454,13 @@ Shaun screenshot: stacked billboards + brown Part-kit workers.
 152. **HUD cash contrast** — Bright mint Cash/Pending + dark TextStroke; darker currency pill (not yellow/gold readability).
 153. BuyPathStatic PASS; no-regress jeep LV / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v35 kits/landmarks.
 
+## 2026-09-20 — Air/naval presence + midgame polish (live v37 — Open Cloud Published versionNumber=37)
+
+154. **Helipad parked aircraft** — KIT_GEN / BuildingDressGen **25**. When Helipad L1+, Part-kit parked TransportHeli silhouette + `WE_DressHost_ParkedHeli` mesh dress (`VisualAssetConfig.Vehicles.TransportHeli` 9753309) via `TryAttachParkedPresence`. Static only (not flyable).
+155. **Dock parked boat** — Naval Dock L1+ Part-kit PatrolBoat silhouette + `WE_DressHost_ParkedBoat` mesh (`PatrolBoat` 15786579439). Static only.
+156. **Airfield runway markings** — Centerline dashes + threshold chevrons + taxi amber edge lights on Part kit (composite dress unchanged).
+157. **Missions dock polish** — DailyUpgrade/Recruit Target=1 (first ~5 min); order Upgrade→Recruit→Spawn first; progress chip + clearer ★ reward copy.
+158. **Level-up celebration** — XPUpdate `LevelUp=true` → HUD high-contrast banner + PlayNotification SFX; server Success toast `★ LEVEL N!`.
+159. **CashMega soft offer** — One-shot toast for DevProduct Id **3713838952** after pending collect ≥ $15k OR death path if not offered (`CashMegaOffered`); existing Id only.
+160. **Garage empty state** — Clear "buy Vehicle Depot / unlock Military Jeep" guidance when nothing owned.
+161. BuyPathStatic PASS; no-regress jeep LV+HingeMotor / GateDefense / AtmRaid / PremiumPad / Monetization Ids / Tutorial / VIP OWNED / v33–v36 kits/landmarks.

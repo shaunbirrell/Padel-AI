@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=36** (2026-09-20 Europe/Madrid) — Warzone road density, LightTank LV+HingeMotor, ArmedJeep ARMED cue, thicker walls/gate, watchtower snipers, SpeedBoost soft offer, HUD cash contrast
+- **Live Published:** Open Cloud **versionNumber=37** (2026-09-20 Europe/Madrid) — Helipad/Dock parked presence, Airfield runway markings, missions first-5-min + progress chip, level-up celebration, CashMega soft offer, garage empty guidance
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

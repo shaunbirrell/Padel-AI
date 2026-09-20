@@ -508,11 +508,11 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "37
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface", "Pad name SurfaceGui helper")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface(part, display)", "Pad name applied on billboard refresh")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "AlwaysOnTop = true", "BUY name billboard AlwaysOnTop near")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 24", "StructureKit KIT_GEN 24")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "StructureKit KIT_GEN 25")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "airfield"', "Airfield kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "warehouse"', "Warehouse kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Vector3.new(10, 28, 10)", "Watchtower body tall silhouette")
-must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 24", "BuildingDressGen 24")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 25", "BuildingDressGen 25")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "RifleBarrel", "GateGuard clear weapon barrel")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "RifleMag", "GateGuard clear weapon mag")
 must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "ToastCooldown", "AtmRaid ToastCooldown")
@@ -536,7 +536,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 
 
 # --- v34 legitimacy pack: HQ/Barracks/Armory kits, soldier variety, garage tips, DoubleCash soft, capture chip, rebirth copy, mobile Orders ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 24", "v34→v35 KIT_GEN 24")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "v34→v37 KIT_GEN 25")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "armory"', "WeaponsFacility armory kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "3-story weapons inventory", "Armory densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "compound-scale HQ", "HQ densify comment")
@@ -568,12 +568,12 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 
 
 # --- v35 legitimacy / late-game presence: SF densify, Helipad/Dock, landmarks, gate guns, VIP soft, oil bob, death CashMega ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 24", "v35 KIT_GEN 24")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "v37 KIT_GEN 25 (was v35 24)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SpecialForcesFacility special kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Special Forces compound", "SF densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: ~28 stud marked pad", "Helipad densify")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: naval pier + bollards", "Dock densify")
-must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 24", "v35 BuildingDressGen 24")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 25", "v37 BuildingDressGen 25 (was v35 24)")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "Map landmarks folder")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "WreckScorch", "Wrecked vehicle landmark")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "attachTurretVisualMarker", "Gate auto-gun visual marker")
@@ -634,8 +634,47 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v36")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect Id no-regress v36")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "v35 landmarks no-regress")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 24", "v35 KIT_GEN no-regress v36")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 25", "KIT_GEN no-regress v37")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v36")
+
+
+
+# --- v37 air/naval presence + midgame polish: parked heli/boat, runway, missions, level-up, CashMega soft, garage ---
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_ParkedHeli", "Helipad parked heli host")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ParkedHeli", "Helipad parked heli Part-kit")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_ParkedBoat", "Dock parked boat host")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ParkedBoat", "Dock parked boat Part-kit")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "threshold chevrons", "Airfield threshold chevrons")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "centerline", "Airfield centerline markings")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "TryAttachParkedPresence", "Parked presence mesh attach")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "TryAttachParkedPresence", "BaseService parked presence call")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'role == "ParkedHeli"', "ParkedHeli kit role visuals")
+must_contain("src/ReplicatedStorage/Shared/Configs/MissionConfig.luau", "completable in first", "Mission first-5-min Target")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau", "ProgressChip", "Missions progress chip")
+must_contain("src/ServerScriptService/Server/Services/XPService.luau", "LevelUp = leveledUp", "XP LevelUp payload flag")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "ShowLevelUpCelebration", "Level-up celebration toast")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "CashMegaOffer", "CashMega soft offer config")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713838952", "CashMega Id no invent v37")
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", "CashMegaOffer", "CashMegaOffer remote")
+must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "CashMegaOffered", "CashMega soft profile gate")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "TrySoftOfferCashMega", "CashMega soft offer server")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "CashMegaToast", "CashMega client toast")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "buy Vehicle Depot / unlock Military Jeep", "Garage empty unlock guidance")
+# No-regress v37
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LV+HingeMotor", "Jeep LV+HingeMotor no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v37")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v37")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v37")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect Id no-regress v37")
+must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "v35 landmarks no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v37")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SF kit no-regress v37")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isTracked", "LightTank tracked no-regress v37")
+
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

@@ -185,7 +185,7 @@ local function refresh()
 
 	if #ids == 0 then
 		local msg = if filterOwnedOnly
-			then "No owned vehicles match these filters — turn off OWNED or pick All."
+			then "No owned rides yet — buy Vehicle Depot / unlock Military Jeep, or turn off OWNED."
 			else "No vehicles match these filters — tap All / clear rarity."
 		UIUtil.EmptyState(listFrame, msg, 0)
 		if cooldownLabel then
@@ -200,7 +200,7 @@ local function refresh()
 	if ownedN == 0 and not filterOwnedOnly then
 		UIUtil.EmptyState(
 			listFrame,
-			"No owned vehicles yet — tap gold BUY, then SPAWN. Starter Jeep syncs after join.",
+			"Garage empty — buy Vehicle Depot / unlock Military Jeep (gold BUY → SPAWN). Starter Jeep syncs after join.",
 			0
 		)
 	elseif ownedN > 0 and filterOwnedOnly == false then

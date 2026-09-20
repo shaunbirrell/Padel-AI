@@ -75,6 +75,7 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 local AntiExploitService: any = nil
 local NotificationService: any = nil
+local MonetizationService: any = nil
 local GateDefenseService: any = nil
 local MonetizationConfig: any = nil
 local RemoteSetup: any = nil
@@ -921,6 +922,12 @@ local function onPlayerDeath(victim: Player, killer: Player?)
 					end
 				end
 			end
+			-- v37: CashMega soft offer on death path if not already offered (existing Id only)
+			if MonetizationService and MonetizationService.TrySoftOfferCashMega then
+				pcall(function()
+					MonetizationService.TrySoftOfferCashMega(victim, "death", 0)
+				end)
+			end
 		end
 	end
 
@@ -978,6 +985,7 @@ function CombatService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	AntiExploitService = deps.AntiExploitService
 	NotificationService = deps.NotificationService
+	MonetizationService = deps.MonetizationService
 	GateDefenseService = deps.GateDefenseService
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService

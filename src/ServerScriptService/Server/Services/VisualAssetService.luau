@@ -400,7 +400,7 @@ end
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
-	local DRESS_GEN = 24 -- v35: sync with StructureVisualConfig.BuildingDressGen
+	local DRESS_GEN = 25 -- v37: sync with StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {
 		[12370174722] = true, -- blockout Airport Model (Design REJECT)
 		[46981739] = true, -- tiny Plane Hangar (Design REJECT)
@@ -1064,5 +1064,60 @@ function VisualAssetService.Init()
 		print("[VisualAssetService] Catalog inserts enabled — free Creator Store IDs via InsertService.")
 	end
 end
+
+
+--[[
+	v37: static parked aircraft/boat mesh on Helipad/Dock DressHosts.
+	Uses existing VisualAssetConfig vehicle ModelAssetIds (TransportHeli / PatrolBoat).
+	Part-kit ParkedHeli/ParkedBoat silhouette remains if insert skipped/fails.
+]]
+function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureId: string, level: number?): boolean
+	if not plinth or not plinth.Parent then
+		return false
+	end
+	local lv = tonumber(level) or 0
+	if lv < 1 then
+		return false
+	end
+	if structureId ~= "Helipad" and structureId ~= "Dock" then
+		return false
+	end
+	local attached = false
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") then
+			local vehicleId = child:GetAttribute("WE_DressVehicle")
+			if typeof(vehicleId) == "string" and (vehicleId :: string) ~= "" then
+				if child:FindFirstChild("WE_ParkedCatalog") then
+					attached = true
+				else
+					local assetId = VisualAssetService.ResolveVehicleAssetId(vehicleId :: string, nil)
+					if assetId then
+						local template = loadModel(assetId)
+						if template then
+							local clone = template:Clone()
+							if weldCloneToPrimary(clone, child, "WE_ParkedCatalog") then
+								clone.Parent = child
+								child:SetAttribute("WE_ParkedAssetId", assetId)
+								for _, sib in ipairs(plinth:GetChildren()) do
+									if sib:IsA("BasePart") then
+										local role = sib:GetAttribute("WE_KitRole")
+										if role == "ParkedHeli" or role == "ParkedBoat" then
+											sib.Transparency = math.max(sib.Transparency, 0.88)
+										end
+									end
+								end
+								attached = true
+							else
+								clone:Destroy()
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+	return attached
+end
+
 
 return VisualAssetService

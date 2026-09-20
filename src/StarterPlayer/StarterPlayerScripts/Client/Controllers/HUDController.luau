@@ -14,6 +14,7 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
+local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 
@@ -359,6 +360,13 @@ function HUDController.Init()
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
 		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
+		-- v37: brief high-contrast level-up celebration + SFX
+		if (payload :: any).LevelUp == true then
+			pcall(function()
+				AudioController.PlayNotification()
+			end)
+			HUDController.ShowLevelUpCelebration(payload.Level, (payload :: any).UnlockMessage)
+		end
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)

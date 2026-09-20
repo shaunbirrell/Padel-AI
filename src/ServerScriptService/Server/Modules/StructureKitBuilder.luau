@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 24 -- v35: denser SpecialForcesFacility + Helipad/Dock presence
+local KIT_GEN = 25 -- v37: parked heli/boat presence + airfield runway markings
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -363,6 +363,23 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 				end
 			end
 		end
+		-- v37: static naval boat Part-kit at pier end + DressHost for PatrolBoat mesh
+		do
+			local bx, bz = 0, 28
+			kitPart(plinth, "ParkedBoat", Vector3.new(12, 2.2, 4.2), Vector3.new(bx, 2.4, bz), Color3.fromRGB(45, 55, 70), Enum.Material.Metal, nil) -- hull
+			kitPart(plinth, "ParkedBoat", Vector3.new(3.5, 1.4, 3.2), Vector3.new(bx + 6.5, 2.6, bz), Color3.fromRGB(50, 60, 75), Enum.Material.Metal, nil) -- bow
+			kitPart(plinth, "ParkedBoat", Vector3.new(4.5, 2.0, 3.0), Vector3.new(bx - 1, 4.0, bz), Color3.fromRGB(55, 62, 58), Enum.Material.Metal, nil) -- cabin
+			kitPart(plinth, "ParkedBoat", Vector3.new(0.4, 2.5, 0.4), Vector3.new(bx - 2, 5.8, bz), Color3.fromRGB(70, 75, 70), Enum.Material.Metal, nil) -- mast
+			kitPart(plinth, "ParkedBoat", Vector3.new(0.8, 0.35, 2.8), Vector3.new(bx + 2, 3.6, bz + 2.4), Color3.fromRGB(40, 48, 55), Enum.Material.Metal, nil) -- gunwale
+			local host = kitPart(plinth, "DressHost", Vector3.new(2.8, 1.2, 2.0), Vector3.new(bx, 2.2, bz), Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+			if host then
+				host.Name = "WE_DressHost_ParkedBoat"
+				host:SetAttribute("WE_DressVehicle", "PatrolBoat")
+				host:SetAttribute("WE_ParkedPresence", "Dock")
+				host.Transparency = 0.9
+				host.CanCollide = false
+			end
+		end
 	elseif kit == "pad" then
 		kitPart(plinth, "Body", Vector3.new(7.3, 0.45, 7.3), Vector3.new(0, 0.92, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -370,6 +387,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), pal.Roof, Enum.Material.Metal, nil)
 	elseif kit == "helipad" then
 		-- v35: ~28 stud marked pad + circle ring + H + 4 floodlights + windsock (readable air ops)
+		-- v37: static parked heli Part-kit silhouette + DressHost for VisualAssetConfig mesh
 		kitPart(plinth, "Body", Vector3.new(28, 0.65, 28), Vector3.new(0, 0.95, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Accent", Vector3.new(22, 0.12, 1.4), Vector3.new(0, 1.32, 0), pal.Accent, Enum.Material.Neon, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.4, 0.12, 18), Vector3.new(0, 1.32, 0), pal.Accent, Enum.Material.Neon, nil)
@@ -392,13 +410,56 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(2.4, 0.9, 0.15), Vector3.new(13.2, 6.2, 0), Color3.fromRGB(220, 80, 50), Enum.Material.Fabric, nil)
 		-- Ops hut
 		kitPart(plinth, "Detail", Vector3.new(6, 3.5, 4), Vector3.new(-14, 2.2, 10), Color3.fromRGB(55, 60, 55), Enum.Material.Metal, nil)
+		-- v37: parked transport heli silhouette (static; not flyable) offset on pad
+		do
+			local hx, hz = 4, -4
+			kitPart(plinth, "ParkedHeli", Vector3.new(8.5, 2.4, 3.2), Vector3.new(hx, 2.6, hz), Color3.fromRGB(55, 70, 50), Enum.Material.Metal, nil) -- fuselage
+			kitPart(plinth, "ParkedHeli", Vector3.new(2.2, 1.6, 2.4), Vector3.new(hx + 4.2, 2.8, hz), Color3.fromRGB(50, 62, 48), Enum.Material.Metal, nil) -- nose
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.35, 1.8, 0.35), Vector3.new(hx, 4.2, hz), Color3.fromRGB(40, 45, 40), Enum.Material.Metal, nil) -- mast
+			kitPart(plinth, "ParkedHeli", Vector3.new(10, 0.12, 0.55), Vector3.new(hx, 5.1, hz), Color3.fromRGB(70, 75, 65), Enum.Material.Metal, nil) -- main rotor
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.55, 0.12, 3.5), Vector3.new(hx, 5.1, hz), Color3.fromRGB(70, 75, 65), Enum.Material.Metal, nil)
+			kitPart(plinth, "ParkedHeli", Vector3.new(5.5, 0.15, 0.35), Vector3.new(hx - 5.5, 3.4, hz), Color3.fromRGB(45, 50, 42), Enum.Material.Metal, nil) -- tail boom
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.15, 1.4, 0.8), Vector3.new(hx - 8.2, 3.8, hz), Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil) -- tail rotor
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.25, 1.0, 4.5), Vector3.new(hx - 1.5, 1.55, hz), Color3.fromRGB(35, 38, 32), Enum.Material.Metal, nil) -- skid L
+			kitPart(plinth, "ParkedHeli", Vector3.new(0.25, 1.0, 4.5), Vector3.new(hx + 1.5, 1.55, hz), Color3.fromRGB(35, 38, 32), Enum.Material.Metal, nil) -- skid R
+			local host = kitPart(plinth, "DressHost", Vector3.new(2.5, 1.2, 2.5), Vector3.new(hx, 2.2, hz), Color3.fromRGB(60, 65, 55), Enum.Material.Metal, nil)
+			if host then
+				host.Name = "WE_DressHost_ParkedHeli"
+				host:SetAttribute("WE_DressVehicle", "TransportHeli")
+				host:SetAttribute("WE_ParkedPresence", "Helipad")
+				host.Transparency = 0.9
+				host.CanCollide = false
+			end
+		end
 	elseif kit == "airfield" then
 		-- v33: readable runway + taxi + large hangar volume (mesh composite dresses on top)
+		-- v37: centerline dashes + threshold chevrons + taxi edge lights
 		kitPart(plinth, "Body", Vector3.new(72, 0.85, 14), Vector3.new(0, 0.95, 20), Color3.fromRGB(42, 44, 46), Enum.Material.Asphalt, nil)
 		kitPart(plinth, "Accent", Vector3.new(64, 0.14, 0.55), Vector3.new(0, 1.42, 20), Color3.fromRGB(245, 245, 210), Enum.Material.Neon, nil)
-		-- runway edge lights / chevron dashes
+		-- v37: runway centerline dashed stripes (white Neon)
+		for i = -5, 5 do
+			if i ~= 0 then
+				kitPart(plinth, "Detail", Vector3.new(2.6, 0.1, 0.45), Vector3.new(i * 5.5, 1.42, 20), Color3.fromRGB(255, 255, 245), Enum.Material.Neon, nil)
+			end
+		end
+		-- v37: threshold chevrons at both runway ends (>>>> style)
+		for _, side in ipairs({ -1, 1 }) do
+			local baseX = side * 30
+			for ci = 0, 3 do
+				local ox = baseX - side * (ci * 2.2)
+				kitPart(plinth, "Detail", Vector3.new(1.6, 0.11, 0.55), Vector3.new(ox, 1.43, 20 - 3.2), Color3.fromRGB(255, 255, 220), Enum.Material.Neon, nil)
+				kitPart(plinth, "Detail", Vector3.new(1.6, 0.11, 0.55), Vector3.new(ox, 1.43, 20 + 3.2), Color3.fromRGB(255, 255, 220), Enum.Material.Neon, nil)
+			end
+		end
+		-- runway edge lights / chevron dashes (kept)
 		for i = -3, 3 do
 			kitPart(plinth, "Detail", Vector3.new(3.2, 0.12, 0.7), Vector3.new(i * 9, 1.4, 20), Color3.fromRGB(255, 255, 230), Enum.Material.Neon, nil)
+		end
+		-- v37: taxi edge lights (amber balls along taxi apron)
+		for _, tz in ipairs({ -12, -6, 0, 6 }) do
+			for _, tx in ipairs({ -12, 12 }) do
+				kitPart(plinth, "Window", Vector3.new(0.55, 0.55, 0.55), Vector3.new(tx, 1.55, tz), Color3.fromRGB(255, 190, 60), Enum.Material.Neon, Enum.PartType.Ball)
+			end
 		end
 		kitPart(plinth, "Detail", Vector3.new(28, 0.6, 18), Vector3.new(0, 0.95, -6), Color3.fromRGB(55, 58, 55), Enum.Material.Concrete, nil) -- taxi
 		kitPart(plinth, "Roof", Vector3.new(40, 18, 28), Vector3.new(0, 10, -24), pal.Roof, Enum.Material.Metal, nil) -- hangar shed
@@ -552,12 +613,12 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" then
+	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
 				local nm = child.Name
-				if string.sub(nm, 1, 12) == "WE_DressHost" or nm == "WE_CommandDesk" or nm == "ShowroomPedestalHost2" or nm == "ShowroomFlagHost" then
+				if string.sub(nm, 1, 12) == "WE_DressHost" or nm == "WE_CommandDesk" or nm == "ShowroomPedestalHost2" or nm == "ShowroomFlagHost" or child:GetAttribute("WE_KitRole") == "ParkedHeli" or child:GetAttribute("WE_KitRole") == "ParkedBoat" then
 					hasDress = true
 					break
 				end

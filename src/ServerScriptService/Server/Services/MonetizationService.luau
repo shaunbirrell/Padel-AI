@@ -615,4 +615,62 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 	end)
 end
 
+
+--[[ v37: one-shot CashMega soft toast after high pending collect OR death path (existing DevProduct Id only). ]]
+function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string?, grantedOrPending: number?)
+	if not player or not player.Parent then
+		return
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	if profile.CashMegaOffered == true then
+		return
+	end
+	local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
+	if not dp or typeof(dp.Id) ~= "number" or dp.Id == 0 then
+		return
+	end
+	local offerCfg = (MonetizationConfig :: any).CashMegaOffer
+	if not offerCfg then
+		return
+	end
+	local minNeed = tonumber(offerCfg.MinPendingCollect) or 15000
+	local amt = tonumber(grantedOrPending) or 0
+	-- Death path bypasses amount threshold; collect path requires high amount
+	if reason ~= "death" and amt < minNeed then
+		return
+	end
+	profile.CashMegaOffered = true
+	DataService.MarkDirty(player)
+	local delaySec = tonumber(offerCfg.DelaySeconds) or 1.8
+	task.delay(delaySec, function()
+		if not player.Parent then
+			return
+		end
+		if RemoteSetup then
+			local remote = RemoteSetup.Get(Constants.RemoteNames.CashMegaOffer)
+			if remote and remote:IsA("RemoteEvent") then
+				(remote :: RemoteEvent):FireClient(player, {
+					ProductKey = "CashMega",
+					ProductId = dp.Id,
+					DisplayName = dp.DisplayName or "Cash Pack Mega",
+					RobuxPrice = dp.RobuxPrice,
+					Reason = reason or "pending_collect",
+				})
+			end
+		end
+		if NotificationService then
+			NotificationService.Notify(
+				player,
+				"★ BEST OFFER — Cash Mega pack ready in Shop",
+				"Info",
+				4.5
+			)
+		end
+	end)
+end
+
+
 return MonetizationService

@@ -102,6 +102,7 @@ export type PlayerProfile = {
 	DoubleCashOffered: boolean?,
 	VIPOffered: boolean?,
 	SpeedBoostOffered: boolean?,
+	CashMegaOffered: boolean?,
 }
 
 export type EconomyUpdatePayload = {
@@ -116,6 +117,7 @@ export type XPUpdatePayload = {
 	XPToNext: number,
 	HudGoal: string?,
 	UnlockMessage: string?,
+	LevelUp: boolean?, -- v37 celebration toast
 }
 
 export type BaseStatePayload = {
