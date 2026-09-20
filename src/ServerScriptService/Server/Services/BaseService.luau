@@ -327,11 +327,12 @@ end
 local function findUpgradeSlots(plotId: number, structureId: string): { BasePart }
 	local found: { BasePart } = {}
 	local seen: { [BasePart]: boolean } = {}
+	local wantPlot = tonumber(plotId)
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
 		if inst:IsA("BasePart") then
-			local p = inst:GetAttribute("PlotId")
+			local p = tonumber(inst:GetAttribute("PlotId") :: any)
 			local s = inst:GetAttribute("StructureId")
-			if p == plotId and s == structureId then
+			if wantPlot ~= nil and p == wantPlot and s == structureId then
 				seen[inst] = true
 				table.insert(found, inst)
 			end
@@ -345,7 +346,8 @@ local function findUpgradeSlots(plotId: number, structureId: string): { BasePart
 		if plotFolder then
 			for _, desc in ipairs(plotFolder:GetDescendants()) do
 				if desc:IsA("BasePart") and not seen[desc] then
-					if desc:GetAttribute("StructureId") == structureId and desc:GetAttribute("PlotId") == plotId then
+					local dp = tonumber(desc:GetAttribute("PlotId") :: any)
+					if desc:GetAttribute("StructureId") == structureId and wantPlot ~= nil and dp == wantPlot then
 						CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
 						table.insert(found, desc)
 					end
@@ -462,7 +464,8 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 		plinth:SetAttribute("BaseSize", baseSize)
 	end
 	local bs = baseSize :: Vector3
-	local lv = math.clamp(level, 0, 5)
+	-- v43: coerce DataStore/remote level; never let non-number leave kits at Transparency=1
+	local lv = math.clamp(tonumber(level) or 0, 0, 5)
 	local t = lv / 5
 	-- L0 = nearly invisible placeholder; L1+ solid "built" structure (spawn-on-buy feel)
 	local ghost = math.max(StructureVisualConfig.GhostTransparency, 0.72)
@@ -613,21 +616,71 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	-- Upgrade pop extras (idempotent Part kits; never required for gameplay)
 	syncUpgradePops(plinth, structureId, lv)
 
-	-- Design P0: PreferMesh L1+ for all structure MeshAssetIds (Part kit always remains)
+	-- v43: assert Body exists + solid at L1+ BEFORE any mesh dress (visibility first)
+	if lv >= 1 then
+		local bodyPart: BasePart? = nil
+		for _, child in ipairs(plinth:GetChildren()) do
+			if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
+				bodyPart = child
+				if child.Transparency > 0.2 then
+					child.Transparency = StructureVisualConfig.SolidTransparency
+				end
+				break
+			end
+		end
+		if not bodyPart then
+			warn("[BaseService] applyKitVisuals L1+ missing Body — re-EnsureKit", structureId)
+			pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
+			for _, child in ipairs(plinth:GetChildren()) do
+				if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") ~= nil then
+					local role = child:GetAttribute("WE_KitRole")
+					if role == "Body" or role == "Roof" or role == "Accent" or role == "Antenna" then
+						child.Transparency = StructureVisualConfig.SolidTransparency
+					elseif role == "Detail" or role == "Door" or role == "Window" or role == "Pier" then
+						child.Transparency = 0.05
+					end
+				end
+			end
+		end
+	end
+
+	-- Design P0: PreferMesh L1+ OPTIONAL dress on top — deferred so InsertService yield
+	-- never blocks / races Part-kit solidify. Mesh failure must never skip EnsureKit path.
 	local preferMesh = StructureVisualConfig.PreferMeshWhenAssetIdSet ~= false
 	local meshMin = tonumber((StructureVisualConfig :: any).PreferMeshMinLevel) or 1
 	if preferMesh and lv >= meshMin then
-		pcall(function()
-			local vas = require(script.Parent.VisualAssetService)
-			vas.TryAttachBuildingVisual(plinth, structureId, lv)
-			if structureId == "VehicleDepot" and vas.TryAttachShowroomVisual then
-				vas.TryAttachShowroomVisual(plinth)
+		local plinthRef = plinth
+		local sid = structureId
+		local levelRef = lv
+		task.defer(function()
+			if not plinthRef or not plinthRef.Parent then
+				return
 			end
-			if vas.TryDressStructureInterior then
-				vas.TryDressStructureInterior(plinth, structureId)
-			end
-			if vas.TryAttachParkedPresence then
-				vas.TryAttachParkedPresence(plinth, structureId, lv)
+			pcall(function()
+				local vas = require(script.Parent.VisualAssetService)
+				vas.TryAttachBuildingVisual(plinthRef, sid, levelRef)
+				if sid == "VehicleDepot" and vas.TryAttachShowroomVisual then
+					vas.TryAttachShowroomVisual(plinthRef)
+				end
+				if vas.TryDressStructureInterior then
+					vas.TryDressStructureInterior(plinthRef, sid)
+				end
+				if vas.TryAttachParkedPresence then
+					vas.TryAttachParkedPresence(plinthRef, sid, levelRef)
+				end
+			end)
+			-- Re-assert Part kits visible after optional mesh (hideKitBody is no-op; belt+suspenders)
+			if levelRef >= 1 and plinthRef.Parent then
+				for _, child in ipairs(plinthRef:GetChildren()) do
+					if child:IsA("BasePart") then
+						local role = child:GetAttribute("WE_KitRole")
+						if role == "Body" or role == "Roof" then
+							if child.Transparency > 0.35 then
+								child.Transparency = StructureVisualConfig.SolidTransparency
+							end
+						end
+					end
+				end
 			end
 		end)
 	end
@@ -707,17 +760,25 @@ function BaseService.RefreshAllVisuals(player: Player)
 	if not profile then
 		return
 	end
-	-- Apply every structure from profile (L0 = faint placeholder; L1+ spawn/solid kit)
-	for structureId in pairs(BaseConfig.Structures) do
-		local level = profile.BaseUpgrades[structureId] or 0
-		BaseService.UpdateVisuals(player, structureId, level)
-	end
-	-- DefensiveWalls / Watchtowers / BaseCeiling extras also driven if present
+	-- v43: perimeter FIRST (independent of upgrade-slot discovery)
 	if profile.BasePlotId then
-		local wallsLv = profile.BaseUpgrades.DefensiveWalls or 0
+		local wallsLv = tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
 		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
 		pcall(StructureKitBuilder.SyncBaseCeiling, profile.BasePlotId, wallsLv)
-		local towerLv = profile.BaseUpgrades.Watchtowers or 0
+		local towerLv = tonumber(profile.BaseUpgrades.Watchtowers) or 0
+		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
+	end
+	-- Apply every structure from profile (L0 = faint placeholder; L1+ spawn/solid kit)
+	for structureId in pairs(BaseConfig.Structures) do
+		local level = tonumber(profile.BaseUpgrades[structureId]) or 0
+		BaseService.UpdateVisuals(player, structureId, level)
+	end
+	-- DefensiveWalls / Watchtowers / BaseCeiling again after pads/kits (slot race heal)
+	if profile.BasePlotId then
+		local wallsLv = tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
+		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
+		pcall(StructureKitBuilder.SyncBaseCeiling, profile.BasePlotId, wallsLv)
+		local towerLv = tonumber(profile.BaseUpgrades.Watchtowers) or 0
 		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
 	end
 end
@@ -873,11 +934,22 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
-		-- Rehydrate structure kits + perimeter from profile (retry: map tags may lag)
+		-- Rehydrate structure kits + perimeter from profile (retry: map tags / soft-rejoin)
+		-- v43: denser retries so walls+kits appear within ~2s even if first pass races MapSetup
 		task.defer(function()
 			BaseService.RefreshAllVisuals(player)
 		end)
+		task.delay(0.5, function()
+			if player.Parent then
+				BaseService.RefreshAllVisuals(player)
+			end
+		end)
 		task.delay(1.0, function()
+			if player.Parent then
+				BaseService.RefreshAllVisuals(player)
+			end
+		end)
+		task.delay(2.0, function()
 			if player.Parent then
 				BaseService.RefreshAllVisuals(player)
 			end

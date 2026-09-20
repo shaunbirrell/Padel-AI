@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 27 -- v39 hotfix; v41 prefers DressGen bump + GateArch BaseGate attach (no wall wipe)
+local KIT_GEN = 28 -- v43 P0: force Part-kit rebuild; walls/buildings visible even if mesh fails
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -225,10 +225,10 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		end
 	elseif kit == "depot" then
 		kitPart(plinth, "Body", Vector3.new(32, 12, 22), Vector3.new(0, 6.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Roof", Vector3.new(34, 1.2, 24), Vector3.new(0, 13.2, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(32, 0.28, 22), Vector3.new(0, 0.75, 0), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Door", Vector3.new(10, 8, 0.4), Vector3.new(0, 4.5, -11.2), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 1.2, 1.2), Vector3.new(12, 8, 8), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 		-- Showroom podium: PlateDark cylinder + GoldBright ring + rarity billboard host
 		local podium = kitPart(plinth, "Podium", Vector3.new(3.6, 0.55, 3.6), Vector3.new(0, 0.95, 4.2), Constants.Colors.PlateDark, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		-- Cylinder default axis X — stand upright
@@ -638,17 +638,22 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 	local gen = tonumber(plinth:GetAttribute("WE_KitGen")) or 0
 	local needsRebuild = gen < KIT_GEN
 
-	-- Footprint too small (legacy pad-sized cubes) → rebuild
-	if not needsRebuild then
-		for _, child in ipairs(plinth:GetChildren()) do
-			if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
-				local s = child.Size
-				if math.max(s.X, s.Y, s.Z) < 12 then
-					needsRebuild = true
-				end
-				break
+	-- Always require a Body part (visibility gate). Missing Body → rebuild.
+	local hasBody = false
+	local bodyTooSmall = false
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
+			hasBody = true
+			local s = child.Size
+			-- Helipad/Dock/Airfield flat decks can be thin on Y but wide on XZ
+			if math.max(s.X, s.Y, s.Z) < 8 then
+				bodyTooSmall = true
 			end
+			break
 		end
+	end
+	if not hasBody or bodyTooSmall then
+		needsRebuild = true
 	end
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
@@ -676,6 +681,23 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 			end
 		end
 		StructureKitBuilder.BuildKitOnPlinth(plinth, structureId)
+		plinth:SetAttribute("WE_KitGen", KIT_GEN)
+		n = countKitRoles(plinth)
+	end
+
+	-- v43 hard assert: EnsureKit path always leaves a Body part (even if mesh later fails)
+	local bodyOk = false
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") == "Body" then
+			bodyOk = true
+			break
+		end
+	end
+	if not bodyOk then
+		warn("[StructureKitBuilder] EnsureKit missing Body after build — forcing generic Body", structureId)
+		local pal = paletteFor(structureId)
+		kitPart(plinth, "Body", Vector3.new(16, 10, 16), Vector3.new(0, 5.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(18, 1.2, 18), Vector3.new(0, 11.2, 0), pal.Roof, Enum.Material.Metal, nil)
 		plinth:SetAttribute("WE_KitGen", KIT_GEN)
 		n = countKitRoles(plinth)
 	end
@@ -735,8 +757,18 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	end
 
 	local folder: Folder
+	local periGen = 0
+	local periParts = 0
 	if existing and existing:IsA("Folder") then
-		existing:ClearAllChildren()
+		periGen = tonumber(existing:GetAttribute("WE_PerimeterGen")) or 0
+		periParts = #existing:GetChildren()
+	end
+	-- v43: rebuild when gen stale or empty (never keep invisible/stale walls)
+	local mustRebuild = (not existing) or (not existing:IsA("Folder")) or periGen < KIT_GEN or periParts < 4
+	if existing and existing:IsA("Folder") then
+		if mustRebuild then
+			existing:ClearAllChildren()
+		end
 		folder = existing
 	else
 		if existing then
@@ -745,6 +777,30 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		folder = Instance.new("Folder")
 		folder.Name = PERIMETER_FOLDER
 		folder.Parent = plotFolder
+		mustRebuild = true
+	end
+	if not mustRebuild then
+		-- Fresh enough walls already present — still ensure gate dress deferred; do not early-return before attr stamp
+		folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
+		folder:SetAttribute("WE_WallLevel", math.clamp(level, 1, 5))
+		task.defer(function()
+			pcall(function()
+				local vac = require(Shared.Configs.VisualAssetConfig)
+				local vas = require(script.Parent.Parent.Services.VisualAssetService)
+				local ref = vac.Buildings and vac.Buildings.BaseGate
+				local aid = ref and tonumber(ref.ModelAssetId) or 0
+				if not aid or aid <= 0 then
+					return
+				end
+				for _, ch in ipairs(folder:GetChildren()) do
+					if ch:IsA("BasePart") and ch.Name == "GateArch" then
+						ch:SetAttribute("WE_DisplayName", "Base Gate")
+						vas.TryAttachBuildingVisual(ch, "BaseGate", level)
+					end
+				end
+			end)
+		end)
+		return
 	end
 
 	local pal = paletteFor("DefensiveWalls")

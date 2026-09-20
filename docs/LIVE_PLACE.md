@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=42** (2026-09-20 Europe/Madrid) — DESIGN_WIRE_GAPS fill: Hangar≠Warehouse≠Depot, Missile≠Tower, tank/arty/naval uniqueness; kits visible; KIT_GEN 27 / DressGen 29
+- **Live Published:** Open Cloud **versionNumber=43** (2026-09-20 Europe/Madrid) — P0 visibility hotfix: Part-kit buildings + DefensiveWalls perimeter always solid; KIT_GEN 28 / DressGen 29; mesh dress deferred
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

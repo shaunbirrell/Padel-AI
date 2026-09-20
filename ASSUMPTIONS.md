@@ -512,3 +512,14 @@ Do not regress: WE_GroundDrive, monetization IDs, AtmRaid, GateDefense, Tutorial
 187. **Safety no-regress** — hideKitBody remains no-op; KIT_GEN stays **27**; BuildingDressGen / VAS DRESS_GEN **29**; Jeep WE_GroundDrive + monetization IDs untouched; billboards ≤160.
 188. BuyPathStatic PASS; InsertService-risk NEW IDs (ping Design Bot on reject): `15942568272`, `12208876851`, `11962508154`, `15618784436`, `14074034450`, `10286064243`, `18406068364`, `12794395111`, `2048010298`, `74585287273804`. Alts: MissileDefenseAlt `14074034450`, HowitzerAlt `8312399501`, RocketArtilleryAlt `10355405319`.
 
+
+
+## 2026-09-20 — P0 visibility hotfix v43 (live v43 — Open Cloud Published versionNumber=43)
+
+Shaun playtest (admin $50M, many L5 MAX chips, flat grey plot, glowing pads, tiny grey boxes, no HQ/Barracks/walls):
+
+189. **Buildings ROOT CAUSE** — Kits spawn at `Transparency=1` until `applyKitVisuals` solidifies; PreferMesh `InsertService` ran synchronously and could race/skip solidify perception on soft-rejoin; KIT_GEN stayed **27** across v41/v42 so Attribute gating skipped rebuild of stale MapSetup-sized / incomplete kits. hideKitBody already no-op since v39 — mesh dress was never allowed to ghost kits, but Part kits still never became solid silhouettes on live.
+190. **Walls ROOT CAUSE** — `SyncPerimeterWalls` Part walls are authoritative (mesh=0), but `ReleasePlot`→`ClearPlotExtras` wipes perimeter and soft-rejoin could miss rebuild when pad/slot discovery lagged; BaseGate GateArch dress is deferred+pcall (not the abort). No vertical walls despite DefensiveWalls L≥1.
+191. **Fix** — KIT_GEN **28** force rebuild; EnsureKit always asserts Body (generic Body+Roof fallback); applyKitVisuals coerces level, Body assert, **defers** PreferMesh so InsertService never blocks kit solidify; re-assert Body/Roof after mesh; RefreshAllVisuals walls-first + retries 0/0.5/1/2/3s; findUpgradeSlots `tonumber(PlotId)`; SyncPerimeterWalls rebuilds when `WE_PerimeterGen < KIT_GEN` or empty; depot Roof sized to Body; hideKitBody remains no-op; no new Design mesh IDs; Orders/jeep/monetization untouched.
+192. BuyPathStatic PASS (EnsureKit Body path; SyncPerimeterWalls no early-return on mesh fail; hideKitBody no-op).
+
