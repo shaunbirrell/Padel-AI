@@ -2316,7 +2316,7 @@ export type StructurePalette = {
 local StructureVisualConfig = {
 	GhostTransparency = 0.72,
 	SolidTransparency = 0,
-	PreferMeshWhenAssetIdSet = true,
+	PreferMeshWhenAssetIdSet = false, -- v44 P0 hotfix: Part kits only until visibility proven; re-enable design meshes later
 	PreferMeshMinLevel = 1,
 	BuildingDressGen = 29, -- v42 DressGen: Hangar≠Warehouse≠Depot, Missile≠Tower; kits stay visible
 
@@ -10507,7 +10507,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 28 -- v43 P0: force Part-kit rebuild; walls/buildings visible even if mesh fails
+local KIT_GEN = 29 -- v44 P0: force rebuild; tall walls + solid kits at spawn (no Transparency=1 Body)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -10553,13 +10553,21 @@ local function makePart(props: { [string]: any }): BasePart
 end
 
 local function kitPart(plinth: BasePart, role: string, size: Vector3, localOffset: Vector3, color: Color3, material: Enum.Material?, shape: Enum.PartType?)
+	-- v44 P0: Body/Roof (and most silhouette parts) spawn SOLID. Do NOT rely on later applyKitVisuals.
+	-- DressHost stays near-invisible so catalog props can overlay. L0 ghosting is applied by applyKitVisuals.
+	local solid = StructureVisualConfig.SolidTransparency
+	if typeof(solid) ~= "number" then
+		solid = 0
+	end
+	solid = math.min(solid, 0.05)
+	local spawnT = if role == "DressHost" then 1 else solid
 	local p = makePart({
 		Name = role,
 		Size = size,
 		CFrame = plinth.CFrame * CFrame.new(localOffset),
 		Color = color,
 		Material = material or Enum.Material.Metal,
-		Transparency = 1, -- hidden until BaseService.applyKitVisuals (L0 ghost / L1+ solid)
+		Transparency = spawnT,
 		CanCollide = false,
 		Parent = plinth,
 		Shape = shape,
@@ -10616,6 +10624,20 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 	local pal = paletteFor(structureId)
 	local kit = pal.Kit
 	clearKitChildren(plinth)
+
+	-- v44: MissileDefense gets launcher bay (not watchtower) — always Body+Roof
+	if structureId == "MissileDefense" then
+		kitPart(plinth, "Body", Vector3.new(14, 8, 16), Vector3.new(0, 4.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(16, 1.0, 10), Vector3.new(0, 9.0, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(14.4, 0.25, 16.4), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- Twin launcher tubes
+		kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 10), Vector3.new(-3.5, 6.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
+		kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 10), Vector3.new(3.5, 6.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 5, 0.35), Vector3.new(0, 11.5, -4), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(0, 7.5, -6), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		plinth:SetAttribute("WE_KitGen", KIT_GEN)
+		return
+	end
 
 	if kit == "hq" then
 		-- v34: compound-scale HQ (~TargetFootprint 36×16×28), not a player-sized cube
@@ -11193,6 +11215,30 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 		plinth:SetAttribute("WE_KitGen", KIT_GEN)
 		n = countKitRoles(plinth)
 	end
+
+	-- v44 P0: owned kits must be solid IMMEDIATELY (do not wait for applyKitVisuals)
+	local solid = StructureVisualConfig.SolidTransparency
+	if typeof(solid) ~= "number" then
+		solid = 0
+	end
+	solid = math.min(solid, 0.05)
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") then
+			local role = child:GetAttribute("WE_KitRole")
+			if role == "Body" or role == "Roof" then
+				child.Transparency = solid
+			elseif role == "Accent" or role == "Antenna" or role == "Detail" or role == "Door" or role == "Window" or role == "Pier" or role == "Crate" then
+				if child.Transparency > 0.5 then
+					child.Transparency = solid
+				end
+			end
+		end
+	end
+
+	if StructureVisualConfig.Palettes[structureId] == nil then
+		warn("[StructureKitBuilder] profile/structure has kit build but no StructureVisualConfig.Palettes entry:", structureId)
+	end
+
 	return n
 end
 
@@ -11300,9 +11346,15 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
 	-- v36: thicker/taller defensive walls at higher levels
+	-- v44 P0: TALL vertical perimeter — L1 ≥ 12 studs, L5 ≥ 20. Size Y = height (not flat slabs).
+	-- Bottom of wall sits on pad top: y = padTop + height/2.
 	local thickness = 2.8 + lv * 0.7
-	local height = 7.5 + lv * 2.8
-	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
+	local height = math.max(12, 10 + lv * 2.5) -- L1=12.5→12min, L5=22.5≥20
+	if lv >= 5 then
+		height = math.max(height, 20)
+	end
+	local padTop = pad.Position.Y + pad.Size.Y * 0.5
+	local y = padTop + height * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 
 	-- Clear walkable opening (8–12 studs). Posts/arch are visual-only outside this span.
@@ -11531,7 +11583,24 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	-- Prior TryAttachBuildingVisual on Wall* parts caused empty/mis-scaled dress on live.
 	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
 	folder:SetAttribute("WE_WallLevel", lv)
-	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d parts=%d", plotId, lv, #folder:GetChildren()))
+	-- Destroy orphan flat Wall* leftovers outside perimeter folder (pre-v44 mis-sized slabs)
+	for _, ch in ipairs(plotFolder:GetChildren()) do
+		if ch ~= folder and ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" then
+			ch:Destroy()
+		end
+	end
+	-- Hard assert: every Wall* segment must be tall on Y
+	for _, ch in ipairs(folder:GetChildren()) do
+		if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
+			if ch.Size.Y < 12 then
+				warn("[StructureKitBuilder] Wall segment too short on Y — forcing height", ch.Name, ch.Size)
+				local s = ch.Size
+				ch.Size = Vector3.new(s.X, height, s.Z)
+				ch.Position = Vector3.new(ch.Position.X, padTop + height * 0.5, ch.Position.Z)
+			end
+		end
+	end
+	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d height=%.1f parts=%d", plotId, lv, height, #folder:GetChildren()))
 
 	-- v41: BaseGate catalog prop on GateArch ONLY (not Wall* segments). StripScripts via VAS.
 	-- Prefer DressGen/attach without KIT_GEN bump so walls are not wiped.
@@ -11631,7 +11700,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	local coverFrac = 0.72
 	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
-	local wallH = 6.5 + lv * 2.2
+	local wallH = math.max(12, 10 + lv * 2.5) -- v44 mirror SyncPerimeterWalls
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
 
 	local sizeX: number
@@ -13565,6 +13634,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	end
 
 	local palette = StructureVisualConfig.Palettes[structureId]
+	if palette == nil and (tonumber(level) or 0) >= 1 then
+		warn("[BaseService] applyKitVisuals: profile level>=1 but no kit palette for", structureId)
+	end
 	local baseSize = plinth:GetAttribute("BaseSize")
 	if typeof(baseSize) ~= "Vector3" then
 		baseSize = Vector3.new(8, 1.2, 8)
@@ -13862,6 +13934,40 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 	end
 end
 
+
+--[[ v44 P0: destroy stale kits on owned plinths and rebuild solid Part kits from profile. ]]
+function BaseService.NuclearRehydrateKits(player: Player)
+	local profile = DataService.GetProfile(player)
+	if not profile or not profile.BasePlotId then
+		return
+	end
+	local plotId = profile.BasePlotId
+	for structureId, rawLevel in pairs(profile.BaseUpgrades) do
+		local lv = math.clamp(tonumber(rawLevel) or 0, 0, 5)
+		if lv >= 1 then
+			if StructureVisualConfig.Palettes[structureId] == nil then
+				warn("[BaseService] profile has level but no StructureVisualConfig.Palettes entry:", structureId, lv)
+			end
+			local slots = findUpgradeSlots(plotId, structureId)
+			for _, plinth in ipairs(slots) do
+				-- Destroy existing WE_KitRole children + catalog dress
+				for _, ch in ipairs(plinth:GetChildren()) do
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") ~= nil then
+						ch:Destroy()
+					elseif ch:IsA("Model") and (ch.Name == "WE_CatalogBuilding" or ch.Name == "WE_AirfieldComposite" or string.sub(ch.Name, 1, 14) == "WE_CatalogBuild") then
+						ch:Destroy()
+					end
+				end
+				plinth:SetAttribute("WE_KitGen", nil)
+				plinth:SetAttribute("WE_CatalogAssetId", nil)
+				plinth:SetAttribute("WE_BuildingDressGen", nil)
+				pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
+				pcall(applyKitVisuals, plinth, structureId, lv)
+			end
+		end
+	end
+end
+
 function BaseService.RefreshAllVisuals(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -14041,31 +14147,18 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
-		-- Rehydrate structure kits + perimeter from profile (retry: map tags / soft-rejoin)
-		-- v43: denser retries so walls+kits appear within ~2s even if first pass races MapSetup
+		-- v44 P0: nuclear kit rebuild then walls-first RefreshAllVisuals at 0 / 0.35 / 1 / 2 / 4s
 		task.defer(function()
+			pcall(BaseService.NuclearRehydrateKits, player)
 			BaseService.RefreshAllVisuals(player)
 		end)
-		task.delay(0.5, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
-		task.delay(1.0, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
-		task.delay(2.0, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
-		task.delay(3.0, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
+		for _, delaySec in ipairs({ 0.35, 1.0, 2.0, 4.0 }) do
+			task.delay(delaySec, function()
+				if player.Parent then
+					BaseService.RefreshAllVisuals(player)
+				end
+			end)
+		end
 		if AnalyticsService then
 			AnalyticsService.Log("PLAYER_JOIN", player.UserId, { plot = _profile.BasePlotId })
 		end
@@ -28244,10 +28337,32 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 		hostPart:SetAttribute("WE_CatalogAssetId", nil)
 	end
 
-	-- v39 P0: NEVER ghost Part-kit silhouettes. Catalog mesh is optional dress on top.
-	-- Prior hideKitBody (Transparency≥0.92) left empty pads when mesh failed/mis-scaled.
+	-- v44 P0: Mesh welded ON TOP; kit stays fully opaque. NEVER raise Body/Roof/host Transparency.
+	-- NEVER ghost Part-kit silhouettes. Catalog mesh is optional dress on top.
+	-- Prior hideKitBody (Transparency≥0.92) and hostPart.Transparency=math.max(...,0.55-0.7) left ghost pads.
 	local function hideKitBody()
-		-- no-op: Part kits stay solid olive/military buildings
+		-- no-op on purpose
+	end
+	local function keepKitSolid()
+		local solid = 0
+		pcall(function()
+			local cfg = require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
+			if typeof(cfg.SolidTransparency) == "number" then
+				solid = math.min(cfg.SolidTransparency, 0.05)
+			end
+		end)
+		-- Host plinth itself may stay slightly visible; never fade it for mesh dress
+		if hostPart.Transparency > 0.35 then
+			hostPart.Transparency = solid
+		end
+		for _, ch in ipairs(hostPart:GetChildren()) do
+			if ch:IsA("BasePart") then
+				local role = ch:GetAttribute("WE_KitRole")
+				if role == "Body" or role == "Roof" or role == "Accent" or role == "Antenna" then
+					ch.Transparency = solid
+				end
+			end
+		end
 	end
 
 	local function footprintFor(id: string): Vector3
@@ -28393,7 +28508,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			hangarId = -6015472062
 		end
 
-		hideKitBody()
+		keepKitSolid()
 		hostPart:SetAttribute("WE_CatalogAssetId", hangarId)
 		hostPart:SetAttribute("WE_BuildingDressGen", DRESS_GEN)
 		return true
@@ -28443,7 +28558,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			dressed.Name = "WE_BaseGate"
 		end
 	end
-	hideKitBody()
+	keepKitSolid()
 	return true
 end
 
@@ -28512,7 +28627,12 @@ function VisualAssetService.TryAttachMeshPartVisual(hostPart: BasePart, meshId: 
 		end
 	end
 	hostPart:SetAttribute("WE_MeshId", meshId)
-	hostPart.Transparency = math.max(hostPart.Transparency, 0.7)
+	-- v44 P0: never raise Transparency on structure kit hosts (Body/Roof/plinth). Vehicles/props OK.
+	local kitRole = hostPart:GetAttribute("WE_KitRole")
+	local isStructureHost = kitRole == "Body" or kitRole == "Roof" or hostPart:GetAttribute("StructureId") ~= nil or hostPart:GetAttribute("WE_StructureId") ~= nil
+	if not isStructureHost then
+		hostPart.Transparency = math.max(hostPart.Transparency, 0.7)
+	end
 	return true
 end
 
@@ -28556,7 +28676,11 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	end
 	clone.Parent = hostPart
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
-	hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
+	-- v44 P0: props on DressHost OK to soften; never fade Body/Roof structure kits
+	local kitRole = hostPart:GetAttribute("WE_KitRole")
+	if kitRole ~= "Body" and kitRole ~= "Roof" and hostPart:GetAttribute("StructureId") == nil then
+		hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
+	end
 	return true
 end
 

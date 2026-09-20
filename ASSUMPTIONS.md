@@ -523,3 +523,11 @@ Shaun playtest (admin $50M, many L5 MAX chips, flat grey plot, glowing pads, tin
 191. **Fix** — KIT_GEN **28** force rebuild; EnsureKit always asserts Body (generic Body+Roof fallback); applyKitVisuals coerces level, Body assert, **defers** PreferMesh so InsertService never blocks kit solidify; re-assert Body/Roof after mesh; RefreshAllVisuals walls-first + retries 0/0.5/1/2/3s; findUpgradeSlots `tonumber(PlotId)`; SyncPerimeterWalls rebuilds when `WE_PerimeterGen < KIT_GEN` or empty; depot Roof sized to Body; hideKitBody remains no-op; no new Design mesh IDs; Orders/jeep/monetization untouched.
 192. BuyPathStatic PASS (EnsureKit Body path; SyncPerimeterWalls no early-return on mesh fail; hideKitBody no-op).
 
+## 2026-09-20 — P0 visibility hard-fix v44 (live v44 — Open Cloud Published versionNumber=44)
+
+Shaun playtest (admin $50M, LVL2, many pads, Orders OK): flat TAN wall blocks on ground, MissileDefense pad empty, mostly empty base, one small grey neon box.
+
+193. **ROOT CAUSE — flat walls** — `SyncPerimeterWalls` wall Size/CFrame left short/wrong-axis segments that read as slabs on the pad; KIT_GEN 28 did not force a tall rebuild. **Fix:** KIT_GEN **29**, height `math.max(12, 10+lv*2.5)` (L1≥12, L5≥20), Y = padTop+height/2, Size Y = height, orphan Wall* destroy + Y assert.
+194. **ROOT CAUSE — empty pads** — Part kits spawned at `Transparency=1` until `applyKitVisuals`; PreferMesh InsertService + VAS host fade (`Transparency=math.max(...,0.55–0.7)`) left ghost/missing silhouettes when mesh failed. **Fix:** kitPart Body/Roof spawn at SolidTransparency; EnsureKit solidifies immediately; `PreferMeshWhenAssetIdSet=false`; VAS `keepKitSolid` + never raise structure host Transparency; NuclearRehydrateKits on join; RefreshAllVisuals walls-first at 0/0.35/1/2/4s.
+195. MissileDefense dedicated launcher Body+Roof kit (not watchtower). No new Design mesh IDs.
+196. BuyPathStatic PASS (KIT_GEN≥29, PreferMesh off, wall height≥12, EnsureKit solid path).

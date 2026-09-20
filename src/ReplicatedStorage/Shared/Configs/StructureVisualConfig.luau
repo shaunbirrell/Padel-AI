@@ -19,7 +19,7 @@ export type StructurePalette = {
 local StructureVisualConfig = {
 	GhostTransparency = 0.72,
 	SolidTransparency = 0,
-	PreferMeshWhenAssetIdSet = true,
+	PreferMeshWhenAssetIdSet = false, -- v44 P0 hotfix: Part kits only until visibility proven; re-enable design meshes later
 	PreferMeshMinLevel = 1,
 	BuildingDressGen = 29, -- v42 DressGen: Hangar≠Warehouse≠Depot, Missile≠Tower; kits stay visible
 

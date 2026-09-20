@@ -425,10 +425,32 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 		hostPart:SetAttribute("WE_CatalogAssetId", nil)
 	end
 
-	-- v39 P0: NEVER ghost Part-kit silhouettes. Catalog mesh is optional dress on top.
-	-- Prior hideKitBody (Transparency≥0.92) left empty pads when mesh failed/mis-scaled.
+	-- v44 P0: Mesh welded ON TOP; kit stays fully opaque. NEVER raise Body/Roof/host Transparency.
+	-- NEVER ghost Part-kit silhouettes. Catalog mesh is optional dress on top.
+	-- Prior hideKitBody (Transparency≥0.92) and hostPart.Transparency=math.max(...,0.55-0.7) left ghost pads.
 	local function hideKitBody()
-		-- no-op: Part kits stay solid olive/military buildings
+		-- no-op on purpose
+	end
+	local function keepKitSolid()
+		local solid = 0
+		pcall(function()
+			local cfg = require(ReplicatedStorage.Shared.Configs.StructureVisualConfig)
+			if typeof(cfg.SolidTransparency) == "number" then
+				solid = math.min(cfg.SolidTransparency, 0.05)
+			end
+		end)
+		-- Host plinth itself may stay slightly visible; never fade it for mesh dress
+		if hostPart.Transparency > 0.35 then
+			hostPart.Transparency = solid
+		end
+		for _, ch in ipairs(hostPart:GetChildren()) do
+			if ch:IsA("BasePart") then
+				local role = ch:GetAttribute("WE_KitRole")
+				if role == "Body" or role == "Roof" or role == "Accent" or role == "Antenna" then
+					ch.Transparency = solid
+				end
+			end
+		end
 	end
 
 	local function footprintFor(id: string): Vector3
@@ -574,7 +596,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			hangarId = -6015472062
 		end
 
-		hideKitBody()
+		keepKitSolid()
 		hostPart:SetAttribute("WE_CatalogAssetId", hangarId)
 		hostPart:SetAttribute("WE_BuildingDressGen", DRESS_GEN)
 		return true
@@ -624,7 +646,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			dressed.Name = "WE_BaseGate"
 		end
 	end
-	hideKitBody()
+	keepKitSolid()
 	return true
 end
 
@@ -693,7 +715,12 @@ function VisualAssetService.TryAttachMeshPartVisual(hostPart: BasePart, meshId: 
 		end
 	end
 	hostPart:SetAttribute("WE_MeshId", meshId)
-	hostPart.Transparency = math.max(hostPart.Transparency, 0.7)
+	-- v44 P0: never raise Transparency on structure kit hosts (Body/Roof/plinth). Vehicles/props OK.
+	local kitRole = hostPart:GetAttribute("WE_KitRole")
+	local isStructureHost = kitRole == "Body" or kitRole == "Roof" or hostPart:GetAttribute("StructureId") ~= nil or hostPart:GetAttribute("WE_StructureId") ~= nil
+	if not isStructureHost then
+		hostPart.Transparency = math.max(hostPart.Transparency, 0.7)
+	end
 	return true
 end
 
@@ -737,7 +764,11 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	end
 	clone.Parent = hostPart
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
-	hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
+	-- v44 P0: props on DressHost OK to soften; never fade Body/Roof structure kits
+	local kitRole = hostPart:GetAttribute("WE_KitRole")
+	if kitRole ~= "Body" and kitRole ~= "Roof" and hostPart:GetAttribute("StructureId") == nil then
+		hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
+	end
 	return true
 end
 

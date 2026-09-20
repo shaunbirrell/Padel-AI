@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 28 -- v43 P0: force Part-kit rebuild; walls/buildings visible even if mesh fails
+local KIT_GEN = 29 -- v44 P0: force rebuild; tall walls + solid kits at spawn (no Transparency=1 Body)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -61,13 +61,21 @@ local function makePart(props: { [string]: any }): BasePart
 end
 
 local function kitPart(plinth: BasePart, role: string, size: Vector3, localOffset: Vector3, color: Color3, material: Enum.Material?, shape: Enum.PartType?)
+	-- v44 P0: Body/Roof (and most silhouette parts) spawn SOLID. Do NOT rely on later applyKitVisuals.
+	-- DressHost stays near-invisible so catalog props can overlay. L0 ghosting is applied by applyKitVisuals.
+	local solid = StructureVisualConfig.SolidTransparency
+	if typeof(solid) ~= "number" then
+		solid = 0
+	end
+	solid = math.min(solid, 0.05)
+	local spawnT = if role == "DressHost" then 1 else solid
 	local p = makePart({
 		Name = role,
 		Size = size,
 		CFrame = plinth.CFrame * CFrame.new(localOffset),
 		Color = color,
 		Material = material or Enum.Material.Metal,
-		Transparency = 1, -- hidden until BaseService.applyKitVisuals (L0 ghost / L1+ solid)
+		Transparency = spawnT,
 		CanCollide = false,
 		Parent = plinth,
 		Shape = shape,
@@ -124,6 +132,20 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 	local pal = paletteFor(structureId)
 	local kit = pal.Kit
 	clearKitChildren(plinth)
+
+	-- v44: MissileDefense gets launcher bay (not watchtower) — always Body+Roof
+	if structureId == "MissileDefense" then
+		kitPart(plinth, "Body", Vector3.new(14, 8, 16), Vector3.new(0, 4.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(16, 1.0, 10), Vector3.new(0, 9.0, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(14.4, 0.25, 16.4), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- Twin launcher tubes
+		kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 10), Vector3.new(-3.5, 6.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
+		kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 10), Vector3.new(3.5, 6.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 5, 0.35), Vector3.new(0, 11.5, -4), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(0, 7.5, -6), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		plinth:SetAttribute("WE_KitGen", KIT_GEN)
+		return
+	end
 
 	if kit == "hq" then
 		-- v34: compound-scale HQ (~TargetFootprint 36×16×28), not a player-sized cube
@@ -701,6 +723,30 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 		plinth:SetAttribute("WE_KitGen", KIT_GEN)
 		n = countKitRoles(plinth)
 	end
+
+	-- v44 P0: owned kits must be solid IMMEDIATELY (do not wait for applyKitVisuals)
+	local solid = StructureVisualConfig.SolidTransparency
+	if typeof(solid) ~= "number" then
+		solid = 0
+	end
+	solid = math.min(solid, 0.05)
+	for _, child in ipairs(plinth:GetChildren()) do
+		if child:IsA("BasePart") then
+			local role = child:GetAttribute("WE_KitRole")
+			if role == "Body" or role == "Roof" then
+				child.Transparency = solid
+			elseif role == "Accent" or role == "Antenna" or role == "Detail" or role == "Door" or role == "Window" or role == "Pier" or role == "Crate" then
+				if child.Transparency > 0.5 then
+					child.Transparency = solid
+				end
+			end
+		end
+	end
+
+	if StructureVisualConfig.Palettes[structureId] == nil then
+		warn("[StructureKitBuilder] profile/structure has kit build but no StructureVisualConfig.Palettes entry:", structureId)
+	end
+
 	return n
 end
 
@@ -808,9 +854,15 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
 	-- v36: thicker/taller defensive walls at higher levels
+	-- v44 P0: TALL vertical perimeter — L1 ≥ 12 studs, L5 ≥ 20. Size Y = height (not flat slabs).
+	-- Bottom of wall sits on pad top: y = padTop + height/2.
 	local thickness = 2.8 + lv * 0.7
-	local height = 7.5 + lv * 2.8
-	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
+	local height = math.max(12, 10 + lv * 2.5) -- L1=12.5→12min, L5=22.5≥20
+	if lv >= 5 then
+		height = math.max(height, 20)
+	end
+	local padTop = pad.Position.Y + pad.Size.Y * 0.5
+	local y = padTop + height * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 
 	-- Clear walkable opening (8–12 studs). Posts/arch are visual-only outside this span.
@@ -1039,7 +1091,24 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	-- Prior TryAttachBuildingVisual on Wall* parts caused empty/mis-scaled dress on live.
 	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
 	folder:SetAttribute("WE_WallLevel", lv)
-	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d parts=%d", plotId, lv, #folder:GetChildren()))
+	-- Destroy orphan flat Wall* leftovers outside perimeter folder (pre-v44 mis-sized slabs)
+	for _, ch in ipairs(plotFolder:GetChildren()) do
+		if ch ~= folder and ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" then
+			ch:Destroy()
+		end
+	end
+	-- Hard assert: every Wall* segment must be tall on Y
+	for _, ch in ipairs(folder:GetChildren()) do
+		if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
+			if ch.Size.Y < 12 then
+				warn("[StructureKitBuilder] Wall segment too short on Y — forcing height", ch.Name, ch.Size)
+				local s = ch.Size
+				ch.Size = Vector3.new(s.X, height, s.Z)
+				ch.Position = Vector3.new(ch.Position.X, padTop + height * 0.5, ch.Position.Z)
+			end
+		end
+	end
+	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d height=%.1f parts=%d", plotId, lv, height, #folder:GetChildren()))
 
 	-- v41: BaseGate catalog prop on GateArch ONLY (not Wall* segments). StripScripts via VAS.
 	-- Prefer DressGen/attach without KIT_GEN bump so walls are not wiped.
@@ -1139,7 +1208,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	local coverFrac = 0.72
 	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
-	local wallH = 6.5 + lv * 2.2
+	local wallH = math.max(12, 10 + lv * 2.5) -- v44 mirror SyncPerimeterWalls
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
 
 	local sizeX: number

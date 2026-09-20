@@ -458,6 +458,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	end
 
 	local palette = StructureVisualConfig.Palettes[structureId]
+	if palette == nil and (tonumber(level) or 0) >= 1 then
+		warn("[BaseService] applyKitVisuals: profile level>=1 but no kit palette for", structureId)
+	end
 	local baseSize = plinth:GetAttribute("BaseSize")
 	if typeof(baseSize) ~= "Vector3" then
 		baseSize = Vector3.new(8, 1.2, 8)
@@ -755,6 +758,40 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 	end
 end
 
+
+--[[ v44 P0: destroy stale kits on owned plinths and rebuild solid Part kits from profile. ]]
+function BaseService.NuclearRehydrateKits(player: Player)
+	local profile = DataService.GetProfile(player)
+	if not profile or not profile.BasePlotId then
+		return
+	end
+	local plotId = profile.BasePlotId
+	for structureId, rawLevel in pairs(profile.BaseUpgrades) do
+		local lv = math.clamp(tonumber(rawLevel) or 0, 0, 5)
+		if lv >= 1 then
+			if StructureVisualConfig.Palettes[structureId] == nil then
+				warn("[BaseService] profile has level but no StructureVisualConfig.Palettes entry:", structureId, lv)
+			end
+			local slots = findUpgradeSlots(plotId, structureId)
+			for _, plinth in ipairs(slots) do
+				-- Destroy existing WE_KitRole children + catalog dress
+				for _, ch in ipairs(plinth:GetChildren()) do
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") ~= nil then
+						ch:Destroy()
+					elseif ch:IsA("Model") and (ch.Name == "WE_CatalogBuilding" or ch.Name == "WE_AirfieldComposite" or string.sub(ch.Name, 1, 14) == "WE_CatalogBuild") then
+						ch:Destroy()
+					end
+				end
+				plinth:SetAttribute("WE_KitGen", nil)
+				plinth:SetAttribute("WE_CatalogAssetId", nil)
+				plinth:SetAttribute("WE_BuildingDressGen", nil)
+				pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
+				pcall(applyKitVisuals, plinth, structureId, lv)
+			end
+		end
+	end
+end
+
 function BaseService.RefreshAllVisuals(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -934,31 +971,18 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
-		-- Rehydrate structure kits + perimeter from profile (retry: map tags / soft-rejoin)
-		-- v43: denser retries so walls+kits appear within ~2s even if first pass races MapSetup
+		-- v44 P0: nuclear kit rebuild then walls-first RefreshAllVisuals at 0 / 0.35 / 1 / 2 / 4s
 		task.defer(function()
+			pcall(BaseService.NuclearRehydrateKits, player)
 			BaseService.RefreshAllVisuals(player)
 		end)
-		task.delay(0.5, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
-		task.delay(1.0, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
-		task.delay(2.0, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
-		task.delay(3.0, function()
-			if player.Parent then
-				BaseService.RefreshAllVisuals(player)
-			end
-		end)
+		for _, delaySec in ipairs({ 0.35, 1.0, 2.0, 4.0 }) do
+			task.delay(delaySec, function()
+				if player.Parent then
+					BaseService.RefreshAllVisuals(player)
+				end
+			end)
+		end
 		if AnalyticsService then
 			AnalyticsService.Log("PLAYER_JOIN", player.UserId, { plot = _profile.BasePlotId })
 		end
