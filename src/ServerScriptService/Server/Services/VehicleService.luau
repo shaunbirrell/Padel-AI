@@ -216,33 +216,34 @@ end
 local function addWheels(model: Model, body: BasePart, scale: number, positions: { Vector3 }, radius: number?)
 	-- Authoritative physics wheels: HingeConstraint motors (NOT welded).
 	-- Catalog mesh wheels stay cosmetic-only via VisualAssetService (CanCollide false).
+	-- Cylinder PartType axis is local X (= axle). Do NOT Z-rotate 90° (that stood the can on end).
 	local r = radius or 1.1
 	for i, offset in ipairs(positions) do
 		local wheel = Instance.new("Part")
 		wheel.Name = "Wheel" .. i
 		wheel.Shape = Enum.PartType.Cylinder
-		-- Cylinder X-axis = axle; rotate 90° so axle aligns with body X
+		-- Thin in X (axle/width), diameter in Y/Z — axle already along body X with identity rot
 		wheel.Size = Vector3.new(r * 0.85, r * 1.8 * scale, r * 1.8 * scale)
 		wheel.Color = Color3.fromRGB(22, 22, 24)
 		wheel.Material = Enum.Material.SmoothPlastic
-		wheel.CFrame = body.CFrame * CFrame.new(offset * scale) * CFrame.Angles(0, 0, math.rad(90))
+		wheel.CFrame = body.CFrame * CFrame.new(offset * scale)
 		wheel.Anchored = false
 		wheel.CanCollide = true
 		wheel.Massless = false
-		wheel.CustomPhysicalProperties = PhysicalProperties.new(0.8, 1.4, 0.15, 1, 1)
+		-- High friction so motor torque converts to ground push
+		wheel.CustomPhysicalProperties = PhysicalProperties.new(0.9, 2.0, 0.1, 1, 1)
 		wheel:SetAttribute("WE_PhysicsWheel", true)
 		wheel.Parent = model
 
 		local att0 = Instance.new("Attachment")
 		att0.Name = "WE_WheelAttBody" .. i
-		-- Identity rotation → Attachment.Axis (1,0,0) = body right = axle
+		-- Identity → Attachment.Axis (1,0,0) = body right = axle
 		att0.CFrame = CFrame.new(offset * scale)
 		att0.Parent = body
 
 		local att1 = Instance.new("Attachment")
 		att1.Name = "WE_WheelAtt" .. i
-		-- Undo cylinder Z-rot so hinge axis matches body X
-		att1.CFrame = CFrame.Angles(0, 0, math.rad(-90))
+		att1.CFrame = CFrame.new() -- wheel local X = axle
 		att1.Parent = wheel
 
 		local hinge = Instance.new("HingeConstraint")
@@ -250,8 +251,8 @@ local function addWheels(model: Model, body: BasePart, scale: number, positions:
 		hinge.Attachment0 = att0
 		hinge.Attachment1 = att1
 		hinge.ActuatorType = Enum.ActuatorType.Motor
-		hinge.MotorMaxTorque = 120000
-		hinge.MotorMaxAcceleration = 100
+		hinge.MotorMaxTorque = 250000
+		hinge.MotorMaxAcceleration = 200
 		hinge.AngularVelocity = 0
 		hinge:SetAttribute("WE_DriveHinge", true)
 		hinge:SetAttribute("WE_WheelSide", if offset.X < 0 then -1 else 1)
@@ -867,8 +868,11 @@ local function startAirPlaceholderDrive(userId: number, model: Model, def: Vehic
 end
 
 
--- Ground drive: VehicleSeat Throttle/Steer → HingeConstraint motors (differential).
--- Mesh visuals never participate; only WE_DriveHinge on Part-kit wheels.
+-- Ground drive: VehicleSeat Throttle/Steer → authoritative LinearVelocity + Hinge motors.
+-- ROOT CAUSE (live undrivable): (1) hinge AngularVelocity was multiplied by WE_WheelSide so
+-- left/right counter-rotated under pure throttle and canceled; (2) LV MaxForce was zeroed
+-- whenever hinges existed, so broken hinge thrust left the jeep as a static prop.
+-- Mesh visuals never participate; only Part-kit WE_DriveHinge / WE_GroundVelocity.
 local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 	stopDrive(userId)
 	local body = model.PrimaryPart
@@ -884,7 +888,7 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 		end
 	end
 
-	-- Disable legacy VehicleSeat chassis shove — hinges / scripted LV are authoritative
+	-- Disable legacy VehicleSeat chassis shove — scripted LV + hinges are authoritative
 	seat.Torque = 0
 	seat.TurnSpeed = 0
 	seat.MaxSpeed = 0
@@ -895,10 +899,9 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 	seat.Anchored = false
 
 	local maxWheelSpeed = math.clamp(def.Speed * 0.55, 18, 48) -- rad/s
-	local steerMix = 0.42
+	local steerMix = 0.35
 	local cruise = math.max(def.Speed, 40)
 
-	-- Scripted LV backup (tracked kits / hinge failure) — still not mesh-driven
 	local attach = body:FindFirstChild("WE_GroundAttach") :: Attachment?
 	if not attach then
 		attach = Instance.new("Attachment")
@@ -911,33 +914,27 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 		lv.Name = "WE_GroundVelocity"
 		lv.Attachment0 = attach
 		lv.RelativeTo = Enum.ActuatorRelativeTo.World
-		lv.MaxForce = 1e6
 		lv.VectorVelocity = Vector3.zero
 		lv.Parent = body
 	end
+	-- ALWAYS keep LV authoritative so Sit+WASD moves even if hinges misbehave
+	lv.MaxForce = 1e6
 	local av = body:FindFirstChild("WE_GroundAngular") :: AngularVelocity?
 	if not av then
 		av = Instance.new("AngularVelocity")
 		av.Name = "WE_GroundAngular"
 		av.Attachment0 = attach
 		av.RelativeTo = Enum.ActuatorRelativeTo.Attachment0
-		av.MaxTorque = 1e5
 		av.AngularVelocity = Vector3.zero
 		av.Parent = body
 	end
+	av.MaxTorque = 1e5
 
 	local useHinges = #hinges > 0
-	if useHinges then
-		-- Hinges provide thrust; damp LV so systems don't fight
-		lv.MaxForce = 0
-		av.MaxTorque = 0
-	else
-		warn("[VehicleService] ground drive: no hinges on", def.Id, "— using scripted LV")
-		lv.MaxForce = 1e6
-		av.MaxTorque = 1e5
+	if not useHinges then
+		warn("[VehicleService] ground drive: no hinges on", def.Id, "— ScriptedLV only")
 	end
-
-	model:SetAttribute("WE_GroundDrive", if useHinges then "HingeMotor" else "ScriptedLV")
+	model:SetAttribute("WE_GroundDrive", if useHinges then "LV+HingeMotor" else "ScriptedLV")
 
 	driveConns[userId] = RunService.Heartbeat:Connect(function(_dt)
 		if not model.Parent or not body.Parent or not seat.Parent then
@@ -956,33 +953,36 @@ local function startGroundDrive(userId: number, model: Model, def: VehicleDef)
 		end
 		local throttle = seat.ThrottleFloat
 		local steer = seat.SteerFloat
+
+		-- Authoritative chassis motion (works with SetNetworkOwner(player); properties replicate)
+		local look = body.CFrame.LookVector
+		local flat = Vector3.new(look.X, 0, look.Z)
+		if flat.Magnitude < 0.05 then
+			flat = Vector3.new(0, 0, -1)
+		else
+			flat = flat.Unit
+		end
+		local speed = cruise * math.clamp(math.abs(throttle), 0, 1)
+		if throttle < 0 then
+			speed *= 0.5
+		end
+		local sign = if throttle >= 0 then 1 else -1
+		if math.abs(throttle) < 0.05 then
+			lv.VectorVelocity = Vector3.zero
+		else
+			lv.VectorVelocity = flat * (speed * sign)
+		end
+		av.AngularVelocity = Vector3.new(0, -steer * 2.6, 0)
+
+		-- Hinge motors: SAME throttle sign both sides (axles parallel +X). Steer = differential.
+		-- Previous bug: AngularVelocity = -spin * side → left/right fought under throttle.
 		if useHinges then
 			for _, h in ipairs(hinges) do
 				if h.Parent then
 					local side = tonumber(h:GetAttribute("WE_WheelSide")) or 1
-					local spin = (throttle * maxWheelSpeed) + (steer * side * maxWheelSpeed * steerMix)
-					h.AngularVelocity = -spin * side
+					h.AngularVelocity = -(throttle * maxWheelSpeed) - (steer * side * maxWheelSpeed * steerMix)
 				end
 			end
-		else
-			local look = body.CFrame.LookVector
-			local flat = Vector3.new(look.X, 0, look.Z)
-			if flat.Magnitude < 0.05 then
-				flat = Vector3.new(0, 0, -1)
-			else
-				flat = flat.Unit
-			end
-			local speed = cruise * math.clamp(math.abs(throttle), 0, 1)
-			if throttle < 0 then
-				speed *= 0.5
-			end
-			local sign = if throttle >= 0 then 1 else -1
-			if math.abs(throttle) < 0.05 then
-				lv.VectorVelocity = Vector3.zero
-			else
-				lv.VectorVelocity = flat * (speed * sign)
-			end
-			av.AngularVelocity = Vector3.new(0, -steer * 2.4, 0)
 		end
 	end)
 end
