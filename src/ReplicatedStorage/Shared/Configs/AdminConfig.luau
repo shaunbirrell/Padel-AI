@@ -6,8 +6,9 @@ local AdminConfig = {
 	UserIds = {
 		470626172,
 	} :: { number },
-	-- On profile load, if UserId is in UserIds and Cash below this, raise to this amount.
-	-- Server-authoritative; not a global economy change. 0 = disabled.
+	-- Every join (not wipe-only): if UserId in UserIds and Cash below this, raise to this amount.
+	-- Idempotent top-up — recovers after force_wipe_done + prior $0 save. 0 = disabled.
+	-- Server-authoritative; not a global economy change. Does NOT auto-max BaseUpgrades.
 	AdminPlaytestCash = 50_000_000,
 	-- allowlist for force wipe; DataService force_wipe_done_USERID makes each wipe one-shot
 	ForceWipeUserIds = { 470626172 } :: { number },

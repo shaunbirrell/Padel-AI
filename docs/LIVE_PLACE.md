@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=50** (2026-09-21 Europe/Madrid) — v50 cash/ATM/BUY UI: AdminPlaytestCash harden + WE_Cash attrs + WorldPrompt cash bootstrap; ATM nearCollector + Collect prompt; compact price chips / BUY bar. PreferMesh OFF / KIT_GEN 32 unchanged.
+- **Live Published:** Open Cloud **versionNumber=51** (2026-09-21 Europe/Madrid) — v51 admin playtest cash floor: every-join AdminPlaytestCash top-up (force_wipe_done + $0 recovery), EconomyService.Push/CharacterAdded re-assert + WE_Cash; StartingCash 10k. PreferMesh OFF / KIT_GEN 32 unchanged.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

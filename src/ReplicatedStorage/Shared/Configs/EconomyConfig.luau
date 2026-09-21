@@ -5,7 +5,7 @@
 ]]
 
 local EconomyConfig = {
-	StartingCash = 5000,
+	StartingCash = 10000, -- v51: healthier fresh join (CC $1500); admin floor still AdminPlaytestCash
 	StartingGold = 0,
 	MinCash = 0,
 	MinGold = 0,
@@ -13,7 +13,7 @@ local EconomyConfig = {
 	MaxGold = 10_000_000,
 
 	-- Passive income: base + sum(structureLevel * rate)
-	-- Early-game pacing (first 10 min): start $5k → CC L1 ($1500) immediately →
+	-- Early-game pacing (first 10 min): start $10k → CC L1 ($1500) immediately →
 	-- base $25/tick (~$300/min) + CC $15 → Barracks L1 ($2500) in ~1 min →
 	-- then ~$60/tick sustains VehicleDepot / WeaponsFacility without feeling stuck.
 	PassiveIncome = {

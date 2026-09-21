@@ -98,6 +98,7 @@ function DataService.MarkDirty(player: Player)
 	end
 end
 
+
 function DataService.WaitForProfile(player: Player, timeout: number?): PlayerProfile?
 	local t = timeout or 15
 	local start = os.clock()
@@ -139,8 +140,13 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 end
 
 local function isAdminUserId(userId: number): boolean
+	local uid = tonumber(userId)
+	if typeof(uid) ~= "number" then
+		return false
+	end
 	for _, id in ipairs(AdminConfig.UserIds) do
-		if id == userId then
+		-- tonumber both sides: rbx place / JSON edge cases must not skip shaunie6
+		if tonumber(id) == uid then
 			return true
 		end
 	end
@@ -152,8 +158,12 @@ local function isForceWipeUserId(userId: number): boolean
 	if typeof(list) ~= "table" then
 		return false
 	end
+	local uid = tonumber(userId)
+	if typeof(uid) ~= "number" then
+		return false
+	end
 	for _, id in ipairs(list) do
-		if id == userId then
+		if tonumber(id) == uid then
 			return true
 		end
 	end
@@ -161,9 +171,11 @@ local function isForceWipeUserId(userId: number): boolean
 end
 
 --- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
+--- Idempotent every-join top-up (NOT wipe-only): if force_wipe already consumed and
+--- profile was saved at $0, next joins still recover to AdminPlaytestCash.
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
-	local target = tonumber(AdminConfig.AdminPlaytestCash)
-	if typeof(target) ~= "number" or target == nil or target <= 0 then
+	local target = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 0)
+	if target <= 0 then
 		return false
 	end
 	if not isAdminUserId(userId) then
@@ -172,9 +184,30 @@ local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): b
 	-- Coerce Cash (DataStore / migrate edge cases) so comparisons never throw.
 	local have = math.floor(tonumber((profile :: any).Cash) or 0)
 	profile.Cash = have
+	if typeof((profile :: any).PendingCash) ~= "number" then
+		(profile :: any).PendingCash = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	end
 	if have < target then
 		profile.Cash = target
-		warn(string.format("[DataService] AdminPlaytestCash applied userId=%d %d → %d", userId, have, target))
+		print(string.format("[DataService] AdminPlaytestCash TOP-UP userId=%d %d → %d", userId, have, target))
+		return true
+	end
+	return false
+end
+
+--- Idempotent admin playtest cash floor for allowlisted UserIds (every join / Push).
+function DataService.EnsureAdminPlaytestCash(player: Player): boolean
+	local profile = profiles[player.UserId]
+	if not profile then
+		return false
+	end
+	local ok, applied = pcall(applyAdminPlaytestCash, player.UserId, profile)
+	if not ok then
+		warn("[DataService] EnsureAdminPlaytestCash ERROR", player.UserId, applied)
+		return false
+	end
+	if applied == true then
+		dirty[player.UserId] = true
 		return true
 	end
 	return false
@@ -254,7 +287,11 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		profile.FirstJoinUnix = os.time()
 	end
 	applyStudioDevFlags(profile)
-	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	local okAdmin, adminResult = pcall(applyAdminPlaytestCash, userId, profile)
+	local adminCashApplied = okAdmin and adminResult == true
+	if not okAdmin then
+		warn("[DataService] AdminPlaytestCash ERROR userId=", userId, adminResult)
+	end
 	-- Wipe always dirties so CreateDefault (+ admin cash) persists even if admin cash no-ops.
 	local wipedFresh = forceWipe and not skipForceWipe
 
@@ -272,6 +309,21 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	loading[userId] = false
 
 	fireProfileLoaded(player, profile)
+
+	-- Re-assert admin cash floor AFTER OnProfileLoaded callbacks (idempotent).
+	-- Covers: force_wipe already consumed + prior $0 save; callbacks must not leave admin broke.
+	do
+		local live = profiles[userId]
+		if live then
+			local ok2, again = pcall(applyAdminPlaytestCash, userId, live)
+			if ok2 and again == true then
+				adminCashApplied = true
+				dirty[userId] = true
+			elseif not ok2 then
+				warn("[DataService] AdminPlaytestCash re-assert ERROR userId=", userId, again)
+			end
+		end
+	end
 
 	-- Persist AdminPlaytestCash / wipe immediately (don't wait for leave/autosave).
 	if adminCashApplied or wipedFresh then

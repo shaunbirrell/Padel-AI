@@ -893,9 +893,9 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 	end
 	local LevelConfig = require(Shared.Configs.LevelConfig)
 	return {
-		Cash = profile.Cash,
-		Gold = profile.Gold,
-		PendingCash = tonumber((profile :: any).PendingCash) or 0,
+		Cash = math.floor(tonumber(profile.Cash) or 0),
+		Gold = math.floor(tonumber(profile.Gold) or 0),
+		PendingCash = math.floor(tonumber((profile :: any).PendingCash) or 0),
 		Level = profile.Level,
 		XP = profile.XP,
 		XPToNext = LevelConfig.GetXPRequiredForLevel(profile.Level),
@@ -1027,6 +1027,10 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
+		-- v51: admin playtest cash floor BEFORE first economy push (force_wipe_done + $0 recovery)
+		if DataService.EnsureAdminPlaytestCash then
+			DataService.EnsureAdminPlaytestCash(player)
+		end
 		BaseService.PushState(player)
 		EconomyService.Push(player)
 		if deps.XPService then
@@ -1043,6 +1047,9 @@ function BaseService.Init(deps: { [string]: any })
 				if not player.Parent then
 					return
 				end
+				if DataService.EnsureAdminPlaytestCash then
+					DataService.EnsureAdminPlaytestCash(player)
+				end
 				EconomyService.Push(player)
 				local st = buildPlayerState(player)
 				if st then
@@ -1050,6 +1057,18 @@ function BaseService.Init(deps: { [string]: any })
 				end
 			end)
 		end
+		-- v51: CharacterAdded re-push so WE_Cash / EconomyUpdate survive respawn / late HUD Init
+		player.CharacterAdded:Connect(function()
+			task.defer(function()
+				if not player.Parent then
+					return
+				end
+				if DataService.EnsureAdminPlaytestCash then
+					DataService.EnsureAdminPlaytestCash(player)
+				end
+				EconomyService.Push(player)
+			end)
+		end)
 		-- v45 P0: nuclear kit rebuild then RefreshAllVisuals at 0 / 0.5 / 2 / 5s (map-heal race)
 		task.defer(function()
 			pcall(BaseService.NuclearRehydrateKits, player)

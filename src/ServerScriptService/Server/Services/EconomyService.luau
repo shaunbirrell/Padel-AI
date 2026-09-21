@@ -88,9 +88,16 @@ end
 
 function EconomyService.Push(player: Player)
 	local profile = DataService.GetProfile(player)
-	if profile then
-		pushEconomy(player, profile)
+	if not profile then
+		return
 	end
+	-- v51: re-assert AdminPlaytestCash floor on every push so HUD/WE_Cash never stick at $0
+	-- after force_wipe_done consumed a prior $0 save (idempotent; non-admins unchanged).
+	if DataService.EnsureAdminPlaytestCash then
+		DataService.EnsureAdminPlaytestCash(player)
+		profile = DataService.GetProfile(player) or profile
+	end
+	pushEconomy(player, profile)
 end
 
 function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean

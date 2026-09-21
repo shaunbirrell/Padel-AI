@@ -948,7 +948,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 
 # ── v50 cash desync / ATM collect / compact BUY UI ──────────────────────────
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'SetAttribute("WE_Cash"', "v50 WE_Cash attribute push")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "AdminPlaytestCash applied", "v50 AdminPlaytestCash log")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "AdminPlaytestCash TOP-UP", "v50/v51 AdminPlaytestCash TOP-UP log")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "nearCollector", "v50 ATM nearCollector radius")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "WE_CollectPrompt", "v50 ATM Collect ProximityPrompt")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", '"$—"', "v50 HUD no fake $5000 placeholder")
@@ -956,6 +956,21 @@ must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "fromOffset
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Allow(player, "get_state", 6, 16)', "v50 get_state rate relaxed")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v50 PreferMesh still OFF")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v50 KIT_GEN stays 32")
+
+# ── v51 admin playtest cash floor (force_wipe_done + $0 recovery) ───────────
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "EnsureAdminPlaytestCash", "v51 EnsureAdminPlaytestCash export")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "AdminPlaytestCash TOP-UP", "v51 AdminPlaytestCash TOP-UP log")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "tonumber(id) == uid", "v51 admin UserId tonumber match")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "EnsureAdminPlaytestCash", "v51 EconomyService.Push ensures admin cash")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EnsureAdminPlaytestCash", "v51 BaseService join ensures admin cash")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "CharacterAdded:Connect", "v51 CharacterAdded economy re-push")
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "AdminPlaytestCash = 50_000_000", "v51 keep AdminPlaytestCash 50M")
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "470626172", "v51 shaunie6 still allowlisted")
+must_contain("src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau", "StartingCash = 10000", "v51 StartingCash 10000")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'SetAttribute("WE_Cash"', "v51 WE_Cash attribute no-regress")
+must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "BaseUpgrades[id] = 5", "v51 must NOT auto-max BaseUpgrades")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v51 PreferMesh still OFF")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v51 KIT_GEN stays 32")
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

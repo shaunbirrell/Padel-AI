@@ -583,3 +583,7 @@ Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he c
 
 214. **BUY / price UI too big** — ScreenGui BUY was 420×88 + MobileScale; MapSetup Cost label overflowed chip. v50: BUY 300×58, chips 118×40 / maxW 120, MapSetup labels fit.
 
+## 2026-09-21 — P0 v51 admin playtest cash floor (shaunie6 $0 on join)
+
+213. **AdminPlaytestCash every-join floor (not wipe-only)** — Root cause: `force_wipe_done_<userId>` one-shot can leave a persisted `$0` profile if an earlier wipe/save raced before AdminPlaytestCash stuck; Shaun then rejoined broke forever because top-up was assumed wipe-path-only. **Fix:** keep idempotent `Cash < AdminPlaytestCash → raise` on **every** `LoadProfile` for `AdminConfig.UserIds` (470626172); `tonumber` both sides of UserId match; pcall + re-assert after `OnProfileLoaded`; export `DataService.EnsureAdminPlaytestCash`; `EconomyService.Push` + BaseService join delays + `CharacterAdded` re-ensure then push so `WE_Cash` / `EconomyUpdate` / `GetPlayerState` never stick at 0 for admins. Does **not** auto-max BaseUpgrades. PreferMesh OFF / KIT_GEN 32 / walls-on-DefensiveWalls-buy / ATM collect unchanged.
+214. **StartingCash = 10000** — Fresh non-admin joins get $10k (was $5k) so Command Center ($1500) + early pads stay buyable if schema/migrate ever yields a thin wallet. Admin floor remains `AdminPlaytestCash` 50_000_000.
