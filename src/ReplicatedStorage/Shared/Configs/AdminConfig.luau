@@ -13,6 +13,7 @@ local AdminConfig = {
 	-- allowlist for force wipe; DataService force_wipe_done_USERID makes each wipe one-shot
 	ForceWipeUserIds = { 470626172 } :: { number },
 	Commands = {
+		"cash",
 		"givecash",
 		"givegold",
 		"givexp",

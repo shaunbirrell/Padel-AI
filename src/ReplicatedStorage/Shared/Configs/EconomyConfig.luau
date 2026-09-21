@@ -5,7 +5,7 @@
 ]]
 
 local EconomyConfig = {
-	StartingCash = 10000, -- v51: healthier fresh join (CC $1500); admin floor still AdminPlaytestCash
+	StartingCash = 25000, -- v54: join floor for ALL (CC+Barracks+pads); admin still AdminPlaytestCash 50M
 	StartingGold = 0,
 	MinCash = 0,
 	MinGold = 0,

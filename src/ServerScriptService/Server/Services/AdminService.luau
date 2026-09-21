@@ -1,7 +1,9 @@
 --!strict
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TextChatService = game:GetService("TextChatService")
 local Workspace = game:GetService("Workspace")
 local AdminConfig = require(ReplicatedStorage:WaitForChild("Shared").Configs.AdminConfig)
 local Constants = require(ReplicatedStorage:WaitForChild("Shared").Constants)
@@ -17,12 +19,61 @@ local AnalyticsService: any = nil
 local RateLimitService: any = nil
 
 function AdminService.IsAdmin(player: Player): boolean
-	for _, id in ipairs(AdminConfig.UserIds) do
-		if id == player.UserId then
+	local uid = tonumber(player.UserId)
+	if typeof(uid) ~= "number" then
+		return false
+	end
+	-- Belt: shaunie6 always admin
+	if uid == 470626172 then
+		return true
+	end
+	local list = AdminConfig.UserIds
+	if typeof(list) ~= "table" then
+		return false
+	end
+	for _, id in ipairs(list) do
+		if tonumber(id) == uid then
+			return true
+		end
+	end
+	for k, v in pairs(list) do
+		if tonumber(k) == uid or tonumber(v) == uid then
 			return true
 		end
 	end
 	return false
+end
+
+--- Force Cash = AdminPlaytestCash for allowlisted admins (mid-session recovery).
+local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
+	local target = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 0)
+	if target <= 0 then
+		return false, 0
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return false, 0
+	end
+	local before = math.floor(tonumber(profile.Cash) or 0)
+	profile.Cash = target
+	if DataService.MarkDirty then
+		DataService.MarkDirty(player)
+	end
+	if DataService.EnsureAdminPlaytestCash then
+		DataService.EnsureAdminPlaytestCash(player)
+	end
+	if EconomyService and EconomyService.Push then
+		EconomyService.Push(player)
+	end
+	print(
+		string.format(
+			"[AdminCash] CHAT/CMD grant userId=%s before=%s after=%s matched=true",
+			tostring(player.UserId),
+			tostring(before),
+			tostring(target)
+		)
+	)
+	return true, target
 end
 
 function AdminService.Init(deps: { [string]: any })
@@ -55,10 +106,18 @@ function AdminService.Init(deps: { [string]: any })
 		local ADMIN_GRANT_MAX = 1_000_000_000
 		AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = cmd })
 
-		if cmd == "givecash" then
-			local amt = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
-			if amt then
-				EconomyService.AddCash(player, amt, "admin")
+		if cmd == "cash" or cmd == "givecash" then
+			-- No amount (or cash alias): instantly floor to AdminPlaytestCash for mid-session recovery
+			local explicit = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
+			if not explicit then
+				local okGrant, granted = grantAdminPlaytestCashFloor(player)
+				if okGrant and deps.NotificationService then
+					deps.NotificationService.Notify(player, string.format("Admin cash set to $%s", tostring(granted)), "Success")
+				elseif not okGrant and deps.NotificationService then
+					deps.NotificationService.Notify(player, "Admin cash grant failed (no profile?)", "Warn")
+				end
+			else
+				EconomyService.AddCash(player, explicit, "admin")
 			end
 		elseif cmd == "givegold" then
 			local amt = RemoteGuard.ClampPositiveInt(arg1, ADMIN_GRANT_MAX)
@@ -226,6 +285,120 @@ function AdminService.Init(deps: { [string]: any })
 			end
 		end
 	end)
+
+	-- Server chat: /cash or /givecash (no client remote wiring required)
+	local function onAdminChat(player: Player, message: string)
+		if typeof(message) ~= "string" or message == "" then
+			return
+		end
+		if not AdminService.IsAdmin(player) then
+			return
+		end
+		local text = string.lower((string.gsub(message, "^%s+", "")))
+		text = string.gsub(text, "^/", "")
+		local cmd, rest = string.match(text, "^([%w_]+)%s*(.-)%s*$")
+		if not cmd then
+			return
+		end
+		if cmd ~= "cash" and cmd ~= "givecash" then
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		local explicit: number? = nil
+		local n = tonumber(rest)
+		if typeof(n) == "number" and n == n and n > 0 then
+			explicit = math.clamp(math.floor(n), 1, 1_000_000_000)
+		end
+		if cmd == "cash" or not explicit then
+			local okGrant, granted = grantAdminPlaytestCashFloor(player)
+			if deps.NotificationService then
+				if okGrant then
+					deps.NotificationService.Notify(player, string.format("Admin cash set to $%s", tostring(granted)), "Success")
+				else
+					deps.NotificationService.Notify(player, "Admin cash grant failed", "Warn")
+				end
+			end
+		elseif explicit and EconomyService then
+			EconomyService.AddCash(player, explicit, "admin")
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, string.format("Gave $%s", tostring(explicit)), "Success")
+			end
+		end
+	end
+
+	local function hookPlayerChat(player: Player)
+		player.Chatted:Connect(function(message: string)
+			onAdminChat(player, message)
+		end)
+	end
+	Players.PlayerAdded:Connect(hookPlayerChat)
+	for _, p in ipairs(Players:GetPlayers()) do
+		task.spawn(hookPlayerChat, p)
+	end
+
+	-- v54: TextChatService backup — modern chat often does NOT fire Player.Chatted
+	-- Secondary to universal StartingCash floor; still useful for mid-session admin recovery.
+	local function wireTextChatCommands()
+		local okCmd, errCmd = pcall(function()
+			local parent = TextChatService:FindFirstChild("WE_AdminCommands")
+			if not parent then
+				parent = Instance.new("Folder")
+				parent.Name = "WE_AdminCommands"
+				parent.Parent = TextChatService
+			end
+			local function ensureCommand(name: string, primary: string, secondary: string?)
+				local existing = parent:FindFirstChild(name)
+				if existing and existing:IsA("TextChatCommand") then
+					return existing :: TextChatCommand
+				end
+				local cmd = Instance.new("TextChatCommand")
+				cmd.Name = name
+				cmd.PrimaryAlias = primary
+				if secondary then
+					cmd.SecondaryAlias = secondary
+				end
+				cmd.Parent = parent
+				return cmd
+			end
+			local cashCmd = ensureCommand("WE_Cash", "/cash", "/givecash")
+			cashCmd.Triggered:Connect(function(textSource: TextSource, unfilteredText: string)
+				local player = Players:GetPlayerByUserId(textSource.UserId)
+				if player then
+					onAdminChat(player, unfilteredText)
+				end
+			end)
+		end)
+		if not okCmd then
+			warn("[AdminService] TextChatCommand wire failed:", errCmd)
+		end
+		-- Also listen on MessageReceived (covers typed /cash when TextChatCommand unavailable)
+		local okMsg, errMsg = pcall(function()
+			TextChatService.MessageReceived:Connect(function(message: TextChatMessage)
+				local text = message.Text
+				if typeof(text) ~= "string" then
+					return
+				end
+				local lower = string.lower((string.gsub(text, "^%s+", "")))
+				if not (string.sub(lower, 1, 5) == "/cash" or string.sub(lower, 1, 9) == "/givecash") then
+					return
+				end
+				local src = message.TextSource
+				if not src then
+					return
+				end
+				local player = Players:GetPlayerByUserId(src.UserId)
+				if player then
+					onAdminChat(player, text)
+				end
+			end)
+		end)
+		if not okMsg then
+			warn("[AdminService] TextChat MessageReceived wire failed:", errMsg)
+		end
+	end
+	task.defer(wireTextChatCommands)
 end
 
 return AdminService

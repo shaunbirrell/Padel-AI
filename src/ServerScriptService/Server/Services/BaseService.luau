@@ -1014,6 +1014,9 @@ function BaseService.Init(deps: { [string]: any })
 	end
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
+		pcall(function()
+			player:SetAttribute("WE_Build", 54)
+		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
 		task.defer(function()
@@ -1027,7 +1030,10 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v51: admin playtest cash floor BEFORE first economy push (force_wipe_done + $0 recovery)
+		-- v54: StartingCash floor (all) then AdminPlaytestCash BEFORE first economy push
+		if DataService.EnsureStartingCashFloor then
+			DataService.EnsureStartingCashFloor(player)
+		end
 		if DataService.EnsureAdminPlaytestCash then
 			DataService.EnsureAdminPlaytestCash(player)
 		end
@@ -1047,6 +1053,9 @@ function BaseService.Init(deps: { [string]: any })
 				if not player.Parent then
 					return
 				end
+				if DataService.EnsureStartingCashFloor then
+					DataService.EnsureStartingCashFloor(player)
+				end
 				if DataService.EnsureAdminPlaytestCash then
 					DataService.EnsureAdminPlaytestCash(player)
 				end
@@ -1062,6 +1071,9 @@ function BaseService.Init(deps: { [string]: any })
 			task.defer(function()
 				if not player.Parent then
 					return
+				end
+				if DataService.EnsureStartingCashFloor then
+					DataService.EnsureStartingCashFloor(player)
 				end
 				if DataService.EnsureAdminPlaytestCash then
 					DataService.EnsureAdminPlaytestCash(player)

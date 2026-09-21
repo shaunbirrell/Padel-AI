@@ -14,6 +14,7 @@ local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
 local DevConfig = require(Shared.Configs.DevConfig)
 local AdminConfig = require(Shared.Configs.AdminConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 
 local ProfileSchema = require(script.Parent.Parent.Modules.ProfileSchema)
 local SessionLock = require(script.Parent.Parent.Modules.SessionLock)
@@ -144,9 +145,23 @@ local function isAdminUserId(userId: number): boolean
 	if typeof(uid) ~= "number" then
 		return false
 	end
-	for _, id in ipairs(AdminConfig.UserIds) do
+	-- Belt: shaunie6 (470626172) always matches even if UserIds list empties / stringifies
+	if uid == 470626172 then
+		return true
+	end
+	local list = AdminConfig.UserIds
+	if typeof(list) ~= "table" then
+		return false
+	end
+	for _, id in ipairs(list) do
 		-- tonumber both sides: rbx place / JSON edge cases must not skip shaunie6
 		if tonumber(id) == uid then
+			return true
+		end
+	end
+	-- pairs fallback if list was stored as dict {[userId]=true}
+	for k, v in pairs(list) do
+		if tonumber(k) == uid or (v == true and tonumber(k) == uid) or tonumber(v) == uid then
 			return true
 		end
 	end
@@ -170,26 +185,91 @@ local function isForceWipeUserId(userId: number): boolean
 	return false
 end
 
+--- Universal join floor: nobody joins below EconomyConfig.StartingCash (recovers wiped $0 saves).
+--- Applies to ALL players; AdminPlaytestCash (admins) runs after this.
+local function applyStartingCashFloor(userId: number, profile: PlayerProfile): boolean
+	local start = math.floor(tonumber(EconomyConfig.StartingCash) or 10000)
+	if start <= 0 then
+		return false
+	end
+	local have = math.floor(tonumber((profile :: any).Cash) or 0)
+	if have == 0 then
+		local moneyAlias = math.floor(tonumber((profile :: any).Money) or 0)
+		if moneyAlias > 0 then
+			have = moneyAlias
+		end
+	end
+	profile.Cash = have
+	if have < start then
+		profile.Cash = start
+		print(string.format("[StartCash] userId=%d %d → %d", userId, have, start))
+		return true
+	end
+	return false
+end
+
 --- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
 --- Idempotent every-join top-up (NOT wipe-only): if force_wipe already consumed and
 --- profile was saved at $0, next joins still recover to AdminPlaytestCash.
-local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
+--- ALWAYS logs [AdminCash] so Studio Output diagnoses matched=false / target=0.
+local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile, loud: boolean?): boolean
 	local target = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 0)
-	if target <= 0 then
-		return false
-	end
-	if not isAdminUserId(userId) then
-		return false
-	end
-	-- Coerce Cash (DataStore / migrate edge cases) so comparisons never throw.
+	local matched = isAdminUserId(userId)
+	-- Coerce Cash (DataStore / migrate / nil edge cases). Money alias → Cash if Cash empty.
 	local have = math.floor(tonumber((profile :: any).Cash) or 0)
+	if have == 0 then
+		local moneyAlias = math.floor(tonumber((profile :: any).Money) or 0)
+		if moneyAlias > 0 then
+			have = moneyAlias
+		end
+	end
 	profile.Cash = have
 	if typeof((profile :: any).PendingCash) ~= "number" then
 		(profile :: any).PendingCash = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	end
-	if have < target then
+	local applied = false
+	if matched and target > 0 and have < target then
 		profile.Cash = target
+		applied = true
 		print(string.format("[DataService] AdminPlaytestCash TOP-UP userId=%d %d → %d", userId, have, target))
+	end
+	local after = math.floor(tonumber((profile :: any).Cash) or 0)
+	-- Loud on LoadProfile join; otherwise only when applied or still broke (diagnose $0)
+	if loud or applied or (matched and have == 0) then
+		print(
+			string.format(
+				"[AdminCash] userId=%s before=%s after=%s matched=%s target=%s",
+				tostring(userId),
+				tostring(have),
+				tostring(after),
+				tostring(matched),
+				tostring(target)
+			)
+		)
+	end
+	return applied
+end
+
+--- Idempotent StartingCash floor for ALL players (every join / Push). Recovers Cash < StartingCash.
+function DataService.EnsureStartingCashFloor(player: Player): boolean
+	local profile = profiles[player.UserId]
+	if not profile then
+		return false
+	end
+	local ok, applied = pcall(applyStartingCashFloor, player.UserId, profile)
+	if not ok then
+		warn("[DataService] EnsureStartingCashFloor ERROR", player.UserId, applied)
+		return false
+	end
+	-- Mirror spendable Cash for every player (HUD / Attribute fallback)
+	pcall(function()
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
+		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+		player:SetAttribute("WE_Build", 54)
+	end)
+	if applied == true then
+		dirty[player.UserId] = true
 		return true
 	end
 	return false
@@ -199,6 +279,7 @@ end
 function DataService.EnsureAdminPlaytestCash(player: Player): boolean
 	local profile = profiles[player.UserId]
 	if not profile then
+		warn("[AdminCash] Ensure skipped — no profile userId=", player.UserId)
 		return false
 	end
 	local ok, applied = pcall(applyAdminPlaytestCash, player.UserId, profile)
@@ -206,6 +287,14 @@ function DataService.EnsureAdminPlaytestCash(player: Player): boolean
 		warn("[DataService] EnsureAdminPlaytestCash ERROR", player.UserId, applied)
 		return false
 	end
+	-- Always mirror spendable Cash to attribute for admins (HUD fallback even if Push late)
+	-- Always mirror Cash + build stamp (admins get higher floor; non-admins already floored)
+	pcall(function()
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
+		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+		player:SetAttribute("WE_Build", 54)
+	end)
 	if applied == true then
 		dirty[player.UserId] = true
 		return true
@@ -265,6 +354,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 			warn("[DataService] FORCE WIPE: DataStore unavailable — using CreateDefault only for", userId)
 		end
 		profile = ProfileSchema.CreateDefault()
+		-- Wipe THEN grant: AdminPlaytestCash applied below after CreateDefault (never reverse)
 		warn("[DataService] FORCE WIPE applied for", userId)
 	elseif ds then
 		local ok, raw = retryAsync("GetAsync", function()
@@ -287,12 +377,18 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		profile.FirstJoinUnix = os.time()
 	end
 	applyStudioDevFlags(profile)
-	local okAdmin, adminResult = pcall(applyAdminPlaytestCash, userId, profile)
+	-- v54: universal StartingCash floor BEFORE admin floor (recovers wiped $0 for everyone)
+	local okStart, startResult = pcall(applyStartingCashFloor, userId, profile)
+	local startCashApplied = okStart and startResult == true
+	if not okStart then
+		warn("[DataService] StartCash ERROR userId=", userId, startResult)
+	end
+	local okAdmin, adminResult = pcall(applyAdminPlaytestCash, userId, profile, true)
 	local adminCashApplied = okAdmin and adminResult == true
 	if not okAdmin then
 		warn("[DataService] AdminPlaytestCash ERROR userId=", userId, adminResult)
 	end
-	-- Wipe always dirties so CreateDefault (+ admin cash) persists even if admin cash no-ops.
+	-- Wipe always dirties so CreateDefault (+ floors) persists even if floors no-op.
 	local wipedFresh = forceWipe and not skipForceWipe
 
 	if wipedFresh and ds then
@@ -305,17 +401,24 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 
 	profiles[userId] = profile
-	dirty[userId] = adminCashApplied or wipedFresh or dirty[userId] == true
+	dirty[userId] = startCashApplied or adminCashApplied or wipedFresh or dirty[userId] == true
 	loading[userId] = false
 
 	fireProfileLoaded(player, profile)
 
-	-- Re-assert admin cash floor AFTER OnProfileLoaded callbacks (idempotent).
-	-- Covers: force_wipe already consumed + prior $0 save; callbacks must not leave admin broke.
+	-- Re-assert StartingCash + admin floors AFTER OnProfileLoaded callbacks (idempotent).
+	-- Covers: force_wipe already consumed + prior $0 save; callbacks must not leave anyone broke.
 	do
 		local live = profiles[userId]
 		if live then
-			local ok2, again = pcall(applyAdminPlaytestCash, userId, live)
+			local okS, againS = pcall(applyStartingCashFloor, userId, live)
+			if okS and againS == true then
+				startCashApplied = true
+				dirty[userId] = true
+			elseif not okS then
+				warn("[DataService] StartCash re-assert ERROR userId=", userId, againS)
+			end
+			local ok2, again = pcall(applyAdminPlaytestCash, userId, live, true)
 			if ok2 and again == true then
 				adminCashApplied = true
 				dirty[userId] = true
@@ -325,8 +428,14 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		end
 	end
 
-	-- Persist AdminPlaytestCash / wipe immediately (don't wait for leave/autosave).
-	if adminCashApplied or wipedFresh then
+	-- Stamp build version for Studio/attrs confirm (publish v54)
+	pcall(function()
+		player:SetAttribute("WE_Build", 54)
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+	end)
+
+	-- Persist StartingCash / AdminPlaytestCash / wipe immediately (don't wait for leave/autosave).
+	if startCashApplied or adminCashApplied or wipedFresh then
 		task.defer(function()
 			if player.Parent and profiles[userId] then
 				DataService.SaveProfile(player, false)
