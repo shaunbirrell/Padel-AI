@@ -53,3 +53,6 @@ export ROBLOX_UNIVERSE_ID=10767159222
 export ROBLOX_PLACE_ID=97112936860418
 ./tools/publish-opencloud.sh
 ```
+
+## Live place status
+Open Cloud Published **versionNumber=62** (place 97112936860418) — v62 BUY cash reconcile + purchase hook. WE_Build=62.
