@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=54** (2026-09-21 Europe/Madrid) — v54 universal join floor: Cash&lt;StartingCash(25000) → raise for ALL + `[StartCash]` log; then AdminPlaytestCash 50M for shaunie6; Economy Push always WE_Cash/EconomyUpdate; TextChat `/cash` backup; `WE_Build=54`; PreferMesh OFF / KIT_GEN 32 / walls-on-buy / no BaseUpgrades auto-max unchanged.
+- **Live Published:** Open Cloud **versionNumber=54** (2026-09-21 Europe/Madrid) — v54 universal join floor: Cash < StartingCash(25000) → raise for ALL + `[StartCash]` log; then AdminPlaytestCash 50M for shaunie6; Economy Push always WE_Cash/EconomyUpdate; TextChat `/cash` backup; `WE_Build=54`; PreferMesh OFF / KIT_GEN 32 / walls-on-buy / no BaseUpgrades auto-max unchanged.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
