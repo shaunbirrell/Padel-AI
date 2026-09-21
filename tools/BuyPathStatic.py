@@ -933,5 +933,17 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v48 PreferMesh still OFF")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "BaseUpgrades[id] = 5", "v48 must NOT auto-max BaseUpgrades")
 
+# ── v49 force_wipe_done one-shot ────────────────────────────────────────────
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "force_wipe_done_", "v49 force_wipe_done key")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "forceWipeDoneKey", "v49 forceWipeDoneKey helper")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "FORCE WIPE skipped (already done)", "v49 skip wipe when done key set")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "ClearForceWipeDone", "v49 ClearForceWipeDone")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'unix = os.time(), v = 1', "v49 done key payload")
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", '"clearwipedone"', "v49 clearwipedone in Commands")
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", 'cmd == "clearwipedone"', "v49 clearwipedone command")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v49 PreferMesh still OFF")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v49 KIT_GEN stays 32")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v49 keep v36 wall height")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

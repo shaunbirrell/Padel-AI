@@ -569,3 +569,7 @@ Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he c
 209. **Walls on BUY** — `BaseService.UpdateVisuals` DefensiveWalls → `SyncPerimeterWalls(plotId, wallsLv)` with loud print; level 0 clears stale short walls. v36 geometry (`height = 7.5 + lv * 2.8`), KIT_GEN 32, PreferMesh OFF unchanged.
 210. BuyPathStatic PASS; Open Cloud Published **versionNumber=48**.
 
+## 2026-09-21 — Force wipe done-key one-shot (live v49 — Open Cloud Published versionNumber=49)
+
+211. **force_wipe_done one-shot** — Before wipe, `GetAsync(force_wipe_done_USERID)`; if truthy skip wipe (normal load). On wipe: RemoveAsync player key → CreateDefault → applyAdminPlaytestCash → `SetAsync(force_wipe_done_USERID, { unix, v=1 })`. ForceWipeUserIds stays allowlist. Admin `clearwipedone` RemoveAsync done key. Walls/PreferMesh unchanged. BuyPathStatic asserts force_wipe_done. Open Cloud **versionNumber=49**.
+

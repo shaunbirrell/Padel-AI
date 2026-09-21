@@ -49,6 +49,10 @@ local function keyFor(userId: number): string
 	return "player_" .. tostring(userId)
 end
 
+local function forceWipeDoneKey(userId: number): string
+	return "force_wipe_done_" .. tostring(userId)
+end
+
 local function retryAsync(label: string, fn: () -> any): (boolean, any)
 	local lastErr = nil
 	for attempt = 1, Constants.DataStoreRetries do
@@ -199,7 +203,18 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	local profile: PlayerProfile
 	local ds = getDataStore()
 	local forceWipe = isForceWipeUserId(userId)
-	if forceWipe then
+	local skipForceWipe = false
+	if forceWipe and ds then
+		-- Done key makes ForceWipeUserIds allowlist one-shot (list can stay populated).
+		local doneOk, doneVal = pcall(function()
+			return ds:GetAsync(forceWipeDoneKey(userId))
+		end)
+		if doneOk and doneVal then
+			skipForceWipe = true
+			warn("[DataService] FORCE WIPE skipped (already done) for", userId)
+		end
+	end
+	if forceWipe and not skipForceWipe then
 		-- One-shot playtest wipe: delete persisted profile BEFORE GetAsync, then fresh CreateDefault.
 		-- Session lock already held via TryAcquire above; do not Release (would race rejoin).
 		if ds then
@@ -236,6 +251,15 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 	applyStudioDevFlags(profile)
 	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+
+	if forceWipe and not skipForceWipe and ds then
+		local markOk, markErr = pcall(function()
+			ds:SetAsync(forceWipeDoneKey(userId), { unix = os.time(), v = 1 })
+		end)
+		if not markOk then
+			warn("[DataService] FORCE WIPE done-key SetAsync failed for", userId, markErr)
+		end
+	end
 
 	profiles[userId] = profile
 	dirty[userId] = adminCashApplied
@@ -311,6 +335,21 @@ function DataService.RemovePersistedProfile(userId: number): (boolean, string?)
 	end
 	local ok, err = pcall(function()
 		ds:RemoveAsync(keyFor(userId))
+	end)
+	if not ok then
+		return false, tostring(err)
+	end
+	return true, nil
+end
+
+--- Remove force_wipe_done_USERID so ForceWipeUserIds can wipe again on next join.
+function DataService.ClearForceWipeDone(userId: number): (boolean, string?)
+	local ds = getDataStore()
+	if not ds then
+		return false, "DataStore unavailable"
+	end
+	local ok, err = pcall(function()
+		ds:RemoveAsync(forceWipeDoneKey(userId))
 	end)
 	if not ok then
 		return false, tostring(err)
