@@ -837,6 +837,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	if level <= 0 then
 		if existing then
 			existing:Destroy()
+			print("[StructureKitBuilder] SyncPerimeterWalls CLEARED (level=0) plot=", plotId)
 		end
 		return
 	end
@@ -1108,6 +1109,15 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 
 	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
 	folder:SetAttribute("WE_WallLevel", lv)
+	print(string.format(
+		"[StructureKitBuilder] SyncPerimeterWalls SPAWNED plot=%s level=%d height=%.1f thickness=%.1f KIT_GEN=%d parts=%d",
+		tostring(plotId),
+		lv,
+		height,
+		thickness,
+		KIT_GEN,
+		#folder:GetChildren()
+	))
 
 end
 

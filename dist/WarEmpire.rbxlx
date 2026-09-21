@@ -74,6 +74,8 @@ local AdminConfig = {
 	-- On profile load, if UserId is in UserIds and Cash below this, raise to this amount.
 	-- Server-authoritative; not a global economy change. 0 = disabled.
 	AdminPlaytestCash = 50_000_000,
+	-- one-shot: next join wipes DataStore then fresh profile (remove UserId after use)
+	ForceWipeUserIds = { 470626172 } :: { number },
 	Commands = {
 		"givecash",
 		"givegold",
@@ -81,6 +83,7 @@ local AdminConfig = {
 		"setlevel",
 		"unlockall",
 		"resetbase",
+		"wipeprofile",
 	},
 }
 
@@ -11350,6 +11353,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	if level <= 0 then
 		if existing then
 			existing:Destroy()
+			print("[StructureKitBuilder] SyncPerimeterWalls CLEARED (level=0) plot=", plotId)
 		end
 		return
 	end
@@ -11621,6 +11625,15 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 
 	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
 	folder:SetAttribute("WE_WallLevel", lv)
+	print(string.format(
+		"[StructureKitBuilder] SyncPerimeterWalls SPAWNED plot=%s level=%d height=%.1f thickness=%.1f KIT_GEN=%d parts=%d",
+		tostring(plotId),
+		lv,
+		height,
+		thickness,
+		KIT_GEN,
+		#folder:GetChildren()
+	))
 
 end
 
@@ -12635,6 +12648,20 @@ function AdminService.Init(deps: { [string]: any })
 					end
 				end
 			end
+		elseif cmd == "wipeprofile" then
+			-- Delete DataStore key, clear memory (so PlayerRemoving cannot re-save), kick to rejoin fresh
+			local userId = player.UserId
+			local okWipe, wipeErr = DataService.RemovePersistedProfile(userId)
+			if not okWipe then
+				warn("[AdminService] wipeprofile RemoveAsync failed:", wipeErr)
+			end
+			DataService.ClearInMemoryProfile(userId)
+			pcall(function()
+				local SessionLock = require(script.Parent.Parent.Modules.SessionLock)
+				SessionLock.Release(userId)
+			end)
+			player:Kick("Progress wiped — please rejoin")
+			return
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
@@ -13951,9 +13978,11 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 		end
 	end
 
-	-- Plot-scale fortifications (DefensiveWalls / Watchtowers / BaseCeiling)
+	-- Plot-scale fortifications (DefensiveWalls / Watchtowers / BaseCeiling) — walls on BUY only path
 	if structureId == "DefensiveWalls" then
-		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, level)
+		local wallsLv = tonumber(level) or 0
+		print("[BaseService] DefensiveWalls → SyncPerimeterWalls plot=", plotId, "level=", wallsLv)
+		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, wallsLv)
 		if not okW then
 			warn("[BaseService] SyncPerimeterWalls failed", errW)
 		end
@@ -17327,6 +17356,19 @@ local function isAdminUserId(userId: number): boolean
 	return false
 end
 
+local function isForceWipeUserId(userId: number): boolean
+	local list = AdminConfig.ForceWipeUserIds
+	if typeof(list) ~= "table" then
+		return false
+	end
+	for _, id in ipairs(list) do
+		if id == userId then
+			return true
+		end
+	end
+	return false
+end
+
 --- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	local target = AdminConfig.AdminPlaytestCash
@@ -17369,7 +17411,23 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 
 	local profile: PlayerProfile
 	local ds = getDataStore()
-	if ds then
+	local forceWipe = isForceWipeUserId(userId)
+	if forceWipe then
+		-- One-shot playtest wipe: delete persisted profile BEFORE GetAsync, then fresh CreateDefault.
+		-- Session lock already held via TryAcquire above; do not Release (would race rejoin).
+		if ds then
+			local wipeOk, wipeErr = pcall(function()
+				ds:RemoveAsync(keyFor(userId))
+			end)
+			if not wipeOk then
+				warn("[DataService] FORCE WIPE RemoveAsync failed for", userId, wipeErr)
+			end
+		else
+			warn("[DataService] FORCE WIPE: DataStore unavailable — using CreateDefault only for", userId)
+		end
+		profile = ProfileSchema.CreateDefault()
+		warn("[DataService] FORCE WIPE applied for", userId)
+	elseif ds then
 		local ok, raw = retryAsync("GetAsync", function()
 			return ds:GetAsync(keyFor(userId))
 		end)
@@ -17449,6 +17507,28 @@ function DataService.UnloadProfile(player: Player)
 	profiles[userId] = nil
 	dirty[userId] = nil
 	loading[userId] = nil
+end
+
+--- Clear in-memory profile without saving (admin wipe / force wipe path).
+function DataService.ClearInMemoryProfile(userId: number)
+	profiles[userId] = nil
+	dirty[userId] = nil
+	loading[userId] = nil
+end
+
+--- RemoveAsync player_USERID; does not touch session lock.
+function DataService.RemovePersistedProfile(userId: number): (boolean, string?)
+	local ds = getDataStore()
+	if not ds then
+		return false, "DataStore unavailable"
+	end
+	local ok, err = pcall(function()
+		ds:RemoveAsync(keyFor(userId))
+	end)
+	if not ok then
+		return false, tostring(err)
+	end
+	return true, nil
 end
 
 function DataService.Init()

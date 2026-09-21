@@ -9,6 +9,8 @@ local AdminConfig = {
 	-- On profile load, if UserId is in UserIds and Cash below this, raise to this amount.
 	-- Server-authoritative; not a global economy change. 0 = disabled.
 	AdminPlaytestCash = 50_000_000,
+	-- one-shot: next join wipes DataStore then fresh profile (remove UserId after use)
+	ForceWipeUserIds = { 470626172 } :: { number },
 	Commands = {
 		"givecash",
 		"givegold",
@@ -16,6 +18,7 @@ local AdminConfig = {
 		"setlevel",
 		"unlockall",
 		"resetbase",
+		"wipeprofile",
 	},
 }
 

@@ -102,6 +102,20 @@ function AdminService.Init(deps: { [string]: any })
 					end
 				end
 			end
+		elseif cmd == "wipeprofile" then
+			-- Delete DataStore key, clear memory (so PlayerRemoving cannot re-save), kick to rejoin fresh
+			local userId = player.UserId
+			local okWipe, wipeErr = DataService.RemovePersistedProfile(userId)
+			if not okWipe then
+				warn("[AdminService] wipeprofile RemoveAsync failed:", wipeErr)
+			end
+			DataService.ClearInMemoryProfile(userId)
+			pcall(function()
+				local SessionLock = require(script.Parent.Parent.Modules.SessionLock)
+				SessionLock.Release(userId)
+			end)
+			player:Kick("Progress wiped — please rejoin")
+			return
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)

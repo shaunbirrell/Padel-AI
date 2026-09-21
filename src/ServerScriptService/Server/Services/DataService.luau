@@ -143,6 +143,19 @@ local function isAdminUserId(userId: number): boolean
 	return false
 end
 
+local function isForceWipeUserId(userId: number): boolean
+	local list = AdminConfig.ForceWipeUserIds
+	if typeof(list) ~= "table" then
+		return false
+	end
+	for _, id in ipairs(list) do
+		if id == userId then
+			return true
+		end
+	end
+	return false
+end
+
 --- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	local target = AdminConfig.AdminPlaytestCash
@@ -185,7 +198,23 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 
 	local profile: PlayerProfile
 	local ds = getDataStore()
-	if ds then
+	local forceWipe = isForceWipeUserId(userId)
+	if forceWipe then
+		-- One-shot playtest wipe: delete persisted profile BEFORE GetAsync, then fresh CreateDefault.
+		-- Session lock already held via TryAcquire above; do not Release (would race rejoin).
+		if ds then
+			local wipeOk, wipeErr = pcall(function()
+				ds:RemoveAsync(keyFor(userId))
+			end)
+			if not wipeOk then
+				warn("[DataService] FORCE WIPE RemoveAsync failed for", userId, wipeErr)
+			end
+		else
+			warn("[DataService] FORCE WIPE: DataStore unavailable — using CreateDefault only for", userId)
+		end
+		profile = ProfileSchema.CreateDefault()
+		warn("[DataService] FORCE WIPE applied for", userId)
+	elseif ds then
 		local ok, raw = retryAsync("GetAsync", function()
 			return ds:GetAsync(keyFor(userId))
 		end)
@@ -265,6 +294,28 @@ function DataService.UnloadProfile(player: Player)
 	profiles[userId] = nil
 	dirty[userId] = nil
 	loading[userId] = nil
+end
+
+--- Clear in-memory profile without saving (admin wipe / force wipe path).
+function DataService.ClearInMemoryProfile(userId: number)
+	profiles[userId] = nil
+	dirty[userId] = nil
+	loading[userId] = nil
+end
+
+--- RemoveAsync player_USERID; does not touch session lock.
+function DataService.RemovePersistedProfile(userId: number): (boolean, string?)
+	local ds = getDataStore()
+	if not ds then
+		return false, "DataStore unavailable"
+	end
+	local ok, err = pcall(function()
+		ds:RemoveAsync(keyFor(userId))
+	end)
+	if not ok then
+		return false, tostring(err)
+	end
+	return true, nil
 end
 
 function DataService.Init()

@@ -914,5 +914,24 @@ must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.lua
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v46 PreferMesh still OFF")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "tonumber(profile.BaseUpgrades.DefensiveWalls)", "v46 RefreshAllVisuals DefensiveWalls level")
 
+
+# ── v48 ForceWipe + wipeprofile + walls on DefensiveWalls buy ───────────────
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "ForceWipeUserIds", "v48 ForceWipeUserIds")
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "470626172", "v48 ForceWipe includes shaunie6")
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", '"wipeprofile"', "v48 wipeprofile in Commands")
+must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "AdminPlaytestCash = 50_000_000", "v48 keep AdminPlaytestCash")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "FORCE WIPE applied for", "v48 DataService FORCE WIPE warn")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "isForceWipeUserId", "v48 isForceWipeUserId")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "RemoveAsync(keyFor(userId))", "v48 RemoveAsync before CreateDefault")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "ClearInMemoryProfile", "v48 ClearInMemoryProfile")
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", 'cmd == "wipeprofile"', "v48 wipeprofile command")
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", "Progress wiped — please rejoin", "v48 wipe Kick message")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "DefensiveWalls → SyncPerimeterWalls", "v48 walls on DefensiveWalls buy print")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "SyncPerimeterWalls SPAWNED", "v48 loud wall spawn print")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v48 keep v36 wall height")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v48 KIT_GEN stays 32")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v48 PreferMesh still OFF")
+must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "BaseUpgrades[id] = 5", "v48 must NOT auto-max BaseUpgrades")
+
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

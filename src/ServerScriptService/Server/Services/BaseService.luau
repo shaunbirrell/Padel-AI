@@ -763,9 +763,11 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 		end
 	end
 
-	-- Plot-scale fortifications (DefensiveWalls / Watchtowers / BaseCeiling)
+	-- Plot-scale fortifications (DefensiveWalls / Watchtowers / BaseCeiling) — walls on BUY only path
 	if structureId == "DefensiveWalls" then
-		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, level)
+		local wallsLv = tonumber(level) or 0
+		print("[BaseService] DefensiveWalls → SyncPerimeterWalls plot=", plotId, "level=", wallsLv)
+		local okW, errW = pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, wallsLv)
 		if not okW then
 			warn("[BaseService] SyncPerimeterWalls failed", errW)
 		end

@@ -560,3 +560,12 @@ Shaun: walls still missing / not tall — pull known-good walls from commit **0b
 - BaseService still calls `SyncPerimeterWalls(plotId, tonumber(profile.BaseUpgrades.DefensiveWalls) or 0)` on RefreshAllVisuals / join — unchanged.
 - PreferMeshWhenAssetIdSet stays false. Vehicle drive / monetization untouched.
 
+## 2026-09-21 — Force wipe + walls on buy (live v48 — Open Cloud Published versionNumber=48)
+
+Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he can buy everything fresh; walls must appear when DefensiveWalls is purchased.
+
+207. **ForceWipeUserIds** — `AdminConfig.ForceWipeUserIds = { 470626172 }`. `DataService.LoadProfile` BEFORE GetAsync: if userId listed → pcall `RemoveAsync(player_USERID)`, skip raw load, `CreateDefault()`, warn `[DataService] FORCE WIPE applied for`. Still `applyAdminPlaytestCash` ($50M). Does **not** auto-max BaseUpgrades. Remove UserId from ForceWipeUserIds in a later publish after the one wipe+buy session (list membership wipes every join while present).
+208. **wipeprofile admin** — `AdminService` command: `RemovePersistedProfile` + `ClearInMemoryProfile` (so PlayerRemoving cannot re-save) + SessionLock.Release + Kick `"Progress wiped — please rejoin"`. Listed in `AdminConfig.Commands`.
+209. **Walls on BUY** — `BaseService.UpdateVisuals` DefensiveWalls → `SyncPerimeterWalls(plotId, wallsLv)` with loud print; level 0 clears stale short walls. v36 geometry (`height = 7.5 + lv * 2.8`), KIT_GEN 32, PreferMesh OFF unchanged.
+210. BuyPathStatic PASS; Open Cloud Published **versionNumber=48**.
+
