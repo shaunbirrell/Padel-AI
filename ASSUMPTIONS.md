@@ -549,3 +549,14 @@ Shaun still saw missing buildings + ankle-height tan wall slabs on live v45.
 204. **Buildings always visible** — PreferMesh OFF; EnsureKit Body min 14×10×14 (non-flat); MissileDefense Body 18×12×18; Body/Roof Transparency=0 CanCollide Body; empty-slot PlotN StructureId scan; NuclearRehydrateKits iterates BaseConfig.Structures keys.
 205. **WE_OwnedLevel** — sync from profile in UpdateVisuals; clear to 0 on ClearPlotExtras (unowned pads).
 206. No new Design meshes. Visibility only.
+
+## 2026-09-21 — Restore SyncPerimeterWalls from v36 / 0b0e95f (Open Cloud versionNumber=TBD)
+
+Shaun: walls still missing / not tall — pull known-good walls from commit **0b0e95f** (Ship v36, last era walls went HIGH when fully bought), before PreferMesh/empty-base chaos.
+
+**Restore (surgical):**
+- Replaced `findPlotPad`, `FindPlotFolder`, `SyncPerimeterWalls` in `StructureKitBuilder.luau` with v36 bodies from `0b0e95f`.
+- Surgical only: `tonumber(inst:GetAttribute("PlotId")) == tonumber(plotId)` in findPlotPad; always ClearAllChildren rebuild (no mustRebuild early-return); no BaseGate/DressGen gate dress; `KIT_GEN = 32` + `WE_PerimeterGen` stamp; height `7.5 + lv * 2.8` (L5 ≈ 21.5).
+- BaseService still calls `SyncPerimeterWalls(plotId, tonumber(profile.BaseUpgrades.DefensiveWalls) or 0)` on RefreshAllVisuals / join — unchanged.
+- PreferMeshWhenAssetIdSet stays false. Vehicle drive / monetization untouched.
+

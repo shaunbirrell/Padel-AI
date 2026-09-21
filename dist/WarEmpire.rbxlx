@@ -10528,7 +10528,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 31 -- v45: force rebuild; height=max(18,10+lv*4) L5≥30; PlotId tonumber; bright olive
+local KIT_GEN = 32 -- restore SyncPerimeterWalls from v36 (0b0e95f); height=7.5+lv*2.8; PlotId tonumber
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -11304,29 +11304,17 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 end
 
 local function findPlotPad(plotId: number): BasePart?
-	-- v45 ROOT CAUSE FIX: always tonumber PlotId (attr may be stringy) — mismatch skipped SyncPerimeterWalls
-	local want = tonumber(plotId)
-	if want == nil then
-		return nil
-	end
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
-		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == want then
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId")) == tonumber(plotId) then
 			return inst
 		end
 	end
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	local bases = setup and setup:FindFirstChild("Bases")
-	local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(want))
+	local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
 	if plotFolder then
 		local pad = plotFolder:FindFirstChild("PlotPad")
 		if pad and pad:IsA("BasePart") then
-			if not CollectionService:HasTag(pad, Constants.Tags.BasePlot) then
-				CollectionService:AddTag(pad, Constants.Tags.BasePlot)
-			end
-			local attrPid = tonumber(pad:GetAttribute("PlotId") :: any)
-			if attrPid == nil then
-				pad:SetAttribute("PlotId", want)
-			end
 			return pad
 		end
 	end
@@ -11355,7 +11343,6 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)
 	if not plotFolder or not pad then
-		warn("[StructureKitBuilder] SyncPerimeterWalls skipped — no plot/pad WITH plotId=", plotId, "hasFolder=", plotFolder ~= nil, "hasPad=", pad ~= nil)
 		return
 	end
 
@@ -11368,26 +11355,6 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	end
 
 	local folder: Folder
-	local periGen = 0
-	local periParts = 0
-	if existing and existing:IsA("Folder") then
-		periGen = tonumber(existing:GetAttribute("WE_PerimeterGen")) or 0
-		periParts = #existing:GetChildren()
-	end
-	-- v45: rebuild when gen stale, empty, OR any Wall* Size.Y < 18 (ankle slabs)
-	local shortWall = false
-	if existing and existing:IsA("Folder") then
-		for _, ch in ipairs(existing:GetChildren()) do
-			if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
-				if ch.Size.Y < 18 then
-					shortWall = true
-					break
-				end
-			end
-		end
-	end
-	-- v45 HOTFIX: always ClearAllChildren + rebuild when level≥1 (ignore early-return mustRebuild false)
-	local mustRebuild = true
 	if existing and existing:IsA("Folder") then
 		existing:ClearAllChildren()
 		folder = existing
@@ -11399,31 +11366,15 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		folder.Name = PERIMETER_FOLDER
 		folder.Parent = plotFolder
 	end
-	-- Parent under plot folder (already); stamp gen after build
-	if periGen < KIT_GEN or periParts < 4 or shortWall then
-		mustRebuild = true
-	end
-	if not folder.Parent then
-		folder.Parent = plotFolder
-	end
 
-	local _pal = paletteFor("DefensiveWalls")
-	-- v45: bright olive body + neon top cap (impossible to miss)
-	if _pal == nil then
-		warn("[StructureKitBuilder] DefensiveWalls palette missing")
-	end
-	local brightOlive = Color3.fromRGB(120, 160, 55)
-	local neonCap = Color3.fromRGB(180, 255, 80)
+	local pal = paletteFor("DefensiveWalls")
 	local lv = math.clamp(level, 1, 5)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
 	-- v36: thicker/taller defensive walls at higher levels
-	-- v45: height = max(18, 10+lv*4) → L1≥18, L5≥30. Size Y=height. Shaun: fully-bought walls HIGH.
 	local thickness = 2.8 + lv * 0.7
-	local height = math.max(18, 10 + lv * 4)
-	local padTop = pad.Position.Y + pad.Size.Y * 0.5
-	local y = padTop + height * 0.5
-	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plotId=%s level=%d height=%.1f padTop=%.1f mustRebuild=%s", tostring(plotId), lv, height, padTop, tostring(mustRebuild)))
+	local height = 7.5 + lv * 2.8
+	local y = pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5
 	local cx, cz = pad.Position.X, pad.Position.Z
 
 	-- Clear walkable opening (8–12 studs). Posts/arch are visual-only outside this span.
@@ -11467,7 +11418,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			Name = name,
 			Size = size,
 			Position = pos,
-			Color = brightOlive,
+			Color = pal.Body,
 			Material = Enum.Material.Concrete,
 			Transparency = 0,
 			CanCollide = true,
@@ -11479,14 +11430,14 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		w:SetAttribute("WE_Perimeter", true)
 		w:SetAttribute("PlotId", plotId)
 		w:SetAttribute("WE_WallLevel", lv)
-		local capH = 0.55 + lv * 0.1
+		local capH = 0.45 + lv * 0.08
 		local cap = makePart({
 			Name = name .. "_Cap",
-			Size = Vector3.new(size.X + 0.5, capH, size.Z + 0.5),
+			Size = Vector3.new(size.X + 0.4, capH, size.Z + 0.4),
 			Position = Vector3.new(pos.X, pos.Y + height * 0.5 + capH * 0.5, pos.Z),
-			Color = neonCap,
+			Color = pal.Accent,
 			Material = Enum.Material.Neon,
-			Transparency = 0,
+			Transparency = 0.05,
 			CanCollide = false,
 			Parent = folder,
 		})
@@ -11648,50 +11599,30 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		end
 	end
 
-	-- v39: do NOT catalog-dress perimeter segments (Part walls are the visible fortification).
-	-- Prior TryAttachBuildingVisual on Wall* parts caused empty/mis-scaled dress on live.
+	-- L3+ heavy wall catalog mesh on a few segments (Part kit remains authoritative)
+	if lv >= 3 then
+		task.defer(function()
+			pcall(function()
+				local vas = require(script.Parent.Parent.Services.VisualAssetService)
+				local dressed = 0
+				for _, ch in ipairs(folder:GetChildren()) do
+					if dressed >= 4 then
+						break
+					end
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_Perimeter") == true and not ch:GetAttribute("WE_GateVisual") then
+						if vas.TryAttachBuildingVisual(ch, "DefensiveWalls", lv) then
+							dressed += 1
+						end
+					end
+				end
+			end)
+		end)
+	end
+
 	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
 	folder:SetAttribute("WE_WallLevel", lv)
-	-- Destroy orphan flat Wall* leftovers outside perimeter folder (pre-v44 mis-sized slabs)
-	for _, ch in ipairs(plotFolder:GetChildren()) do
-		if ch ~= folder and ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" then
-			ch:Destroy()
-		end
-	end
-	-- Hard assert: every Wall* segment must be tall on Y
-	for _, ch in ipairs(folder:GetChildren()) do
-		if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
-			if ch.Size.Y < 18 then
-				warn("[StructureKitBuilder] Wall segment too short on Y — forcing height", ch.Name, ch.Size)
-				local s = ch.Size
-				ch.Size = Vector3.new(s.X, height, s.Z)
-				ch.Position = Vector3.new(ch.Position.X, padTop + height * 0.5, ch.Position.Z)
-			end
-		end
-	end
-	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plot=%d level=%d height=%.1f parts=%d", plotId, lv, height, #folder:GetChildren()))
 
-	-- v41: BaseGate catalog prop on GateArch ONLY (not Wall* segments). StripScripts via VAS.
-	-- Prefer DressGen/attach without KIT_GEN bump so walls are not wiped.
-	task.defer(function()
-		pcall(function()
-			local vac = require(Shared.Configs.VisualAssetConfig)
-			local vas = require(script.Parent.Parent.Services.VisualAssetService)
-			local ref = vac.Buildings and vac.Buildings.BaseGate
-			local aid = ref and tonumber(ref.ModelAssetId) or 0
-			if not aid or aid <= 0 then
-				return
-			end
-			for _, ch in ipairs(folder:GetChildren()) do
-				if ch:IsA("BasePart") and ch.Name == "GateArch" then
-					ch:SetAttribute("WE_DisplayName", "Base Gate")
-					vas.TryAttachBuildingVisual(ch, "BaseGate", lv)
-				end
-			end
-		end)
-	end)
 end
-
 
 --[[ Base Ceiling — competitor anti-heli roof over plot core (ATM + main buildings).
 	Unlock: DefensiveWalls ≥ L3 (wallsLevel). Gate-front spawn road stays open (no seal).
@@ -11769,7 +11700,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	local coverFrac = 0.72
 	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
-	local wallH = math.max(18, 10 + lv * 4) -- v45 mirror SyncPerimeterWalls
+	local wallH = 7.5 + lv * 2.8 -- mirror restored v36 SyncPerimeterWalls
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
 
 	local sizeX: number

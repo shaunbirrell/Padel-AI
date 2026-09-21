@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=46** (2026-09-21 Europe/Madrid) — v45 P0: findPlotPad tonumber PlotId (was skipping SyncPerimeterWalls); map rebuild→RefreshAllOnlinePlayers; KIT_GEN 31; height=max(18,10+lv*4) L5≥30 bright olive+neon; PreferMesh OFF; solid kits. ROOT: PlotId== without tonumber + map heal race wiped kits
+- **Live Published:** Open Cloud **versionNumber=TBD** (2026-09-21 Europe/Madrid) — restored SyncPerimeterWalls from commit **0b0e95f** (v36 known-good tall walls: height=7.5+lv*2.8, KIT_GEN 32, PlotId tonumber, always ClearAllChildren; no BaseGate dress; PreferMesh OFF). Per Shaun request.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
