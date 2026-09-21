@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=61** (2026-09-21 Europe/Madrid) — **v61 BUY PATH**: `Remotes.FireServer` (≤3s TryGet, no unbounded WaitForChild); WorldPrompt/BaseController toast "Buying…" only after FireServer; EnsureProfile on pad+PurchaseUpgrade; DataService Init before UpgradePad; `WE_Build=61`.
+- **Live Published:** Open Cloud **versionNumber=63** (2026-09-21 Europe/Madrid) — **v61 BUY PATH**: `Remotes.FireServer` (≤3s TryGet, no unbounded WaitForChild); WorldPrompt/BaseController toast "Buying…" only after FireServer; EnsureProfile on pad+PurchaseUpgrade; DataService Init before UpgradePad; `WE_Build=63`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
@@ -55,4 +55,6 @@ export ROBLOX_PLACE_ID=97112936860418
 ```
 
 ## Live place status
-Open Cloud Published **versionNumber=62** (place 97112936860418) — v62 BUY cash reconcile + purchase hook. WE_Build=62.
+Open Cloud Published **versionNumber=62** (place 97112936860418) — v62 BUY cash reconcile + purchase hook. WE_Build=63.
+
+Open Cloud Published **versionNumber=63** (place 97112936860418) — v63 BUY attribute-ack + no WaitForProfile>0.25s. WE_Build=63.

@@ -748,11 +748,18 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 	if opts and opts.showBuying then
 		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 	end
-	-- v62: keep in-flight until PurchaseResult (or 5s timeout) — stops spam Buying…
-	task.delay(5, function()
+	-- v63: keep in-flight until WE_BuyAck attribute OR PurchaseResult (8s hard timeout)
+	local ackBefore = player:GetAttribute("WE_BuyAck")
+	task.delay(8, function()
 		if pendingPurchase[structureId] then
+			-- Only timeout if attribute never advanced (primary ack path missed)
+			local ackNow = player:GetAttribute("WE_BuyAck")
+			if ackNow ~= nil and ackNow ~= ackBefore then
+				pendingPurchase[structureId] = nil
+				return
+			end
 			pendingPurchase[structureId] = nil
-			warn("[WorldPrompt] BUY timeout no PurchaseResult", structureId)
+			warn("[WorldPrompt] BUY timeout no WE_BuyAck/PurchaseResult", structureId)
 			NotificationController.Show("Buy timed out — try again (or use E on pad)", "Warn", 3)
 		end
 	end)
@@ -1224,7 +1231,50 @@ function WorldPromptController.Init()
 		applyCash(payload.Cash)
 	end)
 
-	-- v62: authoritative buy result — clear pending + show server reason (never hang on Buying…)
+	-- v63 PRIMARY: attribute ack (replicates without remotes) — clear pending + apply result
+	local function applyBuyAckFromAttributes()
+		local sid = player:GetAttribute("WE_BuyStructure")
+		if typeof(sid) == "string" and sid ~= "" then
+			pendingPurchase[sid] = nil
+		end
+		local ok = player:GetAttribute("WE_BuyOk") == true
+		local cash = player:GetAttribute("WE_BuyCash")
+		if ok then
+			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
+			local name = if def then def.DisplayName else tostring(sid)
+			print(string.format("[WorldPrompt] WE_BuyAck OK %s cash=%s", tostring(sid), tostring(cash)))
+			if typeof(cash) == "number" then
+				applyCash(cash)
+			end
+			flashPadBuyBought(name)
+		else
+			local err = tostring(player:GetAttribute("WE_BuyErr") or "Failed")
+			local msg = if err == "InsufficientCash"
+				then "Not enough cash"
+				elseif err == "NoPlot"
+				then "Claim a base first — stand on your plot pad"
+				elseif err == "NoProfile"
+				then "Profile still loading — try BUY again"
+				elseif err == "MissingRequirement"
+				then "Missing prerequisite structure"
+				elseif err == "MaxLevel"
+				then "Already at MAX level"
+				elseif err == "WrongPlot"
+				then "Not your base — walk your plot pads to buy"
+				elseif err == "RateLimited"
+				then "Buying too fast — wait a moment"
+				else ("Buy failed: " .. err)
+			print(string.format("[WorldPrompt] WE_BuyAck FAIL %s → %s", tostring(sid), err))
+			-- Avoid double-toast if PurchaseResult also arrives; throttle lightly
+			NotificationController.Show(msg, "Error", 3.5)
+		end
+		markBillboardsDirty()
+	end
+	player:GetAttributeChangedSignal("WE_BuyAck"):Connect(function()
+		applyBuyAckFromAttributes()
+	end)
+
+	-- v62/v63 secondary: PurchaseResult remote — clear pending + show server reason
 	Remotes.BindEvent(Constants.RemoteNames.PurchaseResult, function(payload: any)
 		if typeof(payload) ~= "table" then
 			return

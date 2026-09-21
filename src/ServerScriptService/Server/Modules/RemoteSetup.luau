@@ -83,6 +83,7 @@ local FUNCTIONS = {
 local _initialized = false
 local _purchaseHandler: ((Player, any) -> ())? = nil
 local _purchaseHooked = false
+local _purchaseHookedInstance: RemoteEvent? = nil
 
 function RemoteSetup.SetPurchaseUpgradeHandler(handler: (Player, any) -> ())
 	_purchaseHandler = handler
@@ -97,21 +98,41 @@ local function ensurePurchaseHook(folder: Folder)
 		ev.Name = name
 		ev.Parent = folder
 	end
+	-- v63: re-hook if prior RemoteEvent was destroyed / replaced (never sticky forever)
 	if _purchaseHooked then
-		return
+		local hooked = _purchaseHookedInstance
+		if hooked and hooked.Parent and hooked == ev then
+			return
+		end
+		warn("[RemoteSetup] RequestPurchaseUpgrade instance changed — re-hooking OnServerEvent")
+		_purchaseHooked = false
+		_purchaseHookedInstance = nil
 	end
 	if not ev:IsA("RemoteEvent") then
 		warn("[RemoteSetup] RequestPurchaseUpgrade is not RemoteEvent:", ev.ClassName)
 		return
 	end
 	_purchaseHooked = true
-	(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, payload: any)
+	_purchaseHookedInstance = ev :: RemoteEvent
+	local hookedEv = ev :: RemoteEvent
+	hookedEv.OnServerEvent:Connect(function(player: Player, payload: any)
+		-- Ignore events from a destroyed/replaced remote
+		if _purchaseHookedInstance ~= hookedEv then
+			return
+		end
 		local sid = if typeof(payload) == "table" then tostring((payload :: any).StructureId) else tostring(payload)
 		print(string.format("[RemoteSetup] OnServerEvent RequestPurchaseUpgrade %s → %s handler=%s", player.Name, sid, tostring(_purchaseHandler ~= nil)))
 		if _purchaseHandler then
 			_purchaseHandler(player, payload)
 		else
 			warn("[RemoteSetup] RequestPurchaseUpgrade fired but handler not registered yet — BaseService.Init pending")
+		end
+	end)
+	hookedEv.AncestryChanged:Connect(function(_, parent)
+		if parent == nil and _purchaseHookedInstance == hookedEv then
+			_purchaseHooked = false
+			_purchaseHookedInstance = nil
+			warn("[RemoteSetup] RequestPurchaseUpgrade destroyed — will re-hook on next Get/Init")
 		end
 	end)
 	print("[RemoteSetup] RequestPurchaseUpgrade OnServerEvent hooked on WE_Remotes." .. name)

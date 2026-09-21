@@ -154,7 +154,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 62)
+		player:SetAttribute("WE_Build", 63)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -318,7 +318,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=62",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=63",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))
@@ -394,7 +394,8 @@ function DataService.EnsureProfile(player: Player): PlayerProfile
 	if existing then
 		return existing
 	end
-	local waited = DataService.WaitForProfile(player, 20)
+	-- v63: never yield >0.25s on buy/pad path — instant CreateDefault if missing
+	local waited = DataService.WaitForProfile(player, 0.25)
 	if waited then
 		return waited
 	end

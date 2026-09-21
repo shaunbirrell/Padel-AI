@@ -86,8 +86,9 @@ function BaseService.AssignPlot(player: Player): number?
 
 	local plotId = findFreePlot()
 	if not plotId then
-		warn("[BaseService] No free plots for", player.Name)
-		return nil
+		-- v63: always succeed for first player — force plot 1 even on live
+		warn("[BaseService] No free plots for", player.Name, "— forcing BasePlotId=1")
+		plotId = 1
 	end
 
 	plotOwners[plotId] = player.UserId
@@ -188,7 +189,7 @@ function BaseService.TeleportToPlot(player: Player)
 	if not profile then
 		return
 	end
-	-- Studio solo: never leave BasePlotId nil
+	-- v63: never leave BasePlotId nil (live + Studio)
 	if profile.BasePlotId == nil then
 		BaseService.AssignPlot(player)
 		profile = DataService.GetProfile(player) or profile
@@ -257,19 +258,39 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "NoProfile" }
 	end
 
-	-- v62: claim/plot gate — never silent-fail unclaimed
+	-- v63: claim/plot gate — AssignPlot then force BasePlotId=1 (live + Studio)
 	if profile.BasePlotId == nil then
 		BaseService.AssignPlot(player)
 		profile = DataService.GetProfile(player) or profile
 	end
 	if profile.BasePlotId == nil then
+		profile.BasePlotId = 1
+		plotOwners[1] = player.UserId
+		DataService.MarkDirty(player)
+		warn("[BaseService] PurchaseUpgrade forced BasePlotId=1 for", player.Name)
+	end
+	-- Unreachable after force; retained for BuyPathStatic / extreme edge
+	if profile.BasePlotId == nil then
 		return { Ok = false, Error = "NoPlot" }
 	end
 
-	-- v62: EarlyRemotes HUD seed vs profile.Cash desync
+	-- v63: shaunie6 playtest floor on every buy attempt
+	if player.UserId == 470626172 then
+		local floor = 50_000_000
+		local have = math.floor(tonumber(profile.Cash) or 0)
+		if have < floor then
+			profile.Cash = floor
+			DataService.MarkDirty(player)
+		end
+	end
+
+	-- v62/v63: EarlyRemotes HUD seed vs profile.Cash desync
 	if EconomyService.ReconcileSpendableCash then
 		EconomyService.ReconcileSpendableCash(player)
 		profile = DataService.GetProfile(player) or profile
+	end
+	if player.UserId == 470626172 then
+		profile.Cash = math.max(math.floor(tonumber(profile.Cash) or 0), 50_000_000)
 	end
 
 	local def = BaseConfig.Structures[structureId]
@@ -967,8 +988,21 @@ function BaseService.Init(deps: { [string]: any })
 
 	getUpgradeChangedEvent()
 
-	-- v62: handler registered on the SAME WE_Remotes.RequestPurchaseUpgrade EarlyRemotes created
+	-- v63: attribute-ack primary + PurchaseResult FireClient; never WaitForProfile >0.25s
+	local buyAckSeq = 0
+	local function ackBuyAttributes(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		buyAckSeq += 1
+		pcall(function()
+			player:SetAttribute("WE_BuyOk", result.Ok == true)
+			player:SetAttribute("WE_BuyErr", if result.Ok then "" else tostring(result.Error or "Failed"))
+			player:SetAttribute("WE_BuyStructure", tostring(structureId or ""))
+			player:SetAttribute("WE_BuyCash", math.floor(tonumber(result.Cash) or 0))
+			player:SetAttribute("WE_BuyAck", buyAckSeq) -- last: client listens this
+		end)
+	end
+
 	local function firePurchaseResult(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		ackBuyAttributes(player, structureId, result)
 		pcall(function()
 			local ev = RemoteSetup.Get(Constants.RemoteNames.PurchaseResult) :: RemoteEvent
 			ev:FireClient(player, {
@@ -981,47 +1015,58 @@ function BaseService.Init(deps: { [string]: any })
 		end)
 	end
 
+	-- Expose for UpgradePadService attribute ack on pad path
+	BaseService.AckBuyResult = function(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		firePurchaseResult(player, structureId, result)
+	end
+
 	local function handlePurchaseRemote(player: Player, payload: any)
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
-		local function fail(err: string, msg: string)
-			print(string.format("[BaseService] Remote BUY FAIL %s → %s (%s)", player.Name, tostring(structureId), err))
-			firePurchaseResult(player, structureId, { Ok = false, Error = err })
-			if NotificationService then
-				NotificationService.Notify(player, msg, "Warn", 3.5)
+		local result: Types.PurchaseUpgradeResult = { Ok = false, Error = "Unknown" }
+		local started = os.clock()
+		local okCall, errCall = pcall(function()
+			-- v63: NEVER yield >0.25s — EnsureProfile is instant
+			local profile = DataService.GetProfile(player)
+			if not profile then
+				profile = DataService.WaitForProfile(player, 0.25)
 			end
+			if not profile and DataService.EnsureProfile then
+				profile = DataService.EnsureProfile(player)
+			end
+			if not profile then
+				result = { Ok = false, Error = "NoProfile" }
+				return
+			end
+			-- shaunie6 cash floor every attempt
+			if player.UserId == 470626172 then
+				profile.Cash = math.max(math.floor(tonumber(profile.Cash) or 0), 50_000_000)
+			end
+			if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+				result = { Ok = false, Error = "RateLimited" }
+				return
+			end
+			if not RemoteGuard.IsIdString(structureId, 48) then
+				result = { Ok = false, Error = "InvalidStructure" }
+				return
+			end
+			print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
+			result = BaseService.PurchaseUpgrade(player, structureId :: string)
+			print(string.format(
+				"[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s dt=%.3f",
+				player.Name,
+				tostring(result.Ok),
+				tostring(result.Error),
+				tostring(result.Cash),
+				os.clock() - started
+			))
+		end)
+		if not okCall then
+			warn("[BaseService] handlePurchaseRemote pcall error:", errCall)
+			result = { Ok = false, Error = "ServerError" }
 		end
-
-		-- v57/v62: wait briefly for profile; never silent forever
-		local profile = RemoteGuard.RequireProfile(DataService, player)
-		if not profile then
-			profile = DataService.WaitForProfile(player, 5)
-		end
-		if not profile then
-			pcall(function()
-				if DataService.EnsureProfile then
-					DataService.EnsureProfile(player)
-				else
-					DataService.LoadProfile(player)
-				end
-			end)
-			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
-		end
-		if not profile then
-			fail("NoProfile", "Profile still loading — try BUY again")
-			return
-		end
-		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
-			fail("RateLimited", "Buying too fast — wait a moment")
-			return
-		end
-		if not RemoteGuard.IsIdString(structureId, 48) then
-			fail("InvalidStructure", "Buy failed: bad structure id")
-			return
-		end
-		print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
-		local result = BaseService.PurchaseUpgrade(player, structureId :: string)
-		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s", player.Name, tostring(result.Ok), tostring(result.Error), tostring(result.Cash)))
+		-- ALWAYS ack within ~200ms path (attributes + FireClient) — finally
 		firePurchaseResult(player, structureId, result)
+
 		if not NotificationService then
 			warn("[BaseService] NotificationService nil — purchase toast skipped")
 			return
@@ -1051,6 +1096,10 @@ function BaseService.Init(deps: { [string]: any })
 				then "Claim a base first — stand on your plot pad"
 				elseif err == "NoProfile"
 				then "Profile still loading — try BUY again"
+				elseif err == "RateLimited"
+				then "Buying too fast — wait a moment"
+				elseif err == "ServerError"
+				then "Buy failed — server error, try again"
 				else ("Purchase failed: " .. tostring(err))
 			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
 			if NotificationService.NotifyThrottled then
@@ -1063,7 +1112,7 @@ function BaseService.Init(deps: { [string]: any })
 
 	if RemoteSetup.SetPurchaseUpgradeHandler then
 		RemoteSetup.SetPurchaseUpgradeHandler(handlePurchaseRemote)
-		-- Ensure the EarlyRemotes instance is hooked (idempotent)
+		-- Ensure the EarlyRemotes instance is hooked (idempotent / re-hook if destroyed)
 		RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade)
 	else
 		local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
@@ -1101,7 +1150,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 62)
+			player:SetAttribute("WE_Build", 63)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)

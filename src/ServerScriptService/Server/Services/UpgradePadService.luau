@@ -115,6 +115,13 @@ local function flashPad(part: BasePart)
 end
 
 local function firePurchaseResult(player: Player, structureId: string, result: any)
+	-- v63: prefer BaseService.AckBuyResult (attributes + PurchaseResult) so client never times out
+	if BaseService and BaseService.AckBuyResult then
+		pcall(function()
+			BaseService.AckBuyResult(player, structureId, result)
+		end)
+		return
+	end
 	pcall(function()
 		if not RemoteSetup then
 			return
@@ -203,35 +210,19 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
-	-- v62: live — assign plot if unclaimed (never silent)
+	-- v63: live + Studio — assign plot if unclaimed; ALWAYS force BasePlotId=1 (never NoPlot dead-end)
 	if profile.BasePlotId == nil then
 		if BaseService and BaseService.AssignPlot then
 			BaseService.AssignPlot(player)
 			profile = DataService.GetProfile(player) or profile
 		end
-		if profile.BasePlotId == nil then
-			print(string.format("[UpgradePad] BUY FAIL %s %s — NoPlot", player.Name, structureId))
-			firePurchaseResult(player, structureId, { Ok = false, Error = "NoPlot" })
-			if NotificationService then
-				if NotificationService.NotifyThrottled then
-					NotificationService.NotifyThrottled(player, "Claim a base first — stand on your plot pad", "Warn", 3.5, 2.0, "pad|NoPlot")
-				else
-					NotificationService.Notify(player, "Claim a base first — stand on your plot pad", "Warn", 3.5)
-				end
-			end
-			return
-		end
 	end
-
-	-- Studio solo: if BasePlotId nil, force-assign plot 1
-	if RunService:IsStudio() and profile.BasePlotId == nil then
-		if BaseService and BaseService.AssignPlot then
-			BaseService.AssignPlot(player)
-			profile = DataService.GetProfile(player) or profile
+	if profile.BasePlotId == nil then
+		profile.BasePlotId = 1
+		if DataService.MarkDirty then
+			DataService.MarkDirty(player)
 		end
-		if profile.BasePlotId == nil then
-			profile.BasePlotId = 1
-		end
+		warn(string.format("[UpgradePad] forced BasePlotId=1 for %s (live/Studio)", player.Name))
 	end
 
 	local pid = part:GetAttribute("PlotId")
@@ -414,29 +405,56 @@ end
 
 local function scanAndTagFromSetup(): number
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	if not setup then
-		return 0
-	end
-	local bases = setup:FindFirstChild("Bases")
-	if not bases then
-		return 0
-	end
 	local retagged = 0
-	for _, desc in ipairs(bases:GetDescendants()) do
+	local function consider(desc: Instance)
+		if not desc:IsA("BasePart") then
+			return
+		end
+		local sid = desc:GetAttribute("StructureId")
+		local pid = desc:GetAttribute("PlotId")
+		if typeof(sid) == "string" and typeof(pid) == "number" then
+			if not CollectionService:HasTag(desc, TAG) then
+				CollectionService:AddTag(desc, TAG)
+			end
+			hardenPad(desc)
+			attachSlot(desc)
+			retagged += 1
+		end
+	end
+	if setup then
+		local bases = setup:FindFirstChild("Bases")
+		if bases then
+			for _, desc in ipairs(bases:GetDescendants()) do
+				consider(desc)
+			end
+		end
+	end
+	return retagged
+end
+
+-- v63: nuclear Workspace sweep — any BasePart with StructureId (+ optional PlotId)
+local function scanEntireWorkspaceForStructureId(): number
+	local n = 0
+	for _, desc in ipairs(Workspace:GetDescendants()) do
 		if desc:IsA("BasePart") then
 			local sid = desc:GetAttribute("StructureId")
-			local pid = desc:GetAttribute("PlotId")
-			if typeof(sid) == "string" and typeof(pid) == "number" then
+			if typeof(sid) == "string" and sid ~= "" then
+				local pid = desc:GetAttribute("PlotId")
+				if typeof(pid) ~= "number" then
+					-- default PlotId=1 so first player can buy CommandCenter even without tag
+					desc:SetAttribute("PlotId", 1)
+					pid = 1
+				end
 				if not CollectionService:HasTag(desc, TAG) then
 					CollectionService:AddTag(desc, TAG)
 				end
 				hardenPad(desc)
 				attachSlot(desc)
-				retagged += 1
+				n += 1
 			end
 		end
 	end
-	return retagged
+	return n
 end
 
 local function bindExistingAndFuture()
@@ -459,8 +477,20 @@ end
 
 local function startSpatialLoop()
 	local acc = 0
+	local rescanAcc = 0
 	RunService.Heartbeat:Connect(function(dt)
 		acc += dt
+		rescanAcc += dt
+		-- v63: if zero pads, re-sweep Workspace every 5s
+		if rescanAcc >= 5 then
+			rescanAcc = 0
+			if countAttached() == 0 then
+				scanAndTagFromSetup()
+				if countAttached() == 0 then
+					scanEntireWorkspaceForStructureId()
+				end
+			end
+		end
 		if acc < SPATIAL_INTERVAL then
 			return
 		end
@@ -520,6 +550,10 @@ function UpgradePadService.Init(deps: { [string]: any })
 	if initCount == 0 then
 		local scanned = scanAndTagFromSetup()
 		print(string.format("[WAR EMPIRE] UpgradePadService: scanned Bases → attached=%d", scanned))
+		if countAttached() == 0 then
+			local swept = scanEntireWorkspaceForStructureId()
+			warn(string.format("[WAR EMPIRE] UpgradePadService: Init Workspace StructureId sweep attached=%d", swept))
+		end
 	end
 
 	startSpatialLoop()
@@ -536,6 +570,10 @@ function UpgradePadService.Init(deps: { [string]: any })
 		if after == 0 then
 			local scanned = scanAndTagFromSetup()
 			warn(string.format("[WAR EMPIRE] UpgradePadService: ZERO pads after map — Bases scan attached=%d", scanned))
+			if countAttached() == 0 then
+				local swept = scanEntireWorkspaceForStructureId()
+				warn(string.format("[WAR EMPIRE] UpgradePadService: Workspace StructureId sweep attached=%d", swept))
+			end
 		end
 	end)
 

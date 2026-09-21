@@ -633,3 +633,16 @@ Root cause v59 still `$…`: `HUDController.luau` / `WorldPromptController.luau`
 - `NoPlot` gate with clear toast; `UpgradePadService` server `WE_ServerBuyPrompt` ProximityPrompt backup.
 - BuyPathStatic: remote name equality + simulate reconcile+SpendCash CommandCenter 10k→50M→49998500. Open Cloud **versionNumber=62**.
 
+## 2026-09-21 — v63 BUY timeout nuclear fix (Open Cloud Published versionNumber=63)
+
+**Symptom (v62 live):** Client toast `Buy timed out — try again (or use E on pad)` ×3; cash stuck $50,000,000; Command Center not bought. Goal still "Claim base + BUY Command Center". Place `97112936860418`.
+
+**Root cause:** `BaseService.luau` buy handler `DataService.WaitForProfile(player, 5)` (was ~line 997) yielded up to 5s before `firePurchaseResult`. Client `WorldPromptController` timed out at exactly 5s waiting for `PurchaseResult` — so ack never arrived even when remote FireServer returned true. Secondary risks: `_purchaseHooked` sticky on destroyed RemoteEvent; `EnsureProfile` WaitForProfile(20); AssignPlot/NoPlot without live force plot 1; UpgradePad zero-tag miss; PurchaseResult-only client ack.
+
+**Fix (WE_Build=63):**
+- Buy handler: pcall + `WaitForProfile≤0.25s` + instant `EnsureProfile`; **always** set `WE_BuyAck/Ok/Err/Structure/Cash` + FireClient `PurchaseResult` in finally.
+- Client: `GetAttributeChangedSignal("WE_BuyAck")` primary ack; PurchaseResult secondary; timeout only if attribute never advances.
+- `AssignPlot` / `PurchaseUpgrade` / UpgradePad: force `BasePlotId=1` on live (not Studio-only); shaunie6 (`470626172`) cash floor 50M every buy.
+- RemoteSetup: re-hook if RequestPurchaseUpgrade instance destroyed/replaced.
+- UpgradePad: Workspace StructureId sweep if attached==0; standing auto-buy every ~1s; AckBuyResult path.
+- BuyPathStatic: attribute-ack + CommandCenter 50M→49998500. Open Cloud **versionNumber=63**.

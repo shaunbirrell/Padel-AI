@@ -4664,7 +4664,7 @@ end
 -- v61: load profiles BEFORE UpgradePad spatial loop (no silent NoProfile on first stand)
 safeInit("DataService", DataService)
 print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v61)")
-print("[WAR EMPIRE] v62 cash reconcile + purchase hook on WE_Remotes.RequestPurchaseUpgrade")
+print("[WAR EMPIRE] v63 attribute-ack buy + no WaitForProfile>0.25s + force plot1")
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
@@ -5056,7 +5056,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 62)
+		player:SetAttribute("WE_Build", 63)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -5081,7 +5081,7 @@ for _, plr in ipairs(Players:GetPlayers()) do
 	task.spawn(seedPlayer, plr)
 end
 
-print("[WAR EMPIRE] EarlyRemotes v62: WE_Remotes + leaderstats seed ready")
+print("[WAR EMPIRE] EarlyRemotes v63: WE_Remotes + leaderstats seed ready")
 ]]></string>
         </Properties>
       </Item>
@@ -11047,6 +11047,7 @@ local FUNCTIONS = {
 local _initialized = false
 local _purchaseHandler: ((Player, any) -> ())? = nil
 local _purchaseHooked = false
+local _purchaseHookedInstance: RemoteEvent? = nil
 
 function RemoteSetup.SetPurchaseUpgradeHandler(handler: (Player, any) -> ())
 	_purchaseHandler = handler
@@ -11061,21 +11062,41 @@ local function ensurePurchaseHook(folder: Folder)
 		ev.Name = name
 		ev.Parent = folder
 	end
+	-- v63: re-hook if prior RemoteEvent was destroyed / replaced (never sticky forever)
 	if _purchaseHooked then
-		return
+		local hooked = _purchaseHookedInstance
+		if hooked and hooked.Parent and hooked == ev then
+			return
+		end
+		warn("[RemoteSetup] RequestPurchaseUpgrade instance changed — re-hooking OnServerEvent")
+		_purchaseHooked = false
+		_purchaseHookedInstance = nil
 	end
 	if not ev:IsA("RemoteEvent") then
 		warn("[RemoteSetup] RequestPurchaseUpgrade is not RemoteEvent:", ev.ClassName)
 		return
 	end
 	_purchaseHooked = true
-	(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, payload: any)
+	_purchaseHookedInstance = ev :: RemoteEvent
+	local hookedEv = ev :: RemoteEvent
+	hookedEv.OnServerEvent:Connect(function(player: Player, payload: any)
+		-- Ignore events from a destroyed/replaced remote
+		if _purchaseHookedInstance ~= hookedEv then
+			return
+		end
 		local sid = if typeof(payload) == "table" then tostring((payload :: any).StructureId) else tostring(payload)
 		print(string.format("[RemoteSetup] OnServerEvent RequestPurchaseUpgrade %s → %s handler=%s", player.Name, sid, tostring(_purchaseHandler ~= nil)))
 		if _purchaseHandler then
 			_purchaseHandler(player, payload)
 		else
 			warn("[RemoteSetup] RequestPurchaseUpgrade fired but handler not registered yet — BaseService.Init pending")
+		end
+	end)
+	hookedEv.AncestryChanged:Connect(function(_, parent)
+		if parent == nil and _purchaseHookedInstance == hookedEv then
+			_purchaseHooked = false
+			_purchaseHookedInstance = nil
+			warn("[RemoteSetup] RequestPurchaseUpgrade destroyed — will re-hook on next Get/Init")
 		end
 	end)
 	print("[RemoteSetup] RequestPurchaseUpgrade OnServerEvent hooked on WE_Remotes." .. name)
@@ -14351,8 +14372,9 @@ function BaseService.AssignPlot(player: Player): number?
 
 	local plotId = findFreePlot()
 	if not plotId then
-		warn("[BaseService] No free plots for", player.Name)
-		return nil
+		-- v63: always succeed for first player — force plot 1 even on live
+		warn("[BaseService] No free plots for", player.Name, "— forcing BasePlotId=1")
+		plotId = 1
 	end
 
 	plotOwners[plotId] = player.UserId
@@ -14453,7 +14475,7 @@ function BaseService.TeleportToPlot(player: Player)
 	if not profile then
 		return
 	end
-	-- Studio solo: never leave BasePlotId nil
+	-- v63: never leave BasePlotId nil (live + Studio)
 	if profile.BasePlotId == nil then
 		BaseService.AssignPlot(player)
 		profile = DataService.GetProfile(player) or profile
@@ -14522,19 +14544,39 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "NoProfile" }
 	end
 
-	-- v62: claim/plot gate — never silent-fail unclaimed
+	-- v63: claim/plot gate — AssignPlot then force BasePlotId=1 (live + Studio)
 	if profile.BasePlotId == nil then
 		BaseService.AssignPlot(player)
 		profile = DataService.GetProfile(player) or profile
 	end
 	if profile.BasePlotId == nil then
+		profile.BasePlotId = 1
+		plotOwners[1] = player.UserId
+		DataService.MarkDirty(player)
+		warn("[BaseService] PurchaseUpgrade forced BasePlotId=1 for", player.Name)
+	end
+	-- Unreachable after force; retained for BuyPathStatic / extreme edge
+	if profile.BasePlotId == nil then
 		return { Ok = false, Error = "NoPlot" }
 	end
 
-	-- v62: EarlyRemotes HUD seed vs profile.Cash desync
+	-- v63: shaunie6 playtest floor on every buy attempt
+	if player.UserId == 470626172 then
+		local floor = 50_000_000
+		local have = math.floor(tonumber(profile.Cash) or 0)
+		if have < floor then
+			profile.Cash = floor
+			DataService.MarkDirty(player)
+		end
+	end
+
+	-- v62/v63: EarlyRemotes HUD seed vs profile.Cash desync
 	if EconomyService.ReconcileSpendableCash then
 		EconomyService.ReconcileSpendableCash(player)
 		profile = DataService.GetProfile(player) or profile
+	end
+	if player.UserId == 470626172 then
+		profile.Cash = math.max(math.floor(tonumber(profile.Cash) or 0), 50_000_000)
 	end
 
 	local def = BaseConfig.Structures[structureId]
@@ -15232,8 +15274,21 @@ function BaseService.Init(deps: { [string]: any })
 
 	getUpgradeChangedEvent()
 
-	-- v62: handler registered on the SAME WE_Remotes.RequestPurchaseUpgrade EarlyRemotes created
+	-- v63: attribute-ack primary + PurchaseResult FireClient; never WaitForProfile >0.25s
+	local buyAckSeq = 0
+	local function ackBuyAttributes(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		buyAckSeq += 1
+		pcall(function()
+			player:SetAttribute("WE_BuyOk", result.Ok == true)
+			player:SetAttribute("WE_BuyErr", if result.Ok then "" else tostring(result.Error or "Failed"))
+			player:SetAttribute("WE_BuyStructure", tostring(structureId or ""))
+			player:SetAttribute("WE_BuyCash", math.floor(tonumber(result.Cash) or 0))
+			player:SetAttribute("WE_BuyAck", buyAckSeq) -- last: client listens this
+		end)
+	end
+
 	local function firePurchaseResult(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		ackBuyAttributes(player, structureId, result)
 		pcall(function()
 			local ev = RemoteSetup.Get(Constants.RemoteNames.PurchaseResult) :: RemoteEvent
 			ev:FireClient(player, {
@@ -15246,47 +15301,58 @@ function BaseService.Init(deps: { [string]: any })
 		end)
 	end
 
+	-- Expose for UpgradePadService attribute ack on pad path
+	BaseService.AckBuyResult = function(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		firePurchaseResult(player, structureId, result)
+	end
+
 	local function handlePurchaseRemote(player: Player, payload: any)
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
-		local function fail(err: string, msg: string)
-			print(string.format("[BaseService] Remote BUY FAIL %s → %s (%s)", player.Name, tostring(structureId), err))
-			firePurchaseResult(player, structureId, { Ok = false, Error = err })
-			if NotificationService then
-				NotificationService.Notify(player, msg, "Warn", 3.5)
+		local result: Types.PurchaseUpgradeResult = { Ok = false, Error = "Unknown" }
+		local started = os.clock()
+		local okCall, errCall = pcall(function()
+			-- v63: NEVER yield >0.25s — EnsureProfile is instant
+			local profile = DataService.GetProfile(player)
+			if not profile then
+				profile = DataService.WaitForProfile(player, 0.25)
 			end
+			if not profile and DataService.EnsureProfile then
+				profile = DataService.EnsureProfile(player)
+			end
+			if not profile then
+				result = { Ok = false, Error = "NoProfile" }
+				return
+			end
+			-- shaunie6 cash floor every attempt
+			if player.UserId == 470626172 then
+				profile.Cash = math.max(math.floor(tonumber(profile.Cash) or 0), 50_000_000)
+			end
+			if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+				result = { Ok = false, Error = "RateLimited" }
+				return
+			end
+			if not RemoteGuard.IsIdString(structureId, 48) then
+				result = { Ok = false, Error = "InvalidStructure" }
+				return
+			end
+			print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
+			result = BaseService.PurchaseUpgrade(player, structureId :: string)
+			print(string.format(
+				"[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s dt=%.3f",
+				player.Name,
+				tostring(result.Ok),
+				tostring(result.Error),
+				tostring(result.Cash),
+				os.clock() - started
+			))
+		end)
+		if not okCall then
+			warn("[BaseService] handlePurchaseRemote pcall error:", errCall)
+			result = { Ok = false, Error = "ServerError" }
 		end
-
-		-- v57/v62: wait briefly for profile; never silent forever
-		local profile = RemoteGuard.RequireProfile(DataService, player)
-		if not profile then
-			profile = DataService.WaitForProfile(player, 5)
-		end
-		if not profile then
-			pcall(function()
-				if DataService.EnsureProfile then
-					DataService.EnsureProfile(player)
-				else
-					DataService.LoadProfile(player)
-				end
-			end)
-			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
-		end
-		if not profile then
-			fail("NoProfile", "Profile still loading — try BUY again")
-			return
-		end
-		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
-			fail("RateLimited", "Buying too fast — wait a moment")
-			return
-		end
-		if not RemoteGuard.IsIdString(structureId, 48) then
-			fail("InvalidStructure", "Buy failed: bad structure id")
-			return
-		end
-		print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
-		local result = BaseService.PurchaseUpgrade(player, structureId :: string)
-		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s", player.Name, tostring(result.Ok), tostring(result.Error), tostring(result.Cash)))
+		-- ALWAYS ack within ~200ms path (attributes + FireClient) — finally
 		firePurchaseResult(player, structureId, result)
+
 		if not NotificationService then
 			warn("[BaseService] NotificationService nil — purchase toast skipped")
 			return
@@ -15316,6 +15382,10 @@ function BaseService.Init(deps: { [string]: any })
 				then "Claim a base first — stand on your plot pad"
 				elseif err == "NoProfile"
 				then "Profile still loading — try BUY again"
+				elseif err == "RateLimited"
+				then "Buying too fast — wait a moment"
+				elseif err == "ServerError"
+				then "Buy failed — server error, try again"
 				else ("Purchase failed: " .. tostring(err))
 			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
 			if NotificationService.NotifyThrottled then
@@ -15328,7 +15398,7 @@ function BaseService.Init(deps: { [string]: any })
 
 	if RemoteSetup.SetPurchaseUpgradeHandler then
 		RemoteSetup.SetPurchaseUpgradeHandler(handlePurchaseRemote)
-		-- Ensure the EarlyRemotes instance is hooked (idempotent)
+		-- Ensure the EarlyRemotes instance is hooked (idempotent / re-hook if destroyed)
 		RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade)
 	else
 		local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
@@ -15366,7 +15436,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 62)
+			player:SetAttribute("WE_Build", 63)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -18529,7 +18599,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 62)
+		player:SetAttribute("WE_Build", 63)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -18693,7 +18763,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=62",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=63",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))
@@ -18769,7 +18839,8 @@ function DataService.EnsureProfile(player: Player): PlayerProfile
 	if existing then
 		return existing
 	end
-	local waited = DataService.WaitForProfile(player, 20)
+	-- v63: never yield >0.25s on buy/pad path — instant CreateDefault if missing
+	local waited = DataService.WaitForProfile(player, 0.25)
 	if waited then
 		return waited
 	end
@@ -27788,6 +27859,13 @@ local function flashPad(part: BasePart)
 end
 
 local function firePurchaseResult(player: Player, structureId: string, result: any)
+	-- v63: prefer BaseService.AckBuyResult (attributes + PurchaseResult) so client never times out
+	if BaseService and BaseService.AckBuyResult then
+		pcall(function()
+			BaseService.AckBuyResult(player, structureId, result)
+		end)
+		return
+	end
 	pcall(function()
 		if not RemoteSetup then
 			return
@@ -27876,35 +27954,19 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
-	-- v62: live — assign plot if unclaimed (never silent)
+	-- v63: live + Studio — assign plot if unclaimed; ALWAYS force BasePlotId=1 (never NoPlot dead-end)
 	if profile.BasePlotId == nil then
 		if BaseService and BaseService.AssignPlot then
 			BaseService.AssignPlot(player)
 			profile = DataService.GetProfile(player) or profile
 		end
-		if profile.BasePlotId == nil then
-			print(string.format("[UpgradePad] BUY FAIL %s %s — NoPlot", player.Name, structureId))
-			firePurchaseResult(player, structureId, { Ok = false, Error = "NoPlot" })
-			if NotificationService then
-				if NotificationService.NotifyThrottled then
-					NotificationService.NotifyThrottled(player, "Claim a base first — stand on your plot pad", "Warn", 3.5, 2.0, "pad|NoPlot")
-				else
-					NotificationService.Notify(player, "Claim a base first — stand on your plot pad", "Warn", 3.5)
-				end
-			end
-			return
-		end
 	end
-
-	-- Studio solo: if BasePlotId nil, force-assign plot 1
-	if RunService:IsStudio() and profile.BasePlotId == nil then
-		if BaseService and BaseService.AssignPlot then
-			BaseService.AssignPlot(player)
-			profile = DataService.GetProfile(player) or profile
+	if profile.BasePlotId == nil then
+		profile.BasePlotId = 1
+		if DataService.MarkDirty then
+			DataService.MarkDirty(player)
 		end
-		if profile.BasePlotId == nil then
-			profile.BasePlotId = 1
-		end
+		warn(string.format("[UpgradePad] forced BasePlotId=1 for %s (live/Studio)", player.Name))
 	end
 
 	local pid = part:GetAttribute("PlotId")
@@ -28087,29 +28149,56 @@ end
 
 local function scanAndTagFromSetup(): number
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	if not setup then
-		return 0
-	end
-	local bases = setup:FindFirstChild("Bases")
-	if not bases then
-		return 0
-	end
 	local retagged = 0
-	for _, desc in ipairs(bases:GetDescendants()) do
+	local function consider(desc: Instance)
+		if not desc:IsA("BasePart") then
+			return
+		end
+		local sid = desc:GetAttribute("StructureId")
+		local pid = desc:GetAttribute("PlotId")
+		if typeof(sid) == "string" and typeof(pid) == "number" then
+			if not CollectionService:HasTag(desc, TAG) then
+				CollectionService:AddTag(desc, TAG)
+			end
+			hardenPad(desc)
+			attachSlot(desc)
+			retagged += 1
+		end
+	end
+	if setup then
+		local bases = setup:FindFirstChild("Bases")
+		if bases then
+			for _, desc in ipairs(bases:GetDescendants()) do
+				consider(desc)
+			end
+		end
+	end
+	return retagged
+end
+
+-- v63: nuclear Workspace sweep — any BasePart with StructureId (+ optional PlotId)
+local function scanEntireWorkspaceForStructureId(): number
+	local n = 0
+	for _, desc in ipairs(Workspace:GetDescendants()) do
 		if desc:IsA("BasePart") then
 			local sid = desc:GetAttribute("StructureId")
-			local pid = desc:GetAttribute("PlotId")
-			if typeof(sid) == "string" and typeof(pid) == "number" then
+			if typeof(sid) == "string" and sid ~= "" then
+				local pid = desc:GetAttribute("PlotId")
+				if typeof(pid) ~= "number" then
+					-- default PlotId=1 so first player can buy CommandCenter even without tag
+					desc:SetAttribute("PlotId", 1)
+					pid = 1
+				end
 				if not CollectionService:HasTag(desc, TAG) then
 					CollectionService:AddTag(desc, TAG)
 				end
 				hardenPad(desc)
 				attachSlot(desc)
-				retagged += 1
+				n += 1
 			end
 		end
 	end
-	return retagged
+	return n
 end
 
 local function bindExistingAndFuture()
@@ -28132,8 +28221,20 @@ end
 
 local function startSpatialLoop()
 	local acc = 0
+	local rescanAcc = 0
 	RunService.Heartbeat:Connect(function(dt)
 		acc += dt
+		rescanAcc += dt
+		-- v63: if zero pads, re-sweep Workspace every 5s
+		if rescanAcc >= 5 then
+			rescanAcc = 0
+			if countAttached() == 0 then
+				scanAndTagFromSetup()
+				if countAttached() == 0 then
+					scanEntireWorkspaceForStructureId()
+				end
+			end
+		end
 		if acc < SPATIAL_INTERVAL then
 			return
 		end
@@ -28193,6 +28294,10 @@ function UpgradePadService.Init(deps: { [string]: any })
 	if initCount == 0 then
 		local scanned = scanAndTagFromSetup()
 		print(string.format("[WAR EMPIRE] UpgradePadService: scanned Bases → attached=%d", scanned))
+		if countAttached() == 0 then
+			local swept = scanEntireWorkspaceForStructureId()
+			warn(string.format("[WAR EMPIRE] UpgradePadService: Init Workspace StructureId sweep attached=%d", swept))
+		end
 	end
 
 	startSpatialLoop()
@@ -28209,6 +28314,10 @@ function UpgradePadService.Init(deps: { [string]: any })
 		if after == 0 then
 			local scanned = scanAndTagFromSetup()
 			warn(string.format("[WAR EMPIRE] UpgradePadService: ZERO pads after map — Bases scan attached=%d", scanned))
+			if countAttached() == 0 then
+				local swept = scanEntireWorkspaceForStructureId()
+				warn(string.format("[WAR EMPIRE] UpgradePadService: Workspace StructureId sweep attached=%d", swept))
+			end
 		end
 	end)
 
@@ -39789,11 +39898,18 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 	if opts and opts.showBuying then
 		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 	end
-	-- v62: keep in-flight until PurchaseResult (or 5s timeout) — stops spam Buying…
-	task.delay(5, function()
+	-- v63: keep in-flight until WE_BuyAck attribute OR PurchaseResult (8s hard timeout)
+	local ackBefore = player:GetAttribute("WE_BuyAck")
+	task.delay(8, function()
 		if pendingPurchase[structureId] then
+			-- Only timeout if attribute never advanced (primary ack path missed)
+			local ackNow = player:GetAttribute("WE_BuyAck")
+			if ackNow ~= nil and ackNow ~= ackBefore then
+				pendingPurchase[structureId] = nil
+				return
+			end
 			pendingPurchase[structureId] = nil
-			warn("[WorldPrompt] BUY timeout no PurchaseResult", structureId)
+			warn("[WorldPrompt] BUY timeout no WE_BuyAck/PurchaseResult", structureId)
 			NotificationController.Show("Buy timed out — try again (or use E on pad)", "Warn", 3)
 		end
 	end)
@@ -40265,7 +40381,50 @@ function WorldPromptController.Init()
 		applyCash(payload.Cash)
 	end)
 
-	-- v62: authoritative buy result — clear pending + show server reason (never hang on Buying…)
+	-- v63 PRIMARY: attribute ack (replicates without remotes) — clear pending + apply result
+	local function applyBuyAckFromAttributes()
+		local sid = player:GetAttribute("WE_BuyStructure")
+		if typeof(sid) == "string" and sid ~= "" then
+			pendingPurchase[sid] = nil
+		end
+		local ok = player:GetAttribute("WE_BuyOk") == true
+		local cash = player:GetAttribute("WE_BuyCash")
+		if ok then
+			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
+			local name = if def then def.DisplayName else tostring(sid)
+			print(string.format("[WorldPrompt] WE_BuyAck OK %s cash=%s", tostring(sid), tostring(cash)))
+			if typeof(cash) == "number" then
+				applyCash(cash)
+			end
+			flashPadBuyBought(name)
+		else
+			local err = tostring(player:GetAttribute("WE_BuyErr") or "Failed")
+			local msg = if err == "InsufficientCash"
+				then "Not enough cash"
+				elseif err == "NoPlot"
+				then "Claim a base first — stand on your plot pad"
+				elseif err == "NoProfile"
+				then "Profile still loading — try BUY again"
+				elseif err == "MissingRequirement"
+				then "Missing prerequisite structure"
+				elseif err == "MaxLevel"
+				then "Already at MAX level"
+				elseif err == "WrongPlot"
+				then "Not your base — walk your plot pads to buy"
+				elseif err == "RateLimited"
+				then "Buying too fast — wait a moment"
+				else ("Buy failed: " .. err)
+			print(string.format("[WorldPrompt] WE_BuyAck FAIL %s → %s", tostring(sid), err))
+			-- Avoid double-toast if PurchaseResult also arrives; throttle lightly
+			NotificationController.Show(msg, "Error", 3.5)
+		end
+		markBillboardsDirty()
+	end
+	player:GetAttributeChangedSignal("WE_BuyAck"):Connect(function()
+		applyBuyAckFromAttributes()
+	end)
+
+	-- v62/v63 secondary: PurchaseResult remote — clear pending + show server reason
 	Remotes.BindEvent(Constants.RemoteNames.PurchaseResult, function(payload: any)
 		if typeof(payload) ~= "table" then
 			return

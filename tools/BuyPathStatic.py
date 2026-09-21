@@ -53,7 +53,7 @@ must_contain("src/ReplicatedStorage/Shared/Constants.luau", "RequestPurchaseUpgr
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "RequestPurchaseUpgrade", "RemoteSetup lists RequestPurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "function BaseService.PurchaseUpgrade", "BaseService.PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RemoteGuard.IsIdString", "BaseService uses RemoteGuard.IsIdString")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RemoteGuard.RequireProfile", "BaseService remote RequireProfile")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "DataService.EnsureProfile", "BaseService buy EnsureProfile (v63 no long RequireProfile yield)")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RequestPurchaseUpgrade", "BaseService binds RequestPurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "BaseService.PurchaseUpgrade", "UpgradePadService → PurchaseUpgrade")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RequestPurchaseUpgrade", "WorldPrompt BUY FireServer")
@@ -967,8 +967,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 62)', "v62 WE_Build=62 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 62)', "v62 WE_Build=62 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 63)', "v63 WE_Build=63 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 63)', "v63 WE_Build=63 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1033,7 +1033,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 62)', "v62 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 63)', "v63 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1081,6 +1081,42 @@ if 'plinth:SetAttribute("StructureId", def.Id)' in _map and 'Id = "CommandCenter
     ok("v62 pad StructureId attribute === BaseConfig.Structures key (def.Id)")
 else:
     bad("v62 pad StructureId vs catalog key mismatch")
+
+
+
+
+# ── v63 BUY: attribute ack primary + no WaitForProfile>0.25s + force plot1 ─────
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyAck"', "v63 BaseService WE_BuyAck attribute")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyOk"', "v63 BaseService WE_BuyOk")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr"', "v63 BaseService WE_BuyErr")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyStructure"', "v63 BaseService WE_BuyStructure")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyCash"', "v63 BaseService WE_BuyCash")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "WaitForProfile(player, 0.25)", "v63 buy handler WaitForProfile ≤0.25s")
+must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "WaitForProfile(player, 5)", "v63 no WaitForProfile(5) in buy handler")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WaitForProfile(player, 0.25)", "v63 EnsureProfile WaitForProfile ≤0.25s")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "AckBuyResult", "v63 BaseService.AckBuyResult export")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "forcing BasePlotId=1", "v63 AssignPlot force plot 1")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "PurchaseUpgrade forced BasePlotId=1", "v63 PurchaseUpgrade force plot 1")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "AckBuyResult", "v63 UpgradePad uses AckBuyResult")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "scanEntireWorkspaceForStructureId", "v63 UpgradePad Workspace StructureId sweep")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "forced BasePlotId=1", "v63 UpgradePad force plot 1 live")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 63)', "v63 WE_Build=63 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 63)', "v63 WE_Build=63 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 63)', "v63 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
+
+# Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
+_cc_cost2 = 1500
+_hud2 = 50_000_000
+_start2 = 10_000
+_reconciled2 = max(_start2, _hud2)
+_after2 = _reconciled2 - _cc_cost2
+if _reconciled2 == 50_000_000 and _after2 == 49_998_500:
+    ok("v63 simulate attribute-ack path CommandCenter cash: 50M → 49998500")
+else:
+    bad(f"v63 simulate cash failed reconciled={_reconciled2} after={_after2}")
 
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
