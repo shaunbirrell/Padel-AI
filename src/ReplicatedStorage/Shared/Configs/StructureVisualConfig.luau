@@ -89,8 +89,8 @@ local StructureVisualConfig = {
 		},
 		DefensiveWalls = {
 			Plinth = Color3.fromRGB(48, 48, 45),
-			Body = Color3.fromRGB(85, 85, 78),
-			Accent = Color3.fromRGB(120, 130, 110),
+			Body = Color3.fromRGB(120, 160, 55), -- v45 bright olive (impossible to miss)
+			Accent = Color3.fromRGB(180, 255, 80), -- neon top cap
 			Roof = Color3.fromRGB(60, 60, 55),
 			Kit = "wall",
 			TargetFootprint = Vector3.new(24, 8, 3),

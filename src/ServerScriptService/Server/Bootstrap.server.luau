@@ -90,12 +90,23 @@ local function runMapSetupOrFallback(reasonIfNil: string)
 	end
 end
 
+-- v45: set after BaseService Init — refresh kits/walls after any map rebuild (race fix)
+local afterMapRebuild: (() -> ())? = nil
+
+local function notifyMapRebuilt(label: string)
+	if afterMapRebuild then
+		print("[WAR EMPIRE] afterMapRebuild → RefreshAllOnlinePlayers (" .. label .. ")")
+		task.defer(afterMapRebuild)
+	end
+end
+
 local function healOrRebuildMap(label: string)
 	--[[ Idempotent: ensure WarEmpireSetup + collide Ground exist (server start + PlayerAdded). ]]
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	if not setup then
 		print("[WAR EMPIRE] Map heal (" .. label .. "): WarEmpireSetup missing — Run()")
 		runMapSetupOrFallback("MapSetup nil during heal (" .. label .. ")")
+		notifyMapRebuilt(label .. ":missing-run")
 		return
 	end
 	if MapSetup == nil then
@@ -123,6 +134,7 @@ local function healOrRebuildMap(label: string)
 				setup:Destroy()
 				MapSetup.Run()
 			end)
+			notifyMapRebuilt(label .. ":ForceRebuildGround-Run")
 			if not Workspace:FindFirstChild("WarEmpireSetup") then
 				ensureVoidFallback("ForceRebuildGround failed (" .. label .. ")")
 			end
@@ -193,6 +205,7 @@ else
 					setup:Destroy()
 				end)
 				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
+				notifyMapRebuilt("bootstrap-missingPads")
 			else
 				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
 			end
@@ -221,6 +234,7 @@ do
 				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
 					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
 					healOrRebuildMap("PlayerAdded:" .. player.Name)
+					notifyMapRebuilt("PlayerAdded:" .. player.Name)
 					return
 				end
 				if not setup then
@@ -255,6 +269,7 @@ do
 							end)
 						end
 						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
+						notifyMapRebuilt("PlayerAdded-missingPads:" .. player.Name)
 						return
 					end
 				end
@@ -399,6 +414,12 @@ safeInit("XPService", XPService, deps)
 safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
+-- v45: map rebuild race — refresh all online players' kits/walls after healOrRebuildMap
+afterMapRebuild = function()
+	if BaseService and BaseService.RefreshAllOnlinePlayers then
+		pcall(BaseService.RefreshAllOnlinePlayers)
+	end
+end
 safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
 safeInit("PremiumPadService", PremiumPadService, deps) -- ATM-cluster Robux pads
 safeInit("FallSafetyService", FallSafetyService, deps)

@@ -15,7 +15,7 @@ local Constants = require(Shared.Constants)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 30 -- v44b: force rebuild; classic tall formula max(12, 7.5+lv*2.8); Size Y=height
+local KIT_GEN = 31 -- v45: force rebuild; height=max(18,10+lv*4) L5≥30; PlotId tonumber; bright olive
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -135,14 +135,15 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 
 	-- v44: MissileDefense gets launcher bay (not watchtower) — always Body+Roof
 	if structureId == "MissileDefense" then
-		kitPart(plinth, "Body", Vector3.new(14, 8, 16), Vector3.new(0, 4.5, 0), pal.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Roof", Vector3.new(16, 1.0, 10), Vector3.new(0, 9.0, 0), pal.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(14.4, 0.25, 16.4), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
+		-- v45: forced large Body+Roof (never empty pad / tiny slab)
+		kitPart(plinth, "Body", Vector3.new(18, 12, 18), Vector3.new(0, 6.5, 0), pal.Body, Enum.Material.Metal, nil)
+		kitPart(plinth, "Roof", Vector3.new(20, 1.4, 14), Vector3.new(0, 13.2, 0), pal.Roof, Enum.Material.Metal, nil)
+		kitPart(plinth, "Accent", Vector3.new(18.4, 0.3, 18.4), Vector3.new(0, 0.7, 0), pal.Accent, Enum.Material.Neon, nil)
 		-- Twin launcher tubes
-		kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 10), Vector3.new(-3.5, 6.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
-		kitPart(plinth, "Detail", Vector3.new(1.8, 1.8, 10), Vector3.new(3.5, 6.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 5, 0.35), Vector3.new(0, 11.5, -4), pal.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(0, 7.5, -6), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Detail", Vector3.new(2.2, 2.2, 12), Vector3.new(-4, 8.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
+		kitPart(plinth, "Detail", Vector3.new(2.2, 2.2, 12), Vector3.new(4, 8.5, 2), Color3.fromRGB(60, 55, 50), Enum.Material.Metal, Enum.PartType.Cylinder)
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 6, 0.4), Vector3.new(0, 16, -5), pal.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.2, 1.2, 1.2), Vector3.new(0, 9.5, -7), pal.Accent, Enum.Material.Neon, Enum.PartType.Ball)
 		plinth:SetAttribute("WE_KitGen", KIT_GEN)
 		return
 	end
@@ -724,20 +725,59 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 		n = countKitRoles(plinth)
 	end
 
-	-- v44 P0: owned kits must be solid IMMEDIATELY (do not wait for applyKitVisuals)
+	-- v44/v45 P0: owned kits must be solid IMMEDIATELY (do not wait for applyKitVisuals)
 	local solid = StructureVisualConfig.SolidTransparency
 	if typeof(solid) ~= "number" then
 		solid = 0
 	end
-	solid = math.min(solid, 0.05)
+	solid = 0 -- force fully opaque Body/Roof
+	local flatKit = structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "DefensiveWalls"
 	for _, child in ipairs(plinth:GetChildren()) do
 		if child:IsA("BasePart") then
 			local role = child:GetAttribute("WE_KitRole")
 			if role == "Body" or role == "Roof" then
-				child.Transparency = solid
+				child.Transparency = 0
+				child.Anchored = true
+				if role == "Body" then
+					child.CanCollide = true
+					if not flatKit then
+						local s = child.Size
+						local nx = math.max(s.X, 14)
+						local ny = math.max(s.Y, 10)
+						local nz = math.max(s.Z, 14)
+						if nx ~= s.X or ny ~= s.Y or nz ~= s.Z then
+							child.Size = Vector3.new(nx, ny, nz)
+							child:SetAttribute("WE_BaseSize", child.Size)
+						end
+					end
+				end
+				if child.Parent ~= plinth then
+					child.Parent = plinth
+				end
 			elseif role == "Accent" or role == "Antenna" or role == "Detail" or role == "Door" or role == "Window" or role == "Pier" or role == "Crate" then
+				child.Anchored = true
 				if child.Transparency > 0.5 then
 					child.Transparency = solid
+				end
+			end
+		end
+	end
+	-- MissileDefense hard force large Body+Roof after any rebuild path
+	if structureId == "MissileDefense" then
+		for _, child in ipairs(plinth:GetChildren()) do
+			if child:IsA("BasePart") then
+				local role = child:GetAttribute("WE_KitRole")
+				if role == "Body" then
+					local s = child.Size
+					child.Size = Vector3.new(math.max(s.X, 18), math.max(s.Y, 12), math.max(s.Z, 18))
+					child.Transparency = 0
+					child.CanCollide = true
+					child.Anchored = true
+				elseif role == "Roof" then
+					local s = child.Size
+					child.Size = Vector3.new(math.max(s.X, 20), math.max(s.Y, 1.2), math.max(s.Z, 14))
+					child.Transparency = 0
+					child.Anchored = true
 				end
 			end
 		end
@@ -751,17 +791,29 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 end
 
 local function findPlotPad(plotId: number): BasePart?
+	-- v45 ROOT CAUSE FIX: always tonumber PlotId (attr may be stringy) — mismatch skipped SyncPerimeterWalls
+	local want = tonumber(plotId)
+	if want == nil then
+		return nil
+	end
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
-		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == want then
 			return inst
 		end
 	end
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	local bases = setup and setup:FindFirstChild("Bases")
-	local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+	local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(want))
 	if plotFolder then
 		local pad = plotFolder:FindFirstChild("PlotPad")
 		if pad and pad:IsA("BasePart") then
+			if not CollectionService:HasTag(pad, Constants.Tags.BasePlot) then
+				CollectionService:AddTag(pad, Constants.Tags.BasePlot)
+			end
+			local attrPid = tonumber(pad:GetAttribute("PlotId") :: any)
+			if attrPid == nil then
+				pad:SetAttribute("PlotId", want)
+			end
 			return pad
 		end
 	end
@@ -790,7 +842,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
 	local pad = findPlotPad(plotId)
 	if not plotFolder or not pad then
-		warn("[StructureKitBuilder] SyncPerimeterWalls skipped — no plot/pad", plotId, plotFolder ~= nil, pad ~= nil)
+		warn("[StructureKitBuilder] SyncPerimeterWalls skipped — no plot/pad WITH plotId=", plotId, "hasFolder=", plotFolder ~= nil, "hasPad=", pad ~= nil)
 		return
 	end
 
@@ -809,23 +861,22 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		periGen = tonumber(existing:GetAttribute("WE_PerimeterGen")) or 0
 		periParts = #existing:GetChildren()
 	end
-	-- v43/v44b: rebuild when gen stale, empty, OR any Wall* is short on Y (flat slabs)
+	-- v45: rebuild when gen stale, empty, OR any Wall* Size.Y < 18 (ankle slabs)
 	local shortWall = false
 	if existing and existing:IsA("Folder") then
 		for _, ch in ipairs(existing:GetChildren()) do
 			if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
-				if ch.Size.Y < 12 then
+				if ch.Size.Y < 18 then
 					shortWall = true
 					break
 				end
 			end
 		end
 	end
-	local mustRebuild = (not existing) or (not existing:IsA("Folder")) or periGen < KIT_GEN or periParts < 4 or shortWall
+	-- v45 HOTFIX: always ClearAllChildren + rebuild when level≥1 (ignore early-return mustRebuild false)
+	local mustRebuild = true
 	if existing and existing:IsA("Folder") then
-		if mustRebuild then
-			existing:ClearAllChildren()
-		end
+		existing:ClearAllChildren()
 		folder = existing
 	else
 		if existing then
@@ -834,45 +885,32 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		folder = Instance.new("Folder")
 		folder.Name = PERIMETER_FOLDER
 		folder.Parent = plotFolder
+	end
+	-- Parent under plot folder (already); stamp gen after build
+	if periGen < KIT_GEN or periParts < 4 or shortWall then
 		mustRebuild = true
 	end
-	if not mustRebuild then
-		-- Fresh enough walls already present — still ensure gate dress deferred; do not early-return before attr stamp
-		folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
-		folder:SetAttribute("WE_WallLevel", math.clamp(level, 1, 5))
-		task.defer(function()
-			pcall(function()
-				local vac = require(Shared.Configs.VisualAssetConfig)
-				local vas = require(script.Parent.Parent.Services.VisualAssetService)
-				local ref = vac.Buildings and vac.Buildings.BaseGate
-				local aid = ref and tonumber(ref.ModelAssetId) or 0
-				if not aid or aid <= 0 then
-					return
-				end
-				for _, ch in ipairs(folder:GetChildren()) do
-					if ch:IsA("BasePart") and ch.Name == "GateArch" then
-						ch:SetAttribute("WE_DisplayName", "Base Gate")
-						vas.TryAttachBuildingVisual(ch, "BaseGate", level)
-					end
-				end
-			end)
-		end)
-		return
+	if not folder.Parent then
+		folder.Parent = plotFolder
 	end
 
-	local pal = paletteFor("DefensiveWalls")
+	local _pal = paletteFor("DefensiveWalls")
+	-- v45: bright olive body + neon top cap (impossible to miss)
+	if _pal == nil then
+		warn("[StructureKitBuilder] DefensiveWalls palette missing")
+	end
+	local brightOlive = Color3.fromRGB(120, 160, 55)
+	local neonCap = Color3.fromRGB(180, 255, 80)
 	local lv = math.clamp(level, 1, 5)
 	local halfX = pad.Size.X * 0.5 - 1.5
 	local halfZ = pad.Size.Z * 0.5 - 1.5
 	-- v36: thicker/taller defensive walls at higher levels
-	-- v44b Shaun: restore TALL vertical perimeter (fully-bought walls went HIGH before).
-	-- height = max(12, 7.5+lv*2.8) → L1≥12, L5=21.5. Size = (length, height, thickness) with height on Y.
-	-- Bottom sits on pad top: y = padTop + height/2 (never buried / flat slabs).
+	-- v45: height = max(18, 10+lv*4) → L1≥18, L5≥30. Size Y=height. Shaun: fully-bought walls HIGH.
 	local thickness = 2.8 + lv * 0.7
-	local height = math.max(12, 7.5 + lv * 2.8)
+	local height = math.max(18, 10 + lv * 4)
 	local padTop = pad.Position.Y + pad.Size.Y * 0.5
 	local y = padTop + height * 0.5
-	print(string.format("[StructureKitBuilder] SyncPerimeterWalls level=%d height=%.1f padTop=%.1f", lv, height, padTop))
+	print(string.format("[StructureKitBuilder] SyncPerimeterWalls plotId=%s level=%d height=%.1f padTop=%.1f mustRebuild=%s", tostring(plotId), lv, height, padTop, tostring(mustRebuild)))
 	local cx, cz = pad.Position.X, pad.Position.Z
 
 	-- Clear walkable opening (8–12 studs). Posts/arch are visual-only outside this span.
@@ -916,7 +954,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			Name = name,
 			Size = size,
 			Position = pos,
-			Color = pal.Body,
+			Color = brightOlive,
 			Material = Enum.Material.Concrete,
 			Transparency = 0,
 			CanCollide = true,
@@ -928,14 +966,14 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		w:SetAttribute("WE_Perimeter", true)
 		w:SetAttribute("PlotId", plotId)
 		w:SetAttribute("WE_WallLevel", lv)
-		local capH = 0.45 + lv * 0.08
+		local capH = 0.55 + lv * 0.1
 		local cap = makePart({
 			Name = name .. "_Cap",
-			Size = Vector3.new(size.X + 0.4, capH, size.Z + 0.4),
+			Size = Vector3.new(size.X + 0.5, capH, size.Z + 0.5),
 			Position = Vector3.new(pos.X, pos.Y + height * 0.5 + capH * 0.5, pos.Z),
-			Color = pal.Accent,
+			Color = neonCap,
 			Material = Enum.Material.Neon,
-			Transparency = 0.05,
+			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		})
@@ -1110,7 +1148,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	-- Hard assert: every Wall* segment must be tall on Y
 	for _, ch in ipairs(folder:GetChildren()) do
 		if ch:IsA("BasePart") and string.sub(ch.Name, 1, 4) == "Wall" and not string.find(ch.Name, "_Cap", 1, true) then
-			if ch.Size.Y < 12 then
+			if ch.Size.Y < 18 then
 				warn("[StructureKitBuilder] Wall segment too short on Y — forcing height", ch.Name, ch.Size)
 				local s = ch.Size
 				ch.Size = Vector3.new(s.X, height, s.Z)
@@ -1218,7 +1256,7 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	local coverFrac = 0.72
 	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
 	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
-	local wallH = math.max(12, 7.5 + lv * 2.8) -- v44b mirror SyncPerimeterWalls
+	local wallH = math.max(18, 10 + lv * 4) -- v45 mirror SyncPerimeterWalls
 	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
 
 	local sizeX: number
@@ -1754,6 +1792,18 @@ function StructureKitBuilder.ClearPlotExtras(plotId: number)
 	StructureKitBuilder.SyncPerimeterWalls(plotId, 0)
 	StructureKitBuilder.SyncCornerTowers(plotId, 0)
 	StructureKitBuilder.SyncBaseCeiling(plotId, 0)
+	-- E) clear stale WE_OwnedLevel on unowned pads so next claimer does not see MAX with no kits
+	local want = tonumber(plotId)
+	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	if plotFolder and want ~= nil then
+		for _, desc in ipairs(plotFolder:GetDescendants()) do
+			if desc:IsA("BasePart") and desc:GetAttribute("StructureId") ~= nil then
+				if tonumber(desc:GetAttribute("PlotId") :: any) == want then
+					desc:SetAttribute("WE_OwnedLevel", 0)
+				end
+			end
+		end
+	end
 end
 
 return StructureKitBuilder

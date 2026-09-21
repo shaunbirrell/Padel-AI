@@ -162,8 +162,9 @@ end
 
 
 function BaseService.GetPlotSpawnCFrame(plotId: number): CFrame?
+	local wantPlot = tonumber(plotId)
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
-		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+		if inst:IsA("BasePart") and wantPlot ~= nil and tonumber(inst:GetAttribute("PlotId") :: any) == wantPlot then
 			local folder = inst.Parent
 			if folder then
 				local spawn = folder:FindFirstChild("PlayerSpawn")
@@ -729,10 +730,33 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 	end
 	local plotId = profile.BasePlotId
 	local slots = findUpgradeSlots(plotId, structureId)
-	if #slots == 0 then
+	local lvNum = tonumber(level) or 0
+	if #slots == 0 and lvNum >= 1 then
+		warn("[BaseService] UpdateVisuals: NO SLOTS for lv>=1 — scanning ALL BaseParts under Plot", structureId, "plot", plotId)
+		local setup = Workspace:FindFirstChild("WarEmpireSetup")
+		local bases = setup and setup:FindFirstChild("Bases")
+		local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+		local want = tonumber(plotId)
+		if plotFolder and want ~= nil then
+			for _, desc in ipairs(plotFolder:GetDescendants()) do
+				if desc:IsA("BasePart") and desc:GetAttribute("StructureId") == structureId then
+					local dp = tonumber(desc:GetAttribute("PlotId") :: any)
+					if dp == nil or dp == want then
+						CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+						table.insert(slots, desc)
+					end
+				end
+			end
+		end
+		if #slots == 0 then
+			warn("[BaseService] UpdateVisuals: STILL no slot after PlotN StructureId scan", structureId, "plot", plotId)
+		end
+	elseif #slots == 0 then
 		warn("[BaseService] UpdateVisuals: no slot for", structureId, "plot", plotId)
 	end
 	for _, inst in ipairs(slots) do
+		-- E) sync pad owned level from profile (clear stale MAX attrs)
+		inst:SetAttribute("WE_OwnedLevel", lvNum)
 		local okApply, errApply = pcall(applyKitVisuals, inst, structureId, level)
 		if not okApply then
 			warn("[BaseService] applyKitVisuals failed", structureId, errApply)
@@ -766,29 +790,58 @@ function BaseService.NuclearRehydrateKits(player: Player)
 		return
 	end
 	local plotId = profile.BasePlotId
-	for structureId, rawLevel in pairs(profile.BaseUpgrades) do
+	-- v45: iterate BaseConfig.Structures keys (not only BaseUpgrades pairs) so missing keys still get L0/L1 kits
+	local seen: { [string]: boolean } = {}
+	local function rehydrateOne(structureId: string, rawLevel: any)
+		if seen[structureId] then
+			return
+		end
+		seen[structureId] = true
 		local lv = math.clamp(tonumber(rawLevel) or 0, 0, 5)
-		if lv >= 1 then
-			if StructureVisualConfig.Palettes[structureId] == nil then
-				warn("[BaseService] profile has level but no StructureVisualConfig.Palettes entry:", structureId, lv)
-			end
-			local slots = findUpgradeSlots(plotId, structureId)
-			for _, plinth in ipairs(slots) do
-				-- Destroy existing WE_KitRole children + catalog dress
-				for _, ch in ipairs(plinth:GetChildren()) do
-					if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") ~= nil then
-						ch:Destroy()
-					elseif ch:IsA("Model") and (ch.Name == "WE_CatalogBuilding" or ch.Name == "WE_AirfieldComposite" or string.sub(ch.Name, 1, 14) == "WE_CatalogBuild") then
-						ch:Destroy()
+		if lv < 1 then
+			return
+		end
+		if StructureVisualConfig.Palettes[structureId] == nil then
+			warn("[BaseService] profile has level but no StructureVisualConfig.Palettes entry:", structureId, lv)
+		end
+		local slots = findUpgradeSlots(plotId, structureId)
+		if #slots == 0 then
+			warn("[BaseService] NuclearRehydrateKits: empty slots lv>=1 — PlotN StructureId scan", structureId, plotId)
+			local setup = Workspace:FindFirstChild("WarEmpireSetup")
+			local bases = setup and setup:FindFirstChild("Bases")
+			local plotFolder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+			local want = tonumber(plotId)
+			if plotFolder and want ~= nil then
+				for _, desc in ipairs(plotFolder:GetDescendants()) do
+					if desc:IsA("BasePart") and desc:GetAttribute("StructureId") == structureId then
+						CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+						table.insert(slots, desc)
 					end
 				end
-				plinth:SetAttribute("WE_KitGen", nil)
-				plinth:SetAttribute("WE_CatalogAssetId", nil)
-				plinth:SetAttribute("WE_BuildingDressGen", nil)
-				pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
-				pcall(applyKitVisuals, plinth, structureId, lv)
 			end
 		end
+		for _, plinth in ipairs(slots) do
+			-- Destroy existing WE_KitRole children + catalog dress
+			for _, ch in ipairs(plinth:GetChildren()) do
+				if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") ~= nil then
+					ch:Destroy()
+				elseif ch:IsA("Model") and (ch.Name == "WE_CatalogBuilding" or ch.Name == "WE_AirfieldComposite" or string.sub(ch.Name, 1, 14) == "WE_CatalogBuild") then
+					ch:Destroy()
+				end
+			end
+			plinth:SetAttribute("WE_KitGen", nil)
+			plinth:SetAttribute("WE_CatalogAssetId", nil)
+			plinth:SetAttribute("WE_BuildingDressGen", nil)
+			plinth:SetAttribute("WE_OwnedLevel", lv)
+			pcall(StructureKitBuilder.EnsureKit, plinth, structureId)
+			pcall(applyKitVisuals, plinth, structureId, lv)
+		end
+	end
+	for structureId in pairs(BaseConfig.Structures) do
+		rehydrateOne(structureId, profile.BaseUpgrades[structureId])
+	end
+	for structureId, rawLevel in pairs(profile.BaseUpgrades) do
+		rehydrateOne(structureId, rawLevel)
 	end
 end
 
@@ -818,6 +871,17 @@ function BaseService.RefreshAllVisuals(player: Player)
 		local towerLv = tonumber(profile.BaseUpgrades.Watchtowers) or 0
 		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
 	end
+end
+
+--[[ v45: after map heal/rebuild, re-apply kits/walls for every online player (race fix). ]]
+function BaseService.RefreshAllOnlinePlayers()
+	for _, plr in ipairs(Players:GetPlayers()) do
+		pcall(function()
+			pcall(BaseService.NuclearRehydrateKits, plr)
+			BaseService.RefreshAllVisuals(plr)
+		end)
+	end
+	print("[BaseService] RefreshAllOnlinePlayers done for", #Players:GetPlayers(), "players")
 end
 
 local function buildPlayerState(player: Player): Types.PlayerStatePayload?
@@ -971,14 +1035,15 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
-		-- v44 P0: nuclear kit rebuild then walls-first RefreshAllVisuals at 0 / 0.35 / 1 / 2 / 4s
+		-- v45 P0: nuclear kit rebuild then RefreshAllVisuals at 0 / 0.5 / 2 / 5s (map-heal race)
 		task.defer(function()
 			pcall(BaseService.NuclearRehydrateKits, player)
 			BaseService.RefreshAllVisuals(player)
 		end)
-		for _, delaySec in ipairs({ 0.35, 1.0, 2.0, 4.0 }) do
+		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
 			task.delay(delaySec, function()
 				if player.Parent then
+					pcall(BaseService.NuclearRehydrateKits, player)
 					BaseService.RefreshAllVisuals(player)
 				end
 			end)

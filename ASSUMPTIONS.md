@@ -539,3 +539,13 @@ Shaun: previously fully-bought walls went HIGH; now only short tan slabs.
 198. **KIT_GEN 30** + rebuild if any Wall* Size.Y < 12 (flat slabs never kept).
 199. DefensiveWalls pad kit Body raised 8→16 studs so pad sample is not a ground slab.
 200. PreferMesh structures still OFF; Part kits solid at EnsureKit unchanged.
+
+## 2026-09-21 — v45 PlotId tonumber + map race + tall walls (Open Cloud versionNumber=46+)
+
+Shaun still saw missing buildings + ankle-height tan wall slabs on live v45.
+201. **ROOT CAUSE A — PlotId == without tonumber** — `StructureKitBuilder.findPlotPad` compared `inst:GetAttribute("PlotId") == plotId` (no tonumber) while `findUpgradeSlots` correctly used tonumber. Stringy/mismatched PlotId → SyncPerimeterWalls printed skip and returned; Shaun only saw short DefensiveWalls **pad-sample** kit / MapDressing sandbags, NOT tall WE_PerimeterWalls. **Fix:** always `tonumber(GetAttribute("PlotId")) == tonumber(plotId)` in findPlotPad; tag PlotPad with WE_BasePlot if missing.
+202. **ROOT CAUSE B — map heal race** — Bootstrap PlayerAdded could destroy/rebuild WarEmpireSetup AFTER BaseService RefreshAllVisuals → kits/walls wiped on new pads. **Fix:** `BaseService.RefreshAllOnlinePlayers()` + Bootstrap `afterMapRebuild` hook after every heal/rebuild path; rehydrate at 0 / 0.5 / 2 / 5s.
+203. **Force perimeter** — KIT_GEN **31**; height `math.max(18, 10+lv*4)` (L5≥30); bright olive + neon top cap; always ClearAllChildren+rebuild level≥1; shortWall if Size.Y<18.
+204. **Buildings always visible** — PreferMesh OFF; EnsureKit Body min 14×10×14 (non-flat); MissileDefense Body 18×12×18; Body/Roof Transparency=0 CanCollide Body; empty-slot PlotN StructureId scan; NuclearRehydrateKits iterates BaseConfig.Structures keys.
+205. **WE_OwnedLevel** — sync from profile in UpdateVisuals; clear to 0 on ClearPlotExtras (unowned pads).
+206. No new Design meshes. Visibility only.

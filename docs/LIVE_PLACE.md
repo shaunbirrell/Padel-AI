@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=45** (2026-09-20 Europe/Madrid) — v44b tall-wall restore: height=max(12,7.5+lv*2.8) Size.Y=height; KIT_GEN 30 force rebuild if short; PreferMesh OFF; solid kits. Shaun: fully-bought walls must go HIGH again
+- **Live Published:** Open Cloud **versionNumber=46+** (2026-09-21 Europe/Madrid) — v45 P0: findPlotPad tonumber PlotId (was skipping SyncPerimeterWalls); map rebuild→RefreshAllOnlinePlayers; KIT_GEN 31; height=max(18,10+lv*4) L5≥30 bright olive+neon; PreferMesh OFF; solid kits. ROOT: PlotId== without tonumber + map heal race wiped kits
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
