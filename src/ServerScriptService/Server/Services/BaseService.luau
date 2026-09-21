@@ -1043,9 +1043,18 @@ function BaseService.Init(deps: { [string]: any })
 	end
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
+		-- v58: EconomyService.Push FIRST so WE_Cash / EconomyUpdate / leaderstats land ASAP
+		EconomyService.Push(player)
+		do
+			local cashNow = 0
+			if _profile then
+				cashNow = math.floor(tonumber(_profile.Cash) or 0)
+			end
+			print(string.format("[EconPush] userId=%d cash=%d", player.UserId, cashNow))
+		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 57)
+			player:SetAttribute("WE_Build", 58)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -1060,16 +1069,9 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v57: Cash from LoadProfile + AdminPlaytestCash; dense Push so late HUD never sticks on $…
 		BaseService.PushState(player)
+		-- Dense re-push already below; keep an immediate second Push after plot assign
 		EconomyService.Push(player)
-		do
-			local cashNow = 0
-			if _profile then
-				cashNow = math.floor(tonumber(_profile.Cash) or 0)
-			end
-			print(string.format("[EconPush] userId=%d cash=%d", player.UserId, cashNow))
-		end
 		if deps.XPService then
 			deps.XPService.Push(player)
 		end

@@ -134,7 +134,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v57: simple AdminPlaytestCash — shaunie6 only, LoadProfile/EnsureProfile max() only (no floors).
+-- v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -149,55 +149,129 @@ local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): b
 	return false
 end
 
+local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
+	pcall(function()
+		player:SetAttribute("WE_Build", 58)
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
+		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+	end)
+end
+
+local function tryPushEconomy(player: Player)
+	-- Best-effort: EconomyService may not be Init'd yet; attrs alone unblock HUD
+	pcall(function()
+		local EconomyService = require(script.Parent.EconomyService)
+		if EconomyService and EconomyService.Push then
+			EconomyService.Push(player)
+		end
+	end)
+end
+
+local function mergeDsIntoLive(live: PlayerProfile, dsProfile: PlayerProfile, userId: number)
+	-- Prefer max Cash/Gold; never drop below StartingCash / AdminPlaytest floor
+	local EconomyConfig = require(Shared.Configs.EconomyConfig)
+	local startCash = math.floor(tonumber(EconomyConfig.StartingCash) or 10000)
+	live.Cash = math.max(
+		math.floor(tonumber(live.Cash) or 0),
+		math.floor(tonumber(dsProfile.Cash) or 0),
+		startCash
+	)
+	live.Gold = math.max(
+		math.floor(tonumber(live.Gold) or 0),
+		math.floor(tonumber(dsProfile.Gold) or 0)
+	)
+	live.PendingCash = math.max(
+		math.floor(tonumber((live :: any).PendingCash) or 0),
+		math.floor(tonumber((dsProfile :: any).PendingCash) or 0)
+	)
+	-- Keep BaseUpgrades from DS when present (real progress)
+	local dsUp = dsProfile.BaseUpgrades
+	if typeof(dsUp) == "table" then
+		local hasProgress = false
+		for _, lv in pairs(dsUp) do
+			if (tonumber(lv) or 0) > 0 then
+				hasProgress = true
+				break
+			end
+		end
+		if hasProgress then
+			live.BaseUpgrades = dsUp
+		end
+	end
+	-- Prefer DS progression when it looks real (Level/XP/vehicles/etc.)
+	if (tonumber(dsProfile.Level) or 1) > (tonumber(live.Level) or 1) then
+		live.Level = dsProfile.Level
+		live.XP = dsProfile.XP
+	elseif (tonumber(dsProfile.Level) or 1) == (tonumber(live.Level) or 1) then
+		live.XP = math.max(tonumber(live.XP) or 0, tonumber(dsProfile.XP) or 0)
+	end
+	if (tonumber(dsProfile.Prestige) or 0) > (tonumber(live.Prestige) or 0) then
+		live.Prestige = dsProfile.Prestige
+	end
+	if typeof(dsProfile.Vehicles) == "table" then
+		for id, owned in pairs(dsProfile.Vehicles) do
+			if owned then
+				live.Vehicles[id] = true
+			end
+		end
+	end
+	if typeof(dsProfile.Weapons) == "table" then
+		for id, owned in pairs(dsProfile.Weapons) do
+			if owned then
+				live.Weapons[id] = true
+			end
+		end
+	end
+	if typeof(dsProfile.Soldiers) == "number" then
+		live.Soldiers = math.max(tonumber(live.Soldiers) or 0, dsProfile.Soldiers)
+	end
+	if dsProfile.BasePlotId ~= nil and live.BasePlotId == nil then
+		live.BasePlotId = dsProfile.BasePlotId
+	end
+	if dsProfile.TutorialComplete then
+		live.TutorialComplete = true
+		live.TutorialStep = dsProfile.TutorialStep
+	end
+	if typeof(dsProfile.Stats) == "table" and typeof(live.Stats) == "table" then
+		live.Stats.UpgradesPurchased = math.max(
+			tonumber(live.Stats.UpgradesPurchased) or 0,
+			tonumber(dsProfile.Stats.UpgradesPurchased) or 0
+		)
+	end
+	if typeof(dsProfile.FirstJoinUnix) == "number" and dsProfile.FirstJoinUnix > 0 then
+		if live.FirstJoinUnix == 0 or live.FirstJoinUnix == nil or dsProfile.FirstJoinUnix < live.FirstJoinUnix then
+			live.FirstJoinUnix = dsProfile.FirstJoinUnix
+		end
+	end
+	applyAdminPlaytestCash(userId, live)
+	-- Final floors
+	live.Cash = math.max(math.floor(tonumber(live.Cash) or 0), startCash)
+	if userId == ADMIN_PLAYTEST_USER_ID then
+		local floor = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 50_000_000)
+		live.Cash = math.max(live.Cash, floor)
+	end
+end
+
+-- v58: instant playable profile — never block join on DataStore / session lock
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
 		return profiles[userId]
 	end
 	if loading[userId] then
-		local waited = DataService.WaitForProfile(player, 20)
+		local waited = DataService.WaitForProfile(player, 8)
 		if waited then
 			return waited
 		end
-		-- Stuck loader — EnsureProfile CreateDefault (never leave player without profile)
 		warn("[DataService] WaitForProfile timed out while loading; EnsureProfile for", userId)
 		loading[userId] = false
 		return DataService.EnsureProfile(player)
 	end
 	loading[userId] = true
 
-	local acquired, lockErr = SessionLock.TryAcquire(userId)
-	if not acquired then
-		warn("[DataService] Session lock failed for", userId, lockErr)
-		if AnalyticsService then
-			AnalyticsService.Log("SESSION_LOCK_CONFLICT", userId, { err = tostring(lockErr) })
-		end
-		-- Still allow play with default in Studio; kick in live if desired
-		if not RunService:IsStudio() then
-			loading[userId] = false
-			player:Kick("Your data is loading in another server. Please rejoin in a moment.")
-			return nil
-		end
-	end
-
-	local profile: PlayerProfile
-	local ds = getDataStore()
-	if ds then
-		local ok, raw = retryAsync("GetAsync", function()
-			return ds:GetAsync(keyFor(userId))
-		end)
-		if ok and raw ~= nil then
-			profile = ProfileSchema.Migrate(raw)
-		else
-			if not ok then
-				warn("[DataService] Load failed, using defaults for", userId, raw)
-			end
-			profile = ProfileSchema.CreateDefault()
-		end
-	else
-		profile = ProfileSchema.CreateDefault()
-	end
-
+	-- 1) Instant CreateDefault + AdminPlaytestCash so HUD/BUY work within ~1s
+	local profile = ProfileSchema.CreateDefault()
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()
@@ -206,33 +280,84 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
 
 	profiles[userId] = profile
-	dirty[userId] = adminCashApplied
+	dirty[userId] = true
 	loading[userId] = false
 
+	stampEconomyAttrs(player, profile)
+	tryPushEconomy(player)
 	fireProfileLoaded(player, profile)
 
-	-- Stamp build + spendable Cash attr early (HUD / pad BUY Attribute fallback)
-	pcall(function()
-		player:SetAttribute("WE_Build", 57)
-		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
-		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
-		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
-	end)
+	print(string.format(
+		"[DataService] instant profile userId=%d cash=%d WE_Build=58",
+		userId,
+		math.floor(tonumber(profile.Cash) or 0)
+	))
 
-	-- Persist AdminPlaytestCash immediately when applied
-	if adminCashApplied then
-		task.defer(function()
-			if player.Parent and profiles[userId] then
+	-- 2) Background: soft session lock + GetAsync merge (never Kick)
+	task.spawn(function()
+		local acquired, lockErr = SessionLock.TryAcquire(userId)
+		if not acquired then
+			warn("[DataService] Session lock failed (continuing — no kick) for", userId, lockErr)
+			if AnalyticsService then
+				AnalyticsService.Log("SESSION_LOCK_CONFLICT", userId, { err = tostring(lockErr), soft = true })
+			end
+		end
+
+		local ds = getDataStore()
+		if not ds then
+			if adminCashApplied and player.Parent and profiles[userId] then
 				DataService.SaveProfile(player, false)
 			end
+			return
+		end
+
+		local ok, raw = retryAsync("GetAsync", function()
+			return ds:GetAsync(keyFor(userId))
 		end)
-	end
+		if not player.Parent then
+			return
+		end
+		local live = profiles[userId]
+		if not live then
+			return
+		end
+
+		if ok and raw ~= nil then
+			local dsProfile = ProfileSchema.Migrate(raw)
+			mergeDsIntoLive(live, dsProfile, userId)
+			dirty[userId] = true
+			stampEconomyAttrs(player, live)
+			tryPushEconomy(player)
+			-- Light refresh: base upgrades/state from DS without re-firing OnProfileLoaded
+			pcall(function()
+				local BaseService = require(script.Parent.BaseService)
+				if BaseService.PushState then
+					BaseService.PushState(player)
+				end
+				if BaseService.RefreshAllVisuals then
+					BaseService.RefreshAllVisuals(player)
+				end
+			end)
+			print(string.format(
+				"[DataService] DS merge userId=%d cash=%d",
+				userId,
+				math.floor(tonumber(live.Cash) or 0)
+			))
+		elseif not ok then
+			warn("[DataService] Background GetAsync failed for", userId, raw)
+		end
+
+		-- Persist after instant grant / merge
+		if player.Parent and profiles[userId] then
+			DataService.SaveProfile(player, false)
+		end
+	end)
 
 	return profile
 end
 
 
---- v57: never leave a joined player without a profile (CreateDefault + AdminPlaytestCash + OnProfileLoaded).
+--- v58: never leave a joined player without a profile (CreateDefault + AdminPlaytestCash + OnProfileLoaded).
 function DataService.EnsureProfile(player: Player): PlayerProfile
 	local userId = player.UserId
 	local existing = profiles[userId]
@@ -259,13 +384,9 @@ function DataService.EnsureProfile(player: Player): PlayerProfile
 	profiles[userId] = profile
 	dirty[userId] = true
 	loading[userId] = false
+	stampEconomyAttrs(player, profile)
+	tryPushEconomy(player)
 	fireProfileLoaded(player, profile)
-	pcall(function()
-		player:SetAttribute("WE_Build", 57)
-		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
-		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
-		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
-	end)
 	if adminCashApplied then
 		task.defer(function()
 			if player.Parent and profiles[userId] then

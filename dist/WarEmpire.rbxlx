@@ -13996,6 +13996,7 @@ local DataService: any = nil
 local EconomyService: any = nil
 local AnalyticsService: any = nil
 local RateLimitService: any = nil
+local getStateJoinedAt: { [number]: number } = {}
 local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
@@ -14920,8 +14921,26 @@ function BaseService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
-		if not RemoteGuard.RequireProfile(DataService, player) then
+		-- v57: wait briefly for profile; retry once before soft-fail toast (never silent forever)
+		local profile = RemoteGuard.RequireProfile(DataService, player)
+		if not profile then
+			profile = DataService.WaitForProfile(player, 5)
+		end
+		if not profile then
+			pcall(function()
+				if DataService.EnsureProfile then
+					DataService.EnsureProfile(player)
+				else
+					DataService.LoadProfile(player)
+				end
+			end)
+			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
+		end
+		if not profile then
 			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
+			if NotificationService then
+				NotificationService.Notify(player, "Profile still loading — try BUY again", "Warn", 3)
+			end
 			return
 		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
@@ -14977,15 +14996,35 @@ function BaseService.Init(deps: { [string]: any })
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
-		if not RateLimitService.Allow(player, "get_state", 6, 16) then
-			return nil
+		-- v56: do not nil bootstrap for first 20s after join (HUD/WorldPrompt poll)
+		local joinedAt = getStateJoinedAt[player.UserId]
+		local inBootstrap = typeof(joinedAt) == "number" and (os.clock() - joinedAt) < 20
+		if not inBootstrap then
+			if not RateLimitService.Allow(player, "get_state", 12, 32) then
+				return nil
+			end
+		else
+			-- Still count tokens lightly so post-bootstrap isn't empty, but never deny
+			pcall(function()
+				RateLimitService.Allow(player, "get_state", 12, 32)
+			end)
 		end
 		return buildPlayerState(player)
 	end
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
+		-- v58: EconomyService.Push FIRST so WE_Cash / EconomyUpdate / leaderstats land ASAP
+		EconomyService.Push(player)
+		do
+			local cashNow = 0
+			if _profile then
+				cashNow = math.floor(tonumber(_profile.Cash) or 0)
+			end
+			print(string.format("[EconPush] userId=%d cash=%d", player.UserId, cashNow))
+		end
+		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 55)
+			player:SetAttribute("WE_Build", 58)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -15000,8 +15039,8 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v55: Cash comes from LoadProfile CreateDefault + simple AdminPlaytestCash only
 		BaseService.PushState(player)
+		-- Dense re-push already below; keep an immediate second Push after plot assign
 		EconomyService.Push(player)
 		if deps.XPService then
 			deps.XPService.Push(player)
@@ -15011,8 +15050,8 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
-		-- Re-push economy/state so clients that miss the first FireClient (late Init) sync Cash
-		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
+		-- Re-push every 1s for 12s (not just 0.5/2/5) so client Init race always lands
+		for delaySec = 1, 12 do
 			task.delay(delaySec, function()
 				if not player.Parent then
 					return
@@ -15024,7 +15063,7 @@ function BaseService.Init(deps: { [string]: any })
 				end
 			end)
 		end
-		-- CharacterAdded re-push so WE_Cash / EconomyUpdate survive respawn / late HUD Init
+		-- CharacterAdded re-push so WE_Cash / EconomyUpdate / leaderstats survive respawn / late HUD Init
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				if not player.Parent then
@@ -18128,7 +18167,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v55: simple AdminPlaytestCash — shaunie6 only, LoadProfile max() only (no floors).
+-- v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -18143,48 +18182,129 @@ local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): b
 	return false
 end
 
+local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
+	pcall(function()
+		player:SetAttribute("WE_Build", 58)
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
+		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+	end)
+end
+
+local function tryPushEconomy(player: Player)
+	-- Best-effort: EconomyService may not be Init'd yet; attrs alone unblock HUD
+	pcall(function()
+		local EconomyService = require(script.Parent.EconomyService)
+		if EconomyService and EconomyService.Push then
+			EconomyService.Push(player)
+		end
+	end)
+end
+
+local function mergeDsIntoLive(live: PlayerProfile, dsProfile: PlayerProfile, userId: number)
+	-- Prefer max Cash/Gold; never drop below StartingCash / AdminPlaytest floor
+	local EconomyConfig = require(Shared.Configs.EconomyConfig)
+	local startCash = math.floor(tonumber(EconomyConfig.StartingCash) or 10000)
+	live.Cash = math.max(
+		math.floor(tonumber(live.Cash) or 0),
+		math.floor(tonumber(dsProfile.Cash) or 0),
+		startCash
+	)
+	live.Gold = math.max(
+		math.floor(tonumber(live.Gold) or 0),
+		math.floor(tonumber(dsProfile.Gold) or 0)
+	)
+	live.PendingCash = math.max(
+		math.floor(tonumber((live :: any).PendingCash) or 0),
+		math.floor(tonumber((dsProfile :: any).PendingCash) or 0)
+	)
+	-- Keep BaseUpgrades from DS when present (real progress)
+	local dsUp = dsProfile.BaseUpgrades
+	if typeof(dsUp) == "table" then
+		local hasProgress = false
+		for _, lv in pairs(dsUp) do
+			if (tonumber(lv) or 0) > 0 then
+				hasProgress = true
+				break
+			end
+		end
+		if hasProgress then
+			live.BaseUpgrades = dsUp
+		end
+	end
+	-- Prefer DS progression when it looks real (Level/XP/vehicles/etc.)
+	if (tonumber(dsProfile.Level) or 1) > (tonumber(live.Level) or 1) then
+		live.Level = dsProfile.Level
+		live.XP = dsProfile.XP
+	elseif (tonumber(dsProfile.Level) or 1) == (tonumber(live.Level) or 1) then
+		live.XP = math.max(tonumber(live.XP) or 0, tonumber(dsProfile.XP) or 0)
+	end
+	if (tonumber(dsProfile.Prestige) or 0) > (tonumber(live.Prestige) or 0) then
+		live.Prestige = dsProfile.Prestige
+	end
+	if typeof(dsProfile.Vehicles) == "table" then
+		for id, owned in pairs(dsProfile.Vehicles) do
+			if owned then
+				live.Vehicles[id] = true
+			end
+		end
+	end
+	if typeof(dsProfile.Weapons) == "table" then
+		for id, owned in pairs(dsProfile.Weapons) do
+			if owned then
+				live.Weapons[id] = true
+			end
+		end
+	end
+	if typeof(dsProfile.Soldiers) == "number" then
+		live.Soldiers = math.max(tonumber(live.Soldiers) or 0, dsProfile.Soldiers)
+	end
+	if dsProfile.BasePlotId ~= nil and live.BasePlotId == nil then
+		live.BasePlotId = dsProfile.BasePlotId
+	end
+	if dsProfile.TutorialComplete then
+		live.TutorialComplete = true
+		live.TutorialStep = dsProfile.TutorialStep
+	end
+	if typeof(dsProfile.Stats) == "table" and typeof(live.Stats) == "table" then
+		live.Stats.UpgradesPurchased = math.max(
+			tonumber(live.Stats.UpgradesPurchased) or 0,
+			tonumber(dsProfile.Stats.UpgradesPurchased) or 0
+		)
+	end
+	if typeof(dsProfile.FirstJoinUnix) == "number" and dsProfile.FirstJoinUnix > 0 then
+		if live.FirstJoinUnix == 0 or live.FirstJoinUnix == nil or dsProfile.FirstJoinUnix < live.FirstJoinUnix then
+			live.FirstJoinUnix = dsProfile.FirstJoinUnix
+		end
+	end
+	applyAdminPlaytestCash(userId, live)
+	-- Final floors
+	live.Cash = math.max(math.floor(tonumber(live.Cash) or 0), startCash)
+	if userId == ADMIN_PLAYTEST_USER_ID then
+		local floor = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 50_000_000)
+		live.Cash = math.max(live.Cash, floor)
+	end
+end
+
+-- v58: instant playable profile — never block join on DataStore / session lock
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
 		return profiles[userId]
 	end
 	if loading[userId] then
-		return DataService.WaitForProfile(player, 20)
+		local waited = DataService.WaitForProfile(player, 8)
+		if waited then
+			return waited
+		end
+		warn("[DataService] WaitForProfile timed out while loading; EnsureProfile for", userId)
+		loading[userId] = false
+		return DataService.EnsureProfile(player)
 	end
 	loading[userId] = true
 
-	local acquired, lockErr = SessionLock.TryAcquire(userId)
-	if not acquired then
-		warn("[DataService] Session lock failed for", userId, lockErr)
-		if AnalyticsService then
-			AnalyticsService.Log("SESSION_LOCK_CONFLICT", userId, { err = tostring(lockErr) })
-		end
-		-- Still allow play with default in Studio; kick in live if desired
-		if not RunService:IsStudio() then
-			loading[userId] = false
-			player:Kick("Your data is loading in another server. Please rejoin in a moment.")
-			return nil
-		end
-	end
-
-	local profile: PlayerProfile
-	local ds = getDataStore()
-	if ds then
-		local ok, raw = retryAsync("GetAsync", function()
-			return ds:GetAsync(keyFor(userId))
-		end)
-		if ok and raw ~= nil then
-			profile = ProfileSchema.Migrate(raw)
-		else
-			if not ok then
-				warn("[DataService] Load failed, using defaults for", userId, raw)
-			end
-			profile = ProfileSchema.CreateDefault()
-		end
-	else
-		profile = ProfileSchema.CreateDefault()
-	end
-
+	-- 1) Instant CreateDefault + AdminPlaytestCash so HUD/BUY work within ~1s
+	local profile = ProfileSchema.CreateDefault()
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()
@@ -18193,20 +18313,113 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
 
 	profiles[userId] = profile
-	dirty[userId] = adminCashApplied
+	dirty[userId] = true
 	loading[userId] = false
 
+	stampEconomyAttrs(player, profile)
+	tryPushEconomy(player)
 	fireProfileLoaded(player, profile)
 
-	-- Stamp build + spendable Cash attr early (HUD / pad BUY Attribute fallback)
-	pcall(function()
-		player:SetAttribute("WE_Build", 55)
-		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
-		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
-		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+	print(string.format(
+		"[DataService] instant profile userId=%d cash=%d WE_Build=58",
+		userId,
+		math.floor(tonumber(profile.Cash) or 0)
+	))
+
+	-- 2) Background: soft session lock + GetAsync merge (never Kick)
+	task.spawn(function()
+		local acquired, lockErr = SessionLock.TryAcquire(userId)
+		if not acquired then
+			warn("[DataService] Session lock failed (continuing — no kick) for", userId, lockErr)
+			if AnalyticsService then
+				AnalyticsService.Log("SESSION_LOCK_CONFLICT", userId, { err = tostring(lockErr), soft = true })
+			end
+		end
+
+		local ds = getDataStore()
+		if not ds then
+			if adminCashApplied and player.Parent and profiles[userId] then
+				DataService.SaveProfile(player, false)
+			end
+			return
+		end
+
+		local ok, raw = retryAsync("GetAsync", function()
+			return ds:GetAsync(keyFor(userId))
+		end)
+		if not player.Parent then
+			return
+		end
+		local live = profiles[userId]
+		if not live then
+			return
+		end
+
+		if ok and raw ~= nil then
+			local dsProfile = ProfileSchema.Migrate(raw)
+			mergeDsIntoLive(live, dsProfile, userId)
+			dirty[userId] = true
+			stampEconomyAttrs(player, live)
+			tryPushEconomy(player)
+			-- Light refresh: base upgrades/state from DS without re-firing OnProfileLoaded
+			pcall(function()
+				local BaseService = require(script.Parent.BaseService)
+				if BaseService.PushState then
+					BaseService.PushState(player)
+				end
+				if BaseService.RefreshAllVisuals then
+					BaseService.RefreshAllVisuals(player)
+				end
+			end)
+			print(string.format(
+				"[DataService] DS merge userId=%d cash=%d",
+				userId,
+				math.floor(tonumber(live.Cash) or 0)
+			))
+		elseif not ok then
+			warn("[DataService] Background GetAsync failed for", userId, raw)
+		end
+
+		-- Persist after instant grant / merge
+		if player.Parent and profiles[userId] then
+			DataService.SaveProfile(player, false)
+		end
 	end)
 
-	-- Persist AdminPlaytestCash immediately when applied
+	return profile
+end
+
+
+--- v58: never leave a joined player without a profile (CreateDefault + AdminPlaytestCash + OnProfileLoaded).
+function DataService.EnsureProfile(player: Player): PlayerProfile
+	local userId = player.UserId
+	local existing = profiles[userId]
+	if existing then
+		return existing
+	end
+	local waited = DataService.WaitForProfile(player, 20)
+	if waited then
+		return waited
+	end
+	if not player.Parent then
+		-- Player left — still return a throwaway default so callers do not nil-crash
+		return ProfileSchema.CreateDefault()
+	end
+	warn("[DataService] EnsureProfile CreateDefault fallback for", userId)
+	loading[userId] = false
+	local profile = ProfileSchema.CreateDefault()
+	profile.LastJoinUnix = os.time()
+	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
+		profile.FirstJoinUnix = os.time()
+	end
+	applyStudioDevFlags(profile)
+	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	profiles[userId] = profile
+	dirty[userId] = true
+	loading[userId] = false
+	stampEconomyAttrs(player, profile)
+	tryPushEconomy(player)
+	fireProfileLoaded(player, profile)
 	if adminCashApplied then
 		task.defer(function()
 			if player.Parent and profiles[userId] then
@@ -18214,7 +18427,6 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 			end
 		end)
 	end
-
 	return profile
 end
 
@@ -18292,7 +18504,10 @@ end
 
 function DataService.Init()
 	Players.PlayerAdded:Connect(function(player)
-		DataService.LoadProfile(player)
+		local profile = DataService.LoadProfile(player)
+		if not profile and player.Parent then
+			DataService.EnsureProfile(player)
+		end
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
@@ -18301,7 +18516,12 @@ function DataService.Init()
 
 	-- Late joiners already in game
 	for _, player in ipairs(Players:GetPlayers()) do
-		task.spawn(DataService.LoadProfile, player)
+		task.spawn(function()
+			local profile = DataService.LoadProfile(player)
+			if not profile and player.Parent then
+				DataService.EnsureProfile(player)
+			end
+		end)
 	end
 
 	-- Session-lock heartbeat (must be < SessionLockTtlSeconds so live locks stay fresh)
@@ -18391,6 +18611,34 @@ local MonetizationService: any = nil
 local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 
+local function ensureLeaderstats(player: Player, cash: number, gold: number)
+	-- Classic tycoon belt+suspenders: IntValues replicate to client even if remotes miss
+	local folder = player:FindFirstChild("leaderstats")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "leaderstats"
+		folder.Parent = player
+	end
+	local cashVal = folder:FindFirstChild("Cash")
+	if not cashVal then
+		cashVal = Instance.new("IntValue")
+		cashVal.Name = "Cash"
+		cashVal.Parent = folder
+	end
+	if cashVal:IsA("IntValue") or cashVal:IsA("NumberValue") then
+		(cashVal :: any).Value = cash
+	end
+	local goldVal = folder:FindFirstChild("Gold")
+	if not goldVal then
+		goldVal = Instance.new("IntValue")
+		goldVal.Name = "Gold"
+		goldVal.Parent = folder
+	end
+	if goldVal:IsA("IntValue") or goldVal:IsA("NumberValue") then
+		(goldVal :: any).Value = gold
+	end
+end
+
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 	local cash = math.floor(tonumber(profile.Cash) or 0)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
@@ -18405,6 +18653,7 @@ local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
 	end)
+	pcall(ensureLeaderstats, player, cash, gold)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
 	remote:FireClient(player, {
 		Cash = cash,
@@ -32191,6 +32440,13 @@ local function makeStroke(parent: Instance, gold: boolean?)
 	end
 end
 
+local function formatCash(n: number): string
+	local v = tonumber(n) or 0
+	local formatted = tostring(math.floor(v))
+	formatted = formatted:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+	return "$" .. formatted
+end
+
 function HUDController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireHUD"
@@ -32308,7 +32564,8 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	cash.Text = "$—" -- until EconomyUpdate / GetPlayerState (was fake $5,000)
+	-- v57: do NOT fake StartingCash — show $… until first confirmed sync
+	cash.Text = "$…"
 	cash.ZIndex = 13
 	cash.Parent = pill
 	cashLabel = cash
@@ -32464,15 +32721,7 @@ function HUDController.Init()
 	end
 	refreshSpinnerBtn()
 
-	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
-		if typeof(payload) ~= "table" then
-			return
-		end
-		spinnerReady = payload.Ready == true
-		spinnerCooldown = tonumber(payload.CooldownRemaining) or 0
-		refreshSpinnerBtn()
-	end)
-
+	-- v58: cash listeners + poll BEFORE any other remote WaitForChild (Spinner/XP/Season…)
 	local econToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
 		econToken += 1
@@ -32486,9 +32735,96 @@ function HUDController.Init()
 		end)
 	end)
 
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
+		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
+		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
+		HUDController.SetEconomy(c, g, p)
+	end)
+	do
+		local c = player:GetAttribute("WE_Cash")
+		if typeof(c) == "number" then
+			HUDController.SetEconomy(
+				c,
+				tonumber(player:GetAttribute("WE_Gold")) or 0,
+				tonumber(player:GetAttribute("WE_PendingCash")) or 0
+			)
+		end
+	end
+
+	-- Leaderstats belt+suspenders (server pushEconomy writes Cash/Gold IntValues)
+	local function tryLeaderstats(): boolean
+		local folder = player:FindFirstChild("leaderstats")
+		if not folder then
+			return false
+		end
+		local cashV = folder:FindFirstChild("Cash")
+		if not cashV or not (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			return false
+		end
+		local goldV = folder:FindFirstChild("Gold")
+		local g = 0
+		if goldV and (goldV:IsA("IntValue") or goldV:IsA("NumberValue")) then
+			g = (goldV :: any).Value
+		end
+		HUDController.SetEconomy((cashV :: any).Value, g, tonumber(player:GetAttribute("WE_PendingCash")) or 0)
+		return true
+	end
+	tryLeaderstats()
+	player.ChildAdded:Connect(function(ch)
+		if ch.Name == "leaderstats" then
+			task.defer(tryLeaderstats)
+			ch.ChildAdded:Connect(function()
+				task.defer(tryLeaderstats)
+			end)
+		end
+	end)
+
+	-- Start poll IMMEDIATELY so cash lands even if later WaitForChild blocks
+	task.spawn(function()
+		local synced = false
+		for i = 0, 15 do
+			if typeof(player:GetAttribute("WE_Cash")) == "number" then
+				HUDController.SetEconomy(
+					player:GetAttribute("WE_Cash") :: number,
+					tonumber(player:GetAttribute("WE_Gold")) or 0,
+					tonumber(player:GetAttribute("WE_PendingCash")) or 0
+				)
+				synced = true
+			end
+			if tryLeaderstats() then
+				synced = true
+			end
+			local ok, state = pcall(function()
+				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+			end)
+			if ok and state then
+				HUDController.ApplyState(state :: Types.PlayerStatePayload)
+				synced = true
+				break
+			end
+			if synced and i >= 3 then
+				break
+			end
+			task.wait(1)
+		end
+		if not synced then
+			warn("[HUDController] GetPlayerState/attr/leaderstats bootstrap failed")
+		end
+	end)
+
+	-- ONLY THEN: Spinner/XP/Season/other remotes that can WaitForChild-block
+	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		spinnerReady = payload.Ready == true
+		spinnerCooldown = tonumber(payload.CooldownRemaining) or 0
+		refreshSpinnerBtn()
+	end)
+
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
 		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
-		-- v37: brief high-contrast level-up celebration + SFX
 		if (payload :: any).LevelUp == true then
 			pcall(function()
 				AudioController.PlayNotification()
@@ -32531,38 +32867,6 @@ function HUDController.Init()
 			seasonLabel.TextColor3 = Constants.Colors.Muted
 			seasonLabel.Text = name .. "  ·  ENDED"
 		end
-	end)
-
-	-- Attribute fallback (server pushEconomy sets WE_Cash)
-	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
-		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
-		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
-		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
-		HUDController.SetEconomy(c, g, p)
-	end)
-	do
-		local c = player:GetAttribute("WE_Cash")
-		if typeof(c) == "number" then
-			HUDController.SetEconomy(
-				c,
-				tonumber(player:GetAttribute("WE_Gold")) or 0,
-				tonumber(player:GetAttribute("WE_PendingCash")) or 0
-			)
-		end
-	end
-
-	task.spawn(function()
-		for _ = 1, 6 do
-			local ok, state = pcall(function()
-				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
-			end)
-			if ok and state then
-				HUDController.ApplyState(state :: Types.PlayerStatePayload)
-				return
-			end
-			task.wait(0.5)
-		end
-		warn("[HUDController] GetPlayerState bootstrap failed")
 	end)
 end
 
@@ -32716,18 +33020,18 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 	print(string.format("[HUDController] BindActionBar: %d tiles Active size=%d DisplayOrder=%d", #actions, tileSize, order))
 end
 
-local function formatCash(n: number): string
-	local formatted = tostring(math.floor(n))
-	formatted = formatted:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-	return "$" .. formatted
-end
 
 function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
+	-- v57: coerce so nil never skips update (only called after confirmed Economy sync)
+	local cashN = tonumber(cash) or 0
+	local goldN = tonumber(gold) or 0
 	if cashLabel then
-		cashLabel.Text = formatCash(cash)
+		cashLabel.Text = formatCash(cashN)
 	end
 	if typeof(pending) == "number" then
 		lastPending = pending
+	elseif pending ~= nil then
+		lastPending = tonumber(pending) or lastPending
 	end
 	if pendingLabel then
 		if lastPending > 0 then
@@ -32740,7 +33044,7 @@ function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
 		end
 	end
 	if goldLabel then
-		goldLabel.Text = "◆ " .. tostring(math.floor(gold))
+		goldLabel.Text = "◆ " .. tostring(math.floor(goldN))
 	end
 end
 
@@ -38234,6 +38538,22 @@ local BUY_BTN_MIN_H = 56
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
 local cash = 0
+-- v57: every afford/BUY/NEED check reads max of module cash, WE_Cash, leaderstats.Cash
+local function liveCash(): number
+	local best = math.floor(tonumber(cash) or 0)
+	local attr = tonumber(player:GetAttribute("WE_Cash"))
+	if typeof(attr) == "number" then
+		best = math.max(best, math.floor(attr))
+	end
+	local folder = player:FindFirstChild("leaderstats")
+	if folder then
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			best = math.max(best, math.floor((cashV :: any).Value))
+		end
+	end
+	return best
+end
 local myPlotId: number? = nil
 local attachedPrompt: { [Instance]: boolean } = {}
 local slotParts: { [BasePart]: boolean } = {}
@@ -38464,10 +38784,11 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	local btn = ensurePadBuyGui()
 	activeBuyStructureId = structureId
 	activeBuyPart = part
-	local canAfford = cash >= cost
+	local have = liveCash()
+	local canAfford = have >= cost
 	local incomeStr = formatIncomeRate(structureId)
 	if not canAfford then
-		local need = cost - cash
+		local need = cost - have
 		if incomeStr then
 			btn.Text = string.format("NEED %s · %s · %s", formatCost(cost), display, incomeStr)
 		else
@@ -38778,8 +39099,8 @@ local function refreshSlotBillboard(part: BasePart)
 			bb,
 			display,
 			string.format("L%d→%d %s%s", level, level + 1, formatCost(cost), incomeLine),
-			if cash >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
-			if cash >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
+			if liveCash() >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if liveCash() >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	elseif prereqHint then
 		local costStr = if cost then formatCost(cost) else ""
@@ -38791,7 +39112,7 @@ local function refreshSlotBillboard(part: BasePart)
 			Color3.fromRGB(160, 130, 70)
 		)
 	elseif cost then
-		local canAfford = cash >= cost
+		local canAfford = liveCash() >= cost
 		applyBillboardCopy(
 			bb,
 			display,
@@ -38885,20 +39206,15 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		end
 		return
 	end
-	if cost and cash < cost and not (opts and opts.silentMax) then
-		-- Soft client hint; throttled so standing on pad does not spam
-		local fk = "cash|" .. structureId
-		local lastFail = failToastAt[fk] or 0
-		if (now - lastFail) >= FAIL_TOAST_CD then
-			failToastAt[fk] = now
-			NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
-		end
-		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
+	local have = liveCash()
+	if cost and have < cost then
+		-- v57: no client soft-fail toast (server InsufficientCash is authoritative); still FireServer
+		print(string.format("[WorldPrompt] BUY soft-hint cash %s have=%d need=%s (FireServer anyway)", structureId, have, tostring(cost)))
 	end
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
-	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), cash))
+	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), have))
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
@@ -39304,36 +39620,16 @@ local function rescanUntaggedSlots()
 end
 
 function WorldPromptController.Init()
-	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
-		local prev = upgrades
-		upgrades = base.Upgrades or upgrades
-		if typeof(base.PlotId) == "number" then
-			if myPlotId ~= nil and myPlotId ~= base.PlotId then
-				-- Plot reassignment — drop overlap so new pads can fire
-				clearOverlapState()
-			end
-			myPlotId = base.PlotId
-		end
-		-- BUY edge: flash BOUGHT when standing on a pad that just leveled
-		if activeBuyStructureId and typeof(upgrades) == "table" then
-			local sid = activeBuyStructureId
-			local before = if typeof(prev) == "table" then (prev[sid] or 0) else 0
-			local after = upgrades[sid] or 0
-			if after > before then
-				local def = BaseConfig.Structures[sid]
-				local name = if def then def.DisplayName else sid
-				flashPadBuyBought(name)
-				print(string.format("[WorldPrompt] BUY OK flash %s %d→%d", sid, before, after))
-			end
-		end
-		markBillboardsDirty()
-	end)
-
+	-- v58: liveCash listeners FIRST (before BaseState/other remotes that WaitForChild-block)
 	local function applyCash(n: any)
 		local v = tonumber(n)
 		if typeof(v) == "number" then
 			cash = math.floor(v)
 			markBillboardsDirty()
+			-- NEED→BUY while standing when cash syncs
+			if activeBuyPart and activeBuyStructureId then
+				refreshPadBuyButton(activeBuyPart, activeBuyStructureId)
+			end
 		end
 	end
 
@@ -39341,21 +39637,6 @@ function WorldPromptController.Init()
 		applyCash(payload.Cash)
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		applyCash(state.Cash)
-		if state.Base then
-			upgrades = state.Base.Upgrades
-			if typeof(state.Base.PlotId) == "number" then
-				if myPlotId ~= nil and myPlotId ~= state.Base.PlotId then
-					clearOverlapState()
-				end
-				myPlotId = state.Base.PlotId
-			end
-		end
-		markBillboardsDirty()
-	end)
-
-	-- Attribute fallback when FireClient was missed (join race)
 	do
 		local attrCash = player:GetAttribute("WE_Cash")
 		if typeof(attrCash) == "number" then
@@ -39366,9 +39647,39 @@ function WorldPromptController.Init()
 		end)
 	end
 
-	-- Bootstrap like HUD — WorldPrompt used to stay at cash=0 until first EconomyUpdate
+	local function tryLeaderstatsCash(): boolean
+		local folder = player:FindFirstChild("leaderstats")
+		if not folder then
+			return false
+		end
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			applyCash((cashV :: any).Value)
+			return true
+		end
+		return false
+	end
+	tryLeaderstatsCash()
+	player.ChildAdded:Connect(function(ch)
+		if ch.Name == "leaderstats" then
+			task.defer(tryLeaderstatsCash)
+			ch.ChildAdded:Connect(function()
+				task.defer(tryLeaderstatsCash)
+			end)
+		end
+	end)
+
+	-- Poll starts before other remotes
 	task.spawn(function()
-		for _ = 1, 5 do
+		local synced = false
+		for i = 0, 15 do
+			if typeof(player:GetAttribute("WE_Cash")) == "number" then
+				applyCash(player:GetAttribute("WE_Cash"))
+				synced = true
+			end
+			if tryLeaderstatsCash() then
+				synced = true
+			end
 			local ok, state = pcall(function()
 				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
 			end)
@@ -39387,9 +39698,53 @@ function WorldPromptController.Init()
 				print(string.format("[WorldPrompt] cash bootstrap have=%d", cash))
 				return
 			end
-			task.wait(0.6)
+			if synced and i >= 3 then
+				markBillboardsDirty()
+				print(string.format("[WorldPrompt] cash bootstrap via attr/leaderstats have=%d", cash))
+				return
+			end
+			task.wait(1)
 		end
-		warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
+		if not synced then
+			warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
+		end
+	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
+		local prev = upgrades
+		upgrades = base.Upgrades or upgrades
+		if typeof(base.PlotId) == "number" then
+			if myPlotId ~= nil and myPlotId ~= base.PlotId then
+				clearOverlapState()
+			end
+			myPlotId = base.PlotId
+		end
+		if activeBuyStructureId and typeof(upgrades) == "table" then
+			local sid = activeBuyStructureId
+			local before = if typeof(prev) == "table" then (prev[sid] or 0) else 0
+			local after = upgrades[sid] or 0
+			if after > before then
+				local def = BaseConfig.Structures[sid]
+				local name = if def then def.DisplayName else sid
+				flashPadBuyBought(name)
+				print(string.format("[WorldPrompt] BUY OK flash %s %d→%d", sid, before, after))
+			end
+		end
+		markBillboardsDirty()
+	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
+		applyCash(state.Cash)
+		if state.Base then
+			upgrades = state.Base.Upgrades
+			if typeof(state.Base.PlotId) == "number" then
+				if myPlotId ~= nil and myPlotId ~= state.Base.PlotId then
+					clearOverlapState()
+				end
+				myPlotId = state.Base.PlotId
+			end
+		end
+		markBillboardsDirty()
 	end)
 
 	player.CharacterAdded:Connect(function()

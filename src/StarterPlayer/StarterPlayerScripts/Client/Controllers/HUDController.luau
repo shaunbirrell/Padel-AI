@@ -346,7 +346,7 @@ function HUDController.Init()
 	end
 	refreshSpinnerBtn()
 
-	-- v56: EconomyUpdate + WE_Cash FIRST (before other remotes that WaitForChild)
+	-- v58: cash listeners + poll BEFORE any other remote WaitForChild (Spinner/XP/Season…)
 	local econToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
 		econToken += 1
@@ -405,6 +405,40 @@ function HUDController.Init()
 		end
 	end)
 
+	-- Start poll IMMEDIATELY so cash lands even if later WaitForChild blocks
+	task.spawn(function()
+		local synced = false
+		for i = 0, 15 do
+			if typeof(player:GetAttribute("WE_Cash")) == "number" then
+				HUDController.SetEconomy(
+					player:GetAttribute("WE_Cash") :: number,
+					tonumber(player:GetAttribute("WE_Gold")) or 0,
+					tonumber(player:GetAttribute("WE_PendingCash")) or 0
+				)
+				synced = true
+			end
+			if tryLeaderstats() then
+				synced = true
+			end
+			local ok, state = pcall(function()
+				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+			end)
+			if ok and state then
+				HUDController.ApplyState(state :: Types.PlayerStatePayload)
+				synced = true
+				break
+			end
+			if synced and i >= 3 then
+				break
+			end
+			task.wait(1)
+		end
+		if not synced then
+			warn("[HUDController] GetPlayerState/attr/leaderstats bootstrap failed")
+		end
+	end)
+
+	-- ONLY THEN: Spinner/XP/Season/other remotes that can WaitForChild-block
 	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
 		if typeof(payload) ~= "table" then
 			return
@@ -416,7 +450,6 @@ function HUDController.Init()
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
 		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
-		-- v37: brief high-contrast level-up celebration + SFX
 		if (payload :: any).LevelUp == true then
 			pcall(function()
 				AudioController.PlayNotification()
@@ -458,40 +491,6 @@ function HUDController.Init()
 			seasonLabel.Visible = true
 			seasonLabel.TextColor3 = Constants.Colors.Muted
 			seasonLabel.Text = name .. "  ·  ENDED"
-		end
-	end)
-
-	-- v56 poll 0–15s: WE_Cash / leaderstats.Cash / GetPlayerState (pcall — don't die on rate limit)
-	task.spawn(function()
-		local synced = false
-		for i = 0, 15 do
-			if typeof(player:GetAttribute("WE_Cash")) == "number" then
-				HUDController.SetEconomy(
-					player:GetAttribute("WE_Cash") :: number,
-					tonumber(player:GetAttribute("WE_Gold")) or 0,
-					tonumber(player:GetAttribute("WE_PendingCash")) or 0
-				)
-				synced = true
-			end
-			if tryLeaderstats() then
-				synced = true
-			end
-			local ok, state = pcall(function()
-				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
-			end)
-			if ok and state then
-				HUDController.ApplyState(state :: Types.PlayerStatePayload)
-				synced = true
-				break
-			end
-			if synced and i >= 3 then
-				-- Have attr/leaderstats; GetPlayerState still failing (rate limit) — stop, cash is live
-				break
-			end
-			task.wait(1)
-		end
-		if not synced then
-			warn("[HUDController] GetPlayerState/attr/leaderstats bootstrap failed")
 		end
 	end)
 end

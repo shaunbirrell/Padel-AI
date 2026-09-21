@@ -1135,37 +1135,13 @@ local function rescanUntaggedSlots()
 end
 
 function WorldPromptController.Init()
-	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
-		local prev = upgrades
-		upgrades = base.Upgrades or upgrades
-		if typeof(base.PlotId) == "number" then
-			if myPlotId ~= nil and myPlotId ~= base.PlotId then
-				-- Plot reassignment — drop overlap so new pads can fire
-				clearOverlapState()
-			end
-			myPlotId = base.PlotId
-		end
-		-- BUY edge: flash BOUGHT when standing on a pad that just leveled
-		if activeBuyStructureId and typeof(upgrades) == "table" then
-			local sid = activeBuyStructureId
-			local before = if typeof(prev) == "table" then (prev[sid] or 0) else 0
-			local after = upgrades[sid] or 0
-			if after > before then
-				local def = BaseConfig.Structures[sid]
-				local name = if def then def.DisplayName else sid
-				flashPadBuyBought(name)
-				print(string.format("[WorldPrompt] BUY OK flash %s %d→%d", sid, before, after))
-			end
-		end
-		markBillboardsDirty()
-	end)
-
+	-- v58: liveCash listeners FIRST (before BaseState/other remotes that WaitForChild-block)
 	local function applyCash(n: any)
 		local v = tonumber(n)
 		if typeof(v) == "number" then
 			cash = math.floor(v)
 			markBillboardsDirty()
-			-- v57: NEED→BUY while standing when cash syncs
+			-- NEED→BUY while standing when cash syncs
 			if activeBuyPart and activeBuyStructureId then
 				refreshPadBuyButton(activeBuyPart, activeBuyStructureId)
 			end
@@ -1176,21 +1152,6 @@ function WorldPromptController.Init()
 		applyCash(payload.Cash)
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		applyCash(state.Cash)
-		if state.Base then
-			upgrades = state.Base.Upgrades
-			if typeof(state.Base.PlotId) == "number" then
-				if myPlotId ~= nil and myPlotId ~= state.Base.PlotId then
-					clearOverlapState()
-				end
-				myPlotId = state.Base.PlotId
-			end
-		end
-		markBillboardsDirty()
-	end)
-
-	-- Attribute fallback when FireClient was missed (join race)
 	do
 		local attrCash = player:GetAttribute("WE_Cash")
 		if typeof(attrCash) == "number" then
@@ -1223,7 +1184,7 @@ function WorldPromptController.Init()
 		end
 	end)
 
-	-- v56 bootstrap: poll WE_Cash / leaderstats / GetPlayerState so BUY not NEED when server has cash
+	-- Poll starts before other remotes
 	task.spawn(function()
 		local synced = false
 		for i = 0, 15 do
@@ -1262,6 +1223,43 @@ function WorldPromptController.Init()
 		if not synced then
 			warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
 		end
+	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
+		local prev = upgrades
+		upgrades = base.Upgrades or upgrades
+		if typeof(base.PlotId) == "number" then
+			if myPlotId ~= nil and myPlotId ~= base.PlotId then
+				clearOverlapState()
+			end
+			myPlotId = base.PlotId
+		end
+		if activeBuyStructureId and typeof(upgrades) == "table" then
+			local sid = activeBuyStructureId
+			local before = if typeof(prev) == "table" then (prev[sid] or 0) else 0
+			local after = upgrades[sid] or 0
+			if after > before then
+				local def = BaseConfig.Structures[sid]
+				local name = if def then def.DisplayName else sid
+				flashPadBuyBought(name)
+				print(string.format("[WorldPrompt] BUY OK flash %s %d→%d", sid, before, after))
+			end
+		end
+		markBillboardsDirty()
+	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
+		applyCash(state.Cash)
+		if state.Base then
+			upgrades = state.Base.Upgrades
+			if typeof(state.Base.PlotId) == "number" then
+				if myPlotId ~= nil and myPlotId ~= state.Base.PlotId then
+					clearOverlapState()
+				end
+				myPlotId = state.Base.PlotId
+			end
+		end
+		markBillboardsDirty()
 	end)
 
 	player.CharacterAdded:Connect(function()
