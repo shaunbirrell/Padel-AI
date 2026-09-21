@@ -257,6 +257,21 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "NoProfile" }
 	end
 
+	-- v62: claim/plot gate — never silent-fail unclaimed
+	if profile.BasePlotId == nil then
+		BaseService.AssignPlot(player)
+		profile = DataService.GetProfile(player) or profile
+	end
+	if profile.BasePlotId == nil then
+		return { Ok = false, Error = "NoPlot" }
+	end
+
+	-- v62: EarlyRemotes HUD seed vs profile.Cash desync
+	if EconomyService.ReconcileSpendableCash then
+		EconomyService.ReconcileSpendableCash(player)
+		profile = DataService.GetProfile(player) or profile
+	end
+
 	local def = BaseConfig.Structures[structureId]
 	if not def then
 		return { Ok = false, Error = "UnknownStructure" }
@@ -952,9 +967,31 @@ function BaseService.Init(deps: { [string]: any })
 
 	getUpgradeChangedEvent()
 
-	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
-	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
-		-- v57: wait briefly for profile; retry once before soft-fail toast (never silent forever)
+	-- v62: handler registered on the SAME WE_Remotes.RequestPurchaseUpgrade EarlyRemotes created
+	local function firePurchaseResult(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		pcall(function()
+			local ev = RemoteSetup.Get(Constants.RemoteNames.PurchaseResult) :: RemoteEvent
+			ev:FireClient(player, {
+				Ok = result.Ok == true,
+				Error = result.Error,
+				StructureId = structureId,
+				NewLevel = result.NewLevel,
+				Cash = result.Cash,
+			})
+		end)
+	end
+
+	local function handlePurchaseRemote(player: Player, payload: any)
+		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		local function fail(err: string, msg: string)
+			print(string.format("[BaseService] Remote BUY FAIL %s → %s (%s)", player.Name, tostring(structureId), err))
+			firePurchaseResult(player, structureId, { Ok = false, Error = err })
+			if NotificationService then
+				NotificationService.Notify(player, msg, "Warn", 3.5)
+			end
+		end
+
+		-- v57/v62: wait briefly for profile; never silent forever
 		local profile = RemoteGuard.RequireProfile(DataService, player)
 		if not profile then
 			profile = DataService.WaitForProfile(player, 5)
@@ -970,33 +1007,27 @@ function BaseService.Init(deps: { [string]: any })
 			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
 		end
 		if not profile then
-			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
-			if NotificationService then
-				NotificationService.Notify(player, "Profile still loading — try BUY again", "Warn", 3)
-			end
+			fail("NoProfile", "Profile still loading — try BUY again")
 			return
 		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
-			print(string.format("[BaseService] Remote BUY rate-limit %s", player.Name))
-			if NotificationService then
-				NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
-			end
+			fail("RateLimited", "Buying too fast — wait a moment")
 			return
 		end
-		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
 		if not RemoteGuard.IsIdString(structureId, 48) then
-			print(string.format("[BaseService] Remote BUY bad-id %s → %s", player.Name, tostring(structureId)))
+			fail("InvalidStructure", "Buy failed: bad structure id")
 			return
 		end
-		print(string.format("[BaseService] Remote BUY attempt %s → %s", player.Name, tostring(structureId)))
-		local result = BaseService.PurchaseUpgrade(player, structureId)
-		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s", player.Name, tostring(result.Ok), tostring(result.Error)))
+		print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
+		local result = BaseService.PurchaseUpgrade(player, structureId :: string)
+		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s", player.Name, tostring(result.Ok), tostring(result.Error), tostring(result.Cash)))
+		firePurchaseResult(player, structureId, result)
 		if not NotificationService then
 			warn("[BaseService] NotificationService nil — purchase toast skipped")
 			return
 		end
 		if result.Ok then
-			local def = BaseConfig.Structures[structureId]
+			local def = BaseConfig.Structures[structureId :: string]
 			local name = if def then def.DisplayName else tostring(structureId)
 			NotificationService.Notify(
 				player,
@@ -1016,8 +1047,11 @@ function BaseService.Init(deps: { [string]: any })
 				then "Missing prerequisite structure"
 				elseif err == "UnknownStructure" or err == "InvalidStructure"
 				then "Unknown structure"
+				elseif err == "NoPlot"
+				then "Claim a base first — stand on your plot pad"
+				elseif err == "NoProfile"
+				then "Profile still loading — try BUY again"
 				else ("Purchase failed: " .. tostring(err))
-			-- Debounce can't-afford / fail spam from menu + pad
 			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
@@ -1025,7 +1059,17 @@ function BaseService.Init(deps: { [string]: any })
 				NotificationService.Notify(player, msg, "Warn", 3.5)
 			end
 		end
-	end)
+	end
+
+	if RemoteSetup.SetPurchaseUpgradeHandler then
+		RemoteSetup.SetPurchaseUpgradeHandler(handlePurchaseRemote)
+		-- Ensure the EarlyRemotes instance is hooked (idempotent)
+		RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade)
+	else
+		local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
+		purchaseRemote.OnServerEvent:Connect(handlePurchaseRemote)
+		warn("[BaseService] SetPurchaseUpgradeHandler missing — fell back to direct OnServerEvent")
+	end
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
@@ -1057,7 +1101,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 61)
+			player:SetAttribute("WE_Build", 62)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)

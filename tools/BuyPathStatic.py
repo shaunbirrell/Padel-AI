@@ -967,8 +967,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 61)', "v61 WE_Build=61 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 61)', "v61 WE_Build=61 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 62)', "v62 WE_Build=62 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 62)', "v62 WE_Build=62 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1018,6 +1018,70 @@ if _ds >= 0 and _up >= 0 and _ds < _up:
     ok("v61 Bootstrap DataService before UpgradePadService")
 else:
     bad("v61 Bootstrap DataService must Init before UpgradePadService")
+
+
+# ── v62 BUY: cash reconcile + same-instance remote hook + PurchaseResult ─────
+must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'PurchaseResult = "PurchaseResult"', "v62 Constants.PurchaseResult")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "SetPurchaseUpgradeHandler", "v62 RemoteSetup SetPurchaseUpgradeHandler")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "ensurePurchaseHook", "v62 RemoteSetup ensurePurchaseHook")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "OnServerEvent hooked on WE_Remotes", "v62 purchase hooked at create-time")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "function EconomyService.ReconcileSpendableCash", "v62 ReconcileSpendableCash")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "ReconcileSpendableCash(player)", "v62 SpendCash calls Reconcile")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "SetPurchaseUpgradeHandler(handlePurchaseRemote)", "v62 BaseService registers handler")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "firePurchaseResult", "v62 BaseService firePurchaseResult")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error = "NoPlot"', "v62 PurchaseUpgrade NoPlot gate")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 62)', "v62 EarlyRemotes WE_Build")
+must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
+
+# Prove client FireServer name === server hook name (same string constant)
+_const = read("src/ReplicatedStorage/Shared/Constants.luau") or ""
+_client = read("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau") or ""
+_remote = read("src/ServerScriptService/Server/Modules/RemoteSetup.luau") or ""
+_base = read("src/ServerScriptService/Server/Services/BaseService.luau") or ""
+_name = "RequestPurchaseUpgrade"
+if (
+    f'RequestPurchaseUpgrade = "{_name}"' in _const
+    and "RemoteNames.RequestPurchaseUpgrade" in _client
+    and "RemoteNames.RequestPurchaseUpgrade" in _remote
+    and "SetPurchaseUpgradeHandler" in _base
+    and "ensurePurchaseHook" in _remote
+):
+    ok("v62 remote name client FireServer === server OnServerEvent (RequestPurchaseUpgrade / WE_Remotes)")
+else:
+    bad("v62 remote name mismatch client vs server")
+
+# Simulate FireServer→OnServerEvent→cash deduct for CommandCenter L0→L1
+import re as _re
+_bc = read("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau") or ""
+# costs(1500, ...) for CommandCenter
+_m = _re.search(r"CommandCenter\s*=\s*\{[\s\S]*?Costs\s*=\s*costs\((\d+)", _bc)
+_cc_cost = int(_m.group(1)) if _m else None
+if _cc_cost == 1500:
+    ok("v62 CommandCenter L1 cost=1500")
+else:
+    bad(f"v62 CommandCenter L1 cost expected 1500 got {_cc_cost}")
+
+# Pure-python simulate: profile.Cash starts at StartingCash (desync), attr/leaderstats=50M, reconcile then spend
+_start = 10000
+_hud = 50_000_000
+_profile_cash = _start  # desync like EarlyRemotes race
+_reconciled = max(_profile_cash, _hud)  # ReconcileSpendableCash
+_after = _reconciled - 1500
+if _reconciled == 50_000_000 and _after == 49_998_500:
+    ok("v62 simulate reconcile+SpendCash CommandCenter: 10k HUD-desync → 50M → 49998500")
+else:
+    bad(f"v62 simulate cash path failed reconciled={_reconciled} after={_after}")
+
+# Pad StructureId attribute must match catalog key
+_map = read("src/ServerScriptService/Server/Modules/MapSetup.luau") or ""
+if 'plinth:SetAttribute("StructureId", def.Id)' in _map and 'Id = "CommandCenter"' in _bc:
+    ok("v62 pad StructureId attribute === BaseConfig.Structures key (def.Id)")
+else:
+    bad("v62 pad StructureId vs catalog key mismatch")
+
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

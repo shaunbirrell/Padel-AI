@@ -46,6 +46,7 @@ Constants.RemoteNames = {
 	MissionStateUpdate = "MissionStateUpdate",
 	-- Client → Server (request/action only — NEVER GiveCash/GiveXP/GiveWeapon)
 	RequestPurchaseUpgrade = "RequestPurchaseUpgrade",
+	PurchaseResult = "PurchaseResult", -- v62: server always replies Ok/Err after buy
 	RequestClaimDailyReward = "RequestClaimDailyReward",
 	RequestSpawnVehicle = "RequestSpawnVehicle",
 	RequestPurchaseVehicle = "RequestPurchaseVehicle",

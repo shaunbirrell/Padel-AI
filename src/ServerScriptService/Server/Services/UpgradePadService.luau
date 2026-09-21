@@ -24,6 +24,7 @@ local DataService: any = nil
 local BaseService: any = nil
 local NotificationService: any = nil
 local RateLimitService: any = nil
+local RemoteSetup: any = nil
 
 local TAG = Constants.Tags.UpgradeSlot
 local DEBOUNCE_SEC = 1.0
@@ -113,8 +114,28 @@ local function flashPad(part: BasePart)
 	end)
 end
 
+local function firePurchaseResult(player: Player, structureId: string, result: any)
+	pcall(function()
+		if not RemoteSetup then
+			return
+		end
+		local ev = RemoteSetup.Get(Constants.RemoteNames.PurchaseResult)
+		if ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent):FireClient(player, {
+				Ok = result.Ok == true,
+				Error = result.Error,
+				StructureId = structureId,
+				NewLevel = result.NewLevel,
+				Cash = result.Cash,
+			})
+		end
+	end)
+end
+
 local function notifyPurchaseResult(player: Player, structureId: string, result: any, fromStanding: boolean?)
+	firePurchaseResult(player, structureId, result)
 	if not NotificationService then
+		warn("[UpgradePad] NotificationService nil — toast skipped for", structureId, result.Error)
 		return
 	end
 	if result.Ok then
@@ -140,6 +161,10 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 			then "Unknown structure"
 			elseif err == "WrongPlot"
 			then "Not your base — walk your plot pads to buy"
+			elseif err == "NoPlot"
+			then "Claim a base first — stand on your plot pad"
+			elseif err == "NoProfile"
+			then "Profile still loading — try BUY again"
 			else ("Purchase failed: " .. tostring(err))
 		-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
 		local cd = if fromStanding then 1.1 else 0.75
@@ -167,6 +192,7 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	end
 	if not profile then
 		print(string.format("[UpgradePad] BUY FAIL %s %s — NoProfile", player.Name, structureId))
+		firePurchaseResult(player, structureId, { Ok = false, Error = "NoProfile" })
 		if NotificationService then
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, "Profile still loading — try BUY again", "Warn", 3, 2.5, "pad|NoProfile")
@@ -175,6 +201,26 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			end
 		end
 		return
+	end
+
+	-- v62: live — assign plot if unclaimed (never silent)
+	if profile.BasePlotId == nil then
+		if BaseService and BaseService.AssignPlot then
+			BaseService.AssignPlot(player)
+			profile = DataService.GetProfile(player) or profile
+		end
+		if profile.BasePlotId == nil then
+			print(string.format("[UpgradePad] BUY FAIL %s %s — NoPlot", player.Name, structureId))
+			firePurchaseResult(player, structureId, { Ok = false, Error = "NoPlot" })
+			if NotificationService then
+				if NotificationService.NotifyThrottled then
+					NotificationService.NotifyThrottled(player, "Claim a base first — stand on your plot pad", "Warn", 3.5, 2.0, "pad|NoPlot")
+				else
+					NotificationService.Notify(player, "Claim a base first — stand on your plot pad", "Warn", 3.5)
+				end
+			end
+			return
+		end
 	end
 
 	-- Studio solo: if BasePlotId nil, force-assign plot 1
@@ -328,6 +374,32 @@ local function attachSlot(part: BasePart)
 			detach(part)
 		end
 	end))
+
+	-- v62 nuclear backup: server ProximityPrompt.Triggered (no client remotes)
+	local existingPrompt = part:FindFirstChild("WE_ServerBuyPrompt")
+	if existingPrompt then
+		existingPrompt:Destroy()
+	end
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "WE_ServerBuyPrompt"
+	prompt.ActionText = "Buy"
+	local def = BaseConfig.Structures[structureId]
+	prompt.ObjectText = if def then def.DisplayName else structureId
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 16
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+	prompt.Style = Enum.ProximityPromptStyle.Default
+	prompt.Parent = part
+	trackConn(part, prompt.Triggered:Connect(function(who: Player)
+		local character = who.Character
+		if character and isSeated(character) then
+			return
+		end
+		print(string.format("[UpgradePad] ProximityPrompt BUY %s %s", who.Name, structureId))
+		tryServerPurchase(who, part, structureId, false)
+	end))
 end
 
 local function countAttached(): number
@@ -440,6 +512,7 @@ function UpgradePadService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	NotificationService = deps.NotificationService
 	RateLimitService = deps.RateLimitService
+	RemoteSetup = deps.RemoteSetup
 
 	bindExistingAndFuture()
 	local initCount = countAttached()

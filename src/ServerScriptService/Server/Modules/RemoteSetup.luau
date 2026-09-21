@@ -1,7 +1,9 @@
 --!strict
 --[[
-	Creates remotes under ReplicatedStorage.Remotes.
-	Request/action pattern ONLY — no GiveCash / GiveXP / GiveWeapon remotes.
+	Creates remotes under ReplicatedStorage.WE_Remotes (server-only).
+	v62: RequestPurchaseUpgrade OnServerEvent is hooked HERE at create-time so the
+	exact same instance client FireServer hits is always listened — BaseService
+	registers the handler via SetPurchaseUpgradeHandler (never a second remote).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,6 +25,7 @@ local EVENTS = {
 	Constants.RemoteNames.MissionStateUpdate,
 	-- Client requests
 	Constants.RemoteNames.RequestPurchaseUpgrade,
+	Constants.RemoteNames.PurchaseResult,
 	Constants.RemoteNames.RequestClaimDailyReward,
 	Constants.RemoteNames.RequestSpawnVehicle,
 	Constants.RemoteNames.RequestPurchaseVehicle,
@@ -78,6 +81,41 @@ local FUNCTIONS = {
 }
 
 local _initialized = false
+local _purchaseHandler: ((Player, any) -> ())? = nil
+local _purchaseHooked = false
+
+function RemoteSetup.SetPurchaseUpgradeHandler(handler: (Player, any) -> ())
+	_purchaseHandler = handler
+	print("[RemoteSetup] PurchaseUpgrade handler registered")
+end
+
+local function ensurePurchaseHook(folder: Folder)
+	local name = Constants.RemoteNames.RequestPurchaseUpgrade
+	local ev = folder:FindFirstChild(name)
+	if not ev then
+		ev = Instance.new("RemoteEvent")
+		ev.Name = name
+		ev.Parent = folder
+	end
+	if _purchaseHooked then
+		return
+	end
+	if not ev:IsA("RemoteEvent") then
+		warn("[RemoteSetup] RequestPurchaseUpgrade is not RemoteEvent:", ev.ClassName)
+		return
+	end
+	_purchaseHooked = true
+	(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, payload: any)
+		local sid = if typeof(payload) == "table" then tostring((payload :: any).StructureId) else tostring(payload)
+		print(string.format("[RemoteSetup] OnServerEvent RequestPurchaseUpgrade %s → %s handler=%s", player.Name, sid, tostring(_purchaseHandler ~= nil)))
+		if _purchaseHandler then
+			_purchaseHandler(player, payload)
+		else
+			warn("[RemoteSetup] RequestPurchaseUpgrade fired but handler not registered yet — BaseService.Init pending")
+		end
+	end)
+	print("[RemoteSetup] RequestPurchaseUpgrade OnServerEvent hooked on WE_Remotes." .. name)
+end
 
 function RemoteSetup.Init(): Folder
 	-- v60: scrub legacy Rojo empty Remotes so clients never latch onto it
@@ -120,9 +158,12 @@ function RemoteSetup.Init(): Folder
 		end
 	end
 
+	-- v62: hook purchase OnServerEvent on the SAME instance clients FireServer
+	ensurePurchaseHook(folder :: Folder)
+
 	if not _initialized then
 		_initialized = true
-		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions", #EVENTS, #FUNCTIONS))
+		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions (folder=%s)", #EVENTS, #FUNCTIONS, folder.Name))
 	end
 
 	return folder :: Folder
@@ -137,22 +178,26 @@ function RemoteSetup.Get(name: string): Instance
 	end
 	local remote = folder:FindFirstChild(name)
 	if remote then
+		if name == Constants.RemoteNames.RequestPurchaseUpgrade then
+			ensurePurchaseHook(folder :: Folder)
+		end
 		return remote
 	end
 	-- Create missing event/function rather than WaitForChild forever
-	local ev = Instance.new("RemoteEvent")
-	-- Prefer RemoteFunction when name is GetPlayerState
 	if name == Constants.RemoteNames.GetPlayerState then
-		ev:Destroy()
 		local fn = Instance.new("RemoteFunction")
 		fn.Name = name
 		fn.Parent = folder
 		warn("[RemoteSetup] Get created missing RemoteFunction:", name)
 		return fn
 	end
+	local ev = Instance.new("RemoteEvent")
 	ev.Name = name
 	ev.Parent = folder
 	warn("[RemoteSetup] Get created missing RemoteEvent:", name)
+	if name == Constants.RemoteNames.RequestPurchaseUpgrade then
+		ensurePurchaseHook(folder :: Folder)
+	end
 	return ev
 end
 

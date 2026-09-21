@@ -748,9 +748,13 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 	if opts and opts.showBuying then
 		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 	end
-	-- Clear in-flight after debounce (server toast handles success/fail UX)
-	task.delay(DEBOUNCE_SEC, function()
-		pendingPurchase[structureId] = nil
+	-- v62: keep in-flight until PurchaseResult (or 5s timeout) — stops spam Buying…
+	task.delay(5, function()
+		if pendingPurchase[structureId] then
+			pendingPurchase[structureId] = nil
+			warn("[WorldPrompt] BUY timeout no PurchaseResult", structureId)
+			NotificationController.Show("Buy timed out — try again (or use E on pad)", "Warn", 3)
+		end
 	end)
 end
 
@@ -1218,6 +1222,46 @@ function WorldPromptController.Init()
 
 	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
 		applyCash(payload.Cash)
+	end)
+
+	-- v62: authoritative buy result — clear pending + show server reason (never hang on Buying…)
+	Remotes.BindEvent(Constants.RemoteNames.PurchaseResult, function(payload: any)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		local sid = payload.StructureId
+		if typeof(sid) == "string" then
+			pendingPurchase[sid] = nil
+		end
+		if payload.Ok == true then
+			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
+			local name = if def then def.DisplayName else tostring(sid)
+			print(string.format("[WorldPrompt] PurchaseResult OK %s Lv=%s cash=%s", tostring(sid), tostring(payload.NewLevel), tostring(payload.Cash)))
+			if typeof(payload.Cash) == "number" then
+				applyCash(payload.Cash)
+			end
+			flashPadBuyBought(name)
+		else
+			local err = tostring(payload.Error or "Failed")
+			local msg = if err == "InsufficientCash"
+				then "Not enough cash"
+				elseif err == "NoPlot"
+				then "Claim a base first — stand on your plot pad"
+				elseif err == "NoProfile"
+				then "Profile still loading — try BUY again"
+				elseif err == "MissingRequirement"
+				then "Missing prerequisite structure"
+				elseif err == "MaxLevel"
+				then "Already at MAX level"
+				elseif err == "WrongPlot"
+				then "Not your base — walk your plot pads to buy"
+				elseif err == "RateLimited"
+				then "Buying too fast — wait a moment"
+				else ("Buy failed: " .. err)
+			print(string.format("[WorldPrompt] PurchaseResult FAIL %s → %s", tostring(sid), err))
+			NotificationController.Show(msg, "Error", 3.5)
+		end
+		markBillboardsDirty()
 	end)
 
 	task.spawn(function()

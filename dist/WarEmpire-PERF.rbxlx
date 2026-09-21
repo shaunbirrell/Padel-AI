@@ -3778,6 +3778,7 @@ Constants.RemoteNames = {
 	MissionStateUpdate = "MissionStateUpdate",
 	-- Client → Server (request/action only — NEVER GiveCash/GiveXP/GiveWeapon)
 	RequestPurchaseUpgrade = "RequestPurchaseUpgrade",
+	PurchaseResult = "PurchaseResult", -- v62: server always replies Ok/Err after buy
 	RequestClaimDailyReward = "RequestClaimDailyReward",
 	RequestSpawnVehicle = "RequestSpawnVehicle",
 	RequestPurchaseVehicle = "RequestPurchaseVehicle",
@@ -4663,6 +4664,7 @@ end
 -- v61: load profiles BEFORE UpgradePad spatial loop (no silent NoProfile on first stand)
 safeInit("DataService", DataService)
 print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v61)")
+print("[WAR EMPIRE] v62 cash reconcile + purchase hook on WE_Remotes.RequestPurchaseUpgrade")
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
@@ -5054,7 +5056,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 61)
+		player:SetAttribute("WE_Build", 62)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -5079,7 +5081,7 @@ for _, plr in ipairs(Players:GetPlayers()) do
 	task.spawn(seedPlayer, plr)
 end
 
-print("[WAR EMPIRE] EarlyRemotes v61: WE_Remotes + leaderstats seed ready")
+print("[WAR EMPIRE] EarlyRemotes v62: WE_Remotes + leaderstats seed ready")
 ]]></string>
         </Properties>
       </Item>
@@ -10962,8 +10964,10 @@ return RemoteGuard
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
 --[[
-	Creates remotes under ReplicatedStorage.Remotes.
-	Request/action pattern ONLY — no GiveCash / GiveXP / GiveWeapon remotes.
+	Creates remotes under ReplicatedStorage.WE_Remotes (server-only).
+	v62: RequestPurchaseUpgrade OnServerEvent is hooked HERE at create-time so the
+	exact same instance client FireServer hits is always listened — BaseService
+	registers the handler via SetPurchaseUpgradeHandler (never a second remote).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -10985,6 +10989,7 @@ local EVENTS = {
 	Constants.RemoteNames.MissionStateUpdate,
 	-- Client requests
 	Constants.RemoteNames.RequestPurchaseUpgrade,
+	Constants.RemoteNames.PurchaseResult,
 	Constants.RemoteNames.RequestClaimDailyReward,
 	Constants.RemoteNames.RequestSpawnVehicle,
 	Constants.RemoteNames.RequestPurchaseVehicle,
@@ -11040,6 +11045,41 @@ local FUNCTIONS = {
 }
 
 local _initialized = false
+local _purchaseHandler: ((Player, any) -> ())? = nil
+local _purchaseHooked = false
+
+function RemoteSetup.SetPurchaseUpgradeHandler(handler: (Player, any) -> ())
+	_purchaseHandler = handler
+	print("[RemoteSetup] PurchaseUpgrade handler registered")
+end
+
+local function ensurePurchaseHook(folder: Folder)
+	local name = Constants.RemoteNames.RequestPurchaseUpgrade
+	local ev = folder:FindFirstChild(name)
+	if not ev then
+		ev = Instance.new("RemoteEvent")
+		ev.Name = name
+		ev.Parent = folder
+	end
+	if _purchaseHooked then
+		return
+	end
+	if not ev:IsA("RemoteEvent") then
+		warn("[RemoteSetup] RequestPurchaseUpgrade is not RemoteEvent:", ev.ClassName)
+		return
+	end
+	_purchaseHooked = true
+	(ev :: RemoteEvent).OnServerEvent:Connect(function(player: Player, payload: any)
+		local sid = if typeof(payload) == "table" then tostring((payload :: any).StructureId) else tostring(payload)
+		print(string.format("[RemoteSetup] OnServerEvent RequestPurchaseUpgrade %s → %s handler=%s", player.Name, sid, tostring(_purchaseHandler ~= nil)))
+		if _purchaseHandler then
+			_purchaseHandler(player, payload)
+		else
+			warn("[RemoteSetup] RequestPurchaseUpgrade fired but handler not registered yet — BaseService.Init pending")
+		end
+	end)
+	print("[RemoteSetup] RequestPurchaseUpgrade OnServerEvent hooked on WE_Remotes." .. name)
+end
 
 function RemoteSetup.Init(): Folder
 	-- v60: scrub legacy Rojo empty Remotes so clients never latch onto it
@@ -11082,9 +11122,12 @@ function RemoteSetup.Init(): Folder
 		end
 	end
 
+	-- v62: hook purchase OnServerEvent on the SAME instance clients FireServer
+	ensurePurchaseHook(folder :: Folder)
+
 	if not _initialized then
 		_initialized = true
-		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions", #EVENTS, #FUNCTIONS))
+		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions (folder=%s)", #EVENTS, #FUNCTIONS, folder.Name))
 	end
 
 	return folder :: Folder
@@ -11099,22 +11142,26 @@ function RemoteSetup.Get(name: string): Instance
 	end
 	local remote = folder:FindFirstChild(name)
 	if remote then
+		if name == Constants.RemoteNames.RequestPurchaseUpgrade then
+			ensurePurchaseHook(folder :: Folder)
+		end
 		return remote
 	end
 	-- Create missing event/function rather than WaitForChild forever
-	local ev = Instance.new("RemoteEvent")
-	-- Prefer RemoteFunction when name is GetPlayerState
 	if name == Constants.RemoteNames.GetPlayerState then
-		ev:Destroy()
 		local fn = Instance.new("RemoteFunction")
 		fn.Name = name
 		fn.Parent = folder
 		warn("[RemoteSetup] Get created missing RemoteFunction:", name)
 		return fn
 	end
+	local ev = Instance.new("RemoteEvent")
 	ev.Name = name
 	ev.Parent = folder
 	warn("[RemoteSetup] Get created missing RemoteEvent:", name)
+	if name == Constants.RemoteNames.RequestPurchaseUpgrade then
+		ensurePurchaseHook(folder :: Folder)
+	end
 	return ev
 end
 
@@ -14475,6 +14522,21 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "NoProfile" }
 	end
 
+	-- v62: claim/plot gate — never silent-fail unclaimed
+	if profile.BasePlotId == nil then
+		BaseService.AssignPlot(player)
+		profile = DataService.GetProfile(player) or profile
+	end
+	if profile.BasePlotId == nil then
+		return { Ok = false, Error = "NoPlot" }
+	end
+
+	-- v62: EarlyRemotes HUD seed vs profile.Cash desync
+	if EconomyService.ReconcileSpendableCash then
+		EconomyService.ReconcileSpendableCash(player)
+		profile = DataService.GetProfile(player) or profile
+	end
+
 	local def = BaseConfig.Structures[structureId]
 	if not def then
 		return { Ok = false, Error = "UnknownStructure" }
@@ -15170,9 +15232,31 @@ function BaseService.Init(deps: { [string]: any })
 
 	getUpgradeChangedEvent()
 
-	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
-	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
-		-- v57: wait briefly for profile; retry once before soft-fail toast (never silent forever)
+	-- v62: handler registered on the SAME WE_Remotes.RequestPurchaseUpgrade EarlyRemotes created
+	local function firePurchaseResult(player: Player, structureId: any, result: Types.PurchaseUpgradeResult)
+		pcall(function()
+			local ev = RemoteSetup.Get(Constants.RemoteNames.PurchaseResult) :: RemoteEvent
+			ev:FireClient(player, {
+				Ok = result.Ok == true,
+				Error = result.Error,
+				StructureId = structureId,
+				NewLevel = result.NewLevel,
+				Cash = result.Cash,
+			})
+		end)
+	end
+
+	local function handlePurchaseRemote(player: Player, payload: any)
+		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		local function fail(err: string, msg: string)
+			print(string.format("[BaseService] Remote BUY FAIL %s → %s (%s)", player.Name, tostring(structureId), err))
+			firePurchaseResult(player, structureId, { Ok = false, Error = err })
+			if NotificationService then
+				NotificationService.Notify(player, msg, "Warn", 3.5)
+			end
+		end
+
+		-- v57/v62: wait briefly for profile; never silent forever
 		local profile = RemoteGuard.RequireProfile(DataService, player)
 		if not profile then
 			profile = DataService.WaitForProfile(player, 5)
@@ -15188,33 +15272,27 @@ function BaseService.Init(deps: { [string]: any })
 			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
 		end
 		if not profile then
-			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
-			if NotificationService then
-				NotificationService.Notify(player, "Profile still loading — try BUY again", "Warn", 3)
-			end
+			fail("NoProfile", "Profile still loading — try BUY again")
 			return
 		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
-			print(string.format("[BaseService] Remote BUY rate-limit %s", player.Name))
-			if NotificationService then
-				NotificationService.Notify(player, "Buying too fast — wait a moment", "Warn", 2.5)
-			end
+			fail("RateLimited", "Buying too fast — wait a moment")
 			return
 		end
-		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
 		if not RemoteGuard.IsIdString(structureId, 48) then
-			print(string.format("[BaseService] Remote BUY bad-id %s → %s", player.Name, tostring(structureId)))
+			fail("InvalidStructure", "Buy failed: bad structure id")
 			return
 		end
-		print(string.format("[BaseService] Remote BUY attempt %s → %s", player.Name, tostring(structureId)))
-		local result = BaseService.PurchaseUpgrade(player, structureId)
-		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s", player.Name, tostring(result.Ok), tostring(result.Error)))
+		print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
+		local result = BaseService.PurchaseUpgrade(player, structureId :: string)
+		print(string.format("[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s", player.Name, tostring(result.Ok), tostring(result.Error), tostring(result.Cash)))
+		firePurchaseResult(player, structureId, result)
 		if not NotificationService then
 			warn("[BaseService] NotificationService nil — purchase toast skipped")
 			return
 		end
 		if result.Ok then
-			local def = BaseConfig.Structures[structureId]
+			local def = BaseConfig.Structures[structureId :: string]
 			local name = if def then def.DisplayName else tostring(structureId)
 			NotificationService.Notify(
 				player,
@@ -15234,8 +15312,11 @@ function BaseService.Init(deps: { [string]: any })
 				then "Missing prerequisite structure"
 				elseif err == "UnknownStructure" or err == "InvalidStructure"
 				then "Unknown structure"
+				elseif err == "NoPlot"
+				then "Claim a base first — stand on your plot pad"
+				elseif err == "NoProfile"
+				then "Profile still loading — try BUY again"
 				else ("Purchase failed: " .. tostring(err))
-			-- Debounce can't-afford / fail spam from menu + pad
 			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
@@ -15243,7 +15324,17 @@ function BaseService.Init(deps: { [string]: any })
 				NotificationService.Notify(player, msg, "Warn", 3.5)
 			end
 		end
-	end)
+	end
+
+	if RemoteSetup.SetPurchaseUpgradeHandler then
+		RemoteSetup.SetPurchaseUpgradeHandler(handlePurchaseRemote)
+		-- Ensure the EarlyRemotes instance is hooked (idempotent)
+		RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade)
+	else
+		local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
+		purchaseRemote.OnServerEvent:Connect(handlePurchaseRemote)
+		warn("[BaseService] SetPurchaseUpgradeHandler missing — fell back to direct OnServerEvent")
+	end
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
@@ -15275,7 +15366,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 61)
+			player:SetAttribute("WE_Build", 62)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -18438,7 +18529,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 61)
+		player:SetAttribute("WE_Build", 62)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -18602,7 +18693,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=61",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=62",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))
@@ -19068,6 +19159,42 @@ function EconomyService.GetPendingCash(player: Player): number
 	return math.floor(tonumber((profile :: any).PendingCash) or 0)
 end
 
+
+--[[
+	v62: EarlyRemotes seeds leaderstats/WE_Cash BEFORE DataService profile exists.
+	HUD can show $50M while profile.Cash is still StartingCash → SpendCash InsufficientCash
+	with no visible deduct. Lift profile.Cash to max(profile, server WE_Cash, leaderstats).
+	Attrs/leaderstats are server-authored only — safe, not client-trust.
+]]
+function EconomyService.ReconcileSpendableCash(player: Player): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local have = math.floor(tonumber(profile.Cash) or 0)
+	local attr = tonumber(player:GetAttribute("WE_Cash"))
+	if typeof(attr) == "number" then
+		have = math.max(have, math.floor(attr))
+	end
+	local folder = player:FindFirstChild("leaderstats")
+	if folder then
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			have = math.max(have, math.floor((cashV :: any).Value))
+		end
+	end
+	local before = math.floor(tonumber(profile.Cash) or 0)
+	if have > before then
+		profile.Cash = have
+		DataService.MarkDirty(player)
+		print(string.format("[Economy] Reconcile %s profile.Cash %d → %d (attr/leaderstats)", player.Name, before, have))
+		pushEconomy(player, profile)
+	else
+		profile.Cash = have
+	end
+	return have
+end
+
 function EconomyService.SpendCash(player: Player, amount: number, _reason: string?): (boolean, string?)
 	if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
 		return false, "InvalidAmount"
@@ -19077,9 +19204,13 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 	if not profile then
 		return false, "NoProfile"
 	end
-	local have = math.floor(tonumber(profile.Cash) or 0)
+	-- v62: sync profile to EarlyRemotes/leaderstats before afford check
+	local have = EconomyService.ReconcileSpendableCash(player)
+	profile = DataService.GetProfile(player) or profile
+	have = math.floor(tonumber(profile.Cash) or have)
 	profile.Cash = have
 	if have < amount then
+		print(string.format("[Economy] SpendCash FAIL %s have=%d need=%d", player.Name, have, amount))
 		return false, "InsufficientCash"
 	end
 	profile.Cash = have - amount
@@ -27566,6 +27697,7 @@ local DataService: any = nil
 local BaseService: any = nil
 local NotificationService: any = nil
 local RateLimitService: any = nil
+local RemoteSetup: any = nil
 
 local TAG = Constants.Tags.UpgradeSlot
 local DEBOUNCE_SEC = 1.0
@@ -27655,8 +27787,28 @@ local function flashPad(part: BasePart)
 	end)
 end
 
+local function firePurchaseResult(player: Player, structureId: string, result: any)
+	pcall(function()
+		if not RemoteSetup then
+			return
+		end
+		local ev = RemoteSetup.Get(Constants.RemoteNames.PurchaseResult)
+		if ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent):FireClient(player, {
+				Ok = result.Ok == true,
+				Error = result.Error,
+				StructureId = structureId,
+				NewLevel = result.NewLevel,
+				Cash = result.Cash,
+			})
+		end
+	end)
+end
+
 local function notifyPurchaseResult(player: Player, structureId: string, result: any, fromStanding: boolean?)
+	firePurchaseResult(player, structureId, result)
 	if not NotificationService then
+		warn("[UpgradePad] NotificationService nil — toast skipped for", structureId, result.Error)
 		return
 	end
 	if result.Ok then
@@ -27682,6 +27834,10 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 			then "Unknown structure"
 			elseif err == "WrongPlot"
 			then "Not your base — walk your plot pads to buy"
+			elseif err == "NoPlot"
+			then "Claim a base first — stand on your plot pad"
+			elseif err == "NoProfile"
+			then "Profile still loading — try BUY again"
 			else ("Purchase failed: " .. tostring(err))
 		-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
 		local cd = if fromStanding then 1.1 else 0.75
@@ -27709,6 +27865,7 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	end
 	if not profile then
 		print(string.format("[UpgradePad] BUY FAIL %s %s — NoProfile", player.Name, structureId))
+		firePurchaseResult(player, structureId, { Ok = false, Error = "NoProfile" })
 		if NotificationService then
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, "Profile still loading — try BUY again", "Warn", 3, 2.5, "pad|NoProfile")
@@ -27717,6 +27874,26 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			end
 		end
 		return
+	end
+
+	-- v62: live — assign plot if unclaimed (never silent)
+	if profile.BasePlotId == nil then
+		if BaseService and BaseService.AssignPlot then
+			BaseService.AssignPlot(player)
+			profile = DataService.GetProfile(player) or profile
+		end
+		if profile.BasePlotId == nil then
+			print(string.format("[UpgradePad] BUY FAIL %s %s — NoPlot", player.Name, structureId))
+			firePurchaseResult(player, structureId, { Ok = false, Error = "NoPlot" })
+			if NotificationService then
+				if NotificationService.NotifyThrottled then
+					NotificationService.NotifyThrottled(player, "Claim a base first — stand on your plot pad", "Warn", 3.5, 2.0, "pad|NoPlot")
+				else
+					NotificationService.Notify(player, "Claim a base first — stand on your plot pad", "Warn", 3.5)
+				end
+			end
+			return
+		end
 	end
 
 	-- Studio solo: if BasePlotId nil, force-assign plot 1
@@ -27870,6 +28047,32 @@ local function attachSlot(part: BasePart)
 			detach(part)
 		end
 	end))
+
+	-- v62 nuclear backup: server ProximityPrompt.Triggered (no client remotes)
+	local existingPrompt = part:FindFirstChild("WE_ServerBuyPrompt")
+	if existingPrompt then
+		existingPrompt:Destroy()
+	end
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "WE_ServerBuyPrompt"
+	prompt.ActionText = "Buy"
+	local def = BaseConfig.Structures[structureId]
+	prompt.ObjectText = if def then def.DisplayName else structureId
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 16
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+	prompt.Style = Enum.ProximityPromptStyle.Default
+	prompt.Parent = part
+	trackConn(part, prompt.Triggered:Connect(function(who: Player)
+		local character = who.Character
+		if character and isSeated(character) then
+			return
+		end
+		print(string.format("[UpgradePad] ProximityPrompt BUY %s %s", who.Name, structureId))
+		tryServerPurchase(who, part, structureId, false)
+	end))
 end
 
 local function countAttached(): number
@@ -27982,6 +28185,7 @@ function UpgradePadService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	NotificationService = deps.NotificationService
 	RateLimitService = deps.RateLimitService
+	RemoteSetup = deps.RemoteSetup
 
 	bindExistingAndFuture()
 	local initCount = countAttached()
@@ -39585,9 +39789,13 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 	if opts and opts.showBuying then
 		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 	end
-	-- Clear in-flight after debounce (server toast handles success/fail UX)
-	task.delay(DEBOUNCE_SEC, function()
-		pendingPurchase[structureId] = nil
+	-- v62: keep in-flight until PurchaseResult (or 5s timeout) — stops spam Buying…
+	task.delay(5, function()
+		if pendingPurchase[structureId] then
+			pendingPurchase[structureId] = nil
+			warn("[WorldPrompt] BUY timeout no PurchaseResult", structureId)
+			NotificationController.Show("Buy timed out — try again (or use E on pad)", "Warn", 3)
+		end
 	end)
 end
 
@@ -40055,6 +40263,46 @@ function WorldPromptController.Init()
 
 	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
 		applyCash(payload.Cash)
+	end)
+
+	-- v62: authoritative buy result — clear pending + show server reason (never hang on Buying…)
+	Remotes.BindEvent(Constants.RemoteNames.PurchaseResult, function(payload: any)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		local sid = payload.StructureId
+		if typeof(sid) == "string" then
+			pendingPurchase[sid] = nil
+		end
+		if payload.Ok == true then
+			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
+			local name = if def then def.DisplayName else tostring(sid)
+			print(string.format("[WorldPrompt] PurchaseResult OK %s Lv=%s cash=%s", tostring(sid), tostring(payload.NewLevel), tostring(payload.Cash)))
+			if typeof(payload.Cash) == "number" then
+				applyCash(payload.Cash)
+			end
+			flashPadBuyBought(name)
+		else
+			local err = tostring(payload.Error or "Failed")
+			local msg = if err == "InsufficientCash"
+				then "Not enough cash"
+				elseif err == "NoPlot"
+				then "Claim a base first — stand on your plot pad"
+				elseif err == "NoProfile"
+				then "Profile still loading — try BUY again"
+				elseif err == "MissingRequirement"
+				then "Missing prerequisite structure"
+				elseif err == "MaxLevel"
+				then "Already at MAX level"
+				elseif err == "WrongPlot"
+				then "Not your base — walk your plot pads to buy"
+				elseif err == "RateLimited"
+				then "Buying too fast — wait a moment"
+				else ("Buy failed: " .. err)
+			print(string.format("[WorldPrompt] PurchaseResult FAIL %s → %s", tostring(sid), err))
+			NotificationController.Show(msg, "Error", 3.5)
+		end
+		markBillboardsDirty()
 	end)
 
 	task.spawn(function()

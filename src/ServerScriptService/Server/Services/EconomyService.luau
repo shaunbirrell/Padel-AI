@@ -205,6 +205,42 @@ function EconomyService.GetPendingCash(player: Player): number
 	return math.floor(tonumber((profile :: any).PendingCash) or 0)
 end
 
+
+--[[
+	v62: EarlyRemotes seeds leaderstats/WE_Cash BEFORE DataService profile exists.
+	HUD can show $50M while profile.Cash is still StartingCash → SpendCash InsufficientCash
+	with no visible deduct. Lift profile.Cash to max(profile, server WE_Cash, leaderstats).
+	Attrs/leaderstats are server-authored only — safe, not client-trust.
+]]
+function EconomyService.ReconcileSpendableCash(player: Player): number
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return 0
+	end
+	local have = math.floor(tonumber(profile.Cash) or 0)
+	local attr = tonumber(player:GetAttribute("WE_Cash"))
+	if typeof(attr) == "number" then
+		have = math.max(have, math.floor(attr))
+	end
+	local folder = player:FindFirstChild("leaderstats")
+	if folder then
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			have = math.max(have, math.floor((cashV :: any).Value))
+		end
+	end
+	local before = math.floor(tonumber(profile.Cash) or 0)
+	if have > before then
+		profile.Cash = have
+		DataService.MarkDirty(player)
+		print(string.format("[Economy] Reconcile %s profile.Cash %d → %d (attr/leaderstats)", player.Name, before, have))
+		pushEconomy(player, profile)
+	else
+		profile.Cash = have
+	end
+	return have
+end
+
 function EconomyService.SpendCash(player: Player, amount: number, _reason: string?): (boolean, string?)
 	if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
 		return false, "InvalidAmount"
@@ -214,9 +250,13 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 	if not profile then
 		return false, "NoProfile"
 	end
-	local have = math.floor(tonumber(profile.Cash) or 0)
+	-- v62: sync profile to EarlyRemotes/leaderstats before afford check
+	local have = EconomyService.ReconcileSpendableCash(player)
+	profile = DataService.GetProfile(player) or profile
+	have = math.floor(tonumber(profile.Cash) or have)
 	profile.Cash = have
 	if have < amount then
+		print(string.format("[Economy] SpendCash FAIL %s have=%d need=%d", player.Name, have, amount))
 		return false, "InsufficientCash"
 	end
 	profile.Cash = have - amount

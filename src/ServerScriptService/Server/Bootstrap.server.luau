@@ -165,6 +165,7 @@ end
 -- v61: load profiles BEFORE UpgradePad spatial loop (no silent NoProfile on first stand)
 safeInit("DataService", DataService)
 print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v61)")
+print("[WAR EMPIRE] v62 cash reconcile + purchase hook on WE_Remotes.RequestPurchaseUpgrade")
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
