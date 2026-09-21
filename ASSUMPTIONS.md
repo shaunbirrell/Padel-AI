@@ -550,7 +550,7 @@ Shaun still saw missing buildings + ankle-height tan wall slabs on live v45.
 205. **WE_OwnedLevel** — sync from profile in UpdateVisuals; clear to 0 on ClearPlotExtras (unowned pads).
 206. No new Design meshes. Visibility only.
 
-## 2026-09-21 — Restore SyncPerimeterWalls from v36 / 0b0e95f (Open Cloud versionNumber=TBD)
+## 2026-09-21 — Restore SyncPerimeterWalls from v36 / 0b0e95f (Open Cloud versionNumber=47)
 
 Shaun: walls still missing / not tall — pull known-good walls from commit **0b0e95f** (Ship v36, last era walls went HIGH when fully bought), before PreferMesh/empty-base chaos.
 
