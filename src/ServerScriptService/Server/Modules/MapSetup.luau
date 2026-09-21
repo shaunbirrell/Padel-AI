@@ -2769,9 +2769,8 @@ function MapSetup.Run()
 		end
 
 		task.wait(0.1)
-		-- Sparse flora by default (Studio + Low). Full flora only when WorldDressQuality=Full outside Studio,
-		-- or StudioSparseFlora=false for intentional dense Studio art checks.
-		local wantFullFlora = ((not inStudio) and string.lower(tostring(DevConfig.WorldDressQuality or "Low")) == "full")
+		-- Live: Full flora (align MapDressing live Full). Studio: sparse unless StudioSparseFlora=false.
+		local wantFullFlora = (not inStudio)
 			or (inStudio and DevConfig.StudioSparseFlora == false)
 		local sparseFlora = not wantFullFlora
 		local okFlora, errFlora = pcall(function()

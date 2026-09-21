@@ -272,7 +272,7 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 	local sparse = if opts and opts.Sparse ~= nil then opts.Sparse else true
 
 	-- PERF: sparse by default. CastShadow=false on all flora parts (see p()).
-	local rimCount = if sparse then 6 else 12
+	local rimCount = if sparse then 6 else 14
 	local rimR = HALF - 180
 	for i = 1, rimCount do
 		local ang = (i / rimCount) * math.pi * 2
@@ -340,7 +340,7 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 	-- Cap attempts so PERF stays Part-kit-first even on live.
 	do
 		local attached = 0
-		local maxAttach = if sparse then 6 else 12
+		local maxAttach = if sparse then 6 else 18
 		local okVas, vas = pcall(function()
 			return require(script.Parent.Parent.Services.VisualAssetService)
 		end)

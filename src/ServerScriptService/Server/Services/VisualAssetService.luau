@@ -738,14 +738,29 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 	local template = loadModel(assetId)
-	-- Palm/Tent/OilPumpjack alt fallback (Design Bot wire)
-	if not template and (propKey == "Palm" or propKey == "Tent" or propKey == "OilPumpjack") then
-		local altKey = if propKey == "Palm" then "PalmAlt" elseif propKey == "Tent" then "TentAlt" else "OilPumpjackAlt"
-		local altId = VisualAssetService.ResolvePropAssetId(altKey)
-		if altId then
-			template = loadModel(altId)
-			if template then
-				assetId = altId
+	-- Palm/Tent/OilPumpjack/Jersey/CamoNet/StreetLamp alt fallback (Design Bot wire)
+	if not template then
+		local altKey: string? = nil
+		if propKey == "Palm" then
+			altKey = "PalmAlt"
+		elseif propKey == "Tent" then
+			altKey = "TentAlt"
+		elseif propKey == "OilPumpjack" then
+			altKey = "OilPumpjackAlt"
+		elseif propKey == "JerseyBarrier" then
+			altKey = "JerseyBarrierAlt"
+		elseif propKey == "CamoNet" then
+			altKey = "CamoNetAlt"
+		elseif propKey == "StreetLamp" then
+			altKey = "StreetLampAlt"
+		end
+		if altKey then
+			local altId = VisualAssetService.ResolvePropAssetId(altKey)
+			if altId then
+				template = loadModel(altId)
+				if template then
+					assetId = altId
+				end
 			end
 		end
 	end
