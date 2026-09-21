@@ -540,7 +540,7 @@ Shaun: previously fully-bought walls went HIGH; now only short tan slabs.
 199. DefensiveWalls pad kit Body raised 8→16 studs so pad sample is not a ground slab.
 200. PreferMesh structures still OFF; Part kits solid at EnsureKit unchanged.
 
-## 2026-09-21 — v45 PlotId tonumber + map race + tall walls (Open Cloud versionNumber=46+)
+## 2026-09-21 — v45 PlotId tonumber + map race + tall walls (Open Cloud versionNumber=46)
 
 Shaun still saw missing buildings + ankle-height tan wall slabs on live v45.
 201. **ROOT CAUSE A — PlotId == without tonumber** — `StructureKitBuilder.findPlotPad` compared `inst:GetAttribute("PlotId") == plotId` (no tonumber) while `findUpgradeSlots` correctly used tonumber. Stringy/mismatched PlotId → SyncPerimeterWalls printed skip and returned; Shaun only saw short DefensiveWalls **pad-sample** kit / MapDressing sandbags, NOT tall WE_PerimeterWalls. **Fix:** always `tonumber(GetAttribute("PlotId")) == tonumber(plotId)` in findPlotPad; tag PlotPad with WE_BasePlot if missing.
