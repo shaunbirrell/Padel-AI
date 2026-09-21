@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=TBD** (2026-09-21 Europe/Madrid) — **v59 REMOTES-BEFORE-MAP**: Bootstrap `RemoteSetup.Init` + DataService/EconomyService Init **before** any MapSetup/InsertService; EarlyRemotes belt creates EconomyUpdate ASAP; densify/building-catalog InsertService `task.defer`; PlayerAdded earlyCashPush within 1s; keeps v58 instant profile + cash-first HUD; no fake StartingCash; `WE_Build=59`.
+- **Live Published:** Open Cloud **versionNumber=59** (2026-09-21 Europe/Madrid) — **v59 REMOTES-BEFORE-MAP**: Bootstrap `RemoteSetup.Init` + DataService/EconomyService Init **before** any MapSetup/InsertService; EarlyRemotes belt creates EconomyUpdate ASAP; densify/building-catalog InsertService `task.defer`; PlayerAdded earlyCashPush within 1s; keeps v58 instant profile + cash-first HUD; no fake StartingCash; `WE_Build=59`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
