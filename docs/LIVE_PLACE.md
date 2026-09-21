@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=58** (2026-09-21 Europe/Madrid) — **INSTANT PROFILE / CASH-FIRST HUD**: DataService.LoadProfile CreateDefault+AdminPlaytestCash+stamp WE_Cash/WE_Gold/WE_Build=58 + fireProfileLoaded **before** any DataStore/session-lock yield (background GetAsync merge with math.max Cash; never Kick on lock); HUD/WorldPrompt connect EconomyUpdate+WE_Cash+leaderstats+poll **before** other remotes that WaitForChild-block; BaseService OnProfileLoaded `EconomyService.Push` first line; dense Push kept; no fake StartingCash HUD (`$…` until real attr/remote/leaderstats); StartingCash=10000; AdminPlaytestCash 50M for 470626172; DataStore **`WarEmpire_PlayerData_v2`**; PreferMesh OFF / KIT_GEN 32; `WE_Build=58`.
+- **Live Published:** Open Cloud **versionNumber=TBD** (2026-09-21 Europe/Madrid) — **v59 REMOTES-BEFORE-MAP**: Bootstrap `RemoteSetup.Init` + DataService/EconomyService Init **before** any MapSetup/InsertService; EarlyRemotes belt creates EconomyUpdate ASAP; densify/building-catalog InsertService `task.defer`; PlayerAdded earlyCashPush within 1s; keeps v58 instant profile + cash-first HUD; no fake StartingCash; `WE_Build=59`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

@@ -965,8 +965,16 @@ must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", 'pl
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "cash listeners + poll BEFORE", "v58 HUD cash listen before other remotes")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "liveCash listeners FIRST", "v58 WorldPrompt liveCash first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 58)', "v58 WE_Build=58 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 58)', "v58 WE_Build=58 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 59)', "v59 WE_Build=59 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 59)', "v59 WE_Build=59 BaseService")
+
+# ── v59 remotes BEFORE MapSetup (cash HUD never waits on InsertService densify) ─
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "Remotes ready BEFORE map (v59 cash-first)", "v59 remotes before map log")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService/EconomyService ready BEFORE map (v59)", "v59 cash path before map log")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "earlyCashPush", "v59 early cash Push within 1s")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'Name = "EconomyUpdate"', "v59 EarlyRemotes EconomyUpdate belt")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "Catalog densify InsertService — ALWAYS deferred", "v59 densify InsertService deferred")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "ALWAYS deferred (InsertService must never block pads/remotes)", "v59 building visual InsertService deferred")
 
 # ── v55 RESTORE: v20 cash path + DS key bump + v32/v36 kits (NO more floors) ─
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'DataStoreName = "WarEmpire_PlayerData_v2"', "v55 DataStore key bump to v2")

@@ -3,8 +3,8 @@
 	WAR EMPIRE — Server Bootstrap
 	Wires remotes + services. Request/action remotes only.
 
-	CRITICAL: MapSetup runs BEFORE heavy service requires so a failed
-	Combat/Vehicle/etc. module never leaves the player falling in void.
+	v59 CRITICAL: RemoteSetup + DataService/EconomyService BEFORE MapSetup.
+	Map densify InsertService must never block EconomyUpdate (HUD $… forever).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,277 +20,10 @@ local Services = ServerFolder:WaitForChild("Services")
 
 print("[WAR EMPIRE] Server Bootstrap starting...")
 
--- ── Map FIRST (before any heavy service require) ──────────────────────────
--- NEVER let MapSetup parse/require failure abort remotes + HUD (live void bug).
-local MapSetup: any = nil
-do
-	local okMap, mapOrErr = pcall(require, Modules.MapSetup)
-	if okMap then
-		MapSetup = mapOrErr
-	else
-		warn("[WAR EMPIRE] CRITICAL: require(MapSetup) FAILED — remotes will still init. Err:", mapOrErr)
-	end
-end
-
-local function ensureVoidFallback(reason: string)
-	warn("[WAR EMPIRE] CRITICAL: MapSetup failed — installing void fallback. Reason: " .. tostring(reason))
-	print("[WAR EMPIRE] ERROR: MapSetup did not build WarEmpireSetup. Creating emergency baseplate + spawn so players do not void-fall.")
-
-	Workspace.Gravity = 196.2
-
-	local existing = Workspace:FindFirstChild("WE_VoidFallback")
-	if existing then
-		existing:Destroy()
-	end
-
-	local folder = Instance.new("Folder")
-	folder.Name = "WE_VoidFallback"
-	folder.Parent = Workspace
-
-	-- Match playtest ground scale (≥6000) so large-map void-fall still lands on plate
-	local baseplate = Instance.new("Part")
-	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(7000, 6, 7000)
-	baseplate.Position = Vector3.new(0, -3, 0)
-	baseplate.Anchored = true
-	baseplate.CanCollide = true
-	baseplate.Material = Enum.Material.Grass
-	baseplate.Color = Color3.fromRGB(40, 80, 40)
-	baseplate.TopSurface = Enum.SurfaceType.Smooth
-	baseplate.BottomSurface = Enum.SurfaceType.Smooth
-	baseplate.Parent = folder
-
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "EmergencySpawn"
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.Position = Vector3.new(0, 5, 0)
-	spawn.Anchored = true
-	spawn.CanCollide = true
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.BrickColor = BrickColor.new("Bright green")
-	spawn.Material = Enum.Material.Neon
-	spawn.Parent = folder
-
-	print("[WAR EMPIRE] Void fallback ready: WE_VoidFallback Baseplate + EmergencySpawn at (0,5,0)")
-end
-
-local function runMapSetupOrFallback(reasonIfNil: string)
-	if MapSetup == nil then
-		ensureVoidFallback(reasonIfNil)
-		return
-	end
-	local ok, err = pcall(function()
-		MapSetup.Run()
-	end)
-	if not ok then
-		ensureVoidFallback(err)
-	elseif not Workspace:FindFirstChild("WarEmpireSetup") then
-		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
-	end
-end
-
--- v45: set after BaseService Init — refresh kits/walls after any map rebuild (race fix)
-local afterMapRebuild: (() -> ())? = nil
-
-local function notifyMapRebuilt(label: string)
-	if afterMapRebuild then
-		print("[WAR EMPIRE] afterMapRebuild → RefreshAllOnlinePlayers (" .. label .. ")")
-		task.defer(afterMapRebuild)
-	end
-end
-
-local function healOrRebuildMap(label: string)
-	--[[ Idempotent: ensure WarEmpireSetup + collide Ground exist (server start + PlayerAdded). ]]
-	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	if not setup then
-		print("[WAR EMPIRE] Map heal (" .. label .. "): WarEmpireSetup missing — Run()")
-		runMapSetupOrFallback("MapSetup nil during heal (" .. label .. ")")
-		notifyMapRebuilt(label .. ":missing-run")
-		return
-	end
-	if MapSetup == nil then
-		-- Keep existing setup; still force a collide plate if Ground gone
-		local map = setup:FindFirstChild("Map")
-		local g = map and map:FindFirstChild("Ground")
-		if not (g and g:IsA("BasePart") and g.CanCollide) then
-			ensureVoidFallback("MapSetup nil and Ground unhealthy (" .. label .. ")")
-		end
-		return
-	end
-	Workspace.Gravity = 196.2
-	if MapSetup.EnsureGroundHealthy then
-		pcall(function()
-			MapSetup.EnsureGroundHealthy(setup)
-		end)
-	end
-	if MapSetup.ForceRebuildGround then
-		local okRebuild, rebuildResult = pcall(function()
-			return MapSetup.ForceRebuildGround(setup)
-		end)
-		if not (okRebuild and rebuildResult == true) then
-			warn("[WAR EMPIRE] ForceRebuildGround failed (" .. label .. ") — full MapSetup.Run")
-			pcall(function()
-				setup:Destroy()
-				MapSetup.Run()
-			end)
-			notifyMapRebuilt(label .. ":ForceRebuildGround-Run")
-			if not Workspace:FindFirstChild("WarEmpireSetup") then
-				ensureVoidFallback("ForceRebuildGround failed (" .. label .. ")")
-			end
-		end
-	end
-end
-
-if not Workspace:FindFirstChild("WarEmpireSetup") then
-	runMapSetupOrFallback("MapSetup module failed to load")
-else
-	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
-	-- Re-assert gravity; soft-heal first, then ALWAYS delete+recreate Ground/SafetyCatch
-	-- so stale place files / prior soft-heals cannot leave void holes.
-	Workspace.Gravity = 196.2
-	local CollectionService = game:GetService("CollectionService")
-	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	local targetSize = (MapSetup and MapSetup.GROUND_SIZE) or 6400
-
-	healOrRebuildMap("bootstrap-existing")
-
-	setup = Workspace:FindFirstChild("WarEmpireSetup")
-	-- Mandatory Output status after heal/rebuild
-	local mapFolder = setup and setup:FindFirstChild("Map")
-	local g = mapFolder and mapFolder:FindFirstChild("Ground")
-	local catch = mapFolder and mapFolder:FindFirstChild("SafetyCatch")
-	if g and g:IsA("BasePart") then
-		g.CanCollide = true
-		g.Anchored = true
-		print(string.format(
-			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
-			g.Size.X,
-			g.Size.Y,
-			g.Size.Z,
-			tostring(g.CanCollide),
-			tostring(catch ~= nil)
-		))
-		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
-			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
-		end
-	else
-		warn("[WAR EMPIRE] Ground MISSING after force rebuild — run admin resetmap (Studio) MANDATORY")
-	end
-
-	setup = Workspace:FindFirstChild("WarEmpireSetup")
-	if setup then
-		-- Ensure WE_UpgradeSlot tags exist (stale place files / partial builds skip MapSetup)
-		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
-		local taggedCount = #tagged
-		if taggedCount == 0 then
-			local bases = setup:FindFirstChild("Bases")
-			local retagged = 0
-			if bases then
-				for _, desc in ipairs(bases:GetDescendants()) do
-					if desc:IsA("BasePart") then
-						local sid = desc:GetAttribute("StructureId")
-						local pid = desc:GetAttribute("PlotId")
-						if typeof(sid) == "string" and typeof(pid) == "number" then
-							CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
-							desc.CanTouch = true
-							retagged += 1
-						end
-					end
-				end
-			end
-			if retagged == 0 then
-				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
-				pcall(function()
-					setup:Destroy()
-				end)
-				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
-				notifyMapRebuilt("bootstrap-missingPads")
-			else
-				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
-			end
-		else
-			-- Soft-heal: CanTouch on existing tagged pads
-			for _, inst in ipairs(tagged) do
-				if inst:IsA("BasePart") then
-					inst.CanTouch = true
-				end
-			end
-			print("[WAR EMPIRE] Upgrade slots OK:", taggedCount)
-		end
-	end
-end
-
-
--- PlayerAdded: heal map if somehow missing (late join / rare destroy)
--- Also rebuild if WarEmpireSetup exists but upgrade pads are gone (v11 parse abort left void grass).
-do
-	local Players = game:GetService("Players")
-	local CollectionService = game:GetService("CollectionService")
-	local function ensureMapForPlayer(player: Player)
-		task.defer(function()
-			local okHeal, errHeal = pcall(function()
-				local setup = Workspace:FindFirstChild("WarEmpireSetup")
-				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
-					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
-					healOrRebuildMap("PlayerAdded:" .. player.Name)
-					notifyMapRebuilt("PlayerAdded:" .. player.Name)
-					return
-				end
-				if not setup then
-					return
-				end
-				-- Missing pads → full rebuild (never leave green void plate as "setup")
-				local padCount = 0
-				pcall(function()
-					padCount = #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
-				end)
-				if padCount == 0 then
-					local bases = setup:FindFirstChild("Bases")
-					local hasPlotPad = false
-					if bases then
-						for _, d in ipairs(bases:GetDescendants()) do
-							if d:IsA("BasePart") and d.Name == "PlotPad" then
-								hasPlotPad = true
-								break
-							end
-						end
-					end
-					if not hasPlotPad then
-						warn("[WAR EMPIRE] PlayerAdded: WarEmpireSetup has no PlotPad/upgrade pads — full MapSetup rebuild for", player.Name)
-						pcall(function()
-							setup:Destroy()
-						end)
-						-- Destroy void fallback too so Run replaces grass plate
-						local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
-						if voidFb then
-							pcall(function()
-								voidFb:Destroy()
-							end)
-						end
-						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
-						notifyMapRebuilt("PlayerAdded-missingPads:" .. player.Name)
-						return
-					end
-				end
-				if MapSetup and MapSetup.EnsureGroundHealthy then
-					MapSetup.EnsureGroundHealthy(setup)
-				end
-			end)
-			if not okHeal then
-				warn("[WAR EMPIRE] PlayerAdded map heal error (remotes continue):", errHeal)
-			end
-		end)
-	end
-	Players.PlayerAdded:Connect(ensureMapForPlayer)
-	for _, plr in ipairs(Players:GetPlayers()) do
-		ensureMapForPlayer(plr)
-	end
-end
-
--- ── Remotes FIRST (before any service require that can throw) ───────────────
+-- ── 1. REMOTES FIRST (before any MapSetup / InsertService) ─────────────────
 local RemoteSetup = require(Modules.RemoteSetup)
-RemoteSetup.Init() -- client Remotes.GetEvent must never hang on empty folder
+RemoteSetup.Init() -- client Remotes.GetEvent / EconomyUpdate must never hang on empty folder
+print("[WAR EMPIRE] Remotes ready BEFORE map (v59 cash-first)")
 
 local function safeRequire(label: string, moduleScript: ModuleScript): any
 	local ok, mod = pcall(require, moduleScript)
@@ -399,13 +132,23 @@ local function safeInit(label: string, svc: any, ...: any)
 	end
 end
 
+-- v45: set after BaseService Init — refresh kits/walls after any map rebuild (race fix)
+local afterMapRebuild: (() -> ())? = nil
+
+local function notifyMapRebuilt(label: string)
+	if afterMapRebuild then
+		print("[WAR EMPIRE] afterMapRebuild → RefreshAllOnlinePlayers (" .. label .. ")")
+		task.defer(afterMapRebuild)
+	end
+end
+
+-- ── 2. CASH PATH FIRST (instant profile + Push; map must not block) ─────────
 safeInit("RateLimitService", RateLimitService)
 safeInit("AnalyticsService", AnalyticsService)
 if DataService and AnalyticsService and DataService.SetAnalytics then
 	pcall(DataService.SetAnalytics, AnalyticsService)
 end
 
--- Init services that OnProfileLoaded depends on BEFORE DataService loads players
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
@@ -414,23 +157,302 @@ safeInit("XPService", XPService, deps)
 safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
--- v45: map rebuild race — refresh all online players' kits/walls after healOrRebuildMap
 afterMapRebuild = function()
 	if BaseService and BaseService.RefreshAllOnlinePlayers then
 		pcall(BaseService.RefreshAllOnlinePlayers)
 	end
 end
-safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
-safeInit("PremiumPadService", PremiumPadService, deps) -- ATM-cluster Robux pads
+safeInit("UpgradePadService", UpgradePadService, deps)
+safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
 safeInit("TutorialService", TutorialService, deps)
 
--- Now load profiles (fires OnProfileLoaded for joiners)
+-- Now load profiles (fires OnProfileLoaded for joiners) — BEFORE MapSetup
 safeInit("DataService", DataService)
+print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v59)")
 
--- Studio-only auto BUY smoke (IsStudio gated inside module)
+-- Belt: EconomyService.Push within first second regardless of map state
+do
+	local Players = game:GetService("Players")
+	local function earlyCashPush(player: Player)
+		task.spawn(function()
+			local deadline = os.clock() + 1.0
+			while os.clock() < deadline do
+				local profile = nil
+				if DataService and DataService.GetProfile then
+					profile = DataService.GetProfile(player)
+				end
+				if profile then
+					if EconomyService and EconomyService.Push then
+						pcall(EconomyService.Push, player)
+					end
+					return
+				end
+				task.wait(0.05)
+			end
+			if DataService and DataService.EnsureProfile then
+				pcall(DataService.EnsureProfile, player)
+			end
+			if EconomyService and EconomyService.Push then
+				pcall(EconomyService.Push, player)
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(earlyCashPush)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		earlyCashPush(plr)
+	end
+end
+
+-- ── 3. MAP AFTER REMOTES + CASH (densify InsertService is deferred inside MapSetup) ─
+-- NEVER let MapSetup parse/require failure abort remotes + HUD (live void bug).
+local MapSetup: any = nil
+do
+	local okMap, mapOrErr = pcall(require, Modules.MapSetup)
+	if okMap then
+		MapSetup = mapOrErr
+	else
+		warn("[WAR EMPIRE] CRITICAL: require(MapSetup) FAILED — remotes already live. Err:", mapOrErr)
+	end
+end
+
+local function ensureVoidFallback(reason: string)
+	warn("[WAR EMPIRE] CRITICAL: MapSetup failed — installing void fallback. Reason: " .. tostring(reason))
+	print("[WAR EMPIRE] ERROR: MapSetup did not build WarEmpireSetup. Creating emergency baseplate + spawn so players do not void-fall.")
+
+	Workspace.Gravity = 196.2
+
+	local existing = Workspace:FindFirstChild("WE_VoidFallback")
+	if existing then
+		existing:Destroy()
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "WE_VoidFallback"
+	folder.Parent = Workspace
+
+	local baseplate = Instance.new("Part")
+	baseplate.Name = "Baseplate"
+	baseplate.Size = Vector3.new(7000, 6, 7000)
+	baseplate.Position = Vector3.new(0, -3, 0)
+	baseplate.Anchored = true
+	baseplate.CanCollide = true
+	baseplate.Material = Enum.Material.Grass
+	baseplate.Color = Color3.fromRGB(40, 80, 40)
+	baseplate.TopSurface = Enum.SurfaceType.Smooth
+	baseplate.BottomSurface = Enum.SurfaceType.Smooth
+	baseplate.Parent = folder
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "EmergencySpawn"
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.Position = Vector3.new(0, 5, 0)
+	spawn.Anchored = true
+	spawn.CanCollide = true
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.BrickColor = BrickColor.new("Bright green")
+	spawn.Material = Enum.Material.Neon
+	spawn.Parent = folder
+
+	print("[WAR EMPIRE] Void fallback ready: WE_VoidFallback Baseplate + EmergencySpawn at (0,5,0)")
+end
+
+local function runMapSetupOrFallback(reasonIfNil: string)
+	if MapSetup == nil then
+		ensureVoidFallback(reasonIfNil)
+		return
+	end
+	local ok, err = pcall(function()
+		MapSetup.Run()
+	end)
+	if not ok then
+		ensureVoidFallback(err)
+	elseif not Workspace:FindFirstChild("WarEmpireSetup") then
+		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
+	end
+end
+
+local function healOrRebuildMap(label: string)
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		print("[WAR EMPIRE] Map heal (" .. label .. "): WarEmpireSetup missing — Run()")
+		runMapSetupOrFallback("MapSetup nil during heal (" .. label .. ")")
+		notifyMapRebuilt(label .. ":missing-run")
+		return
+	end
+	if MapSetup == nil then
+		local map = setup:FindFirstChild("Map")
+		local g = map and map:FindFirstChild("Ground")
+		if not (g and g:IsA("BasePart") and g.CanCollide) then
+			ensureVoidFallback("MapSetup nil and Ground unhealthy (" .. label .. ")")
+		end
+		return
+	end
+	Workspace.Gravity = 196.2
+	if MapSetup.EnsureGroundHealthy then
+		pcall(function()
+			MapSetup.EnsureGroundHealthy(setup)
+		end)
+	end
+	if MapSetup.ForceRebuildGround then
+		local okRebuild, rebuildResult = pcall(function()
+			return MapSetup.ForceRebuildGround(setup)
+		end)
+		if not (okRebuild and rebuildResult == true) then
+			warn("[WAR EMPIRE] ForceRebuildGround failed (" .. label .. ") — full MapSetup.Run")
+			pcall(function()
+				setup:Destroy()
+				MapSetup.Run()
+			end)
+			notifyMapRebuilt(label .. ":ForceRebuildGround-Run")
+			if not Workspace:FindFirstChild("WarEmpireSetup") then
+				ensureVoidFallback("ForceRebuildGround failed (" .. label .. ")")
+			end
+		end
+	end
+end
+
+-- Run map build/heal AFTER remotes exist (never blocks EconomyUpdate creation)
+if not Workspace:FindFirstChild("WarEmpireSetup") then
+	runMapSetupOrFallback("MapSetup module failed to load")
+else
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
+	Workspace.Gravity = 196.2
+	local CollectionService = game:GetService("CollectionService")
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local targetSize = (MapSetup and MapSetup.GROUND_SIZE) or 6400
+
+	healOrRebuildMap("bootstrap-existing")
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local mapFolder = setup and setup:FindFirstChild("Map")
+	local g = mapFolder and mapFolder:FindFirstChild("Ground")
+	local catch = mapFolder and mapFolder:FindFirstChild("SafetyCatch")
+	if g and g:IsA("BasePart") then
+		g.CanCollide = true
+		g.Anchored = true
+		print(string.format(
+			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
+			g.Size.X,
+			g.Size.Y,
+			g.Size.Z,
+			tostring(g.CanCollide),
+			tostring(catch ~= nil)
+		))
+		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
+			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
+		end
+	else
+		warn("[WAR EMPIRE] Ground MISSING after force rebuild — run admin resetmap (Studio) MANDATORY")
+	end
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if setup then
+		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+		local taggedCount = #tagged
+		if taggedCount == 0 then
+			local bases = setup:FindFirstChild("Bases")
+			local retagged = 0
+			if bases then
+				for _, desc in ipairs(bases:GetDescendants()) do
+					if desc:IsA("BasePart") then
+						local sid = desc:GetAttribute("StructureId")
+						local pid = desc:GetAttribute("PlotId")
+						if typeof(sid) == "string" and typeof(pid) == "number" then
+							CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+							desc.CanTouch = true
+							retagged += 1
+						end
+					end
+				end
+			end
+			if retagged == 0 then
+				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
+				pcall(function()
+					setup:Destroy()
+				end)
+				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
+				notifyMapRebuilt("bootstrap-missingPads")
+			else
+				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
+			end
+		else
+			for _, inst in ipairs(tagged) do
+				if inst:IsA("BasePart") then
+					inst.CanTouch = true
+				end
+			end
+			print("[WAR EMPIRE] Upgrade slots OK:", taggedCount)
+		end
+	end
+end
+
+-- PlayerAdded: heal map if somehow missing (late join / rare destroy)
+do
+	local Players = game:GetService("Players")
+	local CollectionService = game:GetService("CollectionService")
+	local function ensureMapForPlayer(player: Player)
+		task.defer(function()
+			local okHeal, errHeal = pcall(function()
+				local setup = Workspace:FindFirstChild("WarEmpireSetup")
+				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
+					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
+					healOrRebuildMap("PlayerAdded:" .. player.Name)
+					notifyMapRebuilt("PlayerAdded:" .. player.Name)
+					return
+				end
+				if not setup then
+					return
+				end
+				local padCount = 0
+				pcall(function()
+					padCount = #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+				end)
+				if padCount == 0 then
+					local bases = setup:FindFirstChild("Bases")
+					local hasPlotPad = false
+					if bases then
+						for _, d in ipairs(bases:GetDescendants()) do
+							if d:IsA("BasePart") and d.Name == "PlotPad" then
+								hasPlotPad = true
+								break
+							end
+						end
+					end
+					if not hasPlotPad then
+						warn("[WAR EMPIRE] PlayerAdded: WarEmpireSetup has no PlotPad/upgrade pads — full MapSetup rebuild for", player.Name)
+						pcall(function()
+							setup:Destroy()
+						end)
+						local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
+						if voidFb then
+							pcall(function()
+								voidFb:Destroy()
+							end)
+						end
+						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
+						notifyMapRebuilt("PlayerAdded-missingPads:" .. player.Name)
+						return
+					end
+				end
+				if MapSetup and MapSetup.EnsureGroundHealthy then
+					MapSetup.EnsureGroundHealthy(setup)
+				end
+			end)
+			if not okHeal then
+				warn("[WAR EMPIRE] PlayerAdded map heal error (remotes continue):", errHeal)
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(ensureMapForPlayer)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		ensureMapForPlayer(plr)
+	end
+end
+
+-- ── 4. Remaining services ───────────────────────────────────────────────────
 safeInit("StudioBuySmoke", StudioBuySmoke, deps)
-
 safeInit("AdminService", AdminService, deps)
 safeInit("VisualAssetService", VisualAssetService)
 safeInit("CombatService", CombatService, deps)

@@ -3890,8 +3890,8 @@ return Constants
 --[[
 	Client/server helper to fetch remotes created by RemoteSetup.
 	Does not create remotes on the client.
-	Waits patiently — Rojo ships an empty Remotes folder; server may still
-	be running MapSetup before RemoteSetup.Init. Never hard-assert after 10s.
+	Waits patiently — Rojo ships an empty Remotes folder; v59 Bootstrap creates
+	remotes BEFORE MapSetup. EarlyRemotes belt + RemoteSetup.Init. Never hard-assert after 10s.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -4414,8 +4414,8 @@ return UIUtil
 	WAR EMPIRE — Server Bootstrap
 	Wires remotes + services. Request/action remotes only.
 
-	CRITICAL: MapSetup runs BEFORE heavy service requires so a failed
-	Combat/Vehicle/etc. module never leaves the player falling in void.
+	v59 CRITICAL: RemoteSetup + DataService/EconomyService BEFORE MapSetup.
+	Map densify InsertService must never block EconomyUpdate (HUD $… forever).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -4431,277 +4431,10 @@ local Services = ServerFolder:WaitForChild("Services")
 
 print("[WAR EMPIRE] Server Bootstrap starting...")
 
--- ── Map FIRST (before any heavy service require) ──────────────────────────
--- NEVER let MapSetup parse/require failure abort remotes + HUD (live void bug).
-local MapSetup: any = nil
-do
-	local okMap, mapOrErr = pcall(require, Modules.MapSetup)
-	if okMap then
-		MapSetup = mapOrErr
-	else
-		warn("[WAR EMPIRE] CRITICAL: require(MapSetup) FAILED — remotes will still init. Err:", mapOrErr)
-	end
-end
-
-local function ensureVoidFallback(reason: string)
-	warn("[WAR EMPIRE] CRITICAL: MapSetup failed — installing void fallback. Reason: " .. tostring(reason))
-	print("[WAR EMPIRE] ERROR: MapSetup did not build WarEmpireSetup. Creating emergency baseplate + spawn so players do not void-fall.")
-
-	Workspace.Gravity = 196.2
-
-	local existing = Workspace:FindFirstChild("WE_VoidFallback")
-	if existing then
-		existing:Destroy()
-	end
-
-	local folder = Instance.new("Folder")
-	folder.Name = "WE_VoidFallback"
-	folder.Parent = Workspace
-
-	-- Match playtest ground scale (≥6000) so large-map void-fall still lands on plate
-	local baseplate = Instance.new("Part")
-	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(7000, 6, 7000)
-	baseplate.Position = Vector3.new(0, -3, 0)
-	baseplate.Anchored = true
-	baseplate.CanCollide = true
-	baseplate.Material = Enum.Material.Grass
-	baseplate.Color = Color3.fromRGB(40, 80, 40)
-	baseplate.TopSurface = Enum.SurfaceType.Smooth
-	baseplate.BottomSurface = Enum.SurfaceType.Smooth
-	baseplate.Parent = folder
-
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "EmergencySpawn"
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.Position = Vector3.new(0, 5, 0)
-	spawn.Anchored = true
-	spawn.CanCollide = true
-	spawn.Neutral = true
-	spawn.Duration = 0
-	spawn.BrickColor = BrickColor.new("Bright green")
-	spawn.Material = Enum.Material.Neon
-	spawn.Parent = folder
-
-	print("[WAR EMPIRE] Void fallback ready: WE_VoidFallback Baseplate + EmergencySpawn at (0,5,0)")
-end
-
-local function runMapSetupOrFallback(reasonIfNil: string)
-	if MapSetup == nil then
-		ensureVoidFallback(reasonIfNil)
-		return
-	end
-	local ok, err = pcall(function()
-		MapSetup.Run()
-	end)
-	if not ok then
-		ensureVoidFallback(err)
-	elseif not Workspace:FindFirstChild("WarEmpireSetup") then
-		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
-	end
-end
-
--- v45: set after BaseService Init — refresh kits/walls after any map rebuild (race fix)
-local afterMapRebuild: (() -> ())? = nil
-
-local function notifyMapRebuilt(label: string)
-	if afterMapRebuild then
-		print("[WAR EMPIRE] afterMapRebuild → RefreshAllOnlinePlayers (" .. label .. ")")
-		task.defer(afterMapRebuild)
-	end
-end
-
-local function healOrRebuildMap(label: string)
-	--[[ Idempotent: ensure WarEmpireSetup + collide Ground exist (server start + PlayerAdded). ]]
-	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	if not setup then
-		print("[WAR EMPIRE] Map heal (" .. label .. "): WarEmpireSetup missing — Run()")
-		runMapSetupOrFallback("MapSetup nil during heal (" .. label .. ")")
-		notifyMapRebuilt(label .. ":missing-run")
-		return
-	end
-	if MapSetup == nil then
-		-- Keep existing setup; still force a collide plate if Ground gone
-		local map = setup:FindFirstChild("Map")
-		local g = map and map:FindFirstChild("Ground")
-		if not (g and g:IsA("BasePart") and g.CanCollide) then
-			ensureVoidFallback("MapSetup nil and Ground unhealthy (" .. label .. ")")
-		end
-		return
-	end
-	Workspace.Gravity = 196.2
-	if MapSetup.EnsureGroundHealthy then
-		pcall(function()
-			MapSetup.EnsureGroundHealthy(setup)
-		end)
-	end
-	if MapSetup.ForceRebuildGround then
-		local okRebuild, rebuildResult = pcall(function()
-			return MapSetup.ForceRebuildGround(setup)
-		end)
-		if not (okRebuild and rebuildResult == true) then
-			warn("[WAR EMPIRE] ForceRebuildGround failed (" .. label .. ") — full MapSetup.Run")
-			pcall(function()
-				setup:Destroy()
-				MapSetup.Run()
-			end)
-			notifyMapRebuilt(label .. ":ForceRebuildGround-Run")
-			if not Workspace:FindFirstChild("WarEmpireSetup") then
-				ensureVoidFallback("ForceRebuildGround failed (" .. label .. ")")
-			end
-		end
-	end
-end
-
-if not Workspace:FindFirstChild("WarEmpireSetup") then
-	runMapSetupOrFallback("MapSetup module failed to load")
-else
-	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
-	-- Re-assert gravity; soft-heal first, then ALWAYS delete+recreate Ground/SafetyCatch
-	-- so stale place files / prior soft-heals cannot leave void holes.
-	Workspace.Gravity = 196.2
-	local CollectionService = game:GetService("CollectionService")
-	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	local targetSize = (MapSetup and MapSetup.GROUND_SIZE) or 6400
-
-	healOrRebuildMap("bootstrap-existing")
-
-	setup = Workspace:FindFirstChild("WarEmpireSetup")
-	-- Mandatory Output status after heal/rebuild
-	local mapFolder = setup and setup:FindFirstChild("Map")
-	local g = mapFolder and mapFolder:FindFirstChild("Ground")
-	local catch = mapFolder and mapFolder:FindFirstChild("SafetyCatch")
-	if g and g:IsA("BasePart") then
-		g.CanCollide = true
-		g.Anchored = true
-		print(string.format(
-			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
-			g.Size.X,
-			g.Size.Y,
-			g.Size.Z,
-			tostring(g.CanCollide),
-			tostring(catch ~= nil)
-		))
-		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
-			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
-		end
-	else
-		warn("[WAR EMPIRE] Ground MISSING after force rebuild — run admin resetmap (Studio) MANDATORY")
-	end
-
-	setup = Workspace:FindFirstChild("WarEmpireSetup")
-	if setup then
-		-- Ensure WE_UpgradeSlot tags exist (stale place files / partial builds skip MapSetup)
-		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
-		local taggedCount = #tagged
-		if taggedCount == 0 then
-			local bases = setup:FindFirstChild("Bases")
-			local retagged = 0
-			if bases then
-				for _, desc in ipairs(bases:GetDescendants()) do
-					if desc:IsA("BasePart") then
-						local sid = desc:GetAttribute("StructureId")
-						local pid = desc:GetAttribute("PlotId")
-						if typeof(sid) == "string" and typeof(pid) == "number" then
-							CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
-							desc.CanTouch = true
-							retagged += 1
-						end
-					end
-				end
-			end
-			if retagged == 0 then
-				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
-				pcall(function()
-					setup:Destroy()
-				end)
-				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
-				notifyMapRebuilt("bootstrap-missingPads")
-			else
-				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
-			end
-		else
-			-- Soft-heal: CanTouch on existing tagged pads
-			for _, inst in ipairs(tagged) do
-				if inst:IsA("BasePart") then
-					inst.CanTouch = true
-				end
-			end
-			print("[WAR EMPIRE] Upgrade slots OK:", taggedCount)
-		end
-	end
-end
-
-
--- PlayerAdded: heal map if somehow missing (late join / rare destroy)
--- Also rebuild if WarEmpireSetup exists but upgrade pads are gone (v11 parse abort left void grass).
-do
-	local Players = game:GetService("Players")
-	local CollectionService = game:GetService("CollectionService")
-	local function ensureMapForPlayer(player: Player)
-		task.defer(function()
-			local okHeal, errHeal = pcall(function()
-				local setup = Workspace:FindFirstChild("WarEmpireSetup")
-				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
-					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
-					healOrRebuildMap("PlayerAdded:" .. player.Name)
-					notifyMapRebuilt("PlayerAdded:" .. player.Name)
-					return
-				end
-				if not setup then
-					return
-				end
-				-- Missing pads → full rebuild (never leave green void plate as "setup")
-				local padCount = 0
-				pcall(function()
-					padCount = #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
-				end)
-				if padCount == 0 then
-					local bases = setup:FindFirstChild("Bases")
-					local hasPlotPad = false
-					if bases then
-						for _, d in ipairs(bases:GetDescendants()) do
-							if d:IsA("BasePart") and d.Name == "PlotPad" then
-								hasPlotPad = true
-								break
-							end
-						end
-					end
-					if not hasPlotPad then
-						warn("[WAR EMPIRE] PlayerAdded: WarEmpireSetup has no PlotPad/upgrade pads — full MapSetup rebuild for", player.Name)
-						pcall(function()
-							setup:Destroy()
-						end)
-						-- Destroy void fallback too so Run replaces grass plate
-						local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
-						if voidFb then
-							pcall(function()
-								voidFb:Destroy()
-							end)
-						end
-						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
-						notifyMapRebuilt("PlayerAdded-missingPads:" .. player.Name)
-						return
-					end
-				end
-				if MapSetup and MapSetup.EnsureGroundHealthy then
-					MapSetup.EnsureGroundHealthy(setup)
-				end
-			end)
-			if not okHeal then
-				warn("[WAR EMPIRE] PlayerAdded map heal error (remotes continue):", errHeal)
-			end
-		end)
-	end
-	Players.PlayerAdded:Connect(ensureMapForPlayer)
-	for _, plr in ipairs(Players:GetPlayers()) do
-		ensureMapForPlayer(plr)
-	end
-end
-
--- ── Remotes FIRST (before any service require that can throw) ───────────────
+-- ── 1. REMOTES FIRST (before any MapSetup / InsertService) ─────────────────
 local RemoteSetup = require(Modules.RemoteSetup)
-RemoteSetup.Init() -- client Remotes.GetEvent must never hang on empty folder
+RemoteSetup.Init() -- client Remotes.GetEvent / EconomyUpdate must never hang on empty folder
+print("[WAR EMPIRE] Remotes ready BEFORE map (v59 cash-first)")
 
 local function safeRequire(label: string, moduleScript: ModuleScript): any
 	local ok, mod = pcall(require, moduleScript)
@@ -4810,13 +4543,23 @@ local function safeInit(label: string, svc: any, ...: any)
 	end
 end
 
+-- v45: set after BaseService Init — refresh kits/walls after any map rebuild (race fix)
+local afterMapRebuild: (() -> ())? = nil
+
+local function notifyMapRebuilt(label: string)
+	if afterMapRebuild then
+		print("[WAR EMPIRE] afterMapRebuild → RefreshAllOnlinePlayers (" .. label .. ")")
+		task.defer(afterMapRebuild)
+	end
+end
+
+-- ── 2. CASH PATH FIRST (instant profile + Push; map must not block) ─────────
 safeInit("RateLimitService", RateLimitService)
 safeInit("AnalyticsService", AnalyticsService)
 if DataService and AnalyticsService and DataService.SetAnalytics then
 	pcall(DataService.SetAnalytics, AnalyticsService)
 end
 
--- Init services that OnProfileLoaded depends on BEFORE DataService loads players
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
@@ -4825,23 +4568,302 @@ safeInit("XPService", XPService, deps)
 safeInit("MoneyCollectorService", MoneyCollectorService, deps)
 safeInit("ManualDropperService", ManualDropperService, deps)
 safeInit("BaseService", BaseService, deps) -- registers OnProfileLoaded + PurchaseUpgrade remote
--- v45: map rebuild race — refresh all online players' kits/walls after healOrRebuildMap
 afterMapRebuild = function()
 	if BaseService and BaseService.RefreshAllOnlinePlayers then
 		pcall(BaseService.RefreshAllOnlinePlayers)
 	end
 end
-safeInit("UpgradePadService", UpgradePadService, deps) -- server walk-over buy
-safeInit("PremiumPadService", PremiumPadService, deps) -- ATM-cluster Robux pads
+safeInit("UpgradePadService", UpgradePadService, deps)
+safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
 safeInit("TutorialService", TutorialService, deps)
 
--- Now load profiles (fires OnProfileLoaded for joiners)
+-- Now load profiles (fires OnProfileLoaded for joiners) — BEFORE MapSetup
 safeInit("DataService", DataService)
+print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v59)")
 
--- Studio-only auto BUY smoke (IsStudio gated inside module)
+-- Belt: EconomyService.Push within first second regardless of map state
+do
+	local Players = game:GetService("Players")
+	local function earlyCashPush(player: Player)
+		task.spawn(function()
+			local deadline = os.clock() + 1.0
+			while os.clock() < deadline do
+				local profile = nil
+				if DataService and DataService.GetProfile then
+					profile = DataService.GetProfile(player)
+				end
+				if profile then
+					if EconomyService and EconomyService.Push then
+						pcall(EconomyService.Push, player)
+					end
+					return
+				end
+				task.wait(0.05)
+			end
+			if DataService and DataService.EnsureProfile then
+				pcall(DataService.EnsureProfile, player)
+			end
+			if EconomyService and EconomyService.Push then
+				pcall(EconomyService.Push, player)
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(earlyCashPush)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		earlyCashPush(plr)
+	end
+end
+
+-- ── 3. MAP AFTER REMOTES + CASH (densify InsertService is deferred inside MapSetup) ─
+-- NEVER let MapSetup parse/require failure abort remotes + HUD (live void bug).
+local MapSetup: any = nil
+do
+	local okMap, mapOrErr = pcall(require, Modules.MapSetup)
+	if okMap then
+		MapSetup = mapOrErr
+	else
+		warn("[WAR EMPIRE] CRITICAL: require(MapSetup) FAILED — remotes already live. Err:", mapOrErr)
+	end
+end
+
+local function ensureVoidFallback(reason: string)
+	warn("[WAR EMPIRE] CRITICAL: MapSetup failed — installing void fallback. Reason: " .. tostring(reason))
+	print("[WAR EMPIRE] ERROR: MapSetup did not build WarEmpireSetup. Creating emergency baseplate + spawn so players do not void-fall.")
+
+	Workspace.Gravity = 196.2
+
+	local existing = Workspace:FindFirstChild("WE_VoidFallback")
+	if existing then
+		existing:Destroy()
+	end
+
+	local folder = Instance.new("Folder")
+	folder.Name = "WE_VoidFallback"
+	folder.Parent = Workspace
+
+	local baseplate = Instance.new("Part")
+	baseplate.Name = "Baseplate"
+	baseplate.Size = Vector3.new(7000, 6, 7000)
+	baseplate.Position = Vector3.new(0, -3, 0)
+	baseplate.Anchored = true
+	baseplate.CanCollide = true
+	baseplate.Material = Enum.Material.Grass
+	baseplate.Color = Color3.fromRGB(40, 80, 40)
+	baseplate.TopSurface = Enum.SurfaceType.Smooth
+	baseplate.BottomSurface = Enum.SurfaceType.Smooth
+	baseplate.Parent = folder
+
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Name = "EmergencySpawn"
+	spawn.Size = Vector3.new(12, 1, 12)
+	spawn.Position = Vector3.new(0, 5, 0)
+	spawn.Anchored = true
+	spawn.CanCollide = true
+	spawn.Neutral = true
+	spawn.Duration = 0
+	spawn.BrickColor = BrickColor.new("Bright green")
+	spawn.Material = Enum.Material.Neon
+	spawn.Parent = folder
+
+	print("[WAR EMPIRE] Void fallback ready: WE_VoidFallback Baseplate + EmergencySpawn at (0,5,0)")
+end
+
+local function runMapSetupOrFallback(reasonIfNil: string)
+	if MapSetup == nil then
+		ensureVoidFallback(reasonIfNil)
+		return
+	end
+	local ok, err = pcall(function()
+		MapSetup.Run()
+	end)
+	if not ok then
+		ensureVoidFallback(err)
+	elseif not Workspace:FindFirstChild("WarEmpireSetup") then
+		ensureVoidFallback("MapSetup.Run returned but WarEmpireSetup missing")
+	end
+end
+
+local function healOrRebuildMap(label: string)
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if not setup then
+		print("[WAR EMPIRE] Map heal (" .. label .. "): WarEmpireSetup missing — Run()")
+		runMapSetupOrFallback("MapSetup nil during heal (" .. label .. ")")
+		notifyMapRebuilt(label .. ":missing-run")
+		return
+	end
+	if MapSetup == nil then
+		local map = setup:FindFirstChild("Map")
+		local g = map and map:FindFirstChild("Ground")
+		if not (g and g:IsA("BasePart") and g.CanCollide) then
+			ensureVoidFallback("MapSetup nil and Ground unhealthy (" .. label .. ")")
+		end
+		return
+	end
+	Workspace.Gravity = 196.2
+	if MapSetup.EnsureGroundHealthy then
+		pcall(function()
+			MapSetup.EnsureGroundHealthy(setup)
+		end)
+	end
+	if MapSetup.ForceRebuildGround then
+		local okRebuild, rebuildResult = pcall(function()
+			return MapSetup.ForceRebuildGround(setup)
+		end)
+		if not (okRebuild and rebuildResult == true) then
+			warn("[WAR EMPIRE] ForceRebuildGround failed (" .. label .. ") — full MapSetup.Run")
+			pcall(function()
+				setup:Destroy()
+				MapSetup.Run()
+			end)
+			notifyMapRebuilt(label .. ":ForceRebuildGround-Run")
+			if not Workspace:FindFirstChild("WarEmpireSetup") then
+				ensureVoidFallback("ForceRebuildGround failed (" .. label .. ")")
+			end
+		end
+	end
+end
+
+-- Run map build/heal AFTER remotes exist (never blocks EconomyUpdate creation)
+if not Workspace:FindFirstChild("WarEmpireSetup") then
+	runMapSetupOrFallback("MapSetup module failed to load")
+else
+	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
+	Workspace.Gravity = 196.2
+	local CollectionService = game:GetService("CollectionService")
+	local setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local targetSize = (MapSetup and MapSetup.GROUND_SIZE) or 6400
+
+	healOrRebuildMap("bootstrap-existing")
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	local mapFolder = setup and setup:FindFirstChild("Map")
+	local g = mapFolder and mapFolder:FindFirstChild("Ground")
+	local catch = mapFolder and mapFolder:FindFirstChild("SafetyCatch")
+	if g and g:IsA("BasePart") then
+		g.CanCollide = true
+		g.Anchored = true
+		print(string.format(
+			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
+			g.Size.X,
+			g.Size.Y,
+			g.Size.Z,
+			tostring(g.CanCollide),
+			tostring(catch ~= nil)
+		))
+		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
+			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
+		end
+	else
+		warn("[WAR EMPIRE] Ground MISSING after force rebuild — run admin resetmap (Studio) MANDATORY")
+	end
+
+	setup = Workspace:FindFirstChild("WarEmpireSetup")
+	if setup then
+		local tagged = CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+		local taggedCount = #tagged
+		if taggedCount == 0 then
+			local bases = setup:FindFirstChild("Bases")
+			local retagged = 0
+			if bases then
+				for _, desc in ipairs(bases:GetDescendants()) do
+					if desc:IsA("BasePart") then
+						local sid = desc:GetAttribute("StructureId")
+						local pid = desc:GetAttribute("PlotId")
+						if typeof(sid) == "string" and typeof(pid) == "number" then
+							CollectionService:AddTag(desc, Constants.Tags.UpgradeSlot)
+							desc.CanTouch = true
+							retagged += 1
+						end
+					end
+				end
+			end
+			if retagged == 0 then
+				warn("[WAR EMPIRE] WarEmpireSetup present but no upgrade pads — rebuilding via MapSetup")
+				pcall(function()
+					setup:Destroy()
+				end)
+				runMapSetupOrFallback("Missing upgrade pads and MapSetup nil")
+				notifyMapRebuilt("bootstrap-missingPads")
+			else
+				print("[WAR EMPIRE] Re-tagged", retagged, "upgrade pads with WE_UpgradeSlot")
+			end
+		else
+			for _, inst in ipairs(tagged) do
+				if inst:IsA("BasePart") then
+					inst.CanTouch = true
+				end
+			end
+			print("[WAR EMPIRE] Upgrade slots OK:", taggedCount)
+		end
+	end
+end
+
+-- PlayerAdded: heal map if somehow missing (late join / rare destroy)
+do
+	local Players = game:GetService("Players")
+	local CollectionService = game:GetService("CollectionService")
+	local function ensureMapForPlayer(player: Player)
+		task.defer(function()
+			local okHeal, errHeal = pcall(function()
+				local setup = Workspace:FindFirstChild("WarEmpireSetup")
+				if not setup and not Workspace:FindFirstChild("WE_VoidFallback") then
+					warn("[WAR EMPIRE] PlayerAdded map missing for", player.Name, "— healing")
+					healOrRebuildMap("PlayerAdded:" .. player.Name)
+					notifyMapRebuilt("PlayerAdded:" .. player.Name)
+					return
+				end
+				if not setup then
+					return
+				end
+				local padCount = 0
+				pcall(function()
+					padCount = #CollectionService:GetTagged(Constants.Tags.UpgradeSlot)
+				end)
+				if padCount == 0 then
+					local bases = setup:FindFirstChild("Bases")
+					local hasPlotPad = false
+					if bases then
+						for _, d in ipairs(bases:GetDescendants()) do
+							if d:IsA("BasePart") and d.Name == "PlotPad" then
+								hasPlotPad = true
+								break
+							end
+						end
+					end
+					if not hasPlotPad then
+						warn("[WAR EMPIRE] PlayerAdded: WarEmpireSetup has no PlotPad/upgrade pads — full MapSetup rebuild for", player.Name)
+						pcall(function()
+							setup:Destroy()
+						end)
+						local voidFb = Workspace:FindFirstChild("WE_VoidFallback")
+						if voidFb then
+							pcall(function()
+								voidFb:Destroy()
+							end)
+						end
+						healOrRebuildMap("PlayerAdded-missingPads:" .. player.Name)
+						notifyMapRebuilt("PlayerAdded-missingPads:" .. player.Name)
+						return
+					end
+				end
+				if MapSetup and MapSetup.EnsureGroundHealthy then
+					MapSetup.EnsureGroundHealthy(setup)
+				end
+			end)
+			if not okHeal then
+				warn("[WAR EMPIRE] PlayerAdded map heal error (remotes continue):", errHeal)
+			end
+		end)
+	end
+	Players.PlayerAdded:Connect(ensureMapForPlayer)
+	for _, plr in ipairs(Players:GetPlayers()) do
+		ensureMapForPlayer(plr)
+	end
+end
+
+-- ── 4. Remaining services ───────────────────────────────────────────────────
 safeInit("StudioBuySmoke", StudioBuySmoke, deps)
-
 safeInit("AdminService", AdminService, deps)
 safeInit("VisualAssetService", VisualAssetService)
 safeInit("CombatService", CombatService, deps)
@@ -4873,11 +4895,46 @@ print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="50">
+      <Item class="Script" referent="50">
+        <Properties>
+          <string name="Name">EarlyRemotes</string>
+          <token name="RunContext">0</token>
+          <string name="Source"><![CDATA[--!strict
+--[[
+	v59 belt: create Remotes/EconomyUpdate ASAP so client never WaitForChild 180s
+	while Bootstrap is still requiring modules. Idempotent with RemoteSetup.Init.
+]]
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local folder = ReplicatedStorage:FindFirstChild("Remotes")
+if not folder then
+	folder = Instance.new("Folder")
+	folder.Name = "Remotes"
+	folder.Parent = ReplicatedStorage
+end
+
+if not folder:FindFirstChild("EconomyUpdate") then
+	local ev = Instance.new("RemoteEvent")
+	ev.Name = "EconomyUpdate"
+	ev.Parent = folder
+end
+
+if not folder:FindFirstChild("PlayerStateUpdate") then
+	local ev = Instance.new("RemoteEvent")
+	ev.Name = "PlayerStateUpdate"
+	ev.Parent = folder
+end
+
+print("[WAR EMPIRE] EarlyRemotes belt: EconomyUpdate present")
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="Folder" referent="51">
         <Properties>
           <string name="Name">Modules</string>
         </Properties>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -5270,7 +5327,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -7350,7 +7407,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -7805,10 +7862,14 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
 	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
 	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
-	-- Optional free Creator Store building visual (skipped when StudioSkipWorldDressing)
-	pcall(function()
-		local vas = require(script.Parent.Parent.Services.VisualAssetService)
-		vas.TryAttachBuildingVisual(plinth, def.Id)
+	-- Optional catalog building visual — ALWAYS deferred (InsertService must never block pads/remotes)
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if vas and vas.TryAttachBuildingVisual then
+				vas.TryAttachBuildingVisual(plinth, def.Id)
+			end
+		end)
 	end)
 	return plinth
 end
@@ -9487,30 +9548,32 @@ function MapSetup.Run()
 						})
 					end
 				end
-				-- Optional catalog floodlight tower / flag (never clears pads on fail)
-								pcall(function()
-						local vas = require(script.Parent.Parent.Services.VisualAssetService)
-						if not (vas and vas.TryAttachPropVisual) then
-							return
-						end
-						-- WZ densify catalog: sandbags / crates / desert flora hosts
-						for _, ch in ipairs(wz:GetChildren()) do
-							if ch:IsA("BasePart") then
-								if string.find(ch.Name, "Sandbag", 1, true) then
-									vas.TryAttachPropVisual(ch, "Sandbag")
-								elseif string.find(ch.Name, "Crate", 1, true) then
-									vas.TryAttachPropVisual(ch, "Crate")
-								elseif string.find(ch.Name, "Drum", 1, true) then
-									vas.TryAttachPropVisual(ch, "OilBarrel")
-								elseif string.find(ch.Name, "Barrier", 1, true) then
-									vas.TryAttachPropVisual(ch, "ConcreteBarrier")
+				-- Catalog densify InsertService — ALWAYS deferred (never block MapSetup.Run / remotes)
+					task.defer(function()
+						pcall(function()
+							local vas = require(script.Parent.Parent.Services.VisualAssetService)
+							if not (vas and vas.TryAttachPropVisual) then
+								return
+							end
+							-- WZ densify catalog: sandbags / crates / desert flora hosts
+							for _, ch in ipairs(wz:GetChildren()) do
+								if ch:IsA("BasePart") then
+									if string.find(ch.Name, "Sandbag", 1, true) then
+										vas.TryAttachPropVisual(ch, "Sandbag")
+									elseif string.find(ch.Name, "Crate", 1, true) then
+										vas.TryAttachPropVisual(ch, "Crate")
+									elseif string.find(ch.Name, "Drum", 1, true) then
+										vas.TryAttachPropVisual(ch, "OilBarrel")
+									elseif string.find(ch.Name, "Barrier", 1, true) then
+										vas.TryAttachPropVisual(ch, "ConcreteBarrier")
+									end
 								end
 							end
-						end
-						local host = wz:FindFirstChildWhichIsA("BasePart")
-						if host then
-							vas.TryAttachPropVisual(host, "FloodlightTower")
-						end
+							local host = wz:FindFirstChildWhichIsA("BasePart")
+							if host then
+								vas.TryAttachPropVisual(host, "FloodlightTower")
+							end
+						end)
 					end)
 			end)
 			if not okDress then
@@ -10308,7 +10371,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -10673,7 +10736,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -10741,7 +10804,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -10876,7 +10939,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -11096,7 +11159,7 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -12852,7 +12915,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -13122,11 +13185,11 @@ return StudioBuySmoke
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="60">
+      <Item class="Folder" referent="61">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13521,7 +13584,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13570,7 +13633,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13620,7 +13683,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="64">
+        <Item class="ModuleScript" referent="65">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -13965,7 +14028,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="65">
+        <Item class="ModuleScript" referent="66">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15024,7 +15087,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 58)
+			player:SetAttribute("WE_Build", 59)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -15127,7 +15190,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="66">
+        <Item class="ModuleScript" referent="67">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15440,7 +15503,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="67">
+        <Item class="ModuleScript" referent="68">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -15545,7 +15608,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16046,7 +16109,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16478,7 +16541,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -16631,7 +16694,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -17754,7 +17817,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="72">
+          <Item class="ModuleScript" referent="73">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -17811,7 +17874,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="73">
+          <Item class="ModuleScript" referent="74">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -17974,7 +18037,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="74">
+          <Item class="ModuleScript" referent="75">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -18028,7 +18091,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18167,7 +18230,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
+-- v59/v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -18184,7 +18247,7 @@ end
 
 local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	pcall(function()
-		player:SetAttribute("WE_Build", 58)
+		player:SetAttribute("WE_Build", 59)
 		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
 		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
 		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
@@ -18286,7 +18349,7 @@ local function mergeDsIntoLive(live: PlayerProfile, dsProfile: PlayerProfile, us
 	end
 end
 
--- v58: instant playable profile — never block join on DataStore / session lock
+-- v59/v58: instant playable profile — never block join on DataStore / session lock
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
@@ -18321,7 +18384,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=58",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=59",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))
@@ -18577,7 +18640,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -18944,7 +19007,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -19037,7 +19100,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="78">
+        <Item class="ModuleScript" referent="79">
           <Properties>
             <string name="Name">GateDefenseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20357,7 +20420,7 @@ return GateDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="79">
+        <Item class="ModuleScript" referent="80">
           <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
@@ -20744,7 +20807,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="80">
+        <Item class="ModuleScript" referent="81">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21240,7 +21303,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="81">
+        <Item class="ModuleScript" referent="82">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -21952,7 +22015,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="82">
+        <Item class="ModuleScript" referent="83">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22676,7 +22739,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22786,7 +22849,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -22856,7 +22919,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23238,7 +23301,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23598,7 +23661,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="87">
+        <Item class="ModuleScript" referent="88">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -23967,7 +24030,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="88">
+        <Item class="ModuleScript" referent="89">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -24019,7 +24082,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="89">
+        <Item class="ModuleScript" referent="90">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -24283,7 +24346,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="90">
+        <Item class="ModuleScript" referent="91">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -24674,7 +24737,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="91">
+        <Item class="ModuleScript" referent="92">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -24837,7 +24900,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="92">
+        <Item class="ModuleScript" referent="93">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -25537,7 +25600,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="93">
+        <Item class="ModuleScript" referent="94">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -25851,7 +25914,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="94">
+        <Item class="ModuleScript" referent="95">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -26823,7 +26886,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="95">
+          <Item class="ModuleScript" referent="96">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -26864,7 +26927,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -26941,7 +27004,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -26997,7 +27060,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="98">
+        <Item class="ModuleScript" referent="99">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -27247,7 +27310,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="99">
+        <Item class="ModuleScript" referent="100">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -27715,7 +27778,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="100">
+        <Item class="ModuleScript" referent="101">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -29153,7 +29216,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="101">
+        <Item class="ModuleScript" referent="102">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -30333,7 +30396,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="102">
+        <Item class="ModuleScript" referent="103">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -30499,19 +30562,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="103">
+  <Item class="StarterPlayer" referent="104">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="104">
+    <Item class="StarterPlayerScripts" referent="105">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="105">
+      <Item class="Folder" referent="106">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="106">
+        <Item class="LocalScript" referent="107">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -30541,11 +30604,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="107">
+        <Item class="Folder" referent="108">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -30953,7 +31016,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31164,7 +31227,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="110">
+          <Item class="ModuleScript" referent="111">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -31578,7 +31641,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="111">
+          <Item class="ModuleScript" referent="112">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32147,7 +32210,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="112">
+          <Item class="ModuleScript" referent="113">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -32370,7 +32433,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="113">
+          <Item class="ModuleScript" referent="114">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33123,7 +33186,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="114">
+          <Item class="ModuleScript" referent="115">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33463,7 +33526,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="115">
+          <Item class="ModuleScript" referent="116">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33627,7 +33690,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="116">
+          <Item class="ModuleScript" referent="117">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -33901,7 +33964,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="117">
+          <Item class="ModuleScript" referent="118">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -34496,7 +34559,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="118">
+            <Item class="ModuleScript" referent="119">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -34657,7 +34720,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="119">
+            <Item class="ModuleScript" referent="120">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -34697,7 +34760,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="120">
+          <Item class="ModuleScript" referent="121">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -35029,7 +35092,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="121">
+          <Item class="ModuleScript" referent="122">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -36573,7 +36636,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="122">
+          <Item class="ModuleScript" referent="123">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37053,7 +37116,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="123">
+          <Item class="ModuleScript" referent="124">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37629,7 +37692,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="124">
+          <Item class="ModuleScript" referent="125">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -37769,7 +37832,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="125">
+          <Item class="ModuleScript" referent="126">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -38480,7 +38543,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="126">
+          <Item class="ModuleScript" referent="127">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39795,11 +39858,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="127">
+        <Item class="Folder" referent="128">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="128">
+          <Item class="ModuleScript" referent="129">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -39942,7 +40005,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="129">
+          <Item class="ModuleScript" referent="130">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -40010,7 +40073,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="130">
+          <Item class="ModuleScript" referent="131">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -40079,7 +40142,7 @@ return StudioSmokeClient
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="131">
+  <Item class="Workspace" referent="132">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>

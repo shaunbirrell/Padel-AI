@@ -2,8 +2,8 @@
 --[[
 	Client/server helper to fetch remotes created by RemoteSetup.
 	Does not create remotes on the client.
-	Waits patiently — Rojo ships an empty Remotes folder; server may still
-	be running MapSetup before RemoteSetup.Init. Never hard-assert after 10s.
+	Waits patiently — Rojo ships an empty Remotes folder; v59 Bootstrap creates
+	remotes BEFORE MapSetup. EarlyRemotes belt + RemoteSetup.Init. Never hard-assert after 10s.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

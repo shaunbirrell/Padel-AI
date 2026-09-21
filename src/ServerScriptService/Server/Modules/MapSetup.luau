@@ -450,10 +450,14 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
 	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
 	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
-	-- Optional free Creator Store building visual (skipped when StudioSkipWorldDressing)
-	pcall(function()
-		local vas = require(script.Parent.Parent.Services.VisualAssetService)
-		vas.TryAttachBuildingVisual(plinth, def.Id)
+	-- Optional catalog building visual — ALWAYS deferred (InsertService must never block pads/remotes)
+	task.defer(function()
+		pcall(function()
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			if vas and vas.TryAttachBuildingVisual then
+				vas.TryAttachBuildingVisual(plinth, def.Id)
+			end
+		end)
 	end)
 	return plinth
 end
@@ -2132,30 +2136,32 @@ function MapSetup.Run()
 						})
 					end
 				end
-				-- Optional catalog floodlight tower / flag (never clears pads on fail)
-								pcall(function()
-						local vas = require(script.Parent.Parent.Services.VisualAssetService)
-						if not (vas and vas.TryAttachPropVisual) then
-							return
-						end
-						-- WZ densify catalog: sandbags / crates / desert flora hosts
-						for _, ch in ipairs(wz:GetChildren()) do
-							if ch:IsA("BasePart") then
-								if string.find(ch.Name, "Sandbag", 1, true) then
-									vas.TryAttachPropVisual(ch, "Sandbag")
-								elseif string.find(ch.Name, "Crate", 1, true) then
-									vas.TryAttachPropVisual(ch, "Crate")
-								elseif string.find(ch.Name, "Drum", 1, true) then
-									vas.TryAttachPropVisual(ch, "OilBarrel")
-								elseif string.find(ch.Name, "Barrier", 1, true) then
-									vas.TryAttachPropVisual(ch, "ConcreteBarrier")
+				-- Catalog densify InsertService — ALWAYS deferred (never block MapSetup.Run / remotes)
+					task.defer(function()
+						pcall(function()
+							local vas = require(script.Parent.Parent.Services.VisualAssetService)
+							if not (vas and vas.TryAttachPropVisual) then
+								return
+							end
+							-- WZ densify catalog: sandbags / crates / desert flora hosts
+							for _, ch in ipairs(wz:GetChildren()) do
+								if ch:IsA("BasePart") then
+									if string.find(ch.Name, "Sandbag", 1, true) then
+										vas.TryAttachPropVisual(ch, "Sandbag")
+									elseif string.find(ch.Name, "Crate", 1, true) then
+										vas.TryAttachPropVisual(ch, "Crate")
+									elseif string.find(ch.Name, "Drum", 1, true) then
+										vas.TryAttachPropVisual(ch, "OilBarrel")
+									elseif string.find(ch.Name, "Barrier", 1, true) then
+										vas.TryAttachPropVisual(ch, "ConcreteBarrier")
+									end
 								end
 							end
-						end
-						local host = wz:FindFirstChildWhichIsA("BasePart")
-						if host then
-							vas.TryAttachPropVisual(host, "FloodlightTower")
-						end
+							local host = wz:FindFirstChildWhichIsA("BasePart")
+							if host then
+								vas.TryAttachPropVisual(host, "FloodlightTower")
+							end
+						end)
 					end)
 			end)
 			if not okDress then

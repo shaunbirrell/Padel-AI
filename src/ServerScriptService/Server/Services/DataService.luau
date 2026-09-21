@@ -134,7 +134,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
+-- v59/v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -151,7 +151,7 @@ end
 
 local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	pcall(function()
-		player:SetAttribute("WE_Build", 58)
+		player:SetAttribute("WE_Build", 59)
 		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
 		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
 		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
@@ -253,7 +253,7 @@ local function mergeDsIntoLive(live: PlayerProfile, dsProfile: PlayerProfile, us
 	end
 end
 
--- v58: instant playable profile — never block join on DataStore / session lock
+-- v59/v58: instant playable profile — never block join on DataStore / session lock
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
@@ -288,7 +288,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=58",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=59",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))
