@@ -618,3 +618,18 @@ Root cause v59 still `$…`: `HUDController.luau` / `WorldPromptController.luau`
 **Root cause:** WorldPrompt `onBuyPressed` toasted before `Remotes.GetEvent(...):FireServer` — GetEvent still unbounded-waits on WE_Remotes (same class of hang v60 fixed for HUD). Plus UpgradePad silent NoProfile if spatial fired before DataService.Init; Bootstrap had DataService after UpgradePad.
 
 **Fix:** `Remotes.FireServer` (TryGet ≤3s); toast only after fire; EnsureProfile on pad + PurchaseUpgrade; DataService before UpgradePad; WE_Build=61.
+
+## 2026-09-21 — v62 Command Center BUY cash desync + purchase remote hook (Open Cloud Published versionNumber=62)
+
+**Root cause (v61 toast showed, cash stayed $50M):**
+1. `EarlyRemotes.server.luau` seeded `leaderstats.Cash` + `WE_Cash` = AdminPlaytestCash ($50M) for HUD **before** DataService profile was authoritative.
+2. `EconomyService.SpendCash` (file:line) only read `profile.Cash` — if still `StartingCash` (10000) or desynced, returned `InsufficientCash`.
+3. Client `WorldPromptController.tryPurchase` showed "Buying Command Center…" **after** `Remotes.FireServer` returned true (remote existed) — independent of server success. Server `Notification` fail toast could miss if BindEvent lagged → endless Buying spam, cash unchanged, no CC.
+
+**Fix (WE_Build=62):**
+- `EconomyService.ReconcileSpendableCash` lifts `profile.Cash` to max(profile, WE_Cash, leaderstats) before spend (server-authored only).
+- `RemoteSetup.ensurePurchaseHook` wires `OnServerEvent` on `WE_Remotes.RequestPurchaseUpgrade` at create-time; `BaseService` registers via `SetPurchaseUpgradeHandler` (same instance client fires).
+- New `PurchaseResult` remote — server always FireClient Ok/Err; client clears pending + shows reason (5s timeout).
+- `NoPlot` gate with clear toast; `UpgradePadService` server `WE_ServerBuyPrompt` ProximityPrompt backup.
+- BuyPathStatic: remote name equality + simulate reconcile+SpendCash CommandCenter 10k→50M→49998500. Open Cloud **versionNumber=62**.
+
