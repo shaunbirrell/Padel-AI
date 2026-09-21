@@ -146,12 +146,22 @@ local function refreshList()
 							NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
 						end
 						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
-					else
-						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
 					end
-					Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
+					-- v61: FireServer via TryGet (≤3s); toast Buying only if fire succeeded
+					local fired = Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade, {
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
+					if not fired then
+						local now = os.clock()
+						if now - menuFailToastAt >= 8 then
+							menuFailToastAt = now
+							NotificationController.Show("Buy failed — remotes not ready. Rejoin game.", "Error", 4)
+						end
+						return
+					end
+					if cash >= cost then
+						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
+					end
 				end
 				btn.Activated:Connect(onMenuBuy)
 				btn.MouseButton1Click:Connect(onMenuBuy)

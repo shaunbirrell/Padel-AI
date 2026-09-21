@@ -13,6 +13,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared:WaitForChild("Constants"))
 
 local StudioBuySmoke = {}
 
@@ -26,7 +28,7 @@ local function resolveSmokeRemote(): RemoteEvent?
 	if smokeRemote and smokeRemote.Parent then
 		return smokeRemote
 	end
-	local folder = ReplicatedStorage:FindFirstChild("Remotes")
+	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
 	if not folder then
 		return nil
 	end

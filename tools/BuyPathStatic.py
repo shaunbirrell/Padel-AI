@@ -967,8 +967,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 60)', "v60 WE_Build=60 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 60)', "v60 WE_Build=60 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 61)', "v61 WE_Build=61 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 61)', "v61 WE_Build=61 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -976,7 +976,7 @@ must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "RemoteS
 
 # ── v59/v60 remotes BEFORE MapSetup (cash HUD never waits on InsertService densify) ─
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "Remotes ready BEFORE map (v60 WE_Remotes + cash-first)", "v60 remotes before map log")
-must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService/EconomyService ready BEFORE map (v60)", "v60 cash path before map log")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService/EconomyService ready BEFORE map (v61)", "v61 cash path before map log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "earlyCashPush", "v59 early cash Push within 1s")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "Catalog densify InsertService — ALWAYS deferred", "v59 densify InsertService deferred")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "ALWAYS deferred (InsertService must never block pads/remotes)", "v59 building visual InsertService deferred")
@@ -998,6 +998,26 @@ must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "470626172
 must_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "AdminPlaytestCash = 50_000_000", "v55 AdminPlaytestCash 50M")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "force_wipe_done_", "v55 no force_wipe_done key")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "clearwipedone", "v55 no clearwipedone command")
+
+
+# ── v61 BUY: FireServer never optimistic; DataService before UpgradePad ─────
+must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.FireServer", "v61 Remotes.FireServer")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade", "v61 WorldPrompt FireServer helper")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "showBuying = true", "v61 WorldPrompt toast only after fire")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "Buy failed — remotes not ready", "v61 WorldPrompt remote-missing toast")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer", "v61 WorldPrompt must not GetEvent-FireServer purchase")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade", "v61 Base menu FireServer helper")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "EnsureProfile", "v61 UpgradePad EnsureProfile")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EnsureProfile", "v61 BaseService PurchaseUpgrade EnsureProfile")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService/EconomyService ready BEFORE map (v61)", "v61 DataService before UpgradePad log")
+# DataService Init must appear before UpgradePadService Init in Bootstrap
+_boot = read("src/ServerScriptService/Server/Bootstrap.server.luau") or ""
+_ds = _boot.find('safeInit("DataService"')
+_up = _boot.find('safeInit("UpgradePadService"')
+if _ds >= 0 and _up >= 0 and _ds < _up:
+    ok("v61 Bootstrap DataService before UpgradePadService")
+else:
+    bad("v61 Bootstrap DataService must Init before UpgradePadService")
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

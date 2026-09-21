@@ -67,7 +67,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 60)
+		player:SetAttribute("WE_Build", 61)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -92,4 +92,4 @@ for _, plr in ipairs(Players:GetPlayers()) do
 	task.spawn(seedPlayer, plr)
 end
 
-print("[WAR EMPIRE] EarlyRemotes v60: WE_Remotes + leaderstats seed ready")
+print("[WAR EMPIRE] EarlyRemotes v61: WE_Remotes + leaderstats seed ready")

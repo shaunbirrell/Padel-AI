@@ -3,9 +3,10 @@
 	Client/server helper to fetch remotes created by RemoteSetup.
 	Does not create remotes on the client.
 
-	v60: HUD/BUY must NEVER block on unbounded WaitForChild.
-	Use BindEvent / TryGet* for display paths; GetEvent still waits (non-HUD).
+	v60/v61: HUD/BUY must NEVER block on unbounded WaitForChild.
+	Use BindEvent / TryGet* / FireServer for display + BUY paths; GetEvent still waits (non-HUD).
 	Folder is WE_Remotes (server-created) — Rojo no longer ships empty Remotes.
+	v61: FireServer polls ≤3s then returns false — never toast "Buying…" without a live remote.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -84,6 +85,31 @@ function Remotes.TryGetFunction(name: string): RemoteFunction?
 		return remote :: RemoteFunction
 	end
 	return nil
+end
+
+--[[
+	Client→server fire without unbounded WaitForChild.
+	Polls up to timeoutSec (default 3) for WE_Remotes + event.
+	Returns true only if FireServer actually ran on a live RemoteEvent.
+]]
+function Remotes.FireServer(name: string, ...: any): boolean
+	local remote = Remotes.TryGetEvent(name)
+	if remote then
+		remote:FireServer(...)
+		return true
+	end
+	local timeoutSec = 3
+	local deadline = os.clock() + timeoutSec
+	while os.clock() < deadline do
+		task.wait(0.05)
+		remote = Remotes.TryGetEvent(name)
+		if remote then
+			remote:FireServer(...)
+			return true
+		end
+	end
+	warn("[Remotes] FireServer: remote not ready after", timeoutSec, "s:", name)
+	return false
 end
 
 --[[

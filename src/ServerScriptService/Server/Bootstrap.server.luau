@@ -162,14 +162,13 @@ afterMapRebuild = function()
 		pcall(BaseService.RefreshAllOnlinePlayers)
 	end
 end
+-- v61: load profiles BEFORE UpgradePad spatial loop (no silent NoProfile on first stand)
+safeInit("DataService", DataService)
+print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v61)")
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
 safeInit("TutorialService", TutorialService, deps)
-
--- Now load profiles (fires OnProfileLoaded for joiners) — BEFORE MapSetup
-safeInit("DataService", DataService)
-print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v60)")
 
 -- Belt: EconomyService.Push within first second regardless of map state
 do

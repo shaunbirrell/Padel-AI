@@ -130,18 +130,30 @@ end
 
 
 function RemoteSetup.Get(name: string): Instance
+	-- v61: never hang Init/handlers — ensure folder+remote exist immediately
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
-	if not folder then
-		folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName, 30)
+	if not (folder and folder:IsA("Folder")) then
+		folder = RemoteSetup.Init()
 	end
-	assert(folder, "WE_Remotes missing")
 	local remote = folder:FindFirstChild(name)
 	if remote then
 		return remote
 	end
-	remote = folder:WaitForChild(name, 30)
-	assert(remote, "remote missing: " .. name)
-	return remote
+	-- Create missing event/function rather than WaitForChild forever
+	local ev = Instance.new("RemoteEvent")
+	-- Prefer RemoteFunction when name is GetPlayerState
+	if name == Constants.RemoteNames.GetPlayerState then
+		ev:Destroy()
+		local fn = Instance.new("RemoteFunction")
+		fn.Name = name
+		fn.Parent = folder
+		warn("[RemoteSetup] Get created missing RemoteFunction:", name)
+		return fn
+	end
+	ev.Name = name
+	ev.Parent = folder
+	warn("[RemoteSetup] Get created missing RemoteEvent:", name)
+	return ev
 end
 
 return RemoteSetup

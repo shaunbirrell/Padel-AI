@@ -250,6 +250,9 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	end
 
 	local profile = DataService.GetProfile(player)
+	if not profile and DataService.EnsureProfile then
+		profile = DataService.EnsureProfile(player)
+	end
 	if not profile then
 		return { Ok = false, Error = "NoProfile" }
 	end
@@ -1054,7 +1057,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 60)
+			player:SetAttribute("WE_Build", 61)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)

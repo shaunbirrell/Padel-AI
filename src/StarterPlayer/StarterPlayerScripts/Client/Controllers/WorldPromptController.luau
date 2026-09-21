@@ -162,7 +162,7 @@ local function formatIncomeRate(structureId: string): string?
 end
 
 local structureInfo: (structureId: string) -> (string, number, number?, boolean, string?)
-local tryPurchase: (structureId: string, opts: { silentMax: boolean }?) -> ()
+local tryPurchase: (structureId: string, opts: { silentMax: boolean, showBuying: boolean }?) -> ()
 local isSeatedInVehicle: () -> boolean
 local isOwnPlotPad: (part: BasePart) -> boolean
 
@@ -265,9 +265,9 @@ local function ensurePadBuyGui(): TextButton
 		-- Intentional tap: clear walk-over debounce so BUY always fires
 		lastPurchaseAt[sid] = 0
 		pendingPurchase[sid] = nil
-		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
 		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s cost=%s", sid, tostring(cost)))
-		tryPurchase(sid)
+		-- v61: toast only after FireServer actually ran (see tryPurchase showBuying)
+		tryPurchase(sid, { showBuying = true })
 	end
 	btn.Activated:Connect(onBuyPressed)
 	btn.MouseButton1Click:Connect(onBuyPressed)
@@ -685,7 +685,7 @@ function isSeatedInVehicle(): boolean
 	return false
 end
 
-function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
+function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying: boolean }?)
 	local now = os.clock()
 	local last = lastPurchaseAt[structureId] or 0
 	if now - last < DEBOUNCE_SEC then
@@ -730,9 +730,24 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
 	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), have))
-	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
+	-- v61: never unbounded GetEvent wait; never "Buying…" unless FireServer ran
+	local fired = Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade, {
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
+	if not fired then
+		pendingPurchase[structureId] = nil
+		local fk = "noremote|purchase"
+		local lastFail = failToastAt[fk] or 0
+		if (now - lastFail) >= 8 then
+			failToastAt[fk] = now
+			NotificationController.Show("Buy failed — remotes not ready. Rejoin game.", "Error", 4)
+		end
+		warn("[WorldPrompt] BUY FAIL remote missing RequestPurchaseUpgrade")
+		return
+	end
+	if opts and opts.showBuying then
+		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
+	end
 	-- Clear in-flight after debounce (server toast handles success/fail UX)
 	task.delay(DEBOUNCE_SEC, function()
 		pendingPurchase[structureId] = nil
@@ -888,7 +903,7 @@ local function attachCaptureZone(part: BasePart)
 	attachPromptOnce(part, function()
 		return makePrompt(part, "Hold to capture", idStr, 0.4, 18)
 	end, function()
-		Remotes.GetEvent(Constants.RemoteNames.RequestCaptureTerritory):FireServer(idStr)
+		Remotes.FireServer(Constants.RemoteNames.RequestCaptureTerritory, idStr)
 		NotificationController.Show("Stand in the zone to capture — progress fills while you hold ground.", "Info", 3.5)
 	end)
 end

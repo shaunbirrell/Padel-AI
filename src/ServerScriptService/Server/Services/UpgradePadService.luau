@@ -162,8 +162,18 @@ end
 
 local function tryServerPurchase(player: Player, part: BasePart, structureId: string, fromStanding: boolean?)
 	local profile = DataService.GetProfile(player)
+	if not profile and DataService.EnsureProfile then
+		profile = DataService.EnsureProfile(player)
+	end
 	if not profile then
 		print(string.format("[UpgradePad] BUY FAIL %s %s — NoProfile", player.Name, structureId))
+		if NotificationService then
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, "Profile still loading — try BUY again", "Warn", 3, 2.5, "pad|NoProfile")
+			else
+				NotificationService.Notify(player, "Profile still loading — try BUY again", "Warn", 3)
+			end
+		end
 		return
 	end
 

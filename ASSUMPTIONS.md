@@ -609,3 +609,12 @@ Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he c
 
 Root cause v59 still `$…`: `HUDController.luau` / `WorldPromptController.luau` / `NotificationController.luau` called blocking `Remotes.GetEvent` (unbounded WaitForChild on Rojo empty `Remotes` folder) **before** leaderstats/attr wiring. UIController also inited Notification before HUD. Nuclear fix: `WE_Remotes` server-only, EarlyRemotes seeds leaderstats+AdminPlaytestCash sync, BindEvent for HUD, 0.5s fallback.
 
+
+
+## 216. v61 Command Center BUY after v60 cash fix (2026-09-21)
+
+**Symptom:** HUD showed $50M (v60 leaderstats OK) but BUY spam showed optimistic "Buying Command Center…" with no cash deduct / no spawn.
+
+**Root cause:** WorldPrompt `onBuyPressed` toasted before `Remotes.GetEvent(...):FireServer` — GetEvent still unbounded-waits on WE_Remotes (same class of hang v60 fixed for HUD). Plus UpgradePad silent NoProfile if spatial fired before DataService.Init; Bootstrap had DataService after UpgradePad.
+
+**Fix:** `Remotes.FireServer` (TryGet ≤3s); toast only after fire; EnsureProfile on pad + PurchaseUpgrade; DataService before UpgradePad; WE_Build=61.
