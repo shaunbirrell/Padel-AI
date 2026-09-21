@@ -29,6 +29,34 @@ local MonetizationService: any = nil
 local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 
+local function ensureLeaderstats(player: Player, cash: number, gold: number)
+	-- Classic tycoon belt+suspenders: IntValues replicate to client even if remotes miss
+	local folder = player:FindFirstChild("leaderstats")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "leaderstats"
+		folder.Parent = player
+	end
+	local cashVal = folder:FindFirstChild("Cash")
+	if not cashVal then
+		cashVal = Instance.new("IntValue")
+		cashVal.Name = "Cash"
+		cashVal.Parent = folder
+	end
+	if cashVal:IsA("IntValue") or cashVal:IsA("NumberValue") then
+		(cashVal :: any).Value = cash
+	end
+	local goldVal = folder:FindFirstChild("Gold")
+	if not goldVal then
+		goldVal = Instance.new("IntValue")
+		goldVal.Name = "Gold"
+		goldVal.Parent = folder
+	end
+	if goldVal:IsA("IntValue") or goldVal:IsA("NumberValue") then
+		(goldVal :: any).Value = gold
+	end
+end
+
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 	local cash = math.floor(tonumber(profile.Cash) or 0)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
@@ -43,6 +71,7 @@ local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
 	end)
+	pcall(ensureLeaderstats, player, cash, gold)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
 	remote:FireClient(player, {
 		Cash = cash,

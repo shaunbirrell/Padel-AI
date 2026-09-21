@@ -26,6 +26,7 @@ local DataService: any = nil
 local EconomyService: any = nil
 local AnalyticsService: any = nil
 local RateLimitService: any = nil
+local getStateJoinedAt: { [number]: number } = {}
 local RemoteSetup: any = nil
 local TerritoryService: any = nil
 local MissionService: any = nil
@@ -1007,15 +1008,26 @@ function BaseService.Init(deps: { [string]: any })
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
-		if not RateLimitService.Allow(player, "get_state", 6, 16) then
-			return nil
+		-- v56: do not nil bootstrap for first 20s after join (HUD/WorldPrompt poll)
+		local joinedAt = getStateJoinedAt[player.UserId]
+		local inBootstrap = typeof(joinedAt) == "number" and (os.clock() - joinedAt) < 20
+		if not inBootstrap then
+			if not RateLimitService.Allow(player, "get_state", 12, 32) then
+				return nil
+			end
+		else
+			-- Still count tokens lightly so post-bootstrap isn't empty, but never deny
+			pcall(function()
+				RateLimitService.Allow(player, "get_state", 12, 32)
+			end)
 		end
 		return buildPlayerState(player)
 	end
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
+		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 55)
+			player:SetAttribute("WE_Build", 56)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -1030,9 +1042,16 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v55: Cash comes from LoadProfile CreateDefault + simple AdminPlaytestCash only
+		-- v56: Cash from LoadProfile + AdminPlaytestCash; dense Push so late HUD never sticks on $—
 		BaseService.PushState(player)
 		EconomyService.Push(player)
+		do
+			local cashNow = 0
+			if _profile then
+				cashNow = math.floor(tonumber(_profile.Cash) or 0)
+			end
+			print(string.format("[EconPush] userId=%d cash=%d", player.UserId, cashNow))
+		end
 		if deps.XPService then
 			deps.XPService.Push(player)
 		end
@@ -1041,8 +1060,8 @@ function BaseService.Init(deps: { [string]: any })
 		if state then
 			stateRemote:FireClient(player, state)
 		end
-		-- Re-push economy/state so clients that miss the first FireClient (late Init) sync Cash
-		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
+		-- Re-push every 1s for 12s (not just 0.5/2/5) so client Init race always lands
+		for delaySec = 1, 12 do
 			task.delay(delaySec, function()
 				if not player.Parent then
 					return
@@ -1054,7 +1073,7 @@ function BaseService.Init(deps: { [string]: any })
 				end
 			end)
 		end
-		-- CharacterAdded re-push so WE_Cash / EconomyUpdate survive respawn / late HUD Init
+		-- CharacterAdded re-push so WE_Cash / EconomyUpdate / leaderstats survive respawn / late HUD Init
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				if not player.Parent then

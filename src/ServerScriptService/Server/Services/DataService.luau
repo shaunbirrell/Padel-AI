@@ -134,7 +134,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v55: simple AdminPlaytestCash — shaunie6 only, LoadProfile max() only (no floors).
+-- v56: simple AdminPlaytestCash — shaunie6 only, LoadProfile max() only (no floors).
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -206,7 +206,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 
 	-- Stamp build + spendable Cash attr early (HUD / pad BUY Attribute fallback)
 	pcall(function()
-		player:SetAttribute("WE_Build", 55)
+		player:SetAttribute("WE_Build", 56)
 		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
 		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
 		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))

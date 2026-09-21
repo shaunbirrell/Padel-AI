@@ -940,10 +940,19 @@ must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "En
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'SetAttribute("WE_Cash"', "WE_Cash attribute push")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "nearCollector", "ATM nearCollector radius")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "WE_CollectPrompt", "ATM Collect ProximityPrompt")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", '"$—"', "HUD no fake $5000 placeholder")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "EconomyConfig.StartingCash", "HUD inits cash to StartingCash (never $— forever)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "leaderstats", "HUD leaderstats fallback")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats", "WorldPrompt leaderstats fallback")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'Name = "leaderstats"', "EconomyService writes leaderstats")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "fromOffset(118, 40)", "MapSetup price chip 118x40")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Allow(player, "get_state", 6, 16)', "get_state rate relaxed")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Allow(player, "get_state", 12, 32)', "get_state rate relaxed v56")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "getStateJoinedAt", "get_state 20s join grace")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "CharacterAdded:Connect", "CharacterAdded economy re-push")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "[EconPush]", "EconPush join log")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "for delaySec = 1, 12", "dense economy re-push 1s×12")
+
+# ── v56 cash sync (leaderstats + dense push + join grace) ─────────────
+# (v55 restore checks below still apply; WE_Build bumped to 56)
 
 # ── v55 RESTORE: v20 cash path + DS key bump + v32/v36 kits (NO more floors) ─
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'DataStoreName = "WarEmpire_PlayerData_v2"', "v55 DataStore key bump to v2")
@@ -952,8 +961,8 @@ must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "Cash 
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "ADMIN_PLAYTEST_USER_ID = 470626172", "v55 simple admin userId gate")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "applyAdminPlaytestCash", "v55 AdminPlaytestCash on LoadProfile only")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "ProfileSchema.CreateDefault()", "v55 CreateDefault on missing profile")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 55)', "v55 WE_Build=55 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 55)', "v55 WE_Build=55 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 56)', "v56 WE_Build=56 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 56)', "v56 WE_Build=56 BaseService")
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "if profile then", "v55 simple Push (profile then pushEconomy)")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "EconomyUpdate", "v55 HUD listens EconomyUpdate")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "EconomyUpdate", "v55 WorldPrompt listens EconomyUpdate")

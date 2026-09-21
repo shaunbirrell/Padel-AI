@@ -1185,9 +1185,39 @@ function WorldPromptController.Init()
 		end)
 	end
 
-	-- Bootstrap like HUD — WorldPrompt used to stay at cash=0 until first EconomyUpdate
+	local function tryLeaderstatsCash(): boolean
+		local folder = player:FindFirstChild("leaderstats")
+		if not folder then
+			return false
+		end
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			applyCash((cashV :: any).Value)
+			return true
+		end
+		return false
+	end
+	tryLeaderstatsCash()
+	player.ChildAdded:Connect(function(ch)
+		if ch.Name == "leaderstats" then
+			task.defer(tryLeaderstatsCash)
+			ch.ChildAdded:Connect(function()
+				task.defer(tryLeaderstatsCash)
+			end)
+		end
+	end)
+
+	-- v56 bootstrap: poll WE_Cash / leaderstats / GetPlayerState so BUY not NEED when server has cash
 	task.spawn(function()
-		for _ = 1, 5 do
+		local synced = false
+		for i = 0, 15 do
+			if typeof(player:GetAttribute("WE_Cash")) == "number" then
+				applyCash(player:GetAttribute("WE_Cash"))
+				synced = true
+			end
+			if tryLeaderstatsCash() then
+				synced = true
+			end
 			local ok, state = pcall(function()
 				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
 			end)
@@ -1206,9 +1236,16 @@ function WorldPromptController.Init()
 				print(string.format("[WorldPrompt] cash bootstrap have=%d", cash))
 				return
 			end
-			task.wait(0.6)
+			if synced and i >= 3 then
+				markBillboardsDirty()
+				print(string.format("[WorldPrompt] cash bootstrap via attr/leaderstats have=%d", cash))
+				return
+			end
+			task.wait(1)
 		end
-		warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
+		if not synced then
+			warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
+		end
 	end)
 
 	player.CharacterAdded:Connect(function()

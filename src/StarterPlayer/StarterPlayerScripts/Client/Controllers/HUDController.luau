@@ -17,6 +17,7 @@ local UIUtil = require(Shared.Util.UIUtil)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 
 local HUDController = {}
 
@@ -63,6 +64,13 @@ local function makeStroke(parent: Instance, gold: boolean?)
 	else
 		UIUtil.Stroke(parent)
 	end
+end
+
+local function formatCash(n: number): string
+	local v = tonumber(n) or 0
+	local formatted = tostring(math.floor(v))
+	formatted = formatted:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+	return "$" .. formatted
 end
 
 function HUDController.Init()
@@ -182,7 +190,8 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	cash.Text = "$—" -- until EconomyUpdate / GetPlayerState (was fake $5,000)
+	-- v56: never leave $— forever — show StartingCash until real sync lands
+	cash.Text = formatCash(EconomyConfig.StartingCash or 10000)
 	cash.ZIndex = 13
 	cash.Parent = pill
 	cashLabel = cash
@@ -338,15 +347,7 @@ function HUDController.Init()
 	end
 	refreshSpinnerBtn()
 
-	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
-		if typeof(payload) ~= "table" then
-			return
-		end
-		spinnerReady = payload.Ready == true
-		spinnerCooldown = tonumber(payload.CooldownRemaining) or 0
-		refreshSpinnerBtn()
-	end)
-
+	-- v56: EconomyUpdate + WE_Cash FIRST (before other remotes that WaitForChild)
 	local econToken = 0
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
 		econToken += 1
@@ -358,6 +359,60 @@ function HUDController.Init()
 				HUDController.SetEconomy(cashAmt, goldAmt, pendingAmt)
 			end
 		end)
+	end)
+
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
+		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
+		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
+		HUDController.SetEconomy(c, g, p)
+	end)
+	do
+		local c = player:GetAttribute("WE_Cash")
+		if typeof(c) == "number" then
+			HUDController.SetEconomy(
+				c,
+				tonumber(player:GetAttribute("WE_Gold")) or 0,
+				tonumber(player:GetAttribute("WE_PendingCash")) or 0
+			)
+		end
+	end
+
+	-- Leaderstats belt+suspenders (server pushEconomy writes Cash/Gold IntValues)
+	local function tryLeaderstats(): boolean
+		local folder = player:FindFirstChild("leaderstats")
+		if not folder then
+			return false
+		end
+		local cashV = folder:FindFirstChild("Cash")
+		if not cashV or not (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			return false
+		end
+		local goldV = folder:FindFirstChild("Gold")
+		local g = 0
+		if goldV and (goldV:IsA("IntValue") or goldV:IsA("NumberValue")) then
+			g = (goldV :: any).Value
+		end
+		HUDController.SetEconomy((cashV :: any).Value, g, tonumber(player:GetAttribute("WE_PendingCash")) or 0)
+		return true
+	end
+	tryLeaderstats()
+	player.ChildAdded:Connect(function(ch)
+		if ch.Name == "leaderstats" then
+			task.defer(tryLeaderstats)
+			ch.ChildAdded:Connect(function()
+				task.defer(tryLeaderstats)
+			end)
+		end
+	end)
+
+	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		spinnerReady = payload.Ready == true
+		spinnerCooldown = tonumber(payload.CooldownRemaining) or 0
+		refreshSpinnerBtn()
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
@@ -407,36 +462,38 @@ function HUDController.Init()
 		end
 	end)
 
-	-- Attribute fallback (server pushEconomy sets WE_Cash)
-	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
-		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
-		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
-		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
-		HUDController.SetEconomy(c, g, p)
-	end)
-	do
-		local c = player:GetAttribute("WE_Cash")
-		if typeof(c) == "number" then
-			HUDController.SetEconomy(
-				c,
-				tonumber(player:GetAttribute("WE_Gold")) or 0,
-				tonumber(player:GetAttribute("WE_PendingCash")) or 0
-			)
-		end
-	end
-
+	-- v56 poll 0–15s: WE_Cash / leaderstats.Cash / GetPlayerState (pcall — don't die on rate limit)
 	task.spawn(function()
-		for _ = 1, 6 do
+		local synced = false
+		for i = 0, 15 do
+			if typeof(player:GetAttribute("WE_Cash")) == "number" then
+				HUDController.SetEconomy(
+					player:GetAttribute("WE_Cash") :: number,
+					tonumber(player:GetAttribute("WE_Gold")) or 0,
+					tonumber(player:GetAttribute("WE_PendingCash")) or 0
+				)
+				synced = true
+			end
+			if tryLeaderstats() then
+				synced = true
+			end
 			local ok, state = pcall(function()
 				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
 			end)
 			if ok and state then
 				HUDController.ApplyState(state :: Types.PlayerStatePayload)
-				return
+				synced = true
+				break
 			end
-			task.wait(0.5)
+			if synced and i >= 3 then
+				-- Have attr/leaderstats; GetPlayerState still failing (rate limit) — stop, cash is live
+				break
+			end
+			task.wait(1)
 		end
-		warn("[HUDController] GetPlayerState bootstrap failed")
+		if not synced then
+			warn("[HUDController] GetPlayerState/attr/leaderstats bootstrap failed")
+		end
 	end)
 end
 
@@ -590,18 +647,18 @@ function HUDController.BindActionBar(actions: { { Name: string, Icon: string, La
 	print(string.format("[HUDController] BindActionBar: %d tiles Active size=%d DisplayOrder=%d", #actions, tileSize, order))
 end
 
-local function formatCash(n: number): string
-	local formatted = tostring(math.floor(n))
-	formatted = formatted:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-	return "$" .. formatted
-end
 
 function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
+	-- v56: coerce so nil never skips update (keeps temporary StartingCash until real numbers)
+	local cashN = tonumber(cash) or 0
+	local goldN = tonumber(gold) or 0
 	if cashLabel then
-		cashLabel.Text = formatCash(cash)
+		cashLabel.Text = formatCash(cashN)
 	end
 	if typeof(pending) == "number" then
 		lastPending = pending
+	elseif pending ~= nil then
+		lastPending = tonumber(pending) or lastPending
 	end
 	if pendingLabel then
 		if lastPending > 0 then
@@ -614,7 +671,7 @@ function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
 		end
 	end
 	if goldLabel then
-		goldLabel.Text = "◆ " .. tostring(math.floor(gold))
+		goldLabel.Text = "◆ " .. tostring(math.floor(goldN))
 	end
 end
 
