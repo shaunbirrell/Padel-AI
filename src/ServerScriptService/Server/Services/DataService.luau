@@ -134,7 +134,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v59/v58: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
+-- v60/v59: AdminPlaytestCash — shaunie6 only; instant LoadProfile + merge floors.
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -150,11 +150,41 @@ local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): b
 end
 
 local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
+	local cash = math.floor(tonumber(profile.Cash) or 0)
+	local gold = math.floor(tonumber(profile.Gold) or 0)
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 59)
-		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
-		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
-		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+		player:SetAttribute("WE_Build", 60)
+		player:SetAttribute("WE_Cash", cash)
+		player:SetAttribute("WE_Gold", gold)
+		player:SetAttribute("WE_PendingCash", pending)
+	end)
+	-- v60: leaderstats always — HUD reads this even if remotes dead
+	pcall(function()
+		local folder = player:FindFirstChild("leaderstats")
+		if not folder then
+			folder = Instance.new("Folder")
+			folder.Name = "leaderstats"
+			folder.Parent = player
+		end
+		local cashVal = folder:FindFirstChild("Cash")
+		if not cashVal then
+			cashVal = Instance.new("IntValue")
+			cashVal.Name = "Cash"
+			cashVal.Parent = folder
+		end
+		if cashVal:IsA("IntValue") or cashVal:IsA("NumberValue") then
+			(cashVal :: any).Value = cash
+		end
+		local goldVal = folder:FindFirstChild("Gold")
+		if not goldVal then
+			goldVal = Instance.new("IntValue")
+			goldVal.Name = "Gold"
+			goldVal.Parent = folder
+		end
+		if goldVal:IsA("IntValue") or goldVal:IsA("NumberValue") then
+			(goldVal :: any).Value = gold
+		end
 	end)
 end
 
@@ -253,7 +283,7 @@ local function mergeDsIntoLive(live: PlayerProfile, dsProfile: PlayerProfile, us
 	end
 end
 
--- v59/v58: instant playable profile — never block join on DataStore / session lock
+-- v60: instant playable profile — never block join on DataStore / session lock
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
@@ -288,7 +318,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=59",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=60",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))

@@ -3,7 +3,7 @@
 	WAR EMPIRE — Server Bootstrap
 	Wires remotes + services. Request/action remotes only.
 
-	v59 CRITICAL: RemoteSetup + DataService/EconomyService BEFORE MapSetup.
+	v60 CRITICAL: RemoteSetup + DataService/EconomyService BEFORE MapSetup.
 	Map densify InsertService must never block EconomyUpdate (HUD $… forever).
 ]]
 
@@ -23,7 +23,7 @@ print("[WAR EMPIRE] Server Bootstrap starting...")
 -- ── 1. REMOTES FIRST (before any MapSetup / InsertService) ─────────────────
 local RemoteSetup = require(Modules.RemoteSetup)
 RemoteSetup.Init() -- client Remotes.GetEvent / EconomyUpdate must never hang on empty folder
-print("[WAR EMPIRE] Remotes ready BEFORE map (v59 cash-first)")
+print("[WAR EMPIRE] Remotes ready BEFORE map (v60 WE_Remotes + cash-first)")
 
 local function safeRequire(label: string, moduleScript: ModuleScript): any
 	local ok, mod = pcall(require, moduleScript)
@@ -169,7 +169,7 @@ safeInit("TutorialService", TutorialService, deps)
 
 -- Now load profiles (fires OnProfileLoaded for joiners) — BEFORE MapSetup
 safeInit("DataService", DataService)
-print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v59)")
+print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v60)")
 
 -- Belt: EconomyService.Push within first second regardless of map state
 do

@@ -80,6 +80,14 @@ local FUNCTIONS = {
 local _initialized = false
 
 function RemoteSetup.Init(): Folder
+	-- v60: scrub legacy Rojo empty Remotes so clients never latch onto it
+	local legacy = ReplicatedStorage:FindFirstChild("Remotes")
+	if legacy and legacy:IsA("Folder") and legacy.Name ~= Constants.RemotesFolderName then
+		if #legacy:GetChildren() == 0 then
+			legacy:Destroy()
+		end
+	end
+
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
 	if not folder then
 		folder = Instance.new("Folder")
@@ -122,8 +130,18 @@ end
 
 
 function RemoteSetup.Get(name: string): Instance
-	local folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName)
-	return folder:WaitForChild(name)
+	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
+	if not folder then
+		folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName, 30)
+	end
+	assert(folder, "WE_Remotes missing")
+	local remote = folder:FindFirstChild(name)
+	if remote then
+		return remote
+	end
+	remote = folder:WaitForChild(name, 30)
+	assert(remote, "remote missing: " .. name)
+	return remote
 end
 
 return RemoteSetup

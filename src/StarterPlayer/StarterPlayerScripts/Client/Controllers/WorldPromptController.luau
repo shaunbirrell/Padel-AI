@@ -1148,20 +1148,7 @@ function WorldPromptController.Init()
 		end
 	end
 
-	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		applyCash(payload.Cash)
-	end)
-
-	do
-		local attrCash = player:GetAttribute("WE_Cash")
-		if typeof(attrCash) == "number" then
-			applyCash(attrCash)
-		end
-		player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
-			applyCash(player:GetAttribute("WE_Cash"))
-		end)
-	end
-
+	-- v60: leaderstats/attrs FIRST — BindEvent never blocks Init
 	local function tryLeaderstatsCash(): boolean
 		local folder = player:FindFirstChild("leaderstats")
 		if not folder then
@@ -1174,20 +1161,53 @@ function WorldPromptController.Init()
 		end
 		return false
 	end
-	tryLeaderstatsCash()
+
+	local function wireLs(folder: Instance)
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			(cashV :: any):GetPropertyChangedSignal("Value"):Connect(function()
+				tryLeaderstatsCash()
+			end)
+		end
+		folder.ChildAdded:Connect(function(ch)
+			if ch.Name == "Cash" and (ch:IsA("IntValue") or ch:IsA("NumberValue")) then
+				(ch :: any):GetPropertyChangedSignal("Value"):Connect(function()
+					tryLeaderstatsCash()
+				end)
+				tryLeaderstatsCash()
+			end
+		end)
+		tryLeaderstatsCash()
+	end
+	do
+		local existing = player:FindFirstChild("leaderstats")
+		if existing then
+			wireLs(existing)
+		end
+	end
 	player.ChildAdded:Connect(function(ch)
 		if ch.Name == "leaderstats" then
-			task.defer(tryLeaderstatsCash)
-			ch.ChildAdded:Connect(function()
-				task.defer(tryLeaderstatsCash)
-			end)
+			wireLs(ch)
 		end
 	end)
 
-	-- Poll starts before other remotes
+	do
+		local attrCash = player:GetAttribute("WE_Cash")
+		if typeof(attrCash) == "number" then
+			applyCash(attrCash)
+		end
+		player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+			applyCash(player:GetAttribute("WE_Cash"))
+		end)
+	end
+
+	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
+		applyCash(payload.Cash)
+	end)
+
 	task.spawn(function()
 		local synced = false
-		for i = 0, 15 do
+		for i = 0, 20 do
 			if typeof(player:GetAttribute("WE_Cash")) == "number" then
 				applyCash(player:GetAttribute("WE_Cash"))
 				synced = true
@@ -1195,37 +1215,40 @@ function WorldPromptController.Init()
 			if tryLeaderstatsCash() then
 				synced = true
 			end
-			local ok, state = pcall(function()
-				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
-			end)
-			if ok and typeof(state) == "table" then
-				applyCash((state :: any).Cash)
-				local base = (state :: any).Base
-				if typeof(base) == "table" then
-					if typeof(base.Upgrades) == "table" then
-						upgrades = base.Upgrades
+			local fn = Remotes.TryGetFunction(Constants.RemoteNames.GetPlayerState)
+			if fn then
+				local ok, state = pcall(function()
+					return fn:InvokeServer()
+				end)
+				if ok and typeof(state) == "table" then
+					applyCash((state :: any).Cash)
+					local base = (state :: any).Base
+					if typeof(base) == "table" then
+						if typeof(base.Upgrades) == "table" then
+							upgrades = base.Upgrades
+						end
+						if typeof(base.PlotId) == "number" then
+							myPlotId = base.PlotId
+						end
 					end
-					if typeof(base.PlotId) == "number" then
-						myPlotId = base.PlotId
-					end
+					markBillboardsDirty()
+					print(string.format("[WorldPrompt] cash bootstrap have=%d", cash))
+					return
 				end
-				markBillboardsDirty()
-				print(string.format("[WorldPrompt] cash bootstrap have=%d", cash))
-				return
 			end
-			if synced and i >= 3 then
+			if synced and i >= 2 then
 				markBillboardsDirty()
 				print(string.format("[WorldPrompt] cash bootstrap via attr/leaderstats have=%d", cash))
 				return
 			end
-			task.wait(1)
+			task.wait(0.25)
 		end
 		if not synced then
 			warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
 		end
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: Types.BaseStatePayload)
 		local prev = upgrades
 		upgrades = base.Upgrades or upgrades
 		if typeof(base.PlotId) == "number" then
@@ -1248,7 +1271,7 @@ function WorldPromptController.Init()
 		markBillboardsDirty()
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: Types.PlayerStatePayload)
 		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades

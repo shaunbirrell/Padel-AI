@@ -31,7 +31,7 @@ Constants.Tags = {
 }
 
 -- Remote folder / names (created by RemoteSetup)
-Constants.RemotesFolderName = "Remotes"
+Constants.RemotesFolderName = "WE_Remotes" -- v60: server-only; never Rojo empty Remotes
 Constants.RemoteNames = {
 	-- Server → Client (push)
 	PlayerStateUpdate = "PlayerStateUpdate",

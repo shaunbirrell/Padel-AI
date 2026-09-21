@@ -28,11 +28,10 @@ function UIController.Init()
 		end
 	end
 	safeInit("Audio", AudioController.Init)
-	-- Notifications before Base so first-join toasts have a stack ready.
-	safeInit("Notification", NotificationController.Init)
-	-- BUY pads BEFORE HUD — HUD may WaitForChild remotes; never block pad CTA
-	safeInit("WorldPrompt", WorldPromptController.Init)
+	-- v60: HUD + WorldPrompt BEFORE Notification — cash never waits on toast remote
 	safeInit("HUD", HUDController.Init)
+	safeInit("WorldPrompt", WorldPromptController.Init)
+	safeInit("Notification", NotificationController.Init)
 	safeInit("Base", BaseController.Init)
 	safeInit("Tutorial", TutorialController.Init)
 	safeInit("Territory", TerritoryController.Init)

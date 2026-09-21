@@ -3,9 +3,8 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
--- Wait for shared + remotes from server
+-- Wait for Shared; WE_Remotes created by server EarlyRemotes (BindEvent handles late)
 ReplicatedStorage:WaitForChild("Shared")
-ReplicatedStorage:WaitForChild("Remotes")
 
 local Controllers = script.Parent:WaitForChild("Controllers")
 local Modules = script.Parent:WaitForChild("Modules")

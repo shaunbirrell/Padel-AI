@@ -358,7 +358,7 @@ function BaseController.Init()
 	scroll.Parent = panel
 	listFrame = scroll
 
-	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: Types.BaseStatePayload)
 		upgrades = base.Upgrades or upgrades
 		if menuOpen then
 			refreshList()
@@ -375,7 +375,7 @@ function BaseController.Init()
 		end
 	end
 
-	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
 		applyCash(payload.Cash)
 	end)
 
@@ -384,7 +384,7 @@ function BaseController.Init()
 	end)
 	applyCash(player:GetAttribute("WE_Cash"))
 
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: Types.PlayerStatePayload)
 		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades

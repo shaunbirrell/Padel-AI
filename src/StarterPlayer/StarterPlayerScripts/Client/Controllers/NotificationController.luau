@@ -55,7 +55,8 @@ function NotificationController.Init()
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = frame
 
-	Remotes.GetEvent(Constants.RemoteNames.Notification).OnClientEvent:Connect(function(payload: any)
+	-- v60: never block Init on Notification remote
+	Remotes.BindEvent(Constants.RemoteNames.Notification, function(payload: any)
 		NotificationController.Show(payload.Message or "", payload.Type or "Info", payload.Duration)
 	end)
 end

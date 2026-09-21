@@ -72,12 +72,21 @@ local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 		player:SetAttribute("WE_PendingCash", pending)
 	end)
 	pcall(ensureLeaderstats, player, cash, gold)
-	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
-	remote:FireClient(player, {
-		Cash = cash,
-		Gold = gold,
-		PendingCash = pending,
-	} :: Types.EconomyUpdatePayload)
+	-- v60: never yield Push on missing remotes — leaderstats/attrs already replicate
+	pcall(function()
+		if not RemoteSetup then
+			return
+		end
+		local folder = game:GetService("ReplicatedStorage"):FindFirstChild(Constants.RemotesFolderName)
+		local remote = folder and folder:FindFirstChild(Constants.RemoteNames.EconomyUpdate)
+		if remote and remote:IsA("RemoteEvent") then
+			(remote :: RemoteEvent):FireClient(player, {
+				Cash = cash,
+				Gold = gold,
+				PendingCash = pending,
+			} :: Types.EconomyUpdatePayload)
+		end
+	end)
 end
 
 local function applyCashMult(player: Player, profile: any, amount: number, reason: string?): number

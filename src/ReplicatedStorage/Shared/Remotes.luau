@@ -2,8 +2,10 @@
 --[[
 	Client/server helper to fetch remotes created by RemoteSetup.
 	Does not create remotes on the client.
-	Waits patiently — Rojo ships an empty Remotes folder; v59 Bootstrap creates
-	remotes BEFORE MapSetup. EarlyRemotes belt + RemoteSetup.Init. Never hard-assert after 10s.
+
+	v60: HUD/BUY must NEVER block on unbounded WaitForChild.
+	Use BindEvent / TryGet* for display paths; GetEvent still waits (non-HUD).
+	Folder is WE_Remotes (server-created) — Rojo no longer ships empty Remotes.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -11,13 +13,21 @@ local Constants = require(script.Parent.Constants)
 
 local Remotes = {}
 
-local function getFolder(): Folder
+local function getFolderImmediate(): Folder?
 	local folder = ReplicatedStorage:FindFirstChild(Constants.RemotesFolderName)
 	if folder and folder:IsA("Folder") then
 		return folder :: Folder
 	end
-	folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName, 120)
-	assert(folder and folder:IsA("Folder"), "Remotes folder missing — server Bootstrap must run first")
+	return nil
+end
+
+local function getFolder(): Folder
+	local folder = getFolderImmediate()
+	if folder then
+		return folder
+	end
+	folder = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName, 120) :: Folder?
+	assert(folder and folder:IsA("Folder"), "WE_Remotes missing — server EarlyRemotes/RemoteSetup must run first")
 	return folder :: Folder
 end
 
@@ -27,7 +37,6 @@ local function waitForRemote(name: string, className: string): Instance
 	if existing and existing:IsA(className) then
 		return existing
 	end
-	-- Poll with warns — map/service load can exceed 10s on cold Studio Play
 	local waited = 0
 	while waited < 180 do
 		local remote = folder:WaitForChild(name, 5)
@@ -50,6 +59,63 @@ end
 
 function Remotes.GetFunction(name: string): RemoteFunction
 	return waitForRemote(name, "RemoteFunction") :: RemoteFunction
+end
+
+--[[ Non-blocking: nil if remote not ready yet. ]]
+function Remotes.TryGetEvent(name: string): RemoteEvent?
+	local folder = getFolderImmediate()
+	if not folder then
+		return nil
+	end
+	local remote = folder:FindFirstChild(name)
+	if remote and remote:IsA("RemoteEvent") then
+		return remote :: RemoteEvent
+	end
+	return nil
+end
+
+function Remotes.TryGetFunction(name: string): RemoteFunction?
+	local folder = getFolderImmediate()
+	if not folder then
+		return nil
+	end
+	local remote = folder:FindFirstChild(name)
+	if remote and remote:IsA("RemoteFunction") then
+		return remote :: RemoteFunction
+	end
+	return nil
+end
+
+--[[
+	Connect OnClientEvent without ever yielding the caller.
+	If remote appears later, connects in a background spawn.
+]]
+function Remotes.BindEvent(name: string, handler: (...any) -> ()): ()
+	local remote = Remotes.TryGetEvent(name)
+	if remote then
+		remote.OnClientEvent:Connect(handler)
+		return
+	end
+	task.spawn(function()
+		local folder = getFolderImmediate()
+		if not folder then
+			local waited = ReplicatedStorage:WaitForChild(Constants.RemotesFolderName, 120)
+			if not (waited and waited:IsA("Folder")) then
+				warn("[Remotes] BindEvent: WE_Remotes never appeared for", name)
+				return
+			end
+			folder = waited :: Folder
+		end
+		local ev = folder:FindFirstChild(name)
+		if not ev then
+			ev = folder:WaitForChild(name, 120)
+		end
+		if ev and ev:IsA("RemoteEvent") then
+			(ev :: RemoteEvent).OnClientEvent:Connect(handler)
+		else
+			warn("[Remotes] BindEvent: remote never appeared:", name)
+		end
+	end)
 end
 
 return Remotes

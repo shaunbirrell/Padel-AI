@@ -604,3 +604,8 @@ Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he c
 220. **DataStore key bump** — `Constants.DataStoreName = "WarEmpire_PlayerData_v2"` (was `_v1`). Intentional: fresh join → CreateDefault with StartingCash=10000; kills stuck $0 v1 saves. Session lock store unchanged.
 221. **Walls/buildings** — PreferMesh OFF; KIT_GEN 32; SyncPerimeterWalls from v36 (`0b0e95f`, height `7.5+lv*2.8`); walls on DefensiveWalls buy; EnsureKit on buy/join. Jeep drivability + map densify kept.
 222. **WE_Build=55** — Open Cloud publish after rojo build + BuyPathStatic PASS.
+
+## 2026-09-21 — Own the cash v60 (Open Cloud Published versionNumber=60)
+
+Root cause v59 still `$…`: `HUDController.luau` / `WorldPromptController.luau` / `NotificationController.luau` called blocking `Remotes.GetEvent` (unbounded WaitForChild on Rojo empty `Remotes` folder) **before** leaderstats/attr wiring. UIController also inited Notification before HUD. Nuclear fix: `WE_Remotes` server-only, EarlyRemotes seeds leaderstats+AdminPlaytestCash sync, BindEvent for HUD, 0.5s fallback.
+

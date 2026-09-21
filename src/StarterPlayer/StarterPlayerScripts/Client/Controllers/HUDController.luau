@@ -189,7 +189,7 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	-- v57: do NOT fake StartingCash — show $… until first confirmed sync
+	-- v60: brief $… then leaderstats/0 within 0.5s — never stuck forever
 	cash.Text = "$…"
 	cash.ZIndex = 13
 	cash.Parent = pill
@@ -346,38 +346,7 @@ function HUDController.Init()
 	end
 	refreshSpinnerBtn()
 
-	-- v58: cash listeners + poll BEFORE any other remote WaitForChild (Spinner/XP/Season…)
-	local econToken = 0
-	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		econToken += 1
-		local my = econToken
-		local cashAmt, goldAmt = payload.Cash, payload.Gold
-		local pendingAmt = tonumber(payload.PendingCash) or 0
-		task.defer(function()
-			if my == econToken then
-				HUDController.SetEconomy(cashAmt, goldAmt, pendingAmt)
-			end
-		end)
-	end)
-
-	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
-		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
-		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
-		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
-		HUDController.SetEconomy(c, g, p)
-	end)
-	do
-		local c = player:GetAttribute("WE_Cash")
-		if typeof(c) == "number" then
-			HUDController.SetEconomy(
-				c,
-				tonumber(player:GetAttribute("WE_Gold")) or 0,
-				tonumber(player:GetAttribute("WE_PendingCash")) or 0
-			)
-		end
-	end
-
-	-- Leaderstats belt+suspenders (server pushEconomy writes Cash/Gold IntValues)
+	-- v60 NUCLEAR: leaderstats FIRST — never WaitForChild remotes on HUD cash path
 	local function tryLeaderstats(): boolean
 		local folder = player:FindFirstChild("leaderstats")
 		if not folder then
@@ -395,20 +364,91 @@ function HUDController.Init()
 		HUDController.SetEconomy((cashV :: any).Value, g, tonumber(player:GetAttribute("WE_PendingCash")) or 0)
 		return true
 	end
+
+	local function wireLeaderstatsFolder(folder: Instance)
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			(cashV :: any):GetPropertyChangedSignal("Value"):Connect(function()
+				tryLeaderstats()
+			end)
+		end
+		folder.ChildAdded:Connect(function(ch)
+			if ch.Name == "Cash" and (ch:IsA("IntValue") or ch:IsA("NumberValue")) then
+				(ch :: any):GetPropertyChangedSignal("Value"):Connect(function()
+					tryLeaderstats()
+				end)
+				tryLeaderstats()
+			end
+		end)
+		tryLeaderstats()
+	end
+
 	tryLeaderstats()
+	do
+		local existing = player:FindFirstChild("leaderstats")
+		if existing then
+			wireLeaderstatsFolder(existing)
+		end
+	end
 	player.ChildAdded:Connect(function(ch)
 		if ch.Name == "leaderstats" then
-			task.defer(tryLeaderstats)
-			ch.ChildAdded:Connect(function()
-				task.defer(tryLeaderstats)
-			end)
+			wireLeaderstatsFolder(ch)
 		end
 	end)
 
-	-- Start poll IMMEDIATELY so cash lands even if later WaitForChild blocks
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
+		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
+		local pend = tonumber(player:GetAttribute("WE_PendingCash")) or 0
+		HUDController.SetEconomy(c, g, pend)
+	end)
+	do
+		local c = player:GetAttribute("WE_Cash")
+		if typeof(c) == "number" then
+			HUDController.SetEconomy(
+				c,
+				tonumber(player:GetAttribute("WE_Gold")) or 0,
+				tonumber(player:GetAttribute("WE_PendingCash")) or 0
+			)
+		end
+	end
+
+	-- EconomyUpdate IF present — never infinite WaitForChild
+	local econToken = 0
+	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
+		econToken += 1
+		local my = econToken
+		local cashAmt, goldAmt = payload.Cash, payload.Gold
+		local pendingAmt = tonumber(payload.PendingCash) or 0
+		task.defer(function()
+			if my == econToken then
+				HUDController.SetEconomy(cashAmt, goldAmt, pendingAmt)
+			end
+		end)
+	end)
+
+	-- 0.5s hard fallback: never leave $… / $—
+	task.delay(0.5, function()
+		if not cashLabel then
+			return
+		end
+		local txt = cashLabel.Text
+		if txt == "$…" or txt == "$—" or txt == "$..." then
+			if not tryLeaderstats() then
+				local attr = tonumber(player:GetAttribute("WE_Cash"))
+				if typeof(attr) == "number" then
+					HUDController.SetEconomy(attr, tonumber(player:GetAttribute("WE_Gold")) or 0, tonumber(player:GetAttribute("WE_PendingCash")) or 0)
+				else
+					HUDController.SetEconomy(0, 0, 0)
+				end
+			end
+		end
+	end)
+
+	-- Poll: attrs/leaderstats only; GetPlayerState via TryGet (no hang)
 	task.spawn(function()
 		local synced = false
-		for i = 0, 15 do
+		for i = 0, 20 do
 			if typeof(player:GetAttribute("WE_Cash")) == "number" then
 				HUDController.SetEconomy(
 					player:GetAttribute("WE_Cash") :: number,
@@ -420,26 +460,29 @@ function HUDController.Init()
 			if tryLeaderstats() then
 				synced = true
 			end
-			local ok, state = pcall(function()
-				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
-			end)
-			if ok and state then
-				HUDController.ApplyState(state :: Types.PlayerStatePayload)
-				synced = true
+			local fn = Remotes.TryGetFunction(Constants.RemoteNames.GetPlayerState)
+			if fn then
+				local ok, state = pcall(function()
+					return fn:InvokeServer()
+				end)
+				if ok and state then
+					HUDController.ApplyState(state :: Types.PlayerStatePayload)
+					synced = true
+					break
+				end
+			end
+			if synced and i >= 2 then
 				break
 			end
-			if synced and i >= 3 then
-				break
-			end
-			task.wait(1)
+			task.wait(0.25)
 		end
 		if not synced then
-			warn("[HUDController] GetPlayerState/attr/leaderstats bootstrap failed")
+			warn("[HUDController] attr/leaderstats bootstrap still empty after poll")
 		end
 	end)
 
-	-- ONLY THEN: Spinner/XP/Season/other remotes that can WaitForChild-block
-	Remotes.GetEvent(Constants.RemoteNames.SpinnerStateUpdate).OnClientEvent:Connect(function(payload)
+	-- Spinner/XP/Season via BindEvent — never block Init
+	Remotes.BindEvent(Constants.RemoteNames.SpinnerStateUpdate, function(payload)
 		if typeof(payload) ~= "table" then
 			return
 		end
@@ -448,7 +491,7 @@ function HUDController.Init()
 		refreshSpinnerBtn()
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.XPUpdate).OnClientEvent:Connect(function(payload: Types.XPUpdatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.XPUpdate, function(payload: Types.XPUpdatePayload)
 		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
 		if (payload :: any).LevelUp == true then
 			pcall(function()
@@ -458,24 +501,24 @@ function HUDController.Init()
 		end
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: Types.PlayerStatePayload)
 		HUDController.ApplyState(state)
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(base: Types.BaseStatePayload)
+	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: Types.BaseStatePayload)
 		if base.PassiveIncomePerTick then
 			lastPassive = base.PassiveIncomePerTick
 			refreshPassiveHint()
 		end
 	end)
-	Remotes.GetEvent(Constants.RemoteNames.SoldierStateUpdate).OnClientEvent:Connect(function(payload)
+	Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload)
 		if typeof(payload) == "table" then
 			lastTraining = tonumber(payload.TrainingIncomePerTick) or 0
 			refreshPassiveHint()
 		end
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.SeasonStateUpdate).OnClientEvent:Connect(function(payload)
+	Remotes.BindEvent(Constants.RemoteNames.SeasonStateUpdate, function(payload)
 		if not seasonLabel or typeof(payload) ~= "table" then
 			return
 		end
