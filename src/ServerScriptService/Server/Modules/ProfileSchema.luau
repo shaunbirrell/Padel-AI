@@ -302,8 +302,15 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
 	end
+	do
+		local cashN = tonumber((profile :: any).Cash)
+		profile.Cash = if typeof(cashN) == "number" then math.floor(cashN) else EconomyConfig.StartingCash
+		local goldN = tonumber((profile :: any).Gold)
+		profile.Gold = if typeof(goldN) == "number" then math.floor(goldN) else EconomyConfig.StartingGold
+	end
 	if typeof((profile :: any).PendingCash) ~= "number" then
-		(profile :: any).PendingCash = 0
+		local pendN = tonumber((profile :: any).PendingCash)
+		(profile :: any).PendingCash = if typeof(pendN) == "number" then math.floor(pendN) else 0
 	end
 	if typeof((profile :: any).Entitlements) ~= "table" then
 		(profile :: any).Entitlements = {}

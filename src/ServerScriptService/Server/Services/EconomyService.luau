@@ -30,11 +30,24 @@ local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
+	local cash = math.floor(tonumber(profile.Cash) or 0)
+	local gold = math.floor(tonumber(profile.Gold) or 0)
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	-- Keep profile numeric (SpendCash / client Attribute fallback)
+	profile.Cash = cash
+	profile.Gold = gold
+	;(profile :: any).PendingCash = pending
+	-- Replicated attributes: clients that miss FireClient still read spendable Cash
+	pcall(function()
+		player:SetAttribute("WE_Cash", cash)
+		player:SetAttribute("WE_Gold", gold)
+		player:SetAttribute("WE_PendingCash", pending)
+	end)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
 	remote:FireClient(player, {
-		Cash = profile.Cash,
-		Gold = profile.Gold,
-		PendingCash = tonumber((profile :: any).PendingCash) or 0,
+		Cash = cash,
+		Gold = gold,
+		PendingCash = pending,
 	} :: Types.EconomyUpdatePayload)
 end
 
@@ -163,10 +176,12 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 	if not profile then
 		return false, "NoProfile"
 	end
-	if profile.Cash < amount then
+	local have = math.floor(tonumber(profile.Cash) or 0)
+	profile.Cash = have
+	if have < amount then
 		return false, "InsufficientCash"
 	end
-	profile.Cash -= amount
+	profile.Cash = have - amount
 	DataService.MarkDirty(player)
 	pushEconomy(player, profile)
 	return true, nil
@@ -208,7 +223,7 @@ end
 
 function EconomyService.GetCash(player: Player): number
 	local profile = DataService.GetProfile(player)
-	return if profile then profile.Cash else 0
+	return if profile then math.floor(tonumber(profile.Cash) or 0) else 0
 end
 
 function EconomyService.GetGold(player: Player): number

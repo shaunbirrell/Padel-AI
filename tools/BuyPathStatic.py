@@ -710,7 +710,7 @@ must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "Tu
 
 
 # --- v39 P0 hotfix: billboards + walls + Part-kit visibility ---
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52)", "v39 price billboard chip 160x52")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_SIZE = UDim2.fromOffset(118, 40)", "v50 price billboard chip 118x40")
 
 # --- v40 Orders panel scale + chip clamp + design gaps doc ---
 must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "PanelMaxWidth = 220", "v40 Orders PanelMaxWidth")
@@ -720,7 +720,7 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersCo
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "AttachMobileScale", "v40 Orders custom MobileScale")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "HOTKEY_ORDERS", "v40 Orders hotkeys intact")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "KeyCode.T", "v40 Orders T cycle intact")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 160", "v40 chip max width 160")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 120", "v50 chip max width 120")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "clampChipSize", "v40 clampChipSize")
 must_contain("docs/DESIGN_WIRE_GAPS_v40.md", "ModelAssetId = 0", "v40 design gaps doc")
 must_contain("docs/DESIGN_WIRE_GAPS_v40.md", "26007709", "v40 tank reuse gap listed")
@@ -780,7 +780,7 @@ must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", 
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "hideKitBody", "v41 hideKitBody present")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v41")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "placeKitPart", "v41 bottom-anchored placeKitPart")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 160", "v41 billboards ≤160")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 120", "v50a billboards ≤120")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v41")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v41")
 
@@ -821,7 +821,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Bas
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "NEVER ghost Part-kit silhouettes", "v42 hideKitBody no-op")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "hideKitBody", "v42 hideKitBody present")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v42")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 160", "v42 billboards ≤160")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "fromOffset(300, 58)", "v50 buy button 300x58")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v42")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v42")
 
@@ -847,7 +847,7 @@ must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.lua
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Transparency = 0", "v43 wall Parts solid Transparency=0")
 # No-regress
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "bottom + newSize.Y * 0.5", "v43 placeKitPart bottom-anchored")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 160", "v43 billboards ≤160")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "cash bootstrap", "v50 WorldPrompt cash bootstrap")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "v43 Jeep drive no-regress")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "v43 VIP Id no-regress")
 
@@ -944,6 +944,18 @@ must_contain("src/ServerScriptService/Server/Services/AdminService.luau", 'cmd =
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v49 PreferMesh still OFF")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v49 KIT_GEN stays 32")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v49 keep v36 wall height")
+
+
+# ── v50 cash desync / ATM collect / compact BUY UI ──────────────────────────
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'SetAttribute("WE_Cash"', "v50 WE_Cash attribute push")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "AdminPlaytestCash applied", "v50 AdminPlaytestCash log")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "nearCollector", "v50 ATM nearCollector radius")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "WE_CollectPrompt", "v50 ATM Collect ProximityPrompt")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", '"$—"', "v50 HUD no fake $5000 placeholder")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "fromOffset(118, 40)", "v50 MapSetup price chip 118x40")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Allow(player, "get_state", 6, 16)', "v50 get_state rate relaxed")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v50 PreferMesh still OFF")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v50 KIT_GEN stays 32")
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
 sys.exit(1 if FAIL else 0)

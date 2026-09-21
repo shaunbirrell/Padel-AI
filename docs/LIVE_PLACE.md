@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=49** (2026-09-21 Europe/Madrid) — ForceWipe one-shot via `force_wipe_done_USERID` DataStore key (list may stay); clearwipedone admin; walls PreferMesh OFF / KIT_GEN 32 unchanged.
+- **Live Published:** Open Cloud **versionNumber=50** (2026-09-21 Europe/Madrid) — v50 cash/ATM/BUY UI: AdminPlaytestCash harden + WE_Cash attrs + WorldPrompt cash bootstrap; ATM nearCollector + Collect prompt; compact price chips / BUY bar. PreferMesh OFF / KIT_GEN 32 unchanged.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

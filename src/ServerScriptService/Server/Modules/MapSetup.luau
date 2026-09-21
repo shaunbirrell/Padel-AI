@@ -211,13 +211,13 @@ local function neonEdge(parentPart, color, thickness)
 end
 
 local function priceBillboard(parent, title, costLine, accent)
-	-- Visual kits v2: larger readable price cards
+	-- v50: compact mobile price cards (was oversized Title+Cost overflow)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(160, 52) -- v39: match client chip size (was 260×110)
-	bb.StudsOffset = Vector3.new(0, 5.5, 0)
+	bb.Size = UDim2.fromOffset(118, 40)
+	bb.StudsOffset = Vector3.new(0, 4.5, 0)
 	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
-	bb.MaxDistance = 42 -- mobile: price cards near-only
+	bb.MaxDistance = 36 -- mobile: price cards near-only
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -228,19 +228,19 @@ local function priceBillboard(parent, title, costLine, accent)
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
+	c.CornerRadius = UDim.new(0, 6)
 	c.Parent = backdrop
 	local stroke = Instance.new("UIStroke")
 	stroke.Name = "Stroke"
 	stroke.Color = accent
-	stroke.Thickness = 2
+	stroke.Thickness = 1.5
 	stroke.Transparency = 0.1
 	stroke.Parent = backdrop
 
 	local titleLab = Instance.new("TextLabel")
 	titleLab.Name = "Title"
-	titleLab.Size = UDim2.new(1, -10, 0, 26)
-	titleLab.Position = UDim2.fromOffset(5, 4)
+	titleLab.Size = UDim2.new(1, -8, 0, 16)
+	titleLab.Position = UDim2.fromOffset(4, 2)
 	titleLab.BackgroundTransparency = 1
 	titleLab.Text = title
 	titleLab.TextColor3 = Color3.fromRGB(245, 245, 248)
@@ -251,8 +251,8 @@ local function priceBillboard(parent, title, costLine, accent)
 
 	local costLab = Instance.new("TextLabel")
 	costLab.Name = "Cost"
-	costLab.Size = UDim2.new(1, -10, 0, 56)
-	costLab.Position = UDim2.fromOffset(5, 30)
+	costLab.Size = UDim2.new(1, -8, 0, 18)
+	costLab.Position = UDim2.fromOffset(4, 18)
 	costLab.BackgroundTransparency = 1
 	costLab.Text = "Lv 0 → 1\n" .. costLine
 	costLab.TextColor3 = Color3.fromRGB(255, 215, 110)

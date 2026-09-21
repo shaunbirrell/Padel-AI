@@ -44,11 +44,11 @@ local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 42 -- near-only chips (was 56)
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_CHIP_MAX_W = 160 -- v40: hard clamp — never wider than 160
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- phone-readable chip (was giant 300×132)
-local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(120, 32) -- owned L1+: tiny roof chip, never half-screen
+local PRICE_CHIP_MAX_W = 120 -- v50: tighter mobile chips (was 160)
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(118, 40) -- phone-readable chip (was 160×52)
+local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(96, 26) -- owned L1+: tiny roof chip
 local BUY_GUI_NAME = "WE_PadBuyGui"
-local BUY_BTN_MIN_H = 72
+local BUY_BTN_MIN_H = 56
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -198,19 +198,19 @@ local function ensurePadBuyGui(): TextButton
 	-- Above HUD dock (55); below modal panels (60+)
 	screen.DisplayOrder = 65 -- above dock (55); below toast (70); avoids burying notifications
 	screen.Parent = pg
-	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
+	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.05)
 	_buyGui = screen
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyButton"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -120)
-	btn.Size = UDim2.fromOffset(420, 88)
+	btn.Position = UDim2.new(0.5, 0, 1, -108)
+	btn.Size = UDim2.fromOffset(300, 58)
 	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = true
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 28
+	btn.TextSize = 18
 	btn.TextColor3 = Color3.fromRGB(255, 250, 235)
 	btn.TextStrokeTransparency = 0.55
 	btn.Text = "BUY"
@@ -331,16 +331,15 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 end
 
 local function clampChipSize(size: UDim2): UDim2
-	-- v40: if any path left chips >160 wide, force clamp
+	-- v50: hard clamp width+height so legacy/Scale chips never dominate mobile
 	local w = size.X.Offset
 	local h = size.Y.Offset
-	if w <= 0 then
-		return size
+	if w <= 0 and h <= 0 then
+		return PRICE_BILLBOARD_SIZE
 	end
-	if w > PRICE_CHIP_MAX_W then
-		return UDim2.fromOffset(PRICE_CHIP_MAX_W, if h > 0 then h else 52)
-	end
-	return size
+	local cw = if w > 0 then math.min(w, PRICE_CHIP_MAX_W) else PRICE_CHIP_MAX_W
+	local ch = if h > 0 then math.min(h, 44) else 40
+	return UDim2.fromOffset(cw, ch)
 end
 
 local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
@@ -1149,13 +1148,20 @@ function WorldPromptController.Init()
 		markBillboardsDirty()
 	end)
 
+	local function applyCash(n: any)
+		local v = tonumber(n)
+		if typeof(v) == "number" then
+			cash = math.floor(v)
+			markBillboardsDirty()
+		end
+	end
+
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		cash = payload.Cash
-		markBillboardsDirty()
+		applyCash(payload.Cash)
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		cash = state.Cash
+		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades
 			if typeof(state.Base.PlotId) == "number" then
@@ -1166,6 +1172,43 @@ function WorldPromptController.Init()
 			end
 		end
 		markBillboardsDirty()
+	end)
+
+	-- Attribute fallback when FireClient was missed (join race)
+	do
+		local attrCash = player:GetAttribute("WE_Cash")
+		if typeof(attrCash) == "number" then
+			applyCash(attrCash)
+		end
+		player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+			applyCash(player:GetAttribute("WE_Cash"))
+		end)
+	end
+
+	-- Bootstrap like HUD — WorldPrompt used to stay at cash=0 until first EconomyUpdate
+	task.spawn(function()
+		for _ = 1, 5 do
+			local ok, state = pcall(function()
+				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+			end)
+			if ok and typeof(state) == "table" then
+				applyCash((state :: any).Cash)
+				local base = (state :: any).Base
+				if typeof(base) == "table" then
+					if typeof(base.Upgrades) == "table" then
+						upgrades = base.Upgrades
+					end
+					if typeof(base.PlotId) == "number" then
+						myPlotId = base.PlotId
+					end
+				end
+				markBillboardsDirty()
+				print(string.format("[WorldPrompt] cash bootstrap have=%d", cash))
+				return
+			end
+			task.wait(0.6)
+		end
+		warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
 	end)
 
 	player.CharacterAdded:Connect(function()

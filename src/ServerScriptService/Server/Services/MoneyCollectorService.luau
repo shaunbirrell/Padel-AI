@@ -28,8 +28,10 @@ local RateLimitService: any = nil
 
 local TAG = Constants.Tags.MoneyCollector
 local OVERLAP_MARGIN = 3.5
+local COLLECT_RADIUS = 10 -- horizontal studs from ATM body (covers CollectCircle pad)
 local SPATIAL_INTERVAL = 0.25
 local AUTO_COLLECT_INTERVAL = 2.0
+local emptyCollectToastAt: { [number]: number } = {}
 
 local lastOverlap: { [string]: boolean } = {}
 local billboardCache: { [BasePart]: BillboardGui } = {}
@@ -189,6 +191,28 @@ local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
 		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
 		and localPos.Y >= -half.Y - 4
 		and localPos.Y <= half.Y + 10
+end
+
+local function nearCollector(hrpPos: Vector3, part: BasePart): boolean
+	-- Prefer generous ground radius so standing on CollectCircle / black base works
+	local delta = hrpPos - part.Position
+	local horiz = Vector3.new(delta.X, 0, delta.Z).Magnitude
+	if horiz <= COLLECT_RADIUS then
+		return math.abs(delta.Y) <= 14
+	end
+	return pointInPart(hrpPos, part)
+end
+
+local function plotIdOf(part: BasePart): number?
+	local raw = part:GetAttribute("PlotId")
+	if typeof(raw) == "number" then
+		return raw
+	end
+	local n = tonumber(raw)
+	if typeof(n) == "number" then
+		return n
+	end
+	return nil
 end
 
 local function getAtmRaidConfig()
@@ -523,19 +547,39 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 
 	-- Touch + spatial collect
-	local function tryCollectFromPart(player: Player, part: BasePart)
+	local function tryCollectFromPart(player: Player, part: BasePart, fromPrompt: boolean?)
 		local profile = DataService.GetProfile(player)
 		if not profile then
 			return
 		end
-		local plotId = part:GetAttribute("PlotId")
-		-- Enemy ATM: attempt raid (10% PendingCash steal)
-		if typeof(plotId) == "number" and (profile.BasePlotId == nil or plotId ~= profile.BasePlotId) then
-			MoneyCollectorService.TryAtmRaid(player, part)
-			return
+		local plotId = plotIdOf(part)
+		local ownPlot = tonumber(profile.BasePlotId)
+		-- Own ATM (or plot not yet assigned but standing on an unowned/own pad): collect.
+		-- Only raid when this pad clearly belongs to a *different* living player.
+		local isOwn = typeof(plotId) == "number" and typeof(ownPlot) == "number" and plotId == ownPlot
+		if typeof(plotId) == "number" and not isOwn then
+			local owner = findOwnerByPlot(plotId)
+			if owner and owner ~= player then
+				MoneyCollectorService.TryAtmRaid(player, part)
+				return
+			end
+			-- Unowned / own-plot-nil: treat as collectable for this player (join race)
 		end
-		local pending = tonumber(profile.PendingCash) or 0
+		local pending = math.floor(tonumber(profile.PendingCash) or 0)
 		if pending <= 0 then
+			if fromPrompt == true and NotificationService then
+				local now = os.clock()
+				local last = emptyCollectToastAt[player.UserId] or 0
+				if now - last >= 2.5 then
+					emptyCollectToastAt[player.UserId] = now
+					NotificationService.Notify(
+						player,
+						"Nothing to collect yet — click the dropper or wait for passive $",
+						"Info",
+						3
+					)
+				end
+			end
 			return
 		end
 		MoneyCollectorService.Collect(player)
@@ -551,6 +595,27 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		part.CanTouch = true
 		part.CanCollide = true
 		ensureBillboard(part)
+		-- Mobile-friendly Collect prompt (standing on pad + E / tap)
+		do
+			local existing = part:FindFirstChild("WE_CollectPrompt")
+			if existing then
+				existing:Destroy()
+			end
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "WE_CollectPrompt"
+			prompt.ActionText = "Collect"
+			prompt.ObjectText = "ATM"
+			prompt.HoldDuration = 0
+			prompt.MaxActivationDistance = 14
+			prompt.RequiresLineOfSight = false
+			prompt.KeyboardKeyCode = Enum.KeyCode.E
+			prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+			prompt.Style = Enum.ProximityPromptStyle.Default
+			prompt.Parent = part
+			prompt.Triggered:Connect(function(triggerPlayer: Player)
+				tryCollectFromPart(triggerPlayer, part, true)
+			end)
+		end
 		task.defer(function()
 			pcall(function()
 				local vas = require(script.Parent.VisualAssetService)
@@ -615,8 +680,8 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 					local profile = DataService.GetProfile(player)
 					if profile then
 						for part in pairs(attached) do
-							if part.Parent and pointInPart(hrp.Position, part) then
-								tryCollectFromPart(player, part)
+							if part.Parent and nearCollector(hrp.Position, part) then
+								tryCollectFromPart(player, part, false)
 							end
 						end
 					end
@@ -640,6 +705,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		atmRaidCooldownUntil[player.UserId] = nil
+		emptyCollectToastAt[player.UserId] = nil
 		-- Also drop entries where this player was victim
 		for thiefId, byVictim in pairs(atmRaidCooldownUntil) do
 			byVictim[player.UserId] = nil

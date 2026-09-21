@@ -573,3 +573,13 @@ Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he c
 
 211. **force_wipe_done one-shot** — Before wipe, `GetAsync(force_wipe_done_USERID)`; if truthy skip wipe (normal load). On wipe: RemoveAsync player key → CreateDefault → applyAdminPlaytestCash → `SetAsync(force_wipe_done_USERID, { unix, v=1 })`. ForceWipeUserIds stays allowlist. Admin `clearwipedone` RemoveAsync done key. Walls/PreferMesh unchanged. BuyPathStatic asserts force_wipe_done. Open Cloud **versionNumber=49**.
 
+
+
+## 2026-09-21 — Cash desync / ATM collect / compact BUY (live v50)
+
+212. **NEED with HUD $5k root causes** — (a) HUD hardcoded `$5,000` placeholder before sync looked like real Cash; (b) `WorldPromptController` never bootstrapped via `GetPlayerState`, so local `cash` stayed `0` after missed join `EconomyUpdate` → NEED / soft-fail toast while server Cash was fine; (c) AdminPlaytestCash needed tonumber + immediate Save after wipe. Fixes: WE_Cash/WE_Gold/WE_PendingCash attributes on pushEconomy; WorldPrompt+HUD+Base attribute listeners + GetPlayerState retry; AdminPlaytestCash log + deferred Save; join re-push economy at 0.5/2/5s; get_state rate 6/16.
+
+213. **ATM collect** — `BasePlotId == nil` routed touch to AtmRaid (no-op) instead of Collect; CollectCircle not in body AABB. Fixes: own/unowned → Collect, raid only when another living owner; `nearCollector` 10-stud radius; `WE_CollectPrompt` ProximityPrompt; empty-pending toast.
+
+214. **BUY / price UI too big** — ScreenGui BUY was 420×88 + MobileScale; MapSetup Cost label overflowed chip. v50: BUY 300×58, chips 118×40 / maxW 120, MapSetup labels fit.
+

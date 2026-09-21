@@ -365,15 +365,27 @@ function BaseController.Init()
 		end
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		cash = payload.Cash
-		if menuOpen then
-			refreshList()
+	local function applyCash(n: any)
+		local v = tonumber(n)
+		if typeof(v) == "number" then
+			cash = math.floor(v)
+			if menuOpen then
+				refreshList()
+			end
 		end
+	end
+
+	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
+		applyCash(payload.Cash)
 	end)
 
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		applyCash(player:GetAttribute("WE_Cash"))
+	end)
+	applyCash(player:GetAttribute("WE_Cash"))
+
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		cash = state.Cash
+		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades
 		end

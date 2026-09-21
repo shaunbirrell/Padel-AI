@@ -182,7 +182,7 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	cash.Text = "$5,000"
+	cash.Text = "$—" -- until EconomyUpdate / GetPlayerState (was fake $5,000)
 	cash.ZIndex = 13
 	cash.Parent = pill
 	cashLabel = cash
@@ -407,13 +407,36 @@ function HUDController.Init()
 		end
 	end)
 
-	task.spawn(function()
-		local ok, state = pcall(function()
-			return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
-		end)
-		if ok and state then
-			HUDController.ApplyState(state :: Types.PlayerStatePayload)
+	-- Attribute fallback (server pushEconomy sets WE_Cash)
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
+		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
+		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
+		HUDController.SetEconomy(c, g, p)
+	end)
+	do
+		local c = player:GetAttribute("WE_Cash")
+		if typeof(c) == "number" then
+			HUDController.SetEconomy(
+				c,
+				tonumber(player:GetAttribute("WE_Gold")) or 0,
+				tonumber(player:GetAttribute("WE_PendingCash")) or 0
+			)
 		end
+	end
+
+	task.spawn(function()
+		for _ = 1, 6 do
+			local ok, state = pcall(function()
+				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+			end)
+			if ok and state then
+				HUDController.ApplyState(state :: Types.PlayerStatePayload)
+				return
+			end
+			task.wait(0.5)
+		end
+		warn("[HUDController] GetPlayerState bootstrap failed")
 	end)
 end
 

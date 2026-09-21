@@ -1007,7 +1007,7 @@ function BaseService.Init(deps: { [string]: any })
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
-		if not RateLimitService.Allow(player, "get_state", 2, 4) then
+		if not RateLimitService.Allow(player, "get_state", 6, 16) then
 			return nil
 		end
 		return buildPlayerState(player)
@@ -1036,6 +1036,19 @@ function BaseService.Init(deps: { [string]: any })
 		local state = buildPlayerState(player)
 		if state then
 			stateRemote:FireClient(player, state)
+		end
+		-- Re-push economy/state so clients that miss the first FireClient (late Init) sync Cash
+		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
+			task.delay(delaySec, function()
+				if not player.Parent then
+					return
+				end
+				EconomyService.Push(player)
+				local st = buildPlayerState(player)
+				if st then
+					stateRemote:FireClient(player, st)
+				end
+			end)
 		end
 		-- v45 P0: nuclear kit rebuild then RefreshAllVisuals at 0 / 0.5 / 2 / 5s (map-heal race)
 		task.defer(function()

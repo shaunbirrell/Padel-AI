@@ -162,15 +162,19 @@ end
 
 --- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
-	local target = AdminConfig.AdminPlaytestCash
-	if typeof(target) ~= "number" or target <= 0 then
+	local target = tonumber(AdminConfig.AdminPlaytestCash)
+	if typeof(target) ~= "number" or target == nil or target <= 0 then
 		return false
 	end
 	if not isAdminUserId(userId) then
 		return false
 	end
-	if profile.Cash < target then
+	-- Coerce Cash (DataStore / migrate edge cases) so comparisons never throw.
+	local have = math.floor(tonumber((profile :: any).Cash) or 0)
+	profile.Cash = have
+	if have < target then
 		profile.Cash = target
+		warn(string.format("[DataService] AdminPlaytestCash applied userId=%d %d → %d", userId, have, target))
 		return true
 	end
 	return false
@@ -251,8 +255,10 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 	applyStudioDevFlags(profile)
 	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	-- Wipe always dirties so CreateDefault (+ admin cash) persists even if admin cash no-ops.
+	local wipedFresh = forceWipe and not skipForceWipe
 
-	if forceWipe and not skipForceWipe and ds then
+	if wipedFresh and ds then
 		local markOk, markErr = pcall(function()
 			ds:SetAsync(forceWipeDoneKey(userId), { unix = os.time(), v = 1 })
 		end)
@@ -262,10 +268,19 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 
 	profiles[userId] = profile
-	dirty[userId] = adminCashApplied
+	dirty[userId] = adminCashApplied or wipedFresh or dirty[userId] == true
 	loading[userId] = false
 
 	fireProfileLoaded(player, profile)
+
+	-- Persist AdminPlaytestCash / wipe immediately (don't wait for leave/autosave).
+	if adminCashApplied or wipedFresh then
+		task.defer(function()
+			if player.Parent and profiles[userId] then
+				DataService.SaveProfile(player, false)
+			end
+		end)
+	end
 
 	return profile
 end

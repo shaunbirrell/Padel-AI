@@ -6988,13 +6988,13 @@ local function neonEdge(parentPart, color, thickness)
 end
 
 local function priceBillboard(parent, title, costLine, accent)
-	-- Visual kits v2: larger readable price cards
+	-- v50: compact mobile price cards (was oversized Title+Cost overflow)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(160, 52) -- v39: match client chip size (was 260×110)
-	bb.StudsOffset = Vector3.new(0, 5.5, 0)
+	bb.Size = UDim2.fromOffset(118, 40)
+	bb.StudsOffset = Vector3.new(0, 4.5, 0)
 	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
-	bb.MaxDistance = 42 -- mobile: price cards near-only
+	bb.MaxDistance = 36 -- mobile: price cards near-only
 	bb.Parent = parent
 
 	local backdrop = Instance.new("Frame")
@@ -7005,19 +7005,19 @@ local function priceBillboard(parent, title, costLine, accent)
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
+	c.CornerRadius = UDim.new(0, 6)
 	c.Parent = backdrop
 	local stroke = Instance.new("UIStroke")
 	stroke.Name = "Stroke"
 	stroke.Color = accent
-	stroke.Thickness = 2
+	stroke.Thickness = 1.5
 	stroke.Transparency = 0.1
 	stroke.Parent = backdrop
 
 	local titleLab = Instance.new("TextLabel")
 	titleLab.Name = "Title"
-	titleLab.Size = UDim2.new(1, -10, 0, 26)
-	titleLab.Position = UDim2.fromOffset(5, 4)
+	titleLab.Size = UDim2.new(1, -8, 0, 16)
+	titleLab.Position = UDim2.fromOffset(4, 2)
 	titleLab.BackgroundTransparency = 1
 	titleLab.Text = title
 	titleLab.TextColor3 = Color3.fromRGB(245, 245, 248)
@@ -7028,8 +7028,8 @@ local function priceBillboard(parent, title, costLine, accent)
 
 	local costLab = Instance.new("TextLabel")
 	costLab.Name = "Cost"
-	costLab.Size = UDim2.new(1, -10, 0, 56)
-	costLab.Position = UDim2.fromOffset(5, 30)
+	costLab.Size = UDim2.new(1, -8, 0, 18)
+	costLab.Position = UDim2.fromOffset(4, 18)
 	costLab.BackgroundTransparency = 1
 	costLab.Text = "Lv 0 → 1\n" .. costLine
 	costLab.TextColor3 = Color3.fromRGB(255, 215, 110)
@@ -10038,8 +10038,15 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if typeof((profile :: any).ProcessedReceipts) ~= "table" then
 		(profile :: any).ProcessedReceipts = {}
 	end
+	do
+		local cashN = tonumber((profile :: any).Cash)
+		profile.Cash = if typeof(cashN) == "number" then math.floor(cashN) else EconomyConfig.StartingCash
+		local goldN = tonumber((profile :: any).Gold)
+		profile.Gold = if typeof(goldN) == "number" then math.floor(goldN) else EconomyConfig.StartingGold
+	end
 	if typeof((profile :: any).PendingCash) ~= "number" then
-		(profile :: any).PendingCash = 0
+		local pendN = tonumber((profile :: any).PendingCash)
+		(profile :: any).PendingCash = if typeof(pendN) == "number" then math.floor(pendN) else 0
 	end
 	if typeof((profile :: any).Entitlements) ~= "table" then
 		(profile :: any).Entitlements = {}
@@ -14235,7 +14242,7 @@ function BaseService.Init(deps: { [string]: any })
 
 	local getStateFn = RemoteSetup.Get(Constants.RemoteNames.GetPlayerState) :: RemoteFunction
 	getStateFn.OnServerInvoke = function(player: Player)
-		if not RateLimitService.Allow(player, "get_state", 2, 4) then
+		if not RateLimitService.Allow(player, "get_state", 6, 16) then
 			return nil
 		end
 		return buildPlayerState(player)
@@ -14264,6 +14271,19 @@ function BaseService.Init(deps: { [string]: any })
 		local state = buildPlayerState(player)
 		if state then
 			stateRemote:FireClient(player, state)
+		end
+		-- Re-push economy/state so clients that miss the first FireClient (late Init) sync Cash
+		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
+			task.delay(delaySec, function()
+				if not player.Parent then
+					return
+				end
+				EconomyService.Push(player)
+				local st = buildPlayerState(player)
+				if st then
+					stateRemote:FireClient(player, st)
+				end
+			end)
 		end
 		-- v45 P0: nuclear kit rebuild then RefreshAllVisuals at 0 / 0.5 / 2 / 5s (map-heal race)
 		task.defer(function()
@@ -17388,15 +17408,19 @@ end
 
 --- AdminPlaytestCash: raise Cash to configured amount for AdminConfig.UserIds only.
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
-	local target = AdminConfig.AdminPlaytestCash
-	if typeof(target) ~= "number" or target <= 0 then
+	local target = tonumber(AdminConfig.AdminPlaytestCash)
+	if typeof(target) ~= "number" or target == nil or target <= 0 then
 		return false
 	end
 	if not isAdminUserId(userId) then
 		return false
 	end
-	if profile.Cash < target then
+	-- Coerce Cash (DataStore / migrate edge cases) so comparisons never throw.
+	local have = math.floor(tonumber((profile :: any).Cash) or 0)
+	profile.Cash = have
+	if have < target then
 		profile.Cash = target
+		warn(string.format("[DataService] AdminPlaytestCash applied userId=%d %d → %d", userId, have, target))
 		return true
 	end
 	return false
@@ -17477,8 +17501,10 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 	applyStudioDevFlags(profile)
 	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	-- Wipe always dirties so CreateDefault (+ admin cash) persists even if admin cash no-ops.
+	local wipedFresh = forceWipe and not skipForceWipe
 
-	if forceWipe and not skipForceWipe and ds then
+	if wipedFresh and ds then
 		local markOk, markErr = pcall(function()
 			ds:SetAsync(forceWipeDoneKey(userId), { unix = os.time(), v = 1 })
 		end)
@@ -17488,10 +17514,19 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 
 	profiles[userId] = profile
-	dirty[userId] = adminCashApplied
+	dirty[userId] = adminCashApplied or wipedFresh or dirty[userId] == true
 	loading[userId] = false
 
 	fireProfileLoaded(player, profile)
+
+	-- Persist AdminPlaytestCash / wipe immediately (don't wait for leave/autosave).
+	if adminCashApplied or wipedFresh then
+		task.defer(function()
+			if player.Parent and profiles[userId] then
+				DataService.SaveProfile(player, false)
+			end
+		end)
+	end
 
 	return profile
 end
@@ -17685,11 +17720,24 @@ local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 
 local function pushEconomy(player: Player, profile: Types.PlayerProfile)
+	local cash = math.floor(tonumber(profile.Cash) or 0)
+	local gold = math.floor(tonumber(profile.Gold) or 0)
+	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
+	-- Keep profile numeric (SpendCash / client Attribute fallback)
+	profile.Cash = cash
+	profile.Gold = gold
+	;(profile :: any).PendingCash = pending
+	-- Replicated attributes: clients that miss FireClient still read spendable Cash
+	pcall(function()
+		player:SetAttribute("WE_Cash", cash)
+		player:SetAttribute("WE_Gold", gold)
+		player:SetAttribute("WE_PendingCash", pending)
+	end)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.EconomyUpdate) :: RemoteEvent
 	remote:FireClient(player, {
-		Cash = profile.Cash,
-		Gold = profile.Gold,
-		PendingCash = tonumber((profile :: any).PendingCash) or 0,
+		Cash = cash,
+		Gold = gold,
+		PendingCash = pending,
 	} :: Types.EconomyUpdatePayload)
 end
 
@@ -17818,10 +17866,12 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 	if not profile then
 		return false, "NoProfile"
 	end
-	if profile.Cash < amount then
+	local have = math.floor(tonumber(profile.Cash) or 0)
+	profile.Cash = have
+	if have < amount then
 		return false, "InsufficientCash"
 	end
-	profile.Cash -= amount
+	profile.Cash = have - amount
 	DataService.MarkDirty(player)
 	pushEconomy(player, profile)
 	return true, nil
@@ -17863,7 +17913,7 @@ end
 
 function EconomyService.GetCash(player: Player): number
 	local profile = DataService.GetProfile(player)
-	return if profile then profile.Cash else 0
+	return if profile then math.floor(tonumber(profile.Cash) or 0) else 0
 end
 
 function EconomyService.GetGold(player: Player): number
@@ -21014,8 +21064,10 @@ local RateLimitService: any = nil
 
 local TAG = Constants.Tags.MoneyCollector
 local OVERLAP_MARGIN = 3.5
+local COLLECT_RADIUS = 10 -- horizontal studs from ATM body (covers CollectCircle pad)
 local SPATIAL_INTERVAL = 0.25
 local AUTO_COLLECT_INTERVAL = 2.0
+local emptyCollectToastAt: { [number]: number } = {}
 
 local lastOverlap: { [string]: boolean } = {}
 local billboardCache: { [BasePart]: BillboardGui } = {}
@@ -21175,6 +21227,28 @@ local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
 		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
 		and localPos.Y >= -half.Y - 4
 		and localPos.Y <= half.Y + 10
+end
+
+local function nearCollector(hrpPos: Vector3, part: BasePart): boolean
+	-- Prefer generous ground radius so standing on CollectCircle / black base works
+	local delta = hrpPos - part.Position
+	local horiz = Vector3.new(delta.X, 0, delta.Z).Magnitude
+	if horiz <= COLLECT_RADIUS then
+		return math.abs(delta.Y) <= 14
+	end
+	return pointInPart(hrpPos, part)
+end
+
+local function plotIdOf(part: BasePart): number?
+	local raw = part:GetAttribute("PlotId")
+	if typeof(raw) == "number" then
+		return raw
+	end
+	local n = tonumber(raw)
+	if typeof(n) == "number" then
+		return n
+	end
+	return nil
 end
 
 local function getAtmRaidConfig()
@@ -21509,19 +21583,39 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 
 	-- Touch + spatial collect
-	local function tryCollectFromPart(player: Player, part: BasePart)
+	local function tryCollectFromPart(player: Player, part: BasePart, fromPrompt: boolean?)
 		local profile = DataService.GetProfile(player)
 		if not profile then
 			return
 		end
-		local plotId = part:GetAttribute("PlotId")
-		-- Enemy ATM: attempt raid (10% PendingCash steal)
-		if typeof(plotId) == "number" and (profile.BasePlotId == nil or plotId ~= profile.BasePlotId) then
-			MoneyCollectorService.TryAtmRaid(player, part)
-			return
+		local plotId = plotIdOf(part)
+		local ownPlot = tonumber(profile.BasePlotId)
+		-- Own ATM (or plot not yet assigned but standing on an unowned/own pad): collect.
+		-- Only raid when this pad clearly belongs to a *different* living player.
+		local isOwn = typeof(plotId) == "number" and typeof(ownPlot) == "number" and plotId == ownPlot
+		if typeof(plotId) == "number" and not isOwn then
+			local owner = findOwnerByPlot(plotId)
+			if owner and owner ~= player then
+				MoneyCollectorService.TryAtmRaid(player, part)
+				return
+			end
+			-- Unowned / own-plot-nil: treat as collectable for this player (join race)
 		end
-		local pending = tonumber(profile.PendingCash) or 0
+		local pending = math.floor(tonumber(profile.PendingCash) or 0)
 		if pending <= 0 then
+			if fromPrompt == true and NotificationService then
+				local now = os.clock()
+				local last = emptyCollectToastAt[player.UserId] or 0
+				if now - last >= 2.5 then
+					emptyCollectToastAt[player.UserId] = now
+					NotificationService.Notify(
+						player,
+						"Nothing to collect yet — click the dropper or wait for passive $",
+						"Info",
+						3
+					)
+				end
+			end
 			return
 		end
 		MoneyCollectorService.Collect(player)
@@ -21537,6 +21631,27 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		part.CanTouch = true
 		part.CanCollide = true
 		ensureBillboard(part)
+		-- Mobile-friendly Collect prompt (standing on pad + E / tap)
+		do
+			local existing = part:FindFirstChild("WE_CollectPrompt")
+			if existing then
+				existing:Destroy()
+			end
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.Name = "WE_CollectPrompt"
+			prompt.ActionText = "Collect"
+			prompt.ObjectText = "ATM"
+			prompt.HoldDuration = 0
+			prompt.MaxActivationDistance = 14
+			prompt.RequiresLineOfSight = false
+			prompt.KeyboardKeyCode = Enum.KeyCode.E
+			prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
+			prompt.Style = Enum.ProximityPromptStyle.Default
+			prompt.Parent = part
+			prompt.Triggered:Connect(function(triggerPlayer: Player)
+				tryCollectFromPart(triggerPlayer, part, true)
+			end)
+		end
 		task.defer(function()
 			pcall(function()
 				local vas = require(script.Parent.VisualAssetService)
@@ -21601,8 +21716,8 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 					local profile = DataService.GetProfile(player)
 					if profile then
 						for part in pairs(attached) do
-							if part.Parent and pointInPart(hrp.Position, part) then
-								tryCollectFromPart(player, part)
+							if part.Parent and nearCollector(hrp.Position, part) then
+								tryCollectFromPart(player, part, false)
 							end
 						end
 					end
@@ -21626,6 +21741,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		atmRaidCooldownUntil[player.UserId] = nil
+		emptyCollectToastAt[player.UserId] = nil
 		-- Also drop entries where this player was victim
 		for thiefId, byVictim in pairs(atmRaidCooldownUntil) do
 			byVictim[player.UserId] = nil
@@ -30482,15 +30598,27 @@ function BaseController.Init()
 		end
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		cash = payload.Cash
-		if menuOpen then
-			refreshList()
+	local function applyCash(n: any)
+		local v = tonumber(n)
+		if typeof(v) == "number" then
+			cash = math.floor(v)
+			if menuOpen then
+				refreshList()
+			end
 		end
+	end
+
+	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
+		applyCash(payload.Cash)
 	end)
 
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		applyCash(player:GetAttribute("WE_Cash"))
+	end)
+	applyCash(player:GetAttribute("WE_Cash"))
+
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		cash = state.Cash
+		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades
 		end
@@ -31493,7 +31621,7 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	cash.Text = "$5,000"
+	cash.Text = "$—" -- until EconomyUpdate / GetPlayerState (was fake $5,000)
 	cash.ZIndex = 13
 	cash.Parent = pill
 	cashLabel = cash
@@ -31718,13 +31846,36 @@ function HUDController.Init()
 		end
 	end)
 
-	task.spawn(function()
-		local ok, state = pcall(function()
-			return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
-		end)
-		if ok and state then
-			HUDController.ApplyState(state :: Types.PlayerStatePayload)
+	-- Attribute fallback (server pushEconomy sets WE_Cash)
+	player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+		local c = tonumber(player:GetAttribute("WE_Cash")) or 0
+		local g = tonumber(player:GetAttribute("WE_Gold")) or 0
+		local p = tonumber(player:GetAttribute("WE_PendingCash")) or 0
+		HUDController.SetEconomy(c, g, p)
+	end)
+	do
+		local c = player:GetAttribute("WE_Cash")
+		if typeof(c) == "number" then
+			HUDController.SetEconomy(
+				c,
+				tonumber(player:GetAttribute("WE_Gold")) or 0,
+				tonumber(player:GetAttribute("WE_PendingCash")) or 0
+			)
 		end
+	end
+
+	task.spawn(function()
+		for _ = 1, 6 do
+			local ok, state = pcall(function()
+				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+			end)
+			if ok and state then
+				HUDController.ApplyState(state :: Types.PlayerStatePayload)
+				return
+			end
+			task.wait(0.5)
+		end
+		warn("[HUDController] GetPlayerState bootstrap failed")
 	end)
 end
 
@@ -37387,11 +37538,11 @@ local OVERLAP_MARGIN = 2.4 -- generous pad hitbox for mobile walk-over
 local BILLBOARD_THROTTLE = 0.35 -- perf: avoid refreshing every economy tick frame
 local PRICE_BILLBOARD_MAX_DIST = 42 -- near-only chips (was 56)
 local ATM_HIDE_PRICE_STUDS = 12 -- P0: hide price boards near MoneyCollector -- near-only (was 650) — mobile screen clutter
-local PRICE_CHIP_MAX_W = 160 -- v40: hard clamp — never wider than 160
-local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(160, 52) -- phone-readable chip (was giant 300×132)
-local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(120, 32) -- owned L1+: tiny roof chip, never half-screen
+local PRICE_CHIP_MAX_W = 120 -- v50: tighter mobile chips (was 160)
+local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(118, 40) -- phone-readable chip (was 160×52)
+local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(96, 26) -- owned L1+: tiny roof chip
 local BUY_GUI_NAME = "WE_PadBuyGui"
-local BUY_BTN_MIN_H = 72
+local BUY_BTN_MIN_H = 56
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -37541,19 +37692,19 @@ local function ensurePadBuyGui(): TextButton
 	-- Above HUD dock (55); below modal panels (60+)
 	screen.DisplayOrder = 65 -- above dock (55); below toast (70); avoids burying notifications
 	screen.Parent = pg
-	UIUtil.AttachMobileScale(screen, 800, 0.75, 1.2)
+	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.05)
 	_buyGui = screen
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyButton"
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -120)
-	btn.Size = UDim2.fromOffset(420, 88)
+	btn.Position = UDim2.new(0.5, 0, 1, -108)
+	btn.Size = UDim2.fromOffset(300, 58)
 	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = true
 	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 28
+	btn.TextSize = 18
 	btn.TextColor3 = Color3.fromRGB(255, 250, 235)
 	btn.TextStrokeTransparency = 0.55
 	btn.Text = "BUY"
@@ -37674,16 +37825,15 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 end
 
 local function clampChipSize(size: UDim2): UDim2
-	-- v40: if any path left chips >160 wide, force clamp
+	-- v50: hard clamp width+height so legacy/Scale chips never dominate mobile
 	local w = size.X.Offset
 	local h = size.Y.Offset
-	if w <= 0 then
-		return size
+	if w <= 0 and h <= 0 then
+		return PRICE_BILLBOARD_SIZE
 	end
-	if w > PRICE_CHIP_MAX_W then
-		return UDim2.fromOffset(PRICE_CHIP_MAX_W, if h > 0 then h else 52)
-	end
-	return size
+	local cw = if w > 0 then math.min(w, PRICE_CHIP_MAX_W) else PRICE_CHIP_MAX_W
+	local ch = if h > 0 then math.min(h, 44) else 40
+	return UDim2.fromOffset(cw, ch)
 end
 
 local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
@@ -38492,13 +38642,20 @@ function WorldPromptController.Init()
 		markBillboardsDirty()
 	end)
 
+	local function applyCash(n: any)
+		local v = tonumber(n)
+		if typeof(v) == "number" then
+			cash = math.floor(v)
+			markBillboardsDirty()
+		end
+	end
+
 	Remotes.GetEvent(Constants.RemoteNames.EconomyUpdate).OnClientEvent:Connect(function(payload: Types.EconomyUpdatePayload)
-		cash = payload.Cash
-		markBillboardsDirty()
+		applyCash(payload.Cash)
 	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		cash = state.Cash
+		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades
 			if typeof(state.Base.PlotId) == "number" then
@@ -38509,6 +38666,43 @@ function WorldPromptController.Init()
 			end
 		end
 		markBillboardsDirty()
+	end)
+
+	-- Attribute fallback when FireClient was missed (join race)
+	do
+		local attrCash = player:GetAttribute("WE_Cash")
+		if typeof(attrCash) == "number" then
+			applyCash(attrCash)
+		end
+		player:GetAttributeChangedSignal("WE_Cash"):Connect(function()
+			applyCash(player:GetAttribute("WE_Cash"))
+		end)
+	end
+
+	-- Bootstrap like HUD — WorldPrompt used to stay at cash=0 until first EconomyUpdate
+	task.spawn(function()
+		for _ = 1, 5 do
+			local ok, state = pcall(function()
+				return Remotes.GetFunction(Constants.RemoteNames.GetPlayerState):InvokeServer()
+			end)
+			if ok and typeof(state) == "table" then
+				applyCash((state :: any).Cash)
+				local base = (state :: any).Base
+				if typeof(base) == "table" then
+					if typeof(base.Upgrades) == "table" then
+						upgrades = base.Upgrades
+					end
+					if typeof(base.PlotId) == "number" then
+						myPlotId = base.PlotId
+					end
+				end
+				markBillboardsDirty()
+				print(string.format("[WorldPrompt] cash bootstrap have=%d", cash))
+				return
+			end
+			task.wait(0.6)
+		end
+		warn("[WorldPrompt] cash bootstrap failed — relying on EconomyUpdate/Attribute")
 	end)
 
 	player.CharacterAdded:Connect(function()
