@@ -5,7 +5,7 @@
 ]]
 
 local EconomyConfig = {
-	StartingCash = 25000, -- v54: join floor for ALL (CC+Barracks+pads); admin still AdminPlaytestCash 50M
+	StartingCash = 10000, -- v55 restore: healthy start (v20 era used 5000; DS v2 fresh profiles get this)
 	StartingGold = 0,
 	MinCash = 0,
 	MinGold = 0,

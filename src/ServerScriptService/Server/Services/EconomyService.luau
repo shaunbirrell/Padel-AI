@@ -88,20 +88,9 @@ end
 
 function EconomyService.Push(player: Player)
 	local profile = DataService.GetProfile(player)
-	if not profile then
-		return
+	if profile then
+		pushEconomy(player, profile)
 	end
-	-- v54: universal StartingCash floor for ALL, then admin AdminPlaytestCash for allowlist.
-	-- pushEconomy always sets WE_Cash + FireClient EconomyUpdate for every player.
-	if DataService.EnsureStartingCashFloor then
-		DataService.EnsureStartingCashFloor(player)
-		profile = DataService.GetProfile(player) or profile
-	end
-	if DataService.EnsureAdminPlaytestCash then
-		DataService.EnsureAdminPlaytestCash(player)
-		profile = DataService.GetProfile(player) or profile
-	end
-	pushEconomy(player, profile)
 end
 
 function EconomyService.AddCash(player: Player, amount: number, reason: string?): boolean

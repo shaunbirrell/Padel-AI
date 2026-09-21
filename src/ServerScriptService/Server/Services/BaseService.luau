@@ -1015,7 +1015,7 @@ function BaseService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		pcall(function()
-			player:SetAttribute("WE_Build", 54)
+			player:SetAttribute("WE_Build", 55)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -1030,13 +1030,7 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v54: StartingCash floor (all) then AdminPlaytestCash BEFORE first economy push
-		if DataService.EnsureStartingCashFloor then
-			DataService.EnsureStartingCashFloor(player)
-		end
-		if DataService.EnsureAdminPlaytestCash then
-			DataService.EnsureAdminPlaytestCash(player)
-		end
+		-- v55: Cash comes from LoadProfile CreateDefault + simple AdminPlaytestCash only
 		BaseService.PushState(player)
 		EconomyService.Push(player)
 		if deps.XPService then
@@ -1053,12 +1047,6 @@ function BaseService.Init(deps: { [string]: any })
 				if not player.Parent then
 					return
 				end
-				if DataService.EnsureStartingCashFloor then
-					DataService.EnsureStartingCashFloor(player)
-				end
-				if DataService.EnsureAdminPlaytestCash then
-					DataService.EnsureAdminPlaytestCash(player)
-				end
 				EconomyService.Push(player)
 				local st = buildPlayerState(player)
 				if st then
@@ -1066,17 +1054,11 @@ function BaseService.Init(deps: { [string]: any })
 				end
 			end)
 		end
-		-- v51: CharacterAdded re-push so WE_Cash / EconomyUpdate survive respawn / late HUD Init
+		-- CharacterAdded re-push so WE_Cash / EconomyUpdate survive respawn / late HUD Init
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				if not player.Parent then
 					return
-				end
-				if DataService.EnsureStartingCashFloor then
-					DataService.EnsureStartingCashFloor(player)
-				end
-				if DataService.EnsureAdminPlaytestCash then
-					DataService.EnsureAdminPlaytestCash(player)
 				end
 				EconomyService.Push(player)
 			end)

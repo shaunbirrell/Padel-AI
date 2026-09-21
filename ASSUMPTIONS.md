@@ -597,3 +597,10 @@ Shaun: Open Cloud DataStore wipe returned 403. Need ALL progress deleted so he c
 
 217. **Root cause** — Persisted Cash=0 after force_wipe: Migrate/GetAsync keeps Cash=0; CreateDefault StartingCash only on *new* profiles. AdminPlaytestCash alone left shaunie6 broke in live (race / Push miss / HUD stuck). Product rule: nobody should join at $0. `/cash` via Player.Chatted is unreliable under TextChatService — not a product fix.
 218. **v54 fix** — `applyStartingCashFloor` / `EnsureStartingCashFloor`: after Migrate/CreateDefault, if Cash < StartingCash → set Cash=StartingCash, dirty, log `[StartCash] userId=… 0 → start`. Then AdminPlaytestCash 50M for admins (hardcode 470626172). StartingCash **25000**. Economy Push always WE_Cash + EconomyUpdate for every player; CharacterAdded + 0.5/2/5s re-push. TextChatCommand + MessageReceived `/cash`|/givecash` backup (keep Chatted). `WE_Build=54`. PreferMesh OFF / KIT_GEN 32 / walls-on-buy / no BaseUpgrades auto-max. Open Cloud **versionNumber=54**.
+
+## 2026-09-21 — v55 RESTORE cash + kits (stop flooring)
+
+219. **Stop layering floors** — v48–v54 ForceWipe / force_wipe_done / EnsureStartingCashFloor / EnsureAdminPlaytestCash left shaunie6 at $0 on live. **Restore**: simple DataService LoadProfile (CreateDefault Cash=`StartingCash`); EconomyService.Push = pushEconomy only; AdminPlaytestCash = `if userId==470626172 then Cash=max(Cash,50e6)` on LoadProfile only.
+220. **DataStore key bump** — `Constants.DataStoreName = "WarEmpire_PlayerData_v2"` (was `_v1`). Intentional: fresh join → CreateDefault with StartingCash=10000; kills stuck $0 v1 saves. Session lock store unchanged.
+221. **Walls/buildings** — PreferMesh OFF; KIT_GEN 32; SyncPerimeterWalls from v36 (`0b0e95f`, height `7.5+lv*2.8`); walls on DefensiveWalls buy; EnsureKit on buy/join. Jeep drivability + map densify kept.
+222. **WE_Build=55** — Open Cloud publish after rojo build + BuyPathStatic PASS.

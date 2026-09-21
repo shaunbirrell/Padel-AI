@@ -100,7 +100,7 @@ Constants.RemoteNames = {
 	GetPlayerState = "GetPlayerState",
 }
 
-Constants.DataStoreName = "WarEmpire_PlayerData_v1"
+Constants.DataStoreName = "WarEmpire_PlayerData_v2" -- v55: intentional bump; fresh CreateDefault + StartingCash (kills stuck $0 v1 saves)
 Constants.SessionStoreName = "WarEmpire_SessionLock_v1"
 Constants.CURRENT_DATA_VERSION = 8
 

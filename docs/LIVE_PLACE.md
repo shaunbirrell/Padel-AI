@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=54** (2026-09-21 Europe/Madrid) — v54 universal join floor: Cash < StartingCash(25000) → raise for ALL + `[StartCash]` log; then AdminPlaytestCash 50M for shaunie6; Economy Push always WE_Cash/EconomyUpdate; TextChat `/cash` backup; `WE_Build=54`; PreferMesh OFF / KIT_GEN 32 / walls-on-buy / no BaseUpgrades auto-max unchanged.
+- **Live Published:** Open Cloud **versionNumber=55** (2026-09-21 Europe/Madrid) — **RESTORE** v20 cash path + v32/v36 kits: `StartingCash=10000`; DataStore **`WarEmpire_PlayerData_v2`** (intentional bump — fresh CreateDefault); ForceWipe / Ensure* floors REMOVED; simple AdminPlaytestCash max(Cash,50M) for 470626172 on LoadProfile only; EconomyService.Push = pushEconomy only; PreferMesh OFF / KIT_GEN 32 / SyncPerimeterWalls (0b0e95f) / walls on DefensiveWalls buy; `WE_Build=55`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create

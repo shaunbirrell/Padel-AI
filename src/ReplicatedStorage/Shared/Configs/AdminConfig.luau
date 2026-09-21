@@ -6,12 +6,9 @@ local AdminConfig = {
 	UserIds = {
 		470626172,
 	} :: { number },
-	-- Every join (not wipe-only): if UserId in UserIds and Cash below this, raise to this amount.
-	-- Idempotent top-up — recovers after force_wipe_done + prior $0 save. 0 = disabled.
-	-- Server-authoritative; not a global economy change. Does NOT auto-max BaseUpgrades.
+	-- LoadProfile only: if UserId==470626172 and Cash below this, raise to this (simple max).
+	-- No ForceWipe / Ensure* floors. DataStore key bump (v2) forces fresh CreateDefault.
 	AdminPlaytestCash = 50_000_000,
-	-- allowlist for force wipe; DataService force_wipe_done_USERID makes each wipe one-shot
-	ForceWipeUserIds = { 470626172 } :: { number },
 	Commands = {
 		"cash",
 		"givecash",
@@ -21,7 +18,6 @@ local AdminConfig = {
 		"unlockall",
 		"resetbase",
 		"wipeprofile",
-		"clearwipedone",
 	},
 }
 

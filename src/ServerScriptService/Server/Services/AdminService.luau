@@ -59,9 +59,6 @@ local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
 	if DataService.MarkDirty then
 		DataService.MarkDirty(player)
 	end
-	if DataService.EnsureAdminPlaytestCash then
-		DataService.EnsureAdminPlaytestCash(player)
-	end
 	if EconomyService and EconomyService.Push then
 		EconomyService.Push(player)
 	end
@@ -175,18 +172,6 @@ function AdminService.Init(deps: { [string]: any })
 			end)
 			player:Kick("Progress wiped — please rejoin")
 			return
-		elseif cmd == "clearwipedone" then
-			-- Remove force_wipe_done_USERID so ForceWipeUserIds can wipe again on next join
-			local userId = player.UserId
-			local okClear, clearErr = DataService.ClearForceWipeDone(userId)
-			if not okClear then
-				warn("[AdminService] clearwipedone failed:", clearErr)
-				if deps.NotificationService then
-					deps.NotificationService.Notify(player, "clearwipedone failed: " .. tostring(clearErr), "Warn")
-				end
-			elseif deps.NotificationService then
-				deps.NotificationService.Notify(player, "Force-wipe done key cleared — rejoin to wipe again", "Success")
-			end
 		elseif cmd == "resettutorial" then
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
@@ -339,7 +324,7 @@ function AdminService.Init(deps: { [string]: any })
 	end
 
 	-- v54: TextChatService backup — modern chat often does NOT fire Player.Chatted
-	-- Secondary to universal StartingCash floor; still useful for mid-session admin recovery.
+	-- Optional mid-session admin recovery (main cash path is LoadProfile CreateDefault + DS v2).
 	local function wireTextChatCommands()
 		local okCmd, errCmd = pcall(function()
 			local parent = TextChatService:FindFirstChild("WE_AdminCommands")
