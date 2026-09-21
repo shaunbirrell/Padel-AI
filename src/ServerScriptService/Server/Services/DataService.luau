@@ -134,7 +134,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v56: simple AdminPlaytestCash — shaunie6 only, LoadProfile max() only (no floors).
+-- v57: simple AdminPlaytestCash — shaunie6 only, LoadProfile/EnsureProfile max() only (no floors).
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -155,7 +155,14 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		return profiles[userId]
 	end
 	if loading[userId] then
-		return DataService.WaitForProfile(player, 20)
+		local waited = DataService.WaitForProfile(player, 20)
+		if waited then
+			return waited
+		end
+		-- Stuck loader — EnsureProfile CreateDefault (never leave player without profile)
+		warn("[DataService] WaitForProfile timed out while loading; EnsureProfile for", userId)
+		loading[userId] = false
+		return DataService.EnsureProfile(player)
 	end
 	loading[userId] = true
 
@@ -206,7 +213,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 
 	-- Stamp build + spendable Cash attr early (HUD / pad BUY Attribute fallback)
 	pcall(function()
-		player:SetAttribute("WE_Build", 56)
+		player:SetAttribute("WE_Build", 57)
 		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
 		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
 		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
@@ -221,6 +228,51 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		end)
 	end
 
+	return profile
+end
+
+
+--- v57: never leave a joined player without a profile (CreateDefault + AdminPlaytestCash + OnProfileLoaded).
+function DataService.EnsureProfile(player: Player): PlayerProfile
+	local userId = player.UserId
+	local existing = profiles[userId]
+	if existing then
+		return existing
+	end
+	local waited = DataService.WaitForProfile(player, 20)
+	if waited then
+		return waited
+	end
+	if not player.Parent then
+		-- Player left — still return a throwaway default so callers do not nil-crash
+		return ProfileSchema.CreateDefault()
+	end
+	warn("[DataService] EnsureProfile CreateDefault fallback for", userId)
+	loading[userId] = false
+	local profile = ProfileSchema.CreateDefault()
+	profile.LastJoinUnix = os.time()
+	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
+		profile.FirstJoinUnix = os.time()
+	end
+	applyStudioDevFlags(profile)
+	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	profiles[userId] = profile
+	dirty[userId] = true
+	loading[userId] = false
+	fireProfileLoaded(player, profile)
+	pcall(function()
+		player:SetAttribute("WE_Build", 57)
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
+		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+	end)
+	if adminCashApplied then
+		task.defer(function()
+			if player.Parent and profiles[userId] then
+				DataService.SaveProfile(player, false)
+			end
+		end)
+	end
 	return profile
 end
 
@@ -298,7 +350,10 @@ end
 
 function DataService.Init()
 	Players.PlayerAdded:Connect(function(player)
-		DataService.LoadProfile(player)
+		local profile = DataService.LoadProfile(player)
+		if not profile and player.Parent then
+			DataService.EnsureProfile(player)
+		end
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
@@ -307,7 +362,12 @@ function DataService.Init()
 
 	-- Late joiners already in game
 	for _, player in ipairs(Players:GetPlayers()) do
-		task.spawn(DataService.LoadProfile, player)
+		task.spawn(function()
+			local profile = DataService.LoadProfile(player)
+			if not profile and player.Parent then
+				DataService.EnsureProfile(player)
+			end
+		end)
 	end
 
 	-- Session-lock heartbeat (must be < SessionLockTtlSeconds so live locks stay fresh)

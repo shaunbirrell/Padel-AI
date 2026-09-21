@@ -951,8 +951,26 @@ function BaseService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
-		if not RemoteGuard.RequireProfile(DataService, player) then
+		-- v57: wait briefly for profile; retry once before soft-fail toast (never silent forever)
+		local profile = RemoteGuard.RequireProfile(DataService, player)
+		if not profile then
+			profile = DataService.WaitForProfile(player, 5)
+		end
+		if not profile then
+			pcall(function()
+				if DataService.EnsureProfile then
+					DataService.EnsureProfile(player)
+				else
+					DataService.LoadProfile(player)
+				end
+			end)
+			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
+		end
+		if not profile then
 			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
+			if NotificationService then
+				NotificationService.Notify(player, "Profile still loading — try BUY again", "Warn", 3)
+			end
 			return
 		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
@@ -1027,7 +1045,7 @@ function BaseService.Init(deps: { [string]: any })
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 56)
+			player:SetAttribute("WE_Build", 57)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -1042,7 +1060,7 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v56: Cash from LoadProfile + AdminPlaytestCash; dense Push so late HUD never sticks on $—
+		-- v57: Cash from LoadProfile + AdminPlaytestCash; dense Push so late HUD never sticks on $…
 		BaseService.PushState(player)
 		EconomyService.Push(player)
 		do

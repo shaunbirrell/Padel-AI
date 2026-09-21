@@ -940,7 +940,12 @@ must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "En
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'SetAttribute("WE_Cash"', "WE_Cash attribute push")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "nearCollector", "ATM nearCollector radius")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "WE_CollectPrompt", "ATM Collect ProximityPrompt")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "EconomyConfig.StartingCash", "HUD inits cash to StartingCash (never $— forever)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", '"$…"', "HUD inits cash to $… until first sync")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "EconomyConfig.StartingCash", "HUD must NOT fake StartingCash")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "liveCash", "WorldPrompt liveCash for afford/BUY")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "FireServer anyway", "WorldPrompt always FireServer on cash soft-hint")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "function DataService.EnsureProfile", "DataService.EnsureProfile never leave without profile")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "Profile still loading — try BUY again", "BUY toast when profile missing after wait")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "leaderstats", "HUD leaderstats fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats", "WorldPrompt leaderstats fallback")
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'Name = "leaderstats"', "EconomyService writes leaderstats")
@@ -951,8 +956,8 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "Charac
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "[EconPush]", "EconPush join log")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "for delaySec = 1, 12", "dense economy re-push 1s×12")
 
-# ── v56 cash sync (leaderstats + dense push + join grace) ─────────────
-# (v55 restore checks below still apply; WE_Build bumped to 56)
+# ── v57 cash truth (no fake StartingCash; liveCash; EnsureProfile) ─────
+# (v55 restore checks below still apply; WE_Build bumped to 57)
 
 # ── v55 RESTORE: v20 cash path + DS key bump + v32/v36 kits (NO more floors) ─
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'DataStoreName = "WarEmpire_PlayerData_v2"', "v55 DataStore key bump to v2")
@@ -961,8 +966,8 @@ must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "Cash 
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "ADMIN_PLAYTEST_USER_ID = 470626172", "v55 simple admin userId gate")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "applyAdminPlaytestCash", "v55 AdminPlaytestCash on LoadProfile only")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "ProfileSchema.CreateDefault()", "v55 CreateDefault on missing profile")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 56)', "v56 WE_Build=56 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 56)', "v56 WE_Build=56 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 57)', "v57 WE_Build=57 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 57)', "v57 WE_Build=57 BaseService")
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "if profile then", "v55 simple Push (profile then pushEconomy)")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "EconomyUpdate", "v55 HUD listens EconomyUpdate")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "EconomyUpdate", "v55 WorldPrompt listens EconomyUpdate")

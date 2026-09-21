@@ -14921,8 +14921,26 @@ function BaseService.Init(deps: { [string]: any })
 
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseUpgrade) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, payload: any)
-		if not RemoteGuard.RequireProfile(DataService, player) then
+		-- v57: wait briefly for profile; retry once before soft-fail toast (never silent forever)
+		local profile = RemoteGuard.RequireProfile(DataService, player)
+		if not profile then
+			profile = DataService.WaitForProfile(player, 5)
+		end
+		if not profile then
+			pcall(function()
+				if DataService.EnsureProfile then
+					DataService.EnsureProfile(player)
+				else
+					DataService.LoadProfile(player)
+				end
+			end)
+			profile = DataService.GetProfile(player) or DataService.WaitForProfile(player, 2)
+		end
+		if not profile then
 			print(string.format("[BaseService] Remote BUY no-profile %s", player.Name))
+			if NotificationService then
+				NotificationService.Notify(player, "Profile still loading — try BUY again", "Warn", 3)
+			end
 			return
 		end
 		if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
@@ -14997,7 +15015,7 @@ function BaseService.Init(deps: { [string]: any })
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 56)
+			player:SetAttribute("WE_Build", 57)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -15012,7 +15030,7 @@ function BaseService.Init(deps: { [string]: any })
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "PlotAssigned")
 		end
-		-- v56: Cash from LoadProfile + AdminPlaytestCash; dense Push so late HUD never sticks on $—
+		-- v57: Cash from LoadProfile + AdminPlaytestCash; dense Push so late HUD never sticks on $…
 		BaseService.PushState(player)
 		EconomyService.Push(player)
 		do
@@ -18147,7 +18165,7 @@ local function applyStudioDevFlags(profile: PlayerProfile)
 	end
 end
 
--- v56: simple AdminPlaytestCash — shaunie6 only, LoadProfile max() only (no floors).
+-- v57: simple AdminPlaytestCash — shaunie6 only, LoadProfile/EnsureProfile max() only (no floors).
 local ADMIN_PLAYTEST_USER_ID = 470626172
 local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): boolean
 	if userId ~= ADMIN_PLAYTEST_USER_ID then
@@ -18168,7 +18186,14 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		return profiles[userId]
 	end
 	if loading[userId] then
-		return DataService.WaitForProfile(player, 20)
+		local waited = DataService.WaitForProfile(player, 20)
+		if waited then
+			return waited
+		end
+		-- Stuck loader — EnsureProfile CreateDefault (never leave player without profile)
+		warn("[DataService] WaitForProfile timed out while loading; EnsureProfile for", userId)
+		loading[userId] = false
+		return DataService.EnsureProfile(player)
 	end
 	loading[userId] = true
 
@@ -18219,7 +18244,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 
 	-- Stamp build + spendable Cash attr early (HUD / pad BUY Attribute fallback)
 	pcall(function()
-		player:SetAttribute("WE_Build", 56)
+		player:SetAttribute("WE_Build", 57)
 		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
 		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
 		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
@@ -18234,6 +18259,51 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 		end)
 	end
 
+	return profile
+end
+
+
+--- v57: never leave a joined player without a profile (CreateDefault + AdminPlaytestCash + OnProfileLoaded).
+function DataService.EnsureProfile(player: Player): PlayerProfile
+	local userId = player.UserId
+	local existing = profiles[userId]
+	if existing then
+		return existing
+	end
+	local waited = DataService.WaitForProfile(player, 20)
+	if waited then
+		return waited
+	end
+	if not player.Parent then
+		-- Player left — still return a throwaway default so callers do not nil-crash
+		return ProfileSchema.CreateDefault()
+	end
+	warn("[DataService] EnsureProfile CreateDefault fallback for", userId)
+	loading[userId] = false
+	local profile = ProfileSchema.CreateDefault()
+	profile.LastJoinUnix = os.time()
+	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
+		profile.FirstJoinUnix = os.time()
+	end
+	applyStudioDevFlags(profile)
+	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	profiles[userId] = profile
+	dirty[userId] = true
+	loading[userId] = false
+	fireProfileLoaded(player, profile)
+	pcall(function()
+		player:SetAttribute("WE_Build", 57)
+		player:SetAttribute("WE_Cash", math.floor(tonumber(profile.Cash) or 0))
+		player:SetAttribute("WE_Gold", math.floor(tonumber(profile.Gold) or 0))
+		player:SetAttribute("WE_PendingCash", math.floor(tonumber((profile :: any).PendingCash) or 0))
+	end)
+	if adminCashApplied then
+		task.defer(function()
+			if player.Parent and profiles[userId] then
+				DataService.SaveProfile(player, false)
+			end
+		end)
+	end
 	return profile
 end
 
@@ -18311,7 +18381,10 @@ end
 
 function DataService.Init()
 	Players.PlayerAdded:Connect(function(player)
-		DataService.LoadProfile(player)
+		local profile = DataService.LoadProfile(player)
+		if not profile and player.Parent then
+			DataService.EnsureProfile(player)
+		end
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
@@ -18320,7 +18393,12 @@ function DataService.Init()
 
 	-- Late joiners already in game
 	for _, player in ipairs(Players:GetPlayers()) do
-		task.spawn(DataService.LoadProfile, player)
+		task.spawn(function()
+			local profile = DataService.LoadProfile(player)
+			if not profile and player.Parent then
+				DataService.EnsureProfile(player)
+			end
+		end)
 	end
 
 	-- Session-lock heartbeat (must be < SessionLockTtlSeconds so live locks stay fresh)
@@ -32191,7 +32269,6 @@ local UIUtil = require(Shared.Util.UIUtil)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
-local EconomyConfig = require(Shared.Configs.EconomyConfig)
 
 local HUDController = {}
 
@@ -32364,8 +32441,8 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	-- v56: never leave $— forever — show StartingCash until real sync lands
-	cash.Text = formatCash(EconomyConfig.StartingCash or 10000)
+	-- v57: do NOT fake StartingCash — show $… until first confirmed sync
+	cash.Text = "$…"
 	cash.ZIndex = 13
 	cash.Parent = pill
 	cashLabel = cash
@@ -32823,7 +32900,7 @@ end
 
 
 function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
-	-- v56: coerce so nil never skips update (keeps temporary StartingCash until real numbers)
+	-- v57: coerce so nil never skips update (only called after confirmed Economy sync)
 	local cashN = tonumber(cash) or 0
 	local goldN = tonumber(gold) or 0
 	if cashLabel then
@@ -38339,6 +38416,22 @@ local BUY_BTN_MIN_H = 56
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
 local cash = 0
+-- v57: every afford/BUY/NEED check reads max of module cash, WE_Cash, leaderstats.Cash
+local function liveCash(): number
+	local best = math.floor(tonumber(cash) or 0)
+	local attr = tonumber(player:GetAttribute("WE_Cash"))
+	if typeof(attr) == "number" then
+		best = math.max(best, math.floor(attr))
+	end
+	local folder = player:FindFirstChild("leaderstats")
+	if folder then
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			best = math.max(best, math.floor((cashV :: any).Value))
+		end
+	end
+	return best
+end
 local myPlotId: number? = nil
 local attachedPrompt: { [Instance]: boolean } = {}
 local slotParts: { [BasePart]: boolean } = {}
@@ -38569,10 +38662,11 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	local btn = ensurePadBuyGui()
 	activeBuyStructureId = structureId
 	activeBuyPart = part
-	local canAfford = cash >= cost
+	local have = liveCash()
+	local canAfford = have >= cost
 	local incomeStr = formatIncomeRate(structureId)
 	if not canAfford then
-		local need = cost - cash
+		local need = cost - have
 		if incomeStr then
 			btn.Text = string.format("NEED %s · %s · %s", formatCost(cost), display, incomeStr)
 		else
@@ -38883,8 +38977,8 @@ local function refreshSlotBillboard(part: BasePart)
 			bb,
 			display,
 			string.format("L%d→%d %s%s", level, level + 1, formatCost(cost), incomeLine),
-			if cash >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
-			if cash >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
+			if liveCash() >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if liveCash() >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	elseif prereqHint then
 		local costStr = if cost then formatCost(cost) else ""
@@ -38896,7 +38990,7 @@ local function refreshSlotBillboard(part: BasePart)
 			Color3.fromRGB(160, 130, 70)
 		)
 	elseif cost then
-		local canAfford = cash >= cost
+		local canAfford = liveCash() >= cost
 		applyBillboardCopy(
 			bb,
 			display,
@@ -38990,20 +39084,15 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		end
 		return
 	end
-	if cost and cash < cost and not (opts and opts.silentMax) then
-		-- Soft client hint; throttled so standing on pad does not spam
-		local fk = "cash|" .. structureId
-		local lastFail = failToastAt[fk] or 0
-		if (now - lastFail) >= FAIL_TOAST_CD then
-			failToastAt[fk] = now
-			NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
-		end
-		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
+	local have = liveCash()
+	if cost and have < cost then
+		-- v57: no client soft-fail toast (server InsufficientCash is authoritative); still FireServer
+		print(string.format("[WorldPrompt] BUY soft-hint cash %s have=%d need=%s (FireServer anyway)", structureId, have, tostring(cost)))
 	end
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
-	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), cash))
+	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), have))
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
@@ -39439,6 +39528,10 @@ function WorldPromptController.Init()
 		if typeof(v) == "number" then
 			cash = math.floor(v)
 			markBillboardsDirty()
+			-- v57: NEED→BUY while standing when cash syncs
+			if activeBuyPart and activeBuyStructureId then
+				refreshPadBuyButton(activeBuyPart, activeBuyStructureId)
+			end
 		end
 	end
 

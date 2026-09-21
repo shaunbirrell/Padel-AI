@@ -17,7 +17,6 @@ local UIUtil = require(Shared.Util.UIUtil)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
-local EconomyConfig = require(Shared.Configs.EconomyConfig)
 
 local HUDController = {}
 
@@ -190,8 +189,8 @@ function HUDController.Init()
 	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
 	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
 	cash.TextStrokeTransparency = 0.25
-	-- v56: never leave $— forever — show StartingCash until real sync lands
-	cash.Text = formatCash(EconomyConfig.StartingCash or 10000)
+	-- v57: do NOT fake StartingCash — show $… until first confirmed sync
+	cash.Text = "$…"
 	cash.ZIndex = 13
 	cash.Parent = pill
 	cashLabel = cash
@@ -649,7 +648,7 @@ end
 
 
 function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
-	-- v56: coerce so nil never skips update (keeps temporary StartingCash until real numbers)
+	-- v57: coerce so nil never skips update (only called after confirmed Economy sync)
 	local cashN = tonumber(cash) or 0
 	local goldN = tonumber(gold) or 0
 	if cashLabel then

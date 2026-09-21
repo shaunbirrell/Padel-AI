@@ -53,6 +53,22 @@ local BUY_BTN_MIN_H = 56
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
 local cash = 0
+-- v57: every afford/BUY/NEED check reads max of module cash, WE_Cash, leaderstats.Cash
+local function liveCash(): number
+	local best = math.floor(tonumber(cash) or 0)
+	local attr = tonumber(player:GetAttribute("WE_Cash"))
+	if typeof(attr) == "number" then
+		best = math.max(best, math.floor(attr))
+	end
+	local folder = player:FindFirstChild("leaderstats")
+	if folder then
+		local cashV = folder:FindFirstChild("Cash")
+		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
+			best = math.max(best, math.floor((cashV :: any).Value))
+		end
+	end
+	return best
+end
 local myPlotId: number? = nil
 local attachedPrompt: { [Instance]: boolean } = {}
 local slotParts: { [BasePart]: boolean } = {}
@@ -283,10 +299,11 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	local btn = ensurePadBuyGui()
 	activeBuyStructureId = structureId
 	activeBuyPart = part
-	local canAfford = cash >= cost
+	local have = liveCash()
+	local canAfford = have >= cost
 	local incomeStr = formatIncomeRate(structureId)
 	if not canAfford then
-		local need = cost - cash
+		local need = cost - have
 		if incomeStr then
 			btn.Text = string.format("NEED %s · %s · %s", formatCost(cost), display, incomeStr)
 		else
@@ -597,8 +614,8 @@ local function refreshSlotBillboard(part: BasePart)
 			bb,
 			display,
 			string.format("L%d→%d %s%s", level, level + 1, formatCost(cost), incomeLine),
-			if cash >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
-			if cash >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
+			if liveCash() >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
+			if liveCash() >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
 		)
 	elseif prereqHint then
 		local costStr = if cost then formatCost(cost) else ""
@@ -610,7 +627,7 @@ local function refreshSlotBillboard(part: BasePart)
 			Color3.fromRGB(160, 130, 70)
 		)
 	elseif cost then
-		local canAfford = cash >= cost
+		local canAfford = liveCash() >= cost
 		applyBillboardCopy(
 			bb,
 			display,
@@ -704,20 +721,15 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean }?)
 		end
 		return
 	end
-	if cost and cash < cost and not (opts and opts.silentMax) then
-		-- Soft client hint; throttled so standing on pad does not spam
-		local fk = "cash|" .. structureId
-		local lastFail = failToastAt[fk] or 0
-		if (now - lastFail) >= FAIL_TOAST_CD then
-			failToastAt[fk] = now
-			NotificationController.Show(string.format("Need %s for %s", formatCost(cost), display), "Warn", 2.5)
-		end
-		print(string.format("[WorldPrompt] BUY soft-fail cash %s have=%d need=%s", structureId, cash, tostring(cost)))
+	local have = liveCash()
+	if cost and have < cost then
+		-- v57: no client soft-fail toast (server InsufficientCash is authoritative); still FireServer
+		print(string.format("[WorldPrompt] BUY soft-hint cash %s have=%d need=%s (FireServer anyway)", structureId, have, tostring(cost)))
 	end
 
 	lastPurchaseAt[structureId] = now
 	pendingPurchase[structureId] = true
-	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), cash))
+	print(string.format("[WorldPrompt] FireServer RequestPurchaseUpgrade %s cost=%s cash=%d", structureId, tostring(cost), have))
 	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer({
 		StructureId = structureId,
 	} :: Types.PurchaseUpgradeRequest)
@@ -1153,6 +1165,10 @@ function WorldPromptController.Init()
 		if typeof(v) == "number" then
 			cash = math.floor(v)
 			markBillboardsDirty()
+			-- v57: NEED→BUY while standing when cash syncs
+			if activeBuyPart and activeBuyStructureId then
+				refreshPadBuyButton(activeBuyPart, activeBuyStructureId)
+			end
 		end
 	end
 

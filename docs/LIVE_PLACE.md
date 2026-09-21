@@ -4,7 +4,7 @@
 - **Place ID:** `97112936860418`
 - **Universe ID:** `10767159222`
 - **Play URL:** https://www.roblox.com/games/97112936860418
-- **Live Published:** Open Cloud **versionNumber=56** (2026-09-21 Europe/Madrid) — **CASH SYNC FIX**: leaderstats Cash/Gold on every pushEconomy; HUD/WorldPrompt poll WE_Cash+leaderstats+GetPlayerState 0–15s; HUD inits to StartingCash (never `$—`); GetPlayerState 20s join grace; OnProfileLoaded Push every 1s×12 + `[EconPush]` log; DataStore **`WarEmpire_PlayerData_v2`**; StartingCash=10000; AdminPlaytestCash for 470626172; walls/kits as v55; `WE_Build=56`.
+- **Live Published:** Open Cloud **versionNumber=57** (2026-09-21 Europe/Madrid) — **CASH TRUTH FIX**: HUD shows `$…` until first EconomyUpdate/WE_Cash/leaderstats/GetPlayerState sync (no fake StartingCash); WorldPrompt `liveCash()` max(module, WE_Cash, leaderstats) for BUY/NEED + refresh while standing; no client soft-fail toast (server InsufficientCash authoritative); DataService.EnsureProfile CreateDefault if WaitForProfile(20) nil; RequestPurchaseUpgrade WaitForProfile(5)+retry+toast; `[EconPush]` + dense Push; DataStore **`WarEmpire_PlayerData_v2`**; StartingCash=10000; AdminPlaytestCash 50M for 470626172; PreferMesh OFF / KIT_GEN 32; `WE_Build=57`.
 - **API Services:** enabled (DataStores) — required for profiles/persistence; no code change in v31, confirm still on in Creator Dashboard → Security
 - **Privacy:** Private (owner + friends / shared access only until set Public)
 - **Devices:** Computer, Phone, Tablet enabled at create
