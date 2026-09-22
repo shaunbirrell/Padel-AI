@@ -213,7 +213,9 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	-- v63: live + Studio — assign plot if unclaimed; ALWAYS force BasePlotId=1 (never NoPlot dead-end)
 	if profile.BasePlotId == nil then
 		if BaseService and BaseService.AssignPlot then
-			BaseService.AssignPlot(player)
+			pcall(function()
+				BaseService.AssignPlot(player)
+			end)
 			profile = DataService.GetProfile(player) or profile
 		end
 	end
@@ -255,8 +257,15 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
+	-- v64: never index nil BaseUpgrades
+	if typeof(profile.BaseUpgrades) ~= "table" then
+		profile.BaseUpgrades = {}
+	end
+	if typeof(profile.Stats) ~= "table" then
+		profile.Stats = { UpgradesPurchased = 0 }
+	end
 	local def = BaseConfig.Structures[structureId]
-	local current = profile.BaseUpgrades[structureId] or 0
+	local current = tonumber(profile.BaseUpgrades[structureId]) or 0
 	if def and current >= def.MaxLevel then
 		lastAttempt[key] = now
 		if not fromStanding then
@@ -276,7 +285,24 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	end
 
 	print(string.format("[UpgradePad] BUY ATTEMPT %s %s plot=%s standing=%s", player.Name, structureId, tostring(profile.BasePlotId), tostring(fromStanding == true)))
-	local result = BaseService.PurchaseUpgrade(player, structureId)
+	-- v64: pcall so pad path never throws past ack (same ServerError surface as remote)
+	local callOk, callResult = pcall(function()
+		return BaseService.PurchaseUpgrade(player, structureId)
+	end)
+	local result: any
+	if not callOk then
+		local errStr = tostring(callResult or "unknown")
+		if #errStr > 180 then
+			errStr = string.sub(errStr, 1, 180)
+		end
+		warn("[UpgradePad] PurchaseUpgrade threw:", errStr)
+		pcall(function()
+			player:SetAttribute("WE_BuyErr", errStr)
+		end)
+		result = { Ok = false, Error = "ServerError" }
+	else
+		result = callResult
+	end
 	if result.Ok then
 		print(string.format("[UpgradePad] BUY OK %s %s → Lv %s", player.Name, structureId, tostring(result.NewLevel)))
 	else

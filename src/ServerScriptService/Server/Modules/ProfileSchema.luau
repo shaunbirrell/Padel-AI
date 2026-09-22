@@ -337,6 +337,34 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 		(profile :: any).CashMegaOffered = false
 	end
 
+	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
+	if typeof(profile.BaseUpgrades) ~= "table" then
+		profile.BaseUpgrades = emptyUpgrades()
+	else
+		for id in pairs(BaseConfig.Structures) do
+			if profile.BaseUpgrades[id] == nil then
+				profile.BaseUpgrades[id] = 0
+			end
+		end
+	end
+	if typeof(profile.Stats) ~= "table" then
+		profile.Stats = {
+			TotalCashEarned = 0,
+			TotalGoldEarned = 0,
+			UpgradesPurchased = 0,
+			VehiclesSpawned = 0,
+			MissionsCompleted = 0,
+			TerritoriesCaptured = 0,
+			Kills = 0,
+			Deaths = 0,
+			PlayTimeSeconds = 0,
+		}
+	else
+		if typeof(profile.Stats.UpgradesPurchased) ~= "number" then
+			profile.Stats.UpgradesPurchased = math.floor(tonumber(profile.Stats.UpgradesPurchased) or 0)
+		end
+	end
+
 	profile.DataVersion = Constants.CURRENT_DATA_VERSION
 	return profile
 end

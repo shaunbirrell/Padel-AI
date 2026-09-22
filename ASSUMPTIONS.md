@@ -646,3 +646,19 @@ Root cause v59 still `$…`: `HUDController.luau` / `WorldPromptController.luau`
 - RemoteSetup: re-hook if RequestPurchaseUpgrade instance destroyed/replaced.
 - UpgradePad: Workspace StructureId sweep if attached==0; standing auto-buy every ~1s; AckBuyResult path.
 - BuyPathStatic: attribute-ack + CommandCenter 50M→49998500. Open Cloud **versionNumber=63**.
+
+## 2026-09-22 — v64 Command Center BUY ServerError harden (Open Cloud Published versionNumber=64)
+
+**Symptom (v63 live):** Shaun toast `Buy failed — server error, try again` / attr `Buy failed: ServerError`; cash stuck exactly $50,000,000; goal still Claim base + BUY Command Center; E ProximityPrompt visible. Place `97112936860418`.
+
+**Root (pre-spend / SpendCash throw → pcall maps ServerError, cash unchanged):**
+Likeliest sites before deduct: `profile.BaseUpgrades[structureId]` or `meetsRequirements` when `BaseUpgrades` nil; `if EconomyService.ReconcileSpendableCash` / `RateLimitService.Allow` when service nil; or SpendCash throw before deduct. Post-spend `Stats.UpgradesPurchased += 1` / PushState / UpdateVisuals throws would leave cash down — Shaun still at 50M ⇒ prefer pre-spend. Exact live err string was masked as `ServerError`.
+
+**Fix (WE_Build=64):**
+- PurchaseUpgrade: ensure BaseUpgrades + Stats tables; pcall AssignPlot; force BasePlotId=1; nil-safe RateLimit/EconomyService; pcall SpendCash; set level + MarkDirty; **return Ok**; THEN pcall analytics/missions/PushState/UpdateVisuals/bindable (never fail buy after spend).
+- SpendCash: outer pcall → false,"SpendFailed" on throw; Reconcile also pcall'd.
+- handlePurchaseRemote: stamp `WE_BuyErr` = truncated real `tostring(errCall)` (re-stamp after ack so not overwritten by "ServerError").
+- UpgradePad: ensure BaseUpgrades/Stats; pcall PurchaseUpgrade; stamp WE_BuyErr on throw.
+- ProfileSchema.Migrate: always ensure BaseUpgrades + Stats.
+- BuyPathStatic: simulate Stats=nil / BasePlotId=nil / Reconcile → 50M→49998500 PASS. Open Cloud **versionNumber=64**.
+

@@ -258,9 +258,31 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "NoProfile" }
 	end
 
-	-- v63: claim/plot gate — AssignPlot then force BasePlotId=1 (live + Studio)
+	-- v64: never index nil nested tables (live DS corruption / partial EnsureProfile)
+	if typeof(profile.BaseUpgrades) ~= "table" then
+		profile.BaseUpgrades = {}
+	end
+	if typeof(profile.Stats) ~= "table" then
+		profile.Stats = {
+			TotalCashEarned = 0,
+			TotalGoldEarned = 0,
+			UpgradesPurchased = 0,
+			VehiclesSpawned = 0,
+			MissionsCompleted = 0,
+			TerritoriesCaptured = 0,
+			Kills = 0,
+			Deaths = 0,
+			PlayTimeSeconds = 0,
+		}
+	elseif typeof(profile.Stats.UpgradesPurchased) ~= "number" then
+		profile.Stats.UpgradesPurchased = math.floor(tonumber(profile.Stats.UpgradesPurchased) or 0)
+	end
+
+	-- v64: claim/plot gate — pcall AssignPlot; force BasePlotId=1 safely (plotOwners always table)
 	if profile.BasePlotId == nil then
-		BaseService.AssignPlot(player)
+		pcall(function()
+			BaseService.AssignPlot(player)
+		end)
 		profile = DataService.GetProfile(player) or profile
 	end
 	if profile.BasePlotId == nil then
@@ -269,12 +291,11 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		DataService.MarkDirty(player)
 		warn("[BaseService] PurchaseUpgrade forced BasePlotId=1 for", player.Name)
 	end
-	-- Unreachable after force; retained for BuyPathStatic / extreme edge
 	if profile.BasePlotId == nil then
 		return { Ok = false, Error = "NoPlot" }
 	end
 
-	-- v63: shaunie6 playtest floor on every buy attempt
+	-- v63/v64: shaunie6 playtest floor on every buy attempt
 	if player.UserId == 470626172 then
 		local floor = 50_000_000
 		local have = math.floor(tonumber(profile.Cash) or 0)
@@ -284,9 +305,11 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		end
 	end
 
-	-- v62/v63: EarlyRemotes HUD seed vs profile.Cash desync
-	if EconomyService.ReconcileSpendableCash then
-		EconomyService.ReconcileSpendableCash(player)
+	-- v64: guard EconomyService nil (Luau `if mod.Fn` throws if mod is nil)
+	if EconomyService and EconomyService.ReconcileSpendableCash then
+		pcall(function()
+			EconomyService.ReconcileSpendableCash(player)
+		end)
 		profile = DataService.GetProfile(player) or profile
 	end
 	if player.UserId == 470626172 then
@@ -298,7 +321,7 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "UnknownStructure" }
 	end
 
-	local current = profile.BaseUpgrades[structureId] or 0
+	local current = tonumber(profile.BaseUpgrades[structureId]) or 0
 	if current >= def.MaxLevel then
 		return { Ok = false, Error = "MaxLevel" }
 	end
@@ -314,54 +337,87 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		return { Ok = false, Error = "NoCost" }
 	end
 
-	local spendOk, spendErr
-	if def.Currency == "Gold" then
-		spendOk, spendErr = EconomyService.SpendGold(player, cost, "upgrade_" .. structureId)
-	else
-		spendOk, spendErr = EconomyService.SpendCash(player, cost, "upgrade_" .. structureId)
+	-- Order: reconcile (above) → spend → set upgrade → MarkDirty → return Ok; visuals AFTER in pcall
+	local spendOk, spendErr = false, "SpendFailed"
+	local spendCallOk, spendCallErr = pcall(function()
+		if def.Currency == "Gold" then
+			if not (EconomyService and EconomyService.SpendGold) then
+				spendOk, spendErr = false, "SpendFailed"
+				return
+			end
+			spendOk, spendErr = EconomyService.SpendGold(player, cost, "upgrade_" .. structureId)
+		else
+			if not (EconomyService and EconomyService.SpendCash) then
+				spendOk, spendErr = false, "SpendFailed"
+				return
+			end
+			spendOk, spendErr = EconomyService.SpendCash(player, cost, "upgrade_" .. structureId)
+		end
+	end)
+	if not spendCallOk then
+		warn("[BaseService] SpendCash/Gold threw:", spendCallErr)
+		return { Ok = false, Error = "SpendFailed", Cash = profile.Cash, Gold = profile.Gold }
 	end
 	if not spendOk then
-		return { Ok = false, Error = spendErr or "SpendFailed" }
+		return { Ok = false, Error = spendErr or "SpendFailed", Cash = profile.Cash, Gold = profile.Gold }
+	end
+
+	-- Refresh profile after spend (SpendCash mutates same table; belt+suspenders)
+	profile = DataService.GetProfile(player) or profile
+	if typeof(profile.BaseUpgrades) ~= "table" then
+		profile.BaseUpgrades = {}
+	end
+	if typeof(profile.Stats) ~= "table" then
+		profile.Stats = { UpgradesPurchased = 0 }
 	end
 
 	profile.BaseUpgrades[structureId] = targetLevel
-	profile.Stats.UpgradesPurchased += 1
+	profile.Stats.UpgradesPurchased = (tonumber(profile.Stats.UpgradesPurchased) or 0) + 1
 	DataService.MarkDirty(player)
 
 	local firstUpgrade = profile.Stats.UpgradesPurchased == 1
-	if AnalyticsService then
-		AnalyticsService.Log("UPGRADE_PURCHASED", player.UserId, {
-			structure = structureId,
-			level = targetLevel,
-			cost = cost,
-		})
-		if firstUpgrade then
-			AnalyticsService.Log("FIRST_UPGRADE", player.UserId, { structure = structureId })
+	local cashNow = math.floor(tonumber(profile.Cash) or 0)
+	local goldNow = math.floor(tonumber(profile.Gold) or 0)
+
+	-- v64: NEVER fail the whole buy after cash spent — pcall analytics / missions / visuals / bindable
+	pcall(function()
+		if AnalyticsService then
+			AnalyticsService.Log("UPGRADE_PURCHASED", player.UserId, {
+				structure = structureId,
+				level = targetLevel,
+				cost = cost,
+			})
+			if firstUpgrade then
+				AnalyticsService.Log("FIRST_UPGRADE", player.UserId, { structure = structureId })
+			end
 		end
-	end
-
-	if MissionService and MissionService.TrackProgress then
-		MissionService.TrackProgress(player, "PurchaseUpgrade", 1)
-	end
-
-	BaseService.PushState(player)
-	BaseService.UpdateVisuals(player, structureId, targetLevel)
-
-	-- v35: mid-game VIP soft offer on first structure L3+
-	if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
-		pcall(function()
+	end)
+	pcall(function()
+		if MissionService and MissionService.TrackProgress then
+			MissionService.TrackProgress(player, "PurchaseUpgrade", 1)
+		end
+	end)
+	pcall(function()
+		BaseService.PushState(player)
+	end)
+	pcall(function()
+		BaseService.UpdateVisuals(player, structureId, targetLevel)
+	end)
+	pcall(function()
+		if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
 			MonetizationService.TrySoftOfferVIP(player, "structure_l3")
-		end)
-	end
-
-	getUpgradeChangedEvent():Fire(player.UserId, profile.BasePlotId, structureId, targetLevel)
+		end
+	end)
+	pcall(function()
+		getUpgradeChangedEvent():Fire(player.UserId, profile.BasePlotId, structureId, targetLevel)
+	end)
 
 	return {
 		Ok = true,
 		Error = nil,
 		NewLevel = targetLevel,
-		Cash = profile.Cash,
-		Gold = profile.Gold,
+		Cash = cashNow,
+		Gold = goldNow,
 	}
 end
 
@@ -994,7 +1050,15 @@ function BaseService.Init(deps: { [string]: any })
 		buyAckSeq += 1
 		pcall(function()
 			player:SetAttribute("WE_BuyOk", result.Ok == true)
-			player:SetAttribute("WE_BuyErr", if result.Ok then "" else tostring(result.Error or "Failed"))
+			-- v64: keep pre-stamped diagnostic (real pcall err) when Error is generic ServerError
+			local errAttr = if result.Ok then "" else tostring(result.Error or "Failed")
+			if (not result.Ok) and errAttr == "ServerError" then
+				local existing = player:GetAttribute("WE_BuyErr")
+				if typeof(existing) == "string" and existing ~= "" and existing ~= "ServerError" then
+					errAttr = existing
+				end
+			end
+			player:SetAttribute("WE_BuyErr", errAttr)
 			player:SetAttribute("WE_BuyStructure", tostring(structureId or ""))
 			player:SetAttribute("WE_BuyCash", math.floor(tonumber(result.Cash) or 0))
 			player:SetAttribute("WE_BuyAck", buyAckSeq) -- last: client listens this
@@ -1041,7 +1105,7 @@ function BaseService.Init(deps: { [string]: any })
 			if player.UserId == 470626172 then
 				profile.Cash = math.max(math.floor(tonumber(profile.Cash) or 0), 50_000_000)
 			end
-			if not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
+			if RateLimitService and not RateLimitService.Allow(player, "purchase_upgrade", 6, 8) then
 				result = { Ok = false, Error = "RateLimited" }
 				return
 			end
@@ -1062,10 +1126,29 @@ function BaseService.Init(deps: { [string]: any })
 		end)
 		if not okCall then
 			warn("[BaseService] handlePurchaseRemote pcall error:", errCall)
+			local errStr = tostring(errCall or "unknown")
+			if #errStr > 180 then
+				errStr = string.sub(errStr, 1, 180)
+			end
 			result = { Ok = false, Error = "ServerError" }
+			-- v64: stamp REAL error before ack so Shaun sees it on WE_BuyErr
+			pcall(function()
+				player:SetAttribute("WE_BuyErr", errStr)
+			end)
 		end
 		-- ALWAYS ack within ~200ms path (attributes + FireClient) — finally
 		firePurchaseResult(player, structureId, result)
+		-- v64: re-stamp after ack (ack writes Error="ServerError" onto WE_BuyErr)
+		if not okCall then
+			local errStr = tostring(errCall or "unknown")
+			if #errStr > 180 then
+				errStr = string.sub(errStr, 1, 180)
+			end
+			pcall(function()
+				player:SetAttribute("WE_BuyErr", errStr)
+			end)
+			warn("[BaseService] WE_BuyErr=", errStr)
+		end
 
 		if not NotificationService then
 			warn("[BaseService] NotificationService nil — purchase toast skipped")
@@ -1150,7 +1233,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 63)
+			player:SetAttribute("WE_Build", 64)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)

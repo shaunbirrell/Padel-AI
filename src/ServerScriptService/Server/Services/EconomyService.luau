@@ -242,27 +242,47 @@ function EconomyService.ReconcileSpendableCash(player: Player): number
 end
 
 function EconomyService.SpendCash(player: Player, amount: number, _reason: string?): (boolean, string?)
-	if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
-		return false, "InvalidAmount"
+	-- v64: NEVER throw — bad state returns false,"SpendFailed"
+	local ok, a, b = pcall(function(): (boolean, string?)
+		if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
+			return false, "InvalidAmount"
+		end
+		amount = math.floor(amount)
+		local profile = DataService.GetProfile(player)
+		if not profile then
+			return false, "NoProfile"
+		end
+		-- v62/v64: sync profile to EarlyRemotes/leaderstats before afford check
+		local have = 0
+		if EconomyService.ReconcileSpendableCash then
+			local rok, rhave = pcall(function()
+				return EconomyService.ReconcileSpendableCash(player)
+			end)
+			if rok and typeof(rhave) == "number" then
+				have = rhave
+			end
+		end
+		profile = DataService.GetProfile(player) or profile
+		have = math.floor(tonumber(profile.Cash) or have)
+		profile.Cash = have
+		if have < amount then
+			print(string.format("[Economy] SpendCash FAIL %s have=%d need=%d", player.Name, have, amount))
+			return false, "InsufficientCash"
+		end
+		profile.Cash = have - amount
+		pcall(function()
+			DataService.MarkDirty(player)
+		end)
+		pcall(function()
+			pushEconomy(player, profile)
+		end)
+		return true, nil
+	end)
+	if not ok then
+		warn("[Economy] SpendCash threw:", a)
+		return false, "SpendFailed"
 	end
-	amount = math.floor(amount)
-	local profile = DataService.GetProfile(player)
-	if not profile then
-		return false, "NoProfile"
-	end
-	-- v62: sync profile to EarlyRemotes/leaderstats before afford check
-	local have = EconomyService.ReconcileSpendableCash(player)
-	profile = DataService.GetProfile(player) or profile
-	have = math.floor(tonumber(profile.Cash) or have)
-	profile.Cash = have
-	if have < amount then
-		print(string.format("[Economy] SpendCash FAIL %s have=%d need=%d", player.Name, have, amount))
-		return false, "InsufficientCash"
-	end
-	profile.Cash = have - amount
-	DataService.MarkDirty(player)
-	pushEconomy(player, profile)
-	return true, nil
+	return (a :: any) :: boolean, b :: string?
 end
 
 function EconomyService.AddGold(player: Player, amount: number, _reason: string?): boolean

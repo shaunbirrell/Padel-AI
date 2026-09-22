@@ -58,3 +58,6 @@ export ROBLOX_PLACE_ID=97112936860418
 Open Cloud Published **versionNumber=62** (place 97112936860418) — v62 BUY cash reconcile + purchase hook. WE_Build=63.
 
 Open Cloud Published **versionNumber=63** (place 97112936860418) — v63 BUY attribute-ack + no WaitForProfile>0.25s. WE_Build=63.
+
+Open Cloud Published **versionNumber=64** (place 97112936860418) — v64 BUY harden: nil Stats/BaseUpgrades safe, post-spend pcall visuals, SpendCash never-throw, WE_BuyErr=real err. WE_Build=64.
+
