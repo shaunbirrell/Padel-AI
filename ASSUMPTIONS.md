@@ -662,3 +662,16 @@ Likeliest sites before deduct: `profile.BaseUpgrades[structureId]` or `meetsRequ
 - ProfileSchema.Migrate: always ensure BaseUpgrades + Stats.
 - BuyPathStatic: simulate Stats=nil / BasePlotId=nil / Reconcile → 50M→49998500 PASS. Open Cloud **versionNumber=64**.
 
+## 2026-09-22 — v65 DataService nil GetProfile fix (Open Cloud Published versionNumber=65)
+
+**Symptom (v64 live):** Shaun screenshot `Buy failed: ServerScriptService.Server.Services.BaseService:655: attempt to index nil with 'GetProfile'`; toast `Buy failed — server error, try again`; cash stuck $50,000,000; goal still Claim base + BUY Command Center. Place `97112936860418`.
+
+**Root cause:** module-local `DataService` inside BaseService was **nil** when PurchaseUpgrade ran `DataService.GetProfile(player)`. Bootstrap inited BaseService/Economy before DataService.Init; deps.DataService could be missing if safeRequire failed.
+
+**Fix (WE_Build=65):**
+1. Bootstrap: `DataService.Init()` FIRST (before Economy/Base/UpgradePad); assert `deps.DataService ~= nil`; warn if safeRequire failed.
+2. BaseService: `getDataService()` with `require(script.Parent.DataService)` fallback; PurchaseUpgrade returns `NoDataService` if still nil; Init asserts deps.DataService + EconomyService.
+3. EconomyService + UpgradePadService: same getDataService guard (SpendCash never throws index-nil GetProfile).
+4. Keep v64 hardenings (BaseUpgrades/Stats, Reconcile, attr ack, real WE_BuyErr).
+5. BuyPathStatic: nil→require fallback simulate CommandCenter 50M→49998500 PASS. Open Cloud **versionNumber=65**.
+

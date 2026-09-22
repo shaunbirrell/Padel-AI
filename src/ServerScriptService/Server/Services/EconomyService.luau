@@ -29,6 +29,21 @@ local MonetizationService: any = nil
 local TutorialService: any = nil
 local MoneyCollectorService: any = nil
 
+-- v65: never index nil DataService (SpendCash must not throw GetProfile on nil)
+local function getDataService(): any
+	if DataService ~= nil then
+		return DataService
+	end
+	local ok, mod = pcall(require, script.Parent.DataService)
+	if ok and mod ~= nil then
+		DataService = mod
+		warn("[Economy] getDataService: recovered via require(script.Parent.DataService)")
+		return DataService
+	end
+	warn("[Economy] getDataService: DataService still nil after require fallback")
+	return nil
+end
+
 local function ensureLeaderstats(player: Player, cash: number, gold: number)
 	-- Classic tycoon belt+suspenders: IntValues replicate to client even if remotes miss
 	local folder = player:FindFirstChild("leaderstats")
@@ -115,6 +130,7 @@ local function applyCashMult(player: Player, profile: any, amount: number, reaso
 end
 
 function EconomyService.Init(deps: { [string]: any })
+	assert(deps.DataService, "EconomyService.Init missing deps.DataService")
 	SeasonService = deps.SeasonService
 	DataService = deps.DataService
 	RemoteSetup = deps.RemoteSetup
@@ -125,7 +141,11 @@ function EconomyService.Init(deps: { [string]: any })
 end
 
 function EconomyService.Push(player: Player)
-	local profile = DataService.GetProfile(player)
+	local DS = getDataService()
+	if not DS then
+		return
+	end
+	local profile = DS.GetProfile(player)
 	if profile then
 		pushEconomy(player, profile)
 	end
@@ -136,7 +156,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 		return false
 	end
 	amount = math.floor(amount)
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return false
 	end
@@ -144,7 +164,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	local granted = applyCashMult(player, profile, amount, reason)
 	profile.Cash = math.clamp(profile.Cash + granted, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += granted
-	DataService.MarkDirty(player)
+	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MissionService and MissionService.TrackProgress and reason ~= "mission" and reason ~= "achievement" then
 		MissionService.TrackProgress(player, "EarnCash", granted)
@@ -161,14 +181,14 @@ function EconomyService.AccruePendingCash(player: Player, amount: number, reason
 		return false
 	end
 	amount = math.floor(amount)
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return false
 	end
 	local granted = applyCashMult(player, profile, amount, reason)
 	local pending = tonumber((profile :: any).PendingCash) or 0
 	(profile :: any).PendingCash = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
-	DataService.MarkDirty(player)
+	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
 		MoneyCollectorService.RefreshForPlayer(player)
@@ -177,7 +197,7 @@ function EconomyService.AccruePendingCash(player: Player, amount: number, reason
 end
 
 function EconomyService.CollectPendingCash(player: Player): number
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return 0
 	end
@@ -189,7 +209,7 @@ function EconomyService.CollectPendingCash(player: Player): number
 	-- Pending already had mult applied at accrue; grant with exempt reason
 	profile.Cash = math.clamp(profile.Cash + pending, EconomyConfig.MinCash, EconomyConfig.MaxCash)
 	profile.Stats.TotalCashEarned += pending
-	DataService.MarkDirty(player)
+	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(player, "EarnCash", pending)
@@ -198,7 +218,7 @@ function EconomyService.CollectPendingCash(player: Player): number
 end
 
 function EconomyService.GetPendingCash(player: Player): number
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return 0
 	end
@@ -213,7 +233,11 @@ end
 	Attrs/leaderstats are server-authored only — safe, not client-trust.
 ]]
 function EconomyService.ReconcileSpendableCash(player: Player): number
-	local profile = DataService.GetProfile(player)
+	local DS = getDataService()
+	if not DS then
+		return 0
+	end
+	local profile = DS.GetProfile(player)
 	if not profile then
 		return 0
 	end
@@ -232,7 +256,7 @@ function EconomyService.ReconcileSpendableCash(player: Player): number
 	local before = math.floor(tonumber(profile.Cash) or 0)
 	if have > before then
 		profile.Cash = have
-		DataService.MarkDirty(player)
+		getDataService().MarkDirty(player)
 		print(string.format("[Economy] Reconcile %s profile.Cash %d → %d (attr/leaderstats)", player.Name, before, have))
 		pushEconomy(player, profile)
 	else
@@ -243,12 +267,17 @@ end
 
 function EconomyService.SpendCash(player: Player, amount: number, _reason: string?): (boolean, string?)
 	-- v64: NEVER throw — bad state returns false,"SpendFailed"
+	-- v65: getDataService fallback so nil module never surfaces as GetProfile index error
 	local ok, a, b = pcall(function(): (boolean, string?)
+		local DS = getDataService()
+		if not DS then
+			return false, "NoDataService"
+		end
 		if typeof(amount) ~= "number" or amount ~= amount or amount < 0 then
 			return false, "InvalidAmount"
 		end
 		amount = math.floor(amount)
-		local profile = DataService.GetProfile(player)
+		local profile = DS.GetProfile(player)
 		if not profile then
 			return false, "NoProfile"
 		end
@@ -262,7 +291,7 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 				have = rhave
 			end
 		end
-		profile = DataService.GetProfile(player) or profile
+		profile = getDataService().GetProfile(player) or profile
 		have = math.floor(tonumber(profile.Cash) or have)
 		profile.Cash = have
 		if have < amount then
@@ -271,7 +300,7 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 		end
 		profile.Cash = have - amount
 		pcall(function()
-			DataService.MarkDirty(player)
+			getDataService().MarkDirty(player)
 		end)
 		pcall(function()
 			pushEconomy(player, profile)
@@ -290,13 +319,13 @@ function EconomyService.AddGold(player: Player, amount: number, _reason: string?
 		return false
 	end
 	amount = math.floor(amount)
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return false
 	end
 	profile.Gold = math.clamp(profile.Gold + amount, EconomyConfig.MinGold, EconomyConfig.MaxGold)
 	profile.Stats.TotalGoldEarned += amount
-	DataService.MarkDirty(player)
+	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	return true
 end
@@ -306,7 +335,7 @@ function EconomyService.SpendGold(player: Player, amount: number, _reason: strin
 		return false, "InvalidAmount"
 	end
 	amount = math.floor(amount)
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return false, "NoProfile"
 	end
@@ -314,23 +343,23 @@ function EconomyService.SpendGold(player: Player, amount: number, _reason: strin
 		return false, "InsufficientGold"
 	end
 	profile.Gold -= amount
-	DataService.MarkDirty(player)
+	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
 	return true, nil
 end
 
 function EconomyService.GetCash(player: Player): number
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	return if profile then math.floor(tonumber(profile.Cash) or 0) else 0
 end
 
 function EconomyService.GetGold(player: Player): number
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	return if profile then profile.Gold else 0
 end
 
 function EconomyService.GetOutpostIncomeMultiplier(player: Player): number
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return 1
 	end
@@ -344,7 +373,7 @@ end
 
 --[[ Grant one outpost income stack (capped). Prefer SyncOutpostIncomeStacks for contested ownership. ]]
 function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, number, number)
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return false, 0, 0
 	end
@@ -359,7 +388,7 @@ function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, numbe
 	end
 	stacks += 1
 	(profile :: any).OutpostIncomeStacks = stacks
-	DataService.MarkDirty(player)
+	getDataService().MarkDirty(player)
 	local pct = math.floor((buff.MultPerStack or 0.10) * 100)
 	return true, stacks, pct
 end
@@ -369,7 +398,7 @@ end
 	Returns (oldStacks, newStacks, percentPerStack).
 ]]
 function EconomyService.SyncOutpostIncomeStacks(player: Player): (number, number, number)
-	local profile = DataService.GetProfile(player)
+	local profile = getDataService().GetProfile(player)
 	if not profile then
 		return 0, 0, 0
 	end
@@ -386,7 +415,7 @@ function EconomyService.SyncOutpostIncomeStacks(player: Player): (number, number
 	local oldStacks = math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0)
 	if oldStacks ~= newStacks then
 		(profile :: any).OutpostIncomeStacks = newStacks
-		DataService.MarkDirty(player)
+		getDataService().MarkDirty(player)
 	end
 	return oldStacks, newStacks, pct
 end
@@ -400,8 +429,8 @@ function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player
 		return 0
 	end
 	amount = math.floor(amount)
-	local fromProfile = DataService.GetProfile(fromPlayer)
-	local toProfile = DataService.GetProfile(toPlayer)
+	local fromProfile = getDataService().GetProfile(fromPlayer)
+	local toProfile = getDataService().GetProfile(toPlayer)
 	if not fromProfile or not toProfile then
 		return 0
 	end
@@ -416,8 +445,8 @@ function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player
 	(fromProfile :: any).PendingCash = fromPending - take
 	local toPending = math.floor(tonumber((toProfile :: any).PendingCash) or 0)
 	(toProfile :: any).PendingCash = math.clamp(toPending + take, 0, EconomyConfig.MaxCash)
-	DataService.MarkDirty(fromPlayer)
-	DataService.MarkDirty(toPlayer)
+	getDataService().MarkDirty(fromPlayer)
+	getDataService().MarkDirty(toPlayer)
 	pushEconomy(fromPlayer, fromProfile)
 	pushEconomy(toPlayer, toProfile)
 	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then

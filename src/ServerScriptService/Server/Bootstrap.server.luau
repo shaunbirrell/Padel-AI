@@ -3,7 +3,7 @@
 	WAR EMPIRE — Server Bootstrap
 	Wires remotes + services. Request/action remotes only.
 
-	v60 CRITICAL: RemoteSetup + DataService/EconomyService BEFORE MapSetup.
+	v65 CRITICAL: DataService.Init FIRST; then Economy/Base; remotes before MapSetup.
 	Map densify InsertService must never block EconomyUpdate (HUD $… forever).
 ]]
 
@@ -143,11 +143,32 @@ local function notifyMapRebuilt(label: string)
 end
 
 -- ── 2. CASH PATH FIRST (instant profile + Push; map must not block) ─────────
+-- v65: warn loudly if safeRequire failed (nil module → Buy GetProfile crash)
+if DataService == nil then
+	warn("[WAR EMPIRE] CRITICAL: DataService safeRequire FAILED — buy path will break until fixed")
+end
+if EconomyService == nil then
+	warn("[WAR EMPIRE] CRITICAL: EconomyService safeRequire FAILED")
+end
+if BaseService == nil then
+	warn("[WAR EMPIRE] CRITICAL: BaseService safeRequire FAILED")
+end
+
 safeInit("RateLimitService", RateLimitService)
 safeInit("AnalyticsService", AnalyticsService)
 if DataService and AnalyticsService and DataService.SetAnalytics then
 	pcall(DataService.SetAnalytics, AnalyticsService)
 end
+
+-- v65 CRITICAL: DataService.Init FIRST before Economy/Base/UpgradePad
+-- (module-local DataService in BaseService was nil when Init order raced / deps cleared)
+safeInit("DataService", DataService)
+print("[WAR EMPIRE] DataService Init FIRST (v65) — before Economy/Base/UpgradePad")
+
+if deps.DataService == nil then
+	warn("[WAR EMPIRE] CRITICAL: deps.DataService is nil before BaseService.Init — buy will fail")
+end
+assert(deps.DataService ~= nil, "deps.DataService nil before BaseService.Init (v65)")
 
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
@@ -162,10 +183,8 @@ afterMapRebuild = function()
 		pcall(BaseService.RefreshAllOnlinePlayers)
 	end
 end
--- v61: load profiles BEFORE UpgradePad spatial loop (no silent NoProfile on first stand)
-safeInit("DataService", DataService)
 print("[WAR EMPIRE] DataService/EconomyService ready BEFORE map (v61)")
-print("[WAR EMPIRE] v63 attribute-ack buy + no WaitForProfile>0.25s + force plot1")
+print("[WAR EMPIRE] v65 DataService-first + getDataService fallback + attribute-ack buy")
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)

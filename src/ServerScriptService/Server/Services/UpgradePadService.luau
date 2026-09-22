@@ -26,6 +26,21 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 
+-- v65: never index nil DataService
+local function getDataService(): any
+	if DataService ~= nil then
+		return DataService
+	end
+	local ok, mod = pcall(require, script.Parent.DataService)
+	if ok and mod ~= nil then
+		DataService = mod
+		warn("[UpgradePad] getDataService: recovered via require(script.Parent.DataService)")
+		return DataService
+	end
+	warn("[UpgradePad] getDataService: DataService still nil after require fallback")
+	return nil
+end
+
 local TAG = Constants.Tags.UpgradeSlot
 local DEBOUNCE_SEC = 1.0
 local OVERLAP_MARGIN = 4.0 -- wide AABB so kits / edges never miss
@@ -193,9 +208,22 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 end
 
 local function tryServerPurchase(player: Player, part: BasePart, structureId: string, fromStanding: boolean?)
-	local profile = DataService.GetProfile(player)
-	if not profile and DataService.EnsureProfile then
-		profile = DataService.EnsureProfile(player)
+	local DS = getDataService()
+	if not DS then
+		print(string.format("[UpgradePad] BUY FAIL %s %s — NoDataService", player.Name, structureId))
+		firePurchaseResult(player, structureId, { Ok = false, Error = "NoDataService" })
+		if NotificationService then
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, "Buy failed — server data not ready, try again", "Warn", 3, 2.5, "pad|NoDataService")
+			else
+				NotificationService.Notify(player, "Buy failed — server data not ready, try again", "Warn", 3)
+			end
+		end
+		return
+	end
+	local profile = DS.GetProfile(player)
+	if not profile and DS.EnsureProfile then
+		profile = DS.EnsureProfile(player)
 	end
 	if not profile then
 		print(string.format("[UpgradePad] BUY FAIL %s %s — NoProfile", player.Name, structureId))
@@ -216,13 +244,13 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			pcall(function()
 				BaseService.AssignPlot(player)
 			end)
-			profile = DataService.GetProfile(player) or profile
+			profile = getDataService().GetProfile(player) or profile
 		end
 	end
 	if profile.BasePlotId == nil then
 		profile.BasePlotId = 1
-		if DataService.MarkDirty then
-			DataService.MarkDirty(player)
+		if getDataService().MarkDirty then
+			getDataService().MarkDirty(player)
 		end
 		warn(string.format("[UpgradePad] forced BasePlotId=1 for %s (live/Studio)", player.Name))
 	end
@@ -564,6 +592,7 @@ local function startSpatialLoop()
 end
 
 function UpgradePadService.Init(deps: { [string]: any })
+	assert(deps.DataService, "UpgradePadService.Init missing deps.DataService")
 	DataService = deps.DataService
 	BaseService = deps.BaseService
 	NotificationService = deps.NotificationService

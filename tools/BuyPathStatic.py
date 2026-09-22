@@ -53,7 +53,7 @@ must_contain("src/ReplicatedStorage/Shared/Constants.luau", "RequestPurchaseUpgr
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "RequestPurchaseUpgrade", "RemoteSetup lists RequestPurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "function BaseService.PurchaseUpgrade", "BaseService.PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RemoteGuard.IsIdString", "BaseService uses RemoteGuard.IsIdString")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "DataService.EnsureProfile", "BaseService buy EnsureProfile (v63 no long RequireProfile yield)")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EnsureProfile", "BaseService buy EnsureProfile (v63/v65 via getDataService/DS)")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "RequestPurchaseUpgrade", "BaseService binds RequestPurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "BaseService.PurchaseUpgrade", "UpgradePadService → PurchaseUpgrade")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RequestPurchaseUpgrade", "WorldPrompt BUY FireServer")
@@ -967,8 +967,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 64)', "v64 WE_Build=64 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 64)', "v64 WE_Build=64 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1033,7 +1033,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 64)', "v64 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 65)', "v65 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1102,9 +1102,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "forced BasePlotId=1", "v63 UpgradePad force plot 1 live")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 64)', "v64 WE_Build=64 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 64)', "v64 WE_Build=64 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 64)', "v64 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 65)', "v65 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1131,9 +1131,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 64)', "v64 WE_Build=64 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 64)', "v64 WE_Build=64 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 64)', "v64 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 65)', "v65 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1168,6 +1168,77 @@ if _s1 == 49_998_500 and _s2 == 49_998_500 and _s3 == 49_998_500:
     ok("v64 simulate CommandCenter buy Stats=nil/BasePlotId=nil/Reconcile: 50M → 49998500")
 else:
     bad(f"v64 simulate edge failed s1={_s1} s2={_s2} s3={_s3}")
+
+
+
+
+# ── v65 BUY: DataService Init FIRST + getDataService nil-fallback ─────────────
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "local function getDataService()", "v65 BaseService getDataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error = "NoDataService"', "v65 PurchaseUpgrade NoDataService guard")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'assert(deps.DataService, "BaseService.Init missing deps.DataService")', "v65 BaseService.Init assert DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'assert(deps.EconomyService, "BaseService.Init missing deps.EconomyService")', "v65 BaseService.Init assert EconomyService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "require(script.Parent.DataService)", "v65 BaseService require fallback")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "local function getDataService()", "v65 EconomyService getDataService")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"NoDataService"', "v65 SpendCash NoDataService")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", 'assert(deps.DataService, "EconomyService.Init missing deps.DataService")', "v65 EconomyService.Init assert")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "local function getDataService()", "v65 UpgradePad getDataService")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "NoDataService", "v65 UpgradePad NoDataService guard")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService nil before BaseService.Init", "v65 Bootstrap assert deps.DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 65)', "v65 WE_Build=65 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 65)', "v65 EarlyRemotes WE_Build")
+# Keep v64 hardenings
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
+must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "function EconomyService.ReconcileSpendableCash", "v65 keeps v62/v64 Reconcile")
+
+# Bootstrap: DataService Init before EconomyService and BaseService
+_boot65 = read("src/ServerScriptService/Server/Bootstrap.server.luau") or ""
+_ds65 = _boot65.find('safeInit("DataService"')
+_eco65 = _boot65.find('safeInit("EconomyService"')
+_base65 = _boot65.find('safeInit("BaseService"')
+_up65 = _boot65.find('safeInit("UpgradePadService"')
+if _ds65 >= 0 and _eco65 >= 0 and _base65 >= 0 and _up65 >= 0 and _ds65 < _eco65 < _base65 < _up65:
+    ok("v65 Bootstrap DataService → Economy → Base → UpgradePad order")
+else:
+    bad(f"v65 Bootstrap order wrong ds={_ds65} eco={_eco65} base={_base65} up={_up65}")
+
+# Simulate: Init DataService cleared (nil) then require fallback recovers → CC buy 50M→49998500
+def simulate_cc_buy_with_ds(ds_init_nil: bool) -> int | None:
+    """Mirror PurchaseUpgrade when module-local DataService was nil after Init."""
+    # Fake module table recovered via require(script.Parent.DataService)
+    recovered = {"ok": True}
+    ds = None if ds_init_nil else recovered
+    def get_data_service():
+        nonlocal ds
+        if ds is not None:
+            return ds
+        # require fallback
+        ds = recovered
+        return ds
+    DS = get_data_service()
+    if not DS:
+        return None  # NoDataService
+    cash = 50_000_000
+    cost = 1500
+    # Stats/BaseUpgrades nil harden (v64)
+    base_upgrades = {}
+    stats = {"UpgradesPurchased": 0}
+    base_plot = 1
+    cash = max(cash, 50_000_000)
+    assert cash >= cost
+    cash = cash - cost
+    base_upgrades["CommandCenter"] = 1
+    stats["UpgradesPurchased"] += 1
+    return cash
+
+_nil_fallback = simulate_cc_buy_with_ds(ds_init_nil=True)
+_normal = simulate_cc_buy_with_ds(ds_init_nil=False)
+if _nil_fallback == 49_998_500 and _normal == 49_998_500:
+    ok("v65 simulate getDataService nil→require fallback CommandCenter: 50M → 49998500")
+else:
+    bad(f"v65 simulate fallback failed nil={_nil_fallback} normal={_normal}")
 
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

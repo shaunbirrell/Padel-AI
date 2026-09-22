@@ -61,3 +61,4 @@ Open Cloud Published **versionNumber=63** (place 97112936860418) — v63 BUY att
 
 Open Cloud Published **versionNumber=64** (place 97112936860418) — v64 BUY harden: nil Stats/BaseUpgrades safe, post-spend pcall visuals, SpendCash never-throw, WE_BuyErr=real err. WE_Build=64.
 
+Open Cloud Published **versionNumber=65** (place 97112936860418) — v65 DataService-first Init + getDataService require fallback (fixes nil GetProfile on BUY). WE_Build=65.
