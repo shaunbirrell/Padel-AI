@@ -4,8 +4,10 @@
 	roadmap §1.3 / §1.5 #3). The fix for "dead, out of place props". Thresholds: WorldConfig.Hygiene / WorldConfig.Lights.
 
 	  H1  Anchored: every man-made dressing unit lies <= 60 studs from an anchor (POI footprint, road centre line,
-	      water edge, plot edge, capture zone); natural units may stand alone only as groups of >= 3.
-	      W1: REPORT ONLY (Hygiene.OrphanMode = "Report": listed for W3, never deleted). "Enforce" destroys them.
+	      water edge, plot edge, capture zone); natural units may stand alone only as groups of >= 3 (NaturalLink),
+	      or as ONE natural cluster whose instance carries WE_Elements >= MinNatural (Hygiene.ElementsAttr; W3
+	      scatter: e.g. a dead tree, a stump and a log) with parts of >= 2 sizes (max dimensions >= 20 % apart).
+	      W1 ran it in Report mode; W3 (roadmap §1.5 #3) sets Hygiene.OrphanMode = "Enforce": orphans are destroyed.
 	  H2  Road corridor: nothing collidable with its top above 0.75 within 12 of a road centre line; nothing visible
 	      taller than 0.3 within 8 (markings, RoadEnds, CheckpointArm and WE_AllowOnRoad exempt).  → destroy kit
 	  H3  Clear zones: capture zones (R x 1.414 + 25), front-gate aprons, land garage pads + 16, plot pads + 4,
@@ -46,14 +48,15 @@ local CollectionService = game:GetService("CollectionService")
 local Lighting = game:GetService("Lighting")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Configs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
-local WorldConfig = require(Configs:WaitForChild("WorldConfig"))
-local WaterConfig = require(Configs:WaitForChild("WaterConfig"))
-local TerritoryConfig = require(Configs:WaitForChild("TerritoryConfig"))
-local BaseConfig = require(Configs:WaitForChild("BaseConfig"))
-local BaseLayout = require(script.Parent:WaitForChild("BaseLayout"))
-local Waterways = require(script.Parent:WaitForChild("Waterways"))
-local WorldAtmosphere = require(script.Parent:WaitForChild("WorldAtmosphere"))
+-- server module: the configs and siblings ship in the same place file (no WaitForChild, never an unbounded wait)
+local Configs = ReplicatedStorage.Shared.Configs
+local WorldConfig = require(Configs.WorldConfig)
+local WaterConfig = require(Configs.WaterConfig)
+local TerritoryConfig = require(Configs.TerritoryConfig)
+local BaseConfig = require(Configs.BaseConfig)
+local BaseLayout = require(script.Parent.BaseLayout)
+local Waterways = require(script.Parent.Waterways)
+local WorldAtmosphere = require(script.Parent.WorldAtmosphere)
 
 export type Violation = { Rule: string, Path: string, Detail: string, X: number, Z: number }
 export type Orphan = { Path: string, Kind: string, X: number, Z: number, Parts: number, Nearest: number }
@@ -93,6 +96,11 @@ local WorldHygiene = {}
 local H = WorldConfig.Hygiene
 local GROUND_TOP_Y = 0.5
 local RULES = { "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10" }
+-- W3: the attribute a stand-alone natural cluster carries (WorldKits.NewCluster); read loosely so this module
+-- type-checks before and after WorldConfig.Hygiene gains the key
+local ELEMENTS_ATTR: string = (H :: any).ElementsAttr or "WE_Elements"
+-- W3: H1 units per WE_Anchor class (informational, Report.Census "Anchor_<class>")
+local ANCHOR_CLASSES = { "poi", "road", "junction", "water", "natural", "none" }
 
 -- ── small helpers ────────────────────────────────────────────────────────────
 
@@ -509,6 +517,9 @@ local function newReport(mode: string, root: Instance): Report
 		rep.Counts[r] = 0
 		rep.Actions[r] = 0
 	end
+	for _, c in ipairs(ANCHOR_CLASSES) do
+		rep.Census["Anchor_" .. c] = 0
+	end
 	return rep
 end
 
@@ -624,6 +635,33 @@ local function unitsOf(folder: Instance, boxes: { [BasePart]: Box }): { Unit }
 	return units
 end
 
+-- W3: a natural unit may stand alone when its instance says it holds >= MinNatural elements (Terrain rocks included)
+-- and its parts come in >= 2 sizes (largest dimensions at least 20 % apart), e.g. a dead tree, a stump and a log
+local function standsAlone(u: Unit): boolean
+	local inst = u.Inst
+	if not (u.Natural and inst) then
+		return false
+	end
+	local el = inst:GetAttribute(ELEMENTS_ATTR)
+	if type(el) ~= "number" or el < H.MinNatural then
+		return false
+	end
+	local lo, hi = math.huge, 0
+	for _, p in ipairs(u.Parts) do
+		local s = p.Size
+		local m = math.max(s.X, s.Y, s.Z)
+		lo, hi = math.min(lo, m), math.max(hi, m)
+	end
+	return hi > 0 and hi >= lo * 1.2
+end
+
+-- the WE_Anchor class of a unit ("poi" | "road" | "junction" | "water" | "natural"; "none" when unset)
+local function anchorClass(u: Unit): string
+	local a = if u.Inst then u.Inst:GetAttribute("WE_Anchor") else nil
+	local cls = if type(a) == "string" then string.match(a, "^(%a+)") else nil
+	return if cls and table.find(ANCHOR_CLASSES, cls) then cls else "none"
+end
+
 -- distance from a unit centre to its nearest anchor
 local function anchorDist(ctx: Ctx, b: Box): number
 	local x, z = centreOf(b)
@@ -651,7 +689,7 @@ local function anchorDist(ctx: Ctx, b: Box): number
 	return best
 end
 
-local function findOrphans(ctx: Ctx, folder: Instance, boxes: { [BasePart]: Box }): { { Unit: Unit, Nearest: number } }
+local function findOrphans(ctx: Ctx, folder: Instance, boxes: { [BasePart]: Box }): ({ { Unit: Unit, Nearest: number } }, { Unit })
 	local units = unitsOf(folder, boxes)
 	local out: { { Unit: Unit, Nearest: number } } = {}
 	local naturals: { Unit } = {}
@@ -699,13 +737,13 @@ local function findOrphans(ctx: Ctx, folder: Instance, boxes: { [BasePart]: Box 
 	for _, u in ipairs(units) do
 		local anchored = dist[u] <= H.AnchorMax
 		if u.Natural then
-			anchored = anchored or (groupSize[u] or 1) >= H.MinNatural
+			anchored = anchored or (groupSize[u] or 1) >= H.MinNatural or standsAlone(u)
 		end
 		if not anchored then
 			table.insert(out, { Unit = u, Nearest = dist[u] })
 		end
 	end
-	return out
+	return out, units
 end
 
 -- ── Report ────────────────────────────────────────────────────────────────────
@@ -811,8 +849,13 @@ function WorldHygiene.Report(root: Instance, opts: Opts?): Report
 					end
 				end
 			end
-			-- H1 orphans
-			for _, o in ipairs(findOrphans(ctx, top, boxes)) do
+			-- H1 orphans (and the anchor-class census of every unit)
+			local orphans, units = findOrphans(ctx, top, boxes)
+			for _, u in ipairs(units) do
+				local key = "Anchor_" .. anchorClass(u)
+				rep.Census[key] = (rep.Census[key] or 0) + 1
+			end
+			for _, o in ipairs(orphans) do
 				local x, z = centreOf(o.Unit.Box)
 				local kind = if o.Unit.Natural then "natural" else "man-made"
 				table.insert(rep.Orphans, { Path = o.Unit.Key, Kind = kind, X = x, Z = z, Parts = #o.Unit.Parts, Nearest = o.Nearest })
@@ -1130,7 +1173,7 @@ function WorldHygiene.Enforce(root: Instance, opts: Opts?): Report
 		end
 	end
 
-	-- H1: orphans (W1 = Report mode: listed, not destroyed)
+	-- H1: orphans (Report mode: listed only; Enforce (W3): destroyed, the whole unit)
 	local mode = (opts and opts.OrphanMode) or H.OrphanMode
 	if mode == "Enforce" then
 		for _, folder in ipairs(targets) do
@@ -1140,7 +1183,8 @@ function WorldHygiene.Enforce(root: Instance, opts: Opts?): Report
 					boxes[d] = worldBox(d)
 				end
 			end
-			for _, o in ipairs(findOrphans(ctx, folder, boxes)) do
+			local orphans = findOrphans(ctx, folder, boxes)
+			for _, o in ipairs(orphans) do
 				local u = o.Unit
 				if u.Inst and u.Inst.Parent then
 					actions.H1 += countParts(u.Inst)

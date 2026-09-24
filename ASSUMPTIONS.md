@@ -1033,3 +1033,125 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 ## 2026-09-24 — HUD scale fix (sister's phone: rail cut off, cash pill over "Garage")
 - On the sister's Android (about 932x430 GUI units) the left rail and cash pill were drawn about 1.29x too big: the WarEmpireHUD UIScale stayed at 0.90 (the fallback `HudLayout.Scale()` uses before the camera reports a viewport) instead of 0.70. HudLayout and UIUtil tracked their UIScales, topbar areas and visibility bindings in weak-keyed tables; in Roblox a weak table keyed by an Instance can lose the entry once no Lua code holds that Instance, even while it is still on screen, so the later viewport update never reached the scale.
 - Fix: strong tables, pruned when a scale or frame leaves its gui (layout change) or a bound object is destroyed; and `HudLayout.Scale()` returns the phone scale (0.70) on touch devices until the viewport is known, then the viewport watcher corrects it (tablets move up to their own scale).
+
+
+## 2026-09-24 — W3 step 1: kit catalogue, Crossroads Town, travel dressing, H1 Enforce, Roblox-owned look
+
+### contracts (from scratchpad/w3/contracts/assumptions.md)
+- **W3 disabled POIs stay reserved.** Travel dressing (rhythm, junctions, shore, scatter) keeps out of all 18 POI footprints + 30 studs, built or not (`WorldDressConfig.Keepout.POIMargin`), and the emptiness metric counts the reserved footprints as occupied, as `world_v2_model.py` does. Enabling a POI later never moves the travel dressing. Revert: skip `Enabled = false` POIs in `WorldDress.Blocked`.
+- **W3 shore features stay in Quality Low.** The spec gives Low rules for POIs (60 %), rhythm (every other) and scatter (none) only. Revert: `WorldDressConfig.Quality.Low.ShoreEvery = 2`.
+- **W3 pure-Luau PRNG.** `WorldKits.Rng` (xorshift32 on bit32) replaces `Random.new` in all W3 build code, so the headless sim renders exactly the live layout (the sim's `Random` is a different LCG). Revert: swap the implementation; the sim layout then differs from live (rules still hold).
+- **W3 world signs.** The world SurfaceGui budget (`WorldConfig.Budgets.SurfaceGuis` = 12, inside the CLAUDE.md 1,134 cap) is spent as 10 garage signs + 1 Crossroads Town board. Junction direction posts and checkpoint boards are painted arrow / stripe parts with no text in step 1. The lead re-plans the 12 before the other 17 POIs.
+- **W3 H1 Enforce knob.** H1 Enforce is switched in `WorldConfig.Hygiene.OrphanMode` (B1's file, per the contract), not by a second knob in the travel-dressing config. BPS pin `OrphanMode = "Report",` is retired for `OrphanMode = "Enforce",`.
+- **W3 Terrain-only clusters** (roadside rock outcrops, scatter rock clusters and boulder fields) create no instance: 0 parts, 0 instances. They are counted in the build summaries, the occupancy and `WorldKits.TerrainLog()`.
+- **W3 WorldKits.Finish refuses a cluster wider than 64 studs** (H10) or with 0 parts, instead of letting WorldHygiene report it later.
+- **W3 no MAP_GEN bump** unless MapSetup itself changes: the dressing is rebuilt by every `MapSetup.Run`, and the live place is a Rojo build without a baked map.
+- **W3 mesh overlays replace, never add.** A Roblox-owned Synty mesh (VisualAssetService.CloneKitMesh) replaces the fallback part (natural 1-part kits) or all visual parts but one invisible Box collider (solid kits). Part budgets are measured in the sim, which has no InsertService, so the Part kits are the upper bound.
+- **W3 cluster Models use `ModelStreamingMode = Atomic`**, so a building never streams in half-built. Harmless while StreamingEnabled is off (today).
+
+### B1 (from scratchpad/w3/B1/assumptions.md)
+- **W3 Town layout is data.** The Town is 46 cluster rows plus 6 terrain rubble / scorch groups in `WorldConfig.Town`. My layout source is `w3/B1/town_layout.py`.
+  - The water tower is at (-118, -175). It closes a market street that runs west off the north arm (4 tarp stalls with crates).
+  - The clock tower stands on the south-east plaza corner at (100, 100).
+  - There is one building on each of the other three plaza corners, facing the flag, plus 1–2 frontage buildings per road arm.
+  - The houses on the Empire Bank side frame the bank.
+  - The Town Square arena is 4 paving tiles round the TownSquare anchor, with a dry fountain 30 north of the anchor and benches.
+  - Plan: Full 213 parts. Low (Tier 1) 116 = 54.5 %.
+  - Reversible: edit or remove rows. Nothing in code depends on a row.
+- **W3 Town board faces the west approach.** RoadZ0 carries plots 1, 2, 5 and 6; RoadX0 carries plots 3 and 4. So the one painted "CROSSROADS" board (the Town's only SurfaceGui) stands on the west approach at (-292, -22). Reversible: move the `Board` row.
+- **W3 flat paving may lie over an event anchor.** Flat marking clusters (every part top <= 0.75, no collision; only PaveTile in step 1):
+  - accept an `anchor:Event_…` result from `WorldDress.Blocked`, because the supply crate lands on the paving;
+  - are not added to the occupancy (the Town footprint is reserved anyway).
+  - PaveTile stays non-colliding (contract §2.3). SupplyDropService's downward ray therefore passes through the tile, and the crate sits on the ground 0.12 below the paving top.
+  - Reversible: make PaveTile collide, and drop the anchor exception.
+- **W3 mesh overlay modes: never more parts.** The contract's "collider + mesh" rule adds a part for 1-part solid units (a single crate, a bench), so B1 uses three modes:
+  - **skin** (CrateStack crates, Bench): a SpecialMesh inside the Part, using the MeshId, TextureID and MeshSize read from `CloneKitMesh`. Net 0 parts, box collision kept.
+  - **each** (natural kits): each part is replaced by a MeshPart. Net 0.
+  - **collider** (Wreck "car" only, the only variant with a CarWreck mesh): the largest part becomes the invisible box collider, and 1 mesh is added. Net 2 − n.
+  Overlays are deferred and capped by `WorldConfig.Kits.MeshOverlays` (40 per server). Town kits queue first.
+  Reversible: set `Kit.Mesh = false`, or change a kit's mode in `queueMesh`.
+  Mesh orientation (Synty pieces assumed Y-up, aligned with the kit frame) needs a Studio check once LOOK wires ids.
+- **W3 kit sizes are measured.** `WorldKits.Specs[*].Size` is the measured AABB of the default build. The unit test checks it to ±0.25.
+  - New `WorldKits.Footprint(kit, opts)` returns the exact pivot-relative extents: `X0` / `X1` / `Z0` / `Z1` / `Top`, plus `CollideZ0` and `VisibleZ0`.
+  - Road-side kits keep every collidable part at local z >= 0 (the back half): Wreck, DrumGroup, CrateStack, SandbagLine, SandbagNest, Jersey, RoadMarker, DirSign, SandbagArc.
+  - Wreck long axis is local X (parked along the road).
+  - JettyStub, BargeWreck and BeachedHull have their pivot at the landward end, with the hull reaching toward -Z (the water).
+  - Checkpoint pivot is on the road centre line.
+- **W3 catalogue additions (B1's file).**
+  - New kit `CompoundWall`: a 3-tall adobe wall (cover), 1 part per 16 studs, up to 4.
+  - New `AdobeHouse` variants `"wide"` (18-wide row house) and `"shop"` (cloth awning instead of the second window). Still 5 parts each.
+  - Both give more street frontage for the same part cost.
+  - Reversible: drop the rows that use them.
+- **W3 Town shadows.** Only building bodies, stall back walls and tarps, shop awnings, the tower tank / deck / roof, the clock shaft / head, the ruin walls and the fountain rim cast shadows: 34 casters (cap 60, H9 >= 8 only). Roofs, legs, counters and walls do not. Reversible: the `shadow` argument in each builder.
+- **W3 Terrain rubble is Tier 1.** It costs 0 parts, so Low keeps it. `WorldKits.Rock` keeps every prim within the group's outer radius (`opts.Radius`, default `WorldConfig.Kits.Rock[kind].Radius`), and callers test `WorldDress.Blocked` with that same radius.
+- **W3 `WorldKits.Discard(cluster)`.** New helper to destroy a built-but-rejected cluster, so its pending sign and overlays are dropped.
+- **W3 the world sign budget counts every SurfaceGui outside the bases.** It counts those under `WarEmpireSetup` (except `Bases`) plus the signs in clusters that are still open. `Sign` returns nil at `WorldConfig.Budgets.SurfaceGuis` (12). Step 1 uses 11: 10 garage signs + the Town board.
+- **W3 checkpoint barriers dropped.** The v1 jersey barriers ahead of each checkpoint (8 parts) went to frontage buildings in v3. Reversible: add `Jersey` rows on the shoulders at ±15 (13.9 off the line).
+
+### B2 (from scratchpad/w3/B2/assumptions.md)
+- **W3 WorldDress never yields (`WorldDressConfig.Budgets.YieldEvery = 0`).** The contract planned `task.wait()` every 25 clusters, "returning at once" on the sim's main thread. In the Luau CLI the driver's main chunk is itself yieldable, so the sim's `task.wait` really yields and the run dies ("thread yielded unexpectedly"). WorldTerrain avoids this the same way (its drivers pass `YieldEvery = 0`). The whole travel build is 0.07–0.11 s of CPU in the sim (budget 1.0 s), inside MapSetup's deferred dressing thread, and the old coordinate-list dressing never yielded either. Revert: set `YieldEvery = 25` on live if the owner ever sees a start-up hitch; the drivers must then run the dressing in a coroutine.
+- **W3 Quality Low keeps rhythm clusters 1, 4, 5, 8, 9, … of each road (`Rhythm.LowPattern`).** The contract wording was "the 1st, 3rd, 5th …", but sides flip on every accepted cluster, so the odd ones would all sit on the same side of the road (and fail the verifier's alternating-sides rule). The pattern keeps exactly half, sides still alternate, and Low stays a strict subset of Full: every Low build places the same spots with the same kits, then drops the other half. Revert: `LowPattern = { true, false }`.
+- **W3 scatter target tuned to 310 (EmptyRadius 155, MaxClusters 56).** The spec says "stop when the largest empty circle is ≤ 340"; `world_v2_model.py` actually runs `scatter(target_diam = 320)` (49 clusters, final measure 340 at cell 20). With our stricter keep-outs and the Town's own clusters, 340 stopped at 24 clusters (far100 16.9 %, fails V10) and 320 at 40 (one below the verifier's 41–57 band). 310 gives 46 clusters, 104 parts, far100 12.0 %, largest empty circle 322 at cell 20 (live flag state). With FaceMapCentre off (rollback: no dock channels, more dry land) the fill would reach 60, so MaxClusters = 56 (model 49 + 15 %) caps it: 56 clusters, 117 parts, far100 13.6 %, largest 322. Revert: `Scatter.TargetLargestEmpty` / `EmptyRadius` / `MaxClusters`.
+- **W3 road-side clusters are re-centred and pushed, never trusted from the spec sizes.** WorldKits pivots road-side kits at their front edge (collidables at z ≥ 0), so each composed cluster is centred on its spot, then its real parts are measured: collidable parts ≥ 13 and visible parts ≥ 9 from every road centre line. A cluster too close is pushed out along its road (never past offset 34) or dropped. Terrain rock outcrops need their whole reach (12) ≥ 13 from the line, so they sit 25–34 out. Revert: none needed (it only makes placement stricter).
+- **W3 every travel cluster is also checked with the WorldHygiene H3 zones on its real part AABBs** (captures, aprons, garage pads + 16, plot pads + 4, pier corridors, water + 6), on top of the contract's disc test. So Waterways.CullDressing and WorldHygiene.Enforce remove 0 parts of Rhythm / Junctions / Shore / Scatter (verified: 0). Revert: none needed.
+- **W3 in-water kits (jetty stub, barge wreck, beached hull) step into the water only as far as `Shore.InWaterMax` (10) and only into `Ring_*` / `Sea_*` rects** (`Shore.InWaterRects`): never a dock channel, lagoon, harbour, slip or plot water. The recorded occupancy disc stays on the bank line (so the ring / zone rules on the disc hold); the stepped kit is tested separately with `Blocked(AllowWater, SkipRing)` at its real centre and radius. The Bay's beached hull therefore lies on the sea bank about 45 studs seaward of the Bay line. Revert: `InWaterMax = 0` keeps every hull on dry land.
+- **W3 land shore features step to the water's edge (`Shore.ToWater`, `LandEdgeGap = 7.5`).** The spec places canal features "28 studs in from the water"; a revetment, reeds or driftwood 28 studs inland reads as litter on the sand. The occupancy disc (and so every zone rule and the verifier's geometry) stays on the 28-stud bank line; the kit moves seaward until its nearest part is 7.5 from the water (WorldHygiene H3 needs > 6). Their Terrain rock groups move with them and are tested with every keep-out except the ring box (inset 20 from the canal), since the water + 6 rule is the boundary there. Dune grass stays on the Bay line (dunes sit behind the beach). Revert: `ToWater = {}`.
+- **W3 the travel dressing casts no shadows.** WorldKits requests CastShadow on big parts (≥ 8: barge hull, truck bed, dead tree); WorldDress clears it on every travel cluster (contracts §2.2: 0 casters outside the POIs; phones). Revert: delete the loop in `compose`.
+- **W3 junction kits face a world-aligned corner.** The arrow post faces the junction centre, one jersey barrier lines each shoulder (≥ 17 from both centre lines), the sandbag arc sits behind, a Terrain boulder group (reach 7) behind that. The contract's "stack of 2 jerseys" is read as a pair on the corner, since kit pivots are yaw-only on the floor (no vertical stacking). The first free corner of (+,+), (−,+), (+,−), (−,−) is used. Revert: change the recipe in `buildJunctions`.
+- **W3 shore / bay kinds rotate over accepted spots across all three canal lines (one rotation), and the Bay has its own**, as in `world_v2_model.py canal_bank()`. Shore features all stay in Quality Low (contracts ruling). Revert: `Quality.Low.ShoreEvery`.
+- **W3 Terrain rock budget is reserved at each group's maximum** (`Terrain.Rocks[*].MaxPrims`) whether Full keeps it or Low drops it, so Low and Full make the same acceptance decisions; actual prims are 218 (Full, flag on) / 252 (flag off) for B2 against the 400 cap. Revert: none needed.
+- **W3 DesertFlora builds nothing in step 1** (contracts §5.3): the two lone mid-map saguaros were H1 orphans and the flora now comes from the road rhythm and the scatter. `DesertFlora.Kits`, the folder, the cull and Enforce stay; the third-party Palm / Cactus / DesertRock overlay loop is gone. Revert: restore `midSpots` (they would be destroyed by H1 Enforce anyway).
+- **W3 MapDressing keeps only the Dockside quay kit and the kits it uses** (crate stack, oil drums, light pole, ammo shed, fuel depot, vehicle silhouette, sandbag line). Its ammo-shed / fuel-tank catalog hosts stay (LOOK's call, contracts §8.4). The legacy Dockside sandbag line on RoadX0 is still culled by Waterways (12 parts, as at HEAD); it goes with the Port POI step. Revert: none (the deleted sections are in git history).
+- **W3 WorldHygiene H1 stand-alone rule.** A natural unit whose instance carries `WE_Elements` ≥ `Hygiene.MinNatural` (3) and whose parts come in ≥ 2 sizes (largest dimensions ≥ 20 % apart) is anchored; the NaturalLink grouping stays. Report adds per-anchor-class counts (`Census.Anchor_poi / road / junction / water / natural / none`, informational). WorldHygiene's module-level `WaitForChild` calls (no timeout) became direct indexing, like every other W3 server module. Revert: drop `standsAlone` (then scatter clusters are H1 orphans and Enforce destroys them).
+
+### LOOK (from scratchpad/w3/LOOK/assumptions.md)
+- **W3 LOOK LUV body on the light 4x4 family.** Only `Vehicles.MilitaryJeep` is wired (6418221666, Roblox, User 1). ArmedJeep,
+  ScoutCar, ReconBuggy, UtilityQuad and DispatchCar stay `ModelAssetId = 0` and get the body through
+  `KitFamilyFallback.WheeledLight` (the BuyPathStatic pin `ArmedJeep = { ModelAssetId = 0` stays true). Revert:
+  `MilitaryJeep.ModelAssetId = 0` (every light 4x4 back to the Part kit).
+- **W3 LOOK body fit.** The body is scaled uniformly to the kit chassis length (jeep 8.5: scale 0.483, body 3.95 wide x
+  3.83 tall), tyre bottoms on the physics-wheel bottoms, centred on the chassis, front to the kit front (-Z). The collision
+  box stays the Part kit (about 0.9 studs wider than the visible body on each side). The driver sits on the roof line, as
+  on the old kit (the seat offset belongs to VehicleService). Revert: `Fit = nil` (old pivot-onto-chassis dress).
+- **W3 LOOK kit hidden under the body.** With `HideKit`, every Part-kit part except `KeepVisible` (GunMount, Barrel) gets
+  Transparency 1; physics, seats, hit boxes and names are unchanged. The 5 largest body panels cast the car's shadow
+  (`FitShadowShare` 0.5 of the chassis length; default when the key is absent). Revert: `HideKit = false`.
+- **W3 LOOK camo decals stripped.** The LUV green camo uses 41 Decals whose images are owned by a user account
+  (Orlando777, 715494), not Roblox; they are stripped (`StripDecals`), so the body is the plain dark green (39, 70, 45) of
+  its paint parts, and the two Neon lamp parts become SmoothPlastic. Revert: `StripDecals = false`.
+- **W3 LOOK utility quad / recon buggy.** They get the same LUV body at their smaller kit length (a smaller 4x4), as the
+  roadmap says. The shortlist's Roblox Dune Buggy (6433272094) would fit them better; not wired (not verified in this step).
+- **W3 LOOK DesertKit pieces chosen by fit, not by the shortlist.** WorldKits stretches a piece into the fallback part's
+  box, so a key is wired only when the piece's per-axis stretch ratio is <= 2.2: DeadTree = Tree_Pine_Dead_01 (2.11;
+  shortlist pick 2.75), Stump = Tree_Stump_01 (1.47; shortlist pick 2.73), Reeds = Plant_Reeds_01 (1.11), DuneGrass =
+  Plant_01 (1.22; shortlist Grass_04 is 4.35), CrateWood = Crate_Wood_04 (1.00). Revert: change `ChildName`.
+- **W3 LOOK keys left at 0 (ChildName filled in).** `Log` (WorldKits uses the key for FallenLog, Z-long, AND Driftwood,
+  X-long: 20x squash), `Bench` (kit box is the seat only; 2.52), `CarWreck` (kit lies along X, the sedan along Z), and the
+  optional `VanWreck`, `Pebbles`, `Skip` (no caller). Each is a one-number change once WorldKits fits it.
+- **W3 LOOK flat palette.** Every DesertKit piece has `ClearTexture` and a colour from `WorldConfig.Kits.Palette`, so no
+  City-pack atlas text can show and the pieces match our Part kits. Revert: `ClearTexture = false`.
+- **W3 LOOK 40-part cap at load.** `MaxPartsPerModel = 40` (CLAUDE.md catalog budget) refuses any whole-model template or
+  pack piece with more BaseParts after stripping; a Humanoid is stripped (`STRIP_CLASSES`) and the template is refused if one
+  is left. Third-party ids that exceed it (e.g. Shipping Containers 17701461178, 126 MeshParts) now stay Part kit even if the
+  owner presses Get Model. Revert: raise `MaxPartsPerModel`.
+- **W3 LOOK packs split once.** A pack id (any configured ref with `ChildName`) is inserted once; every configured piece
+  becomes its own template in `ServerStorage.WE_VisualAssetTemplates`; the rest of the pack is destroyed. A piece added to
+  config later needs a new server. Revert: none needed (config-driven).
+- **W3 LOOK one insert per id.** While an id is being inserted, other callers wait for it (yield) instead of inserting it
+  again, so the ~40 deferred WorldKits overlays cost 1 load attempt per pack. A caller in a non-yieldable context gets nil
+  (Part kit).
+- **W3 LOOK vehicle pack preload.** `VisualAssetService.Init` inserts the vehicle body pack once in a deferred task (not
+  in Studio when inserts are skipped), so the first 4x4 spawn does not wait on InsertService.
+- **W3 LOOK third-party world-dressing hosts dropped (19 ids → 0).** The 15 contract keys plus AmmoShed (117 MeshParts,
+  over the cap), StreetLamp, StreetLampAlt, SupplyShed, RoadBarriers, CheckpointBridge, SpyBunker, DesertHouse and Pier:
+  none has a caller after the W3 rewrite (checked by grep), so there is no runtime change beyond the Dockside ammo shed's
+  invisible host staying empty. `DesertProps.Palm` 96059329869678 stays as dead config because BuyPathStatic pins the
+  literal; `MapDressing.Palm` (its alias) is 0. Revert: restore the ids (docs/ASSET_LICENSES.md §2c keeps them).
+- **W3 LOOK docs/ASSET_LICENSES.md reconciled.** The 24 ids cleared in 859dedc were still listed as "remaining"; they are
+  now in §2b, the W3 drops in §2c, the Roblox-owned ids in §3.0. The file lists exactly the live config ids (56 third-party
+  + 3 Roblox-owned, + the verified-but-unwired City pack).
+
+### Integration verifier
+- **W3 contract pin on `WorldPOI.Build`.** B1 typed `occ` through a local alias (`type Occupancy = WorldDress.Occupancy`), so the pinned signature is `function WorldPOI.Build(dressing: Instance, quality: string, occ: Occupancy?): Summary`. The type is identical. Revert: none needed.
+- **W3 BuyPathStatic retirements.** Lines 235, 586, 587, 617, 618, 619, 642, 678, 1430 (MapDressing coordinate-list sections deleted) and 1734 (`OrphanMode = "Report",`) are retired; their replacement pins are in the W3 block. The needles `WreckScorch`, `RoadCrater` and `RoadChevron` get no replacement (the names stay hygiene marking prefixes).
+- **W3 old jeep suite.** `w2/cc2/t_jeep_server_k2pin.luau` (K2) expects the stub asset shape, not the real Roblox LUV pack. `w3/LOOK/t_jeep_server_look.luau` with `fakes.luau` replaces it (131/131).

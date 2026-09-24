@@ -52,7 +52,39 @@ export type POI = {
 	Rect: Rect?,
 	Circle: { X: number, Z: number, R: number }?,
 	Budget: number,
+	Enabled: boolean?, -- W3: WorldPOI builds it (step 1: the Town only); a disabled footprint stays reserved
+	Lights: number?, -- W3: PointLight cap (spec §3.1)
+	Signs: number?, -- W3: painted SurfaceGui cap (world budget: Budgets.SurfaceGuis)
 }
+-- W3 (WorldPOI): one kit inside a Town cluster. X / Z / Yaw are local to the cluster frame (studs, degrees; the kit's
+-- front is its local -Z). The optional fields are WorldKits.KitOpts.
+export type KitPlace = {
+	Kit: string,
+	X: number,
+	Z: number,
+	Yaw: number?,
+	Variant: string?,
+	Count: number?,
+	Length: number?,
+	Scale: number?,
+	Color: Color3?,
+	Text: string?,
+}
+-- A Town cluster: one Model <= 64 studs across at (X, Z) turned by Yaw (degrees; 0 = its front faces north, -Z).
+-- Tier 1 = built in Quality Low and Full, 2 = Full only. Street = true: a road-side cluster (checkpoint, lamp, board)
+-- tested part by part against the road lines instead of the 30-stud block margin.
+export type TownCluster = {
+	Id: string,
+	Block: string,
+	Role: string,
+	Tier: number,
+	X: number,
+	Z: number,
+	Yaw: number,
+	Street: boolean?,
+	Kits: { KitPlace },
+}
+export type TownRock = { Kind: string, X: number, Z: number, Radius: number, Tier: number }
 export type Pad = { Id: string, X: number?, Z: number?, PlotId: number?, LocalX: number?, LocalZ: number?, Yaw: number? }
 export type Anchor = { Id: string, X: number, Z: number }
 
@@ -348,8 +380,8 @@ local WorldConfig = {
 
 	-- ── Hygiene rules H1–H10 (WorldHygiene; spec §5.1, roadmap §1.5 #3) ────────────────────────────────────────
 	Hygiene = {
-		-- H1 runs in Report mode in W1 (log + list only); W3 switches it to "Enforce".
-		OrphanMode = "Report",
+		-- W3: H1 enforced (roadmap §1.5 #3)
+		OrphanMode = "Enforce",
 		-- Folders under WarEmpireSetup whose contents are world dressing (Enforce acts ONLY inside these).
 		DressingFolders = { "WorldDressing", "DesertFlora", "WorldPOI", "WorldKits" },
 		-- Never inspected as world parts (bases) / never mutated.
@@ -363,7 +395,9 @@ local WorldConfig = {
 		-- H1: natural clusters may stand alone as >= MinNatural elements within NaturalLink studs of each other
 		MinNatural = 3,
 		NaturalLink = 40,
-		NaturalPrefixes = { "Palm", "Joshua", "Saguaro", "Barrel", "Grass", "Flora", "DesertRock", "WE_CatalogProp_DesertRock", "Rock", "Outcrop", "Mesa", "Cactus", "Bush", "Shrub", "Boulder", "Dune" },
+		NaturalPrefixes = { "Palm", "Joshua", "Saguaro", "Barrel", "Grass", "Flora", "DesertRock", "WE_CatalogProp_DesertRock", "Rock", "Outcrop", "Mesa", "Cactus", "Bush", "Shrub", "Boulder", "Dune", "DeadTree", "Stump", "FallenLog", "Reed", "Driftwood" },
+		-- W3: the cluster attribute holding a natural cluster's element count (terrain rocks included)
+		ElementsAttr = "WE_Elements",
 		NaturalFolders = { "DesertFlora" },
 		-- H2 road corridor (roads = WaterConfig.RoadEnds centre lines)
 		RoadCorridor = 12, -- nothing collidable with its top above RoadMinTop (lane 7 + shoulder 5)
@@ -418,25 +452,161 @@ local WorldConfig = {
 
 	-- ── Phase 2 data (W3 builds the POIs; H1 already uses the footprints as anchors) ────────────────────────────
 	POIs = {
-		{ Id = "Town", Name = "Crossroads Town", Kind = "town", Rect = { X0 = -330, X1 = 330, Z0 = -330, Z1 = 330 }, Budget = 220 },
-		{ Id = "Depot", Name = "West Supply Depot", Kind = "depot", Rect = { X0 = -1500, X1 = -1110, Z0 = -200, Z1 = 200 }, Budget = 120 },
-		{ Id = "Armory", Name = "East Armory", Kind = "armory", Rect = { X0 = 1110, X1 = 1500, Z0 = -200, Z1 = 200 }, Budget = 120 },
-		{ Id = "Signal", Name = "North Ridge Signal Station", Kind = "signal", Rect = { X0 = -280, X1 = 90, Z0 = -1480, Z1 = -1120 }, Budget = 90 },
-		{ Id = "Port", Name = "South Port", Kind = "port", Rect = { X0 = -330, X1 = 330, Z0 = 1180, Z1 = 1466 }, Budget = 150 },
-		{ Id = "OilField", Name = "Oil Field", Kind = "oil", Rect = { X0 = 830, X1 = 1230, Z0 = 830, Z1 = 1230 }, Budget = 110 },
-		{ Id = "Radar", Name = "Radar Hill", Kind = "radar", Circle = { X = -950, Z = -950, R = 130 }, Budget = 60 },
-		{ Id = "FortI", Name = "Fort Ironclad approach", Kind = "fort", Circle = { X = 1450, Z = -1450, R = 230 }, Budget = 60 },
-		{ Id = "FortS", Name = "Fort Sandhold approach", Kind = "fort", Circle = { X = -1450, Z = 1450, R = 200 }, Budget = 60 },
-		{ Id = "RigA", Name = "Rig Alpha shore base", Kind = "rigshore", Rect = { X0 = 1540, X1 = 1698, Z0 = -880, Z1 = -620 }, Budget = 40 },
-		{ Id = "RigB", Name = "Rig Bravo shore base", Kind = "rigshore", Rect = { X0 = -1698, X1 = -1540, Z0 = 620, Z1 = 880 }, Budget = 40 },
-		{ Id = "Airstrip", Name = "Desert Airstrip", Kind = "airstrip", Rect = { X0 = 240, X1 = 780, Z0 = -1380, Z1 = -1150 }, Budget = 100 },
-		{ Id = "Ruins", Name = "Ruined Village", Kind = "ruins", Circle = { X = -540, Z = -1320, R = 190 }, Budget = 100 },
-		{ Id = "Quarry", Name = "Quarry Camp", Kind = "camp", Circle = { X = -1380, Z = -1380, R = 220 }, Budget = 90 },
-		{ Id = "RidgeCamp", Name = "Ridge Camp", Kind = "camp", Circle = { X = 1420, Z = -1060, R = 150 }, Budget = 60 },
-		{ Id = "DuneCamp", Name = "Dune Camp", Kind = "camp", Circle = { X = 1450, Z = 1200, R = 160 }, Budget = 60 },
-		{ Id = "Crash", Name = "Crash Site", Kind = "crash", Circle = { X = -540, Z = 1140, R = 165 }, Budget = 80 },
-		{ Id = "Oasis", Name = "Oasis", Kind = "oasis", Circle = { X = -1300, Z = 560, R = 125 }, Budget = 60 },
+		{ Id = "Town", Name = "Crossroads Town", Kind = "town", Rect = { X0 = -330, X1 = 330, Z0 = -330, Z1 = 330 }, Budget = 220, Enabled = true, Lights = 6, Signs = 1 },
+		{ Id = "Depot", Name = "West Supply Depot", Kind = "depot", Rect = { X0 = -1500, X1 = -1110, Z0 = -200, Z1 = 200 }, Budget = 120, Enabled = false, Lights = 3, Signs = 0 },
+		{ Id = "Armory", Name = "East Armory", Kind = "armory", Rect = { X0 = 1110, X1 = 1500, Z0 = -200, Z1 = 200 }, Budget = 120, Enabled = false, Lights = 3, Signs = 0 },
+		{ Id = "Signal", Name = "North Ridge Signal Station", Kind = "signal", Rect = { X0 = -280, X1 = 90, Z0 = -1480, Z1 = -1120 }, Budget = 90, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "Port", Name = "South Port", Kind = "port", Rect = { X0 = -330, X1 = 330, Z0 = 1180, Z1 = 1466 }, Budget = 150, Enabled = false, Lights = 4, Signs = 0 },
+		{ Id = "OilField", Name = "Oil Field", Kind = "oil", Rect = { X0 = 830, X1 = 1230, Z0 = 830, Z1 = 1230 }, Budget = 110, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "Radar", Name = "Radar Hill", Kind = "radar", Circle = { X = -950, Z = -950, R = 130 }, Budget = 60, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "FortI", Name = "Fort Ironclad approach", Kind = "fort", Circle = { X = 1450, Z = -1450, R = 230 }, Budget = 60, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "FortS", Name = "Fort Sandhold approach", Kind = "fort", Circle = { X = -1450, Z = 1450, R = 200 }, Budget = 60, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "RigA", Name = "Rig Alpha shore base", Kind = "rigshore", Rect = { X0 = 1540, X1 = 1698, Z0 = -880, Z1 = -620 }, Budget = 40, Enabled = false, Lights = 1, Signs = 0 },
+		{ Id = "RigB", Name = "Rig Bravo shore base", Kind = "rigshore", Rect = { X0 = -1698, X1 = -1540, Z0 = 620, Z1 = 880 }, Budget = 40, Enabled = false, Lights = 1, Signs = 0 },
+		{ Id = "Airstrip", Name = "Desert Airstrip", Kind = "airstrip", Rect = { X0 = 240, X1 = 780, Z0 = -1380, Z1 = -1150 }, Budget = 100, Enabled = false, Lights = 3, Signs = 0 },
+		{ Id = "Ruins", Name = "Ruined Village", Kind = "ruins", Circle = { X = -540, Z = -1320, R = 190 }, Budget = 100, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "Quarry", Name = "Quarry Camp", Kind = "camp", Circle = { X = -1380, Z = -1380, R = 220 }, Budget = 90, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "RidgeCamp", Name = "Ridge Camp", Kind = "camp", Circle = { X = 1420, Z = -1060, R = 150 }, Budget = 60, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "DuneCamp", Name = "Dune Camp", Kind = "camp", Circle = { X = 1450, Z = 1200, R = 160 }, Budget = 60, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "Crash", Name = "Crash Site", Kind = "crash", Circle = { X = -540, Z = 1140, R = 165 }, Budget = 80, Enabled = false, Lights = 0, Signs = 0 },
+		{ Id = "Oasis", Name = "Oasis", Kind = "oasis", Circle = { X = -1300, Z = 560, R = 125 }, Budget = 60, Enabled = false, Lights = 2, Signs = 0 },
 	} :: { POI },
+
+	-- ── W3 kit catalogue tunables (Server/Modules/WorldKits; spec §4.5). Our own Part kits: no brand, no insignia ──
+	Kits = {
+		Palette = {
+			Adobe = Color3.fromRGB(185, 150, 105),
+			AdobeDark = Color3.fromRGB(155, 120, 80),
+			AdobeLight = Color3.fromRGB(204, 176, 132),
+			AdobeRose = Color3.fromRGB(190, 138, 104),
+			TarpRed = Color3.fromRGB(160, 70, 55),
+			TarpBlue = Color3.fromRGB(70, 95, 120),
+			TarpSand = Color3.fromRGB(190, 160, 90),
+			Burnt = Color3.fromRGB(45, 42, 40),
+			Rust = Color3.fromRGB(112, 66, 44),
+			Concrete = Color3.fromRGB(85, 85, 78),
+			ConcreteLight = Color3.fromRGB(148, 144, 132),
+			Sandbag = Color3.fromRGB(130, 115, 80),
+			SandbagLight = Color3.fromRGB(150, 133, 94),
+			Hazard = Color3.fromRGB(230, 190, 60),
+			HazardDark = Color3.fromRGB(38, 38, 34),
+			LampLens = Color3.fromRGB(255, 236, 190),
+			Wood = Color3.fromRGB(105, 82, 55),
+			WoodDark = Color3.fromRGB(72, 56, 38),
+			Crate = Color3.fromRGB(118, 94, 60),
+			CrateOlive = Color3.fromRGB(78, 86, 58),
+			Steel = Color3.fromRGB(74, 72, 66),
+			SteelDark = Color3.fromRGB(52, 54, 52),
+			TankCream = Color3.fromRGB(184, 170, 142),
+			DrumOlive = Color3.fromRGB(70, 85, 55),
+			DrumRed = Color3.fromRGB(150, 62, 42),
+			DrumBlue = Color3.fromRGB(58, 72, 88),
+			Window = Color3.fromRGB(58, 76, 90),
+			ClockFace = Color3.fromRGB(232, 222, 196),
+			Paving = Color3.fromRGB(176, 160, 132),
+			PavingDark = Color3.fromRGB(160, 144, 116),
+			SignBoard = Color3.fromRGB(50, 55, 45),
+			Cactus = Color3.fromRGB(62, 110, 58),
+			CactusLight = Color3.fromRGB(78, 130, 72),
+			JoshuaTrunk = Color3.fromRGB(95, 78, 52),
+			JoshuaLeaf = Color3.fromRGB(70, 95, 45),
+			DeadWood = Color3.fromRGB(122, 106, 86),
+			Driftwood = Color3.fromRGB(176, 166, 146),
+			Reed = Color3.fromRGB(122, 128, 70),
+			DuneGrass = Color3.fromRGB(178, 152, 92),
+			Hull = Color3.fromRGB(70, 95, 120),
+			HullLight = Color3.fromRGB(190, 180, 160),
+		},
+		-- StreetLamp night PointLight (H8: Brightness <= 0.8, Range <= 18, Shadows off, tag WE_NightLight)
+		Lamp = { Brightness = 0.6, Range = 16, Color = Color3.fromRGB(255, 236, 190) },
+		SignMaxDistance = 80, -- painted SurfaceGui signs (CLAUDE.md: <= 80)
+		MeshOverlays = 40, -- per-server cap on deferred Roblox-owned mesh overlays (VisualAssetService.CloneKitMesh)
+		-- WorldKits.Rock defaults: Radius = the group's outer radius (callers test WorldDress.Blocked with it)
+		Rock = {
+			outcrop = { Radius = 12, Count = { 2, 4 }, R = { 4, 9 } },
+			boulders = { Radius = 10, Count = { 3, 6 }, R = { 2, 5 } },
+			rubble = { Radius = 8, Count = { 2, 4 }, R = { 2, 4 } },
+			scorch = { Radius = 9, Count = { 1, 1 }, R = { 0, 0 } },
+		},
+	},
+
+	-- ── W3 Crossroads Town (WorldPOI; spec §3.1–§3.2, contracts §4.3). Data, not code: one row per cluster ────────
+	-- Quadrants (north = -Z): NW market street + water tower, NE Empire Bank plaza (MapSetup) + houses, SW Town Square
+	-- arena (event anchor TownSquare), SE clock tower + houses + ruin + wreck + motor pool (Pool_Town pad).
+	-- Block clusters: disc edge >= RoadClear from both road centre lines and outside the CentralPlaza clear radius.
+	-- Street clusters (checkpoints, lamps, board): every collidable part >= 13 and every visible part >= 9 from the lines.
+	Town = {
+		Id = "Town",
+		Seed = 7021, -- WorldKits.Rng seed for the Town's terrain rubble
+		RoadClear = 30, -- block clusters: disc edge to the road centre lines (spec §3.2)
+		CollideRoadGap = 13, -- street clusters, per part (H2 corridor 12 + 1)
+		VisibleRoadGap = 9, -- street clusters, per visible part taller than 0.3 (H2 lane 8 + 1)
+		BoardText = "CROSSROADS",
+		MaxTerrainPrims = 40,
+		Clusters = {
+			-- Entrances: a checkpoint v2 on each road at r 310 (booth on the shoulder, arm raised); yaw = the side arrivals come from
+			{ Id = "CP_N", Block = "Road", Role = "checkpoint", Tier = 1, X = 0, Z = -310, Yaw = 0, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } }, -- booth on the east shoulder
+			{ Id = "CP_E", Block = "Road", Role = "checkpoint", Tier = 1, X = 310, Z = 0, Yaw = -90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
+			{ Id = "CP_S", Block = "Road", Role = "checkpoint", Tier = 1, X = 0, Z = 310, Yaw = 180, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
+			{ Id = "CP_W", Block = "Road", Role = "checkpoint", Tier = 1, X = -310, Z = 0, Yaw = 90, Street = true, Kits = { { Kit = "Checkpoint", X = 0, Z = 0 } } },
+			-- 6 night lamps on the main-street frontages (poles 15 off the road lines, lenses 12.2) and the one painted board
+			{ Id = "Lamp_1", Block = "Road", Role = "lamp", Tier = 1, X = -15, Z = -165, Yaw = -90, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
+			{ Id = "Lamp_2", Block = "Road", Role = "lamp", Tier = 1, X = 15, Z = -235, Yaw = 90, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
+			{ Id = "Lamp_3", Block = "Road", Role = "lamp", Tier = 1, X = -165, Z = 15, Yaw = 0, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
+			{ Id = "Lamp_4", Block = "Road", Role = "lamp", Tier = 1, X = 165, Z = -15, Yaw = 180, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
+			{ Id = "Lamp_5", Block = "Road", Role = "lamp", Tier = 1, X = -15, Z = 165, Yaw = -90, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
+			{ Id = "Lamp_6", Block = "Road", Role = "lamp", Tier = 1, X = 15, Z = 235, Yaw = 90, Street = true, Kits = { { Kit = "StreetLamp", X = 0, Z = 0 } } },
+			{ Id = "Board", Block = "Road", Role = "board", Tier = 1, X = -292, Z = -22, Yaw = 90, Street = true, Kits = { { Kit = "PoiBoard", X = 0, Z = 0 } } }, -- "CROSSROADS" facing arrivals from the west (RoadZ0 carries plots 1, 2, 5, 6)
+			-- Plaza ring: one building on each inner quadrant corner facing the CentralPlaza flag (the clock tower holds SE)
+			{ Id = "NW_Corner", Block = "NW", Role = "house", Tier = 2, X = -97, Z = -103, Yaw = -135, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "tall", Color = Color3.fromRGB(204, 176, 132) } } },
+			{ Id = "NE_Corner", Block = "NE", Role = "house", Tier = 1, X = 97, Z = -103, Yaw = 135, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "shop", Color = Color3.fromRGB(190, 138, 104) } } },
+			{ Id = "SW_Corner", Block = "SW", Role = "house", Tier = 2, X = -97, Z = 103, Yaw = -45, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "wide" } } },
+			{ Id = "SE_ClockTower", Block = "SE", Role = "tower", Tier = 1, X = 100, Z = 100, Yaw = 45, Kits = { { Kit = "ClockTower", X = 0, Z = 0 } } }, -- landmark, 40 tall; clock faces toward the plaza and the south-east
+			-- NW: the market street (z -175) runs west off the north arm between frontage houses, closed by the water tower
+			{ Id = "NW_WaterTower", Block = "NW", Role = "tower", Tier = 1, X = -118, Z = -175, Yaw = 0, Kits = { { Kit = "WaterTower", X = 0, Z = 0 } } }, -- landmark, 43 tall; the street runs under its legs
+			{ Id = "NW_Stall_1", Block = "NW", Role = "stall", Tier = 1, X = -66, Z = -187, Yaw = 180, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(160, 70, 55) } } },
+			{ Id = "NW_Stall_2", Block = "NW", Role = "stall", Tier = 1, X = -72, Z = -163, Yaw = 0, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(70, 95, 120) } } },
+			{ Id = "NW_Stall_3", Block = "NW", Role = "stall", Tier = 2, X = -80, Z = -187, Yaw = 180, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(190, 160, 90) } } },
+			{ Id = "NW_Stall_4", Block = "NW", Role = "stall", Tier = 2, X = -86, Z = -163, Yaw = 0, Kits = { { Kit = "MarketStall", X = 0, Z = 0, Color = Color3.fromRGB(160, 70, 55) } } },
+			{ Id = "NW_Goods", Block = "NW", Role = "goods", Tier = 2, X = -98, Z = -191, Yaw = 180, Kits = { { Kit = "CrateStack", X = -3, Z = 0, Count = 3 }, { Kit = "DrumGroup", X = 4, Z = 0 } } },
+			{ Id = "NW_Shop", Block = "NW", Role = "house", Tier = 1, X = -44, Z = -140, Yaw = -90, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "shop" } } }, -- frontage on the north arm
+			{ Id = "NW_House_1", Block = "NW", Role = "house", Tier = 2, X = -44, Z = -212, Yaw = -90, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "wide", Color = Color3.fromRGB(190, 138, 104) } } },
+			{ Id = "NW_House_2", Block = "NW", Role = "house", Tier = 2, X = -150, Z = -44, Yaw = 180, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "tall", Color = Color3.fromRGB(204, 176, 132) } } }, -- frontage on the west arm
+			-- NE: the Empire Bank plaza (MapSetup, (220, -220); guard ring + 14 clear) framed by houses and a guard post
+			{ Id = "NE_House_1", Block = "NE", Role = "house", Tier = 1, X = 165, Z = -205, Yaw = -90, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0 } } }, -- faces the bank
+			{ Id = "NE_House_2", Block = "NE", Role = "house", Tier = 2, X = 222, Z = -162, Yaw = 0, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "tall", Color = Color3.fromRGB(204, 176, 132) } } }, -- faces the bank
+			{ Id = "NE_GuardPost", Block = "NE", Role = "guardpost", Tier = 2, X = 176, Z = -168, Yaw = -45, Kits = { { Kit = "SandbagLine", X = 0, Z = 0, Length = 10 }, { Kit = "CrateStack", X = 0, Z = 5, Count = 2 } } },
+			{ Id = "NE_House_3", Block = "NE", Role = "house", Tier = 2, X = 44, Z = -150, Yaw = 90, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Color = Color3.fromRGB(190, 138, 104) } } }, -- frontage on the north arm
+			{ Id = "NE_Wall", Block = "NE", Role = "wall", Tier = 2, X = 48, Z = -200, Yaw = 90, Kits = { { Kit = "CompoundWall", X = 0, Z = 0, Length = 32 } } },
+			{ Id = "NE_House_4", Block = "NE", Role = "house", Tier = 2, X = 150, Z = -44, Yaw = 180, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "wide" } } }, -- frontage on the east arm
+			-- SW: the Town Square arena, 90 x 90 paving round the TownSquare event anchor (-150, 150): dry fountain, benches
+			{ Id = "SW_Square_1", Block = "SW", Role = "square", Tier = 1, X = -172.5, Z = 127.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(176, 160, 132) } } },
+			{ Id = "SW_Square_2", Block = "SW", Role = "square", Tier = 1, X = -127.5, Z = 127.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(160, 144, 116) } } },
+			{ Id = "SW_Square_3", Block = "SW", Role = "square", Tier = 1, X = -172.5, Z = 172.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(160, 144, 116) } } },
+			{ Id = "SW_Square_4", Block = "SW", Role = "square", Tier = 1, X = -127.5, Z = 172.5, Yaw = 0, Kits = { { Kit = "PaveTile", X = 0, Z = 0, Color = Color3.fromRGB(176, 160, 132) } } },
+			{ Id = "SW_Fountain", Block = "SW", Role = "fountain", Tier = 1, X = -150, Z = 120, Yaw = 0, Kits = { { Kit = "Fountain", X = 0, Z = 0 } } }, -- 30 from the anchor: its 20-stud landing circle stays clear
+			{ Id = "SW_Benches_1", Block = "SW", Role = "benches", Tier = 2, X = -188, Z = 150, Yaw = -90, Kits = { { Kit = "Bench", X = -12, Z = 0 }, { Kit = "Bench", X = 12, Z = 0 } } },
+			{ Id = "SW_Benches_2", Block = "SW", Role = "benches", Tier = 2, X = -150, Z = 188, Yaw = 0, Kits = { { Kit = "Bench", X = -12, Z = 0 }, { Kit = "Bench", X = 12, Z = 0 } } },
+			{ Id = "SW_House_1", Block = "SW", Role = "house", Tier = 2, X = -150, Z = 213, Yaw = 0, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "wide", Color = Color3.fromRGB(190, 138, 104) } } }, -- faces the square
+			{ Id = "SW_Shop", Block = "SW", Role = "house", Tier = 2, X = -150, Z = 44, Yaw = 0, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "shop" } } }, -- frontage on the west arm
+			{ Id = "SW_House_2", Block = "SW", Role = "house", Tier = 2, X = -44, Z = 150, Yaw = -90, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Color = Color3.fromRGB(204, 176, 132) } } }, -- frontage on the south arm, beside the square
+			-- SE: frontage houses, a ruin and a burnt truck on the east arm, the motor pool by Pool_Town
+			{ Id = "SE_Shop", Block = "SE", Role = "house", Tier = 1, X = 150, Z = 44, Yaw = 0, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "shop", Color = Color3.fromRGB(190, 138, 104) } } }, -- frontage on the east arm
+			{ Id = "SE_Wall", Block = "SE", Role = "wall", Tier = 2, X = 200, Z = 48, Yaw = 0, Kits = { { Kit = "CompoundWall", X = 0, Z = 0, Length = 32 } } },
+			{ Id = "SE_Ruin", Block = "SE", Role = "ruin", Tier = 2, X = 212, Z = 96, Yaw = 20, Kits = { { Kit = "RuinedHouse", X = 0, Z = 0 } } },
+			{ Id = "SE_Wreck", Block = "SE", Role = "wreck", Tier = 1, X = 250, Z = 52, Yaw = 0, Kits = { { Kit = "Wreck", X = 0, Z = 0, Variant = "truck" } } }, -- burnt truck parked on the east arm
+			{ Id = "SE_House_1", Block = "SE", Role = "house", Tier = 2, X = 44, Z = 230, Yaw = 90, Kits = { { Kit = "AdobeHouse", X = 0, Z = 0, Variant = "wide", Color = Color3.fromRGB(204, 176, 132) } } }, -- frontage on the south arm
+			{ Id = "SE_MotorPool", Block = "SE", Role = "motorpool", Tier = 2, X = 82, Z = 170, Yaw = 90, Kits = { { Kit = "Jersey", X = -4, Z = 0 }, { Kit = "Jersey", X = 4, Z = 0 }, { Kit = "DrumGroup", X = 0, Z = 3 } } }, -- beside the Pool_Town garage pad (+16 clear)
+		} :: { TownCluster },
+		Rocks = {
+			{ Kind = "rubble", X = 228, Z = 112, Radius = 6, Tier = 1 },
+			{ Kind = "rubble", X = 196, Z = 110, Radius = 5, Tier = 1 },
+			{ Kind = "scorch", X = 250, Z = 54, Radius = 9, Tier = 1 },
+			{ Kind = "rubble", X = -130, Z = -202, Radius = 6, Tier = 1 },
+			{ Kind = "rubble", X = 258, Z = -150, Radius = 6, Tier = 1 },
+			{ Kind = "rubble", X = -70, Z = 128, Radius = 6, Tier = 1 },
+		} :: { TownRock },
+	},
 
 	-- ── Spawn pads and anchors (spec §3.3; the hook step replaces MapSetup's makeSpawnFolder rings with these) ───
 	Spawns = {

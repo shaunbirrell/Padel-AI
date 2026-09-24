@@ -3,6 +3,15 @@
 	Loads free Creator Store Models via InsertService (fallback AssetService).
 	Caches clones; strips all scripts; never blocks Part-kit spawn on failure.
 	Respects DevConfig.StudioSkipWorldDressing for 8GB Studio PERF.
+
+	W3 LOOK (roadmap §2.4; asset shortlist §6.2 C1):
+	  • AssetRef.ChildName picks ONE piece of a pack (pack:FindFirstChild(ChildName, true); names hold "/", never split),
+	    AssetRef.SubModel a descendant of it. A pack loads once; every configured piece of it becomes its own template
+	    and the rest of the pack is destroyed. One id is inserted by one thread at a time (others wait for it).
+	  • Every template is <= VisualAssetConfig.MaxPartsPerModel BaseParts and holds no Humanoid, or it is refused.
+	  • Templates live in ServerStorage.WE_VisualAssetTemplates (never ReplicatedStorage).
+	  • CloneKitMesh(key): one Roblox-owned mesh piece for a WorldKits Part kit (VisualAssetConfig.DesertKit).
+	  • Vehicle refs with Fit = "Kit" scale the body to the kit chassis and hide the Part-kit visuals (physics unchanged).
 ]]
 
 local InsertService = game:GetService("InsertService")
@@ -10,11 +19,28 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- server module: the Rojo place ships ReplicatedStorage.Shared, so index it (no WaitForChild without a timeout)
+local Shared = ReplicatedStorage.Shared
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 
 local VisualAssetService = {}
+
+-- the fields of VisualAssetConfig.AssetRef this service reads (kept local: config tables are read through `any`)
+type AssetRef = {
+	ModelAssetId: number?,
+	MeshId: number?,
+	ChildName: string?,
+	SubModel: string?,
+	Color: Color3?,
+	Material: Enum.Material?,
+	ClearTexture: boolean?,
+	StripDecals: boolean?,
+	Fit: string?,
+	Yaw: number?,
+	HideKit: boolean?,
+	KeepVisible: { string }?,
+}
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
 local failed: { [number]: boolean } = {}
@@ -22,6 +48,11 @@ local templateStrips: { [number]: { [string]: number } } = {} -- what loadModel 
 local dressLogged: { [number]: boolean } = {} -- vehicle dress strip summary printed once per assetId
 local loadAttempts = 0
 local templatesFolder: Folder? = nil
+-- W3 LOOK: packs (ids whose config refs carry ChildName) are split into one template per configured piece
+local pieceCache: { [string]: Instance } = {} -- pieceKey → Model or BasePart template (in the templates folder)
+local pieceFailed: { [string]: string } = {} -- pieceKey → reason (logged once)
+local packDone: { [number]: boolean } = {} -- the pack was loaded and split (never inserted again)
+local inflight: { [number]: { thread } } = {} -- ids being inserted right now → threads waiting for them
 
 -- Templates live in ServerStorage (CLAUDE.md): clones are made on the server, no client reads them, and in
 -- ReplicatedStorage every joining client had to download every template before its loading screen ended.
@@ -155,22 +186,165 @@ local function prepareTemplate(assetId: number, model: Model)
 	end
 end
 
-local function loadModel(assetId: number, forceInsert: boolean?): Model?
-	if assetId == 0 or failed[assetId] then
-		return nil
-	end
-	if cache[assetId] then
-		return cache[assetId]
-	end
-	-- P0: character dress MUST run even when StudioSkipWorldDressing (workers never brown bricks)
-	if shouldSkipInserts() and not forceInsert then
-		return nil
-	end
-	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
-		return nil
-	end
-	loadAttempts += 1
+-- ── W3 LOOK: part cap, packs and pieces ─────────────────────────────────────────────────────────────────────────
+local function maxParts(): number
+	local n = tonumber((VisualAssetConfig :: any).MaxPartsPerModel)
+	return if n and n > 0 then n else 40
+end
 
+local function countParts(root: Instance): number
+	local n = if root:IsA("BasePart") then 1 else 0
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function hasHumanoid(root: Instance): boolean
+	return root:IsA("Humanoid") or root:FindFirstChildWhichIsA("Humanoid", true) ~= nil
+end
+
+local function refId(ref: any): number
+	if typeof(ref) == "table" and typeof(ref.ModelAssetId) == "number" and ref.ModelAssetId > 0 then
+		return ref.ModelAssetId
+	end
+	return 0
+end
+
+-- Every configured AssetRef (buckets one or two levels deep) that picks a piece of assetId.
+local function pieceRefsFor(assetId: number): { AssetRef }
+	local out: { AssetRef } = {}
+	local function visit(t: any, depth: number)
+		if typeof(t) ~= "table" or depth > 2 then
+			return
+		end
+		if typeof(t.ModelAssetId) == "number" then
+			if t.ModelAssetId == assetId and typeof(t.ChildName) == "string" then
+				table.insert(out, t :: AssetRef)
+			end
+			return
+		end
+		for _, v in pairs(t) do
+			visit(v, depth + 1)
+		end
+	end
+	visit(VisualAssetConfig, 0)
+	return out
+end
+
+local function isPack(assetId: number): boolean
+	return #pieceRefsFor(assetId) > 0
+end
+
+local function pieceKey(ref: AssetRef): string
+	return tostring(refId(ref)) .. "|" .. tostring(ref.ChildName) .. "|" .. tostring(ref.SubModel or "") .. "|" .. (if ref.StripDecals then "d" else "")
+end
+
+-- One configured piece of a prepared pack → its own template (or nil + reason). The pack itself is not changed.
+local function extractPiece(pack: Instance, ref: AssetRef): (Instance?, string?)
+	local name = ref.ChildName
+	if typeof(name) ~= "string" then
+		return nil, "no ChildName"
+	end
+	local piece = pack:FindFirstChild(name, true) -- the name holds "/": never split it
+	if piece == nil then
+		return nil, "child not found: " .. name
+	end
+	if typeof(ref.SubModel) == "string" then
+		local sub = piece:FindFirstChild(ref.SubModel) or piece:FindFirstChild(ref.SubModel, true)
+		if sub == nil then
+			return nil, "sub-model not found: " .. ref.SubModel
+		end
+		piece = sub
+	end
+	if not (piece:IsA("BasePart") or piece:IsA("Model") or piece:IsA("Folder")) then
+		return nil, "unsupported class " .. piece.ClassName
+	end
+	local copyOrNil: Instance? = piece:Clone()
+	if copyOrNil == nil then
+		return nil, "not archivable"
+	end
+	local copy: Instance = copyOrNil
+	local t: Instance = copy
+	if copy:IsA("BasePart") then
+		-- one piece = one part: nested pieces, SurfaceAppearance, attachments all go
+		for _, c in ipairs(copy:GetChildren()) do
+			c:Destroy()
+		end
+	elseif copy:IsA("Folder") then
+		local m = Instance.new("Model")
+		for _, c in ipairs(copy:GetChildren()) do
+			c.Parent = m
+		end
+		copy:Destroy()
+		t = m
+	end
+	stripScripts(t)
+	stripDress(t)
+	for _, d in ipairs(t:GetDescendants()) do
+		if ref.StripDecals and (d:IsA("Decal") or d:IsA("Texture")) then
+			d:Destroy()
+		end
+	end
+	for _, d in ipairs(if t:IsA("BasePart") then { t :: Instance } else t:GetDescendants()) do
+		if d:IsA("BasePart") and d.Material == Enum.Material.Neon then
+			d.Material = Enum.Material.SmoothPlastic -- no Neon from store pieces (phone bloom, world rule)
+		end
+	end
+	local n = countParts(t)
+	if n == 0 or n > maxParts() or hasHumanoid(t) then
+		t:Destroy()
+		return nil, string.format("refused: %d parts (cap %d)%s", n, maxParts(), if n > 0 and n <= maxParts() then ", Humanoid" else "")
+	end
+	t.Name = "WE_Asset_" .. tostring(refId(ref)) .. "_" .. name .. (if ref.SubModel then "_" .. ref.SubModel else "")
+	t.Parent = ensureFolder()
+	return t, nil
+end
+
+-- Split a prepared pack into one template per configured piece, then drop the pack (only the pieces stay).
+local function splitPack(assetId: number, pack: Instance)
+	for _, ref in ipairs(pieceRefsFor(assetId)) do
+		local key = pieceKey(ref)
+		local have: Instance? = pieceCache[key]
+		if have == nil and pieceFailed[key] == nil then
+			local t, why = extractPiece(pack, ref)
+			if t then
+				pieceCache[key] = t
+			else
+				pieceFailed[key] = why or "?"
+				warn("[VisualAssetService] pack piece skipped", assetId, ref.ChildName, why)
+			end
+		end
+	end
+	packDone[assetId] = true
+	cache[assetId] = nil
+	pack:Destroy()
+end
+
+-- Prepared asset → cache (whole model), or split (pack), or refused (over the part cap / Humanoid left).
+local function acceptTemplate(assetId: number, model: Model): Model?
+	prepareTemplate(assetId, model)
+	if isPack(assetId) then
+		splitPack(assetId, model)
+		print("[VisualAssetService] Split pack", assetId)
+		return nil
+	end
+	local n = countParts(model)
+	if n > maxParts() or hasHumanoid(model) then
+		failed[assetId] = true
+		model:Destroy()
+		warn(string.format("[VisualAssetService] refused %d: %d parts (cap %d) — Part kit stays", assetId, n, maxParts()))
+		return nil
+	end
+	model.Parent = ensureFolder()
+	cache[assetId] = model
+	return model
+end
+
+-- InsertService (AssetService fallback) → the asset's Model, or nil. Yields.
+local function insertAsset(assetId: number): Model?
 	local ok, result = pcall(function()
 		return InsertService:LoadAsset(assetId)
 	end)
@@ -208,42 +382,125 @@ local function loadModel(assetId: number, forceInsert: boolean?): Model?
 		warn("[VisualAssetService] No Model in asset", assetId)
 		return nil
 	end
-
-	prepareTemplate(assetId, model)
-	model.Parent = ensureFolder()
-	cache[assetId] = model
-	if container ~= model and container.Parent == nil then
-		-- LoadAsset returns Model in a Model container sometimes
-		pcall(function()
-			container:Destroy()
-		end)
-	elseif container ~= model then
-		-- keep only our template
-		for _, c in ipairs(container:GetChildren()) do
-			if c ~= model then
-				c:Destroy()
-			end
-		end
-		model.Parent = ensureFolder()
+	if container ~= model then
+		model.Parent = nil
 		pcall(function()
 			container:Destroy()
 		end)
 	end
-	print("[VisualAssetService] Cached catalog model", assetId, model.Name)
 	return model
 end
 
--- Returns (attached, { [ClassName] = count } stripped from this clone).
-local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: string): (boolean, { [string]: number })
+local function releaseWaiters(assetId: number)
+	local list = inflight[assetId]
+	inflight[assetId] = nil
+	if list then
+		for _, co in ipairs(list) do
+			task.spawn(co)
+		end
+	end
+end
+
+-- Whole-model template for assetId (nil for packs: use templateForRef). One insert per id at a time: a second caller
+-- waits for the first (InsertService yields) instead of inserting the same id twice.
+local function loadModel(assetId: number, forceInsert: boolean?): Model?
+	if assetId == 0 or failed[assetId] or packDone[assetId] then
+		return nil
+	end
+	if cache[assetId] then
+		return cache[assetId]
+	end
+	-- P0: character dress MUST run even when StudioSkipWorldDressing (workers never brown bricks)
+	if shouldSkipInserts() and not forceInsert then
+		return nil
+	end
+	local waiting = inflight[assetId]
+	if waiting then
+		if coroutine.isyieldable() then
+			table.insert(waiting, coroutine.running())
+			coroutine.yield()
+		end
+		return cache[assetId]
+	end
+	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
+		return nil
+	end
+	loadAttempts += 1
+	inflight[assetId] = {}
+	local ok, res = pcall(function(): Model?
+		local model = insertAsset(assetId)
+		if model == nil then
+			return nil
+		end
+		local kept = acceptTemplate(assetId, model)
+		if kept then
+			print("[VisualAssetService] Cached catalog model", assetId, kept.Name)
+		end
+		return kept
+	end)
+	releaseWaiters(assetId)
+	if not ok then
+		failed[assetId] = true
+		warn("[VisualAssetService] template prep failed", assetId, res)
+		return nil
+	end
+	return res
+end
+
+-- Template for a config ref: the piece (ChildName / SubModel) of a pack, else the whole model. May yield (insert).
+local function templateForRef(ref: AssetRef?): Instance?
+	if ref == nil then
+		return nil
+	end
+	local id = refId(ref)
+	if id == 0 then
+		return nil
+	end
+	if typeof(ref.ChildName) ~= "string" then
+		return loadModel(id)
+	end
+	local key = pieceKey(ref)
+	local have: Instance? = pieceCache[key]
+	if have == nil and pieceFailed[key] == nil and not packDone[id] then
+		loadModel(id) -- a pack id: inserts and splits it (every configured piece) before it returns
+	end
+	local t: Instance? = pieceCache[key]
+	if t and t.Parent == nil then
+		pieceCache[key] = nil -- someone destroyed the template
+		return nil
+	end
+	return t
+end
+
+-- A template as a fresh Model (a single-part piece is wrapped).
+local function cloneAsModel(template: Instance): Model?
+	if template:IsA("Model") then
+		return template:Clone()
+	end
+	local c: Instance? = template:Clone()
+	if c == nil then
+		return nil
+	end
+	local m = Instance.new("Model")
+	m.Name = template.Name
+	c.Parent = m
+	return m
+end
+
+-- Returns (attached, { [ClassName] = count } stripped from this clone). keepPlace: the clone is already placed
+-- (a fitted vehicle body), so it is welded where it is instead of pivoted onto the primary.
+local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: string, keepPlace: boolean?): (boolean, { [string]: number })
 	stripScripts(clone)
 	clone.Name = cloneName
 
 	-- Strip seats / humanoids / scripts / movers / joints / prompts / sounds — mesh is dress-only, never drive
 	local stripped = stripDress(clone)
 
-	pcall(function()
-		clone:PivotTo(primary.CFrame)
-	end)
+	if not keepPlace then
+		pcall(function()
+			clone:PivotTo(primary.CFrame)
+		end)
+	end
 
 	for _, d in ipairs(clone:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -266,19 +523,25 @@ function VisualAssetService.IsInsertEnabled(): boolean
 	return not shouldSkipInserts()
 end
 
-function VisualAssetService.ResolveVehicleAssetId(vehicleId: string, kitFamily: string?): number?
-	local ref = VisualAssetConfig.Vehicles[vehicleId]
-	if ref and typeof(ref.ModelAssetId) == "number" and (ref.ModelAssetId :: number) > 0 then
-		return ref.ModelAssetId
+-- The vehicle's own ref, else its KitFamilyFallback ref (the whole ref: ChildName / Fit travel with the id).
+local function resolveVehicleRef(vehicleId: string, kitFamily: string?): AssetRef?
+	local vehicles = VisualAssetConfig.Vehicles :: any
+	local ref = vehicles[vehicleId]
+	if refId(ref) > 0 then
+		return ref :: AssetRef
 	end
 	if kitFamily and VisualAssetConfig.KitFamilyFallback[kitFamily] then
-		local key = VisualAssetConfig.KitFamilyFallback[kitFamily]
-		local fb = VisualAssetConfig.Vehicles[key]
-		if fb and typeof(fb.ModelAssetId) == "number" and (fb.ModelAssetId :: number) > 0 then
-			return fb.ModelAssetId
+		local fb = vehicles[VisualAssetConfig.KitFamilyFallback[kitFamily]]
+		if refId(fb) > 0 then
+			return fb :: AssetRef
 		end
 	end
 	return nil
+end
+
+function VisualAssetService.ResolveVehicleAssetId(vehicleId: string, kitFamily: string?): number?
+	local ref = resolveVehicleRef(vehicleId, kitFamily)
+	return if ref then refId(ref) else nil
 end
 
 function VisualAssetService.ResolveCharacterAssetId(kind: string): number?
@@ -352,16 +615,91 @@ function VisualAssetService.ResolvePropMeshId(propKey: string): number?
 	return nil
 end
 
+-- W3 LOOK: place a vehicle body (authored axis-aligned, front -Z) on the Part kit: one uniform scale so the body is
+-- as long as the kit chassis, centred on the chassis, tyre bottoms on the physics-wheel bottoms, turned by ref.Yaw.
+-- Moves each part (no Model:ScaleTo / pivots), so it does not depend on how the pack set its pivot. Returns the scale.
+local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, ref: AssetRef): number?
+	local parts: { BasePart } = {}
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			table.insert(parts, d)
+		end
+	end
+	if #parts == 0 then
+		return nil
+	end
+	local lx, ly, lz = math.huge, math.huge, math.huge
+	local hx, hy, hz = -math.huge, -math.huge, -math.huge
+	for _, p in ipairs(parts) do
+		local cf, h = p.CFrame, p.Size * 0.5
+		local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+		local ex = math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z
+		local ey = math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z
+		local ez = math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+		local c = cf.Position
+		lx, ly, lz = math.min(lx, c.X - ex), math.min(ly, c.Y - ey), math.min(lz, c.Z - ez)
+		hx, hy, hz = math.max(hx, c.X + ex), math.max(hy, c.Y + ey), math.max(hz, c.Z + ez)
+	end
+	local yawDeg = tonumber(ref.Yaw) or 0
+	local sideways = math.abs(math.sin(math.rad(yawDeg))) > 0.5
+	local bodyLen = if sideways then hx - lx else hz - lz
+	if bodyLen <= 0.05 then
+		return nil
+	end
+	local s = math.clamp(primary.Size.Z / bodyLen, 0.05, 4)
+	-- lowest physics-wheel point in the chassis frame (else the chassis bottom)
+	local bottom = -primary.Size.Y * 0.5
+	local found = false
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("WE_PhysicsWheel") == true then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local h = d.Size * 0.5
+			local ey = math.abs(rel.RightVector.Y) * h.X + math.abs(rel.UpVector.Y) * h.Y + math.abs(rel.LookVector.Y) * h.Z
+			local b = rel.Position.Y - ey
+			if not found or b < bottom then
+				bottom = b
+				found = true
+			end
+		end
+	end
+	local anchor = Vector3.new((lx + hx) * 0.5, ly, (lz + hz) * 0.5)
+	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(yawDeg), 0)
+	local shadowMin = primary.Size.Z * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
+	for _, p in ipairs(parts) do
+		local cf = p.CFrame
+		local size = p.Size * s
+		p.Size = size
+		p.CFrame = base * CFrame.new((cf.Position - anchor) * s) * (cf - cf.Position)
+		-- a few large body panels cast the car's shadow (the hidden kit no longer does); small parts never
+		p:SetAttribute("WE_FitShadow", math.max(size.X, size.Y, size.Z) >= shadowMin)
+	end
+	return s
+end
+
+-- W3 LOOK: under a fitted body the Part-kit visuals go (Transparency 1). Physics, seats, hit boxes and names stay.
+local function hideKitUnder(hostModel: Model, dress: Instance, ref: AssetRef)
+	local keep: { [string]: boolean } = {}
+	for _, n in ipairs(ref.KeepVisible or {}) do
+		keep[n] = true
+	end
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and not d:IsDescendantOf(dress) and not keep[d.Name] then
+			d.Transparency = 1
+		end
+	end
+end
+
 --[[
 	Clone catalog visual under hostModel, welded to primary, non-colliding.
 	Returns true if attached. Never destroys host Part kit.
 ]]
 function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?): boolean
-	local assetId = VisualAssetService.ResolveVehicleAssetId(vehicleId, kitFamily)
-	if not assetId then
+	local ref = resolveVehicleRef(vehicleId, kitFamily)
+	if not ref then
 		return false
 	end
-	local template = loadModel(assetId)
+	local assetId = refId(ref)
+	local template = templateForRef(ref)
 	-- Design P0: NO JeepFallback 59524622. Part-kit hinge chassis remains if mesh fails.
 	if not template then
 		return false -- Part kit remains authoritative (hinge-drive)
@@ -371,11 +709,23 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		return false
 	end
 
-	local clone = template:Clone()
-	local attached, stripped = weldCloneToPrimary(clone, primary, "WE_CatalogVisual")
+	local clone = cloneAsModel(template)
+	if not clone then
+		return false
+	end
+	local fitted = ref.Fit == "Kit" and fitBodyToKit(clone, hostModel, primary, ref) ~= nil
+	local attached, stripped = weldCloneToPrimary(clone, primary, "WE_CatalogVisual", fitted)
 	if not attached then
 		clone:Destroy()
 		return false
+	end
+	if fitted then
+		for _, d in ipairs(clone:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.CastShadow = d:GetAttribute("WE_FitShadow") == true
+				d:SetAttribute("WE_FitShadow", nil)
+			end
+		end
 	end
 	if not dressLogged[assetId] then
 		dressLogged[assetId] = true
@@ -388,7 +738,7 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	clone.Parent = hostModel
 	hostModel:SetAttribute("WE_CatalogAssetId", assetId)
 	-- Soften host body so catalog mesh reads; keep Part-kit physics wheels (hidden)
-	primary.Transparency = math.max(primary.Transparency, 0.72)
+	primary.Transparency = math.max(primary.Transparency, if fitted and ref.HideKit then 1 else 0.72)
 	for _, d in ipairs(hostModel:GetDescendants()) do
 		if d:IsA("BasePart") and d:GetAttribute("WE_PhysicsWheel") == true then
 			d.Transparency = 1 -- physics collider/motor only; mesh provides visible tires
@@ -397,6 +747,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		elseif d:IsA("BasePart") and d:GetAttribute("WE_KitCosmetic") == true then
 			d.Transparency = math.max(d.Transparency, 0.85)
 		end
+	end
+	if fitted and ref.HideKit then
+		hideKitUnder(hostModel, clone, ref)
 	end
 	-- Re-assert DriverSeat still present after mesh dress
 	if not hostModel:FindFirstChild("DriverSeat") then
@@ -815,7 +1168,8 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	if not assetId then
 		return false
 	end
-	local template = loadModel(assetId)
+	-- W3 LOOK: through the ref, so a ChildName piece of a pack works for props too
+	local template: Instance? = templateForRef(lookupPropRef(propKey))
 	-- Palm/Tent/OilPumpjack/Jersey/CamoNet/StreetLamp alt fallback (Design Bot wire)
 	if not template then
 		local altKey: string? = nil
@@ -835,7 +1189,7 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		if altKey then
 			local altId = VisualAssetService.ResolvePropAssetId(altKey)
 			if altId then
-				template = loadModel(altId)
+				template = templateForRef(lookupPropRef(altKey))
 				if template then
 					assetId = altId
 				end
@@ -850,7 +1204,10 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 
-	local clone = template:Clone()
+	local clone = cloneAsModel(template)
+	if not clone then
+		return false
+	end
 	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp") then
 		clone:Destroy()
 		return false
@@ -936,7 +1293,7 @@ end
 
 --[[
 	Dress WE_MoneyCollector with ATM catalog mesh (cosmetic only).
-	Prefer Design Bot hero 75368157644109 → 175462478 → alts.
+	MoneyCollector (0 since W1: the paid hero id was dropped) → MoneyCollectorFallback 175462478 → alts → Part kit.
 ]]
 function VisualAssetService.TryAttachCollectorVisual(hostPart: BasePart): boolean
 	-- NEVER throw — Part kit ATM remains if Design Bot hero mesh / InsertService fails.
@@ -1190,7 +1547,63 @@ function VisualAssetService.Init()
 		print("[VisualAssetService] Catalog inserts SKIPPED (StudioSkipWorldDressing / disabled). Part kits only.")
 	else
 		print("[VisualAssetService] Catalog inserts enabled — free Creator Store IDs via InsertService.")
+		-- W3 LOOK: insert the vehicle body pack once, deferred, so the first 4x4 spawn does not wait on InsertService
+		task.defer(function()
+			local seen: { [number]: boolean } = {}
+			for _, ref in pairs(VisualAssetConfig.Vehicles :: any) do
+				local id = refId(ref)
+				if id > 0 and typeof(ref.ChildName) == "string" and not seen[id] then
+					seen[id] = true
+					pcall(templateForRef, ref :: AssetRef)
+				end
+			end
+		end)
 	end
+end
+
+--[[
+	W3 LOOK (contracts §8.3): one Roblox-owned mesh piece for a WorldKits Part kit (VisualAssetConfig.DesertKit[key]).
+	Returns an UNPARENTED, Anchored clone (CanCollide / CanQuery / CanTouch / CastShadow false; Color / Material /
+	TextureID per config), or nil when the key is 0 or unknown, inserts are skipped (Studio), or the load fails.
+	YIELDS on the first load of a pack (InsertService): call only from task.defer / task.spawn.
+]]
+function VisualAssetService.CloneKitMesh(key: string): BasePart?
+	local kit = (VisualAssetConfig :: any).DesertKit
+	local ref: any = if typeof(kit) == "table" then kit[key] else nil
+	if refId(ref) == 0 or typeof(ref.ChildName) ~= "string" or shouldSkipInserts() then
+		return nil
+	end
+	local ok, template = pcall(templateForRef, ref :: AssetRef)
+	if not ok or typeof(template) ~= "Instance" or not template:IsA("BasePart") then
+		return nil
+	end
+	local mpOrNil: BasePart? = (template :: BasePart):Clone()
+	if mpOrNil == nil then
+		return nil
+	end
+	local mp: BasePart = mpOrNil
+	mp.Anchored = true
+	mp.CanCollide = false
+	mp.CanQuery = false
+	mp.CanTouch = false
+	mp.CastShadow = false
+	mp.Massless = true
+	if typeof(ref.Color) == "Color3" then
+		mp.Color = ref.Color
+	end
+	if typeof(ref.Material) == "EnumItem" then
+		mp.Material = ref.Material :: any
+	end
+	if mp.Material == Enum.Material.Neon then
+		mp.Material = Enum.Material.SmoothPlastic
+	end
+	if ref.ClearTexture == true and mp:IsA("MeshPart") then
+		mp.TextureID = ""
+	end
+	mp.Name = key .. "Mesh"
+	mp:SetAttribute("WE_Decor", true)
+	mp:SetAttribute("WE_KitMesh", key)
+	return mp
 end
 
 
@@ -1218,11 +1631,12 @@ function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureI
 				if child:FindFirstChild("WE_ParkedCatalog") then
 					attached = true
 				else
-					local assetId = VisualAssetService.ResolveVehicleAssetId(vehicleId :: string, nil)
+					local ref = resolveVehicleRef(vehicleId :: string, nil)
+					local assetId = if ref then refId(ref) else nil
 					if assetId then
-						local template = loadModel(assetId)
-						if template then
-							local clone = template:Clone()
+						local template = templateForRef(ref)
+						local clone = if template then cloneAsModel(template) else nil
+						if clone then
 							if weldCloneToPrimary(clone, child, "WE_ParkedCatalog") then
 								clone.Parent = child
 								child:SetAttribute("WE_ParkedAssetId", assetId)
@@ -1249,13 +1663,48 @@ function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureI
 end
 
 
--- Test hook (headless sim, judge K2): install a template for assetId through the same prep loadModel runs.
+-- Test hook (headless sim, judge K2): install the asset for assetId as InsertService would return it, through the
+-- same prep loadModel runs (a pack is split into its configured pieces; the part cap applies).
 function VisualAssetService._SetTemplate(assetId: number, model: Model)
-	prepareTemplate(assetId, model)
-	model.Parent = ensureFolder()
-	cache[assetId] = model
+	local prefix = tostring(assetId) .. "|"
+	for k, t in pairs(pieceCache) do
+		if string.sub(k, 1, #prefix) == prefix then
+			t:Destroy()
+			pieceCache[k] = nil
+		end
+	end
+	for k in pairs(pieceFailed) do
+		if string.sub(k, 1, #prefix) == prefix then
+			pieceFailed[k] = nil
+		end
+	end
+	local old = cache[assetId]
+	if old and old ~= model then
+		old:Destroy()
+	end
+	cache[assetId] = nil
 	failed[assetId] = nil
+	packDone[assetId] = nil
 	dressLogged[assetId] = nil
+	acceptTemplate(assetId, model)
+end
+
+-- Test hook: loader counters.
+function VisualAssetService._Stats(): { LoadAttempts: number, Cached: number, Pieces: number, PiecesFailed: number, PacksSplit: number }
+	local c, p, f, d = 0, 0, 0, 0
+	for _ in pairs(cache) do
+		c += 1
+	end
+	for _ in pairs(pieceCache) do
+		p += 1
+	end
+	for _ in pairs(pieceFailed) do
+		f += 1
+	end
+	for _ in pairs(packDone) do
+		d += 1
+	end
+	return { LoadAttempts = loadAttempts, Cached = c, Pieces = p, PiecesFailed = f, PacksSplit = d }
 end
 
 return VisualAssetService
