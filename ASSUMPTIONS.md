@@ -872,3 +872,10 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 
 ## 2026-09-24 — Owner playtest chat commands /level and /xp
 - The owner asked for enough XP to buy the helicopter. Admins on `AdminConfig.UserIds` (only 470626172) can type **`/level <n>`** (no number = 25, which unlocks every helicopter) or **`/xp <n>`** (no number = 10,000) in chat. Server-side, allowlist-checked, logged as ADMIN_COMMAND; not a remote and never available to other players. A chat line that arrives through more than one chat path within 1 s runs once. Buying a helicopter still needs the Helipad (Lv 1+) bought at its console and the cash (AdminPlaytestCash covers that).
+
+## 2026-09-24 — Asset shortlist (for the owner's Grok bot) + clear-now ids
+- `docs/ASSET_SHORTLIST.md` (+ `docs/asset_shortlist.json`) is the hard-wire sheet: one pick + one backup per slot, every id re-verified live against the Roblox store on 2026-09-24 (creator, type, free, contents where visible), the "do not use" list, a numbered step list for the Grok bot (store clicks + Studio checks + a report; Grok does not edit the repo) and what the lead wires afterwards.
+- **Cleared now (§3.1):** 24 catalog ids set to 0 in `VisualAssetConfig` (the Part kits show instead): a 484k-triangle soldier swarm pack, a 156k-triangle mesa, a 100k-triangle sandbag nest, two third-party mesh/decal ids that bypass the third-party switch, and every vehicle model copying a real vehicle (Humvee/Bradley/FMTV/MRAP/F-15/F-18/Mustang look) or a game franchise.
+- **Pending owner answers:** Roblox's own Weapons Kit Auto Rifle looks AK-like and its Rocket Launcher RPG-like. Default until the owner says yes: our own Part-kit guns.
+- **Do not bake store models into the Padel-AI repo** (it is public); runtime loading by id is the default path.
+- **Still to do after W2:** six UI/alert sounds in `SoundConfig` point at engine files no longer in the Roblox client (silent taps/notices); §3.5 has licensed replacements.
