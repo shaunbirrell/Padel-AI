@@ -1400,6 +1400,25 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "Go
 must_contain("tools/wire-monetization-ids.py", "each product needs its own Id", "wire tool refuses duplicate product Ids")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/NukeConfig.luau", "DefensesDown", "J1 nuke never opens a base (no defenses-down fields)")
 
+# v70 waterways (verified: V1-V13 all PASS flag false + true, gate loop 66/0, capture 38/0, vehicles 290/167/22/134/11,
+# strikes 67/27/48 on turned plots, ds 24)
+SKBW = "src/ServerScriptService/Server/Modules/StructureKitBuilder.luau"
+MSW = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+must_contain(SKBW, 'd:GetAttribute("WE_WallGap") == true', "v70 perimeter walls leave a gap at WE_WallGap (sea gate)")
+must_contain(SKBW, "function StructureKitBuilder.SetGateOpen(gateFolder: Instance, open: boolean)", "v70 SetGateOpen sea-gate API")
+must_contain(SKBW, 'if gateFolder:GetAttribute("WE_GateMode") == "Proximity" then', "v70 Dock only arms the sea gate")
+must_contain(SKBW, "closed * CFrame.new(sx * (leaf.Size.X + 0.3), 0, 0)", "v70 gate leaves slide along their own X")
+must_contain(MSW, 'gateWater:SetAttribute("WE_GatePlotId", plotId)', "J3 SeaGateWater uses WE_GatePlotId")
+must_not_contain(MSW, 'Name = "GatePost"', "rear-gate posts are RearGatePost (GateDefense fallback)")
+must_contain(MSW, 'root:SetAttribute("WE_MapGen", MapSetup.MAP_GEN)', "v70 map-gen stamp")
+must_contain(MSW, "MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 71 else 70", "map stamp encodes FaceMapCentre")
+must_contain("src/ServerScriptService/Server/Modules/Waterways.luau", 'local occ = if seat and seat:IsA("VehicleSeat") then seat.Occupant else nil', "sea gate opens only for a driven boat")
+must_contain("src/ServerScriptService/Server/Modules/Waterways.luau", "p.CanQuery = false", "water/bank parts take no raycasts")
+must_contain("src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau", "VehiclePassengersCount ~= true", "vehicle passengers never capture or contest")
+must_not_contain("src/ServerScriptService/Server/Services/MissileStrikeService.luau", "CC_OFFSET", "J2 no world-axis Command Center offset")
+must_contain("src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau", "FaceMapCentre = true,", "v70 bases face the map centre (docks reach the ring)")
+must_contain("src/ReplicatedStorage/Shared/Configs/WaterConfig.luau", "OpenRadius = 40,", "v70 sea gate opens only for a boat within 40 studs")
+
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).
 # Needs luau-compile (https://github.com/luau-lang/luau/releases → luau-ubuntu.zip / luau-macos.zip).

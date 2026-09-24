@@ -100,6 +100,7 @@ export type SpawnCtx = {
 	PlayerPos: Vector3?,
 	PlayerLook: Vector3?,
 	PlotPos: Vector3?,
+	PlotCFrame: CFrame?, -- the plot pad's CFrame (carries the plot yaw; nil → CFrame.new(PlotPos))
 	PlotId: number?,
 	Structures: { [string]: number },
 	Footprint: Footprint,
@@ -286,6 +287,48 @@ local function getWaterParts(): { BasePart }
 		refreshWaterParts()
 	end
 	return waterParts
+end
+
+--[[ Waterways C5: plot water (DockWater carries WE_PlotId, SeaGateWater WE_GatePlotId) is water only for a boat
+	whose owner's BasePlotId is that plot. An enemy boat can then neither spawn in, drive into nor idle in someone's
+	basin or gate water, not even behind an ally's boat while the sea gate is open. Public water has neither
+	attribute and is water for every boat. ]]
+local function waterPlotOf(p: BasePart): number?
+	local id = p:GetAttribute("WE_PlotId")
+	if id == nil then
+		id = p:GetAttribute("WE_GatePlotId")
+	end
+	return tonumber(id)
+end
+
+local function filterPlotWater(parts: { BasePart }, plotId: number?): { BasePart }
+	local out: { BasePart } = {}
+	for _, p in ipairs(parts) do
+		local id = waterPlotOf(p)
+		if id == nil or id == plotId then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+-- per-plot filtered lists, rebuilt whenever getWaterParts() hands out a new list (every RefreshSeconds)
+local plotWaterFrom: { BasePart }? = nil
+local plotWaterLists: { [number]: { BasePart } } = {}
+
+local function waterPartsFor(plotId: number?): { BasePart }
+	local all = getWaterParts()
+	if plotWaterFrom ~= all then
+		plotWaterFrom = all
+		plotWaterLists = {}
+	end
+	local key = plotId or -1
+	local list = plotWaterLists[key]
+	if list == nil then
+		list = filterPlotWater(all, plotId)
+		plotWaterLists[key] = list
+	end
+	return list
 end
 
 --[[ Top of the highest flat WE_Water part under pos (nil = no water). margin shrinks each part's
@@ -1686,10 +1729,60 @@ local function playerFront(ctx: SpawnCtx, state: string): SpawnChoice?
 	return nil
 end
 
+--[[ Waterways C1: every plot-local → world conversion goes through the plot frame, i.e. the plot pad's CFrame
+	(PlotPad / WE_BasePlot is built with BaseLayout.PlotCFrame(pos), which carries the plot yaw once
+	BaseLayoutConfig.FaceMapCentre is on). A plot-local heading h becomes h + yawOf(frame). While the flag is off the
+	pad's rotation is the identity, so every spot and heading below equals the old plot + (x, 0, z) exactly. ]]
+local function plotFrame(ctx: SpawnCtx): CFrame?
+	local cf = ctx.PlotCFrame
+	if cf then
+		return cf
+	end
+	local p = ctx.PlotPos
+	return if p then CFrame.new(p) else nil
+end
+
+-- plot-local point (x, z) plus a plot-local offset (ox, oz) → world X, Z (base first, then the turned offset)
+local function plotXZ(frame: CFrame, x: number, z: number, ox: number?, oz: number?): (number, number)
+	local w = frame:PointToWorldSpace(Vector3.new(x, 0, z))
+	if ox == nil and oz == nil then
+		return w.X, w.Z
+	end
+	local o = frame:VectorToWorldSpace(Vector3.new(ox or 0, 0, oz or 0))
+	return w.X + o.X, w.Z + o.Z
+end
+
+-- firstFreeLand at plot-local (x, z) with a plot-local heading; the offsets turn with the plot
+local function firstFreePlotLand(
+	ctx: SpawnCtx,
+	frame: CFrame,
+	x: number,
+	z: number,
+	refTop: number,
+	heading: number,
+	offsets: { Offset2 }
+): CFrame?
+	local h = heading + yawOf(frame)
+	for _, o in ipairs(offsets) do
+		local wx, wz = plotXZ(frame, x, z, o.X, o.Z)
+		local cf = landSpot(ctx, wx, wz, refTop, h)
+		if cf and spotFree(ctx, cf) then
+			return cf
+		end
+	end
+	return nil
+end
+
 local function lastResort(ctx: SpawnCtx, state: string): SpawnChoice
 	local base = ctx.PlotPos or ctx.PlayerPos or Vector3.new(0, 0.5, 0)
 	local y = base.Y + 0.5 + ctx.Footprint.Clearance + SpawnCfg.Clearance
-	return choice(CFrame.new(base.X, y, base.Z + (if ctx.PlotPos then SpawnCfg.PlotFallback.Z else 0)), "WorldOrigin", state)
+	local frame = if ctx.PlotPos then plotFrame(ctx) else nil
+	if frame then
+		-- plot-local (0, PlotFallback.Z), turned with the plot
+		local wx, wz = plotXZ(frame, 0, SpawnCfg.PlotFallback.Z)
+		return choice(CFrame.new(wx, y, wz) * CFrame.Angles(0, yawOf(frame), 0), "WorldOrigin", state)
+	end
+	return choice(CFrame.new(base.X, y, base.Z), "WorldOrigin", state)
 end
 
 local function chooseCar(ctx: SpawnCtx): SpawnChoice
@@ -1704,9 +1797,10 @@ local function chooseCar(ctx: SpawnCtx): SpawnChoice
 		end
 	end
 	local plot = ctx.PlotPos
-	if plot then
+	local frame = plotFrame(ctx)
+	if plot and frame then
 		local o = SpawnCfg.PlotFallback
-		local cf = firstFreeLand(ctx, plot.X + o.X, plot.Z + o.Z, plot.Y + 0.5, 0, offsets)
+		local cf = firstFreePlotLand(ctx, frame, o.X, o.Z, plot.Y + 0.5, 0, offsets)
 		if cf then
 			return choice(cf, "BasePlot", "Grounded")
 		end
@@ -1717,11 +1811,14 @@ end
 local function chooseHeli(ctx: SpawnCtx): SpawnChoice
 	local fp = ctx.Footprint
 	local plot = ctx.PlotPos
-	if plot and (ctx.Structures.Helipad or 0) >= 1 then
+	local frame = plotFrame(ctx)
+	if plot and frame and (ctx.Structures.Helipad or 0) >= 1 then
 		local site = BaseLayoutConfig.Structures.Helipad.Site
 		local refTop = plot.Y + 0.5 + SpawnCfg.HelipadDeckHeight
+		local heading = SpawnCfg.HeliHeadingRad + yawOf(frame)
 		for _, o in ipairs(SpawnCfg.HelipadSpots) do
-			local cf = landSpot(ctx, plot.X + site.X + o.X, plot.Z + site.Z + o.Z, refTop, SpawnCfg.HeliHeadingRad)
+			local wx, wz = plotXZ(frame, site.X, site.Z, o.X, o.Z)
+			local cf = landSpot(ctx, wx, wz, refTop, heading)
 			if cf and spotFree(ctx, cf) then
 				return choice(cf, "Helipad", "Landed")
 			end
@@ -1751,13 +1848,15 @@ local function choosePlane(ctx: SpawnCtx): SpawnChoice
 	local fp = ctx.Footprint
 	local plot = ctx.PlotPos
 	local road = runwayRoad()
-	if plot and road and (ctx.Structures.Airfield or 0) >= 1 then
+	local frame = plotFrame(ctx)
+	if plot and frame and road and (ctx.Structures.Airfield or 0) >= 1 then
 		-- start 12 studs in from the end nearer the plot edge, facing along the runway toward the other end
+		-- (runway X/Z, the ends and the heading are plot-local; plotXZ / yawOf(frame) turn them with the plot)
 		local minX, maxX = road.X - road.SizeX * 0.5, road.X + road.SizeX * 0.5
 		local fromMin = math.abs(minX) >= math.abs(maxX)
 		local startX = if fromMin then minX + SpawnCfg.RunwayInset else maxX - SpawnCfg.RunwayInset
 		local step = if fromMin then 1 else -1
-		local heading = if fromMin then -math.pi / 2 else math.pi / 2 -- +X / -X
+		local heading = (if fromMin then -math.pi / 2 else math.pi / 2) + yawOf(frame) -- plot +X / -X
 		local refTop = plot.Y + 0.5 + SpawnCfg.RunwayHeight
 		local spacing = 2 * fp.HalfZ + 6
 		for k = 0, 3 do
@@ -1768,7 +1867,8 @@ local function choosePlane(ctx: SpawnCtx): SpawnChoice
 			if k > 0 and math.abs(x - startX) > road.SizeX * 0.5 then
 				break -- keep at least half the runway ahead
 			end
-			local cf = landSpot(ctx, plot.X + x, plot.Z + road.Z, refTop, heading)
+			local wx, wz = plotXZ(frame, x, road.Z)
+			local cf = landSpot(ctx, wx, wz, refTop, heading)
 			if cf and spotFree(ctx, cf) then
 				return choice(cf, "Runway", "Grounded")
 			end
@@ -1975,14 +2075,18 @@ local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Foo
 		playerLook = root.CFrame.LookVector
 	end
 	local plotPos: Vector3? = nil
+	local plotCFrame: CFrame? = nil
 	local plotId: number? = nil
 	if profile and profile.BasePlotId then
 		local plot = findPlotPart(profile.BasePlotId)
 		if plot then
 			plotPos = plot.Position
+			plotCFrame = plot.CFrame -- C1: the pad carries the plot yaw
 			plotId = tonumber(profile.BasePlotId)
 		end
 	end
+	-- C5: someone else's DockWater / SeaGateWater is not water for this player's boats
+	local ownPlotId: number? = if profile then tonumber(profile.BasePlotId) else nil
 	local structures: { [string]: number } = {}
 	if profile and typeof(profile.BaseUpgrades) == "table" then
 		for k, v in pairs(profile.BaseUpgrades) do
@@ -2022,13 +2126,14 @@ local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Foo
 		PlayerPos = playerPos,
 		PlayerLook = playerLook,
 		PlotPos = plotPos,
+		PlotCFrame = plotCFrame,
 		PlotId = plotId,
 		Structures = structures,
 		Footprint = fp,
 		TakeoffSpeed = tonumber(attrs.WE_TakeoffSpeed),
 		VehiclePads = vehiclePads,
 		NavalPads = navalPads,
-		WaterParts = getWaterParts(),
+		WaterParts = waterPartsFor(ownPlotId),
 		Occupied = occupied,
 		SurfaceY = function(x: number, z: number, refY: number): number?
 			local hit = Workspace:Raycast(Vector3.new(x, refY + 10, z), Vector3.new(0, -40, 0), groundEx)
@@ -2169,6 +2274,14 @@ local function groundRayParams(t: number): RaycastParams
 	return rp
 end
 
+-- C5: the water this boat may use (its owner's plot water + public water). Owner's BasePlotId is read live from
+-- the profile (nil until the real save loaded → public water only).
+local function recWaterParts(rec: VehicleRec): { BasePart }
+	local owner: Player? = rec.Owner
+	local profile = if owner and DataService then DataService.GetProfile(owner) else nil
+	return waterPartsFor(if profile then tonumber(profile.BasePlotId) else nil)
+end
+
 local function senseFor(rec: VehicleRec, t: number): DriveSense
 	local cf = rec.Chassis.CFrame
 	local pos = cf.Position
@@ -2181,7 +2294,7 @@ local function senseFor(rec: VehicleRec, t: number): DriveSense
 	end
 	local waterY: number? = nil
 	if rec.Mode == "Boat" then
-		waterY = waterSurfaceAt(getWaterParts(), pos, 0, nil)
+		waterY = waterSurfaceAt(recWaterParts(rec), pos, 0, nil)
 	end
 	return {
 		Position = pos,
@@ -2221,7 +2334,7 @@ local function fallbackStep(rec: VehicleRec, t: number, dt: number)
 	if rec.Mode == "Boat" then
 		local dir, near, far = boatProbe(st, rec.Params, input)
 		local f = fwd(st.Heading) * dir
-		local parts = getWaterParts()
+		local parts = recWaterParts(rec)
 		sense.WaterNear = waterSurfaceAt(parts, sense.Position + f * near, 0, nil) ~= nil
 		sense.WaterFar = waterSurfaceAt(parts, sense.Position + f * far, 0, nil) ~= nil
 		out = boatStep(st, rec.Params, input, sense, dt)
@@ -2446,7 +2559,7 @@ local function validateSample(rec: VehicleRec, s: ValidSample): (boolean, string
 	end
 	local overWater = true
 	if mode == "Boat" then
-		if waterSurfaceAt(getWaterParts(), pos, Valid.OffWaterMargin, nil) == nil then
+		if waterSurfaceAt(recWaterParts(rec), pos, Valid.OffWaterMargin, nil) == nil then
 			overWater = false
 			rec.OffWaterFor += dtS
 			if rec.OffWaterFor > Valid.OffWaterGrace then
@@ -2478,7 +2591,7 @@ local function sampleAndCheck(rec: VehicleRec, t: number)
 		Pos = pos,
 		Vel = partVelocity(rec.Chassis),
 		T = t,
-		WaterY = if rec.Mode == "Boat" then waterSurfaceAt(getWaterParts(), pos, 0, nil) else nil,
+		WaterY = if rec.Mode == "Boat" then waterSurfaceAt(recWaterParts(rec), pos, 0, nil) else nil,
 		CFrame = cf,
 	}
 	local ok, reason, soft = validateSample(rec, sample)

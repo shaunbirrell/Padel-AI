@@ -16,7 +16,7 @@ local HollowBuildingBuilder = require(script.Parent.HollowBuildingBuilder)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 34 -- v68: outdoor installations use the foundation-slab Body too (was 33: walk-in Command Center)
+local KIT_GEN = 35 -- v70: perimeter walls leave WE_WallGap openings (sea gate) + wall-mesh placement rule (was 34: installation slab Body)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -927,6 +927,20 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	folder:SetAttribute("WE_GateSign", gateSign)
 	folder:SetAttribute("WE_GateClear", GATE_CLEAR)
 
+	-- v70: openings in the ring. MapSetup puts a WE_WallGap marker (world-axis-aligned box, BaseLayout.PlotRect) under
+	-- LayoutGround wherever the wall must stay open (the sea gate: its posts + collidable leaves close the span).
+	local gaps: { BasePart } = {}
+	do
+		local layoutGround = plotFolder:FindFirstChild("LayoutGround")
+		if layoutGround then
+			for _, d in ipairs(layoutGround:GetDescendants()) do
+				if d:IsA("BasePart") and d:GetAttribute("WE_WallGap") == true then
+					table.insert(gaps, d)
+				end
+			end
+		end
+	end
+
 	local function wall(name: string, size: Vector3, pos: Vector3)
 		local w = makePart({
 			Name = name,
@@ -975,6 +989,81 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		return w
 	end
 
+	-- v70: a wall with every WE_WallGap span that straddles its line cut out. No gap on the line → the exact same
+	-- single wall as before. [J8] The LONGEST piece keeps the base name (it may host the L3+ wall mesh); pieces
+	-- shorter than 26 are flagged WE_NoMesh (a 24-long mesh would hang over the opening).
+	local function gappedWall(name: string, size: Vector3, pos: Vector3)
+		local alongX = size.X >= size.Z
+		local half = (if alongX then size.X else size.Z) * 0.5
+		local c = if alongX then pos.X else pos.Z
+		local wAcross = if alongX then pos.Z else pos.X
+		local wHalfT = (if alongX then size.Z else size.X) * 0.5
+		local segs: { { number } } = { { c - half, c + half } }
+		local cut = false
+		for _, g in ipairs(gaps) do
+			-- world AABB half extents of the marker (robust to a turned marker; identity → Size * 0.5)
+			local gp, gs = g.Position, g.Size
+			local _, _, _, r00, r01, r02, _, _, _, r20, r21, r22 = g.CFrame:GetComponents()
+			local ghx = (math.abs(r00) * gs.X + math.abs(r01) * gs.Y + math.abs(r02) * gs.Z) * 0.5
+			local ghz = (math.abs(r20) * gs.X + math.abs(r21) * gs.Y + math.abs(r22) * gs.Z) * 0.5
+			local gAlong = if alongX then gp.X else gp.Z
+			local gHalf = if alongX then ghx else ghz
+			local gAcross = if alongX then gp.Z else gp.X
+			local gAcrossHalf = if alongX then ghz else ghx
+			if math.abs(gAcross - wAcross) <= gAcrossHalf + wHalfT then -- the gap straddles this wall's line
+				local g0, g1 = gAlong - gHalf, gAlong + gHalf
+				local out: { { number } } = {}
+				for _, s in ipairs(segs) do
+					if g1 <= s[1] or g0 >= s[2] then
+						table.insert(out, s)
+					else
+						cut = true
+						if g0 - s[1] >= 1 then
+							table.insert(out, { s[1], g0 })
+						end
+						if s[2] - g1 >= 1 then
+							table.insert(out, { g1, s[2] })
+						end
+					end
+				end
+				segs = out
+			end
+		end
+		if not cut then
+			local w = wall(name, size, pos)
+			if half * 2 < 26 then
+				w:SetAttribute("WE_NoMesh", true)
+			end
+			return
+		end
+		table.sort(segs, function(a, b)
+			return (a[2] - a[1]) > (b[2] - b[1])
+		end)
+		for i, s in ipairs(segs) do
+			local len, mid = s[2] - s[1], (s[1] + s[2]) * 0.5
+			local pieceName = if i == 1 then name else name .. "_" .. tostring(i)
+			local w = wall(
+				pieceName,
+				if alongX then Vector3.new(len, size.Y, size.Z) else Vector3.new(size.X, size.Y, len),
+				if alongX then Vector3.new(mid, pos.Y, pos.Z) else Vector3.new(pos.X, pos.Y, mid)
+			)
+			w:SetAttribute("WE_WallPiece", i)
+			if len < 26 then
+				w:SetAttribute("WE_NoMesh", true)
+			end
+			-- the cap overhangs its wall by 0.2 at each end; keep it out of the opening at a cut end
+			local cutLo, cutHi = s[1] > c - half + 1e-6, s[2] < c + half - 1e-6
+			local cap = folder:FindFirstChild(pieceName .. "_Cap")
+			if cap and cap:IsA("BasePart") and (cutLo or cutHi) then
+				local capLen = len + 0.4 - (if cutLo then 0.2 else 0) - (if cutHi then 0.2 else 0)
+				local capMid = mid + (if cutLo then 0.1 else 0) - (if cutHi then 0.1 else 0)
+				local cs, cp = cap.Size, cap.Position
+				cap.Size = if alongX then Vector3.new(capLen, cs.Y, cs.Z) else Vector3.new(cs.X, cs.Y, capLen)
+				cap.Position = if alongX then Vector3.new(capMid, cp.Y, cp.Z) else Vector3.new(cp.X, cp.Y, capMid)
+			end
+		end
+	end
+
 	-- Segment from outer corner to gate edge: length = alongHalf - gateHalf (NOT *2 — that sealed the gate).
 	local function gateFaceSegments(alongHalf: number): (number, number)
 		local segLen = math.max(alongHalf - gateHalf, 2)
@@ -985,13 +1074,13 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	if gateAxis == "Z" then
 		local closedZ = cz - gateSign * halfZ
 		local openZ = cz + gateSign * halfZ
-		wall("WallClosed", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, closedZ))
-		wall("WallE", Vector3.new(thickness, height, halfZ * 2), Vector3.new(cx + halfX, y, cz))
-		wall("WallW", Vector3.new(thickness, height, halfZ * 2), Vector3.new(cx - halfX, y, cz))
+		gappedWall("WallClosed", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, closedZ))
+		gappedWall("WallE", Vector3.new(thickness, height, halfZ * 2), Vector3.new(cx + halfX, y, cz))
+		gappedWall("WallW", Vector3.new(thickness, height, halfZ * 2), Vector3.new(cx - halfX, y, cz))
 		local segLen, mid = gateFaceSegments(halfX)
 		if segLen > 2 then
-			wall("WallGate_L", Vector3.new(segLen, height, thickness), Vector3.new(cx - mid, y, openZ))
-			wall("WallGate_R", Vector3.new(segLen, height, thickness), Vector3.new(cx + mid, y, openZ))
+			gappedWall("WallGate_L", Vector3.new(segLen, height, thickness), Vector3.new(cx - mid, y, openZ))
+			gappedWall("WallGate_R", Vector3.new(segLen, height, thickness), Vector3.new(cx + mid, y, openZ))
 		end
 		local postW = 2.2 + lv * 0.15
 		local postH = height + 1.5
@@ -1058,13 +1147,13 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 	else
 		local closedX = cx - gateSign * halfX
 		local openX = cx + gateSign * halfX
-		wall("WallClosed", Vector3.new(thickness, height, halfZ * 2), Vector3.new(closedX, y, cz))
-		wall("WallN", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, cz - halfZ))
-		wall("WallS", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, cz + halfZ))
+		gappedWall("WallClosed", Vector3.new(thickness, height, halfZ * 2), Vector3.new(closedX, y, cz))
+		gappedWall("WallN", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, cz - halfZ))
+		gappedWall("WallS", Vector3.new(halfX * 2, height, thickness), Vector3.new(cx, y, cz + halfZ))
 		local segLen, mid = gateFaceSegments(halfZ)
 		if segLen > 2 then
-			wall("WallGate_L", Vector3.new(thickness, height, segLen), Vector3.new(openX, y, cz - mid))
-			wall("WallGate_R", Vector3.new(thickness, height, segLen), Vector3.new(openX, y, cz + mid))
+			gappedWall("WallGate_L", Vector3.new(thickness, height, segLen), Vector3.new(openX, y, cz - mid))
+			gappedWall("WallGate_R", Vector3.new(thickness, height, segLen), Vector3.new(openX, y, cz + mid))
 		end
 		local postW = 2.2 + lv * 0.15
 		local postH = height + 1.5
@@ -1139,7 +1228,18 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 					if dressed >= 4 then
 						break
 					end
-					if ch:IsA("BasePart") and ch:GetAttribute("WE_Perimeter") == true and not ch:GetAttribute("WE_GateVisual") then
+					-- [J8] wall bodies only: never a cap / wire, a short piece next to an opening (WE_NoMesh) or a wall
+					-- running along Z (the 24x8x3 mesh takes the host's identity rotation, so it would sit across it)
+					local nm = ch.Name
+					if
+						ch:IsA("BasePart")
+						and ch:GetAttribute("WE_Perimeter") == true
+						and not ch:GetAttribute("WE_GateVisual")
+						and ch:GetAttribute("WE_NoMesh") ~= true
+						and string.sub(nm, -4) ~= "_Cap"
+						and string.sub(nm, -5) ~= "_Wire"
+						and ch.Size.Z <= ch.Size.X
+					then
 						if vas.TryAttachBuildingVisual(ch, "DefensiveWalls", lv) then
 							dressed += 1
 						end
@@ -1151,14 +1251,16 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 
 	folder:SetAttribute("WE_PerimeterGen", KIT_GEN)
 	folder:SetAttribute("WE_WallLevel", lv)
+	folder:SetAttribute("WE_WallGaps", #gaps)
 	print(string.format(
-		"[StructureKitBuilder] SyncPerimeterWalls SPAWNED plot=%s level=%d height=%.1f thickness=%.1f KIT_GEN=%d parts=%d",
+		"[StructureKitBuilder] SyncPerimeterWalls SPAWNED plot=%s level=%d height=%.1f thickness=%.1f KIT_GEN=%d parts=%d gaps=%d",
 		tostring(plotId),
 		lv,
 		height,
 		thickness,
 		KIT_GEN,
-		#folder:GetChildren()
+		#folder:GetChildren(),
+		#gaps
 	))
 
 end
@@ -1495,7 +1597,53 @@ end
 
 --[[ v68: open / close the rear-zone gates (MapSetup LayoutGround.RearGate_<StructureId>) from the owner's
 	upgrade levels. A gate opens once its structure is L1+: the leaves slide into the wall and stop colliding. ]]
-local REAR_GATE_LABELS = { Airfield = "AIRFIELD", Helipad = "HELIPAD", Dock = "NAVAL DOCK" }
+local REAR_GATE_LABELS: { [string]: string } = { Airfield = "AIRFIELD", Helipad = "HELIPAD", Dock = "NAVAL DOCK" }
+
+-- v70: lintel sign from the folder state: label (WE_GateLabel, else the rear-gate label) + OPEN, CLOSED (an armed
+-- proximity gate waiting for a boat) or LOCKED.
+local function refreshGateSign(gateFolder: Instance)
+	local lintel = gateFolder:FindFirstChild("GateLintel")
+	local sign = lintel and lintel:FindFirstChild("WE_GateSign")
+	local text = sign and sign:FindFirstChild("Text")
+	if not (text and text:IsA("TextLabel")) then
+		return
+	end
+	local gid = gateFolder:GetAttribute("GateId")
+	local gidText = if typeof(gid) == "string" then gid else "GATE"
+	local label = gateFolder:GetAttribute("WE_GateLabel")
+	local base = if typeof(label) == "string" then label else (REAR_GATE_LABELS[gidText] or string.upper(gidText))
+	local suffix = " · LOCKED"
+	if gateFolder:GetAttribute("WE_GateOpen") == true then
+		suffix = " · OPEN"
+	elseif gateFolder:GetAttribute("WE_GateMode") == "Proximity" and gateFolder:GetAttribute("WE_GateArmed") == true then
+		suffix = " · CLOSED"
+	end
+	text.Text = base .. suffix
+end
+
+--[[ v70: open / close one gate folder (rear gate or sea gate). Every child leaf with a numeric WE_GateLeaf (slide
+	sign) and a CFrame WE_ClosedCFrame slides along its OWN X by its width + 0.3 (into the wall line; identical to the
+	old world-X slide on an unturned plot) and stops colliding; its BasePart children move with it. Idempotent:
+	Waterways' sea-gate loop calls it only when the state changes. ]]
+function StructureKitBuilder.SetGateOpen(gateFolder: Instance, open: boolean)
+	for _, leaf in ipairs(gateFolder:GetChildren()) do
+		local sx = leaf:GetAttribute("WE_GateLeaf")
+		local closed = leaf:GetAttribute("WE_ClosedCFrame")
+		if leaf:IsA("BasePart") and typeof(sx) == "number" and typeof(closed) == "CFrame" then
+			local target = if open then closed * CFrame.new(sx * (leaf.Size.X + 0.3), 0, 0) else closed
+			local shift = target.Position - leaf.Position
+			leaf.CFrame = target
+			leaf.CanCollide = not open
+			for _, ch in ipairs(leaf:GetChildren()) do
+				if ch:IsA("BasePart") then
+					ch.CFrame = ch.CFrame + shift
+				end
+			end
+		end
+	end
+	gateFolder:SetAttribute("WE_GateOpen", open)
+	refreshGateSign(gateFolder)
+end
 
 function StructureKitBuilder.SyncRearGates(plotId: number, upgrades: { [string]: any }?)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
@@ -1507,28 +1655,18 @@ function StructureKitBuilder.SyncRearGates(plotId: number, upgrades: { [string]:
 		local gid = gateFolder:GetAttribute("GateId")
 		if typeof(gid) == "string" then
 			local lv = if upgrades then (tonumber(upgrades[gid]) or 0) else 0
-			local open = lv >= 1
-			gateFolder:SetAttribute("WE_GateOpen", open)
-			for _, leaf in ipairs(gateFolder:GetChildren()) do
-				local sx = leaf:GetAttribute("WE_GateLeaf")
-				local closed = leaf:GetAttribute("WE_ClosedCFrame")
-				if leaf:IsA("BasePart") and typeof(sx) == "number" and typeof(closed) == "CFrame" then
-					local target = if open then closed + Vector3.new(sx * (leaf.Size.X + 0.3), 0, 0) else closed
-					local shift = target.Position - leaf.Position
-					leaf.CFrame = target
-					leaf.CanCollide = not open
-					for _, ch in ipairs(leaf:GetChildren()) do
-						if ch:IsA("BasePart") then
-							ch.CFrame = ch.CFrame + shift
-						end
-					end
+			if gateFolder:GetAttribute("WE_GateMode") == "Proximity" then
+				-- v70 sea gate: the structure only ARMS it. Waterways' loop opens an armed gate while a boat driven by
+				-- the owner or an ally is near and closes it after; unarmed = closed (never a walk-in back door).
+				local armed = lv >= 1
+				gateFolder:SetAttribute("WE_GateArmed", armed)
+				if armed then
+					refreshGateSign(gateFolder)
+				else
+					StructureKitBuilder.SetGateOpen(gateFolder, false)
 				end
-			end
-			local lintel = gateFolder:FindFirstChild("GateLintel")
-			local sign = lintel and lintel:FindFirstChild("WE_GateSign")
-			local text = sign and sign:FindFirstChild("Text")
-			if text and text:IsA("TextLabel") then
-				text.Text = (REAR_GATE_LABELS[gid] or string.upper(gid)) .. (if open then " · OPEN" else " · LOCKED")
+			else
+				StructureKitBuilder.SetGateOpen(gateFolder, lv >= 1)
 			end
 		end
 	end

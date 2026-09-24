@@ -30,6 +30,9 @@ local TerritoryConfig = {
 	RadarRevealRadius = 550,
 	NPCOwnerId = -1,
 	NeutralOwnerId = 0,
+	-- v70 waterways: vehicle passengers neither capture nor contest (only the driver of a vehicle counts), so a crewed
+	-- boat or jeep no longer contests its own capture. Naval outposts (oil rigs): WaterConfig.NavalOutposts.
+	VehiclePassengersCount = false,
 
 	-- Periodic stipend for owned territories (MT-style ~every 90s)
 	CaptureStipend = {
@@ -137,7 +140,7 @@ local TerritoryConfig = {
 		CoastalOilAlpha = {
 			Id = "CoastalOilAlpha",
 			DisplayName = "Coastal Oil Alpha",
-			Description = "Offshore oil platform — high capture stipend. Harder guards.",
+			Description = "Offshore oil platform — take it by boat (drive into the lagoon) or from the deck. Harder guards.",
 			CaptureTimeSeconds = 50,
 			BonusType = "FlatPassiveCash",
 			BonusValue = 100,
@@ -152,7 +155,7 @@ local TerritoryConfig = {
 		CoastalOilBravo = {
 			Id = "CoastalOilBravo",
 			DisplayName = "Coastal Oil Bravo",
-			Description = "Offshore oil platform — high capture stipend. Harder guards.",
+			Description = "Offshore oil platform — take it by boat (drive into the lagoon) or from the deck. Harder guards.",
 			CaptureTimeSeconds = 50,
 			BonusType = "FlatPassiveCash",
 			BonusValue = 100,

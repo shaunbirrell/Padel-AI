@@ -307,6 +307,21 @@ local function groundYForPlot(plotFolder: Instance, fallbackY: number): number
 	return fallbackY
 end
 
+-- v70: the plot's rotation (PlotPad carries the plot yaw, BaseLayout.PlotCFrame); identity when there is no pad
+local function rotOf(plotFolder: Instance?): CFrame
+	local plotPad = plotFolder and plotFolder:FindFirstChild("PlotPad")
+	if plotPad and plotPad:IsA("BasePart") then
+		return plotPad.CFrame.Rotation
+	end
+	return CFrame.identity
+end
+
+-- v70: plot-local XZ offset turned with the plot, added to a world base point, at ground height gy
+local function offsetPos(plotFolder: Instance?, base: Vector3, offset: Vector3, gy: number): Vector3
+	local w = rotOf(plotFolder):VectorToWorldSpace(Vector3.new(offset.X, 0, offset.Z))
+	return Vector3.new(base.X + w.X, gy, base.Z + w.Z)
+end
+
 local function ensureDropperNearCollector(collector: BasePart)
 	local plotId = collector:GetAttribute("PlotId")
 	if typeof(plotId) ~= "number" then
@@ -319,7 +334,7 @@ local function ensureDropperNearCollector(collector: BasePart)
 	if plotFolder then
 		gy = groundYForPlot(plotFolder, gy)
 	end
-	local pos = Vector3.new(collector.Position.X + offset.X, gy, collector.Position.Z + offset.Z)
+	local pos = offsetPos(plotFolder, collector.Position, offset, gy)
 	local pad = buildDropperKit(parent, "ManualDropper_Collector", pos, plotId)
 	wireDropper(pad)
 end
@@ -337,7 +352,7 @@ local function ensureDropperNearYard(plotFolder: Instance, plotId: number)
 	end
 	local offset = ManualDropperConfig.YardOffset or Vector3.new(6, 0, -4)
 	local gy = groundYForPlot(plotFolder, anchor.Position.Y - 6)
-	local pos = Vector3.new(anchor.Position.X + offset.X, gy, anchor.Position.Z + offset.Z)
+	local pos = offsetPos(plotFolder, anchor.Position, offset, gy)
 	local pad = buildDropperKit(yard, "ManualDropper_Yard", pos, plotId)
 	wireDropper(pad)
 end

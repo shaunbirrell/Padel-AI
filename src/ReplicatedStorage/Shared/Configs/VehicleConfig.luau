@@ -585,18 +585,21 @@ local VehicleConfig = {
 			ConnectTopDelta = 1.5, -- ... and their tops differ by at most this
 			SpawnMargin = 1, -- boat spawn: every hull point this far inside a water part
 			GridStep = 4, -- dock basin spawn scan
-			LandProbeHeight = 30,
+			-- land probe ray starts this far above the water top (Waterways C4: at +30 the oil-rig decks at y 28 and
+			-- their markers counted as land and blocked the canal under each rig; +6 still sees the sea-gate leaves
+			-- and boom (top 6.0), kerbs (2.0), pontoons (2.1) and the leg / pier footings (2.5))
+			LandProbeHeight = 6,
 		},
 
 		Spawn = {
 			Clearance = 0.3, -- chassis Y = surface + Clearance(footprint) + this
 			MaxStepUp = 4, -- a surface ray hit this far above the expected top = something in the way
 			CarPadRadius = 700,
-			PlotFallback = { X = 0, Z = 45 },
+			PlotFallback = { X = 0, Z = 45 }, -- plot-local (spots and headings below turn with the plot pad's CFrame)
 			-- from the Helipad site: on the deck clear of the parked-heli model, then the apron toward the gate
 			HelipadSpots = { { X = -4, Z = 6 }, { X = 8, Z = 8 }, { X = 0, Z = 38 } },
 			HelipadDeckHeight = 1.2, -- above the plot pad top when no ray hits
-			HeliHeadingRad = math.pi, -- nose toward the base (+Z)
+			HeliHeadingRad = math.pi, -- nose toward the base (plot-local +Z)
 			RunwayRoad = "Runway", -- BaseLayoutConfig.Roads entry
 			RunwayInset = 12, -- start this far in from the runway end nearer the plot edge
 			RunwayHeight = 0.12, -- runway top above the plot pad top when no ray hits

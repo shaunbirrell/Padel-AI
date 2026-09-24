@@ -21,6 +21,8 @@ local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
 local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
 local StructureVisualConfig = require(SharedConfigs:WaitForChild("StructureVisualConfig"))
 local BaseLayout = require(script.Parent:WaitForChild("BaseLayout"))
+-- v70 waterways: plot water, sea gates, naval pads, road ends, rig piers (public water = Modules.Waterways)
+local WaterConfig = require(SharedConfigs:WaitForChild("WaterConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -78,6 +80,11 @@ local GROUND_THICKNESS = 8
 local GROUND_TOP_Y = 0.5
 local SAFETY_FLOOR_SIZE = 10000
 local SAFETY_FLOOR_Y = -28
+-- v70 (spec_final §12.1): Roblox caps a BasePart at 2048 studs per axis, so the 7200 floor, the 10000 safety catch
+-- and the 7200 berms / void walls are TILED (shared edges, no overlap → no z-fight). Ground: 4 x 4 tiles of 1800.
+local GROUND_TILES_PER_SIDE = 4 -- 7200 / 4 = 1800 per ground tile
+local SAFETY_TILES_PER_SIDE = 5 -- 10000 / 5 = 2000 per safety-catch tile
+local EDGE_PIECES = 4 -- EdgeBerm* (7120 / 4 = 1780) / VoidWall* (7200 / 4 = 1800) pieces per side
 local PLOT_PAD_SIZE = BaseLayout.PlotSize(200) -- v68: BaseLayoutConfig.PlotSize (320) when the layout is on
 local PLOT_RING = 800
 local PLOT_SPAWN_CLEARANCE = 40 -- v68: vehicle / NPC / event spawn pads stay this far outside plot edges
@@ -340,11 +347,16 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	return bb
 end
 
-local function beacon(parent, pos, color, name)
+-- v70: `turn` (optional) = the plot frame for a plot beacon, so the beacon turns with its plot
+local function beacon(parent, at: Vector3, color, name, turn: CFrame?)
+	local function place(dy: number): CFrame
+		local cf = CFrame.new(at + Vector3.new(0, dy, 0))
+		return if turn then cf * turn.Rotation else cf
+	end
 	part({
 		Name = name or "Beacon",
 		Size = Vector3.new(0.55, 12, 0.55),
-		Position = pos + Vector3.new(0, 6, 0),
+		CFrame = place(6),
 		Color = Color3.fromRGB(40, 45, 42),
 		Material = Enum.Material.Metal,
 		CanCollide = false,
@@ -353,7 +365,7 @@ local function beacon(parent, pos, color, name)
 	part({
 		Name = (name or "Beacon") .. "_Tip",
 		Size = Vector3.new(1.6, 1.6, 1.6),
-		Position = pos + Vector3.new(0, 13, 0),
+		CFrame = place(13),
 		Color = color,
 		Material = Enum.Material.Neon,
 		Shape = Enum.PartType.Ball,
@@ -363,7 +375,7 @@ local function beacon(parent, pos, color, name)
 	part({
 		Name = (name or "Beacon") .. "_Glow",
 		Size = Vector3.new(3.2, 0.4, 3.2),
-		Position = pos + Vector3.new(0, 0.3, 0),
+		CFrame = place(0.3),
 		Color = color,
 		Material = Enum.Material.Neon,
 		Transparency = 0.55,
@@ -426,7 +438,8 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local plinth = part({
 		Name = def.Id,
 		Size = plinthSize,
-		Position = if isConsole then (consoleCF :: CFrame).Position else pos + offset,
+		-- legacy grid slot (layout off): plot-local offset through the plot frame (v70)
+		Position = if isConsole then (consoleCF :: CFrame).Position else BaseLayout.PlotCFrame(pos):PointToWorldSpace(offset),
 		Color = if isConsole then Color3.fromRGB(46, 50, 48) else def.Plinth,
 		Transparency = if isConsole then 0 else 0.32,
 		Material = if isConsole then Enum.Material.Metal else Enum.Material.Concrete,
@@ -562,7 +575,7 @@ end
 
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
-local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText, labelColor, health, npcType, npcId)
+local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: string?, labelColor, health, npcType, npcId)
 	-- Visual props for Training Yard / static kits. R15-ready catalog overlay via VisualAssetConfig;
 	-- Part-kit military placeholder (R6-ish ~5 stud) when mesh IDs missing / StudioSkipWorldDressing.
 	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
@@ -813,72 +826,143 @@ local function groundCenterY(): number
 	return GROUND_TOP_Y - GROUND_THICKNESS * 0.5
 end
 
-local function buildSafetyUnderfloor(mapFolder: Folder)
-	part({
-		Name = "SafetyCatch",
-		Size = Vector3.new(SAFETY_FLOOR_SIZE, 4, SAFETY_FLOOR_SIZE),
-		Position = Vector3.new(0, SAFETY_FLOOR_Y, 0),
-		Color = Color3.fromRGB(18, 22, 18),
-		Material = Enum.Material.Slate,
-		Transparency = 0.92,
-		CanCollide = true,
-		Anchored = true,
-		Parent = mapFolder,
-	})
+-- v70 (spec_final §12.1): tiled floor layers. Every tile is <= 2000 studs per axis; neighbours share edges exactly.
+type TileSpec = { Name: string, At: Vector3, Size: Vector3 }
+type TileLook = { Color: Color3, Material: Enum.Material, Transparency: number }
+
+-- centres of n equal tiles of size t that together span n * t, centred on 0
+local function tileCentres(n: number, t: number): { number }
+	local out: { number } = {}
+	for i = 1, n do
+		table.insert(out, (i - 0.5) * t - n * t * 0.5)
+	end
+	return out
 end
 
-local function buildEdgeBerms(mapFolder: Folder)
+-- One shared heal path (MapSetup.Run, EnsureGroundHealthy, ForceRebuildGround): build every missing tile and
+-- re-assert size / position / collide on the rest (a legacy untiled part with a tile's name is resized to that tile).
+-- Returns (tile count, repaired).
+local function healTileSet(mapFolder: Instance, specs: { TileSpec }, look: TileLook): (number, boolean)
+	local repaired = false
+	for _, t in ipairs(specs) do
+		local existing = mapFolder:FindFirstChild(t.Name)
+		if existing and existing:IsA("BasePart") then
+			if existing.Size ~= t.Size or (existing.Position - t.At).Magnitude > 0.01 or existing.CanCollide ~= true or existing.Anchored ~= true then
+				repaired = true
+			end
+			existing.Size = t.Size
+			existing.CFrame = CFrame.new(t.At)
+			existing.CanCollide = true
+			existing.Anchored = true
+			existing.Color = look.Color
+			existing.Material = look.Material
+			existing.Transparency = look.Transparency
+		else
+			if existing then
+				existing:Destroy()
+			end
+			part({
+				Name = t.Name,
+				Size = t.Size,
+				Position = t.At,
+				Color = look.Color,
+				Material = look.Material,
+				Transparency = look.Transparency,
+				CanCollide = true,
+				Anchored = true,
+				Parent = mapFolder,
+			})
+			repaired = true
+		end
+	end
+	return #specs, repaired
+end
+
+-- destroy the part named `base` and every "<base>_..." piece
+local function destroyNamed(mapFolder: Instance, base: string)
+	for _, ch in ipairs(mapFolder:GetChildren()) do
+		if ch.Name == base or string.sub(ch.Name, 1, #base + 1) == base .. "_" then
+			ch:Destroy()
+		end
+	end
+end
+
+-- Ground: 4 x 4 tiles of 1800 x 8 x 1800, top at GROUND_TOP_Y. The tile centred at (-900, -900) keeps the name
+-- "Ground" (Bootstrap and the heal checks read Map.Ground); the others are GroundTile_<i>_<j>.
+local function groundTileSpecs(): { TileSpec }
+	local out: { TileSpec } = {}
+	local tile = GROUND_SIZE / GROUND_TILES_PER_SIDE
+	local cs = tileCentres(GROUND_TILES_PER_SIDE, tile)
+	for i, x in ipairs(cs) do
+		for j, z in ipairs(cs) do
+			local name = if x == -tile * 0.5 and z == -tile * 0.5 then "Ground" else ("GroundTile_" .. i .. "_" .. j)
+			table.insert(out, { Name = name, At = Vector3.new(x, groundCenterY(), z), Size = Vector3.new(tile, GROUND_THICKNESS, tile) })
+		end
+	end
+	return out
+end
+
+local function buildGroundTiles(mapFolder: Instance): (number, boolean)
+	return healTileSet(mapFolder, groundTileSpecs(), { Color = COL_GROUND, Material = Enum.Material.Sand, Transparency = 0 })
+end
+
+-- number of ground tiles that exist, collide and have full tile size (Bootstrap health check)
+local function countHealthyGroundTiles(mapFolder: Instance): number
+	local n = 0
+	for _, t in ipairs(groundTileSpecs()) do
+		local p = mapFolder:FindFirstChild(t.Name)
+		if p and p:IsA("BasePart") and p.CanCollide and p.Size.X >= t.Size.X - 1 and p.Size.Z >= t.Size.Z - 1 then
+			n += 1
+		end
+	end
+	return n
+end
+
+-- SafetyCatch: 5 x 5 tiles of 2000 (the centre one keeps the name SafetyCatch)
+local function buildSafetyUnderfloor(mapFolder: Instance): (number, boolean)
+	local specs: { TileSpec } = {}
+	local tile = SAFETY_FLOOR_SIZE / SAFETY_TILES_PER_SIDE
+	for i, x in ipairs(tileCentres(SAFETY_TILES_PER_SIDE, tile)) do
+		for j, z in ipairs(tileCentres(SAFETY_TILES_PER_SIDE, tile)) do
+			local name = if x == 0 and z == 0 then "SafetyCatch" else ("SafetyCatch_" .. i .. "_" .. j)
+			table.insert(specs, { Name = name, At = Vector3.new(x, SAFETY_FLOOR_Y, z), Size = Vector3.new(tile, 4, tile) })
+		end
+	end
+	return healTileSet(mapFolder, specs, { Color = Color3.fromRGB(18, 22, 18), Material = Enum.Material.Slate, Transparency = 0.92 })
+end
+
+-- one ring side = EDGE_PIECES pieces: <prefix><N|S|E|W> (first piece keeps the legacy name), then _2 .. _4
+local function edgeRingSpecs(prefix: string, inset: number, length: number, height: number, thick: number, y: number): { TileSpec }
+	local out: { TileSpec } = {}
+	local half = GROUND_SIZE * 0.5 - inset
+	local piece = length / EDGE_PIECES
+	for _, side in ipairs({ "N", "S", "E", "W" }) do
+		local alongX = side == "N" or side == "S"
+		local sgn = if side == "N" or side == "W" then -1 else 1
+		for k, c in ipairs(tileCentres(EDGE_PIECES, piece)) do
+			table.insert(out, {
+				Name = prefix .. side .. (if k == 1 then "" else ("_" .. k)),
+				At = if alongX then Vector3.new(c, y, sgn * half) else Vector3.new(sgn * half, y, c),
+				Size = if alongX then Vector3.new(piece, height, thick) else Vector3.new(thick, height, piece),
+			})
+		end
+	end
+	return out
+end
+
+local function buildEdgeBerms(mapFolder: Instance): (number, boolean)
 	-- Soft inner berm just inside Ground edge (keeps stroll-off from feeling like cliff)
-	local half = GROUND_SIZE * 0.5 - 40
 	local bermH = 18
-	local bermT = 28
-	local bermY = GROUND_TOP_Y + bermH * 0.5
-	local sides = {
-		{ Name = "EdgeBermN", Size = Vector3.new(GROUND_SIZE - 80, bermH, bermT), Pos = Vector3.new(0, bermY, -half) },
-		{ Name = "EdgeBermS", Size = Vector3.new(GROUND_SIZE - 80, bermH, bermT), Pos = Vector3.new(0, bermY, half) },
-		{ Name = "EdgeBermE", Size = Vector3.new(bermT, bermH, GROUND_SIZE - 80), Pos = Vector3.new(half, bermY, 0) },
-		{ Name = "EdgeBermW", Size = Vector3.new(bermT, bermH, GROUND_SIZE - 80), Pos = Vector3.new(-half, bermY, 0) },
-	}
-	for _, s in ipairs(sides) do
-		part({
-			Name = s.Name,
-			Size = s.Size,
-			Position = s.Pos,
-			Color = Color3.fromRGB(185, 155, 105),
-			Material = Enum.Material.Sand,
-			CanCollide = true,
-			Anchored = true,
-			Parent = mapFolder,
-		})
-	end
+	local specs = edgeRingSpecs("EdgeBerm", 40, GROUND_SIZE - 80, bermH, 28, GROUND_TOP_Y + bermH * 0.5)
+	return healTileSet(mapFolder, specs, { Color = Color3.fromRGB(185, 155, 105), Material = Enum.Material.Sand, Transparency = 0 })
 end
 
 
-local function buildInvisibleWalls(mapFolder: Folder)
+local function buildInvisibleWalls(mapFolder: Instance): (number, boolean)
 	-- Tall invisible perimeter so players cannot walk off Ground into void/water
-	local half = GROUND_SIZE * 0.5 - 8
 	local wallH = 80
-	local wallT = 12
-	local wallY = GROUND_TOP_Y + wallH * 0.5
-	local sides = {
-		{ Name = "VoidWallN", Size = Vector3.new(GROUND_SIZE, wallH, wallT), Pos = Vector3.new(0, wallY, -half) },
-		{ Name = "VoidWallS", Size = Vector3.new(GROUND_SIZE, wallH, wallT), Pos = Vector3.new(0, wallY, half) },
-		{ Name = "VoidWallE", Size = Vector3.new(wallT, wallH, GROUND_SIZE), Pos = Vector3.new(half, wallY, 0) },
-		{ Name = "VoidWallW", Size = Vector3.new(wallT, wallH, GROUND_SIZE), Pos = Vector3.new(-half, wallY, 0) },
-	}
-	for _, s in ipairs(sides) do
-		part({
-			Name = s.Name,
-			Size = s.Size,
-			Position = s.Pos,
-			Color = Color3.fromRGB(40, 50, 40),
-			Material = Enum.Material.SmoothPlastic,
-			Transparency = 1,
-			CanCollide = true,
-			Anchored = true,
-			Parent = mapFolder,
-		})
-	end
+	local specs = edgeRingSpecs("VoidWall", 8, GROUND_SIZE, wallH, 12, GROUND_TOP_Y + wallH * 0.5)
+	return healTileSet(mapFolder, specs, { Color = Color3.fromRGB(40, 50, 40), Material = Enum.Material.SmoothPlastic, Transparency = 1 })
 end
 
 local function buildMountainRing(root: Folder)
@@ -1069,6 +1153,8 @@ local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Ve
 	--[[
 		Stepped collide stairs from elevated oil deck (~Y=28) down to ground.
 		towardCenter = horizontal direction from deck toward map center (inland).
+		v70: the stairs now really run toward towardCenter (they subtracted dir, so they ran out to sea); on the
+		waterways map they are the rig's pier across the lagoon to the inner bank (spec_final §7.1).
 	]]
 	local dir = Vector3.new(towardCenter.X, 0, towardCenter.Z)
 	if dir.Magnitude < 0.1 then
@@ -1082,15 +1168,15 @@ local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Ve
 	local stepW = 22
 	local stepT = 7.5
 	-- Start just outside the 48-stud deck toward inland
-	local edge = Vector3.new(deckPos.X, 0, deckPos.Z) - dir * 26
+	local edge = Vector3.new(deckPos.X, 0, deckPos.Z) + dir * 26
 	for s = 1, steps do
 		local y = deckTopY - rise * s + 0.6
-		local horiz = edge - dir * (run * s)
-		local pos = Vector3.new(horiz.X, y, horiz.Z)
+		local horiz = edge + dir * (run * s)
+		local stepAt = Vector3.new(horiz.X, y, horiz.Z)
 		part({
 			Name = territoryId .. "_RampStep" .. s,
 			Size = Vector3.new(stepW, 1.3, stepT),
-			CFrame = CFrame.lookAt(pos, pos + dir),
+			CFrame = CFrame.lookAt(stepAt, stepAt + dir),
 			Color = Color3.fromRGB(75, 78, 82),
 			Material = Enum.Material.Metal,
 			CanCollide = true,
@@ -1098,7 +1184,7 @@ local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Ve
 			Parent = parent,
 		})
 	end
-	local midHoriz = edge - dir * (run * 5)
+	local midHoriz = edge + dir * (run * 5)
 	part({
 		Name = territoryId .. "_RampShelf",
 		Size = Vector3.new(28, 1.4, 14),
@@ -1109,7 +1195,7 @@ local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Ve
 		Anchored = true,
 		Parent = parent,
 	})
-	local approach = edge - dir * (run * steps + 10)
+	local approach = edge + dir * (run * steps + 10)
 	part({
 		Name = territoryId .. "_RampApproach",
 		Size = Vector3.new(30, 1, 18),
@@ -1131,6 +1217,22 @@ MapSetup.GROUND_THICKNESS = GROUND_THICKNESS
 MapSetup.GROUND_TOP_Y = GROUND_TOP_Y
 MapSetup.SAFETY_FLOOR_SIZE = SAFETY_FLOOR_SIZE
 MapSetup.SAFETY_FLOOR_Y = SAFETY_FLOOR_Y
+-- v70: the ground is tiled (§12.1); Bootstrap checks the tiles, not one 7200 part
+MapSetup.GROUND_TILE_SIZE = GROUND_SIZE / GROUND_TILES_PER_SIDE
+MapSetup.GROUND_TILES = GROUND_TILES_PER_SIDE * GROUND_TILES_PER_SIDE
+-- v70: stamped on WarEmpireSetup (WE_MapGen). Bootstrap rebuilds a saved / baked map whose stamp differs, so a place
+-- saved with an older layout (unturned plots, one WaterPlane) never keeps it. The stamp also encodes
+-- BaseLayoutConfig.FaceMapCentre (70 = off, 71 = on), so flipping the flag rebuilds a map baked with the other value.
+MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 71 else 70
+
+-- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
+function MapSetup.CountGroundTiles(setup: Instance): number
+	local map = setup:FindFirstChild("Map")
+	if not map then
+		return 0
+	end
+	return countHealthyGroundTiles(map)
+end
 
 local function buildPadSupportShelves(setup: Folder)
 	--[[
@@ -1225,6 +1327,8 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 	--[[
 		Soft-heal existing WarEmpireSetup Ground / SafetyCatch.
 		Returns true if healthy (or repaired in place), false if caller should rebuild.
+		v70: re-asserts all 16 ground tiles, the 25 safety-catch tiles and every berm / void-wall piece (a legacy
+		single 7200 Ground is resized to its tile and the missing tiles are built).
 	]]
 	local map = setup:FindFirstChild("Map")
 	if not map then
@@ -1234,61 +1338,28 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 	if not (ground and ground:IsA("BasePart")) then
 		return false
 	end
-	local repaired = false
 	-- Always force full-size collide Ground every Play (bulletproof void floor)
-	if ground.Size.X < GROUND_SIZE - 1 or ground.Size.Z < GROUND_SIZE - 1 or ground.Size.Y < GROUND_THICKNESS - 0.5
-		or ground.CanCollide ~= true
-	then
-		ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
-		ground.Position = Vector3.new(0, groundCenterY(), 0)
-		repaired = true
-	end
-	-- Even when size OK, re-assert collide / anchor every start
-	ground.Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE)
-	ground.Position = Vector3.new(0, groundCenterY(), 0)
-	if ground.CanCollide ~= true then
-		ground.CanCollide = true
-		repaired = true
-	end
-	if ground.Anchored ~= true then
-		ground.Anchored = true
-		repaired = true
-	end
-	ground.Color = COL_GROUND
-	ground.Material = Enum.Material.Sand
-
-	local catch = map:FindFirstChild("SafetyCatch")
-	if not (catch and catch:IsA("BasePart")) then
-		buildSafetyUnderfloor(map :: Folder)
-		repaired = true
-	else
-		catch.Size = Vector3.new(SAFETY_FLOOR_SIZE, 4, SAFETY_FLOOR_SIZE)
-		catch.Position = Vector3.new(0, SAFETY_FLOOR_Y, 0)
-		catch.CanCollide = true
-		catch.Anchored = true
-		catch.Transparency = 0.92
-	end
+	local tiles, repaired = buildGroundTiles(map)
+	local _, catchRepaired = buildSafetyUnderfloor(map)
+	repaired = repaired or catchRepaired
 
 	if not setup:FindFirstChild("MountainRing") then
 		buildMountainRing(setup :: Folder)
 		repaired = true
 	end
-	if not map:FindFirstChild("EdgeBermN") then
-		buildEdgeBerms(map :: Folder)
-		repaired = true
-	end
-	if not map:FindFirstChild("VoidWallN") then
-		buildInvisibleWalls(map :: Folder)
-		repaired = true
-	end
+	local _, bermRepaired = buildEdgeBerms(map)
+	local _, wallRepaired = buildInvisibleWalls(map)
+	repaired = repaired or bermRepaired or wallRepaired
 
 	buildPadSupportShelves(setup :: Folder)
 
 	print(string.format(
-		"[WAR EMPIRE] Ground heal: ok size=%.0fx%.0fx%.0f CanCollide=%s repaired=%s",
+		"[WAR EMPIRE] Ground heal: ok size=%.0fx%.0fx%.0f tiles=%d/%d CanCollide=%s repaired=%s",
 		ground.Size.X,
 		ground.Size.Y,
 		ground.Size.Z,
+		countHealthyGroundTiles(map),
+		tiles,
 		tostring(ground.CanCollide),
 		tostring(repaired)
 	))
@@ -1303,56 +1374,43 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 		Hard rebuild: destroy Map.Ground + SafetyCatch and recreate them.
 		Use every Play when soft-heal is not enough (stale holes / void gaps).
 		Does NOT rebuild the whole WarEmpireSetup — only the collide floor layers.
+		v70: every ground / safety-catch tile and every berm / void-wall piece.
 	]]
 	local map = setup:FindFirstChild("Map")
 	if not map then
 		return false
 	end
-	local oldGround = map:FindFirstChild("Ground")
-	if oldGround then
-		oldGround:Destroy()
-	end
-	local oldCatch = map:FindFirstChild("SafetyCatch")
-	if oldCatch then
-		oldCatch:Destroy()
-	end
+	destroyNamed(map, "Ground")
+	destroyNamed(map, "GroundTile")
+	destroyNamed(map, "SafetyCatch")
 
-	local ground = part({
-		Name = "Ground",
-		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
-		Position = Vector3.new(0, groundCenterY(), 0),
-		Color = COL_GROUND,
-		Material = Enum.Material.Sand,
-		CanCollide = true,
-		Anchored = true,
-		Parent = map,
-	})
-	ground.CanCollide = true
-	ground.Anchored = true
-	buildSafetyUnderfloor(map :: Folder)
+	local tiles = buildGroundTiles(map)
+	buildSafetyUnderfloor(map)
 	-- Refresh berms + invisible void walls every force rebuild
 	for _, name in ipairs({ "EdgeBermN", "EdgeBermS", "EdgeBermE", "EdgeBermW", "VoidWallN", "VoidWallS", "VoidWallE", "VoidWallW" }) do
-		local oldP = map:FindFirstChild(name)
-		if oldP then
-			oldP:Destroy()
-		end
+		destroyNamed(map, name)
 	end
-	buildEdgeBerms(map :: Folder)
-	buildInvisibleWalls(map :: Folder)
+	buildEdgeBerms(map)
+	buildInvisibleWalls(map)
 	if not setup:FindFirstChild("MountainRing") then
 		buildMountainRing(setup :: Folder)
 	end
 	buildPadSupportShelves(setup :: Folder)
 
+	local healthy = countHealthyGroundTiles(map)
+	local ground = map:FindFirstChild("Ground")
+	local g = if ground and ground:IsA("BasePart") then ground else nil
 	print(string.format(
-		"[WAR EMPIRE] Ground FORCE-REBUILT: size=%.0fx%.0fx%.0f CanCollide=%s Anchored=%s",
-		ground.Size.X,
-		ground.Size.Y,
-		ground.Size.Z,
-		tostring(ground.CanCollide),
-		tostring(ground.Anchored)
+		"[WAR EMPIRE] Ground FORCE-REBUILT: size=%.0fx%.0fx%.0f tiles=%d/%d CanCollide=%s Anchored=%s",
+		if g then g.Size.X else 0,
+		if g then g.Size.Y else 0,
+		if g then g.Size.Z else 0,
+		healthy,
+		tiles,
+		tostring(g ~= nil and g.CanCollide),
+		tostring(g ~= nil and g.Anchored)
 	))
-	return ground.CanCollide == true and ground.Size.X >= GROUND_SIZE - 1 and ground.Size.Y >= GROUND_THICKNESS - 0.5
+	return healthy == tiles and g ~= nil and g.Size.Y >= GROUND_THICKNESS - 0.5
 end
 
 
@@ -1362,13 +1420,32 @@ end
 -- StructureKitBuilder.SyncRearGates when the matching structure (Airfield / Helipad / Dock) is bought.
 local REAR_GATE_LABELS = { Airfield = "AIRFIELD", Helipad = "HELIPAD", Dock = "NAVAL DOCK" }
 
+-- v70 [J3/J4]: shared look + flags for every WE_Water part MapSetup builds (DockWater, SeaGateWater). Water parts never
+-- collide, touch or take raycasts (the vehicles' water query is geometric over the tagged parts; combat rays reach the
+-- real floor) and cast no shadow.
+local function styleWaterPart(w: BasePart, waterId: string)
+	w.Reflectance = WaterConfig.Look.Reflectance
+	w.CanCollide = false
+	w.CanTouch = false
+	w.CanQuery = false
+	w.CastShadow = false
+	w:SetAttribute("WE_WaterId", waterId)
+	CollectionService:AddTag(w, TAG_WATER)
+end
+
 local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector3)
 	if not BaseLayout.Enabled() then
 		return
 	end
 	local cfg = BaseLayout.Config()
 	local look = (StructureVisualConfig :: any).BaseLook or {}
-	local padTop = pos.Y + 0.5
+	-- v70: everything below is plot-local (BaseLayoutConfig frame) and placed through the plot frame F, so the whole
+	-- layout turns with the plot when BaseLayoutConfig.FaceMapCentre is on (F = CFrame.new(pos) while it is off).
+	local F = BaseLayout.PlotCFrame(pos)
+	local padTop = 0.5 -- plot-local: the pad is 1 stud thick, centred on pos
+	local function at(x: number, y: number, z: number): CFrame
+		return F * CFrame.new(x, y, z)
+	end
 	local H = cfg.PlotSize * 0.5
 	local folder = Instance.new("Folder")
 	folder.Name = "LayoutGround"
@@ -1377,13 +1454,18 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 	local paint = Color3.fromRGB(236, 232, 214)
 	local yellow = look.Chevron or Color3.fromRGB(230, 196, 70)
 	local steel = Color3.fromRGB(70, 74, 72)
+	-- v70: the sea gate (and the channel behind it) exists only when the plots face the map centre
+	local seaGate = BaseLayout.FacesMapCentre() and WaterConfig.Enabled == true
+	local SG = WaterConfig.SeaGate
+	local waterMidY = (WaterConfig.BottomY + WaterConfig.SurfaceY) * 0.5
+	local waterH = WaterConfig.SurfaceY - WaterConfig.BottomY
 
 	-- Roads, plaza, runway, taxiway, apron
 	for _, r in ipairs(cfg.Roads) do
 		local road = part({
 			Name = "Road_" .. r.Name,
 			Size = Vector3.new(r.SizeX, 0.12, r.SizeZ),
-			Position = Vector3.new(pos.X + r.X, padTop + 0.06, pos.Z + r.Z),
+			CFrame = at(r.X, padTop + 0.06, r.Z),
 			Color = asphalt,
 			Material = Enum.Material.Asphalt,
 			CanCollide = true,
@@ -1401,7 +1483,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 				part({
 					Name = "RunwayDash",
 					Size = if alongX then Vector3.new(7, 0.02, 0.9) else Vector3.new(0.9, 0.02, 7),
-					Position = Vector3.new(pos.X + r.X + (if alongX then t else 0), markY, pos.Z + r.Z + (if alongX then 0 else t)),
+					CFrame = at(r.X + (if alongX then t else 0), markY, r.Z + (if alongX then 0 else t)),
 					Color = paint,
 					Material = Enum.Material.SmoothPlastic,
 					CanCollide = false,
@@ -1415,7 +1497,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 					part({
 						Name = "RunwayThreshold",
 						Size = if alongX then Vector3.new(6, 0.02, 1.2) else Vector3.new(1.2, 0.02, 6),
-						Position = Vector3.new(pos.X + r.X + (if alongX then along else across), markY, pos.Z + r.Z + (if alongX then across else along)),
+						CFrame = at(r.X + (if alongX then along else across), markY, r.Z + (if alongX then across else along)),
 						Color = paint,
 						Material = Enum.Material.SmoothPlastic,
 						CanCollide = false,
@@ -1427,7 +1509,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 			part({
 				Name = "TaxiLine",
 				Size = if alongX then Vector3.new(len - 2, 0.02, 0.5) else Vector3.new(0.5, 0.02, len - 2),
-				Position = Vector3.new(pos.X + r.X, markY, pos.Z + r.Z),
+				CFrame = at(r.X, markY, r.Z),
 				Color = yellow,
 				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
@@ -1440,7 +1522,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 				part({
 					Name = "RoadEdge",
 					Size = if alongX then Vector3.new(len - 1, 0.02, 0.35) else Vector3.new(0.35, 0.02, len - 1),
-					Position = Vector3.new(pos.X + r.X + (if alongX then 0 else off), markY, pos.Z + r.Z + (if alongX then off else 0)),
+					CFrame = at(r.X + (if alongX then 0 else off), markY, r.Z + (if alongX then off else 0)),
 					Color = paint,
 					Material = Enum.Material.SmoothPlastic,
 					CanCollide = false,
@@ -1453,42 +1535,56 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 	-- Parade-ground flagpole
 	do
 		local f = cfg.Courtyard.Flagpole
-		local base = Vector3.new(pos.X + f.X, padTop, pos.Z + f.Z)
-		part({ Name = "FlagBase", Size = Vector3.new(4, 1, 4), Position = base + Vector3.new(0, 0.5, 0), Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
-		part({ Name = "FlagPole", Size = Vector3.new(0.5, 28, 0.5), Position = base + Vector3.new(0, 15, 0), Color = steel, Material = Enum.Material.Metal, CanCollide = true, Parent = folder })
-		part({ Name = "ParadeFlag", Size = Vector3.new(0.14, 4.4, 7.5), Position = base + Vector3.new(0, 25.8, -3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
+		part({ Name = "FlagBase", Size = Vector3.new(4, 1, 4), CFrame = at(f.X, padTop + 0.5, f.Z), Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
+		part({ Name = "FlagPole", Size = Vector3.new(0.5, 28, 0.5), CFrame = at(f.X, padTop + 15, f.Z), Color = steel, Material = Enum.Material.Metal, CanCollide = true, Parent = folder })
+		part({ Name = "ParadeFlag", Size = Vector3.new(0.14, 4.4, 7.5), CFrame = at(f.X, padTop + 25.8, f.Z - 3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
 	end
 
 	-- Dock basin: water surface + concrete kerb
 	do
 		local d = cfg.Courtyard.DockBasin
-		local c = Vector3.new(pos.X + d.X, padTop, pos.Z + d.Z)
+		-- v70 [J3/J4]: one water level for the whole map (WaterConfig.BottomY..SurfaceY = 0.3..1.5). The part is TURNED
+		-- WITH THE PLOT (exact quarter turn, unchanged world AABB), so the vehicles' basin spawn heading (the part's yaw)
+		-- points the bow at the sea gate. DockWater is the only plot water part with WE_PlotId.
 		local water = part({
 			Name = "DockWater",
-			Size = Vector3.new(d.SizeX, 0.3, d.SizeZ),
-			Position = c + Vector3.new(0, 0.16, 0),
-			Color = Color3.fromRGB(58, 110, 140),
-			Material = Enum.Material.Glass,
-			Transparency = 0.12,
+			Size = Vector3.new(d.SizeX, waterH, d.SizeZ),
+			CFrame = BaseLayout.PlotLocalCFrame(pos, d.X, waterMidY - pos.Y, d.Z),
+			Color = WaterConfig.Look.Color,
+			Material = WaterConfig.Look.Material,
+			Transparency = WaterConfig.Look.Transparency,
 			CanCollide = false,
 			Parent = folder,
 		})
-		water.Reflectance = 0.15
+		styleWaterPart(water, "DockWater")
 		water:SetAttribute("WE_PlotId", plotId)
-		CollectionService:AddTag(water, TAG_WATER)
-		for _, e in ipairs({
-			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, d.SizeZ * 0.5 + 0.6) },
-			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, -d.SizeZ * 0.5 - 0.6) },
-			{ Vector3.new(1.2, 1, d.SizeZ), Vector3.new(d.SizeX * 0.5 + 0.6, 0.5, 0) },
-			{ Vector3.new(1.2, 1, d.SizeZ), Vector3.new(-d.SizeX * 0.5 - 0.6, 0.5, 0) },
-		}) do
-			part({ Name = "DockKerb", Size = e[1], Position = c + e[2], Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
+		-- kerbs: plot-local boxes { size, centre }
+		local kx0, kx1 = d.X - d.SizeX * 0.5 - 1.2, d.X + d.SizeX * 0.5 + 1.2 -- 101.8 .. 154.2
+		local rearZ = d.Z - d.SizeZ * 0.5 - 0.6
+		local kerbs: { { Vector3 } } = {
+			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(d.X, padTop + 0.5, d.Z + d.SizeZ * 0.5 + 0.6) },
+		}
+		if seaGate then
+			-- v70 §4: the rear kerb opens onto the gate water (stubs either side) and two short kerbs line the gate water
+			-- from the basin to the gate posts
+			local sideZ0, sideZ1 = SG.WallZ + SG.PostDepth * 0.5, SG.BasinRearZ -- -156.8 .. -147
+			table.insert(kerbs, { Vector3.new(SG.X0 - kx0, 1, 1.2), Vector3.new((kx0 + SG.X0) * 0.5, padTop + 0.5, rearZ) })
+			table.insert(kerbs, { Vector3.new(kx1 - SG.X1, 1, 1.2), Vector3.new((SG.X1 + kx1) * 0.5, padTop + 0.5, rearZ) })
+			table.insert(kerbs, { Vector3.new(1.2, 1, sideZ1 - sideZ0), Vector3.new(SG.X0 - 0.6, padTop + 0.5, (sideZ0 + sideZ1) * 0.5) })
+			table.insert(kerbs, { Vector3.new(1.2, 1, sideZ1 - sideZ0), Vector3.new(SG.X1 + 0.6, padTop + 0.5, (sideZ0 + sideZ1) * 0.5) })
+		else
+			table.insert(kerbs, { Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(d.X, padTop + 0.5, rearZ) })
+		end
+		table.insert(kerbs, { Vector3.new(1.2, 1, d.SizeZ), Vector3.new(d.X + d.SizeX * 0.5 + 0.6, padTop + 0.5, d.Z) })
+		table.insert(kerbs, { Vector3.new(1.2, 1, d.SizeZ), Vector3.new(d.X - d.SizeX * 0.5 - 0.6, padTop + 0.5, d.Z) })
+		for _, e in ipairs(kerbs) do
+			part({ Name = "DockKerb", Size = e[1], CFrame = F * CFrame.new(e[2]), Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
 		end
 	end
 
 	-- Inner wall with guarded gates
 	local iw = cfg.InnerWall
-	local zc = pos.Z + iw.Z
+	local zc = iw.Z
 	local wallCol = (StructureVisualConfig.Palettes.DefensiveWalls and StructureVisualConfig.Palettes.DefensiveWalls.Body) or Color3.fromRGB(178, 170, 148)
 	local half = iw.GateWidth * 0.5
 	local function wallSeg(a: number, b: number)
@@ -1498,7 +1594,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		part({
 			Name = "InnerWall",
 			Size = Vector3.new(b - a, iw.Height, iw.Thickness),
-			Position = Vector3.new(pos.X + (a + b) * 0.5, padTop + iw.Height * 0.5, zc),
+			CFrame = at((a + b) * 0.5, padTop + iw.Height * 0.5, zc),
 			Color = wallCol,
 			Material = Enum.Material.Concrete,
 			CanCollide = true,
@@ -1508,7 +1604,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		part({
 			Name = "InnerWallCap",
 			Size = Vector3.new(b - a + 0.3, 0.5, iw.Thickness + 0.3),
-			Position = Vector3.new(pos.X + (a + b) * 0.5, padTop + iw.Height + 0.25, zc),
+			CFrame = at((a + b) * 0.5, padTop + iw.Height + 0.25, zc),
 			Color = look.WallCap or Color3.fromRGB(132, 126, 110),
 			Material = Enum.Material.Concrete,
 			CanCollide = false,
@@ -1532,12 +1628,14 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		gateFolder:SetAttribute("GateId", g.Id)
 		gateFolder:SetAttribute("PlotId", plotId)
 		gateFolder.Parent = folder
-		local gx = pos.X + g.X
+		local gx = g.X
 		for _, sx in ipairs({ -1, 1 }) do
+			-- v70: "RearGatePost" (was "GatePost"): GateDefenseService's no-perimeter fallback collects every descendant
+			-- named GatePost under the plot and must only ever see the perimeter main-gate posts
 			part({
-				Name = "GatePost",
+				Name = "RearGatePost",
 				Size = Vector3.new(1.6, iw.Height + 1.5, iw.Thickness + 1),
-				Position = Vector3.new(gx + sx * (half + 0.8), padTop + (iw.Height + 1.5) * 0.5, zc),
+				CFrame = at(gx + sx * (half + 0.8), padTop + (iw.Height + 1.5) * 0.5, zc),
 				Color = steel,
 				Material = Enum.Material.Metal,
 				CanCollide = true,
@@ -1547,7 +1645,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		local lintel = part({
 			Name = "GateLintel",
 			Size = Vector3.new(iw.GateWidth + 3.2, 2.2, iw.Thickness + 0.6),
-			Position = Vector3.new(gx, padTop + iw.Height + 0.6, zc),
+			CFrame = at(gx, padTop + iw.Height + 0.6, zc),
 			Color = Color3.fromRGB(40, 44, 42),
 			Material = Enum.Material.Metal,
 			CanCollide = true,
@@ -1555,7 +1653,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		})
 		local sg = Instance.new("SurfaceGui")
 		sg.Name = "WE_GateSign"
-		sg.Face = Enum.NormalId.Back -- +Z: faces the main compound
+		sg.Face = Enum.NormalId.Back -- plot-local +Z: faces the main compound
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 40
 		sg.LightInfluence = 0
@@ -1575,7 +1673,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 			local leaf = part({
 				Name = "GateLeaf" .. i,
 				Size = Vector3.new(half - 0.1, leafH, 0.8),
-				Position = Vector3.new(gx + sx * half * 0.5, padTop + leafH * 0.5, zc),
+				CFrame = at(gx + sx * half * 0.5, padTop + leafH * 0.5, zc),
 				Color = Color3.fromRGB(78, 84, 80),
 				Material = Enum.Material.DiamondPlate,
 				CanCollide = true,
@@ -1586,7 +1684,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 			part({
 				Name = "GateStripe",
 				Size = Vector3.new(half - 0.1, 0.8, 0.9),
-				Position = leaf.Position + Vector3.new(0, -leafH * 0.5 + 2.2, 0),
+				CFrame = leaf.CFrame * CFrame.new(0, -leafH * 0.5 + 2.2, 0),
 				Color = yellow,
 				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
@@ -1595,11 +1693,11 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		end
 		-- Two guards with sandbags on the compound side
 		for _, sx in ipairs({ -1, 1 }) do
-			local gpos = Vector3.new(gx + sx * (half + 3.6), padTop + 2.1, zc + iw.Thickness * 0.5 + 2.4)
+			local gLocal = Vector3.new(gx + sx * (half + 3.6), padTop + 2.1, zc + iw.Thickness * 0.5 + 2.4)
 			part({
 				Name = "GuardSandbag",
 				Size = Vector3.new(4.2, 1.3, 1.3),
-				Position = Vector3.new(gpos.X, padTop + 0.65, gpos.Z + 2.2),
+				CFrame = at(gLocal.X, padTop + 0.65, gLocal.Z + 2.2),
 				Color = Color3.fromRGB(186, 164, 118),
 				Material = Enum.Material.Fabric,
 				CanCollide = true,
@@ -1608,7 +1706,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 			makeSoldierKit(
 				gateFolder,
 				"GateGuard_" .. g.Id .. (if sx > 0 then "R" else "L"),
-				CFrame.new(gpos) * CFrame.Angles(0, math.rad(180), 0),
+				F * CFrame.new(gLocal) * CFrame.Angles(0, math.rad(180), 0),
 				Color3.fromRGB(62, 72, 52),
 				"GUARD",
 				Color3.fromRGB(140, 150, 130),
@@ -1619,6 +1717,148 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		end
 	end
 	wallSeg(cursor, H)
+
+	-- v70 [J1] sea gate (spec_final §4): on the rear perimeter line behind the dock basin, plot-local x SG.X0..SG.X1.
+	-- Two collidable leaves (12 tall together) close it; StructureKitBuilder.SyncRearGates only ARMS it (Dock L1+) and
+	-- Waterways' loop slides the leaves west into the wall line while a boat driven by the owner / a clan-mate is near.
+	-- A WE_WallGap marker makes SyncPerimeterWalls leave the wall open across the gate.
+	if seaGate then
+		local gx = (SG.X0 + SG.X1) * 0.5
+		local span = SG.X1 - SG.X0
+		local gate = Instance.new("Folder")
+		gate.Name = "SeaGate_Dock"
+		gate:SetAttribute("GateId", "Dock")
+		gate:SetAttribute("PlotId", plotId)
+		gate:SetAttribute("WE_GateMode", "Proximity")
+		gate:SetAttribute("WE_GateLabel", SG.Label)
+		gate:SetAttribute("WE_GateArmed", false)
+		gate:SetAttribute("WE_GateOpen", false)
+		gate:SetAttribute("WE_GateCentre", F:PointToWorldSpace(Vector3.new(gx, 3, SG.WallZ)))
+		gate.Parent = folder
+
+		-- gate water: basin rear edge → pad edge, turned with the plot like DockWater. [J3] WE_GatePlotId, NOT WE_PlotId
+		-- (the vehicles' plotBasin takes the first WE_Water part with WE_PlotId).
+		local gateWater = part({
+			Name = "SeaGateWater",
+			Size = Vector3.new(span, waterH, SG.BasinRearZ - SG.PadEdgeZ),
+			CFrame = BaseLayout.PlotLocalCFrame(pos, gx, waterMidY - pos.Y, (SG.PadEdgeZ + SG.BasinRearZ) * 0.5),
+			Color = WaterConfig.Look.Color,
+			Material = WaterConfig.Look.Material,
+			Transparency = WaterConfig.Look.Transparency,
+			CanCollide = false,
+			Parent = gate,
+		})
+		styleWaterPart(gateWater, "SeaGateWater")
+		gateWater:SetAttribute("WE_GatePlotId", plotId)
+
+		for _, sx in ipairs({ -1, 1 }) do
+			-- named differently from "GatePost" on purpose (GateDefenseService reads that name)
+			part({
+				Name = "SeaGatePost",
+				Size = Vector3.new(SG.PostWidth, SG.PostHeight, SG.PostDepth),
+				CFrame = at(gx + sx * (span + SG.PostWidth) * 0.5, padTop + SG.PostHeight * 0.5, SG.WallZ),
+				Color = steel,
+				Material = Enum.Material.Metal,
+				CanCollide = true,
+				Parent = gate,
+			})
+		end
+		-- lintel: never collides or takes raycasts (a boat's land probe must never see it)
+		local lintel = part({
+			Name = "GateLintel",
+			Size = Vector3.new(span + SG.PostWidth * 2, 2.2, SG.PostDepth + 0.4),
+			CFrame = at(gx, padTop + SG.LintelBottom + 1.1, SG.WallZ),
+			Color = Color3.fromRGB(40, 44, 42),
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+			Parent = gate,
+		})
+		lintel.CanTouch = false
+		lintel.CanQuery = false
+		local sg = Instance.new("SurfaceGui")
+		sg.Name = "WE_GateSign"
+		sg.Face = Enum.NormalId.Back -- plot-local +Z: faces the basin
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		sg.LightInfluence = 0
+		sg.Parent = lintel
+		local lbl = Instance.new("TextLabel")
+		lbl.Name = "Text"
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundColor3 = Color3.fromRGB(20, 22, 20)
+		lbl.BorderSizePixel = 0
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextScaled = true
+		lbl.TextColor3 = yellow
+		lbl.Text = SG.Label .. " · LOCKED"
+		lbl.Parent = sg
+
+		-- leaves: WE_GateLeaf = LeafSlide (-1 = slide plot-local west into the wall line), WE_ClosedCFrame after placing
+		for i, lf in ipairs(SG.Leaves) do
+			local leaf = part({
+				Name = lf.Name,
+				Size = Vector3.new(span, lf.Height, lf.Thickness),
+				CFrame = at(gx, padTop + lf.Bottom + lf.Height * 0.5, SG.WallZ),
+				Color = if i == 1 then yellow else steel,
+				Material = if i == 1 then Enum.Material.DiamondPlate else Enum.Material.Metal,
+				Transparency = lf.Transparency or 0,
+				CanCollide = true,
+				Parent = gate,
+			})
+			leaf:SetAttribute("WE_GateLeaf", SG.LeafSlide)
+			leaf:SetAttribute("WE_ClosedCFrame", leaf.CFrame)
+			if i == 1 then
+				-- black band on the yellow boom (a child part: SetGateOpen moves it with the leaf)
+				part({
+					Name = "GateStripe",
+					Size = Vector3.new(span, 0.8, lf.Thickness + 0.1),
+					CFrame = leaf.CFrame * CFrame.new(0, 1.3, 0),
+					Color = Color3.fromRGB(28, 28, 26),
+					Material = Enum.Material.SmoothPlastic,
+					CanCollide = false,
+					Parent = leaf,
+				})
+			end
+		end
+
+		-- wall gap marker: WORLD-axis-aligned box (BaseLayout.PlotRect; StructureKitBuilder's gappedWall reads world axes)
+		local gapC, gapSX, gapSZ = BaseLayout.PlotRect(pos, gx, SG.WallZ, SG.GapWidth, SG.GapDepth)
+		local gap = part({
+			Name = "SeaGateWallGap",
+			Size = Vector3.new(gapSX, 2, gapSZ),
+			CFrame = CFrame.new(gapC.X, gapC.Y + padTop + 1, gapC.Z),
+			Transparency = 1,
+			CanCollide = false,
+			Parent = gate,
+		})
+		gap.CanTouch = false
+		gap.CanQuery = false
+		gap:SetAttribute("WE_WallGap", true)
+
+		-- one guard on the west quay facing the gate water (+X); no NPCLabel (HUD pass removes gate-guard labels)
+		for gi, gd in ipairs(SG.Guards) do
+			part({
+				Name = "GuardSandbag",
+				Size = Vector3.new(1.3, 1.3, 4.2),
+				CFrame = at(gd.X + 3.5, padTop + 0.65, gd.Z),
+				Color = Color3.fromRGB(186, 164, 118),
+				Material = Enum.Material.Fabric,
+				CanCollide = true,
+				Parent = gate,
+			})
+			makeSoldierKit(
+				gate,
+				"GateGuard_Sea" .. (if gi > 1 then tostring(gi) else ""),
+				F * CFrame.new(gd.X, padTop + 2.1, gd.Z) * CFrame.Angles(0, math.rad(-90), 0),
+				Color3.fromRGB(62, 72, 52),
+				nil,
+				Color3.fromRGB(140, 150, 130),
+				150,
+				"Guard",
+				nil
+			)
+		end
+	end
 end
 
 -- v68: ATM cluster anchor offset (legacy (28, 8) → BaseLayoutConfig Courtyard.Collector)
@@ -1683,7 +1923,9 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 	end
 
 	-- Path nodes: PlayerSpawn → CC → Barracks → Depot → Weapons → ATM/premium cluster
-	local spawnPos = plotOrigin + Vector3.new(0, 0.5, 55)
+	-- v70: nodes are plot-local, mapped through the plot frame (chevron yaws follow the world node deltas)
+	local F = BaseLayout.PlotCFrame(plotOrigin)
+	local spawnPos = F:PointToWorldSpace(Vector3.new(0, 0.5, 55))
 	local nodes = {
 		spawnPos,
 	}
@@ -1694,9 +1936,9 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		local cc = cfg.Structures.CommandCenter
 		local dx, dz = BaseLayout.Rotate(7, 14, cc.Yaw)
 		nodes = {
-			plotOrigin + Vector3.new(sp.X, 0.5, sp.Z - 8),
-			plotOrigin + Vector3.new(0, 0.5, 60),
-			plotOrigin + Vector3.new(cc.Site.X + dx, 0.5, cc.Site.Z + dz),
+			F:PointToWorldSpace(Vector3.new(sp.X, 0.5, sp.Z - 8)),
+			F:PointToWorldSpace(Vector3.new(0, 0.5, 60)),
+			F:PointToWorldSpace(Vector3.new(cc.Site.X + dx, 0.5, cc.Site.Z + dz)),
 		}
 	end
 	for i, def in ipairs(STRUCTURES) do
@@ -1706,11 +1948,11 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		local col = (i - 1) % STRUCT_COLS
 		local row = math.floor((i - 1) / STRUCT_COLS)
 		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
-		table.insert(nodes, plotOrigin + offset + Vector3.new(0, 0.5, 0))
+		table.insert(nodes, F:PointToWorldSpace(offset + Vector3.new(0, 0.5, 0)))
 	end
 	-- Guide toward MoneyCollector + premium Robux pads (unpaid ATM cluster)
 	if not BaseLayout.Enabled() then
-		local atmCluster = plotOrigin + Vector3.new(28, 0.5, 8)
+		local atmCluster = F:PointToWorldSpace(Vector3.new(28, 0.5, 8))
 		table.insert(nodes, atmCluster)
 	end
 
@@ -1731,9 +1973,11 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 	local folder = Instance.new("Folder")
 	folder.Name = "PlotPadDressing"
 	folder.Parent = plotFolder
+	-- v70: positions and yaws are plot-local, placed through the plot frame
+	local F = BaseLayout.PlotCFrame(plotOrigin)
 
 	local function sandbag(at: Vector3, yaw: number, idx: number)
-		local cf = CFrame.new(at) * CFrame.Angles(0, yaw, 0)
+		local cf = F * CFrame.new(at) * CFrame.Angles(0, yaw, 0)
 		part({
 			Name = "PadSandbag" .. idx,
 			Size = Vector3.new(4.2, 1.1, 1.4),
@@ -1757,7 +2001,7 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 	end
 
 	local function miniChevron(at: Vector3, yaw: number, idx: number)
-		local cf = CFrame.new(at) * CFrame.Angles(0, yaw, 0)
+		local cf = F * CFrame.new(at) * CFrame.Angles(0, yaw, 0)
 		part({
 			Name = "PadChevron" .. idx,
 			Size = Vector3.new(2.4, 0.1, 1.6),
@@ -1779,7 +2023,7 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 		local col = (i - 1) % STRUCT_COLS
 		local row = math.floor((i - 1) / STRUCT_COLS)
 		local offset = STRUCT_ORIGIN + Vector3.new(col * STRUCT_GAP, 0, row * STRUCT_GAP)
-		local padPos = plotOrigin + offset
+		local padPos = offset -- plot-local
 		sandbag(padPos + Vector3.new(-7, 0.7, 4), math.rad(15), idx)
 		idx += 1
 		sandbag(padPos + Vector3.new(7, 0.7, 4), math.rad(-15), idx)
@@ -1788,7 +2032,7 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 		idx += 1
 	end
 	-- ATM approach berm
-	local atm = plotOrigin + collectorShift() + Vector3.new(28, 0.7, 8)
+	local atm = collectorShift() + Vector3.new(28, 0.7, 8) -- plot-local
 	sandbag(atm + Vector3.new(-6, 0, 6), 0, idx)
 	idx += 1
 	sandbag(atm + Vector3.new(6, 0, 6), 0, idx)
@@ -1808,7 +2052,8 @@ local function premiumOfferIdLive(kind: string, key: string): boolean
 	return false
 end
 
-local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
+-- v70: F = plot frame, atmLocal = plot-local ATM cluster anchor (pads turn with the plot)
+local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
 	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed; GoldenPump only if Id≠0
 	local offers = {
 		{ Key = "AutoCollect", Kind = "GamePass", Label = "AUTO COLLECT", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
@@ -1824,7 +2069,7 @@ local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
 			Size = Vector3.new(7, 0.45, 7),
-			Position = atmPos + offer.Offset,
+			CFrame = F * CFrame.new(atmLocal + offer.Offset),
 			Color = offer.Color,
 			Material = Enum.Material.Neon,
 			CanCollide = true,
@@ -1850,7 +2095,9 @@ end
 
 local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
 	-- v68: the ATM cluster (body, screen, collect ring, premium pads) moves as a group to Courtyard.Collector
-	pos = pos + collectorShift()
+	-- v70: plot-local ATM anchor, every part placed through the plot frame F (turns with the plot)
+	local F = BaseLayout.PlotCFrame(pos)
+	local base = collectorShift()
 	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
 	local folder = Instance.new("Folder")
 	folder.Name = "MoneyCollector"
@@ -1858,7 +2105,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	local body = part({
 		Name = "CollectorBody",
 		Size = Vector3.new(6, 8, 4),
-		Position = pos + Vector3.new(28, 4.5, 8),
+		CFrame = F * CFrame.new(base + Vector3.new(28, 4.5, 8)),
 		Color = Color3.fromRGB(70, 78, 72),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = true,
@@ -1870,7 +2117,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	part({
 		Name = "CollectorBase",
 		Size = Vector3.new(7.5, 0.6, 5.5),
-		Position = pos + Vector3.new(28, 0.8, 8),
+		CFrame = F * CFrame.new(base + Vector3.new(28, 0.8, 8)),
 		Color = Color3.fromRGB(70, 74, 78),
 		Material = Enum.Material.Concrete,
 		CanCollide = true,
@@ -1879,7 +2126,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	local screen = part({
 		Name = "CollectorScreen",
 		Size = Vector3.new(4.2, 2.8, 0.35),
-		Position = pos + Vector3.new(28, 5.2, 8 - 2.15),
+		CFrame = F * CFrame.new(base + Vector3.new(28, 5.2, 8 - 2.15)),
 		Color = Color3.fromRGB(40, 160, 70),
 		Material = Enum.Material.Neon,
 		CanCollide = false,
@@ -1920,7 +2167,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	local collectCircle = part({
 		Name = "CollectCircle",
 		Size = Vector3.new(14, 0.25, 14),
-		Position = pos + Vector3.new(28, 0.55, 8),
+		CFrame = F * CFrame.new(base + Vector3.new(28, 0.55, 8)),
 		Color = Color3.fromRGB(90, 255, 110),
 		Material = Enum.Material.Neon,
 		Transparency = 0.55,
@@ -1929,7 +2176,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		Parent = folder,
 	})
 	-- Cylinder default axis is X — rotate to lie flat on ground
-	collectCircle.CFrame = CFrame.new(pos + Vector3.new(28, 0.55, 8)) * CFrame.Angles(0, 0, math.rad(90))
+	collectCircle.CFrame = F * CFrame.new(base + Vector3.new(28, 0.55, 8)) * CFrame.Angles(0, 0, math.rad(90))
 	collectCircle:SetAttribute("PlotId", plotId)
 	local ring = part({
 		Name = "CollectRing",
@@ -1941,7 +2188,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		Shape = Enum.PartType.Cylinder,
 		Parent = folder,
 	})
-	ring.CFrame = CFrame.new(pos + Vector3.new(28, 0.45, 8)) * CFrame.Angles(0, 0, math.rad(90))
+	ring.CFrame = F * CFrame.new(base + Vector3.new(28, 0.45, 8)) * CFrame.Angles(0, 0, math.rad(90))
 
 	-- Optional ATM catalog mesh dress (Part kit remains authoritative)
 	task.defer(function()
@@ -1953,7 +2200,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 		end)
 	end)
 	-- ATM-cluster premium Robux pads (AutoCollect / 2x / Speed / GoldenPump)
-	buildPremiumPads(folder, plotId, pos + Vector3.new(28, 0, 8))
+	buildPremiumPads(folder, plotId, F, base + Vector3.new(28, 0, 8))
 end
 
 function MapSetup.Run()
@@ -2045,43 +2292,88 @@ function MapSetup.Run()
 	local root = ensureFolder("WarEmpireSetup", Workspace)
 	local map = ensureFolder("Map", root)
 	-- Continuous collide floor: thick, large, explicit CanCollide — never reads as sky
-	part({
-		Name = "Ground",
-		Size = Vector3.new(GROUND_SIZE, GROUND_THICKNESS, GROUND_SIZE),
-		Position = Vector3.new(0, groundCenterY(), 0),
-		Color = COL_GROUND,
-		Material = Enum.Material.Sand,
-		CanCollide = true,
-		Anchored = true,
-		Parent = map,
-	})
+	-- v70 (§12.1): tiled (16 x 1800 ground, 25 x 2000 safety catch, 4 pieces per berm / void-wall side)
+	buildGroundTiles(map)
 	buildSafetyUnderfloor(map)
 	buildEdgeBerms(map)
 	buildInvisibleWalls(map)
 	buildVisualFillPatches(map)
 	buildMountainRing(root)
 	-- Road grid scaled to plot ring (optional visual guide)
-	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
+	-- v70 (§6): with the waterways every road stops WaterConfig.RoadEndSetback studs before the first water (no
+	-- bridges; every land outpost is inside the ring) and is built as two parts split at 0 (<name>_A: Min..0,
+	-- <name>_B: 0..Max, each <= 1752 studs). Each end gets a collidable jersey barrier in Map.RoadEnds.
+	local roadEndsFolder: Folder? = nil
+	local function roadEndBarrier(name: string, alongX: boolean, across: number, at: number)
+		local rb = WaterConfig.RoadEndBarrier
+		if roadEndsFolder == nil then
+			local f = Instance.new("Folder")
+			f.Name = "RoadEnds"
+			f.Parent = map
+			roadEndsFolder = f
+		end
+		local centre = if alongX
+			then Vector3.new(at, GROUND_TOP_Y + rb.Height * 0.5, across)
+			else Vector3.new(across, GROUND_TOP_Y + rb.Height * 0.5, at)
+		local barrier = part({
+			Name = name,
+			Size = if alongX then Vector3.new(rb.Depth, rb.Height, rb.Width) else Vector3.new(rb.Width, rb.Height, rb.Depth),
+			Position = centre,
+			Color = Color3.fromRGB(196, 192, 180),
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			Parent = roadEndsFolder,
+		})
 		part({
-			Name = "RoadZ" .. z,
-			Size = Vector3.new(GROUND_SIZE, 0.15, 14),
-			Position = Vector3.new(0, GROUND_TOP_Y + 0.05, z),
-			Color = Color3.fromRGB(50, 52, 48),
-			Material = Enum.Material.Asphalt,
+			Name = "Stripe",
+			Size = if alongX then Vector3.new(rb.Depth + 0.1, 0.5, rb.Width) else Vector3.new(rb.Width, 0.5, rb.Depth + 0.1),
+			Position = Vector3.new(centre.X, GROUND_TOP_Y + 1.6, centre.Z),
+			Color = Color3.fromRGB(236, 190, 40),
+			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
-			Parent = map,
+			Parent = barrier,
 		})
 	end
+	-- alongX: the road runs along X (RoadZ<z>, at z = across) or along Z (RoadX<x>, at x = across)
+	local function worldRoad(name: string, alongX: boolean, across: number)
+		local ends = if WaterConfig.Enabled == true then WaterConfig.RoadEnds[name] else nil
+		local spans: { { Name: string, A: number, B: number } } = {}
+		if ends and ends.Min < 0 and ends.Max > 0 then
+			table.insert(spans, { Name = name .. "_A", A = ends.Min, B = 0 })
+			table.insert(spans, { Name = name .. "_B", A = 0, B = ends.Max })
+		elseif ends then
+			table.insert(spans, { Name = name .. "_A", A = ends.Min, B = ends.Max })
+		else
+			-- no waterways: full length, still in pieces under the part-size cap
+			local piece = GROUND_SIZE / EDGE_PIECES
+			for k, c in ipairs(tileCentres(EDGE_PIECES, piece)) do
+				table.insert(spans, { Name = name .. "_" .. k, A = c - piece * 0.5, B = c + piece * 0.5 })
+			end
+		end
+		for _, sp in ipairs(spans) do
+			local mid, len = (sp.A + sp.B) * 0.5, sp.B - sp.A
+			part({
+				Name = sp.Name,
+				Size = if alongX then Vector3.new(len, 0.15, 14) else Vector3.new(14, 0.15, len),
+				Position = if alongX
+					then Vector3.new(mid, GROUND_TOP_Y + 0.05, across)
+					else Vector3.new(across, GROUND_TOP_Y + 0.05, mid),
+				Color = Color3.fromRGB(50, 52, 48),
+				Material = Enum.Material.Asphalt,
+				CanCollide = false,
+				Parent = map,
+			})
+		end
+		if ends then
+			roadEndBarrier(name .. "_Min", alongX, across, ends.Min + WaterConfig.RoadEndBarrier.Depth * 0.5)
+			roadEndBarrier(name .. "_Max", alongX, across, ends.Max - WaterConfig.RoadEndBarrier.Depth * 0.5)
+		end
+	end
+	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
+		worldRoad("RoadZ" .. z, true, z)
+	end
 	for _, x in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
-		part({
-			Name = "RoadX" .. x,
-			Size = Vector3.new(14, 0.15, GROUND_SIZE),
-			Position = Vector3.new(x, GROUND_TOP_Y + 0.05, 0),
-			Color = Color3.fromRGB(50, 52, 48),
-			Material = Enum.Material.Asphalt,
-			CanCollide = false,
-			Parent = map,
-		})
+		worldRoad("RoadX" .. x, false, x)
 	end
 	-- Asphalt Decal texture on road strips (MapDressing.AsphaltDecal)
 	task.defer(function()
@@ -2134,14 +2426,19 @@ function MapSetup.Run()
 
 	local bases = ensureFolder("Bases", root)
 	for plotId, pos in ipairs(PLOT_POSITIONS) do
+		-- v70: the plot frame. Everything on the plot is plot-local and placed through F, so the whole base turns to
+		-- face the map centre when BaseLayoutConfig.FaceMapCentre is on (F = CFrame.new(pos) while it is off).
+		local F = BaseLayout.PlotCFrame(pos)
 		local plotFolder = Instance.new("Folder")
 		plotFolder.Name = "Plot" .. plotId
+		plotFolder:SetAttribute("PlotYaw", BaseLayout.PlotYaw(pos))
+		plotFolder:SetAttribute("PlotForward", BaseLayout.PlotForward(pos))
 		plotFolder.Parent = bases
 
 		local pad = part({
 			Name = "PlotPad",
 			Size = Vector3.new(PLOT_PAD_SIZE, 1, PLOT_PAD_SIZE),
-			Position = pos,
+			CFrame = F, -- v70: the pad carries the plot yaw (services read pad.CFrame for plot-local ↔ world)
 			Color = COL_PAD,
 			Material = Enum.Material.Concrete,
 			Parent = plotFolder,
@@ -2155,7 +2452,7 @@ function MapSetup.Run()
 		spawn.Size = Vector3.new(10, 1, 10)
 		do
 			local sp = if BaseLayout.Enabled() then BaseLayout.Config().SpawnOffset else { X = 0, Z = 55 }
-			spawn.Position = pos + Vector3.new(sp.X, 2, sp.Z)
+			spawn.CFrame = F * CFrame.new(sp.X, 2, sp.Z) -- main gate side, gate defence and spawn facing turn with it
 		end
 		spawn.Anchored = true
 		spawn.Neutral = true
@@ -2165,7 +2462,7 @@ function MapSetup.Run()
 		spawn.Parent = plotFolder
 
 		-- v67: no giant "BASE n · Walk pads to BUY · E / B menu" label over the plot (HUD + pad cards explain buying)
-		beacon(plotFolder, pos + (if BaseLayout.Enabled() then Vector3.new(0, 0, -PLOT_PAD_SIZE * 0.5 + 8) else Vector3.new(0, 0, -62)), COL_PAD_EDGE, "PlotBeacon")
+		beacon(plotFolder, F:PointToWorldSpace(if BaseLayout.Enabled() then Vector3.new(0, 0, -PLOT_PAD_SIZE * 0.5 + 8) else Vector3.new(0, 0, -62)), COL_PAD_EDGE, "PlotBeacon", F)
 
 		for i, def in ipairs(STRUCTURES) do
 			local col = (i - 1) % STRUCT_COLS
@@ -2179,6 +2476,7 @@ function MapSetup.Run()
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)
 		-- v68: the whole yard group (targets, workers, pad, stalls, anchors) moves to Courtyard.TrainingYard
+		-- v70: yardShift and every offset below are plot-local (placed through F)
 		local yardShift = Vector3.zero
 		if BaseLayout.Enabled() then
 			local ty = BaseLayout.Config().Courtyard.TrainingYard
@@ -2188,11 +2486,11 @@ function MapSetup.Run()
 		yardFolder.Name = "TrainingYard"
 		yardFolder.Parent = plotFolder
 		for ti = 1, 3 do
-			local tpos = pos + yardShift + Vector3.new(-50 + ti * 18, 3.5, 48)
+			local tLocal = yardShift + Vector3.new(-50 + ti * 18, 3.5, 48)
 			local target = part({
 				Name = "TrainingTarget" .. ti,
 				Size = Vector3.new(4, 6, 0.6),
-				Position = tpos,
+				CFrame = F * CFrame.new(tLocal),
 				Color = Color3.fromRGB(200, 60, 60),
 				Material = Enum.Material.Metal,
 				CanCollide = true,
@@ -2203,7 +2501,7 @@ function MapSetup.Run()
 			part({
 				Name = "TargetStand" .. ti,
 				Size = Vector3.new(1, 4, 1),
-				Position = tpos + Vector3.new(0, -5, 0),
+				CFrame = F * CFrame.new(tLocal + Vector3.new(0, -5, 0)),
 				Color = Color3.fromRGB(70, 70, 70),
 				Material = Enum.Material.Metal,
 				CanCollide = true,
@@ -2212,7 +2510,7 @@ function MapSetup.Run()
 			part({
 				Name = "TargetBullseye" .. ti,
 				Size = Vector3.new(1.6, 1.6, 0.35),
-				Position = tpos + Vector3.new(0, 0.5, -0.2),
+				CFrame = F * CFrame.new(tLocal + Vector3.new(0, 0.5, -0.2)),
 				Color = Color3.fromRGB(240, 220, 60),
 				Material = Enum.Material.Neon,
 				CanCollide = false,
@@ -2221,12 +2519,12 @@ function MapSetup.Run()
 		end
 		-- Training workers (visual only — income is SoldierService tick)
 		for wi = 1, 2 do
-			local wpos = pos + yardShift + Vector3.new(-40 + wi * 20, 2.6, 42)
+			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.6, 42)
 			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
 			local worker = makeSoldierKit(
 				yardFolder,
 				"TrainingWorker" .. wi,
-				CFrame.new(wpos) * CFrame.Angles(0, math.rad(180), 0),
+				F * CFrame.new(wLocal) * CFrame.Angles(0, math.rad(180), 0),
 				Color3.fromRGB(70, 85, 55),
 				"TRAINING",
 				Color3.fromRGB(140, 150, 130), -- muted
@@ -2252,7 +2550,7 @@ function MapSetup.Run()
 		part({
 			Name = "YardPad",
 			Size = Vector3.new(55, 0.6, 18),
-			Position = pos + yardShift + Vector3.new(-14, 0.4, 48),
+			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 0.4, 48)),
 			Color = Color3.fromRGB(48, 52, 42),
 			Material = Enum.Material.Concrete,
 			CanCollide = true,
@@ -2291,7 +2589,7 @@ function MapSetup.Run()
 				Vector3.new(0, 0, 36),
 			}
 			for si, soff in ipairs(stallOffsets) do
-				local sOrigin = pos + yardShift + soff
+				local sOrigin = yardShift + soff -- plot-local
 				local stall = Instance.new("Folder")
 				stall.Name = "SquadStall" .. si
 				stall.Parent = stallFolder
@@ -2299,7 +2597,7 @@ function MapSetup.Run()
 				part({
 					Name = "StallFloor",
 					Size = Vector3.new(12, 0.4, 10),
-					Position = sOrigin + Vector3.new(0, 0.35, 0),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 0.35, 0)),
 					Color = Color3.fromRGB(70, 68, 52),
 					Material = Enum.Material.WoodPlanks,
 					CanCollide = true,
@@ -2309,7 +2607,7 @@ function MapSetup.Run()
 				local tentHost = part({
 					Name = "TentHost",
 					Size = Vector3.new(8, 4, 6),
-					Position = sOrigin + Vector3.new(0, 2.4, -1),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 2.4, -1)),
 					Color = Color3.fromRGB(90, 100, 70),
 					Material = Enum.Material.Fabric,
 					CanCollide = false,
@@ -2320,7 +2618,7 @@ function MapSetup.Run()
 				local crateA = part({
 					Name = "CrateHostA",
 					Size = Vector3.new(2.2, 2.0, 2.2),
-					Position = sOrigin + Vector3.new(4.5, 1.2, 2),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(4.5, 1.2, 2)),
 					Color = Color3.fromRGB(95, 80, 55),
 					Material = Enum.Material.Wood,
 					CanCollide = true,
@@ -2329,7 +2627,7 @@ function MapSetup.Run()
 				local crateB = part({
 					Name = "CrateHostB",
 					Size = Vector3.new(2.0, 1.8, 2.0),
-					Position = sOrigin + Vector3.new(4.5, 3.0, 2),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(4.5, 3.0, 2)),
 					Color = Color3.fromRGB(85, 70, 48),
 					Material = Enum.Material.Wood,
 					CanCollide = true,
@@ -2338,7 +2636,7 @@ function MapSetup.Run()
 				local milCrate = part({
 					Name = "MilCrateHost",
 					Size = Vector3.new(2.4, 1.6, 1.8),
-					Position = sOrigin + Vector3.new(-4.2, 1.0, 2.2),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(-4.2, 1.0, 2.2)),
 					Color = Color3.fromRGB(55, 70, 50),
 					Material = Enum.Material.Metal,
 					CanCollide = true,
@@ -2348,7 +2646,7 @@ function MapSetup.Run()
 				local sandHost = part({
 					Name = "SandbagHost",
 					Size = Vector3.new(6, 1.1, 1.3),
-					Position = sOrigin + Vector3.new(0, 0.75, 4.2),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 0.75, 4.2)),
 					Color = Color3.fromRGB(130, 115, 80),
 					Material = Enum.Material.Sand,
 					CanCollide = true,
@@ -2358,7 +2656,7 @@ function MapSetup.Run()
 				local lanternHost = part({
 					Name = "LanternHost",
 					Size = Vector3.new(0.6, 1.2, 0.6),
-					Position = sOrigin + Vector3.new(-3.5, 2.2, -2.5),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(-3.5, 2.2, -2.5)),
 					Color = Color3.fromRGB(180, 140, 60),
 					Material = Enum.Material.Metal,
 					CanCollide = false,
@@ -2376,7 +2674,7 @@ function MapSetup.Run()
 					{ Kind = "Guard", Label = "GUARD", Body = Color3.fromRGB(45, 55, 70), Accent = Color3.fromRGB(90, 140, 220) },
 				}
 				local roleDef = stallRoles[((si - 1) % #stallRoles) + 1]
-				local soldierCf = CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
+				local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
 				makeSoldierKit(
 					stall,
 					"Stall" .. roleDef.Kind .. si,
@@ -2422,7 +2720,7 @@ function MapSetup.Run()
 		local yardAnchor = part({
 			Name = "YardAnchor",
 			Size = Vector3.new(1, 1, 1),
-			Position = pos + yardShift + Vector3.new(-14, 8, 48),
+			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 8, 48)),
 			Transparency = 1,
 			CanCollide = false,
 			Parent = yardFolder,
@@ -2437,7 +2735,7 @@ function MapSetup.Run()
 		local earnAnchor = part({
 			Name = "YardEarnAnchor",
 			Size = Vector3.new(1, 1, 1),
-			Position = pos + yardShift + Vector3.new(-14, 6, 42),
+			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 6, 42)),
 			Transparency = 1,
 			CanCollide = false,
 			Parent = yardFolder,
@@ -2447,12 +2745,12 @@ function MapSetup.Run()
 			local worker = yardFolder:FindFirstChild("TrainingWorker" .. wi)
 			local target = yardFolder:FindFirstChild("TrainingTarget" .. wi)
 			if worker and target and worker:IsA("Model") and target:IsA("BasePart") then
-				local root = worker.PrimaryPart or worker:FindFirstChildWhichIsA("BasePart")
-				if root and root:IsA("BasePart") then
+				local workerRoot = worker.PrimaryPart or worker:FindFirstChildWhichIsA("BasePart")
+				if workerRoot and workerRoot:IsA("BasePart") then
 					local a0 = Instance.new("Attachment")
 					a0.Name = "WE_TrainBeam0"
 					a0.Position = Vector3.new(0, 1.2, 0)
-					a0.Parent = root
+					a0.Parent = workerRoot
 					local a1 = Instance.new("Attachment")
 					a1.Name = "WE_TrainBeam1"
 					a1.Parent = target
@@ -2466,7 +2764,7 @@ function MapSetup.Run()
 					beam.FaceCamera = true
 					beam.LightEmission = 0.4
 					beam.Transparency = NumberSequence.new(0.35)
-					beam.Parent = root
+					beam.Parent = workerRoot
 				end
 			end
 		end
@@ -2485,16 +2783,17 @@ function MapSetup.Run()
 				for i = 1, count do
 					local ang = (i / count) * math.pi * 2
 					local rad = 58 + (i % 3) * 10
-					local o = pos + Vector3.new(math.cos(ang) * rad, 0.6, math.sin(ang) * rad)
+					-- v70: plot-local spot, placed through the plot frame F (props turn with the plot)
+					local o = Vector3.new(math.cos(ang) * rad, 0.6, math.sin(ang) * rad)
 					if spots then
-						o = pos + Vector3.new(spots[i].X, 0.6, spots[i].Z)
+						o = Vector3.new(spots[i].X, 0.6, spots[i].Z)
 					end
 					if i % 3 == 0 then
 						-- sandbag berm (Metal/Sand — no neon)
 						part({
 							Name = "WZ_Sandbag" .. i,
 							Size = Vector3.new(6, 1.2, 1.4),
-							Position = o,
+							CFrame = F * CFrame.new(o),
 							Color = Color3.fromRGB(130, 115, 80),
 							Material = Enum.Material.Sand,
 							CanCollide = true,
@@ -2503,7 +2802,7 @@ function MapSetup.Run()
 						part({
 							Name = "WZ_SandbagTop" .. i,
 							Size = Vector3.new(5.2, 0.9, 1.1),
-							Position = o + Vector3.new(0, 1.0, 0),
+							CFrame = F * CFrame.new(o + Vector3.new(0, 1.0, 0)),
 							Color = Color3.fromRGB(120, 105, 75),
 							Material = Enum.Material.Sand,
 							CanCollide = true,
@@ -2513,7 +2812,7 @@ function MapSetup.Run()
 						part({
 							Name = "WZ_Crate" .. i,
 							Size = Vector3.new(2.2, 2.0, 2.2),
-							Position = o + Vector3.new(0, 1.0, 0),
+							CFrame = F * CFrame.new(o + Vector3.new(0, 1.0, 0)),
 							Color = Color3.fromRGB(95, 80, 55),
 							Material = Enum.Material.Wood,
 							CanCollide = true,
@@ -2522,7 +2821,7 @@ function MapSetup.Run()
 						part({
 							Name = "WZ_Drum" .. i,
 							Size = Vector3.new(1.4, 2.2, 1.4),
-							Position = o + Vector3.new(3, 1.1, 1),
+							CFrame = F * CFrame.new(o + Vector3.new(3, 1.1, 1)),
 							Color = Color3.fromRGB(55, 70, 50),
 							Material = Enum.Material.Metal,
 							Shape = Enum.PartType.Cylinder,
@@ -2533,7 +2832,7 @@ function MapSetup.Run()
 						part({
 							Name = "WZ_Barrier" .. i,
 							Size = Vector3.new(5, 1.4, 0.7),
-							Position = o + Vector3.new(0, 0.7, 0),
+							CFrame = F * CFrame.new(o + Vector3.new(0, 0.7, 0)),
 							Color = Color3.fromRGB(110, 105, 90),
 							Material = Enum.Material.Concrete,
 							CanCollide = true,
@@ -2726,8 +3025,49 @@ function MapSetup.Run()
 			})
 			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(300, 44), 14, Color3.fromRGB(255, 210, 120))
 			-- Stairs from deck down to ground (prevent 28-stud death plunge)
-			local inland = Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+			-- v70 (§7.1): on the waterways map the stairs are the rig's pier across the lagoon, snapped to the X axis
+			-- toward the map centre (Alpha steps x 1765 → 1684, approach pad on the inner bank; Bravo mirrored)
+			local inland = if WaterConfig.RigPierAxisAligned == true
+				then Vector3.new(-math.sign(def.Pos.X), 0, 0)
+				else Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+			if inland.Magnitude < 0.1 then
+				inland = Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+			end
 			buildOilDeckRamp(territories, def.Id, def.Pos, inland)
+			if WaterConfig.Enabled == true then
+				-- Concrete footing round each leg at the waterline: a boat's land probe that starts inside a 28-tall leg
+				-- misses the leg, but sees the footing top (2.5)
+				local lf = WaterConfig.RigLegFooting
+				for _, ox in ipairs({ -legOff, legOff }) do
+					for _, oz in ipairs({ -legOff, legOff }) do
+						part({
+							Name = def.Id .. "_LegFooting",
+							Size = lf,
+							Position = Vector3.new(def.Pos.X + ox, GROUND_TOP_Y + lf.Y * 0.5, def.Pos.Z + oz),
+							Color = Color3.fromRGB(120, 118, 110),
+							Material = Enum.Material.Concrete,
+							CanCollide = true,
+							Parent = territories,
+						})
+					end
+				end
+				-- [J5] submerged rubble footing under the pier's low end (rig-local Near..Far along the pier, ±HalfWidth
+				-- across, y 0.5..2.5): capital ships' collidable bridges (up to 13.1 above the water) would ram steps
+				-- 5-10 and the shelf; every land probe sees this top first, so boats brake before it. Walkable.
+				local pf = WaterConfig.RigPierFooting
+				local dir = inland.Unit
+				local mid = Vector3.new(def.Pos.X, GROUND_TOP_Y + pf.Height * 0.5, def.Pos.Z) + dir * ((pf.Near + pf.Far) * 0.5)
+				part({
+					Name = def.Id .. "_PierFooting",
+					Size = Vector3.new(pf.HalfWidth * 2, pf.Height, pf.Far - pf.Near),
+					CFrame = CFrame.lookAt(mid, mid + dir),
+					Color = Color3.fromRGB(78, 76, 70),
+					Material = Enum.Material.Concrete,
+					Transparency = 0,
+					CanCollide = true,
+					Parent = territories,
+				})
+			end
 		end
 
 		-- Fortress walls / keep (named forts with higher stipend)
@@ -2814,15 +3154,15 @@ function MapSetup.Run()
 		end
 		for i = 1, count do
 			local angle = (i / count) * math.pi * 2
-			local pos = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
-			if inAnyPlot(pos) then
+			local padAt = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
+			if inAnyPlot(padAt) then
 				for k = 1, 30 do
 					local found = false
 					for _, sgn in ipairs({ 1, -1 }) do
 						local a = angle + sgn * k * math.rad(2)
 						local p = center + Vector3.new(math.cos(a) * ring, 1, math.sin(a) * ring)
 						if not inAnyPlot(p) then
-							pos = p
+							padAt = p
 							found = true
 							break
 						end
@@ -2836,7 +3176,7 @@ function MapSetup.Run()
 			local p = part({
 				Name = name .. i,
 				Size = Vector3.new(padSize, 1.2, padSize),
-				Position = pos,
+				Position = padAt,
 				Color = color,
 				Material = Enum.Material.Concrete,
 				Parent = folder,
@@ -2847,7 +3187,7 @@ function MapSetup.Run()
 				part({
 					Name = "HMark",
 					Size = Vector3.new(6, 0.2, 1),
-					Position = pos + Vector3.new(0, 0.7, 0),
+					Position = padAt + Vector3.new(0, 0.7, 0),
 					Color = Color3.fromRGB(200, 220, 255),
 					Material = Enum.Material.Neon,
 					CanCollide = false,
@@ -2856,13 +3196,13 @@ function MapSetup.Run()
 				part({
 					Name = "HMark2",
 					Size = Vector3.new(1, 0.2, 6),
-					Position = pos + Vector3.new(0, 0.7, 0),
+					Position = padAt + Vector3.new(0, 0.7, 0),
 					Color = Color3.fromRGB(200, 220, 255),
 					Material = Enum.Material.Neon,
 					CanCollide = false,
 					Parent = folder,
 				})
-				beacon(folder, pos, Color3.fromRGB(90, 160, 220), name .. i .. "_Beacon")
+				beacon(folder, padAt, Color3.fromRGB(90, 160, 220), name .. i .. "_Beacon")
 				plainBillboard(p, "GARAGE PAD · E / G", Vector2.new(170, 32), 5, Color3.fromRGB(200, 220, 255))
 			elseif tag == TAG_NPC then
 				plainBillboard(p, "NPC SPAWN", Vector2.new(140, 28), 4, Color3.fromRGB(255, 180, 180))
@@ -2877,58 +3217,44 @@ function MapSetup.Run()
 	makeSpawnFolder("NPCSpawns", TAG_NPC, 10, Vector3.new(480, 0, 480), COL_NPC, 550)
 	makeSpawnFolder("EventSpawns", TAG_EVENT, 6, Vector3.new(-480, 0, -480), COL_EVENT, 500)
 
-	-- Coastal water band (south of SouthDocks on ~4800 map) + naval spawn pads
+	-- v70 waterways (spec_final §5): Modules.Waterways builds root.CoastalWater (the sea, the ring canal round the map,
+	-- rig lagoons, the South Docks harbour, dock channels, sand banks). The old single WaterPlane and the HarborShelf
+	-- (a collidable sandbar standing above the old sea surface) are gone. Guarded: without the module the map still
+	-- builds (no public water).
 	do
-		local waterFolder = ensureFolder("CoastalWater", root)
-		local water = part({
-			Name = "WaterPlane",
-			Size = Vector3.new(GROUND_SIZE * 0.9, 1, 720),
-			Position = Vector3.new(0, 0.2, 1850),
-			Color = Color3.fromRGB(45, 120, 145),
-			Material = Enum.Material.Glass,
-			Transparency = 0.32,
-			CanCollide = false,
-			Parent = waterFolder,
-		})
-		water.Name = "WaterPlane"
-		CollectionService:AddTag(water, TAG_WATER)
-		-- Shallow collide strip so boats have something under them
-		part({
-			Name = "HarborShelf",
-			Size = Vector3.new(GROUND_SIZE * 0.75, 1, 120),
-			Position = Vector3.new(0, 0.4, 1520),
-			Color = Color3.fromRGB(55, 95, 105),
-			Material = Enum.Material.Sandstone,
-			Transparency = 0.12,
-			CanCollide = true,
-			Parent = waterFolder,
-		})
+		local wwModule = script.Parent:FindFirstChild("Waterways")
+		if wwModule and wwModule:IsA("ModuleScript") then
+			local okWw, errWw = pcall(function()
+				local Waterways = require(wwModule) :: any
+				Waterways.Build(root)
+			end)
+			if not okWw then
+				warn("[WAR EMPIRE] MapSetup: Waterways.Build failed (map continues without public water):", errWw)
+			end
+		else
+			warn("[WAR EMPIRE] MapSetup: Modules.Waterways missing — no public water built")
+		end
+	end
+
+	-- Naval spawn pontoons (WaterConfig.NavalPads: the 9 sea pads + 3 ring landings at road ends). Tagged WE_NavalSpawn
+	-- only: a pad in the water must never be picked as a ground-vehicle / jeep spawn.
+	do
 		local navalFolder = ensureFolder("NavalSpawns", root)
-		local navalPositions = {
-			Vector3.new(-420, 1.5, 1580),
-			Vector3.new(-240, 1.5, 1620),
-			Vector3.new(-80, 1.5, 1640),
-			Vector3.new(80, 1.5, 1640),
-			Vector3.new(240, 1.5, 1620),
-			Vector3.new(420, 1.5, 1580),
-			Vector3.new(0, 1.5, 1720),
-			Vector3.new(-560, 1.5, 1680),
-			Vector3.new(560, 1.5, 1680),
-		}
-		for i, npos in ipairs(navalPositions) do
-			local np = part({
-				Name = "NavalPad_" .. i,
-				Size = Vector3.new(18, 1.2, 18),
-				Position = npos,
+		local padSize = WaterConfig.NavalPadSize
+		for i, np in ipairs(WaterConfig.NavalPads) do
+			local padAt = Vector3.new(np.X, 1.5, np.Z)
+			local pad = part({
+				Name = np.Name,
+				Size = Vector3.new(padSize, 1.2, padSize),
+				Position = padAt,
 				Color = Color3.fromRGB(40, 70, 95),
 				Material = Enum.Material.Concrete,
 				CanCollide = true,
 				Parent = navalFolder,
 			})
-			CollectionService:AddTag(np, TAG_NAVAL)
-			CollectionService:AddTag(np, TAG_VEHICLE) -- garage prompt also works
-			beacon(navalFolder, npos, Color3.fromRGB(70, 180, 220), "NavalBeacon" .. i)
-			plainBillboard(np, "NAVAL PAD · E / G", Vector2.new(170, 32), 5, Color3.fromRGB(160, 220, 255))
+			CollectionService:AddTag(pad, TAG_NAVAL)
+			beacon(navalFolder, padAt, Color3.fromRGB(70, 180, 220), "NavalBeacon" .. i)
+			plainBillboard(pad, "NAVAL PAD · E / G", Vector2.new(170, 32), 5, Color3.fromRGB(160, 220, 255))
 		end
 	end
 
@@ -3104,7 +3430,7 @@ function MapSetup.Run()
 		if cf then
 			return cf.Position + Vector3.new(0, 1.4, 0)
 		end
-		return plot1 + gridOffset
+		return BaseLayout.PlotPoint(plot1, gridOffset.X, gridOffset.Z, gridOffset.Y)
 	end
 	local yardAt = Vector3.new(-14, 3, 42)
 	local claimAt = Vector3.new(0, 2, 52)
@@ -3114,12 +3440,13 @@ function MapSetup.Run()
 		claimAt = Vector3.new(cfg.SpawnOffset.X, 2, cfg.SpawnOffset.Z - 4)
 	end
 	local atmAt = collectorShift() + Vector3.new(28, 0, 8)
-	local mClaim = tutorialMarker("Tutorial_ClaimBase", plot1 + claimAt, Color3.fromRGB(230, 200, 80), "ClaimBase")
+	-- v70: claimAt / yardAt / atmAt are plot-local; BaseLayout.PlotPoint turns them with Plot1 (y relative to the plot)
+	local mClaim = tutorialMarker("Tutorial_ClaimBase", BaseLayout.PlotPoint(plot1, claimAt.X, claimAt.Z, claimAt.Y), Color3.fromRGB(230, 200, 80), "ClaimBase")
 	local mCC = tutorialMarker("Tutorial_CommandCenter", structureMarkerPos("CommandCenter", STRUCT_ORIGIN + Vector3.new(0, 1.4, 0)), Color3.fromRGB(80, 200, 120), "CommandCenter")
-	local mRecruit = tutorialMarker("Tutorial_Recruit", plot1 + yardAt, Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
-	tutorialMarker("Tutorial_Income", plot1 + atmAt + Vector3.new(0, 3, 0), Color3.fromRGB(80, 200, 160), "Income")
+	local mRecruit = tutorialMarker("Tutorial_Recruit", BaseLayout.PlotPoint(plot1, yardAt.X, yardAt.Z, yardAt.Y), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
+	tutorialMarker("Tutorial_Income", BaseLayout.PlotPoint(plot1, atmAt.X, atmAt.Z, atmAt.Y + 3), Color3.fromRGB(80, 200, 160), "Income")
 	-- Click dropper sits near ATM (ManualDropper CollectorOffset ≈ -5.5, 0, 4 from collector body)
-	tutorialMarker("Tutorial_Dropper", plot1 + atmAt + Vector3.new(-5.5, 2.5, 4), Color3.fromRGB(70, 220, 100), "ClickDropper")
+	tutorialMarker("Tutorial_Dropper", BaseLayout.PlotPoint(plot1, atmAt.X - 5.5, atmAt.Z + 4, atmAt.Y + 2.5), Color3.fromRGB(70, 220, 100), "ClickDropper")
 	-- Pads first / beams first 3 beats: dress arrow meshes on early markers
 	task.defer(function()
 		pcall(function()
@@ -3135,9 +3462,13 @@ function MapSetup.Run()
 	end)
 	tutorialMarker("Tutorial_Barracks", structureMarkerPos("Barracks", STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0)), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
-	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
-	if #vSpawns > 0 and vSpawns[1]:IsA("BasePart") then
-		jeepPos = vSpawns[1].Position + Vector3.new(0, 2, 0)
+	-- v70: the first garage pad on LAND (a WE_NavalSpawn pontoon is in the water; the marker used to land on
+	-- NavalPad_1 in the sea)
+	for _, vs in ipairs(CollectionService:GetTagged(TAG_VEHICLE)) do
+		if vs:IsA("BasePart") and not CollectionService:HasTag(vs, TAG_NAVAL) then
+			jeepPos = vs.Position + Vector3.new(0, 2, 0)
+			break
+		end
 	end
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
@@ -3221,11 +3552,11 @@ function MapSetup.Run()
 				Vector3.new(520, 0.5, 180),
 				Vector3.new(-200, 0.5, 620),
 			}
-			for oi, opos in ipairs(pads) do
+			for oi, oilAt in ipairs(pads) do
 				local pad = part({
 					Name = "OilPad" .. oi,
 					Size = Vector3.new(28, 0.6, 28),
-					Position = opos,
+					Position = oilAt,
 					Color = Color3.fromRGB(42, 44, 40),
 					Material = Enum.Material.Asphalt,
 					CanCollide = true,
@@ -3242,7 +3573,7 @@ function MapSetup.Run()
 				local tower = part({
 					Name = "DerrickTower" .. oi,
 					Size = Vector3.new(1.2, 18, 1.2),
-					Position = opos + Vector3.new(0, 9.5, 0),
+					Position = oilAt + Vector3.new(0, 9.5, 0),
 					Color = Color3.fromRGB(70, 72, 68),
 					Material = Enum.Material.Metal,
 					CanCollide = false,
@@ -3251,7 +3582,7 @@ function MapSetup.Run()
 				local beam = part({
 					Name = "WalkingBeam" .. oi,
 					Size = Vector3.new(14, 0.7, 0.7),
-					Position = opos + Vector3.new(0, 17, 0),
+					Position = oilAt + Vector3.new(0, 17, 0),
 					Color = Color3.fromRGB(90, 70, 50),
 					Material = Enum.Material.Metal,
 					CanCollide = false,
@@ -3261,7 +3592,7 @@ function MapSetup.Run()
 				-- Barrel ring
 				for bi = 1, 8 do
 					local ang = (bi / 8) * math.pi * 2
-					local bpos = opos + Vector3.new(math.cos(ang) * 9, 1.1, math.sin(ang) * 9)
+					local bpos = oilAt + Vector3.new(math.cos(ang) * 9, 1.1, math.sin(ang) * 9)
 					part({
 						Name = "OilBarrel" .. oi .. "_" .. bi,
 						Size = Vector3.new(1.6, 2.2, 1.6),
@@ -3347,6 +3678,9 @@ function MapSetup.Run()
 		end
 	end
 
+
+	-- v70: stamp the layout generation last (a Run that threw part-way stays unstamped → Bootstrap rebuilds it)
+	root:SetAttribute("WE_MapGen", MapSetup.MAP_GEN)
 
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas=" .. tostring(DevConfig.MountainRingSegments or 14) .. " (dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
