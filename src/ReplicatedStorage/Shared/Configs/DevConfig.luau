@@ -11,6 +11,9 @@
 	Admin remotes (AdminConfig.UserIds only), via RequestAdminCommand:
 	  givecash <n>, givegold <n>, givexp <n>, setlevel <n>, unlockall, resetbase,
 	  resettutorial, grantpass <PassKey>, prestige/forceprestige, createclan/joinclan/leaveclan, bpxp, grantpremium
+	v71 money (AdminConfig.MoneyCommands; admin allowlist, or any player in Studio; each logs ADMIN_COMMAND and replies
+	"not built yet" until its service exists):
+	  grantent <key>, givenuke <n> [tactical], nukecd, vhp <pct>, setprestige <n>, openzone <id>, resetrebirth
 ]]
 
 local DevConfig = {
@@ -27,6 +30,15 @@ local DevConfig = {
 		-- VIP = true,
 		-- DoubleCash = true,
 		-- DoubleXP = true,
+		-- v71 money (M2): keys the premium vehicle / rebirth workflows add to MonetizationConfig.GamePasses (M1).
+		-- Uncomment only for a Studio test once those keys exist; live servers ignore this table.
+		-- PV_Razorfang = true,
+		-- PV_Bastion = true,
+		-- PV_Warlord = true,
+		-- PV_MotorPool = true, -- bundle: all three ground cars
+		-- PV_Stormwing = true, -- M6b
+		-- PV_Tidebreaker = true, -- M6b
+		-- RebirthBoost = true,
 	} :: { [string]: boolean },
 
 	--[[ Studio / laptop PERF (phase-7)

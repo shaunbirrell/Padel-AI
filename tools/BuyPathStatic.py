@@ -1386,6 +1386,20 @@ must_contain(VDC, "RunService:BindToRenderStep(EXIT_STEP, Enum.RenderPriority.In
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "Remotes.GetEvent(", "v70 garage never blocks on Remotes.GetEvent")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "< PLOT_SIZE * 0.5 + 12", "v70 plot densify props stay out of the 320 base (runways clear)")
 
+# v71 money phase 0 (M0 config hotfix, M2 plumbing, J2 receipt safety). Verified: receipt 31 + adversarial 25,
+# profile 37, admin 28, config 42, ds 24, sl 33, g6 67
+MS = "src/ServerScriptService/Server/Services/MonetizationService.luau"
+must_contain(MS, "local ok, decision = pcall(processReceipt, receiptInfo, receiptId)", "J2 receipt runs inside pcall with in-flight lock")
+must_contain(MS, "if receiptsInFlight[receiptId] then", "J2 duplicate receipt delivery refused while in flight")
+must_contain(MS, "receipt NOT acknowledged (Roblox retries it)", "J2 unknown product Id -> NotProcessedYet")
+must_not_contain(MS, "Mark processed so Roblox queue drains", "J2 unknown Id is never acked (old drain branch gone)")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "local ev = Instance.new(\"UnreliableRemoteEvent\")", "M2 UNRELIABLE remotes created as UnreliableRemoteEvent")
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", "if not isAdmin and not (moneyCmd and RunService:IsStudio()) then", "M2 money admin commands: allowlist or Studio only")
+must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "ensureMoneyFields(profile)", "M2 money profile fields default-filled + sanitised on Migrate")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "GoldSmall = { Id = 3713839003, DisplayName = \"Gold Pack S\", RobuxPrice = 49, Cash = 0, Gold = 50, HideFromShop = true },", "M0 Gold packs hidden, live Id kept")
+must_contain("tools/wire-monetization-ids.py", "each product needs its own Id", "wire tool refuses duplicate product Ids")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/NukeConfig.luau", "DefensesDown", "J1 nuke never opens a base (no defenses-down fields)")
+
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).
 # Needs luau-compile (https://github.com/luau-lang/luau/releases → luau-ubuntu.zip / luau-macos.zip).

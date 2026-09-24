@@ -106,6 +106,27 @@ Constants.RemoteNames = {
 	MissileStrikeStateUpdate = "MissileStrikeStateUpdate",
 	MissileStrikeFx = "MissileStrikeFx",
 	VehicleDriveInput = "VehicleDriveInput",
+	-- v71 money (M2): created now, used by later workflows (nothing fires or listens to them yet).
+	-- Nuke (M5; own Fx remote, J17)
+	RequestNukeLaunch = "RequestNukeLaunch",
+	RequestNukeState = "RequestNukeState",
+	NukeStateUpdate = "NukeStateUpdate",
+	NukeFx = "NukeFx",
+	-- Premium / vehicle weapons (M6). VehicleWeaponFx is an UnreliableRemoteEvent (RemoteSetup UNRELIABLE list).
+	RequestVehicleFire = "RequestVehicleFire",
+	VehicleWeaponFx = "VehicleWeaponFx",
+	RequestVehicleCamo = "RequestVehicleCamo",
+	RequestPremiumTrial = "RequestPremiumTrial",
+	-- Rebirth expansion (M7). Not "SupplyDrop": that name belongs to SupplyDropService.
+	RebirthStateUpdate = "RebirthStateUpdate",
+	RequestRebirthState = "RequestRebirthState",
+	ArtilleryFx = "ArtilleryFx",
+	DroneCrateFx = "DroneCrateFx",
+	-- Offer Director (M3) and M8 (purchase ticker, shortfall chip)
+	OfferShow = "OfferShow",
+	OfferResult = "OfferResult",
+	PurchaseAnnounce = "PurchaseAnnounce",
+	ShortfallChip = "ShortfallChip",
 	GetPlayerState = "GetPlayerState",
 }
 

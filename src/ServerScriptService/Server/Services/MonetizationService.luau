@@ -33,6 +33,11 @@ local SoldierService: any = nil
 
 -- Session receipt cache; also mirrored to profile.ProcessedReceipts
 local processed: { [string]: boolean } = {}
+--[[ v71 money (J2): receipts being processed right now (PurchaseId -> true). ProcessReceipt yields (Battle Pass
+	readiness, the profile load, pre-grant ownership lookups, the save). A second delivery of the same receipt in
+	that window never runs alongside the first (with a yield between hasProcessed and markProcessed it would grant
+	twice): it answers NotProcessedYet, and Roblox retries it after the first run has marked and saved it. ]]
+local receiptsInFlight: { [string]: boolean } = {}
 -- userId -> passKey -> owned
 local gamePassCache: { [number]: { [string]: boolean } } = {}
 -- v38: session soft-offer spam gate (one toast max per SoftOfferSessionCooldownSeconds)
@@ -601,9 +606,7 @@ local function battlePassReady(): boolean
 	return bp ~= nil and typeof(bp.IsReady) == "function" and bp.IsReady() == true
 end
 
-function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurchaseDecision
-	local receiptId = tostring(receiptInfo.PurchaseId)
-
+local function processReceipt(receiptInfo: any, receiptId: string): Enum.ProductPurchaseDecision
 	local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
 	if not player then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
@@ -648,12 +651,23 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 
 	local productKey, product = findDevProduct(receiptInfo.ProductId)
 	if not product then
-		-- Unknown / placeholder Id: do not invent grants. Mark processed so Roblox queue drains.
-		warn("[MonetizationService] Unknown or unconfigured product", receiptInfo.ProductId)
-		markProcessed(profile, receiptId)
-		DataService.MarkDirty(player)
-		return Enum.ProductPurchaseDecision.PurchaseGranted
+		-- v71 money (J2): an unknown Id is never acknowledged. Acking it ("drain the queue") took the Robux and
+		-- granted nothing when a receipt for a newly pasted Id reached a server still on the old version. Roblox
+		-- keeps retrying; once every server runs the version with the Id (Migrate to Latest Update) it is granted.
+		-- Nothing is marked or saved here.
+		warn(
+			"[MonetizationService] Unknown product Id — receipt NOT acknowledged (Roblox retries it):",
+			receiptInfo.ProductId,
+			receiptId
+		)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+
+	--[[ v71 money (J2): everything above may yield (Battle Pass readiness, the profile load). Any ownership lookup
+		a grant needs (UserOwnsGamePassAsync via PlayerOwnsGamePass / PlayerOwnsEntitlement) belongs HERE, before
+		the first grant mutation. From the first mutation below to markProcessed nothing may yield: the grants
+		(SetPremium, AddCash / AddGold with the multiplier-exempt "devproduct" reason, GrantEntitlement) only
+		mutate the in-memory profile and defer their follow-ups. ]]
 
 	-- Battle Pass Premium: server-only via ProcessReceipt (never client confirmation). First, so a failure
 	-- returns before any other grant is applied.
@@ -695,6 +709,24 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	end
 
 	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
+--[[ Roblox MarketplaceService.ProcessReceipt callback (wired in Init). v71 money (J2): one run per PurchaseId at a
+	time; an error inside is answered NotProcessedYet (Roblox retries) and always releases the in-flight lock. ]]
+function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurchaseDecision
+	local receiptId = tostring(if typeof(receiptInfo) == "table" then receiptInfo.PurchaseId else nil)
+	if receiptsInFlight[receiptId] then
+		warn("[MonetizationService] Receipt already being processed — NotProcessedYet (Roblox retries):", receiptId)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	receiptsInFlight[receiptId] = true
+	local ok, decision = pcall(processReceipt, receiptInfo, receiptId)
+	receiptsInFlight[receiptId] = nil
+	if not ok then
+		warn("[MonetizationService] ProcessReceipt error — NotProcessedYet (Roblox retries):", receiptId, decision)
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+	return decision
 end
 
 
