@@ -1961,12 +1961,13 @@ function MapSetup.Run()
 	Workspace.Gravity = 196.2
 
 	-- Lighting / sky / atmosphere — bright midday desert (inspiration only)
-	Lighting.Ambient = Color3.fromRGB(165, 145, 110)
+	local worldLight = (StructureVisualConfig :: any).WorldLighting or {}
+	Lighting.Ambient = worldLight.DayAmbient or Color3.fromRGB(165, 145, 110)
 	Lighting.OutdoorAmbient = Color3.fromRGB(185, 165, 130)
 	Lighting.Brightness = 3.15
 	Lighting.ClockTime = 12.5 -- intense midday sun
 	Lighting.GeographicLatitude = 22
-	Lighting.EnvironmentDiffuseScale = 0.55
+	Lighting.EnvironmentDiffuseScale = worldLight.EnvironmentDiffuseScale or 0.55
 	Lighting.EnvironmentSpecularScale = 0.42
 	Lighting.FogColor = Color3.fromRGB(210, 195, 160)
 	Lighting.FogStart = 1200
@@ -2009,7 +2010,7 @@ function MapSetup.Run()
 	task.spawn(function()
 		local STEP = 0.03
 		local WAIT = 1.5
-		local dayAmb = Color3.fromRGB(165, 145, 110)
+		local dayAmb = ((StructureVisualConfig :: any).WorldLighting or {}).DayAmbient or Color3.fromRGB(165, 145, 110)
 		local dayOut = Color3.fromRGB(185, 165, 130)
 		local dayFog = Color3.fromRGB(210, 195, 160)
 		local nightAmb = Color3.fromRGB(40, 45, 70)

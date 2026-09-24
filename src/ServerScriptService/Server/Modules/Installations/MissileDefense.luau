@@ -91,7 +91,7 @@ return function(ictx: any, api: any)
 	if lv >= 5 then
 		for _, fx in ipairs({ -hw + 2, hw - 2 }) do
 			api.box("FloodPole", Vector3.new(0.3, 7, 0.3), Vector3.new(fx, y0 + 3.5, hd - 2.5), col.Metal, Enum.Material.Metal, false)
-			local lens = api.box("FloodLamp", Vector3.new(1.4, 0.8, 0.5), Vector3.new(fx, y0 + 7, hd - 2.8), col.Light, Enum.Material.Neon, false)
+			local lens = api.box("FloodLamp", Vector3.new(1.4, 0.8, 0.5), Vector3.new(fx, y0 + 7, hd - 2.8), col.Light, Enum.Material.SmoothPlastic, false)
 			api.light(lens, 20, 1.2, col.Light)
 		end
 	end

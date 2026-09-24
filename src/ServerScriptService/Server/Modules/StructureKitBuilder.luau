@@ -1410,17 +1410,18 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 			Size = Vector3.new(1.2, 1, 1.2),
 			Position = lampPos,
 			Color = Color3.fromRGB(255, 236, 200),
-			Material = Enum.Material.Neon,
+			Material = Enum.Material.SmoothPlastic,
 			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		})
 		lamp.CFrame = CFrame.lookAt(lampPos, lampPos + out)
+		local lights = (StructureVisualConfig :: any).BuildingLights or {}
 		local spot = Instance.new("SpotLight")
 		spot.Face = Enum.NormalId.Front
 		spot.Angle = 45
-		spot.Range = 50
-		spot.Brightness = 1.5
+		spot.Range = math.min(50, lights.SpotMaxRange or 50)
+		spot.Brightness = 1.5 * (lights.BrightnessScale or 1)
 		spot.Color = Color3.fromRGB(255, 236, 200)
 		spot.Parent = lamp
 		local beacon = makePart({
@@ -1428,7 +1429,7 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 			Size = Vector3.new(0.7, 0.7, 0.7),
 			Position = Vector3.new(pos.X, floorY + 4.5, pos.Z),
 			Color = Color3.fromRGB(255, 50, 40),
-			Material = Enum.Material.Neon,
+			Material = Enum.Material.SmoothPlastic,
 			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,

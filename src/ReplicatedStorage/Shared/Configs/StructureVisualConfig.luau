@@ -193,6 +193,14 @@ local StructureVisualConfig = {
 		MaxRange = 16,
 		FixtureMaterial = Enum.Material.SmoothPlastic, -- ceiling / entry / hangar fittings (was Neon)
 		FixtureColor = Color3.fromRGB(232, 226, 208),
+		SpotMaxRange = 30, -- floodlights / searchlights (outdoors)
+	},
+
+	-- v69: world lighting. Ambient lights every surface the sky can't reach — at (165,145,110) every interior wall
+	-- glowed ~60 % white (the "blinding" rooms). OutdoorAmbient (outdoor shade) is unchanged.
+	WorldLighting = {
+		DayAmbient = Color3.fromRGB(78, 72, 62),
+		EnvironmentDiffuseScale = 0.35,
 	},
 
 	-- v68: outdoor installations — a detailed model from Modules/Installations/<Module>.luau on a concrete

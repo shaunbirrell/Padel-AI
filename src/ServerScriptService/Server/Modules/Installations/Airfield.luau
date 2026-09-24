@@ -91,7 +91,7 @@ return function(ictx: any, api: any)
 		cab.Transparency = 0.35
 		api.box("TowerCabRoof", Vector3.new(7.2, 0.5, 7.2), Vector3.new(tx, y0 + th + 4.15, tz), col.Trim, Enum.Material.Metal)
 		api.box("TowerMast", Vector3.new(0.3, 4, 0.3), Vector3.new(tx + 2.5, y0 + th + 6.4, tz - 2.5), col.Metal, Enum.Material.Metal, false)
-		local beacon = api.ball("TowerBeacon", 0.7, Vector3.new(tx + 2.5, y0 + th + 8.6, tz - 2.5), Color3.fromRGB(255, 50, 40), Enum.Material.Neon, false)
+		local beacon = api.ball("TowerBeacon", 0.7, Vector3.new(tx + 2.5, y0 + th + 8.6, tz - 2.5), Color3.fromRGB(255, 50, 40), Enum.Material.SmoothPlastic, false)
 		api.light(beacon, 10, 1.5, Color3.fromRGB(255, 60, 40))
 		api.box("TowerDoor", Vector3.new(1.8, 3, 0.15), Vector3.new(tx, y0 + 1.5, tz + 2.08), col.Metal, Enum.Material.Metal, false)
 	end
@@ -120,7 +120,7 @@ return function(ictx: any, api: any)
 	if lv >= 5 then
 		api.box("GoldTrim", Vector3.new(hW, 0.35, 0.35), Vector3.new(hx, y0 + H + 0.2, hd + 0.2), col.Gold, Enum.Material.Metal, false)
 		for _, side in ipairs({ -1, 1 }) do
-			local lens = api.box("FloodLamp", Vector3.new(1.6, 0.9, 0.5), Vector3.new(hx + side * (hw - 1.5), y0 + H - 0.6, hd + 0.5), col.Light, Enum.Material.Neon, false)
+			local lens = api.box("FloodLamp", Vector3.new(1.6, 0.9, 0.5), Vector3.new(hx + side * (hw - 1.5), y0 + H - 0.6, hd + 0.5), col.Light, Enum.Material.SmoothPlastic, false)
 			api.light(lens, 30, 1.4, col.Light)
 		end
 	end

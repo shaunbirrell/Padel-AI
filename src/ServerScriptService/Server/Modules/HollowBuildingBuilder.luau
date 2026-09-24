@@ -714,18 +714,18 @@ local function build(ctx: Ctx)
 		for i = 1, 3 do
 			box(ctx, "MastBar", Vector3.new(2.4 - i * 0.5, 0.15, 0.15), Vector3.new(mx, roofTop + 3 + i * 3.2, mz), col.Metal, Enum.Material.Metal, false)
 		end
-		local beacon = box(ctx, "MastBeacon", Vector3.new(0.7, 0.7, 0.7), Vector3.new(mx, roofTop + 15.3, mz), Color3.fromRGB(255, 50, 40), Enum.Material.Neon, false)
+		local beacon = box(ctx, "MastBeacon", Vector3.new(0.7, 0.7, 0.7), Vector3.new(mx, roofTop + 15.3, mz), Color3.fromRGB(220, 50, 40), FIXTURE_MATERIAL, false)
 		beacon.Shape = Enum.PartType.Ball
 		light(beacon, 10, 2, Color3.fromRGB(255, 60, 40))
 
 		for _, fx in ipairs({ -hw + 1, hw - 1 }) do
 			box(ctx, "Floodlight", Vector3.new(1.2, 0.8, 0.8), Vector3.new(fx, roofTop + parH + 0.8, hd - 0.2), col.Metal, Enum.Material.Metal, false)
-			local lens = box(ctx, "FloodLens", Vector3.new(1.0, 0.6, 0.1), Vector3.new(fx, roofTop + parH + 0.8, hd + 0.25), col.Light, Enum.Material.Neon, false)
+			local lens = box(ctx, "FloodLens", Vector3.new(1.0, 0.6, 0.1), Vector3.new(fx, roofTop + parH + 0.8, hd + 0.25), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 			local spot = Instance.new("SpotLight")
 			spot.Face = Enum.NormalId.Back
 			spot.Angle = 70
-			spot.Range = 30
-			spot.Brightness = 1.5
+			spot.Range = math.min(30, LIGHTS.SpotMaxRange or 30)
+			spot.Brightness = 1.5 * (LIGHTS.BrightnessScale or 1)
 			spot.Color = col.Light
 			spot.Parent = lens
 		end

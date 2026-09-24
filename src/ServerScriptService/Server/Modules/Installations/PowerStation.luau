@@ -116,7 +116,7 @@ return function(ictx: any, api: any)
 			end
 		end
 		if lv >= 5 then
-			local b = api.ball("PylonBeacon", 0.8, Vector3.new(px, y0 + pH + 0.5, pz), Color3.fromRGB(255, 50, 40), Enum.Material.Neon, false)
+			local b = api.ball("PylonBeacon", 0.8, Vector3.new(px, y0 + pH + 0.5, pz), Color3.fromRGB(255, 50, 40), Enum.Material.SmoothPlastic, false)
 			api.light(b, 10, 1.5, Color3.fromRGB(255, 60, 40))
 		end
 	end
@@ -139,6 +139,6 @@ return function(ictx: any, api: any)
 		api.cylinder("FuelDrum", Vector3.new(1.5, 1.1, 1.1), CFrame.new(-12.5 + i * 1.3, y0 + 0.75, 8.5) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(120, 60, 40), Enum.Material.Metal)
 	end
 	api.box("YardLampPole", Vector3.new(0.3, 7, 0.3), Vector3.new(4.5, y0 + 3.5, hd - 1.5), col.Metal, Enum.Material.Metal, false)
-	local lamp = api.box("YardLamp", Vector3.new(1.4, 0.3, 0.8), Vector3.new(4.5, y0 + 7, hd - 2), col.Light, Enum.Material.Neon, false)
+	local lamp = api.box("YardLamp", Vector3.new(1.4, 0.3, 0.8), Vector3.new(4.5, y0 + 7, hd - 2), col.Light, Enum.Material.SmoothPlastic, false)
 	api.light(lamp, 18, 1.2, col.Light)
 end
