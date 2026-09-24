@@ -33,11 +33,12 @@ end
 
 --[[
 	MobileScale tracker: ONE ViewportSize connection for every UIScale made by AttachMobileScale (v70 fix: the
-	old per-call closures reconnected on every CurrentCamera change and never disconnected). Weak keys, so a
-	destroyed gui's UIScale drops out by itself. HudLayout.ApplyScreen takes a scale over with ReleaseMobileScale.
+	old per-call closures reconnected on every CurrentCamera change and never disconnected). Strong keys (Roblox GC
+	drops weak Instance keys); a removed UIScale is pruned on the next viewport change. HudLayout.ApplyScreen takes a
+	scale over with ReleaseMobileScale.
 ]]
 type ScaleParams = { Base: number, Min: number, Max: number }
-local trackedScales: { [UIScale]: ScaleParams } = setmetatable({} :: any, { __mode = "k" })
+local trackedScales: { [UIScale]: ScaleParams } = {} -- STRONG (weak Instance keys are dropped by GC); pruned below
 local trackerStarted = false
 local trackerCamConn: RBXScriptConnection? = nil
 
@@ -52,6 +53,10 @@ end
 
 local function updateTrackedScales()
 	for scale, p in pairs(trackedScales) do
+		if scale.Parent == nil then
+			trackedScales[scale] = nil
+			continue
+		end
 		local v = scaleValue(p)
 		if v and scale.Scale ~= v then
 			scale.Scale = v

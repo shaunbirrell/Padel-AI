@@ -1904,6 +1904,14 @@ must_not_contain("src/ServerScriptService/Server/Modules/VehicleHealth.luau", "I
 must_contain("src/ReplicatedStorage/Shared/Configs/AimAssistConfig.luau", "Touch = { LateralStuds = 2.5, MaxConeDeg = 4 },", "W2: touch assist limits")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "fire.Active = false", "W2: FIRE non-Active (drag-to-aim)")
 
+# --- v72 HUD scale fix (rail/cash pill 1.29x too big on phones) ---
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudLayout.luau", "local trackedScales: { [UIScale]: boolean } = setmetatable({} :: any, { __mode = \"k\" })", "v72 HUD: tracked UIScales are a strong table (weak Instance keys get dropped)")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudLayout.luau", "local topbarAreas: { [ScreenGui]: Frame } = setmetatable({} :: any, { __mode = \"k\" })", "v72 HUD: topbar areas are a strong table")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudLayout.luau", "local bindings: { [GuiObject]: Binding } = setmetatable({} :: any, { __mode = \"k\" })", "v72 HUD: visibility bindings are a strong table")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudLayout.luau", "if not (v and v.X > 1 and v.Y > 1) and HudLayout.IsTouch() then", "v72 HUD: phone scale while the viewport is unknown")
+must_not_contain("src/ReplicatedStorage/Shared/Util/UIUtil.luau", "local trackedScales: { [UIScale]: ScaleParams } = setmetatable({} :: any, { __mode = \"k\" })", "v72 HUD: UIUtil tracked scales are a strong table")
+must_contain("src/ReplicatedStorage/Shared/Util/UIUtil.luau", "if scale.Parent == nil then", "v72 HUD: UIUtil prunes removed scales")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

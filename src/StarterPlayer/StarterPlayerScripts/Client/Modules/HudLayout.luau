@@ -250,6 +250,12 @@ end
 
 --[[ S = clamp(min(vw, vh) / 800, 0.70, 1.15): 844x390 → 0.70, 956x440 → 0.70, 1280x720 → 0.90, 1920x1080 → 1.15 ]]
 function HudLayout.Scale(): number
+	local cam = Workspace.CurrentCamera
+	local v = cam and cam.ViewportSize
+	if not (v and v.X > 1 and v.Y > 1) and HudLayout.IsTouch() then
+		-- viewport not reported yet (early join on a phone): the phone scale; the ViewportSize watcher corrects it
+		return HudConfig.Scale.Min
+	end
 	return scaleFor(viewportSize())
 end
 
@@ -371,7 +377,9 @@ function HudLayout.TopbarRect(): Rect
 	return Rect.new(left, 0, math.max(left, cx + cw), h)
 end
 
-local topbarAreas: { [ScreenGui]: Frame } = setmetatable({} :: any, { __mode = "k" })
+-- STRONG on purpose: a weak Instance key is dropped by Roblox GC while the gui is still parented (devforum t/86634);
+-- onLayoutChanged prunes screens whose frame left them.
+local topbarAreas: { [ScreenGui]: Frame } = {}
 
 local function placeTopbarArea(screen: ScreenGui, f: Frame)
 	if screen:GetAttribute("WE_HudInsets") == "Topbar" then
@@ -417,7 +425,10 @@ end
 -- ScreenGui setup + the one shared UIScale
 ---------------------------------------------------------------------------------------------------------------
 
-local trackedScales: { [UIScale]: boolean } = setmetatable({} :: any, { __mode = "k" })
+-- STRONG on purpose (see topbarAreas): the owner ScreenGuis never keep the UIScale ApplyScreen returns, so a weak key
+-- let GC drop WarEmpireHUD's scale and it stayed at its first value (the 0.90 fallback) - rail/pill 1.29x too big.
+-- onLayoutChanged prunes scales whose Parent is nil.
+local trackedScales: { [UIScale]: boolean } = {}
 
 local function setInsets(screen: ScreenGui, want: Enum.ScreenInsets): boolean
 	local ok = pcall(function()
@@ -513,6 +524,13 @@ function HudLayout.ApplyScreen(screen: ScreenGui, opts: ScreenOpts?): UIScale?
 	sc.Name = "MobileScale"
 	sc.Scale = HudLayout.Scale()
 	sc.Parent = screen
+	-- prune on add too, so a gui made and destroyed per open can never grow the table (Parent == nil, not
+	-- IsDescendantOf(game): most callers run ApplyScreen before parenting their ScreenGui)
+	for s in pairs(trackedScales) do
+		if s.Parent == nil then
+			trackedScales[s] = nil
+		end
+	end
 	trackedScales[sc] = true
 	return sc
 end
@@ -524,7 +542,7 @@ end
 local flags: { [string]: boolean } = {}
 
 type Binding = { Rule: Rule, Extra: (() -> boolean)? }
-local bindings: { [GuiObject]: Binding } = setmetatable({} :: any, { __mode = "k" })
+local bindings: { [GuiObject]: Binding } = {} -- STRONG (see trackedScales); removed on Destroying / UnbindVisibility
 
 -- true / false, or nil when `extra` threw (keep the current visibility)
 local function evalRule(rule: Rule, extra: (() -> boolean)?): boolean?
@@ -624,6 +642,13 @@ end
 function HudLayout.BindVisibility(obj: GuiObject, rule: RuleArg, extra: (() -> boolean)?)
 	local r: Rule = rule :: any
 	local b: Binding = { Rule = { ShowWhen = r.ShowWhen, HideWhen = r.HideWhen }, Extra = extra }
+	if bindings[obj] == nil then
+		pcall(function()
+			obj.Destroying:Once(function()
+				bindings[obj] = nil
+			end)
+		end)
+	end
 	bindings[obj] = b
 	applyBinding(obj, b)
 end
