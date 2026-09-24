@@ -29,6 +29,8 @@
 	  * Flat markings (PaveTile only: top <= 0.75, no collision) may lie over an event anchor (the supply crate lands
 	    on the paving); they are not added to the occupancy.
 	  * Every part stays inside the POI footprint. Terrain rubble / scorch (WorldKits.Rock) passes Blocked too.
+	  * Town v2 (densify): the blocks are WorldKits.TownBlock rows; their Width / Depth / Storeys / Roof / Lantern pass
+	    through kitOpts, so the planned count (Footprint) and the build always use the same options.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -190,6 +192,23 @@ local function measure(model: Model, roads: { Road }, rect: WorldConfig.Rect?): 
 	return m
 end
 
+-- the WorldKits options of one Town kit row (text only for a real build)
+local function kitOpts(k: WorldConfig.KitPlace, text: string?): WorldKits.KitOpts
+	return {
+		Variant = k.Variant,
+		Count = k.Count,
+		Length = k.Length,
+		Scale = k.Scale,
+		Color = k.Color,
+		Text = text,
+		Width = k.Width,
+		Depth = k.Depth,
+		Storeys = k.Storeys,
+		Roof = k.Roof,
+		Lantern = k.Lantern,
+	}
+end
+
 local function kitParts(kit: WorldConfig.KitPlace): (number, number, number)
 	local s = WorldKits.Specs[kit.Kit]
 	if s == nil or s.Step ~= 1 then
@@ -197,8 +216,9 @@ local function kitParts(kit: WorldConfig.KitPlace): (number, number, number)
 	end
 	-- the exact count, measured from the kit builder (cached): CrateStack / DrumGroup Count is crates / drums (1 part
 	-- each), SandbagLine / CompoundWall Length is studs, Wreck "car" is 4 parts
-	local fp = WorldKits.Footprint(kit.Kit, { Variant = kit.Variant, Count = kit.Count, Length = kit.Length, Scale = kit.Scale })
-	return if fp then fp.Parts else s.PartsMax, s.Lights, s.Signs
+	local fp = WorldKits.Footprint(kit.Kit, kitOpts(kit, nil))
+	local lights = s.Lights + (if kit.Lantern == true then 1 else 0) -- a TownBlock wall lantern carries a night light
+	return if fp then fp.Parts else s.PartsMax, lights, s.Signs
 end
 
 local function planned(c: TownCluster): (number, number, number)
@@ -255,7 +275,7 @@ local function buildTown(ctx: Ctx)
 				signsHere += 1
 			end
 			local kcf = frame * CFrame.new(k.X, 0, k.Z) * CFrame.Angles(0, math.rad(k.Yaw or 0), 0)
-			WorldKits.Add(model, k.Kit, kcf, { Variant = k.Variant, Count = k.Count, Length = k.Length, Scale = k.Scale, Color = k.Color, Text = text })
+			WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))
 		end
 		local m = measure(model, roads, poi.Rect)
 		local cx, cz = (m.X0 + m.X1) * 0.5, (m.Z0 + m.Z1) * 0.5

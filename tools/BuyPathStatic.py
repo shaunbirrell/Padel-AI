@@ -1933,7 +1933,7 @@ must_not_contain('src/ServerScriptService/Server/Modules/WorldDress.luau', 'Bill
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'OrphanMode = "Enforce",', 'World v2 H1 enforced in W3 (roadmap 1.5 #3)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'ElementsAttr = "WE_Elements",', 'W3 natural clusters stand alone by their element count (H1)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '"Dune", "DeadTree", "Stump", "FallenLog", "Reed", "Driftwood" },', 'W3 dead wood, reeds and driftwood are natural (H1)')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 220, Enabled = true, Lights = 6, Signs = 1 },', 'W3 step 1 builds Crossroads Town (220 parts, 6 lights, 1 sign)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 370, Enabled = true, Lights = 8, Signs = 1 },', 'W3 Town v2 builds Crossroads Town (370 parts: every 512 circle <= 500; 8 lights, 1 sign)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 150, Enabled = false, Lights = 4, Signs = 0 },', 'W3 Town-first gate: South Port stays off until the owner signs off the Town')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Lamp = { Brightness = 0.6, Range = 16, Color = Color3.fromRGB(255, 236, 190) },', 'W3 Town lamps inside the light policy (H8)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'MeshOverlays = 40,', 'W3 Roblox-owned mesh overlays capped per server')
@@ -2037,6 +2037,20 @@ must_not_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 
 must_not_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', '9136197032', 'W3 LOOK DesertHouse dropped')
 must_not_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', '11138299907', 'W3 LOOK Pier dropped')
 must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'local fp = WorldKits.Footprint(kit.Kit,', 'W3 Town planned counts measured from the kit builder')
+
+# --- W3 Town v2 (densify): TownBlock / RadioMast kits, Town v2 caps, landmarks ---
+must_contain('src/ServerScriptService/Server/Modules/WorldKits.luau', 'Builders.TownBlock = function(b: B)', 'W3 Town v2: 1-6 storey town blocks from a few big parts')
+must_contain('src/ServerScriptService/Server/Modules/WorldKits.luau', 'TownBlock = spec(4, 31, Vector3.new(20.8, 15.2, 16.8), "manmade", true, 1, "Town"),', 'W3 Town v2: TownBlock catalogue row (4 parts default, 31 max)')
+must_contain('src/ServerScriptService/Server/Modules/WorldKits.luau', 'RadioMast = spec(5, 5, Vector3.new(6, 90, 6), "manmade", true, 1, "Town+POI"),', 'W3 Town v2: the 90-stud radio mast is built (step 1)')
+must_contain('src/ServerScriptService/Server/Modules/WorldKits.luau', 'local function nightLamp(host: BasePart)', 'W3 Town v2: street lamps and wall lanterns share one light policy (H8)')
+must_contain('src/ServerScriptService/Server/Modules/WorldKits.luau', 'tostring(o.Width), tostring(o.Depth), tostring(o.Storeys), tostring(o.Roof), tostring(o.Lantern)', 'W3 Town v2: Footprint cache keyed by the block options')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'local function kitOpts(k: WorldConfig.KitPlace, text: string?): WorldKits.KitOpts', 'W3 Town v2: one option mapper for planned counts and the build')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'WorldKits.Add(model, k.Kit, kcf, kitOpts(k, text))', 'W3 Town v2: rows build with the same options they were counted with')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "NW_WaterTower", Block = "NW", Role = "tower", Tier = 1,', 'W3 Town v2: water tower landmark kept (NW, Tier 1)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "SE_ClockTower", Block = "SE", Role = "tower", Tier = 1,', 'W3 Town v2: clock tower landmark kept (SE, Tier 1)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "NE_TowerBlock", Block = "NE", Role = "landmark", Tier = 1,', 'W3 Town v2: ruined tower block landmark (NE, Tier 1)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "SW_RadioMast", Block = "SW", Role = "mast", Tier = 1,', 'W3 Town v2: radio mast landmark (SW, Tier 1)')
+must_not_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 220, Enabled = true, Lights = 6, Signs = 1 },', 'W3 Town v2: the step-1 Town caps are retired')
 
 parse_gate()
 

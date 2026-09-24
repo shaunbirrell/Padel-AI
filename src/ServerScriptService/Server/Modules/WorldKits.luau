@@ -108,6 +108,12 @@ export type KitOpts = {
 	Light: boolean?, -- StreetLamp: build its night PointLight (default true)
 	Mesh: boolean?, -- try the Roblox-owned mesh overlay when Specs[kit].Mesh is set (default true)
 	Seed: number?, -- per-instance jitter (default: from the pivot position)
+	-- Town v2 (TownBlock only; see its builder)
+	Width: number?, -- front width, local X (default 20)
+	Depth: number?, -- local Z (default 16)
+	Storeys: number?, -- 1 .. 6 (default 2), 7 studs each; 5+ = a concrete tower block
+	Roof: string?, -- "+"-joined: "bare", "tank", "tanks", "hut", "mast", "dish"
+	Lantern: boolean?, -- a soft night lamp over the door (1 part + 1 WE_NightLight PointLight)
 }
 
 export type ClusterAttrs = {
@@ -219,6 +225,10 @@ WorldKits.Specs = {
 	PaveTile = spec(1, 1, Vector3.new(45, 0.12, 45), "marking", false, 1, "Town"), -- Town Square paving, top <= 0.75, no collide
 	Fountain = spec(4, 4, Vector3.new(10, 3.6, 10), "manmade", true, 1, "Town"), -- dry fountain
 	Bench = spec(1, 1, Vector3.new(6, 1.2, 1.8), "manmade", false, 1, "Town", { Mesh = "Bench" }),
+	-- Town v2 (densify): 1–6 storey blocks from a few big parts (default = 20 x 16, 2 storeys: body, parapet, 1 window
+	-- strip, door); parts grow with Storeys / Variant / Roof / Lantern (Footprint gives the exact count)
+	TownBlock = spec(4, 31, Vector3.new(20.8, 15.2, 16.8), "manmade", true, 1, "Town"), -- max: 6 storeys, every face and roof option
+	RadioMast = spec(5, 5, Vector3.new(6, 90, 6), "manmade", true, 1, "Town+POI"), -- lattice mast, 90 tall (Town landmark; later the Signal Station)
 	-- Step 1 — shared by the Town and the travel dressing
 	CrateStack = spec(3, 6, Vector3.new(5.2, 4.8, 2.9), "manmade", true, 1, "Town+Travel", { Mesh = "CrateWood", Unit = "crate" }),
 	DrumGroup = spec(3, 6, Vector3.new(3.2, 2.2, 3.0), "manmade", true, 1, "Town+Travel", { Unit = "drum" }),
@@ -261,7 +271,6 @@ WorldKits.Specs = {
 	Bunker = spec(4, 4, Vector3.new(16, 6, 12), "manmade", true, 2, "POI"),
 	Hangar = spec(5, 5, Vector3.new(28, 12, 22), "manmade", true, 2, "POI"),
 	AmmoShed = spec(5, 5, Vector3.new(12, 6, 10), "manmade", true, 2, "POI"),
-	RadioMast = spec(5, 5, Vector3.new(10, 90, 10), "manmade", true, 2, "POI"),
 	WireFence = spec(4, 12, Vector3.new(16, 3, 0.4), "manmade", false, 2, "POI", { Unit = "16 studs" }),
 	Tent = spec(5, 5, Vector3.new(9, 5, 7), "manmade", true, 2, "POI"),
 	Campfire = spec(3, 3, Vector3.new(4, 1, 4), "manmade", false, 2, "POI"),
@@ -604,21 +613,26 @@ local function nightOn(): boolean
 	return ok and on == true
 end
 
+-- the soft night PointLight of a street lamp or a wall lantern (H8: Brightness <= 0.8, Range <= 18, no shadows, tagged)
+local function nightLamp(host: BasePart)
+	local L = KC.Lamp
+	local light = Instance.new("PointLight")
+	light.Name = "LampLight"
+	light.Brightness = math.min(L.Brightness, WorldConfig.Lights.MaxBrightness)
+	light.Range = math.min(L.Range, WorldConfig.Lights.MaxRange)
+	light.Color = L.Color
+	light.Shadows = false
+	light.Enabled = nightOn() -- WorldAtmosphere flips WE_NightLight lights at dusk / dawn
+	CollectionService:AddTag(light, WorldConfig.Atmosphere.NightLightTag)
+	light.Parent = host
+end
+
 Builders.StreetLamp = function(b: B)
 	put(b, "LampPole", Vector3.new(0.5, 12, 0.5), CFrame.new(0, 6, 0), PAL.SteelDark, M.Metal, true)
 	put(b, "LampArm", Vector3.new(0.3, 0.3, 3.2), CFrame.new(0, 11.7, -1.45), PAL.Steel, M.Metal, false)
 	local lens = put(b, "LampLens", Vector3.new(1.2, 0.5, 1.2), CFrame.new(0, 11.3, -2.8), PAL.LampLens, M.SmoothPlastic, false)
 	if b.Opts.Light ~= false then
-		local L = KC.Lamp
-		local light = Instance.new("PointLight")
-		light.Name = "LampLight"
-		light.Brightness = math.min(L.Brightness, WorldConfig.Lights.MaxBrightness)
-		light.Range = math.min(L.Range, WorldConfig.Lights.MaxRange)
-		light.Color = L.Color
-		light.Shadows = false
-		light.Enabled = nightOn() -- WorldAtmosphere flips WE_NightLight lights at dusk / dawn
-		CollectionService:AddTag(light, WorldConfig.Atmosphere.NightLightTag)
-		light.Parent = lens
+		nightLamp(lens)
 	end
 end
 
@@ -645,6 +659,151 @@ end
 Builders.Bench = function(b: B)
 	local p = put(b, "Bench", Vector3.new(6, 1.2, 1.8), CFrame.new(0, 0.6, 0), PAL.Wood, M.Wood, true)
 	queueMesh(b, "Bench", "skin", { p })
+end
+
+-- Town v2 (densify) ────────────────────────────────────────────────────────────────────────────────────────────────
+local STOREY = 7 -- studs per storey (TownBlock)
+
+local function tokens(s: string?): { [string]: boolean }
+	local t: { [string]: boolean } = {}
+	if s ~= nil then
+		for w in string.gmatch(s, "[^+]+") do
+			t[w] = true
+		end
+	end
+	return t
+end
+
+--[[ A town block: height and street frontage for few parts. The walls are ONE solid part (cover, H4), the cornice ONE
+	parapet slab, each upper storey ONE inset window strip per face, the ground floor a door or a shopfront (rolled
+	shutter + cloth awning), plus cheap rooftop details. The pivot is the footprint centre on the floor; the front (door,
+	shopfront, window strips) faces local -Z.
+	Opts: Width (local X, 8..48, default 20), Depth (local Z, 8..48, default 16), Storeys (1..6, default 2; 5+ = a
+	concrete tower block), Color (walls; trim = 20 % darker), Lantern (a soft night lamp beside the door),
+	Variant ("+"-joined): "shop" (shutter + awning instead of the door), "side" / "left" / "rear" (window strips on the
+	+X / -X / back face too),
+	"damaged" (the top storey's +X half is blown off: remnant + the fallen floor slab on the broken roof, no parapet),
+	"gutted" (a burnt-out shell: back and side walls, a ground-floor front stub, the collapsed floor leaning inside);
+	Roof ("+"-joined): "bare" (no parapet), "tank" / "tanks" (1 / 2 water tanks), "hut" (stair hut), "mast" (antenna,
+	2 parts), "dish" (1 part). Every part stays inside the parapet footprint (W + 0.8) x (D + 0.8), except the awning
+	(3.1 in front) and the lantern (0.8 in front). One shadow caster per block (its body, or a shell's back wall: H9,
+	the Town keeps <= 60 casters for phones). ]]
+Builders.TownBlock = function(b: B)
+	local o = b.Opts
+	local W = math.clamp(o.Width or 20, 8, 48)
+	local D = math.clamp(o.Depth or 16, 8, 48)
+	local S = math.clamp(math.floor(o.Storeys or 2), 1, 6)
+	local v, roof = tokens(o.Variant), tokens(o.Roof)
+	local tower = S >= 5
+	local mat = if tower then M.Concrete else M.Sandstone
+	local wall = o.Color or (if tower then PAL.ConcreteLight else PAL.Adobe)
+	local trim = wall:Lerp(Color3.new(0, 0, 0), 0.2)
+	local H = S * STOREY
+	local fz = -D * 0.5 -- the front face
+	local rng = b.Rng
+
+	if v.gutted then
+		put(b, "RuinWallBack", Vector3.new(W, H, 1.2), CFrame.new(0, H * 0.5, D * 0.5 - 0.6), wall, mat, true, true)
+		local sh = math.max(H - 2, 4)
+		put(b, "RuinWallSide", Vector3.new(1.2, sh, D - 1.2), CFrame.new(-W * 0.5 + 0.6, sh * 0.5, -0.6), trim, mat, true)
+		local fw = math.floor(W * 0.45 + 0.5)
+		local fh = if S == 1 then 4 else STOREY + 1
+		put(b, "RuinWallFront", Vector3.new(fw, fh, 1.2), CFrame.new(W * 0.5 - fw * 0.5, fh * 0.5, fz + 0.6), wall, mat, true)
+		-- the collapsed upper floor: its high end on the side wall, its low end on the floor inside the shell
+		local L = W * 0.7
+		local a = math.asin(math.min(0.8, math.min(STOREY, H - 1) * 0.8 / L))
+		local cy = L * 0.5 * math.sin(a) + 0.4 * math.cos(a) + 0.02
+		put(b, "RuinFloorSlab", Vector3.new(L, 0.8, D - 3), CFrame.new(-W * 0.5 + 1.2 + L * 0.5 * math.cos(a), cy, 0) * rotZ(-math.deg(a)), trim, mat, true)
+		return
+	end
+
+	local damaged = v.damaged == true and S >= 2
+	local rx0, rx1 = -W * 0.5, W * 0.5 -- the roof the details stand on
+	local roofY = H
+	local topW = W - 4 -- the top storey's window strip
+	if damaged then
+		local lowH = H - STOREY
+		local rw = math.floor(W * 0.55 + 0.5)
+		put(b, "AdobeBlock", Vector3.new(W, lowH, D), CFrame.new(0, lowH * 0.5, 0), wall, mat, true, true)
+		put(b, "AdobeBlockUpper", Vector3.new(rw, STOREY, D), CFrame.new(-W * 0.5 + rw * 0.5, lowH + STOREY * 0.5, 0), wall, mat, true)
+		-- the fallen floor of the blown corner, tipped from the remnant down to the broken edge
+		local sw = W - rw - 1
+		local tilt = math.rad(10)
+		put(b, "AdobeDebris", Vector3.new(sw, 0.8, D * 0.7), CFrame.new(W * 0.5 - sw * 0.5 - 0.3, lowH + sw * 0.5 * math.sin(tilt) + 0.4 * math.cos(tilt), 0.1 * D) * rotZ(-10), trim, mat, true)
+		rx1 = -W * 0.5 + rw
+		topW = rw - 3
+	else
+		put(b, "AdobeBlock", Vector3.new(W, H, D), CFrame.new(0, H * 0.5, 0), wall, mat, true, true)
+		if not roof.bare then
+			put(b, "AdobeParapet", Vector3.new(W + 0.8, 1.2, D + 0.8), CFrame.new(0, H + 0.6, 0), trim, mat, true)
+			roofY = H + 1.2
+		end
+	end
+
+	-- one inset window strip per upper storey (front; "side" / "left" / "rear": the +X / -X / back face too; damaged:
+	-- none on the blown half)
+	for k = 2, S do
+		local y = (k - 1) * STOREY + 3.6
+		local top = k == S
+		local w = if top then topW else W - 4
+		local x = if top and damaged then rx0 + 1.5 + w * 0.5 else 0
+		put(b, "AdobeWindowStrip", Vector3.new(math.max(w, 2), 1.8, 0.3), CFrame.new(x, y, fz - 0.15), PAL.Window, M.SmoothPlastic, false)
+		if v.side and not (top and damaged) then
+			put(b, "AdobeWindowStrip", Vector3.new(0.3, 1.8, math.max(D - 4, 2)), CFrame.new(W * 0.5 + 0.15, y, 0), PAL.Window, M.SmoothPlastic, false)
+		end
+		if v.left then
+			put(b, "AdobeWindowStrip", Vector3.new(0.3, 1.8, math.max(D - 4, 2)), CFrame.new(-W * 0.5 - 0.15, y, 0), PAL.Window, M.SmoothPlastic, false)
+		end
+		if v.rear and not (top and damaged) then
+			put(b, "AdobeWindowStrip", Vector3.new(math.max(W - 4, 2), 1.8, 0.3), CFrame.new(0, y, D * 0.5 + 0.15), PAL.Window, M.SmoothPlastic, false)
+		end
+	end
+
+	-- ground floor: a rolled steel shutter under a cloth awning, or a door
+	if v.shop then
+		local shutters = { PAL.Rust, PAL.SteelDark, PAL.DrumBlue }
+		local tarps = { PAL.TarpRed, PAL.TarpBlue, PAL.TarpSand }
+		local sw = math.max(W - 6, 4)
+		put(b, "ShopShutter", Vector3.new(sw, 4.2, 0.3), CFrame.new(0, 2.3, fz - 0.15), shutters[rng:NextInteger(1, 3)], M.CorrodedMetal, false)
+		put(b, "ShopTarp", Vector3.new(sw, 0.25, 3.1), CFrame.new(0, 5.2, fz - 1.52) * rotX(-14), tarps[rng:NextInteger(1, 3)], M.Fabric, false)
+	else
+		put(b, "AdobeDoor", Vector3.new(2.4, 4.2, 0.3), CFrame.new(-W * 0.5 + 3.2, 2.1, fz - 0.15), PAL.WoodDark, M.Wood, false)
+	end
+	if o.Lantern == true then
+		local lamp = put(b, "LampLantern", Vector3.new(0.8, 1.1, 0.8), CFrame.new(W * 0.5 - 1.6, 6.2, fz - 0.4), PAL.LampLens, M.SmoothPlastic, false)
+		if o.Light ~= false then
+			nightLamp(lamp)
+		end
+	end
+
+	-- rooftop details (inside the roof outline, standing on it)
+	if roof.tank or roof.tanks then
+		local cols = { PAL.SteelDark, PAL.TankCream, PAL.DrumBlue }
+		vcyl(b, "RoofTank", rx1 - 2.6, roofY, D * 0.5 - 2.6, 3.2, 3.4, cols[rng:NextInteger(1, 3)], M.Plastic, true)
+		if roof.tanks then
+			vcyl(b, "RoofTank", rx1 - 6.4, roofY, D * 0.5 - 2.6, 3.2, 3.4, cols[rng:NextInteger(1, 3)], M.Plastic, true)
+		end
+	end
+	if roof.hut then
+		put(b, "RoofHut", Vector3.new(4.6, 3.2, 4.2), CFrame.new(rx0 + 3.0, roofY + 1.6, D * 0.5 - 2.8), trim, mat, true)
+	end
+	if roof.mast then
+		put(b, "RoofMast", Vector3.new(0.45, 12, 0.45), CFrame.new(rx0 + 2.0, roofY + 6, fz + 2.2), PAL.SteelDark, M.Metal, false)
+		put(b, "RoofMastBar", Vector3.new(3.2, 0.3, 0.3), CFrame.new(rx0 + 2.0, roofY + 10.5, fz + 2.2), PAL.SteelDark, M.Metal, false)
+	end
+	if roof.dish then
+		put(b, "RoofDish", Vector3.new(0.4, 3, 3), CFrame.new((rx0 + rx1) * 0.5, roofY + 1.3, fz + 2.4) * rotY(90) * rotZ(40), PAL.ConcreteLight, M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+	end
+end
+
+-- a lattice radio mast, 90 tall (the Town's skyline marker from every gate): plinth, two tapering sections, a red tip
+-- and a relay dish. Solid, no light (the aviation tip is painted, never Neon).
+Builders.RadioMast = function(b: B)
+	put(b, "MastPlinth", Vector3.new(6, 2, 6), CFrame.new(0, 1, 0), PAL.ConcreteLight, M.Concrete, true)
+	put(b, "MastSection", Vector3.new(3.2, 40, 3.2), CFrame.new(0, 22, 0), PAL.Steel, M.DiamondPlate, true, true)
+	put(b, "MastSection", Vector3.new(2.2, 30, 2.2), CFrame.new(0, 57, 0), PAL.Steel, M.DiamondPlate, true, true)
+	put(b, "MastTip", Vector3.new(1, 18, 1), CFrame.new(0, 81, 0), PAL.TarpRed, M.SmoothPlastic, true)
+	put(b, "MastDish", Vector3.new(0.5, 4.4, 4.4), CFrame.new(0, 48, -1.35) * ZCYL, PAL.ConcreteLight, M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
 end
 
 -- Shared ───────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -1128,7 +1287,7 @@ local footCache: { [string]: Footprint } = {}
 
 function WorldKits.Footprint(kitId: string, opts: KitOpts?): Footprint?
 	local o: KitOpts = opts or {}
-	local key = table.concat({ kitId, tostring(o.Variant), tostring(o.Count), tostring(o.Length), tostring(o.Scale) }, "|")
+	local key = table.concat({ kitId, tostring(o.Variant), tostring(o.Count), tostring(o.Length), tostring(o.Scale), tostring(o.Width), tostring(o.Depth), tostring(o.Storeys), tostring(o.Roof), tostring(o.Lantern) }, "|")
 	local hit = footCache[key]
 	if hit then
 		return hit
@@ -1138,7 +1297,14 @@ function WorldKits.Footprint(kitId: string, opts: KitOpts?): Footprint?
 	end
 	local tmp = Instance.new("Model")
 	local frame = CFrame.new(0, GROUND_Y, 0)
-	local b: B = { Cluster = tmp, CF = frame, Opts = { Variant = o.Variant, Count = o.Count, Length = o.Length, Scale = o.Scale, Light = false, Mesh = false, Seed = 1 }, Parts = {}, Rng = WorldKits.Rng(1), Overlays = {} }
+	local b: B = {
+		Cluster = tmp,
+		CF = frame,
+		Opts = { Variant = o.Variant, Count = o.Count, Length = o.Length, Scale = o.Scale, Width = o.Width, Depth = o.Depth, Storeys = o.Storeys, Roof = o.Roof, Lantern = o.Lantern, Light = false, Mesh = false, Seed = 1 },
+		Parts = {},
+		Rng = WorldKits.Rng(1),
+		Overlays = {},
+	}
 	Builders[kitId](b)
 	local fp: Footprint = { X0 = math.huge, X1 = -math.huge, Z0 = math.huge, Z1 = -math.huge, Top = 0, CollideZ0 = math.huge, VisibleZ0 = math.huge, Parts = #b.Parts }
 	for _, p in ipairs(b.Parts) do

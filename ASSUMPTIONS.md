@@ -1155,3 +1155,80 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 - **W3 contract pin on `WorldPOI.Build`.** B1 typed `occ` through a local alias (`type Occupancy = WorldDress.Occupancy`), so the pinned signature is `function WorldPOI.Build(dressing: Instance, quality: string, occ: Occupancy?): Summary`. The type is identical. Revert: none needed.
 - **W3 BuyPathStatic retirements.** Lines 235, 586, 587, 617, 618, 619, 642, 678, 1430 (MapDressing coordinate-list sections deleted) and 1734 (`OrphanMode = "Report",`) are retired; their replacement pins are in the W3 block. The needles `WreckScorch`, `RoadCrater` and `RoadChevron` get no replacement (the names stay hygiene marking prefixes).
 - **W3 old jeep suite.** `w2/cc2/t_jeep_server_k2pin.luau` (K2) expects the stub asset shape, not the real Roblox LUV pack. `w3/LOOK/t_jeep_server_look.luau` with `fakes.luau` replaces it (131/131).
+
+## 2026-09-24 — Crossroads Town v2 (denser, taller; owner found step 1 too sparse)
+## W3 Town v2 (densify): assumptions (reversible; append to ASSUMPTIONS.md)
+
+- **Town budget is set by the 512-stud circle, not by taste.** Everything outside the Town inside the busiest 512 circle
+  (centre about (128, 128)) is 121 parts: 73 world parts plus the 48 skyline parts that count in every circle. So the Town
+  can hold at most 379 parts before a 512 circle passes 500. `POIs.Town.Budget` goes from 220 to 370 (the build uses 368),
+  which leaves the busiest circle at 488 (grid 128) or 489 (grid 16). To undo: lower `Budget`. Rows past the cap are skipped
+  with a warning, never placed.
+- **Town lights go from 6 to 8.** The 6 street lamps stay. 2 wall lanterns are added: 1 part plus 1 PointLight each, on the
+  NW plaza block (facing the flag) and the first east-arm block. They share the street lamps' light policy through
+  `nightLamp`: Brightness 0.6, Range 16, no shadows, tagged `WE_NightLight`, night only. There are now 13 world lights,
+  under the cap of 24. Low keeps all 8.
+- **The 30-stud road rule is unchanged.** Frontage blocks still use a disc: the AABB half-diagonal, 30 + 0.6 off each
+  road centre line. That puts shop fronts 33–39 studs from the centre line, so the verge is about 26–32 studs wide. The rule
+  was not changed to a per-box test because the verifier's W3-zones and TOWN-clusters checks use the disc. If the owner
+  wants narrower streets, a box rule would bring the fronts to 30.
+- **The parked burnt truck and a jersey barricade are street clusters.** They are tested part by part, like checkpoints and
+  lamps: every collidable part is at least 13 from the line and every visible part at least 9. `SE_Wreck` moved from
+  (250, 52) onto the east-arm verge at (232, 14.5). The barricade is on the north-arm verge at the plaza corner. W3-road
+  still counts 0 collidables within 12 of a road line.
+- **`RadioMast` is built now.** It was a step-2 kit whose spec size was 10 × 90 × 10. It is now step 1, "Town+POI", 5
+  parts and 6 × 90 × 6: a plinth, 2 tapering sections, a red painted tip (never Neon) and a relay dish. The Signal Station
+  can reuse it later. The kit unit test's `KIT-step2 RadioMast` check is replaced by the normal step-1 kit checks.
+- **New kit `TownBlock`.** It has 1–6 storeys at 7 studs each.
+  - **Parts:** 1 solid body (cover, H4), 1 parapet slab, 1 inset window strip per upper storey per face, a door or a
+    shopfront (rolled shutter plus cloth awning), and rooftop tanks, a hut, a mast or a dish.
+  - **Variants:** `damaged` (the top storey's +X half is blown off and a fallen slab lies on the roof) and `gutted` (a
+    burnt-out shell).
+  - **Tower blocks:** blocks with 5 or more storeys use Concrete in a light-concrete colour automatically.
+  - **Shadows:** one shadow caster per block, so the Town has 56 casters (cap 60).
+  - **Options:** new optional `KitOpts` / `KitPlace` fields `Width`, `Depth`, `Storeys`, `Roof`, `Lantern`. Existing kits
+    and their APIs are unchanged.
+  - **Footprint cache:** the key now includes these fields.
+- **`AdobeHouse` and `RuinedHouse` are no longer placed in the Town.** `TownBlock` replaces them, with terrain rubble by
+  the damaged and gutted blocks. Both kits stay in the catalogue, unchanged.
+- **Moves and removals:**
+  - Landmarks:
+    - The clock tower moved 4.5 studs toward the plaza, to (95.5, 95.5). That is the least clearance its disc needs from
+      r 124.
+    - The water tower moved 8 west, to (−126, −175), so it closes the new market lane.
+  - Market lane:
+    - The 4 stalls now stand in the lane between 2 lane blocks.
+    - The separate crate stack is gone; the stalls carry crates.
+  - Town Square:
+    - One bench pair was dropped.
+  - Unchanged: the checkpoints (r 310), the board, the square tiles, the fountain and the motor pool jerseys.
+- **The SW plaza corner stays open toward the Town Square**, so the flag looks across to the fountain and the radio mast.
+  A 2-part sandbag arc marks the corner.
+- **Low keeps Tier 1 only: 215 parts, which is 58 % of 368 (cap 220).** Tier 1 holds the first block of each road arm,
+  the plaza blocks, the 4 landmarks, the south lane block, 2 stalls, the square's south block, the checkpoints, lamps,
+  board, tiles, fountain and the wreck.
+- **Terrain rubble:** 9 groups by the damaged and gutted blocks, giving 25 prims in the Town (cap 40, unchanged).
+- **Driver expectations updated where the design changed on purpose.**
+  - W3 acceptance (`S/w3/densify/drivers/w3_driver.luau`):
+    - `W3-town-budget` reads `POIs.Town.Budget` and fails above 370.
+    - `W3-town-lights` reads `POIs.Town.Lights` and fails above 8.
+    - `W3-town-signs` reads `POIs.Town.Signs` and fails above 1.
+  - Town driver (`S/w3/densify/drivers/b1_driver.luau`): `TOWN-lights` expects 8, not 6.
+  - Kit unit test (`S/w3/densify/drivers/kits_driver.luau`): 38 new `TownBlock` and `RadioMast` checks.
+  - Run unchanged, the step-1 drivers fail only those 3 checks: W3-town-budget, W3-town-lights and TOWN-lights.
+- **Renders only:** the renderer draws thin façade parts (window strips, doors, shutters) over the wall they sit on.
+  Before this, a painter sorted by centroid could hide them behind their own wall. This affects the pictures only.
+
+### Verifier additions (adversarial pass)
+- **The sum of the POI budgets is now 1,770, against the §7.1 plan of 1,700 or less.** At HEAD it was 1,620. Only the Town
+  is enabled today, so nothing is over a cap at runtime (1,444 parts outside the bases, cap 2,900). Before the other 17
+  POIs are built, their budgets must drop by 70 in total, or the lead must re-baseline §7.1. Town v2 is the reason for the
+  change, and the lead accepted Town growth of about 150–170. To undo: lower `POIs.Town.Budget`.
+- **The sum of the POI light caps is now 25, up from 23.** Non-POI world lights are 5 today (13 − 8), so with every POI
+  at its cap the world would plan 30 lights against the cap of 24. HEAD was already over, at 28. The next POI lane must cut
+  its light caps.
+- **Two floating details were fixed in `TownBlock`.**
+  - `RoofDish` sat 0.62 studs above the roof. It now sits on it: its centre is at `roofY + 1.3`, with a tilted half-height
+    of 1.28.
+  - `LampLantern` stood 0.15 studs off the wall. It now touches the wall at `fz - 0.4`, reaching 0.8 in front.
+  - Neither fix changes a part count, a Footprint extent that the layout uses, or a pin.
