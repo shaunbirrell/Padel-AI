@@ -76,7 +76,7 @@ local isTouch = UserInputService.TouchEnabled
 local shell: PanelShell.Shell? = nil
 
 -- v70 rail badge (HudConfig.Rail.BadgeSources.Garage = "NewVehicle"): "!" while a vehicle bought / granted this
--- session has not been spawned yet; opening the Garage clears it. The join sync (incl. a late starter Jeep merge)
+-- session has not been spawned yet; opening the Garage clears it. The join sync (incl. a late starter 4x4 merge)
 -- never counts as new.
 local NEW_VEHICLE_GRACE_SECONDS = 10
 local newVehicleIds: { [string]: boolean } = {}
@@ -592,7 +592,7 @@ local function rebuild()
 
 	if #ids == 0 then
 		local msg = if filterOwnedOnly
-			then "No owned rides yet — buy Vehicle Depot / unlock Military Jeep, or turn off OWNED."
+			then "No owned rides yet — buy Vehicle Depot / unlock Field 4x4, or turn off OWNED."
 			else "No vehicles match these filters — tap All / clear rarity."
 		emptyState(list, msg)
 		return
@@ -602,7 +602,7 @@ local function rebuild()
 	if ownedN == 0 and not filterOwnedOnly then
 		emptyState(
 			list,
-			"Garage empty — buy Vehicle Depot / unlock Military Jeep (gold BUY → SPAWN). Starter Jeep syncs after join."
+			"Garage empty — buy Vehicle Depot / unlock Field 4x4 (gold BUY → SPAWN). Starter 4x4 syncs after join."
 		)
 	elseif ownedN > 0 and filterOwnedOnly == false then
 		-- soft tip only when filters hide all owned
@@ -689,9 +689,10 @@ local function rebuild()
 			end
 			local nextX = makeChip(string.upper(cat), catCol, 14)
 			nextX = makeChip(string.upper(def.Rarity or "Common"), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
-			-- v32: ArmedJeep lists with explicit DisplayName + ARMED chip (same WheeledLight drive as MilitaryJeep)
+			-- v32: ArmedJeep lists with explicit DisplayName + ARMED chip (same WheeledLight drive as MilitaryJeep);
+			-- JEEP-2: players see "Armed 4x4" (the id stays ArmedJeep)
 			if id == "ArmedJeep" then
-				title.Text = def.DisplayName or "Armed Jeep"
+				title.Text = def.DisplayName or "Armed 4x4"
 				makeChip("ARMED", Color3.fromRGB(180, 70, 55), nextX)
 			end
 
@@ -1096,7 +1097,7 @@ local function buildGui()
 	local function hintText(keys: boolean): string
 		return if keys
 			then "G · SPAWN deploys at your base · Heli SPACE/CTRL · Plane hold W · F exits aircraft"
-			else "BUY → SPAWN · air + sea deploy at your base · ▲▼ fly · Jump exits"
+			else "BUY → SPAWN · air + sea deploy at your base · ▲▼ fly · hold EXIT to leave"
 	end
 	hint.Text = hintText(HudLayout.PrefersKeys())
 	hint.Parent = panel

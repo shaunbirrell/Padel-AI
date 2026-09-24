@@ -1,7 +1,7 @@
 --!strict
 --[[ Interactive tutorial steps — short plain copy, one step at a time.
 	v31 first-2-min: Claim → MoneyCollector → ClickDropper → CommandCenter buy,
-	then Recruit → Barracks → Jeep → Outpost.
+	then Recruit → Barracks → Jeep (players see "4x4") → Outpost.
 	v71 P1-15: device-neutral copy (about 80% of players are on phones): no key names, no "click"; the chip's GO
 	button runs CtaAction. Buy steps point at the structure's own console (console-only buying): at L0 the BUY
 	button there reads BUILD. The beam target of every step is the player's OWN plot (TutorialController.ResolveTarget).
@@ -79,9 +79,9 @@ local TutorialConfig = {
 			CtaLabel = "GO",
 		},
 		{
-			Id = "Jeep",
-			Title = "Spawn Jeep",
-			Hint = "Open the Garage and spawn your Jeep.",
+			Id = "Jeep", -- JEEP-2: the id / marker stay (TutorialService, MapSetup's Tutorial_Jeep); the copy says 4x4
+			Title = "Spawn 4x4",
+			Hint = "Open the Garage and spawn your 4x4.",
 			MarkerName = "Tutorial_Jeep",
 			HighlightHint = "Garage",
 			CtaAction = "OpenGarage",

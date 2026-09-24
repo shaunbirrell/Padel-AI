@@ -1,8 +1,28 @@
 --!strict
 --[[ Deep vehicle roster (~95): Ground / Air / Naval unlock ladder.
 	KitFamily drives VehicleService Part kits (grows to 100 without rewrite).
-	Generic military names only — no real brands, no MT names.
+	Generic military names only — no real brands, no MT names. JEEP-2 (roadmap §1.4): DisplayName is what players see
+	("Field 4x4", "Armed 4x4"); the ids / keys ("MilitaryJeep", "ArmedJeep") stay, because saves and ownership key on them.
 ]]
+
+-- World v2 air box (WorldConfig.Bounds.Air: { X, ZMin, ZMax, MaxY }): the ONE source for the aircraft turn-back law
+-- (VehicleDriveClient) and the server validator's air bounds (VehicleService). nil when WorldConfig is missing or
+-- malformed: then both sides keep the old numbers (SoftBound / WorldHalfExtent / MaxAltitude).
+local AIR_BOX: { X: number, ZMin: number, ZMax: number, MaxY: number }? = nil
+do
+	local ok, box = pcall(function(): any
+		local W: any = require(script.Parent.WorldConfig) -- a missing / broken WorldConfig errors inside the pcall
+		return W.Bounds.Air
+	end)
+	if ok and typeof(box) == "table" then
+		local x, z0, z1, y = box.X, box.ZMin, box.ZMax, box.MaxY
+		if typeof(x) == "number" and typeof(z0) == "number" and typeof(z1) == "number" and typeof(y) == "number" then
+			if x > 0 and z1 > z0 and y > 0 then
+				AIR_BOX = { X = x, ZMin = z0, ZMax = z1, MaxY = y }
+			end
+		end
+	end
+end
 
 export type VehicleCategory = "Ground" | "Air" | "Naval"
 
@@ -111,9 +131,9 @@ end
 local VehicleConfig = {
 	Vehicles = {
 		-- ═══ GROUND — early wheeled ═══
-		MilitaryJeep = V("MilitaryJeep", "Military Jeep", "Ground", "Common", 1, 200, 55, 4, 10, 0, "WheeledLight", nil),
+		MilitaryJeep = V("MilitaryJeep", "Field 4x4", "Ground", "Common", 1, 200, 55, 4, 10, 0, "WheeledLight", nil),
 		UtilityQuad = V("UtilityQuad", "Utility Quad", "Ground", "Common", 2, 160, 58, 2, 8, 3500, "WheeledLight", { Struct = D(1), Scale = 0.75 }),
-		ArmedJeep = V("ArmedJeep", "Armed Jeep", "Ground", "Common", 3, 250, 52, 4, 15, 8000, "WheeledLight", { Struct = D(1) }),
+		ArmedJeep = V("ArmedJeep", "Armed 4x4", "Ground", "Common", 3, 250, 52, 4, 15, 8000, "WheeledLight", { Struct = D(1) }),
 		ScoutCar = V("ScoutCar", "Scout Car", "Ground", "Common", 4, 280, 62, 3, 18, 12000, "WheeledLight", { Struct = D(1) }),
 		PatrolTruck = V("PatrolTruck", "Patrol Truck", "Ground", "Common", 5, 380, 48, 5, 25, 16000, "WheeledTruck", { Struct = D(1), Scale = 0.9 }),
 		ArmoredTruck = V("ArmoredTruck", "Armored Truck", "Ground", "Uncommon", 5, 500, 40, 6, 40, 20000, "WheeledTruck", { Struct = D(2) }),
@@ -614,6 +634,48 @@ local VehicleConfig = {
 		},
 
 		World = { SoftBound = 3300 }, -- client: past this, no outward speed + "TURN BACK"
+
+		--[[ JEEP-2: World v2 air box. Box = WorldConfig.Bounds.Air (the air wall stands on its edges, 700 tall, NO roof).
+			Client law (Heli + Plane, VehicleDriveClient Laws.Step): inside Band studs of a side edge while moving outward
+			the stick is steered toward the box centre (+ a heading assist), and the outward speed is capped at
+			(room - Buffer) x EdgeGain, so an aircraft stops Buffer studs inside the edge (and is pushed back in when it
+			is past it). Ceiling = min(WE_MaxAltitude, Box.MaxY): climbing tapers over CeilBand to 0 at CeilBuffer below
+			it; above it the aircraft sinks at up to CeilSink. The pilot sees the "Restricted airspace" line.
+			Server (VehicleService validateSample, Heli + Plane): "bounds" only past the box edges + ValidatorSlack while
+			still moving out (or past Validation.WorldHalfExtent), "altitude" only above the ceiling +
+			Validation.AirAltitudeSlack — never inside the box. ]]
+		AirBox = {
+			Enabled = true, -- false = the old behaviour (SoftBound 3300, WorldHalfExtent, MaxAltitude) on both sides
+			Box = AIR_BOX,
+			Band = 160, -- studs inside a side edge where the turn-back starts (at least; planes add LeadSeconds x speed)
+			LeadSeconds = 1.6, -- a plane at 200 studs/s starts turning 30 + 320 studs from the edge
+			Buffer = 30, -- aircraft stop this far inside a side edge
+			EdgeGain = 0.6, -- heli: outward speed cap = (room - Buffer) x this (per second); past Buffer it pushes back in
+			PlaneEdgeGain = 1.5, -- plane: the same cap as a late backstop (never negative); the turn comes first
+			PushFrac = 0.5, -- airborne heli past the Buffer: pushed back in at most this x its max speed per axis (0 on the ground)
+			OutwardSpeed = 2, -- moving outward faster than this (studs/s) inside Band = the guard steers
+			SteerGain = 2, -- stick override = heading error (rad) x this, clamped to [-1, 1]
+			AssistYawRate = 0.8, -- rad/s heading assist at the edge (scaled by depth into Band)
+			CeilBand = 100, -- climb tapers to 0 over this many studs below the ceiling
+			CeilBuffer = 10, -- ... reaching 0 this far below it
+			CeilGain = 1.0, -- climb cap = (ceiling - CeilBuffer - y) x this (per second)
+			CeilSink = 20, -- above the ceiling: sink at up to this (studs/s)
+			NoticeHoldSeconds = 1.5, -- the "Restricted airspace" line stays up this long after the guard lets go
+			Notice = "Restricted airspace — turning back", -- device-neutral (no key names), in the vehicle hint slot
+			ValidatorSlack = 60, -- server: "bounds" only this far past a side edge (the law stops at -Buffer) ...
+			ValidatorOutwardSpeed = 8, -- ... and only while still moving out through it faster than this (studs/s)
+		},
+
+		-- W7 (mobile plan P2): where the SPD pill and the hint line sit. Touch: HudLayout's top-centre stack right under
+		-- the Progress slot (HudConfig.TopStack.Order.Progress = 20, Objective = 30), so the capture bar can never cover
+		-- them. Desktop / gamepad: the pill takes the ammo readout's slot (bottom-right; combat is hidden while seated).
+		Hud = {
+			PillStackOrder = 25,
+			HintStackOrder = 26,
+			DiagStackOrder = 27,
+			StackWidthScale = 0.62, -- = HudConfig.TopStack.MaxWidthScale (hint / diag lines in the stack)
+			DesktopPillInset = 14, -- desktop pill: this many px in from the bottom-right corner (the ammo slot)
+		},
 
 		Water = {
 			RefreshSeconds = 2, -- WE_Water part list refresh

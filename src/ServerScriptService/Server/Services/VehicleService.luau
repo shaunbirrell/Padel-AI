@@ -57,6 +57,25 @@ local ResyncCfg = Drive.Resync
 local W = Drive.Watchdog
 local DBG = Drive.Debug
 
+--[[ JEEP-2: the World v2 air box for the Heli / Plane checks — the SAME table the client's turn-back law reads
+	(VehicleConfig.Drive.AirBox.Box = WorldConfig.Bounds.Air). Returns (nil, slack) when disabled or WorldConfig is
+	missing → the old WorldHalfExtent square and WE_MaxAltitude ceiling. A module-table field, not a local: this file
+	sits at Luau's 200-register limit for module locals. ]]
+function VehicleService._AirBox(): ({ X: number, ZMin: number, ZMax: number, MaxY: number }?, number)
+	local cfg: any = (Drive :: any).AirBox
+	local b: any = if typeof(cfg) == "table" and cfg.Enabled ~= false then cfg.Box else nil
+	if
+		typeof(b) == "table"
+		and typeof(b.X) == "number"
+		and typeof(b.ZMin) == "number"
+		and typeof(b.ZMax) == "number"
+		and typeof(b.MaxY) == "number"
+	then
+		return b, if typeof(cfg.ValidatorSlack) == "number" then cfg.ValidatorSlack else 60
+	end
+	return nil, 60
+end
+
 local debugUserSet: { [number]: boolean } = {}
 for _, uid in ipairs(DBG.UserIds) do
 	debugUserSet[uid] = true
@@ -2949,6 +2968,24 @@ local function validateSample(rec: VehicleRec, s: ValidSample): (boolean, string
 	local dtS = math.max(0, s.T - prevT)
 	rec.LastSampleT = s.T
 	rec.LastSamplePos = pos
+	local box: { X: number, ZMin: number, ZMax: number, MaxY: number }?, sl: number = nil, 0
+	if air then
+		box, sl = VehicleService._AirBox()
+	end
+	if box then
+		-- aircraft: past the air box + slack while still moving OUT through that edge (the client law stops a pilot
+		-- Buffer studs inside the box and only ever steers one that is outside it back in — e.g. spawned in the live
+		-- map's outer desert while World v2's ground wall is unhooked); the air wall is the backstop
+		local ow = tonumber(((Drive :: any).AirBox or {}).ValidatorOutwardSpeed) or 8
+		if
+			(pos.X > box.X + sl and vel.X > ow)
+			or (pos.X < -box.X - sl and vel.X < -ow)
+			or (pos.Z > box.ZMax + sl and vel.Z > ow)
+			or (pos.Z < box.ZMin - sl and vel.Z < -ow)
+		then
+			return false, "bounds", false
+		end
+	end
 	if math.abs(pos.X) > Valid.WorldHalfExtent or math.abs(pos.Z) > Valid.WorldHalfExtent then
 		return false, "bounds", false
 	end
@@ -2970,7 +3007,9 @@ local function validateSample(rec: VehicleRec, s: ValidSample): (boolean, string
 		end
 	end
 	if air then
-		if pos.Y > rec.MaxAltitude + Valid.AirAltitudeSlack then
+		-- the client law's ceiling: min(WE_MaxAltitude, air box MaxY)
+		local ceiling = if box then math.min(rec.MaxAltitude, box.MaxY) else rec.MaxAltitude
+		if pos.Y > ceiling + Valid.AirAltitudeSlack then
 			return false, "altitude", false
 		end
 	else

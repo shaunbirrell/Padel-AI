@@ -150,7 +150,7 @@ return function(ictx: any, api: any)
 	api.surfaceText(board, Enum.NormalId.Right, {
 		"VEHICLE STATUS",
 		"TRK-01   ON LIFT",
-		if lv >= 3 then "JEEP-02  READY" else "BAY 2    ----",
+		if lv >= 3 then "4X4-02   READY" else "BAY 2    ----",
 		if lv >= 5 then "FUEL-03  FUELING" else "BAY 3    ----",
 	}, col.Light, Color3.fromRGB(16, 22, 18), Enum.Font.Code)
 

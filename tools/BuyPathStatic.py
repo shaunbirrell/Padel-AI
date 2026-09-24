@@ -504,7 +504,7 @@ must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "FlagStripe", "FlagStripe nation visibility")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "NationColorService", "NationColorService capture color")
 must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "CashPopGlow", "Manual dropper green $ pop glow")
-must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", 'ArmedJeep = V("ArmedJeep", "Armed Jeep"', "ArmedJeep DisplayName")
+must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", 'ArmedJeep = V("ArmedJeep", "Armed 4x4"', "ArmedJeep DisplayName")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", 'id == "ArmedJeep"', "Garage lists ArmedJeep")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", 'id == "ArmedJeep"', "ArmedJeep same WheeledLight kit")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "startGroundDrive", "ArmedJeep drivability via startGroundDrive")
@@ -665,7 +665,7 @@ must_contain("src/ReplicatedStorage/Shared/Constants.luau", "CashMegaOffer", "Ca
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "CashMegaOffered", "CashMega soft profile gate")
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "TrySoftOfferCashMega", "CashMega soft offer server")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "CashMegaToast", "CashMega client toast")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "buy Vehicle Depot / unlock Military Jeep", "Garage empty unlock guidance")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "buy Vehicle Depot / unlock Field 4x4", "Garage empty unlock guidance")
 # No-regress v37
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v37")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v37")
@@ -1741,6 +1741,22 @@ must_contain(_S + "Services/BankRaidService.luau", 'vault:FindFirstChild("Label"
 must_contain(_S + "Services/SupplyDropService.luau", "-- bottom face on the ground", "supply crate sits on the ground")
 must_not_contain(_S + "Services/SquadOrdersService.luau", "Squad: FOLLOW", "no Squad: X toast per order")
 must_contain(HUDCFG, 'Match = "^BASE UNDER ATTACK"', "client routes the new BASE UNDER ATTACK shape to the Alert slot")
+
+# W1 JEEP-2 (verified: t_server 290, v_rot 167, v_server 22, v_client 11, t_jeep_server 105, adv 33, jeep2 client 44 + adv 9 + prompt 6,
+# t_client_jeep 194 re-pinned, HUD 0 overlaps 800x360..1920x1080, ds 24, world ok)
+must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", "MilitaryJeep = V(\"MilitaryJeep\", \"Field 4x4\"", "JEEP-2 starter 4x4 id kept")
+must_contain("src/ReplicatedStorage/Shared/Configs/VehicleWeaponConfig.luau", "DisplayName = \"4x4 HMG\"", "JEEP-2 JeepHMG shown as 4x4 HMG")
+must_contain("src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau", "MarkerName = \"Tutorial_Jeep\"", "JEEP-2 tutorial marker id kept")
+must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", "local W: any = require(script.Parent.WorldConfig)", "JEEP-2 air box from WorldConfig.Bounds.Air")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "input = airGuardInput(st, P, box, input, sense)", "JEEP-2 turn-back before the law")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "local floor = if plane or grounded then 0 else -box.PushFrac * P.MaxSpeed", "JEEP-2 bounded push-in, none on the ground")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "(pos.X > box.X + sl and vel.X > ow)", "JEEP-2 air bounds only when still moving out")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "local ceiling = if box then math.min(rec.MaxAltitude, box.MaxY) else rec.MaxAltitude", "JEEP-2 validator ceiling = law ceiling")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "HL.RegisterTopStack(STACK_NAMES[1], p, tonumber(HUDC.PillStackOrder) or 25, { Space = \"Screen\" })", "JEEP-2 W7 touch SPD pill in the top stack")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/LevelConfig.luau", "(K panel)", "JEEP-2 no key name in the L40 line")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "pps.PromptShown:Connect(onPromptShown)", "JEEP-2 prompts hidden while seated")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "\"Armed Jeep\"", "JEEP-2 no Jeep brand in garage copy")
+must_not_contain("src/ServerScriptService/Server/Modules/Interiors/VehicleDepot.luau", "JEEP-02", "JEEP-2 depot status board brand-free")
 
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).

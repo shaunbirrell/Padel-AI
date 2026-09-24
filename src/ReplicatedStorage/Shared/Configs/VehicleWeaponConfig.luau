@@ -195,9 +195,10 @@ local VehicleWeaponConfig = {
 			FxKind = "MG",
 			SquadCrewMult = 0.5,
 		},
-		-- Cash ArmedJeep (free armed answer, plan §2.2): gunner-seat HMG
+		-- Cash ArmedJeep ("Armed 4x4"; free armed answer, plan §2.2): gunner-seat HMG. JEEP-2: the key stays "JeepHMG"
+		-- (mount ids travel in RequestVehicleFire / WE_Aim_<mountId>); only the name players see changed.
 		JeepHMG = {
-			DisplayName = "Jeep HMG",
+			DisplayName = "4x4 HMG",
 			Damage = 12,
 			Rate = 6,
 			Range = 180,

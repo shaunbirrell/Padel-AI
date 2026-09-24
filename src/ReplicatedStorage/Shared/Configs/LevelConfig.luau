@@ -156,8 +156,8 @@ LevelConfig.Milestones = {
 	{
 		Level = 40,
 		Title = "Prestige Ready",
-		UnlockText = "LVL 40 — PRESTIGE UNLOCKED. Rebirth for +10% cash forever (K panel).",
-		HudGoal = "GOAL: L40 reached — open K · Do Prestige / Rebirth (+10% cash)",
+		UnlockText = "LVL 40 — PRESTIGE UNLOCKED. Open Rebirth for +10% cash forever.",
+		HudGoal = "GOAL: L40 reached — open Rebirth · Do Prestige (+10% cash)",
 		Kind = "Prestige",
 	},
 	{

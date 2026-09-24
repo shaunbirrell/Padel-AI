@@ -18,8 +18,17 @@
 	  {K="Exit", V}                F4d: jump button / Space (JumpRequest), the EXIT hold pill, F — the server ejects
 	Every value is clamped to [-1, 1] on the server again; a client can only downgrade its own car to server driving.
 
-	Laws (NewState / Step / ComposeInput / ControlsLayout / WaterSurfaceAt / ProbeDistances / BuildParams)
+	Laws (NewState / Step / ComposeInput / ControlsLayout / WaterSurfaceAt / ProbeDistances / BuildParams / AirBoxParams)
 	are pure and are tested headless. The server's fallback + idle laws are a copy of the Car/Boat maths.
+
+	JEEP-2 (roadmap W1 §2.2 item 4):
+	  * air box: helicopters and planes turn back before the World v2 air box (VehicleConfig.Drive.AirBox.Box =
+	    WorldConfig.Bounds.Air; the air wall has no roof) and show the device-neutral "Restricted airspace" line;
+	    VehicleService's validator uses the same box, so nothing inside it is ever corrected
+	  * W7: on touch the SPD pill and the hint line sit in HudLayout's top-centre stack under the capture bar; on
+	    desktop / gamepad the pill takes the ammo readout's slot (bottom-right)
+	  * jeep F9 / V8: while I sit in any vehicle seat, every ProximityPrompt outside WarEmpireVehicles is hushed
+	    locally (MaxActivationDistance 0) and put back on the way out
 
 	Requiring this module does nothing heavy (GetService only). Init() is called by VehicleController.
 ]]
@@ -62,9 +71,31 @@ export type Sense = {
 	WaterFar: boolean?,
 }
 
-export type Hud = { Speed: number, Alt: number?, Throttle: number?, Tag: string? }
+-- Restricted: the air-box guard steered / capped this step (the HUD shows the "Restricted airspace" line)
+export type Hud = { Speed: number, Alt: number?, Throttle: number?, Tag: string?, Restricted: boolean? }
 
 export type Out = { Velocity: Vector3, HoldVertical: boolean, Orientation: CFrame, Hud: Hud }
+
+-- JEEP-2 World v2 air box for Heli / Plane (Laws.AirBoxParams; VehicleConfig.Drive.AirBox): Box edges + law tunables
+export type AirBox = {
+	X: number,
+	ZMin: number,
+	ZMax: number,
+	MaxY: number,
+	Band: number,
+	LeadSeconds: number,
+	Buffer: number,
+	EdgeGain: number,
+	PlaneEdgeGain: number,
+	PushFrac: number,
+	OutwardSpeed: number,
+	SteerGain: number,
+	AssistYawRate: number,
+	CeilBand: number,
+	CeilBuffer: number,
+	CeilGain: number,
+	CeilSink: number,
+}
 
 export type Params = {
 	Mode: string,
@@ -84,6 +115,7 @@ export type Params = {
 	SpawnSpeed: number,
 	SoftBound: number,
 	AutoTakeoff: boolean,
+	AirBox: AirBox?,
 	C: { [string]: number },
 }
 
@@ -116,6 +148,12 @@ export type State = {
 	BobT: number,
 	LastWaterPos: Vector3?,
 	LastWaterY: number?,
+	-- JEEP-2 air box guard (set every step by airGuardInput): turning back (until facing the box centre or out of the
+	-- band), depth into the band 0..1, heading to the box centre, and "a plane's ▲ was capped under the ceiling"
+	AirTurn: boolean,
+	AirDepth: number,
+	AirTarget: number,
+	AirLift: boolean,
 }
 
 export type Rect = { Pos: Vector2, Size: Vector2 }
@@ -147,6 +185,28 @@ local DEFAULTS: any = {
 	},
 	-- mobile P1-8: client-side owner nameplate (VehicleConfig.Drive.Nameplate overrides)
 	Nameplate = { MaxDistance = 36, WidthStuds = 2, HeightStuds = 0.4, HeightPx = 20, MinText = 14, MaxText = 20 },
+	-- JEEP-2 air-box law tunables (VehicleConfig.Drive.AirBox overrides key by key). No Box here: without
+	-- VehicleConfig.Drive.AirBox.Box (WorldConfig.Bounds.Air) there is no air box and the old SoftBound applies.
+	AirBox = {
+		Enabled = true,
+		Band = 160,
+		LeadSeconds = 1.6,
+		Buffer = 30,
+		EdgeGain = 0.6,
+		PlaneEdgeGain = 1.5,
+		PushFrac = 0.5,
+		OutwardSpeed = 2,
+		SteerGain = 2,
+		AssistYawRate = 0.8,
+		CeilBand = 100,
+		CeilBuffer = 10,
+		CeilGain = 1.0,
+		CeilSink = 20,
+		NoticeHoldSeconds = 1.5,
+		Notice = "Restricted airspace — turning back",
+	},
+	-- W7: SPD pill / hint placement (VehicleConfig.Drive.Hud overrides)
+	Hud = { PillStackOrder = 25, HintStackOrder = 26, DiagStackOrder = 27, StackWidthScale = 0.62, DesktopPillInset = 14 },
 	Modes = {
 		Car = {
 			ReverseFrac = 0.45,
@@ -375,6 +435,46 @@ local function modeConstants(mode: string, tracked: boolean, drive: any): { [str
 	return out
 end
 
+--[[ JEEP-2: the air box for aircraft from VehicleConfig.Drive.AirBox (Box = WorldConfig.Bounds.Air, tunables over
+	DEFAULTS.AirBox key by key). nil when the section is missing, Enabled = false or the Box is malformed. ]]
+function Laws.AirBoxParams(drive: any): AirBox?
+	local cfg: any = if typeof(drive) == "table" then drive.AirBox else nil
+	if typeof(cfg) ~= "table" or cfg.Enabled == false then
+		return nil
+	end
+	local box: any = cfg.Box
+	if typeof(box) ~= "table" then
+		return nil
+	end
+	local x, z0, z1, top = cfgNumber(box, "X"), cfgNumber(box, "ZMin"), cfgNumber(box, "ZMax"), cfgNumber(box, "MaxY")
+	if x == nil or z0 == nil or z1 == nil or top == nil or x <= 0 or z1 <= z0 or top <= 0 then
+		return nil
+	end
+	local d: any = DEFAULTS.AirBox
+	local function n(key: string): number
+		return cfgNumber(cfg, key) or d[key]
+	end
+	return {
+		X = x,
+		ZMin = z0,
+		ZMax = z1,
+		MaxY = top,
+		Band = math.max(1, n("Band")),
+		LeadSeconds = math.max(0, n("LeadSeconds")),
+		Buffer = math.max(0, n("Buffer")),
+		EdgeGain = math.max(0.01, n("EdgeGain")),
+		PlaneEdgeGain = math.max(0.01, n("PlaneEdgeGain")),
+		PushFrac = math.clamp(n("PushFrac"), 0, 1),
+		OutwardSpeed = math.max(0, n("OutwardSpeed")),
+		SteerGain = math.max(0.01, n("SteerGain")),
+		AssistYawRate = math.max(0, n("AssistYawRate")),
+		CeilBand = math.max(1, n("CeilBand")),
+		CeilBuffer = math.max(0, n("CeilBuffer")),
+		CeilGain = math.max(0.01, n("CeilGain")),
+		CeilSink = math.max(0, n("CeilSink")),
+	}
+end
+
 --[[ Params from the vehicle model's attributes (spec 6.2) + VehicleConfig.Drive (or DEFAULTS). ]]
 function Laws.BuildParams(mode: string, attrs: { [string]: any }, drive: any?): Params
 	local function a(key: string): number?
@@ -421,6 +521,7 @@ function Laws.BuildParams(mode: string, attrs: { [string]: any }, drive: any?): 
 		SpawnSpeed = a("WE_SpawnSpeed") or 0,
 		SoftBound = softBound,
 		AutoTakeoff = autoTakeoff,
+		AirBox = if mode == "Heli" or mode == "Plane" then Laws.AirBoxParams(drive) else nil,
 		C = C,
 	}
 end
@@ -451,6 +552,10 @@ local function blankState(mode: string): State
 		BobT = 0,
 		LastWaterPos = nil,
 		LastWaterY = nil,
+		AirTurn = false,
+		AirDepth = 0,
+		AirTarget = 0,
+		AirLift = false,
 	}
 end
 
@@ -850,10 +955,135 @@ local function applySoftBound(st: State, P: Params, sense: Sense, out: Out, dt: 
 	end
 end
 
+--[[ JEEP-2 World v2 air box (Heli / Plane; P.AirBox from Laws.AirBoxParams). Pure; two halves around the mode law.
+	"room" = studs from the position to a side edge, positive inside; ceiling = min(P.MaxAltitude, box.MaxY).
+	airGuardInput (before the law): inside the side band while the law's own velocity heads outward (faster than
+	  OutwardSpeed), a turn-back starts and the stick is steered toward the box centre until the aircraft faces it
+	  (AIR_TURN_DONE) or leaves the band; an airborne plane's ▲ is capped so its climb tapers to 0 under the ceiling
+	  (and noses down above it).
+	airGuardOutput (after the law): per-axis outward speed cap (room - Buffer) x gain (a heli past the Buffer is pushed
+	  back in; a plane only loses the outward part), climb cap / sink under and above the ceiling, a heading assist at
+	  the edge, and Hud.Restricted = true while any of it acted (the "Restricted airspace" line). ]]
+function Laws.AirCeiling(P: Params, box: AirBox): number
+	return math.min(P.MaxAltitude, box.MaxY)
+end
+
+-- a turn-back ends when the heading is this close to the box centre (rad, ~20°)
+local AIR_TURN_DONE = 0.35
+
+-- the law's own horizontal velocity intent (last step). Not the measured velocity: the guard's own cap pushes that
+-- inward, which would hide an outward intent and stop the turn-back half way.
+local function horizontalIntent(st: State, P: Params): Vector3
+	if P.Mode == "Plane" then
+		return fwd(st.Heading) * st.Airspeed
+	end
+	return fwd(st.Heading) * st.Fwd + right(st.Heading) * st.Side
+end
+
+-- (no closures and no tables per frame: the guard's findings go into st.AirTurn / AirDepth / AirTarget / AirLift;
+-- a new Input table is made only on the frames the guard actually overrides the stick)
+local function airGuardInput(st: State, P: Params, box: AirBox, input: Input, sense: Sense): Input
+	local p = sense.Position
+	local v = horizontalIntent(st, P)
+	local band = box.Band
+	if P.Mode == "Plane" then
+		band = math.max(band, box.Buffer + box.LeadSeconds * v.Magnitude) -- a fast plane needs room to turn
+	end
+	local ow = box.OutwardSpeed
+	local rXp, rXn, rZp, rZn = box.X - p.X, p.X + box.X, box.ZMax - p.Z, p.Z - box.ZMin
+	local minRoom = math.min(rXp, rXn, rZp, rZn)
+	-- heading out through an edge we are within Band of
+	local outward = (rXp < band and v.X > ow) or (rXn < band and -v.X > ow) or (rZp < band and v.Z > ow) or (rZn < band and -v.Z > ow)
+	local target = math.atan2(p.X, p.Z - (box.ZMin + box.ZMax) / 2) -- fwd(target) points at the box centre
+	local err = wrap(target - st.Heading)
+	local grounded = if P.Mode == "Plane" then not st.Airborne else st.Landed
+	-- start a turn-back when heading out inside the band; keep it until facing the centre (or out of the band)
+	local turning = (st.AirTurn or outward) and not grounded and minRoom < band and math.abs(err) > AIR_TURN_DONE
+	st.AirTurn = turning
+	st.AirDepth = math.clamp((band - minRoom) / math.max(1, band - box.Buffer), 0, 1)
+	st.AirTarget = target
+	st.AirLift = false
+	local out = input
+	if turning then
+		out = { Throttle = input.Throttle, Steer = -math.clamp(err * box.SteerGain, -1, 1), Lift = input.Lift, Strafe = input.Strafe }
+	end
+	if P.Mode == "Plane" and st.Airborne then
+		local room = Laws.AirCeiling(P, box) - box.CeilBuffer - p.Y
+		if room < box.CeilBand then
+			-- the highest pitch that keeps Vy under the climb cap at this airspeed
+			local vyCap = math.max(-box.CeilSink, room * box.CeilGain)
+			local pitchCap = math.deg(math.asin(math.clamp(vyCap / math.max(st.Airspeed, 1), -1, 1)))
+			local C = P.C
+			local liftCap = math.clamp(
+				if pitchCap >= 0 then pitchCap / math.max(1, C.MaxPitchUp) else pitchCap / math.max(1, C.MaxPitchDown),
+				-1,
+				1
+			)
+			if out.Lift > liftCap then
+				st.AirLift = out.Lift - liftCap > 0.05
+				out = { Throttle = out.Throttle, Steer = out.Steer, Lift = liftCap, Strafe = out.Strafe }
+			end
+		end
+	end
+	return out
+end
+
+local function airGuardOutput(st: State, P: Params, box: AirBox, sense: Sense, out: Out, dt: number)
+	local p = sense.Position
+	local v = out.Velocity
+	local plane = P.Mode == "Plane"
+	local gain = if plane then box.PlaneEdgeGain else box.EdgeGain
+	local b = box.Buffer
+	local grounded = if plane then not st.Airborne else st.Landed
+	-- per-axis outward cap (room - Buffer) x gain: an airborne heli past the Buffer is pushed back in (negative cap,
+	-- at most PushFrac x its max speed per axis: one outside the box, e.g. spawned in the live map's outer desert, is
+	-- never flung), a plane or anything on the ground only loses the outward part (never below 0)
+	local floor = if plane or grounded then 0 else -box.PushFrac * P.MaxSpeed
+	local capXp = math.max(floor, (box.X - p.X - b) * gain)
+	local capXn = math.max(floor, (p.X + box.X - b) * gain)
+	local capZp = math.max(floor, (box.ZMax - p.Z - b) * gain)
+	local capZn = math.max(floor, (p.Z - box.ZMin - b) * gain)
+	local nx = math.max(math.min(v.X, capXp), -capXn)
+	local nz = math.max(math.min(v.Z, capZp), -capZn)
+	local ny = v.Y
+	if not grounded then
+		local top = Laws.AirCeiling(P, box) - box.CeilBuffer
+		local vyCap = math.max(-box.CeilSink, (top - p.Y) * box.CeilGain)
+		if ny > vyCap then
+			ny = vyCap
+		end
+		if not plane then
+			st.Vy = math.min(st.Vy, vyCap)
+			local hold = st.HoldY
+			if hold ~= nil and hold > top then
+				st.HoldY = top
+			end
+		end
+	end
+	local capped = math.abs(nx - v.X) > 0.5 or math.abs(nz - v.Z) > 0.5 or v.Y - ny > 0.5
+	if nx ~= v.X or nz ~= v.Z or ny ~= v.Y then
+		out.Velocity = Vector3.new(nx, ny, nz)
+		-- the guard slowed us, not a wall: no speed resync from it (a plane would stall; a heli's commanded speed would
+		-- snap to the capped one, flip its intent inward and stop the turn-back half way)
+		st.LagFor = 0
+	end
+	if st.AirTurn and box.AssistYawRate > 0 then
+		local m = box.AssistYawRate * st.AirDepth * dt
+		st.Heading += math.clamp(wrap(st.AirTarget - st.Heading), -m, m)
+	end
+	if st.AirTurn or st.AirLift or capped then
+		out.Hud.Restricted = true
+	end
+end
+
 --[[ One control step. Changes `st` in place; returns the mover targets (spec 2.0). ]]
 function Laws.Step(st: State, P: Params, input: Input, sense: Sense, dt: number): Out
 	dt = math.clamp(dt, 0, 0.1)
 	st.Age += dt
+	local box = if P.Mode == "Heli" or P.Mode == "Plane" then P.AirBox else nil
+	if box ~= nil then
+		input = airGuardInput(st, P, box, input, sense)
+	end
 	local out: Out
 	if P.Mode == "Heli" then
 		out = stepHeli(st, P, input, sense, dt)
@@ -863,6 +1093,9 @@ function Laws.Step(st: State, P: Params, input: Input, sense: Sense, dt: number)
 		out = stepBoat(st, P, input, sense, dt)
 	else
 		out = stepCar(st, P, input, sense, dt)
+	end
+	if box ~= nil then
+		airGuardOutput(st, P, box, sense, out, dt)
 	end
 	applySoftBound(st, P, sense, out, dt)
 	return out
@@ -1010,6 +1243,8 @@ type Drive = {
 	-- mobile P1-7
 	AirLocked: boolean, -- Heli/Plane above Exit.LockAGL: the local JumpHeight is 0
 	NextAirCheck: number,
+	-- JEEP-2: the "Restricted airspace" line shows until this os.clock() (the guard acted within NoticeHoldSeconds)
+	RestrictedUntil: number,
 }
 
 local WATER_TAG_DEFAULT = "WE_Water"
@@ -1039,6 +1274,8 @@ local HINTS: { [string]: { PC: string, Pad: string, Touch: string } } = {
 	},
 }
 local RED_TAGS: { [string]: boolean } = { STALL = true, ["PULL UP"] = true, AGROUND = true, ["TURN BACK"] = true }
+local HINT_COLOR = Color3.fromRGB(255, 210, 90)
+local RESTRICTED_COLOR = Color3.fromRGB(255, 140, 120)
 
 local initialized = false
 local RemotesMod: any = nil
@@ -1096,7 +1333,20 @@ local W: any = DEFAULTS.Watchdog
 local DBG: any = DEFAULTS.Debug
 local EXIT: any = DEFAULTS.Exit
 local PLATE: any = DEFAULTS.Nameplate
+local AIRC: any = DEFAULTS.AirBox -- JEEP-2: Notice / NoticeHoldSeconds (the law reads Params.AirBox)
+local HUDC: any = DEFAULTS.Hud -- W7: pill / hint placement
 local debugUser = false
+
+-- W7: HudLayout (sibling module), required lazily; false = not available (headless tests) → fixed positions
+local hudLayoutMod: any = nil
+local stackedHud = false -- pill / hint / diag are registered in HudLayout's top-centre stack
+local restrictShown = false -- the hint line currently shows the "Restricted airspace" notice
+
+-- jeep F9 / mobile V8: prompts hushed while seated in a vehicle (prompt → its MaxActivationDistance before the hush)
+type Hushed = { Range: number, Conn: RBXScriptConnection? }
+local shownPrompts: { [ProximityPrompt]: boolean } = {}
+local hushedPrompts: { [ProximityPrompt]: Hushed } = {}
+local hushOn = false
 
 -- P1-8 owner nameplates (client-only BillboardGuis in PlayerGui, adorned to each of my vehicles' Chassis)
 local plates: { [Model]: BillboardGui } = {}
@@ -1122,6 +1372,8 @@ local function refreshConfig()
 	DBG = cfgSection("Debug")
 	EXIT = cfgSection("Exit")
 	PLATE = cfgSection("Nameplate")
+	AIRC = cfgSection("AirBox")
+	HUDC = cfgSection("Hud")
 	local uid = localPlayer().UserId
 	local ids: any = DBG.UserIds
 	debugUser = DBG.All == true or (typeof(ids) == "table" and table.find(ids, uid) ~= nil)
@@ -1299,6 +1551,95 @@ local function refreshAllPrompts()
 			suppressServerLabel(d)
 		end
 	end
+end
+
+--[[ jeep F9 / mobile V8: while I sit in any seat of a vehicle (driver or passenger), every ProximityPrompt OUTSIDE
+	WarEmpireVehicles (garage pad "Garage", console BUY / panel prompts, ATM, terminals, gate repair, ...) is hushed on
+	this client and put back when I get up — no tap target next to the thumbstick, no stray E while driving over a pad.
+	Hushing sets the prompt's MaxActivationDistance to 0 LOCALLY and restores the saved range: Enabled stays untouched
+	because other code owns it (the server toggles gate-repair prompts, PromptController the owner-only ones,
+	WorldPromptController its own), and a restore of Enabled could undo their decision; the range is only written at
+	creation (a server re-write while hushed is remembered for the restore). Event-driven: prompts are found through
+	ProximityPromptService.PromptShown / PromptHidden (no workspace scan); the vehicle's own prompts stay. ]]
+local function seatIsVehicle(seat: Instance?): boolean
+	return seat ~= nil and (seat:IsA("Seat") or seat:IsA("VehicleSeat")) and vehicleModelOf(seat) ~= nil
+end
+
+local function isVehiclePrompt(prompt: Instance): boolean
+	local folder = Workspace:FindFirstChild(VEHICLE_FOLDER)
+	return folder ~= nil and prompt:IsDescendantOf(folder)
+end
+
+local function hushPrompt(prompt: ProximityPrompt)
+	if hushedPrompts[prompt] ~= nil or isVehiclePrompt(prompt) then
+		return
+	end
+	local range = prompt.MaxActivationDistance
+	if typeof(range) ~= "number" or range <= 0 then
+		return
+	end
+	local rec: Hushed = { Range = range, Conn = nil }
+	hushedPrompts[prompt] = rec
+	prompt.MaxActivationDistance = 0
+	pcall(function()
+		rec.Conn = prompt:GetPropertyChangedSignal("MaxActivationDistance"):Connect(function()
+			local r = prompt.MaxActivationDistance
+			if hushedPrompts[prompt] == rec and typeof(r) == "number" and r > 0 then
+				rec.Range = r -- someone re-set the range while I sit: keep it for the restore, stay hushed
+				prompt.MaxActivationDistance = 0
+			end
+		end)
+	end)
+end
+
+local function restorePrompts()
+	for prompt, rec in pairs(hushedPrompts) do
+		hushedPrompts[prompt] = nil
+		local c = rec.Conn
+		if c then
+			c:Disconnect()
+		end
+		pcall(function()
+			if prompt.MaxActivationDistance == 0 then
+				prompt.MaxActivationDistance = rec.Range
+			end
+		end)
+	end
+end
+
+local function setPromptHush(on: boolean)
+	if on == hushOn then
+		return
+	end
+	hushOn = on
+	if on then
+		for prompt in pairs(shownPrompts) do
+			if prompt.Parent == nil then
+				shownPrompts[prompt] = nil
+			else
+				hushPrompt(prompt)
+			end
+		end
+	else
+		restorePrompts()
+	end
+end
+
+local function syncPromptHush()
+	local ch = localPlayer().Character
+	local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+	setPromptHush(hum ~= nil and hum.Health > 0 and seatIsVehicle(hum.SeatPart))
+end
+
+local function onPromptShown(prompt: ProximityPrompt)
+	shownPrompts[prompt] = true
+	if hushOn then
+		hushPrompt(prompt)
+	end
+end
+
+local function onPromptHidden(prompt: ProximityPrompt)
+	shownPrompts[prompt] = nil
 end
 
 -- ── P1-8 owner nameplate: small, owner-only, stud-scaled, 14–20 px text, MaxDistance ≤ 40, never AlwaysOnTop,
@@ -1593,6 +1934,91 @@ local function makeExitButton(parent: Instance): TextButton
 	return b
 end
 
+-- W7: HudLayout (sibling module) or nil. Required lazily and never at require time; any failure → nil for good.
+local function hudLayout(): any
+	if hudLayoutMod == nil then
+		local ok, m = pcall(function(): any
+			local here: any = script
+			local mod = here.Parent and here.Parent:FindFirstChild("HudLayout")
+			if mod and mod:IsA("ModuleScript") then
+				local req: any = require
+				return req(mod)
+			end
+			return nil
+		end)
+		hudLayoutMod = if ok and typeof(m) == "table" and typeof(m.RegisterTopStack) == "function" then m else false
+	end
+	return if hudLayoutMod then hudLayoutMod else nil
+end
+
+local STACK_NAMES = { "VehiclePill", "VehicleHint", "VehicleDiag" }
+
+--[[ W7 (mobile plan P2): where the SPD pill, the hint line and the debug diag line sit.
+	Touch: HudLayout's top-centre stack right under the Progress slot (capture bar, ATM / bank raid), orders
+	Drive.Hud.PillStackOrder / HintStackOrder / DiagStackOrder (25 / 26 / 27, between Progress 20 and Objective 30).
+	The stack owns Position.Y and collapses hidden items, so the capture bar can never cover them on any screen.
+	Desktop / gamepad: the pill takes the ammo readout's slot (bottom-right; the combat HUD hides while seated), the
+	hint and diag lines stay bottom-centre. Without HudLayout (headless tests) touch keeps the old bottom column. ]]
+local function placeHud()
+	local p, h, dg = pill, hintLabel, diagLabel
+	if not (p and h and dg) then
+		return
+	end
+	local HL = if isTouch then hudLayout() else nil
+	local widthScale = tonumber(HUDC.StackWidthScale) or 0.62
+	if HL then
+		if stackedHud then
+			return -- already in the stack: it owns Position.Y
+		end
+		-- X centred here; Y is written by the stack (RegisterTopStack relayouts at once, then on Visible / size)
+		p.AnchorPoint = Vector2.new(0.5, 0)
+		p.Position = UDim2.new(0.5, 0, 0, 0)
+		h.AnchorPoint = Vector2.new(0.5, 0)
+		h.Position = UDim2.new(0.5, 0, 0, 0)
+		h.Size = UDim2.new(widthScale, 0, 0, 26)
+		dg.AnchorPoint = Vector2.new(0.5, 0)
+		dg.Position = UDim2.new(0.5, 0, 0, 0)
+		dg.Size = UDim2.new(widthScale, 0, 0, 40)
+		local ok = pcall(function()
+			HL.RegisterTopStack(STACK_NAMES[1], p, tonumber(HUDC.PillStackOrder) or 25, { Space = "Screen" })
+			HL.RegisterTopStack(STACK_NAMES[2], h, tonumber(HUDC.HintStackOrder) or 26, { Space = "Screen" })
+			HL.RegisterTopStack(STACK_NAMES[3], dg, tonumber(HUDC.DiagStackOrder) or 27, { Space = "Screen" })
+		end)
+		if ok then
+			stackedHud = true
+			return
+		end
+		for _, name in ipairs(STACK_NAMES) do
+			pcall(HL.UnregisterTopStack, name) -- a half-registered set never stays behind
+		end
+	end
+	if stackedHud then
+		stackedHud = false
+		local L = hudLayout()
+		if L then
+			for _, name in ipairs(STACK_NAMES) do
+				pcall(L.UnregisterTopStack, name)
+			end
+		end
+	end
+	h.AnchorPoint = Vector2.new(0.5, 1)
+	h.Size = UDim2.new(0.92, 0, 0, 26)
+	dg.AnchorPoint = Vector2.new(0.5, 1)
+	dg.Size = UDim2.new(0.94, 0, 0, 40)
+	if isTouch then
+		p.AnchorPoint = Vector2.new(0.5, 1)
+		p.Position = UDim2.new(0.5, 0, 1, -236)
+		h.Position = UDim2.new(0.5, 0, 1, -236 - 36)
+		dg.Position = UDim2.new(0.5, 0, 1, -236 - 72)
+	else
+		local inset = tonumber(HUDC.DesktopPillInset) or 14
+		p.AnchorPoint = Vector2.new(1, 1)
+		p.Position = UDim2.new(1, -inset, 1, -inset)
+		h.Position = UDim2.new(0.5, 0, 1, -64 - 36) -- hint / diag keep their v70 rows (bottom-centre)
+		dg.Position = UDim2.new(0.5, 0, 1, -64 - 72)
+	end
+end
+
 local function ensureHud(): ScreenGui?
 	local gui = hudGui
 	if gui and gui.Parent then
@@ -1610,10 +2036,9 @@ local function ensureHud(): ScreenGui?
 	screen.DisplayOrder = 56 -- above the dock (55), below panels (60)
 	screen.Enabled = true
 
+	-- positions: placeHud() below (W7)
 	local p = Instance.new("TextLabel")
 	p.Name = "WE_VehiclePill"
-	p.AnchorPoint = Vector2.new(0.5, 1)
-	p.Position = UDim2.new(0.5, 0, 1, if isTouch then -236 else -64)
 	p.Size = UDim2.fromOffset(230, 30)
 	p.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
 	p.BackgroundTransparency = 0.25
@@ -1630,15 +2055,13 @@ local function ensureHud(): ScreenGui?
 
 	local h = Instance.new("TextLabel")
 	h.Name = "WE_VehicleHint"
-	h.AnchorPoint = Vector2.new(0.5, 1)
-	h.Position = UDim2.new(0.5, 0, 1, (if isTouch then -236 else -64) - 36)
 	h.Size = UDim2.new(0.92, 0, 0, 26)
 	h.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
 	h.BackgroundTransparency = 0.35
 	h.BorderSizePixel = 0
 	h.Font = Enum.Font.Gotham
 	h.TextSize = 14 -- ≥ 14 px real (this ScreenGui has no UIScale)
-	h.TextColor3 = Color3.fromRGB(255, 210, 90)
+	h.TextColor3 = HINT_COLOR
 	h.TextWrapped = true
 	h.Text = ""
 	h.Visible = false
@@ -1652,8 +2075,6 @@ local function ensureHud(): ScreenGui?
 	-- F7 / fix_spec §2.1: on-device "NO DRIVE" line, debug users only (Drive.Debug), never interactive
 	local dg = Instance.new("TextLabel")
 	dg.Name = "WE_VehicleDiag"
-	dg.AnchorPoint = Vector2.new(0.5, 1)
-	dg.Position = UDim2.new(0.5, 0, 1, (if isTouch then -236 else -64) - 72)
 	dg.Size = UDim2.new(0.94, 0, 0, 40)
 	dg.BackgroundColor3 = Color3.fromRGB(0x3A, 0x0E, 0x0E)
 	dg.BackgroundTransparency = 0.2
@@ -1687,6 +2108,8 @@ local function ensureHud(): ScreenGui?
 
 	screen.Parent = pg
 	hudGui = screen
+	stackedHud = false -- a rebuilt gui re-registers its new labels
+	placeHud()
 	return screen
 end
 
@@ -1827,7 +2250,9 @@ local function showHint(mode: string, params: Params)
 	end
 	hintShown[mode] = true
 	lab.Text = text
+	lab.TextColor3 = HINT_COLOR
 	lab.Visible = true
+	restrictShown = false
 	hintToken += 1
 	local token = hintToken
 	task.delay(8, function()
@@ -1835,6 +2260,28 @@ local function showHint(mode: string, params: Params)
 			hintLabel.Visible = false
 		end
 	end)
+end
+
+--[[ JEEP-2: the "Restricted airspace" line (device-neutral, Drive.AirBox.Notice) in the hint slot while the air-box
+	guard acts and Drive.AirBox.NoticeHoldSeconds after; it replaces the control hint (one message at a time). ]]
+local function setRestrictedLine(on: boolean)
+	if on == restrictShown then
+		return
+	end
+	local lab = hintLabel
+	if not lab then
+		return
+	end
+	restrictShown = on
+	hintToken += 1 -- a pending control-hint hide must not touch the notice
+	if on then
+		lab.Text = if typeof(AIRC.Notice) == "string" then AIRC.Notice else "Restricted airspace — turning back"
+		lab.TextColor3 = RESTRICTED_COLOR
+		lab.Visible = true
+	else
+		lab.Visible = false
+		lab.TextColor3 = HINT_COLOR
+	end
 end
 
 -- ── input actions (aircraft only) ───────────────────────────────────────────
@@ -2318,6 +2765,7 @@ local function updateHud(d: Drive, dt: number, hud: Hud?)
 	end
 	p.Text = hudText(d.Mode, shown, fallback, d.Blocked)
 	p.Visible = true
+	setRestrictedLine(os.clock() < d.RestrictedUntil)
 end
 
 local function stepDrive(d: Drive, dt: number)
@@ -2373,6 +2821,9 @@ local function stepDrive(d: Drive, dt: number)
 	end
 	local out = Laws.Step(state, d.Params, input, sense, dt)
 	applyOut(d, out)
+	if out.Hud.Restricted then
+		d.RestrictedUntil = now + (tonumber(AIRC.NoticeHoldSeconds) or 1.5)
+	end
 	updateHud(d, dt, out.Hud)
 end
 
@@ -2388,6 +2839,7 @@ stopDrive = function()
 	unbindActions()
 	hideControls()
 	unlockJump()
+	setRestrictedLine(false)
 	if pill then
 		pill.Visible = false
 	end
@@ -2472,6 +2924,7 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 		StartedAt = os.clock(),
 		AirLocked = false,
 		NextAirCheck = 0,
+		RestrictedUntil = 0,
 	}
 	local proto = model:GetAttribute("WE_ProtocolVersion")
 	if typeof(proto) == "number" and proto ~= PROTOCOL_VERSION then
@@ -2553,26 +3006,50 @@ local function bindCharacter(char: Model)
 			end
 		end
 		refreshPlates() -- P1-8: nameplates hide while seated anywhere
+		-- jeep F9: any vehicle seat (driver or passenger) hushes the world's prompts; getting up restores them
+		setPromptHush(isSeated and seatIsVehicle(seatPart) and hum.Health > 0)
+	end)
+	pcall(function()
+		hum.Died:Connect(function()
+			setPromptHush(false)
+		end)
 	end)
 	checkSeat(hum)
 	refreshPlates()
+	syncPromptHush()
 end
 
 -- test hook: device class is read once in Init; the headless tests flip it to cover the touch layout
 function VehicleDriveClient._SetTouch(value: boolean)
 	isTouch = value
 	deviceOverride = if value then "Touch" else nil
-	local y = if isTouch then -236 else -64
-	if pill then
-		pill.Position = UDim2.new(0.5, 0, 1, y)
-	end
-	if hintLabel then
-		hintLabel.Position = UDim2.new(0.5, 0, 1, y - 36)
-	end
+	placeHud()
 	if diagLabel then
-		diagLabel.Position = UDim2.new(0.5, 0, 1, y - 72)
 		diagLabel.TextSize = if isTouch then 11 else 12
 	end
+end
+
+-- test hooks (headless): replace / drop the HudLayout module (false = none), and read the prompt hush state
+function VehicleDriveClient._SetHudLayout(mod: any)
+	if stackedHud then
+		local L = hudLayout()
+		stackedHud = false
+		if L then
+			for _, name in ipairs(STACK_NAMES) do
+				pcall(L.UnregisterTopStack, name)
+			end
+		end
+	end
+	hudLayoutMod = if mod == nil then nil else mod
+	placeHud()
+end
+
+function VehicleDriveClient._HushedPrompts(): { [ProximityPrompt]: number }
+	local out: { [ProximityPrompt]: number } = {}
+	for prompt, rec in pairs(hushedPrompts) do
+		out[prompt] = rec.Range
+	end
+	return out
 end
 
 -- test hooks (headless): the ControlModule stand-in for F4a, and the current jump lock
@@ -2643,6 +3120,13 @@ function VehicleDriveClient.Init()
 	end)
 	plr.CharacterRemoving:Connect(function()
 		stopDrive()
+		setPromptHush(false)
+	end)
+	-- jeep F9: which prompts the engine shows (no scan); hushed at once while seated
+	pcall(function()
+		local pps: any = game:GetService("ProximityPromptService")
+		pps.PromptShown:Connect(onPromptShown)
+		pps.PromptHidden:Connect(onPromptHidden)
 	end)
 	if plr.Character then
 		task.spawn(bindCharacter, plr.Character)
@@ -2667,6 +3151,7 @@ function VehicleDriveClient.Init()
 					checkSeat(h)
 				end
 			end
+			syncPromptHush() -- a missed Seated event never leaves the world's prompts hushed (or shown) for long
 			if acc >= waterRefreshSeconds then
 				acc = 0
 				refreshWater()
