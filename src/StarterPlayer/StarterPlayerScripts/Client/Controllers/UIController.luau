@@ -138,7 +138,7 @@ safeInit("Orders", OrdersController.Init)
 
 	-- v68: item terminals inside walk-in buildings (server HollowBuildingBuilder + Interiors/*) carry the
 	-- panel to open in the prompt attribute WE_OpenPanel. Keep this list in sync with the interior checker.
-	local panelOpeners: { [string]: () -> () } = {
+	local panelOpeners: { [string]: (...any) -> () } = {
 		Base = BaseController.Open,
 		Shop = ShopController.Open,
 		Rebirth = ProgressionController.Open,
@@ -163,7 +163,14 @@ safeInit("Orders", OrdersController.Init)
 			return
 		end
 		pcall(AudioController.PlayClick)
-		local ok, err = pcall(open)
+		-- optional tab hint on the prompt (e.g. the Armory counter opens Shop → Weapons)
+		local tab = prompt:GetAttribute("WE_OpenTab")
+		local ok, err
+		if typeof(tab) == "string" and panel == "Shop" and ShopController.OpenTab then
+			ok, err = pcall(ShopController.OpenTab, tab)
+		else
+			ok, err = pcall(open, if typeof(tab) == "string" then tab else nil)
+		end
 		if not ok then
 			warn("[WAR EMPIRE] terminal panel failed:", panel, err)
 		end
