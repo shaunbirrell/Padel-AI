@@ -1864,6 +1864,30 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Progress
 must_not_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "MonetizationService.TrySoftOfferSpeedBoost(player, \"walk_speed\")", "M1 no Speed Boost offer on spawn")
 must_not_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "local cashBelow = tonumber(offerCfg.CashBelow)", "M1 one Starter scheduler (old at-join offer gone)")
 
+# --- Join hotfix (2026-09-24): store-model templates in ServerStorage; gate guards spare unloaded / just-spawned players ---
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local ServerStorage = game:GetService(\"ServerStorage\")", "Join hotfix: VisualAssetService gets ServerStorage")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "\tf.Name = \"WE_VisualAssetTemplates\"\n\tf.Parent = ServerStorage\n", "Join hotfix: store-model templates parked in ServerStorage (not replicated to joiners)")
+must_not_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "f.Parent = ReplicatedStorage", "Join hotfix: templates folder never parented to ReplicatedStorage")
+must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "SpawnGraceSeconds = 4,", "Join hotfix: GateDefenseConfig.SpawnGraceSeconds")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "if DataService and DataService.GetProfile and DataService.GetProfile(player) == nil then\n\t\treturn true\n\tend", "Join hotfix: guards ignore a player whose save has not loaded")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "return from ~= nil and nowClock() - from < (GateDefenseConfig.SpawnGraceSeconds or 4)", "Join hotfix: spawn grace reads SpawnGraceSeconds")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "if player:GetAttribute(\"WE_RaidingPlot\") ~= nil then\n\t\treturn false\n\tend", "Join hotfix: an ATM raid ends the spawn grace")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "if isEnemyPlayer(def.OwnerUserId, player) and not inSpawnGrace(player) then", "Join hotfix: guards + AutoGuns skip players in spawn grace (nearestEnemy)")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "\tif inSpawnGrace(player) then\n\t\treturn\n\tend\n\tif not rateLimitVictim(player.UserId) then", "Join hotfix: dealDamage refuses players in spawn grace")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "player.CharacterAdded:Connect(function()\n\t\t\tstartSpawnGrace(player)\n\t\tend)", "Join hotfix: spawn grace clock starts on every CharacterAdded")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "DataService.OnProfileLoaded(function(player: Player, _profile: any)\n\t\t\tstartSpawnGrace(player)", "Join hotfix: spawn grace clock restarts when the save loads")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "graceFrom[attacker.UserId] = nil -- attacking the defenses ends the spawn grace", "Join hotfix: hitting a gate / guard ends the spawn grace")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "graceFrom[player.UserId] = nil\n", "Join hotfix: spawn grace entry cleared on leave")
+must_not_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "deps.CombatService", "Join hotfix: GateDefenseService takes no CombatService dep (no require cycle)")
+must_not_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", ".CombatService)", "Join hotfix: GateDefenseService does not require CombatService")
+must_contain("docs/LIVE_PLACE.md", "**Public** since 2026-09-24 17:54 UTC", "Join hotfix: LIVE_PLACE privacy is Public")
+must_not_contain("docs/LIVE_PLACE.md", "Private (owner + friends", "Join hotfix: LIVE_PLACE no longer says Private = owner + friends")
+_tpl_refs = [q.relative_to(ROOT).as_posix() for q in (ROOT / "src").rglob("*.luau") if q.name != "VisualAssetService.luau" and "WE_VisualAssetTemplates" in q.read_text(encoding="utf-8")]
+if _tpl_refs:
+    bad("Join hotfix: WE_VisualAssetTemplates read outside VisualAssetService (a client read would break after the ServerStorage move) — " + ", ".join(_tpl_refs))
+else:
+    ok("Join hotfix: nothing outside VisualAssetService reads WE_VisualAssetTemplates")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

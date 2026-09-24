@@ -98,6 +98,7 @@ local defenses: { [number]: PlotDefense } = {}
 local syncBusy: { [number]: boolean } = {}
 local syncAgain: { [number]: boolean } = {}
 local victimHitAt: { [number]: number } = {}
+local graceFrom: { [number]: number } = {} -- UserId → os.clock of the last character spawn / save load (spawn grace)
 local catalogCache: { [number]: Model } = {}
 local catalogFailed: { [number]: boolean } = {}
 
@@ -772,6 +773,28 @@ local function alertBaseUnderAttack(plotId: number?, ownerUserId: number?, attac
 	NotificationService.Notify(owner, GateDefenseConfig.BaseUnderAttackToast or "BASE UNDER ATTACK!", "Warn", 4)
 end
 
+--[[ Spawn grace (GateDefenseConfig.SpawnGraceSeconds). Every PlayerSpawn pad sits at somebody's gate, and a new
+	player stands there until the save loads and BaseService moves them to their own plot. So guards and AutoGuns
+	ignore a player whose save has not loaded (DataService.GetProfile is nil; such a player cannot fire either), and
+	for SpawnGraceSeconds after each character spawn and after the save loads (the move home is deferred). A
+	respawned raider is moved to their own plot at once. The grace ends early for anyone holding an ATM raid or
+	hitting a gate / guard (ApplyDamage), so a player left on a gate pad (no plot: server over MaxPlots) cannot
+	use it to attack. ]]
+local function inSpawnGrace(player: Player): boolean
+	if DataService and DataService.GetProfile and DataService.GetProfile(player) == nil then
+		return true
+	end
+	if player:GetAttribute("WE_RaidingPlot") ~= nil then
+		return false
+	end
+	local from = graceFrom[player.UserId]
+	return from ~= nil and nowClock() - from < (GateDefenseConfig.SpawnGraceSeconds or 4)
+end
+
+local function startSpawnGrace(player: Player)
+	graceFrom[player.UserId] = nowClock()
+end
+
 local function rateLimitVictim(userId: number): boolean
 	local t = nowClock()
 	local last = victimHitAt[userId] or 0
@@ -797,7 +820,7 @@ local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, m
 	local engageInside = RaidConfig.Defense.EngageIntrudersInsideWalls
 
 	for _, player in ipairs(Players:GetPlayers()) do
-		if isEnemyPlayer(def.OwnerUserId, player) then
+		if isEnemyPlayer(def.OwnerUserId, player) and not inSpawnGrace(player) then
 			local char = player.Character
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -824,6 +847,9 @@ end
 
 local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceModel: Model, plotId: number?)
 	if amount <= 0 or hum.Health <= 0 then
+		return
+	end
+	if inSpawnGrace(player) then
 		return
 	end
 	if not rateLimitVictim(player.UserId) then
@@ -1118,6 +1144,7 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 	if GateDefenseService.IsAlly(def.OwnerUserId, attacker) then
 		return false
 	end
+	graceFrom[attacker.UserId] = nil -- attacking the defenses ends the spawn grace
 
 	if isGuardPart then
 		for _, g in ipairs(def.Guards) do
@@ -1735,9 +1762,24 @@ function GateDefenseService.Init(deps: { [string]: any })
 			warn("[GateDefense] OnPlotReady hook failed:", errHook)
 		end
 	end
+	-- Spawn grace clock: every character spawn, and the save load (the move to the player's own plot follows it)
+	local function hookGrace(player: Player)
+		player.CharacterAdded:Connect(function()
+			startSpawnGrace(player)
+		end)
+		if player.Character then
+			startSpawnGrace(player)
+		end
+	end
+	Players.PlayerAdded:Connect(hookGrace)
+	for _, player in ipairs(Players:GetPlayers()) do
+		hookGrace(player)
+	end
+
 	if DataService and DataService.OnProfileLoaded then
 		-- Belt: late ensure for the loaded owner's plot (no-op when already in sync); sole path if the hook failed
 		DataService.OnProfileLoaded(function(player: Player, _profile: any)
+			startSpawnGrace(player)
 			for _, delaySec in ipairs(if hookedPlotReady then { 10 } else { 1.2, 3.5, 10 }) do
 				task.delay(delaySec, function()
 					local plotId = if player.Parent and BaseService and BaseService.GetOwnedPlotId
@@ -1761,6 +1803,7 @@ function GateDefenseService.Init(deps: { [string]: any })
 			end
 		end
 		victimHitAt[player.UserId] = nil
+		graceFrom[player.UserId] = nil
 	end)
 
 	local accum = 0

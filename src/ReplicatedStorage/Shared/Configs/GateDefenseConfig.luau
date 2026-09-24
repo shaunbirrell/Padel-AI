@@ -51,6 +51,11 @@ local GateDefenseConfig = {
 	RequireLineOfSight = true,
 	LosMaxDistance = 110,
 	DamageCooldownGlobal = 0.08,
+	-- Guards and AutoGuns ignore a player whose save has not loaded yet, and for this many seconds after each
+	-- character spawn and after the save loads. Every PlayerSpawn pad sits at somebody's gate: a new player used
+	-- to be shot there before BaseService could move them to their own plot. Respawns are moved home at once.
+	-- The grace ends early for a player holding an ATM raid or hitting the gate / a guard.
+	SpawnGraceSeconds = 4,
 	GuardRespawnSeconds = 12,
 	PatrolIdleSeconds = 1.4,
 

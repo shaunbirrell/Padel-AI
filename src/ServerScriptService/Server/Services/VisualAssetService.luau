@@ -8,6 +8,7 @@
 local InsertService = game:GetService("InsertService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
@@ -22,13 +23,15 @@ local dressLogged: { [number]: boolean } = {} -- vehicle dress strip summary pri
 local loadAttempts = 0
 local templatesFolder: Folder? = nil
 
+-- Templates live in ServerStorage (CLAUDE.md): clones are made on the server, no client reads them, and in
+-- ReplicatedStorage every joining client had to download every template before its loading screen ended.
 local function ensureFolder(): Folder
 	if templatesFolder and templatesFolder.Parent then
 		return templatesFolder
 	end
 	local f = Instance.new("Folder")
 	f.Name = "WE_VisualAssetTemplates"
-	f.Parent = ReplicatedStorage
+	f.Parent = ServerStorage
 	templatesFolder = f
 	return f
 end
