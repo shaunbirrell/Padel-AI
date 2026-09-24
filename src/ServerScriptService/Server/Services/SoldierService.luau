@@ -9,6 +9,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local WorldLabel = require(Shared.Util.WorldLabel)
+
+local TRAIN_POP_RADIUS = 28 -- studs: the "+$N" training pop shows only to the owner standing this close (spec §5)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
@@ -232,66 +235,36 @@ local function refreshTrainingYardFeedback(player: Player, profile: any, tickAmo
 	if not yard then
 		return
 	end
-	-- P0: parent earn board to YardPad (not worker heads); short MaxDistance; never AlwaysOnTop
 	local anchor = yard:FindFirstChild("YardPad")
 		or yard:FindFirstChild("YardEarnAnchor")
 		or yard:FindFirstChild("YardAnchor")
 	if not anchor or not anchor:IsA("BasePart") then
 		return
 	end
-	local bb = anchor:FindFirstChild("WE_TrainingEarnBillboard")
-	if not bb or not bb:IsA("BillboardGui") then
-		bb = Instance.new("BillboardGui")
-		bb.Name = "WE_TrainingEarnBillboard"
-		bb.Size = UDim2.fromOffset(140, 28)
-		bb.StudsOffset = Vector3.new(0, 3.2, 0)
-		bb.AlwaysOnTop = false
-		bb.MaxDistance = 22
-		bb.Parent = anchor
-		local label = Instance.new("TextLabel")
-		label.Name = "Amount"
-		label.Size = UDim2.fromScale(1, 1)
-		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.GothamBold
-		label.TextScaled = true
-		label.TextColor3 = Color3.fromRGB(90, 240, 130)
-		label.TextStrokeTransparency = 0.4
-		label.Parent = bb
+	-- v71 (spec §5): no "+$/tick" earn board over the yard (the old one also looked for a label named "Amount"
+	-- that MapSetup's board never had, so it never updated). One owner-only "+$N" pop per tick, and only while
+	-- the owner stands near the yard — nobody else sees it and nothing is made for an empty yard.
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) or (hrp.Position - anchor.Position).Magnitude > TRAIN_POP_RADIUS then
+		return
 	end
-	local amountLabel = bb:FindFirstChild("Amount")
-	if amountLabel and amountLabel:IsA("TextLabel") then
-		local perTick = trainingIncomePerTick(profile)
-		amountLabel.Text = string.format("+$%d/tick", perTick)
-		amountLabel.TextTransparency = 0
-		-- brief pulse so workers "feel" like they earn
-		task.delay(0.35, function()
-			if amountLabel.Parent then
-				amountLabel.TextTransparency = 0.15
-			end
-		end)
-	end
-	-- Floating +$ popup on tick (cosmetic)
-	local pop = Instance.new("BillboardGui")
-	pop.Name = "WE_TrainCashPop"
-	pop.Size = UDim2.fromOffset(100, 28)
-	pop.StudsOffset = Vector3.new(0, 6, 0)
-	-- P0: short-lived pop (0.6s), not AlwaysOnTop, no persistent stack
-	pop.AlwaysOnTop = false
-	pop.MaxDistance = 22
-	pop.Parent = anchor
-	local popLab = Instance.new("TextLabel")
-	popLab.Size = UDim2.fromScale(1, 1)
-	popLab.BackgroundTransparency = 1
-	popLab.Font = Enum.Font.GothamBold
-	popLab.TextScaled = true
-	popLab.TextColor3 = Color3.fromRGB(100, 255, 140)
-	popLab.TextStrokeTransparency = 0.35
-	popLab.Text = string.format("+$%d", tickAmount)
-	popLab.Parent = pop
+	local pop = WorldLabel.Create(anchor, string.format("+$%d", tickAmount), {
+		Name = "WE_TrainCashPop",
+		Color = Color3.fromRGB(100, 255, 140),
+		TextSize = 18,
+		Studs = Vector2.new(3, 1.2),
+		Offset = Vector3.new(0, 3.5, 0),
+		MaxDistance = TRAIN_POP_RADIUS,
+		OwnerUserId = player.UserId,
+	})
+	local popLab = pop:FindFirstChild("Title")
 	task.spawn(function()
 		for i = 1, 6 do
-			pop.StudsOffset = Vector3.new(0, 3.5 + i * 0.4, 0)
-			popLab.TextTransparency = i / 7
+			pop.StudsOffsetWorldSpace = Vector3.new(0, 3.5 + i * 0.4, 0)
+			if popLab and popLab:IsA("TextLabel") then
+				popLab.TextTransparency = i / 7
+			end
 			task.wait(0.1)
 		end
 		pop:Destroy()

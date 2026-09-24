@@ -5,6 +5,9 @@
 	P1-4 (mobile plan): Follow is an escort — units shoot hostiles within CombatFairnessConfig.EscortEngageRadius of
 	their player (line of sight required) while staying within EscortLeash of the player. Every unit hit tags the
 	owner as creator (CombatDamage.TagCreator, unit flag), so squad kills credit the owner at UnitKillCashShare.
+	v71 (HUD v70 spec §4.2 / §5): no per-unit "SQUAD" tags and no "Squad: X" toast per order — the order flashes
+	for OrderBillboardSeconds as one owner-only stud-scaled WorldLabel over the nearest unit (flashOrderBillboard),
+	and the Army popover shows the active order.
 ]]
 
 local Players = game:GetService("Players")
@@ -16,6 +19,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-4 escort + kill credit
+local WorldLabel = require(Shared.Util.WorldLabel)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local CombatDamage = require(script.Parent.CombatService.CombatDamage) -- creator tags + line of sight
@@ -251,28 +255,8 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
 
-	-- v68: no floating "SQUAD" tag per soldier by default (a wall of labels over the squad — owner report).
-	if (OrdersConfig :: any).ShowUnitLabels == true then
-		local bb = Instance.new("BillboardGui")
-		bb.Name = "SquadLabel"
-		bb.Size = UDim2.fromOffset(100, 22)
-		bb.StudsOffset = Vector3.new(0, 3.4, 0)
-		bb.AlwaysOnTop = false
-		bb.MaxDistance = 60
-		bb.Parent = root
-		local lbl = Instance.new("TextLabel")
-		lbl.Size = UDim2.fromScale(1, 1)
-		lbl.BackgroundColor3 = Color3.fromRGB(28, 36, 28)
-		lbl.BackgroundTransparency = 0.3
-		lbl.Text = "SQUAD"
-		lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
-		lbl.TextScaled = true
-		lbl.Font = Enum.Font.GothamBold
-		lbl.Parent = bb
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 4)
-		corner.Parent = lbl
-	end
+	-- v68/v71: no floating "SQUAD" tag per soldier (a wall of labels over the squad — owner report; spec §5).
+	-- OrdersConfig.ShowUnitLabels stays false; the order echo is flashOrderBillboard's one owner-only label.
 
 	model.PrimaryPart = root
 	if VisualAssetService and VisualAssetService.TryAttachCharacterVisual then
@@ -602,37 +586,30 @@ local function flashOrderBillboard(player: Player, st: SquadState, order: OrderI
 	if not best then
 		return
 	end
-	local bb = best.Root:FindFirstChild("SquadLabel")
-	if not (bb and bb:IsA("BillboardGui")) then
-		return
+	-- one owner-only order echo over the nearest unit ("FOLLOWING"), replaced by the next order, gone after `hold`
+	for _, u in ipairs(st.Units) do
+		local old = u.Root and u.Root:FindFirstChild("WE_OrderFlash")
+		if old then
+			old:Destroy()
+		end
 	end
-	local lbl = bb:FindFirstChildOfClass("TextLabel")
-	if not lbl then
-		return
-	end
-	local prev = lbl.Text
-	local prevColor = lbl.TextColor3
-	lbl.Text = textLabel
-	lbl.TextColor3 = Color3.fromRGB(255, 230, 120)
-	bb.StudsOffset = Vector3.new(0, 4.2, 0)
-	bb.AlwaysOnTop = true
+	local bb = WorldLabel.Create(best.Root, textLabel, {
+		Name = "WE_OrderFlash",
+		Color = Color3.fromRGB(255, 230, 120),
+		Studs = Vector2.new(5, 1.4),
+		Offset = Vector3.new(0, 4.2, 0),
+		MaxDistance = 40,
+		OwnerUserId = player.UserId,
+	})
 	local hold = tonumber((OrdersConfig :: any).OrderBillboardSeconds) or 2.8
 	local token = tostring(os.clock())
 	best.Root:SetAttribute("WE_OrderFlash", token)
 	task.delay(hold, function()
-		if not best or not best.Root or not best.Root.Parent then
-			return
+		if best and best.Root and best.Root.Parent and best.Root:GetAttribute("WE_OrderFlash") ~= token then
+			return -- a newer order owns the flash
 		end
-		if best.Root:GetAttribute("WE_OrderFlash") ~= token then
-			return
-		end
-		if lbl and lbl.Parent then
-			lbl.Text = prev
-			lbl.TextColor3 = prevColor
-		end
-		if bb and bb.Parent then
-			bb.StudsOffset = Vector3.new(0, 3.4, 0)
-			bb.AlwaysOnTop = false
+		if bb.Parent then
+			bb:Destroy()
 		end
 	end)
 end
@@ -680,16 +657,8 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	end
 
 	pushState(player)
+	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
 	flashOrderBillboard(player, st, order :: OrderId)
-	if NotificationService then
-		local labels = {
-			Follow = "Squad: FOLLOW",
-			Attack = "Squad: ATTACK nearest hostile",
-			Hold = "Squad: HOLD position",
-			Retreat = "Squad: RETREAT to plot",
-		}
-		NotificationService.Notify(player, labels[order] or ("Squad: " .. order), "Info")
-	end
 	return true, nil
 end
 

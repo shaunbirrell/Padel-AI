@@ -170,43 +170,26 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 	local def = BaseConfig.Structures[structureId]
 	if result.Ok then
 		local name = if def then def.DisplayName else tostring(structureId)
+		-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
 		NotificationService.Notify(
 			player,
-			string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
+			string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
 			"Success",
 			4
 		)
 	else
+		-- v71 (HUD v70 spec §4.1 / §4.2): one failed purchase = one line — the client words every PurchaseResult
+		-- error itself (WorldPromptController), so the server only adds what the client cannot see.
 		local err = result.Error or "Failed"
-		local msg = if err == "InsufficientCash"
-			then "Not enough cash"
-			elseif err == "InsufficientGold"
-			then "Not enough gold"
-			elseif err == "MaxLevel"
-			then "Already at MAX level"
-			elseif err == "MissingRequirement"
-			then "Missing prerequisite structure"
-			elseif err == "UnknownStructure" or err == "InvalidStructure"
-			then "Unknown structure"
-			elseif err == "WrongPlot"
-			then "Not your base — walk your plot pads to buy"
-			elseif err == "NoPlot"
-			then "Claim a base first — stand on your plot pad"
-			elseif err == "NotAtConsole"
-			then string.format(ConsoleBuyConfig.Text.NotAtConsole, if def then def.DisplayName else structureId)
-			elseif err == "NoProfile"
+		local msg: string? = if err == "NoProfile"
 			then "Profile still loading — try BUY again"
-			else ("Purchase failed: " .. tostring(err))
-		-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
-		local cd = if fromStanding then 1.1 else 0.75
-		local key = "pad|" .. err .. "|" .. structureId
-		if err == "MaxLevel" then
-			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, msg, "Info", 2, 8, key)
-			else
-				NotificationService.Notify(player, msg, "Info", 2)
-			end
-		else
+			elseif err == "RateLimited"
+			then "Buying too fast — wait a moment"
+			else nil
+		if msg then
+			-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
+			local cd = if fromStanding then 1.1 else 0.75
+			local key = "pad|" .. err .. "|" .. structureId
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, cd, key)
 			else
@@ -220,14 +203,8 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	local DS = getDataService()
 	if not DS then
 		print(string.format("[UpgradePad] BUY FAIL %s %s — NoDataService", player.Name, structureId))
+		-- the client words this failure from PurchaseResult (one failed purchase = one line)
 		firePurchaseResult(player, structureId, { Ok = false, Error = "NoDataService" })
-		if NotificationService then
-			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, "Buy failed — server data not ready, try again", "Warn", 3, 2.5, "pad|NoDataService")
-			else
-				NotificationService.Notify(player, "Buy failed — server data not ready, try again", "Warn", 3)
-			end
-		end
 		return
 	end
 	local profile = DS.GetProfile(player)

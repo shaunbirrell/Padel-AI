@@ -91,15 +91,19 @@ local CombatConfig = {
 			XPReward = 40,
 			Color = Color3.fromRGB(110, 70, 35),
 		},
+		-- v71 bank retune (task #20): HEAD's 5 guards (28 dmg × 2.2/s, aggro 130) out-shot any player + squad
+		-- (~200 dps at 35 studs), so the Empire Bank was unwinnable. Now 5 × 12 dmg × 1.3/s (~49 dps at 35 studs
+		-- after the P1-2 hit chance): a lone player in the open still dies, a player + squad using cover takes it
+		-- (headless end-to-end sim with the real BankRaidService: 7/7 seeds). Tankier (200 HP) so the squad matters.
 		BankGuard = {
 			Id = "BankGuard",
 			DisplayName = "Bank Guard",
-			Health = 220,
-			Damage = 28,
-			FireRate = 2.2,
-			Range = 90,
+			Health = 200,
+			Damage = 12,
+			FireRate = 1.3,
+			Range = 75,
 			WalkSpeed = 14,
-			AggroRange = 130,
+			AggroRange = 90,
 			CashReward = 150,
 			XPReward = 45,
 			Color = Color3.fromRGB(55, 65, 120),

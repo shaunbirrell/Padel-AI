@@ -349,6 +349,8 @@ HudConfig.Toast = {
 		{ Match = " down %(%+%$[%d,]+%)$", Float = true }, -- NPC kill "<NPC> down (+$N)" (Reward today)
 		{ Match = "^Eliminated .+ %(%+%$[%d,]+%)$", Float = true, Show = "%STRIP%", Strip = " %(%+%$[%d,]+%)$", Type = "Success" }, -- PvP kill: "Eliminated X" + float
 		{ Match = "^DEF HIT", Show = "BASE UNDER ATTACK!", Type = "Warn", MinGapSeconds = 60, AlertSeconds = 4 }, -- every 1.2 s today
+		-- v71 server shape (GateDefenseService, once per plot per 60 s): the same Alert-slot banner, no lane line
+		{ Match = "^BASE UNDER ATTACK", Show = "BASE UNDER ATTACK!", Type = "Warn", MinGapSeconds = 60, AlertSeconds = 4 },
 	} :: { RerouteRule }),
 	-- Client safety net for server/client noise that has no business on screen. Lua patterns on Message.
 	-- (The real fix is at the source — see spec §World/Server noise — this only stops regressions.)

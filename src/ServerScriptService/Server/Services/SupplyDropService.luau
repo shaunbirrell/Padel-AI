@@ -1,6 +1,10 @@
 --!strict
 --[[
 	Periodic Supply Drops — crates spawn on map; stand near to claim Cash.
+
+	v71 (HUD v70 spec §5, roadmap §1.6): the crate stands ON THE GROUND under its anchor (a downward ray from the
+	WE_EventSpawn anchor or scatter point; anchors may be invisible and float), and its label is one stud-scaled
+	WorldLabel "Supply Drop" / "$8,500" (MaxDistance <= 40, never AlwaysOnTop).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -13,6 +17,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local WorldLabel = require(Shared.Util.WorldLabel)
 
 local SupplyDropService = {}
 
@@ -50,12 +55,42 @@ local function ensureFolder(): Folder
 	return f
 end
 
+local function formatCash(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (out:gsub("^,", ""))
+end
+
+-- Ground under `pos`: a downward ray that skips the anchor itself, the crates, characters and non-collidable
+-- decor. nil when nothing solid is below within `depth` studs.
+local function groundBelow(pos: Vector3, ignore: { Instance }, depth: number): number?
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	local list = table.clone(ignore)
+	table.insert(list, ensureFolder())
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl.Character then
+			table.insert(list, pl.Character)
+		end
+	end
+	params.FilterDescendantsInstances = list
+	params.RespectCanCollide = true
+	local hit = Workspace:Raycast(pos, Vector3.new(0, -depth, 0), params)
+	return if hit then hit.Position.Y else nil
+end
+
+-- Where the crate's BOTTOM goes: the ground under an event anchor (or a scatter point), not the anchor's centre.
 local function pickSpawnPosition(): Vector3
 	local pads = CollectionService:GetTagged(Constants.Tags.EventSpawn)
 	local candidates: { Vector3 } = {}
 	for _, inst in ipairs(pads) do
 		if inst:IsA("BasePart") then
-			table.insert(candidates, inst.Position + Vector3.new(0, 3, 0))
+			local top = inst.Position + Vector3.new(0, inst.Size.Y * 0.5, 0)
+			-- a visible solid pad IS the ground (the ray lands on its top); an invisible anchor is skipped, and a
+			-- non-collidable one is skipped by RespectCanCollide
+			local ignore: { Instance } = if inst.Transparency >= 0.99 then { inst } else {}
+			local gy = groundBelow(top + Vector3.new(0, 1, 0), ignore, 80)
+			table.insert(candidates, Vector3.new(top.X, gy or top.Y, top.Z))
 		end
 	end
 	-- Avoid stacking on occupied pads
@@ -81,7 +116,7 @@ local function pickSpawnPosition(): Vector3
 	for _ = 1, 12 do
 		local angle = math.random() * math.pi * 2
 		local dist = minR + math.random() * (r - minR)
-		local pos = Vector3.new(math.cos(angle) * dist, 3, math.sin(angle) * dist)
+		local pos = Vector3.new(math.cos(angle) * dist, 0, math.sin(angle) * dist)
 		local ok = true
 		for _, rec in pairs(active) do
 			if (rec.Part.Position - pos).Magnitude < 40 then
@@ -90,10 +125,11 @@ local function pickSpawnPosition(): Vector3
 			end
 		end
 		if ok then
-			return pos
+			local gy = groundBelow(pos + Vector3.new(0, 60, 0), {}, 200)
+			return Vector3.new(pos.X, gy or 1, pos.Z)
 		end
 	end
-	return Vector3.new(150, 3, 150)
+	return Vector3.new(150, 1, 150)
 end
 
 local function destroyDrop(id: string)
@@ -121,7 +157,7 @@ local function spawnDrop()
 
 	nextId += 1
 	local id = "drop_" .. tostring(nextId)
-	local pos = pickSpawnPosition()
+	local ground = pickSpawnPosition()
 	local cashMin = SupplyDropConfig.CashMin or 2500
 	local cashMax = SupplyDropConfig.CashMax or 12000
 	local cash = math.random(cashMin, cashMax)
@@ -130,7 +166,7 @@ local function spawnDrop()
 	local crate = Instance.new("Part")
 	crate.Name = "SupplyCrate_" .. id
 	crate.Size = SupplyDropConfig.CrateSize or Vector3.new(5, 4, 5)
-	crate.Position = pos
+	crate.Position = ground + Vector3.new(0, crate.Size.Y * 0.5, 0) -- bottom face on the ground
 	crate.Anchored = true
 	crate.CanCollide = true
 	crate.Color = SupplyDropConfig.CrateColor or Color3.fromRGB(210, 160, 55)
@@ -174,27 +210,16 @@ local function spawnDrop()
 	tip.CFrame = crate.CFrame * CFrame.new(0, 4, 0)
 	tip.Parent = crate
 
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "Label"
-	bb.Size = UDim2.fromOffset(200, 40)
-	bb.StudsOffset = Vector3.new(0, 6.5, 0)
+	local bb = WorldLabel.Create(crate, "Supply Drop", {
+		Name = "Label",
+		Sub = "$" .. formatCash(cash),
+		Color = Color3.fromRGB(255, 220, 120),
+		SubColor = Color3.fromRGB(110, 255, 90),
+		Offset = Vector3.new(0, crate.Size.Y * 0.5 + 4, 0), -- above the beacon ball
+		MaxDistance = 40,
+	})
 	-- v31: never AlwaysOnTop — was covering structure name billboards on approach
 	bb.AlwaysOnTop = false
-	bb.MaxDistance = 90
-	bb.Parent = crate
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundColor3 = Color3.fromRGB(12, 14, 16)
-	label.BackgroundTransparency = 0.2
-	label.BorderSizePixel = 0
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(255, 220, 120)
-	label.Text = string.format("SUPPLY DROP · Stand to claim ~$%d", cash)
-	label.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = label
 
 	local ttl = SupplyDropConfig.LifetimeSeconds or 75
 	pcall(function()

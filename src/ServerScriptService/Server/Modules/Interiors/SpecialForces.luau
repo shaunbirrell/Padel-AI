@@ -114,7 +114,7 @@ return function(ictx: any, api: any)
 	for i = 1, (if lv >= 2 then 2 else 1) do
 		local nx = -0.1 + (i - 1) * 1.2
 		B("NVGoggles", 0.9, 0.4, 0.5, nx, topY + 0.2, Z1 - 0.9, col.Dark, M.Metal, false)
-		B("NVGLens", 0.7, 0.18, 0.06, nx, topY + 0.2, Z1 - 1.18, col.Screen, M.Neon, false)
+		B("NVGLens", 0.7, 0.18, 0.06, nx, topY + 0.2, Z1 - 1.18, col.Screen, M.SmoothPlastic, false) -- v70: painted lens (no decorative Neon)
 	end
 	for _, rx in ipairs({ 2.15, 3.05 }) do
 		B("Radio", 0.55, 1.1, 0.4, rx, topY + 0.55, Z1 - 0.7, col.Locker, M.SmoothPlastic, false)

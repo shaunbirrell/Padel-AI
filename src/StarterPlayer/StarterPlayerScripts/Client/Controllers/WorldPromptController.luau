@@ -62,6 +62,7 @@ do
 	end
 end
 local UIUtil = require(Shared.Util.UIUtil)
+local WorldLabel = require(Shared.Util.WorldLabel)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 
 local WorldPromptController = {}
@@ -1354,6 +1355,11 @@ local function rescanUntaggedSlots()
 end
 
 function WorldPromptController.Init()
+	-- v70 (spec §5): server labels made with WorldLabel{OwnerUserId} carry WE_LabelOwner; hide everyone else's here.
+	local okFilter, errFilter = pcall(WorldLabel.StartOwnerFilter)
+	if not okFilter then
+		warn("[WorldPrompt] WorldLabel owner filter failed:", errFilter)
+	end
 	-- v58: liveCash listeners FIRST (before BaseState/other remotes that WaitForChild-block)
 	local function applyCash(n: any)
 		local v = tonumber(n)

@@ -17,12 +17,13 @@ local DesertFlora = require(script.Parent:WaitForChild("DesertFlora"))
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedConfigs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs")
 local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
-local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
 local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
 local StructureVisualConfig = require(SharedConfigs:WaitForChild("StructureVisualConfig"))
 local BaseLayout = require(script.Parent:WaitForChild("BaseLayout"))
 -- v70 waterways: plot water, sea gates, naval pads, road ends, rig piers (public water = Modules.Waterways)
 local WaterConfig = require(SharedConfigs:WaitForChild("WaterConfig"))
+-- v70 (HUD spec §5): every floating label goes through the shared helper (stud-scaled, 14-20 px, MaxDistance <= 40)
+local WorldLabel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("WorldLabel"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -64,13 +65,6 @@ local STRUCTURES = {
 	{ Id = "PowerStation", Kit = "power", Plinth = Color3.fromRGB(50, 48, 35), Body = Color3.fromRGB(90, 85, 50), Accent = Color3.fromRGB(255, 210, 70), Roof = Color3.fromRGB(60, 55, 40) },
 	{ Id = "Warehouse", Kit = "warehouse", Plinth = Color3.fromRGB(140, 115, 75), Body = Color3.fromRGB(165, 135, 90), Accent = Color3.fromRGB(200, 160, 90), Roof = Color3.fromRGB(120, 95, 65) },
 	{ Id = "SpecialForcesFacility", Kit = "special", Plinth = Color3.fromRGB(35, 38, 42), Body = Color3.fromRGB(45, 55, 65), Accent = Color3.fromRGB(160, 80, 200), Roof = Color3.fromRGB(30, 35, 40) },
-}
-
-local STARTER_COST = {
-	CommandCenter = 1500, Barracks = 2500, VehicleDepot = 3000, WeaponsFacility = 2800,
-	Helipad = 5000, Dock = 4500, Airfield = 8000, DefensiveWalls = 2000, Watchtowers = 2200,
-	Radar = 4000, ResearchLab = 4500, MissileDefense = 6000, PowerStation = 3500,
-	Warehouse = 3200, SpecialForcesFacility = 10000,
 }
 
 -- Map scale: ground ≥6000 continuous floor, plot ring ~800, pads ~200
@@ -256,58 +250,8 @@ local function paintEdge(parentPart, color, thickness)
 	end
 end
 
-local function priceBillboard(parent, title, costLine, accent)
-	-- v50: compact mobile price cards (was oversized Title+Cost overflow)
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "WE_PriceBillboard"
-	bb.Size = UDim2.fromOffset(118, 40)
-	bb.StudsOffset = Vector3.new(0, 4.5, 0)
-	bb.AlwaysOnTop = false -- P0: never stack over ATM AlwaysOnTop
-	bb.MaxDistance = 36 -- mobile: price cards near-only
-	bb.Parent = parent
-
-	local backdrop = Instance.new("Frame")
-	backdrop.Name = "Backdrop"
-	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
-	backdrop.BackgroundTransparency = 0.08
-	backdrop.BorderSizePixel = 0
-	backdrop.Parent = bb
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
-	c.Parent = backdrop
-	local stroke = Instance.new("UIStroke")
-	stroke.Name = "Stroke"
-	stroke.Color = accent
-	stroke.Thickness = 1.5
-	stroke.Transparency = 0.1
-	stroke.Parent = backdrop
-
-	local titleLab = Instance.new("TextLabel")
-	titleLab.Name = "Title"
-	titleLab.Size = UDim2.new(1, -8, 0, 16)
-	titleLab.Position = UDim2.fromOffset(4, 2)
-	titleLab.BackgroundTransparency = 1
-	titleLab.Text = title
-	titleLab.TextColor3 = Color3.fromRGB(245, 245, 248)
-	titleLab.TextScaled = true
-	titleLab.Font = Enum.Font.GothamBold
-	titleLab.TextStrokeTransparency = 0.4
-	titleLab.Parent = backdrop
-
-	local costLab = Instance.new("TextLabel")
-	costLab.Name = "Cost"
-	costLab.Size = UDim2.new(1, -8, 0, 18)
-	costLab.Position = UDim2.fromOffset(4, 18)
-	costLab.BackgroundTransparency = 1
-	costLab.Text = "Lv 0 → 1\n" .. costLine
-	costLab.TextColor3 = Color3.fromRGB(255, 215, 110)
-	costLab.TextScaled = true
-	costLab.Font = Enum.Font.GothamBold
-	costLab.TextStrokeTransparency = 0.35
-	costLab.Parent = backdrop
-	return bb
-end
+-- v70 (HUD spec §5): no server price card on the consoles (the client draws the owner's own price tag); the old
+-- always-on dark card per console is gone.
 
 local function plainBillboard(parent, text, size, offsetY, textColor)
 	local bb = Instance.new("BillboardGui")
@@ -402,6 +346,7 @@ local function dressConsole(plinth, title)
 	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	sg.PixelsPerStud = 60
 	sg.LightInfluence = 0
+	sg.MaxDistance = 40 -- v70: SurfaceGuis draw near-only (CLAUDE.md budget, <= 80)
 	sg.Parent = screen
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
@@ -425,7 +370,6 @@ local function dressConsole(plinth, title)
 end
 
 local function buildStructureKit(plotFolder, plotId, pos, offset, def)
-	local isCC = def.Id == "CommandCenter"
 	local plinthSize = Vector3.new(8, 1.2, 8)
 	-- v68: with BaseLayoutConfig the upgrade slot is a console / kiosk and the kit or walk-in building
 	-- stands at its site (WE_SiteCFrame). Buying happens at the console by prompt / tap only.
@@ -458,80 +402,79 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	CollectionService:AddTag(plinth, TAG_SLOT)
 
 	local kit = def.Kit
-	-- Visual kits v2: distinct silhouettes, neon accents, doors/windows (modest part count)
+	-- Visual kits v2: distinct silhouettes, painted accents (v70: no Neon), doors/windows (modest part count)
 	if kit == "hq" then
 		kitPart(plinth, "Body", Vector3.new(5.5, 3.4, 5.5), Vector3.new(0, 2.3, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(6.4, 0.55, 6.4), Vector3.new(0, 4.3, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.8, 0.35), Vector3.new(1.8, 6.8, 1.8), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.6, 0.22, 6.6), Vector3.new(0, 0.72, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.8, 0.35), Vector3.new(1.8, 6.8, 1.8), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.6, 0.22, 6.6), Vector3.new(0, 0.72, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.1, 1.1, 1.1), Vector3.new(-2, 3.6, -2), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		kitPart(plinth, "Door", Vector3.new(1.6, 2.2, 0.25), Vector3.new(0, 1.7, -2.85), Color3.fromRGB(30, 35, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.4, 1.0, 0.2), Vector3.new(2.0, 2.6, -2.8), Color3.fromRGB(70, 120, 150), Enum.Material.Glass, nil)
 	elseif kit == "barracks" then
 		kitPart(plinth, "Body", Vector3.new(6.6, 2.6, 4.4), Vector3.new(0, 1.9, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.1, 0.5, 5.0), Vector3.new(0, 3.35, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.9, 0.18, 4.7), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.9, 0.18, 4.7), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Door", Vector3.new(1.4, 2.0, 0.25), Vector3.new(0, 1.6, -2.3), Color3.fromRGB(35, 40, 32), Enum.Material.Metal, nil)
 		kitPart(plinth, "Window", Vector3.new(1.2, 0.9, 0.2), Vector3.new(-2.2, 2.3, -2.25), Color3.fromRGB(70, 120, 140), Enum.Material.Glass, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.7, 1.8, 0.7), Vector3.new(-3.0, 2.3, 1.5), def.Accent, Enum.Material.SmoothPlastic, nil)
 	elseif kit == "depot" then
 		kitPart(plinth, "Body", Vector3.new(6.9, 2.2, 5.6), Vector3.new(0, 1.7, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.3, 0.4, 6.1), Vector3.new(0, 2.95, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(3.2, 0.28, 5.9), Vector3.new(0, 0.72, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Door", Vector3.new(2.8, 2.0, 0.3), Vector3.new(0, 1.6, -2.9), Color3.fromRGB(40, 50, 60), Enum.Material.Metal, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.8, 2.4, 2.0), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	elseif kit == "lab" then
 		kitPart(plinth, "Body", Vector3.new(5.1, 3.2, 5.1), Vector3.new(0, 2.2, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(5.5, 0.5, 5.5), Vector3.new(0, 4.0, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(5.7, 0.2, 5.7), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.4, 3.8, 0.4), Vector3.new(0, 6.1, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Accent", Vector3.new(5.7, 0.2, 5.7), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Window", Vector3.new(1.5, 1.2, 0.2), Vector3.new(0, 2.6, -2.6), Color3.fromRGB(80, 160, 200), Enum.Material.Glass, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.9, 0.9, 0.9), Vector3.new(2.0, 3.5, 2.0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Detail", Vector3.new(0.9, 0.9, 0.9), Vector3.new(2.0, 3.5, 2.0), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	elseif kit == "tower" then
 		kitPart(plinth, "Body", Vector3.new(2.9, 5.8, 2.9), Vector3.new(0, 3.5, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(3.8, 0.5, 3.8), Vector3.new(0, 6.6, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.5, 0.3), Vector3.new(0, 8.5, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(3.3, 0.22, 3.3), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Antenna", Vector3.new(0.3, 3.5, 0.3), Vector3.new(0, 8.5, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Accent", Vector3.new(3.3, 0.22, 3.3), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Window", Vector3.new(1.0, 0.8, 0.2), Vector3.new(0, 4.5, -1.5), Color3.fromRGB(90, 140, 180), Enum.Material.Glass, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.7, 0.7, 0.7), Vector3.new(0, 7.0, 0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Detail", Vector3.new(0.7, 0.7, 0.7), Vector3.new(0, 7.0, 0), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	elseif kit == "dock" then
 		kitPart(plinth, "Body", Vector3.new(7.5, 0.55, 7.5), Vector3.new(0, 0.9, 0), def.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Pier", Vector3.new(8.8, 0.4, 2.4), Vector3.new(0, 1.15, 3.3), def.Roof, Enum.Material.Wood, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.2, 0.14, 0.4), Vector3.new(0, 1.25, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.2, 0.14, 0.4), Vector3.new(0, 1.25, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Detail", Vector3.new(1.2, 2.8, 0.4), Vector3.new(3.3, 2.1, 2.6), def.Accent, Enum.Material.Metal, nil)
 		kitPart(plinth, "Door", Vector3.new(1.8, 0.3, 1.2), Vector3.new(0, 1.35, 4.2), Color3.fromRGB(40, 55, 70), Enum.Material.Metal, nil)
 	elseif kit == "pad" then
 		kitPart(plinth, "Body", Vector3.new(7.3, 0.45, 7.3), Vector3.new(0, 0.92, 0), def.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.5, 0.14, 6.6), Vector3.new(0, 1.18, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(6.6, 0.14, 0.5), Vector3.new(0, 1.18, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.5, 0.14, 6.6), Vector3.new(0, 1.18, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Roof", Vector3.new(1.6, 0.3, 1.6), Vector3.new(0, 1.35, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Window", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.8, 1.4, 2.8), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Window", Vector3.new(0.5, 0.5, 0.5), Vector3.new(2.8, 1.4, 2.8), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	elseif kit == "wall" then
 		kitPart(plinth, "Body", Vector3.new(7.5, 3.0, 1.5), Vector3.new(0, 2.1, 0), def.Body, Enum.Material.Concrete, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.7, 0.25, 1.7), Vector3.new(0, 3.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.7, 0.25, 1.7), Vector3.new(0, 3.7, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.5, 0.4, 1.9), Vector3.new(0, 3.9, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.8, 1.2, 0.8), Vector3.new(-3.2, 3.2, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(0.8, 1.2, 0.8), Vector3.new(3.2, 3.2, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.8, 1.2, 0.8), Vector3.new(-3.2, 3.2, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Detail", Vector3.new(0.8, 1.2, 0.8), Vector3.new(3.2, 3.2, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 	elseif kit == "power" then
 		kitPart(plinth, "Body", Vector3.new(4.6, 3.6, 4.6), Vector3.new(0, 2.5, 0), def.Body, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Accent", Vector3.new(2.3, 2.3, 2.3), Vector3.new(0, 4.7, 0), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		kitPart(plinth, "Roof", Vector3.new(5.1, 0.4, 5.1), Vector3.new(0, 4.4, 0), def.Roof, Enum.Material.Metal, nil)
 		kitPart(plinth, "Detail", Vector3.new(0.6, 2.5, 0.6), Vector3.new(2.0, 2.8, 2.0), Color3.fromRGB(60, 55, 40), Enum.Material.Metal, nil)
 	elseif kit == "warehouse" then
 		kitPart(plinth, "Body", Vector3.new(7.1, 2.8, 5.6), Vector3.new(0, 2.0, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(7.5, 0.5, 6.1), Vector3.new(0, 3.55, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Accent", Vector3.new(7.3, 0.2, 5.9), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
+		kitPart(plinth, "Accent", Vector3.new(7.3, 0.2, 5.9), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
 		kitPart(plinth, "Door", Vector3.new(2.6, 2.2, 0.3), Vector3.new(0, 1.7, -2.95), Color3.fromRGB(50, 45, 38), Enum.Material.Metal, nil)
 	else
 		kitPart(plinth, "Body", Vector3.new(5.3, 3.5, 5.3), Vector3.new(0, 2.4, 0), def.Body, Enum.Material.Metal, nil)
 		kitPart(plinth, "Roof", Vector3.new(4.2, 1.2, 4.2), Vector3.new(0, 4.6, 0), def.Roof, Enum.Material.Metal, nil)
-		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.2, 0.35), Vector3.new(0, 7.2, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Accent", Vector3.new(5.9, 0.22, 5.9), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.Neon, nil)
-		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.0, 3.5, -2.0), def.Accent, Enum.Material.Neon, Enum.PartType.Ball)
+		kitPart(plinth, "Antenna", Vector3.new(0.35, 4.2, 0.35), Vector3.new(0, 7.2, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Accent", Vector3.new(5.9, 0.22, 5.9), Vector3.new(0, 0.7, 0), def.Accent, Enum.Material.SmoothPlastic, nil)
+		kitPart(plinth, "Detail", Vector3.new(1.0, 1.0, 1.0), Vector3.new(2.0, 3.5, -2.0), def.Accent, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	end
 
-	local cost = STARTER_COST[def.Id] or 0
-	-- Prefer readable DisplayName; client refreshSlotBillboard rewrites when attached
+	-- Readable DisplayName for the console screen (the client's owner-only price tag uses BaseConfig names)
 	local displayNames = {
 		CommandCenter = "Command Center",
 		Barracks = "Barracks",
@@ -550,11 +493,6 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 		SpecialForcesFacility = "Special Forces",
 	}
 	local nice = displayNames[def.Id] or def.Id
-	local title = if isCC then ("★ " .. nice) else nice
-	local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
-	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
-	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
-	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
 	if isConsole then
 		dressConsole(plinth, nice)
 		-- v68: no catalog building mesh on a console (it would be placed at the console, not the site)
@@ -1657,6 +1595,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 40
 		sg.LightInfluence = 0
+		sg.MaxDistance = 80 -- v70: painted sign, near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = lintel
 		local lbl = Instance.new("TextLabel")
 		lbl.Name = "Text"
@@ -1703,12 +1642,13 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 				CanCollide = true,
 				Parent = gateFolder,
 			})
+			-- v70 (HUD spec §5): no "GUARD" NPCLabel over the rear-gate guards
 			makeSoldierKit(
 				gateFolder,
 				"GateGuard_" .. g.Id .. (if sx > 0 then "R" else "L"),
 				F * CFrame.new(gLocal) * CFrame.Angles(0, math.rad(180), 0),
 				Color3.fromRGB(62, 72, 52),
-				"GUARD",
+				nil,
 				Color3.fromRGB(140, 150, 130),
 				150,
 				"Guard",
@@ -1781,6 +1721,7 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 40
 		sg.LightInfluence = 0
+		sg.MaxDistance = 80 -- v70: painted sign, near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = lintel
 		local lbl = Instance.new("TextLabel")
 		lbl.Name = "Text"
@@ -2007,7 +1948,7 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 			Size = Vector3.new(2.4, 0.1, 1.6),
 			CFrame = cf,
 			Color = Color3.fromRGB(245, 245, 250),
-			Material = Enum.Material.Neon,
+			Material = Enum.Material.SmoothPlastic, -- v70: painted (no decorative Neon)
 			CanCollide = false,
 			Transparency = 0.2,
 			Parent = folder,
@@ -2053,14 +1994,18 @@ local function premiumOfferIdLive(kind: string, key: string): boolean
 end
 
 -- v70: F = plot frame, atmLocal = plot-local ATM cluster anchor (pads turn with the plot)
+local PREMIUM_TAG_RANGE = 20
 local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
 	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed; GoldenPump only if Id≠0
+	-- v70 (HUD spec §5): plain stud-scaled tag "Auto Collect" / "R$" (was a dark card "AUTO COLLECT · R$"); the pad
+	-- keeps its Neon (it is the offer), its PointLight is gone (light budget). PREMIUM_TAG_RANGE keeps the four tags
+	-- off screen while you stand at the ATM (CLAUDE.md: at most 3 labels on screen at a base).
 	local offers = {
-		{ Key = "AutoCollect", Kind = "GamePass", Label = "AUTO COLLECT", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
+		{ Key = "AutoCollect", Kind = "GamePass", Label = "Auto Collect", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
 		{ Key = "VIP", Kind = "GamePass", Label = "VIP", Color = Color3.fromRGB(180, 60, 220), Offset = Vector3.new(-18, 0.55, 8) },
-		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x CASH", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
-		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "SPEED BOOST", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
-		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "GOLDEN PUMP", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
+		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x Cash", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
+		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "Speed Boost", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
+		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "Golden Pump", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
 	}
 	for _, offer in ipairs(offers) do
 		if not premiumOfferIdLive(offer.Kind, offer.Key) then
@@ -2079,17 +2024,7 @@ local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLo
 		pad:SetAttribute("OfferKey", offer.Key)
 		pad:SetAttribute("OfferKind", offer.Kind)
 		CollectionService:AddTag(pad, TAG_PREMIUM)
-		local glow = Instance.new("PointLight")
-		glow.Color = offer.Color
-		glow.Brightness = 1.4
-		glow.Range = 14
-		glow.Parent = pad
-		local bb = plainBillboard(pad, offer.Label .. "  ·  R$", Vector2.new(160, 32), 3.2, offer.Color)
-		if bb then
-			bb.Name = "WE_PremiumBillboard"
-			bb.AlwaysOnTop = false
-			bb.MaxDistance = 36
-		end
+		WorldLabel.Create(pad, offer.Label, { Name = "WE_PremiumBillboard", Sub = "R$", Color = offer.Color, MaxDistance = PREMIUM_TAG_RANGE, Offset = Vector3.new(0, 5.5, 0) })
 	end
 end
 
@@ -2138,6 +2073,7 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	sg.Face = Enum.NormalId.Front
 	sg.CanvasSize = Vector2.new(240, 160)
 	sg.LightInfluence = 0
+	sg.MaxDistance = 80 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 	sg.Parent = screen
 	local digits = Instance.new("TextLabel")
 	digits.Name = "Digits"
@@ -2155,34 +2091,28 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	light.Brightness = 1.15
 	light.Range = 20
 	light.Parent = body
-	do
-		local bb = plainBillboard(body, "COLLECT · Touch ATM", Vector2.new(200, 36), 6.5, Color3.fromRGB(90, 240, 130))
-		if bb then
-			bb.Name = "WE_CollectBillboard"
-			bb.AlwaysOnTop = true -- P0: ATM primary when nearest
-			bb.MaxDistance = 28
-		end
-	end
-	-- Lime Collect circle on ground (touch radius visual)
+	-- v70 (HUD spec §5): no "COLLECT · Touch ATM" billboard (it was AlwaysOnTop); the ATM screen and the flat lime
+	-- collect circle are the cue.
+	-- Lime Collect circle on ground (touch radius visual). A cylinder's axis is its X: X is the thickness, Y/Z the
+	-- diameter, turned 90° about Z so it lies flat (it was sized along X, which stood a 14-stud pole on end).
 	local collectCircle = part({
 		Name = "CollectCircle",
-		Size = Vector3.new(14, 0.25, 14),
+		Size = Vector3.new(0.25, 14, 14),
 		CFrame = F * CFrame.new(base + Vector3.new(28, 0.55, 8)),
 		Color = Color3.fromRGB(90, 255, 110),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.SmoothPlastic, -- v70: painted (no decorative Neon)
 		Transparency = 0.55,
 		CanCollide = false,
 		Shape = Enum.PartType.Cylinder,
 		Parent = folder,
 	})
-	-- Cylinder default axis is X — rotate to lie flat on ground
 	collectCircle.CFrame = F * CFrame.new(base + Vector3.new(28, 0.55, 8)) * CFrame.Angles(0, 0, math.rad(90))
 	collectCircle:SetAttribute("PlotId", plotId)
 	local ring = part({
 		Name = "CollectRing",
-		Size = Vector3.new(15.5, 0.2, 15.5),
+		Size = Vector3.new(0.2, 15.5, 15.5),
 		Color = Color3.fromRGB(60, 220, 90),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.SmoothPlastic,
 		Transparency = 0.35,
 		CanCollide = false,
 		Shape = Enum.PartType.Cylinder,
@@ -2458,11 +2388,11 @@ function MapSetup.Run()
 		spawn.Neutral = true
 		spawn.Duration = 0
 		spawn.BrickColor = BrickColor.new("Dark green")
-		spawn.Material = Enum.Material.Neon
+		spawn.Material = Enum.Material.SmoothPlastic -- v70 (HUD spec §5): painted spawn pad (was Neon)
 		spawn.Parent = plotFolder
 
 		-- v67: no giant "BASE n · Walk pads to BUY · E / B menu" label over the plot (HUD + pad cards explain buying)
-		beacon(plotFolder, F:PointToWorldSpace(if BaseLayout.Enabled() then Vector3.new(0, 0, -PLOT_PAD_SIZE * 0.5 + 8) else Vector3.new(0, 0, -62)), COL_PAD_EDGE, "PlotBeacon", F)
+		-- v70 (HUD spec §5): no plot beacon (neon tip + glow disc) at the rear of the plot either
 
 		for i, def in ipairs(STRUCTURES) do
 			local col = (i - 1) % STRUCT_COLS
@@ -2512,39 +2442,26 @@ function MapSetup.Run()
 				Size = Vector3.new(1.6, 1.6, 0.35),
 				CFrame = F * CFrame.new(tLocal + Vector3.new(0, 0.5, -0.2)),
 				Color = Color3.fromRGB(240, 220, 60),
-				Material = Enum.Material.Neon,
+				Material = Enum.Material.SmoothPlastic, -- v70: painted (no decorative Neon)
 				CanCollide = false,
 				Parent = yardFolder,
 			})
 		end
-		-- Training workers (visual only — income is SoldierService tick)
+		-- Training workers (visual only — income is SoldierService tick). v70 (HUD spec §5): no name tag over them
 		for wi = 1, 2 do
 			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.6, 42)
 			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
-			local worker = makeSoldierKit(
+			makeSoldierKit(
 				yardFolder,
 				"TrainingWorker" .. wi,
 				F * CFrame.new(wLocal) * CFrame.Angles(0, math.rad(180), 0),
 				Color3.fromRGB(70, 85, 55),
-				"TRAINING",
+				nil,
 				Color3.fromRGB(140, 150, 130), -- muted
 				50,
 				"Worker",
 				nil
 			)
-			if worker then
-				local head = worker:FindFirstChild("Head")
-				if head then
-					local bb = head:FindFirstChild("NPCLabel") or head:FindFirstChildWhichIsA("BillboardGui")
-					if bb and bb:IsA("BillboardGui") then
-						bb.Name = "WE_WorkerTag"
-						bb.AlwaysOnTop = false
-						bb.MaxDistance = 18
-						bb.StudsOffset = Vector3.new(0, 2.4, 0)
-						bb.Size = UDim2.fromOffset(90, 18)
-					end
-				end
-			end
 		end
 		-- Target ring + base plate polish
 		part({
@@ -2556,28 +2473,7 @@ function MapSetup.Run()
 			CanCollide = true,
 			Parent = yardFolder,
 		})
-		do
-			local yp = yardFolder:FindFirstChild("YardPad")
-			if yp and yp:IsA("BasePart") then
-				local ebb = Instance.new("BillboardGui")
-				ebb.Name = "WE_TrainingEarnBillboard"
-				ebb.Size = UDim2.fromOffset(140, 28)
-				ebb.StudsOffset = Vector3.new(0, 3.2, 0)
-				ebb.AlwaysOnTop = false
-				ebb.MaxDistance = 22
-				ebb.Parent = yp
-				local el = Instance.new("TextLabel")
-				el.Size = UDim2.fromScale(1, 1)
-				el.BackgroundTransparency = 0.35
-				el.BackgroundColor3 = Color3.fromRGB(20, 28, 18)
-				el.BorderSizePixel = 0
-				el.Font = Enum.Font.GothamBold
-				el.TextSize = 14
-				el.TextColor3 = Color3.fromRGB(160, 220, 120)
-				el.Text = "+$/tick"
-				el.Parent = ebb
-			end
-		end
+		-- v70 (HUD spec §5): no "+$/tick" earn placeholder billboard on the yard pad
 		-- Design Bot quality wire: 2–3 SquadStall kits (Tent + crates + sandbags + Infantry)
 		do
 			local stallFolder = Instance.new("Folder")
@@ -2652,7 +2548,7 @@ function MapSetup.Run()
 					CanCollide = true,
 					Parent = stall,
 				})
-				-- Lantern host
+				-- Lantern host (v70 light budget: the lantern carries no PointLight)
 				local lanternHost = part({
 					Name = "LanternHost",
 					Size = Vector3.new(0.6, 1.2, 0.6),
@@ -2662,11 +2558,6 @@ function MapSetup.Run()
 					CanCollide = false,
 					Parent = stall,
 				})
-				local lanternLight = Instance.new("PointLight")
-				lanternLight.Color = Color3.fromRGB(255, 200, 120)
-				lanternLight.Brightness = 0.8
-				lanternLight.Range = 14
-				lanternLight.Parent = lanternHost
 				-- v34: stall roles use distinct VisualAssetConfig Character IDs + Part dress
 				local stallRoles = {
 					{ Kind = "Infantry", Label = "INFANTRY", Body = Color3.fromRGB(70, 85, 55), Accent = Color3.fromRGB(180, 220, 120) },
@@ -2680,12 +2571,26 @@ function MapSetup.Run()
 					"Stall" .. roleDef.Kind .. si,
 					soldierCf,
 					roleDef.Body,
-					roleDef.Label,
+					nil,
 					roleDef.Accent,
 					80,
 					roleDef.Kind,
 					nil
 				)
+				-- v70 (HUD spec §5): the stall's role is a painted board on the sandbags facing the yard front (was a
+				-- floating NPCLabel over the soldier)
+				local stallSign = part({
+					Name = "StallSign",
+					Size = Vector3.new(4.4, 1.2, 0.2),
+					CFrame = F * CFrame.new(sOrigin + Vector3.new(0, 1.9, 4.2)),
+					Color = Color3.fromRGB(78, 64, 44),
+					Material = Enum.Material.WoodPlanks,
+					CanCollide = false,
+					Parent = stall,
+				})
+				stallSign.CanQuery = false
+				stallSign.CanTouch = false
+				WorldLabel.Surface(stallSign, Enum.NormalId.Back, roleDef.Label, { Name = "WE_StallSign", Color = roleDef.Accent })
 				-- Optional crouch: Humanoid Sit as lightweight proxy (full crouch AnimationId TBD)
 				pcall(function()
 					local m = stall:FindFirstChild("Stall" .. roleDef.Kind .. si)
@@ -2717,7 +2622,10 @@ function MapSetup.Run()
 			end
 		end
 
-		local yardAnchor = part({
+		-- Invisible anchors (ManualDropperService / SoldierService place the yard dropper and cash pops from them).
+		-- v70 (HUD spec §5): no yard title billboard and no glowing worker → target beams (the last always-on
+		-- glowing lines in a base).
+		part({
 			Name = "YardAnchor",
 			Size = Vector3.new(1, 1, 1),
 			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 8, 48)),
@@ -2725,14 +2633,7 @@ function MapSetup.Run()
 			CanCollide = false,
 			Parent = yardFolder,
 		})
-		plainBillboard(
-			yardAnchor,
-			"TRAINING YARD",
-			Vector2.new(170, 30),
-			8,
-			Color3.fromRGB(255, 200, 120)
-		)
-		local earnAnchor = part({
+		part({
 			Name = "YardEarnAnchor",
 			Size = Vector3.new(1, 1, 1),
 			CFrame = F * CFrame.new(yardShift + Vector3.new(-14, 6, 42)),
@@ -2740,34 +2641,6 @@ function MapSetup.Run()
 			CanCollide = false,
 			Parent = yardFolder,
 		})
-		-- Light beams worker → target (visual income feedback)
-		for wi = 1, 2 do
-			local worker = yardFolder:FindFirstChild("TrainingWorker" .. wi)
-			local target = yardFolder:FindFirstChild("TrainingTarget" .. wi)
-			if worker and target and worker:IsA("Model") and target:IsA("BasePart") then
-				local workerRoot = worker.PrimaryPart or worker:FindFirstChildWhichIsA("BasePart")
-				if workerRoot and workerRoot:IsA("BasePart") then
-					local a0 = Instance.new("Attachment")
-					a0.Name = "WE_TrainBeam0"
-					a0.Position = Vector3.new(0, 1.2, 0)
-					a0.Parent = workerRoot
-					local a1 = Instance.new("Attachment")
-					a1.Name = "WE_TrainBeam1"
-					a1.Parent = target
-					local beam = Instance.new("Beam")
-					beam.Name = "WE_TrainBeam"
-					beam.Attachment0 = a0
-					beam.Attachment1 = a1
-					beam.Color = ColorSequence.new(Color3.fromRGB(255, 200, 80))
-					beam.Width0 = 0.15
-					beam.Width1 = 0.05
-					beam.FaceCamera = true
-					beam.LightEmission = 0.4
-					beam.Transparency = NumberSequence.new(0.35)
-					beam.Parent = workerRoot
-				end
-			end
-		end
 		-- Design densify: 8–12 realistic warzone props per plot (always-on Part kits; pcall catalog)
 		do
 			local okDress, errDress = pcall(function()
@@ -3203,12 +3076,10 @@ function MapSetup.Run()
 					Parent = folder,
 				})
 				beacon(folder, padAt, Color3.fromRGB(90, 160, 220), name .. i .. "_Beacon")
-				plainBillboard(p, "GARAGE PAD · E / G", Vector2.new(170, 32), 5, Color3.fromRGB(200, 220, 255))
-			elseif tag == TAG_NPC then
-				plainBillboard(p, "NPC SPAWN", Vector2.new(140, 28), 4, Color3.fromRGB(255, 180, 180))
-			else
-				plainBillboard(p, "EVENT ZONE", Vector2.new(140, 28), 4, Color3.fromRGB(255, 220, 160))
+				-- v70 (HUD spec §5, mobile P1-11): device-neutral stud-scaled tag (the old card named keys)
+				WorldLabel.Create(p, "Garage", { Name = "WE_PadLabel", Color = Color3.fromRGB(200, 220, 255) })
 			end
+			-- v70: NPC / event spawns carry no debug labels
 		end
 	end
 
@@ -3254,7 +3125,8 @@ function MapSetup.Run()
 			})
 			CollectionService:AddTag(pad, TAG_NAVAL)
 			beacon(navalFolder, padAt, Color3.fromRGB(70, 180, 220), "NavalBeacon" .. i)
-			plainBillboard(pad, "NAVAL PAD · E / G", Vector2.new(170, 32), 5, Color3.fromRGB(160, 220, 255))
+			-- v70 (HUD spec §5, mobile P1-11): device-neutral stud-scaled tag (the old card named keys)
+			WorldLabel.Create(pad, "Naval", { Name = "WE_PadLabel", Color = Color3.fromRGB(160, 220, 255) })
 		end
 	end
 
@@ -3402,23 +3274,21 @@ function MapSetup.Run()
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
-		-- Hidden by default; TutorialController reveals only the active step (no billboard spam)
+		-- Hidden by default; TutorialController reveals only the active step (no billboard spam).
+		-- v70 (HUD spec §5): an anchor only: no tutorial debug billboard and no Neon slab (the tutorial beam and the
+		-- highlight are the cue).
 		local p = part({
 			Name = name,
 			Size = Vector3.new(7, 1.2, 7),
 			Position = pos,
 			Color = color,
-			Material = Enum.Material.Neon,
+			Material = Enum.Material.SmoothPlastic,
 			Transparency = 1,
 			CanCollide = false,
 			Parent = tutorialFolder,
 		})
 		p:SetAttribute("TutorialStepId", stepId or name)
 		CollectionService:AddTag(p, TAG_TUTORIAL)
-		local bb = plainBillboard(p, "TUT · " .. name:gsub("Tutorial_", ""), Vector2.new(200, 34), 6, Color3.fromRGB(255, 245, 180))
-		if typeof(bb) == "Instance" and bb:IsA("BillboardGui") then
-			bb.Enabled = false
-		end
 		-- No beacon / ring clutter — waypoint beam is enough
 		return p
 	end

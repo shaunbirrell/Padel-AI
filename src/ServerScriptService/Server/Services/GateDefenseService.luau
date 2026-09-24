@@ -11,6 +11,11 @@
 	Research TurretDamage multiplies guard + AutoGun damage; a missile strike (MissileStrikeService →
 	SetDefensesDown) takes everything down until profile.Raid.DefensesDownUntil (os.time — the rest of this file
 	uses os.clock).
+
+	v71 (HUD v70 spec §4.2 / §5): no guard name cards and no auto-gun name cards (the client draws an HP bar after
+	damage); the AutoGun marker ring and muzzle are painted, not neon; the gate shows ONE thin stud-scaled HP bar
+	centred over the opening, only while damaged, breached, struck or raided; the owner gets one "BASE UNDER
+	ATTACK!" Warn per plot per minute instead of a toast on every hit.
 ]]
 
 local Players = game:GetService("Players")
@@ -25,6 +30,8 @@ local Constants = require(Shared.Constants)
 local GateDefenseConfig = require(Shared.Configs.GateDefenseConfig)
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
+local HudConfig = require(Shared.Configs.HudConfig)
+local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 
 local GateDefenseService = {}
 
@@ -401,30 +408,8 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
 
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "GateGuardLabel"
-	bb.Size = UDim2.fromOffset(140, 36)
-	bb.StudsOffset = Vector3.new(0, 3.8, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 90
-	bb.Parent = root
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(18, 22, 14)
-	lbl.BackgroundTransparency = 0.15
-	lbl.Text = "GATE GUARD\n" .. tostring(stats.WeaponLabel or "Rifle")
-	lbl.TextColor3 = Color3.fromRGB(210, 240, 160)
-	lbl.TextStrokeTransparency = 0.3
-	lbl.TextScaled = true
-	lbl.Font = Enum.Font.GothamBold
-	lbl.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 4)
-	corner.Parent = lbl
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(120, 160, 80)
-	stroke.Thickness = 1.4
-	stroke.Parent = lbl
+	-- v71: no "GATE GUARD" name card (spec §5: it drew through walls at 90 studs); the client shows an HP bar
+	-- after damage.
 
 	-- v69 F3: guards are killable. CombatService forwards a raycast hit on any GateBarrier-attributed part to
 	-- ApplyDamage, which routes GateGuardPart hits to this humanoid. No WE_GateBarrier tag (that is the gate).
@@ -557,7 +542,7 @@ local function partKitAutoGun(at: CFrame, parent: Instance): (Model, BasePart)
 	muzzle.Anchored = true
 	muzzle.CanCollide = false
 	muzzle.Color = Color3.fromRGB(255, 160, 40)
-	muzzle.Material = Enum.Material.Neon
+	muzzle.Material = Enum.Material.SmoothPlastic -- v71: painted, not neon (not a light source)
 	muzzle.Parent = model
 	model.PrimaryPart = yaw
 	model.Parent = parent
@@ -565,7 +550,8 @@ local function partKitAutoGun(at: CFrame, parent: Instance): (Model, BasePart)
 end
 
 local function attachTurretVisualMarker(model: Model, at: CFrame)
-	-- Always-on neon ring so upgraded AutoGuns read clearly even when catalog mesh loads
+	-- Painted ring under the nest so upgraded AutoGuns read even before the catalog mesh loads.
+	-- v71: SmoothPlastic, no floating name card over the gun (spec §5 neon + label clean-up).
 	if model:FindFirstChild("WE_TurretMarker") then
 		return
 	end
@@ -575,29 +561,10 @@ local function attachTurretVisualMarker(model: Model, at: CFrame)
 	ring.CFrame = at * CFrame.new(0, 0.15, 0)
 	ring.Anchored = true
 	ring.CanCollide = false
-	ring.Color = Color3.fromRGB(255, 90, 40)
-	ring.Material = Enum.Material.Neon
-	ring.Transparency = 0.25
+	ring.CanQuery = false
+	ring.Color = Color3.fromRGB(200, 80, 40)
+	ring.Material = Enum.Material.SmoothPlastic
 	ring.Parent = model
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "WE_AutoGunBillboard"
-	bb.Size = UDim2.fromOffset(90, 22)
-	bb.StudsOffset = Vector3.new(0, 4.5, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 90
-	bb.Parent = model.PrimaryPart or ring
-	local lab = Instance.new("TextLabel")
-	lab.Size = UDim2.fromScale(1, 1)
-	lab.BackgroundColor3 = Color3.fromRGB(30, 20, 10)
-	lab.BackgroundTransparency = 0.2
-	lab.Font = Enum.Font.GothamBold
-	lab.TextScaled = true
-	lab.TextColor3 = Color3.fromRGB(255, 180, 80)
-	lab.Text = "AUTO GUN"
-	lab.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 4)
-	corner.Parent = lab
 end
 
 local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
@@ -784,8 +751,26 @@ local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): b
 end
 
 
--- v38: throttle owner DEF HIT toasts per plot
-local lastGateHitToastAt: { [number]: number } = {}
+-- v71: one "BASE UNDER ATTACK!" owner Warn per plot per BaseUnderAttackCooldown (spec §4.2)
+local lastAttackAlertAt: { [number]: number } = {}
+local barCheckAt: { [number]: number } = {}
+
+local function alertBaseUnderAttack(plotId: number?, ownerUserId: number?, attacker: Player?)
+	if not NotificationService or typeof(plotId) ~= "number" or typeof(ownerUserId) ~= "number" then
+		return
+	end
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if not owner or owner == attacker then
+		return
+	end
+	local now = os.clock()
+	local cd = GateDefenseConfig.BaseUnderAttackCooldown or 60
+	if now - (lastAttackAlertAt[plotId] or -math.huge) < cd then
+		return
+	end
+	lastAttackAlertAt[plotId] = now
+	NotificationService.Notify(owner, GateDefenseConfig.BaseUnderAttackToast or "BASE UNDER ATTACK!", "Warn", 4)
+end
 
 local function rateLimitVictim(userId: number): boolean
 	local t = nowClock()
@@ -852,27 +837,9 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 		return
 	end
 	hum:TakeDamage(amount)
-	-- v38: brief damage toast for gate owner when guards/AutoGuns hit an enemy
-	local ownerUid = tonumber(sourceModel:GetAttribute("OwnerUserId"))
-	if ownerUid and NotificationService then
-		local owner = Players:GetPlayerByUserId(ownerUid)
-		if owner and owner ~= player then
-			local pid = plotId or 0
-			local cd = GateDefenseConfig.GateHitOwnerToastCooldown or 1.2
-			local now = os.clock()
-			local last = lastGateHitToastAt[pid] or 0
-			if now - last >= cd then
-				lastGateHitToastAt[pid] = now
-				local tpl = GateDefenseConfig.GateHitOwnerToast or "DEF HIT · %s (−%d HP)"
-				NotificationService.Notify(
-					owner,
-					string.format(tpl, player.DisplayName, math.floor(amount)),
-					"Success",
-					1.6
-				)
-			end
-		end
-	end
+	-- the defenses are engaging an intruder: tell the owner once a minute (not on every hit)
+	local def = if plotId ~= nil then defenses[plotId] else nil
+	alertBaseUnderAttack(plotId, if def then def.OwnerUserId else tonumber(sourceModel:GetAttribute("OwnerUserId")), player)
 end
 
 
@@ -904,21 +871,120 @@ local function setGateBarrierOpen(parts: { BasePart }, open: boolean)
 	end
 end
 
-local function updateGateBillboard(parts: { BasePart }, health: number, maxHealth: number, breached: boolean)
-	for _, p in ipairs(parts) do
-		local bb = p:FindFirstChild("WE_GateHP")
-		if bb and bb:IsA("BillboardGui") then
-			local lbl = bb:FindFirstChild("Label")
-			if lbl and lbl:IsA("TextLabel") then
-				if breached then
-					lbl.Text = "⚠ BREACHED — repair / rebuild"
-					lbl.TextColor3 = Color3.fromRGB(255, 160, 80)
-				else
-					lbl.Text = string.format("GATE %d/%d", math.floor(health), math.floor(maxHealth))
-					lbl.TextColor3 = Color3.fromRGB(200, 220, 255)
-				end
-			end
+-- ── gate HP bar (v71, spec §5 "WE_GateHP ×2 → one thin bar centred on the gate") ───────────────────────────
+
+-- an ATM raid hold is running on this plot (MoneyCollectorService stamps WE_RaidingPlot on the thief)
+local function plotRaidActive(plotId: any): boolean
+	if typeof(plotId) ~= "number" then
+		return false
+	end
+	for _, pl in ipairs(Players:GetPlayers()) do
+		if pl:GetAttribute("WE_RaidingPlot") == plotId then
+			return true
 		end
+	end
+	return false
+end
+
+local function gateBar(parts: { BasePart }): BillboardGui?
+	for _, p in ipairs(parts) do
+		local bb = p and p:FindFirstChild("WE_GateHP")
+		if bb and bb:IsA("BillboardGui") then
+			return bb
+		end
+	end
+	return nil
+end
+
+-- One bar per gate: a BillboardGui on leaf 1 whose Adornee is an attachment at the middle of the opening.
+-- Stud-scaled, never AlwaysOnTop, MaxDistance <= 40; a 14 px status line shows only when breached / down.
+local function buildGateBar(leaf: BasePart, gateCf: CFrame, height: number, maxHp: number)
+	local cfg = GateDefenseConfig.GateBar
+	local studs: Vector2 = cfg.Studs
+	local att = Instance.new("Attachment")
+	att.Name = "WE_GateBarAnchor"
+	att.Parent = leaf
+	att.WorldPosition = (gateCf * CFrame.new(0, height - 0.5 + cfg.HeightAbove, 0)).Position
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "WE_GateHP"
+	bb.Adornee = att
+	bb.Size = UDim2.fromScale(studs.X, studs.Y)
+	bb.AlwaysOnTop = false
+	bb.LightInfluence = 0
+	bb.MaxDistance = math.min(cfg.MaxDistance, WorldLabelConfig.MaxDistance)
+	bb.Enabled = false -- only while damaged / breached / down / raided (updateGateBillboard, updateDownBillboard)
+	bb:SetAttribute("MaxHealth", maxHp)
+	local track = Instance.new("Frame")
+	track.Name = "Track"
+	track.AnchorPoint = Vector2.new(0.5, 1)
+	track.Position = UDim2.fromScale(0.5, 1)
+	track.Size = UDim2.new(1, 0, 0, 6)
+	track.BackgroundColor3 = HudConfig.Colors.Ink
+	track.BackgroundTransparency = 0.25
+	track.BorderSizePixel = 0
+	track.Parent = bb
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(1, 1)
+	fill.BackgroundColor3 = Color3.fromRGB(120, 200, 255)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Label"
+	lbl.AnchorPoint = Vector2.new(0.5, 1)
+	lbl.Position = UDim2.new(0.5, 0, 1, -8)
+	lbl.Size = UDim2.new(1, 0, 0, 16)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = HudConfig.WorldLabels.Default.Font
+	lbl.TextSize = WorldLabelConfig.MinTextSize
+	lbl.TextScaled = false
+	lbl.TextStrokeColor3 = HudConfig.Colors.Ink
+	lbl.TextStrokeTransparency = 0
+	lbl.TextColor3 = Color3.fromRGB(255, 160, 80)
+	lbl.Text = ""
+	lbl.Visible = false
+	lbl.Parent = bb
+	bb.Parent = leaf
+end
+
+-- status: nil = normal (bar only), else the line above the bar ("BREACHED", "DEFENSES DOWN 4:59")
+local function setGateBar(parts: { BasePart }, ratio: number, status: string?, statusColor: Color3?, show: boolean)
+	local bb = gateBar(parts)
+	if not bb then
+		return
+	end
+	local fill = bb:FindFirstChild("Fill", true)
+	if fill and fill:IsA("Frame") then
+		local want = UDim2.fromScale(math.clamp(ratio, 0, 1), 1)
+		if fill.Size ~= want then
+			fill.Size = want
+		end
+	end
+	local lbl = bb:FindFirstChild("Label")
+	if lbl and lbl:IsA("TextLabel") then
+		local vis = status ~= nil
+		if lbl.Visible ~= vis then
+			lbl.Visible = vis
+		end
+		if status and lbl.Text ~= status then
+			lbl.Text = status
+		end
+		if statusColor and lbl.TextColor3 ~= statusColor then
+			lbl.TextColor3 = statusColor
+		end
+	end
+	if bb.Enabled ~= show then
+		bb.Enabled = show
+	end
+end
+
+local function updateGateBillboard(parts: { BasePart }, health: number, maxHealth: number, breached: boolean)
+	local plotId = parts[1] and parts[1]:GetAttribute("PlotId")
+	if breached then
+		setGateBar(parts, 0, "BREACHED", Color3.fromRGB(255, 160, 80), true)
+	else
+		local damaged = health < maxHealth - 0.5
+		setGateBar(parts, health / math.max(maxHealth, 1), nil, nil, damaged or plotRaidActive(plotId))
 	end
 end
 
@@ -953,26 +1019,9 @@ local function spawnGateBarriers(gateCf: CFrame, wallsLevel: number, parent: Fol
 		pcall(function()
 			CollectionService:AddTag(leaf, tag)
 		end)
-		local bb = Instance.new("BillboardGui")
-		bb.Name = "WE_GateHP"
-		bb.Size = UDim2.fromOffset(140, 22)
-		bb.StudsOffset = Vector3.new(0, height * 0.55, 0)
-		bb.AlwaysOnTop = false
-		bb.MaxDistance = 90
-		bb.Parent = leaf
-		local lbl = Instance.new("TextLabel")
-		lbl.Name = "Label"
-		lbl.Size = UDim2.fromScale(1, 1)
-		lbl.BackgroundColor3 = Color3.fromRGB(20, 24, 30)
-		lbl.BackgroundTransparency = 0.35
-		lbl.Text = string.format("GATE %d/%d", maxHp, maxHp)
-		lbl.TextColor3 = Color3.fromRGB(200, 220, 255)
-		lbl.TextScaled = true
-		lbl.Font = Enum.Font.GothamBold
-		lbl.Parent = bb
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 4)
-		corner.Parent = lbl
+		if i == 1 then
+			buildGateBar(leaf, gateCf, height, maxHp) -- one bar for both leaves
+		end
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.Name = "GateRepairPrompt"
 		prompt.ActionText = "Repair Gate"
@@ -1075,6 +1124,7 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 			if hitPart == g.Root or hitPart:IsDescendantOf(g.Model) then
 				if g.Alive and g.Humanoid.Health > 0 then
 					g.Humanoid:TakeDamage(amount)
+					alertBaseUnderAttack(def.PlotId, def.OwnerUserId, attacker)
 					return true
 				end
 				return false
@@ -1093,6 +1143,7 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 		end
 	end
 	updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, false)
+	alertBaseUnderAttack(def.PlotId, def.OwnerUserId, attacker)
 	if def.GateHealth <= 0 then
 		breachGate(def)
 	end
@@ -1182,14 +1233,7 @@ end
 
 local function updateDownBillboard(def: PlotDefense)
 	local left = math.max(0, (def.DownUntil or 0) - os.time())
-	for _, p in ipairs(def.GateBarriers) do
-		local bb = p:FindFirstChild("WE_GateHP")
-		local lbl = bb and bb:FindFirstChild("Label")
-		if lbl and lbl:IsA("TextLabel") then
-			lbl.Text = "DEFENSES DOWN " .. RaidConfig.FormatTime(left)
-			lbl.TextColor3 = Color3.fromRGB(255, 110, 90)
-		end
-	end
+	setGateBar(def.GateBarriers, 0, "DEFENSES DOWN " .. RaidConfig.FormatTime(left), Color3.fromRGB(255, 110, 90), true)
 end
 
 local RUBBLE: { { number } } = {
@@ -1231,12 +1275,6 @@ local function applyDefensesDown(def: PlotDefense, untilUnix: number, blast: boo
 			smoke.RiseVelocity = 4
 			smoke.Size = 2
 			smoke.Parent = t.YawPart
-		end
-		local bb = t.Model:FindFirstChild("WE_AutoGunBillboard", true)
-		local lab = bb and bb:FindFirstChildOfClass("TextLabel")
-		if lab then
-			lab.Text = "OFFLINE"
-			lab.TextColor3 = Color3.fromRGB(255, 90, 70)
 		end
 	end
 	def.GateBreached = true
@@ -1781,6 +1819,11 @@ function GateDefenseService.Init(deps: { [string]: any })
 				end
 				-- v69 F5: the gate lets the owner and clan-mates through
 				updateFriendlyGate(def, tnow)
+				-- v71: the gate bar also shows while an ATM raid runs on this plot (≈1 Hz; writes only on change)
+				if tnow - (barCheckAt[plotId] or 0) >= 1 then
+					barCheckAt[plotId] = tnow
+					updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, def.GateBreached)
+				end
 			end
 		end
 		-- (outside the pairs loop: SyncPlot replaces defenses[plotId] and can yield)

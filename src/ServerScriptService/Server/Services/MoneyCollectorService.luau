@@ -11,6 +11,12 @@
 	server hopping does not reset them. The hold runs on the server's view of the character (StepRaids) —
 	there is no raid remote. Defenses are physical: any damage cancels the hold (GateDefenseService guards /
 	AutoGuns, or the owner shooting back).
+
+	v71 (HUD v70 spec §4.2 / §5): no floating ATM card — the ATM's own screen (WE_ATMScreen) carries the balance
+	and a status line, the lime CollectCircle is the "stand here" cue. A collect is a "+$N" float at the cash pill
+	(Notification type Collect + Amount, no lane line); walking over the ATM is silent for AutoCollect owners. No
+	upsell companion lines (the client's offer toast carries the offer). A raid victim gets one Error line plus a
+	red spend float (the HUD shield chip reads WE_ShieldUntil); the thief gets a Success line plus a float.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -49,7 +55,6 @@ local AUTO_COLLECT_INTERVAL = 2.0
 local emptyCollectToastAt: { [number]: number } = {}
 
 local lastOverlap: { [string]: boolean } = {}
-local billboardCache: { [BasePart]: BillboardGui } = {}
 local attached: { [BasePart]: boolean } = {}
 
 type RaidHold = {
@@ -338,73 +343,44 @@ function MoneyCollectorService.GetRaidableBalance(victim: Player): number
 	return balance
 end
 
--- ── billboard / ATM screen ─────────────────────────────────────────────────
+-- ── ATM screen (no floating card: spec §5 "WE_CollectorBillboard … REMOVE") ──────────────────────────────
 
-local function ensureBillboard(part: BasePart): BillboardGui
-	local existing = billboardCache[part]
-	if existing and existing.Parent then
-		return existing
-	end
+-- v71: the old floating "ATM · WALK IN TO COLLECT" card (WE_CollectorBillboard: AlwaysOnTop, 100 studs, a card
+-- with a backdrop) is gone. Remove one left by an older server build or a resetmap.
+local function dropLegacyBillboard(part: BasePart)
 	local oldBb = part:FindFirstChild("WE_CollectorBillboard")
-	if oldBb and oldBb:IsA("BillboardGui") then
-		billboardCache[part] = oldBb
-		return oldBb
+	if oldBb then
+		oldBb:Destroy()
 	end
-	-- ATM-like green digit billboard
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "WE_CollectorBillboard"
-	bb.Size = UDim2.fromOffset(220, 72)
-	bb.StudsOffset = Vector3.new(0, 7.2, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 100
-	bb.Parent = part
-
-	local backdrop = Instance.new("Frame")
-	backdrop.Name = "Backdrop"
-	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(18, 22, 20)
-	backdrop.BackgroundTransparency = 0.05
-	backdrop.BorderSizePixel = 0
-	backdrop.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = backdrop
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(60, 200, 100)
-	stroke.Thickness = 2.5
-	stroke.Parent = backdrop
-
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.new(1, -10, 0, 18)
-	title.Position = UDim2.fromOffset(5, 4)
-	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 12
-	title.TextColor3 = Color3.fromRGB(200, 210, 200)
-	title.Text = "ATM · WALK IN TO COLLECT"
-	title.Parent = backdrop
-
-	local amount = Instance.new("TextLabel")
-	amount.Name = "Amount"
-	amount.Size = UDim2.new(1, -10, 0, 42)
-	amount.Position = UDim2.fromOffset(5, 24)
-	amount.BackgroundColor3 = Color3.fromRGB(6, 48, 22)
-	amount.BackgroundTransparency = 0.2
-	amount.Font = Enum.Font.Code
-	amount.TextScaled = true
-	amount.TextColor3 = Color3.fromRGB(70, 255, 120)
-	amount.Text = "$0"
-	amount.Parent = backdrop
-	local ac = Instance.new("UICorner")
-	ac.CornerRadius = UDim.new(0, 4)
-	ac.Parent = amount
-
-	billboardCache[part] = bb
-	return bb
 end
 
-local function syncAtmScreen(part: BasePart, pending: number)
+-- The status line sits on the painted ATM screen (MapSetup's WE_ATMScreen SurfaceGui): top third, the digits
+-- below it. Built once per screen; later refreshes only write changed text.
+local function ensureScreenStatus(sg: Instance, digits: TextLabel): TextLabel?
+	local st = sg:FindFirstChild("Status")
+	if st and st:IsA("TextLabel") then
+		return st
+	end
+	digits.AnchorPoint = Vector2.new(0.5, 1)
+	digits.Position = UDim2.fromScale(0.5, 1)
+	digits.Size = UDim2.fromScale(1, 0.68)
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "Status"
+	lbl.AnchorPoint = Vector2.new(0.5, 0)
+	lbl.Position = UDim2.fromScale(0.5, 0)
+	lbl.Size = UDim2.fromScale(1, 0.32)
+	lbl.BackgroundColor3 = Color3.fromRGB(6, 26, 12)
+	lbl.BackgroundTransparency = 0.1
+	lbl.BorderSizePixel = 0
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextScaled = true
+	lbl.TextColor3 = Color3.fromRGB(200, 230, 200)
+	lbl.Text = ""
+	lbl.Parent = sg
+	return lbl
+end
+
+local function syncAtmScreen(part: BasePart, pending: number, title: string?)
 	local folder = part.Parent
 	if not folder then
 		return
@@ -415,9 +391,18 @@ local function syncAtmScreen(part: BasePart, pending: number)
 	end
 	local sg = screen:FindFirstChild("WE_ATMScreen")
 	local digits = sg and sg:FindFirstChild("Digits")
-	if digits and digits:IsA("TextLabel") then
-		digits.Text = string.format("$%s", tostring(math.floor(pending)))
-		digits.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(40, 120, 70)
+	if sg and digits and digits:IsA("TextLabel") then
+		local text = string.format("$%s", tostring(math.floor(pending)))
+		if digits.Text ~= text then
+			digits.Text = text
+			digits.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(40, 120, 70)
+		end
+		if title then
+			local st = ensureScreenStatus(sg, digits)
+			if st and st.Text ~= title then
+				st.Text = title
+			end
+		end
 	end
 	local light = part:FindFirstChild("ATMGlow")
 	if light and light:IsA("PointLight") then
@@ -444,42 +429,28 @@ local function isBeingRobbed(plotId: number): boolean
 	return false
 end
 
--- Billboard title (spec §1.10): shield > being robbed > AutoCollect > walk-in.
+-- ATM screen status line (raid spec §1.10): shield > being robbed > AutoCollect > walk-in. Painted on the ATM's
+-- own screen (v71), so it reads only up close and never floats over the HUD.
 local function atmTitle(owner: Player?, plotId: number?): string
 	if owner then
 		local profile = profileOf(owner)
 		local shield = raidNum(profile, "ShieldUntil")
 		local nowUnix = os.time()
 		if shield > nowUnix then
-			return "ATM · 🛡 SHIELD " .. RaidConfig.FormatTime(shield - nowUnix)
+			return "ATM · SHIELD " .. RaidConfig.FormatTime(shield - nowUnix)
 		end
 		if plotId ~= nil and isBeingRobbed(plotId) then
-			return "⚠ ATM BEING ROBBED"
+			return "ATM BEING ROBBED!"
 		end
 		if autoCollectFlag[owner.UserId] == true then
-			return "ATM · AUTO-COLLECT (10 MIN)"
+			return "ATM · AUTO-COLLECT"
 		end
 	end
 	return "ATM · WALK IN TO COLLECT"
 end
 
 local function refreshBillboard(part: BasePart, pending: number, title: string?)
-	local bb = ensureBillboard(part)
-	local amount = bb:FindFirstChild("Amount", true)
-	if amount and amount:IsA("TextLabel") then
-		local text = if pending > 0 then string.format("$%s", tostring(math.floor(pending))) else "$0"
-		if amount.Text ~= text then
-			amount.Text = text
-			amount.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(100, 140, 110)
-		end
-	end
-	if title then
-		local lbl = bb:FindFirstChild("Title", true)
-		if lbl and lbl:IsA("TextLabel") and lbl.Text ~= title then
-			lbl.Text = title
-		end
-	end
-	syncAtmScreen(part, pending)
+	syncAtmScreen(part, pending, title)
 end
 
 local function pointInPart(hrpPos: Vector3, part: BasePart): boolean
@@ -798,8 +769,11 @@ local function completeRaid(thief: Player, victim: Player, hold: RaidHold): bool
 	local successText = string.format(T.RaidSuccess, formatCash(moved), victim.DisplayName)
 	local robbedText = string.format(T.RaidRobbed, thief.DisplayName, formatCash(moved), RaidConfig.FormatTime(R.ShieldSeconds))
 	if NotificationService then
-		NotificationService.Notify(thief, successText, "Reward", 5)
-		NotificationService.Notify(victim, robbedText, "Warn", 6)
+		-- spec §4.2: thief → Success line + "+$N" float; victim → Error line + red spend float (shield chip = HUD)
+		NotificationService.Notify(thief, successText, "Success", 5)
+		NotificationService.Notify(thief, string.format("+$%s", formatCash(moved)), "Collect", nil, moved)
+		NotificationService.Notify(victim, robbedText, "Error", 6)
+		NotificationService.Notify(victim, string.format("-$%s", formatCash(moved)), "Collect", nil, -moved)
 	end
 	pushAtmRaidState(thief, {
 		Phase = "Success",
@@ -1005,7 +979,8 @@ function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boole
 		return true, granted
 	end
 	if NotificationService then
-		NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3)
+		-- spec §4.2: type Collect + Amount → only the "+$N" float at the cash pill, never a lane line
+		NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3, granted)
 	end
 	-- v33: one-shot soft AutoCollect GamePass offer after first manual collect
 	do
@@ -1040,9 +1015,7 @@ function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boole
 						RobuxPrice = gp.RobuxPrice,
 					})
 				end
-				if NotificationService then
-					NotificationService.Notify(player, "Tired of walking to the ATM? Auto Collect available", "Info", 4.5)
-				end
+				-- (no companion Info line: the client's offer toast is the whole offer — spec §4.2)
 			end)
 		end
 	end
@@ -1084,9 +1057,7 @@ function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boole
 						RobuxPrice = gp.RobuxPrice,
 					})
 				end
-				if NotificationService then
-					NotificationService.Notify(player, "Big collect! Double your cash with 2x Cash", "Info", 4.5)
-				end
+				-- (no companion Info line: the client's offer toast is the whole offer — spec §4.2)
 			end)
 		end
 	end
@@ -1213,7 +1184,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 					emptyCollectToastAt[player.UserId] = now
 					NotificationService.Notify(
 						player,
-						"Nothing to collect yet — click the dropper or wait for passive $",
+						"Nothing to collect yet — grab the dropper cash or wait for income",
 						"Info",
 						3
 					)
@@ -1221,7 +1192,9 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 			end
 			return
 		end
-		MoneyCollectorService.Collect(player)
+		-- walking over / standing at the ATM is silent for AutoCollect owners (their loop collects every 2 s;
+		-- the number counting up is the feedback) — spec §4.2. The prompt is an explicit tap: it always floats.
+		MoneyCollectorService.Collect(player, fromPrompt ~= true and autoCollectFlag[player.UserId] == true)
 		MoneyCollectorService.RefreshForPlayer(player)
 	end
 
@@ -1232,8 +1205,8 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		attached[part] = true
 		part.CanTouch = true
 		part.CanCollide = true
-		ensureBillboard(part)
-		-- Mobile-friendly Collect prompt (standing on pad + E / tap)
+		dropLegacyBillboard(part)
+		-- Mobile-friendly Collect prompt (standing on the pad + the prompt button)
 		do
 			local existing = part:FindFirstChild("WE_CollectPrompt")
 			if existing then

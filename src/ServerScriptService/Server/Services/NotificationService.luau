@@ -16,12 +16,15 @@ function NotificationService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 end
 
-function NotificationService.Notify(player: Player, message: string, notifType: string?, duration: number?)
+--[[ amount (v71, HUD v70 spec §4.2): money this line is about. With type "Collect" the client shows no lane line,
+	only the "+$N" float at the cash pill (negative = the red spend float); other types ignore it. ]]
+function NotificationService.Notify(player: Player, message: string, notifType: string?, duration: number?, amount: number?)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.Notification) :: RemoteEvent
 	remote:FireClient(player, {
 		Message = message,
 		Type = notifType or "Info",
 		Duration = duration or 4,
+		Amount = amount,
 	})
 end
 

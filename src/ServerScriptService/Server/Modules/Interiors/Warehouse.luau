@@ -65,6 +65,7 @@ return function(ictx: any, api: any)
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 20
 		sg.LightInfluence = 1
+		sg.MaxDistance = 40 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = host
 		return sg
 	end

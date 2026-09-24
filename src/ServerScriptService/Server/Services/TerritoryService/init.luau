@@ -2,6 +2,12 @@
 --[[
 	Phase 5 — Territory control.
 	Server-authoritative stand-in-zone capture; bonuses for Economy / XP / Vehicles / Combat.
+
+	v71 (HUD v70 spec §5, roadmap W1 F): the capture marker and ring only take the owner colour (no forced Neon,
+	no transparency / size writes — World v2 owns their look); the flag is painted (SmoothPlastic) and sits at
+	basePos.Y + flagLift − 1 (oil-rig decks too); the zone label is one stud-scaled WorldLabel with the zone name
+	in the owner colour (capture % and "contested" live on the HUD capture bar); the WE_FlagBillboard diamond is
+	28 px and draws through walls only while contested (WorldLabel.SetRole). No "Capturing X..." toast.
 ]]
 
 local Players = game:GetService("Players")
@@ -12,6 +18,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
+local WorldLabel = require(Shared.Util.WorldLabel)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 
 local TerritoryRadar = require(script.TerritoryRadar)
@@ -122,19 +129,25 @@ local function syncProfileOwnership(player: Player)
 	DataService.MarkDirty(player)
 end
 
-local function ownerStateLabel(rt: TerritoryRuntime): string
-	local ot = ownerTypes()
-	if rt.Contested or rt.OwnerType == ot.Contested then
-		return "CONTESTED"
-	elseif rt.OwnerType == ot.Player then
-		local plr = Players:GetPlayerByUserId(rt.OwnerUserId)
-		return if plr then ("OWNED · " .. plr.DisplayName) else "OWNED"
-	elseif rt.OwnerType == ot.NPC then
-		return "HOSTILE NPC"
-	elseif rt.OwnerType == ot.Clan then
-		return "CLAN"
+-- Zone label: the zone name only, in the owner colour (spec §5). MapSetup's old "Label" card (name + [NEUTRAL] ·
+-- Stand to capture, 220 studs) is replaced by this one stud-scaled WorldLabel above the flag pole.
+local ZONE_LABEL_HEIGHT = 16 -- studs above the marker centre (the pole is 14 tall)
+
+local function ensureZoneLabel(rt: TerritoryRuntime, marker: BasePart): BillboardGui
+	local existing = marker:FindFirstChild("WE_ZoneLabel")
+	if existing and existing:IsA("BillboardGui") then
+		return existing
 	end
-	return "NEUTRAL · Stand to capture"
+	local legacy = marker:FindFirstChild("Label")
+	if legacy and legacy:IsA("BillboardGui") then
+		legacy:Destroy()
+	end
+	return WorldLabel.Create(marker, rt.Def.DisplayName, {
+		Name = "WE_ZoneLabel",
+		Studs = Vector2.new(8, 1.6),
+		Offset = Vector3.new(0, ZONE_LABEL_HEIGHT, 0),
+		MaxDistance = 40,
+	})
 end
 
 local function updateMarkerVisual(rt: TerritoryRuntime)
@@ -145,11 +158,8 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	local ot = ownerTypes()
 	local contested = rt.Contested or rt.OwnerType == ot.Contested
 	local color: Color3
-	local markerTransparency = 0.45
 	local flagTransparency = 0.15
-	local flagMaterial = Enum.Material.Neon
-	local ringTransparency = 0.65
-	local flagLift = 12 -- studs above ground for flag center
+	local flagLift = 12 -- studs above the marker for the flag centre (+ basePos.Y − 1 below)
 
 	if contested then
 		-- v38: pulse between both nation colors when two contesting players known
@@ -166,39 +176,31 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		else
 			color = Color3.fromRGB(255, 140, 35)
 		end
-		markerTransparency = 0.28
 		flagTransparency = 0.05
-		ringTransparency = 0.35
 		flagLift = 13.5
 	elseif rt.OwnerType == ot.Player then
 		local nation = if NationColorService and NationColorService.GetColor then NationColorService.GetColor(rt.OwnerUserId) else nil
 		color = nation or Color3.fromRGB(55, 210, 95)
-		markerTransparency = 0.35
 		flagTransparency = 0.0
-		ringTransparency = 0.45
 		flagLift = 14.5
 	elseif rt.OwnerType == ot.NPC then
 		color = Color3.fromRGB(210, 45, 45)
-		markerTransparency = 0.32
 		flagTransparency = 0.05
-		ringTransparency = 0.4
 		flagLift = 13.2
 	elseif rt.OwnerType == ot.Clan then
 		color = Color3.fromRGB(70, 120, 240)
-		markerTransparency = 0.35
 		flagTransparency = 0.0
-		ringTransparency = 0.45
 		flagLift = 14.0
 	else
 		color = rt.Def.Color
-		flagMaterial = Enum.Material.SmoothPlastic
 		flagTransparency = 0.35
 		flagLift = 11.0
 	end
 
-	marker.Color = color
-	marker.Transparency = markerTransparency
-	marker.Material = Enum.Material.Neon
+	-- v71: colour only (no forced Neon / transparency: World v2 decides how the marker looks)
+	if marker.Color ~= color then
+		marker.Color = color
+	end
 	marker:SetAttribute("OwnerType", if contested then ot.Contested else rt.OwnerType)
 	marker:SetAttribute("OwnerUserId", rt.OwnerUserId)
 	marker:SetAttribute("CaptureProgress", rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds))
@@ -215,12 +217,13 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	local flag = parent:FindFirstChild(tid .. "_Flag")
 	if flag and flag:IsA("BasePart") then
 		flag.Color = color
-		flag.Material = flagMaterial
+		flag.Material = Enum.Material.SmoothPlastic -- v71: painted, not neon (not a light source)
 		flag.Transparency = flagTransparency
-		-- Raise owned flags; lower neutral so ownership reads at a glance
+		-- Raise owned flags; lower neutral so ownership reads at a glance. Height from the marker, so a flag on
+		-- an oil-rig deck (marker high above the sea) stays on its pole instead of dropping to y ≈ 12.
 		local basePos = marker.Position
 		flag.Size = if contested then Vector3.new(6.2, 3.6, 0.3) elseif rt.OwnerType == ot.Neutral then Vector3.new(4.2, 2.4, 0.22) else Vector3.new(5.5, 3.2, 0.28)
-		flag.Position = Vector3.new(basePos.X + flag.Size.X * 0.5 + 0.2, flagLift, basePos.Z)
+		flag.Position = Vector3.new(basePos.X + flag.Size.X * 0.5 + 0.2, basePos.Y + flagLift - 1, basePos.Z)
 		-- Ownership flash light (brief)
 		local lightInst = flag:FindFirstChild("WE_OwnerLight")
 		local light: PointLight
@@ -248,10 +251,11 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 			stripe.Transparency = if rt.OwnerType == ot.Neutral then 0.45 else 0.08
 		end
 
-		-- Floating nation-color flag marker (AlwaysOnTop billboard) for long-range read
+		-- Nation-colour diamond over the flag: 28 px, MaxDistance <= 40, through walls ONLY while contested
+		-- (WorldLabel.SetRole "contested"; WorldLabelPolicy honours the role). Range is set once, never per refresh.
 		local flagBbInst = flag:FindFirstChild("WE_FlagBillboard")
 		local flagBb: BillboardGui
-		if flagBbInst and flagBbInst:IsA("BillboardGui") then
+		if flagBbInst and flagBbInst:IsA("BillboardGui") and flagBbInst:GetAttribute("WE_V71") == true then
 			flagBb = flagBbInst
 		else
 			if flagBbInst then
@@ -259,11 +263,12 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 			end
 			local created = Instance.new("BillboardGui")
 			created.Name = "WE_FlagBillboard"
-			created.Size = UDim2.fromOffset(52, 52)
+			created.Size = UDim2.fromOffset(28, 28)
 			created.StudsOffset = Vector3.new(0, 2.2, 0)
-			created.AlwaysOnTop = true
-			created.MaxDistance = 160
-			created.Parent = flag
+			created.AlwaysOnTop = false
+			created.LightInfluence = 0
+			created.MaxDistance = 40
+			created:SetAttribute("WE_V71", true)
 			local diamond = Instance.new("Frame")
 			diamond.Name = "NationDiamond"
 			diamond.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -277,10 +282,14 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 			ds.Thickness = 2
 			ds.Color = Color3.fromRGB(255, 255, 255)
 			ds.Parent = diamond
+			created.Parent = flag
 			flagBb = created
 		end
-		flagBb.Enabled = rt.OwnerType ~= ot.Neutral or contested
-		flagBb.MaxDistance = if contested then 180 else 150
+		local showFlag = rt.OwnerType ~= ot.Neutral or contested
+		if flagBb.Enabled ~= showFlag then
+			flagBb.Enabled = showFlag
+		end
+		WorldLabel.SetRole(flagBb, if contested then "contested" else nil)
 		local diamond = flagBb:FindFirstChild("NationDiamond")
 		if diamond and diamond:IsA("Frame") then
 			diamond.BackgroundColor3 = color
@@ -291,13 +300,10 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		end
 	end
 
+	-- v71: the ring writes colour only (roadmap W1 F; no Neon while contested, no size / transparency churn)
 	local ring = parent:FindFirstChild(tid .. "_Ring")
-	if ring and ring:IsA("BasePart") then
+	if ring and ring:IsA("BasePart") and ring.Color ~= color then
 		ring.Color = color
-		ring.Transparency = ringTransparency
-		ring.Material = if contested then Enum.Material.Neon else Enum.Material.SmoothPlastic
-		local d = (rt.Def.Radius or 30) * 2
-		ring.Size = if contested then Vector3.new(d + 14, 0.55, d + 14) else Vector3.new(d + 8, 0.4, d + 8)
 	end
 
 	local pole = parent:FindFirstChild(tid .. "_FlagPole")
@@ -305,114 +311,12 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		pole.Color = if contested then Color3.fromRGB(180, 90, 30) elseif rt.OwnerType == ot.Neutral then Color3.fromRGB(55, 55, 55) else Color3.fromRGB(40, 45, 40)
 	end
 
-	-- Billboard state line (CONTESTED reads loud — progress + enemy presence)
-	local labelGui = marker:FindFirstChild("Label")
-	if labelGui and labelGui:IsA("BillboardGui") then
-		local backdrop = labelGui:FindFirstChild("Backdrop")
-		local textLabel = backdrop and backdrop:FindFirstChild("Text")
-		local pct = math.floor((rt.Progress / math.max(1, rt.Def.CaptureTimeSeconds)) * 100)
-		if contested then
-			-- Enlarge billboard while contested so it reads at range
-			labelGui.Size = UDim2.fromOffset(220, 64)
-			labelGui.StudsOffset = Vector3.new(0, 10, 0)
-			labelGui.MaxDistance = 120
-			if backdrop and backdrop:IsA("Frame") then
-				backdrop.BackgroundColor3 = Color3.fromRGB(55, 28, 8)
-				backdrop.BackgroundTransparency = 0.08
-			end
-			-- Ensure a second "CONTESTED" badge line
-			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
-			if backdrop and (not badge or not badge:IsA("TextLabel")) then
-				if badge then
-					badge:Destroy()
-				end
-				local b = Instance.new("TextLabel")
-				b.Name = "ContestedBadge"
-				b.BackgroundTransparency = 1
-				b.Position = UDim2.fromScale(0, 0)
-				b.Size = UDim2.new(1, 0, 0.42, 0)
-				b.Font = Enum.Font.GothamBold
-				b.TextScaled = true
-				b.TextColor3 = Color3.fromRGB(255, 170, 60)
-				b.TextStrokeTransparency = 0.4
-				b.Text = "⚠ CONTESTED"
-				b.Parent = backdrop
-				badge = b
-				if textLabel and textLabel:IsA("TextLabel") then
-					textLabel.Position = UDim2.fromScale(0, 0.42)
-					textLabel.Size = UDim2.new(1, 0, 0.58, 0)
-				end
-			elseif badge and badge:IsA("TextLabel") then
-				badge.Visible = true
-				badge.Text = "⚠ CONTESTED"
-			end
-			if textLabel and textLabel:IsA("TextLabel") then
-				local enemyNote = "enemy present"
-				textLabel.Text = string.format("%s · %d%% · %s", rt.Def.DisplayName, pct, enemyNote)
-				textLabel.TextColor3 = Color3.fromRGB(255, 210, 140)
-			end
-		else
-			-- v34: brief progress/owner chip when capture in progress; otherwise owner state
-			local capturing = (rt.Progress or 0) > 0.02 and (rt.CapturingUserId or 0) > 0
-			labelGui.Size = if capturing then UDim2.fromOffset(200, 56) else UDim2.fromOffset(180, 40)
-			labelGui.StudsOffset = Vector3.new(0, 8, 0)
-			labelGui.MaxDistance = if capturing then 90 else 70
-			if backdrop and backdrop:IsA("Frame") then
-				backdrop.BackgroundColor3 = if capturing then Color3.fromRGB(28, 40, 22) else Color3.fromRGB(12, 14, 16)
-				backdrop.BackgroundTransparency = 0.18
-			end
-			local badge = backdrop and backdrop:FindFirstChild("ContestedBadge")
-			if badge and badge:IsA("GuiObject") then
-				badge.Visible = false
-			end
-			-- Owner / progress chip
-			local chip = backdrop and backdrop:FindFirstChild("OwnerChip")
-			if backdrop and (not chip or not chip:IsA("TextLabel")) then
-				if chip then chip:Destroy() end
-				local c = Instance.new("TextLabel")
-				c.Name = "OwnerChip"
-				c.BackgroundTransparency = 1
-				c.Position = UDim2.fromScale(0, 0)
-				c.Size = UDim2.new(1, 0, 0.4, 0)
-				c.Font = Enum.Font.GothamBold
-				c.TextScaled = true
-				c.TextStrokeTransparency = 0.45
-				c.Parent = backdrop
-				chip = c
-			end
-			if chip and chip:IsA("TextLabel") then
-				if capturing then
-					chip.Visible = true
-					chip.Text = string.format("CAPTURING · %d%%", pct)
-					chip.TextColor3 = Color3.fromRGB(200, 230, 120)
-					if textLabel and textLabel:IsA("TextLabel") then
-						textLabel.Position = UDim2.fromScale(0, 0.4)
-						textLabel.Size = UDim2.new(1, 0, 0.6, 0)
-					end
-				else
-					chip.Visible = true
-					chip.Text = ownerStateLabel(rt)
-					chip.TextColor3 = if rt.OwnerType == ot.Player then Color3.fromRGB(140, 230, 160) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 150, 140) else Color3.fromRGB(180, 180, 180)
-					if textLabel and textLabel:IsA("TextLabel") then
-						textLabel.Position = UDim2.fromScale(0, 0.4)
-						textLabel.Size = UDim2.new(1, 0, 0.6, 0)
-					end
-				end
-			end
-			if textLabel and textLabel:IsA("TextLabel") then
-				if capturing then
-					textLabel.Text = string.format("%s · was %s", rt.Def.DisplayName, ownerStateLabel(rt))
-				else
-					textLabel.Text = rt.Def.DisplayName
-				end
-				textLabel.TextColor3 = if rt.OwnerType == ot.Player then Color3.fromRGB(160, 255, 180) elseif rt.OwnerType == ot.NPC then Color3.fromRGB(255, 160, 150) else Color3.new(1, 1, 1)
-			end
-		end
-		local stroke = backdrop and backdrop:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			stroke.Color = color
-			stroke.Thickness = if contested then 2 else 1
-		end
+	-- Zone label: name only, owner colour (neutral = white); % / contested are on the HUD capture bar
+	local zoneLabel = ensureZoneLabel(rt, marker)
+	local title = zoneLabel:FindFirstChild("Title")
+	local nameColor = if contested then Color3.fromRGB(255, 176, 48) elseif rt.OwnerType == ot.Neutral then Color3.new(1, 1, 1) else color
+	if title and title:IsA("TextLabel") and title.TextColor3 ~= nameColor then
+		title.TextColor3 = nameColor
 	end
 end
 
@@ -853,9 +757,7 @@ function TerritoryService.BeginCapture(player: Player, territoryId: any): (boole
 		end
 		return false, "NotInZone"
 	end
-	if NotificationService then
-		NotificationService.Notify(player, "Capturing " .. rt.Def.DisplayName .. "...", "Info")
-	end
+	-- (no "Capturing X..." toast per request: the HUD capture bar shows it — spec §4.2)
 	TerritoryService.PushPlayer(player)
 	return true, nil
 end

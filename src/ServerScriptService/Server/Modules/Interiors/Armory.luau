@@ -45,6 +45,7 @@ return function(ictx: any, api: any)
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 40
 		sg.LightInfluence = 1
+		sg.MaxDistance = 40 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = host
 		if stripe then
 			local band = Instance.new("Frame")
@@ -278,6 +279,7 @@ return function(ictx: any, api: any)
 			sg.Face = N.Back
 			sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 			sg.PixelsPerStud = 40
+			sg.MaxDistance = 40 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 			sg.Parent = target
 			for i, s in ipairs({ 0.86, 0.66, 0.46, 0.26, 0.1 }) do
 				local ring = Instance.new("Frame")
@@ -298,10 +300,11 @@ return function(ictx: any, api: any)
 
 		-- Ammo storage on the west side: wall shelving + a freestanding row (third row at L5), pallets
 		shelving(X0 + 0.65, 3.0, 9.6, { N.Right }, { { 1, -1.6, 2.4, 1.3 }, { 1, 1.4, 2.4, 1.3 }, { 2, 0, 1.8, 1.1 } })
-		shelving(-8.5, -3.8, 3.4, { N.Left, N.Right }, { { 1, -1.6, 2.6, 1.3 }, { 2, 0.6, 2.0, 1.1 }, { 3, -1.4, 1.8, 1.0 } })
+		-- v70: crates are stencilled on the face toward the open floor only (SurfaceGui budget; was both faces)
+		shelving(-8.5, -3.8, 3.4, { N.Right }, { { 1, -1.6, 2.6, 1.3 }, { 2, 0.6, 2.0, 1.1 }, { 3, -1.4, 1.8, 1.0 } })
 		if lv >= 5 then
-			shelving(-3.5, -3.8, 3.4, { N.Left, N.Right }, { { 1, 0, 3.0, 1.3 }, { 2, -1.5, 2.0, 1.1 }, { 3, 0.8, 1.8, 1.0 } })
+			shelving(-3.5, -3.8, 3.4, { N.Right }, { { 1, 0, 3.0, 1.3 }, { 2, -1.5, 2.0, 1.1 }, { 3, 0.8, 1.8, 1.0 } })
 		end
-		pallet(0.2, y2, 7.2, { N.Front, N.Left }, "7.62 MM", true)
+		pallet(0.2, y2, 7.2, { N.Front }, "7.62 MM", true)
 	end
 end

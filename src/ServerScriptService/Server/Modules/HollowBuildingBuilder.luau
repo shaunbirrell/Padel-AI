@@ -201,13 +201,30 @@ local function light(host: BasePart, range: number, brightness: number, color: C
 	l.Parent = host
 end
 
-local function surfaceText(host: BasePart, face: Enum.NormalId, lines: { string }, textColor: Color3, bg: Color3, font: Enum.Font?)
+--[[ v70 light budget (HUD spec §5, mobile P1-12; CLAUDE.md: at most 40 lights per base at L5, was 120). The fitting
+	parts all stay; only these carry no PointLight:
+	  - ceiling fittings other than the one nearest each floor's centre (one light per floor);
+	  - entry lamps and terminal lamps (the lamp part still reads as lit);
+	  - red warning beacons on masts / pylons / towers (WARNING_BEACONS);
+	  - every second fitting of the same name inside one interior / installation module (a row of 3 hangar lamps
+	    keeps 2, a pair of floodlamps keeps 1).
+	StructureVisualConfig.BuildingLights.LightEveryOther = false turns the last rule off. ]]
+local WARNING_BEACONS: { [string]: boolean } = { TowerBeacon = true, PylonBeacon = true, TowerLamp = true, MastBeacon = true }
+local TERMINAL_PROMPT_RANGE = 12 -- mobile P1-19: 8 → 12 studs (the thumbstick overshoots a small range)
+
+-- v70: every SurfaceGui draws near-only (CLAUDE.md budget: MaxDistance <= 80). Screens and signs inside a building
+-- only need the room (SURFACE_NEAR); outdoor building / installation signs SURFACE_FAR.
+local SURFACE_NEAR = 40
+local SURFACE_FAR = 80
+
+local function surfaceText(host: BasePart, face: Enum.NormalId, lines: { string }, textColor: Color3, bg: Color3, font: Enum.Font?, maxDistance: number?)
 	local sg = Instance.new("SurfaceGui")
 	sg.Name = "WE_Screen"
 	sg.Face = face
 	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	sg.PixelsPerStud = 40
 	sg.LightInfluence = 0
+	sg.MaxDistance = math.min(maxDistance or SURFACE_NEAR, SURFACE_FAR)
 	sg.Parent = host
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.fromScale(1, 1)
@@ -363,14 +380,14 @@ local function terminal(ctx: Ctx, name: string, pos: Vector3, facingDeg: number,
 	local body = part(ctx, name, Vector3.new(2.4, 3.2, 1.2), frame * CFrame.new(0, 1.6, 0), col.Dark, Enum.Material.Metal)
 	local screen = part(ctx, name .. "Screen", Vector3.new(2.1, 1.3, 0.14), frame * CFrame.new(0, 3.55, 0.3) * CFrame.Angles(math.rad(-20), 0, 0), Color3.fromRGB(10, 24, 14), Enum.Material.SmoothPlastic, false)
 	surfaceText(screen, Enum.NormalId.Back, screenLines or { string.upper(objectText), "TAP TO OPEN" }, col.Screen, Color3.fromRGB(8, 20, 12), Enum.Font.GothamBold)
-	local lamp = part(ctx, name .. "Lamp", Vector3.new(0.4, 0.2, 0.4), frame * CFrame.new(0.8, 3.25, 0.35), col.Screen, Enum.Material.Neon, false)
-	light(lamp, 6, 0.8, col.Screen)
+	-- the lamp is a small interactive cue (kept Neon, spec §5); no PointLight (v70 light budget)
+	part(ctx, name .. "Lamp", Vector3.new(0.4, 0.2, 0.4), frame * CFrame.new(0.8, 3.25, 0.35), col.Screen, Enum.Material.Neon, false)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "WE_PanelPrompt"
 	prompt.ActionText = actionText
 	prompt.ObjectText = objectText
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 8
+	prompt.MaxActivationDistance = TERMINAL_PROMPT_RANGE
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.F
 	prompt:SetAttribute("WE_OpenPanel", panel)
@@ -385,6 +402,20 @@ local function makeApi(ctx: Ctx, tag: string): any
 		p:SetAttribute(tag, true)
 		return p
 	end
+	-- v70 light budget (see WARNING_BEACONS): modules call api.light per fitting; the budget rules apply here
+	local fittings: { [string]: number } = {}
+	local everyOther = LIGHTS.LightEveryOther ~= false
+	local function budgetLight(host: BasePart, range: number, brightness: number, color: Color3)
+		if WARNING_BEACONS[host.Name] then
+			return
+		end
+		local n = (fittings[host.Name] or 0) + 1
+		fittings[host.Name] = n
+		if everyOther and n % 2 == 0 then
+			return
+		end
+		light(host, range, brightness, color)
+	end
 	local api = {
 		box = function(name: string, size: Vector3, pos: Vector3, color: Color3, material: Enum.Material, collide: boolean?): Part
 			return tagged(box(ctx, name, size, pos, color, material, collide))
@@ -392,8 +423,10 @@ local function makeApi(ctx: Ctx, tag: string): any
 		part = function(name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): Part
 			return tagged(part(ctx, name, size, ctx.origin * localCF, color, material, collide))
 		end,
-		light = light,
-		surfaceText = surfaceText,
+		light = budgetLight,
+		surfaceText = function(host: BasePart, face: Enum.NormalId, lines: { string }, textColor: Color3, bg: Color3, font: Enum.Font?, maxDistance: number?)
+			surfaceText(host, face, lines, textColor, bg, font, maxDistance or (if tag == "WE_Installation" then SURFACE_FAR else SURFACE_NEAR))
+		end,
 		chair = function(pos: Vector3, facing: Vector3)
 			local before = #ctx.model:GetChildren()
 			chair(ctx, pos, facing)
@@ -640,8 +673,8 @@ local function build(ctx: Ctx)
 		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX - doorW * 0.5 - 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
 		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX + doorW * 0.5 + 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
 	end
-	local entryLamp = box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
-	light(entryLamp, 14, 1.4, col.Light)
+	-- entry lamp fitting only (v70 light budget: no PointLight)
+	box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 	local signW = math.min(W - 6, 16)
 	local signY = math.min(awnY + 1.6, y1 + H1 - 1.2)
 	local signX = c.SignX or 0
@@ -651,7 +684,7 @@ local function build(ctx: Ctx)
 	end
 	local sign = box(ctx, "Sign", Vector3.new(signW, 2.0, 0.3), Vector3.new(signX, signY, hd + 0.15), col.Dark, Enum.Material.Metal, false)
 	-- NormalId.Back is the +Z face = the building front
-	surfaceText(sign, Enum.NormalId.Back, { c.SignText or "COMMAND CENTER" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
+	surfaceText(sign, Enum.NormalId.Back, { c.SignText or "COMMAND CENTER" }, col.Accent, col.Dark, Enum.Font.GothamBlack, SURFACE_FAR)
 	if not garage then
 		sandbags(ctx, doorX + doorW * 0.5 + 1.6, doorX + doorW * 0.5 + 6.5, hd + 1.6, 0)
 	end
@@ -664,24 +697,31 @@ local function build(ctx: Ctx)
 		box(ctx, "FlagPole", Vector3.new(0.4, poleH, 0.4), Vector3.new(flagX, poleH * 0.5, hd + 1), col.Metal, Enum.Material.Metal)
 		box(ctx, "Flag", Vector3.new(0.12, 3.6, 6), Vector3.new(flagX, poleH - 2.2, hd + 1 - 3.2), col.Flag, Enum.Material.Fabric, false)
 		if goldCap then
-			box(ctx, "FlagTip", Vector3.new(0.9, 0.9, 0.9), Vector3.new(flagX, poleH + 0.4, hd + 1), col.Gold, Enum.Material.Neon, false).Shape = Enum.PartType.Ball
+			-- v70: painted gold ball (was Neon: spec §5, no neon that is not a light source)
+			box(ctx, "FlagTip", Vector3.new(0.9, 0.9, 0.9), Vector3.new(flagX, poleH + 0.4, hd + 1), col.Gold, Enum.Material.SmoothPlastic, false).Shape = Enum.PartType.Ball
 		end
 	end
 
-	-- Ceiling lights (ground floor): a row along the building, spaced ~9 studs
+	-- Ceiling lights: fittings in two rows (ground) / one row (upper), spaced ~9 studs. v70 light budget: only the
+	-- fitting nearest each floor's centre carries a PointLight (one light per floor; the rest are unlit fittings).
 	local lampCount = math.max(2, math.floor(W / 9))
+	local litIndex = math.ceil(lampCount / 2)
 	for i = 1, lampCount do
 		local lx = -hw + W * (i - 0.5) / lampCount
-		for _, lz in ipairs({ -hd * 0.4, hd * 0.35 }) do
+		for row, lz in ipairs({ -hd * 0.4, hd * 0.35 }) do
 			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y1 + H1 - 0.15, lz), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
-			light(lamp, 20, 1.0, col.Light)
+			if i == litIndex and row == 1 then
+				light(lamp, 20, 1.0, col.Light)
+			end
 		end
 	end
 	if twoStory then
 		for i = 1, lampCount do
 			local lx = -hw + W * (i - 0.5) / lampCount
 			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y2 + H2 - 0.15, hd * 0.3), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
-			light(lamp, 18, 1.0, col.Light)
+			if i == litIndex then
+				light(lamp, 18, 1.0, col.Light)
+			end
 		end
 	end
 
@@ -706,7 +746,7 @@ local function build(ctx: Ctx)
 		local aLamp = box(ctx, "CeilingLight", Vector3.new(3, 0.2, 1), Vector3.new(axc, y1 + annexH - 0.15, annexZc), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 		light(aLamp, 16, 1.1, col.Light)
 		local signA = box(ctx, "AnnexSign", Vector3.new(5, 1.2, 0.25), Vector3.new(axc, y1 + annexH - 1.2, az1 + 0.15), col.Dark, Enum.Material.Metal, false)
-		surfaceText(signA, Enum.NormalId.Back, { c.AnnexSignText or "COMMS" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
+		surfaceText(signA, Enum.NormalId.Back, { c.AnnexSignText or "COMMS" }, col.Accent, col.Dark, Enum.Font.GothamBlack, SURFACE_FAR)
 
 		local mx, mz = -hw + 2, -hd + 2
 		box(ctx, "MastBase", Vector3.new(1.6, 1, 1.6), Vector3.new(mx, roofTop + 0.5, mz), col.Metal, Enum.Material.Metal)
@@ -714,9 +754,7 @@ local function build(ctx: Ctx)
 		for i = 1, 3 do
 			box(ctx, "MastBar", Vector3.new(2.4 - i * 0.5, 0.15, 0.15), Vector3.new(mx, roofTop + 3 + i * 3.2, mz), col.Metal, Enum.Material.Metal, false)
 		end
-		local beacon = box(ctx, "MastBeacon", Vector3.new(0.7, 0.7, 0.7), Vector3.new(mx, roofTop + 15.3, mz), Color3.fromRGB(220, 50, 40), FIXTURE_MATERIAL, false)
-		beacon.Shape = Enum.PartType.Ball
-		light(beacon, 10, 2, Color3.fromRGB(255, 60, 40))
+		-- v70 (HUD spec §5): no red beacon ball / light on the mast top
 
 		for _, fx in ipairs({ -hw + 1, hw - 1 }) do
 			box(ctx, "Floodlight", Vector3.new(1.2, 0.8, 0.8), Vector3.new(fx, roofTop + parH + 0.8, hd - 0.2), col.Metal, Enum.Material.Metal, false)
@@ -727,6 +765,7 @@ local function build(ctx: Ctx)
 			spot.Range = math.min(30, LIGHTS.SpotMaxRange or 30)
 			spot.Brightness = 1.5 * (LIGHTS.BrightnessScale or 1)
 			spot.Color = col.Light
+			spot.Shadows = false
 			spot.Parent = lens
 		end
 	end

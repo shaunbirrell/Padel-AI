@@ -606,7 +606,7 @@ function ShopController.Init()
 	shopListFrame = list
 	local weaponList = makeList(
 		"Weapons",
-		"Weapons cost in-game Cash. EQUIP owned weapons here; draw them from the hotbar (tap a slot or press 1-4)."
+		"Weapons cost in-game Cash. EQUIP owned weapons here; draw them from the hotbar (tap a slot" .. (if HudLayout.PrefersKeys() then " or press 1-4)." else ").")
 	)
 	selectTab(activeTab)
 
@@ -1000,6 +1000,11 @@ function ShopController.Init()
 					if label and label:IsA("TextLabel") then
 						label.Text = "OWNED"
 						label.TextColor3 = Color3.fromRGB(180, 255, 160)
+					end
+					-- v71: the server tag is a two-line WorldLabel ("Auto Collect" / "R$"): no price line under OWNED
+					local sub = bb:FindFirstChild("Sub")
+					if sub and sub:IsA("TextLabel") and sub ~= label then
+						sub.Visible = false
 					end
 					part.LocalTransparencyModifier = 0.45
 					part:SetAttribute("WE_LocalOwned", true)

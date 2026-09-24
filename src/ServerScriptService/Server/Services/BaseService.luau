@@ -420,11 +420,6 @@ export type PurchaseOpts = {
 
 local noConsoleWarned: { [string]: boolean } = {}
 
-local function structureDisplayName(structureId: any): string
-	local def = if typeof(structureId) == "string" then BaseConfig.Structures[structureId] else nil
-	return if def then def.DisplayName else tostring(structureId)
-end
-
 --[[ v71: is the player at this structure's console on THEIR plot (server's view of the character)?
 	Returns (ok, reason, horizontalDistance?). reason: Ok | NoPlot | ConsoleLocator.Reason
 	(NoCharacter | Dead | Seated | NoConsole | WrongPart | TooFar | WrongFloor | OtherNearer). ]]
@@ -1522,42 +1517,32 @@ function BaseService.Init(deps: { [string]: any })
 		if result.Ok then
 			local def = BaseConfig.Structures[structureId :: string]
 			local name = if def then def.DisplayName else tostring(structureId)
+			-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
 			NotificationService.Notify(
 				player,
-				string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
+				string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
 				"Success",
 				3.5
 			)
 		else
+			-- v71 (HUD v70 spec §4.1 / §4.2): one failed purchase = one line. The client already turns PurchaseResult /
+			-- WE_BuyAck into that line (WorldPromptController), so the server adds a Warn only for reasons the
+			-- client cannot see or word right: a rate-limited tap, a profile still loading, a full server.
 			local err = result.Error or "Failed"
-			local msg = if err == "InsufficientCash"
-				then "Not enough cash"
-				elseif err == "InsufficientGold"
-				then "Not enough gold"
-				elseif err == "MaxLevel"
-				then "Already at MAX level"
-				elseif err == "MissingRequirement"
-				then "Missing prerequisite structure"
-				elseif err == "UnknownStructure" or err == "InvalidStructure"
-				then "Unknown structure"
-				elseif err == "NoPlot"
-				then NO_PLOT_BUY_MESSAGE
-				elseif err == "NotAtConsole"
-				then string.format(ConsoleBuyConfig.Text.NotAtConsole, structureDisplayName(structureId))
-				elseif err == "NoProfile"
+			local msg: string? = if err == "NoProfile"
 				then "Profile still loading — try BUY again"
-				elseif err == "NoDataService"
-				then "Buy failed — server data not ready, try again"
 				elseif err == "RateLimited"
 				then "Buying too fast — wait a moment"
-				elseif err == "ServerError"
-				then "Buy failed — server error, try again"
-				else ("Purchase failed: " .. tostring(err))
-			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
-			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
-			else
-				NotificationService.Notify(player, msg, "Warn", 3.5)
+				elseif err == "NoPlot"
+				then NO_PLOT_BUY_MESSAGE -- only the server knows every base is taken
+				else nil
+			if msg then
+				local key = "basebuy|" .. err .. "|" .. tostring(structureId)
+				if NotificationService.NotifyThrottled then
+					NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
+				else
+					NotificationService.Notify(player, msg, "Warn", 3.5)
+				end
 			end
 		end
 	end

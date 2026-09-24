@@ -83,6 +83,7 @@ return function(ictx: any, api: any)
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 20
 		sg.LightInfluence = 1
+		sg.MaxDistance = 40 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = host
 		for i = 0, n - 1 do
 			local f = Instance.new("Frame")
@@ -102,6 +103,7 @@ return function(ictx: any, api: any)
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 20
 		sg.LightInfluence = if glow then 0 else 1
+		sg.MaxDistance = 40 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = host
 		local frame = Instance.new("Frame")
 		frame.Size = UDim2.fromScale(1, 1)

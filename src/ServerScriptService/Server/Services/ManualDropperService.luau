@@ -2,6 +2,10 @@
 --[[
 	Early-game manual cash droppers at each plot (Money Collector + Training Yard).
 	ClickDetector / ProximityPrompt → AccruePendingCash. Server cooldown + rate limit.
+
+	v71 (HUD v70 spec §5): the "$15" tag and the "+$15" pop are Shared/Util/WorldLabel labels owned by the plot's
+	owner (the client filter hides them for everyone else), stud-scaled, never AlwaysOnTop. The plate keeps its
+	glow but no PointLight (light budget).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -12,6 +16,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local ManualDropperConfig = require(Shared.Configs.ManualDropperConfig)
+local WorldLabel = require(Shared.Util.WorldLabel)
 
 local ManualDropperService = {}
 
@@ -21,9 +26,13 @@ local RateLimitService: any = nil
 local VisualAssetService: any = nil
 local TutorialService: any = nil
 local NotificationService: any = nil
+local BaseService: any = nil
 
 local TAG_COLLECTOR = Constants.Tags.MoneyCollector
 local TAG_DROPPER = "WE_ManualDropper"
+
+-- owner-only tag on a plate nobody owns yet: a UserId no player has (the client filter hides it for everyone)
+local NOBODY = -1
 
 local lastAwardAt: { [string]: number } = {}
 local wired: { [BasePart]: boolean } = {}
@@ -87,63 +96,49 @@ local function ownsPlot(player: Player, plotId: any): boolean
 	return profile.BasePlotId == plotId
 end
 
-local function spawnFloatingCash(parent: Instance, amount: number, at: Vector3)
-	local anchor = Instance.new("Part")
-	anchor.Name = "WE_DropCashPop"
-	anchor.Size = Vector3.new(0.2, 0.2, 0.2)
-	anchor.Transparency = 1
-	anchor.Anchored = true
-	anchor.CanCollide = false
-	anchor.CanQuery = false
-	anchor.CanTouch = false
-	anchor.CFrame = CFrame.new(at + Vector3.new(0, 2.2, 0))
-	anchor.Parent = parent
-
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "CashPop"
-	bb.Size = UDim2.fromOffset(132, 44)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 90
-	bb.Parent = anchor
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(80, 255, 120)
-	label.TextStrokeTransparency = 0.25
-	label.TextStrokeColor3 = Color3.fromRGB(8, 36, 14)
-	label.Text = string.format("+$%d", amount)
-	label.Parent = bb
-	-- Competitor-style floating green $ pop (glow stroke)
-	local glow = Instance.new("UIStroke")
-	glow.Name = "CashPopGlow"
-	glow.Color = Color3.fromRGB(40, 200, 80)
-	glow.Thickness = 1.4
-	glow.Transparency = 0.35
-	glow.Parent = label
+-- "+$15" rising from the plate — only the player who grabbed it sees it (owner-only WorldLabel)
+local function spawnFloatingCash(dropper: BasePart, amount: number, ownerUserId: number)
+	local top = dropper.Size.Y * 0.5
+	local bb = WorldLabel.Create(dropper, string.format("+$%d", amount), {
+		Name = "CashPop",
+		Color = Color3.fromRGB(80, 255, 120),
+		TextSize = 20,
+		Studs = Vector2.new(3, 1.2),
+		Offset = Vector3.new(0, top + 1.2, 0),
+		MaxDistance = 30,
+		OwnerUserId = ownerUserId,
+	})
+	local label = bb:FindFirstChild("Title")
+	if label and label:IsA("TextLabel") then
+		-- Competitor-style $ pop: dark green glow outline (replaces the ink text stroke on this label)
+		local glow = Instance.new("UIStroke")
+		glow.Name = "CashPopGlow"
+		glow.Color = Color3.fromRGB(8, 36, 14)
+		glow.Thickness = 1.4
+		glow.Parent = label
+	end
 
 	local rise = ManualDropperConfig.PopupRiseStuds or 3.2
 	local dur = ManualDropperConfig.PopupDuration or 0.55
 	task.spawn(function()
-		local steps = 10
+		local steps = 6
 		for i = 1, steps do
-			if not anchor.Parent then
+			if not bb.Parent then
 				return
 			end
 			local t = i / steps
-			anchor.CFrame = CFrame.new(at + Vector3.new(0, 2.2 + rise * t, 0))
-			label.TextTransparency = t * 0.85
-			label.TextStrokeTransparency = 0.35 + t * 0.55
+			bb.StudsOffsetWorldSpace = Vector3.new(0, top + 1.2 + rise * t, 0)
+			if label and label:IsA("TextLabel") then
+				label.TextTransparency = t * 0.85
+			end
 			task.wait(dur / steps)
 		end
-		anchor:Destroy()
+		bb:Destroy()
 	end)
 
 	pcall(function()
 		if VisualAssetService and VisualAssetService.PlayMoneyBagFX then
-			VisualAssetService.PlayMoneyBagFX(at + Vector3.new(0, 1.5, 0), parent)
+			VisualAssetService.PlayMoneyBagFX(dropper.Position + Vector3.new(0, 1.5, 0), dropper.Parent or dropper)
 		end
 	end)
 end
@@ -196,7 +191,7 @@ local function tryAward(player: Player, dropper: BasePart)
 	local amount = pickAward()
 	local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")
 	if ok then
-		spawnFloatingCash(dropper.Parent or dropper, amount, dropper.Position)
+		spawnFloatingCash(dropper, amount, player.UserId)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "ManualDrop")
 		end
@@ -235,32 +230,15 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 	neon.CFrame = pad.CFrame * CFrame.new(0, size.Y * 0.5 + 0.05, 0)
 	neon.Parent = pad
 
-	local light = Instance.new("PointLight")
-	light.Color = Color3.fromRGB(100, 255, 130)
-	light.Brightness = 0.7
-	light.Range = 10
-	light.Parent = pad
-
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "WE_DropperLabel"
-	bb.Size = UDim2.fromOffset(140, 32)
-	bb.StudsOffset = Vector3.new(0, 2.4, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 55
-	bb.Parent = pad
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundColor3 = Color3.fromRGB(12, 28, 16)
-	label.BackgroundTransparency = 0.25
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(100, 255, 140)
+	-- v71: no PointLight (the neon plate is the glow; light budget) and an owner-only "$15" tag
 	local shown = ManualDropperConfig.AwardAmount or ManualDropperConfig.MinAward or 10
-	label.Text = (ManualDropperConfig.BillboardLabel or "CLICK · $") .. tostring(shown)
-	label.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = label
+	WorldLabel.Create(pad, (ManualDropperConfig.BillboardLabel or "$") .. tostring(shown), {
+		Name = "WE_DropperLabel",
+		Color = Color3.fromRGB(100, 255, 140),
+		Studs = ManualDropperConfig.LabelStuds,
+		MaxDistance = ManualDropperConfig.LabelMaxDistance,
+		OwnerUserId = NOBODY, -- syncTagOwners hands it to the plot owner (≤ 2 s)
+	})
 
 	local click = Instance.new("ClickDetector")
 	click.Name = "DropClick"
@@ -279,11 +257,51 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 	return pad
 end
 
+-- Older server builds left a PointLight and a carded price tag on the plate: strip / rebuild them once.
+local function upgradeLegacyKit(pad: BasePart)
+	local light = pad:FindFirstChildOfClass("PointLight")
+	if light then
+		light:Destroy()
+	end
+	local tag = pad:FindFirstChild("WE_DropperLabel")
+	if tag and not tag:FindFirstChild("Title") then
+		tag:Destroy()
+		local shown = ManualDropperConfig.AwardAmount or ManualDropperConfig.MinAward or 10
+		WorldLabel.Create(pad, (ManualDropperConfig.BillboardLabel or "$") .. tostring(shown), {
+			Name = "WE_DropperLabel",
+			Color = Color3.fromRGB(100, 255, 140),
+			Studs = ManualDropperConfig.LabelStuds,
+			MaxDistance = ManualDropperConfig.LabelMaxDistance,
+			OwnerUserId = NOBODY,
+		})
+	end
+end
+
+-- The tag belongs to the plot owner: follow plot hand-outs (join / leave / late claim). ≤ 12 plates, 0.5 Hz.
+local function syncTagOwners()
+	if not (BaseService and BaseService.GetOwnerUserId) then
+		return
+	end
+	for pad in pairs(wired) do
+		if pad.Parent then
+			local tag = pad:FindFirstChild("WE_DropperLabel")
+			local plotId = pad:GetAttribute("PlotId")
+			if tag and tag:IsA("BillboardGui") and typeof(plotId) == "number" then
+				local owner = BaseService.GetOwnerUserId(plotId)
+				WorldLabel.SetOwner(tag, if typeof(owner) == "number" and owner ~= 0 then owner else NOBODY)
+			end
+		else
+			wired[pad] = nil
+		end
+	end
+end
+
 local function wireDropper(pad: BasePart)
 	if wired[pad] then
 		return
 	end
 	wired[pad] = true
+	upgradeLegacyKit(pad)
 
 	local click = pad:FindFirstChild("DropClick")
 	if click and click:IsA("ClickDetector") then
@@ -384,6 +402,7 @@ function ManualDropperService.Init(deps: { [string]: any })
 	VisualAssetService = deps.VisualAssetService
 	TutorialService = deps.TutorialService
 	NotificationService = deps.NotificationService
+	BaseService = deps.BaseService
 
 	if not ManualDropperConfig.Enabled then
 		print("[WAR EMPIRE] ManualDropperService disabled by config")
@@ -435,6 +454,7 @@ function ManualDropperService.Init(deps: { [string]: any })
 				lastAwardAt[key] = nil
 			end
 		end
+		task.defer(syncTagOwners)
 		-- Budget refills fully within an hour; drop it then unless the player came back.
 		task.delay(3600, function()
 			if not Players:GetPlayerByUserId(userId) then
@@ -443,7 +463,14 @@ function ManualDropperService.Init(deps: { [string]: any })
 		end)
 	end)
 
-	print("[WAR EMPIRE] ManualDropperService ready (click/prompt → PendingCash)")
+	task.spawn(function()
+		while true do
+			task.wait(2)
+			syncTagOwners()
+		end
+	end)
+
+	print("[WAR EMPIRE] ManualDropperService ready (prompt / ClickDetector → PendingCash)")
 end
 
 return ManualDropperService

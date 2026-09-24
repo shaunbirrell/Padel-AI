@@ -3,6 +3,11 @@
 	Empire Bank raid — stand on vault to loot Cash; per-player cooldown.
 	Bank guards are living CombatService NPCs (MoveTo + shoot), not static MapSetup props.
 	Pushes HoldProgress / UnderFire / InVault to clients for BankRaidController HUD.
+
+	v71 (task #20, bank retune): "under fire" = hit within BankRaidConfig.UnderFireSeconds (was: health below 95 %,
+	which froze the hold forever for anyone the guards had ever scratched — no health regen reaches 95 % inside the
+	respawn window). The vault label is one stud-scaled WorldLabel ("Empire Bank" / "RAID IN PROGRESS"), never
+	AlwaysOnTop, MaxDistance <= 40 (HUD v70 spec §5).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -14,6 +19,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BankRaidConfig = require(Shared.Configs.BankRaidConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local WorldLabel = require(Shared.Util.WorldLabel)
 
 local BankRaidService = {}
 
@@ -30,7 +36,13 @@ local inVaultNow: { [number]: boolean } = {}
 local underFireNow: { [number]: boolean } = {}
 local lastPushedProgress: { [number]: number } = {}
 local guardsSpawned = false
-local billboardLabel: TextLabel? = nil
+local vaultLabel: BillboardGui? = nil
+local lastRaiding: boolean? = nil
+-- under fire = a health drop seen within UnderFireSeconds (sampled on the 4 Hz tick; regen never counts)
+local lastHealth: { [number]: number } = {}
+local hurtAt: { [number]: number } = {}
+
+local LABEL = BankRaidConfig.Label
 
 local function findVault(): BasePart?
 	if vaultPart and vaultPart.Parent then
@@ -47,43 +59,35 @@ end
 
 local function ensureVaultBillboard(vault: BasePart)
 	local existing = vault:FindFirstChild("WE_BankRaidStatus")
-	if existing and existing:IsA("BillboardGui") then
-		local lbl = existing:FindFirstChild("Status")
-		if lbl and lbl:IsA("TextLabel") then
-			billboardLabel = lbl
-			return
-		end
+	if existing and existing:IsA("BillboardGui") and existing:FindFirstChild("Title") then
+		vaultLabel = existing
+		return
 	end
 	if existing then
 		existing:Destroy()
 	end
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "WE_BankRaidStatus"
-	bb.Size = UDim2.fromOffset(300, 48)
-	bb.StudsOffset = Vector3.new(0, 10, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 220
-	bb.Parent = vault
-
-	local lbl = Instance.new("TextLabel")
-	lbl.Name = "Status"
-	lbl.BackgroundTransparency = 1
-	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.Font = Enum.Font.GothamBold
-	lbl.TextSize = 18
-	lbl.TextColor3 = Color3.fromRGB(255, 220, 120)
-	lbl.TextStrokeTransparency = 0.4
-	lbl.Text = "EMPIRE BANK — STAND TO LOOT"
-	lbl.Parent = bb
-	billboardLabel = lbl
+	-- spec §5 "Bank vault labels ×2 → keep only BankRaidService's": MapSetup's "EMPIRE BANK · Stand to RAID cash"
+	-- card ("Label") sits on the same vault at the same height, so the two drew on top of each other.
+	local legacy = vault:FindFirstChild("Label")
+	if legacy and legacy:IsA("BillboardGui") then
+		legacy:Destroy()
+	end
+	-- stud-scaled, plain outlined text, MaxDistance <= 40, never through walls (spec §5 "Bank vault labels")
+	vaultLabel = WorldLabel.Create(vault, LABEL.Title, {
+		Name = "WE_BankRaidStatus",
+		Color = LABEL.Color,
+		Offset = Vector3.new(0, LABEL.HeightStuds, 0),
+		MaxDistance = LABEL.MaxDistance,
+	})
+	lastRaiding = nil
 end
 
 local function refreshBillboardHint()
-	local lbl = billboardLabel
-	if not lbl then
+	local bb = vaultLabel
+	if not bb or not bb.Parent then
 		return
 	end
-	-- Prefer a short public hint; per-player cooldown stays on the ScreenGui.
+	-- One public line; the per-player hold / cooldown stays on the raider's HUD (BankRaidController).
 	local anyRaiding = false
 	for uid, inv in pairs(inVaultNow) do
 		if inv and (holdProgress[uid] or 0) > 0 then
@@ -91,13 +95,11 @@ local function refreshBillboardHint()
 			break
 		end
 	end
-	if anyRaiding then
-		lbl.Text = "EMPIRE BANK — RAID IN PROGRESS"
-		lbl.TextColor3 = Color3.fromRGB(255, 180, 80)
-	else
-		lbl.Text = "EMPIRE BANK — STAND TO LOOT"
-		lbl.TextColor3 = Color3.fromRGB(255, 220, 120)
+	if anyRaiding == lastRaiding then
+		return
 	end
+	lastRaiding = anyRaiding
+	WorldLabel.SetText(bb, LABEL.Title, if anyRaiding then LABEL.RaidingSub else nil, LABEL.RaidingColor)
 end
 
 local function spawnBankGuards()
@@ -189,7 +191,17 @@ local function completeRaid(player: Player)
 	pushState(player, { InVault = false, UnderFire = false })
 end
 
-local function isUnderFire(player: Player): boolean
+-- health drops since the last tick → "hit just now" (a respawn or regen raises health and never counts)
+local function sampleHurt(uid: number, hum: Humanoid, nowC: number)
+	local hp = hum.Health
+	local prev = lastHealth[uid]
+	if prev ~= nil and hp < prev - 0.01 then
+		hurtAt[uid] = nowC
+	end
+	lastHealth[uid] = hp
+end
+
+local function isUnderFire(player: Player, nowC: number): boolean
 	local char = player.Character
 	if not char then
 		return true
@@ -198,7 +210,7 @@ local function isUnderFire(player: Player): boolean
 	if not hum or hum.Health <= 0 then
 		return true
 	end
-	return hum.Health < hum.MaxHealth * 0.95
+	return nowC - (hurtAt[player.UserId] or -math.huge) < (BankRaidConfig.UnderFireSeconds or 2)
 end
 
 function BankRaidService.Push(player: Player)
@@ -238,12 +250,13 @@ function BankRaidService.Init(deps: { [string]: any })
 		if not vault then
 			return
 		end
-		if not billboardLabel then
+		if not (vaultLabel and vaultLabel.Parent) then
 			ensureVaultBillboard(vault)
 		end
 		local radius = BankRaidConfig.VaultRadius or 12
 		local need = BankRaidConfig.RaidHoldSeconds or 8
 		local nowUnix = os.time()
+		local nowC = os.clock()
 		local pos = vault.Position
 		local nearby: { [number]: boolean } = {}
 		local toPush: { Player } = {}
@@ -258,13 +271,16 @@ function BankRaidService.Init(deps: { [string]: any })
 			local inside = false
 			local fired = false
 
+			if hum then
+				sampleHurt(uid, hum, nowC)
+			end
 			if hrp and hum and hum.Health > 0 then
 				inside = (hrp.Position - pos).Magnitude <= radius
 			end
 
 			if inside and not onCooldown then
 				nearby[uid] = true
-				fired = isUnderFire(player)
+				fired = isUnderFire(player, nowC)
 				underFireNow[uid] = fired
 				inVaultNow[uid] = true
 				if not fired then
@@ -326,6 +342,8 @@ function BankRaidService.Init(deps: { [string]: any })
 		inVaultNow[uid] = nil
 		underFireNow[uid] = nil
 		lastPushedProgress[uid] = nil
+		lastHealth[uid] = nil
+		hurtAt[uid] = nil
 	end)
 	for _, player in ipairs(Players:GetPlayers()) do
 		task.defer(function()
