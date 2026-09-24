@@ -2,6 +2,20 @@
 --[[
 	Phase 3 — Server-authoritative combat.
 	Clients request fire/reload/equip/purchase; server validates and applies WeaponConfig damage.
+
+	W2 Combat Core (contracts §1–§3; money plan M4; mobile plan §4.1, P1-5):
+	  - RequestFire resolves a hitscan shot in order: exact server ray (player / NPC / registered vehicle / gate;
+	    a "Head" part is a headshot x CombatFeelConfig.HeadshotMult) → the P0-7 claim (unchanged lag tolerance) →
+	    server aim assist (CombatAssist, AimAssistConfig class limits; the client never names the target) → miss.
+	    Damage falls off with distance (WeaponConfig.Falloff). The shot filter leaves out the shooter, the vehicle
+	    they sit in and every squad unit. Seat rules come first (drivers per VehicleCombatConfig.SeatFire, open-seat
+	    passengers fire from the head, mount and enclosed seats refuse).
+	  - Rocket / grenade (WeaponConfig.Projectile) launch a server projectile (Server/Modules/Projectile): direct
+	    vehicle / gate hit, then ApplyRadiusDamage (humanoids) + VehicleHealth.ApplyRadiusDamage (vehicles).
+	  - WeaponFx (UnreliableRemoteEvent, CombatFx): one bullet event per accepted shot within 250 studs, <= 20 Hz per
+	    shooter; projectile launch / explosion events.
+	  - Server APIs for other services: ApplyHit, ApplyRadiusDamage, ApplyBlastDamage, IsSpawnInvulnerable,
+	    OnPlayerDeath (the DeathShopOffer toast is built-in listener #1).
 ]]
 
 local Players = game:GetService("Players")
@@ -10,7 +24,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
@@ -20,11 +34,20 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local ResearchConfig = require(Shared.Configs.ResearchConfig) -- v69 research
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- mobile plan P0-7 / P1-2 / P1-4
+local AimAssistConfig = require(Shared.Configs.AimAssistConfig) -- W2
+local CombatFeelConfig = require(Shared.Configs.CombatFeelConfig) -- W2
+local VehicleCombatConfig = require(Shared.Configs.VehicleCombatConfig) -- W2 (M4)
+local VehicleConfig = require(Shared.Configs.VehicleConfig) -- W2: vehicle names in hit feedback
 
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
 local CombatWeaponLogic = require(script.CombatWeaponLogic)
 local VisualAssetService = require(script.Parent.VisualAssetService)
+local CombatAssist = require(script.CombatAssist) -- W2
+local CombatFx = require(script.CombatFx) -- W2
+local VehicleHealth = require(script.Parent.Parent.Modules.VehicleHealth) -- W2 (CC-2; every call pcall'd)
+local Projectile = require(script.Parent.Parent.Modules.Projectile) -- W2
+local WeaponAssetLoader = require(script.Parent.Parent.Modules.WeaponAssetLoader) -- W2
 
 -- Cached CollectionService:GetTagged results (invalidated on TTL)
 local _tagCache: { [string]: { at: number, list: { Instance } } } = {}
@@ -67,12 +90,50 @@ type NPCRecord = {
 	AimTarget: Player?, -- P1-2: the player this NPC is aiming at (CombatNPC reaction delay)
 	AimSince: number,
 	AimBlocked: boolean, -- P1-2: the last line-of-sight check failed (the reaction delay restarts on regaining sight)
+	KillCtx: { Quiet: boolean?, NoKillMarker: boolean? }?, -- W2: set around TakeDamage so an immediate Died pays quietly
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
 
 local CombatService = {}
+
+-- W2 (contracts §3): server damage API types
+export type HitOpts = {
+	WeaponId: string, -- WeaponConfig id | "V_<MountId>" (M6 vehicle guns) | a source id ("VehicleWreck", "Missile", "Nuke")
+	Class: string?, -- VehicleCombatConfig.DamageClasses key for VEHICLE damage (default by WeaponId)
+	WeaponMult: number?, -- vehicle WeaponMult (default InfantryWeapons[WeaponId].Mult or 1)
+	VsInfantryMult: number?, -- x against players and NPCs (default 1)
+	HitPos: Vector3?, -- world point (feedback Pos)
+	Vehicle: Model?, -- the FIRING vehicle (M6): never damaged; its occupants never hit; rookie protection vs players
+	Headshot: boolean?, -- only RequestFire's exact-ray Head hit sets this
+	Quiet: boolean?, -- no attacker hitFeedback, no per-kill toast (NPC rewards still paid)
+	UnitShot: boolean?, -- creator tag carries WE_UnitShot (squad credit share)
+	Assist: boolean?, -- feedback only: the server assist chose this target (RequestFire)
+}
+export type HitResult = { Kind: string, Dealt: number, Killed: boolean, Target: Instance? }
+export type RadiusOpts = {
+	WeaponId: string,
+	MinMult: number?,
+	VsInfantryMult: number?,
+	Vehicle: Model?,
+	RequireLos: boolean?,
+	Quiet: boolean?,
+	IgnoreModel: Model?,
+}
+export type RadiusResult = { Players: number, Npcs: number, Killed: number, Dealt: number }
+export type DeathInfo = { WeaponId: string?, BlastSource: string?, Quiet: boolean }
+
+-- feedback / credit switches for one damage call (internal)
+type FbOpts = {
+	Headshot: boolean?,
+	Pos: Vector3?,
+	Assist: boolean?,
+	Quiet: boolean?, -- no attacker feedback and no kill toast (rewards still paid)
+	NoAttackerFb: boolean?, -- no per-target attacker feedback (splash sends one aggregate)
+	NoKillMarker: boolean?, -- no per-NPC "Kill" marker (splash)
+	UnitShot: boolean?,
+}
 
 local DataService: any = nil
 local EconomyService: any = nil
@@ -88,6 +149,7 @@ local RemoteSetup: any = nil
 local MissionService: any = nil
 local TerritoryService: any = nil
 local ResearchService: any = nil -- v69 research (deps.ResearchService; Init may run after ours)
+local ClanService: any = nil -- W2: clan allies are never assisted / splashed (deps.ClanService; pcall)
 
 local combatStates: { [number]: CombatState } = {}
 local gunSchedule: { [number]: { [string]: number } } = {} -- v69 research: per-gun GCRA time (swaps can't skip a slow gun's cooldown)
@@ -95,6 +157,15 @@ local npcRecords: { [string]: NPCRecord } = {}
 local npcFolder: Folder? = nil
 local npcSerial = 1
 local firstPvpLogged: { [number]: boolean } = {}
+-- W2 per-player / per-humanoid state, grouped in one table (keeps the module's local count low)
+local W2 = {
+	inputClass = {} :: { [number]: string }, -- accepted AimAssistConfig class (mirrors Player.WE_InputClass)
+	inputClassAt = {} :: { [number]: number },
+	deathListeners = {} :: { { Fn: (Player, Player?, DeathInfo) -> () } },
+	deathHandled = (setmetatable({}, { __mode = "k" }) :: any) :: { [Humanoid]: boolean }, -- once per death
+	aimStats = {} :: { [string]: { [string]: number } }, -- class -> { Exact, Claim, Assist, Miss }
+	aimStatsLoggedAt = 0,
+}
 
 local function clock(): number
 	return os.clock()
@@ -172,6 +243,13 @@ local function syncWeaponAttributes(player: Player)
 	if level and player:GetAttribute("WE_Level") ~= level then
 		player:SetAttribute("WE_Level", level)
 	end
+	-- W2: the client shows damage numbers unless Settings.ShowDamageNumbers is false
+	local settings: any = profile.Settings
+	local showNumbers = not (typeof(settings) == "table" and settings.ShowDamageNumbers == false)
+	local attr = CombatFeelConfig.DamageNumbersAttribute
+	if player:GetAttribute(attr) ~= showNumbers then
+		player:SetAttribute(attr, showNumbers)
+	end
 end
 
 local function pushState(player: Player)
@@ -195,7 +273,7 @@ end
 
 local function hitFeedback(player: Player, payload: Types.CombatHitFeedbackPayload)
 	local remote = RemoteSetup.Get(Constants.RemoteNames.CombatHitFeedback) :: RemoteEvent
-	remote:FireClient(player, payload)
+	pcall(remote.FireClient, remote, player, payload) -- W2: a player who just left never breaks the shot
 end
 
 local function getState(player: Player): CombatState?
@@ -233,8 +311,8 @@ local function damageFor(def: WeaponDef, attacker: Player?): number
 	return boosted
 end
 
-local function tagCreator(humanoid: Humanoid, attacker: Player)
-	CombatDamage.TagCreator(humanoid, attacker)
+local function tagCreator(humanoid: Humanoid, attacker: Player, unitShot: boolean?)
+	CombatDamage.TagCreator(humanoid, attacker, unitShot)
 end
 
 local function raycast(origin: Vector3, direction: Vector3, range: number, ignore: { Instance }): RaycastResult?
@@ -307,7 +385,8 @@ local function grantRewards(attacker: Player, cash: number, xp: number, reason: 
 	end
 end
 
-function CombatService.RegisterPlayerKill(attacker: Player, victim: Player)
+-- W2: opts.Quiet (a blast death, nuke §15.2) keeps stats, missions and rewards but sends no "Eliminated" toast
+function CombatService.RegisterPlayerKill(attacker: Player, victim: Player, opts: { Quiet: boolean? }?)
 	local profile = DataService.GetProfile(attacker)
 	if profile then
 		profile.Stats.Kills += 1
@@ -330,7 +409,7 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player)
 			xp = CombatConfig.PlayerKill.XP,
 		})
 	end
-	if NotificationService then
+	if NotificationService and not (opts and opts.Quiet == true) then
 		NotificationService.Notify(
 			attacker,
 			string.format("Eliminated %s (+$%d)", victim.DisplayName, CombatConfig.PlayerKill.Cash),
@@ -339,43 +418,71 @@ function CombatService.RegisterPlayerKill(attacker: Player, victim: Player)
 	end
 end
 
-local function damagePlayer(attacker: Player, victim: Player, damage: number, weaponId: string): boolean
-	if not GameConfig.PvPEnabled then
-		return false
-	end
-	if attacker == victim and not GameConfig.FriendlyFire then
-		return false
+--[[ Damage one player. With an attacker: PvP, self (FriendlyFire) and the spawn shield apply, and the creator tag
+	credits the kill. With no attacker (a wreck with no killer): only the spawn shield applies and nobody is credited.
+	Returns (dealt, killed). W2: also records WE_LastWeapon (DeathInfo) and the richer feedback fields. ]]
+local function hurtPlayer(attacker: Player?, victim: Player, damage: number, weaponId: string, fb: FbOpts?): (number, boolean)
+	if attacker ~= nil then
+		if not GameConfig.PvPEnabled then
+			return 0, false
+		end
+		if attacker == victim and not GameConfig.FriendlyFire then
+			return 0, false
+		end
 	end
 	local vState = combatStates[victim.UserId]
 	if vState and clock() < vState.InvulnerableUntil then
-		return false
+		return 0, false
 	end
 	local _, humanoid = characterParts(victim)
 	if not humanoid or humanoid.Health <= 0 then
-		return false
+		return 0, false
 	end
-	tagCreator(humanoid, attacker)
+	if not (damage > 0) then -- NaN / negative never heal or poison a humanoid
+		return 0, false
+	end
+	if attacker then
+		tagCreator(humanoid, attacker, fb and fb.UnitShot)
+	end
+	humanoid:SetAttribute("WE_LastWeapon", weaponId)
 	local before = humanoid.Health
 	humanoid:TakeDamage(damage)
 	local dealt = math.max(0, before - humanoid.Health)
 	if dealt <= 0 then
-		return false
+		return 0, false
 	end
 	local killed = humanoid.Health <= 0
-	hitFeedback(attacker, {
-		Kind = if killed then "Kill" else "Hit",
-		Damage = dealt,
-		TargetName = victim.DisplayName,
-		WeaponId = weaponId,
-		IsHeadshot = false,
-	})
+	local from: Vector3? = nil
+	if attacker then
+		local _, _, aroot = characterParts(attacker)
+		from = if aroot then aroot.Position else nil
+		if not (fb and (fb.Quiet == true or fb.NoAttackerFb == true)) then
+			hitFeedback(attacker, {
+				Kind = if killed then "Kill" else "Hit",
+				Damage = dealt,
+				TargetName = victim.DisplayName,
+				WeaponId = weaponId,
+				IsHeadshot = fb ~= nil and fb.Headshot == true,
+				Target = victim.Character, -- W2 (display only)
+				TargetKind = "Player",
+				Pos = if fb then fb.Pos else nil,
+				Assist = if fb and fb.Assist then true else nil,
+			})
+		end
+	end
 	hitFeedback(victim, {
 		Kind = if killed then "Death" else "Damaged",
 		Damage = dealt,
 		WeaponId = weaponId,
+		From = from, -- W2: direction cue
 	})
 	pushState(victim)
-	return true
+	return dealt, killed
+end
+
+local function damagePlayer(attacker: Player, victim: Player, damage: number, weaponId: string): boolean
+	local dealt = hurtPlayer(attacker, victim, damage, weaponId, nil)
+	return dealt > 0
 end
 
 local function ensureNPCFolder(): Folder
@@ -407,13 +514,22 @@ end
 local function destroyNPC(rec: NPCRecord)
 	rec.Alive = false
 	npcRecords[rec.Id] = nil
+	CombatFx.Forget(rec.Id) -- W2 verify: its WeaponFx shooter bucket goes too (NPC ids never repeat)
 	if rec.Model and rec.Model.Parent then
 		rec.Model:Destroy()
 	end
 end
 
+-- W2 (F hand-off): per-type respawn time (CombatConfig.NPCTypes[*].RespawnSeconds), else the global one
+local function npcRespawnSeconds(rec: NPCRecord): number
+	local t = tonumber((rec.Def :: any).RespawnSeconds)
+	return if t and t > 0 then t else CombatConfig.NPCRespawnSeconds
+end
+
 -- `byUnit` (P1-4): the killing hit came from the attacker's squad unit — CombatFairnessConfig.UnitKillCashShare
-function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boolean?)
+-- W2: `quiet` (blast kills, nuke §15.2) pays rewards, missions and stats with no toast and no kill marker;
+-- `noMarker` (splash) keeps the toast but leaves the kill marker to the one aggregated splash feedback.
+function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boolean?, quiet: boolean?, noMarker: boolean?)
 	if not rec.Alive then
 		return
 	end
@@ -441,11 +557,11 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 			squad = byUnit == true,
 		})
 	end
-	if NotificationService then
+	if NotificationService and quiet ~= true then
 		local fmt = if byUnit then "Squad: %s down (+$%d)" else "%s down (+$%d)"
 		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, cash), "Reward")
 	end
-	if not byUnit then -- the kill marker belongs to the player's own shot
+	if not byUnit and quiet ~= true and noMarker ~= true then -- the kill marker belongs to the player's own shot
 		hitFeedback(attacker, { Kind = "Kill", Damage = 0, TargetName = rec.Def.DisplayName, WeaponId = nil })
 	end
 	local spawnCf = rec.SpawnCFrame
@@ -453,34 +569,57 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 	task.delay(0.35, function()
 		destroyNPC(rec)
 	end)
-	task.delay(CombatConfig.NPCRespawnSeconds, function()
+	task.delay(npcRespawnSeconds(rec), function()
 		CombatService.SpawnNPC(typeId, spawnCf)
 	end)
 end
 
-local function damageNPC(attacker: Player, npcId: string, damage: number, weaponId: string): boolean
+--[[ Damage one NPC record. Returns (dealt, killed). With no attacker nobody is credited (the Died handler respawns
+	it). W2: fb carries the feedback / credit switches (quiet blast kills, splash aggregation, squad unit shots). ]]
+local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponId: string, fb: FbOpts?): (number, boolean)
 	local rec = npcRecords[npcId]
 	if not rec or not rec.Alive or rec.Humanoid.Health <= 0 then
-		return false
+		return 0, false
 	end
-	tagCreator(rec.Humanoid, attacker)
+	if not (damage > 0) then
+		return 0, false
+	end
+	if attacker then
+		tagCreator(rec.Humanoid, attacker, fb and fb.UnitShot)
+	end
 	local before = rec.Humanoid.Health
+	-- W2: Died may fire inside TakeDamage (immediate signals); its handler reads this to pay the kill quietly
+	rec.KillCtx = if fb then { Quiet = fb.Quiet, NoKillMarker = fb.NoKillMarker } else nil
 	rec.Humanoid:TakeDamage(damage)
+	rec.KillCtx = nil
 	local dealt = math.max(0, before - rec.Humanoid.Health)
 	if dealt <= 0 then
-		return false
+		return 0, false
 	end
 	local killed = rec.Humanoid.Health <= 0
-	hitFeedback(attacker, {
-		Kind = if killed then "Kill" else "Hit",
-		Damage = dealt,
-		TargetName = rec.Def.DisplayName,
-		WeaponId = weaponId,
-	})
-	if killed then
-		CombatService.OnNPCKilled(attacker, rec)
+	local quiet = fb ~= nil and fb.Quiet == true
+	if attacker and not quiet and not (fb and fb.NoAttackerFb == true) then
+		hitFeedback(attacker, {
+			Kind = if killed then "Kill" else "Hit",
+			Damage = dealt,
+			TargetName = rec.Def.DisplayName,
+			WeaponId = weaponId,
+			IsHeadshot = if fb and fb.Headshot then true else nil, -- W2
+			Target = rec.Model,
+			TargetKind = "NPC",
+			Pos = if fb then fb.Pos else nil,
+			Assist = if fb and fb.Assist then true else nil,
+		})
 	end
-	return true
+	if killed and attacker then
+		CombatService.OnNPCKilled(attacker, rec, if fb and fb.UnitShot then true else nil, quiet, fb ~= nil and fb.NoKillMarker == true)
+	end
+	return dealt, killed
+end
+
+local function damageNPC(attacker: Player, npcId: string, damage: number, weaponId: string): boolean
+	local dealt = hurtNPC(attacker, npcId, damage, weaponId, nil)
+	return dealt > 0
 end
 
 function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
@@ -592,32 +731,14 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	humanoid.WalkSpeed = def.WalkSpeed
 	humanoid.AutoRotate = true
 	humanoid.HipHeight = 2 -- R6-ish Part kit (root mid-torso; legs welded massless)
-	-- Kill double nametags: Humanoid nameplate OFF; one clean Billboard only
+	-- Kill double nametags: Humanoid nameplate OFF (W2: and no server Billboard; see below)
 	humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
 	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
 
-	-- Single clean nameplate
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "NPCLabel"
-	bb.Size = UDim2.fromOffset(140, 28)
-	bb.StudsOffset = Vector3.new(0, 3.6, 0)
-	bb.AlwaysOnTop = true
-	bb.MaxDistance = 90
-	bb.Parent = root
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(15, 18, 28)
-	lbl.BackgroundTransparency = 0.25
-	lbl.Text = def.DisplayName
-	lbl.TextColor3 = Color3.fromRGB(230, 235, 255)
-	lbl.TextScaled = true
-	lbl.Font = Enum.Font.GothamBold
-	lbl.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = lbl
+	-- W2 (agent F hand-off): no server name card (was an AlwaysOnTop BillboardGui per NPC, MaxDistance 90). The
+	-- client target bar (WeaponVisuals) shows the name and HP for 2.5 s after your hit.
 
 	model.PrimaryPart = root
 	-- Optional free catalog character visual (scripts stripped); Part kit stays authoritative.
@@ -654,6 +775,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		AimTarget = nil,
 		AimSince = 0,
 		AimBlocked = false,
+		KillCtx = nil,
 	}
 	npcRecords[id] = rec
 
@@ -669,14 +791,15 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 			byUnit = tag:GetAttribute("WE_UnitShot") == true -- P1-4: a squad unit's hit, credited to its owner
 		end
 		if killer then
-			CombatService.OnNPCKilled(killer, rec, byUnit)
+			local ctx = rec.KillCtx -- W2: a quiet / splash hit that is still inside TakeDamage
+			CombatService.OnNPCKilled(killer, rec, byUnit, ctx ~= nil and ctx.Quiet == true, ctx ~= nil and ctx.NoKillMarker == true)
 		else
 			local spawnCf = rec.SpawnCFrame
 			local t = rec.TypeId
 			task.delay(0.35, function()
 				destroyNPC(rec)
 			end)
-			task.delay(CombatConfig.NPCRespawnSeconds, function()
+			task.delay(npcRespawnSeconds(rec), function()
 				CombatService.SpawnNPC(t, spawnCf)
 			end)
 		end
@@ -739,6 +862,10 @@ function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, str
 		state.WeaponId = weaponId
 		state.Ammo = magSize(player, def) -- v69 research
 		state.ReloadingUntil = 0
+	end
+	local char = player.Character -- W2: a drawn gun switches to the new weapon (WE_GunOut)
+	if char and char:GetAttribute(CombatFeelConfig.Drawn.Attribute) ~= nil then
+		char:SetAttribute(CombatFeelConfig.Drawn.Attribute, weaponId)
 	end
 	pushState(player)
 	if AnalyticsService then
@@ -910,6 +1037,606 @@ local function validateClaim(
 	return true, "ok"
 end
 
+-- ── W2 Combat Core: target resolution, seat rules, damage APIs ─────────────────────────────────────────────
+
+local FX_KIND: { [string]: string } = { Player = "P", NPC = "N", Vehicle = "V", Gate = "G" }
+
+-- The registered vehicle a part belongs to (and its VehicleHealth record), or nil. Every call is pcall'd.
+local function registeredVehicle(inst: Instance): (Model?, any)
+	local ok, model = pcall(VehicleHealth.FindVehicleModel, inst)
+	if not ok or typeof(model) ~= "Instance" then
+		return nil, nil
+	end
+	local okRec, rec = pcall(VehicleHealth.Get, model :: Model)
+	if not okRec or rec == nil then
+		return nil, nil
+	end
+	return model :: Model, rec
+end
+
+-- (seated vehicle model, seat part) of a player, pcall'd
+local function seatedVehicle(player: Player): (Model?, BasePart?)
+	local ok, veh, seat = pcall(VehicleHealth.GetSeatedVehicle, player)
+	if not ok then
+		return nil, nil
+	end
+	local v: Model? = if typeof(veh) == "Instance" and (veh :: Instance):IsA("Model") then veh :: Model else nil
+	local s: BasePart? = if typeof(seat) == "Instance" and (seat :: Instance):IsA("BasePart") then seat :: BasePart else nil
+	return v, s
+end
+
+-- true while the player sits in an ENCLOSED seat (WE_Exposed == false) of a live registered vehicle
+local function inEnclosedSeat(veh: Model?, seat: BasePart?): boolean
+	if veh == nil or seat == nil or seat:GetAttribute("WE_Exposed") ~= false then
+		return false
+	end
+	local _, rec = registeredVehicle(seat)
+	return rec ~= nil and rec.Destroyed ~= true
+end
+
+--[[ What a ray / hit part belongs to, first match wins (contracts §3.1):
+	"Player" (ancestor character), "NPC" (WE_NPC model with an NPCId), "Vehicle" (registered), "Gate" (GateBarrier
+	part), "NPC" with no id (a tagged model outside the NPC records: decides the shot, takes no damage), "None". ]]
+local function resolveTarget(inst: Instance): (string, any, Model?)
+	local node: Instance? = inst
+	local taggedNoId: Model? = nil
+	while node ~= nil and node ~= Workspace do
+		if node:IsA("Model") then
+			local plr = Players:GetPlayerFromCharacter(node)
+			if plr then
+				return "Player", plr, node :: Model
+			end
+			if CollectionService:HasTag(node, Constants.Tags.NPC) then
+				local npcId = node:GetAttribute("NPCId")
+				if typeof(npcId) == "string" then
+					return "NPC", npcId, node :: Model
+				end
+				taggedNoId = taggedNoId or node :: Model
+			end
+		end
+		node = node.Parent
+	end
+	local veh = registeredVehicle(inst)
+	if veh then
+		return "Vehicle", veh, veh
+	end
+	if inst:IsA("BasePart") and inst:GetAttribute("GateBarrier") == true then
+		return "Gate", inst, nil
+	end
+	if taggedNoId then
+		return "NPC", nil, taggedNoId
+	end
+	return "None", nil, nil
+end
+
+-- VehicleCombatConfig damage class + WeaponMult for a weapon id (explicit values win)
+local function vehicleClassFor(weaponId: string, class: string?, mult: number?): (string, number)
+	local iw = VehicleCombatConfig.InfantryWeapons[weaponId]
+	local c = class or (if iw then iw.Class else nil) or VehicleCombatConfig.DefaultInfantryClass
+	local m = mult or (if iw then iw.Mult else nil) or 1
+	return c, m
+end
+
+local function vehicleName(model: Model): string
+	local id = model:GetAttribute("VehicleId")
+	local def = if typeof(id) == "string" then (VehicleConfig.Vehicles :: any)[id] else nil
+	return if def and typeof(def.DisplayName) == "string" then def.DisplayName else model.Name
+end
+
+-- same clan (both in one, pcall'd; no ClanService = never allies)
+local function isClanAlly(a: Player, b: Player): boolean
+	if a == b or ClanService == nil or ClanService.GetClanId == nil then
+		return false
+	end
+	local okA, ca = pcall(ClanService.GetClanId, a)
+	local okB, cb = pcall(ClanService.GetClanId, b)
+	return okA and okB and ca ~= nil and ca == cb
+end
+
+function CombatService.IsSpawnInvulnerable(player: Player): boolean
+	local s = combatStates[player.UserId]
+	return s ~= nil and clock() < s.InvulnerableUntil
+end
+
+--[[ W2 (contracts §3.1): one hit on whatever `hit` belongs to (player > NPC > registered vehicle > gate).
+	Players / NPCs take amount x VsInfantryMult x (Headshot and HeadshotMult); vehicles go to VehicleHealth
+	(class maths there); gates need an attacker. Unless opts.Quiet the attacker gets CombatHitFeedback. ]]
+function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number, opts: HitOpts): HitResult
+	if typeof(hit) ~= "Instance" or typeof(amount) ~= "number" or not (amount > 0) or typeof(opts) ~= "table" then
+		return { Kind = "None", Dealt = 0, Killed = false, Target = nil }
+	end
+	local weaponId = if typeof(opts.WeaponId) == "string" then opts.WeaponId else "?"
+	local quiet = opts.Quiet == true
+	local firing = opts.Vehicle
+	local kind, ref, model = resolveTarget(hit)
+	if kind == "Player" then
+		local victim = ref :: Player
+		if firing then
+			local vVeh = seatedVehicle(victim)
+			if vVeh == firing then -- a vehicle's own gun never hits its occupants
+				return { Kind = "Player", Dealt = 0, Killed = false, Target = model }
+			end
+		end
+		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then CombatFeelConfig.HeadshotMult else 1)
+		if firing then
+			local rp = VehicleCombatConfig.RookieProtection
+			local vp = DataService and DataService.GetProfile(victim)
+			if vp and (tonumber(vp.Level) or 1) < rp.BelowLevel then
+				dmg *= rp.VehicleWeaponMult
+			end
+		end
+		local dealt, killed = hurtPlayer(attacker, victim, dmg, weaponId, {
+			Headshot = opts.Headshot,
+			Pos = opts.HitPos,
+			Assist = opts.Assist,
+			Quiet = quiet,
+			UnitShot = opts.UnitShot,
+		})
+		return { Kind = "Player", Dealt = dealt, Killed = killed, Target = model }
+	elseif kind == "NPC" then
+		if typeof(ref) ~= "string" then
+			return { Kind = "NPC", Dealt = 0, Killed = false, Target = model }
+		end
+		local dmg = amount * (tonumber(opts.VsInfantryMult) or 1) * (if opts.Headshot == true then CombatFeelConfig.HeadshotMult else 1)
+		local dealt, killed = hurtNPC(attacker, ref, dmg, weaponId, {
+			Headshot = opts.Headshot,
+			Pos = opts.HitPos,
+			Assist = opts.Assist,
+			Quiet = quiet,
+			UnitShot = opts.UnitShot,
+		})
+		return { Kind = "NPC", Dealt = dealt, Killed = killed, Target = model }
+	elseif kind == "Vehicle" then
+		local veh = ref :: Model
+		if veh == firing then
+			return { Kind = "Vehicle", Dealt = 0, Killed = false, Target = veh }
+		end
+		local class, mult = vehicleClassFor(weaponId, opts.Class, opts.WeaponMult)
+		local ok, d, destroyedNow = pcall(VehicleHealth.ApplyDamage, veh, {
+			Attacker = attacker,
+			Amount = amount,
+			Class = class,
+			WeaponId = weaponId,
+			WeaponMult = mult,
+			HitPos = opts.HitPos,
+		})
+		local dealt = if ok then tonumber(d) or 0 else 0
+		local killed = ok and destroyedNow == true
+		if attacker and dealt > 0 and not quiet then
+			hitFeedback(attacker, {
+				Kind = if killed then "Kill" else "Hit",
+				Damage = dealt,
+				TargetName = vehicleName(veh),
+				WeaponId = weaponId,
+				IsHeadshot = false,
+				Target = veh,
+				TargetKind = "Vehicle",
+				Pos = opts.HitPos,
+				Assist = if opts.Assist then true else nil,
+			})
+		end
+		return { Kind = "Vehicle", Dealt = dealt, Killed = killed, Target = veh }
+	elseif kind == "Gate" then
+		local part = ref :: BasePart
+		local landed = false
+		if attacker and GateDefenseService and GateDefenseService.ApplyDamage then
+			local ok, res = pcall(GateDefenseService.ApplyDamage, attacker, part, amount, weaponId)
+			landed = ok and res == true
+		end
+		if attacker and landed and not quiet then
+			hitFeedback(attacker, {
+				Kind = "Hit",
+				Damage = amount,
+				TargetName = "Gate",
+				WeaponId = weaponId,
+				IsHeadshot = false,
+				Target = part,
+				TargetKind = "Gate",
+				Pos = opts.HitPos,
+			})
+		end
+		return { Kind = "Gate", Dealt = if landed then amount else 0, Killed = false, Target = part }
+	end
+	return { Kind = "None", Dealt = 0, Killed = false, Target = nil }
+end
+
+--[[ W2 (contracts §3.2): area damage to humanoids (players + NPC records; vehicles are NOT included: pair it with
+	VehicleHealth.ApplyRadiusDamage). maxAmount x VsInfantryMult x lerp(1, MinMult, d / radius) to each torso within
+	radius, with a line of sight from the blast (lifted LosLiftStuds) unless RequireLos == false. Players follow the
+	usual rules (PvP, self, spawn shield) and clan allies of the attacker are spared (Splash.ExcludeClanAllies).
+	Skipped: the firing vehicle's occupants, IgnoreModel, occupants of enclosed seats (the vehicle takes it) and
+	squad units. Unless Quiet, the attacker gets ONE aggregated feedback (Splash = true). ]]
+function CombatService.ApplyRadiusDamage(attacker: Player?, center: Vector3, radius: number, maxAmount: number, opts: RadiusOpts): RadiusResult
+	local res: RadiusResult = { Players = 0, Npcs = 0, Killed = 0, Dealt = 0 }
+	if typeof(center) ~= "Vector3" or not (center.Magnitude < 1e7) then
+		return res
+	end
+	if typeof(radius) ~= "number" or not (radius > 0 and radius < 1e4) or typeof(maxAmount) ~= "number" or not (maxAmount > 0) then
+		return res
+	end
+	local o: any = if typeof(opts) == "table" then opts else {}
+	local weaponId = if typeof(o.WeaponId) == "string" then o.WeaponId else "?"
+	local splash = CombatFeelConfig.Splash
+	local minMult = if typeof(o.MinMult) == "number" then o.MinMult else splash.DefaultMinMult
+	local vsInf = tonumber(o.VsInfantryMult) or 1
+	local requireLos = if o.RequireLos == nil then splash.RequireLos else o.RequireLos == true
+	local quiet = o.Quiet == true
+	local firing: Model? = if typeof(o.Vehicle) == "Instance" then (o.Vehicle :: any) :: Model else nil
+	local ignoreModel: Model? = if typeof(o.IgnoreModel) == "Instance" then (o.IgnoreModel :: any) :: Model else nil
+	local losFrom = center + Vector3.new(0, splash.LosLiftStuds, 0)
+	local ignore: { Instance }? = nil -- built once, on the first line-of-sight check
+	local function clear(to: Vector3, ownVeh: Model?): boolean
+		if not requireLos then
+			return true
+		end
+		local list = ignore
+		if list == nil then
+			local l: { Instance } = {}
+			local npcs = Workspace:FindFirstChild("WarEmpireNPCs")
+			if npcs then
+				table.insert(l, npcs)
+			end
+			local squads = Workspace:FindFirstChild("WarEmpireSquads")
+			if squads then
+				table.insert(l, squads)
+			end
+			for _, plr in ipairs(Players:GetPlayers()) do
+				local c = plr.Character
+				if c then
+					table.insert(l, c)
+				end
+			end
+			ignore = l
+			list = l
+		end
+		local ll = list :: { Instance }
+		if ownVeh then
+			table.insert(ll, ownVeh)
+		end
+		local ok = CombatDamage.LineOfSight(losFrom, to, ll, nil, false)
+		if ownVeh then
+			table.remove(ll)
+		end
+		return ok
+	end
+	local r2 = radius * radius
+	local seen: { [Instance]: boolean } = {}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		local char, hum, root = characterParts(plr)
+		if char and hum and root and hum.Health > 0 and not seen[char] and char ~= ignoreModel then
+			seen[char] = true
+			local torso = torsoOf(char, root).Position
+			local dv = torso - center
+			if dv:Dot(dv) <= r2 then
+				local veh, seat = seatedVehicle(plr)
+				local skip = (firing ~= nil and veh == firing)
+					or inEnclosedSeat(veh, seat)
+					or (attacker ~= nil and splash.ExcludeClanAllies == true and isClanAlly(attacker, plr))
+				if not skip and clear(torso, veh) then
+					local amt = maxAmount * vsInf * CombatDamage.SplashMult(dv.Magnitude, radius, minMult)
+					local dealt, killed = hurtPlayer(attacker, plr, amt, weaponId, { NoAttackerFb = true, Pos = center, Quiet = quiet })
+					if dealt > 0 then
+						res.Players += 1
+						res.Dealt += dealt
+						if killed then
+							res.Killed += 1
+						end
+					end
+				end
+			end
+		end
+	end
+	for id, rec in pairs(npcRecords) do
+		local model = rec.Model
+		if rec.Alive and rec.Humanoid.Health > 0 and model.Parent ~= nil and not seen[model] and model ~= ignoreModel then
+			seen[model] = true
+			local torso = torsoOf(model, rec.Root).Position
+			local dv = torso - center
+			if dv:Dot(dv) <= r2 and clear(torso, nil) then
+				local amt = maxAmount * vsInf * CombatDamage.SplashMult(dv.Magnitude, radius, minMult)
+				local dealt, killed = hurtNPC(attacker, id, amt, weaponId, { NoAttackerFb = true, NoKillMarker = true, Quiet = quiet, Pos = center })
+				if dealt > 0 then
+					res.Npcs += 1
+					res.Dealt += dealt
+					if killed then
+						res.Killed += 1
+					end
+				end
+			end
+		end
+	end
+	if attacker and not quiet and res.Dealt > 0 then
+		hitFeedback(attacker, {
+			Kind = if res.Killed > 0 then "Kill" else "Hit",
+			Damage = res.Dealt,
+			WeaponId = weaponId,
+			IsHeadshot = false,
+			Pos = center,
+			Splash = true,
+		})
+	end
+	return res
+end
+
+--[[ W2 (contracts §3.3, nuke §15.2): blast damage to one humanoid, always quiet for the attacker. Players: PvP, not
+	self, no spawn shield, alive; tags WE_BlastSource / WE_BlastAt (a death within CombatFeelConfig.BlastSourceSeconds
+	is a quiet "blast death"). NPCs: quiet kill (rewards, missions, stats; no toast, no feedback).
+	Returns (dealt, killed) with killed read right after TakeDamage. ]]
+function CombatService.ApplyBlastDamage(attacker: Player?, humanoid: Humanoid, damage: number, sourceId: string): (number, boolean)
+	if typeof(humanoid) ~= "Instance" or not humanoid:IsA("Humanoid") then
+		return 0, false
+	end
+	if typeof(damage) ~= "number" or not (damage > 0) then
+		return 0, false
+	end
+	local src = if typeof(sourceId) == "string" then sourceId else "Blast"
+	local model = humanoid.Parent
+	if model == nil or not model:IsA("Model") then
+		return 0, false
+	end
+	local victim = Players:GetPlayerFromCharacter(model)
+	if victim then
+		if attacker ~= nil and (not GameConfig.PvPEnabled or attacker == victim) then
+			return 0, false
+		end
+		if CombatService.IsSpawnInvulnerable(victim) or humanoid.Health <= 0 then
+			return 0, false
+		end
+		if attacker then
+			tagCreator(humanoid, attacker)
+		end
+		humanoid:SetAttribute("WE_BlastSource", src)
+		humanoid:SetAttribute("WE_BlastAt", clock())
+		humanoid:SetAttribute("WE_LastWeapon", src)
+		local before = humanoid.Health
+		humanoid:TakeDamage(damage)
+		local dealt = math.max(0, before - humanoid.Health)
+		local killed = humanoid.Health <= 0
+		if dealt > 0 then
+			hitFeedback(victim, { Kind = if killed then "Death" else "Damaged", Damage = dealt, WeaponId = src })
+			pushState(victim)
+		end
+		return dealt, killed
+	end
+	if CollectionService:HasTag(model, Constants.Tags.NPC) then
+		local npcId = model:GetAttribute("NPCId")
+		if typeof(npcId) == "string" then
+			return hurtNPC(attacker, npcId, damage, src, { Quiet = true })
+		end
+	end
+	return 0, false
+end
+
+--[[ W2 (contracts §3.7): `fn(victim, killer, info)` after every player death (once per death; after stats, rewards
+	and RegisterPlayerKill; before the respawn delay). Each listener runs in its own pcall, in registration order.
+	Returns a disconnect function. ]]
+function CombatService.OnPlayerDeath(fn: (victim: Player, killer: Player?, info: DeathInfo) -> ()): () -> ()
+	local entry = { Fn = fn }
+	table.insert(W2.deathListeners, entry)
+	return function()
+		local i = table.find(W2.deathListeners, entry)
+		if i then
+			table.remove(W2.deathListeners, i)
+		end
+	end
+end
+
+--[[ W2 (contracts §1.2 step 2): may this player fire from where they sit? Returns (allowed, seated vehicle model,
+	fires from the head). A seat outside a registered vehicle keeps today's rules. ]]
+local function seatFireRule(player: Player): (boolean, Model?, boolean)
+	local veh, seat = seatedVehicle(player)
+	if seat == nil or veh == nil then
+		return true, nil, false
+	end
+	local _, rec = registeredVehicle(seat)
+	if rec == nil then
+		return true, veh, false -- not a registered vehicle: today's rules (its hull still stays out of the shot)
+	end
+	if seat:IsA("VehicleSeat") or seat:GetAttribute("WE_SeatRole") == "Driver" then
+		-- J10 lets drivers of OPEN vehicles fire; an enclosed driver seat never shoots out through its own hull
+		-- (W2 verify: the shot filter leaves the vehicle out, and enclosed occupants cannot be hit back)
+		return VehicleCombatConfig.SeatFire.DriverCanUseInfantryWeapons == true and seat:GetAttribute("WE_Exposed") ~= false, veh, false
+	end
+	if seat:GetAttribute("WE_MountId") ~= nil then
+		return false, veh, false
+	end
+	if seat:GetAttribute("WE_CanFireFromSeat") == true then
+		return true, veh, true
+	end
+	return false, veh, false
+end
+
+-- the shot's Exclude list: the shooter, the vehicle they sit in, every squad unit (units are not player targets)
+local function shotFilterFor(character: Model, veh: Model?): { Instance }
+	local f: { Instance } = { character }
+	if veh then
+		table.insert(f, veh)
+	end
+	local squads = Workspace:FindFirstChild("WarEmpireSquads")
+	if squads then
+		table.insert(f, squads)
+	end
+	return f
+end
+
+-- W2 (contracts §1.1): the fire payload's Input field sets the assist class (first valid one at once, then at most
+-- one change per ClassChangeSeconds); anything else is ignored without a strike
+local function noteInputClass(player: Player, input: any)
+	if typeof(input) ~= "string" or string.len(input) > 16 or AimAssistConfig.Classes[input] == nil then
+		return
+	end
+	local uid = player.UserId
+	local cur = W2.inputClass[uid]
+	if cur == input then
+		return
+	end
+	local t = clock()
+	if cur ~= nil and t - (W2.inputClassAt[uid] or -math.huge) < AimAssistConfig.ClassChangeSeconds then
+		return
+	end
+	W2.inputClass[uid] = input
+	W2.inputClassAt[uid] = t
+	player:SetAttribute(AimAssistConfig.ClassAttribute, input)
+end
+
+function CombatService.InputClass(player: Player): string
+	return W2.inputClass[player.UserId] or AimAssistConfig.DefaultClass
+end
+
+-- W2 (contracts §2.3): character attribute WE_GunOut = the drawn weapon id (other clients show the gun)
+local function setGunOut(player: Player, weaponId: string?)
+	local char = player.Character
+	if char == nil then
+		return
+	end
+	local attr = CombatFeelConfig.Drawn.Attribute
+	if char:GetAttribute(attr) ~= weaponId then
+		char:SetAttribute(attr, weaponId)
+	end
+end
+
+function CombatService.SetDrawn(player: Player, drawn: boolean)
+	local state = combatStates[player.UserId]
+	local _, hum = characterParts(player)
+	local alive = state ~= nil and state.Alive and hum ~= nil and hum.Health > 0
+	setGunOut(player, if drawn and alive and state then state.WeaponId else nil)
+end
+
+-- W2 (contracts §1.5): per-class counts of how hitscan shots resolved; one summary log line per AimStatsLogSeconds
+local function noteAim(cls: string, how: string)
+	local s = W2.aimStats[cls]
+	if s == nil then
+		s = { Exact = 0, Claim = 0, Assist = 0, Miss = 0 }
+		W2.aimStats[cls] = s
+	end
+	s[how] = (s[how] or 0) + 1
+	local t = clock()
+	if t - W2.aimStatsLoggedAt >= CombatFeelConfig.AimStatsLogSeconds then
+		W2.aimStatsLoggedAt = t
+		local parts: { string } = {}
+		for name, c in pairs(W2.aimStats) do
+			table.insert(parts, string.format("%s exact %d claim %d assist %d miss %d", name, c.Exact, c.Claim, c.Assist, c.Miss))
+		end
+		table.sort(parts)
+		print("[CombatService] aim: " .. table.concat(parts, " | "))
+	end
+end
+
+function CombatService._AimStats(): { [string]: { [string]: number } }
+	local out: { [string]: { [string]: number } } = {}
+	for name, c in pairs(W2.aimStats) do
+		out[name] = table.clone(c)
+	end
+	return out
+end
+
+-- W2: one WeaponFx bullet event (pcall'd: a missing remote drops the effect, never the shot)
+local function sendBulletFx(player: Player, weaponId: string, origin: Vector3, landed: Vector3, kind: string)
+	pcall(CombatFx.Bullet, player.UserId, player.UserId, weaponId, origin, landed, kind)
+end
+
+--[[ W2 (contracts §3.4): rocket / grenade impact. Direct vehicle or gate hit first, then humanoid splash, then vehicle
+	splash (the directly hit vehicle is not hit twice), then the "X" WeaponFx event. A shooter who left deals nothing. ]]
+local function projectileImpact(
+	attacker: Player,
+	weaponId: string,
+	pd: WeaponConfig.ProjectileDef,
+	amount: number,
+	launchedAt: Vector3,
+	pos: Vector3,
+	hit: RaycastResult?,
+	id: number
+)
+	local center = pos
+	if hit then
+		center = hit.Position + hit.Normal * 0.5 -- just off the surface (the splash line-of-sight starts outside it)
+	end
+	if attacker.Parent ~= nil then
+		local direct: Model? = nil
+		if hit then
+			local veh, vrec = registeredVehicle(hit.Instance)
+			if veh and vrec and vrec.Destroyed ~= true then
+				CombatService.ApplyHit(attacker, hit.Instance, amount, { WeaponId = weaponId, HitPos = hit.Position })
+				direct = veh
+			elseif hit.Instance:IsA("BasePart") and hit.Instance:GetAttribute("GateBarrier") == true then
+				CombatService.ApplyHit(attacker, hit.Instance, amount, { WeaponId = weaponId, HitPos = hit.Position })
+			end
+		end
+		CombatService.ApplyRadiusDamage(attacker, center, pd.Splash, amount, { WeaponId = weaponId, MinMult = pd.SplashMinMult })
+		local class, mult = vehicleClassFor(weaponId, nil, nil)
+		pcall(VehicleHealth.ApplyRadiusDamage, center, pd.Splash, amount, attacker, class, {
+			MinMult = pd.SplashMinMult,
+			WeaponMult = mult,
+			IgnoreModel = direct,
+			WeaponId = weaponId,
+		})
+	end
+	pcall(CombatFx.Explode, attacker.UserId, weaponId, launchedAt, center, pd.Splash, id)
+end
+
+local function launchProjectile(player: Player, def: WeaponDef, weaponId: string, origin: Vector3, dir: Vector3, filter: { Instance }): boolean
+	local pd = def.Projectile :: WeaponConfig.ProjectileDef
+	local amount = damageFor(def, player)
+	local spawnAt = origin + dir * CombatFeelConfig.Projectile.SpawnForwardStuds
+	local vel = dir * pd.Speed
+	local rec = Projectile.Launch({
+		OwnerUserId = player.UserId,
+		Origin = spawnAt,
+		From = origin, -- W2 verify: the first ray starts at the shot origin (no tunnelling through a wall 1 stud ahead)
+		Velocity = vel,
+		GravityFactor = pd.GravityFactor,
+		MaxSeconds = pd.MaxSeconds,
+		Filter = filter,
+		OnImpact = function(pos: Vector3, hit: RaycastResult?, r: Projectile.Record)
+			projectileImpact(player, weaponId, pd, amount, spawnAt, pos, hit, r.Id)
+		end,
+	})
+	if rec == nil then
+		return false
+	end
+	pcall(CombatFx.Launch, player.UserId, weaponId, spawnAt, vel, pd.MaxSeconds, rec.Id)
+	return true
+end
+
+--[[ W2 (contracts §1.3 step 3): the assist candidate for this shot, or nil. Candidates are alive players (PvP on) and
+	live NPC records; never the shooter, clan allies, spawn-shielded players, anyone in the shooter's vehicle or in an
+	enclosed seat, vehicles, gates or squad units. ]]
+local function assistPick(
+	player: Player,
+	shooterVeh: Model?,
+	origin: Vector3,
+	dir: Vector3,
+	cls: string,
+	assistRange: number,
+	maxAlong: number,
+	filter: { Instance }
+): CombatAssist.Pick?
+	CombatAssist.Begin(origin, dir, cls, assistRange, maxAlong)
+	if GameConfig.PvPEnabled then
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr ~= player then
+				local char, hum, root = characterParts(plr)
+				local torso = if char and root then torsoOf(char, root) else nil
+				if char and hum and torso and hum.Health > 0 and CombatAssist.InCone(torso.Position) and not CombatService.IsSpawnInvulnerable(plr) then
+					local veh, seat = seatedVehicle(plr)
+					local excluded = (shooterVeh ~= nil and veh == shooterVeh)
+						or inEnclosedSeat(veh, seat)
+						or (AimAssistConfig.ExcludeClanAllies and isClanAlly(player, plr))
+					if not excluded then
+						CombatAssist.Offer(char, torso, plr, nil)
+					end
+				end
+			end
+		end
+	end
+	for id, rec in pairs(npcRecords) do
+		if rec.Alive and rec.Humanoid.Health > 0 and rec.Model.Parent ~= nil then
+			CombatAssist.Offer(rec.Model, torsoOf(rec.Model, rec.Root), nil, id)
+		end
+	end
+	return CombatAssist.Finish(filter)
+end
+
 function CombatService.RequestFire(player: Player, payload: any): boolean
 	if typeof(payload) ~= "table" then
 		AntiExploitService.Strike(player, "fire_bad_payload")
@@ -939,6 +1666,16 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 
 	local def = weaponDef(state.WeaponId)
 	if not def then
+		return false
+	end
+
+	-- W2 (contracts §1.2 step 2): seat rule before any ammo or schedule is spent (a refusal is not a strike)
+	local seatVeh, seatAllowed, fromSeat = nil, true, false
+	do
+		local allowed, veh, fromHead = seatFireRule(player)
+		seatAllowed, seatVeh, fromSeat = allowed, veh, fromHead
+	end
+	if not seatAllowed then
 		return false
 	end
 
@@ -975,13 +1712,31 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	direction = direction.Unit
 
 	local origin = payload.Origin
-	if typeof(origin) ~= "Vector3" then
+	if fromSeat then
+		-- W2: an open-seat passenger fires from the head (the seat moves under them: no desync check)
+		local head = character:FindFirstChild("Head")
+		origin = if head and head:IsA("BasePart") then head.Position else root.Position + Vector3.new(0, 1.5, 0)
+	elseif typeof(origin) ~= "Vector3" then
 		origin = root.Position + Vector3.new(0, 1.5, 0)
 	else
 		if not ((origin - root.Position).Magnitude <= CombatConfig.MaxOriginDeltaStuds) then -- P0-7: NaN snaps too
 			AntiExploitService.Strike(player, "fire_origin_desync")
 			origin = root.Position + Vector3.new(0, 1.5, 0)
+		else
+			-- W2 verify: an Origin up to 12 studs out may not sit on the far side of a wall (wall-banging, rockets
+			-- spawned inside a base). No strike: the shot simply starts at the head.
+			local head = character:FindFirstChild("Head")
+			local eye = if head and head:IsA("BasePart") then head.Position else root.Position + Vector3.new(0, 1.5, 0)
+			if (origin - eye).Magnitude > 0.25 and not CombatDamage.LineOfSight(eye, origin, shotFilterFor(character, seatVeh), nil, true) then
+				origin = eye
+			end
 		end
+	end
+
+	-- W2 (contracts §1.2 step 5): projectile caps refuse the shot before any ammo is spent
+	local isProjectile = def.Projectile ~= nil
+	if isProjectile and Projectile.AtCap(player.UserId) then
+		return false
 	end
 
 	state.Ammo -= 1
@@ -989,43 +1744,56 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	guns[state.WeaponId] = math.max(gunAt + minInterval, clock()) -- v69 research
 	pushState(player)
 
+	-- W2 (contracts §1.1, §2.3): input class for the assist; an accepted shot means the gun is out
+	noteInputClass(player, payload.Input)
+	if character:GetAttribute(CombatFeelConfig.Drawn.Attribute) == nil then
+		setGunOut(player, state.WeaponId)
+	end
+	local shotFilter = shotFilterFor(character, seatVeh)
+
+	if isProjectile then
+		launchProjectile(player, def, state.WeaponId, origin, direction, shotFilter)
+		return true
+	end
+
 	local range = def.Range + CombatConfig.HitPositionSlopStuds
 	local damage = damageFor(def, player)
-	local result = raycast(origin, direction, range, { character })
+	local result = raycast(origin, direction, range, shotFilter)
+	local cls = CombatService.InputClass(player)
 
 	local hitSomething = false
+	local how = "Miss" -- W2 aim stats: "Exact" | "Claim" | "Assist" | "Miss"
+	local fxKind, fxAt = "M", origin + direction * def.Range -- W2 WeaponFx: where the shot landed
 	-- P0-7: how far along the fire ray a client-named target may stand (nil = the exact ray decided the shot)
 	local claimMaxAlong: number? = nil
+	local sceneryAlong: number? = nil -- W2: the exact ray hit scenery this far along (bounds the assist too)
 	if result then
-		local hitTarget = false -- the ray hit a player, an NPC or a gate: that decides the shot, no claim
-		local model = result.Instance:FindFirstAncestorOfClass("Model")
-		if model then
-			local hitPlayer = Players:GetPlayerFromCharacter(model)
-			if hitPlayer then
-				hitTarget = true
-				hitSomething = damagePlayer(player, hitPlayer, damage, state.WeaponId)
-			elseif CollectionService:HasTag(model, Constants.Tags.NPC) then
-				hitTarget = true
-				local npcId = model:GetAttribute("NPCId")
-				if typeof(npcId) == "string" and (result.Position - origin).Magnitude <= range then
-					hitSomething = damageNPC(player, npcId, damage, state.WeaponId)
-				end
+		-- W2 (contracts §1.3 step 1): a player, an NPC, a registered vehicle (cover, even when protected) or a gate
+		-- decides the shot. A part named "Head" of a player or NPC is a headshot.
+		local kind = resolveTarget(result.Instance)
+		if kind ~= "None" then
+			how = "Exact"
+			local isHead = (kind == "Player" or kind == "NPC") and result.Instance.Name == "Head"
+			local amount = if kind == "Gate"
+				then damage
+				else damage * CombatDamage.FalloffMult(def, (result.Position - origin).Magnitude)
+			local hit = CombatService.ApplyHit(player, result.Instance, amount, {
+				WeaponId = state.WeaponId,
+				HitPos = result.Position,
+				Headshot = isHead,
+			})
+			hitSomething = hit.Dealt > 0
+			fxKind = FX_KIND[kind] or "W"
+			fxAt = result.Position
+		else
+			-- the ray only hit scenery (ground, a wall far behind the target): a named target in front of that point may
+			-- still take the hit under the same checks (on flat ground the camera ray almost always ends in the ground)
+			sceneryAlong = (result.Position - origin).Magnitude
+			if CombatFairnessConfig.ClaimAfterSceneryHit then
+				claimMaxAlong = (result.Position - origin).Magnitude + CombatFairnessConfig.ClaimBeyondHitStuds
 			end
-		end
-		-- Siegeable plot gate barrier (server-validated)
-		if not hitSomething then
-			local hitInst = result.Instance
-			if hitInst and hitInst:IsA("BasePart") and hitInst:GetAttribute("GateBarrier") == true then
-				hitTarget = true
-				if GateDefenseService and GateDefenseService.ApplyDamage then
-					hitSomething = GateDefenseService.ApplyDamage(player, hitInst, damage, state.WeaponId) == true
-				end
-			end
-		end
-		-- the ray only hit scenery (ground, a wall far behind the target): a named target in front of that point may
-		-- still take the hit under the same checks (on flat ground the camera ray almost always ends in the ground)
-		if not hitTarget and CombatFairnessConfig.ClaimAfterSceneryHit then
-			claimMaxAlong = (result.Position - origin).Magnitude + CombatFairnessConfig.ClaimBeyondHitStuds
+			fxKind = "W"
+			fxAt = result.Position
 		end
 	else
 		claimMaxAlong = range
@@ -1033,6 +1801,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	if claimMaxAlong ~= nil then
 		-- P0-7: the server ray missed. The target the client named still takes the hit when the target moved a
 		-- little after the phone's ray hit it (cellular lag), never through walls or with the gun pointed elsewhere.
+		-- W2: a validated claim decides the shot (no headshot, no assist); a refused one falls through to the assist.
 		local maxAlong = math.min(range, claimMaxAlong)
 		local targetUserId = payload.TargetUserId
 		local targetNpcId = payload.TargetNpcId
@@ -1048,9 +1817,14 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 				if tchar == nil or thum == nil or troot == nil or thum.Health <= 0 then
 					logClaimRefusal(player, "target dead or absent", "user " .. tostring(targetPlayer.UserId))
 				else
-					local ok, why = validateClaim(character, origin, direction, range, maxAlong, tchar, torsoOf(tchar, troot).Position)
+					local torso = torsoOf(tchar, troot)
+					local ok, why = validateClaim(character, origin, direction, range, maxAlong, tchar, torso.Position)
 					if ok then
-						hitSomething = damagePlayer(player, targetPlayer, damage, state.WeaponId)
+						how = "Claim"
+						local amount = damage * CombatDamage.FalloffMult(def, (torso.Position - origin).Magnitude)
+						local hit = CombatService.ApplyHit(player, torso, amount, { WeaponId = state.WeaponId, HitPos = torso.Position })
+						hitSomething = hit.Dealt > 0
+						fxKind, fxAt = "P", torso.Position
 					else
 						logClaimRefusal(player, why, "user " .. tostring(targetPlayer.UserId))
 					end
@@ -1063,11 +1837,34 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 			else
 				local ok, why = validateClaim(character, origin, direction, range, maxAlong, rec.Model, rec.Root.Position)
 				if ok then
-					hitSomething = damageNPC(player, targetNpcId, damage, state.WeaponId)
+					how = "Claim"
+					local amount = damage * CombatDamage.FalloffMult(def, (rec.Root.Position - origin).Magnitude)
+					local hit = CombatService.ApplyHit(player, rec.Root, amount, { WeaponId = state.WeaponId, HitPos = rec.Root.Position })
+					hitSomething = hit.Dealt > 0
+					fxKind, fxAt = "N", rec.Root.Position
 				else
 					logClaimRefusal(player, why, "npc " .. targetNpcId)
 				end
 			end
+		end
+	end
+
+	-- W2 (contracts §1.3 step 3): server aim assist (the client's target hints are never read here)
+	if how == "Miss" and AimAssistConfig.Enabled then
+		local assistRange = math.min(def.Range, AimAssistConfig.MaxRangeStuds)
+		local maxAlong = if sceneryAlong ~= nil then sceneryAlong + CombatFairnessConfig.ClaimBeyondHitStuds else assistRange
+		local pick = assistPick(player, seatVeh, origin, direction, cls, assistRange, maxAlong, shotFilter)
+		if pick then
+			how = "Assist"
+			local amount = damage * CombatDamage.FalloffMult(def, pick.Distance)
+			local hit = CombatService.ApplyHit(player, pick.Torso, amount, {
+				WeaponId = state.WeaponId,
+				HitPos = pick.Torso.Position,
+				Assist = true,
+			})
+			hitSomething = hit.Dealt > 0
+			fxKind = if pick.Player then "P" else "N"
+			fxAt = pick.Torso.Position
 		end
 	end
 
@@ -1078,6 +1875,8 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		end
 	end
 
+	noteAim(cls, how)
+	sendBulletFx(player, state.WeaponId, origin, fxAt, fxKind)
 	return true
 end
 
@@ -1097,23 +1896,30 @@ local function resolveDeathOfferLive(MonetizationConfig: any, key: string): (boo
 	return false, nil
 end
 
-local function onPlayerDeath(victim: Player, killer: Player?)
-	local state = combatStates[victim.UserId]
-	if state then
-		state.Alive = false
-	end
-	pushState(victim)
-	if killer and killer ~= victim then
-		CombatService.RegisterPlayerKill(killer, victim)
-	else
-		local vProfile = DataService.GetProfile(victim)
-		if vProfile then
-			vProfile.Stats.Deaths += 1
-			DataService.MarkDirty(victim)
+-- W2 (contracts §3.7): what killed the player (WE_LastWeapon, and a recent blast marks a quiet "blast death")
+local function deathInfoOf(humanoid: Humanoid?): DeathInfo
+	local weaponId: string? = nil
+	local blast: string? = nil
+	if humanoid then
+		local w = humanoid:GetAttribute("WE_LastWeapon")
+		if typeof(w) == "string" then
+			weaponId = w
+		end
+		local src = humanoid:GetAttribute("WE_BlastSource")
+		local at = humanoid:GetAttribute("WE_BlastAt")
+		if typeof(src) == "string" and typeof(at) == "number" and clock() - at <= CombatFeelConfig.BlastSourceSeconds then
+			blast = src
 		end
 	end
-	
-	-- v30: PvP death → DeathShopOffer toast (DoubleCash GP + SpeedBoost DP; live Ids only; debounced)
+	return { WeaponId = weaponId, BlastSource = blast, Quiet = blast ~= nil }
+end
+
+--[[ Built-in OnPlayerDeath listener #1 (moved as-is from onPlayerDeath; skipped for blast deaths, nuke §15.2).
+	v30: PvP death → DeathShopOffer toast (DoubleCash GP + SpeedBoost DP; live Ids only; debounced) ]]
+local function deathShopOfferListener(victim: Player, killer: Player?, info: DeathInfo)
+	if info.BlastSource ~= nil then
+		return
+	end
 	if killer and killer ~= victim and NotificationService then
 		local now = os.clock()
 		local prev = lastDeathShopAt[victim.UserId] or 0
@@ -1152,6 +1958,39 @@ local function onPlayerDeath(victim: Player, killer: Player?)
 			end
 		end
 	end
+end
+CombatService.OnPlayerDeath(deathShopOfferListener) -- registered at load: always listener #1
+
+local function onPlayerDeath(victim: Player, killer: Player?, humanoid: Humanoid?)
+	if humanoid then -- W2: once per death, whatever fires Died
+		if W2.deathHandled[humanoid] then
+			return
+		end
+		W2.deathHandled[humanoid] = true
+	end
+	local state = combatStates[victim.UserId]
+	if state then
+		state.Alive = false
+	end
+	pcall(setGunOut, victim, nil) -- W2: the gun goes away with the body
+	pushState(victim)
+	local info = deathInfoOf(humanoid)
+	if killer and killer ~= victim then
+		CombatService.RegisterPlayerKill(killer, victim, if info.Quiet then { Quiet = true } else nil)
+	else
+		local vProfile = DataService.GetProfile(victim)
+		if vProfile then
+			vProfile.Stats.Deaths += 1
+			DataService.MarkDirty(victim)
+		end
+	end
+
+	-- W2: OnPlayerDeath listeners (listener #1 = the DeathShopOffer toast), each in its own pcall
+	for _, entry in ipairs(table.clone(W2.deathListeners)) do
+		xpcall(entry.Fn, function(err: any)
+			warn("[CombatService] OnPlayerDeath listener error:", err)
+		end, victim, killer, info)
+	end
 
 	task.delay(GameConfig.RespawnTimeSeconds, function()
 		if victim.Parent then
@@ -1173,6 +2012,12 @@ local function onCharacterAdded(player: Player, character: Model)
 		state.Alive = true
 		local invuln = GameConfig.SpawnInvulnerabilitySeconds or CombatConfig.SpawnInvulnerabilitySeconds
 		state.InvulnerableUntil = clock() + invuln
+		-- W2 (contracts §3.6): replicated spawn shield end (client bubble, AimTargets); server time, not os.clock
+		local okNow, serverNow = pcall(function()
+			return Workspace:GetServerTimeNow()
+		end)
+		local base = if okNow and typeof(serverNow) == "number" then serverNow else os.time()
+		character:SetAttribute(CombatFeelConfig.ShieldAttribute, base + invuln)
 		local def = weaponDef(state.WeaponId)
 		if def then
 			state.Ammo = magSize(player, def) -- v69 research
@@ -1191,7 +2036,7 @@ local function onCharacterAdded(player: Player, character: Model)
 		if tag and tag:IsA("ObjectValue") and tag.Value and tag.Value:IsA("Player") then
 			killer = tag.Value :: Player
 		end
-		onPlayerDeath(player, killer)
+		onPlayerDeath(player, killer, humanoid)
 	end)
 
 	humanoid.HealthChanged:Connect(function()
@@ -1213,6 +2058,7 @@ function CombatService.Init(deps: { [string]: any })
 	MissionService = deps.MissionService
 	TerritoryService = deps.TerritoryService
 	ResearchService = deps.ResearchService -- v69 research
+	ClanService = deps.ClanService -- W2: ally exclusion (optional)
 
 	CombatDamage.Bind({ TerritoryService = TerritoryService })
 	CombatNPC.Bind({
@@ -1226,7 +2072,24 @@ function CombatService.Init(deps: { [string]: any })
 			return CombatService.SpawnNPC(typeId, at)
 		end,
 		getTagged = getTaggedCached,
+		fx = function(rec: any, origin: Vector3, landed: Vector3, kind: string) -- W2: NPC WeaponFx (S = 0)
+			CombatFx.Bullet(rec.Id, 0, "NPC", origin, landed, kind)
+		end,
 	})
+	-- W2: WeaponFx fan-out (UnreliableRemoteEvent; every send pcall'd)
+	CombatFx.Bind({
+		getRemote = function(): Instance?
+			return RemoteSetup.GetUnreliable(Constants.RemoteNames.WeaponFx)
+		end,
+		clock = clock,
+	})
+	W2.aimStatsLoggedAt = clock()
+	-- W2: optional gun meshes (nothing to load while every WeaponConfig VisualAssetId is 0)
+	task.spawn(function()
+		xpcall(WeaponAssetLoader.Start, function(err: any)
+			warn("[CombatService] WeaponAssetLoader:", err)
+		end, WeaponConfig.Weapons)
+	end)
 
 
 	local equipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestEquipWeapon) :: RemoteEvent
@@ -1258,6 +2121,18 @@ function CombatService.Init(deps: { [string]: any })
 		CombatService.RequestFire(player, payload)
 	end)
 
+	-- W2 (contracts §2.3): drawn / holstered (WE_GunOut); a non-boolean is ignored without a strike
+	local drawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSetDrawn) :: RemoteEvent
+	drawnRemote.OnServerEvent:Connect(function(player: Player, drawn: any)
+		if not RateLimitService.Allow(player, "set_drawn", CombatFeelConfig.Drawn.RemoteRate, CombatFeelConfig.Drawn.RemoteBurst) then
+			return
+		end
+		if typeof(drawn) ~= "boolean" then
+			return
+		end
+		CombatService.SetDrawn(player, drawn)
+	end)
+
 	local reloadRemote = RemoteSetup.Get(Constants.RemoteNames.RequestReload) :: RemoteEvent
 	reloadRemote.OnServerEvent:Connect(function(player: Player)
 		if not RateLimitService.Allow(player, "reload", CombatConfig.ReloadRemoteRate, CombatConfig.ReloadRemoteBurst) then
@@ -1270,6 +2145,9 @@ function CombatService.Init(deps: { [string]: any })
 	end)
 
 	local function hookPlayer(player: Player)
+		if player:GetAttribute(AimAssistConfig.ClassAttribute) == nil then -- W2: assist class until the first shot says
+			player:SetAttribute(AimAssistConfig.ClassAttribute, AimAssistConfig.DefaultClass)
+		end
 		player.CharacterAdded:Connect(function(character)
 			onCharacterAdded(player, character)
 		end)
@@ -1297,6 +2175,10 @@ function CombatService.Init(deps: { [string]: any })
 		gunSchedule[player.UserId] = nil -- v69 research
 		claimRefusals[player.UserId] = nil -- P0-7
 		CombatNPC.ForgetPlayer(player.UserId) -- P1-2 speed samples
+		W2.inputClass[player.UserId] = nil -- W2
+		W2.inputClassAt[player.UserId] = nil
+		CombatFx.Forget(player.UserId)
+		Projectile.ForgetOwner(player.UserId)
 	end)
 
 	task.spawn(function()

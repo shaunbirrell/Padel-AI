@@ -1,7 +1,7 @@
 --!strict
 --[[ v71 money (M2): vehicle HP, damage classes, destruction, regen, seat rules (premium_vehicles.md §3–§5).
-	Server: VehicleHealth (M4) and CombatService.ApplyHit; VehicleWeaponService (M6). Client reads it for display.
-	Config only: nothing reads this file yet.
+	Server: VehicleHealth (W2 / M4: Server/Modules/VehicleHealth.luau) and CombatService.ApplyHit; VehicleWeaponService
+	(M6). Client: VehicleCombatClient reads Ui (HP bars) for display only.
 
 	dealt = raw × Class.Mult × WeaponMult × (1 − min(Armor / (Armor + ArmorK), MaxArmorReduction) × Class.ArmorFactor)
 	MaxHP = def.Health × clamp(WE_ArmorMult, ArmorMultClamp) × GlobalHPMult (× Tank Factory bonus for ground
@@ -98,6 +98,19 @@ local VehicleCombatConfig = {
 	-- Free 90 s test drives (PremiumVehicleConfig.Trial): no damage to or from players / vehicles, no bounty, and
 	-- NPC kills carry no creator tag (no rewards).
 	Trial = { DealsPlayerDamage = false, DealsVehicleDamage = false, TakesDamage = false, Bounty = false, KillRewards = false },
+
+	-- W2 client HP bars (VehicleCombatClient; display only). Sizes are REAL px (the bar's ScreenGui has no UIScale).
+	--   HudBar   occupant bar: touch = HudLayout top stack order TouchStackOrder (right above the SPD pill, 25);
+	--            desktop = AnchorPoint (1, 1) at (1, -DesktopRight, 1, -DesktopBottom), just above the SPD pill.
+	--            Flashes red below LowFrac; gold frame on premium vehicles.
+	--   OverBar  over-vehicle BillboardGui on the Chassis: stud-scaled, never AlwaysOnTop, MaxDistance <= 40, no text;
+	--            ShowSeconds after that vehicle's WE_HP drops, and on your own parked vehicle while HP < MaxHP;
+	--            never on the vehicle you sit in; at most MaxShown at once (the most recent win).
+	Ui = {
+		HudBar = { Width = 230, Height = 10, TouchStackOrder = 24, DesktopRight = 14, DesktopBottom = 50, LowFrac = 0.25 },
+		OverBar = { WidthStuds = 4, HeightStuds = 0.35, ShowSeconds = 5, MaxDistance = 40, MaxShown = 3 },
+		RefreshHz = 10,
+	},
 }
 
 -- armorReduction × ArmorFactor for one hit (pure; used by VehicleHealth and the Garage stat bars)

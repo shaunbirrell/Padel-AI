@@ -863,3 +863,295 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 - **Server message routing (spec §4.2):** collects are `Collect` + `Amount` (float only; walking over the ATM is silent for AutoCollect owners); ATM raid thief = Success line + "+$" float, victim = Error line + red "-$" float; capture stipend silent (`TerritoryConfig.CaptureStipend.NotifyOnPayout = false`); no "Squad: X" per order; "BASE UNDER ATTACK!" (Warn → the client's Alert slot, new `HudConfig.Toast.Reroute` rule) at most once per plot per 60 s instead of a toast every 1.2 s; no upsell companion lines; purchase failure Warns only for NoProfile / RateLimited / a full server (the client words the rest); no "Capturing X..." toast; the near-rebirth nudge once per session at L38 and once at L39; no key names or "click" in any server line. `NotificationService.Notify` gained an optional 5th `amount` argument.
 - **Bank retune (task #20):** HEAD's 5 guards (28 dmg × 2.2/s, range 90, aggro 130) out-shot any player + squad, and the vault hold froze for anyone below 95 % health (no regen reaches that inside the 18 s respawn), so nobody could loot. Now `CombatConfig.NPCTypes.BankGuard` = 200 HP, 12 dmg, 1.3/s, range 75, aggro 90; `BankRaidConfig.RaidHoldSeconds` 8 → 6; the hold freezes only if you were hit in the last `UnderFireSeconds` (2). Headless end-to-end sim with the real BankRaidService, 7 seeds: a lone player in the open dies 7/7; player + 5-unit squad on ATTACK behind cover loots 7/7 (24-27 s). Guard respawn stays the global 18 s (a per-type `RespawnSeconds` needs a 2-line CombatService change — handed to Combat Core). Payout ($15-35K, 5 min cooldown) unchanged; owner may want to revisit it now the bank is winnable.
 - **Bank retune (task #20):** hold time 6 s, the hold freezes only while the raider was hit recently (`BankRaidConfig.UnderFireSeconds`), guard tuning in BankRaidConfig/CombatConfig. Headless: player + squad on Attack behind cover wins 12/12 seeds; a lone player behind cover 0/12; a lone player in the open wins about 1 in 20 (guards miss). Adding a 6th guard (`GuardCount = 6`) removes the lone-player wins but costs an NPC slot under the live cap (MaxActiveNPCs 18 + 4 special) — left at 5.
+
+## 2026-09-24 — W1 JEEP-2: brand-free vehicle names, airspace limit, prompts while seated
+- **Names:** "Military Jeep" → "Field 4x4", "Armed Jeep" → "Armed 4x4", "Jeep HMG" → "4x4 HMG", tutorial "Spawn 4x4", depot board "4X4-02 READY". Internal ids (`MilitaryJeep`, `ArmedJeep`, `JeepHMG`, `Tutorial_Jeep`) are unchanged so saves, ownership and premium entitlements keep working. The Level 40 line says "Open Rebirth" (no K).
+- **Airspace:** helicopters and planes turn back before the World v2 air box (`WorldConfig.Bounds.Air`) and level off at about 350 studs, with a red "Restricted airspace — turning back" line. The air box is live now, before the canyon walls are hooked, so the outer desert beyond ±2050 is no-fly: an aircraft out there is steered back in (never dragged on the ground; `AirBox.PushFrac` 0.5), and the server validator only flags aircraft still moving outward past box + 60 (`ValidatorOutwardSpeed` 8) or beyond ±3560. Rollback: `VehicleConfig.Drive.AirBox.Enabled = false`. Consider raising `WorldConfig.Bounds.Air.MaxY` to ~380-400 once the canyon buttes (320-340 tall) are live.
+- **Prompts while seated:** every prompt outside the vehicle is hidden (range set to 0 locally, not `Enabled`) while you sit in any vehicle seat and restored on exit/death/respawn; console BUY works again when you step out.
+- **Layout:** on touch the SPD pill and hint sit in the top stack under the capture bar (no overlap 800×360-1920×1080); on keyboard the pill uses the ammo slot.
+
+## 2026-09-24 — Owner playtest chat commands /level and /xp
+- The owner asked for enough XP to buy the helicopter. Admins on `AdminConfig.UserIds` (only 470626172) can type **`/level <n>`** (no number = 25, which unlocks every helicopter) or **`/xp <n>`** (no number = 10,000) in chat. Server-side, allowlist-checked, logged as ADMIN_COMMAND; not a remote and never available to other players. A chat line that arrives through more than one chat path within 1 s runs once. Buying a helicopter still needs the Helipad (Lv 1+) bought at its console and the cash (AdminPlaytestCash covers that).
+
+## 2026-09-24 — Asset shortlist (for the owner's Grok bot) + clear-now ids
+- `docs/ASSET_SHORTLIST.md` (+ `docs/asset_shortlist.json`) is the hard-wire sheet: one pick + one backup per slot, every id re-verified live against the Roblox store on 2026-09-24 (creator, type, free, contents where visible), the "do not use" list, a numbered step list for the Grok bot (store clicks + Studio checks + a report; Grok does not edit the repo) and what the lead wires afterwards.
+- **Cleared now (§3.1):** 24 catalog ids set to 0 in `VisualAssetConfig` (the Part kits show instead): a 484k-triangle soldier swarm pack, a 156k-triangle mesa, a 100k-triangle sandbag nest, two third-party mesh/decal ids that bypass the third-party switch, and every vehicle model copying a real vehicle (Humvee/Bradley/FMTV/MRAP/F-15/F-18/Mustang look) or a game franchise.
+- **Pending owner answers:** Roblox's own Weapons Kit Auto Rifle looks AK-like and its Rocket Launcher RPG-like. Default until the owner says yes: our own Part-kit guns.
+- **Do not bake store models into the Padel-AI repo** (it is public); runtime loading by id is the default path.
+- **Still to do after W2:** six UI/alert sounds in `SoundConfig` point at engine files no longer in the Roblox client (silent taps/notices); §3.5 has licensed replacements.
+
+## 2026-09-24 — World v2 W1 hook (WORLD-A): canyon edge on, dead world props gone
+- **Switched on:** `WorldAtmosphere.Apply`, `WorldBounds.Build` and `WorldTerrain.Build` (background task) are called from `MapSetup`, each behind one `FindFirstChild` + `pcall` guard: if a module is missing or errors, the map still builds and the old lighting block runs as the fallback. `WorldHygiene.Enforce` runs after the dressing / flora cull. `MAP_GEN` is 81/80 (odd = FaceMapCentre), so servers rebuild maps stamped 70/71.
+- **Deleted:** the Part mountain ring, the fill patches, the 20 guard statues (no service read `GuardNPCType`), the oil spectacle, the warzone landmarks and every territory beacon. Outside the bases: parts 2,726 → 2,022 (Low 1,670 → 1,101), Neon 481 → 0, world BillboardGuis 71 → 16 (all ≤ 40 studs), static Humanoids 20 → 0.
+- **Spawns come from `WorldConfig.Spawns`:** 10 garage pads with a painted "Garage" board, gate pads in plot coordinates facing away from each base, invisible NPC / event anchors (tags and folder names unchanged). Hostile NPCs now start at the Quarry, Ridge and Dune corner camps plus 4 territory points, not the old ring near the centre, so NPC kill trips are longer.
+- **Naval pontoons carry no painted name** (decision): the text would have used 12 more SurfaceGuis, over the World v2 sign budget, and boats spawn from the Garage menu, so nobody has to find a pontoon. Restoring it is one `WorldLabel.Surface` call on the trim part.
+- **Radio tower at the Oil Field yard moved 30 studs** so supply crates at the OilYard event anchor land on the ground, not through the mast.
+- **Left for later:** TerritoryService's flag `WE_OwnerLight` (Range 28, up to Brightness 3.2, untagged) is the one world light-policy failure; flag poles stand (non-colliding) in the lane at the 5 road capture points; aircraft can touch the 400-tall ground wall before the air-box turn-back completes (pick: air box = wall box, or wall height ~170). All three need TerritoryService / WorldConfig changes outside this step.
+- **Needs the engine:** Terrain can't be tested headless (build time budget ≤ 5 s, memory, cliff climbability, look of the Atmosphere haze; revert is `WorldConfig.Atmosphere.Preset = "Classic"`). The first terrain build clears any hand-painted terrain in the place.
+
+## 2026-09-24 — Money M1: receipt core + quick wins
+- **Starter Pack v2** (same product Id 3713839505): 149 R$, $50,000 + Auto Collect for good, one time, no Gold. A buyer who already owns Auto Collect gets $25,000 more Cash instead (`StarterFallbackCash`). If a second Starter receipt ever arrives (only by getting round the client's one-time guard), it is still granted, since Roblox has taken the Robux: +$75k.
+- **Army Expansion (+10)** (same Id 3713839210): 99 R$, army cap +10, kept through Rebirth. It is a yes/no entitlement, so it never stacks, and old buyers of the +1 slot get +10 too.
+- **Goodwill (owner decision D2):** players who bought the old Starter get Auto Collect once, outside `ProcessReceipt`, on a fully loaded profile only, flagged `Entitlements.StarterGoodwillV2`, with a thank-you toast.
+- **Offers:** none while the tutorial is unfinished; the Starter card is sent 3 s after the tutorial ends (8 s after load when already done) and the HUD still holds offers until 90 s after join. No Speed Boost pop-up on spawn or on sitting in a vehicle, and no Cash Mega pop-up after a death. The server also caps offers at 3 per session, 240 s apart (`SoftOfferSessionMax`, `SoftOfferSessionCooldownSeconds`). The server and HUD budgets can drift, so a server-sent offer can be refused by the HUD and its one-time flag is still spent; the M3 Offer Director fixes that.
+- **"Army full" chip:** detected on the client from the latest `SoldierStateUpdate` (the server refuses with `AtCap`; there is no refusal remote). The chip replaces the Army Expansion button in place so nothing moves.
+- **No double charge:** the new Army, Commander Pack and Battle Pass UNLOCK buttons treat a product bought this session as owned as soon as `PromptProductPurchaseFinished` fires, like the Shop does.
+- **New keys with Id 0** (Nuke, Nuke x3, 6 premium-vehicle passes, Rebirth Boost) are hidden with a `Feature` tag until their feature ships; the wire tool keeps them hidden when an Id is pasted.
+- **Dashboard gap:** after this publish the game shows 149 / 99 R$ while Roblox still charges 249 / 79 R$ until the owner changes the two prices. Do the Dashboard change straight after publishing.
+
+## 2026-09-24 — Join hotfix (owner's sister stuck loading)
+- **Diagnosis:** no game code blocks or holds a joining player (two-player headless sim, 9 runs: save loads, plot 2, can move, no kick). The likely causes were Roblox-side: the game was Private until 17:54 UTC (Private = Edit-permission users only), and it is rated "Mild, Ages 16+", so until it passes Roblox's Kids/Select review only age-checked players 16+ and the owner's Trusted Friends can join. The non-streamed world is about 1–3 MB (headless estimate): a slow load on a weak phone, not an endless one. `docs/LIVE_PLACE.md` is corrected.
+- **Store-model templates live in ServerStorage** (`WE_VisualAssetTemplates`), not ReplicatedStorage, so joiners no longer download templates nobody on the client reads; clones are still made on the server. One line in `ensureFolder()` reverses it.
+- **Gate guards give a spawn grace:** guards and AutoGuns ignore a player whose save has not loaded (such a player cannot fire or raid) and, for `GateDefenseConfig.SpawnGraceSeconds` (4), a player who just spawned or whose save just loaded, since a new player's random first spawn can be someone's gate pad. The grace ends early when the player holds an ATM raid or hits the gate or a guard.
+- **Left for Combat Core / streaming:** with more players than the 6 plots, a plotless respawn stays on a random gate pad (`CombatService.TeleportToBase` needs a plot); it gets the 4 s grace but cannot attack or raid under it. StreamingEnabled (faster joins, less phone memory) is the next step once Combat Core is committed.
+
+
+## 2026-09-24 — W2 Combat Core (CC-1 server combat, CC-2 vehicle HP, CC-3 client feel, verifier)
+
+## W2 CC-1 (server combat) — assumptions
+
+- **A-CC1-1 Claim decides.** A validated P0-7 claim ends the shot's resolution even when the damage is then refused (PvP off, spawn shield). The assist never runs after a validated claim ("first rule that decides wins").
+- **A-CC1-2 Assist depth.** When the exact ray hit scenery, the assist's `maxAlong` is that distance + `ClaimBeyondHitStuds` (3), whatever `ClaimAfterSceneryHit` says. With no hit, it is the assist range `min(weapon Range, 150)`.
+- **A-CC1-3 Splash spares clan mates.** `CombatFeelConfig.Splash.ExcludeClanAllies = true` is a CC-1 additive field (the W2 task asked splash to respect allies). A direct bullet hit on a clan mate still lands as it does today; there is no clan friendly-fire rule yet.
+- **A-CC1-4 Gate hit marker.** When `GateDefenseService.ApplyDamage` accepts a hit, the attacker now gets a `CombatHitFeedback` "Hit" (`TargetKind = "Gate"`). Gates take no fall-off. Before W2, gate hits sent no marker.
+- **A-CC1-5 NPC miss tracer.** A missed NPC shot sends WeaponFx with `K = "M"` and `P` = the target's torso plus a random 2–4 stud horizontal offset. There is no extra raycast to find the scenery.
+- **A-CC1-6 Shooter leaves.** A player's live projectiles are removed when they leave (`Projectile.ForgetOwner`). They have no impact and send no "X"; the client drops the visual at T + 0.5 s. A projectile that lands after its shooter's `Player.Parent` is nil deals no damage.
+- **A-CC1-7 Blast centre.** The explosion centre is the hit point pushed 0.5 studs out along the surface normal, so the splash line of sight starts outside the surface. With no hit, it is the point at MaxSeconds.
+- **A-CC1-8 Shield attribute.** `WE_ShieldUntil` is written only when the combat state exists at CharacterAdded. That is the same condition under which the server sets `InvulnerableUntil`. If `GetServerTimeNow` fails, `os.time()` is the base.
+- **A-CC1-9 Own vehicle is always out of the ray.** A seated player's vehicle (any model tagged `WE_Vehicle`, registered or not) is always in the shooter's Exclude filter. The seat-fire refusal rules apply only to registered vehicles, as §1.2 says.
+- **A-CC1-10 Where death attributes live.** `WE_LastWeapon`, `WE_BlastSource` and `WE_BlastAt` are Humanoid attributes. `WE_BlastAt` uses `os.clock()`, so it is server-local.
+- **A-CC1-11 Immediate `Died` fix.** `Died` can fire inside `TakeDamage` (Immediate signal mode, and the headless sim). While the damage is applied, the NPC record carries `KillCtx`, so its Died handler pays quiet (blast) and splash kills correctly: no toast, or no per-NPC kill marker.
+- **A-CC1-12 Mouse cone vs body size.** The KeyboardAndMouse class (1.0 stud, 1.5°) is narrower than a 2-stud torso, so for mouse players the assist only matters at the body edges. The headless "outside" offset for that class is at least 1.1 studs, so the exact ray misses the torso.
+- **A-CC1-13 Seat check order.** Driver (`VehicleSeat` or `WE_SeatRole == "Driver"`) → mount (`WE_MountId`) → passenger with `WE_CanFireFromSeat` → refuse, in the order of contract §1.2.
+- **A-CC1-14 Assist cost cap.** Per shot, at most 8 in-cone candidates are kept and at most 3 line-of-sight rays are cast, smallest lateral first. Players get a cone pre-check before the seat and clan lookups.
+- **A-CC1-15 Feedback send.** `hitFeedback` now wraps `FireClient` in pcall, so a player who has just left never breaks a shot.
+- **A-CC1-16 Aim stats log.** One summary line (`[CombatService] aim: ...`) is printed lazily on the first shot after each 300 s window (`AimStatsLogSeconds`). It needs no extra thread.
+- **A-CC1-17 Asset loader clone.** `WeaponAssetLoader` clones the asset's Tool children (or the `VisualChild` model's children) into `Weapon_<Id>` and sets `PrimaryPart = Handle` when a Handle exists. Today it does nothing, because every `VisualAssetId` is 0.
+
+## W2 CC-2 (vehicle health) — reversible assumptions
+
+- **Own-plot regen test.** "Inside the owner's plot" uses the plot pad tagged `WE_BasePlot` with `PlotId == profile.BasePlotId`. The Chassis must be on the pad's rectangle, margin 0. The pad's CFrame carries the plot yaw, and `VehicleService.insidePlot` uses the same test. The plot pad stands in for the "BaseLayout plot frame".
+- **Raid shield.** premium §3.5 mentions a raid-shield protection. It is not implemented, for two reasons: no service exposes `IsShielded(userId)`, and contracts §4.1 leaves it out of `IsProtected`. Add it to `VehicleHealth.IsProtected` once that API exists.
+- **What `IsProtected` blocks:**
+  - It returns true for an unregistered model.
+  - It also blocks an attacker who sits in a trial vehicle (`VehicleCombatConfig.Trial.DealsVehicleDamage = false`).
+- **`WeaponMult` default.** The default comes from `InfantryWeapons[WeaponId]` only when that row's class is the class being applied. Example: an explicit `Class = "NPC"` hit that carries `WeaponId = "RocketLauncher"` is not doubled. An explicit `WeaponMult` always wins.
+- **Radius distance.** Distance is measured to the Chassis box (0 inside it), not to the whole model's bounding box. This is cheaper, and the Chassis is the hull.
+- **Nuke core-destroy switch.** The Nuke class destroys outright inside `CoreRadius` only when both flags are on: `VehicleCombatConfig.DamageClasses.Nuke.CoreDestroys` and `NukeConfig.Vehicles.CoreDestroys`. Setting `NukeConfig.Vehicles.CoreDestroys = false` turns it off.
+- **`Repair(model, pct)`.** `pct` is a fraction from 0 to 1. A value above 1 is read as a percent (50 means 50 %).
+- **Rounding.**
+  - MaxHP is rounded to 3 decimals, so that `WE_MaxHP` (ceil) does not read 281 for 280.
+  - `RepairingFor` reports `ceil(left − 1e-6)` seconds, with a minimum of 1.
+- **Bounty toast.** The toast reads "<DisplayName> down (+$N)", the same shape as an NPC kill. The HUD therefore reroutes it to a cash float, with no lane line during combat. The XP is paid but not shown in the text.
+- **Owner notice.** When the teardown runs after `DebrisSeconds`, the owner gets "<DisplayName> destroyed" as a Warn toast for 4 s, through `destroyVehicle`'s message.
+- **Wreck physics.** On wreck, LinearVelocity and AlignOrientation are switched off (`Enabled = false`), not just zeroed. An airborne or floating wreck therefore falls or sinks under gravity. The server takes network ownership.
+- **Occupant damage fallback.** Occupant damage goes through `CombatService.ApplyHit` (with `WeaponId = "VehicleWreck"`) when that function exists. It falls back to `Humanoid:TakeDamage(35)` when `ApplyHit` is missing or errors. Squad units never ride today (F8 ejects NPCs from passenger seats), so the squad path is only for M6 mounted units.
+- **HUD bar colour.** The occupant HUD bar fill is "armor cyan" (90, 196, 235), not green. On touch it sits right under the green capture bar, and two green bars read as duplicates. Below 25 % it flashes red.
+- **HUD bar placement.** The HUD bar decides "touch" with the same test as the SPD pill in VehicleDriveClient (`TouchEnabled` or `PreferredInput == Touch`). That keeps the bar and the pill in the same layout: the stack on touch, bottom-right on desktop.
+- **Over-bars.**
+  - Height is `WE_LabelY − 0.75` studs, just under the owner nameplate.
+  - Three BillboardGuis are pooled in PlayerGui, with `Adornee = Chassis`.
+  - The "own parked vehicle below MaxHP" bar is shown only to its owner.
+  - A heal never re-arms the 5 s window.
+- **Wreck burst.**
+  - It uses the default ParticleEmitter texture; no new `rbxasset://` path is set.
+  - It emits 24 particles from one pooled Attachment under Terrain.
+  - A vehicle that streams in already wrecked gets no burst.
+
+## W2 CC-3 (client feel) — assumptions (reversible; the verifier appends these to ASSUMPTIONS.md)
+
+- **A-CC3-1 (test re-pin, audio).** `w1/snd/t_audio.luau` check 0a keeps a licence allowlist of every SoundConfig id. The
+  21 new combat ids (docs/ASSET_SHORTLIST.md §3.5, all owned by ProSoundEffects, User 7462895450) are not on it, so the
+  unmodified suite reads 148/149. `w2/cc3/t_audio_w2.luau` is the same file with only those 21 ids added to 0a's list:
+  149/149. The W1 file itself is unchanged. BuyPathStatic re-pins: 0.
+- **A-CC3-2 (sounds).** Values nobody has listened to yet: volumes 0.35–0.8; priorities Kill 4 > Headshot 3 > Confirm /
+  Hurt 2 > shots 1 (rocket 2, explosions 3–4). Sniper has no MaxSeconds (the shortlist gives none). Reload / Empty / Equip
+  are World-bus 3D sounds at the local character (contract table), MaxDistance 60. `Hit.Headshot` = the `Hit.Confirm`
+  file at pitch 1.8.
+- **A-CC3-3 (recoil spring).** The vendored RbxUtil Spring is a critically damped `TweenService:SmoothDamp` spring (no
+  Speed / Damper). SmoothTime = 2 / `WeaponConfig.Recoil.Recover` (`CombatCamera.RecoilSpring.Speed` only when Recover is
+  missing); `RecoilSpring.Damper` is unused. The impulse is sized so the peak kick equals `Recoil.Kick` degrees (x 0.5 on
+  touch); `Side` is a random yaw in ±Side. If `SmoothDamp` is missing on a client, a hand-rolled critically damped spring
+  with the same maths runs instead.
+- **A-CC3-4 (allies).** The client does not know clans (no attribute in W2): the camera aim help may slow over an ally.
+  The server assist excludes allies, so no ally is ever hit by assist.
+- **A-CC3-5 (local fire ray).** The local ray now starts at the head-projected Origin and runs for the weapon Range +
+  `CombatConfig.HitPositionSlopStuds` (was: from the camera, 500 studs). It is the same line the server's exact ray uses,
+  so tracers end where the server hits, and a far miss no longer reports a HitPosition out of range (`fire_hitpos_oor`
+  soft strikes). `TargetUserId` / `TargetNpcId` hints now name only targets inside weapon range.
+- **A-CC3-6 (local shot schedule).** The 20 Hz send loop is unchanged (the server clamps). Local flash / tracer / recoil /
+  casing / bloom follow the server's GCRA fire schedule (FireRate x research WeaponFireRate) and a predicted magazine
+  (reset by every CombatStateUpdate), so a slow gun held at 20 Hz shows its own fire rate.
+- **A-CC3-7 (damage numbers).** Spawned 26 px right / 30 px above the hit point's screen position (never on the
+  crosshair), then rise 24 px and fade over 0.8 s. At most 4 labels; the oldest is reused.
+- **A-CC3-8 (target bar).** Stays visible during a reload (only the reticle hides): it is small, under the crosshair, and
+  times out 2.5 s after the last hit. Hidden while holstered, driving, dead or in a panel.
+- **A-CC3-9 (haptics).** `HapticService:SetMotor` on `Touch`, then `Gamepad1`, only when `IsVibrationSupported` and
+  `IsMotorSupported` say yes; 80 ms pulses, at most about 8 per second. On a phone without motor support nothing happens
+  (device-only check).
+- **A-CC3-10 (RequestSetDrawn).** Sends the "shown" state (drawn AND alive AND allowed to shoot from this seat), so other
+  players never see a gun on a driver or in an enclosed seat. Leading edge at once, trailing edge after 0.5 s (≤ 2/s).
+- **A-CC3-11 (gun grip).** Guns use the Roblox Tool default grip (barrel along the RightGripAttachment's -Z, top along +Y).
+  `HudConfig.CombatFx.Grip = { RotationDeg, OffsetStuds }` (zero) is a device-tuning knob if the hold animation needs it.
+- **A-CC3-12 (passenger seats).** On a seat with `WE_CanFireFromSeat` the whole combat HUD (hotbar, FIRE, RELOAD, ammo,
+  reticle, health) shows and the 1-4 / Q keys work. The pinned auto-draw-on-damage line still uses `seatedNow()`, so
+  nobody auto-draws in any seat. A driver never gets combat input in W2.
+- **A-CC3-13 (FX parts lifetime).** Pooled FX parts park at (0, 10000, 0); each part pool is destroyed after 20 s without
+  use, so every FX part is gone within 25 s of the last shot. Explosions use 3 (touch 2) pooled attachments with
+  emitters (0 parts), outside the Impacts cap.
+- **A-CC3-14 (remote launch sound).** Another player's rocket / grenade launch ("L") plays its fire key at O; the shooter
+  hears his own from LocalShot.
+- **A-CC3-15 (casings).** Desktop only; a 0.35 s tween to 2.6 studs below the ejection port (no physics), parked after 2 s.
+- **A-CC3-16 (HUD harness).** `check_hud.py` creates every RemoteName as a RemoteEvent, so in those runs WeaponVisuals
+  does not bind WeaponFx (it polls 120 s, then warns once). The CC-3 driver replaces it with an UnreliableRemoteEvent,
+  as RemoteSetup does on live (CC-1's UNRELIABLE list).
+- **A-CC3-17 (shake units).** Shake output x 1 stud (position) and x (8°, 8°, 4°) (rotation): BlastAmplitude 0.6 ≈
+  ±0.15 stud / ±1.2° point blank, fading linearly to 0 at radius x MaxRadiusMult; touch 0.3. Hit pulse = HitAmplitude x
+  clamp(damage / 25, 0.5, 1.5), halved on touch.
+- **A-CC3-18 (shoulder camera).** Like the Weapons Kit ShoulderCamera, the root yaw is written directly (only when the
+  camera yaw moved > 1°). AutoRotate is restored to the Roblox default (true) on release.
+- **A-CC3-19 (Trove).** Vendored per the contract but not used by the W2 code yet (nothing needed a clean-up bag).
+- **A-CC3-20 (drag-to-aim hit test).** TouchStarted compares `InputObject.Position` with FIRE's `AbsolutePosition` /
+  `AbsoluteSize` (the same GUI-inset space in Roblox) ± `FireSlopPx`, and ignores touches another button already took
+  (`gameProcessed`: RELOAD, the jump button, panels). Device check: holding FIRE and dragging turns the camera.
+- **A-CC3-21 (out of scope, flagged).** The shortlist found `rbxasset://sounds/electronicpingshort.wav` / `switch.wav`
+  missing from the client, so `UI.Click`, `UI.Notify`, `Toast.Warn` / `Toast.Error`, `UI.Denied` and `Capture.Start` are
+  probably silent. Fixing those is the asset workflow's config commit (shortlist §6.1), not CC-3.
+- **A-CC3-22 (aim step).** CameraFx binds its per-frame step only while recoil is in flight, the shoulder camera is on, or
+  aim help is on (touch / gamepad, drawn). A drawn PC gun with no recoil runs nothing per frame.
+
+## W2 verifier — assumptions and fixes
+
+- **A-V-1 Origin behind a wall.** `RequestFire` keeps the P0-7 rule (Origin within `MaxOriginDeltaStuds` 12 of the root, else strike + snap). An accepted Origin that is not visible from the head (a ray from the head, `RespectCanCollide = true`, shot filter excluded) is now snapped to the head with no strike. It stops shooting through a wall with a forged Origin up to 12 studs out, and rockets spawned inside a base. Legit W2 clients send the point on the camera ray nearest the head, so they are almost never snapped. Revert: delete the `else` branch after the desync check.
+- **A-V-2 Enclosed drivers.** J10 (drivers keep their rifle) now applies to driver seats with `WE_Exposed ~= false` only. An enclosed driver seat (APC, tank, heli, jet) is refused, like an enclosed passenger. Before W2, the driver's own hull blocked these shots, and the W2 client never sends driver fire, so only a modified client notices. Revert: drop `and seat:GetAttribute("WE_Exposed") ~= false` in `seatFireRule`.
+- **A-V-3 No heal by respawn.** SPAWN is refused with the existing "InCombat" reason for `SpawnCfg.DamageLockSeconds` (5 s) after any live vehicle of that owner took damage. Without it, a vehicle at 10 % HP could be swapped for a full-HP copy in place, either by SPAWN on the same id or by Despawn and then SPAWN, whenever the 15 s spawn cooldown had passed. A destroying hit clears the lock, because the repair timer covers wrecks. State: `VehicleHealth.HitLockLeft(userId, seconds)`.
+- **A-V-4 Rocket first ray.** `Projectile.Launch` takes an optional `From` (the shot origin). The first step's ray starts there, not at the spawn point 1 stud ahead. Before, a player whose head was within about 1 stud of a wall fired straight through it with an honest client.
+- **A-V-5 NPC FX buckets.** `destroyNPC` calls `CombatFx.Forget(rec.Id)`, because NPC ids never repeat and the per-shooter bucket table grew for the life of the server.
+- **A-V-6 Left as contracted.** `VehicleHealth.ApplyRadiusDamage` has no line of sight. A rocket that hits a wall still damages a vehicle within the radius behind it (headless: a 4x4 1–5 studs behind a 1-stud wall is destroyed). Humanoid splash does check line of sight. Nukes and missiles need the no-LOS behaviour, so any change is an owner decision (option: a `RequireLos` flag in `RadiusOpts` for the infantry rocket only).
+- **A-V-7 ASSUMPTIONS.md.** The verifier was limited to builder-owned files, so this combined block (CC-1 + CC-2 + CC-3 + verifier) is written to `scratchpad/w2/verify/ASSUMPTIONS_append.md` for the committer to append.
+
+## 2026-09-24 — HUD scale fix (sister's phone: rail cut off, cash pill over "Garage")
+- On the sister's Android (about 932x430 GUI units) the left rail and cash pill were drawn about 1.29x too big: the WarEmpireHUD UIScale stayed at 0.90 (the fallback `HudLayout.Scale()` uses before the camera reports a viewport) instead of 0.70. HudLayout and UIUtil tracked their UIScales, topbar areas and visibility bindings in weak-keyed tables; in Roblox a weak table keyed by an Instance can lose the entry once no Lua code holds that Instance, even while it is still on screen, so the later viewport update never reached the scale.
+- Fix: strong tables, pruned when a scale or frame leaves its gui (layout change) or a bound object is destroyed; and `HudLayout.Scale()` returns the phone scale (0.70) on touch devices until the viewport is known, then the viewport watcher corrects it (tablets move up to their own scale).
+
+
+## 2026-09-24 — W3 step 1: kit catalogue, Crossroads Town, travel dressing, H1 Enforce, Roblox-owned look
+
+### contracts (from scratchpad/w3/contracts/assumptions.md)
+- **W3 disabled POIs stay reserved.** Travel dressing (rhythm, junctions, shore, scatter) keeps out of all 18 POI footprints + 30 studs, built or not (`WorldDressConfig.Keepout.POIMargin`), and the emptiness metric counts the reserved footprints as occupied, as `world_v2_model.py` does. Enabling a POI later never moves the travel dressing. Revert: skip `Enabled = false` POIs in `WorldDress.Blocked`.
+- **W3 shore features stay in Quality Low.** The spec gives Low rules for POIs (60 %), rhythm (every other) and scatter (none) only. Revert: `WorldDressConfig.Quality.Low.ShoreEvery = 2`.
+- **W3 pure-Luau PRNG.** `WorldKits.Rng` (xorshift32 on bit32) replaces `Random.new` in all W3 build code, so the headless sim renders exactly the live layout (the sim's `Random` is a different LCG). Revert: swap the implementation; the sim layout then differs from live (rules still hold).
+- **W3 world signs.** The world SurfaceGui budget (`WorldConfig.Budgets.SurfaceGuis` = 12, inside the CLAUDE.md 1,134 cap) is spent as 10 garage signs + 1 Crossroads Town board. Junction direction posts and checkpoint boards are painted arrow / stripe parts with no text in step 1. The lead re-plans the 12 before the other 17 POIs.
+- **W3 H1 Enforce knob.** H1 Enforce is switched in `WorldConfig.Hygiene.OrphanMode` (B1's file, per the contract), not by a second knob in the travel-dressing config. BPS pin `OrphanMode = "Report",` is retired for `OrphanMode = "Enforce",`.
+- **W3 Terrain-only clusters** (roadside rock outcrops, scatter rock clusters and boulder fields) create no instance: 0 parts, 0 instances. They are counted in the build summaries, the occupancy and `WorldKits.TerrainLog()`.
+- **W3 WorldKits.Finish refuses a cluster wider than 64 studs** (H10) or with 0 parts, instead of letting WorldHygiene report it later.
+- **W3 no MAP_GEN bump** unless MapSetup itself changes: the dressing is rebuilt by every `MapSetup.Run`, and the live place is a Rojo build without a baked map.
+- **W3 mesh overlays replace, never add.** A Roblox-owned Synty mesh (VisualAssetService.CloneKitMesh) replaces the fallback part (natural 1-part kits) or all visual parts but one invisible Box collider (solid kits). Part budgets are measured in the sim, which has no InsertService, so the Part kits are the upper bound.
+- **W3 cluster Models use `ModelStreamingMode = Atomic`**, so a building never streams in half-built. Harmless while StreamingEnabled is off (today).
+
+### B1 (from scratchpad/w3/B1/assumptions.md)
+- **W3 Town layout is data.** The Town is 46 cluster rows plus 6 terrain rubble / scorch groups in `WorldConfig.Town`. My layout source is `w3/B1/town_layout.py`.
+  - The water tower is at (-118, -175). It closes a market street that runs west off the north arm (4 tarp stalls with crates).
+  - The clock tower stands on the south-east plaza corner at (100, 100).
+  - There is one building on each of the other three plaza corners, facing the flag, plus 1–2 frontage buildings per road arm.
+  - The houses on the Empire Bank side frame the bank.
+  - The Town Square arena is 4 paving tiles round the TownSquare anchor, with a dry fountain 30 north of the anchor and benches.
+  - Plan: Full 213 parts. Low (Tier 1) 116 = 54.5 %.
+  - Reversible: edit or remove rows. Nothing in code depends on a row.
+- **W3 Town board faces the west approach.** RoadZ0 carries plots 1, 2, 5 and 6; RoadX0 carries plots 3 and 4. So the one painted "CROSSROADS" board (the Town's only SurfaceGui) stands on the west approach at (-292, -22). Reversible: move the `Board` row.
+- **W3 flat paving may lie over an event anchor.** Flat marking clusters (every part top <= 0.75, no collision; only PaveTile in step 1):
+  - accept an `anchor:Event_…` result from `WorldDress.Blocked`, because the supply crate lands on the paving;
+  - are not added to the occupancy (the Town footprint is reserved anyway).
+  - PaveTile stays non-colliding (contract §2.3). SupplyDropService's downward ray therefore passes through the tile, and the crate sits on the ground 0.12 below the paving top.
+  - Reversible: make PaveTile collide, and drop the anchor exception.
+- **W3 mesh overlay modes: never more parts.** The contract's "collider + mesh" rule adds a part for 1-part solid units (a single crate, a bench), so B1 uses three modes:
+  - **skin** (CrateStack crates, Bench): a SpecialMesh inside the Part, using the MeshId, TextureID and MeshSize read from `CloneKitMesh`. Net 0 parts, box collision kept.
+  - **each** (natural kits): each part is replaced by a MeshPart. Net 0.
+  - **collider** (Wreck "car" only, the only variant with a CarWreck mesh): the largest part becomes the invisible box collider, and 1 mesh is added. Net 2 − n.
+  Overlays are deferred and capped by `WorldConfig.Kits.MeshOverlays` (40 per server). Town kits queue first.
+  Reversible: set `Kit.Mesh = false`, or change a kit's mode in `queueMesh`.
+  Mesh orientation (Synty pieces assumed Y-up, aligned with the kit frame) needs a Studio check once LOOK wires ids.
+- **W3 kit sizes are measured.** `WorldKits.Specs[*].Size` is the measured AABB of the default build. The unit test checks it to ±0.25.
+  - New `WorldKits.Footprint(kit, opts)` returns the exact pivot-relative extents: `X0` / `X1` / `Z0` / `Z1` / `Top`, plus `CollideZ0` and `VisibleZ0`.
+  - Road-side kits keep every collidable part at local z >= 0 (the back half): Wreck, DrumGroup, CrateStack, SandbagLine, SandbagNest, Jersey, RoadMarker, DirSign, SandbagArc.
+  - Wreck long axis is local X (parked along the road).
+  - JettyStub, BargeWreck and BeachedHull have their pivot at the landward end, with the hull reaching toward -Z (the water).
+  - Checkpoint pivot is on the road centre line.
+- **W3 catalogue additions (B1's file).**
+  - New kit `CompoundWall`: a 3-tall adobe wall (cover), 1 part per 16 studs, up to 4.
+  - New `AdobeHouse` variants `"wide"` (18-wide row house) and `"shop"` (cloth awning instead of the second window). Still 5 parts each.
+  - Both give more street frontage for the same part cost.
+  - Reversible: drop the rows that use them.
+- **W3 Town shadows.** Only building bodies, stall back walls and tarps, shop awnings, the tower tank / deck / roof, the clock shaft / head, the ruin walls and the fountain rim cast shadows: 34 casters (cap 60, H9 >= 8 only). Roofs, legs, counters and walls do not. Reversible: the `shadow` argument in each builder.
+- **W3 Terrain rubble is Tier 1.** It costs 0 parts, so Low keeps it. `WorldKits.Rock` keeps every prim within the group's outer radius (`opts.Radius`, default `WorldConfig.Kits.Rock[kind].Radius`), and callers test `WorldDress.Blocked` with that same radius.
+- **W3 `WorldKits.Discard(cluster)`.** New helper to destroy a built-but-rejected cluster, so its pending sign and overlays are dropped.
+- **W3 the world sign budget counts every SurfaceGui outside the bases.** It counts those under `WarEmpireSetup` (except `Bases`) plus the signs in clusters that are still open. `Sign` returns nil at `WorldConfig.Budgets.SurfaceGuis` (12). Step 1 uses 11: 10 garage signs + the Town board.
+- **W3 checkpoint barriers dropped.** The v1 jersey barriers ahead of each checkpoint (8 parts) went to frontage buildings in v3. Reversible: add `Jersey` rows on the shoulders at ±15 (13.9 off the line).
+
+### B2 (from scratchpad/w3/B2/assumptions.md)
+- **W3 WorldDress never yields (`WorldDressConfig.Budgets.YieldEvery = 0`).** The contract planned `task.wait()` every 25 clusters, "returning at once" on the sim's main thread. In the Luau CLI the driver's main chunk is itself yieldable, so the sim's `task.wait` really yields and the run dies ("thread yielded unexpectedly"). WorldTerrain avoids this the same way (its drivers pass `YieldEvery = 0`). The whole travel build is 0.07–0.11 s of CPU in the sim (budget 1.0 s), inside MapSetup's deferred dressing thread, and the old coordinate-list dressing never yielded either. Revert: set `YieldEvery = 25` on live if the owner ever sees a start-up hitch; the drivers must then run the dressing in a coroutine.
+- **W3 Quality Low keeps rhythm clusters 1, 4, 5, 8, 9, … of each road (`Rhythm.LowPattern`).** The contract wording was "the 1st, 3rd, 5th …", but sides flip on every accepted cluster, so the odd ones would all sit on the same side of the road (and fail the verifier's alternating-sides rule). The pattern keeps exactly half, sides still alternate, and Low stays a strict subset of Full: every Low build places the same spots with the same kits, then drops the other half. Revert: `LowPattern = { true, false }`.
+- **W3 scatter target tuned to 310 (EmptyRadius 155, MaxClusters 56).** The spec says "stop when the largest empty circle is ≤ 340"; `world_v2_model.py` actually runs `scatter(target_diam = 320)` (49 clusters, final measure 340 at cell 20). With our stricter keep-outs and the Town's own clusters, 340 stopped at 24 clusters (far100 16.9 %, fails V10) and 320 at 40 (one below the verifier's 41–57 band). 310 gives 46 clusters, 104 parts, far100 12.0 %, largest empty circle 322 at cell 20 (live flag state). With FaceMapCentre off (rollback: no dock channels, more dry land) the fill would reach 60, so MaxClusters = 56 (model 49 + 15 %) caps it: 56 clusters, 117 parts, far100 13.6 %, largest 322. Revert: `Scatter.TargetLargestEmpty` / `EmptyRadius` / `MaxClusters`.
+- **W3 road-side clusters are re-centred and pushed, never trusted from the spec sizes.** WorldKits pivots road-side kits at their front edge (collidables at z ≥ 0), so each composed cluster is centred on its spot, then its real parts are measured: collidable parts ≥ 13 and visible parts ≥ 9 from every road centre line. A cluster too close is pushed out along its road (never past offset 34) or dropped. Terrain rock outcrops need their whole reach (12) ≥ 13 from the line, so they sit 25–34 out. Revert: none needed (it only makes placement stricter).
+- **W3 every travel cluster is also checked with the WorldHygiene H3 zones on its real part AABBs** (captures, aprons, garage pads + 16, plot pads + 4, pier corridors, water + 6), on top of the contract's disc test. So Waterways.CullDressing and WorldHygiene.Enforce remove 0 parts of Rhythm / Junctions / Shore / Scatter (verified: 0). Revert: none needed.
+- **W3 in-water kits (jetty stub, barge wreck, beached hull) step into the water only as far as `Shore.InWaterMax` (10) and only into `Ring_*` / `Sea_*` rects** (`Shore.InWaterRects`): never a dock channel, lagoon, harbour, slip or plot water. The recorded occupancy disc stays on the bank line (so the ring / zone rules on the disc hold); the stepped kit is tested separately with `Blocked(AllowWater, SkipRing)` at its real centre and radius. The Bay's beached hull therefore lies on the sea bank about 45 studs seaward of the Bay line. Revert: `InWaterMax = 0` keeps every hull on dry land.
+- **W3 land shore features step to the water's edge (`Shore.ToWater`, `LandEdgeGap = 7.5`).** The spec places canal features "28 studs in from the water"; a revetment, reeds or driftwood 28 studs inland reads as litter on the sand. The occupancy disc (and so every zone rule and the verifier's geometry) stays on the 28-stud bank line; the kit moves seaward until its nearest part is 7.5 from the water (WorldHygiene H3 needs > 6). Their Terrain rock groups move with them and are tested with every keep-out except the ring box (inset 20 from the canal), since the water + 6 rule is the boundary there. Dune grass stays on the Bay line (dunes sit behind the beach). Revert: `ToWater = {}`.
+- **W3 the travel dressing casts no shadows.** WorldKits requests CastShadow on big parts (≥ 8: barge hull, truck bed, dead tree); WorldDress clears it on every travel cluster (contracts §2.2: 0 casters outside the POIs; phones). Revert: delete the loop in `compose`.
+- **W3 junction kits face a world-aligned corner.** The arrow post faces the junction centre, one jersey barrier lines each shoulder (≥ 17 from both centre lines), the sandbag arc sits behind, a Terrain boulder group (reach 7) behind that. The contract's "stack of 2 jerseys" is read as a pair on the corner, since kit pivots are yaw-only on the floor (no vertical stacking). The first free corner of (+,+), (−,+), (+,−), (−,−) is used. Revert: change the recipe in `buildJunctions`.
+- **W3 shore / bay kinds rotate over accepted spots across all three canal lines (one rotation), and the Bay has its own**, as in `world_v2_model.py canal_bank()`. Shore features all stay in Quality Low (contracts ruling). Revert: `Quality.Low.ShoreEvery`.
+- **W3 Terrain rock budget is reserved at each group's maximum** (`Terrain.Rocks[*].MaxPrims`) whether Full keeps it or Low drops it, so Low and Full make the same acceptance decisions; actual prims are 218 (Full, flag on) / 252 (flag off) for B2 against the 400 cap. Revert: none needed.
+- **W3 DesertFlora builds nothing in step 1** (contracts §5.3): the two lone mid-map saguaros were H1 orphans and the flora now comes from the road rhythm and the scatter. `DesertFlora.Kits`, the folder, the cull and Enforce stay; the third-party Palm / Cactus / DesertRock overlay loop is gone. Revert: restore `midSpots` (they would be destroyed by H1 Enforce anyway).
+- **W3 MapDressing keeps only the Dockside quay kit and the kits it uses** (crate stack, oil drums, light pole, ammo shed, fuel depot, vehicle silhouette, sandbag line). Its ammo-shed / fuel-tank catalog hosts stay (LOOK's call, contracts §8.4). The legacy Dockside sandbag line on RoadX0 is still culled by Waterways (12 parts, as at HEAD); it goes with the Port POI step. Revert: none (the deleted sections are in git history).
+- **W3 WorldHygiene H1 stand-alone rule.** A natural unit whose instance carries `WE_Elements` ≥ `Hygiene.MinNatural` (3) and whose parts come in ≥ 2 sizes (largest dimensions ≥ 20 % apart) is anchored; the NaturalLink grouping stays. Report adds per-anchor-class counts (`Census.Anchor_poi / road / junction / water / natural / none`, informational). WorldHygiene's module-level `WaitForChild` calls (no timeout) became direct indexing, like every other W3 server module. Revert: drop `standsAlone` (then scatter clusters are H1 orphans and Enforce destroys them).
+
+### LOOK (from scratchpad/w3/LOOK/assumptions.md)
+- **W3 LOOK LUV body on the light 4x4 family.** Only `Vehicles.MilitaryJeep` is wired (6418221666, Roblox, User 1). ArmedJeep,
+  ScoutCar, ReconBuggy, UtilityQuad and DispatchCar stay `ModelAssetId = 0` and get the body through
+  `KitFamilyFallback.WheeledLight` (the BuyPathStatic pin `ArmedJeep = { ModelAssetId = 0` stays true). Revert:
+  `MilitaryJeep.ModelAssetId = 0` (every light 4x4 back to the Part kit).
+- **W3 LOOK body fit.** The body is scaled uniformly to the kit chassis length (jeep 8.5: scale 0.483, body 3.95 wide x
+  3.83 tall), tyre bottoms on the physics-wheel bottoms, centred on the chassis, front to the kit front (-Z). The collision
+  box stays the Part kit (about 0.9 studs wider than the visible body on each side). The driver sits on the roof line, as
+  on the old kit (the seat offset belongs to VehicleService). Revert: `Fit = nil` (old pivot-onto-chassis dress).
+- **W3 LOOK kit hidden under the body.** With `HideKit`, every Part-kit part except `KeepVisible` (GunMount, Barrel) gets
+  Transparency 1; physics, seats, hit boxes and names are unchanged. The 5 largest body panels cast the car's shadow
+  (`FitShadowShare` 0.5 of the chassis length; default when the key is absent). Revert: `HideKit = false`.
+- **W3 LOOK camo decals stripped.** The LUV green camo uses 41 Decals whose images are owned by a user account
+  (Orlando777, 715494), not Roblox; they are stripped (`StripDecals`), so the body is the plain dark green (39, 70, 45) of
+  its paint parts, and the two Neon lamp parts become SmoothPlastic. Revert: `StripDecals = false`.
+- **W3 LOOK utility quad / recon buggy.** They get the same LUV body at their smaller kit length (a smaller 4x4), as the
+  roadmap says. The shortlist's Roblox Dune Buggy (6433272094) would fit them better; not wired (not verified in this step).
+- **W3 LOOK DesertKit pieces chosen by fit, not by the shortlist.** WorldKits stretches a piece into the fallback part's
+  box, so a key is wired only when the piece's per-axis stretch ratio is <= 2.2: DeadTree = Tree_Pine_Dead_01 (2.11;
+  shortlist pick 2.75), Stump = Tree_Stump_01 (1.47; shortlist pick 2.73), Reeds = Plant_Reeds_01 (1.11), DuneGrass =
+  Plant_01 (1.22; shortlist Grass_04 is 4.35), CrateWood = Crate_Wood_04 (1.00). Revert: change `ChildName`.
+- **W3 LOOK keys left at 0 (ChildName filled in).** `Log` (WorldKits uses the key for FallenLog, Z-long, AND Driftwood,
+  X-long: 20x squash), `Bench` (kit box is the seat only; 2.52), `CarWreck` (kit lies along X, the sedan along Z), and the
+  optional `VanWreck`, `Pebbles`, `Skip` (no caller). Each is a one-number change once WorldKits fits it.
+- **W3 LOOK flat palette.** Every DesertKit piece has `ClearTexture` and a colour from `WorldConfig.Kits.Palette`, so no
+  City-pack atlas text can show and the pieces match our Part kits. Revert: `ClearTexture = false`.
+- **W3 LOOK 40-part cap at load.** `MaxPartsPerModel = 40` (CLAUDE.md catalog budget) refuses any whole-model template or
+  pack piece with more BaseParts after stripping; a Humanoid is stripped (`STRIP_CLASSES`) and the template is refused if one
+  is left. Third-party ids that exceed it (e.g. Shipping Containers 17701461178, 126 MeshParts) now stay Part kit even if the
+  owner presses Get Model. Revert: raise `MaxPartsPerModel`.
+- **W3 LOOK packs split once.** A pack id (any configured ref with `ChildName`) is inserted once; every configured piece
+  becomes its own template in `ServerStorage.WE_VisualAssetTemplates`; the rest of the pack is destroyed. A piece added to
+  config later needs a new server. Revert: none needed (config-driven).
+- **W3 LOOK one insert per id.** While an id is being inserted, other callers wait for it (yield) instead of inserting it
+  again, so the ~40 deferred WorldKits overlays cost 1 load attempt per pack. A caller in a non-yieldable context gets nil
+  (Part kit).
+- **W3 LOOK vehicle pack preload.** `VisualAssetService.Init` inserts the vehicle body pack once in a deferred task (not
+  in Studio when inserts are skipped), so the first 4x4 spawn does not wait on InsertService.
+- **W3 LOOK third-party world-dressing hosts dropped (19 ids → 0).** The 15 contract keys plus AmmoShed (117 MeshParts,
+  over the cap), StreetLamp, StreetLampAlt, SupplyShed, RoadBarriers, CheckpointBridge, SpyBunker, DesertHouse and Pier:
+  none has a caller after the W3 rewrite (checked by grep), so there is no runtime change beyond the Dockside ammo shed's
+  invisible host staying empty. `DesertProps.Palm` 96059329869678 stays as dead config because BuyPathStatic pins the
+  literal; `MapDressing.Palm` (its alias) is 0. Revert: restore the ids (docs/ASSET_LICENSES.md §2c keeps them).
+- **W3 LOOK docs/ASSET_LICENSES.md reconciled.** The 24 ids cleared in 859dedc were still listed as "remaining"; they are
+  now in §2b, the W3 drops in §2c, the Roblox-owned ids in §3.0. The file lists exactly the live config ids (56 third-party
+  + 3 Roblox-owned, + the verified-but-unwired City pack).
+
+### Integration verifier
+- **W3 contract pin on `WorldPOI.Build`.** B1 typed `occ` through a local alias (`type Occupancy = WorldDress.Occupancy`), so the pinned signature is `function WorldPOI.Build(dressing: Instance, quality: string, occ: Occupancy?): Summary`. The type is identical. Revert: none needed.
+- **W3 BuyPathStatic retirements.** Lines 235, 586, 587, 617, 618, 619, 642, 678, 1430 (MapDressing coordinate-list sections deleted) and 1734 (`OrphanMode = "Report",`) are retired; their replacement pins are in the W3 block. The needles `WreckScorch`, `RoadCrater` and `RoadChevron` get no replacement (the names stay hygiene marking prefixes).
+- **W3 old jeep suite.** `w2/cc2/t_jeep_server_k2pin.luau` (K2) expects the stub asset shape, not the real Roblox LUV pack. `w3/LOOK/t_jeep_server_look.luau` with `fakes.luau` replaces it (131/131).

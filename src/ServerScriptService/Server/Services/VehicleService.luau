@@ -44,6 +44,9 @@ local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local VisualAssetService = require(script.Parent.VisualAssetService)
 
 local VehicleService = {}
+-- W2 (CC-2): vehicle HP for every vehicle. A module-table field, not a local (this file sits at Luau's 200-register
+-- limit for module locals).
+VehicleService._VehicleHealth = require(script.Parent.Parent.Modules.VehicleHealth)
 
 local Drive = VehicleConfig.Drive
 local CarCfg = Drive.Modes.Car
@@ -56,6 +59,25 @@ local SpawnCfg = Drive.Spawn
 local ResyncCfg = Drive.Resync
 local W = Drive.Watchdog
 local DBG = Drive.Debug
+
+--[[ JEEP-2: the World v2 air box for the Heli / Plane checks — the SAME table the client's turn-back law reads
+	(VehicleConfig.Drive.AirBox.Box = WorldConfig.Bounds.Air). Returns (nil, slack) when disabled or WorldConfig is
+	missing → the old WorldHalfExtent square and WE_MaxAltitude ceiling. A module-table field, not a local: this file
+	sits at Luau's 200-register limit for module locals. ]]
+function VehicleService._AirBox(): ({ X: number, ZMin: number, ZMax: number, MaxY: number }?, number)
+	local cfg: any = (Drive :: any).AirBox
+	local b: any = if typeof(cfg) == "table" and cfg.Enabled ~= false then cfg.Box else nil
+	if
+		typeof(b) == "table"
+		and typeof(b.X) == "number"
+		and typeof(b.ZMin) == "number"
+		and typeof(b.ZMax) == "number"
+		and typeof(b.MaxY) == "number"
+	then
+		return b, if typeof(cfg.ValidatorSlack) == "number" then cfg.ValidatorSlack else 60
+	end
+	return nil, 60
+end
 
 local debugUserSet: { [number]: boolean } = {}
 for _, uid in ipairs(DBG.UserIds) do
@@ -1478,6 +1500,8 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	end
 
 	model.PrimaryPart = body
+	-- W2: WE_Premium + per-seat WE_SeatRole / WE_Exposed / WE_CanFireFromSeat (VehicleCombatConfig.SeatFire)
+	pcall(VehicleService._VehicleHealth.ApplySeatAttributes, model, def)
 	-- Optional free Creator Store visual (non-colliding); Part kit stays authoritative
 	pcall(function()
 		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family)
@@ -1596,6 +1620,7 @@ local function pushState(player: Player)
 		ActiveVehicleId = activeId,
 		CooldownRemaining = cooldownLeft(player.UserId, player),
 		Gates = gatesFor(profile),
+		Repairing = VehicleService._VehicleHealth.RepairingFor(player.UserId), -- W2: { [id] = seconds } (empty = none)
 	}
 	local remote = RemoteSetup.Get(Constants.RemoteNames.VehicleStateUpdate) :: RemoteEvent
 	remote:FireClient(player, payload)
@@ -1626,10 +1651,15 @@ local function errorText(err: string, def: VehicleDef?, player: Player?): string
 		local left = if player then math.ceil(cooldownLeft(player.UserId, player)) else 0
 		return if left > 0 then string.format("Vehicle spawn cooling down (%ds)", left) else "Vehicle spawn cooling down"
 	elseif err == "InCombat" then
-		local left = if player then math.ceil(damageLockLeft(player.UserId)) else 0
+		local left = if player
+			then math.ceil(math.max(damageLockLeft(player.UserId), VehicleService._VehicleHealth.HitLockLeft(player.UserId, SpawnCfg.DamageLockSeconds)))
+			else 0
 		return if left > 0 then string.format("In combat — wait %ds", left) else "In combat — wait a moment"
 	elseif err == "NotOwned" then
 		return "Buy this vehicle first"
+	elseif err == "Repairing" and def then
+		local left = if player then math.ceil(VehicleService._VehicleHealth.RepairLeft(player.UserId, def.Id)) else 0
+		return string.format("%s is being repaired — ready in %ds", def.DisplayName, math.max(1, left))
 	elseif err == "SpawnBuildFailed" or err == "SpawnKitIncomplete" or err == "SpawnOrphaned" then
 		return "Spawn failed — try again"
 	elseif err == "InvalidId" or err == "UnknownVehicle" then
@@ -2830,6 +2860,7 @@ end
 local function forgetVehicle(model: Model)
 	local rec = vehicles[model]
 	vehicles[model] = nil
+	pcall(VehicleService._VehicleHealth.Unregister, model) -- W2: HP record goes with the vehicle
 	if rec then
 		for _, c in ipairs(rec.Conns) do
 			c:Disconnect()
@@ -2949,6 +2980,24 @@ local function validateSample(rec: VehicleRec, s: ValidSample): (boolean, string
 	local dtS = math.max(0, s.T - prevT)
 	rec.LastSampleT = s.T
 	rec.LastSamplePos = pos
+	local box: { X: number, ZMin: number, ZMax: number, MaxY: number }?, sl: number = nil, 0
+	if air then
+		box, sl = VehicleService._AirBox()
+	end
+	if box then
+		-- aircraft: past the air box + slack while still moving OUT through that edge (the client law stops a pilot
+		-- Buffer studs inside the box and only ever steers one that is outside it back in — e.g. spawned in the live
+		-- map's outer desert while World v2's ground wall is unhooked); the air wall is the backstop
+		local ow = tonumber(((Drive :: any).AirBox or {}).ValidatorOutwardSpeed) or 8
+		if
+			(pos.X > box.X + sl and vel.X > ow)
+			or (pos.X < -box.X - sl and vel.X < -ow)
+			or (pos.Z > box.ZMax + sl and vel.Z > ow)
+			or (pos.Z < box.ZMin - sl and vel.Z < -ow)
+		then
+			return false, "bounds", false
+		end
+	end
 	if math.abs(pos.X) > Valid.WorldHalfExtent or math.abs(pos.Z) > Valid.WorldHalfExtent then
 		return false, "bounds", false
 	end
@@ -2970,7 +3019,9 @@ local function validateSample(rec: VehicleRec, s: ValidSample): (boolean, string
 		end
 	end
 	if air then
-		if pos.Y > rec.MaxAltitude + Valid.AirAltitudeSlack then
+		-- the client law's ceiling: min(WE_MaxAltitude, air box MaxY)
+		local ceiling = if box then math.min(rec.MaxAltitude, box.MaxY) else rec.MaxAltitude
+		if pos.Y > ceiling + Valid.AirAltitudeSlack then
 			return false, "altitude", false
 		end
 	else
@@ -3668,11 +3719,17 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if not okPres then
 		return false, presErr
 	end
+	if VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then
+		return false, "Repairing" -- W2: destroyed → that id is locked for Destroy.RepairSeconds
+	end
 	if cooldownLeft(player.UserId, player) > 0 then
 		return false, "Cooldown"
 	end
 	if damageLockLeft(player.UserId) > 0 then
 		return false, "InCombat" -- P1-9: SPAWN is not an escape from a fight
+	end
+	if VehicleService._VehicleHealth.HitLockLeft(player.UserId, SpawnCfg.DamageLockSeconds) > 0 then
+		return false, "InCombat" -- W2: nor a full heal for a vehicle under fire (SPAWN / Despawn + SPAWN)
 	end
 	-- P1-9: inside your own plot the garage flow seats you on your own pad / helipad / runway / basin; anywhere
 	-- else only a vehicle that appears next to you (in front of you) seats you. Never a cross-map teleport.
@@ -3741,6 +3798,29 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	end
 	activeVehicles[player.UserId] = model
 	lastSpawnAt[player.UserId] = now()
+	-- W2: vehicle HP (VehicleHealth). At 0 HP: the wreck look at once, the normal teardown after DebrisSeconds.
+	local okHp, errHp = pcall(VehicleService._VehicleHealth.Register, model, def, player, {
+		Premium = (def :: any).Premium ~= nil,
+		OnWrecked = function()
+			VehicleService._Wreck(model)
+		end,
+		OnDestroyed = function()
+			local r = vehicles[model]
+			if r then
+				destroyVehicle(r, def.DisplayName .. " destroyed")
+			else
+				pcall(function()
+					model:Destroy()
+				end)
+				if player.Parent then
+					pcall(pushState, player)
+				end
+			end
+		end,
+	})
+	if not okHp then
+		warn("[VehicleService] VehicleHealth.Register failed", vehicleId, errHp)
+	end
 
 	-- Driveability: Drive prompt + auto-sit the DriverSeat so garage SPAWN is immediately usable
 	local autoSeat = false
@@ -3856,6 +3936,41 @@ function VehicleService.OnResearchChanged(player: Player)
 	rec.Params.MaxSpeed = rec.BaseMaxSpeed * bonus
 	rec.Model:SetAttribute("WE_MaxSpeed", rec.Params.MaxSpeed)
 	rec.Model:SetAttribute("WE_ArmorMult", researchMult(player, "VehicleArmor", Drive.MaxResearchArmorBonus))
+	pcall(VehicleService._VehicleHealth.RefreshMaxHP, rec.Model) -- W2: MaxHP follows WE_ArmorMult (HP fraction kept)
+end
+
+--[[ W2: the destroyed look (premium_vehicles §2.4), called by VehicleHealth at 0 HP before the occupants are ejected.
+	The server takes the physics back, the movers stop (the wreck falls / settles under gravity), every seat and the
+	Drive prompt switch off, every part turns charred (35, 32, 30) CorrodedMetal (no Neon left), lights / cues / emitters
+	go off. Adds no parts and no server Explosion. ]]
+function VehicleService._Wreck(model: Model)
+	local rec = vehicles[model]
+	if rec then
+		pcall(releaseToServer, rec, now())
+		setOwner(rec, nil)
+		pcall(function()
+			rec.LV.VectorVelocity = Vector3.zero
+			rec.LV.MaxAxesForce = Vector3.zero
+			rec.LV.Enabled = false
+			rec.AO.Enabled = false
+		end)
+	end
+	model:SetAttribute("WE_DriveAuthority", "Server")
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Color = Color3.fromRGB(35, 32, 30)
+			d.Material = Enum.Material.CorrodedMetal
+			if d:IsA("VehicleSeat") or d:IsA("Seat") then
+				(d :: any).Disabled = true
+			end
+		elseif d:IsA("ProximityPrompt") then
+			d.Enabled = false
+		elseif d:IsA("Light") or d:IsA("ParticleEmitter") or d:IsA("Beam") or d:IsA("Trail") then
+			(d :: any).Enabled = false
+		elseif d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+			(d :: any).Enabled = false
+		end
+	end
 end
 
 -- ── Test hooks (headless sim; spec §7) ─────────────────────────────────────────────────────────
@@ -3908,6 +4023,7 @@ function VehicleService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	ResearchService = deps.ResearchService
 	AntiExploitService = deps.AntiExploitService
+	VehicleService._VehicleHealth.Init(deps) -- W2: every dep optional (CombatService / ClanService / XPService / ...)
 
 	ensureFolder()
 	refreshWaterParts()

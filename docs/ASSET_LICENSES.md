@@ -6,13 +6,15 @@ Data: Roblox economy API `economy.roblox.com/v2/assets/<id>/details`, read 2026-
 `gap/asset_stats.json` (triangles, scripts). Nothing here was loaded in Roblox. The headless sim is not Roblox.
 
 Owner: CFG (W1) writes this file with `VisualAssetConfig`; LOOK (W3) and W6a update it in the same commit as any ID change.
+Last update: W3 LOOK, 2026-09-24 — Roblox-owned packs wired (§3.0), 19 third-party world-dressing IDs dropped (§2c), and the
+24 IDs cleared in 859dedc moved out of §3 (§2b).
 
 ## 1. Rules
 
 **How these IDs load.** Owner default D1 keeps Game Settings › Security › "Allow Loading Third Party Assets" **OFF**.
-`AssetService:LoadAssetAsync` then loads only assets the game creator owns or has been granted. **None of the IDs below is
-owned by Roblox or by the game owner**, so on live every one fails once, `VisualAssetService` caches the failure, and the
-Part kit stays. An ID starts to show only if the owner clicks "Get Model" on it (or turns the setting on, which D1 rejects).
+`AssetService:LoadAssetAsync` then loads only assets the game creator owns or has been granted, or that Roblox owns. **Only
+the §3.0 IDs are owned by Roblox; none of the others is owned by Roblox or by the game owner**, so on live every third-party
+ID fails once, `VisualAssetService` caches the failure, and the Part kit stays. An ID starts to show only if the owner clicks "Get Model" on it (or turns the setting on, which D1 rejects).
 
 **Terms for a free Creator Store asset.** The uploader keeps the copyright and grants Roblox a licence that Roblox may
 sublicense "to other Users and Creators" (Roblox Terms of Use, Creator Terms, "Roblox License to UGC"). The Creator Store
@@ -66,40 +68,110 @@ Weapons Kit), which load without "Get Model".
 Rows 1–5 are the paid IDs and rows 6–14 the real-world and franchise designs named in `gap/reusable_parts.md` §3. Rows 15–22
 were found by the same test on the full listing text in this pass.
 
-## 3. Remaining IDs (99) and why each is allowed
+### 2b. Cleared in commit 859dedc (asset shortlist §3.1, 24 IDs)
+
+Heavy, real-world copies or franchise looks. Every key is now 0 (the light 4x4s use the Roblox LUV body, §3.0).
+
+| Asset ID | Creator Store name | Uploader | Reason | Keys now 0 | Fallback |
+|---|---|---|---|---|---|
+| [14776506955](https://create.roblox.com/store/asset/14776506955) | Army of Soldiers (Rthro) | takinuptoomuchspace (User) | 484,133 triangles, 840 scripts (a whole soldier swarm on every 3rd NPC) | `Characters.HeavyInfantry` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [12809476227](https://create.roblox.com/store/asset/12809476227) | Desert Mountain | falterize (User) | 156,326 triangles for one horizon prop; World v2 uses Terrain | `MapDressing.DesertMesa`, `Landmarks.DesertMesa` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [6562523344](https://create.roblox.com/store/asset/6562523344) | Low Poly Rocks Pack | GYPLA6 (User) | third-party MeshPart applied by MeshId, which skips the third-party switch | `DesertProps.DesertRock`, `MapDressing.DesertRock` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [8980890767](https://create.roblox.com/store/asset/8980890767) | 88th machine gun nest | ValentiusSenatus (User) | 100,126 triangles on every gate | `GateDefense.SandbagNest` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [125916936788670](https://create.roblox.com/store/asset/125916936788670) | Military Car Vehicle War Wheel Armored Model | BlitzxbCyberl36 (User) | copy of a real 4x4 (Humvee look), 98,067 triangles, 13 scripts, 2026 keyword title | `Vehicles.MilitaryJeep`, `Vehicles.UtilityQuad`, `Vehicles.ScoutCar`, `Vehicles.ReconBuggy`, `Vehicles.DispatchCar` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [76055078503396](https://create.roblox.com/store/asset/76055078503396) | Tank Military Vehicle War Machine Roleplay Combat | wimundefined0 (User) | copy of a real IFV (Bradley look); the same model is re-uploaded by several accounts | `Vehicles.LightTank`, `Vehicles.CombatIFV`, `Vehicles.AssaultIFV`, `Vehicles.BridgeLayer`, `Vehicles.MineClearer`, `Vehicles.FlameCarrier`, `Vehicles.LightScoutTank` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [105503568352704](https://create.roblox.com/store/asset/105503568352704) | Army Truck Military Vehicle Transport Mesh PBR | Bella29_0Ghost591530 (User) | copy of a real army truck (FMTV look), 34,358 triangles, 24 scripts | `Vehicles.PatrolTruck`, `Vehicles.ArmoredTruck`, `Vehicles.SupplyTruck` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [81802040484766](https://create.roblox.com/store/asset/81802040484766) | Army Truck Military Vehicle Transport Mesh Pbr | Rocket1h202 (User) | same mesh as 105503568352704 from another 2026 account, 20 scripts | `Vehicles.AmmoCarrier`, `Vehicles.MissileTruck`, `Vehicles.RadarTruck` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [4128346779](https://create.roblox.com/store/asset/4128346779) | Army Truck (Mesh) | bearduckmonkey (User) | copy of a real 4x4 (Humvee look) | `Vehicles.TroopTransport` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [17835143223](https://create.roblox.com/store/asset/17835143223) | APC | 2Varu (User) | copy of a real MRAP, 119,089 triangles, 14 scripts | `Vehicles.APC`, `Vehicles.InfantryCarrier`, `Vehicles.CommandVehicle`, `Vehicles.WheeledIFV`, `Vehicles.AmphibiousAPC` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [4865838](https://create.roblox.com/store/asset/4865838) | fighter jet | stinkyturkey (User) | copy of a real fighter (F-15 look), 6 scripts | `Vehicles._FallbackJet`, `Vehicles.FighterJet`, `Vehicles.InterceptorJet`, `Vehicles.TrainerJet`, `Vehicles.ReconPlane`, `Vehicles.LightFighter` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [5507592781](https://create.roblox.com/store/asset/5507592781) | fighter jet model (no script) | berkobero (User) | copy of a real fighter (F/A-18 look), 26,924 triangles | `Vehicles.StrikeJet`, `Vehicles.CASJet`, `Vehicles.StealthStrikeJet`, `Vehicles.StealthStrike` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [3319732457](https://create.roblox.com/store/asset/3319732457) | war plane | the_epicpokemon (User) | WW2 fighter (Mustang look) used even for the cargo plane, 34,432 triangles | `Vehicles.StrikeBomber`, `Vehicles.CargoPlane`, `Vehicles.AWACSPlane`, `Vehicles.TankerPlane`, `Vehicles.HeavyBomber`, `Vehicles.StrategicBomber` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [295607934](https://create.roblox.com/store/asset/295607934) | Attack Helicopter | 12904 (User) | looks like a vehicle from a game franchise, 10 scripts | `Vehicles.AttackHelicopter`, `Vehicles.NightAttackHeli`, `Vehicles.GunshipHeli`, `Vehicles.StealthHeli`, `Vehicles.EscortHeli` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [12794395111](https://create.roblox.com/store/asset/12794395111) | Multipurpose Frigate | teunboy3 (User) | 263,332 triangles, 93 MeshParts | `Vehicles.Corvette`, `Vehicles.Frigate`, `Vehicles.CarrierEscort` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [9753309](https://create.roblox.com/store/asset/9753309) | Elite Force Gunship | pieman711 (User) | 2009 build, 15 scripts | `Vehicles.TransportHeli`, `Vehicles.HeavyLiftHeli`, `Vehicles.VTOLTransport` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [5935419](https://create.roblox.com/store/asset/5935419) | gunship | liger0223 (User) | 2008 build, 7 scripts, 17,858 triangles | `Vehicles.LightTransportHeli`, `Vehicles.LightScoutHeli`, `Vehicles.RescueHeli`, `Vehicles.UtilityHeli`, `Vehicles.MedevacHeli` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [26007709](https://create.roblox.com/store/asset/26007709) | free tank | august999 (User) | crude 2010 brick build, 2 scripts | `Vehicles.MediumTank` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [28912351](https://create.roblox.com/store/asset/28912351) | Military Vehicle Meshes | Catmando (User) | tiny 2010 meshes | `Vehicles._FallbackWheeled`, `Vehicles.AntiAirTruck`, `Vehicles.CargoVan`, `Vehicles.RecoveryTruck`, `Vehicles.EscortTruck` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [15618784436](https://create.roblox.com/store/asset/15618784436) | AA gun | itsJambles (User) | a towed AA gun used as a tracked vehicle | `Vehicles.SPAAG` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [10286064243](https://create.roblox.com/store/asset/10286064243) | Howitzer | ParanoidType (User) | a towed howitzer used as a self-propelled vehicle | `Vehicles.MortarCarrier`, `Vehicles.MobileArtillery`, `Vehicles.HowitzerTruck`, `Vehicles.SiegeMortar` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [15786579439](https://create.roblox.com/store/asset/15786579439) | Boat | BRicey763 (User) | a rowboat, 1 script | `Vehicles._FallbackNaval`, `Vehicles.RiverBoat`, `Vehicles.MissileBoat`, `Vehicles.MineLayer`, `Vehicles.CoastalMonitor`, `Vehicles.SubSurfaceRunner`, `Vehicles.AttackSub` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [557152593](https://create.roblox.com/store/asset/557152593) | Navy Patrol Boat | Zolteks (User) | 20,240 triangles (over the 12k boat budget) | `Vehicles.PatrolBoat`, `Vehicles.CoastCutter`, `Vehicles.Gunboat` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [10197707775](https://create.roblox.com/store/asset/10197707775) | asphalt road texture | ZePurpleCat (User) | third-party Decal applied by id; the roads already use Material Asphalt | `MapDressing.AsphaltDecal` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+
+### 2c. Dropped in W3 LOOK (19 IDs)
+
+Third-party world-dressing hosts (spec §4.5: "No third-party Creator Store models") with no caller after the W3 rewrite,
+plus the Dockside ammo shed (over the 40-part cap). `DesertProps.Palm` 96059329869678 stays as dead config (no caller;
+the literal is pinned by BuyPathStatic).
+
+| Asset ID | Creator Store name | Uploader | Reason | Keys now 0 | Fallback |
+|---|---|---|---|---|---|
+| [2652344972](https://create.roblox.com/store/asset/2652344972) | Military ammo/supplies shed | F3rwrd (User) | 117 MeshParts, over the 40-part cap (shortlist §4); Dockside keeps its Part-kit shed | `WarzoneProps.AmmoShed` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [13668977092](https://create.roblox.com/store/asset/13668977092) | Camouflage Netting | AntiSocial_Lasagna (User) | world-dressing host with no caller after the W3 rewrite | `WarzoneProps.CamoNet` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [13437018139](https://create.roblox.com/store/asset/13437018139) | Ghillie Net | Crank_theTank (User) | world-dressing host with no caller after the W3 rewrite | `WarzoneProps.CamoNetAlt` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [82454061017921](https://create.roblox.com/store/asset/82454061017921) | Concrete Jersey Barrier | 0WowlionPro (User) | world-dressing host; WorldKits `Jersey` is our Part kit | `WarzoneProps.JerseyBarrier`, `MapDressing.JerseyBarrier` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [17156953177](https://create.roblox.com/store/asset/17156953177) | ConcreteBarrierMesh | ek3170 (User) | world-dressing host with no caller | `WarzoneProps.JerseyBarrierAlt`, `MapDressing.JerseyBarrierAlt` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [9701862157](https://create.roblox.com/store/asset/9701862157) | MILITARY PORTABLE LIGHT TOWER | declan1954 (User) | shortlist §4: listing text names a real-world military; no caller | `WarzoneProps.PortableLightTower` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [15912051001](https://create.roblox.com/store/asset/15912051001) | Concrete Barriers | s1ix6 (User) | world-dressing host with no caller | `WarzoneProps.RoadBarriers` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [8176692221](https://create.roblox.com/store/asset/8176692221) | Destroyed Building | SURPRlSE0 (User) | world-dressing host with no caller | `WarzoneProps.RuinedBuilding` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [104053043839965](https://create.roblox.com/store/asset/104053043839965) | Old brick wall (Mossy or smth) | Guest_62246 (User) | world-dressing host with no caller | `WarzoneProps.RuinedWall` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [123546710527428](https://create.roblox.com/store/asset/123546710527428) | StreetLamp_A | chiroxli (User) | world-dressing host; WorldKits `StreetLamp` is our Part kit | `WarzoneProps.StreetLamp` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [8180880144](https://create.roblox.com/store/asset/8180880144) | Modified Street light [Light version] | AloysiousCatindoy (User) | shortlist §4 provenance ("credits to the original owners"), 8 scripts; no caller | `WarzoneProps.StreetLampAlt` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [82560800252069](https://create.roblox.com/store/asset/82560800252069) | Military Vehicle Shed Army Base Bunker Barrack | 4x4basspeep (User) | shortlist §4 keyword-spam listing, 9 scripts; no caller | `WarzoneProps.SupplyShed` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [9171585794](https://create.roblox.com/store/asset/9171585794) | destroyed tank | lobo73_audas (User) | world-dressing host with no caller (WorldKits `Wreck`) | `WarzoneProps.TankWreck` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [16354482789](https://create.roblox.com/store/asset/16354482789) | CactusBase2 | creepersaur (User) | world-dressing host with no caller | `DesertProps.CactusBase` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [105982075286356](https://create.roblox.com/store/asset/105982075286356) | Low Poly Palm Tree Coconut Summer Tree isla | LaylaDawn2564 (User) | shortlist §4 keyword-spam listing, 1 script; no caller | `DesertProps.PalmAlt`, `MapDressing.PalmAlt` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [867696371](https://create.roblox.com/store/asset/867696371) | Bridge and checkpoint ww2 | Illinois_Lawz (User) | shortlist §4 real-world theme ("ww2"); WorldKits `Checkpoint` v2 | `Landmarks.CheckpointBridge` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [9136197032](https://create.roblox.com/store/asset/9136197032) | Desert house | stabok61 (User) | world landmark with no caller (WorldKits `AdobeHouse`) | `Landmarks.DesertHouse` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [11138299907](https://create.roblox.com/store/asset/11138299907) | Boat Dock | v6cvk (User) | world landmark with no caller | `Landmarks.Pier` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+| [55228082](https://create.roblox.com/store/asset/55228082) | Spy Bunker | Azraekan (User) | world landmark with no caller | `Landmarks.SpyBunker` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
+
+## 3.0 Roblox-owned IDs (W3 LOOK; load with the third-party switch OFF)
+
+Creator **Roblox (User 1, verified badge)** for all four, read from the public economy API on **2026-09-24** (no login):
+`GET https://economy.roblox.com/v2/assets/<id>/details` → `"Creator":{"Id":1,"Name":"Roblox","CreatorType":"User",...,"HasVerifiedBadge":true}`,
+`"IsForSale":false`, `"IsPublicDomain":true` (free); these are the fields that matter from each raw response (the W3
+LOOK lane keeps the full responses with its test evidence). Roblox's docs for `InsertService:LoadAsset` / `AssetService` allow assets "owned by Roblox" with
+"Allow Loading Third Party Assets" OFF, so the owner clicks nothing.
+
+| Asset ID | Store name | Creator | Type | Updated | What we take (never the whole asset) | Used by | Evidence |
+|---|---|---|---|---|---|---|---|
+| [6418221666](https://create.roblox.com/store/asset/6418221666) | Light Utility Vehicle | Roblox (User 1) | Model | 2023-11-03 | Child `Light Utility Vehicle (green camo)` › `Body` only: 39 MeshParts. Its Chassis, 16 scripts, seats, remotes and sounds are destroyed at load; the 41 camo Decals are stripped (the camo images are uploaded by user Orlando777, 715494, not Roblox, and cost draw calls). Neon lights become SmoothPlastic | `Vehicles.MilitaryJeep` and through `KitFamilyFallback.WheeledLight` the other light 4x4s (`ArmedJeep`, `ScoutCar`, `ReconBuggy`, `UtilityQuad`, `DispatchCar`). The Part kit still drives; the Armed 4x4 keeps its Part turret | [economy API](https://economy.roblox.com/v2/assets/6418221666/details) |
+| [6933438443](https://create.roblox.com/store/asset/6933438443) | Synty Nature Pack | Roblox (User 1) | Model | 2021-06-10 | One MeshPart per kit, texture cleared, recoloured: `Meshes/PolygonNature_Tree_Pine_Dead_01`, `…_Tree_Stump_01`, `…_Plant_Reeds_01`, `…_Plant_01` | `DesertKit.DeadTree`, `Stump`, `Reeds`, `DuneGrass` (WorldKits mesh overlays) | [economy API](https://economy.roblox.com/v2/assets/6933438443/details) |
+| [6933790012](https://create.roblox.com/store/asset/6933790012) | Synty Dungeon Pack: Weapons & Props | Roblox (User 1) | Model | 2021-06-10 | `Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04` | `DesertKit.CrateWood` | [economy API](https://economy.roblox.com/v2/assets/6933790012/details) |
+| [6933556508](https://create.roblox.com/store/asset/6933556508) | Synty City Pack | Roblox (User 1) | Model | 2021-06-10 | Verified, **not wired** (every City key is 0): the bench, sedan and van pieces do not fit the current WorldKits boxes | `DesertKit.Bench`, `CarWreck`, `VanWreck`, `Skip` (all 0) | [economy API](https://economy.roblox.com/v2/assets/6933556508/details) |
+
+**Terms.**
+- Synty packs: Roblox's DevForum announcement "Free Synty Asset Packs Released in the Marketplace" (topic 1283755,
+  2021-06-10, re-read 2026-09-24): *"These assets are completely free to use in anything you want to create on Roblox!"*
+  Use on Roblox only.
+- Light Utility Vehicle: made and published by Roblox, free, Creator Store terms (use on Roblox). We use its body mesh as
+  dress under our own vehicle names ("Field 4x4" …); its scripts trust the client and are never used (roadmap §1.4).
+- The meshes and textures inside these models were uploaded by the accounts that built them for Roblox (checked on the
+  economy API: oggo732, 1114780684, for the LUV and Nature meshes; Klaugrana001, 1453730866, for the City and Dungeon
+  meshes and the pack textures). We never reference those inner ids in config; they arrive inside the Roblox-owned model
+  through `InsertService`.
+
+**Rules the loader enforces** (`VisualAssetService`, W3 LOOK): each pack is inserted once and split into the configured
+pieces (`ChildName`, found with `FindFirstChild(name, true)`, never split on "/"); the rest is destroyed; every template is
+<= 40 parts (`MaxPartsPerModel`) with no Humanoid or it is refused; templates live in `ServerStorage`; a failed load is
+cached and the Part kit stays.
+
+## 3. Remaining third-party IDs (56) and why each is allowed
 
 Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes rules 1–5 in §1 unless the note says
 "Watch". "Scripts" is the count inside the upload; all are stripped before use. Triangles are from the toolbox API.
 
 ### Vehicles (dress on the Part-kit chassis; physics stays the Part kit)
 
-| Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
-|---|---|---|---|---|---|---|---|---|
-| [17835143223](https://create.roblox.com/store/asset/17835143223) | APC | 2Varu (User) | Model | 2024-06-12 | 119,089 | 14 | `Vehicles.APC`, `Vehicles.InfantryCarrier`, `Vehicles.CommandVehicle`, `Vehicles.WheeledIFV`, `Vehicles.AmphibiousAPC` | 119,089 triangles: W3 phase-out (phone budget) |
-| [81802040484766](https://create.roblox.com/store/asset/81802040484766) | Army Truck Military Vehicle Transport Mesh Pbr | Rocket1h202 (User) | Model | 2026-02-17 | 34,358 | 20 | `Vehicles.AmmoCarrier`, `Vehicles.MissileTruck`, `Vehicles.RadarTruck` | Watch: identical mesh to 105503568352704 (see there). W3 LOOK replaces both |
-| [295607934](https://create.roblox.com/store/asset/295607934) | Attack Helicopter | 12904 (User) | Model | 2015-09-14 | 13,418 | 10 | `Vehicles.AttackHelicopter`, `Vehicles.NightAttackHeli`, `Vehicles.GunshipHeli`, `Vehicles.StealthHeli`, `Vehicles.EscortHeli` | Uploader credits the Turbo Fusion Plane Kit: credited here |
-| [12794395111](https://create.roblox.com/store/asset/12794395111) | Multipurpose Frigate | teunboy3 (User) | Model | 2023-03-15 | 263,332 | 1 | `Vehicles.Corvette`, `Vehicles.Frigate`, `Vehicles.CarrierEscort` | 263,332 triangles: W3 phase-out (phone budget) |
-| [76055078503396](https://create.roblox.com/store/asset/76055078503396) | Tank Military Vehicle War Machine Roleplay Combat | wimundefined0 (User) | Model | 2026-02-15 | 7,318 | 2 | `Vehicles.LightTank`, `Vehicles.CombatIFV`, `Vehicles.AssaultIFV`, `Vehicles.BridgeLayer`, `Vehicles.MineClearer`, `Vehicles.FlameCarrier`, `Vehicles.LightScoutTank` | Also the family body for the dropped `MobileSAM`, `RocketArtillery` and `RailgunCarrier` entries |
-| [5935419](https://create.roblox.com/store/asset/5935419) | gunship | liger0223 (User) | Model | 2008-11-30 | 17,858 | 7 | `Vehicles.LightTransportHeli`, `Vehicles.LightScoutHeli`, `Vehicles.RescueHeli`, `Vehicles.UtilityHeli`, `Vehicles.MedevacHeli` |  |
-| [26007709](https://create.roblox.com/store/asset/26007709) | free tank | august999 (User) | Model | 2010-04-22 | 2,414 | 2 | `Vehicles.MediumTank` |  |
-| [125916936788670](https://create.roblox.com/store/asset/125916936788670) | Military Car Vehicle War Wheel Armored Model | BlitzxbCyberl36 (User) | Model | 2026-05-04 | 98,067 | 13 | `Vehicles.MilitaryJeep`, `Vehicles.UtilityQuad`, `Vehicles.ScoutCar`, `Vehicles.ReconBuggy`, `Vehicles.DispatchCar` | 98,067 triangles, 13 scripts, 2026 keyword-titled upload. Now also the WheeledLight family body for `ArmedJeep` (no turret). W3 LOOK swaps the light 4x4s to the Roblox Light Utility Vehicle |
-| [10286064243](https://create.roblox.com/store/asset/10286064243) | Howitzer | ParanoidType (User) | Model | 2022-07-19 | 3,632 | 0 | `Vehicles.MortarCarrier`, `Vehicles.MobileArtillery`, `Vehicles.HowitzerTruck`, `Vehicles.SiegeMortar` |  |
-| [557152593](https://create.roblox.com/store/asset/557152593) | Navy Patrol Boat | Zolteks (User) | Model | 2016-12-08 | 20,240 | 0 | `Vehicles.PatrolBoat`, `Vehicles.CoastCutter`, `Vehicles.Gunboat` |  |
-| [105503568352704](https://create.roblox.com/store/asset/105503568352704) | Army Truck Military Vehicle Transport Mesh PBR | Bella29_0Ghost591530 (User) | Model | 2026-02-04 | 34,358 | 24 | `Vehicles.PatrolTruck`, `Vehicles.ArmoredTruck`, `Vehicles.SupplyTruck` | Watch: identical mesh (34,358 triangles) to 81802040484766 from another 2026 account; one is a re-upload. W3 LOOK replaces both |
-| [15618784436](https://create.roblox.com/store/asset/15618784436) | AA gun | itsJambles (User) | Model | 2023-12-12 | 3,988 | 0 | `Vehicles.SPAAG` |  |
-| [3319732457](https://create.roblox.com/store/asset/3319732457) | war plane | the_epicpokemon (User) | Model | 2019-06-16 | 34,432 | 0 | `Vehicles.StrikeBomber`, `Vehicles.CargoPlane`, `Vehicles.AWACSPlane`, `Vehicles.TankerPlane`, `Vehicles.HeavyBomber`, `Vehicles.StrategicBomber` |  |
-| [5507592781](https://create.roblox.com/store/asset/5507592781) | fighter jet model (no script) | berkobero (User) | Model | 2023-03-31 | 26,924 | 0 | `Vehicles.StrikeJet`, `Vehicles.CASJet`, `Vehicles.StealthStrikeJet`, `Vehicles.StealthStrike` |  |
-| [9753309](https://create.roblox.com/store/asset/9753309) | Elite Force Gunship | pieman711 (User) | Model | 2009-04-11 | 4,052 | 15 | `Vehicles.TransportHeli`, `Vehicles.HeavyLiftHeli`, `Vehicles.VTOLTransport` | Listing: built on "Trooperc's Aberaxas Platform"; 15 scripts stripped |
-| [4128346779](https://create.roblox.com/store/asset/4128346779) | Army Truck (Mesh) | bearduckmonkey (User) | Model | 2019-10-15 | 4,699 | 0 | `Vehicles.TroopTransport` |  |
-| [4865838](https://create.roblox.com/store/asset/4865838) | fighter jet | stinkyturkey (User) | Model | 2008-10-13 | 15,710 | 6 | `Vehicles._FallbackJet`, `Vehicles.FighterJet`, `Vehicles.InterceptorJet`, `Vehicles.TrainerJet`, `Vehicles.ReconPlane`, `Vehicles.LightFighter` |  |
-| [15786579439](https://create.roblox.com/store/asset/15786579439) | Boat | BRicey763 (User) | Model | 2023-12-28 | 772 | 1 | `Vehicles._FallbackNaval`, `Vehicles.RiverBoat`, `Vehicles.MissileBoat`, `Vehicles.MineLayer`, `Vehicles.CoastalMonitor`, `Vehicles.SubSurfaceRunner`, `Vehicles.AttackSub` | Also the family body for the dropped `FastAttackCraft` and `TorpedoBoat` entries |
-| [28912351](https://create.roblox.com/store/asset/28912351) | Military Vehicle Meshes | Catmando (User) | Model | 2010-06-15 | 1,452 | 0 | `Vehicles._FallbackWheeled`, `Vehicles.AntiAirTruck`, `Vehicles.CargoVan`, `Vehicles.RecoveryTruck`, `Vehicles.EscortTruck` | Listing: "Free to use!". Also the family body for the dropped `FuelTanker`, `EngineeringTruck` and `FlatbedHauler` entries |
+None. Every third-party vehicle id was cleared (§2, §2b); the light 4x4s use the Roblox-owned body in §3.0 and every other
+family keeps its Part kit.
 
 ### Characters (dress on Part-kit NPCs)
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [14776506955](https://create.roblox.com/store/asset/14776506955) | Army of Soldiers (Rthro) | takinuptoomuchspace (User) | Model | 2023-09-14 | 484,133 | 840 | `Characters.HeavyInfantry` | Uploader: "i used roblox's model" (Rthro). 484k triangles, 840 scripts: W3 phase-out (phone budget) |
 | [9104381136](https://create.roblox.com/store/asset/9104381136) | Layered clothing realistic soldier | paquinhos (User) | Model | 2022-03-14 | 29,703 | 0 | `Characters.Infantry`, `Characters.WorkerFallback` | Uploader assembled Marketplace clothing and accessories made by others ("no need to credit"). Pinned Infantry/Worker fallback; W6a replaces with Roblox rigs |
 | [100212659702941](https://create.roblox.com/store/asset/100212659702941) | Realistic soldier StarterCharacter | HeitorGameplayBr009 (User) | Model | 2025-08-10 | 20,000 | 2 | `Characters.Soldier` |  |
 | [16134469614](https://create.roblox.com/store/asset/16134469614) | Rigged Soldier | Gioele_e (User) | Model | 2024-01-27 | 50,580 | 0 | `Characters.Worker`, `Characters.Guard`, `Characters.BankGuard`, `Characters.OilRigGuard`, `Characters.FortGuard`, `Characters.GateGuard`, `GateDefense.Guard` |  |
@@ -128,7 +200,6 @@ Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes r
 |---|---|---|---|---|---|---|---|---|
 | [4923345827](https://create.roblox.com/store/asset/4923345827) | Machine Gun Nest | Byrdknight (User) | Model | 2020-04-20 | 4,999 | 0 | `GateDefense.AutoGun`, `GateDefenseService default` |  |
 | [10354803684](https://create.roblox.com/store/asset/10354803684) | Military turret | gtddgc8 (User) | Model | 2022-07-25 | 14,754 | 5 | `GateDefense.AutoGunElevatedAlt` | The 2022 original of the 2026 re-upload 71964514000054 (dropped) |
-| [8980890767](https://create.roblox.com/store/asset/8980890767) | 88th machine gun nest | ValentiusSenatus (User) | Model | 2022-03-01 | 100,126 | 0 | `GateDefense.SandbagNest` | 100,126 triangles: W3 phase-out (phone budget) |
 | [3525056989](https://create.roblox.com/store/asset/3525056989) | Realistic Sandbag | 0TacoMillitary0 (User) | Model | 2019-07-24 | 1,868 | 0 | `GateDefense.Sandbags`, `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags`, `GateDefenseService default` |  |
 
 ### Collector, effects, showroom, tutorial
@@ -156,33 +227,20 @@ Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes r
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
 | [16382915010](https://create.roblox.com/store/asset/16382915010) | Ammo Box | ajh2k21 (User) | Model | 2024-02-15 | 21,472 | 0 | `WarzoneProps.AmmoBox` |  |
-| [2652344972](https://create.roblox.com/store/asset/2652344972) | Military ammo/supplies shed | F3rwrd (User) | Model | 2018-12-15 | 13,982 | 0 | `WarzoneProps.AmmoShed` |  |
 | [1291725699](https://create.roblox.com/store/asset/1291725699) | [FREE] Barbed Wire Fence | CentralCityLaw (User) | Model | 2018-01-01 | 312 | 1 | `WarzoneProps.BarbedWire` |  |
-| [13668977092](https://create.roblox.com/store/asset/13668977092) | Camouflage Netting | AntiSocial_Lasagna (User) | Model | 2023-06-06 | 7,540 | 0 | `WarzoneProps.CamoNet` |  |
-| [13437018139](https://create.roblox.com/store/asset/13437018139) | Ghillie Net | Crank_theTank (User) | Model | 2023-05-14 | 6,652 | 0 | `WarzoneProps.CamoNetAlt` |  |
 | [91071319](https://create.roblox.com/store/asset/91071319) | Concrete Barrier | HabaneroDude (User) | Model | 2016-08-27 | 868 | 0 | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` |  |
 | [53591587](https://create.roblox.com/store/asset/53591587) | Crate/Box | griflay (User) | Model | 2011-06-10 | 24 | 0 | `WarzoneProps.Crate`, `WarzoneProps.Drum` | "Area 51" in the listing is a place name, not a design |
 | [1454179642](https://create.roblox.com/store/asset/1454179642) | [Highly Detailed] Flag Pole | Owl4110 (User) | Model | 2018-02-24 | 912 | 0 | `WarzoneProps.FlagPoleHD` |  |
 | [116763933](https://create.roblox.com/store/asset/116763933) | Floodlight | ChillyRaptor (User) | Model | 2013-05-24 | 204 | 1 | `WarzoneProps.Floodlight`, `WarzoneProps.Lamp` |  |
 | [4893998573](https://create.roblox.com/store/asset/4893998573) | Floodlight | VladimirDeliyUA (User) | Model | 2020-04-13 | 2,074 | 0 | `WarzoneProps.FloodlightAlt` |  |
 | [1160141839](https://create.roblox.com/store/asset/1160141839) | Non-Laggy Fuel Cans and Oil Barrels | WOLFENCHAN (Group) | Model | 2017-11-07 | 7,350 | 0 | `WarzoneProps.FuelCans`, `IndustrialProps.FuelCans` |  |
-| [82454061017921](https://create.roblox.com/store/asset/82454061017921) | Concrete Jersey Barrier | 0WowlionPro (User) | Model | 2026-08-04 | 412 | 0 | `WarzoneProps.JerseyBarrier`, `MapDressing.JerseyBarrier` | "Jersey barrier" is the generic name of the barrier type |
-| [17156953177](https://create.roblox.com/store/asset/17156953177) | ConcreteBarrierMesh | ek3170 (User) | Model | 2024-04-15 | 308 | 0 | `WarzoneProps.JerseyBarrierAlt`, `MapDressing.JerseyBarrierAlt` |  |
 | [976333542](https://create.roblox.com/store/asset/976333542) | Military Crate | sam_youwell (User) | Model | 2017-08-13 | 1,196 | 0 | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` |  |
 | [16540055496](https://create.roblox.com/store/asset/16540055496) | Military Crates | Antonov_Slonovskaya (User) | Model | 2024-02-27 | 8,254 | 0 | `WarzoneProps.MilitaryCratePack` |  |
 | [25623924](https://create.roblox.com/store/asset/25623924) | Oil Barrel | raldude1 (User) | Model | 2010-04-15 | 480 | 0 | `WarzoneProps.OilBarrel`, `WarzoneProps.Fence`, `IndustrialProps.OilBarrel` |  |
-| [9701862157](https://create.roblox.com/store/asset/9701862157) | MILITARY PORTABLE LIGHT TOWER | declan1954 (User) | Model | 2022-05-22 | 1,208 | 2 | `WarzoneProps.PortableLightTower` |  |
 | [19277831](https://create.roblox.com/store/asset/19277831) | radio antenna | ak74dd (User) | Model | 2009-12-15 | 652 | 0 | `WarzoneProps.RadioAntenna`, `WarzoneProps.Radio` |  |
 | [42209845](https://create.roblox.com/store/asset/42209845) | Radio Antenna | MrTw0fer (User) | Model | 2010-12-16 | 360 | 0 | `WarzoneProps.RadioAntennaAlt` |  |
-| [15912051001](https://create.roblox.com/store/asset/15912051001) | Concrete Barriers | s1ix6 (User) | Model | 2024-01-07 | 9,248 | 0 | `WarzoneProps.RoadBarriers` |  |
-| [8176692221](https://create.roblox.com/store/asset/8176692221) | Destroyed Building | SURPRlSE0 (User) | Model | 2021-12-04 | 15,156 | 2 | `WarzoneProps.RuinedBuilding` |  |
-| [104053043839965](https://create.roblox.com/store/asset/104053043839965) | Old brick wall (Mossy or smth) | Guest_62246 (User) | Model | 2025-01-06 | 20,000 | 0 | `WarzoneProps.RuinedWall` |  |
 | [12651656400](https://create.roblox.com/store/asset/12651656400) | Sandbag Barrier | Aheadit (User) | Model | 2023-03-01 | 7,493 | 0 | `WarzoneProps.SandbagBarrier` |  |
 | [25733125](https://create.roblox.com/store/asset/25733125) | Sandbag wall | SpecialOp (User) | Model | 2010-04-17 | 3,624 | 0 | `WarzoneProps.SandbagWall`, `WarzoneProps.Barrier` |  |
-| [123546710527428](https://create.roblox.com/store/asset/123546710527428) | StreetLamp_A | chiroxli (User) | Model | 2026-03-29 | 1,860 | 0 | `WarzoneProps.StreetLamp` |  |
-| [8180880144](https://create.roblox.com/store/asset/8180880144) | Modified Street light [Light version] | AloysiousCatindoy (User) | Model | 2021-12-05 | 24,338 | 8 | `WarzoneProps.StreetLampAlt` | Derivative; uploader credits "the original owners … James": credited here. Watch (W3) |
-| [82560800252069](https://create.roblox.com/store/asset/82560800252069) | Military Vehicle Shed Army Base Bunker Barrack | 4x4basspeep (User) | Model | 2026-04-30 | 45,717 | 9 | `WarzoneProps.SupplyShed` | Watch: listing uses the same keyword-spam block as the dropped 111066366655290 (re-upload pattern). W3 |
-| [9171585794](https://create.roblox.com/store/asset/9171585794) | destroyed tank | lobo73_audas (User) | Model | 2022-03-22 | 9,012 | 0 | `WarzoneProps.TankWreck` |  |
 | [6883609157](https://create.roblox.com/store/asset/6883609157) | Military Tent | ForestFireTree1 (User) | Model | 2023-11-29 | 9,932 | 0 | `WarzoneProps.Tent` |  |
 | [3133150032](https://create.roblox.com/store/asset/3133150032) | Military Tent | MrKotikXD (User) | Model | 2022-01-22 | 38,324 | 9 | `WarzoneProps.TentAlt` |  |
 
@@ -190,17 +248,12 @@ Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes r
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [16354482789](https://create.roblox.com/store/asset/16354482789) | CactusBase2 | creepersaur (User) | Model | 2024-02-22 | — | 0 | `DesertProps.CactusBase` |  |
-| [6562523344](https://create.roblox.com/store/asset/6562523344) | Low Poly Rocks Pack | GYPLA6 (User) | MeshPart | 2024-03-02 | — | — | `DesertProps.DesertRock`, `MapDressing.DesertRock` | Loaded as MeshPart.MeshId (not LoadAssetAsync); works only if the mesh is Open Use |
 | [96059329869678](https://create.roblox.com/store/asset/96059329869678) | Palm Trees Realistic Tropical Island Beach Pack | BellaLion62438 (User) | Model | 2026-02-05 | — | 0 | `DesertProps.Palm`, `MapDressing.Palm` |  |
-| [105982075286356](https://create.roblox.com/store/asset/105982075286356) | Low Poly Palm Tree Coconut Summer Tree isla | LaylaDawn2564 (User) | Model | 2026-02-11 | 3,229 | 1 | `DesertProps.PalmAlt`, `MapDressing.PalmAlt` |  |
 
 ### Map dressing aliases
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [10197707775](https://create.roblox.com/store/asset/10197707775) | asphalt road texture | ZePurpleCat (User) | Image (decal) | 2023-08-05 | — | — | `MapDressing.AsphaltDecal` | Road texture set as Decal.Texture (not LoadAssetAsync) |
-| [12809476227](https://create.roblox.com/store/asset/12809476227) | Desert Mountain | falterize (User) | Model | 2023-03-17 | 156,326 | 0 | `MapDressing.DesertMesa`, `Landmarks.DesertMesa` | 156,326 triangles: W3 phase-out (phone budget) |
 
 ### Industrial props
 
@@ -213,12 +266,8 @@ Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes r
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [867696371](https://create.roblox.com/store/asset/867696371) | Bridge and checkpoint ww2 | Illinois_Lawz (User) | Model | 2017-06-15 | — | 0 | `Landmarks.CheckpointBridge` |  |
-| [9136197032](https://create.roblox.com/store/asset/9136197032) | Desert house | stabok61 (User) | Model | 2022-03-18 | 2,568 | 0 | `Landmarks.DesertHouse` |  |
-| [11138299907](https://create.roblox.com/store/asset/11138299907) | Boat Dock | v6cvk (User) | Model | 2022-10-01 | 840 | 0 | `Landmarks.Pier` |  |
 | [119021509](https://create.roblox.com/store/asset/119021509) | Radio Tower | George256 (User) | Model | 2013-06-14 | 22,836 | 0 | `Landmarks.RadioTower` |  |
 | [67444725](https://create.roblox.com/store/asset/67444725) | Small Fort | ballygoat (User) | Model | 2011-12-11 | 72 | 0 | `Landmarks.SmallFort` |  |
-| [55228082](https://create.roblox.com/store/asset/55228082) | Spy Bunker | Azraekan (User) | Model | 2011-07-01 | 2,962 | 0 | `Landmarks.SpyBunker` |  |
 
 ## 4. Follow-ups outside `VisualAssetConfig` (not CFG's files)
 
@@ -226,12 +275,14 @@ Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes r
    back to this field when `VisualAssetConfig.Buildings.MissileDefense` is 0, so the HIMARS-type launcher still resolves for
    MissileDefense plinths until it is set to `MeshAssetId = 0`. BuyPathStatic pins `MeshAssetId = 11962508154` for that file;
    whoever edits it re-pins to the new text.
-2. **`VisualAssetService.luau` line 936**: a comment still names the paid ATM ID 75368157644109 ("Prefer Design Bot hero …").
-   No runtime effect. Next writer of that file (JEEP-1, then LOOK) rewrites it as "MoneyCollector (0 in W1) → 175462478 → alts".
-3. **Watch rows** in §3 (USM Gate, Shipping Containers, the floodlight-tower mismatch, the two identical army trucks, the
-   modified street light) go to LOOK in W3, which phases out the remaining third-party IDs for Roblox-owned packs.
-4. **`THIRD_PARTY_NOTICES.md`** (roadmap §4) is for parts we adopt (Weapons Kit, Synty, LUV, the desert pack, MIT code). It
-   lands with the first adopted part. The credits requested by uploaders of the IDs above are in the notes of §3.
+2. ~~`VisualAssetService.luau`: a comment named the paid ATM ID~~ Done in W3 LOOK (the comment now reads "MoneyCollector (0
+   since W1) → MoneyCollectorFallback 175462478 → alts → Part kit"). Item 1 is also done: `StructureVisualConfig` MissileDefense
+   `MeshAssetId = 0`.
+3. **Watch rows** in §3: the two army trucks went in 859dedc and the modified street light in W3 LOOK (§2b, §2c). Shipping
+   Containers 17701461178 (126 MeshParts) is now refused at load by the 40-part cap. USM Gate 85138026 and the
+   floodlight-tower mismatch 107381977457431 stay (BuyPathStatic pins them); the next LOOK step replaces them.
+4. **`THIRD_PARTY_NOTICES.md`** (roadmap §4) exists since W2 and points here for the `VisualAssetConfig` model / mesh IDs:
+   the Synty grant and the LUV terms are in §3.0. The credits requested by uploaders of the IDs above are in the notes of §3.
 
 ## 5. Other external IDs in `src/` (listed elsewhere)
 
@@ -243,8 +294,12 @@ Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes r
 
 ## 6. What the owner must test on his phone
 
-Nothing changes on screen while "Allow Loading Third Party Assets" stays OFF: the headless world build with Full dressing
-at L5 gave the same 7,941 parts and 802 GUIs before and after, asked for none of the §2 IDs, and logged 9 fewer
-failed-load warnings. The headless stand-in is not Roblox. On the phone: nothing to see. In Studio, check Game Settings ›
-Security: the setting is OFF. After publishing, the live Developer Console (F9) should show no `LoadAsset failed` line
-for an ID in §2, except 11962508154 on a MissileDefense plinth until §4 item 1 lands.
+W3 LOOK (Roblox-owned, loads with the switch OFF; the headless stand-in is not Roblox and cannot load assets):
+1. Spawn the Field 4x4 (and the Armed 4x4): it wears Roblox's dark-green utility-vehicle body, sits on the ground with its
+   wheels, drives exactly as before, and the Armed 4x4 still shows its gun. The driver sits on the roof line, as on the old
+   kit (the seat height belongs to VehicleService).
+2. In Crossroads Town and along the roads: some crates, stumps, dead trees, reeds and dry plants use smoother Synty shapes
+   (at most 40 per server); nothing floats, nothing has text on it.
+3. Developer Console (F9) after a publish: `Split pack 6418221666`, `Split pack 6933438443`, `Split pack 6933790012` and no
+   `LoadAsset failed` line for these three IDs. A failed load only means the Part kits stay.
+4. Studio: Game Settings › Security › "Allow Loading Third Party Assets" stays OFF.

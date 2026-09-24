@@ -127,6 +127,9 @@ Constants.RemoteNames = {
 	OfferResult = "OfferResult",
 	PurchaseAnnounce = "PurchaseAnnounce",
 	ShortfallChip = "ShortfallChip",
+	-- W2 Combat Core: WeaponFx is an UnreliableRemoteEvent (RemoteSetup UNRELIABLE list); RequestSetDrawn a RemoteEvent
+	WeaponFx = "WeaponFx",
+	RequestSetDrawn = "RequestSetDrawn",
 	GetPlayerState = "GetPlayerState",
 }
 

@@ -1,19 +1,18 @@
 --!strict
 --[[
-	WAR EMPIRE — DesertFlora (procedural Part-kit vegetation)
-	Saguaro / Joshua / palm / barrel cactus / dry grass tufts.
-	Inspiration-only desert tycoon look — original Part kits, mobile-friendly counts.
-	Called from MapSetup.Run after MapDressing (deferred).
-	CanCollide false; CastShadow false on ALL flora (Studio/laptop perf).
-	Sparse mode default — ~70% fewer plants than prior dense pass.
-	v70 waterways (spec_final §9): no plant in the water or on a plot pad (spots there are skipped whole);
-	Waterways.CullDressing is the safety net at the end.
+	WAR EMPIRE — DesertFlora (procedural Part-kit vegetation kits)
+	Saguaro / Joshua / palm / barrel cactus / dry grass tufts / rock outcrop: original Part kits, mobile-friendly counts.
+	Called from MapSetup.Run after MapDressing (deferred). CanCollide false; CastShadow false on ALL flora.
+	v70 waterways (spec_final §9): Waterways.CullDressing is the safety net at the end.
+	World v2 W1 (spec §1.6): the rim ring (r ~3020, inside the Terrain canyon) and the lone mid-map palms are gone.
+	World v2 W3 (spec §4.4, roadmap §2.4 WORLD-B builder 2; contracts §5.3): Dress builds NOTHING in step 1. The lone
+	mid-map saguaros were H1 orphans; the desert flora now comes from WorldDress (road rhythm flora groups and the natural
+	scatter, >= 3 elements of >= 2 sizes each). No third-party catalog overlays (Palm / Cactus / DesertRock ids). The Part
+	kits stay exported as DesertFlora.Kits (WorldKits may reuse Palm for the Oasis POI). Dress keeps its folder, the cull
+	and WorldHygiene.Enforce, so a later step can add flora here again.
 ]]
 
 local DesertFlora = {}
-
-local GROUND_TOP_Y = 0.5
-local HALF = 3200 -- matches MapSetup GROUND_SIZE/2
 
 local COL = {
 	Cactus = Color3.fromRGB(62, 110, 58),
@@ -29,6 +28,22 @@ local COL = {
 	Rock = Color3.fromRGB(160, 110, 75),
 }
 
+-- World v2 W1: Modules/WorldHygiene (rules H1–H10), loaded lazily and guarded like Waterways
+local hygieneMod: any = nil
+local function getWorldHygiene(): any?
+	if hygieneMod == nil then
+		local ok, m = pcall(function(): any
+			local mod = script.Parent:FindFirstChild("WorldHygiene")
+			return if mod and mod:IsA("ModuleScript") then require(mod) :: any else nil
+		end)
+		hygieneMod = if ok and type(m) == "table" then m else false
+		if not ok then
+			warn("[DesertFlora] WorldHygiene unavailable:", m)
+		end
+	end
+	return if hygieneMod then hygieneMod else nil
+end
+
 -- v70: Modules/Waterways (water rects + dressing cull), loaded lazily so a Waterways error never blocks MapSetup
 local waterwaysMod: any = nil
 local function getWaterways(): any?
@@ -39,17 +54,6 @@ local function getWaterways(): any?
 		waterwaysMod = if ok and type(m) == "table" then m else false
 	end
 	return if waterwaysMod then waterwaysMod else nil
-end
-
-local function onWaterOrPlot(pos: Vector3, margin: number): boolean
-	local ww = getWaterways()
-	if not ww then
-		return false
-	end
-	local ok, res = pcall(function(): boolean
-		return ww.IsWaterXZ(pos.X, pos.Z, margin) or ww.IsOnPlotPadXZ(pos.X, pos.Z, margin)
-	end)
-	return ok and res == true
 end
 
 local function ensureFolder(name: string, parent: Instance): Folder
@@ -285,109 +289,21 @@ local function kitRockOutcrop(folder: Folder, origin: Vector3, scale: number?)
 	})
 end
 
-local function placeAt(folder: Folder, name: string, pos: Vector3, builder: (Folder, Vector3, number?) -> (), scale: number?)
-	if onWaterOrPlot(pos, 6) then
-		return -- v70: never a plant in the water or on a plot pad
-	end
-	local cluster = Instance.new("Folder")
-	cluster.Name = name
-	cluster.Parent = folder
-	builder(cluster, pos, scale)
-end
+-- World v2 (spec §8.2): the Part kits stay, exported for Phase 2 (WorldKits: oasis palms, natural scatter). Each builds
+-- one plant into `folder` at `origin` (ground level) with an optional scale.
+DesertFlora.Kits = {
+	Saguaro = kitSaguaro,
+	Joshua = kitJoshua,
+	Palm = kitPalm,
+	Barrel = kitBarrel,
+	GrassTuft = kitGrassTuft,
+	RockOutcrop = kitRockOutcrop,
+}
 
+-- Builds WarEmpireSetup.DesertFlora (replaces an old one; idempotent). W3 step 1: the folder stays empty (see header).
 function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 	local flora = ensureFolder("DesertFlora", root)
 	local sparse = if opts and opts.Sparse ~= nil then opts.Sparse else true
-
-	-- PERF: sparse by default. CastShadow=false on all flora parts (see p()).
-	local rimCount = if sparse then 6 else 14
-	local rimR = HALF - 180
-	for i = 1, rimCount do
-		local ang = (i / rimCount) * math.pi * 2
-		local jitter = ((i * 37) % 50) - 25
-		local r = rimR + jitter
-		local pos = Vector3.new(math.cos(ang) * r, GROUND_TOP_Y, math.sin(ang) * r)
-		local kind = i % 4
-		if kind == 0 then
-			placeAt(flora, "Saguaro_Rim_" .. i, pos, kitSaguaro, 0.9)
-		elseif kind == 1 then
-			placeAt(flora, "Joshua_Rim_" .. i, pos, kitJoshua, 0.95)
-		elseif kind == 2 then
-			placeAt(flora, "Palm_Rim_" .. i, pos, kitPalm, 0.8)
-		else
-			placeAt(flora, "Barrel_Rim_" .. i, pos, kitBarrel, 0.95)
-		end
-	end
-
-	-- Mid-map: drastically cut (was 10 dual plants → 2–4 singles)
-	local midSpots = if sparse
-		then {
-			Vector3.new(480, GROUND_TOP_Y, 520),
-			Vector3.new(900, GROUND_TOP_Y, -900),
-		}
-		else {
-			Vector3.new(350, GROUND_TOP_Y, 180),
-			Vector3.new(180, GROUND_TOP_Y, -480),
-			Vector3.new(620, GROUND_TOP_Y, -80),
-			Vector3.new(480, GROUND_TOP_Y, 520),
-			Vector3.new(1100, GROUND_TOP_Y, 200),
-			Vector3.new(900, GROUND_TOP_Y, -900),
-		}
-	for i, pos in ipairs(midSpots) do
-		if i % 2 == 0 then
-			placeAt(flora, "Saguaro_Mid_" .. i, pos, kitSaguaro, 1.0)
-		else
-			placeAt(flora, "Palm_Mid_" .. i, pos, kitPalm, 0.95)
-		end
-		if not sparse and i == 1 then
-			placeAt(flora, "Rock_Mid_" .. i, pos + Vector3.new(10, 0, -8), kitRockOutcrop, 0.9)
-			local tuft = Instance.new("Folder")
-			tuft.Name = "Grass_Mid_" .. i
-			tuft.Parent = flora
-			kitGrassTuft(tuft, pos + Vector3.new(-6, 0, 5))
-		end
-	end
-
-	-- v70: the plot-adjacent palms (Palm_Plot_*, plot + (110, 0, 40)) are gone: at the 320 layout they stood inside the
-	-- east building row of the base.
-
-	-- Catalog overlays: DesertPlants / Palm(+PalmAlt) / Cactus / DesertRock MeshPart
-	-- Cap attempts so PERF stays Part-kit-first even on live.
-	do
-		local attached = 0
-		local maxAttach = if sparse then 6 else 18
-		local okVas, vas = pcall(function()
-			return require(script.Parent.Parent.Services.VisualAssetService)
-		end)
-		if okVas and vas and vas.IsInsertEnabled and vas.IsInsertEnabled() then
-			for _, d in ipairs(flora:GetDescendants()) do
-				if attached >= maxAttach then
-					break
-				end
-				if d:IsA("BasePart") then
-					local key: string? = nil
-					if d.Name == "SaguaroTrunk" then
-						key = if attached % 3 == 0 then "DesertPlants" elseif attached % 3 == 1 then "Cactus" else "CactusBase"
-					elseif d.Name == "PalmTrunk" then
-						key = "Palm" -- PalmAlt fallback inside TryAttachPropVisual
-					elseif d.Name == "Outcrop" or d.Name == "OutcropCap" then
-						key = "DesertRock"
-					end
-					if key then
-						local okAtt = pcall(function()
-							return vas.TryAttachPropVisual(d, key :: string)
-						end)
-						if okAtt then
-							attached += 1
-						end
-					end
-				end
-			end
-			if attached > 0 then
-				print("[WAR EMPIRE] DesertFlora catalog props attached:", attached)
-			end
-		end
-	end
 
 	-- v70 safety net (spec §9.12): nothing in the water or on a plot pad
 	local ww = getWaterways()
@@ -398,6 +314,15 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		end
 	end
 
+	-- World v2 W1: hygiene rules over what is left (spec §5.1; logs one summary line)
+	local wh = getWorldHygiene()
+	if wh then
+		local okHy, errHy = pcall(wh.Enforce, flora)
+		if not okHy then
+			warn("[DesertFlora] WorldHygiene.Enforce failed:", errHy)
+		end
+	end
+
 	local partCount = 0
 	for _, d in ipairs(flora:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -405,7 +330,7 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 			d.CastShadow = false
 		end
 	end
-	print("[WAR EMPIRE] DesertFlora complete: " .. tostring(partCount) .. " flora parts (sparse=" .. tostring(sparse) .. ", CastShadow=false)")
+	print("[WAR EMPIRE] DesertFlora complete: " .. tostring(partCount) .. " flora parts (sparse=" .. tostring(sparse) .. ", W3: flora from WorldDress)")
 end
 
 return DesertFlora

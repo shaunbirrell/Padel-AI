@@ -110,6 +110,33 @@ SoundConfig.Sounds = {
 	["Engine.Jet"] = { Id = 6417165160, Volume = 0.4, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" }, -- [RBX] LUV "Sedan_Loop_High" 6417165160 (placeholder jet whine)
 	["Engine.Heli"] = { Id = 9113417759, Volume = 0.45, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" }, -- [PSE] helicopter "Rises For Takeoff 2" 9113417759 (swap for a seamless rotor loop after preview)
 	["Engine.Naval"] = { Id = 6417179625, Volume = 0.4, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0, Bus = "Loop" }, -- [RBX] LUV "Sedan_Loop_Low" 6417179625, pitched down (boat motor)
+
+	-- ── combat (W2 CC-3; WeaponVisuals plays these). Key names = docs/ASSET_SHORTLIST.md §3.5, so the asset
+	-- workflow's config commit swaps ids with no code change. Every id is a [PSE] row of that sheet (P0/P1,
+	-- 2026-09-24); NOBODY HAS LISTENED YET: preview each in Studio before a publish. Gun shots: 3D at the muzzle
+	-- (other players: at the server origin O); the local player's reload / empty / equip: 3D at their character.
+	["Weapon.StarterRifle.Fire"] = { Id = 9113188870, Volume = 0.55, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 0.9, LengthSeconds = 0.5 }, -- [PSE] "Assault Rifle 2 (SFX)" 9113188870
+	["Weapon.AssaultRifle.Fire"] = { Id = 9113188876, Volume = 0.55, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 0.9, LengthSeconds = 0.5 }, -- [PSE] "Assault Rifle 4 (SFX)" 9113188876
+	["Weapon.SMG.Fire"] = { Id = 9113029219, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1.15, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 0.18, LengthSeconds = 0.5 }, -- [PSE] "9 Mm Gun Firing 5 (SFX)" 9113029219
+	["Weapon.Pistol.Fire"] = { Id = 9117400889, Volume = 0.55, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 1.0, LengthSeconds = 0.5 }, -- [PSE] "Pistol Single Shots 8 (SFX)" 9117400889
+	["Weapon.Shotgun.Fire"] = { Id = 9112912936, Volume = 0.6, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", MaxSeconds = 1.2, LengthSeconds = 0.5 }, -- [PSE] "12 Gauge Shotgun 101 (SFX)" 9112912936 (preview: may hold 2 blasts)
+	["Weapon.Sniper.Fire"] = { Id = 9118173988, Volume = 0.65, RollOff = "InverseTapered", MaxDistance = 400, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", LengthSeconds = 0.5 }, -- [PSE] "Rifle Single Shots 3 (SFX)" 9118173988
+	["Weapon.RocketLauncher.Fire"] = { Id = 9118592471, Volume = 0.6, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1, CooldownSeconds = 0.05, Priority = 2, Bus = "World", MaxSeconds = 1.5, LengthSeconds = 0.5 }, -- [PSE] "Rocket Flare Out 9 (SFX)" 9118592471
+	["Weapon.Grenade.Throw"] = { Id = 9114659833, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 250, Pitch = 1, CooldownSeconds = 0.05, Priority = 1, Bus = "World", LengthSeconds = 0.5 }, -- [PSE] "Grenade Pull Pin 2 (SFX)" 9114659833
+	["Weapon.Reload.Rifle"] = { Id = 9113104509, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.3, Priority = 2, Bus = "World", LengthSeconds = 1.3 }, -- [PSE] "Ammo Magazine 3 (SFX)" 9113104509
+	["Weapon.Reload.Pistol"] = { Id = 9113104176, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.3, Priority = 2, Bus = "World", LengthSeconds = 1.3 }, -- [PSE] "Ammo Magazine 1 (SFX)" 9113104176
+	["Weapon.Reload.Shotgun"] = { Id = 9112913564, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.3, Priority = 2, Bus = "World", LengthSeconds = 0.6 }, -- [PSE] "12 Gauge Shotgun 9 (SFX)" 9112913564 (pump)
+	["Weapon.Reload.Launcher"] = { Id = 9118594324, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.3, Priority = 2, Bus = "World", LengthSeconds = 1 }, -- [PSE] "Rockets Handle 6 (SFX)" 9118594324
+	["Weapon.Empty"] = { Id = 9117396530, Volume = 0.5, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.25, Priority = 1, Bus = "World", MaxSeconds = 0.25, LengthSeconds = 0.3 }, -- [PSE] "Pistol Handling 1 (SFX)" 9117396530 (dry fire)
+	["Weapon.Equip"] = { Id = 9114702107, Volume = 0.45, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.3, Priority = 1, Bus = "World", LengthSeconds = 1 }, -- [PSE] "Gun Grab Hard 1 (SFX)" 9114702107
+	["Hit.Confirm"] = { Id = 9119717529, Volume = 0.5, RollOff = "Linear", MaxDistance = 0, Pitch = 1.4, CooldownSeconds = 0.06, Priority = 2, Bus = "UI", LengthSeconds = 0.25 }, -- [PSE] "Switch Click On Or Off Toggle Button 1 (SFX)" 9119717529
+	["Hit.Headshot"] = { Id = 9119717529, Volume = 0.6, RollOff = "Linear", MaxDistance = 0, Pitch = 1.8, CooldownSeconds = 0.06, Priority = 3, Bus = "UI", LengthSeconds = 0.25 }, -- [PSE] same file as Hit.Confirm, higher
+	["Hit.Kill"] = { Id = 9126073001, Volume = 0.55, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0.2, Priority = 4, Bus = "UI", MaxSeconds = 0.9, LengthSeconds = 0.9 }, -- [PSE] "Synth Sparkle Tone High Pitch Bell Tone Ding (SFX)" 9126073001
+	["Player.Hurt"] = { Id = 9113524237, Volume = 0.35, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0.25, Priority = 2, Bus = "UI", LengthSeconds = 0.55 }, -- [PSE] "Body Impact 2 (SFX)" 9113524237, low
+	["Impact.Ground"] = { Id = 9118768193, Volume = 0.4, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.08, Priority = 1, Bus = "World", LengthSeconds = 0.7 }, -- [PSE] "Sand Impacts 5 (SFX)" 9118768193
+	["Impact.Metal"] = { Id = 9119915230, Volume = 0.45, RollOff = "InverseTapered", MaxDistance = 60, Pitch = 1, CooldownSeconds = 0.08, Priority = 1, Bus = "World", LengthSeconds = 1 }, -- [PSE] "Tank Impact 1 (SFX)" 9119915230
+	["Explosion.Small"] = { Id = 9114086583, Volume = 0.7, RollOff = "InverseTapered", MaxDistance = 400, Pitch = 1, CooldownSeconds = 0.1, Priority = 3, Bus = "World", LengthSeconds = 1.9 }, -- [PSE] "Dirt Explosion 4 (SFX)" 9114086583 (grenade, rocket)
+	["Explosion.Large"] = { Id = 9114554567, Volume = 0.8, RollOff = "InverseTapered", MaxDistance = 400, Pitch = 1, CooldownSeconds = 0.3, Priority = 4, Bus = "World", LengthSeconds = 4 }, -- [PSE] "Gas Fire Explosion 3 (SFX)" 9114554567 (vehicle wreck)
 } :: { [string]: SoundDef }
 
 SoundConfig.Mix = {
@@ -188,6 +215,35 @@ SoundConfig.Hooks = {
 	-- Alarm.Missile has a valid Id, so the victim hears the real siren instead of the click. "" = never mute.
 	LegacyMissileSirenName = "WE_MissileSiren",
 	LevelUp = "Level.Up", -- XPUpdate LevelUp == true
+}
+
+-- W2 (CC-3): weapon id → sound keys. WeaponVisuals reads this; a missing entry or an Id-0 key is silent
+-- (AudioController.Play never errors). "NPC" = the NPC rifle shots relayed by WeaponFx (W = "NPC").
+export type WeaponSounds = { Fire: string?, Reload: string? }
+SoundConfig.Weapons = {
+	StarterRifle = { Fire = "Weapon.StarterRifle.Fire", Reload = "Weapon.Reload.Rifle" },
+	AssaultRifle = { Fire = "Weapon.AssaultRifle.Fire", Reload = "Weapon.Reload.Rifle" },
+	SMG = { Fire = "Weapon.SMG.Fire", Reload = "Weapon.Reload.Rifle" },
+	Pistol = { Fire = "Weapon.Pistol.Fire", Reload = "Weapon.Reload.Pistol" },
+	Shotgun = { Fire = "Weapon.Shotgun.Fire", Reload = "Weapon.Reload.Shotgun" },
+	Sniper = { Fire = "Weapon.Sniper.Fire", Reload = "Weapon.Reload.Rifle" },
+	RocketLauncher = { Fire = "Weapon.RocketLauncher.Fire", Reload = "Weapon.Reload.Launcher" },
+	Grenade = { Fire = "Weapon.Grenade.Throw" },
+	NPC = { Fire = "Weapon.StarterRifle.Fire" },
+} :: { [string]: WeaponSounds }
+
+-- W2 (CC-3): combat cue → key (WeaponVisuals; VehicleCombatClient plays "Explosion.Large" by name)
+SoundConfig.CombatCues = {
+	Empty = "Weapon.Empty",
+	Equip = "Weapon.Equip",
+	HitConfirm = "Hit.Confirm",
+	Kill = "Hit.Kill",
+	Headshot = "Hit.Headshot",
+	Hurt = "Player.Hurt",
+	ImpactGround = "Impact.Ground",
+	ImpactMetal = "Impact.Metal",
+	ExplosionSmall = "Explosion.Small",
+	ExplosionLarge = "Explosion.Large",
 }
 
 return SoundConfig

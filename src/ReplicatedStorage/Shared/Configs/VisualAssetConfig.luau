@@ -23,33 +23,65 @@
 
 	Design P0 REJECT: JeepFallback 59524622; SWAT/police; blocky soldiers; 107381 as vehicle.
 	Design P0 REJECT primary: 3924234975 plastic Rthro; 91299598767068 Respawn Soldiers pack.
+
+	W3 LOOK (roadmap §2.4, asset shortlist §6.2 C1/C7): Roblox-owned packs (creator Roblox, User 1) load with the
+	third-party switch OFF. One pack serves many keys: `ChildName` picks one piece (pack:FindFirstChild(ChildName, true),
+	never split on "/"), `SubModel` a descendant of that piece. Each pack loads once; the chosen pieces are kept as
+	templates in ServerStorage and the rest is dropped. Every inserted template is <= MaxPartsPerModel parts and has no
+	Humanoid, or it is refused and the Part kit stays.
 ]]
 
 export type AssetRef = {
 	ModelAssetId: number?, -- InsertService / AssetService:LoadAssetAsync catalog Model
 	MeshId: number?, -- optional SpecialMesh / MeshPart MeshId (0 = unused)
 	Note: string?,
+	-- W3 LOOK: one piece of a (Roblox-owned) pack
+	ChildName: string?, -- found with pack:FindFirstChild(ChildName, true); names contain "/" (never split)
+	SubModel: string?, -- then this descendant of the piece (e.g. "Body": drops Chassis / Scripts / Effects)
+	Color: Color3?, -- single-part pieces: flat colour (with ClearTexture)
+	Material: Enum.Material?, -- single-part pieces
+	ClearTexture: boolean?, -- TextureID = "" and no SurfaceAppearance: flat desert palette, no stray text
+	StripDecals: boolean?, -- drop Decals / Textures (phone draw calls; the LUV camo decals are not Roblox-owned images)
+	Fit: string?, -- "Kit": vehicle body scaled to the kit chassis length, tyres on the physics-wheel bottoms
+	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z)
+	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
+	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
 }
 
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
 	MaxLoadAttempts = 48,
+	MaxPartsPerModel = 40, -- CLAUDE.md catalog budget: an inserted template with more BaseParts is refused (Part kit stays)
+	FitShadowShare = 0.5, -- fitted vehicle bodies: only parts at least this share of the chassis length cast a shadow
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0, -- ScaleTo uses TargetFootprint; do NOT squash to plinth
 	PropVisualScale = 1.0,
 
 	Vehicles = {
-		-- Free light 4x4 family
-		MilitaryJeep = { ModelAssetId = 125916936788670, Note = "Military Car dress-only (NO JeepFallback)" } :: AssetRef,
-		ArmedJeep = { ModelAssetId = 0, Note = "W1 CFG drop (real-world design) → WheeledLight family body, else Part kit" } :: AssetRef,
-		UtilityQuad = { ModelAssetId = 125916936788670, Note = "Military Car reuse (scaled)" } :: AssetRef,
-		ScoutCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
-		ReconBuggy = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
+		-- Light 4x4 family (KitFamilyFallback.WheeledLight = MilitaryJeep): W3 LOOK wires Roblox's own Light Utility
+		-- Vehicle 6418221666 (creator Roblox, User 1; verified 2026-09-24, docs/ASSET_LICENSES.md §3). Only the green camo
+		-- "Body" sub-model (39 MeshParts) is kept; its Chassis, scripts, seats and sounds are never used. The Part kit
+		-- stays the physics body; the Armed 4x4 keeps its Part turret. 0 here = Part kit only (one-line revert).
+		MilitaryJeep = {
+			ModelAssetId = 6418221666,
+			ChildName = "Light Utility Vehicle (green camo)",
+			SubModel = "Body",
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			KeepVisible = { "GunMount", "Barrel" },
+			StripDecals = true,
+			Note = "W3 LOOK: Roblox Light Utility Vehicle body (NO JeepFallback); dress-only, Part kit drives",
+		} :: AssetRef,
+		ArmedJeep = { ModelAssetId = 0, Note = "W1 CFG drop (real-world design) → WheeledLight family body (MilitaryJeep: Roblox LUV body + our Part turret), else Part kit" } :: AssetRef,
+		UtilityQuad = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
+		ScoutCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep)" } :: AssetRef,
+		ReconBuggy = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
 		-- Free tank family
-		LightTank = { ModelAssetId = 76055078503396, Note = "v41 IFV/tank mesh — DisplayName Light Tank" } :: AssetRef,
-		MediumTank = { ModelAssetId = 26007709, Note = "Classic free tank — Medium only" } :: AssetRef,
+		LightTank = { ModelAssetId = 0, Note = "v41 IFV/tank mesh — DisplayName Light Tank" } :: AssetRef,
+		MediumTank = { ModelAssetId = 0, Note = "Classic free tank — Medium only" } :: AssetRef,
 		-- W1 CFG drop (franchise design): TrackedMBT family → BattleTank = 0 → Part kit
 		BattleTank = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) — Part kit" } :: AssetRef,
 		HeavyTank = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) — Part kit" } :: AssetRef,
@@ -57,103 +89,103 @@ local VisualAssetConfig = {
 		TankDestroyer = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) — Part kit" } :: AssetRef,
 		AssaultGun = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) — Part kit" } :: AssetRef,
 		-- Free heli family
-		TransportHeli = { ModelAssetId = 9753309, Note = "Transport heli" } :: AssetRef,
-		AttackHelicopter = { ModelAssetId = 295607934, Note = "Gunship heli" } :: AssetRef,
-		LightTransportHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
-		NightAttackHeli = { ModelAssetId = 295607934, Note = "Gunship heli" } :: AssetRef,
-		LightScoutHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
-		GunshipHeli = { ModelAssetId = 295607934, Note = "Gunship heli" } :: AssetRef,
-		HeavyLiftHeli = { ModelAssetId = 9753309, Note = "Transport heli heavy-lift" } :: AssetRef,
-		RescueHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
-		StealthHeli = { ModelAssetId = 295607934, Note = "Gunship/stealth heli" } :: AssetRef,
+		TransportHeli = { ModelAssetId = 0, Note = "Transport heli" } :: AssetRef,
+		AttackHelicopter = { ModelAssetId = 0, Note = "Gunship heli" } :: AssetRef,
+		LightTransportHeli = { ModelAssetId = 0, Note = "Light/utility heli" } :: AssetRef,
+		NightAttackHeli = { ModelAssetId = 0, Note = "Gunship heli" } :: AssetRef,
+		LightScoutHeli = { ModelAssetId = 0, Note = "Light/utility heli" } :: AssetRef,
+		GunshipHeli = { ModelAssetId = 0, Note = "Gunship heli" } :: AssetRef,
+		HeavyLiftHeli = { ModelAssetId = 0, Note = "Transport heli heavy-lift" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 0, Note = "Light/utility heli" } :: AssetRef,
+		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
-		_FallbackWheeled = { ModelAssetId = 28912351, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
-		PatrolTruck = { ModelAssetId = 105503568352704, Note = "Military truck prefer" } :: AssetRef,
-		ArmoredTruck = { ModelAssetId = 105503568352704, Note = "Military truck prefer" } :: AssetRef,
-		APC = { ModelAssetId = 17835143223, Note = "APC prefer" } :: AssetRef,
+		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
+		PatrolTruck = { ModelAssetId = 0, Note = "Military truck prefer" } :: AssetRef,
+		ArmoredTruck = { ModelAssetId = 0, Note = "Military truck prefer" } :: AssetRef,
+		APC = { ModelAssetId = 0, Note = "APC prefer" } :: AssetRef,
 		-- Free jet family (classic + named free fighter)
-		_FallbackJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
-		FighterJet = { ModelAssetId = 4865838, Note = "Classic free fighter jet" } :: AssetRef,
-		InterceptorJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
-		TrainerJet = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
-		ReconPlane = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
-		LightFighter = { ModelAssetId = 4865838, Note = "Fighter reuse" } :: AssetRef,
-		StrikeJet = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
-		CASJet = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
-		StealthStrikeJet = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
-		StrikeBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
-		CargoPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
-		AWACSPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
-		TankerPlane = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		_FallbackJet = { ModelAssetId = 0, Note = "Classic free fighter jet" } :: AssetRef,
+		FighterJet = { ModelAssetId = 0, Note = "Classic free fighter jet" } :: AssetRef,
+		InterceptorJet = { ModelAssetId = 0, Note = "Fighter reuse" } :: AssetRef,
+		TrainerJet = { ModelAssetId = 0, Note = "Fighter reuse" } :: AssetRef,
+		ReconPlane = { ModelAssetId = 0, Note = "Fighter reuse" } :: AssetRef,
+		LightFighter = { ModelAssetId = 0, Note = "Fighter reuse" } :: AssetRef,
+		StrikeJet = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
+		CASJet = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
+		StealthStrikeJet = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
+		StrikeBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		CargoPlane = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		AWACSPlane = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		TankerPlane = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 		-- Free naval family
-		_FallbackNaval = { ModelAssetId = 15786579439, Note = "Free Boat (Creator Store)" } :: AssetRef,
-		PatrolBoat = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" } :: AssetRef,
+		_FallbackNaval = { ModelAssetId = 0, Note = "Free Boat (Creator Store)" } :: AssetRef,
+		PatrolBoat = { ModelAssetId = 0, Note = "Navy Patrol Boat" } :: AssetRef,
 		FastAttackCraft = { ModelAssetId = 0, Note = "W1 CFG drop (real-world design) → NavalPatrol family body, else Part kit" } :: AssetRef,
-		RiverBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		CoastCutter = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" } :: AssetRef,
+		RiverBoat = { ModelAssetId = 0, Note = "Boat reuse" } :: AssetRef,
+		CoastCutter = { ModelAssetId = 0, Note = "Navy Patrol Boat" } :: AssetRef,
 		TorpedoBoat = { ModelAssetId = 0, Note = "W1 CFG drop (real-world design) → NavalPatrol family body, else Part kit" } :: AssetRef,
-		Gunboat = { ModelAssetId = 557152593, Note = "Navy Patrol Boat" } :: AssetRef,
-		MissileBoat = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		MineLayer = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
-		CoastalMonitor = { ModelAssetId = 15786579439, Note = "Boat reuse" } :: AssetRef,
+		Gunboat = { ModelAssetId = 0, Note = "Navy Patrol Boat" } :: AssetRef,
+		MissileBoat = { ModelAssetId = 0, Note = "Boat reuse" } :: AssetRef,
+		MineLayer = { ModelAssetId = 0, Note = "Boat reuse" } :: AssetRef,
+		CoastalMonitor = { ModelAssetId = 0, Note = "Boat reuse" } :: AssetRef,
 		LandingCraft = { ModelAssetId = 0, Note = "Part-kit barge — REJECT 13195201090 template" } :: AssetRef,
 		AssaultLanding = { ModelAssetId = 0, Note = "Part-kit — REJECT 13195201090" } :: AssetRef,
 		HoverTransport = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
 		HospitalShip = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
 		SupplyShip = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
 		AmphibAssault = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090" } :: AssetRef,
-		Corvette = { ModelAssetId = 12794395111, Note = "Frigate scaled" } :: AssetRef,
+		Corvette = { ModelAssetId = 0, Note = "Frigate scaled" } :: AssetRef,
 		Destroyer = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
-		Frigate = { ModelAssetId = 12794395111, Note = "Multipurpose Frigate" } :: AssetRef,
-		CarrierEscort = { ModelAssetId = 12794395111, Note = "Frigate escort" } :: AssetRef,
+		Frigate = { ModelAssetId = 0, Note = "Multipurpose Frigate" } :: AssetRef,
+		CarrierEscort = { ModelAssetId = 0, Note = "Frigate escort" } :: AssetRef,
 		Battleship = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
 		AircraftCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		SubSurfaceRunner = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
-		AttackSub = { ModelAssetId = 15786579439, Note = "Boat reuse (surface stub)" } :: AssetRef,
+		SubSurfaceRunner = { ModelAssetId = 0, Note = "Boat reuse (surface stub)" } :: AssetRef,
+		AttackSub = { ModelAssetId = 0, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
-		SupplyTruck = { ModelAssetId = 105503568352704, Note = "Military truck (same as PatrolTruck)" } :: AssetRef,
+		SupplyTruck = { ModelAssetId = 0, Note = "Military truck (same as PatrolTruck)" } :: AssetRef,
 		FuelTanker = { ModelAssetId = 0, Note = "W1 CFG drop (real-world truck) → WheeledTruck family body, else Part kit" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 0, Note = "W1 CFG drop (real-world truck) → WheeledTruck family body, else Part kit" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 0, Note = "W1 CFG drop (real-world truck) → WheeledTruck family body, else Part kit" } :: AssetRef,
-		AmmoCarrier = { ModelAssetId = 81802040484766, Note = "Logistics Truck PBR" } :: AssetRef,
-		MissileTruck = { ModelAssetId = 81802040484766, Note = "Logistics Truck PBR" } :: AssetRef,
-		AntiAirTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		RadarTruck = { ModelAssetId = 81802040484766, Note = "Logistics Truck PBR" } :: AssetRef,
-		CargoVan = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		TroopTransport = { ModelAssetId = 4128346779, Note = "Army Truck mesh unique" } :: AssetRef,
-		RecoveryTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		EscortTruck = { ModelAssetId = 28912351, Note = "Mesh pack truck" } :: AssetRef,
-		InfantryCarrier = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
-		CommandVehicle = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
-		WheeledIFV = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
-		AmphibiousAPC = { ModelAssetId = 17835143223, Note = "APC prefer (Design P0)" } :: AssetRef,
-		CombatIFV = { ModelAssetId = 76055078503396, Note = "v41 Combat IFV" } :: AssetRef,
-		AssaultIFV = { ModelAssetId = 76055078503396, Note = "v41 Assault IFV" } :: AssetRef,
-		BridgeLayer = { ModelAssetId = 76055078503396, Note = "Engineer Track" } :: AssetRef,
-		MineClearer = { ModelAssetId = 76055078503396, Note = "Engineer Track" } :: AssetRef,
-		FlameCarrier = { ModelAssetId = 76055078503396, Note = "Engineer Track" } :: AssetRef,
-		SPAAG = { ModelAssetId = 15618784436, Note = "AA Gun" } :: AssetRef,
+		AmmoCarrier = { ModelAssetId = 0, Note = "Logistics Truck PBR" } :: AssetRef,
+		MissileTruck = { ModelAssetId = 0, Note = "Logistics Truck PBR" } :: AssetRef,
+		AntiAirTruck = { ModelAssetId = 0, Note = "Mesh pack truck" } :: AssetRef,
+		RadarTruck = { ModelAssetId = 0, Note = "Logistics Truck PBR" } :: AssetRef,
+		CargoVan = { ModelAssetId = 0, Note = "Mesh pack truck" } :: AssetRef,
+		TroopTransport = { ModelAssetId = 0, Note = "Army Truck mesh unique" } :: AssetRef,
+		RecoveryTruck = { ModelAssetId = 0, Note = "Mesh pack truck" } :: AssetRef,
+		EscortTruck = { ModelAssetId = 0, Note = "Mesh pack truck" } :: AssetRef,
+		InfantryCarrier = { ModelAssetId = 0, Note = "APC prefer (Design P0)" } :: AssetRef,
+		CommandVehicle = { ModelAssetId = 0, Note = "APC prefer (Design P0)" } :: AssetRef,
+		WheeledIFV = { ModelAssetId = 0, Note = "APC prefer (Design P0)" } :: AssetRef,
+		AmphibiousAPC = { ModelAssetId = 0, Note = "APC prefer (Design P0)" } :: AssetRef,
+		CombatIFV = { ModelAssetId = 0, Note = "v41 Combat IFV" } :: AssetRef,
+		AssaultIFV = { ModelAssetId = 0, Note = "v41 Assault IFV" } :: AssetRef,
+		BridgeLayer = { ModelAssetId = 0, Note = "Engineer Track" } :: AssetRef,
+		MineClearer = { ModelAssetId = 0, Note = "Engineer Track" } :: AssetRef,
+		FlameCarrier = { ModelAssetId = 0, Note = "Engineer Track" } :: AssetRef,
+		SPAAG = { ModelAssetId = 0, Note = "AA Gun" } :: AssetRef,
 		MobileSAM = { ModelAssetId = 0, Note = "W1 CFG drop (real-world system) → TrackedSPAAG family body, else Part kit" } :: AssetRef,
-		MortarCarrier = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
-		MobileArtillery = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
+		MortarCarrier = { ModelAssetId = 0, Note = "Howitzer" } :: AssetRef,
+		MobileArtillery = { ModelAssetId = 0, Note = "Howitzer" } :: AssetRef,
 		RocketArtillery = { ModelAssetId = 0, Note = "W1 CFG drop (real-world system) → TrackedArtillery family body, else Part kit" } :: AssetRef,
-		HowitzerTruck = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
-		SiegeMortar = { ModelAssetId = 10286064243, Note = "Howitzer" } :: AssetRef,
-		LightScoutTank = { ModelAssetId = 76055078503396, Note = "v42 Scout Tank" } :: AssetRef,
+		HowitzerTruck = { ModelAssetId = 0, Note = "Howitzer" } :: AssetRef,
+		SiegeMortar = { ModelAssetId = 0, Note = "Howitzer" } :: AssetRef,
+		LightScoutTank = { ModelAssetId = 0, Note = "v42 Scout Tank" } :: AssetRef,
 		FortressTank = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) — Part kit" } :: AssetRef,
 		RailgunCarrier = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) → TrackedArtillery family body, else Part kit" } :: AssetRef,
-		DispatchCar = { ModelAssetId = 125916936788670, Note = "Military Car reuse" } :: AssetRef,
-		UtilityHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
-		MedevacHeli = { ModelAssetId = 5935419, Note = "Light/utility heli" } :: AssetRef,
-		EscortHeli = { ModelAssetId = 295607934, Note = "Gunship escort" } :: AssetRef,
-		VTOLTransport = { ModelAssetId = 9753309, Note = "Transport heli VTOL" } :: AssetRef,
-		HeavyBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
-		StealthStrike = { ModelAssetId = 5507592781, Note = "Strike/CAS jet" } :: AssetRef,
+		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
+		UtilityHeli = { ModelAssetId = 0, Note = "Light/utility heli" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 0, Note = "Light/utility heli" } :: AssetRef,
+		EscortHeli = { ModelAssetId = 0, Note = "Gunship escort" } :: AssetRef,
+		VTOLTransport = { ModelAssetId = 0, Note = "Transport heli VTOL" } :: AssetRef,
+		HeavyBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		StealthStrike = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
 		Cruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
 		MissileCruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
 		FleetCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
-		StrategicBomber = { ModelAssetId = 3319732457, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
+		StrategicBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	Characters = {
@@ -162,7 +194,7 @@ local VisualAssetConfig = {
 		Infantry = { ModelAssetId = 9104381136, Note = "Layered clothing realistic soldier (helmet+MOLLE)" } :: AssetRef,
 		Worker = { ModelAssetId = 16134469614, Note = "v41 distinct Worker (Rigged Soldier NVG)" } :: AssetRef,
 		WorkerFallback = { ModelAssetId = 9104381136, Note = "Worker fallback Infantry mesh if Guard insert fails" } :: AssetRef,
-		HeavyInfantry = { ModelAssetId = 14776506955, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
+		HeavyInfantry = { ModelAssetId = 0, Note = "Army of Soldiers Rthro swarm pack" } :: AssetRef,
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		BankGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
 		OilRigGuard = { ModelAssetId = 16134469614, Note = "Rigged Soldier NVG/balaclava" } :: AssetRef,
@@ -213,7 +245,7 @@ local VisualAssetConfig = {
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
-		SandbagNest = { ModelAssetId = 8980890767, Note = "Circular sandbag ring under HMG" } :: AssetRef,
+		SandbagNest = { ModelAssetId = 0, Note = "Circular sandbag ring under HMG" } :: AssetRef,
 		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
 	},
 
@@ -264,19 +296,19 @@ local VisualAssetConfig = {
 		FlagPole = { ModelAssetId = 1679839739, Note = "Depot/HQ flag pole" } :: AssetRef,
 		FlagPoleHD = { ModelAssetId = 1454179642, Note = "HQ prestige flag pole" } :: AssetRef,
 		-- Map densify P0/P1 (Design MAP_BUILD_OUT_WIRE 2026-09-21)
-		JerseyBarrier = { ModelAssetId = 82454061017921, Note = "Concrete Jersey — road rhythm" } :: AssetRef,
-		JerseyBarrierAlt = { ModelAssetId = 17156953177, Note = "Jersey mesh alt" } :: AssetRef,
-		RoadBarriers = { ModelAssetId = 15912051001, Note = "Concrete Barriers pack — junctions" } :: AssetRef,
+		JerseyBarrier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; WorldKits Jersey is our Part kit) — Part kit" } :: AssetRef,
+		JerseyBarrierAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
+		RoadBarriers = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		Hesco = { ModelAssetId = 0, Note = "W1 CFG drop (brand name in the source) — Part kit host" } :: AssetRef,
-		TankWreck = { ModelAssetId = 9171585794, Note = "Destroyed tank warzone fill" } :: AssetRef,
-		RuinedBuilding = { ModelAssetId = 8176692221, Note = "Destroyed Building landmark fill" } :: AssetRef,
-		RuinedWall = { ModelAssetId = 104053043839965, Note = "Mossy ruined wall" } :: AssetRef,
+		TankWreck = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller after the W3 rewrite) — Part kit" } :: AssetRef,
+		RuinedBuilding = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
+		RuinedWall = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		FuelTanks = { ModelAssetId = 0, Note = "W1 CFG drop (country name in the source) — Part kit host" } :: AssetRef,
-		AmmoShed = { ModelAssetId = 2652344972, Note = "Military ammo/supplies shed mesh" } :: AssetRef,
-		SupplyShed = { ModelAssetId = 82560800252069, Note = "Vehicle/supply shed" } :: AssetRef,
-		PortableLightTower = { ModelAssetId = 9701862157, Note = "Military portable light tower" } :: AssetRef,
-		StreetLamp = { ModelAssetId = 123546710527428, Note = "StreetLamp_A road furniture" } :: AssetRef,
-		StreetLampAlt = { ModelAssetId = 8180880144, Note = "Street lamp fallback" } :: AssetRef,
+		AmmoShed = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party, 117 MeshParts > MaxPartsPerModel) — Dockside Part-kit host" } :: AssetRef,
+		SupplyShed = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 keyword-spam listing, 9 scripts; no caller) — Part kit" } :: AssetRef,
+		PortableLightTower = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 real-world listing text; no caller) — Part kit" } :: AssetRef,
+		StreetLamp = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; WorldKits StreetLamp is our Part kit) — Part kit" } :: AssetRef,
+		StreetLampAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 provenance, 8 scripts; no caller) — Part kit" } :: AssetRef,
 		MilitaryCratePack = { ModelAssetId = 16540055496, Note = "Military Crates pack variety" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
 		Sandbags = { ModelAssetId = 3525056989, Note = "alias → Sandbag" } :: AssetRef,
@@ -284,8 +316,8 @@ local VisualAssetConfig = {
 		Cone = { ModelAssetId = 91071319, Note = "alias → ConcreteBarrier" } :: AssetRef,
 		Drum = { ModelAssetId = 53591587, Note = "alias → Crate" } :: AssetRef,
 		Pallet = { ModelAssetId = 976333542, Note = "alias → MilitaryCrate" } :: AssetRef,
-		CamoNet = { ModelAssetId = 13668977092, Note = "Camouflage Netting — FIXED (was AmmoBox alias)" } :: AssetRef,
-		CamoNetAlt = { ModelAssetId = 13437018139, Note = "Ghillie Net fallback" } :: AssetRef,
+		CamoNet = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
+		CamoNetAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		Fence = { ModelAssetId = 25623924, Note = "alias → OilBarrel" } :: AssetRef,
 		Radio = { ModelAssetId = 19277831, Note = "alias → RadioAntenna" } :: AssetRef,
 		Lamp = { ModelAssetId = 116763933, Note = "alias → Floodlight" } :: AssetRef,
@@ -293,26 +325,27 @@ local VisualAssetConfig = {
 
 	DesertProps = {
 		Cactus = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — Part kit" } :: AssetRef,
-		CactusBase = { ModelAssetId = 16354482789, Note = "CactusBase2 free Get Model" } :: AssetRef,
+		CactusBase = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		DesertPlants = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
-		Palm = { ModelAssetId = 96059329869678, Note = "Palm Trees Realistic pack (horizon)" } :: AssetRef,
-		PalmAlt = { ModelAssetId = 105982075286356, Note = "Low Poly Palm alt if Palm insert fails" } :: AssetRef,
+		-- Dead config (contracts §8.4): no caller after the W3 rewrite; the literal stays because BuyPathStatic pins it.
+		Palm = { ModelAssetId = 96059329869678, Note = "DEAD CONFIG since W3 (no TryAttachPropVisual caller); BPS-pinned literal" } :: AssetRef,
+		PalmAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 keyword-spam listing, 1 script; no caller) — Part kit" } :: AssetRef,
 		-- MeshPart AssetType 40 — VisualAssetService MeshPart pipeline (not InsertService Model)
-		DesertRock = { ModelAssetId = 0, MeshId = 6562523344, Note = "Low Poly Rocks MeshPart (MeshId pipeline)" } :: AssetRef,
+		DesertRock = { ModelAssetId = 0, MeshId = 0, Note = "Low Poly Rocks MeshPart (MeshId pipeline)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- MapDressing keys (Decal / non-Model assets)
 	MapDressing = {
-		AsphaltDecal = { ModelAssetId = 0, MeshId = 10197707775, Note = "Asphalt road Decal Texture on road Parts" } :: AssetRef,
+		AsphaltDecal = { ModelAssetId = 0, MeshId = 0, Note = "Asphalt road Decal Texture on road Parts" } :: AssetRef,
 		ChevronArrow = { ModelAssetId = 0, Note = "Part-kit floor chevrons (no free Model)" } :: AssetRef,
-		DesertRock = { ModelAssetId = 0, MeshId = 6562523344, Note = "alias → DesertProps.DesertRock MeshPart" } :: AssetRef,
-		Palm = { ModelAssetId = 96059329869678, Note = "alias → DesertProps.Palm" } :: AssetRef,
-		PalmAlt = { ModelAssetId = 105982075286356, Note = "alias → DesertProps.PalmAlt" } :: AssetRef,
+		DesertRock = { ModelAssetId = 0, MeshId = 0, Note = "alias → DesertProps.DesertRock MeshPart" } :: AssetRef,
+		Palm = { ModelAssetId = 0, Note = "W3 LOOK drop (alias; no caller) — DesertProps.Palm is dead config" } :: AssetRef,
+		PalmAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (alias → DesertProps.PalmAlt; no caller)" } :: AssetRef,
 		DesertPlants = { ModelAssetId = 0, Note = "alias → DesertProps.DesertPlants (W1 CFG drop)" } :: AssetRef,
 		Cactus = { ModelAssetId = 0, Note = "alias → DesertProps.Cactus (W1 CFG drop)" } :: AssetRef,
-		JerseyBarrier = { ModelAssetId = 82454061017921, Note = "alias → WarzoneProps.JerseyBarrier" } :: AssetRef,
-		JerseyBarrierAlt = { ModelAssetId = 17156953177, Note = "alias → WarzoneProps.JerseyBarrierAlt" } :: AssetRef,
-		DesertMesa = { ModelAssetId = 12809476227, Note = "Desert Mountain mesa horizon" } :: AssetRef,
+		JerseyBarrier = { ModelAssetId = 0, Note = "W3 LOOK drop (alias → WarzoneProps.JerseyBarrier; no caller)" } :: AssetRef,
+		JerseyBarrierAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (alias → WarzoneProps.JerseyBarrierAlt; no caller)" } :: AssetRef,
+		DesertMesa = { ModelAssetId = 0, Note = "Desert Mountain mesa horizon" } :: AssetRef,
 		Hesco = { ModelAssetId = 0, Note = "alias → WarzoneProps.Hesco (W1 CFG drop)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
@@ -332,14 +365,47 @@ local VisualAssetConfig = {
 	Landmarks = {
 		RadioTower = { ModelAssetId = 119021509, Note = "Map ridge radio tower POI" } :: AssetRef,
 		Bunker = { ModelAssetId = 0, Note = "W1 CFG drop (off the Creator Store) — Part kit" } :: AssetRef,
-		SpyBunker = { ModelAssetId = 55228082, Note = "Optional spy bunker POI" } :: AssetRef,
+		SpyBunker = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world landmark; POIs use our Part kits) — Part kit" } :: AssetRef,
 		SmallFort = { ModelAssetId = 67444725, Note = "Mid-map small fort landmark" } :: AssetRef,
-		DesertMesa = { ModelAssetId = 12809476227, Note = "alias → MapDressing.DesertMesa horizon" } :: AssetRef,
+		DesertMesa = { ModelAssetId = 0, Note = "alias → MapDressing.DesertMesa horizon" } :: AssetRef,
 		-- P2 registered (dress deferred if perf risk)
-		DesertHouse = { ModelAssetId = 9136197032, Note = "Adobe desert house (P2)" } :: AssetRef,
-		Pier = { ModelAssetId = 11138299907, Note = "Boat Dock pier accent (P2)" } :: AssetRef,
+		DesertHouse = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world landmark; WorldKits AdobeHouse) — Part kit" } :: AssetRef,
+		Pier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world landmark; no caller) — Part kit" } :: AssetRef,
 		PierAlt = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
-		CheckpointBridge = { ModelAssetId = 867696371, Note = "WW2 bridge checkpoint landmark (P2)" } :: AssetRef,
+		CheckpointBridge = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 real-world theme; WorldKits Checkpoint v2) — Part kit" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	--[[ W3 LOOK: World v2 kit meshes (contracts §8.2; keys = WorldKits.Specs[kit].Mesh). One MeshPart from a Roblox-owned
+		Synty pack (creator Roblox, User 1; "completely free to use in anything you want to create on Roblox", DevForum
+		1283755): 6933438443 Nature, 6933556508 City, 6933790012 Dungeon. WorldKits asks VisualAssetService.CloneKitMesh(key)
+		in a deferred task and stretches the piece into the Part-kit fallback's box, so a piece is wired only when its
+		proportions fit that box (distortion = max/min of the per-axis stretch, <= 2.2). ModelAssetId = 0 keeps the Part kit.
+		Colours match WorldConfig.Kits.Palette; ClearTexture gives the flat desert palette and keeps pack text off-screen. ]]
+	DesertKit = {
+		-- Kit DeadTree (1.1 x 11 pole, leaning): a thin dead pine snag, stretch 2.11 (the shortlist pick
+		-- branches_tree_dead02 is 2.75)
+		DeadTree = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Tree_Pine_Dead_01", Color = Color3.fromRGB(122, 106, 86), Material = Enum.Material.Wood, ClearTexture = true, Note = "Synty Nature: dead pine snag (310 tris)" } :: AssetRef,
+		-- Kit Stump (2.4 x 1.6 x 2.4): Stump_01, stretch 1.47 (Stump_03 is a tall stump, 2.73)
+		Stump = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Tree_Stump_01", Color = Color3.fromRGB(95, 78, 52), Material = Enum.Material.Wood, ClearTexture = true, Note = "Synty Nature: stump (114 tris)" } :: AssetRef,
+		-- NOT WIRED: WorldKits uses "Log" for FallenLog (long axis Z: this piece fits, 1.10) AND Driftwood (long axis X:
+		-- the piece would be squashed 20x). Set 6933438443 once Driftwood has its own key or no mesh.
+		Log = { ModelAssetId = 0, ChildName = "Meshes/PolygonNature_Tree_Log_01", Color = Color3.fromRGB(122, 106, 86), Material = Enum.Material.Wood, ClearTexture = true, Note = "Synty Nature: fallen log (306 tris) — waits on the Driftwood key" } :: AssetRef,
+		-- Kit Reeds clumps (1.9 x 3.2 x 1.9): stretch 1.11
+		Reeds = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Plant_Reeds_01", Color = Color3.fromRGB(122, 128, 70), Material = Enum.Material.Grass, ClearTexture = true, Note = "Synty Nature: reeds (135 tris)" } :: AssetRef,
+		-- Kit DuneGrass tufts (2.6 x 1.1 x 2.6): a low plant, stretch 1.22 (the shortlist's Grass_04 is 4.35)
+		DuneGrass = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Plant_01", Color = Color3.fromRGB(178, 152, 92), Material = Enum.Material.Grass, ClearTexture = true, Note = "Synty Nature: low dry plant (416 tris)" } :: AssetRef,
+		-- Kit CrateStack crates (2.4 cube; WorldKits "skin" mode keeps the Part's colour): stretch 1.00
+		CrateWood = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04", Color = Color3.fromRGB(118, 94, 60), Material = Enum.Material.Wood, ClearTexture = true, Note = "Synty Dungeon: wooden crate (598 tris)" } :: AssetRef,
+		-- NOT WIRED: the kit Bench box is 6 x 1.2 x 1.8 (seat only); the park bench with its backrest is 3.65 tall
+		-- (stretch 2.52: a flattened bench). Wire when the kit box covers the backrest.
+		Bench = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Prop_ParkBench_01", Color = Color3.fromRGB(105, 82, 55), Material = Enum.Material.Wood, ClearTexture = true, Note = "Synty City: park bench (552 tris) — waits on the kit box" } :: AssetRef,
+		-- NOT WIRED: the kit wreck lies along X, the sedan along Z (the overlay would squash it sideways). Wire when the
+		-- overlay turns the piece to the kit's long axis.
+		CarWreck = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Veh_Car_Sedan_01", Color = Color3.fromRGB(45, 42, 40), Material = Enum.Material.CorrodedMetal, ClearTexture = true, Note = "Synty City: burnt sedan (5,524 tris; <= 6 per 512-stud circle) — waits on the overlay axis" } :: AssetRef,
+		-- Optional keys (contracts §8.2; no WorldKits caller yet)
+		VanWreck = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Veh_Car_Van_01", Color = Color3.fromRGB(45, 42, 40), Material = Enum.Material.CorrodedMetal, ClearTexture = true, Note = "Synty City: burnt van (5,665 tris) — no caller" } :: AssetRef,
+		Pebbles = { ModelAssetId = 0, ChildName = "Meshes/PolygonNature_Terrain_Rubble_Pebbles_01", Color = Color3.fromRGB(150, 135, 110), Material = Enum.Material.Ground, ClearTexture = true, Note = "Synty Nature: pebbles (168 tris) — no caller" } :: AssetRef,
+		Skip = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Prop_Skip_02", Color = Color3.fromRGB(70, 85, 55), Material = Enum.Material.Metal, ClearTexture = true, Note = "Synty City: skip (1,352 tris) — no caller" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- HQ / Barracks interior dress keys (hosts in StructureKitBuilder)

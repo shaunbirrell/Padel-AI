@@ -504,6 +504,10 @@ HudConfig.TouchCombat = { -- positions are from the content rect's bottom-right;
 	FireColor = Color3.fromRGB(220, 50, 50),
 	ReloadColor = Color3.fromRGB(34, 38, 44),
 	HoldToFireHz = 20, -- existing loop; the server still clamps to the weapon FireRate
+	-- W2 (P1-1 drag-to-aim): FIRE is a non-Active Frame, so its touch is NOT sunk and the same thumb that holds FIRE
+	-- also turns the camera. CombatController hit-tests UserInputService.TouchStarted against FIRE's rect instead.
+	DragAim = true,
+	FireSlopPx = 8, -- real px added around FIRE's rect for the TouchStarted hit test (forgiving thumbs)
 	ShowWhen = { "Drawn" },
 	HideWhen = { "Driving", "Modal", "Dead" },
 }
@@ -526,6 +530,60 @@ HudConfig.HitFeedback = {
 	DamageEdgeMinGap = 0.3,
 	DamageEdgeTransparency = 0.55,
 	FullScreenTint = false, -- the 0.08 s full-screen strobe goes
+}
+
+---------------------------------------------------------------------------------------------------------------
+-- W2 COMBAT FEEL (client only: WeaponVisuals, CameraFx, AimTargets). The server stays authoritative: the client
+-- aim help only nudges the camera; the server re-runs its own cone (AimAssistConfig) on every shot.
+---------------------------------------------------------------------------------------------------------------
+
+HudConfig.AimHelp = {
+	Enabled = true,
+	-- per input class (AimTargets.InputClass(), from UserInputService.PreferredInput); a level name from Levels
+	Strength = { Touch = "Medium", Gamepad = "Low", KeyboardAndMouse = "Off" },
+	-- FrictionKeep: share of the player's own frame-to-frame camera turn kept while a hostile is in the cone
+	-- Tracking:     max share of the target's angular velocity the camera follows (never a snap to centre)
+	Levels = {
+		Off = { FrictionKeep = 1, Tracking = 0 },
+		Low = { FrictionKeep = 0.8, Tracking = 0.1 },
+		Medium = { FrictionKeep = 0.6, Tracking = 0.2 },
+	},
+	ScanHz = 10, -- AimTargets candidate scan (only while drawn and the level is not Off)
+	MaxCandidates = 8, -- nearest in-cone candidates considered per scan
+	MaxLosRays = 2, -- line-of-sight raycasts per scan
+}
+
+HudConfig.CombatCamera = {
+	-- P1-3 shoulder camera while drawn, alive and on foot, per input class
+	Shoulder = { Touch = true, Gamepad = false, KeyboardAndMouse = false },
+	ShoulderOffset = Vector3.new(1.75, 0.6, 0), -- Humanoid.CameraOffset (studs)
+	FaceCameraYaw = true, -- AutoRotate off; the root follows the camera yaw (written only when it moves > 1°)
+	FovNudge = 0,
+	RecoilSpring = { Speed = 20, Damper = 0.8 }, -- WeaponConfig.Recoil.Recover overrides Speed per weapon
+	RecoilScaleTouch = 0.5, -- touch players get half the camera kick
+	Shake = { BlastAmplitude = 0.6, BlastAmplitudeTouch = 0.3, HitAmplitude = 0.15, MaxRadiusMult = 3 },
+	RespectReducedMotion = true, -- GuiService.ReducedMotionEnabled → no shake and no recoil kick
+}
+
+HudConfig.CombatFx = {
+	CullStuds = 250, -- WeaponFx farther than this from the camera (both ends) is skipped
+	Tracers = { Max = 16, MaxTouch = 10, Seconds = 0.08 }, -- Beams on pooled Terrain attachments (0 parts)
+	Impacts = { Max = 12, MaxTouch = 8, Emit = 8, EmitTouch = 4 }, -- pooled Attachment + ParticleEmitter (0 parts)
+	BulletHoles = { Max = 20, MaxTouch = 10, Seconds = 4 }, -- parts
+	Projectiles = { Max = 6, MaxTouch = 4, PartsEach = 3 }, -- parts
+	Casings = { Enabled = true, EnabledTouch = false, Max = 8, Seconds = 2 }, -- parts
+	MaxFxParts = 48, -- hard cap across the three part pools (20 + 18 + 8 = 46)
+	MaxFxPartsTouch = 24, -- touch: 10 + 12 + 0 = 22
+	MuzzleFlashSeconds = 0.05,
+	RemoteGuns = { Max = 6, MaxTouch = 3, Radius = 120, CoreParts = 5 }, -- other players' drawn guns (core LOD)
+	DamageNumbers = { Max = 4, Seconds = 0.8, TextPx = 18 }, -- real px; local only, behind ShowDamageNumbers
+	TargetBar = { Seconds = 2.5, Width = 120, Height = 6, NamePx = 14 }, -- real px, under the reticle
+	Haptics = { Enabled = true, Hit = 0.2, Kill = 0.5 }, -- touch only (HapticService)
+	-- Roblox-owned animation ids (docs/ASSET_SHORTLIST.md §3.4, creator Roblox); 0 disables
+	Anims = { Hold = { Rifle = 3972151362, Pistol = 507768375, Launcher = 3972164452 }, Reload = 3972131105 },
+	-- gun placement in the hand (device tuning knob; zero = the Roblox Tool default: barrel along the
+	-- RightGripAttachment's -Z, top along its +Y). Handle = grip * Rotation(deg, X/Y/Z order) * Offset(studs).
+	Grip = { RotationDeg = Vector3.zero, OffsetStuds = Vector3.zero },
 }
 
 ---------------------------------------------------------------------------------------------------------------

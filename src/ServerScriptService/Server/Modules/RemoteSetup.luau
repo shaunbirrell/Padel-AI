@@ -99,11 +99,14 @@ local EVENTS = {
 	Constants.RemoteNames.OfferResult,
 	Constants.RemoteNames.PurchaseAnnounce,
 	Constants.RemoteNames.ShortfallChip,
+	-- W2 Combat Core: client -> server drawn/holstered state (WE_GunOut)
+	Constants.RemoteNames.RequestSetDrawn,
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)
 local UNRELIABLE = {
 	Constants.RemoteNames.VehicleWeaponFx,
+	Constants.RemoteNames.WeaponFx, -- W2 Combat Core: bullet tracers / projectile launch + explosion (CombatService)
 }
 local UNRELIABLE_SET: { [string]: boolean } = {}
 for _, name in ipairs(UNRELIABLE) do

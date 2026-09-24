@@ -259,9 +259,10 @@ ResearchConfig.Upgrades = {
 		Costs = { 3500, 14000, 45000, 120000, 320000 },
 		EffectText = "%s vehicle armor",
 		Note = "Your vehicles take less damage",
-		-- OFF until vehicles can take damage: VehicleService only stores WE_ArmorMult and nothing reads it, so
-		-- a level would be a paid no-op (spec §7). Turn on once vehicle damage divides by WE_ArmorMult.
-		Enabled = false,
+		-- W2: ON. Vehicles take damage now (VehicleHealth): MaxHP = def.Health × WE_ArmorMult (clamped to
+		-- VehicleCombatConfig.Health.ArmorMultClamp {1, 1.5}; 5 levels = ×1.40). VehicleService writes WE_ArmorMult at
+		-- deploy and on OnResearchChanged; the deployed vehicle's MaxHP rescales and keeps its HP fraction.
+		Enabled = true,
 	},
 	-- ── Defenses (GateDefenseService, raids/defenses workflow) ─────────────────────────────────────────
 	TargetingSystems = {

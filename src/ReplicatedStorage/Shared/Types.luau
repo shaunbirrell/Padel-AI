@@ -216,6 +216,13 @@ export type CombatHitFeedbackPayload = {
 	TargetName: string?,
 	WeaponId: string?,
 	IsHeadshot: boolean?,
+	-- W2 additive (contracts §3.5; all optional, display only):
+	Target: Instance?, -- Hit/Kill: victim character / NPC model / vehicle model (nil if streamed out)
+	TargetKind: string?, -- "Player" | "NPC" | "Vehicle" | "Gate"
+	Pos: Vector3?, -- Hit/Kill: world hit point (damage-number anchor)
+	From: Vector3?, -- Damaged: attacker position (direction cue)
+	Assist: boolean?, -- Hit/Kill: the server assist chose this target
+	Splash: boolean?, -- aggregated area damage
 }
 
 export type VehicleStatePayload = {
@@ -277,11 +284,26 @@ export type MissionStatePayload = {
 }
 
 export type FireRequestPayload = {
-	Direction: Vector3,
-	Origin: Vector3?,
-	TargetUserId: number?,
-	TargetNpcId: string?,
-	HitPosition: Vector3?,
+	Direction: Vector3, -- camera-ray direction (after client aim help and recoil); finite, magnitude > 0.001
+	Origin: Vector3?, -- the point on the camera ray closest to the head; server rule: <= MaxOriginDeltaStuds of the root
+	TargetUserId: number?, -- the client ray's target: a HINT for the P0-7 lag tolerance only; never picks an assist target
+	TargetNpcId: string?, -- same
+	HitPosition: Vector3?, -- the client ray's end: telemetry only (the fire_hitpos_oor soft strike)
+	Input: string?, -- W2: "Touch" | "Gamepad" | "KeyboardAndMouse" (<= 16 chars; anything else is ignored, no strike)
+}
+
+-- W2 (contracts §2.1): one WeaponFx UnreliableRemoteEvent table per event, sent with FireClient to each recipient.
+export type WeaponFxPayload = {
+	S: number, -- shooter UserId; 0 = NPC
+	W: string, -- WeaponConfig id; "NPC" for NPC rifles
+	O: Vector3, -- server-validated origin (NPC: its eye point)
+	P: Vector3, -- where the shot landed (exact hit point, target torso, or O + dir x range on a miss); "L": equals O
+	K: string, -- "P" player / "N" NPC / "V" vehicle / "G" gate / "W" scenery / "M" miss / "L" launch / "X" explosion
+	R: boolean?, -- true on "L"/"X" (projectile events); nil for bullets
+	I: number?, -- projectile serial: "L" and "X" of one projectile share it
+	V: Vector3?, -- "L": initial velocity (client simulates O + V t + 1/2 g t^2, g = Gravity x GravityFactor)
+	T: number?, -- "L": Projectile.MaxSeconds (the client removes the visual at T + 0.5 s if "X" never arrives)
+	D: number?, -- "X": splash radius (explosion size + camera shake range)
 }
 
 export type PurchaseUpgradeRequest = {

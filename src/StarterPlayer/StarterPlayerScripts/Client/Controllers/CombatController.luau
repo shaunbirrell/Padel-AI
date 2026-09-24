@@ -56,6 +56,26 @@
 	  R, gamepad Y, touch R         reload
 	  gamepad DPadUp                draw / holster
 	  E                             ProximityPrompts only — it no longer cycles weapons
+
+	W2 COMBAT FEEL (contracts §5.5; modules loaded with pcall — a failure leaves today's combat working)
+	  Modules/WeaponVisuals  gun in the right hand, hold animation, muzzle flash, tracers, impacts, bullet holes,
+	                         casings, other players' shots (WeaponFx), damage numbers, target bar, hit sounds
+	  Modules/CameraFx       shoulder camera (touch), recoil spring, blast / hit shake, aim help; aimRay uses
+	                         CameraFx.AimCFrame() (the camera without the view-only shake)
+	  Modules/AimTargets     input class for the fire payload (Input) + the client mirror of the server assist cone
+	  DRAG-TO-AIM FIRE (P1-1) FireButton is a non-Active Frame: UserInputService.TouchStarted inside its rect
+	                         (+ TouchCombat.FireSlopPx) fires, and the touch is NOT sunk, so the same thumb turns
+	                         the camera while it holds FIRE. RELOAD stays a TextButton.
+	  SHOTS                  Origin = the point on the camera ray closest to the head; the local ray (one reused
+	                         RaycastParams: character, seated vehicle, squad units) runs from Origin for the weapon
+	                         Range + HitPositionSlopStuds, like the server's exact ray. Payload fields: Direction,
+	                         Origin, TargetUserId / TargetNpcId (the local ray's target: a lag hint only),
+	                         HitPosition, Input. Local flash / tracer / recoil follow the server's fire schedule.
+	  SEATS                  seatAllowsFire(): on foot, or a passenger Seat with WE_CanFireFromSeat (open vehicles).
+	                         A driver never gets combat input in W2.
+	  DRAWN                  RequestSetDrawn (boolean, trailing-edge, <= 2/s) so the server sets WE_GunOut for the
+	                         other clients' gun models.
+	  (W2 state lives in the Feel / W2 tables: this module is near Luau's 200-local limit.)
 ]]
 
 local Players = game:GetService("Players")
@@ -67,7 +87,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -78,6 +98,73 @@ local ResearchConfig = require(Shared.Configs.ResearchConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
+
+-- W2 (contracts §5.5): feel modules + state in ONE table (module locals are at Luau's register limit)
+type FeelState = {
+	WV: any, -- Modules/WeaponVisuals (nil if it failed to load)
+	CF: any, -- Modules/CameraFx
+	AT: any, -- Modules/AimTargets
+	HitSlop: number, -- CombatConfig.HitPositionSlopStuds (local ray length = Range + this)
+	FireSlopPx: number, -- TouchCombat.FireSlopPx (real px around FIRE for TouchStarted)
+	FireRateMult: number, -- research WeaponFireRate (local shot visuals follow the server's schedule)
+	NextVisualAt: number,
+	PredictedAmmo: number, -- ammo left for local shot visuals (reset by every CombatStateUpdate)
+	ShotParams: RaycastParams, -- the local fire ray (reused: no RaycastParams per shot)
+	FilterChar: Instance?,
+	FilterVeh: Instance?,
+	FilterSquads: Instance?,
+	FilterList: { Instance },
+	Shown: boolean?, -- last drawn state pushed to the feel modules
+	Weapon: string?,
+	DrawnWant: boolean, -- RequestSetDrawn: trailing-edge state
+	DrawnSent: boolean?,
+	DrawnTimer: boolean,
+	LastDrawnSendAt: number,
+	Bloom: UIScale?,
+}
+local Feel: FeelState
+do
+	local function optionalModule(name: string): any
+		local folder = script.Parent.Parent:FindFirstChild("Modules")
+		local inst = if folder then folder:FindFirstChild(name) else nil
+		if not (inst and inst:IsA("ModuleScript")) then
+			return nil
+		end
+		local ok, mod = pcall(require, inst)
+		if ok and type(mod) == "table" then
+			return mod
+		end
+		warn("[CombatController] optional module failed to load:", name, mod)
+		return nil
+	end
+	local combatCfg: any = require(Shared.Configs.CombatConfig)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.IgnoreWater = true
+	Feel = {
+		WV = optionalModule("WeaponVisuals"),
+		CF = optionalModule("CameraFx"),
+		AT = optionalModule("AimTargets"),
+		HitSlop = tonumber(combatCfg.HitPositionSlopStuds) or 4,
+		FireSlopPx = tonumber((HudConfig.TouchCombat :: any).FireSlopPx) or 8,
+		FireRateMult = 1,
+		NextVisualAt = -math.huge,
+		PredictedAmmo = 0,
+		ShotParams = params,
+		FilterChar = nil,
+		FilterVeh = nil,
+		FilterSquads = nil,
+		FilterList = {},
+		Shown = nil,
+		Weapon = nil,
+		DrawnWant = false,
+		DrawnSent = false, -- the server starts every life holstered (WE_GunOut nil)
+		DrawnTimer = false,
+		LastDrawnSendAt = -math.huge,
+		Bloom = nil,
+	}
+end
+local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
 
 local CombatController = {}
 
@@ -164,7 +251,7 @@ local ammoName: TextLabel? = nil
 local ammoCount: TextLabel? = nil
 local ammoMag: TextLabel? = nil
 local ammoBarFill: Frame? = nil
-local fireBtn: TextButton? = nil
+local fireBtn: Frame? = nil -- W2: a non-Active Frame (drag-to-aim); TouchStarted hit-tests its rect
 local fireIcon: Frame? = nil
 local fireDimmed: boolean? = nil -- current FIRE style (nil = not styled yet)
 local reloadBtn: TextButton? = nil
@@ -236,6 +323,7 @@ local refreshAmmo: () -> ()
 local updateWheelBinding: () -> ()
 local refreshFire: () -> ()
 local armedTick: () -> ()
+local syncFeel: () -> ()
 
 local function clock(): number
 	return os.clock()
@@ -274,8 +362,29 @@ local function seatedNow(): boolean
 	return hum ~= nil and hum.Parent ~= nil and hum.SeatPart ~= nil
 end
 
+--[[ W2: may the player use combat input from where they are? On foot: yes. Seated: only as a passenger on a Seat
+	(not a VehicleSeat) marked WE_CanFireFromSeat (open vehicles, VehicleService). A driver never shoots in W2. ]]
+local function seatAllowsFire(): boolean
+	if not seatedNow() then
+		return true
+	end
+	if HudLayout.GetFlag("Driving") then
+		return false
+	end
+	local mode = player:GetAttribute("WE_DriveMode")
+	if typeof(mode) == "string" and mode ~= "" then
+		return false
+	end
+	local hum = humanoid
+	local seat = if hum and hum.Parent then hum.SeatPart else nil
+	if seat == nil or seat:IsA("VehicleSeat") then
+		return false
+	end
+	return seat:GetAttribute("WE_CanFireFromSeat") == true
+end
+
 local function combatBlocked(): boolean
-	if not alive or GuiService.MenuIsOpen or seatedNow() then
+	if not alive or GuiService.MenuIsOpen or not seatAllowsFire() then
 		return true
 	end
 	for _, f in ipairs(KEYS.CombatInputBlockedWhen) do
@@ -300,6 +409,56 @@ end
 local function publishDrawn()
 	HudLayout.SetFlag("Drawn", drawn and alive and not HudLayout.GetFlag("Dead"))
 	refreshFire() -- FIRE's rule reads Drawn through its extra() (it also shows dimmed while holstered)
+	syncFeel() -- W2: gun model, shoulder camera, aim help, RequestSetDrawn
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- W2: RequestSetDrawn (trailing edge, <= 2/s: the last state always goes out) + input class
+---------------------------------------------------------------------------------------------------------------
+
+function W2.sendDrawn()
+	Feel.DrawnTimer = false
+	if Feel.DrawnSent == Feel.DrawnWant then
+		return
+	end
+	local name = (Constants.RemoteNames :: any).RequestSetDrawn
+	if type(name) ~= "string" then
+		return
+	end
+	local want = Feel.DrawnWant
+	Feel.DrawnSent = want
+	Feel.LastDrawnSendAt = clock()
+	local remote = Remotes.TryGetEvent(name)
+	if remote then
+		remote:FireServer(want)
+	else
+		task.spawn(Remotes.FireServer, name, want) -- bounded (<= 3 s) lookup, off this thread
+	end
+end
+
+function W2.queueDrawn(on: boolean)
+	Feel.DrawnWant = on
+	if Feel.DrawnTimer or Feel.DrawnSent == on then
+		return -- a send is already scheduled (it reads DrawnWant when it fires), or nothing changed
+	end
+	local wait = Feel.LastDrawnSendAt + 0.5 - clock() -- <= 2/s (the server allows 2/s, burst 4)
+	if wait <= 0 then
+		W2.sendDrawn()
+	else
+		Feel.DrawnTimer = true
+		task.delay(wait, W2.sendDrawn)
+	end
+end
+
+function W2.inputClass(): string
+	local at = Feel.AT
+	if at then
+		local ok, cls = pcall(at.InputClass)
+		if ok and type(cls) == "string" then
+			return cls
+		end
+	end
+	return if HudLayout.IsTouch() then "Touch" else "KeyboardAndMouse"
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -529,6 +688,7 @@ local function equip(id: string)
 		if lastEquipRequestAt == at then
 			refreshHotbar()
 			refreshAmmo()
+			syncFeel() -- W2: a refused equip puts the real weapon back in the hand
 		end
 	end)
 end
@@ -597,6 +757,29 @@ setDrawn = function(on: boolean)
 	if changed and not on then
 		armedTick() -- holstered next to a visible hostile: FIRE goes straight to dimmed (no blink)
 	end
+end
+
+--[[ W2: push the drawn state to the feel modules (each call pcall'd) and queue RequestSetDrawn. "Shown" = drawn,
+	alive and allowed to shoot from here (seatAllowsFire): the gun model, the shoulder camera and the aim help
+	follow it, and the server's WE_GunOut (other players' view) follows the same state. ]]
+syncFeel = function()
+	local on = drawn and alive and not HudLayout.GetFlag("Dead") and seatAllowsFire()
+	local id = activeWeaponId() or currentWeaponId
+	if on ~= Feel.Shown or id ~= Feel.Weapon then
+		Feel.Shown, Feel.Weapon = on, id
+		local wv, cf, at = Feel.WV, Feel.CF, Feel.AT
+		if wv then
+			pcall(wv.SetLocalWeapon, id, on)
+		end
+		if cf then
+			pcall(cf.SetWeapon, id)
+			pcall(cf.SetCombatMode, on, W2.inputClass())
+		end
+		if at then
+			pcall(at.SetActive, on)
+		end
+	end
+	W2.queueDrawn(on)
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -893,6 +1076,7 @@ local function applyState(raw: any)
 	local prevHealth = health
 	alive = payload.Alive ~= false
 	ammo = tonumber(payload.Ammo) or 0
+	Feel.PredictedAmmo = ammo -- W2: local shot visuals never run past the server's magazine
 	magazineSize = tonumber(payload.MagazineSize) or 0
 	reloading = payload.Reloading == true and alive
 	local wid = payload.WeaponId
@@ -915,6 +1099,10 @@ local function applyState(raw: any)
 	end
 	if reloading and (not wasReloading or prevWeapon ~= currentWeaponId) then
 		startReloadBar()
+		local wv, rid = Feel.WV, currentWeaponId
+		if wv and rid then
+			pcall(wv.PlayReload, rid) -- W2: reload animation + sound
+		end
 	end
 	publishDrawn()
 	refreshHotbar()
@@ -936,9 +1124,17 @@ local function onHitFeedback(raw: any)
 		showHitMarker(kind)
 	elseif kind == "Damaged" then
 		onDamaged()
+		local cf = Feel.CF
+		if cf then
+			pcall(cf.HitTaken, tonumber(raw.Damage) or 0) -- W2: small trauma pulse
+		end
 	elseif kind == "Death" then
 		stopFiring()
 		flashEdge()
+	end
+	local wv = Feel.WV
+	if wv then
+		pcall(wv.OnHitFeedback, raw) -- W2: hit / kill / headshot sound, damage number, target bar, haptic
 	end
 end
 
@@ -953,12 +1149,94 @@ local function aimRay(): (Vector3, Vector3)
 
 	local cam = Workspace.CurrentCamera
 	if cam then
+		-- W2: the camera WITHOUT the view-only shake (CameraFx); its look = the viewport-centre ray = WE_Reticle
+		local cf = Feel.CF
+		if cf then
+			local ok, aim = pcall(cf.AimCFrame)
+			if ok and typeof(aim) == "CFrame" then
+				return aim.Position, aim.LookVector
+			end
+		end
 		-- the viewport centre = WE_Reticle's centre (that gui ignores the topbar + safe-area insets)
 		local vp = cam.ViewportSize
 		local ray = cam:ViewportPointToRay(vp.X / 2, vp.Y / 2)
 		return ray.Origin, ray.Direction.Unit
 	end
 	return fallbackOrigin, Vector3.new(0, 0, -1)
+end
+
+-- W2: the point on the camera ray closest to the head (contracts §5.5): the server checks it against the root
+function W2.shotOrigin(rayOrigin: Vector3, dir: Vector3): Vector3
+	local character = player.Character
+	local head = if character then character:FindFirstChild("Head") else nil
+	if not (head and head:IsA("BasePart")) then
+		return rayOrigin
+	end
+	return rayOrigin + dir * math.max(0, (head.Position - rayOrigin):Dot(dir))
+end
+
+-- W2: one reused RaycastParams (character, seated vehicle, squad units); rebuilt only when one of them changes
+function W2.shotFilter(): RaycastParams
+	local ch = player.Character
+	local hum = humanoid
+	local seat = if hum and hum.Parent then hum.SeatPart else nil
+	local veh: Instance? = nil
+	if seat then
+		veh = seat:FindFirstAncestorWhichIsA("Model")
+		local p = veh
+		local depth = 0
+		while p and p ~= Workspace and depth < 8 do
+			if CollectionService:HasTag(p, Constants.Tags.Vehicle) then
+				veh = p
+				break
+			end
+			p = p.Parent
+			depth += 1
+		end
+	end
+	local squads = Workspace:FindFirstChild("WarEmpireSquads")
+	if ch ~= Feel.FilterChar or veh ~= Feel.FilterVeh or squads ~= Feel.FilterSquads then
+		Feel.FilterChar, Feel.FilterVeh, Feel.FilterSquads = ch, veh, squads
+		local list = Feel.FilterList
+		table.clear(list)
+		if ch then
+			table.insert(list, ch)
+		end
+		if veh then
+			table.insert(list, veh)
+		end
+		if squads then
+			table.insert(list, squads)
+		end
+		Feel.ShotParams.FilterDescendantsInstances = list
+	end
+	return Feel.ShotParams
+end
+
+-- W2: local shot visuals follow the server's fire schedule (the same GCRA as CombatService: the 20 Hz loop sends
+-- more requests than a slow gun may fire; only the ones the server would take get a flash / tracer / kick)
+function W2.visualShotAllowed(def: WeaponConfig.WeaponDef): boolean
+	if Feel.PredictedAmmo <= 0 then
+		return false
+	end
+	local interval = 1 / math.max(0.1, (tonumber(def.FireRate) or 1) * Feel.FireRateMult)
+	local t = clock()
+	if t - Feel.NextVisualAt < -interval * 0.5 then
+		return false
+	end
+	Feel.NextVisualAt = math.max(Feel.NextVisualAt + interval, t)
+	Feel.PredictedAmmo -= 1
+	return true
+end
+
+-- W2: reticle bloom (WeaponConfig.Spread is client-only cosmetic)
+function W2.bloomReticle(def: WeaponConfig.WeaponDef)
+	local b = Feel.Bloom
+	if not b then
+		return
+	end
+	b.Scale = 1 + math.clamp((tonumber(def.Spread) or 0) * 0.06, 0.03, 0.5)
+	TweenService:Create(b, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 end
 
 local function canFireNow(): boolean
@@ -980,27 +1258,34 @@ requestFire = function()
 		local t = clock()
 		if t - lastAutoReloadAt >= AUTO_RELOAD_MIN_GAP then
 			lastAutoReloadAt = t
+			local wv = Feel.WV
+			if wv then
+				pcall(wv.Cue, "Empty") -- W2: dry-fire click
+			end
 			requestReload()
 		end
 		return
 	end
 
-	local origin, direction = aimRay()
+	local rayOrigin, direction = aimRay()
+	-- W2 (contracts §1.1): Origin = the point on the camera ray closest to the head; Input = the aim-assist class.
+	-- The payload carries ONLY these fields (never a damage, hit kind, headshot or assist target).
+	local origin = W2.shotOrigin(rayOrigin, direction)
 	local payload: Types.FireRequestPayload = {
 		Direction = direction,
 		Origin = origin,
 		TargetUserId = nil,
 		TargetNpcId = nil,
 		HitPosition = nil,
+		Input = W2.inputClass(),
 	}
 
-	local params = RaycastParams.new()
-	params.FilterType = Enum.RaycastFilterType.Exclude
-	local character = player.Character
-	if character then
-		params.FilterDescendantsInstances = { character }
-	end
-	local result = Workspace:Raycast(origin, direction * 500, params)
+	-- W2: the same line the server casts (from Origin, weapon Range + HitPositionSlopStuds), so the tracer ends where
+	-- the server's exact ray lands and a far miss never reports a HitPosition out of range (fire_hitpos_oor)
+	local wid = activeWeaponId() or currentWeaponId
+	local def = if wid then WeaponConfig.Weapons[wid] else nil
+	local reach = if def then (tonumber(def.Range) or 496) + Feel.HitSlop else 500
+	local result = Workspace:Raycast(origin, direction * reach, W2.shotFilter())
 	if result then
 		payload.HitPosition = result.Position
 		local model = result.Instance:FindFirstAncestorOfClass("Model")
@@ -1022,6 +1307,17 @@ requestFire = function()
 	if remote then
 		remote:FireServer(payload)
 		markCombat()
+		-- W2: predicted flash / sound / tracer / impact / casing + recoil, at the gun's own fire rate
+		if wid and def and W2.visualShotAllowed(def) then
+			local wv, cf = Feel.WV, Feel.CF
+			if wv then
+				pcall(wv.LocalShot, wid, origin, direction, payload.HitPosition, if result then result.Instance else nil, if result then result.Normal else nil)
+			end
+			if cf then
+				pcall(cf.Kick, wid)
+			end
+			W2.bloomReticle(def)
+		end
 	end
 end
 
@@ -1450,16 +1746,16 @@ local function buildAmmo(parent: Instance)
 end
 
 local function buildTouchButtons(parent: Instance)
-	local fire = Instance.new("TextButton")
+	-- W2 drag-to-aim (P1-1): FIRE is a plain, NON-Active Frame (same name, size, anchor, position). Its touch is not
+	-- sunk, so the thumb that holds FIRE also turns the camera; UserInputService.TouchStarted hit-tests its rect.
+	local fire = Instance.new("Frame")
 	fire.Name = "FireButton"
 	fire.AnchorPoint = TC.Fire.Anchor
 	fire.Size = UDim2.fromOffset(TC.Fire.Size, TC.Fire.Size)
 	fire.BackgroundColor3 = TC.FireColor
 	fire.BackgroundTransparency = FIRE_BG_TRANSPARENCY
 	fire.BorderSizePixel = 0
-	fire.Text = ""
-	fire.AutoButtonColor = true
-	fire.Active = true
+	fire.Active = false
 	fire.ZIndex = 2
 	fire.Parent = parent
 	round(fire)
@@ -1473,26 +1769,9 @@ local function buildTouchButtons(parent: Instance)
 		Color = WHITE,
 		Fill = TC.FireColor,
 	})
-	-- hold-to-fire: one entry per finger; released on the button's InputEnded or anywhere (TouchEnded).
-	-- Holstered, FIRE only shows (dimmed) while a hostile is in sight: that press draws, then fires.
-	fire.InputBegan:Connect(function(io: InputObject)
-		local ut = io.UserInputType
-		if ut == Enum.UserInputType.Touch or ut == Enum.UserInputType.MouseButton1 then
-			if not drawn then
-				if not fireArmed or combatBlocked() then
-					return
-				end
-				setDrawn(true)
-			end
-			if canFireNow() then
-				fireTouches[io] = true
-				requestFire()
-			end
-		end
-	end)
-	fire.InputEnded:Connect(function(io: InputObject)
-		fireTouches[io] = nil
-	end)
+	-- hold-to-fire: one entry per finger, added by the UserInputService.TouchStarted hit test (Init) and released on
+	-- TouchEnded / InputEnded anywhere. Holstered, FIRE only shows (dimmed) while a hostile is in sight: that press
+	-- draws, then fires.
 	fireBtn = fire
 	HudLayout.AssertTouchTarget(fire, "FIRE")
 
@@ -1574,6 +1853,12 @@ local function buildReticleGui(pg: Instance)
 	ret.ZIndex = 5
 	ret.Parent = rg
 	reticle = ret
+	-- W2: reticle bloom (WeaponConfig.Spread, cosmetic): scales about the centre, back to 1 in 0.14 s
+	local bloom = Instance.new("UIScale")
+	bloom.Name = "Bloom"
+	bloom.Scale = 1
+	bloom.Parent = ret
+	Feel.Bloom = bloom
 	local off = RT.Gap + RT.Arm / 2
 	for _, a in ipairs({
 		{ 0, -off, RT.Thickness, RT.Arm },
@@ -1697,16 +1982,17 @@ local function buildHud(pg: Instance)
 	HudLayout.SetRect("Health", hp)
 	HudLayout.SetRect("Ammo", ammoPanel :: Frame)
 
-	-- visibility: the HudConfig rules + "not seated" (VehicleDriveClient's ▲▼ own the reserve while seated)
+	-- visibility: the HudConfig rules + "not seated" (VehicleDriveClient's ▲▼ own the reserve while seated). W2: a
+	-- passenger on an open seat (WE_CanFireFromSeat) keeps the combat HUD (seatAllowsFire); a driver never does.
 	local function notSeated(): boolean
-		return not seatedNow()
+		return seatAllowsFire()
 	end
 	HudLayout.BindVisibility(bar, HB, function(): boolean
-		return #slotIds > 0 and not seatedNow()
+		return #slotIds > 0 and seatAllowsFire()
 	end)
 	HudLayout.BindVisibility(hp, HP, notSeated)
 	HudLayout.BindVisibility(ammoPanel :: Frame, AM, function(): boolean
-		return currentWeaponId ~= nil and not seatedNow()
+		return currentWeaponId ~= nil and seatAllowsFire()
 	end)
 	bound = { bar, hp, ammoPanel :: Frame }
 	local f, r = fireBtn, reloadBtn
@@ -1714,7 +2000,7 @@ local function buildHud(pg: Instance)
 		-- FIRE: TC's HideWhen, shown while Drawn OR (holstered and armed — dimmed); refreshFire re-evaluates it
 		-- when Drawn / the armed state changes
 		HudLayout.BindVisibility(f, { HideWhen = TC.HideWhen }, function(): boolean
-			return not seatedNow() and (HudLayout.GetFlag("Drawn") or fireArmed)
+			return seatAllowsFire() and (HudLayout.GetFlag("Drawn") or fireArmed)
 		end)
 		HudLayout.BindVisibility(r, TC, notSeated)
 		table.insert(bound, f)
@@ -1732,11 +2018,12 @@ end
 ---------------------------------------------------------------------------------------------------------------
 
 local function onSeatContext()
-	if seatedNow() then
+	if not seatAllowsFire() then
 		stopFiring()
 	end
 	refreshBound()
 	updateWheelBinding()
+	syncFeel() -- W2: gun / shoulder camera off in a seat that cannot shoot
 end
 
 local function bindHumanoid(hum: Humanoid)
@@ -1821,6 +2108,15 @@ function CombatController.Init()
 	initialized = true
 	HudLayout.Init()
 	buildHud(pg)
+	-- W2 feel modules (each Init pcall'd; a failure only loses that module's effects)
+	for _, mod in ipairs({ Feel.AT, Feel.CF, Feel.WV }) do
+		if type(mod) == "table" and type(mod.Init) == "function" then
+			local ok, err = pcall(mod.Init)
+			if not ok then
+				warn("[CombatController] feel module Init failed:", err)
+			end
+		end
+	end
 	publishDrawn()
 	refreshHotbar()
 	refreshAmmo()
@@ -1849,6 +2145,10 @@ function CombatController.Init()
 			local m = ResearchConfig.MultFor(payload.Levels, "WeaponReload")
 			if typeof(m) == "number" and m == m and m >= 1 then
 				reloadMult = m
+			end
+			local fr = ResearchConfig.MultFor(payload.Levels, "WeaponFireRate") -- W2: local shot-visual schedule
+			if typeof(fr) == "number" and fr == fr and fr >= 1 then
+				Feel.FireRateMult = fr
 			end
 		end
 	end)
@@ -1920,6 +2220,34 @@ function CombatController.Init()
 			firing = false
 		end
 		fireTouches[input] = nil
+	end)
+	-- W2 drag-to-aim FIRE (P1-1): a finger that STARTS inside FIRE's rect (+ FireSlopPx real px) fires and keeps
+	-- firing while held; the touch is never sunk (FIRE is a non-Active Frame), so the same thumb turns the camera.
+	-- A touch another button already took (gameProcessed: RELOAD, the jump button, a panel) is ignored.
+	UserInputService.TouchStarted:Connect(function(input: InputObject, gameProcessed: boolean)
+		if gameProcessed then
+			return
+		end
+		local f = fireBtn
+		if not f or not f.Visible or f.Parent == nil then
+			return
+		end
+		local pos = input.Position
+		local ap, as = f.AbsolutePosition, f.AbsoluteSize
+		local slop = Feel.FireSlopPx
+		if pos.X < ap.X - slop or pos.X > ap.X + as.X + slop or pos.Y < ap.Y - slop or pos.Y > ap.Y + as.Y + slop then
+			return
+		end
+		if not drawn then
+			if not fireArmed or combatBlocked() then
+				return
+			end
+			setDrawn(true) -- dimmed FIRE while holstered: this press draws, then fires
+		end
+		if canFireNow() then
+			fireTouches[input] = true
+			requestFire()
+		end
 	end)
 	UserInputService.TouchEnded:Connect(function(input: InputObject)
 		fireTouches[input] = nil
