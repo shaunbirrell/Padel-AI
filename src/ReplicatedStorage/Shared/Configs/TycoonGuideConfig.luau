@@ -18,7 +18,7 @@
 ]]
 
 local TycoonGuideConfig = {
-	Enabled = false,
+	Enabled = true,
 
 	-- Pick rules (TycoonMath.PickNext). Opening: the first entry that is open now (requirements met, level not owned)
 	-- wins. After the Opening the candidate with the lowest score wins:

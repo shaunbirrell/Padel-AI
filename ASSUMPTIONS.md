@@ -1341,3 +1341,9 @@ Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.D
 
 ### Tests
 - The flags-ON gate uses the kiosk-aware drivers build/A/gate_driver_biz.luau and tut_driver_biz.luau; the originals (polish/C/gate_driver, tut_driver) fail on a flags-ON tree by design (no kiosks before a plot is owned / MapSetup-only world). Switch worldhook/verify/run_all.sh to them at the flip.
+
+## 2026-09-25 — v72 switched on (businesses + next-buy guide live)
+- **Flags on:** `BusinessConfig.Enabled` and `TycoonGuideConfig.Enabled` are true. To turn both off, set them false (tutorial step 6 goes back to Barracks automatically).
+- **Part budget (Lane D):** floor chevrons are gone (`BaseLayoutConfig.FloorChevrons = false`, static and pointing the wrong way; dynamic owner-only chevrons are planned with the owner's feature list), static soldier kits drop 7 small detail parts each (`StructureVisualConfig.StaticSoldierDetail = false`), and gate signs get padding so long names fit. Parts per base at L5: 2,666 (cap 2,700; was 2,704 before the businesses).
+- **Early wait accepted (lead decision; owner delegated):** the economy model's longest wait in the first 10 minutes is 141 s (Arms Crate Line L2, then Command Center L2) against a 120 s design target. The measured fixes either did not help or cut 30-minute income below its floor, and the guide chip shows a "ready in m:ss" countdown during the wait. Revisit after real play data.
+- **Armor Plate Press income is 1.2x the spec** (120/220/360/580/860 per tick) so 30-minute income stays above 280 $/s with the 34 % soldier rule; revert is those five numbers.

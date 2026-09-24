@@ -497,6 +497,10 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 	-- Visual props for Training Yard / static kits. R15-ready catalog overlay via VisualAssetConfig;
 	-- Part-kit military placeholder (R6-ish ~5 stud) when mesh IDs missing / StudioSkipWorldDressing.
 	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
+	-- v72 budget: StructureVisualConfig.StaticSoldierDetail = false drops the 7 small detail parts (Shemagh, VestPouch,
+	-- BootL/R, RifleStock, RifleBarrel, Accent): 9 parts per static soldier (Pack adds 1 for Heavy). No other code welds
+	-- or looks up these names on a static kit.
+	local detail = (StructureVisualConfig :: any).StaticSoldierDetail ~= false
 	local model = Instance.new("Model")
 	model.Name = name
 	if npcId then
@@ -566,16 +570,18 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = head.CFrame * CFrame.new(0, 0.38, 0),
 		Parent = model,
 	})
-	part({
-		Name = "Shemagh",
-		Size = Vector3.new(1.25, 0.45, 1.15),
-		Color = Color3.fromRGB(200, 185, 150),
-		Material = Enum.Material.Fabric,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = head.CFrame * CFrame.new(0, -0.32, 0.05),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "Shemagh",
+			Size = Vector3.new(1.25, 0.45, 1.15),
+			Color = Color3.fromRGB(200, 185, 150),
+			Material = Enum.Material.Fabric,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = head.CFrame * CFrame.new(0, -0.32, 0.05),
+			Parent = model,
+		})
+	end
 	part({
 		Name = "Vest",
 		Size = Vector3.new(2.1, 1.2, 1.15),
@@ -586,16 +592,18 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = torso.CFrame * CFrame.new(0, 0.15, 0),
 		Parent = model,
 	})
-	part({
-		Name = "VestPouch",
-		Size = Vector3.new(1.5, 0.45, 0.3),
-		Color = Color3.fromRGB(90, 80, 55),
-		Material = Enum.Material.Fabric,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.05, -0.6),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "VestPouch",
+			Size = Vector3.new(1.5, 0.45, 0.3),
+			Color = Color3.fromRGB(90, 80, 55),
+			Material = Enum.Material.Fabric,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0, 0.05, -0.6),
+			Parent = model,
+		})
+	end
 	-- R6 arms 1×2×1
 	part({
 		Name = "ArmL",
@@ -638,36 +646,42 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = torso.CFrame * CFrame.new(0.5, -2, 0),
 		Parent = model,
 	})
-	part({
-		Name = "BootL",
-		Size = Vector3.new(1.05, 0.35, 1.15),
-		Color = Color3.fromRGB(35, 32, 28),
-		Material = Enum.Material.SmoothPlastic,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(-0.5, -3.1, 0.1),
-		Parent = model,
-	})
-	part({
-		Name = "BootR",
-		Size = Vector3.new(1.05, 0.35, 1.15),
-		Color = Color3.fromRGB(35, 32, 28),
-		Material = Enum.Material.SmoothPlastic,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.5, -3.1, 0.1),
-		Parent = model,
-	})
-	part({
-		Name = "RifleStock",
-		Size = Vector3.new(0.3, 0.4, 0.9),
-		Color = Color3.fromRGB(55, 48, 38),
-		Material = Enum.Material.Wood,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(1.15, 0.15, 0.35),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "BootL",
+			Size = Vector3.new(1.05, 0.35, 1.15),
+			Color = Color3.fromRGB(35, 32, 28),
+			Material = Enum.Material.SmoothPlastic,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(-0.5, -3.1, 0.1),
+			Parent = model,
+		})
+	end
+	if detail then
+		part({
+			Name = "BootR",
+			Size = Vector3.new(1.05, 0.35, 1.15),
+			Color = Color3.fromRGB(35, 32, 28),
+			Material = Enum.Material.SmoothPlastic,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0.5, -3.1, 0.1),
+			Parent = model,
+		})
+	end
+	if detail then
+		part({
+			Name = "RifleStock",
+			Size = Vector3.new(0.3, 0.4, 0.9),
+			Color = Color3.fromRGB(55, 48, 38),
+			Material = Enum.Material.Wood,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(1.15, 0.15, 0.35),
+			Parent = model,
+		})
+	end
 	part({
 		Name = "Rifle",
 		Size = Vector3.new(0.25, 0.25, 2.4),
@@ -678,26 +692,30 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = torso.CFrame * CFrame.new(1.15, 0.2, -0.95),
 		Parent = model,
 	})
-	part({
-		Name = "RifleBarrel",
-		Size = Vector3.new(0.14, 0.14, 0.9),
-		Color = Color3.fromRGB(25, 25, 28),
-		Material = Enum.Material.Metal,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(1.15, 0.22, -2.25),
-		Parent = model,
-	})
-	part({
-		Name = "Accent",
-		Size = Vector3.new(1.6, 0.1, 0.28),
-		Color = accentCol,
-		Material = Enum.Material.Metal,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "RifleBarrel",
+			Size = Vector3.new(0.14, 0.14, 0.9),
+			Color = Color3.fromRGB(25, 25, 28),
+			Material = Enum.Material.Metal,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(1.15, 0.22, -2.25),
+			Parent = model,
+		})
+	end
+	if detail then
+		part({
+			Name = "Accent",
+			Size = Vector3.new(1.6, 0.1, 0.28),
+			Color = accentCol,
+			Material = Enum.Material.Metal,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
+			Parent = model,
+		})
+	end
 	if role == "HeavyInfantry" or role == "Heavy" then
 		part({
 			Name = "Pack",
@@ -1405,6 +1423,20 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		lbl.TextColor3 = yellow
 		lbl.Text = (REAR_GATE_LABELS[g.Id] or string.upper(g.Id)) .. " · LOCKED"
 		lbl.Parent = sg
+		-- v72 (phone HUD audit F4): inset the sign text so the gate name reads in full (TextScaled filled the whole
+		-- board and clipped at the edges); InnerWall.SignInsetStuds x PixelsPerStud left/right, capped text size
+		do
+			local insetPx = math.floor(((BaseLayout.Config().InnerWall or {}).SignInsetStuds or 2.0) * sg.PixelsPerStud + 0.5)
+			local signPad = Instance.new("UIPadding")
+			signPad.PaddingLeft = UDim.new(0, insetPx)
+			signPad.PaddingRight = UDim.new(0, insetPx)
+			signPad.PaddingTop = UDim.new(0, 6)
+			signPad.PaddingBottom = UDim.new(0, 6)
+			signPad.Parent = lbl
+			local signCap = Instance.new("UITextSizeConstraint")
+			signCap.MaxTextSize = 64
+			signCap.Parent = lbl
+		end
 		local leafH = iw.Height - 2
 		for i, sx in ipairs({ -1, 1 }) do
 			local leaf = part({
@@ -1531,6 +1563,20 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		lbl.TextColor3 = yellow
 		lbl.Text = SG.Label .. " · LOCKED"
 		lbl.Parent = sg
+		-- v72 (phone HUD audit F4): inset the sign text so the gate name reads in full (TextScaled filled the whole
+		-- board and clipped at the edges); InnerWall.SignInsetStuds x PixelsPerStud left/right, capped text size
+		do
+			local insetPx = math.floor(((BaseLayout.Config().InnerWall or {}).SignInsetStuds or 2.0) * sg.PixelsPerStud + 0.5)
+			local signPad = Instance.new("UIPadding")
+			signPad.PaddingLeft = UDim.new(0, insetPx)
+			signPad.PaddingRight = UDim.new(0, insetPx)
+			signPad.PaddingTop = UDim.new(0, 6)
+			signPad.PaddingBottom = UDim.new(0, 6)
+			signPad.Parent = lbl
+			local signCap = Instance.new("UITextSizeConstraint")
+			signCap.MaxTextSize = 64
+			signCap.Parent = lbl
+		end
 
 		-- leaves: WE_GateLeaf = LeafSlide (-1 = slide plot-local west into the wall line), WE_ClosedCFrame after placing
 		for i, lf in ipairs(SG.Leaves) do
@@ -2247,7 +2293,10 @@ function MapSetup.Run()
 			buildStructureKit(plotFolder, plotId, pos, offset, def)
 		end
 
-		paintPlotFloorChevrons(plotFolder, pos)
+		-- v72: static arrows off by default (they pointed back at the gate; the per-player NEXT pointer replaces them)
+		if not BaseLayout.Enabled() or BaseLayout.Config().FloorChevrons ~= false then
+			paintPlotFloorChevrons(plotFolder, pos)
+		end
 		dressPlotPadSandbags(plotFolder, pos)
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)

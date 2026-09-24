@@ -215,6 +215,13 @@ local StructureVisualConfig = {
 		Airfield = { Enabled = true, Module = "Airfield", Width = 58, Depth = 34 },
 	},
 
+	-- v72 budget (phone): static soldier kits (gate guards, yard workers) without the 7 small detail parts
+	-- (MapSetup.makeSoldierKit): 16 -> 9 parts each, -84 parts per base. true = the old detailed kit.
+	StaticSoldierDetail = false,
+	-- v72: walk-in building stairs stay step boxes. "Ramp" (one wedge per flight, -75 parts per base at L5) is a
+	-- reserve cut only; nothing reads this key until that cut is needed.
+	StairStyle = "Steps",
+
 	HollowBuildings = {
 		-- Shared by every walk-in building; per-building entries override (Colors merge key by key).
 		Defaults = {

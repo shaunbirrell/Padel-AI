@@ -50,7 +50,7 @@ export type KitPart = {
 }
 
 local BusinessConfig = {
-	Enabled = false,
+	Enabled = true,
 	Kind = "Business", -- BaseConfig.Structures[id].Kind for a merged business (nil = building / installation)
 	FolderName = "WE_Businesses",
 	ModelPrefix = "WE_Business_",

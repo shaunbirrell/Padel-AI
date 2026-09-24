@@ -2100,8 +2100,8 @@ BLC = "src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau"
 TUC = "src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau"
 
 # --- flags (flip at integration) ---
-must_contain(BZC, "\tEnabled = false,", "v72 BusinessConfig off until integration (lead flips after Lane D)")
-must_contain(TGC, "\tEnabled = false,", "v72 TycoonGuideConfig off until integration (lead flips after Lane D)")
+must_contain(BZC, "\tEnabled = true,", "v72 BusinessConfig off until integration (lead flips after Lane D)")
+must_contain(TGC, "\tEnabled = true,", "v72 TycoonGuideConfig off until integration (lead flips after Lane D)")
 
 # --- BusinessConfig (spec section 1) ---
 must_contain(BZC, 'Requires = { { StructureId = "AmmoWorks", Level = 1 }, { StructureId = "WeaponsFacility", Level = 1 } },', "v72 Arms Crate Line requires Ammo Works 1 + Weapons Facility 1")
@@ -2434,6 +2434,14 @@ must_contain(BZV, "local bestD, bestLv = V.PopRadius, 0", "v72 pops only within 
 must_contain(BZV, "TycoonMath.PopText(best.def.Id, bestLv, mult)", "v72 pop amount = TycoonMath.PopText (floor(IncomePerTick x WE_IncomeMult))")
 # --- verifier (vfy2): a pop that lands before the next scan must not reuse a destroyed local folder's crates ---
 must_contain(BZV, "forgetPool() -- a pop can land before the next scan notices", "v72 BusinessVisuals: crateFolder drops the dead pool before rebuilding")
+
+# Lane D (world, deferred; merge together with laneD.diff, not before). Verified on build/integ/on.
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "BaseLayout.Config().FloorChevrons ~= false", "v72 static floor arrows behind BaseLayoutConfig.FloorChevrons")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "local detail = (StructureVisualConfig :: any).StaticSoldierDetail ~= false", "v72 static soldier kit detail behind StructureVisualConfig.StaticSoldierDetail")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "StaticSoldierDetail = false,", "v72 static soldier kit trimmed (-84 parts per base)")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", 'StairStyle = "Steps",', "v72 stairs stay steps (ramps are a reserve cut)")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "signCap.MaxTextSize = 64", "v72 gate-sign text capped (reads in full)")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "(BaseLayout.Config().InnerWall or {}).SignInsetStuds", "v72 gate-sign inset from BaseLayoutConfig.InnerWall.SignInsetStuds")
 
 parse_gate()
 
