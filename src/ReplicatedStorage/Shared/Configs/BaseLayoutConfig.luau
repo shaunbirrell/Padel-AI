@@ -54,6 +54,7 @@ local BaseLayoutConfig = {
 		{ Name = "Taxiway", X = -100, Z = -66, SizeX = 12, SizeZ = 12 }, -- airfield gate → runway
 		{ Name = "Runway", X = -65, Z = -80, SizeX = 170, SizeZ = 24 }, -- under / beside the hangar kit's strip
 		{ Name = "HeliApron", X = 40, Z = -86, SizeX = 12, SizeZ = 50 }, -- helipad gate → pad
+		{ Name = "HangarApron", X = -100, Z = -98.5, SizeX = 34, SizeZ = 13 }, -- runway → hangar doors
 	},
 
 	Courtyard = {
@@ -81,10 +82,11 @@ local BaseLayoutConfig = {
 		PowerStation = { Site = { X = -60, Z = -40 }, Yaw = 0, WalkIn = false, Kiosk = { X = -60, Z = -24 } },
 		Radar = { Site = { X = 70, Z = -40 }, Yaw = 0, WalkIn = false, Kiosk = { X = 70, Z = -24 } },
 		MissileDefense = { Site = { X = 132, Z = -40 }, Yaw = 0, WalkIn = false, Kiosk = { X = 132, Z = -24 } },
-		DefensiveWalls = { Site = { X = -18, Z = 146 }, Yaw = 0, WalkIn = false, Kiosk = { X = -18, Z = 146 } },
-		Watchtowers = { Site = { X = 18, Z = 146 }, Yaw = 0, WalkIn = false, Kiosk = { X = 18, Z = 146 } },
-		-- Airfield kit: hangar at local -Z (south), its strip at local +Z → faces the gate / runway
-		Airfield = { Site = { X = -100, Z = -100 }, Yaw = 0, WalkIn = false, Kiosk = { X = -86, Z = -52 }, Gate = "Airfield" },
+		-- Kiosks stand in front of their kits (a kiosk inside the wall sample / tower body could not be reached)
+		DefensiveWalls = { Site = { X = -18, Z = 146 }, Yaw = 0, WalkIn = false, Kiosk = { X = -18, Z = 134 } },
+		Watchtowers = { Site = { X = 18, Z = 146 }, Yaw = 0, WalkIn = false, Kiosk = { X = 18, Z = 134 } },
+		-- Airfield: hangar installation (Installations/Airfield) behind the runway, doors facing it (+Z)
+		Airfield = { Site = { X = -100, Z = -122 }, Yaw = 0, WalkIn = false, Kiosk = { X = -86, Z = -52 }, Gate = "Airfield" },
 		Helipad = { Site = { X = 40, Z = -125 }, Yaw = 0, WalkIn = false, Kiosk = { X = 54, Z = -52 }, Gate = "Helipad" },
 		Dock = { Site = { X = 128, Z = -112 }, Yaw = 0, WalkIn = false, Kiosk = { X = 106, Z = -52 }, Gate = "Dock" },
 	} :: { [string]: StructureSite },

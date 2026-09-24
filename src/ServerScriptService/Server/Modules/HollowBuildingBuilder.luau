@@ -17,6 +17,7 @@
 	the level changes.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
@@ -84,8 +85,30 @@ local function cfgFor(structureId: string): any?
 	return merged(all.Defaults, c)
 end
 
+-- v68 outdoor installations (StructureVisualConfig.Installations): not walk-in shells but a detailed model
+-- from Modules/Installations/<Module>.luau on the same foundation slab. Needs BaseLayoutConfig (site frames).
+local function instCfgFor(structureId: string): any?
+	if not BaseLayoutConfig.Enabled then
+		return nil
+	end
+	local all = (StructureVisualConfig :: any).Installations
+	if typeof(all) ~= "table" then
+		return nil
+	end
+	local c = all[structureId]
+	if typeof(c) ~= "table" or c.Enabled == false then
+		return nil
+	end
+	local hb = (StructureVisualConfig :: any).HollowBuildings
+	return merged(if typeof(hb) == "table" then hb.Defaults else nil, c)
+end
+
 function HollowBuildingBuilder.IsHollow(structureId: string): boolean
-	return cfgFor(structureId) ~= nil
+	return cfgFor(structureId) ~= nil or instCfgFor(structureId) ~= nil
+end
+
+function HollowBuildingBuilder.IsInstallation(structureId: string): boolean
+	return cfgFor(structureId) == nil and instCfgFor(structureId) ~= nil
 end
 
 local function groundY(plinth: BasePart): number
@@ -129,7 +152,7 @@ end
 
 --[[ Foundation slab for StructureKitBuilder's "Body": (size, local offset in the kit frame). ]]
 function HollowBuildingBuilder.FoundationSpec(plinth: BasePart, structureId: string): (Vector3?, Vector3?)
-	local c = cfgFor(structureId)
+	local c = cfgFor(structureId) or instCfgFor(structureId)
 	if not c then
 		return nil, nil
 	end
@@ -137,7 +160,7 @@ function HollowBuildingBuilder.FoundationSpec(plinth: BasePart, structureId: str
 end
 
 function HollowBuildingBuilder.FoundationColor(structureId: string): Color3?
-	local c = cfgFor(structureId)
+	local c = cfgFor(structureId) or instCfgFor(structureId)
 	return if c and c.Colors then c.Colors.Floor else nil
 end
 
@@ -351,6 +374,112 @@ local function terminal(ctx: Ctx, name: string, pos: Vector3, facingDeg: number,
 	prompt.Parent = body
 	body:SetAttribute("WE_Terminal", panel)
 	return body
+end
+
+-- Part helpers handed to interior / installation modules (building-local coordinates, parts tagged `tag`).
+local function makeApi(ctx: Ctx, tag: string): any
+	local function tagged(p: Part): Part
+		p:SetAttribute(tag, true)
+		return p
+	end
+	local api = {
+		box = function(name: string, size: Vector3, pos: Vector3, color: Color3, material: Enum.Material, collide: boolean?): Part
+			return tagged(box(ctx, name, size, pos, color, material, collide))
+		end,
+		part = function(name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): Part
+			return tagged(part(ctx, name, size, ctx.origin * localCF, color, material, collide))
+		end,
+		light = light,
+		surfaceText = surfaceText,
+		chair = function(pos: Vector3, facing: Vector3)
+			local before = #ctx.model:GetChildren()
+			chair(ctx, pos, facing)
+			local kids = ctx.model:GetChildren()
+			for i = before + 1, #kids do
+				local k = kids[i]
+				if k:IsA("BasePart") then
+					k:SetAttribute(tag, true)
+				end
+			end
+		end,
+		sandbags = function(x0: number, x1: number, z: number, baseY: number)
+			local before = #ctx.model:GetChildren()
+			sandbags(ctx, x0, x1, z, baseY)
+			local kids = ctx.model:GetChildren()
+			for i = before + 1, #kids do
+				local k = kids[i]
+				if k:IsA("BasePart") then
+					k:SetAttribute(tag, true)
+				end
+			end
+		end,
+		terminal = function(name: string, pos: Vector3, facingDeg: number, panel: string, actionText: string, objectText: string, screenLines: { string }?): Part
+			local before = #ctx.model:GetChildren()
+			local body = terminal(ctx, name, pos, facingDeg, panel, actionText, objectText, screenLines)
+			local kids = ctx.model:GetChildren()
+			for i = before + 1, #kids do
+				local k = kids[i]
+				if k:IsA("BasePart") then
+					k:SetAttribute(tag, true)
+				end
+			end
+			return body
+		end,
+	}
+	-- installations: shaped parts, climbable trusses, client-side spinning groups
+	api.cylinder = function(name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): Part
+		local p = tagged(part(ctx, name, size, ctx.origin * localCF, color, material, collide))
+		p.Shape = Enum.PartType.Cylinder -- axis = local X
+		return p
+	end
+	api.ball = function(name: string, diameter: number, pos: Vector3, color: Color3, material: Enum.Material, collide: boolean?): Part
+		local p = tagged(box(ctx, name, Vector3.new(diameter, diameter, diameter), pos, color, material, collide))
+		p.Shape = Enum.PartType.Ball
+		return p
+	end
+	api.wedge = function(name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): WedgePart
+		local w = Instance.new("WedgePart")
+		w.Name = name
+		w.Anchored = true
+		w.Size = size
+		w.CFrame = ctx.origin * localCF
+		w.Color = color
+		w.Material = material
+		w.CanCollide = if collide == nil then true else collide
+		w.CanTouch = false
+		w.CanQuery = w.CanCollide
+		w:SetAttribute(tag, true)
+		w.Parent = ctx.model
+		return w
+	end
+	api.truss = function(name: string, height: number, pos: Vector3, color: Color3): TrussPart
+		local tp = Instance.new("TrussPart")
+		tp.Name = name
+		tp.Anchored = true
+		tp.Size = Vector3.new(2, math.max(2, math.floor(height / 2 + 0.5) * 2), 2)
+		tp.CFrame = ctx.origin * CFrame.new(pos.X, pos.Y + tp.Size.Y * 0.5, pos.Z)
+		tp.Color = color
+		tp.Material = Enum.Material.Metal
+		tp.CanTouch = false
+		tp:SetAttribute(tag, true)
+		tp.Parent = ctx.model
+		return tp
+	end
+	-- Group parts that the client spins around a vertical axis through `pivot` (building-local).
+	-- Server copies stay still; Client/Modules/WorldSpinners rotates the tagged Model locally.
+	api.spin = function(parts: { BasePart }, pivot: Vector3, rpm: number): Model
+		local m = Instance.new("Model")
+		m.Name = "WE_Spinner"
+		m:SetAttribute("WE_SpinPivot", ctx.origin * CFrame.new(pivot))
+		m:SetAttribute("WE_SpinRPM", rpm)
+		for _, bp in ipairs(parts) do
+			bp.Parent = m
+		end
+		m.Parent = ctx.model
+		CollectionService:AddTag(m, "WE_Spinner")
+		return m
+	end
+	return api
 end
 
 -- ── building ────────────────────────────────────────────────────────────────
@@ -673,55 +802,7 @@ local function build(ctx: Ctx)
 		InZ1 = hd - t,
 		Colors = col,
 	}
-	-- Parts made by the interior are tagged WE_Interior (layout checks / future clean-up)
-	local function tagged(p: Part): Part
-		p:SetAttribute("WE_Interior", true)
-		return p
-	end
-	local api = {
-		box = function(name: string, size: Vector3, pos: Vector3, color: Color3, material: Enum.Material, collide: boolean?): Part
-			return tagged(box(ctx, name, size, pos, color, material, collide))
-		end,
-		part = function(name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): Part
-			return tagged(part(ctx, name, size, ctx.origin * localCF, color, material, collide))
-		end,
-		light = light,
-		surfaceText = surfaceText,
-		chair = function(pos: Vector3, facing: Vector3)
-			local before = #ctx.model:GetChildren()
-			chair(ctx, pos, facing)
-			local kids = ctx.model:GetChildren()
-			for i = before + 1, #kids do
-				local k = kids[i]
-				if k:IsA("BasePart") then
-					k:SetAttribute("WE_Interior", true)
-				end
-			end
-		end,
-		sandbags = function(x0: number, x1: number, z: number, baseY: number)
-			local before = #ctx.model:GetChildren()
-			sandbags(ctx, x0, x1, z, baseY)
-			local kids = ctx.model:GetChildren()
-			for i = before + 1, #kids do
-				local k = kids[i]
-				if k:IsA("BasePart") then
-					k:SetAttribute("WE_Interior", true)
-				end
-			end
-		end,
-		terminal = function(name: string, pos: Vector3, facingDeg: number, panel: string, actionText: string, objectText: string, screenLines: { string }?): Part
-			local before = #ctx.model:GetChildren()
-			local body = terminal(ctx, name, pos, facingDeg, panel, actionText, objectText, screenLines)
-			local kids = ctx.model:GetChildren()
-			for i = before + 1, #kids do
-				local k = kids[i]
-				if k:IsA("BasePart") then
-					k:SetAttribute("WE_Interior", true)
-				end
-			end
-			return body
-		end,
-	}
+	local api = makeApi(ctx, "WE_Interior")
 	local interiors = script.Parent:FindFirstChild("Interiors")
 	local modScript = interiors and interiors:FindFirstChild(c.Interior or ctx.structureId)
 	if modScript and modScript:IsA("ModuleScript") then
@@ -737,6 +818,48 @@ local function build(ctx: Ctx)
 	end
 end
 
+-- Kiosk position in the installation's local frame (keep-out for the module), if the layout has one.
+local function kioskLocal(structureId: string): Vector3?
+	local s = (BaseLayoutConfig.Structures :: any)[structureId]
+	if not (s and s.Kiosk and s.Site) then
+		return nil
+	end
+	local dx, dz = s.Kiosk.X - s.Site.X, s.Kiosk.Z - s.Site.Z
+	local a = math.rad(-(s.Yaw or 0))
+	return Vector3.new(dx * math.cos(a) + dz * math.sin(a), 0, -dx * math.sin(a) + dz * math.cos(a))
+end
+
+local function buildInstallation(ctx: Ctx)
+	local c = ctx.c
+	local ictx = {
+		StructureId = ctx.structureId,
+		Level = ctx.level,
+		W = c.Width,
+		D = c.Depth,
+		HalfW = c.Width * 0.5,
+		HalfD = c.Depth * 0.5,
+		Y0 = 0.4, -- foundation top (the kit Body slab)
+		Colors = ctx.col,
+		Kiosk = kioskLocal(ctx.structureId),
+	}
+	local api = makeApi(ctx, "WE_Installation")
+	local folder = script.Parent:FindFirstChild("Installations")
+	local modScript = folder and folder:FindFirstChild(c.Module or ctx.structureId)
+	if not (modScript and modScript:IsA("ModuleScript")) then
+		warn("[HollowBuilding] installation module missing", ctx.structureId)
+		return
+	end
+	local ok, fn = pcall(require, modScript)
+	if ok and typeof(fn) == "function" then
+		local okRun, errRun = pcall(fn, ictx, api)
+		if not okRun then
+			warn("[HollowBuilding] installation failed", ctx.structureId, errRun)
+		end
+	else
+		warn("[HollowBuilding] installation module did not load", ctx.structureId, fn)
+	end
+end
+
 local function findModel(plinth: BasePart): Model?
 	local m = plinth:FindFirstChild(MODEL_NAME)
 	if m and m:IsA("Model") then
@@ -745,12 +868,13 @@ local function findModel(plinth: BasePart): Model?
 	return nil
 end
 
---[[ Build / rebuild / remove the walk-in building for this plinth at `level`. Idempotent. ]]
+--[[ Build / rebuild / remove the walk-in building (or outdoor installation) for this plinth at `level`. Idempotent. ]]
 function HollowBuildingBuilder.Sync(plinth: BasePart, structureId: string, level: number)
 	local c = cfgFor(structureId)
+	local inst = if c then nil else instCfgFor(structureId)
 	local existing = findModel(plinth)
 	local lv = math.clamp(math.floor(tonumber(level) or 0), 0, 5)
-	if not c or lv < 1 then
+	if (not c and not inst) or lv < 1 then
 		if existing then
 			existing:Destroy()
 		end
@@ -767,15 +891,16 @@ function HollowBuildingBuilder.Sync(plinth: BasePart, structureId: string, level
 	model:SetAttribute("WE_BuildingLevel", lv)
 	model:SetAttribute("WE_BuildingGen", GEN)
 	model:SetAttribute("StructureId", structureId)
+	local cfg = c or inst
 	local ctx: Ctx = {
 		model = model,
-		origin = originFor(plinth, c),
-		c = c,
-		col = c.Colors,
+		origin = originFor(plinth, cfg),
+		c = cfg,
+		col = cfg.Colors,
 		level = lv,
 		structureId = structureId,
 	}
-	local ok, err = pcall(build, ctx)
+	local ok, err = pcall(if inst then buildInstallation else build, ctx)
 	if not ok then
 		warn("[HollowBuilding] build failed", structureId, lv, err)
 	end

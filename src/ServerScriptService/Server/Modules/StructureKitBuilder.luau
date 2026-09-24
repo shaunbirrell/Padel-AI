@@ -16,7 +16,7 @@ local HollowBuildingBuilder = require(script.Parent.HollowBuildingBuilder)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 33 -- v66: walk-in Command Center (foundation-slab Body + HollowBuildingBuilder model)
+local KIT_GEN = 34 -- v68: outdoor installations use the foundation-slab Body too (was 33: walk-in Command Center)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -788,8 +788,8 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 			end
 		end
 	end
-	-- MissileDefense hard force large Body+Roof after any rebuild path
-	if structureId == "MissileDefense" then
+	-- MissileDefense hard force large Body+Roof after any rebuild path (not for the v68 installation slab)
+	if structureId == "MissileDefense" and not hollow then
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
 				local role = child:GetAttribute("WE_KitRole")
@@ -1335,11 +1335,16 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 		Vector3.new(cx - half, y, cz + half),
 		Vector3.new(cx + half, y, cz + half),
 	}
+	-- v68: guard tower = concrete shaft + glazed cabin + roof, searchlight facing out, red beacon
+	-- (was a solid 7-10 stud concrete pillar with a rail ring). Names/attributes kept for other systems.
+	local padTop = pad.Position.Y + pad.Size.Y * 0.5
+	local cabinW = towerW + 1.5
+	local shaftH = towerH - 4
 	for i, pos in ipairs(corners) do
 		local body = makePart({
 			Name = "CornerTower" .. i,
-			Size = Vector3.new(towerW, towerH, towerW),
-			Position = pos,
+			Size = Vector3.new(towerW - 2.5, shaftH, towerW - 2.5),
+			Position = Vector3.new(pos.X, padTop + shaftH * 0.5, pos.Z),
 			Color = pal.Body,
 			Material = Enum.Material.Concrete,
 			Transparency = 0,
@@ -1348,51 +1353,89 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 		})
 		body.CastShadow = true
 		body:SetAttribute("WE_CornerTower", true)
-		makePart({
-			Name = "TowerCap" .. i,
-			Size = Vector3.new(towerW + 1.2, 0.6, towerW + 1.2),
-			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 + 0.35, pos.Z),
-			Color = pal.Roof,
-			Material = Enum.Material.Metal,
-			Transparency = 0,
-			CanCollide = false,
-			Parent = folder,
-		})
+		local floorY = padTop + shaftH
 		makePart({
 			Name = "TowerPlatform" .. i,
-			Size = Vector3.new(towerW + 3, 0.5, towerW + 3),
-			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 - 1.2, pos.Z),
+			Size = Vector3.new(cabinW, 0.5, cabinW),
+			Position = Vector3.new(pos.X, floorY + 0.25, pos.Z),
 			Color = pal.Roof,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
-			CanCollide = false,
+			CanCollide = true,
 			Parent = folder,
 		})
-		-- Rail ring
-		for _, off in ipairs({ Vector3.new(towerW * 0.7, 0, 0), Vector3.new(-towerW * 0.7, 0, 0), Vector3.new(0, 0, towerW * 0.7), Vector3.new(0, 0, -towerW * 0.7) }) do
+		-- low concrete band + glass band on all four sides
+		for _, side in ipairs({ Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) }) do
+			local alongX = side.Z ~= 0
+			local len = cabinW
+			local c = Vector3.new(pos.X + side.X * (cabinW * 0.5 - 0.2), 0, pos.Z + side.Z * (cabinW * 0.5 - 0.2))
 			makePart({
-				Name = "TowerRail" .. i,
-				Size = Vector3.new(if math.abs(off.X) > 0 then 0.35 else towerW + 2.5, 1.6, if math.abs(off.Z) > 0 then 0.35 else towerW + 2.5),
-				Position = Vector3.new(pos.X + off.X, pos.Y + towerH * 0.5 - 0.2, pos.Z + off.Z),
-				Color = pal.Accent,
-				Material = Enum.Material.Metal,
+				Name = "TowerCabinWall" .. i,
+				Size = Vector3.new(if alongX then len else 0.4, 1.0, if alongX then 0.4 else len),
+				Position = Vector3.new(c.X, floorY + 1.0, c.Z),
+				Color = pal.Body,
+				Material = Enum.Material.Concrete,
 				Transparency = 0,
+				CanCollide = true,
+				Parent = folder,
+			})
+			local glass = makePart({
+				Name = "TowerCabinGlass" .. i,
+				Size = Vector3.new(if alongX then len else 0.2, 2.0, if alongX then 0.2 else len),
+				Position = Vector3.new(c.X, floorY + 2.5, c.Z),
+				Color = Color3.fromRGB(140, 180, 200),
+				Material = Enum.Material.Glass,
+				Transparency = 0.45,
 				CanCollide = false,
 				Parent = folder,
 			})
+			glass.CastShadow = false
 		end
 		makePart({
-			Name = "TowerBeacon" .. i,
-			Size = Vector3.new(0.6, 2.2 + lv * 0.4, 0.6),
-			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 + 2, pos.Z),
-			Color = pal.Accent,
+			Name = "TowerCap" .. i,
+			Size = Vector3.new(cabinW + 1.2, 0.6, cabinW + 1.2),
+			Position = Vector3.new(pos.X, floorY + 3.8, pos.Z),
+			Color = pal.Roof,
+			Material = Enum.Material.Metal,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		-- searchlight on the roof edge, pointing away from the plot centre
+		local out = Vector3.new(pos.X - cx, 0, pos.Z - cz)
+		out = if out.Magnitude > 0.1 then out.Unit else Vector3.new(0, 0, 1)
+		local lampPos = Vector3.new(pos.X + out.X * (cabinW * 0.5 - 0.6), floorY + 4.6, pos.Z + out.Z * (cabinW * 0.5 - 0.6))
+		local lamp = makePart({
+			Name = "TowerSearchlight" .. i,
+			Size = Vector3.new(1.2, 1, 1.2),
+			Position = lampPos,
+			Color = Color3.fromRGB(255, 236, 200),
 			Material = Enum.Material.Neon,
 			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		})
+		lamp.CFrame = CFrame.lookAt(lampPos, lampPos + out)
+		local spot = Instance.new("SpotLight")
+		spot.Face = Enum.NormalId.Front
+		spot.Angle = 45
+		spot.Range = 50
+		spot.Brightness = 1.5
+		spot.Color = Color3.fromRGB(255, 236, 200)
+		spot.Parent = lamp
+		local beacon = makePart({
+			Name = "TowerBeacon" .. i,
+			Size = Vector3.new(0.7, 0.7, 0.7),
+			Position = Vector3.new(pos.X, floorY + 4.5, pos.Z),
+			Color = Color3.fromRGB(255, 50, 40),
+			Material = Enum.Material.Neon,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		;(beacon :: Part).Shape = Enum.PartType.Ball
 		-- v36: 1–2 static sniper silhouettes on tower platforms (presence; GateDefense handles combat)
-		local deckY = pos.Y + towerH * 0.5 - 0.6
+		local deckY = floorY + 0.5
 		local shooterCount = if lv >= 3 then 2 else 1
 		for s = 1, shooterCount do
 			local ox = if s == 1 then -1.4 else 1.4

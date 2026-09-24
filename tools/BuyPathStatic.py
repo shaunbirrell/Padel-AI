@@ -1032,6 +1032,38 @@ def v68_interiors() -> None:
 
 
 v68_interiors()
+
+
+def v68_installations() -> None:
+    """Every outdoor installation entry names a module that exists and returns a function; consoles never
+    share a spot with their kit (a kiosk inside the tower/wall sample could not be reached)."""
+    cfg = read("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau") or ""
+    block = cfg.split("Installations = {", 1)[1].split("\n\t},", 1)[0] if "Installations = {" in cfg else ""
+    entries = re.findall(r"(\w+) = \{ Enabled = true, Module = \"(\w+)\"", block)
+    if len(entries) < 6:
+        bad("v68 expected >= 6 installations, found %d" % len(entries))
+    for sid, mod in entries:
+        src = read("src/ServerScriptService/Server/Modules/Installations/%s.luau" % mod)
+        if src is None:
+            bad("v68 installation module missing: %s (%s)" % (mod, sid))
+        elif not re.search(r"^return function\(ictx: any, api: any\)", src, re.M):
+            bad("v68 installation %s must return function(ictx: any, api: any)" % mod)
+        else:
+            ok("v68 installation %s → Installations/%s" % (sid, mod))
+    layout = read("src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau") or ""
+    for m in re.finditer(r"(\w+) = \{ Site = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}, Yaw = -?\d+, WalkIn = false, Kiosk = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}", layout):
+        sid, sx, sz, kx, kz = m.group(1), *map(float, m.groups()[1:])
+        if abs(sx - kx) < 4 and abs(sz - kz) < 4:
+            bad("v68 %s kiosk sits on its own kit site (unreachable console)" % sid)
+        else:
+            ok("v68 %s kiosk clear of its site" % sid)
+
+
+v68_installations()
+must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "local function buildInstallation(ctx: Ctx)", "v68 installation build path")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'if structureId == "MissileDefense" and not hollow then', "v68 MissileDefense force skips the installation slab")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", "pcall(WorldSpinners.Init)", "v68 radar dishes spin client-side (guarded)")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'body:SetAttribute("WE_CornerTower", true)', "v68 corner guard towers keep WE_CornerTower")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "continuing — no kick", "v58 never Kick on session lock")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", 'player:Kick("Your data is loading', "v58 no session-lock Kick")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "never WaitForChild remotes on HUD cash path", "v60 HUD leaderstats-first no WaitForChild")

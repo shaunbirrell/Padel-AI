@@ -186,6 +186,18 @@ local StructureVisualConfig = {
 		doorway is shifted sideways so going inside never re-triggers the walk-over buy (pad hit box = ±8 studs).
 		Local axes: +Z = building front (faces the plot spawn), X = across the facade.
 	]]
+	-- v68: outdoor installations — a detailed model from Modules/Installations/<Module>.luau on a concrete
+	-- foundation (the kit Body), rebuilt per level by HollowBuildingBuilder. Only with BaseLayoutConfig.
+	-- Width/Depth = foundation footprint (building-local, +Z = the side facing the plot front).
+	Installations = {
+		PowerStation = { Enabled = true, Module = "PowerStation", Width = 30, Depth = 22 },
+		Radar = { Enabled = true, Module = "Radar", Width = 24, Depth = 20 },
+		MissileDefense = { Enabled = true, Module = "MissileDefense", Width = 24, Depth = 22 },
+		Watchtowers = { Enabled = true, Module = "Watchtower", Width = 10, Depth = 10 },
+		DefensiveWalls = { Enabled = true, Module = "Checkpoint", Width = 20, Depth = 10 },
+		Airfield = { Enabled = true, Module = "Airfield", Width = 58, Depth = 34 },
+	},
+
 	HollowBuildings = {
 		-- Shared by every walk-in building; per-building entries override (Colors merge key by key).
 		Defaults = {
