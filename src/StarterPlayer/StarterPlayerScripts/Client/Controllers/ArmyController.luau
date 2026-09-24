@@ -36,6 +36,31 @@ local capLabel: TextLabel? = nil
 local armyState: any = nil
 local requestingState = false
 local refreshLabels: () -> ()
+-- v71 money (M1): "Army full · +10 slots" chip — set when a Recruit tap is refused because the army is full
+local fullChip = false
+local refreshRobux: () -> () = function() end
+-- v71 money (M1 verify): one-time products bought this session (PromptProductPurchaseFinished) count as owned at once,
+-- as in ShopController (v69): the receipt / WE_Ent_* can lag, and a second purchase would charge for nothing
+local sessionBought: { [string]: boolean } = {}
+
+--[[ v71 money (M1): display-only ownership. MonetizationService replicates one-time entitlements as the player
+	attribute WE_Ent_<key> (never read back by the server); SoldierStateUpdate also reports ArmyCapBonus > 0 once
+	Army Expansion counts toward the cap. ]]
+local function entOwned(key: string): boolean
+	return player:GetAttribute("WE_Ent_" .. key) == true
+end
+
+local function armyExpansionBonus(): number
+	local def: any = MonetizationConfig.DevProducts.ExtraSoldierSlot
+	return math.max(0, math.floor(tonumber(if typeof(def) == "table" then def.ArmyCapBonus else nil) or 10))
+end
+
+local function armyExpansionOwned(): boolean
+	if entOwned("ExtraSoldierSlot") or sessionBought.ExtraSoldierSlot == true then
+		return true
+	end
+	return typeof(armyState) == "table" and (tonumber(armyState.ArmyCapBonus) or 0) > 0
+end
 
 local function synthesizeFromPlayerState(state: any)
 	if typeof(state) ~= "table" then
@@ -48,7 +73,8 @@ local function synthesizeFromPlayerState(state: any)
 	local count = tonumber(state.Soldiers) or 0
 	local baseCap = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
-	local cap = baseCap + barracks * per
+	local bonus = if entOwned("ExtraSoldierSlot") then armyExpansionBonus() else 0
+	local cap = baseCap + barracks * per + bonus
 	local cost = SoldierConfig.RecruitCostCash or 500
 	local room = math.max(0, cap - count)
 	local tickSec = (SoldierConfig.TrainingIncome and SoldierConfig.TrainingIncome.TickSeconds) or 5
@@ -67,6 +93,7 @@ local function synthesizeFromPlayerState(state: any)
 		TrainingIncomePerTick = training,
 		TrainingTickSeconds = tickSec,
 		TrainingIncomePerSec = if tickSec > 0 then training / tickSec else 0,
+		ArmyCapBonus = bonus,
 	}
 end
 
@@ -142,6 +169,10 @@ end
 
 local function setOpen(isOpen: boolean)
 	open = isOpen
+	if not isOpen and fullChip then
+		fullChip = false -- the chip belongs to the refused tap; a fresh open starts clean
+		refreshRobux()
+	end
 	if screenGui then
 		local panel = screenGui:FindFirstChild("Panel")
 		if panel and panel:IsA("GuiObject") then
@@ -296,63 +327,187 @@ function ArmyController.Init()
 		return out
 	end
 
-	-- v30 P2W visibility (Reaper-style): Commander Pack / Extra Slot at top — free recruits unchanged below
-	local function promptArmyRobux(productKey: string)
+	-- v30 P2W visibility (Reaper-style): Commander Pack / Army Expansion at top — free recruits unchanged below.
+	-- v71 money (M1): both are one-time — an owned one is never prompted again (revenue audit F2).
+	local starter = MonetizationConfig.DevProducts.StarterBundle
+	local extraSlot = MonetizationConfig.DevProducts.ExtraSoldierSlot
+	local starterLive = starter ~= nil and (tonumber(starter.Id) or 0) ~= 0
+	local slotLive = extraSlot ~= nil and (tonumber(extraSlot.Id) or 0) ~= 0
+
+	local function productOwned(productKey: string): boolean
+		if productKey == "ExtraSoldierSlot" then
+			return armyExpansionOwned()
+		end
+		return productKey == "StarterBundle" and (entOwned("StarterBundle") or sessionBought.StarterBundle == true)
+	end
+
+	-- source: optional analytics tag for the intent remote (the server whitelists it; grants stay ProcessReceipt)
+	local function promptArmyRobux(productKey: string, source: string)
 		local def = MonetizationConfig.DevProducts[productKey]
 		if not def or (tonumber(def.Id) or 0) == 0 then
 			NotificationController.Show("Offer coming soon", "Info", 2)
 			return
 		end
-		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey)
+		if productOwned(productKey) then
+			return -- OWNED: no re-prompt
+		end
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey, source)
 		pcall(function()
 			MarketplaceService:PromptProductPurchase(player, def.Id)
 		end)
 	end
 
-	local starter = MonetizationConfig.DevProducts.StarterBundle
-	local extraSlot = MonetizationConfig.DevProducts.ExtraSoldierSlot
-	local starterLive = starter ~= nil and (tonumber(starter.Id) or 0) ~= 0
-	local slotLive = extraSlot ~= nil and (tonumber(extraSlot.Id) or 0) ~= 0
 	local robuxDefs: { { Label: string, OnClick: () -> (), Gold: boolean?, Robux: boolean? } } = {}
+	local starterIdx, slotIdx = 0, 0
 	if starterLive and starter then
-		local price = tonumber(starter.RobuxPrice) or 249
+		local price = tonumber(starter.RobuxPrice) or 149
 		table.insert(robuxDefs, {
 			Label = string.format("★ COMMANDER PACK  %d R$", price),
 			OnClick = function()
-				promptArmyRobux("StarterBundle")
+				promptArmyRobux("StarterBundle", "army_panel")
 			end,
 			Gold = true,
 			Robux = true,
 		})
+		starterIdx = #robuxDefs
 	end
 	if slotLive and extraSlot then
-		local price = tonumber(extraSlot.RobuxPrice) or 79
 		table.insert(robuxDefs, {
-			-- a secondary ExtraSoldierSlot chip when the Commander Pack is also offered
-			Label = if starterLive then string.format("+1 SLOT  %d R$", price) else string.format("★ EXTRA SOLDIER SLOT  %d R$", price),
+			Label = "", -- set by refreshRobux (buy / Army full chip / OWNED)
 			OnClick = function()
-				promptArmyRobux("ExtraSoldierSlot")
+				-- ExtraSoldierSlot = Army Expansion (+10); the chip is the same product at the refusal moment
+				promptArmyRobux("ExtraSoldierSlot", if fullChip then "army_full" else "army_panel")
 			end,
 			Gold = true,
 			Robux = true,
 		})
+		slotIdx = #robuxDefs
 	end
 	if #robuxDefs > 0 then
-		buttonRow(robuxDefs)
+		local robuxBtns = buttonRow(robuxDefs)
+		local robuxRow = robuxBtns[1].Parent
+		local starterBtn: TextButton? = if starterIdx > 0 then robuxBtns[starterIdx] else nil
+		local slotBtn: TextButton? = if slotIdx > 0 then robuxBtns[slotIdx] else nil
+		local slotPrice = tonumber(extraSlot and extraSlot.RobuxPrice) or 99
+		local bonus = armyExpansionBonus()
+		local function styleRobux(b: TextButton, mode: string)
+			local st = b:FindFirstChildOfClass("UIStroke")
+			if mode == "owned" then
+				b.BackgroundColor3 = Constants.Colors.Gunmetal
+				b.TextColor3 = Constants.Colors.Muted
+				b.AutoButtonColor = false
+				if st then
+					st.Color = Constants.Colors.Muted
+					st.Thickness = 1
+				end
+			elseif mode == "chip" then
+				b.BackgroundColor3 = Color3.fromRGB(92, 64, 8)
+				b.TextColor3 = Constants.Colors.GoldBright or Constants.Colors.Gold
+				b.AutoButtonColor = true
+				if st then
+					st.Color = Color3.fromRGB(255, 220, 90)
+					st.Thickness = 3
+				end
+			else
+				b.BackgroundColor3 = Color3.fromRGB(40, 32, 12)
+				b.TextColor3 = Constants.Colors.Gold
+				b.AutoButtonColor = true
+				if st then
+					st.Color = Color3.fromRGB(255, 200, 60)
+					st.Thickness = 2
+				end
+			end
+		end
+		refreshRobux = function()
+			local shown: { TextButton } = {}
+			if starterBtn then
+				-- v71 money (M1, J14): the Starter Pack is one-time — its row goes once it is owned
+				starterBtn.Visible = not (entOwned("StarterBundle") or sessionBought.StarterBundle == true)
+				if starterBtn.Visible then
+					table.insert(shown, starterBtn)
+				end
+			end
+			if slotBtn then
+				if armyExpansionOwned() then
+					fullChip = false
+					slotBtn.Text = string.format("ARMY +%d · OWNED", bonus)
+					styleRobux(slotBtn, "owned")
+				elseif fullChip then
+					slotBtn.Text = string.format("Army full · +%d slots · %d R$", bonus, slotPrice)
+					styleRobux(slotBtn, "chip")
+				else
+					slotBtn.Text = string.format("★ ARMY +%d SLOTS  %d R$", bonus, slotPrice)
+					styleRobux(slotBtn, "buy")
+				end
+				table.insert(shown, slotBtn)
+			end
+			local n = #shown
+			for _, b in ipairs(shown) do
+				b.Size = UDim2.new(1 / n, -GAP * (n - 1) / n, 1, 0)
+			end
+			if robuxRow and robuxRow:IsA("GuiObject") then
+				robuxRow.Visible = n > 0
+			end
+		end
+		refreshRobux()
+		for _, key in ipairs({ "ExtraSoldierSlot", "StarterBundle" }) do
+			player:GetAttributeChangedSignal("WE_Ent_" .. key):Connect(function()
+				refreshRobux()
+			end)
+		end
+		pcall(function()
+			MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, isPurchased: boolean)
+				if userId ~= player.UserId or isPurchased ~= true then
+					return
+				end
+				for _, key in ipairs({ "ExtraSoldierSlot", "StarterBundle" }) do
+					local def: any = MonetizationConfig.DevProducts[key]
+					if typeof(def) == "table" and def.Id ~= 0 and def.Id == productId then
+						sessionBought[key] = true
+					end
+				end
+				refreshRobux()
+			end)
+		end)
+	end
+
+	-- v71 money (M1): a Recruit tap on a full army is refused ("Full") → the Army Expansion button becomes the
+	-- "Army full · +10 slots" chip (unless owned). The recruit request still goes to the server, which decides.
+	local function armyFull(): boolean
+		if typeof(armyState) ~= "table" then
+			return false
+		end
+		local count = tonumber(armyState.Soldiers) or 0
+		local cap = tonumber(armyState.MaxSoldiers) or 0
+		local free = tonumber(armyState.SlotsFree) or math.max(0, cap - count)
+		return cap > 0 and (free <= 0 or count >= cap)
+	end
+	local function noteRecruitRefusedFull()
+		if slotLive and not armyExpansionOwned() and not fullChip then
+			fullChip = true
+			refreshRobux()
+		end
+	end
+	local function recruit(n: number)
+		ensureArmyState()
+		if armyFull() then
+			noteRecruitRefusedFull()
+		end
+		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRecruitSoldiers, n)
 	end
 
 	local recruitBtns = buttonRow({
 		{
 			Label = "RECRUIT x1 $500",
 			OnClick = function()
-				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRecruitSoldiers, 1)
+				recruit(1)
 			end,
 			Gold = true,
 		},
 		{
 			Label = "RECRUIT x5",
 			OnClick = function()
-				task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRecruitSoldiers, 5)
+				recruit(5)
 			end,
 			Gold = true,
 		},
@@ -364,6 +519,9 @@ function ArmyController.Init()
 				if free > 0 then
 					task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRecruitSoldiers, math.min(free, 50))
 				else
+					if armyFull() then
+						noteRecruitRefusedFull()
+					end
 					NotificationController.Show("Army full or no slots — upgrade the Barracks", "Warn", 3)
 				end
 			end,
@@ -445,6 +603,10 @@ function ArmyController.Init()
 			return
 		end
 		armyState = payload
+		if fullChip and not armyFull() then
+			fullChip = false -- a slot opened (Barracks upgrade, Army Expansion, dismiss)
+		end
+		refreshRobux()
 		refreshLabels()
 	end)
 
@@ -457,6 +619,10 @@ function ArmyController.Init()
 			armyState.Soldiers = state.Soldiers
 			local cap = tonumber(armyState.MaxSoldiers) or 0
 			armyState.SlotsFree = math.max(0, cap - state.Soldiers)
+			if fullChip and not armyFull() then
+				fullChip = false
+				refreshRobux()
+			end
 			refreshLabels()
 		end
 	end)

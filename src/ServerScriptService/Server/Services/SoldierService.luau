@@ -9,6 +9,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
 
 local TRAIN_POP_RADIUS = 28 -- studs: the "+$N" training pop shows only to the owner standing this close (spec §5)
@@ -68,15 +69,27 @@ local function barracksLevel(profile: any): number
 	return tonumber(upgrades.Barracks) or 0
 end
 
+--[[ v71 money (M1, owner decision D3): Army Expansion. The live ExtraSoldierSlot product (same Id) now adds
+	MonetizationConfig.DevProducts.ExtraSoldierSlot.ArmyCapBonus (10) army capacity instead of +1. It reads the
+	entitlement exactly as MonetizationService records it (ProcessReceipt → GrantEntitlement("ExtraSoldierSlot")
+	→ profile.Entitlements.ExtraSoldierSlot = true; admin grants use the same key), so it is retroactive: players
+	who bought the old +1 slot get +10 on their next state push. A one-time boolean — owning it never stacks. ]]
+local ARMY_EXPANSION_DEFAULT_BONUS = 10
+
+local function armyCapBonus(profile: any): number
+	if typeof(profile.Entitlements) ~= "table" or profile.Entitlements.ExtraSoldierSlot ~= true then
+		return 0
+	end
+	local def: any = MonetizationConfig.DevProducts.ExtraSoldierSlot
+	local bonus = if typeof(def) == "table" then tonumber(def.ArmyCapBonus) else nil
+	return math.max(0, math.floor(bonus or ARMY_EXPANSION_DEFAULT_BONUS))
+end
+
 local function maxSoldiers(profile: any): number
 	local base = SoldierConfig.MaxSoldiersBase or 50
 	local per = SoldierConfig.SoldiersPerBarracksLevel or 5
-	local cap = base + barracksLevel(profile) * per
-	-- ExtraSoldierSlot DevProduct entitlement (+1 capacity)
-	if typeof(profile.Entitlements) == "table" and profile.Entitlements.ExtraSoldierSlot == true then
-		cap += 1
-	end
-	return cap
+	-- + Army Expansion (ExtraSoldierSlot DevProduct entitlement): ArmyCapBonus capacity
+	return base + barracksLevel(profile) * per + armyCapBonus(profile)
 end
 
 local function pushState(player: Player)
@@ -103,6 +116,8 @@ local function pushState(player: Player)
 		TrainingIncomePerTick = training,
 		TrainingTickSeconds = tickSec,
 		TrainingIncomePerSec = if tickSec > 0 then training / tickSec else 0,
+		-- v71 money (M1): > 0 when Army Expansion is owned (already inside MaxSoldiers); the Army panel shows OWNED
+		ArmyCapBonus = armyCapBonus(profile),
 	})
 	for _, cb in ipairs(armyChangedListeners) do
 		task.defer(cb, player)

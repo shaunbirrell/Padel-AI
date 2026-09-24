@@ -13,6 +13,7 @@ local Constants = require(Shared.Constants)
 local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
@@ -22,6 +23,7 @@ local DataService: any = nil
 local RemoteSetup: any = nil
 local NotificationService: any = nil
 local RateLimitService: any = nil
+local MonetizationService: any = nil
 
 local STEP_CLAIM = 1
 local STEP_INCOME = 2
@@ -75,6 +77,72 @@ function TutorialService.Push(player: Player)
 	pushTutorial(player)
 end
 
+--[[ v71 money (M1, plan §2.1 "Pop-up race"; revenue audit F4 / R3): the Commander Starter Pack offer belongs to the
+	end of the tutorial, not to the join (it used to fire 8 s after join mid-tutorial and usually lost its slot to the
+	Speed Boost pop-up). TutorialService decides WHEN: StarterBundleOffer.AfterTutorialSeconds (3 s) after the tutorial
+	completes (the last step done, or SKIP), or StarterBundleOffer.DelaySeconds (8 s) after the profile loads when the
+	tutorial is already done. MonetizationService.TrySoftOfferStarterBundle(player, reason) decides WHETHER and sends
+	it (live Id, unoffered = profile.StarterBundleOffered, unowned, the soft-offer slot / D8 budget; true = sent,
+	nil = not wanted, false = slot busy) down the existing path: the StarterBundleOffer remote → ShopController's
+	StarterBundleToast → NotificationController.ShowOffer, so the HUD throttle still decides when the card shows.
+	A busy slot is retried STARTER_RETRIES times, one soft-offer cooldown apart. Nothing here grants or prompts. ]]
+local STARTER_AFTER_TUTORIAL_SECONDS = 3
+local STARTER_AT_LOAD_SECONDS = 8
+local STARTER_RETRIES = 2
+local starterToken: { [number]: number } = {} -- userId -> the pending offer schedule (one at a time)
+local starterSeq = 0
+
+local function scheduleStarterOffer(player: Player, afterTutorial: boolean)
+	local mon = MonetizationService
+	if not mon or typeof(mon.TrySoftOfferStarterBundle) ~= "function" or not DataService then
+		return
+	end
+	local def: any = MonetizationConfig.DevProducts.StarterBundle
+	local profile = DataService.GetProfile(player)
+	if typeof(def) ~= "table" or (tonumber(def.Id) or 0) == 0 or not profile or profile.StarterBundleOffered == true then
+		return
+	end
+	if typeof(profile.Entitlements) == "table" and profile.Entitlements.StarterBundle == true then
+		return -- owned (the gate re-checks ownership when it fires; this only skips a pointless timer)
+	end
+	local uid = player.UserId
+	if starterToken[uid] ~= nil then
+		return
+	end
+	starterSeq += 1
+	local my = starterSeq
+	starterToken[uid] = my
+	local cfg: any = (MonetizationConfig :: any).StarterBundleOffer
+	local delaySec = if afterTutorial
+		then tonumber(cfg and cfg.AfterTutorialSeconds) or STARTER_AFTER_TUTORIAL_SECONDS
+		else tonumber(cfg and cfg.DelaySeconds) or STARTER_AT_LOAD_SECONDS
+	local cooldown = tonumber((MonetizationConfig :: any).SoftOfferSessionCooldownSeconds) or 60
+	local reason = if afterTutorial then "tutorial_complete" else "session"
+	local function attempt(n: number)
+		if starterToken[uid] ~= my then
+			return -- left the server
+		end
+		local sent: boolean? = nil
+		if player.Parent then
+			local ok, res = pcall(mon.TrySoftOfferStarterBundle, player, reason)
+			if ok then
+				sent = res
+			else
+				warn("[TutorialService] Starter offer failed:", res)
+			end
+		end
+		if starterToken[uid] ~= my then
+			return
+		end
+		if sent == false and n <= STARTER_RETRIES and player.Parent then
+			task.delay(cooldown, attempt, n + 1) -- the soft-offer slot was busy
+		else
+			starterToken[uid] = nil
+		end
+	end
+	task.delay(delaySec, attempt, 1)
+end
+
 --[[ v69: buy steps (PadStructureId) for a structure the player already owns are done — skip them. The HUD goal
 	sends new players to buy Command Center before step 4, which then only advanced on ANOTHER CC purchase
 	($8,000 for L2); same for Barracks at step 6. Returns the first step that still needs doing. ]]
@@ -105,6 +173,9 @@ local function setStep(player: Player, step: number, complete: boolean?)
 	pushTutorial(player)
 	if complete and NotificationService then
 		NotificationService.Notify(player, "Tutorial complete — BUILD. CONQUER. DOMINATE.", "Success")
+	end
+	if complete then
+		scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
 	end
 end
 
@@ -151,6 +222,7 @@ function TutorialService.Complete(player: Player)
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
+	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
 end
 
 function TutorialService.Reset(player: Player)
@@ -222,6 +294,7 @@ function TutorialService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	NotificationService = deps.NotificationService
 	RateLimitService = deps.RateLimitService
+	MonetizationService = deps.MonetizationService -- v71 money (M1): TrySoftOfferStarterBundle (Starter Pack gate)
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
@@ -234,7 +307,7 @@ function TutorialService.Init(deps: { [string]: any })
 		TutorialService.Complete(player)
 	end)
 
-	DataService.OnProfileLoaded(function(player: Player, profile: any)
+	local function onProfileLoaded(player: Player, profile: any)
 		if not tutorialEnabled() then
 			profile.TutorialComplete = true
 			pushTutorial(player)
@@ -272,6 +345,13 @@ function TutorialService.Init(deps: { [string]: any })
 				TutorialService.Notify(player, "PlotAssigned")
 			end
 		end)
+	end
+	DataService.OnProfileLoaded(function(player: Player, profile: any)
+		onProfileLoaded(player, profile)
+		-- v71 money (M1): the tutorial is already done at load → the Starter Pack offer 8 s in (the gate decides)
+		if profile.TutorialComplete == true then
+			scheduleStarterOffer(player, false)
+		end
 	end)
 
 	-- Upgrade hook
@@ -290,6 +370,7 @@ function TutorialService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player: Player)
 		lastAdvanceAt[player.UserId] = nil
 		lastAdvanceStep[player.UserId] = nil
+		starterToken[player.UserId] = nil
 	end)
 end
 

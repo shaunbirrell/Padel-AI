@@ -69,6 +69,39 @@ local function countClaimable(bp: any, track: { [number]: any }, claimedMap: any
 	return n
 end
 
+--[[ v71 money (M1, plan §2.1 "Battle Pass premium button"): what the Premium track holds for this player right now —
+	every PremiumTrack reward at or below the current tier that is not claimed yet, whether or not Premium is owned
+	(so the panel's "N rewards waiting ($X + Y Gold)" line is always true, and after the purchase exactly these are
+	claimable). Read-only: computed for the state push, never stored or granted from here. ]]
+local function premiumWaiting(bp: any): { Count: number, Cash: number, Gold: number }
+	local out = { Count = 0, Cash = 0, Gold = 0 }
+	local level = tonumber(bp.Level) or 0
+	local claimed = if typeof(bp.ClaimedPremium) == "table" then bp.ClaimedPremium else {}
+	for tier, reward in pairs(BattlePassConfig.PremiumTrack) do
+		local t = tonumber(tier)
+		if t and t >= 1 and t <= level and not claimed[tostring(t)] and typeof(reward) == "table" then
+			local r: any = reward
+			local cash = if typeof(r.Cash) == "number" and r.Cash > 0 then math.floor(r.Cash) else 0
+			local gold = if typeof(r.Gold) == "number" and r.Gold > 0 then math.floor(r.Gold) else 0
+			if cash > 0 or gold > 0 then
+				out.Count += 1
+				out.Cash += cash
+				out.Gold += gold
+			end
+		end
+	end
+	return out
+end
+
+function BattlePassService.GetPremiumWaiting(player: Player): { Count: number, Cash: number, Gold: number }?
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return nil
+	end
+	ensureSeason(profile)
+	return premiumWaiting(profile.BattlePass)
+end
+
 local function pushState(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile then
@@ -91,6 +124,7 @@ local function pushState(player: Player)
 		ClaimableFree = countClaimable(bp, BattlePassConfig.FreeTrack, bp.ClaimedFree, false),
 		ClaimablePremium = countClaimable(bp, BattlePassConfig.PremiumTrack, bp.ClaimedPremium, true),
 		PremiumProductId = BattlePassConfig.PremiumProductId,
+		PremiumWaiting = premiumWaiting(bp), -- v71 money (M1): {Count, Cash, Gold} unclaimed premium rewards ≤ tier
 	})
 end
 

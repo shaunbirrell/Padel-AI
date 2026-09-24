@@ -235,8 +235,17 @@ def main(argv: list[str]) -> int:
             edits.append((m.start(1), m.end(1), str(pid), f"{label}: {current} -> {pid}"))
             final_ids[key] = pid
             touched.add(key)
-            if re.search(r"\bHideFromShop\s*=\s*true\b", text[e_open:e_close + 1]):
-                notes.append(f"NOTE {label} still has HideFromShop = true: remove it in the same commit to sell it")
+            entry_text = text[e_open:e_close + 1]
+            if re.search(r"\bHideFromShop\s*=\s*true\b", entry_text):
+                feature = re.search(r"\bFeature\s*=\s*\"(\w+)\"", entry_text)
+                if feature:
+                    # v71 money (M1): a Feature SKU stays hidden until its feature ships (M3 feature gate, J3)
+                    notes.append(
+                        f"NOTE {label} is a Feature SKU ({feature.group(1)}): keep HideFromShop = true until the publish "
+                        f"that makes that feature live (pasting the Id alone does not sell it)"
+                    )
+                else:
+                    notes.append(f"NOTE {label} still has HideFromShop = true: remove it in the same commit to sell it")
         # Two entries with one Id make ProcessReceipt / the pass cache pick either row (wrong grant): never allowed,
         # not even with --force.
         for key in sorted(touched):

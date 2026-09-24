@@ -7,6 +7,7 @@
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -14,10 +15,12 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local ProgressionUI = require(script.ProgressionUI)
 local ProgressionBattlePass = require(script.ProgressionBattlePass)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+local NotificationController = require(script.Parent.NotificationController)
 
 local ProgressionController = {}
 
@@ -34,6 +37,11 @@ local unlockLabel: TextLabel? = nil
 local prestigeConfirm: TextLabel? = nil
 local prestigeKeepBanner: TextLabel? = nil
 local bpLabel: TextLabel? = nil
+local bpPremiumHeader: TextLabel? = nil -- v71 money (M1): "PREMIUM · 499 R$ · N rewards waiting ($X + Y Gold)"
+local bpPremiumBtn: TextButton? = nil -- CLAIM ALL PREMIUM, or UNLOCK PREMIUM for non-premium players
+-- v71 money (M1 verify): PremiumPass bought this session (PromptProductPurchaseFinished). The receipt / state push can
+-- lag; until it lands, UNLOCK PREMIUM must not prompt a second 499 R$ purchase of a one-time product (ShopController v69)
+local premiumBought = false
 local bpClaimHint: TextLabel? = nil
 local bpBarFill: Frame? = nil
 local clanLabel: TextLabel? = nil
@@ -83,6 +91,77 @@ local function rebuildTrackPreview()
 end
 
 local debouncedRefresh = ProgressionUI.Debounce(0.12)
+
+--[[ v71 money (M1, plan §2.1 "Battle Pass premium button"; revenue audit §15): the panel is where Premium intent is
+	highest, so it sells it. Non-premium players see "PREMIUM · 499 R$ · N rewards waiting ($X + Y Gold)" — N and the
+	sums are the unclaimed PremiumTrack rewards at or below their tier (BattlePassService PremiumWaiting), so the line
+	is always true — and CLAIM ALL PREMIUM becomes UNLOCK PREMIUM, which prompts the existing PremiumPass product
+	(the grant stays ProcessReceipt → BattlePassService.SetPremium). ]]
+local function premiumPrice(): number
+	local def: any = MonetizationConfig.DevProducts.PremiumPass
+	return tonumber(if typeof(def) == "table" then def.RobuxPrice else nil) or 499
+end
+
+local function commas(n: number): string
+	local s = tostring(math.max(0, math.floor(n)))
+	local out = string.reverse((string.gsub(string.reverse(s), "(%d%d%d)", "%1,")))
+	if string.sub(out, 1, 1) == "," then
+		out = string.sub(out, 2)
+	end
+	return out
+end
+
+-- {Count, Cash, Gold} from the server (PremiumWaiting); older servers: summed here from the pushed track
+local function premiumWaiting(state: any): (number, number, number)
+	local w = state.PremiumWaiting
+	if typeof(w) == "table" then
+		return tonumber(w.Count) or 0, tonumber(w.Cash) or 0, tonumber(w.Gold) or 0
+	end
+	local track = if typeof(state.PremiumTrack) == "table" then state.PremiumTrack else {}
+	local claimed = if typeof(state.ClaimedPremium) == "table" then state.ClaimedPremium else {}
+	local level = tonumber(state.Level) or 0
+	local n, cash, gold = 0, 0, 0
+	for tier, r in pairs(track) do
+		local t = tonumber(tier)
+		if t and t >= 1 and t <= level and claimed[tostring(t)] ~= true and typeof(r) == "table" then
+			local c = if typeof(r.Cash) == "number" and r.Cash > 0 then r.Cash else 0
+			local g = if typeof(r.Gold) == "number" and r.Gold > 0 then r.Gold else 0
+			if c > 0 or g > 0 then
+				n += 1
+				cash += c
+				gold += g
+			end
+		end
+	end
+	return n, cash, gold
+end
+
+local function rewardValue(cash: number, gold: number): string
+	if cash > 0 and gold > 0 then
+		return string.format("$%s + %d Gold", commas(cash), gold)
+	elseif gold > 0 then
+		return string.format("%d Gold", gold)
+	end
+	return "$" .. commas(cash)
+end
+
+local function promptPremium()
+	local def: any = MonetizationConfig.DevProducts.PremiumPass
+	local id = tonumber(if typeof(def) == "table" then def.Id else nil) or 0
+	if id == 0 then
+		NotificationController.Show("Premium coming soon", "Info", 2)
+		return
+	end
+	if premiumBought then
+		NotificationController.Show("Premium is unlocking…", "Info", 2)
+		return
+	end
+	-- intent log only (optional source tag); the grant stays ProcessReceipt
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, "PremiumPass", "bp_panel")
+	pcall(function()
+		MarketplaceService:PromptProductPurchase(player, id)
+	end)
+end
 
 local function refreshLabelsImmediate()
 	if prestigeLabel then
@@ -164,12 +243,56 @@ local function refreshLabelsImmediate()
 			tonumber(bpState.Level) or 0,
 			xp,
 			need,
-			if bpState.Premium then "PREMIUM" else "Free (shop PremiumPass / admin)",
+			if bpState.Premium then "PREMIUM" else string.format("FREE TRACK · Premium: %d R$", premiumPrice()),
 			claimFree,
 			claimPrem
 		)
 		if bpBarFill and need > 0 then
 			bpBarFill.Size = UDim2.fromScale(math.clamp(xp / need, 0, 1), 1)
+		end
+	end
+	if typeof(bpState) == "table" then
+		local n, cash, gold = premiumWaiting(bpState)
+		local owned = bpState.Premium == true
+		local header = bpPremiumHeader
+		if header then
+			if owned then
+				header.Text = if n > 0
+					then string.format("PREMIUM ACTIVE · %d %s ready (%s)", n, if n == 1 then "reward" else "rewards", rewardValue(cash, gold))
+					else "PREMIUM ACTIVE"
+				header.TextColor3 = Constants.Colors.Cash
+			else
+				header.Text = if n > 0
+					then string.format(
+						"PREMIUM · %d R$ · %d %s waiting (%s)",
+						premiumPrice(),
+						n,
+						if n == 1 then "reward" else "rewards",
+						rewardValue(cash, gold)
+					)
+					else string.format("PREMIUM · %d R$", premiumPrice())
+				header.TextColor3 = Constants.Colors.GoldBright or Constants.Colors.Gold
+			end
+			header.Visible = true
+		end
+		local pb = bpPremiumBtn
+		if pb then
+			local stroke = pb:FindFirstChildOfClass("UIStroke")
+			if owned then
+				pb.Text = "CLAIM ALL PREMIUM"
+				pb.BackgroundColor3 = Constants.Colors.Accent
+				pb.TextColor3 = Constants.Colors.Text
+				if stroke then
+					stroke.Enabled = false
+				end
+			else
+				pb.Text = "UNLOCK PREMIUM"
+				pb.BackgroundColor3 = Color3.fromRGB(40, 32, 12)
+				pb.TextColor3 = Constants.Colors.Gold
+				if stroke then
+					stroke.Enabled = true
+				end
+			end
 		end
 	end
 	if bpLabel and typeof(bpState) ~= "table" then
@@ -465,6 +588,25 @@ function ProgressionController.Init()
 	y += rowH + 10
 
 	section("BATTLE PASS")
+	do
+		-- v71 money (M1): the Premium line (gold); up to 2 lines on the narrow desktop panel
+		local hs = PanelShell.Text(14)
+		local header = Instance.new("TextLabel")
+		header.Name = "BPPremiumHeader"
+		header.BackgroundTransparency = 1
+		header.Position = UDim2.fromOffset(16, y)
+		header.Size = UDim2.new(1, -32, 0, hs * 2 + 4)
+		header.Font = Enum.Font.GothamBold
+		header.TextSize = hs
+		header.TextWrapped = true
+		header.TextXAlignment = Enum.TextXAlignment.Left
+		header.TextYAlignment = Enum.TextYAlignment.Top
+		header.TextColor3 = Constants.Colors.GoldBright or Constants.Colors.Gold
+		header.Text = string.format("PREMIUM · %d R$", premiumPrice())
+		header.Parent = scroll
+		bpPremiumHeader = header
+		y += hs * 2 + 8
+	end
 	bpLabel = body(44)
 	-- XP bar
 	local bpBg = Instance.new("Frame")
@@ -488,12 +630,21 @@ function ProgressionController.Init()
 		fire(Constants.RemoteNames.RequestClaimBattlePassReward, 0, "free")
 	end)
 	local premBtn = btn("CLAIM ALL PREMIUM", 170, function()
-		print("[Progression] CLAIM ALL PREMIUM tap")
-		if typeof(bpState) == "table" and not bpState.Premium then
+		if typeof(bpState) == "table" and bpState.Premium ~= true then
+			-- v71 money (M1): UNLOCK PREMIUM (was a silent no-op for non-premium players)
+			print("[Progression] UNLOCK PREMIUM tap")
+			promptPremium()
 			return
 		end
+		print("[Progression] CLAIM ALL PREMIUM tap")
 		fire(Constants.RemoteNames.RequestClaimBattlePassReward, 0, "premium")
 	end)
+	do
+		local st = UIUtil.Stroke(premBtn, Constants.Colors.Gold, 2)
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		st.Enabled = false
+	end
+	bpPremiumBtn = premBtn
 	if isTouch then
 		-- side by side, each half the row
 		freeClaim.Size = UDim2.new(0.5, -20, 0, TAP)
@@ -588,6 +739,14 @@ function ProgressionController.Init()
 	Remotes.BindEvent(Constants.RemoteNames.BattlePassStateUpdate, function(payload: any)
 		bpState = payload
 		refreshLabels()
+	end)
+	pcall(function()
+		MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, isPurchased: boolean)
+			local def: any = MonetizationConfig.DevProducts.PremiumPass
+			if userId == player.UserId and isPurchased == true and typeof(def) == "table" and def.Id ~= 0 and def.Id == productId then
+				premiumBought = true -- v71 money (M1 verify): no second UNLOCK prompt while the grant is on its way
+			end
+		end)
 	end)
 	Remotes.BindEvent(Constants.RemoteNames.ClanStateUpdate, function(payload: any)
 		clanState = payload

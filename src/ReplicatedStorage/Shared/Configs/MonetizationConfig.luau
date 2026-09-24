@@ -9,7 +9,17 @@
 	v71 money (M0): HideFromShop also stops selling dead items (Gold packs: Gold has no use yet; Instant Barracks).
 	Their Ids stay unchanged (never set a live Id to 0). A receipt for a product Id that is not listed here is NOT
 	acknowledged (MonetizationService J2): paste new Ids with tools/wire-monetization-ids.py, publish, then run
-	Migrate to Latest Update. ]]
+	Migrate to Latest Update.
+	v71 money (M1): receipt fields for the grant path (MonetizationService.ProcessReceipt, all applied before the
+	receipt is marked and saved; see the field notes below):
+	  GrantEntitlement = "Key"          one boolean entitlement (profile.Entitlements[Key])
+	  GrantEntitlements = { "A", "B" }  a list of them (merged with GrantEntitlement, each granted once)
+	  StarterFallbackCash = N           + N Cash when the buyer already owns Auto Collect (decided before any grant)
+	  GrantNukes = N (etc.)             counter grants: only the fields whitelisted in CounterGrants below
+	  Feature = "Name"                  the SKU belongs to a feature that is not live yet (M3: shown only when the
+	                                    ReplicatedStorage attribute WE_Feature_<Name> is true and Id ~= 0). Until
+	                                    M3 ships, every Feature SKU also carries HideFromShop = true.
+	New SKUs stay Id = 0 until the owner creates them; game passes are created with Item for Sale OFF (J3). ]]
 
 local MonetizationConfig = {
 	GamePasses = {
@@ -48,6 +58,78 @@ local MonetizationConfig = {
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
 			Description = "Auto-claims Money Collector without touch",
+		},
+		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
+		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
+		-- (WE_Feature_PremiumVehicles); the generic Shop pass loop must skip VehicleIds passes (M3/M6 Garage sells
+		-- them). BundlePassKeys = other passes that also unlock the car; HideIfOwnsAny hides the bundle row.
+		PV_Razorfang = {
+			Id = 0,
+			DisplayName = "Razorfang GT Interceptor",
+			RobuxPrice = 199,
+			VehicleIds = { "PremiumRazorfang" },
+			BundlePassKeys = { "PV_MotorPool" },
+			Feature = "PremiumVehicles",
+			HideFromShop = true,
+			Description = "Premium armored car with twin hood machine guns",
+		},
+		PV_Bastion = {
+			Id = 0,
+			DisplayName = "Bastion Gun Truck",
+			RobuxPrice = 399,
+			VehicleIds = { "PremiumBastion" },
+			BundlePassKeys = { "PV_MotorPool" },
+			Feature = "PremiumVehicles",
+			HideFromShop = true,
+			Description = "Premium gun truck that carries up to 9 soldiers", -- J22
+		},
+		PV_Warlord = {
+			Id = 0,
+			DisplayName = "Warlord Siege Tank",
+			RobuxPrice = 799,
+			VehicleIds = { "PremiumWarlord" },
+			BundlePassKeys = { "PV_MotorPool" },
+			Feature = "PremiumVehicles",
+			HideFromShop = true,
+			Description = "Premium heavy tank with a siege cannon",
+		},
+		PV_MotorPool = {
+			Id = 0,
+			DisplayName = "Premium Motor Pool",
+			RobuxPrice = 1099,
+			VehicleIds = { "PremiumRazorfang", "PremiumBastion", "PremiumWarlord" },
+			HideIfOwnsAny = { "PV_Razorfang", "PV_Bastion", "PV_Warlord" }, -- J3: single-car owners buy the others alone
+			Feature = "PremiumVehicles",
+			HideFromShop = true,
+			Description = "All 3 premium ground vehicles",
+		},
+		PV_Stormwing = { -- M6b (after helicopter flight is verified on a phone)
+			Id = 0,
+			DisplayName = "Stormwing Gunship",
+			RobuxPrice = 999,
+			VehicleIds = { "PremiumStormwing" },
+			Feature = "PremiumVehicles",
+			HideFromShop = true,
+			Description = "Premium attack helicopter",
+		},
+		PV_Tidebreaker = { -- M6b (after waterways / boats)
+			Id = 0,
+			DisplayName = "Tidebreaker Assault Boat",
+			RobuxPrice = 299,
+			VehicleIds = { "PremiumTidebreaker" },
+			Feature = "PremiumVehicles",
+			HideFromShop = true,
+			Description = "Premium assault boat",
+		},
+		-- v71 money (M1): Rebirth Boost (J13: +15% Cash per Rebirth instead of +10%, 1.5x starting Cash; no Gold x2).
+		-- RebirthConfig.Boost.GamePassKey. Id = 0 until created (OFF sale until the M7b/M7d publish).
+		RebirthBoost = {
+			Id = 0,
+			DisplayName = "Rebirth Boost",
+			RobuxPrice = 199,
+			Feature = "Rebirth",
+			HideFromShop = true,
+			Description = "+15% Cash per Rebirth and 1.5x starting Cash",
 		},
 	},
 	DevProducts = {
@@ -92,15 +174,19 @@ local MonetizationConfig = {
 			HideFromShop = true,
 			Description = "2x Cash earnings (permanent flag)",
 		},
+		-- v71 money (M1, owner decision D3): "Army Expansion (+10)", 99 R$, same Id. SoldierService adds ArmyCapBonus
+		-- for Entitlements.ExtraSoldierSlot, so earlier +1 buyers get +10 too (retroactive). The key and the
+		-- ExtraSoldierSlot entitlement name stay (receipts, saves and the Army panel use them).
 		ExtraSoldierSlot = {
 			Id = 3713839210,
-			DisplayName = "Extra Soldier Slot",
-			RobuxPrice = 79,
+			DisplayName = "Army Expansion (+10)",
+			RobuxPrice = 99,
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "ExtraSoldierSlot",
-			OneTime = true, -- v69: boolean entitlement (+1 cap once); a second purchase would add nothing
-			Description = "+1 soldier capacity",
+			ArmyCapBonus = 10,
+			OneTime = true, -- v69: boolean entitlement; a second purchase would add nothing
+			Description = "+10 army capacity, permanent",
 		},
 		-- v71 money (M0): not sold any more (Barracks L1 costs $2,500 of early cash; audit F13). Id kept for receipt compat.
 		InstantBarracks = {
@@ -150,26 +236,103 @@ local MonetizationConfig = {
 			HideFromShop = true,
 			Description = "Gold-dress every oil pump on your base",
 		},
+		-- v71 money (M1, owner decision D2): Commander Starter Pack v2, same Id, 149 R$, one time (J14: no timer until
+		-- M3's real 72 h window). $50,000 + Auto Collect (permanent); a buyer who already owns Auto Collect gets
+		-- StarterFallbackCash more instead. Old 249 R$ buyers get Auto Collect once (StarterGoodwill below).
 		StarterBundle = {
 			Id = 3713839505,
-			DisplayName = "Commander Starter Bundle",
-			RobuxPrice = 249,
-			Cash = 25000,
-			Gold = 25,
-			GrantEntitlement = "StarterBundle",
-			Description = "Cash + Gold jumpstart pack",
+			DisplayName = "Commander Starter Pack",
+			RobuxPrice = 149,
+			Cash = 50000,
+			Gold = 0,
+			GrantEntitlement = "StarterBundle", -- OWNED key (WE_Ent_StarterBundle); also in GrantEntitlements
+			GrantEntitlements = { "StarterBundle", "AutoCollect" },
+			StarterFallbackCash = 25000,
+			OneTime = true,
+			Description = "$50,000 Cash + Auto Collect (permanent)",
+		},
+		-- v71 money (M1): the Nuke (nuke §2.2, plan §2.3). Consumables: no OneTime, no entitlement; GrantNukes adds to
+		-- profile.Nukes (CounterGrants). Id = 0 until created; hidden until M3's feature gate (WE_Feature_Nuke, M5).
+		Nuke = {
+			Id = 0,
+			DisplayName = "Nuke",
+			RobuxPrice = 19,
+			Cash = 0,
+			Gold = 0,
+			GrantNukes = 1,
+			Feature = "Nuke",
+			HideFromShop = true,
+			Description = "1 Nuke: the biggest blast in the game, bonus XP",
+		},
+		NukeBundle3 = {
+			Id = 0,
+			DisplayName = "Nuke x3",
+			RobuxPrice = 49,
+			Cash = 0,
+			Gold = 0,
+			GrantNukes = 3,
+			Feature = "Nuke",
+			HideFromShop = true,
+			Description = "3 Nukes (save 14%)",
 		},
 	},
+	--[[ v71 money (M1): counter grants — the ONLY product fields ProcessReceipt adds to a profile number. Field is the
+		profile key (a whole number >= 0), Stats (optional) a counter table + key bumped by the same amount,
+		Attribute (optional) a display-only player attribute (never read back), Currency (optional) the Roblox
+		AnalyticsService economy currency name, MaxPerReceipt a sanity cap on the config value. ]]
+	CounterGrants = {
+		GrantNukes = {
+			Field = "Nukes",
+			Stats = { Table = "NukeStats", Key = "Bought" },
+			Attribute = "WE_Nukes",
+			Currency = "Nukes",
+			MaxPerReceipt = 100,
+		},
+	},
+	-- v71 money (M1, D2): one-time thank-you for players who bought the old 249 R$ Starter Bundle: Auto Collect on
+	-- their next join. Entitlements[Flag] marks it done (set even when they already owned Auto Collect).
+	StarterGoodwill = {
+		Enabled = true,
+		IfEntitlement = "StarterBundle",
+		GrantEntitlement = "AutoCollect",
+		Flag = "StarterGoodwillV2",
+	},
+	--[[ v71 money (M1): optional second argument of RequestPurchaseDevProduct / RequestPurchaseGamePass (where the
+		prompt came from). Analytics only; anything not listed is logged as "other". A receipt within
+		IntentAttributionSeconds of the intent for the same key inherits its source. ]]
+	PurchaseSources = {
+		shop = true,
+		featured = true,
+		hud_plus = true,
+		rail_shop = true,
+		armory = true,
+		offer = true,
+		starter_offer = true,
+		death_card = true,
+		pad = true,
+		bp_panel = true,
+		army_panel = true,
+		army_full = true,
+		garage = true,
+		showroom = true,
+		trial_end = true,
+		nuke_tile = true,
+		nuke_card = true,
+		silo = true,
+	} :: { [string]: boolean },
+	IntentAttributionSeconds = 180,
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
 	-- v30: PvP death toast — was { "DoubleCash", "SpeedBoost" } (live Ids).
 	-- v71 money (M0): empty, so a PvP death no longer offers 2x Cash to players who already own it; the M3 Offer
 	-- Director's death card replaces this toast. Keep the DeathShopOffers key (CombatService / ShopController read it).
 	DeathShopOffers = {} :: { string },
-	-- v32: one-shot soft offer on first join / low cash (server marks StarterBundleOffered)
+	-- v32: one-shot soft offer (server marks StarterBundleOffered).
+	-- v71 money (M1): never during the tutorial. TutorialService schedules it AfterTutorialSeconds after the tutorial
+	-- completes (finished or skipped), or DelaySeconds after load when it is already done, and sends it through
+	-- MonetizationService.TrySoftOfferStarterBundle (only while the pack is live, unoffered and unowned).
 	StarterBundleOffer = {
 		DelaySeconds = 8,
-		CashBelow = 12000, -- StartingCash*2 + buffer
-		NewProfileMaxAgeSeconds = 600, -- FirstJoin→LastJoin span treats as new
+		AfterTutorialSeconds = 3,
 	},
 	-- v33: one-shot soft offer after first manual ATM collect (server marks AutoCollectOffered)
 	AutoCollectOffer = {
@@ -189,14 +352,25 @@ local MonetizationConfig = {
 	-- v36: one-shot SpeedBoost soft offer after first jeep sit / walk-speed moment (existing Id only)
 	SpeedBoostOffer = {
 		DelaySeconds = 1.5,
+		-- v71 money (M1): the spawn / first-vehicle-sit pop-ups raced the Starter offer; both triggers are ignored
+		IgnoreReasons = { walk_speed = true, vehicle_sit = true } :: { [string]: boolean },
 	},
 	-- v37: one-shot CashMega soft toast after big pending collect OR death path (existing Id 3713838952 only)
 	CashMegaOffer = {
 		DelaySeconds = 1.8,
 		MinPendingCollect = 15000, -- pending/granted threshold
+		-- v71 money (M1): no 799 R$ pop-up on a PvP death (the M3 Director's death card replaces it)
+		IgnoreReasons = { death = true } :: { [string]: boolean },
 	},
 	-- v38: one soft-offer toast max per session minute (shared across Starter/VIP/Speed/CashMega/AC/2x)
-	SoftOfferSessionCooldownSeconds = 60,
+	-- v71 money (M1, owner decision D8): at most SoftOfferSessionMax per session, SoftOfferSessionCooldownSeconds
+	-- apart, and none before the tutorial is complete (SoftOfferQuietMaxSeconds of play lifts that for players who
+	-- never finish it). Same numbers as HudConfig.Offer, so the server no longer spends a one-shot offer the client
+	-- would refuse.
+	SoftOfferSessionCooldownSeconds = 240,
+	SoftOfferSessionMax = 3,
+	SoftOfferQuietUntilTutorialComplete = true,
+	SoftOfferQuietMaxSeconds = 900,
 	LootBoxPolicyPending = true,
 	-- Reasons that skip VIP / 2x Cash multipliers (already granted amounts or admin)
 	CashMultExemptReasons = {
