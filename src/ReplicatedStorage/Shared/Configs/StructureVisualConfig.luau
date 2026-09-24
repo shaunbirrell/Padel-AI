@@ -37,7 +37,8 @@ local StructureVisualConfig = {
 		Wire = Color3.fromRGB(58, 60, 56),
 		GateStripe = Color3.fromRGB(214, 178, 64),
 	},
-	-- Invisible anti-helicopter barrier height above the plot floor (clears the L5 Command Center flag).
+	-- v68: no roof at all over bases (owner). If re-enabled, the barrier is invisible at this height.
+	AntiAirCeilingEnabled = false,
 	AntiAirCeilingHeight = 48,
 
 	Palettes = {
@@ -185,35 +186,37 @@ local StructureVisualConfig = {
 		doorway is shifted sideways so going inside never re-triggers the walk-over buy (pad hit box = ±8 studs).
 		Local axes: +Z = building front (faces the plot spawn), X = across the facade.
 	]]
+	-- v68: outdoor installations — a detailed model from Modules/Installations/<Module>.luau on a concrete
+	-- foundation (the kit Body), rebuilt per level by HollowBuildingBuilder. Only with BaseLayoutConfig.
+	-- Width/Depth = foundation footprint (building-local, +Z = the side facing the plot front).
+	Installations = {
+		PowerStation = { Enabled = true, Module = "PowerStation", Width = 30, Depth = 22 },
+		Radar = { Enabled = true, Module = "Radar", Width = 24, Depth = 20 },
+		MissileDefense = { Enabled = true, Module = "MissileDefense", Width = 24, Depth = 22 },
+		Watchtowers = { Enabled = true, Module = "Watchtower", Width = 10, Depth = 10 },
+		DefensiveWalls = { Enabled = true, Module = "Checkpoint", Width = 20, Depth = 10 },
+		Airfield = { Enabled = true, Module = "Airfield", Width = 58, Depth = 34 },
+	},
+
 	HollowBuildings = {
-		CommandCenter = {
-			Enabled = true,
-			Width = 26,
-			Depth = 20,
+		-- Shared by every walk-in building; per-building entries override (Colors merge key by key).
+		Defaults = {
 			WallThickness = 0.8,
 			StoryHeight = 12,
 			UpperStoryHeight = 10,
-			FrontGap = 10, -- pad centre → front wall (pad hit box reaches 8)
-			OffsetX = 6, -- footprint centre east of the pad; with DoorX = 7 the doorway is 13 studs from the pad
-			DoorX = 7,
 			DoorWidth = 6,
 			DoorHeight = 8,
 			WindowWidth = 4.5,
 			WindowHeight = 3.2,
 			WindowBottom = 4,
-			FrontWindowsX = { -8.5, -2 },
-			BackWindowsX = { -6, 4 }, -- ground floor only while single-storey (stairs take the back wall at L3+)
-			WestWindowsZ = { -7 },
-			UpperWindowsX = { -8.5, -2, 7 },
-			AnnexLevel = 2, -- comms annex, roof mast, floodlights
-			AnnexWidth = 12,
-			AnnexDepth = 14,
-			AnnexHeight = 9,
-			TwoStoryLevel = 3, -- second storey + interior stairs
-			RoofAccessLevel = 4, -- truss ladder through a roof hatch + satellite dish
-			HelipadLevel = 5, -- rooftop helipad marking, gold parapet cap, tall flag
-			SignText = "COMMAND CENTER",
-			SignX = 0,
+			FrontGap = 10, -- legacy (no BaseLayoutConfig): pad centre → front wall
+			OffsetX = 6, -- legacy: footprint centre east of the pad
+			AnnexLevel = 99, -- comms annex + mast + floodlights (Command Center)
+			TwoStoryLevel = 99, -- second storey + interior stairs
+			RoofAccessLevel = 99, -- truss ladder through a roof hatch + dish
+			HelipadLevel = 99, -- rooftop helipad marking
+			GoldCapLevel = 5, -- gold parapet cap + flag finial
+			FlagLevel = 1,
 			Colors = {
 				Wall = Color3.fromRGB(214, 200, 168),
 				Trim = Color3.fromRGB(78, 92, 62),
@@ -223,7 +226,8 @@ local StructureVisualConfig = {
 				Stair = Color3.fromRGB(128, 126, 118),
 				Roof = Color3.fromRGB(112, 108, 96),
 				Glass = Color3.fromRGB(140, 190, 215),
-				Accent = Color3.fromRGB(240, 196, 64),
+				Accent = Color3.fromRGB(230, 196, 70), -- signs, hazard paint
+				Gold = Color3.fromRGB(240, 196, 64),
 				Screen = Color3.fromRGB(90, 255, 140),
 				Light = Color3.fromRGB(255, 236, 200),
 				Locker = Color3.fromRGB(86, 100, 70),
@@ -231,6 +235,112 @@ local StructureVisualConfig = {
 				Sandbag = Color3.fromRGB(186, 164, 118),
 				Flag = Color3.fromRGB(70, 110, 60),
 			},
+		},
+		CommandCenter = {
+			Enabled = true,
+			Interior = "CommandCenter",
+			Width = 26,
+			Depth = 20,
+			DoorX = 7,
+			FrontWindowsX = { -8.5, -2 },
+			BackWindowsX = { -6, 4 }, -- ground floor only while single-storey (stairs take the back wall)
+			WestWindowsZ = { -7 },
+			UpperWindowsX = { -8.5, -2, 7 },
+			AnnexLevel = 2,
+			AnnexWidth = 12,
+			AnnexDepth = 14,
+			AnnexHeight = 9,
+			TwoStoryLevel = 3,
+			RoofAccessLevel = 4,
+			HelipadLevel = 5,
+			SignText = "COMMAND CENTER",
+			SignX = 0,
+		},
+		Barracks = {
+			Enabled = true,
+			Interior = "Barracks",
+			Width = 32,
+			Depth = 24,
+			DoorX = 10,
+			FrontWindowsX = { -11, -4, 3 },
+			BackWindowsX = { -10, 0, 10 },
+			WestWindowsZ = { -6, 6 },
+			EastWindowsZ = { -6, 6 },
+			UpperWindowsX = { -11, -4, 3, 10 },
+			TwoStoryLevel = 3,
+			SignText = "BARRACKS",
+			Colors = { Wall = Color3.fromRGB(196, 184, 150) },
+		},
+		WeaponsFacility = {
+			Enabled = true,
+			Interior = "Armory",
+			Width = 30,
+			Depth = 22,
+			DoorX = 9,
+			FrontWindowsX = { -10, -3 },
+			BackWindowsX = { -8, 8 },
+			WestWindowsZ = { 0 },
+			EastWindowsZ = { 0 },
+			TwoStoryLevel = 4,
+			SignText = "ARMORY",
+			Colors = { Wall = Color3.fromRGB(184, 176, 156) },
+		},
+		SpecialForcesFacility = {
+			Enabled = true,
+			Interior = "SpecialForces",
+			Width = 30,
+			Depth = 22,
+			DoorX = 9,
+			FrontWindowsX = { -10, -3 },
+			TwoStoryLevel = 3,
+			SignText = "SPECIAL FORCES",
+			Colors = { Wall = Color3.fromRGB(128, 128, 120), Trim = Color3.fromRGB(52, 56, 50) },
+		},
+		VehicleDepot = {
+			Enabled = true,
+			Interior = "VehicleDepot",
+			Width = 36,
+			Depth = 28,
+			StoryHeight = 14,
+			DoorStyle = "Garage",
+			DoorX = 2,
+			DoorWidth = 16,
+			DoorHeight = 11,
+			FrontWindowsX = { -13.5 },
+			WestWindowsZ = { -6, 6 },
+			EastWindowsZ = { -6, 6 },
+			Skylights = true,
+			SignText = "VEHICLE DEPOT",
+			Colors = { Wall = Color3.fromRGB(172, 170, 160) },
+		},
+		Warehouse = {
+			Enabled = true,
+			Interior = "Warehouse",
+			Width = 34,
+			Depth = 26,
+			StoryHeight = 14,
+			DoorStyle = "Garage",
+			DoorX = 3,
+			DoorWidth = 12,
+			DoorHeight = 10,
+			FrontWindowsX = { -11.5 },
+			Skylights = true,
+			SignText = "WAREHOUSE",
+			Colors = { Wall = Color3.fromRGB(190, 172, 140) },
+		},
+		ResearchLab = {
+			Enabled = true,
+			Interior = "ResearchLab",
+			Width = 30,
+			Depth = 22,
+			DoorX = 9,
+			FrontWindowsX = { -10, -3.5, 3 },
+			BackWindowsX = { -8, 0, 8 },
+			WestWindowsZ = { -5, 5 },
+			EastWindowsZ = { -5, 5 },
+			TwoStoryLevel = 3,
+			SignText = "RESEARCH LAB",
+			Colors = { Wall = Color3.fromRGB(206, 204, 196), Trim = Color3.fromRGB(88, 104, 112) },
 		},
 	},
 }

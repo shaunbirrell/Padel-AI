@@ -594,15 +594,19 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	local solid = StructureVisualConfig.SolidTransparency
 	local transparency = if lv == 0 then ghost else solid
 
-	plinth.Size = Vector3.new(bs.X, bs.Y * (1 + t * 0.35), bs.Z)
-	if palette then
-		plinth.Color = palette.Plinth
-	else
-		plinth.Color = Color3.fromRGB(40 + math.floor(t * 40), 60 + math.floor(t * 80), 50)
+	-- v68: console-mode slots keep their terminal look (never resized / recoloured / ghosted)
+	local isConsole = plinth:GetAttribute("WE_Console") == true
+	if not isConsole then
+		plinth.Size = Vector3.new(bs.X, bs.Y * (1 + t * 0.35), bs.Z)
+		if palette then
+			plinth.Color = palette.Plinth
+		else
+			plinth.Color = Color3.fromRGB(40 + math.floor(t * 40), 60 + math.floor(t * 80), 50)
+		end
+		-- Plinth stays walkable; keep slightly visible at L0 so pads remain findable
+		plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
+		plinth.Material = Enum.Material.Concrete
 	end
-	-- Plinth stays walkable; keep slightly visible at L0 so pads remain findable
-	plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
-	plinth.Material = Enum.Material.Concrete
 
 	-- v66: walk-in buildings keep a fixed foundation slab; the Model grows with level instead
 	local hollow = HollowBuildingBuilder.IsHollow(structureId)
@@ -624,7 +628,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 			local bottom = o.Y - b.Y * 0.5
 			local newOffY = bottom + newSize.Y * 0.5 + (yExtra or 0)
 			child.Size = newSize
-			child.CFrame = plinth.CFrame * CFrame.new(o.X, newOffY, o.Z)
+			child.CFrame = StructureKitBuilder.SiteFrame(plinth) * CFrame.new(o.X, newOffY, o.Z)
 		else
 			child.Size = newSize
 		end
@@ -745,7 +749,7 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 
 	-- Upgrade pop extras (idempotent Part kits; never required for gameplay).
 	-- Walk-in buildings show level in the building itself; pops would float over the pad.
-	syncUpgradePops(plinth, structureId, if hollow then 0 else lv)
+	syncUpgradePops(plinth, structureId, if hollow or isConsole then 0 else lv)
 	if hollow then
 		local okB, errB = pcall(HollowBuildingBuilder.Sync, plinth, structureId, lv)
 		if not okB then
@@ -914,6 +918,12 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 		if not okT then
 			warn("[BaseService] SyncCornerTowers failed", errT)
 		end
+	elseif structureId == "Airfield" or structureId == "Helipad" or structureId == "Dock" then
+		-- v68: buying a rear-zone structure opens its guarded gate in the inner wall
+		local okG, errG = pcall(StructureKitBuilder.SyncRearGates, plotId, profile.BaseUpgrades)
+		if not okG then
+			warn("[BaseService] SyncRearGates failed", errG)
+		end
 	end
 end
 
@@ -1000,6 +1010,7 @@ function BaseService.RefreshAllVisuals(player: Player)
 	end
 	-- DefensiveWalls / Watchtowers / BaseCeiling again after pads/kits (slot race heal)
 	if profile.BasePlotId then
+		pcall(StructureKitBuilder.SyncRearGates, profile.BasePlotId, profile.BaseUpgrades)
 		local wallsLv = tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
 		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
 		pcall(StructureKitBuilder.SyncBaseCeiling, profile.BasePlotId, wallsLv)

@@ -399,6 +399,10 @@ end
 	Welded non-colliding; plinth remains authoritative for walk-buy.
 ]]
 function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structureId: string, level: number?): boolean
+	-- v68: consoles are not where the building stands (WE_SiteCFrame); never hang a catalog building on one
+	if hostPart:GetAttribute("WE_Console") == true then
+		return false
+	end
 	-- STRUCTURE_SCALE_WIRE v21: ScaleTo TargetFootprint; NEVER MeshPart.Size = plinth.
 	local DRESS_GEN = 29 -- v42: Hangar≠Warehouse≠Depot, Missile≠Tower; sync StructureVisualConfig.BuildingDressGen
 	local REJECTED: { [number]: boolean } = {

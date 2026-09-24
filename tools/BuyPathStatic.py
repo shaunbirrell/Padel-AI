@@ -978,6 +978,92 @@ must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "me
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "btn.MouseButton1Click:Connect(onBuyPressed)", "v67 pad BUY fires once per tap")
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "btn.MouseButton1Click:Connect(onMenuBuy)", "v67 B-menu BUY fires once per tap")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "lastRemoteBuyAt[dupKey]", "v67 server drops duplicate purchase events")
+
+# ── v68 base layout: bigger plot, consoles, walk-in buildings with interiors, guarded rear gates ─────────
+must_contain("src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau", "PlotSize = 320", "v68 layout plot size 320")
+must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", "BaseLayoutConfig.PlotSize, 1, BaseLayoutConfig.PlotSize", "v68 BaseConfig.PlotSize follows the layout")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "BaseLayout.PlotSize(200)", "v68 MapSetup pad size from BaseLayout")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'plinth:SetAttribute("WE_Console", true)', "v68 upgrade slot becomes a console")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "plinth.CanTouch = not isConsole", "v68 consoles are not touch pads")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "PLOT_SPAWN_CLEARANCE", "v68 spawn pads kept outside plots")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "if not console and hit:IsA(\"BasePart\") then", "v68 server Touched never buys at a console")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "part.CanTouch = not isConsole(part)", "v68 hardenPad keeps consoles untouchable")
+must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "not isConsole(part)", "v68 spatial buy loop skips consoles")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "never auto-buy at a console", "v68 client walk-over skips consoles")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "WE_Console", "v68 no catalog mesh on consoles")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "function StructureKitBuilder.SyncRearGates", "v68 rear gates sync")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "pcall(StructureKitBuilder.SyncRearGates, plotId, profile.BaseUpgrades)", "v68 buying Airfield/Helipad/Dock opens its gate")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, wallsLv)", "v68 keeps DefensiveWalls → SyncPerimeterWalls")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "StructureKitBuilder.SyncRearGates(plotId, nil)", "v68 released plot closes its gates")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "AntiAirCeilingEnabled = false", "v68 open sky over the base (no roof)")
+must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "local axis = math.max(math.abs(toward.X), math.abs(toward.Z), 0.5)", "v68 oil pumps clear the square plot on diagonals")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "ProximityPromptService.PromptTriggered:Connect", "v68 terminal prompts open panels")
+
+
+def v68_interiors() -> None:
+    """Every walk-in building names an interior module that exists and returns a function; every terminal
+    panel an interior asks for is one the client router opens."""
+    cfg = read("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau") or ""
+    router = read("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau") or ""
+    routed = set(re.findall(r"^\t\t(\w+) = \w+Controller\.Open,$", router, re.M))
+    if not routed:
+        bad("v68 UIController panelOpeners table not found")
+        return
+    names = re.findall(r'Interior = "(\w+)"', cfg)
+    if len(names) < 7:
+        bad("v68 expected 7 HollowBuildings interiors, found %d" % len(names))
+    for n in names:
+        rel = "src/ServerScriptService/Server/Modules/Interiors/%s.luau" % n
+        src = read(rel)
+        if src is None:
+            bad("v68 interior module missing: " + rel)
+            continue
+        if not re.search(r"^return function\(ictx: any, api: any\)", src, re.M):
+            bad("v68 interior %s must return function(ictx: any, api: any)" % n)
+            continue
+        panels = re.findall(r'api\.terminal\([^\n]*?, "(\w+)", "', src) + re.findall(r'SetAttribute\("WE_OpenPanel", "(\w+)"\)', src)
+        missing = sorted(set(p for p in panels if p not in routed))
+        if len(panels) < 2:
+            bad("v68 interior %s has %d panel terminals (need >= 2)" % (n, len(panels)))
+        elif missing:
+            bad("v68 interior %s opens panels the client cannot route: %s" % (n, missing))
+        else:
+            ok("v68 interior %s: %d terminals → %s" % (n, len(panels), ", ".join(sorted(set(panels)))))
+
+
+v68_interiors()
+
+
+def v68_installations() -> None:
+    """Every outdoor installation entry names a module that exists and returns a function; consoles never
+    share a spot with their kit (a kiosk inside the tower/wall sample could not be reached)."""
+    cfg = read("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau") or ""
+    block = cfg.split("Installations = {", 1)[1].split("\n\t},", 1)[0] if "Installations = {" in cfg else ""
+    entries = re.findall(r"(\w+) = \{ Enabled = true, Module = \"(\w+)\"", block)
+    if len(entries) < 6:
+        bad("v68 expected >= 6 installations, found %d" % len(entries))
+    for sid, mod in entries:
+        src = read("src/ServerScriptService/Server/Modules/Installations/%s.luau" % mod)
+        if src is None:
+            bad("v68 installation module missing: %s (%s)" % (mod, sid))
+        elif not re.search(r"^return function\(ictx: any, api: any\)", src, re.M):
+            bad("v68 installation %s must return function(ictx: any, api: any)" % mod)
+        else:
+            ok("v68 installation %s → Installations/%s" % (sid, mod))
+    layout = read("src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau") or ""
+    for m in re.finditer(r"(\w+) = \{ Site = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}, Yaw = -?\d+, WalkIn = false, Kiosk = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}", layout):
+        sid, sx, sz, kx, kz = m.group(1), *map(float, m.groups()[1:])
+        if abs(sx - kx) < 4 and abs(sz - kz) < 4:
+            bad("v68 %s kiosk sits on its own kit site (unreachable console)" % sid)
+        else:
+            ok("v68 %s kiosk clear of its site" % sid)
+
+
+v68_installations()
+must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "local function buildInstallation(ctx: Ctx)", "v68 installation build path")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'if structureId == "MissileDefense" and not hollow then', "v68 MissileDefense force skips the installation slab")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", "pcall(WorldSpinners.Init)", "v68 radar dishes spin client-side (guarded)")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'body:SetAttribute("WE_CornerTower", true)', "v68 corner guard towers keep WE_CornerTower")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "continuing — no kick", "v58 never Kick on session lock")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", 'player:Kick("Your data is loading', "v58 no session-lock Kick")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "never WaitForChild remotes on HUD cash path", "v60 HUD leaderstats-first no WaitForChild")

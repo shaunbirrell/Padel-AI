@@ -16,13 +16,18 @@ export type StructureDef = {
 	PassiveIncomeBonus: number?, -- extra flat cash/tick at each level (also in EconomyConfig)
 }
 
+local BaseLayoutConfig = require(script.Parent.BaseLayoutConfig)
+
 local function costs(a: number, b: number, c: number, d: number, e: number): { number }
 	return { a, b, c, d, e }
 end
 
 local BaseConfig = {
 	MaxPlots = 6,
-	PlotSize = Vector3.new(200, 1, 200),
+	-- v68: follows BaseLayoutConfig.PlotSize (320) while the layout is on — MapSetup builds pads that size
+	PlotSize = if BaseLayoutConfig.Enabled
+		then Vector3.new(BaseLayoutConfig.PlotSize, 1, BaseLayoutConfig.PlotSize)
+		else Vector3.new(200, 1, 200),
 	-- World positions — keep in sync with MapSetup PLOT_POSITIONS (ring ~800, ground ~4800)
 	PlotPositions = {
 		Vector3.new(-800, 0.5, -400),

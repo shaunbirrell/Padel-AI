@@ -16,12 +16,23 @@ local HollowBuildingBuilder = require(script.Parent.HollowBuildingBuilder)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 33 -- v66: walk-in Command Center (foundation-slab Body + HollowBuildingBuilder model)
+local KIT_GEN = 34 -- v68: outdoor installations use the foundation-slab Body too (was 33: walk-in Command Center)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
 local CEILING_FOLDER = "WE_BaseCeiling"
 local CEILING_UNLOCK_WALLS = 3 -- DefensiveWalls ≥ L3 unlocks anti-heli roof
+
+--[[ v68: kit parts are placed in the structure's site frame. With BaseLayoutConfig the upgrade slot (plinth)
+	is a console and WE_SiteCFrame says where the building stands; legacy pads have no attribute (site = pad). ]]
+local function siteFrame(plinth: BasePart): CFrame
+	local cf = plinth:GetAttribute("WE_SiteCFrame")
+	if typeof(cf) == "CFrame" then
+		return cf
+	end
+	return plinth.CFrame
+end
+StructureKitBuilder.SiteFrame = siteFrame
 
 local function makePart(props: { [string]: any }): BasePart
 	local p = Instance.new("Part")
@@ -73,7 +84,7 @@ local function kitPart(plinth: BasePart, role: string, size: Vector3, localOffse
 	local p = makePart({
 		Name = role,
 		Size = size,
-		CFrame = plinth.CFrame * CFrame.new(localOffset),
+		CFrame = siteFrame(plinth) * CFrame.new(localOffset),
 		Color = color,
 		Material = material or Enum.Material.Metal,
 		Transparency = spawnT,
@@ -272,14 +283,14 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		if podium then
 			local off = podium:GetAttribute("WE_LocalOffset")
 			if typeof(off) == "Vector3" then
-				podium.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+				podium.CFrame = siteFrame(plinth) * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
 			end
 		end
 		local ring = kitPart(plinth, "PodiumRing", Vector3.new(4.2, 0.18, 4.2), Vector3.new(0, 1.15, 4.2), Constants.Colors.GoldBright, Enum.Material.Neon, Enum.PartType.Cylinder)
 		if ring then
 			local off = ring:GetAttribute("WE_LocalOffset")
 			if typeof(off) == "Vector3" then
-				ring.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+				ring.CFrame = siteFrame(plinth) * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
 			end
 		end
 		local display = kitPart(plinth, "ShowroomMesh", Vector3.new(2.4, 1.1, 4.0), Vector3.new(0, 1.85, 4.2), Color3.fromRGB(70, 88, 62), Enum.Material.Metal, nil)
@@ -314,7 +325,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 				ped.Name = "ShowroomPedestalHost" .. (pi + 1)
 				local off = ped:GetAttribute("WE_LocalOffset")
 				if typeof(off) == "Vector3" then
-					ped.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+					ped.CFrame = siteFrame(plinth) * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
 				end
 				ped.Transparency = 0.55
 			end
@@ -777,8 +788,8 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 			end
 		end
 	end
-	-- MissileDefense hard force large Body+Roof after any rebuild path
-	if structureId == "MissileDefense" then
+	-- MissileDefense hard force large Body+Roof after any rebuild path (not for the v68 installation slab)
+	if structureId == "MissileDefense" and not hollow then
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
 				local role = child:GetAttribute("WE_KitRole")
@@ -1164,7 +1175,8 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	end
 
 	local existing = plotFolder:FindFirstChild(CEILING_FOLDER)
-	if wallsLevel < CEILING_UNLOCK_WALLS then
+	-- v68: no roof at all over bases (owner request) — AntiAirCeilingEnabled = false clears any ceiling
+	if (StructureVisualConfig :: any).AntiAirCeilingEnabled == false or wallsLevel < CEILING_UNLOCK_WALLS then
 		if existing then
 			existing:Destroy()
 		end
@@ -1323,11 +1335,16 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 		Vector3.new(cx - half, y, cz + half),
 		Vector3.new(cx + half, y, cz + half),
 	}
+	-- v68: guard tower = concrete shaft + glazed cabin + roof, searchlight facing out, red beacon
+	-- (was a solid 7-10 stud concrete pillar with a rail ring). Names/attributes kept for other systems.
+	local padTop = pad.Position.Y + pad.Size.Y * 0.5
+	local cabinW = towerW + 1.5
+	local shaftH = towerH - 4
 	for i, pos in ipairs(corners) do
 		local body = makePart({
 			Name = "CornerTower" .. i,
-			Size = Vector3.new(towerW, towerH, towerW),
-			Position = pos,
+			Size = Vector3.new(towerW - 2.5, shaftH, towerW - 2.5),
+			Position = Vector3.new(pos.X, padTop + shaftH * 0.5, pos.Z),
 			Color = pal.Body,
 			Material = Enum.Material.Concrete,
 			Transparency = 0,
@@ -1336,51 +1353,89 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 		})
 		body.CastShadow = true
 		body:SetAttribute("WE_CornerTower", true)
-		makePart({
-			Name = "TowerCap" .. i,
-			Size = Vector3.new(towerW + 1.2, 0.6, towerW + 1.2),
-			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 + 0.35, pos.Z),
-			Color = pal.Roof,
-			Material = Enum.Material.Metal,
-			Transparency = 0,
-			CanCollide = false,
-			Parent = folder,
-		})
+		local floorY = padTop + shaftH
 		makePart({
 			Name = "TowerPlatform" .. i,
-			Size = Vector3.new(towerW + 3, 0.5, towerW + 3),
-			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 - 1.2, pos.Z),
+			Size = Vector3.new(cabinW, 0.5, cabinW),
+			Position = Vector3.new(pos.X, floorY + 0.25, pos.Z),
 			Color = pal.Roof,
 			Material = Enum.Material.Metal,
 			Transparency = 0,
-			CanCollide = false,
+			CanCollide = true,
 			Parent = folder,
 		})
-		-- Rail ring
-		for _, off in ipairs({ Vector3.new(towerW * 0.7, 0, 0), Vector3.new(-towerW * 0.7, 0, 0), Vector3.new(0, 0, towerW * 0.7), Vector3.new(0, 0, -towerW * 0.7) }) do
+		-- low concrete band + glass band on all four sides
+		for _, side in ipairs({ Vector3.new(1, 0, 0), Vector3.new(-1, 0, 0), Vector3.new(0, 0, 1), Vector3.new(0, 0, -1) }) do
+			local alongX = side.Z ~= 0
+			local len = cabinW
+			local c = Vector3.new(pos.X + side.X * (cabinW * 0.5 - 0.2), 0, pos.Z + side.Z * (cabinW * 0.5 - 0.2))
 			makePart({
-				Name = "TowerRail" .. i,
-				Size = Vector3.new(if math.abs(off.X) > 0 then 0.35 else towerW + 2.5, 1.6, if math.abs(off.Z) > 0 then 0.35 else towerW + 2.5),
-				Position = Vector3.new(pos.X + off.X, pos.Y + towerH * 0.5 - 0.2, pos.Z + off.Z),
-				Color = pal.Accent,
-				Material = Enum.Material.Metal,
+				Name = "TowerCabinWall" .. i,
+				Size = Vector3.new(if alongX then len else 0.4, 1.0, if alongX then 0.4 else len),
+				Position = Vector3.new(c.X, floorY + 1.0, c.Z),
+				Color = pal.Body,
+				Material = Enum.Material.Concrete,
 				Transparency = 0,
+				CanCollide = true,
+				Parent = folder,
+			})
+			local glass = makePart({
+				Name = "TowerCabinGlass" .. i,
+				Size = Vector3.new(if alongX then len else 0.2, 2.0, if alongX then 0.2 else len),
+				Position = Vector3.new(c.X, floorY + 2.5, c.Z),
+				Color = Color3.fromRGB(140, 180, 200),
+				Material = Enum.Material.Glass,
+				Transparency = 0.45,
 				CanCollide = false,
 				Parent = folder,
 			})
+			glass.CastShadow = false
 		end
 		makePart({
-			Name = "TowerBeacon" .. i,
-			Size = Vector3.new(0.6, 2.2 + lv * 0.4, 0.6),
-			Position = Vector3.new(pos.X, pos.Y + towerH * 0.5 + 2, pos.Z),
-			Color = pal.Accent,
+			Name = "TowerCap" .. i,
+			Size = Vector3.new(cabinW + 1.2, 0.6, cabinW + 1.2),
+			Position = Vector3.new(pos.X, floorY + 3.8, pos.Z),
+			Color = pal.Roof,
+			Material = Enum.Material.Metal,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		-- searchlight on the roof edge, pointing away from the plot centre
+		local out = Vector3.new(pos.X - cx, 0, pos.Z - cz)
+		out = if out.Magnitude > 0.1 then out.Unit else Vector3.new(0, 0, 1)
+		local lampPos = Vector3.new(pos.X + out.X * (cabinW * 0.5 - 0.6), floorY + 4.6, pos.Z + out.Z * (cabinW * 0.5 - 0.6))
+		local lamp = makePart({
+			Name = "TowerSearchlight" .. i,
+			Size = Vector3.new(1.2, 1, 1.2),
+			Position = lampPos,
+			Color = Color3.fromRGB(255, 236, 200),
 			Material = Enum.Material.Neon,
 			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		})
+		lamp.CFrame = CFrame.lookAt(lampPos, lampPos + out)
+		local spot = Instance.new("SpotLight")
+		spot.Face = Enum.NormalId.Front
+		spot.Angle = 45
+		spot.Range = 50
+		spot.Brightness = 1.5
+		spot.Color = Color3.fromRGB(255, 236, 200)
+		spot.Parent = lamp
+		local beacon = makePart({
+			Name = "TowerBeacon" .. i,
+			Size = Vector3.new(0.7, 0.7, 0.7),
+			Position = Vector3.new(pos.X, floorY + 4.5, pos.Z),
+			Color = Color3.fromRGB(255, 50, 40),
+			Material = Enum.Material.Neon,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+		})
+		;(beacon :: Part).Shape = Enum.PartType.Ball
 		-- v36: 1–2 static sniper silhouettes on tower platforms (presence; GateDefense handles combat)
-		local deckY = pos.Y + towerH * 0.5 - 0.6
+		local deckY = floorY + 0.5
 		local shooterCount = if lv >= 3 then 2 else 1
 		for s = 1, shooterCount do
 			local ox = if s == 1 then -1.4 else 1.4
@@ -1437,8 +1492,50 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 	end
 end
 
+--[[ v68: open / close the rear-zone gates (MapSetup LayoutGround.RearGate_<StructureId>) from the owner's
+	upgrade levels. A gate opens once its structure is L1+: the leaves slide into the wall and stop colliding. ]]
+local REAR_GATE_LABELS = { Airfield = "AIRFIELD", Helipad = "HELIPAD", Dock = "NAVAL DOCK" }
+
+function StructureKitBuilder.SyncRearGates(plotId: number, upgrades: { [string]: any }?)
+	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	local ground = plotFolder and plotFolder:FindFirstChild("LayoutGround")
+	if not ground then
+		return
+	end
+	for _, gateFolder in ipairs(ground:GetChildren()) do
+		local gid = gateFolder:GetAttribute("GateId")
+		if typeof(gid) == "string" then
+			local lv = if upgrades then (tonumber(upgrades[gid]) or 0) else 0
+			local open = lv >= 1
+			gateFolder:SetAttribute("WE_GateOpen", open)
+			for _, leaf in ipairs(gateFolder:GetChildren()) do
+				local sx = leaf:GetAttribute("WE_GateLeaf")
+				local closed = leaf:GetAttribute("WE_ClosedCFrame")
+				if leaf:IsA("BasePart") and typeof(sx) == "number" and typeof(closed) == "CFrame" then
+					local target = if open then closed + Vector3.new(sx * (leaf.Size.X + 0.3), 0, 0) else closed
+					local shift = target.Position - leaf.Position
+					leaf.CFrame = target
+					leaf.CanCollide = not open
+					for _, ch in ipairs(leaf:GetChildren()) do
+						if ch:IsA("BasePart") then
+							ch.CFrame = ch.CFrame + shift
+						end
+					end
+				end
+			end
+			local lintel = gateFolder:FindFirstChild("GateLintel")
+			local sign = lintel and lintel:FindFirstChild("WE_GateSign")
+			local text = sign and sign:FindFirstChild("Text")
+			if text and text:IsA("TextLabel") then
+				text.Text = (REAR_GATE_LABELS[gid] or string.upper(gid)) .. (if open then " · OPEN" else " · LOCKED")
+			end
+		end
+	end
+end
+
 function StructureKitBuilder.ClearPlotExtras(plotId: number)
 	StructureKitBuilder.SyncPerimeterWalls(plotId, 0)
+	StructureKitBuilder.SyncRearGates(plotId, nil)
 	StructureKitBuilder.SyncCornerTowers(plotId, 0)
 	StructureKitBuilder.SyncBaseCeiling(plotId, 0)
 	-- E) clear stale WE_OwnedLevel on unowned pads so next claimer does not see MAX with no kits
