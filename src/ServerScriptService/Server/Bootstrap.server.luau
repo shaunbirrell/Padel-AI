@@ -259,17 +259,24 @@ local function ensureVoidFallback(reason: string)
 	folder.Name = "WE_VoidFallback"
 	folder.Parent = Workspace
 
-	local baseplate = Instance.new("Part")
-	baseplate.Name = "Baseplate"
-	baseplate.Size = Vector3.new(7000, 6, 7000)
-	baseplate.Position = Vector3.new(0, -3, 0)
-	baseplate.Anchored = true
-	baseplate.CanCollide = true
-	baseplate.Material = Enum.Material.Grass
-	baseplate.Color = Color3.fromRGB(40, 80, 40)
-	baseplate.TopSurface = Enum.SurfaceType.Smooth
-	baseplate.BottomSurface = Enum.SurfaceType.Smooth
-	baseplate.Parent = folder
+	-- v70 (spec_final §12.1): 3 x 3 tiles of 1700 (a single 7000 plate exceeds Roblox's 2048 part-size cap). The centre
+	-- tile keeps the name Baseplate.
+	local TILE = 1700
+	for i = -1, 1 do
+		for j = -1, 1 do
+			local baseplate = Instance.new("Part")
+			baseplate.Name = if i == 0 and j == 0 then "Baseplate" else ("Baseplate_" .. tostring(i + 2) .. "_" .. tostring(j + 2))
+			baseplate.Size = Vector3.new(TILE, 6, TILE)
+			baseplate.Position = Vector3.new(i * TILE, -3, j * TILE)
+			baseplate.Anchored = true
+			baseplate.CanCollide = true
+			baseplate.Material = Enum.Material.Grass
+			baseplate.Color = Color3.fromRGB(40, 80, 40)
+			baseplate.TopSurface = Enum.SurfaceType.Smooth
+			baseplate.BottomSurface = Enum.SurfaceType.Smooth
+			baseplate.Parent = folder
+		end
+	end
 
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "EmergencySpawn"
@@ -341,15 +348,39 @@ local function healOrRebuildMap(label: string)
 	end
 end
 
+-- v70: a saved / baked WarEmpireSetup from another layout generation (WE_MapGen ~= MapSetup.MAP_GEN: unturned plots,
+-- one WaterPlane, untiled ground) is rebuilt from scratch instead of healed.
+local function isStaleMapGen(setup: Instance?): boolean
+	if setup == nil or MapSetup == nil or MapSetup.MAP_GEN == nil then
+		return false
+	end
+	return setup:GetAttribute("WE_MapGen") ~= MapSetup.MAP_GEN
+end
+
 -- Run map build/heal AFTER remotes exist (never blocks EconomyUpdate creation)
 if not Workspace:FindFirstChild("WarEmpireSetup") then
 	runMapSetupOrFallback("MapSetup module failed to load")
+elseif isStaleMapGen(Workspace:FindFirstChild("WarEmpireSetup")) then
+	local stale = Workspace:FindFirstChild("WarEmpireSetup") :: Instance
+	print(
+		"[WAR EMPIRE] WarEmpireSetup is map gen "
+			.. tostring(stale:GetAttribute("WE_MapGen"))
+			.. " (want "
+			.. tostring(MapSetup.MAP_GEN)
+			.. ") — full MapSetup.Run (stale map gen)"
+	)
+	pcall(function()
+		stale:Destroy()
+	end)
+	runMapSetupOrFallback("stale map gen")
+	notifyMapRebuilt("bootstrap-staleMapGen")
 else
 	print("[WAR EMPIRE] WarEmpireSetup already present — skipping MapSetup.Run (FORCE rebuild Ground + SafetyCatch)")
 	Workspace.Gravity = 196.2
 	local CollectionService = game:GetService("CollectionService")
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
-	local targetSize = (MapSetup and MapSetup.GROUND_SIZE) or 6400
+	-- v70: the ground is 16 tiles of MapSetup.GROUND_TILE_SIZE (Map.Ground is one of them)
+	local targetSize = (MapSetup and (MapSetup.GROUND_TILE_SIZE or MapSetup.GROUND_SIZE)) or 6400
 
 	healOrRebuildMap("bootstrap-existing")
 
@@ -360,15 +391,19 @@ else
 	if g and g:IsA("BasePart") then
 		g.CanCollide = true
 		g.Anchored = true
+		local tiles = if setup and MapSetup and MapSetup.CountGroundTiles then MapSetup.CountGroundTiles(setup) else 1
+		local wantTiles = (MapSetup and MapSetup.GROUND_TILES) or 1
 		print(string.format(
-			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f CanCollide=%s SafetyCatch=%s",
+			"[WAR EMPIRE] Ground AFTER heal: size=%.0fx%.0fx%.0f tiles=%d/%d CanCollide=%s SafetyCatch=%s",
 			g.Size.X,
 			g.Size.Y,
 			g.Size.Z,
+			tiles,
+			wantTiles,
 			tostring(g.CanCollide),
 			tostring(catch ~= nil)
 		))
-		if g.Size.X < targetSize - 1 or g.CanCollide ~= true then
+		if g.Size.X < targetSize - 1 or g.CanCollide ~= true or tiles < wantTiles then
 			warn("[WAR EMPIRE] Ground still unhealthy after force rebuild — run admin resetmap (Studio)")
 		end
 	else
@@ -516,6 +551,22 @@ safeInit("PlotOilPumpService", PlotOilPumpService, deps)
 safeInit("SpinnerService", SpinnerService, deps)
 safeInit("ResearchService", ResearchService, deps)
 safeInit("MissileStrikeService", MissileStrikeService, deps)
+
+-- v70 waterways [J1]: the sea-gate loop (opens an armed plot's sea gate while a boat driven by the owner or a
+-- clan-mate is near). After the services' Init: it reads BaseService owners and GateDefenseService.IsAlly. Guarded —
+-- a missing or broken Modules.Waterways only means the sea gates stay closed.
+do
+	local wwModule = Modules:FindFirstChild("Waterways")
+	local Waterways = if wwModule and wwModule:IsA("ModuleScript") then safeRequire("Waterways", wwModule) else nil
+	if Waterways and Waterways.StartSeaGates then
+		local okGates, errGates = pcall(Waterways.StartSeaGates, { BaseService = BaseService, GateDefenseService = GateDefenseService })
+		if not okGates then
+			warn("[WAR EMPIRE] Waterways.StartSeaGates failed (sea gates stay closed):", errGates)
+		end
+	else
+		warn("[WAR EMPIRE] Waterways sea-gate loop not started (Modules.Waterways missing)")
+	end
+end
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)

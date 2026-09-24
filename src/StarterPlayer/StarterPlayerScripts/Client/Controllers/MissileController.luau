@@ -36,6 +36,8 @@ local UIUtil = require(Shared.Util.UIUtil)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local ClientSettings = require(script.Parent.Parent.Modules.ClientSettings)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout) -- v70: the banner is the top-centre stack's "Alert"
+local HudConfig = require(Shared.Configs.HudConfig)
 
 local MissileController = {}
 
@@ -1476,6 +1478,7 @@ local function ensureAlertUi(): AlertUi?
 	local banner = Instance.new("Frame")
 	banner.Name = "Banner"
 	banner.AnchorPoint = Vector2.new(0.5, 0)
+	banner.Position = UDim2.fromScale(0.5, 0) -- Y: the top-centre stack
 	banner.BorderSizePixel = 0
 	banner.Active = false
 	banner.Visible = false
@@ -1503,6 +1506,9 @@ local function ensureAlertUi(): AlertUi?
 	screen.Parent = pg
 	local built: AlertUi = { Screen = screen, Edges = edges, Banner = banner, Label = label, Stroke = stroke }
 	alertUi = built
+	-- v70: first item of the top-centre stack (HudLayout writes Banner.Position.Y; X stays centred). Real px gui
+	-- (IgnoreGuiInset, no UIScale) → Space "Screen"; everything below it (capture bar, tutorial, toasts, offer) moves down.
+	HudLayout.RegisterTopStack("Alert", banner, HudConfig.TopStack.Order.Alert, { Space = "Screen" })
 	return built
 end
 
@@ -1578,7 +1584,8 @@ local function startAlert(role: string, strikeId: number, launch: number, flight
 	if au then
 		local w = guiArea()
 		local victim = role == "Victim"
-		au.Banner.Position = UDim2.new(0.5, 0, 0, topInset() + 8)
+		-- v70: Y belongs to the top-centre stack (HudLayout.RegisterTopStack "Alert"); only X is set here
+		au.Banner.Position = UDim2.new(0.5, 0, 0, au.Banner.Position.Y.Offset)
 		au.Banner.Size = UDim2.fromOffset(math.max(200, math.min(if victim then 620 else 480, w - 32)), if victim then 50 else 38)
 		au.Banner.BackgroundColor3 = if victim then Color3.fromRGB(128, 18, 16) else Color3.fromRGB(34, 38, 44)
 		au.Stroke.Color = if victim then Color3.fromRGB(255, 120, 100) else C.Orange
@@ -1590,6 +1597,7 @@ local function startAlert(role: string, strikeId: number, launch: number, flight
 		for _, e in ipairs(au.Edges) do
 			e.Visible = false
 		end
+		HudLayout.RelayoutTopStack()
 	end
 	if role == "Victim" then
 		playSiren()

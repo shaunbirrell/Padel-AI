@@ -66,6 +66,7 @@ type NPCRecord = {
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
 
 local CombatService = {}
 
@@ -236,6 +237,11 @@ local function raycast(origin: Vector3, direction: Vector3, range: number, ignor
 	return CombatDamage.Raycast(origin, direction, range, ignore)
 end
 
+-- v70: plot-local PlayerSpawn offset (same choice as MapSetup); the pad CFrame carries the plot yaw
+local function plotSpawnOffset(): { X: number, Z: number }
+	return if BaseLayout.Enabled() then BaseLayout.Config().SpawnOffset else { X = 0, Z = 55 }
+end
+
 function CombatService.GetPlotSpawnCFrame(plotId: number): CFrame?
 	for _, inst in ipairs(getTaggedCached(Constants.Tags.BasePlot)) do
 		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
@@ -246,12 +252,14 @@ function CombatService.GetPlotSpawnCFrame(plotId: number): CFrame?
 					return spawn.CFrame + Vector3.new(0, 3, 0)
 				end
 			end
-			return inst.CFrame + Vector3.new(0, 5, 55)
+			local sp = plotSpawnOffset()
+			return inst.CFrame * CFrame.new(sp.X, 5, sp.Z)
 		end
 	end
 	local pos = BaseConfig.PlotPositions[plotId]
 	if pos then
-		return CFrame.new(pos + Vector3.new(0, 5, 55))
+		local sp = plotSpawnOffset()
+		return BaseLayout.PlotCFrame(pos) * CFrame.new(sp.X, 5, sp.Z)
 	end
 	return nil
 end

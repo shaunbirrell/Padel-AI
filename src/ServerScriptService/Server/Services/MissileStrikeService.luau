@@ -29,6 +29,7 @@ local GateDefenseConfig = require(Shared.Configs.GateDefenseConfig)
 local ServerModules = script.Parent.Parent.Modules
 local RemoteSetup = require(ServerModules.RemoteSetup)
 local RemoteGuard = require(ServerModules.RemoteGuard)
+local BaseLayout = require(ServerModules.BaseLayout)
 
 local MissileStrikeService = {}
 
@@ -75,7 +76,8 @@ local function defaultRandom(): number
 end
 local randomFn: () -> number = defaultRandom
 
--- Plot-local offsets (plots are not rotated: plot-local = world offset from the pad centre)
+-- Plot-local sites (x, z in the BaseLayoutConfig frame); plot-local → world through BaseLayout (plots turn with
+-- FaceMapCentre)
 local function siteOffset(structureId: string, fallbackX: number, fallbackZ: number): Vector3
 	local structures = (BaseLayoutConfig :: any).Structures
 	local entry = structures and structures[structureId]
@@ -85,9 +87,9 @@ local function siteOffset(structureId: string, fallbackX: number, fallbackZ: num
 	end
 	return Vector3.new(fallbackX, 0, fallbackZ)
 end
-local CC_OFFSET = siteOffset("CommandCenter", 0, -38)
--- Missile Defense site + the launcher's local (0, -3), ~8 studs above the pad
-local BATTERY_OFFSET = siteOffset("MissileDefense", 132, -40) + Vector3.new(0, 8.5, -3)
+local CC_SITE = siteOffset("CommandCenter", 0, -38)
+-- Missile Defense site; the battery is the launcher's local (0, -3) off it, ~8 studs above the pad
+local BATTERY_SITE = siteOffset("MissileDefense", 132, -40)
 local LAUNCH_MAX_DY = 30
 
 -- ── helpers ────────────────────────────────────────────────────────────────
@@ -180,7 +182,7 @@ end
 
 local function batteryPos(plotId: number): Vector3?
 	local p = plotPos(plotId)
-	return if p then p + BATTERY_OFFSET else nil
+	return if p then BaseLayout.PlotPoint(p, BATTERY_SITE.X, BATTERY_SITE.Z - 3, 8.5) else nil
 end
 
 local function gatePos(plotId: number): Vector3?
@@ -194,7 +196,7 @@ local function gatePos(plotId: number): Vector3?
 	if not p then
 		return nil
 	end
-	return p + Vector3.new(0, 3.5, BaseConfig.PlotSize.Z * 0.5 - 1.5)
+	return BaseLayout.PlotPoint(p, 0, BaseConfig.PlotSize.Z * 0.5 - 1.5, 3.5)
 end
 
 local function isUnlocked(profile: any): boolean
@@ -236,7 +238,7 @@ local function atCommandCenter(player: Player, plotId: number?): boolean
 	if not p or not (hrp and hrp:IsA("BasePart")) then
 		return false
 	end
-	local d = hrp.Position - (p + CC_OFFSET)
+	local d = hrp.Position - BaseLayout.PlotPoint(p, CC_SITE.X, CC_SITE.Z)
 	return Vector3.new(d.X, 0, d.Z).Magnitude <= RaidConfig.Strike.LaunchMaxDistanceFromCC and math.abs(d.Y) <= LAUNCH_MAX_DY
 end
 

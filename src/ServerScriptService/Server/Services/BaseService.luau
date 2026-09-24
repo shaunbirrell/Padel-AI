@@ -18,6 +18,7 @@ local DevConfig = require(Shared.Configs.DevConfig)
 local Types = require(Shared.Types)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
 local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
 local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildingBuilder)
 
@@ -289,6 +290,11 @@ local function meetsRequirements(profile: Types.PlayerProfile, structureId: stri
 end
 
 
+-- v70: plot-local PlayerSpawn offset (same choice as MapSetup); the pad CFrame carries the plot yaw
+local function plotSpawnOffset(): { X: number, Z: number }
+	return if BaseLayout.Enabled() then BaseLayout.Config().SpawnOffset else { X = 0, Z = 55 }
+end
+
 function BaseService.GetPlotSpawnCFrame(plotId: number): CFrame?
 	local wantPlot = tonumber(plotId)
 	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
@@ -300,12 +306,14 @@ function BaseService.GetPlotSpawnCFrame(plotId: number): CFrame?
 					return spawn.CFrame + Vector3.new(0, 3, 0)
 				end
 			end
-			return inst.CFrame + Vector3.new(0, 5, 55)
+			local sp = plotSpawnOffset()
+			return inst.CFrame * CFrame.new(sp.X, 5, sp.Z)
 		end
 	end
 	local pos = BaseConfig.PlotPositions[plotId]
 	if typeof(pos) == "Vector3" then
-		return CFrame.new(pos + Vector3.new(0, 5, 55))
+		local sp = plotSpawnOffset()
+		return BaseLayout.PlotCFrame(pos) * CFrame.new(sp.X, 5, sp.Z)
 	end
 	return nil
 end

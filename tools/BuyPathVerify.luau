@@ -295,10 +295,11 @@ if pg then
 		local buyBtn = buyGui:FindFirstChild("BuyButton", true) or buyGui:FindFirstChildWhichIsA("TextButton", true)
 		if buyBtn and buyBtn:IsA("GuiButton") then
 			ok("Pad BUY GuiButton present: " .. buyBtn.Name)
-			if buyBtn.AbsoluteSize.Y >= 64 or buyBtn.Size.Y.Offset >= 64 then
-				ok("Pad BUY touch height OK")
+			-- v70: the BUY button lives in the HUD action lane; the rule is >= 44 px REAL (after the HUD UIScale)
+			if buyBtn.AbsoluteSize.Y >= 44 then
+				ok(string.format("Pad BUY touch height OK (%d px real)", math.floor(buyBtn.AbsoluteSize.Y)))
 			else
-				soft("Pad BUY height may be small — check EnsureMinTouch")
+				soft(string.format("Pad BUY height %d px real < 44 — check HudConfig.ActionLane", math.floor(buyBtn.AbsoluteSize.Y)))
 			end
 		else
 			soft("Pad BUY button not visible yet (stand on own pad)")
@@ -316,8 +317,43 @@ if pg then
 		if spawnish > 0 then
 			ok(string.format("Garage action buttons visible≈%d (open panel / OWNED filter)", spawnish))
 		else
-			soft("Garage SPAWN/BUY not visible yet — open GARAGE (G) after VehicleStateUpdate")
+			soft("Garage SPAWN/BUY not visible yet — open the Garage (rail tile / G) after VehicleStateUpdate")
 		end
+	end
+
+	-- v70 HUD: the new top-level guis, and ONE HUD scale on every gui that carries a MobileScale
+	for _, guiName in ipairs({ "WE_TopStrip", "WE_Reticle", "WE_PromptLane", "WarEmpireNotifications" }) do
+		if pg:FindFirstChild(guiName) then
+			ok("Gui present " .. guiName)
+		else
+			soft("Gui not yet: " .. guiName .. " (ok if early)")
+		end
+	end
+	local scales: { [string]: number } = {}
+	local first: number? = nil
+	local same = true
+	for _, g in ipairs(pg:GetChildren()) do
+		local s = if g:IsA("ScreenGui") then g:FindFirstChild("MobileScale") else nil
+		if s and s:IsA("UIScale") then
+			scales[g.Name] = s.Scale
+			if first == nil then
+				first = s.Scale
+			elseif math.abs(s.Scale - (first :: number)) > 0.001 then
+				same = false
+			end
+		end
+	end
+	if first == nil then
+		soft("no MobileScale UIScale found yet (ok if early)")
+	elseif same then
+		ok(string.format("one HUD scale %.2f on every MobileScale gui", first :: number))
+	else
+		local parts = {}
+		for name, v in pairs(scales) do
+			table.insert(parts, string.format("%s=%.2f", name, v))
+		end
+		table.sort(parts)
+		bad("MobileScale differs between HUD guis: " .. table.concat(parts, " "))
 	end
 else
 	soft("LocalPlayer.PlayerGui missing (run on client / Play Solo)")
@@ -325,7 +361,7 @@ end
 
 note(string.format("Studio=%s Server=%s Client=%s", tostring(RunService:IsStudio()), tostring(RunService:IsServer()), tostring(RunService:IsClient())))
 print("[BuyPathVerify] Done — stand on YOUR pad and tap BUY; Output should show [WorldPrompt] BUY + [BaseService] Remote BUY result Ok=true")
-print("[BuyPathVerify] Army: dock ARMY / key A → RECRUIT; expect SoldierStateUpdate + Success toast")
-print("[BuyPathVerify] Garage: G / E on pad → OWNED Jeep SPAWN; expect Deployed toast + DriverSeat model")
-print("[BuyPathVerify] Shop/Rebirth: dock tiles use Activated; panels DisplayOrder 60 above HUD dock 55")
+print("[BuyPathVerify] Army: rail Army tile / key Y → popover → MANAGE ARMY → RECRUIT; expect SoldierStateUpdate + Success toast")
+print("[BuyPathVerify] Garage: rail Garage tile / G → OWNED Jeep SPAWN; expect Deployed toast + DriverSeat model")
+print("[BuyPathVerify] Shop/Rebirth: rail tiles use Activated; panels DisplayOrder 60 above the HUD rail 55")
 print("[BuyPathVerify] Automation: docs/LIVE_PLAYTEST_AUTOMATION.md + tools/SmokeTest.luau")

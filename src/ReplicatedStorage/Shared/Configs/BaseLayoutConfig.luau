@@ -3,7 +3,10 @@
 	v68: player base layout (plot-local studs). One source of truth for MapSetup (plot build), the
 	structure kits / walk-in buildings, consoles and the rear-zone gates.
 
-	Axes: +Z = FRONT (main gate, spawn road), -Z = rear. X = across the plot.
+	Axes (plot-local): +Z = FRONT (main gate, spawn road), -Z = rear. X = across the plot.
+	v70: each plot has its own frame (BaseLayout.PlotCFrame). With FaceMapCentre the plot is turned (yaw snapped to 90)
+	so its FRONT faces the map centre and the rear zone (runway, helipad, dock + sea gate) faces outward:
+	P1/P2 yaw 90 (front +X), P3 yaw 0, P4 yaw 180, P5/P6 yaw -90. Everything below stays plot-local.
 	Yaw (degrees) is the direction a building's FRONT faces: 0 = +Z, 90 = +X, -90 = -X, 180 = -Z.
 
 	Zones
@@ -30,6 +33,7 @@ export type StructureSite = {
 
 local BaseLayoutConfig = {
 	Enabled = true,
+	FaceMapCentre = true, -- v70 waterways go-live: bases face the map centre so every Dock channel reaches the ring. Rollback = false (MapSetup MAP_GEN 71↔70 forces a map rebuild either way)
 	PlotSize = 320, -- was 200; 6 plots on the 800-stud ring still clear roads/event spawns (see ASSUMPTIONS)
 	SpawnOffset = { X = 0, Z = 136 },
 	MainGateWidth = 14,
@@ -88,7 +92,9 @@ local BaseLayoutConfig = {
 		-- Airfield: hangar installation (Installations/Airfield) behind the runway, doors facing it (+Z)
 		Airfield = { Site = { X = -100, Z = -122 }, Yaw = 0, WalkIn = false, Kiosk = { X = -86, Z = -52 }, Gate = "Airfield" },
 		Helipad = { Site = { X = 40, Z = -125 }, Yaw = 0, WalkIn = false, Kiosk = { X = 54, Z = -52 }, Gate = "Helipad" },
-		Dock = { Site = { X = 128, Z = -112 }, Yaw = 0, WalkIn = false, Kiosk = { X = 106, Z = -52 }, Gate = "Dock" },
+		-- v70: the dock kit stands on the basin's west shore (was centred IN the basin, where its collidable Body was an
+		-- island in the boats' spawn water); pier along the kerb, parked boat moored in the basin's west edge
+		Dock = { Site = { X = 78, Z = -112 }, Yaw = 90, WalkIn = false, Kiosk = { X = 106, Z = -52 }, Gate = "Dock" },
 	} :: { [string]: StructureSite },
 }
 

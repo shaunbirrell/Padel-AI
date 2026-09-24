@@ -1,5 +1,9 @@
 --!strict
---[[ Progression UI — Prestige + Battle Pass + Clan + Clan War (key K / PROGRESS) ]]
+--[[ Progression UI — Prestige + Battle Pass + Clan + Clan War (the rail's Rebirth tile / K).
+	v70 "clean screen" (spec §3.7 / §3.8): the season banner left the HUD — the season line sits under this
+	panel's title (SeasonStateUpdate). The near-rebirth banner became the Rebirth tile's "!" badge. A registered
+	Modal panel (HudLayout id "Rebirth") with the black dim; one HUD scale + safe area; every tappable ≥ 44 real
+	px on touch. Server-authoritative: every button only fires its request remote. ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -9,15 +13,22 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
+local HudConfig = require(Shared.Configs.HudConfig)
 local ProgressionUI = require(script.ProgressionUI)
 local ProgressionBattlePass = require(script.ProgressionBattlePass)
 
+local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+
 local ProgressionController = {}
+
+local PANEL_ID = "Rebirth"
 
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
 local menuOpen = false
 local screenGui: ScreenGui? = nil
+local shell: PanelShell.Shell? = nil
+local seasonLabel: TextLabel? = nil
 local prestigeLabel: TextLabel? = nil
 local unlockLabel: TextLabel? = nil
 local prestigeConfirm: TextLabel? = nil
@@ -29,14 +40,46 @@ local clanLabel: TextLabel? = nil
 local warLabel: TextLabel? = nil
 local scoreboardLabel: TextLabel? = nil
 local trackList: ScrollingFrame? = nil
-local warIdBox: TextBox? = nil
 local prestigeState: any = nil
 local bpState: any = nil
 local clanState: any = nil
 local warState: any = nil
 
+-- non-blocking request (Remotes.FireServer polls ≤ 3 s for the remote; never waits forever)
+local function fire(remoteName: string, ...: any)
+	task.spawn(Remotes.FireServer, remoteName, ...)
+end
+
 local function rebuildTrackPreview()
 	ProgressionBattlePass.RebuildTrackPreview(trackList, bpState)
+	-- v70: the shared track builder makes 40 v rows with 36 v CLAIM buttons and 10-11 v text; lift them to the
+	-- panel's touch target / text floor (≥ 44 real px targets, ≥ 11 px text)
+	local list = trackList
+	if not list then
+		return
+	end
+	local tap = PanelShell.TouchMinV()
+	for _, row in ipairs(list:GetChildren()) do
+		if row:IsA("Frame") then
+			if isTouch then
+				row.Size = UDim2.new(row.Size.X.Scale, row.Size.X.Offset, 0, tap + 8)
+			end
+			for _, d in ipairs(row:GetChildren()) do
+				if d:IsA("TextButton") then
+					d.TextSize = PanelShell.Text(d.TextSize)
+					if isTouch then
+						d.Size = UDim2.fromOffset(math.max(d.Size.X.Offset, 96), tap)
+					end
+				elseif d:IsA("TextLabel") then
+					d.TextSize = PanelShell.Text(d.TextSize)
+					d.TextTruncate = Enum.TextTruncate.AtEnd
+					if isTouch then
+						d.Size = UDim2.new(1, -112, 1, 0)
+					end
+				end
+			end
+		end
+	end
 end
 
 local debouncedRefresh = ProgressionUI.Debounce(0.12)
@@ -226,136 +269,162 @@ local function setOpen(open: boolean)
 			panel.Visible = open
 		end
 	end
+	local sh = shell
+	if sh then
+		sh.Sync(open)
+	end
+end
+
+-- SeasonStateUpdate → the line under the title (was the HUD's SeasonLabel banner)
+local function applySeason(payload: any)
+	local lab = seasonLabel
+	if not lab or typeof(payload) ~= "table" then
+		return
+	end
+	local name = tostring(payload.DisplayName or payload.SeasonId or "Season")
+	if payload.Active == true then
+		local xpB = tonumber(payload.XPBonusMult) or 1
+		local cashB = tonumber(payload.CashBonusMult) or 1
+		lab.TextColor3 = Constants.Colors.Cash
+		lab.Text = string.format("%s  ·  XP×%.2f  Cash×%.2f", name, xpB, cashB)
+	else
+		lab.TextColor3 = Constants.Colors.Muted
+		lab.Text = name .. "  ·  ENDED"
+	end
+	lab.Visible = true
 end
 
 function ProgressionController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireProgression"
+	PanelShell.Screen(screen) -- DisplayOrder 60 (Panels), one HUD scale + safe area
 	screen.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(screen, false)
-	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	screenGui = screen
 
-	local toggle = Instance.new("TextButton")
-	toggle.Name = "ProgressToggle"
-	toggle.AnchorPoint = Vector2.new(0, 1)
-	toggle.Position = UDim2.new(0, 224, 1, -16)
-	toggle.Size = UDim2.fromOffset(100, 36)
-	toggle.BackgroundColor3 = Constants.Colors.Panel
-	toggle.Font = Enum.Font.GothamBold
-	toggle.TextSize = 13
-	toggle.TextColor3 = Constants.Colors.Text
-	toggle.Text = "PROGRESS"
-	toggle.BorderSizePixel = 0
-	toggle.Visible = false -- docked in HUD MobileActionBar
-	UIUtil.Corner(toggle, 8)
-	UIUtil.Stroke(toggle)
-	toggle.Parent = screen
-	UIUtil.EnsureMinTouch(toggle, 44)
-	toggle.Activated:Connect(function()
-		setOpen(not menuOpen)
-	end)
+	local TAP = PanelShell.TouchMinV()
 
 	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = if isTouch then UDim2.new(0.94, 0, 0.82, 0) else UDim2.fromOffset(520, 660)
+	panel.Size = if isTouch then UDim2.new(0.94, 0, 1, -16) else UDim2.fromOffset(540, 660)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
+	panel.Active = true
 	panel.Visible = false
 	panel.Parent = screen
-	UIUtil.Corner(panel, 10)
+	UIUtil.Corner(panel, 12)
 	UIUtil.Stroke(panel)
-	if isTouch then
+	do
 		local sizeConstraint = Instance.new("UISizeConstraint")
-		sizeConstraint.MinSize = Vector2.new(280, 360)
-		sizeConstraint.MaxSize = Vector2.new(720, 900)
+		sizeConstraint.MinSize = Vector2.new(280, 300)
+		sizeConstraint.MaxSize = if isTouch then Vector2.new(820, 900) else Vector2.new(540, 660)
 		sizeConstraint.Parent = panel
 	end
 
-	local scroll = Instance.new("ScrollingFrame")
-	scroll.Name = "Content"
-	scroll.Position = UDim2.fromOffset(0, 44)
-	scroll.Size = UDim2.new(1, 0, 1, -52)
-	scroll.BackgroundTransparency = 1
-	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 5
-	scroll.CanvasSize = UDim2.fromOffset(0, 1100)
-	scroll.Parent = panel
+	local title = PanelShell.Title(panel, if isTouch then "Rebirth / Progression" else "Progression")
 
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(16, 10)
-	title.Size = UDim2.new(1, -80, 0, 28)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 20
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextColor3 = Constants.Colors.Text
-	title.Text = if isTouch then "Rebirth / Progression" else "Progression"
-	title.Parent = panel
+	-- v70: the season line (was the HUD's top-centre SeasonLabel banner)
+	local seasonSize = PanelShell.Text(13)
+	local season = Instance.new("TextLabel")
+	season.Name = "SeasonLabel"
+	season.BackgroundTransparency = 1
+	season.Position = UDim2.fromOffset(16, title.Position.Y.Offset + title.Size.Y.Offset - 2)
+	season.Size = UDim2.new(1, -(TAP + 28), 0, seasonSize + 4)
+	season.Font = Enum.Font.GothamBold
+	season.TextSize = seasonSize
+	season.TextXAlignment = Enum.TextXAlignment.Left
+	season.TextTruncate = Enum.TextTruncate.AtEnd
+	season.TextColor3 = Constants.Colors.Muted
+	season.Text = ""
+	season.Visible = false
+	season.Parent = panel
+	seasonLabel = season
 
-	local close = Instance.new("TextButton")
-	close.AnchorPoint = Vector2.new(1, 0)
-	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(48, 48)
-	close.BackgroundColor3 = Constants.Colors.Background
-	close.Font = Enum.Font.GothamBold
-	close.Text = "X"
-	close.TextColor3 = Constants.Colors.Text
-	close.BorderSizePixel = 0
-	UIUtil.Corner(close, 6)
-	close.Parent = panel
-	UIUtil.EnsureMinTouch(close, 48)
-	close.Activated:Connect(function()
+	PanelShell.CloseButton(panel, function()
 		setOpen(false)
 	end)
 
+	local headerH = math.max(TAP + 8, season.Position.Y.Offset + seasonSize + 10)
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "Content"
+	scroll.Position = UDim2.fromOffset(0, headerH)
+	scroll.Size = UDim2.new(1, 0, 1, -(headerH + 8))
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = if isTouch then 6 else 5
+	scroll.CanvasSize = UDim2.fromOffset(0, 1100)
+	scroll.Parent = panel
+
 	local y = 8
+	local sectionSize = PanelShell.Text(14)
+	local bodySize = PanelShell.Text(12)
+	local bodyK = bodySize / 12 -- body heights were designed for 12 v text
 	local function section(text: string)
 		local lab = Instance.new("TextLabel")
 		lab.BackgroundTransparency = 1
 		lab.Position = UDim2.fromOffset(16, y)
-		lab.Size = UDim2.new(1, -32, 0, 20)
+		lab.Size = UDim2.new(1, -32, 0, sectionSize + 6)
 		lab.Font = Enum.Font.GothamBold
-		lab.TextSize = 14
+		lab.TextSize = sectionSize
 		lab.TextXAlignment = Enum.TextXAlignment.Left
 		lab.TextColor3 = Constants.Colors.Accent
 		lab.Text = text
 		lab.Parent = scroll
-		y += 22
+		y += sectionSize + 8
 	end
 	local function body(h: number?): TextLabel
+		local hh = math.ceil((h or 40) * bodyK)
 		local lab = Instance.new("TextLabel")
 		lab.BackgroundTransparency = 1
 		lab.Position = UDim2.fromOffset(16, y)
-		lab.Size = UDim2.new(1, -32, 0, h or 40)
-		lab.Font = Enum.Font.Gotham
-		lab.TextSize = 12
+		lab.Size = UDim2.new(1, -32, 0, hh)
+		lab.Font = Enum.Font.GothamMedium
+		lab.TextSize = bodySize
 		lab.TextWrapped = true
 		lab.TextXAlignment = Enum.TextXAlignment.Left
 		lab.TextYAlignment = Enum.TextYAlignment.Top
 		lab.TextColor3 = Constants.Colors.Muted
 		lab.Text = "..."
 		lab.Parent = scroll
-		y += (h or 40) + 4
+		y += hh + 4
 		return lab
 	end
+	-- a button on the current row; on touch it is TAP (≥ 44 real px) tall
 	local function btn(label: string, w: number, cb: () -> ()): TextButton
 		local b = Instance.new("TextButton")
 		b.Position = UDim2.fromOffset(16, y)
-		b.Size = UDim2.fromOffset(math.max(w, if isTouch then 160 else w), if isTouch then 44 else 36)
+		b.Size = UDim2.fromOffset(math.max(w, if isTouch then 180 else w), if isTouch then TAP else 36)
 		b.BackgroundColor3 = Constants.Colors.Accent
 		b.Font = Enum.Font.GothamBold
-		b.TextSize = if isTouch then 13 else 12
+		b.TextSize = PanelShell.Text(13)
 		b.TextColor3 = Constants.Colors.Text
 		b.Text = label
 		b.BorderSizePixel = 0
-		UIUtil.Corner(b, 6)
+		b.Active = true
+		UIUtil.Corner(b, 8)
 		b.Parent = scroll
-		UIUtil.EnsureMinTouch(b, 44)
+		UIUtil.EnsureMinTouch(b, if isTouch then TAP else 36)
 		b.Activated:Connect(cb)
 		return b
+	end
+	local rowH = if isTouch then TAP else 36
+	local function textBox(placeholder: string, x: number, w: UDim): TextBox
+		local box = Instance.new("TextBox")
+		box.Position = UDim2.fromOffset(x, y)
+		box.Size = UDim2.new(w.Scale, w.Offset, 0, if isTouch then TAP else 32)
+		box.BackgroundColor3 = Constants.Colors.Background
+		box.Font = Enum.Font.GothamMedium
+		box.TextSize = PanelShell.Text(13)
+		box.TextColor3 = Constants.Colors.Text
+		box.PlaceholderText = placeholder
+		box.PlaceholderColor3 = Constants.Colors.Muted
+		box.Text = ""
+		box.ClearTextOnFocus = false
+		box.BorderSizePixel = 0
+		UIUtil.Corner(box, 8)
+		box.Parent = scroll
+		return box
 	end
 
 	section("REBIRTH / PRESTIGE")
@@ -364,36 +433,36 @@ function ProgressionController.Init()
 	prestigeConfirm = body(52)
 	-- Competitor rebirth trust cue (Entitlements / GamePasses never cleared on prestige)
 	do
+		local keepH = if isTouch then 44 else 34
 		local keep = Instance.new("TextLabel")
 		keep.Name = "KeepRobuxBanner"
 		keep.Position = UDim2.fromOffset(16, y)
-		keep.Size = UDim2.new(1, -32, 0, if isTouch then 40 else 32)
+		keep.Size = UDim2.new(1, -32, 0, keepH)
 		keep.BackgroundColor3 = Color3.fromRGB(28, 72, 36)
 		keep.BackgroundTransparency = 0.05
 		keep.BorderSizePixel = 0
-		keep.Font = Enum.Font.GothamBold
-		keep.TextSize = if isTouch then 16 else 15
+		keep.Font = HudConfig.Fonts.Display
+		keep.TextSize = PanelShell.Text(if isTouch then 18 else 16)
 		keep.TextColor3 = Constants.Colors.GoldBright
 		keep.Text = "★ Keep all your Robux Items!"
 		keep.TextXAlignment = Enum.TextXAlignment.Center
 		keep.Parent = scroll
-		UIUtil.Corner(keep, 6)
-		UIUtil.Stroke(keep, Constants.Colors.Gold, 2)
+		UIUtil.Corner(keep, 8)
+		UIUtil.Stroke(keep, Constants.Colors.Gold, 2).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		prestigeKeepBanner = keep
-		y += if isTouch then 46 else 38
+		y += keepH + 6
 	end
 	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
 		print("[Progression] CONFIRM REBIRTH tap")
-		Remotes.GetEvent(Constants.RemoteNames.RequestPrestige):FireServer()
+		fire(Constants.RemoteNames.RequestPrestige)
 	end)
 	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
 	rebirthBtn.TextColor3 = Constants.Colors.Gold
-	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5)
+	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	if isTouch then
-		rebirthBtn.Size = UDim2.new(1, -32, 0, 52)
-		UIUtil.EnsureMinTouch(rebirthBtn, 52)
+		rebirthBtn.Size = UDim2.new(1, -32, 0, TAP)
 	end
-	y += if isTouch then 60 else 40
+	y += rowH + 10
 
 	section("BATTLE PASS")
 	bpLabel = body(44)
@@ -405,51 +474,53 @@ function ProgressionController.Init()
 	bpBg.BorderSizePixel = 0
 	bpBg.Parent = scroll
 	UIUtil.Corner(bpBg, 4)
-	bpBarFill = Instance.new("Frame")
-	bpBarFill.Size = UDim2.fromScale(0, 1)
-	bpBarFill.BackgroundColor3 = Constants.Colors.XP
-	bpBarFill.BorderSizePixel = 0
-	bpBarFill.Parent = bpBg
-	UIUtil.Corner(bpBarFill, 4)
+	local fillBar = Instance.new("Frame")
+	fillBar.Size = UDim2.fromScale(0, 1)
+	fillBar.BackgroundColor3 = Constants.Colors.XP
+	fillBar.BorderSizePixel = 0
+	fillBar.Parent = bpBg
+	UIUtil.Corner(fillBar, 4)
+	bpBarFill = fillBar
 	y += 16
 	bpClaimHint = body(18)
 	local freeClaim = btn("CLAIM ALL FREE", 150, function()
 		print("[Progression] CLAIM ALL FREE tap")
-		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "free")
+		fire(Constants.RemoteNames.RequestClaimBattlePassReward, 0, "free")
 	end)
 	local premBtn = btn("CLAIM ALL PREMIUM", 170, function()
 		print("[Progression] CLAIM ALL PREMIUM tap")
 		if typeof(bpState) == "table" and not bpState.Premium then
 			return
 		end
-		Remotes.GetEvent(Constants.RemoteNames.RequestClaimBattlePassReward):FireServer(0, "premium")
+		fire(Constants.RemoteNames.RequestClaimBattlePassReward, 0, "premium")
 	end)
 	if isTouch then
-		freeClaim.Size = UDim2.new(1, -32, 0, 48)
-		y += 52
-		premBtn.Position = UDim2.fromOffset(16, y)
-		premBtn.Size = UDim2.new(1, -32, 0, 48)
-		y += 56
+		-- side by side, each half the row
+		freeClaim.Size = UDim2.new(0.5, -20, 0, TAP)
+		premBtn.Position = UDim2.new(0.5, 4, 0, y)
+		premBtn.Size = UDim2.new(0.5, -20, 0, TAP)
+		y += TAP + 10
 	else
 		premBtn.Position = UDim2.fromOffset(176, y)
-		y += 36
+		y += 36 + 6
 	end
 
 	local trackTitle = Instance.new("TextLabel")
 	trackTitle.BackgroundTransparency = 1
 	trackTitle.Position = UDim2.fromOffset(16, y)
-	trackTitle.Size = UDim2.new(1, -32, 0, 16)
+	trackTitle.Size = UDim2.new(1, -32, 0, bodySize + 4)
 	trackTitle.Font = Enum.Font.GothamBold
-	trackTitle.TextSize = 11
+	trackTitle.TextSize = bodySize
 	trackTitle.TextXAlignment = Enum.TextXAlignment.Left
 	trackTitle.TextColor3 = Constants.Colors.Muted
 	trackTitle.Text = "Reward track (CLAIM on READY rows)"
 	trackTitle.Parent = scroll
-	y += 18
+	y += bodySize + 6
 
+	local trackH = if isTouch then 3 * (TAP + 11) else 110
 	local trackScroll = Instance.new("ScrollingFrame")
 	trackScroll.Position = UDim2.fromOffset(12, y)
-	trackScroll.Size = UDim2.new(1, -24, 0, 110)
+	trackScroll.Size = UDim2.new(1, -24, 0, trackH)
 	trackScroll.BackgroundTransparency = 1
 	trackScroll.BorderSizePixel = 0
 	trackScroll.ScrollBarThickness = 4
@@ -460,118 +531,91 @@ function ProgressionController.Init()
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0, 3)
 	layout.Parent = trackScroll
-	y += 118
+	y += trackH + 8
 
 	section("CLAN")
 	clanLabel = body(48)
-	local nameBox = Instance.new("TextBox")
-	nameBox.Position = UDim2.fromOffset(16, y)
-	nameBox.Size = UDim2.fromOffset(200, 28)
-	nameBox.BackgroundColor3 = Constants.Colors.Background
-	nameBox.Font = Enum.Font.Gotham
-	nameBox.TextSize = 13
-	nameBox.TextColor3 = Constants.Colors.Text
-	nameBox.PlaceholderText = "Clan name"
-	nameBox.Text = ""
-	nameBox.ClearTextOnFocus = false
-	nameBox.BorderSizePixel = 0
-	UIUtil.Corner(nameBox, 6)
-	nameBox.Parent = scroll
-	local tagBox = Instance.new("TextBox")
-	tagBox.Position = UDim2.fromOffset(224, y)
-	tagBox.Size = UDim2.fromOffset(80, 28)
-	tagBox.BackgroundColor3 = Constants.Colors.Background
-	tagBox.Font = Enum.Font.Gotham
-	tagBox.TextSize = 13
-	tagBox.TextColor3 = Constants.Colors.Text
-	tagBox.PlaceholderText = "TAG"
-	tagBox.Text = ""
-	tagBox.ClearTextOnFocus = false
-	tagBox.BorderSizePixel = 0
-	UIUtil.Corner(tagBox, 6)
-	tagBox.Parent = scroll
-	y += 36
+	local nameBox = textBox("Clan name", 16, if isTouch then UDim.new(0.6, -20) else UDim.new(0, 200))
+	local tagBox = textBox("TAG", if isTouch then 0 else 224, if isTouch then UDim.new(0.4, -20) else UDim.new(0, 80))
+	if isTouch then
+		tagBox.Position = UDim2.new(0.6, 4, 0, y)
+	end
+	y += (if isTouch then TAP else 32) + 6
 	btn("CREATE CLAN", 200, function()
-		Remotes.GetEvent(Constants.RemoteNames.RequestCreateClan):FireServer(nameBox.Text, tagBox.Text)
+		fire(Constants.RemoteNames.RequestCreateClan, nameBox.Text, tagBox.Text)
 	end)
-	y += 36
-	local joinBox = Instance.new("TextBox")
-	joinBox.Position = UDim2.fromOffset(16, y)
-	joinBox.Size = UDim2.fromOffset(280, 28)
-	joinBox.BackgroundColor3 = Constants.Colors.Background
-	joinBox.Font = Enum.Font.Gotham
-	joinBox.TextSize = 12
-	joinBox.TextColor3 = Constants.Colors.Text
-	joinBox.PlaceholderText = "Clan Id to join"
-	joinBox.Text = ""
-	joinBox.ClearTextOnFocus = false
-	joinBox.BorderSizePixel = 0
-	UIUtil.Corner(joinBox, 6)
-	joinBox.Parent = scroll
-	y += 36
+	y += rowH + 8
+	local joinBox = textBox("Clan Id to join", 16, if isTouch then UDim.new(1, -32) else UDim.new(0, 280))
+	y += (if isTouch then TAP else 32) + 6
 	btn("JOIN CLAN", 140, function()
-		Remotes.GetEvent(Constants.RemoteNames.RequestJoinClan):FireServer(joinBox.Text)
+		fire(Constants.RemoteNames.RequestJoinClan, joinBox.Text)
 	end)
 	local leaveBtn = btn("LEAVE CLAN", 140, function()
-		Remotes.GetEvent(Constants.RemoteNames.RequestLeaveClan):FireServer()
+		fire(Constants.RemoteNames.RequestLeaveClan)
 	end)
-	leaveBtn.Position = UDim2.fromOffset(166, y)
-	y += 40
+	leaveBtn.Position = if isTouch then UDim2.new(0, 16 + 180 + 8, 0, y) else UDim2.fromOffset(166, y)
+	y += rowH + 10
 
 	section("CLAN WAR")
 	warLabel = body(52)
 	scoreboardLabel = body(72)
-	warIdBox = Instance.new("TextBox")
-	warIdBox.Position = UDim2.fromOffset(16, y)
-	warIdBox.Size = UDim2.fromOffset(260, 28)
-	warIdBox.BackgroundColor3 = Constants.Colors.Background
-	warIdBox.Font = Enum.Font.Gotham
-	warIdBox.TextSize = 12
-	warIdBox.TextColor3 = Constants.Colors.Text
-	warIdBox.PlaceholderText = "Enemy clan Id to declare war"
-	warIdBox.Text = ""
-	warIdBox.ClearTextOnFocus = false
-	warIdBox.BorderSizePixel = 0
-	UIUtil.Corner(warIdBox, 6)
-	warIdBox.Parent = scroll
-	y += 36
+	local warBox = textBox("Enemy clan Id to declare war", 16, if isTouch then UDim.new(1, -32) else UDim.new(0, 260))
+	y += (if isTouch then TAP else 32) + 6
 	btn("DECLARE WAR", 160, function()
-		if warIdBox and warIdBox.Text ~= "" then
-			Remotes.GetEvent(Constants.RemoteNames.RequestDeclareClanWar):FireServer(warIdBox.Text)
+		if warBox.Text ~= "" then
+			fire(Constants.RemoteNames.RequestDeclareClanWar, warBox.Text)
 		end
 	end)
-	y += 40
+	y += rowH + 10
 	scroll.CanvasSize = UDim2.fromOffset(0, y + 20)
 
-	Remotes.GetEvent(Constants.RemoteNames.PrestigeStateUpdate).OnClientEvent:Connect(function(payload)
+	shell = PanelShell.Attach({
+		Id = PANEL_ID,
+		Screen = screen,
+		Panel = panel,
+		IsOpen = function(): boolean
+			return menuOpen
+		end,
+		Close = function()
+			setOpen(false)
+		end,
+	})
+
+	Remotes.BindEvent(Constants.RemoteNames.PrestigeStateUpdate, function(payload: any)
 		prestigeState = payload
 		refreshLabels()
 	end)
-	Remotes.GetEvent(Constants.RemoteNames.BattlePassStateUpdate).OnClientEvent:Connect(function(payload)
+	Remotes.BindEvent(Constants.RemoteNames.BattlePassStateUpdate, function(payload: any)
 		bpState = payload
 		refreshLabels()
 	end)
-	Remotes.GetEvent(Constants.RemoteNames.ClanStateUpdate).OnClientEvent:Connect(function(payload)
+	Remotes.BindEvent(Constants.RemoteNames.ClanStateUpdate, function(payload: any)
 		clanState = payload
 		refreshLabels()
 	end)
-	Remotes.GetEvent(Constants.RemoteNames.ClanWarStateUpdate).OnClientEvent:Connect(function(payload)
+	Remotes.BindEvent(Constants.RemoteNames.ClanWarStateUpdate, function(payload: any)
 		warState = payload
 		refreshLabels()
 	end)
+	Remotes.BindEvent(Constants.RemoteNames.SeasonStateUpdate, applySeason)
 
+	local rebirthKey: Enum.KeyCode = HudConfig.Keys.Rebirth or Enum.KeyCode.K
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.K then
+		if input.KeyCode == rebirthKey then
 			setOpen(not menuOpen)
 		end
 	end)
+	refreshLabelsImmediate()
 end
 
-
 function ProgressionController.Toggle()
+	local sh = shell
+	if not menuOpen and sh and sh.TapThrough() then
+		return
+	end
 	setOpen(not menuOpen)
 end
 

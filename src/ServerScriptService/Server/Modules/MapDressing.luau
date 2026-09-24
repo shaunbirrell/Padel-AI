@@ -8,6 +8,8 @@
 	Quality Low (~60–70% fewer clusters) vs Full. Studio usually SKIPS entirely
 	(DevConfig.StudioSkipWorldDressing) — ForceDress attribute to opt in.
 	Regenerate: delete WarEmpireSetup + Play, or admin resetmap.
+	v70 waterways (spec_final §9): nothing stands in the water (sea, ring canal, lagoons, harbour, dock channels) or on
+	a plot pad; the South Docks quay is re-laid round the harbour; Waterways.CullDressing is the safety net at the end.
 ]]
 
 local MapDressing = {}
@@ -19,6 +21,41 @@ local PLOT_SIZE: number = (function(): number
 	end)
 	return if ok and type(cfg) == "table" and type(cfg.PlotSize) == "number" then cfg.PlotSize else 320
 end)()
+
+-- v70: BaseLayoutConfig.Enabled (the 320 layout has its own in-base WarzoneSpots)
+local LAYOUT_ON: boolean = (function(): boolean
+	local ok, cfg = pcall(function()
+		return require(game:GetService("ReplicatedStorage").Shared.Configs.BaseLayoutConfig) :: any
+	end)
+	return ok and type(cfg) == "table" and cfg.Enabled == true
+end)()
+
+-- v70: Modules/Waterways (water rects + dressing cull), loaded lazily so a Waterways error never blocks MapSetup
+local waterwaysMod: any = nil
+local function getWaterways(): any?
+	if waterwaysMod == nil then
+		local ok, m = pcall(function(): any
+			return require(script.Parent.Waterways) :: any
+		end)
+		waterwaysMod = if ok and type(m) == "table" then m else false
+		if not ok then
+			warn("[MapDressing] Waterways unavailable:", m)
+		end
+	end
+	return if waterwaysMod then waterwaysMod else nil
+end
+
+-- v70: true when (x, z) is within `margin` of any water or of a plot pad (spots there are skipped whole)
+local function onWaterOrPlot(pos: Vector3, margin: number): boolean
+	local ww = getWaterways()
+	if not ww then
+		return false
+	end
+	local ok, res = pcall(function(): boolean
+		return ww.IsWaterXZ(pos.X, pos.Z, margin) or ww.IsOnPlotPadXZ(pos.X, pos.Z, margin)
+	end)
+	return ok and res == true
+end
 
 -- Palette aligned with StructureVisualConfig / MapSetup (Concrete / Metal / Neon)
 local COL = {
@@ -1422,13 +1459,13 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 	-- 2) Outposts
 	local outposts = if full
 		then {
-			{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
+			{ Name = "OP_NorthRidge", Pos = Vector3.new(60, 0.5, -1180), Yaw = 30, Label = "OUTPOST" }, -- v70: x 90 was in P3's dock channel
 			{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = "OUTPOST" },
 			{ Name = "OP_OilFields", Pos = Vector3.new(850, 0.5, 1080), Yaw = 45, Label = "OUTPOST" },
 			{ Name = "OP_MidNE", Pos = Vector3.new(550, 0.5, -550), Yaw = 20, Label = nil },
 		}
 		else {
-			{ Name = "OP_NorthRidge", Pos = Vector3.new(90, 0.5, -1180), Yaw = 30, Label = "OUTPOST" },
+			{ Name = "OP_NorthRidge", Pos = Vector3.new(60, 0.5, -1180), Yaw = 30, Label = "OUTPOST" }, -- v70: x 90 was in P3's dock channel
 			{ Name = "OP_EastArmory", Pos = Vector3.new(1180, 0.5, 90), Yaw = 100, Label = nil },
 		}
 	for _, op in ipairs(outposts) do
@@ -1444,13 +1481,13 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		if full then
 			kitHangar(f, Vector3.new(700, 0.5, 200), 90)
 			kitRunway(f, Vector3.new(780, 0.5, 0), 0, 100)
-			kitFuelDepot(f, Vector3.new(640, 0.5, -280), 0)
+			kitFuelDepot(f, Vector3.new(600, 0.5, -280), 0) -- v70: (640,-280) overlapped P5's pad corner
 			kitVehicleSilhouette(f, Vector3.new(660, 0.5, -140), 90, "truck")
 			kitVehicleSilhouette(f, Vector3.new(660, 0.5, 140), 85, "jeep")
 			kitLightPole(f, Vector3.new(740, 0.5, -60))
 			kitLightPole(f, Vector3.new(740, 0.5, 60))
 		else
-			kitFuelDepot(f, Vector3.new(640, 0.5, -280), 0)
+			kitFuelDepot(f, Vector3.new(600, 0.5, -280), 0) -- v70: (640,-280) overlapped P5's pad corner
 			kitLightPole(f, Vector3.new(740, 0.5, 0))
 		end
 	end
@@ -1496,7 +1533,7 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 	local camps = if full
 		then {
 			{ Name = "Camp_N", Pos = Vector3.new(-280, 0.5, -700), Yaw = 15 },
-			{ Name = "Camp_E", Pos = Vector3.new(900, 0.5, -350), Yaw = 90 },
+			{ Name = "Camp_E", Pos = Vector3.new(1120, 0.5, -400), Yaw = 90 }, -- v70: (900,-350) sat on P5's Warehouse
 			{ Name = "Camp_FarSE", Pos = Vector3.new(1400, 0.5, 900), Yaw = 40 },
 		}
 		else {
@@ -1509,33 +1546,37 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		kitCamp(f, c.Pos, c.Yaw)
 	end
 
-	-- 7) Dockside (Low: 2 piers; Full: 5)
+	-- 7) Dockside — v70: re-laid round the South Docks harbour (water x -240..240, z 1364..1490). Piers stand in the
+	-- harbour off the quay (WE_AllowInWater); crates / drums / lights on the quay (z 1330..1360) beside them, never in
+	-- front of a pier. Piers at x -220 / -185 / 185 / 220 stay clear of the capture lens (|x| <= 56), the slips
+	-- (|x| 64..108) and P4's channel mouth (x -148..-108). Low: 2 piers; Full: 4.
 	do
 		local f = Instance.new("Folder")
 		f.Name = "DocksideDressing"
 		f.Parent = dressing
-		local pierXs = if full then { -200, -80, 80, 200, 350 } else { -80, 80 }
+		local pierXs = if full then { -220, -185, 185, 220 } else { -185, 185 }
 		for i, x in ipairs(pierXs) do
-			p({
+			local pier = p({
 				Name = "Pier" .. i,
-				Size = Vector3.new(18, 1.2, 40),
-				Position = Vector3.new(x, 0.8, 1420),
+				Size = Vector3.new(10, 1.2, 36),
+				Position = Vector3.new(x, 2.0, 1382), -- z 1364..1400, deck top 2.6
 				Color = COL.Dock,
 				Material = Enum.Material.Wood,
 				CanCollide = true,
 				CanQuery = true,
 				Parent = f,
 			})
-			kitCrateStack(f, Vector3.new(x - 4, 1.5, 1410))
+			pier:SetAttribute("WE_AllowInWater", true)
+			kitCrateStack(f, Vector3.new(x - 12, 0.5, 1350))
 			if full then
-				kitOilDrums(f, Vector3.new(x + 5, 1.5, 1405), 3)
-				kitLightPole(f, Vector3.new(x + 8, 0.5, 1440))
+				kitOilDrums(f, Vector3.new(x + 8, 0.5, 1340), 3)
+				kitLightPole(f, Vector3.new(x + 7, 0.5, 1358))
 			end
 		end
 		if full then
 			kitAmmoShed(f, Vector3.new(-320, 0.5, 1380), 0)
 			kitFuelDepot(f, Vector3.new(320, 0.5, 1380), 180)
-			kitVehicleSilhouette(f, Vector3.new(0, 0.5, 1360), 0, "truck")
+			kitVehicleSilhouette(f, Vector3.new(170, 0.5, 1330), 0, "truck")
 			kitSandbagLine(f, Vector3.new(0, 0.5, 1340), 0, 6)
 		end
 	end
@@ -1559,8 +1600,8 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		kitVehicleSilhouette(f2, Vector3.new(1250, 0.5, -1380), 40, "tank")
 		kitWatchtower(f2, Vector3.new(1200, 0.5, -1500), 30)
 		kitRuinedWall(f2, Vector3.new(-1320, 0.5, 1320), -135)
-		kitSandbagLine(f2, Vector3.new(-1280, 0.5, 1450), -90, 5)
-		kitWatchtower(f2, Vector3.new(-1200, 0.5, 1500), -150)
+		kitSandbagLine(f2, Vector3.new(-1280, 0.5, 1420), -90, 5) -- v70: was z 1450 (sea shore)
+		kitWatchtower(f2, Vector3.new(-1200, 0.5, 1440), -150) -- v70: was z 1500 (in the sea)
 	end
 
 	-- 10) Road furniture (Low: 4 signs + 2 lights; Full: prior)
@@ -1574,19 +1615,19 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 				{ Vector3.new(-40, 0.5, 250), 180 },
 				{ Vector3.new(250, 0.5, 40), 90 },
 				{ Vector3.new(-250, 0.5, -40), -90 },
-				{ Vector3.new(40, 0.5, -800), 0 },
-				{ Vector3.new(-40, 0.5, 800), 180 },
+				{ Vector3.new(40, 0.5, -620), 0 }, -- v70: was (40,-800), inside P3
+				{ Vector3.new(-40, 0.5, 620), 180 }, -- v70: was (-40,800), inside P4
 				{ Vector3.new(800, 0.5, 40), 90 },
 				{ Vector3.new(-800, 0.5, -40), -90 },
 				{ Vector3.new(40, 0.5, -1600), 0 },
-				{ Vector3.new(-40, 0.5, 1600), 180 },
+				{ Vector3.new(-24, 0.5, 1225), 180 }, -- v70: was (-40,1600), in the sea
 				{ Vector3.new(1600, 0.5, 40), 90 },
 				{ Vector3.new(-1600, 0.5, -40), -90 },
 			}
 			else {
 				{ Vector3.new(40, 0.5, -250), 0 },
 				{ Vector3.new(250, 0.5, 40), 90 },
-				{ Vector3.new(40, 0.5, -800), 0 },
+				{ Vector3.new(40, 0.5, -620), 0 }, -- v70: was (40,-800), inside P3
 				{ Vector3.new(800, 0.5, 40), 90 },
 			}
 		for _, s in ipairs(signSpots) do
@@ -1660,12 +1701,12 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		f.Parent = dressing
 		local bunkers = if full
 			then {
-				{ Vector3.new(0, 0.5, -900), 0 },
+				{ Vector3.new(-60, 0.5, -1000), 0 }, -- v70: was (0,-900), inside P3
 				{ Vector3.new(900, 0.5, 0), 90 },
 				{ Vector3.new(-450, 0.5, 900), 195 },
 			}
 			else {
-				{ Vector3.new(0, 0.5, -900), 0 },
+				{ Vector3.new(-60, 0.5, -1000), 0 }, -- v70: was (0,-900), inside P3
 			}
 		for _, b in ipairs(bunkers) do
 			kitBunker(f, b[1], b[2])
@@ -1689,14 +1730,12 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			then {
 				{ Vector3.new(-800, 0.5, -650), 0 },
 				{ Vector3.new(-800, 0.5, 650), 0 },
-				{ Vector3.new(0, 0.5, -950), 0 },
-				{ Vector3.new(0, 0.5, 950), 180 },
+				-- v70: (0, +-950) dropped (inside P3 / P4)
 				{ Vector3.new(800, 0.5, -650), 180 },
 				{ Vector3.new(800, 0.5, 650), 180 },
 			}
 			else {
 				{ Vector3.new(-800, 0.5, -650), 0 },
-				{ Vector3.new(0, 0.5, -950), 0 },
 				{ Vector3.new(800, 0.5, 650), 180 },
 			}
 		for _, e in ipairs(plotEdges) do
@@ -1706,7 +1745,9 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		local densify = Instance.new("Folder")
 		densify.Name = "PlotWarzoneDensify"
 		densify.Parent = dressing
-		local perPlot = if full then 12 else 8
+		-- v70 (spec §9.7): the 320 layout places its own WarzoneSpots inside each base; the 55-91 ring is inside the
+		-- base (plaza, roads, buildings), so the densify pass is skipped whole while BaseLayoutConfig.Enabled.
+		local perPlot = if LAYOUT_ON then 0 elseif full then 12 else 8
 		for pi, center in ipairs(plotCenters) do
 			for i = 1, perPlot do
 				local ang = (i / perPlot) * math.pi * 2 + pi * 0.35
@@ -1740,8 +1781,8 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			then {
 				Vector3.new(200, 0.5, -200), Vector3.new(-200, 0.5, 200), Vector3.new(350, 0.5, 350),
 				Vector3.new(-350, 0.5, -350), Vector3.new(0, 0.5, -550), Vector3.new(550, 0.5, 0),
-				Vector3.new(-550, 0.5, 0), Vector3.new(0, 0.5, 550), Vector3.new(750, 0.5, -400),
-				Vector3.new(-750, 0.5, 400), Vector3.new(400, 0.5, -900), Vector3.new(-400, 0.5, 900),
+				Vector3.new(-550, 0.5, 0), Vector3.new(0, 0.5, 550), -- v70: (750,-400) / (-750,400) dropped (inside P5 / P2)
+				Vector3.new(400, 0.5, -900), Vector3.new(-400, 0.5, 900),
 			}
 			else {
 				Vector3.new(200, 0.5, -200), Vector3.new(-200, 0.5, 200), Vector3.new(0, 0.5, -550),
@@ -1925,8 +1966,8 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		f.Parent = dressing
 		local mesas = if full
 			then {
-				{ Pos = Vector3.new(2200, 2, 1800), Yaw = 225 },
-				{ Pos = Vector3.new(-2200, 2, 1800), Yaw = -45 },
+				{ Pos = Vector3.new(2200, 2, 2420), Yaw = 225 }, -- v70: z 1800 was in the sea
+				{ Pos = Vector3.new(-2200, 2, 2420), Yaw = -45 },
 				{ Pos = Vector3.new(2200, 2, -1800), Yaw = 135 },
 				{ Pos = Vector3.new(-2200, 2, -1800), Yaw = 45 },
 				{ Pos = Vector3.new(0, 4, 2400), Yaw = 180 },
@@ -1935,7 +1976,7 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 				{ Pos = Vector3.new(-2400, 3, 0), Yaw = 90 },
 			}
 			else {
-				{ Pos = Vector3.new(2200, 2, 1800), Yaw = 225 },
+				{ Pos = Vector3.new(2200, 2, 2420), Yaw = 225 }, -- v70: z 1800 was in the sea
 				{ Pos = Vector3.new(-2200, 2, -1800), Yaw = 45 },
 				{ Pos = Vector3.new(0, 4, 2400), Yaw = 180 },
 				{ Pos = Vector3.new(2400, 3, 0), Yaw = -90 },
@@ -1951,6 +1992,9 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			local ang = (i / palmRim) * math.pi * 2
 			local r = 2100 + ((i * 47) % 80)
 			local pos = Vector3.new(math.cos(ang) * r, 0.5, math.sin(ang) * r)
+			if onWaterOrPlot(pos, 8) then
+				continue -- v70: rim spots on the sea band are skipped (no catalog insert for a prop the cull would drop)
+			end
 			local host = p({
 				Name = "PalmHorizonHost" .. i,
 				Size = Vector3.new(2, 10, 2),
@@ -1965,10 +2009,10 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		local floraSpots = if full
 			then {
 				Vector3.new(500, 0.5, 700), Vector3.new(-500, 0.5, -700),
-				Vector3.new(700, 0.5, -500), Vector3.new(-700, 0.5, 500),
+				Vector3.new(720, 0.5, -640), Vector3.new(-720, 0.5, 640), -- v70: were (700,-500) / (-700,500), inside P5 / P2
 				Vector3.new(1100, 0.5, 400), Vector3.new(-1100, 0.5, -400),
 				Vector3.new(400, 0.5, 1100), Vector3.new(-400, 0.5, -1100),
-				Vector3.new(1500, 0.5, -300), Vector3.new(-1500, 0.5, 300),
+				Vector3.new(1500, 0.5, -360), Vector3.new(-1500, 0.5, 360), -- v70: z +-300 touched the P5 / P2 dock channels
 			}
 			else {
 				Vector3.new(500, 0.5, 700), Vector3.new(-500, 0.5, -700),
@@ -1992,7 +2036,7 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			then {
 				{ Pos = Vector3.new(-350, 0.5, -450), Yaw = 25 },
 				{ Pos = Vector3.new(400, 0.5, 500), Yaw = 110 },
-				{ Pos = Vector3.new(-800, 0.5, 300), Yaw = -30 },
+				{ Pos = Vector3.new(-880, 0.5, 150), Yaw = -30 }, -- v70: was (-800,300), inside P2
 				{ Pos = Vector3.new(900, 0.5, -700), Yaw = 70 },
 			}
 			else {
@@ -2008,7 +2052,7 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			then {
 				{ Pos = Vector3.new(250, 0.5, -700), Yaw = 20 },
 				{ Pos = Vector3.new(-600, 0.5, 250), Yaw = 100 },
-				{ Pos = Vector3.new(700, 0.5, 350), Yaw = -40 },
+				{ Pos = Vector3.new(560, 0.5, 330), Yaw = -40 }, -- v70: was (700,350), inside P6
 				{ Pos = Vector3.new(-300, 0.5, 750), Yaw = 160 },
 			}
 			else {
@@ -2024,11 +2068,11 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			then {
 				Vector3.new(150, 0.5, -350), Vector3.new(-150, 0.5, 350),
 				Vector3.new(450, 0.5, -150), Vector3.new(-450, 0.5, 150),
-				Vector3.new(50, 0.5, -900), Vector3.new(-50, 0.5, 900),
+				Vector3.new(60, 0.5, -1010), Vector3.new(-60, 0.5, 1010), -- v70: were (50,-900) / (-50,900), inside P3 / P4
 			}
 			else {
 				Vector3.new(150, 0.5, -350), Vector3.new(-450, 0.5, 150),
-				Vector3.new(50, 0.5, -900),
+				Vector3.new(60, 0.5, -1010), -- v70: was (50,-900), inside P3
 			}
 		for _, origin in ipairs(camoSpots) do
 			if not tooCloseToGameplay(origin, 28) then
@@ -2074,6 +2118,18 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 	end
 
 
+	-- v70 safety net (spec §9.12): nothing in the water or on a plot pad (WE_AllowInWater exempts the harbour piers)
+	local culled = 0
+	local ww = getWaterways()
+	if ww then
+		local okCull, res = pcall(ww.CullDressing, dressing)
+		if okCull and type(res) == "number" then
+			culled = res
+		elseif not okCull then
+			warn("[MapDressing] water cull failed:", res)
+		end
+	end
+
 	local partCount = 0
 	for _, d in ipairs(dressing:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -2081,7 +2137,7 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			d.CastShadow = false
 		end
 	end
-	print("[WAR EMPIRE] MapDressing complete: quality=" .. quality .. " parts=" .. tostring(partCount) .. " densify=P0+P1 (CastShadow=false)")
+	print("[WAR EMPIRE] MapDressing complete: quality=" .. quality .. " parts=" .. tostring(partCount) .. " culled=" .. tostring(culled) .. " densify=P0+P1 (CastShadow=false)")
 end
 
 return MapDressing

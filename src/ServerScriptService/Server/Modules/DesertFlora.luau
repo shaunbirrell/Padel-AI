@@ -6,6 +6,8 @@
 	Called from MapSetup.Run after MapDressing (deferred).
 	CanCollide false; CastShadow false on ALL flora (Studio/laptop perf).
 	Sparse mode default — ~70% fewer plants than prior dense pass.
+	v70 waterways (spec_final §9): no plant in the water or on a plot pad (spots there are skipped whole);
+	Waterways.CullDressing is the safety net at the end.
 ]]
 
 local DesertFlora = {}
@@ -26,6 +28,29 @@ local COL = {
 	GrassDry = Color3.fromRGB(170, 145, 85),
 	Rock = Color3.fromRGB(160, 110, 75),
 }
+
+-- v70: Modules/Waterways (water rects + dressing cull), loaded lazily so a Waterways error never blocks MapSetup
+local waterwaysMod: any = nil
+local function getWaterways(): any?
+	if waterwaysMod == nil then
+		local ok, m = pcall(function(): any
+			return require(script.Parent.Waterways) :: any
+		end)
+		waterwaysMod = if ok and type(m) == "table" then m else false
+	end
+	return if waterwaysMod then waterwaysMod else nil
+end
+
+local function onWaterOrPlot(pos: Vector3, margin: number): boolean
+	local ww = getWaterways()
+	if not ww then
+		return false
+	end
+	local ok, res = pcall(function(): boolean
+		return ww.IsWaterXZ(pos.X, pos.Z, margin) or ww.IsOnPlotPadXZ(pos.X, pos.Z, margin)
+	end)
+	return ok and res == true
+end
 
 local function ensureFolder(name: string, parent: Instance): Folder
 	local existing = parent:FindFirstChild(name)
@@ -261,6 +286,9 @@ local function kitRockOutcrop(folder: Folder, origin: Vector3, scale: number?)
 end
 
 local function placeAt(folder: Folder, name: string, pos: Vector3, builder: (Folder, Vector3, number?) -> (), scale: number?)
+	if onWaterOrPlot(pos, 6) then
+		return -- v70: never a plant in the water or on a plot pad
+	end
 	local cluster = Instance.new("Folder")
 	cluster.Name = name
 	cluster.Parent = folder
@@ -320,21 +348,8 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		end
 	end
 
-	-- Plot-adjacent flora: sparse = 2 palms only; full = 4
-	local plotOffsets = if sparse
-		then {
-			Vector3.new(-800, GROUND_TOP_Y, -400),
-			Vector3.new(800, GROUND_TOP_Y, 400),
-		}
-		else {
-			Vector3.new(-800, GROUND_TOP_Y, -400),
-			Vector3.new(-800, GROUND_TOP_Y, 400),
-			Vector3.new(800, GROUND_TOP_Y, -400),
-			Vector3.new(800, GROUND_TOP_Y, 400),
-		}
-	for i, pos in ipairs(plotOffsets) do
-		placeAt(flora, "Palm_Plot_" .. i, pos + Vector3.new(110, 0, 40), kitPalm, 0.85)
-	end
+	-- v70: the plot-adjacent palms (Palm_Plot_*, plot + (110, 0, 40)) are gone: at the 320 layout they stood inside the
+	-- east building row of the base.
 
 	-- Catalog overlays: DesertPlants / Palm(+PalmAlt) / Cactus / DesertRock MeshPart
 	-- Cap attempts so PERF stays Part-kit-first even on live.
@@ -371,6 +386,15 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 			if attached > 0 then
 				print("[WAR EMPIRE] DesertFlora catalog props attached:", attached)
 			end
+		end
+	end
+
+	-- v70 safety net (spec §9.12): nothing in the water or on a plot pad
+	local ww = getWaterways()
+	if ww then
+		local okCull, res = pcall(ww.CullDressing, flora)
+		if not okCull then
+			warn("[DesertFlora] water cull failed:", res)
 		end
 	end
 
