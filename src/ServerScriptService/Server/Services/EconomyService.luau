@@ -444,7 +444,7 @@ function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player
 	end
 	(fromProfile :: any).PendingCash = fromPending - take
 	local toPending = math.floor(tonumber((toProfile :: any).PendingCash) or 0)
-	(toProfile :: any).PendingCash = math.clamp(toPending + take, 0, EconomyConfig.MaxCash)
+	;(toProfile :: any).PendingCash = math.clamp(toPending + take, 0, EconomyConfig.MaxCash)
 	getDataService().MarkDirty(fromPlayer)
 	getDataService().MarkDirty(toPlayer)
 	pushEconomy(fromPlayer, fromProfile)

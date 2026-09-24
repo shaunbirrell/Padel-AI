@@ -310,7 +310,7 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if typeof((profile :: any).PendingCash) ~= "number" then
 		local pendN = tonumber((profile :: any).PendingCash)
-		(profile :: any).PendingCash = if typeof(pendN) == "number" then math.floor(pendN) else 0
+		;(profile :: any).PendingCash = if typeof(pendN) == "number" then math.floor(pendN) else 0
 	end
 	if typeof((profile :: any).Entitlements) ~= "table" then
 		(profile :: any).Entitlements = {}

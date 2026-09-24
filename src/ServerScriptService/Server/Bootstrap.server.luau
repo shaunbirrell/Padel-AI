@@ -165,10 +165,11 @@ end
 safeInit("DataService", DataService)
 print("[WAR EMPIRE] DataService Init FIRST (v65) — before Economy/Base/UpgradePad")
 
+-- v66: warn only. The v65 assert killed this whole script when DataService failed to load
+-- (ProfileSchema parse error since v50), so no purchase handler, map or later service ever ran.
 if deps.DataService == nil then
 	warn("[WAR EMPIRE] CRITICAL: deps.DataService is nil before BaseService.Init — buy will fail")
 end
-assert(deps.DataService ~= nil, "deps.DataService nil before BaseService.Init (v65)")
 
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)

@@ -191,9 +191,12 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 	end
 	if productId == 0 then
 		if NotificationService then
-			NotificationService.NotifyThrottled
-				and NotificationService.NotifyThrottled(player, (displayName or offerKey) .. " — coming soon", "Info", 2.5, 4, "prem_stub_" .. offerKey)
-				or NotificationService.Notify(player, (displayName or offerKey) .. " — coming soon", "Info", 2.5)
+			local msg = (displayName or offerKey) .. " — coming soon"
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Info", 2.5, 4, "prem_stub_" .. offerKey)
+			else
+				NotificationService.Notify(player, msg, "Info", 2.5)
+			end
 		end
 		return
 	end

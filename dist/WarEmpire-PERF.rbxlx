@@ -4664,10 +4664,11 @@ end
 safeInit("DataService", DataService)
 print("[WAR EMPIRE] DataService Init FIRST (v65) — before Economy/Base/UpgradePad")
 
+-- v66: warn only. The v65 assert killed this whole script when DataService failed to load
+-- (ProfileSchema parse error since v50), so no purchase handler, map or later service ever ran.
 if deps.DataService == nil then
 	warn("[WAR EMPIRE] CRITICAL: deps.DataService is nil before BaseService.Init — buy will fail")
 end
-assert(deps.DataService ~= nil, "deps.DataService nil before BaseService.Init (v65)")
 
 safeInit("NotificationService", NotificationService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
@@ -5075,7 +5076,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 65)
+		player:SetAttribute("WE_Build", 66)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -10860,7 +10861,7 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if typeof((profile :: any).PendingCash) ~= "number" then
 		local pendN = tonumber((profile :: any).PendingCash)
-		(profile :: any).PendingCash = if typeof(pendN) == "number" then math.floor(pendN) else 0
+		;(profile :: any).PendingCash = if typeof(pendN) == "number" then math.floor(pendN) else 0
 	end
 	if typeof((profile :: any).Entitlements) ~= "table" then
 		(profile :: any).Entitlements = {}
@@ -15591,7 +15592,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 65)
+			player:SetAttribute("WE_Build", 66)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
@@ -18754,7 +18755,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 65)
+		player:SetAttribute("WE_Build", 66)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -18918,7 +18919,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=65",
+		"[DataService] instant profile userId=%d cash=%d WE_Build=66",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0)
 	))
@@ -19624,7 +19625,7 @@ function EconomyService.TransferPendingCash(fromPlayer: Player, toPlayer: Player
 	end
 	(fromProfile :: any).PendingCash = fromPending - take
 	local toPending = math.floor(tonumber((toProfile :: any).PendingCash) or 0)
-	(toProfile :: any).PendingCash = math.clamp(toPending + take, 0, EconomyConfig.MaxCash)
+	;(toProfile :: any).PendingCash = math.clamp(toPending + take, 0, EconomyConfig.MaxCash)
 	getDataService().MarkDirty(fromPlayer)
 	getDataService().MarkDirty(toPlayer)
 	pushEconomy(fromPlayer, fromProfile)
@@ -24130,9 +24131,12 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 	end
 	if productId == 0 then
 		if NotificationService then
-			NotificationService.NotifyThrottled
-				and NotificationService.NotifyThrottled(player, (displayName or offerKey) .. " — coming soon", "Info", 2.5, 4, "prem_stub_" .. offerKey)
-				or NotificationService.Notify(player, (displayName or offerKey) .. " — coming soon", "Info", 2.5)
+			local msg = (displayName or offerKey) .. " — coming soon"
+			if NotificationService.NotifyThrottled then
+				NotificationService.NotifyThrottled(player, msg, "Info", 2.5, 4, "prem_stub_" .. offerKey)
+			else
+				NotificationService.Notify(player, msg, "Info", 2.5)
+			end
 		end
 		return
 	end
@@ -26998,6 +27002,8 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			localCapture.Capturing = true
 			localCapture.Contested = rt.Contested == true
 			localCapture.Protected = rt.ProtectedUntil > nowUnix()
+				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
+				and rt.OwnerUserId ~= player.UserId
 			-- v38: dual nation colors for contested pulse HUD
 			if rt.Contested then
 				local function packColor(uid: number?): { number }?
@@ -27013,8 +27019,6 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 				;(localCapture :: any).ContesterColorA = packColor(rt.ContesterA)
 				;(localCapture :: any).ContesterColorB = packColor(rt.ContesterB)
 			end
-				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
-				and rt.OwnerUserId ~= player.UserId
 		end
 	end
 

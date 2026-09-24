@@ -446,6 +446,8 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			localCapture.Capturing = true
 			localCapture.Contested = rt.Contested == true
 			localCapture.Protected = rt.ProtectedUntil > nowUnix()
+				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
+				and rt.OwnerUserId ~= player.UserId
 			-- v38: dual nation colors for contested pulse HUD
 			if rt.Contested then
 				local function packColor(uid: number?): { number }?
@@ -461,8 +463,6 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 				;(localCapture :: any).ContesterColorA = packColor(rt.ContesterA)
 				;(localCapture :: any).ContesterColorB = packColor(rt.ContesterB)
 			end
-				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
-				and rt.OwnerUserId ~= player.UserId
 		end
 	end
 
