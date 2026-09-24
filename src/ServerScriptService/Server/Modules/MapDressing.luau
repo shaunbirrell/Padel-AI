@@ -12,6 +12,14 @@
 
 local MapDressing = {}
 
+-- v70: plots are 320 wide now (BaseLayoutConfig.PlotSize); plot-ring props must stay outside the base footprint
+local PLOT_SIZE: number = (function(): number
+	local ok, cfg = pcall(function()
+		return require(game:GetService("ReplicatedStorage").Shared.Configs.BaseLayoutConfig) :: any
+	end)
+	return if ok and type(cfg) == "table" and type(cfg.PlotSize) == "number" then cfg.PlotSize else 320
+end)()
+
 -- Palette aligned with StructureVisualConfig / MapSetup (Concrete / Metal / Neon)
 local COL = {
 	Concrete = Color3.fromRGB(85, 85, 78),
@@ -1705,7 +1713,12 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 				local rad = 55 + (i % 4) * 12
 				local origin = center + Vector3.new(math.cos(ang) * rad, 0, math.sin(ang) * rad)
 				local yaw = (i * 41 + pi * 17) % 180
-				if i % 3 == 0 then
+				-- v70: rad 55–91 was outside the old 200 plots but is inside the 320 base now (sandbags / bunkers on
+				-- the runway and rear zone). Skip anything inside the footprint + 12 until the waterways pass re-homes them.
+				local inside = math.max(math.abs(origin.X - center.X), math.abs(origin.Z - center.Z)) < PLOT_SIZE * 0.5 + 12
+				if inside then
+					-- skipped (base interior)
+				elseif i % 3 == 0 then
 					kitSandbagLine(densify, origin, yaw, if full then 4 else 3)
 				elseif i % 3 == 1 then
 					kitCrateStack(densify, origin)

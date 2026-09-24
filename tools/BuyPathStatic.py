@@ -1372,6 +1372,20 @@ else:
     bad(f"v65 simulate fallback failed nil={_nil_fallback} normal={_normal}")
 
 
+# v70 drivable vehicles (client-simulated, server-validated). Verified: server 290 + adversarial 22, client 134 + 11
+VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+VDC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau"
+must_contain(VS, "PhysicalProperties.new(0.9, CarCfg.WheelFriction, 0.1, CarCfg.WheelFrictionWeight, 1)", "v70 wheels low friction so cars/tanks can yaw")
+must_not_contain(VS, "PhysicalProperties.new(0.9, 2.0, 0.1, 1, 1)", "v70 no high-friction fixed-axle wheels")
+must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", "WheelFriction = 0.2,", "v70 Car.WheelFriction config")
+must_contain(VS, "Valid.TeleportSlack + held * idleDriftSpeed(rec.Mode)", "v70 correction hold does not eject airborne pilots")
+must_contain(VS, "local wallow = cap * math.max(0, s.T - win.T) + Valid.TeleportSlack", "v70 windowed teleport check (slack not per sample)")
+must_contain(VS, "if occ == nil or (tonumber(occ.Health) or 0) <= 0 then", "v70 fallback ignores a dead driver's throttle")
+must_contain(VDC, "hum:ChangeState(Enum.HumanoidStateType.Jumping)", "v70 F exit survives ControlModule Jump overwrite")
+must_contain(VDC, "RunService:BindToRenderStep(EXIT_STEP, Enum.RenderPriority.Input.Value + 1", "v70 exit re-asserts Jump after ControlModule render step")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "Remotes.GetEvent(", "v70 garage never blocks on Remotes.GetEvent")
+must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "< PLOT_SIZE * 0.5 + 12", "v70 plot densify props stay out of the 320 base (runways clear)")
+
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).
 # Needs luau-compile (https://github.com/luau-lang/luau/releases → luau-ubuntu.zip / luau-macos.zip).
