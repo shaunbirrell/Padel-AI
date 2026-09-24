@@ -167,7 +167,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "sea
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_DriveHinge", "HingeConstraint drive motors")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "startGroundDrive", "scripted/hinge ground drive")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "HingeConstraint", "mesh strips drive constraints")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "Codes in Settings", "ATM codes hint P1-7")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "ATM · WALK IN TO COLLECT", "v67 ATM card title (short; codes live in Settings)")
 
 
 # 9) Design competitive pass P0/P1 (ATM / WarzoneProps / showroom / HUD)
@@ -358,7 +358,7 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 # --- v25 Base Ceiling + prestige income keep + HUD rebirth progress ---
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "function StructureKitBuilder.SyncBaseCeiling", "SyncBaseCeiling")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_BaseCeiling", "WE_BaseCeiling folder")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofHelipad", "Ceiling roof helipad dress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "roof.CanQuery = false -- camera + weapon raycasts pass", "v67 anti-heli ceiling is an invisible barrier")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "SyncBaseCeiling", "BaseService SyncBaseCeiling wire")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "PlotOilPumpService", "Bootstrap PlotOilPump still wired")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "GateDefenseService", "Bootstrap GateDefense still wired")
@@ -370,9 +370,9 @@ must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "MinLev
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "RebirthUnlocks", "PrestigeConfig unlocks no-regress")
 
 # --- v26 Roof barracks + Missions dock + rebirth fee clarity ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofBarracksPad", "Ceiling roof barracks pads")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_RoofBarracks", "WE_RoofBarracks attribute")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "TryAttachBuildingVisual(bp, \"Barracks\"", "Roof barracks Barracks mesh dress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "AntiAirCeilingHeight", "v67 ceiling height from StructureVisualConfig")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'roof:SetAttribute("WE_BaseCeiling", true)', "v67 ceiling keeps WE_BaseCeiling attribute")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofBarracksPad", "v67 no rooftop barracks pads on the ceiling")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "DockMissions", "HUD dock Missions tile")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "MissionController.Toggle", "Missions dock opens MissionController")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "Label = \"MISSIONS\"", "Missions dock label")
@@ -432,8 +432,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersCo
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "KeyCode.T", "Orders T cycle")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "CONTESTED", "Territory Contested billboard")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "ContestedBadge", "Territory ContestedBadge")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingBeamLong", "BaseCeiling beams")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingJoist", "BaseCeiling joists")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingBeamLong", "v67 no ceiling beams (dark warehouse look)")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingJoist", "v67 no ceiling joists")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "Keep all your Robux Items!", "Rebirth exact keep banner")
 
 

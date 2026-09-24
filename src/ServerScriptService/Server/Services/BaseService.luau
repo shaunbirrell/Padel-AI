@@ -609,7 +609,6 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 
 	-- v39: mild level scale (was 0.55/lv → L5 Body 3.75× buried underground)
 	local bodyScale = 1 + lv * 0.12
-	local accentScale = 1 + lv * 0.08
 
 	local function placeKitPart(child: BasePart, newSize: Vector3, yExtra: number?)
 		local bx = child:GetAttribute("WE_BaseSize")
@@ -662,12 +661,12 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				placeKitPart(child, Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale), nil)
-				if palette then
-					child.Color = palette.Accent
-				end
-				child.Transparency = if lv == 0 then 0.85 else 0.02
-				child.Material = Enum.Material.Neon
+				-- v67: concrete foundation under the building. It was a Neon plate in the accent colour scaled
+				-- to 1.4x the footprint at L5, i.e. the glowing purple/green/blue floors around every building.
+				placeKitPart(child, b, nil)
+				child.Color = StructureVisualConfig.FoundationColor or Color3.fromRGB(146, 142, 130)
+				child.Transparency = if lv == 0 then 0.85 else 0
+				child.Material = Enum.Material.Concrete
 			elseif role == "Roof" or role == "Antenna" then
 				local bx = child:GetAttribute("WE_BaseSize")
 				if typeof(bx) ~= "Vector3" then
