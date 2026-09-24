@@ -1483,6 +1483,20 @@ must_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "DeferWhen =
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "HudLayout.ApplyScreen(rg, { Insets = \"None\" })", "v70 reticle gui full-screen (true centre)")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "{ Id = \"Missiles\", Controller = MissileController },", "v70 Missiles panel joins the one-panel-at-a-time registry")
 
+# v70 server fairness (verified: fairness combat 56, adversarial 22, thief 18, squad 26, research combat 40/9, squad 18,
+# raid 71, strike 67/27, gate 48, ds 24)
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if not (finite(direction.X) and finite(direction.Y) and finite(direction.Z)) then", "P0-7 every Direction component finite (NaN Y/Z bypassed claim checks)")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if not ((origin - root.Position).Magnitude <= CombatConfig.MaxOriginDeltaStuds) then", "P0-7 NaN origin snaps to root")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if not (along > 0) then", "P0-7 claim in front of the ray (NaN-safe)")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if not CombatDamage.LineOfSight(origin, torsoPos, { shooter }, target, false, CombatFairnessConfig.ClaimLosPastTorsoStuds) then", "P0-7 claimed target needs line of sight")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if lateral > CombatFairnessConfig.MissTolerance then", "P0-7 claim within MissTolerance of the ray")
+must_not_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if troot and (troot.Position - origin).Magnitude <= range then", "P0-7 old range-only trust removed")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau", "elseif not npcHasLos(rec, target, th, troot) then", "P1-2 NPC shots need line of sight")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau", "if not (tState and now < tState.InvulnerableUntil) and rng:NextNumber() < chance then", "P1-2 NPC hit chance")
+must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true)", "P1-4 ATTACK kills credit only via flag (idle bank farm)")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "local thiefBlock, thiefLeft = newThiefBlock(tProfile)", "P0-6 CanRaid refuses tutorial/new thieves")
+must_contain("src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau", "MissTolerance = 5,", "v70 phone lag tolerance 5 studs (10/12 aim points at 250 ms)")
+
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).
 # Needs luau-compile (https://github.com/luau-lang/luau/releases → luau-ubuntu.zip / luau-macos.zip).

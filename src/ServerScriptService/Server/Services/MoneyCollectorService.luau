@@ -22,6 +22,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
+local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P0-6 new-thief protection
 local ServerModules = script.Parent.Parent.Modules
 local RemoteSetup = require(ServerModules.RemoteSetup)
 
@@ -250,6 +251,30 @@ local function newPlayerSecondsLeft(profile: any): number
 		return 0
 	end
 	return math.max(0, first + R.NewPlayerProtectionSeconds - os.time())
+end
+
+--[[ P0-6 (mobile plan): mirror of the victim's protection for the THIEF — a player still in the tutorial, or inside
+	their first CombatFairnessConfig.ThiefProtectMinutes, cannot rob an ATM (the tutorial's guide line must never
+	turn into a raid on someone else's base). Returns (reason?, secondsLeft?). ]]
+local function newThiefBlock(profile: any): (string?, number?)
+	local C = CombatFairnessConfig
+	if not C.ThiefProtectEnabled then
+		return nil, nil
+	end
+	if RunService:IsStudio() and not C.ThiefProtectInStudio then
+		return nil, nil
+	end
+	if C.ThiefRequireTutorialDone and profile.TutorialComplete ~= true then
+		return "ThiefTutorial", nil
+	end
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	if first > 0 then
+		local left = first + C.ThiefProtectMinutes * 60 - os.time()
+		if left > 0 then
+			return "ThiefNew", left
+		end
+	end
+	return nil, nil
 end
 
 -- ── AutoCollect income window (spec §1.5) ──────────────────────────────────
@@ -505,6 +530,11 @@ local function reasonText(reason: string, secs: number?, balance: number?): stri
 	elseif reason == "Dead" then
 		return T.RaidDead
 	end
+	if reason == "ThiefTutorial" then -- P0-6 (texts in CombatFairnessConfig; device-neutral)
+		return CombatFairnessConfig.ThiefTutorialText
+	elseif reason == "ThiefNew" then
+		return string.format(CombatFairnessConfig.ThiefNewText, RaidConfig.FormatTime(secs or 0))
+	end
 	local tpl = T.Blocked[reason]
 	if not tpl then
 		return reason
@@ -649,6 +679,10 @@ function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean,
 	end
 	if ownedPlotOf(thief) == nil then
 		return false, "NoBase"
+	end
+	local thiefBlock, thiefLeft = newThiefBlock(tProfile)
+	if thiefBlock then
+		return false, thiefBlock, thiefLeft
 	end
 	if not R.AllowAllies and isAlly(victim.UserId, thief) then
 		return false, "Ally"

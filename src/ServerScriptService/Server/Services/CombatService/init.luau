@@ -19,6 +19,7 @@ local GameConfig = require(Shared.Configs.GameConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local ResearchConfig = require(Shared.Configs.ResearchConfig) -- v69 research
+local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- mobile plan P0-7 / P1-2 / P1-4
 
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
@@ -63,6 +64,9 @@ type NPCRecord = {
 	LastFireAt: number,
 	SpawnCFrame: CFrame,
 	Alive: boolean,
+	AimTarget: Player?, -- P1-2: the player this NPC is aiming at (CombatNPC reaction delay)
+	AimSince: number,
+	AimBlocked: boolean, -- P1-2: the last line-of-sight check failed (the reaction delay restarts on regaining sight)
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -408,14 +412,19 @@ local function destroyNPC(rec: NPCRecord)
 	end
 end
 
-function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord)
+-- `byUnit` (P1-4): the killing hit came from the attacker's squad unit — CombatFairnessConfig.UnitKillCashShare
+function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boolean?)
 	if not rec.Alive then
 		return
 	end
 	rec.Alive = false
 	local cash = rec.Def.CashReward
 	local xp = rec.Def.XPReward
-	grantRewards(attacker, cash, xp, "npc_kill")
+	if byUnit then
+		cash = math.floor(cash * math.clamp(CombatFairnessConfig.UnitKillCashShare, 0, 1) + 0.5)
+		xp = math.floor(xp * math.clamp(CombatFairnessConfig.UnitKillXPShare, 0, 1) + 0.5)
+	end
+	grantRewards(attacker, cash, xp, if byUnit then "npc_kill_squad" else "npc_kill")
 	if MissionService and MissionService.TrackProgress then
 		MissionService.TrackProgress(attacker, "KillNPC", 1)
 	end
@@ -429,12 +438,16 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord)
 			npcType = rec.TypeId,
 			cash = cash,
 			xp = xp,
+			squad = byUnit == true,
 		})
 	end
 	if NotificationService then
-		NotificationService.Notify(attacker, string.format("%s down (+$%d)", rec.Def.DisplayName, cash), "Reward")
+		local fmt = if byUnit then "Squad: %s down (+$%d)" else "%s down (+$%d)"
+		NotificationService.Notify(attacker, string.format(fmt, rec.Def.DisplayName, cash), "Reward")
 	end
-	hitFeedback(attacker, { Kind = "Kill", Damage = 0, TargetName = rec.Def.DisplayName, WeaponId = nil })
+	if not byUnit then -- the kill marker belongs to the player's own shot
+		hitFeedback(attacker, { Kind = "Kill", Damage = 0, TargetName = rec.Def.DisplayName, WeaponId = nil })
+	end
 	local spawnCf = rec.SpawnCFrame
 	local typeId = rec.TypeId
 	task.delay(0.35, function()
@@ -638,6 +651,9 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		LastFireAt = 0,
 		SpawnCFrame = at,
 		Alive = true,
+		AimTarget = nil,
+		AimSince = 0,
+		AimBlocked = false,
 	}
 	npcRecords[id] = rec
 
@@ -646,12 +662,14 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 			return
 		end
 		local killer: Player? = nil
+		local byUnit = false
 		local tag = humanoid:FindFirstChild("creator")
 		if tag and tag:IsA("ObjectValue") and tag.Value and tag.Value:IsA("Player") then
 			killer = tag.Value :: Player
+			byUnit = tag:GetAttribute("WE_UnitShot") == true -- P1-4: a squad unit's hit, credited to its owner
 		end
 		if killer then
-			CombatService.OnNPCKilled(killer, rec)
+			CombatService.OnNPCKilled(killer, rec, byUnit)
 		else
 			local spawnCf = rec.SpawnCFrame
 			local t = rec.TypeId
@@ -836,6 +854,62 @@ function CombatService.Reload(player: Player): (boolean, string?)
 	return true, nil
 end
 
+-- ── P0-7 (mobile plan): the server never trusts a client-named target on its own ───────────────────────────
+local claimRefusals: { [number]: { At: number, Suppressed: number } } = {}
+
+local function logClaimRefusal(player: Player, reason: string, target: string)
+	local t = clock()
+	local entry = claimRefusals[player.UserId]
+	if entry and t - entry.At < CombatFairnessConfig.RefusalLogSeconds then
+		entry.Suppressed += 1
+		return
+	end
+	local suppressed = if entry then entry.Suppressed else 0
+	claimRefusals[player.UserId] = { At = t, Suppressed = 0 }
+	print(string.format("[CombatService] claimed target refused: %s (%d) -> %s: %s (+%d not logged)", player.Name, player.UserId, target, reason, suppressed))
+end
+
+local function torsoOf(model: Model, root: BasePart): BasePart
+	local torso = model:FindFirstChild("UpperTorso") or model:FindFirstChild("Torso")
+	if torso and torso:IsA("BasePart") then
+		return torso
+	end
+	return root
+end
+
+--[[ A claimed target counts only if its torso is in front of the fire ray (0 < along <= maxAlong), within `range` of
+	the origin, at most CombatFairnessConfig.MissTolerance studs sideways of the ray, and a server ray from the origin
+	to that torso (the shot's own filter: only the shooter is excluded) touches the target before anything else. ]]
+local function validateClaim(
+	shooter: Model,
+	origin: Vector3,
+	direction: Vector3,
+	range: number,
+	maxAlong: number,
+	target: Model,
+	torsoPos: Vector3
+): (boolean, string)
+	local v = torsoPos - origin
+	local along = v:Dot(direction)
+	if not (along > 0) then -- NaN-safe: a NaN along fails here (and would pass every check below)
+		return false, "behind the shot"
+	end
+	if v.Magnitude > range then
+		return false, string.format("out of range %.0f > %.0f", v.Magnitude, range)
+	end
+	if along > maxAlong then
+		return false, "beyond what the shot hit"
+	end
+	local lateral = (v - direction * along).Magnitude
+	if lateral > CombatFairnessConfig.MissTolerance then
+		return false, string.format("%.1f studs off the ray", lateral)
+	end
+	if not CombatDamage.LineOfSight(origin, torsoPos, { shooter }, target, false, CombatFairnessConfig.ClaimLosPastTorsoStuds) then
+		return false, "no line of sight"
+	end
+	return true, "ok"
+end
+
 function CombatService.RequestFire(player: Player, payload: any): boolean
 	if typeof(payload) ~= "table" then
 		AntiExploitService.Strike(player, "fire_bad_payload")
@@ -892,7 +966,9 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		AntiExploitService.Strike(player, "fire_bad_direction")
 		return false
 	end
-	if not AntiExploitService.IsFiniteNumber(direction.X) then
+	-- P0-7: every component (a NaN Y or Z made .Unit NaN, which slipped past the claim checks below)
+	local finite = AntiExploitService.IsFiniteNumber
+	if not (finite(direction.X) and finite(direction.Y) and finite(direction.Z)) then
 		AntiExploitService.Strike(player, "fire_nan_direction")
 		return false
 	end
@@ -902,7 +978,7 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	if typeof(origin) ~= "Vector3" then
 		origin = root.Position + Vector3.new(0, 1.5, 0)
 	else
-		if (origin - root.Position).Magnitude > CombatConfig.MaxOriginDeltaStuds then
+		if not ((origin - root.Position).Magnitude <= CombatConfig.MaxOriginDeltaStuds) then -- P0-7: NaN snaps too
 			AntiExploitService.Strike(player, "fire_origin_desync")
 			origin = root.Position + Vector3.new(0, 1.5, 0)
 		end
@@ -918,13 +994,18 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	local result = raycast(origin, direction, range, { character })
 
 	local hitSomething = false
+	-- P0-7: how far along the fire ray a client-named target may stand (nil = the exact ray decided the shot)
+	local claimMaxAlong: number? = nil
 	if result then
+		local hitTarget = false -- the ray hit a player, an NPC or a gate: that decides the shot, no claim
 		local model = result.Instance:FindFirstAncestorOfClass("Model")
 		if model then
 			local hitPlayer = Players:GetPlayerFromCharacter(model)
 			if hitPlayer then
+				hitTarget = true
 				hitSomething = damagePlayer(player, hitPlayer, damage, state.WeaponId)
 			elseif CollectionService:HasTag(model, Constants.Tags.NPC) then
+				hitTarget = true
 				local npcId = model:GetAttribute("NPCId")
 				if typeof(npcId) == "string" and (result.Position - origin).Magnitude <= range then
 					hitSomething = damageNPC(player, npcId, damage, state.WeaponId)
@@ -935,26 +1016,57 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		if not hitSomething then
 			local hitInst = result.Instance
 			if hitInst and hitInst:IsA("BasePart") and hitInst:GetAttribute("GateBarrier") == true then
+				hitTarget = true
 				if GateDefenseService and GateDefenseService.ApplyDamage then
 					hitSomething = GateDefenseService.ApplyDamage(player, hitInst, damage, state.WeaponId) == true
 				end
 			end
 		end
+		-- the ray only hit scenery (ground, a wall far behind the target): a named target in front of that point may
+		-- still take the hit under the same checks (on flat ground the camera ray almost always ends in the ground)
+		if not hitTarget and CombatFairnessConfig.ClaimAfterSceneryHit then
+			claimMaxAlong = (result.Position - origin).Magnitude + CombatFairnessConfig.ClaimBeyondHitStuds
+		end
 	else
+		claimMaxAlong = range
+	end
+	if claimMaxAlong ~= nil then
+		-- P0-7: the server ray missed. The target the client named still takes the hit when the target moved a
+		-- little after the phone's ray hit it (cellular lag), never through walls or with the gun pointed elsewhere.
+		local maxAlong = math.min(range, claimMaxAlong)
 		local targetUserId = payload.TargetUserId
 		local targetNpcId = payload.TargetNpcId
 		if typeof(targetUserId) == "number" then
-			local targetPlayer = Players:GetPlayerByUserId(targetUserId)
-			if targetPlayer then
-				local _, _, troot = characterParts(targetPlayer)
-				if troot and (troot.Position - origin).Magnitude <= range then
-					hitSomething = damagePlayer(player, targetPlayer, damage, state.WeaponId)
+			local targetPlayer: Player? = nil
+			if targetUserId == targetUserId and targetUserId > 0 and targetUserId < 2 ^ 53 and targetUserId % 1 == 0 then
+				targetPlayer = Players:GetPlayerByUserId(targetUserId)
+			end
+			if targetPlayer == nil or targetPlayer == player then
+				logClaimRefusal(player, "no such target", "user " .. tostring(targetUserId))
+			else
+				local tchar, thum, troot = characterParts(targetPlayer)
+				if tchar == nil or thum == nil or troot == nil or thum.Health <= 0 then
+					logClaimRefusal(player, "target dead or absent", "user " .. tostring(targetPlayer.UserId))
+				else
+					local ok, why = validateClaim(character, origin, direction, range, maxAlong, tchar, torsoOf(tchar, troot).Position)
+					if ok then
+						hitSomething = damagePlayer(player, targetPlayer, damage, state.WeaponId)
+					else
+						logClaimRefusal(player, why, "user " .. tostring(targetPlayer.UserId))
+					end
 				end
 			end
 		elseif typeof(targetNpcId) == "string" then
-			local rec = npcRecords[targetNpcId]
-			if rec and rec.Alive and (rec.Root.Position - origin).Magnitude <= range then
-				hitSomething = damageNPC(player, targetNpcId, damage, state.WeaponId)
+			local rec = if #targetNpcId <= 64 then npcRecords[targetNpcId] else nil
+			if rec == nil or not rec.Alive or rec.Humanoid.Health <= 0 or rec.Model.Parent == nil then
+				logClaimRefusal(player, "target dead or absent", "npc " .. string.sub(targetNpcId, 1, 64))
+			else
+				local ok, why = validateClaim(character, origin, direction, range, maxAlong, rec.Model, rec.Root.Position)
+				if ok then
+					hitSomething = damageNPC(player, targetNpcId, damage, state.WeaponId)
+				else
+					logClaimRefusal(player, why, "npc " .. targetNpcId)
+				end
 			end
 		end
 	end
@@ -1183,6 +1295,8 @@ function CombatService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player)
 		combatStates[player.UserId] = nil
 		gunSchedule[player.UserId] = nil -- v69 research
+		claimRefusals[player.UserId] = nil -- P0-7
+		CombatNPC.ForgetPlayer(player.UserId) -- P1-2 speed samples
 	end)
 
 	task.spawn(function()
