@@ -17,6 +17,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local Types = require(Shared.Types)
 
 local EconomyService = {}
@@ -115,7 +116,7 @@ local NEVER_MULTIPLIED: { [string]: boolean } = {
 	atm_raid = true,
 }
 
-local function applyCashMult(player: Player, profile: any, amount: number, reason: string?): number
+local function cashMultFor(player: Player, profile: any, reason: string?): number
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
 	local exempt = MonetizationConfig.CashMultExemptReasons
@@ -140,7 +141,60 @@ local function applyCashMult(player: Player, profile: any, amount: number, reaso
 			mult *= SeasonService.GetCashMult()
 		end
 	end
-	return math.floor(amount * mult)
+	return mult
+end
+
+local function applyCashMult(player: Player, profile: any, amount: number, reason: string?): number
+	return math.floor(amount * cashMultFor(player, profile, reason))
+end
+
+-- v72: the multiplier AddCash / AccruePendingCash would apply for `reason` right now (1 for exempt reasons).
+-- Display only (BaseService.IncomeMult -> WE_IncomeMult); never used to grant.
+function EconomyService.GetCashMult(player: Player, reason: string?): number
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
+	if not profile then
+		return 1
+	end
+	return cashMultFor(player, profile, reason)
+end
+
+--[[ v72 WE_IncomePerSec (tycoon guide: cash pill "+$24/s", the pick's "ready in"): the last amount granted per steady
+	reason (TycoonGuideConfig.SteadyIncomeReasons: passive / training / plot_oil), multipliers included, summed and
+	divided by the passive TickSeconds, rounded to 0.1. A reason that missed SteadyIncomeExpireTicks ticks drops out
+	(oil pumps after a rebirth). Written only when the value changes. Nothing here grants or changes money. ]]
+type SteadyEntry = { Amount: number, At: number }
+local steadyIncome: { [number]: { [string]: SteadyEntry } } = {}
+
+local function noteSteadyIncome(player: Player, reason: string?, granted: number)
+	if not TycoonGuideConfig.Enabled or reason == nil or TycoonGuideConfig.SteadyIncomeReasons[reason] ~= true then
+		return
+	end
+	local now = os.clock()
+	local book = steadyIncome[player.UserId]
+	if book == nil then
+		book = {}
+		steadyIncome[player.UserId] = book
+	end
+	local b = book :: { [string]: SteadyEntry }
+	b[reason] = { Amount = granted, At = now }
+	local tickSec = EconomyConfig.PassiveIncome.TickSeconds
+	-- half a tick of slack: the pay loops wait TickSeconds plus their own work between grants
+	local window = (TycoonGuideConfig.SteadyIncomeExpireTicks + 0.5) * tickSec
+	local sum = 0
+	for r, e in pairs(b) do
+		if now - e.At > window then
+			b[r] = nil
+		else
+			sum += e.Amount
+		end
+	end
+	local perSec = if tickSec > 0 then math.floor(sum / tickSec * 10 + 0.5) / 10 else 0
+	pcall(function()
+		if player:GetAttribute("WE_IncomePerSec") ~= perSec then
+			player:SetAttribute("WE_IncomePerSec", perSec)
+		end
+	end)
 end
 
 function EconomyService.Init(deps: { [string]: any })
@@ -152,6 +206,11 @@ function EconomyService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	TutorialService = deps.TutorialService
 	MoneyCollectorService = deps.MoneyCollectorService
+	if TycoonGuideConfig.Enabled then
+		game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
+			steadyIncome[player.UserId] = nil
+		end)
+	end
 end
 
 function EconomyService.Push(player: Player)
@@ -180,6 +239,7 @@ function EconomyService.AddCash(player: Player, amount: number, reason: string?)
 	profile.Stats.TotalCashEarned += granted
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
+	noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec (display only; no-op while the guide is off)
 	if MissionService and MissionService.TrackProgress and reason ~= "mission" and reason ~= "achievement" then
 		MissionService.TrackProgress(player, "EarnCash", granted)
 	end
@@ -204,6 +264,7 @@ function EconomyService.AccruePendingCash(player: Player, amount: number, reason
 	(profile :: any).PendingCash = math.clamp(pending + granted, 0, EconomyConfig.MaxCash)
 	getDataService().MarkDirty(player)
 	pushEconomy(player, profile)
+	noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec (display only; no-op while the guide is off)
 	if MoneyCollectorService and MoneyCollectorService.RefreshForPlayer then
 		MoneyCollectorService.RefreshForPlayer(player)
 	end

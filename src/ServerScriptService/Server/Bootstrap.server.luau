@@ -53,6 +53,7 @@ local MonetizationService = safeRequire("MonetizationService", Services.Monetiza
 local TutorialService = safeRequire("TutorialService", Services.TutorialService)
 local BattlePassService = safeRequire("BattlePassService", Services.BattlePassService)
 local SoldierService = safeRequire("SoldierService", Services.SoldierService)
+local BusinessService = safeRequire("BusinessService", Services.BusinessService) -- v72 war businesses + next-buy pick
 local SquadOrdersService = safeRequire("SquadOrdersService", Services.SquadOrdersService)
 local SeasonService = safeRequire("SeasonService", Services.SeasonService)
 local ClanWarService = safeRequire("ClanWarService", Services.ClanWarService)
@@ -97,6 +98,7 @@ local deps: { [string]: any } = {
 	TutorialService = TutorialService,
 	BattlePassService = BattlePassService,
 	SoldierService = SoldierService,
+	BusinessService = BusinessService,
 	SquadOrdersService = SquadOrdersService,
 	SeasonService = SeasonService,
 	ClanWarService = ClanWarService,
@@ -539,6 +541,7 @@ safeInit("PrestigeService", PrestigeService, deps)
 safeInit("ClanService", ClanService, deps)
 safeInit("BattlePassService", BattlePassService, deps)
 safeInit("SoldierService", SoldierService, deps)
+safeInit("BusinessService", BusinessService, deps) -- v72: after SoldierService (GetCap / OnArmyChanged); no-op while the guide is off
 safeInit("SquadOrdersService", SquadOrdersService, deps)
 safeInit("SeasonService", SeasonService, deps)
 safeInit("ClanWarService", ClanWarService, deps)

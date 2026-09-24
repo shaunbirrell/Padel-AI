@@ -24,12 +24,30 @@
 	    no "Stand or tap BUY"; MAX → no label (MAX is on the console screen). No pad-name wash on consoles.
 	  * Prompts are pills (PromptController); the "Open Base" and "Hold to capture" client prompts are gone.
 	  * No per-frame workspace scan, no WE_HUD season hack; a price label hidden for a reason stays hidden.
+
+	v72 tycoon guide (only while TycoonGuideConfig.Enabled; off = the v70 look above, unchanged):
+	  * BUY is two lines of 20 v (TycoonGuideConfig.BuyLane.TouchSize 300x72 v on touch; line 1 Display, line 2 Body)
+	    from TycoonMath.MoneyState(cost, wallet, ATM, WE_IncomePerSec):
+	      Buy      green  "BUILD AMMO WORKS  $600" / "UPGRADE AMMO LV 2  $2,000" / "BUILD  $1,500"  over
+	                      "+$3.3/s income" or "+$3.1/s  6 new buildings"
+	      Collect  amber  "COLLECT $1,240 AT ATM" / "+$3.3/s when built": fires NOTHING, draws the line to your own
+	                      ATM (ConsoleWaypoint.ShowAtm) and toasts "Follow the line to your ATM"
+	      Earn     red    "NEED $1,240 MORE" / "+$3.3/s  ready in 0:42" (the countdown ticks at EtaRefreshHz)
+	    A line that does not fit at 20 v (TextService) falls back to the short name / the unlock is dropped; text is
+	    never scaled below 20 v. On touch the lane moves right of the thumb zone (TycoonMath.ActionLaneShiftV). While
+	    it shows, HudLayout flag "AtConsole" is on (the guide chip hides).
+	  * Console tag: stud-scaled (ConsoleTag StudsW x StudsH, DistanceLowerLimit), fixed 14-20 px lines stacked like
+	    WorldLabel, owner-only: "AMMO WORKS" (gold "NEXT  AMMO WORKS" on the WE_NextBuy pick, MaxDistance 40) over
+	    "$600  +$3.3/s" (green when wallet + ATM covers it, red otherwise) / "Needs Weapons Facility 1" / "MAX LEVEL"
+	    (kiosks without a screen). Console screens of the 15 buildings read "WAREHOUSE\n$3.2K\n+$5.2/s".
+	  * Every number is TycoonMath over configs x the server-stamped WE_IncomeMult; no remote is added.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -39,6 +57,8 @@ local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local HudConfig = require(Shared.Configs.HudConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local TycoonMath = require(Shared.Util.TycoonMath)
 
 local VehicleController = require(script.Parent.VehicleController)
 local NotificationController = require(script.Parent.NotificationController)
@@ -64,6 +84,8 @@ end
 local UIUtil = require(Shared.Util.UIUtil)
 local WorldLabel = require(Shared.Util.WorldLabel)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+-- any: ConsoleWaypoint.ShowAtm arrives with the v72 guide lane; every call is guarded (`if ConsoleWaypoint.ShowAtm`)
+local ConsoleWaypoint: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
 
 local WorldPromptController = {}
 
@@ -85,7 +107,89 @@ local BUY_BTN_SIZE_TOUCH = HudConfig.ActionLane.BuyButtonSizeTouch
 local CONSOLE_LABEL = HudConfig.WorldLabels.Console
 local BUY_FAIL_DEDUPE_SEC = 1 -- WE_BuyAck + PurchaseResult for the same structure = one line
 
+-- v72 tycoon guide surfaces (TycoonGuideConfig.Enabled only)
+local GTEXT = TycoonGuideConfig.Text
+local BUY_LANE = TycoonGuideConfig.BuyLane
+local TAG = TycoonGuideConfig.ConsoleTag
+local BUY_LINE_V = 20 -- v per BUY line (14 real px at the 0.70 phone scale); never scaled below this
+local BUY_LINE_ROW_V = BUY_LINE_V + 4 -- row height (two rows centred in the button)
+local BUY_TEXT_PAD_V = 12 -- v between the button edge (or the key cap) and the text
+local BUY_KEYCAP_V = 28
+local BUY_COPY_MIN_SEC = 0.1 -- copy rebuilds at most 10 Hz while its inputs change (CLAUDE.md UI refresh cap)
+local COLLECT_TOAST_CD = 3 -- "Follow the line to your ATM" at most every 3 s
+-- console tag lines: real px (BillboardGui), fixed size (the box is stud-scaled; WorldLabel's model, 14-20 px)
+local TAG_TITLE_PX = math.clamp(CONSOLE_LABEL.NameSize, 14, 20)
+local TAG_LINE_PX = math.clamp(CONSOLE_LABEL.PriceSize, 14, 20)
+local TAG_LINE_PAD = 2
+
+local function guideOn(): boolean
+	return TycoonGuideConfig.Enabled == true
+end
+
+-- dirty labels refresh at most this often (v72 guide: the console tags at TextRefreshHz)
+local billboardThrottle = if guideOn()
+	then math.max(BILLBOARD_THROTTLE, 1 / math.max(0.1, TycoonGuideConfig.TextRefreshHz))
+	else BILLBOARD_THROTTLE
+
 local player = Players.LocalPlayer
+
+-- a numeric Player attribute (NaN / missing / wrong type -> default)
+local function numAttr(name: string, default: number): number
+	local v = player:GetAttribute(name)
+	if typeof(v) == "number" and v == v then
+		return v
+	end
+	return default
+end
+
+-- ATM balance (EconomyService WE_PendingCash)
+local function pendingCash(): number
+	return math.max(0, numAttr("WE_PendingCash", 0))
+end
+
+-- what the ATM receives per second right now (server WE_IncomePerSec; 0 until the first steady grant)
+local function incomePerSec(): number
+	return math.max(0, numAttr("WE_IncomePerSec", 0))
+end
+
+-- what one base $ of income pays (server WE_IncomeMult; 1 until the first passive tick)
+local function incomeMult(): number
+	local m = numAttr("WE_IncomeMult", 1)
+	return if m > 0 then m else 1
+end
+
+-- "+$3.3/s": the income buying level + 1 of structureId adds (floored; oil counted unscaled)
+local function stepGainText(structureId: string, level: number): string
+	return TycoonMath.PerSecText(TycoonMath.StepGainPerTick(structureId, level, incomeMult()))
+end
+
+-- the server's pick (WE_NextBuy "Id:Level") is buying level + 1 of structureId
+local function isNextPick(structureId: string, level: number): boolean
+	local id, lv = TycoonMath.Decode(player:GetAttribute("WE_NextBuy"))
+	return id == structureId and lv == level + 1
+end
+
+-- TextService width (v, at BUY_LINE_V) of one BUY line; memoised (a few dozen distinct strings per session)
+local textWidthCache: { [string]: number } = {}
+local textWidthCount = 0
+local function lineWidthV(text: string, font: Enum.Font): number
+	local key = font.Name .. "|" .. text
+	local hit = textWidthCache[key]
+	if hit then
+		return hit
+	end
+	local ok, v = pcall(function(): Vector2
+		return TextService:GetTextSize(text, BUY_LINE_V, font, Vector2.new(4000, 200))
+	end)
+	local w = if ok and typeof(v) == "Vector2" and v.X > 0 then v.X else (utf8.len(text) or #text) * BUY_LINE_V * 0.62
+	if textWidthCount >= 128 then
+		table.clear(textWidthCache)
+		textWidthCount = 0
+	end
+	textWidthCache[key] = w
+	textWidthCount += 1
+	return w
+end
 local upgrades: { [string]: number } = {}
 local cash = 0
 -- v57: every afford/BUY/NEED check reads max of module cash, WE_Cash, leaderstats.Cash
@@ -230,6 +334,37 @@ local BUY_SHORT_TOP = Color3.fromRGB(96, 44, 44)
 local BUY_SHORT_BOTTOM = Color3.fromRGB(58, 26, 26)
 local BUY_SHORT_STROKE = Color3.fromRGB(30, 10, 10)
 local BUY_SHORT_PRICE = "#ff8080"
+-- v72 Collect (money is in the ATM): amber
+local BUY_COLLECT_TOP = Color3.fromRGB(255, 180, 40)
+local BUY_COLLECT_BOTTOM = Color3.fromRGB(205, 118, 12)
+local BUY_COLLECT_STROKE = Color3.fromRGB(88, 46, 4)
+
+type BuyLook = "Buy" | "Collect" | "Earn" -- green / amber / dark red (TycoonMath.MoneyState)
+
+local function asLook(state: string): BuyLook
+	if state == "Collect" then
+		return "Collect"
+	elseif state == "Earn" then
+		return "Earn"
+	end
+	return "Buy"
+end
+
+-- v72 two-line BUY (guide on): line 2, the key cap, and the copy cache (rebuilt only when its inputs change)
+local buyLine2: TextLabel? = nil
+local buyKeyCap: Frame? = nil
+local buyLaneFrame: Frame? = nil
+local buyLaneConn: RBXScriptConnection? = nil
+local buyCopyDirty = true
+local copySid: string? = nil
+local copyLevel = -1
+local copyCost = -1
+local copyAt = -math.huge
+local copyLook: BuyLook = "Buy"
+local copyGain = ""
+local copyEtaEnd: number? = nil
+local copyEtaAt = -math.huge
+local collectToastAt = -math.huge
 
 -- UIGradient colours multiply BackgroundColor3: bg = top colour, gradient white → bottom/top per channel
 local function gradientTo(top: Color3, bottom: Color3): ColorSequence
@@ -239,23 +374,29 @@ local function gradientTo(top: Color3, bottom: Color3): ColorSequence
 	return ColorSequence.new(Color3.new(1, 1, 1), Color3.new(ratio(bottom.R, top.R), ratio(bottom.G, top.G), ratio(bottom.B, top.B)))
 end
 
-local buyLookAffordable: boolean? = nil
-local function setBuyLook(affordable: boolean)
+local buyLook: BuyLook? = nil
+local function setBuyLook(look: BuyLook)
 	local btn = buyBtn
-	if not btn or buyLookAffordable == affordable then
+	if not btn or buyLook == look then
 		return
 	end
-	buyLookAffordable = affordable
-	btn.BackgroundColor3 = if affordable then BUY_OK_TOP else BUY_SHORT_TOP
+	buyLook = look
+	local top, bottom, edge = BUY_OK_TOP, BUY_OK_BOTTOM, BUY_OK_STROKE
+	if look == "Earn" then
+		top, bottom, edge = BUY_SHORT_TOP, BUY_SHORT_BOTTOM, BUY_SHORT_STROKE
+	elseif look == "Collect" then
+		top, bottom, edge = BUY_COLLECT_TOP, BUY_COLLECT_BOTTOM, BUY_COLLECT_STROKE
+	end
+	btn.BackgroundColor3 = top
 	local g = buyGradient
 	if g then
-		g.Color = if affordable then gradientTo(BUY_OK_TOP, BUY_OK_BOTTOM) else gradientTo(BUY_SHORT_TOP, BUY_SHORT_BOTTOM)
+		g.Color = gradientTo(top, bottom)
 	end
 	local st = buyStroke
 	if st then
-		st.Color = if affordable then BUY_OK_STROKE else BUY_SHORT_STROKE
+		st.Color = edge
 	end
-	btn.AutoButtonColor = affordable
+	btn.AutoButtonColor = look ~= "Earn"
 end
 
 local function setBuyCaption(rich: string)
@@ -265,14 +406,75 @@ local function setBuyCaption(rich: string)
 	end
 end
 
-local function flashPadBuyBought(displayName: string)
+-- v72 two-line layout: rows centred as a pair (one row centred alone), right of the key cap when it shows
+local function layoutBuyLines(twoLines: boolean, capVisible: boolean)
+	local cap, line2 = buyCaption, buyLine2
+	if not (cap and line2) then
+		return
+	end
+	local padL = BUY_TEXT_PAD_V + (if capVisible then BUY_KEYCAP_V + 8 else 0)
+	local size = UDim2.new(1, -(padL + BUY_TEXT_PAD_V), 0, BUY_LINE_ROW_V)
+	local p1 = UDim2.new(0, padL, 0.5, if twoLines then -BUY_LINE_ROW_V / 2 else 0)
+	if cap.Position ~= p1 then
+		cap.Position = p1
+	end
+	if cap.Size ~= size then
+		cap.Size = size
+		line2.Size = size
+	end
+	local p2 = UDim2.new(0, padL, 0.5, BUY_LINE_ROW_V / 2)
+	if line2.Position ~= p2 then
+		line2.Position = p2
+	end
+	if line2.Visible ~= twoLines then
+		line2.Visible = twoLines
+	end
+	local kc = buyKeyCap
+	if kc and kc.Visible ~= capVisible then
+		kc.Visible = capVisible
+	end
+end
+
+local function setBuyLine2(text: string)
+	local l2 = buyLine2
+	if l2 and l2.Text ~= text then
+		l2.Text = text
+	end
+end
+
+-- the text width (v) left for one BUY line
+local function buyInnerWidthV(capVisible: boolean): number
+	local btn = buyBtn
+	local w = if btn then btn.Size.X.Offset else BUY_LANE.TouchSize.X
+	return w - 2 * BUY_TEXT_PAD_V - (if capVisible then BUY_KEYCAP_V + 8 else 0)
+end
+
+-- v72: "BUYING…" / "BOUGHT …!" alone on one centred line; the copy is rebuilt once the hold ends
+local function holdBuyCaption(text: string)
+	setBuyCaption(text)
+	if guideOn() then
+		buyCopyDirty = true
+		layoutBuyLines(false, false)
+	end
+end
+
+local function flashPadBuyBought(displayName: string, structureId: string?)
 	local btn = buyBtn
 	if not btn or not btn.Visible then
 		return
 	end
 	padBuyFlashToken += 1
 	captionHoldUntil = os.clock() + 1.0
-	setBuyLook(true)
+	setBuyLook("Buy")
+	if guideOn() then
+		-- plain text (RichText off); the short name when the full one does not fit at 20 v
+		local text = string.format("BOUGHT %s!", string.upper(displayName))
+		if structureId and lineWidthV(text, HudConfig.Fonts.Display) > buyInnerWidthV(false) then
+			text = string.format("BOUGHT %s!", TycoonMath.ShortName(structureId))
+		end
+		holdBuyCaption(text)
+		return
+	end
 	setBuyCaption(string.format("BOUGHT %s!", escapeRich(string.upper(displayName))))
 	-- the standing Heartbeat refreshPadBuyButton rewrites the caption once captionHoldUntil passes
 end
@@ -284,6 +486,58 @@ local function hidePadBuyButton()
 		buyBtn.Visible = false
 	end
 	PromptController.SetBuyButtonActive(false)
+	if guideOn() then
+		HudLayout.SetFlag(TycoonGuideConfig.AtConsoleFlag, false)
+	end
+end
+
+-- v72 Collect: the money is in the ATM. Fires nothing; the GO line goes to YOUR ATM + one short toast.
+local function showAtmLine()
+	if ConsoleWaypoint.ShowAtm then
+		local ok, err = pcall(ConsoleWaypoint.ShowAtm, myPlotId)
+		if not ok then
+			warn("[WorldPrompt] ConsoleWaypoint.ShowAtm failed:", err)
+		end
+	end
+	local now = os.clock()
+	if now - collectToastAt >= COLLECT_TOAST_CD then
+		collectToastAt = now
+		NotificationController.Show(GTEXT.CollectToast, "Info", 3)
+	end
+end
+
+-- TouchSize on touch, the pinned desktop size otherwise (v72 guide: the desktop button is wider by the "E" key cap,
+-- so both lines get the same text width as on touch)
+local function buyButtonSize(touch: boolean): UDim2
+	if not touch then
+		if guideOn() then
+			return UDim2.fromOffset(BUY_LANE.TouchSize.X + BUY_KEYCAP_V + 8, BUY_BTN_SIZE_DESKTOP.Y.Offset)
+		end
+		return BUY_BTN_SIZE_DESKTOP
+	end
+	if guideOn() then
+		return UDim2.fromOffset(BUY_LANE.TouchSize.X, BUY_LANE.TouchSize.Y)
+	end
+	return BUY_BTN_SIZE_TOUCH
+end
+
+-- v72 F3: on touch the BUY lane's left edge sits ThumbZoneFrac of the safe width + ClearPx right of its left edge
+local function buyLaneShiftV(widthV: number): number
+	if not (guideOn() and HudLayout.IsTouch()) then
+		return 0
+	end
+	return TycoonMath.ActionLaneShiftV(HudLayout.ContentSizeV(), widthV, BUY_LANE.ThumbZoneFrac, BUY_LANE.ClearPx, HudLayout.Scale())
+end
+
+local function placeBuyLane()
+	local lane = buyLaneFrame
+	if not lane then
+		return
+	end
+	local want = UDim2.new(0.5, buyLaneShiftV(lane.Size.X.Offset), 1, -HudLayout.ActionLaneBottomV())
+	if lane.Position ~= want then
+		lane.Position = want
+	end
 end
 
 local function ensurePadBuyGui(): TextButton
@@ -305,18 +559,27 @@ local function ensurePadBuyGui(): TextButton
 	_buyGui = screen
 
 	local touch = HudLayout.IsTouch()
-	local size = if touch then BUY_BTN_SIZE_TOUCH else BUY_BTN_SIZE_DESKTOP
+	local guide = guideOn()
+	local size = buyButtonSize(touch)
 	-- the action lane slot: bottom-centre, 100 v (touch) / 86 v (desktop) above the content bottom
+	-- (v72 guide on touch: shifted right so its left edge clears the thumb zone)
 	local lane = Instance.new("Frame")
 	lane.Name = "Lane"
 	lane.AnchorPoint = Vector2.new(0.5, 1)
-	lane.Position = UDim2.new(0.5, 0, 1, -HudLayout.ActionLaneBottomV())
+	lane.Position = UDim2.new(0.5, buyLaneShiftV(size.X.Offset), 1, -HudLayout.ActionLaneBottomV())
 	lane.Size = size
 	lane.BackgroundTransparency = 1
 	lane.BorderSizePixel = 0
 	lane.Active = false
 	lane.Parent = screen
 	HudLayout.BindVisibility(lane, { HideWhen = { "Modal", "Driving", "Dead" } })
+	if guide then
+		buyLaneFrame = lane
+		if buyLaneConn == nil then
+			-- rotation / safe-area change: the thumb-zone edge moves with the viewport
+			buyLaneConn = HudLayout.LayoutChanged:Connect(placeBuyLane)
+		end
+	end
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyButton"
@@ -342,12 +605,63 @@ local function ensurePadBuyGui(): TextButton
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	stroke.Transparency = 0
 	buyStroke = stroke
-	buyLookAffordable = nil
+	buyLook = nil
 	UIUtil.EnsureMinTouch(btn, BUY_BTN_MIN_H)
+
+	if guide then
+		-- v72: two fixed 20 v lines (Display over Body), never TextScaled; the "E" key cap only while
+		-- HudLayout.PrefersKeys() (PreferredInput) and E does what the button says (not in the Collect state)
+		local cap = Instance.new("Frame")
+		cap.Name = "KeyCap"
+		cap.AnchorPoint = Vector2.new(0, 0.5)
+		cap.Position = UDim2.new(0, BUY_TEXT_PAD_V, 0.5, 0)
+		cap.Size = UDim2.fromOffset(BUY_KEYCAP_V, BUY_KEYCAP_V)
+		cap.BackgroundColor3 = Color3.fromRGB(232, 255, 232)
+		cap.BorderSizePixel = 0
+		cap.Active = false
+		cap.Visible = false
+		cap.ZIndex = 41
+		cap.Parent = btn
+		UIUtil.Corner(cap, 5)
+		local key = Instance.new("TextLabel")
+		key.Name = "Key"
+		key.BackgroundTransparency = 1
+		key.Size = UDim2.fromScale(1, 1)
+		key.Font = HudConfig.Fonts.Body
+		key.TextSize = 16
+		key.TextColor3 = BUY_OK_STROKE
+		key.Text = "E"
+		key.ZIndex = 42
+		key.Parent = cap
+		buyKeyCap = cap
+
+		local function line(name: string, font: Enum.Font): TextLabel
+			local t = Instance.new("TextLabel")
+			t.Name = name
+			t.BackgroundTransparency = 1
+			t.AnchorPoint = Vector2.new(0, 0.5)
+			t.Font = font
+			t.TextSize = BUY_LINE_V
+			t.TextScaled = false
+			t.TextWrapped = false
+			t.RichText = false
+			t.TextXAlignment = Enum.TextXAlignment.Center
+			t.TextColor3 = Color3.fromRGB(255, 255, 255)
+			t.Text = ""
+			t.ZIndex = 42
+			t.Parent = btn
+			UIUtil.TextOutline(t, 1.4)
+			return t
+		end
+		buyCaption = line("Caption", HudConfig.Fonts.Display)
+		buyLine2 = line("Line2", HudConfig.Fonts.Body)
+		buyCopyDirty = true
+		layoutBuyLines(true, false)
+	end
 
 	-- desktop / gamepad: an "E" key cap (the console's E-hold prompt still works; its pill hides while BUY shows)
 	local padL = 14
-	if not touch then
+	if not touch and not guide then
 		local cap = Instance.new("Frame")
 		cap.Name = "KeyCap"
 		cap.AnchorPoint = Vector2.new(0, 0.5)
@@ -372,25 +686,27 @@ local function ensurePadBuyGui(): TextButton
 		padL += 28 + 8
 	end
 
-	local caption = Instance.new("TextLabel")
-	caption.Name = "Caption"
-	caption.BackgroundTransparency = 1
-	caption.AnchorPoint = Vector2.new(0, 0.5)
-	caption.Position = UDim2.new(0, padL, 0.5, 0)
-	caption.Size = UDim2.new(1, -(padL + 12), 1, -10)
-	caption.Font = HudConfig.Fonts.Display
-	caption.RichText = true
-	caption.TextScaled = true
-	caption.TextColor3 = Color3.fromRGB(255, 255, 255)
-	caption.Text = "BUY"
-	caption.ZIndex = 42
-	caption.Parent = btn
-	local limit = Instance.new("UITextSizeConstraint")
-	limit.MaxTextSize = 20
-	limit.MinTextSize = 12
-	limit.Parent = caption
-	UIUtil.TextOutline(caption, 1.4)
-	buyCaption = caption
+	if not guide then
+		local caption = Instance.new("TextLabel")
+		caption.Name = "Caption"
+		caption.BackgroundTransparency = 1
+		caption.AnchorPoint = Vector2.new(0, 0.5)
+		caption.Position = UDim2.new(0, padL, 0.5, 0)
+		caption.Size = UDim2.new(1, -(padL + 12), 1, -10)
+		caption.Font = HudConfig.Fonts.Display
+		caption.RichText = true
+		caption.TextScaled = true
+		caption.TextColor3 = Color3.fromRGB(255, 255, 255)
+		caption.Text = "BUY"
+		caption.ZIndex = 42
+		caption.Parent = btn
+		local limit = Instance.new("UITextSizeConstraint")
+		limit.MaxTextSize = 20
+		limit.MinTextSize = 12
+		limit.Parent = caption
+		UIUtil.TextOutline(caption, 1.4)
+		buyCaption = caption
+	end
 
 	local lastTapAt = 0
 	local function onBuyPressed()
@@ -409,6 +725,11 @@ local function ensurePadBuyGui(): TextButton
 			hidePadBuyButton()
 			return
 		end
+		-- v72 Collect (wallet short, wallet + ATM enough): no buy request; the line goes to the player's own ATM
+		if guideOn() and (TycoonMath.MoneyState(cost, liveCash(), pendingCash(), incomePerSec())) == "Collect" then
+			showAtmLine()
+			return
+		end
 		-- Intentional tap: clear walk-over debounce so BUY always fires
 		lastPurchaseAt[sid] = 0
 		pendingPurchase[sid] = nil
@@ -422,6 +743,89 @@ local function ensurePadBuyGui(): TextButton
 
 	buyBtn = btn
 	return btn
+end
+
+-- v72 line 1 of the Buy state: the full name, else the short name, else no name ("BUILD  $600"); an upgrade keeps
+-- "LV n" and the price. Everything comes from TycoonGuideConfig.Text.
+local function buyLine1(sid: string, display: string, level: number, price: string, unlock: string?, innerW: number): string
+	local font = HudConfig.Fonts.Display
+	if level <= 0 then
+		if unlock then
+			return string.format(GTEXT.BuyBuildShort, price) -- line 2 names what it unlocks
+		end
+		local full = string.format(GTEXT.BuyBuild, string.upper(display), price)
+		if lineWidthV(full, font) <= innerW then
+			return full
+		end
+		local short = string.format(GTEXT.BuyBuild, TycoonMath.ShortName(sid), price)
+		if lineWidthV(short, font) <= innerW then
+			return short
+		end
+		return string.format(GTEXT.BuyBuildShort, price)
+	end
+	local up = string.format(GTEXT.BuyUpgrade, TycoonMath.ShortName(sid), level + 1, price)
+	if lineWidthV(up, font) <= innerW then
+		return up
+	end
+	return string.format(GTEXT.BuyUpgrade, "", level + 1, price) -- "UPGRADE  LV 5  $12.5K"
+end
+
+--[[ v72 BUY copy (guide on). Rebuilt when its inputs change (structure, level, price, or buyCopyDirty: cash, ATM,
+	WE_IncomePerSec, WE_IncomeMult, upgrades), at most every BUY_COPY_MIN_SEC; the Earn countdown ticks at
+	EtaRefreshHz from the end time taken at the last rebuild. No allocation on the frames in between. ]]
+local function refreshGuideBuyCopy(sid: string, display: string, level: number, cost: number)
+	local now = os.clock()
+	local same = sid == copySid and level == copyLevel and cost == copyCost
+	if same and not buyCopyDirty then
+		local etaEnd = copyEtaEnd
+		local hz = math.max(0.1, TycoonGuideConfig.EtaRefreshHz)
+		if copyLook == "Earn" and etaEnd ~= nil and now - copyEtaAt >= 1 / hz then
+			copyEtaAt = now
+			setBuyLine2(string.format(GTEXT.BuyNeedLine2, copyGain, TycoonMath.FormatEta(math.max(0, etaEnd - now))))
+		end
+		return
+	end
+	if same and now - copyAt < BUY_COPY_MIN_SEC then
+		return
+	end
+	copySid, copyLevel, copyCost, copyAt = sid, level, cost, now
+	buyCopyDirty = false
+
+	local gain = stepGainText(sid, level)
+	local moneyState, short, eta = TycoonMath.MoneyState(cost, liveCash(), pendingCash(), incomePerSec())
+	local state: BuyLook = asLook(moneyState)
+	local capVisible = state ~= "Collect" and HudLayout.PrefersKeys()
+	local innerW = buyInnerWidthV(capVisible)
+	local line1: string
+	local line2: string
+	copyEtaEnd = nil
+	if state == "Collect" then
+		line1 = string.format(GTEXT.BuyCollect, TycoonMath.ShortCash(short))
+		line2 = string.format(GTEXT.BuyCollectLine2, gain)
+	elseif state == "Earn" then
+		line1 = string.format(GTEXT.BuyNeed, TycoonMath.ShortCash(short))
+		if eta ~= nil then
+			copyEtaEnd = now + eta
+			line2 = string.format(GTEXT.BuyNeedLine2, gain, TycoonMath.FormatEta(eta))
+		else
+			line2 = string.format(GTEXT.BuyIncome, gain) -- no income yet: no countdown
+		end
+	else
+		local unlock = TycoonMath.UnlockText(sid, level + 1)
+		line1 = buyLine1(sid, display, level, TycoonMath.ShortCash(cost), unlock, innerW)
+		line2 = string.format(GTEXT.BuyIncome, gain)
+		if unlock then
+			local withUnlock = string.format(GTEXT.BuyIncomeUnlock, gain, unlock)
+			if lineWidthV(withUnlock, HudConfig.Fonts.Body) <= innerW then
+				line2 = withUnlock
+			end
+		end
+	end
+	copyLook, copyGain, copyEtaAt = state, gain, now
+	setBuyLook(state)
+	layoutBuyLines(true, capVisible)
+	setBuyCaption(line1)
+	setBuyLine2(line2)
 end
 
 local function refreshPadBuyButton(part: BasePart?, structureId: string?)
@@ -447,10 +851,14 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	local btn = ensurePadBuyGui()
 	activeBuyStructureId = structureId
 	activeBuyPart = part
-	if os.clock() >= captionHoldUntil then
+	if guideOn() then
+		if os.clock() >= captionHoldUntil then
+			refreshGuideBuyCopy(structureId, display, level, cost)
+		end
+	elseif os.clock() >= captionHoldUntil then
 		local have = liveCash()
 		local canAfford = have >= cost
-		setBuyLook(canAfford)
+		setBuyLook(if canAfford then "Buy" else "Earn")
 		if canAfford then
 			-- "BUILD HELIPAD  $5,000" / "UPGRADE HELIPAD  $12,000" (income lives on the console screen / Base panel)
 			local verb = if level <= 0 then "BUILD" else "UPGRADE"
@@ -461,6 +869,9 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	end
 	btn.Visible = true
 	PromptController.SetBuyButtonActive(true)
+	if guideOn() then
+		HudLayout.SetFlag(TycoonGuideConfig.AtConsoleFlag, true) -- the guide chip steps aside (one message at a time)
+	end
 end
 
 function structureInfo(structureId: string): (string, number, number?, boolean, string?)
@@ -514,8 +925,37 @@ local nearAtmNow = false
 -- labels hidden on purpose (another player's plot, MAX): the ATM soft-restore must never switch these back on
 local priceHidden: { [BasePart]: boolean } = setmetatable({} :: any, { __mode = "k" })
 
+-- v72 console tag geometry (guide on): stud-scaled box above the console top; the range is set with the copy
+local tagPlaced: { [BillboardGui]: boolean } = setmetatable({} :: any, { __mode = "k" })
+local function placeConsoleTag(bb: BillboardGui, part: BasePart)
+	local size = UDim2.fromScale(TAG.StudsW, TAG.StudsH)
+	if bb.Size ~= size then
+		bb.Size = size
+	end
+	local offset = Vector3.new(0, part.Size.Y * 0.5 + CONSOLE_LABEL.StudsAboveConsoleTop, 0)
+	if bb.StudsOffsetWorldSpace ~= offset then
+		bb.StudsOffsetWorldSpace = offset
+	end
+	if tagPlaced[bb] then
+		return
+	end
+	tagPlaced[bb] = true
+	bb.StudsOffset = Vector3.zero
+	-- stops growing closer than this (deprecated in the API docs, still honoured; skipped if an engine drops it)
+	pcall(function()
+		(bb :: any).DistanceLowerLimit = TAG.DistanceLowerLimit
+	end)
+	bb.ClipsDescendants = false
+	bb.AlwaysOnTop = false
+	bb.LightInfluence = 0
+end
+
 local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?, part: BasePart?)
 	-- never AlwaysOnTop giant tabs — plain text, near-only, owner-only
+	if part and guideOn() and isConsolePart(part) then
+		placeConsoleTag(bb, part)
+		return
+	end
 	local k = chipScale()
 	if part and isConsolePart(part) then
 		-- v70: 2.2 studs above the console top (the old 5-stud host + 5.5 landed in the ceiling of walk-ins)
@@ -727,12 +1167,84 @@ local function applyBillboardCopy(bb: BillboardGui, titleLine: string, detailLin
 	end
 end
 
+-- v72 console tag copy (guide on): fixed-size lines stacked in px around the box centre (WorldLabel's layout), so
+-- they never overlap however small the stud box gets; the text overflows the box symmetrically (no clipping).
+local function styleTagLabel(lab: TextLabel, px: number)
+	lab.BackgroundTransparency = 1
+	lab.Font = HudConfig.Fonts.Display
+	lab.TextScaled = false
+	lab.TextWrapped = false
+	lab.TextSize = px
+	lab.TextXAlignment = Enum.TextXAlignment.Center
+	lab.TextYAlignment = Enum.TextYAlignment.Center
+	lab.TextStrokeColor3 = HudConfig.Colors.Ink
+	lab.TextStrokeTransparency = CONSOLE_LABEL.StrokeTransparency
+	lab.AnchorPoint = Vector2.new(0.5, 0.5)
+	lab.Size = UDim2.new(1, 0, 0, px + TAG_LINE_PAD)
+	local limit = lab:FindFirstChildOfClass("UITextSizeConstraint")
+	if limit then
+		limit:Destroy() -- a v70 chip's TextScaled limits; this text is a fixed size
+	end
+end
+
+local function applyTagCopy(bb: BillboardGui, titleLine: string, titleColor: Color3, detailLine: string, detailColor: Color3)
+	local backdrop = bb:FindFirstChild("Backdrop")
+	if backdrop and backdrop:IsA("Frame") then
+		backdrop.BackgroundTransparency = 1
+		local pad = backdrop:FindFirstChildOfClass("UIPadding")
+		if pad then
+			pad:Destroy()
+		end
+	end
+	local stroke = bb:FindFirstChild("Stroke", true)
+	if stroke and stroke:IsA("UIStroke") then
+		stroke.Enabled = false
+	end
+	local titleLab = bb:FindFirstChild("Title", true)
+	local costLab = bb:FindFirstChild("Cost", true)
+	if titleLab and titleLab:IsA("TextLabel") and costLab and costLab:IsA("TextLabel") then
+		styleTagLabel(titleLab, TAG_TITLE_PX)
+		styleTagLabel(costLab, TAG_LINE_PX)
+		if titleLab.Text ~= titleLine then
+			titleLab.Text = titleLine
+		end
+		titleLab.TextColor3 = titleColor
+		local twoLines = detailLine ~= ""
+		costLab.Visible = twoLines
+		if costLab.Text ~= detailLine then
+			costLab.Text = detailLine
+		end
+		costLab.TextColor3 = detailColor
+		if twoLines then
+			local hT, hS = TAG_TITLE_PX + TAG_LINE_PAD, TAG_LINE_PX + TAG_LINE_PAD
+			titleLab.Position = UDim2.new(0.5, 0, 0.5, -hS / 2)
+			costLab.Position = UDim2.new(0.5, 0, 0.5, hT / 2)
+		else
+			titleLab.Position = UDim2.fromScale(0.5, 0.5)
+		end
+		return
+	end
+	local textLab = bb:FindFirstChild("Text", true) -- pre-v70 client chip: one label
+	if textLab and textLab:IsA("TextLabel") then
+		styleTagLabel(textLab, TAG_LINE_PX)
+		textLab.Size = UDim2.new(1, 0, 0, 2 * (TAG_LINE_PX + TAG_LINE_PAD))
+		textLab.Position = UDim2.fromScale(0.5, 0.5)
+		textLab.Text = if detailLine ~= "" then (titleLine .. "\n" .. detailLine) else titleLine
+		textLab.TextColor3 = detailColor
+	end
+end
+
 -- MapSetup's console screen (ConsoleScreen.WE_ConsoleScreen): the owner reads the level / price there;
 -- everyone else just sees the name. Local text only (the server wrote it once at build).
-local function setConsoleScreen(part: BasePart, text: string)
+local function consoleScreenLabel(part: BasePart): TextLabel?
 	local screenPart = part:FindFirstChild("ConsoleScreen")
 	local sg = screenPart and screenPart:FindFirstChild("WE_ConsoleScreen")
 	local lbl = sg and sg:FindFirstChildWhichIsA("TextLabel")
+	return if lbl and lbl:IsA("TextLabel") then lbl else nil
+end
+
+local function setConsoleScreen(part: BasePart, text: string)
+	local lbl = consoleScreenLabel(part)
 	if lbl and lbl.Text ~= text then
 		lbl.Text = text
 	end
@@ -784,13 +1296,17 @@ local function refreshSlotBillboard(part: BasePart)
 		ensurePadNameSurface(part, display)
 	end
 
+	local guide = guideOn()
 	if isConsole then
 		if isMax then
 			setConsoleScreen(part, name .. "\nMAX")
 		elseif prereqHint then
 			setConsoleScreen(part, name .. "\nLOCKED")
 		elseif cost then
-			if owned then
+			if guide then
+				-- v72 (the 15 buildings; business kiosks have no screen): "WAREHOUSE\n$3.2K\n+$5.2/s"
+				setConsoleScreen(part, string.format(GTEXT.ScreenLines, TycoonMath.ShortName(structureId), TycoonMath.ShortCash(cost, true), stepGainText(structureId, level)))
+			elseif owned then
 				setConsoleScreen(part, string.format("%s\nLV %d → %d\n%s", name, level, level + 1, shortCost(cost)))
 			else
 				setConsoleScreen(part, string.format("%s\nBUILD\n%s", name, shortCost(cost)))
@@ -801,6 +1317,35 @@ local function refreshSlotBillboard(part: BasePart)
 		if sp and sp:IsA("ProximityPrompt") then
 			PromptController.SetSuppressed(sp, isMax or prereqHint ~= nil)
 		end
+	end
+
+	if guide and isConsole then
+		-- v72 console tag: MAX stays off where the console screen shows it (the 15 buildings); a business kiosk has
+		-- no screen, so its tag reads MAX LEVEL
+		local hasScreen = consoleScreenLabel(part) ~= nil
+		if isMax and not CONSOLE_LABEL.ShowOnMax and hasScreen then
+			hidePriceBillboard(part)
+			return
+		end
+		local bb = ensurePriceBillboard(part)
+		local pick = cost ~= nil and not isMax and isNextPick(structureId, level)
+		local title = if pick then string.format(GTEXT.TagTitleNext, name) else name
+		local titleColor = if pick then TAG.NextColor else CONSOLE_LABEL.NameColor
+		local detail, detailColor = "", CONSOLE_LABEL.NameColor
+		local met, req = TycoonMath.MeetsRequirements(structureId, upgrades)
+		if isMax then
+			detail = GTEXT.MaxLevel
+		elseif not met and req then
+			detail = string.format(GTEXT.Locked, TycoonMath.DisplayName(req.StructureId), req.Level)
+			detailColor = CONSOLE_LABEL.LockedColor
+		elseif cost then
+			local state = TycoonMath.MoneyState(cost, liveCash(), pendingCash(), incomePerSec())
+			detail = string.format(GTEXT.TagLine, TycoonMath.ShortCash(cost), stepGainText(structureId, level))
+			detailColor = if state ~= "Earn" then CONSOLE_LABEL.PriceAffordable else CONSOLE_LABEL.PriceShort
+		end
+		bb.MaxDistance = if pick then TAG.NextMaxDistance elseif owned then TAG.MaxDistanceUpgrade else TAG.MaxDistanceBuild
+		applyTagCopy(bb, title, titleColor, detail, detailColor)
+		return
 	end
 
 	-- MAX → no label in the air (MAX is on the console screen); income is on the screen / Base panel
@@ -937,7 +1482,7 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean?, showBuyin
 		-- v70: the BUY button itself reads BUYING… (no "Buying X…" toast; the lane drops that line anyway)
 		if buyBtn and buyBtn.Visible and activeBuyStructureId == structureId then
 			captionHoldUntil = os.clock() + 1.5
-			setBuyCaption("BUYING…")
+			holdBuyCaption("BUYING…")
 		end
 		print(string.format("[WorldPrompt] BUY sent %s (%s)", structureId, display))
 	end
@@ -1258,7 +1803,7 @@ local function startOverlapLoop()
 			lastWorldLabelPass = now
 			worldLabelPass()
 		end
-		if billboardDirty and (os.clock() - lastBillboardRefresh) >= BILLBOARD_THROTTLE then
+		if billboardDirty and (os.clock() - lastBillboardRefresh) >= billboardThrottle then
 			refreshAllBillboardsNow()
 		end
 
@@ -1365,6 +1910,7 @@ function WorldPromptController.Init()
 		local v = tonumber(n)
 		if typeof(v) == "number" then
 			cash = math.floor(v)
+			buyCopyDirty = true
 			markBillboardsDirty()
 			-- NEED→BUY while standing when cash syncs
 			if activeBuyPart and activeBuyStructureId then
@@ -1426,6 +1972,19 @@ function WorldPromptController.Init()
 		end)
 	end
 
+	-- v72 guide: the ATM balance, the income rate / multiplier and the server's pick feed the BUY copy and the tags
+	-- (server-stamped attributes; a missing one reads as its default, see the helpers at the top)
+	if guideOn() then
+		local function onGuideInput()
+			buyCopyDirty = true
+			markBillboardsDirty()
+		end
+		for _, attr in ipairs({ "WE_PendingCash", "WE_IncomePerSec", "WE_IncomeMult", "WE_NextBuy" }) do
+			player:GetAttributeChangedSignal(attr):Connect(onGuideInput)
+		end
+		HudLayout.InputModeChanged:Connect(onGuideInput) -- the "E" key cap follows PreferredInput
+	end
+
 	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
 		applyCash(payload.Cash)
 	end)
@@ -1475,7 +2034,7 @@ function WorldPromptController.Init()
 			local name = if def then def.DisplayName else tostring(sid)
 			print(string.format("[WorldPrompt] %s OK %s Lv=%s cash=%s", source, tostring(sid), tostring(newLevel), tostring(newCash)))
 			if not dup then
-				flashPadBuyBought(name)
+				flashPadBuyBought(name, if typeof(sid) == "string" then sid else nil)
 			end
 			-- "-$20,000" spend float at the cash pill (HudConfig.CashFloat.ShowSpend) — only PurchaseResult knows
 			-- the level bought (WE_BuyAck has no level); the server's "Purchase SUCCESSFUL!" line is the toast
@@ -1578,7 +2137,7 @@ function WorldPromptController.Init()
 			if after > before then
 				local def = BaseConfig.Structures[sid]
 				local name = if def then def.DisplayName else sid
-				flashPadBuyBought(name)
+				flashPadBuyBought(name, sid)
 				print(string.format("[WorldPrompt] BUY OK flash %s %d→%d", sid, before, after))
 			end
 		end

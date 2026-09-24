@@ -170,10 +170,18 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 	local def = BaseConfig.Structures[structureId]
 	if result.Ok then
 		local name = if def then def.DisplayName else tostring(structureId)
+		-- v72: "  +$3.3/s" suffix while the tycoon guide is on (BaseService.PurchaseToastSuffix; "" otherwise)
+		local suffix = ""
+		if BaseService and BaseService.PurchaseToastSuffix then
+			local okS, s = pcall(BaseService.PurchaseToastSuffix, player, structureId, result.NewLevel or 0)
+			if okS and typeof(s) == "string" then
+				suffix = s
+			end
+		end
 		-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
 		NotificationService.Notify(
 			player,
-			string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
+			string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0) .. suffix,
 			"Success",
 			4
 		)

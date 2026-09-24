@@ -9,11 +9,22 @@
 	    map-table terminal (WE_OpenPanel "Base") and the tutorial CTA.
 	  * Passive income moved here from the cash pill: the subtitle reads "+$N/tick passive · +$N/tick training".
 	  * A registered Modal panel (HudLayout id "Base") with the black dim; one HUD scale + safe area.
+	v72 tycoon guide (TycoonGuideConfig.Enabled):
+	  * rows "Build $600  +$3.3/s" / "Lv 1 -> 2  $2,000  +$4.2/s" (TycoonGuideConfig.Text; the rate is
+	    TycoonMath.PerSecText(StepGainPerTick(id, level, WE_IncomeMult)), floored so it never over-promises);
+	  * the server's pick (Player attribute WE_NextBuy) gets a gold outline and a gold NEXT badge, and the list opens
+	    scrolled to it;
+	  * war businesses (BaseConfig Kind "Business", only while BusinessConfig.Enabled) sit under a WAR BUSINESSES
+	    header after the buildings;
+	  * subtitle "Income $46/s  buy at each console" from WE_IncomePerSec (what the ATM really receives).
+	  With the guide on, "+$N/s" replaces the old "+N/t" row suffix; with the guide off the rows and the subtitle
+	  read exactly as before v72 (flags off = HEAD).
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextService = game:GetService("TextService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -21,17 +32,25 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
+local BusinessConfig = require(Shared.Configs.BusinessConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
+local TycoonMath = require(Shared.Util.TycoonMath)
 local Types = require(Shared.Types)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local NotificationController = require(script.Parent.NotificationController)
 local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
 
 local BaseController = {}
 
 local PANEL_ID = "Base"
+local GUIDE_ON = TycoonGuideConfig.Enabled -- v72 rows / NEXT / subtitle
+local GT = TycoonGuideConfig.Text
+local BIZ_ORDER = 1000 -- LayoutOrder base of the WAR BUSINESSES header + business rows (after the buildings)
+local NEXT_INK = Color3.fromRGB(28, 22, 6) -- dark text on the gold NEXT badge
 
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
@@ -63,10 +82,28 @@ local function commas(n: number): string
 	return out
 end
 
+local function attrNum(name: string, default: number): number
+	local v = tonumber(player:GetAttribute(name) :: any)
+	if v == nil or v ~= v or v == math.huge or v == -math.huge then
+		return default
+	end
+	return v
+end
+
 -- the passive-income hint that used to sit on the cash pill ("+N$/tick")
 local function refreshSubtitle()
 	local sub = subLabel
 	if not sub then
+		return
+	end
+	if GUIDE_ON then
+		-- v72: "Income $46/s  buy at each console" = what the ATM really receives (server-stamped, multipliers in);
+		-- before the first stamp: the server's per-tick figures (pre-multiplier, so it can only under-read)
+		local perSec = attrNum("WE_IncomePerSec", 0)
+		if perSec <= 0 then
+			perSec = (passivePerTick + trainingPerTick) / TycoonMath.TickSeconds()
+		end
+		sub.Text = string.format(GT.PanelSubtitle, string.format(GT.Rate, TycoonMath.RateText(perSec)))
 		return
 	end
 	local tickSec = (EconomyConfig.PassiveIncome and tonumber(EconomyConfig.PassiveIncome.TickSeconds)) or 5
@@ -77,7 +114,27 @@ local function refreshSubtitle()
 	sub.Text = table.concat(parts, " · ") .. string.format("  (every %ds)", tickSec)
 end
 
-local function refreshList()
+-- v72: width (v) of the gold NEXT badge for text size `size`
+local function badgeWidth(text: string, size: number): number
+	local ok, v = pcall(function(): Vector2
+		return TextService:GetTextSize(text, size, Enum.Font.GothamBold, Vector2.new(1000, 1000))
+	end)
+	local w = if ok and typeof(v) == "Vector2" then v.X else #text * size * 0.72
+	return math.ceil(w) + 16
+end
+
+-- v72 row copy: "Build $600  +$3.3/s" / "Lv 1 -> 2  $2,000  +$4.2/s". A step that adds no income names what it
+-- unlocks instead of a "+$0/s".
+local function guideRowText(structureId: string, level: number, cost: number, mult: number): string
+	local gainPerTick = TycoonMath.StepGainPerTick(structureId, level, mult)
+	local tail = if gainPerTick > 0 then TycoonMath.PerSecText(gainPerTick) else (TycoonMath.UnlockText(structureId, level + 1) or "")
+	local text = if level == 0
+		then string.format(GT.PanelRowBuild, TycoonMath.ShortCash(cost), tail)
+		else string.format(GT.PanelRowUpgrade, level, level + 1, TycoonMath.ShortCash(cost), tail)
+	return (string.gsub(text, "%s+$", ""))
+end
+
+local function refreshList(scrollToNext: boolean?)
 	if not listFrame then
 		return
 	end
@@ -101,24 +158,69 @@ local function refreshList()
 	local descSize = PanelShell.Text(12)
 	local btnW = if PanelShell.IsTouch() then 120 else 88 -- GO / MAX chip (was the "BUY $N +N/t" button)
 
+	-- v72 guide: the server's pick (WE_NextBuy) and the income multiplier the rows' +$/s use
+	local nextId: string? = nil
+	local mult = 1
+	if GUIDE_ON then
+		nextId = TycoonMath.Decode(player:GetAttribute("WE_NextBuy"))
+		mult = attrNum("WE_IncomeMult", 1)
+		if mult <= 0 then
+			mult = 1
+		end
+	end
+	local listPad = 6 -- the UIListLayout Padding below
+	local placed: { { Order: number, H: number, Next: boolean } } = {} -- for scrolling to the NEXT row
+	local headerDone = false
+
 	for order, structureId in ipairs(BaseConfig.StructureOrder) do
 		local def = BaseConfig.Structures[structureId]
 		if def then
 			local level = upgrades[structureId] or 0
 			local nextLevel = level + 1
 			local cost = if nextLevel <= def.MaxLevel then def.Costs[nextLevel] else nil
+			local isBusiness = def.Kind ~= nil and def.Kind == BusinessConfig.Kind
+			local isNext = nextId ~= nil and structureId == nextId
+			local layoutOrder = if isBusiness then BIZ_ORDER + order else order
+
+			-- v72: one WAR BUSINESSES header above the first business row
+			if isBusiness and not headerDone then
+				headerDone = true
+				local headerH = titleSize + 14
+				local header = Instance.new("Frame")
+				header.Name = "BusinessHeader"
+				header.Size = UDim2.new(1, -8, 0, headerH)
+				header.BackgroundTransparency = 1
+				header.BorderSizePixel = 0
+				header.LayoutOrder = BIZ_ORDER
+				header.Parent = listFrame
+				local ht = Instance.new("TextLabel")
+				ht.Name = "Label"
+				ht.BackgroundTransparency = 1
+				ht.Position = UDim2.fromOffset(12, 0)
+				ht.Size = UDim2.new(1, -24, 1, 0)
+				ht.Font = Enum.Font.GothamBold
+				ht.TextSize = titleSize
+				ht.TextColor3 = Constants.Colors.Gold
+				ht.TextXAlignment = Enum.TextXAlignment.Left
+				ht.TextYAlignment = Enum.TextYAlignment.Bottom
+				ht.TextTruncate = Enum.TextTruncate.AtEnd
+				ht.Text = GT.PanelHeader
+				ht.Parent = header
+				table.insert(placed, { Order = BIZ_ORDER, H = headerH, Next = false })
+			end
 
 			local row = Instance.new("Frame")
 			row.Name = structureId
 			row.Size = UDim2.new(1, -8, 0, rowH)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
-			row.LayoutOrder = order
+			row.LayoutOrder = layoutOrder
 			row.Parent = listFrame
 			corner(row, 8)
+			table.insert(placed, { Order = layoutOrder, H = rowH, Next = isNext })
 
-			-- Highlight first purchasable row (Command Center) when still L0
-			if structureId == "CommandCenter" and level == 0 then
+			-- Highlight first purchasable row (Command Center) when still L0; v72 guide: the server's pick instead
+			if (GUIDE_ON and isNext) or (not GUIDE_ON and structureId == "CommandCenter" and level == 0) then
 				local stroke = Instance.new("UIStroke")
 				stroke.Color = Constants.Colors.Gold
 				stroke.Thickness = 2
@@ -136,6 +238,26 @@ local function refreshList()
 			title.TextTruncate = Enum.TextTruncate.AtEnd
 			title.Text = string.format("%s  Lv%d/%d", def.DisplayName, level, def.MaxLevel)
 			title.Parent = row
+
+			-- v72: gold NEXT badge on the pick's row (between the title and GO)
+			if GUIDE_ON and isNext then
+				local badgeSize = PanelShell.Text(13)
+				local bw = badgeWidth(GT.NextTag, badgeSize)
+				local badge = Instance.new("TextLabel")
+				badge.Name = "NextBadge"
+				badge.AnchorPoint = Vector2.new(1, 0)
+				badge.Position = UDim2.new(1, -(btnW + 16), 0, 6)
+				badge.Size = UDim2.fromOffset(bw, titleSize + 6)
+				badge.BackgroundColor3 = TycoonGuideConfig.ConsoleTag.NextColor
+				badge.BorderSizePixel = 0
+				badge.Font = Enum.Font.GothamBold
+				badge.TextSize = badgeSize
+				badge.TextColor3 = NEXT_INK
+				badge.Text = GT.NextTag
+				badge.Parent = row
+				corner(badge, 6)
+				title.Size = UDim2.new(1, -(btnW + 28 + bw + 8), 0, titleSize + 6)
+			end
 
 			local desc = Instance.new("TextLabel")
 			desc.BackgroundTransparency = 1
@@ -169,9 +291,6 @@ local function refreshList()
 			else
 				-- v71: overview only. GO draws a guide line to this structure's console on your plot; buying happens
 				-- there (BUY button / hold the console prompt). The server refuses a remote buy (NotAtConsole).
-				local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
-				local rate = if typeof(rates) == "table" then (tonumber(rates[structureId]) or 0) else 0
-				local incomeSuffix = if rate > 0 then ("  +" .. tostring(rate) .. "/t") else ""
 				local lockedBy: string? = nil
 				for _, req in ipairs(def.Requires or {}) do
 					if (upgrades[req.StructureId] or 0) < req.Level then
@@ -184,10 +303,18 @@ local function refreshList()
 				if lockedBy then
 					desc.Text = lockedBy
 					desc.TextColor3 = Color3.fromRGB(235, 120, 110)
-				elseif level == 0 then
-					desc.Text = string.format(ConsoleBuyConfig.Text.Build, price) .. incomeSuffix
+				elseif GUIDE_ON then
+					desc.Text = guideRowText(structureId, level, cost, mult)
 				else
-					desc.Text = string.format(ConsoleBuyConfig.Text.Upgrade, level, nextLevel, price) .. incomeSuffix
+					-- guide off (flags off = HEAD): the pre-v72 per-tick suffix stays until the lead flips the guide on
+					local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
+					local rate = if typeof(rates) == "table" then (tonumber(rates[structureId]) or 0) else 0
+					local legacySuffix = if rate > 0 then string.format("  +%s/t", tostring(rate)) else ""
+					if level == 0 then
+						desc.Text = string.format(ConsoleBuyConfig.Text.Build, price) .. legacySuffix
+					else
+						desc.Text = string.format(ConsoleBuyConfig.Text.Upgrade, level, nextLevel, price) .. legacySuffix
+					end
 				end
 				btn.Text = ConsoleBuyConfig.Text.Go
 				-- accent when unlocked and affordable; grey otherwise but still tappable (GO finds the console)
@@ -214,6 +341,47 @@ local function refreshList()
 	if l then
 		listFrame.CanvasSize = UDim2.fromOffset(0, l.AbsoluteContentSize.Y + 12)
 	end
+
+	-- v72: open on the NEXT row (a phone shows about 3 rows; the pick is often a business at the bottom)
+	if GUIDE_ON and scrollToNext then
+		table.sort(placed, function(a, b)
+			return a.Order < b.Order
+		end)
+		local y = 0
+		local nextH = 0
+		local headerY: number? = nil
+		local found = false
+		for _, p in ipairs(placed) do
+			if p.Order == BIZ_ORDER then
+				headerY = y
+			end
+			if p.Next then
+				found = true
+				nextH = p.H
+				break
+			end
+			y += p.H + listPad
+		end
+		local lf = listFrame :: ScrollingFrame
+		if found then
+			local total = 0
+			for _, p in ipairs(placed) do
+				total += p.H + listPad
+			end
+			-- AbsoluteWindowSize is real px; the canvas is in v (the panel gui carries the one HUD UIScale)
+			local window = lf.AbsoluteWindowSize.Y / math.max(HudLayout.Scale(), 0.01)
+			local maxY = math.max(0, total + 12 - window)
+			local target = y - listPad
+			-- a business pick: start at the WAR BUSINESSES header while the NEXT row still fits below it
+			if headerY ~= nil and y + nextH - headerY <= window then
+				target = headerY
+			end
+			lf.CanvasSize = UDim2.fromOffset(0, math.max(lf.CanvasSize.Y.Offset, total + 12))
+			lf.CanvasPosition = Vector2.new(0, math.clamp(target, 0, maxY))
+		else
+			lf.CanvasPosition = Vector2.new(0, 0)
+		end
+	end
 end
 
 function setOpen(open: boolean)
@@ -230,7 +398,7 @@ function setOpen(open: boolean)
 	end
 	if open then
 		refreshSubtitle()
-		refreshList()
+		refreshList(true)
 	end
 end
 
@@ -415,6 +583,18 @@ function BaseController.Init()
 			setOpen(not menuOpen)
 		end
 	end)
+
+	-- v72 guide: the server re-picks / re-stamps these (at most every few seconds): subtitle + rows follow
+	if GUIDE_ON then
+		player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(refreshSubtitle)
+		local function relist()
+			if menuOpen then
+				refreshList()
+			end
+		end
+		player:GetAttributeChangedSignal("WE_NextBuy"):Connect(relist)
+		player:GetAttributeChangedSignal("WE_IncomeMult"):Connect(relist)
+	end
 
 	refreshSubtitle()
 	print("[WAR EMPIRE] BaseController ready (B / terminal / tutorial open the overview; rows GO to the console, never buy)")

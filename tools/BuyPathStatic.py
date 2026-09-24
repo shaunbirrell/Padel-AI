@@ -2082,6 +2082,359 @@ must_contain(RVAS, 'd.CanTouch = false\n\t\t\td.Massless = true\n\t\t\td.CastSha
 must_contain(RVS, 'if flipAt ~= nil and t - flipAt < CarCfg.RecoverMaxSeconds then\n\t\t\tpush = false', 'Rollover (verifier): a flipped / just-righted car never trips the nomove watchdog')
 must_contain(RVDC, 'and not (d.Mode == "Car" and d.Chassis.CFrame.UpVector.Y < (d.Params.C.FlipUpY or 0.5))', 'Rollover (verifier): no Stuck report while flipped / righting')
 
+# ===== v72 merged BuyPathStatic pins (lanes K, A, B1, B2, C), for the flags-OFF commit. Paste before the final parse_gate().
+
+# ===== Lane K =====
+# Lane K (v72 contract) proposed BuyPathStatic pins. Paste-ready for tools/BuyPathStatic.py (before parse_gate()).
+# Every needle below was checked with verify_pins.py against /home/user/Padel-AI (flags OFF, the repo state) and
+# against the flags-ON scratch tree: must_contain needles present, must_not_contain needles absent (see pins_check.txt).
+# Two pins (the Enabled = false lines) protect "flags stay off"; flip them to "Enabled = true," at integration.
+# Format per line: must_contain|must_not_contain(file, needle, label). The RULES block is the prototype's regex rules
+# (kiosk sites, kit budget, guide copy) adapted to the v72 copy rules, verified the same way.
+
+BZC = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
+TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
+TMU = "src/ReplicatedStorage/Shared/Util/TycoonMath.luau"
+BCF = "src/ReplicatedStorage/Shared/Configs/BaseConfig.luau"
+BLC = "src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau"
+TUC = "src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau"
+
+# --- flags (flip at integration) ---
+must_contain(BZC, "\tEnabled = false,", "v72 BusinessConfig off until integration (lead flips after Lane D)")
+must_contain(TGC, "\tEnabled = false,", "v72 TycoonGuideConfig off until integration (lead flips after Lane D)")
+
+# --- BusinessConfig (spec section 1) ---
+must_contain(BZC, 'Requires = { { StructureId = "AmmoWorks", Level = 1 }, { StructureId = "WeaponsFacility", Level = 1 } },', "v72 Arms Crate Line requires Ammo Works 1 + Weapons Facility 1")
+must_contain(BZC, 'StructureId = "WeaponsFacility"', "v72 the Weapons Facility gates a business (spec section 7)")
+must_contain(BZC, 'Order = { "AmmoWorks", "ArmsCrateLine", "ArmorPlatePress", "RocketAssembly" },', "v72 four war businesses in order")
+must_contain(BZC, "PartsPerBusinessL5 = 16,", "v72 business part cap 16 at L5")
+must_contain(BZC, "ConsoleNeon = false,", "v72 business kiosks: no Neon button")
+must_contain(BZC, "ConsoleScreenGui = false,", "v72 business kiosks: no SurfaceGui")
+must_contain(BZC, "return BusinessConfig.Enabled and BusinessConfig.Businesses[id] ~= nil", "v72 IsBusiness false while the flag is off")
+must_not_contain(BZC, "require(", "v72 BusinessConfig requires nothing (BaseConfig / TutorialConfig require it: no cycle)")
+
+# --- TycoonGuideConfig (spec sections 2-4) ---
+must_contain(TGC, 'Opening = { "CommandCenter:1", "AmmoWorks:1", "WeaponsFacility:1", "ArmsCrateLine:1", "Barracks:1" },', "v72 guide opening (Barracks last)")
+must_contain(TGC, "SoldierMaxShare = 0.34,", "v72 soldiers offered only below 34% training share")
+must_contain(TGC, "RepickSeconds = 15,", "v72 re-pick every 15 s")
+must_contain(TGC, "Hysteresis = 0.75,", "v72 sticky pick (challenger < 0.75 x current)")
+must_contain(TGC, "PillIncome = true,", "v72 cash pill +$/s suffix")
+must_contain(TGC, "ThumbZoneFrac = 0.40,", "v72 BUY lane clears the left 40% thumb zone")
+must_contain(TGC, "TouchSize = Vector2.new(300, 72),", "v72 BUY button 300 x 72 v (>= 44 px real at 0.70)")
+must_contain(TGC, "NextMaxDistance = 40,", "v72 NEXT console tag MaxDistance <= 40")
+must_contain(TGC, 'HideWhen = { "Tutorial", "Modal", "Driving", "Dead", "RecentCombat", "AtConsole" },', "v72 guide chip hides in tutorial / panel / driving / dead / combat / at a console")
+must_not_contain(TGC, "·", "v72 no middle dot in the guide config (Display font)")
+must_not_contain(TGC, "→", "v72 no arrow glyph in the guide config (Display font)")
+must_not_contain(TGC, "require(", "v72 TycoonGuideConfig requires nothing")
+
+# --- TycoonMath (pure, one formula for paid and shown) ---
+must_contain(TMU, "function TycoonMath.BasePassivePerTick(upgrades: { [string]: any }?): number", "v72 TycoonMath passive formula (BaseService pays it)")
+must_contain(TMU, "local tenths = math.floor(v * 10 + EPS)", "v72 displayed $/s floored to 0.1 below $10/s (never over-promises)")
+must_contain(TMU, "return tostring(math.floor(v + EPS))", "v72 displayed $/s floored to whole dollars from $10/s")
+must_contain(TMU, "TycoonMath.TrainingShare(ctx.Upgrades, soldiers) < TycoonGuideConfig.SoldierMaxShare", "v72 soldier candidate gated by the training share")
+must_contain(TMU, "if bestScore >= TycoonGuideConfig.Hysteresis * TycoonMath.Score(cur, ctx) then", "v72 pick hysteresis")
+must_contain(TMU, "function TycoonMath.ActionLaneShiftV(viewportV: Vector2, widthV: number, frac: number, clearPx: number, scale: number): number", "v72 BUY lane shift helper (Lane 0 owns HudLayout)")
+must_contain(TMU, "if biz then\n\t\tif not BusinessConfig.Enabled then\n\t\t\treturn 0", "v72 a saved business level pays nothing while the flag is off")
+for _needle in ("Instance.new", "game:GetService", "WaitForChild", "task.wait", "FireServer", "RemoteEvent"):
+    must_not_contain(TMU, _needle, f"v72 TycoonMath is pure (no {_needle})")
+
+# --- BaseConfig merge ---
+must_contain(BCF, "local BusinessConfig = require(script.Parent.BusinessConfig)", "v72 BaseConfig reads BusinessConfig")
+must_contain(BCF, "if BusinessConfig.Enabled then\n\tfor _, id in ipairs(BusinessConfig.Order) do", "v72 businesses merged into Structures only while enabled")
+must_contain(BCF, "Kind = BusinessConfig.Kind,", "v72 merged businesses carry Kind = Business")
+must_contain(BCF, 'Description = if BusinessConfig.Enabled then "Arms storage. Unlocks the Arms Crate Line." else "Research and unlock advanced weapons.",', "v72 Weapons Facility description (flag-gated)")
+
+# --- BaseLayoutConfig sites (plot-local, Yaw 180, kiosk 10 studs toward the gate) ---
+must_contain(BLC, "AmmoWorks = { Site = { X = -30, Z = 100 }, Yaw = 180, WalkIn = false, Kiosk = { X = -30, Z = 90 } },", "v72 Ammo Works site")
+must_contain(BLC, "ArmsCrateLine = { Site = { X = -66, Z = 100 }, Yaw = 180, WalkIn = false, Kiosk = { X = -66, Z = 90 } },", "v72 Arms Crate Line site")
+must_contain(BLC, "ArmorPlatePress = { Site = { X = 34, Z = 60 }, Yaw = 180, WalkIn = false, Kiosk = { X = 34, Z = 50 } },", "v72 Armor Plate Press site")
+must_contain(BLC, "RocketAssembly = { Site = { X = 70, Z = 60 }, Yaw = 180, WalkIn = false, Kiosk = { X = 70, Z = 50 } },", "v72 Rocket Assembly site")
+must_contain(BLC, "FloorChevrons = false,", "v72 static floor arrows off (read by MapSetup once Lane D lands)")
+must_contain(BLC, "SignInsetStuds = 2.0,", "v72 gate-sign inset key (read by MapSetup once Lane D lands)")
+
+# --- TutorialConfig step 6 ---
+must_contain(TUC, 'MarkerName = "Tutorial_Business",', "v72 tutorial step 6 marker name (no marker part: GO resolves via PadStructureId)")
+must_contain(TUC, 'PadStructureId = "AmmoWorks",', "v72 tutorial step 6 buys Ammo Works at your own kiosk")
+must_contain(TUC, 'Hint = "Build your Ammo Works. It makes cash.",', "v72 tutorial step 6 copy (<= 42, device-neutral)")
+must_contain(TUC, "if BusinessConfig.Enabled then\n\tTutorialConfig.Steps[TutorialConfig.BusinessStepIndex] = TutorialConfig.BusinessStep", "v72 step 6 = Ammo Works only while businesses are on (else Barracks)")
+must_contain(TUC, 'Id = "Barracks",', "v72 flags-off step 6 stays the Barracks buy")
+
+# --- other files stay untouched by v72 (spec section 7 "Unchanged") ---
+must_not_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "BuyLane", "v72 BUY lane keys live in TycoonGuideConfig, not HudConfig")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "ConsoleTag", "v72 console tag keys live in TycoonGuideConfig, not HudConfig")
+must_not_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "Business", "v72 no business remote")
+
+# --- RULES (prototype rules, adapted; verified) ---
+_bz = read(BZC) or ""
+_blc2 = read(BLC) or ""
+_bz_order = re.findall(r'"(\w+)"', (re.search(r"Order = \{([^}]*)\}", _bz) or re.search("()", "")).group(1) or "")
+_bz_nosite = [b for b in _bz_order if not re.search(r"^\t\t" + b + r" = \{ Site = .*Kiosk = \{", _blc2, re.M)]
+if _bz_order and not _bz_nosite:
+    ok(f"v72 every business ({len(_bz_order)}) has a BaseLayoutConfig kiosk site")
+else:
+    bad(f"v72 businesses without a kiosk site: {_bz_nosite} (order={_bz_order})")
+_kit = re.search(r"\n\tKit = \{(.*?)\n\t\} :: \{ KitPart \},", _bz, re.S)
+_kit_n = len(re.findall(r"\{ Role = ", _kit.group(1))) if _kit else 0
+_cap = re.search(r"PartsPerBusinessL5 = (\d+)", _bz)
+if _kit and _cap and _kit_n + 3 <= int(_cap.group(1)):
+    ok(f"v72 business kit at L5 = {_kit_n} + console 3 <= PartsPerBusinessL5 {_cap.group(1)}")
+else:
+    bad(f"v72 business kit {_kit_n} + 3 exceeds PartsPerBusinessL5 {(_cap.group(1) if _cap else '?')}")
+_bz_short = re.findall(r'ShortName = "([^"]*)"', _bz)
+_bz_desc = re.findall(r'Description = "([^"]*)"', _bz)
+if len(_bz_short) == 4 and all(len(s) <= 10 for s in _bz_short) and all(len(d) <= 42 for d in _bz_desc):
+    ok("v72 business ShortName <= 10 and Description <= 42 characters")
+else:
+    bad(f"v72 business copy too long: {_bz_short} {_bz_desc}")
+_tg = read(TGC) or ""
+_tg_text = re.search(r"\n\tText = \{(.*?)\n\t\},", _tg, re.S)
+_tg_strings = re.findall(r'= "([^"]*)"', _tg_text.group(1)) if _tg_text else []
+_keyish2 = [t for t in _tg_strings if re.search(r"\b(click|tap|press [A-Z]|E key|\[[A-Z]\]|key)\b", t, re.I)]
+_long2 = [t for t in _tg_strings if len(t) > 42]
+_glyph2 = [t for t in _tg_strings if "·" in t or "→" in t]
+if len(_tg_strings) >= 30 and not _keyish2 and not _long2 and not _glyph2:
+    ok(f"v72 guide copy device-neutral, <= 42 characters, no middle dot / arrow ({len(_tg_strings)} strings)")
+else:
+    bad(f"v72 guide copy: key names {_keyish2}, too long {_long2}, glyphs {_glyph2} (n={len(_tg_strings)})")
+_sn = re.search(r"\n\tShortNames = \{(.*?)\n\t\}", _tg, re.S)
+_sn_vals = re.findall(r'= "([^"]*)"', _sn.group(1)) if _sn else []
+if len(_sn_vals) == 15 and all(len(s) <= 10 for s in _sn_vals):
+    ok("v72 building ShortNames (15) <= 10 characters")
+else:
+    bad(f"v72 building ShortNames: {_sn_vals}")
+
+# ===== Lane A =====
+# Lane A (v72 server) proposed BuyPathStatic pins. Paste-ready for tools/BuyPathStatic.py (before parse_gate()).
+# Every needle was checked with verify_pins.py against /home/user/Padel-AI (flags OFF, the repo state) and against the
+# flags-ON scratch tree (build/A/on): must_contain needles present, must_not_contain needles absent (pins_check_*.txt).
+# None of these depends on the flag values, so nothing here flips at integration.
+# The first block is the spec section 7 prototype pins that touch Lane A files (kept verbatim from proto_bps.diff,
+# except the two BaseService lines, which match the ported code exactly). The rest are Lane A contract pins.
+
+BZS = "src/ServerScriptService/Server/Services/BusinessService.luau"
+BSV = "src/ServerScriptService/Server/Services/BaseService.luau"
+ECO = "src/ServerScriptService/Server/Services/EconomyService.luau"
+SOL = "src/ServerScriptService/Server/Services/SoldierService.luau"
+UPS = "src/ServerScriptService/Server/Services/UpgradePadService.luau"
+TUS = "src/ServerScriptService/Server/Services/TutorialService.luau"
+BOOT = "src/ServerScriptService/Server/Bootstrap.server.luau"
+
+# --- spec section 7: prototype pins on Lane A files ---
+must_contain(BZS, "CollectionService:AddTag(console, TAG_SLOT)", "v72 business consoles are WE_UpgradeSlot buy points (console-only buying)")
+must_contain(BZS, 'console:SetAttribute("WE_Console", true)', "v72 business console marked WE_Console")
+for _needle in ("SurfaceGui", "PointLight", "SpotLight", "AddCash", "AccruePendingCash", "OnServerEvent", "FireServer"):
+    must_not_contain(BZS, _needle, f"v72 BusinessService has no {_needle} (no new money path / budget-free look)")
+must_contain(BSV, "local total = TycoonMath.BasePassivePerTick(profile.BaseUpgrades)", "v72 passive income = TycoonMath (the numbers the client shows)")
+must_contain(BSV, "if TycoonMath.IsBusiness(structureId) then", "v72 businesses never get a structure kit")
+# spec section 7 "Add": TutorialService advances step 6 from config
+must_contain(TUS, ".PadStructureId", "v72 TutorialService reads the step's PadStructureId")
+
+# --- BusinessService: world no-ops while off, no remote, pick written only on change ---
+must_contain(BZS, "function BusinessService.SyncBusiness(plotId: number, id: string, level: number, ownerUserId: number?)\n\tif not BusinessConfig.Enabled then\n\t\treturn\n\tend", "v72 SyncBusiness is a no-op while BusinessConfig.Enabled is false")
+must_contain(BZS, "function BusinessService.SyncPlot(plotId: number, upgrades: { [string]: any }?, ownerUserId: number?)\n\tif not BusinessConfig.Enabled then", "v72 SyncPlot is a no-op while BusinessConfig.Enabled is false")
+must_contain(BZS, "function BusinessService.ClearPlot(plotId: number)\n\tif not BusinessConfig.Enabled then", "v72 ClearPlot is a no-op while BusinessConfig.Enabled is false")
+must_contain(BZS, "-- Both flags off: no hooks, no loop, no attributes (the game is exactly as before v72)\n\tif not TycoonGuideConfig.Enabled then\n\t\treturn\n\tend", "v72 BusinessService.Init hooks nothing while the guide is off")
+must_contain(BZS, "local pick = TycoonMath.PickNext({", "v72 the server picks the next buy (TycoonMath.PickNext)")
+must_contain(BZS, "if player:GetAttribute(ATTR_NEXT) ~= value then\n\t\tplayer:SetAttribute(ATTR_NEXT, value)", "v72 WE_NextBuy written only when it changes")
+must_contain(BZS, "if now - (lastRepick[p] or 0) >= TycoonGuideConfig.RepickSeconds then", "v72 re-pick every RepickSeconds since the player's last pick")
+must_contain(BZS, "SoldierService.OnArmyChanged(function(p: Player)", "v72 re-pick on an army change")
+must_contain(BZS, "BaseService.GetUpgradeChangedEvent().Event:Connect(function(userId: number)", "v72 re-pick after every purchase")
+must_contain(BZS, "DataService.OnProfileLoaded(function(p: Player)", "v72 re-pick on profile load")
+must_contain(BZS, "BusinessService.StampAtmPos(p, plotId)", "v72 WE_AtmPos stamped on plot ready (own ATM; streaming-safe GO line)")
+must_not_contain(BZS, "RemoteSetup", "v72 BusinessService adds no remote")
+must_not_contain(BZS, "WaitForChild(\"Kit_", "v72 BusinessService never waits on kit parts")
+
+# --- BaseService ---
+must_contain(BSV, "local BusinessService = require(script.Parent.BusinessService)", "v72 BaseService builds business lines through BusinessService")
+must_contain(BSV, "xpcall(BusinessService.SyncPlot, function(errB)", "v72 RefreshAllVisuals syncs every business line before plot-ready (L0 kiosk on owned plots)")
+must_contain(BSV, "if not TycoonMath.IsBusiness(structureId) then -- v72: businesses in one SyncPlot below", "v72 RefreshAllVisuals structure loop skips businesses")
+must_contain(BSV, "if seen[structureId] or TycoonMath.IsBusiness(structureId) then", "v72 NuclearRehydrateKits skips businesses")
+must_contain(BSV, "pcall(BusinessService.OnPlotReleased, player, plotId)", "v72 ReleasePlot clears the plot's business lines and WE_AtmPos")
+must_contain(BSV, "if targetLevel >= 3 and def.Kind ~= BusinessConfig.Kind and MonetizationService and MonetizationService.TrySoftOfferVIP then", "v72 the VIP soft offer skips war businesses")
+must_contain(BSV, 'player:SetAttribute("WE_PassiveTick", (tonumber(player:GetAttribute("WE_PassiveTick")) or 0) + 1)', "v72 passive tick counter for the client pops")
+must_contain(BSV, 'if player:GetAttribute("WE_IncomeMult") ~= m then', "v72 WE_IncomeMult written only when it changes")
+must_contain(BSV, "if BusinessConfig.Enabled or TycoonGuideConfig.Enabled then", "v72 passive-tick stamps only while a v72 flag is on")
+must_contain(BSV, 'string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0) .. (if okS and typeof(suffix) == "string" then suffix else "")', "v72 remote BUY toast carries the +$/s suffix")
+must_contain(BSV, "function BaseService.PurchaseToastSuffix(player: Player, structureId: string, newLevel: number): string\n\tif not TycoonGuideConfig.Enabled then\n\t\treturn \"\"", "v72 toast suffix empty while the guide is off")
+must_contain(BSV, 'EconomyService.AccruePendingCash(player, amount, "passive")', "v72 business income rides the existing passive tick into the ATM")
+
+# --- EconomyService: display multiplier + steady income, the grant math unchanged ---
+must_contain(ECO, "function EconomyService.GetCashMult(player: Player, reason: string?): number", "v72 EconomyService.GetCashMult (display only)")
+must_contain(ECO, "return math.floor(amount * cashMultFor(player, profile, reason))", "v72 grants and GetCashMult share one multiplier function")
+must_contain(ECO, "noteSteadyIncome(player, reason, granted) -- v72 WE_IncomePerSec", "v72 WE_IncomePerSec from what was really granted")
+must_contain(ECO, 'if player:GetAttribute("WE_IncomePerSec") ~= perSec then', "v72 WE_IncomePerSec written only when it changes")
+must_contain(ECO, "if not TycoonGuideConfig.Enabled or reason == nil or TycoonGuideConfig.SteadyIncomeReasons[reason] ~= true then", "v72 WE_IncomePerSec only while the guide is on, steady reasons only")
+
+# --- SoldierService / UpgradePadService / TutorialService / Bootstrap ---
+must_contain(SOL, "function SoldierService.GetCap(player: Player): number", "v72 SoldierService.GetCap (next-buy soldier offer)")
+must_contain(UPS, 'string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0) .. suffix', "v72 kiosk hold-prompt toast carries the +$/s suffix")
+must_contain(UPS, "BaseService.PurchaseToastSuffix", "v72 one toast-suffix function for both buy paths")
+must_contain(TUS, "local STEP_BUSINESS = TutorialConfig.BusinessStepIndex", "v72 tutorial step 6 index from TutorialConfig")
+must_contain(TUS, "elseif step == STEP_BUSINESS and detail == businessStepStructureId() then", "v72 step 6 advances on Steps[6].PadStructureId (AmmoWorks on, Barracks off)")
+must_not_contain(TUS, 'detail == "Barracks"', "v72 no hard-coded Barracks step")
+must_contain(BOOT, 'local BusinessService = safeRequire("BusinessService", Services.BusinessService)', "v72 Bootstrap requires BusinessService")
+must_contain(BOOT, 'safeInit("BusinessService", BusinessService, deps)', "v72 Bootstrap inits BusinessService")
+_boot = read(BOOT) or ""
+_i_sol = _boot.find('safeInit("SoldierService", SoldierService, deps)')
+_i_biz = _boot.find('safeInit("BusinessService", BusinessService, deps)')
+if 0 <= _i_sol < _i_biz:
+    ok("v72 BusinessService inits after SoldierService (GetCap / OnArmyChanged)")
+else:
+    bad(f"v72 BusinessService must init after SoldierService (sol={_i_sol} biz={_i_biz})")
+
+# ===== Lane B1 =====
+# Lane B1 (v72 buy surfaces) proposed BuyPathStatic pins. Paste-ready for tools/BuyPathStatic.py (before the final
+# parse_gate() call). Every needle was checked with verify_pins_b1.py against /home/user/Padel-AI (flags OFF, the
+# repo state), against the flags-ON scratch tree (build/B1/on) and against HEAD 45bd63c (where they are new): every
+# must_contain needle present and every must_not_contain needle absent in the repo and ON trees (pins_check_*.txt).
+# None of them depends on the Enabled flags, so nothing flips at integration.
+# Format per line: must_contain|must_not_contain(file, needle, label).
+
+B1_WPC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau"
+B1_PC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/PromptController.luau"
+B1_HUD = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau"
+
+# --- spec section 7 pins that belong to B1 ---
+must_contain(B1_WPC, "TycoonMath.PerSecText", "v72 BUY / console tag / screen rates come from TycoonMath.PerSecText (floored, never over-promises)")
+must_contain(B1_WPC, "TycoonGuideConfig.BuyLane", "v72 BUY lane keys live in TycoonGuideConfig (not HudConfig)")
+must_contain(B1_PC, "TycoonGuideConfig.BuyLane", "v72 prompt pill lane uses the BUY lane keys (TycoonGuideConfig)")
+
+# --- gating: flags OFF renders exactly like HEAD ---
+must_contain(B1_WPC, "local function guideOn(): boolean\n\treturn TycoonGuideConfig.Enabled == true\nend", "v72 WorldPrompt guide surfaces gated on TycoonGuideConfig.Enabled")
+must_contain(B1_PC, "if not (TycoonGuideConfig.Enabled == true and isTouch()) then\n\t\treturn 0\n\tend", "v72 prompt lane shift only with the guide on, touch only")
+must_contain(B1_HUD, "local incomeOn = TycoonGuideConfig.Enabled == true and TycoonGuideConfig.PillIncome == true", "v72 cash pill +$/s behind TycoonGuideConfig.Enabled and PillIncome")
+
+# --- F3: BUY / pill lane right of the thumb zone (TycoonMath.ActionLaneShiftV, the lead's home for the helper) ---
+must_contain(B1_WPC, "TycoonMath.ActionLaneShiftV(HudLayout.ContentSizeV(), widthV, BUY_LANE.ThumbZoneFrac, BUY_LANE.ClearPx, HudLayout.Scale())", "v72 F3 BUY lane clears the thumb zone (left 40% + 8 px)")
+must_contain(B1_PC, "TycoonMath.ActionLaneShiftV(HudLayout.ContentSizeV(), widthV, BUY_LANE.ThumbZoneFrac, BUY_LANE.ClearPx, HudLayout.Scale())", "v72 F3 prompt pill lane clears the thumb zone")
+must_contain(B1_WPC, "buyLaneConn = HudLayout.LayoutChanged:Connect(placeBuyLane)", "v72 BUY lane re-placed on rotation / safe-area change")
+must_contain(B1_PC, "lane.Position = UDim2.new(0.5, laneShiftV(math.max(1, totalW)), 1, -bottom)", "v72 pill lane position goes through the thumb-zone shift")
+must_not_contain(B1_PC, "lane.Position = UDim2.new(0.5, 0, 1, -bottom)", "v72 pill lane never skips the thumb-zone shift")
+must_contain(B1_PC, "return UDim2.fromOffset(BUY_LANE.TouchSize.X, BUY_LANE.TouchSize.Y)", "v72 pills above BUY clear its 72 v touch height")
+
+# --- two-line BUY (300x72 v touch, 20 v lines, MoneyState) ---
+must_contain(B1_WPC, "local BUY_LINE_V = 20", "v72 BUY lines are 20 v (14 real px on phones)")
+must_contain(B1_WPC, "t.TextSize = BUY_LINE_V\n\t\t\tt.TextScaled = false", "v72 BUY lines never TextScaled below 14 px")
+must_contain(B1_WPC, "local moneyState, short, eta = TycoonMath.MoneyState(cost, liveCash(), pendingCash(), incomePerSec())", "v72 BUY state from TycoonMath.MoneyState (wallet + ATM + WE_IncomePerSec)")
+must_not_contain(B1_WPC, "setBuyLook(canAfford)", "v72 BUY look is a money state (Buy / Collect / Earn), not a bool")
+must_contain(B1_WPC, "if lineWidthV(full, font) <= innerW then", "v72 BUY line 1 falls back to the short name when it does not fit (TextService)")
+
+# --- Collect: fires nothing, line to your OWN ATM, one toast ---
+must_contain(B1_WPC, 'if guideOn() and (TycoonMath.MoneyState(cost, liveCash(), pendingCash(), incomePerSec())) == "Collect" then\n\t\t\tshowAtmLine()\n\t\t\treturn\n\t\tend', "v72 Collect sends no buy request")
+must_contain(B1_WPC, "if ConsoleWaypoint.ShowAtm then", "v72 Collect draws the line to the player's own ATM (guarded until the guide lane's ShowAtm lands)")
+must_contain(B1_WPC, "NotificationController.Show(GTEXT.CollectToast", "v72 Collect toast copy from TycoonGuideConfig.Text")
+
+# --- AtConsole flag (the guide chip hides while BUY is up) ---
+must_contain(B1_WPC, "HudLayout.SetFlag(TycoonGuideConfig.AtConsoleFlag, true)", "v72 AtConsole on while BUY shows")
+must_contain(B1_WPC, "HudLayout.SetFlag(TycoonGuideConfig.AtConsoleFlag, false)", "v72 AtConsole off when BUY hides")
+
+# --- console tag (F2) + screen line 3 ---
+must_contain(B1_WPC, "local size = UDim2.fromScale(TAG.StudsW, TAG.StudsH)", "v72 F2 stud-scaled console tag (ConsoleTag StudsW x StudsH)")
+must_contain(B1_WPC, "bb.MaxDistance = if pick then TAG.NextMaxDistance elseif owned then TAG.MaxDistanceUpgrade else TAG.MaxDistanceBuild", "v72 console tag ranges from ConsoleTag (NEXT 40)")
+must_contain(B1_WPC, "string.format(GTEXT.TagTitleNext, name)", "v72 gold NEXT title on the WE_NextBuy pick")
+must_contain(B1_WPC, "string.format(GTEXT.ScreenLines, TycoonMath.ShortName(structureId), TycoonMath.ShortCash(cost, true), stepGainText(structureId, level))", "v72 console screen line 3 (+$/s)")
+must_not_contain(B1_WPC, "AlwaysOnTop = true", "v72 console tags never AlwaysOnTop")
+must_contain(B1_WPC, 'for _, attr in ipairs({ "WE_PendingCash", "WE_IncomePerSec", "WE_IncomeMult", "WE_NextBuy" }) do', "v72 buy surfaces read server-stamped attributes (no new remote)")
+
+# --- cash pill suffix ---
+must_contain(B1_HUD, "else TycoonMath.RatePerSecText(rate)", "v72 cash pill +$/s from WE_IncomePerSec (TycoonMath, floored)")
+must_contain(B1_HUD, "then string.format(TycoonGuideConfig.Text.PerSec, TycoonMath.Commas(rate))", "v72 cash pill +$1,234/s keeps the thousands separator")
+must_contain(B1_HUD, "inc.Active = false", "v72 cash pill +$/s is not a tap target")
+must_contain(B1_HUD, 'player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(queueIncome)', "v72 cash pill +$/s refresh throttled to TextRefreshHz")
+
+# ===== Lane B2 =====
+# Lane B2 (v72 guide: TutorialController, BaseController, ConsoleWaypoint) proposed BuyPathStatic pins.
+# Paste-ready for tools/BuyPathStatic.py (the same must_contain / must_not_contain helpers; needles are Python strings).
+# Every needle was checked with verify_pins.py against /home/user/Padel-AI (flags OFF, the repo) and against the
+# flags-ON scratch tree (build/B2/on): must_contain present, must_not_contain absent in both (pins_check.txt).
+# The first three are the spec section 7 pins for Lane B2; the rest protect the behaviour the lane tests.
+
+B2_TC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau"
+B2_BC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau"
+B2_CW = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/ConsoleWaypoint.luau"
+
+# --- spec section 7 ---
+must_contain(B2_TC, 'GetAttribute("WE_NextBuy")', "v72 guide chip reads the server's pick (WE_NextBuy)")
+must_contain(B2_BC, "TycoonMath.PerSecText", "v72 Base panel rows show the floored +$/s (TycoonMath.PerSecText)")
+must_not_contain(B2_BC, '.. "/t")', "v72 Base panel: no HEAD-style per-tick '+N/t' concat (guide on shows +$N/s; guide off keeps HEAD text via string.format)")
+
+# --- guide chip (TutorialController) ---
+must_contain(B2_TC, "if GUIDE.Enabled then\n\t\tbuildGuideChip(screen)", "v72 guide chip only exists while TycoonGuideConfig.Enabled")
+must_contain(B2_TC, "HudLayout.BindVisibility(c, GUIDE.ChipRule, guideWanted)", "v72 guide chip: own plot only; hidden on Tutorial / Modal / Driving / Dead / RecentCombat / AtConsole")
+must_contain(B2_TC, "and (tutorialDone or GUIDE.ShowAfterTutorial == false)", "v72 guide chip only after the tutorial")
+must_contain(B2_TC, "local state, short, eta = TycoonMath.MoneyState(cost, attrNum(\"WE_Cash\", 0), attrNum(\"WE_PendingCash\", 0), attrNum(\"WE_IncomePerSec\", 0))", "v72 chip Build / Collect / Earn from TycoonMath.MoneyState")
+must_contain(B2_TC, "local gain = TycoonMath.PerSecText(TycoonMath.StepGainPerTick(id, level - 1, mult))", "v72 chip +$/s = TycoonMath (floored, WE_IncomeMult)")
+must_contain(B2_TC, "if short ~= nil and lineCount(raw, OBJ.HintSize, HudConfig.Fonts.Body, textW) > 1 then", "v72 chip drops the unlock part when the hint does not fit at 20 v")
+must_contain(B2_TC, "ConsoleWaypoint.Show(guideId, myPlotId)", "v72 guide GO: the line to the console on the player's OWN plot")
+must_contain(B2_TC, "ConsoleWaypoint.ShowAtm(myPlotId)", "v72 guide ATM: the line to the player's OWN ATM")
+must_contain(B2_TC, "guideHiddenUntil = os.clock() + GUIDE.HideSeconds", "v72 Hide lasts HideSeconds")
+must_contain(B2_TC, 'player:GetAttributeChangedSignal("WE_BuyAck"):Connect(function()', "v72 Hide ends at the next purchase acknowledgement")
+must_contain(B2_TC, "and now - idleSince >= GUIDE.AutoGuideIdleSeconds and ConsoleWaypoint.Current() == nil then", "v72 auto-guide after AutoGuideIdleSeconds idle, never over an existing line")
+must_contain(B2_TC, "if target and Vector3.new(target.X - p.X, 0, target.Z - p.Z).Magnitude > GUIDE.AutoGuideMinStuds then", "v72 auto-guide only when farther than AutoGuideMinStuds")
+must_contain(B2_TC, 'if (guideKind == "Build" or guideKind == "Collect") and guidePick ~= "" and autoGuidedFor ~= guidePick', "v72 auto-guide once per pick, Build / Collect only")
+must_contain(B2_TC, "local period = 1 / math.max(GUIDE.EtaRefreshHz or 1, 0.1)", "v72 guide ticks at EtaRefreshHz (1 Hz; UI refresh <= 10 Hz)")
+must_not_contain(B2_TC, "RenderStepped", "v72 tutorial / guide chip: no per-frame work")
+must_not_contain(B2_TC, "Heartbeat:Connect", "v72 tutorial / guide chip: no per-frame work")
+# F5 + tutorial step 6
+must_contain(B2_TC, "local HIDE_MARKER_DRESSING = TycoonGuideConfig.Enabled", "v72 F5 gated with the guide flag (flags off = HEAD)")
+must_contain(B2_TC, "d.LocalTransparencyModifier = if isActive then 0 else 1", "v72 F5 the Plot-1 tutorial arrow is hidden locally unless its marker is the target")
+must_contain(B2_TC, "CollectionService:GetInstanceAddedSignal(Constants.Tags.TutorialMarker):Connect(watchMarker)", "v72 F5 late markers / arrows start hidden (events, no polling)")
+must_contain(B2_TC, "and sid ~= nil and TycoonMath.IsBusiness(sid)", "v72 step 6 (a business) re-aims until the own kiosk is on this client")
+
+# --- Base panel (BaseController) ---
+must_contain(B2_BC, "ht.Text = GT.PanelHeader", "v72 WAR BUSINESSES header")
+must_contain(B2_BC, "badge.Text = GT.NextTag", "v72 gold NEXT badge on the server's pick")
+must_contain(B2_BC, "sub.Text = string.format(GT.PanelSubtitle, string.format(GT.Rate, TycoonMath.RateText(perSec)))", "v72 subtitle Income $N/s from WE_IncomePerSec")
+must_contain(B2_BC, "local GUIDE_ON = TycoonGuideConfig.Enabled", "v72 Base panel guide copy behind TycoonGuideConfig.Enabled")
+
+# --- ConsoleWaypoint.ShowAtm ---
+must_contain(B2_CW, "function ConsoleWaypoint.ShowAtm(plotId: number?): boolean", "v72 ConsoleWaypoint.ShowAtm (guide Collect state)")
+must_contain(B2_CW, 'if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == plotId and inst:IsDescendantOf(Workspace) then', "v72 ATM line only to the player's OWN ATM")
+must_contain(B2_CW, 'player:GetAttribute(if guidingAtm then "WE_AtmPos" else "WE_ConsolePos_" .. structureId)', "v72 ATM line falls back to the server-stamped WE_AtmPos (streaming-safe)")
+
+# ===== Lane C =====
+# Lane C (v72 visuals: BusinessVisuals + one client Bootstrap safeInit) proposed BuyPathStatic pins.
+# Paste-ready for tools/BuyPathStatic.py (before parse_gate()). No other lane pins BusinessVisuals (checked K's and A's).
+# Every needle was checked with build/C/verify_pins.py against /home/user/Padel-AI (flags OFF, repo state) and the
+# flags-ON scratch tree: must_contain needles present, must_not_contain needles absent (build/C/pins_check_*.txt).
+# None depends on the flags, so nothing here flips at integration.
+# Format per line: must_contain|must_not_contain(file, needle, label).
+
+BZV = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/BusinessVisuals.luau"
+CBOOT = "src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau"
+
+# --- the prototype's 7 BusinessVisuals pins (spec section 7 "keep all 23 prototype pins"), unchanged ---
+for _needle in ("AddCash", "FireServer", "InvokeServer", "RenderStepped", "GetDescendants", "WaitForChild(\"Kit_"):
+    must_not_contain(BZV, _needle, f"v72 BusinessVisuals: no {_needle} (client-only, no per-frame scans, streaming-safe)")
+must_contain(BZV, "Workspace:BulkMoveTo(movedParts, movedCFrames", "v72 business crates move with one BulkMoveTo per step")
+
+# --- Lane C: wiring ---
+must_contain(CBOOT, 'safeInit("BusinessVisuals", safeRequire("BusinessVisuals", Modules:WaitForChild("BusinessVisuals", 5) :: Instance))', "v72 BusinessVisuals: one guarded safeInit, bounded wait")
+must_contain(BZV, "if started or not BusinessConfig.Enabled then", "v72 BusinessVisuals inert while BusinessConfig.Enabled is false (and Init runs once)")
+
+# --- Lane C: phone performance (spec section 5 client work) ---
+must_contain(BZV, "local STEP_EVERY = 1 / math.clamp(V.UpdateHz, 1, 20)", "v72 crate step never above 20 Hz")
+must_contain(BZV, "stepAcc = 0 -- reset, never catch up", "v72 crate step: no burst after a frame hitch")
+must_contain(BZV, "local POP_EVERY = 0.1", "v72 pop animation at 10 Hz (UI refresh cap)")
+must_contain(BZV, "(belt.Position - at).Magnitude <= V.ActiveRadius", "v72 crates only within ActiveRadius of the character")
+must_contain(BZV, "if q > 0 and q <= V.LowQualityLevel then", "v72 one crate per line at Graphics Quality <= LowQualityLevel")
+must_contain(BZV, "while #l.crates > maxCrates do", "v72 at most MaxCratesPerLine crates per line")
+must_not_contain(BZV, ":Destroy()", "v72 crates / pops are pooled, never destroyed (0 new Instances after warm-up)")
+must_not_contain(BZV, "task.spawn(", "v72 BusinessVisuals: no thread per pop")
+must_not_contain(BZV, "task.wait(", "v72 BusinessVisuals never yields")
+must_not_contain(BZV, 'WaitForChild("Shared")', "v72 BusinessVisuals: bounded WaitForChild only")
+for _needle in ("Remote", "PointLight", "SpotLight", "SurfaceLight", "ParticleEmitter", "Neon", "SurfaceGui"):
+    must_not_contain(BZV, _needle, f"v72 BusinessVisuals: no {_needle} (no remote, budget-free look)")
+
+# --- Lane C: owner-only, the server's numbers ---
+must_contain(BZV, "return m:GetAttribute(\"OwnerUserId\") == player.UserId", "v72 crates / pops on the player's OWN lines only")
+must_contain(BZV, 'player:GetAttributeChangedSignal("WE_PassiveTick"):Connect(popTick)', "v72 pops on the server's passive-tick stamp")
+must_contain(BZV, "for _ = 1, V.MaxPopsPerTick do", "v72 at most MaxPopsPerTick pops per passive tick")
+must_contain(BZV, "local bestD, bestLv = V.PopRadius, 0", "v72 pops only within PopRadius of the character")
+must_contain(BZV, "TycoonMath.PopText(best.def.Id, bestLv, mult)", "v72 pop amount = TycoonMath.PopText (floor(IncomePerTick x WE_IncomeMult))")
+# --- verifier (vfy2): a pop that lands before the next scan must not reuse a destroyed local folder's crates ---
+must_contain(BZV, "forgetPool() -- a pop can land before the next scan notices", "v72 BusinessVisuals: crateFolder drops the dead pool before rebuilding")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

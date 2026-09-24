@@ -132,6 +132,16 @@ function SoldierService.GetCount(player: Player): number
 	return tonumber(profile.Soldiers) or 0
 end
 
+-- v72: the army cap Recruit enforces (base + Barracks levels + Army Expansion). BusinessService's next-buy pick
+-- offers soldiers only below it. 0 without a profile.
+function SoldierService.GetCap(player: Player): number
+	local profile = if DataService then DataService.GetProfile(player) else nil
+	if not profile then
+		return 0
+	end
+	return maxSoldiers(profile)
+end
+
 local function sanitizeAmount(amount: any): (number?, string?)
 	local n = RemoteGuard.ClampPositiveInt(amount, MAX_BATCH)
 	if not n then

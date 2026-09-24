@@ -1,7 +1,8 @@
 --!strict
 --[[
 	MVP interactive tutorial (v31 first-2-min):
-	claim → MoneyCollector → ClickDropper → CommandCenter buy → recruit → barracks → jeep → outpost
+	claim → MoneyCollector → ClickDropper → CommandCenter buy → recruit → barracks (v72: Ammo Works while
+	BusinessConfig.Enabled) → jeep → outpost
 	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
 ]]
 
@@ -30,7 +31,9 @@ local STEP_INCOME = 2
 local STEP_DROPPER = 3
 local STEP_COMMAND = 4
 local STEP_RECRUIT = 5
-local STEP_BARRACKS = 6
+-- v72: step 6 is a console buy whose id comes from config: "AmmoWorks" (the first war business) while
+-- BusinessConfig.Enabled, else "Barracks" (TutorialConfig swaps Steps[BusinessStepIndex]); one code path for both
+local STEP_BUSINESS = TutorialConfig.BusinessStepIndex
 local STEP_JEEP = 7
 local STEP_OUTPOST = 8
 
@@ -239,6 +242,12 @@ function TutorialService.Reset(player: Player)
 	pushTutorial(player)
 end
 
+-- v72: the console buy that finishes step 6 (TutorialConfig.Steps[BusinessStepIndex].PadStructureId)
+local function businessStepStructureId(): string?
+	local def = TutorialConfig.GetStep(STEP_BUSINESS)
+	return if def then def.PadStructureId else nil
+end
+
 --[[
 	event types: PlotAssigned | Upgrade | RecruitSoldiers | PassiveIncome | ManualDrop | SpawnVehicle | CaptureTerritory
 ]]
@@ -276,8 +285,8 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	elseif eventType == "Upgrade" and typeof(detail) == "string" then
 		if detail == "CommandCenter" and step == STEP_COMMAND then
 			advanceTo(player, STEP_COMMAND)
-		elseif detail == "Barracks" and step == STEP_BARRACKS then
-			advanceTo(player, STEP_BARRACKS)
+		elseif step == STEP_BUSINESS and detail == businessStepStructureId() then
+			advanceTo(player, STEP_BUSINESS)
 		end
 	elseif eventType == "RecruitSoldiers" and step == STEP_RECRUIT then
 		advanceTo(player, STEP_RECRUIT)

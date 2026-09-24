@@ -1298,3 +1298,46 @@ Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.D
     last flipped sample, and the client does not run its Stuck clock while flipped or righting. An upright car that is
     pinned still trips exactly as before (tested). Revert: remove the two blocks marked "rollover fix" in
     `watchdogStep` / `watchClient`.
+
+## 2026-09-25 — v72 war businesses + next-buy guide (shipped with both flags OFF)
+## v72 Tycoon Guide and War Businesses (merged from lanes K, A, B1, B2, C + integration; all reversible)
+
+### Flags and scope
+- `BusinessConfig.Enabled` and `TycoonGuideConfig.Enabled` ship **false**. With both off, server, world, census, HUD and every suite match HEAD (measured). Flip both together, only after Lane D (MapSetup + StructureVisualConfig, `build/integ/laneD.diff`) lands; then also flip the two `Enabled = false` pins to `Enabled = true`.
+- Server gating: business world code (SyncBusiness / SyncPlot / ClearPlot) runs only with BusinessConfig on; BusinessService.Init connects nothing (no re-pick loop, no WE_NextBuy / WE_AtmPos) with the guide off. WE_PassiveTick only with businesses on; WE_IncomeMult with either flag; WE_IncomePerSec and the "+$/s" toast suffix only with the guide on.
+- Client gating: every new B1 / B2 branch checks the guide flag (F3 BUY-lane shift and F5 Plot-1 arrow hide included); BusinessVisuals follows BusinessConfig only.
+
+### Economy (owner sign-off pending)
+- Business numbers and requirements are a proposal, tuned in BusinessConfig (table in BALANCE.md). Arms Crate Line requires Ammo Works L1 + Weapons Facility L1.
+- Armor Plate Press IncomePerTick is 1.2x the spec draft ({120,220,360,580,860}) so guided run D with the 34 % soldier rule reaches 295 $/s at 30 min (spec 274). Revert = those five numbers.
+- OPEN: guided run C's longest wait in the first 10 min is 141 s (target <= 120 s; Arms Crate Line L2 at 6:58). Armor/Rocket numbers cannot fix it (it happens before the Armor Press unlocks). Lead/owner decides.
+- Soldiers are offered by the pick only while the config-computed training share is < 0.34.
+- Displayed $/s = TycoonMath.PerSecText: step gain x WE_IncomeMult / 5, floored (one decimal below $10/s, whole dollars above; oil unscaled). It can under-read for prestiged players (double-prestige bug out of scope). A "+$N" pop can read $1 high at prestige >= 1 (WE_IncomeMult rounded to 0.01, pay floors twice).
+- WE_IncomePerSec = last passive + training + plot_oil grants / 5; a reason drops out after 2 missed ticks. In Studio with FastPassiveIncome it over-reads ~5x (live unaffected).
+- Passive formula moved to TycoonMath.BasePassivePerTick: identical for valid saves; junk saved levels are clamped.
+
+### Tutorial and guide
+- Tutorial step 6 is Ammo Works only while BusinessConfig.Enabled (Barracks moves into the guide Opening); flags off it stays the Barracks buy. No Tutorial_Business marker part: GO resolves through PadStructureId to your own kiosk; the beam re-aims every 2 s until the kiosk streams in.
+- Guide chip shows only after the tutorial, only inside your own plot; hidden on Tutorial, Modal, Driving, Dead, RecentCombat, AtConsole. The pick is advice only; the server re-checks every buy. Hide = 300 s or until the next successful purchase ack.
+- Auto-guide: 12 s idle (<= 2 studs moved per 1 Hz sample) with the chip on screen, > 20 studs from the target, Build/Collect only, once per pick.
+- The Command Center L1 unlock text ("6 new buildings") never fits the chip hint at 20 v in the harness; it is dropped per spec.
+- Base panel: businesses after the 15 buildings under a WAR BUSINESSES header; gold outline + NEXT badge on the pick; flags off keeps HEAD's "+N/t" rows via string.format.
+
+### Buy surfaces
+- BUY 300x72 v on touch (336x58 v on desktop with the guide on, incl. the key cap shown only for keyboard/gamepad PreferredInput, never in Collect). Two 20 v lines, never scaled below 20 v; line 1 falls back to the short name, then no name.
+- The thumb-zone lane shift (TycoonMath.ActionLaneShiftV; Lane 0 owns HudLayout) applies on touch only.
+- Earn (red) tap still sends the buy request (server answers InsufficientCash); only Collect (amber) sends nothing and draws the line to your own ATM.
+- Console tag: owner-only, stud-scaled, fixed 16/15 px text, never AlwaysOnTop; ranges 18 (build) / 14 (upgrade) / 40 (the NEXT pick). Business kiosks have no SurfaceGui and no Neon; visitors see an unnamed kiosk.
+- Cash pill "+$N/s" suffix: green 20 v, not tappable, <= 2 Hz, hidden at 0, behind PillIncome; uses commas from $1,000/s (TycoonMath.RateText has none). It sits in the bottom-left zone under the owner's v70 decision.
+- ConsoleTag / BuyLane / auto-guide / Hide / pill keys live in TycoonGuideConfig, not HudConfig. ShortNames (<= 10 chars) for the 15 buildings live there too.
+
+### World and budget
+- Business sites plot-local (-30,100), (-66,100), (34,60), (70,60), Yaw 180, kiosks 10 studs toward the gate; built only on owned plots. Rebirth and admin resetbase reset businesses to L0.
+- Lane D: FloorChevrons = false (static arrows removed), StaticSoldierDetail = false (static soldier kit 9 parts, -84 per base), gate signs inset by InnerWall.SignInsetStuds x PixelsPerStud (80 px) with text capped at 64 px. StairStyle = "Steps"; ramps are a reserve cut only (nothing reads the key yet).
+
+### Client visuals
+- Up to 3 crates per own line within 80 studs (1 at saved Graphics Quality 1-3; Automatic counts as full), pooled, moved by one BulkMoveTo at <= 20 Hz; other players' lines never animate.
+- "+$N" pop (floor(IncomePerTick x WE_IncomeMult)) on each WE_PassiveTick, at most 2 per tick, within 28 studs of the character, 1.2 s, billboard MaxDistance 40. The server now stamps WE_IncomeMult before WE_PassiveTick so the pop uses the current multiplier.
+
+### Tests
+- The flags-ON gate uses the kiosk-aware drivers build/A/gate_driver_biz.luau and tut_driver_biz.luau; the originals (polish/C/gate_driver, tut_driver) fail on a flags-ON tree by design (no kiosks before a plot is owned / MapSetup-only world). Switch worldhook/verify/run_all.sh to them at the flip.

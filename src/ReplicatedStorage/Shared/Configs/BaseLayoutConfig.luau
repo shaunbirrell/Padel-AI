@@ -48,6 +48,9 @@ local BaseLayoutConfig = {
 			Helipad = { X = 40 },
 			Dock = { X = 92 }, -- west of the basin, so the path runs along the kerb, not into the water
 		} :: { [string]: { X: number } },
+		-- v72 (read by MapSetup's gate signs once the v72 world lane lands; unused before): sign text inset from the
+		-- sign board's edges, so "HELIPAD" / "AIRFIELD" read in full on a phone
+		SignInsetStuds = 2.0,
 	},
 
 	-- Roads (plot-local rectangles: centre + size) — asphalt with painted edges
@@ -95,7 +98,19 @@ local BaseLayoutConfig = {
 		-- v70: the dock kit stands on the basin's west shore (was centred IN the basin, where its collidable Body was an
 		-- island in the boats' spawn water); pier along the kerb, parked boat moored in the basin's west edge
 		Dock = { Site = { X = 78, Z = -112 }, Yaw = 90, WalkIn = false, Kiosk = { X = 106, Z = -52 }, Gate = "Dock" },
+		-- v72 war businesses (BusinessConfig; built by BusinessService only while BusinessConfig.Enabled, looked up by
+		-- id, so these lines are inert until then). 22 x 12 lines facing the plot centre (Yaw 180), kiosk 10 studs
+		-- toward the gate. Prototype census: 0 overlaps at L5, kiosks >= 36.6 studs apart, farthest 8.2 s from the ATM.
+		AmmoWorks = { Site = { X = -30, Z = 100 }, Yaw = 180, WalkIn = false, Kiosk = { X = -30, Z = 90 } },
+		ArmsCrateLine = { Site = { X = -66, Z = 100 }, Yaw = 180, WalkIn = false, Kiosk = { X = -66, Z = 90 } },
+		ArmorPlatePress = { Site = { X = 34, Z = 60 }, Yaw = 180, WalkIn = false, Kiosk = { X = 34, Z = 50 } },
+		RocketAssembly = { Site = { X = 70, Z = 60 }, Yaw = 180, WalkIn = false, Kiosk = { X = 70, Z = 50 } },
 	} :: { [string]: StructureSite },
+
+	-- v72: the 9 static painted floor arrows (MapSetup.paintPlotFloorChevrons, 18 parts per plot) pointed back at the
+	-- gate and never moved on after the Command Center; the per-player NEXT pointer replaces them. Read by MapSetup
+	-- once the v72 world lane lands (unused before). true = keep the old arrows.
+	FloorChevrons = false,
 }
 
 return BaseLayoutConfig

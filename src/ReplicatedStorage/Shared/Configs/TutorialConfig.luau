@@ -6,7 +6,13 @@
 	button runs CtaAction. Buy steps point at the structure's own console (console-only buying): at L0 the BUY
 	button there reads BUILD. The beam target of every step is the player's OWN plot (TutorialController.ResolveTarget).
 	Hints stay <= 42 characters: the objective chip shows 2 hint lines, about 44 characters on an 800x360 phone.
+	v72: while BusinessConfig.Enabled, step 6 (BusinessStepIndex) is the first war business, Ammo Works, instead of
+	the Barracks buy (Barracks moves into TycoonGuideConfig.Opening). No marker part is built for it: GO resolves
+	through PadStructureId to the player's own console, so a missing "Tutorial_Business" marker is fine. Businesses
+	off: step 6 stays the Barracks buy (exactly as before v72).
 ]]
+
+local BusinessConfig = require(script.Parent.BusinessConfig)
 
 export type TutorialStepDef = {
 	Id: string,
@@ -98,6 +104,23 @@ local TutorialConfig = {
 		},
 	} :: { TutorialStepDef },
 }
+
+-- v72: step 6 = the Ammo Works buy while the war businesses are on (TutorialService advances it on a purchase whose
+-- id equals Steps[BusinessStepIndex].PadStructureId)
+TutorialConfig.BusinessStepIndex = 6
+TutorialConfig.BusinessStep = {
+	Id = "AmmoWorks",
+	Title = "Ammo Works",
+	Hint = "Build your Ammo Works. It makes cash.",
+	MarkerName = "Tutorial_Business",
+	HighlightHint = "Console",
+	PadStructureId = "AmmoWorks",
+	CtaAction = "PadBuy",
+	CtaLabel = "GO",
+} :: TutorialStepDef
+if BusinessConfig.Enabled then
+	TutorialConfig.Steps[TutorialConfig.BusinessStepIndex] = TutorialConfig.BusinessStep
+end
 
 function TutorialConfig.GetStep(index: number): TutorialStepDef?
 	return TutorialConfig.Steps[index]

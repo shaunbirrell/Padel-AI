@@ -14,9 +14,11 @@ export type StructureDef = {
 	Currency: "Cash" | "Gold",
 	Requires: { { StructureId: string, Level: number } }?,
 	PassiveIncomeBonus: number?, -- extra flat cash/tick at each level (also in EconomyConfig)
+	Kind: string?, -- nil = building / installation; "Business" = a v72 war business merged from BusinessConfig
 }
 
 local BaseLayoutConfig = require(script.Parent.BaseLayoutConfig)
+local BusinessConfig = require(script.Parent.BusinessConfig)
 
 local function costs(a: number, b: number, c: number, d: number, e: number): { number }
 	return { a, b, c, d, e }
@@ -69,7 +71,8 @@ local BaseConfig = {
 		WeaponsFacility = {
 			Id = "WeaponsFacility",
 			DisplayName = "Weapons Facility",
-			Description = "Research and unlock advanced weapons.",
+			-- v72: with the war businesses on, the Weapons Facility gates the Arms Crate Line
+			Description = if BusinessConfig.Enabled then "Arms storage. Unlocks the Arms Crate Line." else "Research and unlock advanced weapons.",
 			MaxLevel = 5,
 			Costs = costs(2800, 11000, 38000, 110000, 320000),
 			Currency = "Cash",
@@ -195,5 +198,29 @@ local BaseConfig = {
 		"SpecialForcesFacility",
 	},
 }
+
+--[[ v72 war businesses (BusinessConfig) are bought at their own consoles like any structure: while Enabled they are
+	merged here (Kind = "Business") so the one purchase path (BaseService.PurchaseUpgrade), saving
+	(profile.BaseUpgrades), requirements, rebirth reset and the Base panel cover them. Appended after the 15 literal
+	ids above (BuyPathStatic's MapSetup-row rule reads only that literal list; businesses are built by
+	BusinessService and have their own rule). Disabled: nothing is merged and BaseConfig is exactly as before v72. ]]
+if BusinessConfig.Enabled then
+	for _, id in ipairs(BusinessConfig.Order) do
+		local b = BusinessConfig.Businesses[id]
+		if b and BaseConfig.Structures[id] == nil then
+			BaseConfig.Structures[id] = {
+				Id = b.Id,
+				DisplayName = b.DisplayName,
+				Description = b.Description,
+				MaxLevel = #b.Costs,
+				Costs = b.Costs,
+				Currency = "Cash",
+				Requires = b.Requires,
+				Kind = BusinessConfig.Kind,
+			}
+			table.insert(BaseConfig.StructureOrder, id)
+		end
+	end
+end
 
 return BaseConfig

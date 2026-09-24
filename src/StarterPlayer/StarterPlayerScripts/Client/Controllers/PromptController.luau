@@ -21,6 +21,10 @@
 	The engine still owns triggering (keyboard / gamepad keys, hold timing, MaxActivationDistance, Triggered on the
 	server) — nothing here grants anything. If Init fails before the pills exist, prompts keep the Default style
 	(adoption runs LAST, after the lane and the PromptShown handlers are up — spec risk #2).
+
+	v72 (TycoonGuideConfig.Enabled only): on touch the pill lane moves right so its left edge clears the thumb zone
+	(TycoonMath.ActionLaneShiftV with TycoonGuideConfig.BuyLane, like the BUY button), and pills stacked above the
+	BUY button clear its 72 v touch height (BuyLane.TouchSize).
 ]]
 
 local Players = game:GetService("Players")
@@ -33,13 +37,16 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local HudConfig = require(Shared.Configs.HudConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local UIUtil = require(Shared.Util.UIUtil)
+local TycoonMath = require(Shared.Util.TycoonMath)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 
 local PromptController = {}
 
 local LANE = HudConfig.ActionLane
+local BUY_LANE = TycoonGuideConfig.BuyLane
 local COLORS = HudConfig.Colors
 local FONT_DISPLAY = HudConfig.Fonts.Display
 local FONT_BODY = HudConfig.Fonts.Body
@@ -281,6 +288,25 @@ local function sizePill(pill: Pill)
 	end
 end
 
+-- v72 F3 (guide on, touch): how far (v) the centred lane of width widthV moves right to clear the thumb zone
+local function laneShiftV(widthV: number): number
+	if not (TycoonGuideConfig.Enabled == true and isTouch()) then
+		return 0
+	end
+	return TycoonMath.ActionLaneShiftV(HudLayout.ContentSizeV(), widthV, BUY_LANE.ThumbZoneFrac, BUY_LANE.ClearPx, HudLayout.Scale())
+end
+
+-- the BUY button's size (WorldPromptController): v72 guide on touch = BuyLane.TouchSize
+local function buyButtonSize(): UDim2
+	if not isTouch() then
+		return LANE.BuyButtonSize
+	end
+	if TycoonGuideConfig.Enabled == true then
+		return UDim2.fromOffset(BUY_LANE.TouchSize.X, BUY_LANE.TouchSize.Y)
+	end
+	return LANE.BuyButtonSizeTouch
+end
+
 local function relayout()
 	lanePending = false
 	local lane = laneFrame
@@ -319,10 +345,10 @@ local function relayout()
 	-- the BUY button owns the lane slot while it shows: other pills (a terminal next to a console) sit just above it
 	local bottom = HudLayout.ActionLaneBottomV()
 	if buyActive then
-		local buySize = if isTouch() then LANE.BuyButtonSizeTouch else LANE.BuyButtonSize
+		local buySize = buyButtonSize()
 		bottom += buySize.Y.Offset + LANE.PromptGap
 	end
-	lane.Position = UDim2.new(0.5, 0, 1, -bottom)
+	lane.Position = UDim2.new(0.5, laneShiftV(math.max(1, totalW)), 1, -bottom)
 	lane:SetAttribute("WE_PillCount", shown)
 	HudLayout.RefreshVisibility(lane)
 end
@@ -648,7 +674,7 @@ function PromptController.Init()
 	local lane = Instance.new("Frame")
 	lane.Name = "Lane"
 	lane.AnchorPoint = Vector2.new(0.5, 1)
-	lane.Position = UDim2.new(0.5, 0, 1, -HudLayout.ActionLaneBottomV())
+	lane.Position = UDim2.new(0.5, laneShiftV(1), 1, -HudLayout.ActionLaneBottomV())
 	lane.Size = UDim2.fromOffset(1, LANE.PromptHeight)
 	lane.BackgroundTransparency = 1
 	lane.BorderSizePixel = 0

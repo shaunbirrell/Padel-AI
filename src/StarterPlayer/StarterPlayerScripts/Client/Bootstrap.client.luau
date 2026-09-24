@@ -44,5 +44,6 @@ safeInit("StudioSmokeClient", StudioSmokeClient)
 -- v68: radar dishes on base installations (visual only; never block the rest of the client)
 safeInit("WorldSpinners", WorldSpinners)
 safeInit("AudioHooks", safeRequire("AudioHooks", Modules:WaitForChild("AudioHooks", 5) :: Instance)) -- W1 SND: sound cues from existing remotes / HUD signals (client only)
+safeInit("BusinessVisuals", safeRequire("BusinessVisuals", Modules:WaitForChild("BusinessVisuals", 5) :: Instance)) -- v72: own war-business crates + "+$N" pops (client-only look; no-op while BusinessConfig.Enabled is false)
 
 print("[WAR EMPIRE] Client Bootstrap ready.")

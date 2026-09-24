@@ -18,6 +18,10 @@
 	  SeasonLabel → Progression panel header · SpinnerButton → Missions badge + the Missions panel claim row
 	  PassiveHint → Base panel subtitle · GoldLabel "◆ 0" → Shop header (gold > 0)
 	  PendingLabel "+$N pending" → the in-world ATM screen · the 7-tile MobileActionBar dock → Rail + TopStrip gear
+
+	v72 (TycoonGuideConfig.Enabled and PillIncome only): the pill reads "13,594  +$24/s". The suffix (IncomeLabel) is
+	green, 20 v, not tappable, TycoonMath.RatePerSecText(WE_IncomePerSec) (the server's steady income into the ATM),
+	refreshed at most TextRefreshHz (2 Hz) and hidden while the rate floors to 0.
 ]]
 
 local Players = game:GetService("Players")
@@ -35,6 +39,8 @@ local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local TycoonMath = require(Shared.Util.TycoonMath)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 
@@ -82,6 +88,9 @@ local pill: Frame? = nil
 local cashLabel: TextLabel? = nil
 local cashPop: UIScale? = nil
 local plusSlot: Frame? = nil
+local incomeLabel: TextLabel? = nil -- v72 "+$24/s" suffix (guide on)
+local incomeQueued = false
+local incomeShownAt = -math.huge
 local cashTarget: number? = nil -- last synced cash; nil until the first sync (the label shows "$…")
 local countFrom, countTo, countElapsed, counting = 0, 0, 0, false
 local flashToken = 0
@@ -705,11 +714,28 @@ local function buildPill(screen: ScreenGui)
 	cashLabel = cash
 	cashPop = cp
 
+	-- v72: "+$24/s" after the number (green, 20 v = 14 real px on phones; a label, never a tap target)
+	local incomeOn = TycoonGuideConfig.Enabled == true and TycoonGuideConfig.PillIncome == true
+	if incomeOn then
+		local inc = label(p, "IncomeLabel", Fonts.Display, 20, HudConfig.CashFloat.GainColor, "")
+		inc.LayoutOrder = 3
+		inc.Size = UDim2.new(0, 0, 1, 0)
+		inc.AutomaticSize = Enum.AutomaticSize.X
+		inc.TextXAlignment = Enum.TextXAlignment.Left
+		inc.Active = false
+		inc.Visible = false -- until WE_IncomePerSec > 0
+		inc.ZIndex = 13
+		inc.TextStrokeColor3 = Colors.Ink
+		inc.TextStrokeTransparency = 0.25
+		UIUtil.TextOutline(inc, 2)
+		incomeLabel = inc
+	end
+
 	-- PlusSlot: the cash floats' anchor at the pill's right end. The green + itself is the TopStrip's CashPlus
 	-- chip (mobile merge gate #6: out of the thumbstick zone) unless HudConfig.CashPill.PlusOnPill brings it back.
 	local slot = Instance.new("Frame")
 	slot.Name = "PlusSlot"
-	slot.LayoutOrder = 3
+	slot.LayoutOrder = if incomeOn then 4 else 3
 	slot.Size = UDim2.fromOffset(if P.PlusOnPill then P.PlusVisual else P.PlusSlotWidth, P.PlusVisual)
 	slot.BackgroundTransparency = 1
 	slot.BorderSizePixel = 0
@@ -777,6 +803,42 @@ buildPillPlus = function(slot: Frame)
 		press.Scale = 1
 	end)
 	cashPlus.Activated:Connect(openShopFromHud)
+end
+
+-- v72 pill suffix: "+$24/s" from the server's WE_IncomePerSec (0 / missing / floors to "0" -> hidden)
+local function applyIncome()
+	incomeQueued = false
+	incomeShownAt = os.clock()
+	local lab = incomeLabel
+	if not lab then
+		return
+	end
+	local v = player:GetAttribute("WE_IncomePerSec")
+	local rate = if typeof(v) == "number" and v == v then v else 0
+	local show = rate > 0 and TycoonMath.RateText(rate) ~= "0"
+	if show then
+		-- "+$1,234/s": RateText floors but has no thousands separator; from $1,000/s the floored whole dollars get
+		-- TycoonMath.Commas (identical to RatePerSecText below that)
+		local text = if rate >= 1000
+			then string.format(TycoonGuideConfig.Text.PerSec, TycoonMath.Commas(rate))
+			else TycoonMath.RatePerSecText(rate)
+		if lab.Text ~= text then
+			lab.Text = text
+		end
+	end
+	if lab.Visible ~= show then
+		lab.Visible = show
+	end
+end
+
+-- at most TextRefreshHz: the first change after a quiet spell shows at once, a burst coalesces into one update
+local function queueIncome()
+	if incomeQueued or not incomeLabel then
+		return
+	end
+	incomeQueued = true
+	local gap = 1 / math.max(0.1, TycoonGuideConfig.TextRefreshHz)
+	task.delay(math.max(0, gap - (os.clock() - incomeShownAt)), applyIncome)
 end
 
 local function renderCash(v: number)
@@ -1085,6 +1147,10 @@ function HUDController.Init()
 	HudLayout.SetRect("Rail", r)
 
 	buildPill(screen)
+	if incomeLabel then
+		player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(queueIncome)
+		applyIncome()
+	end
 	buildTopStrip()
 
 	HudLayout.LayoutChanged:Connect(layoutRail)

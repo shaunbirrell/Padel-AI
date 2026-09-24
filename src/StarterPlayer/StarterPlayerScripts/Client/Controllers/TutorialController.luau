@@ -19,6 +19,26 @@
 	  A marker part is only ever shown when it IS the target (unknown future steps, and only inside the own plot).
 	v71 console-only buying: the CommandCenter / Barracks GO only re-aims the beam at the console; it never opens the
 	Base panel (that panel cannot buy any more).
+	v72 tycoon guide (TycoonGuideConfig.Enabled; none of it exists while the flag is false):
+	  After the tutorial a second chip ("Guide", same top-centre slot) names the ONE next buy the server picked
+	  (Player attribute WE_NextBuy = "Id:Level" | "Soldier:0" | ""):
+	    Build    NEXT: Ammo Works         $600  +$3.3/s                  [ GO ]   Hide
+	    Collect  NEXT: Ammo Works         Collect $1,240 at your ATM     [ ATM ]  Hide
+	    Earn     NEXT: Ammo Works         +$3.3/s  ready in 0:42 (1 Hz)  [ GO ]   Hide
+	    Soldier  NEXT: Recruit soldiers   $500 each  +$1.6/s each        [ ARMY ] Hide
+	  Money state = TycoonMath.MoneyState(cost, WE_Cash, WE_PendingCash, WE_IncomePerSec); every rate is
+	  TycoonMath.PerSecText(StepGainPerTick(id, level - 1, WE_IncomeMult)) (floored: never over-promises).
+	  GO draws the console line (Modules/ConsoleWaypoint) to that console on the player's OWN plot; ATM draws it to
+	  the player's own ATM (ConsoleWaypoint.ShowAtm); ARMY opens the Army panel. Hide: HideSeconds, or until the next
+	  successful purchase acknowledgement (WE_BuyAck). Visibility: TycoonGuideConfig.ChipRule (inside the own plot;
+	  hidden on Tutorial, Modal, Driving, Dead, RecentCombat and AtConsole = the BUY button is up).
+	  Auto-guide: in the Build or Collect state, after AutoGuideIdleSeconds standing still with the chip on screen and
+	  more than AutoGuideMinStuds from the target, GO fires once per pick.
+	  F5: tutorial marker dressing (the catalog arrow VisualAssetService welds under the Plot-1 markers) is hidden
+	  locally (LocalTransparencyModifier) unless that marker is the active target; markers and arrows that replicate
+	  late are handled as they arrive (events, no polling).
+	  Tutorial step 6 (Ammo Works while BusinessConfig.Enabled) has no marker part: it resolves through PadStructureId
+	  to the player's own kiosk, and re-aims at most every BUSINESS_REAIM_SECONDS until the kiosk is on this client.
 ]]
 
 local Players = game:GetService("Players")
@@ -35,9 +55,14 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local BusinessConfig = require(Shared.Configs.BusinessConfig)
+local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
+local TycoonMath = require(Shared.Util.TycoonMath)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
 
 local TutorialController = {}
 
@@ -103,9 +128,27 @@ local function clearWaypoint()
 	currentMarkerName = nil
 end
 
+-- v72 F5 (with the guide flag): a marker's welded dressing (the catalog tutorial arrow under the Plot-1 markers) is
+-- hidden on this client unless that marker is the active target
+local HIDE_MARKER_DRESSING = TycoonGuideConfig.Enabled
+local activeMarker: BasePart? = nil
+
+local function showDressing(d: Instance, isActive: boolean)
+	if d:IsA("BillboardGui") then
+		d.Enabled = isActive
+	elseif d:IsA("SurfaceGui") then
+		d.Enabled = isActive
+	elseif d:IsA("BasePart") then
+		d.LocalTransparencyModifier = if isActive then 0 else 1
+	elseif d:IsA("Decal") then
+		d.LocalTransparencyModifier = if isActive then 0 else 1
+	end
+end
+
 -- Show a tutorial marker part only when it IS the resolved target (P0-6: the Tutorial_* markers are built on Plot 1;
 -- revealing them led every other player to Plot 1). Everything else stays hidden.
 local function syncMarkerVisibility(activePart: BasePart?)
+	activeMarker = activePart
 	local tag = Constants.Tags.TutorialMarker
 	for _, inst in ipairs(CollectionService:GetTagged(tag)) do
 		if inst:IsA("BasePart") then
@@ -116,10 +159,46 @@ local function syncMarkerVisibility(activePart: BasePart?)
 			for _, child in ipairs(inst:GetDescendants()) do
 				if child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
 					child.Enabled = isActive == true
+				elseif HIDE_MARKER_DRESSING then
+					showDressing(child, isActive)
 				end
 			end
 		end
 	end
+end
+
+-- F5: a marker (and the arrow welded under it) that replicates after the last sync starts hidden too. Event-driven:
+-- one DescendantAdded connection per marker part, no polling.
+local watchedMarkers: { [Instance]: RBXScriptConnection } = {}
+local function unwatchMarker(inst: Instance)
+	local conn = watchedMarkers[inst]
+	if conn then
+		conn:Disconnect()
+		watchedMarkers[inst] = nil
+	end
+end
+local function watchMarker(inst: Instance)
+	if watchedMarkers[inst] or not inst:IsA("BasePart") then
+		return
+	end
+	local marker = inst :: BasePart
+	local function isActive(): boolean
+		return activeMarker ~= nil and activeMarker == marker
+	end
+	for _, d in ipairs(marker:GetDescendants()) do
+		showDressing(d, isActive())
+	end
+	watchedMarkers[marker] = marker.DescendantAdded:Connect(function(d: Instance)
+		local on = isActive()
+		showDressing(d, on)
+		-- a whole arrow model parented at once: its parts too (idempotent where the engine also fires per part)
+		for _, dd in ipairs(d:GetDescendants()) do
+			showDressing(dd, on)
+		end
+	end)
+	marker.Destroying:Once(function()
+		unwatchMarker(marker)
+	end)
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -712,6 +791,411 @@ local function buildChip(screen: ScreenGui)
 	layoutChip()
 end
 
+---------------------------------------------------------------------------------------------------------------
+-- v72 tycoon guide chip (TycoonGuideConfig.Enabled only; see the header)
+---------------------------------------------------------------------------------------------------------------
+
+local GUIDE = TycoonGuideConfig
+local GT = TycoonGuideConfig.Text
+local GUIDE_PAD_L = 16 -- v: the guide chip has no step disc, so its text starts near the pill edge
+local GO_FACE_PAD = 20 -- v of gold face around the GO / ATM / ARMY word
+local IDLE_MOVE_STUDS = 2 -- auto-guide "idle": the character moved less than this between 1 Hz samples
+local BUSINESS_REAIM_SECONDS = 2 -- tutorial step 6: re-aim at the own kiosk this often until it is on this client
+
+type GuideKind = "Build" | "Collect" | "Earn" | "Soldier"
+type GuideAction = "Console" | "Atm" | "Army"
+
+local guideChip: Frame? = nil
+local guideTitle: TextLabel? = nil
+local guideHint: TextLabel? = nil
+local guideGoBtn: TextButton? = nil
+local guideGoFace: TextLabel? = nil
+local guideHideBtn: TextButton? = nil
+local tutorialDone = false -- TutorialStateUpdate.Complete / PlayerStateUpdate.TutorialComplete
+local guidePick = "" -- the WE_NextBuy value on screen
+local guideKind: GuideKind? = nil -- nil = nothing to show
+local guideAction: GuideAction? = nil
+local guideId: string? = nil -- structure / business id for GO (nil for soldiers)
+local guideRawTitle = ""
+local guideRawTitleShort: string? = nil -- the title with TycoonMath.ShortName (used when the full one does not fit)
+local guideRawHint = ""
+local guideRawHintShort: string? = nil -- the Build hint without its unlock part (used when the full one does not fit)
+local guideGoText = ""
+local guideHiddenUntil = -math.huge -- Hide: os.clock() until the chip may show again
+local etaDeadline: number? = nil -- Earn: os.clock() when wallet + ATM should cover the cost
+local autoGuidedFor: string? = nil -- the pick GO already fired for (auto or tapped): auto-guide once per pick
+local idleAnchor: Vector3? = nil
+local idleSince = 0.0
+local lastBusinessReaim = -math.huge
+
+local function attrNum(name: string, default: number): number
+	local v = tonumber(player:GetAttribute(name) :: any)
+	if v == nil or v ~= v or v == math.huge or v == -math.huge then
+		return default
+	end
+	return v
+end
+
+-- the chip wants to be up (HudLayout adds ChipRule: inside the own plot, no Tutorial / Modal / Driving / Dead /
+-- RecentCombat / AtConsole)
+local function guideWanted(): boolean
+	return GUIDE.Enabled
+		and (tutorialDone or GUIDE.ShowAfterTutorial == false)
+		and not stepActive
+		and guideKind ~= nil
+		and os.clock() >= guideHiddenUntil
+end
+
+local function layoutGuideChip()
+	local c, title, hint, go, face, hide = guideChip, guideTitle, guideHint, guideGoBtn, guideGoFace, guideHideBtn
+	if not (c and title and hint and go and face and hide) then
+		return
+	end
+	local w = chipWidthV()
+	local h = OBJ.Height
+	c.Size = UDim2.fromOffset(w, h)
+	local faceW = math.max(GO_FACE.X, math.ceil(measure(guideGoText, OBJ.TitleSize, HudConfig.Fonts.Display, 1000).X) + GO_FACE_PAD)
+	face.Size = UDim2.fromOffset(faceW, GO_FACE.Y)
+	face.Text = guideGoText
+	local goW = math.max(goHitV(), faceW + 8)
+	local hideW = skipHitV()
+	go.Size = UDim2.fromOffset(goW, h)
+	go.Position = UDim2.new(1, -(PAD_R + hideW), 0.5, 0)
+	hide.Size = UDim2.fromOffset(hideW, h)
+	local textW = math.max(60, w - GUIDE_PAD_L - TEXT_GAP - goW - hideW - PAD_R)
+
+	local rawTitle = guideRawTitle
+	local shortTitle = guideRawTitleShort
+	-- a long name ("NEXT: Special Forces Facility Lv 2") falls back to its short name so the level stays readable
+	if shortTitle ~= nil and lineCount(rawTitle, OBJ.TitleSize, HudConfig.Fonts.Display, textW) > 1 then
+		rawTitle = shortTitle
+	end
+	title.Text = fitText(rawTitle, OBJ.TitleSize, HudConfig.Fonts.Display, textW, 1)
+	local raw = guideRawHint
+	local short = guideRawHintShort
+	-- spec v72 §3: when the hint does not fit one 20 v line, drop the unlock part (TextService fit test)
+	if short ~= nil and lineCount(raw, OBJ.HintSize, HudConfig.Fonts.Body, textW) > 1 then
+		raw = short
+	end
+	hint.Text = fitText(raw, OBJ.HintSize, HudConfig.Fonts.Body, textW, 1)
+	local blockH = TITLE_H + OBJ.HintSize + 2
+	local top = math.max(3, math.floor((h - blockH) / 2))
+	title.Position = UDim2.fromOffset(GUIDE_PAD_L, top)
+	title.Size = UDim2.fromOffset(textW, TITLE_H)
+	hint.Position = UDim2.fromOffset(GUIDE_PAD_L, top + TITLE_H)
+	hint.Size = UDim2.fromOffset(textW, OBJ.HintSize + 2)
+end
+
+--[[ Rebuild the chip's copy from WE_NextBuy + the money attributes. recompute = money / pick changed (restart the
+	"ready in" countdown from the new numbers); the 1 Hz tick passes false and only counts the deadline down. ]]
+local function renderGuide(recompute: boolean)
+	local c = guideChip
+	if not c then
+		return
+	end
+	local rawPick = player:GetAttribute("WE_NextBuy")
+	local pick = if typeof(rawPick) == "string" then rawPick else ""
+	if pick ~= guidePick then
+		guidePick = pick
+		etaDeadline = nil
+		recompute = true
+	end
+	local id, level = TycoonMath.Decode(pick)
+	local mult = attrNum("WE_IncomeMult", 1)
+	if mult <= 0 then
+		mult = 1
+	end
+	local kind: GuideKind? = nil
+	local action: GuideAction? = nil
+	local title, hint, goText = "", "", GT.ChipGo
+	local titleShort: string? = nil
+	local hintShort: string? = nil
+	if id ~= nil and id == GUIDE.SoldierCandidateId then
+		kind, action, goText = "Soldier", "Army", GT.SoldierGo
+		title = GT.SoldierTitle
+		hint = string.format(GT.SoldierHint, TycoonMath.ShortCash(SoldierConfig.RecruitCostCash),
+			TycoonMath.PerSecText(TycoonMath.SoldierGainPerTick(), mult))
+	elseif id ~= nil and level >= 1 then
+		local cost = TycoonMath.NextCost(id, level - 1)
+		if cost ~= nil then
+			local gain = TycoonMath.PerSecText(TycoonMath.StepGainPerTick(id, level - 1, mult))
+			local name = TycoonMath.DisplayName(id)
+			title = if level <= 1 then string.format(GT.ChipTitle, name) else string.format(GT.ChipTitleUpgrade, name, level)
+			local sname = TycoonMath.ShortName(id)
+			titleShort = if level <= 1 then string.format(GT.ChipTitle, sname) else string.format(GT.ChipTitleUpgrade, sname, level)
+			local state, short, eta = TycoonMath.MoneyState(cost, attrNum("WE_Cash", 0), attrNum("WE_PendingCash", 0), attrNum("WE_IncomePerSec", 0))
+			local price = TycoonMath.ShortCash(cost)
+			if state == "Collect" then
+				kind, action, goText = "Collect", "Atm", GT.ChipGoCollect
+				hint = string.format(GT.ChipHintCollect, TycoonMath.ShortCash(short))
+				etaDeadline = nil
+			elseif state == "Earn" and eta ~= nil then
+				kind, action = "Earn", "Console"
+				local now = os.clock()
+				if recompute or etaDeadline == nil then
+					etaDeadline = now + eta
+				end
+				local left = math.max(1, (etaDeadline or now) - now)
+				hint = string.format(GT.ChipHintEarning, gain, TycoonMath.FormatEta(left))
+			else
+				-- Buy (or Earn with no income yet: price + gain, no countdown)
+				kind = if state == "Buy" then "Build" else "Earn"
+				action = "Console"
+				etaDeadline = nil
+				hint = string.format(GT.ChipHintBuy, price, gain)
+				local unlock = if state == "Buy" then TycoonMath.UnlockText(id, level) else nil
+				if unlock ~= nil then
+					hintShort = hint
+					hint = string.format(GT.ChipHintBuyUnlock, price, gain, unlock)
+				end
+			end
+		end
+	end
+	guideKind, guideAction = kind, action
+	guideId = if action == "Console" then id else nil
+	if title ~= guideRawTitle or titleShort ~= guideRawTitleShort or hint ~= guideRawHint or hintShort ~= guideRawHintShort
+		or goText ~= guideGoText then
+		guideRawTitle, guideRawTitleShort, guideRawHint, guideRawHintShort, guideGoText = title, titleShort, hint, hintShort, goText
+		layoutGuideChip()
+	end
+	HudLayout.RefreshVisibility(c)
+end
+
+-- where GO / ATM leads: the own console (part on this client, else the server stamp) or the own ATM
+local function guideTargetPos(): Vector3?
+	if guideAction == "Atm" then
+		local pos = player:GetAttribute("WE_AtmPos")
+		if typeof(pos) == "Vector3" then
+			return pos
+		end
+		local atm = if myPlotId ~= nil then nearestOwnTagged(Constants.Tags.MoneyCollector, myPlotId, originPos()) else nil
+		return if atm then atm.Position else nil
+	end
+	local sid = guideId
+	if guideAction == "Console" and sid ~= nil then
+		local part = if myPlotId ~= nil then ConsoleLocator.Find(myPlotId, sid) else nil
+		if part then
+			return part.Position
+		end
+		local pos = player:GetAttribute("WE_ConsolePos_" .. sid)
+		if typeof(pos) == "Vector3" then
+			return pos
+		end
+	end
+	return nil
+end
+
+local function toastWarn(text: string)
+	local ok, NotificationController = pcall(function()
+		return require(script.Parent.NotificationController) :: any
+	end)
+	if ok and NotificationController and NotificationController.Show then
+		NotificationController.Show(text, "Warn", 2.5)
+	end
+end
+
+-- GO / ATM / ARMY. Every line leads to the player's OWN plot (ConsoleWaypoint: own console / own ATM).
+local function runGuideGo(auto: boolean)
+	autoGuidedFor = guidePick
+	local action = guideAction
+	if action == "Army" then
+		local ok, ArmyController = pcall(function()
+			return require(script.Parent.ArmyController) :: any
+		end)
+		if ok and ArmyController and ArmyController.Open then
+			ArmyController.Open()
+		end
+	elseif action == "Atm" then
+		ConsoleWaypoint.ShowAtm(myPlotId)
+	elseif action == "Console" and guideId ~= nil then
+		if not ConsoleWaypoint.Show(guideId, myPlotId) and not auto then
+			local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
+			toastWarn(ConsoleBuyConfig.Text.NoConsole)
+		end
+	end
+end
+
+local function rootPos(): Vector3?
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	return if hrp and hrp:IsA("BasePart") then hrp.Position else nil
+end
+
+-- 1 Hz (EtaRefreshHz): the "ready in" countdown, Hide expiry, auto-guide and the step-6 kiosk re-aim
+local function guideTick()
+	local now = os.clock()
+	local hp = highlightPart
+	local sid = currentPadStructureId
+	if stepActive and (hp == nil or hp.Parent == nil) and myPlotId ~= nil and sid ~= nil and TycoonMath.IsBusiness(sid)
+		and now - lastBusinessReaim >= BUSINESS_REAIM_SECONDS then
+		lastBusinessReaim = now
+		setWaypoint(currentMarkerName, sid)
+	end
+	local c = guideChip
+	if not (GUIDE.Enabled and c) then
+		return
+	end
+	renderGuide(false)
+	local pos = rootPos()
+	if not (c.Visible and pos) then
+		idleAnchor = nil -- idle only counts while the chip is on screen
+		return
+	end
+	local p = pos :: Vector3
+	local anchor = idleAnchor
+	if anchor == nil or (p - anchor).Magnitude > IDLE_MOVE_STUDS then
+		idleAnchor = p
+		idleSince = now
+		return
+	end
+	if (guideKind == "Build" or guideKind == "Collect") and guidePick ~= "" and autoGuidedFor ~= guidePick
+		and now - idleSince >= GUIDE.AutoGuideIdleSeconds and ConsoleWaypoint.Current() == nil then
+		local target = guideTargetPos()
+		if target and Vector3.new(target.X - p.X, 0, target.Z - p.Z).Magnitude > GUIDE.AutoGuideMinStuds then
+			runGuideGo(true)
+		end
+	end
+end
+
+local function buildGuideChip(screen: ScreenGui)
+	local c = Instance.new("Frame")
+	c.Name = "Guide"
+	c.AnchorPoint = Vector2.new(0.5, 0)
+	c.Position = UDim2.new(0.5, 0, 0, HudConfig.TopStack.Top) -- Y is rewritten by HudLayout's top stack
+	c.Size = UDim2.fromOffset(chipWidthV(), OBJ.Height)
+	c.BackgroundColor3 = HudConfig.Colors.PillBg
+	c.BackgroundTransparency = 0.16
+	c.BorderSizePixel = 0
+	c.Active = true -- taps on the chip never fall through to the world
+	c.Visible = false
+	c.ZIndex = 2
+	c.Parent = screen
+	UIUtil.Corner(c, CORNER)
+	UIUtil.Stroke(c, GOLD, 2)
+	guideChip = c
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Font = HudConfig.Fonts.Display
+	title.TextSize = OBJ.TitleSize
+	title.TextColor3 = GOLD
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextYAlignment = Enum.TextYAlignment.Center
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	title.Text = ""
+	title.Active = false
+	title.ZIndex = 3
+	title.Parent = c
+	UIUtil.TextOutline(title, 1.4)
+	guideTitle = title
+
+	local hint = Instance.new("TextLabel")
+	hint.Name = "Hint"
+	hint.BackgroundTransparency = 1
+	hint.Font = HudConfig.Fonts.Body
+	hint.TextSize = OBJ.HintSize
+	hint.TextColor3 = HudConfig.Colors.White
+	hint.TextXAlignment = Enum.TextXAlignment.Left
+	hint.TextYAlignment = Enum.TextYAlignment.Center
+	hint.TextTruncate = Enum.TextTruncate.AtEnd
+	hint.Text = ""
+	hint.Active = false
+	hint.ZIndex = 3
+	hint.Parent = c
+	guideHint = hint
+
+	-- GO / ATM / ARMY: a touch-size hit area around a gold face (the face widens for "ARMY")
+	local go = Instance.new("TextButton")
+	go.Name = "Go"
+	go.AnchorPoint = Vector2.new(1, 0.5)
+	go.BackgroundTransparency = 1
+	go.BorderSizePixel = 0
+	go.AutoButtonColor = false
+	go.Text = ""
+	go.Active = true
+	go.ZIndex = 3
+	go.Parent = c
+	local face = Instance.new("TextLabel")
+	face.Name = "Face"
+	face.AnchorPoint = Vector2.new(0.5, 0.5)
+	face.Position = UDim2.fromScale(0.5, 0.5)
+	face.Size = UDim2.fromOffset(GO_FACE.X, GO_FACE.Y)
+	face.BackgroundColor3 = GOLD
+	face.BorderSizePixel = 0
+	face.Font = HudConfig.Fonts.Display
+	face.TextSize = OBJ.TitleSize
+	face.TextColor3 = DARK_INK
+	face.Text = GT.ChipGo
+	face.Active = false
+	face.ZIndex = 4
+	face.Parent = go
+	UIUtil.Corner(face, 12)
+	local faceStroke = UIUtil.Stroke(face, Color3.fromRGB(107, 77, 0), 2)
+	faceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	local press = Instance.new("UIScale")
+	press.Parent = face
+	go.MouseButton1Down:Connect(function()
+		press.Scale = HudConfig.Rail.PressScale
+	end)
+	go.MouseButton1Up:Connect(function()
+		press.Scale = 1
+	end)
+	go.MouseLeave:Connect(function()
+		press.Scale = 1
+	end)
+	go.Activated:Connect(function()
+		press.Scale = 1
+		runGuideGo(false)
+	end)
+	guideGoBtn = go
+	guideGoFace = face
+	HudLayout.AssertTouchTarget(go, "Guide.GO")
+
+	-- Hide: one tap, HideSeconds or until the next successful purchase acknowledgement
+	local hide = Instance.new("TextButton")
+	hide.Name = "Hide"
+	hide.AnchorPoint = Vector2.new(1, 0.5)
+	hide.Position = UDim2.new(1, -PAD_R, 0.5, 0)
+	hide.BackgroundTransparency = 1
+	hide.BorderSizePixel = 0
+	hide.AutoButtonColor = false
+	hide.Text = ""
+	hide.Active = true
+	hide.ZIndex = 3
+	hide.Parent = c
+	local hl = Instance.new("TextLabel")
+	hl.Name = "Label"
+	hl.BackgroundTransparency = 1
+	hl.Size = UDim2.fromScale(1, 1)
+	hl.Font = HudConfig.Fonts.Body
+	hl.TextSize = OBJ.HintSize
+	hl.TextColor3 = HudConfig.Colors.White
+	hl.TextTransparency = 0.35
+	hl.Text = GT.ChipHide
+	hl.Active = false
+	hl.ZIndex = 4
+	hl.Parent = hide
+	hide.Activated:Connect(function()
+		guideHiddenUntil = os.clock() + GUIDE.HideSeconds
+		HudLayout.RefreshVisibility(c)
+	end)
+	guideHideBtn = hide
+	HudLayout.AssertTouchTarget(hide, "Guide.Hide")
+
+	HudLayout.BindVisibility(c, GUIDE.ChipRule, guideWanted)
+	HudLayout.RegisterTopStack("Guide", c, HudConfig.TopStack.Order.Objective, { Space = "Hud" })
+	HudLayout.LayoutChanged:Connect(layoutGuideChip)
+	layoutGuideChip()
+end
+
+local function refreshGuideVisibility()
+	local c = guideChip
+	if c then
+		HudLayout.RefreshVisibility(c)
+	end
+end
+
 function TutorialController.Init()
 	local pg = player:WaitForChild("PlayerGui")
 	local screen = Instance.new("ScreenGui")
@@ -764,6 +1248,60 @@ function TutorialController.Init()
 			end)
 		end
 	end)
+
+	-- v72 F5: markers / arrows that replicate later start hidden (events only)
+	if HIDE_MARKER_DRESSING then
+		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.TutorialMarker)) do
+			watchMarker(inst)
+		end
+		CollectionService:GetInstanceAddedSignal(Constants.Tags.TutorialMarker):Connect(watchMarker)
+		-- streamed out (no Destroying on the client): drop the watch; a marker streamed back in is watched again
+		CollectionService:GetInstanceRemovedSignal(Constants.Tags.TutorialMarker):Connect(unwatchMarker)
+	end
+
+	-- v72 tycoon guide
+	if GUIDE.Enabled then
+		buildGuideChip(screen)
+		Remotes.BindEvent(Constants.RemoteNames.TutorialStateUpdate, function(payload: any)
+			if typeof(payload) == "table" then
+				tutorialDone = payload.Complete == true
+				refreshGuideVisibility()
+			end
+		end)
+		Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: any)
+			if typeof(state) == "table" and typeof(state.TutorialComplete) == "boolean" then
+				tutorialDone = state.TutorialComplete
+				refreshGuideVisibility()
+			end
+		end)
+		for _, name in ipairs({ "WE_NextBuy", "WE_Cash", "WE_PendingCash", "WE_IncomePerSec", "WE_IncomeMult" }) do
+			player:GetAttributeChangedSignal(name):Connect(function()
+				renderGuide(true)
+			end)
+		end
+		-- Hide lasts until the next successful purchase acknowledgement (BaseService stamps WE_BuyOk before WE_BuyAck)
+		player:GetAttributeChangedSignal("WE_BuyAck"):Connect(function()
+			if player:GetAttribute("WE_BuyOk") == true then
+				guideHiddenUntil = -math.huge
+				refreshGuideVisibility()
+			end
+		end)
+		renderGuide(true)
+	end
+	if GUIDE.Enabled or BusinessConfig.Enabled then
+		task.spawn(function()
+			local period = 1 / math.max(GUIDE.EtaRefreshHz or 1, 0.1)
+			local warned = false
+			while true do
+				task.wait(period)
+				local ok, err = pcall(guideTick :: () -> any)
+				if not ok and not warned then
+					warned = true
+					warn("[Tutorial] guide tick failed:", err)
+				end
+			end
+		end)
+	end
 end
 
 return TutorialController
