@@ -11,7 +11,8 @@
 	    is near it and closes it CloseDelay seconds after the last one leaves. Driverless boats never open it, so the
 	    Dock is never a walk-in back door past the main-gate raid barrier.
 	  * CullDressing(folder): safety net for MapDressing / DesertFlora — destroys decor parts that stand in water or on
-	    a plot pad (parts with WE_AllowInWater are exempt).
+	    a plot pad (parts with WE_AllowInWater are exempt), and (roadmap W0 ROAD, WaterConfig.RoadCull) decor in the
+	    road corridor, whole kits where they are small. RoadLines / IsNearRoadXZ expose the road centre lines.
 	Geometry lives in Configs/WaterConfig (world rects) and Configs/BaseLayoutConfig (plot-local sea gate / basin).
 	Water parts are CanCollide / CanTouch / CanQuery / CastShadow false: boats read the tagged parts geometrically
 	(VehicleService), combat and ground raycasts pass through to the real floor.
@@ -29,6 +30,7 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local BaseLayout = require(script.Parent.BaseLayout)
 
 type Rect = WaterConfig.Rect
+export type RoadLine = { Name: string, AlongX: boolean, Across: number, Min: number, Max: number }
 
 export type SeaGateDeps = {
 	BaseService: any?,
@@ -200,6 +202,54 @@ function Waterways.IsOnPlotPadXZ(x: number, z: number, margin: number?): boolean
 	return inRects(padRects(), x, z, margin or 0)
 end
 
+-- World road centre lines, from the WaterConfig.RoadEnds keys (MapSetup builds the roads from the same table):
+-- RoadX<x> runs along Z at x = Across, RoadZ<z> along X at z = Across, over Min..Max (the whole map while
+-- WaterConfig.Enabled is false, when MapSetup builds them full length). Sorted by name.
+function Waterways.RoadLines(): { RoadLine }
+	local out: { RoadLine } = {}
+	for name, ends in pairs(WaterConfig.RoadEnds) do
+		local axis, num = string.match(name, "^Road([XZ])(%-?[%d%.]+)$")
+		local across = if num then tonumber(num) else nil
+		if axis and across then
+			table.insert(out, {
+				Name = name,
+				AlongX = axis == "Z",
+				Across = across,
+				Min = if WaterConfig.Enabled then ends.Min else -math.huge,
+				Max = if WaterConfig.Enabled then ends.Max else math.huge,
+			})
+		end
+	end
+	table.sort(out, function(a: RoadLine, b: RoadLine): boolean
+		return a.Name < b.Name
+	end)
+	return out
+end
+
+-- Smallest across-gap from the XZ box to the centre line of a road whose extent it overlaps along the road
+-- (0 = the box straddles the line); math.huge when it is beside no road.
+local function roadGap(roads: { RoadLine }, x0: number, x1: number, z0: number, z1: number): number
+	local best = math.huge
+	for _, r in ipairs(roads) do
+		local a0, a1, c0, c1 = x0, x1, z0, z1 -- along, across
+		if not r.AlongX then
+			a0, a1, c0, c1 = z0, z1, x0, x1
+		end
+		if a1 >= r.Min and a0 <= r.Max then
+			local gap = math.max(0, c0 - r.Across, r.Across - c1)
+			if gap < best then
+				best = gap
+			end
+		end
+	end
+	return best
+end
+
+-- true when (x, z) is within `margin` studs (default WaterConfig.RoadCull.Corridor) of a road centre line
+function Waterways.IsNearRoadXZ(x: number, z: number, margin: number?): boolean
+	return roadGap(Waterways.RoadLines(), x, x, z, z) <= (margin or WaterConfig.RoadCull.Corridor)
+end
+
 -- ── Build ───────────────────────────────────────────────────────────────────
 
 local function flatPart(name: string, size: Vector3, cf: CFrame, parent: Instance): Part
@@ -277,7 +327,27 @@ function Waterways.Build(root: Instance): Folder
 	return folder
 end
 
--- ── Dressing safety net (spec §9.12) ────────────────────────────────────────
+-- ── Dressing safety net (spec §9.12; roadmap W0 ROAD / World v2 H2) ─────────
+
+type Box = { X0: number, X1: number, Y0: number, Y1: number, Z0: number, Z1: number }
+
+local function worldBox(part: BasePart): Box
+	local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = part.CFrame:GetComponents()
+	local hx, hy, hz = part.Size.X * 0.5, part.Size.Y * 0.5, part.Size.Z * 0.5
+	local ex = math.abs(r00) * hx + math.abs(r01) * hy + math.abs(r02) * hz
+	local ey = math.abs(r10) * hx + math.abs(r11) * hy + math.abs(r12) * hz
+	local ez = math.abs(r20) * hx + math.abs(r21) * hy + math.abs(r22) * hz
+	return { X0 = x - ex, X1 = x + ex, Y0 = y - ey, Y1 = y + ey, Z0 = z - ez, Z1 = z + ez }
+end
+
+local function boxesTouch(a: Box, b: Box, grow: number): boolean
+	return a.X0 <= b.X1 + grow
+		and a.X1 >= b.X0 - grow
+		and a.Y0 <= b.Y1 + grow
+		and a.Y1 >= b.Y0 - grow
+		and a.Z0 <= b.Z1 + grow
+		and a.Z1 >= b.Z0 - grow
+end
 
 local function allowedInWater(part: Instance, stop: Instance): boolean
 	local cur: Instance? = part
@@ -290,6 +360,14 @@ local function allowedInWater(part: Instance, stop: Instance): boolean
 	return false
 end
 
+local function toSet(list: { string }?): { [string]: boolean }
+	local out: { [string]: boolean } = {}
+	for _, s in ipairs(list or {}) do
+		out[s] = true
+	end
+	return out
+end
+
 local function overlapsAny(rects: { Rect }, x0: number, x1: number, z0: number, z1: number, grow: number): boolean
 	for _, r in ipairs(rects) do
 		if x0 < r.X1 + grow and x1 > r.X0 - grow and z0 < r.Z1 + grow and z1 > r.Z0 - grow then
@@ -299,34 +377,235 @@ local function overlapsAny(rects: { Rect }, x0: number, x1: number, z0: number, 
 	return false
 end
 
--- Destroys every decor BasePart under `folder` whose world AABB overlaps water (grown by 2) with its bottom below
--- SurfaceY + 14, or overlaps a plot pad grown by 4. WE_AllowInWater (on the part or an ancestor) exempts it.
--- Returns the number of parts destroyed.
+-- Destroys decor under `folder` (MapDressing's WorldDressing, DesertFlora's DesertFlora) that
+--   * overlaps water (grown by 2) with its bottom below SurfaceY + 14, or overlaps a plot pad grown by 4
+--     (WE_AllowInWater on the part or an ancestor exempts it from this rule); or
+--   * stands on a world road (WaterConfig.RoadCull): collidable with its top above MinTop within Corridor studs of a
+--     centre line, or any visible non-marking part taller than LaneMaxHeight within Lane studs. A road hit takes its
+--     whole kit (nearest Model / kit Folder spanning <= KitMaxSpan) or, part alone, the raised parts it carried.
+--     Map.RoadEnds, Bases, Territories, Plot<N> folders, ExemptNames and WE_AllowOnRoad are never road hits.
+-- Returns the number of BaseParts destroyed (kit members included).
 function Waterways.CullDressing(folder: Instance): number
 	local water = Waterways.AllRects()
 	local pads = padRects()
 	local maxBottom = WaterConfig.SurfaceY + 14
-	local victims: { BasePart } = {}
-	for _, d in ipairs(folder:GetDescendants()) do
-		if d:IsA("BasePart") and not allowedInWater(d, folder) then
-			local x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22 = d.CFrame:GetComponents()
-			local hx, hy, hz = d.Size.X * 0.5, d.Size.Y * 0.5, d.Size.Z * 0.5
-			local ex = math.abs(r00) * hx + math.abs(r01) * hy + math.abs(r02) * hz
-			local ey = math.abs(r10) * hx + math.abs(r11) * hy + math.abs(r12) * hz
-			local ez = math.abs(r20) * hx + math.abs(r21) * hy + math.abs(r22) * hz
-			local x0, x1, z0, z1 = x - ex, x + ex, z - ez, z + ez
-			if (y - ey < maxBottom and overlapsAny(water, x0, x1, z0, z1, 2)) or overlapsAny(pads, x0, x1, z0, z1, 4) then
-				table.insert(victims, d)
+	local rc = WaterConfig.RoadCull
+	local roads: { RoadLine } = if rc and rc.Enabled then Waterways.RoadLines() else {}
+	local exemptAncestors = toSet(rc and rc.ExemptAncestors)
+	local exemptNames = toSet(rc and rc.ExemptNames)
+	local markings: { string } = (rc and rc.MarkingPrefixes) or {}
+	local laneTop = GROUND_TOP_Y + ((rc and rc.LaneMaxHeight) or 0.3)
+
+	local descendants = folder:GetDescendants()
+	local boxes: { [BasePart]: Box } = {}
+	local parts: { BasePart } = {}
+	for _, d in ipairs(descendants) do
+		if d:IsA("BasePart") then
+			boxes[d] = worldBox(d)
+			table.insert(parts, d)
+		end
+	end
+
+	local roadExemptMemo: { [Instance]: boolean } = {}
+	local function roadExempt(inst: Instance): boolean
+		local memo = roadExemptMemo[inst]
+		if memo ~= nil then
+			return memo
+		end
+		local res = false
+		if inst:GetAttribute("WE_AllowOnRoad") == true or exemptNames[inst.Name] then
+			res = true
+		elseif exemptAncestors[inst.Name] or string.match(inst.Name, "^Plot%d+$") ~= nil then
+			res = not inst:IsA("BasePart")
+		end
+		if not res and inst ~= folder then
+			local parent = inst.Parent
+			res = parent ~= nil and roadExempt(parent)
+		end
+		roadExemptMemo[inst] = res
+		return res
+	end
+	local function isMarking(name: string): boolean
+		for _, prefix in ipairs(markings) do
+			if string.sub(name, 1, #prefix) == prefix then
+				return true
+			end
+		end
+		return false
+	end
+
+	-- 1) hits
+	local doomed: { [Instance]: boolean } = {}
+	local wetHits: { BasePart } = {}
+	local roadHits: { BasePart } = {}
+	for _, d in ipairs(parts) do
+		local b = boxes[d]
+		if
+			not allowedInWater(d, folder)
+			and ((b.Y0 < maxBottom and overlapsAny(water, b.X0, b.X1, b.Z0, b.Z1, 2)) or overlapsAny(pads, b.X0, b.X1, b.Z0, b.Z1, 4))
+		then
+			table.insert(wetHits, d)
+		elseif #roads > 0 and b.Y1 > rc.MinTop then
+			local gap = roadGap(roads, b.X0, b.X1, b.Z0, b.Z1)
+			local hit = (gap <= rc.Corridor and d.CanCollide)
+				or (gap <= rc.Lane and b.Y1 > laneTop and d.Transparency < 0.99 and not isMarking(d.Name))
+			if hit and not roadExempt(d) then
+				table.insert(roadHits, d)
 			end
 		end
 	end
-	for _, v in ipairs(victims) do
-		v:Destroy()
+	for _, d in ipairs(wetHits) do
+		doomed[d] = true
 	end
-	if #victims > 0 then
-		print(string.format("[WAR EMPIRE] Waterways: culled %d decor parts in water / on plot pads under %s", #victims, folder.Name))
+
+	-- 2) whole kit for road hits: the nearest Model / Folder below `folder`, if it is small and holds nothing exempt
+	local kitMemo: { [Instance]: boolean } = {}
+	local function kitOk(kit: Instance): boolean
+		local memo = kitMemo[kit]
+		if memo ~= nil then
+			return memo
+		end
+		local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+		local ok = true
+		for _, k in ipairs(kit:GetDescendants()) do
+			local kb = if k:IsA("BasePart") then boxes[k] else nil
+			if kb then
+				x0, x1 = math.min(x0, kb.X0), math.max(x1, kb.X1)
+				z0, z1 = math.min(z0, kb.Z0), math.max(z1, kb.Z1)
+				if allowedInWater(k, folder) or roadExempt(k) then
+					ok = false
+					break
+				end
+			end
+		end
+		ok = ok and x1 >= x0 and math.max(x1 - x0, z1 - z0) <= rc.KitMaxSpan
+		kitMemo[kit] = ok
+		return ok
 	end
-	return #victims
+	local kits = 0
+	local loose: { BasePart } = {}
+	for _, d in ipairs(roadHits) do
+		-- climb out of part chains and catalog overlays (a Model parented to its host part): the part alone is then
+		-- the top-most host part, and the kit is the container above it
+		local victim: BasePart = d
+		local cur = d.Parent
+		while cur and cur ~= folder do
+			if cur:IsA("BasePart") then
+				victim = cur
+			elseif not (cur:IsA("Model") and cur.Parent and cur.Parent:IsA("BasePart")) then
+				break
+			end
+			cur = cur.Parent
+		end
+		if cur and cur ~= folder and (cur:IsA("Model") or cur:IsA("Folder")) and kitOk(cur) then
+			if not doomed[cur] then
+				doomed[cur] = true
+				kits += 1
+			end
+		elseif not doomed[victim] then
+			doomed[victim] = true
+			table.insert(loose, victim)
+		end
+	end
+
+	-- 3) part-alone road hits also take the raised siblings they carried (flood over touching AABBs, bounded)
+	if rc and rc.SweepAttached and #loose > 0 then
+		local siblings: { [Instance]: { BasePart } } = {}
+		for _, d in ipairs(parts) do
+			local parent = d.Parent
+			if parent then
+				local list = siblings[parent]
+				if not list then
+					list = {}
+					siblings[parent] = list
+				end
+				table.insert(list, d)
+			end
+		end
+		local minBottom = GROUND_TOP_Y + rc.SweepMinLift
+		local queue: { { Part: BasePart, CX: number, CZ: number } } = {}
+		for _, d in ipairs(loose) do
+			local b = boxes[d]
+			table.insert(queue, { Part = d, CX = (b.X0 + b.X1) * 0.5, CZ = (b.Z0 + b.Z1) * 0.5 })
+		end
+		local head = 1
+		while head <= #queue do
+			local item = queue[head]
+			head += 1
+			local pb = boxes[item.Part]
+			local parent = item.Part.Parent
+			for _, q in ipairs((parent and siblings[parent]) or {}) do
+				local qb = boxes[q]
+				if
+					not doomed[q]
+					and qb.Y0 > minBottom
+					and boxesTouch(pb, qb, rc.SweepTouch)
+					and math.max(math.abs((qb.X0 + qb.X1) * 0.5 - item.CX), math.abs((qb.Z0 + qb.Z1) * 0.5 - item.CZ))
+						<= rc.KitMaxSpan
+					and not allowedInWater(q, folder)
+					and not roadExempt(q)
+				then
+					doomed[q] = true
+					table.insert(queue, { Part = q, CX = item.CX, CZ = item.CZ })
+				end
+			end
+		end
+	end
+
+	-- 4) count (kit members included), then destroy only the top-most doomed instances
+	local function underDoomed(inst: Instance): boolean
+		local cur: Instance? = inst
+		while cur and cur ~= folder do
+			if doomed[cur] then
+				return true
+			end
+			cur = cur.Parent
+		end
+		return false
+	end
+	local wetSet: { [Instance]: boolean } = {}
+	for _, d in ipairs(wetHits) do
+		wetSet[d] = true
+	end
+	local function underWet(inst: Instance): boolean
+		local cur: Instance? = inst
+		while cur and cur ~= folder do
+			if wetSet[cur] then
+				return true
+			end
+			cur = cur.Parent
+		end
+		return false
+	end
+	local total, wetParts = 0, 0
+	for _, d in ipairs(parts) do
+		if underDoomed(d) then
+			total += 1
+			if underWet(d) then
+				wetParts += 1
+			end
+		end
+	end
+	for inst in pairs(doomed) do
+		local parent = inst.Parent
+		if not (parent and parent ~= folder and underDoomed(parent)) then
+			inst:Destroy()
+		end
+	end
+	if total > 0 then
+		print(
+			string.format(
+				"[WAR EMPIRE] Waterways: culled %d decor parts under %s (%d in water / on plot pads, %d on roads: %d hits, %d kits)",
+				total,
+				folder.Name,
+				wetParts,
+				total - wetParts,
+				#roadHits,
+				kits
+			)
+		)
+	end
+	return total
 end
 
 -- ── Sea-gate loop (J1) ──────────────────────────────────────────────────────

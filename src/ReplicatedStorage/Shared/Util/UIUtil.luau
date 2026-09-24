@@ -400,7 +400,8 @@ function UIUtil.MakeRailTile(parent: Instance?, props: RailTileProps): TextButto
 
 	local B = R.Badge
 	local badge = circle(tile, "Badge", B.Size + 4, ink, 30)
-	badge.Position = UDim2.new(1, -4, 0, 4)
+	local inset: Vector2 = (B :: any).Inset or Vector2.new(4, 4)
+	badge.Position = UDim2.new(1, -inset.X, 0, inset.Y)
 	badge.Visible = false
 	local dot = circle(badge, "Dot", B.Size, B.Bg, 31)
 	local btext = Instance.new("TextLabel")

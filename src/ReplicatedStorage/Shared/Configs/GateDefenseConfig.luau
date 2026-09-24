@@ -140,9 +140,13 @@ local GateDefenseConfig = {
 	GateRepairCashCost = 750, -- owner Collect repair while breached
 	GateBreachToast = "⚠ BREACHED — gate open! Repair or wait rebuild",
 	GateRepairedToast = "Gate repaired",
-	-- v38: owner feedback when guards/AutoGuns land a hit on an enemy player
-	GateHitOwnerToast = "DEF HIT · %s (−%d HP)",
-	GateHitOwnerToastCooldown = 1.2,
+	-- v71 (HUD v70 spec §4.2): one owner Warn when the base is fought over — the defenses hit an enemy, or an enemy
+	-- hits the gate / a guard — at most once per BaseUnderAttackCooldown per plot. The client shows it in the Alert
+	-- slot (HudConfig.Toast.Reroute "^BASE UNDER ATTACK"). Was a per-hit "DEF HIT · name (−HP)" toast every 1.2 s.
+	BaseUnderAttackToast = "BASE UNDER ATTACK!",
+	BaseUnderAttackCooldown = 60,
+	-- gate HP bar (one stud-scaled bar centred over the gate; shown only while damaged, breached, down or raided)
+	GateBar = { Studs = Vector2.new(6, 1.1), MaxDistance = 40, HeightAbove = 1.2 },
 	GateBarrierThickness = 1.6,
 	GateBarrierHeight = 9,
 	GateClearStuds = 10, -- match StructureKitBuilder GATE_CLEAR

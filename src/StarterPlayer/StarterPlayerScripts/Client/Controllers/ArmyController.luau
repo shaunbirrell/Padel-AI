@@ -18,6 +18,7 @@ local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local NotificationController = require(script.Parent.NotificationController)
 
 local ArmyController = {}
@@ -108,7 +109,7 @@ refreshLabels = function()
 	local barracks = tonumber(armyState.BarracksLevel) or 0
 	if count == 0 and barracks == 0 then
 		status.Text = string.format(
-			"Army empty — build the Barracks (B) to raise the cap.\nBase cap %d · Recruit $%d each · FILL CAP recruits up to the free slots.",
+			"Army empty — build the Barracks to raise the cap.\nBase cap %d · Recruit $%d each · FILL CAP recruits up to the free slots.",
 			cap,
 			cost
 		)
@@ -363,7 +364,7 @@ function ArmyController.Init()
 				if free > 0 then
 					task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestRecruitSoldiers, math.min(free, 50))
 				else
-					NotificationController.Show("Army full or no slots — upgrade the Barracks (B)", "Warn", 3)
+					NotificationController.Show("Army full or no slots — upgrade the Barracks", "Warn", 3)
 				end
 			end,
 		},
@@ -409,7 +410,16 @@ function ArmyController.Init()
 	note.TextXAlignment = Enum.TextXAlignment.Left
 	note.TextYAlignment = Enum.TextYAlignment.Top
 	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Recruits cost Cash; ★ Robux packs are optional. Squad orders: the Army tile or Y."
+	-- copy by device (mobile plan P1-15): the Y key only for keyboard / gamepad players (HudLayout.PrefersKeys)
+	local function noteText(keys: boolean): string
+		return if keys
+			then "Recruits cost Cash; ★ Robux packs are optional. Squad orders: the Army tile or Y."
+			else "Recruits cost Cash; ★ Robux packs are optional. Squad orders: tap the Army tile, hold it to switch."
+	end
+	note.Text = noteText(HudLayout.PrefersKeys())
+	HudLayout.InputModeChanged:Connect(function(keys: boolean)
+		note.Text = noteText(keys)
+	end)
 	note.Parent = body
 	y += noteSize * 2 + 12
 	body.CanvasSize = UDim2.fromOffset(0, y)

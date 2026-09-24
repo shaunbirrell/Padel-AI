@@ -27,7 +27,7 @@ Paste entire file → Command Bar → Enter. Read Output for `PASS` / `FAIL` / `
 ## Auto smoke (Studio Play Solo)
 
 Server module `StudioBuySmoke` (Bootstrap, `RunService:IsStudio()` only) waits ~4s after profile/plot,
-teleports home, calls `BaseService.PurchaseUpgrade("CommandCenter")`, then:
+teleports home, stands at the Command Center console (v71: no bypass), calls `BaseService.PurchaseUpgrade(player, "CommandCenter", { Source = "Smoke" })`, then:
 
 1. **Loud server prints** — `========== [SMOKE] BUY OK … ==========` (+ `warn` on FAIL)
 2. **`ServerStorage.SmokeResult.LastBuy` / `.Log`** — StringValue mirror

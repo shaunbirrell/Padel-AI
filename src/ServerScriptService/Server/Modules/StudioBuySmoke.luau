@@ -1,7 +1,7 @@
 --!strict
 --[[
 	Studio-only auto BUY smoke.
-	After profile + plot assign (~3–5s): teleport to plot, PurchaseUpgrade(CommandCenter),
+	After profile + plot assign (~3–5s): teleport to plot, stand at the CC console (v71), PurchaseUpgrade(CommandCenter),
 	print unmistakable [SMOKE] BUY lines, mirror into ServerStorage.SmokeResult,
 	and FireAllClients(StudioSmokeLog) so Play Solo client Output also shows the result.
 
@@ -15,6 +15,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared:WaitForChild("Constants"))
+local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local StudioBuySmoke = {}
 
@@ -87,6 +88,22 @@ local function smokeLine(kind: string, detail: string)
 	writeResult(line)
 	broadcast(kind, line)
 	return line
+end
+
+-- v71 console-only buying has no bypass: the smoke stands its character at the structure's own console (the same
+-- spot a player uses), so every Studio Play also exercises the server presence gate end to end.
+local function standAtConsole(BaseService: any, player: Player, structureId: string): string
+	local plotId = if BaseService.GetOwnedPlotId then BaseService.GetOwnedPlotId(player) else nil
+	local char = player.Character
+	if plotId == nil or char == nil then
+		return "no plot / character"
+	end
+	local part = ConsoleLocator.Find(plotId, structureId)
+	if part == nil then
+		return "no console part"
+	end
+	char:PivotTo(ConsoleLocator.StandCFrame(part))
+	return "ok"
 end
 
 function StudioBuySmoke.Init(deps: { [string]: any })
@@ -180,7 +197,9 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 			))
 
 			local okCall, resultOrErr = pcall(function()
-				return BaseService.PurchaseUpgrade(player, STRUCTURE_ID)
+				-- v71: stand at the Command Center console first (no bypass; a far-away buy answers NotAtConsole)
+				print("[SMOKE] stand at console: " .. standAtConsole(BaseService, player, STRUCTURE_ID))
+				return BaseService.PurchaseUpgrade(player, STRUCTURE_ID, { Source = "Smoke" })
 			end)
 			if not okCall then
 				smokeLine("FAIL", "pcall error: " .. tostring(resultOrErr))
@@ -238,7 +257,8 @@ function StudioBuySmoke.Init(deps: { [string]: any })
 					end
 					smokeLine("START", string.format("follow-up structure=%s cash=%d level=%d", barracksId, cashB, lvlB))
 					local okB, resB = pcall(function()
-						return BaseService.PurchaseUpgrade(player, barracksId)
+						print("[SMOKE] stand at console: " .. standAtConsole(BaseService, player, barracksId))
+						return BaseService.PurchaseUpgrade(player, barracksId, { Source = "Smoke" })
 					end)
 					if not okB then
 						smokeLine("FAIL", "Barracks pcall: " .. tostring(resB))

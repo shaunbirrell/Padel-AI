@@ -176,7 +176,7 @@ return function(ictx: any, api: any)
 		prompt.ActionText = "Review troops"
 		prompt.ObjectText = "Officer's Desk"
 		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 8
+		prompt.MaxActivationDistance = 12 -- mobile P1-19 (was 8)
 		prompt.RequiresLineOfSight = false
 		prompt.KeyboardKeyCode = Enum.KeyCode.F
 		prompt:SetAttribute("WE_OpenPanel", "Army")

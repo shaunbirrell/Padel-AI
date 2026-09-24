@@ -17,7 +17,12 @@
 	    teleport, bounds, boats over WE_Water). A violation takes ownership back and puts the vehicle
 	    at its last valid position; repeated hard violations recall it (one AntiExploit strike).
 	  * The server never accepts positions or velocities from the client: VehicleDriveInput only
-	    carries {K="Hello"|"Bye", V=<VehicleId>, P=<protocol>}.
+	    carries {K="Hello"|"Bye", V=<VehicleId>, P=<protocol>}, the input stream {K="In", V, T, S, L}
+	    (clamped to [-1, 1]), {K="Stuck", V, ...} and {K="Exit", V}.
+	  * Judge fix (jeep "doesn't drive"): whoever simulates owns every assembly (chassis + each hinge wheel).
+	    A watchdog proves in each sit that the client-simulated car really moves while the driver pushes;
+	    if not, the server takes ownership and drives it from the input stream (Car/Boat), logs one
+	    NO-DRIVE line, and debug users (Drive.Debug) get a WE_Diag attribute + periodic server lines.
 ]]
 
 local Players = game:GetService("Players")
@@ -49,6 +54,16 @@ local Valid = Drive.Validation
 local WaterCfg = Drive.Water
 local SpawnCfg = Drive.Spawn
 local ResyncCfg = Drive.Resync
+local W = Drive.Watchdog
+local DBG = Drive.Debug
+
+local debugUserSet: { [number]: boolean } = {}
+for _, uid in ipairs(DBG.UserIds) do
+	debugUserSet[uid] = true
+end
+local function isDebugUser(userId: number): boolean
+	return DBG.All == true or debugUserSet[userId] == true
+end
 
 -- ── Types (law protocol shared with VehicleDriveClient; see spec §2) ─────────────────────────────
 export type DriveInput = { Throttle: number, Steer: number, Lift: number, Strafe: number }
@@ -112,6 +127,12 @@ export type SpawnCtx = {
 	SurfaceY: ((x: number, z: number, refY: number) -> number?)?,
 	LandProbe: ((x: number, z: number, top: number) -> boolean)?,
 	BoxFree: ((cf: CFrame, half: Vector3) -> boolean)?,
+	-- Mobile P1-9: the player has a plot and stands outside it → SPAWN tries in front of the player first
+	AwayFromHome: boolean?,
+	-- P1-9 (verifier): every WE_Water part (WaterParts drops other plots' basin / gate water: not boat water for this
+	-- player, but still water for a car), and a line-of-sight test (true = nothing solid between the two points)
+	AllWater: { BasePart }?,
+	Clear: ((from: Vector3, to: Vector3) -> boolean)?,
 }
 export type SpawnChoice = { CFrame: CFrame, Source: string, State: string, Speed: number }
 export type ValidSample = { Pos: Vector3, Vel: Vector3, T: number, WaterY: number?, CFrame: CFrame? }
@@ -159,9 +180,36 @@ type VehicleRec = {
 	OutVel: Vector3?,
 	OutHold: boolean?,
 	OutRot: CFrame?,
+	-- judge fix: ownership of every assembly, input stream, watchdog, diagnostics
+	OwnParts: { BasePart },
+	InT: number,
+	InS: number,
+	InL: number,
+	InAt: number?,
+	ClientProven: boolean,
+	ClientBroken: boolean,
+	ServerProven: boolean,
+	BrokenReason: string?,
+	HandOffPos: Vector3?,
+	HandOffAt: number?,
+	PushSince: number?,
+	PushPos: Vector3?,
+	OwnerBad: number,
+	NextOwnerProbe: number,
+	TripAt: number?,
+	TripPos: Vector3?,
+	TripSign: number?, -- sign of the pushed throttle at the trip (0 / nil = no push: ownership trip)
+	TripLook: Vector3?, -- chassis look vector at the trip
+	BlockPush: number,
+	BlockLogged: boolean,
+	LastWatchAt: number?,
+	Pins: number,
+	PinList: string,
+	NextDiagAt: number,
+	NextDiagLogAt: number,
 }
 
-local driveTipShown: { [number]: boolean } = {} -- car "Press WASD to drive" (once per session)
+local sitCueShown: { [number]: boolean } = {} -- ArmedJeep muzzle-flash cue on the first car sit (once per session)
 local sitOfferShown: { [number]: boolean } = {} -- SpeedBoost soft offer after the first sit (once per session)
 
 local DataService: any = nil
@@ -179,6 +227,8 @@ local AntiExploitService: any = nil
 
 local activeVehicles: { [number]: Model } = {}
 local lastSpawnAt: { [number]: number } = {}
+local lastDamageAt: { [number]: number } = {} -- P1-9: character took damage (Humanoid.HealthChanged drop)
+local brokenTrips: { [number]: number } = {} -- judge fix: server-proven watchdog trips this session (per UserId)
 local vehicles: { [Model]: VehicleRec } = {}
 local vehicleFolder: Folder? = nil
 
@@ -905,6 +955,13 @@ local function addWheels(model: Model, body: BasePart, scale: number, positions:
 		hinge:SetAttribute("WE_DriveHinge", true)
 		hinge:SetAttribute("WE_WheelSide", if offset.X < 0 then -1 else 1)
 		hinge.Parent = wheel
+		-- v70 judge: hinge-joined parts are separate assemblies and DO collide; every kit's wheels sit
+		-- 0.15-1.3 studs inside the Chassis, so the hinge and the contact fought forever (jitter, locked wheels, flings).
+		local nc = Instance.new("NoCollisionConstraint")
+		nc.Name = "WE_WheelNoCollide" .. i
+		nc.Part0 = body
+		nc.Part1 = wheel
+		nc.Parent = wheel
 
 		local hub = Instance.new("Part")
 		hub.Name = "Hub" .. i
@@ -965,52 +1022,6 @@ end
 local function addSideRails(model: Model, body: BasePart, s: number, length: number, height: number, width: number, color: Color3)
 	addPart(model, body, "RailL", Vector3.new(0.2 * s, 0.25 * s, length * s), CFrame.new(-width * s, height * s, 0), color, Enum.Material.Metal, nil, false)
 	addPart(model, body, "RailR", Vector3.new(0.2 * s, 0.25 * s, length * s), CFrame.new(width * s, height * s, 0), color, Enum.Material.Metal, nil, false)
-end
-
-local function addLabel(parent: BasePart, text: string, y: number, driveTip: string?)
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "VehicleLabel"
-	billboard.Size = UDim2.fromOffset(170, if driveTip and driveTip ~= "" then 48 else 36)
-	billboard.StudsOffset = Vector3.new(0, y, 0)
-	billboard.AlwaysOnTop = true
-	billboard.MaxDistance = 280
-	billboard.Parent = parent
-	local backdrop = Instance.new("Frame")
-	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(12, 14, 16)
-	backdrop.BackgroundTransparency = 0.25
-	backdrop.BorderSizePixel = 0
-	backdrop.Parent = billboard
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 5)
-	c.Parent = backdrop
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(230, 190, 60)
-	stroke.Thickness = 1
-	stroke.Transparency = 0.35
-	stroke.Parent = backdrop
-	local tip = driveTip or ""
-	local label = Instance.new("TextLabel")
-	label.Name = "Name"
-	label.Size = if tip ~= "" then UDim2.new(1, 0, 0.58, 0) else UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.TextColor3 = Color3.fromRGB(235, 238, 242)
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.Text = text
-	label.Parent = backdrop
-	if tip ~= "" then
-		local tipLab = Instance.new("TextLabel")
-		tipLab.Name = "DriveTip"
-		tipLab.Position = UDim2.fromScale(0, 0.55)
-		tipLab.Size = UDim2.new(1, 0, 0.42, 0)
-		tipLab.BackgroundTransparency = 1
-		tipLab.TextColor3 = Color3.fromRGB(200, 190, 120)
-		tipLab.Font = Enum.Font.Gotham
-		tipLab.TextScaled = true
-		tipLab.Text = tip
-		tipLab.Parent = backdrop
-	end
 end
 
 local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: number, bonus: number?, armorMult: number?): Model
@@ -1398,7 +1409,6 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	end
 
 	local cat = def.Category or "Ground"
-	local isNaval = cat == "Naval"
 	local mode = driveModeFor(def)
 	local seat = Instance.new("VehicleSeat")
 	seat.Name = "DriverSeat"
@@ -1437,29 +1447,21 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	end
 
 	do
-		local tip = if mode == "Heli"
-			then "Sit · SPACE/▲ up"
-			elseif mode == "Plane" then "Sit · hold W"
-			elseif isNaval then "Sit · WASD to pilot"
-			else "Sit · WASD to drive"
-		if id == "ArmedJeep" then
-			tip = "ARMED · Sit · WASD"
-		elseif family == "WheeledAPC" or id == "APC" then
-			tip = "APC · Sit · WASD"
-		elseif typeof(family) == "string" and string.find(family, "Tracked") ~= nil then
-			tip = "TRACKED · Sit · WASD (slow)"
-		end
-		addLabel(body, def.DisplayName, labelY, tip)
-		-- v36 ArmedJeep: static ARMED billboard on barrel (no fire logic yet)
+		-- Mobile P1-8: no server nameplate and no key-name tips. The old nameplate billboard (always on top, 280 studs,
+		-- keyboard tips) showed to everyone through the HUD. The owner-only nameplate is client-side
+		-- (VehicleDriveClient); WE_LabelY is the kit's label height above the Chassis centre for it.
+		model:SetAttribute("WE_LabelY", labelY)
+		-- v36 ArmedJeep: static ARMED billboard on barrel (no fire logic yet). World-label rules: stud-scaled,
+		-- MaxDistance <= 40, never AlwaysOnTop.
 		if id == "ArmedJeep" then
 			local barrel = model:FindFirstChild("Barrel")
 			if barrel and barrel:IsA("BasePart") then
 				local abb = Instance.new("BillboardGui")
 				abb.Name = "WE_ArmedCue"
-				abb.Size = UDim2.fromOffset(90, 22)
+				abb.Size = UDim2.fromScale(2.4, 0.6) -- studs
 				abb.StudsOffset = Vector3.new(0, 1.2, 0)
 				abb.AlwaysOnTop = false
-				abb.MaxDistance = 60
+				abb.MaxDistance = 40
 				abb.Parent = barrel
 				local al = Instance.new("TextLabel")
 				al.Size = UDim2.fromScale(1, 1)
@@ -1531,6 +1533,15 @@ end
 
 -- ── State push (garage) ────────────────────────────────────────────────────────────────────────
 local GATE_STRUCTURES = { "VehicleDepot", "Helipad", "Airfield", "Dock" }
+
+-- P1-9: seconds until SPAWN is allowed again after the player's character took damage
+local function damageLockLeft(userId: number): number
+	local at = lastDamageAt[userId]
+	if at == nil then
+		return 0
+	end
+	return math.max(0, SpawnCfg.DamageLockSeconds - (now() - at))
+end
 
 local function cooldownLeft(userId: number, player: Player?): number
 	local last = lastSpawnAt[userId]
@@ -1614,6 +1625,9 @@ local function errorText(err: string, def: VehicleDef?, player: Player?): string
 	elseif err == "Cooldown" then
 		local left = if player then math.ceil(cooldownLeft(player.UserId, player)) else 0
 		return if left > 0 then string.format("Vehicle spawn cooling down (%ds)", left) else "Vehicle spawn cooling down"
+	elseif err == "InCombat" then
+		local left = if player then math.ceil(damageLockLeft(player.UserId)) else 0
+		return if left > 0 then string.format("In combat — wait %ds", left) else "In combat — wait a moment"
 	elseif err == "NotOwned" then
 		return "Buy this vehicle first"
 	elseif err == "SpawnBuildFailed" or err == "SpawnKitIncomplete" or err == "SpawnOrphaned" then
@@ -1713,6 +1727,41 @@ local function choice(cf: CFrame, source: string, state: string, speed: number?)
 	return { CFrame = cf, Source = source, State = state, Speed = speed or 0 }
 end
 
+--[[ P1-9: the land spot (centre or a footprint corner) lies in any water whose surface is above the ground there.
+	Every WE_Water part counts (AllWater): another plot's dock basin is not boat water for this player, but a car
+	must never land in it. Depth-independent (the ground ray ignores water, so it lands on the basin floor). ]]
+local function overAnyWater(ctx: SpawnCtx, cf: CFrame): boolean
+	local fp = ctx.Footprint
+	local ground = cf.Position.Y - fp.Clearance - SpawnCfg.Clearance
+	local lists = { ctx.WaterParts, ctx.AllWater or {} }
+	for _, o in ipairs({ Vector3.zero, Vector3.new(fp.HalfX, 0, fp.HalfZ), Vector3.new(-fp.HalfX, 0, fp.HalfZ), Vector3.new(fp.HalfX, 0, -fp.HalfZ), Vector3.new(-fp.HalfX, 0, -fp.HalfZ) }) do
+		local pt = cf:PointToWorldSpace(o)
+		for _, list in ipairs(lists) do
+			for _, w in ipairs(list) do
+				local lp = w.CFrame:PointToObjectSpace(pt)
+				if math.abs(lp.X) <= w.Size.X * 0.5 and math.abs(lp.Z) <= w.Size.Z * 0.5 and w.Position.Y + w.Size.Y * 0.5 > ground - 0.5 then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+-- P1-9: nothing solid between the player's root part and the spot (never a spawn across a wall: the auto-sit would
+-- carry the player through it, e.g. from outside an enemy base's perimeter wall into its courtyard)
+local function inSight(ctx: SpawnCtx, from: Vector3, cf: CFrame): boolean
+	local clear = ctx.Clear
+	return clear == nil or clear(from, cf.Position + Vector3.new(0, 1, 0))
+end
+
+-- P1-9: open sky over the spot (no roof, upper floor or hangar within 40 studs): never inside a building
+local function openSky(ctx: SpawnCtx, cf: CFrame): boolean
+	local clear = ctx.Clear
+	local top = cf.Position + Vector3.new(0, math.max(ctx.Footprint.Top, 1) + 0.5, 0)
+	return clear == nil or clear(top, top + Vector3.new(0, 40, 0))
+end
+
 local function playerFront(ctx: SpawnCtx, state: string): SpawnChoice?
 	local pp = ctx.PlayerPos
 	if not pp then
@@ -1720,11 +1769,15 @@ local function playerFront(ctx: SpawnCtx, state: string): SpawnChoice?
 	end
 	local look = flat(ctx.PlayerLook or Vector3.new(0, 0, -1))
 	look = if look.Magnitude > 0.05 then look.Unit else Vector3.new(0, 0, -1)
-	local ahead = pp + look * (14 + footRadius(ctx.Footprint))
+	local ahead = pp + look * (SpawnCfg.FrontDistance + footRadius(ctx.Footprint))
 	local heading = math.atan2(-look.X, -look.Z)
-	local cf = firstFreeLand(ctx, ahead.X, ahead.Z, pp.Y - 3, heading, aroundOffsets(ctx.Footprint))
-	if cf then
-		return choice(cf, "PlayerFront", state)
+	-- land vehicles only (Car / Heli / Plane): never a spot over water (a player on a pier facing the sea), never
+	-- across a wall (the auto-sit would carry the player through it) and never under a roof (inside a building)
+	for _, o in ipairs(aroundOffsets(ctx.Footprint)) do
+		local cf = landSpot(ctx, ahead.X + o.X, ahead.Z + o.Z, pp.Y - 3, heading)
+		if cf and not overAnyWater(ctx, cf) and inSight(ctx, pp, cf) and openSky(ctx, cf) and spotFree(ctx, cf) then
+			return choice(cf, "PlayerFront", state)
+		end
 	end
 	return nil
 end
@@ -1788,6 +1841,13 @@ end
 local function chooseCar(ctx: SpawnCtx): SpawnChoice
 	local fp = ctx.Footprint
 	local offsets = aroundOffsets(fp)
+	if ctx.AwayFromHome then
+		-- P1-9: away from your own plot SPAWN puts it in front of you, not on a pad 650 studs away or at home
+		local front = playerFront(ctx, "Grounded")
+		if front then
+			return front
+		end
+	end
 	if ctx.PlayerPos then
 		for _, e in ipairs(padsByDistance(ctx.VehiclePads, ctx.PlayerPos, false, SpawnCfg.CarPadRadius)) do
 			local cf = firstFreeLand(ctx, e.Pad.Pos.X, e.Pad.Pos.Z, padTop(e.Pad), yawOf(e.Pad.CFrame), offsets)
@@ -1812,6 +1872,12 @@ local function chooseHeli(ctx: SpawnCtx): SpawnChoice
 	local fp = ctx.Footprint
 	local plot = ctx.PlotPos
 	local frame = plotFrame(ctx)
+	if ctx.AwayFromHome then
+		local front = playerFront(ctx, "Landed") -- P1-9
+		if front then
+			return front
+		end
+	end
 	if plot and frame and (ctx.Structures.Helipad or 0) >= 1 then
 		local site = BaseLayoutConfig.Structures.Helipad.Site
 		local refTop = plot.Y + 0.5 + SpawnCfg.HelipadDeckHeight
@@ -1849,6 +1915,12 @@ local function choosePlane(ctx: SpawnCtx): SpawnChoice
 	local plot = ctx.PlotPos
 	local road = runwayRoad()
 	local frame = plotFrame(ctx)
+	if ctx.AwayFromHome then
+		local front = playerFront(ctx, "Grounded") -- P1-9: taxi and take off from where you stand
+		if front then
+			return front
+		end
+	end
 	if plot and frame and road and (ctx.Structures.Airfield or 0) >= 1 then
 		-- start 12 studs in from the end nearer the plot edge, facing along the runway toward the other end
 		-- (runway X/Z, the ends and the heading are plot-local; plotXZ / yawOf(frame) turn them with the plot)
@@ -1930,77 +2002,105 @@ end
 
 local function chooseBoat(ctx: SpawnCtx): (SpawnChoice?, string?)
 	local fp = ctx.Footprint
-	-- 1) own dock basin, only when a channel links it to the sea
-	local basin = plotBasin(ctx)
-	if basin and ctx.PlotPos and (ctx.Structures.Dock or 0) >= 1 and isConnectedToSea(basin, ctx.WaterParts) then
-		local bcf = basin.CFrame
-		local top = basin.Position.Y + basin.Size.Y * 0.5
-		local step = WaterCfg.GridStep
-		local pts: { Vector3 } = {}
-		local hx, hz = basin.Size.X * 0.5, basin.Size.Z * 0.5
-		local nx, nz = math.floor(hx / step), math.floor(hz / step)
-		for i = -nx, nx do
-			for j = -nz, nz do
-				table.insert(pts, Vector3.new(i * step, 0, j * step))
+	-- own dock basin, only when a channel links it to the sea
+	local function basinChoice(): SpawnChoice?
+		local basin = plotBasin(ctx)
+		if basin and ctx.PlotPos and (ctx.Structures.Dock or 0) >= 1 and isConnectedToSea(basin, ctx.WaterParts) then
+			local bcf = basin.CFrame
+			local top = basin.Position.Y + basin.Size.Y * 0.5
+			local step = WaterCfg.GridStep
+			local pts: { Vector3 } = {}
+			local hx, hz = basin.Size.X * 0.5, basin.Size.Z * 0.5
+			local nx, nz = math.floor(hx / step), math.floor(hz / step)
+			for i = -nx, nx do
+				for j = -nz, nz do
+					table.insert(pts, Vector3.new(i * step, 0, j * step))
+				end
 			end
-		end
-		table.sort(pts, function(a: Vector3, b: Vector3): boolean
-			return a.Magnitude < b.Magnitude
-		end)
-		local byaw = yawOf(bcf)
-		for _, lp in ipairs(pts) do
-			local wp = bcf:PointToWorldSpace(lp)
-			for _, h in ipairs({ byaw, byaw + math.pi / 2 }) do
-				local cf = boatSpot(ctx, wp.X, wp.Z, h, top)
-				if cf then
-					return choice(cf, "DockBasin", "Floating"), nil
+			table.sort(pts, function(a: Vector3, b: Vector3): boolean
+				return a.Magnitude < b.Magnitude
+			end)
+			local byaw = yawOf(bcf)
+			for _, lp in ipairs(pts) do
+				local wp = bcf:PointToWorldSpace(lp)
+				for _, h in ipairs({ byaw, byaw + math.pi / 2 }) do
+					local cf = boatSpot(ctx, wp.X, wp.Z, h, top)
+					if cf then
+						return choice(cf, "DockBasin", "Floating")
+					end
 				end
 			end
 		end
+		return nil
 	end
-	-- 2) naval pads by distance (no limit): 8 directions, bow pointing away from the pad
-	local origin = ctx.PlayerPos or ctx.PlotPos
-	for _, e in ipairs(padsByDistance(ctx.NavalPads, origin, nil, nil)) do
-		local pad = e.Pad
-		local padHalf = math.max(pad.Size.X, pad.Size.Z) * 0.5
-		local away = if origin then flat(pad.Pos - origin) else Vector3.new(0, 0, 1)
-		away = if away.Magnitude > 0.05 then away.Unit else Vector3.new(0, 0, 1)
-		local dirs: { Vector3 } = {}
-		for k = 0, 7 do
-			table.insert(dirs, fwd(k * math.pi / 4))
-		end
-		table.sort(dirs, function(a: Vector3, b: Vector3): boolean
-			return a:Dot(away) > b:Dot(away)
-		end)
-		for _, d in ipairs(dirs) do
-			local c = pad.Pos + d * (padHalf + fp.HalfZ + SpawnCfg.NavalPadGap)
-			local h = math.atan2(-d.X, -d.Z)
-			local cf = boatSpot(ctx, c.X, c.Z, h, pad.Pos.Y)
-			if cf then
-				return choice(cf, "NavalSpawn", "Floating"), nil
+	-- naval pads by distance (no limit): 8 directions, bow pointing away from the pad
+	local function padChoice(): SpawnChoice?
+		local origin = ctx.PlayerPos or ctx.PlotPos
+		for _, e in ipairs(padsByDistance(ctx.NavalPads, origin, nil, nil)) do
+			local pad = e.Pad
+			local padHalf = math.max(pad.Size.X, pad.Size.Z) * 0.5
+			local away = if origin then flat(pad.Pos - origin) else Vector3.new(0, 0, 1)
+			away = if away.Magnitude > 0.05 then away.Unit else Vector3.new(0, 0, 1)
+			local dirs: { Vector3 } = {}
+			for k = 0, 7 do
+				table.insert(dirs, fwd(k * math.pi / 4))
+			end
+			table.sort(dirs, function(a: Vector3, b: Vector3): boolean
+				return a:Dot(away) > b:Dot(away)
+			end)
+			for _, d in ipairs(dirs) do
+				local c = pad.Pos + d * (padHalf + fp.HalfZ + SpawnCfg.NavalPadGap)
+				local h = math.atan2(-d.X, -d.Z)
+				local cf = boatSpot(ctx, c.X, c.Z, h, pad.Pos.Y)
+				if cf then
+					return choice(cf, "NavalSpawn", "Floating")
+				end
 			end
 		end
+		return nil
 	end
-	-- 3) centre of the largest water part (and a ring around it)
-	local largest: BasePart? = nil
-	local area = -1
-	for _, p in ipairs(ctx.WaterParts) do
-		local a = p.Size.X * p.Size.Z
-		if a > area then
-			area = a
-			largest = p
-		end
-	end
-	if largest then
-		local top = largest.Position.Y + largest.Size.Y * 0.5
-		local c = largest.Position
-		local ring = 2 * footRadius(fp) + SpawnCfg.OffsetStep
-		for k = 0, 8 do
-			local off = if k == 0 then Vector3.zero else fwd((k - 1) * math.pi / 4) * ring
-			local cf = boatSpot(ctx, c.X + off.X, c.Z + off.Z, yawOf(largest.CFrame), top)
-			if cf then
-				return choice(cf, "OpenWater", "Floating"), nil
+	-- centre of the largest water part (and a ring around it)
+	local function openChoice(): SpawnChoice?
+		local largest: BasePart? = nil
+		local area = -1
+		for _, p in ipairs(ctx.WaterParts) do
+			local a = p.Size.X * p.Size.Z
+			if a > area then
+				area = a
+				largest = p
 			end
+		end
+		if largest then
+			local top = largest.Position.Y + largest.Size.Y * 0.5
+			local c = largest.Position
+			local ring = 2 * footRadius(fp) + SpawnCfg.OffsetStep
+			for k = 0, 8 do
+				local off = if k == 0 then Vector3.zero else fwd((k - 1) * math.pi / 4) * ring
+				local cf = boatSpot(ctx, c.X + off.X, c.Z + off.Z, yawOf(largest.CFrame), top)
+				if cf then
+					return choice(cf, "OpenWater", "Floating")
+				end
+			end
+		end
+		return nil
+	end
+	-- P1-9: away from your own plot, water right in front of you first (never your dock basin across the map first)
+	local function frontChoice(): SpawnChoice?
+		local pp = ctx.PlayerPos
+		if not pp then
+			return nil
+		end
+		local look = flat(ctx.PlayerLook or Vector3.new(0, 0, -1))
+		look = if look.Magnitude > 0.05 then look.Unit else Vector3.new(0, 0, -1)
+		local ahead = pp + look * (SpawnCfg.FrontDistance + footRadius(fp))
+		local cf = boatSpot(ctx, ahead.X, ahead.Z, math.atan2(-look.X, -look.Z), pp.Y)
+		return if cf and inSight(ctx, pp, cf) then choice(cf, "PlayerFront", "Floating") else nil
+	end
+	local order = if ctx.AwayFromHome then { frontChoice, padChoice, basinChoice, openChoice } else { basinChoice, padChoice, openChoice }
+	for _, step in ipairs(order) do
+		local c = step()
+		if c then
+			return c, nil
 		end
 	end
 	return nil, "NoWater"
@@ -2065,6 +2165,24 @@ local function findPlotPart(plotId: any): BasePart?
 	return nil
 end
 
+-- P1-9: pos on the plot pad's rectangle (plot-local XZ, grown by OwnPlotMargin)
+local function insidePlot(plot: BasePart, pos: Vector3): boolean
+	local lp = plot.CFrame:PointToObjectSpace(pos)
+	local m = SpawnCfg.OwnPlotMargin
+	return math.abs(lp.X) <= plot.Size.X * 0.5 + m and math.abs(lp.Z) <= plot.Size.Z * 0.5 + m
+end
+
+-- P1-9: the player stands inside their own plot (nil plot / no character → false)
+local function playerAtHome(player: Player, profile: any): boolean
+	local character = player.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not (root and root:IsA("BasePart")) or not (profile and profile.BasePlotId) then
+		return false
+	end
+	local plot = findPlotPart(profile.BasePlotId)
+	return plot ~= nil and insidePlot(plot, root.Position)
+end
+
 local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Footprint, attrs: { [string]: any }, exclude: Model?): SpawnCtx
 	local character = player.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -2077,12 +2195,14 @@ local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Foo
 	local plotPos: Vector3? = nil
 	local plotCFrame: CFrame? = nil
 	local plotId: number? = nil
+	local awayFromHome = false
 	if profile and profile.BasePlotId then
 		local plot = findPlotPart(profile.BasePlotId)
 		if plot then
 			plotPos = plot.Position
 			plotCFrame = plot.CFrame -- C1: the pad carries the plot yaw
 			plotId = tonumber(profile.BasePlotId)
+			awayFromHome = playerPos ~= nil and not insidePlot(plot, playerPos)
 		end
 	end
 	-- C5: someone else's DockWater / SeaGateWater is not water for this player's boats
@@ -2152,6 +2272,11 @@ local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Foo
 			op.MaxParts = 1
 			local hits = Workspace:GetPartBoundsInBox(cf, half * 2, op)
 			return #hits == 0
+		end,
+		AwayFromHome = awayFromHome,
+		AllWater = getWaterParts(),
+		Clear = function(from: Vector3, to: Vector3): boolean
+			return Workspace:Raycast(from, to - from, groundEx) == nil
 		end,
 	}
 	return ctx
@@ -2236,6 +2361,52 @@ local function setNetworkOwner(part: BasePart, owner: Player?): boolean
 		part:SetNetworkOwner(owner)
 	end)
 	return ok
+end
+
+-- Every assembly the vehicle is made of: the chassis (+ welded kit, seats, catalog dress) and each hinge wheel.
+local function ownPartsOf(model: Model, chassis: BasePart): { BasePart }
+	local list: { BasePart } = { chassis }
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("WE_PhysicsWheel") == true then
+			table.insert(list, d)
+		end
+	end
+	return list
+end
+
+-- Whoever simulates owns everything: the chassis assembly and every wheel assembly (true = no call refused).
+local function setOwner(rec: VehicleRec, owner: Player?): boolean
+	local ok = true
+	for _, p in ipairs(rec.OwnParts) do
+		if p.Parent ~= nil and not setNetworkOwner(p, owner) then
+			ok = false
+		end
+	end
+	return ok
+end
+
+--[[ ("drv" | "srv" | "split" | "oth" | "unk", per-part detail "drv,drv,srv,…"). GetNetworkOwner is server-only and
+	errors on anchored parts ("err"); an unreadable part is not evidence of a wrong owner ("unk" = the probe neither
+	counts nor clears; a pinned car is caught by the no-motion check instead). ]]
+local function ownerState(rec: VehicleRec, driver: Player?): (string, string)
+	local tags: { string } = {}
+	local allDrv, allSrv, anyOth, anyErr = true, true, false, false
+	for i, p in ipairs(rec.OwnParts) do
+		local ok, o = pcall(function(): Player?
+			return p:GetNetworkOwner()
+		end)
+		local tag = if not ok then "err" elseif o == nil then "srv" elseif o == driver then "drv" else "oth"
+		tags[i] = tag
+		if tag == "err" then
+			anyErr = true
+		else
+			allDrv = allDrv and tag == "drv"
+			allSrv = allSrv and tag == "srv"
+			anyOth = anyOth or tag == "oth"
+		end
+	end
+	local st = if anyOth then "oth" elseif anyErr and allDrv then "unk" elseif allDrv then "drv" elseif allSrv and not anyErr then "srv" else "split"
+	return st, table.concat(tags, ",")
 end
 
 local function resetValid(rec: VehicleRec, t: number)
@@ -2324,12 +2495,204 @@ local function seatInput(seat: VehicleSeat): DriveInput
 	return { Throttle = unitInput(seat.ThrottleFloat), Steer = unitInput(seat.SteerFloat), Lift = 0, Strafe = 0 }
 end
 
--- Fallback (no Hello from the client): the server runs the Car / Boat law from the seat's input.
+-- F5b: the client's input stream while fresh, else the seat floats (an old cached client sends no stream)
+local function serverInput(rec: VehicleRec, t: number): DriveInput
+	local occ = rec.Seat.Occupant
+	if occ == nil or (tonumber(occ.Health) or 0) <= 0 then
+		return { Throttle = 0, Steer = 0, Lift = 0, Strafe = 0 }
+	end
+	local at = rec.InAt
+	if at ~= nil and t - at <= W.StreamStaleSeconds then
+		return { Throttle = rec.InT, Steer = rec.InS, Lift = rec.InL, Strafe = 0 }
+	end
+	return seatInput(rec.Seat)
+end
+
+--[[ "The driver is pushing" = input that must move this vehicle. Car/Boat: |throttle| (spec). Aircraft refine
+	the spec's rule so nothing trips on a landed craft: a landed heli ignores the stick until it lifts off (lift up
+	only), and a plane's throttle-back at rest moves nothing (throttle forward only). ]]
+local function pushing(rec: VehicleRec, input: DriveInput): boolean
+	local th = W.PushThrottle
+	if rec.Mode == "Heli" then
+		return input.Lift > th
+	elseif rec.Mode == "Plane" then
+		return input.Throttle > th
+	end
+	return math.abs(input.Throttle) > th
+end
+
+-- F5i diagnostics: what could pin this vehicle (anchored parts, foreign movers / joints, movers in its riders)
+local CONSTRAINT_CLASSES: { [string]: boolean } = {
+	AlignOrientation = true, AlignPosition = true, AngularVelocity = true, BallSocketConstraint = true,
+	HingeConstraint = true, LineForce = true, LinearVelocity = true, PlaneConstraint = true, Plane = true,
+	PrismaticConstraint = true, CylindricalConstraint = true, RigidConstraint = true, RodConstraint = true,
+	RopeConstraint = true, SpringConstraint = true, Torque = true, TorsionSpringConstraint = true,
+	UniversalConstraint = true, VectorForce = true, AnimationConstraint = true,
+}
+local BODYMOVER_CLASSES: { [string]: boolean } = {
+	BodyAngularVelocity = true, BodyForce = true, BodyGyro = true, BodyPosition = true, BodyThrust = true,
+	BodyVelocity = true, RocketPropulsion = true,
+}
+local JOINT_CLASSES: { [string]: boolean } = {
+	Weld = true, Motor = true, Motor6D = true, Snap = true, ManualWeld = true, Glue = true, ManualGlue = true,
+	Rotate = true, RotateP = true, RotateV = true, VelocityMotor = true,
+}
+
+local function isMover(d: Instance): boolean
+	local c = d.ClassName
+	return BODYMOVER_CLASSES[c] == true or CONSTRAINT_CLASSES[c] == true or d:IsA("BodyMover") or d:IsA("Constraint")
+end
+
+local function isOwnDriveObject(d: Instance): boolean
+	local n = d.Name
+	return n == "WE_DriveLV"
+		or n == "WE_DriveAO"
+		or n == "SeatWeld"
+		or string.sub(n, 1, 17) == "WE_WheelNoCollide"
+		or (d:IsA("HingeConstraint") and d:GetAttribute("WE_DriveHinge") == true)
+end
+
+local function riderCharacters(rec: VehicleRec): { Instance }
+	local list: { Instance } = {}
+	local seats: { BasePart } = { rec.Seat }
+	for _, s in ipairs(rec.Passengers) do
+		table.insert(seats, s)
+	end
+	for _, s in ipairs(seats) do
+		local occ = if s.Parent then (s :: any).Occupant else nil
+		local ch = if occ then occ.Parent else nil
+		if ch then
+			table.insert(list, ch)
+		end
+	end
+	return list
+end
+
+local function countPins(rec: VehicleRec): (number, string)
+	local n = 0
+	local names: { string } = {}
+	local function add(what: string)
+		n += 1
+		if #names < 3 then
+			table.insert(names, what)
+		end
+	end
+	for _, d in ipairs(rec.Model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if d.Anchored then
+				add("anchored:" .. d.Name)
+			end
+		elseif (isMover(d) or JOINT_CLASSES[d.ClassName] == true or d:IsA("JointInstance")) and not isOwnDriveObject(d) then
+			add(d.ClassName .. ":" .. d.Name)
+		end
+	end
+	for _, ch in ipairs(riderCharacters(rec)) do
+		for _, d in ipairs(ch:GetDescendants()) do
+			if d:IsA("BasePart") then
+				if d.Anchored then
+					add("rider-anchored:" .. d.Name)
+				end
+			elseif isMover(d) then
+				local c = d.ClassName
+				if c ~= "AnimationConstraint" and c ~= "BallSocketConstraint" and c ~= "HingeConstraint" then
+					add("rider-" .. c .. ":" .. d.Name)
+				end
+			end
+		end
+	end
+	return n, table.concat(names, ",")
+end
+
+-- occupied passenger seats whose occupant is not a player (F8 ejects them; the log proves it)
+local function npcRiders(rec: VehicleRec): number
+	local n = 0
+	for _, s in ipairs(rec.Passengers) do
+		local occ = if s.Parent then s.Occupant else nil
+		if occ ~= nil and playerOfHumanoid(occ) == nil then
+			n += 1
+		end
+	end
+	return n
+end
+
+local function signed(x: number): string
+	return string.format("%+.2f", x)
+end
+
+-- a client-sent field for a log line: short, printable
+local function logField(v: any): string
+	local str = string.sub(tostring(v), 1, 16)
+	return (string.gsub(str, "[^%w%.%+%-_]", "?"))
+end
+
+local function movedFromSit(rec: VehicleRec): number
+	local from = rec.HandOffPos
+	if from == nil then
+		return 0
+	end
+	local d = rec.Chassis.Position - from
+	return if rec.Mode == "Heli" or rec.Mode == "Plane" then d.Magnitude else Vector3.new(d.X, 0, d.Z).Magnitude
+end
+
+-- one server log line (F5i)
+local function diagLine(rec: VehicleRec, t: number, head: string, extra: any?): string
+	local st, detail = ownerState(rec, rec.Owner)
+	local seat = rec.Seat
+	local ex = ""
+	if typeof(extra) == "table" then
+		ex = string.format(" extra=T=%s Spd=%s R=%s Src=%s", logField(extra.T), logField(extra.Spd), logField(extra.R), logField(extra.Src))
+	end
+	local inAge = if rec.InAt ~= nil then string.format("%.1f", t - (rec.InAt :: number)) else "-"
+	return string.format(
+		"[VehicleService] %s u=%d %s auth=%s own=%s(%s) hello=%d in=%s/%s@%s seatT=%s/%s lvS=%.1f moved=%.1f pins=%d(%s) npc=%d catalog=%s%s",
+		head,
+		rec.OwnerUserId,
+		tostring(rec.Def.Id),
+		rec.Authority,
+		st,
+		detail,
+		if rec.HelloAt ~= nil then 1 else 0,
+		signed(rec.InT),
+		signed(rec.InS),
+		inAge,
+		signed(unitInput(seat.ThrottleFloat)),
+		signed(unitInput(seat.SteerFloat)),
+		rec.LV.VectorVelocity.Magnitude,
+		movedFromSit(rec),
+		rec.Pins,
+		rec.PinList,
+		npcRiders(rec),
+		tostring(rec.Model:GetAttribute("WE_CatalogAssetId") or "-"),
+		ex
+	)
+end
+
+-- F5j: the compact WE_Diag attribute (debug users only); the client's NO DRIVE line parses these key=value pairs
+local function diagCompact(rec: VehicleRec): string
+	local st = ownerState(rec, rec.Owner)
+	local seat = rec.Seat
+	return string.format(
+		"own=%s hello=%d in=%s/%s seat=%s/%s lv=%.0f moved=%.1f pins=%d npc=%d fail=%s",
+		st,
+		if rec.HelloAt ~= nil then 1 else 0,
+		signed(rec.InT),
+		signed(rec.InS),
+		signed(unitInput(seat.ThrottleFloat)),
+		signed(unitInput(seat.SteerFloat)),
+		rec.LV.VectorVelocity.Magnitude,
+		movedFromSit(rec),
+		rec.Pins,
+		npcRiders(rec),
+		rec.BrokenReason or "-"
+	)
+end
+
+-- Fallback / trip: the server runs the Car / Boat law from the client's input stream (or the seat floats).
 local function fallbackStep(rec: VehicleRec, t: number, dt: number)
 	local sense = senseFor(rec, t)
 	local st: DriveState = rec.Fallback or newDriveState(sense)
 	rec.Fallback = st
-	local input = seatInput(rec.Seat)
+	local input = serverInput(rec, t)
 	local out: DriveOut
 	if rec.Mode == "Boat" then
 		local dir, near, far = boatProbe(st, rec.Params, input)
@@ -2346,8 +2709,12 @@ end
 
 -- Car fallback (name kept from v27-v69; the old server LV + "LV+HingeMotor" path is gone: wheels roll
 -- free and the WE_DriveLV / WE_DriveAO movers carry the car). Boats share the same loop.
+-- F5c: the server both drives and simulates (owns every assembly), so its own mover values act.
 local function startGroundDrive(rec: VehicleRec, t: number)
 	setAuthority(rec, "Fallback")
+	if not setOwner(rec, nil) then
+		warn("[VehicleService] Fallback: SetNetworkOwner(nil) refused", rec.Def.Id) -- server writes still replicate to the owner
+	end
 	rec.Fallback = newDriveState(senseFor(rec, t))
 	if rec.Mode == "Car" then
 		rec.Model:SetAttribute("WE_GroundDrive", "Fallback")
@@ -2361,32 +2728,79 @@ local function stopDrive(rec: VehicleRec)
 	end
 end
 
--- Driver (owner) seated: give them the physics. fresh = a new sit (vs the end of a correction).
+-- Driver (owner) seated: give them the physics. fresh = a new sit (vs the end of a correction). F5d.
 local function handOff(rec: VehicleRec, player: Player, t: number, fresh: boolean)
 	rec.CorrectUntil = nil
 	rec.CorrectPos = nil
-	if not setNetworkOwner(rec.Chassis, player) then
-		warn("[VehicleService] SetNetworkOwner(driver) refused", rec.Def.Id)
-	end
 	rec.DriverUserId = player.UserId
 	rec.Model:SetAttribute("WE_DriverUserId", player.UserId)
+	local ground = rec.Mode == "Car" or rec.Mode == "Boat"
 	if fresh then
 		rec.SatAt = t
 		rec.HelloAt = nil
 		rec.HelloTimedOut = false
+		rec.ClientProven = false
+		rec.PushSince = nil
+		rec.PushPos = nil
+		rec.OwnerBad = 0
+		rec.BlockPush = 0
+		rec.BlockLogged = false
+		rec.TripAt = nil
+		rec.TripPos = nil
+		rec.TripSign, rec.TripLook = nil, nil
+		rec.InT, rec.InS, rec.InL, rec.InAt = 0, 0, 0, nil
+		rec.HandOffPos = rec.Chassis.Position
+		rec.HandOffAt = t
+		rec.NextOwnerProbe = t + 0.5
+		rec.NextDiagAt = t
+		rec.NextDiagLogAt = t
+		rec.ClientBroken = ground and W.Enabled and (brokenTrips[player.UserId] or 0) >= W.SessionTrips
+		rec.BrokenReason = if rec.ClientBroken then "session" else nil
+		rec.ServerProven = rec.ClientBroken
+		rec.Model:SetAttribute("WE_DriveFail", rec.BrokenReason)
+		rec.Pins, rec.PinList = countPins(rec)
 	end
 	resetValid(rec, t)
 	rec.NextSampleAt = t + 1 / Valid.SampleHz
 	stopDrive(rec)
-	if (rec.Mode == "Car" or rec.Mode == "Boat") and rec.HelloTimedOut and rec.HelloAt == nil then
+	if ground and (rec.ClientBroken or (rec.HelloTimedOut and rec.HelloAt == nil)) then
 		startGroundDrive(rec, t)
-	else
-		setAuthority(rec, "Client")
+		return
 	end
+	if not setOwner(rec, player) then
+		warn("[VehicleService] SetNetworkOwner(driver) refused", rec.Def.Id)
+		if ground then
+			rec.ClientBroken = true
+			rec.BrokenReason = "owner-refused"
+			rec.TripAt = t
+			rec.TripPos = rec.Chassis.Position
+			rec.TripSign = 0 -- no push involved: any server-driven motion proves the client link was the fault
+			rec.ServerProven = false
+			rec.Model:SetAttribute("WE_DriveFail", "owner-refused")
+			startGroundDrive(rec, t)
+			return
+		end
+	end
+	setAuthority(rec, "Client")
 end
 
--- Nobody in the driver seat: the server owns the physics and runs the idle law.
+--[[ F5e: a character that left a (possibly server-owned) vehicle assembly goes back to its player explicitly, on the
+	next deferred tick (after the SeatWeld is gone). Harmless when the player already owns it. ]]
+local function handBackCharacter(player: Player, chassis: BasePart)
+	task.defer(function()
+		local ch = player.Character
+		local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+		if hrp and hrp:IsA("BasePart") and not hrp.Anchored and hrp.AssemblyRootPart ~= chassis.AssemblyRootPart then
+			pcall(function()
+				hrp:SetNetworkOwner(player)
+			end)
+		end
+	end)
+end
+
+-- Nobody in the driver seat: the server owns the physics and runs the idle law. F5e.
 local function releaseToServer(rec: VehicleRec, t: number)
+	local leaving = if rec.DriverUserId ~= 0 then Players:GetPlayerByUserId(rec.DriverUserId) else nil
 	stopDrive(rec)
 	rec.CorrectUntil = nil
 	rec.CorrectPos = nil
@@ -2395,11 +2809,18 @@ local function releaseToServer(rec: VehicleRec, t: number)
 	rec.SatAt = nil
 	rec.HelloAt = nil
 	rec.HelloTimedOut = false
+	rec.InT, rec.InS, rec.InL, rec.InAt = 0, 0, 0, nil
 	setAuthority(rec, "Server")
-	setNetworkOwner(rec.Chassis, nil)
+	setOwner(rec, nil)
 	rec.Idle = {}
 	rec.NextIdleAt = t
 	rec.LastSeatedAt = t
+	if rec.Model:GetAttribute("WE_Diag") ~= nil then
+		rec.Model:SetAttribute("WE_Diag", nil)
+	end
+	if leaving then
+		handBackCharacter(leaving, rec.Chassis)
+	end
 end
 
 local function ejectDriver(rec: VehicleRec)
@@ -2415,6 +2836,18 @@ local function forgetVehicle(model: Model)
 		end
 		table.clear(rec.Conns)
 		rec.Fallback = nil
+		-- the vehicle goes away with riders in it (recall, SPAWN of another, despawn): their characters were part of
+		-- the vehicle assembly, which the server may own; give each character back to its player
+		local seats: { BasePart } = { rec.Seat }
+		for _, ps in ipairs(rec.Passengers) do
+			table.insert(seats, ps)
+		end
+		for _, seat in ipairs(seats) do
+			local rider = playerOfHumanoid((seat :: any).Occupant)
+			if rider then
+				handBackCharacter(rider, rec.Chassis)
+			end
+		end
 	end
 end
 
@@ -2461,7 +2894,7 @@ end
 local function beginCorrection(rec: VehicleRec, t: number)
 	stopDrive(rec)
 	setAuthority(rec, "Server")
-	local released = setNetworkOwner(rec.Chassis, nil)
+	local released = setOwner(rec, nil)
 	local back = rec.LastValid
 	pcall(function()
 		rec.Model:PivotTo(back.CFrame)
@@ -2642,6 +3075,123 @@ local function correctionStep(rec: VehicleRec, t: number)
 	end
 end
 
+-- F5g: the client-simulation link is broken for this sit → server drive (Car/Boat) or a notice (aircraft).
+local function trip(rec: VehicleRec, reason: string, t: number, extra: any?)
+	if rec.ClientBroken then
+		return
+	end
+	rec.ClientBroken = true
+	rec.BrokenReason = reason
+	rec.TripAt = t
+	rec.TripPos = rec.Chassis.Position
+	local th = serverInput(rec, t).Throttle
+	rec.TripSign = if th > W.PushThrottle then 1 elseif th < -W.PushThrottle then -1 else 0
+	rec.TripLook = rec.Chassis.CFrame.LookVector
+	rec.ServerProven = false
+	rec.BlockPush = 0
+	rec.BlockLogged = false
+	rec.Model:SetAttribute("WE_DriveFail", reason)
+	rec.Pins, rec.PinList = countPins(rec)
+	warn(diagLine(rec, t, "NO-DRIVE " .. reason, extra)) -- every player, one line per trip
+	if rec.Mode == "Car" or rec.Mode == "Boat" then
+		startGroundDrive(rec, t)
+	else
+		setOwner(rec, rec.Owner) -- aircraft: no server law (spec §5); re-assert and tell the pilot once
+		if not rec.FlightNoticeSent then
+			rec.FlightNoticeSent = true
+			notify(rec.Owner, "Flight controls not responding — jump out and sit again", "Warn", 6)
+		end
+	end
+end
+
+-- 5 Hz next to sampleAndCheck: prove the client-simulated vehicle moves; after a trip, prove server drive does.
+local function watchdogStep(rec: VehicleRec, t: number)
+	if not W.Enabled or rec.DriverUserId == 0 then
+		return
+	end
+	local air = rec.Mode == "Heli" or rec.Mode == "Plane"
+	local pos = rec.Chassis.Position
+	local function moved(from: Vector3?): number
+		if from == nil then
+			return 0
+		end
+		local d = pos - from
+		return if air then d.Magnitude else Vector3.new(d.X, 0, d.Z).Magnitude
+	end
+	local push = pushing(rec, serverInput(rec, t))
+	local last = rec.LastWatchAt
+	local since = if last ~= nil then math.clamp(t - last, 0, 0.5) else 0 -- real time between 5 Hz calls
+	rec.LastWatchAt = t
+	if rec.Authority == "Client" and not rec.ClientProven and not rec.ClientBroken then
+		if moved(rec.HandOffPos) > W.ProvenStuds then
+			rec.ClientProven = true
+			rec.PushSince = nil
+			return
+		end
+		if t - (rec.HandOffAt or t) <= W.OwnerProbeSeconds and t >= rec.NextOwnerProbe then
+			rec.NextOwnerProbe = t + 1 / W.OwnerProbeHz
+			local st, detail = ownerState(rec, rec.Owner)
+			if st == "drv" then
+				rec.OwnerBad = 0
+			elseif st ~= "unk" then
+				rec.OwnerBad += 1
+				if rec.OwnerBad == 2 then
+					setOwner(rec, rec.Owner) -- one re-assert
+				elseif rec.OwnerBad >= 3 then
+					trip(rec, "owner:" .. st .. "(" .. detail .. ")", t)
+					return
+				end
+			end
+		end
+		if push then
+			local pushSince = rec.PushSince
+			if pushSince == nil then
+				rec.PushSince, rec.PushPos = t, pos
+			elseif t - pushSince >= W.Seconds and moved(rec.PushPos) < W.MinMoveStuds then
+				trip(rec, "nomove", t)
+			end
+		else
+			rec.PushSince = nil
+		end
+	elseif rec.ClientBroken and rec.Authority == "Fallback" and not rec.ServerProven then
+		if moved(rec.TripPos) > W.ProvenStuds then
+			rec.ServerProven = true
+			-- the client link was the fault only if server drive moved it the way the driver pushed at the trip: a car
+			-- parked nose-to-wall trips, then reverses away under server drive; that proves nothing (spec: a blocked
+			-- car must not count toward SessionTrips)
+			local sign, look, from = rec.TripSign or 0, rec.TripLook, rec.TripPos
+			local along = if look and from then (pos - from):Dot(look) * sign else 0
+			if sign == 0 or along > W.MinMoveStuds then
+				brokenTrips[rec.OwnerUserId] = (brokenTrips[rec.OwnerUserId] or 0) + 1 -- remember it for this session
+				print(diagLine(rec, t, "SERVER-DRIVE ok (" .. tostring(rec.BrokenReason) .. ")", nil))
+			else
+				print(diagLine(rec, t, "SERVER-DRIVE moved away from the trip spot (not counted)", nil))
+			end
+		elseif push then
+			rec.BlockPush += since
+			if rec.BlockPush >= W.BlockedSeconds and not rec.BlockLogged then
+				rec.BlockLogged = true
+				warn(diagLine(rec, t, "BLOCKED (server drive cannot move it either: pinned or wedged)", nil))
+			end
+		end
+	end
+end
+
+-- F5j: debug users (Drive.Debug) get WE_Diag at 2 Hz and a server line every ServerLogSeconds while pushing.
+local function debugStep(rec: VehicleRec, t: number)
+	if rec.DriverUserId == 0 or not isDebugUser(rec.OwnerUserId) then
+		return
+	end
+	if t >= rec.NextDiagAt then
+		rec.NextDiagAt = t + 0.5
+		rec.Model:SetAttribute("WE_Diag", diagCompact(rec))
+	end
+	if t >= rec.NextDiagLogAt and pushing(rec, serverInput(rec, t)) then
+		rec.NextDiagLogAt = t + DBG.ServerLogSeconds
+		print(diagLine(rec, t, "DIAG", nil))
+	end
+end
+
 local function tickRecord(rec: VehicleRec, t: number, dt: number)
 	local model, chassis = rec.Model, rec.Chassis
 	if model.Parent == nil or chassis.Parent == nil then
@@ -2684,6 +3234,9 @@ local function tickRecord(rec: VehicleRec, t: number, dt: number)
 		if t >= rec.NextSampleAt then
 			rec.NextSampleAt = t + 1 / Valid.SampleHz
 			sampleAndCheck(rec, t)
+			if vehicles[model] == rec then -- sampleAndCheck can recall (destroy) it
+				watchdogStep(rec, t)
+			end
 		end
 	else
 		if rec.CorrectUntil ~= nil then
@@ -2696,6 +3249,9 @@ local function tickRecord(rec: VehicleRec, t: number, dt: number)
 			rec.NextIdleAt = t + 1 / Drive.IdleHz
 			idleStep(rec, t, idt)
 		end
+	end
+	if vehicles[model] == rec then
+		debugStep(rec, t)
 	end
 end
 
@@ -2715,15 +3271,13 @@ local function tickAll(dt: number)
 	end
 end
 
-local function showDriveTip(rec: VehicleRec, player: Player)
+-- First sit extras (once per session). Mobile P1-8: no keyboard drive-tip toast any more (key names on phones);
+-- the ArmedJeep keeps its cosmetic muzzle-flash cue.
+local function onFirstSit(rec: VehicleRec, player: Player)
 	local model = rec.Model
-	if rec.Mode == "Car" and not driveTipShown[player.UserId] then
-		driveTipShown[player.UserId] = true
-		-- v31: one-shot drive tip after Sit (session) — cars only; aircraft get client hints
-		local vid = model:GetAttribute("VehicleId")
-		local tipMsg = "Press WASD to drive"
-		if vid == "ArmedJeep" then
-			tipMsg = "ARMED Jeep — Press WASD to drive"
+	if rec.Mode == "Car" and not sitCueShown[player.UserId] then
+		sitCueShown[player.UserId] = true
+		if model:GetAttribute("VehicleId") == "ArmedJeep" then
 			-- Brief muzzle flash cue (cosmetic; no fire logic)
 			local barrel = model:FindFirstChild("Barrel")
 			if barrel and barrel:IsA("BasePart") then
@@ -2732,6 +3286,7 @@ local function showDriveTip(rec: VehicleRec, player: Player)
 				flash.Color = Color3.fromRGB(255, 200, 120)
 				flash.Brightness = 4
 				flash.Range = 14
+				flash.Shadows = false
 				flash.Parent = barrel
 				task.delay(0.18, function()
 					if flash.Parent then
@@ -2739,10 +3294,7 @@ local function showDriveTip(rec: VehicleRec, player: Player)
 					end
 				end)
 			end
-		elseif model:GetAttribute("WE_Tracked") == true then
-			tipMsg = "TRACKED — Press WASD (slow)"
 		end
-		notify(player, tipMsg, "Info", 4)
 	end
 	-- v36: one-shot SpeedBoost soft offer after the first vehicle sit
 	if sitOfferShown[player.UserId] then
@@ -2770,20 +3322,28 @@ local function onDriverChanged(model: Model, occupant: Instance?)
 	end
 	local player = playerOfHumanoid(occupant)
 	if player == nil or player ~= rec.Owner then
-		ejectSeat(rec.Seat) -- only the owner can drive; passenger seats are open
+		ejectSeat(rec.Seat) -- only the owner can drive; passenger seats take players only (F8)
 		return
 	end
 	rec.EverSeated = true
 	rec.LastSeatedAt = t
 	refreshMoverLimits(rec) -- AssemblyMass now includes the driver
 	handOff(rec, player, t, true)
-	showDriveTip(rec, player)
+	onFirstSit(rec, player)
 end
 
-local function handleDriveInput(player: Player, msg: any)
-	if RateLimitService and not RateLimitService.Allow(player, "vehicle_drive_input", 4, 2) then
-		return
+-- a stream axis: finite number clamped to [-1, 1], anything else 0
+local function axis(v: any): number
+	if typeof(v) ~= "number" or v ~= v then
+		return 0
 	end
+	return math.clamp(v, -1, 1)
+end
+
+--[[ VehicleDriveInput (F5f). Kinds: Hello {P}, Bye, In {T, S, L} (10 Hz while any axis is non-zero), Stuck (once per
+	sit), Exit (touch jump / EXIT pill). Only the seated owner-driver of their own active vehicle is heard; the
+	messages carry clamped inputs only, never positions or velocities. ]]
+local function handleDriveInput(player: Player, msg: any)
 	if typeof(msg) ~= "table" then
 		if AntiExploitService and AntiExploitService.Strike then
 			pcall(AntiExploitService.Strike, player, "vehicle_input_payload")
@@ -2791,7 +3351,17 @@ local function handleDriveInput(player: Player, msg: any)
 		return
 	end
 	local kind = msg.K
-	if kind ~= "Hello" and kind ~= "Bye" then
+	local key: string, rate: number, burst: number
+	if kind == "In" then
+		key, rate, burst = "vehicle_drive_stream", W.StreamRate, W.StreamBurst
+	elseif kind == "Hello" or kind == "Bye" or kind == "Stuck" then
+		key, rate, burst = "vehicle_drive_input", 4, 2
+	elseif kind == "Exit" then
+		key, rate, burst = "vehicle_exit", 4, 2
+	else
+		return
+	end
+	if RateLimitService and not RateLimitService.Allow(player, key, rate, burst) then
 		return
 	end
 	if not RemoteGuard.IsIdString(msg.V, 48) then
@@ -2806,14 +3376,34 @@ local function handleDriveInput(player: Player, msg: any)
 		return
 	end
 	local t = now()
-	if kind == "Hello" then
+	if kind == "In" then
+		rec.InT, rec.InS, rec.InL = axis(msg.T), axis(msg.S), axis(msg.L)
+		rec.InAt = t
+		return
+	elseif kind == "Exit" then
+		ejectSeat(rec.Seat) -- works whoever simulates the seat (a client jump may not leave a server-owned seat)
+		return
+	elseif kind == "Stuck" then
+		if rec.Authority == "Client" and not rec.ClientProven then
+			local air = rec.Mode == "Heli" or rec.Mode == "Plane"
+			-- aircraft: only when the server also sees input that must move the craft (a landed heli ignores the stick)
+			if not air or pushing(rec, serverInput(rec, t)) then
+				trip(rec, "client-stuck", t, msg)
+			end
+		end
+		return
+	elseif kind == "Hello" then
 		if msg.P ~= nil and msg.P ~= Drive.ProtocolVersion then
 			return -- an old client: it refuses to drive; Car/Boat fall back after the timeout
 		end
 		rec.HelloAt = t
-		if rec.Authority == "Fallback" then
+		if rec.Authority == "Fallback" and not rec.ClientBroken then
 			stopDrive(rec)
-			setAuthority(rec, "Client")
+			if setOwner(rec, player) then
+				setAuthority(rec, "Client")
+			else
+				startGroundDrive(rec, t)
+			end
 		end
 	elseif rec.Mode == "Car" or rec.Mode == "Boat" then
 		-- Bye while still seated: the client stopped driving → the server takes over
@@ -2907,6 +3497,30 @@ local function registerVehicle(player: Player, model: Model, def: VehicleDef, mo
 		OutVel = nil,
 		OutHold = nil,
 		OutRot = nil,
+		OwnParts = ownPartsOf(model, chassis),
+		InT = 0,
+		InS = 0,
+		InL = 0,
+		InAt = nil,
+		ClientProven = false,
+		ClientBroken = false,
+		ServerProven = false,
+		BrokenReason = nil,
+		HandOffPos = nil,
+		HandOffAt = nil,
+		PushSince = nil,
+		PushPos = nil,
+		OwnerBad = 0,
+		NextOwnerProbe = t,
+		TripAt = nil,
+		TripPos = nil,
+		BlockPush = 0,
+		BlockLogged = false,
+		LastWatchAt = nil,
+		Pins = 0,
+		PinList = "",
+		NextDiagAt = t,
+		NextDiagLogAt = t,
 	}
 	vehicles[model] = rec
 	for _, d in ipairs(model:GetDescendants()) do
@@ -2914,7 +3528,7 @@ local function registerVehicle(player: Player, model: Model, def: VehicleDef, mo
 			d.Anchored = false
 		end
 	end
-	setNetworkOwner(chassis, nil)
+	setOwner(rec, nil)
 	refreshMoverLimits(rec)
 	if spawn.State == "Airborne" and spawn.Speed > 0 then
 		-- air start: moving at 1.3 x takeoff speed, held by the idle glide until the pilot sits
@@ -2934,6 +3548,29 @@ local function registerVehicle(player: Player, model: Model, def: VehicleDef, mo
 			onDriverChanged(model, seat.Occupant)
 		end)
 	)
+	-- F8: passenger seats take players only. NPC squad units / guards never ride (their BodyGyro would steer the car).
+	-- A player leaving a passenger seat gets their character handed back (the car may be server-owned).
+	for _, ps in ipairs(passengers) do
+		local prevRider: Player? = nil
+		table.insert(
+			rec.Conns,
+			ps:GetPropertyChangedSignal("Occupant"):Connect(function()
+				local occ = ps.Occupant
+				local rider = playerOfHumanoid(occ)
+				if prevRider and prevRider ~= rider then
+					handBackCharacter(prevRider, chassis)
+				end
+				prevRider = rider
+				if occ ~= nil and rider == nil then
+					task.defer(function()
+						if ps.Occupant == occ then
+							ejectSeat(ps)
+						end
+					end)
+				end
+			end)
+		)
+	end
 	return rec
 end
 
@@ -3034,6 +3671,12 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	if cooldownLeft(player.UserId, player) > 0 then
 		return false, "Cooldown"
 	end
+	if damageLockLeft(player.UserId) > 0 then
+		return false, "InCombat" -- P1-9: SPAWN is not an escape from a fight
+	end
+	-- P1-9: inside your own plot the garage flow seats you on your own pad / helipad / runway / basin; anywhere
+	-- else only a vehicle that appears next to you (in front of you) seats you. Never a cross-map teleport.
+	local sitRadius = if playerAtHome(player, profile) then SpawnCfg.AutoSitHomeRadius else SpawnCfg.AutoSitRadius
 
 	-- 1) build unparented at the origin (movers + drive attributes included)
 	local bonus = researchMult(player, "VehicleSpeed", Drive.MaxResearchSpeedBonus)
@@ -3100,6 +3743,7 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 	lastSpawnAt[player.UserId] = now()
 
 	-- Driveability: Drive prompt + auto-sit the DriverSeat so garage SPAWN is immediately usable
+	local autoSeat = false
 	do
 		local seat = rec.Seat
 		seat.Disabled = false
@@ -3131,6 +3775,14 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 				end)
 			)
 		end
+		-- "close" = the player's root part within sitRadius of the vehicle's footprint (centre distance - radius)
+		local reach = footRadius(fp)
+		local function seatNear(): boolean
+			local character = player.Character
+			local hrp = character and character:FindFirstChild("HumanoidRootPart")
+			return hrp ~= nil and hrp:IsA("BasePart") and (hrp.Position - rec.Chassis.Position).Magnitude - reach <= sitRadius
+		end
+		autoSeat = seatNear()
 		local function trySit()
 			if rec.EverSeated or not player.Parent or not model.Parent or not seat.Parent then
 				return
@@ -3138,11 +3790,9 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			local character = player.Character
 			local hum = character and character:FindFirstChildOfClass("Humanoid")
 			local hrp = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
-			if hum and seat.Occupant == nil then
-				if hrp then
-					-- Place character on seat so Sit always has a valid near-seat humanoid
-					hrp.CFrame = seat.CFrame * CFrame.new(0, 2.5, 0)
-				end
+			if hum and hrp and seat.Occupant == nil and seatNear() then
+				-- Place character on seat so Sit always has a valid near-seat humanoid
+				hrp.CFrame = seat.CFrame * CFrame.new(0, 2.5, 0)
 				pcall(function()
 					seat:Sit(hum)
 				end)
@@ -3184,7 +3834,8 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 		at.Z
 	))
 	if NotificationService then
-		NotificationService.Notify(player, "Deployed " .. def.DisplayName, "Success")
+		local msg = if autoSeat then "Deployed " .. def.DisplayName else "Deployed " .. def.DisplayName .. " — walk over to drive"
+		NotificationService.Notify(player, msg, "Success")
 	end
 	pushState(player)
 	return true, nil
@@ -3233,6 +3884,10 @@ VehicleService._Tick = tickAll
 VehicleService._Record = function(model: Model): any
 	return vehicles[model]
 end
+VehicleService._BrokenTrips = function(userId: number): number
+	return brokenTrips[userId] or 0
+end
+VehicleService._DamageLockLeft = damageLockLeft
 VehicleService._OnViolation = function(model: Model, reason: string, soft: boolean)
 	local rec = vehicles[model]
 	if rec then
@@ -3322,10 +3977,45 @@ function VehicleService.Init(deps: { [string]: any })
 
 	RunService.Heartbeat:Connect(tickAll)
 
+	-- P1-9: remember when each player's character last took damage (a Health drop at an unchanged MaxHealth;
+	-- CombatService's spawn reset of MaxHealth / regen never counts)
+	local function watchCharacter(player: Player, character: Model)
+		task.spawn(function()
+			local found = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 5)
+			if not (found and found:IsA("Humanoid")) then
+				return
+			end
+			local hum = found :: Humanoid
+			local lastHealth, lastMax = hum.Health, hum.MaxHealth
+			hum.HealthChanged:Connect(function(h: number)
+				local max = hum.MaxHealth
+				if h < lastHealth - 0.01 and max == lastMax then
+					lastDamageAt[player.UserId] = now()
+				end
+				lastHealth, lastMax = h, max
+			end)
+		end)
+	end
+	local function hookPlayer(player: Player)
+		player.CharacterAdded:Connect(function(character: Model)
+			watchCharacter(player, character)
+		end)
+		local character = player.Character
+		if character then
+			watchCharacter(player, character)
+		end
+	end
+	Players.PlayerAdded:Connect(hookPlayer)
+	for _, player in ipairs(Players:GetPlayers()) do
+		hookPlayer(player)
+	end
+
 	Players.PlayerRemoving:Connect(function(player)
 		destroyActive(player.UserId)
 		lastSpawnAt[player.UserId] = nil
-		driveTipShown[player.UserId] = nil
+		lastDamageAt[player.UserId] = nil
+		brokenTrips[player.UserId] = nil
+		sitCueShown[player.UserId] = nil
 		sitOfferShown[player.UserId] = nil
 	end)
 end

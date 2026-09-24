@@ -257,6 +257,80 @@ do
 	end
 end
 
+-- 5b) v71 console-only buying: one console per structure per plot; the Base panel only shows the way
+do
+	local okCfg, ConsoleBuyConfig = pcall(function()
+		return require(Shared.Configs.ConsoleBuyConfig)
+	end)
+	local okB, BaseConfig = pcall(function()
+		return require(Shared.Configs.BaseConfig)
+	end)
+	local okL, BaseLayoutConfig = pcall(function()
+		return require(Shared.Configs.BaseLayoutConfig)
+	end)
+	if not (okCfg and okB and okL) then
+		bad("ConsoleBuyConfig / BaseConfig / BaseLayoutConfig require failed")
+	else
+		if ConsoleBuyConfig.Enabled == true then
+			ok("ConsoleBuyConfig.Enabled=true (structures buy at their console only)")
+		else
+			bad("ConsoleBuyConfig.Enabled is not true — remote structure buys are allowed")
+		end
+		if BaseLayoutConfig.Enabled == true then
+			local seen: { [string]: number } = {}
+			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+				if inst:IsA("BasePart") and inst:GetAttribute("WE_Console") == true then
+					local key = tostring(inst:GetAttribute("PlotId")) .. "|" .. tostring(inst:GetAttribute("StructureId"))
+					seen[key] = (seen[key] or 0) + 1
+				end
+			end
+			local missing, dupes = 0, 0
+			for plotId = 1, BaseConfig.MaxPlots do
+				for _, sid in ipairs(BaseConfig.StructureOrder) do
+					local n = seen[tostring(plotId) .. "|" .. sid] or 0
+					if n == 0 then
+						missing += 1
+					elseif n > 1 then
+						dupes += 1
+					end
+				end
+			end
+			if missing == 0 and dupes == 0 then
+				ok(string.format("Consoles: %d plots x %d structures, one each", BaseConfig.MaxPlots, #BaseConfig.StructureOrder))
+			elseif dupes > 0 then
+				bad(string.format("Consoles: %d duplicated (plot, structure) pairs", dupes))
+			else
+				soft(string.format("Consoles missing=%d (ok while MapSetup is still building)", missing))
+			end
+		end
+		local lp = Players.LocalPlayer
+		local char = lp and lp.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if lp and hrp and hrp:IsA("BasePart") then
+			local bestSid, bestD = nil, math.huge
+			for _, sid in ipairs(BaseConfig.StructureOrder) do
+				local pos = lp:GetAttribute("WE_ConsolePos_" .. sid)
+				if typeof(pos) == "Vector3" then
+					local d = (pos - hrp.Position).Magnitude
+					if d < bestD then
+						bestSid, bestD = sid, d
+					end
+				end
+			end
+			if bestSid then
+				note(string.format(
+					"Nearest own console: %s at %.1f studs (server buys within %d)",
+					bestSid,
+					bestD,
+					ConsoleBuyConfig.ConsolePromptDistance + ConsoleBuyConfig.ServerSlack
+				))
+			else
+				soft("WE_ConsolePos_* not stamped yet (plot not ready)")
+			end
+		end
+	end
+end
+
 -- 6) Client GUIs + Activated path notes
 local pg = Players.LocalPlayer and Players.LocalPlayer:FindFirstChild("PlayerGui")
 if pg then
@@ -360,7 +434,8 @@ else
 end
 
 note(string.format("Studio=%s Server=%s Client=%s", tostring(RunService:IsStudio()), tostring(RunService:IsServer()), tostring(RunService:IsClient())))
-print("[BuyPathVerify] Done — stand on YOUR pad and tap BUY; Output should show [WorldPrompt] BUY + [BaseService] Remote BUY result Ok=true")
+print("[BuyPathVerify] Done — stand at YOUR console and tap BUY; Output should show [WorldPrompt] BUY + [BaseService] Remote BUY result Ok=true")
+print("[BuyPathVerify] Base panel (CC map table / B): rows show GO (guide line to the console), never BUY; a far-away buy answers NotAtConsole")
 print("[BuyPathVerify] Army: rail Army tile / key Y → popover → MANAGE ARMY → RECRUIT; expect SoldierStateUpdate + Success toast")
 print("[BuyPathVerify] Garage: rail Garage tile / G → OWNED Jeep SPAWN; expect Deployed toast + DriverSeat model")
 print("[BuyPathVerify] Shop/Rebirth: rail tiles use Activated; panels DisplayOrder 60 above the HUD rail 55")

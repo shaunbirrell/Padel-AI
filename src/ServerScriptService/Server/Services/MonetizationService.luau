@@ -549,14 +549,7 @@ function MonetizationService.Init(deps: { [string]: any })
 									})
 								end
 							end
-							if NotificationService then
-								NotificationService.Notify(
-									player,
-									"Commander Starter Bundle available — tap toast to jumpstart",
-									"Info",
-									5
-								)
-							end
+							-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 						end)
 					end
 				end
@@ -793,14 +786,7 @@ function MonetizationService.TrySoftOfferVIP(player: Player, reason: string?)
 				})
 			end
 		end
-		if NotificationService then
-			NotificationService.Notify(
-				player,
-				"Commander status unlocked — VIP boosts cash & prestige",
-				"Info",
-				4.5
-			)
-		end
+		-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 	end)
 end
 
@@ -854,14 +840,7 @@ function MonetizationService.TrySoftOfferSpeedBoost(player: Player, reason: stri
 				})
 			end
 		end
-		if NotificationService then
-			NotificationService.Notify(
-				player,
-				"Move faster — Speed Boost available",
-				"Info",
-				4.0
-			)
-		end
+		-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 	end)
 end
 
@@ -914,14 +893,7 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 				})
 			end
 		end
-		if NotificationService then
-			NotificationService.Notify(
-				player,
-				"★ BEST OFFER — Cash Mega pack ready in Shop",
-				"Info",
-				4.5
-			)
-		end
+		-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 	end)
 end
 

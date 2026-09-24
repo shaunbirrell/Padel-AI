@@ -149,7 +149,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(70, 72, 68),
 			Kit = "tower",
 			TargetFootprint = Vector3.new(14, 10, 18), -- v42 launcher mass, not tower height
-			MeshAssetId = 11962508154, -- Missile Battery ≠ Watchtower
+			MeshAssetId = 0, -- W1 CFG: real-world launcher mesh dropped (was 11962508154); Part kit "tower" (Missile Battery ≠ Watchtower)
 		},
 		PowerStation = {
 			Plinth = Color3.fromRGB(72, 82, 58),

@@ -637,7 +637,7 @@ local function layoutOffer(def: OfferDef)
 	sub.Visible = def.Sub ~= nil and def.Sub ~= ""
 	getLab.Text = if def.Cta ~= "" then def.Cta else NotificationConfig.Offer.GetText
 
-	local ctaB = measure(getLab.Text, 18, FONT_DISPLAY, 400)
+	local ctaB = measure(getLab.Text, OFFER.CtaSize, FONT_DISPLAY, 400)
 	local faceW = math.ceil(ctaB.X) + 28
 	local hitH = if touch then math.max(OFFER.GetHit, touchMinV()) else h
 	local closeW = if touch then math.max(OFFER.CloseHit, touchMinV()) else OFFER.CloseHit
@@ -908,7 +908,7 @@ local function buildOffer(screen: ScreenGui)
 	getLab.BackgroundTransparency = 1
 	getLab.Size = UDim2.fromScale(1, 1)
 	getLab.Font = FONT_DISPLAY
-	getLab.TextSize = 18
+	getLab.TextSize = OFFER.CtaSize
 	getLab.TextColor3 = COLORS.White
 	getLab.ZIndex = 8
 	getLab.Parent = face
@@ -919,7 +919,7 @@ local function buildOffer(screen: ScreenGui)
 	close.AnchorPoint = Vector2.new(1, 0.5)
 	close.BackgroundTransparency = 1
 	close.Font = FONT_BODY
-	close.TextSize = 16
+	close.TextSize = OFFER.CloseTextSize
 	close.TextColor3 = COLORS.White
 	close.TextTransparency = 0.4
 	close.Text = NotificationConfig.Offer.CloseText

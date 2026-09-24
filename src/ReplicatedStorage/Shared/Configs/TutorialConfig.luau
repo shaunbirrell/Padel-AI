@@ -2,6 +2,10 @@
 --[[ Interactive tutorial steps — short plain copy, one step at a time.
 	v31 first-2-min: Claim → MoneyCollector → ClickDropper → CommandCenter buy,
 	then Recruit → Barracks → Jeep → Outpost.
+	v71 P1-15: device-neutral copy (about 80% of players are on phones): no key names, no "click"; the chip's GO
+	button runs CtaAction. Buy steps point at the structure's own console (console-only buying): at L0 the BUY
+	button there reads BUILD. The beam target of every step is the player's OWN plot (TutorialController.ResolveTarget).
+	Hints stay <= 42 characters: the objective chip shows 2 hint lines, about 44 characters on an 800x360 phone.
 ]]
 
 export type TutorialStepDef = {
@@ -30,7 +34,7 @@ local TutorialConfig = {
 		{
 			Id = "Income",
 			Title = "Collect cash",
-			Hint = "Touch the Money Collector (green ATM screen) to claim pending cash.",
+			Hint = "Walk up to your ATM to collect cash.",
 			MarkerName = "Tutorial_Income",
 			HighlightHint = "CashHUD",
 			CtaAction = "WatchHud",
@@ -39,26 +43,26 @@ local TutorialConfig = {
 		{
 			Id = "ClickDropper",
 			Title = "Grab cash drops",
-			Hint = "Click the green CLICK drop next to the ATM for quick cash.",
+			Hint = "Grab the green cash drop by your ATM.",
 			MarkerName = "Tutorial_Dropper",
 			HighlightHint = "CashHUD",
 			CtaAction = "WatchHud",
-			CtaLabel = "CLICK DROP",
+			CtaLabel = "CASH DROP",
 		},
 		{
 			Id = "CommandCenter",
 			Title = "Command Center",
-			Hint = "Stand on the Command Center pad and tap BUY.",
+			Hint = "Follow the gold line, then press BUILD.",
 			MarkerName = "Tutorial_CommandCenter",
-			HighlightHint = "BaseMenu",
+			HighlightHint = "Console",
 			PadStructureId = "CommandCenter",
 			CtaAction = "PadBuy",
-			CtaLabel = "BUY",
+			CtaLabel = "GO",
 		},
 		{
 			Id = "RecruitSoldiers",
 			Title = "Recruit workers",
-			Hint = "Open Army and recruit a soldier. Workers earn cash at the Training Yard.",
+			Hint = "Open Army and recruit a soldier.",
 			MarkerName = "Tutorial_Recruit",
 			HighlightHint = "Army",
 			CtaAction = "OpenArmy",
@@ -67,17 +71,17 @@ local TutorialConfig = {
 		{
 			Id = "Barracks",
 			Title = "Barracks",
-			Hint = "Stand on the Barracks pad and tap BUY.",
+			Hint = "Follow the gold line, then press BUILD.",
 			MarkerName = "Tutorial_Barracks",
-			HighlightHint = "BaseMenu",
+			HighlightHint = "Console",
 			PadStructureId = "Barracks",
 			CtaAction = "PadBuy",
-			CtaLabel = "BUY",
+			CtaLabel = "GO",
 		},
 		{
 			Id = "Jeep",
 			Title = "Spawn Jeep",
-			Hint = "Open Garage (G) and spawn your Military Jeep.",
+			Hint = "Open the Garage and spawn your Jeep.",
 			MarkerName = "Tutorial_Jeep",
 			HighlightHint = "Garage",
 			CtaAction = "OpenGarage",
@@ -86,7 +90,7 @@ local TutorialConfig = {
 		{
 			Id = "Outpost",
 			Title = "Capture outpost",
-			Hint = "Stand in a territory zone until it captures.",
+			Hint = "Stand in a zone until it's yours.",
 			MarkerName = "Tutorial_Outpost",
 			HighlightHint = "Territory",
 			CtaAction = "Capture",

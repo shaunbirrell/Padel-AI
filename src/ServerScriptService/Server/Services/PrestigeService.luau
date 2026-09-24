@@ -257,6 +257,10 @@ function PrestigeService.DoPrestige(player: Player): (boolean, string?)
 end
 
 
+-- v71 (HUD v70 spec §4.2): the near-rebirth nudge shows ONCE per session for each level in the window (L38, L39);
+-- the Rebirth badge does the rest. Was: every 90 s, and it named a keyboard key that phones do not have.
+local nearNudged: { [number]: { [number]: boolean } } = {}
+
 -- v38: soft rebirth CTA when Level is within NearPrestigeLevels of Min
 function PrestigeService.MaybeNearPrestigeToast(player: Player)
 	if not NotificationService then
@@ -280,19 +284,24 @@ function PrestigeService.MaybeNearPrestigeToast(player: Player)
 	if level < (minLv - near) then
 		return
 	end
+	local seen = nearNudged[player.UserId]
+	if not seen then
+		seen = {}
+		nearNudged[player.UserId] = seen
+	end
+	if seen[level] then
+		return
+	end
+	seen[level] = true
 	local remain = minLv - level
 	local msg = string.format(
-		"Rebirth almost ready (Lv %d/%d) — %d level%s left · Keep all Robux Items · press K",
+		"Rebirth almost ready (Lv %d/%d) — %d level%s left · Keep all Robux Items",
 		level,
 		minLv,
 		remain,
 		if remain == 1 then "" else "s"
 	)
-	if NotificationService.NotifyThrottled then
-		NotificationService.NotifyThrottled(player, msg, "Info", 5.5, 90, "prestige_near")
-	else
-		NotificationService.Notify(player, msg, "Info", 5.5)
-	end
+	NotificationService.Notify(player, msg, "Info", 5.5)
 end
 
 -- Alias for MT-inspired "rebirth" wording
@@ -330,6 +339,10 @@ function PrestigeService.Init(deps: { [string]: any })
 		end
 	end)
 
+	game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
+		nearNudged[player.UserId] = nil
+	end)
+
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		if typeof(profile.RebirthUnlocks) ~= "table" then
 			profile.RebirthUnlocks = {}
@@ -341,7 +354,7 @@ function PrestigeService.Init(deps: { [string]: any })
 		-- UX: remind eligible commanders (MinLevelToPrestige = 40) that Rebirth is ready
 		if PrestigeService.CanPrestige(player) and NotificationService then
 			local msg = string.format(
-				"REBIRTH READY (Lv %d) — %s — press K · Do Prestige (+10%% cash forever)",
+				"REBIRTH READY (Lv %d) — %s · Rebirth for +10%% cash forever",
 				tonumber(profile.Level) or PrestigeConfig.MinLevelToPrestige,
 				feeSummaryFor(profile)
 			)

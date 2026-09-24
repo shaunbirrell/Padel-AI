@@ -40,7 +40,7 @@ local TerritoryConfig = {
 		DefaultCash = 4000,
 		OilRigCash = 14000,
 		FortressCash = 10000,
-		NotifyOnPayout = true,
+		NotifyOnPayout = false, -- v71 (HUD v70 spec §4.2): silent — the cash pill counts up; no toast every 90 s
 	},
 
 	OwnerTypes = {

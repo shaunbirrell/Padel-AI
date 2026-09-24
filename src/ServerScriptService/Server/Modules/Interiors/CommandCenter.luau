@@ -43,6 +43,7 @@ return function(ictx: any, api: any)
 		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 		sg.PixelsPerStud = 40
 		sg.LightInfluence = 0
+		sg.MaxDistance = 40 -- v70: near-only (CLAUDE.md SurfaceGui budget)
 		sg.Parent = mapTop
 		local bg = Instance.new("Frame")
 		bg.Size = UDim2.fromScale(1, 1)
@@ -73,7 +74,7 @@ return function(ictx: any, api: any)
 	prompt.ActionText = "Plan upgrades"
 	prompt.ObjectText = "Base Upgrades"
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 8
+	prompt.MaxActivationDistance = 12 -- mobile P1-19 (was 8)
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.F
 	prompt:SetAttribute("WE_OpenPanel", "Base")

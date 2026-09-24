@@ -43,5 +43,6 @@ safeInit("VehicleController", VehicleController)
 safeInit("StudioSmokeClient", StudioSmokeClient)
 -- v68: radar dishes on base installations (visual only; never block the rest of the client)
 safeInit("WorldSpinners", WorldSpinners)
+safeInit("AudioHooks", safeRequire("AudioHooks", Modules:WaitForChild("AudioHooks", 5) :: Instance)) -- W1 SND: sound cues from existing remotes / HUD signals (client only)
 
 print("[WAR EMPIRE] Client Bootstrap ready.")

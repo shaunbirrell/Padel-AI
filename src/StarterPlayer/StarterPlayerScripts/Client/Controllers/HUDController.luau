@@ -4,10 +4,12 @@
 	scale / insets / flags / badges / cash-float plumbing: Client/Modules/HudLayout.luau; icons: HudIcons.luau.
 
 	WarEmpireHUD (DisplayOrder 55, the shared "MobileScale" UIScale, CoreUISafeInsets)
-	  Rail          5 tiles down the left edge (Shop · Rebirth · Army · Garage · Missions) + badges; desktop key hints
-	  CurrencyPill  bottom-left: cash icon · number (count-up) · green + (cash packs); "+$141" floats rise from it
+	  Rail          5 tiles down the left edge (Shop · Rebirth · Army · Garage · Missions) + badges; key hints on
+	                hover only while HudLayout.PrefersKeys(); a tile may take a long-press (Army: cycle the order)
+	  CurrencyPill  bottom-left: cash icon · number (count-up); "+$141" floats rise from its right end
 	WE_TopStrip (DisplayOrder 56, the Roblox topbar row, real px — Roblox's own buttons are 44 px there too)
-	  LevelChip (tap / hover → the GoalLabel tooltip) · SettingsGear · ShieldChip (while WE_ShieldUntil runs)
+	  LevelChip (tap / hover → the GoalLabel tooltip) · SettingsGear · CashPlus (bills + green +, cash packs; it
+	  left the pill: mobile merge gate #6, the thumbstick zone) · ShieldChip (while WE_ShieldUntil runs)
 	  CompassController adds the compass chip at the right end.
 
 	REMOVED from the screen (spec §3.7; where each thing lives now):
@@ -39,7 +41,12 @@ local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local HUDController = {}
 
 -- One rail tile binding (UIController): Id = HudConfig.Rail.Tiles[].Id; Name = the pinned child name ("DockMissions").
-export type RailAction = { Id: string, Name: string?, OnClick: () -> () }
+-- OnLongPress (optional): a finger / mouse held on the tile for LONG_PRESS_SECONDS runs it instead of OnClick
+-- (the Army tile cycles the squad order — mobile plan P1-6, the touch twin of T).
+export type RailAction = { Id: string, Name: string?, OnClick: () -> (), OnLongPress: (() -> ())? }
+
+local LONG_PRESS_SECONDS = 0.5
+local LONG_PRESS_SLOP_PX = 24 -- real px a held finger may move and still count as a long-press (not a drag)
 
 type FloatRec = { Label: TextLabel, Stroke: UIStroke, Amount: number, Last: number, Token: number, Tweens: { Tween } }
 
@@ -139,6 +146,16 @@ local function padding(parent: Instance, left: number, right: number, top: numbe
 	p.PaddingBottom = UDim.new(0, bottom or 0)
 	p.Parent = parent
 	return p
+end
+
+-- the cash "+" (TopStrip chip, or the pill's + when HudConfig.CashPill.PlusOnPill) → Shop cash packs
+local function openShopFromHud()
+	if shopOpener then
+		local ok, err = pcall(shopOpener :: any)
+		if not ok then
+			warn("[HUDController] cash + :", err)
+		end
+	end
 end
 
 local function chipBase(inst: GuiObject)
@@ -404,11 +421,69 @@ local function buildTopStrip()
 	end)
 	gear.Parent = group
 
+	-- Buy-cash chip (mobile merge gate #6): cash bills + green "+" → cash packs. It was the pill's "+", which sat
+	-- in the thumbstick zone (bottom-left); up here it can never be hit by a thumb that is walking.
+	if not HudConfig.CashPill.PlusOnPill then
+		local CP = TS.CashPlus
+		local cashPlus = Instance.new("TextButton")
+		cashPlus.Name = "CashPlus"
+		cashPlus.LayoutOrder = 3
+		cashPlus.Size = UDim2.fromOffset(0, CP.Height)
+		cashPlus.AutomaticSize = Enum.AutomaticSize.X
+		cashPlus.AutoButtonColor = false
+		cashPlus.Text = ""
+		cashPlus.Active = true
+		cashPlus.Selectable = true
+		chipBase(cashPlus)
+		padding(cashPlus, CP.PadLeft, CP.PadRight)
+		hList(cashPlus, CP.Gap)
+		HudIcons.Make("Cash", cashPlus, {
+			Name = "Icon",
+			Size = UDim2.fromOffset(CP.IconSize.X, CP.IconSize.Y),
+			LayoutOrder = 1,
+			ZIndex = 2,
+		})
+		local disc = Instance.new("Frame")
+		disc.Name = "Circle"
+		disc.LayoutOrder = 2
+		disc.Size = UDim2.fromOffset(CP.PlusSize, CP.PlusSize)
+		disc.BackgroundColor3 = Colors.PlusGreen
+		disc.BorderSizePixel = 0
+		disc.Active = false
+		disc.ZIndex = 2
+		disc.Parent = cashPlus
+		UIUtil.Corner(disc, math.ceil(CP.PlusSize / 2))
+		local ds = UIUtil.Stroke(disc, Colors.PlusGreenStroke, CP.PlusStrokePx)
+		ds.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		HudIcons.Make("Plus", disc, {
+			Size = UDim2.fromScale(0.72, 0.72),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			Color = Colors.White,
+			ZIndex = 3,
+		})
+		local press = Instance.new("UIScale")
+		press.Name = "Press"
+		press.Parent = disc
+		cashPlus.InputBegan:Connect(function(input: InputObject)
+			local t = input.UserInputType
+			if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+				press.Scale = HudConfig.Rail.PressScale
+			end
+		end)
+		cashPlus.InputEnded:Connect(function()
+			press.Scale = 1
+		end)
+		cashPlus.Activated:Connect(openShopFromHud)
+		cashPlus.Parent = group
+		HudLayout.SetRect("CashPlus", cashPlus)
+	end
+
 	-- Shield chip (raid victim shield): cyan shield + "9:12" while WE_ShieldUntil is in the future
 	local SH = TS.Shield
 	local sh = Instance.new("Frame")
 	sh.Name = "ShieldChip"
-	sh.LayoutOrder = 3
+	sh.LayoutOrder = 4
 	sh.Size = UDim2.fromOffset(0, TS.Height)
 	sh.AutomaticSize = Enum.AutomaticSize.X
 	sh.Active = false
@@ -512,11 +587,9 @@ local function tileDef(id: string): any?
 	return nil
 end
 
--- desktop: hovering a tile shows "Shop [P]" after HudConfig.Rail.KeyHintDelay
+-- keyboard / gamepad players: hovering a tile shows "Shop [P]" after HudConfig.Rail.KeyHintDelay. Built for every
+-- device, shown only while HudLayout.PrefersKeys() (a phone never sees a key name; touch can fire MouseEnter too).
 local function addKeyHint(btn: TextButton, id: string, def: any?)
-	if isTouch() then
-		return
-	end
 	local key = (HudConfig.Keys :: any)[id] or (def and def.Key)
 	if typeof(key) ~= "EnumItem" then
 		return
@@ -538,8 +611,11 @@ local function addKeyHint(btn: TextButton, id: string, def: any?)
 	btn.MouseEnter:Connect(function()
 		token += 1
 		local my = token
+		if not HudLayout.PrefersKeys() then
+			return
+		end
 		task.delay(R.KeyHintDelay, function()
-			if my == token then
+			if my == token and HudLayout.PrefersKeys() then
 				hint.Visible = true
 			end
 		end)
@@ -579,14 +655,7 @@ local function pillHeight(): number
 	return if isTouch() then HudConfig.CashPill.Height else HudConfig.CashPill.HeightDesktop
 end
 
-local function openShopFromHud()
-	if shopOpener then
-		local ok, err = pcall(shopOpener :: any)
-		if not ok then
-			warn("[HUDController] cash + :", err)
-		end
-	end
-end
+local buildPillPlus: (slot: Frame) -> ()
 
 local function buildPill(screen: ScreenGui)
 	local P = HudConfig.CashPill
@@ -636,16 +705,31 @@ local function buildPill(screen: ScreenGui)
 	cashLabel = cash
 	cashPop = cp
 
-	-- green + : a transparent PlusHit v hit area around the PlusVisual v circle → cash packs (no toast)
+	-- PlusSlot: the cash floats' anchor at the pill's right end. The green + itself is the TopStrip's CashPlus
+	-- chip (mobile merge gate #6: out of the thumbstick zone) unless HudConfig.CashPill.PlusOnPill brings it back.
 	local slot = Instance.new("Frame")
 	slot.Name = "PlusSlot"
 	slot.LayoutOrder = 3
-	slot.Size = UDim2.fromOffset(P.PlusVisual, P.PlusVisual)
+	slot.Size = UDim2.fromOffset(if P.PlusOnPill then P.PlusVisual else P.PlusSlotWidth, P.PlusVisual)
 	slot.BackgroundTransparency = 1
 	slot.BorderSizePixel = 0
 	slot.Active = false
 	slot.Parent = p
 	plusSlot = slot
+	if P.PlusOnPill then
+		buildPillPlus(slot)
+	end
+
+	p.Parent = screen
+	pill = p
+	HudLayout.BindVisibility(p, HudConfig.CashPill)
+	HudLayout.SetRect("CashPill", p)
+end
+
+-- the legacy pill "+" (HudConfig.CashPill.PlusOnPill = true only): a transparent PlusHit v hit area around the
+-- PlusVisual v circle → cash packs (no toast)
+buildPillPlus = function(slot: Frame)
+	local P = HudConfig.CashPill
 	local cashPlus = Instance.new("TextButton")
 	cashPlus.Name = "CashPlus"
 	cashPlus.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -693,11 +777,6 @@ local function buildPill(screen: ScreenGui)
 		press.Scale = 1
 	end)
 	cashPlus.Activated:Connect(openShopFromHud)
-
-	p.Parent = screen
-	pill = p
-	HudLayout.BindVisibility(p, HudConfig.CashPill)
-	HudLayout.SetRect("CashPill", p)
 end
 
 local function renderCash(v: number)
@@ -762,11 +841,12 @@ local function floatX(f: FloatRec): number
 			return TextService:GetTextSize(cl.Text, cl.TextSize, cl.Font, Vector2.new(4000, 1000))
 		end)
 		if okN and typeof(nb) == "Vector2" then
-			local wV = P.PadLeft + P.IconSize.X + P.Gap + nb.X + P.NumberPadRight + P.Gap + P.PlusVisual + P.PadRight
+			local slotW = if P.PlusOnPill then P.PlusVisual else P.PlusSlotWidth
+			local wV = P.PadLeft + P.IconSize.X + P.Gap + nb.X + P.NumberPadRight + P.Gap + slotW + P.PadRight
 			pillW = math.max(pillW, math.clamp(wV, P.MinWidth, P.MaxWidth) * s)
 		end
 	end
-	local slotLeftPx = p.AbsolutePosition.X + pillW - (P.PadRight + P.PlusVisual) * s
+	local slotLeftPx = p.AbsolutePosition.X + pillW - (P.PadRight + (if P.PlusOnPill then P.PlusVisual else P.PlusSlotWidth)) * s
 	local leftPx = slotLeftPx + (x - tb.X - HudConfig.CashFloat.StrokePx) * s
 	local minLeft = railPos.X + railSize.X + 4 * s
 	if leftPx < minLeft then
@@ -1290,8 +1370,60 @@ function HUDController.BindActionBar(actions: { RailAction })
 		})
 		btn.Active = true
 		local onClick = entry.Action.OnClick
+		local onLong = entry.Action.OnLongPress
+		-- long-press (optional, e.g. Army → cycle the order): fires once after LONG_PRESS_SECONDS of holding the
+		-- tile; the tap that ends that hold is then swallowed, so the popover does not also toggle
+		local swallowNext = false
+		if onLong then
+			local longFn: () -> () = onLong
+			local pressToken = 0
+			local held: InputObject? = nil
+			btn.InputBegan:Connect(function(input: InputObject)
+				local t = input.UserInputType
+				if t ~= Enum.UserInputType.Touch and t ~= Enum.UserInputType.MouseButton1 then
+					return
+				end
+				pressToken += 1
+				local my = pressToken
+				held = input
+				swallowNext = false
+				local startPos = input.Position
+				task.delay(LONG_PRESS_SECONDS, function()
+					if my ~= pressToken or held ~= input then
+						return
+					end
+					local st = input.UserInputState
+					if st == Enum.UserInputState.End or st == Enum.UserInputState.Cancel then
+						return
+					end
+					-- a thumb that lands on the tile and slides (walking) is a drag, not a long-press: the order stays
+					if (input.Position - startPos).Magnitude > LONG_PRESS_SLOP_PX then
+						return
+					end
+					held = nil
+					swallowNext = true
+					local ok, err = pcall(function(): string?
+						longFn()
+						return nil
+					end)
+					if not ok then
+						warn("[HUDController] rail long-press " .. id .. ":", err)
+					end
+				end)
+			end)
+			btn.InputEnded:Connect(function(input: InputObject)
+				if input == held then
+					held = nil
+					pressToken += 1
+				end
+			end)
+		end
 		-- Activated = mouse + touch + gamepad (MouseButton1Click alone misses some touch paths)
 		btn.Activated:Connect(function()
+			if swallowNext then
+				swallowNext = false
+				return
+			end
 			onClick()
 		end)
 		addKeyHint(btn, id, def)
@@ -1331,11 +1463,12 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 	local fee = tonumber(PrestigeConfig and PrestigeConfig.CashFee) or 0
 	local feeBit = if fee > 0 then string.format("Fee $%s", withCommas(fee)) else "Fee: none"
 	local bonusPct = math.floor((tonumber(PrestigeConfig.CashBonusPerPrestige) or 0.1) * 100 + 0.5)
-	local rebirthKey = HudConfig.Keys.Rebirth.Name
+	-- "press K" only for keyboard / gamepad players (CLAUDE.md §1: never name a key where a phone player reads it)
+	local rebirthHow = if HudLayout.PrefersKeys() then " · press " .. HudConfig.Keys.Rebirth.Name else " · tap Rebirth"
 	local goalText = if typeof(hudGoal) == "string" and hudGoal ~= "" then hudGoal else LevelConfig.GetHudGoal(lv)
 	local rebirthText: string
 	if lv >= minPrestige then
-		rebirthText = string.format("Rebirth READY · %s · +%d%% cash forever · Keep all Robux Items · press %s", feeBit, bonusPct, rebirthKey)
+		rebirthText = string.format("Rebirth READY · %s · +%d%% cash forever · Keep all Robux Items%s", feeBit, bonusPct, rebirthHow)
 	else
 		local pct = math.clamp(math.floor((lv / minPrestige) * 100), 0, 99)
 		rebirthText = string.format("Rebirth %d/%d (%d%%) · %s · +%d%%/P", lv, minPrestige, pct, feeBit, bonusPct)

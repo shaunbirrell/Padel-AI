@@ -4,7 +4,13 @@
 	10 x 10 by the main gate: four braced legs, a climbable ladder (TrussPart) on the compound side (-Z, where
 	the kiosk is), a sandbagged platform with a roof and a searchlight facing the front wall.
 	Height grows with level; L3 mounted gun; L5 gold roof trim + flag.
+	v70 (HUD spec §5): the searchlight goes through StructureVisualConfig.BuildingLights like every building light
+	(BrightnessScale, SpotMaxRange), with a SmoothPlastic lens and no shadows.
 ]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
+local LIGHTS = (StructureVisualConfig :: any).BuildingLights or {}
 
 return function(ictx: any, api: any)
 	local col = ictx.Colors
@@ -74,9 +80,10 @@ return function(ictx: any, api: any)
 	local spot = Instance.new("SpotLight")
 	spot.Face = Enum.NormalId.Right -- lens local +X = building +Z
 	spot.Angle = 40
-	spot.Range = 30
-	spot.Brightness = 0.7 -- v69: dimmed like the other building lights
+	spot.Range = math.min(30, LIGHTS.SpotMaxRange or 30)
+	spot.Brightness = 2 * (LIGHTS.BrightnessScale or 0.35) -- 0.7 at the v69 scale
 	spot.Color = col.Light
+	spot.Shadows = false
 	spot.Parent = lens
 
 	-- Mounted gun (L3+)

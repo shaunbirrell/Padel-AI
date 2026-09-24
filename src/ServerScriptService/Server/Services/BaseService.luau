@@ -15,7 +15,9 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
+local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local Types = require(Shared.Types)
+local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
@@ -407,7 +409,40 @@ function BaseService.TeleportToPlot(player: Player): boolean
 	return plotId ~= nil
 end
 
-function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types.PurchaseUpgradeResult
+--[[ v71 console-only buying. There is NO bypass: every caller (the remote, the console prompt, StudioBuySmoke)
+	needs the character at this structure's console on the caller's own plot. AtPart: the console / pad whose prompt
+	fired (UpgradePadService), checked instead of looking the console up. Source: logs only. Nothing here is ever
+	built from a remote payload (the remote handler reads StructureId only). ]]
+export type PurchaseOpts = {
+	AtPart: BasePart?,
+	Source: string?,
+}
+
+local noConsoleWarned: { [string]: boolean } = {}
+
+--[[ v71: is the player at this structure's console on THEIR plot (server's view of the character)?
+	Returns (ok, reason, horizontalDistance?). reason: Ok | NoPlot | ConsoleLocator.Reason
+	(NoCharacter | Dead | Seated | NoConsole | WrongPart | TooFar | WrongFloor | OtherNearer). ]]
+function BaseService.IsAtConsole(player: Player, structureId: string, atPart: BasePart?): (boolean, string, number?)
+	local plotId = ownedPlotOf(player.UserId)
+	if plotId == nil then
+		return false, "NoPlot", nil
+	end
+	local ok, reason, dist = ConsoleLocator.Check(player, plotId, structureId, atPart)
+	if not ok and reason == "NoConsole" then
+		local key = tostring(plotId) .. "|" .. structureId
+		if not noConsoleWarned[key] then
+			noConsoleWarned[key] = true
+			warn(string.format("[BaseService] no console part for %s on plot %d (NoConsolePolicy=%s)", structureId, plotId, tostring(ConsoleBuyConfig.NoConsolePolicy)))
+		end
+		if ConsoleBuyConfig.NoConsolePolicy == "Allow" then
+			return true, "NoConsole", nil
+		end
+	end
+	return ok, reason, dist
+end
+
+function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: PurchaseOpts?): Types.PurchaseUpgradeResult
 	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
 	end
@@ -464,6 +499,26 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	if profile.BasePlotId ~= ownPlot then
 		profile.BasePlotId = ownPlot
 		DS.MarkDirty(player)
+	end
+
+	-- v71: console-only buying — the player must stand at THIS structure's console on their own plot. Runs before
+	-- any cash floor / reconcile / spend, so a refused buy changes nothing.
+	if ConsoleBuyConfig.Enabled ~= false then
+		if BaseConfig.Structures[structureId] == nil then
+			return { Ok = false, Error = "UnknownStructure" }
+		end
+		local atConsole, why, dist = BaseService.IsAtConsole(player, structureId, opts and opts.AtPart)
+		if not atConsole then
+			print(string.format(
+				"[BaseService] BUY refused %s %s NotAtConsole reason=%s d=%s src=%s",
+				player.Name,
+				structureId,
+				why,
+				if dist then string.format("%.1f", dist) else "-",
+				tostring(opts and opts.Source)
+			))
+			return { Ok = false, Error = "NotAtConsole" }
+		end
 	end
 
 	-- v63/v64: shaunie6 playtest floor on every buy attempt
@@ -1419,7 +1474,7 @@ function BaseService.Init(deps: { [string]: any })
 				return
 			end
 			print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
-			result = BaseService.PurchaseUpgrade(player, structureId :: string)
+			result = BaseService.PurchaseUpgrade(player, structureId :: string, { Source = "Remote" })
 			print(string.format(
 				"[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s dt=%.3f",
 				player.Name,
@@ -1462,40 +1517,32 @@ function BaseService.Init(deps: { [string]: any })
 		if result.Ok then
 			local def = BaseConfig.Structures[structureId :: string]
 			local name = if def then def.DisplayName else tostring(structureId)
+			-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
 			NotificationService.Notify(
 				player,
-				string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
+				string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
 				"Success",
 				3.5
 			)
 		else
+			-- v71 (HUD v70 spec §4.1 / §4.2): one failed purchase = one line. The client already turns PurchaseResult /
+			-- WE_BuyAck into that line (WorldPromptController), so the server adds a Warn only for reasons the
+			-- client cannot see or word right: a rate-limited tap, a profile still loading, a full server.
 			local err = result.Error or "Failed"
-			local msg = if err == "InsufficientCash"
-				then "Not enough cash"
-				elseif err == "InsufficientGold"
-				then "Not enough gold"
-				elseif err == "MaxLevel"
-				then "Already at MAX level"
-				elseif err == "MissingRequirement"
-				then "Missing prerequisite structure"
-				elseif err == "UnknownStructure" or err == "InvalidStructure"
-				then "Unknown structure"
-				elseif err == "NoPlot"
-				then NO_PLOT_BUY_MESSAGE
-				elseif err == "NoProfile"
+			local msg: string? = if err == "NoProfile"
 				then "Profile still loading — try BUY again"
-				elseif err == "NoDataService"
-				then "Buy failed — server data not ready, try again"
 				elseif err == "RateLimited"
 				then "Buying too fast — wait a moment"
-				elseif err == "ServerError"
-				then "Buy failed — server error, try again"
-				else ("Purchase failed: " .. tostring(err))
-			local key = "basebuy|" .. err .. "|" .. tostring(structureId)
-			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
-			else
-				NotificationService.Notify(player, msg, "Warn", 3.5)
+				elseif err == "NoPlot"
+				then NO_PLOT_BUY_MESSAGE -- only the server knows every base is taken
+				else nil
+			if msg then
+				local key = "basebuy|" .. err .. "|" .. tostring(structureId)
+				if NotificationService.NotifyThrottled then
+					NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, 0.9, key)
+				else
+					NotificationService.Notify(player, msg, "Warn", 3.5)
+				end
 			end
 		end
 	end

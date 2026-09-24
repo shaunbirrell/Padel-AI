@@ -1,5 +1,8 @@
 --!strict
---[[ Base menu → RequestPurchaseUpgrade remote (the menu BUY path; the console BUY in the world stays primary).
+--[[ Base overview panel. v71 console-only buying: it NEVER buys.
+	Each row: level, next cost or the first unmet requirement, income; the row button is GO — a guide line to that
+	structure's console on YOUR plot (Modules/ConsoleWaypoint) — and the panel closes. Buying happens at the console
+	only (WorldPromptController BUY button / the console prompt); the server refuses remote buys (NotAtConsole).
 	v70 "clean screen" (spec §3.7 / §3.8):
 	  * No HUD button any more: the "BASE [B]" / "Base Upgrades [B]" CTA and the stale first-join hint toasts
 	    are gone. The menu opens from B (HudConfig.Keys.Base, respects gameProcessed / chat), the Command Center
@@ -17,12 +20,14 @@ local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
+local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local NotificationController = require(script.Parent.NotificationController)
+local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
 
 local BaseController = {}
 
@@ -34,12 +39,14 @@ local upgrades: { [string]: number } = {}
 local cash = 0
 local passivePerTick = 0
 local trainingPerTick = 0
+local myPlotId: number? = nil -- BaseStateUpdate.PlotId / PlayerStateUpdate.Base.PlotId (nil until the plot is known)
 local menuOpen = false
-local menuFailToastAt = 0
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
 local subLabel: TextLabel? = nil
 local shell: PanelShell.Shell? = nil
+
+local setOpen: (boolean) -> ()
 
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
@@ -92,7 +99,7 @@ local function refreshList()
 	local rowH = TAP + 16
 	local titleSize = PanelShell.Text(15)
 	local descSize = PanelShell.Text(12)
-	local btnW = if isTouch then 190 else 136
+	local btnW = if PanelShell.IsTouch() then 120 else 88 -- GO / MAX chip (was the "BUY $N +N/t" button)
 
 	for order, structureId in ipairs(BaseConfig.StructureOrder) do
 		local def = BaseConfig.Structures[structureId]
@@ -155,61 +162,49 @@ local function refreshList()
 			corner(btn, 8)
 
 			if not cost then
-				btn.Text = "MAX"
+				btn.Text = ConsoleBuyConfig.Text.Max
 				btn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
+				btn.AutoButtonColor = false
 				btn.Active = false
 			else
-				-- Clear BUY path — not instant on B; tap this button to purchase.
+				-- v71: overview only. GO draws a guide line to this structure's console on your plot; buying happens
+				-- there (BUY button / hold the console prompt). The server refuses a remote buy (NotAtConsole).
 				local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
 				local rate = if typeof(rates) == "table" then (tonumber(rates[structureId]) or 0) else 0
-				local incomeSuffix = if rate > 0 then (" +" .. tostring(rate) .. "/t") else ""
-				local idleText = (if level == 0 then "BUY $" else "UP $") .. commas(cost) .. incomeSuffix
-				btn.Text = idleText
-				local canAfford = cash >= cost
-				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
-				btn.Active = true
-				UIUtil.EnsureMinTouch(btn, TAP)
-				local lastTapAt = 0
-				local function onMenuBuy()
-					-- v67: one purchase per tap
-					local tapNow = os.clock()
-					if tapNow - lastTapAt < 0.35 then
-						return
-					end
-					lastTapAt = tapNow
-					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
-					if cash < cost then
-						local now = os.clock()
-						if now - menuFailToastAt >= 0.9 then
-							menuFailToastAt = now
-							NotificationController.Show("Not enough cash — need $" .. commas(cost), "Warn", 2.5)
-						end
-						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
-					end
-					-- v61: FireServer via TryGet (≤3s); the button reads BUYING… only if the fire succeeded
-					local fired = Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade, {
-						StructureId = structureId,
-					} :: Types.PurchaseUpgradeRequest)
-					if not fired then
-						local now = os.clock()
-						if now - menuFailToastAt >= 8 then
-							menuFailToastAt = now
-							NotificationController.Show("Buy failed — remotes not ready. Rejoin game.", "Error", 4)
-						end
-						return
-					end
-					if cash >= cost and btn.Parent then
-						-- v70: feedback on the button itself (the "Buying X…" toast is dropped by the toast lane)
-						btn.Text = "BUYING…"
-						task.delay(1.5, function()
-							if btn.Parent and btn.Text == "BUYING…" then
-								btn.Text = idleText
-							end
-						end)
+				local incomeSuffix = if rate > 0 then ("  +" .. tostring(rate) .. "/t") else ""
+				local lockedBy: string? = nil
+				for _, req in ipairs(def.Requires or {}) do
+					if (upgrades[req.StructureId] or 0) < req.Level then
+						local rdef = BaseConfig.Structures[req.StructureId]
+						lockedBy = string.format(ConsoleBuyConfig.Text.Needs, if rdef then rdef.DisplayName else req.StructureId, req.Level)
+						break
 					end
 				end
-				-- v67: Activated only (MouseButton1Click as well fired two purchases per click)
-				btn.Activated:Connect(onMenuBuy)
+				local price = "$" .. commas(cost)
+				if lockedBy then
+					desc.Text = lockedBy
+					desc.TextColor3 = Color3.fromRGB(235, 120, 110)
+				elseif level == 0 then
+					desc.Text = string.format(ConsoleBuyConfig.Text.Build, price) .. incomeSuffix
+				else
+					desc.Text = string.format(ConsoleBuyConfig.Text.Upgrade, level, nextLevel, price) .. incomeSuffix
+				end
+				btn.Text = ConsoleBuyConfig.Text.Go
+				-- accent when unlocked and affordable; grey otherwise but still tappable (GO finds the console)
+				local ready = lockedBy == nil and cash >= cost
+				btn.BackgroundColor3 = if ready then Constants.Colors.Accent else Color3.fromRGB(58, 62, 68)
+				btn.Active = true
+				UIUtil.EnsureMinTouch(btn, TAP)
+				local function onGo()
+					if ConsoleWaypoint.Show(structureId, myPlotId) then
+						setOpen(false)
+						NotificationController.Show(string.format(ConsoleBuyConfig.Text.WaypointSet, def.DisplayName), "Info", 2)
+					else
+						NotificationController.Show(ConsoleBuyConfig.Text.NoConsole, "Warn", 2.5)
+					end
+				end
+				-- v67: Activated only (fires once for mouse, touch and gamepad)
+				btn.Activated:Connect(onGo)
 			end
 			btn.Parent = row
 		end
@@ -221,7 +216,7 @@ local function refreshList()
 	end
 end
 
-local function setOpen(open: boolean)
+function setOpen(open: boolean)
 	menuOpen = open
 	if screenGui then
 		local panel = screenGui:FindFirstChild("UpgradePanel")
@@ -291,7 +286,7 @@ function BaseController.Init()
 		cap.Parent = panel
 	end
 
-	local title = PanelShell.Title(panel, "BASE UPGRADES")
+	local title = PanelShell.Title(panel, "YOUR BASE")
 
 	local subSize = PanelShell.Text(13)
 	local sub = Instance.new("TextLabel")
@@ -308,11 +303,25 @@ function BaseController.Init()
 	sub.Parent = panel
 	subLabel = sub
 
+	-- v71: how buying works now (the rows only show the way)
+	local how = Instance.new("TextLabel")
+	how.Name = "HowToBuy"
+	how.BackgroundTransparency = 1
+	how.Position = UDim2.fromOffset(16, sub.Position.Y.Offset + subSize + 4)
+	how.Size = UDim2.new(1, -(TAP + 28), 0, subSize + 4)
+	how.Font = Enum.Font.GothamMedium
+	how.TextSize = subSize
+	how.TextColor3 = PanelShell.Colors.Muted
+	how.TextXAlignment = Enum.TextXAlignment.Left
+	how.TextTruncate = Enum.TextTruncate.AtEnd
+	how.Text = ConsoleBuyConfig.Text.PanelSubtitle
+	how.Parent = panel
+
 	PanelShell.CloseButton(panel, function()
 		setOpen(false)
 	end)
 
-	local listTop = math.max(TAP + 8, sub.Position.Y.Offset + subSize + 10)
+	local listTop = math.max(TAP + 8, how.Position.Y.Offset + subSize + 10)
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "List"
 	scroll.Position = UDim2.fromOffset(10, listTop)
@@ -341,6 +350,9 @@ function BaseController.Init()
 			return
 		end
 		upgrades = base.Upgrades or upgrades
+		if typeof(base.PlotId) == "number" then
+			myPlotId = base.PlotId
+		end
 		if typeof(base.PassiveIncomePerTick) == "number" then
 			passivePerTick = base.PassiveIncomePerTick
 		end
@@ -380,6 +392,9 @@ function BaseController.Init()
 		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades
+			if typeof(state.Base.PlotId) == "number" then
+				myPlotId = state.Base.PlotId
+			end
 			if typeof(state.Base.PassiveIncomePerTick) == "number" then
 				passivePerTick = state.Base.PassiveIncomePerTick
 			end
@@ -402,7 +417,7 @@ function BaseController.Init()
 	end)
 
 	refreshSubtitle()
-	print("[WAR EMPIRE] BaseController ready (B / terminal / tutorial open the menu; BUY via Activated)")
+	print("[WAR EMPIRE] BaseController ready (B / terminal / tutorial open the overview; rows GO to the console, never buy)")
 end
 
 return BaseController

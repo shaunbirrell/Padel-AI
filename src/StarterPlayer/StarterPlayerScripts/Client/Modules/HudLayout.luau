@@ -18,10 +18,11 @@
 	API (fixed contracts, spec §9)
 	  ApplyScreen(screen, {DisplayOrder?, Insets? = "Core"|"Topbar"|"None"|"Device", Scale?}) -> UIScale?
 	  Scale() -> number · IsTouch() -> boolean · ContentSizeV() -> Vector2
+	  PrefersKeys() -> boolean · InputModeChanged (prefersKeys)   -- key hints / keyboard copy (CLAUDE.md §1)
 	  SetFlag(name, on) · GetFlag(name) -> boolean · FlagChanged (name, on)
 	  BindVisibility(obj, {ShowWhen?, HideWhen?}, extra?)
 	  RegisterTopStack(name, obj, order, {Space? = "Hud"|"Screen"})
-	  RegisterPanel(id, isOpen, close) · PanelOpened(id) · PanelClosed(id)
+	  RegisterPanel(id, isOpen, close, {Fallback?, NonModal?}) · PanelOpened(id) · PanelClosed(id)
 	  SetBadge(tileId, text?) · BadgeChanged (tileId, text?)
 	  CashFloat(amount) · CashFloatRequested (amount)
 	  SetRect(name, obj) · GetRect(name) -> (pos, size)
@@ -122,12 +123,14 @@ local cashSig, fireCash = newSignal()
 local layoutSig, fireLayout = newSignal()
 local panelSig, firePanel = newSignal()
 local compassSig, fireCompass = newSignal()
+local inputSig, fireInput = newSignal()
 
 HudLayout.FlagChanged = flagSig :: RBXScriptSignal<string, boolean>
 HudLayout.BadgeChanged = badgeSig :: RBXScriptSignal<string, string?>
 HudLayout.CashFloatRequested = cashSig :: RBXScriptSignal<number>
 HudLayout.LayoutChanged = layoutSig :: RBXScriptSignal<>
 HudLayout.PanelChanged = panelSig :: RBXScriptSignal<string, boolean>
+HudLayout.InputModeChanged = inputSig :: RBXScriptSignal<boolean>
 HudLayout.Signals = {
 	CompassTapped = compassSig :: RBXScriptSignal<>, -- CompassController fires (Emit), TerritoryController listens
 }
@@ -155,6 +158,78 @@ function HudLayout.IsTouch(): boolean
 		return touchOverride
 	end
 	return UserInputService.TouchEnabled == true
+end
+
+--[[
+	Key hints and keyboard copy ("press K", "WASD", key caps, the Settings controls sheet) show ONLY when this is
+	true: UserInputService.PreferredInput is KeyboardAndMouse or Gamepad (CLAUDE.md §1 "Copy by device": detect
+	with PreferredInput, not TouchEnabled). IsTouch() stays the LAYOUT switch (tap-target sizes).
+	Fallback when the property is missing (older clients, the headless harness): the last input type, then
+	"has a keyboard and no touch screen". A phone therefore never gets key copy.
+]]
+local keyPrefOverride: boolean? = nil
+
+local function readPreferredInput(): string?
+	local ok, v = pcall(function(): any
+		return (UserInputService :: any).PreferredInput
+	end)
+	if ok and typeof(v) == "EnumItem" then
+		local name = (v :: EnumItem).Name
+		if name == "KeyboardAndMouse" or name == "Gamepad" or name == "Touch" then
+			return name
+		end
+	end
+	return nil
+end
+
+local function lastInputPrefersKeys(): boolean?
+	local ok, t = pcall(function(): any
+		return UserInputService:GetLastInputType()
+	end)
+	if not ok or typeof(t) ~= "EnumItem" then
+		return nil
+	end
+	local name = (t :: EnumItem).Name
+	if name == "Touch" then
+		return false
+	end
+	if name == "Keyboard" or string.sub(name, 1, 5) == "Mouse" or string.sub(name, 1, 7) == "Gamepad" then
+		return true
+	end
+	return nil
+end
+
+function HudLayout.PrefersKeys(): boolean
+	if keyPrefOverride ~= nil then
+		return keyPrefOverride
+	end
+	local pref = readPreferredInput()
+	if pref then
+		return pref ~= "Touch"
+	end
+	local last = lastInputPrefersKeys()
+	if last ~= nil then
+		return last
+	end
+	local okT, touch = pcall(function(): boolean
+		return UserInputService.TouchEnabled == true
+	end)
+	local okK, keys = pcall(function(): boolean
+		return UserInputService.KeyboardEnabled == true or UserInputService.GamepadEnabled == true
+	end)
+	return (okK and keys == true) and not (okT and touch == true)
+end
+
+local lastKeyPref: boolean? = nil
+local function checkInputMode()
+	local now = HudLayout.PrefersKeys()
+	if now ~= lastKeyPref then
+		local first = lastKeyPref == nil
+		lastKeyPref = now
+		if not first then
+			fireInput(now)
+		end
+	end
 end
 
 local function viewportSize(): Vector2
@@ -768,8 +843,10 @@ end
 -- panels (one open at a time → Modal flag)
 ---------------------------------------------------------------------------------------------------------------
 
-type Panel = { IsOpen: () -> boolean, Close: () -> (), Fallback: boolean }
-export type PanelOpts = { Fallback: boolean? }
+type Panel = { IsOpen: () -> boolean, Close: () -> (), Fallback: boolean, NonModal: boolean }
+-- NonModal (the Army popover, mobile plan P1-6): still one-open-at-a-time with the other panels, but it does NOT
+-- raise the Modal flag, so FIRE / the hotbar / the prompt lane stay up while it is open
+export type PanelOpts = { Fallback: boolean?, NonModal: boolean? }
 local panels: { [string]: Panel } = {}
 local openPanels: { [string]: boolean } = {}
 local lastOpened: string? = nil
@@ -794,7 +871,15 @@ local function panelReportsOpen(id: string): boolean
 end
 
 local function refreshModal()
-	HudLayout.SetFlag("Modal", next(openPanels) ~= nil)
+	local modal = false
+	for id in pairs(openPanels) do
+		local p = panels[id]
+		if not (p and p.NonModal) then
+			modal = true
+			break
+		end
+	end
+	HudLayout.SetFlag("Modal", modal)
 end
 
 --[[ Register once in Init. isOpen: is the panel showing now; close: hide it (it should call PanelClosed).
@@ -806,7 +891,9 @@ function HudLayout.RegisterPanel(id: string, isOpen: () -> boolean, close: () ->
 	if fallback and cur and not cur.Fallback then
 		return -- the panel registered itself: keep that
 	end
-	panels[id] = { IsOpen = isOpen, Close = close, Fallback = fallback }
+	local nonModal = if opts ~= nil and opts.NonModal ~= nil then opts.NonModal == true else (cur ~= nil and cur.NonModal)
+	panels[id] = { IsOpen = isOpen, Close = close, Fallback = fallback, NonModal = nonModal }
+	refreshModal()
 end
 
 --[[ Increments on every PanelOpened / PanelClosed call. UIController compares it around an opener to tell
@@ -1154,6 +1241,18 @@ function HudLayout.Init()
 	pcall(function()
 		GuiService:GetPropertyChangedSignal("TopbarInset"):Connect(onLayoutChanged)
 	end)
+	-- key hints follow the device the player is using now (PreferredInput; LastInputType as the fallback)
+	checkInputMode()
+	pcall(function()
+		UserInputService:GetPropertyChangedSignal("PreferredInput"):Connect(checkInputMode)
+	end)
+	pcall(function()
+		UserInputService.LastInputTypeChanged:Connect(function()
+			if readPreferredInput() == nil then
+				checkInputMode()
+			end
+		end)
+	end)
 	pcall(function()
 		local acc = 0
 		RunService.Heartbeat:Connect(function(dt: number)
@@ -1170,6 +1269,12 @@ end
 function HudLayout._SetTouchOverride(value: boolean?)
 	touchOverride = value
 	onLayoutChanged()
+end
+
+-- test hook (headless harness): force key hints on / off; nil = use the device
+function HudLayout._SetKeyPrefOverride(value: boolean?)
+	keyPrefOverride = value
+	checkInputMode()
 end
 
 HudLayout.Init()

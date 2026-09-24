@@ -7,9 +7,12 @@
 	    OrdersConfig.Walkie.GapFromTile, tile centre), clamped to the safe area.
 	  * Contents: "ARMY 5/20" + ✕ (touch hit ≥ 44 px), a 2×2 order grid (hotkey order 1 ATTACK · 2 HOLD ·
 	    3 FOLLOW · 4 RETREAT, the active order highlighted), "MANAGE ARMY ▸" → ArmyController.Open.
-	  * A Modal panel (HudLayout id "Orders"): exclusive with the other panels; tapping outside closes it.
+	  * A NON-modal panel (HudLayout id "Orders", mobile plan P1-6): exclusive with the other panels and tapping
+	    outside closes it, but it does not raise the Modal flag, so FIRE / the hotbar stay up in a fight.
+	  * Long-press the Army tile (UIController → OrdersController.CycleOrder): cycles the order without the popover.
 	  * While open: HudLayout flag "OrdersOpen" → 1-4 are order hotkeys (CombatController leaves them alone).
-	  * T cycles the order at any time; with the popover closed a local Info toast "Squad: FOLLOW" confirms it
+	  * T (keyboard) / the Army-tile long-press (touch) cycles the order at any time; with the popover closed a
+	    local Info toast "Squad: FOLLOW" confirms it
 	    (the server's own "Squad: X" echo is dropped by HudConfig.Toast.Drop).
 	Server-authoritative: this only fires RequestSquadOrder(orderId).
 ]]
@@ -45,6 +48,7 @@ local panel: Frame? = nil
 local titleLabel: TextLabel? = nil
 local shell: PanelShell.Shell? = nil
 local orderButtons: { [string]: TextButton } = {}
+local keyCaps: { TextLabel } = {} -- the 1-4 digits on the order cells: only while HudLayout.PrefersKeys()
 local currentOrder: string = OrdersConfig.DefaultOrder or "Follow"
 local soldierCount = 0
 local maxSoldiers = 0
@@ -316,15 +320,15 @@ local function build(screen: ScreenGui)
 		lab.BackgroundTransparency = 1
 		lab.Size = UDim2.fromScale(1, 1)
 		lab.Font = HudConfig.Fonts.Display
-		lab.TextSize = WALKIE.CellTextSize
+		lab.TextSize = PanelShell.Text(WALKIE.CellTextSize) -- ≥ 20 v on touch = 14 real px
 		lab.TextColor3 = Color3.fromRGB(220, 226, 232)
 		lab.Text = def.Label
 		lab.ZIndex = 4
 		lab.Active = false
 		lab.Parent = btn
 		UIUtil.TextOutline(lab, 1.5)
-		if not isTouch then
-			-- desktop: the hotkey digit, top-left (like the hotbar)
+		do
+			-- keyboard / gamepad players: the hotkey digit, top-left (like the hotbar); hidden for touch players
 			local key = Instance.new("TextLabel")
 			key.Name = "Key"
 			key.BackgroundTransparency = 1
@@ -338,7 +342,9 @@ local function build(screen: ScreenGui)
 			key.Text = def.Key
 			key.ZIndex = 4
 			key.Active = false
+			key.Visible = HudLayout.PrefersKeys()
 			key.Parent = btn
+			table.insert(keyCaps, key)
 		end
 		btn.Parent = grid
 		UIUtil.EnsureMinTouch(btn, if isTouch then WALKIE.MinTouchPx else 44)
@@ -370,7 +376,7 @@ local function build(screen: ScreenGui)
 	mLab.Position = UDim2.fromOffset(12, 0)
 	mLab.Size = UDim2.new(1, -44, 1, 0)
 	mLab.Font = HudConfig.Fonts.Display
-	mLab.TextSize = WALKIE.CellTextSize
+	mLab.TextSize = PanelShell.Text(WALKIE.CellTextSize)
 	mLab.TextColor3 = Color3.fromRGB(255, 255, 255)
 	mLab.TextXAlignment = Enum.TextXAlignment.Left
 	mLab.Text = "MANAGE ARMY"
@@ -440,6 +446,14 @@ function OrdersController.IsOpen(): boolean
 	return open
 end
 
+--[[ Cycle Attack → Hold → Follow → Retreat (T on a keyboard; the Army tile's long-press on touch — P1-6). ]]
+function OrdersController.CycleOrder()
+	if not OrdersConfig.Enabled then
+		return
+	end
+	cycleOrder()
+end
+
 --[[ v70: the Army popover no longer follows the Army panel (they are exclusive Modal panels). Kept for callers. ]]
 function OrdersController.SetArmyOpen(_isOpen: boolean) end
 
@@ -469,7 +483,13 @@ function OrdersController.Init()
 		end,
 		Dim = false, -- a popover: invisible tap-catcher, no black dim
 		TapCloses = true,
+		NonModal = true, -- P1-6: FIRE / hotbar / prompts stay up while the popover is open
 	})
+	HudLayout.InputModeChanged:Connect(function(prefersKeys: boolean)
+		for _, k in ipairs(keyCaps) do
+			k.Visible = prefersKeys
+		end
+	end)
 
 	Remotes.BindEvent(Constants.RemoteNames.SquadOrderStateUpdate, function(payload: any)
 		if typeof(payload) ~= "table" then
@@ -524,7 +544,7 @@ function OrdersController.Init()
 	end)
 
 	refresh()
-	print("[WAR EMPIRE] OrdersController ready (Army popover: tile / Y, orders 1-4 / T)")
+	print("[WAR EMPIRE] OrdersController ready (Army popover: tile / Y, orders 1-4 / T / tile long-press)")
 end
 
 return OrdersController

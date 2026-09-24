@@ -17,6 +17,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
+local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local UpgradePadService = {}
 
@@ -165,44 +167,29 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 		warn("[UpgradePad] NotificationService nil — toast skipped for", structureId, result.Error)
 		return
 	end
+	local def = BaseConfig.Structures[structureId]
 	if result.Ok then
-		local def = BaseConfig.Structures[structureId]
 		local name = if def then def.DisplayName else tostring(structureId)
+		-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
 		NotificationService.Notify(
 			player,
-			string.format("Purchase SUCCESSFUL! %s → Lv %d", name, result.NewLevel or 0),
+			string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
 			"Success",
 			4
 		)
 	else
+		-- v71 (HUD v70 spec §4.1 / §4.2): one failed purchase = one line — the client words every PurchaseResult
+		-- error itself (WorldPromptController), so the server only adds what the client cannot see.
 		local err = result.Error or "Failed"
-		local msg = if err == "InsufficientCash"
-			then "Not enough cash"
-			elseif err == "InsufficientGold"
-			then "Not enough gold"
-			elseif err == "MaxLevel"
-			then "Already at MAX level"
-			elseif err == "MissingRequirement"
-			then "Missing prerequisite structure"
-			elseif err == "UnknownStructure" or err == "InvalidStructure"
-			then "Unknown structure"
-			elseif err == "WrongPlot"
-			then "Not your base — walk your plot pads to buy"
-			elseif err == "NoPlot"
-			then "Claim a base first — stand on your plot pad"
-			elseif err == "NoProfile"
+		local msg: string? = if err == "NoProfile"
 			then "Profile still loading — try BUY again"
-			else ("Purchase failed: " .. tostring(err))
-		-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
-		local cd = if fromStanding then 1.1 else 0.75
-		local key = "pad|" .. err .. "|" .. structureId
-		if err == "MaxLevel" then
-			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, msg, "Info", 2, 8, key)
-			else
-				NotificationService.Notify(player, msg, "Info", 2)
-			end
-		else
+			elseif err == "RateLimited"
+			then "Buying too fast — wait a moment"
+			else nil
+		if msg then
+			-- Standing on pad must NOT spam every spatial tick (~0.85–1.2s cooldown)
+			local cd = if fromStanding then 1.1 else 0.75
+			local key = "pad|" .. err .. "|" .. structureId
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, msg, "Warn", 3.5, cd, key)
 			else
@@ -216,14 +203,8 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	local DS = getDataService()
 	if not DS then
 		print(string.format("[UpgradePad] BUY FAIL %s %s — NoDataService", player.Name, structureId))
+		-- the client words this failure from PurchaseResult (one failed purchase = one line)
 		firePurchaseResult(player, structureId, { Ok = false, Error = "NoDataService" })
-		if NotificationService then
-			if NotificationService.NotifyThrottled then
-				NotificationService.NotifyThrottled(player, "Buy failed — server data not ready, try again", "Warn", 3, 2.5, "pad|NoDataService")
-			else
-				NotificationService.Notify(player, "Buy failed — server data not ready, try again", "Warn", 3)
-			end
-		end
 		return
 	end
 	local profile = DS.GetProfile(player)
@@ -314,7 +295,8 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 	print(string.format("[UpgradePad] BUY ATTEMPT %s %s plot=%s standing=%s", player.Name, structureId, tostring(profile.BasePlotId), tostring(fromStanding == true)))
 	-- v64: pcall so pad path never throws past ack (same ServerError surface as remote)
 	local callOk, callResult = pcall(function()
-		return BaseService.PurchaseUpgrade(player, structureId)
+		-- v71: AtPart = this console / pad, so the server checks the character against the part that was used
+		return BaseService.PurchaseUpgrade(player, structureId, { AtPart = part, Source = if isConsole(part) then "Prompt" else "Pad" })
 	end)
 	local result: any
 	if not callOk then
@@ -431,8 +413,8 @@ local function attachSlot(part: BasePart)
 	local def = BaseConfig.Structures[structureId]
 	prompt.ObjectText = if def then def.DisplayName else structureId
 	-- v68: consoles need a short hold so walking past never buys
-	prompt.HoldDuration = if console then 0.35 else 0
-	prompt.MaxActivationDistance = if console then 10 else 16
+	prompt.HoldDuration = if console then ConsoleBuyConfig.ConsoleHoldSeconds else ConsoleBuyConfig.PadHoldSeconds
+	prompt.MaxActivationDistance = if console then ConsoleBuyConfig.ConsolePromptDistance else ConsoleBuyConfig.PadPromptDistance
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
@@ -613,6 +595,25 @@ function UpgradePadService.Init(deps: { [string]: any })
 	end
 
 	startSpatialLoop()
+
+	-- v71: stamp each console's world position on its owner (WE_ConsolePos_<StructureId>) so the Base panel GO
+	-- waypoint still finds it when StreamingEnabled has streamed the console out on that client. A missing console
+	-- means that structure cannot be bought on this plot (console-only buying): say so loudly, once per plot ready.
+	if BaseService and BaseService.OnPlotReady then
+		BaseService.OnPlotReady(function(player: Player, plotId: number)
+			local missing: { string } = {}
+			for _, sid in ipairs(BaseConfig.StructureOrder) do
+				local part = ConsoleLocator.Find(plotId, sid)
+				player:SetAttribute("WE_ConsolePos_" .. sid, if part then part.Position else nil)
+				if part == nil then
+					table.insert(missing, sid)
+				end
+			end
+			if #missing > 0 then
+				warn(string.format("[UpgradePad] plot %d has NO buy point for %s — unbuyable until the map rebuilds", plotId, table.concat(missing, ", ")))
+			end
+		end)
+	end
 
 	task.defer(function()
 		task.wait(1)

@@ -1,7 +1,7 @@
 --!strict
 --[[
 	Root UI coordinator (v70 "clean screen"): inits every controller, binds the left rail (5 tiles — no Base,
-	no Settings tile, no "opened" toast), the TopStrip settings gear and the cash-pill +, registers every panel
+	no Settings tile, no "opened" toast), the TopStrip settings gear and cash + chip, registers every panel
 	with HudLayout (one open at a time → the Modal flag) and routes interior terminals (WE_OpenPanel) to panels.
 ]]
 
@@ -181,7 +181,8 @@ function UIController.Init()
 		end
 	end
 
-	-- Cash-pill + → Shop cash packs (ShopController.OpenCashPacks when present, else the Shop)
+	-- Cash + (the TopStrip chip since the mobile merge gate) → Shop cash packs (ShopController.OpenCashPacks when
+	-- present, else the Shop)
 	HUDController.BindShopOpener(function()
 		local shop: any = ShopController
 		local open: () -> () = if typeof(shop.OpenCashPacks) == "function" then shop.OpenCashPacks else ShopController.Open
@@ -220,6 +221,14 @@ function UIController.Init()
 					dockPress("Army", orders.Toggle, "Orders")
 				else
 					dockPress("Army", ArmyController.Toggle, "Army")
+				end
+			end,
+			-- mobile plan P1-6: hold the Army tile to cycle the squad order (the touch twin of T), no popover
+			OnLongPress = function()
+				local orders: any = OrdersController
+				if typeof(orders.CycleOrder) == "function" then
+					pcall(AudioController.PlayClick)
+					orders.CycleOrder()
 				end
 			end,
 		},

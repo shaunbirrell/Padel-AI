@@ -1,7 +1,9 @@
 --!strict
 --[[
-	Early-game manual click/proximity droppers near Money Collector + Training Yard.
+	Early-game manual cash droppers near Money Collector + Training Yard (prompt on touch, ClickDetector on PC).
 	Server-authoritative; client only fires ClickDetector / ProximityPrompt.
+	v71 (HUD v70 spec §5): the price tag reads "$15" (no mouse wording — wrong on phones), owner-only, stud-scaled; the
+	"+$15" pop is owner-only too; the plate keeps its glow but no PointLight.
 ]]
 
 local ManualDropperConfig = {
@@ -35,7 +37,9 @@ local ManualDropperConfig = {
 	PartSize = Vector3.new(2.4, 1.2, 2.4),
 	PartColor = Color3.fromRGB(40, 140, 70),
 	NeonAccentColor = Color3.fromRGB(90, 255, 120),
-	BillboardLabel = "CLICK · $",
+	BillboardLabel = "$", -- v71: device-neutral (the old tag told phone players to use a mouse); the owner sees "$15"
+	LabelMaxDistance = 30, -- studs (WorldLabel caps at 40)
+	LabelStuds = Vector2.new(3, 1.2), -- the tag's box, studs
 
 	PopupDuration = 0.55,
 	PopupRiseStuds = 3.2,

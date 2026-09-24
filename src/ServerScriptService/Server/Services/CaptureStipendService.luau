@@ -1,6 +1,8 @@
 --!strict
 --[[
-	Periodic cash stipend for owned territories / coastal oil (Military Tycoon–style).
+	Periodic cash stipend for owned territories / coastal oil.
+	v71 (HUD v70 spec §4.2): silent by default (TerritoryConfig.CaptureStipend.NotifyOnPayout = false) — the cash
+	pill counts up; the old "Capture stipend +$N" Reward line came every 90 s for as long as you held a zone.
 ]]
 
 local Players = game:GetService("Players")

@@ -3,6 +3,9 @@
 	Near-plot oil pumpjacks outside DefensiveWalls (toward warzone / map origin).
 	Income → PendingCash. Part kit + optional IndustrialPack dress.
 	Does NOT touch OilRig Alpha/Bravo far POIs.
+
+	v71 (HUD v70 spec §5): no neon IncomePad and no "+$/tick" card over each pump; the "+$18" pop is an owner-only
+	stud-scaled WorldLabel, made only while the owner stands within PopOwnerRadius of that pump.
 ]]
 
 local Players = game:GetService("Players")
@@ -15,6 +18,9 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local PlotOilPumpConfig = require(Shared.Configs.PlotOilPumpConfig)
+local WorldLabel = require(Shared.Util.WorldLabel)
+
+local POP_OWNER_RADIUS = 28 -- studs (HudConfig.WorldLabels.Transient range): no pop for an owner who is not there
 
 local PlotOilPumpService = {}
 
@@ -106,37 +112,7 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 	head.Material = Enum.Material.Metal
 	head.Parent = model
 
-	local income = Instance.new("Part")
-	income.Name = "IncomePad"
-	income.Size = Vector3.new(4, 0.4, 4)
-	income.CFrame = at * CFrame.new(0, 0.5, 4.5)
-	income.Anchored = true
-	income.CanCollide = false
-	income.Color = Color3.fromRGB(40, 90, 50)
-	income.Material = Enum.Material.Neon
-	income.Transparency = 0.35
-	income.Parent = model
-
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "OilIncomeBillboard"
-	bb.Size = UDim2.fromOffset(90, 28)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
-	bb.AlwaysOnTop = false
-	bb.MaxDistance = PlotOilPumpConfig.BillboardMaxDistance or 80
-	bb.Parent = income
-	local lbl = Instance.new("TextLabel")
-	lbl.Name = "Label"
-	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(20, 40, 25)
-	lbl.BackgroundTransparency = 0.25
-	lbl.Text = "+$" .. tostring(PlotOilPumpConfig.CashPerTick or 18) .. "/tick"
-	lbl.TextColor3 = Color3.fromRGB(120, 255, 140)
-	lbl.TextScaled = true
-	lbl.Font = Enum.Font.GothamBold
-	lbl.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 4)
-	corner.Parent = lbl
+	-- v71: no neon IncomePad and no "+$/tick" billboard (spec §5); the owner sees a "+$18" pop when nearby
 
 	model.PrimaryPart = pad
 	model.Parent = parent
@@ -177,12 +153,7 @@ local function applyGoldenDress(model: Model)
 			if d.Name == "Pad" or d.Name == "Derrick" or d.Name == "WalkingBeam" or d.Name == "HorseHead" then
 				d.Color = Color3.fromRGB(255, 195, 60)
 				d.Material = Enum.Material.Neon
-			elseif d.Name == "IncomePad" then
-				d.Color = Color3.fromRGB(255, 210, 80)
 			end
-		elseif d:IsA("TextLabel") and d.Name == "Label" then
-			d.TextColor3 = Color3.fromRGB(255, 230, 120)
-			d.BackgroundColor3 = Color3.fromRGB(60, 45, 10)
 		end
 	end
 	model:SetAttribute("WE_GoldenPump", true)
@@ -364,32 +335,29 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 						end
 						if n > 0 then
 							EconomyService.AccruePendingCash(owner, cash * n, reason)
-							-- Floating +$/tick pops on each pump (competitor video feel)
+							-- "+$18" pop on each pump, owner-only and only while the owner is close (spec §5)
+							local char = owner.Character
+							local hrp = char and char:FindFirstChild("HumanoidRootPart")
 							for _, ch in ipairs(folder:GetChildren()) do
-								if ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
-									local incomePad = ch:FindFirstChild("IncomePad")
-									local anchor = if incomePad and incomePad:IsA("BasePart") then incomePad else ch.PrimaryPart
-									if anchor and anchor:IsA("BasePart") then
-										local pop = Instance.new("BillboardGui")
-										pop.Name = "WE_OilCashPop"
-										pop.Size = UDim2.fromOffset(90, 26)
-										pop.StudsOffset = Vector3.new(0, 4.5, 0)
-										pop.AlwaysOnTop = false
-										pop.MaxDistance = 28
-										pop.Parent = anchor
-										local popLab = Instance.new("TextLabel")
-										popLab.Size = UDim2.fromScale(1, 1)
-										popLab.BackgroundTransparency = 1
-										popLab.Font = Enum.Font.GothamBold
-										popLab.TextScaled = true
-										popLab.TextColor3 = Color3.fromRGB(100, 255, 140)
-										popLab.TextStrokeTransparency = 0.35
-										popLab.Text = string.format("+$%d", cash)
-										popLab.Parent = pop
+								if hrp and hrp:IsA("BasePart") and ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
+									local anchor = ch.PrimaryPart
+									if anchor and (anchor.Position - hrp.Position).Magnitude <= POP_OWNER_RADIUS then
+										local pop = WorldLabel.Create(anchor, string.format("+$%d", cash), {
+											Name = "WE_OilCashPop",
+											Color = Color3.fromRGB(100, 255, 140),
+											TextSize = 18,
+											Studs = Vector2.new(3, 1.2),
+											Offset = Vector3.new(0, 4.5, 0),
+											MaxDistance = POP_OWNER_RADIUS,
+											OwnerUserId = ownerId,
+										})
+										local popLab = pop:FindFirstChild("Title")
 										task.spawn(function()
 											for i = 1, 6 do
-												pop.StudsOffset = Vector3.new(0, 4.5 + i * 0.35, 0)
-												popLab.TextTransparency = i / 7
+												pop.StudsOffsetWorldSpace = Vector3.new(0, 4.5 + i * 0.35, 0)
+												if popLab and popLab:IsA("TextLabel") then
+													popLab.TextTransparency = i / 7
+												end
 												task.wait(0.1)
 											end
 											pop:Destroy()

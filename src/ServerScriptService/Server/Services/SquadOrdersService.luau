@@ -2,6 +2,12 @@
 --[[
 	Squad Orders — server-authoritative Follow / Attack / Hold / Retreat.
 	Extends SoldierService counts + Combat MoveTo patterns. Not a second army economy.
+	P1-4 (mobile plan): Follow is an escort — units shoot hostiles within CombatFairnessConfig.EscortEngageRadius of
+	their player (line of sight required) while staying within EscortLeash of the player. Every unit hit tags the
+	owner as creator (CombatDamage.TagCreator, unit flag), so squad kills credit the owner at UnitKillCashShare.
+	v71 (HUD v70 spec §4.2 / §5): no per-unit "SQUAD" tags and no "Squad: X" toast per order — the order flashes
+	for OrderBillboardSeconds as one owner-only stud-scaled WorldLabel over the nearest unit (flashOrderBillboard),
+	and the Army popover shows the active order.
 ]]
 
 local Players = game:GetService("Players")
@@ -12,8 +18,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
+local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-4 escort + kill credit
+local WorldLabel = require(Shared.Util.WorldLabel)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local CombatDamage = require(script.Parent.CombatService.CombatDamage) -- creator tags + line of sight
 
 local SquadOrdersService = {}
 
@@ -246,28 +255,8 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
 
-	-- v68: no floating "SQUAD" tag per soldier by default (a wall of labels over the squad — owner report).
-	if (OrdersConfig :: any).ShowUnitLabels == true then
-		local bb = Instance.new("BillboardGui")
-		bb.Name = "SquadLabel"
-		bb.Size = UDim2.fromOffset(100, 22)
-		bb.StudsOffset = Vector3.new(0, 3.4, 0)
-		bb.AlwaysOnTop = false
-		bb.MaxDistance = 60
-		bb.Parent = root
-		local lbl = Instance.new("TextLabel")
-		lbl.Size = UDim2.fromScale(1, 1)
-		lbl.BackgroundColor3 = Color3.fromRGB(28, 36, 28)
-		lbl.BackgroundTransparency = 0.3
-		lbl.Text = "SQUAD"
-		lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
-		lbl.TextScaled = true
-		lbl.Font = Enum.Font.GothamBold
-		lbl.Parent = bb
-		local corner = Instance.new("UICorner")
-		corner.CornerRadius = UDim.new(0, 4)
-		corner.Parent = lbl
-	end
+	-- v68/v71: no floating "SQUAD" tag per soldier (a wall of labels over the squad — owner report; spec §5).
+	-- OrdersConfig.ShowUnitLabels stays false; the order echo is flashOrderBillboard's one owner-only label.
 
 	model.PrimaryPart = root
 	if VisualAssetService and VisualAssetService.TryAttachCharacterVisual then
@@ -357,7 +346,76 @@ local function faceYaw(root: BasePart, lookAt: Vector3)
 	end
 end
 
-local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: number)
+local function unitReady(unit: SquadUnit, now: number): boolean
+	return now - unit.LastFireAt >= 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+end
+
+-- One unit shot (Attack and escort). `credit`: the owner is tagged as creator first (unit flag), so a kill credits
+-- the owner. Attack shots credit only with CombatFairnessConfig.UnitKillCreditOnAttack: Attack units roam without a
+-- leash or line of sight, so an idle owner hidden near respawning NPCs would farm cash (verifier sim: bank guards).
+local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: number, credit: boolean): boolean
+	if not unitReady(unit, now) then
+		return false
+	end
+	unit.LastFireAt = now
+	if credit then
+		CombatDamage.TagCreator(th, player, true)
+	end
+	th:TakeDamage((OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage")) -- v69 research
+	return true
+end
+
+-- Escort line of sight: the unit's squad, the owner and the target itself never block
+local function escortHasLos(player: Player, unit: SquadUnit, troot: BasePart): boolean
+	if not CombatFairnessConfig.EscortRequireLos then
+		return true
+	end
+	local ignore: { Instance } = { unit.Model, ensureFolder() }
+	local targetModel = troot.Parent
+	if targetModel then
+		table.insert(ignore, targetModel)
+	end
+	if player.Character then
+		table.insert(ignore, player.Character :: Instance)
+	end
+	local eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+	return CombatDamage.LineOfSight(eye, troot.Position, ignore, nil, CombatFairnessConfig.NpcLosRespectCanCollide)
+end
+
+--[[ P1-4 escort (order Follow): `th` / `troot` is the hostile nearest the PLAYER within EscortEngageRadius (picked
+	once per think pass). The unit closes in only as far as the leash allows, drifts back when it is beyond the leash,
+	and shoots when the hostile is within AttackRange with a clear line. Returns false when there is nothing to fight
+	(the caller then runs the plain follow move). ]]
+local function escortUnit(player: Player, unit: SquadUnit, playerRoot: BasePart, th: Humanoid?, troot: BasePart?, now: number): boolean
+	if th == nil or troot == nil or th.Health <= 0 or troot.Parent == nil then
+		return false
+	end
+	local leash = CombatFairnessConfig.EscortLeash
+	local range = OrdersConfig.AttackRange or 55
+	local playerPos = playerRoot.Position
+	local unitPos = unit.Root.Position
+	local dist = (troot.Position - unitPos).Magnitude
+	local fromPlayer = (unitPos - playerPos).Magnitude
+	faceYaw(unit.Root, troot.Position)
+	if fromPlayer > leash then
+		-- back to the formation slot next to the player (still shooting on the way when possible)
+		unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(formationOffset(unit.Slot))).Position)
+	elseif dist > range * 0.85 then
+		-- close in, but never past 90 % of the leash from the player
+		local off = troot.Position - playerPos
+		local maxOff = leash * 0.9
+		local goal = if off.Magnitude > maxOff then playerPos + off.Unit * maxOff else troot.Position
+		unit.Humanoid:MoveTo(goal)
+	else
+		unit.Humanoid:MoveTo(unitPos)
+	end
+	if dist <= range and unitReady(unit, now) and escortHasLos(player, unit, troot) then
+		unitShoot(player, unit, th, now, true)
+	end
+	return true
+end
+
+local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: number, escortHum: Humanoid?, escortRoot: BasePart?)
 	if not unit.Alive or unit.Humanoid.Health <= 0 or not unit.Root.Parent then
 		return
 	end
@@ -366,6 +424,9 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 
 	if order == "Follow" then
 		if not playerRoot then
+			return
+		end
+		if escortUnit(player, unit, playerRoot, escortHum, escortRoot, now) then
 			return
 		end
 		local offset = formationOffset(unit.Slot)
@@ -426,12 +487,8 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 				unit.Humanoid:MoveTo(troot.Position)
 			else
 				unit.Humanoid:MoveTo(unit.Root.Position)
-				if th and th.Health > 0 then
-					local interval = 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
-					if now - unit.LastFireAt >= interval and dist <= range then
-						unit.LastFireAt = now
-						th:TakeDamage((OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage")) -- v69 research
-					end
+				if th and th.Health > 0 and dist <= range then
+					unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true) -- P1-4
 				end
 			end
 		elseif playerRoot then
@@ -529,37 +586,30 @@ local function flashOrderBillboard(player: Player, st: SquadState, order: OrderI
 	if not best then
 		return
 	end
-	local bb = best.Root:FindFirstChild("SquadLabel")
-	if not (bb and bb:IsA("BillboardGui")) then
-		return
+	-- one owner-only order echo over the nearest unit ("FOLLOWING"), replaced by the next order, gone after `hold`
+	for _, u in ipairs(st.Units) do
+		local old = u.Root and u.Root:FindFirstChild("WE_OrderFlash")
+		if old then
+			old:Destroy()
+		end
 	end
-	local lbl = bb:FindFirstChildOfClass("TextLabel")
-	if not lbl then
-		return
-	end
-	local prev = lbl.Text
-	local prevColor = lbl.TextColor3
-	lbl.Text = textLabel
-	lbl.TextColor3 = Color3.fromRGB(255, 230, 120)
-	bb.StudsOffset = Vector3.new(0, 4.2, 0)
-	bb.AlwaysOnTop = true
+	local bb = WorldLabel.Create(best.Root, textLabel, {
+		Name = "WE_OrderFlash",
+		Color = Color3.fromRGB(255, 230, 120),
+		Studs = Vector2.new(5, 1.4),
+		Offset = Vector3.new(0, 4.2, 0),
+		MaxDistance = 40,
+		OwnerUserId = player.UserId,
+	})
 	local hold = tonumber((OrdersConfig :: any).OrderBillboardSeconds) or 2.8
 	local token = tostring(os.clock())
 	best.Root:SetAttribute("WE_OrderFlash", token)
 	task.delay(hold, function()
-		if not best or not best.Root or not best.Root.Parent then
-			return
+		if best and best.Root and best.Root.Parent and best.Root:GetAttribute("WE_OrderFlash") ~= token then
+			return -- a newer order owns the flash
 		end
-		if best.Root:GetAttribute("WE_OrderFlash") ~= token then
-			return
-		end
-		if lbl and lbl.Parent then
-			lbl.Text = prev
-			lbl.TextColor3 = prevColor
-		end
-		if bb and bb.Parent then
-			bb.StudsOffset = Vector3.new(0, 3.4, 0)
-			bb.AlwaysOnTop = false
+		if bb.Parent then
+			bb:Destroy()
 		end
 	end)
 end
@@ -607,16 +657,8 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	end
 
 	pushState(player)
+	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
 	flashOrderBillboard(player, st, order :: OrderId)
-	if NotificationService then
-		local labels = {
-			Follow = "Squad: FOLLOW",
-			Attack = "Squad: ATTACK nearest hostile",
-			Hold = "Squad: HOLD position",
-			Retreat = "Squad: RETREAT to plot",
-		}
-		NotificationService.Notify(player, labels[order] or ("Squad: " .. order), "Info")
-	end
 	return true, nil
 end
 
@@ -722,15 +764,23 @@ function SquadOrdersService.Init(deps: { [string]: any })
 			for _, player in ipairs(Players:GetPlayers()) do
 				local st = squadByUser[player.UserId]
 				if st and #st.Units > 0 then
+					-- P1-4 escort: one hostile pick per player per pass (nearest to the player)
+					local escortHum: Humanoid?, escortRoot: BasePart? = nil, nil
+					if st.Order == "Follow" then
+						local proot = characterRoot(player)
+						if proot then
+							escortHum, escortRoot = nearestHostile(proot.Position, CombatFairnessConfig.EscortEngageRadius)
+						end
+					end
 					for _, unit in ipairs(st.Units) do
-						thinkUnit(player, st, unit, now)
+						thinkUnit(player, st, unit, now, escortHum, escortRoot)
 					end
 				end
 			end
 		end
 	end)
 
-	print("[WAR EMPIRE] SquadOrdersService ready (Follow/Attack/Hold/Retreat)")
+	print("[WAR EMPIRE] SquadOrdersService ready (Follow = escort/Attack/Hold/Retreat)")
 end
 
 return SquadOrdersService
