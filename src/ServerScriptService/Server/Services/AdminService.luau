@@ -426,6 +426,13 @@ function AdminService.Init(deps: { [string]: any })
 	end)
 
 	-- Server chat: /cash or /givecash (no client remote wiring required)
+	local lastAdminChat: { [number]: { Text: string, At: number } } = {}
+	local ADMIN_DEFAULT_LEVEL = 25 -- every helicopter unlocks by Lv 20 (VehicleConfig Air)
+	local ADMIN_DEFAULT_XP = 10_000
+	Players.PlayerRemoving:Connect(function(p: Player)
+		lastAdminChat[p.UserId] = nil
+	end)
+
 	local function onAdminChat(player: Player, message: string)
 		if typeof(message) ~= "string" or message == "" then
 			return
@@ -439,10 +446,43 @@ function AdminService.Init(deps: { [string]: any })
 		if not cmd then
 			return
 		end
-		if cmd ~= "cash" and cmd ~= "givecash" then
+		local isLevelCmd = cmd == "level" or cmd == "setlevel"
+		local isXpCmd = cmd == "xp" or cmd == "givexp"
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd then
 			return
 		end
+		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
+		local nowClock = os.clock()
+		local last = lastAdminChat[player.UserId]
+		if last and last.Text == text and nowClock - last.At < 1.0 then
+			return
+		end
+		lastAdminChat[player.UserId] = { Text = text, At = nowClock }
 		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		-- v71: owner playtest — /level <n> (default ADMIN_DEFAULT_LEVEL) and /xp <n> (default ADMIN_DEFAULT_XP).
+		-- Allowlist only (AdminService.IsAdmin above); server-side; no remote grants XP.
+		if isLevelCmd or isXpCmd then
+			local num = tonumber(rest)
+			local valid = typeof(num) == "number" and num == num and num > 0
+			if isLevelCmd then
+				local lvl = if valid then math.clamp(math.floor(num :: number), 1, 1000) else ADMIN_DEFAULT_LEVEL
+				XPService.SetLevel(player, lvl)
+				local profile = DataService.GetProfile(player)
+				local now = if profile then profile.Level else lvl
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, string.format("Admin: level set to %d", now), "Success")
+				end
+				AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_level", arg = tostring(lvl) })
+			else
+				local amt = if valid then math.clamp(math.floor(num :: number), 1, 1_000_000_000) else ADMIN_DEFAULT_XP
+				local ok = XPService.AddXP(player, amt, "admin")
+				if deps.NotificationService then
+					deps.NotificationService.Notify(player, if ok then string.format("Admin: +%d XP", amt) else "Admin: XP not added (max level?)", if ok then "Success" else "Warn")
+				end
+				AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_xp", arg = tostring(amt) })
+			end
 			return
 		end
 		local explicit: number? = nil
@@ -466,6 +506,8 @@ function AdminService.Init(deps: { [string]: any })
 			end
 		end
 	end
+
+	AdminService._OnAdminChat = onAdminChat -- test hook (headless sim has no Player.Chatted)
 
 	local function hookPlayerChat(player: Player)
 		player.Chatted:Connect(function(message: string)
@@ -508,6 +550,16 @@ function AdminService.Init(deps: { [string]: any })
 					onAdminChat(player, unfilteredText)
 				end
 			end)
+			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" } }) do
+				local c = ensureCommand(spec[1], spec[2], spec[3])
+				c.Triggered:Connect(function(textSource: TextSource, unfilteredText: string)
+					local player = Players:GetPlayerByUserId(textSource.UserId)
+					if player then
+						onAdminChat(player, unfilteredText)
+					end
+				end)
+			end
 		end)
 		if not okCmd then
 			warn("[AdminService] TextChatCommand wire failed:", errCmd)
@@ -520,7 +572,13 @@ function AdminService.Init(deps: { [string]: any })
 					return
 				end
 				local lower = string.lower((string.gsub(text, "^%s+", "")))
-				if not (string.sub(lower, 1, 5) == "/cash" or string.sub(lower, 1, 9) == "/givecash") then
+				local isAdminLine = string.sub(lower, 1, 5) == "/cash"
+					or string.sub(lower, 1, 9) == "/givecash"
+					or string.sub(lower, 1, 6) == "/level"
+					or string.sub(lower, 1, 9) == "/setlevel"
+					or string.sub(lower, 1, 3) == "/xp"
+					or string.sub(lower, 1, 7) == "/givexp"
+				if not isAdminLine then
 					return
 				end
 				local src = message.TextSource

@@ -1758,6 +1758,10 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDrive
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "\"Armed Jeep\"", "JEEP-2 no Jeep brand in garage copy")
 must_not_contain("src/ServerScriptService/Server/Modules/Interiors/VehicleDepot.luau", "JEEP-02", "JEEP-2 depot status board brand-free")
 
+# v71 owner playtest chat commands /level and /xp (verified: admin chat 11/11, admin money 28)
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", "local isLevelCmd = cmd == \"level\" or cmd == \"setlevel\"", "owner /level chat command (allowlist only)")
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", "if last and last.Text == text and nowClock - last.At < 1.0 then", "admin chat line runs once across chat paths")
+
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).
 # Needs luau-compile (https://github.com/luau-lang/luau/releases → luau-ubuntu.zip / luau-macos.zip).
