@@ -2,9 +2,14 @@
 --[[
 	WAR EMPIRE — MapSetup (shared world build)
 	Builds Workspace.WarEmpireSetup: map, plots, structure kits, territories,
-	spawns, tutorial markers, NPC placeholders, desert lighting, MapDressing + DesertFlora.
+	spawns, tutorial markers, MapDressing + DesertFlora.
 	Called from Bootstrap when WarEmpireSetup is missing (Play Solo / server start).
 	Admin `resetmap` destroys WarEmpireSetup and re-runs.
+	World v2 W1 (gap/world_v2_spec.md §1.6 / §3.3–§3.5, roadmap §2.2 WORLD-A): WorldAtmosphere owns the lighting,
+	WorldBounds builds the skyline / ground and air walls / seabed tint / far shore, WorldTerrain fills the canyon edge
+	(each call guarded: a failure never stops the map build). The mesa Part ring, the ground fill patches, the 20 static
+	soldier statues, the "OIL FIELD" pads and the grey landmark hosts are gone. Spawns come from WorldConfig.Spawns:
+	10 painted garage pads (6 outside the front gates), invisible NPC / event anchors, no beacons, no Neon.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -24,6 +29,8 @@ local BaseLayout = require(script.Parent:WaitForChild("BaseLayout"))
 local WaterConfig = require(SharedConfigs:WaitForChild("WaterConfig"))
 -- v70 (HUD spec §5): every floating label goes through the shared helper (stud-scaled, 14-20 px, MaxDistance <= 40)
 local WorldLabel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("WorldLabel"))
+-- World v2: spawn pads / anchors (Spawns) and the SafetyCatch look (Bounds.SafetyCatch)
+local WorldConfig = require(SharedConfigs:WaitForChild("WorldConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -95,6 +102,9 @@ local PLOT_POSITIONS = {
 	Vector3.new(PLOT_RING, 0.5, PLOT_RING * 0.5), -- Plot6 NE
 }
 
+-- World v2 (spec §3.4): each fort's wall toward its nearest road has a 16-wide gate (GateSide = the gated wall)
+local FORT_GATE_WIDTH = 16
+
 local TERRITORIES = {
 	{ Id = "CentralPlaza", DisplayName = "Central Plaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 70 },
 	{ Id = "NorthRidge", DisplayName = "North Ridge", Pos = Vector3.new(0, 1, -1300), Color = Color3.fromRGB(55, 120, 180), Radius = 60 },
@@ -106,8 +116,8 @@ local TERRITORIES = {
 	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
 	{ Id = "CoastalOilAlpha", DisplayName = "Coastal Oil Alpha", Pos = Vector3.new(1800, 28, -750), Color = Color3.fromRGB(190, 145, 45), Radius = 48, OilRig = true },
 	{ Id = "CoastalOilBravo", DisplayName = "Coastal Oil Bravo", Pos = Vector3.new(-1800, 28, 750), Color = Color3.fromRGB(170, 125, 40), Radius = 48, OilRig = true },
-	{ Id = "FortIronclad", DisplayName = "Fort Ironclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true },
-	{ Id = "FortSandhold", DisplayName = "Fort Sandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true },
+	{ Id = "FortIronclad", DisplayName = "Fort Ironclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true, GateSide = 1 }, -- +Z wall, toward RoadZ-800
+	{ Id = "FortSandhold", DisplayName = "Fort Sandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true, GateSide = -1 }, -- -Z wall, toward RoadZ800
 }
 
 local function ensureFolder(name, parent)
@@ -202,31 +212,9 @@ local function kitPart(parentPlinth, role, size, localOffset, color, material, s
 	return p
 end
 
-local function neonEdge(parentPart, color, thickness)
-	local t = thickness or 0.35
-	local s = parentPart.Size
-	local edges = {
-		{ Vector3.new(s.X + t, t, t), Vector3.new(0, s.Y * 0.5, s.Z * 0.5) },
-		{ Vector3.new(s.X + t, t, t), Vector3.new(0, s.Y * 0.5, -s.Z * 0.5) },
-		{ Vector3.new(t, t, s.Z + t), Vector3.new(s.X * 0.5, s.Y * 0.5, 0) },
-		{ Vector3.new(t, t, s.Z + t), Vector3.new(-s.X * 0.5, s.Y * 0.5, 0) },
-	}
-	for i, e in ipairs(edges) do
-		local edge = part({
-			Name = "Edge" .. i,
-			Size = e[1],
-			CFrame = parentPart.CFrame * CFrame.new(e[2]),
-			Color = color,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			Transparency = 0.15,
-			Parent = parentPart.Parent,
-		})
-		edge:SetAttribute("WE_Decor", true)
-	end
-end
+-- World v2 W1: the Neon kerb edge (neonEdge) is gone: nothing outside the bases glows; paintEdge below is the one edge
 
--- v67: painted kerb edge (same geometry as neonEdge, no glow)
+-- v67: painted kerb edge (no glow)
 local function paintEdge(parentPart, color, thickness)
 	local t = thickness or 0.35
 	local s = parentPart.Size
@@ -292,6 +280,8 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 end
 
 -- v70: `turn` (optional) = the plot frame for a plot beacon, so the beacon turns with its plot
+-- World v2 W1 (spec §5.2 row 2): a painted pole + SmoothPlastic tip, no Neon and no glow disc. Only the bank keeps one;
+-- garage pads, naval pontoons and capture zones have none.
 local function beacon(parent, at: Vector3, color, name, turn: CFrame?)
 	local function place(dy: number): CFrame
 		local cf = CFrame.new(at + Vector3.new(0, dy, 0))
@@ -311,18 +301,8 @@ local function beacon(parent, at: Vector3, color, name, turn: CFrame?)
 		Size = Vector3.new(1.6, 1.6, 1.6),
 		CFrame = place(13),
 		Color = color,
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.SmoothPlastic,
 		Shape = Enum.PartType.Ball,
-		CanCollide = false,
-		Parent = parent,
-	})
-	part({
-		Name = (name or "Beacon") .. "_Glow",
-		Size = Vector3.new(3.2, 0.4, 3.2),
-		CFrame = place(0.3),
-		Color = color,
-		Material = Enum.Material.Neon,
-		Transparency = 0.55,
 		CanCollide = false,
 		Parent = parent,
 	})
@@ -866,7 +846,10 @@ local function buildSafetyUnderfloor(mapFolder: Instance): (number, boolean)
 			table.insert(specs, { Name = name, At = Vector3.new(x, SAFETY_FLOOR_Y, z), Size = Vector3.new(tile, 4, tile) })
 		end
 	end
-	return healTileSet(mapFolder, specs, { Color = Color3.fromRGB(18, 22, 18), Material = Enum.Material.Slate, Transparency = 0.92 })
+	-- World v2 (spec §1.4): opaque sand (was Slate, Transparency 0.92), so a ray that clears the skyline meets a
+	-- sand-coloured plain instead of the void; an opaque floor is also cheaper to draw on phones
+	local look = WorldConfig.Bounds.SafetyCatch
+	return healTileSet(mapFolder, specs, { Color = look.Color, Material = look.Material, Transparency = look.Transparency })
 end
 
 -- one ring side = EDGE_PIECES pieces: <prefix><N|S|E|W> (first piece keeps the legacy name), then _2 .. _4
@@ -903,189 +886,9 @@ local function buildInvisibleWalls(mapFolder: Instance): (number, boolean)
 	return healTileSet(mapFolder, specs, { Color = Color3.fromRGB(40, 50, 40), Material = Enum.Material.SmoothPlastic, Transparency = 1 })
 end
 
-local function buildMountainRing(root: Folder)
-	--[[
-		Desert mesa / butte rim — terracotta / sienna / reddish-brown layered Part kits.
-		Flat-topped sedimentary striations; varied heights; foothills + collide berm.
-		Keeps continuous floor / CanCollide perimeter from void-fall fix (4021025).
-	]]
-	local folder = Instance.new("Folder")
-	folder.Name = "MountainRing"
-	folder.Parent = root
-
-	local mesaColors = {
-		Color3.fromRGB(168, 95, 58), -- terracotta
-		Color3.fromRGB(145, 78, 48), -- burnt sienna
-		Color3.fromRGB(185, 110, 70), -- warm sandstone
-		Color3.fromRGB(130, 72, 48), -- deep clay
-		Color3.fromRGB(175, 105, 65), -- mesa orange
-		Color3.fromRGB(155, 88, 55), -- red rock
-	}
-	local strataLight = Color3.fromRGB(200, 145, 100)
-	local strataDark = Color3.fromRGB(110, 62, 40)
-	local sandFoothill = Color3.fromRGB(195, 160, 110)
-
-	local half = GROUND_SIZE * 0.5
-	local ringR = half + 90
-	-- PERF: 12–16 segments (was 24). Studio laptops struggle with mesa*strata*cap parts.
-	local configured = tonumber(DevConfig.MountainRingSegments) or 14
-	local segCount = math.clamp(math.floor(configured), 12, 24)
-	local segArc = (math.pi * 2) / segCount
-	local segLen = ringR * segArc * 1.12
-
-	for i = 1, segCount do
-		local angle = (i - 0.5) * segArc
-		local cx = math.cos(angle) * ringR
-		local cz = math.sin(angle) * ringR
-		local hSeed = ((i * 17 + 31) % 80) + 40
-		local height = hSeed
-		if i % 7 == 0 then
-			height = math.min(125, height + 32)
-		elseif i % 5 == 0 then
-			height = math.max(42, height - 16)
-		end
-		-- Flat-topped mesa: slightly shorter + wider top silhouette
-		local depth = 58 + (i % 5) * 9
-		local yaw = -angle + math.pi * 0.5
-		local col = mesaColors[((i - 1) % #mesaColors) + 1]
-		local mat = Enum.Material.Sandstone
-		if i % 3 == 0 then
-			mat = Enum.Material.Rock
-			col = col:Lerp(strataDark, 0.25)
-		elseif i % 4 == 0 then
-			mat = Enum.Material.Slate
-			col = col:Lerp(Color3.fromRGB(140, 95, 70), 0.3)
-		end
-		local ridge = part({
-			Name = "Mesa_" .. i,
-			Size = Vector3.new(segLen, height, depth),
-			CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.5 - 2, cz) * CFrame.Angles(0, yaw, 0),
-			Color = col,
-			Material = mat,
-			CanCollide = true,
-			Anchored = true,
-			Parent = folder,
-		})
-		ridge:SetAttribute("WE_Mountain", true)
-		-- Sedimentary striation bands (visual only) — every 3rd segment (perf)
-		if i % 3 == 0 then
-			local bandH = math.clamp(height * 0.12, 4, 10)
-			part({
-				Name = "Strata_" .. i,
-				Size = Vector3.new(segLen * 1.02, bandH, depth * 0.98),
-				CFrame = CFrame.new(cx, GROUND_TOP_Y + height * 0.38, cz) * CFrame.Angles(0, yaw, 0),
-				Color = if i % 4 == 0 then strataLight else strataDark,
-				Material = Enum.Material.Sandstone,
-				CanCollide = false,
-				Anchored = true,
-				Transparency = 0.08,
-				Parent = folder,
-			}):SetAttribute("WE_Mountain", true)
-		end
-		-- Flat mesa cap (butte top) — every 3rd segment (perf)
-		if i % 3 == 0 then
-			local tipH = 6 + (i % 5) * 2
-			part({
-				Name = "MesaCap_" .. i,
-				Size = Vector3.new(segLen * 0.72, tipH, depth * 0.7),
-				CFrame = CFrame.new(cx, GROUND_TOP_Y + height + tipH * 0.25 - 2, cz) * CFrame.Angles(0, yaw, 0),
-				Color = col:Lerp(strataLight, 0.35),
-				Material = Enum.Material.Sandstone,
-				CanCollide = false,
-				Anchored = true,
-				Parent = folder,
-			}):SetAttribute("WE_Mountain", true)
-		end
-		-- Inner foothill shelf (sand) — collide continuity from berm (sparser)
-		if i % 4 == 0 then
-			local footH = 12 + (i % 4) * 3
-			local footR = half + 35
-			local fx = math.cos(angle) * footR
-			local fz = math.sin(angle) * footR
-			part({
-				Name = "Foothill_" .. i,
-				Size = Vector3.new(segLen * 0.9, footH, 38),
-				CFrame = CFrame.new(fx, GROUND_TOP_Y + footH * 0.5 - 1, fz) * CFrame.Angles(0, yaw, 0),
-				Color = sandFoothill,
-				Material = Enum.Material.Sand,
-				CanCollide = true,
-				Anchored = true,
-				Parent = folder,
-			}):SetAttribute("WE_Mountain", true)
-		end
-	end
-
-	-- Mid-ground rocky outcrops just inside the ring (sandy floor props)
-	for oi = 1, 4 do
-		local ang = (oi / 12) * math.pi * 2 + 0.2
-		local orad = half - 220 - (oi % 4) * 40
-		local ox = math.cos(ang) * orad
-		local oz = math.sin(ang) * orad
-		local oh = 10 + (oi % 5) * 4
-		part({
-			Name = "Outcrop_" .. oi,
-			Size = Vector3.new(28 + (oi % 3) * 8, oh, 22 + (oi % 2) * 6),
-			Position = Vector3.new(ox, GROUND_TOP_Y + oh * 0.5 - 1, oz),
-			Color = mesaColors[((oi - 1) % #mesaColors) + 1],
-			Material = Enum.Material.Sandstone,
-			CanCollide = true,
-			Anchored = true,
-			Parent = folder,
-		}):SetAttribute("WE_Mountain", true)
-	end
-
-	-- Corner massifs (extra bulk — flat-topped buttes)
-	-- Cardinal buttes only (was 8 incl. diagonals) — Studio collide/GPU win
-	local massifs = {
-		{ 0, -1, "N" },
-		{ 0, 1, "S" },
-		{ 1, 0, "E" },
-		{ -1, 0, "W" },
-	}
-	for mi, m in ipairs(massifs) do
-		local mx = m[1] * (half + 120)
-		local mz = m[2] * (half + 120)
-		local mh = 75 + (mi % 4) * 14
-		part({
-			Name = "Butte_" .. m[3],
-			Size = Vector3.new(150, mh, 150),
-			Position = Vector3.new(mx, GROUND_TOP_Y + mh * 0.5 - 4, mz),
-			Color = mesaColors[((mi - 1) % #mesaColors) + 1],
-			Material = Enum.Material.Sandstone,
-			CanCollide = true,
-			Anchored = true,
-			Parent = folder,
-		}):SetAttribute("WE_Mountain", true)
-		-- Flat caps omitted for perf (mesa segments already have caps)
-	end
-
-	print("[WAR EMPIRE] MapSetup: MountainRing mesas=" .. tostring(segCount) .. " + buttes/outcrops (desert terracotta)")
-end
-
-local function buildVisualFillPatches(mapFolder: Folder)
-	-- Low-cost ground patches between plot ring and mid-map so dead space doesn't look empty
-	local patches = {
-		Vector3.new(400, GROUND_TOP_Y + 0.08, 200),
-		Vector3.new(-350, GROUND_TOP_Y + 0.08, -250),
-		Vector3.new(600, GROUND_TOP_Y + 0.08, -100),
-		Vector3.new(-400, GROUND_TOP_Y + 0.08, -550),
-	}
-	for i, pos in ipairs(patches) do
-		local w = 80 + (i % 4) * 25
-		local d = 55 + (i % 3) * 20
-		part({
-			Name = "FillPatch_" .. i,
-			Size = Vector3.new(w, 0.2, d),
-			Position = pos,
-			Color = if i % 2 == 0 then Color3.fromRGB(220, 195, 140) else Color3.fromRGB(195, 165, 115),
-			Material = if i % 2 == 0 then Enum.Material.Sand else Enum.Material.Sandstone,
-			CanCollide = false,
-			Anchored = true,
-			Transparency = 0.05,
-			Parent = mapFolder,
-		})
-	end
-end
+-- World v2 W1 (spec §1.6): buildMountainRing (the 14-mesa Part ring past the berm) and buildVisualFillPatches are
+-- gone. The edge is WorldTerrain (Terrain canyon) + WorldBounds (skyline, walls, far shore); Phase 2 paints ground patches
+-- as Terrain.
 
 local function buildOilDeckRamp(parent: Folder, territoryId: string, deckPos: Vector3, towardCenter: Vector3)
 	--[[
@@ -1160,8 +963,9 @@ MapSetup.GROUND_TILE_SIZE = GROUND_SIZE / GROUND_TILES_PER_SIDE
 MapSetup.GROUND_TILES = GROUND_TILES_PER_SIDE * GROUND_TILES_PER_SIDE
 -- v70: stamped on WarEmpireSetup (WE_MapGen). Bootstrap rebuilds a saved / baked map whose stamp differs, so a place
 -- saved with an older layout (unturned plots, one WaterPlane) never keeps it. The stamp also encodes
--- BaseLayoutConfig.FaceMapCentre (70 = off, 71 = on), so flipping the flag rebuilds a map baked with the other value.
-MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 71 else 70
+-- BaseLayoutConfig.FaceMapCentre (even = off, odd = on), so flipping the flag rebuilds a map baked with the other value.
+-- World v2 W1: 70/71 → 80/81, so a saved map with the mesa ring, statues, beacons and old spawn rings is rebuilt.
+MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 81 else 80
 
 -- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
 function MapSetup.CountGroundTiles(setup: Instance): number
@@ -1281,10 +1085,7 @@ function MapSetup.EnsureGroundHealthy(setup: Instance): boolean
 	local _, catchRepaired = buildSafetyUnderfloor(map)
 	repaired = repaired or catchRepaired
 
-	if not setup:FindFirstChild("MountainRing") then
-		buildMountainRing(setup :: Folder)
-		repaired = true
-	end
+	-- World v2 W1: no Part mountain ring to heal any more (the edge is Terrain + WorldBounds, rebuilt by MapSetup.Run)
 	local _, bermRepaired = buildEdgeBerms(map)
 	local _, wallRepaired = buildInvisibleWalls(map)
 	repaired = repaired or bermRepaired or wallRepaired
@@ -1330,9 +1131,6 @@ function MapSetup.ForceRebuildGround(setup: Instance): boolean
 	end
 	buildEdgeBerms(map)
 	buildInvisibleWalls(map)
-	if not setup:FindFirstChild("MountainRing") then
-		buildMountainRing(setup :: Folder)
-	end
 	buildPadSupportShelves(setup :: Folder)
 
 	local healthy = countHealthyGroundTiles(map)
@@ -2133,11 +1931,9 @@ local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vect
 	buildPremiumPads(folder, plotId, F, base + Vector3.new(28, 0, 8))
 end
 
-function MapSetup.Run()
-	-- Normal gravity so characters fall onto terrain (not float/void)
-	Workspace.Gravity = 196.2
-
-	-- Lighting / sky / atmosphere — bright midday desert (inspiration only)
+-- Pre-World-v2 lighting (bright midday desert + the 1.5 s day loop). Kept only as the fallback when Modules.WorldAtmosphere
+-- is missing or fails; the one-line look revert is WorldConfig.Atmosphere.Preset = "Classic".
+local function applyClassicLighting()
 	local worldLight = (StructureVisualConfig :: any).WorldLighting or {}
 	Lighting.Ambient = worldLight.DayAmbient or Color3.fromRGB(165, 145, 110)
 	Lighting.OutdoorAmbient = Color3.fromRGB(185, 165, 130)
@@ -2218,6 +2014,36 @@ function MapSetup.Run()
 			task.wait(WAIT)
 		end
 	end)
+end
+
+-- World v2 W1: run fn(module) on one of the Modules.World* modules. A missing module or an error is logged and never
+-- stops the map build. Returns true when fn ran without error.
+local function withWorldModule(name: string, fn: (any) -> ()): boolean
+	local mod = script.Parent:FindFirstChild(name)
+	if not (mod and mod:IsA("ModuleScript")) then
+		warn("[WAR EMPIRE] MapSetup: Modules." .. name .. " missing — skipped (map continues)")
+		return false
+	end
+	local ok, err = pcall(function()
+		fn(require(mod) :: any)
+	end)
+	if not ok then
+		warn("[WAR EMPIRE] MapSetup: " .. name .. " failed (map continues):", err)
+	end
+	return ok
+end
+
+function MapSetup.Run()
+	-- Normal gravity so characters fall onto terrain (not float/void)
+	Workspace.Gravity = 196.2
+
+	-- World v2 (spec §2): WorldAtmosphere owns Lighting / Sky / Atmosphere and the day cycle (warm haze, no blue below
+	-- the horizon, agent F's ambient, one step every 6 s). Idempotent: a second Run replaces the day loop.
+	if not withWorldModule("WorldAtmosphere", function(m: any)
+		m.Apply()
+	end) then
+		applyClassicLighting()
+	end
 
 	local root = ensureFolder("WarEmpireSetup", Workspace)
 	local map = ensureFolder("Map", root)
@@ -2227,8 +2053,6 @@ function MapSetup.Run()
 	buildSafetyUnderfloor(map)
 	buildEdgeBerms(map)
 	buildInvisibleWalls(map)
-	buildVisualFillPatches(map)
-	buildMountainRing(root)
 	-- Road grid scaled to plot ring (optional visual guide)
 	-- v70 (§6): with the waterways every road stops WaterConfig.RoadEndSetback studs before the first water (no
 	-- bridges; every land outpost is inside the ring) and is built as two parts split at 0 (<name>_A: Min..0,
@@ -2320,36 +2144,58 @@ function MapSetup.Run()
 		end)
 	end)
 
-		-- Yellow centerline dashes (asphalt polish — competitor desert roads)
-	for _, z in ipairs({ -PLOT_RING, 0, PLOT_RING }) do
+	-- Yellow centre-line dashes. World v2 W1 (spec §7.1): 40 painted SmoothPlastic dashes (was 80 Neon), only on the
+	-- approaches: a dash stays when it lies within DASH_APPROACH studs (3 dashes) along its road of a visible crossing
+	-- (the town at 0,0 and the six ring crossings; the crossings at 0,±800 are under plots 3 / 4) and never under a plot
+	-- pad (those were hidden under the pad anyway). Road markings: RoadDash* is exempt from the road-corridor rules.
+	local DASH_APPROACH = 270
+	local ROAD_LINES = { -PLOT_RING, 0, PLOT_RING }
+	local function underPlotPad(x: number, z: number): boolean
+		local half = PLOT_PAD_SIZE * 0.5 + 4
+		for _, pp in ipairs(PLOT_POSITIONS) do
+			if math.abs(x - pp.X) <= half and math.abs(z - pp.Z) <= half then
+				return true
+			end
+		end
+		return false
+	end
+	local function nearVisibleCrossing(alongX: boolean, across: number, at: number): boolean
+		for _, c in ipairs(ROAD_LINES) do
+			local cx = if alongX then c else across
+			local cz = if alongX then across else c
+			if not underPlotPad(cx, cz) and math.abs(at - c) <= DASH_APPROACH then
+				return true
+			end
+		end
+		return false
+	end
+	local function roadDash(name: string, alongX: boolean, across: number, at: number)
+		local x = if alongX then at else across
+		local z = if alongX then across else at
+		if underPlotPad(x, z) or not nearVisibleCrossing(alongX, across, at) then
+			return
+		end
+		part({
+			Name = name,
+			Size = if alongX then Vector3.new(8, 0.12, 1.2) else Vector3.new(1.2, 0.12, 8),
+			Position = Vector3.new(x, GROUND_TOP_Y + 0.12, z),
+			Color = Color3.fromRGB(240, 210, 60),
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			Parent = map,
+		})
+	end
+	for _, z in ipairs(ROAD_LINES) do
 		for i = -8, 8 do
 			if i ~= 0 then
-				part({
-					Name = "RoadDashZ" .. z .. "_" .. i,
-					Size = Vector3.new(8, 0.12, 1.2),
-					Position = Vector3.new(i * 90, GROUND_TOP_Y + 0.12, z),
-					Color = Color3.fromRGB(240, 210, 60),
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-					Transparency = 0.25,
-					Parent = map,
-				})
+				roadDash("RoadDashZ" .. z .. "_" .. i, true, z, i * 90)
 			end
 		end
 	end
 	for _, x in ipairs({ -PLOT_RING, PLOT_RING }) do
 		for i = -8, 8 do
 			if i ~= 0 then
-				part({
-					Name = "RoadDashX" .. x .. "_" .. i,
-					Size = Vector3.new(1.2, 0.12, 8),
-					Position = Vector3.new(x, GROUND_TOP_Y + 0.12, i * 90),
-					Color = Color3.fromRGB(240, 210, 60),
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-					Transparency = 0.25,
-					Parent = map,
-				})
+				roadDash("RoadDashX" .. x .. "_" .. i, false, x, i * 90)
 			end
 		end
 	end
@@ -2752,15 +2598,21 @@ function MapSetup.Run()
 	local territories = ensureFolder("Territories", root)
 	for _, def in ipairs(TERRITORIES) do
 		local diameter = (def.Radius or 30) * 2
+		-- World v2 (spec §3.5): the capture marker keeps its Size (TerritoryCapture reads its half-diagonal) but is an
+		-- invisible, non-colliding volume (it was a glowing 1.5-tall slab across five roads). The visible cue is the
+		-- flat <Id>_Ring disc below; TerritoryService writes only the owner colour.
 		local marker = part({
 			Name = def.Id,
 			Size = Vector3.new(diameter, 1.5, diameter),
 			Position = def.Pos,
 			Color = def.Color,
-			Transparency = 0.45,
-			Material = Enum.Material.Neon,
+			Transparency = 1,
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
 			Parent = territories,
 		})
+		marker.CanQuery = false
+		marker.CanTouch = false
 		marker:SetAttribute("TerritoryId", def.Id)
 		marker:SetAttribute("Radius", def.Radius or 30)
 		marker:SetAttribute("OwnerType", "Neutral")
@@ -2769,25 +2621,33 @@ function MapSetup.Run()
 		CollectionService:AddTag(marker, TAG_TERRITORY)
 		CollectionService:AddTag(marker, TAG_CAPTURE)
 
-		do
-			local zoneName = def.DisplayName or def.Id
-			local bb = plainBillboard(marker, zoneName .. "  [NEUTRAL]  ·  Stand to capture", Vector2.new(280, 48), 12, Color3.new(1, 1, 1))
-			if typeof(bb) == "Instance" and bb:IsA("BillboardGui") then
-				bb.MaxDistance = 220 -- named capture zones readable from farther
-				bb.StudsOffset = Vector3.new(0, 14, 0)
-			end
-		end
+		-- Zone name: the same stud-scaled label TerritoryService.ensureZoneLabel makes (it reuses WE_ZoneLabel), so the
+		-- world never shows the old 220-stud "[NEUTRAL] · Stand to capture" card, even before the service starts
+		WorldLabel.Create(marker, def.DisplayName or def.Id, {
+			Name = "WE_ZoneLabel",
+			Studs = Vector2.new(8, 1.6),
+			Offset = Vector3.new(0, 16, 0),
+			MaxDistance = 40,
+		})
 
-		part({
+		-- Flat disc (spec §3.5): a Cylinder lying on its side, top at y 0.58 on the ground (on the deck top for a rig,
+		-- sized to the 48-stud deck instead of overhanging the sea)
+		local ringD = if def.OilRig then math.min(diameter + 8, 46) else diameter + 8
+		local ringTop = if def.OilRig then def.Pos.Y + 0.13 else GROUND_TOP_Y + 0.08
+		local ring = part({
 			Name = def.Id .. "_Ring",
-			Size = Vector3.new(diameter + 8, 0.4, diameter + 8),
-			Position = def.Pos + Vector3.new(0, 0.2, 0),
+			Size = Vector3.new(0.12, ringD, ringD),
+			CFrame = CFrame.new(def.Pos.X, ringTop - 0.06, def.Pos.Z) * CFrame.Angles(0, 0, math.rad(90)),
 			Color = def.Color,
-			Transparency = 0.65,
+			Transparency = 0.55,
 			CanCollide = false,
 			Material = Enum.Material.SmoothPlastic,
+			Shape = Enum.PartType.Cylinder,
 			Parent = territories,
-		}):SetAttribute("TerritoryId", def.Id)
+		})
+		ring.CanQuery = false
+		ring.CanTouch = false
+		ring:SetAttribute("TerritoryId", def.Id)
 
 		part({
 			Name = def.Id .. "_FlagPole",
@@ -2803,7 +2663,7 @@ function MapSetup.Run()
 			Size = Vector3.new(5.5, 3.2, 0.22),
 			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
 			Color = def.Color,
-			Material = Enum.Material.Neon,
+			Material = Enum.Material.SmoothPlastic, -- painted (TerritoryService keeps it SmoothPlastic)
 			CanCollide = false,
 			Transparency = 0.08,
 			Parent = territories,
@@ -2825,13 +2685,13 @@ function MapSetup.Run()
 			Size = Vector3.new(0.7, 0.7, 0.7),
 			Position = def.Pos + Vector3.new(0, 14.4, 0),
 			Color = Color3.fromRGB(230, 190, 60),
-			Material = Enum.Material.Neon,
+			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Ball,
 			CanCollide = false,
 			Parent = territories,
 		})
 
-		beacon(territories, def.Pos + Vector3.new(def.Radius * 0.6, 0, 0), def.Color, def.Id .. "_Beacon")
+		-- World v2 W1: no beacon pole in the capture zone (the flag pole and the disc mark it)
 
 		-- Coastal oil platform deck + legs + harder NPC guards
 		if def.OilRig then
@@ -2859,7 +2719,7 @@ function MapSetup.Run()
 					})
 				end
 			end
-			-- Derrick + crane tip + neon rim (visual kits v2)
+			-- Derrick + crane tip + painted deck rim (visual kits v2; World v2: no Neon)
 			part({
 				Name = def.Id .. "_Derrick",
 				Size = Vector3.new(4, 22, 4),
@@ -2888,15 +2748,15 @@ function MapSetup.Run()
 				Parent = territories,
 			})
 			part({
-				Name = def.Id .. "_NeonRim",
+				Name = def.Id .. "_DeckRim",
 				Size = Vector3.new(46, 0.35, 0.5),
 				Position = Vector3.new(def.Pos.X, deckY + 0.3, def.Pos.Z + 23),
 				Color = Color3.fromRGB(255, 180, 60),
-				Material = Enum.Material.Neon,
+				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
 				Parent = territories,
 			})
-			plainBillboard(deck, def.Id .. "  ·  OIL PLATFORM  ·  Hard guards", Vector2.new(300, 44), 14, Color3.fromRGB(255, 210, 120))
+			-- World v2 W1: no "OIL PLATFORM · Hard guards" card (the zone label names the rig; CLAUDE.md: no debug labels)
 			-- Stairs from deck down to ground (prevent 28-stud death plunge)
 			-- v70 (§7.1): on the waterways map the stairs are the rig's pier across the lagoon, snapped to the X axis
 			-- toward the map centre (Alpha steps x 1765 → 1684, approach pad on the inner bank; Bravo mirrored)
@@ -2954,15 +2814,32 @@ function MapSetup.Run()
 				{ Vector3.new(wallT, wallH, span * 2), Vector3.new(span, wallH / 2, 0) },
 				{ Vector3.new(wallT, wallH, span * 2), Vector3.new(-span, wallH / 2, 0) },
 			}
+			-- World v2 (spec §3.4): the wall facing the fort's nearest road (GateSide: 1 = +Z wall, -1 = -Z wall) is two
+			-- pieces with a FORT_GATE_WIDTH gap, so infantry and vehicles can drive in (the fort was a closed box)
+			local gateWall = if def.GateSide == 1 then 1 elseif def.GateSide == -1 then 2 else nil
 			for wi, wd in ipairs(wallDefs) do
-				part({
-					Name = def.Id .. "_Wall" .. wi,
-					Size = wd[1],
-					Position = def.Pos + wd[2],
-					Color = Color3.fromRGB(95, 90, 75),
-					Material = Enum.Material.Concrete,
-					Parent = territories,
-				})
+				if wi == gateWall then
+					local pieceLen = (span * 2 - FORT_GATE_WIDTH) * 0.5
+					for k, sgn in ipairs({ -1, 1 }) do
+						part({
+							Name = def.Id .. "_Wall" .. wi .. (if k == 1 then "" else "b"),
+							Size = Vector3.new(pieceLen, wallH, wallT),
+							Position = def.Pos + wd[2] + Vector3.new(sgn * (FORT_GATE_WIDTH * 0.5 + pieceLen * 0.5), 0, 0),
+							Color = Color3.fromRGB(95, 90, 75),
+							Material = Enum.Material.Concrete,
+							Parent = territories,
+						})
+					end
+				else
+					part({
+						Name = def.Id .. "_Wall" .. wi,
+						Size = wd[1],
+						Position = def.Pos + wd[2],
+						Color = Color3.fromRGB(95, 90, 75),
+						Material = Enum.Material.Concrete,
+						Parent = territories,
+					})
+				end
 			end
 			local keep = part({
 				Name = def.Id .. "_Keep",
@@ -2982,7 +2859,7 @@ function MapSetup.Run()
 				CanCollide = false,
 				Parent = territories,
 			})
-			-- Corner towers + gate neon
+			-- Corner towers + gate lintel
 			for _, corner in ipairs({
 				Vector3.new(span, 0, span),
 				Vector3.new(span, 0, -span),
@@ -2998,95 +2875,130 @@ function MapSetup.Run()
 					Parent = territories,
 				})
 			end
-			part({
-				Name = def.Id .. "_GateNeon",
-				Size = Vector3.new(8, 0.4, 0.5),
-				Position = def.Pos + Vector3.new(0, 1.5, span),
+			-- SmoothPlastic lintel over the gate (was a Neon strip on a wall with no gate); non-colliding, so it never
+			-- snags a tall vehicle
+			local gz = if def.GateSide == -1 then -span else span
+			local lintel = part({
+				Name = def.Id .. "_GateLintel",
+				Size = Vector3.new(FORT_GATE_WIDTH + 2, 1, wallT + 0.4),
+				Position = def.Pos + Vector3.new(0, wallH - 0.5, gz),
 				Color = def.Color,
-				Material = Enum.Material.Neon,
+				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
 				Parent = territories,
 			})
-			plainBillboard(keep, def.Id .. "  ·  FORTRESS  ·  High stipend", Vector2.new(300, 44), 12, Color3.fromRGB(230, 210, 160))
+			lintel.CanQuery = false
+			-- World v2 W1: no "FORTRESS · High stipend" card (the zone label names the fort; no debug labels)
 		end
 	end
 
-	local function makeSpawnFolder(name, tag, count, center, color, ringRadius)
-		local folder = ensureFolder(name, root)
-		local ring = ringRadius or 200
-		-- v68: slide a spawn along its ring until it is PLOT_SPAWN_CLEARANCE outside every player plot
-		-- (NPCSpawns4 sat inside plot 4 even at the old 200 size; EventSpawns3 was 13 studs off plot 1).
-		local function inAnyPlot(p: Vector3): boolean
-			local half = PLOT_PAD_SIZE * 0.5 + PLOT_SPAWN_CLEARANCE
-			for _, pp in ipairs(PLOT_POSITIONS) do
-				if math.abs(p.X - pp.X) < half and math.abs(p.Z - pp.Z) < half then
-					return true
-				end
+	-- World v2 (spec §3.3): spawn pads and anchors come from WorldConfig.Spawns (the three makeSpawnFolder rings at
+	-- 650 / 550 / 500 are gone: their pads sat on the roads, carried Neon edges, H marks and a beacon pole through the jeep).
+	--   VehicleSpawns  10 garage pads (WE_VehicleSpawn): painted Concrete aprons + a painted kerb, a 1-post "Garage"
+	--                  sign (SurfaceGui, <= 80 studs; the world's only painted signs) on the back edge; no beacon, no billboard, no Neon. Gate_P1..P6 sit
+	--                  62 studs outside each plot's front gate (plot-local, so they turn with the plot) and face the plot
+	--                  forward; the pools face Yaw. VehicleService spawns on the pad heading (yawOf(pad.CFrame)).
+	--   NPCSpawns      10 invisible anchors (WE_NPCSpawn) in the Quarry / Ridge / Dune camps (CombatNPC.GatherSpawns)
+	--   EventSpawns    6 invisible anchors (WE_EventSpawn) (SupplyDropService lands the crate on the ground below)
+	local spawnCfg = WorldConfig.Spawns
+	-- v68: nothing spawns within PLOT_SPAWN_CLEARANCE of a plot pad (a config typo would put a pad inside a base)
+	local function nearAnyPlot(p: Vector3, halfSize: number): boolean
+		local half = PLOT_PAD_SIZE * 0.5 + PLOT_SPAWN_CLEARANCE + halfSize
+		for _, pp in ipairs(PLOT_POSITIONS) do
+			if math.abs(p.X - pp.X) < half and math.abs(p.Z - pp.Z) < half then
+				return true
 			end
-			return false
 		end
-		for i = 1, count do
-			local angle = (i / count) * math.pi * 2
-			local padAt = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
-			if inAnyPlot(padAt) then
-				for k = 1, 30 do
-					local found = false
-					for _, sgn in ipairs({ 1, -1 }) do
-						local a = angle + sgn * k * math.rad(2)
-						local p = center + Vector3.new(math.cos(a) * ring, 1, math.sin(a) * ring)
-						if not inAnyPlot(p) then
-							padAt = p
-							found = true
-							break
-						end
-					end
-					if found then
-						break
-					end
-				end
+		return false
+	end
+	-- garage pads: top 0.9 (a 0.4 lip over the desert floor, not the old 1.1 step), padSize from config
+	local GARAGE_Y = GROUND_TOP_Y + 0.4 - spawnCfg.PadSize.Y * 0.5
+	local garageFolder = ensureFolder("VehicleSpawns", root)
+	for _, def in ipairs(spawnCfg.Garage) do
+		local cf: CFrame? = nil
+		if def.PlotId ~= nil then
+			local plotPos = PLOT_POSITIONS[def.PlotId]
+			if plotPos then
+				local at = BaseLayout.PlotPoint(plotPos, def.LocalX or 0, def.LocalZ or 0)
+				-- face the plot forward (the pad's LookVector = the plot front, away from the gate)
+				local fwd = BaseLayout.PlotForward(plotPos)
+				local c = Vector3.new(at.X, GARAGE_Y, at.Z)
+				cf = CFrame.lookAt(c, c + fwd)
 			end
-			local padSize = if tag == TAG_VEHICLE then 20 else 14
+		elseif def.X ~= nil and def.Z ~= nil then
+			cf = CFrame.new(def.X, GARAGE_Y, def.Z) * CFrame.Angles(0, math.rad(def.Yaw or 0), 0)
+		end
+		if cf == nil then
+			warn("[WAR EMPIRE] MapSetup: garage pad " .. def.Id .. " has no position — skipped")
+			continue
+		end
+		if nearAnyPlot(cf.Position, spawnCfg.PadSize.X * 0.5) then
+			warn("[WAR EMPIRE] MapSetup: garage pad " .. def.Id .. " is within PLOT_SPAWN_CLEARANCE of a plot")
+		end
+		local pad = part({
+			Name = def.Id,
+			Size = spawnCfg.PadSize,
+			CFrame = cf,
+			Color = COL_VEHICLE,
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			Parent = garageFolder,
+		})
+		CollectionService:AddTag(pad, TAG_VEHICLE)
+		paintEdge(pad, COL_VEHICLE:Lerp(Color3.new(1, 1, 1), 0.55), 0.35)
+		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
+		local back = spawnCfg.PadSize.Z * 0.5 + 0.4
+		local topY = spawnCfg.PadSize.Y * 0.5
+		local post = part({
+			Name = "SignPost",
+			Size = Vector3.new(0.35, 4.2, 0.35),
+			CFrame = cf * CFrame.new(0, topY + 2.1, back),
+			Color = Color3.fromRGB(60, 62, 58),
+			Material = Enum.Material.Metal,
+			CanCollide = false,
+			Parent = garageFolder,
+		})
+		post.CanQuery = false
+		post.CanTouch = false
+		local board = part({
+			Name = "GarageSign",
+			Size = Vector3.new(4.4, 1.3, 0.2),
+			CFrame = cf * CFrame.new(0, topY + 4.4, back),
+			Color = Color3.fromRGB(40, 48, 58),
+			Material = Enum.Material.SmoothPlastic,
+			CanCollide = false,
+			Parent = garageFolder,
+		})
+		board.CanQuery = false
+		board.CanTouch = false
+		-- v70 (HUD spec §5, mobile P1-11): device-neutral text, no key names
+		WorldLabel.Surface(board, Enum.NormalId.Front, "Garage", { Name = "WE_PadSign", Color = Color3.fromRGB(200, 220, 255), MaxDistance = 80 })
+	end
+	-- invisible anchors: server-only readers (CombatNPC / SupplyDropService); no physics, no raycast target
+	local function anchorFolder(name: string, tag: string, list: { any }, color: Color3)
+		local folder = ensureFolder(name, root)
+		for _, a in ipairs(list) do
+			local at = Vector3.new(a.X, 1, a.Z)
+			if nearAnyPlot(at, spawnCfg.AnchorSize.X * 0.5) then
+				warn("[WAR EMPIRE] MapSetup: " .. name .. "." .. a.Id .. " is within PLOT_SPAWN_CLEARANCE of a plot")
+			end
 			local p = part({
-				Name = name .. i,
-				Size = Vector3.new(padSize, 1.2, padSize),
-				Position = padAt,
+				Name = a.Id,
+				Size = spawnCfg.AnchorSize,
+				Position = at,
 				Color = color,
-				Material = Enum.Material.Concrete,
+				Material = Enum.Material.SmoothPlastic,
+				Transparency = 1,
+				CanCollide = false,
 				Parent = folder,
 			})
+			p.CanQuery = false
+			p.CanTouch = false
 			CollectionService:AddTag(p, tag)
-			neonEdge(p, color:Lerp(Color3.new(1, 1, 1), 0.35), 0.35)
-			if tag == TAG_VEHICLE then
-				part({
-					Name = "HMark",
-					Size = Vector3.new(6, 0.2, 1),
-					Position = padAt + Vector3.new(0, 0.7, 0),
-					Color = Color3.fromRGB(200, 220, 255),
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-					Parent = folder,
-				})
-				part({
-					Name = "HMark2",
-					Size = Vector3.new(1, 0.2, 6),
-					Position = padAt + Vector3.new(0, 0.7, 0),
-					Color = Color3.fromRGB(200, 220, 255),
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-					Parent = folder,
-				})
-				beacon(folder, padAt, Color3.fromRGB(90, 160, 220), name .. i .. "_Beacon")
-				-- v70 (HUD spec §5, mobile P1-11): device-neutral stud-scaled tag (the old card named keys)
-				WorldLabel.Create(p, "Garage", { Name = "WE_PadLabel", Color = Color3.fromRGB(200, 220, 255) })
-			end
-			-- v70: NPC / event spawns carry no debug labels
 		end
 	end
-
-	-- Rings scaled for ~4800 ground: garage pads spread; more pads for large roster testing
-	makeSpawnFolder("VehicleSpawns", TAG_VEHICLE, 10, Vector3.new(0, 0, 0), COL_VEHICLE, 650)
-	makeSpawnFolder("NPCSpawns", TAG_NPC, 10, Vector3.new(480, 0, 480), COL_NPC, 550)
-	makeSpawnFolder("EventSpawns", TAG_EVENT, 6, Vector3.new(-480, 0, -480), COL_EVENT, 500)
+	anchorFolder("NPCSpawns", TAG_NPC, spawnCfg.NPC, COL_NPC)
+	anchorFolder("EventSpawns", TAG_EVENT, spawnCfg.Event, COL_EVENT)
 
 	-- v70 waterways (spec_final §5): Modules.Waterways builds root.CoastalWater (the sea, the ring canal round the map,
 	-- rig lagoons, the South Docks harbour, dock channels, sand banks). The old single WaterPlane and the HarborShelf
@@ -3107,12 +3019,29 @@ function MapSetup.Run()
 		end
 	end
 
+	-- World v2 (spec §1.1–§1.5): WorldBounds builds <root>.WE_Skyline (48 Persistent parts) and <root>.WE_Bounds (invisible
+	-- ground / air walls, seabed tint, far-shore lighthouse + freighter). WorldTerrain fills the Terrain canyon edge round
+	-- the ring canal and the Bay in the background (about 2,000 fills, yielding; skipped when Workspace.Terrain is already
+	-- stamped with WorldConfig.Terrain.Gen). Each call is guarded: a failure never stops the map build.
+	withWorldModule("WorldBounds", function(m: any)
+		m.Build(root)
+	end)
+	task.spawn(function()
+		withWorldModule("WorldTerrain", function(m: any)
+			m.Build()
+		end)
+	end)
+
 	-- Naval spawn pontoons (WaterConfig.NavalPads: the 9 sea pads + 3 ring landings at road ends). Tagged WE_NavalSpawn
 	-- only: a pad in the water must never be picked as a ground-vehicle / jeep spawn.
+	-- World v2 (spec §3.3): the deck + 1 painted trim part (a lighter inset, so the pontoon reads as a pad from a boat);
+	-- no beacon pole in the water, no Neon edge and no floating billboard. No painted name either: the world's painted
+	-- signs stay within WorldConfig.Budgets.SurfaceGuis (12; the 10 garage signs use 10) and the SurfaceGui hard cap
+	-- (6 bases at L5 already hold 1,104 of 1,134). Boats spawn from the Garage menu, so nobody has to find a pontoon.
 	do
 		local navalFolder = ensureFolder("NavalSpawns", root)
 		local padSize = WaterConfig.NavalPadSize
-		for i, np in ipairs(WaterConfig.NavalPads) do
+		for _, np in ipairs(WaterConfig.NavalPads) do
 			local padAt = Vector3.new(np.X, 1.5, np.Z)
 			local pad = part({
 				Name = np.Name,
@@ -3124,72 +3053,23 @@ function MapSetup.Run()
 				Parent = navalFolder,
 			})
 			CollectionService:AddTag(pad, TAG_NAVAL)
-			beacon(navalFolder, padAt, Color3.fromRGB(70, 180, 220), "NavalBeacon" .. i)
-			-- v70 (HUD spec §5, mobile P1-11): device-neutral stud-scaled tag (the old card named keys)
-			WorldLabel.Create(pad, "Naval", { Name = "WE_PadLabel", Color = Color3.fromRGB(160, 220, 255) })
+			local trim = part({
+				Name = np.Name .. "_Trim",
+				Size = Vector3.new(padSize - 3, 0.06, padSize - 3),
+				Position = padAt + Vector3.new(0, 0.6 + 0.03, 0),
+				Color = Color3.fromRGB(70, 112, 140),
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+				Parent = navalFolder,
+			})
+			trim.CanQuery = false
+			trim.CanTouch = false
 		end
 	end
 
-	local npcFolder = ensureFolder("NPCPlaceholders", root)
-	for i, spawnPart in ipairs(CollectionService:GetTagged(TAG_NPC)) do
-		if i > 4 then
-			break
-		end
-		makeSoldierKit(
-			npcFolder,
-			"HostileInfantry_" .. i,
-			spawnPart.CFrame + Vector3.new(0, 3.2, 0),
-			Color3.fromRGB(140, 55, 55),
-			"HOSTILE",
-			Color3.fromRGB(255, 120, 100),
-			80,
-			"Infantry",
-			"studio_npc_" .. i
-		)
-	end
-
-
-	-- Oil rig guards (harder NPC placeholders — visual kits v2 infantry)
-	for _, def in ipairs(TERRITORIES) do
-		if def.OilRig then
-			for gi = 1, 4 do
-				local angle = (gi / 4) * math.pi * 2
-				local gpos = def.Pos + Vector3.new(math.cos(angle) * 16, 2.6, math.sin(angle) * 16)
-				makeSoldierKit(
-					npcFolder,
-					def.Id .. "_Guard_" .. gi,
-					CFrame.new(gpos),
-					Color3.fromRGB(110, 70, 35),
-					"OIL GUARD",
-					Color3.fromRGB(255, 180, 80),
-					200,
-					"OilRigGuard",
-					def.Id .. "_guard_" .. gi
-				)
-			end
-		end
-	end
-
-	-- Fort guards
-	for _, def in ipairs(TERRITORIES) do
-		if def.Fortress then
-			for gi = 1, 4 do
-				local angle = (gi / 4) * math.pi * 2
-				local gpos = def.Pos + Vector3.new(math.cos(angle) * 22, 2.6, math.sin(angle) * 22)
-				makeSoldierKit(
-					npcFolder,
-					def.Id .. "_Guard_" .. gi,
-					CFrame.new(gpos),
-					Color3.fromRGB(100, 95, 70),
-					"FORT GUARD",
-					Color3.fromRGB(220, 200, 140),
-					170,
-					"FortGuard",
-					def.Id .. "_guard_" .. gi
-				)
-			end
-		end
-	end
+	-- World v2 W1 (spec §1.6, §5 H6): the NPCPlaceholders block is gone: 20 static soldier statues (4 "HOSTILE" on the
+	-- NPC pads, 4 per oil rig, 4 per fort) that never moved, carried a WE_NPC tag squads shot at, and stood on roads.
+	-- Guards and hostiles are live CombatService NPCs (NPC anchors above, TerritoryConfig GuardNPCType).
 
 	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
 	local bankFolder = ensureFolder("EmpireBank", root)
@@ -3202,7 +3082,7 @@ function MapSetup.Run()
 		Material = Enum.Material.Concrete,
 		Parent = bankFolder,
 	})
-	neonEdge(bankPad, Color3.fromRGB(90, 120, 200), 0.4)
+	paintEdge(bankPad, Color3.fromRGB(90, 120, 200), 0.4) -- World v2 W1: painted kerb (nothing glows outside the bases)
 	part({
 		Name = "BankBuilding",
 		Size = Vector3.new(22, 14, 18),
@@ -3219,7 +3099,7 @@ function MapSetup.Run()
 		Material = Enum.Material.Metal,
 		Parent = bankFolder,
 	})
-	-- Columns + entrance neon (visual kits v2)
+	-- Columns + painted entrance (visual kits v2; World v2 W1: sign, vault pad and ring are SmoothPlastic, not Neon)
 	for _, ox in ipairs({ -8, -2.5, 2.5, 8 }) do
 		part({
 			Name = "BankColumn",
@@ -3243,7 +3123,7 @@ function MapSetup.Run()
 		Size = Vector3.new(10, 1.2, 0.4),
 		Position = bankPos + Vector3.new(0, 12.5, 5.2),
 		Color = Color3.fromRGB(230, 190, 60),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Parent = bankFolder,
 	})
@@ -3252,7 +3132,7 @@ function MapSetup.Run()
 		Size = Vector3.new(10, 1.4, 10),
 		Position = bankPos + Vector3.new(0, 1.2, 8),
 		Color = Color3.fromRGB(200, 170, 60),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.SmoothPlastic,
 		Parent = bankFolder,
 	})
 	part({
@@ -3260,7 +3140,7 @@ function MapSetup.Run()
 		Size = Vector3.new(12, 0.35, 12),
 		Position = bankPos + Vector3.new(0, 1.9, 8),
 		Color = Color3.fromRGB(90, 140, 220),
-		Material = Enum.Material.Neon,
+		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
 		Transparency = 0.35,
 		Parent = bankFolder,
@@ -3332,12 +3212,17 @@ function MapSetup.Run()
 	end)
 	tutorialMarker("Tutorial_Barracks", structureMarkerPos("Barracks", STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0)), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
-	-- v70: the first garage pad on LAND (a WE_NavalSpawn pontoon is in the water; the marker used to land on
-	-- NavalPad_1 in the sea)
-	for _, vs in ipairs(CollectionService:GetTagged(TAG_VEHICLE)) do
-		if vs:IsA("BasePart") and not CollectionService:HasTag(vs, TAG_NAVAL) then
-			jeepPos = vs.Position + Vector3.new(0, 2, 0)
-			break
+	-- World v2 (spec §3.3): the Gate_P1 pad (WorldConfig.Spawns.TutorialJeepPad); the tutorial beam itself resolves to
+	-- the player's own plot (TutorialController). Fallback: the first garage pad on LAND (never a naval pontoon).
+	local jeepPad = garageFolder:FindFirstChild(spawnCfg.TutorialJeepPad)
+	if jeepPad and jeepPad:IsA("BasePart") then
+		jeepPos = jeepPad.Position + Vector3.new(0, 2, 0)
+	else
+		for _, vs in ipairs(CollectionService:GetTagged(TAG_VEHICLE)) do
+			if vs:IsA("BasePart") and not CollectionService:HasTag(vs, TAG_NAVAL) then
+				jeepPos = vs.Position + Vector3.new(0, 2, 0)
+				break
+			end
 		end
 	end
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
@@ -3404,155 +3289,22 @@ function MapSetup.Run()
 		fallbackSpawn.Neutral = true
 		fallbackSpawn.Duration = 0
 		fallbackSpawn.BrickColor = BrickColor.new("Bright green")
-		fallbackSpawn.Material = Enum.Material.Neon
+		fallbackSpawn.Material = Enum.Material.SmoothPlastic -- World v2 W1: no Neon outside the bases
 		fallbackSpawn.Parent = root
 		print("[WAR EMPIRE] MapSetup: added fallback NeutralSpawn at (0,5,0)")
 	end
 
-		buildPadSupportShelves(root)
+	buildPadSupportShelves(root)
 
-	-- Tier 2: near-plot oil spectacle (IndustrialPack + pipes + barrel ring). REJECT Ultrapump.
-	do
-		local okOil, errOil = pcall(function()
-			local oilFolder = Instance.new("Folder")
-			oilFolder.Name = "OilSpectacle"
-			oilFolder.Parent = root
-			local pads = {
-				Vector3.new(-520, 0.5, -180),
-				Vector3.new(520, 0.5, 180),
-				Vector3.new(-200, 0.5, 620),
-			}
-			for oi, oilAt in ipairs(pads) do
-				local pad = part({
-					Name = "OilPad" .. oi,
-					Size = Vector3.new(28, 0.6, 28),
-					Position = oilAt,
-					Color = Color3.fromRGB(42, 44, 40),
-					Material = Enum.Material.Asphalt,
-					CanCollide = true,
-					Parent = oilFolder,
-				})
-				plainBillboard(pad, "OIL FIELD", Vector2.new(160, 32), 12, Color3.fromRGB(255, 180, 60))
-				-- Amber landmark light
-				local light = Instance.new("PointLight")
-				light.Color = Color3.fromRGB(255, 160, 40)
-				light.Brightness = 1.2
-				light.Range = 40
-				light.Parent = pad
-				-- Walking-beam silhouette (Part kit derrick)
-				local tower = part({
-					Name = "DerrickTower" .. oi,
-					Size = Vector3.new(1.2, 18, 1.2),
-					Position = oilAt + Vector3.new(0, 9.5, 0),
-					Color = Color3.fromRGB(70, 72, 68),
-					Material = Enum.Material.Metal,
-					CanCollide = false,
-					Parent = oilFolder,
-				})
-				local beam = part({
-					Name = "WalkingBeam" .. oi,
-					Size = Vector3.new(14, 0.7, 0.7),
-					Position = oilAt + Vector3.new(0, 17, 0),
-					Color = Color3.fromRGB(90, 70, 50),
-					Material = Enum.Material.Metal,
-					CanCollide = false,
-					Parent = oilFolder,
-				})
-				beam:SetAttribute("WE_OilBeam", true)
-				-- Barrel ring
-				for bi = 1, 8 do
-					local ang = (bi / 8) * math.pi * 2
-					local bpos = oilAt + Vector3.new(math.cos(ang) * 9, 1.1, math.sin(ang) * 9)
-					part({
-						Name = "OilBarrel" .. oi .. "_" .. bi,
-						Size = Vector3.new(1.6, 2.2, 1.6),
-						Position = bpos,
-						Color = Color3.fromRGB(45, 70, 45),
-						Material = Enum.Material.Metal,
-						Shape = Enum.PartType.Cylinder,
-						CanCollide = true,
-						Parent = oilFolder,
-					})
-				end
-				-- Catalog dress (IndustrialPack / RustyPipes / OilBarrel)
-				task.defer(function()
-					pcall(function()
-						local vas = require(script.Parent.Parent.Services.VisualAssetService)
-						if not vas then
-							return
-						end
-						vas.TryAttachPropVisual(tower, "IndustrialPack")
-						vas.TryAttachPropVisual(beam, "RustyPipes")
-						for _, ch in ipairs(oilFolder:GetChildren()) do
-							if ch:IsA("BasePart") and string.find(ch.Name, "OilBarrel" .. oi, 1, true) then
-								vas.TryAttachPropVisual(ch, "OilBarrel")
-							end
-						end
-					end)
-				end)
-			end
-			-- Slow walking-beam sway
-			task.spawn(function()
-				local t0 = os.clock()
-				while oilFolder.Parent do
-					local t = os.clock() - t0
-					for _, ch in ipairs(oilFolder:GetChildren()) do
-						if ch:IsA("BasePart") and ch:GetAttribute("WE_OilBeam") then
-							ch.CFrame = CFrame.new(ch.Position) * CFrame.Angles(0, 0, math.rad(math.sin(t * 0.7) * 12))
-						end
-					end
-					task.wait(0.1)
-				end
-			end)
-		end)
-		if not okOil then
-			warn("[MapSetup] OilSpectacle failed:", errOil)
-		end
-	end
-
-	-- Tier 2: warzone landmarks (RadioTower / SmallFort / Bunker)
-	do
-		local okLm, errLm = pcall(function()
-			local lm = Instance.new("Folder")
-			lm.Name = "WarzoneLandmarks"
-			lm.Parent = root
-			local spots = {
-				{ Name = "RadioTower", Key = "RadioTower", Pos = Vector3.new(0, 0.5, -1400), Size = Vector3.new(4, 28, 4) },
-				{ Name = "SmallFort", Key = "SmallFort", Pos = Vector3.new(1100, 0.5, -1100), Size = Vector3.new(18, 10, 18) },
-				{ Name = "BunkerApproach", Key = "Bunker", Pos = Vector3.new(-1100, 0.5, 900), Size = Vector3.new(14, 6, 14) },
-			}
-			for _, s in ipairs(spots) do
-				local host = part({
-					Name = s.Name .. "Host",
-					Size = s.Size,
-					Position = s.Pos + Vector3.new(0, s.Size.Y * 0.5, 0),
-					Color = Color3.fromRGB(80, 78, 70),
-					Material = Enum.Material.Concrete,
-					CanCollide = true,
-					Transparency = 0.25,
-					Parent = lm,
-				})
-				plainBillboard(host, string.upper(s.Name), Vector2.new(180, 32), 14, Color3.fromRGB(220, 200, 140))
-				task.defer(function()
-					pcall(function()
-						local vas = require(script.Parent.Parent.Services.VisualAssetService)
-						if vas and vas.TryAttachPropVisual then
-							vas.TryAttachPropVisual(host, s.Key)
-						end
-					end)
-				end)
-			end
-		end)
-		if not okLm then
-			warn("[MapSetup] WarzoneLandmarks failed:", errLm)
-		end
-	end
-
+	-- World v2 W1 (spec §1.6): the OilSpectacle block (3 "OIL FIELD" pads with an amber light, derrick, walking beam and
+	-- barrel ring near the plots, no mechanic) and the WarzoneLandmarks block (grey RadioTower / SmallFort /
+	-- BunkerApproach host boxes with labels, one on RoadX0) are gone. Their derricks and kits return inside the Phase 2
+	-- POIs (Oil Field, Signal Station).
 
 	-- v70: stamp the layout generation last (a Run that threw part-way stays unstamped → Bootstrap rebuilds it)
 	root:SetAttribute("WE_MapGen", MapSetup.MAP_GEN)
 
-	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " mesas=" .. tostring(DevConfig.MountainRingSegments or 14) .. " (dressing deferred/Studio-skip)")
+	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " (World v2 edge: WorldTerrain + WorldBounds; dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
 	print("[WAR EMPIRE] Walk onto upgrade pads to BUY (auto). E opens Base/Garage menus. Delete WarEmpireSetup + Play / admin resetmap to regenerate.")
 end

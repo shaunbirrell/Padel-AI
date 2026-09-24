@@ -8,12 +8,13 @@
 	Sparse mode default — ~70% fewer plants than prior dense pass.
 	v70 waterways (spec_final §9): no plant in the water or on a plot pad (spots there are skipped whole);
 	Waterways.CullDressing is the safety net at the end.
+	World v2 W1 (spec §1.6, roadmap §2.2 WORLD-A): the rim ring (r ~3020, now inside the Terrain canyon) and the lone
+	Palm_Mid_* palms are gone; WorldHygiene.Enforce runs over DesertFlora after the cull.
 ]]
 
 local DesertFlora = {}
 
 local GROUND_TOP_Y = 0.5
-local HALF = 3200 -- matches MapSetup GROUND_SIZE/2
 
 local COL = {
 	Cactus = Color3.fromRGB(62, 110, 58),
@@ -28,6 +29,22 @@ local COL = {
 	GrassDry = Color3.fromRGB(170, 145, 85),
 	Rock = Color3.fromRGB(160, 110, 75),
 }
+
+-- World v2 W1: Modules/WorldHygiene (rules H1–H10), loaded lazily and guarded like Waterways
+local hygieneMod: any = nil
+local function getWorldHygiene(): any?
+	if hygieneMod == nil then
+		local ok, m = pcall(function(): any
+			local mod = script.Parent:FindFirstChild("WorldHygiene")
+			return if mod and mod:IsA("ModuleScript") then require(mod) :: any else nil
+		end)
+		hygieneMod = if ok and type(m) == "table" then m else false
+		if not ok then
+			warn("[DesertFlora] WorldHygiene unavailable:", m)
+		end
+	end
+	return if hygieneMod then hygieneMod else nil
+end
 
 -- v70: Modules/Waterways (water rects + dressing cull), loaded lazily so a Waterways error never blocks MapSetup
 local waterwaysMod: any = nil
@@ -295,29 +312,23 @@ local function placeAt(folder: Folder, name: string, pos: Vector3, builder: (Fol
 	builder(cluster, pos, scale)
 end
 
+-- World v2 (spec §8.2): the Part kits stay, exported for Phase 2 (WorldKits: oasis palms, natural scatter). Each builds
+-- one plant into `folder` at `origin` (ground level) with an optional scale.
+DesertFlora.Kits = {
+	Saguaro = kitSaguaro,
+	Joshua = kitJoshua,
+	Palm = kitPalm,
+	Barrel = kitBarrel,
+	GrassTuft = kitGrassTuft,
+	RockOutcrop = kitRockOutcrop,
+}
+
 function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 	local flora = ensureFolder("DesertFlora", root)
 	local sparse = if opts and opts.Sparse ~= nil then opts.Sparse else true
 
 	-- PERF: sparse by default. CastShadow=false on all flora parts (see p()).
-	local rimCount = if sparse then 6 else 14
-	local rimR = HALF - 180
-	for i = 1, rimCount do
-		local ang = (i / rimCount) * math.pi * 2
-		local jitter = ((i * 37) % 50) - 25
-		local r = rimR + jitter
-		local pos = Vector3.new(math.cos(ang) * r, GROUND_TOP_Y, math.sin(ang) * r)
-		local kind = i % 4
-		if kind == 0 then
-			placeAt(flora, "Saguaro_Rim_" .. i, pos, kitSaguaro, 0.9)
-		elseif kind == 1 then
-			placeAt(flora, "Joshua_Rim_" .. i, pos, kitJoshua, 0.95)
-		elseif kind == 2 then
-			placeAt(flora, "Palm_Rim_" .. i, pos, kitPalm, 0.8)
-		else
-			placeAt(flora, "Barrel_Rim_" .. i, pos, kitBarrel, 0.95)
-		end
-	end
+	-- World v2 W1 (spec §1.6): no rim ring (r ~3020 is inside the Terrain canyon, past the ground wall)
 
 	-- Mid-map: drastically cut (was 10 dual plants → 2–4 singles)
 	local midSpots = if sparse
@@ -334,10 +345,9 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 			Vector3.new(900, GROUND_TOP_Y, -900),
 		}
 	for i, pos in ipairs(midSpots) do
+		-- World v2 W1 (spec §1.6): the lone Palm_Mid_* palms on open sand are gone (palms return at the Oasis POI)
 		if i % 2 == 0 then
 			placeAt(flora, "Saguaro_Mid_" .. i, pos, kitSaguaro, 1.0)
-		else
-			placeAt(flora, "Palm_Mid_" .. i, pos, kitPalm, 0.95)
 		end
 		if not sparse and i == 1 then
 			placeAt(flora, "Rock_Mid_" .. i, pos + Vector3.new(10, 0, -8), kitRockOutcrop, 0.9)
@@ -395,6 +405,15 @@ function DesertFlora.Dress(root: Instance, opts: { Sparse: boolean? }?)
 		local okCull, res = pcall(ww.CullDressing, flora)
 		if not okCull then
 			warn("[DesertFlora] water cull failed:", res)
+		end
+	end
+
+	-- World v2 W1: hygiene rules over what is left (spec §5.1; logs one summary line)
+	local wh = getWorldHygiene()
+	if wh then
+		local okHy, errHy = pcall(wh.Enforce, flora)
+		if not okHy then
+			warn("[DesertFlora] WorldHygiene.Enforce failed:", errHy)
 		end
 	end
 

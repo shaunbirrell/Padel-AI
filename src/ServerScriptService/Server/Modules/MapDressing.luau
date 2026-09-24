@@ -10,6 +10,9 @@
 	Regenerate: delete WarEmpireSetup + Play, or admin resetmap.
 	v70 waterways (spec_final §9): nothing stands in the water (sea, ring canal, lagoons, harbour, dock channels) or on
 	a plot pad; the South Docks quay is re-laid round the harbour; Waterways.CullDressing is the safety net at the end.
+	World v2 W1 (spec §5, roadmap §2.2 WORLD-A): WorldHygiene.Enforce runs over WorldDressing right after the cull (no road
+	blocker, clear-zone prop, Neon, Beam, billboard or statue survives; lights are clamped to the 24-light world budget;
+	cover collides; H1 orphans are reported for W3, not deleted). The coordinate-list sections stay until Phase 2.
 ]]
 
 local MapDressing = {}
@@ -43,6 +46,23 @@ local function getWaterways(): any?
 		end
 	end
 	return if waterwaysMod then waterwaysMod else nil
+end
+
+-- World v2 W1: Modules/WorldHygiene (rules H1–H10), loaded lazily and guarded like Waterways: a missing module or an
+-- error never stops the dressing
+local hygieneMod: any = nil
+local function getWorldHygiene(): any?
+	if hygieneMod == nil then
+		local ok, m = pcall(function(): any
+			local mod = script.Parent:FindFirstChild("WorldHygiene")
+			return if mod and mod:IsA("ModuleScript") then require(mod) :: any else nil
+		end)
+		hygieneMod = if ok and type(m) == "table" then m else false
+		if not ok then
+			warn("[MapDressing] WorldHygiene unavailable:", m)
+		end
+	end
+	return if hygieneMod then hygieneMod else nil
 end
 
 -- v70: true when (x, z) is within `margin` of any water or of a plot pad (spots there are skipped whole)
@@ -1525,7 +1545,9 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			local f2 = Instance.new("Folder")
 			f2.Name = "Radio_OilApproach"
 			f2.Parent = dressing
-			kitRadioTower(f2, Vector3.new(1100, 0.5, 1100), 45)
+			-- World v2 W1: 30 studs off the OilYard event anchor (WorldConfig.Spawns.Event, 1100, 1100); on it, a supply
+			-- crate was placed through the mast and half inside the hut
+			kitRadioTower(f2, Vector3.new(1130, 0.5, 1130), 45)
 		end
 	end
 
@@ -2127,6 +2149,15 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 			culled = res
 		elseif not okCull then
 			warn("[MapDressing] water cull failed:", res)
+		end
+	end
+
+	-- World v2 W1: hygiene rules over what is left (spec §5.1; logs one summary line)
+	local wh = getWorldHygiene()
+	if wh then
+		local okHy, errHy = pcall(wh.Enforce, dressing)
+		if not okHy then
+			warn("[MapDressing] WorldHygiene.Enforce failed:", errHy)
 		end
 	end
 
