@@ -27,6 +27,7 @@ local TAG_SLOT = "WE_UpgradeSlot"
 local TAG_TERRITORY = "WE_Territory"
 local TAG_CAPTURE = "WE_CaptureZone"
 local TAG_VEHICLE = "WE_VehicleSpawn"
+local TAG_WATER = "WE_Water" -- v69: boats sail on WE_Water surfaces (Constants.Tags.Water)
 local TAG_NAVAL = "WE_NavalSpawn"
 local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
@@ -1473,6 +1474,8 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 			Parent = folder,
 		})
 		water.Reflectance = 0.15
+		water:SetAttribute("WE_PlotId", plotId)
+		CollectionService:AddTag(water, TAG_WATER)
 		for _, e in ipairs({
 			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, d.SizeZ * 0.5 + 0.6) },
 			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, -d.SizeZ * 0.5 - 0.6) },
@@ -2887,6 +2890,7 @@ function MapSetup.Run()
 			Parent = waterFolder,
 		})
 		water.Name = "WaterPlane"
+		CollectionService:AddTag(water, TAG_WATER)
 		-- Shallow collide strip so boats have something under them
 		part({
 			Name = "HarborShelf",

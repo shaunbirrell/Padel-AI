@@ -74,6 +74,12 @@ local EVENTS = {
 	Constants.RemoteNames.CashMegaOffer,
 	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
+	Constants.RemoteNames.RequestResearch,
+	Constants.RemoteNames.ResearchStateUpdate,
+	Constants.RemoteNames.RequestMissileStrike,
+	Constants.RemoteNames.MissileStrikeStateUpdate,
+	Constants.RemoteNames.MissileStrikeFx,
+	Constants.RemoteNames.VehicleDriveInput,
 }
 
 local FUNCTIONS = {

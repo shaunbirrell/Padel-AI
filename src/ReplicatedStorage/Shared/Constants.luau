@@ -17,6 +17,7 @@ Constants.Tags = {
 	CaptureZone = "WE_CaptureZone",
 	VehicleSpawn = "WE_VehicleSpawn",
 	NavalSpawn = "WE_NavalSpawn",
+	Water = "WE_Water", -- v69: water surface parts (top face = water level); boats may only move over these
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
 	SupplyDrop = "WE_SupplyDrop",
@@ -98,6 +99,13 @@ Constants.RemoteNames = {
 	CashMegaOffer = "CashMegaOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
+	-- v69: Research Lab upgrades, Command Center missile strikes, vehicle drive input
+	RequestResearch = "RequestResearch",
+	ResearchStateUpdate = "ResearchStateUpdate",
+	RequestMissileStrike = "RequestMissileStrike",
+	MissileStrikeStateUpdate = "MissileStrikeStateUpdate",
+	MissileStrikeFx = "MissileStrikeFx",
+	VehicleDriveInput = "VehicleDriveInput",
 	GetPlayerState = "GetPlayerState",
 }
 

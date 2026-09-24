@@ -22,6 +22,8 @@ local WorldPromptController = require(script.Parent.WorldPromptController)
 local CompassController = require(script.Parent.CompassController)
 local VehicleController = require(script.Parent.VehicleController)
 local BankRaidController = require(script.Parent.BankRaidController)
+local ResearchController = require(script.Parent.ResearchController) -- v69 Research Lab upgrades
+local MissileController = require(script.Parent.MissileController) -- v69 Command Center strikes
 
 function UIController.Init()
 	local function safeInit(name: string, fn: () -> ())
@@ -46,6 +48,8 @@ safeInit("Orders", OrdersController.Init)
 	safeInit("Settings", SettingsController.Init)
 	safeInit("Compass", CompassController.Init)
 	safeInit("BankRaid", BankRaidController.Init)
+	safeInit("Research", ResearchController.Init)
+	safeInit("Missiles", MissileController.Init)
 
 	-- Mobile advanced dock: large color-coded tiles (Shop / Rebirth / Missions / Army / Settings)
 	-- Inspiration-only layout quality — keep WAR EMPIRE hotkeys (P/K/M/A/O).
@@ -142,6 +146,8 @@ safeInit("Orders", OrdersController.Init)
 		Army = ArmyController.Open,
 		Garage = VehicleController.Open,
 		Settings = SettingsController.Open,
+		Research = ResearchController.Open,
+		Missiles = MissileController.Open,
 	}
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
 		if who ~= Players.LocalPlayer then
