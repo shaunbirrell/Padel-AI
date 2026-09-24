@@ -106,6 +106,9 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		VIPOffered = false,
 		SpeedBoostOffered = false,
 		CashMegaOffered = false,
+		-- v69: Research Lab upgrades (UpgradeId → level) and raid / missile-strike timers (os.time seconds)
+		Research = {},
+		Raid = { ShieldUntil = 0, StrikeCooldownUntil = 0, DefensesDownUntil = 0 },
 	}
 end
 
@@ -335,6 +338,22 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	if (profile :: any).CashMegaOffered == nil then
 		(profile :: any).CashMegaOffered = false
+	end
+	-- v69: Research levels + raid / strike timers (idempotent; no DataVersion bump needed for new tables)
+	if typeof((profile :: any).Research) ~= "table" then
+		(profile :: any).Research = {}
+	end
+	do
+		local raid = (profile :: any).Raid
+		if typeof(raid) ~= "table" then
+			raid = {}
+			;(profile :: any).Raid = raid
+		end
+		for _, k in ipairs({ "ShieldUntil", "StrikeCooldownUntil", "DefensesDownUntil" }) do
+			if typeof(raid[k]) ~= "number" then
+				raid[k] = 0
+			end
+		end
 	end
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
