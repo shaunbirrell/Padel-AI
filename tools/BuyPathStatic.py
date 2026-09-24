@@ -38,6 +38,16 @@ def must_contain(rel: str, needle: str, label: str) -> None:
     else:
         bad(f"{label} — missing `{needle}` in {rel}")
 
+def kit_gen_at_least(minimum: int, label: str) -> None:
+    """v66: KIT_GEN may only move forward (bumps force kit rebuilds); exact-text checks broke every bump."""
+    rel = "src/ServerScriptService/Server/Modules/StructureKitBuilder.luau"
+    body = read(rel)
+    m = re.search(r"^local KIT_GEN = (\d+)", body or "", re.M)
+    if m and int(m.group(1)) >= minimum:
+        ok(label)
+    else:
+        bad(f"{label} — KIT_GEN missing or < {minimum} in {rel}")
+
 def must_not_contain(rel: str, needle: str, label: str) -> None:
     body = read(rel)
     if body is None:
@@ -508,7 +518,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "37
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface", "Pad name SurfaceGui helper")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "ensurePadNameSurface(part, display)", "Pad name applied on billboard refresh")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "AlwaysOnTop = false", "BUY name billboard never AlwaysOnTop (v39)")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "StructureKit KIT_GEN 27")
+kit_gen_at_least(32, "StructureKit KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "airfield"', "Airfield kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "warehouse"', "Warehouse kit present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Vector3.new(10, 28, 10)", "Watchtower body tall silhouette")
@@ -536,7 +546,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 
 
 # --- v34 legitimacy pack: HQ/Barracks/Armory kits, soldier variety, garage tips, DoubleCash soft, capture chip, rebirth copy, mobile Orders ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "KIT_GEN 27")
+kit_gen_at_least(32, "KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "armory"', "WeaponsFacility armory kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "3-story weapons inventory", "Armory densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "compound-scale HQ", "HQ densify comment")
@@ -568,7 +578,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 
 
 # --- v35 legitimacy / late-game presence: SF densify, Helipad/Dock, landmarks, gate guns, VIP soft, oil bob, death CashMega ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "KIT_GEN 27 (v39 hotfix)")
+kit_gen_at_least(32, "KIT_GEN 27 (v39 hotfix)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SpecialForcesFacility special kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Special Forces compound", "SF densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: ~28 stud marked pad", "Helipad densify")
@@ -634,7 +644,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v36")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect Id no-regress v36")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "v35 landmarks no-regress")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "KIT_GEN no-regress →27")
+kit_gen_at_least(32, "KIT_GEN no-regress →27")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v36")
 
 
@@ -729,7 +739,7 @@ must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", 
 
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_OWNED_SIZE", "v39 owned billboard chip size")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "bb.AlwaysOnTop = false", "v39 price boards never AlwaysOnTop")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v39 KIT_GEN 27")
+kit_gen_at_least(32, "v39 KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "function StructureKitBuilder.SyncPerimeterWalls", "v39 SyncPerimeterWalls present")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_PerimeterGen", "v39 perimeter gen attr")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "SyncPerimeterWalls", "v39 BaseService calls SyncPerimeterWalls")
@@ -758,7 +768,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", 
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local DRESS_GEN = 29", "v42 VAS DRESS_GEN 29")
 must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'vas.TryAttachBuildingVisual(ch, "BaseGate"', "v46 no BaseGate dress in StructureKitBuilder")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'vas.TryAttachBuildingVisual(ch, "DefensiveWalls"', "v46 v36 DefensiveWalls segment dress")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v41 KIT_GEN stays 27 (no wall wipe)")
+kit_gen_at_least(32, "v41 KIT_GEN stays 27 (no wall wipe)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "LightTank = { ModelAssetId = 76055078503396", "v41 LightTank mesh")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "CombatIFV = { ModelAssetId = 76055078503396", "v41 CombatIFV")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "AssaultIFV = { ModelAssetId = 76055078503396", "v41 AssaultIFV")
@@ -814,7 +824,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Wor
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Soldier = { ModelAssetId = 100212659702941", "v42 Soldier KEEP")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 29", "v42 BuildingDressGen 29")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local DRESS_GEN = 29", "v42 VAS DRESS_GEN 29")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v42 KIT_GEN stays 27")
+kit_gen_at_least(32, "v42 KIT_GEN stays 27")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "MeshAssetId = 0, -- v41: NO Wall* segment", "v42 DefensiveWalls still 0")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "BaseGate = { ModelAssetId = 85138026", "v42 BaseGate GateArch only")
 # No-regress v42 critical safety
@@ -828,7 +838,7 @@ must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", 
 
 
 # ── v43 P0 visibility hotfix ───────────────────────────────────────────────
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v46 KIT_GEN 32 force rebuild after v36 wall restore")
+kit_gen_at_least(32, "v46 KIT_GEN 32 force rebuild after v36 wall restore")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "EnsureKit missing Body after build", "v43 EnsureKit Body assert")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "forcing generic Body", "v43 EnsureKit always creates Body")
 must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "if not mustRebuild then return", "v46 no mustRebuild early-return skip")
@@ -855,7 +865,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 
 
 # ── v44 P0 visibility hard-fix ─────────────────────────────────────────────
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v46 KIT_GEN 32")
+kit_gen_at_least(32, "v46 KIT_GEN 32")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v46 restored v36 wall height 7.5+lv*2.8")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "pad.Position.Y + pad.Size.Y * 0.5 + height * 0.5", "v46 wall Y sits on pad top (v36)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_PerimeterGen", "v46 WE_PerimeterGen stamp")
@@ -890,7 +900,7 @@ else:
 
 
 # ── v45 P0 PlotId tonumber + tall walls + map race ───────────────────────────
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v46 KIT_GEN 32 force rebuild")
+kit_gen_at_least(32, "v46 KIT_GEN 32 force rebuild")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'tonumber(inst:GetAttribute("PlotId")', "v45 findPlotPad tonumber PlotId")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v46 wall height 7.5+lv*2.8 from 0b0e95f")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ClearAllChildren()", "v46 always ClearAllChildren like v36")
@@ -909,7 +919,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 # ── v46 restore SyncPerimeterWalls from 0b0e95f (v36) ───────────────────────
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v46 height formula from 0b0e95f")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'tonumber(inst:GetAttribute("PlotId")) == tonumber(plotId)', "v46 findPlotPad tonumber")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "v46 KIT_GEN 32")
+kit_gen_at_least(32, "v46 KIT_GEN 32")
 must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "if not mustRebuild then return", "v46 no mustRebuild skip")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "v46 PreferMesh still OFF")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "tonumber(profile.BaseUpgrades.DefensiveWalls)", "v46 RefreshAllVisuals DefensiveWalls level")
@@ -924,7 +934,7 @@ must_contain("src/ServerScriptService/Server/Services/AdminService.luau", 'cmd =
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "DefensiveWalls → SyncPerimeterWalls", "walls on DefensiveWalls buy print")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "SyncPerimeterWalls SPAWNED", "loud wall spawn print")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "height = 7.5 + lv * 2.8", "v36 wall height (0b0e95f)")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "KIT_GEN = 32", "KIT_GEN 32")
+kit_gen_at_least(32, "KIT_GEN 32")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "PreferMeshWhenAssetIdSet = false", "PreferMesh OFF")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "BaseUpgrades[id] = 5", "must NOT auto-max BaseUpgrades")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "ForceWipeUserIds", "v55 no ForceWipeUserIds")

@@ -12,10 +12,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
 local Constants = require(Shared.Constants)
+local HollowBuildingBuilder = require(script.Parent.HollowBuildingBuilder)
 
 local StructureKitBuilder = {}
 
-local KIT_GEN = 32 -- restore SyncPerimeterWalls from v36 (0b0e95f); height=7.5+lv*2.8; PlotId tonumber
+local KIT_GEN = 33 -- v66: walk-in Command Center (foundation-slab Body + HollowBuildingBuilder model)
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
 local CORNER_FOLDER = "WE_CornerTowers"
@@ -132,6 +133,19 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 	local pal = paletteFor(structureId)
 	local kit = pal.Kit
 	clearKitChildren(plinth)
+
+	-- v66: walk-in building — the kit is only the foundation slab (Body); BaseService.applyKitVisuals
+	-- syncs the HollowBuildingBuilder model for the owned level.
+	if HollowBuildingBuilder.IsHollow(structureId) then
+		local size, offset = HollowBuildingBuilder.FoundationSpec(plinth, structureId)
+		if size and offset then
+			local body = kitPart(plinth, "Body", size, offset, HollowBuildingBuilder.FoundationColor(structureId) or pal.Plinth, Enum.Material.Concrete, nil)
+			body.CanCollide = true
+			plinth:SetAttribute("WE_HollowKit", true)
+			plinth:SetAttribute("WE_KitGen", KIT_GEN)
+			return
+		end
+	end
 
 	-- v44: MissileDefense gets launcher bay (not watchtower) — always Body+Roof
 	if structureId == "MissileDefense" then
@@ -657,6 +671,7 @@ end
 
 --[[ Ensure plinth has kit children; rebuild if missing/incomplete. Returns role count. ]]
 function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): number
+	local hollow = HollowBuildingBuilder.IsHollow(structureId)
 	local n = countKitRoles(plinth)
 	local gen = tonumber(plinth:GetAttribute("WE_KitGen")) or 0
 	local needsRebuild = gen < KIT_GEN
@@ -681,7 +696,7 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 
 	-- Tier 2: rebuild HQ/Barracks/Depot if dress / showroom densify hosts missing
 	local needsDress = false
-	if structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "Warehouse" then
+	if not hollow and (structureId == "CommandCenter" or structureId == "Barracks" or structureId == "VehicleDepot" or structureId == "PowerStation" or structureId == "WeaponsFacility" or structureId == "SpecialForcesFacility" or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "Warehouse") then
 		local hasDress = false
 		for _, child in ipairs(plinth:GetChildren()) do
 			if child:IsA("BasePart") then
@@ -731,7 +746,7 @@ function StructureKitBuilder.EnsureKit(plinth: BasePart, structureId: string): n
 		solid = 0
 	end
 	solid = 0 -- force fully opaque Body/Roof
-	local flatKit = structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "DefensiveWalls"
+	local flatKit = hollow or structureId == "Helipad" or structureId == "Dock" or structureId == "Airfield" or structureId == "DefensiveWalls"
 	for _, child in ipairs(plinth:GetChildren()) do
 		if child:IsA("BasePart") then
 			local role = child:GetAttribute("WE_KitRole")
@@ -1736,6 +1751,10 @@ function StructureKitBuilder.ClearPlotExtras(plotId: number)
 	-- E) clear stale WE_OwnedLevel on unowned pads so next claimer does not see MAX with no kits
 	local want = tonumber(plotId)
 	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	-- v66: an ownerless plot must not keep a walk-in building standing
+	if plotFolder then
+		HollowBuildingBuilder.ClearUnder(plotFolder)
+	end
 	if plotFolder and want ~= nil then
 		for _, desc in ipairs(plotFolder:GetDescendants()) do
 			if desc:IsA("BasePart") and desc:GetAttribute("StructureId") ~= nil then
