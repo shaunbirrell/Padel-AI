@@ -20,6 +20,7 @@ local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
 local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
 local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
 local StructureVisualConfig = require(SharedConfigs:WaitForChild("StructureVisualConfig"))
+local BaseLayout = require(script.Parent:WaitForChild("BaseLayout"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -76,8 +77,9 @@ local GROUND_THICKNESS = 8
 local GROUND_TOP_Y = 0.5
 local SAFETY_FLOOR_SIZE = 10000
 local SAFETY_FLOOR_Y = -28
-local PLOT_PAD_SIZE = 200
+local PLOT_PAD_SIZE = BaseLayout.PlotSize(200) -- v68: BaseLayoutConfig.PlotSize (320) when the layout is on
 local PLOT_RING = 800
+local PLOT_SPAWN_CLEARANCE = 40 -- v68: vehicle / NPC / event spawn pads stay this far outside plot edges
 local STRUCT_COLS = 4
 local STRUCT_GAP = 42 -- studs between upgrade pad centers (was 30)
 local STRUCT_ORIGIN = Vector3.new(-63, 1.6, -63) -- CommandCenter grid origin on each plot
@@ -166,11 +168,19 @@ local function part(props: { [string]: any })
 	return p
 end
 
+local function siteFrameOf(plinth: BasePart): CFrame
+	local cf = plinth:GetAttribute("WE_SiteCFrame")
+	if typeof(cf) == "CFrame" then
+		return cf
+	end
+	return plinth.CFrame
+end
+
 local function kitPart(parentPlinth, role, size, localOffset, color, material, shape)
 	local p = part({
 		Name = role,
 		Size = size,
-		CFrame = parentPlinth.CFrame * CFrame.new(localOffset),
+		CFrame = siteFrameOf(parentPlinth) * CFrame.new(localOffset),
 		Color = color,
 		Material = material or Enum.Material.Metal,
 		CanCollide = false,
@@ -361,20 +371,73 @@ local function beacon(parent, pos, color, name)
 	})
 end
 
+-- v68: terminal look for console-mode upgrade slots (screen + button); decoration only, not kit roles
+local function dressConsole(plinth, title)
+	local screen = part({
+		Name = "ConsoleScreen",
+		Size = Vector3.new(2.3, 1.3, 0.16),
+		CFrame = plinth.CFrame * CFrame.new(0, BaseLayout.CONSOLE_SIZE.Y * 0.5 + 0.45, -0.25) * CFrame.Angles(math.rad(20), 0, 0),
+		Color = Color3.fromRGB(14, 22, 16),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = plinth,
+	})
+	screen:SetAttribute("WE_Decor", true)
+	local sg = Instance.new("SurfaceGui")
+	sg.Name = "WE_ConsoleScreen"
+	sg.Face = Enum.NormalId.Front
+	sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	sg.PixelsPerStud = 60
+	sg.LightInfluence = 0
+	sg.Parent = screen
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromScale(1, 1)
+	lbl.BackgroundColor3 = Color3.fromRGB(10, 26, 16)
+	lbl.BorderSizePixel = 0
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextScaled = true
+	lbl.TextColor3 = Color3.fromRGB(120, 255, 150)
+	lbl.Text = string.upper(title) .. "\nBUILD / UPGRADE"
+	lbl.Parent = sg
+	local button = part({
+		Name = "ConsoleButton",
+		Size = Vector3.new(0.5, 0.2, 0.5),
+		CFrame = plinth.CFrame * CFrame.new(0.8, BaseLayout.CONSOLE_SIZE.Y * 0.5 + 0.1, -0.35),
+		Color = Color3.fromRGB(90, 255, 120),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+		Parent = plinth,
+	})
+	button:SetAttribute("WE_Decor", true)
+end
+
 local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local isCC = def.Id == "CommandCenter"
 	local plinthSize = Vector3.new(8, 1.2, 8)
+	-- v68: with BaseLayoutConfig the upgrade slot is a console / kiosk and the kit or walk-in building
+	-- stands at its site (WE_SiteCFrame). Buying happens at the console by prompt / tap only.
+	local consoleCF = BaseLayout.ConsoleCFrame(pos, def.Id)
+	local siteCF = BaseLayout.SiteCFrame(pos, def.Id)
+	local isConsole = consoleCF ~= nil and siteCF ~= nil
+	if isConsole then
+		plinthSize = BaseLayout.CONSOLE_SIZE
+	end
 	local plinth = part({
 		Name = def.Id,
 		Size = plinthSize,
-		Position = pos + offset,
-		Color = def.Plinth,
-		Transparency = 0.32,
-		Material = Enum.Material.Concrete,
+		Position = if isConsole then (consoleCF :: CFrame).Position else pos + offset,
+		Color = if isConsole then Color3.fromRGB(46, 50, 48) else def.Plinth,
+		Transparency = if isConsole then 0 else 0.32,
+		Material = if isConsole then Enum.Material.Metal else Enum.Material.Concrete,
 		CanCollide = true,
 		Parent = plotFolder,
 	})
-	plinth.CanTouch = true -- walk-over buy (Touched + Heartbeat)
+	if isConsole then
+		plinth.CFrame = consoleCF :: CFrame
+		plinth:SetAttribute("WE_Console", true)
+		plinth:SetAttribute("WE_SiteCFrame", siteCF)
+	end
+	plinth.CanTouch = not isConsole -- legacy walk-over pads only
 	plinth:SetAttribute("PlotId", plotId)
 	plinth:SetAttribute("StructureId", def.Id)
 	plinth:SetAttribute("BaseSize", plinthSize)
@@ -478,6 +541,11 @@ local function buildStructureKit(plotFolder, plotId, pos, offset, def)
 	local rate = if typeof(rates) == "table" then (tonumber(rates[def.Id]) or 0) else 0
 	local incomeBit = if rate > 0 then (" · +$" .. tostring(rate) .. "/tick") else ""
 	priceBillboard(plinth, title, "Lv 0 → 1 / $" .. tostring(cost) .. incomeBit, def.Accent)
+	if isConsole then
+		dressConsole(plinth, nice)
+		-- v68: no catalog building mesh on a console (it would be placed at the console, not the site)
+		return plinth
+	end
 	-- Optional catalog building visual — ALWAYS deferred (InsertService must never block pads/remotes)
 	task.defer(function()
 		pcall(function()
@@ -1084,7 +1152,8 @@ local function buildPadSupportShelves(setup: Folder)
 	local TAG = TAG_SLOT
 	local count = 0
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
-		if inst:IsA("BasePart") and inst:IsDescendantOf(setup) then
+		-- v68: consoles stand on the plot floor; their height is not an air gap to fill
+		if inst:IsA("BasePart") and inst:IsDescendantOf(setup) and inst:GetAttribute("WE_Console") ~= true then
 			local topY = inst.Position.Y + inst.Size.Y * 0.5
 			local gap = topY - GROUND_TOP_Y
 			if gap > 2.5 then
@@ -1110,7 +1179,7 @@ local function buildPadSupportShelves(setup: Folder)
 		for _, desc in ipairs(bases:GetDescendants()) do
 			if desc:IsA("BasePart") then
 				local sid = desc:GetAttribute("StructureId")
-				if typeof(sid) == "string" then
+				if typeof(sid) == "string" and desc:GetAttribute("WE_Console") ~= true then
 					local topY = desc.Position.Y + desc.Size.Y * 0.5
 					local gap = topY - GROUND_TOP_Y
 					if gap > 2.5 then
@@ -1287,6 +1356,277 @@ end
 
 
 
+-- v68: layout ground work (BaseLayoutConfig): roads + plaza + runway markings, parade flagpole, dock basin,
+-- and the inner wall with one guarded gate per rear-zone structure. Gate leaves are opened/closed by
+-- StructureKitBuilder.SyncRearGates when the matching structure (Airfield / Helipad / Dock) is bought.
+local REAR_GATE_LABELS = { Airfield = "AIRFIELD", Helipad = "HELIPAD", Dock = "NAVAL DOCK" }
+
+local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector3)
+	if not BaseLayout.Enabled() then
+		return
+	end
+	local cfg = BaseLayout.Config()
+	local look = (StructureVisualConfig :: any).BaseLook or {}
+	local padTop = pos.Y + 0.5
+	local H = cfg.PlotSize * 0.5
+	local folder = Instance.new("Folder")
+	folder.Name = "LayoutGround"
+	folder.Parent = plotFolder
+	local asphalt = Color3.fromRGB(64, 66, 64)
+	local paint = Color3.fromRGB(236, 232, 214)
+	local yellow = look.Chevron or Color3.fromRGB(230, 196, 70)
+	local steel = Color3.fromRGB(70, 74, 72)
+
+	-- Roads, plaza, runway, taxiway, apron
+	for _, r in ipairs(cfg.Roads) do
+		local road = part({
+			Name = "Road_" .. r.Name,
+			Size = Vector3.new(r.SizeX, 0.12, r.SizeZ),
+			Position = Vector3.new(pos.X + r.X, padTop + 0.06, pos.Z + r.Z),
+			Color = asphalt,
+			Material = Enum.Material.Asphalt,
+			CanCollide = true,
+			Parent = folder,
+		})
+		road:SetAttribute("WE_Decor", true)
+		local alongX = r.SizeX >= r.SizeZ
+		local len = if alongX then r.SizeX else r.SizeZ
+		local markY = padTop + 0.13
+		if r.Name == "Runway" then
+			-- dashed white centreline + threshold bars at both ends
+			local n = math.floor(len / 14)
+			for i = 0, n - 1 do
+				local t = -len * 0.5 + 7 + i * 14
+				part({
+					Name = "RunwayDash",
+					Size = if alongX then Vector3.new(7, 0.02, 0.9) else Vector3.new(0.9, 0.02, 7),
+					Position = Vector3.new(pos.X + r.X + (if alongX then t else 0), markY, pos.Z + r.Z + (if alongX then 0 else t)),
+					Color = paint,
+					Material = Enum.Material.SmoothPlastic,
+					CanCollide = false,
+					Parent = folder,
+				})
+			end
+			for _, endSign in ipairs({ -1, 1 }) do
+				for b = -3, 3 do
+					local along = endSign * (len * 0.5 - 4)
+					local across = b * 2.6
+					part({
+						Name = "RunwayThreshold",
+						Size = if alongX then Vector3.new(6, 0.02, 1.2) else Vector3.new(1.2, 0.02, 6),
+						Position = Vector3.new(pos.X + r.X + (if alongX then along else across), markY, pos.Z + r.Z + (if alongX then across else along)),
+						Color = paint,
+						Material = Enum.Material.SmoothPlastic,
+						CanCollide = false,
+						Parent = folder,
+					})
+				end
+			end
+		elseif r.Name == "Taxiway" or r.Name == "HeliApron" then
+			part({
+				Name = "TaxiLine",
+				Size = if alongX then Vector3.new(len - 2, 0.02, 0.5) else Vector3.new(0.5, 0.02, len - 2),
+				Position = Vector3.new(pos.X + r.X, markY, pos.Z + r.Z),
+				Color = yellow,
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+				Parent = folder,
+			})
+		else
+			-- white edge lines on the compound roads
+			for _, side in ipairs({ -1, 1 }) do
+				local off = side * ((if alongX then r.SizeZ else r.SizeX) * 0.5 - 0.6)
+				part({
+					Name = "RoadEdge",
+					Size = if alongX then Vector3.new(len - 1, 0.02, 0.35) else Vector3.new(0.35, 0.02, len - 1),
+					Position = Vector3.new(pos.X + r.X + (if alongX then 0 else off), markY, pos.Z + r.Z + (if alongX then off else 0)),
+					Color = paint,
+					Material = Enum.Material.SmoothPlastic,
+					CanCollide = false,
+					Parent = folder,
+				})
+			end
+		end
+	end
+
+	-- Parade-ground flagpole
+	do
+		local f = cfg.Courtyard.Flagpole
+		local base = Vector3.new(pos.X + f.X, padTop, pos.Z + f.Z)
+		part({ Name = "FlagBase", Size = Vector3.new(4, 1, 4), Position = base + Vector3.new(0, 0.5, 0), Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
+		part({ Name = "FlagPole", Size = Vector3.new(0.5, 28, 0.5), Position = base + Vector3.new(0, 15, 0), Color = steel, Material = Enum.Material.Metal, CanCollide = true, Parent = folder })
+		part({ Name = "ParadeFlag", Size = Vector3.new(0.14, 4.4, 7.5), Position = base + Vector3.new(0, 25.8, -3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
+	end
+
+	-- Dock basin: water surface + concrete kerb
+	do
+		local d = cfg.Courtyard.DockBasin
+		local c = Vector3.new(pos.X + d.X, padTop, pos.Z + d.Z)
+		local water = part({
+			Name = "DockWater",
+			Size = Vector3.new(d.SizeX, 0.3, d.SizeZ),
+			Position = c + Vector3.new(0, 0.16, 0),
+			Color = Color3.fromRGB(58, 110, 140),
+			Material = Enum.Material.Glass,
+			Transparency = 0.12,
+			CanCollide = false,
+			Parent = folder,
+		})
+		water.Reflectance = 0.15
+		for _, e in ipairs({
+			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, d.SizeZ * 0.5 + 0.6) },
+			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, -d.SizeZ * 0.5 - 0.6) },
+			{ Vector3.new(1.2, 1, d.SizeZ), Vector3.new(d.SizeX * 0.5 + 0.6, 0.5, 0) },
+			{ Vector3.new(1.2, 1, d.SizeZ), Vector3.new(-d.SizeX * 0.5 - 0.6, 0.5, 0) },
+		}) do
+			part({ Name = "DockKerb", Size = e[1], Position = c + e[2], Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
+		end
+	end
+
+	-- Inner wall with guarded gates
+	local iw = cfg.InnerWall
+	local zc = pos.Z + iw.Z
+	local wallCol = (StructureVisualConfig.Palettes.DefensiveWalls and StructureVisualConfig.Palettes.DefensiveWalls.Body) or Color3.fromRGB(178, 170, 148)
+	local half = iw.GateWidth * 0.5
+	local function wallSeg(a: number, b: number)
+		if b - a < 0.5 then
+			return
+		end
+		part({
+			Name = "InnerWall",
+			Size = Vector3.new(b - a, iw.Height, iw.Thickness),
+			Position = Vector3.new(pos.X + (a + b) * 0.5, padTop + iw.Height * 0.5, zc),
+			Color = wallCol,
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			CastShadow = true,
+			Parent = folder,
+		})
+		part({
+			Name = "InnerWallCap",
+			Size = Vector3.new(b - a + 0.3, 0.5, iw.Thickness + 0.3),
+			Position = Vector3.new(pos.X + (a + b) * 0.5, padTop + iw.Height + 0.25, zc),
+			Color = look.WallCap or Color3.fromRGB(132, 126, 110),
+			Material = Enum.Material.Concrete,
+			CanCollide = false,
+			Parent = folder,
+		})
+	end
+	local gates = {}
+	for id, g in pairs(iw.Gates) do
+		table.insert(gates, { Id = id, X = g.X })
+	end
+	table.sort(gates, function(a, b)
+		return a.X < b.X
+	end)
+	local cursor = -H
+	for _, g in ipairs(gates) do
+		wallSeg(cursor, g.X - half)
+		cursor = g.X + half
+
+		local gateFolder = Instance.new("Folder")
+		gateFolder.Name = "RearGate_" .. g.Id
+		gateFolder:SetAttribute("GateId", g.Id)
+		gateFolder:SetAttribute("PlotId", plotId)
+		gateFolder.Parent = folder
+		local gx = pos.X + g.X
+		for _, sx in ipairs({ -1, 1 }) do
+			part({
+				Name = "GatePost",
+				Size = Vector3.new(1.6, iw.Height + 1.5, iw.Thickness + 1),
+				Position = Vector3.new(gx + sx * (half + 0.8), padTop + (iw.Height + 1.5) * 0.5, zc),
+				Color = steel,
+				Material = Enum.Material.Metal,
+				CanCollide = true,
+				Parent = gateFolder,
+			})
+		end
+		local lintel = part({
+			Name = "GateLintel",
+			Size = Vector3.new(iw.GateWidth + 3.2, 2.2, iw.Thickness + 0.6),
+			Position = Vector3.new(gx, padTop + iw.Height + 0.6, zc),
+			Color = Color3.fromRGB(40, 44, 42),
+			Material = Enum.Material.Metal,
+			CanCollide = true,
+			Parent = gateFolder,
+		})
+		local sg = Instance.new("SurfaceGui")
+		sg.Name = "WE_GateSign"
+		sg.Face = Enum.NormalId.Back -- +Z: faces the main compound
+		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		sg.PixelsPerStud = 40
+		sg.LightInfluence = 0
+		sg.Parent = lintel
+		local lbl = Instance.new("TextLabel")
+		lbl.Name = "Text"
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundColor3 = Color3.fromRGB(20, 22, 20)
+		lbl.BorderSizePixel = 0
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextScaled = true
+		lbl.TextColor3 = yellow
+		lbl.Text = (REAR_GATE_LABELS[g.Id] or string.upper(g.Id)) .. " · LOCKED"
+		lbl.Parent = sg
+		local leafH = iw.Height - 2
+		for i, sx in ipairs({ -1, 1 }) do
+			local leaf = part({
+				Name = "GateLeaf" .. i,
+				Size = Vector3.new(half - 0.1, leafH, 0.8),
+				Position = Vector3.new(gx + sx * half * 0.5, padTop + leafH * 0.5, zc),
+				Color = Color3.fromRGB(78, 84, 80),
+				Material = Enum.Material.DiamondPlate,
+				CanCollide = true,
+				Parent = gateFolder,
+			})
+			leaf:SetAttribute("WE_GateLeaf", sx)
+			leaf:SetAttribute("WE_ClosedCFrame", leaf.CFrame)
+			part({
+				Name = "GateStripe",
+				Size = Vector3.new(half - 0.1, 0.8, 0.9),
+				Position = leaf.Position + Vector3.new(0, -leafH * 0.5 + 2.2, 0),
+				Color = yellow,
+				Material = Enum.Material.SmoothPlastic,
+				CanCollide = false,
+				Parent = leaf,
+			})
+		end
+		-- Two guards with sandbags on the compound side
+		for _, sx in ipairs({ -1, 1 }) do
+			local gpos = Vector3.new(gx + sx * (half + 3.6), padTop + 2.1, zc + iw.Thickness * 0.5 + 2.4)
+			part({
+				Name = "GuardSandbag",
+				Size = Vector3.new(4.2, 1.3, 1.3),
+				Position = Vector3.new(gpos.X, padTop + 0.65, gpos.Z + 2.2),
+				Color = Color3.fromRGB(186, 164, 118),
+				Material = Enum.Material.Fabric,
+				CanCollide = true,
+				Parent = gateFolder,
+			})
+			makeSoldierKit(
+				gateFolder,
+				"GateGuard_" .. g.Id .. (if sx > 0 then "R" else "L"),
+				CFrame.new(gpos) * CFrame.Angles(0, math.rad(180), 0),
+				Color3.fromRGB(62, 72, 52),
+				"GUARD",
+				Color3.fromRGB(140, 150, 130),
+				150,
+				"Guard",
+				nil
+			)
+		end
+	end
+	wallSeg(cursor, H)
+end
+
+-- v68: ATM cluster anchor offset (legacy (28, 8) → BaseLayoutConfig Courtyard.Collector)
+local function collectorShift(): Vector3
+	if BaseLayout.Enabled() then
+		local c = BaseLayout.Config().Courtyard.Collector
+		return Vector3.new(c.X - 28, 0, c.Z - 8)
+	end
+	return Vector3.zero
+end
+
 local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 	--[[
 		Permanent white >>>> chevrons on plot floor guiding spawn → CommandCenter → next pads.
@@ -1344,8 +1684,20 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 	local nodes = {
 		spawnPos,
 	}
+	if BaseLayout.Enabled() then
+		-- v68: spawn → down the main road → Command Center doorway
+		local cfg = BaseLayout.Config()
+		local sp = cfg.SpawnOffset
+		local cc = cfg.Structures.CommandCenter
+		local dx, dz = BaseLayout.Rotate(7, 14, cc.Yaw)
+		nodes = {
+			plotOrigin + Vector3.new(sp.X, 0.5, sp.Z - 8),
+			plotOrigin + Vector3.new(0, 0.5, 60),
+			plotOrigin + Vector3.new(cc.Site.X + dx, 0.5, cc.Site.Z + dz),
+		}
+	end
 	for i, def in ipairs(STRUCTURES) do
-		if i > 5 then
+		if i > 5 or BaseLayout.Enabled() then
 			break
 		end
 		local col = (i - 1) % STRUCT_COLS
@@ -1354,8 +1706,10 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 		table.insert(nodes, plotOrigin + offset + Vector3.new(0, 0.5, 0))
 	end
 	-- Guide toward MoneyCollector + premium Robux pads (unpaid ATM cluster)
-	local atmCluster = plotOrigin + Vector3.new(28, 0.5, 8)
-	table.insert(nodes, atmCluster)
+	if not BaseLayout.Enabled() then
+		local atmCluster = plotOrigin + Vector3.new(28, 0.5, 8)
+		table.insert(nodes, atmCluster)
+	end
 
 	local idx = 1
 	for i = 1, #nodes - 1 do
@@ -1414,9 +1768,9 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 	end
 
 	local idx = 1
-	-- First 6 structure pads get flanking sandbags + approach chevron
+	-- First 6 structure pads get flanking sandbags + approach chevron (legacy grid pads only; v68 consoles)
 	for i, def in ipairs(STRUCTURES) do
-		if i > 6 then
+		if i > 6 or BaseLayout.Enabled() then
 			break
 		end
 		local col = (i - 1) % STRUCT_COLS
@@ -1431,7 +1785,7 @@ local function dressPlotPadSandbags(plotFolder: Folder, plotOrigin: Vector3)
 		idx += 1
 	end
 	-- ATM approach berm
-	local atm = plotOrigin + Vector3.new(28, 0.7, 8)
+	local atm = plotOrigin + collectorShift() + Vector3.new(28, 0.7, 8)
 	sandbag(atm + Vector3.new(-6, 0, 6), 0, idx)
 	idx += 1
 	sandbag(atm + Vector3.new(6, 0, 6), 0, idx)
@@ -1492,6 +1846,8 @@ local function buildPremiumPads(folder: Folder, plotId: number, atmPos: Vector3)
 end
 
 local function buildMoneyCollector(plotFolder: Folder, plotId: number, pos: Vector3)
+	-- v68: the ATM cluster (body, screen, collect ring, premium pads) moves as a group to Courtyard.Collector
+	pos = pos + collectorShift()
 	-- ATM-like Part kit: matte grey body + green digit screen (MoneyCollectorService billboard refreshes $)
 	local folder = Instance.new("Folder")
 	folder.Name = "MoneyCollector"
@@ -1793,7 +2149,10 @@ function MapSetup.Run()
 		local spawn = Instance.new("SpawnLocation")
 		spawn.Name = "PlayerSpawn"
 		spawn.Size = Vector3.new(10, 1, 10)
-		spawn.Position = pos + Vector3.new(0, 2, 55)
+		do
+			local sp = if BaseLayout.Enabled() then BaseLayout.Config().SpawnOffset else { X = 0, Z = 55 }
+			spawn.Position = pos + Vector3.new(sp.X, 2, sp.Z)
+		end
 		spawn.Anchored = true
 		spawn.Neutral = true
 		spawn.Duration = 0
@@ -1802,7 +2161,7 @@ function MapSetup.Run()
 		spawn.Parent = plotFolder
 
 		-- v67: no giant "BASE n · Walk pads to BUY · E / B menu" label over the plot (HUD + pad cards explain buying)
-		beacon(plotFolder, pos + Vector3.new(0, 0, -62), COL_PAD_EDGE, "PlotBeacon")
+		beacon(plotFolder, pos + (if BaseLayout.Enabled() then Vector3.new(0, 0, -PLOT_PAD_SIZE * 0.5 + 8) else Vector3.new(0, 0, -62)), COL_PAD_EDGE, "PlotBeacon")
 
 		for i, def in ipairs(STRUCTURES) do
 			local col = (i - 1) % STRUCT_COLS
@@ -1815,11 +2174,17 @@ function MapSetup.Run()
 		dressPlotPadSandbags(plotFolder, pos)
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)
+		-- v68: the whole yard group (targets, workers, pad, stalls, anchors) moves to Courtyard.TrainingYard
+		local yardShift = Vector3.zero
+		if BaseLayout.Enabled() then
+			local ty = BaseLayout.Config().Courtyard.TrainingYard
+			yardShift = Vector3.new(ty.X - -14, 0, ty.Z - 48)
+		end
 		local yardFolder = Instance.new("Folder")
 		yardFolder.Name = "TrainingYard"
 		yardFolder.Parent = plotFolder
 		for ti = 1, 3 do
-			local tpos = pos + Vector3.new(-50 + ti * 18, 3.5, 48)
+			local tpos = pos + yardShift + Vector3.new(-50 + ti * 18, 3.5, 48)
 			local target = part({
 				Name = "TrainingTarget" .. ti,
 				Size = Vector3.new(4, 6, 0.6),
@@ -1852,7 +2217,7 @@ function MapSetup.Run()
 		end
 		-- Training workers (visual only — income is SoldierService tick)
 		for wi = 1, 2 do
-			local wpos = pos + Vector3.new(-40 + wi * 20, 2.6, 42)
+			local wpos = pos + yardShift + Vector3.new(-40 + wi * 20, 2.6, 42)
 			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
 			local worker = makeSoldierKit(
 				yardFolder,
@@ -1883,7 +2248,7 @@ function MapSetup.Run()
 		part({
 			Name = "YardPad",
 			Size = Vector3.new(55, 0.6, 18),
-			Position = pos + Vector3.new(-14, 0.4, 48),
+			Position = pos + yardShift + Vector3.new(-14, 0.4, 48),
 			Color = Color3.fromRGB(48, 52, 42),
 			Material = Enum.Material.Concrete,
 			CanCollide = true,
@@ -1922,7 +2287,7 @@ function MapSetup.Run()
 				Vector3.new(0, 0, 36),
 			}
 			for si, soff in ipairs(stallOffsets) do
-				local sOrigin = pos + soff
+				local sOrigin = pos + yardShift + soff
 				local stall = Instance.new("Folder")
 				stall.Name = "SquadStall" .. si
 				stall.Parent = stallFolder
@@ -2053,7 +2418,7 @@ function MapSetup.Run()
 		local yardAnchor = part({
 			Name = "YardAnchor",
 			Size = Vector3.new(1, 1, 1),
-			Position = pos + Vector3.new(-14, 8, 48),
+			Position = pos + yardShift + Vector3.new(-14, 8, 48),
 			Transparency = 1,
 			CanCollide = false,
 			Parent = yardFolder,
@@ -2068,7 +2433,7 @@ function MapSetup.Run()
 		local earnAnchor = part({
 			Name = "YardEarnAnchor",
 			Size = Vector3.new(1, 1, 1),
-			Position = pos + Vector3.new(-14, 6, 42),
+			Position = pos + yardShift + Vector3.new(-14, 6, 42),
 			Transparency = 1,
 			CanCollide = false,
 			Parent = yardFolder,
@@ -2108,10 +2473,18 @@ function MapSetup.Run()
 				wz.Name = "PlotWarzone"
 				wz.Parent = plotFolder
 				local count = 12
+				-- v68: fixed spots along the walls / rear zone (the 58-78 stud ring lands on the new plaza)
+				local spots = if BaseLayout.Enabled() then BaseLayout.Config().WarzoneSpots else nil
+				if spots then
+					count = #spots
+				end
 				for i = 1, count do
 					local ang = (i / count) * math.pi * 2
 					local rad = 58 + (i % 3) * 10
 					local o = pos + Vector3.new(math.cos(ang) * rad, 0.6, math.sin(ang) * rad)
+					if spots then
+						o = pos + Vector3.new(spots[i].X, 0.6, spots[i].Z)
+					end
 					if i % 3 == 0 then
 						-- sandbag berm (Metal/Sand — no neon)
 						part({
@@ -2197,6 +2570,7 @@ function MapSetup.Run()
 			end
 		end
 		buildMoneyCollector(plotFolder, plotId, pos)
+		buildLayoutGround(plotFolder, plotId, pos)
 	end
 
 	local territories = ensureFolder("Territories", root)
@@ -2423,9 +2797,37 @@ function MapSetup.Run()
 	local function makeSpawnFolder(name, tag, count, center, color, ringRadius)
 		local folder = ensureFolder(name, root)
 		local ring = ringRadius or 200
+		-- v68: slide a spawn along its ring until it is PLOT_SPAWN_CLEARANCE outside every player plot
+		-- (NPCSpawns4 sat inside plot 4 even at the old 200 size; EventSpawns3 was 13 studs off plot 1).
+		local function inAnyPlot(p: Vector3): boolean
+			local half = PLOT_PAD_SIZE * 0.5 + PLOT_SPAWN_CLEARANCE
+			for _, pp in ipairs(PLOT_POSITIONS) do
+				if math.abs(p.X - pp.X) < half and math.abs(p.Z - pp.Z) < half then
+					return true
+				end
+			end
+			return false
+		end
 		for i = 1, count do
 			local angle = (i / count) * math.pi * 2
 			local pos = center + Vector3.new(math.cos(angle) * ring, 1, math.sin(angle) * ring)
+			if inAnyPlot(pos) then
+				for k = 1, 30 do
+					local found = false
+					for _, sgn in ipairs({ 1, -1 }) do
+						local a = angle + sgn * k * math.rad(2)
+						local p = center + Vector3.new(math.cos(a) * ring, 1, math.sin(a) * ring)
+						if not inAnyPlot(p) then
+							pos = p
+							found = true
+							break
+						end
+					end
+					if found then
+						break
+					end
+				end
+			end
 			local padSize = if tag == TAG_VEHICLE then 20 else 14
 			local p = part({
 				Name = name .. i,
@@ -2691,13 +3093,28 @@ function MapSetup.Run()
 	end
 
 	local plot1 = PLOT_POSITIONS[1]
-	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps)
-	local mClaim = tutorialMarker("Tutorial_ClaimBase", plot1 + Vector3.new(0, 2, 52), Color3.fromRGB(230, 200, 80), "ClaimBase")
-	local mCC = tutorialMarker("Tutorial_CommandCenter", plot1 + STRUCT_ORIGIN + Vector3.new(0, 1.4, 0), Color3.fromRGB(80, 200, 120), "CommandCenter")
-	local mRecruit = tutorialMarker("Tutorial_Recruit", plot1 + Vector3.new(-14, 3, 42), Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
-	tutorialMarker("Tutorial_Income", plot1 + Vector3.new(28, 3, 8), Color3.fromRGB(80, 200, 160), "Income")
+	-- Offsets track Plot1 spawn / structure grid (STRUCT_ORIGIN + gaps); v68: layout consoles when enabled
+	local function structureMarkerPos(structureId: string, gridOffset: Vector3): Vector3
+		local cf = BaseLayout.ConsoleCFrame(plot1, structureId)
+		if cf then
+			return cf.Position + Vector3.new(0, 1.4, 0)
+		end
+		return plot1 + gridOffset
+	end
+	local yardAt = Vector3.new(-14, 3, 42)
+	local claimAt = Vector3.new(0, 2, 52)
+	if BaseLayout.Enabled() then
+		local cfg = BaseLayout.Config()
+		yardAt = Vector3.new(cfg.Courtyard.TrainingYard.X, 3, cfg.Courtyard.TrainingYard.Z - 6)
+		claimAt = Vector3.new(cfg.SpawnOffset.X, 2, cfg.SpawnOffset.Z - 4)
+	end
+	local atmAt = collectorShift() + Vector3.new(28, 0, 8)
+	local mClaim = tutorialMarker("Tutorial_ClaimBase", plot1 + claimAt, Color3.fromRGB(230, 200, 80), "ClaimBase")
+	local mCC = tutorialMarker("Tutorial_CommandCenter", structureMarkerPos("CommandCenter", STRUCT_ORIGIN + Vector3.new(0, 1.4, 0)), Color3.fromRGB(80, 200, 120), "CommandCenter")
+	local mRecruit = tutorialMarker("Tutorial_Recruit", plot1 + yardAt, Color3.fromRGB(180, 220, 100), "RecruitSoldiers")
+	tutorialMarker("Tutorial_Income", plot1 + atmAt + Vector3.new(0, 3, 0), Color3.fromRGB(80, 200, 160), "Income")
 	-- Click dropper sits near ATM (ManualDropper CollectorOffset ≈ -5.5, 0, 4 from collector body)
-	tutorialMarker("Tutorial_Dropper", plot1 + Vector3.new(28 - 5.5, 2.5, 8 + 4), Color3.fromRGB(70, 220, 100), "ClickDropper")
+	tutorialMarker("Tutorial_Dropper", plot1 + atmAt + Vector3.new(-5.5, 2.5, 4), Color3.fromRGB(70, 220, 100), "ClickDropper")
 	-- Pads first / beams first 3 beats: dress arrow meshes on early markers
 	task.defer(function()
 		pcall(function()
@@ -2711,7 +3128,7 @@ function MapSetup.Run()
 			end
 		end)
 	end)
-	tutorialMarker("Tutorial_Barracks", plot1 + STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0), Color3.fromRGB(100, 180, 220), "Barracks")
+	tutorialMarker("Tutorial_Barracks", structureMarkerPos("Barracks", STRUCT_ORIGIN + Vector3.new(STRUCT_GAP, 1.4, 0)), Color3.fromRGB(100, 180, 220), "Barracks")
 	local jeepPos = Vector3.new(200, 2, 0)
 	local vSpawns = CollectionService:GetTagged(TAG_VEHICLE)
 	if #vSpawns > 0 and vSpawns[1]:IsA("BasePart") then
@@ -2724,12 +3141,12 @@ function MapSetup.Run()
 	do
 		local okNeon, errNeon = pcall(function()
 			local neon = Color3.fromRGB(80, 255, 160)
-			local collectorPos = plot1 + Vector3.new(28, 5, 8)
-			local ccPos = plot1 + STRUCT_ORIGIN + Vector3.new(0, 4, 0)
+			local collectorPos = plot1 + atmAt + Vector3.new(0, 5, 0)
+			local ccPos = structureMarkerPos("CommandCenter", STRUCT_ORIGIN) + Vector3.new(0, 2.6, 0)
 			local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
 			local depotCol = (depotIdx - 1) % STRUCT_COLS
 			local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
-			local depotPos = plot1 + STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 4, depotRow * STRUCT_GAP)
+			local depotPos = structureMarkerPos("VehicleDepot", STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 0, depotRow * STRUCT_GAP)) + Vector3.new(0, 2.6, 0)
 			local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
 				local a0p = part({
 					Name = name .. "_A0",

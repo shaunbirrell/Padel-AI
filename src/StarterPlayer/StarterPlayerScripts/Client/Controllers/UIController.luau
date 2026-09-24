@@ -3,6 +3,9 @@
 
 local UIController = {}
 
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local HUDController = require(script.Parent.HUDController)
 local NotificationController = require(script.Parent.NotificationController)
@@ -128,6 +131,37 @@ safeInit("Orders", OrdersController.Init)
 		},
 	})
 	print("[WAR EMPIRE] UIController: action dock bound (Base/Shop/Rebirth/Missions/Army/Garage/Settings)")
+
+	-- v68: item terminals inside walk-in buildings (server HollowBuildingBuilder + Interiors/*) carry the
+	-- panel to open in the prompt attribute WE_OpenPanel. Keep this list in sync with the interior checker.
+	local panelOpeners: { [string]: () -> () } = {
+		Base = BaseController.Open,
+		Shop = ShopController.Open,
+		Rebirth = ProgressionController.Open,
+		Missions = MissionController.Open,
+		Army = ArmyController.Open,
+		Garage = VehicleController.Open,
+		Settings = SettingsController.Open,
+	}
+	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
+		if who ~= Players.LocalPlayer then
+			return
+		end
+		local panel = prompt:GetAttribute("WE_OpenPanel")
+		if typeof(panel) ~= "string" then
+			return
+		end
+		local open = panelOpeners[panel]
+		if not open then
+			warn("[WAR EMPIRE] terminal opens unknown panel:", panel)
+			return
+		end
+		pcall(AudioController.PlayClick)
+		local ok, err = pcall(open)
+		if not ok then
+			warn("[WAR EMPIRE] terminal panel failed:", panel, err)
+		end
+	end)
 end
 
 return UIController

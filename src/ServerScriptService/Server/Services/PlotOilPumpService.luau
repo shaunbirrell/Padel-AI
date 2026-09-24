@@ -230,7 +230,10 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	end
 	local right = Vector3.new(-toward.Z, 0, toward.X)
 	local half = (BaseConfig.PlotSize.X or 200) * 0.5
-	local out = half + (PlotOilPumpConfig.WallClearanceStuds or 18)
+	-- `toward` is diagonal for the corner plots: step far enough along it to clear the square plot edge
+	-- by WallClearanceStuds (measured square to the wall), not just half the plot size.
+	local axis = math.max(math.abs(toward.X), math.abs(toward.Z), 0.5)
+	local out = (half + (PlotOilPumpConfig.WallClearanceStuds or 18)) / axis
 	local spread = PlotOilPumpConfig.LateralSpreadStuds or 22
 	local count = math.clamp(PlotOilPumpConfig.PumpsPerPlot or 2, 1, 2)
 

@@ -83,8 +83,13 @@ local function detach(part: BasePart)
 	attached[part] = nil
 end
 
+-- v68: consoles (BaseLayoutConfig) are bought by prompt / BUY tap only — never by walking into them
+local function isConsole(part: BasePart): boolean
+	return part:GetAttribute("WE_Console") == true
+end
+
 local function hardenPad(part: BasePart)
-	part.CanTouch = true
+	part.CanTouch = not isConsole(part)
 	part.CanCollide = true
 	part.CanQuery = true
 	for _, child in ipairs(part:GetDescendants()) do
@@ -382,8 +387,9 @@ local function attachSlot(part: BasePart)
 	attached[part] = true
 	hardenPad(part)
 
+	local console = isConsole(part)
 	trackConn(part, part.Touched:Connect(function(hit)
-		if hit:IsA("BasePart") then
+		if not console and hit:IsA("BasePart") then
 			onPadTouched(part, hit)
 		end
 	end))
@@ -427,11 +433,12 @@ local function attachSlot(part: BasePart)
 	end
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "WE_ServerBuyPrompt"
-	prompt.ActionText = "Buy"
+	prompt.ActionText = if console then "Build / Upgrade" else "Buy"
 	local def = BaseConfig.Structures[structureId]
 	prompt.ObjectText = if def then def.DisplayName else structureId
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 16
+	-- v68: consoles need a short hold so walking past never buys
+	prompt.HoldDuration = if console then 0.35 else 0
+	prompt.MaxActivationDistance = if console then 10 else 16
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
@@ -566,7 +573,7 @@ local function startSpatialLoop()
 					if hrp and hrp:IsA("BasePart") then
 						local pos = hrp.Position
 						for part in pairs(attached) do
-							if part.Parent then
+							if part.Parent and not isConsole(part) then
 								local structureId = part:GetAttribute("StructureId")
 								if typeof(structureId) == "string" then
 									local key = padKey(part, structureId) .. "|" .. tostring(player.UserId)

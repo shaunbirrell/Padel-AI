@@ -23,6 +23,17 @@ local CORNER_FOLDER = "WE_CornerTowers"
 local CEILING_FOLDER = "WE_BaseCeiling"
 local CEILING_UNLOCK_WALLS = 3 -- DefensiveWalls ≥ L3 unlocks anti-heli roof
 
+--[[ v68: kit parts are placed in the structure's site frame. With BaseLayoutConfig the upgrade slot (plinth)
+	is a console and WE_SiteCFrame says where the building stands; legacy pads have no attribute (site = pad). ]]
+local function siteFrame(plinth: BasePart): CFrame
+	local cf = plinth:GetAttribute("WE_SiteCFrame")
+	if typeof(cf) == "CFrame" then
+		return cf
+	end
+	return plinth.CFrame
+end
+StructureKitBuilder.SiteFrame = siteFrame
+
 local function makePart(props: { [string]: any }): BasePart
 	local p = Instance.new("Part")
 	p.Anchored = true
@@ -73,7 +84,7 @@ local function kitPart(plinth: BasePart, role: string, size: Vector3, localOffse
 	local p = makePart({
 		Name = role,
 		Size = size,
-		CFrame = plinth.CFrame * CFrame.new(localOffset),
+		CFrame = siteFrame(plinth) * CFrame.new(localOffset),
 		Color = color,
 		Material = material or Enum.Material.Metal,
 		Transparency = spawnT,
@@ -272,14 +283,14 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		if podium then
 			local off = podium:GetAttribute("WE_LocalOffset")
 			if typeof(off) == "Vector3" then
-				podium.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+				podium.CFrame = siteFrame(plinth) * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
 			end
 		end
 		local ring = kitPart(plinth, "PodiumRing", Vector3.new(4.2, 0.18, 4.2), Vector3.new(0, 1.15, 4.2), Constants.Colors.GoldBright, Enum.Material.Neon, Enum.PartType.Cylinder)
 		if ring then
 			local off = ring:GetAttribute("WE_LocalOffset")
 			if typeof(off) == "Vector3" then
-				ring.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+				ring.CFrame = siteFrame(plinth) * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
 			end
 		end
 		local display = kitPart(plinth, "ShowroomMesh", Vector3.new(2.4, 1.1, 4.0), Vector3.new(0, 1.85, 4.2), Color3.fromRGB(70, 88, 62), Enum.Material.Metal, nil)
@@ -314,7 +325,7 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 				ped.Name = "ShowroomPedestalHost" .. (pi + 1)
 				local off = ped:GetAttribute("WE_LocalOffset")
 				if typeof(off) == "Vector3" then
-					ped.CFrame = plinth.CFrame * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
+					ped.CFrame = siteFrame(plinth) * CFrame.new(off :: Vector3) * CFrame.Angles(0, 0, math.rad(90))
 				end
 				ped.Transparency = 0.55
 			end
@@ -1164,7 +1175,8 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	end
 
 	local existing = plotFolder:FindFirstChild(CEILING_FOLDER)
-	if wallsLevel < CEILING_UNLOCK_WALLS then
+	-- v68: no roof at all over bases (owner request) — AntiAirCeilingEnabled = false clears any ceiling
+	if (StructureVisualConfig :: any).AntiAirCeilingEnabled == false or wallsLevel < CEILING_UNLOCK_WALLS then
 		if existing then
 			existing:Destroy()
 		end
@@ -1437,8 +1449,50 @@ function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
 	end
 end
 
+--[[ v68: open / close the rear-zone gates (MapSetup LayoutGround.RearGate_<StructureId>) from the owner's
+	upgrade levels. A gate opens once its structure is L1+: the leaves slide into the wall and stop colliding. ]]
+local REAR_GATE_LABELS = { Airfield = "AIRFIELD", Helipad = "HELIPAD", Dock = "NAVAL DOCK" }
+
+function StructureKitBuilder.SyncRearGates(plotId: number, upgrades: { [string]: any }?)
+	local plotFolder = StructureKitBuilder.FindPlotFolder(plotId)
+	local ground = plotFolder and plotFolder:FindFirstChild("LayoutGround")
+	if not ground then
+		return
+	end
+	for _, gateFolder in ipairs(ground:GetChildren()) do
+		local gid = gateFolder:GetAttribute("GateId")
+		if typeof(gid) == "string" then
+			local lv = if upgrades then (tonumber(upgrades[gid]) or 0) else 0
+			local open = lv >= 1
+			gateFolder:SetAttribute("WE_GateOpen", open)
+			for _, leaf in ipairs(gateFolder:GetChildren()) do
+				local sx = leaf:GetAttribute("WE_GateLeaf")
+				local closed = leaf:GetAttribute("WE_ClosedCFrame")
+				if leaf:IsA("BasePart") and typeof(sx) == "number" and typeof(closed) == "CFrame" then
+					local target = if open then closed + Vector3.new(sx * (leaf.Size.X + 0.3), 0, 0) else closed
+					local shift = target.Position - leaf.Position
+					leaf.CFrame = target
+					leaf.CanCollide = not open
+					for _, ch in ipairs(leaf:GetChildren()) do
+						if ch:IsA("BasePart") then
+							ch.CFrame = ch.CFrame + shift
+						end
+					end
+				end
+			end
+			local lintel = gateFolder:FindFirstChild("GateLintel")
+			local sign = lintel and lintel:FindFirstChild("WE_GateSign")
+			local text = sign and sign:FindFirstChild("Text")
+			if text and text:IsA("TextLabel") then
+				text.Text = (REAR_GATE_LABELS[gid] or string.upper(gid)) .. (if open then " · OPEN" else " · LOCKED")
+			end
+		end
+	end
+end
+
 function StructureKitBuilder.ClearPlotExtras(plotId: number)
 	StructureKitBuilder.SyncPerimeterWalls(plotId, 0)
+	StructureKitBuilder.SyncRearGates(plotId, nil)
 	StructureKitBuilder.SyncCornerTowers(plotId, 0)
 	StructureKitBuilder.SyncBaseCeiling(plotId, 0)
 	-- E) clear stale WE_OwnedLevel on unowned pads so next claimer does not see MAX with no kits

@@ -1,17 +1,16 @@
 --!strict
 --[[
-	v66: walk-in structures (Command Center first). Config: StructureVisualConfig.HollowBuildings.
+	Walk-in structures. Config: StructureVisualConfig.HollowBuildings (Defaults + one entry per structure).
 
-	Builds Model "WE_Building" under the upgrade plinth:
-	  L1  ground floor: real doorway, glass windows, lit interior (desk, monitors, map table, lockers, radio)
-	  L2+ comms annex (east) + roof radio mast + floodlights
-	  L3+ second storey with interior stairs and a railed stairwell
-	  L4+ roof access (climbable truss through a hatch) + satellite dish
-	  L5  rooftop helipad marking, gold trim, tall flag
+	Builds Model "WE_Building" under the structure's upgrade slot:
+	  shell     real doorway (or wide garage door), glass windows, floor, flat roof + parapet, entrance, sign
+	  levels    TwoStoryLevel → second storey + interior stairs; AnnexLevel → side annex, mast, floodlights;
+	            RoofAccessLevel → truss ladder through a roof hatch + dish; GoldCapLevel → gold parapet; flag
+	  interior  Modules/Interiors/<Interior>.luau — function(ictx, api) that furnishes the rooms
+	            (ictx = geometry + keep-out zones, api = building-local part helpers + item terminals)
 
-	Placement: the building sits BEHIND its pad and shifted sideways so the doorway is well outside the
-	walk-over buy hit box (UpgradePadService: plinth half-size + 4 margin = ±8 studs). Walking inside
-	never re-triggers a purchase. +Z (building front) faces the plot spawn.
+	v68: with BaseLayoutConfig the building is centred on its site (WE_SiteCFrame) and bought/upgraded at the
+	console inside it. Legacy (no site): it sits behind its pad with the doorway shifted clear of the pad.
 
 	The kit's "Body" part is only the foundation slab (see StructureKitBuilder), so EnsureKit / applyKitVisuals
 	invariants (Body exists, solid at L1+) still hold. Everything else lives in the Model and is rebuilt when
@@ -21,11 +20,12 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
+local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
 
 local HollowBuildingBuilder = {}
 
 local MODEL_NAME = "WE_Building"
-local GEN = 1
+local GEN = 2
 
 type Opening = {
 	Center: number, -- along the wall's local X
@@ -33,6 +33,7 @@ type Opening = {
 	Bottom: number, -- above the wall base
 	Height: number,
 	Glass: boolean,
+	Garage: boolean?,
 }
 
 type Ctx = {
@@ -41,18 +42,46 @@ type Ctx = {
 	c: any,
 	col: any,
 	level: number,
+	structureId: string,
 }
+
+export type Rect = { X0: number, X1: number, Z0: number, Z1: number }
+
+local function merged(defaults: any, specific: any): any
+	local out = {}
+	if typeof(defaults) == "table" then
+		for k, v in pairs(defaults) do
+			out[k] = v
+		end
+	end
+	for k, v in pairs(specific) do
+		out[k] = v
+	end
+	local colors = {}
+	if typeof(defaults) == "table" and typeof(defaults.Colors) == "table" then
+		for k, v in pairs(defaults.Colors) do
+			colors[k] = v
+		end
+	end
+	if typeof(specific.Colors) == "table" then
+		for k, v in pairs(specific.Colors) do
+			colors[k] = v
+		end
+	end
+	out.Colors = colors
+	return out
+end
 
 local function cfgFor(structureId: string): any?
 	local all = (StructureVisualConfig :: any).HollowBuildings
-	if typeof(all) ~= "table" then
+	if typeof(all) ~= "table" or structureId == "Defaults" then
 		return nil
 	end
 	local c = all[structureId]
 	if typeof(c) ~= "table" or c.Enabled == false then
 		return nil
 	end
-	return c
+	return merged(all.Defaults, c)
 end
 
 function HollowBuildingBuilder.IsHollow(structureId: string): boolean
@@ -70,18 +99,35 @@ local function groundY(plinth: BasePart): number
 	return plinth.Position.Y - h * 0.5
 end
 
--- Offset of the footprint centre from the plinth, in plinth space (ground level).
+local function siteCFrame(plinth: BasePart): CFrame?
+	local cf = plinth:GetAttribute("WE_SiteCFrame")
+	if typeof(cf) == "CFrame" then
+		return cf
+	end
+	return nil
+end
+
+-- Offset of the footprint centre from the kit frame (StructureKitBuilder site frame), at ground level.
+-- v68 layout: the building is centred on its site. Legacy pads: behind the pad, shifted sideways.
 local function footprintOffset(plinth: BasePart, c: any): Vector3
 	local gy = groundY(plinth)
+	local site = siteCFrame(plinth)
+	if site then
+		return Vector3.new(0, gy - site.Position.Y, 0)
+	end
 	return Vector3.new(c.OffsetX or 0, gy - plinth.Position.Y, -((c.FrontGap or 10) + c.Depth * 0.5))
 end
 
 local function originFor(plinth: BasePart, c: any): CFrame
+	local site = siteCFrame(plinth)
+	if site then
+		return site * CFrame.new(footprintOffset(plinth, c))
+	end
 	local rot = plinth.CFrame - plinth.CFrame.Position
 	return CFrame.new(plinth.Position) * rot * CFrame.new(footprintOffset(plinth, c))
 end
 
---[[ Foundation slab for StructureKitBuilder's "Body": (size, local offset from plinth). ]]
+--[[ Foundation slab for StructureKitBuilder's "Body": (size, local offset in the kit frame). ]]
 function HollowBuildingBuilder.FoundationSpec(plinth: BasePart, structureId: string): (Vector3?, Vector3?)
 	local c = cfgFor(structureId)
 	if not c then
@@ -168,7 +214,7 @@ end
 --[[
 	Wall along its local X (length len) with base at y=baseY in wallCF space; thickness along local Z,
 	local +Z = outside. Openings are cut as piers / sills / lintels; glass openings get a pane + ledge,
-	doorways get a metal frame.
+	doorways get a metal frame, garage openings a striped frame + rolled shutter drum.
 ]]
 local function wall(ctx: Ctx, name: string, wallCF: CFrame, len: number, height: number, baseY: number, openings: { Opening })
 	local c = ctx.c
@@ -200,9 +246,16 @@ local function wall(ctx: Ctx, name: string, wallCF: CFrame, len: number, height:
 				pane.Transparency = 0.45
 				pane.Reflectance = 0.08
 				pane.CastShadow = false
-				-- divider + outside ledge
 				part(ctx, name .. "Mullion", Vector3.new(0.2, o.Height, 0.3), wallCF * CFrame.new((oa + ob) * 0.5, midY, 0), col.Trim, Enum.Material.Metal, false)
 				part(ctx, name .. "Ledge", Vector3.new(w + 0.6, 0.3, 0.7), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom - 0.15, t * 0.5 + 0.2), col.Trim, Enum.Material.Metal, false)
+			elseif o.Garage then
+				local frameT = t + 0.4
+				for _, edge in ipairs({ oa + 0.3, ob - 0.3 }) do
+					part(ctx, name .. "GarageFrame", Vector3.new(0.6, o.Height, frameT), wallCF * CFrame.new(edge, midY, 0), col.Accent, Enum.Material.SmoothPlastic, false)
+				end
+				part(ctx, name .. "GarageHeader", Vector3.new(w, 0.6, frameT), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom + o.Height - 0.3, 0), col.Metal, Enum.Material.Metal, false)
+				local drum = part(ctx, name .. "ShutterDrum", Vector3.new(w - 0.6, 1.4, 1.4), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom + o.Height - 0.5, -t * 0.5 - 0.7), col.Metal, Enum.Material.DiamondPlate, false)
+				drum.Shape = Enum.PartType.Cylinder
 			else
 				local frameT = t + 0.3
 				part(ctx, name .. "DoorFrame", Vector3.new(0.35, o.Height, frameT), wallCF * CFrame.new(oa + 0.175, midY, 0), col.Metal, Enum.Material.Metal, false)
@@ -276,7 +329,39 @@ local function sandbags(ctx: Ctx, x0: number, x1: number, z: number, baseY: numb
 	end
 end
 
+--[[ Item terminal: a floor-standing screen with a ProximityPrompt that opens a client panel
+	(attribute WE_OpenPanel on the prompt; ClientBootstrap routes it). Not an upgrade slot. ]]
+local function terminal(ctx: Ctx, name: string, pos: Vector3, facingDeg: number, panel: string, actionText: string, objectText: string, screenLines: { string }?): Part
+	local col = ctx.col
+	local frame = ctx.origin * CFrame.new(pos) * CFrame.Angles(0, math.rad(facingDeg), 0)
+	local body = part(ctx, name, Vector3.new(2.4, 3.2, 1.2), frame * CFrame.new(0, 1.6, 0), col.Dark, Enum.Material.Metal)
+	local screen = part(ctx, name .. "Screen", Vector3.new(2.1, 1.3, 0.14), frame * CFrame.new(0, 3.55, 0.3) * CFrame.Angles(math.rad(-20), 0, 0), Color3.fromRGB(10, 24, 14), Enum.Material.SmoothPlastic, false)
+	surfaceText(screen, Enum.NormalId.Back, screenLines or { string.upper(objectText), "TAP TO OPEN" }, col.Screen, Color3.fromRGB(8, 20, 12), Enum.Font.GothamBold)
+	local lamp = part(ctx, name .. "Lamp", Vector3.new(0.4, 0.2, 0.4), frame * CFrame.new(0.8, 3.25, 0.35), col.Screen, Enum.Material.Neon, false)
+	light(lamp, 6, 0.8, col.Screen)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "WE_PanelPrompt"
+	prompt.ActionText = actionText
+	prompt.ObjectText = objectText
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 8
+	prompt.RequiresLineOfSight = false
+	prompt.KeyboardKeyCode = Enum.KeyCode.F
+	prompt:SetAttribute("WE_OpenPanel", panel)
+	prompt.Parent = body
+	body:SetAttribute("WE_Terminal", panel)
+	return body
+end
+
 -- ── building ────────────────────────────────────────────────────────────────
+
+local function consoleLocal(structureId: string): Vector3?
+	local s = (BaseLayoutConfig.Structures :: any)[structureId]
+	if BaseLayoutConfig.Enabled and s and s.WalkIn and s.Console then
+		return Vector3.new(s.Console.X, 0, s.Console.Z)
+	end
+	return nil
+end
 
 local function build(ctx: Ctx)
 	local c = ctx.c
@@ -289,6 +374,8 @@ local function build(ctx: Ctx)
 	local hasAnnex = lv >= c.AnnexLevel
 	local roofAccess = lv >= c.RoofAccessLevel and twoStory
 	local helipad = lv >= c.HelipadLevel
+	local goldCap = helipad or lv >= (c.GoldCapLevel or 5)
+	local garage = c.DoorStyle == "Garage"
 
 	local y1 = 0.4 -- ground floor top (foundation slab = kit Body)
 	local y2 = y1 + H1 + 0.8 -- upper floor top
@@ -298,7 +385,7 @@ local function build(ctx: Ctx)
 	local doorX, doorW, doorH = c.DoorX, c.DoorWidth, c.DoorHeight
 	local winW, winH, winBottom = c.WindowWidth, c.WindowHeight, c.WindowBottom
 
-	-- Stairwell (L3+) along the back wall, climbing toward +X.
+	-- Stairwell (two storeys) along the back wall, climbing toward +X.
 	local stairW = 4.5
 	local stairRise = y2 - y1
 	local stepCount = math.ceil(stairRise / 0.8)
@@ -309,8 +396,7 @@ local function build(ctx: Ctx)
 	local stairZ0 = -hd + t
 	local stairZ1 = stairZ0 + stairW
 
-	-- Annex (L2+) on the east side, flush with the back wall.
-	local annexW, annexD, annexH = c.AnnexWidth, c.AnnexDepth, c.AnnexHeight
+	local annexW, annexD, annexH = c.AnnexWidth or 12, c.AnnexDepth or 14, c.AnnexHeight or 9
 	local annexZc = -hd + annexD * 0.5
 
 	-- Walls: ground storey
@@ -321,16 +407,16 @@ local function build(ctx: Ctx)
 	local sideLen = D - 2 * t
 
 	local frontOpen: { Opening } = {
-		{ Center = doorX, Width = doorW, Bottom = 0, Height = doorH, Glass = false },
+		{ Center = doorX, Width = doorW, Bottom = 0, Height = doorH, Glass = false, Garage = garage },
 	}
-	for _, wx in ipairs(c.FrontWindowsX) do
+	for _, wx in ipairs(c.FrontWindowsX or {}) do
 		table.insert(frontOpen, { Center = wx, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
 	end
 	wall(ctx, "WallFront", frontCF, W, H1, y1, frontOpen)
 
 	local backOpen: { Opening } = {}
 	if not twoStory then
-		for _, wx in ipairs(c.BackWindowsX) do
+		for _, wx in ipairs(c.BackWindowsX or {}) do
 			-- back wall local X is mirrored (rotated 180°)
 			table.insert(backOpen, { Center = -wx, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
 		end
@@ -338,7 +424,7 @@ local function build(ctx: Ctx)
 	wall(ctx, "WallBack", backCF, W, H1, y1, backOpen)
 
 	local westOpen: { Opening } = {}
-	for _, wz in ipairs(c.WestWindowsZ) do
+	for _, wz in ipairs(c.WestWindowsZ or {}) do
 		table.insert(westOpen, { Center = wz, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
 	end
 	wall(ctx, "WallWest", westCF, sideLen, H1, y1, westOpen)
@@ -346,37 +432,37 @@ local function build(ctx: Ctx)
 	local eastOpen: { Opening } = {}
 	if hasAnnex then
 		table.insert(eastOpen, { Center = -annexZc, Width = 4, Bottom = 0, Height = 7.5, Glass = false })
+	else
+		for _, wz in ipairs(c.EastWindowsZ or {}) do
+			table.insert(eastOpen, { Center = -wz, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
+		end
 	end
 	wall(ctx, "WallEast", eastCF, sideLen, H1, y1, eastOpen)
 
 	-- Upper storey
 	if twoStory then
 		local upFront: { Opening } = {}
-		for _, wx in ipairs(c.UpperWindowsX) do
+		for _, wx in ipairs(c.UpperWindowsX or c.FrontWindowsX or {}) do
 			table.insert(upFront, { Center = wx, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true })
 		end
 		wall(ctx, "WallFront2", frontCF, W, H2, y2, upFront)
 		local upBack: { Opening } = {}
-		for _, wx in ipairs(c.BackWindowsX) do
+		for _, wx in ipairs(c.BackWindowsX or {}) do
 			table.insert(upBack, { Center = -wx, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true })
 		end
 		wall(ctx, "WallBack2", backCF, W, H2, y2, upBack)
 		wall(ctx, "WallWest2", westCF, sideLen, H2, y2, { { Center = 0, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true } })
 		wall(ctx, "WallEast2", eastCF, sideLen, H2, y2, { { Center = 0, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true } })
-		-- storey band
 		box(ctx, "StoreyBand", Vector3.new(W + 0.4, 0.8, 0.3), Vector3.new(0, y2 - 0.4, hd + 0.15), col.Trim, Enum.Material.Metal, false)
 		box(ctx, "StoreyBand", Vector3.new(W + 0.4, 0.8, 0.3), Vector3.new(0, y2 - 0.4, -hd - 0.15), col.Trim, Enum.Material.Metal, false)
 		box(ctx, "StoreyBand", Vector3.new(0.3, 0.8, D + 0.4), Vector3.new(hw + 0.15, y2 - 0.4, 0), col.Trim, Enum.Material.Metal, false)
 		box(ctx, "StoreyBand", Vector3.new(0.3, 0.8, D + 0.4), Vector3.new(-hw - 0.15, y2 - 0.4, 0), col.Trim, Enum.Material.Metal, false)
 
-		-- Upper floor with stairwell hole
 		slab(ctx, "Floor2", -hw + t, hw - t, -hd + t, hd - t, y2 - 0.8, 0.8, col.Floor, Enum.Material.Concrete, { stairX0 - 0.2, stairX1, stairZ0 - 0.1, stairZ1 + 0.2 })
-		-- Solid concrete steps
 		for k = 1, stepCount do
 			local top = y1 + k * stepRise
 			box(ctx, "Stair", Vector3.new(stepRun, top - y1, stairW), Vector3.new(stairX0 + (k - 0.5) * stepRun, y1 + (top - y1) * 0.5, (stairZ0 + stairZ1) * 0.5), col.Stair, Enum.Material.Concrete)
 		end
-		-- Railing around the stairwell on the upper floor (open at the top step, +X end)
 		railing(ctx, Vector3.new(stairX0 - 0.2, y2, stairZ1 + 0.3), Vector3.new(stairX1 - 2.4, y2, stairZ1 + 0.3), 3)
 	end
 
@@ -393,7 +479,7 @@ local function build(ctx: Ctx)
 	box(ctx, "Parapet", Vector3.new(W, parH, t), Vector3.new(0, roofTop + parH * 0.5, -hd + t * 0.5), col.Wall, Enum.Material.Concrete)
 	box(ctx, "Parapet", Vector3.new(t, parH, D - 2 * t), Vector3.new(hw - t * 0.5, roofTop + parH * 0.5, 0), col.Wall, Enum.Material.Concrete)
 	box(ctx, "Parapet", Vector3.new(t, parH, D - 2 * t), Vector3.new(-hw + t * 0.5, roofTop + parH * 0.5, 0), col.Wall, Enum.Material.Concrete)
-	local capColor = if helipad then col.Accent else col.Trim
+	local capColor = if goldCap then col.Gold else col.Trim
 	box(ctx, "ParapetCap", Vector3.new(W + 0.3, 0.3, t + 0.3), Vector3.new(0, roofTop + parH + 0.15, hd - t * 0.5), capColor, Enum.Material.Metal, false)
 	box(ctx, "ParapetCap", Vector3.new(W + 0.3, 0.3, t + 0.3), Vector3.new(0, roofTop + parH + 0.15, -hd + t * 0.5), capColor, Enum.Material.Metal, false)
 	box(ctx, "ParapetCap", Vector3.new(t + 0.3, 0.3, D), Vector3.new(hw - t * 0.5, roofTop + parH + 0.15, 0), capColor, Enum.Material.Metal, false)
@@ -403,103 +489,71 @@ local function build(ctx: Ctx)
 	box(ctx, "ACUnit", Vector3.new(3, 1.6, 2.4), Vector3.new(-hw + 5, roofTop + 0.8, -hd + 3), col.Metal, Enum.Material.DiamondPlate)
 	box(ctx, "ACUnit", Vector3.new(3, 1.6, 2.4), Vector3.new(-hw + 9, roofTop + 0.8, -hd + 3), col.Metal, Enum.Material.DiamondPlate)
 	box(ctx, "Vent", Vector3.new(1.2, 1.4, 1.2), Vector3.new(hw - 3, roofTop + 0.7, 0), col.Dark, Enum.Material.Metal)
-
-	-- Entrance: awning, sign, sandbags
-	local awnY = y1 + doorH + 1.0
-	box(ctx, "Awning", Vector3.new(doorW + 3, 0.35, 3.6), Vector3.new(doorX, awnY, hd + 1.8), col.Trim, Enum.Material.Metal)
-	box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX - doorW * 0.5 - 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
-	box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX + doorW * 0.5 + 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
-	local entryLamp = box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), col.Light, Enum.Material.Neon, false)
-	light(entryLamp, 14, 1.4, col.Light)
-	local signW = math.min(W - 6, 14)
-	local sign = box(ctx, "Sign", Vector3.new(signW, 2.0, 0.3), Vector3.new(c.SignX or 0, awnY + 1.6, hd + 0.15), col.Dark, Enum.Material.Metal, false)
-	-- NormalId.Back is the +Z face = the building front
-	surfaceText(sign, Enum.NormalId.Back, { c.SignText or "COMMAND CENTER" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
-	sandbags(ctx, doorX + doorW * 0.5 + 1.6, doorX + doorW * 0.5 + 6.5, hd + 1.6, 0)
-
-	-- Flag
-	local flagX = -hw - 2.5
-	-- always clear the roofline (two-storey from L3), taller again at L5
-	local poleH = roofTop + parH + (if helipad then 9 else 4)
-	box(ctx, "FlagPole", Vector3.new(0.4, poleH, 0.4), Vector3.new(flagX, poleH * 0.5, hd + 1), col.Metal, Enum.Material.Metal)
-	box(ctx, "Flag", Vector3.new(0.12, 3.6, 6), Vector3.new(flagX, poleH - 2.2, hd + 1 - 3.2), col.Flag, Enum.Material.Fabric, false)
-	if helipad then
-		box(ctx, "FlagTip", Vector3.new(0.9, 0.9, 0.9), Vector3.new(flagX, poleH + 0.4, hd + 1), col.Accent, Enum.Material.Neon, false).Shape = Enum.PartType.Ball
-	end
-
-	-- Ground-floor interior
-	local deskX = -hw + t + 1.4
-	box(ctx, "Desk", Vector3.new(2.2, 2.8, 9), Vector3.new(deskX, y1 + 1.4, 0), col.Dark, Enum.Material.Metal)
-	box(ctx, "DeskTop", Vector3.new(2.8, 0.3, 9.4), Vector3.new(deskX + 0.2, y1 + 2.95, 0), col.Metal, Enum.Material.Metal)
-	local screenLines = {
-		{ "SITREP", "ALL SECTORS", "GREEN" },
-		{ "RADAR", "◆  ◇  ◆", "SWEEP" },
-		{ "INTEL", "OUTPOSTS", "CONTESTED" },
-	}
-	for i, mz in ipairs({ -3, 0, 3 }) do
-		local mon = box(ctx, "Monitor", Vector3.new(0.25, 1.6, 2.5), Vector3.new(deskX - 0.5, y1 + 3.9, mz), col.Dark, Enum.Material.Metal, false)
-		surfaceText(mon, Enum.NormalId.Right, screenLines[i], col.Screen, Color3.fromRGB(8, 20, 12), Enum.Font.Code)
-	end
-	chair(ctx, Vector3.new(deskX + 2.4, y1, -1.6), Vector3.new(-1, 0, 0))
-	chair(ctx, Vector3.new(deskX + 2.4, y1, 1.6), Vector3.new(-1, 0, 0))
-
-	local mapX = (stairX0 + hw) * 0.5 - 1
-	box(ctx, "MapTableBase", Vector3.new(6, 2.6, 3.6), Vector3.new(mapX, y1 + 1.3, 1.5), col.Dark, Enum.Material.Metal)
-	local mapTop = box(ctx, "MapTable", Vector3.new(6.6, 0.25, 4.2), Vector3.new(mapX, y1 + 2.72, 1.5), col.Trim, Enum.Material.Metal)
-	do
-		local sg = Instance.new("SurfaceGui")
-		sg.Name = "WE_MapSurface"
-		sg.Face = Enum.NormalId.Top
-		sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		sg.PixelsPerStud = 40
-		sg.LightInfluence = 0
-		sg.Parent = mapTop
-		local bg = Instance.new("Frame")
-		bg.Size = UDim2.fromScale(1, 1)
-		bg.BackgroundColor3 = Color3.fromRGB(60, 78, 52)
-		bg.BorderSizePixel = 0
-		bg.Parent = sg
-		local grid = Instance.new("UIGridLayout")
-		grid.CellSize = UDim2.fromScale(0.3, 0.3)
-		grid.CellPadding = UDim2.fromScale(0.033, 0.033)
-		grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		grid.VerticalAlignment = Enum.VerticalAlignment.Center
-		grid.Parent = bg
-		local cells = { "N", "", "OIL", "", "HQ", "", "FORT", "", "S" }
-		for i, label in ipairs(cells) do
-			local cell = Instance.new("TextLabel")
-			cell.LayoutOrder = i
-			cell.BackgroundColor3 = if label == "HQ" then col.Accent else Color3.fromRGB(96, 120, 78)
-			cell.BorderSizePixel = 0
-			cell.Font = Enum.Font.GothamBold
-			cell.Text = label
-			cell.TextScaled = true
-			cell.TextColor3 = if label == "HQ" then col.Dark else Color3.fromRGB(230, 235, 220)
-			cell.Parent = bg
+	if c.Skylights then
+		for i, sx in ipairs({ -hw * 0.45, 0, hw * 0.45 }) do
+			local sky = box(ctx, "Skylight" .. i, Vector3.new(5, 0.5, 3.4), Vector3.new(sx, roofTop + 0.25, hd * 0.2), col.Glass, Enum.Material.Glass, false)
+			sky.Transparency = 0.35
 		end
 	end
-	box(ctx, "Runner", Vector3.new(3.4, 0.06, hd - 3), Vector3.new(doorX, y1 + 0.03, hd * 0.5 + 1.5), col.Rug, Enum.Material.Fabric, false)
 
-	for i = 0, 1 do
-		local lz = hd - t - 1.0 - i * 1.7
-		box(ctx, "Locker", Vector3.new(1.4, 7, 1.6), Vector3.new(-hw + t + 0.7, y1 + 3.5, lz), col.Locker, Enum.Material.Metal)
-		box(ctx, "LockerSeam", Vector3.new(0.1, 6.4, 0.08), Vector3.new(-hw + t + 1.42, y1 + 3.5, lz), col.Dark, Enum.Material.Metal, false)
+	-- Entrance: awning or garage canopy, lamp, sign, sandbags
+	local awnY = y1 + doorH + 1.0
+	if garage then
+		box(ctx, "Canopy", Vector3.new(doorW + 4, 0.4, 4.6), Vector3.new(doorX, awnY, hd + 2.3), col.Metal, Enum.Material.DiamondPlate)
+		for _, sx in ipairs({ -1, 1 }) do
+			box(ctx, "BollardHazard", Vector3.new(0.9, 1.6, 0.9), Vector3.new(doorX + sx * (doorW * 0.5 + 1.2), y1 + 0.8, hd + 1.2), col.Accent, Enum.Material.SmoothPlastic)
+		end
+	else
+		box(ctx, "Awning", Vector3.new(doorW + 3, 0.35, 3.6), Vector3.new(doorX, awnY, hd + 1.8), col.Trim, Enum.Material.Metal)
+		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX - doorW * 0.5 - 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
+		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX + doorW * 0.5 + 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
+	end
+	local entryLamp = box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), col.Light, Enum.Material.Neon, false)
+	light(entryLamp, 14, 1.4, col.Light)
+	local signW = math.min(W - 6, 16)
+	local signY = math.min(awnY + 1.6, y1 + H1 - 1.2)
+	local signX = c.SignX or 0
+	-- only slide the sign sideways if it would hang down over the doorway
+	if math.abs(signX - doorX) < (signW + doorW) * 0.5 and signY - 1 < y1 + doorH + 0.4 then
+		signX = if doorX > 0 then doorX - doorW * 0.5 - signW * 0.5 - 1 else doorX + doorW * 0.5 + signW * 0.5 + 1
+	end
+	local sign = box(ctx, "Sign", Vector3.new(signW, 2.0, 0.3), Vector3.new(signX, signY, hd + 0.15), col.Dark, Enum.Material.Metal, false)
+	-- NormalId.Back is the +Z face = the building front
+	surfaceText(sign, Enum.NormalId.Back, { c.SignText or "COMMAND CENTER" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
+	if not garage then
+		sandbags(ctx, doorX + doorW * 0.5 + 1.6, doorX + doorW * 0.5 + 6.5, hd + 1.6, 0)
 	end
 
-	box(ctx, "RadioRack", Vector3.new(2, 5, 1.4), Vector3.new(hw - t - 1.2, y1 + 2.5, -hd + t + 0.8), col.Dark, Enum.Material.Metal)
-	for i = 0, 2 do
-		box(ctx, "RackLed", Vector3.new(0.3, 0.3, 0.1), Vector3.new(hw - t - 1.6 + i * 0.4, y1 + 3.8, -hd + t + 1.55), if i == 1 then col.Accent else col.Screen, Enum.Material.Neon, false)
+	-- Flag
+	if lv >= (c.FlagLevel or 1) then
+		local flagX = -hw - 2.5
+		-- always clear the roofline (two-storey from L3), taller again at L5
+		local poleH = roofTop + parH + (if helipad then 9 else 4)
+		box(ctx, "FlagPole", Vector3.new(0.4, poleH, 0.4), Vector3.new(flagX, poleH * 0.5, hd + 1), col.Metal, Enum.Material.Metal)
+		box(ctx, "Flag", Vector3.new(0.12, 3.6, 6), Vector3.new(flagX, poleH - 2.2, hd + 1 - 3.2), col.Flag, Enum.Material.Fabric, false)
+		if goldCap then
+			box(ctx, "FlagTip", Vector3.new(0.9, 0.9, 0.9), Vector3.new(flagX, poleH + 0.4, hd + 1), col.Gold, Enum.Material.Neon, false).Shape = Enum.PartType.Ball
+		end
 	end
 
-	local wallScreen = box(ctx, "WallScreen", Vector3.new(0.2, 4, 7), Vector3.new(hw - t - 0.1, y1 + 5, hd - t - 4.5), col.Dark, Enum.Material.Metal, false)
-	surfaceText(wallScreen, Enum.NormalId.Left, { "WAR EMPIRE · HQ", "LEVEL " .. tostring(lv), "BUILD. CONQUER. DOMINATE." }, col.Accent, Color3.fromRGB(10, 14, 12), Enum.Font.GothamBold)
-
-	for _, lz in ipairs({ -hd * 0.45, hd * 0.4 }) do
-		local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(0, y1 + H1 - 0.15, lz), col.Light, Enum.Material.Neon, false)
-		light(lamp, 22, 1.2, col.Light)
+	-- Ceiling lights (ground floor): a row along the building, spaced ~9 studs
+	local lampCount = math.max(2, math.floor(W / 9))
+	for i = 1, lampCount do
+		local lx = -hw + W * (i - 0.5) / lampCount
+		for _, lz in ipairs({ -hd * 0.4, hd * 0.35 }) do
+			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y1 + H1 - 0.15, lz), col.Light, Enum.Material.Neon, false)
+			light(lamp, 20, 1.0, col.Light)
+		end
+	end
+	if twoStory then
+		for i = 1, lampCount do
+			local lx = -hw + W * (i - 0.5) / lampCount
+			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y2 + H2 - 0.15, hd * 0.3), col.Light, Enum.Material.Neon, false)
+			light(lamp, 18, 1.0, col.Light)
+		end
 	end
 
-	-- Annex (comms room)
+	-- Annex (comms room) + mast + floodlights
 	if hasAnnex then
 		local ax0 = hw
 		local ax1 = hw + annexW
@@ -520,9 +574,8 @@ local function build(ctx: Ctx)
 		local aLamp = box(ctx, "CeilingLight", Vector3.new(3, 0.2, 1), Vector3.new(axc, y1 + annexH - 0.15, annexZc), col.Light, Enum.Material.Neon, false)
 		light(aLamp, 16, 1.1, col.Light)
 		local signA = box(ctx, "AnnexSign", Vector3.new(5, 1.2, 0.25), Vector3.new(axc, y1 + annexH - 1.2, az1 + 0.15), col.Dark, Enum.Material.Metal, false)
-		surfaceText(signA, Enum.NormalId.Back, { "COMMS" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
+		surfaceText(signA, Enum.NormalId.Back, { c.AnnexSignText or "COMMS" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
 
-		-- Radio mast on the main roof
 		local mx, mz = -hw + 2, -hd + 2
 		box(ctx, "MastBase", Vector3.new(1.6, 1, 1.6), Vector3.new(mx, roofTop + 0.5, mz), col.Metal, Enum.Material.Metal)
 		box(ctx, "Mast", Vector3.new(0.4, 14, 0.4), Vector3.new(mx, roofTop + 8, mz), col.Metal, Enum.Material.Metal, false)
@@ -533,7 +586,6 @@ local function build(ctx: Ctx)
 		beacon.Shape = Enum.PartType.Ball
 		light(beacon, 10, 2, Color3.fromRGB(255, 60, 40))
 
-		-- Floodlights on the front parapet corners
 		for _, fx in ipairs({ -hw + 1, hw - 1 }) do
 			box(ctx, "Floodlight", Vector3.new(1.2, 0.8, 0.8), Vector3.new(fx, roofTop + parH + 0.8, hd - 0.2), col.Metal, Enum.Material.Metal, false)
 			local lens = box(ctx, "FloodLens", Vector3.new(1.0, 0.6, 0.1), Vector3.new(fx, roofTop + parH + 0.8, hd + 0.25), col.Light, Enum.Material.Neon, false)
@@ -547,32 +599,7 @@ local function build(ctx: Ctx)
 		end
 	end
 
-	-- Upper floor interior
-	if twoStory then
-		box(ctx, "StrategyTable", Vector3.new(7, 2.6, 3.2), Vector3.new(2, y2 + 1.3, 3), col.Dark, Enum.Material.Metal)
-		box(ctx, "StrategyTop", Vector3.new(7.4, 0.25, 3.6), Vector3.new(2, y2 + 2.72, 3), col.Trim, Enum.Material.Metal)
-		for _, cx in ipairs({ -0.5, 2, 4.5 }) do
-			chair(ctx, Vector3.new(cx, y2, 5.8), Vector3.new(0, 0, -1))
-		end
-		for i = 0, 1 do
-			local bz = hd - t - 2 - i * 3.4
-			local bx = -hw + t + 1.3
-			box(ctx, "Bunk", Vector3.new(2.4, 0.5, 3), Vector3.new(bx, y2 + 1.2, bz), col.Locker, Enum.Material.Metal)
-			box(ctx, "Bunk", Vector3.new(2.4, 0.5, 3), Vector3.new(bx, y2 + 4.0, bz), col.Locker, Enum.Material.Metal)
-			box(ctx, "Mattress", Vector3.new(2.2, 0.3, 2.8), Vector3.new(bx, y2 + 1.6, bz), col.Rug, Enum.Material.Fabric, false)
-			box(ctx, "Mattress", Vector3.new(2.2, 0.3, 2.8), Vector3.new(bx, y2 + 4.4, bz), col.Rug, Enum.Material.Fabric, false)
-		end
-		box(ctx, "WeaponRack", Vector3.new(0.6, 4, 4), Vector3.new(hw - t - 0.4, y2 + 2, 4.5), col.Dark, Enum.Material.Metal)
-		for i = 0, 3 do
-			box(ctx, "RackRifle", Vector3.new(0.3, 3.2, 0.3), Vector3.new(hw - t - 0.9, y2 + 2.1, 3 + i * 1.0), col.Metal, Enum.Material.Metal, false)
-		end
-		for _, lz in ipairs({ -hd * 0.3, hd * 0.45 }) do
-			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(0, y2 + H2 - 0.15, lz), col.Light, Enum.Material.Neon, false)
-			light(lamp, 20, 1.1, col.Light)
-		end
-	end
-
-	-- Roof access: climbable truss through a hatch
+	-- Roof access: climbable truss through a hatch + dish
 	if roofAccess then
 		local climb = (roofTop - y2) + 2
 		local trussH = math.ceil(climb / 2) * 2
@@ -587,8 +614,6 @@ local function build(ctx: Ctx)
 		truss.Parent = ctx.model
 		railing(ctx, Vector3.new(trussX - 1.8, roofTop, trussZ - 1.8), Vector3.new(trussX + 1.8, roofTop, trussZ - 1.8), 3)
 		railing(ctx, Vector3.new(trussX - 1.8, roofTop, trussZ - 1.8), Vector3.new(trussX - 1.8, roofTop, trussZ + 1.2), 3)
-
-		-- Satellite dish
 		local dx, dz = hw - 6, -hd + 4.5
 		box(ctx, "DishMount", Vector3.new(0.6, 2.4, 0.6), Vector3.new(dx, roofTop + 1.2, dz), col.Metal, Enum.Material.Metal)
 		local dish = part(ctx, "Dish", Vector3.new(0.4, 5, 5), ctx.origin * CFrame.new(dx, roofTop + 3.2, dz) * CFrame.Angles(0, math.rad(-120), math.rad(35)), Color3.fromRGB(220, 222, 218), Enum.Material.SmoothPlastic)
@@ -598,13 +623,117 @@ local function build(ctx: Ctx)
 	-- Rooftop helipad marking
 	if helipad then
 		local hx, hz = 2, 1.5
-		local ring = part(ctx, "HelipadRing", Vector3.new(0.06, 12, 12), ctx.origin * CFrame.new(hx, roofTop + 0.03, hz) * CFrame.Angles(0, 0, math.pi * 0.5), col.Accent, Enum.Material.SmoothPlastic, false)
+		local ring = part(ctx, "HelipadRing", Vector3.new(0.06, 12, 12), ctx.origin * CFrame.new(hx, roofTop + 0.03, hz) * CFrame.Angles(0, 0, math.pi * 0.5), col.Gold, Enum.Material.SmoothPlastic, false)
 		ring.Shape = Enum.PartType.Cylinder
 		local inner = part(ctx, "HelipadInner", Vector3.new(0.06, 10.6, 10.6), ctx.origin * CFrame.new(hx, roofTop + 0.05, hz) * CFrame.Angles(0, 0, math.pi * 0.5), col.Dark, Enum.Material.SmoothPlastic, false)
 		inner.Shape = Enum.PartType.Cylinder
-		box(ctx, "HelipadH", Vector3.new(0.8, 0.06, 5), Vector3.new(hx - 1.6, roofTop + 0.08, hz), col.Accent, Enum.Material.SmoothPlastic, false)
-		box(ctx, "HelipadH", Vector3.new(0.8, 0.06, 5), Vector3.new(hx + 1.6, roofTop + 0.08, hz), col.Accent, Enum.Material.SmoothPlastic, false)
-		box(ctx, "HelipadH", Vector3.new(2.4, 0.06, 0.8), Vector3.new(hx, roofTop + 0.08, hz), col.Accent, Enum.Material.SmoothPlastic, false)
+		box(ctx, "HelipadH", Vector3.new(0.8, 0.06, 5), Vector3.new(hx - 1.6, roofTop + 0.08, hz), col.Gold, Enum.Material.SmoothPlastic, false)
+		box(ctx, "HelipadH", Vector3.new(0.8, 0.06, 5), Vector3.new(hx + 1.6, roofTop + 0.08, hz), col.Gold, Enum.Material.SmoothPlastic, false)
+		box(ctx, "HelipadH", Vector3.new(2.4, 0.06, 0.8), Vector3.new(hx, roofTop + 0.08, hz), col.Gold, Enum.Material.SmoothPlastic, false)
+	end
+
+	-- Interior furnishing (per building type)
+	local keepOut: { Rect } = {
+		-- doorway approach
+		{ X0 = doorX - doorW * 0.5 - 1, X1 = doorX + doorW * 0.5 + 1, Z0 = hd - t - 6, Z1 = hd - t },
+	}
+	local con = consoleLocal(ctx.structureId)
+	if con then
+		table.insert(keepOut, { X0 = con.X - 2.2, X1 = con.X + 2.2, Z0 = con.Z - 2.2, Z1 = con.Z + 2.2 })
+	end
+	if twoStory then
+		table.insert(keepOut, { X0 = stairX0 - 0.5, X1 = stairX1 + 0.5, Z0 = stairZ0, Z1 = stairZ1 + 1 })
+	end
+	if hasAnnex then
+		table.insert(keepOut, { X0 = hw - t - 2, X1 = hw - t, Z0 = annexZc - 3, Z1 = annexZc + 3 })
+	end
+	local ictx = {
+		StructureId = ctx.structureId,
+		Level = lv,
+		W = W,
+		D = D,
+		T = t,
+		HalfW = hw,
+		HalfD = hd,
+		H1 = H1,
+		H2 = H2,
+		Y1 = y1,
+		Y2 = y2,
+		TwoStory = twoStory,
+		DoorX = doorX,
+		DoorWidth = doorW,
+		DoorHeight = doorH,
+		Garage = garage,
+		Console = con,
+		KeepOut = keepOut,
+		-- inner faces of the ground-floor walls
+		InX0 = -hw + t,
+		InX1 = hw - t,
+		InZ0 = -hd + t,
+		InZ1 = hd - t,
+		Colors = col,
+	}
+	-- Parts made by the interior are tagged WE_Interior (layout checks / future clean-up)
+	local function tagged(p: Part): Part
+		p:SetAttribute("WE_Interior", true)
+		return p
+	end
+	local api = {
+		box = function(name: string, size: Vector3, pos: Vector3, color: Color3, material: Enum.Material, collide: boolean?): Part
+			return tagged(box(ctx, name, size, pos, color, material, collide))
+		end,
+		part = function(name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): Part
+			return tagged(part(ctx, name, size, ctx.origin * localCF, color, material, collide))
+		end,
+		light = light,
+		surfaceText = surfaceText,
+		chair = function(pos: Vector3, facing: Vector3)
+			local before = #ctx.model:GetChildren()
+			chair(ctx, pos, facing)
+			local kids = ctx.model:GetChildren()
+			for i = before + 1, #kids do
+				local k = kids[i]
+				if k:IsA("BasePart") then
+					k:SetAttribute("WE_Interior", true)
+				end
+			end
+		end,
+		sandbags = function(x0: number, x1: number, z: number, baseY: number)
+			local before = #ctx.model:GetChildren()
+			sandbags(ctx, x0, x1, z, baseY)
+			local kids = ctx.model:GetChildren()
+			for i = before + 1, #kids do
+				local k = kids[i]
+				if k:IsA("BasePart") then
+					k:SetAttribute("WE_Interior", true)
+				end
+			end
+		end,
+		terminal = function(name: string, pos: Vector3, facingDeg: number, panel: string, actionText: string, objectText: string, screenLines: { string }?): Part
+			local before = #ctx.model:GetChildren()
+			local body = terminal(ctx, name, pos, facingDeg, panel, actionText, objectText, screenLines)
+			local kids = ctx.model:GetChildren()
+			for i = before + 1, #kids do
+				local k = kids[i]
+				if k:IsA("BasePart") then
+					k:SetAttribute("WE_Interior", true)
+				end
+			end
+			return body
+		end,
+	}
+	local interiors = script.Parent:FindFirstChild("Interiors")
+	local modScript = interiors and interiors:FindFirstChild(c.Interior or ctx.structureId)
+	if modScript and modScript:IsA("ModuleScript") then
+		local ok, fn = pcall(require, modScript)
+		if ok and typeof(fn) == "function" then
+			local okRun, errRun = pcall(fn, ictx, api)
+			if not okRun then
+				warn("[HollowBuilding] interior failed", ctx.structureId, errRun)
+			end
+		else
+			warn("[HollowBuilding] interior module did not load", ctx.structureId, fn)
+		end
 	end
 end
 
@@ -644,6 +773,7 @@ function HollowBuildingBuilder.Sync(plinth: BasePart, structureId: string, level
 		c = c,
 		col = c.Colors,
 		level = lv,
+		structureId = structureId,
 	}
 	local ok, err = pcall(build, ctx)
 	if not ok then

@@ -773,11 +773,19 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 	end)
 end
 
+-- v68: consoles (BaseLayoutConfig) — the BUY button shows when you walk up; buying needs a tap or the prompt
+local CONSOLE_MARGIN = 5
+
+local function isConsolePart(part: BasePart): boolean
+	return part:GetAttribute("WE_Console") == true
+end
+
 local function pointInPad(hrpPos: Vector3, part: BasePart): boolean
 	local localPos = part.CFrame:PointToObjectSpace(hrpPos)
 	local half = part.Size * 0.5
-	return math.abs(localPos.X) <= half.X + OVERLAP_MARGIN
-		and math.abs(localPos.Z) <= half.Z + OVERLAP_MARGIN
+	local margin = if isConsolePart(part) then CONSOLE_MARGIN else OVERLAP_MARGIN
+	return math.abs(localPos.X) <= half.X + margin
+		and math.abs(localPos.Z) <= half.Z + margin
 		and localPos.Y >= -half.Y - 3
 		and localPos.Y <= half.Y + 8
 end
@@ -798,6 +806,10 @@ end
 
 local function onEnterPad(part: BasePart, structureId: string, fromStandingRetry: boolean?)
 	if isSeatedInVehicle() then
+		return
+	end
+	-- v68: never auto-buy at a console (walk-over + standing retries bought levels by accident)
+	if isConsolePart(part) then
 		return
 	end
 	local key = padKey(part, structureId)
