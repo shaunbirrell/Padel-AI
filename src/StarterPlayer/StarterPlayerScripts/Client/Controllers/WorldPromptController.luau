@@ -38,6 +38,7 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local HudConfig = require(Shared.Configs.HudConfig)
+local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 
 local VehicleController = require(script.Parent.VehicleController)
 local NotificationController = require(script.Parent.NotificationController)
@@ -1428,8 +1429,12 @@ function WorldPromptController.Init()
 	-- NotificationController.ShowPurchaseFailure also swallows the server's own Warn echo.
 	local lastAckAt: { [string]: number } = {}
 	local spendFloatAt: { [string]: number } = {}
-	local function failureText(err: string): (string, string)
-		if err == "InsufficientCash" then
+	local function failureText(err: string, sid: any): (string, string)
+		if err == "NotAtConsole" then
+			-- v71 console-only buying: the server saw this character away from its own console for sid
+			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
+			return string.format(ConsoleBuyConfig.Text.NotAtConsole, if def then def.DisplayName else tostring(sid)), "Warn"
+		elseif err == "InsufficientCash" then
 			return "You need more Money!", "Warn" -- competitor wording; the BUY button already reads NEED $N more
 		elseif err == "NoPlot" then
 			return "Claim a base first — stand on your plot pad", "Error"
@@ -1479,7 +1484,7 @@ function WorldPromptController.Init()
 			local errStr = tostring(err or "Failed")
 			print(string.format("[WorldPrompt] %s FAIL %s → %s%s", source, tostring(sid), errStr, if dup then " (dup)" else ""))
 			if not dup then
-				local msg, kind = failureText(errStr)
+				local msg, kind = failureText(errStr, sid)
 				NotificationController.ShowPurchaseFailure(msg, kind, 3)
 			end
 		end

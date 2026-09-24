@@ -9,6 +9,8 @@
 	  * FredokaOne ActionText (ObjectText only when ActionText is empty); desktop / gamepad show a key cap
 	  * hold prompts fill left → right (PromptButtonHoldBegan / Ended); touch drives the engine's own hold timer
 	    with prompt:InputHoldBegin() / InputHoldEnd() — the 0.35 s console hold and the 0.6 s gate-repair hold work
+	  * a finger that slides off a pill or lifts anywhere releases the hold (UserInputService.TouchEnded /
+	    InputEnded + TouchMoved past HOLD_SLOP_PX), and a stale hold never swallows the next tap (merge gate #4)
 	  * at most 2 pills, side by side (E + F), centred; hidden while Modal or Dead; while Driving only the
 	    vehicle's own prompts
 	  * OWNER-ONLY: WE_ServerBuyPrompt / WE_PanelPrompt / WE_DrivePrompt on another player's plot or vehicle get
@@ -22,6 +24,7 @@
 ]]
 
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
@@ -43,6 +46,8 @@ local FONT_BODY = HudConfig.Fonts.Body
 local MAX_PILLS = 2
 local PILL_BG_TRANSPARENCY = 0.16
 local FILL_TRANSPARENCY = 0.72
+-- a held finger may wander this far (real px) outside its pill before the hold is released (forgiving on touch)
+local HOLD_SLOP_PX = 24
 
 local OWNER_ONLY: { [string]: boolean } = {}
 for _, n in ipairs(LANE.OwnerOnlyPromptNames) do
@@ -61,6 +66,7 @@ type Pill = {
 	InputType: Enum.ProximityPromptInputType,
 	Seq: number,
 	Held: boolean,
+	HoldInput: InputObject?, -- the touch / mouse input that started the current hold
 	Conns: { RBXScriptConnection },
 }
 
@@ -330,12 +336,43 @@ local function queueRelayout()
 end
 
 local function endHold(pill: Pill)
+	pill.HoldInput = nil
 	if pill.Held then
 		pill.Held = false
 		pcall(function()
 			pill.Prompt:InputHoldEnd()
 		end)
 	end
+end
+
+local function inputFinished(input: InputObject?): boolean
+	if input == nil then
+		return true
+	end
+	local st = input.UserInputState
+	return st == Enum.UserInputState.End or st == Enum.UserInputState.Cancel
+end
+
+-- merge gate #4: release every hold that `input` owns (it ended, or the finger left its pill). A hold whose input
+-- is unknown is released by any touch / left-click end, so a missed InputEnded can never leave Held = true.
+local function releaseHoldsOf(input: InputObject)
+	for _, pill in pairs(pills) do
+		if pill.Held and (pill.HoldInput == nil or pill.HoldInput == input or inputFinished(pill.HoldInput)) then
+			endHold(pill)
+		end
+	end
+end
+
+local function outsidePill(pill: Pill, pos: Vector3): boolean
+	local b = pill.Button
+	local a, sz = b.AbsolutePosition, b.AbsoluteSize
+	if sz.X <= 0 or sz.Y <= 0 then
+		return false
+	end
+	-- InputObject.Position is in screen px with the topbar inset excluded, like AbsolutePosition of a gui that
+	-- respects the inset; the slop covers the difference on guis with other insets
+	local slop = HOLD_SLOP_PX
+	return pos.X < a.X - slop or pos.X > a.X + sz.X + slop or pos.Y < a.Y - slop or pos.Y > a.Y + sz.Y + slop
 end
 
 local function resetFill(pill: Pill, seconds: number?)
@@ -436,6 +473,7 @@ local function makePill(prompt: ProximityPrompt, inputType: Enum.ProximityPrompt
 		InputType = inputType,
 		Seq = pillSeq,
 		Held = false,
+		HoldInput = nil,
 		Conns = {},
 	}
 
@@ -447,9 +485,13 @@ local function makePill(prompt: ProximityPrompt, inputType: Enum.ProximityPrompt
 			return
 		end
 		if pill.Held then
-			return
+			if pill.HoldInput ~= nil and pill.HoldInput ~= input and not inputFinished(pill.HoldInput) then
+				return -- a second finger on a pill that is already held
+			end
+			endHold(pill) -- stale hold (its finger is gone): release it, then start this tap's hold
 		end
 		pill.Held = true
+		pill.HoldInput = input
 		pcall(function()
 			prompt:InputHoldBegin()
 		end)
@@ -644,6 +686,24 @@ function PromptController.Init()
 		end
 	end))
 	keep(HudLayout.LayoutChanged:Connect(queueRelayout))
+	-- merge gate #4 backstop: a finger lifted anywhere (even off the pill, where the button's own InputEnded may
+	-- never fire) releases its hold; a finger that slides off the pill releases it too
+	keep(UserInputService.TouchEnded:Connect(function(input: InputObject)
+		releaseHoldsOf(input)
+	end))
+	keep(UserInputService.InputEnded:Connect(function(input: InputObject)
+		local t = input.UserInputType
+		if t == Enum.UserInputType.Touch or t == Enum.UserInputType.MouseButton1 then
+			releaseHoldsOf(input)
+		end
+	end))
+	keep(UserInputService.TouchMoved:Connect(function(input: InputObject)
+		for _, pill in pairs(pills) do
+			if pill.Held and pill.HoldInput == input and outsidePill(pill, input.Position) then
+				endHold(pill)
+			end
+		end
+	end))
 	keep(player:GetAttributeChangedSignal("WE_PlotId"):Connect(function()
 		for prompt in pairs(adopted) do
 			if prompt.Parent and OWNER_ONLY[prompt.Name] then
@@ -691,6 +751,17 @@ function PromptController.Shutdown()
 	end
 	screen = nil
 	laneFrame = nil
+end
+
+--[[ QA: how many pills are holding their prompt right now (merge gate #4 harness check). ]]
+function PromptController.GetHeldCount(): number
+	local n = 0
+	for _, pill in pairs(pills) do
+		if pill.Held then
+			n += 1
+		end
+	end
+	return n
 end
 
 --[[ QA: texts of the pills on screen, left → right. ]]

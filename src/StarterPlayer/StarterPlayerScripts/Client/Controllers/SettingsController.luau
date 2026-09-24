@@ -3,8 +3,10 @@
 	Lightweight Settings panel — music/SFX local toggles, redeem codes, the supply spinner and the controls sheet.
 	v70 "clean screen": opened ONLY from the TopStrip gear (UIController → SettingsController.Toggle) or a
 	terminal. No key (O was Roblox camera zoom-out; HudConfig.Keys.Settings = nil). The keybind sheet is generated
-	from HudConfig.Keys, so it can never drift from the real bindings. A registered Modal panel (HudLayout id
-	"Settings") with the black dim; one HUD scale + safe area; every tappable ≥ 44 real px on touch.
+	from HudConfig.Keys, so it can never drift from the real bindings; it shows ONLY while HudLayout.PrefersKeys()
+	(UserInputService.PreferredInput keyboard / gamepad — mobile merge gate #7: phone players are never told to
+	press keys). A registered Modal panel (HudLayout id "Settings") with the black dim; one HUD scale + safe area;
+	every tappable ≥ 44 real px on touch.
 ]]
 
 local Players = game:GetService("Players")
@@ -20,6 +22,7 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local ClientSettings = require(script.Parent.Parent.Modules.ClientSettings)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 
 local SettingsController = {}
 
@@ -192,6 +195,7 @@ function SettingsController.Init()
 	body.Parent = panel
 
 	local y = 0
+	local host: GuiObject = body -- where section() / button() / the key rows go (the KeySheet frame for the sheet)
 	local sectionSize = PanelShell.Text(14)
 	local function section(text: string)
 		local lab = Instance.new("TextLabel")
@@ -203,7 +207,7 @@ function SettingsController.Init()
 		lab.TextXAlignment = Enum.TextXAlignment.Left
 		lab.TextColor3 = Constants.Colors.Gold
 		lab.Text = text
-		lab.Parent = body
+		lab.Parent = host
 		y += sectionSize + 10
 	end
 	local function button(name: string, text: string, x: UDim, w: UDim, color: Color3?): TextButton
@@ -220,7 +224,7 @@ function SettingsController.Init()
 		b.BorderSizePixel = 0
 		b.Active = true
 		UIUtil.Corner(b, 8)
-		b.Parent = body
+		b.Parent = host
 		return b
 	end
 
@@ -293,8 +297,19 @@ function SettingsController.Init()
 	end)
 	y += TAP + 14
 
-	-- Controls sheet, generated from HudConfig.Keys
-	section(if isTouch then "KEYBOARD & GAMEPAD CONTROLS" else "CONTROLS")
+	-- Controls sheet, generated from HudConfig.Keys. Its own frame (KeySheet) so it can come and go with the
+	-- device: shown only while HudLayout.PrefersKeys() (keyboard / gamepad), never to a touch player.
+	local sheetTop = y
+	local sheet = Instance.new("Frame")
+	sheet.Name = "KeySheet"
+	sheet.BackgroundTransparency = 1
+	sheet.BorderSizePixel = 0
+	sheet.Position = UDim2.fromOffset(0, sheetTop)
+	sheet.Size = UDim2.new(1, 0, 0, 0)
+	sheet.Parent = body
+	host = sheet
+	y = 0
+	section("CONTROLS")
 	local rowText = PanelShell.Text(13)
 	local rowH = rowText + 12
 	local capW = if isTouch then 110 else 92
@@ -308,7 +323,7 @@ function SettingsController.Init()
 		head.TextXAlignment = Enum.TextXAlignment.Left
 		head.TextColor3 = Constants.Colors.Muted
 		head.Text = sec.Title
-		head.Parent = body
+		head.Parent = host
 		y += rowText + 8
 		for _, r in ipairs(sec.Rows) do
 			local row = Instance.new("Frame")
@@ -318,7 +333,7 @@ function SettingsController.Init()
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BackgroundTransparency = 0.35
 			row.BorderSizePixel = 0
-			row.Parent = body
+			row.Parent = host
 			UIUtil.Corner(row, 6)
 			local cap = Instance.new("TextLabel")
 			cap.Name = "Cap"
@@ -347,7 +362,14 @@ function SettingsController.Init()
 		end
 		y += 6
 	end
-	body.CanvasSize = UDim2.fromOffset(0, y + 8)
+	local sheetH = y
+	sheet.Size = UDim2.new(1, 0, 0, sheetH)
+	local function applySheet(show: boolean)
+		sheet.Visible = show
+		body.CanvasSize = UDim2.fromOffset(0, sheetTop + (if show then sheetH else 0) + 8)
+	end
+	applySheet(HudLayout.PrefersKeys())
+	HudLayout.InputModeChanged:Connect(applySheet)
 
 	shell = PanelShell.Attach({
 		Id = PANEL_ID,

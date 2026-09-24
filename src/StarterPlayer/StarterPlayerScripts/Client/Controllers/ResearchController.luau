@@ -13,11 +13,14 @@
 
 	Layout: an 800 x 340 logical panel, centred, scaled by its own UIScale (not UIUtil.PrepareScreen, whose 0.65
 	floor would shrink the 56 px touch targets). Every tap target is at least 56 logical px in both dimensions.
+	Text (mobile merge gate #2): nothing under TEXT_MIN = 17 logical px, i.e. ≥ 14 real px at the smallest fit
+	scale (800x360 phone: 0.853). Effect lines wrap to two lines and each tab's page scrolls.
 ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared") -- already loaded: the client Bootstrap waits for it
 local Constants = require(Shared.Constants)
@@ -63,14 +66,20 @@ local STRIPE_H = 4
 local RAIL_X, RAIL_Y, RAIL_W, RAIL_H = 12, 66, 150, 262
 local TAB_H, TAB_GAP = 58, 8
 local CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H = 174, 66, 614, 266
-local ROW_H, ROW_GAP, BANNER_H = 62, 6, 36
-local BANNER_MAX_ROWS = 3 -- tabs with at most this many upgrades get the 36 px banner
+-- ≥ 14 real px at the smallest fit scale: FitScale(800, 302) = 0.853 on an 800x360 phone → 17 logical px
+local TEXT_MIN = 17
+local SCROLLBAR = 6
+local ROW_W = CONTENT_W - SCROLLBAR - 4
+local ROW_H, ROW_GAP, BANNER_H = 80, 6, 44
+local BANNER_MAX_ROWS = 3 -- tabs with at most this many upgrades get the banner (grows to its text)
 local BADGE_X, BADGE_SIZE = 9, 44
 local TEXT_X = 62
 local NAME_W = 292
-local EFFECT_W = 404
 local PIP_X, PIP_Y, PIP_W, PIP_H, PIP_GAP = 362, 12, 16, 10, 4
-local BUY_X, BUY_W, BUY_H = 474, 128, 56
+local BUY_W, BUY_H = 132, 56
+local BUY_X = ROW_W - 8 - BUY_W
+local EFFECT_W = BUY_X - 8 - TEXT_X
+local EFFECT_Y, EFFECT_H = 32, 2 * TEXT_MIN + 6 -- two wrapped lines
 local CLOSE_SIZE = 56
 local FIT_MIN, FIT_MAX = 0.6, 1.3
 
@@ -119,7 +128,7 @@ local statusLabel: TextLabel? = nil
 local rows: { [string]: RowRefs } = {}
 local awaitingReply: { [string]: number } = {} -- upgrade id -> earliest release (tap + BUSY_SECONDS)
 local tabs: { [string]: TabRefs } = {}
-local pages: { [string]: Frame } = {}
+local pages: { [string]: ScrollingFrame } = {}
 local banners: { [string]: TextLabel } = {}
 
 -- ── small helpers ──────────────────────────────────────────────────────────────
@@ -301,7 +310,7 @@ local function statusFor(def: UpgradeDef): RowStatus
 		return {
 			Kind = "NeedLab",
 			Label = string.format("LAB L%d", need),
-			Line = if lock and lock.Text ~= "" then lock.Text else string.format("Needs Research Lab L%d", need),
+			Line = string.format("Needs Lab L%d", need), -- short: the effect line wraps to 2 lines at TEXT_MIN
 			LineColor = COLOR.Amber,
 			Preview = true,
 			Reason = string.format(
@@ -346,7 +355,7 @@ local function effectMarkup(def: UpgradeDef, lvl: number, status: RowStatus): st
 		local preview = if tail
 			then bold(paint(ResearchConfig.FormatAmount(def, nextLevel), COLOR.Gold)) .. paint(" " .. esc(tail), COLOR.Muted)
 			else paint(esc(ResearchConfig.FormatEffect(def, nextLevel)), COLOR.Muted)
-		return reason .. paint("  ·  Next ", COLOR.Muted) .. preview
+		return reason .. paint(" · Next ", COLOR.Muted) .. preview
 	end
 	if status.Kind == "Maxed" then
 		if tail then
@@ -463,6 +472,30 @@ local function bannerMarkup(trackId: string): string
 	return first .. "\n" .. paint(table.concat(notes, "  ·  "), COLOR.Muted)
 end
 
+-- the banner grows to its (wrapped) text: the page scrolls, so nothing is ever clipped or shrunk
+local function fitBanner(caption: TextLabel)
+	local plain = string.gsub(caption.Text, "<[^>]*>", "")
+	plain = string.gsub(plain, "&lt;", "<")
+	plain = string.gsub(plain, "&gt;", ">")
+	plain = string.gsub(plain, "&amp;", "&")
+	local lines = 0
+	for _, part in ipairs(string.split(plain, "\n")) do
+		local ok, v = pcall(function(): Vector2
+			return TextService:GetTextSize(part, TEXT_MIN, Enum.Font.Gotham, Vector2.new(ROW_W - 24, 1000))
+		end)
+		local h = if ok and typeof(v) == "Vector2" and v.Y > 0
+			then v.Y
+			else math.ceil(((utf8.len(part) or #part) * TEXT_MIN * 0.5) / (ROW_W - 24)) * TEXT_MIN
+		lines += math.max(1, math.floor(h / TEXT_MIN + 0.5))
+	end
+	local h = math.max(BANNER_H, math.ceil(lines * TEXT_MIN * caption.LineHeight) + 10)
+	caption.Size = UDim2.fromOffset(ROW_W - 24, h)
+	local banner = caption.Parent
+	if banner and banner:IsA("Frame") then
+		banner.Size = UDim2.fromOffset(ROW_W, h)
+	end
+end
+
 local function renderAll()
 	if not screen then
 		return
@@ -489,6 +522,7 @@ local function renderAll()
 	end
 	for trackId, banner in pairs(banners) do
 		banner.Text = bannerMarkup(trackId)
+		fitBanner(banner)
 	end
 	for _, row in pairs(rows) do
 		renderRow(row)
@@ -588,24 +622,26 @@ local function updateScale()
 end
 
 local function buildRow(parent: Instance, def: UpgradeDef): RowRefs
-	local f = frame(parent, "Row_" .. def.Id, 0, 0, CONTENT_W, ROW_H, COLOR.Row)
+	local f = frame(parent, "Row_" .. def.Id, 0, 0, ROW_W, ROW_H, COLOR.Row)
 	f.LayoutOrder = 10 + def.Order
 	corner(f, 8)
 	local rowStroke = stroke(f, COLOR.Gunmetal, 1)
 
 	local badge = frame(f, "Badge", BADGE_X, math.floor((ROW_H - BADGE_SIZE) / 2), BADGE_SIZE, BADGE_SIZE, COLOR.Olive)
 	corner(badge, 6)
-	local badgeText = label(badge, "Caption", 0, 0, BADGE_SIZE, BADGE_SIZE, Enum.Font.GothamBlack, 14, COLOR.Gold, def.Badge)
+	local badgeText = label(badge, "Caption", 0, 0, BADGE_SIZE, BADGE_SIZE, Enum.Font.GothamBlack, TEXT_MIN, COLOR.Gold, def.Badge)
 	badgeText.TextXAlignment = Enum.TextXAlignment.Center
 
-	local name = label(f, "Title", TEXT_X, 6, NAME_W, 22, Enum.Font.GothamBold, 16, COLOR.Text, "")
+	local name = label(f, "Title", TEXT_X, 6, NAME_W, 24, Enum.Font.GothamBold, 18, COLOR.Text, "")
 	name.RichText = true
 	name.TextTruncate = Enum.TextTruncate.AtEnd
 
-	local effect = label(f, "Effect", TEXT_X, 32, EFFECT_W, 24, Enum.Font.Gotham, 13, COLOR.Text, "")
+	local effect = label(f, "Effect", TEXT_X, EFFECT_Y, EFFECT_W, EFFECT_H, Enum.Font.Gotham, TEXT_MIN, COLOR.Text, "")
 	effect.RichText = true
-	effect.TextScaled = true -- the longest line ("gate guard and auto-gun damage") shrinks instead of clipping
-	maxTextSize(effect, 13, 10)
+	-- two lines at TEXT_MIN (never shrinks under 14 real px): "Needs Research Lab L4 · Next +20% gate guard and
+	-- auto-gun damage" wraps instead of scaling down
+	effect.TextWrapped = true
+	effect.TextYAlignment = Enum.TextYAlignment.Top
 
 	local pipBox = frame(f, "Pips", PIP_X, PIP_Y, def.MaxLevel * (PIP_W + PIP_GAP) - PIP_GAP, PIP_H)
 	local pips: { Frame } = {}
@@ -632,12 +668,12 @@ local function buildRow(parent: Instance, def: UpgradeDef): RowRefs
 	btn.BorderSizePixel = 0
 	btn.Font = Enum.Font.GothamBold
 	btn.TextScaled = true
-	btn.TextSize = 16
+	btn.TextSize = 18
 	btn.TextColor3 = COLOR.Muted
 	btn.Text = "…"
 	btn.Parent = f
 	corner(btn, 8)
-	maxTextSize(btn, 16, 9)
+	maxTextSize(btn, 18, TEXT_MIN)
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 8)
 	pad.PaddingRight = UDim.new(0, 8)
@@ -697,7 +733,7 @@ local function build(): boolean
 	-- header
 	local header = frame(panel, "Header", 0, 0, PANEL_W, HEADER_H)
 	label(header, "Title", 18, 7, 196, 28, Enum.Font.GothamBlack, 22, COLOR.Gold, "RESEARCH LAB")
-	local chip = label(header, "LabChip", 220, 8, 78, 26, Enum.Font.GothamBold, 14, COLOR.Text, "LAB —")
+	local chip = label(header, "LabChip", 220, 7, 92, 28, Enum.Font.GothamBold, TEXT_MIN, COLOR.Text, "LAB —")
 	chip.BackgroundColor3 = COLOR.Olive
 	chip.BackgroundTransparency = 0
 	chip.TextXAlignment = Enum.TextXAlignment.Center
@@ -709,9 +745,9 @@ local function build(): boolean
 		18,
 		37,
 		440,
-		16,
+		TEXT_MIN + 3,
 		Enum.Font.Gotham,
-		13,
+		TEXT_MIN,
 		COLOR.Muted,
 		"Permanent upgrades · kept through Rebirth"
 	)
@@ -723,7 +759,7 @@ local function build(): boolean
 	local cashText = label(cashBox, "Amount", 10, 0, 150, 36, Enum.Font.GothamBold, 18, COLOR.Cash, cash(currentCash()))
 	cashText.TextXAlignment = Enum.TextXAlignment.Center
 	cashText.TextScaled = true
-	maxTextSize(cashText, 18, 10)
+	maxTextSize(cashText, 18, TEXT_MIN)
 	cashLabel = cashText
 
 	local close = Instance.new("TextButton")
@@ -773,15 +809,15 @@ local function build(): boolean
 			b,
 			"Label",
 			14,
-			9,
+			7,
 			RAIL_W - 20,
-			20,
+			TEXT_MIN + 5,
 			Enum.Font.GothamBold,
-			15,
+			TEXT_MIN,
 			COLOR.Muted,
 			string.upper(if trackDef then trackDef.DisplayName else trackId)
 		)
-		local progress = label(b, "Progress", 14, 31, RAIL_W - 20, 16, Enum.Font.Gotham, 13, COLOR.Muted, "…")
+		local progress = label(b, "Progress", 14, 31, RAIL_W - 20, TEXT_MIN + 3, Enum.Font.Gotham, TEXT_MIN, COLOR.Muted, "…")
 		tabs[trackId] = { Button = b, Bar = bar, Title = title, Progress = progress }
 		b.Activated:Connect(function()
 			if currentTab ~= trackId then
@@ -794,7 +830,19 @@ local function build(): boolean
 	-- content: one page per track (optional banner + upgrade rows)
 	local content = frame(panel, "Content", CONTENT_X, CONTENT_Y, CONTENT_W, CONTENT_H)
 	for _, trackId in ipairs(ResearchConfig.TrackOrder) do
-		local page = frame(content, "Page_" .. trackId, 0, 0, CONTENT_W, CONTENT_H)
+		-- a scrolling page: rows are 80 px (two-line effects at TEXT_MIN), so a 4-upgrade tab scrolls on phones
+		local page = Instance.new("ScrollingFrame")
+		page.Name = "Page_" .. trackId
+		page.Position = UDim2.fromOffset(0, 0)
+		page.Size = UDim2.fromOffset(CONTENT_W, CONTENT_H)
+		page.BackgroundTransparency = 1
+		page.BorderSizePixel = 0
+		page.ScrollBarThickness = SCROLLBAR
+		page.ScrollingDirection = Enum.ScrollingDirection.Y
+		page.CanvasSize = UDim2.fromOffset(0, 0)
+		page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		page.ElasticBehavior = Enum.ElasticBehavior.Always
+		page.Parent = content
 		page.Visible = false
 		local list = Instance.new("UIListLayout")
 		list.FillDirection = Enum.FillDirection.Vertical
@@ -803,11 +851,11 @@ local function build(): boolean
 		list.Parent = page
 		local defs = ResearchConfig.UpgradesForTrack(trackId)
 		if #defs <= BANNER_MAX_ROWS then
-			local banner = frame(page, "Banner", 0, 0, CONTENT_W, BANNER_H, COLOR.Olive)
+			local banner = frame(page, "Banner", 0, 0, ROW_W, BANNER_H, COLOR.Olive)
 			banner.BackgroundTransparency = 0.72
 			banner.LayoutOrder = 0
 			corner(banner, 6)
-			local text = label(banner, "Caption", 12, 0, CONTENT_W - 24, BANNER_H, Enum.Font.Gotham, 13, COLOR.Muted, "")
+			local text = label(banner, "Caption", 12, 0, ROW_W - 24, BANNER_H, Enum.Font.Gotham, TEXT_MIN, COLOR.Muted, "")
 			text.RichText = true
 			text.TextWrapped = true
 			text.LineHeight = 1.05
@@ -818,7 +866,7 @@ local function build(): boolean
 		end
 		pages[trackId] = page
 	end
-	local status = label(content, "Status", 0, 0, CONTENT_W, CONTENT_H, Enum.Font.GothamBold, 16, COLOR.Muted, "")
+	local status = label(content, "Status", 0, 0, CONTENT_W, CONTENT_H, Enum.Font.GothamBold, 18, COLOR.Muted, "")
 	status.TextXAlignment = Enum.TextXAlignment.Center
 	status.TextWrapped = true
 	statusLabel = status

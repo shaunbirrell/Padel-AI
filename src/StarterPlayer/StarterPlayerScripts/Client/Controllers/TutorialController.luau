@@ -11,7 +11,14 @@
 	the beam), Skip (touch-size hit; tap twice — "Sure?" — so a stray tap never ends the tutorial).
 	While a step is active the HudLayout flag "Tutorial" is on (offers wait). The chip hides while a panel is open
 	(Modal), while Driving (the beam keeps guiding) and while dead. The world guide beam + SelectionBox are unchanged.
-	Pad StructureId fallback when markers are missing.
+	v71 P0-6: every per-player target resolves to the player's OWN plot BEFORE any name lookup (the Tutorial_* marker
+	parts are all built on Plot 1, so 5 of 6 players were led into someone else's base):
+	  ClaimBase -> own PlayerSpawn · Income -> own WE_MoneyCollector · ClickDropper -> own WE_ManualDropper ·
+	  CommandCenter / Barracks -> own console (ConsoleLocator) · Recruit / Jeep -> no beam (GO opens Army / Garage) ·
+	  Outpost -> nearest uncontested, walkable territory. No plot id yet -> no beam (re-aimed when it arrives).
+	  A marker part is only ever shown when it IS the target (unknown future steps, and only inside the own plot).
+	v71 console-only buying: the CommandCenter / Barracks GO only re-aims the beam at the console; it never opens the
+	Base panel (that panel cannot buy any more).
 ]]
 
 local Players = game:GetService("Players")
@@ -27,6 +34,8 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local TutorialConfig = require(Shared.Configs.TutorialConfig)
+local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
+local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 
@@ -42,7 +51,8 @@ local highlightPart: BasePart? = nil
 local currentMarkerName: string? = nil
 local currentPadStructureId: string? = nil
 local currentCtaAction: string? = nil
-local myPlotId: any = nil
+local currentStepId: string? = nil
+local myPlotId: number? = nil
 
 -- objective chip
 local OBJ = HudConfig.TopStack.Objective
@@ -93,17 +103,13 @@ local function clearWaypoint()
 	currentMarkerName = nil
 end
 
--- Show only the active tutorial marker (hide billboards/parts for other steps)
-local function syncMarkerVisibility(activeName: string?)
+-- Show a tutorial marker part only when it IS the resolved target (P0-6: the Tutorial_* markers are built on Plot 1;
+-- revealing them led every other player to Plot 1). Everything else stays hidden.
+local function syncMarkerVisibility(activePart: BasePart?)
 	local tag = Constants.Tags.TutorialMarker
 	for _, inst in ipairs(CollectionService:GetTagged(tag)) do
 		if inst:IsA("BasePart") then
-			local stepAttr = inst:GetAttribute("TutorialStepId")
-			local isActive = activeName ~= nil and (
-				inst.Name == activeName
-					or stepAttr == activeName
-					or (typeof(stepAttr) == "string" and ("Tutorial_" .. stepAttr) == activeName)
-			)
+			local isActive = activePart ~= nil and inst == activePart
 			-- MapSetup starts Transparency=1; must set Transparency (not only LocalTransparencyModifier)
 			inst.Transparency = if isActive then 0.25 else 1
 			inst.LocalTransparencyModifier = 0
@@ -116,30 +122,76 @@ local function syncMarkerVisibility(activeName: string?)
 	end
 end
 
-local function findPadByStructure(structureId: string?): BasePart?
-	if not structureId or structureId == "" then
-		return nil
-	end
-	local best: BasePart? = nil
-	local bestDist = math.huge
-	local char = player.Character
-	local hrp = char and char:FindFirstChild("HumanoidRootPart")
-	local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
+---------------------------------------------------------------------------------------------------------------
+-- P0-6 target resolution: the player's OWN plot first, never a fixed world marker (CLAUDE.md "Pointers")
+---------------------------------------------------------------------------------------------------------------
 
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
-		if inst:IsA("BasePart") and inst:GetAttribute("StructureId") == structureId then
-			local plotOk = true
-			if myPlotId ~= nil then
-				local pid = inst:GetAttribute("PlotId")
-				-- Prefer own plot when known; still accept untagged Studio pads
-				if pid ~= nil and pid ~= myPlotId then
-					plotOk = false
-				end
+local MANUAL_DROPPER_TAG = "WE_ManualDropper" -- ManualDropperService TAG_DROPPER
+local OUTPOST_TIER_GAP = 1e6 -- a lower tier always wins over distance
+
+local function ownPlotPad(plotId: number): BasePart?
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+			return inst
+		end
+	end
+	return nil
+end
+
+-- plot-local rectangle test on the plot pad (the pad carries the plot yaw, so rotated plots need no extra math)
+local function insidePad(pad: BasePart, pos: Vector3): boolean
+	local lp = pad.CFrame:PointToObjectSpace(pos)
+	return math.abs(lp.X) <= pad.Size.X * 0.5 and math.abs(lp.Z) <= pad.Size.Z * 0.5
+end
+
+-- nearest part with `tag` whose PlotId is exactly plotId (a part with no PlotId is never "own")
+local function nearestOwnTagged(tag: string, plotId: number, origin: Vector3): BasePart?
+	local best: BasePart? = nil
+	local bestD = math.huge
+	for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId and inst:IsDescendantOf(Workspace) then
+			local d = (inst.Position - origin).Magnitude
+			if d < bestD then
+				bestD = d
+				best = inst
 			end
-			if plotOk then
-				local d = (inst.Position - origin).Magnitude
-				if d < bestDist then
-					bestDist = d
+		end
+	end
+	return best
+end
+
+local function ownSpawn(plotId: number): BasePart?
+	local root = Workspace:FindFirstChild("WarEmpireSetup")
+	local bases = root and root:FindFirstChild("Bases")
+	local folder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
+	local sp = folder and folder:FindFirstChild("PlayerSpawn")
+	if sp and sp:IsA("BasePart") then
+		return sp
+	end
+	return ownPlotPad(plotId) -- the spawn streamed out / renamed: the plot pad is still inside the plot
+end
+
+-- Outpost: the nearest zone the player can take on foot. Tiers: neutral land zone, then any uncontested land zone
+-- they do not own, then any uncontested zone (oil rigs need a boat, forts have guards), then anything.
+local function nearestOutpost(origin: Vector3, userId: number): BasePart?
+	local ot = TerritoryConfig.OwnerTypes
+	local best: BasePart? = nil
+	local bestScore = math.huge
+	local seen: { [Instance]: boolean } = {}
+	for _, tag in ipairs({ Constants.Tags.Territory, Constants.Tags.CaptureZone }) do
+		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+			if not seen[inst] and inst:IsA("BasePart") and inst:IsDescendantOf(Workspace) then
+				seen[inst] = true
+				local tid = inst:GetAttribute("TerritoryId")
+				local def = if typeof(tid) == "string" then (TerritoryConfig.Territories :: any)[tid] else nil
+				local ownerType = inst:GetAttribute("OwnerType")
+				local contested = ownerType == ot.Contested
+				local mine = ownerType == ot.Player and inst:GetAttribute("OwnerUserId") == userId
+				local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
+				local tier = if contested or mine then 3 elseif hard then 2 elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1 else 0
+				local score = tier * OUTPOST_TIER_GAP + (inst.Position - origin).Magnitude
+				if score < bestScore then
+					bestScore = score
 					best = inst
 				end
 			end
@@ -148,99 +200,63 @@ local function findPadByStructure(structureId: string?): BasePart?
 	return best
 end
 
-local function findMarker(markerName: string?, padStructureId: string?): BasePart?
-	-- Prefer live upgrade pad for buy steps (always present after MapSetup)
-	local pad = findPadByStructure(padStructureId)
-	if pad then
-		return pad
+--[[ Where the tutorial beam points for a step. Pure (reads the world, builds nothing), exported for the headless
+	test (every target except Outpost lies inside the player's own plot, plots 1-6, flat and rotated).
+	stepId: TutorialStateUpdate.Id; markerName / padStructureId: the step's MarkerName / PadStructureId;
+	plotId: the player's own plot (nil = not known yet -> no per-player beam); origin: where "nearest" is measured. ]]
+function TutorialController.ResolveTarget(stepId: string?, markerName: string?, padStructureId: string?, plotId: number?, origin: Vector3, userId: number?): BasePart?
+	if stepId == "Outpost" or markerName == "Tutorial_Outpost" then
+		return nearestOutpost(origin, userId or player.UserId)
 	end
-	if not markerName or markerName == "" then
-		return nil
+	if stepId == "RecruitSoldiers" or markerName == "Tutorial_Recruit" or stepId == "Jeep" or markerName == "Tutorial_Jeep" then
+		return nil -- GO opens Army / the Garage; nothing to walk to
 	end
-	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.TutorialMarker)) do
-		if inst:IsA("BasePart") and (inst.Name == markerName or inst:GetAttribute("TutorialStepId") == markerName) then
-			return inst
-		end
+	if plotId == nil then
+		return nil -- per-player target: wait for the plot id (applyPlotId re-aims)
 	end
-	local root = Workspace:FindFirstChild("WarEmpireSetup")
-	if root then
-		local found = root:FindFirstChild(markerName, true)
-		if found and found:IsA("BasePart") then
-			return found
-		end
+	if typeof(padStructureId) == "string" and padStructureId ~= "" then
+		return ConsoleLocator.Find(plotId, padStructureId)
 	end
-	local any = Workspace:FindFirstChild(markerName, true)
-	if any and any:IsA("BasePart") then
-		return any
+	if stepId == "ClaimBase" or markerName == "Tutorial_ClaimBase" then
+		return ownSpawn(plotId)
 	end
-	-- Click-dropper: nearest WE_ManualDropper on own plot
-	if markerName == "Tutorial_Dropper" then
-		local nearest: BasePart? = nil
-		local nd = math.huge
-		local char = player.Character
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
-		local ok, tagged = pcall(function()
-			return CollectionService:GetTagged("WE_ManualDropper")
-		end)
-		if ok and tagged then
-			for _, inst in ipairs(tagged) do
-				if inst:IsA("BasePart") then
-					local plotOk = true
-					if myPlotId ~= nil then
-						local pid = inst:GetAttribute("PlotId")
-						if pid ~= nil and pid ~= myPlotId then
-							plotOk = false
-						end
-					end
-					if plotOk then
-						local d = (inst.Position - origin).Magnitude
-						if d < nd then
-							nd = d
-							nearest = inst
-						end
-					end
+	if stepId == "Income" or markerName == "Tutorial_Income" then
+		return nearestOwnTagged(Constants.Tags.MoneyCollector, plotId, origin)
+	end
+	if stepId == "ClickDropper" or markerName == "Tutorial_Dropper" then
+		return nearestOwnTagged(MANUAL_DROPPER_TAG, plotId, origin)
+	end
+	-- unknown (future) step: its named marker, but only when it lies inside the player's own plot
+	if typeof(markerName) == "string" and markerName ~= "" then
+		local pad = ownPlotPad(plotId)
+		if pad then
+			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.TutorialMarker)) do
+				if inst:IsA("BasePart") and (inst.Name == markerName or inst:GetAttribute("TutorialStepId") == markerName)
+					and insidePad(pad, inst.Position) then
+					return inst
 				end
 			end
 		end
-		if nearest then
-			return nearest
-		end
-	end
-	-- Last resort: nearest territory capture zone for outpost step
-	if markerName == "Tutorial_Outpost" then
-		local nearest: BasePart? = nil
-		local nd = math.huge
-		local char = player.Character
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		local origin = if hrp and hrp:IsA("BasePart") then hrp.Position else Vector3.zero
-		for _, tag in ipairs({ Constants.Tags.Territory, Constants.Tags.CaptureZone }) do
-			local ok, tagged = pcall(function()
-				return CollectionService:GetTagged(tag)
-			end)
-			if ok and tagged then
-				for _, inst in ipairs(tagged) do
-					if inst:IsA("BasePart") then
-						local d = (inst.Position - origin).Magnitude
-						if d < nd then
-							nd = d
-							nearest = inst
-						end
-					end
-				end
-			end
-		end
-		return nearest
 	end
 	return nil
+end
+
+local function originPos(): Vector3
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp and hrp:IsA("BasePart") then
+		return hrp.Position
+	end
+	local pad = if myPlotId ~= nil then ownPlotPad(myPlotId) else nil
+	return if pad then pad.Position else Vector3.zero
 end
 
 local function setWaypoint(markerName: string?, padStructureId: string?)
 	clearWaypoint()
 	currentMarkerName = markerName
 	currentPadStructureId = padStructureId
-	syncMarkerVisibility(markerName)
-	local target = findMarker(markerName, padStructureId)
+	local target = TutorialController.ResolveTarget(currentStepId, markerName, padStructureId, myPlotId, originPos())
+	syncMarkerVisibility(target)
 	if not target then
 		return
 	end
@@ -413,8 +429,11 @@ end
 local function runCta()
 	local action = currentCtaAction
 	-- CTA silent (avoid Output spam)
-	if action == "PadBuy" or action == "OpenBase" then
-		-- Re-aim beam at the buy pad; open base menu as secondary path (B)
+	if action == "PadBuy" then
+		-- v71: buying happens at the console only — GO re-aims the beam at it (never opens the Base panel to buy)
+		setWaypoint(currentMarkerName, currentPadStructureId)
+	elseif action == "OpenBase" then
+		-- Base overview (GO rows guide to consoles; it cannot buy)
 		setWaypoint(currentMarkerName, currentPadStructureId)
 		local ok, BaseController = pcall(function()
 			return require(script.Parent.BaseController)
@@ -491,6 +510,7 @@ local function applyState(payload: any)
 
 	local padSid = if typeof(payload.PadStructureId) == "string" then payload.PadStructureId else nil
 	local marker = if typeof(payload.MarkerName) == "string" then payload.MarkerName else nil
+	currentStepId = if typeof(payload.Id) == "string" then payload.Id else nil
 	currentCtaAction = if typeof(payload.CtaAction) == "string" and payload.CtaAction ~= "" then payload.CtaAction else nil
 	setWaypoint(marker, padSid)
 
@@ -711,8 +731,8 @@ function TutorialController.Init()
 			return
 		end
 		myPlotId = plotId
-		-- Re-bind pad beam once plot is known
-		if stepActive and currentPadStructureId then
+		-- P0-6: every per-player target (spawn, ATM, dropper, console) needs the plot: re-aim once it is known
+		if stepActive then
 			task.defer(function()
 				setWaypoint(currentMarkerName, currentPadStructureId)
 			end)

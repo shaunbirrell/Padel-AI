@@ -102,6 +102,7 @@ local NotificationConfig = {
 			"^Purchase failed: ",
 			"^Not your base — walk your plot pads to buy$",
 			"^Claim a base first",
+			"^Go to your .+ console to buy it$", -- v71 NotAtConsole (ConsoleBuyConfig.Text.NotAtConsole)
 		},
 	},
 

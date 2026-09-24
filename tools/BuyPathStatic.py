@@ -68,8 +68,8 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "Reques
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "BaseService.PurchaseUpgrade", "UpgradePadService → PurchaseUpgrade")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RequestPurchaseUpgrade", "WorldPrompt BUY FireServer")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "btn.Activated", "WorldPrompt BUY Activated")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "RequestPurchaseUpgrade", "Base menu BUY FireServer")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "btn.Activated", "Base menu BUY Activated")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "RequestPurchaseUpgrade", "v71 Base panel never fires RequestPurchaseUpgrade (console-only buying)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "btn.Activated", "v71 Base panel GO uses Activated")
 
 # 2) PERF
 must_contain("src/ReplicatedStorage/Shared/Configs/DevConfig.luau", "StudioSkipWorldDressing = true", "StudioSkipWorldDressing=true")
@@ -1137,7 +1137,7 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPro
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "showBuying = true", "v61 WorldPrompt toast only after fire")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "Buy failed — remotes not ready", "v61 WorldPrompt remote-missing toast")
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseUpgrade):FireServer", "v61 WorldPrompt must not GetEvent-FireServer purchase")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade", "v61 Base menu FireServer helper")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade", "v71 Base panel has no buy FireServer")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "EnsureProfile", "v61 UpgradePad EnsureProfile")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EnsureProfile", "v61 BaseService PurchaseUpgrade EnsureProfile")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService/EconomyService ready BEFORE map (v61)", "v61 DataService before UpgradePad log")
@@ -1477,6 +1477,200 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Notifica
 must_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "DeferWhen = { \"Drawn\", \"RecentCombat\", \"Driving\", \"Modal\", \"Tutorial\" }", "v70 offers deferred in combat/driving/panels/tutorial")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "HudLayout.ApplyScreen(rg, { Insets = \"None\" })", "v70 reticle gui full-screen (true centre)")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "{ Id = \"Missiles\", Controller = MissileController },", "v70 Missiles panel joins the one-panel-at-a-time registry")
+
+# ── v71 console-only structure buying (owner: "you should have to actually go and click the button") ──
+CBC = "src/ReplicatedStorage/Shared/Configs/ConsoleBuyConfig.luau"
+CL = "src/ReplicatedStorage/Shared/Util/ConsoleLocator.luau"
+BS = "src/ServerScriptService/Server/Services/BaseService.luau"
+UPS = "src/ServerScriptService/Server/Services/UpgradePadService.luau"
+WPC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau"
+BC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau"
+TC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau"
+SMOKE = "src/ServerScriptService/Server/Modules/StudioBuySmoke.luau"
+must_contain(CBC, "Enabled = true,", "v71 ConsoleBuyConfig.Enabled")
+must_contain(CBC, "ConsolePromptDistance = 10,", "v71 console prompt distance in config")
+must_contain(CBC, "ServerSlack = 8,", "v71 server lag slack in config (horizontal 18 at consoles)")
+must_contain(CBC, "MaxVerticalOffset = 10,", "v71 vertical window (no buys from the floor above)")
+must_contain(CBC, 'NoConsolePolicy = "Deny",', "v71 missing console fails closed")
+must_contain(CBC, "RequireNearest = true,", "v71 only the nearest console in range buys")
+must_contain(CBC, 'NotAtConsole = "Go to your %s console to buy it"', "v71 NotAtConsole player text")
+must_contain(CL, "function ConsoleLocator.Check(", "v71 ConsoleLocator.Check")
+must_contain(CL, "function ConsoleLocator.Find(", "v71 ConsoleLocator.Find (real console part, rotation-proof)")
+must_contain(CL, "math.abs(offset.Y) > ConsoleBuyConfig.MaxVerticalOffset", "v71 presence is a cylinder (horizontal + vertical)")
+must_contain(BS, "function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: PurchaseOpts?)", "v71 PurchaseUpgrade takes opts")
+must_contain(BS, 'return { Ok = false, Error = "NotAtConsole" }', "v71 PurchaseUpgrade console gate")
+must_contain(BS, "BaseService.IsAtConsole(player, structureId, opts and opts.AtPart)", "v71 gate uses IsAtConsole (+ AtPart)")
+must_contain(BS, "if ConsoleBuyConfig.Enabled ~= false then", "v71 gate has no per-call bypass")
+must_contain(BS, 'BaseService.PurchaseUpgrade(player, structureId :: string, { Source = "Remote" })', "v71 remote handler goes through the gate")
+must_contain(UPS, "{ AtPart = part,", "v71 prompt/pad path checks the part that was used")
+must_contain(UPS, "ConsoleBuyConfig.ConsolePromptDistance", "v71 prompt distance from config")
+must_not_contain(UPS, "prompt.MaxActivationDistance = if console then 10 else 16", "v71 no prompt distance literals")
+must_contain(UPS, "WE_ConsolePos_", "v71 console positions stamped for the GO waypoint (streaming)")
+must_contain(SMOKE, "char:PivotTo(ConsoleLocator.StandCFrame(part))", "v71 Studio smoke stands at the console (no bypass)")
+must_contain(WPC, 'err == "NotAtConsole"', "v71 client explains NotAtConsole")
+must_contain("src/ReplicatedStorage/Shared/Configs/NotificationConfig.luau", '"^Go to your .+ console to buy it$"', "v71 NotAtConsole is one line (purchase-failure dedupe)")
+must_contain(BC, "ConsoleWaypoint.Show(structureId, myPlotId)", "v71 Base panel GO shows the way")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/ConsoleWaypoint.luau", 'b.Name = "WE_ConsoleBeam"', "v71 GO waypoint beam")
+must_contain(TC, 'if action == "PadBuy" then', "v71 tutorial PadBuy only re-aims the beam")
+must_not_contain(TC, 'action == "PadBuy" or action == "OpenBase"', "v71 tutorial BUY step never opens the Base panel")
+
+_bs = read(BS) or ""
+_pu = _bs.find("function BaseService.PurchaseUpgrade(")
+_gate = _bs.find('Error = "NotAtConsole"', _pu)
+_rec = _bs.find("EconomyService.ReconcileSpendableCash(player)", _pu)
+_spend = _bs.find('EconomyService.SpendCash(player, cost, "upgrade_" .. structureId)', _pu)
+_floor = _bs.find("if player.UserId == 470626172 then", _pu)
+_maxlv = _bs.find('Error = "MaxLevel"', _pu)
+if 0 <= _pu < _gate < min(_rec, _spend, _floor, _maxlv):
+    ok("v71 console gate runs before the cash floor / reconcile / MaxLevel / spend")
+else:
+    bad(f"v71 console gate order wrong pu={_pu} gate={_gate} floor={_floor} rec={_rec} maxlv={_maxlv} spend={_spend}")
+
+import os as _os
+_callers, _bypass, _client_fire = [], [], []
+for _dp, _dn, _fn in _os.walk(ROOT / "src"):
+    for _f in _fn:
+        if not _f.endswith(".luau"):
+            continue
+        _rel = _os.path.relpath(_os.path.join(_dp, _f), ROOT)
+        _t = read(_rel) or ""
+        if "BaseService.PurchaseUpgrade(" in _t and not _rel.endswith("BaseService.luau"):
+            _callers.append(_os.path.basename(_rel))
+        if "SkipConsoleCheck" in _t or "SkipConsole" in _t:
+            _bypass.append(_os.path.basename(_rel))
+        if _rel.startswith("src/StarterPlayer") and "RequestPurchaseUpgrade" in _t:
+            _client_fire.append(_os.path.basename(_rel))
+if sorted(set(_callers)) == ["StudioBuySmoke.luau", "UpgradePadService.luau"]:
+    ok("v71 PurchaseUpgrade callers allowlist (UpgradePadService, StudioBuySmoke)")
+else:
+    bad(f"v71 unexpected PurchaseUpgrade callers {sorted(set(_callers))} — every caller must stand the character at the console (or pass AtPart)")
+if not _bypass:
+    ok("v71 no console-gate bypass anywhere (no SkipConsoleCheck)")
+else:
+    bad(f"v71 console-gate bypass found in {sorted(set(_bypass))}")
+if _client_fire == ["WorldPromptController.luau"]:
+    ok("v71 only the console BUY button fires RequestPurchaseUpgrade")
+else:
+    bad(f"v71 client files firing RequestPurchaseUpgrade: {_client_fire}")
+
+# Every structure has a buy point in the world: a MapSetup STRUCTURES row (else nothing is built -> unbuyable) and a
+# BaseLayoutConfig site with Console (walk-in) or Kiosk (else it silently falls back to a legacy grid pad)
+_bc = read("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau") or ""
+_ms = read("src/ServerScriptService/Server/Modules/MapSetup.luau") or ""
+_blc = read("src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau") or ""
+_order_m = re.search(r"StructureOrder = \{(.*?)\}", _bc, re.S)
+_order = re.findall(r'"(\w+)"', _order_m.group(1)) if _order_m else []
+_nobuild = [sid for sid in _order if f'{{ Id = "{sid}"' not in _ms]
+_nosite = [sid for sid in _order if not re.search(r"^\t\t" + sid + r" = \{ Site = .*(Console|Kiosk) = \{", _blc, re.M)]
+if _order and not _nobuild and not _nosite:
+    ok(f"v71 every structure ({len(_order)}) has a MapSetup row and a console / kiosk site")
+else:
+    bad(f"v71 structures without a buy point: no MapSetup row {_nobuild}, no console/kiosk site {_nosite}")
+
+# Radii: client BUY boxes never overlap, and the client BUY box never offers a buy the server refuses
+import math as _math
+_cfg = read(CBC) or ""
+_dist = float(re.search(r"ConsolePromptDistance = ([\d.]+)", _cfg).group(1))
+_slack = float(re.search(r"ServerSlack = ([\d.]+)", _cfg).group(1))
+_maxdy = float(re.search(r"MaxVerticalOffset = ([\d.]+)", _cfg).group(1))
+_pts = []
+for _m in re.finditer(r"^\t\t(\w+) = \{ Site = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}, Yaw = (-?[\d.]+), WalkIn = (true|false)(.*)$", _blc, re.M):
+    _sx, _sz, _yaw = float(_m.group(2)), float(_m.group(3)), float(_m.group(4))
+    _rest = _m.group(6)
+    if _m.group(5) == "true":
+        _c = re.search(r"Console = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}", _rest)
+        _cx, _cz = float(_c.group(1)), float(_c.group(2))
+        _a = _math.radians(_yaw)
+        _pts.append((_m.group(1), _sx + _cx * _math.cos(_a) + _cz * _math.sin(_a), _sz - _cx * _math.sin(_a) + _cz * _math.cos(_a)))
+    else:
+        _k = re.search(r"Kiosk = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}", _rest)
+        _pts.append((_m.group(1), float(_k.group(1)), float(_k.group(2))))
+_sep = min(_math.hypot(a[1] - b[1], a[2] - b[2]) for i, a in enumerate(_pts) for b in _pts[i + 1:]) if len(_pts) > 1 else 0
+_wpc = read(WPC) or ""
+_mm = re.search(r"local CONSOLE_MARGIN = ([\d.]+)", _wpc)
+_margin = float(_mm.group(1)) if _mm else 99
+_ytop = re.search(r"localPos\.Y <= half\.Y \+ ([\d.]+)", _wpc)
+_ybot = re.search(r"localPos\.Y >= -half\.Y - ([\d.]+)", _wpc)
+_boxTop = 1.7 + (float(_ytop.group(1)) if _ytop else 99)  # CONSOLE_SIZE.Y 3.4 -> half 1.7
+_boxBot = 1.7 + (float(_ybot.group(1)) if _ybot else 99)
+_corner = _math.hypot(1.3 + _margin, 0.7 + _margin)  # CONSOLE_SIZE 2.6 x 3.4 x 1.4, horizontal corner of the BUY box
+if len(_pts) >= 15 and _sep > 2 * _corner:
+    ok(f"v71 closest console pair {_sep:.1f} studs > 2 x client BUY box {_corner:.1f} (boxes never overlap)")
+else:
+    bad(f"v71 consoles too close: {_sep:.1f} studs vs 2 x {_corner:.1f} (n={len(_pts)})")
+if _corner <= _dist and _boxTop <= _maxdy and _boxBot <= _maxdy:
+    ok(f"v71 client BUY box (xz {_corner:.1f}, y -{_boxBot:.1f}..+{_boxTop:.1f}) inside the server cylinder ({_dist + _slack:.0f}, +-{_maxdy:.0f})")
+else:
+    bad(f"v71 client BUY box xz {_corner:.1f} / y -{_boxBot:.1f}..+{_boxTop:.1f} exceeds prompt {_dist} / vertical {_maxdy} (CONSOLE_MARGIN={_margin})")
+_bw = float(re.search(r"BeamWidth0 = ([\d.]+)", _cfg).group(1))
+_le = float(re.search(r"BeamLightEmission = ([\d.]+)", _cfg).group(1))
+if _bw <= 0.25 and _le <= 0.3:
+    ok("v71 GO waypoint beam within the HUD beam rule (width <= 0.25, LightEmission <= 0.3)")
+else:
+    bad(f"v71 GO beam too loud width={_bw} LightEmission={_le}")
+
+# v71 console-only buying, client polish: the GO marker refreshes at <= 10 Hz (CLAUDE.md UI refresh cap)
+CW = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/ConsoleWaypoint.luau"
+must_contain(CW, "if stepAcc < 1 / W.RefreshHz then", "v71 GO waypoint step throttled to Waypoint.RefreshHz")
+must_contain(CBC, "RefreshHz = 10,", "v71 GO waypoint refresh 10 Hz")
+must_contain(CBC, "MarkerMinTextPx = 14,", "v71 GO marker text >= 14 px")
+
+# ── v71 mobile P0-6: tutorial targets are the player's OWN plot (never Plot 1's markers); P1-15 device-neutral copy
+TCFG = "src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau"
+must_contain(TC, "function TutorialController.ResolveTarget(", "P0-6 tutorial target resolver (own plot first)")
+must_contain(TC, "nearestOwnTagged(Constants.Tags.MoneyCollector, plotId, origin)", "P0-6 Income -> own Money Collector")
+must_contain(TC, "nearestOwnTagged(MANUAL_DROPPER_TAG, plotId, origin)", "P0-6 Dropper -> own manual dropper")
+must_contain(TC, "return ConsoleLocator.Find(plotId, padStructureId)", "P0-6 buy steps -> own console")
+must_contain(TC, "return ownSpawn(plotId)", "P0-6 ClaimBase -> own PlayerSpawn")
+must_contain(TC, "return nearestOutpost(origin, userId or player.UserId)", "P0-6 Outpost -> nearest uncontested zone")
+must_contain(TC, "and insidePad(pad, inst.Position) then", "P0-6 a named marker only inside the own plot")
+must_not_contain(TC, "Workspace:FindFirstChild(markerName, true)", "P0-6 no world-wide marker lookup by name")
+must_not_contain(TC, "findPadByStructure", "P0-6 no nearest-any-plot pad fallback")
+_tc = read(TC) or ""
+_rt = _tc.find("function TutorialController.ResolveTarget(")
+_rt_end = _tc.find("\nend\n", _rt)
+_body = _tc[_rt:_rt_end] if _rt >= 0 else ""
+_plot_gate = _body.find("if plotId == nil then")
+_name_lookup = _body.find("Constants.Tags.TutorialMarker")
+if 0 <= _plot_gate < _name_lookup and all(_body.find(k) < _name_lookup for k in ("ownSpawn(plotId)", "Tags.MoneyCollector", "MANUAL_DROPPER_TAG", "ConsoleLocator.Find(plotId")):
+    ok("P0-6 per-player targets resolve before any marker name lookup")
+else:
+    bad(f"P0-6 resolver order wrong plotGate={_plot_gate} nameLookup={_name_lookup}")
+_tcfg = read(TCFG) or ""
+_hints = re.findall(r'(?:Hint|Title|CtaLabel) = "([^"]*)"', _tcfg)
+_keyish = [h for h in _hints if re.search(r"\((?:[A-Z]|Key [A-Z0-9]+)\)|\[[A-Z]\]|\bclick|\bpress [A-Z]\b|\bWASD\b|\bkey\b|\bE to\b", h, re.I)]
+if len(_hints) >= 16 and not _keyish:
+    ok(f"P1-15 tutorial copy is device-neutral ({len(_hints)} strings, no key names / click)")
+else:
+    bad(f"P1-15 tutorial copy names keys or says click: {_keyish} (n={len(_hints)})")
+_longhints = [h for h in re.findall(r'\n\t\t\tHint = "([^"]*)"', _tcfg) if len(h) > 42]
+if not _longhints and re.search(r'\n\t\t\tHint = "', _tcfg):
+    ok("P1-15 tutorial hints fit the objective chip on an 800x360 phone (<= 42 characters)")
+else:
+    bad(f"P1-15 tutorial hints longer than 42 characters (cut off on phones): {_longhints}")
+
+# ── v71 mobile merge gate §1C #2-#8 + P1-6 (builders A / B; verifier fixes). Verified: HUD harness 10 states x
+# 800x360 / 844x390 / 956x440 / 1180x820 / 1280x720, pa_gate 10/10, b_touchfire 45/45 touch + 11/11 desktop, v_adv.
+_MG_HC = "src/ReplicatedStorage/Shared/Configs/HudConfig.luau"
+_MG_CTL = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/"
+must_contain(_MG_HC, "MinTextPx = 14,", "merge gate #2 text floor 14 real px")
+must_contain(_MG_HC, "SkipHit = 64", "merge gate #3 tutorial Skip hit 64 v (44.8 real px)")
+must_contain(_MG_HC, "CloseHit = 64,", "merge gate #3 offer close hit 64 v")
+must_contain(_MG_HC, "PlusOnPill = false,", "merge gate #6 cash + off the pill (thumbstick zone)")
+must_contain(_MG_CTL + "PromptController.luau", "UserInputService.TouchEnded:Connect", "merge gate #4 a lifted finger releases held pills")
+must_contain(_MG_CTL + "PromptController.luau", "releaseHoldsOf(input)", "merge gate #4 hold release helper")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudLayout.luau", "function HudLayout.PrefersKeys(", "merge gate #7 key copy follows PreferredInput")
+must_contain(_MG_CTL + "SettingsController.luau", "applySheet(HudLayout.PrefersKeys())", "merge gate #7 controls sheet only for keyboard / gamepad")
+must_contain(_MG_CTL + "VehicleController.luau", "Sit · drive with the stick", "merge gate #7 garage touch tip without WASD")
+must_not_contain(_MG_CTL + "VehicleController.luau", "string.sub(cat, 1, 3)", "merge gate #7 no GRO / COMM chips")
+must_contain(_MG_CTL + "OrdersController.luau", "NonModal = true", "P1-6 Army popover non-modal (FIRE stays up)")
+must_contain(_MG_CTL + "UIController.luau", "OnLongPress", "P1-6 Army tile long-press cycles the order")
+must_contain(_MG_CTL + "HUDController.luau", "if (input.Position - startPos).Magnitude > LONG_PRESS_SLOP_PX then", "P1-6 a thumb dragging off the Army tile never changes the order")
+must_not_contain(_MG_CTL + "ArmyController.luau", "Barracks (B)", "CLAUDE.md copy by device: no (B) key in Army text")
+must_contain(_MG_CTL + "CombatController.luau", "TOUCH_TAP_HOLSTERS", "merge gate #5 a touch re-tap never holsters")
+must_contain(_MG_CTL + "CombatController.luau", "math.clamp(tonumber(ARMED_CFG.ScanHz) or 4, 1, 4)", "merge gate #5 holstered-FIRE scan capped at 4 Hz")
+must_contain(_MG_HC, "Fire = { Size = 88, Anchor = Vector2.new(0.5, 1), Right = 86, Bottom = 152 },", "FIRE 16 px above the jump button (phones)")
+must_contain(_MG_CTL + "CombatController.luau", "local FIRE_ABOVE_JUMP = 16", "FIRE 16 px above the jump button (tablets)")
 
 # v70 server fairness (verified: fairness combat 56, adversarial 22, thief 18, squad 26, research combat 40/9, squad 18,
 # raid 71, strike 67/27, gate 48, ds 24)

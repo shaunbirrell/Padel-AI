@@ -5,17 +5,18 @@
 
 	  PanelShell.Screen(screen, displayOrder?)   HudLayout.ApplyScreen: Core safe insets + the ONE HUD UIScale
 	                                             ("MobileScale", S = 0.70 on phones … 1.15 at 1080p)
-	  PanelShell.Attach({Id, Screen, Panel, IsOpen, Close, Dim?, TapCloses?}) -> Shell
+	  PanelShell.Attach({Id, Screen, Panel, IsOpen, Close, Dim?, TapCloses?, NonModal?}) -> Shell
 	      * HudLayout.RegisterPanel(Id, IsOpen, Close): one panel open at a time → the Modal flag
 	      * the black dim behind the panel (UIUtil.MakeModalDim, HudConfig.Context.ModalDim; Active = false).
 	        It covers the whole screen width of the gui plus the Roblox topbar row, so the HUD (rail, pill,
 	        TopStrip) stays visible but dimmed under the panel. On touch a tap outside the panel closes it.
 	      * Dim = false → an invisible tap-catcher instead (the Army popover).
+	      * NonModal = true → exclusive with the other panels but no Modal flag (FIRE / hotbar stay up: the popover)
 	  shell.Sync(open)        call from the panel's setOpen: dim visibility + HudLayout.PanelOpened / PanelClosed
 	  shell.TapThrough()      true for a moment after the dim closed the panel: the same tap then lands on the rail
 	                          tile that toggles it, and Toggle must not re-open it
 	  PanelShell.Tap(v)       a touch target in v: ≥ TouchMinV() (64 v = 44.8 real px at the phone scale 0.70)
-	  PanelShell.Text(v)      a text size in v: ≥ 16 v on touch (11.2 px) / 13 v on desktop
+	  PanelShell.Text(v)      a text size in v: ≥ 20 v on touch (14 real px, HudConfig.Scale.MinTextPx) / 16 v on desktop
 	  PanelShell.CloseButton(parent, onClose)    ✕ from HudIcons "Close"; 64 v hit on touch, 44 v on desktop
 
 	Nothing here touches a purchase path.
@@ -36,8 +37,8 @@ local PanelShell = {}
 -- 64 v: the rail tile / hotbar slot size, = HudConfig.Scale.TouchMinPx (44) / Scale.Min (0.70) rounded up
 local TOUCH_MIN_V = math.max(HudConfig.Hotbar.Slot, math.ceil(HudConfig.Scale.TouchMinPx / HudConfig.Scale.Min))
 local DESKTOP_MIN_V = 44
-local TEXT_MIN_TOUCH = math.ceil(HudConfig.Scale.MinTextPx / HudConfig.Scale.Min) -- 16 v = 11.2 px on phones
-local TEXT_MIN_DESKTOP = 13 -- 11.7 px at 720p (S 0.90)
+local TEXT_MIN_TOUCH = math.ceil(HudConfig.Scale.MinTextPx / HudConfig.Scale.Min - 1e-6) -- 20 v = 14 px on phones
+local TEXT_MIN_DESKTOP = 16 -- 14.4 px at 720p (S 0.90)
 local TAP_THROUGH_SECONDS = 0.45
 
 PanelShell.Colors = {
@@ -65,6 +66,7 @@ export type AttachOpts = {
 	Close: () -> (),
 	Dim: boolean?, -- default true; false = invisible tap-catcher (popover)
 	TapCloses: boolean?, -- default: touch only (spec §3.8)
+	NonModal: boolean?, -- default false; true = no Modal flag while open (HudLayout.RegisterPanel NonModal)
 }
 
 function PanelShell.IsTouch(): boolean
@@ -80,7 +82,8 @@ function PanelShell.Tap(v: number): number
 	return math.max(v, PanelShell.TouchMinV())
 end
 
---[[ A text size in v that renders ≥ 11 real px at the smallest HUD scale of the device class. ]]
+--[[ A text size in v that renders ≥ HudConfig.Scale.MinTextPx (14) real px at the smallest HUD scale on touch
+	(20 v at 0.70) and on a 720p desktop (16 v at 0.90). ]]
 function PanelShell.Text(v: number): number
 	return math.max(v, if HudLayout.IsTouch() then TEXT_MIN_TOUCH else TEXT_MIN_DESKTOP)
 end
@@ -138,7 +141,7 @@ function PanelShell.Attach(o: AttachOpts): Shell
 	HudLayout.LayoutChanged:Connect(refit)
 	o.Screen:GetPropertyChangedSignal("AbsoluteSize"):Connect(refit)
 
-	HudLayout.RegisterPanel(o.Id, o.IsOpen, o.Close)
+	HudLayout.RegisterPanel(o.Id, o.IsOpen, o.Close, { NonModal = o.NonModal == true })
 
 	local shell: Shell = {
 		Id = o.Id,

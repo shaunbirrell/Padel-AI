@@ -9,6 +9,9 @@
 	OWNER DECISIONS (v70): Settings = TopStrip gear (not a rail tile); no Base tile on the rail; you spawn
 	HOLSTERED (Hotbar.DrawnOnSpawn = false, auto-draw on damage); Army popover key Y; Robux offer pop-ups at most
 	Offer.MaxPerSession per session and Offer.MinGapSeconds apart.
+	MOBILE MERGE GATE (mobile_plan §1C): text floor 14 real px (Scale.MinTextPx; 20 v on phones), Skip / offer ✕
+	hits 64 v, the cash "+" lives on the TopStrip (TopStrip.CashPlus), not in the thumbstick zone, and key hints
+	show only when HudLayout.PrefersKeys() (UserInputService.PreferredInput is keyboard or gamepad).
 
 	UNITS
 	  v     virtual px. Every HUD ScreenGui gets ONE UIScale named "MobileScale" from HudLayout.ApplyScreen():
@@ -50,8 +53,12 @@ HudConfig.Scale = {
 	Min = 0.70, -- 64 v tile → 44.8 real px on every phone (Apple/Roblox 44 px touch minimum)
 	Max = 1.15,
 	TouchMinPx = 44, -- real px; HudLayout.AssertTouchTarget() warns in Studio when a tappable is smaller
-	-- real px floor for any HUD text (check_hud's rule): at S 0.70 that is 16 v, so no v text size below 16
-	MinTextPx = 11,
+	-- real px floor for any HUD text (CLAUDE.md §1, check_hud's rule): at S 0.70 that is 20 v, so no v text size
+	-- below 20 on touch (PanelShell.Text floors panel text to it). Was 11 until the mobile merge gate (§1C #2).
+	MinTextPx = 14,
+	-- The ONE documented exception (mobile_plan §1C #2): a hotbar weapon caption whose short name cannot fit its
+	-- 64 v slot at 20 v may shrink to this (TextScaled). check_hud.py applies the same rule to Hotbar …WeaponName.
+	CaptionMinTextPx = 12,
 }
 
 -- Roblox built-in fonts only.
@@ -124,10 +131,10 @@ HudConfig.TopStrip = {
 	TextStroke = 1.2, -- real px Colors.Ink outline on the chips' Display-font numbers
 	Bg = Color3.fromRGB(18, 20, 24),
 	BgTransparency = 0.25, -- visually matches Roblox's own topbar pills
-	LeftItems = { "Level", "Settings", "Shield" }, -- order; Shield only while shielded
+	LeftItems = { "Level", "Settings", "CashPlus", "Shield" }, -- order; Shield only while shielded
 	Level = {
 		MinWidth = 118,
-		CaptionSize = 12, -- "LV"
+		CaptionSize = 14, -- "LV" (real px: Scale.MinTextPx)
 		NumberSize = 22, -- "7"
 		BarSize = Vector2.new(56, 6),
 		BarBg = Color3.fromRGB(255, 255, 255),
@@ -137,12 +144,24 @@ HudConfig.TopStrip = {
 		TapShowsGoalSeconds = 3.5, -- tap/hover: GoalLabel tooltip under the chip (goal + rebirth summary)
 		TipGap = 6, -- real px between the topbar row and the tooltip card
 		TipMaxWidth = 340,
-		TipGoalSize = 13, -- GothamBold, white
-		TipRebirthSize = 12, -- GothamMedium, gold
+		TipGoalSize = 15, -- GothamBold, white (real px, ≥ Scale.MinTextPx)
+		TipRebirthSize = 14, -- GothamMedium, gold
 		PopScale = 1.15, -- level-up chip pop (UIScale 1 → 1.15 → 1 over PopSeconds)
 		PopSeconds = 0.45,
 	},
 	Settings = { Size = 44, IconColor = Color3.fromRGB(52, 156, 255) }, -- gear; opens SettingsController
+	-- Buy-cash chip (mobile merge gate #6, T17): the green "+" that used to sit on the cash pill's right end — right
+	-- where a resting left thumb lands (thumbstick zone), so a stray touch opened the Shop, a Modal that hides FIRE.
+	-- Now a 44 px real chip in the Roblox topbar row: cash-bills icon + green "+" disc. Opens CashPill.PlusOpens.
+	CashPlus = {
+		Height = 44, -- real px (the chip IS the tap target)
+		IconSize = Vector2.new(30, 23), -- HudIcons "Cash" (42:32 box)
+		PlusSize = 30, -- green disc
+		PlusStrokePx = 2,
+		PadLeft = 10,
+		PadRight = 7,
+		Gap = 6,
+	},
 	Shield = { -- raids: victim shield after being robbed (player attribute WE_ShieldUntil, os.time())
 		Attribute = "WE_ShieldUntil",
 		IconColor = Color3.fromRGB(80, 210, 255),
@@ -154,7 +173,7 @@ HudConfig.TopStrip = {
 		ArrowSize = 22, -- chevron built from 2 Frames, Rotation = bearing relative to the camera
 		ArrowBox = 24, -- faint round backing behind the arrow
 		ArrowColor = Color3.fromRGB(255, 214, 72),
-		LabelSize = 13, -- "BASE"
+		LabelSize = 14, -- "BASE" (real px, ≥ Scale.MinTextPx)
 		DistanceSize = 18, -- "95m" (Display font)
 		TickSeconds = 0.25,
 		HideInsideOwnPlot = true, -- inside your own walls you need no arrow home
@@ -178,7 +197,7 @@ HudConfig.Rail = {
 	ColumnGap = 10, -- v added to Gap between columns when a short screen wraps the rail (e.g. 800x360 → 4 + 1)
 	LabelOverhang = 6, -- v the label hangs below the tile edge (included in the hit area)
 	LabelOverhangDesktop = 8,
-	LabelSize = 17,
+	LabelSize = 20, -- v: 14.0 real px at S 0.70 (Scale.MinTextPx); "Missions" is ~88 v, the label box is Tile + 32
 	LabelSizeDesktop = 20,
 	LabelStroke = 2, -- real px, Colors.Ink
 	Corner = 12,
@@ -200,8 +219,10 @@ HudConfig.Rail = {
 		{ Id = "Missions", Name = "DockMissions", Label = "Missions", Icon = "Clipboard", Accent = Color3.fromRGB(255, 150, 32), Fill = Color3.fromRGB(80, 42, 6), Key = Enum.KeyCode.M },
 	},
 	Badge = {
-		Size = 24, -- v circle at the tile's top-right corner (AnchorPoint 0.5,0.5 at (1,-4,0,4))
-		TextSize = 16, -- 11.2 real px on phones (Scale.MinTextPx)
+		Size = 26, -- v circle at the tile's top-right corner (AnchorPoint 0.5,0.5 at (1,-Inset.X,0,Inset.Y))
+		-- centre 9 v below the tile top, so the (bigger, 20 v) badge barely reaches the label of the tile above
+		Inset = Vector2.new(4, 9),
+		TextSize = 20, -- 14 real px on phones (Scale.MinTextPx)
 		Bg = Color3.fromRGB(235, 40, 52),
 		ReadyBg = Color3.fromRGB(255, 214, 72), -- "!" on Rebirth uses gold with dark text
 		ReadyText = Color3.fromRGB(30, 22, 4),
@@ -227,7 +248,7 @@ HudConfig.CashPill = {
 	Bottom = 12,
 	Height = 56, -- v touch (39 real); the + hit area is taller (PlusHit)
 	HeightDesktop = 52,
-	MinWidth = 200,
+	MinWidth = 150, -- the + moved to the TopStrip (TopStrip.CashPlus): the pill is icon + number only
 	MaxWidth = 380,
 	Corner = 14,
 	StrokePx = 2,
@@ -244,9 +265,13 @@ HudConfig.CashPill = {
 	PopScale = 1.08, -- the number pops once per change
 	FlashSeconds = 0.5, -- gain/spend colour (CashFloat.GainColor / SpendColor) settles back to NumberColor
 	NumberPadRight = 4,
+	-- The green "+" is NOT on the pill any more (mobile merge gate #6): it is the TopStrip.CashPlus chip. The pill
+	-- keeps an empty PlusSlot (PlusSlotWidth v) at its right end as the cash float's anchor.
+	PlusOnPill = false,
+	PlusSlotWidth = 0,
 	PlusStrokePx = 2.5,
-	PlusVisual = 44, -- v green circle
-	PlusHit = 64, -- v transparent hit area (≥ 44 real on phones)
+	PlusVisual = 44, -- v: the float anchor's height (the old green circle's size)
+	PlusHit = 64, -- v transparent hit area (≥ 44 real on phones) — only when PlusOnPill = true
 	PlusOpens = "ShopCashPacks", -- ShopController.OpenCashPacks() — no toast
 	HideWhen = { "Dead" },
 }
@@ -282,8 +307,11 @@ HudConfig.TopStack = {
 	Gap = 6,
 	MaxWidthScale = 0.62, -- of content width; nothing in the stack is wider
 	Order = { Alert = 10, Progress = 20, Objective = 30, Toasts = 40, Offer = 50 },
-	Progress = { Size = Vector2.new(320, 44), BarH = 8, TextSize = 16, ContestedColor = Color3.fromRGB(255, 176, 48) },
-	Objective = { MaxWidth = 460, Height = 64, TitleSize = 20, HintSize = 16, GoHit = 64, SkipHit = 44 },
+	-- text ≥ 20 v (14 real px on phones, Scale.MinTextPx): title row 4..28 v, bar 29..37 v in the 44 v pill (kept 44:
+	-- VehicleDriveClient's SPD pill sits right under a 44 v Progress pill at the top of the stack)
+	Progress = { Size = Vector2.new(360, 44), BarH = 8, TextSize = 20, ContestedColor = Color3.fromRGB(255, 176, 48) },
+	-- Height 72: title (22 v) + two 20 v hint lines; SkipHit 64 v = 44.8 real px (merge gate #3; 44 v was 30.8 px)
+	Objective = { MaxWidth = 460, Height = 72, TitleSize = 20, HintSize = 20, GoHit = 64, SkipHit = 64 },
 }
 
 HudConfig.Toast = {
@@ -355,9 +383,11 @@ HudConfig.Offer = { -- Robux soft offers (7 ShopController cards) become ONE off
 	Bg = Color3.fromRGB(26, 22, 8),
 	BgTransparency = 0.12,
 	TitleSize = 20,
-	SubSize = 16,
+	SubSize = 20, -- 14 real px on phones (Scale.MinTextPx)
+	CtaSize = 20, -- "GET R$ 99"
+	CloseTextSize = 22, -- the ✕ glyph
 	GetHit = 64, -- green GET button
-	CloseHit = 44,
+	CloseHit = 64, -- v: 44.8 real px on phones (merge gate #3; 44 v was 30.8 px)
 	HoldSeconds = 9,
 	-- Owner decision (money plan D8): at most 3 offer pop-ups per session, at least 4 minutes apart.
 	-- The server Offer Director (money workflow) may be stricter; this client throttle is the floor.
@@ -378,7 +408,7 @@ HudConfig.Hotbar = {
 	MaxSlots = 4,
 	Slot = 64, -- v touch (44.8 real)
 	SlotDesktop = 50, -- v (45 real at 720p)
-	Gap = 6,
+	Gap = 12, -- also widens each slot's caption box (slot + Gap + 4 = 80 v) so SHOTGUN keeps ≥ 12 px (CaptionMinTextPx)
 	Bottom = 12,
 	Corner = 8,
 	Bg = Color3.fromRGB(20, 22, 26),
@@ -388,9 +418,12 @@ HudConfig.Hotbar = {
 	SelectedBgTransparency = 0.12,
 	SelectedStrokePx = 2,
 	SelectedScale = 1.08,
-	NumberSize = 16, -- slot number, top-left (11.2 real px on phones)
-	NameSize = 16, -- v touch, TextScaled max; WeaponConfig.ShortName (RIFLE / AR / SMG / PISTOL / SHOTGUN / SNIPER / RPG / FRAG)
-	NameSizeDesktop = 13, -- 11.7 real px at 720p
+	NumberSize = 20, -- slot number, top-left (14 real px on phones)
+	-- v touch, TextScaled max (14 real px); WeaponConfig.ShortName (RIFLE / AR / SMG / PISTOL / SHOTGUN / SNIPER /
+	-- RPG / FRAG). CAPTION EXCEPTION (mobile_plan §1C #2, §6): a name too long for the slot at 20 v (SHOTGUN,
+	-- SNIPER, PISTOL) may shrink to CaptionMinTextPx (12 real px) — the only HUD text allowed under 14 px.
+	NameSize = 20,
+	NameSizeDesktop = 16, -- 14.4 real px at 720p
 	TapSelectedHolsters = true, -- tap / press the drawn weapon's slot again → holster
 	DrawnOnSpawn = false, -- you spawn holstered: clicks go to the world (droppers, consoles), not the gun
 	AutoDrawOnDamage = true, -- taking damage from a player/NPC draws the last weapon
@@ -420,7 +453,7 @@ HudConfig.ActionLane = {
 	PromptHeightDesktop = 50,
 	PromptMinWidth = 150,
 	PromptGap = 8, -- two prompts (E + F) side by side
-	PromptTextSize = 18,
+	PromptTextSize = 20, -- 14 real px on phones
 	KeyCapSize = 34, -- desktop/gamepad key cap ("E", "F", ButtonX glyph)
 	HoldFill = Color3.fromRGB(110, 255, 90),
 	-- BuyButton (WorldPromptController, gui WE_PadBuyGui): same lane. Desktop keeps the pinned 300x58.
@@ -443,13 +476,13 @@ HudConfig.Ammo = {
 	Bottom = 14,
 	Size = Vector2.new(240, 80),
 	RightTouch = 12,
-	BottomTouch = 243, -- FIRE top (143 + 88) + 12
-	SizeTouch = Vector2.new(200, 56),
+	BottomTouch = 252, -- FIRE top (152 + 88) + 12
+	SizeTouch = Vector2.new(200, 60), -- name row 22 v + count row 30 v + bar
 	CountSize = 44, -- "27" Display font
 	CountSizeTouch = 30,
 	MagSize = 24, -- "/30"
-	MagSizeTouch = 18,
-	NameSize = 16, -- weapon name above the count (11.2 real px on phones)
+	MagSizeTouch = 20, -- 14 real px on phones
+	NameSize = 20, -- weapon name above the count (14 real px on phones)
 	BarSize = Vector2.new(200, 4), -- magazine / reload fraction
 	CountColor = Color3.fromRGB(255, 255, 255),
 	MagColor = Color3.fromRGB(200, 204, 210),
@@ -463,8 +496,9 @@ HudConfig.Ammo = {
 
 HudConfig.TouchCombat = { -- positions are from the content rect's bottom-right; Roblox's jump button is at
 	-- x = W − safeRight − 95 .. +70, y = H − 90 .. +70 (real) and is never covered
-	Fire = { Size = 88, Anchor = Vector2.new(0.5, 1), Right = 86, Bottom = 143 }, -- centred over the jump button
-	Reload = { Size = 64, Anchor = Vector2.new(1, 1), Right = 142, Bottom = 143 }, -- left of FIRE
+	-- Bottom 152 v = 106 real px at S 0.70: FIRE ends 16 px above the jump button (CLAUDE.md: nothing within 16 px)
+	Fire = { Size = 88, Anchor = Vector2.new(0.5, 1), Right = 86, Bottom = 152 }, -- centred over the jump button
+	Reload = { Size = 64, Anchor = Vector2.new(1, 1), Right = 142, Bottom = 152 }, -- left of FIRE
 	FireColor = Color3.fromRGB(220, 50, 50),
 	ReloadColor = Color3.fromRGB(34, 38, 44),
 	HoldToFireHz = 20, -- existing loop; the server still clamps to the weapon FireRate

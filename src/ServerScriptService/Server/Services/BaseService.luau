@@ -15,7 +15,9 @@ local BaseConfig = require(Shared.Configs.BaseConfig)
 local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
+local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local Types = require(Shared.Types)
+local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
@@ -407,7 +409,45 @@ function BaseService.TeleportToPlot(player: Player): boolean
 	return plotId ~= nil
 end
 
-function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types.PurchaseUpgradeResult
+--[[ v71 console-only buying. There is NO bypass: every caller (the remote, the console prompt, StudioBuySmoke)
+	needs the character at this structure's console on the caller's own plot. AtPart: the console / pad whose prompt
+	fired (UpgradePadService), checked instead of looking the console up. Source: logs only. Nothing here is ever
+	built from a remote payload (the remote handler reads StructureId only). ]]
+export type PurchaseOpts = {
+	AtPart: BasePart?,
+	Source: string?,
+}
+
+local noConsoleWarned: { [string]: boolean } = {}
+
+local function structureDisplayName(structureId: any): string
+	local def = if typeof(structureId) == "string" then BaseConfig.Structures[structureId] else nil
+	return if def then def.DisplayName else tostring(structureId)
+end
+
+--[[ v71: is the player at this structure's console on THEIR plot (server's view of the character)?
+	Returns (ok, reason, horizontalDistance?). reason: Ok | NoPlot | ConsoleLocator.Reason
+	(NoCharacter | Dead | Seated | NoConsole | WrongPart | TooFar | WrongFloor | OtherNearer). ]]
+function BaseService.IsAtConsole(player: Player, structureId: string, atPart: BasePart?): (boolean, string, number?)
+	local plotId = ownedPlotOf(player.UserId)
+	if plotId == nil then
+		return false, "NoPlot", nil
+	end
+	local ok, reason, dist = ConsoleLocator.Check(player, plotId, structureId, atPart)
+	if not ok and reason == "NoConsole" then
+		local key = tostring(plotId) .. "|" .. structureId
+		if not noConsoleWarned[key] then
+			noConsoleWarned[key] = true
+			warn(string.format("[BaseService] no console part for %s on plot %d (NoConsolePolicy=%s)", structureId, plotId, tostring(ConsoleBuyConfig.NoConsolePolicy)))
+		end
+		if ConsoleBuyConfig.NoConsolePolicy == "Allow" then
+			return true, "NoConsole", nil
+		end
+	end
+	return ok, reason, dist
+end
+
+function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: PurchaseOpts?): Types.PurchaseUpgradeResult
 	if not RemoteGuard.IsIdString(structureId, 48) then
 		return { Ok = false, Error = "InvalidStructure" }
 	end
@@ -464,6 +504,26 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	if profile.BasePlotId ~= ownPlot then
 		profile.BasePlotId = ownPlot
 		DS.MarkDirty(player)
+	end
+
+	-- v71: console-only buying — the player must stand at THIS structure's console on their own plot. Runs before
+	-- any cash floor / reconcile / spend, so a refused buy changes nothing.
+	if ConsoleBuyConfig.Enabled ~= false then
+		if BaseConfig.Structures[structureId] == nil then
+			return { Ok = false, Error = "UnknownStructure" }
+		end
+		local atConsole, why, dist = BaseService.IsAtConsole(player, structureId, opts and opts.AtPart)
+		if not atConsole then
+			print(string.format(
+				"[BaseService] BUY refused %s %s NotAtConsole reason=%s d=%s src=%s",
+				player.Name,
+				structureId,
+				why,
+				if dist then string.format("%.1f", dist) else "-",
+				tostring(opts and opts.Source)
+			))
+			return { Ok = false, Error = "NotAtConsole" }
+		end
 	end
 
 	-- v63/v64: shaunie6 playtest floor on every buy attempt
@@ -1419,7 +1479,7 @@ function BaseService.Init(deps: { [string]: any })
 				return
 			end
 			print(string.format("[BaseService] Remote BUY attempt %s → %s cash=%s", player.Name, tostring(structureId), tostring(profile.Cash)))
-			result = BaseService.PurchaseUpgrade(player, structureId :: string)
+			result = BaseService.PurchaseUpgrade(player, structureId :: string, { Source = "Remote" })
 			print(string.format(
 				"[BaseService] Remote BUY result %s → Ok=%s Err=%s cash=%s dt=%.3f",
 				player.Name,
@@ -1482,6 +1542,8 @@ function BaseService.Init(deps: { [string]: any })
 				then "Unknown structure"
 				elseif err == "NoPlot"
 				then NO_PLOT_BUY_MESSAGE
+				elseif err == "NotAtConsole"
+				then string.format(ConsoleBuyConfig.Text.NotAtConsole, structureDisplayName(structureId))
 				elseif err == "NoProfile"
 				then "Profile still loading — try BUY again"
 				elseif err == "NoDataService"

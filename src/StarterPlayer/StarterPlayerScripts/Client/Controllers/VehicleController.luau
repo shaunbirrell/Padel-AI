@@ -27,6 +27,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TextService = game:GetService("TextService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -519,17 +520,31 @@ local function onRowTap(id: string)
 	end
 end
 
+-- Copy by device (mobile merge gate #7, CLAUDE.md §1): key names only while HudLayout.PrefersKeys() (PreferredInput
+-- keyboard / gamepad); touch players read what their own controls do (stick, ▲ — VehicleDriveClient's touch hints).
 local function rowTip(def: VehicleDef): string
 	local cat = def.Category or "Ground"
+	local keys = HudLayout.PrefersKeys()
 	if cat == "Air" then
 		if string.sub(def.KitFamily or "", 1, 4) == "Heli" then
-			return "Deploys on your Helipad · SPACE/▲ climb"
+			return if keys then "Deploys on your Helipad · SPACE/▲ climb" else "Deploys on your Helipad · ▲ climbs"
 		end
-		return "Deploys on your runway · hold W"
+		return if keys then "Deploys on your runway · hold W" else "Deploys on your runway · stick up to go"
 	elseif cat == "Naval" then
-		return "Deploys at your dock / the coast · WASD"
+		return if keys then "Deploys at your dock / the coast · WASD" else "Deploys at your dock / the coast"
 	end
-	return "Sit · WASD drive"
+	return if keys then "Sit · WASD drive" else "Sit · drive with the stick"
+end
+
+-- garage chips carry whole words ("GROUND", "COMMON" — never "GRO" / "COMM"): width follows the text
+local function chipWidthFor(text: string, size: number, minW: number): number
+	local ok, v = pcall(function(): Vector2
+		return TextService:GetTextSize(text, size, Enum.Font.GothamBold, Vector2.new(1000, 100))
+	end)
+	-- never trust a short measurement (font fallbacks draw wider): at least ~0.62 em per character, plus padding
+	local est = (utf8.len(text) or #text) * size * 0.62
+	local w = if ok and typeof(v) == "Vector2" and v.X > 0 then math.max(v.X, est) else est
+	return math.max(minW, math.ceil(w) + 18)
 end
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -654,8 +669,9 @@ local function rebuild()
 				else Constants.Colors.CategoryGround
 			local chipY = chipTop
 			local function makeChip(label: string, color: Color3, x: number): number
+				local w = chipWidthFor(label, chipTextSize, chipW)
 				local chip = Instance.new("Frame")
-				chip.Size = UDim2.fromOffset(chipW, chipHt)
+				chip.Size = UDim2.fromOffset(w, chipHt)
 				chip.Position = UDim2.fromOffset(x, chipY)
 				chip.BackgroundColor3 = color
 				chip.BorderSizePixel = 0
@@ -669,14 +685,10 @@ local function rebuild()
 				lab.TextColor3 = Color3.fromRGB(12, 14, 16)
 				lab.Text = label
 				lab.Parent = chip
-				return x + chipW + 4
+				return x + w + 4
 			end
-			local nextX = makeChip(string.upper(string.sub(cat, 1, 3)), catCol, 14)
-			nextX = makeChip(
-				string.upper(string.sub(def.Rarity or "Common", 1, 4)),
-				rarityColors[def.Rarity] or Constants.Colors.Muted,
-				nextX
-			)
+			local nextX = makeChip(string.upper(cat), catCol, 14)
+			nextX = makeChip(string.upper(def.Rarity or "Common"), rarityColors[def.Rarity] or Constants.Colors.Muted, nextX)
 			-- v32: ArmedJeep lists with explicit DisplayName + ARMED chip (same WheeledLight drive as MilitaryJeep)
 			if id == "ArmedJeep" then
 				title.Text = def.DisplayName or "Armed Jeep"
@@ -1080,10 +1092,20 @@ local function buildGui()
 	hint.TextXAlignment = Enum.TextXAlignment.Left
 	hint.TextColor3 = Constants.Colors.Muted
 	hint.TextTruncate = Enum.TextTruncate.AtEnd
-	hint.Text = if isTouch
-		then "BUY → SPAWN · air + sea deploy at your base · ▲▼ fly · Jump exits"
-		else "G · SPAWN deploys at your base · Heli SPACE/CTRL · Plane hold W · F exits aircraft"
+	-- copy by device: key names only for keyboard / gamepad players (HudLayout.PrefersKeys, not TouchEnabled)
+	local function hintText(keys: boolean): string
+		return if keys
+			then "G · SPAWN deploys at your base · Heli SPACE/CTRL · Plane hold W · F exits aircraft"
+			else "BUY → SPAWN · air + sea deploy at your base · ▲▼ fly · Jump exits"
+	end
+	hint.Text = hintText(HudLayout.PrefersKeys())
 	hint.Parent = panel
+	HudLayout.InputModeChanged:Connect(function(keys: boolean)
+		hint.Text = hintText(keys)
+		if isOpen then
+			rebuild() -- the row tips name keys only for keyboard / gamepad players
+		end
+	end)
 
 	-- v70: the desktop GARAGE toggle (bottom-left, over the thumbstick / cash pill) is gone — the Garage opens from
 	-- the rail's Garage tile, G, the vehicle-pad prompt and the Vehicle Depot terminal.

@@ -7,14 +7,29 @@
 
 	HOLSTER STATE
 	  You spawn HOLSTERED (HudConfig.Hotbar.DrawnOnSpawn). Tap a hotbar slot / press 1-4 to draw that weapon
-	  (RequestEquipWeapon when it is not the equipped one); tap / press the drawn slot again to holster.
+	  (RequestEquipWeapon when it is not the equipped one). Holstering:
+	    mouse / keyboard   click / press the drawn slot again (Hotbar.TapSelectedHolsters)
+	    touch              LONG-PRESS the drawn slot (HOLSTER_HOLD_SECONDS, 0.5 s). A quick re-tap of the drawn slot
+	                       keeps it drawn (TOUCH_TAP_HOLSTERS = false), so a panicked re-tap never hides FIRE
+	                       (mobile plan merge gate #5 / T16)
 	  Taking damage (CombatHitFeedback "Damaged", or the humanoid's health dropping) auto-draws the last weapon
 	  (Hotbar.AutoDrawOnDamage). Published HudLayout flags: Drawn, Reloading, Hurt, RecentCombat.
+
+	HOLSTERED FIRE (touch only; merge gate #5 / G14)
+	  While holstered, a 4 Hz scan (ARMED_SCAN_HZ, never faster) looks for a hostile the player can SEE: another
+	  player (PvP on, no spawn ForceField) or a combat NPC (tag WE_NPC with an NPCId, not a squad unit), alive,
+	  within the equipped weapon's Range, on screen, and not behind a wall (≤ ARMED_MAX_LOS_RAYS camera rays per
+	  scan). Then FIRE shows DIMMED in its usual place; pressing it draws AND fires in one touch. It stays up for
+	  ARMED_GRACE_SECONDS after the last sighting so it does not blink when the target ducks behind cover. The
+	  scan only reads positions (the server still decides every hit); tagged NPCs are tracked by CollectionService
+	  signals, never a tree scan. Nothing scans while drawn, seated, in a panel or dead.
 
 	WHAT SHOWS WHEN (HudLayout.BindVisibility with the HudConfig rules)
 	  Hotbar (bottom-centre)          always — hidden while Driving / Dead / Modal / seated
 	  Health bar (above the hotbar)   Hurt (HP < max, fades 3 s after full) or RecentCombat (6 s)
-	  Ammo readout, touch FIRE / R    Drawn — hidden while Driving / Modal / Dead / seated
+	  Ammo readout, touch R           Drawn — hidden while Driving / Modal / Dead / seated
+	  Touch FIRE                      Drawn, or DIMMED while holstered with a visible hostile in range (above) —
+	                                  hidden while Driving / Modal / Dead / seated
 	  WE_Reticle                      Drawn and not Reloading. Its own ScreenGui (IgnoreGuiInset, no safe-area
 	                                  insets), so it sits on the TRUE viewport centre = the aimRay point.
 	  DamageEdge (in WE_Reticle)      red screen-edge flash when you are hit (no full-screen strobe); a softer
@@ -29,10 +44,13 @@
 
 	INPUT (HudConfig.Keys) — ignored while Driving / Modal / Dead / seated / the Roblox menu is open
 	  LMB, touch FIRE, gamepad R2   fire ONLY while drawn (Keys.FireNeedsDrawn: a click on a ClickDetector —
-	                                the tutorial dropper — never shoots while holstered). Hold = 20 Hz; the
-	                                server clamps to the (research-boosted) FireRate, so the client never does.
+	                                the tutorial dropper — never shoots while holstered). The one exception is the
+	                                DIMMED touch FIRE button itself: pressing it draws first, then fires.
+	                                Hold = 20 Hz; the server clamps to the (research-boosted) FireRate, so the
+	                                client never does.
 	  1-4                           draw / holster that hotbar slot — squad orders instead while the Army popover
 	                                is open (flag OrdersOpen; OrdersController handles those keys)
+	  touch hotbar slot             tap = draw / switch; LONG-PRESS the drawn slot = holster
 	  Q, gamepad L1 / R1            previous / next owned weapon (draws it)
 	  mouse wheel                   cycles weapons while drawn (Roblox camera zoom while holstered)
 	  R, gamepad Y, touch R         reload
@@ -47,6 +65,7 @@ local ContextActionService = game:GetService("ContextActionService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -56,6 +75,7 @@ local Types = require(Shared.Types)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
 local ResearchConfig = require(Shared.Configs.ResearchConfig)
+local GameConfig = require(Shared.Configs.GameConfig)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 
@@ -81,14 +101,32 @@ local HF_ANY: any = HF
 local EDGE_V: number = tonumber(HF_ANY.DamageEdgeWidth) or 40 -- v, thickness of each red screen-edge strip
 local EDGE_LOW_HP_TRANSPARENCY: number = tonumber(HF_ANY.LowHpEdgeTransparency) or 0.74 -- steady <= 25 % HP edge
 
+-- Touch holster + holstered FIRE (mobile plan merge gate #5). Optional HudConfig fields, read with defaults so
+-- HudConfig.Hotbar / HudConfig.TouchCombat.HolsteredFire can take them over later.
+local HB_ANY: any = HudConfig.Hotbar
+local TOUCH_TAP_HOLSTERS: boolean = HB_ANY.TouchTapHolsters == true -- false: a touch re-tap keeps the weapon drawn
+local HOLSTER_HOLD_SECONDS: number = tonumber(HB_ANY.HolsterHoldSeconds) or 0.5 -- touch long-press on the drawn slot
+local HOLD_SLOP_PX = 24 -- real px: a finger that slides further than this during the hold is a drag, not a long-press
+local ARMED_CFG: any = (HudConfig.TouchCombat :: any).HolsteredFire or {}
+local ARMED_FIRE_ENABLED: boolean = ARMED_CFG.Enabled ~= false
+local ARMED_SCAN_HZ: number = math.clamp(tonumber(ARMED_CFG.ScanHz) or 4, 1, 4) -- hard cap 4 Hz
+local ARMED_GRACE_SECONDS: number = tonumber(ARMED_CFG.GraceSeconds) or 1.5 -- keep the dimmed FIRE after a sighting
+local ARMED_MAX_LOS_RAYS: number = math.clamp(tonumber(ARMED_CFG.MaxLosRays) or 4, 1, 8) -- nearest first, per scan
+local ARMED_MAX_CANDIDATES = 16 -- in-range, on-screen targets kept per scan (the nearest are ray-checked)
+local FIRE_DIM_BG: Color3 = if typeof(ARMED_CFG.Color) == "Color3" then ARMED_CFG.Color else Color3.fromRGB(112, 40, 42)
+local FIRE_DIM_INK: Color3 = if typeof(ARMED_CFG.IconColor) == "Color3" then ARMED_CFG.IconColor else Color3.fromRGB(226, 196, 196)
+local FIRE_DIM_TRANSPARENCY: number = tonumber(ARMED_CFG.Transparency) or 0.2
+local FIRE_BG_TRANSPARENCY = 0.05
+
 -- Roblox's engine touch jump button (TouchJump): 70 px at (1, -95, 1, -90) of the safe area when
 -- min(viewport) <= 500, otherwise 120 px at (1, -170, 1, -210). HudConfig.TouchCombat / Ammo.BottomTouch are the
--- small-button (phone) layout — every phone lands on S = 0.70, where 86 / 143 v = 60 / 100 px: FIRE centred
--- over the jump button, 10 px above it. Large-button tablets derive the same placement from the big button.
+-- small-button (phone) layout — every phone lands on S = 0.70, where 86 / 152 v = 60 / 106 px: FIRE centred
+-- over the jump button, 16 px above it (CLAUDE.md: nothing within 16 px of the jump button). Large-button tablets
+-- derive the same placement from the big button.
 local SMALL_JUMP_MAX_AXIS = 500
 local LARGE_JUMP_CENTRE_FROM_RIGHT = 110 -- px: 170 − 120 / 2
 local LARGE_JUMP_TOP_FROM_BOTTOM = 210 -- px
-local FIRE_ABOVE_JUMP = 10 -- px
+local FIRE_ABOVE_JUMP = 16 -- px (CLAUDE.md reserved zones: nothing within 16 px of the jump button)
 
 local EQUIP_PENDING_SECONDS = 0.8
 local WHEEL_MIN_GAP = 0.12
@@ -110,6 +148,11 @@ type Slot = {
 	Stroke: UIStroke,
 	Scale: UIScale,
 	Name: TextLabel,
+	-- touch press tracking (long-press holster)
+	PressInput: InputObject?, -- the finger currently down on this slot
+	PressToken: number,
+	LastTouch: boolean, -- the last press on this slot was a finger (tap semantics), not the mouse
+	LongFired: boolean, -- the long-press holstered: swallow the Activated that the release fires
 }
 
 -- gui objects
@@ -122,6 +165,8 @@ local ammoCount: TextLabel? = nil
 local ammoMag: TextLabel? = nil
 local ammoBarFill: Frame? = nil
 local fireBtn: TextButton? = nil
+local fireIcon: Frame? = nil
+local fireDimmed: boolean? = nil -- current FIRE style (nil = not styled yet)
 local reloadBtn: TextButton? = nil
 local reticle: Frame? = nil
 local hitMarker: Frame? = nil
@@ -166,6 +211,21 @@ local wheelBound = false
 local humanoid: Humanoid? = nil
 local lastHumHealth: number? = nil
 local humConns: { RBXScriptConnection } = {}
+local pressToken = 0
+-- holstered FIRE (touch): a visible hostile in range while holstered
+local fireArmed = false
+local armedSeenAt = -math.huge
+local lastScanAt = -math.huge
+local lastScanResult = false
+local scanCount = 0 -- scans run (tests read it through CombatController.ArmedScanCount)
+local npcModels: { [Instance]: boolean } = {} -- tagged WE_NPC models (CollectionService signals; no tree scans)
+local losParams = RaycastParams.new() -- line-of-sight rays of the holstered-FIRE scan
+losParams.FilterType = Enum.RaycastFilterType.Exclude
+losParams.IgnoreWater = true
+losParams.RespectCanCollide = true -- decor / zones / prompt hosts do not hide a target
+local candDist: { number } = {}
+local candModel: { Model } = {}
+local candPos: { Vector3 } = {}
 
 -- forward declarations
 local requestFire: () -> ()
@@ -174,6 +234,8 @@ local setDrawn: (on: boolean) -> ()
 local refreshHotbar: () -> ()
 local refreshAmmo: () -> ()
 local updateWheelBinding: () -> ()
+local refreshFire: () -> ()
+local armedTick: () -> ()
 
 local function clock(): number
 	return os.clock()
@@ -237,6 +299,7 @@ end
 
 local function publishDrawn()
 	HudLayout.SetFlag("Drawn", drawn and alive and not HudLayout.GetFlag("Dead"))
+	refreshFire() -- FIRE's rule reads Drawn through its extra() (it also shows dimmed while holstered)
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -470,14 +533,16 @@ local function equip(id: string)
 	end)
 end
 
-local function selectSlot(i: number)
+-- retapHolsters: keys 1-4 and mouse clicks use Hotbar.TapSelectedHolsters; a finger tap uses TOUCH_TAP_HOLSTERS
+-- (off: on touch only a long-press on the drawn slot holsters, see makeSlot)
+local function selectSlot(i: number, retapHolsters: boolean)
 	local id = slotIds[i]
 	if not id then
 		return
 	end
 	local active = activeWeaponId()
 	if drawn and id == active then
-		if HB.TapSelectedHolsters then
+		if retapHolsters then
 			setDrawn(false)
 		end
 		return
@@ -513,16 +578,25 @@ local function cycleWeapon(delta: number)
 end
 
 setDrawn = function(on: boolean)
-	if drawn ~= on then
+	local changed = drawn ~= on
+	if changed then
 		drawn = on
 		if not on then
 			stopFiring()
 		end
 	end
+	if on then
+		-- drawn: the full FIRE takes over; a later holster starts a fresh sighting
+		fireArmed = false
+		armedSeenAt = -math.huge
+	end
 	publishDrawn()
 	refreshHotbar()
 	refreshAmmo()
 	updateWheelBinding()
+	if changed and not on then
+		armedTick() -- holstered next to a visible hostile: FIRE goes straight to dimmed (no blink)
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -616,14 +690,85 @@ local function makeSlot(parent: Frame, i: number): Slot
 	tc.Parent = name
 	UIUtil.TextOutline(name, 1)
 
-	btn.Activated:Connect(function()
+	local sl: Slot = {
+		Cell = cell,
+		Button = btn,
+		Stroke = st,
+		Scale = sc,
+		Name = name,
+		PressInput = nil,
+		PressToken = 0,
+		LastTouch = false,
+		LongFired = false,
+	}
+
+	-- A finger on the slot: remember it; still down (and still on the slot) after HOLSTER_HOLD_SECONDS while this
+	-- slot is the drawn weapon → holster. The release that follows fires Activated, which is swallowed.
+	btn.InputBegan:Connect(function(io: InputObject)
+		local ut = io.UserInputType
+		if ut == Enum.UserInputType.MouseButton1 then
+			sl.LastTouch = false
+			sl.LongFired = false
+			return
+		end
+		if ut ~= Enum.UserInputType.Touch then
+			return
+		end
+		sl.LastTouch = true
+		sl.LongFired = false
+		pressToken += 1
+		local token = pressToken
+		sl.PressToken = token
+		sl.PressInput = io
+		local startPos = io.Position
+		task.delay(HOLSTER_HOLD_SECONDS, function()
+			if sl.PressToken ~= token or sl.PressInput ~= io or cell.Parent == nil then
+				return -- released, another press, or the hotbar was rebuilt
+			end
+			local state = io.UserInputState
+			if state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+				return
+			end
+			if (io.Position - startPos).Magnitude > HOLD_SLOP_PX then
+				return -- the finger slid away: a drag, not a hold
+			end
+			if not drawn or combatBlocked() then
+				return
+			end
+			local id = slotIds[i]
+			if id == nil or id ~= activeWeaponId() then
+				return -- long-press on another weapon's slot: the release draws / switches as a tap
+			end
+			sl.LongFired = true
+			setDrawn(false)
+		end)
+	end)
+	btn.InputEnded:Connect(function(io: InputObject)
+		if sl.PressInput == io then
+			sl.PressInput = nil
+		end
+	end)
+	btn.Activated:Connect(function(io: InputObject?)
+		if sl.LongFired then
+			sl.LongFired = false -- this release ended the long-press that just holstered
+			return
+		end
+		local viaTouch = sl.LastTouch
+		if io ~= nil then
+			local ut = io.UserInputType
+			if ut == Enum.UserInputType.Touch then
+				viaTouch = true
+			elseif ut == Enum.UserInputType.MouseButton1 then
+				viaTouch = false
+			end
+		end
 		if not combatBlocked() then
-			selectSlot(i)
+			selectSlot(i, if viaTouch then TOUCH_TAP_HOLSTERS and HB.TapSelectedHolsters else HB.TapSelectedHolsters)
 		end
 	end)
 	HudLayout.AssertTouchTarget(btn, "Hotbar slot " .. i)
 	cell.Parent = parent
-	return { Cell = cell, Button = btn, Stroke = st, Scale = sc, Name = name }
+	return sl
 end
 
 refreshHotbar = function()
@@ -888,6 +1033,236 @@ requestReload = function()
 end
 
 ---------------------------------------------------------------------------------------------------------------
+-- holstered FIRE (touch): dimmed FIRE while a visible hostile is within the weapon's range (≤ 4 Hz scan)
+---------------------------------------------------------------------------------------------------------------
+
+-- FIRE's look: full red while drawn, dimmed while holstered-and-armed (colour, not transparency, so the
+-- crosshair icon's "Fill" parts keep matching the button behind them)
+local function styleFire(dim: boolean)
+	local f = fireBtn
+	if not f or fireDimmed == dim then
+		return
+	end
+	fireDimmed = dim
+	local bg = if dim then FIRE_DIM_BG else TC.FireColor
+	f.BackgroundColor3 = bg
+	f.BackgroundTransparency = if dim then FIRE_DIM_TRANSPARENCY else FIRE_BG_TRANSPARENCY
+	local icon = fireIcon
+	if icon then
+		HudIcons.SetColor(icon, if dim then FIRE_DIM_INK else WHITE, bg)
+	end
+	f:SetAttribute("WE_FireDimmed", dim)
+end
+
+refreshFire = function()
+	local f = fireBtn
+	if not f then
+		return
+	end
+	styleFire(fireArmed and not HudLayout.GetFlag("Drawn"))
+	HudLayout.RefreshVisibility(f)
+end
+
+local function setFireArmed(on: boolean)
+	if fireArmed == on then
+		return
+	end
+	fireArmed = on
+	refreshFire()
+end
+
+-- the cheap preconditions: touch FIRE exists, holstered, alive, a weapon equipped, nothing blocking combat
+local function armedWanted(): boolean
+	return ARMED_FIRE_ENABLED
+		and fireBtn ~= nil
+		and not drawn
+		and alive
+		and currentWeaponId ~= nil
+		and not HudLayout.GetFlag("Dead")
+		and not combatBlocked()
+end
+
+local function weaponRange(): number
+	local id = activeWeaponId() or currentWeaponId
+	local def = if id then WeaponConfig.Weapons[id] else nil
+	return if def then math.max(0, tonumber(def.Range) or 0) else 0
+end
+
+local function aliveHumanoid(model: Model): boolean
+	local h = model:FindFirstChildOfClass("Humanoid")
+	return h ~= nil and h.Health > 0
+end
+
+local function aimPart(model: Model): BasePart?
+	local r = model:FindFirstChild("HumanoidRootPart")
+	if r and r:IsA("BasePart") then
+		return r
+	end
+	return model.PrimaryPart
+end
+
+-- a combat NPC the player may shoot: tagged WE_NPC with an NPCId (CombatService / MapSetup combat NPCs), not a
+-- squad unit (same filter as SquadOrdersService.nearestHostile); decorative base soldiers carry no NPCId
+local function hostileNpc(model: Model): boolean
+	if typeof(model:GetAttribute("NPCId")) ~= "string" then
+		return false
+	end
+	if model:GetAttribute("FriendlySquad") or model:GetAttribute("OwnerUserId") then
+		return false
+	end
+	return true
+end
+
+-- per-scan inputs for considerTarget (module locals, so a scan builds no closures)
+local scanCam: Camera? = nil
+local scanFrom = Vector3.zero
+local scanRange = 0
+local candN = 0
+local losFilterFor: Model? = nil -- the character losParams currently excludes
+
+-- an alive target within range and on screen → the candidate list (nearest are ray-checked afterwards)
+local function considerTarget(model: Model)
+	local cam = scanCam
+	if not cam or candN >= ARMED_MAX_CANDIDATES or not aliveHumanoid(model) then
+		return
+	end
+	local part = aimPart(model)
+	if not part then
+		return -- streamed out / not built yet
+	end
+	local pos = part.Position
+	local d = (pos - scanFrom).Magnitude
+	if d > scanRange then
+		return
+	end
+	local sp, onScreen = cam:WorldToViewportPoint(pos)
+	if not onScreen or sp.Z <= 0 then
+		return
+	end
+	candN += 1
+	candDist[candN] = d
+	candModel[candN] = model
+	candPos[candN] = pos
+end
+
+--[[ One scan: in-range, on-screen hostiles (players + tracked NPCs), then line-of-sight rays from the camera to the
+	nearest few. Reads positions only (Players:GetPlayers() is the one allocation). Never runs more than
+	ARMED_SCAN_HZ times a second, whoever calls it (the loop or a holster): a call inside the window returns the
+	last result. ]]
+local function scanHostiles(): boolean
+	local t = clock()
+	if t - lastScanAt < 1 / ARMED_SCAN_HZ - 1e-3 then
+		return lastScanResult
+	end
+	lastScanAt = t
+	scanCount += 1
+	lastScanResult = false
+	local cam = Workspace.CurrentCamera
+	local character = player.Character
+	local myRoot = if character then aimPart(character) else nil
+	local range = weaponRange()
+	if not cam or not character or not myRoot or range <= 0 then
+		return false
+	end
+	scanCam = cam
+	scanFrom = myRoot.Position
+	scanRange = range
+	candN = 0
+	if GameConfig.PvPEnabled then
+		for _, other in ipairs(Players:GetPlayers()) do
+			local ch = other.Character
+			if other ~= player and ch and ch.Parent and not ch:FindFirstChildOfClass("ForceField") then
+				considerTarget(ch)
+			end
+		end
+	end
+	for inst in pairs(npcModels) do
+		if inst.Parent == nil then
+			npcModels[inst] = nil
+		elseif inst:IsA("Model") and hostileNpc(inst) then
+			considerTarget(inst)
+		end
+	end
+	scanCam = nil
+	local n = candN
+	if n == 0 then
+		return false
+	end
+	-- line of sight, nearest first
+	local params = losParams
+	if losFilterFor ~= character then
+		losFilterFor = character
+		params.FilterDescendantsInstances = { character }
+	end
+	local origin = cam.CFrame.Position
+	for _ = 1, math.min(n, ARMED_MAX_LOS_RAYS) do
+		local best = 0
+		for k = 1, n do
+			if candDist[k] >= 0 and (best == 0 or candDist[k] < candDist[best]) then
+				best = k
+			end
+		end
+		if best == 0 then
+			break
+		end
+		candDist[best] = -1 -- taken
+		local dir = candPos[best] - origin
+		if dir.Magnitude < 0.05 then
+			lastScanResult = true -- the camera sits on the target: nothing can be in between
+			break
+		end
+		local hit = Workspace:Raycast(origin, dir, params)
+		if hit == nil or hit.Instance:IsDescendantOf(candModel[best]) then
+			lastScanResult = true
+			break
+		end
+	end
+	table.clear(candModel) -- drop model references until the next scan
+	return lastScanResult
+end
+
+armedTick = function()
+	if not armedWanted() then
+		armedSeenAt = -math.huge
+		setFireArmed(false)
+		return
+	end
+	if scanHostiles() then
+		armedSeenAt = clock()
+		setFireArmed(true)
+	elseif clock() - armedSeenAt > ARMED_GRACE_SECONDS then
+		setFireArmed(false)
+	end
+end
+
+local function trackNpc(inst: Instance)
+	if inst:IsA("Model") then
+		npcModels[inst] = true
+	end
+end
+
+local function startArmedScan()
+	if not ARMED_FIRE_ENABLED or not fireBtn then
+		return -- desktop / gamepad: no touch FIRE, nothing to arm
+	end
+	local tag = Constants.Tags.NPC
+	for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+		trackNpc(inst)
+	end
+	CollectionService:GetInstanceAddedSignal(tag):Connect(trackNpc)
+	CollectionService:GetInstanceRemovedSignal(tag):Connect(function(inst: Instance)
+		npcModels[inst] = nil
+	end)
+	task.spawn(function()
+		local period = 1 / ARMED_SCAN_HZ
+		while true do
+			task.wait(period)
+			armedTick()
+		end
+	end)
+end
+
+---------------------------------------------------------------------------------------------------------------
 -- mouse wheel (bound only while drawn, so a holstered wheel still zooms the camera)
 ---------------------------------------------------------------------------------------------------------------
 
@@ -1080,7 +1455,7 @@ local function buildTouchButtons(parent: Instance)
 	fire.AnchorPoint = TC.Fire.Anchor
 	fire.Size = UDim2.fromOffset(TC.Fire.Size, TC.Fire.Size)
 	fire.BackgroundColor3 = TC.FireColor
-	fire.BackgroundTransparency = 0.05
+	fire.BackgroundTransparency = FIRE_BG_TRANSPARENCY
 	fire.BorderSizePixel = 0
 	fire.Text = ""
 	fire.AutoButtonColor = true
@@ -1089,7 +1464,7 @@ local function buildTouchButtons(parent: Instance)
 	fire.Parent = parent
 	round(fire)
 	stroke(fire, Color3.fromRGB(0, 0, 0), 3, 0.55)
-	HudIcons.Make("Crosshair", fire, {
+	fireIcon = HudIcons.Make("Crosshair", fire, {
 		Name = "Icon",
 		Size = UDim2.fromScale(0.6, 0.6),
 		Position = UDim2.fromScale(0.5, 0.5),
@@ -1098,10 +1473,17 @@ local function buildTouchButtons(parent: Instance)
 		Color = WHITE,
 		Fill = TC.FireColor,
 	})
-	-- hold-to-fire: one entry per finger; released on the button's InputEnded or anywhere (TouchEnded)
+	-- hold-to-fire: one entry per finger; released on the button's InputEnded or anywhere (TouchEnded).
+	-- Holstered, FIRE only shows (dimmed) while a hostile is in sight: that press draws, then fires.
 	fire.InputBegan:Connect(function(io: InputObject)
 		local ut = io.UserInputType
 		if ut == Enum.UserInputType.Touch or ut == Enum.UserInputType.MouseButton1 then
+			if not drawn then
+				if not fireArmed or combatBlocked() then
+					return
+				end
+				setDrawn(true)
+			end
 			if canFireNow() then
 				fireTouches[io] = true
 				requestFire()
@@ -1329,7 +1711,11 @@ local function buildHud(pg: Instance)
 	bound = { bar, hp, ammoPanel :: Frame }
 	local f, r = fireBtn, reloadBtn
 	if f and r then
-		HudLayout.BindVisibility(f, TC, notSeated)
+		-- FIRE: TC's HideWhen, shown while Drawn OR (holstered and armed — dimmed); refreshFire re-evaluates it
+		-- when Drawn / the armed state changes
+		HudLayout.BindVisibility(f, { HideWhen = TC.HideWhen }, function(): boolean
+			return not seatedNow() and (HudLayout.GetFlag("Drawn") or fireArmed)
+		end)
 		HudLayout.BindVisibility(r, TC, notSeated)
 		table.insert(bound, f)
 		table.insert(bound, r)
@@ -1410,6 +1796,16 @@ end
 
 function CombatController.Draw()
 	setDrawn(true)
+end
+
+-- touch: FIRE is showing DIMMED (holstered, a visible hostile within the weapon's range)
+function CombatController.IsFireArmed(): boolean
+	return fireArmed and not drawn
+end
+
+-- how many holstered-FIRE scans have run (tests check the ≤ 4 Hz cap)
+function CombatController.ArmedScanCount(): number
+	return scanCount
 end
 
 function CombatController.Init()
@@ -1504,7 +1900,7 @@ function CombatController.Init()
 			if HudLayout.GetFlag("OrdersOpen") then
 				return -- Army popover open: 1-4 are squad orders (OrdersController)
 			end
-			selectSlot(slot)
+			selectSlot(slot, HB.TapSelectedHolsters)
 		elseif kc == KEYS.Reload or kc == GP.Reload then
 			if not drawn then
 				setDrawn(true)
@@ -1527,6 +1923,12 @@ function CombatController.Init()
 	end)
 	UserInputService.TouchEnded:Connect(function(input: InputObject)
 		fireTouches[input] = nil
+		-- a finger that slid off a hotbar slot before lifting ends that slot's long-press too
+		for _, sl in ipairs(slots) do
+			if sl.PressInput == input then
+				sl.PressInput = nil
+			end
+		end
 	end)
 
 	-- hold-to-fire loop (HudConfig.TouchCombat.HoldToFireHz); the server clamps every shot to the FireRate
@@ -1543,6 +1945,9 @@ function CombatController.Init()
 			end
 		end
 	end)
+
+	-- touch: dimmed FIRE while holstered with a visible hostile in range (≤ 4 Hz; nothing on desktop)
+	startArmedScan()
 end
 
 return CombatController
