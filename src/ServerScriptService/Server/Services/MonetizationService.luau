@@ -28,6 +28,8 @@ local RateLimitService: any = nil
 local NotificationService: any = nil
 local RemoteSetup: any = nil
 local BattlePassService: any = nil
+local BaseService: any = nil
+local SoldierService: any = nil
 
 -- Session receipt cache; also mirrored to profile.ProcessedReceipts
 local processed: { [string]: boolean } = {}
@@ -35,6 +37,23 @@ local processed: { [string]: boolean } = {}
 local gamePassCache: { [number]: { [string]: boolean } } = {}
 -- v38: session soft-offer spam gate (one toast max per SoftOfferSessionCooldownSeconds)
 local lastSoftOfferAt: { [number]: number } = {}
+-- v70: follow-up ownership checks after UserOwnsGamePassAsync failed (userId -> retries used)
+local passRefreshRetries: { [number]: number } = {}
+local PASS_REFRESH_MAX_RETRIES = 4
+local PASS_REFRESH_RETRY_SECONDS = 15
+-- v70: a Battle Pass Premium receipt can arrive before BattlePassService.Init (it runs after MapSetup)
+local BATTLE_PASS_READY_WAIT_SECONDS = 30
+
+--[[ v70: display-only replication of one-time entitlements / owned passes (ShopController shows OWNED when
+	WE_Ent_<key> is true). Never read back by the server; grants stay ProcessReceipt / ownership checks. ]]
+local function setEntitlementAttr(player: Player, key: any)
+	if typeof(key) ~= "string" or #key == 0 or #key > 90 or string.match(key, "^[%w_]+$") == nil then
+		return
+	end
+	pcall(function()
+		player:SetAttribute("WE_Ent_" .. key, true)
+	end)
+end
 
 function MonetizationService.ClaimSoftOfferSlot(player: Player): boolean
 	if not player then
@@ -81,8 +100,9 @@ local function hasProcessed(profile: any, receiptId: string): boolean
 	return false
 end
 
+--[[ v70: marks the profile only. The session cache `processed` is set once the grant is SAVED (ProcessReceipt):
+	after a failed save plus a reload, that cache used to acknowledge the re-delivered receipt with no grant. ]]
 local function markProcessed(profile: any, receiptId: string)
-	processed[receiptId] = true
 	if typeof(profile) == "table" then
 		if typeof(profile.ProcessedReceipts) ~= "table" then
 			profile.ProcessedReceipts = {}
@@ -99,9 +119,10 @@ local function mockOwns(passKey: string): boolean
 	return typeof(mock) == "table" and mock[passKey] == true
 end
 
-function MonetizationService.RefreshGamePassCache(player: Player)
+function MonetizationService.RefreshGamePassCache(player: Player): { [string]: boolean }
 	local userId = player.UserId
-	local cache: { [string]: boolean } = {}
+	local checked: { [string]: boolean } = {}
+	local anyFailed = false
 	for passKey, def in pairs(MonetizationConfig.GamePasses) do
 		local owned = false
 		if typeof(def.Id) == "number" and def.Id ~= 0 then
@@ -112,13 +133,44 @@ function MonetizationService.RefreshGamePassCache(player: Player)
 				owned = true
 			elseif not ok then
 				warn("[MonetizationService] UserOwnsGamePassAsync failed", passKey, result)
+				anyFailed = true
 			end
 		elseif mockOwns(passKey) then
 			owned = true
 		end
-		cache[passKey] = owned
+		checked[passKey] = owned
 	end
-	gamePassCache[userId] = cache
+	-- v70: merge into the live cache instead of replacing it. Keys mirrored from Entitlements or a purchase
+	-- this session stay true, and a failed / lagging check never turns an owned pass off for the session.
+	local cache = gamePassCache[userId]
+	if not cache then
+		cache = {}
+		if player.Parent then -- left during the checks: PlayerRemoving already dropped the cache
+			gamePassCache[userId] = cache
+		end
+	end
+	for passKey, owned in pairs(checked) do
+		if owned then
+			cache[passKey] = true
+			setEntitlementAttr(player, passKey)
+		elseif cache[passKey] == nil then
+			cache[passKey] = false
+		end
+	end
+	-- v70: a failed check is not "not owned" — ask again a few times instead of caching false all session
+	if anyFailed and player.Parent then
+		local used = passRefreshRetries[userId] or 0
+		if used < PASS_REFRESH_MAX_RETRIES then
+			passRefreshRetries[userId] = used + 1
+			task.delay(PASS_REFRESH_RETRY_SECONDS * (used + 1), function()
+				if player.Parent then
+					MonetizationService.RefreshGamePassCache(player)
+				end
+			end)
+		end
+	elseif not anyFailed then
+		passRefreshRetries[userId] = nil
+	end
 	return cache
 end
 
@@ -176,6 +228,7 @@ function MonetizationService.GrantEntitlement(player: Player, key: string)
 	end
 	local ents = ensureEntitlements(profile)
 	ents[key] = true
+	setEntitlementAttr(player, key) -- v70: Shop shows OWNED (display only)
 	-- Mirror common keys into GamePass session cache so multipliers apply immediately
 	if key == "VIP" or key == "DoubleCash" or key == "DoubleXP" or key == "AutoCollect" then
 		local cache = gamePassCache[player.UserId]
@@ -187,10 +240,42 @@ function MonetizationService.GrantEntitlement(player: Player, key: string)
 	end
 	-- InstantBarracks: bump Barracks to at least 1
 	if key == "InstantBarracks" and typeof(profile.BaseUpgrades) == "table" then
-		local cur = profile.BaseUpgrades.Barracks or 0
+		local cur = tonumber(profile.BaseUpgrades.Barracks) or 0
 		if cur < 1 then
 			profile.BaseUpgrades.Barracks = 1
+			-- v70: same follow-ups as a cash Barracks purchase, or the player sees nothing until rejoin
+			task.defer(function()
+				if not player.Parent then
+					return
+				end
+				local base = BaseService
+				if base then
+					if base.PushState then
+						pcall(base.PushState, player)
+					end
+					if base.UpdateVisuals then
+						pcall(base.UpdateVisuals, player, "Barracks", 1)
+					end
+					if base.GetUpgradeChangedEvent then
+						pcall(function()
+							local live = DataService.GetProfile(player)
+							base.GetUpgradeChangedEvent():Fire(player.UserId, live and live.BasePlotId, "Barracks", 1)
+						end)
+					end
+				end
+				if SoldierService and SoldierService.Push then
+					pcall(SoldierService.Push, player) -- army cap label
+				end
+			end)
 		end
+	end
+	-- ExtraSoldierSlot: +1 army cap — refresh the Army panel now
+	if key == "ExtraSoldierSlot" then
+		task.defer(function()
+			if player.Parent and SoldierService and SoldierService.Push then
+				pcall(SoldierService.Push, player)
+			end
+		end)
 	end
 	-- GoldenPumpjack: re-dress plot oil pumps when product Id is live + granted
 	if key == "GoldenPumpjack" and typeof(profile.BasePlotId) == "number" then
@@ -249,6 +334,58 @@ function MonetizationService.GetXPMultiplier(player: Player): number
 	return 1
 end
 
+local PASS_CONFIRM_DELAYS = { 0, 2, 5, 10, 20 } -- re-checks after a pass purchase prompt closes (~37 s)
+local passConfirming: { [string]: boolean } = {} -- "userId:passKey" -> a confirm loop is running
+
+--[[ v70: after PromptGamePassPurchaseFinished(wasPurchased) — never trusted alone. Marks the pass owned for this
+	session only when UserOwnsGamePassAsync says so (bounded re-checks, one loop per player + pass). ]]
+local function confirmPassPurchase(player: Player, passKey: string, passId: number, passName: string)
+	local loopKey = tostring(player.UserId) .. ":" .. passKey
+	if passConfirming[loopKey] then
+		return
+	end
+	passConfirming[loopKey] = true
+	task.spawn(function()
+		local confirmed = false
+		for _, delaySec in ipairs(PASS_CONFIRM_DELAYS) do
+			if delaySec > 0 then
+				task.wait(delaySec)
+			end
+			if not player.Parent then
+				break
+			end
+			local ok, owns = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)
+			end)
+			if ok and owns == true then
+				confirmed = true
+				break
+			end
+		end
+		passConfirming[loopKey] = nil
+		if not player.Parent then
+			return
+		end
+		if not confirmed then
+			if NotificationService then
+				NotificationService.Notify(player, passName .. ": waiting for Roblox to confirm the pass — rejoin if it is not active soon", "Info")
+			end
+			return
+		end
+		local cache = gamePassCache[player.UserId]
+		if not cache then
+			cache = {}
+			gamePassCache[player.UserId] = cache
+		end
+		local wasOwned = cache[passKey] == true
+		cache[passKey] = true
+		setEntitlementAttr(player, passKey)
+		if not wasOwned and NotificationService then
+			NotificationService.Notify(player, "Owned: " .. passName .. " (benefits active)", "Success")
+		end
+	end)
+end
+
 function MonetizationService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	EconomyService = deps.EconomyService
@@ -257,6 +394,8 @@ function MonetizationService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	RemoteSetup = deps.RemoteSetup
 	BattlePassService = deps.BattlePassService
+	BaseService = deps.BaseService
+	SoldierService = deps.SoldierService
 
 	MarketplaceService.ProcessReceipt = function(receiptInfo)
 		return MonetizationService.ProcessReceipt(receiptInfo)
@@ -320,34 +459,43 @@ function MonetizationService.Init(deps: { [string]: any })
 		-- Do NOT grant benefits from this remote — ownership cache only.
 	end)
 
-	-- Refresh ownership when Roblox reports a GamePass purchase finished (client signal is untrusted for grants)
+	-- Re-check ownership when a GamePass prompt reports a purchase (the signal itself is untrusted for grants)
 	MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player: Player, passId: number, wasPurchased: boolean)
 		if typeof(player) ~= "Instance" or not player:IsA("Player") then
 			return
 		end
-		-- Always refresh cache; never grant Cash/Gold/XP from wasPurchased alone
-		MonetizationService.RefreshGamePassCache(player)
-		if wasPurchased and NotificationService then
-			local name = "Game Pass"
+		local passKey: string? = nil
+		local passName = "Game Pass"
+		if typeof(passId) == "number" and passId ~= 0 then
 			for key, def in pairs(MonetizationConfig.GamePasses) do
 				if def.Id ~= 0 and def.Id == passId then
-					name = def.DisplayName or key
+					passKey = key
+					passName = tostring(def.DisplayName or key)
 					break
 				end
 			end
-			NotificationService.Notify(player, "Owned: " .. name .. " (benefits active)", "Success")
+		end
+		-- v70: wasPurchased is only the prompt's GUI state and exploit clients have been able to fire this event
+		-- (Roblox: use receipts for purchases). A pass counts as owned only once UserOwnsGamePassAsync confirms
+		-- it; that check can lag right after an in-game purchase, so it is repeated a few times.
+		if wasPurchased == true and passKey ~= nil then
+			confirmPassPurchase(player, passKey, passId, passName)
 		end
 	end)
 
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		task.spawn(function()
 			MonetizationService.RefreshGamePassCache(player)
+			if not player.Parent then
+				return
+			end
 			-- Rehydrate session cache from persisted Entitlements
 			if typeof(profile) == "table" and typeof(profile.Entitlements) == "table" then
 				local cache = gamePassCache[player.UserId] or {}
 				for k, v in pairs(profile.Entitlements) do
 					if v == true then
 						cache[k] = true
+						setEntitlementAttr(player, k) -- v70: Shop shows OWNED (display only)
 					end
 				end
 				gamePassCache[player.UserId] = cache
@@ -414,6 +562,7 @@ function MonetizationService.Init(deps: { [string]: any })
 	Players.PlayerRemoving:Connect(function(player)
 		gamePassCache[player.UserId] = nil
 		lastSoftOfferAt[player.UserId] = nil
+		passRefreshRetries[player.UserId] = nil
 	end)
 
 	-- Re-apply SpeedBoost WalkSpeed on respawn + v36 soft offer on first walk-speed moment
@@ -447,6 +596,11 @@ function MonetizationService.Init(deps: { [string]: any })
 	Players.PlayerAdded:Connect(hookSpeed)
 end
 
+local function battlePassReady(): boolean
+	local bp = BattlePassService
+	return bp ~= nil and typeof(bp.IsReady) == "function" and bp.IsReady() == true
+end
+
 function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurchaseDecision
 	local receiptId = tostring(receiptInfo.PurchaseId)
 
@@ -455,7 +609,23 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
 
-	local profile = DataService.WaitForProfile(player, 10)
+	-- v70: Battle Pass Premium needs BattlePassService, which Bootstrap initialises after the map build. A
+	-- receipt delivered earlier waits for it; if it is still not up, Roblox re-delivers the receipt later.
+	do
+		local _, earlyProduct = findDevProduct(receiptInfo.ProductId)
+		if earlyProduct and earlyProduct.GrantsBattlePassPremium == true and not battlePassReady() then
+			local deadline = os.clock() + BATTLE_PASS_READY_WAIT_SECONDS
+			while not battlePassReady() and os.clock() < deadline and player.Parent do
+				task.wait(0.25)
+			end
+			if not battlePassReady() or not player.Parent then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+		end
+	end
+
+	-- v70: 25 s — the load can first wait up to 12 s for the previous server's session lock (SessionLock)
+	local profile = DataService.WaitForProfile(player, 25)
 	if not profile then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
@@ -466,6 +636,13 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	end
 
 	if hasProcessed(profile, receiptId) then
+		-- v70: granted into this profile earlier, but that save may have failed — the ack still waits for a save
+		if not processed[receiptId] then
+			if not DataService.SaveProfile(player, false) then
+				return Enum.ProductPurchaseDecision.NotProcessedYet
+			end
+			processed[receiptId] = true
+		end
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
@@ -478,15 +655,18 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 		return Enum.ProductPurchaseDecision.PurchaseGranted
 	end
 
+	-- Battle Pass Premium: server-only via ProcessReceipt (never client confirmation). First, so a failure
+	-- returns before any other grant is applied.
+	if product.GrantsBattlePassPremium == true then
+		if not battlePassReady() or BattlePassService.SetPremium(player, true) ~= true then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+	end
 	if product.Cash and product.Cash > 0 then
 		EconomyService.AddCash(player, product.Cash, "devproduct")
 	end
 	if product.Gold and product.Gold > 0 then
 		EconomyService.AddGold(player, product.Gold, "devproduct")
-	end
-	-- Battle Pass Premium: server-only via ProcessReceipt (never client confirmation)
-	if product.GrantsBattlePassPremium == true and BattlePassService and BattlePassService.SetPremium then
-		BattlePassService.SetPremium(player, true)
 	end
 	-- DevProduct entitlement flags (AutoCollect / DoubleCash / VIP / etc.)
 	if typeof(product.GrantEntitlement) == "string" and product.GrantEntitlement ~= "" then
@@ -500,6 +680,7 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	if not DataService.SaveProfile(player, false) then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	processed[receiptId] = true
 
 	if NotificationService then
 		NotificationService.Notify(player, "Purchase granted: " .. (product.DisplayName or productKey or "item"), "Reward")

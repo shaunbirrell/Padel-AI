@@ -239,15 +239,27 @@ function BattlePassService.ClaimAll(player: Player, track: string): (number, str
 	return claimed, nil
 end
 
-function BattlePassService.SetPremium(player: Player, premium: boolean)
+--[[ v70: true once Init has wired DataService + RemoteSetup. Monetization's ProcessReceipt can run before
+	Init (Bootstrap inits this service after the map build) and waits on this before granting Premium. ]]
+function BattlePassService.IsReady(): boolean
+	return DataService ~= nil and RemoteSetup ~= nil
+end
+
+--- Returns true when the flag was applied to a loaded profile (ProcessReceipt only acknowledges then).
+function BattlePassService.SetPremium(player: Player, premium: boolean): boolean
+	if DataService == nil then
+		return false
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
-		return
+		return false
 	end
 	ensureSeason(profile)
 	profile.BattlePass.Premium = premium == true
 	DataService.MarkDirty(player)
-	pushState(player)
+	-- The flag is applied; a failed UI push must not fail the purchase that set it
+	pcall(pushState, player)
+	return true
 end
 
 function BattlePassService.Push(player: Player)

@@ -133,23 +133,10 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 		profile = DataService.GetProfile(player) or profile
 	end
 
+	-- v70: another plot's pads (or an unowned plot's, or any plot's while you have none) do nothing — no
+	-- prompt, no teleport. Teleporting here threw raiders off the ATM approach and anyone crossing a cluster.
 	local pid = part:GetAttribute("PlotId")
-	if typeof(pid) == "number" and profile.BasePlotId ~= nil and pid ~= profile.BasePlotId then
-		local key = attemptKey(player.UserId, "wrongplot")
-		local now = os.clock()
-		if now - (lastAttempt[key] or 0) >= DEBOUNCE_SEC then
-			lastAttempt[key] = now
-			if BaseService and BaseService.TeleportToPlot then
-				BaseService.TeleportToPlot(player)
-			end
-			if NotificationService then
-				if NotificationService.NotifyThrottled then
-					NotificationService.NotifyThrottled(player, "Not your base — teleported to YOUR plot", "Warn", 2.5, 1.5, "prem_wrongplot")
-				else
-					NotificationService.Notify(player, "Not your base — teleported to YOUR plot", "Warn", 2.5)
-				end
-			end
-		end
+	if typeof(pid) == "number" and pid ~= profile.BasePlotId then
 		return
 	end
 
