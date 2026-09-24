@@ -177,6 +177,35 @@ local WaterConfig = {
 	} :: { [string]: RoadEnd },
 	-- Jersey barrier across each road end (collidable, yellow/black stripe)
 	RoadEndBarrier = { Width = 18, Height = 2.4, Depth = 1.6 },
+
+	-- Road corridor rule of Waterways.CullDressing (roadmap W0 ROAD; World v2 H2). The road centre lines are the
+	-- RoadEnds keys (RoadX<x> runs along Z at x, RoadZ<z> along X at z), over Min..Max (the whole map while Enabled is
+	-- false and the roads run full length). A decor part is on a road when its world AABB overlaps Min..Max along the
+	-- road and comes within the margin of the centre line across it.
+	RoadCull = {
+		Enabled = true,
+		-- Nothing collidable with its top above MinTop within Corridor studs of a centre line (lane 7 + shoulder 5).
+		Corridor = 12,
+		MinTop = 0.75, -- desert floor 0.5 + 0.25: flatter parts are markings and stay
+		-- Nothing at all (collidable or not) taller than LaneMaxHeight above the floor within Lane studs: the walk-through
+		-- crates, drums and sandbag tops you would drive through. Fully transparent parts and MarkingPrefixes stay.
+		Lane = 8,
+		LaneMaxHeight = 0.3,
+		MarkingPrefixes = { "RoadCrater", "RoadChevron", "AsphaltStrip", "ChevronWedge", "RoadDash", "WreckScorch" },
+		-- Whole kit: a hit takes its nearest Model or kit Folder ancestor (below the culled folder) when that spans
+		-- <= KitMaxSpan studs across (XZ) and holds no exempt part; otherwise the part alone.
+		KitMaxSpan = 64,
+		-- Part-alone hits also take the parts they carried (sandbag tops, sign faces, lamp arms, bunker doors): a sibling
+		-- whose bottom is more than SweepMinLift above the floor (so not a separate prop standing on the sand) and whose
+		-- AABB touches (SweepTouch) a culled part, repeated, within KitMaxSpan of the first hit. Nothing is left floating.
+		SweepAttached = true,
+		SweepMinLift = 0.1,
+		SweepTouch = 0.1,
+		-- Never culled by the road rule: parts under a folder with one of these names (or a plot folder "Plot<N>"), parts
+		-- with one of ExemptNames, and anything with the WE_AllowOnRoad attribute on it or an ancestor.
+		ExemptAncestors = { "RoadEnds", "Bases", "Territories" },
+		ExemptNames = { "CheckpointArm" }, -- World v2 checkpoint arms stand raised on the shoulder
+	},
 }
 
 return WaterConfig
