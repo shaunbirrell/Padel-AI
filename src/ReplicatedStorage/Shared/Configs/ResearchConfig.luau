@@ -244,7 +244,7 @@ ResearchConfig.Upgrades = {
 		Costs = { 3000, 12000, 38000, 100000, 280000 },
 		EffectText = "%s vehicle speed",
 		Note = "Applies when you deploy a vehicle",
-		Enabled = false -- v69: turned on together with the vehicles workflow (VehicleSpeed hook in VehicleService),
+		Enabled = true, -- v70: VehicleService applies VehicleSpeed at spawn + OnResearchChanged for a deployed vehicle
 	},
 	CompositeArmor = {
 		Id = "CompositeArmor",
