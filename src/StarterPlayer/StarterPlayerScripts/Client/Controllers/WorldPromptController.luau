@@ -252,11 +252,18 @@ local function ensurePadBuyGui(): TextButton
 	gloss.Parent = btn
 	UIUtil.Corner(gloss, 10)
 
+	local lastTapAt = 0
 	local function onBuyPressed()
 		local sid = activeBuyStructureId
 		if typeof(sid) ~= "string" then
 			return
 		end
+		-- v67: one purchase per tap (a stray double event bought two levels)
+		local now = os.clock()
+		if now - lastTapAt < 0.35 then
+			return
+		end
+		lastTapAt = now
 		local display, _level, cost, isMax, prereqHint = structureInfo(sid)
 		if isMax or prereqHint or cost == nil then
 			hidePadBuyButton()
@@ -269,8 +276,9 @@ local function ensurePadBuyGui(): TextButton
 		-- v61: toast only after FireServer actually ran (see tryPurchase showBuying)
 		tryPurchase(sid, { showBuying = true })
 	end
+	-- v67: Activated only — it already fires for mouse, touch and gamepad. Also wiring MouseButton1Click
+	-- ran the handler twice per click (two RequestPurchaseUpgrade = two levels bought).
 	btn.Activated:Connect(onBuyPressed)
-	btn.MouseButton1Click:Connect(onBuyPressed)
 
 	buyBtn = btn
 	return btn

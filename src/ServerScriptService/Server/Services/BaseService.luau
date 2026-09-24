@@ -609,7 +609,6 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 
 	-- v39: mild level scale (was 0.55/lv → L5 Body 3.75× buried underground)
 	local bodyScale = 1 + lv * 0.12
-	local accentScale = 1 + lv * 0.08
 
 	local function placeKitPart(child: BasePart, newSize: Vector3, yExtra: number?)
 		local bx = child:GetAttribute("WE_BaseSize")
@@ -662,12 +661,12 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child:SetAttribute("WE_BaseSize", bx)
 				end
 				local b = bx :: Vector3
-				placeKitPart(child, Vector3.new(b.X * accentScale, b.Y, b.Z * accentScale), nil)
-				if palette then
-					child.Color = palette.Accent
-				end
-				child.Transparency = if lv == 0 then 0.85 else 0.02
-				child.Material = Enum.Material.Neon
+				-- v67: concrete foundation under the building. It was a Neon plate in the accent colour scaled
+				-- to 1.4x the footprint at L5, i.e. the glowing purple/green/blue floors around every building.
+				placeKitPart(child, b, nil)
+				child.Color = StructureVisualConfig.FoundationColor or Color3.fromRGB(146, 142, 130)
+				child.Transparency = if lv == 0 then 0.85 else 0
+				child.Material = Enum.Material.Concrete
 			elseif role == "Roof" or role == "Antenna" then
 				local bx = child:GetAttribute("WE_BaseSize")
 				if typeof(bx) ~= "Vector3" then
@@ -1124,8 +1123,18 @@ function BaseService.Init(deps: { [string]: any })
 		firePurchaseResult(player, structureId, result)
 	end
 
+	-- v67: an identical request inside 0.3s is a duplicate event (one click used to send two and buy two
+	-- levels); the first request's PurchaseResult still answers the client.
+	local lastRemoteBuyAt: { [string]: number } = {}
 	local function handlePurchaseRemote(player: Player, payload: any)
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		local dupKey = tostring(player.UserId) .. "|" .. tostring(structureId)
+		local nowBuy = os.clock()
+		local prevBuy = lastRemoteBuyAt[dupKey]
+		if prevBuy ~= nil and nowBuy - prevBuy < 0.3 then
+			return
+		end
+		lastRemoteBuyAt[dupKey] = nowBuy
 		local result: Types.PurchaseUpgradeResult = { Ok = false, Error = "Unknown" }
 		local started = os.clock()
 		local okCall, errCall = pcall(function()
@@ -1275,7 +1284,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 67)
+			player:SetAttribute("WE_Build", 68)
 		end)
 		BaseService.AssignPlot(player)
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)

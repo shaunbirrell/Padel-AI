@@ -459,6 +459,11 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 	if not profile then
 		return Enum.ProductPurchaseDecision.NotProcessedYet
 	end
+	-- v67: only grant onto a profile that was read from the DataStore and will be saved. A session-only
+	-- profile (store read failed) would lose the grant; Roblox re-delivers NotProcessedYet receipts.
+	if DataService.IsLoaded and not DataService.IsLoaded(player) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 
 	if hasProcessed(profile, receiptId) then
 		return Enum.ProductPurchaseDecision.PurchaseGranted
@@ -490,6 +495,11 @@ function MonetizationService.ProcessReceipt(receiptInfo: any): Enum.ProductPurch
 
 	markProcessed(profile, receiptId)
 	DataService.MarkDirty(player)
+	-- v67: persist the grant before acknowledging it. If the save fails, Roblox retries the receipt;
+	-- ProcessedReceipts (still in memory this session) stops a double grant on the retry.
+	if not DataService.SaveProfile(player, false) then
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
 
 	if NotificationService then
 		NotificationService.Notify(player, "Purchase granted: " .. (product.DisplayName or productKey or "item"), "Reward")

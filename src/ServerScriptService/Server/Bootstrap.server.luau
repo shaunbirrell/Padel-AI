@@ -408,6 +408,18 @@ else
 	end
 end
 
+-- v67: base labels stop drawing over everything (AlwaysOnTop off, capped range) — map exists now,
+-- and DescendantAdded catches labels services create later (ATM, droppers, soldiers, gate).
+do
+	local WorldLabelPolicy = safeRequire("WorldLabelPolicy", Modules.WorldLabelPolicy)
+	if WorldLabelPolicy and WorldLabelPolicy.Init then
+		local okLabels, errLabels = pcall(WorldLabelPolicy.Init)
+		if not okLabels then
+			warn("[WAR EMPIRE] WorldLabelPolicy.Init failed:", errLabels)
+		end
+	end
+end
+
 -- PlayerAdded: heal map if somehow missing (late join / rare destroy)
 do
 	local Players = game:GetService("Players")

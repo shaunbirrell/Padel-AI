@@ -19,6 +19,7 @@ local SharedConfigs = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Con
 local DevConfig = require(SharedConfigs:WaitForChild("DevConfig"))
 local EconomyConfig = require(SharedConfigs:WaitForChild("EconomyConfig"))
 local MonetizationConfig = require(SharedConfigs:WaitForChild("MonetizationConfig"))
+local StructureVisualConfig = require(SharedConfigs:WaitForChild("StructureVisualConfig"))
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -34,8 +35,11 @@ local TAG_COLLECTOR = "WE_MoneyCollector"
 local TAG_PREMIUM = "WE_PremiumPad"
 
 local COL_GROUND = Color3.fromRGB(210, 185, 130) -- pale sandy-yellow desert floor
-local COL_PAD = Color3.fromRGB(38, 44, 48)
-local COL_PAD_EDGE = Color3.fromRGB(70, 190, 110)
+-- v67 base look: light concrete plot floor + painted olive edge (was near-black navy + green Neon)
+local BASE_LOOK = (StructureVisualConfig :: any).BaseLook or {}
+local COL_PAD = BASE_LOOK.PlotFloor or Color3.fromRGB(168, 162, 148)
+local COL_PAD_EDGE = BASE_LOOK.PlotEdge or Color3.fromRGB(86, 98, 64)
+local COL_CHEVRON = BASE_LOOK.Chevron or Color3.fromRGB(230, 196, 70)
 local COL_VEHICLE = Color3.fromRGB(48, 62, 78)
 local COL_NPC = Color3.fromRGB(88, 42, 42)
 local COL_EVENT = Color3.fromRGB(78, 64, 36)
@@ -204,6 +208,30 @@ local function neonEdge(parentPart, color, thickness)
 			Material = Enum.Material.Neon,
 			CanCollide = false,
 			Transparency = 0.15,
+			Parent = parentPart.Parent,
+		})
+		edge:SetAttribute("WE_Decor", true)
+	end
+end
+
+-- v67: painted kerb edge (same geometry as neonEdge, no glow)
+local function paintEdge(parentPart, color, thickness)
+	local t = thickness or 0.35
+	local s = parentPart.Size
+	local edges = {
+		{ Vector3.new(s.X + t, t, t), Vector3.new(0, s.Y * 0.5, s.Z * 0.5) },
+		{ Vector3.new(s.X + t, t, t), Vector3.new(0, s.Y * 0.5, -s.Z * 0.5) },
+		{ Vector3.new(t, t, s.Z + t), Vector3.new(s.X * 0.5, s.Y * 0.5, 0) },
+		{ Vector3.new(t, t, s.Z + t), Vector3.new(-s.X * 0.5, s.Y * 0.5, 0) },
+	}
+	for i, e in ipairs(edges) do
+		local edge = part({
+			Name = "Edge" .. i,
+			Size = e[1],
+			CFrame = parentPart.CFrame * CFrame.new(e[2]),
+			Color = color,
+			Material = Enum.Material.Concrete,
+			CanCollide = false,
 			Parent = parentPart.Parent,
 		})
 		edge:SetAttribute("WE_Decor", true)
@@ -1275,20 +1303,20 @@ local function paintPlotFloorChevrons(plotFolder: Folder, plotOrigin: Vector3)
 			Name = "ChevronBody" .. idx,
 			Size = Vector3.new(3.2, 0.12, 2.2),
 			CFrame = cf,
-			Color = Color3.fromRGB(245, 245, 250),
-			Material = Enum.Material.Neon,
+			Color = COL_CHEVRON,
+			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
-			Transparency = 0.15,
+			Transparency = 0,
 			Parent = folder,
 		})
 		part({
 			Name = "ChevronTip" .. idx,
 			Size = Vector3.new(1.6, 0.14, 1.6),
 			CFrame = cf * CFrame.new(0, 0.02, -1.4) * CFrame.Angles(0, math.rad(45), 0),
-			Color = Color3.fromRGB(255, 255, 255),
-			Material = Enum.Material.Neon,
+			Color = COL_CHEVRON,
+			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
-			Transparency = 0.05,
+			Transparency = 0,
 			Parent = folder,
 		})
 	end
@@ -1760,7 +1788,7 @@ function MapSetup.Run()
 		})
 		pad:SetAttribute("PlotId", plotId)
 		CollectionService:AddTag(pad, TAG_BASE)
-		neonEdge(pad, COL_PAD_EDGE, 0.55)
+		paintEdge(pad, COL_PAD_EDGE, 0.55)
 
 		local spawn = Instance.new("SpawnLocation")
 		spawn.Name = "PlayerSpawn"
@@ -1773,7 +1801,7 @@ function MapSetup.Run()
 		spawn.Material = Enum.Material.Neon
 		spawn.Parent = plotFolder
 
-		plainBillboard(pad, "BASE " .. plotId .. "  ·  Walk pads to BUY  ·  E / B menu", Vector2.new(280, 44), 16, Color3.fromRGB(200, 230, 200))
+		-- v67: no giant "BASE n · Walk pads to BUY · E / B menu" label over the plot (HUD + pad cards explain buying)
 		beacon(plotFolder, pos + Vector3.new(0, 0, -62), COL_PAD_EDGE, "PlotBeacon")
 
 		for i, def in ipairs(STRUCTURES) do
@@ -2032,8 +2060,8 @@ function MapSetup.Run()
 		})
 		plainBillboard(
 			yardAnchor,
-			"TRAINING YARD · Workers earn cash",
-			Vector2.new(280, 40),
+			"TRAINING YARD",
+			Vector2.new(170, 30),
 			8,
 			Color3.fromRGB(255, 200, 120)
 		)

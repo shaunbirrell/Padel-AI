@@ -167,7 +167,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "sea
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_DriveHinge", "HingeConstraint drive motors")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "startGroundDrive", "scripted/hinge ground drive")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "HingeConstraint", "mesh strips drive constraints")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "Codes in Settings", "ATM codes hint P1-7")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "ATM · WALK IN TO COLLECT", "v67 ATM card title (short; codes live in Settings)")
 
 
 # 9) Design competitive pass P0/P1 (ATM / WarzoneProps / showroom / HUD)
@@ -358,7 +358,7 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 # --- v25 Base Ceiling + prestige income keep + HUD rebirth progress ---
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "function StructureKitBuilder.SyncBaseCeiling", "SyncBaseCeiling")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_BaseCeiling", "WE_BaseCeiling folder")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofHelipad", "Ceiling roof helipad dress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "roof.CanQuery = false -- camera + weapon raycasts pass", "v67 anti-heli ceiling is an invisible barrier")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "SyncBaseCeiling", "BaseService SyncBaseCeiling wire")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "PlotOilPumpService", "Bootstrap PlotOilPump still wired")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "GateDefenseService", "Bootstrap GateDefense still wired")
@@ -370,9 +370,9 @@ must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "MinLev
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "RebirthUnlocks", "PrestigeConfig unlocks no-regress")
 
 # --- v26 Roof barracks + Missions dock + rebirth fee clarity ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofBarracksPad", "Ceiling roof barracks pads")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_RoofBarracks", "WE_RoofBarracks attribute")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "TryAttachBuildingVisual(bp, \"Barracks\"", "Roof barracks Barracks mesh dress")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "AntiAirCeilingHeight", "v67 ceiling height from StructureVisualConfig")
+must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'roof:SetAttribute("WE_BaseCeiling", true)', "v67 ceiling keeps WE_BaseCeiling attribute")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofBarracksPad", "v67 no rooftop barracks pads on the ceiling")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "DockMissions", "HUD dock Missions tile")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "MissionController.Toggle", "Missions dock opens MissionController")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "Label = \"MISSIONS\"", "Missions dock label")
@@ -432,8 +432,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersCo
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "KeyCode.T", "Orders T cycle")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "CONTESTED", "Territory Contested billboard")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "ContestedBadge", "Territory ContestedBadge")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingBeamLong", "BaseCeiling beams")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingJoist", "BaseCeiling joists")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingBeamLong", "v67 no ceiling beams (dark warehouse look)")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "CeilingJoist", "v67 no ceiling joists")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "Keep all your Robux Items!", "Rebirth exact keep banner")
 
 
@@ -967,9 +967,17 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "[EconP
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "for delaySec = 1, 12", "dense economy re-push 1s×12")
 
 # ── v58 instant profile + cash-first HUD listen (no fake StartingCash) ─────
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "instant profile", "v58 instant profile log")
+must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "instant profile", "v67 no instant default profile (it overwrote real saves)")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "function DataService.IsLoaded", "v67 DataService.IsLoaded")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "if not loaded[userId] then", "v67 SaveProfile refuses never-loaded profiles")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", "Left during the load: nothing was loaded, so nothing may be saved", "v67 leave mid-load never saves")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "DataService.IsLoaded(player)", "v67 ProcessReceipt waits for a loaded profile")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "if not DataService.SaveProfile(player, false) then", "v67 receipt saved before PurchaseGranted")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "stampEconomyAttrs", "v58 stampEconomyAttrs before DS")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "mergeDsIntoLive", "v58 background DS merge")
+must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", "mergeDsIntoLive", "v67 no partial DS merge (dropped most saved fields)")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "btn.MouseButton1Click:Connect(onBuyPressed)", "v67 pad BUY fires once per tap")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau", "btn.MouseButton1Click:Connect(onMenuBuy)", "v67 B-menu BUY fires once per tap")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "lastRemoteBuyAt[dupKey]", "v67 server drops duplicate purchase events")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "continuing — no kick", "v58 never Kick on session lock")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", 'player:Kick("Your data is loading', "v58 no session-lock Kick")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "never WaitForChild remotes on HUD cash path", "v60 HUD leaderstats-first no WaitForChild")
@@ -977,8 +985,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1043,7 +1051,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 67)', "v67 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 68)', "v68 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1112,9 +1120,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "forced BasePlotId=1", "v63 UpgradePad force plot 1 live")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 67)', "v67 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 68)', "v68 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1141,9 +1149,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 67)', "v67 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 68)', "v68 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1196,9 +1204,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 67)', "v67 WE_Build=67 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 67)', "v67 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 68)', "v68 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")

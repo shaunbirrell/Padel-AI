@@ -25,6 +25,12 @@ local DataService = {}
 local profiles: { [number]: PlayerProfile } = {}
 local dirty: { [number]: boolean } = {}
 local loading: { [number]: boolean } = {}
+-- v67: true only when the profile content came from a successful DataStore read (existing save or a
+-- confirmed new player). Only loaded profiles are ever written back, so a default / session-only profile
+-- can never overwrite a real save.
+local loaded: { [number]: boolean } = {}
+-- v67: a leave-save still in flight; a same-server rejoin waits for it before reading the store.
+local pendingSave: { [number]: boolean } = {}
 local dataStore: DataStore? = nil
 
 local AnalyticsService: any = nil
@@ -86,6 +92,12 @@ end
 
 function DataService.GetProfile(player: Player): PlayerProfile?
 	return profiles[player.UserId]
+end
+
+--[[ v67: true when this player's profile was read from the DataStore and will be saved. False while the
+	load is in flight and for a session-only profile (DataStore read failed). Receipts must wait for it. ]]
+function DataService.IsLoaded(player: Player): boolean
+	return loaded[player.UserId] == true
 end
 
 function DataService.MarkDirty(player: Player)
@@ -154,7 +166,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 67)
+		player:SetAttribute("WE_Build", 68)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -198,119 +210,89 @@ local function tryPushEconomy(player: Player)
 	end)
 end
 
-local function mergeDsIntoLive(live: PlayerProfile, dsProfile: PlayerProfile, userId: number)
-	-- Prefer max Cash/Gold; never drop below StartingCash / AdminPlaytest floor
-	local EconomyConfig = require(Shared.Configs.EconomyConfig)
-	local startCash = math.floor(tonumber(EconomyConfig.StartingCash) or 10000)
-	live.Cash = math.max(
-		math.floor(tonumber(live.Cash) or 0),
-		math.floor(tonumber(dsProfile.Cash) or 0),
-		startCash
-	)
-	live.Gold = math.max(
-		math.floor(tonumber(live.Gold) or 0),
-		math.floor(tonumber(dsProfile.Gold) or 0)
-	)
-	live.PendingCash = math.max(
-		math.floor(tonumber((live :: any).PendingCash) or 0),
-		math.floor(tonumber((dsProfile :: any).PendingCash) or 0)
-	)
-	-- Keep BaseUpgrades from DS when present (real progress)
-	local dsUp = dsProfile.BaseUpgrades
-	if typeof(dsUp) == "table" then
-		local hasProgress = false
-		for _, lv in pairs(dsUp) do
-			if (tonumber(lv) or 0) > 0 then
-				hasProgress = true
-				break
+local function notifyPlayer(player: Player, text: string)
+	task.defer(function()
+		pcall(function()
+			local NotificationService = require(script.Parent.NotificationService)
+			if NotificationService and NotificationService.Notify then
+				NotificationService.Notify(player, text, "Warn", 8)
 			end
-		end
-		if hasProgress then
-			live.BaseUpgrades = dsUp
-		end
-	end
-	-- Prefer DS progression when it looks real (Level/XP/vehicles/etc.)
-	if (tonumber(dsProfile.Level) or 1) > (tonumber(live.Level) or 1) then
-		live.Level = dsProfile.Level
-		live.XP = dsProfile.XP
-	elseif (tonumber(dsProfile.Level) or 1) == (tonumber(live.Level) or 1) then
-		live.XP = math.max(tonumber(live.XP) or 0, tonumber(dsProfile.XP) or 0)
-	end
-	if (tonumber(dsProfile.Prestige) or 0) > (tonumber(live.Prestige) or 0) then
-		live.Prestige = dsProfile.Prestige
-	end
-	if typeof(dsProfile.Vehicles) == "table" then
-		for id, owned in pairs(dsProfile.Vehicles) do
-			if owned then
-				live.Vehicles[id] = true
-			end
-		end
-	end
-	if typeof(dsProfile.Weapons) == "table" then
-		for id, owned in pairs(dsProfile.Weapons) do
-			if owned then
-				live.Weapons[id] = true
-			end
-		end
-	end
-	if typeof(dsProfile.Soldiers) == "number" then
-		live.Soldiers = math.max(tonumber(live.Soldiers) or 0, dsProfile.Soldiers)
-	end
-	if dsProfile.BasePlotId ~= nil and live.BasePlotId == nil then
-		live.BasePlotId = dsProfile.BasePlotId
-	end
-	if dsProfile.TutorialComplete then
-		live.TutorialComplete = true
-		live.TutorialStep = dsProfile.TutorialStep
-	end
-	if typeof(dsProfile.Stats) == "table" and typeof(live.Stats) == "table" then
-		live.Stats.UpgradesPurchased = math.max(
-			tonumber(live.Stats.UpgradesPurchased) or 0,
-			tonumber(dsProfile.Stats.UpgradesPurchased) or 0
-		)
-	end
-	if typeof(dsProfile.FirstJoinUnix) == "number" and dsProfile.FirstJoinUnix > 0 then
-		if live.FirstJoinUnix == 0 or live.FirstJoinUnix == nil or dsProfile.FirstJoinUnix < live.FirstJoinUnix then
-			live.FirstJoinUnix = dsProfile.FirstJoinUnix
-		end
-	end
-	applyAdminPlaytestCash(userId, live)
-	-- Final floors
-	live.Cash = math.max(math.floor(tonumber(live.Cash) or 0), startCash)
-	if userId == ADMIN_PLAYTEST_USER_ID then
-		local floor = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 50_000_000)
-		live.Cash = math.max(live.Cash, floor)
-	end
+		end)
+	end)
 end
 
--- v60: instant playable profile — never block join on DataStore / session lock
+--[[
+	v67: load the real save BEFORE the profile exists.
+
+	v58–v65 handed out an instant default profile and merged ~15 fields of the save into it later, then
+	saved the result — dropping everything else (entitlements, receipts, codes, battle pass, clan, daily,
+	spinner, territories …) on every rejoin, writing the default over the save whenever the player left,
+	autosave ran or GetAsync failed first, and lifting cash to StartingCash on each join. That instant
+	profile only existed because this module failed to parse (v50–v65); a DataStore read takes well under
+	a second. Now: GetProfile is nil until the read finishes; callers already handle nil ("still loading").
+]]
 function DataService.LoadProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	if profiles[userId] then
 		return profiles[userId]
 	end
 	if loading[userId] then
-		local waited = DataService.WaitForProfile(player, 8)
-		if waited then
-			return waited
-		end
-		warn("[DataService] WaitForProfile timed out while loading; EnsureProfile for", userId)
-		loading[userId] = false
-		return DataService.EnsureProfile(player)
+		return DataService.WaitForProfile(player, 20)
 	end
 	loading[userId] = true
 
-	-- 1) Instant CreateDefault + AdminPlaytestCash so HUD/BUY work within ~1s
-	local profile = ProfileSchema.CreateDefault()
+	-- Same-server rejoin: let the previous session's leave-save land before reading.
+	local waitStart = os.clock()
+	while pendingSave[userId] and os.clock() - waitStart < 15 do
+		task.wait(0.1)
+	end
+
+	local acquired, lockErr = SessionLock.TryAcquire(userId)
+	if not acquired then
+		warn("[DataService] Session lock failed (continuing — no kick) for", userId, lockErr)
+		if AnalyticsService then
+			AnalyticsService.Log("SESSION_LOCK_CONFLICT", userId, { err = tostring(lockErr), soft = true })
+		end
+	end
+
+	local profile: PlayerProfile
+	local persistent = true
+	local ds = getDataStore()
+	if not ds then
+		-- Studio without API access: session-only profile (SaveProfile has nothing to write anyway).
+		profile = ProfileSchema.CreateDefault()
+	else
+		local ok, raw = retryAsync("GetAsync", function()
+			return ds:GetAsync(keyFor(userId))
+		end)
+		if ok then
+			profile = if raw == nil then ProfileSchema.CreateDefault() else ProfileSchema.Migrate(raw)
+		else
+			-- Could not read the save. Let them play, but never write this default over the real data.
+			warn("[DataService] GetAsync failed — session-only profile, saving disabled for", userId, raw)
+			profile = ProfileSchema.CreateDefault()
+			persistent = false
+			notifyPlayer(player, "Your save could not be loaded. Progress this session will NOT be saved — rejoin to retry.")
+		end
+	end
+
+	if not player.Parent then
+		-- Left during the load: nothing was loaded, so nothing may be saved.
+		loading[userId] = false
+		SessionLock.Release(userId)
+		return nil
+	end
+
 	profile.LastJoinUnix = os.time()
 	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
 		profile.FirstJoinUnix = os.time()
 	end
 	applyStudioDevFlags(profile)
-	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
+	applyAdminPlaytestCash(userId, profile)
 
 	profiles[userId] = profile
-	dirty[userId] = true
+	loaded[userId] = persistent
+	dirty[userId] = persistent
 	loading[userId] = false
 
 	stampEconomyAttrs(player, profile)
@@ -318,114 +300,30 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] instant profile userId=%d cash=%d WE_Build=67",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=68",
 		userId,
-		math.floor(tonumber(profile.Cash) or 0)
+		math.floor(tonumber(profile.Cash) or 0),
+		tostring(persistent)
 	))
-
-	-- 2) Background: soft session lock + GetAsync merge (never Kick)
-	task.spawn(function()
-		local acquired, lockErr = SessionLock.TryAcquire(userId)
-		if not acquired then
-			warn("[DataService] Session lock failed (continuing — no kick) for", userId, lockErr)
-			if AnalyticsService then
-				AnalyticsService.Log("SESSION_LOCK_CONFLICT", userId, { err = tostring(lockErr), soft = true })
-			end
-		end
-
-		local ds = getDataStore()
-		if not ds then
-			if adminCashApplied and player.Parent and profiles[userId] then
-				DataService.SaveProfile(player, false)
-			end
-			return
-		end
-
-		local ok, raw = retryAsync("GetAsync", function()
-			return ds:GetAsync(keyFor(userId))
-		end)
-		if not player.Parent then
-			return
-		end
-		local live = profiles[userId]
-		if not live then
-			return
-		end
-
-		if ok and raw ~= nil then
-			local dsProfile = ProfileSchema.Migrate(raw)
-			mergeDsIntoLive(live, dsProfile, userId)
-			dirty[userId] = true
-			stampEconomyAttrs(player, live)
-			tryPushEconomy(player)
-			-- Light refresh: base upgrades/state from DS without re-firing OnProfileLoaded
-			pcall(function()
-				local BaseService = require(script.Parent.BaseService)
-				if BaseService.PushState then
-					BaseService.PushState(player)
-				end
-				if BaseService.RefreshAllVisuals then
-					BaseService.RefreshAllVisuals(player)
-				end
-			end)
-			print(string.format(
-				"[DataService] DS merge userId=%d cash=%d",
-				userId,
-				math.floor(tonumber(live.Cash) or 0)
-			))
-		elseif not ok then
-			warn("[DataService] Background GetAsync failed for", userId, raw)
-		end
-
-		-- Persist after instant grant / merge
-		if player.Parent and profiles[userId] then
-			DataService.SaveProfile(player, false)
-		end
-	end)
-
 	return profile
 end
 
 
---- v58: never leave a joined player without a profile (CreateDefault + AdminPlaytestCash + OnProfileLoaded).
-function DataService.EnsureProfile(player: Player): PlayerProfile
+--[[ v67: never invents a profile. Returns the loaded profile, waits briefly for an in-flight load,
+	or starts the load if none began (callers treat nil as "still loading"). ]]
+function DataService.EnsureProfile(player: Player): PlayerProfile?
 	local userId = player.UserId
 	local existing = profiles[userId]
 	if existing then
 		return existing
 	end
-	-- v63: never yield >0.25s on buy/pad path — instant CreateDefault if missing
-	local waited = DataService.WaitForProfile(player, 0.25)
-	if waited then
-		return waited
-	end
 	if not player.Parent then
-		-- Player left — still return a throwaway default so callers do not nil-crash
-		return ProfileSchema.CreateDefault()
+		return nil
 	end
-	warn("[DataService] EnsureProfile CreateDefault fallback for", userId)
-	loading[userId] = false
-	local profile = ProfileSchema.CreateDefault()
-	profile.LastJoinUnix = os.time()
-	if profile.FirstJoinUnix == 0 or profile.FirstJoinUnix == nil then
-		profile.FirstJoinUnix = os.time()
+	if not loading[userId] then
+		task.spawn(DataService.LoadProfile, player)
 	end
-	applyStudioDevFlags(profile)
-	local adminCashApplied = applyAdminPlaytestCash(userId, profile)
-	profiles[userId] = profile
-	dirty[userId] = true
-	loading[userId] = false
-	stampEconomyAttrs(player, profile)
-	tryPushEconomy(player)
-	fireProfileLoaded(player, profile)
-	if adminCashApplied then
-		task.defer(function()
-			if player.Parent and profiles[userId] then
-				DataService.SaveProfile(player, false)
-			end
-		end)
-	end
-	return profile
+	return DataService.WaitForProfile(player, 0.25)
 end
 
 --- Clear in-memory profile without saving (optional admin wipeprofile).
@@ -433,6 +331,7 @@ function DataService.ClearInMemoryProfile(userId: number)
 	profiles[userId] = nil
 	dirty[userId] = nil
 	loading[userId] = nil
+	loaded[userId] = nil
 end
 
 --- RemoveAsync player_USERID; does not touch session lock.
@@ -450,62 +349,71 @@ function DataService.RemovePersistedProfile(userId: number): (boolean, string?)
 	return true, nil
 end
 
+local function writeProfile(userId: number, profile: PlayerProfile, releaseLock: boolean?): boolean
+	local ds = getDataStore()
+	if not ds then
+		if releaseLock then
+			SessionLock.Release(userId)
+		end
+		return true -- nothing to persist (Studio without API access)
+	end
+	local snapshot = ProfileSchema.DeepCopy(profile)
+	local ok, err = retryAsync("SetAsync", function()
+		ds:SetAsync(keyFor(userId), snapshot)
+	end)
+	if ok then
+		SessionLock.Refresh(userId)
+	else
+		warn("[DataService] Save failed for", userId, err)
+	end
+	if releaseLock then
+		SessionLock.Release(userId)
+	end
+	return ok
+end
+
 function DataService.SaveProfile(player: Player, releaseLock: boolean?): boolean
 	local userId = player.UserId
 	local profile = profiles[userId]
 	if not profile then
 		return false
 	end
-
-	local ds = getDataStore()
-	if not ds then
-		dirty[userId] = false
+	if not loaded[userId] then
+		-- v67: session-only / not-yet-loaded profile — writing it would overwrite the real save.
 		if releaseLock then
 			SessionLock.Release(userId)
 		end
-		return true -- nothing to persist
+		return false
 	end
-
-	local snapshot = ProfileSchema.DeepCopy(profile)
-	local ok, err = retryAsync("SetAsync", function()
-		ds:SetAsync(keyFor(userId), snapshot)
-	end)
-
-	if ok then
+	local ok = writeProfile(userId, profile, releaseLock)
+	if ok and profiles[userId] == profile then
 		dirty[userId] = false
-		SessionLock.Refresh(userId)
-		if releaseLock then
-			SessionLock.Release(userId)
-		end
-		return true
 	end
-
-	warn("[DataService] Save failed for", userId, err)
-	if releaseLock then
-		SessionLock.Release(userId)
-	end
-	return false
+	return ok
 end
 
 function DataService.UnloadProfile(player: Player)
 	local userId = player.UserId
-	if profiles[userId] then
-		DataService.SaveProfile(player, true)
-	else
-		-- Still release if load was in-flight or profile missing (never soft-lock forever)
-		SessionLock.Release(userId)
-	end
+	local profile = profiles[userId]
+	local wasLoaded = loaded[userId] == true
+	-- Clear first so a same-server rejoin starts a fresh load instead of reusing this session's table.
 	profiles[userId] = nil
 	dirty[userId] = nil
 	loading[userId] = nil
+	loaded[userId] = nil
+	if profile and wasLoaded then
+		pendingSave[userId] = true
+		writeProfile(userId, profile, true)
+		pendingSave[userId] = nil
+	else
+		-- Never loaded (left mid-load / session-only): nothing to save; still release the lock.
+		SessionLock.Release(userId)
+	end
 end
 
 function DataService.Init()
 	Players.PlayerAdded:Connect(function(player)
-		local profile = DataService.LoadProfile(player)
-		if not profile and player.Parent then
-			DataService.EnsureProfile(player)
-		end
+		DataService.LoadProfile(player)
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
@@ -514,12 +422,7 @@ function DataService.Init()
 
 	-- Late joiners already in game
 	for _, player in ipairs(Players:GetPlayers()) do
-		task.spawn(function()
-			local profile = DataService.LoadProfile(player)
-			if not profile and player.Parent then
-				DataService.EnsureProfile(player)
-			end
-		end)
+		task.spawn(DataService.LoadProfile, player)
 	end
 
 	-- Session-lock heartbeat (must be < SessionLockTtlSeconds so live locks stay fresh)
@@ -556,7 +459,7 @@ function DataService.Init()
 		for _, player in ipairs(players) do
 			task.spawn(function()
 				local userId = player.UserId
-				if profiles[userId] then
+				if profiles[userId] and loaded[userId] then
 					DataService.SaveProfile(player, true)
 				else
 					SessionLock.ForceReleaseIfStaleOrOurs(userId)

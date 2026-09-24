@@ -687,3 +687,32 @@ Likeliest sites before deduct: `profile.BaseUpgrades[structureId]` or `meetsRequ
 4. Walls/floors keep `CanQuery = true` so weapon raycasts and camera occlusion treat the building as solid.
 5. Other structures keep their Part kits until they get a `HollowBuildings` entry.
 6. `KIT_GEN` 32 → 33 so stale kits rebuild; BuyPathStatic checks KIT_GEN ≥ 32 instead of the exact text.
+
+## 2026-09-24 — v67 base look (military palette, no neon floors, no dark ceiling, quieter labels)
+
+Measured by running the real MapSetup + BaseService + wall/ceiling code headless and rendering plot 1 at L5.
+1. **Palette:** all structure palettes are one scheme (sand concrete / olive / dark metal) with a muted per-type Accent used only on small details. The v45 "bright olive / lime neon cap" walls were a visibility workaround from when services were not loading.
+2. **Foundations:** the kit `Accent` footprint plate is concrete (`StructureVisualConfig.FoundationColor`) at 1x size. It was a Neon plate in the accent colour scaled to 1.4x the footprint at L5 — the purple (Special Forces), green, blue and red glowing floors.
+3. **Walls:** concrete with a concrete cap and a razor-wire line; gate stripe is painted hazard yellow; gate sign range 50.
+4. **Anti-heli ceiling:** kept as gameplay (helicopters collide) but it is an invisible plate at `AntiAirCeilingHeight` (48) above the plot floor with `CanQuery = false`. The visible translucent slab, trims, posts, beams and rooftop pads are gone (dark "warehouse" look, and the roof cut through two-storey buildings).
+5. **Plot floor:** light concrete with a painted olive kerb and yellow chevrons (`StructureVisualConfig.BaseLook`); the "BASE n · Walk pads to BUY" label is removed.
+6. **World labels in bases:** `Modules/WorldLabelPolicy` + `Configs/WorldLabelConfig` turn AlwaysOnTop off and cap MaxDistance at 45 for every BillboardGui anchored inside a plot (labels outside plots untouched). Label sizes/layouts are not changed. ATM card title is "ATM · WALK IN TO COLLECT"; Training Yard label shortened.
+7. Robux offer pads and the ATM collect ring keep their bright colours on purpose (purchase / collect affordances).
+
+## 2026-09-24 — v67 save integrity (DataService ran live for the first time in v66)
+
+Found by the buy-path audit (5 of 6 auditors independently) and confirmed by reading the code:
+the v58–v65 "instant profile" handed out a default, merged ~15 saved fields into it later and saved the
+result, so every rejoin dropped entitlements/receipts/codes/battle pass/clan/daily/spinner/territories,
+leaving before the read finished (or a failed GetAsync, or autosave first) wrote the default over the save,
+and cash was lifted to StartingCash on every join.
+1. `DataService.LoadProfile` reads the save first; `GetProfile` is nil until then (callers already treat nil as "still loading"). No partial merge.
+2. `loaded[userId]` marks a profile as read from the store (or a confirmed new player). `SaveProfile`, autosave, leave and `BindToClose` only ever write loaded profiles.
+3. GetAsync failure → the player can keep playing on a session-only profile that is never saved, with an on-screen warning.
+4. `EnsureProfile` never invents a profile; it waits briefly for, or starts, the real load.
+5. Leave clears the in-memory profile before its save; a same-server rejoin waits for that save before reading.
+6. No StartingCash floor on join (new players still start with StartingCash). Admin playtest cash for 470626172 unchanged.
+7. `EconomyService.ReconcileSpendableCash` no longer raises profile cash to HUD display values (it re-syncs the display to the profile).
+8. `MonetizationService.ProcessReceipt` returns NotProcessedYet until the profile is loaded, and saves the grant before PurchaseGranted.
+9. Pad BUY and B-menu BUY were wired to both Activated and MouseButton1Click (two purchases per click); now Activated only + 0.35 s tap debounce, and the server drops an identical request inside 0.3 s.
+Verified with a behavioural harness (simulated clock + fake DataStore) running the real DataService/MonetizationService: 24/24 scenarios pass.

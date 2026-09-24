@@ -934,17 +934,33 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 		w:SetAttribute("PlotId", plotId)
 		w:SetAttribute("WE_WallLevel", lv)
 		local capH = 0.45 + lv * 0.08
+		local look = (StructureVisualConfig :: any).BaseLook or {}
+		-- v67: concrete cap + razor wire (was a lime Neon cap on bright olive walls)
 		local cap = makePart({
 			Name = name .. "_Cap",
 			Size = Vector3.new(size.X + 0.4, capH, size.Z + 0.4),
 			Position = Vector3.new(pos.X, pos.Y + height * 0.5 + capH * 0.5, pos.Z),
-			Color = pal.Accent,
-			Material = Enum.Material.Neon,
-			Transparency = 0.05,
+			Color = look.WallCap or pal.Accent,
+			Material = Enum.Material.Concrete,
+			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		})
 		cap:SetAttribute("WE_Perimeter", true)
+		local along = math.max(size.X, size.Z)
+		local wireYaw = if size.Z > size.X then math.pi * 0.5 else 0
+		local wire = makePart({
+			Name = name .. "_Wire",
+			Size = Vector3.new(along, 0.9, 0.9),
+			CFrame = CFrame.new(pos.X, pos.Y + height * 0.5 + capH + 0.45, pos.Z) * CFrame.Angles(0, wireYaw, 0),
+			Color = look.Wire or Color3.fromRGB(58, 60, 56),
+			Material = Enum.Material.DiamondPlate,
+			Transparency = 0,
+			CanCollide = false,
+			Parent = folder,
+			Shape = Enum.PartType.Cylinder,
+		})
+		wire:SetAttribute("WE_Perimeter", true)
 		return w
 	end
 
@@ -1003,9 +1019,9 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			Name = "GateChevron",
 			Size = Vector3.new(GATE_CLEAR + postW, 0.35, thickness + 1.6),
 			Position = Vector3.new(cx, archY + 0.9, openZ),
-			Color = Color3.fromRGB(210, 170, 50),
-			Material = Enum.Material.Neon,
-			Transparency = 0.05,
+			Color = ((StructureVisualConfig :: any).BaseLook or {}).GateStripe or Color3.fromRGB(214, 178, 64),
+			Material = Enum.Material.SmoothPlastic,
+			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		}):SetAttribute("WE_GateVisual", true)
@@ -1015,7 +1031,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			bb.Size = UDim2.fromOffset(120, 28)
 			bb.StudsOffset = Vector3.new(0, 1.6, 0)
 			bb.AlwaysOnTop = false
-			bb.MaxDistance = 110
+			bb.MaxDistance = 50
 			bb.Parent = arch
 			local lbl = Instance.new("TextLabel")
 			lbl.Size = UDim2.fromScale(1, 1)
@@ -1075,9 +1091,9 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			Name = "GateChevron",
 			Size = Vector3.new(thickness + 1.6, 0.35, GATE_CLEAR + postW),
 			Position = Vector3.new(openX, archY + 0.9, cz),
-			Color = Color3.fromRGB(210, 170, 50),
-			Material = Enum.Material.Neon,
-			Transparency = 0.05,
+			Color = ((StructureVisualConfig :: any).BaseLook or {}).GateStripe or Color3.fromRGB(214, 178, 64),
+			Material = Enum.Material.SmoothPlastic,
+			Transparency = 0,
 			CanCollide = false,
 			Parent = folder,
 		}):SetAttribute("WE_GateVisual", true)
@@ -1087,7 +1103,7 @@ function StructureKitBuilder.SyncPerimeterWalls(plotId: number, level: number)
 			bb.Size = UDim2.fromOffset(120, 28)
 			bb.StudsOffset = Vector3.new(0, 1.6, 0)
 			bb.AlwaysOnTop = false
-			bb.MaxDistance = 110
+			bb.MaxDistance = 50
 			bb.Parent = arch
 			local lbl = Instance.new("TextLabel")
 			lbl.Size = UDim2.fromScale(1, 1)
@@ -1210,10 +1226,6 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 	-- Cover core (~70% pad) but stop short of gate face so spawn road stays fly/walk open
 	local GATE_FRONT_OPEN = 34 -- studs from gate-edge pad rim left uncovered
 	local coverFrac = 0.72
-	local roofThick = 1.85 + lv * 0.12 -- thicker slab + beams below (not a paper roof)
-	-- Wall height formula mirrors SyncPerimeterWalls so roof sits above walls
-	local wallH = 7.5 + lv * 2.8 -- mirror restored v36 SyncPerimeterWalls
-	local roofY = padTop + wallH + 2.4 + roofThick * 0.5
 
 	local sizeX: number
 	local sizeZ: number
@@ -1248,345 +1260,26 @@ function StructureKitBuilder.SyncBaseCeiling(plotId: number, wallsLevel: number)
 		sizeX = math.max(sizeX, 40)
 	end
 
-	-- Gunmetal / olive translucent anti-heli plate
-	local roofColor = Color3.fromRGB(58, 68, 55) -- olive gunmetal
-	local accentColor = Color3.fromRGB(90, 100, 88)
+	-- v67: the anti-heli roof is an invisible barrier high above every building. The visible slab, trims,
+	-- posts, beams and rooftop pads made the whole base a dark warehouse and cut through two-storey buildings.
+	local ceilingHeight = tonumber((StructureVisualConfig :: any).AntiAirCeilingHeight) or 48
 	local roof = makePart({
 		Name = "CeilingPlate",
-		Size = Vector3.new(sizeX, roofThick, sizeZ),
-		Position = Vector3.new(posX, roofY, posZ),
-		Color = roofColor,
-		Material = Enum.Material.Metal,
-		Transparency = 0.18,
+		Size = Vector3.new(sizeX, 2, sizeZ),
+		Position = Vector3.new(posX, padTop + ceilingHeight, posZ),
+		Color = Color3.fromRGB(58, 68, 55),
+		Material = Enum.Material.SmoothPlastic,
+		Transparency = 1,
 		CanCollide = true,
 		Parent = folder,
 	})
 	roof.CanTouch = false
-	roof.CanQuery = true
-	roof.CastShadow = true
+	roof.CanQuery = false -- camera + weapon raycasts pass; helicopters still collide
+	roof.CastShadow = false
 	roof:SetAttribute("WE_BaseCeiling", true)
 	roof:SetAttribute("PlotId", plotId)
 	roof:SetAttribute("WE_CeilingLevel", lv)
-
-	-- Edge trim (visual only)
-	local trimH = 0.55
-	local trimY = roofY + roofThick * 0.5 + trimH * 0.5
-	for _, edge in ipairs({
-		{ Name = "TrimN", Size = Vector3.new(sizeX + 1.2, trimH, 1.0), Pos = Vector3.new(posX, trimY, posZ - sizeZ * 0.5) },
-		{ Name = "TrimS", Size = Vector3.new(sizeX + 1.2, trimH, 1.0), Pos = Vector3.new(posX, trimY, posZ + sizeZ * 0.5) },
-		{ Name = "TrimE", Size = Vector3.new(1.0, trimH, sizeZ + 1.2), Pos = Vector3.new(posX + sizeX * 0.5, trimY, posZ) },
-		{ Name = "TrimW", Size = Vector3.new(1.0, trimH, sizeZ + 1.2), Pos = Vector3.new(posX - sizeX * 0.5, trimY, posZ) },
-	}) do
-		local t = makePart({
-			Name = edge.Name,
-			Size = edge.Size,
-			Position = edge.Pos,
-			Color = accentColor,
-			Material = Enum.Material.Neon,
-			Transparency = 0.35,
-			CanCollide = false,
-			Parent = folder,
-		})
-		t:SetAttribute("WE_BaseCeiling", true)
-	end
-
-	-- Support posts under closed-side corners (not gate side) — visual only
-	local postH = roofY - padTop - roofThick * 0.5
-	postH = math.max(postH, 8)
-	local postY = padTop + postH * 0.5
-	local insetX = sizeX * 0.42
-	local insetZ = sizeZ * 0.42
-	local posts = {
-		Vector3.new(posX - insetX, postY, posZ - insetZ),
-		Vector3.new(posX + insetX, postY, posZ - insetZ),
-		Vector3.new(posX - insetX, postY, posZ + insetZ),
-		Vector3.new(posX + insetX, postY, posZ + insetZ),
-	}
-	for i, ppos in ipairs(posts) do
-		-- Skip posts near gate face
-		local nearGate = false
-		if gateAxis == "Z" then
-			nearGate = (gateSign > 0 and ppos.Z > posZ + sizeZ * 0.15) or (gateSign < 0 and ppos.Z < posZ - sizeZ * 0.15)
-		else
-			nearGate = (gateSign > 0 and ppos.X > posX + sizeX * 0.15) or (gateSign < 0 and ppos.X < posX - sizeX * 0.15)
-		end
-		if not nearGate then
-			local post = makePart({
-				Name = "CeilingPost" .. i,
-				Size = Vector3.new(1.4, postH, 1.4),
-				Position = ppos,
-				Color = Color3.fromRGB(48, 52, 46),
-				Material = Enum.Material.Metal,
-				Transparency = 0.05,
-				CanCollide = false,
-				Parent = folder,
-			})
-			post.CastShadow = true
-			post:SetAttribute("WE_BaseCeiling", true)
-		end
-	end
-
-	-- Cross beams + joists under plate so roof reads as structure (not a flat slab)
-	do
-		local beamColor = Color3.fromRGB(42, 48, 40)
-		local beamY = roofY - roofThick * 0.5 - 0.55
-		local beamThick = 0.9
-		local beamDeep = 1.35
-		-- Longitudinal beams (along longer roof axis)
-		local longCount = 3
-		for i = 1, longCount do
-			local t = (i - 1) / math.max(1, longCount - 1) -- 0..1
-			if sizeX >= sizeZ then
-				-- beams run along X, spaced on Z
-				local zOff = (t - 0.5) * sizeZ * 0.7
-				local b = makePart({
-					Name = "CeilingBeamLong" .. i,
-					Size = Vector3.new(sizeX * 0.92, beamDeep, beamThick),
-					Position = Vector3.new(posX, beamY, posZ + zOff),
-					Color = beamColor,
-					Material = Enum.Material.Metal,
-					Transparency = 0.05,
-					CanCollide = false,
-					Parent = folder,
-				})
-				b.CastShadow = true
-				b:SetAttribute("WE_BaseCeiling", true)
-			else
-				local xOff = (t - 0.5) * sizeX * 0.7
-				local b = makePart({
-					Name = "CeilingBeamLong" .. i,
-					Size = Vector3.new(beamThick, beamDeep, sizeZ * 0.92),
-					Position = Vector3.new(posX + xOff, beamY, posZ),
-					Color = beamColor,
-					Material = Enum.Material.Metal,
-					Transparency = 0.05,
-					CanCollide = false,
-					Parent = folder,
-				})
-				b.CastShadow = true
-				b:SetAttribute("WE_BaseCeiling", true)
-			end
-		end
-		-- Cross joists
-		local crossCount = 4
-		for i = 1, crossCount do
-			local t = (i - 0.5) / crossCount -- centered segments
-			if sizeX >= sizeZ then
-				local xOff = (t - 0.5) * sizeX * 0.85
-				local b = makePart({
-					Name = "CeilingJoist" .. i,
-					Size = Vector3.new(beamThick * 0.85, beamDeep * 0.85, sizeZ * 0.88),
-					Position = Vector3.new(posX + xOff, beamY - 0.15, posZ),
-					Color = Color3.fromRGB(52, 58, 48),
-					Material = Enum.Material.Metal,
-					Transparency = 0.08,
-					CanCollide = false,
-					Parent = folder,
-				})
-				b:SetAttribute("WE_BaseCeiling", true)
-			else
-				local zOff = (t - 0.5) * sizeZ * 0.85
-				local b = makePart({
-					Name = "CeilingJoist" .. i,
-					Size = Vector3.new(sizeX * 0.88, beamDeep * 0.85, beamThick * 0.85),
-					Position = Vector3.new(posX, beamY - 0.15, posZ + zOff),
-					Color = Color3.fromRGB(52, 58, 48),
-					Material = Enum.Material.Metal,
-					Transparency = 0.08,
-					CanCollide = false,
-					Parent = folder,
-				})
-				b:SetAttribute("WE_BaseCeiling", true)
-			end
-		end
-		-- Corner diagonal braces (closed-side posts → plate)
-		for i, ppos in ipairs(posts) do
-			local nearGate = false
-			if gateAxis == "Z" then
-				nearGate = (gateSign > 0 and ppos.Z > posZ + sizeZ * 0.15) or (gateSign < 0 and ppos.Z < posZ - sizeZ * 0.15)
-			else
-				nearGate = (gateSign > 0 and ppos.X > posX + sizeX * 0.15) or (gateSign < 0 and ppos.X < posX - sizeX * 0.15)
-			end
-			if not nearGate then
-				local mid = Vector3.new((ppos.X + posX) * 0.5, beamY - 1.2, (ppos.Z + posZ) * 0.5)
-				local brace = makePart({
-					Name = "CeilingBrace" .. i,
-					Size = Vector3.new(0.7, 2.8, 0.7),
-					Position = mid,
-					Color = beamColor,
-					Material = Enum.Material.Metal,
-					Transparency = 0.1,
-					CanCollide = false,
-					Parent = folder,
-				})
-				brace:SetAttribute("WE_BaseCeiling", true)
-			end
-		end
-	end
-
-	folder:SetAttribute("WE_GateAxis", gateAxis)
-	folder:SetAttribute("WE_GateSign", gateSign)
-	folder:SetAttribute("WE_CeilingLevel", lv)
 	plotFolder:SetAttribute("WE_BaseCeiling", true)
-
-	-- Roof helipad dress (competitor-style vertical base): Part-kit H pad + optional Helipad catalog mesh
-	local heliSize = math.clamp(math.min(sizeX, sizeZ) * 0.28, 18, 28)
-	local heliY = roofY + roofThick * 0.5 + 0.35
-	-- Place helipad toward CLOSED side (away from gate front)
-	local heliX, heliZ = posX, posZ
-	if gateAxis == "Z" then
-		heliZ = posZ - gateSign * (sizeZ * 0.18)
-	else
-		heliX = posX - gateSign * (sizeX * 0.18)
-	end
-	local heliPad = makePart({
-		Name = "RoofHelipad",
-		Size = Vector3.new(heliSize, 0.55, heliSize),
-		Position = Vector3.new(heliX, heliY, heliZ),
-		Color = Color3.fromRGB(48, 52, 48),
-		Material = Enum.Material.Concrete,
-		Transparency = 0.05,
-		CanCollide = true,
-		Parent = folder,
-	})
-	heliPad.CastShadow = true
-	heliPad:SetAttribute("WE_BaseCeiling", true)
-	heliPad:SetAttribute("WE_RoofHelipad", true)
-	-- Yellow H marking
-	makePart({
-		Name = "RoofHelipadH",
-		Size = Vector3.new(heliSize * 0.12, 0.2, heliSize * 0.55),
-		Position = Vector3.new(heliX, heliY + 0.4, heliZ),
-		Color = Color3.fromRGB(230, 200, 60),
-		Material = Enum.Material.Neon,
-		Transparency = 0.1,
-		CanCollide = false,
-		Parent = folder,
-	}):SetAttribute("WE_BaseCeiling", true)
-	makePart({
-		Name = "RoofHelipadHBar",
-		Size = Vector3.new(heliSize * 0.42, 0.2, heliSize * 0.12),
-		Position = Vector3.new(heliX, heliY + 0.4, heliZ),
-		Color = Color3.fromRGB(230, 200, 60),
-		Material = Enum.Material.Neon,
-		Transparency = 0.1,
-		CanCollide = false,
-		Parent = folder,
-	}):SetAttribute("WE_BaseCeiling", true)
-	-- Ring
-	makePart({
-		Name = "RoofHelipadRing",
-		Size = Vector3.new(heliSize * 0.92, 0.15, heliSize * 0.92),
-		Position = Vector3.new(heliX, heliY + 0.28, heliZ),
-		Color = Color3.fromRGB(200, 180, 50),
-		Material = Enum.Material.Neon,
-		Transparency = 0.45,
-		CanCollide = false,
-		Parent = folder,
-	}):SetAttribute("WE_BaseCeiling", true)
-
-	-- Roof barracks slots (1–2 small Barracks-style pads) — visual dress only; gate front stays open
-	local barracksPads: { BasePart } = {}
-	do
-		local padSz = math.clamp(math.min(sizeX, sizeZ) * 0.14, 9, 14)
-		local padY = roofY + roofThick * 0.5 + 0.38
-		local bodyH = 3.6
-		local spots: { Vector3 } = {}
-		if gateAxis == "Z" then
-			-- Flank left/right of roof; slight shift toward gate so they clear helipad (closed side)
-			table.insert(spots, Vector3.new(posX - sizeX * 0.30, padY, posZ + gateSign * (sizeZ * 0.08)))
-			table.insert(spots, Vector3.new(posX + sizeX * 0.30, padY, posZ + gateSign * (sizeZ * 0.08)))
-		else
-			table.insert(spots, Vector3.new(posX + gateSign * (sizeX * 0.08), padY, posZ - sizeZ * 0.30))
-			table.insert(spots, Vector3.new(posX + gateSign * (sizeX * 0.08), padY, posZ + sizeZ * 0.30))
-		end
-		local nSlots = if lv >= 5 then 2 else 1
-		for i = 1, math.min(nSlots, #spots) do
-			local spos = spots[i]
-			-- Skip if too close to helipad center
-			local dx = spos.X - heliX
-			local dz = spos.Z - heliZ
-			if (dx * dx + dz * dz) < (heliSize * 0.55) ^ 2 then
-				continue
-			end
-			local bPad = makePart({
-				Name = "RoofBarracksPad" .. i,
-				Size = Vector3.new(padSz, 0.5, padSz * 0.72),
-				Position = spos,
-				Color = Color3.fromRGB(62, 72, 58),
-				Material = Enum.Material.Concrete,
-				Transparency = 0.05,
-				CanCollide = true,
-				Parent = folder,
-			})
-			bPad.CastShadow = true
-			bPad:SetAttribute("WE_BaseCeiling", true)
-			bPad:SetAttribute("WE_RoofBarracks", true)
-			bPad:SetAttribute("PlotId", plotId)
-			-- Mini Barracks silhouette (Part-kit fallback)
-			makePart({
-				Name = "RoofBarracksBody" .. i,
-				Size = Vector3.new(padSz * 0.78, bodyH, padSz * 0.48),
-				Position = Vector3.new(spos.X, padY + 0.25 + bodyH * 0.5, spos.Z),
-				Color = Color3.fromRGB(70, 82, 64),
-				Material = Enum.Material.Metal,
-				Transparency = 0.08,
-				CanCollide = false,
-				Parent = folder,
-			}):SetAttribute("WE_BaseCeiling", true)
-			makePart({
-				Name = "RoofBarracksRoof" .. i,
-				Size = Vector3.new(padSz * 0.86, 0.45, padSz * 0.55),
-				Position = Vector3.new(spos.X, padY + 0.25 + bodyH + 0.3, spos.Z),
-				Color = Color3.fromRGB(48, 54, 46),
-				Material = Enum.Material.Metal,
-				Transparency = 0.05,
-				CanCollide = false,
-				Parent = folder,
-			}):SetAttribute("WE_BaseCeiling", true)
-			makePart({
-				Name = "RoofBarracksAccent" .. i,
-				Size = Vector3.new(padSz * 0.35, 0.18, padSz * 0.22),
-				Position = Vector3.new(spos.X, padY + 0.55, spos.Z),
-				Color = Color3.fromRGB(200, 180, 70),
-				Material = Enum.Material.Neon,
-				Transparency = 0.25,
-				CanCollide = false,
-				Parent = folder,
-			}):SetAttribute("WE_BaseCeiling", true)
-			table.insert(barracksPads, bPad)
-		end
-		folder:SetAttribute("WE_RoofBarracksSlots", #barracksPads)
-	end
-
-	-- Optional catalog: BaseCeiling mesh + Helipad + Barracks dress on roof pads (existing free IDs only)
-	task.defer(function()
-		pcall(function()
-			local vac = require(Shared.Configs.VisualAssetConfig)
-			local vas = require(script.Parent.Parent.Services.VisualAssetService)
-			local ref = vac.Buildings and vac.Buildings.BaseCeiling
-			local aid = ref and tonumber(ref.ModelAssetId) or 0
-			if aid and aid > 0 then
-				vas.TryAttachBuildingVisual(roof, "BaseCeiling", lv)
-			end
-			-- Helipad 14313845338 already in VisualAssetConfig.Buildings — dress roof pad
-			local heliRef = vac.Buildings and vac.Buildings.Helipad
-			local heliAid = heliRef and tonumber(heliRef.ModelAssetId) or 0
-			if heliAid and heliAid > 0 and heliPad.Parent then
-				vas.TryAttachBuildingVisual(heliPad, "Helipad", 1)
-			end
-			-- Barracks 18798977801 — dress roof barracks pads when free catalog ID present
-			local barRef = vac.Buildings and vac.Buildings.Barracks
-			local barAid = barRef and tonumber(barRef.ModelAssetId) or 0
-			if barAid and barAid > 0 then
-				for _, bp in ipairs(barracksPads) do
-					if bp.Parent then
-						vas.TryAttachBuildingVisual(bp, "Barracks", 1)
-					end
-				end
-			end
-		end)
-	end)
 end
 
 function StructureKitBuilder.SyncCornerTowers(plotId: number, level: number)
