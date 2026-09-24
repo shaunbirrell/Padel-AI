@@ -137,7 +137,14 @@ local function refreshList()
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
 				UIUtil.EnsureMinTouch(btn, 44)
+				local lastTapAt = 0
 				local function onMenuBuy()
+					-- v67: one purchase per tap
+					local tapNow = os.clock()
+					if tapNow - lastTapAt < 0.35 then
+						return
+					end
+					lastTapAt = tapNow
 					print(string.format("[WAR EMPIRE] Base menu BUY: %s cost=%s cash=%d rate=+%d/tick", structureId, tostring(cost), cash, rate))
 					if cash < cost then
 						local now = os.clock()
@@ -163,8 +170,8 @@ local function refreshList()
 						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
 					end
 				end
+				-- v67: Activated only (MouseButton1Click as well fired two purchases per click)
 				btn.Activated:Connect(onMenuBuy)
-				btn.MouseButton1Click:Connect(onMenuBuy)
 			end
 			btn.Parent = row
 		end

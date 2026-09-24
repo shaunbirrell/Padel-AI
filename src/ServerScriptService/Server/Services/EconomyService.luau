@@ -227,10 +227,10 @@ end
 
 
 --[[
-	v62: EarlyRemotes seeds leaderstats/WE_Cash BEFORE DataService profile exists.
-	HUD can show $50M while profile.Cash is still StartingCash → SpendCash InsufficientCash
-	with no visible deduct. Lift profile.Cash to max(profile, server WE_Cash, leaderstats).
-	Attrs/leaderstats are server-authored only — safe, not client-trust.
+	v67: the loaded profile is the only source of truth. v62 lifted profile.Cash to max(profile, WE_Cash,
+	leaderstats) because the profile was a placeholder while DataService failed to load; with real loads
+	that turned any stale display value (EarlyRemotes' seeded StartingCash, cash before a rebirth reset)
+	into free money. Now the displays are re-synced to the profile instead.
 ]]
 function EconomyService.ReconcileSpendableCash(player: Player): number
 	local DS = getDataService()
@@ -242,25 +242,10 @@ function EconomyService.ReconcileSpendableCash(player: Player): number
 		return 0
 	end
 	local have = math.floor(tonumber(profile.Cash) or 0)
+	profile.Cash = have
 	local attr = tonumber(player:GetAttribute("WE_Cash"))
-	if typeof(attr) == "number" then
-		have = math.max(have, math.floor(attr))
-	end
-	local folder = player:FindFirstChild("leaderstats")
-	if folder then
-		local cashV = folder:FindFirstChild("Cash")
-		if cashV and (cashV:IsA("IntValue") or cashV:IsA("NumberValue")) then
-			have = math.max(have, math.floor((cashV :: any).Value))
-		end
-	end
-	local before = math.floor(tonumber(profile.Cash) or 0)
-	if have > before then
-		profile.Cash = have
-		getDataService().MarkDirty(player)
-		print(string.format("[Economy] Reconcile %s profile.Cash %d → %d (attr/leaderstats)", player.Name, before, have))
+	if attr == nil or math.floor(attr) ~= have then
 		pushEconomy(player, profile)
-	else
-		profile.Cash = have
 	end
 	return have
 end

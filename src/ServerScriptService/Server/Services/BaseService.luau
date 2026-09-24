@@ -1123,8 +1123,18 @@ function BaseService.Init(deps: { [string]: any })
 		firePurchaseResult(player, structureId, result)
 	end
 
+	-- v67: an identical request inside 0.3s is a duplicate event (one click used to send two and buy two
+	-- levels); the first request's PurchaseResult still answers the client.
+	local lastRemoteBuyAt: { [string]: number } = {}
 	local function handlePurchaseRemote(player: Player, payload: any)
 		local structureId = if typeof(payload) == "table" then payload.StructureId else payload
+		local dupKey = tostring(player.UserId) .. "|" .. tostring(structureId)
+		local nowBuy = os.clock()
+		local prevBuy = lastRemoteBuyAt[dupKey]
+		if prevBuy ~= nil and nowBuy - prevBuy < 0.3 then
+			return
+		end
+		lastRemoteBuyAt[dupKey] = nowBuy
 		local result: Types.PurchaseUpgradeResult = { Ok = false, Error = "Unknown" }
 		local started = os.clock()
 		local okCall, errCall = pcall(function()
