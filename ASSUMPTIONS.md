@@ -675,3 +675,15 @@ Likeliest sites before deduct: `profile.BaseUpgrades[structureId]` or `meetsRequ
 4. Keep v64 hardenings (BaseUpgrades/Stats, Reconcile, attr ack, real WE_BuyErr).
 5. BuyPathStatic: nil→require fallback simulate CommandCenter 50M→49998500 PASS. Open Cloud **versionNumber=65**.
 
+
+## 2026-09-24 — v66 real root cause + walk-in Command Center
+
+**Root cause of v50–v65 buy failures (supersedes the v65 note above):** `ProfileSchema.luau` (since v50) and `EconomyService.luau` (since v22) did not *parse* — a line starting with `(` right after a call is a Luau "ambiguous syntax" error. `DataService` requires ProfileSchema at top level, so it never loaded; the v65 `assert(deps.DataService)` then aborted the whole server Bootstrap. `PremiumPadService` (v29) and `TerritoryService` (v38) also failed to parse. Fixed in v66; Bootstrap now warns instead of asserting. `tools/BuyPathStatic.py` gained a real parse gate (`luau-compile` over every `.luau`) because its text checks all passed on the broken tree. Shaun confirmed cash/BUY works after the fix.
+
+**Walk-in buildings (`Modules/HollowBuildingBuilder`, config `StructureVisualConfig.HollowBuildings`):**
+1. Command Center is a real building (doorway, glass windows, lit interior) instead of a solid box. L2 comms annex + mast + floodlights; L3 second storey + interior stairs; L4 roof ladder (TrussPart) through a hatch + dish; L5 helipad marking, gold trim, taller flag.
+2. The building stands **behind** its pad and the doorway is shifted sideways (nearest door edge 10.2 studs from pad centre vs the 8-stud walk-over hit box), so going inside never buys the next level.
+3. The kit `Body` is now just the foundation slab, so existing invariants (Body exists, solid at L1+) hold; `applyKitVisuals` skips Body rescale and level-up "pops" for walk-in kits; the Model is rebuilt only when the level changes; plot release removes it.
+4. Walls/floors keep `CanQuery = true` so weapon raycasts and camera occlusion treat the building as solid.
+5. Other structures keep their Part kits until they get a `HollowBuildings` entry.
+6. `KIT_GEN` 32 → 33 so stale kits rebuild; BuyPathStatic checks KIT_GEN ≥ 32 instead of the exact text.

@@ -19,6 +19,7 @@ local Types = require(Shared.Types)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
+local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildingBuilder)
 
 local BaseService = {}
 
@@ -603,6 +604,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	plinth.Transparency = if lv == 0 then math.min(ghost, 0.45) else solid
 	plinth.Material = Enum.Material.Concrete
 
+	-- v66: walk-in buildings keep a fixed foundation slab; the Model grows with level instead
+	local hollow = HollowBuildingBuilder.IsHollow(structureId)
+
 	-- v39: mild level scale (was 0.55/lv → L5 Body 3.75× buried underground)
 	local bodyScale = 1 + lv * 0.12
 	local accentScale = 1 + lv * 0.08
@@ -630,7 +634,13 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 	for _, child in ipairs(plinth:GetChildren()) do
 		if child:IsA("BasePart") then
 			local role = child:GetAttribute("WE_KitRole")
-			if role == "Body" then
+			if role == "Body" and hollow then
+				child.Color = HollowBuildingBuilder.FoundationColor(structureId) or child.Color
+				child.Material = Enum.Material.Concrete
+				child.Transparency = transparency
+				child.CanCollide = true
+				child.CastShadow = false
+			elseif role == "Body" then
 				local bx = child:GetAttribute("WE_BaseSize")
 				if typeof(bx) ~= "Vector3" then
 					bx = child.Size
@@ -734,8 +744,15 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 		end
 	end
 
-	-- Upgrade pop extras (idempotent Part kits; never required for gameplay)
-	syncUpgradePops(plinth, structureId, lv)
+	-- Upgrade pop extras (idempotent Part kits; never required for gameplay).
+	-- Walk-in buildings show level in the building itself; pops would float over the pad.
+	syncUpgradePops(plinth, structureId, if hollow then 0 else lv)
+	if hollow then
+		local okB, errB = pcall(HollowBuildingBuilder.Sync, plinth, structureId, lv)
+		if not okB then
+			warn("[BaseService] HollowBuildingBuilder.Sync failed", structureId, errB)
+		end
+	end
 
 	-- v43: assert Body exists + solid at L1+ BEFORE any mesh dress (visibility first)
 	if lv >= 1 then

@@ -161,6 +161,61 @@ local StructureVisualConfig = {
 			MeshAssetId = 18798977801,
 		},
 	} :: { [string]: StructurePalette },
+
+	--[[
+		v66: walk-in buildings (Modules/HollowBuildingBuilder). The kit Body becomes the foundation slab;
+		walls/doorway/windows/interior are a Model rebuilt per level. The building sits BEHIND its pad and the
+		doorway is shifted sideways so going inside never re-triggers the walk-over buy (pad hit box = ±8 studs).
+		Local axes: +Z = building front (faces the plot spawn), X = across the facade.
+	]]
+	HollowBuildings = {
+		CommandCenter = {
+			Enabled = true,
+			Width = 26,
+			Depth = 20,
+			WallThickness = 0.8,
+			StoryHeight = 12,
+			UpperStoryHeight = 10,
+			FrontGap = 10, -- pad centre → front wall (pad hit box reaches 8)
+			OffsetX = 6, -- footprint centre east of the pad; with DoorX = 7 the doorway is 13 studs from the pad
+			DoorX = 7,
+			DoorWidth = 6,
+			DoorHeight = 8,
+			WindowWidth = 4.5,
+			WindowHeight = 3.2,
+			WindowBottom = 4,
+			FrontWindowsX = { -8.5, -2 },
+			BackWindowsX = { -6, 4 }, -- ground floor only while single-storey (stairs take the back wall at L3+)
+			WestWindowsZ = { -7 },
+			UpperWindowsX = { -8.5, -2, 7 },
+			AnnexLevel = 2, -- comms annex, roof mast, floodlights
+			AnnexWidth = 12,
+			AnnexDepth = 14,
+			AnnexHeight = 9,
+			TwoStoryLevel = 3, -- second storey + interior stairs
+			RoofAccessLevel = 4, -- truss ladder through a roof hatch + satellite dish
+			HelipadLevel = 5, -- rooftop helipad marking, gold parapet cap, tall flag
+			SignText = "COMMAND CENTER",
+			SignX = 0,
+			Colors = {
+				Wall = Color3.fromRGB(214, 200, 168),
+				Trim = Color3.fromRGB(78, 92, 62),
+				Metal = Color3.fromRGB(70, 74, 72),
+				Dark = Color3.fromRGB(28, 32, 30),
+				Floor = Color3.fromRGB(150, 150, 142),
+				Stair = Color3.fromRGB(128, 126, 118),
+				Roof = Color3.fromRGB(112, 108, 96),
+				Glass = Color3.fromRGB(140, 190, 215),
+				Accent = Color3.fromRGB(240, 196, 64),
+				Screen = Color3.fromRGB(90, 255, 140),
+				Light = Color3.fromRGB(255, 236, 200),
+				Locker = Color3.fromRGB(86, 100, 70),
+				Rug = Color3.fromRGB(58, 74, 50),
+				Sandbag = Color3.fromRGB(186, 164, 118),
+				Flag = Color3.fromRGB(70, 110, 60),
+			},
+		},
+	},
 }
 
 return StructureVisualConfig
