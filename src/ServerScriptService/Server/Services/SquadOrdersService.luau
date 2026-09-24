@@ -25,6 +25,7 @@ local RemoteSetup: any = nil
 local AntiExploitService: any = nil
 local VisualAssetService: any = nil
 local BaseService: any = nil
+local ResearchService: any = nil -- v69 research (deps.ResearchService)
 
 export type OrderId = "Follow" | "Attack" | "Hold" | "Retreat"
 
@@ -72,6 +73,28 @@ local function ensureFolder(): Folder
 	f.Parent = Workspace
 	squadFolder = f
 	return f
+end
+
+local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
+	if player == nil or ResearchService == nil or ResearchService.GetBonus == nil then
+		return 1
+	end
+	local ok, m = pcall(ResearchService.GetBonus, player, statId)
+	if ok and typeof(m) == "number" and m == m and m >= 1 and m <= 5 then
+		return m
+	end
+	return 1
+end
+
+local function researchAdd(player: Player?, statId: string): number -- v69 research: 0..10, 0 when absent
+	if player == nil or ResearchService == nil or ResearchService.GetAdd == nil then
+		return 0
+	end
+	local ok, a = pcall(ResearchService.GetAdd, player, statId)
+	if ok and typeof(a) == "number" and a == a and a >= 0 and a <= 10 then
+		return a
+	end
+	return 0
 end
 
 local function characterRoot(player: Player): BasePart?
@@ -123,7 +146,7 @@ local function pushState(player: Player)
 		Order = if st then st.Order else (OrdersConfig.DefaultOrder or "Follow"),
 		Soldiers = soldiers,
 		FieldUnits = alive,
-		MaxFieldUnits = OrdersConfig.MaxFieldUnits or 5,
+		MaxFieldUnits = (OrdersConfig.MaxFieldUnits or 5) + math.floor(researchAdd(player, "SquadSize")), -- v69 research
 		ShowPanel = show,
 	})
 end
@@ -213,7 +236,7 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	weldPart("Rifle", Vector3.new(0.26, 0.26, 2.4), CFrame.new(1.15, 0.15, -0.85), Color3.fromRGB(28, 28, 30), Enum.Material.Metal, nil)
 
 	local humanoid = Instance.new("Humanoid")
-	humanoid.MaxHealth = OrdersConfig.UnitHealth or 90
+	humanoid.MaxHealth = math.floor((OrdersConfig.UnitHealth or 90) * researchMult(owner, "SoldierHealth") + 0.5) -- v69 research
 	humanoid.Health = humanoid.MaxHealth
 	humanoid.WalkSpeed = OrdersConfig.UnitWalkSpeed or 14
 	humanoid.AutoRotate = true
@@ -407,7 +430,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 					local interval = 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
 					if now - unit.LastFireAt >= interval and dist <= range then
 						unit.LastFireAt = now
-						th:TakeDamage(OrdersConfig.AttackDamage or 8)
+						th:TakeDamage((OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage")) -- v69 research
 					end
 				end
 			end
@@ -425,7 +448,7 @@ function SquadOrdersService.SyncArmy(player: Player)
 		return
 	end
 	local soldiers = if SoldierService then SoldierService.GetCount(player) else 0
-	local maxField = OrdersConfig.MaxFieldUnits or 5
+	local maxField = (OrdersConfig.MaxFieldUnits or 5) + math.floor(researchAdd(player, "SquadSize")) -- v69 research
 	local per = OrdersConfig.UnitsPerSoldier or 1
 	local desired = math.clamp(math.floor(soldiers * per), 0, maxField)
 	if soldiers < (OrdersConfig.MinSoldiersToShow or 1) then
@@ -601,6 +624,21 @@ function SquadOrdersService.Push(player: Player)
 	pushState(player)
 end
 
+function SquadOrdersService.ApplyResearch(player: Player) -- v69 research: rescale living units' HP, add units
+	local st = squadByUser[player.UserId]
+	if st then
+		local maxHp = math.floor((OrdersConfig.UnitHealth or 90) * researchMult(player, "SoldierHealth") + 0.5)
+		for _, u in ipairs(st.Units) do
+			if u.Alive and u.Humanoid.Health > 0 then
+				local ratio = u.Humanoid.Health / math.max(u.Humanoid.MaxHealth, 1)
+				u.Humanoid.MaxHealth = maxHp
+				u.Humanoid.Health = math.max(1, ratio * maxHp)
+			end
+		end
+	end
+	SquadOrdersService.SyncArmy(player)
+end
+
 function SquadOrdersService.Init(deps: { [string]: any })
 	DataService = deps.DataService
 	SoldierService = deps.SoldierService
@@ -610,6 +648,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	AntiExploitService = deps.AntiExploitService
 	VisualAssetService = deps.VisualAssetService
 	BaseService = deps.BaseService
+	ResearchService = deps.ResearchService -- v69 research
 
 	if not OrdersConfig.Enabled then
 		print("[WAR EMPIRE] SquadOrdersService disabled (OrdersConfig.Enabled=false)")

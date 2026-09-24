@@ -18,6 +18,7 @@ local CombatConfig = require(Shared.Configs.CombatConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local ResearchConfig = require(Shared.Configs.ResearchConfig) -- v69 research
 
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
@@ -81,8 +82,10 @@ local MonetizationConfig: any = nil
 local RemoteSetup: any = nil
 local MissionService: any = nil
 local TerritoryService: any = nil
+local ResearchService: any = nil -- v69 research (deps.ResearchService; Init may run after ours)
 
 local combatStates: { [number]: CombatState } = {}
+local gunSchedule: { [number]: { [string]: number } } = {} -- v69 research: per-gun GCRA time (swaps can't skip a slow gun's cooldown)
 local npcRecords: { [string]: NPCRecord } = {}
 local npcFolder: Folder? = nil
 local npcSerial = 1
@@ -94,6 +97,21 @@ end
 
 local function weaponDef(id: string): WeaponDef?
 	return CombatWeaponLogic.WeaponDef(id)
+end
+
+local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
+	if player == nil or ResearchService == nil or ResearchService.GetBonus == nil then
+		return 1
+	end
+	local ok, m = pcall(ResearchService.GetBonus, player, statId)
+	if ok and typeof(m) == "number" and m == m and m >= 1 and m <= 5 then
+		return m
+	end
+	return 1
+end
+
+local function magSize(player: Player?, def: WeaponDef): number -- v69 research: upgraded magazine
+	return ResearchConfig.EffectiveMagazine(def.MagazineSize, researchMult(player, "WeaponMagazine"))
 end
 
 local function ensureStarter(profile: PlayerProfile)
@@ -162,7 +180,7 @@ local function pushState(player: Player)
 		MaxHealth = if humanoid then humanoid.MaxHealth else CombatConfig.PlayerMaxHealth,
 		WeaponId = weaponId,
 		Ammo = if state then state.Ammo else 0,
-		MagazineSize = if def then def.MagazineSize else 0,
+		MagazineSize = if def then magSize(player, def) else 0, -- v69 research
 		Reloading = if state then clock() < state.ReloadingUntil else false,
 		Alive = if state then state.Alive else (humanoid ~= nil and humanoid.Health > 0),
 	}
@@ -189,7 +207,7 @@ local function getState(player: Player): CombatState?
 	local def = weaponDef(weaponId)
 	local state: CombatState = {
 		WeaponId = weaponId,
-		Ammo = if def then def.MagazineSize else 30,
+		Ammo = if def then magSize(player, def) else 30, -- v69 research
 		ReloadingUntil = 0,
 		LastFireAt = 0,
 		InvulnerableUntil = 0,
@@ -201,7 +219,13 @@ local function getState(player: Player): CombatState?
 end
 
 local function damageFor(def: WeaponDef, attacker: Player?): number
-	return CombatDamage.DamageFor(def, attacker)
+	local base = CombatDamage.DamageFor(def, attacker)
+	local boosted = base * researchMult(attacker, "WeaponDamage") -- v69 research
+	local lethal = CombatConfig.PlayerMaxHealth or 100 -- v69 research: the bonus never creates a one-shot (Sniper 85 x 1.2)
+	if base < lethal and boosted >= lethal then -- v69 research
+		return math.max(base, lethal - 1) -- v69 research
+	end
+	return boosted
 end
 
 local function tagCreator(humanoid: Humanoid, attacker: Player)
@@ -687,7 +711,7 @@ function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, str
 	local state = getState(player)
 	if state then
 		state.WeaponId = weaponId
-		state.Ammo = def.MagazineSize
+		state.Ammo = magSize(player, def) -- v69 research
 		state.ReloadingUntil = 0
 	end
 	pushState(player)
@@ -780,10 +804,10 @@ function CombatService.Reload(player: Player): (boolean, string?)
 	if clock() < state.ReloadingUntil then
 		return false, "AlreadyReloading"
 	end
-	if state.Ammo >= def.MagazineSize then
+	if state.Ammo >= magSize(player, def) then -- v69 research
 		return false, "FullMag"
 	end
-	local reloadTime = def.ReloadTime
+	local reloadTime = def.ReloadTime / researchMult(player, "WeaponReload") -- v69 research
 	state.ReloadingUntil = clock() + reloadTime
 	local weaponId = state.WeaponId
 	pushState(player)
@@ -795,7 +819,7 @@ function CombatService.Reload(player: Player): (boolean, string?)
 		if clock() + 0.05 < s.ReloadingUntil then
 			return
 		end
-		s.Ammo = def.MagazineSize
+		s.Ammo = magSize(player, def) -- v69 research
 		s.ReloadingUntil = 0
 		if player.Parent then
 			pushState(player)
@@ -836,8 +860,14 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		return false
 	end
 
-	local minInterval = 1 / math.max(def.FireRate, 0.1)
-	if clock() - state.LastFireAt < minInterval * 0.9 then
+	local minInterval = 1 / math.max(def.FireRate * researchMult(player, "WeaponFireRate"), 0.1) -- v69 research
+	if state.LastFireAt > clock() + minInterval * 0.5 then -- v69 research: after a switch from a slower gun,
+		state.LastFireAt = clock() + minInterval * 0.5 -- cap its schedule to this gun (no-op for one gun)
+	end
+	local guns = gunSchedule[player.UserId] or {} -- v69 research
+	gunSchedule[player.UserId] = guns -- v69 research
+	local gunAt = guns[state.WeaponId] or -math.huge -- v69 research: this gun's own schedule (never capped)
+	if clock() - state.LastFireAt < minInterval * 0.5 or clock() - gunAt < minInterval * 0.5 then -- v69: GCRA
 		return false
 	end
 	if state.Ammo <= 0 then
@@ -871,7 +901,8 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	end
 
 	state.Ammo -= 1
-	state.LastFireAt = clock()
+	state.LastFireAt = math.max(state.LastFireAt + minInterval, clock()) -- v69 research: was = clock()
+	guns[state.WeaponId] = math.max(gunAt + minInterval, clock()) -- v69 research
 	pushState(player)
 
 	local range = def.Range + CombatConfig.HitPositionSlopStuds
@@ -1024,7 +1055,7 @@ local function onCharacterAdded(player: Player, character: Model)
 		state.InvulnerableUntil = clock() + invuln
 		local def = weaponDef(state.WeaponId)
 		if def then
-			state.Ammo = def.MagazineSize
+			state.Ammo = magSize(player, def) -- v69 research
 			state.ReloadingUntil = 0
 		end
 	end
@@ -1061,6 +1092,7 @@ function CombatService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
 	TerritoryService = deps.TerritoryService
+	ResearchService = deps.ResearchService -- v69 research
 
 	CombatDamage.Bind({ TerritoryService = TerritoryService })
 	CombatNPC.Bind({
@@ -1142,6 +1174,7 @@ function CombatService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		combatStates[player.UserId] = nil
+		gunSchedule[player.UserId] = nil -- v69 research
 	end)
 
 	task.spawn(function()
