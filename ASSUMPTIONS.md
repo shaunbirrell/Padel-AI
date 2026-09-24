@@ -1232,3 +1232,69 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
     of 1.28.
   - `LampLantern` stood 0.15 studs off the wall. It now touches the wall at `fz - 0.4`, reaching 0.8 in front.
   - Neither fix changes a part count, a Footprint extent that the layout uses, or a pin.
+
+## 2026-09-24 — Rollover fix (owner: "The quad falls over when driving super easy")
+## Rollover fix (owner report 2026-09-24: "The quad falls over when driving super easy") — assumptions
+
+Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.Drive.Stability` and
+`VehicleConfig.Drive.Modes.Car`; one-line reverts are given).
+
+1. **Rider mass for sizing = 14 (R15 at density 0.7), sitting 1.3 studs above the seat's top face.** Used only to
+   size the ballast, to place the drive point at the centre of mass and to size the upright assist. The real rider joins
+   the chassis assembly through the SeatWeld. Sensitivity was measured for riders of 10, 14 and 20 (Rthro). With a
+   20-mass rider the quad's static stability factor is 1.55 and it tips at 57°; at HEAD it was 0.80 and 39°.
+2. **Ballast = 1.0 x (kit + rider) for light 4x4s and the quad, and 0.4 x for trucks and APCs. Tracked, air and naval
+   get none.** The mover force (`WE_DriveLV`) and torque (`WE_DriveAO`) scale with mass, so acceleration, top speed and
+   turning feel stay the same. The heavier car pushes harder in car-vs-car and car-vs-player collisions: a light 4x4
+   goes from 77 to 154 mass, and trucks go up x1.4. Revert: `Families = {}`.
+3. **Ballast sits at `BallastHeight = 0.5`, halfway between the tyres' ground line and the axles.** This is below the
+   chassis. It is invisible, has no collision, query or touch, and is welded to the Chassis. It is not physically
+   plausible, but it is invisible, and it lowers the centre of mass more for the same mass.
+4. **The drive point (`WE_DriveAttach`) moves to the nominal centre of mass** (`DriveAtCoM = true`), so the drive's
+   cornering and braking force produces no roll or pitch moment. `WE_DriveAO` shares the attachment, and its torque
+   does not depend on where the attachment sits. Revert: `DriveAtCoM = false`.
+5. **`WE_UprightAO` is a roll/pitch-only AlignOrientation.** It tops `WE_DriveAO` up to `UprightFrac` (0.75 for light
+   vehicles, 0.6 for trucks and APCs) x weight x min(half track, half wheelbase). That total stays below gravity's own
+   righting moment, so the assist cannot lift wheels on slopes or ramps and cannot right a car that is lying on its
+   side. Assumption: `AlignType.PrimaryAxisParallel` aligns the attachment's X axis in the same direction as the goal's
+   X axis (world up); `PrimaryAxisOnly = true` is also set. This needs a device.
+6. **Wider track by vehicle id: UtilityQuad x1.2 (3.60 → 4.32 studs), ReconBuggy x1.1, DispatchCar x1.1.** The physics
+   wheels are hidden under the fitted Light Utility Vehicle body, so the change does not show. The Part kit shows the
+   wheels further out, which reads as a quad. Revert: `TrackScale = {}`.
+7. **Speed-sensitive steering: the turn rate is capped at `MaxLatAccel / speed`, with `MaxLatAccel` = 120 studs/s²
+   (0.61 g).** Nothing changes below 50 studs/s. At the quad's top speed of 58 the turn rate is 2.07 rad/s instead of
+   2.4. At 87 (1.5x research) it is 1.38. Tracked vehicles never reach the cap.
+8. **No traction and no steering while flipped (UpY < `FlipUpY` = 0.5, tilted past 60°).** The commanded speed brakes
+   to 0 at the class's `Brake` rate. At HEAD, a car on its side with the stick held was driven along the ground at up to
+   60 studs/s. This matches the "SPD 45" in the owner's screenshot.
+9. **Flip recovery replaces the old 0.5 s x 15 studs/s hop** (the hop moved the car up to 7.5 studs up plus its
+   horizontal speed). The recovery starts after 1.5 s on its side or roof below 3 studs/s:
+   - It holds X/Z still, lifts at 6 studs/s to 2.5 studs, levels the car at 2.5 rad/s through `WE_DriveAO`, then lowers
+     it at 6 studs/s until it touches down.
+   - It gives up after 2.5 s, or once it has moved more than 5 studs from the start.
+   - It waits 4 s between tries, allows at most 5 starts per minute, and never starts while another player (not a rider
+     of this car) is within 4 studs of the car's footprint.
+   - The same law runs on the driver's client, in server drive, and for an empty car (the server idle law).
+   - The per-minute count resets when the driver exits and sits again. This is harmless: a try lifts 2.5 studs at most
+     and never moves the car horizontally, and the server validator is unchanged.
+10. **The owner standing next to his own empty, flipped car blocks the idle recovery** (he counts as "another player"
+    until he sits in it). If he sits back in, the client law rights it with him aboard. If he steps about 4 studs away,
+    the server rights it. Alternative, if the owner prefers: exclude the owner in the idle case.
+11. **The two existing checks that pinned the old hop now fail by design and have patched copies:**
+    - `water/build/v/t_server.luau (h)`: "hop at 2.0 s, Vy 15"
+    - `jeep2/suites/t_client_jeep.luau 1h`: "0.5 s hop Vy 15"
+    The patched copies (`rollover/patched/`) check righting at 1.5 s with Vy 6 and X/Z at 0. The suite owners should
+    adopt them.
+12. **The catalog vehicle dress (W3 LOOK Light Utility Vehicle body) was checked, not changed.**
+    `VisualAssetService.weldCloneToPrimary` makes every clone part CanCollide, CanQuery and CanTouch false and Massless
+    true. The existing K2 test confirms it, and a pin is proposed. It adds no mass and no collision width. No
+    VisualAssetService edit was needed.
+
+13. **(Verifier) The watchdog ignores a flipped car.** Without traction a car on its side does not move, and the
+    righting lifts it straight up. A driver who sat into a flipped car and held the stick therefore tripped the
+    "nomove" watchdog after 1.2 s (server check) or the client's Stuck report after 1.5 s. That forced server drive,
+    and after righting it was counted toward `SessionTrips` (2 trips = every later ground sit starts in server drive).
+    Now the server watchdog does not count "pushing" while UpY < `FlipUpY` or for `RecoverMaxSeconds` (2.5 s) after the
+    last flipped sample, and the client does not run its Stuck clock while flipped or righting. An upright car that is
+    pinned still trips exactly as before (tested). Revert: remove the two blocks marked "rollover fix" in
+    `watchdogStep` / `watchClient`.

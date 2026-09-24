@@ -2052,6 +2052,36 @@ must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "N
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "SW_RadioMast", Block = "SW", Role = "mast", Tier = 1,', 'W3 Town v2: radio mast landmark (SW, Tier 1)')
 must_not_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 220, Enabled = true, Lights = 6, Signs = 1 },', 'W3 Town v2: the step-1 Town caps are retired')
 
+# --- Rollover fix (owner 2026-09-24: "The quad falls over when driving super easy"): ballast + drive at the centre of
+# mass + roll/pitch assist + speed-sensitive steering + no traction while flipped + gentle flip recovery ---
+RVC = 'src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau'
+RVS = 'src/ServerScriptService/Server/Services/VehicleService.luau'
+RVDC = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau'
+RVAS = 'src/ServerScriptService/Server/Services/VisualAssetService.luau'
+must_contain(RVC, 'Wheeled = { Accel = 28, Brake = 60, Coast = 10, TurnRate = 2.4, MinTurnFactor = 0.35, Grip = 8, MaxLatAccel = 120 },', 'Rollover: speed-sensitive steering, wheeled MaxLatAccel 120 studs/s2')
+must_contain(RVC, 'WheeledLight = { Ballast = 1.0, UprightFrac = 0.75 },', 'Rollover: light 4x4 / quad ballast + upright assist')
+must_contain(RVC, 'TrackScale = { UtilityQuad = 1.2, ReconBuggy = 1.1, DispatchCar = 1.1 }', 'Rollover: wider quad / buggy / dispatch-car track')
+must_contain(RVC, 'FlipUpY = 0.5, -- UpVector.Y below this', 'Rollover: flipped = tilted past 60 degrees')
+must_not_contain(RVC, 'HopSpeed = 15,', 'Rollover: no 15 studs/s flip hop (recovery lifts <= 2.5 studs)')
+must_contain(RVS, 'b:SetAttribute("WE_Ballast", true)', 'Rollover: WE_Ballast built for Car-mode wheeled kits')
+must_contain(RVS, 'attach.Position = Vector3.new(0, com.Y, com.Z)', 'Rollover: WE_DriveLV pushes at the centre of mass (no cornering roll)')
+must_contain(RVS, 'up.AlignType = Enum.AlignType.PrimaryAxisParallel', 'Rollover: WE_UprightAO is roll/pitch only (yaw free)')
+must_contain(RVS, 'local torque = fam.UprightFrac * info.Weight * info.Arm - ao.MaxTorque', 'Rollover: upright assist stays below gravity righting moment')
+must_contain(RVS, 'local rv = VehicleService._FlipRecover(state, sense, dt)', 'Rollover: server drive runs the flip recovery')
+must_contain(RVS, 'local rv = VehicleService._FlipRecover(idle, sense, dt)', 'Rollover: an empty flipped car rights itself')
+must_contain(RVS, 'state.Speed = approach(state.Speed, 0, c.Brake, dt)', 'Rollover: server drive has no traction while flipped')
+must_contain(RVS, 'turn = math.clamp(turn, -c.MaxLatAccel / spd, c.MaxLatAccel / spd)', 'Rollover: server speed-sensitive steering')
+must_contain(RVS, 'rec.ClearVal = not VehicleService._OthersNear(rec.Model, pos, reach + CarCfg.RecoverClearRadius)', 'Rollover: no righting next to another player (server)')
+must_contain(RVS, 'or n == "WE_UprightAO" -- rollover fix', 'Rollover: WE_UprightAO is never counted as a pin')
+must_contain(RVDC, 'local rv = Laws.FlipRecover(st, C, sense, dt)', 'Rollover: client law flip recovery')
+must_contain(RVDC, 'st.Speed = approach(st.Speed, 0, C.Brake, dt)', 'Rollover: client law has no traction while flipped')
+must_contain(RVDC, 'turn = math.clamp(turn, -latMax / spd, latMax / spd)', 'Rollover: client speed-sensitive steering')
+must_contain(RVDC, 'd.ClearVal = not othersNear(', 'Rollover: no righting next to another player (client)')
+must_contain(RVDC, 'ao.MaxAngularVelocity = tonumber(ao:GetAttribute("WE_Spin")) or ao.MaxAngularVelocity', 'Rollover: leaving the seat restores the AO spin limit')
+must_contain(RVAS, 'd.CanTouch = false\n\t\t\td.Massless = true\n\t\t\td.CastShadow = false\n\t\t\tlocal weld = Instance.new("WeldConstraint")', 'Rollover: catalog vehicle dress stays massless + non-colliding')
+must_contain(RVS, 'if flipAt ~= nil and t - flipAt < CarCfg.RecoverMaxSeconds then\n\t\t\tpush = false', 'Rollover (verifier): a flipped / just-righted car never trips the nomove watchdog')
+must_contain(RVDC, 'and not (d.Mode == "Car" and d.Chassis.CFrame.UpVector.Y < (d.Params.C.FlipUpY or 0.5))', 'Rollover (verifier): no Stuck report while flipped / righting')
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

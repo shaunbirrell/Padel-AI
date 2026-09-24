@@ -99,9 +99,11 @@ export type DriveSense = {
 	WaterNear: boolean?,
 	WaterFar: boolean?,
 	Time: number,
+	Clear: boolean?, -- rollover fix: false = another player is within reach of this flipped car (no righting); nil = clear
 }
 export type DriveHud = { Speed: number, Alt: number?, Throttle: number?, Tag: string? }
-export type DriveOut = { Velocity: Vector3, HoldVertical: boolean, Orientation: CFrame, Hud: DriveHud }
+-- Righting: flip recovery is lifting / levelling the car (WE_DriveAO.MaxAngularVelocity = Car.RecoverSpin meanwhile)
+export type DriveOut = { Velocity: Vector3, HoldVertical: boolean, Orientation: CFrame, Hud: DriveHud, Righting: boolean? }
 export type DriveParams = {
 	MaxSpeed: number,
 	Accel: number,
@@ -116,10 +118,16 @@ export type DriveState = {
 	Age: number,
 	SlowFor: number,
 	FlipFor: number,
-	HopLeft: number,
+	HopLeft: number, -- flip recovery: seconds left of the current righting (0 = none)
 	BobT: number,
 	LastWaterPos: Vector3?,
 	LastWaterY: number?,
+	-- flip recovery (VehicleService._FlipRecover; created on first use)
+	RightFrom: Vector3?,
+	RightDown: number?,
+	RightCool: number?,
+	RightClock: number?,
+	RightTimes: { number }?,
 }
 export type IdleState = {
 	GlideSpeed: number?,
@@ -128,6 +136,14 @@ export type IdleState = {
 	LastWaterPos: Vector3?,
 	LastWaterY: number?,
 	ReturnPos: Vector3?,
+	-- flip recovery for an empty car (the Car idle law)
+	FlipFor: number?,
+	HopLeft: number?,
+	RightFrom: Vector3?,
+	RightDown: number?,
+	RightCool: number?,
+	RightClock: number?,
+	RightTimes: { number }?,
 }
 export type Footprint = { HalfX: number, HalfZ: number, Clearance: number, Top: number }
 export type SpawnPad = { Pos: Vector3, CFrame: CFrame, Size: Vector3, Naval: boolean }
@@ -229,6 +245,11 @@ type VehicleRec = {
 	PinList: string,
 	NextDiagAt: number,
 	NextDiagLogAt: number,
+	-- rollover fix: "another player near this flipped car" (DriveSense.Clear), re-checked at most 5x a second
+	ClearAt: number?,
+	ClearVal: boolean?,
+	-- rollover fix: last watchdog sample (5 Hz) that saw this car on its side / roof (no "nomove" trip meanwhile)
+	FlipSeenAt: number?,
 }
 
 local sitCueShown: { [number]: boolean } = {} -- ArmedJeep muzzle-flash cue on the first car sit (once per session)
@@ -522,6 +543,96 @@ local function isConnectedToSea(basin: BasePart, parts: { BasePart }): boolean
 end
 
 -- ── Laws (server copies: idle, Car/Boat fallback; spec §2.1, §2.4, §2.6) ────────────────────────
+
+--[[ Rollover fix: is any player other than this car's own riders within `radius` of `pos`? (list: test hook; nil =
+	Players:GetPlayers()). Module-table fields, not locals: this file sits at Luau's 200-local limit. ]]
+VehicleService._OthersNear = function(model: Model, pos: Vector3, radius: number, list: { Player }?): boolean
+	for _, plr in ipairs(list or Players:GetPlayers()) do
+		local ch = plr.Character
+		if ch then
+			local root = ch:FindFirstChild("HumanoidRootPart")
+			if root and root:IsA("BasePart") and (root.Position - pos).Magnitude <= radius then
+				local hum = ch:FindFirstChildOfClass("Humanoid")
+				local seat = if hum then hum.SeatPart else nil
+				local riding = seat ~= nil and seat:IsDescendantOf(model)
+				if not riding and hum then
+					for _, c in ipairs(model:GetChildren()) do
+						if (c:IsA("Seat") or c:IsA("VehicleSeat")) and (c :: any).Occupant == hum then
+							riding = true
+							break
+						end
+					end
+				end
+				if not riding then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
+--[[ Rollover fix: flip recovery — the same maths as VehicleDriveClient Laws.FlipRecover (the driver's client runs
+	that one while it simulates; carStep (server drive) and the Car idle law (nobody seated) run this copy). Config:
+	VehicleConfig.Drive.Modes.Car (FlipUpY, FlipSeconds, Recover*). st = DriveState or IdleState; its recovery fields
+	are created on first use. Returns the mover velocity while righting (X/Z always 0), nil otherwise. ]]
+VehicleService._FlipRecover = function(st: any, sense: DriveSense, dt: number): Vector3?
+	local c: any = CarCfg
+	local clock = (tonumber(st.RightClock) or 0) + dt
+	st.RightClock = clock
+	st.RightCool = math.max(0, (tonumber(st.RightCool) or 0) - dt)
+	local pos = sense.Position
+	local left = tonumber(st.HopLeft) or 0
+	if left > 0 then
+		left -= dt
+		st.HopLeft = left
+		local from: Vector3 = st.RightFrom or pos
+		local down: number? = st.RightDown
+		if down == nil and sense.UpY >= c.RecoverDoneUpY then
+			down = 0 -- level again: lower it onto its wheels
+		end
+		local landed = down ~= nil and down >= 0.1 and sense.Velocity.Y > -0.5 * c.RecoverLiftSpeed
+		if landed or left <= 0 or (pos - from).Magnitude > c.RecoverMaxStuds then
+			st.HopLeft = 0
+			st.RightFrom = nil
+			st.RightDown = nil
+			st.FlipFor = 0
+			st.RightCool = c.RecoverCooldown
+			return nil
+		end
+		if down ~= nil then
+			st.RightDown = down + dt
+			return Vector3.new(0, -c.RecoverLiftSpeed, 0)
+		end
+		local rise = pos.Y - from.Y
+		return Vector3.new(0, math.clamp((c.RecoverLift - rise) * 4, 0, c.RecoverLiftSpeed), 0)
+	end
+	local v = sense.Velocity
+	if sense.UpY < c.FlipUpY and Vector3.new(v.X, 0, v.Z).Magnitude < c.RecoverSpeed then
+		st.FlipFor = (tonumber(st.FlipFor) or 0) + dt
+	else
+		st.FlipFor = 0
+	end
+	if st.FlipFor < c.FlipSeconds or st.RightCool > 0 or sense.Clear == false then
+		return nil
+	end
+	local times: { number } = st.RightTimes or {}
+	st.RightTimes = times
+	while #times > 0 and clock - times[1] >= 60 do
+		table.remove(times, 1)
+	end
+	if #times >= c.RecoverMaxPerMinute then
+		st.RightCool = 60 - (clock - times[1]) -- wait for the oldest start to leave the minute
+		return nil
+	end
+	table.insert(times, clock)
+	st.FlipFor = 0
+	st.HopLeft = c.RecoverMaxSeconds
+	st.RightFrom = pos
+	st.RightDown = nil
+	return Vector3.new(0, c.RecoverLiftSpeed, 0)
+end
+
 local function newDriveState(sense: DriveSense): DriveState
 	local waterY = sense.WaterY
 	return {
@@ -587,36 +698,39 @@ local function carStep(state: DriveState, p: DriveParams, input: DriveInput, sen
 	local rev = maxS * CarCfg.ReverseFrac
 	local t, s = unitInput(input.Throttle), unitInput(input.Steer)
 	speedResync(state, sense.Velocity:Dot(fwd(state.Heading)), ResyncCfg.CarGap, dt)
-	state.Speed = throttleSpeed(state.Speed, t, maxS, rev, p.Accel, c.Brake, c.Coast, CarCfg.ReverseAccelFrac, dt)
+	if sense.UpY < CarCfg.FlipUpY then
+		-- rollover fix: no traction and no steering on its side / roof (it used to be driven along on its side)
+		s = 0
+		state.Speed = approach(state.Speed, 0, c.Brake, dt)
+	else
+		state.Speed = throttleSpeed(state.Speed, t, maxS, rev, p.Accel, c.Brake, c.Coast, CarCfg.ReverseAccelFrac, dt)
+	end
 	state.Speed = math.clamp(state.Speed, -rev, maxS)
 	local dir = if state.Speed < -0.5 then -1 else 1
-	state.Heading -= s * p.TurnRate * math.clamp(math.abs(state.Speed) / CarCfg.TurnSpeedRef, c.MinTurnFactor, 1) * dir * dt
+	local spd = math.abs(state.Speed)
+	local turn = s * p.TurnRate * math.clamp(spd / CarCfg.TurnSpeedRef, c.MinTurnFactor, 1)
+	if c.MaxLatAccel > 0 and spd > 1 then
+		turn = math.clamp(turn, -c.MaxLatAccel / spd, c.MaxLatAccel / spd) -- rollover fix: speed-sensitive steering
+	end
+	state.Heading -= turn * dir * dt
 	if math.abs(wrapAngle(sense.Yaw - state.Heading)) > CarCfg.YawResyncRad then
 		state.Heading = sense.Yaw -- a collision spun us: stop fighting it
 	end
 	local r = right(state.Heading)
 	local lat = sense.Velocity:Dot(r) * math.exp(-c.Grip * dt)
 	local vel = fwd(state.Heading) * state.Speed + r * lat
-	local hold = false
-	if sense.UpY < CarCfg.FlipUpY then
-		state.FlipFor += dt
-		if state.FlipFor >= CarCfg.FlipSeconds then
-			state.FlipFor = 0
-			state.HopLeft = CarCfg.HopSeconds
-		end
-	else
-		state.FlipFor = 0
-	end
-	if state.HopLeft > 0 then
-		state.HopLeft -= dt
-		vel = Vector3.new(vel.X, CarCfg.HopSpeed, vel.Z)
-		hold = true
+	-- rollover fix: on its side / roof and stopped → flip recovery (replaces the old 15 studs/s hop)
+	local rv = VehicleService._FlipRecover(state, sense, dt)
+	if rv then
+		state.Speed = 0
+		vel = rv
 	end
 	return {
 		Velocity = vel,
-		HoldVertical = hold,
+		HoldVertical = rv ~= nil,
 		Orientation = orient(0, state.Heading, 0),
-		Hud = { Speed = math.abs(state.Speed) },
+		Hud = { Speed = math.abs(state.Speed), Tag = if rv then "RIGHTING" else nil },
+		Righting = rv ~= nil,
 	}
 end
 
@@ -741,7 +855,13 @@ local function idleTarget(mode: string, p: DriveParams, idle: IdleState, sense: 
 		end
 		return { Velocity = horiz + Vector3.new(0, vy, 0), HoldVertical = true, Orientation = level, Hud = hud }
 	end
-	-- Car: parking brake, level at the current heading
+	-- Car: parking brake, level at the current heading; an empty car on its side / roof rights itself (rollover fix)
+	if mode == "Car" then
+		local rv = VehicleService._FlipRecover(idle, sense, dt)
+		if rv then
+			return { Velocity = rv, HoldVertical = true, Orientation = level, Hud = { Speed = hud.Speed, Tag = "RIGHTING" }, Righting = true }
+		end
+	end
 	return { Velocity = Vector3.zero, HoldVertical = false, Orientation = level, Hud = hud }
 end
 
@@ -865,7 +985,120 @@ local function setMoverLimits(lv: LinearVelocity, ao: AlignOrientation, chassis:
 	ao.MaxTorque = mass * sizeMag * sizeMag * torqueScale
 	ao.Responsiveness = responsiveness
 	ao.MaxAngularVelocity = maxAngular
+	ao:SetAttribute("WE_Spin", maxAngular) -- rollover fix: the client restores this after a flip recovery
 	return force
+end
+
+--[[ Rollover fix (VehicleConfig.Drive.Stability; Car-mode kits of the listed families only): the WE_Ballast part and
+	WE_DriveAttach moved to the centre of mass with a nominal rider. Returns what WE_UprightAO needs (weight with the
+	rider, lever arm = min(half track to the tyre's outer face, half wheelbase)), or nil when the family gets nothing.
+	Module-table fields, not locals: this file sits at Luau's 200-local limit. ]]
+VehicleService._Ballast = function(model: Model, chassis: BasePart, attach: Attachment, def: VehicleDef): { Weight: number, Arm: number }?
+	local cfg = Drive.Stability
+	local fam = cfg.Families[def.KitFamily or ""]
+	if fam == nil then
+		return nil
+	end
+	local ccf = chassis.CFrame
+	local ground, axle, zSum, n = math.huge, 0, 0, 0
+	local halfTrack, zMin, zMax = 0, math.huge, -math.huge
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("WE_PhysicsWheel") == true then
+			local lp = ccf:PointToObjectSpace(d.Position)
+			ground = math.min(ground, lp.Y - math.min(d.Size.Y, d.Size.Z) * 0.5)
+			axle += lp.Y
+			zSum += lp.Z
+			n += 1
+			halfTrack = math.max(halfTrack, math.abs(lp.X) + d.Size.X * 0.5)
+			zMin = math.min(zMin, lp.Z)
+			zMax = math.max(zMax, lp.Z)
+		end
+	end
+	if n == 0 then
+		return nil
+	end
+	axle /= n
+	local m = math.max(0, fam.Ballast) * (estimateMass(model) + cfg.RiderMass)
+	if m > 0 then
+		-- invisible, never collides / queried / touched; thin plate between the wheels, below the chassis
+		local bx = math.max(0.4, chassis.Size.X * 0.5)
+		local bz = math.max(0.4, (zMax - zMin) * 0.5)
+		local by = math.max(0.2, m / (cfg.BallastDensityMax * bx * bz))
+		local b = Instance.new("Part")
+		b.Name = "WE_Ballast"
+		b.Size = Vector3.new(bx, by, bz)
+		b.CFrame = ccf * CFrame.new(0, ground + cfg.BallastHeight * (axle - ground), zSum / n)
+		b.Anchored = false
+		b.CanCollide = false
+		b.CanQuery = false
+		b.CanTouch = false
+		b.CastShadow = false
+		b.Massless = false
+		b.Transparency = 1
+		b.CustomPhysicalProperties = PhysicalProperties.new(m / (bx * by * bz), 0.3, 0, 1, 1)
+		b:SetAttribute("WE_Ballast", true)
+		b.Parent = model
+		local w = Instance.new("WeldConstraint")
+		w.Part0 = chassis
+		w.Part1 = b
+		w.Parent = b
+	end
+	-- centre of mass with the nominal rider on the driver seat (chassis space)
+	local mass, moment = 0, Vector3.zero
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and not d.Massless then
+			local pm = d:GetMass()
+			mass += pm
+			moment += ccf:PointToObjectSpace(d.Position) * pm
+		end
+	end
+	local seat = model:FindFirstChild("DriverSeat")
+	if seat and seat:IsA("BasePart") and cfg.RiderMass > 0 then
+		local sp = ccf:PointToObjectSpace(seat.Position) + Vector3.new(0, seat.Size.Y * 0.5 + cfg.RiderLift, 0)
+		mass += cfg.RiderMass
+		moment += sp * cfg.RiderMass
+	end
+	if mass <= 0 then
+		return nil
+	end
+	if cfg.DriveAtCoM then
+		local com = moment / mass
+		attach.Position = Vector3.new(0, com.Y, com.Z)
+	end
+	return { Weight = mass * Workspace.Gravity, Arm = math.min(halfTrack, (zMax - zMin) * 0.5) }
+end
+
+--[[ Rollover fix: WE_UprightAO — roll / pitch only (the attachment's primary axis is the chassis' up, the goal's is the
+	world's up; yaw is free). It tops WE_DriveAO's torque up to UprightFrac x weight x arm: always below gravity's own
+	righting moment, so a car on a slope, ramp or landing still follows the ground, and a car on its side is left to
+	the flip recovery. Nothing is added when WE_DriveAO alone already reaches that. ]]
+VehicleService._Upright = function(chassis: BasePart, ao: AlignOrientation, info: { Weight: number, Arm: number }, def: VehicleDef)
+	local cfg = Drive.Stability
+	local fam = cfg.Families[def.KitFamily or ""]
+	if fam == nil then
+		return
+	end
+	local torque = fam.UprightFrac * info.Weight * info.Arm - ao.MaxTorque
+	if torque <= 0 then
+		return
+	end
+	local frame = CFrame.fromMatrix(Vector3.zero, Vector3.yAxis, -Vector3.xAxis) -- X column = up
+	local att = Instance.new("Attachment")
+	att.Name = "WE_UprightAttach"
+	att.CFrame = frame
+	att.Parent = chassis
+	local up = Instance.new("AlignOrientation")
+	up.Name = "WE_UprightAO"
+	up.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	up.PrimaryAxisOnly = true
+	up.AlignType = Enum.AlignType.PrimaryAxisParallel
+	up.Attachment0 = att
+	up.RigidityEnabled = false
+	up.CFrame = frame -- goal primary axis (X column) = world up
+	up.MaxTorque = torque
+	up.Responsiveness = cfg.UprightResponsiveness
+	up.MaxAngularVelocity = cfg.UprightMaxAngularVelocity
+	up.Parent = chassis
 end
 
 local function createMovers(model: Model, chassis: BasePart, def: VehicleDef, mode: string)
@@ -891,8 +1124,13 @@ local function createMovers(model: Model, chassis: BasePart, def: VehicleDef, mo
 	ao.RigidityEnabled = false
 	ao.CFrame = chassis.CFrame.Rotation
 	ao.Parent = chassis
+	-- rollover fix: ballast + drive point at the centre of mass (Car-mode families in Drive.Stability.Families)
+	local stab = if mode == "Car" then VehicleService._Ballast(model, chassis, attach, def) else nil
 	-- Fy starts at F only for boats (planes that start in the air get it at spawn)
 	setMoverLimits(lv, ao, chassis, mode, def.Seats or 1, estimateMass(model), mode == "Boat")
+	if stab then
+		VehicleService._Upright(chassis, ao, stab, def)
+	end
 end
 
 local function weldTo(body: BasePart, other: BasePart)
@@ -932,13 +1170,16 @@ local function addPart(
 	return p
 end
 
-local function addWheels(model: Model, body: BasePart, scale: number, positions: { Vector3 }, radius: number?)
+local function addWheels(model: Model, body: BasePart, scale: number, positions: { Vector3 }, radius: number?, track: number?)
 	-- Physics wheels on HingeConstraints (NOT welded). v70: free-rolling (ActuatorType None) — the
 	-- WE_DriveLV / WE_DriveAO movers carry the vehicle, so nothing fights the drive.
 	-- Catalog mesh wheels stay cosmetic-only via VisualAssetService (CanCollide false).
 	-- Cylinder PartType axis is local X (= axle). Do NOT Z-rotate 90° (that stood the can on end).
+	-- Rollover fix: track (Drive.Stability.TrackScale by vehicle id) sets the wheels further out (X only).
 	local r = radius or 1.1
-	for i, offset in ipairs(positions) do
+	local tw = track or 1
+	for i, raw in ipairs(positions) do
+		local offset = Vector3.new(raw.X * tw, raw.Y, raw.Z)
 		local wheel = Instance.new("Part")
 		wheel.Name = "Wheel" .. i
 		wheel.Shape = Enum.PartType.Cylinder
@@ -1085,6 +1326,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	local seatOffset = CFrame.new(0, 2.0, -0.5)
 	local labelY = 4.5
 	local s = scale
+	local track = tonumber(Drive.Stability.TrackScale[id]) or 1 -- rollover fix: wider-set physics wheels
 
 	local function kitWheeledLight()
 		local armed = id == "ArmedJeep"
@@ -1109,7 +1351,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			Vector3.new(2.4, -0.9, 2.6),
 			Vector3.new(-2.4, -0.9, -2.6),
 			Vector3.new(2.4, -0.9, -2.6),
-		}, 1.05)
+		}, 1.05, track)
 		addHeadlights(model, body, s, -4.1, 0.2, 1.8)
 		addTaillights(model, body, s, if quad then 3.0 else 4.0, 0.15, 1.9)
 		addExhaust(model, body, s, CFrame.new(1.8 * s, -0.2 * s, 3.2 * s) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(50, 55, 45))
@@ -1145,7 +1387,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			Vector3.new(2.8, -1.2, 0),
 			Vector3.new(-2.8, -1.2, -3.5),
 			Vector3.new(2.8, -1.2, -3.5),
-		}, 1.2)
+		}, 1.2, track)
 		addHeadlights(model, body, s, -5.3, 0.4, 2.2)
 		addTaillights(model, body, s, 5.2, 0.3, 2.4)
 		addExhaust(model, body, s, CFrame.new(2.4 * s, -0.4 * s, 4.5 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
@@ -1173,7 +1415,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 			Vector3.new(3.0, -1.3, 0.5),
 			Vector3.new(-3.0, -1.3, -2.5),
 			Vector3.new(3.0, -1.3, -2.5),
-		}, 1.25)
+		}, 1.25, track)
 		addHeadlights(model, body, s, -5.1, 0.2, 2.4)
 		addTaillights(model, body, s, 4.8, 0.2, 2.5)
 		addExhaust(model, body, s, CFrame.new(2.8 * s, 0.2 * s, 4.0 * s) * CFrame.Angles(0, 0, math.rad(90)), accentCol)
@@ -2343,6 +2585,13 @@ local function applyOut(rec: VehicleRec, out: DriveOut)
 		ao.CFrame = rot
 		rec.OutRot = rot
 	end
+	if rec.Mode == "Car" then
+		-- rollover fix: a flip recovery levels the car gently (Car.RecoverSpin), then the normal limit comes back
+		local spin = if out.Righting == true then CarCfg.RecoverSpin else CarCfg.MaxAngularVelocity
+		if ao.MaxAngularVelocity ~= spin then
+			ao.MaxAngularVelocity = spin
+		end
+	end
 end
 
 local function refreshMoverLimits(rec: VehicleRec)
@@ -2497,6 +2746,16 @@ local function senseFor(rec: VehicleRec, t: number): DriveSense
 	if rec.Mode == "Boat" then
 		waterY = waterSurfaceAt(recWaterParts(rec), pos, 0, nil)
 	end
+	-- rollover fix: only a flipped car asks whether another player is within reach (5 Hz at most)
+	local clear: boolean? = nil
+	if rec.Mode == "Car" and cf.UpVector.Y < CarCfg.FlipUpY then
+		if rec.ClearAt == nil or t - (rec.ClearAt :: number) >= 0.2 then
+			local reach = math.max(rec.Params.HalfLength, tonumber(rec.Model:GetAttribute("WE_HalfWidth")) or 0)
+			rec.ClearAt = t
+			rec.ClearVal = not VehicleService._OthersNear(rec.Model, pos, reach + CarCfg.RecoverClearRadius)
+		end
+		clear = rec.ClearVal
+	end
 	return {
 		Position = pos,
 		Velocity = partVelocity(rec.Chassis),
@@ -2505,6 +2764,7 @@ local function senseFor(rec: VehicleRec, t: number): DriveSense
 		AGL = agl,
 		WaterY = waterY,
 		Time = t,
+		Clear = clear,
 	}
 end
 
@@ -2577,6 +2837,7 @@ local function isOwnDriveObject(d: Instance): boolean
 	local n = d.Name
 	return n == "WE_DriveLV"
 		or n == "WE_DriveAO"
+		or n == "WE_UprightAO" -- rollover fix: our own roll / pitch assist, not a pin
 		or n == "SeatWeld"
 		or string.sub(n, 1, 17) == "WE_WheelNoCollide"
 		or (d:IsA("HingeConstraint") and d:GetAttribute("WE_DriveHinge") == true)
@@ -3170,6 +3431,18 @@ local function watchdogStep(rec: VehicleRec, t: number)
 		return if air then d.Magnitude else Vector3.new(d.X, 0, d.Z).Magnitude
 	end
 	local push = pushing(rec, serverInput(rec, t))
+	if rec.Mode == "Car" then
+		-- rollover fix: a car on its side / roof has no traction by design and the flip recovery lifts it straight up,
+		-- so "pushing but not moving" proves nothing until it has been upright for Car.RecoverMaxSeconds (else sitting
+		-- in a flipped car with the stick held tripped the watchdog → server drive, and counted toward SessionTrips)
+		if rec.Chassis.CFrame.UpVector.Y < CarCfg.FlipUpY then
+			rec.FlipSeenAt = t
+		end
+		local flipAt = rec.FlipSeenAt
+		if flipAt ~= nil and t - flipAt < CarCfg.RecoverMaxSeconds then
+			push = false
+		end
+	end
 	local last = rec.LastWatchAt
 	local since = if last ~= nil then math.clamp(t - last, 0, 0.5) else 0 -- real time between 5 Hz calls
 	rec.LastWatchAt = t
@@ -3953,6 +4226,10 @@ function VehicleService._Wreck(model: Model)
 			rec.LV.MaxAxesForce = Vector3.zero
 			rec.LV.Enabled = false
 			rec.AO.Enabled = false
+			local up = rec.Chassis:FindFirstChild("WE_UprightAO") -- rollover fix: the wreck settles freely
+			if up and up:IsA("AlignOrientation") then
+				up.Enabled = false
+			end
 		end)
 	end
 	model:SetAttribute("WE_DriveAuthority", "Server")
