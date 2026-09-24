@@ -22,11 +22,24 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
-local AntiExploitService: any = nil
 local MissionService: any = nil
 local TutorialService: any = nil
 
 local MAX_BATCH = 50
+-- Recruit/Dismiss tap limiter (per remote): 4/s sustained, 8 burst — above human tap speed for a
+-- short burst; extra taps are dropped with a throttled toast (no AntiExploit strike).
+local TAP_RATE = 4
+local TAP_BURST = 8
+
+local function slowDownToast(player: Player, what: string)
+	if not NotificationService then
+		return
+	end
+	local msg = "Slow down — too many " .. what .. " taps, try again in a moment"
+	if NotificationService.NotifyThrottled then
+		NotificationService.NotifyThrottled(player, msg, "Info", 1.5, 2, "soldier_tap_" .. what)
+	end
+end
 
 local function trainingIncomePerTick(profile: any): number
 	local cfg = SoldierConfig.TrainingIncome
@@ -292,16 +305,14 @@ function SoldierService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
-	AntiExploitService = deps.AntiExploitService
 	MissionService = deps.MissionService
 	TutorialService = deps.TutorialService
 
 	local recruitRemote = RemoteSetup.Get(Constants.RemoteNames.RequestRecruitSoldiers) :: RemoteEvent
 	recruitRemote.OnServerEvent:Connect(function(player: Player, amount: any)
-		if not RateLimitService.Allow(player, "soldier_recruit", 2, 4) then
-			if AntiExploitService and AntiExploitService.Strike then
-				AntiExploitService.Strike(player, "soldier_recruit_rate")
-			end
+		-- v69: fast taps are normal play — drop extras with a throttled toast, never an AntiExploit strike
+		if not RateLimitService.Allow(player, "soldier_recruit", TAP_RATE, TAP_BURST) then
+			slowDownToast(player, "recruit")
 			return
 		end
 		if not RemoteGuard.RequireProfile(DataService, player) then
@@ -321,10 +332,8 @@ function SoldierService.Init(deps: { [string]: any })
 
 	local dismissRemote = RemoteSetup.Get(Constants.RemoteNames.RequestDismissSoldiers) :: RemoteEvent
 	dismissRemote.OnServerEvent:Connect(function(player: Player, amount: any)
-		if not RateLimitService.Allow(player, "soldier_dismiss", 2, 4) then
-			if AntiExploitService and AntiExploitService.Strike then
-				AntiExploitService.Strike(player, "soldier_dismiss_rate")
-			end
+		if not RateLimitService.Allow(player, "soldier_dismiss", TAP_RATE, TAP_BURST) then
+			slowDownToast(player, "dismiss")
 			return
 		end
 		if not RemoteGuard.RequireProfile(DataService, player) then

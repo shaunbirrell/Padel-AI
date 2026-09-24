@@ -1004,7 +1004,19 @@ function GateDefenseService.TryRepair(player: Player, plotId: number): boolean
 	return true
 end
 
-function GateDefenseService.SyncPlot(plotId: number)
+-- Owner's DefensiveWalls level from the loaded profile (0 when offline / not loaded)
+local function ownerWallsLevel(ownerUserId: number): number
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if owner and DataService then
+		local profile = DataService.GetProfile(owner)
+		if profile and profile.BaseUpgrades then
+			return tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
+		end
+	end
+	return 0
+end
+
+local function syncPlotNow(plotId: number)
 	if not GateDefenseConfig.Enabled then
 		clearDefense(plotId)
 		return
@@ -1014,14 +1026,7 @@ function GateDefenseService.SyncPlot(plotId: number)
 		clearDefense(plotId)
 		return
 	end
-	local owner = Players:GetPlayerByUserId(ownerUserId)
-	local wallsLevel = 0
-	if owner and DataService then
-		local profile = DataService.GetProfile(owner)
-		if profile and profile.BaseUpgrades then
-			wallsLevel = tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
-		end
-	end
+	local wallsLevel = ownerWallsLevel(ownerUserId)
 	local stats = GateDefenseConfig.GetLevelStats(wallsLevel)
 	if not stats then
 		clearDefense(plotId)
@@ -1074,6 +1079,18 @@ function GateDefenseService.SyncPlot(plotId: number)
 		end
 	end
 
+	-- v69: owner left / plot changed hands while the spawns above yielded → drop this build
+	local ownerNow = if BaseService and BaseService.GetOwnerUserId then BaseService.GetOwnerUserId(plotId) else nil
+	if ownerNow ~= ownerUserId or folder.Parent == nil then
+		for _, g in ipairs(guards) do
+			g.Alive = false
+		end
+		if folder.Parent then
+			folder:Destroy()
+		end
+		return
+	end
+
 	local barriers, maxHp = spawnGateBarriers(gateCf, wallsLevel, folder, plotId, ownerUserId)
 	for _, leaf in ipairs(barriers) do
 		local prompt = leaf:FindFirstChild("GateRepairPrompt")
@@ -1110,6 +1127,53 @@ function GateDefenseService.SyncPlot(plotId: number)
 			#turrets,
 			tostring(stats.DesignTier)
 		))
+	end
+end
+
+-- v69: one sync per plot at a time. Guard/AutoGun spawns can yield (catalog LoadAsset); two overlapping syncs
+-- (walls purchase + plot-ready) used to both spawn into the same folder → duplicate / orphaned guards.
+local syncBusy: { [number]: boolean } = {}
+local syncAgain: { [number]: boolean } = {}
+
+function GateDefenseService.SyncPlot(plotId: number)
+	if syncBusy[plotId] then
+		syncAgain[plotId] = true -- coalesce: re-run once the running sync ends (picks up the latest level)
+		return
+	end
+	syncBusy[plotId] = true
+	repeat
+		syncAgain[plotId] = nil
+		xpcall(syncPlotNow, function(err)
+			warn("[GateDefense] SyncPlot failed plot=", plotId, err)
+		end, plotId)
+	until not syncAgain[plotId]
+	syncBusy[plotId] = nil
+end
+
+--[[ v69: idempotent — syncs only when the plot's defense does not match its owner + current walls level
+	(missing, other owner, level changed, or folder lost to a map rebuild). Safe to call on every plot-ready. ]]
+function GateDefenseService.EnsurePlot(plotId: number)
+	if not GateDefenseConfig.Enabled then
+		return
+	end
+	local ownerUserId = if BaseService and BaseService.GetOwnerUserId then BaseService.GetOwnerUserId(plotId) else nil
+	local def = defenses[plotId]
+	if ownerUserId == nil then
+		if def then
+			GateDefenseService.SyncPlot(plotId)
+		end
+		return
+	end
+	local wallsLevel = ownerWallsLevel(ownerUserId)
+	local wantDefense = GateDefenseConfig.GetLevelStats(wallsLevel) ~= nil
+	local inSync = if wantDefense
+		then def ~= nil
+			and def.OwnerUserId == ownerUserId
+			and def.WallsLevel == wallsLevel
+			and def.Folder.Parent ~= nil
+		else def == nil
+	if not inSync then
+		GateDefenseService.SyncPlot(plotId)
 	end
 end
 
@@ -1233,23 +1297,33 @@ function GateDefenseService.Init(deps: { [string]: any })
 		end)
 	end
 
+	-- v69: spawn from the LOADED save whenever the owner's plot is (re)built — join (DataService v67 fires
+	-- OnProfileLoaded only after the real save is read; BaseService then builds the walls/GatePosts and fires
+	-- OnPlotReady), a freed plot handed out, prestige, map rebuild. Replaces the fixed 1.2 s / 3.5 s timers,
+	-- which missed any save/walls that landed later and then never re-synced for the whole session.
+	local hookedPlotReady = false
+	if BaseService and BaseService.OnPlotReady then
+		local okHook, errHook = pcall(BaseService.OnPlotReady, function(_player: Player, plotId: number)
+			GateDefenseService.EnsurePlot(plotId)
+		end)
+		hookedPlotReady = okHook
+		if not okHook then
+			warn("[GateDefense] OnPlotReady hook failed:", errHook)
+		end
+	end
 	if DataService and DataService.OnProfileLoaded then
-		DataService.OnProfileLoaded(function(player: Player, profile: any)
-			task.defer(function()
-				task.wait(1.2)
-				if not player.Parent then
-					return
-				end
-				local plotId = profile and profile.BasePlotId
-				if typeof(plotId) == "number" then
-					GateDefenseService.SyncPlot(plotId)
-				end
-			end)
-			task.delay(3.5, function()
-				if player.Parent and profile and typeof(profile.BasePlotId) == "number" then
-					GateDefenseService.SyncPlot(profile.BasePlotId)
-				end
-			end)
+		-- Belt: late ensure for the loaded owner's plot (no-op when already in sync); sole path if the hook failed
+		DataService.OnProfileLoaded(function(player: Player, _profile: any)
+			for _, delaySec in ipairs(if hookedPlotReady then { 10 } else { 1.2, 3.5, 10 }) do
+				task.delay(delaySec, function()
+					local plotId = if player.Parent and BaseService and BaseService.GetOwnedPlotId
+						then BaseService.GetOwnedPlotId(player)
+						else nil
+					if typeof(plotId) == "number" then
+						GateDefenseService.EnsurePlot(plotId)
+					end
+				end)
+			end
 		end)
 	end
 

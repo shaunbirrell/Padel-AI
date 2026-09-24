@@ -189,10 +189,13 @@ local function box(ctx: Ctx, name: string, size: Vector3, pos: Vector3, color: C
 	return part(ctx, name, size, ctx.origin * CFrame.new(pos), color, material, collide)
 end
 
+local LIGHTS = (StructureVisualConfig :: any).BuildingLights or {}
+local FIXTURE_MATERIAL: Enum.Material = LIGHTS.FixtureMaterial or Enum.Material.Neon
+
 local function light(host: BasePart, range: number, brightness: number, color: Color3)
 	local l = Instance.new("PointLight")
-	l.Range = range
-	l.Brightness = brightness
+	l.Range = math.min(range, LIGHTS.MaxRange or range)
+	l.Brightness = brightness * (LIGHTS.BrightnessScale or 1)
 	l.Color = color
 	l.Shadows = false
 	l.Parent = host
@@ -637,7 +640,7 @@ local function build(ctx: Ctx)
 		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX - doorW * 0.5 - 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
 		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX + doorW * 0.5 + 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
 	end
-	local entryLamp = box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), col.Light, Enum.Material.Neon, false)
+	local entryLamp = box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 	light(entryLamp, 14, 1.4, col.Light)
 	local signW = math.min(W - 6, 16)
 	local signY = math.min(awnY + 1.6, y1 + H1 - 1.2)
@@ -670,14 +673,14 @@ local function build(ctx: Ctx)
 	for i = 1, lampCount do
 		local lx = -hw + W * (i - 0.5) / lampCount
 		for _, lz in ipairs({ -hd * 0.4, hd * 0.35 }) do
-			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y1 + H1 - 0.15, lz), col.Light, Enum.Material.Neon, false)
+			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y1 + H1 - 0.15, lz), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 			light(lamp, 20, 1.0, col.Light)
 		end
 	end
 	if twoStory then
 		for i = 1, lampCount do
 			local lx = -hw + W * (i - 0.5) / lampCount
-			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y2 + H2 - 0.15, hd * 0.3), col.Light, Enum.Material.Neon, false)
+			local lamp = box(ctx, "CeilingLight", Vector3.new(4, 0.2, 1.2), Vector3.new(lx, y2 + H2 - 0.15, hd * 0.3), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 			light(lamp, 18, 1.0, col.Light)
 		end
 	end
@@ -700,7 +703,7 @@ local function build(ctx: Ctx)
 		box(ctx, "Generator", Vector3.new(4, 3, 2.4), Vector3.new(axc + 1.5, y1 + 1.5, az0 + t + 1.5), col.Locker, Enum.Material.DiamondPlate)
 		box(ctx, "GeneratorStripe", Vector3.new(4.05, 0.5, 2.45), Vector3.new(axc + 1.5, y1 + 2.4, az0 + t + 1.5), col.Accent, Enum.Material.SmoothPlastic, false)
 		box(ctx, "RadioRack", Vector3.new(1.4, 5, 2), Vector3.new(ax1 - t - 0.8, y1 + 2.5, annexZc + 2), col.Dark, Enum.Material.Metal)
-		local aLamp = box(ctx, "CeilingLight", Vector3.new(3, 0.2, 1), Vector3.new(axc, y1 + annexH - 0.15, annexZc), col.Light, Enum.Material.Neon, false)
+		local aLamp = box(ctx, "CeilingLight", Vector3.new(3, 0.2, 1), Vector3.new(axc, y1 + annexH - 0.15, annexZc), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
 		light(aLamp, 16, 1.1, col.Light)
 		local signA = box(ctx, "AnnexSign", Vector3.new(5, 1.2, 0.25), Vector3.new(axc, y1 + annexH - 1.2, az1 + 0.15), col.Dark, Enum.Material.Metal, false)
 		surfaceText(signA, Enum.NormalId.Back, { c.AnnexSignText or "COMMS" }, col.Accent, col.Dark, Enum.Font.GothamBlack)

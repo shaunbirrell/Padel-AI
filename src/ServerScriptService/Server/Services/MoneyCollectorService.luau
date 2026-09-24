@@ -366,13 +366,15 @@ function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boole
 	return true, transferred
 end
 
-function MoneyCollectorService.Collect(player: Player): (boolean, number)
+-- silent: the AutoCollect loop collects every few seconds; the cash readout updating is the feedback,
+-- a "Collected $N" toast each cycle only covered the screen (owner report, v68).
+function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boolean, number)
 	if not EconomyService or not EconomyService.CollectPendingCash then
 		return false, 0
 	end
 	local granted = EconomyService.CollectPendingCash(player)
 	if granted > 0 then
-		if NotificationService then
+		if NotificationService and not silent then
 			NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3)
 		end
 		if TutorialService and TutorialService.Notify then
@@ -695,7 +697,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 				if hasAutoCollect(player) then
 					local profile = DataService.GetProfile(player)
 					if profile and (tonumber(profile.PendingCash) or 0) > 0 then
-						MoneyCollectorService.Collect(player)
+						MoneyCollectorService.Collect(player, true)
 						MoneyCollectorService.RefreshForPlayer(player)
 					end
 				end

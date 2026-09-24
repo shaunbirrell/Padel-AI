@@ -45,7 +45,7 @@ return function(ictx: any, api: any)
 	end
 	-- Hangar lights
 	for i = -1, 1 do
-		local lamp = api.box("HangarLight", Vector3.new(6, 0.25, 1), Vector3.new(hx + i * 12, y0 + H - 0.4, 0), col.Light, Enum.Material.Neon, false)
+		local lamp = api.box("HangarLight", Vector3.new(6, 0.25, 1), Vector3.new(hx + i * 12, y0 + H - 0.4, 0), col.Light, Enum.Material.SmoothPlastic, false)
 		api.light(lamp, 26, 1.1, col.Light)
 	end
 	api.box("TaxiLine", Vector3.new(0.5, 0.05, hD - 2), Vector3.new(hx, y0 + 0.03, 0.5), col.Accent, Enum.Material.SmoothPlastic, false)

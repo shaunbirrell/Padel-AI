@@ -172,6 +172,11 @@ if deps.DataService == nil then
 end
 
 safeInit("NotificationService", NotificationService, deps)
+-- v69: TutorialService right after its deps (DataService, RemoteSetup, RateLimit, Notification) and BEFORE every
+-- service that calls TutorialService.Notify (Economy, MoneyCollector, ManualDropper, Base …). BaseService's
+-- OnProfileLoaded fires at once for already-loaded players and used to call Notify before this Init → threw.
+-- (TutorialService.Init only needs BaseService.GetUpgradeChangedEvent, which works before BaseService.Init.)
+safeInit("TutorialService", TutorialService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
@@ -189,7 +194,6 @@ print("[WAR EMPIRE] v65 DataService-first + getDataService fallback + attribute-
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
-safeInit("TutorialService", TutorialService, deps)
 
 -- Belt: EconomyService.Push within first second regardless of map state
 do

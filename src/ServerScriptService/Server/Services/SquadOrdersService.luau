@@ -223,25 +223,28 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	humanoid.NameOcclusion = Enum.NameOcclusion.OccludeAll
 	humanoid.Parent = model
 
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "SquadLabel"
-	bb.Size = UDim2.fromOffset(100, 22)
-	bb.StudsOffset = Vector3.new(0, 3.4, 0)
-	bb.AlwaysOnTop = false
-	bb.MaxDistance = 60
-	bb.Parent = root
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(28, 36, 28)
-	lbl.BackgroundTransparency = 0.3
-	lbl.Text = "SQUAD"
-	lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
-	lbl.TextScaled = true
-	lbl.Font = Enum.Font.GothamBold
-	lbl.Parent = bb
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 4)
-	corner.Parent = lbl
+	-- v68: no floating "SQUAD" tag per soldier by default (a wall of labels over the squad — owner report).
+	if (OrdersConfig :: any).ShowUnitLabels == true then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "SquadLabel"
+		bb.Size = UDim2.fromOffset(100, 22)
+		bb.StudsOffset = Vector3.new(0, 3.4, 0)
+		bb.AlwaysOnTop = false
+		bb.MaxDistance = 60
+		bb.Parent = root
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundColor3 = Color3.fromRGB(28, 36, 28)
+		lbl.BackgroundTransparency = 0.3
+		lbl.Text = "SQUAD"
+		lbl.TextColor3 = Color3.fromRGB(180, 220, 140)
+		lbl.TextScaled = true
+		lbl.Font = Enum.Font.GothamBold
+		lbl.Parent = bb
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = lbl
+	end
 
 	model.PrimaryPart = root
 	if VisualAssetService and VisualAssetService.TryAttachCharacterVisual then

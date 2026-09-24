@@ -1,7 +1,11 @@
 --!strict
 --[[ Live Robux product IDs (Creator Dashboard / Open Cloud). Id=0 = stub / hidden duplicate.
 	Grants ONLY via server ProcessReceipt / GamePass ownership checks — never client confirmation.
-	DevProducts AutoCollect/DoubleCash/VIPBoost are HideFromShop (GamePasses cover them). ]]
+	DevProducts AutoCollect/DoubleCash/VIPBoost are HideFromShop (GamePasses cover them).
+	v69: OneTime = true marks a DevProduct whose grant is a boolean (buying it twice adds nothing). The Shop
+	shows OWNED instead of prompting once the server reports it owned (player attribute WE_Ent_<key>, see
+	ShopController). ProcessReceipt still grants any receipt Roblox delivers. HideFromShop on a GamePass keeps
+	it out of the Shop list. ]]
 
 local MonetizationConfig = {
 	GamePasses = {
@@ -26,11 +30,14 @@ local MonetizationConfig = {
 			XPMult = 2,
 			Description = "2x XP",
 		},
+		-- v69: HideFromShop — no code applies this theme yet, so it is not sold in the in-game Shop.
+		-- Id kept unchanged (existing owners keep the pass); remove HideFromShop once the theme ships.
 		ExtraPlotCosmetic = {
 			Id = 1983357731,
 			DisplayName = "Elite Base Theme",
 			RobuxPrice = 79,
 			Description = "Cosmetic base theme",
+			HideFromShop = true,
 		},
 		AutoCollect = {
 			Id = 1985115501,
@@ -55,6 +62,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantsBattlePassPremium = true,
+			OneTime = true, -- v69: Premium is a boolean kept across seasons; the Shop shows OWNED once granted
 		},
 		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
 		-- Covered by GamePass AutoCollect — keep stub for ProcessReceipt compat; hidden in shop
@@ -86,6 +94,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "ExtraSoldierSlot",
+			OneTime = true, -- v69: boolean entitlement (+1 cap once); a second purchase would add nothing
 			Description = "+1 soldier capacity",
 		},
 		InstantBarracks = {
@@ -95,6 +104,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "InstantBarracks",
+			OneTime = true, -- v69: only raises Barracks to L1; OWNED once granted or Barracks is already L1+
 			Description = "Unlocks Barracks L1 instantly (server grant)",
 		},
 		-- Covered by GamePass VIP — hidden in shop
@@ -115,6 +125,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
+			OneTime = true, -- v69: permanent boolean flag
 			Description = "Permanent move-speed boost",
 		},
 		-- Cosmetic oil pump gold dress — Id=0: MapSetup hides GoldenPump pad until Id set;

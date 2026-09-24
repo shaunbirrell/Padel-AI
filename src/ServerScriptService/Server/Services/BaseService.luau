@@ -88,45 +88,155 @@ local function findFreePlot(): number?
 	return nil
 end
 
+-- v69: a real plot id (1..MaxPlots); a saved id from another server / older build may be anything
+local function isValidPlotId(plotId: any): boolean
+	local n = tonumber(plotId)
+	return n ~= nil and n == math.floor(n) and n >= 1 and n <= BaseConfig.MaxPlots
+end
+
+-- v69: server truth for "which plot does this player own here" (profile.BasePlotId is only a copy)
+local function ownedPlotOf(userId: number): number?
+	for plotId, owner in pairs(plotOwners) do
+		if owner == userId then
+			return plotId
+		end
+	end
+	return nil
+end
+
+local function setNoPlotFlag(player: Player, noPlot: boolean)
+	pcall(function()
+		player:SetAttribute("WE_NoPlot", noPlot)
+	end)
+end
+
+--[[ v69: returns the player's plot, or nil when every plot is owned. Never hands out a plot someone else owns:
+	v63 forced plot 1 here, so the 7th+ player shared plot 1 with its owner — each one's refresh redrew the other's
+	kits and walls at their own levels, and the extra player's ReleasePlot wiped the real owner's base. ]]
 function BaseService.AssignPlot(player: Player): number?
-	local profile = getDataService().GetProfile(player)
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
 	if not profile then
 		return nil
 	end
 
+	-- Already holds a plot on this server: keep it (idempotent — never a second plot)
+	local held = ownedPlotOf(player.UserId)
+	if held ~= nil then
+		if profile.BasePlotId ~= held then
+			profile.BasePlotId = held
+			DS.MarkDirty(player)
+		end
+		setNoPlotFlag(player, false)
+		return held
+	end
+
 	-- Reclaim previous if still free
-	if profile.BasePlotId and plotOwners[profile.BasePlotId] == nil then
-		plotOwners[profile.BasePlotId] = player.UserId
-		return profile.BasePlotId
+	local saved = tonumber(profile.BasePlotId)
+	if saved ~= nil and isValidPlotId(saved) and plotOwners[saved] == nil then
+		plotOwners[saved] = player.UserId
+		if profile.BasePlotId ~= saved then
+			profile.BasePlotId = saved
+			DS.MarkDirty(player)
+		end
+		setNoPlotFlag(player, false)
+		return saved
 	end
 
 	local plotId = findFreePlot()
 	if not plotId then
-		-- v63: always succeed for first player — force plot 1 even on live
-		warn("[BaseService] No free plots for", player.Name, "— forcing BasePlotId=1")
-		plotId = 1
+		warn("[BaseService] No free plot for", player.Name, "— all", BaseConfig.MaxPlots, "owned; waiting for one to free up")
+		-- A stale saved id must not let this player buy / collect on another player's plot
+		if profile.BasePlotId ~= nil then
+			profile.BasePlotId = nil
+			DS.MarkDirty(player)
+		end
+		setNoPlotFlag(player, true)
+		return nil
 	end
 
 	plotOwners[plotId] = player.UserId
 	profile.BasePlotId = plotId
-	getDataService().MarkDirty(player)
+	DS.MarkDirty(player)
+	setNoPlotFlag(player, false)
 	return plotId
 end
 
-function BaseService.ReleasePlot(player: Player)
+function BaseService.ReleasePlot(player: Player): boolean
 	local userId = player.UserId
+	local released = false
 	for plotId, owner in pairs(plotOwners) do
 		if owner == userId then
 			pcall(function()
 				StructureKitBuilder.ClearPlotExtras(plotId)
 			end)
 			plotOwners[plotId] = nil
+			released = true
 		end
 	end
+	return released
 end
 
 function BaseService.GetOwnerUserId(plotId: number): number?
 	return plotOwners[plotId]
+end
+
+-- v69: set in Init section (setUpGainedPlot): full setup when a plotless player picks up a free plot outside the
+-- join / hand-out paths (teleport, notify, tutorial, kit refresh → plot-ready)
+local onLateClaim: ((Player, number) -> ())? = nil
+
+local function claimFreePlotLate(player: Player): number?
+	local plotId = BaseService.AssignPlot(player)
+	if plotId ~= nil and onLateClaim then
+		task.delay(0.5, onLateClaim, player, plotId)
+	end
+	return plotId
+end
+
+-- v69: owned plot for a base rebuild. A profile that carries a BasePlotId but no plotOwners entry (never assigned
+-- on this server) re-claims it through AssignPlot — which hands out a FREE plot or none, never an owned one.
+local function plotForRebuild(player: Player, profile: any): number?
+	local plotId = ownedPlotOf(player.UserId)
+	if plotId == nil and profile.BasePlotId ~= nil then
+		plotId = BaseService.AssignPlot(player)
+	end
+	return plotId
+end
+
+--[[ v69: the plot this player owns on this server, or nil (server full). Prefer this over profile.BasePlotId. ]]
+function BaseService.GetOwnedPlotId(player: Player): number?
+	return ownedPlotOf(player.UserId)
+end
+
+-- v69: plot-ready listeners (GateDefense / PlotOilPump). Fired after RefreshAllVisuals rebuilt a plot's walls
+-- (GatePosts) for its owner: on join once the real save is loaded, when a freed plot is handed out, prestige,
+-- map rebuild. Replaces the fixed 1.2 s / 3.5 s / 4 s re-sync timers those services used.
+local plotReadyCallbacks: { (Player, number) -> () } = {}
+
+local function runPlotReadyCallback(cb: (Player, number) -> (), player: Player, plotId: number)
+	task.spawn(function()
+		xpcall(cb, function(err)
+			warn("[BaseService] OnPlotReady callback failed:", err)
+		end, player, plotId)
+	end)
+end
+
+local function firePlotReady(player: Player, plotId: number)
+	for _, cb in ipairs(plotReadyCallbacks) do
+		runPlotReadyCallback(cb, player, plotId)
+	end
+end
+
+--[[ v69: cb(player, plotId) runs whenever a plot's walls/kits were (re)built for its owner. Also runs right away
+	for plots already owned (services that Init after players joined). Callbacks must be idempotent. ]]
+function BaseService.OnPlotReady(cb: (Player, number) -> ())
+	table.insert(plotReadyCallbacks, cb)
+	for plotId, userId in pairs(plotOwners) do
+		local owner = Players:GetPlayerByUserId(userId)
+		if owner then
+			runPlotReadyCallback(cb, owner, plotId)
+		end
+	end
 end
 
 function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile, player: Player?): number
@@ -200,26 +310,53 @@ function BaseService.GetPlotSpawnCFrame(plotId: number): CFrame?
 	return nil
 end
 
-function BaseService.TeleportToPlot(player: Player)
-	local profile = getDataService().GetProfile(player)
-	if not profile then
-		return
-	end
-	-- v63: never leave BasePlotId nil (live + Studio)
-	if profile.BasePlotId == nil then
-		BaseService.AssignPlot(player)
-		profile = getDataService().GetProfile(player) or profile
-		if profile.BasePlotId == nil then
-			profile.BasePlotId = 1
+-- v69: player without a plot (server full) waits on neutral ground at Central Plaza — every PlayerSpawn sits at
+-- somebody's gate, where that owner's GateGuards shoot non-allies.
+local function noPlotDropCFrame(): CFrame
+	local fallback = CFrame.new(0, 8, 40)
+	local ok, hit = pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		local chars = {}
+		for _, plr in ipairs(Players:GetPlayers()) do
+			if plr.Character then
+				table.insert(chars, plr.Character)
+			end
 		end
+		params.FilterDescendantsInstances = chars
+		return Workspace:Raycast(Vector3.new(0, 400, 40), Vector3.new(0, -800, 0), params)
+	end)
+	if ok and hit then
+		return CFrame.new(hit.Position + Vector3.new(0, 4, 0))
 	end
-	local cf = BaseService.GetPlotSpawnCFrame(profile.BasePlotId)
+	return fallback
+end
+
+--[[ Moves the player onto THEIR plot (true), or — with no plot free — onto neutral ground (false). ]]
+function BaseService.TeleportToPlot(player: Player): boolean
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
+	if not profile then
+		return false
+	end
+	-- v69: only ever a plot this player owns (v63 forced BasePlotId=1 → another player's base)
+	local plotId = ownedPlotOf(player.UserId)
+	if plotId == nil then
+		plotId = claimFreePlotLate(player)
+	end
+	local cf: CFrame? = nil
+	if plotId ~= nil then
+		cf = BaseService.GetPlotSpawnCFrame(plotId)
+	else
+		cf = noPlotDropCFrame()
+	end
 	if not cf then
-		return
+		return false
 	end
+	local target: CFrame = cf
 	local function apply(character: Model)
 		if character and character.Parent then
-			character:PivotTo(cf)
+			character:PivotTo(target)
 			local hrp = character:FindFirstChild("HumanoidRootPart")
 			if hrp and hrp:IsA("BasePart") then
 				hrp.AssemblyLinearVelocity = Vector3.zero
@@ -259,6 +396,7 @@ function BaseService.TeleportToPlot(player: Player)
 			end
 		end)
 	end
+	return plotId ~= nil
 end
 
 function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types.PurchaseUpgradeResult
@@ -300,21 +438,24 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 		profile.Stats.UpgradesPurchased = math.floor(tonumber(profile.Stats.UpgradesPurchased) or 0)
 	end
 
-	-- v64: claim/plot gate — pcall AssignPlot; force BasePlotId=1 safely (plotOwners always table)
-	if profile.BasePlotId == nil then
-		pcall(function()
-			BaseService.AssignPlot(player)
-		end)
-		profile = getDataService().GetProfile(player) or profile
+	-- v69: plot gate — must OWN a plot (plotOwners), never a forced/shared one. Server full → NoPlot.
+	local ownPlot = ownedPlotOf(player.UserId)
+	if ownPlot == nil then
+		pcall(claimFreePlotLate, player)
+		ownPlot = ownedPlotOf(player.UserId)
+		profile = DS.GetProfile(player) or profile
 	end
-	if profile.BasePlotId == nil then
-		profile.BasePlotId = 1
-		plotOwners[1] = player.UserId
-		getDataService().MarkDirty(player)
-		warn("[BaseService] PurchaseUpgrade forced BasePlotId=1 for", player.Name)
-	end
-	if profile.BasePlotId == nil then
+	if ownPlot == nil then
+		if profile.BasePlotId ~= nil then
+			-- stale / forced copy (e.g. another service wrote BasePlotId=1) — it is not this player's plot
+			profile.BasePlotId = nil
+			DS.MarkDirty(player)
+		end
 		return { Ok = false, Error = "NoPlot" }
+	end
+	if profile.BasePlotId ~= ownPlot then
+		profile.BasePlotId = ownPlot
+		DS.MarkDirty(player)
 	end
 
 	-- v63/v64: shaunie6 playtest floor on every buy attempt
@@ -425,11 +566,12 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string): Types
 	pcall(function()
 		BaseService.UpdateVisuals(player, structureId, targetLevel)
 	end)
-	pcall(function()
-		if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
-			MonetizationService.TrySoftOfferVIP(player, "structure_l3")
-		end
-	end)
+	-- v69: can yield (game-pass ownership lookup on a cold cache) — never hold the BUY reply for it
+	if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
+		task.defer(function()
+			pcall(MonetizationService.TrySoftOfferVIP, player, "structure_l3")
+		end)
+	end
 	pcall(function()
 		getUpgradeChangedEvent():Fire(player.UserId, profile.BasePlotId, structureId, targetLevel)
 	end)
@@ -556,12 +698,21 @@ local function syncUpgradePops(plinth: BasePart, structureId: string, lv: number
 		glow.Range = 28
 		glow.Color = Color3.fromRGB(255, 245, 210)
 		glow.Parent = flood
-		pcall(function()
-			local vas = require(script.Parent.VisualAssetService)
-			if vas.TryAttachPropVisual then
-				vas.TryAttachPropVisual(cloth, "Flag")
-				vas.TryAttachPropVisual(flood, "Floodlight")
+		-- v69: optional catalog dress yields on InsertService:LoadAsset. Deferred so the BUY reply (PurchaseUpgrade →
+		-- UpdateVisuals → here) and the join refresh never wait on it; skipped if a later sync replaced this folder.
+		task.defer(function()
+			if folder.Parent ~= plinth then
+				return
 			end
+			pcall(function()
+				local vas = require(script.Parent.VisualAssetService)
+				if vas.TryAttachPropVisual then
+					vas.TryAttachPropVisual(cloth, "Flag")
+					if folder.Parent == plinth then
+						vas.TryAttachPropVisual(flood, "Floodlight")
+					end
+				end
+			end)
 		end)
 	end
 end
@@ -861,11 +1012,12 @@ end
 function BaseService.UpdateVisuals(player: Player, structureId: string, level: number)
 	ensureShowroomSpin()
 	local profile = getDataService().GetProfile(player)
-	if not profile or not profile.BasePlotId then
+	-- v69: only the plot this player OWNS — a forced / stale BasePlotId would repaint another player's base
+	local plotId = ownedPlotOf(player.UserId)
+	if not profile or plotId == nil then
 		warn("[BaseService] UpdateVisuals skipped — no plot", player.Name, structureId)
 		return
 	end
-	local plotId = profile.BasePlotId
 	local slots = findUpgradeSlots(plotId, structureId)
 	local lvNum = tonumber(level) or 0
 	if #slots == 0 and lvNum >= 1 then
@@ -931,10 +1083,13 @@ end
 --[[ v44 P0: destroy stale kits on owned plinths and rebuild solid Part kits from profile. ]]
 function BaseService.NuclearRehydrateKits(player: Player)
 	local profile = getDataService().GetProfile(player)
-	if not profile or not profile.BasePlotId then
+	if not profile then
 		return
 	end
-	local plotId = profile.BasePlotId
+	local plotId = plotForRebuild(player, profile) -- v69: owned plot only (nil = server full, nothing to rebuild)
+	if plotId == nil then
+		return
+	end
 	-- v45: iterate BaseConfig.Structures keys (not only BaseUpgrades pairs) so missing keys still get L0/L1 kits
 	local seen: { [string]: boolean } = {}
 	local function rehydrateOne(structureId: string, rawLevel: any)
@@ -995,13 +1150,18 @@ function BaseService.RefreshAllVisuals(player: Player)
 	if not profile then
 		return
 	end
+	-- v69: owned plot only. No plot (server full) → nothing to draw, and never another owner's plot.
+	local plotId = plotForRebuild(player, profile)
+	if plotId == nil then
+		return
+	end
 	-- v43: perimeter FIRST (independent of upgrade-slot discovery)
-	if profile.BasePlotId then
+	do
 		local wallsLv = tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
-		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
-		pcall(StructureKitBuilder.SyncBaseCeiling, profile.BasePlotId, wallsLv)
+		pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, wallsLv)
+		pcall(StructureKitBuilder.SyncBaseCeiling, plotId, wallsLv)
 		local towerLv = tonumber(profile.BaseUpgrades.Watchtowers) or 0
-		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
+		pcall(StructureKitBuilder.SyncCornerTowers, plotId, towerLv)
 	end
 	-- Apply every structure from profile (L0 = faint placeholder; L1+ spawn/solid kit)
 	for structureId in pairs(BaseConfig.Structures) do
@@ -1009,13 +1169,17 @@ function BaseService.RefreshAllVisuals(player: Player)
 		BaseService.UpdateVisuals(player, structureId, level)
 	end
 	-- DefensiveWalls / Watchtowers / BaseCeiling again after pads/kits (slot race heal)
-	if profile.BasePlotId then
-		pcall(StructureKitBuilder.SyncRearGates, profile.BasePlotId, profile.BaseUpgrades)
+	do
+		pcall(StructureKitBuilder.SyncRearGates, plotId, profile.BaseUpgrades)
 		local wallsLv = tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
-		pcall(StructureKitBuilder.SyncPerimeterWalls, profile.BasePlotId, wallsLv)
-		pcall(StructureKitBuilder.SyncBaseCeiling, profile.BasePlotId, wallsLv)
+		pcall(StructureKitBuilder.SyncPerimeterWalls, plotId, wallsLv)
+		pcall(StructureKitBuilder.SyncBaseCeiling, plotId, wallsLv)
 		local towerLv = tonumber(profile.BaseUpgrades.Watchtowers) or 0
-		pcall(StructureKitBuilder.SyncCornerTowers, profile.BasePlotId, towerLv)
+		pcall(StructureKitBuilder.SyncCornerTowers, plotId, towerLv)
+	end
+	-- v69: walls + GatePosts now exist for this owner → gate guards / AutoGuns / oil pumps sync to the loaded save
+	if player.Parent and ownedPlotOf(player.UserId) == plotId then
+		firePlotReady(player, plotId)
 	end
 end
 
@@ -1076,6 +1240,79 @@ end
 
 function BaseService.GetPlayerState(player: Player): Types.PlayerStatePayload?
 	return buildPlayerState(player)
+end
+
+-- v69: server full (every plot owned) — the player gets no plot and is told why, never a shared plot.
+local NO_PLOT_BUY_MESSAGE = "No free base on this server — you get the next one that frees up"
+
+local function notifyNoPlot(player: Player)
+	if not (NotificationService and NotificationService.Notify) then
+		return
+	end
+	pcall(
+		NotificationService.Notify,
+		player,
+		string.format(
+			"All %d bases on this server are taken. You get the next base that frees up — or join another server.",
+			BaseConfig.MaxPlots
+		),
+		"Warn",
+		10
+	)
+end
+
+-- v69: pcall — the tutorial must never break the join path (this used to run before TutorialService.Init and
+-- throw, skipping PushState + kit rehydrate). Only with a real plot: no plot is not "claimed a base".
+local function notifyTutorialPlotAssigned(player: Player)
+	if TutorialService and TutorialService.Notify and ownedPlotOf(player.UserId) ~= nil then
+		local ok, err = pcall(TutorialService.Notify, player, "PlotAssigned")
+		if not ok then
+			warn("[BaseService] TutorialService.Notify(PlotAssigned) failed:", err)
+		end
+	end
+end
+
+local function setUpGainedPlot(plr: Player, plotId: number)
+	if not plr.Parent or ownedPlotOf(plr.UserId) ~= plotId then
+		return
+	end
+	print("[BaseService] freed plot", plotId, "handed to waiting player", plr.Name)
+	if NotificationService and NotificationService.Notify then
+		pcall(NotificationService.Notify, plr, string.format("A base freed up — Base %d is yours now!", plotId), "Success", 6)
+	end
+	pcall(BaseService.TeleportToPlot, plr)
+	notifyTutorialPlotAssigned(plr)
+	pcall(BaseService.PushState, plr)
+	pcall(function()
+		local st = buildPlayerState(plr)
+		if st then
+			(RemoteSetup.Get(Constants.RemoteNames.PlayerStateUpdate) :: RemoteEvent):FireClient(plr, st)
+		end
+	end)
+	pcall(BaseService.NuclearRehydrateKits, plr)
+	pcall(BaseService.RefreshAllVisuals, plr) -- fires OnPlotReady → gate defense / oil pumps
+end
+
+onLateClaim = setUpGainedPlot
+
+-- v69: a plot freed up → it goes to players who joined a full server (join order) before any new joiner.
+-- The setup waits 1 s so the leaver's PlayerRemoving cleanup (gate defense, pumps) runs first.
+local function handOutFreePlots(leaving: Player?)
+	local DS = getDataService()
+	if not DS then
+		return
+	end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if findFreePlot() == nil then
+			return
+		end
+		if plr ~= leaving and plr.Parent and ownedPlotOf(plr.UserId) == nil and DS.GetProfile(plr) ~= nil then
+			local plotId = BaseService.AssignPlot(plr)
+			if plotId ~= nil then
+				task.delay(1, setUpGainedPlot, plr, plotId)
+			end
+		end
+	end
 end
 
 function BaseService.Init(deps: { [string]: any })
@@ -1236,7 +1473,7 @@ function BaseService.Init(deps: { [string]: any })
 				elseif err == "UnknownStructure" or err == "InvalidStructure"
 				then "Unknown structure"
 				elseif err == "NoPlot"
-				then "Claim a base first — stand on your plot pad"
+				then NO_PLOT_BUY_MESSAGE
 				elseif err == "NoProfile"
 				then "Profile still loading — try BUY again"
 				elseif err == "NoDataService"
@@ -1297,7 +1534,16 @@ function BaseService.Init(deps: { [string]: any })
 		pcall(function()
 			player:SetAttribute("WE_Build", 68)
 		end)
-		BaseService.AssignPlot(player)
+		local assignedPlot = BaseService.AssignPlot(player)
+		if assignedPlot == nil then
+			-- v69: server full — no plot (never someone else's). Told now and again once the HUD is up.
+			notifyNoPlot(player)
+			task.delay(8, function()
+				if player.Parent and ownedPlotOf(player.UserId) == nil then
+					notifyNoPlot(player)
+				end
+			end)
+		end
 		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
 		task.defer(function()
 			BaseService.TeleportToPlot(player)
@@ -1307,9 +1553,7 @@ function BaseService.Init(deps: { [string]: any })
 				BaseService.TeleportToPlot(player)
 			end
 		end)
-		if TutorialService and TutorialService.Notify then
-			TutorialService.Notify(player, "PlotAssigned")
-		end
+		notifyTutorialPlotAssigned(player)
 		BaseService.PushState(player)
 		-- Dense re-push already below; keep an immediate second Push after plot assign
 		EconomyService.Push(player)
@@ -1365,7 +1609,9 @@ function BaseService.Init(deps: { [string]: any })
 		if AnalyticsService then
 			AnalyticsService.Log("PLAYER_LEAVE", player.UserId, {})
 		end
-		BaseService.ReleasePlot(player)
+		if BaseService.ReleasePlot(player) then
+			handOutFreePlots(player)
+		end
 	end)
 
 	-- Passive income loop

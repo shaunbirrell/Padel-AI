@@ -244,11 +244,12 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	beam.Attachment0 = attach0
 	beam.Attachment1 = attach1
 	beam.FaceCamera = true
-	beam.Width0 = 0.55
-	beam.Width1 = 0.35
-	beam.Color = ColorSequence.new(Constants.Colors.NeonAccent or Constants.Colors.Accent)
-	beam.Transparency = NumberSequence.new(0.15)
-	beam.LightEmission = 0.85
+	-- v68: subtle guide (was a thick glowing neon line): thin, mostly transparent, fading out toward the target
+	beam.Width0 = 0.22
+	beam.Width1 = 0.12
+	beam.Color = ColorSequence.new(Color3.fromRGB(240, 214, 110))
+	beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.85) })
+	beam.LightEmission = 0.2
 	beam.Parent = hrp
 end
 
@@ -332,15 +333,33 @@ local lastAnnouncedId: string? = nil
 local lastApplyAt = 0.0
 local APPLY_DEBOUNCE = 0.2
 
+local pendingPayload: any = nil
+local pendingScheduled = false
+
 local function applyState(payload: any)
 	if typeof(payload) ~= "table" then
 		return
 	end
 	local now = os.clock()
 	if (now - lastApplyAt) < APPLY_DEBOUNCE and payload.Complete ~= true then
-		-- coalesce bursty pushes; always allow Complete through
+		-- coalesce bursty pushes; always allow Complete through.
+		-- v69: keep the NEWEST payload and apply it when the window ends. It used to be dropped, so a step
+		-- advance pushed right after the join push (Claim → Collect) left the panel on the old step.
+		pendingPayload = payload
+		if not pendingScheduled then
+			pendingScheduled = true
+			task.delay(APPLY_DEBOUNCE + 0.05, function()
+				pendingScheduled = false
+				local latest = pendingPayload
+				pendingPayload = nil
+				if latest ~= nil then
+					applyState(latest)
+				end
+			end)
+		end
 		return
 	end
+	pendingPayload = nil
 	lastApplyAt = now
 	if payload.Complete == true then
 		setVisible(false)
@@ -539,6 +558,21 @@ function TutorialController.Init()
 
 	Remotes.GetEvent(Constants.RemoteNames.TutorialStateUpdate).OnClientEvent:Connect(applyState)
 
+	-- v69: the plot id arrives as state.Base.PlotId / BaseStatePayload.PlotId. The payload never had a top-level
+	-- BasePlotId, so myPlotId stayed nil and the beam could pick another player's pad. nil = no plot (server full).
+	local function applyPlotId(plotId: any)
+		if typeof(plotId) ~= "number" or plotId == myPlotId then
+			return
+		end
+		myPlotId = plotId
+		-- Re-bind pad beam once plot is known
+		if panel and panel.Visible and currentPadStructureId then
+			task.defer(function()
+				setWaypoint(currentMarkerName, currentPadStructureId)
+			end)
+		end
+	end
+
 	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: any)
 		if typeof(state) ~= "table" then
 			return
@@ -547,14 +581,14 @@ function TutorialController.Init()
 			setVisible(false)
 			clearWaypoint()
 		end
-		if state.BasePlotId ~= nil then
-			myPlotId = state.BasePlotId
-			-- Re-bind pad beam once plot is known
-			if panel and panel.Visible and currentPadStructureId then
-				task.defer(function()
-					setWaypoint(currentMarkerName, currentPadStructureId)
-				end)
-			end
+		if typeof(state.Base) == "table" then
+			applyPlotId(state.Base.PlotId)
+		end
+	end)
+
+	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: any)
+		if typeof(base) == "table" then
+			applyPlotId(base.PlotId)
 		end
 	end)
 

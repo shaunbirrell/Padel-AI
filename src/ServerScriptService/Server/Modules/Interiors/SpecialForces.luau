@@ -15,7 +15,7 @@
 	Upper floor (two storeys from L3): a kill house of low plywood partitions — four rooms, walk-through, entry and
 	  exit on its east side facing the stair landing — with pop-up targets (2 / 3 / 4 at L3 / L4 / L5), the kill-house
 	  terminal (Army) beside the entry, a fast-rope / rappel frame over a crash mat (1 / 2 / 3 ropes) and operator
-	  lockers with a bench in the back-east corner (fourth locker from L4).
+	  lockers with a bench in the back-east corner (a second bank from L4).
 
 	Layout (building-local, +Z = front/door, door at X = 9): stairs run along the back wall from L3
 	(X -13.7..5.5, Z -10.2..-5.7, foot at the west end), so nothing collidable sits at z < -4.7 west of x = 6 from L3
@@ -27,7 +27,7 @@ return function(ictx: any, api: any)
 	local col = ictx.Colors
 	local lv: number = ictx.Level
 	local y1: number = ictx.Y1
-	local X0, X1, Z0, Z1 = ictx.InX0, ictx.InX1, ictx.InZ0, ictx.InZ1
+	local X0: number, X1: number, Z0: number, Z1: number = ictx.InX0, ictx.InX1, ictx.InZ0, ictx.InZ1
 	local M = Enum.Material
 	local N = Enum.NormalId
 	local screenBg = Color3.fromRGB(8, 20, 12)
@@ -38,8 +38,9 @@ return function(ictx: any, api: any)
 
 	-- ── Ops briefing (west wall) ─────────────────────────────────────────────
 	local scrZ = 2.5
-	B("BriefScreenFrame", 0.16, 5.6, 9.6, X0 + 0.08, y1 + 6.8, scrZ, col.Trim, M.Metal, false)
-	local scr = B("BriefScreen", 0.2, 5, 9, X0 + 0.1, y1 + 6.8, scrZ, col.Dark, M.SmoothPlastic, false)
+	B("BriefScreenFrame", 0.1, 5.6, 9.6, X0 + 0.05, y1 + 6.8, scrZ, col.Trim, M.Metal, false)
+	local scr = B("BriefScreen", 0.15, 5, 9, X0 + 0.175, y1 + 6.8, scrZ, col.Dark, M.SmoothPlastic, false)
+	api.light(scr, 10, 0.5, col.Screen)
 	api.surfaceText(scr, N.Right, { "OPS BRIEFING · TIER " .. tostring(lv), "OBJ: RIDGE OUTPOST", "INFIL 0300 · NO COMMS" }, col.Screen, screenBg, Enum.Font.Code)
 
 	-- Briefing podium in the front-west corner, beside the screen → Missions
@@ -82,7 +83,7 @@ return function(ictx: any, api: any)
 	-- ── Equipment cages (back-east corner) ───────────────────────────────────
 	local cz1 = Z0 + 3.2
 	local cageH = 7
-	local bounds = if lv >= 2 then { 6.4, 10.3, X1 } else { 10.3, X1 }
+	local bounds: { number } = if lv >= 2 then { 6.4, 10.3, X1 } else { 10.3, X1 }
 	local postX: { number } = {}
 	for i, bx in ipairs(bounds) do
 		local px = if i == 1 then bx + 0.15 elseif i == #bounds then bx - 0.15 else bx
@@ -103,7 +104,6 @@ return function(ictx: any, api: any)
 	B("AmmoCrate", 1.8, 1.0, 1.4, 12.3, y1 + 1.8, Z0 + 1.2, col.Locker, M.Wood)
 	if lv >= 2 then
 		B("KitBag", 2.6, 1.1, 1.3, 8.4, y1 + 0.55, Z0 + 1.1, col.Rug, M.Fabric)
-		B("HardCase", 2.0, 0.8, 1.2, 8.4, y1 + 1.5, Z0 + 1.1, col.Dark, M.SmoothPlastic)
 	end
 
 	-- ── Night-vision / comms bench (front wall, between the window and the door) ──
@@ -116,9 +116,8 @@ return function(ictx: any, api: any)
 		B("NVGoggles", 0.9, 0.4, 0.5, nx, topY + 0.2, Z1 - 0.9, col.Dark, M.Metal, false)
 		B("NVGLens", 0.7, 0.18, 0.06, nx, topY + 0.2, Z1 - 1.18, col.Screen, M.Neon, false)
 	end
-	B("RadioDock", 1.8, 0.3, 0.7, 2.6, topY + 0.15, Z1 - 0.7, col.Dark, M.Metal, false)
 	for _, rx in ipairs({ 2.15, 3.05 }) do
-		B("Radio", 0.55, 1.1, 0.4, rx, topY + 0.85, Z1 - 0.7, col.Locker, M.SmoothPlastic, false)
+		B("Radio", 0.55, 1.1, 0.4, rx, topY + 0.55, Z1 - 0.7, col.Locker, M.SmoothPlastic, false)
 	end
 	local shelf = B("CommsShelf", 5.0, 0.4, 0.9, bx, y1 + 5.6, Z1 - 0.45, col.Metal, M.Metal, false)
 	api.surfaceText(shelf, N.Front, { "COMMS · NVG" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
@@ -190,8 +189,11 @@ return function(ictx: any, api: any)
 
 		-- Kill-house control terminal beside the entry → Army
 		api.terminal("KillHouseTerminal", Vector3.new(KX + 0.8, y2, 3.0), 90, "Army", "Train operators", "Kill House", { "KILL HOUSE", "ROOM-CLEAR DRILL" })
+		-- stack-up line on the floor outside the entry (small hazard stripe)
+		B("StackLine", 0.25, 0.04, 3.0, KX + 1.3, y2 + 0.02, -0.9, col.Accent, M.SmoothPlastic, false)
 		local khSign = B("KillHouseSign", 0.14, 1.1, 4.4, KX, y2 + wallH + 0.55, 3.0, col.Dark, M.Metal, false)
 		api.surfaceText(khSign, N.Right, { "KILL HOUSE", "LIVE DRILL" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
+		api.light(khSign, 10, 0.6, Color3.fromRGB(255, 96, 64)) -- dim red "live" glow over the entry
 
 		-- Fast-rope / rappel frame over a crash mat (front-east)
 		local RX = 10.5
@@ -206,14 +208,15 @@ return function(ictx: any, api: any)
 		local rSign = B("RappelSign", 0.1, 1.4, 4.0, X1 - 0.05, y2 + 6.2, 7.2, col.Dark, M.Metal, false)
 		api.surfaceText(rSign, N.Left, { "FAST ROPE", "RAPPEL POINT" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
 
-		-- Operator lockers + bench (back-east corner, clear of the landing)
-		for _, lx in ipairs({ 9.9, 11.5, 13.1 }) do
-			B("Locker", 1.5, 7, 1.6, lx, y2 + 3.5, Z0 + 0.8, col.Locker, M.Metal)
-			B("LockerSeam", 0.08, 6.4, 0.06, lx, y2 + 3.5, Z0 + 1.63, col.Dark, M.Metal, false)
+		-- Operator lockers + bench (back-east corner, clear of the landing): a bank of three on the back wall,
+		-- a bank of two on the east wall from L4 (one body per bank, dark seams between the doors)
+		B("LockerBank", 4.8, 7, 1.6, 11.5, y2 + 3.5, Z0 + 0.8, col.Locker, M.Metal)
+		for _, sx in ipairs({ 10.7, 12.3 }) do
+			B("LockerSeam", 0.08, 6.6, 0.06, sx, y2 + 3.5, Z0 + 1.63, col.Dark, M.Metal, false)
 		end
 		if lv >= 4 then
-			B("Locker", 1.6, 7, 1.5, X1 - 0.8, y2 + 3.5, -7.4, col.Locker, M.Metal)
-			B("LockerSeam", 0.06, 6.4, 0.08, X1 - 1.63, y2 + 3.5, -7.4, col.Dark, M.Metal, false)
+			B("LockerBank", 1.6, 7, 3.0, X1 - 0.8, y2 + 3.5, -6.6, col.Locker, M.Metal)
+			B("LockerSeam", 0.06, 6.6, 0.08, X1 - 1.63, y2 + 3.5, -6.6, col.Dark, M.Metal, false)
 		end
 		B("LockerBench", 2.8, 0.9, 1.0, 10.8, y2 + 0.45, -7.4, col.Trim, M.WoodPlanks)
 	end

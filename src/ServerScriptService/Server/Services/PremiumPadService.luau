@@ -127,14 +127,10 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 		return
 	end
 
-	if RunService:IsStudio() and profile.BasePlotId == nil then
-		if BaseService and BaseService.AssignPlot then
-			BaseService.AssignPlot(player)
-			profile = DataService.GetProfile(player) or profile
-		end
-		if profile.BasePlotId == nil then
-			profile.BasePlotId = 1
-		end
+	-- v68: assign a plot if missing, but never fall back to someone else's plot 1
+	if profile.BasePlotId == nil and BaseService and BaseService.AssignPlot then
+		BaseService.AssignPlot(player)
+		profile = DataService.GetProfile(player) or profile
 	end
 
 	local pid = part:GetAttribute("PlotId")

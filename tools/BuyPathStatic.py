@@ -188,7 +188,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "syncUpgradePops", "BaseService upgrade pops")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "GoldBright", "HUD GoldBright stroke")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "dock≤8", "HUD dock padding ≤8")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau", "NeonAccent", "Tutorial NeonAccent beam")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau", "beam.Name = \"WE_TutorialBeam\"", "Tutorial guide beam (v68: subtle, not neon)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "125916936788670", "Jeep ModelAssetId unchanged")
 
 
@@ -1060,6 +1060,12 @@ def v68_installations() -> None:
 
 
 v68_installations()
+# v68 owner feedback: blinding interiors, green lines, SQUAD tags, auto-collect toast spam
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BrightnessScale = 0.35", "v68 building lights dimmed")
+must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "l.Brightness = brightness * (LIGHTS.BrightnessScale or 1)", "v68 every building light goes through the dimmer")
+must_not_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "WE_NeonPath_", "v68 no always-on neon guide beams across the base")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "ShowUnitLabels = false", "v68 no SQUAD tag per field unit")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "MoneyCollectorService.Collect(player, true)", "v68 AutoCollect collects silently")
 must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "local function buildInstallation(ctx: Ctx)", "v68 installation build path")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'if structureId == "MissileDefense" and not hollow then', "v68 MissileDefense force skips the installation slab")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", "pcall(WorldSpinners.Init)", "v68 radar dishes spin client-side (guarded)")
@@ -1199,11 +1205,15 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "WaitFo
 must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "WaitForProfile(player, 5)", "v63 no WaitForProfile(5) in buy handler")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WaitForProfile(player, 0.25)", "v63 EnsureProfile WaitForProfile ≤0.25s")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "AckBuyResult", "v63 BaseService.AckBuyResult export")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "forcing BasePlotId=1", "v63 AssignPlot force plot 1")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "PurchaseUpgrade forced BasePlotId=1", "v63 PurchaseUpgrade force plot 1")
+# v68 batch 2: never force a 7th+ player onto plot 1 (it hijacked the owner's base); a buy with no plot yet
+# claims a free one on the spot (the v63 intent), and only a full server answers NoPlot.
+must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "forcing BasePlotId=1", "v68 AssignPlot never forces plot 1")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "pcall(claimFreePlotLate, player)", "v68 PurchaseUpgrade claims a free plot late")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'return { Ok = false, Error = "NoPlot" }', "v68 PurchaseUpgrade answers NoPlot when the server is full")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "AckBuyResult", "v63 UpgradePad uses AckBuyResult")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "scanEntireWorkspaceForStructureId", "v63 UpgradePad Workspace StructureId sweep")
-must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "forced BasePlotId=1", "v63 UpgradePad force plot 1 live")
+must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "profile.BasePlotId = 1", "v68 UpgradePad never forces plot 1")
+must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 68)', "v68 WE_Build=68 BaseService")

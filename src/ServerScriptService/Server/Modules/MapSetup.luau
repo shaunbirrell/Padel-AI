@@ -3137,61 +3137,9 @@ function MapSetup.Run()
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
 
-	-- Neon Accent guide beams: collector → CommandCenter → VehicleDepot (Plot1 landmark path)
-	do
-		local okNeon, errNeon = pcall(function()
-			local neon = Color3.fromRGB(80, 255, 160)
-			local collectorPos = plot1 + atmAt + Vector3.new(0, 5, 0)
-			local ccPos = structureMarkerPos("CommandCenter", STRUCT_ORIGIN) + Vector3.new(0, 2.6, 0)
-			local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
-			local depotCol = (depotIdx - 1) % STRUCT_COLS
-			local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
-			local depotPos = structureMarkerPos("VehicleDepot", STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 0, depotRow * STRUCT_GAP)) + Vector3.new(0, 2.6, 0)
-			local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
-				local a0p = part({
-					Name = name .. "_A0",
-					Size = Vector3.new(0.4, 0.4, 0.4),
-					Position = fromPos,
-					Color = neon,
-					Material = Enum.Material.Neon,
-					Transparency = 1,
-					CanCollide = false,
-					Parent = tutorialFolder,
-				})
-				local a1p = part({
-					Name = name .. "_A1",
-					Size = Vector3.new(0.4, 0.4, 0.4),
-					Position = toPos,
-					Color = neon,
-					Material = Enum.Material.Neon,
-					Transparency = 1,
-					CanCollide = false,
-					Parent = tutorialFolder,
-				})
-				local att0 = Instance.new("Attachment")
-				att0.Parent = a0p
-				local att1 = Instance.new("Attachment")
-				att1.Parent = a1p
-				local beam = Instance.new("Beam")
-				beam.Name = name
-				beam.Attachment0 = att0
-				beam.Attachment1 = att1
-				beam:SetAttribute("WE_TutorialBeamAsset", 88687072714005)
-				beam.FaceCamera = true
-				beam.Width0 = 0.35
-				beam.Width1 = 0.35
-				beam.Color = ColorSequence.new(neon)
-				beam.Transparency = NumberSequence.new(0.35)
-				beam.LightEmission = 0.9
-				beam.Parent = a0p
-			end
-			neonBeam(collectorPos, ccPos, "WE_NeonPath_CollectorToCC")
-			neonBeam(ccPos, depotPos, "WE_NeonPath_CCToDepot")
-		end)
-		if not okNeon then
-			warn("[WAR EMPIRE] MapSetup neon/tutorial path failed (pads already built):", errNeon)
-		end
-	end
+	-- v68: the always-on neon guide beams (collector → Command Center → Vehicle Depot) are gone: at the 320-stud
+	-- layout they were long glowing lines cutting across the whole base. TutorialController draws one subtle
+	-- guide to the current step only, while the tutorial runs.
 
 	-- Military world dressing (visual only). Does not tag WE_UpgradeSlot / buy pads.
 	-- PERF: skip MapDressing entirely in Studio unless ForceDress (attribute or DevConfig).
