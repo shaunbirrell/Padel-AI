@@ -12,3 +12,7 @@ roblox.yml
 # Competitor reference media (too large for GitHub)
 docs/ref/*.mp4
 docs/ref/*.mov
+
+# Python bytecode (tools/*.py)
+__pycache__/
+*.pyc
