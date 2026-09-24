@@ -27,7 +27,50 @@ Design, build and verify for a **phone in landscape first**, PC second. Anything
 - **Game feel on touch:**
   - Controls must be forgiving: aim help on touch, generous prompt ranges, and vehicles that drive with the thumbstick alone.
   - Auto-collect and auto-actions are preferred over precise taps.
-- **Verification:** run the HUD harness at phone viewports (`check_hud.py --viewports phone,owner,desktop`). Every change note says what the owner must test **on his phone**.
+- **Real px, not code px:**
+  - Phone HUDs run under UIScale ≈ 0.70 and panels under ≈ 0.65.
+  - So 44 px real means ≥ 64 in code (≥ 68 under 0.65), and 14 px text means ≥ 20 in code.
+  - Size helpers take **real px**.
+- **Reserved zones:**
+  - Nothing tappable in the left 40 % × lower ⅔ of the safe area, except one edge rail.
+  - Nothing within 16 px of the jump button.
+  - Jump is the only touch exit, so it is never covered.
+  - Airborne exits need a hold.
+- **Copy by device:**
+  - Never name a key or say "click" in text a phone player can see (toasts, billboards, tutorial).
+  - Key hints appear only when `PreferredInput` is keyboard or gamepad.
+  - Detect the device with `PreferredInput`, not `TouchEnabled`.
+- **World labels:**
+  - Stud-scaled, 14–20 px text, `MaxDistance` ≤ 40.
+  - At most 3 on screen at a base and 5 at an outpost.
+  - `AlwaysOnTop` only for the one active objective marker.
+  - No debug labels on live.
+- **Pointers:** anything that points a player somewhere (tutorial beam, waypoint, GO line) resolves to **their own** plot or the nearest valid target, never a fixed world marker.
+- **Combat fairness:**
+  - The server never trusts a target id sent by the client.
+  - Assisted hits need line of sight and follow the aim-assist config.
+  - NPC shots need line of sight and a hit chance.
+- **Travel:** any core-loop trip over 30 s on foot needs a shortcut (sprint, vehicle or recall).
+- **Budgets:** these are hard caps and must not grow. The target is reached by the phone-performance pass.
+
+  | Budget | Hard cap | Target |
+  |---|---|---|
+  | Parts per base at L5 | 2,700 | 2,000 |
+  | World parts outside bases | 3,100 | 2,000 |
+  | Lights | 730 total, 40 per base | 300 total |
+  | SurfaceGuis | 1,134, each `MaxDistance` ≤ 80 | 400 |
+  | Neon parts | 986 | 300 |
+  | Instance changes per purchase | — | 60 |
+  | Catalog models | ≤ 40 parts each, no Humanoid, templates in ServerStorage | — |
+  | Client per-frame work | no whole-tree scans | — |
+  | UI refresh rate | 10 Hz | — |
+
+- **Test like a phone:**
+  - Performance claims use the live dressing level.
+  - Confirm them on a mid-range Android or at Graphics Quality 3. The owner's top-end iPhone is not the bar.
+- **Verification:**
+  - Run the HUD harness at phone viewports (`check_hud.py --viewports phone,owner,desktop`), plus 800×360 and 1180×820, including panels with data.
+  - Every change note says what the owner must test **on his phone**.
 
 ## 2. Hard rules
 - **Server authority:**
