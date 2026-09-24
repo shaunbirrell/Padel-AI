@@ -4,6 +4,9 @@
 	v62: RequestPurchaseUpgrade OnServerEvent is hooked HERE at create-time so the
 	exact same instance client FireServer hits is always listened — BaseService
 	registers the handler via SetPurchaseUpgradeHandler (never a second remote).
+	v71 money (M2): UNRELIABLE lists UnreliableRemoteEvents (cosmetic, high-rate Fx that may be dropped). They are
+	NOT RemoteEvents (both extend BaseRemoteEvent): the server uses RemoteSetup.GetUnreliable, the client
+	Remotes.GetUnreliableEvent / TryGetUnreliableEvent.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -74,7 +77,38 @@ local EVENTS = {
 	Constants.RemoteNames.CashMegaOffer,
 	Constants.RemoteNames.AtmRaidStateUpdate,
 	Constants.RemoteNames.PromptPremiumPad,
+	Constants.RemoteNames.RequestResearch,
+	Constants.RemoteNames.ResearchStateUpdate,
+	Constants.RemoteNames.RequestMissileStrike,
+	Constants.RemoteNames.MissileStrikeStateUpdate,
+	Constants.RemoteNames.MissileStrikeFx,
+	Constants.RemoteNames.VehicleDriveInput,
+	-- v71 money (M2): created now for the nuke / premium vehicle / rebirth / offer workflows (unused until they land)
+	Constants.RemoteNames.RequestNukeLaunch,
+	Constants.RemoteNames.RequestNukeState,
+	Constants.RemoteNames.NukeStateUpdate,
+	Constants.RemoteNames.NukeFx,
+	Constants.RemoteNames.RequestVehicleFire,
+	Constants.RemoteNames.RequestVehicleCamo,
+	Constants.RemoteNames.RequestPremiumTrial,
+	Constants.RemoteNames.RebirthStateUpdate,
+	Constants.RemoteNames.RequestRebirthState,
+	Constants.RemoteNames.ArtilleryFx,
+	Constants.RemoteNames.DroneCrateFx,
+	Constants.RemoteNames.OfferShow,
+	Constants.RemoteNames.OfferResult,
+	Constants.RemoteNames.PurchaseAnnounce,
+	Constants.RemoteNames.ShortfallChip,
 }
+
+-- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)
+local UNRELIABLE = {
+	Constants.RemoteNames.VehicleWeaponFx,
+}
+local UNRELIABLE_SET: { [string]: boolean } = {}
+for _, name in ipairs(UNRELIABLE) do
+	UNRELIABLE_SET[name] = true
+end
 
 local FUNCTIONS = {
 	Constants.RemoteNames.GetPlayerState,
@@ -171,6 +205,21 @@ function RemoteSetup.Init(): Folder
 		end
 	end
 
+	-- v71 money (M2): unreliable events; a same-named instance of another class is replaced (never left ambiguous)
+	for _, name in ipairs(UNRELIABLE) do
+		local existing = folder:FindFirstChild(name)
+		if existing and not existing:IsA("UnreliableRemoteEvent") then
+			warn("[RemoteSetup] Replacing non-unreliable remote:", name, existing.ClassName)
+			existing:Destroy()
+			existing = nil
+		end
+		if not existing then
+			local ev = Instance.new("UnreliableRemoteEvent")
+			ev.Name = name
+			ev.Parent = folder
+		end
+	end
+
 	-- Guard: never create Give* remotes
 	for _, child in ipairs(folder:GetChildren()) do
 		if string.sub(child.Name, 1, 4) == "Give" then
@@ -184,7 +233,7 @@ function RemoteSetup.Init(): Folder
 
 	if not _initialized then
 		_initialized = true
-		print(string.format("[RemoteSetup] Remotes ready: %d events + %d functions (folder=%s)", #EVENTS, #FUNCTIONS, folder.Name))
+		print(string.format("[RemoteSetup] Remotes ready: %d events + %d unreliable + %d functions (folder=%s)", #EVENTS, #UNRELIABLE, #FUNCTIONS, folder.Name))
 	end
 
 	return folder :: Folder
@@ -205,6 +254,13 @@ function RemoteSetup.Get(name: string): Instance
 		return remote
 	end
 	-- Create missing event/function rather than WaitForChild forever
+	if UNRELIABLE_SET[name] then
+		local uev = Instance.new("UnreliableRemoteEvent")
+		uev.Name = name
+		uev.Parent = folder
+		warn("[RemoteSetup] Get created missing UnreliableRemoteEvent:", name)
+		return uev
+	end
 	if name == Constants.RemoteNames.GetPlayerState then
 		local fn = Instance.new("RemoteFunction")
 		fn.Name = name
@@ -220,6 +276,22 @@ function RemoteSetup.Get(name: string): Instance
 		ensurePurchaseHook(folder :: Folder)
 	end
 	return ev
+end
+
+--[[ v71 money (M2): typed getter for a name in UNRELIABLE (never yields; creates it when missing). ]]
+function RemoteSetup.GetUnreliable(name: string): UnreliableRemoteEvent
+	assert(UNRELIABLE_SET[name] == true, "RemoteSetup.GetUnreliable: not an UNRELIABLE remote: " .. tostring(name))
+	local remote = RemoteSetup.Get(name)
+	if not remote:IsA("UnreliableRemoteEvent") then
+		-- a stale same-named instance of another class: Init replaces it
+		RemoteSetup.Init()
+		remote = RemoteSetup.Get(name)
+	end
+	return remote :: UnreliableRemoteEvent
+end
+
+function RemoteSetup.IsUnreliable(name: string): boolean
+	return UNRELIABLE_SET[name] == true
 end
 
 return RemoteSetup

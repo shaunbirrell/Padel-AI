@@ -26,7 +26,6 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
-local AntiExploitService: any = nil
 local VehicleService: any = nil
 
 local function cashBonusPer(): number
@@ -314,15 +313,12 @@ function PrestigeService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
-	AntiExploitService = deps.AntiExploitService
 	VehicleService = deps.VehicleService
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestPrestige) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player)
+		-- v69: extra taps are dropped silently (the allowed tap already answered) — never a strike
 		if not RateLimitService.Allow(player, "prestige", 1, 2) then
-			if AntiExploitService and AntiExploitService.Strike then
-				AntiExploitService.Strike(player, "prestige_rate")
-			end
 			return
 		end
 		if not RemoteGuard.RequireProfile(DataService, player) then

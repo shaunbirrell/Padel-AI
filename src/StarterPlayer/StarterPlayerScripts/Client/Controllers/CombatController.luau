@@ -9,6 +9,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local GuiService = game:GetService("GuiService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -18,6 +19,7 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
+local NotificationController = require(script.Parent.NotificationController)
 
 local CombatController = {}
 
@@ -39,6 +41,15 @@ local magazineSize = 0
 local reloading = false
 local alive = true
 local firing = false
+
+-- v69: weapon cycle state. Owned list = player attribute WE_Weapons (CombatService); level = WE_Level
+-- attribute or the latest XPUpdate. The cycle skips weapons the server would refuse (NotOwned / LevelTooLow).
+local knownLevel: number? = nil
+local lastEquipRequestId: string? = nil
+local lastEquipRequestAt = -math.huge
+local lastCycleHintAt = -math.huge
+local EQUIP_PENDING_SECONDS = 0.8
+local shownEPrompts: { [ProximityPrompt]: boolean } = {}
 
 local requestFire: () -> ()
 local requestReload: () -> ()
@@ -493,31 +504,94 @@ requestReload = function()
 end
 
 local function requestEquip(weaponId: string)
-	Remotes.GetEvent(Constants.RemoteNames.RequestEquipWeapon):FireServer(weaponId)
+	-- v69: bounded wait (≤3 s) instead of GetEvent's long WaitForChild on the input path
+	Remotes.FireServer(Constants.RemoteNames.RequestEquipWeapon, weaponId)
+end
+
+local function cycleHint(message: string)
+	local now = os.clock()
+	if now - lastCycleHintAt < 3 then
+		return
+	end
+	lastCycleHintAt = now
+	pcall(NotificationController.Show, message, "Info", 2.5)
+end
+
+--[[ v69: weapons the cycle may equip — owned (server attribute) and at/above UnlockLevel when the level is
+	known — in the Shop › WEAPONS order. ]]
+local function cycleCandidates(): { string }
+	local owned = WeaponConfig.ParseOwned(player:GetAttribute("WE_Weapons"))
+	local level = knownLevel
+	local ids: { string } = {}
+	for _, id in ipairs(WeaponConfig.SortedIds()) do
+		local def = WeaponConfig.Weapons[id]
+		if owned[id] and (level == nil or level >= def.UnlockLevel) then
+			table.insert(ids, id)
+		end
+	end
+	return ids
 end
 
 cycleWeapon = function(delta: number)
-	local ids: { string } = {}
-	for id in pairs(WeaponConfig.Weapons) do
-		table.insert(ids, id)
+	local ids = cycleCandidates()
+	-- A press right after another one continues from the weapon just requested (state push not back yet)
+	local from = currentWeaponId
+	if lastEquipRequestId and os.clock() - lastEquipRequestAt < EQUIP_PENDING_SECONDS then
+		from = lastEquipRequestId
 	end
-	table.sort(ids)
-	if #ids == 0 then
+	if #ids == 0 or (#ids == 1 and ids[1] == from) then
+		cycleHint("Only one weapon owned — buy more in Shop › WEAPONS")
 		return
 	end
-	local idx = 1
-	for i, id in ipairs(ids) do
-		if id == currentWeaponId then
-			idx = i
-			break
-		end
+	local found = if from then table.find(ids, from) else nil
+	local idx: number = if found then found elseif delta >= 0 then 0 else #ids + 1
+	local step = if delta >= 0 then 1 else -1
+	idx = ((idx - 1 + step) % #ids) + 1
+	local target = ids[idx]
+	if target == from then
+		return
 	end
-	idx = ((idx - 1 + delta) % #ids) + 1
-	requestEquip(ids[idx])
+	lastEquipRequestId = target
+	lastEquipRequestAt = os.clock()
+	requestEquip(target)
+end
+
+-- v69: E is also the ProximityPrompt key (consoles, pads, collector). Only cycle on E when no E prompt is up.
+local function ePromptShowing(): boolean
+	for prompt in pairs(shownEPrompts) do
+		if prompt.Parent ~= nil and prompt.Enabled then
+			return true
+		end
+		shownEPrompts[prompt] = nil
+	end
+	return false
 end
 
 function CombatController.Init()
 	buildHud()
+
+	-- v69: level for the cycle's UnlockLevel filter (server attribute + XPUpdate, whichever is newer)
+	local function readLevelAttribute()
+		local v = player:GetAttribute("WE_Level")
+		if typeof(v) == "number" then
+			knownLevel = v
+		end
+	end
+	readLevelAttribute()
+	player:GetAttributeChangedSignal("WE_Level"):Connect(readLevelAttribute)
+	Remotes.BindEvent(Constants.RemoteNames.XPUpdate, function(payload: any)
+		if typeof(payload) == "table" and typeof(payload.Level) == "number" then
+			knownLevel = payload.Level
+		end
+	end)
+	ProximityPromptService.PromptShown:Connect(function(prompt: ProximityPrompt)
+		if prompt.KeyboardKeyCode == Enum.KeyCode.E then
+			shownEPrompts[prompt] = true
+		end
+	end)
+	ProximityPromptService.PromptHidden:Connect(function(prompt: ProximityPrompt)
+		shownEPrompts[prompt] = nil
+	end)
 
 	Remotes.GetEvent(Constants.RemoteNames.CombatStateUpdate).OnClientEvent:Connect(function(payload: Types.CombatStatePayload)
 		applyState(payload)
@@ -539,8 +613,10 @@ function CombatController.Init()
 		elseif input.KeyCode == Enum.KeyCode.Q then
 			cycleWeapon(-1)
 		elseif input.KeyCode == Enum.KeyCode.E then
-			-- E is also used by WorldPrompt for proximity — only cycle when not over Gui
-			cycleWeapon(1)
+			-- E is also the ProximityPrompt key — never cycle while an E prompt is on screen
+			if not ePromptShowing() then
+				cycleWeapon(1)
+			end
 		end
 	end)
 

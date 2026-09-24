@@ -61,6 +61,11 @@ local function ensureDaily(profile: Types.PlayerProfile)
 	end
 end
 
+-- Timed missions share DailyMissions.Claimed (reset on UTC day change) under a prefixed key.
+local function timedClaimKey(missionId: string): string
+	return "timed:" .. missionId
+end
+
 local function dailyOpDefs(): { [string]: any }
 	local map: { [string]: any } = {}
 	if DailyOpsConfig.Enabled then
@@ -378,6 +383,10 @@ function MissionService.Start(player: Player, missionId: any): (boolean, string?
 	if profile.DailyMissions.ActiveTimed[missionId] and profile.DailyMissions.ActiveTimed[missionId] > os.time() then
 		return false, "AlreadyActive"
 	end
+	-- v69: each timed mission pays once per UTC day (was repeatable every Duration seconds)
+	if profile.DailyMissions.Claimed[timedClaimKey(missionId)] then
+		return false, "AlreadyClaimed"
+	end
 
 	profile.DailyMissions.ActiveTimed[missionId] = os.time() + def.DurationSeconds
 	DataService.MarkDirty(player)
@@ -420,6 +429,12 @@ function MissionService.Complete(player: Player, missionId: string)
 	if not def then
 		return
 	end
+	ensureDaily(profile)
+	local claimKey = timedClaimKey(missionId)
+	if profile.DailyMissions.Claimed[claimKey] then
+		return
+	end
+	profile.DailyMissions.Claimed[claimKey] = true
 
 	profile.Stats.MissionsCompleted += 1
 	local cash = def.RewardCash
@@ -456,9 +471,17 @@ function MissionService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	TerritoryService = deps.TerritoryService
 
+	-- v69: no client UI starts timed missions; with the remote open an executor could loop them for
+	-- cash/XP. Keep a listener (so events never queue) but drop requests unless explicitly enabled.
 	local startRemote = RemoteSetup.Get(Constants.RemoteNames.RequestStartMission) :: RemoteEvent
 	startRemote.OnServerEvent:Connect(function(player: Player, missionId: any)
+		if MissionConfig.TimedMissionsRemoteEnabled ~= true then
+			return
+		end
 		if not RateLimitService.Allow(player, "start_mission", 1, 2) then
+			return
+		end
+		if not RemoteGuard.RequireProfile(DataService, player) then
 			return
 		end
 		MissionService.Start(player, missionId)

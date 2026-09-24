@@ -97,6 +97,6 @@ return function(ictx: any, api: any)
 	end
 
 	-- Warning lamp on the main tower
-	local lamp = api.ball("TowerLamp", 0.6, Vector3.new(tx + 1.5, top + 0.5, tz + 1.5), Color3.fromRGB(255, 50, 40), Enum.Material.Neon, false)
+	local lamp = api.ball("TowerLamp", 0.6, Vector3.new(tx + 1.5, top + 0.5, tz + 1.5), Color3.fromRGB(255, 50, 40), Enum.Material.SmoothPlastic, false)
 	api.light(lamp, 8, 1.2, Color3.fromRGB(255, 60, 40))
 end

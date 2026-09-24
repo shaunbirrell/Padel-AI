@@ -70,12 +70,12 @@ return function(ictx: any, api: any)
 	-- Searchlight facing the front wall (+Z)
 	api.box("SearchlightMount", Vector3.new(0.5, 1.2, 0.5), Vector3.new(2, deck + 1.6, 2.8), col.Metal, Enum.Material.Metal, false)
 	api.cylinder("Searchlight", Vector3.new(1.4, 1.3, 1.3), CFrame.new(2, deck + 2.5, 2.8) * CFrame.Angles(0, math.rad(90), 0), col.Dark, Enum.Material.Metal, false)
-	local lens = api.cylinder("SearchlightLens", Vector3.new(0.1, 1.1, 1.1), CFrame.new(2, deck + 2.5, 3.52) * CFrame.Angles(0, math.rad(-90), 0), col.Light, Enum.Material.Neon, false)
+	local lens = api.cylinder("SearchlightLens", Vector3.new(0.1, 1.1, 1.1), CFrame.new(2, deck + 2.5, 3.52) * CFrame.Angles(0, math.rad(-90), 0), col.Light, Enum.Material.SmoothPlastic, false)
 	local spot = Instance.new("SpotLight")
 	spot.Face = Enum.NormalId.Right -- lens local +X = building +Z
 	spot.Angle = 40
-	spot.Range = 40
-	spot.Brightness = 2
+	spot.Range = 30
+	spot.Brightness = 0.7 -- v69: dimmed like the other building lights
 	spot.Color = col.Light
 	spot.Parent = lens
 

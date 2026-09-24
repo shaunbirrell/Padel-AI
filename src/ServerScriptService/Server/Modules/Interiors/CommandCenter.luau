@@ -1,9 +1,9 @@
 --!strict
 --[[
 	Command Center interior (HollowBuildingBuilder). Ground floor: command desk with three monitors, map table
-	(opens the Base Upgrades menu), intel terminal (Missions), lockers, radio rack, wall screen. Upper floor (two
-	storeys): strategy table, war-council terminal (Rebirth), bunk, weapon rack. The upgrade console stands
-	inside by the door (BaseLayoutConfig).
+	(opens the Base Upgrades menu), intel terminal (Missions), Missile Command terminal (Missiles), lockers, radio
+	rack, wall screen. Upper floor (two storeys): strategy table, war-council terminal (Rebirth), bunk, weapon
+	rack. The upgrade console stands inside by the door (BaseLayoutConfig).
 
 	Layout (building-local, +Z = front/door): stairs run along the back wall from L3, so the west desk starts
 	at z -1 to leave the foot of the stairs open. The east wall carries the annex doorway from L2 (z -5..-1).
@@ -81,6 +81,9 @@ return function(ictx: any, api: any)
 
 	-- Intel terminal on the east wall (between the annex doorway and the console) → Missions
 	api.terminal("IntelTerminal", Vector3.new(X1 - 0.6, y1, 1.6), -90, "Missions", "Open briefings", "Intel · Missions", { "INTEL", "MISSIONS" })
+
+	-- Missile Command terminal on the west wall, between the command desk and the foot of the stairs → Missiles
+	api.terminal("MissileTerminal", Vector3.new(X0 + 0.6, y1, -2.4), 90, "Missiles", "Missile Command", "Missile Command", { "MISSILE", "COMMAND" })
 
 	-- Door runner (inside the front wall)
 	api.box("Runner", Vector3.new(3.4, 0.06, 7), Vector3.new(doorX, y1 + 0.03, Z1 - 3.7), col.Rug, Enum.Material.Fabric, false)

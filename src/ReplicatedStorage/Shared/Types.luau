@@ -64,6 +64,45 @@ export type BattlePassProgress = {
 	ClaimedPremium: { [string]: boolean },
 }
 
+-- v71 money (M2): optional profile blocks (ProfileSchema default-fill + sanitise; no DataVersion bump).
+-- Nothing reads them yet; the nuke / premium vehicle / rebirth / offer workflows will.
+export type NukeInFlight = {
+	Kind: string, -- "Nuke" | "TacticalNuke"
+	LaunchId: string,
+	At: number, -- os.time() at launch
+}
+
+export type NukeStats = {
+	Bought: number,
+	Launched: number,
+	PlayerKills: number,
+	NpcKills: number,
+	BestKills: number,
+}
+
+export type SiloProgress = {
+	ProgressSeconds: number, -- online seconds toward the next Tactical Nuke
+}
+
+export type RebirthProgress = {
+	ZonesSeen: { [string]: boolean }, -- zoneId -> the unlock celebration played
+	LastRebirthUnix: number,
+}
+
+export type OfferStats = {
+	Shown: number,
+	LastShownUnix: number,
+	Clicked: number,
+	Dismissed: number,
+}
+
+export type MonetizationStats = {
+	FirstPurchaseUnix: number,
+	LastPurchaseUnix: number,
+	Purchases: number,
+	RobuxSpent: number, -- analytics / segmentation only; never shown to players
+}
+
 export type PlayerProfile = {
 	DataVersion: number,
 	Cash: number,
@@ -103,6 +142,20 @@ export type PlayerProfile = {
 	VIPOffered: boolean?,
 	SpeedBoostOffered: boolean?,
 	CashMegaOffered: boolean?,
+	-- v71 money (M2)
+	Nukes: number?, -- paid (Robux) nukes, granted only in ProcessReceipt
+	TacticalNukes: number?, -- silo / gift / reward nukes
+	NukeInFlight: NukeInFlight?,
+	NukeGiftGranted: boolean?,
+	NukeStats: NukeStats?,
+	Silo: SiloProgress?,
+	PremiumVehicleCamo: { [string]: string }?, -- vehicleId -> camo id
+	PremiumTrials: { [string]: number }?, -- vehicleId -> os.time() of the last free test drive
+	Rebirth: RebirthProgress?,
+	Offers: { [string]: OfferStats }?, -- offer key -> cadence counters (Offer Director)
+	Monetization: MonetizationStats?,
+	AnnouncePurchases: boolean?, -- M8 purchase ticker opt-out (true = announce)
+	VipSupplyAt: number?, -- M8 daily VIP supply: os.time() of the last claim
 }
 
 export type EconomyUpdatePayload = {

@@ -12,7 +12,7 @@ export type WeaponDef = {
 	ReloadTime: number,
 	Range: number,
 	Spread: number,
-	CostCash: number?,
+	CostCash: number?, -- v69: > 0 = sold in Shop › WEAPONS at this server-side price; 0 / nil = not sold
 	Pellets: number?, -- shotgun-style; server applies Damage * Pellets max
 }
 
@@ -127,5 +127,42 @@ local WeaponConfig = {
 
 	DefaultWeapon = "StarterRifle",
 }
+
+--[[ v69: one weapon order for Shop › WEAPONS rows and the Q/E / mobile ◀ ▶ cycle:
+	UnlockLevel, then CostCash, then id. ]]
+function WeaponConfig.SortedIds(): { string }
+	local ids: { string } = {}
+	for id in pairs(WeaponConfig.Weapons) do
+		table.insert(ids, id)
+	end
+	table.sort(ids, function(a: string, b: string): boolean
+		local da, db = WeaponConfig.Weapons[a], WeaponConfig.Weapons[b]
+		if da.UnlockLevel ~= db.UnlockLevel then
+			return da.UnlockLevel < db.UnlockLevel
+		end
+		local ca, cb = tonumber(da.CostCash) or 0, tonumber(db.CostCash) or 0
+		if ca ~= cb then
+			return ca < cb
+		end
+		return a < b
+	end)
+	return ids
+end
+
+--[[ v69: parse the server's owned-weapons player attribute (WE_Weapons = "Pistol,StarterRifle", written by
+	CombatService) into a set of known weapon ids. The default weapon is always owned (server EnsureStarter).
+	Display / input filtering only — the server re-validates every equip and purchase. ]]
+function WeaponConfig.ParseOwned(raw: any): { [string]: boolean }
+	local set: { [string]: boolean } = {}
+	if typeof(raw) == "string" then
+		for id in string.gmatch(raw, "[^,]+") do
+			if WeaponConfig.Weapons[id] ~= nil then
+				set[id] = true
+			end
+		end
+	end
+	set[WeaponConfig.DefaultWeapon] = true
+	return set
+end
 
 return WeaponConfig

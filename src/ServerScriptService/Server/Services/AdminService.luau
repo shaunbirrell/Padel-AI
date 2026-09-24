@@ -44,6 +44,146 @@ function AdminService.IsAdmin(player: Player): boolean
 	return false
 end
 
+--[[ v71 money (M2): test commands for the money workflows (AdminConfig.MoneyCommands). Allowed for the admin
+	allowlist, and for any player in Studio (Local Server tests use Player1 / Player2). Each one is logged as
+	ADMIN_COMMAND and calls its service when that service exists; until then it replies "not built yet".
+	None of them touches Cash, and each acts only on the caller. ]]
+local MONEY_COMMANDS: { [string]: boolean } = {}
+for _, name in ipairs((AdminConfig :: any).MoneyCommands or {}) do
+	if typeof(name) == "string" then
+		MONEY_COMMANDS[string.lower(name)] = true
+	end
+end
+
+local function isMoneyCommand(command: any): boolean
+	return RemoteGuard.IsCommandString(command) and MONEY_COMMANDS[string.lower(command :: string)] == true
+end
+
+local function adminReply(deps: { [string]: any }, player: Player, text: string, kind: string)
+	local notify = deps.NotificationService
+	if notify and notify.Notify then
+		pcall(notify.Notify, player, text, kind)
+	end
+	print("[AdminService] " .. player.Name .. ": " .. text)
+end
+
+-- An entitlement key the game knows: a MonetizationConfig GamePasses key or a DevProduct GrantEntitlement value.
+local function isKnownEntitlementKey(key: string): boolean
+	local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
+	if (MonetizationConfig.GamePasses :: any)[key] ~= nil then
+		return true
+	end
+	for _, def in pairs(MonetizationConfig.DevProducts :: any) do
+		if typeof(def) == "table" and def.GrantEntitlement == key then
+			return true
+		end
+	end
+	return false
+end
+
+-- Whole number in [minN, maxN] from a number or a numeric string; nil otherwise.
+local function argInt(value: any, minN: number, maxN: number): number?
+	local n = if typeof(value) == "string" then tonumber(value) else value
+	return RemoteGuard.ClampInt(n, minN, maxN)
+end
+
+-- Runs one money command; returns a short result for the ADMIN_COMMAND log.
+local function runMoneyCommand(deps: { [string]: any }, player: Player, cmd: string, arg1: any, arg2: any): string
+	local function serviceFn(serviceName: string, fnName: string): any
+		local svc = deps[serviceName]
+		if typeof(svc) == "table" and typeof(svc[fnName]) == "function" then
+			return svc[fnName]
+		end
+		return nil
+	end
+	local function notBuilt(): string
+		adminReply(deps, player, cmd .. ": not built yet", "Warn")
+		return "not_built"
+	end
+	local function badArgs(usage: string): string
+		adminReply(deps, player, "Usage: " .. usage, "Warn")
+		return "bad_args"
+	end
+	local function call(fn: any, okText: string, ...: any): string
+		local ok, res, err = pcall(fn, ...)
+		if not ok then
+			warn("[AdminService] " .. cmd .. " failed:", res)
+			adminReply(deps, player, cmd .. " failed (see Output)", "Warn")
+			return "error"
+		end
+		if res == false then
+			adminReply(deps, player, cmd .. " refused: " .. tostring(err), "Warn")
+			return "refused"
+		end
+		adminReply(deps, player, okText, "Success")
+		return "ok"
+	end
+
+	if cmd == "grantent" then
+		if not RemoteGuard.IsKeyString(arg1) or not isKnownEntitlementKey(arg1 :: string) then
+			return badArgs("grantent <key> (a MonetizationConfig pass key or GrantEntitlement)")
+		end
+		local fn = serviceFn("MonetizationService", "GrantEntitlement")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, "Entitlement granted: " .. (arg1 :: string), player, arg1 :: string)
+	elseif cmd == "givenuke" then
+		local n = argInt(arg1, 1, 100)
+		if not n then
+			return badArgs("givenuke <1-100> [tactical]")
+		end
+		local kind = if typeof(arg2) == "string" and string.lower(arg2) == "tactical" then "TacticalNuke" else "Nuke"
+		local fn = serviceFn("NukeService", "Grant")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, string.format("Granted %d %s", n, kind), player, kind, n, "admin")
+	elseif cmd == "nukecd" then
+		local fn = serviceFn("NukeService", "AdminResetCooldowns")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, "Nuke cooldowns reset")
+	elseif cmd == "vhp" then
+		local pct = argInt(arg1, 0, 100)
+		if not pct then
+			return badArgs("vhp <0-100>")
+		end
+		local fn = serviceFn("VehicleService", "AdminSetHP")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, string.format("Vehicle HP set to %d%%", pct), player, pct)
+	elseif cmd == "setprestige" then
+		local n = argInt(arg1, 0, 100)
+		if not n then
+			return badArgs("setprestige <0-100>")
+		end
+		local fn = serviceFn("RebirthExpansionService", "AdminSetPrestige")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, "Prestige set to " .. tostring(n), player, n)
+	elseif cmd == "openzone" then
+		if not RemoteGuard.IsIdString(arg1, 32) then
+			return badArgs("openzone <zoneId>")
+		end
+		local fn = serviceFn("RebirthExpansionService", "AdminOpenZone")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, "Zone opened: " .. (arg1 :: string), player, arg1 :: string)
+	elseif cmd == "resetrebirth" then
+		local fn = serviceFn("RebirthExpansionService", "AdminResetRebirth")
+		if not fn then
+			return notBuilt()
+		end
+		return call(fn, "Rebirth progress reset", player)
+	end
+	return "unknown"
+end
+
 --- Force Cash = AdminPlaytestCash for allowlisted admins (mid-session recovery).
 local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
 	local target = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 0)
@@ -87,7 +227,10 @@ function AdminService.Init(deps: { [string]: any })
 		if not RateLimitService.Allow(player, "admin", 2, 4) then
 			return
 		end
-		if not AdminService.IsAdmin(player) then
+		-- v71 money (M2): the money test commands are also open to any player in Studio (never on live servers)
+		local moneyCmd = isMoneyCommand(command)
+		local isAdmin = AdminService.IsAdmin(player)
+		if not isAdmin and not (moneyCmd and RunService:IsStudio()) then
 			warn("[AdminService] Unauthorized admin attempt:", player.UserId)
 			return
 		end
@@ -101,6 +244,17 @@ function AdminService.Init(deps: { [string]: any })
 
 		local cmd = string.lower(command :: string)
 		local ADMIN_GRANT_MAX = 1_000_000_000
+		if moneyCmd then
+			local result = runMoneyCommand(deps, player, cmd, arg1, arg2)
+			local argText = if typeof(arg1) == "string" or typeof(arg1) == "number" then string.sub(tostring(arg1), 1, 40) else nil
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, {
+				command = cmd,
+				arg = argText,
+				result = result,
+				admin = isAdmin,
+			})
+			return
+		end
 		AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = cmd })
 
 		if cmd == "cash" or cmd == "givecash" then

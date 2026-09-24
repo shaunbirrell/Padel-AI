@@ -27,6 +27,7 @@ local TAG_SLOT = "WE_UpgradeSlot"
 local TAG_TERRITORY = "WE_Territory"
 local TAG_CAPTURE = "WE_CaptureZone"
 local TAG_VEHICLE = "WE_VehicleSpawn"
+local TAG_WATER = "WE_Water" -- v69: boats sail on WE_Water surfaces (Constants.Tags.Water)
 local TAG_NAVAL = "WE_NavalSpawn"
 local TAG_NPC = "WE_NPCSpawn"
 local TAG_EVENT = "WE_EventSpawn"
@@ -1473,6 +1474,8 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 			Parent = folder,
 		})
 		water.Reflectance = 0.15
+		water:SetAttribute("WE_PlotId", plotId)
+		CollectionService:AddTag(water, TAG_WATER)
 		for _, e in ipairs({
 			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, d.SizeZ * 0.5 + 0.6) },
 			{ Vector3.new(d.SizeX + 2.4, 1, 1.2), Vector3.new(0, 0.5, -d.SizeZ * 0.5 - 0.6) },
@@ -1958,12 +1961,13 @@ function MapSetup.Run()
 	Workspace.Gravity = 196.2
 
 	-- Lighting / sky / atmosphere — bright midday desert (inspiration only)
-	Lighting.Ambient = Color3.fromRGB(165, 145, 110)
+	local worldLight = (StructureVisualConfig :: any).WorldLighting or {}
+	Lighting.Ambient = worldLight.DayAmbient or Color3.fromRGB(165, 145, 110)
 	Lighting.OutdoorAmbient = Color3.fromRGB(185, 165, 130)
 	Lighting.Brightness = 3.15
 	Lighting.ClockTime = 12.5 -- intense midday sun
 	Lighting.GeographicLatitude = 22
-	Lighting.EnvironmentDiffuseScale = 0.55
+	Lighting.EnvironmentDiffuseScale = worldLight.EnvironmentDiffuseScale or 0.55
 	Lighting.EnvironmentSpecularScale = 0.42
 	Lighting.FogColor = Color3.fromRGB(210, 195, 160)
 	Lighting.FogStart = 1200
@@ -2006,7 +2010,7 @@ function MapSetup.Run()
 	task.spawn(function()
 		local STEP = 0.03
 		local WAIT = 1.5
-		local dayAmb = Color3.fromRGB(165, 145, 110)
+		local dayAmb = ((StructureVisualConfig :: any).WorldLighting or {}).DayAmbient or Color3.fromRGB(165, 145, 110)
 		local dayOut = Color3.fromRGB(185, 165, 130)
 		local dayFog = Color3.fromRGB(210, 195, 160)
 		local nightAmb = Color3.fromRGB(40, 45, 70)
@@ -2887,6 +2891,7 @@ function MapSetup.Run()
 			Parent = waterFolder,
 		})
 		water.Name = "WaterPlane"
+		CollectionService:AddTag(water, TAG_WATER)
 		-- Shallow collide strip so boats have something under them
 		part({
 			Name = "HarborShelf",
@@ -3137,61 +3142,9 @@ function MapSetup.Run()
 	tutorialMarker("Tutorial_Jeep", jeepPos, Color3.fromRGB(120, 140, 200), "Jeep")
 	tutorialMarker("Tutorial_Outpost", Vector3.new(0, 3, 0), Color3.fromRGB(200, 120, 80), "Outpost")
 
-	-- Neon Accent guide beams: collector → CommandCenter → VehicleDepot (Plot1 landmark path)
-	do
-		local okNeon, errNeon = pcall(function()
-			local neon = Color3.fromRGB(80, 255, 160)
-			local collectorPos = plot1 + atmAt + Vector3.new(0, 5, 0)
-			local ccPos = structureMarkerPos("CommandCenter", STRUCT_ORIGIN) + Vector3.new(0, 2.6, 0)
-			local depotIdx = 3 -- STRUCTURES[3] = VehicleDepot
-			local depotCol = (depotIdx - 1) % STRUCT_COLS
-			local depotRow = math.floor((depotIdx - 1) / STRUCT_COLS)
-			local depotPos = structureMarkerPos("VehicleDepot", STRUCT_ORIGIN + Vector3.new(depotCol * STRUCT_GAP, 0, depotRow * STRUCT_GAP)) + Vector3.new(0, 2.6, 0)
-			local function neonBeam(fromPos: Vector3, toPos: Vector3, name: string)
-				local a0p = part({
-					Name = name .. "_A0",
-					Size = Vector3.new(0.4, 0.4, 0.4),
-					Position = fromPos,
-					Color = neon,
-					Material = Enum.Material.Neon,
-					Transparency = 1,
-					CanCollide = false,
-					Parent = tutorialFolder,
-				})
-				local a1p = part({
-					Name = name .. "_A1",
-					Size = Vector3.new(0.4, 0.4, 0.4),
-					Position = toPos,
-					Color = neon,
-					Material = Enum.Material.Neon,
-					Transparency = 1,
-					CanCollide = false,
-					Parent = tutorialFolder,
-				})
-				local att0 = Instance.new("Attachment")
-				att0.Parent = a0p
-				local att1 = Instance.new("Attachment")
-				att1.Parent = a1p
-				local beam = Instance.new("Beam")
-				beam.Name = name
-				beam.Attachment0 = att0
-				beam.Attachment1 = att1
-				beam:SetAttribute("WE_TutorialBeamAsset", 88687072714005)
-				beam.FaceCamera = true
-				beam.Width0 = 0.35
-				beam.Width1 = 0.35
-				beam.Color = ColorSequence.new(neon)
-				beam.Transparency = NumberSequence.new(0.35)
-				beam.LightEmission = 0.9
-				beam.Parent = a0p
-			end
-			neonBeam(collectorPos, ccPos, "WE_NeonPath_CollectorToCC")
-			neonBeam(ccPos, depotPos, "WE_NeonPath_CCToDepot")
-		end)
-		if not okNeon then
-			warn("[WAR EMPIRE] MapSetup neon/tutorial path failed (pads already built):", errNeon)
-		end
-	end
+	-- v68: the always-on neon guide beams (collector → Command Center → Vehicle Depot) are gone: at the 320-stud
+	-- layout they were long glowing lines cutting across the whole base. TutorialController draws one subtle
+	-- guide to the current step only, while the tutorial runs.
 
 	-- Military world dressing (visual only). Does not tag WE_UpgradeSlot / buy pads.
 	-- PERF: skip MapDressing entirely in Studio unless ForceDress (attribute or DevConfig).

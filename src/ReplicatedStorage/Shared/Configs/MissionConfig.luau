@@ -121,7 +121,9 @@ local MissionConfig = {
 		"DailyKillPlayer",
 	},
 
-	-- Legacy timed missions (optional start → wait Duration → claim)
+	-- Legacy timed missions (optional start → wait Duration → claim). v69: no client UI starts them,
+	-- so the RequestStartMission remote is ignored unless this is true; each one pays once per UTC day.
+	TimedMissionsRemoteEnabled = false,
 	Missions = {
 		PatrolOutskirts = {
 			Id = "PatrolOutskirts",

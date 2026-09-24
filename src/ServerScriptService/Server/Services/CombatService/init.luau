@@ -18,6 +18,7 @@ local CombatConfig = require(Shared.Configs.CombatConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local ResearchConfig = require(Shared.Configs.ResearchConfig) -- v69 research
 
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
@@ -81,8 +82,10 @@ local MonetizationConfig: any = nil
 local RemoteSetup: any = nil
 local MissionService: any = nil
 local TerritoryService: any = nil
+local ResearchService: any = nil -- v69 research (deps.ResearchService; Init may run after ours)
 
 local combatStates: { [number]: CombatState } = {}
+local gunSchedule: { [number]: { [string]: number } } = {} -- v69 research: per-gun GCRA time (swaps can't skip a slow gun's cooldown)
 local npcRecords: { [string]: NPCRecord } = {}
 local npcFolder: Folder? = nil
 local npcSerial = 1
@@ -94,6 +97,21 @@ end
 
 local function weaponDef(id: string): WeaponDef?
 	return CombatWeaponLogic.WeaponDef(id)
+end
+
+local function researchMult(player: Player?, statId: string): number -- v69 research: ≥1, 1 when absent
+	if player == nil or ResearchService == nil or ResearchService.GetBonus == nil then
+		return 1
+	end
+	local ok, m = pcall(ResearchService.GetBonus, player, statId)
+	if ok and typeof(m) == "number" and m == m and m >= 1 and m <= 5 then
+		return m
+	end
+	return 1
+end
+
+local function magSize(player: Player?, def: WeaponDef): number -- v69 research: upgraded magazine
+	return ResearchConfig.EffectiveMagazine(def.MagazineSize, researchMult(player, "WeaponMagazine"))
 end
 
 local function ensureStarter(profile: PlayerProfile)
@@ -114,7 +132,45 @@ local function characterParts(player: Player): (Model?, Humanoid?, BasePart?)
 	return character, humanoid, root
 end
 
+--[[ v69: replicate weapon ownership for the client UI — the Shop WEAPONS tab (BUY / EQUIP / EQUIPPED)
+	and the Q/E + mobile ◀ ▶ cycle, which must only offer weapons the player owns. Display only: every
+	equip / purchase is still validated in EquipWeapon / PurchaseWeapon.
+	  WE_Weapons        = sorted comma list of owned WeaponConfig ids ("Pistol,StarterRifle")
+	  WE_EquippedWeapon = equipped weapon id
+	  WE_Level          = profile level (weapon unlock levels; XPUpdate refreshes it on the client between pushes)
+	Runs from pushState (profile load, respawn, equip, purchase, fire, health change); only writes on change. ]]
+local function syncWeaponAttributes(player: Player)
+	local profile = DataService and DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local ids: { string } = {}
+	local weapons: any = profile.Weapons
+	if typeof(weapons) == "table" then
+		for id, owned in pairs(weapons) do
+			if owned == true and typeof(id) == "string" and WeaponConfig.Weapons[id] ~= nil then
+				table.insert(ids, id)
+			end
+		end
+	end
+	table.sort(ids)
+	local csv = table.concat(ids, ",")
+	if player:GetAttribute("WE_Weapons") ~= csv then
+		player:SetAttribute("WE_Weapons", csv)
+	end
+	local state = combatStates[player.UserId]
+	local equipped: any = if state then state.WeaponId else profile.EquippedWeapon
+	if typeof(equipped) == "string" and player:GetAttribute("WE_EquippedWeapon") ~= equipped then
+		player:SetAttribute("WE_EquippedWeapon", equipped)
+	end
+	local level = tonumber(profile.Level)
+	if level and player:GetAttribute("WE_Level") ~= level then
+		player:SetAttribute("WE_Level", level)
+	end
+end
+
 local function pushState(player: Player)
+	pcall(syncWeaponAttributes, player)
 	local state = combatStates[player.UserId]
 	local _, humanoid = characterParts(player)
 	local weaponId = if state then state.WeaponId else nil
@@ -124,7 +180,7 @@ local function pushState(player: Player)
 		MaxHealth = if humanoid then humanoid.MaxHealth else CombatConfig.PlayerMaxHealth,
 		WeaponId = weaponId,
 		Ammo = if state then state.Ammo else 0,
-		MagazineSize = if def then def.MagazineSize else 0,
+		MagazineSize = if def then magSize(player, def) else 0, -- v69 research
 		Reloading = if state then clock() < state.ReloadingUntil else false,
 		Alive = if state then state.Alive else (humanoid ~= nil and humanoid.Health > 0),
 	}
@@ -151,7 +207,7 @@ local function getState(player: Player): CombatState?
 	local def = weaponDef(weaponId)
 	local state: CombatState = {
 		WeaponId = weaponId,
-		Ammo = if def then def.MagazineSize else 30,
+		Ammo = if def then magSize(player, def) else 30, -- v69 research
 		ReloadingUntil = 0,
 		LastFireAt = 0,
 		InvulnerableUntil = 0,
@@ -163,7 +219,13 @@ local function getState(player: Player): CombatState?
 end
 
 local function damageFor(def: WeaponDef, attacker: Player?): number
-	return CombatDamage.DamageFor(def, attacker)
+	local base = CombatDamage.DamageFor(def, attacker)
+	local boosted = base * researchMult(attacker, "WeaponDamage") -- v69 research
+	local lethal = CombatConfig.PlayerMaxHealth or 100 -- v69 research: the bonus never creates a one-shot (Sniper 85 x 1.2)
+	if base < lethal and boosted >= lethal then -- v69 research
+		return math.max(base, lethal - 1) -- v69 research
+	end
+	return boosted
 end
 
 local function tagCreator(humanoid: Humanoid, attacker: Player)
@@ -649,7 +711,7 @@ function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, str
 	local state = getState(player)
 	if state then
 		state.WeaponId = weaponId
-		state.Ammo = def.MagazineSize
+		state.Ammo = magSize(player, def) -- v69 research
 		state.ReloadingUntil = 0
 	end
 	pushState(player)
@@ -678,12 +740,15 @@ function CombatService.PurchaseWeapon(player: Player, weaponId: any): (boolean, 
 	if profile.Level < def.UnlockLevel then
 		return false, "LevelTooLow"
 	end
-	local cost = def.CostCash or 0
-	if cost > 0 then
-		local ok, err = EconomyService.SpendCash(player, cost, "weapon_" .. weaponId)
-		if not ok then
-			return false, err or "SpendFailed"
-		end
+	-- v69: price comes from the server's WeaponConfig only (the remote carries just the id). A weapon with no
+	-- positive CostCash is not sold — the starter is granted by ensureStarter, anything else by other systems.
+	local cost = math.floor(tonumber(def.CostCash) or 0)
+	if cost <= 0 then
+		return false, "NotForSale"
+	end
+	local ok, err = EconomyService.SpendCash(player, cost, "weapon_" .. weaponId)
+	if not ok then
+		return false, err or "SpendFailed"
 	end
 	profile.Weapons[weaponId] = true
 	DataService.MarkDirty(player)
@@ -694,7 +759,37 @@ function CombatService.PurchaseWeapon(player: Player, weaponId: any): (boolean, 
 		NotificationService.Notify(player, "Acquired " .. def.DisplayName, "Reward")
 	end
 	CombatService.EquipWeapon(player, weaponId)
+	pcall(syncWeaponAttributes, player)
 	return true, nil
+end
+
+--[[ v69: player-facing text for weapon BUY / EQUIP refusals (was "Cannot buy weapon: InsufficientCash"). ]]
+local function formatCash(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if out:sub(1, 1) == "," then
+		out = out:sub(2)
+	end
+	return out
+end
+
+local function weaponRefusalText(action: string, weaponId: any, err: string): string
+	local def = if typeof(weaponId) == "string" then weaponDef(weaponId) else nil
+	local name = if def then def.DisplayName else "that weapon"
+	if err == "InsufficientCash" and def then
+		return string.format("Not enough Cash — %s costs $%s", name, formatCash(tonumber(def.CostCash) or 0))
+	elseif err == "LevelTooLow" and def then
+		return string.format("%s unlocks at Lv %d", name, def.UnlockLevel)
+	elseif err == "AlreadyOwned" then
+		return string.format("You already own %s — tap EQUIP in Shop › WEAPONS", name)
+	elseif err == "NotOwned" then
+		return string.format("You don't own %s yet — buy it in Shop › WEAPONS", name)
+	elseif err == "NotForSale" then
+		return string.format("%s is not for sale", name)
+	elseif err == "NoProfile" then
+		return "Your save is still loading — try again in a moment"
+	end
+	return string.format("Cannot %s weapon: %s", action, err)
 end
 
 function CombatService.Reload(player: Player): (boolean, string?)
@@ -709,10 +804,10 @@ function CombatService.Reload(player: Player): (boolean, string?)
 	if clock() < state.ReloadingUntil then
 		return false, "AlreadyReloading"
 	end
-	if state.Ammo >= def.MagazineSize then
+	if state.Ammo >= magSize(player, def) then -- v69 research
 		return false, "FullMag"
 	end
-	local reloadTime = def.ReloadTime
+	local reloadTime = def.ReloadTime / researchMult(player, "WeaponReload") -- v69 research
 	state.ReloadingUntil = clock() + reloadTime
 	local weaponId = state.WeaponId
 	pushState(player)
@@ -724,7 +819,7 @@ function CombatService.Reload(player: Player): (boolean, string?)
 		if clock() + 0.05 < s.ReloadingUntil then
 			return
 		end
-		s.Ammo = def.MagazineSize
+		s.Ammo = magSize(player, def) -- v69 research
 		s.ReloadingUntil = 0
 		if player.Parent then
 			pushState(player)
@@ -765,8 +860,14 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 		return false
 	end
 
-	local minInterval = 1 / math.max(def.FireRate, 0.1)
-	if clock() - state.LastFireAt < minInterval * 0.9 then
+	local minInterval = 1 / math.max(def.FireRate * researchMult(player, "WeaponFireRate"), 0.1) -- v69 research
+	if state.LastFireAt > clock() + minInterval * 0.5 then -- v69 research: after a switch from a slower gun,
+		state.LastFireAt = clock() + minInterval * 0.5 -- cap its schedule to this gun (no-op for one gun)
+	end
+	local guns = gunSchedule[player.UserId] or {} -- v69 research
+	gunSchedule[player.UserId] = guns -- v69 research
+	local gunAt = guns[state.WeaponId] or -math.huge -- v69 research: this gun's own schedule (never capped)
+	if clock() - state.LastFireAt < minInterval * 0.5 or clock() - gunAt < minInterval * 0.5 then -- v69: GCRA
 		return false
 	end
 	if state.Ammo <= 0 then
@@ -800,7 +901,8 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	end
 
 	state.Ammo -= 1
-	state.LastFireAt = clock()
+	state.LastFireAt = math.max(state.LastFireAt + minInterval, clock()) -- v69 research: was = clock()
+	guns[state.WeaponId] = math.max(gunAt + minInterval, clock()) -- v69 research
 	pushState(player)
 
 	local range = def.Range + CombatConfig.HitPositionSlopStuds
@@ -953,7 +1055,7 @@ local function onCharacterAdded(player: Player, character: Model)
 		state.InvulnerableUntil = clock() + invuln
 		local def = weaponDef(state.WeaponId)
 		if def then
-			state.Ammo = def.MagazineSize
+			state.Ammo = magSize(player, def) -- v69 research
 			state.ReloadingUntil = 0
 		end
 	end
@@ -990,6 +1092,7 @@ function CombatService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	MissionService = deps.MissionService
 	TerritoryService = deps.TerritoryService
+	ResearchService = deps.ResearchService -- v69 research
 
 	CombatDamage.Bind({ TerritoryService = TerritoryService })
 	CombatNPC.Bind({
@@ -1013,10 +1116,12 @@ function CombatService.Init(deps: { [string]: any })
 		end
 		local ok, err = CombatService.EquipWeapon(player, weaponId)
 		if not ok and NotificationService and err then
-			NotificationService.Notify(player, "Cannot equip: " .. tostring(err), "Warn")
+			NotificationService.Notify(player, weaponRefusalText("equip", weaponId, tostring(err)), "Warn")
 		end
 	end)
 
+	-- Shop › WEAPONS BUY (ShopController). Client sends only the weapon id; PurchaseWeapon checks id, loaded
+	-- profile, ownership, UnlockLevel and spends WeaponConfig.CostCash via EconomyService.SpendCash.
 	local purchaseRemote = RemoteSetup.Get(Constants.RemoteNames.RequestPurchaseWeapon) :: RemoteEvent
 	purchaseRemote.OnServerEvent:Connect(function(player: Player, weaponId: any)
 		if not RateLimitService.Allow(player, "buy_weapon", CombatConfig.PurchaseWeaponRate, CombatConfig.PurchaseWeaponBurst) then
@@ -1024,7 +1129,7 @@ function CombatService.Init(deps: { [string]: any })
 		end
 		local ok, err = CombatService.PurchaseWeapon(player, weaponId)
 		if not ok and NotificationService and err then
-			NotificationService.Notify(player, "Cannot buy weapon: " .. tostring(err), "Warn")
+			NotificationService.Notify(player, weaponRefusalText("buy", weaponId, tostring(err)), "Warn")
 		end
 	end)
 
@@ -1069,6 +1174,7 @@ function CombatService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player)
 		combatStates[player.UserId] = nil
+		gunSchedule[player.UserId] = nil -- v69 research
 	end)
 
 	task.spawn(function()

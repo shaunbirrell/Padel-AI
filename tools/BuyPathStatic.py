@@ -188,7 +188,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "syncUpgradePops", "BaseService upgrade pops")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "GoldBright", "HUD GoldBright stroke")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "dock≤8", "HUD dock padding ≤8")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau", "NeonAccent", "Tutorial NeonAccent beam")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau", "beam.Name = \"WE_TutorialBeam\"", "Tutorial guide beam (v68: subtle, not neon)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "125916936788670", "Jeep ModelAssetId unchanged")
 
 
@@ -262,7 +262,15 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "Tra
 must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", "GrantOutpostIncomeStack", "GrantOutpostIncomeStack kept")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "SyncOutpostIncomeStacks", "TerritoryService SyncOutpostIncomeStacks")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "Outpost lost", "Territory outpost lost toast")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "MoneyCollector TryAtmRaid")
+# v69: the instant touch/prompt ATM raid (TryAtmRaid) became a 6 s server-side hold with a 10-min victim shield
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "function MoneyCollectorService.StepRaids(", "v69 ATM raid is a server-side hold (StepRaids)")
+must_not_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "v69 instant touch/prompt ATM raid removed")
+must_contain("src/ReplicatedStorage/Shared/Configs/RaidConfig.luau", "StealFraction = 0.10", "v69 raid steals 10% of the ATM")
+must_contain("src/ReplicatedStorage/Shared/Configs/RaidConfig.luau", "ShieldSeconds = 600", "v69 victim shield 10 min after a raid")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "balance += math.min(recentAutoSum(victim.UserId), cash)", "v69 AutoCollect raidable balance capped at held cash")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "table.insert(ignore, def.CollectorModel :: Instance)", "v69 guard/AutoGun LOS ignores own ATM")
+must_contain("src/ServerScriptService/Server/Services/MissileStrikeService.luau", "EconomyService.SpendCash(attacker, S.Cost, \"missile_strike\")", "v69 missile strike paid server-side")
+must_contain("src/ServerScriptService/Server/Modules/Interiors/CommandCenter.luau", "api.terminal(\"MissileTerminal\"", "v69 Command Center Missile Command terminal")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TransferPendingCash", "MoneyCollector uses TransferPendingCash")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "atm_raid", "atm_raid cash-mult exempt")
 # No-regress ManualDropper / own collect
@@ -384,7 +392,6 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Progress
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau", "function MissionController.Toggle", "MissionController.Toggle exists")
 
 # No-regress
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.SyncPlot", "GateDefense SyncPlot no-regress")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ScaleTo", "STRUCTURE_SCALE ScaleTo no-regress")
 must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "AccruePendingCash", "ManualDropper no-regress")
@@ -422,7 +429,6 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ProgressionController/init.luau", "Keep all Robux", "Rebirth keep Robux banner/copy")
 must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "GoldenPumpjack", "PlotOilPump GoldenPumpjack dress")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "safeInit(\"VehicleService\"", "Bootstrap VehicleService no-regress")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v29")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v29")
 
 
@@ -458,7 +464,6 @@ must_contain("src/ServerScriptService/Server/Services/SoldierService.luau", "Ext
 # No-regress v30
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v30")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v30")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v30")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v30")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713838952", "CashMega Id no-regress")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash GamePass Id no-regress")
@@ -480,7 +485,6 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 # No-regress v31
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v31")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v31")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v31")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v31")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP GamePass Id no-regress")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect GamePass Id no-regress")
@@ -509,7 +513,6 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 # No-regress v32
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v32")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v32")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v32")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v32")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP GamePass Id no-regress v32")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713839505", "StarterBundle Id no-regress v32")
@@ -539,7 +542,6 @@ must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "PlotPadDre
 # No-regress v33
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v33")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v33")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v33")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v33")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect GamePass Id no-regress v33")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v33")
@@ -570,7 +572,6 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v34")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v34")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v34")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v34")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v34")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP GamePass Id no-regress v34")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect GamePass Id no-regress v34")
@@ -603,7 +604,6 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v35")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v35")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v35")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v35")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v35")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v35")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985115501", "AutoCollect Id no-regress v35")
@@ -638,7 +638,6 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v36")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LV+HingeMotor", "Jeep LV+HingeMotor no-regress v36")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v36")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v36")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v36")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v36")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v36")
@@ -675,7 +674,6 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v37")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LV+HingeMotor", "Jeep LV+HingeMotor no-regress v37")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v37")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v37")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v37")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v37")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash Id no-regress v37")
@@ -711,7 +709,6 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LV+HingeMotor", "Jeep LV+HingeMotor no-regress v38")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isTracked", "LightTank tracked no-regress v38")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v38")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v38")
 must_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "PromptPremiumPad", "PremiumPad no-regress v38")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v38")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "3713839505", "StarterBundle Id no invent v38")
@@ -752,7 +749,6 @@ must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Worl
 # No-regress v39
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v39")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.ApplyDamage", "GateDefense no-regress v39")
-must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "TryAtmRaid", "AtmRaid no-regress v39")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "TutorialService", "Tutorial no-regress v39")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1985475542", "VIP Id no-regress v39")
 
@@ -1060,6 +1056,32 @@ def v68_installations() -> None:
 
 
 v68_installations()
+# v68 owner feedback: blinding interiors, green lines, SQUAD tags, auto-collect toast spam
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BrightnessScale = 0.35", "v68 building lights dimmed")
+must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "l.Brightness = brightness * (LIGHTS.BrightnessScale or 1)", "v68 every building light goes through the dimmer")
+must_not_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "WE_NeonPath_", "v68 no always-on neon guide beams across the base")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "ShowUnitLabels = false", "v68 no SQUAD tag per field unit")
+must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "MoneyCollectorService.Collect(player, true)", "v68 AutoCollect collects silently")
+must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "DayAmbient = Color3.fromRGB(78, 72, 62)", "v69 indoor ambient no longer washes interiors white")
+# v69 Research Lab (verified: server 119 + adversarial 29, combat 40 + 9, squad 18, client 91)
+must_contain("src/ServerScriptService/Server/Services/ResearchService.luau", "function ResearchService.GetBonus(player: Player, statId: string): number", "v69 ResearchService.GetBonus contract kept")
+must_contain("src/ServerScriptService/Server/Services/ResearchService.luau", "structureLevel(profile, ResearchConfig.StructureId) < ResearchConfig.LabLevelFor(def, target)", "v69 research Lab-level gate enforced on the server")
+must_contain("src/ServerScriptService/Server/Services/ResearchService.luau", "EconomyService.SpendCash(player, cost, \"research_\" .. id)", "v69 research spends server-priced Cash")
+must_contain("src/ServerScriptService/Server/Services/ResearchService.luau", "RateLimitService.Allow(player, \"research_buy\", ResearchConfig.BuyRate, ResearchConfig.BuyBurst)", "v69 research Buy is rate-limited")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if clock() - state.LastFireAt < minInterval * 0.5 or clock() - gunAt < minInterval * 0.5 then", "v69 per-gun fire schedule (swaps cannot skip a slow gun's cooldown)")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if base < lethal and boosted >= lethal then", "v69 research damage never creates a one-shot")
+must_not_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "Ammo = def.MagazineSize", "v69 every magazine refill uses the researched magazine size")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ResearchController.luau", "GetEvent(", "v69 ResearchController never blocks on GetEvent")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "Lighting.Ambient = worldLight.DayAmbient", "v69 MapSetup ambient from config")
+must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "spot.Brightness = 1.5 * (LIGHTS.BrightnessScale or 1)", "v69 roof floodlights dimmed")
+# v69 batch-2 leftovers (verified with leftovers/sl_driver 33/33 + g6_driver 67/67)
+must_contain("src/ServerScriptService/Server/Modules/SessionLock.luau", "if ours or (not releasedHere[userId] and not isLockHeldByOther(old, jobId, os.time())) then", "v69 session lock refresh re-takes a free/stale lock only for our loaded player")
+must_contain("src/ServerScriptService/Server/Modules/SessionLock.luau", "releasedHere[userId] = true -- before the yield: a Refresh queued after this must not re-claim", "v69 released lock is never re-claimed by a late refresh")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "confirmPassPurchase(player, passKey, passId, passName)", "v69 mid-session pass purchase confirmed by ownership check")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "return MarketplaceService:UserOwnsGamePassAsync(player.UserId, passId)", "v69 pass ownership only from UserOwnsGamePassAsync")
+must_not_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "-- v70: this event is fired on the server by the engine", "v69 never trusts PromptGamePassPurchaseFinished wasPurchased")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "-- v70: granted into this profile earlier, but that save may have failed", "v69 receipt retry saves before PurchaseGranted")
+must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "local profile = DataService.WaitForProfile(player, 25)", "v69 receipts wait for the (lock-delayed) profile load")
 must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "local function buildInstallation(ctx: Ctx)", "v68 installation build path")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'if structureId == "MissileDefense" and not hollow then', "v68 MissileDefense force skips the installation slab")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", "pcall(WorldSpinners.Init)", "v68 radar dishes spin client-side (guarded)")
@@ -1199,11 +1221,15 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "WaitFo
 must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "WaitForProfile(player, 5)", "v63 no WaitForProfile(5) in buy handler")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WaitForProfile(player, 0.25)", "v63 EnsureProfile WaitForProfile ≤0.25s")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "AckBuyResult", "v63 BaseService.AckBuyResult export")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "forcing BasePlotId=1", "v63 AssignPlot force plot 1")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "PurchaseUpgrade forced BasePlotId=1", "v63 PurchaseUpgrade force plot 1")
+# v68 batch 2: never force a 7th+ player onto plot 1 (it hijacked the owner's base); a buy with no plot yet
+# claims a free one on the spot (the v63 intent), and only a full server answers NoPlot.
+must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", "forcing BasePlotId=1", "v68 AssignPlot never forces plot 1")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "pcall(claimFreePlotLate, player)", "v68 PurchaseUpgrade claims a free plot late")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'return { Ok = false, Error = "NoPlot" }', "v68 PurchaseUpgrade answers NoPlot when the server is full")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "AckBuyResult", "v63 UpgradePad uses AckBuyResult")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "scanEntireWorkspaceForStructureId", "v63 UpgradePad Workspace StructureId sweep")
-must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "forced BasePlotId=1", "v63 UpgradePad force plot 1 live")
+must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "profile.BasePlotId = 1", "v68 UpgradePad never forces plot 1")
+must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 69)', "v69 WE_Build=69 BaseService")
@@ -1345,6 +1371,34 @@ if _nil_fallback == 49_998_500 and _normal == 49_998_500:
 else:
     bad(f"v65 simulate fallback failed nil={_nil_fallback} normal={_normal}")
 
+
+# v70 drivable vehicles (client-simulated, server-validated). Verified: server 290 + adversarial 22, client 134 + 11
+VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+VDC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau"
+must_contain(VS, "PhysicalProperties.new(0.9, CarCfg.WheelFriction, 0.1, CarCfg.WheelFrictionWeight, 1)", "v70 wheels low friction so cars/tanks can yaw")
+must_not_contain(VS, "PhysicalProperties.new(0.9, 2.0, 0.1, 1, 1)", "v70 no high-friction fixed-axle wheels")
+must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", "WheelFriction = 0.2,", "v70 Car.WheelFriction config")
+must_contain(VS, "Valid.TeleportSlack + held * idleDriftSpeed(rec.Mode)", "v70 correction hold does not eject airborne pilots")
+must_contain(VS, "local wallow = cap * math.max(0, s.T - win.T) + Valid.TeleportSlack", "v70 windowed teleport check (slack not per sample)")
+must_contain(VS, "if occ == nil or (tonumber(occ.Health) or 0) <= 0 then", "v70 fallback ignores a dead driver's throttle")
+must_contain(VDC, "hum:ChangeState(Enum.HumanoidStateType.Jumping)", "v70 F exit survives ControlModule Jump overwrite")
+must_contain(VDC, "RunService:BindToRenderStep(EXIT_STEP, Enum.RenderPriority.Input.Value + 1", "v70 exit re-asserts Jump after ControlModule render step")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "Remotes.GetEvent(", "v70 garage never blocks on Remotes.GetEvent")
+must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "< PLOT_SIZE * 0.5 + 12", "v70 plot densify props stay out of the 320 base (runways clear)")
+
+# v71 money phase 0 (M0 config hotfix, M2 plumbing, J2 receipt safety). Verified: receipt 31 + adversarial 25,
+# profile 37, admin 28, config 42, ds 24, sl 33, g6 67
+MS = "src/ServerScriptService/Server/Services/MonetizationService.luau"
+must_contain(MS, "local ok, decision = pcall(processReceipt, receiptInfo, receiptId)", "J2 receipt runs inside pcall with in-flight lock")
+must_contain(MS, "if receiptsInFlight[receiptId] then", "J2 duplicate receipt delivery refused while in flight")
+must_contain(MS, "receipt NOT acknowledged (Roblox retries it)", "J2 unknown product Id -> NotProcessedYet")
+must_not_contain(MS, "Mark processed so Roblox queue drains", "J2 unknown Id is never acked (old drain branch gone)")
+must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "local ev = Instance.new(\"UnreliableRemoteEvent\")", "M2 UNRELIABLE remotes created as UnreliableRemoteEvent")
+must_contain("src/ServerScriptService/Server/Services/AdminService.luau", "if not isAdmin and not (moneyCmd and RunService:IsStudio()) then", "M2 money admin commands: allowlist or Studio only")
+must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "ensureMoneyFields(profile)", "M2 money profile fields default-filled + sanitised on Migrate")
+must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "GoldSmall = { Id = 3713839003, DisplayName = \"Gold Pack S\", RobuxPrice = 49, Cash = 0, Gold = 50, HideFromShop = true },", "M0 Gold packs hidden, live Id kept")
+must_contain("tools/wire-monetization-ids.py", "each product needs its own Id", "wire tool refuses duplicate product Ids")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/NukeConfig.luau", "DefensesDown", "J1 nuke never opens a base (no defenses-down fields)")
 
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).

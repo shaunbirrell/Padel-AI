@@ -3,6 +3,14 @@
 	Money Collector — passive income accrues to PendingCash until the player
 	touches their plot's WE_MoneyCollector (or owns AutoCollect entitlement).
 	Server-authoritative only.
+
+	v69 ATM raids (RaidConfig.Raid, owner rule): stand at another player's ATM — inside their base — for
+	HoldSeconds, on foot, alive and without taking damage, to steal 10% of their ATM balance into your own ATM.
+	The victim is then shielded for 10 minutes (profile.Raid.ShieldUntil) and the thief waits a minute
+	(profile.Raid.RaidCooldownUntil); both are os.time() values on the saved profile, so leaving / rejoining /
+	server hopping does not reset them. The hold runs on the server's view of the character (StepRaids) —
+	there is no raid remote. Defenses are physical: any damage cancels the hold (GateDefenseService guards /
+	AutoGuns, or the owner shooting back).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -12,8 +20,8 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
-local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local RaidConfig = require(Shared.Configs.RaidConfig)
 local ServerModules = script.Parent.Parent.Modules
 local RemoteSetup = require(ServerModules.RemoteSetup)
 
@@ -25,18 +33,52 @@ local NotificationService: any = nil
 local MonetizationService: any = nil
 local TutorialService: any = nil
 local RateLimitService: any = nil
+-- v69: Init runs before these services' own Init (Bootstrap order) — only called from heartbeat / handlers
+local BaseService: any = nil
+local ClanService: any = nil
+local GateDefenseService: any = nil
+local AnalyticsService: any = nil
 
 local TAG = Constants.Tags.MoneyCollector
 local OVERLAP_MARGIN = 3.5
 local COLLECT_RADIUS = 10 -- horizontal studs from ATM body (covers CollectCircle pad)
 local SPATIAL_INTERVAL = 0.25
+local MAX_RAID_STEP = 0.5 -- a server hitch never advances a raid hold by more than this per tick
 local AUTO_COLLECT_INTERVAL = 2.0
 local emptyCollectToastAt: { [number]: number } = {}
 
 local lastOverlap: { [string]: boolean } = {}
 local billboardCache: { [BasePart]: BillboardGui } = {}
--- thiefUserId → victimUserId → cooldownUntil (os.clock)
-local atmRaidCooldownUntil: { [number]: { [number]: number } } = {}
+local attached: { [BasePart]: boolean } = {}
+
+type RaidHold = {
+	VictimUserId: number,
+	VictimName: string,
+	PlotId: number,
+	Part: BasePart,
+	Progress: number,
+	LastHealth: number,
+	LastPushAt: number,
+	LastAlarmAt: number,
+	StartedAt: number,
+	Hrp: BasePart,
+}
+
+type IncomeEntry = { t: number, amount: number }
+
+-- thiefUserId → running hold (memory only; a hold never survives the thief leaving)
+local holds: { [number]: RaidHold } = {}
+-- thiefUserId → last Blocked reason pushed (throttle, spec §1.7)
+local blockedPush: { [number]: { Reason: string, At: number } } = {}
+-- teleport guard (spec §1.8), all os.clock
+local lastPos: { [number]: Vector3 } = {}
+local lastHrp: { [number]: BasePart } = {}
+local teleportLockUntil: { [number]: number } = {}
+-- AutoCollect income of the last AutoCollectWindowSeconds (memory only, spec §1.5); os.time stamps
+local recentAuto: { [number]: { IncomeEntry } } = {}
+-- non-yielding "owns AutoCollect" flag, refreshed by the AutoCollect loop (entitlement checks can yield on a cold
+-- game-pass cache; the raid path must never yield)
+local autoCollectFlag: { [number]: boolean } = {}
 
 local function hasAutoCollect(player: Player): boolean
 	if MonetizationService and MonetizationService.PlayerOwnsEntitlement then
@@ -73,6 +115,205 @@ local function hasDoubleCash(player: Player): boolean
 	end
 	return false
 end
+
+-- ── small helpers ───────────────────────────────────────────────────────────
+
+local function profileOf(player: Player): any
+	if not DataService then
+		return nil
+	end
+	return DataService.GetProfile(player)
+end
+
+-- v67 contract: true only for a save read from the DataStore (never for a session-only profile)
+local function isLoaded(player: Player): boolean
+	if not DataService then
+		return false
+	end
+	if DataService.IsLoaded then
+		return DataService.IsLoaded(player) == true
+	end
+	return DataService.GetProfile(player) ~= nil
+end
+
+local function markDirty(player: Player)
+	if DataService and DataService.MarkDirty then
+		DataService.MarkDirty(player)
+	end
+end
+
+local function raidNum(profile: any, key: string): number
+	local raid = profile and profile.Raid
+	if typeof(raid) ~= "table" then
+		return 0
+	end
+	return tonumber(raid[key]) or 0
+end
+
+local function raidOf(profile: any): { [string]: any }
+	local raid = profile.Raid
+	if typeof(raid) ~= "table" then
+		raid = { ShieldUntil = 0, StrikeCooldownUntil = 0, DefensesDownUntil = 0 }
+		profile.Raid = raid
+	end
+	return raid
+end
+
+local function formatCash(n: number): string
+	local s = string.format("%d", math.floor(math.abs(n)))
+	local out = (string.reverse(s):gsub("(%d%d%d)", "%1,"))
+	out = string.reverse(out)
+	if string.sub(out, 1, 1) == "," then
+		out = string.sub(out, 2)
+	end
+	return (if n < 0 then "-" else "") .. out
+end
+
+local function plotIdOf(part: BasePart): number?
+	local raw = part:GetAttribute("PlotId")
+	if typeof(raw) == "number" then
+		return raw
+	end
+	local n = tonumber(raw)
+	if typeof(n) == "number" then
+		return n
+	end
+	return nil
+end
+
+-- Server truth for plot ownership (BaseService); profile scan only when BaseService is missing.
+local function ownerUserIdOfPlot(plotId: number): number?
+	if BaseService and BaseService.GetOwnerUserId then
+		local uid = BaseService.GetOwnerUserId(plotId)
+		if typeof(uid) == "number" then
+			return uid
+		end
+		return nil
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local profile = profileOf(player)
+		if profile and profile.BasePlotId == plotId then
+			return player.UserId
+		end
+	end
+	return nil
+end
+
+local function findOwnerByPlot(plotId: number): Player?
+	local uid = ownerUserIdOfPlot(plotId)
+	if uid == nil then
+		return nil
+	end
+	return Players:GetPlayerByUserId(uid)
+end
+
+local function ownedPlotOf(player: Player): number?
+	if BaseService and BaseService.GetOwnedPlotId then
+		local pid = BaseService.GetOwnedPlotId(player)
+		if typeof(pid) == "number" then
+			return pid
+		end
+		return nil
+	end
+	local profile = profileOf(player)
+	local pid = if profile then tonumber(profile.BasePlotId) else nil
+	return pid
+end
+
+local function isAlly(ownerUserId: number, player: Player): boolean
+	if player.UserId == ownerUserId then
+		return true
+	end
+	if GateDefenseService and GateDefenseService.IsAlly then
+		return GateDefenseService.IsAlly(ownerUserId, player) == true
+	end
+	-- Fallback (no GateDefenseService): same non-empty clan id
+	if not (ClanService and ClanService.GetClanId) then
+		return false
+	end
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if not owner then
+		return false
+	end
+	local okA, a = pcall(ClanService.GetClanId, owner)
+	local okB, b = pcall(ClanService.GetClanId, player)
+	return okA and okB and typeof(a) == "string" and a ~= "" and a == b
+end
+
+local function newPlayerSecondsLeft(profile: any): number
+	local R = RaidConfig.Raid
+	if RunService:IsStudio() and not R.ProtectNewPlayersInStudio then
+		return 0
+	end
+	local first = tonumber(profile.FirstJoinUnix) or 0
+	if first <= 0 then
+		return 0
+	end
+	return math.max(0, first + R.NewPlayerProtectionSeconds - os.time())
+end
+
+-- ── AutoCollect income window (spec §1.5) ──────────────────────────────────
+
+local function pruneRecent(userId: number): { IncomeEntry }?
+	local list = recentAuto[userId]
+	if not list then
+		return nil
+	end
+	local window = RaidConfig.Raid.AutoCollectWindowSeconds
+	local nowUnix = os.time()
+	local kept: { IncomeEntry } = {}
+	for _, e in ipairs(list) do
+		if nowUnix - e.t <= window then
+			table.insert(kept, e)
+		end
+	end
+	if #kept == 0 then
+		recentAuto[userId] = nil
+		return nil
+	end
+	recentAuto[userId] = kept
+	return kept
+end
+
+local function recordAutoIncome(userId: number, amount: number)
+	if amount <= 0 then
+		return
+	end
+	local list = pruneRecent(userId) or {}
+	table.insert(list, { t = os.time(), amount = math.floor(amount) })
+	recentAuto[userId] = list
+end
+
+local function recentAutoSum(userId: number): number
+	local list = pruneRecent(userId)
+	if not list then
+		return 0
+	end
+	local total = 0
+	for _, e in ipairs(list) do
+		total += e.amount
+	end
+	return total
+end
+
+-- What "10% of their ATM" is taken from: PendingCash, plus the last 10 min of auto-collected income for
+-- AutoCollect owners (otherwise AutoCollect would be raid immunity — its loop empties the ATM every 2 s).
+function MoneyCollectorService.GetRaidableBalance(victim: Player): number
+	local profile = profileOf(victim)
+	if not profile then
+		return 0
+	end
+	local balance = math.max(0, math.floor(tonumber(profile.PendingCash) or 0))
+	if RaidConfig.Raid.AutoCollectCountsRecentIncome and autoCollectFlag[victim.UserId] == true then
+		-- capped at the Cash they still hold: auto income already spent cannot be stolen (completeRaid takes the
+		-- rest out of Cash), so the ATM never shows / promises more than a raid can actually take
+		local cash = math.max(0, math.floor(tonumber(profile.Cash) or 0))
+		balance += math.min(recentAutoSum(victim.UserId), cash)
+	end
+	return balance
+end
+
+-- ── billboard / ATM screen ─────────────────────────────────────────────────
 
 local function ensureBillboard(part: BasePart): BillboardGui
 	local existing = billboardCache[part]
@@ -169,16 +410,48 @@ local function syncAtmScreen(part: BasePart, pending: number)
 	end
 end
 
-local function refreshBillboard(part: BasePart, pending: number)
+local function isBeingRobbed(plotId: number): boolean
+	for _, hold in pairs(holds) do
+		if hold.PlotId == plotId then
+			return true
+		end
+	end
+	return false
+end
+
+-- Billboard title (spec §1.10): shield > being robbed > AutoCollect > walk-in.
+local function atmTitle(owner: Player?, plotId: number?): string
+	if owner then
+		local profile = profileOf(owner)
+		local shield = raidNum(profile, "ShieldUntil")
+		local nowUnix = os.time()
+		if shield > nowUnix then
+			return "ATM · 🛡 SHIELD " .. RaidConfig.FormatTime(shield - nowUnix)
+		end
+		if plotId ~= nil and isBeingRobbed(plotId) then
+			return "⚠ ATM BEING ROBBED"
+		end
+		if autoCollectFlag[owner.UserId] == true then
+			return "ATM · AUTO-COLLECT (10 MIN)"
+		end
+	end
+	return "ATM · WALK IN TO COLLECT"
+end
+
+local function refreshBillboard(part: BasePart, pending: number, title: string?)
 	local bb = ensureBillboard(part)
 	local amount = bb:FindFirstChild("Amount", true)
 	if amount and amount:IsA("TextLabel") then
-		if pending > 0 then
-			amount.Text = string.format("$%s", tostring(math.floor(pending)))
-			amount.TextColor3 = Color3.fromRGB(70, 255, 120)
-		else
-			amount.Text = "$0"
-			amount.TextColor3 = Color3.fromRGB(100, 140, 110)
+		local text = if pending > 0 then string.format("$%s", tostring(math.floor(pending))) else "$0"
+		if amount.Text ~= text then
+			amount.Text = text
+			amount.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(100, 140, 110)
+		end
+	end
+	if title then
+		local lbl = bb:FindFirstChild("Title", true)
+		if lbl and lbl:IsA("TextLabel") and lbl.Text ~= title then
+			lbl.Text = title
 		end
 	end
 	syncAtmScreen(part, pending)
@@ -203,51 +476,14 @@ local function nearCollector(hrpPos: Vector3, part: BasePart): boolean
 	return pointInPart(hrpPos, part)
 end
 
-local function plotIdOf(part: BasePart): number?
-	local raw = part:GetAttribute("PlotId")
-	if typeof(raw) == "number" then
-		return raw
-	end
-	local n = tonumber(raw)
-	if typeof(n) == "number" then
-		return n
-	end
-	return nil
+-- Raid range: horizontal RadiusStuds and |dy| <= MaxHeightDelta from the ATM body
+local function inRaidRange(hrpPos: Vector3, part: BasePart): boolean
+	local R = RaidConfig.Raid
+	local delta = hrpPos - part.Position
+	return Vector3.new(delta.X, 0, delta.Z).Magnitude <= R.RadiusStuds and math.abs(delta.Y) <= R.MaxHeightDelta
 end
 
-local function getAtmRaidConfig()
-	local cfg = EconomyConfig.AtmRaid
-	if not cfg or cfg.Enabled == false then
-		return nil
-	end
-	return cfg
-end
-
-local function findOwnerByPlot(plotId: number): Player?
-	for _, player in ipairs(Players:GetPlayers()) do
-		local profile = DataService.GetProfile(player)
-		if profile and profile.BasePlotId == plotId then
-			return player
-		end
-	end
-	return nil
-end
-
-local function raidCooldownRemaining(thiefId: number, victimId: number): number
-	local byVictim = atmRaidCooldownUntil[thiefId]
-	if not byVictim then
-		return 0
-	end
-	local untilT = byVictim[victimId]
-	if not untilT then
-		return 0
-	end
-	return math.max(0, untilT - os.clock())
-end
-
-local function raidOnCooldown(thiefId: number, victimId: number, _cooldownSec: number): boolean
-	return raidCooldownRemaining(thiefId, victimId) > 0
-end
+-- ── raid feedback ──────────────────────────────────────────────────────────
 
 local function pushAtmRaidState(player: Player, payload: { [string]: any })
 	local remote = RemoteSetup.Get(Constants.RemoteNames.AtmRaidStateUpdate)
@@ -256,235 +492,586 @@ local function pushAtmRaidState(player: Player, payload: { [string]: any })
 	end
 end
 
-local function setRaidCooldown(thiefId: number, victimId: number, cooldownSec: number)
-	local byVictim = atmRaidCooldownUntil[thiefId]
-	if not byVictim then
-		byVictim = {}
-		atmRaidCooldownUntil[thiefId] = byVictim
+local function reasonText(reason: string, secs: number?, balance: number?): string
+	local T = RaidConfig.Text
+	if reason == "Hit" then
+		return T.RaidHit
+	elseif reason == "LeftRange" then
+		return T.RaidLeft
+	elseif reason == "VictimLeft" then
+		return T.RaidVictimLeft
+	elseif reason == "Emptied" then
+		return T.RaidEmptied
+	elseif reason == "Dead" then
+		return T.RaidDead
 	end
-	byVictim[victimId] = os.clock() + cooldownSec
+	local tpl = T.Blocked[reason]
+	if not tpl then
+		return reason
+	end
+	if string.find(tpl, "%s", 1, true) then
+		if reason == "LowBalance" then
+			return string.format(tpl, formatCash(balance or 0))
+		end
+		return string.format(tpl, RaidConfig.FormatTime(secs or 0))
+	end
+	return tpl
 end
 
---[[
-	Enemy touches WE_MoneyCollector belonging to another player → steal 10% PendingCash.
-	Server-authoritative; distance + rate-limit + per thief→victim cooldown.
-]]
-function MoneyCollectorService.TryAtmRaid(thief: Player, part: BasePart): (boolean, number)
-	local cfg = getAtmRaidConfig()
-	if not cfg then
-		return false, 0
+-- CanRaid reason while a hold was running → the Interrupted reason the thief sees
+local function interruptReason(reason: string): string
+	if reason == "LowBalance" then
+		return "Emptied"
+	elseif reason == "VictimLoading" then
+		return "VictimLeft"
 	end
-	local plotId = part:GetAttribute("PlotId")
-	if typeof(plotId) ~= "number" then
-		return false, 0
+	return reason
+end
+
+-- Reasons shown as Phase "Interrupted"; any other cause of a cancel is shown as Phase "Blocked" with its code
+local INTERRUPT_REASONS: { [string]: boolean } = { Hit = true, LeftRange = true, VictimLeft = true, Emptied = true, Dead = true }
+
+local function holdingPayload(hold: RaidHold): { [string]: any }
+	local need = RaidConfig.Raid.HoldSeconds
+	local progress = math.min(hold.Progress, need)
+	return {
+		Phase = "Holding",
+		VictimName = hold.VictimName,
+		HoldProgress = math.floor(progress * 100 + 0.5) / 100,
+		HoldNeed = need,
+		Text = string.format(RaidConfig.Text.RaidHolding, hold.VictimName, progress, math.floor(need)),
+	}
+end
+
+local function pushAlarm(victim: Player, thief: Player, hold: RaidHold, first: boolean)
+	local need = RaidConfig.Raid.HoldSeconds
+	local text = string.format(RaidConfig.Text.RaidAlarm, thief.DisplayName)
+	hold.LastAlarmAt = os.clock()
+	pushAtmRaidState(victim, {
+		Phase = "Alarm",
+		ThiefName = thief.DisplayName,
+		HoldProgress = math.floor(math.min(hold.Progress, need) * 100 + 0.5) / 100,
+		HoldNeed = need,
+		Text = text,
+	})
+	if first and NotificationService and NotificationService.NotifyThrottled then
+		NotificationService.NotifyThrottled(victim, text, "Warn", 4, RaidConfig.Raid.VictimAlarmToastCooldown, "atm_alarm")
 	end
-	local thiefProfile = DataService.GetProfile(thief)
-	if not thiefProfile then
-		return false, 0
+end
+
+-- Blocked is re-sent only when the reason changes, or every BlockedPushInterval while standing at the ATM.
+local function pushBlocked(thief: Player, victim: Player, reason: string, secs: number?, force: boolean?)
+	local nowC = os.clock()
+	local rec = blockedPush[thief.UserId]
+	if not force and rec and rec.Reason == reason and nowC - rec.At < RaidConfig.Raid.BlockedPushInterval - 1e-6 then
+		return
 	end
-	-- Must not be owner
-	if thiefProfile.BasePlotId ~= nil and thiefProfile.BasePlotId == plotId then
-		return false, 0
+	blockedPush[thief.UserId] = { Reason = reason, At = nowC }
+	local balance = if reason == "LowBalance" then MoneyCollectorService.GetRaidableBalance(victim) else nil
+	pushAtmRaidState(thief, {
+		Phase = "Blocked",
+		Reason = reason,
+		VictimName = victim.DisplayName,
+		CooldownRemaining = if secs then math.max(0, math.ceil(secs)) else nil,
+		Text = reasonText(reason, secs, balance),
+	})
+end
+
+local function clearHold(thief: Player): RaidHold?
+	local hold = holds[thief.UserId]
+	holds[thief.UserId] = nil
+	pcall(function()
+		thief:SetAttribute("WE_RaidingPlot", nil)
+	end)
+	return hold
+end
+
+--[[ Cancel a running hold. `reason` is a cancel reason (Hit / LeftRange / VictimLeft / Dead) or the CanRaid code
+	that failed mid-hold (LowBalance shows as Emptied, VictimLoading as VictimLeft). Interrupt reasons push
+	"Interrupted"; any other rule (Shielded, Seated, Teleport …) pushes "Blocked" with its code instead (one chip,
+	not two). The victim gets "Defended" when the hold had reached >= 1 s — unless they were just robbed / left. ]]
+local function cancelHold(thief: Player, reason: string, secs: number?, victim: Player?)
+	local hold = clearHold(thief)
+	if not hold then
+		return
 	end
-	local victim = findOwnerByPlot(plotId)
-	if not victim or victim == thief then
-		return false, 0
-	end
-	-- Distance check
-	local character = thief.Character
-	local hrp = character and character:FindFirstChild("HumanoidRootPart")
-	if not (hrp and hrp:IsA("BasePart")) then
-		return false, 0
-	end
-	local maxDist = cfg.MaxDistanceStuds or 14
-	if (hrp.Position - part.Position).Magnitude > maxDist + OVERLAP_MARGIN then
-		return false, 0
-	end
-	if RateLimitService and not RateLimitService.Allow(thief, "atm_raid", 1, 2) then
-		return false, 0
-	end
-	local cooldownSec = cfg.AtmRaidCooldownSeconds or 60
-	local remain = raidCooldownRemaining(thief.UserId, victim.UserId)
-	if remain > 0 then
-		if NotificationService then
-			local cdToast = cfg.ToastCooldown or "ATM raid cooldown — %ds left"
-			NotificationService.Notify(thief, string.format(cdToast, math.ceil(remain)), "Warn", 2.5)
-		end
+	local shown = interruptReason(reason)
+	if INTERRUPT_REASONS[shown] or victim == nil then
 		pushAtmRaidState(thief, {
-			CooldownRemaining = math.ceil(remain),
-			CooldownTotal = cooldownSec,
-			Success = false,
+			Phase = "Interrupted",
+			Reason = shown,
+			VictimName = hold.VictimName,
+			HoldProgress = math.floor(math.min(hold.Progress, RaidConfig.Raid.HoldSeconds) * 100 + 0.5) / 100,
+			HoldNeed = RaidConfig.Raid.HoldSeconds,
+			Text = reasonText(shown, secs),
 		})
-		return false, 0
-	end
-	local victimPending = 0
-	if EconomyService and EconomyService.GetPendingCash then
-		victimPending = EconomyService.GetPendingCash(victim)
+		-- the chip already says why: no Blocked push of the same cause right after it
+		blockedPush[thief.UserId] = { Reason = reason, At = os.clock() }
 	else
-		local vp = DataService.GetProfile(victim)
-		victimPending = if vp then math.floor(tonumber((vp :: any).PendingCash) or 0) else 0
+		pushBlocked(thief, victim, reason, secs, true)
 	end
-	local minSteal = cfg.MinStealCash or 1
-	if victimPending < minSteal then
-		return false, 0
+	if hold.Progress >= 1 and shown ~= "VictimLeft" then
+		local owner = Players:GetPlayerByUserId(hold.VictimUserId)
+		if owner and raidNum(profileOf(owner), "ShieldUntil") <= os.time() then
+			pushAtmRaidState(owner, {
+				Phase = "Defended",
+				ThiefName = thief.DisplayName,
+				Reason = shown,
+				Text = RaidConfig.Text.RaidDefended,
+			})
+		end
 	end
-	local fraction = cfg.StealFraction or 0.10
-	local stealAmount = math.floor(victimPending * fraction)
-	if stealAmount < minSteal then
-		return false, 0
+end
+
+-- ── rules (spec §1.1) ──────────────────────────────────────────────────────
+
+--[[ (ok, reason?, secondsLeft?) — first failure wins. reason nil = silent (own ATM). "Dead" / "VictimLeft" are
+	cancel-only reasons (never pushed as Blocked). ]]
+function MoneyCollectorService.CanRaid(thief: Player, victim: Player): (boolean, string?, number?)
+	local R = RaidConfig.Raid
+	if not R.Enabled then
+		return false, "Disabled"
 	end
-	local transferred = 0
-	if EconomyService and EconomyService.TransferPendingCash then
-		transferred = EconomyService.TransferPendingCash(victim, thief, stealAmount)
+	if victim == thief or victim.UserId == thief.UserId then
+		return false, nil
 	end
-	if transferred <= 0 then
-		return false, 0
+	if victim.Parent == nil or ownedPlotOf(victim) == nil then
+		return false, "VictimLeft"
 	end
-	setRaidCooldown(thief.UserId, victim.UserId, cooldownSec)
+	local tProfile = profileOf(thief)
+	if not tProfile or not isLoaded(thief) then
+		return false, "ThiefLoading"
+	end
+	-- a session-only save would create / destroy money: refuse until the real save is in
+	local vProfile = profileOf(victim)
+	if not vProfile or not isLoaded(victim) then
+		return false, "VictimLoading"
+	end
+	if ownedPlotOf(thief) == nil then
+		return false, "NoBase"
+	end
+	if not R.AllowAllies and isAlly(victim.UserId, thief) then
+		return false, "Ally"
+	end
+	local char = thief.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return false, "Dead"
+	end
+	if R.RequireOnFoot and hum.SeatPart ~= nil then
+		return false, "Seated"
+	end
+	local lock = teleportLockUntil[thief.UserId]
+	if lock and os.clock() < lock then
+		return false, "Teleport", math.ceil(lock - os.clock())
+	end
+	local nowUnix = os.time()
+	local cd = raidNum(tProfile, "RaidCooldownUntil")
+	if nowUnix < cd then
+		return false, "ThiefCooldown", cd - nowUnix
+	end
+	local shield = raidNum(vProfile, "ShieldUntil")
+	if nowUnix < shield then
+		return false, "Shielded", shield - nowUnix
+	end
+	local newLeft = newPlayerSecondsLeft(vProfile)
+	if newLeft > 0 then
+		return false, "NewPlayer", newLeft
+	end
+	local balance = MoneyCollectorService.GetRaidableBalance(victim)
+	if balance < R.MinVictimBalance or math.floor(balance * R.StealFraction) < R.MinSteal then
+		return false, "LowBalance"
+	end
+	return true, nil, nil
+end
+
+function MoneyCollectorService.GetRaidHold(thief: Player): { VictimUserId: number, Progress: number }?
+	local hold = holds[thief.UserId]
+	if not hold then
+		return nil
+	end
+	return { VictimUserId = hold.VictimUserId, Progress = hold.Progress }
+end
+
+-- ── steal (spec §1.4) — synchronous: nothing here may yield ─────────────────
+
+local function completeRaid(thief: Player, victim: Player, hold: RaidHold): boolean
+	local R = RaidConfig.Raid
+	-- 1. re-validate at the moment of completion (a second thief finishing on the same tick fails here: Shielded)
+	local ok, reason, secs = MoneyCollectorService.CanRaid(thief, victim)
+	if not ok then
+		cancelHold(thief, reason or "VictimLeft", secs, victim)
+		return false
+	end
+	local vProfile = profileOf(victim)
+	local tProfile = profileOf(thief)
+	if not vProfile or not tProfile or not EconomyService then
+		cancelHold(thief, "VictimLeft")
+		return false
+	end
+	-- 2. 10% of the raidable balance
+	local balance = MoneyCollectorService.GetRaidableBalance(victim)
+	local steal = math.floor(balance * R.StealFraction)
+	-- 3. protection first: a failure below favours the victim
+	local vRaid = raidOf(vProfile)
+	local tRaid = raidOf(tProfile)
+	local oldShield = vRaid.ShieldUntil
+	local oldCooldown = tRaid.RaidCooldownUntil
+	local nowUnix = os.time()
+	vRaid.ShieldUntil = nowUnix + R.ShieldSeconds
+	tRaid.RaidCooldownUntil = nowUnix + R.ThiefCooldownSeconds
+	-- 4. PendingCash → thief's ATM, 1:1 (existing transfer, no multipliers)
+	local moved = 0
+	local pending = math.max(0, math.floor(tonumber(EconomyService.GetPendingCash(victim)) or 0))
+	local fromPending = math.min(steal, pending)
+	if fromPending > 0 then
+		moved = math.max(0, math.floor(tonumber(EconomyService.TransferPendingCash(victim, thief, fromPending)) or 0))
+	end
+	-- 5. AutoCollect owners: the rest comes out of the last 10 min of auto-collected income (now in Cash)
+	local rest = steal - moved
+	if rest > 0 and R.AutoCollectCountsRecentIncome and autoCollectFlag[victim.UserId] == true then
+		local cash = math.max(0, math.floor(tonumber(EconomyService.GetCash(victim)) or 0))
+		local cashTake = math.floor(math.min(rest, recentAutoSum(victim.UserId), cash))
+		if cashTake > 0 and EconomyService.SpendCash(victim, cashTake, "atm_raid_loss") then
+			-- "atm_raid" is NEVER_MULTIPLIED → the thief gets exactly what the victim lost
+			if EconomyService.AccruePendingCash(thief, cashTake, "atm_raid") then
+				moved += cashTake
+			else
+				EconomyService.AddCash(victim, cashTake, "purchase_refund")
+			end
+		end
+	end
+	-- 6. nothing moved → no shield, no cooldown
+	if moved <= 0 then
+		vRaid.ShieldUntil = oldShield
+		tRaid.RaidCooldownUntil = oldCooldown
+		clearHold(thief)
+		pushBlocked(thief, victim, "LowBalance", nil, true)
+		return false
+	end
+	-- 7. persist + mirror
+	markDirty(victim)
+	markDirty(thief)
+	pcall(function()
+		victim:SetAttribute("WE_ShieldUntil", vRaid.ShieldUntil)
+	end)
+	recentAuto[victim.UserId] = nil
+	clearHold(thief)
+	-- keep the 5 s Success chip up: the thief is still on the ATM (now ThiefCooldown) — no Blocked push for 5 s
+	blockedPush[thief.UserId] = { Reason = "ThiefCooldown", At = os.clock() + 5 - R.BlockedPushInterval }
+	-- 8. feedback
+	local T = RaidConfig.Text
+	local successText = string.format(T.RaidSuccess, formatCash(moved), victim.DisplayName)
+	local robbedText = string.format(T.RaidRobbed, thief.DisplayName, formatCash(moved), RaidConfig.FormatTime(R.ShieldSeconds))
 	if NotificationService then
-		local thiefToast = cfg.ToastThief or "ATM RAID +$%d (10%%) from %s — 1m cooldown"
-		local victimToast = cfg.ToastVictim or "ATM RAIDED −10%% by %s (−$%d)"
-		NotificationService.Notify(thief, string.format(thiefToast, transferred, victim.DisplayName), "Reward", 5)
-		-- v38: clear red defender alert with thief display name
-		NotificationService.Notify(victim, string.format(victimToast, thief.DisplayName, transferred), "Warn", 5.5)
+		NotificationService.Notify(thief, successText, "Reward", 5)
+		NotificationService.Notify(victim, robbedText, "Warn", 6)
 	end
 	pushAtmRaidState(thief, {
-		CooldownRemaining = cooldownSec,
-		CooldownTotal = cooldownSec,
-		Success = true,
-		Stolen = transferred,
+		Phase = "Success",
 		VictimName = victim.DisplayName,
+		Stolen = moved,
+		Text = successText,
+		CooldownRemaining = R.ThiefCooldownSeconds,
+		CooldownTotal = R.ThiefCooldownSeconds,
+		Success = true,
 	})
 	pushAtmRaidState(victim, {
-		CooldownRemaining = 0,
-		CooldownTotal = cooldownSec,
-		Success = false,
-		Stolen = transferred,
-		Raided = true,
+		Phase = "Robbed",
 		ThiefName = thief.DisplayName,
+		Stolen = moved,
+		ShieldRemaining = R.ShieldSeconds,
+		Text = robbedText,
+		CooldownRemaining = 0,
+		CooldownTotal = R.ThiefCooldownSeconds,
+		Success = false,
+		Raided = true,
 	})
-	return true, transferred
+	MoneyCollectorService.RefreshForPlayer(victim)
+	if AnalyticsService and AnalyticsService.Log then
+		local props = { VictimUserId = victim.UserId, Stolen = moved, Balance = balance, PlotId = hold.PlotId }
+		task.spawn(function()
+			pcall(AnalyticsService.Log, "ATM_RAID", thief.UserId, props)
+		end)
+	end
+	return true
 end
 
-function MoneyCollectorService.Collect(player: Player): (boolean, number)
+-- ── the hold state machine (spec §1.3) ─────────────────────────────────────
+
+-- Foreign ATM (owned by someone else) this position is in raid range of; prefers the running hold's ATM.
+local function findForeignAtm(player: Player, pos: Vector3, hold: RaidHold?): (BasePart?, number?, number?)
+	if hold and hold.Part.Parent and inRaidRange(pos, hold.Part) then
+		local ownerId = ownerUserIdOfPlot(hold.PlotId)
+		if ownerId ~= nil and ownerId ~= player.UserId then
+			return hold.Part, hold.PlotId, ownerId
+		end
+	end
+	for part in pairs(attached) do
+		if part.Parent and inRaidRange(pos, part) then
+			local plotId = plotIdOf(part)
+			if plotId ~= nil then
+				local ownerId = ownerUserIdOfPlot(plotId)
+				if ownerId ~= nil and ownerId ~= player.UserId then
+					return part, plotId, ownerId
+				end
+			end
+		end
+	end
+	return nil, nil, nil
+end
+
+local function stepPlayer(player: Player, step: number, nowC: number)
+	local R = RaidConfig.Raid
+	local uid = player.UserId
+	local char = player.Character
+	local hrpInst = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrpInst and hrpInst:IsA("BasePart")) then
+		lastPos[uid] = nil
+		lastHrp[uid] = nil
+		if holds[uid] then
+			cancelHold(player, "Dead")
+		end
+		return
+	end
+	local hrp = hrpInst :: BasePart
+	local hum = (char :: Model):FindFirstChildOfClass("Humanoid")
+	local pos = hrp.Position
+
+	-- 1. teleport bookkeeping (same HRP, on foot, > TeleportStuds in one tick → lockout)
+	local seated = hum ~= nil and hum.SeatPart ~= nil
+	local prevPos: Vector3? = lastPos[uid]
+	if lastHrp[uid] == hrp and prevPos and not seated then
+		local limit = R.TeleportStuds * math.max(1, step / SPATIAL_INTERVAL)
+		if (pos - prevPos).Magnitude > limit then
+			teleportLockUntil[uid] = nowC + R.TeleportLockoutSeconds
+		end
+	end
+	lastPos[uid] = pos
+	lastHrp[uid] = hrp
+
+	local hold: RaidHold? = holds[uid]
+	if hold and hold.Hrp ~= hrp then
+		cancelHold(player, "Dead") -- respawned mid-hold
+		hold = nil
+	end
+
+	-- 2. a foreign ATM in range
+	local part, plotId, ownerId = findForeignAtm(player, pos, hold)
+	if not part or plotId == nil or ownerId == nil then
+		if hold then
+			local stillThere = hold.Part.Parent ~= nil and inRaidRange(pos, hold.Part)
+			cancelHold(player, if stillThere then "VictimLeft" else "LeftRange")
+		end
+		return
+	end
+	local victim = Players:GetPlayerByUserId(ownerId)
+	if not victim then
+		if hold then
+			cancelHold(player, "VictimLeft")
+		end
+		return
+	end
+
+	-- 3. rules
+	local ok, reason, secs = MoneyCollectorService.CanRaid(player, victim)
+	if not ok then
+		if hold then
+			cancelHold(player, reason or "VictimLeft", secs, victim)
+		elseif reason ~= nil and reason ~= "Dead" and reason ~= "VictimLeft" then
+			pushBlocked(player, victim, reason, secs)
+		end
+		return
+	end
+	if not hum then
+		return
+	end
+
+	-- 4. start (or switch victim)
+	if hold and hold.VictimUserId ~= victim.UserId then
+		cancelHold(player, "LeftRange")
+		hold = nil
+	end
+	if not hold then
+		local newHold: RaidHold = {
+			VictimUserId = victim.UserId,
+			VictimName = victim.DisplayName,
+			PlotId = plotId,
+			Part = part,
+			Progress = 0,
+			LastHealth = hum.Health,
+			LastPushAt = -math.huge,
+			LastAlarmAt = -math.huge,
+			StartedAt = nowC,
+			Hrp = hrp,
+		}
+		holds[uid] = newHold
+		hold = newHold
+		blockedPush[uid] = nil
+		pcall(function()
+			player:SetAttribute("WE_RaidingPlot", plotId)
+		end)
+		pushAlarm(victim, player, newHold, true)
+	else
+		-- 5. any damage cancels (progress back to 0; restarts next tick while still in range)
+		if hum.Health < hold.LastHealth - R.DamageCancelHp then
+			cancelHold(player, "Hit")
+			return
+		end
+		hold.LastHealth = hum.Health
+	end
+	local h = hold :: RaidHold
+	h.Progress += step
+
+	-- 6. done
+	if h.Progress >= R.HoldSeconds - 1e-6 then
+		completeRaid(player, victim, h)
+		return
+	end
+	if nowC - h.LastPushAt >= R.HoldPushInterval - 1e-6 then
+		h.LastPushAt = nowC
+		pushAtmRaidState(player, holdingPayload(h))
+	end
+	if nowC - h.LastAlarmAt >= R.AlarmPushInterval - 1e-6 then
+		pushAlarm(victim, player, h, false)
+	end
+end
+
+--[[ One raid tick for every online player (heartbeat calls it every ~0.25 s with the elapsed time; exported so
+	tests can drive it with a fake clock). ]]
+function MoneyCollectorService.StepRaids(step: number)
+	if typeof(step) ~= "number" or step ~= step or step <= 0 then
+		return
+	end
+	step = math.min(step, MAX_RAID_STEP)
+	local nowC = os.clock()
+	for _, player in ipairs(Players:GetPlayers()) do
+		xpcall(stepPlayer, function(err)
+			warn("[MoneyCollector] raid step failed", player.UserId, err)
+		end, player, step, nowC)
+	end
+end
+
+-- ── collect ────────────────────────────────────────────────────────────────
+
+-- silent: the AutoCollect loop collects every few seconds; the cash readout updating is the feedback.
+-- v69: silent also skips the money-bag FX and the soft offers (they ran every 2 s for AutoCollect owners).
+function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boolean, number)
 	if not EconomyService or not EconomyService.CollectPendingCash then
 		return false, 0
 	end
 	local granted = EconomyService.CollectPendingCash(player)
-	if granted > 0 then
-		if NotificationService then
-			NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3)
-		end
-		if TutorialService and TutorialService.Notify then
-			TutorialService.Notify(player, "PassiveIncome")
-		end
-		-- v33: one-shot soft AutoCollect GamePass offer after first manual collect
-		do
-			local profile = DataService.GetProfile(player)
-			local offerCfg = (MonetizationConfig :: any).AutoCollectOffer
-			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.AutoCollect
-			if (
-				profile
-				and offerCfg
-				and gp
-				and typeof(gp.Id) == "number"
-				and gp.Id ~= 0
-				and profile.AutoCollectOffered ~= true
-				and not hasAutoCollect(player)
-				and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
-			) then
-				profile.AutoCollectOffered = true
-				DataService.MarkDirty(player)
-				task.delay(tonumber(offerCfg.DelaySeconds) or 1.2, function()
-					if not player.Parent then
-						return
-					end
-					if hasAutoCollect(player) then
-						return
-					end
-					local remote = RemoteSetup.Get(Constants.RemoteNames.AutoCollectOffer)
-					if remote and remote:IsA("RemoteEvent") then
-						(remote :: RemoteEvent):FireClient(player, {
-							ProductKey = "AutoCollect",
-							GamePassId = gp.Id,
-							DisplayName = gp.DisplayName or "Auto Collect",
-							RobuxPrice = gp.RobuxPrice,
-						})
-					end
-					if NotificationService then
-						NotificationService.Notify(
-							player,
-							"Tired of walking to the ATM? Auto Collect available",
-							"Info",
-							4.5
-						)
-					end
-				end)
-			end
-		end
-		-- v34: one-shot DoubleCash soft offer after meaningful collect (existing Id only; not spammy)
-		do
-			local profile = DataService.GetProfile(player)
-			local offerCfg = (MonetizationConfig :: any).DoubleCashOffer
-			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.DoubleCash
-			local minCash = tonumber(offerCfg and offerCfg.MinCollectCash) or 2500
-			-- Prefer after AutoCollect already teased/owned so we don't stack two toasts on first collect
-			local acReady = profile and (profile.AutoCollectOffered == true or hasAutoCollect(player))
-			if (
-				profile
-				and offerCfg
-				and gp
-				and typeof(gp.Id) == "number"
-				and gp.Id ~= 0
-				and granted >= minCash
-				and acReady
-				and profile.DoubleCashOffered ~= true
-				and not hasDoubleCash(player)
-				and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
-			) then
-				profile.DoubleCashOffered = true
-				DataService.MarkDirty(player)
-				task.delay(tonumber(offerCfg.DelaySeconds) or 1.8, function()
-					if not player.Parent then
-						return
-					end
-					if hasDoubleCash(player) then
-						return
-					end
-					local remote = RemoteSetup.Get(Constants.RemoteNames.DoubleCashOffer)
-					if remote and remote:IsA("RemoteEvent") then
-						(remote :: RemoteEvent):FireClient(player, {
-							ProductKey = "DoubleCash",
-							GamePassId = gp.Id,
-							DisplayName = gp.DisplayName or "2x Cash",
-							RobuxPrice = gp.RobuxPrice,
-						})
-					end
-					if NotificationService then
-						NotificationService.Notify(
-							player,
-							"Big collect! Double your cash with 2x Cash",
-							"Info",
-							4.5
-						)
-					end
-				end)
-			end
-		end
-		-- v37: one-shot CashMega soft offer after high pending collect (existing Id only)
-		if MonetizationService and MonetizationService.TrySoftOfferCashMega then
-			pcall(function()
-				MonetizationService.TrySoftOfferCashMega(player, "pending_collect", granted)
+	if granted <= 0 then
+		return false, 0
+	end
+	if TutorialService and TutorialService.Notify then
+		TutorialService.Notify(player, "PassiveIncome")
+	end
+	if silent then
+		return true, granted
+	end
+	if NotificationService then
+		NotificationService.Notify(player, string.format("Collected $%d", granted), "Collect", 3)
+	end
+	-- v33: one-shot soft AutoCollect GamePass offer after first manual collect
+	do
+		local profile = DataService.GetProfile(player)
+		local offerCfg = (MonetizationConfig :: any).AutoCollectOffer
+		local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.AutoCollect
+		if (
+			profile
+			and offerCfg
+			and gp
+			and typeof(gp.Id) == "number"
+			and gp.Id ~= 0
+			and profile.AutoCollectOffered ~= true
+			and not hasAutoCollect(player)
+			and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
+		) then
+			profile.AutoCollectOffered = true
+			DataService.MarkDirty(player)
+			task.delay(tonumber(offerCfg.DelaySeconds) or 1.2, function()
+				if not player.Parent then
+					return
+				end
+				if hasAutoCollect(player) then
+					return
+				end
+				local remote = RemoteSetup.Get(Constants.RemoteNames.AutoCollectOffer)
+				if remote and remote:IsA("RemoteEvent") then
+					(remote :: RemoteEvent):FireClient(player, {
+						ProductKey = "AutoCollect",
+						GamePassId = gp.Id,
+						DisplayName = gp.DisplayName or "Auto Collect",
+						RobuxPrice = gp.RobuxPrice,
+					})
+				end
+				if NotificationService then
+					NotificationService.Notify(player, "Tired of walking to the ATM? Auto Collect available", "Info", 4.5)
+				end
 			end)
 		end
+	end
+	-- v34: one-shot DoubleCash soft offer after meaningful collect (existing Id only; not spammy)
+	do
+		local profile = DataService.GetProfile(player)
+		local offerCfg = (MonetizationConfig :: any).DoubleCashOffer
+		local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.DoubleCash
+		local minCash = tonumber(offerCfg and offerCfg.MinCollectCash) or 2500
+		-- Prefer after AutoCollect already teased/owned so we don't stack two toasts on first collect
+		local acReady = profile and (profile.AutoCollectOffered == true or hasAutoCollect(player))
+		if (
+			profile
+			and offerCfg
+			and gp
+			and typeof(gp.Id) == "number"
+			and gp.Id ~= 0
+			and granted >= minCash
+			and acReady
+			and profile.DoubleCashOffered ~= true
+			and not hasDoubleCash(player)
+			and (not MonetizationService or not MonetizationService.ClaimSoftOfferSlot or MonetizationService.ClaimSoftOfferSlot(player))
+		) then
+			profile.DoubleCashOffered = true
+			DataService.MarkDirty(player)
+			task.delay(tonumber(offerCfg.DelaySeconds) or 1.8, function()
+				if not player.Parent then
+					return
+				end
+				if hasDoubleCash(player) then
+					return
+				end
+				local remote = RemoteSetup.Get(Constants.RemoteNames.DoubleCashOffer)
+				if remote and remote:IsA("RemoteEvent") then
+					(remote :: RemoteEvent):FireClient(player, {
+						ProductKey = "DoubleCash",
+						GamePassId = gp.Id,
+						DisplayName = gp.DisplayName or "2x Cash",
+						RobuxPrice = gp.RobuxPrice,
+					})
+				end
+				if NotificationService then
+					NotificationService.Notify(player, "Big collect! Double your cash with 2x Cash", "Info", 4.5)
+				end
+			end)
+		end
+	end
+	-- v37: one-shot CashMega soft offer after high pending collect (existing Id only)
+	if MonetizationService and MonetizationService.TrySoftOfferCashMega then
 		pcall(function()
-			local vas = require(script.Parent.VisualAssetService)
-			local profile = DataService.GetProfile(player)
+			MonetizationService.TrySoftOfferCashMega(player, "pending_collect", granted)
+		end)
+	end
+	-- v69: FX on its own thread (a catalog load can yield; the collect path never does)
+	task.spawn(function()
+		pcall(function()
+			local vas = require(script.Parent.VisualAssetService) :: any
+			local plotId = ownedPlotOf(player)
 			local pos: Vector3? = nil
 			local parent: Instance? = nil
-			if profile and profile.BasePlotId ~= nil then
+			if plotId ~= nil then
 				for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
-					if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
+					if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
 						pos = inst.Position + Vector3.new(0, 4, 0)
 						parent = inst.Parent
 						break
@@ -501,41 +1088,57 @@ function MoneyCollectorService.Collect(player: Player): (boolean, number)
 				vas.PlayMoneyBagFX(pos, parent)
 			end
 		end)
-		return true, granted
-	end
-	return false, 0
+	end)
+	return true, granted
 end
 
 function MoneyCollectorService.RefreshAllBillboards()
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
 		if inst:IsA("BasePart") and inst.Parent then
-			local plotId = inst:GetAttribute("PlotId")
-			local pending = 0
-			if typeof(plotId) == "number" then
-				for _, player in ipairs(Players:GetPlayers()) do
-					local profile = DataService.GetProfile(player)
-					if profile and profile.BasePlotId == plotId then
-						pending = tonumber(profile.PendingCash) or 0
-						break
-					end
-				end
-			end
-			refreshBillboard(inst, pending)
+			local plotId = plotIdOf(inst)
+			local owner = if plotId ~= nil then findOwnerByPlot(plotId) else nil
+			local amount = if owner then MoneyCollectorService.GetRaidableBalance(owner) else 0
+			refreshBillboard(inst, amount, atmTitle(owner, plotId))
 		end
 	end
 end
 
 function MoneyCollectorService.RefreshForPlayer(player: Player)
-	local profile = DataService.GetProfile(player)
-	if not profile or profile.BasePlotId == nil then
+	local plotId = ownedPlotOf(player)
+	if plotId == nil then
 		return
 	end
-	local pending = tonumber(profile.PendingCash) or 0
+	local amount = MoneyCollectorService.GetRaidableBalance(player)
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
-		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == profile.BasePlotId then
-			refreshBillboard(inst, pending)
+		if inst:IsA("BasePart") and plotIdOf(inst) == plotId then
+			refreshBillboard(inst, amount, atmTitle(player, plotId))
 		end
 	end
+end
+
+-- Non-owner pressed the ATM prompt: a hint only (rate limited) — the raid itself is the server-side hold.
+local function promptHint(player: Player, owner: Player)
+	if RateLimitService and not RateLimitService.Allow(player, "atm_prompt", 2, 3) then
+		return
+	end
+	local hold = holds[player.UserId]
+	if hold then
+		pushAtmRaidState(player, holdingPayload(hold))
+		return
+	end
+	local ok, reason, secs = MoneyCollectorService.CanRaid(player, owner)
+	if not ok then
+		if reason ~= nil and reason ~= "Dead" and reason ~= "VictimLeft" then
+			pushBlocked(player, owner, reason, secs, true)
+		end
+		return
+	end
+	pushAtmRaidState(player, {
+		Phase = "Blocked",
+		Reason = "Hint",
+		VictimName = owner.DisplayName,
+		Text = string.format(RaidConfig.Text.RaidHint, owner.DisplayName, math.floor(RaidConfig.Raid.HoldSeconds)),
+	})
 end
 
 function MoneyCollectorService.Init(deps: { [string]: any })
@@ -545,25 +1148,27 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	TutorialService = deps.TutorialService
 	RateLimitService = deps.RateLimitService
+	BaseService = deps.BaseService
+	ClanService = deps.ClanService
+	GateDefenseService = deps.GateDefenseService
+	AnalyticsService = deps.AnalyticsService
 
-	-- Touch + spatial collect
+	-- Touch + spatial + prompt collect (own ATM, or an unowned one during the join race). Foreign ATMs never
+	-- collect or raid from here: the raid is the StepRaids hold.
 	local function tryCollectFromPart(player: Player, part: BasePart, fromPrompt: boolean?)
 		local profile = DataService.GetProfile(player)
 		if not profile then
 			return
 		end
 		local plotId = plotIdOf(part)
-		local ownPlot = tonumber(profile.BasePlotId)
-		-- Own ATM (or plot not yet assigned but standing on an unowned/own pad): collect.
-		-- Only raid when this pad clearly belongs to a *different* living player.
-		local isOwn = typeof(plotId) == "number" and typeof(ownPlot) == "number" and plotId == ownPlot
-		if typeof(plotId) == "number" and not isOwn then
+		if plotId ~= nil then
 			local owner = findOwnerByPlot(plotId)
 			if owner and owner ~= player then
-				MoneyCollectorService.TryAtmRaid(player, part)
+				if fromPrompt == true then
+					promptHint(player, owner)
+				end
 				return
 			end
-			-- Unowned / own-plot-nil: treat as collectable for this player (join race)
 		end
 		local pending = math.floor(tonumber(profile.PendingCash) or 0)
 		if pending <= 0 then
@@ -586,7 +1191,6 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		MoneyCollectorService.RefreshForPlayer(player)
 	end
 
-	local attached: { [BasePart]: boolean } = {}
 	local function attach(part: BasePart)
 		if attached[part] then
 			return
@@ -618,7 +1222,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		end
 		task.defer(function()
 			pcall(function()
-				local vas = require(script.Parent.VisualAssetService)
+				local vas = require(script.Parent.VisualAssetService) :: any
 				if vas and vas.TryAttachCollectorVisual then
 					vas.TryAttachCollectorVisual(part)
 				end
@@ -672,6 +1276,7 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		acc += dt
 		autoAcc += dt
 		if acc >= SPATIAL_INTERVAL then
+			local elapsed = acc
 			acc = 0
 			for _, player in ipairs(Players:GetPlayers()) do
 				local character = player.Character
@@ -687,15 +1292,21 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 					end
 				end
 			end
+			MoneyCollectorService.StepRaids(elapsed)
 			MoneyCollectorService.RefreshAllBillboards()
 		end
 		if autoAcc >= AUTO_COLLECT_INTERVAL then
 			autoAcc = 0
 			for _, player in ipairs(Players:GetPlayers()) do
-				if hasAutoCollect(player) then
+				local owns = hasAutoCollect(player)
+				autoCollectFlag[player.UserId] = owns
+				if owns then
 					local profile = DataService.GetProfile(player)
 					if profile and (tonumber(profile.PendingCash) or 0) > 0 then
-						MoneyCollectorService.Collect(player)
+						local ok, granted = MoneyCollectorService.Collect(player, true)
+						if ok and granted > 0 then
+							recordAutoIncome(player.UserId, granted)
+						end
 						MoneyCollectorService.RefreshForPlayer(player)
 					end
 				end
@@ -703,16 +1314,30 @@ function MoneyCollectorService.Init(deps: { [string]: any })
 		end
 	end)
 
+	-- Mirror the persisted shield for HUDs once the real save is in
+	if DataService and DataService.OnProfileLoaded then
+		DataService.OnProfileLoaded(function(player: Player, profile: any)
+			local shield = raidNum(profile, "ShieldUntil")
+			pcall(function()
+				player:SetAttribute("WE_ShieldUntil", if shield > 0 then shield else nil)
+			end)
+		end)
+	end
+
 	Players.PlayerRemoving:Connect(function(player)
-		atmRaidCooldownUntil[player.UserId] = nil
-		emptyCollectToastAt[player.UserId] = nil
-		-- Also drop entries where this player was victim
-		for thiefId, byVictim in pairs(atmRaidCooldownUntil) do
-			byVictim[player.UserId] = nil
-		end
+		local uid = player.UserId
+		holds[uid] = nil
+		blockedPush[uid] = nil
+		lastPos[uid] = nil
+		lastHrp[uid] = nil
+		teleportLockUntil[uid] = nil
+		recentAuto[uid] = nil
+		autoCollectFlag[uid] = nil
+		emptyCollectToastAt[uid] = nil
+		-- holds on this player (as victim) are cancelled on the next raid tick (owner gone → VictimLeft)
 	end)
 
-	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector; AtmRaid 10%)")
+	print("[WAR EMPIRE] MoneyCollectorService ready (PendingCash → touch WE_MoneyCollector; ATM raid hold 10%, shield 10 min)")
 end
 
 return MoneyCollectorService

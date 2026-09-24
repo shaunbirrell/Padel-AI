@@ -186,6 +186,23 @@ local StructureVisualConfig = {
 		doorway is shifted sideways so going inside never re-triggers the walk-over buy (pad hit box = ±8 studs).
 		Local axes: +Z = building front (faces the plot spawn), X = across the facade.
 	]]
+	-- v68: lights made by walk-in shells, interiors and installations (HollowBuildingBuilder). Interiors were
+	-- blinding: 6-8 Neon ceiling strips per room, each with a 20-stud full-brightness PointLight, under bloom.
+	BuildingLights = {
+		BrightnessScale = 0.35, -- multiplies every PointLight these builders create
+		MaxRange = 16,
+		FixtureMaterial = Enum.Material.SmoothPlastic, -- ceiling / entry / hangar fittings (was Neon)
+		FixtureColor = Color3.fromRGB(232, 226, 208),
+		SpotMaxRange = 30, -- floodlights / searchlights (outdoors)
+	},
+
+	-- v69: world lighting. Ambient lights every surface the sky can't reach — at (165,145,110) every interior wall
+	-- glowed ~60 % white (the "blinding" rooms). OutdoorAmbient (outdoor shade) is unchanged.
+	WorldLighting = {
+		DayAmbient = Color3.fromRGB(78, 72, 62),
+		EnvironmentDiffuseScale = 0.35,
+	},
+
 	-- v68: outdoor installations — a detailed model from Modules/Installations/<Module>.luau on a concrete
 	-- foundation (the kit Body), rebuilt per level by HollowBuildingBuilder. Only with BaseLayoutConfig.
 	-- Width/Depth = foundation footprint (building-local, +Z = the side facing the plot front).

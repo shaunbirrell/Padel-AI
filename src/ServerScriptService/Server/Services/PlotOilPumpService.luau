@@ -261,6 +261,24 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	end
 end
 
+--[[ v69: idempotent — syncs only when the plot's pumps do not match its owner / walls level (missing, other
+	owner, walls under MinWallsLevel, or folder lost to a map rebuild). Safe to call on every plot-ready. ]]
+function PlotOilPumpService.EnsurePlot(plotId: number)
+	if not PlotOilPumpConfig.Enabled then
+		return
+	end
+	local ownerUserId = if BaseService and BaseService.GetOwnerUserId then BaseService.GetOwnerUserId(plotId) else nil
+	local owner = if ownerUserId then Players:GetPlayerByUserId(ownerUserId) else nil
+	local want = owner ~= nil and wallsLevelFor(owner) >= (PlotOilPumpConfig.MinWallsLevel or 2)
+	local folder: Folder? = pumpsByPlot[plotId]
+	local inSync = if want
+		then folder ~= nil and folder.Parent ~= nil and folder:GetAttribute("OwnerUserId") == ownerUserId
+		else folder == nil
+	if not inSync then
+		PlotOilPumpService.SyncPlot(plotId)
+	end
+end
+
 function PlotOilPumpService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	DataService = deps.DataService
@@ -283,19 +301,32 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 		end)
 	end
 
+	-- v69: pumps follow the LOADED save whenever the owner's plot is (re)built — join (DataService v67 fires
+	-- OnProfileLoaded only after the real save is read; BaseService then fires OnPlotReady), a freed plot handed
+	-- out, prestige, map rebuild. Replaces the fixed 1.5 s / 4 s timers (missed a later save → no pumps all session).
+	local hookedPlotReady = false
+	if BaseService and BaseService.OnPlotReady then
+		local okHook, errHook = pcall(BaseService.OnPlotReady, function(_player: Player, plotId: number)
+			PlotOilPumpService.EnsurePlot(plotId)
+		end)
+		hookedPlotReady = okHook
+		if not okHook then
+			warn("[PlotOilPump] OnPlotReady hook failed:", errHook)
+		end
+	end
 	if DataService and DataService.OnProfileLoaded then
-		DataService.OnProfileLoaded(function(player: Player, profile: any)
-			task.defer(function()
-				task.wait(1.5)
-				if player.Parent and profile and typeof(profile.BasePlotId) == "number" then
-					PlotOilPumpService.SyncPlot(profile.BasePlotId)
-				end
-			end)
-			task.delay(4, function()
-				if player.Parent and profile and typeof(profile.BasePlotId) == "number" then
-					PlotOilPumpService.SyncPlot(profile.BasePlotId)
-				end
-			end)
+		-- Belt: late ensure for the loaded owner's plot (no-op when already in sync); sole path if the hook failed
+		DataService.OnProfileLoaded(function(player: Player, _profile: any)
+			for _, delaySec in ipairs(if hookedPlotReady then { 10 } else { 1.5, 4, 10 }) do
+				task.delay(delaySec, function()
+					local plotId = if player.Parent and BaseService and BaseService.GetOwnedPlotId
+						then BaseService.GetOwnedPlotId(player)
+						else nil
+					if typeof(plotId) == "number" then
+						PlotOilPumpService.EnsurePlot(plotId)
+					end
+				end)
+			end
 		end)
 	end
 

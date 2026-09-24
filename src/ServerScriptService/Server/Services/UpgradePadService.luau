@@ -243,7 +243,8 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 		return
 	end
 
-	-- v63: live + Studio — assign plot if unclaimed; ALWAYS force BasePlotId=1 (never NoPlot dead-end)
+	-- Assign a plot if this player has none yet. v68: never fall back to plot 1 — that handed a 7th+ player
+	-- another player's base. With no free plot, BaseService.PurchaseUpgrade answers NoPlot (with a toast).
 	if profile.BasePlotId == nil then
 		if BaseService and BaseService.AssignPlot then
 			pcall(function()
@@ -251,13 +252,6 @@ local function tryServerPurchase(player: Player, part: BasePart, structureId: st
 			end)
 			profile = getDataService().GetProfile(player) or profile
 		end
-	end
-	if profile.BasePlotId == nil then
-		profile.BasePlotId = 1
-		if getDataService().MarkDirty then
-			getDataService().MarkDirty(player)
-		end
-		warn(string.format("[UpgradePad] forced BasePlotId=1 for %s (live/Studio)", player.Name))
 	end
 
 	local pid = part:GetAttribute("PlotId")

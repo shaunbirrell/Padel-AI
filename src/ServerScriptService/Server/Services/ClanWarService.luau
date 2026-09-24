@@ -55,6 +55,20 @@ local function memberCount(clan: any): number
 	return n
 end
 
+-- v70: members of a clan in THIS server (wars and their scores are per server)
+local function onlineMemberCount(clanId: string): number
+	local n = 0
+	if not (ClanService and ClanService.GetClanId) then
+		return 0
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		if ClanService.GetClanId(player) == clanId then
+			n += 1
+		end
+	end
+	return n
+end
+
 local function leaderUserId(clan: any): number?
 	if typeof(clan) ~= "table" then
 		return nil
@@ -186,10 +200,16 @@ local function settleWar(war: WarRecord)
 	local attackerName = war.AttackerName or clanDisplayName(war.AttackerClanId)
 	local defenderName = war.DefenderName or clanDisplayName(war.DefenderClanId)
 	local scoreLine = string.format("%s %d – %d %s", attackerName, war.AttackerScore, war.DefenderScore, defenderName)
+	-- v70: nobody scored → nothing was fought; pay nothing (idle 0–0 wars paid participation every hour)
+	local contested = (war.AttackerScore + war.DefenderScore) > 0
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		local cid = if ClanService and ClanService.GetClanId then ClanService.GetClanId(player) else nil
-		if cid == winner then
+		if not contested then
+			if (cid == war.AttackerClanId or cid == war.DefenderClanId) and NotificationService then
+				NotificationService.Notify(player, "Clan war ended " .. scoreLine .. " — no score, no rewards", "Info")
+			end
+		elseif cid == winner then
 			local bonus = 0
 			if scoreBonus > 0 then
 				local myScore = if cid == war.AttackerClanId then war.AttackerScore else war.DefenderScore
@@ -317,6 +337,11 @@ function ClanWarService.DeclareWar(player: Player, defenderClanId: any): (boolea
 	if clanActiveWar[attackerClanId] or clanActiveWar[defenderClanId] then
 		return false, "AlreadyAtWar"
 	end
+	-- v70: wars are scored in this server only — a clan with nobody here cannot defend (uncontested wins)
+	local minOnline = math.max(1, math.floor(tonumber((ClanWarConfig :: any).MinOnlineDefendersToDeclare) or 1))
+	if onlineMemberCount(defenderClanId) < minOnline then
+		return false, "DefenderOffline"
+	end
 
 	local warId = string.format("war_%d_%d", now, nextWarSerial)
 	nextWarSerial += 1
@@ -399,6 +424,8 @@ function ClanWarService.Init(deps: { [string]: any })
 				msg = string.format("Both clans need ≥%d members to war", ClanWarConfig.MinClanMembersToDeclare or 2)
 			elseif err == "LeaderOnly" then
 				msg = "Only the clan leader can declare war"
+			elseif err == "DefenderOffline" then
+				msg = "That clan has no members in this server — wars need defenders online"
 			end
 			NotificationService.Notify(player, msg, "Warn")
 		end

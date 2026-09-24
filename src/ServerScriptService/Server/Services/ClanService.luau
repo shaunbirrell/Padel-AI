@@ -4,10 +4,15 @@
 	Graceful fallback when DataStore unavailable (Studio without API services):
 	session-only roster + profile.ClanId still works for the session.
 	TerritoryService stamps runtime.ClanId from profile.ClanId on capture.
+
+	v70: clan ids are random (clan_<12 hex>) instead of a per-server counter (clan_<leader>_1 repeated in
+	every server and overwrote older clans). A new record is written create-only, and a clan whose record
+	could not be read is never written back over the real one.
 ]]
 
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -36,7 +41,11 @@ local RemoteSetup: any = nil
 local AnalyticsService: any = nil
 
 local clans: { [string]: ClanRecord } = {}
-local nextClanSerial = 1
+-- v70: clans whose stored record could not be read (DataStore error). Their in-memory copy is a stub, so it
+-- is never written back over the real record; ensureClanLoaded retries the read.
+local unsynced: { [string]: number } = {} -- clanId -> os.clock() of the last failed read
+local UNSYNCED_RETRY_SECONDS = 30
+local NEW_ID_ATTEMPTS = 4
 local clanStore: DataStore? = nil
 local dataStoreAvailable = false
 local nameIndex: { [string]: string } = {} -- lower(name|tag) -> clanId (session + loaded)
@@ -131,7 +140,69 @@ local function clearIndexKeys(clan: ClanRecord)
 	end
 end
 
+local function addToIndex(store: DataStore, clanId: string)
+	-- Best-effort index update (list of ids)
+	pcall(function()
+		store:UpdateAsync(INDEX_KEY, function(old)
+			local list = if typeof(old) == "table" then old else {}
+			for _, id in ipairs(list) do
+				if id == clanId then
+					return nil -- already listed: cancel (no write)
+				end
+			end
+			table.insert(list, clanId)
+			return list
+		end)
+	end)
+end
+
+--[[ v70: a fresh random id. Twelve hex digits (48 bits) from a GUID: short enough to type into the join /
+	declare-war box, and never the same across servers (the old per-server counter was). ]]
+local function newClanId(): string
+	for _ = 1, 8 do
+		local hex = string.gsub(HttpService:GenerateGUID(false), "[^%x]", "")
+		local id = "clan_" .. string.lower(string.sub(hex, 1, 12))
+		if #id == 17 and clans[id] == nil then
+			return id
+		end
+	end
+	-- Unreachable in practice; still unique on this server
+	return string.format("clan_%x%x", os.time(), math.random(0, 0xFFFFF))
+end
+
+--[[ v70: create-only write. "ok" = written; "exists" = another clan already has this id (nothing written);
+	"error" = no store / DataStore failure (the clan stays session-only). ]]
+local function persistNewClan(clan: ClanRecord): string
+	local store = getClanStore()
+	if not store then
+		return "error"
+	end
+	local exists = false
+	local ok, err = pcall(function()
+		store:UpdateAsync(clan.Id, function(old)
+			if old ~= nil then
+				exists = true
+				return nil -- never overwrite another clan's record (nil cancels the write)
+			end
+			exists = false
+			return encodeClan(clan)
+		end)
+	end)
+	if not ok then
+		warn("[ClanService] persistNewClan failed:", clan.Id, err)
+		return "error"
+	end
+	if exists then
+		return "exists"
+	end
+	addToIndex(store, clan.Id)
+	return "ok"
+end
+
 local function persistClan(clan: ClanRecord): boolean
+	if unsynced[clan.Id] then
+		return false -- stub from a failed read: writing it would replace the real roster
+	end
 	local store = getClanStore()
 	if not store then
 		return false
@@ -143,23 +214,7 @@ local function persistClan(clan: ClanRecord): boolean
 		warn("[ClanService] persistClan failed:", clan.Id, err)
 		return false
 	end
-	-- Best-effort index update (list of ids)
-	pcall(function()
-		store:UpdateAsync(INDEX_KEY, function(old)
-			local list = if typeof(old) == "table" then old else {}
-			local found = false
-			for _, id in ipairs(list) do
-				if id == clan.Id then
-					found = true
-					break
-				end
-			end
-			if not found then
-				table.insert(list, clan.Id)
-			end
-			return list
-		end)
-	end)
+	addToIndex(store, clan.Id)
 	return true
 end
 
@@ -187,32 +242,67 @@ local function deleteClanPersist(clanId: string)
 	end)
 end
 
-local function loadClanFromStore(clanId: string): ClanRecord?
+--- Returns (record or nil, readOk). readOk = false means the DataStore read failed (record unknown).
+local function loadClanFromStore(clanId: string): (ClanRecord?, boolean)
 	local store = getClanStore()
 	if not store then
-		return nil
+		return nil, false
 	end
 	local ok, data = pcall(function()
 		return store:GetAsync(clanId)
 	end)
 	if not ok then
 		warn("[ClanService] GetAsync failed:", clanId, data)
-		return nil
+		return nil, false
 	end
 	local clan = decodeClan(data)
 	if clan then
 		clans[clan.Id] = clan
 		indexKeys(clan)
 	end
-	return clan
+	return clan, true
 end
 
 local function ensureClanLoaded(clanId: string): ClanRecord?
 	local existing = clans[clanId]
 	if existing then
-		return existing
+		local failedAt = unsynced[clanId]
+		if failedAt == nil or os.clock() - failedAt < UNSYNCED_RETRY_SECONDS then
+			return existing
+		end
+		-- v70: retry the read that failed; the real record replaces the stub, keeping this session's members
+		local stub = existing
+		unsynced[clanId] = os.clock() -- one retry at a time; callers meanwhile get the stub
+		local loaded, readOk = loadClanFromStore(clanId)
+		if not readOk then
+			unsynced[clanId] = os.clock()
+			clans[clanId] = stub
+			return stub
+		end
+		unsynced[clanId] = nil
+		if loaded then
+			local added = false
+			for uid in pairs(stub.Members) do
+				if not loaded.Members[uid] then
+					loaded.Members[uid] = true
+					added = true
+				end
+			end
+			if added then
+				persistClan(loaded)
+			end
+			if stub.Name ~= loaded.Name or stub.Tag ~= loaded.Tag then
+				clearIndexKeys(stub)
+				indexKeys(loaded)
+			end
+			return loaded
+		end
+		-- No record exists: keep the stub and store it (create-only)
+		persistNewClan(stub)
+		return stub
 	end
-	return loadClanFromStore(clanId)
+	local clan = loadClanFromStore(clanId)
+	return clan
 end
 
 local function sanitizeName(name: string): string?
@@ -220,7 +310,7 @@ local function sanitizeName(name: string): string?
 		return nil
 	end
 	local trimmed = string.gsub(name, "^%s*(.-)%s*$", "%1")
-	trimmed = string.gsub(trimmed, "[^%w%s%-%_]", "")
+	trimmed = string.gsub(trimmed, "[^%w%s%-_]", "")
 	if #trimmed < ClanConfig.MinNameLength or #trimmed > ClanConfig.MaxNameLength then
 		return nil
 	end
@@ -231,7 +321,7 @@ local function sanitizeTag(tag: string): string?
 	if typeof(tag) ~= "string" then
 		return nil
 	end
-	local trimmed = string.upper(string.gsub(tag, "%s+", ""))
+	local trimmed = string.upper((string.gsub(tag, "%s+", "")))
 	trimmed = string.gsub(trimmed, "[^%w]", "")
 	if #trimmed < ClanConfig.MinTagLength or #trimmed > ClanConfig.MaxTagLength then
 		return nil
@@ -300,8 +390,7 @@ function ClanService.CreateClan(leader: Player, name: string, tag: string?): (bo
 		end
 	end
 
-	local clanId = string.format("clan_%d_%d", leader.UserId, nextClanSerial)
-	nextClanSerial += 1
+	local clanId = newClanId()
 	local record: ClanRecord = {
 		Id = clanId,
 		Name = cleanName,
@@ -310,12 +399,30 @@ function ClanService.CreateClan(leader: Player, name: string, tag: string?): (bo
 		Members = { [memberKey(leader.UserId)] = true },
 		CreatedUnix = os.time(),
 	}
+	-- Registered (and the leader's ClanId set) before the DataStore write yields, so a second create
+	-- request meanwhile sees AlreadyInClan / NameOrTagTaken.
 	clans[clanId] = record
 	indexKeys(record)
-	persistClan(record)
-
 	profile.ClanId = clanId
 	DataService.MarkDirty(leader)
+
+	-- v70: create-only write; on the (astronomically unlikely) id collision pick a new id and try again
+	for _ = 1, NEW_ID_ATTEMPTS do
+		if persistNewClan(record) ~= "exists" then
+			break
+		end
+		clans[record.Id] = nil
+		clearIndexKeys(record)
+		record.Id = newClanId()
+		clans[record.Id] = record
+		indexKeys(record)
+		if profile.ClanId == clanId then -- same table the leave-save writes, even if they left meanwhile
+			profile.ClanId = record.Id
+			DataService.MarkDirty(leader)
+		end
+		clanId = record.Id
+	end
+
 	pushState(leader)
 
 	if NotificationService then
@@ -387,7 +494,12 @@ function ClanService.LeaveClan(player: Player): (boolean, string?)
 			else
 				clearIndexKeys(clan)
 				clans[clanId] = nil
-				deleteClanPersist(clanId)
+				if unsynced[clanId] then
+					-- v70: only a stub was known here (read failed) — never delete the real record
+					unsynced[clanId] = nil
+				else
+					deleteClanPersist(clanId)
+				end
 			end
 		else
 			persistClan(clan)
@@ -461,25 +573,39 @@ function ClanService.Init(deps: { [string]: any })
 
 	DataService.OnProfileLoaded(function(player: Player, profile: any)
 		if typeof(profile.ClanId) == "string" and profile.ClanId ~= "" then
-			local existing = ensureClanLoaded(profile.ClanId)
+			local clanId: string = profile.ClanId
+			local existing: ClanRecord? = clans[clanId]
+			local readOk = true
+			if not existing then
+				existing, readOk = loadClanFromStore(clanId)
+			else
+				existing = ensureClanLoaded(clanId)
+			end
 			if existing then
-				existing.Members[memberKey(player.UserId)] = true
 				-- Soft-heal membership if they were missing from roster (e.g. crash mid-join)
-				persistClan(existing)
+				if not existing.Members[memberKey(player.UserId)] then
+					existing.Members[memberKey(player.UserId)] = true
+					persistClan(existing)
+				end
 			else
 				-- Soft rehydrate stub so territory ClanId stamp still works this session
 				local stub: ClanRecord = {
-					Id = profile.ClanId,
-					Name = "Clan " .. string.sub(profile.ClanId, -4),
+					Id = clanId,
+					Name = "Clan " .. string.sub(clanId, -4),
 					Tag = "CLAN",
 					LeaderUserId = player.UserId,
 					Members = { [memberKey(player.UserId)] = true },
 					CreatedUnix = os.time(),
 				}
-				clans[profile.ClanId] = stub
+				clans[clanId] = stub
 				indexKeys(stub)
-				if dataStoreAvailable then
-					persistClan(stub)
+				if not readOk then
+					-- v70: the read failed — the real record may exist. Never write this stub over it.
+					if dataStoreAvailable then
+						unsynced[clanId] = os.clock()
+					end
+				elseif dataStoreAvailable then
+					persistNewClan(stub) -- create-only: no record exists for this id
 				end
 			end
 		end

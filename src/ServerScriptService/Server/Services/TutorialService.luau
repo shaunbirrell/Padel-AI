@@ -32,8 +32,10 @@ local STEP_BARRACKS = 6
 local STEP_JEEP = 7
 local STEP_OUTPOST = 8
 
--- Debounce rapid Notify spam (collector ticks, double hooks)
+-- Debounce rapid Notify spam (collector ticks, double hooks) — per step, so a different step's event right
+-- after an advance (e.g. CC bought 0.5 s after the dropper step) is never dropped
 local lastAdvanceAt: { [number]: number } = {}
+local lastAdvanceStep: { [number]: number } = {}
 local ADVANCE_COOLDOWN = 0.75
 
 local function tutorialEnabled(): boolean
@@ -44,6 +46,9 @@ local function tutorialEnabled(): boolean
 end
 
 local function pushTutorial(player: Player)
+	if not DataService then
+		return -- v69: before Init
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return
@@ -68,6 +73,23 @@ end
 
 function TutorialService.Push(player: Player)
 	pushTutorial(player)
+end
+
+--[[ v69: buy steps (PadStructureId) for a structure the player already owns are done — skip them. The HUD goal
+	sends new players to buy Command Center before step 4, which then only advanced on ANOTHER CC purchase
+	($8,000 for L2); same for Barracks at step 6. Returns the first step that still needs doing. ]]
+local function skipOwnedBuySteps(profile: any, step: number): number
+	local upgrades = if typeof(profile.BaseUpgrades) == "table" then profile.BaseUpgrades else {}
+	local total = TutorialConfig.StepCount()
+	while step <= total do
+		local def = TutorialConfig.GetStep(step)
+		local sid = if def then def.PadStructureId else nil
+		if typeof(sid) ~= "string" or (tonumber(upgrades[sid]) or 0) < 1 then
+			break
+		end
+		step += 1
+	end
+	return step
 end
 
 local function setStep(player: Player, step: number, complete: boolean?)
@@ -99,11 +121,13 @@ local function advanceTo(player: Player, targetStep: number)
 	end
 	local now = os.clock()
 	local last = lastAdvanceAt[player.UserId]
-	if last and (now - last) < ADVANCE_COOLDOWN then
+	if last and (now - last) < ADVANCE_COOLDOWN and lastAdvanceStep[player.UserId] == targetStep then
 		return
 	end
 	lastAdvanceAt[player.UserId] = now
-	local nextStep = targetStep + 1
+	lastAdvanceStep[player.UserId] = targetStep
+	-- One setStep (one push): the client drops a second TutorialStateUpdate that lands within 0.2 s
+	local nextStep = skipOwnedBuySteps(profile, targetStep + 1)
 	if nextStep > TutorialConfig.StepCount() then
 		setStep(player, nextStep, true)
 	else
@@ -113,6 +137,9 @@ local function advanceTo(player: Player, targetStep: number)
 end
 
 function TutorialService.Complete(player: Player)
+	if not DataService then
+		return -- v69: before Init
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return
@@ -127,6 +154,9 @@ function TutorialService.Complete(player: Player)
 end
 
 function TutorialService.Reset(player: Player)
+	if not DataService then
+		return -- v69: before Init
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile then
 		return
@@ -144,6 +174,11 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	if not tutorialEnabled() then
 		return
 	end
+	if not DataService then
+		-- v69: called before Init (BaseService's join hook used to throw here and skip the kit rehydrate).
+		-- Init's OnProfileLoaded replays PlotAssigned for every loaded player.
+		return
+	end
 	local profile = DataService.GetProfile(player)
 	if not profile or profile.TutorialComplete then
 		return
@@ -157,6 +192,10 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 	end
 
 	if eventType == "PlotAssigned" and step == STEP_CLAIM then
+		-- v69: server full → no plot yet; the claim step waits until a plot is handed out
+		if profile.BasePlotId == nil then
+			return
+		end
 		advanceTo(player, STEP_CLAIM)
 	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
 		advanceTo(player, STEP_INCOME)
@@ -214,7 +253,19 @@ function TutorialService.Init(deps: { [string]: any })
 			profile.TutorialStep = STEP_CLAIM
 			DataService.MarkDirty(player)
 		end
+		-- v69: saved on a buy step for a structure already owned (bought early / older build) → move on
+		local firstOpen = skipOwnedBuySteps(profile, profile.TutorialStep)
+		if firstOpen ~= profile.TutorialStep then
+			profile.TutorialStep = firstOpen
+			if firstOpen > TutorialConfig.StepCount() then
+				profile.TutorialComplete = true
+			end
+			DataService.MarkDirty(player)
+		end
 		pushTutorial(player)
+		if profile.TutorialComplete then
+			return
+		end
 		-- Plot assignment counts as claim-base progress
 		task.defer(function()
 			if profile.BasePlotId then
@@ -238,6 +289,7 @@ function TutorialService.Init(deps: { [string]: any })
 
 	Players.PlayerRemoving:Connect(function(player: Player)
 		lastAdvanceAt[player.UserId] = nil
+		lastAdvanceStep[player.UserId] = nil
 	end)
 end
 

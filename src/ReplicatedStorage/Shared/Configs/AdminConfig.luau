@@ -19,6 +19,26 @@ local AdminConfig = {
 		"resetbase",
 		"wipeprofile",
 	},
+	-- v71 money (M2): test commands for the money workflows. AdminService allows them for the UserIds above and,
+	-- in Studio only, for any player (Local Server tests). Each is logged as ADMIN_COMMAND and replies
+	-- "not built yet" until its service exists. None of them touches Cash (AdminPlaytestCash stays owner-only).
+	--   grantent <key>            MonetizationService.GrantEntitlement on yourself (a MonetizationConfig pass key
+	--                             or DevProduct GrantEntitlement value)
+	--   givenuke <n> [tactical]   NukeService.Grant(player, "Nuke" | "TacticalNuke", n, "admin")
+	--   nukecd                    NukeService.AdminResetCooldowns()
+	--   vhp <pct>                 VehicleService.AdminSetHP(player, pct): your active vehicle's HP (0-100%)
+	--   setprestige <n>           RebirthExpansionService.AdminSetPrestige(player, n)
+	--   openzone <id>             RebirthExpansionService.AdminOpenZone(player, zoneId)
+	--   resetrebirth              RebirthExpansionService.AdminResetRebirth(player)
+	MoneyCommands = {
+		"grantent",
+		"givenuke",
+		"nukecd",
+		"vhp",
+		"setprestige",
+		"openzone",
+		"resetrebirth",
+	} :: { string },
 }
 
 return AdminConfig

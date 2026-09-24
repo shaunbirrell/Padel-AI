@@ -104,13 +104,27 @@ local function pushEconomy(player: Player, profile: Types.PlayerProfile)
 	end)
 end
 
+-- v69: refunds / purchases / pre-multiplied transfers are paid 1:1 even if the config list drifts
+-- (a multiplied dismiss refund > recruit cost is an infinite-cash loop at high prestige).
+local NEVER_MULTIPLIED: { [string]: boolean } = {
+	dismiss_soldiers = true,
+	purchase_refund = true,
+	devproduct = true,
+	admin = true,
+	collector = true,
+	atm_raid = true,
+}
+
 local function applyCashMult(player: Player, profile: any, amount: number, reason: string?): number
-	local mult = 1 + (profile.Prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
 	local exempt = MonetizationConfig.CashMultExemptReasons
-	local isExempt = exempt and exempt[reasonKey]
+	local isExempt = NEVER_MULTIPLIED[reasonKey] == true or (exempt ~= nil and exempt[reasonKey] == true)
+	local mult = 1
 	if not isExempt then
+		-- v69: prestige is part of the non-exempt stack (was applied to exempt reasons too)
+		local prestige = math.max(0, tonumber(profile.Prestige) or 0)
+		mult = 1 + prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0)
 		-- Permanent outpost capture stacks (passive / structure / training AccruePendingCash)
 		local buff = EconomyConfig.OutpostIncomeBuff
 		if buff then

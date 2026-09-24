@@ -35,6 +35,129 @@ local function emptyDailyMissions(): Types.DailyMissionProgress
 	}
 end
 
+-- v71 money (M2) ─────────────────────────────────────────────────────────────────────────────────────────────
+-- New profile blocks for the nuke, premium vehicles, rebirth expansion, the Offer Director and purchase accounting.
+-- Default-filled and sanitised on every Migrate (idempotent), with no DataVersion bump, the same way as v69
+-- Research / Raid. Nothing reads them yet. PrestigeService.DoPrestige resets only the fields it names, so rebirth
+-- keeps all of these.
+local NUKE_KINDS: { [string]: boolean } = { Nuke = true, TacticalNuke = true }
+local NUKE_STAT_KEYS = { "Bought", "Launched", "PlayerKills", "NpcKills", "BestKills" }
+local OFFER_STAT_KEYS = { "Shown", "LastShownUnix", "Clicked", "Dismissed" }
+local MONETIZATION_KEYS = { "FirstPurchaseUnix", "LastPurchaseUnix", "Purchases", "RobuxSpent" }
+local MAX_COUNTER = 1e15 -- keeps junk like 1e308 out of the save; far above any real count / os.time()
+
+-- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
+local function nonNegInt(value: any): number
+	local n = tonumber(value)
+	if n == nil or n ~= n or n == math.huge or n == -math.huge then
+		return 0
+	end
+	return math.clamp(math.floor(n), 0, MAX_COUNTER)
+end
+
+local function sanitizeCounters(t: any, keys: { string }): { [string]: number }
+	local out: { [string]: number } = if typeof(t) == "table" then t else {}
+	for _, k in ipairs(keys) do
+		local v = out[k]
+		local clean = nonNegInt(v)
+		if v ~= clean then
+			out[k] = clean
+		end
+	end
+	return out
+end
+
+local function defaultNukeStats()
+	return { Bought = 0, Launched = 0, PlayerKills = 0, NpcKills = 0, BestKills = 0 }
+end
+
+local function defaultMonetization()
+	return { FirstPurchaseUnix = 0, LastPurchaseUnix = 0, Purchases = 0, RobuxSpent = 0 }
+end
+
+local function ensureMoneyFields(profile: any)
+	-- Nuke inventory (paid Nukes are granted only in ProcessReceipt) and the launch refund marker
+	profile.Nukes = nonNegInt(profile.Nukes)
+	profile.TacticalNukes = nonNegInt(profile.TacticalNukes)
+	local inFlight = profile.NukeInFlight
+	if inFlight ~= nil then
+		if
+			typeof(inFlight) ~= "table"
+			or typeof(inFlight.Kind) ~= "string"
+			or NUKE_KINDS[inFlight.Kind] ~= true
+		then
+			profile.NukeInFlight = nil
+		else
+			if typeof(inFlight.LaunchId) ~= "string" then
+				inFlight.LaunchId = tostring(inFlight.LaunchId or "")
+			end
+			local at = nonNegInt(inFlight.At)
+			if inFlight.At ~= at then
+				inFlight.At = at
+			end
+		end
+	end
+	if typeof(profile.NukeGiftGranted) ~= "boolean" then
+		profile.NukeGiftGranted = false
+	end
+	profile.NukeStats = sanitizeCounters(profile.NukeStats, NUKE_STAT_KEYS)
+	profile.Silo = sanitizeCounters(profile.Silo, { "ProgressSeconds" })
+
+	-- Premium vehicles: chosen camo per vehicle, last free test drive per vehicle
+	local camo = if typeof(profile.PremiumVehicleCamo) == "table" then profile.PremiumVehicleCamo else {}
+	for k, v in pairs(camo) do
+		if typeof(k) ~= "string" or typeof(v) ~= "string" then
+			camo[k] = nil
+		end
+	end
+	profile.PremiumVehicleCamo = camo
+	local trials = if typeof(profile.PremiumTrials) == "table" then profile.PremiumTrials else {}
+	for k, v in pairs(trials) do
+		if typeof(k) ~= "string" then
+			trials[k] = nil
+		else
+			local clean = nonNegInt(v)
+			if v ~= clean then
+				trials[k] = clean
+			end
+		end
+	end
+	profile.PremiumTrials = trials
+
+	-- Rebirth expansion (the Expansion Permit / Rebirth Skip counters were cut, J12)
+	local rebirth = if typeof(profile.Rebirth) == "table" then profile.Rebirth else {}
+	local seen = if typeof(rebirth.ZonesSeen) == "table" then rebirth.ZonesSeen else {}
+	for k, v in pairs(seen) do
+		if typeof(k) ~= "string" or v ~= true then
+			seen[k] = nil
+		end
+	end
+	rebirth.ZonesSeen = seen
+	local lastRebirth = nonNegInt(rebirth.LastRebirthUnix)
+	if rebirth.LastRebirthUnix ~= lastRebirth then
+		rebirth.LastRebirthUnix = lastRebirth
+	end
+	profile.Rebirth = rebirth
+
+	-- Offer Director cadence (offer key -> counters) and purchase accounting (analytics only)
+	local offers = if typeof(profile.Offers) == "table" then profile.Offers else {}
+	for k, v in pairs(offers) do
+		if typeof(k) ~= "string" or typeof(v) ~= "table" then
+			offers[k] = nil
+		else
+			sanitizeCounters(v, OFFER_STAT_KEYS)
+		end
+	end
+	profile.Offers = offers
+	profile.Monetization = sanitizeCounters(profile.Monetization, MONETIZATION_KEYS)
+
+	-- M8: purchase ticker opt-out (default on) and the daily VIP supply stamp
+	if typeof(profile.AnnouncePurchases) ~= "boolean" then
+		profile.AnnouncePurchases = true
+	end
+	profile.VipSupplyAt = nonNegInt(profile.VipSupplyAt)
+end
+
 function ProfileSchema.CreateDefault(): PlayerProfile
 	local now = os.time()
 	return {
@@ -106,6 +229,23 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		VIPOffered = false,
 		SpeedBoostOffered = false,
 		CashMegaOffered = false,
+		-- v69: Research Lab upgrades (UpgradeId → level) and raid / missile-strike timers (os.time seconds)
+		Research = {},
+		Raid = { ShieldUntil = 0, StrikeCooldownUntil = 0, DefensesDownUntil = 0 },
+		-- v71 money (M2): see ensureMoneyFields (Migrate fills the same defaults into older saves)
+		Nukes = 0,
+		TacticalNukes = 0,
+		NukeInFlight = nil,
+		NukeGiftGranted = false,
+		NukeStats = defaultNukeStats(),
+		Silo = { ProgressSeconds = 0 },
+		PremiumVehicleCamo = {},
+		PremiumTrials = {},
+		Rebirth = { ZonesSeen = {}, LastRebirthUnix = 0 },
+		Offers = {},
+		Monetization = defaultMonetization(),
+		AnnouncePurchases = true,
+		VipSupplyAt = 0,
 	}
 end
 
@@ -336,6 +476,24 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	if (profile :: any).CashMegaOffered == nil then
 		(profile :: any).CashMegaOffered = false
 	end
+	-- v69: Research levels + raid / strike timers (idempotent; no DataVersion bump needed for new tables)
+	if typeof((profile :: any).Research) ~= "table" then
+		(profile :: any).Research = {}
+	end
+	do
+		local raid = (profile :: any).Raid
+		if typeof(raid) ~= "table" then
+			raid = {}
+			;(profile :: any).Raid = raid
+		end
+		for _, k in ipairs({ "ShieldUntil", "StrikeCooldownUntil", "DefensesDownUntil" }) do
+			if typeof(raid[k]) ~= "number" then
+				raid[k] = 0
+			end
+		end
+	end
+	-- v71 money (M2): nuke / premium vehicle / rebirth / offer / accounting blocks (idempotent; no version bump)
+	ensureMoneyFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

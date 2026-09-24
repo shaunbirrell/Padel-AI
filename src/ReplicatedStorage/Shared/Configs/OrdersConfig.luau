@@ -38,6 +38,7 @@ local OrdersConfig = {
 
 	VisualKind = "Infantry",
 	DisplayName = "Squad",
+	ShowUnitLabels = false, -- v68: floating "SQUAD" tag over every field unit (owner: clutter)
 	-- v38: brief order state over nearest soldier
 	OrderBillboardSeconds = 2.8,
 	OrderLabels = {

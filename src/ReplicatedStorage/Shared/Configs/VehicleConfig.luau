@@ -401,6 +401,209 @@ local VehicleConfig = {
 	StarterVehicle = "MilitaryJeep",
 	SpawnCooldownSeconds = 15,
 	UseMeshKitsWhenAssetIdNonZero = true,
+
+	--[[ v70 driving (spec: scratchpad vehicles/spec.md). The driver's client runs these laws
+		(VehicleDriveClient) and writes the WE_DriveLV / WE_DriveAO movers; VehicleService runs the idle
+		laws, the Car/Boat fallback copy and the 5 Hz checks. Speeds in studs/s, rates in studs/s²,
+		angles in degrees unless the name says Rad, turn rates in rad/s.
+		Per-vehicle values (WE_MaxSpeed, WE_Accel, WE_TurnRate, ...) are model attributes set at spawn. ]]
+	Drive = {
+		ProtocolVersion = 1, -- WE_ProtocolVersion; a client with a different version refuses to drive
+		HelloTimeoutSeconds = 2.5, -- no VehicleDriveInput Hello this long after sitting → Car/Boat "Fallback"
+		IdleDespawnSeconds = 300, -- nobody sat in it this long → destroyed (no message)
+		MaxResearchSpeedBonus = 1.5, -- ResearchService.GetBonus(player, "VehicleSpeed") clamp
+		MaxResearchArmorBonus = 3, -- VehicleArmor bonus clamp (stored as WE_ArmorMult only)
+		IdleHz = 10, -- server idle law rate (parked / abandoned / correcting)
+		LostBelowY = -30, -- chassis below this → destroyed, "Vehicle lost"
+		LostMargin = 40, -- |X| or |Z| beyond Validation.WorldHalfExtent + this → destroyed
+		StabilisedNoticeSeconds = 20, -- "Vehicle stabilised" at most this often
+		SeatMassAllowance = 20, -- mover force F = (AssemblyMass + this x def.Seats) x ForcePerMass
+
+		-- Speed resync (every mode): actual forward speed this far below the commanded speed for
+		-- Seconds straight → commanded = actual + gap (a vehicle pushed into a wall never winds up).
+		Resync = { Gap = 10, CarGap = 6, Seconds = 0.3, GraceSeconds = 1 },
+
+		Modes = {
+			Car = {
+				WheeledMinSpeed = 40, -- WE_MaxSpeed = max(def.Speed, 40) (40-68)
+				TrackedMinSpeed = 18, -- tracked: clamp(def.Speed, 18, 36)
+				TrackedMaxSpeed = 36,
+				Wheeled = { Accel = 28, Brake = 60, Coast = 10, TurnRate = 2.4, MinTurnFactor = 0.35, Grip = 8 },
+				Tracked = { Accel = 16, Brake = 40, Coast = 10, TurnRate = 1.5, MinTurnFactor = 0.7, Grip = 12 },
+				ReverseFrac = 0.45, -- reverse max = 0.45 x Max
+				ReverseAccelFrac = 0.7, -- reverse accel = Accel x 0.7
+				TurnSpeedRef = 12, -- full turn rate from this speed up
+				YawResyncRad = 0.6, -- collision spun the car this far off → take the real heading
+				FlipUpY = 0.3, -- UpVector.Y below this ...
+				FlipSeconds = 2, -- ... this long → hop
+				HopSeconds = 0.5,
+				HopSpeed = 15,
+				-- Physics wheels roll free on hinges. Yawing a fixed-axle car makes every wheel slip sideways,
+				-- which wheel friction resists with mu x load x |wheel Z|; the AlignOrientation must beat it or the
+				-- car cannot turn. Low friction (weight 100 = the wheel's value wins over the ground's) keeps the
+				-- AO at >= 2x that torque for every kit; the law's Grip term supplies the sideways grip instead.
+				WheelFriction = 0.2,
+				WheelFrictionWeight = 100,
+				-- movers (server-built)
+				ForcePerMass = 250,
+				TorqueScale = 4,
+				Responsiveness = 25,
+				MaxAngularVelocity = 8,
+			},
+			Heli = {
+				Accel = 22,
+				Drag = 20,
+				BackFrac = 0.4,
+				StrafeFrac = 0.5,
+				ClimbRate = 24,
+				SinkRate = 20,
+				AccelV = 30,
+				TurnRate = 1.6,
+				YawAccel = 5,
+				MaxPitchTilt = 14,
+				MaxRollTilt = 12,
+				BankPerYawRate = 6, -- degrees of roll per rad/s of yaw rate
+				TiltRate = 25,
+				AltHoldGain = 1.5,
+				AltHoldMax = 6,
+				LandAGL = 0.8,
+				MaxAltitude = 450, -- world Y
+				IdleSink = 8, -- idle (no pilot): sink at this speed until IdleLandAGL
+				IdleLandAGL = 1,
+				ForcePerMass = 600,
+				TorqueScale = 3,
+				Responsiveness = 12,
+				MaxAngularVelocity = 3,
+			},
+			Plane = {
+				Thrust = 20,
+				Drag = 6,
+				GroundDrag = 10,
+				Brake = 30,
+				GravityAlong = 25, -- x sin(pitch)
+				OverspeedFrac = 1.15,
+				ThrottleRateUp = 0.6,
+				ThrottleRateDown = 0.8,
+				MaxPitchUp = 30,
+				MaxPitchDown = 35,
+				PitchRate = 40,
+				MaxBank = 55,
+				BankRate = 90,
+				TurnRate = 0.9, -- at full bank
+				TaxiTurnRate = 0.8,
+				StallNoseDown = -20,
+				StallSinkMax = 35,
+				StallClearMargin = 3, -- stall clears at StallSpeed + this
+				ClimbOutPitch = 15,
+				ClimbOutAGL = 45,
+				AutoTakeoff = true,
+				AutoTakeoffLever = 0.9,
+				AutoTakeoffSpeedFrac = 1.1, -- x TakeoffSpeed
+				LiftoffPitch = 6,
+				RolledOffAGL = 3,
+				LandAGL = 1.5,
+				MaxAltitude = 600,
+				AirStartHeight = 120,
+				AirStartSpeedFrac = 1.3, -- x TakeoffSpeed
+				TakeoffFrac = 0.45, -- WE_TakeoffSpeed = clamp(0.45 x def.Speed, 40, 60) (not research-scaled)
+				TakeoffMin = 40,
+				TakeoffMax = 60,
+				StallFrac = 0.8, -- WE_StallSpeed = 0.8 x TakeoffSpeed
+				IdleGlideAGL = 2, -- idle (no pilot) above this: glide
+				IdleGlideMinSpeed = 25,
+				IdleGlideDecel = 6,
+				IdleGlideSink = 18,
+				IdleGlidePitch = -8,
+				ForcePerMass = 600,
+				TorqueScale = 3,
+				Responsiveness = 15,
+				MaxAngularVelocity = 2.5,
+			},
+			Boat = {
+				Accel = 14,
+				Brake = 18,
+				Coast = 6,
+				ReverseFrac = 0.35,
+				ReverseAccelFrac = 0.7,
+				TurnRate = 1.1,
+				MinTurnFactor = 0.25,
+				TurnSpeedRef = 8,
+				Drift = 3,
+				Draft = 0.15, -- WE_RideOffset = Clearance - Draft
+				BobAmp = 0.15, -- bob only goes up: rideY + BobAmp x 0.5 x (1 + sin)
+				BobHz = 0.35,
+				HeightGain = 4,
+				MaxVy = 10,
+				BowUpDeg = 4,
+				TurnLeanDeg = 6,
+				BobPitchDeg = 1.2,
+				BobRollDeg = 1.5,
+				BobRollHz = 0.4,
+				ShoreBrake = 50,
+				ShoreMargin = 3,
+				AgroundSpeed = 8, -- pushed aground: head back to the last water position at this speed
+				IdleHeightGain = 2,
+				IdleMaxVy = 6,
+				IdleDecel = 6,
+				ForcePerMass = 500,
+				TorqueScale = 2,
+				Responsiveness = 8,
+				MaxAngularVelocity = 1.5,
+			},
+		},
+
+		-- Server checks while the driver's client owns the physics (5 Hz)
+		Validation = {
+			SpeedTolerance = 1.25, -- cap = WE_MaxSpeed x 1.25 + slack
+			SpeedSlack = 12,
+			AirSpeedSlack = 30,
+			SpeedSamplesToFlag = 2,
+			TeleportSlack = 20,
+			HardTeleport = 150, -- more than this beyond the teleport allowance counts toward a recall
+			MaxLagWindow = 1.5, -- teleport allowance grows with time since the last valid sample up to this
+		WindowSeconds = 1, -- plus a ~1 s displacement window: TeleportSlack is granted once per window, not per sample
+			MaxGroundUpSpeed = 60,
+			GroundMaxY = 150,
+			AirAltitudeSlack = 25,
+			WorldHalfExtent = 3560,
+			OffWaterGrace = 1.5,
+			OffWaterMargin = -3, -- boats: 3 studs of slack outside a water part's edge
+			BoatMaxAboveWater = 8,
+			SampleHz = 5,
+			CorrectionHold = 1.5,
+			RecallViolations = 3,
+			RecallWindow = 60,
+		},
+
+		World = { SoftBound = 3300 }, -- client: past this, no outward speed + "TURN BACK"
+
+		Water = {
+			RefreshSeconds = 2, -- WE_Water part list refresh
+			QueryBelow = 8, -- a point counts as over a water part from top - 8 ...
+			QueryAbove = 20, -- ... to top + 20
+			ConnectGap = 2, -- basins link when rectangles come this close ...
+			ConnectTopDelta = 1.5, -- ... and their tops differ by at most this
+			SpawnMargin = 1, -- boat spawn: every hull point this far inside a water part
+			GridStep = 4, -- dock basin spawn scan
+			LandProbeHeight = 30,
+		},
+
+		Spawn = {
+			Clearance = 0.3, -- chassis Y = surface + Clearance(footprint) + this
+			MaxStepUp = 4, -- a surface ray hit this far above the expected top = something in the way
+			CarPadRadius = 700,
+			PlotFallback = { X = 0, Z = 45 },
+			-- from the Helipad site: on the deck clear of the parked-heli model, then the apron toward the gate
+			HelipadSpots = { { X = -4, Z = 6 }, { X = 8, Z = 8 }, { X = 0, Z = 38 } },
+			HelipadDeckHeight = 1.2, -- above the plot pad top when no ray hits
+			HeliHeadingRad = math.pi, -- nose toward the base (+Z)
+			RunwayRoad = "Runway", -- BaseLayoutConfig.Roads entry
+			RunwayInset = 12, -- start this far in from the runway end nearer the plot edge
+			RunwayHeight = 0.12, -- runway top above the plot pad top when no ray hits
+			NavalPadGap = 4,
+			OffsetStep = 4, -- extra room between side-by-side spots
+		},
+	},
 }
 
 return VehicleConfig

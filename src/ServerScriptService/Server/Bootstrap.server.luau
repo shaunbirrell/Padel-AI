@@ -69,6 +69,8 @@ local MoneyCollectorService = safeRequire("MoneyCollectorService", Services.Mone
 local ManualDropperService = safeRequire("ManualDropperService", Services.ManualDropperService)
 local VisualAssetService = safeRequire("VisualAssetService", Services.VisualAssetService)
 local GateDefenseService = safeRequire("GateDefenseService", Services.GateDefenseService)
+local ResearchService = safeRequire("ResearchService", Services.ResearchService) -- v69 Research Lab upgrades
+local MissileStrikeService = safeRequire("MissileStrikeService", Services.MissileStrikeService) -- v69 CC strikes
 local PlotOilPumpService = safeRequire("PlotOilPumpService", Services.PlotOilPumpService)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
@@ -111,6 +113,8 @@ local deps: { [string]: any } = {
 	VisualAssetService = VisualAssetService,
 	ManualDropperService = ManualDropperService,
 	GateDefenseService = GateDefenseService,
+	ResearchService = ResearchService,
+	MissileStrikeService = MissileStrikeService,
 	PlotOilPumpService = PlotOilPumpService,
 }
 
@@ -172,6 +176,11 @@ if deps.DataService == nil then
 end
 
 safeInit("NotificationService", NotificationService, deps)
+-- v69: TutorialService right after its deps (DataService, RemoteSetup, RateLimit, Notification) and BEFORE every
+-- service that calls TutorialService.Notify (Economy, MoneyCollector, ManualDropper, Base …). BaseService's
+-- OnProfileLoaded fires at once for already-loaded players and used to call Notify before this Init → threw.
+-- (TutorialService.Init only needs BaseService.GetUpgradeChangedEvent, which works before BaseService.Init.)
+safeInit("TutorialService", TutorialService, deps)
 safeInit("AntiExploitService", AntiExploitService, deps)
 safeInit("MonetizationService", MonetizationService, deps)
 safeInit("EconomyService", EconomyService, deps)
@@ -189,7 +198,6 @@ print("[WAR EMPIRE] v65 DataService-first + getDataService fallback + attribute-
 safeInit("UpgradePadService", UpgradePadService, deps)
 safeInit("PremiumPadService", PremiumPadService, deps)
 safeInit("FallSafetyService", FallSafetyService, deps)
-safeInit("TutorialService", TutorialService, deps)
 
 -- Belt: EconomyService.Push within first second regardless of map state
 do
@@ -506,6 +514,8 @@ safeInit("BankRaidService", BankRaidService, deps)
 safeInit("GateDefenseService", GateDefenseService, deps)
 safeInit("PlotOilPumpService", PlotOilPumpService, deps)
 safeInit("SpinnerService", SpinnerService, deps)
+safeInit("ResearchService", ResearchService, deps)
+safeInit("MissileStrikeService", MissileStrikeService, deps)
 
 if DevConfig.VerboseLogging then
 	print("[WAR EMPIRE] Services initialized. Plots:", Constants.MaxBasePlots)

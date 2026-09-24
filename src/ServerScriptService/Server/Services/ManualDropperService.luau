@@ -20,12 +20,44 @@ local EconomyService: any = nil
 local RateLimitService: any = nil
 local VisualAssetService: any = nil
 local TutorialService: any = nil
+local NotificationService: any = nil
 
 local TAG_COLLECTOR = Constants.Tags.MoneyCollector
 local TAG_DROPPER = "WE_ManualDropper"
 
 local lastAwardAt: { [string]: number } = {}
 local wired: { [BasePart]: boolean } = {}
+
+-- v69: per-player award budget (minute + hour refilling buckets). Kept for an hour after leaving so a
+-- same-server rejoin does not reset it.
+type Budget = { minute: number, hour: number, at: number }
+local budgets: { [number]: Budget } = {}
+
+local function budgetLimits(): (number, number)
+	local perMinute = math.max(1, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerMinute) or 30))
+	local perHour = math.max(perMinute, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerHour) or 600))
+	return perMinute, perHour
+end
+
+-- Consumes one award from the player's budget; false when either bucket is empty.
+local function takeBudget(userId: number, now: number): boolean
+	local perMinute, perHour = budgetLimits()
+	local b = budgets[userId]
+	if not b then
+		b = { minute = perMinute, hour = perHour, at = now }
+		budgets[userId] = b
+	end
+	local dt = math.max(0, now - b.at)
+	b.at = now
+	b.minute = math.min(perMinute, b.minute + dt * perMinute / 60)
+	b.hour = math.min(perHour, b.hour + dt * perHour / 3600)
+	if b.minute < 1 or b.hour < 1 then
+		return false
+	end
+	b.minute -= 1
+	b.hour -= 1
+	return true
+end
 
 local function pickAward(): number
 	local fixed = ManualDropperConfig.AwardAmount
@@ -144,11 +176,24 @@ local function tryAward(player: Player, dropper: BasePart)
 		end
 	end
 
-	lastAwardAt[key] = now
-	local amount = pickAward()
 	if not EconomyService or not EconomyService.AccruePendingCash then
 		return
 	end
+	lastAwardAt[key] = now
+	if not takeBudget(player.UserId, now) then
+		if NotificationService and NotificationService.NotifyThrottled then
+			NotificationService.NotifyThrottled(
+				player,
+				ManualDropperConfig.BudgetEmptyToast or "Cash drop is recharging",
+				"Info",
+				3,
+				ManualDropperConfig.BudgetEmptyToastCooldown or 20,
+				"manual_dropper_budget"
+			)
+		end
+		return
+	end
+	local amount = pickAward()
 	local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")
 	if ok then
 		spawnFloatingCash(dropper.Parent or dropper, amount, dropper.Position)
@@ -323,6 +368,7 @@ function ManualDropperService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	VisualAssetService = deps.VisualAssetService
 	TutorialService = deps.TutorialService
+	NotificationService = deps.NotificationService
 
 	if not ManualDropperConfig.Enabled then
 		print("[WAR EMPIRE] ManualDropperService disabled by config")
@@ -367,12 +413,19 @@ function ManualDropperService.Init(deps: { [string]: any })
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
-		local prefix = tostring(player.UserId) .. "|"
+		local userId = player.UserId
+		local prefix = tostring(userId) .. "|"
 		for key in pairs(lastAwardAt) do
 			if string.sub(key, 1, #prefix) == prefix then
 				lastAwardAt[key] = nil
 			end
 		end
+		-- Budget refills fully within an hour; drop it then unless the player came back.
+		task.delay(3600, function()
+			if not Players:GetPlayerByUserId(userId) then
+				budgets[userId] = nil
+			end
+		end)
 	end)
 
 	print("[WAR EMPIRE] ManualDropperService ready (click/prompt → PendingCash)")

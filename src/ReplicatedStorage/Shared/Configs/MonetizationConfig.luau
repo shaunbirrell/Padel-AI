@@ -1,7 +1,15 @@
 --!strict
 --[[ Live Robux product IDs (Creator Dashboard / Open Cloud). Id=0 = stub / hidden duplicate.
 	Grants ONLY via server ProcessReceipt / GamePass ownership checks — never client confirmation.
-	DevProducts AutoCollect/DoubleCash/VIPBoost are HideFromShop (GamePasses cover them). ]]
+	DevProducts AutoCollect/DoubleCash/VIPBoost are HideFromShop (GamePasses cover them).
+	v69: OneTime = true marks a DevProduct whose grant is a boolean (buying it twice adds nothing). The Shop
+	shows OWNED instead of prompting once the server reports it owned (player attribute WE_Ent_<key>, see
+	ShopController). ProcessReceipt still grants any receipt Roblox delivers. HideFromShop on a GamePass keeps
+	it out of the Shop list.
+	v71 money (M0): HideFromShop also stops selling dead items (Gold packs: Gold has no use yet; Instant Barracks).
+	Their Ids stay unchanged (never set a live Id to 0). A receipt for a product Id that is not listed here is NOT
+	acknowledged (MonetizationService J2): paste new Ids with tools/wire-monetization-ids.py, publish, then run
+	Migrate to Latest Update. ]]
 
 local MonetizationConfig = {
 	GamePasses = {
@@ -26,11 +34,14 @@ local MonetizationConfig = {
 			XPMult = 2,
 			Description = "2x XP",
 		},
+		-- v69: HideFromShop — no code applies this theme yet, so it is not sold in the in-game Shop.
+		-- Id kept unchanged (existing owners keep the pass); remove HideFromShop once the theme ships.
 		ExtraPlotCosmetic = {
 			Id = 1983357731,
 			DisplayName = "Elite Base Theme",
 			RobuxPrice = 79,
 			Description = "Cosmetic base theme",
+			HideFromShop = true,
 		},
 		AutoCollect = {
 			Id = 1985115501,
@@ -44,9 +55,10 @@ local MonetizationConfig = {
 		CashMedium = { Id = 3713838815, DisplayName = "Cash Pack M", RobuxPrice = 149, Cash = 50000, Gold = 0 },
 		CashLarge = { Id = 3713838888, DisplayName = "Cash Pack L", RobuxPrice = 399, Cash = 200000, Gold = 0 },
 		CashMega = { Id = 3713838952, DisplayName = "Cash Pack Mega", RobuxPrice = 799, Cash = 2000000, Gold = 0 },
-		GoldSmall = { Id = 3713839003, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50 },
-		GoldMedium = { Id = 3713839048, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200 },
-		GoldLarge = { Id = 3713839090, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500 },
+		-- v71 money (M0): Gold has no sink yet (revenue audit F9), so the Gold packs are not sold. Ids kept.
+		GoldSmall = { Id = 3713839003, DisplayName = "Gold Pack S", RobuxPrice = 49, Cash = 0, Gold = 50, HideFromShop = true },
+		GoldMedium = { Id = 3713839048, DisplayName = "Gold Pack M", RobuxPrice = 149, Cash = 0, Gold = 200, HideFromShop = true },
+		GoldLarge = { Id = 3713839090, DisplayName = "Gold Pack L", RobuxPrice = 349, Cash = 0, Gold = 500, HideFromShop = true },
 		-- Placeholder Id=0: ProcessReceipt sets Battle Pass Premium when Id is live; Studio uses admin grantpremium
 		PremiumPass = {
 			Id = 3713839151,
@@ -55,6 +67,7 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantsBattlePassPremium = true,
+			OneTime = true, -- v69: Premium is a boolean kept across seasons; the Shop shows OWNED once granted
 		},
 		-- Monetization add-ons (Ids = 0 until Creator Dashboard)
 		-- Covered by GamePass AutoCollect — keep stub for ProcessReceipt compat; hidden in shop
@@ -86,8 +99,10 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "ExtraSoldierSlot",
+			OneTime = true, -- v69: boolean entitlement (+1 cap once); a second purchase would add nothing
 			Description = "+1 soldier capacity",
 		},
+		-- v71 money (M0): not sold any more (Barracks L1 costs $2,500 of early cash; audit F13). Id kept for receipt compat.
 		InstantBarracks = {
 			Id = 3713839278,
 			DisplayName = "Instant Barracks",
@@ -95,7 +110,9 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "InstantBarracks",
-			Description = "Unlocks Barracks L1 instantly (server grant)",
+			OneTime = true, -- v69: only raises Barracks to L1; OWNED once granted or Barracks is already L1+
+			HideFromShop = true,
+			Description = "Unlocks Barracks L1 instantly",
 		},
 		-- Covered by GamePass VIP — hidden in shop
 		VIPBoost = {
@@ -115,19 +132,23 @@ local MonetizationConfig = {
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
+			OneTime = true, -- v69: permanent boolean flag
 			Description = "Permanent move-speed boost",
 		},
 		-- Cosmetic oil pump gold dress — Id=0: MapSetup hides GoldenPump pad until Id set;
-		-- ProcessReceipt + GrantEntitlement ready when Creator Dashboard Id is pasted
+		-- ProcessReceipt + GrantEntitlement ready when Creator Dashboard Id is pasted.
+		-- v71 money (M0): one-time Developer Product (J29), 49 R$. M0b: paste the Id AND remove HideFromShop in the
+		-- same commit (the Shop row stays hidden until then).
 		GoldenPumpjack = {
 			Id = 0,
-			DisplayName = "Golden Pumpjack",
+			DisplayName = "Golden Pumpjacks",
 			RobuxPrice = 49,
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "GoldenPumpjack",
+			OneTime = true, -- boolean entitlement: a second purchase adds nothing; the Shop shows OWNED
 			HideFromShop = true,
-			Description = "Gold-dress plot oil pumps (pad hidden while Id=0)",
+			Description = "Gold-dress every oil pump on your base",
 		},
 		StarterBundle = {
 			Id = 3713839505,
@@ -140,8 +161,10 @@ local MonetizationConfig = {
 		},
 	},
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
-	-- v30: PvP death toast — DoubleCash GamePass + SpeedBoost DevProduct (live Ids)
-	DeathShopOffers = { "DoubleCash", "SpeedBoost" },
+	-- v30: PvP death toast — was { "DoubleCash", "SpeedBoost" } (live Ids).
+	-- v71 money (M0): empty, so a PvP death no longer offers 2x Cash to players who already own it; the M3 Offer
+	-- Director's death card replaces this toast. Keep the DeathShopOffers key (CombatService / ShopController read it).
+	DeathShopOffers = {} :: { string },
 	-- v32: one-shot soft offer on first join / low cash (server marks StarterBundleOffered)
 	StarterBundleOffer = {
 		DelaySeconds = 8,

@@ -17,6 +17,7 @@ Constants.Tags = {
 	CaptureZone = "WE_CaptureZone",
 	VehicleSpawn = "WE_VehicleSpawn",
 	NavalSpawn = "WE_NavalSpawn",
+	Water = "WE_Water", -- v69: water surface parts (top face = water level); boats may only move over these
 	NPCSpawn = "WE_NPCSpawn",
 	EventSpawn = "WE_EventSpawn",
 	SupplyDrop = "WE_SupplyDrop",
@@ -98,6 +99,34 @@ Constants.RemoteNames = {
 	CashMegaOffer = "CashMegaOffer",
 	AtmRaidStateUpdate = "AtmRaidStateUpdate",
 	PromptPremiumPad = "PromptPremiumPad",
+	-- v69: Research Lab upgrades, Command Center missile strikes, vehicle drive input
+	RequestResearch = "RequestResearch",
+	ResearchStateUpdate = "ResearchStateUpdate",
+	RequestMissileStrike = "RequestMissileStrike",
+	MissileStrikeStateUpdate = "MissileStrikeStateUpdate",
+	MissileStrikeFx = "MissileStrikeFx",
+	VehicleDriveInput = "VehicleDriveInput",
+	-- v71 money (M2): created now, used by later workflows (nothing fires or listens to them yet).
+	-- Nuke (M5; own Fx remote, J17)
+	RequestNukeLaunch = "RequestNukeLaunch",
+	RequestNukeState = "RequestNukeState",
+	NukeStateUpdate = "NukeStateUpdate",
+	NukeFx = "NukeFx",
+	-- Premium / vehicle weapons (M6). VehicleWeaponFx is an UnreliableRemoteEvent (RemoteSetup UNRELIABLE list).
+	RequestVehicleFire = "RequestVehicleFire",
+	VehicleWeaponFx = "VehicleWeaponFx",
+	RequestVehicleCamo = "RequestVehicleCamo",
+	RequestPremiumTrial = "RequestPremiumTrial",
+	-- Rebirth expansion (M7). Not "SupplyDrop": that name belongs to SupplyDropService.
+	RebirthStateUpdate = "RebirthStateUpdate",
+	RequestRebirthState = "RequestRebirthState",
+	ArtilleryFx = "ArtilleryFx",
+	DroneCrateFx = "DroneCrateFx",
+	-- Offer Director (M3) and M8 (purchase ticker, shortfall chip)
+	OfferShow = "OfferShow",
+	OfferResult = "OfferResult",
+	PurchaseAnnounce = "PurchaseAnnounce",
+	ShortfallChip = "ShortfallChip",
 	GetPlayerState = "GetPlayerState",
 }
 

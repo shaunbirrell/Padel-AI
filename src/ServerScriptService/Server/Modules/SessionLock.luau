@@ -3,6 +3,11 @@
 	Simple DataStore session lock to reduce multi-server write races.
 	JobId + timestamp; steal if stale / malformed so rejoin after crash
 	or place update is reliable within LOCK_TTL (never soft-lock forever).
+
+	v70: returning nil from an UpdateAsync transform CANCELS the write (it never deletes the key), so
+	Release / ForceRelease write a free tombstone { JobId = "" } instead. TryAcquire waits a few seconds
+	for another server's lock to be released (the server the player just left is still saving), so the
+	load that follows reads that server's final save instead of an older one.
 ]]
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -23,6 +28,12 @@ local STORE_NAME = Constants.SessionStoreName
 -- Stale threshold: after force-quit / dead server, rejoin can take over.
 -- Must stay ABOVE SessionLockRefreshSeconds (see DataService heartbeat).
 local LOCK_TTL = Constants.SessionLockTtlSeconds
+-- A player hopping servers: the old server's leave-save + Release usually lands within a few seconds.
+local ACQUIRE_WAIT_SECONDS = tonumber((Constants :: any).SessionLockAcquireWaitSeconds) or 12
+local ACQUIRE_POLL_SECONDS = 2
+-- v70: userIds whose lock THIS server released (leave / shutdown). Refresh never re-claims those; for the
+-- rest it takes over a free or stale lock, so a session whose TryAcquire timed out still ends up holding it.
+local releasedHere: { [number]: boolean } = {}
 local store: DataStore? = nil
 
 local function getStore(): DataStore?
@@ -63,6 +74,15 @@ local function isLockHeldByOther(info: any, jobId: string, now: number): boolean
 	return true
 end
 
+--- A released lock. isLockHeldByOther treats JobId "" as free, so any server may take it.
+local function freeLock(userId: number): LockInfo
+	return {
+		JobId = "",
+		UserId = userId,
+		Timestamp = 0,
+	}
+end
+
 function SessionLock.GetTtlSeconds(): number
 	return LOCK_TTL
 end
@@ -77,28 +97,39 @@ function SessionLock.TryAcquire(userId: number): (boolean, string?)
 	local key = "lock_" .. tostring(userId)
 	local jobId = thisJobId()
 	local now = os.time()
-	local aborted = false
+	local deadline = os.clock() + ACQUIRE_WAIT_SECONDS
+	releasedHere[userId] = nil
 
-	local ok, err = pcall(function()
-		ds:UpdateAsync(key, function(old)
-			if isLockHeldByOther(old, jobId, now) then
-				aborted = true
-				return nil -- abort acquire
-			end
-			return {
-				JobId = jobId,
-				UserId = userId,
-				Timestamp = now,
-			} :: LockInfo
+	while true do
+		local aborted = false
+		now = os.time()
+		local ok, err = pcall(function()
+			ds:UpdateAsync(key, function(old)
+				if isLockHeldByOther(old, jobId, now) then
+					aborted = true
+					return nil -- cancel: leave the other server's lock untouched
+				end
+				aborted = false
+				return {
+					JobId = jobId,
+					UserId = userId,
+					Timestamp = now,
+				} :: LockInfo
+			end)
 		end)
-	end)
 
-	if not ok then
-		return false, tostring(err)
-	end
-
-	if aborted then
-		return false, "Session locked by another server"
+		if not ok then
+			return false, tostring(err)
+		end
+		if not aborted then
+			break
+		end
+		-- Held by a live server — usually the one the player just left, still saving. Give it time to
+		-- release so the caller's read sees that final save; stale locks expire via LOCK_TTL.
+		if os.clock() >= deadline then
+			return false, "Session locked by another server"
+		end
+		task.wait(ACQUIRE_POLL_SECONDS)
 	end
 
 	-- Confirm we hold the lock (UpdateAsync nil-abort path + races)
@@ -152,14 +183,17 @@ function SessionLock.Refresh(userId: number)
 	local jobId = thisJobId()
 	pcall(function()
 		ds:UpdateAsync(key, function(old)
-			if typeof(old) == "table" and tostring((old :: LockInfo).JobId or "") == jobId then
+			local ours = typeof(old) == "table" and tostring((old :: LockInfo).JobId or "") == jobId
+			-- v70: a free / stale lock is taken over (this server still has the player loaded: e.g. TryAcquire
+			-- timed out while the previous server was still saving) — unless this server already released it.
+			if ours or (not releasedHere[userId] and not isLockHeldByOther(old, jobId, os.time())) then
 				return {
 					JobId = jobId,
 					UserId = userId,
 					Timestamp = os.time(),
 				}
 			end
-			return old
+			return nil -- another server's live lock, or released here: cancel (no write)
 		end)
 	end)
 end
@@ -171,17 +205,18 @@ function SessionLock.Release(userId: number)
 	end
 	local key = "lock_" .. tostring(userId)
 	local jobId = thisJobId()
+	releasedHere[userId] = true -- before the yield: a Refresh queued after this must not re-claim
 	pcall(function()
 		ds:UpdateAsync(key, function(old)
 			if typeof(old) ~= "table" then
-				return nil
+				return nil -- no lock record: nothing to release (nil cancels the write)
 			end
 			local held = tostring((old :: LockInfo).JobId or "")
-			-- Release our lock; also clear empty/malformed so rejoin never soft-locks forever
-			if held == "" or held == jobId then
-				return nil
+			if held == jobId then
+				-- v70: write a free lock. Returning nil here would cancel the write and keep our lock.
+				return freeLock(userId)
 			end
-			return old
+			return nil -- already free, or another server's lock: leave it untouched
 		end)
 	end)
 end
@@ -195,18 +230,22 @@ function SessionLock.ForceReleaseIfStaleOrOurs(userId: number)
 	local key = "lock_" .. tostring(userId)
 	local jobId = thisJobId()
 	local now = os.time()
+	releasedHere[userId] = true
 	pcall(function()
 		ds:UpdateAsync(key, function(old)
 			if typeof(old) ~= "table" then
-				return nil
+				return nil -- nothing to clear (nil cancels the write)
 			end
 			local info = old :: LockInfo
 			local held = tostring(info.JobId or "")
-			local age = now - (tonumber(info.Timestamp) or 0)
-			if held == "" or held == jobId or age >= LOCK_TTL then
-				return nil
+			if held == "" then
+				return nil -- already free
 			end
-			return old
+			local age = now - (tonumber(info.Timestamp) or 0)
+			if held == jobId or age >= LOCK_TTL then
+				return freeLock(userId) -- v70: an actual write; nil would keep the lock
+			end
+			return nil -- another live server's lock: leave it untouched
 		end)
 	end)
 end

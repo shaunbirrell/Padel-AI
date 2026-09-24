@@ -1,17 +1,25 @@
 --!strict
---[[ Phase 7 — Shop UI. Prompts Marketplace; grants only via server ProcessReceipt / GamePass ownership. ]]
+--[[ Phase 7 — Shop UI. Prompts Marketplace; grants only via server ProcessReceipt / GamePass ownership.
+	v69: two tabs — SUPPLY (Robux DevProducts / GamePasses) and WEAPONS (in-game Cash, WeaponConfig). WEAPONS
+	rows fire RequestPurchaseWeapon / RequestEquipWeapon with the weapon id only; CombatService prices,
+	level-checks, rate-limits and grants. The Armory terminal (WE_OpenPanel "Shop", weapons prompt) opens the
+	WEAPONS tab. One-time DevProducts (MonetizationConfig OneTime) show OWNED once owned and are never
+	re-prompted. ]]
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
 local CollectionService = game:GetService("CollectionService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local WeaponConfig = require(Shared.Configs.WeaponConfig)
+local NotificationController = require(script.Parent.NotificationController)
 
 local ShopController = {}
 
@@ -22,10 +30,211 @@ local pendingCashMegaHighlight = false
 local shopListFrame: ScrollingFrame? = nil
 local screenGui: ScreenGui? = nil
 
+-- v69: tabs
+local panelTitle: TextLabel? = nil
+local tabLists: { [string]: ScrollingFrame } = {}
+local tabButtons: { [string]: TextButton } = {}
+local activeTab = "Supply"
+local TAB_TITLES: { [string]: string } = { Supply = "Supply Depot", Weapons = "Armory" }
+
+-- v69: what the rows show as owned / locked. Display only — the server validates every BUY, EQUIP and receipt.
+local knownLevel: number? = nil -- WE_Level attribute / XPUpdate / PlayerState, whichever arrived last
+local knownBarracksLevel: number? = nil -- InstantBarracks is pointless once Barracks is L1+
+local knownPremium: boolean? = nil -- BattlePassStateUpdate.Premium
+local fallbackWeapons: { [string]: boolean }? = nil -- PlayerState.Weapons until WE_Weapons replicates
+local fallbackEquipped: string? = nil
+local sessionOwnedProducts: { [string]: boolean } = {} -- one-time products bought this session
+local sessionOwnedPasses: { [string]: boolean } = {}
+local refreshQueued = false
+local refreshShopRows: () -> () = function() end -- set in Init
+local lastSnapshotAt = -math.huge
+
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = parent
+end
+
+local function toast(message: string, kind: string?)
+	pcall(NotificationController.Show, message, kind or "Info", 3)
+end
+
+local function formatCash(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if out:sub(1, 1) == "," then
+		out = out:sub(2)
+	end
+	return out
+end
+
+local function queueRefresh()
+	if refreshQueued then
+		return
+	end
+	refreshQueued = true
+	task.defer(function()
+		refreshQueued = false
+		refreshShopRows()
+	end)
+end
+
+--[[ v69: row button looks. Disabled buttons carry WE_Disabled and their Activated handler returns early,
+	so a LOCKED / OWNED / EQUIPPED button never looks tappable and never does anything. ]]
+local function setRowButton(btn: TextButton, text: string, mode: string)
+	local disabled = mode == "owned" or mode == "locked" or mode == "busy"
+	btn.Text = text
+	btn:SetAttribute("WE_Disabled", disabled)
+	btn.AutoButtonColor = not disabled
+	if mode == "owned" then
+		btn.BackgroundColor3 = Color3.fromRGB(34, 64, 40)
+		btn.TextColor3 = Color3.fromRGB(180, 255, 160)
+	elseif mode == "locked" or mode == "busy" then
+		btn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
+		btn.TextColor3 = Constants.Colors.Muted
+	elseif mode == "equip" then
+		btn.BackgroundColor3 = Color3.fromRGB(40, 110, 60)
+		btn.TextColor3 = Color3.fromRGB(240, 255, 245)
+	elseif mode == "dim" then
+		btn.BackgroundColor3 = Constants.Colors.Gunmetal
+		btn.TextColor3 = Constants.Colors.Muted
+	else -- "buy"
+		btn.BackgroundColor3 = Constants.Colors.Gunmetal
+		btn.TextColor3 = Color3.fromRGB(255, 248, 230)
+	end
+	local stroke = btn:FindFirstChildOfClass("UIStroke")
+	if stroke then
+		stroke.Color = if mode == "buy"
+			then Constants.Colors.Gold
+			elseif mode == "equip" then Color3.fromRGB(120, 220, 140)
+			else Color3.fromRGB(80, 88, 96)
+		stroke.Thickness = if disabled then 1 else 1.25
+	end
+end
+
+--[[ v69: a OneTime DevProduct (boolean grant) is owned when the server says so (player attribute
+	WE_Ent_<entitlement>), when it was bought this session, or when its effect is already there (Battle Pass
+	Premium on; Barracks already L1+ for InstantBarracks). ]]
+local function isOneTimeOwned(productKey: string): boolean
+	local def = (MonetizationConfig.DevProducts :: any)[productKey]
+	if typeof(def) ~= "table" or def.OneTime ~= true then
+		return false
+	end
+	if sessionOwnedProducts[productKey] == true then
+		return true
+	end
+	local entKey = if typeof(def.GrantEntitlement) == "string" and def.GrantEntitlement ~= ""
+		then def.GrantEntitlement
+		else productKey
+	if player:GetAttribute("WE_Ent_" .. entKey) == true then
+		return true
+	end
+	if def.GrantsBattlePassPremium == true and knownPremium == true then
+		return true
+	end
+	if def.GrantEntitlement == "InstantBarracks" and (knownBarracksLevel or 0) >= 1 then
+		return true
+	end
+	return false
+end
+
+local function ownedWeapons(): { [string]: boolean }
+	local raw: any = player:GetAttribute("WE_Weapons")
+	if typeof(raw) ~= "string" and fallbackWeapons then
+		local ids: { string } = {}
+		for id in pairs(fallbackWeapons) do
+			table.insert(ids, id)
+		end
+		raw = table.concat(ids, ",")
+	end
+	return WeaponConfig.ParseOwned(raw)
+end
+
+local function equippedWeapon(): string?
+	local attr = player:GetAttribute("WE_EquippedWeapon")
+	if typeof(attr) == "string" then
+		return attr
+	end
+	return fallbackEquipped
+end
+
+local function currentCash(): number?
+	local attr = tonumber(player:GetAttribute("WE_Cash"))
+	if attr then
+		return attr
+	end
+	local ls = player:FindFirstChild("leaderstats")
+	local v = ls and ls:FindFirstChild("Cash")
+	if v and (v:IsA("IntValue") or v:IsA("NumberValue")) then
+		return (v :: any).Value
+	end
+	return nil
+end
+
+local function applyPlayerState(state: any)
+	if typeof(state) ~= "table" then
+		return
+	end
+	if typeof(state.Level) == "number" then
+		knownLevel = state.Level
+	end
+	if typeof(state.Weapons) == "table" then
+		local set: { [string]: boolean } = {}
+		for id, owned in pairs(state.Weapons) do
+			if typeof(id) == "string" and owned == true then
+				set[id] = true
+			end
+		end
+		fallbackWeapons = set
+	end
+	if typeof(state.EquippedWeapon) == "string" then
+		fallbackEquipped = state.EquippedWeapon
+	end
+	local base = state.Base
+	if typeof(base) == "table" and typeof(base.Upgrades) == "table" and typeof(base.Upgrades.Barracks) == "number" then
+		knownBarracksLevel = base.Upgrades.Barracks
+	end
+	queueRefresh()
+end
+
+-- One GetPlayerState read per shop open (≥5 s apart) so owned / level / Barracks are fresh. Never blocks.
+local function requestStateSnapshot()
+	local now = os.clock()
+	if now - lastSnapshotAt < 5 then
+		return
+	end
+	lastSnapshotAt = now
+	task.spawn(function()
+		local fn = Remotes.TryGetFunction(Constants.RemoteNames.GetPlayerState)
+		if not fn then
+			return
+		end
+		local ok, state = pcall(function()
+			return fn:InvokeServer()
+		end)
+		if ok then
+			applyPlayerState(state)
+		end
+	end)
+end
+
+local function selectTab(name: string)
+	if not tabLists[name] then
+		return
+	end
+	activeTab = name
+	for tabName, tabList in pairs(tabLists) do
+		tabList.Visible = tabName == name
+	end
+	for tabName, btn in pairs(tabButtons) do
+		local on = tabName == name
+		btn.BackgroundColor3 = if on then Constants.Colors.Gold else Constants.Colors.Gunmetal
+		btn.TextColor3 = if on then Constants.Colors.TextDark else Constants.Colors.Muted
+	end
+	if panelTitle then
+		panelTitle.Text = TAB_TITLES[name] or "Supply Depot"
+	end
+	queueRefresh()
 end
 
 local function highlightCashMegaRow()
@@ -70,7 +279,12 @@ local function setOpen(open: boolean)
 	-- v35: optional CashMega highlight when shop opens from death continuity
 	if open and pendingCashMegaHighlight then
 		pendingCashMegaHighlight = false
+		selectTab("Supply")
 		task.defer(highlightCashMegaRow)
+	end
+	if open then
+		requestStateSnapshot()
+		queueRefresh()
 	end
 end
 
@@ -79,8 +293,14 @@ local function promptDevProduct(productKey: string)
 	if not def then
 		return
 	end
-	-- Ask server to log + validate; client still prompts Marketplace
-	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseDevProduct):FireServer(productKey)
+	-- v69: a one-time product the player already owns is never prompted again (it would charge for nothing)
+	if isOneTimeOwned(productKey) then
+		toast("You already own " .. tostring(def.DisplayName or productKey), "Info")
+		queueRefresh()
+		return
+	end
+	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey)
 	if def.Id and def.Id ~= 0 then
 		MarketplaceService:PromptProductPurchase(player, def.Id)
 	else
@@ -93,8 +313,12 @@ local function promptGamePass(passKey: string)
 	if not def then
 		return
 	end
+	-- v69: HideFromShop passes (ExtraPlotCosmetic — theme not implemented) are never offered
+	if (def :: any).HideFromShop == true then
+		return
+	end
 	-- Log intent on server; NEVER treat client confirmation as a grant
-	Remotes.GetEvent(Constants.RemoteNames.RequestPurchaseGamePass):FireServer(passKey)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey)
 	if def.Id and def.Id ~= 0 then
 		MarketplaceService:PromptGamePassPurchase(player, def.Id)
 	else
@@ -115,6 +339,10 @@ function ShopController.Init()
 			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
 			if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
 				return "GamePass", key, gp.Id, gp.DisplayName or key
+			end
+			-- v69: never offer a one-time product the player already owns (e.g. Speed Boost)
+			if isOneTimeOwned(key) then
+				return nil, nil, nil, nil
 			end
 			local dp = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts[key]
 			if dp and typeof(dp.Id) == "number" and dp.Id ~= 0 and dp.HideFromShop ~= true then
@@ -337,7 +565,7 @@ function ShopController.Init()
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(400, 360)
+	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(400, 400)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
 	panel.Visible = false
@@ -354,6 +582,7 @@ function ShopController.Init()
 	title.TextColor3 = Constants.Colors.Text
 	title.Text = "Supply Depot"
 	title.Parent = panel
+	panelTitle = title
 
 	local close = Instance.new("TextButton")
 	close.AnchorPoint = Vector2.new(1, 0)
@@ -371,43 +600,81 @@ function ShopController.Init()
 		setOpen(false)
 	end)
 
-	local note = Instance.new("TextLabel")
-	note.BackgroundTransparency = 1
-	note.Position = UDim2.fromOffset(16, 40)
-	note.Size = UDim2.new(1, -32, 0, 32)
-	note.Font = Enum.Font.Gotham
-	note.TextSize = 11
-	note.TextWrapped = true
-	note.TextXAlignment = Enum.TextXAlignment.Left
-	note.TextColor3 = Constants.Colors.Muted
-	note.Text = "Prices in Robux. Live products charge on confirm. Passes persist after Rebirth."
-	note.Parent = panel
+	-- v69: SUPPLY / WEAPONS tabs under the title (the close button keeps the top-right corner)
+	local tabBar = Instance.new("Frame")
+	tabBar.Name = "Tabs"
+	tabBar.BackgroundTransparency = 1
+	tabBar.Position = UDim2.fromOffset(12, 44)
+	tabBar.Size = UDim2.new(1, -84, 0, 44)
+	tabBar.Parent = panel
+	local function makeTab(name: string, text: string, index: number)
+		local b = Instance.new("TextButton")
+		b.Name = "Tab_" .. name
+		b.Position = UDim2.new((index - 1) * 0.5, if index == 1 then 0 else 4, 0, 0)
+		b.Size = UDim2.new(0.5, -4, 1, 0) -- 44 px tall: full touch target without EnsureMinTouch
+		b.BackgroundColor3 = Constants.Colors.Gunmetal
+		b.Font = Enum.Font.GothamBold
+		b.TextSize = 13
+		b.TextColor3 = Constants.Colors.Muted
+		b.Text = text
+		b.BorderSizePixel = 0
+		corner(b, 6)
+		b.Parent = tabBar
+		b.Activated:Connect(function()
+			selectTab(name)
+		end)
+		tabButtons[name] = b
+	end
+	makeTab("Supply", "SUPPLY · R$", 1)
+	makeTab("Weapons", "WEAPONS · CASH", 2)
 
-	local list = Instance.new("ScrollingFrame")
-	list.Position = UDim2.fromOffset(12, 80)
-	list.Size = UDim2.new(1, -24, 1, -92)
-	list.BackgroundTransparency = 1
-	list.BorderSizePixel = 0
-	list.ScrollBarThickness = 4
-	list.CanvasSize = UDim2.fromOffset(0, 0)
-	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	list.Parent = panel
+	local function makeList(name: string, noteText: string): ScrollingFrame
+		local l = Instance.new("ScrollingFrame")
+		l.Name = "List_" .. name
+		l.Position = UDim2.fromOffset(12, 96)
+		l.Size = UDim2.new(1, -24, 1, -108)
+		l.BackgroundTransparency = 1
+		l.BorderSizePixel = 0
+		l.ScrollBarThickness = 4
+		l.CanvasSize = UDim2.fromOffset(0, 0)
+		l.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		l.Visible = name == activeTab
+		l.Parent = panel
+		local lay = Instance.new("UIListLayout")
+		lay.Padding = UDim.new(0, 6)
+		lay.SortOrder = Enum.SortOrder.LayoutOrder
+		lay.Parent = l
+		local n = Instance.new("TextLabel")
+		n.Name = "Note"
+		n.BackgroundTransparency = 1
+		n.Size = UDim2.new(1, -8, 0, 30)
+		n.Font = Enum.Font.Gotham
+		n.TextSize = 11
+		n.TextWrapped = true
+		n.TextXAlignment = Enum.TextXAlignment.Left
+		n.TextColor3 = Constants.Colors.Muted
+		n.Text = noteText
+		n.LayoutOrder = 0
+		n.Parent = l
+		tabLists[name] = l
+		return l
+	end
+	local list = makeList("Supply", "Prices in Robux. Live products charge on confirm. Passes persist after Rebirth.")
 	shopListFrame = list
+	local weaponList = makeList(
+		"Weapons",
+		"Weapons cost in-game Cash. EQUIP owned weapons here, or cycle them with Q / E (◀ ▶ on mobile)."
+	)
+	selectTab(activeTab)
 
-	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 6)
-	layout.Parent = list
-
-	local order = 0
-	local function addRow(label: string, sub: string, onClick: () -> (), btnText: string?, rowKey: string?)
-		order += 1
+	local function buildRow(parentList: ScrollingFrame, layoutOrder: number, rowName: string, label: string, sub: string, btnText: string): (Frame, TextLabel, TextButton)
 		local row = Instance.new("Frame")
-		row.Name = if rowKey then ("ShopRow_" .. rowKey) else ("ShopRow_" .. tostring(order))
+		row.Name = "ShopRow_" .. rowName
 		row.Size = UDim2.new(1, -8, 0, 56)
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
-		row.LayoutOrder = order
-		row.Parent = list
+		row.LayoutOrder = layoutOrder
+		row.Parent = parentList
 		corner(row, 6)
 
 		local t = Instance.new("TextLabel")
@@ -429,10 +696,12 @@ function ShopController.Init()
 		s.TextSize = 11
 		s.TextXAlignment = Enum.TextXAlignment.Left
 		s.TextColor3 = Constants.Colors.Muted
+		s.TextTruncate = Enum.TextTruncate.AtEnd
 		s.Text = sub
 		s.Parent = row
 
 		local btn = Instance.new("TextButton")
+		btn.Name = "Action"
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
 		btn.Size = UDim2.fromOffset(if isTouch then 110 else 96, 48)
@@ -440,7 +709,7 @@ function ShopController.Init()
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = 11
 		btn.TextColor3 = Color3.fromRGB(255, 248, 230)
-		btn.Text = btnText or "BUY"
+		btn.Text = btnText
 		btn.BorderSizePixel = 0
 		corner(btn, 6)
 		local btnStroke = Instance.new("UIStroke")
@@ -449,8 +718,29 @@ function ShopController.Init()
 		btnStroke.Parent = btn
 		btn.Parent = row
 		UIUtil.EnsureMinTouch(btn, 44)
-		btn.Activated:Connect(onClick)
+		return row, s, btn
 	end
+
+	local order = 0
+	-- SUPPLY row. onClick nil = display-only row: its button is disabled (never a dead gold BUY).
+	local function addRow(label: string, sub: string, onClick: (() -> ())?, btnText: string?, rowKey: string?): TextButton
+		order += 1
+		local _, _, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY")
+		btn.Activated:Connect(function()
+			if onClick == nil or btn:GetAttribute("WE_Disabled") == true then
+				return
+			end
+			onClick()
+		end)
+		if onClick == nil then
+			setRowButton(btn, btnText or "LOCKED", "locked")
+		end
+		return btn
+	end
+
+	-- v69: rows whose button flips to OWNED (one-time DevProducts, GamePasses)
+	local oneTimeRows: { [string]: { Btn: TextButton, Label: string } } = {}
+	local passRows: { [string]: { Btn: TextButton, Label: string } } = {}
 
 	local function addDevRow(key: string, def: any, heroLabel: string?)
 		if def.HideFromShop == true then
@@ -481,9 +771,12 @@ function ShopController.Init()
 			sub = "BEST OFFER — " .. sub
 		end
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
-		addRow(title, sub, function()
+		local btn = addRow(title, sub, function()
 			promptDevProduct(key)
 		end, btnLabel, key)
+		if def.OneTime == true then
+			oneTimeRows[key] = { Btn = btn, Label = btnLabel }
+		end
 	end
 
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
@@ -512,27 +805,217 @@ function ShopController.Init()
 	end
 
 	for key, def in pairs(MonetizationConfig.GamePasses) do
+		-- v69: HideFromShop passes are not sold (ExtraPlotCosmetic "Elite Base Theme": nothing applies it yet)
+		if (def :: any).HideFromShop == true then
+			continue
+		end
 		local stub = (tonumber(def.Id) or 0) == 0
 		local robux = tonumber(def.RobuxPrice) or 0
 		local sub = (def.Description or "") .. (if stub then " · coming soon (no charge)" else "")
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
-		addRow("Pass: " .. def.DisplayName, sub, function()
+		local btn = addRow("Pass: " .. def.DisplayName, sub, function()
 			promptGamePass(key)
-		end, btnLabel)
+		end, btnLabel, "Pass_" .. key)
+		passRows[key] = { Btn = btn, Label = btnLabel }
 	end
 
-	
-
-	-- Policy-pending loot crates (display only — no purchase/grant path)
+	-- Policy-pending loot crates (display only — no purchase/grant path). v69: disabled LOCKED button.
 	do
 		local ok, LootBoxConfig = pcall(function()
 			return require(Shared.Configs.LootBoxConfig)
 		end)
 		if ok and LootBoxConfig and LootBoxConfig.PolicyPending then
-			addRow("Supply Crate (locked)", "Random loot policy-pending — not for sale", function()
-				warn("[Shop] Loot boxes disabled (policy-pending)")
+			addRow("Supply Crate (locked)", "Random loot is policy-pending — not for sale", nil, "LOCKED", "SupplyCrate")
+		end
+	end
+
+	-- v69: WEAPONS tab — one row per WeaponConfig weapon in the shared order (UnlockLevel, price, id)
+	local weaponRows: { { Id: string, Row: Frame, Sub: TextLabel, Btn: TextButton, Action: string? } } = {}
+	local weaponBusy: { [string]: { Until: number, Text: string } } = {}
+	local WEAPON_BUSY_SECONDS = 2.5
+
+	local function weaponStats(def: any): string
+		local pellets = tonumber(def.Pellets)
+		local dmg = if pellets and pellets > 1 then (tostring(def.Damage) .. "×" .. tostring(pellets)) else tostring(def.Damage)
+		return string.format("%s · DMG %s · %s/s · %sm", tostring(def.Rarity), dmg, tostring(def.FireRate), tostring(def.Range))
+	end
+
+	local function refreshWeaponRows()
+		local owned = ownedWeapons()
+		local equipped = equippedWeapon()
+		local level = knownLevel
+		local cash = currentCash()
+		local now = os.clock()
+		for _, r in ipairs(weaponRows) do
+			local def = WeaponConfig.Weapons[r.Id]
+			local cost = math.floor(tonumber(def.CostCash) or 0)
+			local isOwned = owned[r.Id] == true
+			local levelOk = level == nil or level >= def.UnlockLevel
+			local stats = weaponStats(def)
+			local busy = weaponBusy[r.Id]
+			-- Weapons with no Cash price are only listed once owned (starter / granted)
+			r.Row.Visible = isOwned or cost > 0
+			r.Action = nil
+			if r.Id == equipped then
+				setRowButton(r.Btn, "EQUIPPED", "owned")
+				r.Sub.Text = "Equipped · " .. stats
+			elseif busy and now < busy.Until then
+				setRowButton(r.Btn, busy.Text, "busy")
+			elseif isOwned and levelOk then
+				setRowButton(r.Btn, "EQUIP", "equip")
+				r.Sub.Text = "Owned · " .. stats
+				r.Action = "equip"
+			elseif isOwned then
+				setRowButton(r.Btn, "LV " .. def.UnlockLevel, "locked")
+				r.Sub.Text = string.format("Owned · equip at Lv %d", def.UnlockLevel)
+			elseif cost <= 0 then
+				setRowButton(r.Btn, "N/A", "locked")
+				r.Sub.Text = "Not sold in the Shop"
+			elseif not levelOk then
+				setRowButton(r.Btn, "LV " .. def.UnlockLevel, "locked")
+				r.Sub.Text = string.format("Unlocks at Lv %d · $%s Cash", def.UnlockLevel, formatCash(cost))
+			else
+				local short = cash ~= nil and cash < cost
+				-- Still tappable when short: the server answers with a "Not enough Cash" toast
+				setRowButton(r.Btn, "BUY $" .. formatCash(cost), if short then "dim" else "buy")
+				r.Sub.Text = if short and cash
+					then string.format("Need $%s more Cash", formatCash(cost - cash))
+					else string.format("Lv %d · %s", def.UnlockLevel, stats)
+				r.Action = "buy"
+			end
+		end
+	end
+
+	do
+		local wOrder = 0
+		for _, id in ipairs(WeaponConfig.SortedIds()) do
+			local def = WeaponConfig.Weapons[id]
+			wOrder += 1
+			local row, subLabel, btn = buildRow(weaponList, wOrder, "Weapon_" .. id, def.DisplayName, weaponStats(def), "…")
+			local entry = { Id = id, Row = row, Sub = subLabel, Btn = btn, Action = nil :: string? }
+			table.insert(weaponRows, entry)
+			btn.Activated:Connect(function()
+				local action = entry.Action
+				if btn:GetAttribute("WE_Disabled") == true or action == nil then
+					return
+				end
+				-- One request per tap: the row shows BUYING… / EQUIPPING… until the server's attribute push
+				-- (or WEAPON_BUSY_SECONDS) — refusals arrive as a server toast.
+				weaponBusy[id] = { Until = os.clock() + WEAPON_BUSY_SECONDS, Text = if action == "buy" then "BUYING…" else "EQUIPPING…" }
+				refreshWeaponRows()
+				task.delay(WEAPON_BUSY_SECONDS + 0.05, queueRefresh)
+				local remoteName = if action == "buy"
+					then Constants.RemoteNames.RequestPurchaseWeapon
+					else Constants.RemoteNames.RequestEquipWeapon
+				if not Remotes.FireServer(remoteName, id) then
+					weaponBusy[id] = nil
+					queueRefresh()
+					toast("Shop is still connecting — try again in a moment", "Warn")
+				end
 			end)
 		end
+	end
+
+	local function refreshOwnedRows()
+		for key, r in pairs(oneTimeRows) do
+			if isOneTimeOwned(key) then
+				setRowButton(r.Btn, "OWNED", "owned")
+			else
+				setRowButton(r.Btn, r.Label, "buy")
+			end
+		end
+		for key, r in pairs(passRows) do
+			if sessionOwnedPasses[key] == true then
+				setRowButton(r.Btn, "OWNED", "owned")
+			end
+		end
+	end
+
+	refreshShopRows = function()
+		refreshWeaponRows()
+		refreshOwnedRows()
+	end
+
+	-- v69: live inputs for the rows (attributes replicate without any remote)
+	do
+		local lvl = player:GetAttribute("WE_Level")
+		if typeof(lvl) == "number" then
+			knownLevel = lvl
+		end
+		player.AttributeChanged:Connect(function(attr: string)
+			if attr == "WE_Weapons" or attr == "WE_EquippedWeapon" then
+				table.clear(weaponBusy) -- server answered: drop BUYING… / EQUIPPING…
+				queueRefresh()
+			elseif attr == "WE_Level" then
+				local v = player:GetAttribute("WE_Level")
+				if typeof(v) == "number" then
+					knownLevel = v
+				end
+				queueRefresh()
+			elseif attr == "WE_Cash" or string.sub(attr, 1, 7) == "WE_Ent_" then
+				queueRefresh()
+			end
+		end)
+		Remotes.BindEvent(Constants.RemoteNames.XPUpdate, function(payload: any)
+			if typeof(payload) == "table" and typeof(payload.Level) == "number" then
+				knownLevel = payload.Level
+				queueRefresh()
+			end
+		end)
+		Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, applyPlayerState)
+		Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(payload: any)
+			if typeof(payload) == "table" and typeof(payload.Upgrades) == "table" and typeof(payload.Upgrades.Barracks) == "number" then
+				knownBarracksLevel = payload.Upgrades.Barracks
+				queueRefresh()
+			end
+		end)
+		Remotes.BindEvent(Constants.RemoteNames.BattlePassStateUpdate, function(payload: any)
+			if typeof(payload) == "table" and typeof(payload.Premium) == "boolean" then
+				knownPremium = payload.Premium
+				queueRefresh()
+			end
+		end)
+		-- Same-session purchases show OWNED at once (the grant itself is ProcessReceipt / pass ownership only)
+		pcall(function()
+			MarketplaceService.PromptProductPurchaseFinished:Connect(function(userId: number, productId: number, isPurchased: boolean)
+				if userId ~= player.UserId or not isPurchased then
+					return
+				end
+				for key, def in pairs(MonetizationConfig.DevProducts :: any) do
+					if def.Id == productId and def.OneTime == true then
+						sessionOwnedProducts[key] = true
+					end
+				end
+				queueRefresh()
+			end)
+		end)
+		pcall(function()
+			MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(who: Player, passId: number, wasPurchased: boolean)
+				if who ~= player or not wasPurchased then
+					return
+				end
+				for key, def in pairs(MonetizationConfig.GamePasses :: any) do
+					if def.Id == passId then
+						sessionOwnedPasses[key] = true
+					end
+				end
+				queueRefresh()
+			end)
+		end)
+		-- Armory terminal (WE_OpenPanel "Shop" with a weapons prompt, or WE_ShopTab) lands on WEAPONS.
+		-- UIController opens the panel; this only picks the tab (deferred, so it wins whatever the handler order).
+		ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
+			if who ~= player or prompt:GetAttribute("WE_OpenPanel") ~= "Shop" then
+				return
+			end
+			local tab = prompt:GetAttribute("WE_ShopTab")
+			if typeof(tab) ~= "string" then
+				local text = string.lower(prompt.ActionText .. " " .. prompt.ObjectText)
+				tab = if string.find(text, "weapon", 1, true) then "Weapons" else "Supply"
+			end
+			task.defer(selectTab, tab :: string)
+		end)
+		queueRefresh()
 	end
 
 
@@ -590,6 +1073,14 @@ function ShopController.Init()
 					if kind == "GamePass" and typeof(key) == "string" then
 						applyOwnedVisual(inst, queryOwnsGamePass(key))
 					end
+				end
+			end
+			-- v69: Shop pass rows show OWNED too (session purchases stay OWNED even if the check lags)
+			for key, r in pairs(passRows) do
+				if sessionOwnedPasses[key] == true or queryOwnsGamePass(key) then
+					setRowButton(r.Btn, "OWNED", "owned")
+				else
+					setRowButton(r.Btn, r.Label, "buy")
 				end
 			end
 		end
@@ -1392,23 +1883,36 @@ function ShopController.Init()
 		end
 	end
 
-	-- v33: ATM raid success / cooldown HUD chip
+	-- v33 → v69: ATM raid chip (bottom centre). v69 payloads carry Phase (spec §4.4): Holding / Alarm show a
+	-- live progress bar and hide themselves shortly after the last push; Interrupted / Blocked / Defended /
+	-- Success / Robbed show the server's payload.Text for a few seconds. No Phase = legacy v33 rendering.
 	do
 		local chip: Frame? = nil
 		local hideToken = 0
 
-		local function showAtmRaidHud(payload: any)
-			if typeof(payload) ~= "table" then
-				return
-			end
-			local host = screenGui
-			if not host then
-				return
-			end
+		local function dropChip()
 			if chip then
 				chip:Destroy()
 				chip = nil
 			end
+		end
+
+		local function hideLater(frame: Frame, seconds: number)
+			hideToken += 1
+			local token = hideToken
+			task.delay(seconds, function()
+				if token == hideToken and chip == frame then
+					frame:Destroy()
+					if chip == frame then
+						chip = nil
+					end
+				end
+			end)
+		end
+
+		-- legacy (no Phase): exactly the v33 chip
+		local function showLegacyAtmRaidHud(payload: any, host: ScreenGui)
+			dropChip()
 			local success = (payload :: any).Success == true
 			local raided = (payload :: any).Raided == true
 			local cd = math.max(0, math.floor(tonumber((payload :: any).CooldownRemaining) or 0))
@@ -1453,30 +1957,141 @@ function ShopController.Init()
 			end
 			lab.Parent = frame
 
-			hideToken += 1
-			local token = hideToken
-			local hold = if success or raided then 5.5 else math.clamp(cd, 2, 8)
-			task.delay(hold, function()
-				if token == hideToken and chip == frame then
-					frame:Destroy()
-					if chip == frame then
-						chip = nil
-					end
-				end
-			end)
+			hideLater(frame, if success or raided then 5.5 else math.clamp(cd, 2, 8))
 		end
 
-		local remote = Remotes.GetEvent(Constants.RemoteNames.AtmRaidStateUpdate)
-		if remote then
-			remote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showAtmRaidHud(payload)
-				end)
-			end)
+		type PhaseStyle = { Bg: Color3, Stroke: Color3, Hold: number, Bar: boolean }
+		local AMBER: PhaseStyle = { Bg = Color3.fromRGB(74, 56, 16), Stroke = Color3.fromRGB(240, 190, 70), Hold = 2.5, Bar = false }
+		local PHASE_STYLE: { [string]: PhaseStyle } = {
+			Holding = { Bg = Color3.fromRGB(24, 28, 34), Stroke = Color3.fromRGB(230, 200, 80), Hold = 1.0, Bar = true }, -- thief
+			Alarm = { Bg = Color3.fromRGB(112, 24, 22), Stroke = Color3.fromRGB(255, 120, 100), Hold = 1.5, Bar = true }, -- victim
+			Interrupted = AMBER,
+			Blocked = AMBER,
+			Defended = { Bg = Color3.fromRGB(30, 70, 40), Stroke = Color3.fromRGB(120, 220, 140), Hold = 2.5, Bar = false },
+			Success = { Bg = Color3.fromRGB(30, 70, 40), Stroke = Color3.fromRGB(120, 220, 140), Hold = 5, Bar = false },
+			Robbed = { Bg = Color3.fromRGB(80, 30, 30), Stroke = Color3.fromRGB(255, 120, 100), Hold = 6, Bar = false },
+		}
+
+		local function phaseText(payload: any, phase: string): string
+			local text = if typeof(payload.Text) == "string" and payload.Text ~= "" then payload.Text else nil
+			local progress = tonumber(payload.HoldProgress)
+			local need = tonumber(payload.HoldNeed)
+			if phase == "Holding" then
+				return text or string.format("ROBBING %s's ATM · %.1f/%ds — don't get hit!", tostring(payload.VictimName or "their"), progress or 0, math.floor(need or 6))
+			elseif phase == "Alarm" then
+				local base = text or string.format("⚠ %s is robbing your ATM!", tostring(payload.ThiefName or "Someone"))
+				if progress and need and not string.find(base, "%d/%d") then
+					base ..= string.format(" %d/%ds", math.floor(progress), math.floor(need))
+				end
+				return base
+			end
+			return text or tostring(payload.Reason or phase)
 		end
+
+		local function showPhaseChip(payload: any, host: ScreenGui, phase: string, style: PhaseStyle)
+			local frame = chip
+			if not frame or frame.Parent ~= host or frame:GetAttribute("WE_Phase") == nil then
+				dropChip()
+				local f = Instance.new("Frame")
+				f.Name = "AtmRaidHud"
+				f.AnchorPoint = Vector2.new(0.5, 1)
+				f.Position = UDim2.new(0.5, 0, 1, if isTouch then -110 else -96)
+				f.Size = if isTouch then UDim2.new(0.9, 0, 0, 52) else UDim2.fromOffset(460, 52)
+				f.BorderSizePixel = 0
+				f.ZIndex = 75
+				corner(f, 8)
+				local stroke = Instance.new("UIStroke")
+				stroke.Name = "Stroke"
+				stroke.Thickness = 1.4
+				stroke.Parent = f
+				local lab = Instance.new("TextLabel")
+				lab.Name = "Text"
+				lab.BackgroundTransparency = 1
+				lab.Position = UDim2.fromOffset(10, 0)
+				lab.Size = UDim2.new(1, -20, 1, 0)
+				lab.Font = Enum.Font.GothamBold
+				lab.TextScaled = true
+				lab.TextColor3 = Color3.fromRGB(245, 245, 240)
+				lab.TextStrokeTransparency = 0.35
+				lab.ZIndex = 76
+				lab.Parent = f
+				local limit = Instance.new("UITextSizeConstraint")
+				limit.MinTextSize = if isTouch then 14 else 11
+				limit.MaxTextSize = if isTouch then 15 else 14
+				limit.Parent = lab
+				local barBg = Instance.new("Frame")
+				barBg.Name = "Bar"
+				barBg.AnchorPoint = Vector2.new(0.5, 1)
+				barBg.Position = UDim2.new(0.5, 0, 1, -6)
+				barBg.Size = UDim2.new(1, -24, 0, 6)
+				barBg.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+				barBg.BorderSizePixel = 0
+				barBg.ZIndex = 76
+				barBg.Visible = false
+				barBg.Parent = f
+				corner(barBg, 3)
+				local fill = Instance.new("Frame")
+				fill.Name = "Fill"
+				fill.Size = UDim2.fromScale(0, 1)
+				fill.BorderSizePixel = 0
+				fill.ZIndex = 77
+				fill.Parent = barBg
+				corner(fill, 3)
+				f.Parent = host
+				chip = f
+				frame = f
+			end
+			local f = frame :: Frame
+			f:SetAttribute("WE_Phase", phase)
+			f.BackgroundColor3 = style.Bg
+			local stroke = f:FindFirstChild("Stroke")
+			if stroke and stroke:IsA("UIStroke") then
+				stroke.Color = style.Stroke
+			end
+			local lab = f:FindFirstChild("Text")
+			local barBg = f:FindFirstChild("Bar")
+			if lab and lab:IsA("TextLabel") then
+				lab.Text = phaseText(payload, phase)
+				lab.Size = if style.Bar then UDim2.new(1, -20, 1, -14) else UDim2.new(1, -20, 1, 0)
+			end
+			if barBg and barBg:IsA("Frame") then
+				barBg.Visible = style.Bar
+				local fill = barBg:FindFirstChild("Fill")
+				if fill and fill:IsA("Frame") then
+					local need = tonumber(payload.HoldNeed) or 0
+					local pct = if need > 0 then math.clamp((tonumber(payload.HoldProgress) or 0) / need, 0, 1) else 0
+					fill.Size = UDim2.fromScale(pct, 1)
+					fill.BackgroundColor3 = style.Stroke
+				end
+			end
+			hideLater(f, style.Hold)
+		end
+
+		local function showAtmRaidHud(payload: any)
+			if typeof(payload) ~= "table" then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local phase = (payload :: any).Phase
+			local style = if typeof(phase) == "string" then PHASE_STYLE[phase] else nil
+			if style then
+				showPhaseChip(payload, host, phase :: string, style)
+			elseif phase == nil then
+				showLegacyAtmRaidHud(payload, host)
+			end
+		end
+
+		Remotes.BindEvent(Constants.RemoteNames.AtmRaidStateUpdate, function(payload: any)
+			task.defer(function()
+				if not screenGui then
+					task.wait(0.2)
+				end
+				showAtmRaidHud(payload)
+			end)
+		end)
 	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
@@ -1521,6 +2136,16 @@ end
 
 function ShopController.Toggle()
 	setOpen(not menuOpen)
+end
+
+--[[ v69: open on a tab ("Supply" | "Weapons"). The Armory terminal lands on Weapons via PromptTriggered. ]]
+function ShopController.OpenTab(tab: string)
+	selectTab(tab)
+	setOpen(true)
+end
+
+function ShopController.OpenWeapons()
+	ShopController.OpenTab("Weapons")
 end
 
 function ShopController.Open()

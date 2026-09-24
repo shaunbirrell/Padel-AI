@@ -143,7 +143,11 @@ return function(ictx: any, api: any)
 	blk("IssueCounter", 3.5, 3.3, 1.2, 12.45, y1, cz, col.Dark, M.Metal)
 	blk("CounterTop", 2.05, 0.25, 1.5, 7.275, y1 + 3.3, cz + 0.15, col.Metal, M.DiamondPlate)
 	blk("CounterTop", 3.5, 0.25, 1.5, 12.45, y1 + 3.3, cz + 0.15, col.Metal, M.DiamondPlate)
-	api.terminal("IssueTerminal", Vector3.new(hatchX, y1, cz), 0, "Shop", "Buy weapons", "Armory · Weapons", { "ARMS ISSUE", "WEAPONS · SHOP" })
+	local issue = api.terminal("IssueTerminal", Vector3.new(hatchX, y1, cz), 0, "Shop", "Buy weapons", "Armory · Weapons", { "ARMS ISSUE", "WEAPONS · SHOP" })
+	local issuePrompt = issue:FindFirstChild("WE_PanelPrompt")
+	if issuePrompt then
+		issuePrompt:SetAttribute("WE_OpenTab", "Weapons") -- opens the Shop on its WEAPONS tab
+	end
 	for _, px in ipairs({ sideX, 8.15, 10.85 }) do
 		blk("CagePost", 0.3, yHead - yTop, 0.3, px, yTop, barZ, col.Metal, M.Metal)
 	end

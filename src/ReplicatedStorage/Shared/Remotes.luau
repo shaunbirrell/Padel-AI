@@ -87,6 +87,25 @@ function Remotes.TryGetFunction(name: string): RemoteFunction?
 	return nil
 end
 
+--[[ v71 money (M2): UnreliableRemoteEvents (RemoteSetup UNRELIABLE list, e.g. VehicleWeaponFx). They are not
+	RemoteEvents, so GetEvent / TryGetEvent never return them. Same bounded wait as GetEvent. ]]
+function Remotes.GetUnreliableEvent(name: string): UnreliableRemoteEvent
+	return waitForRemote(name, "UnreliableRemoteEvent") :: UnreliableRemoteEvent
+end
+
+--[[ Non-blocking: nil if the unreliable remote is not ready yet. ]]
+function Remotes.TryGetUnreliableEvent(name: string): UnreliableRemoteEvent?
+	local folder = getFolderImmediate()
+	if not folder then
+		return nil
+	end
+	local remote = folder:FindFirstChild(name)
+	if remote and remote:IsA("UnreliableRemoteEvent") then
+		return remote :: UnreliableRemoteEvent
+	end
+	return nil
+end
+
 --[[
 	Client→server fire without unbounded WaitForChild.
 	Polls up to timeoutSec (default 3) for WE_Remotes + event.

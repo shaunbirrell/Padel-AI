@@ -56,7 +56,7 @@ return function(ictx: any, api: any)
 	-- Floodlights
 	local function flood(fx: number, fz: number)
 		api.box("FloodPole", Vector3.new(0.3, 7, 0.3), Vector3.new(fx, y0 + 3.5, fz), col.Metal, Enum.Material.Metal, false)
-		local lamp = api.box("FloodLamp", Vector3.new(1.4, 0.8, 0.5), Vector3.new(fx, y0 + 7, fz + 0.3), col.Light, Enum.Material.Neon, false)
+		local lamp = api.box("FloodLamp", Vector3.new(1.4, 0.8, 0.5), Vector3.new(fx, y0 + 7, fz + 0.3), col.Light, Enum.Material.SmoothPlastic, false)
 		api.light(lamp, 22, 1.3, col.Light)
 	end
 	flood(-9.4, -3.5)

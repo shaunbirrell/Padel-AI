@@ -16,6 +16,14 @@ local ManualDropperConfig = {
 	RateLimitRate = 4,
 	RateLimitBurst = 3,
 
+	-- v69 income budget per player (both droppers share it) so an auto-clicker can't farm all night.
+	-- Refilling buckets: a full minute bucket gives a quick burst, then it refills at N/60 per second;
+	-- the hour bucket caps long sessions at ~MaxAwardsPerHour (600 x $15 = $9k/h, below base passive).
+	MaxAwardsPerMinute = 30,
+	MaxAwardsPerHour = 600,
+	BudgetEmptyToast = "Cash drop is recharging — the ATM keeps earning meanwhile",
+	BudgetEmptyToastCooldown = 20,
+
 	CollectorOffset = Vector3.new(-5.5, 0, 4),
 	YardOffset = Vector3.new(6, 0, -4),
 

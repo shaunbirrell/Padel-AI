@@ -19,7 +19,6 @@ local NotificationService: any = nil
 local RateLimitService: any = nil
 local RemoteSetup: any = nil
 local AnalyticsService: any = nil
-local AntiExploitService: any = nil
 
 local function pickReward(): any
 	local rewards = SpinnerConfig.Rewards
@@ -119,14 +118,11 @@ function SpinnerService.Init(deps: { [string]: any })
 	RateLimitService = deps.RateLimitService
 	RemoteSetup = deps.RemoteSetup
 	AnalyticsService = deps.AnalyticsService
-	AntiExploitService = deps.AntiExploitService
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestClaimSpinner) :: RemoteEvent
 	remote.OnServerEvent:Connect(function(player: Player)
+		-- v69: extra taps are dropped silently (the allowed tap already answered) — never a strike
 		if not RateLimitService.Allow(player, "spinner_claim", 1, 2) then
-			if AntiExploitService and AntiExploitService.Strike then
-				AntiExploitService.Strike(player, "spinner_rate")
-			end
 			return
 		end
 		if not RemoteGuard.RequireProfile(DataService, player) then
