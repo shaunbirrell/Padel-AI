@@ -1,35 +1,41 @@
 --!strict
 --[[
-	Interactive tutorial UI (v31): claim → collect → click-dropper → CC → recruit → barracks → jeep → outpost
-	Skip + mobile CTA (BUY / ARMY / GARAGE / …); pad StructureId fallback when markers missing.
+	Interactive tutorial (v31 steps): claim → collect → click-dropper → CC → recruit → barracks → jeep → outpost.
+
+	v70 "clean screen" (spec §3.4 item 3): the step is an OBJECTIVE CHIP in the top-centre stack (HudLayout
+	TopStack "Objective"; was a 94 %-wide 168 v card across mid-screen):
+	  ( 2 )  Collect cash                              [ GO ]  Skip
+	         Touch the Money Collector (green ATM …
+	≤ 460×64 v pill (HudConfig.TopStack.Objective), 2 v gold edge. Step disc, title (Display font), hint (Body
+	font, up to 2 lines, "…" when longer), GO (64 v hit: runs the step's CTA — BUY/ARMY/GARAGE opener or re-aims
+	the beam), Skip (touch-size hit; tap twice — "Sure?" — so a stray tap never ends the tutorial).
+	While a step is active the HudLayout flag "Tutorial" is on (offers wait). The chip hides while a panel is open
+	(Modal), while Driving (the beam keeps guiding) and while dead. The world guide beam + SelectionBox are unchanged.
+	Pad StructureId fallback when markers are missing.
 ]]
 
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
+local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
+local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local TutorialConfig = require(Shared.Configs.TutorialConfig)
 
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+
 local TutorialController = {}
 
 local player = Players.LocalPlayer
-local isTouch = UserInputService.TouchEnabled
 
 local _gui: ScreenGui? = nil
-local panel: Frame? = nil
-local titleLabel: TextLabel? = nil
-local hintLabel: TextLabel? = nil
-local progressLabel: TextLabel? = nil
-local dotsFrame: Frame? = nil
-local ctaBtn: TextButton? = nil
-local beam: Beam? = nil
+local guideBeam: Beam? = nil
 local attach0: Attachment? = nil
 local attach1: Attachment? = nil
 local highlightPart: BasePart? = nil
@@ -38,16 +44,36 @@ local currentPadStructureId: string? = nil
 local currentCtaAction: string? = nil
 local myPlotId: any = nil
 
-local function corner(parent: Instance, r: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, r)
-	c.Parent = parent
-end
+-- objective chip
+local OBJ = HudConfig.TopStack.Objective
+local chip: Frame? = nil
+local discLabel: TextLabel? = nil
+local titleLabel: TextLabel? = nil
+local hintLabel: TextLabel? = nil
+local goBtn: TextButton? = nil
+local skipBtn: TextButton? = nil
+local skipLabel: TextLabel? = nil
+local stepActive = false -- a step is showing (drives the "Tutorial" flag and the chip)
+local rawTitle = ""
+local rawHint = ""
+
+-- chip internals, v (the gui carries HudLayout's MobileScale)
+local PAD_L = 10
+local DISC = 36
+local DISC_GAP = 10
+local TEXT_GAP = 6
+local PAD_R = 2
+local TITLE_H = 22
+local GO_FACE = Vector2.new(56, 44)
+local CORNER = 16
+local GOLD = HudConfig.Colors.Gold
+local DARK_INK = HudConfig.Rail.Badge.ReadyText
+local SKIP_CONFIRM_SECONDS = 3
 
 local function clearWaypoint()
-	if beam then
-		beam:Destroy()
-		beam = nil
+	if guideBeam then
+		guideBeam:Destroy()
+		guideBeam = nil
 	end
 	if attach0 then
 		attach0:Destroy()
@@ -232,17 +258,19 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 		return
 	end
 
-	attach0 = Instance.new("Attachment")
-	attach0.Name = "WE_TutAtt0"
-	attach0.Parent = hrp
-	attach1 = Instance.new("Attachment")
-	attach1.Name = "WE_TutAtt1"
-	attach1.Parent = target
+	local a0 = Instance.new("Attachment")
+	a0.Name = "WE_TutAtt0"
+	a0.Parent = hrp
+	attach0 = a0
+	local a1 = Instance.new("Attachment")
+	a1.Name = "WE_TutAtt1"
+	a1.Parent = target
+	attach1 = a1
 
-	beam = Instance.new("Beam")
+	local beam = Instance.new("Beam")
 	beam.Name = "WE_TutorialBeam"
-	beam.Attachment0 = attach0
-	beam.Attachment1 = attach1
+	beam.Attachment0 = a0
+	beam.Attachment1 = a1
 	beam.FaceCamera = true
 	-- v68: subtle guide (was a thick glowing neon line): thin, mostly transparent, fading out toward the target
 	beam.Width0 = 0.22
@@ -251,48 +279,134 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.85) })
 	beam.LightEmission = 0.2
 	beam.Parent = hrp
+	guideBeam = beam
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- objective chip
+---------------------------------------------------------------------------------------------------------------
+
+local function touchMinV(): number
+	if HudLayout.IsTouch() then
+		-- 64 v = 44.8 real px at the smallest HUD scale (0.70)
+		return math.max(HudConfig.Hotbar.Slot, math.ceil(HudConfig.Scale.TouchMinPx / HudConfig.Scale.Min))
+	end
+	return 0
+end
+
+local function goHitV(): number
+	return math.max(OBJ.GoHit, touchMinV())
+end
+
+local function skipHitV(): number
+	return math.max(OBJ.SkipHit, touchMinV())
+end
+
+local function chipWidthV(): number
+	return math.floor(math.min(OBJ.MaxWidth, HudLayout.TopStackMaxWidthV()))
+end
+
+-- rendered size of `text` in v (text size and width are both v, so the gui's UIScale cancels out)
+local function measure(text: string, size: number, font: Enum.Font, widthV: number): Vector2
+	local ok, v = pcall(function(): Vector2
+		return TextService:GetTextSize(text, size, font, Vector2.new(widthV, 10000))
+	end)
+	if ok and typeof(v) == "Vector2" then
+		return v
+	end
+	return Vector2.new(#text * size * 0.55, size)
+end
+
+local function lineCount(text: string, size: number, font: Enum.Font, widthV: number): number
+	if text == "" then
+		return 0
+	end
+	local h = measure(text, size, font, widthV).Y
+	return math.max(1, math.floor(h / size + 0.5))
+end
+
+-- `text` cut on a word boundary + "…" so it fits in maxLines lines of widthV (TextTruncate stays on as a backstop)
+local function fitText(text: string, size: number, font: Enum.Font, widthV: number, maxLines: number): string
+	if lineCount(text, size, font, widthV) <= maxLines then
+		return text
+	end
+	local words = string.split(text, " ")
+	local lo, hi = 1, #words
+	local best = ""
+	while lo <= hi do
+		local mid = (lo + hi) // 2
+		local candidate = table.concat(words, " ", 1, mid) .. "…"
+		if lineCount(candidate, size, font, widthV) <= maxLines then
+			best = candidate
+			lo = mid + 1
+		else
+			hi = mid - 1
+		end
+	end
+	if best == "" then
+		best = string.sub(text, 1, math.max(1, math.floor(widthV / (size * 0.6)))) .. "…"
+	end
+	return best
+end
+
+-- Size the chip to the current scale and lay the title / hint out for 0, 1 or 2 hint lines.
+local function layoutChip()
+	local c = chip
+	local title = titleLabel
+	local hint = hintLabel
+	local go = goBtn
+	local skip = skipBtn
+	if not (c and title and hint and go and skip) then
+		return
+	end
+	local w = chipWidthV()
+	local h = OBJ.Height
+	c.Size = UDim2.fromOffset(w, h)
+	local goW = if go.Visible then goHitV() else 0
+	local skipW = skipHitV()
+	go.Size = UDim2.fromOffset(goW, h)
+	go.Position = UDim2.new(1, -(PAD_R + skipW), 0.5, 0)
+	skip.Size = UDim2.fromOffset(skipW, h)
+	local left = PAD_L + DISC + DISC_GAP
+	local textW = math.max(60, w - left - TEXT_GAP - goW - skipW - PAD_R)
+
+	title.Text = fitText(rawTitle, OBJ.TitleSize, HudConfig.Fonts.Display, textW, 1)
+	local lines = math.min(2, lineCount(rawHint, OBJ.HintSize, HudConfig.Fonts.Body, textW))
+	hint.Text = fitText(rawHint, OBJ.HintSize, HudConfig.Fonts.Body, textW, 2)
+	hint.Visible = lines > 0
+	local hintH = lines * OBJ.HintSize + 2
+	local blockH = TITLE_H + (if lines > 0 then hintH else 0)
+	local top = math.max(3, math.floor((h - blockH) / 2))
+	title.Position = UDim2.fromOffset(left, top)
+	title.Size = UDim2.fromOffset(textW, TITLE_H)
+	hint.Position = UDim2.fromOffset(left, top + TITLE_H)
+	hint.Size = UDim2.fromOffset(textW, math.max(hintH, 1))
+end
+
+local skipArmedAt = -math.huge
+local function resetSkip()
+	skipArmedAt = -math.huge
+	local l = skipLabel
+	if l then
+		l.Text = "Skip"
+		l.TextColor3 = HudConfig.Colors.White
+		l.TextTransparency = 0.35
+	end
 end
 
 local function setVisible(open: boolean)
-	if panel then
-		panel.Visible = open
+	if stepActive ~= open then
+		stepActive = open
+		HudLayout.SetFlag("Tutorial", open)
+		local c = chip
+		if c then
+			HudLayout.RefreshVisibility(c)
+		end
 	end
 	if not open then
 		clearWaypoint()
 		syncMarkerVisibility(nil)
-		if ctaBtn then
-			ctaBtn.Visible = false
-		end
-	end
-end
-
-local function refreshDots(step: number, total: number)
-	local frame = dotsFrame
-	if not frame then
-		return
-	end
-	for _, child in ipairs(frame:GetChildren()) do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
-	end
-	local layout = frame:FindFirstChildOfClass("UIListLayout")
-	if not layout then
-		local l = Instance.new("UIListLayout")
-		l.FillDirection = Enum.FillDirection.Horizontal
-		l.HorizontalAlignment = Enum.HorizontalAlignment.Left
-		l.Padding = UDim.new(0, 6)
-		l.Parent = frame
-	end
-	for i = 1, total do
-		local dot = Instance.new("Frame")
-		dot.Name = "Dot" .. i
-		dot.Size = UDim2.fromOffset(10, 10)
-		dot.BorderSizePixel = 0
-		dot.BackgroundColor3 = if i == step then Constants.Colors.Gold elseif i < step then Constants.Colors.Accent else Constants.Colors.Muted
-		dot.BackgroundTransparency = if i <= step then 0 else 0.45
-		corner(dot, 5)
-		dot.Parent = frame
+		resetSkip()
 	end
 end
 
@@ -329,7 +443,6 @@ local function runCta()
 	end
 end
 
-local lastAnnouncedId: string? = nil
 local lastApplyAt = 0.0
 local APPLY_DEBOUNCE = 0.2
 
@@ -363,200 +476,233 @@ local function applyState(payload: any)
 	lastApplyAt = now
 	if payload.Complete == true then
 		setVisible(false)
-		clearWaypoint()
-		syncMarkerVisibility(nil)
-		lastAnnouncedId = nil
 		currentCtaAction = nil
 		return
 	end
-	setVisible(true)
-	if titleLabel then
-		titleLabel.Text = tostring(payload.Title or "Tutorial")
-	end
-	if hintLabel then
-		hintLabel.Text = tostring(payload.Hint or "")
-	end
+
 	local step = tonumber(payload.Step) or 0
 	local total = tonumber(payload.Total) or TutorialConfig.StepCount()
-	if progressLabel then
-		progressLabel.Text = string.format("Step %d / %d", math.clamp(step, 1, total), total)
+	rawTitle = tostring(payload.Title or "Tutorial")
+	rawHint = tostring(payload.Hint or "")
+	local disc = discLabel
+	if disc then
+		disc.Text = tostring(math.clamp(step, 1, math.max(1, total)))
 	end
-	refreshDots(math.clamp(step, 1, total), total)
 
 	local padSid = if typeof(payload.PadStructureId) == "string" then payload.PadStructureId else nil
 	local marker = if typeof(payload.MarkerName) == "string" then payload.MarkerName else nil
-	currentCtaAction = if typeof(payload.CtaAction) == "string" then payload.CtaAction else nil
+	currentCtaAction = if typeof(payload.CtaAction) == "string" and payload.CtaAction ~= "" then payload.CtaAction else nil
 	setWaypoint(marker, padSid)
 
-	if ctaBtn then
-		local label = if typeof(payload.CtaLabel) == "string" and payload.CtaLabel ~= ""
-			then payload.CtaLabel
-			else "CONTINUE"
-		ctaBtn.Text = label
-		ctaBtn.Visible = currentCtaAction ~= nil and currentCtaAction ~= ""
+	local go = goBtn
+	if go then
+		go.Visible = currentCtaAction ~= nil
 	end
+	resetSkip()
+	layoutChip()
+	setVisible(true)
+end
 
-	local id = if typeof(payload.Id) == "string" then payload.Id else nil
-	if id and id ~= lastAnnouncedId then
-		lastAnnouncedId = id
+local function buildChip(screen: ScreenGui)
+	local c = Instance.new("Frame")
+	c.Name = "Objective"
+	c.AnchorPoint = Vector2.new(0.5, 0)
+	c.Position = UDim2.new(0.5, 0, 0, HudConfig.TopStack.Top) -- Y is rewritten by HudLayout's top stack
+	c.Size = UDim2.fromOffset(chipWidthV(), OBJ.Height)
+	c.BackgroundColor3 = HudConfig.Colors.PillBg
+	c.BackgroundTransparency = 0.16
+	c.BorderSizePixel = 0
+	c.Active = true -- taps on the chip never fall through to the world
+	c.Visible = false
+	c.ZIndex = 2
+	c.Parent = screen
+	UIUtil.Corner(c, CORNER)
+	local st = UIUtil.Stroke(c, GOLD, 2)
+	chip = c
+
+	local disc = Instance.new("TextLabel")
+	disc.Name = "Step"
+	disc.AnchorPoint = Vector2.new(0, 0.5)
+	disc.Position = UDim2.new(0, PAD_L, 0.5, 0)
+	disc.Size = UDim2.fromOffset(DISC, DISC)
+	disc.BackgroundColor3 = GOLD
+	disc.BorderSizePixel = 0
+	disc.Font = HudConfig.Fonts.Display
+	disc.TextSize = OBJ.TitleSize
+	disc.TextColor3 = DARK_INK
+	disc.Text = "1"
+	disc.Active = false
+	disc.ZIndex = 3
+	disc.Parent = c
+	UIUtil.Corner(disc, math.ceil(DISC / 2))
+	discLabel = disc
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Font = HudConfig.Fonts.Display
+	title.TextSize = OBJ.TitleSize
+	title.TextColor3 = HudConfig.Colors.White
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextYAlignment = Enum.TextYAlignment.Center
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	title.Text = ""
+	title.Active = false
+	title.ZIndex = 3
+	title.Parent = c
+	UIUtil.TextOutline(title, 1.4)
+	titleLabel = title
+
+	local hint = Instance.new("TextLabel")
+	hint.Name = "Hint"
+	hint.BackgroundTransparency = 1
+	hint.Font = HudConfig.Fonts.Body
+	hint.TextSize = OBJ.HintSize
+	hint.TextColor3 = HudConfig.Colors.White
+	hint.TextTransparency = 0.2
+	hint.TextXAlignment = Enum.TextXAlignment.Left
+	hint.TextYAlignment = Enum.TextYAlignment.Top
+	hint.TextWrapped = true
+	hint.TextTruncate = Enum.TextTruncate.AtEnd
+	hint.Text = ""
+	hint.Active = false
+	hint.ZIndex = 3
+	hint.Parent = c
+	hintLabel = hint
+
+	-- GO: transparent touch-size hit area around a gold face (runs the step's CTA)
+	local go = Instance.new("TextButton")
+	go.Name = "Go"
+	go.AnchorPoint = Vector2.new(1, 0.5)
+	go.BackgroundTransparency = 1
+	go.BorderSizePixel = 0
+	go.AutoButtonColor = false
+	go.Text = ""
+	go.Active = true
+	go.Visible = false
+	go.ZIndex = 3
+	go.Parent = c
+	local face = Instance.new("TextLabel")
+	face.Name = "Face"
+	face.AnchorPoint = Vector2.new(0.5, 0.5)
+	face.Position = UDim2.fromScale(0.5, 0.5)
+	face.Size = UDim2.fromOffset(GO_FACE.X, GO_FACE.Y)
+	face.BackgroundColor3 = GOLD
+	face.BorderSizePixel = 0
+	face.Font = HudConfig.Fonts.Display
+	face.TextSize = OBJ.TitleSize
+	face.TextColor3 = DARK_INK
+	face.Text = "GO"
+	face.Active = false
+	face.ZIndex = 4
+	face.Parent = go
+	UIUtil.Corner(face, 12)
+	local faceStroke = UIUtil.Stroke(face, Color3.fromRGB(107, 77, 0), 2)
+	faceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border -- the face is a TextLabel: edge, not glyph outline
+	local press = Instance.new("UIScale")
+	press.Parent = face
+	go.MouseButton1Down:Connect(function()
+		press.Scale = HudConfig.Rail.PressScale
+	end)
+	go.MouseButton1Up:Connect(function()
+		press.Scale = 1
+	end)
+	go.MouseLeave:Connect(function()
+		press.Scale = 1
+	end)
+	go.Activated:Connect(function()
+		press.Scale = 1
+		runCta()
+	end)
+	goBtn = go
+	HudLayout.AssertTouchTarget(go, "Objective.GO")
+
+	-- Skip: first tap arms ("Sure?"), a second tap within SKIP_CONFIRM_SECONDS skips
+	local skip = Instance.new("TextButton")
+	skip.Name = "Skip"
+	skip.AnchorPoint = Vector2.new(1, 0.5)
+	skip.Position = UDim2.new(1, -PAD_R, 0.5, 0)
+	skip.BackgroundTransparency = 1
+	skip.BorderSizePixel = 0
+	skip.AutoButtonColor = false
+	skip.Text = ""
+	skip.Active = true
+	skip.ZIndex = 3
+	skip.Parent = c
+	local sl = Instance.new("TextLabel")
+	sl.Name = "Label"
+	sl.BackgroundTransparency = 1
+	sl.Size = UDim2.fromScale(1, 1)
+	sl.Font = HudConfig.Fonts.Body
+	sl.TextSize = OBJ.HintSize
+	sl.TextColor3 = HudConfig.Colors.White
+	sl.TextTransparency = 0.35
+	sl.Text = "Skip"
+	sl.Active = false
+	sl.ZIndex = 4
+	sl.Parent = skip
+	skipLabel = sl
+	skip.Activated:Connect(function()
+		local now = os.clock()
+		if now - skipArmedAt > SKIP_CONFIRM_SECONDS then
+			skipArmedAt = now
+			sl.Text = "Sure?"
+			sl.TextColor3 = HudConfig.Colors.Warn
+			sl.TextTransparency = 0
+			task.delay(SKIP_CONFIRM_SECONDS, function()
+				if skipArmedAt == now then
+					resetSkip()
+				end
+			end)
+			return
+		end
+		-- Optimistic hide so Skip always feels reliable; the server confirms with Complete
+		setVisible(false)
+		task.spawn(function()
+			Remotes.FireServer(Constants.RemoteNames.RequestSkipTutorial)
+		end)
+	end)
+	skipBtn = skip
+	HudLayout.AssertTouchTarget(skip, "Objective.Skip")
+
+	HudLayout.BindVisibility(c, { HideWhen = { "Modal", "Driving", "Dead" } }, function(): boolean
+		return stepActive
+	end)
+	HudLayout.RegisterTopStack("Objective", c, HudConfig.TopStack.Order.Objective, { Space = "Hud" })
+
+	-- soft gold edge pulse while the chip is on screen
+	local pulse: Tween? = nil
+	local function syncPulse()
+		if c.Visible and not pulse then
+			local tw = TweenService:Create(st, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+				Transparency = 0.55,
+			})
+			tw:Play()
+			pulse = tw
+		elseif not c.Visible and pulse then
+			pulse:Cancel()
+			pulse = nil
+			st.Transparency = 0
+		end
 	end
+	c:GetPropertyChangedSignal("Visible"):Connect(syncPulse)
+	syncPulse()
+
+	HudLayout.LayoutChanged:Connect(layoutChip)
+	layoutChip()
 end
 
 function TutorialController.Init()
 	local pg = player:WaitForChild("PlayerGui")
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireTutorial"
-	screen.DisplayOrder = 50 -- below WorldPrompt BUY (65); above most HUD
+	-- Core safe insets + the one HUD UIScale; DisplayOrder from HudConfig (50, under the HUD rail / TopStrip)
+	HudLayout.ApplyScreen(screen, { Insets = "Core" })
 	screen.Parent = pg
-	UIUtil.PrepareScreen(screen, false)
 	_gui = screen
+	buildChip(screen)
 
-	local panelH = if isTouch then 168 else 148
-	local panelW = if isTouch then 0 else 460
-	local frame = Instance.new("Frame")
-	frame.Name = "Panel"
-	frame.AnchorPoint = Vector2.new(0.5, 1)
-	-- Lift above pad BUY (~108) + mobile dock
-	frame.Position = UDim2.new(0.5, 0, 1, if isTouch then -210 else -196)
-	if isTouch then
-		frame.Size = UDim2.new(0.94, 0, 0, panelH)
-	else
-		frame.Size = UDim2.fromOffset(panelW, panelH)
-	end
-	frame.BackgroundColor3 = Constants.Colors.Panel
-	frame.BorderSizePixel = 0
-	frame.Visible = false
-	frame.Parent = screen
-	panel = frame
-	corner(frame, 10)
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Constants.Colors.Accent
-	stroke.Thickness = 2
-	stroke.Parent = frame
-
-	local prog = Instance.new("TextLabel")
-	prog.Name = "Progress"
-	prog.BackgroundTransparency = 1
-	prog.Position = UDim2.fromOffset(14, 6)
-	prog.Size = UDim2.new(1, -120, 0, 14)
-	prog.Font = Enum.Font.Gotham
-	prog.TextSize = 11
-	prog.TextXAlignment = Enum.TextXAlignment.Left
-	prog.TextColor3 = Constants.Colors.Muted
-	prog.Text = ""
-	prog.Parent = frame
-	progressLabel = prog
-
-	local dots = Instance.new("Frame")
-	dots.Name = "Dots"
-	dots.BackgroundTransparency = 1
-	dots.Position = UDim2.fromOffset(14, 22)
-	dots.Size = UDim2.new(1, -130, 0, 12)
-	dots.Parent = frame
-	dotsFrame = dots
-
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(14, 38)
-	title.Size = UDim2.new(1, -120, 0, 20)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = if isTouch then 15 else 16
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextColor3 = Constants.Colors.Text
-	title.Text = "Tutorial"
-	title.Parent = frame
-	titleLabel = title
-
-	local hint = Instance.new("TextLabel")
-	hint.Name = "Hint"
-	hint.BackgroundTransparency = 1
-	hint.Position = UDim2.fromOffset(14, 58)
-	hint.Size = UDim2.new(1, -120, 0, if isTouch then 40 else 34)
-	hint.Font = Enum.Font.Gotham
-	hint.TextSize = if isTouch then 12 else 13
-	hint.TextWrapped = true
-	hint.TextXAlignment = Enum.TextXAlignment.Left
-	hint.TextYAlignment = Enum.TextYAlignment.Top
-	hint.TextColor3 = Constants.Colors.Muted
-	hint.Text = ""
-	hint.Parent = frame
-	hintLabel = hint
-
-	local skip = Instance.new("TextButton")
-	skip.Name = "Skip"
-	skip.AnchorPoint = Vector2.new(1, 0)
-	skip.Position = UDim2.new(1, -12, 0, 8)
-	skip.Size = UDim2.fromOffset(72, 28)
-	skip.BackgroundColor3 = Constants.Colors.Background
-	skip.Font = Enum.Font.GothamBold
-	skip.TextSize = 12
-	skip.TextColor3 = Constants.Colors.Text
-	skip.Text = "SKIP"
-	skip.BorderSizePixel = 0
-	corner(skip, 6)
-	skip.Parent = frame
-	UIUtil.EnsureMinTouch(skip, 44)
-	skip.Activated:Connect(function()
-		-- Optimistic hide so SKIP always feels reliable; server confirms Complete
-		setVisible(false)
-		clearWaypoint()
-		syncMarkerVisibility(nil)
-		Remotes.GetEvent(Constants.RemoteNames.RequestSkipTutorial):FireServer()
-	end)
-
-	local cta = Instance.new("TextButton")
-	cta.Name = "Cta"
-	cta.AnchorPoint = Vector2.new(0.5, 1)
-	cta.Position = UDim2.new(0.5, 0, 1, -10)
-	cta.Size = UDim2.new(1, -24, 0, if isTouch then 44 else 36)
-	cta.BackgroundColor3 = Constants.Colors.Gold
-	cta.Font = Enum.Font.GothamBold
-	cta.TextSize = if isTouch then 14 else 13
-	cta.TextColor3 = Color3.fromRGB(20, 22, 18)
-	cta.Text = "CONTINUE"
-	cta.BorderSizePixel = 0
-	cta.Visible = false
-	cta.AutoButtonColor = true
-	corner(cta, 8)
-	cta.Parent = frame
-	UIUtil.EnsureMinTouch(cta, 44)
-	ctaBtn = cta
-	cta.Activated:Connect(function()
-		runCta()
-	end)
-
-	-- Soft pulse on panel + CTA when shown
-	task.spawn(function()
-		while screen.Parent do
-			if frame.Visible then
-				local tw = TweenService:Create(stroke, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-					Transparency = 0.55,
-				})
-				tw:Play()
-				local ctaTw: Tween? = nil
-				if cta.Visible then
-					ctaTw = TweenService:Create(cta, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
-						BackgroundColor3 = Color3.fromRGB(28, 32, 38),
-					})
-					ctaTw:Play()
-				end
-				while frame.Visible and screen.Parent do
-					task.wait(0.5)
-				end
-				tw:Cancel()
-				stroke.Transparency = 0
-				if ctaTw then
-					ctaTw:Cancel()
-					cta.BackgroundColor3 = Constants.Colors.Gold
-				end
-			end
-			task.wait(0.25)
-		end
-	end)
-
-	Remotes.GetEvent(Constants.RemoteNames.TutorialStateUpdate).OnClientEvent:Connect(applyState)
+	Remotes.BindEvent(Constants.RemoteNames.TutorialStateUpdate, applyState)
 
 	-- v69: the plot id arrives as state.Base.PlotId / BaseStatePayload.PlotId. The payload never had a top-level
 	-- BasePlotId, so myPlotId stayed nil and the beam could pick another player's pad. nil = no plot (server full).
@@ -566,20 +712,19 @@ function TutorialController.Init()
 		end
 		myPlotId = plotId
 		-- Re-bind pad beam once plot is known
-		if panel and panel.Visible and currentPadStructureId then
+		if stepActive and currentPadStructureId then
 			task.defer(function()
 				setWaypoint(currentMarkerName, currentPadStructureId)
 			end)
 		end
 	end
 
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: any)
+	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: any)
 		if typeof(state) ~= "table" then
 			return
 		end
 		if state.TutorialComplete == true then
 			setVisible(false)
-			clearWaypoint()
 		end
 		if typeof(state.Base) == "table" then
 			applyPlotId(state.Base.PlotId)
@@ -593,7 +738,7 @@ function TutorialController.Init()
 	end)
 
 	player.CharacterAdded:Connect(function()
-		if currentMarkerName and panel and panel.Visible then
+		if currentMarkerName and stepActive then
 			task.defer(function()
 				setWaypoint(currentMarkerName, currentPadStructureId)
 			end)

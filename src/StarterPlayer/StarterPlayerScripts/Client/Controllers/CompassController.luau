@@ -1,8 +1,17 @@
 --!strict
---[[ Lightweight compass: direction + distance to own base and nearest unowned territory. ]]
+--[[
+	CompassController — v70 compass chip in the TopStrip (spec §3.1; HudConfig.TopStrip.Compass).
+	A gold Frame-built arrow that points at your base relative to the camera, "BASE" and the distance ("95m",
+	"1.2km"), right-aligned in the Roblox topbar row. Shown only OUTSIDE your own plot — this controller publishes
+	the HudLayout flag "InOwnPlot" (plot square + OwnPlotMarginStuds) — and hidden while a panel is open.
+	Tap → HudLayout.Signals.CompassTapped (TerritoryController opens the territory list under the chip).
+	RadarReveal (flag "Radar", TerritoryController) → a pulsing purple dot at the chip's left edge.
+	Gone: the 210x52 two-line card under the weapon panel and its "◎ nearest territory" line.
+]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -10,41 +19,25 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
-local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local BaseConfig = require(Shared.Configs.BaseConfig)
+local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
+local HUDController = require(script.Parent.HUDController)
 
 local CompassController = {}
 
+local TS = HudConfig.TopStrip
+local C = TS.Compass
+
 local player = Players.LocalPlayer
 local myPlotId: number? = nil
-local territoryOwners: { [string]: { OwnerType: string, OwnerUserId: number } } = {}
-
-local baseLabel: TextLabel? = nil
-local outpostLabel: TextLabel? = nil
+local chip: TextButton? = nil
+local arrow: Frame? = nil
+local distLabel: TextLabel? = nil
+local baseKnown = false
 local accum = 0
-
-local CARDINAL_LABELS = { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }
-
-local function bearingLabel(from: Vector3, to: Vector3, look: Vector3): string
-	local dir = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
-	if dir.Magnitude < 1 then
-		return "•"
-	end
-	dir = dir.Unit
-	local lookFlat = Vector3.new(look.X, 0, look.Z)
-	if lookFlat.Magnitude < 0.05 then
-		lookFlat = Vector3.new(0, 0, -1)
-	else
-		lookFlat = lookFlat.Unit
-	end
-	-- Relative bearing vs camera look (0 = ahead)
-	local worldAngle = math.deg(math.atan2(dir.X, -dir.Z)) % 360
-	local lookAngle = math.deg(math.atan2(lookFlat.X, -lookFlat.Z)) % 360
-	local relative = (worldAngle - lookAngle + 360) % 360
-	local idx = (math.floor((relative + 22.5) / 45) % 8) + 1
-	return CARDINAL_LABELS[idx] or "N"
-end
 
 local function formatDist(studs: number): string
 	if studs < 1000 then
@@ -68,146 +61,211 @@ local function baseWorldPos(): Vector3?
 	if typeof(myPlotId) ~= "number" then
 		return nil
 	end
-	local pos = BaseConfig.PlotPositions[myPlotId]
-	if pos then
-		return pos
-	end
-	return nil
+	return BaseConfig.PlotPositions[myPlotId]
 end
 
-local function nearestUnowned(from: Vector3): (string?, Vector3?, number?)
-	local bestId: string? = nil
-	local bestPos: Vector3? = nil
-	local bestDist = math.huge
-	for id, def in pairs(TerritoryConfig.Territories) do
-		local own = territoryOwners[id]
-		local ownedByMe = own and own.OwnerType == "Player" and own.OwnerUserId == player.UserId
-		local isNeutral = (not own) or own.OwnerType == "Neutral" or own.OwnerType == ""
-		-- Prefer unowned/neutral; skip own holdings
-		if not ownedByMe and (isNeutral or (own and own.OwnerType ~= "Player")) then
-			-- Prefer truly neutral over NPC/clan when choosing "unowned" target
-			local weight = if isNeutral then 0 else 80
-			local d = (def.Position - from).Magnitude + weight
-			if d < bestDist then
-				bestDist = d
-				bestId = def.DisplayName
-				bestPos = def.Position
-			end
-		end
+-- inside your own plot square (BaseConfig.PlotSize centred on the plot position) + the configured margin
+local function insideOwnPlot(pos: Vector3, center: Vector3): boolean
+	local size = BaseConfig.PlotSize
+	local m = C.OwnPlotMarginStuds
+	return math.abs(pos.X - center.X) <= size.X / 2 + m and math.abs(pos.Z - center.Z) <= size.Z / 2 + m
+end
+
+-- bearing of `to` relative to the camera look, degrees clockwise (0 = straight ahead = arrow up)
+local function relativeBearing(from: Vector3, to: Vector3, look: Vector3): number
+	local dx, dz = to.X - from.X, to.Z - from.Z
+	if dx * dx + dz * dz < 1e-4 then
+		return 0
 	end
-	if bestId and bestPos then
-		return bestId, bestPos, (bestPos - from).Magnitude
+	local lx, lz = look.X, look.Z
+	if lx * lx + lz * lz < 0.0025 then
+		lx, lz = 0, -1
 	end
-	return nil, nil, nil
+	local worldAngle = math.deg(math.atan2(dx, -dz))
+	local lookAngle = math.deg(math.atan2(lx, -lz))
+	return (worldAngle - lookAngle) % 360
+end
+
+local function setKnown(known: boolean)
+	if known == baseKnown then
+		return
+	end
+	baseKnown = known
+	if chip then
+		HudLayout.RefreshVisibility(chip)
+	end
 end
 
 local function tickCompass()
-	if not baseLabel or not outpostLabel then
-		return
-	end
 	local pos, look = getRoot()
-	if not pos or not look then
-		baseLabel.Text = "⌂ BASE  —"
-		outpostLabel.Text = "◎ OUTPOST  —"
+	local center = baseWorldPos()
+	if not center then
+		setKnown(false)
 		return
 	end
-
-	local bPos = baseWorldPos()
-	if bPos then
-		local dist = (bPos - pos).Magnitude
-		if dist < 45 then
-			baseLabel.Text = "⌂ BASE  HERE"
-		else
-			local dir = bearingLabel(pos, bPos, look)
-			baseLabel.Text = string.format("⌂ BASE  %s  %s", dir, formatDist(dist))
-		end
-	else
-		baseLabel.Text = "⌂ BASE  …"
+	if not pos or not look then
+		return -- respawning: keep the last state
 	end
-
-	local name, tPos, dist = nearestUnowned(pos)
-	if name and tPos and dist then
-		if dist < 55 then
-			outpostLabel.Text = string.format("◎ %s  HERE", name)
-		else
-			local dir = bearingLabel(pos, tPos, look)
-			outpostLabel.Text = string.format("◎ %s  %s  %s", name, dir, formatDist(dist))
-		end
-	else
-		outpostLabel.Text = "◎ OUTPOST  all held"
+	local inPlot = insideOwnPlot(pos, center)
+	HudLayout.SetFlag("InOwnPlot", inPlot)
+	setKnown(true)
+	if inPlot and C.HideInsideOwnPlot then
+		return
+	end
+	if arrow then
+		HudIcons.SetRotation(arrow, relativeBearing(pos, center, look))
+	end
+	if distLabel then
+		distLabel.Text = formatDist(Vector3.new(center.X - pos.X, 0, center.Z - pos.Z).Magnitude)
 	end
 end
 
-function CompassController.Init()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "WarEmpireCompass"
-	gui.DisplayOrder = 20
-	gui.ResetOnSpawn = false
-	gui.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(gui, false)
+local function buildChip(area: Frame)
+	local c = Instance.new("TextButton")
+	c.Name = "Compass"
+	c.AnchorPoint = Vector2.new(1, 1)
+	c.Position = UDim2.new(1, -TS.EdgePad, 1, -TS.BottomPad + TS.YNudge)
+	c.Size = UDim2.fromOffset(C.MinWidth, TS.Height)
+	c.AutomaticSize = Enum.AutomaticSize.X
+	c.BackgroundColor3 = TS.Bg
+	c.BackgroundTransparency = TS.BgTransparency
+	c.BorderSizePixel = 0
+	c.AutoButtonColor = false
+	c.Text = ""
+	c.Active = true
+	c.Selectable = true
+	UIUtil.Corner(c, TS.Corner)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 10)
+	pad.PaddingRight = UDim.new(0, 16)
+	pad.Parent = c
+	local list = Instance.new("UIListLayout")
+	list.FillDirection = Enum.FillDirection.Horizontal
+	list.VerticalAlignment = Enum.VerticalAlignment.Center
+	list.Padding = UDim.new(0, 7)
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Parent = c
 
-	local frame = Instance.new("Frame")
-	frame.Name = "Compass"
-	frame.AnchorPoint = Vector2.new(1, 0)
-	frame.Position = UDim2.new(1, -16, 0, 100)
-	frame.Size = UDim2.fromOffset(210, 52)
-	frame.BackgroundColor3 = Constants.Colors.Panel
-	frame.BackgroundTransparency = 0.22
-	frame.BorderSizePixel = 0
-	frame.Parent = gui
-	UIUtil.Corner(frame, 8)
-	UIUtil.Stroke(frame, Color3.fromRGB(70, 100, 80), 1)
+	local box = Instance.new("Frame")
+	box.Name = "ArrowBox"
+	box.LayoutOrder = 1
+	box.Size = UDim2.fromOffset(C.ArrowBox, C.ArrowBox)
+	box.BackgroundColor3 = Color3.new(1, 1, 1)
+	box.BackgroundTransparency = 0.88
+	box.BorderSizePixel = 0
+	box.Active = false
+	box.Parent = c
+	UIUtil.Corner(box, math.ceil(C.ArrowBox / 2))
+	arrow = HudIcons.Make("Arrow", box, {
+		Name = "Arrow",
+		Size = UDim2.fromOffset(C.ArrowSize, C.ArrowSize),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Color = C.ArrowColor,
+		ZIndex = 2,
+	})
+
+	-- RadarReveal: 8 px pulsing purple dot at the chip's left edge (TerritoryController sets the "Radar" flag)
+	local dot = Instance.new("Frame")
+	dot.Name = "RadarDot"
+	dot.AnchorPoint = Vector2.new(1, 0.5)
+	dot.Position = UDim2.new(0, -1, 0.5, 0)
+	dot.Size = UDim2.fromOffset(8, 8)
+	dot.BackgroundColor3 = C.RadarDot
+	dot.BorderSizePixel = 0
+	dot.Active = false
+	dot.ZIndex = 3
+	dot.Parent = box
+	UIUtil.Corner(dot, 4)
+	HudLayout.BindVisibility(dot, { ShowWhen = { "Radar" } })
+	local pulse: Tween? = nil
+	local function syncPulse()
+		local on = HudLayout.GetFlag("Radar")
+		if on and not pulse then
+			dot.BackgroundTransparency = 0
+			pulse = TweenService:Create(dot, TweenInfo.new(0.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), { BackgroundTransparency = 0.7 })
+			if pulse then
+				pulse:Play()
+			end
+		elseif not on and pulse then
+			pulse:Cancel()
+			pulse = nil
+			dot.BackgroundTransparency = 0
+		end
+	end
+	HudLayout.FlagChanged:Connect(function(name: string)
+		if name == "Radar" then
+			syncPulse()
+		end
+	end)
+	syncPulse()
 
 	local base = Instance.new("TextLabel")
-	base.Name = "BaseHint"
+	base.Name = "BaseLabel"
+	base.LayoutOrder = 2
 	base.BackgroundTransparency = 1
-	base.Position = UDim2.fromOffset(8, 4)
-	base.Size = UDim2.new(1, -12, 0, 20)
-	base.Font = Enum.Font.GothamBold
-	base.TextSize = 12
-	base.TextXAlignment = Enum.TextXAlignment.Left
-	base.TextColor3 = Color3.fromRGB(160, 220, 170)
-	base.Text = "⌂ BASE  —"
-	base.Parent = frame
-	baseLabel = base
+	base.Size = UDim2.new(0, 0, 1, 0)
+	base.AutomaticSize = Enum.AutomaticSize.X
+	base.Font = HudConfig.Fonts.Body
+	base.TextSize = C.LabelSize
+	base.TextColor3 = HudConfig.Colors.White
+	base.TextTransparency = 0.15
+	base.Text = "BASE"
+	base.Active = false
+	base.Parent = c
 
-	local out = Instance.new("TextLabel")
-	out.Name = "OutpostHint"
-	out.BackgroundTransparency = 1
-	out.Position = UDim2.fromOffset(8, 26)
-	out.Size = UDim2.new(1, -12, 0, 20)
-	out.Font = Enum.Font.GothamMedium
-	out.TextSize = 12
-	out.TextXAlignment = Enum.TextXAlignment.Left
-	out.TextColor3 = Color3.fromRGB(220, 200, 120)
-	out.Text = "◎ OUTPOST  —"
-	out.Parent = frame
-	outpostLabel = out
+	local dist = Instance.new("TextLabel")
+	dist.Name = "Distance"
+	dist.LayoutOrder = 3
+	dist.BackgroundTransparency = 1
+	dist.Size = UDim2.new(0, 0, 1, 0)
+	dist.AutomaticSize = Enum.AutomaticSize.X
+	dist.Font = HudConfig.Fonts.Display
+	dist.TextSize = C.DistanceSize
+	dist.TextColor3 = HudConfig.Colors.White
+	dist.Text = "…"
+	dist.Active = false
+	dist.Parent = c
+	UIUtil.TextOutline(dist, TS.TextStroke)
+	distLabel = dist
 
-	Remotes.GetEvent(Constants.RemoteNames.BaseStateUpdate).OnClientEvent:Connect(function(basePayload: Types.BaseStatePayload)
-		if typeof(basePayload.PlotId) == "number" then
+	c.Activated:Connect(function()
+		if C.TapOpensTerritories then
+			HudLayout.Emit("CompassTapped")
+		end
+	end)
+	c.Parent = area
+	chip = c
+	local hideWhen = if C.HideInsideOwnPlot then { "InOwnPlot", "Modal" } else { "Modal" }
+	HudLayout.BindVisibility(c, { HideWhen = hideWhen }, function(): boolean
+		return baseKnown
+	end)
+	HudLayout.SetRect("Compass", c)
+end
+
+function CompassController.Init()
+	local area = HUDController.GetTopStripArea()
+	if area then
+		buildChip(area)
+	else
+		warn("[CompassController] no TopStrip area — compass chip skipped")
+	end
+
+	-- plot id: BindEvent (never an infinite WaitForChild on a remote)
+	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(basePayload: Types.BaseStatePayload)
+		if typeof(basePayload) == "table" and typeof(basePayload.PlotId) == "number" then
 			myPlotId = basePayload.PlotId
 		end
 	end)
-
-	Remotes.GetEvent(Constants.RemoteNames.PlayerStateUpdate).OnClientEvent:Connect(function(state: Types.PlayerStatePayload)
-		if state.Base and typeof(state.Base.PlotId) == "number" then
+	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: Types.PlayerStatePayload)
+		if typeof(state) == "table" and state.Base and typeof(state.Base.PlotId) == "number" then
 			myPlotId = state.Base.PlotId
 		end
 	end)
 
-	Remotes.GetEvent(Constants.RemoteNames.TerritoryStateUpdate).OnClientEvent:Connect(function(payload: Types.TerritoryStatePayload)
-		for _, entry in ipairs(payload.Territories) do
-			territoryOwners[entry.Id] = {
-				OwnerType = entry.OwnerType,
-				OwnerUserId = entry.OwnerUserId or 0,
-			}
-		end
-	end)
-
-	RunService.Heartbeat:Connect(function(dt)
+	RunService.Heartbeat:Connect(function(dt: number)
 		accum += dt
-		if accum >= 0.25 then
+		if accum >= C.TickSeconds then
 			accum = 0
 			tickCompass()
 		end

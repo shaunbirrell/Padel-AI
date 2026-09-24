@@ -48,17 +48,33 @@ local OrdersConfig = {
 		Retreat = "RETREATING",
 	},
 
+	-- v70 Army popover (spec §3.8): never auto-shown. The rail's Army tile / Y toggles it; it sits right of the
+	-- tile (AnchorPoint 0,0.5 at tile right + GapFromTile, tile centre, clamped to the safe area). Sizes are in v
+	-- under the one HUD UIScale (HudLayout.ApplyScreen: 0.70 on phones), so 64 v = 44.8 real px.
 	Walkie = {
-		PositionTouch = UDim2.new(0, 10, 1, -240), -- clear of dock; less screen cover
-		PositionDesktop = UDim2.new(0, 16, 1, -110),
-		Size = UDim2.fromOffset(180, 152),
-		-- v40: Shaun SQUAD ORDERS huge on left — cap ~220px; MinTouch 56; MobileScale max lower
-		SizeTouch = UDim2.fromOffset(200, 168),
-		MinTouchPx = 56,
-		PanelMaxWidth = 220,
-		PanelMaxHeight = 190,
-		MobileScaleMax = 0.85, -- was PrepareScreen default 1.1 blowing up walkie
-		MobileScaleMin = 0.65,
+		Size = UDim2.fromOffset(216, 180), -- desktop: title + 2×2 cells of 100×44 v + MANAGE row 40 v
+		SizeTouch = UDim2.fromOffset(216, 244), -- 2×2 cells of 96×64 v + title + MANAGE row
+		MinTouchPx = 64, -- v; 56 v × 0.70 = 39 px was under the 44 px touch minimum
+		PanelMaxWidth = 240, -- popover 216 v + padding (UISizeConstraint)
+		PanelMaxHeight = 260,
+		GapFromTile = 10, -- v between the Army tile's right edge and the popover
+		EdgeMargin = 8, -- v kept free between the popover (incl. its corner ✕) and the safe-area edges
+		Pad = 6,
+		TitleHeight = 28,
+		TitleSize = 22, -- "ARMY 5/20" (Display font)
+		CellGap = 4,
+		CellHeightDesktop = 44,
+		ManageHeightDesktop = 40,
+		CellTextSize = 18,
+		CaptionSize = 16, -- desktop "ORDERS 1-4 · T" hint, hotkey digits
+		CloseFace = 30, -- v ✕ disc centred on the popover's top-right corner (hit = MinTouchPx on touch)
+		Bg = Color3.fromRGB(22, 24, 28),
+		BgTransparency = 0.08,
+		Accent = Color3.fromRGB(72, 220, 96), -- the Army rail tile's accent: popover + cell strokes
+		CellBg = Color3.fromRGB(32, 36, 42),
+		ActiveBg = Color3.fromRGB(40, 132, 60), -- the order the squad follows now
+		ManageBg = Color3.fromRGB(16, 58, 28),
+		HotkeyToastSeconds = 1.6, -- T with the popover closed → local Info toast "Squad: FOLLOW"
 	},
 }
 

@@ -4,7 +4,15 @@
 	rows fire RequestPurchaseWeapon / RequestEquipWeapon with the weapon id only; CombatService prices,
 	level-checks, rate-limits and grants. The Armory terminal (WE_OpenPanel "Shop", weapons prompt) opens the
 	WEAPONS tab. One-time DevProducts (MonetizationConfig OneTime) show OWNED once owned and are never
-	re-prompted. ]]
+	re-prompted.
+	v70 "clean screen" (spec §3.3 / §3.4 / §3.8 / §4.3):
+	  * A registered Modal panel (HudLayout id "Shop") with the black dim; one HUD scale + safe area; every
+	    tappable ≥ 44 real px on touch. Gold (> 0) shows in the header (it left the cash pill).
+	  * OpenCashPacks(): the cash pill's + opens the SUPPLY tab with the Cash Pack Mega row highlighted.
+	  * The seven upsell cards (StarterBundleToast, AutoCollectToast, DoubleCashToast, VIPToast, SpeedBoostToast,
+	    CashMegaToast, DeathShopToast) are thin wrappers around NotificationController.ShowOffer — ONE throttled
+	    offer toast in the top-centre stack. OnGet = the same promptDevProduct / promptGamePass as before.
+	  * AtmRaidHud is the TopStack "Progress" pill (was a full-width chip over the jump button). ]]
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -12,6 +20,7 @@ local CollectionService = game:GetService("CollectionService")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
+local TextService = game:GetService("TextService")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
@@ -19,9 +28,15 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local WeaponConfig = require(Shared.Configs.WeaponConfig)
+local HudConfig = require(Shared.Configs.HudConfig)
 local NotificationController = require(script.Parent.NotificationController)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
+local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 
 local ShopController = {}
+
+local PANEL_ID = "Shop"
 
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
@@ -29,6 +44,11 @@ local menuOpen = false
 local pendingCashMegaHighlight = false
 local shopListFrame: ScrollingFrame? = nil
 local screenGui: ScreenGui? = nil
+local shell: PanelShell.Shell? = nil
+local goldChip: Frame? = nil
+local goldText: TextLabel? = nil
+-- UserOwnsGamePassAsync results (refreshed every 20 s by the premium-pad block); read without yielding
+local ownedCache: { [string]: boolean } = {}
 
 -- v69: tabs
 local panelTitle: TextLabel? = nil
@@ -136,6 +156,43 @@ local function isOneTimeOwned(productKey: string): boolean
 		return true
 	end
 	return false
+end
+
+--[[ v70: a GamePass is known owned (display / offer gating only): bought this session, replicated by the server
+	(WE_Ent_<passKey>, MonetizationService), or a cached UserOwnsGamePassAsync hit. Never yields. ]]
+local function passOwnedKnown(passKey: string): boolean
+	if sessionOwnedPasses[passKey] == true then
+		return true
+	end
+	if player:GetAttribute("WE_Ent_" .. passKey) == true then
+		return true
+	end
+	return ownedCache[passKey] == true
+end
+
+--[[ v70 (spec §4.3): every upsell goes through ONE offer toast (throttled / deferred by NotificationController). ]]
+type OfferDef = { Key: string, Title: string, Sub: string?, Cta: string, OnGet: () -> () }
+local function showOffer(def: OfferDef): boolean
+	local fn = (NotificationController :: any).ShowOffer
+	if typeof(fn) ~= "function" then
+		return false
+	end
+	local ok, shown = pcall(fn, def)
+	return ok and shown == true
+end
+
+local function ctaFor(robux: number?): string
+	return if robux and robux > 0 then string.format("GET R$ %d", robux) else "GET"
+end
+
+local function refreshGold()
+	local chip, lab = goldChip, goldText
+	if not (chip and lab) then
+		return
+	end
+	local g = math.floor(tonumber(player:GetAttribute("WE_Gold")) or 0)
+	chip.Visible = g > 0
+	lab.Text = formatCash(g) .. " GOLD"
 end
 
 local function ownedWeapons(): { [string]: boolean }
@@ -247,11 +304,9 @@ local function highlightCashMegaRow()
 		return
 	end
 	row.BackgroundColor3 = Color3.fromRGB(90, 70, 30)
-	local stroke = row:FindFirstChildOfClass("UIStroke")
-	if not stroke then
-		stroke = Instance.new("UIStroke")
-		stroke.Parent = row
-	end
+	local found = row:FindFirstChildOfClass("UIStroke")
+	local stroke: UIStroke = found or Instance.new("UIStroke")
+	stroke.Parent = row
 	stroke.Color = Constants.Colors.Gold
 	stroke.Thickness = 2.5
 	-- Scroll to top (CashMega is first)
@@ -261,7 +316,7 @@ local function highlightCashMegaRow()
 	task.delay(4, function()
 		if row.Parent then
 			row.BackgroundColor3 = Constants.Colors.Background
-			if stroke and stroke.Parent then
+			if stroke.Parent then
 				stroke.Thickness = 0
 			end
 		end
@@ -275,6 +330,13 @@ local function setOpen(open: boolean)
 		if panel and panel:IsA("GuiObject") then
 			panel.Visible = open
 		end
+	end
+	local sh = shell
+	if sh then
+		sh.Sync(open)
+	end
+	if open then
+		refreshGold()
 	end
 	-- v35: optional CashMega highlight when shop opens from death continuity
 	if open and pendingCashMegaHighlight then
@@ -328,16 +390,20 @@ end
 
 function ShopController.Init()
 
-	-- v30: PvP death → mobile-friendly toast (DoubleCash GP + SpeedBoost DP). Debounced; no auto-spam Marketplace.
+	-- v30 → v70: PvP death → ONE offer toast (DoubleCash GP / SpeedBoost DP …), no longer a card with a button
+	-- per product. DEATH_TOAST_DEBOUNCE stays the client floor; HudConfig.Offer.DeathOfferMinGapSeconds (the
+	-- "^Death" offer key) is the real cap. v35 continuity kept: the next Shop open highlights ShopRow_CashMega.
 	do
-		local lastDeathToastAt = 0
+		local lastDeathToastAt = -math.huge
 		local DEATH_TOAST_DEBOUNCE = 10
-		local deathToast: Frame? = nil
 
 		local function resolveOfferPrompt(key: string): (string?, string?, number?, string?)
 			-- Prefer live GamePass, then live DevProduct (DoubleCash is GP; SpeedBoost is DP)
 			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
 			if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
+				if passOwnedKnown(key) then
+					return nil, nil, nil, nil
+				end
 				return "GamePass", key, gp.Id, gp.DisplayName or key
 			end
 			-- v69: never offer a one-time product the player already owns (e.g. Speed Boost)
@@ -355,270 +421,145 @@ function ShopController.Init()
 			return nil, nil, nil, nil
 		end
 
-		local function destroyDeathToast()
-			if deathToast then
-				deathToast:Destroy()
-				deathToast = nil
-			end
-		end
-
-		local function showDeathOfferToast(offerKeys: { string })
+		-- the first live, not-owned offer of the server's list becomes the death offer toast
+		local function DeathShopToast(offerKeys: { string }): boolean
 			local now = os.clock()
 			if now - lastDeathToastAt < DEATH_TOAST_DEBOUNCE then
-				return
+				return false
 			end
-			lastDeathToastAt = now
-			destroyDeathToast()
-
-			local live: { { Kind: string, Key: string, Id: number, Name: string } } = {}
 			for _, key in ipairs(offerKeys) do
-				local kind, k, id, name = resolveOfferPrompt(key)
-				if kind and k and id and name then
-					table.insert(live, { Kind = kind, Key = k, Id = id, Name = name })
+				local kind, k, _, name = resolveOfferPrompt(key)
+				if kind and k and name then
+					lastDeathToastAt = now
+					local def: any = if kind == "GamePass"
+						then (MonetizationConfig.GamePasses :: any)[k]
+						else (MonetizationConfig.DevProducts :: any)[k]
+					local robux = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
+					local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else nil
+					pendingCashMegaHighlight = true -- v35: CashMega highlight if the shop opens next
+					local offerKind, offerKey = kind, k
+					return showOffer({
+						Key = "DeathShopToast",
+						Title = "Back stronger: " .. name,
+						Sub = desc or "Boost after death",
+						Cta = ctaFor(robux),
+						OnGet = function()
+							if offerKind == "GamePass" then
+								promptGamePass(offerKey)
+							else
+								promptDevProduct(offerKey)
+							end
+						end,
+					})
 				end
 			end
-			if #live == 0 then
-				return
-			end
-
-			local host = screenGui
-			if not host then
-				local pg = player:FindFirstChild("PlayerGui")
-				local existing = pg and pg:FindFirstChild("WarEmpireShop")
-				if existing and existing:IsA("ScreenGui") then
-					host = existing
-					screenGui = existing
-				else
-					return
-				end
-			end
-			local toast = Instance.new("Frame")
-			toast.Name = "DeathShopToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 132) else UDim2.fromOffset(360, 120)
-			toast.BackgroundColor3 = Constants.Colors.Panel
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Constants.Colors.Gold
-			stroke.Thickness = 1.5
-			stroke.Parent = toast
-			toast.Parent = host
-			deathToast = toast
-			pendingCashMegaHighlight = true -- v35: CashMega highlight if shop opens
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -56, 0, 22)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 16 else 15
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Constants.Colors.Gold
-			title.Text = "Boost after death?"
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local sub = Instance.new("TextLabel")
-			sub.BackgroundTransparency = 1
-			sub.Position = UDim2.fromOffset(12, 30)
-			sub.Size = UDim2.new(1, -24, 0, 18)
-			sub.Font = Enum.Font.Gotham
-			sub.TextSize = 11
-			sub.TextXAlignment = Enum.TextXAlignment.Left
-			sub.TextColor3 = Constants.Colors.Muted
-			sub.Text = "Tap a Robux offer — grants via ProcessReceipt / GamePass only"
-			sub.ZIndex = 81
-			sub.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.AnchorPoint = Vector2.new(1, 0)
-			dismiss.Position = UDim2.new(1, -8, 0, 6)
-			dismiss.Size = UDim2.fromOffset(36, 36)
-			dismiss.BackgroundColor3 = Constants.Colors.Background
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.Text = "X"
-			dismiss.TextColor3 = Constants.Colors.Text
-			dismiss.BorderSizePixel = 0
-			dismiss.ZIndex = 82
-			corner(dismiss, 6)
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroyDeathToast)
-
-			local rowY = 56
-			local btnH = if isTouch then 48 else 40
-			-- Equal-split buttons via scale (no fixed btnW)
-			for i, offer in ipairs(live) do
-				local btn = Instance.new("TextButton")
-				btn.Name = "DeathOffer_" .. offer.Key
-				btn.Position = UDim2.new((i - 1) / #live, 8, 0, rowY)
-				btn.Size = UDim2.new(1 / #live, -12, 0, btnH)
-				btn.BackgroundColor3 = Constants.Colors.Gunmetal
-				btn.Font = Enum.Font.GothamBold
-				btn.TextSize = if isTouch then 13 else 12
-				btn.TextColor3 = Constants.Colors.Gold
-				btn.Text = offer.Name
-				btn.TextWrapped = true
-				btn.BorderSizePixel = 0
-				btn.ZIndex = 82
-				corner(btn, 8)
-				local bs = Instance.new("UIStroke")
-				bs.Color = Constants.Colors.Gold
-				bs.Thickness = 1.25
-				bs.Parent = btn
-				btn.Parent = toast
-				UIUtil.EnsureMinTouch(btn, if isTouch then 48 else 44)
-				local kind, key = offer.Kind, offer.Key
-				btn.Activated:Connect(function()
-					destroyDeathToast()
-					if kind == "GamePass" then
-						promptGamePass(key)
-					else
-						promptDevProduct(key)
-				end
-				end)
-			end
-
-			-- v35: optional open shop → CashMega highlight continuity
-			do
-				local shopBtn = Instance.new("TextButton")
-				shopBtn.Name = "DeathOffer_OpenShop"
-				shopBtn.Position = UDim2.fromOffset(12, rowY + btnH + 6)
-				shopBtn.Size = UDim2.new(1, -24, 0, if isTouch then 36 else 28)
-				shopBtn.BackgroundColor3 = Constants.Colors.Background
-				shopBtn.Font = Enum.Font.GothamBold
-				shopBtn.TextSize = 12
-				shopBtn.TextColor3 = Constants.Colors.Gold
-				shopBtn.Text = "Open Shop · Cash Mega"
-				shopBtn.BorderSizePixel = 0
-				shopBtn.ZIndex = 82
-				corner(shopBtn, 6)
-				shopBtn.Parent = toast
-				-- Grow toast a bit for the extra row
-				toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 168) else UDim2.fromOffset(360, 156)
-				UIUtil.EnsureMinTouch(shopBtn, 44)
-				shopBtn.Activated:Connect(function()
-					destroyDeathToast()
-					pendingCashMegaHighlight = true
-					setOpen(true)
-				end)
-			end
-
-			task.delay(12, function()
-				if deathToast == toast then
-					destroyDeathToast()
-				end
-			end)
+			return false
 		end
 
-		local remote = Remotes.GetEvent(Constants.RemoteNames.DeathShopOffer)
-		if remote then
-			remote.OnClientEvent:Connect(function(payload: any)
-				local offers = if typeof(payload) == "table" then (payload :: any).Offers else nil
-				if typeof(offers) ~= "table" then
-					offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
-				end
-				-- Wait for screenGui (Init continues below); defer one frame if needed
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.15)
-					end
-					showDeathOfferToast(offers :: { string })
-				end)
-			end)
-		end
+		-- DeathShopOffer never blocks Init (BindEvent connects when the remote appears)
+		Remotes.BindEvent(Constants.RemoteNames.DeathShopOffer, function(payload: any)
+			local offers = if typeof(payload) == "table" then (payload :: any).Offers else nil
+			if typeof(offers) ~= "table" then
+				offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
+			end
+			DeathShopToast(offers :: { string })
+		end)
 	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireShop"
-	screen.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(screen, false)
 	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
+	-- v70: one HUD scale + the safe area (HudLayout.ApplyScreen via PanelShell); DisplayOrder stays Panels = 60
+	PanelShell.Screen(screen, HudConfig.DisplayOrder.Panels)
+	screen.Parent = player:WaitForChild("PlayerGui")
 	screenGui = screen
 
-	local toggle = Instance.new("TextButton")
-	toggle.Name = "ShopToggle"
-	toggle.AnchorPoint = Vector2.new(0, 1)
-	toggle.Position = UDim2.new(0, 136, 1, -16)
-	toggle.Size = UDim2.fromOffset(88, 44)
-	toggle.BackgroundColor3 = Constants.Colors.Gunmetal
-	toggle.Font = Enum.Font.GothamBold
-	toggle.TextSize = 14
-	toggle.TextColor3 = Constants.Colors.Gold
-	toggle.Text = "SHOP"
-	toggle.BorderSizePixel = 0
-	toggle.Visible = false -- docked in HUD MobileActionBar
-	corner(toggle, 8)
-	local toggleStroke = Instance.new("UIStroke")
-	toggleStroke.Color = Constants.Colors.Gold
-	toggleStroke.Thickness = 1.5
-	toggleStroke.Parent = toggle
-	toggle.Parent = screen
-	UIUtil.EnsureMinTouch(toggle, 44)
-	toggle.Activated:Connect(function()
-		setOpen(not menuOpen)
-	end)
-
+	local TAP = PanelShell.TouchMinV()
 	local panel = Instance.new("Frame")
 	panel.Name = "Panel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = if isTouch then UDim2.new(0.92, 0, 0.72, 0) else UDim2.fromOffset(400, 400)
+	panel.Size = if isTouch then UDim2.new(0.94, 0, 1, -16) else UDim2.fromOffset(480, 520)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BorderSizePixel = 0
+	panel.Active = true
 	panel.Visible = false
 	panel.Parent = screen
-	corner(panel, 10)
+	corner(panel, 12)
+	do
+		local cap = Instance.new("UISizeConstraint")
+		cap.MaxSize = if isTouch then Vector2.new(900, 620) else Vector2.new(480, 520)
+		cap.Parent = panel
+	end
 
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(16, 10)
-	title.Size = UDim2.new(1, -80, 0, 28)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 20
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextColor3 = Constants.Colors.Text
-	title.Text = "Supply Depot"
-	title.Parent = panel
+	local title = PanelShell.Title(panel, "Supply Depot")
 	panelTitle = title
 
-	local close = Instance.new("TextButton")
-	close.AnchorPoint = Vector2.new(1, 0)
-	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(48, 48)
-	close.BackgroundColor3 = Constants.Colors.Background
-	close.Font = Enum.Font.GothamBold
-	close.Text = "X"
-	close.TextColor3 = Constants.Colors.Text
-	close.BorderSizePixel = 0
-	corner(close, 6)
-	close.Parent = panel
-	UIUtil.EnsureMinTouch(close, 48)
-	close.Activated:Connect(function()
+	-- v70: Gold left the cash pill; it shows here, only while the player has any (WE_Gold / EconomyUpdate)
+	do
+		local goldSize = PanelShell.Text(18)
+		local chip = Instance.new("Frame")
+		chip.Name = "Gold"
+		chip.AnchorPoint = Vector2.new(1, 0.5)
+		chip.Position = UDim2.new(1, -(TAP + 12), 0, title.Position.Y.Offset + title.Size.Y.Offset / 2)
+		chip.Size = UDim2.fromOffset(170, goldSize + 12)
+		chip.BackgroundTransparency = 1
+		chip.Visible = false
+		chip.Parent = panel
+		local lay = Instance.new("UIListLayout")
+		lay.FillDirection = Enum.FillDirection.Horizontal
+		lay.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		lay.VerticalAlignment = Enum.VerticalAlignment.Center
+		lay.Padding = UDim.new(0, 6)
+		lay.SortOrder = Enum.SortOrder.LayoutOrder
+		lay.Parent = chip
+		HudIcons.Make("Dot", chip, {
+			Size = UDim2.fromOffset(goldSize - 2, goldSize - 2),
+			LayoutOrder = 1,
+			Color = HudConfig.Colors.Gold,
+			Fill = Constants.Colors.Panel,
+		})
+		local lab = Instance.new("TextLabel")
+		lab.Name = "Amount"
+		lab.LayoutOrder = 2
+		lab.BackgroundTransparency = 1
+		lab.Size = UDim2.fromOffset(0, goldSize + 6)
+		lab.AutomaticSize = Enum.AutomaticSize.X -- the dot hugs the number
+		lab.Font = HudConfig.Fonts.Display
+		lab.TextSize = goldSize
+		lab.TextColor3 = HudConfig.Colors.Gold
+		lab.TextXAlignment = Enum.TextXAlignment.Right
+		lab.Text = "0 GOLD"
+		lab.Parent = chip
+		UIUtil.TextOutline(lab, 1.5)
+		goldChip = chip
+		goldText = lab
+	end
+
+	PanelShell.CloseButton(panel, function()
 		setOpen(false)
 	end)
 
 	-- v69: SUPPLY / WEAPONS tabs under the title (the close button keeps the top-right corner)
+	local tabTop = TAP + 8
 	local tabBar = Instance.new("Frame")
 	tabBar.Name = "Tabs"
 	tabBar.BackgroundTransparency = 1
-	tabBar.Position = UDim2.fromOffset(12, 44)
-	tabBar.Size = UDim2.new(1, -84, 0, 44)
+	tabBar.Position = UDim2.fromOffset(12, tabTop)
+	tabBar.Size = UDim2.new(1, -24, 0, TAP)
 	tabBar.Parent = panel
 	local function makeTab(name: string, text: string, index: number)
 		local b = Instance.new("TextButton")
 		b.Name = "Tab_" .. name
 		b.Position = UDim2.new((index - 1) * 0.5, if index == 1 then 0 else 4, 0, 0)
-		b.Size = UDim2.new(0.5, -4, 1, 0) -- 44 px tall: full touch target without EnsureMinTouch
+		b.Size = UDim2.new(0.5, -4, 1, 0) -- TAP tall: a full touch target without EnsureMinTouch
 		b.BackgroundColor3 = Constants.Colors.Gunmetal
 		b.Font = Enum.Font.GothamBold
-		b.TextSize = 13
+		b.TextSize = PanelShell.Text(13)
 		b.TextColor3 = Constants.Colors.Muted
 		b.Text = text
 		b.BorderSizePixel = 0
-		corner(b, 6)
+		b.Active = true
+		corner(b, 8)
 		b.Parent = tabBar
 		b.Activated:Connect(function()
 			selectTab(name)
@@ -628,14 +569,16 @@ function ShopController.Init()
 	makeTab("Supply", "SUPPLY · R$", 1)
 	makeTab("Weapons", "WEAPONS · CASH", 2)
 
+	local listTop = tabTop + TAP + 8
+	local noteSize = PanelShell.Text(11)
 	local function makeList(name: string, noteText: string): ScrollingFrame
 		local l = Instance.new("ScrollingFrame")
 		l.Name = "List_" .. name
-		l.Position = UDim2.fromOffset(12, 96)
-		l.Size = UDim2.new(1, -24, 1, -108)
+		l.Position = UDim2.fromOffset(12, listTop)
+		l.Size = UDim2.new(1, -24, 1, -(listTop + 12))
 		l.BackgroundTransparency = 1
 		l.BorderSizePixel = 0
-		l.ScrollBarThickness = 4
+		l.ScrollBarThickness = if isTouch then 6 else 4
 		l.CanvasSize = UDim2.fromOffset(0, 0)
 		l.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		l.Visible = name == activeTab
@@ -647,9 +590,9 @@ function ShopController.Init()
 		local n = Instance.new("TextLabel")
 		n.Name = "Note"
 		n.BackgroundTransparency = 1
-		n.Size = UDim2.new(1, -8, 0, 30)
-		n.Font = Enum.Font.Gotham
-		n.TextSize = 11
+		n.Size = UDim2.new(1, -8, 0, noteSize * 2 + 6)
+		n.Font = Enum.Font.GothamMedium
+		n.TextSize = noteSize
 		n.TextWrapped = true
 		n.TextXAlignment = Enum.TextXAlignment.Left
 		n.TextColor3 = Constants.Colors.Muted
@@ -663,37 +606,42 @@ function ShopController.Init()
 	shopListFrame = list
 	local weaponList = makeList(
 		"Weapons",
-		"Weapons cost in-game Cash. EQUIP owned weapons here, or cycle them with Q / E (◀ ▶ on mobile)."
+		"Weapons cost in-game Cash. EQUIP owned weapons here; draw them from the hotbar (tap a slot or press 1-4)."
 	)
 	selectTab(activeTab)
 
+	local rowBtnH = if isTouch then TAP else 48
+	local rowBtnW = if isTouch then 140 else 100
+	local rowTitleSize = PanelShell.Text(14)
+	local rowSubSize = PanelShell.Text(11)
 	local function buildRow(parentList: ScrollingFrame, layoutOrder: number, rowName: string, label: string, sub: string, btnText: string): (Frame, TextLabel, TextButton)
 		local row = Instance.new("Frame")
 		row.Name = "ShopRow_" .. rowName
-		row.Size = UDim2.new(1, -8, 0, 56)
+		row.Size = UDim2.new(1, -8, 0, math.max(rowBtnH + 10, rowTitleSize + rowSubSize + 22))
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = layoutOrder
 		row.Parent = parentList
-		corner(row, 6)
+		corner(row, 8)
 
 		local t = Instance.new("TextLabel")
 		t.BackgroundTransparency = 1
-		t.Position = UDim2.fromOffset(10, 6)
-		t.Size = UDim2.new(1, -110, 0, 20)
+		t.Position = UDim2.fromOffset(12, 7)
+		t.Size = UDim2.new(1, -(rowBtnW + 30), 0, rowTitleSize + 4)
 		t.Font = Enum.Font.GothamBold
-		t.TextSize = 14
+		t.TextSize = rowTitleSize
 		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.TextTruncate = Enum.TextTruncate.AtEnd
 		t.TextColor3 = Constants.Colors.Text
 		t.Text = label
 		t.Parent = row
 
 		local s = Instance.new("TextLabel")
 		s.BackgroundTransparency = 1
-		s.Position = UDim2.fromOffset(10, 28)
-		s.Size = UDim2.new(1, -110, 0, 16)
-		s.Font = Enum.Font.Gotham
-		s.TextSize = 11
+		s.Position = UDim2.fromOffset(12, 7 + rowTitleSize + 6)
+		s.Size = UDim2.new(1, -(rowBtnW + 30), 0, rowSubSize + 4)
+		s.Font = Enum.Font.GothamMedium
+		s.TextSize = rowSubSize
 		s.TextXAlignment = Enum.TextXAlignment.Left
 		s.TextColor3 = Constants.Colors.Muted
 		s.TextTruncate = Enum.TextTruncate.AtEnd
@@ -704,20 +652,22 @@ function ShopController.Init()
 		btn.Name = "Action"
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
-		btn.Size = UDim2.fromOffset(if isTouch then 110 else 96, 48)
+		btn.Size = UDim2.fromOffset(rowBtnW, rowBtnH)
 		btn.BackgroundColor3 = Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 11
+		btn.TextSize = PanelShell.Text(12)
 		btn.TextColor3 = Color3.fromRGB(255, 248, 230)
 		btn.Text = btnText
 		btn.BorderSizePixel = 0
-		corner(btn, 6)
+		btn.Active = true
+		corner(btn, 8)
 		local btnStroke = Instance.new("UIStroke")
+		btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 		btnStroke.Color = Constants.Colors.Gold
 		btnStroke.Thickness = 1.25
 		btnStroke.Parent = btn
 		btn.Parent = row
-		UIUtil.EnsureMinTouch(btn, 44)
+		UIUtil.EnsureMinTouch(btn, rowBtnH)
 		return row, s, btn
 	end
 
@@ -758,9 +708,9 @@ function ShopController.Init()
 		elseif def.GrantEntitlement then
 			sub = (def.Description or ("Grants " .. tostring(def.GrantEntitlement)))
 		elseif def.Cash and def.Cash > 0 then
-			sub = string.format("+$%d Cash", def.Cash)
+			sub = "+$" .. formatCash(def.Cash) .. " Cash"
 		elseif def.Gold and def.Gold > 0 then
-			sub = string.format("+%d Gold", def.Gold)
+			sub = "+" .. formatCash(def.Gold) .. " Gold"
 		end
 		if stub then
 			sub = sub .. " · coming soon (no charge)"
@@ -925,7 +875,7 @@ function ShopController.Init()
 			end
 		end
 		for key, r in pairs(passRows) do
-			if sessionOwnedPasses[key] == true then
+			if passOwnedKnown(key) then
 				setRowButton(r.Btn, "OWNED", "owned")
 			end
 		end
@@ -1022,7 +972,6 @@ function ShopController.Init()
 
 	-- v31: VIP / AutoCollect / other GamePass pads → OWNED (hide R$ prompt look)
 	do
-		local ownedCache: { [string]: boolean } = {}
 		local function queryOwnsGamePass(key: string): boolean
 			if ownedCache[key] ~= nil then
 				return ownedCache[key] == true
@@ -1075,9 +1024,9 @@ function ShopController.Init()
 					end
 				end
 			end
-			-- v69: Shop pass rows show OWNED too (session purchases stay OWNED even if the check lags)
+			-- v69: Shop pass rows show OWNED too (session purchases / WE_Ent_<pass> stay OWNED even if the check lags)
 			for key, r in pairs(passRows) do
-				if sessionOwnedPasses[key] == true or queryOwnsGamePass(key) then
+				if passOwnedKnown(key) or queryOwnsGamePass(key) then
 					setRowButton(r.Btn, "OWNED", "owned")
 				else
 					setRowButton(r.Btn, r.Label, "buy")
@@ -1105,881 +1054,387 @@ function ShopController.Init()
 	end
 
 
-	-- v32: one-shot StarterBundle soft offer (server fires once per profile)
+	-- v32 → v70: one-shot StarterBundle soft offer (server fires once per profile) → ONE offer toast
 	do
-		local starterToast: Frame? = nil
-		local lastStarterToastAt = 0.0
+		local lastStarterToastAt = -math.huge
 		local STARTER_TOAST_DEBOUNCE = 30
 
-		local function destroyStarterToast()
-			if starterToast then
-				starterToast:Destroy()
-				starterToast = nil
-			end
-		end
-
-		local function showStarterBundleToast(payload: any)
+		local function StarterBundleToast(payload: any): boolean
 			local now = os.clock()
 			if now - lastStarterToastAt < STARTER_TOAST_DEBOUNCE then
-				return
+				return false
+			end
+			local def = (MonetizationConfig.DevProducts :: any).StarterBundle
+			if typeof(def) ~= "table" or (tonumber(def.Id) or 0) == 0 or isOneTimeOwned("StarterBundle") then
+				return false
 			end
 			lastStarterToastAt = now
-			destroyStarterToast()
-
-			local productId = if typeof(payload) == "table" then tonumber((payload :: any).ProductId) else nil
-			local displayName = if typeof(payload) == "table" then tostring((payload :: any).DisplayName or "Starter Bundle") else "Starter Bundle"
-			local robux = if typeof(payload) == "table" then tonumber((payload :: any).RobuxPrice) else nil
-			if not productId or productId == 0 then
-				local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.StarterBundle
-				if def and typeof(def.Id) == "number" and def.Id ~= 0 then
-					productId = def.Id
-					displayName = def.DisplayName or displayName
-					robux = def.RobuxPrice or robux
-				else
-					return
-				end
-			end
-
-			local host = screenGui
-			if not host then
-				local pg = player:FindFirstChild("PlayerGui")
-				local existing = pg and pg:FindFirstChild("WarEmpireShop")
-				if existing and existing:IsA("ScreenGui") then
-					host = existing
-					screenGui = existing
-				else
-					return
-				end
-			end
-
-			local toast = Instance.new("Frame")
-			toast.Name = "StarterBundleToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
-			toast.BackgroundColor3 = Constants.Colors.Panel
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Color3.fromRGB(80, 200, 120)
-			stroke.Thickness = 1.6
-			stroke.Parent = toast
-			toast.Parent = host
-			starterToast = toast
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -56, 0, 22)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 16 else 15
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Color3.fromRGB(120, 255, 160)
-			title.Text = "Jumpstart your base?"
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local sub = Instance.new("TextLabel")
-			sub.BackgroundTransparency = 1
-			sub.Position = UDim2.fromOffset(12, 30)
-			sub.Size = UDim2.new(1, -24, 0, 18)
-			sub.Font = Enum.Font.Gotham
-			sub.TextSize = 11
-			sub.TextXAlignment = Enum.TextXAlignment.Left
-			sub.TextColor3 = Constants.Colors.Muted
-			sub.Text = displayName .. (if robux then string.format(" · %d R$", robux) else "")
-			sub.ZIndex = 81
-			sub.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.AnchorPoint = Vector2.new(1, 0)
-			dismiss.Position = UDim2.new(1, -8, 0, 6)
-			dismiss.Size = UDim2.fromOffset(36, 36)
-			dismiss.BackgroundColor3 = Constants.Colors.Background
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.Text = "X"
-			dismiss.TextColor3 = Constants.Colors.Text
-			dismiss.BorderSizePixel = 0
-			dismiss.ZIndex = 82
-			corner(dismiss, 6)
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroyStarterToast)
-
-			local buy = Instance.new("TextButton")
-			buy.Position = UDim2.fromOffset(12, 58)
-			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
-			buy.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
-			buy.Font = Enum.Font.GothamBold
-			buy.TextSize = if isTouch then 15 else 14
-			buy.TextColor3 = Color3.fromRGB(240, 255, 245)
-			buy.Text = "Get Starter Bundle"
-			buy.BorderSizePixel = 0
-			buy.ZIndex = 82
-			corner(buy, 8)
-			buy.Parent = toast
-			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
-			buy.Activated:Connect(function()
-				destroyStarterToast()
-				-- PromptProductPurchase only — grants via ProcessReceipt
-				promptDevProduct("StarterBundle")
-			end)
-
-			task.delay(14, function()
-				if starterToast == toast then
-					destroyStarterToast()
-				end
-			end)
+			local p: any = if typeof(payload) == "table" then payload else {}
+			local displayName = tostring(p.DisplayName or def.DisplayName or "Starter Bundle")
+			local robux = tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)
+			return showOffer({
+				Key = "StarterBundleToast",
+				Title = "Jumpstart your base",
+				Sub = displayName,
+				Cta = ctaFor(robux),
+				OnGet = function()
+					-- PromptProductPurchase only — grants via ProcessReceipt
+					promptDevProduct("StarterBundle")
+				end,
+			})
 		end
 
-		local remote = Remotes.GetEvent(Constants.RemoteNames.StarterBundleOffer)
-		if remote then
-			remote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showStarterBundleToast(payload)
-				end)
-			end)
-		end
+		Remotes.BindEvent(Constants.RemoteNames.StarterBundleOffer, StarterBundleToast)
 	end
 
-	-- v33: one-shot AutoCollect soft offer after first manual ATM collect
+	-- v33 → v70: one-shot AutoCollect soft offer after the first manual ATM collect
 	do
-		local acToast: Frame? = nil
-		local lastAcToastAt = 0.0
+		local lastAcToastAt = -math.huge
 		local AC_TOAST_DEBOUNCE = 30
 
-		local function destroyAcToast()
-			if acToast then
-				acToast:Destroy()
-				acToast = nil
-			end
-		end
-
-		local function showAutoCollectToast(payload: any)
+		local function AutoCollectToast(payload: any): boolean
 			local now = os.clock()
 			if now - lastAcToastAt < AC_TOAST_DEBOUNCE then
-				return
+				return false
+			end
+			local def = (MonetizationConfig.GamePasses :: any).AutoCollect
+			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 or passOwnedKnown("AutoCollect") then
+				return false
 			end
 			lastAcToastAt = now
-			destroyAcToast()
-
-			local displayName = "Auto Collect"
-			local robux = nil
-			if typeof(payload) == "table" then
-				displayName = tostring((payload :: any).DisplayName or displayName)
-				robux = tonumber((payload :: any).RobuxPrice)
-			end
-			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.AutoCollect
-			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
-				return
-			end
-
-			local host = screenGui
-			if not host then
-				return
-			end
-
-			local toast = Instance.new("Frame")
-			toast.Name = "AutoCollectToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
-			toast.BackgroundColor3 = Constants.Colors.Panel
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Color3.fromRGB(220, 80, 80)
-			stroke.Thickness = 1.6
-			stroke.Parent = toast
-			toast.Parent = host
-			acToast = toast
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -56, 0, 22)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 16 else 15
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Color3.fromRGB(255, 160, 140)
-			title.Text = "Skip the walk to the ATM?"
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local sub = Instance.new("TextLabel")
-			sub.BackgroundTransparency = 1
-			sub.Position = UDim2.fromOffset(12, 30)
-			sub.Size = UDim2.new(1, -24, 0, 18)
-			sub.Font = Enum.Font.Gotham
-			sub.TextSize = 11
-			sub.TextXAlignment = Enum.TextXAlignment.Left
-			sub.TextColor3 = Constants.Colors.Muted
-			sub.Text = displayName .. (if robux then string.format(" · %d R$", robux) else "")
-			sub.ZIndex = 81
-			sub.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.AnchorPoint = Vector2.new(1, 0)
-			dismiss.Position = UDim2.new(1, -8, 0, 6)
-			dismiss.Size = UDim2.fromOffset(36, 36)
-			dismiss.BackgroundColor3 = Constants.Colors.Background
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.Text = "X"
-			dismiss.TextColor3 = Constants.Colors.Text
-			dismiss.BorderSizePixel = 0
-			dismiss.ZIndex = 82
-			corner(dismiss, 6)
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroyAcToast)
-
-			local buy = Instance.new("TextButton")
-			buy.Position = UDim2.fromOffset(12, 58)
-			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
-			buy.BackgroundColor3 = Color3.fromRGB(180, 50, 50)
-			buy.Font = Enum.Font.GothamBold
-			buy.TextSize = if isTouch then 15 else 14
-			buy.TextColor3 = Color3.fromRGB(255, 240, 240)
-			buy.Text = "Get Auto Collect"
-			buy.BorderSizePixel = 0
-			buy.ZIndex = 82
-			corner(buy, 8)
-			buy.Parent = toast
-			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
-			buy.Activated:Connect(function()
-				destroyAcToast()
-				promptGamePass("AutoCollect")
-			end)
-
-			task.delay(12, function()
-				if acToast == toast then
-					destroyAcToast()
-				end
-			end)
+			local p: any = if typeof(payload) == "table" then payload else {}
+			return showOffer({
+				Key = "AutoCollectToast",
+				Title = "Skip the walk to the ATM",
+				Sub = tostring(p.DisplayName or def.DisplayName or "Auto Collect") .. " · collects for you",
+				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				OnGet = function()
+					promptGamePass("AutoCollect")
+				end,
+			})
 		end
 
-		local remote = Remotes.GetEvent(Constants.RemoteNames.AutoCollectOffer)
-		if remote then
-			remote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showAutoCollectToast(payload)
-				end)
-			end)
-		end
+		Remotes.BindEvent(Constants.RemoteNames.AutoCollectOffer, AutoCollectToast)
 	end
 
-	-- v34: one-shot DoubleCash soft offer toast (existing GamePass Id only)
+	-- v34 → v70: one-shot DoubleCash soft offer (existing GamePass Id only)
 	do
-		local dcToast: Frame? = nil
-		local lastDcToastAt = 0.0
+		local lastDcToastAt = -math.huge
 		local DC_TOAST_DEBOUNCE = 8.0
 
-		local function destroyDcToast()
-			if dcToast then
-				dcToast:Destroy()
-				dcToast = nil
-			end
-		end
-
-		local function showDoubleCashToast(payload: any)
+		local function DoubleCashToast(payload: any): boolean
 			local now = os.clock()
 			if now - lastDcToastAt < DC_TOAST_DEBOUNCE then
-				return
+				return false
+			end
+			local def = (MonetizationConfig.GamePasses :: any).DoubleCash
+			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 or passOwnedKnown("DoubleCash") then
+				return false
 			end
 			lastDcToastAt = now
-			destroyDcToast()
-			local displayName = "2x Cash"
-			local robux = nil
-			if typeof(payload) == "table" then
-				displayName = tostring((payload :: any).DisplayName or displayName)
-				robux = tonumber((payload :: any).RobuxPrice)
-			end
-			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.DoubleCash
-			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
-				return
-			end
-			local host = screenGui
-			if not host then
-				return
-			end
-			local toast = Instance.new("Frame")
-			toast.Name = "DoubleCashToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
-			toast.BackgroundColor3 = Constants.Colors.Panel
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Color3.fromRGB(255, 90, 50)
-			stroke.Thickness = 1.6
-			stroke.Parent = toast
-			toast.Parent = host
-			dcToast = toast
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -48, 0, 24)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 17 else 16
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Color3.fromRGB(255, 200, 120)
-			title.Text = "★ Soft offer · " .. displayName
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local body = Instance.new("TextLabel")
-			body.BackgroundTransparency = 1
-			body.Position = UDim2.fromOffset(12, 32)
-			body.Size = UDim2.new(1, -24, 0, 22)
-			body.Font = Enum.Font.Gotham
-			body.TextSize = if isTouch then 13 else 12
-			body.TextXAlignment = Enum.TextXAlignment.Left
-			body.TextColor3 = Constants.Colors.Muted
-			body.Text = if robux then string.format("Double all cash earnings · %d R$", robux) else "Double all cash earnings"
-			body.ZIndex = 81
-			body.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.AnchorPoint = Vector2.new(1, 0)
-			dismiss.Position = UDim2.new(1, -8, 0, 6)
-			dismiss.Size = UDim2.fromOffset(32, 32)
-			dismiss.BackgroundTransparency = 1
-			dismiss.Text = "✕"
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.TextSize = 18
-			dismiss.TextColor3 = Constants.Colors.Muted
-			dismiss.ZIndex = 82
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroyDcToast)
-
-			local buy = Instance.new("TextButton")
-			buy.Position = UDim2.fromOffset(12, 58)
-			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
-			buy.BackgroundColor3 = Color3.fromRGB(220, 70, 40)
-			buy.Font = Enum.Font.GothamBold
-			buy.TextSize = if isTouch then 15 else 14
-			buy.TextColor3 = Color3.fromRGB(255, 240, 240)
-			buy.Text = "Get 2x Cash"
-			buy.BorderSizePixel = 0
-			buy.ZIndex = 82
-			corner(buy, 8)
-			buy.Parent = toast
-			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
-			buy.Activated:Connect(function()
-				destroyDcToast()
-				promptGamePass("DoubleCash")
-			end)
-
-			task.delay(12, function()
-				if dcToast == toast then
-					destroyDcToast()
-				end
-			end)
+			local p: any = if typeof(payload) == "table" then payload else {}
+			return showOffer({
+				Key = "DoubleCashToast",
+				Title = "Double all cash",
+				Sub = tostring(p.DisplayName or def.DisplayName or "2x Cash") .. " · every payout, forever",
+				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				OnGet = function()
+					promptGamePass("DoubleCash")
+				end,
+			})
 		end
 
-		local dcRemote = Remotes.GetEvent(Constants.RemoteNames.DoubleCashOffer)
-		if dcRemote then
-			dcRemote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showDoubleCashToast(payload)
-				end)
-			end)
-		end
+		Remotes.BindEvent(Constants.RemoteNames.DoubleCashOffer, DoubleCashToast)
 	end
 
-
-	-- v35: one-shot VIP soft offer toast (existing GamePass Id 1985475542 only)
+	-- v35 → v70: one-shot VIP soft offer (existing GamePass Id only)
 	do
-		local vipToast: Frame? = nil
-		local lastVipToastAt = 0.0
+		local lastVipToastAt = -math.huge
 		local VIP_TOAST_DEBOUNCE = 12.0
 
-		local function destroyVipToast()
-			if vipToast then
-				vipToast:Destroy()
-				vipToast = nil
-			end
-		end
-
-		local function showVIPToast(payload: any)
+		local function VIPToast(payload: any): boolean
 			local now = os.clock()
 			if now - lastVipToastAt < VIP_TOAST_DEBOUNCE then
-				return
+				return false
+			end
+			local def = (MonetizationConfig.GamePasses :: any).VIP
+			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 or passOwnedKnown("VIP") then
+				return false
 			end
 			lastVipToastAt = now
-			destroyVipToast()
-			local displayName = "VIP"
-			local robux = nil
-			if typeof(payload) == "table" then
-				displayName = tostring((payload :: any).DisplayName or displayName)
-				robux = tonumber((payload :: any).RobuxPrice)
-			end
-			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses.VIP
-			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
-				return
-			end
-			local host = screenGui
-			if not host then
-				return
-			end
-			local toast = Instance.new("Frame")
-			toast.Name = "VIPToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
-			toast.BackgroundColor3 = Constants.Colors.Panel
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Constants.Colors.Gold
-			stroke.Thickness = 1.6
-			stroke.Parent = toast
-			toast.Parent = host
-			vipToast = toast
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -48, 0, 24)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 17 else 16
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Constants.Colors.Gold
-			title.Text = "★ Soft offer · " .. displayName
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local body = Instance.new("TextLabel")
-			body.BackgroundTransparency = 1
-			body.Position = UDim2.fromOffset(12, 32)
-			body.Size = UDim2.new(1, -24, 0, 22)
-			body.Font = Enum.Font.Gotham
-			body.TextSize = if isTouch then 13 else 12
-			body.TextXAlignment = Enum.TextXAlignment.Left
-			body.TextColor3 = Constants.Colors.Muted
-			body.Text = if robux then string.format("+25%% cash · prestige presence · %d R$", robux) else "+25% cash · prestige presence"
-			body.ZIndex = 81
-			body.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.AnchorPoint = Vector2.new(1, 0)
-			dismiss.Position = UDim2.new(1, -8, 0, 6)
-			dismiss.Size = UDim2.fromOffset(32, 32)
-			dismiss.BackgroundTransparency = 1
-			dismiss.Text = "✕"
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.TextSize = 18
-			dismiss.TextColor3 = Constants.Colors.Muted
-			dismiss.ZIndex = 82
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroyVipToast)
-
-			local buy = Instance.new("TextButton")
-			buy.Position = UDim2.fromOffset(12, 58)
-			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
-			buy.BackgroundColor3 = Color3.fromRGB(180, 140, 40)
-			buy.Font = Enum.Font.GothamBold
-			buy.TextSize = if isTouch then 15 else 14
-			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
-			buy.Text = "Get VIP"
-			buy.BorderSizePixel = 0
-			buy.ZIndex = 82
-			corner(buy, 8)
-			buy.Parent = toast
-			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
-			buy.Activated:Connect(function()
-				destroyVipToast()
-				promptGamePass("VIP")
-			end)
-
-			task.delay(12, function()
-				if vipToast == toast then
-					destroyVipToast()
-				end
-			end)
+			local p: any = if typeof(payload) == "table" then payload else {}
+			return showOffer({
+				Key = "VIPToast",
+				Title = "Go " .. tostring(p.DisplayName or def.DisplayName or "VIP"),
+				Sub = "+25% cash · prestige presence",
+				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				OnGet = function()
+					promptGamePass("VIP")
+				end,
+			})
 		end
 
-		local vipRemote = Remotes.GetEvent(Constants.RemoteNames.VIPOffer)
-		if vipRemote then
-			vipRemote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showVIPToast(payload)
-				end)
-			end)
-		end
+		Remotes.BindEvent(Constants.RemoteNames.VIPOffer, VIPToast)
 	end
 
-	-- v36: one-shot SpeedBoost soft offer toast (existing DevProduct Id 3713839342 only)
+	-- v36 → v70: one-shot SpeedBoost soft offer (existing DevProduct Id only; never for an owner)
 	do
-		local sbToast: Frame? = nil
-		local lastSbToastAt = 0.0
+		local lastSbToastAt = -math.huge
 		local SB_TOAST_DEBOUNCE = 12.0
 
-		local function destroySbToast()
-			if sbToast then
-				sbToast:Destroy()
-				sbToast = nil
-			end
-		end
-
-		local function showSpeedBoostToast(payload: any)
+		local function SpeedBoostToast(payload: any): boolean
 			local now = os.clock()
 			if now - lastSbToastAt < SB_TOAST_DEBOUNCE then
-				return
+				return false
+			end
+			local def = (MonetizationConfig.DevProducts :: any).SpeedBoost
+			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 or isOneTimeOwned("SpeedBoost") then
+				return false
 			end
 			lastSbToastAt = now
-			destroySbToast()
-			local displayName = "Speed Boost"
-			local robux = nil
-			if typeof(payload) == "table" then
-				displayName = tostring((payload :: any).DisplayName or displayName)
-				robux = tonumber((payload :: any).RobuxPrice)
-			end
-			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.SpeedBoost
-			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
-				return
-			end
-			local host = screenGui
-			if not host then
-				return
-			end
-			local toast = Instance.new("Frame")
-			toast.Name = "SpeedBoostToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
-			toast.BackgroundColor3 = Constants.Colors.Panel
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Color3.fromRGB(90, 200, 255)
-			stroke.Thickness = 1.6
-			stroke.Parent = toast
-			toast.Parent = host
-			sbToast = toast
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -48, 0, 24)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 17 else 16
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Color3.fromRGB(140, 220, 255)
-			title.Text = "★ Soft offer · " .. displayName
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local body = Instance.new("TextLabel")
-			body.BackgroundTransparency = 1
-			body.Position = UDim2.fromOffset(12, 32)
-			body.Size = UDim2.new(1, -24, 0, 22)
-			body.Font = Enum.Font.Gotham
-			body.TextSize = if isTouch then 13 else 12
-			body.TextXAlignment = Enum.TextXAlignment.Left
-			body.TextColor3 = Constants.Colors.Muted
-			body.Text = if robux then string.format("Permanent move-speed · %d R$", robux) else "Permanent move-speed boost"
-			body.ZIndex = 81
-			body.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.AnchorPoint = Vector2.new(1, 0)
-			dismiss.Position = UDim2.new(1, -8, 0, 6)
-			dismiss.Size = UDim2.fromOffset(32, 32)
-			dismiss.BackgroundTransparency = 1
-			dismiss.Text = "✕"
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.TextSize = 18
-			dismiss.TextColor3 = Constants.Colors.Muted
-			dismiss.ZIndex = 82
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroySbToast)
-
-			local buy = Instance.new("TextButton")
-			buy.Position = UDim2.fromOffset(12, 58)
-			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
-			buy.BackgroundColor3 = Color3.fromRGB(40, 120, 160)
-			buy.Font = Enum.Font.GothamBold
-			buy.TextSize = if isTouch then 15 else 14
-			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
-			buy.Text = "Get Speed Boost"
-			buy.BorderSizePixel = 0
-			buy.ZIndex = 82
-			corner(buy, 8)
-			buy.Parent = toast
-			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
-			buy.Activated:Connect(function()
-				destroySbToast()
-				promptDevProduct("SpeedBoost")
-			end)
-
-			task.delay(12, function()
-				if sbToast == toast then
-					destroySbToast()
-				end
-			end)
+			local p: any = if typeof(payload) == "table" then payload else {}
+			return showOffer({
+				Key = "SpeedBoostToast",
+				Title = tostring(p.DisplayName or def.DisplayName or "Speed Boost"),
+				Sub = if typeof(def.Description) == "string" and def.Description ~= "" then def.Description else "Run faster across the map",
+				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				OnGet = function()
+					promptDevProduct("SpeedBoost")
+				end,
+			})
 		end
 
-		local sbRemote = Remotes.GetEvent(Constants.RemoteNames.SpeedBoostOffer)
-		if sbRemote then
-			sbRemote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showSpeedBoostToast(payload)
-				end)
-			end)
-		end
+		Remotes.BindEvent(Constants.RemoteNames.SpeedBoostOffer, SpeedBoostToast)
 	end
 
-	-- v37: one-shot CashMega soft offer toast (existing DevProduct Id 3713838952 only)
+	-- v37 → v70: one-shot CashMega soft offer (existing DevProduct Id only) — "BEST OFFER"
 	do
-		local megaToast: Frame? = nil
-		local lastMegaToastAt = 0.0
+		local lastMegaToastAt = -math.huge
 		local MEGA_TOAST_DEBOUNCE = 14.0
 
-		local function destroyMegaToast()
-			if megaToast then
-				megaToast:Destroy()
-				megaToast = nil
-			end
-		end
-
-		local function showCashMegaToast(payload: any)
+		local function CashMegaToast(payload: any): boolean
 			local now = os.clock()
 			if now - lastMegaToastAt < MEGA_TOAST_DEBOUNCE then
-				return
+				return false
+			end
+			local def = (MonetizationConfig.DevProducts :: any).CashMega
+			if typeof(def) ~= "table" or typeof(def.Id) ~= "number" or def.Id == 0 then
+				return false
 			end
 			lastMegaToastAt = now
-			destroyMegaToast()
-			local displayName = "Cash Pack Mega"
-			local robux = nil
-			if typeof(payload) == "table" then
-				displayName = tostring((payload :: any).DisplayName or displayName)
-				robux = tonumber((payload :: any).RobuxPrice)
-			end
-			local def = MonetizationConfig.DevProducts and MonetizationConfig.DevProducts.CashMega
-			if not def or typeof(def.Id) ~= "number" or def.Id == 0 then
-				return
-			end
-			local host = screenGui
-			if not host then
-				return
-			end
-			local toast = Instance.new("Frame")
-			toast.Name = "CashMegaToast"
-			toast.AnchorPoint = Vector2.new(0.5, 0)
-			toast.Position = UDim2.new(0.5, 0, 0, if isTouch then 72 else 56)
-			toast.Size = if isTouch then UDim2.new(0.94, 0, 0, 118) else UDim2.fromOffset(360, 108)
-			toast.BackgroundColor3 = Color3.fromRGB(28, 42, 28)
-			toast.BorderSizePixel = 0
-			toast.ZIndex = 80
-			corner(toast, 10)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = Color3.fromRGB(130, 255, 170)
-			stroke.Thickness = 1.8
-			stroke.Parent = toast
-			toast.Parent = host
-			megaToast = toast
-
-			local title = Instance.new("TextLabel")
-			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(12, 8)
-			title.Size = UDim2.new(1, -48, 0, 24)
-			title.Font = Enum.Font.GothamBold
-			title.TextSize = if isTouch then 16 else 15
-			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextColor3 = Color3.fromRGB(255, 250, 230)
-			title.Text = "★ BEST OFFER — " .. displayName
-			title.ZIndex = 81
-			title.Parent = toast
-
-			local sub = Instance.new("TextLabel")
-			sub.BackgroundTransparency = 1
-			sub.Position = UDim2.fromOffset(12, 32)
-			sub.Size = UDim2.new(1, -24, 0, 20)
-			sub.Font = Enum.Font.Gotham
-			sub.TextSize = 12
-			sub.TextXAlignment = Enum.TextXAlignment.Left
-			sub.TextColor3 = Color3.fromRGB(180, 220, 190)
-			sub.Text = if robux then string.format("Jumpstart · %d R$ · tap below", robux) else "Jumpstart cash pack · tap below"
-			sub.ZIndex = 81
-			sub.Parent = toast
-
-			local dismiss = Instance.new("TextButton")
-			dismiss.Position = UDim2.new(1, -36, 0, 6)
-			dismiss.Size = UDim2.fromOffset(28, 28)
-			dismiss.BackgroundColor3 = Color3.fromRGB(50, 55, 50)
-			dismiss.Font = Enum.Font.GothamBold
-			dismiss.TextSize = 16
-			dismiss.TextColor3 = Color3.fromRGB(220, 220, 220)
-			dismiss.Text = "×"
-			dismiss.BorderSizePixel = 0
-			dismiss.ZIndex = 82
-			corner(dismiss, 6)
-			dismiss.Parent = toast
-			UIUtil.EnsureMinTouch(dismiss, 44)
-			dismiss.Activated:Connect(destroyMegaToast)
-
-			local buy = Instance.new("TextButton")
-			buy.Position = UDim2.fromOffset(12, 58)
-			buy.Size = UDim2.new(1, -24, 0, if isTouch then 48 else 40)
-			buy.BackgroundColor3 = Color3.fromRGB(40, 140, 70)
-			buy.Font = Enum.Font.GothamBold
-			buy.TextSize = if isTouch then 15 else 14
-			buy.TextColor3 = Color3.fromRGB(255, 250, 230)
-			buy.Text = "Get Cash Mega"
-			buy.BorderSizePixel = 0
-			buy.ZIndex = 82
-			corner(buy, 8)
-			buy.Parent = toast
-			UIUtil.EnsureMinTouch(buy, if isTouch then 48 else 44)
-			buy.Activated:Connect(function()
-				destroyMegaToast()
-				pendingCashMegaHighlight = true
-				promptDevProduct("CashMega")
-			end)
-
-			task.delay(12, function()
-				if megaToast == toast then
-					destroyMegaToast()
-				end
-			end)
+			local p: any = if typeof(payload) == "table" then payload else {}
+			local cashAmount = tonumber(def.Cash) or 0
+			return showOffer({
+				Key = "CashMegaToast",
+				Title = "★ BEST OFFER",
+				Sub = tostring(p.DisplayName or def.DisplayName or "Cash Pack Mega")
+					.. (if cashAmount > 0 then " · +$" .. formatCash(cashAmount) else ""),
+				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
+				OnGet = function()
+					pendingCashMegaHighlight = true
+					promptDevProduct("CashMega")
+				end,
+			})
 		end
 
-		local megaRemote = Remotes.GetEvent(Constants.RemoteNames.CashMegaOffer)
-		if megaRemote then
-			megaRemote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showCashMegaToast(payload)
-				end)
-			end)
-		end
+		Remotes.BindEvent(Constants.RemoteNames.CashMegaOffer, CashMegaToast)
 	end
 
-	-- v33 → v69: ATM raid chip (bottom centre). v69 payloads carry Phase (spec §4.4): Holding / Alarm show a
-	-- live progress bar and hide themselves shortly after the last push; Interrupted / Blocked / Defended /
-	-- Success / Robbed show the server's payload.Text for a few seconds. No Phase = legacy v33 rendering.
+	-- v33 → v70: ATM raid hold / cooldown / result → the TopStack "Progress" pill (spec §3.4; it was a full-width
+	-- chip over the jump button). ONE persistent pill (Frame "AtmRaidHud", its own gui "WarEmpireAtmRaid" at the
+	-- bank-raid z) that HudLayout.RegisterTopStack places under the topbar and collapses while hidden. v69
+	-- payloads carry Phase: Holding / Alarm show a live bar and hide shortly after the last push; Interrupted /
+	-- Blocked / Defended / Success / Robbed show the server's payload.Text for a few seconds. No Phase = legacy v33.
 	do
-		local chip: Frame? = nil
+		local P = HudConfig.TopStack.Progress
+		local pill: Frame? = nil
 		local hideToken = 0
 
-		local function dropChip()
-			if chip then
-				chip:Destroy()
-				chip = nil
+		type PhaseStyle = { Stroke: Color3, Text: Color3, Hold: number, Bar: boolean }
+		local AMBER: PhaseStyle = { Stroke = P.ContestedColor, Text = Color3.fromRGB(255, 226, 170), Hold = 2.5, Bar = false }
+		local GREEN: PhaseStyle = { Stroke = Color3.fromRGB(120, 220, 140), Text = Color3.fromRGB(200, 255, 210), Hold = 2.5, Bar = false }
+		local PHASE_STYLE: { [string]: PhaseStyle } = {
+			Holding = { Stroke = Color3.fromRGB(230, 200, 80), Text = Color3.fromRGB(255, 255, 255), Hold = 1.0, Bar = true }, -- thief
+			Alarm = { Stroke = Color3.fromRGB(255, 96, 84), Text = Color3.fromRGB(255, 205, 200), Hold = 1.5, Bar = true }, -- victim
+			Interrupted = AMBER,
+			Blocked = AMBER,
+			Defended = GREEN,
+			Success = { Stroke = GREEN.Stroke, Text = GREEN.Text, Hold = 5, Bar = false },
+			Robbed = { Stroke = Color3.fromRGB(255, 96, 84), Text = Color3.fromRGB(255, 205, 200), Hold = 6, Bar = false },
+		}
+
+		local function ensurePill(): Frame?
+			local existing = pill
+			if existing and existing.Parent then
+				return existing
 			end
+			local pg = player:FindFirstChildOfClass("PlayerGui")
+			if not pg then
+				return nil
+			end
+			local gui = Instance.new("ScreenGui")
+			gui.Name = "WarEmpireAtmRaid"
+			HudLayout.ApplyScreen(gui, { DisplayOrder = HudConfig.DisplayOrder.WarEmpireBankRaid, Insets = "Core" })
+			gui.Parent = pg
+
+			local f = Instance.new("Frame")
+			f.Name = "AtmRaidHud"
+			f.AnchorPoint = Vector2.new(0.5, 0)
+			f.Position = UDim2.new(0.5, 0, 0, HudConfig.TopStack.Top)
+			f.Size = UDim2.fromOffset(P.Size.X, P.Size.Y)
+			f.BackgroundColor3 = HudConfig.Colors.PillBg
+			f.BackgroundTransparency = 0.12
+			f.BorderSizePixel = 0
+			f.Visible = false
+			f.Active = false
+			corner(f, 12)
+			local stroke = Instance.new("UIStroke")
+			stroke.Name = "Stroke"
+			stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			stroke.Thickness = 2
+			stroke.Parent = f
+
+			local lab = Instance.new("TextLabel")
+			lab.Name = "Text"
+			lab.BackgroundTransparency = 1
+			lab.Font = HudConfig.Fonts.Body
+			lab.TextSize = P.TextSize
+			lab.TextXAlignment = Enum.TextXAlignment.Left
+			lab.TextTruncate = Enum.TextTruncate.AtEnd
+			lab.TextColor3 = HudConfig.Colors.White
+			lab.Parent = f
+			UIUtil.TextOutline(lab, 1.2)
+
+			local pct = Instance.new("TextLabel")
+			pct.Name = "Pct"
+			pct.BackgroundTransparency = 1
+			pct.AnchorPoint = Vector2.new(1, 0)
+			pct.Position = UDim2.new(1, -12, 0, 3)
+			pct.Size = UDim2.fromOffset(56, P.TextSize + 6)
+			pct.Font = HudConfig.Fonts.Display
+			pct.TextSize = P.TextSize + 2
+			pct.TextXAlignment = Enum.TextXAlignment.Right
+			pct.TextColor3 = HudConfig.Colors.White
+			pct.Text = ""
+			pct.Parent = f
+			UIUtil.TextOutline(pct, 1.2)
+
+			local barBg = Instance.new("Frame")
+			barBg.Name = "Bar"
+			barBg.AnchorPoint = Vector2.new(0.5, 1)
+			barBg.Position = UDim2.new(0.5, 0, 1, -7)
+			barBg.Size = UDim2.new(1, -24, 0, P.BarH)
+			barBg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+			barBg.BackgroundTransparency = 0.45
+			barBg.BorderSizePixel = 0
+			barBg.Visible = false
+			barBg.Parent = f
+			corner(barBg, P.BarH // 2)
+			local fill = Instance.new("Frame")
+			fill.Name = "Fill"
+			fill.Size = UDim2.fromScale(0, 1)
+			fill.BorderSizePixel = 0
+			fill.Parent = barBg
+			corner(fill, P.BarH // 2)
+
+			f.Parent = gui
+			HudLayout.RegisterTopStack("AtmRaid", f, HudConfig.TopStack.Order.Progress, { Space = "Hud" })
+			pill = f
+			return f
 		end
 
 		local function hideLater(frame: Frame, seconds: number)
 			hideToken += 1
 			local token = hideToken
 			task.delay(seconds, function()
-				if token == hideToken and chip == frame then
-					frame:Destroy()
-					if chip == frame then
-						chip = nil
-					end
+				if token == hideToken and pill == frame then
+					frame.Visible = false
 				end
 			end)
 		end
 
-		-- legacy (no Phase): exactly the v33 chip
-		local function showLegacyAtmRaidHud(payload: any, host: ScreenGui)
-			dropChip()
+		-- paint the pill: text, optional bar fraction, colours; auto width (Progress.Size.X … the stack's max)
+		local function showPill(text: string, style: PhaseStyle, fraction: number?)
+			local f = ensurePill()
+			if not f then
+				return
+			end
+			local lab = f:FindFirstChild("Text")
+			local pct = f:FindFirstChild("Pct")
+			local barBg = f:FindFirstChild("Bar")
+			local stroke = f:FindFirstChild("Stroke")
+			local withBar = style.Bar and fraction ~= nil
+			local pctW = if withBar then 60 else 0
+			local textW = P.Size.X
+			pcall(function()
+				textW = TextService:GetTextSize(text, P.TextSize, HudConfig.Fonts.Body, Vector2.new(4000, 100)).X
+			end)
+			local maxW = math.max(P.Size.X, HudLayout.TopStackMaxWidthV())
+			local w = math.clamp(math.ceil(textW * 1.06) + 24 + pctW, P.Size.X, maxW)
+			f.Size = UDim2.fromOffset(w, P.Size.Y)
+			if stroke and stroke:IsA("UIStroke") then
+				stroke.Color = style.Stroke
+			end
+			if lab and lab:IsA("TextLabel") then
+				lab.Text = text
+				lab.TextColor3 = style.Text
+				if withBar then
+					lab.Position = UDim2.fromOffset(12, 4)
+					lab.Size = UDim2.new(1, -(24 + pctW), 0, P.TextSize + 6)
+				else
+					lab.Position = UDim2.fromOffset(12, 0)
+					lab.Size = UDim2.new(1, -24, 1, 0)
+				end
+			end
+			if pct and pct:IsA("TextLabel") then
+				pct.Visible = withBar
+				pct.Text = if withBar and fraction then string.format("%d%%", math.floor(fraction * 100 + 0.5)) else ""
+			end
+			if barBg and barBg:IsA("Frame") then
+				barBg.Visible = withBar
+				local fill = barBg:FindFirstChild("Fill")
+				if fill and fill:IsA("Frame") then
+					fill.Size = UDim2.fromScale(math.clamp(fraction or 0, 0, 1), 1)
+					fill.BackgroundColor3 = style.Stroke
+				end
+			end
+			f.Visible = true
+			hideLater(f, style.Hold)
+		end
+
+		-- legacy (no Phase): the v33 texts
+		local function showLegacyAtmRaidHud(payload: any)
 			local success = (payload :: any).Success == true
 			local raided = (payload :: any).Raided == true
 			local cd = math.max(0, math.floor(tonumber((payload :: any).CooldownRemaining) or 0))
 			local stolen = math.floor(tonumber((payload :: any).Stolen) or 0)
 			local victim = tostring((payload :: any).VictimName or "")
-
-			local frame = Instance.new("Frame")
-			frame.Name = "AtmRaidHud"
-			frame.AnchorPoint = Vector2.new(0.5, 1)
-			frame.Position = UDim2.new(0.5, 0, 1, if isTouch then -110 else -96)
-			frame.Size = if isTouch then UDim2.new(0.9, 0, 0, 52) else UDim2.fromOffset(340, 48)
-			frame.BackgroundColor3 = if success then Color3.fromRGB(30, 70, 40) elseif raided then Color3.fromRGB(80, 30, 30) else Color3.fromRGB(40, 40, 28)
-			frame.BorderSizePixel = 0
-			frame.ZIndex = 75
-			corner(frame, 8)
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = if success then Color3.fromRGB(120, 220, 140) elseif raided then Color3.fromRGB(255, 120, 100) else Color3.fromRGB(230, 200, 80)
-			stroke.Thickness = 1.4
-			stroke.Parent = frame
-			frame.Parent = host
-			chip = frame
-
-			local lab = Instance.new("TextLabel")
-			lab.BackgroundTransparency = 1
-			lab.Size = UDim2.fromScale(1, 1)
-			lab.Font = Enum.Font.GothamBold
-			lab.TextSize = if isTouch then 15 else 14
-			lab.TextColor3 = Color3.fromRGB(245, 245, 240)
-			lab.TextStrokeTransparency = 0.35
-			lab.ZIndex = 76
+			local text: string
 			if success then
-				lab.Text = string.format("ATM RAID +$%d%s · cooldown 1m", stolen, if victim ~= "" then (" from " .. victim) else "")
+				text = string.format("ATM RAID +$%s%s · cooldown 1m", formatCash(stolen), if victim ~= "" then (" from " .. victim) else "")
 			elseif raided then
 				local thief = tostring((payload :: any).ThiefName or "")
 				if thief ~= "" then
-					lab.Text = string.format("ATM RAIDED −10%% by %s (−$%d)", thief, stolen)
+					text = string.format("ATM RAIDED −10%% by %s (−$%s)", thief, formatCash(stolen))
 				else
-					lab.Text = string.format("ATM RAIDED −10%% (−$%d)", stolen)
+					text = string.format("ATM RAIDED −10%% (−$%s)", formatCash(stolen))
 				end
 			else
-				lab.Text = string.format("ATM raid cooldown — %ds", cd)
+				text = string.format("ATM raid cooldown — %ds", cd)
 			end
-			lab.Parent = frame
-
-			hideLater(frame, if success or raided then 5.5 else math.clamp(cd, 2, 8))
+			local base = if success then GREEN elseif raided then PHASE_STYLE.Robbed else AMBER
+			local hold = if success or raided then 5.5 else math.clamp(cd, 2, 8)
+			showPill(text, { Stroke = base.Stroke, Text = base.Text, Hold = hold, Bar = false }, nil)
 		end
-
-		type PhaseStyle = { Bg: Color3, Stroke: Color3, Hold: number, Bar: boolean }
-		local AMBER: PhaseStyle = { Bg = Color3.fromRGB(74, 56, 16), Stroke = Color3.fromRGB(240, 190, 70), Hold = 2.5, Bar = false }
-		local PHASE_STYLE: { [string]: PhaseStyle } = {
-			Holding = { Bg = Color3.fromRGB(24, 28, 34), Stroke = Color3.fromRGB(230, 200, 80), Hold = 1.0, Bar = true }, -- thief
-			Alarm = { Bg = Color3.fromRGB(112, 24, 22), Stroke = Color3.fromRGB(255, 120, 100), Hold = 1.5, Bar = true }, -- victim
-			Interrupted = AMBER,
-			Blocked = AMBER,
-			Defended = { Bg = Color3.fromRGB(30, 70, 40), Stroke = Color3.fromRGB(120, 220, 140), Hold = 2.5, Bar = false },
-			Success = { Bg = Color3.fromRGB(30, 70, 40), Stroke = Color3.fromRGB(120, 220, 140), Hold = 5, Bar = false },
-			Robbed = { Bg = Color3.fromRGB(80, 30, 30), Stroke = Color3.fromRGB(255, 120, 100), Hold = 6, Bar = false },
-		}
 
 		local function phaseText(payload: any, phase: string): string
 			local text = if typeof(payload.Text) == "string" and payload.Text ~= "" then payload.Text else nil
 			local progress = tonumber(payload.HoldProgress)
 			local need = tonumber(payload.HoldNeed)
 			if phase == "Holding" then
-				return text or string.format("ROBBING %s's ATM · %.1f/%ds — don't get hit!", tostring(payload.VictimName or "their"), progress or 0, math.floor(need or 6))
+				return text or string.format("ROBBING %s's ATM — don't get hit!", tostring(payload.VictimName or "their"))
 			elseif phase == "Alarm" then
-				local base = text or string.format("⚠ %s is robbing your ATM!", tostring(payload.ThiefName or "Someone"))
+				local base = text or string.format("%s is robbing your ATM!", tostring(payload.ThiefName or "Someone"))
 				if progress and need and not string.find(base, "%d/%d") then
 					base ..= string.format(" %d/%ds", math.floor(progress), math.floor(need))
 				end
@@ -1988,143 +1443,76 @@ function ShopController.Init()
 			return text or tostring(payload.Reason or phase)
 		end
 
-		local function showPhaseChip(payload: any, host: ScreenGui, phase: string, style: PhaseStyle)
-			local frame = chip
-			if not frame or frame.Parent ~= host or frame:GetAttribute("WE_Phase") == nil then
-				dropChip()
-				local f = Instance.new("Frame")
-				f.Name = "AtmRaidHud"
-				f.AnchorPoint = Vector2.new(0.5, 1)
-				f.Position = UDim2.new(0.5, 0, 1, if isTouch then -110 else -96)
-				f.Size = if isTouch then UDim2.new(0.9, 0, 0, 52) else UDim2.fromOffset(460, 52)
-				f.BorderSizePixel = 0
-				f.ZIndex = 75
-				corner(f, 8)
-				local stroke = Instance.new("UIStroke")
-				stroke.Name = "Stroke"
-				stroke.Thickness = 1.4
-				stroke.Parent = f
-				local lab = Instance.new("TextLabel")
-				lab.Name = "Text"
-				lab.BackgroundTransparency = 1
-				lab.Position = UDim2.fromOffset(10, 0)
-				lab.Size = UDim2.new(1, -20, 1, 0)
-				lab.Font = Enum.Font.GothamBold
-				lab.TextScaled = true
-				lab.TextColor3 = Color3.fromRGB(245, 245, 240)
-				lab.TextStrokeTransparency = 0.35
-				lab.ZIndex = 76
-				lab.Parent = f
-				local limit = Instance.new("UITextSizeConstraint")
-				limit.MinTextSize = if isTouch then 14 else 11
-				limit.MaxTextSize = if isTouch then 15 else 14
-				limit.Parent = lab
-				local barBg = Instance.new("Frame")
-				barBg.Name = "Bar"
-				barBg.AnchorPoint = Vector2.new(0.5, 1)
-				barBg.Position = UDim2.new(0.5, 0, 1, -6)
-				barBg.Size = UDim2.new(1, -24, 0, 6)
-				barBg.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
-				barBg.BorderSizePixel = 0
-				barBg.ZIndex = 76
-				barBg.Visible = false
-				barBg.Parent = f
-				corner(barBg, 3)
-				local fill = Instance.new("Frame")
-				fill.Name = "Fill"
-				fill.Size = UDim2.fromScale(0, 1)
-				fill.BorderSizePixel = 0
-				fill.ZIndex = 77
-				fill.Parent = barBg
-				corner(fill, 3)
-				f.Parent = host
-				chip = f
-				frame = f
-			end
-			local f = frame :: Frame
-			f:SetAttribute("WE_Phase", phase)
-			f.BackgroundColor3 = style.Bg
-			local stroke = f:FindFirstChild("Stroke")
-			if stroke and stroke:IsA("UIStroke") then
-				stroke.Color = style.Stroke
-			end
-			local lab = f:FindFirstChild("Text")
-			local barBg = f:FindFirstChild("Bar")
-			if lab and lab:IsA("TextLabel") then
-				lab.Text = phaseText(payload, phase)
-				lab.Size = if style.Bar then UDim2.new(1, -20, 1, -14) else UDim2.new(1, -20, 1, 0)
-			end
-			if barBg and barBg:IsA("Frame") then
-				barBg.Visible = style.Bar
-				local fill = barBg:FindFirstChild("Fill")
-				if fill and fill:IsA("Frame") then
-					local need = tonumber(payload.HoldNeed) or 0
-					local pct = if need > 0 then math.clamp((tonumber(payload.HoldProgress) or 0) / need, 0, 1) else 0
-					fill.Size = UDim2.fromScale(pct, 1)
-					fill.BackgroundColor3 = style.Stroke
-				end
-			end
-			hideLater(f, style.Hold)
-		end
-
 		local function showAtmRaidHud(payload: any)
 			if typeof(payload) ~= "table" then
-				return
-			end
-			local host = screenGui
-			if not host then
 				return
 			end
 			local phase = (payload :: any).Phase
 			local style = if typeof(phase) == "string" then PHASE_STYLE[phase] else nil
 			if style then
-				showPhaseChip(payload, host, phase :: string, style)
+				local need = tonumber(payload.HoldNeed) or 0
+				local fraction = if need > 0 then math.clamp((tonumber(payload.HoldProgress) or 0) / need, 0, 1) else nil
+				showPill(phaseText(payload, phase :: string), style, fraction)
 			elseif phase == nil then
-				showLegacyAtmRaidHud(payload, host)
+				showLegacyAtmRaidHud(payload)
 			end
 		end
 
-		Remotes.BindEvent(Constants.RemoteNames.AtmRaidStateUpdate, function(payload: any)
-			task.defer(function()
-				if not screenGui then
-					task.wait(0.2)
-				end
-				showAtmRaidHud(payload)
-			end)
-		end)
+		Remotes.BindEvent(Constants.RemoteNames.AtmRaidStateUpdate, showAtmRaidHud)
 	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
-	do
-		local remote = Remotes.GetEvent(Constants.RemoteNames.PromptPremiumPad)
-		if remote then
-			remote.OnClientEvent:Connect(function(payload: any)
-				if typeof(payload) ~= "table" then
-					return
-				end
-				local kind = payload.Kind
-				local key = payload.Key
-				if typeof(kind) ~= "string" or typeof(key) ~= "string" then
-					return
-				end
-				if kind == "GamePass" then
-					promptGamePass(key)
-				elseif kind == "DevProduct" then
-					promptDevProduct(key)
-				end
-			end)
+	Remotes.BindEvent(Constants.RemoteNames.PromptPremiumPad, function(payload: any)
+		if typeof(payload) ~= "table" then
+			return
 		end
-	end
+		local kind = payload.Kind
+		local key = payload.Key
+		if typeof(kind) ~= "string" or typeof(key) ~= "string" then
+			return
+		end
+		if kind == "GamePass" then
+			promptGamePass(key)
+		elseif kind == "DevProduct" then
+			promptDevProduct(key)
+		end
+	end)
 
 	if order == 0 then
 		UIUtil.EmptyState(list, "Shop catalog empty — MonetizationConfig has no DevProducts / GamePasses.", 0)
 	end
 
+	shell = PanelShell.Attach({
+		Id = PANEL_ID,
+		Screen = screen,
+		Panel = panel,
+		IsOpen = function(): boolean
+			return menuOpen
+		end,
+		Close = function()
+			setOpen(false)
+		end,
+	})
+
+	-- Gold in the header (WE_Gold replicates from the server; EconomyUpdate as a backup)
+	player:GetAttributeChangedSignal("WE_Gold"):Connect(refreshGold)
+	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: any)
+		if typeof(payload) == "table" and typeof(payload.Gold) == "number" and player:GetAttribute("WE_Gold") == nil then
+			local chip, lab = goldChip, goldText
+			if chip and lab then
+				chip.Visible = payload.Gold > 0
+				lab.Text = formatCash(payload.Gold) .. " GOLD"
+			end
+		end
+	end)
+	refreshGold()
+
+	local shopKey: Enum.KeyCode = HudConfig.Keys.Shop or Enum.KeyCode.P
 	UserInputService.InputBegan:Connect(function(input, gp)
 		if gp then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.P then
+		if input.KeyCode == shopKey then
 			setOpen(not menuOpen)
 		end
 	end)
@@ -2135,7 +1523,19 @@ end
 
 
 function ShopController.Toggle()
+	-- the tap that just closed the Shop through its dim lands on the Shop tile too: stay closed
+	local sh = shell
+	if not menuOpen and sh and sh.TapThrough() then
+		return
+	end
 	setOpen(not menuOpen)
+end
+
+--[[ v70: the cash pill's + (HUDController.BindShopOpener → UIController): SUPPLY tab, Cash Pack Mega highlighted.
+	Visual only — no toast, no purchase prompt. ]]
+function ShopController.OpenCashPacks()
+	pendingCashMegaHighlight = true
+	setOpen(true)
 end
 
 --[[ v69: open on a tab ("Supply" | "Weapons"). The Armory terminal lands on Weapons via PromptTriggered. ]]

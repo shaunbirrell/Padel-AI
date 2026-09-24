@@ -160,7 +160,8 @@ must_contain("src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau", 'Id = "
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "MinLevelToPrestige = 40", "MinLevelToPrestige 40")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "buildMoneyCollector", "MapSetup ATM MoneyCollector")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "TAG_COLLECTOR", "MapSetup TAG_COLLECTOR")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "PendingLabel", "HUD PendingLabel")
+# v70 HUD re-pin: pending cash left the HUD (owner direction; the ATM screen shows it) → cash gains are "+$N" floats
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "ShowCashFloat", "v70 HUD cash floats (ShowCashFloat; PendingLabel removed)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "125916936788670", "MilitaryJeep Military Car mesh")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_DrivePrompt", "DriverSeat Drive ProximityPrompt")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "seat:Sit(hum)", "VehicleSeat auto-Sit")
@@ -383,7 +384,8 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "RoofBarracksPad", "v67 no rooftop barracks pads on the ceiling")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "DockMissions", "HUD dock Missions tile")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "MissionController.Toggle", "Missions dock opens MissionController")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "Label = \"MISSIONS\"", "Missions dock label")
+# v70 HUD re-pin: the `Label = "MISSIONS"` pin is deleted (rail labels are title case from HudConfig.Rail.Tiles;
+# the DockMissions pin above still locks the Missions tile)
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "CashFee", "PrestigeConfig CashFee")
 must_contain("src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau", "BuildFeeSummary", "PrestigeConfig BuildFeeSummary")
 must_contain("src/ServerScriptService/Server/Services/PrestigeService.luau", "FeeSummary", "PrestigeService FeeSummary push")
@@ -566,7 +568,7 @@ must_contain("src/ReplicatedStorage/Shared/Constants.luau", "DoubleCashOffer", "
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "DoubleCashOffered", "DoubleCash soft profile gate")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "DoubleCashToast", "DoubleCash client toast")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "Fee: none", "Rebirth fee HUD copy")
-must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MinTouchPx = 56", "Orders mobile touch 56")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MinTouchPx = 64", "v70 Orders touch 64 v (x0.70 = 44.8 px real)")
 must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "1982865711", "DoubleCash GamePass Id no invent")
 # No-regress v34
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v34")
@@ -616,6 +618,7 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "TRA
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isTracked", "Tracked slower LV cruise")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "ARMED · Sit · WASD", "ArmedJeep ARMED tip")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_MuzzleFlash", "ArmedJeep muzzle flash cue")
+# v70 HUD spec §8 re-pin (delete / NOT WE_ArmedCue) is DEFERRED: that server label goes with the §5 world-label pass
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_ArmedCue", "ArmedJeep ARMED billboard")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "RoadWarzone_v36", "Road warzone density folder")
 must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "RoadCrater", "Road crater clusters")
@@ -686,6 +689,8 @@ must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isT
 
 
 # --- v38 combat feel + prestige/monetization polish ---
+# v70 HUD spec §8 re-pin (DEF HIT → BASE UNDER ATTACK) is DEFERRED with the §4.2 server routing; until then the client
+# folds every "DEF HIT" line into one "BASE UNDER ATTACK!" alert (HudConfig.Toast.Reroute, pinned in the v70 HUD block)
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "DEF HIT", "Gate defense owner hit toast")
 must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "BREACHED", "Gate BREACHED toast config")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "BREACHED", "Gate BREACHED billboard")
@@ -720,11 +725,15 @@ must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "Tu
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_BILLBOARD_SIZE = UDim2.fromOffset(118, 40)", "v50 price billboard chip 118x40")
 
 # --- v40 Orders panel scale + chip clamp + design gaps doc ---
-must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "PanelMaxWidth = 220", "v40 Orders PanelMaxWidth")
-must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MobileScaleMax = 0.85", "v40 Orders MobileScaleMax")
-must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MinTouchPx = 56", "v40 Orders MinTouchPx 56")
+# v70 HUD re-pins: the Army popover is 216 v wide + padding, one unified HUD scale (no per-panel MobileScale)
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "PanelMaxWidth = 240", "v70 Orders PanelMaxWidth 240 (popover 216 v + padding)")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MobileScaleMax", "v70 Orders MobileScaleMax deleted (unified HUD scale)")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "MinTouchPx = 64", "v70 Orders MinTouchPx 64")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "UISizeConstraint", "v40 Orders UISizeConstraint")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "AttachMobileScale", "v40 Orders custom MobileScale")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "HudLayout.ApplyScreen", "v70 Orders on the unified HUD scale (HudLayout.ApplyScreen)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "PanelShell.Screen(screen", "v70 Orders screen set up through PanelShell.Screen")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/PanelShell.luau", "return HudLayout.ApplyScreen(screen", "v70 PanelShell.Screen = HudLayout.ApplyScreen")
+must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "AttachMobileScale", "v70 Orders no custom MobileScale")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "HOTKEY_ORDERS", "v40 Orders hotkeys intact")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "KeyCode.T", "v40 Orders T cycle intact")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "PRICE_CHIP_MAX_W = 120", "v50 chip max width 120")
@@ -744,7 +753,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "placeK
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'role == "Crate"', "v39 Warehouse Crate role visible")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "NEVER ghost Part-kit silhouettes", "v39 hideKitBody no-op")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 29", "v42 BuildingDressGen 29")
-must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "SizeTouch = UDim2.fromOffset(200, 168)", "v40 Orders SizeTouch 200x168")
+must_contain("src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau", "SizeTouch = UDim2.fromOffset(216, 244)", "v70 Orders SizeTouch 216x244 (2x2 order cells 96x64 v + title + MANAGE)")
 must_not_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "UDim2.fromOffset(300, 132)", "v39 no giant 300x132 boards")
 # No-regress v39
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_GroundDrive", "Jeep WE_GroundDrive no-regress v39")
@@ -1084,7 +1093,8 @@ must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau",
 must_contain("src/ServerScriptService/Server/Services/MonetizationService.luau", "local profile = DataService.WaitForProfile(player, 25)", "v69 receipts wait for the (lock-delayed) profile load")
 must_contain("src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau", "local function buildInstallation(ctx: Ctx)", "v68 installation build path")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'if structureId == "MissileDefense" and not hollow then', "v68 MissileDefense force skips the installation slab")
-must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", "pcall(WorldSpinners.Init)", "v68 radar dishes spin client-side (guarded)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", 'safeInit("WorldSpinners", WorldSpinners)', "v68 radar dishes spin client-side (guarded)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau", "local ok, err = pcall(mod.Init)", "v70 every client controller Init is isolated (combat failure cannot kill driving)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'body:SetAttribute("WE_CornerTower", true)', "v68 corner guard towers keep WE_CornerTower")
 must_contain("src/ServerScriptService/Server/Services/DataService.luau", "continuing — no kick", "v58 never Kick on session lock")
 must_not_contain("src/ServerScriptService/Server/Services/DataService.luau", 'player:Kick("Your data is loading', "v58 no session-lock Kick")
@@ -1372,6 +1382,45 @@ else:
     bad(f"v65 simulate fallback failed nil={_nil_fallback} normal={_normal}")
 
 
+# v70 HUD "clean screen" (docs spec §8 new pins + owner decisions). Verified with the headless HUD harness states
+# v70_base / v70_combat / v70_drive / v70_tutorial / v70_alert / v70_offer at 844x390, 956x440 and 1280x720.
+CL = "src/StarterPlayer/StarterPlayerScripts/Client"
+HUDCFG = "src/ReplicatedStorage/Shared/Configs/HudConfig.luau"
+must_contain(HUDCFG, "Tiles = {", "v70 HudConfig rail tiles")
+must_contain(HUDCFG, "Reserve = {", "v70 HudConfig reserved combat/vehicle rect")
+must_contain(HUDCFG, "CombatTouch = { Width = 290, Height = 300, MinWidthPx = 0, MinHeightPx = 222 }", "v70 touch reserve holds VehicleDriveClient's lift column (222 px)")
+must_contain(HUDCFG, "\tDrawnOnSpawn = false,", "v70 owner decision: spawn holstered")
+must_contain(HUDCFG, "AutoDrawOnDamage = true", "v70 holstered players auto-draw on damage")
+must_contain(HUDCFG, "Army = Enum.KeyCode.Y", "v70 owner decision: Army popover key Y (A is strafe)")
+must_contain(HUDCFG, "MaxPerSession = 3,", "v70 owner decision: at most 3 offer pop-ups per session")
+must_contain(HUDCFG, "MinGapSeconds = 240,", "v70 owner decision: offers at least 4 min apart")
+must_contain(HUDCFG, 'Show = "BASE UNDER ATTACK!"', "v70 client folds DEF HIT spam into one BASE UNDER ATTACK alert")
+_hudcfg = read(HUDCFG) or ""
+_tiles = _hudcfg.split("Tiles = {", 1)[1].split("\n\t},", 1)[0] if "Tiles = {" in _hudcfg else ""
+if _tiles and 'Id = "Settings"' not in _tiles and 'Id = "Base"' not in _tiles and _tiles.count('Id = "') == 5:
+    ok("v70 owner decision: 5 rail tiles, no Base / Settings tile (Settings = TopStrip gear)")
+else:
+    bad("v70 rail tiles must be the 5 of spec §3.2 (no Base / Settings tile) in HudConfig.Rail.Tiles")
+must_contain(CL + "/Controllers/HUDController.luau", "SetRailBadge", "v70 HUD rail badges")
+must_contain(CL + "/Controllers/HUDController.luau", "layoutRail", "v70 HUD left rail layout")
+must_contain(CL + "/Controllers/HUDController.luau", '"WE_TopStrip"', "v70 HUD TopStrip (level chip, gear, shield)")
+must_contain(CL + "/Controllers/NotificationController.luau", "ShowOffer", "v70 one offer toast (ShowOffer)")
+must_contain(CL + "/Controllers/NotificationController.luau", "MaxVisible", "v70 toast lane cap (MaxVisible)")
+must_contain(CL + "/Controllers/PromptController.luau", "ProximityPromptStyle.Custom", "v70 custom prompt pills")
+must_contain(CL + "/Controllers/UIController.luau", 'safeInit("Prompt", PromptController.Init)', "v70 PromptController init guarded (Default prompts on failure)")
+must_contain(CL + "/Controllers/CombatController.luau", "FireNeedsDrawn", "v70 no firing while holstered")
+must_contain(CL + "/Controllers/CombatController.luau", "WE_Reticle", "v70 reticle gui at the true centre")
+must_contain("src/ReplicatedStorage/Shared/Util/UIUtil.luau", "MakeRailTile", "v70 UIUtil.MakeRailTile")
+must_not_contain(CL + "/Controllers/UIController.luau", '" opened", "Info"', "v70 rail presses never toast")
+must_contain(CL + "/Modules/HudLayout.luau", "function HudLayout.RegisterTopStack(", "v70 HudLayout top-centre stack")
+must_contain(CL + "/Modules/HudLayout.luau", "function HudLayout.RegisterPanel(", "v70 HudLayout panel registry (one panel at a time)")
+must_contain(CL + "/Controllers/ShopController.luau", '"WE_Ent_"', "v70 Shop OWNED / offer skip via WE_Ent_<key>")
+for _c in ("HUDController", "CompassController", "UIController", "NotificationController", "PromptController", "WorldPromptController",
+           "CombatController", "OrdersController", "ArmyController", "BaseController", "ShopController", "MissionController",
+           "SettingsController", "VehicleController", "ResearchController", "MissileController", "TutorialController",
+           "TerritoryController", "BankRaidController", "ProgressionController/init"):
+    must_not_contain(CL + "/Controllers/%s.luau" % _c, "Remotes.GetEvent(", "v70 %s never blocks on Remotes.GetEvent" % _c.split("/")[0])
+
 # v70 drivable vehicles (client-simulated, server-validated). Verified: server 290 + adversarial 22, client 134 + 11
 VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
 VDC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau"
@@ -1418,6 +1467,21 @@ must_contain("src/ServerScriptService/Server/Services/TerritoryService/Territory
 must_not_contain("src/ServerScriptService/Server/Services/MissileStrikeService.luau", "CC_OFFSET", "J2 no world-axis Command Center offset")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau", "FaceMapCentre = true,", "v70 bases face the map centre (docks reach the ring)")
 must_contain("src/ReplicatedStorage/Shared/Configs/WaterConfig.luau", "OpenRadius = 40,", "v70 sea gate opens only for a boat within 40 studs")
+
+# v70 HUD "clean screen" (verified: harness 0 overlaps / 0 targets < 44 px / 0 text < 11 px at phone+owner+desktop,
+# fault injection 17 controllers, HudLayout 169, t_client 134, v_client 11)
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OrdersController.luau", "right = math.max(right, railPos.X + railSize.X)", "v70 Army popover clears a 2-column rail (800x360)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "local x = floatX(f)", "v70 cash float never overlaps the rail")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "restoreDefaultPrompts()", "v70 PromptController failure restores Default prompts")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/PromptController.luau", "prompt.Style = Enum.ProximityPromptStyle.Default", "v70 PromptController.Shutdown back to Default style")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudLayout.luau", "sweepStalePanels()", "v70 stale Modal flag safety sweep")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "if HB.AutoDrawOnDamage and not drawn and not seatedNow()", "v70 holstered players auto-draw on damage")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "drawn = HB.DrawnOnSpawn == true", "v70 every life starts holstered")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NotificationController.luau", "offersShown >= OFFER.MaxPerSession", "v70 offer session cap enforced")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NotificationController.luau", "now - lastOfferAt < OFFER.MinGapSeconds", "v70 offer min gap enforced")
+must_contain("src/ReplicatedStorage/Shared/Configs/HudConfig.luau", "DeferWhen = { \"Drawn\", \"RecentCombat\", \"Driving\", \"Modal\", \"Tutorial\" }", "v70 offers deferred in combat/driving/panels/tutorial")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "HudLayout.ApplyScreen(rg, { Insets = \"None\" })", "v70 reticle gui full-screen (true centre)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau", "{ Id = \"Missiles\", Controller = MissileController },", "v70 Missiles panel joins the one-panel-at-a-time registry")
 
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).

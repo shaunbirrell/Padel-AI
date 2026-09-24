@@ -26,6 +26,7 @@ local ResearchConfig = require(Shared.Configs.ResearchConfig)
 
 local NotificationController = require(script.Parent.NotificationController)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout) -- v70: panel registry (one panel open → Modal)
 
 type UpgradeDef = ResearchConfig.UpgradeDef
 type ResearchLock = ResearchConfig.ResearchLock
@@ -977,6 +978,13 @@ end
 
 function ResearchController.Init()
 	wire()
+	-- v70 (spec §3.8): one panel open at a time; the Modal flag hides the hotbar / prompt lane / BUY underneath.
+	-- The panel keeps its own Backdrop (0.45 black) as the dim.
+	HudLayout.RegisterPanel("Research", function(): boolean
+		return isOpen
+	end, function()
+		ResearchController.Close()
+	end)
 end
 
 function ResearchController.Open(tab: any?)
@@ -995,6 +1003,7 @@ function ResearchController.Open(tab: any?)
 	end
 	isOpen = true
 	gui.Enabled = true
+	HudLayout.PanelOpened("Research")
 	statusOverride = nil
 	updateScale()
 	renderAll()
@@ -1011,6 +1020,7 @@ function ResearchController.Close()
 	if gui then
 		gui.Enabled = false
 	end
+	HudLayout.PanelClosed("Research")
 end
 
 function ResearchController.Toggle()

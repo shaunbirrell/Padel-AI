@@ -1,42 +1,73 @@
 --!strict
---[[ Upgrade menu UI → RequestPurchaseUpgrade remote.
-	B toggles the panel (respects gameProcessed / chat).
-	Primary buy path: WALK onto upgrade pads (WorldPromptController).
-	Menu BUY buttons remain as an alternate purchase path.
+--[[ Base menu → RequestPurchaseUpgrade remote (the menu BUY path; the console BUY in the world stays primary).
+	v70 "clean screen" (spec §3.7 / §3.8):
+	  * No HUD button any more: the "BASE [B]" / "Base Upgrades [B]" CTA and the stale first-join hint toasts
+	    are gone. The menu opens from B (HudConfig.Keys.Base, respects gameProcessed / chat), the Command Center
+	    map-table terminal (WE_OpenPanel "Base") and the tutorial CTA.
+	  * Passive income moved here from the cash pill: the subtitle reads "+$N/tick passive · +$N/tick training".
+	  * A registered Modal panel (HudLayout id "Base") with the black dim; one HUD scale + safe area.
 ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local GuiService = game:GetService("GuiService")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
+local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 
+local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local NotificationController = require(script.Parent.NotificationController)
 
 local BaseController = {}
 
+local PANEL_ID = "Base"
+
 local player = Players.LocalPlayer
+local isTouch = UserInputService.TouchEnabled
 local upgrades: { [string]: number } = {}
 local cash = 0
+local passivePerTick = 0
+local trainingPerTick = 0
 local menuOpen = false
 local menuFailToastAt = 0
 local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
-local toggleBtn: TextButton? = nil
-local hintShown = false
+local subLabel: TextLabel? = nil
+local shell: PanelShell.Shell? = nil
 
 local function corner(parent: Instance, r: number)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = parent
+end
+
+local function commas(n: number): string
+	local s = tostring(math.floor(n))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if out:sub(1, 1) == "," then
+		out = out:sub(2)
+	end
+	return out
+end
+
+-- the passive-income hint that used to sit on the cash pill ("+N$/tick")
+local function refreshSubtitle()
+	local sub = subLabel
+	if not sub then
+		return
+	end
+	local tickSec = (EconomyConfig.PassiveIncome and tonumber(EconomyConfig.PassiveIncome.TickSeconds)) or 5
+	local parts = { string.format("+$%s/tick passive", commas(passivePerTick)) }
+	if trainingPerTick > 0 then
+		table.insert(parts, string.format("+$%s/tick training", commas(trainingPerTick)))
+	end
+	sub.Text = table.concat(parts, " · ") .. string.format("  (every %ds)", tickSec)
 end
 
 local function refreshList()
@@ -57,6 +88,12 @@ local function refreshList()
 		l.Parent = listFrame
 	end
 
+	local TAP = PanelShell.TouchMinV()
+	local rowH = TAP + 16
+	local titleSize = PanelShell.Text(15)
+	local descSize = PanelShell.Text(12)
+	local btnW = if isTouch then 190 else 136
+
 	for order, structureId in ipairs(BaseConfig.StructureOrder) do
 		local def = BaseConfig.Structures[structureId]
 		if def then
@@ -66,12 +103,12 @@ local function refreshList()
 
 			local row = Instance.new("Frame")
 			row.Name = structureId
-			row.Size = UDim2.new(1, -8, 0, 60)
+			row.Size = UDim2.new(1, -8, 0, rowH)
 			row.BackgroundColor3 = Constants.Colors.Background
 			row.BorderSizePixel = 0
 			row.LayoutOrder = order
 			row.Parent = listFrame
-			corner(row, 6)
+			corner(row, 8)
 
 			-- Highlight first purchasable row (Command Center) when still L0
 			if structureId == "CommandCenter" and level == 0 then
@@ -83,21 +120,22 @@ local function refreshList()
 
 			local title = Instance.new("TextLabel")
 			title.BackgroundTransparency = 1
-			title.Position = UDim2.fromOffset(8, 4)
-			title.Size = UDim2.new(1, -110, 0, 22)
+			title.Position = UDim2.fromOffset(12, 6)
+			title.Size = UDim2.new(1, -(btnW + 28), 0, titleSize + 6)
 			title.Font = Enum.Font.GothamBold
-			title.TextSize = 14
+			title.TextSize = titleSize
 			title.TextXAlignment = Enum.TextXAlignment.Left
 			title.TextColor3 = Constants.Colors.Text
+			title.TextTruncate = Enum.TextTruncate.AtEnd
 			title.Text = string.format("%s  Lv%d/%d", def.DisplayName, level, def.MaxLevel)
 			title.Parent = row
 
 			local desc = Instance.new("TextLabel")
 			desc.BackgroundTransparency = 1
-			desc.Position = UDim2.fromOffset(8, 28)
-			desc.Size = UDim2.new(1, -110, 0, 20)
-			desc.Font = Enum.Font.Gotham
-			desc.TextSize = 11
+			desc.Position = UDim2.fromOffset(12, titleSize + 14)
+			desc.Size = UDim2.new(1, -(btnW + 28), 0, descSize + 6)
+			desc.Font = Enum.Font.GothamMedium
+			desc.TextSize = descSize
 			desc.TextXAlignment = Enum.TextXAlignment.Left
 			desc.TextColor3 = Constants.Colors.Muted
 			desc.Text = def.Description
@@ -107,13 +145,14 @@ local function refreshList()
 			local btn = Instance.new("TextButton")
 			btn.AnchorPoint = Vector2.new(1, 0.5)
 			btn.Position = UDim2.new(1, -8, 0.5, 0)
-			btn.Size = UDim2.fromOffset(108, 44)
+			btn.Size = UDim2.fromOffset(btnW, TAP)
 			btn.Font = Enum.Font.GothamBold
-			btn.TextSize = 12
+			btn.TextSize = PanelShell.Text(13)
 			btn.TextColor3 = Constants.Colors.Text
+			btn.TextWrapped = true
 			btn.AutoButtonColor = true
 			btn.BorderSizePixel = 0
-			corner(btn, 6)
+			corner(btn, 8)
 
 			if not cost then
 				btn.Text = "MAX"
@@ -124,19 +163,12 @@ local function refreshList()
 				local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
 				local rate = if typeof(rates) == "table" then (tonumber(rates[structureId]) or 0) else 0
 				local incomeSuffix = if rate > 0 then (" +" .. tostring(rate) .. "/t") else ""
-				-- Wider button when income shown
-				if rate > 0 then
-					btn.Size = UDim2.fromOffset(128, 44)
-				end
-				if level == 0 then
-					btn.Text = "BUY $" .. tostring(cost) .. incomeSuffix
-				else
-					btn.Text = "UP $" .. tostring(cost) .. incomeSuffix
-				end
+				local idleText = (if level == 0 then "BUY $" else "UP $") .. commas(cost) .. incomeSuffix
+				btn.Text = idleText
 				local canAfford = cash >= cost
 				btn.BackgroundColor3 = if canAfford then Constants.Colors.Accent else Color3.fromRGB(70, 50, 50)
 				btn.Active = true
-				UIUtil.EnsureMinTouch(btn, 44)
+				UIUtil.EnsureMinTouch(btn, TAP)
 				local lastTapAt = 0
 				local function onMenuBuy()
 					-- v67: one purchase per tap
@@ -150,11 +182,11 @@ local function refreshList()
 						local now = os.clock()
 						if now - menuFailToastAt >= 0.9 then
 							menuFailToastAt = now
-							NotificationController.Show("Not enough cash — need $" .. tostring(cost), "Warn", 2.5)
+							NotificationController.Show("Not enough cash — need $" .. commas(cost), "Warn", 2.5)
 						end
 						print("[WAR EMPIRE] Base menu BUY soft-fail cash", structureId)
 					end
-					-- v61: FireServer via TryGet (≤3s); toast Buying only if fire succeeded
+					-- v61: FireServer via TryGet (≤3s); the button reads BUYING… only if the fire succeeded
 					local fired = Remotes.FireServer(Constants.RemoteNames.RequestPurchaseUpgrade, {
 						StructureId = structureId,
 					} :: Types.PurchaseUpgradeRequest)
@@ -166,8 +198,14 @@ local function refreshList()
 						end
 						return
 					end
-					if cash >= cost then
-						NotificationController.Show("Buying " .. def.DisplayName .. "…", "Info", 1.5)
+					if cash >= cost and btn.Parent then
+						-- v70: feedback on the button itself (the "Buying X…" toast is dropped by the toast lane)
+						btn.Text = "BUYING…"
+						task.delay(1.5, function()
+							if btn.Parent and btn.Text == "BUYING…" then
+								btn.Text = idleText
+							end
+						end)
 					end
 				end
 				-- v67: Activated only (MouseButton1Click as well fired two purchases per click)
@@ -191,62 +229,14 @@ local function setOpen(open: boolean)
 			panel.Visible = open
 		end
 	end
-	if toggleBtn then
-		local touch = UserInputService.TouchEnabled
-		if open then
-			toggleBtn.Text = "Close Base"
-		else
-			toggleBtn.Text = if touch then "BASE UPGRADES" else "Base Upgrades  [B]"
-		end
-		toggleBtn.Visible = true
+	local sh = shell
+	if sh then
+		sh.Sync(open)
 	end
 	if open then
+		refreshSubtitle()
 		refreshList()
 	end
-end
-
-local function flashToggle()
-	if not toggleBtn then
-		return
-	end
-	local btn = toggleBtn
-	local baseColor = Constants.Colors.Accent
-	btn.BackgroundColor3 = Constants.Colors.Gold
-	local tw = TweenService:Create(
-		btn,
-		TweenInfo.new(0.55, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 5, true),
-		{ BackgroundColor3 = baseColor }
-	)
-	tw:Play()
-	task.delay(6, function()
-		if toggleBtn == btn then
-			tw:Cancel()
-			btn.BackgroundColor3 = Constants.Colors.Accent
-		end
-	end)
-end
-
-local function showFirstJoinHints()
-	if hintShown then
-		return
-	end
-	hintShown = true
-	-- Session-once onboarding after MapSetup world is up
-	task.delay(1.4, function()
-		NotificationController.Show(
-			"Walk to glowing pads to buy · B/G menus",
-			"Info",
-			6
-		)
-	end)
-	task.delay(7.5, function()
-		NotificationController.Show(
-			"Prices float above pads · Base [B] · Garage [G] / E on pads",
-			"Info",
-			5
-		)
-	end)
-	flashToggle()
 end
 
 function BaseController.Open()
@@ -258,6 +248,10 @@ function BaseController.Close()
 end
 
 function BaseController.Toggle()
+	local sh = shell
+	if not menuOpen and sh and sh.TapThrough() then
+		return
+	end
 	setOpen(not menuOpen)
 end
 
@@ -268,117 +262,98 @@ end
 function BaseController.Init()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "WarEmpireBaseUI"
-	-- Above default chat / touch controls so mobile Base CTA stays tappable
-	gui.DisplayOrder = 58 -- above HUD dock (55); CTA parked left of dock so no click steal
+	-- DisplayOrder 58 (HudConfig.DisplayOrder.WarEmpireBaseUI): above the HUD (55); one HUD scale + safe area
+	PanelShell.Screen(gui, HudConfig.DisplayOrder.WarEmpireBaseUI)
 	gui.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(gui, false)
 	screenGui = gui
 
-	local touch = UserInputService.TouchEnabled
-	-- CRITICAL: do NOT park Base CTA over the right action dock (Shop/Rebirth/…).
-	-- Mobile → bottom-LEFT above currency pill; desktop → bottom-center (dock is right-only).
-	local btnW = if touch then 168 else 260
-	local btnH = if touch then 52 else 56
-
-	local btn = Instance.new("TextButton")
-	btn.Name = "ToggleUpgrades"
-	if touch then
-		btn.AnchorPoint = Vector2.new(0, 1)
-		btn.Position = UDim2.new(0, 16, 1, -176)
-	else
-		btn.AnchorPoint = Vector2.new(0.5, 1)
-		btn.Position = UDim2.new(0.5, 0, 1, -28)
-	end
-	btn.Size = UDim2.fromOffset(btnW, btnH)
-	btn.BackgroundColor3 = Constants.Colors.Accent
-	btn.TextColor3 = Constants.Colors.Text
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = if touch then 15 else 18
-	btn.Text = if touch then "BASE [B]" else "Base Upgrades  [B]"
-	btn.BorderSizePixel = 0
-	btn.ZIndex = 20
-	btn.Visible = true
-	btn.Active = true
-	btn.AutoButtonColor = true
-	corner(btn, 10)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Constants.Colors.Gold
-	stroke.Thickness = 2
-	stroke.Parent = btn
-	btn.Parent = gui
-	toggleBtn = btn
-	UIUtil.EnsureMinTouch(btn, 48)
-	btn.Activated:Connect(function()
-		print("[WAR EMPIRE] Base CTA toggled →", not menuOpen)
-		setOpen(not menuOpen)
-	end)
-
-	if touch then
-		task.defer(function()
-			local inset = GuiService:GetGuiInset()
-			local extra = math.clamp(inset.Y * 0.15, 0, 24)
-			btn.Position = UDim2.new(0, 16, 1, -(176 + extra))
-			btn.Visible = true
-			btn.Active = true
-		end)
-	end
-
+	local TAP = PanelShell.TouchMinV()
 	local panel = Instance.new("Frame")
 	panel.Name = "UpgradePanel"
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
-	panel.Position = UDim2.fromScale(0.5, 0.48)
-	panel.Size = UDim2.fromOffset(440, 440)
+	panel.Position = UDim2.fromScale(0.5, 0.5)
+	panel.Size = if isTouch then UDim2.new(0.94, 0, 1, -16) else UDim2.fromOffset(480, 520)
 	panel.BackgroundColor3 = Constants.Colors.Panel
 	panel.BackgroundTransparency = 0.05
 	panel.BorderSizePixel = 0
+	panel.Active = true
 	panel.Visible = false
 	panel.Parent = gui
-	corner(panel, 10)
+	corner(panel, 12)
 	do
 		local ps = Instance.new("UIStroke")
 		ps.Color = Constants.Colors.Gold
 		ps.Thickness = 1.5
 		ps.Transparency = 0.4
 		ps.Parent = panel
+		local cap = Instance.new("UISizeConstraint")
+		cap.MaxSize = if isTouch then Vector2.new(760, 620) else Vector2.new(480, 520)
+		cap.Parent = panel
 	end
 
-	local title = Instance.new("TextLabel")
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(14, 10)
-	title.Size = UDim2.new(1, -28, 0, 28)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 20
-	title.TextColor3 = Constants.Colors.Text
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Text = "BASE UPGRADES"
-	title.Parent = panel
+	local title = PanelShell.Title(panel, "BASE UPGRADES")
 
+	local subSize = PanelShell.Text(13)
 	local sub = Instance.new("TextLabel")
+	sub.Name = "PassiveIncome"
 	sub.BackgroundTransparency = 1
-	sub.Position = UDim2.fromOffset(14, 36)
-	sub.Size = UDim2.new(1, -28, 0, 18)
-	sub.Font = Enum.Font.Gotham
-	sub.TextSize = 12
-	sub.TextColor3 = Constants.Colors.Muted
+	sub.Position = UDim2.fromOffset(16, title.Position.Y.Offset + title.Size.Y.Offset)
+	sub.Size = UDim2.new(1, -(TAP + 28), 0, subSize + 4)
+	sub.Font = Enum.Font.GothamBold
+	sub.TextSize = subSize
+	sub.TextColor3 = Constants.Colors.Cash
 	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.Text = "Walk/tap BUY on pads · B menu · +$/tick shown"
+	sub.TextTruncate = Enum.TextTruncate.AtEnd
+	sub.Text = ""
 	sub.Parent = panel
+	subLabel = sub
 
+	PanelShell.CloseButton(panel, function()
+		setOpen(false)
+	end)
+
+	local listTop = math.max(TAP + 8, sub.Position.Y.Offset + subSize + 10)
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "List"
-	scroll.Position = UDim2.fromOffset(10, 58)
-	scroll.Size = UDim2.new(1, -20, 1, -68)
+	scroll.Position = UDim2.fromOffset(10, listTop)
+	scroll.Size = UDim2.new(1, -20, 1, -(listTop + 10))
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 4
+	scroll.ScrollBarThickness = if isTouch then 6 else 4
 	scroll.CanvasSize = UDim2.fromOffset(0, 0)
 	scroll.Parent = panel
 	listFrame = scroll
 
+	shell = PanelShell.Attach({
+		Id = PANEL_ID,
+		Screen = gui,
+		Panel = panel,
+		IsOpen = function(): boolean
+			return menuOpen
+		end,
+		Close = function()
+			setOpen(false)
+		end,
+	})
+
 	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: Types.BaseStatePayload)
+		if typeof(base) ~= "table" then
+			return
+		end
 		upgrades = base.Upgrades or upgrades
+		if typeof(base.PassiveIncomePerTick) == "number" then
+			passivePerTick = base.PassiveIncomePerTick
+		end
+		refreshSubtitle()
 		if menuOpen then
 			refreshList()
+		end
+	end)
+
+	Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload: any)
+		if typeof(payload) == "table" then
+			trainingPerTick = tonumber(payload.TrainingIncomePerTick) or trainingPerTick
+			refreshSubtitle()
 		end
 	end)
 
@@ -405,21 +380,29 @@ function BaseController.Init()
 		applyCash(state.Cash)
 		if state.Base then
 			upgrades = state.Base.Upgrades
+			if typeof(state.Base.PassiveIncomePerTick) == "number" then
+				passivePerTick = state.Base.PassiveIncomePerTick
+			end
 		end
+		if typeof(state.TrainingIncomePerTick) == "number" then
+			trainingPerTick = state.TrainingIncomePerTick
+		end
+		refreshSubtitle()
 	end)
 
+	local baseKey: Enum.KeyCode = HudConfig.Keys.Base or Enum.KeyCode.B
 	UserInputService.InputBegan:Connect(function(input, gp)
 		-- Respect chat / processed UI (gp true while typing in chat).
 		if gp then
 			return
 		end
-		if input.KeyCode == Enum.KeyCode.B then
+		if input.KeyCode == baseKey then
 			setOpen(not menuOpen)
 		end
 	end)
 
-	showFirstJoinHints()
-	print("[WAR EMPIRE] BaseController ready (CTA clear of dock, BUY via Activated)")
+	refreshSubtitle()
+	print("[WAR EMPIRE] BaseController ready (B / terminal / tutorial open the menu; BUY via Activated)")
 end
 
 return BaseController

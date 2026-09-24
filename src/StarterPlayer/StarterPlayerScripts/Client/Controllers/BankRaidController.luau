@@ -1,29 +1,36 @@
 --!strict
 --[[
-	Empire Bank raid HUD — bottom progress bar (gunmetal/gold).
-	Shows while InVault / HoldProgress>0 / UnderFire; cooldown text when cooling down on vault.
+	Empire Bank raid HUD — v70 "clean screen": the vault hold bar is a top-centre stack item (spec §3.4, slot
+	"Progress"; was a 340×78 card at (0.5, 0, 1, -330) in the middle of the screen). One ProgressPill:
+	  in the vault, nothing held yet  "STAND TO LOOT $15K–$35K"   0%
+	  holding                         "RAIDING EMPIRE BANK"       62%   gold bar
+	  under fire                      "UNDER FIRE · CLEAR GUARDS" 62%   red bar + red edge
+	  cooldown (standing on the vault) "EMPIRE BANK COOLDOWN"      4m    grey
+	Shows while InVault / HoldProgress > 0 / UnderFire (BankRaidStateUpdate), hidden while Dead.
+	Display only: the server decides every payout.
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
+local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
-local UIUtil = require(Shared.Util.UIUtil)
+
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local ProgressPill = require(script.Parent.Parent.Modules.ProgressPill)
 
 local BankRaidController = {}
 
 local player = Players.LocalPlayer
-local isTouch = UserInputService.TouchEnabled
 
 local _gui: ScreenGui? = nil
-local progressFrame: Frame? = nil
-local progressFill: Frame? = nil
-local titleLabel: TextLabel? = nil
-local statusLabel: TextLabel? = nil
-local pctLabel: TextLabel? = nil
+local pill: ProgressPill.Pill? = nil
+local active = false -- the server says the local player is at / in the vault (see Apply)
+
+local UNDER_FIRE = Color3.fromRGB(255, 96, 72)
+local HOLD_FILL = HudConfig.Colors.Gold
 
 export type BankRaidStatePayload = {
 	BankId: string?,
@@ -40,9 +47,27 @@ export type BankRaidStatePayload = {
 }
 
 local function setVisible(visible: boolean)
-	if progressFrame then
-		progressFrame.Visible = visible
+	if active == visible then
+		return
 	end
+	active = visible
+	local p = pill
+	if p then
+		HudLayout.RefreshVisibility(p.Frame)
+	end
+end
+
+-- "$15K" / "$1.2M" / "$900" — keeps the loot hint short enough for the 320 v pill
+local function shortCash(n: number): string
+	local a = math.abs(n)
+	if a >= 1e6 then
+		local s = string.format("%.1f", n / 1e6):gsub("%.0$", "")
+		return "$" .. s .. "M"
+	elseif a >= 1e3 then
+		local s = string.format("%.1f", n / 1e3):gsub("%.0$", "")
+		return "$" .. s .. "K"
+	end
+	return "$" .. tostring(math.floor(n))
 end
 
 function BankRaidController.Apply(payload: BankRaidStatePayload)
@@ -67,132 +92,57 @@ function BankRaidController.Apply(payload: BankRaidStatePayload)
 		return
 	end
 
-	setVisible(true)
-	local pct = math.clamp(hold / need, 0, 1)
-	if pctLabel then
+	local p = pill
+	if p then
+		local frac = math.clamp(hold / need, 0, 1)
 		if cd > 0 then
-			pctLabel.Text = string.format("%dm", math.ceil(cd / 60))
-		else
-			pctLabel.Text = string.format("%d%%", math.floor(pct * 100))
-		end
-	end
-	if progressFill then
-		progressFill.Size = UDim2.fromScale(if cd > 0 then 0 else pct, 1)
-		if underFire then
-			progressFill.BackgroundColor3 = Color3.fromRGB(220, 90, 70)
-		elseif cd > 0 then
-			progressFill.BackgroundColor3 = Color3.fromRGB(90, 100, 110)
-		else
-			progressFill.BackgroundColor3 = Constants.Colors.Gold
-		end
-	end
-	if titleLabel then
-		if cd > 0 then
-			titleLabel.Text = string.format("%s cooldown", name)
-		else
-			titleLabel.Text = string.format("Raiding %s…", name)
-		end
-	end
-	if statusLabel then
-		if cd > 0 then
-			local mins = math.max(1, math.ceil(cd / 60))
-			statusLabel.Text = string.format("Cooldown %dm — come back later", mins)
-			statusLabel.TextColor3 = Color3.fromRGB(180, 190, 200)
+			p.Title.Text = string.upper(name) .. " COOLDOWN"
+			p.Title.TextColor3 = ProgressPill.Colors.Title
+			p.Value.Text = string.format("%dm", math.max(1, math.ceil(cd / 60)))
+			p.Fill.BackgroundColor3 = ProgressPill.Colors.Idle
+			ProgressPill.SetFraction(p, 0)
+			ProgressPill.ResetStroke(p)
 		elseif underFire then
-			statusLabel.Text = "UNDER FIRE — clear guards"
-			statusLabel.TextColor3 = Color3.fromRGB(255, 140, 90)
+			p.Title.Text = "UNDER FIRE · CLEAR GUARDS"
+			p.Title.TextColor3 = UNDER_FIRE
+			p.Value.Text = ProgressPill.Percent(frac)
+			p.Fill.BackgroundColor3 = UNDER_FIRE
+			ProgressPill.SetFraction(p, frac)
+			ProgressPill.AccentStroke(p, UNDER_FIRE)
 		else
-			local cashMin = tonumber(payload.CashHintMin) or 15000
-			local cashMax = tonumber(payload.CashHintMax) or 35000
-			statusLabel.Text = string.format("STAND TO LOOT · $%d–$%d", cashMin, cashMax)
-			statusLabel.TextColor3 = Color3.fromRGB(200, 210, 140)
+			if hold > 0 then
+				p.Title.Text = "RAIDING " .. string.upper(name)
+			else
+				local cashMin = tonumber(payload.CashHintMin) or 15000
+				local cashMax = tonumber(payload.CashHintMax) or 35000
+				p.Title.Text = string.format("STAND TO LOOT %s–%s", shortCash(cashMin), shortCash(cashMax))
+			end
+			p.Title.TextColor3 = ProgressPill.Colors.Title
+			p.Value.Text = ProgressPill.Percent(frac)
+			p.Fill.BackgroundColor3 = HOLD_FILL
+			ProgressPill.SetFraction(p, frac)
+			ProgressPill.ResetStroke(p)
 		end
 	end
+	setVisible(true)
 end
 
 function BankRaidController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireBankRaid"
+	-- Core safe insets + the one HUD UIScale; DisplayOrder from HudConfig (32: above the capture bar's gui)
+	HudLayout.ApplyScreen(screen, { Insets = "Core" })
 	screen.Parent = player:WaitForChild("PlayerGui")
-	UIUtil.PrepareScreen(screen, false)
-	-- Above territory capture (28), below pad BUY / combat cluster
-	screen.DisplayOrder = 32
 	_gui = screen
 
-	local prog = Instance.new("Frame")
-	prog.Name = "BankRaidProgress"
-	prog.AnchorPoint = Vector2.new(0.5, 1)
-	-- Sit above territory bar / dock; clear of pad BUY (~-108) and combat HP
-	prog.Position = UDim2.new(0.5, 0, 1, if isTouch then -330 else -180)
-	prog.Size = UDim2.fromOffset(if isTouch then 340 else 300, if isTouch then 78 else 52)
-	prog.BackgroundColor3 = Constants.Colors.Gunmetal
-	prog.BackgroundTransparency = 0.05
-	prog.BorderSizePixel = 0
-	prog.Visible = false
-	prog.ZIndex = 12
-	prog.Parent = screen
-	UIUtil.Corner(prog, 10)
-	UIUtil.GoldStroke(prog, 2)
-	progressFrame = prog
+	local p = ProgressPill.Build(screen, "BankRaidProgress")
+	pill = p
+	HudLayout.BindVisibility(p.Frame, { HideWhen = { "Dead" } }, function(): boolean
+		return active
+	end)
+	HudLayout.RegisterTopStack("BankRaid", p.Frame, HudConfig.TopStack.Order.Progress, { Space = "Hud" })
 
-	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.BackgroundTransparency = 1
-	title.Position = UDim2.fromOffset(12, 6)
-	title.Size = UDim2.new(1, -90, 0, if isTouch then 20 else 18)
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = if isTouch then 15 else 13
-	title.TextColor3 = Constants.Colors.Text
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Text = "Raiding Empire Bank…"
-	title.TextTruncate = Enum.TextTruncate.AtEnd
-	title.Parent = prog
-	titleLabel = title
-
-	local pct = Instance.new("TextLabel")
-	pct.Name = "Pct"
-	pct.BackgroundTransparency = 1
-	pct.AnchorPoint = Vector2.new(1, 0)
-	pct.Position = UDim2.new(1, -12, 0, 6)
-	pct.Size = UDim2.fromOffset(72, if isTouch then 22 else 18)
-	pct.Font = Enum.Font.GothamBold
-	pct.TextSize = if isTouch then 18 else 14
-	pct.TextColor3 = Constants.Colors.Gold
-	pct.TextXAlignment = Enum.TextXAlignment.Right
-	pct.Text = "0%"
-	pct.Parent = prog
-	pctLabel = pct
-
-	local status = Instance.new("TextLabel")
-	status.Name = "Status"
-	status.BackgroundTransparency = 1
-	status.Position = UDim2.fromOffset(12, if isTouch then 28 else 24)
-	status.Size = UDim2.new(1, -24, 0, 16)
-	status.Font = Enum.Font.GothamBold
-	status.TextSize = if isTouch then 12 else 11
-	status.TextColor3 = Color3.fromRGB(200, 210, 140)
-	status.TextXAlignment = Enum.TextXAlignment.Left
-	status.Text = "STAND TO LOOT"
-	status.Parent = prog
-	statusLabel = status
-
-	local bg = Instance.new("Frame")
-	bg.Position = UDim2.fromOffset(12, if isTouch then 50 else 36)
-	bg.Size = UDim2.new(1, -24, 0, if isTouch then 18 else 14)
-	bg.BackgroundColor3 = Constants.Colors.Background
-	bg.BorderSizePixel = 0
-	bg.Parent = prog
-	UIUtil.Corner(bg, 4)
-
-	local fill = Instance.new("Frame")
-	fill.Size = UDim2.fromScale(0, 1)
-	fill.BackgroundColor3 = Constants.Colors.Gold
-	fill.BorderSizePixel = 0
-	fill.Parent = bg
-	UIUtil.Corner(fill, 4)
-	progressFill = fill
-
-	Remotes.GetEvent(Constants.RemoteNames.BankRaidStateUpdate).OnClientEvent:Connect(function(payload: any)
+	Remotes.BindEvent(Constants.RemoteNames.BankRaidStateUpdate, function(payload: any)
 		if typeof(payload) ~= "table" then
 			return
 		end

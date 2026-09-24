@@ -1,350 +1,1054 @@
 --!strict
 --[[
-	Programmatic HUD: Level+XP top-left, currency pill bottom-left,
-	mobile action dock (large color-coded squares) bottom-right.
-	Inspiration-only layout quality — WAR EMPIRE features/hotkeys kept.
+	HUDController — the v70 "clean screen" HUD shell (spec §3.1-3.3). Numbers: Shared/Configs/HudConfig.luau;
+	scale / insets / flags / badges / cash-float plumbing: Client/Modules/HudLayout.luau; icons: HudIcons.luau.
+
+	WarEmpireHUD (DisplayOrder 55, the shared "MobileScale" UIScale, CoreUISafeInsets)
+	  Rail          5 tiles down the left edge (Shop · Rebirth · Army · Garage · Missions) + badges; desktop key hints
+	  CurrencyPill  bottom-left: cash icon · number (count-up) · green + (cash packs); "+$141" floats rise from it
+	WE_TopStrip (DisplayOrder 56, the Roblox topbar row, real px — Roblox's own buttons are 44 px there too)
+	  LevelChip (tap / hover → the GoalLabel tooltip) · SettingsGear · ShieldChip (while WE_ShieldUntil runs)
+	  CompassController adds the compass chip at the right end.
+
+	REMOVED from the screen (spec §3.7; where each thing lives now):
+	  LevelPanel goal / rebirth text → the level-chip tooltip (GoalLabel) + the Rebirth "!" badge
+	  level-up / near-prestige banners → chip pulse / Rebirth tile pulse (the server's reward toast is the text)
+	  SeasonLabel → Progression panel header · SpinnerButton → Missions badge + the Missions panel claim row
+	  PassiveHint → Base panel subtitle · GoldLabel "◆ 0" → Shop header (gold > 0)
+	  PendingLabel "+$N pending" → the in-world ATM screen · the 7-tile MobileActionBar dock → Rail + TopStrip gear
 ]]
 
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
-local AudioController = require(script.Parent.Parent.Modules.AudioController)
+local HudConfig = require(Shared.Configs.HudConfig)
 local LevelConfig = require(Shared.Configs.LevelConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 
 local HUDController = {}
 
-local player = Players.LocalPlayer
-local _gui: ScreenGui? = nil
-local levelLabel: TextLabel? = nil
-local goalLabel: TextLabel? = nil
-local nearPrestigeBanner: Frame? = nil
-local levelUpBanner: Frame? = nil
-local xpBarFill: Frame? = nil
-local xpText: TextLabel? = nil
-local cashLabel: TextLabel? = nil
-local pendingLabel: TextButton? = nil
-local goldLabel: TextLabel? = nil
-local passiveLabel: TextLabel? = nil
-local lastPending = 0
-local seasonLabel: TextLabel? = nil
-local spinnerBtn: TextButton? = nil
-local actionDock: Frame? = nil
-local spinnerReady = false
-local spinnerCooldown = 0
-local lastPassive = 0
-local lastTraining = 0
-local shopOpener: (() -> ())? = nil
+-- One rail tile binding (UIController): Id = HudConfig.Rail.Tiles[].Id; Name = the pinned child name ("DockMissions").
+export type RailAction = { Id: string, Name: string?, OnClick: () -> () }
 
-local function refreshPassiveHint()
-	if not passiveLabel then
+type FloatRec = { Label: TextLabel, Stroke: UIStroke, Amount: number, Last: number, Token: number, Tweens: { Tween } }
+
+local player = Players.LocalPlayer
+local Colors = HudConfig.Colors
+local Fonts = HudConfig.Fonts
+local TS = HudConfig.TopStrip
+
+local _gui: ScreenGui? = nil
+local topArea: Frame? = nil
+
+-- TopStrip
+local levelLabel: TextLabel? = nil
+local xpBarFill: Frame? = nil
+local chipStroke: UIStroke? = nil
+local chipPop: UIScale? = nil
+local goalTip: Frame? = nil
+local goalLabel: TextLabel? = nil
+local rebirthLabel: TextLabel? = nil
+local tipToken = 0
+local shieldChip: Frame? = nil
+local shieldText: TextLabel? = nil
+local shieldLoop = false
+
+-- Rail
+local rail: Frame? = nil
+local railGrid: UIGridLayout? = nil
+local railTiles: { [string]: TextButton } = {}
+local railCount = 0
+
+-- Cash pill
+local pill: Frame? = nil
+local cashLabel: TextLabel? = nil
+local cashPop: UIScale? = nil
+local plusSlot: Frame? = nil
+local cashTarget: number? = nil -- last synced cash; nil until the first sync (the label shows "$…")
+local countFrom, countTo, countElapsed, counting = 0, 0, 0, false
+local flashToken = 0
+local floats: { FloatRec } = {}
+local floatBirths: { number } = {}
+local lastBuyVisibleAt = -math.huge
+-- ONE spend float per purchase: WorldPromptController floats console / Base buys from PurchaseResult (the exact
+-- cost) through HudLayout.CashFloat; the cash-drop float (setCash) is only for drops nothing else explained.
+local SPEND_FLOAT_DELAY = 0.35 -- s after a cash drop: a stale sync that bounces back, or PurchaseResult, lands first
+local lastExplicitSpendAt = -math.huge
+local lastDropFloat: { Amount: number, At: number }? = nil
+
+local shopOpener: (() -> ())? = nil
+local settingsOpener: (() -> ())? = nil
+
+-- badge inputs
+local spinnerReady = false
+local missionClaimables = 0
+local loginClaimable = false
+local nearPulseLevel = -1
+local feedsStarted = false
+
+---------------------------------------------------------------------------------------------------------------
+-- small builders
+---------------------------------------------------------------------------------------------------------------
+
+local function isTouch(): boolean
+	return HudLayout.IsTouch()
+end
+
+local function label(parent: Instance?, name: string, font: Enum.Font, size: number, color: Color3, text: string): TextLabel
+	local t = Instance.new("TextLabel")
+	t.Name = name
+	t.BackgroundTransparency = 1
+	t.BorderSizePixel = 0
+	t.Font = font
+	t.TextSize = size
+	t.TextColor3 = color
+	t.Text = text
+	t.Active = false
+	if parent then
+		t.Parent = parent
+	end
+	return t
+end
+
+local function hList(parent: Instance, padding: number, align: Enum.VerticalAlignment?): UIListLayout
+	local l = Instance.new("UIListLayout")
+	l.FillDirection = Enum.FillDirection.Horizontal
+	l.VerticalAlignment = align or Enum.VerticalAlignment.Center
+	l.Padding = UDim.new(0, padding)
+	l.SortOrder = Enum.SortOrder.LayoutOrder
+	l.Parent = parent
+	return l
+end
+
+local function padding(parent: Instance, left: number, right: number, top: number?, bottom: number?): UIPadding
+	local p = Instance.new("UIPadding")
+	p.PaddingLeft = UDim.new(0, left)
+	p.PaddingRight = UDim.new(0, right)
+	p.PaddingTop = UDim.new(0, top or 0)
+	p.PaddingBottom = UDim.new(0, bottom or 0)
+	p.Parent = parent
+	return p
+end
+
+local function chipBase(inst: GuiObject)
+	inst.BackgroundColor3 = TS.Bg
+	inst.BackgroundTransparency = TS.BgTransparency
+	inst.BorderSizePixel = 0
+	UIUtil.Corner(inst, TS.Corner)
+end
+
+local function withCommas(n: number): string
+	local s = tostring(math.floor(math.abs(n) + 0.5))
+	s = s:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
+	return if n < 0 then "-" .. s else s
+end
+
+local ABBREV: { { Value: number, Suffix: string } } = {
+	{ Value = 1e12, Suffix = "T" },
+	{ Value = 1e9, Suffix = "B" },
+	{ Value = 1e6, Suffix = "M" },
+	{ Value = 1e3, Suffix = "K" },
+}
+
+-- "50,015,946"; at/above HudConfig.CashPill.AbbreviateAbove → "1.23B" (no "$": the pill's icon says cash)
+local function formatCash(n: number): string
+	local P = HudConfig.CashPill
+	local v = math.floor((tonumber(n) or 0) + 0.5)
+	local body = withCommas(v)
+	if math.abs(v) >= P.AbbreviateAbove then
+		for _, a in ipairs(ABBREV) do
+			if math.abs(v) >= a.Value then
+				body = string.format("%.2f%s", v / a.Value, a.Suffix)
+				break
+			end
+		end
+	end
+	return if P.ShowDollarSign then "$" .. body else body
+end
+
+local function floatText(amount: number): string
+	return (if amount >= 0 then "+$" else "-$") .. withCommas(math.abs(amount))
+end
+
+local function serverNow(): number
+	local ok, t = pcall(function(): number
+		return Workspace:GetServerTimeNow()
+	end)
+	if ok and typeof(t) == "number" and t > 0 then
+		return t
+	end
+	return os.time()
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- TopStrip (WE_TopStrip): level chip + GoalLabel tooltip, settings gear, shield chip
+---------------------------------------------------------------------------------------------------------------
+
+local function ensureTopStrip(): Frame?
+	local area = topArea
+	if area and area.Parent then
+		return area
+	end
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if not pg then
+		return nil
+	end
+	local existing = pg:FindFirstChild("WE_TopStrip")
+	local screen: ScreenGui
+	if existing and existing:IsA("ScreenGui") then
+		screen = existing
+	else
+		screen = Instance.new("ScreenGui")
+		screen.Name = "WE_TopStrip"
+		HudLayout.ApplyScreen(screen, { Insets = "Topbar", DisplayOrder = HudConfig.DisplayOrder.WE_TopStrip })
+		screen.Parent = pg
+	end
+	local a = HudLayout.TopbarArea(screen)
+	topArea = a
+	return a
+end
+
+local function showGoalTip(seconds: number?)
+	local tip = goalTip
+	if not tip then
 		return
 	end
-	if lastTraining > 0 then
-		passiveLabel.Text = string.format("+%d$/tick · Train +%d$/tick", lastPassive, lastTraining)
-	else
-		passiveLabel.Text = string.format("+%d$/tick", lastPassive)
+	tipToken += 1
+	local my = tipToken
+	tip.Visible = true
+	if seconds then
+		task.delay(seconds, function()
+			if tipToken == my and goalTip then
+				goalTip.Visible = false
+			end
+		end)
 	end
 end
 
-local function makeCorner(parent: Instance, radius: number)
-	UIUtil.Corner(parent, radius)
-end
-
-local function makeStroke(parent: Instance, gold: boolean?)
-	if gold then
-		UIUtil.GoldStroke(parent, 1.5)
-	else
-		UIUtil.Stroke(parent)
+local function hideGoalTip()
+	tipToken += 1
+	if goalTip then
+		goalTip.Visible = false
 	end
 end
 
-local function formatCash(n: number): string
-	local v = tonumber(n) or 0
-	local formatted = tostring(math.floor(v))
-	formatted = formatted:reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")
-	return "$" .. formatted
+local function buildTopStrip()
+	local area = ensureTopStrip()
+	if not area then
+		warn("[HUDController] TopStrip: no PlayerGui")
+		return
+	end
+	local L = TS.Level
+
+	local group = Instance.new("Frame")
+	group.Name = "LeftGroup"
+	group.AnchorPoint = Vector2.new(0, 1)
+	group.Position = UDim2.new(0, TS.EdgePad, 1, -TS.BottomPad + TS.YNudge)
+	group.Size = UDim2.fromOffset(0, TS.Height)
+	group.AutomaticSize = Enum.AutomaticSize.X
+	group.BackgroundTransparency = 1
+	group.BorderSizePixel = 0
+	group.Active = false
+	hList(group, TS.Gap)
+
+	-- Level chip: "LV 7" + XP bar. Tap / hover → the GoalLabel tooltip (goal + rebirth summary).
+	local chip = Instance.new("TextButton")
+	chip.Name = "LevelChip"
+	chip.LayoutOrder = 1
+	chip.Size = UDim2.fromOffset(L.MinWidth, TS.Height)
+	chip.AutomaticSize = Enum.AutomaticSize.X
+	chip.AutoButtonColor = false
+	chip.Text = ""
+	chip.Active = true
+	chip.Selectable = true
+	chipBase(chip)
+	padding(chip, 14, 14)
+	hList(chip, 8)
+	local stroke = Instance.new("UIStroke")
+	stroke.Name = "PulseStroke"
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Color = Constants.Colors.GoldBright
+	stroke.Thickness = 2
+	stroke.Transparency = 1
+	stroke.Parent = chip
+	chipStroke = stroke
+	local pop = Instance.new("UIScale")
+	pop.Name = "Pulse"
+	pop.Parent = chip
+	chipPop = pop
+
+	local cap = label(chip, "LevelCaption", Fonts.Body, L.CaptionSize, Colors.White, "LV")
+	cap.TextTransparency = 0.28
+	cap.Size = UDim2.new(0, 0, 1, 0)
+	cap.AutomaticSize = Enum.AutomaticSize.X
+	cap.LayoutOrder = 1
+	local num = label(chip, "LevelLabel", Fonts.Display, L.NumberSize, Colors.White, "1")
+	num.Size = UDim2.new(0, 0, 1, 0)
+	num.AutomaticSize = Enum.AutomaticSize.X
+	num.LayoutOrder = 2
+	UIUtil.TextOutline(num, TS.TextStroke)
+	levelLabel = num
+	local barBg = Instance.new("Frame")
+	barBg.Name = "XPBarBG"
+	barBg.LayoutOrder = 3
+	barBg.Size = UDim2.fromOffset(L.BarSize.X, L.BarSize.Y)
+	barBg.BackgroundColor3 = L.BarBg
+	barBg.BackgroundTransparency = L.BarBgTransparency
+	barBg.BorderSizePixel = 0
+	barBg.Active = false
+	barBg.Parent = chip
+	UIUtil.Corner(barBg, math.ceil(L.BarSize.Y / 2))
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = Colors.XP
+	fill.BorderSizePixel = 0
+	fill.Active = false
+	fill.Parent = barBg
+	UIUtil.Corner(fill, math.ceil(L.BarSize.Y / 2))
+	xpBarFill = fill
+
+	-- GoalLabel tooltip: a small dark card under the chip (line 1 goal, line 2 rebirth summary)
+	local tip = Instance.new("Frame")
+	tip.Name = "GoalTip"
+	tip.Position = UDim2.new(0, TS.EdgePad, 1, L.TipGap)
+	tip.Size = UDim2.fromOffset(L.TipMaxWidth, 0)
+	tip.AutomaticSize = Enum.AutomaticSize.Y
+	tip.BackgroundColor3 = TS.Bg
+	tip.BackgroundTransparency = 0.08
+	tip.BorderSizePixel = 0
+	tip.Active = false
+	tip.Visible = false
+	tip.ZIndex = 5
+	UIUtil.Corner(tip, 10)
+	padding(tip, 10, 10, 8, 8)
+	local tipList = Instance.new("UIListLayout")
+	tipList.FillDirection = Enum.FillDirection.Vertical
+	tipList.Padding = UDim.new(0, 3)
+	tipList.SortOrder = Enum.SortOrder.LayoutOrder
+	tipList.Parent = tip
+	local goal = label(tip, "GoalLabel", Fonts.Body, L.TipGoalSize, Colors.White, "")
+	goal.Size = UDim2.new(1, 0, 0, 0)
+	goal.AutomaticSize = Enum.AutomaticSize.Y
+	goal.TextWrapped = true
+	goal.TextXAlignment = Enum.TextXAlignment.Left
+	goal.LayoutOrder = 1
+	goal.ZIndex = 6
+	goalLabel = goal
+	local reb = label(tip, "RebirthLabel", Fonts.BodyMedium, L.TipRebirthSize, Colors.Gold, "")
+	reb.Size = UDim2.new(1, 0, 0, 0)
+	reb.AutomaticSize = Enum.AutomaticSize.Y
+	reb.TextWrapped = true
+	reb.TextXAlignment = Enum.TextXAlignment.Left
+	reb.LayoutOrder = 2
+	reb.ZIndex = 6
+	rebirthLabel = reb
+	goalTip = tip
+
+	chip.Activated:Connect(function()
+		if goalTip and goalTip.Visible then
+			hideGoalTip()
+		else
+			showGoalTip(L.TapShowsGoalSeconds)
+		end
+	end)
+	chip.MouseEnter:Connect(function()
+		if not isTouch() then
+			showGoalTip(nil)
+		end
+	end)
+	chip.MouseLeave:Connect(function()
+		if not isTouch() then
+			hideGoalTip()
+		end
+	end)
+	chip.Parent = group
+
+	-- Settings gear (the only way into Settings: no rail tile, no key)
+	local G = TS.Settings
+	local gear = Instance.new("TextButton")
+	gear.Name = "SettingsGear"
+	gear.LayoutOrder = 2
+	gear.Size = UDim2.fromOffset(G.Size, G.Size)
+	gear.AutoButtonColor = false
+	gear.Text = ""
+	gear.Active = true
+	gear.Selectable = true
+	chipBase(gear)
+	HudIcons.Make("Gear", gear, {
+		Size = UDim2.fromOffset(24, 24),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Color = G.IconColor,
+		Fill = TS.Bg,
+		ZIndex = 2,
+	})
+	gear.Activated:Connect(function()
+		if settingsOpener then
+			local ok, err = pcall(settingsOpener :: any)
+			if not ok then
+				warn("[HUDController] settings gear:", err)
+			end
+		end
+	end)
+	gear.Parent = group
+
+	-- Shield chip (raid victim shield): cyan shield + "9:12" while WE_ShieldUntil is in the future
+	local SH = TS.Shield
+	local sh = Instance.new("Frame")
+	sh.Name = "ShieldChip"
+	sh.LayoutOrder = 3
+	sh.Size = UDim2.fromOffset(0, TS.Height)
+	sh.AutomaticSize = Enum.AutomaticSize.X
+	sh.Active = false
+	sh.Visible = false
+	chipBase(sh)
+	padding(sh, 10, 14)
+	hList(sh, 6)
+	HudIcons.Make("Shield", sh, { Name = "Icon", Size = UDim2.fromOffset(SH.IconSize, SH.IconSize), Color = SH.IconColor, LayoutOrder = 1 })
+	local st = label(sh, "ShieldText", Fonts.Display, SH.TextSize, Colors.White, "")
+	st.Size = UDim2.new(0, 0, 1, 0)
+	st.AutomaticSize = Enum.AutomaticSize.X
+	st.LayoutOrder = 2
+	UIUtil.TextOutline(st, TS.TextStroke)
+	sh.Parent = group
+	shieldChip = sh
+	shieldText = st
+
+	tip.Parent = area
+	group.Parent = area
+	HudLayout.SetRect("LevelChip", chip)
+end
+
+local function shieldLeft(): number
+	local v = tonumber(player:GetAttribute(TS.Shield.Attribute)) or 0
+	return math.max(0, v - serverNow())
+end
+
+local function refreshShield()
+	local chip, txt = shieldChip, shieldText
+	if not chip or not txt then
+		return
+	end
+	local left = shieldLeft()
+	if left <= 0 then
+		chip.Visible = false
+		return
+	end
+	local s = math.ceil(left)
+	txt.Text = string.format("%d:%02d", s // 60, s % 60)
+	chip.Visible = true
+	if shieldLoop then
+		return
+	end
+	shieldLoop = true
+	task.spawn(function()
+		while shieldLeft() > 0 do
+			task.wait(1)
+			local c, t = shieldChip, shieldText
+			if not c or not t then
+				break
+			end
+			local r = math.ceil(shieldLeft())
+			t.Text = string.format("%d:%02d", r // 60, r % 60)
+		end
+		shieldLoop = false
+		if shieldChip and shieldLeft() <= 0 then
+			shieldChip.Visible = false
+		end
+	end)
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Rail (WarEmpireHUD › Rail): one UIGridLayout column of MakeRailTile cells, vertically centred between the
+-- content top and the cash pill; wraps to a 2nd column when a screen is too short (800x360 → 4 + 1).
+---------------------------------------------------------------------------------------------------------------
+
+local function layoutRail()
+	local host, grid = rail, railGrid
+	if not host or not grid then
+		return
+	end
+	local R = HudConfig.Rail
+	local touch = isTouch()
+	local T = if touch then R.Tile else R.TileDesktop
+	local ov = if touch then R.LabelOverhang else R.LabelOverhangDesktop
+	local gap = if touch then R.Gap else R.GapDesktop -- dock≤8: rail gap 5/8 v
+	local pillH = if touch then HudConfig.CashPill.Height else HudConfig.CashPill.HeightDesktop
+	local n = math.max(1, railCount)
+	local cv = HudLayout.ContentSizeV()
+	local bandTop = R.TopReserve
+	local bandBot = cv.Y - (HudConfig.CashPill.Bottom + pillH + HudConfig.Edge)
+	local bandH = math.max(0, bandBot - bandTop)
+	local perCol = math.clamp(math.floor((bandH + gap) / (T + ov + gap)), 1, n)
+	local cols = math.ceil(n / perCol)
+	local colH = perCol * (T + ov) + (perCol - 1) * gap
+	local colGap = gap + R.ColumnGap
+	local top = math.clamp(bandTop + R.CenterY * bandH - colH / 2, bandTop, math.max(bandTop, bandBot - colH))
+	grid.CellSize = UDim2.fromOffset(T, T + ov)
+	grid.CellPadding = UDim2.fromOffset(colGap, gap)
+	grid.FillDirectionMaxCells = perCol
+	host.Position = UDim2.fromOffset(R.Left, top)
+	host.Size = UDim2.fromOffset(cols * T + (cols - 1) * colGap, colH)
+end
+
+local function tileDef(id: string): any?
+	for _, t in ipairs(HudConfig.Rail.Tiles) do
+		if t.Id == id then
+			return t
+		end
+	end
+	return nil
+end
+
+-- desktop: hovering a tile shows "Shop [P]" after HudConfig.Rail.KeyHintDelay
+local function addKeyHint(btn: TextButton, id: string, def: any?)
+	if isTouch() then
+		return
+	end
+	local key = (HudConfig.Keys :: any)[id] or (def and def.Key)
+	if typeof(key) ~= "EnumItem" then
+		return
+	end
+	local R = HudConfig.Rail
+	local text = string.format("%s [%s]", if def then tostring(def.Label) else id, key.Name)
+	local hint = label(nil, "KeyHint", Fonts.Body, R.KeyHintSize, Colors.White, text)
+	hint.AnchorPoint = Vector2.new(0, 0.5)
+	hint.Position = UDim2.new(1, 8, 0, R.TileDesktop / 2)
+	hint.AutomaticSize = Enum.AutomaticSize.XY
+	hint.BackgroundColor3 = TS.Bg
+	hint.BackgroundTransparency = 0.15
+	hint.Visible = false
+	hint.ZIndex = 40
+	UIUtil.Corner(hint, 8)
+	padding(hint, 8, 8, 4, 4)
+	hint.Parent = btn
+	local token = 0
+	btn.MouseEnter:Connect(function()
+		token += 1
+		local my = token
+		task.delay(R.KeyHintDelay, function()
+			if my == token then
+				hint.Visible = true
+			end
+		end)
+	end)
+	local function hide()
+		token += 1
+		hint.Visible = false
+	end
+	btn.MouseLeave:Connect(hide)
+	btn.Activated:Connect(hide)
+end
+
+local function pulseTile(id: string, scale: number)
+	local btn = railTiles[id]
+	local press = btn and btn:FindFirstChild("Press", true)
+	if press and press:IsA("UIScale") then
+		press.Scale = scale
+		TweenService:Create(press, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	end
+end
+
+--[[ Rail badge: "!" (gold ready style), a count ("3"), or nil to clear. Anyone else calls HudLayout.SetBadge. ]]
+function HUDController.SetRailBadge(id: string, text: string?)
+	HudLayout.SetBadge(id, text)
+end
+
+local function refreshMissionsBadge()
+	local n = missionClaimables + (if loginClaimable then 1 else 0) + (if spinnerReady then 1 else 0)
+	HUDController.SetRailBadge("Missions", if n > 0 then tostring(n) else nil)
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Cash pill (WarEmpireHUD › CurrencyPill) + cash float
+---------------------------------------------------------------------------------------------------------------
+
+local function pillHeight(): number
+	return if isTouch() then HudConfig.CashPill.Height else HudConfig.CashPill.HeightDesktop
+end
+
+local function openShopFromHud()
+	if shopOpener then
+		local ok, err = pcall(shopOpener :: any)
+		if not ok then
+			warn("[HUDController] cash + :", err)
+		end
+	end
+end
+
+local function buildPill(screen: ScreenGui)
+	local P = HudConfig.CashPill
+	local touch = isTouch()
+	local h = pillHeight()
+
+	local p = Instance.new("Frame")
+	p.Name = "CurrencyPill"
+	p.AnchorPoint = Vector2.new(0, 1)
+	p.Position = UDim2.new(0, P.Left, 1, -P.Bottom)
+	p.Size = UDim2.fromOffset(P.MinWidth, h)
+	p.AutomaticSize = Enum.AutomaticSize.X
+	p.BackgroundColor3 = Colors.PillBg
+	p.BackgroundTransparency = Colors.PillBgTransparency
+	p.BorderSizePixel = 0
+	p.Active = false
+	p.ZIndex = 12
+	UIUtil.Corner(p, P.Corner)
+	local ring = UIUtil.Stroke(p, Colors.PillStroke, P.StrokePx)
+	ring.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	ring.Transparency = Colors.PillStrokeTransparency
+	padding(p, P.PadLeft, P.PadRight)
+	local lim = Instance.new("UISizeConstraint")
+	lim.MinSize = Vector2.new(P.MinWidth, 0)
+	lim.MaxSize = Vector2.new(P.MaxWidth, math.huge)
+	lim.Parent = p
+	hList(p, P.Gap)
+
+	HudIcons.Make("Cash", p, { Name = "Icon", Size = UDim2.fromOffset(P.IconSize.X, P.IconSize.Y), LayoutOrder = 1, ZIndex = 13 })
+
+	local cash = label(p, "CashLabel", Fonts.Display, if touch then P.NumberSize else P.NumberSizeDesktop, P.NumberColor, "")
+	cash.LayoutOrder = 2
+	cash.Size = UDim2.new(0, 0, 1, 0)
+	cash.AutomaticSize = Enum.AutomaticSize.X
+	cash.TextXAlignment = Enum.TextXAlignment.Left
+	cash.ZIndex = 13
+	-- v36: high-contrast cash (white FredokaOne + a 2 px Ink outline on the dark pill — not yellow/gold)
+	cash.TextStrokeColor3 = Colors.Ink
+	cash.TextStrokeTransparency = 0.25
+	-- v60: brief $… then leaderstats/0 within 0.5s — never stuck forever
+	cash.Text = "$…"
+	UIUtil.TextOutline(cash, 2)
+	padding(cash, 0, P.NumberPadRight)
+	local cp = Instance.new("UIScale")
+	cp.Name = "Pop"
+	cp.Parent = cash
+	cashLabel = cash
+	cashPop = cp
+
+	-- green + : a transparent PlusHit v hit area around the PlusVisual v circle → cash packs (no toast)
+	local slot = Instance.new("Frame")
+	slot.Name = "PlusSlot"
+	slot.LayoutOrder = 3
+	slot.Size = UDim2.fromOffset(P.PlusVisual, P.PlusVisual)
+	slot.BackgroundTransparency = 1
+	slot.BorderSizePixel = 0
+	slot.Active = false
+	slot.Parent = p
+	plusSlot = slot
+	local cashPlus = Instance.new("TextButton")
+	cashPlus.Name = "CashPlus"
+	cashPlus.AnchorPoint = Vector2.new(0.5, 0.5)
+	cashPlus.Position = UDim2.fromScale(0.5, 0.5)
+	cashPlus.Size = UDim2.fromOffset(P.PlusHit, P.PlusHit)
+	cashPlus.BackgroundTransparency = 1
+	cashPlus.BorderSizePixel = 0
+	cashPlus.AutoButtonColor = false
+	cashPlus.Text = ""
+	cashPlus.Active = true
+	cashPlus.Selectable = true
+	cashPlus.ZIndex = 14
+	cashPlus.Parent = slot
+	UIUtil.EnsureMinTouch(cashPlus, 44)
+	local circle = Instance.new("Frame")
+	circle.Name = "Circle"
+	circle.AnchorPoint = Vector2.new(0.5, 0.5)
+	circle.Position = UDim2.fromScale(0.5, 0.5)
+	circle.Size = UDim2.fromOffset(P.PlusVisual, P.PlusVisual)
+	circle.BackgroundColor3 = Colors.PlusGreen
+	circle.BorderSizePixel = 0
+	circle.Active = false
+	circle.ZIndex = 15
+	circle.Parent = cashPlus
+	UIUtil.Corner(circle, math.ceil(P.PlusVisual / 2))
+	local cs = UIUtil.Stroke(circle, Colors.PlusGreenStroke, P.PlusStrokePx)
+	cs.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	HudIcons.Make("Plus", circle, {
+		Size = UDim2.fromScale(0.76, 0.76),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Color = Colors.White,
+		ZIndex = 16,
+	})
+	local press = Instance.new("UIScale")
+	press.Name = "Press"
+	press.Parent = circle
+	cashPlus.InputBegan:Connect(function(input: InputObject)
+		local t = input.UserInputType
+		if t == Enum.UserInputType.MouseButton1 or t == Enum.UserInputType.Touch then
+			press.Scale = HudConfig.Rail.PressScale
+		end
+	end)
+	cashPlus.InputEnded:Connect(function()
+		press.Scale = 1
+	end)
+	cashPlus.Activated:Connect(openShopFromHud)
+
+	p.Parent = screen
+	pill = p
+	HudLayout.BindVisibility(p, HudConfig.CashPill)
+	HudLayout.SetRect("CashPill", p)
+end
+
+local function renderCash(v: number)
+	if cashLabel then
+		cashLabel.Text = formatCash(v)
+	end
+end
+
+local function flashCash(color: Color3)
+	local lab, pop = cashLabel, cashPop
+	if not lab then
+		return
+	end
+	local P = HudConfig.CashPill
+	flashToken += 1
+	local my = flashToken
+	lab.TextColor3 = color
+	TweenService:Create(lab, TweenInfo.new(P.FlashSeconds, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { TextColor3 = P.NumberColor }):Play()
+	task.delay(P.FlashSeconds + 0.05, function()
+		if my == flashToken and cashLabel then
+			cashLabel.TextColor3 = P.NumberColor
+		end
+	end)
+	if pop then
+		pop.Scale = P.PopScale
+		TweenService:Create(pop, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+	end
+end
+
+local function floatBaseY(): number
+	return -(4 + (pillHeight() - HudConfig.CashPill.PlusVisual) / 2)
+end
+
+-- X offset (v) of the float's right edge from the + slot: normally -4, shifted right when a long "-$120,000" next
+-- to a short pill would run into the rail's bottom tile (spec §3.3: the float never overlaps the rail)
+local function floatX(f: FloatRec): number
+	local x = -4
+	local p = pill
+	local r = rail
+	if not (p and r and r.Visible) then
+		return x
+	end
+	local railPos, railSize = HudLayout.GetRect("Rail")
+	if railSize.X <= 0 then
+		return x
+	end
+	local lab = f.Label
+	local ok, tb = pcall(function(): Vector2
+		return TextService:GetTextSize(lab.Text, lab.TextSize, lab.Font, Vector2.new(4000, 1000))
+	end)
+	if not ok or typeof(tb) ~= "Vector2" then
+		return x
+	end
+	local s = HudLayout.Scale()
+	-- the + slot is the pill's last list item, PadRight from its right edge. Pill width: its AbsoluteSize, or its
+	-- content measured from the cash text when the AutomaticSize width has not been resolved yet
+	local P = HudConfig.CashPill
+	local pillW = p.AbsoluteSize.X
+	local cl = cashLabel
+	if cl then
+		local okN, nb = pcall(function(): Vector2
+			return TextService:GetTextSize(cl.Text, cl.TextSize, cl.Font, Vector2.new(4000, 1000))
+		end)
+		if okN and typeof(nb) == "Vector2" then
+			local wV = P.PadLeft + P.IconSize.X + P.Gap + nb.X + P.NumberPadRight + P.Gap + P.PlusVisual + P.PadRight
+			pillW = math.max(pillW, math.clamp(wV, P.MinWidth, P.MaxWidth) * s)
+		end
+	end
+	local slotLeftPx = p.AbsolutePosition.X + pillW - (P.PadRight + P.PlusVisual) * s
+	local leftPx = slotLeftPx + (x - tb.X - HudConfig.CashFloat.StrokePx) * s
+	local minLeft = railPos.X + railSize.X + 4 * s
+	if leftPx < minLeft then
+		x += (minLeft - leftPx) / s
+	end
+	return x
+end
+
+local function animateFloat(f: FloatRec)
+	local CF = HudConfig.CashFloat
+	for _, tw in ipairs(f.Tweens) do
+		tw:Cancel()
+	end
+	local y = floatBaseY()
+	local x = floatX(f)
+	f.Label.Position = UDim2.new(0, x, 0, y)
+	f.Label.TextTransparency = 0
+	f.Stroke.Transparency = 0
+	local rise = TweenInfo.new(CF.Seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	-- hold opaque for the first half, fade over the second
+	local fade = TweenInfo.new(CF.Seconds * 0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, CF.Seconds * 0.5)
+	f.Tweens = {
+		TweenService:Create(f.Label, rise, { Position = UDim2.new(0, x, 0, y - CF.Rise) }),
+		TweenService:Create(f.Label, fade, { TextTransparency = 1 }),
+		TweenService:Create(f.Stroke, fade, { Transparency = 1 }),
+	}
+	for _, tw in ipairs(f.Tweens) do
+		tw:Play()
+	end
+	f.Token += 1
+	local my = f.Token
+	task.delay(CF.Seconds + 0.05, function()
+		if f.Token ~= my then
+			return
+		end
+		local i = table.find(floats, f)
+		if i then
+			table.remove(floats, i)
+		end
+		f.Label:Destroy()
+	end)
+end
+
+--[[
+	"+$141" rising from the cash pill, just left of the + (spend: "-$5,000" in red). Gains within
+	HudConfig.CashFloat.MergeWindow add into the same float; at most MaxPerSecond new floats per second (extra
+	amounts merge into the newest float or are left to the count-up). Fed by HudLayout.CashFloat (Collect
+	notifications) and by cash drops while buying (SetEconomy).
+]]
+function HUDController.ShowCashFloat(amount: number)
+	if typeof(amount) ~= "number" or amount ~= amount or amount == 0 or math.abs(amount) == math.huge then
+		return
+	end
+	local CF = HudConfig.CashFloat
+	if amount < 0 and not CF.ShowSpend then
+		return
+	end
+	local slot = plusSlot
+	if not slot then
+		return
+	end
+	local now = os.clock()
+	for i = #floatBirths, 1, -1 do
+		if now - floatBirths[i] > 1 then
+			table.remove(floatBirths, i)
+		end
+	end
+	local newest = floats[#floats]
+	if newest and newest.Label.Parent and (newest.Amount > 0) == (amount > 0) then
+		if now - newest.Last <= CF.MergeWindow or #floatBirths >= CF.MaxPerSecond then
+			newest.Amount += amount
+			newest.Last = now
+			newest.Label.Text = floatText(newest.Amount)
+			animateFloat(newest)
+			return
+		end
+	end
+	if #floatBirths >= CF.MaxPerSecond then
+		return -- over the rate limit with nothing to merge into: the count-up alone shows it
+	end
+	local lab = label(nil, "CashFloat", Fonts.Display, CF.TextSize, if amount > 0 then CF.GainColor else CF.SpendColor, floatText(amount))
+	lab.AnchorPoint = Vector2.new(1, 1)
+	lab.AutomaticSize = Enum.AutomaticSize.XY
+	lab.Size = UDim2.fromOffset(0, 0)
+	lab.ZIndex = 20
+	local stroke = UIUtil.TextOutline(lab, CF.StrokePx)
+	lab.Parent = slot
+	local rec: FloatRec = { Label = lab, Stroke = stroke, Amount = amount, Last = now, Token = 0, Tweens = {} }
+	table.insert(floats, rec)
+	table.insert(floatBirths, now)
+	animateFloat(rec)
+end
+
+local function buyButtonShowing(): boolean
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	local g = pg and pg:FindFirstChild("WE_PadBuyGui")
+	if not (g and g:IsA("ScreenGui") and g.Enabled) then
+		return false
+	end
+	local b = g:FindFirstChild("BuyButton", true)
+	return b ~= nil and b:IsA("GuiObject") and b.Visible
+end
+
+-- spend floats only for drops the player caused: a panel is open, or the console BUY button was just on screen
+local function spendContext(): boolean
+	if HudLayout.GetFlag("Modal") or buyButtonShowing() then
+		return true
+	end
+	return os.clock() - lastBuyVisibleAt <= HudConfig.CashFloat.SpendContextSeconds
+end
+
+local function setCash(newCash: number)
+	local prev = cashTarget
+	cashTarget = newCash
+	if not cashLabel then
+		return
+	end
+	if prev == nil then
+		counting = false
+		countTo = newCash
+		renderCash(newCash)
+		return
+	end
+	if newCash == prev and not counting then
+		renderCash(newCash)
+		return
+	end
+	if newCash == countTo then
+		return
+	end
+	local P = HudConfig.CashPill
+	local shown = if counting then countFrom + (countTo - countFrom) * math.clamp(countElapsed / P.CountUpSeconds, 0, 1) else prev
+	countFrom = shown
+	countTo = newCash
+	countElapsed = 0
+	counting = true
+	local delta = newCash - prev
+	if delta > 0 then
+		flashCash(HudConfig.CashFloat.GainColor)
+	elseif delta < 0 then
+		flashCash(HudConfig.CashFloat.SpendColor)
+		if HudConfig.CashFloat.ShowSpend and spendContext() then
+			-- after a beat, so a stale sync that bounces straight back never floats, and skipped when the buy
+			-- already floated its exact cost (WorldPromptController → HudLayout.CashFloat): no "-$40,000" for $20,000
+			task.delay(SPEND_FLOAT_DELAY, function()
+				local now = os.clock()
+				if cashTarget and cashTarget <= newCash and now - lastExplicitSpendAt > HudConfig.CashFloat.SpendContextSeconds then
+					lastDropFloat = { Amount = delta, At = now }
+					HUDController.ShowCashFloat(delta)
+				end
+			end)
+		end
+	end
+end
+
+local function stepHud(dt: number)
+	if counting then
+		countElapsed += dt
+		local a = math.clamp(countElapsed / HudConfig.CashPill.CountUpSeconds, 0, 1)
+		local e = 1 - (1 - a) * (1 - a)
+		if a >= 1 then
+			counting = false
+			renderCash(countTo)
+		else
+			renderCash(countFrom + (countTo - countFrom) * e)
+		end
+	end
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Init
+---------------------------------------------------------------------------------------------------------------
+
+local function startBadgeFeeds()
+	if feedsStarted then
+		return
+	end
+	feedsStarted = true
+	-- Bound after every controller's Init (deferred), so MissionController's own listener is already connected
+	-- when the join push arrives.
+	Remotes.BindEvent(Constants.RemoteNames.SpinnerStateUpdate, function(payload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		spinnerReady = payload.Ready == true
+		refreshMissionsBadge()
+	end)
+	Remotes.BindEvent(Constants.RemoteNames.MissionStateUpdate, function(payload: Types.MissionStatePayload)
+		if typeof(payload) ~= "table" then
+			return
+		end
+		local n = 0
+		local daily = (payload :: any).Daily
+		if typeof(daily) == "table" then
+			for _, m in ipairs(daily) do
+				if typeof(m) == "table" and m.Complete == true and m.Claimed ~= true then
+					n += 1
+				end
+			end
+		end
+		missionClaimables = n
+		local dl = (payload :: any).DailyLogin
+		loginClaimable = typeof(dl) == "table" and dl.CanClaim == true
+		refreshMissionsBadge()
+	end)
 end
 
 function HUDController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireHUD"
-	screen.Parent = player:WaitForChild("PlayerGui")
-	screen.ResetOnSpawn = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	screen.IgnoreGuiInset = false
-	-- Above Base CTA (45) so dock tiles receive clicks; below modal panels (60+)
+	-- above the world HUDs (combat 25 … orders 52) so rail tiles receive clicks; below modal panels (60+)
 	screen.DisplayOrder = 55
-	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.15)
+	HudLayout.ApplyScreen(screen, { DisplayOrder = HudConfig.DisplayOrder.WarEmpireHUD })
+	screen.Parent = player:WaitForChild("PlayerGui")
 	_gui = screen
 
-	local touch = UserInputService.TouchEnabled
+	-- Left rail (tiles come from BindActionBar)
+	local r = Instance.new("Frame")
+	r.Name = "Rail"
+	r.BackgroundTransparency = 1
+	r.BorderSizePixel = 0
+	r.Active = false
+	r.ZIndex = 20
+	local grid = Instance.new("UIGridLayout")
+	grid.FillDirection = Enum.FillDirection.Vertical
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	grid.VerticalAlignment = Enum.VerticalAlignment.Top
+	grid.Parent = r
+	r.Parent = screen
+	rail = r
+	railGrid = grid
+	layoutRail()
+	HudLayout.BindVisibility(r, HudConfig.Rail)
+	HudLayout.SetRect("Rail", r)
 
-	-- Top-left: Level + XP (compact)
-	local left = Instance.new("Frame")
-	left.Name = "LevelPanel"
-	left.AnchorPoint = Vector2.new(0, 0)
-	left.Position = UDim2.fromOffset(16, 16)
-	left.Size = UDim2.fromOffset(268, 86)
-	left.BackgroundColor3 = Constants.Colors.Panel
-	left.BackgroundTransparency = 0.15 -- panel α≤0.15
-	left.BorderSizePixel = 0
-	left.Parent = screen
-	makeCorner(left, 10)
-	makeStroke(left, true)
+	buildPill(screen)
+	buildTopStrip()
 
-	local lvl = Instance.new("TextLabel")
-	lvl.Name = "LevelLabel"
-	lvl.BackgroundTransparency = 1
-	lvl.Position = UDim2.fromOffset(10, 6)
-	lvl.Size = UDim2.new(1, -20, 0, 22)
-	lvl.Font = Enum.Font.GothamBold
-	lvl.TextSize = 18
-	lvl.TextXAlignment = Enum.TextXAlignment.Left
-	lvl.TextColor3 = Constants.Colors.TextOnDark
-	lvl.Text = "LVL 1"
-	lvl.Parent = left
-	levelLabel = lvl
-
-	local xpBg = Instance.new("Frame")
-	xpBg.Name = "XPBarBG"
-	xpBg.Position = UDim2.fromOffset(10, 36)
-	xpBg.Size = UDim2.new(1, -20, 0, 14)
-	xpBg.BackgroundColor3 = Constants.Colors.Background
-	xpBg.BorderSizePixel = 0
-	xpBg.Parent = left
-	makeCorner(xpBg, 4)
-
-	local fill = Instance.new("Frame")
-	fill.Name = "Fill"
-	fill.Size = UDim2.fromScale(0, 1)
-	fill.BackgroundColor3 = Constants.Colors.XP
-	fill.BorderSizePixel = 0
-	fill.Parent = xpBg
-	makeCorner(fill, 4)
-	xpBarFill = fill
-
-	local xpLbl = Instance.new("TextLabel")
-	xpLbl.Name = "XPText"
-	xpLbl.BackgroundTransparency = 1
-	xpLbl.Size = UDim2.fromScale(1, 1)
-	xpLbl.Font = Enum.Font.Gotham
-	xpLbl.TextSize = 11
-	xpLbl.TextColor3 = Constants.Colors.Text
-	xpLbl.Text = "0 / 100"
-	xpLbl.Parent = xpBg
-	xpText = xpLbl
-
-	local goal = Instance.new("TextLabel")
-	goal.Name = "GoalLabel"
-	goal.BackgroundTransparency = 1
-	goal.Position = UDim2.fromOffset(10, 52)
-	goal.Size = UDim2.new(1, -20, 0, 28)
-	goal.Font = Enum.Font.Gotham
-	goal.TextSize = 11
-	goal.TextXAlignment = Enum.TextXAlignment.Left
-	goal.TextYAlignment = Enum.TextYAlignment.Top
-	goal.TextWrapped = true
-	goal.TextColor3 = Constants.Colors.GoldBright
-	goal.Text = "GOAL: Claim base → BUY Command Center"
-	goal.Parent = left
-	goalLabel = goal
-
-	-- Bottom-left: currency pill (cash + gold) + Robux shop entry — competitor pattern
-	local function openShopFromHud()
-		if shopOpener then
-			pcall(shopOpener)
-		end
-	end
-
-	local pill = Instance.new("Frame")
-	pill.Name = "CurrencyPill"
-	pill.AnchorPoint = Vector2.new(0, 1)
-	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
-	pill.Size = UDim2.fromOffset(248, 64)
-	pill.BackgroundColor3 = Color3.fromRGB(14, 18, 22)
-	pill.BackgroundTransparency = 0.05 -- v36 darker pill for cash contrast
-	pill.BorderSizePixel = 0
-	pill.ZIndex = 12
-	pill.Parent = screen
-	makeCorner(pill, 28)
-	local pillStroke = UIUtil.Stroke(pill, Constants.Colors.GoldBright, 2)
-	pillStroke.Transparency = 0.15
-
-	local cash = Instance.new("TextLabel")
-	cash.Name = "CashLabel"
-	cash.BackgroundTransparency = 1
-	cash.Position = UDim2.fromOffset(18, 4)
-	cash.Size = UDim2.new(1, -56, 0, 26)
-	cash.Font = Enum.Font.GothamBold
-	cash.TextSize = 21
-	cash.TextXAlignment = Enum.TextXAlignment.Left
-	-- v36: high-contrast cash (bright mint + dark stroke — not yellow/gold)
-	cash.TextColor3 = Color3.fromRGB(150, 255, 180)
-	cash.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
-	cash.TextStrokeTransparency = 0.25
-	-- v60: brief $… then leaderstats/0 within 0.5s — never stuck forever
-	cash.Text = "$…"
-	cash.ZIndex = 13
-	cash.Parent = pill
-	cashLabel = cash
-
-	-- Pending cash line doubles as shop entry (AutoCollect / packs once Ids live)
-	local pending = Instance.new("TextButton")
-	pending.Name = "PendingLabel"
-	pending.BackgroundTransparency = 1
-	pending.Position = UDim2.fromOffset(18, 28)
-	pending.Size = UDim2.new(1, -56, 0, 14)
-	pending.Font = Enum.Font.GothamMedium
-	pending.TextSize = 12
-	pending.TextXAlignment = Enum.TextXAlignment.Left
-	-- v36 pending cash contrast
-	pending.TextColor3 = Color3.fromRGB(120, 240, 160)
-	pending.TextStrokeColor3 = Color3.fromRGB(8, 12, 10)
-	pending.TextStrokeTransparency = 0.35
-	pending.Text = ""
-	pending.Visible = false
-	pending.AutoButtonColor = false
-	pending.ZIndex = 13
-	pending.Parent = pill
-	pendingLabel = pending
-	pending.Activated:Connect(openShopFromHud)
-
-	local gold = Instance.new("TextLabel")
-	gold.Name = "GoldLabel"
-	gold.BackgroundTransparency = 1
-	gold.Position = UDim2.fromOffset(18, 40)
-	gold.Size = UDim2.new(1, -56, 0, 16)
-	gold.Font = Enum.Font.GothamMedium
-	gold.TextSize = 15
-	gold.TextXAlignment = Enum.TextXAlignment.Left
-	gold.TextColor3 = Color3.fromRGB(255, 230, 140)
-	gold.TextStrokeColor3 = Color3.fromRGB(20, 14, 4)
-	gold.TextStrokeTransparency = 0.35
-	gold.Text = "◆ 0"
-	gold.ZIndex = 13
-	gold.Parent = pill
-	goldLabel = gold
-
-	-- Cash HUD `+` opens Shop (Prompt only when Monetization Ids ~= 0)
-	local cashPlus = Instance.new("TextButton")
-	cashPlus.Name = "CashPlus"
-	cashPlus.AnchorPoint = Vector2.new(1, 0.5)
-	cashPlus.Position = UDim2.new(1, -8, 0.5, 0)
-	cashPlus.Size = UDim2.fromOffset(40, 40)
-	cashPlus.BackgroundColor3 = Constants.Colors.Gunmetal
-	cashPlus.Font = Enum.Font.GothamBold
-	cashPlus.TextSize = 22
-	cashPlus.TextColor3 = Constants.Colors.GoldBright
-	cashPlus.Text = "+"
-	cashPlus.BorderSizePixel = 0
-	cashPlus.ZIndex = 14
-	cashPlus.Parent = pill
-	makeCorner(cashPlus, 20)
-	local plusStroke = UIUtil.Stroke(cashPlus, Constants.Colors.GoldBright, 1.5)
-	plusStroke.Transparency = 0.1
-	UIUtil.EnsureMinTouch(cashPlus, 44)
-	cashPlus.Activated:Connect(openShopFromHud)
-
-	local passive = Instance.new("TextLabel")
-	passive.Name = "PassiveHint"
-	passive.AnchorPoint = Vector2.new(0, 1)
-	passive.Position = UDim2.new(0, 16, 1, if touch then -160 else -80)
-	passive.Size = UDim2.fromOffset(240, 18)
-	passive.BackgroundTransparency = 1
-	passive.Font = Enum.Font.Gotham
-	passive.TextSize = 12
-	passive.TextXAlignment = Enum.TextXAlignment.Left
-	passive.TextColor3 = Constants.Colors.Muted
-	passive.Text = ""
-	passive.Parent = screen
-	passiveLabel = passive
-
-	local season = Instance.new("TextLabel")
-	season.Name = "SeasonLabel"
-	season.AnchorPoint = Vector2.new(0.5, 0)
-	season.Position = UDim2.new(0.5, 0, 0, 4) -- top safe; hide near pads via WorldPrompt
-	season.Size = UDim2.fromOffset(240, 18)
-	season.BackgroundColor3 = Constants.Colors.Panel
-	season.BackgroundTransparency = 0.35 -- v31: lighter so world names read through
-	season.BorderSizePixel = 0
-	season.Font = Enum.Font.GothamBold
-	season.TextSize = 11
-	season.TextColor3 = Constants.Colors.Muted
-	season.Text = ""
-	season.Visible = false
-	season.ZIndex = 2 -- below dock (12); never steal structure-name attention
-	season.Parent = screen
-	UIUtil.Corner(season, 6)
-	seasonLabel = season
-
-	-- P0: READY/SPIN chip LEFT of cash pill (never overlaps cash text)
-	local spin = Instance.new("TextButton")
-	spin.Name = "SpinnerButton"
-	spin.AnchorPoint = Vector2.new(0, 1)
-	spin.Position = UDim2.new(0, 16, 1, if touch then -168 else -88)
-	spin.Size = UDim2.fromOffset(88, 36)
-	spin.BackgroundColor3 = Constants.Colors.Gunmetal
-	spin.Font = Enum.Font.GothamBold
-	spin.TextSize = 12
-	spin.TextColor3 = Constants.Colors.Text
-	spin.Text = "SPIN"
-	spin.BorderSizePixel = 0
-	spin.ZIndex = 12
-	spin.Parent = screen
-	makeCorner(spin, 10)
-	local spinStroke = UIUtil.Stroke(spin, Constants.Colors.GoldBright, 1)
-	spinStroke.Transparency = 0.25
-	UIUtil.EnsureMinTouch(spin, 44)
-	spinnerBtn = spin
-	-- Shift cash pill up slightly so READY sits above it cleanly on touch
-	pill.Position = UDim2.new(0, 16, 1, if touch then -100 else -20)
-	spin.Activated:Connect(function()
-		if spinnerReady then
-			Remotes.GetEvent(Constants.RemoteNames.RequestClaimSpinner):FireServer()
+	HudLayout.LayoutChanged:Connect(layoutRail)
+	HudLayout.BadgeChanged:Connect(function(id: string, text: string?)
+		local btn = railTiles[id]
+		if btn then
+			UIUtil.SetTileBadge(btn, text)
 		end
 	end)
-
-	-- Bottom-right action dock (tiles bound by BindActionBar)
-	local dock = Instance.new("Frame")
-	dock.Name = "MobileActionBar"
-	dock.AnchorPoint = Vector2.new(1, 1)
-	dock.Position = UDim2.new(1, -16, 1, if touch then -28 else -22)
-	dock.Size = UDim2.fromOffset(420, 78)
-	dock.BackgroundTransparency = 1
-	dock.ZIndex = 12
-	dock.Parent = screen
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 8) -- dock≤8
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Parent = dock
-	actionDock = dock
-
-	local function refreshSpinnerBtn()
-		if not spinnerBtn then
-			return
+	-- Shop "!" (offer deferred / dropped) and Garage "!" (vehicle not spawned yet) clear when that panel opens
+	HudLayout.PanelChanged:Connect(function(id: string, open: boolean)
+		local src = (HudConfig.Rail.BadgeSources :: any)[id]
+		if open and (src == "OfferPending" or src == "NewVehicle") then
+			HudLayout.SetBadge(id, nil)
 		end
-		if spinnerReady then
-			spinnerBtn.Text = "READY"
-			spinnerBtn.BackgroundColor3 = Constants.Colors.Accent -- olive
-			spinnerBtn.TextColor3 = Color3.fromRGB(245, 248, 240)
-		else
-			local mins = math.ceil(math.max(0, spinnerCooldown) / 60)
-			spinnerBtn.Text = string.format("%dm", mins)
-			spinnerBtn.BackgroundColor3 = Constants.Colors.Gunmetal
-			spinnerBtn.TextColor3 = Constants.Colors.Muted
+	end)
+	HudLayout.CashFloatRequested:Connect(function(amount: number)
+		if typeof(amount) == "number" and amount < 0 then
+			local now = os.clock()
+			lastExplicitSpendAt = now
+			local d = lastDropFloat
+			if d and now - d.At <= HudConfig.CashFloat.SpendContextSeconds and math.abs(d.Amount - amount) < 0.5 then
+				return -- the cash-drop float already showed this exact spend (PurchaseResult came late)
+			end
 		end
+		HUDController.ShowCashFloat(amount)
+	end)
+
+	player:GetAttributeChangedSignal(TS.Shield.Attribute):Connect(refreshShield)
+	refreshShield()
+
+	do
+		local acc = 0
+		RunService.Heartbeat:Connect(function(dt: number)
+			stepHud(dt)
+			acc += dt
+			if acc >= 0.25 then
+				acc = 0
+				if buyButtonShowing() then
+					lastBuyVisibleAt = os.clock()
+				end
+			end
+		end)
 	end
-	refreshSpinnerBtn()
 
 	-- v60 NUCLEAR: leaderstats FIRST — never WaitForChild remotes on HUD cash path
 	local function tryLeaderstats(): boolean
@@ -481,23 +1185,12 @@ function HUDController.Init()
 		end
 	end)
 
-	-- Spinner/XP/Season via BindEvent — never block Init
-	Remotes.BindEvent(Constants.RemoteNames.SpinnerStateUpdate, function(payload)
-		if typeof(payload) ~= "table" then
-			return
-		end
-		spinnerReady = payload.Ready == true
-		spinnerCooldown = tonumber(payload.CooldownRemaining) or 0
-		refreshSpinnerBtn()
-	end)
-
+	-- XP / state via BindEvent — never block Init
 	Remotes.BindEvent(Constants.RemoteNames.XPUpdate, function(payload: Types.XPUpdatePayload)
-		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, (payload :: any).HudGoal)
-		if (payload :: any).LevelUp == true then
-			pcall(function()
-				AudioController.PlayNotification()
-			end)
-			HUDController.ShowLevelUpCelebration(payload.Level, (payload :: any).UnlockMessage)
+		HUDController.SetXP(payload.Level, payload.XP, payload.XPToNext, payload.HudGoal)
+		if payload.LevelUp == true then
+			-- the server's "★ LEVEL n!" reward toast is the text (and the sound); the chip just celebrates
+			HUDController.ShowLevelUpCelebration(payload.Level, payload.UnlockMessage)
 		end
 	end)
 
@@ -505,266 +1198,162 @@ function HUDController.Init()
 		HUDController.ApplyState(state)
 	end)
 
-	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: Types.BaseStatePayload)
-		if base.PassiveIncomePerTick then
-			lastPassive = base.PassiveIncomePerTick
-			refreshPassiveHint()
-		end
-	end)
-	Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload)
-		if typeof(payload) == "table" then
-			lastTraining = tonumber(payload.TrainingIncomePerTick) or 0
-			refreshPassiveHint()
-		end
-	end)
+	-- spinner + mission badge feeds: after every controller's Init (see startBadgeFeeds)
+	task.defer(startBadgeFeeds)
+end
 
-	Remotes.BindEvent(Constants.RemoteNames.SeasonStateUpdate, function(payload)
-		if not seasonLabel or typeof(payload) ~= "table" then
-			return
-		end
-		local active = payload.Active == true
-		local name = tostring(payload.DisplayName or payload.SeasonId or "Season")
-		if active then
-			local xpB = tonumber(payload.XPBonusMult) or 1
-			local cashB = tonumber(payload.CashBonusMult) or 1
-			seasonLabel.Visible = true
-			seasonLabel.TextColor3 = Constants.Colors.Cash
-			seasonLabel.Text = string.format("%s  ·  XP×%.2f Cash×%.2f", name, xpB, cashB)
-		else
-			seasonLabel.Visible = true
-			seasonLabel.TextColor3 = Constants.Colors.Muted
-			seasonLabel.Text = name .. "  ·  ENDED"
-		end
-	end)
+--[[ The TopStrip's free-topbar-row Frame (HudLayout.TopbarArea of WE_TopStrip); CompassController parents the
+	compass chip here. Builds the gui on demand, so it works whatever the Init order. ]]
+function HUDController.GetTopStripArea(): Frame?
+	return ensureTopStrip()
+end
+
+--[[ v70: no banner — the level chip pops (UIScale 1 → 1.15 → 1) and its stroke flashes GoldBright; the
+	server's "★ LEVEL n! — unlock" reward toast in the lane is the only text. ]]
+function HUDController.ShowLevelUpCelebration(level: number, _unlockMessage: string?)
+	local L = TS.Level
+	if levelLabel then
+		levelLabel.Text = tostring(math.floor(level))
+	end
+	local pop, stroke = chipPop, chipStroke
+	if pop then
+		pop.Scale = 1
+		TweenService:Create(pop, TweenInfo.new(L.PopSeconds / 2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, true), { Scale = L.PopScale }):Play()
+	end
+	if stroke then
+		stroke.Color = Constants.Colors.GoldBright
+		stroke.Transparency = 0
+		TweenService:Create(stroke, TweenInfo.new(L.PulseSeconds, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Transparency = 1 }):Play()
+	end
+end
+
+--[[ v38 soft rebirth CTA, v70 form: no banner. The Rebirth tile pulses once (the "!" badge comes at minLevel,
+	see SetXP) and the level-chip tooltip carries the copy ("Rebirth 38/40 … · Keep all Robux Items"). ]]
+function HUDController.ShowNearPrestigeBanner(level: number, minLevel: number)
+	if level >= minLevel then
+		HUDController.SetRailBadge("Rebirth", "!")
+	end
+	pulseTile("Rebirth", HudConfig.Rail.NearPrestigePulse)
 end
 
 --[[
-	Wire large color-coded action tiles after other controllers Init.
-	actions: { { Name, Icon, Label, Color, OnClick }, ... }
+	Rail tiles (spec §3.2). actions: { {Id, Name?, OnClick} } — visuals (label, icon, colours) come from
+	HudConfig.Rail.Tiles by Id, in config order. Each cell is ONE TextButton (UIUtil.MakeRailTile) whose hit area
+	includes the label; btn.Activated → OnClick (UIController: opener, one click sound, no toast).
 ]]
-
---[[ v37/v38: brief high-contrast level-up celebration banner ]]
-function HUDController.ShowLevelUpCelebration(level: number, unlockMessage: string?)
-	local host = _gui
+function HUDController.BindActionBar(actions: { RailAction })
+	local host = rail
 	if not host then
+		warn("[HUDController] BindActionBar: rail nil — Init order broken?")
 		return
 	end
-	if levelUpBanner then
-		levelUpBanner:Destroy()
-		levelUpBanner = nil
-	end
-	local frame = Instance.new("Frame")
-	frame.Name = "LevelUpCelebration"
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Position = UDim2.new(0.5, 0, 0, if UserInputService.TouchEnabled then 88 else 72)
-	frame.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 360 else 320, 56)
-	frame.BackgroundColor3 = Color3.fromRGB(20, 45, 28)
-	frame.BorderSizePixel = 0
-	frame.ZIndex = 90
-	frame.Parent = host
-	UIUtil.Corner(frame, 10)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Constants.Colors.GoldBright or Color3.fromRGB(255, 210, 80)
-	stroke.Thickness = 2
-	stroke.Parent = frame
-	local lab = Instance.new("TextLabel")
-	lab.BackgroundTransparency = 1
-	lab.Size = UDim2.fromScale(1, 1)
-	lab.Font = Enum.Font.GothamBold
-	lab.TextSize = if UserInputService.TouchEnabled then 18 else 16
-	lab.TextColor3 = Color3.fromRGB(255, 245, 200)
-	lab.TextStrokeTransparency = 0.4
-	lab.ZIndex = 91
-	local msg = string.format("★ LEVEL %d!", math.floor(level))
-	if typeof(unlockMessage) == "string" and unlockMessage ~= "" then
-		msg = msg .. "  " .. unlockMessage
-	end
-	lab.Text = msg
-	lab.Parent = frame
-	levelUpBanner = frame
-	task.delay(3.2, function()
-		if levelUpBanner == frame then
-			frame:Destroy()
-			levelUpBanner = nil
-		end
-	end)
-end
-
---[[ v38: soft rebirth CTA when Level >= Min-2 ]]
-function HUDController.ShowNearPrestigeBanner(level: number, minLevel: number)
-	local host = _gui
-	if not host then
-		return
-	end
-	if nearPrestigeBanner then
-		nearPrestigeBanner:Destroy()
-		nearPrestigeBanner = nil
-	end
-	local remain = math.max(0, minLevel - level)
-	local frame = Instance.new("Frame")
-	frame.Name = "NearPrestigeBanner"
-	frame.AnchorPoint = Vector2.new(0.5, 0)
-	frame.Position = UDim2.new(0.5, 0, 0, if UserInputService.TouchEnabled then 150 else 132)
-	frame.Size = UDim2.fromOffset(if UserInputService.TouchEnabled then 380 else 340, 48)
-	frame.BackgroundColor3 = Color3.fromRGB(40, 32, 18)
-	frame.BorderSizePixel = 0
-	frame.ZIndex = 85
-	frame.Parent = host
-	UIUtil.Corner(frame, 8)
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Constants.Colors.Gold or Color3.fromRGB(220, 180, 60)
-	stroke.Thickness = 1.5
-	stroke.Parent = frame
-	local lab = Instance.new("TextLabel")
-	lab.BackgroundTransparency = 1
-	lab.Size = UDim2.fromScale(1, 1)
-	lab.Font = Enum.Font.GothamBold
-	lab.TextSize = if UserInputService.TouchEnabled then 14 else 13
-	lab.TextColor3 = Color3.fromRGB(255, 230, 160)
-	lab.TextStrokeTransparency = 0.45
-	lab.ZIndex = 86
-	lab.Text = string.format(
-		"Rebirth dock · %d to go · Keep all Robux Items · press K",
-		remain
-	)
-	lab.Parent = frame
-	nearPrestigeBanner = frame
-	task.delay(6.5, function()
-		if nearPrestigeBanner == frame then
-			frame:Destroy()
-			nearPrestigeBanner = nil
-		end
-	end)
-end
-
-function HUDController.BindActionBar(actions: { { Name: string, Icon: string, Label: string, Color: Color3, OnClick: () -> () } })
-	if not actionDock then
-		warn("[HUDController] BindActionBar: actionDock nil — Init order broken?")
-		return
-	end
-	actionDock.Active = false -- children buttons receive input; frame must not sink
-	for _, child in ipairs(actionDock:GetChildren()) do
+	for _, child in ipairs(host:GetChildren()) do
 		if child:IsA("GuiButton") then
 			child:Destroy()
 		end
 	end
-	-- Always ≥56px; touch larger; shrink when many tiles so dock fits phone width
-	local tileSize = if UserInputService.TouchEnabled then 76 else 68
-	if #actions >= 7 then
-		tileSize = if UserInputService.TouchEnabled then 64 else 58
+	table.clear(railTiles)
+	local byId: { [string]: RailAction } = {}
+	for _, a in ipairs(actions) do
+		byId[a.Id] = a
 	end
-	tileSize = math.max(tileSize, 56)
-	actionDock.Size = UDim2.fromOffset(#actions * (tileSize + 8) + 8, tileSize + 8)
-	actionDock.ZIndex = 30
-	for i, def in ipairs(actions) do
-		local btn = UIUtil.MakeActionTile(actionDock, {
-			Name = def.Name,
-			Icon = def.Icon,
-			Label = def.Label,
-			Color = def.Color,
+	local ordered: { { Def: any?, Action: RailAction } } = {}
+	for _, t in ipairs(HudConfig.Rail.Tiles) do
+		local a = byId[t.Id]
+		if a then
+			table.insert(ordered, { Def = t, Action = a })
+			byId[t.Id] = nil
+		end
+	end
+	for _, a in ipairs(actions) do
+		if byId[a.Id] then
+			table.insert(ordered, { Def = tileDef(a.Id), Action = a })
+			byId[a.Id] = nil
+		end
+	end
+	local touch = isTouch()
+	for i, entry in ipairs(ordered) do
+		local def = entry.Def
+		local id = entry.Action.Id
+		local kind: string = if def then def.Icon else "Dot"
+		local btn = UIUtil.MakeRailTile(nil, {
+			Name = entry.Action.Name or (if def then def.Name else "Dock" .. id),
+			Label = if def then def.Label else id,
+			Accent = if def then def.Accent else Colors.Muted,
+			Fill = if def then def.Fill else Colors.PillBg,
+			Icon = kind,
 			LayoutOrder = i,
-			SizePx = tileSize,
+			Touch = touch,
+			IconBuilder = function(slot: Frame, ink: Color3, fill: Color3)
+				HudIcons.Make(kind, slot, { Size = UDim2.fromScale(1, 1), Color = ink, Fill = fill, ZIndex = 24 })
+			end,
 		})
 		btn.Active = true
-		btn.ZIndex = 31
-		-- P0 dock: gunmetal tiles + gold 1px stroke (no rainbow candy)
-		btn.BackgroundColor3 = Constants.Colors.Gunmetal
-		local st = btn:FindFirstChildOfClass("UIStroke")
-		if st then
-			st.Color = Constants.Colors.GoldBright
-			st.Thickness = 1
-			st.Transparency = 0.2
-		end
-		local ic = btn:FindFirstChild("Icon")
-		if ic and ic:IsA("TextLabel") then
-			ic.TextColor3 = Constants.Colors.Olive
-		end
+		local onClick = entry.Action.OnClick
 		-- Activated = mouse + touch + gamepad (MouseButton1Click alone misses some touch paths)
 		btn.Activated:Connect(function()
-			def.OnClick()
+			onClick()
 		end)
+		addKeyHint(btn, id, def)
+		btn.Parent = host
+		railTiles[id] = btn
+		UIUtil.SetTileBadge(btn, HudLayout.GetBadge(id))
+		HudLayout.SetRect(id .. "Tile", btn)
+		HudLayout.AssertTouchTarget(btn, "rail " .. id)
 	end
+	railCount = #ordered
+	layoutRail()
 	local order = if _gui then _gui.DisplayOrder else -1
-	print(string.format("[HUDController] BindActionBar: %d tiles Active size=%d DisplayOrder=%d", #actions, tileSize, order))
+	print(string.format("[HUDController] BindActionBar: %d rail tiles DisplayOrder=%d", railCount, order))
 end
 
-
 function HUDController.SetEconomy(cash: number, gold: number, pending: number?)
-	-- v57: coerce so nil never skips update (only called after confirmed Economy sync)
-	local cashN = tonumber(cash) or 0
-	local goldN = tonumber(gold) or 0
-	if cashLabel then
-		cashLabel.Text = formatCash(cashN)
-	end
-	if typeof(pending) == "number" then
-		lastPending = pending
-	elseif pending ~= nil then
-		lastPending = tonumber(pending) or lastPending
-	end
-	if pendingLabel then
-		if lastPending > 0 then
-			pendingLabel.Visible = true
-			pendingLabel.Text = string.format("+$%s pending", tostring(math.floor(lastPending)))
-			pendingLabel.TextColor3 = Color3.fromRGB(90, 230, 130)
-		else
-			pendingLabel.Visible = false
-			pendingLabel.Text = ""
-		end
-	end
-	if goldLabel then
-		goldLabel.Text = "◆ " .. tostring(math.floor(goldN))
-	end
+	-- v57: coerce so nil never skips update (only called after confirmed Economy sync). Gold and pending are
+	-- accepted for every caller but no longer drawn: gold > 0 lives in the Shop header, pending on the ATM screen.
+	local _ = gold
+	local _p = pending
+	setCash(tonumber(cash) or 0)
 end
 
 function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoal: string?)
+	local lv = math.floor(tonumber(level) or 0)
 	if levelLabel then
-		levelLabel.Text = "LVL " .. tostring(level)
+		levelLabel.Text = tostring(lv)
 	end
-	local denom = if xpToNext > 0 and xpToNext < math.huge then xpToNext else 1
-	local alpha = math.clamp(xp / denom, 0, 1)
+	local maxed = xpToNext == math.huge or xpToNext <= 0
+	local alpha = if maxed then 1 else math.clamp(xp / xpToNext, 0, 1)
 	if xpBarFill then
 		xpBarFill.Size = UDim2.fromScale(alpha, 1)
 	end
-	if xpText then
-		if xpToNext == math.huge or xpToNext <= 0 then
-			xpText.Text = "MAX"
-		else
-			xpText.Text = string.format("%d / %d", xp, xpToNext)
-		end
-	end
-	-- Rebirth progress toward PrestigeConfig.MinLevelToPrestige (default 40)
+	-- Rebirth progress toward PrestigeConfig.MinLevelToPrestige (default 40) → the GoalLabel tooltip + badge
 	local minPrestige = (PrestigeConfig and PrestigeConfig.MinLevelToPrestige) or 40
 	local nearBand = (PrestigeConfig and PrestigeConfig.NearPrestigeLevels) or 2
-	if goalLabel then
-		local fee = tonumber(PrestigeConfig and PrestigeConfig.CashFee) or 0
-		local feeBit = if fee > 0 then string.format("Fee $%s", tostring(fee)) else "Fee: none"
-		if level >= minPrestige then
-			local ready = string.format("GOAL: Rebirth READY · %s · +10%% cash forever · keep Robux · press K", feeBit)
-			if typeof(hudGoal) == "string" and hudGoal ~= "" then
-				goalLabel.Text = ready .. " · " .. hudGoal
-			else
-				goalLabel.Text = ready
-			end
-		else
-			local pct = math.clamp(math.floor((level / minPrestige) * 100), 0, 99)
-			local rebirthLine = string.format("Rebirth %d/%d (%d%%) · %s · +10%%/P", level, minPrestige, pct, feeBit)
-			if typeof(hudGoal) == "string" and hudGoal ~= "" then
-				goalLabel.Text = rebirthLine .. "  ·  " .. hudGoal
-			else
-				goalLabel.Text = "GOAL: " .. rebirthLine .. " — press K / REBIRTH dock"
-			end
-			-- v38: soft banner when nearly at MinLevelToPrestige
-			if level >= (minPrestige - nearBand) then
-				local host = _gui
-				local lastShown = if host then tonumber(host:GetAttribute("WE_NearPrestigeShownAt")) or 0 else 0
-				if os.clock() - lastShown > 75 then
-					if host then
-						host:SetAttribute("WE_NearPrestigeShownAt", os.clock())
-					end
-					HUDController.ShowNearPrestigeBanner(level, minPrestige)
-				end
-			end
+	local fee = tonumber(PrestigeConfig and PrestigeConfig.CashFee) or 0
+	local feeBit = if fee > 0 then string.format("Fee $%s", withCommas(fee)) else "Fee: none"
+	local bonusPct = math.floor((tonumber(PrestigeConfig.CashBonusPerPrestige) or 0.1) * 100 + 0.5)
+	local rebirthKey = HudConfig.Keys.Rebirth.Name
+	local goalText = if typeof(hudGoal) == "string" and hudGoal ~= "" then hudGoal else LevelConfig.GetHudGoal(lv)
+	local rebirthText: string
+	if lv >= minPrestige then
+		rebirthText = string.format("Rebirth READY · %s · +%d%% cash forever · Keep all Robux Items · press %s", feeBit, bonusPct, rebirthKey)
+	else
+		local pct = math.clamp(math.floor((lv / minPrestige) * 100), 0, 99)
+		rebirthText = string.format("Rebirth %d/%d (%d%%) · %s · +%d%%/P", lv, minPrestige, pct, feeBit, bonusPct)
+		if lv >= minPrestige - nearBand then
+			rebirthText ..= " · Keep all Robux Items"
 		end
+	end
+	if goalLabel then
+		goalLabel.Text = goalText
+	end
+	if rebirthLabel then
+		rebirthLabel.Text = rebirthText
+	end
+	HUDController.SetRailBadge("Rebirth", if lv >= minPrestige then "!" else nil)
+	-- v38 near-prestige nudge: once per level in the band
+	if lv >= minPrestige - nearBand and lv < minPrestige and nearPulseLevel ~= lv then
+		nearPulseLevel = lv
+		HUDController.ShowNearPrestigeBanner(lv, minPrestige)
 	end
 end
 
@@ -772,19 +1361,16 @@ function HUDController.ApplyState(state: Types.PlayerStatePayload)
 	HUDController.SetEconomy(state.Cash, state.Gold, (state :: any).PendingCash)
 	local goal = LevelConfig.GetHudGoal(state.Level)
 	HUDController.SetXP(state.Level, state.XP, state.XPToNext, goal)
-	if state.Base then
-		lastPassive = state.Base.PassiveIncomePerTick or 0
-	end
-	if typeof(state.TrainingIncomePerTick) == "number" then
-		lastTraining = state.TrainingIncomePerTick
-	end
-	refreshPassiveHint()
 end
 
-
---[[ Wire cash-pill `+` / pending line → ShopController.Open (after Shop Init). ]]
+--[[ Wire the cash-pill + → ShopController (cash packs) after Shop Init. ]]
 function HUDController.BindShopOpener(fn: () -> ())
 	shopOpener = fn
+end
+
+--[[ Wire the TopStrip settings gear → SettingsController after Settings Init. ]]
+function HUDController.BindSettingsOpener(fn: () -> ())
+	settingsOpener = fn
 end
 
 return HUDController

@@ -13,12 +13,21 @@
 	part destroy. BillboardGuis throttled refresh on Base/Economy updates.
 	Billboard subtitle: "Stand or tap BUY". Hide BUY for leave / wrong plot / MAX / prereq.
 
-	ProximityPrompts only for non-buy actions (Open Base, Open Garage, capture ping, tutorial).
+	ProximityPrompts only for non-buy actions (the vehicle pad "Garage" prompt; tutorial markers have none).
+
+	v70 "clean screen" (spec §3.5 action lane, §4.1 one failed buy = one line, §5 console labels):
+	  * BUY lives in the ACTION LANE (bottom-centre, above the hotbar; HudLayout.ActionLaneBottomV()): green when
+	    affordable / dark red "NEED $N more"; "BUILD HELIPAD  $5,000" / "UPGRADE HELIPAD  $12,000"; desktop shows an
+	    "E" key cap; hidden while a panel is open (Modal), seated or dead. The buy path is unchanged: btn.Activated →
+	    tryPurchase → Remotes.FireServer(RequestPurchaseUpgrade) → WE_BuyAck / PurchaseResult.
+	  * Console price label: plain 2-line outlined text, owner-only, 2.2 studs above the console, no card, no income,
+	    no "Stand or tap BUY"; MAX → no label (MAX is on the console screen). No pad-name wash on consoles.
+	  * Prompts are pills (PromptController); the "Open Base" and "Hold to capture" client prompts are gone.
+	  * No per-frame workspace scan, no WE_HUD season hack; a price label hidden for a reason stays hidden.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
-local CollectionService = game:GetService("CollectionService")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -26,14 +35,33 @@ local Workspace = game:GetService("Workspace")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
-local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
+local HudConfig = require(Shared.Configs.HudConfig)
 
-local BaseController = require(script.Parent.BaseController)
 local VehicleController = require(script.Parent.VehicleController)
 local NotificationController = require(script.Parent.NotificationController)
+-- v70 prompt pills: required defensively (like UIController does) — a broken PromptController must never take the
+-- BUY path down with it; the stub keeps every call a no-op.
+local PromptController: any = {
+	SetMyPlotId = function(_: number?) end,
+	SetBuyButtonActive = function(_: boolean) end,
+	SetSuppressed = function(_: ProximityPrompt, _: boolean) end,
+}
+do
+	local mod = script.Parent:FindFirstChild("PromptController")
+	if mod and mod:IsA("ModuleScript") then
+		local req: any = require
+		local ok, res = pcall(req, mod)
+		if ok and typeof(res) == "table" then
+			PromptController = res
+		else
+			warn("[WorldPrompt] PromptController failed to load:", res)
+		end
+	end
+end
 local UIUtil = require(Shared.Util.UIUtil)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 
 local WorldPromptController = {}
 
@@ -49,6 +77,11 @@ local PRICE_BILLBOARD_SIZE = UDim2.fromOffset(118, 40) -- phone-readable chip (w
 local PRICE_BILLBOARD_OWNED_SIZE = UDim2.fromOffset(96, 26) -- owned L1+: tiny roof chip
 local BUY_GUI_NAME = "WE_PadBuyGui"
 local BUY_BTN_MIN_H = 56
+-- v70 action-lane BUY (HudConfig.ActionLane): desktop keeps the pinned 300x58; touch is 64 v (44.8 px on phones)
+local BUY_BTN_SIZE_DESKTOP = UDim2.fromOffset(300, 58)
+local BUY_BTN_SIZE_TOUCH = HudConfig.ActionLane.BuyButtonSizeTouch
+local CONSOLE_LABEL = HudConfig.WorldLabels.Console
+local BUY_FAIL_DEDUPE_SEC = 1 -- WE_BuyAck + PurchaseResult for the same structure = one line
 
 local player = Players.LocalPlayer
 local upgrades: { [string]: number } = {}
@@ -72,7 +105,7 @@ end
 local myPlotId: number? = nil
 local attachedPrompt: { [Instance]: boolean } = {}
 local slotParts: { [BasePart]: boolean } = {}
-local slotConns: { [BasePart]: { RBXScriptConnection } } = {}
+local slotConns: { [Instance]: { RBXScriptConnection } } = {}
 local promptConns: { [Instance]: { RBXScriptConnection } } = {}
 local lastPurchaseAt: { [string]: number } = {} -- keyed by structureId (server rate is global)
 local lastOverlap: { [string]: boolean } = {} -- keyed by padKey (plot|structure)
@@ -88,6 +121,11 @@ local _buyGui: ScreenGui? = nil
 local buyBtn: TextButton? = nil
 local activeBuyStructureId: string? = nil
 local activeBuyPart: BasePart? = nil
+
+-- v68: consoles (BaseLayoutConfig) — the BUY button shows when you walk up; buying needs a tap or the prompt
+local function isConsolePart(part: BasePart): boolean
+	return part:GetAttribute("WE_Console") == true
+end
 
 local function padKey(part: BasePart, structureId: string): string
 	local pid = part:GetAttribute("PlotId")
@@ -136,56 +174,105 @@ local function makePrompt(parent: BasePart, actionText: string, objectText: stri
 	return prompt
 end
 
-local function formatCost(cost: number): string
+-- 12000 → "12,000"
+local function withCommas(n: number): string
+	local s = tostring(math.floor(math.abs(n)))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	if out:sub(1, 1) == "," then
+		out = out:sub(2)
+	end
+	return if n < 0 then "-" .. out else out
+end
+
+-- BUY button: the full price ("$12,000")
+local function fullCost(cost: number): string
+	return "$" .. withCommas(cost)
+end
+
+-- console label: "$5,000" under 10K, then "$12K" / "$12.5K" / "$1.2M"
+local function shortCost(cost: number): string
 	if cost >= 1_000_000 then
-		return string.format("$%.1fM", cost / 1_000_000)
+		return (string.format("$%.1fM", cost / 1_000_000):gsub("%.0M", "M"))
 	elseif cost >= 10_000 then
-		return string.format("$%dk", math.floor(cost / 1000))
+		local k = cost / 1000
+		if k >= 100 or math.abs(k - math.floor(k)) < 0.05 then
+			return string.format("$%dK", math.floor(k))
+		end
+		return string.format("$%.1fK", k)
 	end
-	return "$" .. tostring(cost)
+	return fullCost(cost)
 end
 
-local function incomePerLevel(structureId: string): number
-	local rates = EconomyConfig.PassiveIncome and EconomyConfig.PassiveIncome.PerLevelRates
-	if typeof(rates) ~= "table" then
-		return 0
-	end
-	return tonumber(rates[structureId]) or 0
-end
-
-local function formatIncomeRate(structureId: string): string?
-	local rate = incomePerLevel(structureId)
-	if rate <= 0 then
-		return nil
-	end
-	return string.format("+$%d/tick", rate)
+local function escapeRich(t: string): string
+	return (t:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;"))
 end
 
 local structureInfo: (structureId: string) -> (string, number, number?, boolean, string?)
-local tryPurchase: (structureId: string, opts: { silentMax: boolean, showBuying: boolean }?) -> ()
+local tryPurchase: (structureId: string, opts: { silentMax: boolean?, showBuying: boolean? }?) -> ()
 local isSeatedInVehicle: () -> boolean
 local isOwnPlotPad: (part: BasePart) -> boolean
 
 
 local padBuyFlashToken = 0
-local lastPadLevels: { [string]: number } = {}
+-- the BUY caption keeps "BUYING…" / "BOUGHT …!" until this os.clock() (the Heartbeat refresh would overwrite it)
+local captionHoldUntil = 0
+local buyCaption: TextLabel? = nil
+local buyStroke: UIStroke? = nil
+local buyGradient: UIGradient? = nil
+
+-- affordable: green gradient (63,220,85) → (35,165,58), 3 v dark-green stroke; short of cash: dark red
+local BUY_OK_TOP = Color3.fromRGB(63, 220, 85)
+local BUY_OK_BOTTOM = Color3.fromRGB(35, 165, 58)
+local BUY_OK_STROKE = Color3.fromRGB(12, 70, 22)
+local BUY_SHORT_TOP = Color3.fromRGB(96, 44, 44)
+local BUY_SHORT_BOTTOM = Color3.fromRGB(58, 26, 26)
+local BUY_SHORT_STROKE = Color3.fromRGB(30, 10, 10)
+local BUY_SHORT_PRICE = "#ff8080"
+
+-- UIGradient colours multiply BackgroundColor3: bg = top colour, gradient white → bottom/top per channel
+local function gradientTo(top: Color3, bottom: Color3): ColorSequence
+	local function ratio(b: number, t: number): number
+		return if t > 0 then math.clamp(b / t, 0, 1) else 1
+	end
+	return ColorSequence.new(Color3.new(1, 1, 1), Color3.new(ratio(bottom.R, top.R), ratio(bottom.G, top.G), ratio(bottom.B, top.B)))
+end
+
+local buyLookAffordable: boolean? = nil
+local function setBuyLook(affordable: boolean)
+	local btn = buyBtn
+	if not btn or buyLookAffordable == affordable then
+		return
+	end
+	buyLookAffordable = affordable
+	btn.BackgroundColor3 = if affordable then BUY_OK_TOP else BUY_SHORT_TOP
+	local g = buyGradient
+	if g then
+		g.Color = if affordable then gradientTo(BUY_OK_TOP, BUY_OK_BOTTOM) else gradientTo(BUY_SHORT_TOP, BUY_SHORT_BOTTOM)
+	end
+	local st = buyStroke
+	if st then
+		st.Color = if affordable then BUY_OK_STROKE else BUY_SHORT_STROKE
+	end
+	btn.AutoButtonColor = affordable
+end
+
+local function setBuyCaption(rich: string)
+	local cap = buyCaption
+	if cap and cap.Text ~= rich then
+		cap.Text = rich
+	end
+end
+
 local function flashPadBuyBought(displayName: string)
 	local btn = buyBtn
 	if not btn or not btn.Visible then
 		return
 	end
 	padBuyFlashToken += 1
-	local my = padBuyFlashToken
-	btn.Text = string.format("BOUGHT %s ✓", displayName)
-	btn.BackgroundColor3 = Color3.fromRGB(30, 70, 40)
-	btn.TextColor3 = Constants.Colors.Cash
-	-- Standing Heartbeat refreshPadBuyButton rewrites label after flash window
-	task.delay(1.0, function()
-		if my ~= padBuyFlashToken then
-			return
-		end
-		-- no-op; next pad refresh overwrites
-	end)
+	captionHoldUntil = os.clock() + 1.0
+	setBuyLook(true)
+	setBuyCaption(string.format("BOUGHT %s!", escapeRich(string.upper(displayName))))
+	-- the standing Heartbeat refreshPadBuyButton rewrites the caption once captionHoldUntil passes
 end
 
 local function hidePadBuyButton()
@@ -194,6 +281,7 @@ local function hidePadBuyButton()
 	if buyBtn then
 		buyBtn.Visible = false
 	end
+	PromptController.SetBuyButtonActive(false)
 end
 
 local function ensurePadBuyGui(): TextButton
@@ -208,49 +296,99 @@ local function ensurePadBuyGui(): TextButton
 
 	local screen = Instance.new("ScreenGui")
 	screen.Name = BUY_GUI_NAME
-	screen.ResetOnSpawn = false
-	screen.IgnoreGuiInset = false
-	screen.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	-- Above HUD dock (55); below modal panels (60+)
-	screen.DisplayOrder = 65 -- above dock (55); below toast (70); avoids burying notifications
+	-- Above the HUD (55) and panels (60); below toasts (70). One HUD scale + CoreUISafeInsets (HudLayout).
+	screen.DisplayOrder = HudConfig.DisplayOrder.WE_PadBuyGui
+	HudLayout.ApplyScreen(screen, { Insets = "Core" })
 	screen.Parent = pg
-	UIUtil.AttachMobileScale(screen, 800, 0.7, 1.05)
 	_buyGui = screen
+
+	local touch = HudLayout.IsTouch()
+	local size = if touch then BUY_BTN_SIZE_TOUCH else BUY_BTN_SIZE_DESKTOP
+	-- the action lane slot: bottom-centre, 100 v (touch) / 86 v (desktop) above the content bottom
+	local lane = Instance.new("Frame")
+	lane.Name = "Lane"
+	lane.AnchorPoint = Vector2.new(0.5, 1)
+	lane.Position = UDim2.new(0.5, 0, 1, -HudLayout.ActionLaneBottomV())
+	lane.Size = size
+	lane.BackgroundTransparency = 1
+	lane.BorderSizePixel = 0
+	lane.Active = false
+	lane.Parent = screen
+	HudLayout.BindVisibility(lane, { HideWhen = { "Modal", "Driving", "Dead" } })
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyButton"
-	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.Position = UDim2.new(0.5, 0, 1, -108)
-	btn.Size = UDim2.fromOffset(300, 58)
-	btn.BackgroundColor3 = Color3.fromRGB(40, 32, 10)
+	btn.AnchorPoint = Vector2.new(0.5, 0.5)
+	btn.Position = UDim2.fromScale(0.5, 0.5)
+	btn.Size = size
+	btn.BackgroundColor3 = BUY_OK_TOP
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = true
-	btn.Font = Enum.Font.GothamBold
-	btn.TextSize = 18
-	btn.TextColor3 = Color3.fromRGB(255, 250, 235)
-	btn.TextStrokeTransparency = 0.55
-	btn.Text = "BUY"
+	btn.Text = ""
 	btn.Visible = false
 	btn.Active = true
 	btn.Selectable = true
 	btn.ZIndex = 40
-	btn.Parent = screen
-	UIUtil.Corner(btn, 16)
-	local stroke = UIUtil.GoldStroke(btn, 3)
-	stroke.Transparency = 0.05
+	btn.Parent = lane
+	UIUtil.Corner(btn, 14)
+	local grad = Instance.new("UIGradient")
+	grad.Rotation = 90
+	grad.Color = gradientTo(BUY_OK_TOP, BUY_OK_BOTTOM)
+	grad.Parent = btn
+	buyGradient = grad
+	local stroke = UIUtil.Stroke(btn, BUY_OK_STROKE, 3)
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Transparency = 0
+	buyStroke = stroke
+	buyLookAffordable = nil
 	UIUtil.EnsureMinTouch(btn, BUY_BTN_MIN_H)
 
-	local gloss = Instance.new("Frame")
-	gloss.Name = "Gloss"
-	gloss.Size = UDim2.new(1, -12, 0, 18)
-	gloss.Position = UDim2.fromOffset(6, 6)
-	gloss.BackgroundColor3 = Color3.fromRGB(255, 230, 140)
-	gloss.BackgroundTransparency = 0.78
-	gloss.BorderSizePixel = 0
-	gloss.Active = false
-	gloss.ZIndex = 41
-	gloss.Parent = btn
-	UIUtil.Corner(gloss, 10)
+	-- desktop / gamepad: an "E" key cap (the console's E-hold prompt still works; its pill hides while BUY shows)
+	local padL = 14
+	if not touch then
+		local cap = Instance.new("Frame")
+		cap.Name = "KeyCap"
+		cap.AnchorPoint = Vector2.new(0, 0.5)
+		cap.Position = UDim2.new(0, padL, 0.5, 0)
+		cap.Size = UDim2.fromOffset(28, 28)
+		cap.BackgroundColor3 = Color3.fromRGB(232, 255, 232)
+		cap.BorderSizePixel = 0
+		cap.Active = false
+		cap.ZIndex = 41
+		cap.Parent = btn
+		UIUtil.Corner(cap, 5)
+		local key = Instance.new("TextLabel")
+		key.Name = "Key"
+		key.BackgroundTransparency = 1
+		key.Size = UDim2.fromScale(1, 1)
+		key.Font = HudConfig.Fonts.Body
+		key.TextSize = 16
+		key.TextColor3 = BUY_OK_STROKE
+		key.Text = "E"
+		key.ZIndex = 42
+		key.Parent = cap
+		padL += 28 + 8
+	end
+
+	local caption = Instance.new("TextLabel")
+	caption.Name = "Caption"
+	caption.BackgroundTransparency = 1
+	caption.AnchorPoint = Vector2.new(0, 0.5)
+	caption.Position = UDim2.new(0, padL, 0.5, 0)
+	caption.Size = UDim2.new(1, -(padL + 12), 1, -10)
+	caption.Font = HudConfig.Fonts.Display
+	caption.RichText = true
+	caption.TextScaled = true
+	caption.TextColor3 = Color3.fromRGB(255, 255, 255)
+	caption.Text = "BUY"
+	caption.ZIndex = 42
+	caption.Parent = btn
+	local limit = Instance.new("UITextSizeConstraint")
+	limit.MaxTextSize = 20
+	limit.MinTextSize = 12
+	limit.Parent = caption
+	UIUtil.TextOutline(caption, 1.4)
+	buyCaption = caption
 
 	local lastTapAt = 0
 	local function onBuyPressed()
@@ -272,8 +410,8 @@ local function ensurePadBuyGui(): TextButton
 		-- Intentional tap: clear walk-over debounce so BUY always fires
 		lastPurchaseAt[sid] = 0
 		pendingPurchase[sid] = nil
-		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s cost=%s", sid, tostring(cost)))
-		-- v61: toast only after FireServer actually ran (see tryPurchase showBuying)
+		print(string.format("[WorldPrompt] BUY button tap → RequestPurchaseUpgrade %s %s cost=%s", sid, display, tostring(cost)))
+		-- v61: "BUYING…" only after FireServer actually ran (see tryPurchase showBuying)
 		tryPurchase(sid, { showBuying = true })
 	end
 	-- v67: Activated only — it already fires for mouse, touch and gamepad. Also wiring MouseButton1Click
@@ -298,7 +436,7 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 		return
 	end
 
-	local display, _level, cost, isMax, prereqHint = structureInfo(structureId)
+	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
 	if isMax or prereqHint or cost == nil then
 		hidePadBuyButton()
 		return
@@ -307,25 +445,20 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	local btn = ensurePadBuyGui()
 	activeBuyStructureId = structureId
 	activeBuyPart = part
-	local have = liveCash()
-	local canAfford = have >= cost
-	local incomeStr = formatIncomeRate(structureId)
-	if not canAfford then
-		local need = cost - have
-		if incomeStr then
-			btn.Text = string.format("NEED %s · %s · %s", formatCost(cost), display, incomeStr)
+	if os.clock() >= captionHoldUntil then
+		local have = liveCash()
+		local canAfford = have >= cost
+		setBuyLook(canAfford)
+		if canAfford then
+			-- "BUILD HELIPAD  $5,000" / "UPGRADE HELIPAD  $12,000" (income lives on the console screen / Base panel)
+			local verb = if level <= 0 then "BUILD" else "UPGRADE"
+			setBuyCaption(string.format("%s %s  %s", verb, escapeRich(string.upper(display)), fullCost(cost)))
 		else
-			btn.Text = string.format("NEED %s more · %s", formatCost(need), display)
+			setBuyCaption(string.format('NEED  <font color="%s">%s more</font>', BUY_SHORT_PRICE, fullCost(cost - have)))
 		end
-	elseif incomeStr then
-		btn.Text = string.format("BUY %s · %s · %s", display, formatCost(cost), incomeStr)
-	else
-		btn.Text = string.format("BUY %s · %s", display, formatCost(cost))
 	end
-	btn.TextColor3 = if canAfford then Color3.fromRGB(255, 252, 240) else Color3.fromRGB(255, 200, 200)
-	btn.BackgroundColor3 = if canAfford then Color3.fromRGB(28, 24, 10) else Color3.fromRGB(42, 16, 16)
-	btn.AutoButtonColor = canAfford
 	btn.Visible = true
+	PromptController.SetBuyButtonActive(true)
 end
 
 function structureInfo(structureId: string): (string, number, number?, boolean, string?)
@@ -355,50 +488,75 @@ function structureInfo(structureId: string): (string, number, number?, boolean, 
 	return display, level, cost, false, prereqHint
 end
 
-local function clampChipSize(size: UDim2): UDim2
-	-- v50: hard clamp width+height so legacy/Scale chips never dominate mobile
+-- v70: the console label grows with the HUD scale: k = clamp(S / 0.9, 0.9, 1.3) → 106x36 phone, 118x40 at
+-- 720p, 151x51 at 1080p (BillboardGui offsets are real px; the HUD UIScale never reaches them)
+local function chipScale(): number
+	return math.clamp(HudLayout.Scale() / 0.9, 0.9, 1.3)
+end
+
+local function clampChipSize(size: UDim2, k: number?): UDim2
+	-- v50: hard clamp width+height so legacy/Scale chips never dominate mobile (v70: then × k)
+	local kk = k or 1
 	local w = size.X.Offset
 	local h = size.Y.Offset
 	if w <= 0 and h <= 0 then
-		return PRICE_BILLBOARD_SIZE
+		w, h = PRICE_BILLBOARD_SIZE.X.Offset, PRICE_BILLBOARD_SIZE.Y.Offset
 	end
 	local cw = if w > 0 then math.min(w, PRICE_CHIP_MAX_W) else PRICE_CHIP_MAX_W
 	local ch = if h > 0 then math.min(h, 44) else 40
-	return UDim2.fromOffset(cw, ch)
+	return UDim2.fromOffset(math.floor(cw * kk + 0.5), math.floor(ch * kk + 0.5))
 end
 
-local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?)
-	-- never AlwaysOnTop giant tabs — owned = tiny chip; buyable = readable but ≤160 wide
-	if ownedChip then
-		bb.Size = clampChipSize(PRICE_BILLBOARD_OWNED_SIZE)
+-- the latest "standing near an ATM" answer (the throttled loop keeps it); price labels stay off near the ATM
+local nearAtmNow = false
+-- labels hidden on purpose (another player's plot, MAX): the ATM soft-restore must never switch these back on
+local priceHidden: { [BasePart]: boolean } = setmetatable({} :: any, { __mode = "k" })
+
+local function setBillboardNearOnly(bb: BillboardGui, ownedChip: boolean?, part: BasePart?)
+	-- never AlwaysOnTop giant tabs — plain text, near-only, owner-only
+	local k = chipScale()
+	if part and isConsolePart(part) then
+		-- v70: 2.2 studs above the console top (the old 5-stud host + 5.5 landed in the ceiling of walk-ins)
+		bb.Size = clampChipSize(PRICE_BILLBOARD_SIZE, k)
+		bb.StudsOffset = Vector3.zero
+		bb.StudsOffsetWorldSpace = Vector3.new(0, part.Size.Y * 0.5 + CONSOLE_LABEL.StudsAboveConsoleTop, 0)
+		bb.MaxDistance = if ownedChip then CONSOLE_LABEL.MaxDistanceUpgrade else CONSOLE_LABEL.MaxDistanceBuild
+		bb.AlwaysOnTop = false
+	elseif ownedChip then
+		bb.Size = clampChipSize(PRICE_BILLBOARD_OWNED_SIZE, k)
 		bb.StudsOffset = Vector3.new(0, 6, 0)
 		bb.MaxDistance = 28
 		bb.AlwaysOnTop = false
 	else
-		bb.Size = clampChipSize(PRICE_BILLBOARD_SIZE)
+		bb.Size = clampChipSize(PRICE_BILLBOARD_SIZE, k)
 		bb.StudsOffset = Vector3.new(0, 5.5, 0)
 		bb.MaxDistance = PRICE_BILLBOARD_MAX_DIST
 		bb.AlwaysOnTop = false
 	end
+	bb.LightInfluence = 0
 	-- Defensive: legacy / stale oversized chips
-	if bb.Size.X.Offset > PRICE_CHIP_MAX_W then
-		bb.Size = clampChipSize(bb.Size)
+	if bb.Size.X.Offset > PRICE_CHIP_MAX_W * k + 1 then
+		bb.Size = clampChipSize(bb.Size, 1)
 	end
 end
 
 local function hidePriceBillboard(part: BasePart)
+	priceHidden[part] = true
+	-- every copy: the client host's and a server card still sitting on the part (MapSetup priceBillboard)
 	local host = part:FindFirstChild("WE_BillboardHost")
-	local existing = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
-	if existing and existing:IsA("BillboardGui") then
-		existing.Enabled = false
+	for _, holder in ipairs({ host, part } :: { Instance? }) do
+		local existing = holder and holder:FindFirstChild(BILLBOARD_NAME)
+		if existing and existing:IsA("BillboardGui") then
+			existing.Enabled = false
+		end
 	end
 	-- MapSetup non-price Label billboards on other parts are left alone
 end
 
 local function resolveBillboardAdornee(part: BasePart): BasePart
-	local host = part:FindFirstChild("WE_BillboardHost")
-	if host and host:IsA("BasePart") then
-		return host
+	local found = part:FindFirstChild("WE_BillboardHost")
+	if found and found:IsA("BasePart") then
+		return found
 	end
 	-- Prefer tall invisible host above kit roof so geometry never occludes BUY name
 	local roofY = 0
@@ -407,7 +565,7 @@ local function resolveBillboardAdornee(part: BasePart): BasePart
 			roofY = math.max(roofY, (ch.Position.Y - part.Position.Y) + ch.Size.Y * 0.5)
 		end
 	end
-	host = Instance.new("Part")
+	local host = Instance.new("Part")
 	host.Name = "WE_BillboardHost"
 	host.Size = Vector3.new(0.4, 0.4, 0.4)
 	host.Transparency = 1
@@ -459,102 +617,122 @@ local function ensurePadNameSurface(part: BasePart, displayName: string)
 	stroke.Parent = lab
 end
 
+local function styleChipLabel(lab: TextLabel, maxText: number)
+	lab.BackgroundTransparency = 1
+	lab.Font = HudConfig.Fonts.Display
+	lab.TextScaled = true
+	lab.TextWrapped = false
+	lab.TextStrokeColor3 = HudConfig.Colors.Ink
+	lab.TextStrokeTransparency = CONSOLE_LABEL.StrokeTransparency
+	local limit = lab:FindFirstChildOfClass("UITextSizeConstraint")
+	if not limit then
+		local c = Instance.new("UITextSizeConstraint")
+		c.Parent = lab
+		limit = c
+	end
+	if limit then
+		limit.MaxTextSize = maxText
+		limit.MinTextSize = 8
+	end
+end
+
 local function ensurePriceBillboard(part: BasePart): BillboardGui
-	local adornee = resolveBillboardAdornee(part)
-	local existing = adornee:FindFirstChild(BILLBOARD_NAME) or part:FindFirstChild(BILLBOARD_NAME)
+	priceHidden[part] = nil
+	local adornee: BasePart = if isConsolePart(part) then part else resolveBillboardAdornee(part)
+	local host = part:FindFirstChild("WE_BillboardHost")
+	local existing = adornee:FindFirstChild(BILLBOARD_NAME)
+		or part:FindFirstChild(BILLBOARD_NAME)
+		or (host and host:FindFirstChild(BILLBOARD_NAME))
 	if existing and existing:IsA("BillboardGui") then
 		existing.Adornee = adornee
 		existing.Parent = adornee
-		setBillboardNearOnly(existing)
-		existing.Enabled = true
+		setBillboardNearOnly(existing, nil, part)
+		existing.Enabled = not nearAtmNow
 		return existing
 	end
 	local legacy = part:FindFirstChild("Label")
 	if legacy and legacy:IsA("BillboardGui") then
 		legacy.Name = BILLBOARD_NAME
-		setBillboardNearOnly(legacy)
-		legacy.Enabled = true
+		setBillboardNearOnly(legacy, nil, part)
+		legacy.Enabled = not nearAtmNow
 		return legacy
 	end
 
+	-- v70: plain 2-line outlined text, NO card (Backdrop stays as a transparent holder)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = BILLBOARD_NAME
-	setBillboardNearOnly(bb)
+	setBillboardNearOnly(bb, nil, part)
 	bb.Adornee = adornee
+	bb.Enabled = not nearAtmNow
 	bb.Parent = adornee
 
 	local backdrop = Instance.new("Frame")
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.fromScale(1, 1)
-	backdrop.BackgroundColor3 = Color3.fromRGB(8, 10, 12)
-	backdrop.BackgroundTransparency = 0.02
+	backdrop.BackgroundTransparency = 1
 	backdrop.BorderSizePixel = 0
 	backdrop.Parent = bb
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
-	c.Parent = backdrop
-	local stroke = Instance.new("UIStroke")
-	stroke.Name = "Stroke"
-	stroke.Color = Constants.Colors.Gold
-	stroke.Thickness = 2
-	stroke.Transparency = 0.15
-	stroke.Parent = backdrop
 
-	local label = Instance.new("TextLabel")
-	label.Name = "Text"
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.TextColor3 = Constants.Colors.Text
-	label.TextStrokeTransparency = 0.2
-	label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
-	label.Text = "…"
-	label.Parent = backdrop
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0, 6)
-	pad.PaddingRight = UDim.new(0, 6)
-	pad.PaddingTop = UDim.new(0, 4)
-	pad.PaddingBottom = UDim.new(0, 4)
-	pad.Parent = backdrop
-
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Text = ""
+	title.Parent = backdrop
+	local cost = Instance.new("TextLabel")
+	cost.Name = "Cost"
+	cost.Text = ""
+	cost.Parent = backdrop
 	return bb
 end
 
-local function applyBillboardCopy(
-	bb: BillboardGui,
-	titleLine: string,
-	detailLine: string,
-	textColor: Color3,
-	strokeColor: Color3
-)
+local function applyBillboardCopy(bb: BillboardGui, titleLine: string, detailLine: string, detailColor: Color3)
+	local k = chipScale()
+	-- plain text: no card, no stroke box (server cards arrive with a dark Backdrop + gold Stroke)
+	local backdrop = bb:FindFirstChild("Backdrop")
+	if backdrop and backdrop:IsA("Frame") then
+		backdrop.BackgroundTransparency = 1
+		local pad = backdrop:FindFirstChildOfClass("UIPadding")
+		if pad then
+			pad:Destroy()
+		end
+	end
 	local stroke = bb:FindFirstChild("Stroke", true)
 	if stroke and stroke:IsA("UIStroke") then
-		stroke.Color = strokeColor
+		stroke.Enabled = false
 	end
 
-	-- MapSetup price cards use Title + Cost; client-created use Text
+	-- MapSetup price cards and v70 client labels use Title + Cost; pre-v70 client chips used one "Text"
 	local titleLab = bb:FindFirstChild("Title", true)
 	local costLab = bb:FindFirstChild("Cost", true)
 	local textLab = bb:FindFirstChild("Text", true)
 
 	if titleLab and titleLab:IsA("TextLabel") and costLab and costLab:IsA("TextLabel") then
-		titleLab.Text = string.upper(titleLine)
-		titleLab.TextColor3 = Color3.fromRGB(255, 245, 180)
-		titleLab.TextStrokeTransparency = 0.25
-		titleLab.Font = Enum.Font.GothamBold
+		local twoLines = detailLine ~= ""
+		titleLab.Position = UDim2.fromScale(0, 0)
+		titleLab.Size = if twoLines then UDim2.fromScale(1, 0.5) else UDim2.fromScale(1, 1)
+		titleLab.Text = titleLine
+		titleLab.TextColor3 = CONSOLE_LABEL.NameColor
+		styleChipLabel(titleLab, math.floor(CONSOLE_LABEL.NameSize * k + 0.5))
+		costLab.Position = UDim2.fromScale(0, 0.5)
+		costLab.Size = UDim2.fromScale(1, 0.5)
+		costLab.Visible = twoLines
 		costLab.Text = detailLine
-		costLab.TextColor3 = textColor
-		costLab.TextStrokeTransparency = 0.35
+		costLab.TextColor3 = detailColor
+		styleChipLabel(costLab, math.floor(CONSOLE_LABEL.PriceSize * k + 0.5))
 	elseif textLab and textLab:IsA("TextLabel") then
-		if detailLine ~= "" then
-			textLab.Text = string.upper(titleLine) .. "\n" .. detailLine
-		else
-			textLab.Text = string.upper(titleLine)
-		end
-		textLab.TextColor3 = textColor
-		textLab.TextStrokeTransparency = 0.25
-		textLab.Font = Enum.Font.GothamBold
+		textLab.Text = if detailLine ~= "" then (titleLine .. "\n" .. detailLine) else titleLine
+		textLab.TextColor3 = detailColor
+		styleChipLabel(textLab, math.floor(CONSOLE_LABEL.NameSize * k + 0.5))
+	end
+end
+
+-- MapSetup's console screen (ConsoleScreen.WE_ConsoleScreen): the owner reads the level / price there;
+-- everyone else just sees the name. Local text only (the server wrote it once at build).
+local function setConsoleScreen(part: BasePart, text: string)
+	local screenPart = part:FindFirstChild("ConsoleScreen")
+	local sg = screenPart and screenPart:FindFirstChild("WE_ConsoleScreen")
+	local lbl = sg and sg:FindFirstChildWhichIsA("TextLabel")
+	if lbl and lbl.Text ~= text then
+		lbl.Text = text
 	end
 end
 
@@ -580,71 +758,71 @@ local function refreshSlotBillboard(part: BasePart)
 	if typeof(structureId) ~= "string" then
 		return
 	end
+	local isConsole = isConsolePart(part)
+	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
+	local name = string.upper(display)
 
 	if not isOwnPlotPad(part) then
+		-- owner-only (spec §5): no price label, no pad wash; the console screen shows just the name
+		-- (PromptController disables this console's WE_ServerBuyPrompt locally)
+		hidePriceBillboard(part)
+		if isConsole then
+			setConsoleScreen(part, name)
+		end
+		return
+	end
+
+	local owned = level >= 1
+	-- pad-name wash on the pad top: legacy walk-over pads before their first level only (never on consoles)
+	local padName = part:FindFirstChild("WE_PadNameGui")
+	if padName and (owned or isConsole) then
+		padName:Destroy()
+	end
+	if not owned and not isConsole then
+		ensurePadNameSurface(part, display)
+	end
+
+	if isConsole then
+		if isMax then
+			setConsoleScreen(part, name .. "\nMAX")
+		elseif prereqHint then
+			setConsoleScreen(part, name .. "\nLOCKED")
+		elseif cost then
+			if owned then
+				setConsoleScreen(part, string.format("%s\nLV %d → %d\n%s", name, level, level + 1, shortCost(cost)))
+			else
+				setConsoleScreen(part, string.format("%s\nBUILD\n%s", name, shortCost(cost)))
+			end
+		end
+		-- nothing to buy (MAX / locked) → no "Build / Upgrade" pill; the BUY button covers the buyable case
+		local sp = part:FindFirstChild("WE_ServerBuyPrompt")
+		if sp and sp:IsA("ProximityPrompt") then
+			PromptController.SetSuppressed(sp, isMax or prereqHint ~= nil)
+		end
+	end
+
+	-- MAX → no label in the air (MAX is on the console screen); income is on the screen / Base panel
+	if isMax and not CONSOLE_LABEL.ShowOnMax then
 		hidePriceBillboard(part)
 		return
 	end
 
-	local display, level, cost, isMax, prereqHint = structureInfo(structureId)
-	local owned = level >= 1
-	-- Owned: pad SurfaceGui name is enough for L0 buy; skip giant top-of-pad wash when built
-	if owned then
-		local padName = part:FindFirstChild("WE_PadNameGui")
-		if padName then
-			padName:Destroy()
-		end
-	else
-		ensurePadNameSurface(part, display)
-	end
-
 	local bb = ensurePriceBillboard(part)
-	setBillboardNearOnly(bb, owned)
+	setBillboardNearOnly(bb, owned, part)
 
-	local incomeStr = formatIncomeRate(structureId)
-	local incomeLine = if incomeStr then (" · " .. incomeStr) else ""
-
-	if isMax then
-		-- v39: tiny roof chip only — never dominate screen over the building
-		local ownedIncome = if incomePerLevel(structureId) > 0
-			then string.format(" +$%d/t", incomePerLevel(structureId) * level)
-			else ""
-		applyBillboardCopy(
-			bb,
-			display,
-			string.format("L%d MAX%s", level, ownedIncome),
-			Constants.Colors.Muted,
-			Color3.fromRGB(70, 80, 70)
-		)
-	elseif owned and cost then
-		-- L1+ upgradeable: small chip, not AlwaysOnTop billboard wall
-		applyBillboardCopy(
-			bb,
-			display,
-			string.format("L%d→%d %s%s", level, level + 1, formatCost(cost), incomeLine),
-			if liveCash() >= cost then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
-			if liveCash() >= cost then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
-		)
-	elseif prereqHint then
-		local costStr = if cost then formatCost(cost) else ""
-		applyBillboardCopy(
-			bb,
-			display,
-			string.format("Lv %d → %d %s%s\n%s", level, level + 1, costStr, incomeLine, prereqHint),
-			Color3.fromRGB(200, 170, 120),
-			Color3.fromRGB(160, 130, 70)
-		)
+	if prereqHint then
+		-- "Needs Command Center 2" in grey
+		applyBillboardCopy(bb, name, (string.gsub(prereqHint, " L(%d+)$", " %1")), CONSOLE_LABEL.LockedColor)
 	elseif cost then
 		local canAfford = liveCash() >= cost
-		applyBillboardCopy(
-			bb,
-			display,
-			string.format("Lv %d → %d  %s%s\nStand or tap BUY", level, level + 1, formatCost(cost), incomeLine),
-			if canAfford then Color3.fromRGB(255, 230, 140) else Color3.fromRGB(255, 190, 190),
-			if canAfford then Color3.fromRGB(230, 190, 60) else Color3.fromRGB(180, 70, 70)
-		)
+		local color = if canAfford then CONSOLE_LABEL.PriceAffordable else CONSOLE_LABEL.PriceShort
+		if owned then
+			applyBillboardCopy(bb, string.format("%s LV %d", name, level), "UPGRADE " .. shortCost(cost), color)
+		else
+			applyBillboardCopy(bb, name, "BUILD " .. shortCost(cost), color)
+		end
 	else
-		applyBillboardCopy(bb, display, incomeStr or "", Constants.Colors.Text, Constants.Colors.Gold)
+		applyBillboardCopy(bb, name, "", CONSOLE_LABEL.NameColor)
 	end
 end
 
@@ -693,7 +871,7 @@ function isSeatedInVehicle(): boolean
 	return false
 end
 
-function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying: boolean }?)
+function tryPurchase(structureId: string, opts: { silentMax: boolean?, showBuying: boolean? }?)
 	local now = os.clock()
 	local last = lastPurchaseAt[structureId] or 0
 	if now - last < DEBOUNCE_SEC then
@@ -711,7 +889,7 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 		local lastMax = maxToastAt[structureId] or 0
 		if not silent and (now - lastMax) >= 8 then
 			maxToastAt[structureId] = now
-			NotificationController.Show("Already MAX", "Info", 2)
+			NotificationController.ShowPurchaseFailure("Already at MAX level", "Info", 2)
 			print("[WorldPrompt] BUY FAIL MAX", structureId)
 		end
 		return
@@ -723,7 +901,7 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 			local lastFail = failToastAt[fk] or 0
 			if (now - lastFail) >= FAIL_TOAST_CD then
 				failToastAt[fk] = now
-				NotificationController.Show(prereqHint, "Warn", 3)
+				NotificationController.ShowPurchaseFailure(prereqHint, "Warn", 3)
 			end
 			print("[WorldPrompt] BUY FAIL prereq", structureId, prereqHint)
 		end
@@ -748,13 +926,18 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 		local lastFail = failToastAt[fk] or 0
 		if (now - lastFail) >= 8 then
 			failToastAt[fk] = now
-			NotificationController.Show("Buy failed — remotes not ready. Rejoin game.", "Error", 4)
+			NotificationController.ShowPurchaseFailure("Buy failed — remotes not ready. Rejoin game.", "Error", 4)
 		end
 		warn("[WorldPrompt] BUY FAIL remote missing RequestPurchaseUpgrade")
 		return
 	end
 	if opts and opts.showBuying then
-		NotificationController.Show(string.format("Buying %s…", display), "Info", 1.5)
+		-- v70: the BUY button itself reads BUYING… (no "Buying X…" toast; the lane drops that line anyway)
+		if buyBtn and buyBtn.Visible and activeBuyStructureId == structureId then
+			captionHoldUntil = os.clock() + 1.5
+			setBuyCaption("BUYING…")
+		end
+		print(string.format("[WorldPrompt] BUY sent %s (%s)", structureId, display))
 	end
 	-- v63: keep in-flight until WE_BuyAck attribute OR PurchaseResult (8s hard timeout)
 	local ackBefore = player:GetAttribute("WE_BuyAck")
@@ -768,17 +951,13 @@ function tryPurchase(structureId: string, opts: { silentMax: boolean, showBuying
 			end
 			pendingPurchase[structureId] = nil
 			warn("[WorldPrompt] BUY timeout no WE_BuyAck/PurchaseResult", structureId)
-			NotificationController.Show("Buy timed out — try again (or use E on pad)", "Warn", 3)
+			captionHoldUntil = 0
+			NotificationController.ShowPurchaseFailure("Buy timed out — try again", "Warn", 3)
 		end
 	end)
 end
 
--- v68: consoles (BaseLayoutConfig) — the BUY button shows when you walk up; buying needs a tap or the prompt
 local CONSOLE_MARGIN = 5
-
-local function isConsolePart(part: BasePart): boolean
-	return part:GetAttribute("WE_Console") == true
-end
 
 local function pointInPad(hrpPos: Vector3, part: BasePart): boolean
 	local localPos = part.CFrame:PointToObjectSpace(hrpPos)
@@ -816,7 +995,7 @@ local function onEnterPad(part: BasePart, structureId: string, fromStandingRetry
 	if not isOwnPlot(part) then
 		local now = os.clock()
 		local last = lastPurchaseAt[structureId] or 0
-		if now - last >= DEBOUNCE_SEC then
+		if not fromStandingRetry and not lastOverlap[key] and now - last >= DEBOUNCE_SEC then
 			lastPurchaseAt[structureId] = now
 			NotificationController.Show("Not your base — walk your plot pads to buy", "Warn", 2.5)
 		end
@@ -918,33 +1097,21 @@ local function attachPromptOnce(part: BasePart, build: () -> ProximityPrompt, on
 	end))
 end
 
-local function attachBasePlot(part: BasePart)
-	local plotId = part:GetAttribute("PlotId")
-	local label = if typeof(plotId) == "number" then ("Base Plot " .. tostring(plotId)) else "Base"
-	attachPromptOnce(part, function()
-		return makePrompt(part, "Open Base", label, 0, 14)
-	end, function()
-		BaseController.Open()
-	end)
-end
-
-local function attachCaptureZone(part: BasePart)
-	local territoryId = part:GetAttribute("TerritoryId")
-	local idStr = if typeof(territoryId) == "string" then territoryId else part.Name
-	attachPromptOnce(part, function()
-		return makePrompt(part, "Hold to capture", idStr, 0.4, 18)
-	end, function()
-		Remotes.FireServer(Constants.RemoteNames.RequestCaptureTerritory, idStr)
-		NotificationController.Show("Stand in the zone to capture — progress fills while you hold ground.", "Info", 3.5)
-	end)
+-- v70: the client "Open Base" (WE_BasePlot) and "Hold to capture" (capture zones) prompts are gone (spec §5):
+-- the Base menu opens from B / the Command Center map table / the tutorial; capture runs by standing in the zone
+-- (the HUD capture bar shows it). A leftover prompt from an older client build is removed on sight.
+local function removeClientPrompt(part: BasePart)
+	local existing = part:FindFirstChild(PROMPT_NAME)
+	if existing and existing:IsA("ProximityPrompt") then
+		existing:Destroy()
+	end
 end
 
 local function attachVehicleSpawn(part: BasePart)
 	attachPromptOnce(part, function()
-		local prompt = makePrompt(part, "Open Garage", "Vehicle Pad", 0, 12)
+		-- v70: a lane pill "Garage" (PromptController); the seat keeps its own "Drive" prompt
+		local prompt = makePrompt(part, "Garage", "", 0, 12)
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		-- Secondary Drive hint via ObjectText when vehicles nearby (seat has its own Drive prompt)
-		prompt.ObjectText = "Garage · seat has Drive"
 		return prompt
 	end, function()
 		VehicleController.Open()
@@ -984,68 +1151,64 @@ local function clearOverlapState()
 	hidePadBuyButton()
 end
 
-local function startOverlapLoop()
-	if overlapConn then
-		overlapConn:Disconnect()
-		overlapConn = nil
-	end
-	overlapConn = RunService.Heartbeat:Connect(function()
+local WORLD_LABEL_PASS_SEC = 0.25
+local lastWorldLabelPass = 0
 
-	
-	-- P0 STRUCTURE_SCALE: hide WORKER/TRAINING tags near ATM or upgrade pads (stop name stack)
-	do
-		local cam = workspace.CurrentCamera
-		local camPos = if cam then cam.CFrame.Position else nil
-		local nearPad = false
-		if camPos then
-			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
-				if inst:IsA("BasePart") and (inst.Position - camPos).Magnitude <= 20 then
+-- v70: the "TRAINING" worker tags and the training "+$/tick" billboard are removed from the design (spec §5);
+-- until the server stops creating them the client keeps them off — event-driven (the per-frame
+-- workspace:GetDescendants() scan that hid them near pads is gone).
+local REMOVED_WORLD_LABELS: { [string]: boolean } = { WE_WorkerTag = true, WE_TrainingEarnBillboard = true }
+local function hideRemovedLabel(inst: Instance)
+	if inst:IsA("BillboardGui") and REMOVED_WORLD_LABELS[inst.Name] then
+		local bb: BillboardGui = inst
+		bb.Enabled = false
+		bb:GetPropertyChangedSignal("Enabled"):Connect(function()
+			if bb.Enabled then
+				bb.Enabled = false
+			end
+		end)
+	end
+end
+
+-- 4 Hz: SupplyDrop labels step aside near your consoles / ATM; price labels hide near the ATM. A label hidden on
+-- purpose (hidePriceBillboard: another plot, MAX) or by WE_PriceForceHidden is never switched back on here.
+local function worldLabelPass()
+	local cam = Workspace.CurrentCamera
+	local camPos = if cam then cam.CFrame.Position else nil
+	local nearPad = false
+	if camPos then
+		for part in pairs(slotParts) do
+			if part.Parent and (part.Position - camPos).Magnitude <= 20 then
+				nearPad = true
+				break
+			end
+		end
+		if not nearPad then
+			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
+				if inst:IsA("BasePart") and (inst.Position - camPos).Magnitude <= 14 then
 					nearPad = true
 					break
 				end
 			end
 		end
-		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
-			if inst:IsA("BasePart") and camPos and (inst.Position - camPos).Magnitude <= 14 then
-				nearPad = true
-				break
-			end
-		end
-		for _, bb in ipairs(workspace:GetDescendants()) do
-			if bb:IsA("BillboardGui") and (bb.Name == "WE_WorkerTag" or bb.Name == "WE_TrainingEarnBillboard") then
-				if nearPad then
-					bb.Enabled = false
-				elseif bb.MaxDistance > 0 then
-					bb.Enabled = true
-				end
-			end
-		end
-		-- Season banner: tuck/hide when near pads (never cover structure names)
-		local pg = player:FindFirstChildOfClass("PlayerGui")
-		local hud = pg and pg:FindFirstChild("WE_HUD")
-		local season = hud and hud:FindFirstChild("SeasonLabel", true)
-		if season and season:IsA("GuiObject") then
-			season.Visible = not nearPad and season.Text ~= ""
-			if season:IsA("GuiObject") then
-				season.ZIndex = 2 -- keep below dock/action chrome
-			end
-		end
-		-- v31: Supply Drop labels — hide when near upgrade pads / ATM so structure names win
-		local supplyTag = (Constants.Tags and Constants.Tags.SupplyDrop) or "WE_SupplyDrop"
-		local okSup, supplies = pcall(function()
-			return CollectionService:GetTagged(supplyTag)
-		end)
-		if okSup and supplies then
-			for _, crate in ipairs(supplies) do
-				if crate:IsA("BasePart") then
-					for _, d in ipairs(crate:GetDescendants()) do
-						if d:IsA("BillboardGui") then
-							d.AlwaysOnTop = false
-							if nearPad then
+	end
+	-- v31: Supply Drop labels — hide when near upgrade pads / ATM so structure names win
+	local supplyTag = (Constants.Tags and (Constants.Tags :: any).SupplyDrop) or "WE_SupplyDrop"
+	local okSup, supplies = pcall(function()
+		return CollectionService:GetTagged(supplyTag)
+	end)
+	if okSup and supplies then
+		for _, crate in ipairs(supplies) do
+			if crate:IsA("BasePart") then
+				for _, d in ipairs(crate:GetDescendants()) do
+					if d:IsA("BillboardGui") then
+						d.AlwaysOnTop = false
+						if nearPad then
+							if d.Enabled then
 								d.Enabled = false
-							elseif d.MaxDistance > 0 then
-								d.Enabled = true
 							end
+						elseif d.MaxDistance > 0 and not d.Enabled then
+							d.Enabled = true
 						end
 					end
 				end
@@ -1053,37 +1216,46 @@ local function startOverlapLoop()
 		end
 	end
 
--- P0: hide structure price boards when near MoneyCollector ATM
-	do
-		local nearAtm = false
-		local char = player.Character
-		local hrp = char and char:FindFirstChild("HumanoidRootPart")
-		if hrp and hrp:IsA("BasePart") then
-			for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
-				if inst:IsA("BasePart") then
-					local d = (inst.Position - hrp.Position).Magnitude
-					if d <= ATM_HIDE_PRICE_STUDS then
-						nearAtm = true
-						break
-					end
-				end
+	-- P0: hide structure price boards when near MoneyCollector ATM
+	local nearAtm = false
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp and hrp:IsA("BasePart") then
+		for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
+			if inst:IsA("BasePart") and (inst.Position - hrp.Position).Magnitude <= ATM_HIDE_PRICE_STUDS then
+				nearAtm = true
+				break
 			end
 		end
-		for _, part in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
-			if part:IsA("BasePart") then
-				local host = part:FindFirstChild("WE_BillboardHost")
-				local bb = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
-				if bb and bb:IsA("BillboardGui") then
-					if nearAtm then
-						bb.Enabled = false
-					elseif bb.Enabled == false and part:GetAttribute("WE_PriceForceHidden") ~= true then
-						-- re-enable only if still in range logic elsewhere; soft restore
-						bb.Enabled = true
-					end
+	end
+	nearAtmNow = nearAtm
+	for part in pairs(slotParts) do
+		if part.Parent then
+			local host = part:FindFirstChild("WE_BillboardHost")
+			local bb = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
+			if bb and bb:IsA("BillboardGui") then
+				local want = not nearAtm and not priceHidden[part] and part:GetAttribute("WE_PriceForceHidden") ~= true
+				if bb.Enabled ~= want then
+					bb.Enabled = want
 				end
 			end
 		end
 	end
+end
+
+local function startOverlapLoop()
+	if overlapConn then
+		overlapConn:Disconnect()
+		overlapConn = nil
+	end
+	overlapConn = RunService.Heartbeat:Connect(function()
+		-- v70: world-label upkeep at 4 Hz, not every frame (the per-frame workspace:GetDescendants() tag scan and
+		-- the WE_HUD season-banner hack are gone: MapSetup / HUD own those labels)
+		local now = os.clock()
+		if now - lastWorldLabelPass >= WORLD_LABEL_PASS_SEC then
+			lastWorldLabelPass = now
+			worldLabelPass()
+		end
 		if billboardDirty and (os.clock() - lastBillboardRefresh) >= BILLBOARD_THROTTLE then
 			refreshAllBillboardsNow()
 		end
@@ -1152,9 +1324,9 @@ local function bindAllTags()
 		return
 	end
 	tagsBound = true
-	bindTag(Constants.Tags.BasePlot, attachBasePlot)
+	bindTag(Constants.Tags.BasePlot, removeClientPrompt)
 	bindTag(Constants.Tags.UpgradeSlot, attachUpgradeSlot)
-	bindTag(Constants.Tags.CaptureZone, attachCaptureZone)
+	bindTag(Constants.Tags.CaptureZone, removeClientPrompt)
 	bindTag(Constants.Tags.VehicleSpawn, attachVehicleSpawn)
 	bindTag(Constants.Tags.TutorialMarker, attachTutorialMarker)
 end
@@ -1251,87 +1423,87 @@ function WorldPromptController.Init()
 		applyCash(payload.Cash)
 	end)
 
-	-- v63 PRIMARY: attribute ack (replicates without remotes) — clear pending + apply result
-	local function applyBuyAckFromAttributes()
-		local sid = player:GetAttribute("WE_BuyStructure")
-		if typeof(sid) == "string" and sid ~= "" then
+	-- v70: one failed purchase = one line. WE_BuyAck (attribute) and PurchaseResult (remote) both answer every
+	-- buy; the first one shows, the second is skipped for the same structure inside BUY_FAIL_DEDUPE_SEC, and
+	-- NotificationController.ShowPurchaseFailure also swallows the server's own Warn echo.
+	local lastAckAt: { [string]: number } = {}
+	local spendFloatAt: { [string]: number } = {}
+	local function failureText(err: string): (string, string)
+		if err == "InsufficientCash" then
+			return "You need more Money!", "Warn" -- competitor wording; the BUY button already reads NEED $N more
+		elseif err == "NoPlot" then
+			return "Claim a base first — stand on your plot pad", "Error"
+		elseif err == "NoProfile" then
+			return "Profile still loading — try BUY again", "Error"
+		elseif err == "MissingRequirement" then
+			return "Missing prerequisite structure", "Error"
+		elseif err == "MaxLevel" then
+			return "Already at MAX level", "Info"
+		elseif err == "WrongPlot" then
+			return "Not your base — walk your plot pads to buy", "Error"
+		elseif err == "RateLimited" then
+			return "Buying too fast — wait a moment", "Error"
+		end
+		return "Buy failed: " .. err, "Error"
+	end
+	local function onBuyResult(source: string, sid: any, ok: boolean, err: string?, newCash: any, newLevel: any)
+		if typeof(sid) == "string" then
 			pendingPurchase[sid] = nil
 		end
-		local ok = player:GetAttribute("WE_BuyOk") == true
-		local cash = player:GetAttribute("WE_BuyCash")
+		captionHoldUntil = 0
+		-- the ack's cash is only meaningful on success (a failed ack stamps WE_BuyCash = 0)
+		if ok and typeof(newCash) == "number" then
+			applyCash(newCash)
+		end
+		local key = tostring(sid) .. "|" .. (if ok then "ok" else tostring(err))
+		local now = os.clock()
+		local dup = now - (lastAckAt[key] or -math.huge) < BUY_FAIL_DEDUPE_SEC
+		lastAckAt[key] = now
 		if ok then
 			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
 			local name = if def then def.DisplayName else tostring(sid)
-			print(string.format("[WorldPrompt] WE_BuyAck OK %s cash=%s", tostring(sid), tostring(cash)))
-			if typeof(cash) == "number" then
-				applyCash(cash)
+			print(string.format("[WorldPrompt] %s OK %s Lv=%s cash=%s", source, tostring(sid), tostring(newLevel), tostring(newCash)))
+			if not dup then
+				flashPadBuyBought(name)
 			end
-			flashPadBuyBought(name)
+			-- "-$20,000" spend float at the cash pill (HudConfig.CashFloat.ShowSpend) — only PurchaseResult knows
+			-- the level bought (WE_BuyAck has no level); the server's "Purchase SUCCESSFUL!" line is the toast
+			local lvl = tonumber(newLevel)
+			local spent = if def and lvl then def.Costs[lvl] else nil
+			local fk = tostring(sid) .. "|" .. tostring(lvl)
+			if HudConfig.CashFloat.ShowSpend and typeof(spent) == "number" and spent > 0 and now - (spendFloatAt[fk] or -math.huge) > 2 then
+				spendFloatAt[fk] = now
+				HudLayout.CashFloat(-spent)
+			end
 		else
-			local err = tostring(player:GetAttribute("WE_BuyErr") or "Failed")
-			local msg = if err == "InsufficientCash"
-				then "Not enough cash"
-				elseif err == "NoPlot"
-				then "Claim a base first — stand on your plot pad"
-				elseif err == "NoProfile"
-				then "Profile still loading — try BUY again"
-				elseif err == "MissingRequirement"
-				then "Missing prerequisite structure"
-				elseif err == "MaxLevel"
-				then "Already at MAX level"
-				elseif err == "WrongPlot"
-				then "Not your base — walk your plot pads to buy"
-				elseif err == "RateLimited"
-				then "Buying too fast — wait a moment"
-				else ("Buy failed: " .. err)
-			print(string.format("[WorldPrompt] WE_BuyAck FAIL %s → %s", tostring(sid), err))
-			-- Avoid double-toast if PurchaseResult also arrives; throttle lightly
-			NotificationController.Show(msg, "Error", 3.5)
+			local errStr = tostring(err or "Failed")
+			print(string.format("[WorldPrompt] %s FAIL %s → %s%s", source, tostring(sid), errStr, if dup then " (dup)" else ""))
+			if not dup then
+				local msg, kind = failureText(errStr)
+				NotificationController.ShowPurchaseFailure(msg, kind, 3)
+			end
 		end
 		markBillboardsDirty()
 	end
+
+	-- v63 PRIMARY: attribute ack (replicates without remotes) — clear pending + apply result
 	player:GetAttributeChangedSignal("WE_BuyAck"):Connect(function()
-		applyBuyAckFromAttributes()
+		onBuyResult(
+			"WE_BuyAck",
+			player:GetAttribute("WE_BuyStructure"),
+			player:GetAttribute("WE_BuyOk") == true,
+			tostring(player:GetAttribute("WE_BuyErr") or "Failed"),
+			player:GetAttribute("WE_BuyCash"),
+			nil
+		)
 	end)
 
-	-- v62/v63 secondary: PurchaseResult remote — clear pending + show server reason
+	-- v62/v63 secondary: PurchaseResult remote — clear pending + show server reason (deduped with WE_BuyAck)
 	Remotes.BindEvent(Constants.RemoteNames.PurchaseResult, function(payload: any)
 		if typeof(payload) ~= "table" then
 			return
 		end
-		local sid = payload.StructureId
-		if typeof(sid) == "string" then
-			pendingPurchase[sid] = nil
-		end
-		if payload.Ok == true then
-			local def = if typeof(sid) == "string" then BaseConfig.Structures[sid] else nil
-			local name = if def then def.DisplayName else tostring(sid)
-			print(string.format("[WorldPrompt] PurchaseResult OK %s Lv=%s cash=%s", tostring(sid), tostring(payload.NewLevel), tostring(payload.Cash)))
-			if typeof(payload.Cash) == "number" then
-				applyCash(payload.Cash)
-			end
-			flashPadBuyBought(name)
-		else
-			local err = tostring(payload.Error or "Failed")
-			local msg = if err == "InsufficientCash"
-				then "Not enough cash"
-				elseif err == "NoPlot"
-				then "Claim a base first — stand on your plot pad"
-				elseif err == "NoProfile"
-				then "Profile still loading — try BUY again"
-				elseif err == "MissingRequirement"
-				then "Missing prerequisite structure"
-				elseif err == "MaxLevel"
-				then "Already at MAX level"
-				elseif err == "WrongPlot"
-				then "Not your base — walk your plot pads to buy"
-				elseif err == "RateLimited"
-				then "Buying too fast — wait a moment"
-				else ("Buy failed: " .. err)
-			print(string.format("[WorldPrompt] PurchaseResult FAIL %s → %s", tostring(sid), err))
-			NotificationController.Show(msg, "Error", 3.5)
-		end
-		markBillboardsDirty()
+		onBuyResult("PurchaseResult", payload.StructureId, payload.Ok == true, tostring(payload.Error or "Failed"), payload.Cash, payload.NewLevel)
 	end)
 
 	task.spawn(function()
@@ -1358,6 +1530,7 @@ function WorldPromptController.Init()
 						end
 						if typeof(base.PlotId) == "number" then
 							myPlotId = base.PlotId
+							PromptController.SetMyPlotId(myPlotId)
 						end
 					end
 					markBillboardsDirty()
@@ -1385,6 +1558,7 @@ function WorldPromptController.Init()
 				clearOverlapState()
 			end
 			myPlotId = base.PlotId
+			PromptController.SetMyPlotId(myPlotId)
 		end
 		if activeBuyStructureId and typeof(upgrades) == "table" then
 			local sid = activeBuyStructureId
@@ -1409,6 +1583,7 @@ function WorldPromptController.Init()
 					clearOverlapState()
 				end
 				myPlotId = state.Base.PlotId
+				PromptController.SetMyPlotId(myPlotId)
 			end
 		end
 		markBillboardsDirty()
@@ -1434,6 +1609,10 @@ function WorldPromptController.Init()
 		end
 		bindAllTags()
 		startOverlapLoop()
+		Workspace.DescendantAdded:Connect(hideRemovedLabel)
+		for _, d in ipairs(setup and setup:GetDescendants() or {}) do
+			hideRemovedLabel(d)
+		end
 		refreshAllBillboardsNow()
 		rescanUntaggedSlots()
 		local n = 0
