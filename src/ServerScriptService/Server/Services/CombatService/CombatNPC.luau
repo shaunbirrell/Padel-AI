@@ -2,23 +2,29 @@
 --[[ NPC spawn gathering, nearest-player, think loop — used by CombatService façade.
 	P1-2 (mobile plan): an NPC shot needs line of sight (CombatDamage.LineOfSight, the GateDefenseService.hasLos
 	pattern), waits CombatFairnessConfig.NpcReactionSeconds after acquiring a target, and hits with a chance that
-	falls with distance and against fast-moving targets. All numbers live in CombatFairnessConfig. ]]
+	falls with distance and against fast-moving targets. All numbers live in CombatFairnessConfig.
+	W2 Combat Core (contracts §2.2, §3.8): every NPC shot sends one WeaponFx bullet event through the optional `fx`
+	binding (a miss lands 2–4 studs beside the target), and a hit on a player sitting in an ENCLOSED seat
+	(WE_Exposed == false) of a live registered vehicle damages the vehicle instead (VehicleHealth, class "NPC"). ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local SharedRoot = ReplicatedStorage:WaitForChild("Shared")
+local SharedRoot = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(SharedRoot.Constants)
 local CombatConfig = require(SharedRoot.Configs.CombatConfig)
 local CombatFairnessConfig = require(SharedRoot.Configs.CombatFairnessConfig)
 
 local CombatDamage = require(script.Parent.CombatDamage)
+local CombatFeelConfig = require(SharedRoot.Configs.CombatFeelConfig) -- W2
+local VehicleHealth = require(script.Parent.Parent.Parent.Modules.VehicleHealth) -- W2 (CC-2; nil-safe calls below)
 
 local CombatNPC = {}
 
 local rng = Random.new()
+local fxRng = Random.new() -- W2: miss offsets for WeaponFx only (never touches the seeded hit roll)
 -- per-player horizontal speed, sampled from server positions once per Think (P1-2 moving-target penalty)
 local samplePos: { [number]: Vector3 } = {}
 local sampleAt: { [number]: number } = {}
@@ -33,6 +39,8 @@ export type Bindings = {
 	pushState: (Player) -> (),
 	spawnNPC: (string?, CFrame) -> any,
 	getTagged: (string) -> { Instance },
+	-- W2 (optional): one WeaponFx bullet event per NPC shot (origin = eye, landed, kind "P" / "V" / "M")
+	fx: ((rec: any, origin: Vector3, landed: Vector3, kind: string) -> ())?,
 }
 
 local B: Bindings
@@ -149,6 +157,40 @@ local function vehicleOf(seat: Instance?): Instance?
 	return nil
 end
 
+--[[ W2 (contracts §3.8): a target sitting in an ENCLOSED seat (WE_Exposed == false; a missing attribute counts as
+	exposed) of a live registered vehicle is shielded by it: the vehicle takes the NPC's damage (class "NPC", no
+	attacker, no feedback to the occupant). Returns true when the hit went to the vehicle. ]]
+local function redirectToVehicle(target: Player, damage: number): boolean
+	local ok, veh, seat = pcall(VehicleHealth.GetSeatedVehicle, target)
+	if not ok or veh == nil or seat == nil then
+		return false
+	end
+	if (seat :: BasePart):GetAttribute("WE_Exposed") ~= false then
+		return false
+	end
+	local okRec, rec = pcall(VehicleHealth.Get, veh :: Model)
+	if not okRec or rec == nil or (rec :: any).Destroyed == true then
+		return false
+	end
+	pcall(VehicleHealth.ApplyDamage, veh :: Model, { Attacker = nil, Amount = damage, Class = "NPC", WeaponId = "NPC" })
+	return true
+end
+
+local function sendFx(rec: any, origin: Vector3, landed: Vector3, kind: string)
+	local fx = B.fx
+	if fx and CombatFeelConfig.Fx.NpcShots then
+		pcall(fx, rec, origin, landed, kind)
+	end
+end
+
+-- a missed NPC shot lands 2–4 studs beside the target (horizontal), for the tracer only
+local function missPoint(at: Vector3): Vector3
+	local m = CombatFeelConfig.Fx.NpcMissOffset
+	local a = fxRng:NextNumber() * math.pi * 2
+	local r = fxRng:NextNumber(m.Min, m.Max)
+	return at + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+end
+
 -- Clear shot from the NPC's eyes to the target's root (the NPC and the target's own character never block)
 local function npcHasLos(rec: any, target: Player, th: Humanoid, troot: BasePart): boolean
 	if not CombatFairnessConfig.NpcRequireLos then
@@ -223,14 +265,23 @@ function CombatNPC.Think()
 							rec.LastFireAt = now
 							local tState = B.combatStates[target.UserId]
 							local chance = CombatNPC.HitChance(dist, rec.Def.Range, speedOf[target.UserId] or 0)
+							local eye = rec.Root.Position + Vector3.new(0, C.NpcEyeHeight, 0)
 							if not (tState and now < tState.InvulnerableUntil) and rng:NextNumber() < chance then
-								th:TakeDamage(rec.Def.Damage)
-								B.hitFeedback(target, {
-									Kind = if th.Health <= 0 then "Death" else "Damaged",
-									Damage = rec.Def.Damage,
-									TargetName = rec.Def.DisplayName,
-								})
-								B.pushState(target)
+								if redirectToVehicle(target, rec.Def.Damage) then
+									sendFx(rec, eye, troot.Position, "V") -- W2: the enclosed seat's vehicle took it
+								else
+									th:TakeDamage(rec.Def.Damage)
+									B.hitFeedback(target, {
+										Kind = if th.Health <= 0 then "Death" else "Damaged",
+										Damage = rec.Def.Damage,
+										TargetName = rec.Def.DisplayName,
+										From = eye, -- W2: direction cue
+									})
+									B.pushState(target)
+									sendFx(rec, eye, troot.Position, "P")
+								end
+							else
+								sendFx(rec, eye, missPoint(troot.Position), "M")
 							end
 						end
 					end

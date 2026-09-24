@@ -904,3 +904,128 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 - **Store-model templates live in ServerStorage** (`WE_VisualAssetTemplates`), not ReplicatedStorage, so joiners no longer download templates nobody on the client reads; clones are still made on the server. One line in `ensureFolder()` reverses it.
 - **Gate guards give a spawn grace:** guards and AutoGuns ignore a player whose save has not loaded (such a player cannot fire or raid) and, for `GateDefenseConfig.SpawnGraceSeconds` (4), a player who just spawned or whose save just loaded, since a new player's random first spawn can be someone's gate pad. The grace ends early when the player holds an ATM raid or hits the gate or a guard.
 - **Left for Combat Core / streaming:** with more players than the 6 plots, a plotless respawn stays on a random gate pad (`CombatService.TeleportToBase` needs a plot); it gets the 4 s grace but cannot attack or raid under it. StreamingEnabled (faster joins, less phone memory) is the next step once Combat Core is committed.
+
+
+## 2026-09-24 — W2 Combat Core (CC-1 server combat, CC-2 vehicle HP, CC-3 client feel, verifier)
+
+## W2 CC-1 (server combat) — assumptions
+
+- **A-CC1-1 Claim decides.** A validated P0-7 claim ends the shot's resolution even when the damage is then refused (PvP off, spawn shield). The assist never runs after a validated claim ("first rule that decides wins").
+- **A-CC1-2 Assist depth.** When the exact ray hit scenery, the assist's `maxAlong` is that distance + `ClaimBeyondHitStuds` (3), whatever `ClaimAfterSceneryHit` says. With no hit, it is the assist range `min(weapon Range, 150)`.
+- **A-CC1-3 Splash spares clan mates.** `CombatFeelConfig.Splash.ExcludeClanAllies = true` is a CC-1 additive field (the W2 task asked splash to respect allies). A direct bullet hit on a clan mate still lands as it does today; there is no clan friendly-fire rule yet.
+- **A-CC1-4 Gate hit marker.** When `GateDefenseService.ApplyDamage` accepts a hit, the attacker now gets a `CombatHitFeedback` "Hit" (`TargetKind = "Gate"`). Gates take no fall-off. Before W2, gate hits sent no marker.
+- **A-CC1-5 NPC miss tracer.** A missed NPC shot sends WeaponFx with `K = "M"` and `P` = the target's torso plus a random 2–4 stud horizontal offset. There is no extra raycast to find the scenery.
+- **A-CC1-6 Shooter leaves.** A player's live projectiles are removed when they leave (`Projectile.ForgetOwner`). They have no impact and send no "X"; the client drops the visual at T + 0.5 s. A projectile that lands after its shooter's `Player.Parent` is nil deals no damage.
+- **A-CC1-7 Blast centre.** The explosion centre is the hit point pushed 0.5 studs out along the surface normal, so the splash line of sight starts outside the surface. With no hit, it is the point at MaxSeconds.
+- **A-CC1-8 Shield attribute.** `WE_ShieldUntil` is written only when the combat state exists at CharacterAdded. That is the same condition under which the server sets `InvulnerableUntil`. If `GetServerTimeNow` fails, `os.time()` is the base.
+- **A-CC1-9 Own vehicle is always out of the ray.** A seated player's vehicle (any model tagged `WE_Vehicle`, registered or not) is always in the shooter's Exclude filter. The seat-fire refusal rules apply only to registered vehicles, as §1.2 says.
+- **A-CC1-10 Where death attributes live.** `WE_LastWeapon`, `WE_BlastSource` and `WE_BlastAt` are Humanoid attributes. `WE_BlastAt` uses `os.clock()`, so it is server-local.
+- **A-CC1-11 Immediate `Died` fix.** `Died` can fire inside `TakeDamage` (Immediate signal mode, and the headless sim). While the damage is applied, the NPC record carries `KillCtx`, so its Died handler pays quiet (blast) and splash kills correctly: no toast, or no per-NPC kill marker.
+- **A-CC1-12 Mouse cone vs body size.** The KeyboardAndMouse class (1.0 stud, 1.5°) is narrower than a 2-stud torso, so for mouse players the assist only matters at the body edges. The headless "outside" offset for that class is at least 1.1 studs, so the exact ray misses the torso.
+- **A-CC1-13 Seat check order.** Driver (`VehicleSeat` or `WE_SeatRole == "Driver"`) → mount (`WE_MountId`) → passenger with `WE_CanFireFromSeat` → refuse, in the order of contract §1.2.
+- **A-CC1-14 Assist cost cap.** Per shot, at most 8 in-cone candidates are kept and at most 3 line-of-sight rays are cast, smallest lateral first. Players get a cone pre-check before the seat and clan lookups.
+- **A-CC1-15 Feedback send.** `hitFeedback` now wraps `FireClient` in pcall, so a player who has just left never breaks a shot.
+- **A-CC1-16 Aim stats log.** One summary line (`[CombatService] aim: ...`) is printed lazily on the first shot after each 300 s window (`AimStatsLogSeconds`). It needs no extra thread.
+- **A-CC1-17 Asset loader clone.** `WeaponAssetLoader` clones the asset's Tool children (or the `VisualChild` model's children) into `Weapon_<Id>` and sets `PrimaryPart = Handle` when a Handle exists. Today it does nothing, because every `VisualAssetId` is 0.
+
+## W2 CC-2 (vehicle health) — reversible assumptions
+
+- **Own-plot regen test.** "Inside the owner's plot" uses the plot pad tagged `WE_BasePlot` with `PlotId == profile.BasePlotId`. The Chassis must be on the pad's rectangle, margin 0. The pad's CFrame carries the plot yaw, and `VehicleService.insidePlot` uses the same test. The plot pad stands in for the "BaseLayout plot frame".
+- **Raid shield.** premium §3.5 mentions a raid-shield protection. It is not implemented, for two reasons: no service exposes `IsShielded(userId)`, and contracts §4.1 leaves it out of `IsProtected`. Add it to `VehicleHealth.IsProtected` once that API exists.
+- **What `IsProtected` blocks:**
+  - It returns true for an unregistered model.
+  - It also blocks an attacker who sits in a trial vehicle (`VehicleCombatConfig.Trial.DealsVehicleDamage = false`).
+- **`WeaponMult` default.** The default comes from `InfantryWeapons[WeaponId]` only when that row's class is the class being applied. Example: an explicit `Class = "NPC"` hit that carries `WeaponId = "RocketLauncher"` is not doubled. An explicit `WeaponMult` always wins.
+- **Radius distance.** Distance is measured to the Chassis box (0 inside it), not to the whole model's bounding box. This is cheaper, and the Chassis is the hull.
+- **Nuke core-destroy switch.** The Nuke class destroys outright inside `CoreRadius` only when both flags are on: `VehicleCombatConfig.DamageClasses.Nuke.CoreDestroys` and `NukeConfig.Vehicles.CoreDestroys`. Setting `NukeConfig.Vehicles.CoreDestroys = false` turns it off.
+- **`Repair(model, pct)`.** `pct` is a fraction from 0 to 1. A value above 1 is read as a percent (50 means 50 %).
+- **Rounding.**
+  - MaxHP is rounded to 3 decimals, so that `WE_MaxHP` (ceil) does not read 281 for 280.
+  - `RepairingFor` reports `ceil(left − 1e-6)` seconds, with a minimum of 1.
+- **Bounty toast.** The toast reads "<DisplayName> down (+$N)", the same shape as an NPC kill. The HUD therefore reroutes it to a cash float, with no lane line during combat. The XP is paid but not shown in the text.
+- **Owner notice.** When the teardown runs after `DebrisSeconds`, the owner gets "<DisplayName> destroyed" as a Warn toast for 4 s, through `destroyVehicle`'s message.
+- **Wreck physics.** On wreck, LinearVelocity and AlignOrientation are switched off (`Enabled = false`), not just zeroed. An airborne or floating wreck therefore falls or sinks under gravity. The server takes network ownership.
+- **Occupant damage fallback.** Occupant damage goes through `CombatService.ApplyHit` (with `WeaponId = "VehicleWreck"`) when that function exists. It falls back to `Humanoid:TakeDamage(35)` when `ApplyHit` is missing or errors. Squad units never ride today (F8 ejects NPCs from passenger seats), so the squad path is only for M6 mounted units.
+- **HUD bar colour.** The occupant HUD bar fill is "armor cyan" (90, 196, 235), not green. On touch it sits right under the green capture bar, and two green bars read as duplicates. Below 25 % it flashes red.
+- **HUD bar placement.** The HUD bar decides "touch" with the same test as the SPD pill in VehicleDriveClient (`TouchEnabled` or `PreferredInput == Touch`). That keeps the bar and the pill in the same layout: the stack on touch, bottom-right on desktop.
+- **Over-bars.**
+  - Height is `WE_LabelY − 0.75` studs, just under the owner nameplate.
+  - Three BillboardGuis are pooled in PlayerGui, with `Adornee = Chassis`.
+  - The "own parked vehicle below MaxHP" bar is shown only to its owner.
+  - A heal never re-arms the 5 s window.
+- **Wreck burst.**
+  - It uses the default ParticleEmitter texture; no new `rbxasset://` path is set.
+  - It emits 24 particles from one pooled Attachment under Terrain.
+  - A vehicle that streams in already wrecked gets no burst.
+
+## W2 CC-3 (client feel) — assumptions (reversible; the verifier appends these to ASSUMPTIONS.md)
+
+- **A-CC3-1 (test re-pin, audio).** `w1/snd/t_audio.luau` check 0a keeps a licence allowlist of every SoundConfig id. The
+  21 new combat ids (docs/ASSET_SHORTLIST.md §3.5, all owned by ProSoundEffects, User 7462895450) are not on it, so the
+  unmodified suite reads 148/149. `w2/cc3/t_audio_w2.luau` is the same file with only those 21 ids added to 0a's list:
+  149/149. The W1 file itself is unchanged. BuyPathStatic re-pins: 0.
+- **A-CC3-2 (sounds).** Values nobody has listened to yet: volumes 0.35–0.8; priorities Kill 4 > Headshot 3 > Confirm /
+  Hurt 2 > shots 1 (rocket 2, explosions 3–4). Sniper has no MaxSeconds (the shortlist gives none). Reload / Empty / Equip
+  are World-bus 3D sounds at the local character (contract table), MaxDistance 60. `Hit.Headshot` = the `Hit.Confirm`
+  file at pitch 1.8.
+- **A-CC3-3 (recoil spring).** The vendored RbxUtil Spring is a critically damped `TweenService:SmoothDamp` spring (no
+  Speed / Damper). SmoothTime = 2 / `WeaponConfig.Recoil.Recover` (`CombatCamera.RecoilSpring.Speed` only when Recover is
+  missing); `RecoilSpring.Damper` is unused. The impulse is sized so the peak kick equals `Recoil.Kick` degrees (x 0.5 on
+  touch); `Side` is a random yaw in ±Side. If `SmoothDamp` is missing on a client, a hand-rolled critically damped spring
+  with the same maths runs instead.
+- **A-CC3-4 (allies).** The client does not know clans (no attribute in W2): the camera aim help may slow over an ally.
+  The server assist excludes allies, so no ally is ever hit by assist.
+- **A-CC3-5 (local fire ray).** The local ray now starts at the head-projected Origin and runs for the weapon Range +
+  `CombatConfig.HitPositionSlopStuds` (was: from the camera, 500 studs). It is the same line the server's exact ray uses,
+  so tracers end where the server hits, and a far miss no longer reports a HitPosition out of range (`fire_hitpos_oor`
+  soft strikes). `TargetUserId` / `TargetNpcId` hints now name only targets inside weapon range.
+- **A-CC3-6 (local shot schedule).** The 20 Hz send loop is unchanged (the server clamps). Local flash / tracer / recoil /
+  casing / bloom follow the server's GCRA fire schedule (FireRate x research WeaponFireRate) and a predicted magazine
+  (reset by every CombatStateUpdate), so a slow gun held at 20 Hz shows its own fire rate.
+- **A-CC3-7 (damage numbers).** Spawned 26 px right / 30 px above the hit point's screen position (never on the
+  crosshair), then rise 24 px and fade over 0.8 s. At most 4 labels; the oldest is reused.
+- **A-CC3-8 (target bar).** Stays visible during a reload (only the reticle hides): it is small, under the crosshair, and
+  times out 2.5 s after the last hit. Hidden while holstered, driving, dead or in a panel.
+- **A-CC3-9 (haptics).** `HapticService:SetMotor` on `Touch`, then `Gamepad1`, only when `IsVibrationSupported` and
+  `IsMotorSupported` say yes; 80 ms pulses, at most about 8 per second. On a phone without motor support nothing happens
+  (device-only check).
+- **A-CC3-10 (RequestSetDrawn).** Sends the "shown" state (drawn AND alive AND allowed to shoot from this seat), so other
+  players never see a gun on a driver or in an enclosed seat. Leading edge at once, trailing edge after 0.5 s (≤ 2/s).
+- **A-CC3-11 (gun grip).** Guns use the Roblox Tool default grip (barrel along the RightGripAttachment's -Z, top along +Y).
+  `HudConfig.CombatFx.Grip = { RotationDeg, OffsetStuds }` (zero) is a device-tuning knob if the hold animation needs it.
+- **A-CC3-12 (passenger seats).** On a seat with `WE_CanFireFromSeat` the whole combat HUD (hotbar, FIRE, RELOAD, ammo,
+  reticle, health) shows and the 1-4 / Q keys work. The pinned auto-draw-on-damage line still uses `seatedNow()`, so
+  nobody auto-draws in any seat. A driver never gets combat input in W2.
+- **A-CC3-13 (FX parts lifetime).** Pooled FX parts park at (0, 10000, 0); each part pool is destroyed after 20 s without
+  use, so every FX part is gone within 25 s of the last shot. Explosions use 3 (touch 2) pooled attachments with
+  emitters (0 parts), outside the Impacts cap.
+- **A-CC3-14 (remote launch sound).** Another player's rocket / grenade launch ("L") plays its fire key at O; the shooter
+  hears his own from LocalShot.
+- **A-CC3-15 (casings).** Desktop only; a 0.35 s tween to 2.6 studs below the ejection port (no physics), parked after 2 s.
+- **A-CC3-16 (HUD harness).** `check_hud.py` creates every RemoteName as a RemoteEvent, so in those runs WeaponVisuals
+  does not bind WeaponFx (it polls 120 s, then warns once). The CC-3 driver replaces it with an UnreliableRemoteEvent,
+  as RemoteSetup does on live (CC-1's UNRELIABLE list).
+- **A-CC3-17 (shake units).** Shake output x 1 stud (position) and x (8°, 8°, 4°) (rotation): BlastAmplitude 0.6 ≈
+  ±0.15 stud / ±1.2° point blank, fading linearly to 0 at radius x MaxRadiusMult; touch 0.3. Hit pulse = HitAmplitude x
+  clamp(damage / 25, 0.5, 1.5), halved on touch.
+- **A-CC3-18 (shoulder camera).** Like the Weapons Kit ShoulderCamera, the root yaw is written directly (only when the
+  camera yaw moved > 1°). AutoRotate is restored to the Roblox default (true) on release.
+- **A-CC3-19 (Trove).** Vendored per the contract but not used by the W2 code yet (nothing needed a clean-up bag).
+- **A-CC3-20 (drag-to-aim hit test).** TouchStarted compares `InputObject.Position` with FIRE's `AbsolutePosition` /
+  `AbsoluteSize` (the same GUI-inset space in Roblox) ± `FireSlopPx`, and ignores touches another button already took
+  (`gameProcessed`: RELOAD, the jump button, panels). Device check: holding FIRE and dragging turns the camera.
+- **A-CC3-21 (out of scope, flagged).** The shortlist found `rbxasset://sounds/electronicpingshort.wav` / `switch.wav`
+  missing from the client, so `UI.Click`, `UI.Notify`, `Toast.Warn` / `Toast.Error`, `UI.Denied` and `Capture.Start` are
+  probably silent. Fixing those is the asset workflow's config commit (shortlist §6.1), not CC-3.
+- **A-CC3-22 (aim step).** CameraFx binds its per-frame step only while recoil is in flight, the shoulder camera is on, or
+  aim help is on (touch / gamepad, drawn). A drawn PC gun with no recoil runs nothing per frame.
+
+## W2 verifier — assumptions and fixes
+
+- **A-V-1 Origin behind a wall.** `RequestFire` keeps the P0-7 rule (Origin within `MaxOriginDeltaStuds` 12 of the root, else strike + snap). An accepted Origin that is not visible from the head (a ray from the head, `RespectCanCollide = true`, shot filter excluded) is now snapped to the head with no strike. It stops shooting through a wall with a forged Origin up to 12 studs out, and rockets spawned inside a base. Legit W2 clients send the point on the camera ray nearest the head, so they are almost never snapped. Revert: delete the `else` branch after the desync check.
+- **A-V-2 Enclosed drivers.** J10 (drivers keep their rifle) now applies to driver seats with `WE_Exposed ~= false` only. An enclosed driver seat (APC, tank, heli, jet) is refused, like an enclosed passenger. Before W2, the driver's own hull blocked these shots, and the W2 client never sends driver fire, so only a modified client notices. Revert: drop `and seat:GetAttribute("WE_Exposed") ~= false` in `seatFireRule`.
+- **A-V-3 No heal by respawn.** SPAWN is refused with the existing "InCombat" reason for `SpawnCfg.DamageLockSeconds` (5 s) after any live vehicle of that owner took damage. Without it, a vehicle at 10 % HP could be swapped for a full-HP copy in place, either by SPAWN on the same id or by Despawn and then SPAWN, whenever the 15 s spawn cooldown had passed. A destroying hit clears the lock, because the repair timer covers wrecks. State: `VehicleHealth.HitLockLeft(userId, seconds)`.
+- **A-V-4 Rocket first ray.** `Projectile.Launch` takes an optional `From` (the shot origin). The first step's ray starts there, not at the spawn point 1 stud ahead. Before, a player whose head was within about 1 stud of a wall fired straight through it with an honest client.
+- **A-V-5 NPC FX buckets.** `destroyNPC` calls `CombatFx.Forget(rec.Id)`, because NPC ids never repeat and the per-shooter bucket table grew for the life of the server.
+- **A-V-6 Left as contracted.** `VehicleHealth.ApplyRadiusDamage` has no line of sight. A rocket that hits a wall still damages a vehicle within the radius behind it (headless: a 4x4 1–5 studs behind a 1-stud wall is destroyed). Humanoid splash does check line of sight. Nukes and missiles need the no-LOS behaviour, so any change is an owner decision (option: a `RequireLos` flag in `RadiusOpts` for the infantry rocket only).
+- **A-V-7 ASSUMPTIONS.md.** The verifier was limited to builder-owned files, so this combined block (CC-1 + CC-2 + CC-3 + verifier) is written to `scratchpad/w2/verify/ASSUMPTIONS_append.md` for the committer to append.

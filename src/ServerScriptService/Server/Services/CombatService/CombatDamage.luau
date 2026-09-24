@@ -85,4 +85,34 @@ function CombatDamage.DamageFor(def: any, attacker: Player?): number
 	return base
 end
 
+--[[ W2 (contracts §1.5): hitscan damage fall-off. def.Falloff = { Start, MinMult } (nil = none): full damage up to
+	Start studs, MinMult at the weapon's Range, linear in between (and MinMult beyond Range). Additive helper. ]]
+function CombatDamage.FalloffMult(def: any, dist: number): number
+	local f = if typeof(def) == "table" then def.Falloff else nil
+	if typeof(f) ~= "table" then
+		return 1
+	end
+	local start = tonumber(f.Start) or 0
+	local minMult = math.clamp(tonumber(f.MinMult) or 1, 0, 1)
+	local range = tonumber(def.Range) or 0
+	if not (dist > start) then -- NaN-safe: a NaN distance keeps full damage
+		return 1
+	end
+	if range <= start then
+		return minMult
+	end
+	local t = math.clamp((dist - start) / (range - start), 0, 1)
+	return 1 - (1 - minMult) * t
+end
+
+--[[ W2 (contracts §3.2): splash damage mult at `dist` from the blast: 1 at the centre, `minMult` at `radius`
+	(linear), 0 outside. Additive helper. ]]
+function CombatDamage.SplashMult(dist: number, radius: number, minMult: number): number
+	if not (radius > 0) or not (dist <= radius) then
+		return 0
+	end
+	local t = math.clamp(dist / radius, 0, 1)
+	return 1 + (math.clamp(minMult, 0, 1) - 1) * t
+end
+
 return CombatDamage

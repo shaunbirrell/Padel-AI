@@ -14,7 +14,9 @@
 	  * Remotes only via Remotes.BindEvent / Remotes.FireServer (never a blocking GetEvent).
 	  * Sort: active, owned, buyable, can't afford, locked. Open(tab) presets the category (terminal WE_OpenTab).
 	  * Touch: the panel closes once the requested vehicle is deployed.
-	  * Init also starts VehicleDriveClient (the client half of drivable vehicles).
+	  * Init also starts VehicleDriveClient (the client half of drivable vehicles) and, in a pcall,
+	    VehicleCombatClient (W2: vehicle HP bars + wreck burst).
+	  * W2: a destroyed vehicle's row reads "REPAIR n s" (VehicleStateUpdate.Repairing) until it can be redeployed.
 
 	v70 "clean screen" HUD (spec §3.7 / §3.8):
 	  * No desktop GARAGE toggle: the rail's Garage tile, G (HudConfig.Keys.Garage), the vehicle-pad prompt and
@@ -57,10 +59,11 @@ export type RowCtx = {
 	Cooldown: number,
 	Gates: Gates?,
 	Cash: number?,
+	Repairing: { [string]: number }?, -- W2: destroyed ids → seconds until redeploy (VehicleStateUpdate.Repairing)
 }
 
 export type RowState = {
-	Kind: string, -- Despawn | Cooldown | Spawn | Locked | CantAfford | Buy | Claim
+	Kind: string, -- Despawn | Repairing | Cooldown | Spawn | Locked | CantAfford | Buy | Claim
 	Text: string,
 	Enabled: boolean,
 	Reason: string?, -- Locked: short reason
@@ -93,6 +96,7 @@ local paintFilters: (() -> ())? = nil
 local ownedMap: { [string]: boolean } = {}
 local activeId: string? = nil
 local cooldownLeft = 0
+local repairingMap: { [string]: number } = {} -- W2: vehicle id → seconds of repair left (the 0.5 s ticker counts down)
 local gates: Gates = { Level = 1, Prestige = 0, Structures = {}, Rebirth = {} }
 local filterCategory: string = "All" -- All | Ground | Air | Naval
 local filterRarity: string = "All" -- All | Common | Uncommon | Rare | Epic | Legendary
@@ -119,7 +123,7 @@ local STRUCTURE_SHORT: { [string]: string } =
 local STRUCTURE_LONG: { [string]: string } =
 	{ VehicleDepot = "Vehicle Depot", Helipad = "Helipad", Airfield = "Airfield", Dock = "Dock" }
 local KIND_RANK: { [string]: number } =
-	{ Despawn = 0, Cooldown = 1, Spawn = 1, Claim = 2, Buy = 2, CantAfford = 3, Locked = 4 }
+	{ Despawn = 0, Repairing = 1, Cooldown = 1, Spawn = 1, Claim = 2, Buy = 2, CantAfford = 3, Locked = 4 }
 
 local function addCorner(parent: Instance, radius: number)
 	local c = Instance.new("UICorner")
@@ -215,6 +219,11 @@ function VehicleController._RowState(id: string, def: VehicleDef, ctx: RowCtx): 
 	end
 	local owned = if typeof(ctx.Owned) == "table" then ctx.Owned[id] == true else ctx.Owned == true
 	if owned then
+		-- W2: a destroyed vehicle is locked while it is repaired (VehicleHealth repair timer)
+		local rep = if ctx.Repairing then tonumber(ctx.Repairing[id]) else nil
+		if rep ~= nil and rep > 0 then
+			return { Kind = "Repairing", Text = string.format("REPAIR %ds", math.max(1, math.floor(rep + 0.5))), Enabled = false }
+		end
 		local cd = ctx.Cooldown or 0
 		if cd > 0 then
 			return { Kind = "Cooldown", Text = string.format("%ds", math.max(1, math.floor(cd + 0.5))), Enabled = false }
@@ -315,6 +324,7 @@ local function currentCtx(): RowCtx
 		Cooldown = cooldownLeft,
 		Gates = gates,
 		Cash = tonumber(player:GetAttribute("WE_Cash")),
+		Repairing = repairingMap,
 	}
 end
 
@@ -409,7 +419,7 @@ local function paintButton(btn: TextButton, id: string, st: RowState)
 		bg, fg = Constants.Colors.Danger, Constants.Colors.Text
 	elseif kind == "Spawn" then
 		bg, fg = Constants.Colors.Accent, Constants.Colors.Text
-	elseif kind == "Cooldown" then
+	elseif kind == "Cooldown" or kind == "Repairing" then
 		bg, fg = Constants.Colors.Gunmetal, Constants.Colors.Muted
 	elseif kind == "Locked" then
 		bg, fg = Constants.Colors.Gunmetal, Constants.Colors.Muted
@@ -507,6 +517,9 @@ local function onRowTap(id: string)
 		task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestDespawnVehicle)
 	elseif kind == "Cooldown" then
 		setStatus(string.format("Spawn ready in %ds", math.max(1, math.floor(cooldownLeft + 0.5))))
+	elseif kind == "Repairing" then
+		local left = repairingMap[id] or 0
+		setStatus(string.format("%s is being repaired — ready in %ds", def.DisplayName, math.max(1, math.floor(left + 0.5))))
 	elseif kind == "Spawn" then
 		fireSpawn(id)
 	elseif kind == "Locked" then
@@ -1191,6 +1204,16 @@ local function onVehicleState(payload: any)
 		refreshNewVehicleBadge()
 	end
 	cooldownLeft = math.max(0, tonumber(payload.CooldownRemaining) or 0)
+	-- W2: Repairing = { [id] = seconds } (absent = none: an older server)
+	table.clear(repairingMap)
+	if typeof(payload.Repairing) == "table" then
+		for id, secs in pairs(payload.Repairing) do
+			local n = tonumber(secs)
+			if typeof(id) == "string" and n ~= nil and n > 0 and n == n then
+				repairingMap[id] = math.min(n, 3600)
+			end
+		end
+	end
 	if payload.Gates ~= nil then
 		VehicleController._MergeGates(gates, payload.Gates)
 	end
@@ -1259,6 +1282,15 @@ function VehicleController.Init()
 	if not okDrive then
 		warn("[VehicleController] VehicleDriveClient.Init failed:", errDrive)
 	end
+	-- W2: vehicle HP bars + wreck burst (display only); a failure never stops driving or the garage
+	local okHp, errHp = pcall(function(): any
+		local VehicleCombatClient = require(script.Parent.Parent.Modules.VehicleCombatClient)
+		VehicleCombatClient.Init()
+		return nil
+	end)
+	if not okHp then
+		warn("[VehicleController] VehicleCombatClient.Init failed:", errHp)
+	end
 
 	buildGui()
 
@@ -1284,7 +1316,17 @@ function VehicleController.Init()
 	task.spawn(function()
 		while true do
 			task.wait(0.5)
-			if cooldownLeft > 0 then
+			local repairing = false
+			for id, left in pairs(repairingMap) do
+				repairing = true
+				local n = left - 0.5
+				if n > 0 then
+					repairingMap[id] = n
+				else
+					repairingMap[id] = nil
+				end
+			end
+			if cooldownLeft > 0 or repairing then
 				cooldownLeft = math.max(0, cooldownLeft - 0.5)
 				if isOpen and listFrame then
 					repaintOwned()

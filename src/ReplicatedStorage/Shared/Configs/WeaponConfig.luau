@@ -1,6 +1,19 @@
 --!strict
 --[[ Weapon definitions — damage/fireRate server-authoritative later ]]
 
+-- W2 Combat Core (contracts §5.1): additive feel fields. Every field is optional; nil keeps today's behaviour.
+export type RecoilDef = { Kick: number, Side: number, Recover: number } -- deg pitch / max deg yaw jitter / spring speed
+export type FalloffDef = { Start: number, MinMult: number } -- server damage: full to Start, MinMult at Range
+export type ProjectileDef = {
+	Speed: number, -- studs/s
+	GravityFactor: number, -- × Workspace.Gravity (0 = straight line)
+	Splash: number, -- splash radius (studs)
+	SplashMinMult: number, -- damage mult at the splash edge
+	MaxSeconds: number, -- explodes here if nothing was hit
+	MeshId: number?, -- 0 = Part body (asset shortlist §6.2 C4)
+	TextureId: number?,
+}
+
 export type WeaponDef = {
 	Id: string,
 	DisplayName: string,
@@ -15,6 +28,16 @@ export type WeaponDef = {
 	Spread: number,
 	CostCash: number?, -- v69: > 0 = sold in Shop › WEAPONS at this server-side price; 0 / nil = not sold
 	Pellets: number?, -- shotgun-style; server applies Damage * Pellets max
+	-- W2 (contracts §5.1). Spread above is CLIENT-ONLY cosmetic (tracer jitter + reticle bloom); the server applies
+	-- no spread in W2.
+	Visual: string?, -- Part-kit gun model key (nil = "Rifle")
+	VisualAssetId: number?, -- 0 / nil = Part kit; > 0 = WeaponAssetLoader template WE_WeaponTemplates["Weapon_<Id>"]
+	VisualToolName: string?, -- Tool name inside the asset (nil = the first Tool)
+	VisualChild: string?, -- Model child of that Tool holding the parts (nil = the Tool's own parts)
+	Tracer: boolean?, -- nil = true unless Projectile
+	Recoil: RecoilDef?,
+	Falloff: FalloffDef?, -- nil = no damage fall-off
+	Projectile: ProjectileDef?, -- set = launched as a server projectile (no hitscan, no assist)
 }
 
 local WeaponConfig = {
@@ -32,6 +55,11 @@ local WeaponConfig = {
 			Range = 120,
 			Spread = 2.5,
 			CostCash = 0,
+			Visual = "Rifle",
+			VisualAssetId = 0,
+			Tracer = true,
+			Recoil = { Kick = 0.6, Side = 0.25, Recover = 12 },
+			Falloff = { Start = 110, MinMult = 0.7 },
 		},
 		AssaultRifle = {
 			Id = "AssaultRifle",
@@ -46,6 +74,11 @@ local WeaponConfig = {
 			Range = 140,
 			Spread = 2.0,
 			CostCash = 5000,
+			Visual = "Carbine",
+			VisualAssetId = 0,
+			Tracer = true,
+			Recoil = { Kick = 0.7, Side = 0.3, Recover = 12 },
+			Falloff = { Start = 110, MinMult = 0.7 },
 		},
 		SMG = {
 			Id = "SMG",
@@ -60,6 +93,11 @@ local WeaponConfig = {
 			Range = 80,
 			Spread = 4.0,
 			CostCash = 6500,
+			Visual = "SMG",
+			VisualAssetId = 0,
+			Tracer = true,
+			Recoil = { Kick = 0.45, Side = 0.35, Recover = 14 },
+			Falloff = { Start = 50, MinMult = 0.6 },
 		},
 		Pistol = {
 			Id = "Pistol",
@@ -74,6 +112,11 @@ local WeaponConfig = {
 			Range = 60,
 			Spread = 1.5,
 			CostCash = 1500,
+			Visual = "Pistol",
+			VisualAssetId = 0,
+			Tracer = true,
+			Recoil = { Kick = 1.0, Side = 0.2, Recover = 10 },
+			Falloff = { Start = 40, MinMult = 0.7 },
 		},
 		Shotgun = {
 			Id = "Shotgun",
@@ -89,6 +132,11 @@ local WeaponConfig = {
 			Spread = 8.0,
 			CostCash = 12000,
 			Pellets = 6,
+			Visual = "Shotgun",
+			VisualAssetId = 0,
+			Tracer = true,
+			Recoil = { Kick = 2.2, Side = 0.5, Recover = 8 },
+			Falloff = { Start = 18, MinMult = 0.4 },
 		},
 		Sniper = {
 			Id = "Sniper",
@@ -103,6 +151,10 @@ local WeaponConfig = {
 			Range = 400,
 			Spread = 0.3,
 			CostCash = 25000,
+			Visual = "LongRifle",
+			VisualAssetId = 0,
+			Tracer = true,
+			Recoil = { Kick = 2.8, Side = 0.3, Recover = 6 },
 		},
 		RocketLauncher = {
 			Id = "RocketLauncher",
@@ -117,6 +169,11 @@ local WeaponConfig = {
 			Range = 250,
 			Spread = 0.5,
 			CostCash = 50000,
+			Visual = "Launcher",
+			VisualAssetId = 0,
+			Tracer = false,
+			Recoil = { Kick = 3.0, Side = 0.4, Recover = 5 },
+			Projectile = { Speed = 140, GravityFactor = 0, Splash = 10, SplashMinMult = 0.3, MaxSeconds = 1.9, MeshId = 0, TextureId = 0 },
 		},
 		Grenade = {
 			Id = "Grenade",
@@ -131,6 +188,11 @@ local WeaponConfig = {
 			Range = 50,
 			Spread = 0,
 			CostCash = 8000,
+			Visual = "Grenade",
+			VisualAssetId = 0,
+			Tracer = false,
+			Recoil = { Kick = 0.8, Side = 0.2, Recover = 8 },
+			Projectile = { Speed = 80, GravityFactor = 0.3, Splash = 12, SplashMinMult = 0.25, MaxSeconds = 1.6, MeshId = 0, TextureId = 0 },
 		},
 	} :: { [string]: WeaponDef },
 

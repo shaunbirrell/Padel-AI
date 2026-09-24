@@ -1888,6 +1888,22 @@ if _tpl_refs:
 else:
     ok("Join hotfix: nothing outside VisualAssetService reads WE_VisualAssetTemplates")
 
+# --- W2 Combat Core: aim assist, projectiles + splash, vehicle HP, client feel ---
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if (origin - eye).Magnitude > 0.25 and not CombatDamage.LineOfSight(eye, origin, shotFilterFor(character, seatVeh), nil, true) then", "W2: shot Origin behind a wall snaps to the head")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "return VehicleCombatConfig.SeatFire.DriverCanUseInfantryWeapons == true and seat:GetAttribute(\"WE_Exposed\") ~= false, veh, false", "W2: enclosed driver seat never fires out")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "From = origin, -- W2 verify", "W2: projectile first ray from the shot origin")
+must_contain("src/ServerScriptService/Server/Modules/Projectile.luau", "Pos = start,", "W2: Projectile starts its ray at From")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if isProjectile and Projectile.AtCap(player.UserId) then", "W2: projectile cap before ammo")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "local isHead = (kind == \"Player\" or kind == \"NPC\") and result.Instance.Name == \"Head\"", "W2: headshot only on the exact ray")
+must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "if how == \"Miss\" and AimAssistConfig.Enabled then", "W2: assist only after exact ray + claim miss")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatAssist.luau", "if CombatDamage.LineOfSight(cur.Origin, torso.Position, shotFilter, model, false, AimAssistConfig.LosPastTorsoStuds) then", "W2: assist needs line of sight")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatFx.luau", "if not take(shooterBuckets, shooterKey, fx.PerShooterHz, fx.PerShooterBurst, now()) then", "W2: WeaponFx <= 20 Hz per shooter")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "if VehicleService._VehicleHealth.HitLockLeft(player.UserId, SpawnCfg.DamageLockSeconds) > 0 then", "W2: no SPAWN heal while the vehicle is under fire")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "return false, \"Repairing\"", "W2: destroyed id locked while repairing")
+must_not_contain("src/ServerScriptService/Server/Modules/VehicleHealth.luau", "Instance.new(\"Explosion\")", "W2: no server Explosion")
+must_contain("src/ReplicatedStorage/Shared/Configs/AimAssistConfig.luau", "Touch = { LateralStuds = 2.5, MaxConeDeg = 4 },", "W2: touch assist limits")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau", "fire.Active = false", "W2: FIRE non-Active (drag-to-aim)")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
