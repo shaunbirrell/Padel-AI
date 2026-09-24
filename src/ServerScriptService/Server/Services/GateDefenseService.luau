@@ -4,6 +4,13 @@
 	Reads GatePost parts from WE_PerimeterWalls (does NOT edit StructureKitBuilder).
 	Design Bot GATE_DEFENSE_WIRE: Guard 16134469614, AutoGun 4923345827, sandbag dress.
 	Aggro covers MoneyCollector ATM approach (raid deterrent). No exotic persist.
+
+	v69 (RaidConfig.Defense, spec §1.9): allies = owner + same clan (IsAlly); guards / AutoGuns posted INSIDE the
+	gate and engaging any non-ally inside the walls (raider at the ATM first); guards are killable (weapon hits
+	route through the GateBarrier hook) and respawn one at a time; the gate opens for the owner and clan-mates;
+	Research TurretDamage multiplies guard + AutoGun damage; a missile strike (MissileStrikeService →
+	SetDefensesDown) takes everything down until profile.Raid.DefensesDownUntil (os.time — the rest of this file
+	uses os.clock).
 ]]
 
 local Players = game:GetService("Players")
@@ -17,13 +24,15 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local GateDefenseConfig = require(Shared.Configs.GateDefenseConfig)
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
+local RaidConfig = require(Shared.Configs.RaidConfig)
 
 local GateDefenseService = {}
 
 local BaseService: any = nil
 local DataService: any = nil
 local VisualAssetService: any = nil
-local NationColorService: any = nil
+local ClanService: any = nil
+local ResearchService: any = nil
 local EconomyService: any = nil
 local NotificationService: any = nil
 
@@ -48,6 +57,7 @@ type TurretUnit = {
 	YawPart: BasePart,
 	Slot: number,
 	LastFireAt: number,
+	Offline: boolean, -- v69: missile strike (defenses down)
 }
 
 type PlotDefense = {
@@ -59,15 +69,27 @@ type PlotDefense = {
 	Turrets: { TurretUnit },
 	GateCf: CFrame,
 	CollectorPos: Vector3?,
+	CollectorModel: Instance?, -- v69: ignored by line of sight (raider hiding behind the ATM body)
 	GateHealth: number,
 	GateMaxHealth: number,
 	GateBreached: boolean,
 	GateBarriers: { BasePart },
 	GateRebuildAt: number?,
 	LastRegenAt: number,
+	-- v69
+	DownUntil: number?, -- os.time: missile strike took the defenses down until then
+	LastDownLabelAt: number,
+	GateOpen: boolean, -- friendly gate: leaves open for the owner / clan-mates
+	GateAllyAt: number, -- os.clock an ally was last at the gate
+	PadCenter: Vector3?, -- plot pad (WE_BasePlot) centre, for "inside the walls"
+	PadHalf: number,
 }
 
 local defenses: { [number]: PlotDefense } = {}
+-- v69: one sync per plot at a time. Guard/AutoGun spawns can yield (catalog LoadAsset); two overlapping syncs
+-- (walls purchase + plot-ready) used to both spawn into the same folder → duplicate / orphaned guards.
+local syncBusy: { [number]: boolean } = {}
+local syncAgain: { [number]: boolean } = {}
 local victimHitAt: { [number]: number } = {}
 local catalogCache: { [number]: Model } = {}
 local catalogFailed: { [number]: boolean } = {}
@@ -241,6 +263,21 @@ local function findCollectorPos(plotId: number): Vector3?
 	return nil
 end
 
+-- v69: the plot's own ATM (MoneyCollector folder, or the tagged part) — guard / AutoGun line of sight ignores it,
+-- otherwise a raider standing on the far side of the 6×8×4 ATM body is invisible to every post.
+local function findCollectorModel(plotId: number): Instance?
+	for _, inst in ipairs(CollectionService:GetTagged(TAG_COLLECTOR)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+			local parent = inst.Parent
+			if parent and parent.Name == "MoneyCollector" and (parent:IsA("Folder") or parent:IsA("Model")) then
+				return parent
+			end
+			return inst
+		end
+	end
+	return nil
+end
+
 local function clearDefense(plotId: number)
 	local def = defenses[plotId]
 	if not def then
@@ -290,7 +327,10 @@ local function faceYaw(root: BasePart, lookAt: Vector3)
 	end
 end
 
-local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, stats: any, parent: Folder): GuardUnit?
+-- v69 F4: set below (needs spawnGuardModel); a dead guard respawns alone, never through SyncPlot
+local respawnGuard: (plotId: number, slot: number, ownerUserId: number, def: PlotDefense, dead: GuardUnit) -> ()
+
+local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, stats: any, parent: Folder, plotId: number): GuardUnit
 	local model = Instance.new("Model")
 	model.Name = "GateGuard_" .. tostring(slot)
 	model:SetAttribute("GateGuard", true)
@@ -386,8 +426,23 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 	stroke.Thickness = 1.4
 	stroke.Parent = lbl
 
+	-- v69 F3: guards are killable. CombatService forwards a raycast hit on any GateBarrier-attributed part to
+	-- ApplyDamage, which routes GateGuardPart hits to this humanoid. No WE_GateBarrier tag (that is the gate).
+	local function markHittable(d: Instance)
+		if d:IsA("BasePart") then
+			d:SetAttribute("GateBarrier", true)
+			d:SetAttribute("GateGuardPart", true)
+			d:SetAttribute("PlotId", plotId)
+		end
+	end
+	for _, d in ipairs(model:GetDescendants()) do
+		markHittable(d)
+	end
+	model.DescendantAdded:Connect(markHittable) -- catalog character visual parts added below
+
 	model.PrimaryPart = root
 	-- Do NOT tag WE_NPC — CombatNPC would aggro owner
+	model:SetAttribute("PlotId", plotId)
 	model.Parent = parent
 	pcall(function()
 		root:SetNetworkOwner(nil)
@@ -424,23 +479,19 @@ local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, st
 			return
 		end
 		unit.Alive = false
-		local plotId = model:GetAttribute("PlotId")
 		task.delay(0.35, function()
 			if model.Parent then
 				model:Destroy()
 			end
 		end)
-		task.delay(GateDefenseConfig.GuardRespawnSeconds or 12, function()
-			if typeof(plotId) == "number" then
-				local def = defenses[plotId :: number]
-				if def and def.OwnerUserId == ownerUserId then
-					GateDefenseService.SyncPlot(plotId :: number)
-				end
-			end
-		end)
+		-- v69 F4: respawn only this slot (a whole-plot SyncPlot used to reset a breached gate to full HP and
+		-- respawn the other guard too)
+		local def = defenses[plotId]
+		if def and def.OwnerUserId == ownerUserId then
+			task.delay(GateDefenseConfig.GuardRespawnSeconds or 12, respawnGuard, plotId, slot, ownerUserId, def, unit)
+		end
 	end)
 
-	model:SetAttribute("PlotId", parent:GetAttribute("PlotId"))
 	return unit
 end
 
@@ -638,29 +689,69 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 		YawPart = yawPart,
 		Slot = slot,
 		LastFireAt = 0,
+		Offline = false,
 	}
 end
 
-local function sameNation(a: number, b: number): boolean
-	if not NationColorService or not NationColorService.GetColorId then
+--[[ v69 F1: allies = the owner, or a player in the owner's clan (same non-empty ClanService clan id; the owner
+	must be online). Nation colour no longer matters (it is userId % 8, never chosen: 1 in 8 random players used
+	to be ignored by your guards and unable to damage your gate). Used by raids and strikes too. ]]
+function GateDefenseService.IsAlly(ownerUserId: number, player: Player): boolean
+	if player.UserId == ownerUserId then
+		return true
+	end
+	if not (ClanService and ClanService.GetClanId) then
 		return false
 	end
-	local ca = NationColorService.GetColorId(a)
-	local cb = NationColorService.GetColorId(b)
-	if typeof(ca) ~= "string" or typeof(cb) ~= "string" then
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if not owner then
 		return false
 	end
-	return ca == cb
+	local okA, a = pcall(ClanService.GetClanId, owner)
+	local okB, b = pcall(ClanService.GetClanId, player)
+	return okA and okB and typeof(a) == "string" and a ~= "" and a == b
 end
 
 local function isEnemyPlayer(ownerUserId: number, player: Player): boolean
-	if player.UserId == ownerUserId then
+	return not GateDefenseService.IsAlly(ownerUserId, player)
+end
+
+-- v69 F6: Research "TurretDamage" of the owner multiplies guard + AutoGun damage (read at fire time)
+local function researchMult(ownerUserId: number): number
+	if not (ResearchService and ResearchService.GetBonus) then
+		return 1
+	end
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if not owner then
+		return 1
+	end
+	local ok, v = pcall(ResearchService.GetBonus, owner, RaidConfig.Defense.ResearchStat)
+	if not ok or typeof(v) ~= "number" or v ~= v then
+		return 1
+	end
+	return math.clamp(v, 1, RaidConfig.Defense.MaxResearchMult)
+end
+
+local function isDown(def: PlotDefense): boolean
+	return def.DownUntil ~= nil and os.time() < (def.DownUntil :: number)
+end
+
+local function insidePlot(def: PlotDefense, pos: Vector3): boolean
+	local c = def.PadCenter
+	if not c then
 		return false
 	end
-	if sameNation(ownerUserId, player.UserId) then
-		return false
+	return math.abs(pos.X - c.X) <= def.PadHalf and math.abs(pos.Z - c.Z) <= def.PadHalf
+end
+
+-- Guards chase only to points inside the plot (never out through the gate)
+local function clampInsidePlot(def: PlotDefense, pos: Vector3): Vector3
+	local c = def.PadCenter
+	if not c then
+		return pos
 	end
-	return true
+	local h = math.max(0, def.PadHalf - 4)
+	return Vector3.new(math.clamp(pos.X, c.X - h, c.X + h), pos.Y, math.clamp(pos.Z, c.Z - h, c.Z + h))
 end
 
 local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): boolean
@@ -670,6 +761,8 @@ local function hasLos(fromPos: Vector3, toPos: Vector3, ignore: { Instance }): b
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = ignore
+	-- v69: non-collidable decor (wire, trims, signs, lamp shades) no longer blocks the shot
+	params.RespectCanCollide = RaidConfig.Defense.LosRespectCanCollide
 	local dir = toPos - fromPos
 	local maxD = GateDefenseConfig.LosMaxDistance or 110
 	if dir.Magnitude > maxD then
@@ -705,13 +798,18 @@ local function rateLimitVictim(userId: number): boolean
 	return true
 end
 
-local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, shootRange: number): (Player?, Humanoid?, BasePart?, number)
+--[[ v69 F2: target choice. In aggro: within `aggro` of the shooter, near the ATM, or (EngageIntrudersInsideWalls)
+	anywhere inside the plot. Priority: the player holding a raid on this plot's ATM (WE_RaidingPlot), then anyone
+	near the ATM, then the nearest. `maxReach` (AutoGuns — they cannot chase) skips targets beyond it. ]]
+local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, maxReach: number?): (Player?, Humanoid?, BasePart?, number)
 	local bestPlr: Player? = nil
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
 	local bestDist = aggro
+	local bestTier = math.huge
 	local collectorPos = def.CollectorPos
 	local protectR = GateDefenseConfig.ProtectCollectorRadius or 42
+	local engageInside = RaidConfig.Defense.EngageIntrudersInsideWalls
 
 	for _, player in ipairs(Players:GetPlayers()) do
 		if isEnemyPlayer(def.OwnerUserId, player) then
@@ -719,17 +817,15 @@ local function nearestEnemy(def: PlotDefense, fromPos: Vector3, aggro: number, s
 			local hum = char and char:FindFirstChildOfClass("Humanoid")
 			local root = char and char:FindFirstChild("HumanoidRootPart")
 			if hum and root and root:IsA("BasePart") and hum.Health > 0 then
-				local dGate = (root.Position - fromPos).Magnitude
-				local nearATM = false
-				if collectorPos then
-					nearATM = (root.Position - collectorPos).Magnitude <= protectR
-				end
-				local inAggro = dGate <= aggro or nearATM
-				if inAggro and dGate < bestDist + (if nearATM then 30 else 0) then
-					-- Prefer closest to shooter; ATM proximity still qualifies
-					local score = if nearATM then math.min(dGate, protectR) else dGate
-					if score < bestDist or (nearATM and bestPlr == nil) then
-						bestDist = dGate
+				local pos = root.Position
+				local d = (pos - fromPos).Magnitude
+				local nearATM = collectorPos ~= nil and (pos - (collectorPos :: Vector3)).Magnitude <= protectR
+				local inAggro = d <= aggro or nearATM or (engageInside and insidePlot(def, pos))
+				if inAggro and (maxReach == nil or d <= (maxReach :: number)) then
+					local tier = if player:GetAttribute("WE_RaidingPlot") == def.PlotId then 0 elseif nearATM then 1 else 2
+					if tier < bestTier or (tier == bestTier and d < bestDist) then
+						bestTier = tier
+						bestDist = d
 						bestPlr = player
 						bestHum = hum
 						bestRoot = root
@@ -749,8 +845,10 @@ local function dealDamage(player: Player, hum: Humanoid, amount: number, sourceM
 		return
 	end
 	-- Never friendly-fire owner's soldiers / squad
+	-- (v69: only when the shooter has an owner — AutoGun models had none, so nil == nil skipped every hit)
 	local char = player.Character
-	if char and (char:GetAttribute("FriendlySquad") or char:GetAttribute("OwnerUserId") == sourceModel:GetAttribute("OwnerUserId")) then
+	local srcOwner = sourceModel:GetAttribute("OwnerUserId")
+	if char and (char:GetAttribute("FriendlySquad") or (srcOwner ~= nil and char:GetAttribute("OwnerUserId") == srcOwner)) then
 		return
 	end
 	hum:TakeDamage(amount)
@@ -893,11 +991,13 @@ local function rebuildGate(def: PlotDefense)
 	def.GateBreached = false
 	def.GateHealth = def.GateMaxHealth
 	def.GateRebuildAt = nil
+	def.GateOpen = false
 	setGateBarrierOpen(def.GateBarriers, false)
 	for _, p in ipairs(def.GateBarriers) do
 		if p and p.Parent then
 			p:SetAttribute("GateHealth", def.GateHealth)
 			p:SetAttribute("GateBreached", false)
+			p:SetAttribute("GateOpen", false)
 			local prompt = p:FindFirstChild("GateRepairPrompt")
 			if prompt and prompt:IsA("ProximityPrompt") then
 				prompt.Enabled = false
@@ -914,11 +1014,13 @@ local function breachGate(def: PlotDefense)
 	def.GateBreached = true
 	def.GateHealth = 0
 	def.GateRebuildAt = os.clock() + (GateDefenseConfig.GateRebuildSeconds or 50)
+	def.GateOpen = false
 	setGateBarrierOpen(def.GateBarriers, true)
 	for _, p in ipairs(def.GateBarriers) do
 		if p and p.Parent then
 			p:SetAttribute("GateHealth", 0)
 			p:SetAttribute("GateBreached", true)
+			p:SetAttribute("GateOpen", false)
 			local prompt = p:FindFirstChild("GateRepairPrompt")
 			if prompt and prompt:IsA("ProximityPrompt") then
 				prompt.Enabled = true
@@ -932,11 +1034,28 @@ local function breachGate(def: PlotDefense)
 	end
 end
 
+--[[ v69 F3 order: (1) sane amount + attacker alive and close to the hit part, (2) a defense on that plot and the
+	attacker is not an ally, (3) a guard part → that guard's humanoid takes the damage, (4) else the gate barrier
+	(still false while breached or down). Called by CombatService for any hit on a GateBarrier-attributed part. ]]
 function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amount: number, _weaponId: string?): boolean
-	if typeof(amount) ~= "number" or amount <= 0 then
+	if typeof(amount) ~= "number" or amount ~= amount or amount <= 0 or amount == math.huge then
 		return false
 	end
 	if not hitPart or hitPart:GetAttribute("GateBarrier") ~= true then
+		return false
+	end
+	local isGuardPart = hitPart:GetAttribute("GateGuardPart") == true
+	local char = attacker.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not root or not root:IsA("BasePart") then
+		return false
+	end
+	local hum = (char :: Model):FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then
+		return false
+	end
+	local maxDist = if isGuardPart then RaidConfig.Defense.GuardHitMaxDistance else 120
+	if (root.Position - hitPart.Position).Magnitude > maxDist then
 		return false
 	end
 	local plotId = hitPart:GetAttribute("PlotId")
@@ -944,28 +1063,29 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 		return false
 	end
 	local def = defenses[plotId :: number]
-	if not def or def.GateBreached then
+	if not def then
 		return false
 	end
-	if attacker.UserId == def.OwnerUserId then
-		return false
-	end
-	if sameNation(def.OwnerUserId, attacker.UserId) then
-		return false
-	end
-	local char = attacker.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart")
-	if not root or not root:IsA("BasePart") then
-		return false
-	end
-	if (root.Position - hitPart.Position).Magnitude > 120 then
-		return false
-	end
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum or hum.Health <= 0 then
+	if GateDefenseService.IsAlly(def.OwnerUserId, attacker) then
 		return false
 	end
 
+	if isGuardPart then
+		for _, g in ipairs(def.Guards) do
+			if hitPart == g.Root or hitPart:IsDescendantOf(g.Model) then
+				if g.Alive and g.Humanoid.Health > 0 then
+					g.Humanoid:TakeDamage(amount)
+					return true
+				end
+				return false
+			end
+		end
+		return false
+	end
+
+	if def.GateBreached or isDown(def) then
+		return false
+	end
 	def.GateHealth = math.max(0, def.GateHealth - amount)
 	for _, p in ipairs(def.GateBarriers) do
 		if p and p.Parent then
@@ -981,10 +1101,20 @@ end
 
 function GateDefenseService.TryRepair(player: Player, plotId: number): boolean
 	local def = defenses[plotId]
-	if not def or not def.GateBreached then
+	if not def then
 		return false
 	end
 	if player.UserId ~= def.OwnerUserId then
+		return false
+	end
+	if isDown(def) then
+		if NotificationService then
+			local left = (def.DownUntil :: number) - os.time()
+			NotificationService.Notify(player, "Defenses down — back in " .. RaidConfig.FormatTime(left), "Warn")
+		end
+		return false
+	end
+	if not def.GateBreached then
 		return false
 	end
 	local cost = GateDefenseConfig.GateRepairCashCost or 750
@@ -1004,6 +1134,211 @@ function GateDefenseService.TryRepair(player: Player, plotId: number): boolean
 	return true
 end
 
+-- ── v69 F5: friendly gate ───────────────────────────────────────────────────
+
+local function setFriendlyGateOpen(def: PlotDefense, open: boolean)
+	def.GateOpen = open
+	for _, p in ipairs(def.GateBarriers) do
+		if p and p.Parent then
+			p.CanCollide = not open
+			p.Transparency = if open then 0.8 else 0.15
+			p:SetAttribute("GateOpen", open)
+		end
+	end
+end
+
+-- Intact barrier: open while the owner / a clan-mate stands at the gate, close GateCloseDelay s after they leave.
+local function updateFriendlyGate(def: PlotDefense, tnow: number)
+	if def.GateBreached or isDown(def) then
+		return
+	end
+	local D = RaidConfig.Defense
+	local gatePos = def.GateCf.Position
+	local allyNear = false
+	for _, player in ipairs(Players:GetPlayers()) do
+		if GateDefenseService.IsAlly(def.OwnerUserId, player) then
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			if root and root:IsA("BasePart") then
+				local delta = root.Position - gatePos
+				if Vector3.new(delta.X, 0, delta.Z).Magnitude <= D.GateOpenRadius and math.abs(delta.Y) <= D.GateOpenHeight then
+					allyNear = true
+					break
+				end
+			end
+		end
+	end
+	if allyNear then
+		def.GateAllyAt = tnow
+		if not def.GateOpen then
+			setFriendlyGateOpen(def, true)
+		end
+	elseif def.GateOpen and tnow - def.GateAllyAt >= D.GateCloseDelay - 1e-6 then
+		setFriendlyGateOpen(def, false)
+	end
+end
+
+-- ── v69 F7: defenses down (missile strike) ─────────────────────────────────
+
+local function updateDownBillboard(def: PlotDefense)
+	local left = math.max(0, (def.DownUntil or 0) - os.time())
+	for _, p in ipairs(def.GateBarriers) do
+		local bb = p:FindFirstChild("WE_GateHP")
+		local lbl = bb and bb:FindFirstChild("Label")
+		if lbl and lbl:IsA("TextLabel") then
+			lbl.Text = "DEFENSES DOWN " .. RaidConfig.FormatTime(left)
+			lbl.TextColor3 = Color3.fromRGB(255, 110, 90)
+		end
+	end
+end
+
+local RUBBLE: { { number } } = {
+	{ -3.2, 0.6, 2.2 },
+	{ 2.6, -0.8, 1.8 },
+	{ -0.6, 1.9, 1.5 },
+	{ 4.1, 1.2, 1.3 },
+	{ -4.6, -1.5, 1.6 },
+}
+
+-- Guards blown up, AutoGuns offline, gate barrier blown open + rubble/fire (all inside WE_GateDefense;
+-- WE_PerimeterWalls is never touched). `blast` = visual-only server explosions on the live guards.
+local function applyDefensesDown(def: PlotDefense, untilUnix: number, blast: boolean)
+	def.DownUntil = untilUnix
+	def.LastDownLabelAt = nowClock()
+	for _, g in ipairs(def.Guards) do
+		if g.Alive and blast and g.Root.Parent then
+			local ex = Instance.new("Explosion")
+			ex.Position = g.Root.Position
+			ex.BlastRadius = 6
+			ex.BlastPressure = 0
+			ex.DestroyJointRadiusPercent = 0
+			ex.ExplosionType = Enum.ExplosionType.NoCraters
+			ex.Parent = Workspace
+		end
+		g.Alive = false
+		if g.Model.Parent then
+			g.Model:Destroy()
+		end
+	end
+	for _, t in ipairs(def.Turrets) do
+		t.Offline = true
+		t.Model:SetAttribute("Offline", true)
+		if t.YawPart.Parent and not t.YawPart:FindFirstChild("WE_StrikeSmoke") then
+			local smoke = Instance.new("Smoke")
+			smoke.Name = "WE_StrikeSmoke"
+			smoke.Color = Color3.fromRGB(45, 45, 48)
+			smoke.Opacity = 0.35
+			smoke.RiseVelocity = 4
+			smoke.Size = 2
+			smoke.Parent = t.YawPart
+		end
+		local bb = t.Model:FindFirstChild("WE_AutoGunBillboard", true)
+		local lab = bb and bb:FindFirstChildOfClass("TextLabel")
+		if lab then
+			lab.Text = "OFFLINE"
+			lab.TextColor3 = Color3.fromRGB(255, 90, 70)
+		end
+	end
+	def.GateBreached = true
+	def.GateHealth = 0
+	def.GateRebuildAt = nil
+	def.GateOpen = false
+	for _, p in ipairs(def.GateBarriers) do
+		if p and p.Parent then
+			p.CanCollide = false
+			p.CanQuery = false -- blown away: shots pass through
+			p.Transparency = 1
+			p:SetAttribute("GateHealth", 0)
+			p:SetAttribute("GateBreached", true)
+			p:SetAttribute("GateOpen", false)
+			p:SetAttribute("DefensesDown", true)
+			local prompt = p:FindFirstChild("GateRepairPrompt")
+			if prompt and prompt:IsA("ProximityPrompt") then
+				prompt.Enabled = false
+			end
+		end
+	end
+	if def.Folder.Parent and not def.Folder:FindFirstChild("StrikeRubble") then
+		for i, o in ipairs(RUBBLE) do
+			local size = o[3]
+			local r = Instance.new("Part")
+			r.Name = "StrikeRubble"
+			r.Size = Vector3.new(size, size * 0.55, size * 0.8)
+			r.CFrame = def.GateCf * CFrame.new(o[1], -3 + size * 0.25, o[2]) * CFrame.Angles(0.25 * i, 0.9 * i, 0.15 * i)
+			r.Anchored = true
+			r.CanCollide = false
+			r.CanQuery = false
+			r.CanTouch = false
+			r.Color = Color3.fromRGB(38, 34, 30)
+			r.Material = Enum.Material.Slate
+			r.Parent = def.Folder
+			if i == 1 then
+				local fire = Instance.new("Fire")
+				fire.Name = "WE_StrikeFire"
+				fire.Size = 5
+				fire.Heat = 6
+				fire.Parent = r
+			end
+		end
+	end
+	updateDownBillboard(def)
+end
+
+--[[ Missile strike hit (MissileStrikeService is the only caller). untilUnix is os.time. False when this plot has no
+	defense built yet — syncPlotNow applies the down state from profile.Raid.DefensesDownUntil when it builds. ]]
+function GateDefenseService.SetDefensesDown(plotId: number, untilUnix: number): boolean
+	if typeof(plotId) ~= "number" or typeof(untilUnix) ~= "number" or untilUnix ~= untilUnix then
+		return false
+	end
+	local def = defenses[plotId]
+	if not def or untilUnix <= os.time() then
+		return false
+	end
+	applyDefensesDown(def, untilUnix, true)
+	return true
+end
+
+function GateDefenseService.IsDefensesDown(plotId: number): (boolean, number)
+	local def = defenses[plotId]
+	if def and def.DownUntil ~= nil then
+		local left = (def.DownUntil :: number) - os.time()
+		if left > 0 then
+			return true, left
+		end
+	end
+	return false, 0
+end
+
+function GateDefenseService.HasDefenses(plotId: number): boolean
+	return defenses[plotId] ~= nil
+end
+
+function GateDefenseService.GetGateCFrame(plotId: number): CFrame?
+	local def = defenses[plotId]
+	return if def then def.GateCf else nil
+end
+
+respawnGuard = function(plotId: number, slot: number, ownerUserId: number, def: PlotDefense, dead: GuardUnit)
+	if defenses[plotId] ~= def or def.OwnerUserId ~= ownerUserId or isDown(def) or syncBusy[plotId] then
+		return
+	end
+	local idx = table.find(def.Guards, dead)
+	local stats = GateDefenseConfig.GetLevelStats(def.WallsLevel)
+	if not idx or not stats or not def.Folder.Parent then
+		return
+	end
+	local g = spawnGuardModel(ownerUserId, slot, dead.PostCf, stats, def.Folder, plotId)
+	-- the spawn can yield (catalog visual): drop it if the plot was rebuilt / struck meanwhile
+	if defenses[plotId] ~= def or isDown(def) or def.Guards[idx] ~= dead or not def.Folder.Parent then
+		g.Alive = false
+		if g.Model.Parent then
+			g.Model:Destroy()
+		end
+		return
+	end
+	def.Guards[idx] = g
+end
+
 -- Owner's DefensiveWalls level from the loaded profile (0 when offline / not loaded)
 local function ownerWallsLevel(ownerUserId: number): number
 	local owner = Players:GetPlayerByUserId(ownerUserId)
@@ -1014,6 +1349,42 @@ local function ownerWallsLevel(ownerUserId: number): number
 		end
 	end
 	return 0
+end
+
+-- Owner's strike timer (profile.Raid.DefensesDownUntil, os.time) when it is still running, else nil
+local function ownerDownUntil(ownerUserId: number): number?
+	local owner = Players:GetPlayerByUserId(ownerUserId)
+	if not (owner and DataService) then
+		return nil
+	end
+	local profile = DataService.GetProfile(owner)
+	local raid = profile and (profile :: any).Raid
+	local du = if typeof(raid) == "table" then tonumber(raid.DefensesDownUntil) else nil
+	if du and du > os.time() then
+		return du
+	end
+	return nil
+end
+
+-- Plot pad (WE_BasePlot) centre + half-size minus a margin: "inside the walls" for engage / chase limits
+local function findPadBounds(plotId: number, plotFolder: Folder): (Vector3?, number)
+	local pad: BasePart? = nil
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+		if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
+			pad = inst
+			break
+		end
+	end
+	if not pad then
+		local p = plotFolder:FindFirstChild("PlotPad")
+		if p and p:IsA("BasePart") then
+			pad = p
+		end
+	end
+	if not pad then
+		return nil, 0
+	end
+	return pad.Position, math.max(pad.Size.X, pad.Size.Z) * 0.5 - 2
 end
 
 local function syncPlotNow(plotId: number)
@@ -1050,14 +1421,18 @@ local function syncPlotNow(plotId: number)
 	folder:SetAttribute("OwnerUserId", ownerUserId)
 	folder:SetAttribute("WallsLevel", wallsLevel)
 
+	-- v69 F7: a strike still running (rejoin / server hop / walls upgrade / plot-ready) → build it down
+	local downUntil = ownerDownUntil(ownerUserId)
+
+	-- v69 F2: posts INSIDE the gate. gateCf looks toward PlayerSpawn, so local -Z is inside (it used to be +Z:
+	-- outside the wall, AutoGuns embedded in it at L4-5, no line of sight to the ATM).
 	local flankX = GateDefenseConfig.GuardFlankX or 6
-	local fwdZ = GateDefenseConfig.GuardForwardZ or 2
+	local guardInside = RaidConfig.Defense.GuardPostInsideStuds
 	local guards: { GuardUnit } = {}
-	for slot, sx in ipairs({ -flankX, flankX }) do
-		local at = gateCf * CFrame.new(sx, 0, fwdZ)
-		local g = spawnGuardModel(ownerUserId, slot, at, stats, folder)
-		if g then
-			g.Model:SetAttribute("PlotId", plotId)
+	if downUntil == nil then
+		for slot, sx in ipairs({ -flankX, flankX }) do
+			local at = gateCf * CFrame.new(sx, 0, -guardInside)
+			local g = spawnGuardModel(ownerUserId, slot, at, stats, folder, plotId)
 			g.Model:SetAttribute("OwnerUserId", ownerUserId)
 			table.insert(guards, g)
 		end
@@ -1067,13 +1442,16 @@ local function syncPlotNow(plotId: number)
 	local useTurrets = stats.UseTurrets == true and wallsLevel >= (GateDefenseConfig.AutoGunMinWallsLevel or 4)
 	if useTurrets then
 		local gx = GateDefenseConfig.AutoGunFlankX or 7
-		local gz = GateDefenseConfig.AutoGunForwardZ or 1
+		local gunInside = RaidConfig.Defense.AutoGunInsideStuds
 		local yawDeg = GateDefenseConfig.AutoGunYawDeg or 15
 		for slot, sx in ipairs({ -gx, gx }) do
 			local yaw = if sx < 0 then yawDeg else -yawDeg
-			local at = gateCf * CFrame.new(sx, 0, gz) * CFrame.Angles(0, math.rad(yaw), 0)
+			-- idle facing the gate (outward), toed in toward the gate centre; thinkTurret re-aims at targets
+			local at = gateCf * CFrame.new(sx, 0, -gunInside) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)
 			local t = spawnAutoGun(slot, at, folder)
 			if t then
+				t.Model:SetAttribute("OwnerUserId", ownerUserId)
+				t.Model:SetAttribute("PlotId", plotId)
 				table.insert(turrets, t)
 			end
 		end
@@ -1101,7 +1479,8 @@ local function syncPlotNow(plotId: number)
 		end
 	end
 
-	defenses[plotId] = {
+	local padCenter, padHalf = findPadBounds(plotId, plotFolder)
+	local def: PlotDefense = {
 		PlotId = plotId,
 		OwnerUserId = ownerUserId,
 		WallsLevel = wallsLevel,
@@ -1110,13 +1489,26 @@ local function syncPlotNow(plotId: number)
 		Turrets = turrets,
 		GateCf = gateCf,
 		CollectorPos = findCollectorPos(plotId),
+		CollectorModel = findCollectorModel(plotId),
 		GateHealth = maxHp,
 		GateMaxHealth = maxHp,
 		GateBreached = false,
 		GateBarriers = barriers,
 		GateRebuildAt = nil,
 		LastRegenAt = os.clock(),
+		DownUntil = nil,
+		LastDownLabelAt = 0,
+		GateOpen = false,
+		GateAllyAt = 0,
+		PadCenter = padCenter,
+		PadHalf = padHalf,
 	}
+	defenses[plotId] = def
+	-- re-read: a strike that landed while the spawns above yielded found no def (SetDefensesDown → false)
+	local downNow = ownerDownUntil(ownerUserId)
+	if downNow ~= nil then
+		applyDefensesDown(def, downNow, downUntil == nil)
+	end
 
 	if RunService:IsStudio() then
 		print(string.format(
@@ -1129,11 +1521,6 @@ local function syncPlotNow(plotId: number)
 		))
 	end
 end
-
--- v69: one sync per plot at a time. Guard/AutoGun spawns can yield (catalog LoadAsset); two overlapping syncs
--- (walls purchase + plot-ready) used to both spawn into the same folder → duplicate / orphaned guards.
-local syncBusy: { [number]: boolean } = {}
-local syncAgain: { [number]: boolean } = {}
 
 function GateDefenseService.SyncPlot(plotId: number)
 	if syncBusy[plotId] then
@@ -1187,44 +1574,39 @@ local function thinkGuard(def: PlotDefense, g: GuardUnit, stats: any, tnow: numb
 	end
 	local aggro = stats.AggroRange or GateDefenseConfig.DefaultAggroRange or 95
 	local range = stats.ShootRange or 70
-	local plr, hum, troot, dist = nearestEnemy(def, g.Root.Position, aggro, range)
+	local plr, hum, troot, dist = nearestEnemy(def, g.Root.Position, aggro, nil)
 	if plr and hum and troot then
 		faceYaw(g.Root, troot.Position)
-		local ignore = { g.Model, def.Folder, plr.Character :: Instance }
+		local ignore: { Instance } = { g.Model, def.Folder, (plr.Character :: any) :: Instance }
+		if def.CollectorModel then
+			table.insert(ignore, def.CollectorModel :: Instance)
+		end
 		if dist > range * 0.85 then
-			g.Humanoid:MoveTo(troot.Position)
+			g.Humanoid:MoveTo(clampInsidePlot(def, troot.Position))
 		else
 			g.Humanoid:MoveTo(g.Root.Position)
 			local interval = 1 / math.max(stats.GuardFireRate or 1.4, 0.1)
 			if tnow - g.LastFireAt >= interval and dist <= range then
 				if hasLos(g.Root.Position, troot.Position, ignore) then
 					g.LastFireAt = tnow
-					dealDamage(plr, hum, stats.GuardDamage or 14, g.Model, def.PlotId)
+					dealDamage(plr, hum, (stats.GuardDamage or 14) * researchMult(def.OwnerUserId), g.Model, def.PlotId)
 				end
 			end
 		end
 		return
 	end
 
-	-- Patrol ±PatrolHalfSpanStuds along gate line
+	-- Patrol near own post, along the gate line (v69: inside the gate)
 	local half = GateDefenseConfig.PatrolHalfSpanStuds or 6
 	local idle = GateDefenseConfig.PatrolIdleSeconds or 1.4
+	local postZ = -RaidConfig.Defense.GuardPostInsideStuds
+	local flankX = GateDefenseConfig.GuardFlankX or 6
+	local sx = if g.Slot == 1 then -flankX else flankX
+	local toward = if g.Slot == 1 then half * 0.5 else -half * 0.5
 	local waypoints = {
-		(def.GateCf * CFrame.new(-half, 0, GateDefenseConfig.GuardForwardZ or 2)).Position,
-		(def.GateCf * CFrame.new(half, 0, GateDefenseConfig.GuardForwardZ or 2)).Position,
+		(def.GateCf * CFrame.new(sx, 0, postZ)).Position,
+		(def.GateCf * CFrame.new(sx + toward, 0, postZ)).Position,
 	}
-	-- Prefer near own post
-	if g.Slot == 1 then
-		waypoints = {
-			(def.GateCf * CFrame.new(-(GateDefenseConfig.GuardFlankX or 6), 0, GateDefenseConfig.GuardForwardZ or 2)).Position,
-			(def.GateCf * CFrame.new(-(GateDefenseConfig.GuardFlankX or 6) + half * 0.5, 0, GateDefenseConfig.GuardForwardZ or 2)).Position,
-		}
-	else
-		waypoints = {
-			(def.GateCf * CFrame.new((GateDefenseConfig.GuardFlankX or 6), 0, GateDefenseConfig.GuardForwardZ or 2)).Position,
-			(def.GateCf * CFrame.new((GateDefenseConfig.GuardFlankX or 6) - half * 0.5, 0, GateDefenseConfig.GuardForwardZ or 2)).Position,
-		}
-	end
 	if tnow < g.IdleUntil then
 		g.Humanoid:MoveTo(g.Root.Position)
 		return
@@ -1243,7 +1625,7 @@ local function thinkGuard(def: PlotDefense, g: GuardUnit, stats: any, tnow: numb
 end
 
 local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: number)
-	if not t.Model.Parent or not t.YawPart.Parent then
+	if t.Offline or not t.Model.Parent or not t.YawPart.Parent then
 		return
 	end
 	local aggro = stats.TurretRange or 100
@@ -1265,10 +1647,13 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 	end
 	local interval = 1 / math.max(stats.TurretFireRate or 6, 0.1)
 	if tnow - t.LastFireAt >= interval and dist <= aggro then
-		local ignore = { t.Model, def.Folder, plr.Character :: Instance }
+		local ignore: { Instance } = { t.Model, def.Folder, (plr.Character :: any) :: Instance }
+		if def.CollectorModel then
+			table.insert(ignore, def.CollectorModel :: Instance)
+		end
 		if hasLos(fromPos, troot.Position, ignore) then
 			t.LastFireAt = tnow
-			dealDamage(plr, hum, stats.TurretDamage or 22, t.Model, def.PlotId)
+			dealDamage(plr, hum, (stats.TurretDamage or 22) * researchMult(def.OwnerUserId), t.Model, def.PlotId)
 		end
 	end
 end
@@ -1277,7 +1662,8 @@ function GateDefenseService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	DataService = deps.DataService
 	VisualAssetService = deps.VisualAssetService
-	NationColorService = deps.NationColorService
+	ClanService = deps.ClanService
+	ResearchService = deps.ResearchService
 	EconomyService = deps.EconomyService
 	NotificationService = deps.NotificationService
 
@@ -1347,11 +1733,26 @@ function GateDefenseService.Init(deps: { [string]: any })
 		end
 		accum = 0
 		local tnow = nowClock()
+		local nowUnix = os.time()
+		local restore: { number } = {}
 		for plotId, def in pairs(defenses) do
+			if def.DownUntil ~= nil then
+				-- v69 F7: struck — no guards, AutoGuns offline, gate blown; count down, then rebuild fresh
+				if nowUnix >= (def.DownUntil :: number) then
+					table.insert(restore, plotId)
+				elseif tnow - def.LastDownLabelAt >= 1 then
+					def.LastDownLabelAt = tnow
+					updateDownBillboard(def)
+				end
+				continue
+			end
 			local stats = GateDefenseConfig.GetLevelStats(def.WallsLevel)
 			if stats then
 				if not def.CollectorPos then
 					def.CollectorPos = findCollectorPos(plotId)
+				end
+				if def.CollectorModel == nil or (def.CollectorModel :: Instance).Parent == nil then
+					def.CollectorModel = findCollectorModel(plotId)
 				end
 				for _, g in ipairs(def.Guards) do
 					thinkGuard(def, g, stats, tnow)
@@ -1378,11 +1779,28 @@ function GateDefenseService.Init(deps: { [string]: any })
 						updateGateBillboard(def.GateBarriers, def.GateHealth, def.GateMaxHealth, false)
 					end
 				end
+				-- v69 F5: the gate lets the owner and clan-mates through
+				updateFriendlyGate(def, tnow)
+			end
+		end
+		-- (outside the pairs loop: SyncPlot replaces defenses[plotId] and can yield)
+		for _, plotId in ipairs(restore) do
+			local def = defenses[plotId]
+			if def then
+				def.DownUntil = nil
+				local ownerUserId = def.OwnerUserId
+				task.spawn(function()
+					GateDefenseService.SyncPlot(plotId)
+					local owner = Players:GetPlayerByUserId(ownerUserId)
+					if owner and NotificationService then
+						NotificationService.Notify(owner, RaidConfig.Text.DefensesBack, "Success")
+					end
+				end)
 			end
 		end
 	end)
 
-	print("[WAR EMPIRE] GateDefenseService ready (walls≥1 → GateGuards + siegeable GateBarrier HP; walls≥4 → AutoGun nests)")
+	print("[WAR EMPIRE] GateDefenseService ready (walls≥1 → GateGuards + siegeable GateBarrier HP; walls≥4 → AutoGun nests; allies = clan)")
 end
 
 return GateDefenseService

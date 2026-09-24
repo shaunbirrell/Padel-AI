@@ -1883,23 +1883,36 @@ function ShopController.Init()
 		end
 	end
 
-	-- v33: ATM raid success / cooldown HUD chip
+	-- v33 → v69: ATM raid chip (bottom centre). v69 payloads carry Phase (spec §4.4): Holding / Alarm show a
+	-- live progress bar and hide themselves shortly after the last push; Interrupted / Blocked / Defended /
+	-- Success / Robbed show the server's payload.Text for a few seconds. No Phase = legacy v33 rendering.
 	do
 		local chip: Frame? = nil
 		local hideToken = 0
 
-		local function showAtmRaidHud(payload: any)
-			if typeof(payload) ~= "table" then
-				return
-			end
-			local host = screenGui
-			if not host then
-				return
-			end
+		local function dropChip()
 			if chip then
 				chip:Destroy()
 				chip = nil
 			end
+		end
+
+		local function hideLater(frame: Frame, seconds: number)
+			hideToken += 1
+			local token = hideToken
+			task.delay(seconds, function()
+				if token == hideToken and chip == frame then
+					frame:Destroy()
+					if chip == frame then
+						chip = nil
+					end
+				end
+			end)
+		end
+
+		-- legacy (no Phase): exactly the v33 chip
+		local function showLegacyAtmRaidHud(payload: any, host: ScreenGui)
+			dropChip()
 			local success = (payload :: any).Success == true
 			local raided = (payload :: any).Raided == true
 			local cd = math.max(0, math.floor(tonumber((payload :: any).CooldownRemaining) or 0))
@@ -1944,30 +1957,141 @@ function ShopController.Init()
 			end
 			lab.Parent = frame
 
-			hideToken += 1
-			local token = hideToken
-			local hold = if success or raided then 5.5 else math.clamp(cd, 2, 8)
-			task.delay(hold, function()
-				if token == hideToken and chip == frame then
-					frame:Destroy()
-					if chip == frame then
-						chip = nil
-					end
-				end
-			end)
+			hideLater(frame, if success or raided then 5.5 else math.clamp(cd, 2, 8))
 		end
 
-		local remote = Remotes.GetEvent(Constants.RemoteNames.AtmRaidStateUpdate)
-		if remote then
-			remote.OnClientEvent:Connect(function(payload: any)
-				task.defer(function()
-					if not screenGui then
-						task.wait(0.2)
-					end
-					showAtmRaidHud(payload)
-				end)
-			end)
+		type PhaseStyle = { Bg: Color3, Stroke: Color3, Hold: number, Bar: boolean }
+		local AMBER: PhaseStyle = { Bg = Color3.fromRGB(74, 56, 16), Stroke = Color3.fromRGB(240, 190, 70), Hold = 2.5, Bar = false }
+		local PHASE_STYLE: { [string]: PhaseStyle } = {
+			Holding = { Bg = Color3.fromRGB(24, 28, 34), Stroke = Color3.fromRGB(230, 200, 80), Hold = 1.0, Bar = true }, -- thief
+			Alarm = { Bg = Color3.fromRGB(112, 24, 22), Stroke = Color3.fromRGB(255, 120, 100), Hold = 1.5, Bar = true }, -- victim
+			Interrupted = AMBER,
+			Blocked = AMBER,
+			Defended = { Bg = Color3.fromRGB(30, 70, 40), Stroke = Color3.fromRGB(120, 220, 140), Hold = 2.5, Bar = false },
+			Success = { Bg = Color3.fromRGB(30, 70, 40), Stroke = Color3.fromRGB(120, 220, 140), Hold = 5, Bar = false },
+			Robbed = { Bg = Color3.fromRGB(80, 30, 30), Stroke = Color3.fromRGB(255, 120, 100), Hold = 6, Bar = false },
+		}
+
+		local function phaseText(payload: any, phase: string): string
+			local text = if typeof(payload.Text) == "string" and payload.Text ~= "" then payload.Text else nil
+			local progress = tonumber(payload.HoldProgress)
+			local need = tonumber(payload.HoldNeed)
+			if phase == "Holding" then
+				return text or string.format("ROBBING %s's ATM · %.1f/%ds — don't get hit!", tostring(payload.VictimName or "their"), progress or 0, math.floor(need or 6))
+			elseif phase == "Alarm" then
+				local base = text or string.format("⚠ %s is robbing your ATM!", tostring(payload.ThiefName or "Someone"))
+				if progress and need and not string.find(base, "%d/%d") then
+					base ..= string.format(" %d/%ds", math.floor(progress), math.floor(need))
+				end
+				return base
+			end
+			return text or tostring(payload.Reason or phase)
 		end
+
+		local function showPhaseChip(payload: any, host: ScreenGui, phase: string, style: PhaseStyle)
+			local frame = chip
+			if not frame or frame.Parent ~= host or frame:GetAttribute("WE_Phase") == nil then
+				dropChip()
+				local f = Instance.new("Frame")
+				f.Name = "AtmRaidHud"
+				f.AnchorPoint = Vector2.new(0.5, 1)
+				f.Position = UDim2.new(0.5, 0, 1, if isTouch then -110 else -96)
+				f.Size = if isTouch then UDim2.new(0.9, 0, 0, 52) else UDim2.fromOffset(460, 52)
+				f.BorderSizePixel = 0
+				f.ZIndex = 75
+				corner(f, 8)
+				local stroke = Instance.new("UIStroke")
+				stroke.Name = "Stroke"
+				stroke.Thickness = 1.4
+				stroke.Parent = f
+				local lab = Instance.new("TextLabel")
+				lab.Name = "Text"
+				lab.BackgroundTransparency = 1
+				lab.Position = UDim2.fromOffset(10, 0)
+				lab.Size = UDim2.new(1, -20, 1, 0)
+				lab.Font = Enum.Font.GothamBold
+				lab.TextScaled = true
+				lab.TextColor3 = Color3.fromRGB(245, 245, 240)
+				lab.TextStrokeTransparency = 0.35
+				lab.ZIndex = 76
+				lab.Parent = f
+				local limit = Instance.new("UITextSizeConstraint")
+				limit.MinTextSize = if isTouch then 14 else 11
+				limit.MaxTextSize = if isTouch then 15 else 14
+				limit.Parent = lab
+				local barBg = Instance.new("Frame")
+				barBg.Name = "Bar"
+				barBg.AnchorPoint = Vector2.new(0.5, 1)
+				barBg.Position = UDim2.new(0.5, 0, 1, -6)
+				barBg.Size = UDim2.new(1, -24, 0, 6)
+				barBg.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+				barBg.BorderSizePixel = 0
+				barBg.ZIndex = 76
+				barBg.Visible = false
+				barBg.Parent = f
+				corner(barBg, 3)
+				local fill = Instance.new("Frame")
+				fill.Name = "Fill"
+				fill.Size = UDim2.fromScale(0, 1)
+				fill.BorderSizePixel = 0
+				fill.ZIndex = 77
+				fill.Parent = barBg
+				corner(fill, 3)
+				f.Parent = host
+				chip = f
+				frame = f
+			end
+			local f = frame :: Frame
+			f:SetAttribute("WE_Phase", phase)
+			f.BackgroundColor3 = style.Bg
+			local stroke = f:FindFirstChild("Stroke")
+			if stroke and stroke:IsA("UIStroke") then
+				stroke.Color = style.Stroke
+			end
+			local lab = f:FindFirstChild("Text")
+			local barBg = f:FindFirstChild("Bar")
+			if lab and lab:IsA("TextLabel") then
+				lab.Text = phaseText(payload, phase)
+				lab.Size = if style.Bar then UDim2.new(1, -20, 1, -14) else UDim2.new(1, -20, 1, 0)
+			end
+			if barBg and barBg:IsA("Frame") then
+				barBg.Visible = style.Bar
+				local fill = barBg:FindFirstChild("Fill")
+				if fill and fill:IsA("Frame") then
+					local need = tonumber(payload.HoldNeed) or 0
+					local pct = if need > 0 then math.clamp((tonumber(payload.HoldProgress) or 0) / need, 0, 1) else 0
+					fill.Size = UDim2.fromScale(pct, 1)
+					fill.BackgroundColor3 = style.Stroke
+				end
+			end
+			hideLater(f, style.Hold)
+		end
+
+		local function showAtmRaidHud(payload: any)
+			if typeof(payload) ~= "table" then
+				return
+			end
+			local host = screenGui
+			if not host then
+				return
+			end
+			local phase = (payload :: any).Phase
+			local style = if typeof(phase) == "string" then PHASE_STYLE[phase] else nil
+			if style then
+				showPhaseChip(payload, host, phase :: string, style)
+			elseif phase == nil then
+				showLegacyAtmRaidHud(payload, host)
+			end
+		end
+
+		Remotes.BindEvent(Constants.RemoteNames.AtmRaidStateUpdate, function(payload: any)
+			task.defer(function()
+				if not screenGui then
+					task.wait(0.2)
+				end
+				showAtmRaidHud(payload)
+			end)
+		end)
 	end
 
 	-- ATM-cluster premium pads → PromptGamePass / PromptProduct (server-validated)
