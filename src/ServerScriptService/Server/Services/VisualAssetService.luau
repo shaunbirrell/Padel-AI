@@ -17,6 +17,8 @@ local VisualAssetService = {}
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
 local failed: { [number]: boolean } = {}
+local templateStrips: { [number]: { [string]: number } } = {} -- what loadModel stripped from each template
+local dressLogged: { [number]: boolean } = {} -- vehicle dress strip summary printed once per assetId
 local loadAttempts = 0
 local templatesFolder: Folder? = nil
 
@@ -57,6 +59,95 @@ local function stripScripts(root: Instance)
 	for _, c in ipairs(root:GetChildren()) do
 		if c:IsA("BaseScript") or c:IsA("ModuleScript") then
 			c:Destroy()
+		end
+	end
+end
+
+--[[ v70 judge (jeep "doesn't drive", R3): a catalog dress model is welded into the vehicle's Chassis assembly, so any
+	mover, joint or gameplay object it carries acts on (or rides with) the whole vehicle. A saved BodyVelocity /
+	BodyPosition / AlignPosition is a hidden parking brake; a BodyGyro blocks turning. Strip by explicit class name
+	(works the same in the headless sim) PLUS the abstract bases. WeldConstraint / NoCollisionConstraint are not
+	Constraint subclasses, so they are listed by name. Every part is re-welded to the primary afterwards. ]]
+local STRIP_CLASSES: { [string]: boolean } = {
+	Humanoid = true, Tool = true, Seat = true, VehicleSeat = true, SpawnLocation = true,
+	Script = true, LocalScript = true, ModuleScript = true,
+	-- Constraint family
+	AlignOrientation = true, AlignPosition = true, AngularVelocity = true, BallSocketConstraint = true,
+	HingeConstraint = true, LineForce = true, LinearVelocity = true, PlaneConstraint = true, Plane = true,
+	PrismaticConstraint = true, CylindricalConstraint = true, RigidConstraint = true, RodConstraint = true,
+	RopeConstraint = true, SpringConstraint = true, Torque = true, TorsionSpringConstraint = true,
+	UniversalConstraint = true, VectorForce = true, AnimationConstraint = true,
+	-- legacy movers
+	BodyAngularVelocity = true, BodyForce = true, BodyGyro = true, BodyPosition = true, BodyThrust = true,
+	BodyVelocity = true, RocketPropulsion = true,
+	-- joints (every part is re-welded to the primary below)
+	Weld = true, Motor6D = true, Motor = true, Snap = true, ManualWeld = true, Glue = true, ManualGlue = true,
+	Rotate = true, RotateP = true, RotateV = true, VelocityMotor = true, WeldConstraint = true, NoCollisionConstraint = true,
+	-- gameplay objects a dress model must never bring along
+	ProximityPrompt = true, ClickDetector = true, DragDetector = true, Sound = true, ForceField = true,
+}
+local STRIP_BASES = { "Constraint", "BodyMover", "JointInstance", "LuaSourceContainer" }
+
+local function shouldStrip(d: Instance): boolean
+	if STRIP_CLASSES[d.ClassName] then
+		return true
+	end
+	for _, b in ipairs(STRIP_BASES) do
+		if d:IsA(b) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Destroys every strippable descendant; returns { [ClassName] = count } (children of a stripped object not counted).
+local function stripDress(root: Instance): { [string]: number }
+	local counts: { [string]: number } = {}
+	for _, d in ipairs(root:GetDescendants()) do
+		if d.Parent ~= nil and shouldStrip(d) then
+			counts[d.ClassName] = (counts[d.ClassName] or 0) + 1
+			d:Destroy()
+		end
+	end
+	return counts
+end
+
+local function mergeCounts(into: { [string]: number }, from: { [string]: number }?)
+	if from then
+		for k, n in pairs(from) do
+			into[k] = (into[k] or 0) + n
+		end
+	end
+end
+
+local function stripSummary(counts: { [string]: number }): string
+	local keys: { string } = {}
+	for k in pairs(counts) do
+		table.insert(keys, k)
+	end
+	if #keys == 0 then
+		return "stripped nothing"
+	end
+	table.sort(keys)
+	local parts: { string } = {}
+	for _, k in ipairs(keys) do
+		table.insert(parts, k .. "×" .. tostring(counts[k]))
+	end
+	return "stripped " .. table.concat(parts, ", ")
+end
+
+-- Template prep shared by loadModel and the test hook: dress-strip once, then anchor for the template.
+local function prepareTemplate(assetId: number, model: Model)
+	stripScripts(model)
+	templateStrips[assetId] = stripDress(model)
+	model.Name = "WE_Asset_" .. tostring(assetId)
+	-- Anchor all for template; clones will reconfigure
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CastShadow = false
+			d.Massless = true
 		end
 	end
 end
@@ -115,17 +206,7 @@ local function loadModel(assetId: number, forceInsert: boolean?): Model?
 		return nil
 	end
 
-	stripScripts(model)
-	model.Name = "WE_Asset_" .. tostring(assetId)
-	-- Anchor all for template; clones will reconfigure
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then
-			d.Anchored = true
-			d.CanCollide = false
-			d.CastShadow = false
-			d.Massless = true
-		end
-	end
+	prepareTemplate(assetId, model)
 	model.Parent = ensureFolder()
 	cache[assetId] = model
 	if container ~= model and container.Parent == nil then
@@ -149,31 +230,13 @@ local function loadModel(assetId: number, forceInsert: boolean?): Model?
 	return model
 end
 
-local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: string): boolean
+-- Returns (attached, { [ClassName] = count } stripped from this clone).
+local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: string): (boolean, { [string]: number })
 	stripScripts(clone)
 	clone.Name = cloneName
 
-	-- Strip seats / humanoids / scripts / constraints — mesh is dress-only, never drive
-	for _, d in ipairs(clone:GetDescendants()) do
-		if
-			d:IsA("Humanoid")
-			or d:IsA("Tool")
-			or d:IsA("VehicleSeat")
-			or d:IsA("Seat")
-			or d:IsA("BaseScript")
-			or d:IsA("ModuleScript")
-			or d:IsA("HingeConstraint")
-			or d:IsA("CylindricalConstraint")
-			or d:IsA("SpringConstraint")
-			or d:IsA("PrismaticConstraint")
-			or d:IsA("RodConstraint")
-			or d:IsA("VectorForce")
-			or d:IsA("LinearVelocity")
-			or d:IsA("AngularVelocity")
-		then
-			d:Destroy()
-		end
-	end
+	-- Strip seats / humanoids / scripts / movers / joints / prompts / sounds — mesh is dress-only, never drive
+	local stripped = stripDress(clone)
 
 	pcall(function()
 		clone:PivotTo(primary.CFrame)
@@ -193,7 +256,7 @@ local function weldCloneToPrimary(clone: Model, primary: BasePart, cloneName: st
 			weld.Parent = d
 		end
 	end
-	return true
+	return true, stripped
 end
 
 function VisualAssetService.IsInsertEnabled(): boolean
@@ -306,9 +369,17 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 	end
 
 	local clone = template:Clone()
-	if not weldCloneToPrimary(clone, primary, "WE_CatalogVisual") then
+	local attached, stripped = weldCloneToPrimary(clone, primary, "WE_CatalogVisual")
+	if not attached then
 		clone:Destroy()
 		return false
+	end
+	if not dressLogged[assetId] then
+		dressLogged[assetId] = true
+		local counts: { [string]: number } = {}
+		mergeCounts(counts, templateStrips[assetId])
+		mergeCounts(counts, stripped)
+		print(string.format("[VisualAssetService] dress %d on %s: %s", assetId, vehicleId, stripSummary(counts)))
 	end
 
 	clone.Parent = hostModel
@@ -1174,5 +1245,14 @@ function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureI
 	return attached
 end
 
+
+-- Test hook (headless sim, judge K2): install a template for assetId through the same prep loadModel runs.
+function VisualAssetService._SetTemplate(assetId: number, model: Model)
+	prepareTemplate(assetId, model)
+	model.Parent = ensureFolder()
+	cache[assetId] = model
+	failed[assetId] = nil
+	dressLogged[assetId] = nil
+end
 
 return VisualAssetService

@@ -816,3 +816,15 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 - **New thieves:** you cannot start an ATM raid until you have finished or skipped the tutorial and are past your first 10 minutes (mirrors the victim protection). Refusal text names no keys.
 - **NPCs:** shots need line of sight; hit chance 75 % at ≤ 20 studs falling to 30 % at max range, −15 % vs targets faster than 10 studs/s; 0.5 s reaction delay. Five bank guards drop from 200 to 130 dps. **The bank is still unwinnable** (guards respawn in 18 s); it needs a separate bank retune.
 - **Squad:** FOLLOW is now an escort (engages hostiles within 55 studs of you, never more than 20 studs away). Escort kills pay you 50 % cash + XP ("Squad: X down"). ATTACK-order kills pay nothing (`UnitKillCreditOnAttack = false`) because an idle owner could farm $9k/10 min from the bank.
+
+## 2026-09-24 — v70 jeep drive fix (live: "the jeep doesn't drive")
+- **Root cause could not be pinned to one layer** (network ownership, something pinning the car, or phone input — none modelled by the headless stand-in), but v70 turned any one failure into a permanent, silent parking brake. The fix removes every known hazard and adds a server-verified failover:
+  - ownership is set and checked on the chassis **and every wheel**; wheels get NoCollisionConstraints to their own chassis;
+  - catalog "dress" models are stripped of every mover, joint, constraint and script before they are welded on;
+  - the client reads the thumbstick directly if the seat reports no throttle, and streams its input (≤ 15/s) to the server;
+  - **watchdog:** if you push for ~1.5 s and the vehicle has not moved, the server takes the physics and drives it from your input stream (server driving has one round-trip of lag, only in that failure case);
+  - passenger seats eject anything that is not a player (squad soldiers brought a turn-blocking BodyGyro);
+  - the speed pill shows real speed; the owner (UserId 470626172) sees a one-line NO-DRIVE diagnostic naming the failing layer when he pushes and nothing moves.
+- **Mobile items:** above 8 studs in a helicopter/plane the jump button is disabled and exiting needs a 0.5 s hold on the EXIT pill (gamepad B also exits); the big "Armed Jeep · Sit · WASD" billboards and "Press WASD" toasts are gone — the owner sees a small nameplate over his own vehicle only (≤ 40 studs, never through walls); away from your base SPAWN puts the vehicle in front of you (never in water, across a wall or indoors) and SPAWN is refused for 5 s after taking damage.
+- **Auto-sit:** 30 studs away from home; up to 520 studs inside your own plot so Garage → SPAWN still seats you at base (`VehicleConfig.Drive.Spawn.AutoSitHomeRadius`).
+- **Needs the phone:** whether it now drives with the thumbstick alone; if not, screenshot the NO-DRIVE line.

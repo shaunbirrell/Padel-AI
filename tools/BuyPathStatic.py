@@ -481,7 +481,6 @@ must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'Key = "VIP
 must_contain("src/ServerScriptService/Server/Services/SupplyDropService.luau", "AlwaysOnTop = false", "SupplyDrop AlwaysOnTop false")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "SupplyDrop", "WorldPrompt hides SupplyDrop near pads")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "SECURED", "Capture SECURED celebration toast")
-must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "Press WASD to drive", "Jeep WASD sit tip")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "WE_LocalOwned", "Premium pad OWNED visual")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "UserOwnsGamePassAsync", "OWNED via PlayerOwnsGamePass check")
 # No-regress v31
@@ -558,8 +557,6 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "100
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'Worker = "Worker"', "Worker VisualKind Worker")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "HeavyInfantry", "Stall HeavyInfantry variety")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "role Part-dress differentiation", "Soldier role dress")
-must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "DriveTip", "Vehicle label drive tip")
-must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "Sit · WASD to drive", "Ground drive tip copy")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "Sit · WASD drive", "Garage row drive tip")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "OwnerChip", "Capture owner/progress chip")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "CAPTURING ·", "Capture progress chip text")
@@ -614,9 +611,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 
 
 # --- v36 warzone density + late vehicle/presence: tank drive, ArmedJeep cue, walls, towers, SpeedBoost soft, HUD cash ---
-must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "TRACKED · Sit · WASD (slow)", "LightTank tracked tip")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "isTracked", "Tracked slower LV cruise")
-must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "ARMED · Sit · WASD", "ArmedJeep ARMED tip")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_MuzzleFlash", "ArmedJeep muzzle flash cue")
 # v70 HUD spec §8 re-pin (delete / NOT WE_ArmedCue) is DEFERRED: that server label goes with the §5 world-label pass
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WE_ArmedCue", "ArmedJeep ARMED billboard")
@@ -1496,6 +1491,22 @@ must_contain("src/ServerScriptService/Server/Services/CombatService/CombatNPC.lu
 must_contain("src/ServerScriptService/Server/Services/SquadOrdersService.luau", "unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true)", "P1-4 ATTACK kills credit only via flag (idle bank farm)")
 must_contain("src/ServerScriptService/Server/Services/MoneyCollectorService.luau", "local thiefBlock, thiefLeft = newThiefBlock(tProfile)", "P0-6 CanRaid refuses tutorial/new thieves")
 must_contain("src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau", "MissTolerance = 5,", "v70 phone lag tolerance 5 studs (10/12 aim points at 250 ms)")
+
+# v70 jeep drive fix (verified: t_server 290, v_rot 167, v_server 22, v_client 11, t_client_jeep 194, t_jeep_server 105,
+# adversarial 33/4/1, ds 24, world ok)
+must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "WASD", "P1-8 no key-name tips/toasts in vehicles")
+must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "DriveTip", "P1-8 no server drive-tip label")
+must_not_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "\"VehicleLabel\"", "P1-8 server nameplate removed (client owner-only plate)")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "nc.Name = \"WE_WheelNoCollide\" .. i", "F2 wheel/chassis no-collide")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "trip(rec, \"nomove\", t)", "F5 drive watchdog failover")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "not overAnyWater(ctx, cf) and inSight(ctx, pp, cf) and openSky(ctx, cf)", "P1-9 front spawn: dry, no wall-crossing, not indoors")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "if sign == 0 or along > W.MinMoveStuds then", "Blocked car never counts as a session trip")
+must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "return false, \"InCombat\"", "P1-9 SPAWN damage lock")
+must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local STRIP_BASES = { \"Constraint\", \"BodyMover\", \"JointInstance\", \"LuaSourceContainer\" }", "F3 catalog dress strips movers/joints")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "sendDriveInput({ K = \"In\", V = d.VehicleId, T = round2(t), S = round2(s), L = round2(l) })", "F4b client input stream")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "hum.JumpHeight = 0", "P1-7 airborne jump lock")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "g.MaxDistance = math.min(40, PLATE.MaxDistance)", "P1-8 owner nameplate within 40 studs")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau", "Enum.KeyCode.F, Enum.KeyCode.ButtonB)", "gamepad B exits vehicles (airborne bail-out)")
 
 # ── v66: REAL parse gate. Every check above is a text match; none of them noticed that
 # ProfileSchema/EconomyService stopped parsing in v50 (DataService never loaded v50–v65).

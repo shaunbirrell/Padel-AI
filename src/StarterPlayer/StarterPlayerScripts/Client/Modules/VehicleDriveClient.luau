@@ -9,8 +9,14 @@
 	  WE_DriveAO (AlignOrientation)         -> CFrame (rotation only)
 	It writes only while the model's WE_DriveAuthority == "Client". The server checks the result
 	(speed, altitude, teleports, map bounds, boats over WE_Water) and takes ownership back on a violation.
-	No positions or velocities are ever sent to the server: the only remote is VehicleDriveInput
-	{K="Hello"/"Bye"}.
+	No positions or velocities are ever sent to the server. The only remote is VehicleDriveInput:
+	  {K="Hello", V, P}            once per sit (+ retries) → the server hands the physics to this client
+	  {K="Bye", V}                 leaving the seat
+	  {K="In", V, T, S, L}         jeep fix F4b: the composed input, 2 decimals, Drive.Watchdog.StreamHz while any
+	                               axis is non-zero + one zero message on release (feeds the server-driven fallback)
+	  {K="Stuck", V, T, Spd, R, Src}  F4c: once per sit, throttle held 1.5 s under Client authority, speed < 1
+	  {K="Exit", V}                F4d: jump button / Space (JumpRequest), the EXIT hold pill, F — the server ejects
+	Every value is clamped to [-1, 1] on the server again; a client can only downgrade its own car to server driving.
 
 	Laws (NewState / Step / ComposeInput / ControlsLayout / WaterSurfaceAt / ProbeDistances / BuildParams)
 	are pure and are tested headless. The server's fallback + idle laws are a copy of the Car/Boat maths.
@@ -113,7 +119,7 @@ export type State = {
 }
 
 export type Rect = { Pos: Vector2, Size: Vector2 }
-export type Layout = { Up: Rect, Down: Rect, Where: string }
+export type Layout = { Up: Rect, Down: Rect, Exit: Rect, Where: string }
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Defaults (spec section 2). VehicleConfig.Drive overrides any of these when present.
@@ -126,6 +132,21 @@ local DEFAULTS: any = {
 	World = { SoftBound = 3300 },
 	Resync = { Gap = 10, CarGap = 6, Seconds = 0.3, GraceSeconds = 1 },
 	Water = { RefreshSeconds = 2, QueryBelow = 8, QueryAbove = 20, LandProbeHeight = 30 },
+	-- jeep fix (fix_spec §1.2). VehicleConfig.Drive.Watchdog / .Debug override these key by key.
+	Watchdog = { StreamHz = 10 },
+	-- Debug: nobody unless VehicleConfig.Drive.Debug names them (the on-device NO DRIVE line is config-gated)
+	Debug = { UserIds = {}, All = false, NoDriveSeconds = 1.0, NoDriveSpeed = 1.0, ShowSeconds = 6 },
+	-- mobile P1-7: EXIT pill + airborne jump lock (VehicleConfig.Drive.Exit overrides)
+	Exit = {
+		HoldSeconds = 0.5, -- the EXIT pill fires after this long held
+		LockAGL = 8, -- Heli/Plane higher than this above the ground: local JumpHeight 0 (the touch jump button hides)
+		UnlockAGL = 7, -- ... and back below this (hysteresis: the jump button does not flicker at 8)
+		RequestGapSeconds = 0.3, -- at most one {K="Exit"} per this long
+		StuckSeconds = 1.5, -- F4c: throttle held this long under Client authority at speed < StuckSpeed → one Stuck report
+		StuckSpeed = 1.0,
+	},
+	-- mobile P1-8: client-side owner nameplate (VehicleConfig.Drive.Nameplate overrides)
+	Nameplate = { MaxDistance = 36, WidthStuds = 2, HeightStuds = 0.4, HeightPx = 20, MinText = 14, MaxText = 20 },
 	Modes = {
 		Car = {
 			ReverseFrac = 0.45,
@@ -867,44 +888,60 @@ function Laws.ComposeInput(mode: string, raw: RawInput): Input
 	}
 end
 
---[[ Mobile ▲/▼ column in pixels (spec 3.1). Positions are top-left corners in the same space as jumpPos. ]]
+--[[ Mobile ▲/▼ column + EXIT pill in pixels (spec 3.1, mobile plan P1-7). Positions are top-left corners in the
+	same space as jumpPos. Every control is ≥ 44 px (50 on phones, 60 on tablets) and CONTROL_GAP (16) px from
+	the others and from the Roblox jump button. The phone column tops out at H − 222 (HudConfig.Reserve.CombatTouch
+	MinHeightPx), the EXIT pill sits left of the jump button (cars/boats and the "Above" column) or left of the
+	column ("Left"/"Fallback"), bottom-aligned with the lowest control: never in the thumbstick zone.
+	lift = false (cars/boats): no column, only the EXIT pill. ]]
+local CONTROL_GAP = 16
 function Laws.ControlsLayout(
 	jumpPos: Vector2?,
 	jumpSize: Vector2?,
 	viewport: Vector2,
-	reservedTopFromBottom: number?
+	reservedTopFromBottom: number?,
+	lift: boolean?
 ): Layout
 	local reserved = reservedTopFromBottom or 250
-	local size = if viewport.Y < 500 then 52 else 60
-	local gap = 8
+	local size = if viewport.Y < 500 then 50 else 60
+	local gap = CONTROL_GAP
 	local S = Vector2.new(size, size)
+	local exitW = math.floor(size * 1.8 + 0.5)
+	local E = Vector2.new(exitW, size)
+	local column = lift ~= false
 	if jumpPos and jumpSize then
-		-- 1) column centred above the jump button
+		local jumpBottom = jumpPos.Y + jumpSize.Y
+		-- 1) column centred above the jump button; EXIT left of the jump button
 		local x = jumpPos.X + jumpSize.X / 2 - size / 2
-		local downY = jumpPos.Y - 10 - size
+		local downY = jumpPos.Y - gap - size
 		local upY = downY - gap - size
 		if upY >= viewport.Y - reserved then
 			return {
 				Up = { Pos = Vector2.new(x, upY), Size = S },
 				Down = { Pos = Vector2.new(x, downY), Size = S },
+				Exit = { Pos = Vector2.new(jumpPos.X - gap - exitW, jumpBottom - size), Size = E },
 				Where = "Above",
 			}
 		end
-		-- 2) column left of the jump button, bottom-aligned with it
-		local lx = jumpPos.X - 10 - size
-		local ldown = jumpPos.Y + jumpSize.Y - size
+		-- 2) column left of the jump button, bottom-aligned with it; EXIT left of the column
+		local lx = jumpPos.X - gap - size
+		local ldown = jumpBottom - size
+		local ex = if column then lx - gap - exitW else jumpPos.X - gap - exitW
 		return {
 			Up = { Pos = Vector2.new(lx, ldown - gap - size), Size = S },
 			Down = { Pos = Vector2.new(lx, ldown), Size = S },
+			Exit = { Pos = Vector2.new(ex, ldown), Size = E },
 			Where = "Left",
 		}
 	end
-	-- 3) no jump button
+	-- 3) no jump button (hidden TouchGui): column right 24 / bottom 106, EXIT left of it (or in its place)
 	local fx = viewport.X - 24 - size
-	local fdown = viewport.Y - 110 - size
+	local fdown = viewport.Y - 106 - size
+	local fex = if column then fx - gap - exitW else viewport.X - 24 - exitW
 	return {
 		Up = { Pos = Vector2.new(fx, fdown - gap - size), Size = S },
 		Down = { Pos = Vector2.new(fx, fdown), Size = S },
+		Exit = { Pos = Vector2.new(fex, fdown), Size = E },
 		Where = "Fallback",
 	}
 end
@@ -958,6 +995,21 @@ type Drive = {
 	HudAcc: number,
 	Blocked: string?,
 	Conns: { RBXScriptConnection },
+	-- jeep fix F4 / F7
+	InputSrc: string, -- "seat" | "stick" | "none" (where readRaw found the throttle/steer)
+	LastStreamAt: number,
+	StreamZeroSent: boolean,
+	NoDriveFor: number, -- pushing with speed < Debug.NoDriveSpeed for this long (diagnostic line)
+	StuckFor: number, -- pushing with speed < Exit.StuckSpeed for this long (Stuck report)
+	MovedFor: number, -- speed ≥ 3 for this long
+	StuckSent: boolean,
+	DiagUntil: number,
+	DiagAcc: number,
+	LastExitAt: number,
+	StartedAt: number,
+	-- mobile P1-7
+	AirLocked: boolean, -- Heli/Plane above Exit.LockAGL: the local JumpHeight is 0
+	NextAirCheck: number,
 }
 
 local WATER_TAG_DEFAULT = "WE_Water"
@@ -973,14 +1025,17 @@ local ACTION_DOWN = "WE_VehLiftDown"
 local ACTION_STRAFE = "WE_VehStrafe"
 local ACTION_EXIT = "WE_VehExit"
 
-local HINTS: { [string]: { PC: string, Touch: string } } = {
+-- Copy by device (CLAUDE.md §1): key names only for PreferredInput KeyboardAndMouse (PC) or Gamepad (Pad).
+local HINTS: { [string]: { PC: string, Pad: string, Touch: string } } = {
 	Heli = {
 		PC = "W/S fly · A/D turn · SPACE up · CTRL down · Z/X strafe · F exit",
-		Touch = "Stick: fly/turn · ▲▼ climb/descend · Jump exits",
+		Pad = "Stick: fly/turn · RT up · LT down · LB/RB strafe",
+		Touch = "Stick: fly/turn · ▲▼ climb/descend · hold EXIT to leave",
 	},
 	Plane = {
 		PC = "Hold W: throttle · A/D bank · SPACE nose up (lift off at %d) · F exit",
-		Touch = "Push stick up for throttle · ▲ to lift off · Jump exits",
+		Pad = "Stick up: throttle · RT nose up (lift off at %d)",
+		Touch = "Push stick up for throttle · ▲ to lift off · hold EXIT to leave",
 	},
 }
 local RED_TAGS: { [string]: boolean } = { STALL = true, ["PULL UP"] = true, AGROUND = true, ["TURN BACK"] = true }
@@ -1011,13 +1066,86 @@ local touchUp, touchDown = false, false
 local hudGui: ScreenGui? = nil
 local pill: TextLabel? = nil
 local hintLabel: TextLabel? = nil
+local diagLabel: TextLabel? = nil
 local controlsFrame: Frame? = nil
 local upBtn: TextButton? = nil
 local downBtn: TextButton? = nil
+local exitBtn: TextButton? = nil
+local exitFill: Frame? = nil
+local exitLabel: TextLabel? = nil
 local layoutConns: { RBXScriptConnection } = {}
+local controlsLift = true -- the ▲▼ column is shown (aircraft); false = EXIT pill only (cars/boats)
+
+-- EXIT hold (P1-7): the touch that is holding the pill and since when
+local exitIo: InputObject? = nil
+local exitHoldStart = 0
+local exitTapHintUntil = 0
+
+-- airborne jump lock (P1-7): the Humanoid whose JumpHeight/JumpPower we zeroed and the values to put back
+local jumpLock: { Hum: Humanoid, Height: number, Power: number }? = nil
+
+-- F4a: the PlayerModule ControlModule (stick / WASD move vector); looked up lazily, retried every 2 s while missing
+local controls: any = nil
+local nextControlsTry = 0
+
+-- device (CLAUDE.md §1: PreferredInput, not TouchEnabled, decides the copy); nil = not overridden
+local deviceOverride: string? = nil
+
+-- config sections resolved at each sit (VehicleConfig.Drive.<name> over DEFAULTS.<name>)
+local W: any = DEFAULTS.Watchdog
+local DBG: any = DEFAULTS.Debug
+local EXIT: any = DEFAULTS.Exit
+local PLATE: any = DEFAULTS.Nameplate
+local debugUser = false
+
+-- P1-8 owner nameplates (client-only BillboardGuis in PlayerGui, adorned to each of my vehicles' Chassis)
+local plates: { [Model]: BillboardGui } = {}
 
 local function localPlayer(): Player
 	return Players.LocalPlayer
+end
+
+-- Drive.<name> with DEFAULTS.<name> filled in, key by key, only when the types match
+local function cfgSection(name: string): any
+	local d: any = DEFAULTS[name]
+	local c: any = if typeof(driveCfg) == "table" and typeof(driveCfg[name]) == "table" then driveCfg[name] else nil
+	local out: any = {}
+	for k, v in pairs(d) do
+		local o = if c then c[k] else nil
+		out[k] = if o ~= nil and typeof(o) == typeof(v) then o else v
+	end
+	return out
+end
+
+local function refreshConfig()
+	W = cfgSection("Watchdog")
+	DBG = cfgSection("Debug")
+	EXIT = cfgSection("Exit")
+	PLATE = cfgSection("Nameplate")
+	local uid = localPlayer().UserId
+	local ids: any = DBG.UserIds
+	debugUser = DBG.All == true or (typeof(ids) == "table" and table.find(ids, uid) ~= nil)
+end
+
+--[[ "Touch" | "Gamepad" | "KeyboardAndMouse" from UserInputService.PreferredInput (TouchEnabled only when the
+	property is unavailable). Decides the copy: key names are shown only for KeyboardAndMouse / Gamepad. ]]
+local function preferredInput(): string
+	if deviceOverride then
+		return deviceOverride
+	end
+	local ok, name = pcall(function(): string?
+		local pi: any = (UserInputService :: any).PreferredInput
+		return if typeof(pi) == "EnumItem" then pi.Name else nil
+	end)
+	if ok and typeof(name) == "string" then
+		if name == "Touch" then
+			return "Touch"
+		elseif string.find(name, "Gamepad", 1, true) ~= nil then
+			return "Gamepad"
+		end
+		return "KeyboardAndMouse"
+	end
+	return if UserInputService.TouchEnabled then "Touch" else "KeyboardAndMouse"
 end
 
 local function loadShared()
@@ -1145,6 +1273,20 @@ local function refreshPrompt(prompt: Instance)
 	end
 end
 
+local function corner(parent: Instance, r: number)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, r)
+	c.Parent = parent
+end
+
+-- P1-8: the server's old always-on-top "VehicleLabel" (280 studs, key names) is replaced by the owner-only client
+-- nameplate below; any copy an older server still builds is switched off on this client.
+local function suppressServerLabel(d: Instance)
+	if d.Name == "VehicleLabel" and d:IsA("BillboardGui") and d.Enabled then
+		d.Enabled = false
+	end
+end
+
 local function refreshAllPrompts()
 	local folder = Workspace:FindFirstChild(VEHICLE_FOLDER)
 	if not folder then
@@ -1153,6 +1295,127 @@ local function refreshAllPrompts()
 	for _, d in ipairs(folder:GetDescendants()) do
 		if d.Name == "WE_DrivePrompt" then
 			refreshPrompt(d)
+		elseif d.Name == "VehicleLabel" then
+			suppressServerLabel(d)
+		end
+	end
+end
+
+-- ── P1-8 owner nameplate: small, owner-only, stud-scaled, 14–20 px text, MaxDistance ≤ 40, never AlwaysOnTop,
+-- hidden while seated. Client-only BillboardGui in PlayerGui (Adornee = Chassis), so streaming a vehicle out
+-- only blanks it and no server instance or remote is involved. No key names: it shows the vehicle's name only.
+local function removePlate(model: Model)
+	local g = plates[model]
+	if g then
+		plates[model] = nil
+		g:Destroy()
+	end
+end
+
+local function seatedNow(): boolean
+	if active ~= nil then
+		return true
+	end
+	local ch = localPlayer().Character
+	local h = ch and ch:FindFirstChildOfClass("Humanoid")
+	return h ~= nil and h.SeatPart ~= nil
+end
+
+local function plateHeight(model: Model, chassis: BasePart): number
+	-- the kit's own label height above the Chassis centre (VehicleService sets WE_LabelY); else the model's top
+	local ly = model:GetAttribute("WE_LabelY")
+	if typeof(ly) == "number" and ly == ly and ly > 0 then
+		return math.min(ly, 30)
+	end
+	local ok, top = pcall(function(): number
+		local cf, size = model:GetBoundingBox()
+		return cf.Position.Y + size.Y / 2
+	end)
+	if ok and typeof(top) == "number" and top == top then
+		return math.clamp(top - chassis.Position.Y + 1.2, 1.5, 30)
+	end
+	return chassis.Size.Y / 2 + 3
+end
+
+local function makePlate(model: Model, chassis: BasePart, parent: Instance): BillboardGui
+	local text = model.Name
+	local g = Instance.new("BillboardGui")
+	g.Name = "WE_VehicleNameplate"
+	g.Adornee = chassis
+	g.AlwaysOnTop = false
+	g.LightInfluence = 0
+	g.ResetOnSpawn = false
+	g.MaxDistance = math.min(40, PLATE.MaxDistance)
+	-- width: a fixed px part sized to the name + a small stud part; height: 20 px + 0.4 studs (≈ 23–32 px box)
+	local widthPx = math.clamp(#text * 9 + 20, 80, 240)
+	g.Size = UDim2.new(PLATE.WidthStuds, widthPx, PLATE.HeightStuds, PLATE.HeightPx)
+	g.StudsOffsetWorldSpace = Vector3.new(0, plateHeight(model, chassis), 0)
+	local lab = Instance.new("TextLabel")
+	lab.Name = "Label"
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.BackgroundColor3 = Color3.fromRGB(12, 14, 18)
+	lab.BackgroundTransparency = 0.35
+	lab.BorderSizePixel = 0
+	lab.Font = Enum.Font.GothamBold
+	lab.TextColor3 = Color3.fromRGB(240, 242, 246)
+	lab.TextScaled = true
+	lab.Text = text
+	lab.Parent = g
+	local tc = Instance.new("UITextSizeConstraint")
+	tc.MinTextSize = PLATE.MinText
+	tc.MaxTextSize = PLATE.MaxText
+	tc.Parent = lab
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 6)
+	pad.PaddingRight = UDim.new(0, 6)
+	pad.Parent = lab
+	corner(lab, 6)
+	g.Parent = parent
+	return g
+end
+
+local function refreshPlate(inst: Instance)
+	if not inst:IsA("Model") then
+		return
+	end
+	local model: Model = inst
+	local folder = model.Parent
+	local chassis = model.PrimaryPart or model:FindFirstChild("Chassis")
+	local mine = model:GetAttribute("OwnerUserId") == localPlayer().UserId and model:GetAttribute("VehicleId") ~= nil
+	if not mine or folder == nil or folder.Name ~= VEHICLE_FOLDER or not (chassis and chassis:IsA("BasePart")) then
+		removePlate(model)
+		return
+	end
+	local gui = plates[model]
+	if not gui or gui.Parent == nil or gui.Adornee ~= chassis then
+		removePlate(model)
+		local pg = localPlayer():FindFirstChildOfClass("PlayerGui")
+		if not pg then
+			return
+		end
+		local made = makePlate(model, chassis, pg)
+		plates[model] = made
+		gui = made
+	end
+	if not gui then
+		return
+	end
+	local want = not seatedNow()
+	if gui.Enabled ~= want then
+		gui.Enabled = want
+	end
+end
+
+local function refreshPlates()
+	for model in pairs(plates) do
+		if model.Parent == nil then
+			removePlate(model)
+		end
+	end
+	local folder = Workspace:FindFirstChild(VEHICLE_FOLDER)
+	if folder then
+		for _, m in ipairs(folder:GetChildren()) do
+			refreshPlate(m)
 		end
 	end
 end
@@ -1168,16 +1431,35 @@ local function hookVehicleFolder()
 	promptFolderConn = folder.DescendantAdded:Connect(function(d: Instance)
 		if d.Name == "WE_DrivePrompt" then
 			refreshPrompt(d)
+		elseif d.Name == "VehicleLabel" then
+			suppressServerLabel(d)
+		elseif d.Parent == folder then
+			task.defer(refreshPlate, d) -- attributes + chassis arrive with the model; defer past its children
+		elseif d.Name == "Chassis" and d.Parent and d.Parent.Parent == folder then
+			task.defer(refreshPlate, d.Parent) -- streamed in after its model
+		end
+	end)
+	folder.ChildRemoved:Connect(function(child: Instance)
+		if child:IsA("Model") then
+			removePlate(child)
 		end
 	end)
 	refreshAllPrompts()
+	refreshPlates()
 end
 
 -- ── HUD ─────────────────────────────────────────────────────────────────────
-local function corner(parent: Instance, r: number)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, r)
-	c.Parent = parent
+local function setExitProgress(p: number)
+	local f = exitFill
+	if f then
+		f.Size = UDim2.fromScale(math.clamp(p, 0, 1), 1)
+		f.Visible = p > 0
+	end
+end
+
+local function cancelExitHold()
+	exitIo = nil
+	setExitProgress(0)
 end
 
 local function releaseTouches()
@@ -1188,6 +1470,7 @@ local function releaseTouches()
 			b.BackgroundTransparency = 0.3
 		end
 	end
+	cancelExitHold()
 end
 
 local function recomputeTouches()
@@ -1246,6 +1529,70 @@ local function makeLiftButton(parent: Instance, name: string, text: string, whic
 	return b
 end
 
+-- a finger lifted before Exit.HoldSeconds: the pill says HOLD for a moment instead of exiting
+local function exitReleasedEarly(io: InputObject)
+	if exitIo == io then
+		cancelExitHold()
+		exitTapHintUntil = os.clock() + 1.2
+	end
+end
+
+--[[ P1-7 EXIT pill: hold Exit.HoldSeconds (0.5 s) to leave the vehicle. The same pill in every vehicle, so an
+	airborne exit is never one stray tap, and phone players always have a labelled way out. ]]
+local function makeExitButton(parent: Instance): TextButton
+	local b = Instance.new("TextButton")
+	b.Name = "Exit"
+	b.Text = ""
+	b.BackgroundColor3 = Color3.fromRGB(120, 28, 24)
+	b.BackgroundTransparency = 0.2
+	b.BorderSizePixel = 0
+	b.AutoButtonColor = false
+	b.Active = true
+	b.ClipsDescendants = true
+	b.Size = UDim2.fromOffset(90, 50)
+	b.Parent = parent
+	corner(b, 12)
+	local st = Instance.new("UIStroke")
+	st.Color = Color3.fromRGB(255, 200, 190)
+	st.Thickness = 1.5
+	st.Transparency = 0.25
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	st.Parent = b
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.BackgroundColor3 = Color3.fromRGB(255, 120, 100)
+	fill.BackgroundTransparency = 0.35
+	fill.BorderSizePixel = 0
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.Visible = false
+	fill.ZIndex = 2
+	fill.Parent = b
+	exitFill = fill
+	local lab = Instance.new("TextLabel")
+	lab.Name = "Label"
+	lab.BackgroundTransparency = 1
+	lab.Size = UDim2.fromScale(1, 1)
+	lab.Font = Enum.Font.GothamBold
+	lab.TextSize = 18
+	lab.TextColor3 = Color3.fromRGB(255, 244, 240)
+	lab.Text = "EXIT"
+	lab.ZIndex = 3
+	lab.Parent = b
+	exitLabel = lab
+	b.InputBegan:Connect(function(io: InputObject)
+		local ut = io.UserInputType
+		if (ut == Enum.UserInputType.Touch or ut == Enum.UserInputType.MouseButton1) and exitIo == nil then
+			exitIo = io
+			exitHoldStart = os.clock()
+			exitTapHintUntil = 0
+		end
+	end)
+	b.InputEnded:Connect(function(io: InputObject)
+		exitReleasedEarly(io)
+	end)
+	return b
+end
+
 local function ensureHud(): ScreenGui?
 	local gui = hudGui
 	if gui and gui.Parent then
@@ -1290,7 +1637,7 @@ local function ensureHud(): ScreenGui?
 	h.BackgroundTransparency = 0.35
 	h.BorderSizePixel = 0
 	h.Font = Enum.Font.Gotham
-	h.TextSize = if isTouch then 12 else 13
+	h.TextSize = 14 -- ≥ 14 px real (this ScreenGui has no UIScale)
 	h.TextColor3 = Color3.fromRGB(255, 210, 90)
 	h.TextWrapped = true
 	h.Text = ""
@@ -1302,6 +1649,30 @@ local function ensureHud(): ScreenGui?
 	hc.Parent = h
 	hintLabel = h
 
+	-- F7 / fix_spec §2.1: on-device "NO DRIVE" line, debug users only (Drive.Debug), never interactive
+	local dg = Instance.new("TextLabel")
+	dg.Name = "WE_VehicleDiag"
+	dg.AnchorPoint = Vector2.new(0.5, 1)
+	dg.Position = UDim2.new(0.5, 0, 1, (if isTouch then -236 else -64) - 72)
+	dg.Size = UDim2.new(0.94, 0, 0, 40)
+	dg.BackgroundColor3 = Color3.fromRGB(0x3A, 0x0E, 0x0E)
+	dg.BackgroundTransparency = 0.2
+	dg.BorderSizePixel = 0
+	dg.Active = false
+	dg.Font = Enum.Font.Code
+	dg.TextSize = if isTouch then 11 else 12
+	dg.TextColor3 = Color3.fromRGB(0xFF, 0xD7, 0xD0)
+	dg.TextWrapped = true
+	dg.RichText = false
+	dg.Text = ""
+	dg.Visible = false
+	dg.Parent = screen
+	corner(dg, 6)
+	local dc = Instance.new("UISizeConstraint")
+	dc.MaxSize = Vector2.new(620, 44)
+	dc.Parent = dg
+	diagLabel = dg
+
 	local cf = Instance.new("Frame")
 	cf.Name = "WE_VehicleControls"
 	cf.BackgroundTransparency = 1
@@ -1312,6 +1683,7 @@ local function ensureHud(): ScreenGui?
 	controlsFrame = cf
 	upBtn = makeLiftButton(cf, "LiftUp", "▲", "Up")
 	downBtn = makeLiftButton(cf, "LiftDown", "▼", "Down")
+	exitBtn = makeExitButton(cf)
 
 	screen.Parent = pg
 	hudGui = screen
@@ -1326,15 +1698,22 @@ local function findJumpButton(): GuiObject?
 	end
 	local frame = tg:FindFirstChild("TouchControlFrame")
 	local jb = frame and frame:FindFirstChild("JumpButton")
-	if jb and jb:IsA("GuiObject") and jb.Visible and typeof(jb.AbsoluteSize) == "Vector2" and jb.AbsoluteSize.X > 0 then
+	-- while our airborne lock hides it (JumpHeight 0), keep laying out around its rect so nothing moves
+	if
+		jb
+		and jb:IsA("GuiObject")
+		and (jb.Visible or jumpLock ~= nil)
+		and typeof(jb.AbsoluteSize) == "Vector2"
+		and jb.AbsoluteSize.X > 0
+	then
 		return jb
 	end
 	return nil
 end
 
 local function layoutControls()
-	local gui, ub, db = hudGui, upBtn, downBtn
-	if not (gui and ub and db) then
+	local gui, ub, db, eb = hudGui, upBtn, downBtn, exitBtn
+	if not (gui and ub and db and eb) then
 		return
 	end
 	local vp: Vector2 = gui.AbsoluteSize
@@ -1354,11 +1733,15 @@ local function layoutControls()
 		jpos = jb.AbsolutePosition - origin
 		jsize = jb.AbsoluteSize
 	end
-	local L = Laws.ControlsLayout(jpos, jsize, vp, RESERVED_FROM_BOTTOM)
+	local L = Laws.ControlsLayout(jpos, jsize, vp, RESERVED_FROM_BOTTOM, controlsLift)
 	ub.Position = UDim2.fromOffset(L.Up.Pos.X, L.Up.Pos.Y)
 	ub.Size = UDim2.fromOffset(L.Up.Size.X, L.Up.Size.Y)
 	db.Position = UDim2.fromOffset(L.Down.Pos.X, L.Down.Pos.Y)
 	db.Size = UDim2.fromOffset(L.Down.Size.X, L.Down.Size.Y)
+	eb.Position = UDim2.fromOffset(L.Exit.Pos.X, L.Exit.Pos.Y)
+	eb.Size = UDim2.fromOffset(L.Exit.Size.X, L.Exit.Size.Y)
+	ub.Visible = controlsLift
+	db.Visible = controlsLift
 end
 
 local function hideControls()
@@ -1372,11 +1755,12 @@ local function hideControls()
 	end
 end
 
-local function showControls()
+local function showControls(lift: boolean)
 	if not ensureHud() or not controlsFrame then
 		return
 	end
 	hideControls()
+	controlsLift = lift
 	layoutControls()
 	local cam = Workspace.CurrentCamera
 	if cam then
@@ -1415,19 +1799,21 @@ local function hudText(mode: string, hud: Hud?, fallbackSpeed: number, blocked: 
 	return text
 end
 
---[[ Device-aware control hint (spec 3.1), or nil for modes without one. ]]
-function Laws.HintText(mode: string, touch: boolean, vto: number): string?
+--[[ Device-aware control hint (spec 3.1), or nil for modes without one. device: true / "Touch" = touch copy (no
+	key names), "Gamepad" = pad buttons, false / "KeyboardAndMouse" = keys. ]]
+function Laws.HintText(mode: string, device: boolean | string, vto: number): string?
 	local spec = HINTS[mode]
 	if not spec then
 		return nil
 	end
-	if touch then
+	if device == true or device == "Touch" then
 		return spec.Touch
 	end
+	local text = if device == "Gamepad" then spec.Pad else spec.PC
 	if mode == "Plane" then
-		return string.format(spec.PC, math.floor(vto))
+		return string.format(text, math.floor(vto))
 	end
-	return spec.PC
+	return text
 end
 
 local function showHint(mode: string, params: Params)
@@ -1435,7 +1821,7 @@ local function showHint(mode: string, params: Params)
 		return
 	end
 	local lab = hintLabel
-	local text = Laws.HintText(mode, isTouch, params.Vto)
+	local text = Laws.HintText(mode, preferredInput(), params.Vto)
 	if not lab or not text then
 		return
 	end
@@ -1495,14 +1881,133 @@ local function requestExit(hum: Humanoid)
 	end)
 end
 
+--[[ P1-7 airborne jump lock. JumpHeight (and JumpPower) 0 hides the Roblox touch jump button and stops a stray jump
+	from leaving the seat mid-air; the exit paths below put the saved values back before they jump. Only values we
+	zeroed are restored (a value someone else changed meanwhile is left alone). ]]
+local function lockJump(hum: Humanoid)
+	if jumpLock ~= nil then
+		return
+	end
+	local okH, h = pcall(function(): any
+		return hum.JumpHeight
+	end)
+	local okP, p = pcall(function(): any
+		return hum.JumpPower
+	end)
+	local height: number = if okH and typeof(h) == "number" then h else 7.2
+	local power: number = if okP and typeof(p) == "number" then p else 50
+	jumpLock = { Hum = hum, Height = height, Power = power }
+	pcall(function()
+		hum.JumpHeight = 0
+		hum.JumpPower = 0
+	end)
+end
+
+local function unlockJump()
+	local j = jumpLock
+	if j == nil then
+		return
+	end
+	jumpLock = nil
+	pcall(function()
+		if j.Hum.JumpHeight == 0 then
+			j.Hum.JumpHeight = j.Height
+		end
+		if j.Hum.JumpPower == 0 then
+			j.Hum.JumpPower = j.Power
+		end
+	end)
+end
+
+--[[ Leave the vehicle: jump back on, ask the server to eject (F4d: works even while the server owns the car's
+	assembly) and jump locally (requestExit). Used by the EXIT pill and by F. ]]
+local function exitVehicle(d: Drive)
+	unlockJump()
+	local now = os.clock()
+	if not d.Blocked and now - d.LastExitAt >= EXIT.RequestGapSeconds then
+		d.LastExitAt = now
+		sendDriveInput({ K = "Exit", V = d.VehicleId })
+	end
+	requestExit(d.Humanoid)
+end
+
 local function onExitAction(_name: string, state: Enum.UserInputState, _io: InputObject): Enum.ContextActionResult?
 	if state == Enum.UserInputState.Begin then
 		local d = active
 		if d then
-			requestExit(d.Humanoid)
+			exitVehicle(d)
 		end
 	end
 	return Enum.ContextActionResult.Sink
+end
+
+--[[ F4d: the Roblox jump button / Space / gamepad A (UserInputService.JumpRequest) also asks the server to eject,
+	so jump exits even when the seated character's assembly is server-owned (Fallback / correction). Aircraft:
+	never while airborne (the EXIT pill hold or F is the way out up there), and never on Space (Space = climb). ]]
+local function onJumpRequest(d: Drive)
+	if active ~= d or d.Blocked then
+		return
+	end
+	local now = os.clock()
+	if now - d.StartedAt < 0.3 or now - d.LastExitAt < EXIT.RequestGapSeconds then
+		return
+	end
+	if d.Mode == "Heli" or d.Mode == "Plane" then
+		if d.AirLocked then
+			return
+		end
+		local okK, spaceDown = pcall(function(): boolean
+			return UserInputService:IsKeyDown(Enum.KeyCode.Space)
+		end)
+		if (okK and spaceDown) or keyDown[Enum.KeyCode.Space] == true then
+			return
+		end
+	end
+	d.LastExitAt = now
+	sendDriveInput({ K = "Exit", V = d.VehicleId })
+end
+
+-- per frame while driving: the EXIT pill's hold progress; fires exitVehicle at Exit.HoldSeconds
+local function updateExitHold(d: Drive, now: number)
+	local lab = exitLabel
+	if lab then
+		local want = if exitIo == nil and now < exitTapHintUntil then "HOLD" else "EXIT"
+		if lab.Text ~= want then
+			lab.Text = want
+		end
+	end
+	if exitIo == nil then
+		return
+	end
+	local hold = math.max(0.05, EXIT.HoldSeconds)
+	local p = (now - exitHoldStart) / hold
+	if p >= 1 then
+		cancelExitHold()
+		exitVehicle(d)
+	else
+		setExitProgress(p)
+	end
+end
+
+-- P1-7: Heli/Plane more than Exit.LockAGL above the ground → JumpHeight 0 (5 Hz ray; hysteresis to UnlockAGL)
+local function updateAirLock(d: Drive, now: number)
+	if d.Mode ~= "Heli" and d.Mode ~= "Plane" then
+		return
+	end
+	if now < d.NextAirCheck then
+		return
+	end
+	d.NextAirCheck = now + 0.2
+	local agl = groundAGL(d.Chassis.Position, d.Params.Clearance)
+	if d.AirLocked then
+		if agl <= EXIT.UnlockAGL then
+			d.AirLocked = false
+			unlockJump()
+		end
+	elseif agl > EXIT.LockAGL then
+		d.AirLocked = true
+		lockJump(d.Humanoid)
+	end
 end
 
 local function unbindActions()
@@ -1541,13 +2046,52 @@ local function bindAircraftActions(mode: string)
 			Enum.KeyCode.ButtonR1
 		)
 	end
-	ContextActionService:BindActionAtPriority(ACTION_EXIT, onExitAction, false, hi, Enum.KeyCode.F)
+	-- v70: gamepad B also exits (jump is locked while airborne, so pads need their own bail-out)
+	ContextActionService:BindActionAtPriority(ACTION_EXIT, onExitAction, false, hi, Enum.KeyCode.F, Enum.KeyCode.ButtonB)
 end
 
+--[[ F4a: the PlayerModule's ControlModule (GetControls). Looked up lazily (never at require time) and retried every
+	2 s while missing, so a late PlayerModule still gets picked up. ]]
+local function playerControls(): any
+	if controls ~= nil then
+		return controls
+	end
+	local now = os.clock()
+	if now < nextControlsTry then
+		return nil
+	end
+	nextControlsTry = now + 2
+	local ok, c = pcall(function(): any
+		local ps = localPlayer():FindFirstChildOfClass("PlayerScripts")
+		local pm = ps and ps:FindFirstChild("PlayerModule")
+		if pm and pm:IsA("ModuleScript") then
+			local req: any = require
+			return req(pm):GetControls()
+		end
+		return nil
+	end)
+	controls = if ok then c else nil
+	return controls
+end
+
+--[[ Seat floats first (the PlayerModule VehicleController writes them from the same stick/WASD vector); when both
+	are ~0, the ControlModule's move vector directly (ThrottleFloat = -Z, SteerFloat = X), so a missed client
+	Humanoid.Seated (the VehicleController never switched on) no longer means zero throttle. ]]
 local function readRaw(d: Drive): RawInput
+	local t, s, src = tonumber(d.Seat.ThrottleFloat) or 0, tonumber(d.Seat.SteerFloat) or 0, "seat"
+	if math.abs(t) < 0.05 and math.abs(s) < 0.05 then
+		local c = playerControls()
+		if c then
+			local ok, mv = pcall(c.GetMoveVector, c)
+			if ok and typeof(mv) == "Vector3" and mv.Magnitude > 0.05 then
+				t, s, src = -mv.Z, mv.X, "stick"
+			end
+		end
+	end
+	d.InputSrc = if math.abs(t) < 0.05 and math.abs(s) < 0.05 then "none" else src
 	return {
-		Throttle = d.Seat.ThrottleFloat,
-		Steer = d.Seat.SteerFloat,
+		Throttle = t,
+		Steer = s,
 		Up = keyDown[Enum.KeyCode.Space] == true,
 		Down = keyDown[Enum.KeyCode.LeftControl] == true or keyDown[Enum.KeyCode.C] == true,
 		TouchUp = touchUp,
@@ -1610,6 +2154,150 @@ local function sendHello(d: Drive)
 	sendDriveInput({ K = "Hello", V = d.VehicleId, P = PROTOCOL_VERSION })
 end
 
+local function round2(x: number): number
+	return math.floor(x * 100 + 0.5) / 100
+end
+
+--[[ F4b: the composed input to the server ({K="In", V, T, S, L}, 2 decimals) at Drive.Watchdog.StreamHz while any
+	axis is non-zero, one zero message on release, nothing while idle, under every authority (it feeds the
+	server-driven fallback). ~10 × 40 bytes/s per driver; the server rate-limits it on its own key. ]]
+local function streamInput(d: Drive, input: Input, now: number)
+	local hz = tonumber(W.StreamHz) or 0
+	if hz <= 0 then
+		return
+	end
+	local t, s, l = input.Throttle, input.Steer, input.Lift
+	if math.abs(t) > 0.05 or math.abs(s) > 0.05 or math.abs(l) > 0.05 then
+		-- 0.98: a 60 Hz Heartbeat sends on every 6th frame (10 Hz), never faster than ~10.2 Hz
+		if now - d.LastStreamAt >= 0.98 / hz then
+			d.LastStreamAt = now
+			d.StreamZeroSent = false
+			sendDriveInput({ K = "In", V = d.VehicleId, T = round2(t), S = round2(s), L = round2(l) })
+		end
+	elseif not d.StreamZeroSent then
+		d.StreamZeroSent = true
+		d.LastStreamAt = now
+		sendDriveInput({ K = "In", V = d.VehicleId, T = 0, S = 0, L = 0 })
+	end
+end
+
+local function receiveAge(p: BasePart): number?
+	local ok, v = pcall(function(): any
+		return (p :: any).ReceiveAge
+	end)
+	return if ok and typeof(v) == "number" then v else nil
+end
+
+local function signed(x: number): string
+	return string.format("%+.2f", x)
+end
+
+-- the server's WE_Diag "k=v k=v" string → map (debug users only; F5j)
+local function parseDiag(model: Model): { [string]: string }
+	local out: { [string]: string } = {}
+	local raw = model:GetAttribute("WE_Diag")
+	if typeof(raw) == "string" then
+		for k, v in string.gmatch(raw, "(%w+)=(%S+)") do
+			if k and v then
+				out[k] = v
+			end
+		end
+	end
+	return out
+end
+
+-- fix_spec §2.1: the two NO DRIVE lines, each value from its named source
+local function diagText(d: Drive, input: Input, auth: any, spd: number): string
+	local sv = parseDiag(d.Model)
+	local srvIn = sv["in"]
+	if srvIn then
+		srvIn = string.match(srvIn, "^([^/]+)") or srvIn
+	end
+	local fail = d.Model:GetAttribute("WE_DriveFail")
+	local lvMag = 0
+	local lv = d.LV
+	if lv then
+		lvMag = lv.VectorVelocity.Magnitude
+	end
+	local age = receiveAge(d.Chassis)
+	local rcv = if age == nil then "rep?" elseif age < 0.05 then "sim" else string.format("rep%.2f", age)
+	return string.format(
+		"NO DRIVE · auth=%s · own=%s · hello=%s · fail=%s\nin %s/%s (%s) · srvIn %s · lv %d · spd %.1f · rcv %s · pins %s · npc %s · %s",
+		tostring(auth),
+		sv.own or "?",
+		sv.hello or "?",
+		if typeof(fail) == "string" and fail ~= "" then fail else "-",
+		signed(input.Throttle),
+		signed(input.Steer),
+		d.InputSrc,
+		srvIn or "?",
+		math.floor(lvMag + 0.5),
+		spd,
+		rcv,
+		sv.pins or "?",
+		sv.npc or "?",
+		d.Seat.Name
+	)
+end
+
+--[[ F4c + F7, every frame: is the driver pushing while the vehicle does not move?
+	Every player: one {K="Stuck"} per sit after Exit.StuckSeconds under Client authority (feeds the server watchdog).
+	Debug users (Drive.Debug): the WE_VehicleDiag line, up while stuck and Debug.ShowSeconds after, 4 Hz text. ]]
+--[[ "The driver is asking this vehicle to move" (same idea as VehicleService's watchdog `pushing`): |throttle| > 0.5
+	for cars and boats; a plane only on forward throttle (brake / ▲ at rest never move it, by design); a helicopter on
+	▲, or on the stick while it is not sitting landed (a landed heli never taxis on the stick alone, by design). ]]
+local function pushing(d: Drive, input: Input): boolean
+	if d.Mode == "Heli" then
+		local st = d.State
+		return input.Lift > 0.5 or (math.abs(input.Throttle) > 0.5 and not (st ~= nil and st.Landed))
+	elseif d.Mode == "Plane" then
+		return input.Throttle > 0.5
+	end
+	return math.abs(input.Throttle) > 0.5
+end
+
+local function watchClient(d: Drive, input: Input, auth: any, dt: number, now: number)
+	local v = d.Chassis.AssemblyLinearVelocity
+	local air = d.Mode == "Heli" or d.Mode == "Plane"
+	local spd = if air then v.Magnitude else Vector3.new(v.X, 0, v.Z).Magnitude
+	local push = pushing(d, input)
+	d.NoDriveFor = if push and spd < DBG.NoDriveSpeed then d.NoDriveFor + dt else 0
+	d.MovedFor = if spd >= 3 then d.MovedFor + dt else 0
+	-- the Stuck clock only runs under Client authority (a car stuck in server drive is the server's to report)
+	d.StuckFor = if push and spd < EXIT.StuckSpeed and auth == "Client" then d.StuckFor + dt else 0
+	if not d.StuckSent and d.StuckFor >= EXIT.StuckSeconds then
+		d.StuckSent = true
+		local age = receiveAge(d.Chassis)
+		sendDriveInput({
+			K = "Stuck",
+			V = d.VehicleId,
+			T = round2(input.Throttle),
+			Spd = math.floor(spd * 10 + 0.5) / 10,
+			R = if age ~= nil and age < 0.05 then "sim" else "rep",
+			Src = d.InputSrc,
+		})
+	end
+	local lab = diagLabel
+	if not debugUser or not lab then
+		return
+	end
+	if d.NoDriveFor >= DBG.NoDriveSeconds then
+		d.DiagUntil = now + DBG.ShowSeconds
+	end
+	if d.MovedFor >= 1 then
+		d.DiagUntil = 0
+	end
+	local show = now < d.DiagUntil
+	d.DiagAcc += dt
+	if show and (d.DiagAcc >= 0.25 or not lab.Visible) then
+		d.DiagAcc = 0
+		lab.Text = diagText(d, input, auth, spd)
+	end
+	if lab.Visible ~= show then
+		lab.Visible = show
+	end
+end
+
 local function updateHud(d: Drive, dt: number, hud: Hud?)
 	d.HudAcc += dt
 	if d.HudAcc < 0.1 then
@@ -1622,7 +2310,13 @@ local function updateHud(d: Drive, dt: number, hud: Hud?)
 	end
 	local v = d.Chassis.AssemblyLinearVelocity
 	local fallback = if d.Mode == "Heli" or d.Mode == "Plane" then v.Magnitude else Vector3.new(v.X, 0, v.Z).Magnitude
-	p.Text = hudText(d.Mode, hud, fallback, d.Blocked)
+	-- F6: cars and boats show the ACTUAL flat speed (a frozen car honestly reads SPD 0; the law's commanded speed
+	-- saws 6-14 against a blocked chassis). Aircraft keep the law's HUD (ALT / THR / STALL).
+	local shown = hud
+	if d.Mode == "Car" or d.Mode == "Boat" then
+		shown = { Speed = fallback, Tag = if hud then hud.Tag else nil }
+	end
+	p.Text = hudText(d.Mode, shown, fallback, d.Blocked)
 	p.Visible = true
 end
 
@@ -1636,16 +2330,25 @@ local function stepDrive(d: Drive, dt: number)
 		return
 	end
 	dt = math.clamp(dt, 0, 0.1)
+	local now = os.clock()
+	updateAirLock(d, now)
+	updateExitHold(d, now)
+	if active ~= d then
+		return -- the EXIT hold just fired and the seat is already gone
+	end
 	if d.Blocked then
 		updateHud(d, dt, nil)
 		return
 	end
-	local now = os.clock()
 	if (not d.LV or not d.AO or not (d.LV :: LinearVelocity).Parent) and now - d.LastMoverLookAt > 0.5 then
 		d.LastMoverLookAt = now
 		locateMovers(d)
 	end
+	-- F4e: the input is read every frame under every authority (stream + stuck report + diagnostic)
+	local input = Laws.ComposeInput(d.Mode, readRaw(d))
+	streamInput(d, input, now)
 	local auth = d.Model:GetAttribute("WE_DriveAuthority")
+	watchClient(d, input, auth, dt, now)
 	if auth ~= "Client" or not d.LV or not d.AO then
 		d.WasClient = false
 		if d.HelloSent < HELLO_MAX and now - d.LastHelloAt >= HELLO_RETRY_SECONDS then
@@ -1662,7 +2365,6 @@ local function stepDrive(d: Drive, dt: number)
 		d.WasClient = true
 	end
 	local state = st :: State
-	local input = Laws.ComposeInput(d.Mode, readRaw(d))
 	if d.Mode == "Boat" then
 		local dir, near, far = Laws.ProbeDistances(state, d.Params, input)
 		local f = fwd(state.Heading) * dir
@@ -1685,11 +2387,15 @@ stopDrive = function()
 	end
 	unbindActions()
 	hideControls()
+	unlockJump()
 	if pill then
 		pill.Visible = false
 	end
 	if hintLabel then
 		hintLabel.Visible = false
+	end
+	if diagLabel then
+		diagLabel.Visible = false
 	end
 	pcall(function()
 		localPlayer():SetAttribute("WE_DriveMode", nil)
@@ -1698,7 +2404,17 @@ stopDrive = function()
 		sendDriveInput({ K = "Bye", V = d.VehicleId })
 	end
 	refreshAllPrompts()
+	refreshPlates()
 end
+
+-- server attributes that never change the drive law (the diagnostic ones change at 2 Hz for debug users)
+local NON_PARAM_ATTRS: { [string]: boolean } = {
+	WE_DriveAuthority = true,
+	WE_DriverUserId = true,
+	WE_Diag = true,
+	WE_DriveFail = true,
+	WE_GroundDrive = true,
+}
 
 local function startDrive(hum: Humanoid, seat: VehicleSeat)
 	local cur = active
@@ -1743,11 +2459,29 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 		HudAcc = 1,
 		Blocked = nil,
 		Conns = {},
+		InputSrc = "none",
+		LastStreamAt = 0,
+		StreamZeroSent = true,
+		NoDriveFor = 0,
+		StuckFor = 0,
+		MovedFor = 0,
+		StuckSent = false,
+		DiagUntil = 0,
+		DiagAcc = 0,
+		LastExitAt = 0,
+		StartedAt = os.clock(),
+		AirLocked = false,
+		NextAirCheck = 0,
 	}
 	local proto = model:GetAttribute("WE_ProtocolVersion")
 	if typeof(proto) == "number" and proto ~= PROTOCOL_VERSION then
 		d.Blocked = "Rejoin to update"
 	end
+	refreshConfig()
+	if controls == nil then
+		nextControlsTry = 0
+	end
+	playerControls() -- F4a warm-up (never at require time)
 	locateMovers(d)
 	active = d
 	pcall(function()
@@ -1755,24 +2489,37 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 	end)
 	ensureHud()
 	refreshRayFilter()
+	local air = mode == "Heli" or mode == "Plane"
+	if isTouch then
+		showControls(air and not d.Blocked) -- the EXIT pill in every vehicle; ▲▼ for aircraft
+	end
 	if not d.Blocked then
-		if mode == "Heli" or mode == "Plane" then
+		if air then
 			bindAircraftActions(mode)
-			if isTouch then
-				showControls()
-			end
 			showHint(mode, d.Params)
 		end
 		sendHello(d)
 		table.insert(
 			d.Conns,
 			model.AttributeChanged:Connect(function(attr: string)
-				if attr ~= "WE_DriveAuthority" and attr ~= "WE_DriverUserId" and string.sub(attr, 1, 3) == "WE_" then
+				if not NON_PARAM_ATTRS[attr] and string.sub(attr, 1, 3) == "WE_" then
 					d.Params = Laws.BuildParams(d.Mode, model:GetAttributes(), driveCfg)
 				end
 			end)
 		)
 	end
+	-- F4d: jump (touch button / Space / pad A) also asks the server to eject
+	pcall(function()
+		local jr: any = (UserInputService :: any).JumpRequest
+		if jr then
+			table.insert(
+				d.Conns,
+				jr:Connect(function()
+					onJumpRequest(d)
+				end)
+			)
+		end
+	end)
 	table.insert(
 		d.Conns,
 		RunService.Heartbeat:Connect(function(dt: number)
@@ -1780,6 +2527,7 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 		end)
 	)
 	refreshAllPrompts()
+	refreshPlates()
 end
 
 local function checkSeat(hum: Humanoid)
@@ -1804,19 +2552,37 @@ local function bindCharacter(char: Model)
 				stopDrive()
 			end
 		end
+		refreshPlates() -- P1-8: nameplates hide while seated anywhere
 	end)
 	checkSeat(hum)
+	refreshPlates()
 end
 
 -- test hook: device class is read once in Init; the headless tests flip it to cover the touch layout
 function VehicleDriveClient._SetTouch(value: boolean)
 	isTouch = value
+	deviceOverride = if value then "Touch" else nil
+	local y = if isTouch then -236 else -64
 	if pill then
-		pill.Position = UDim2.new(0.5, 0, 1, if isTouch then -236 else -64)
+		pill.Position = UDim2.new(0.5, 0, 1, y)
 	end
 	if hintLabel then
-		hintLabel.Position = UDim2.new(0.5, 0, 1, (if isTouch then -236 else -64) - 36)
+		hintLabel.Position = UDim2.new(0.5, 0, 1, y - 36)
 	end
+	if diagLabel then
+		diagLabel.Position = UDim2.new(0.5, 0, 1, y - 72)
+		diagLabel.TextSize = if isTouch then 11 else 12
+	end
+end
+
+-- test hooks (headless): the ControlModule stand-in for F4a, and the current jump lock
+function VehicleDriveClient._SetControls(c: any)
+	controls = c
+	nextControlsTry = 0
+end
+
+function VehicleDriveClient._JumpLocked(): boolean
+	return jumpLock ~= nil
 end
 
 function VehicleDriveClient.IsDriving(): boolean
@@ -1833,8 +2599,11 @@ function VehicleDriveClient.Init()
 		return
 	end
 	initialized = true
-	isTouch = UserInputService.TouchEnabled
+	-- on-screen touch controls whenever the device can touch (they agree with HudLayout's touch reserve);
+	-- the COPY follows PreferredInput (preferredInput()), so a phone never sees a key name
+	isTouch = UserInputService.TouchEnabled or preferredInput() == "Touch"
 	loadShared()
+	refreshConfig()
 	local wcfg: any = if typeof(driveCfg) == "table" then driveCfg.Water else nil
 	waterBelow = cfgNumber(wcfg, "QueryBelow") or waterBelow
 	waterAbove = cfgNumber(wcfg, "QueryAbove") or waterAbove
@@ -1856,11 +2625,15 @@ function VehicleDriveClient.Init()
 			touchOwners[io] = nil
 			recomputeTouches()
 		end
+		exitReleasedEarly(io)
 	end)
 	UserInputService.InputEnded:Connect(function(io: InputObject)
-		if io.UserInputType == Enum.UserInputType.MouseButton1 and touchOwners[io] then
-			touchOwners[io] = nil
-			recomputeTouches()
+		if io.UserInputType == Enum.UserInputType.MouseButton1 then
+			if touchOwners[io] then
+				touchOwners[io] = nil
+				recomputeTouches()
+			end
+			exitReleasedEarly(io)
 		end
 	end)
 
@@ -1899,6 +2672,7 @@ function VehicleDriveClient.Init()
 				refreshWater()
 				refreshRayFilter()
 				hookVehicleFolder()
+				refreshPlates() -- children of the vehicles folder only (no descendant scan)
 			end
 		end
 	end)

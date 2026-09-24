@@ -419,6 +419,44 @@ local VehicleConfig = {
 		StabilisedNoticeSeconds = 20, -- "Vehicle stabilised" at most this often
 		SeatMassAllowance = 20, -- mover force F = (AssemblyMass + this x def.Seats) x ForcePerMass
 
+		-- Server-verified drive (judge fix): if the client-simulated car does not move while the driver pushes,
+		-- the server takes ownership of every assembly and drives it (Car/Boat). Aircraft: diagnostics only.
+		Watchdog = {
+			Enabled = true,
+			PushThrottle = 0.5, -- above this = the driver is pushing: |throttle| (Car/Boat), lift up (Heli), throttle up (Plane)
+			Seconds = 1.2, -- pushing this long ...
+			MinMoveStuds = 1.5, -- ... with less movement than this under Client authority → trip
+			ProvenStuds = 3, -- moved this far from the sit point under Client authority → watchdog disarms for this sit
+			BlockedSeconds = 3, -- after a trip: pushing this long in server drive with no movement → "BLOCKED" log
+			OwnerProbeHz = 1, -- GetNetworkOwner probe rate ...
+			OwnerProbeSeconds = 6, -- ... for this long after each hand-off
+			SessionTrips = 2, -- server-proven trips before this player's later Car/Boat sits start in server drive
+			StreamHz = 10, -- client "In" input stream while any axis is non-zero
+			StreamStaleSeconds = 0.5, -- older stream input → use the seat floats
+			StreamRate = 15, -- RateLimitService key "vehicle_drive_stream"
+			StreamBurst = 10,
+		},
+		Debug = {
+			UserIds = { 470626172 }, -- on-device NO DRIVE line + WE_Diag attribute + periodic server log
+			All = false,
+			NoDriveSeconds = 1.0, -- throttle held this long ...
+			NoDriveSpeed = 1.0, -- ... with speed below this → show the line
+			ShowSeconds = 6, -- keep it up this long after the condition clears
+			ServerLogSeconds = 5, -- debug users: one server diag line this often while seated and pushing
+		},
+		-- Mobile P1-7 (VehicleDriveClient reads these over its DEFAULTS, key by key): the EXIT hold pill in every vehicle
+		-- on touch, and the airborne jump lock (Heli/Plane above LockAGL: local JumpHeight 0, the touch jump hides)
+		Exit = {
+			HoldSeconds = 0.5, -- the EXIT pill fires after this long held
+			LockAGL = 8, -- studs above the ground → jump locked ...
+			UnlockAGL = 7, -- ... and unlocked again below this (hysteresis)
+			RequestGapSeconds = 0.3, -- at most one {K="Exit"} per this long
+			StuckSeconds = 1.5, -- F4c: pushing this long under Client authority at speed < StuckSpeed → one Stuck report
+			StuckSpeed = 1.0,
+		},
+		-- Mobile P1-8: the client-side owner nameplate (never AlwaysOnTop; MaxDistance is capped at 40 in code)
+		Nameplate = { MaxDistance = 36, WidthStuds = 2, HeightStuds = 0.4, HeightPx = 20, MinText = 14, MaxText = 20 },
+
 		-- Speed resync (every mode): actual forward speed this far below the commanded speed for
 		-- Seconds straight → commanded = actual + gap (a vehicle pushed into a wall never winds up).
 		Resync = { Gap = 10, CarGap = 6, Seconds = 0.3, GraceSeconds = 1 },
@@ -605,6 +643,14 @@ local VehicleConfig = {
 			RunwayHeight = 0.12, -- runway top above the plot pad top when no ray hits
 			NavalPadGap = 4,
 			OffsetStep = 4, -- extra room between side-by-side spots
+			-- Mobile P1-9: SPAWN is not a teleport or a combat escape
+			FrontDistance = 14, -- "in front of the player" = this + the footprint radius ahead of the root part
+			OwnPlotMargin = 0, -- inside your own plot = on the plot pad's rectangle grown by this (studs)
+			AutoSitRadius = 30, -- auto-sit (and the root-part move onto the seat) only within this of the vehicle's footprint
+			-- ... except inside your own plot: the garage flow keeps seating you on your own car pad / helipad / runway /
+			-- dock basin (139-279 studs from the base spawn, up to ~500 from a plot corner); nothing further than this
+			AutoSitHomeRadius = 520,
+			DamageLockSeconds = 5, -- SPAWN refused this long after the player's character took damage
 		},
 	},
 }
