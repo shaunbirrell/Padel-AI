@@ -3575,8 +3575,8 @@ must_contain(_BRS, 'pcall(ActivityAnchors.List, BankRaidConfig.AnchorSite, "npc"
 must_contain(_BRS, "for i, p in ipairs(BankRaidConfig.GuardPosts) do", "W3s2 F: P0 fallback posts from BankRaidConfig.GuardPosts")
 must_contain(_BRC, 'AnchorSite = "Town.Bank",', "W3s2 F: the bank anchor site id")
 must_contain(_BRC, 'GuardRolePattern = "^G%d+$",', "W3s2 F: only G<n> anchors are guard posts (R1/R2 are Phase B reinforcements)")
-must_contain(_BRC, "{ X = 212, Y = 1.6, Z = -206, Yaw = 180 },", "W3s2 F: P0 post front-left (clear in the HEAD dump)")
-must_contain(_BRC, "{ X = 220, Y = 0.5, Z = -198, Yaw = 180 },", "W3s2 F: P0 post on the street (clear in the HEAD dump)")
+must_contain(_BRC, "{ X = 206, Y = 1.6, Z = -209.5, Yaw = 180 },", "W3s2 cutprep: fallback post 1 = the Town.Bank.G1 anchor (behind PlanterW)")
+must_contain(_BRC, "{ X = 227, Y = 1.6, Z = -231, Yaw = 180 },", "W3s2 cutprep: fallback post 5 = the Town.Bank.G5 anchor (inside the hall by the vault door)")
 must_contain(_BRS, 'blockedNow[uid] = "Vehicle"', "W3s2 F: a seated raider is Blocked = Vehicle (HUD: LEAVE VEHICLE)")
 must_contain(_BRS, "DataService.OnProfileLoaded(function(player: Player, profile: any)", "W3s2 F: saved cooldown sanitised + pushed when the save loads")
 must_contain(_BRS, "function BankRaidService.SanitizeCooldown(value: any, nowUnix: number): (number?, boolean)", "W3s2 F: local sanitiser (no ProfileSchema edit)")
@@ -4463,6 +4463,20 @@ must_contain(C4_CC, '\tplayer.CharacterRemoving:Connect(W2.stopHumanoidWait) -- 
 must_contain(C4_CC, '-- streaming2 F30: this ray sees only what has streamed in here', 'streaming2 C4 F30: the local fire ray is marked as a streamed-geometry hint (the server re-casts)')
 must_contain(C4_CC, '-- streaming2 F30: sees only streamed-in walls', 'streaming2 C4 F30: the holstered-FIRE LOS ray is marked as a streamed-geometry hint')
 
+
+# --- W3s2 cutprep (Jobs cutover prep): bank-hall pending edits BK §1 / §2, Cargo.MaxBagsInWorld 3 ---
+must_contain('src/ReplicatedStorage/Shared/Configs/BankRaidConfig.luau', '{ X = 229.5, Y = 1.6, Z = -210.5, Yaw = 180 },', 'W3s2 cutprep: fallback post 4 = the Town.Bank.G4 anchor (beside the east column)')
+must_not_contain('src/ReplicatedStorage/Shared/Configs/BankRaidConfig.luau', '{ X = 204, Y = 1.6, Z = -216', 'W3s2 cutprep: no P0 post round the old building is left in the fallback list')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "Town.Bank.G1", Kind = "npc", X = 206, Z = -209.5, Yaw = 180, Y = 1.1 },', 'W3s2 cutprep: the G1 anchor = BankRaidConfig fallback post 1 (two literals, pinned together)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "Town.Bank.G5", Kind = "npc", X = 227, Z = -231, Yaw = 180, Y = 1.1 },', 'W3s2 cutprep: the G5 anchor = BankRaidConfig fallback post 5 (two literals, pinned together)')
+must_contain('src/ServerScriptService/Server/Services/OpsService/OpsSites.luau', 'local cf = door:GetAttribute(if open then "WE_OpenCFrame" else "WE_ClosedCFrame")', 'W3s2 cutprep: SetDoor moves the bank gate between the two positions MapSetup stores')
+must_contain('src/ServerScriptService/Server/Services/OpsService/OpsSites.luau', 'if typeof(cf) == "CFrame" and door.CFrame ~= cf then', 'W3s2 cutprep: a door without the attributes (HeistGate) only toggles')
+must_contain('src/ServerScriptService/Server/Services/OpsService/OpsSites.luau', 'door.CanQuery = not open', 'W3s2 cutprep: a closed gate stops shots (CanQuery on); a raised one never blocks a raycast')
+must_contain('src/ServerScriptService/Server/Modules/MapSetup.luau', 'gate:SetAttribute("WE_ClosedCFrame", gateClosed)', 'W3s2 cutprep: the bank gate carries its closed position (OpsSites.SetDoor reads it)')
+must_contain('src/ServerScriptService/Server/Modules/MapSetup.luau', 'gate:SetAttribute("WE_OpenCFrame", gateOpen)', 'W3s2 cutprep: the bank gate carries its open position (OpsSites.SetDoor reads it)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '\t\tMaxBagsInWorld = 3,', 'W3s2 cutprep: at most 3 bags in the world (busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '{ Id = "Breach", At = "Door", Prompt = "Breach", Hold = 7, Dist = 10 },', 'W3s2 cutprep H2: bank breach hold 7 s (staged for the cutover; H2 NOT cleared, ASSUMPTIONS CP-9)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '{ Id = "Crack", At = "Vault", Seconds = 45, R = 6 },', 'W3s2 cutprep H2: bank crack ring r 6 round the Vault anchor (fewer blind corners for a lone raider)')
 
 parse_gate()
 

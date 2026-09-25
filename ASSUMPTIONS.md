@@ -4124,3 +4124,294 @@ S4-5 Whole buildings cost parts at some foci. In the stand-in (3D rules, target 
   replaced by the patched copies in streaming2/build/S4/drv/.
 - **STR-L3 Radar marker:** with streaming on, a far radar ping shows as a thin beam column instead of the spec's text label
   (C2-1). Owner call before lane Z.
+
+## 2026-09-25 — Jobs cutover prep (bank-hall pending edits BK §1 / §2, Cargo.MaxBagsInWorld 3, H2 bank values) - shipped with Jobs still OFF
+
+### W3s2 cutover prep: assumptions (all reversible)
+
+**CP-1 · Bank-hall pending edit BK §1 applied as written.**
+- `BankRaidConfig.GuardPosts` are now the five Town.Bank G1..G5 anchor posts (206/234, -209.5; 210.5/229.5, -210.5;
+  227, -231; Y 1.6). The header comment says the anchors come from MapSetup and the list is only a fallback.
+- Correction to the pending-edit note: two lane F BuyPathStatic pins **did** quote the old P0 posts
+  (`{ X = 212, Y = 1.6, Z = -206, Yaw = 180 },` and `{ X = 220, Y = 0.5, Z = -198, Yaw = 180 },`).
+  - They move to the G1 and G5 posts (cutprep/bps_changes.txt).
+  - New pins hold the G1 / G5 anchor rows in WorldConfig and the fallback list together (cutprep/bps_pins.txt).
+- `Position` and `VaultRadius` are unchanged, as the note says.
+- Reverse: restore the five P0 rows and the two old needles.
+
+**CP-2 · Bank-hall pending edit BK §2 applied as written (OpsSites.SetDoor).**
+- A door with `WE_OpenCFrame` / `WE_ClosedCFrame` attributes (the BankGate) now moves between them.
+- Every Ops door, the Port's HeistGate included, now turns `CanQuery` on when it closes and off when it opens.
+  - Before this edit only `CanCollide` flipped.
+  - The world's HeistGate has neither attribute and today stands with CanCollide true and CanQuery true. It stays
+    in place and only toggles.
+  - A closed HeistGate already stopped shots at HEAD (built CanCollide + CanQuery on). The change is on the OPEN state:
+    an opened HeistGate does not move and stays visible, but now has CanQuery off, so player and server shot raycasts
+    pass through it. NPC line of sight already ignored it (CanCollide rule), so this makes the two symmetric. Jobs-ON
+    only; device check in CP-9 item 10: does shooting through an open, visible steel gate look acceptable?
+- Reverse: drop the CFrame and CanQuery lines. With Jobs ON that brings back the "closed gate lying flat under the
+  roof" bug. The HEAD + cutover control run fails 13 of 24 gate checks.
+
+**CP-3 · `OpsConfig.Cargo.MaxBagsInWorld` 4 → 3.**
+- Busiest 512-stud circle, worst case: 493 static + 4 crate parts + 3 bags = **500** (cap 500).
+  - Full and Low census on the Jobs-ON copy agree.
+  - The same bound at HEAD with 4 bags is 501.
+- Side effect: the bank's Grab stage keeps `MaxBags = 4` per run while the world holds at most 3 bags, so a run rarely
+  reaches 4 grabs (only after a delivery, about 60 s, frees a world slot inside the 240 s run).
+  - Most bank runs now end on the 240 s lockdown instead of "4 bags grabbed". Guards stay provoked until then.
+  - The Port customs, fuel and crates Grab stages also have `MaxBags = 4` and share the same global 3-bag cap.
+  - A 4th raider gets the "Too many bags out" toast.
+  - Accepted. Setting the bank's `MaxBags` to 3 would be a follow-up if the owner wants a run to end early.
+- Reverse: set it back to 4, and first remove a part from that circle.
+
+**CP-4 · How H2 is defined (spec §7 H2, activities §12). Headless stand-in, not Roblox.**
+- **Tree:** the real hall and Town on a copy of the working tree made by apply_cutover.py (Jobs ON, BankRaidService
+  retired, FieldBootstrap off).
+- **World and services:** MapSetup + MapDressing Full. The real CombatService (NPC core, LOS + hit chance,
+  CombatFairnessConfig), SquadOrdersService and OpsService.
+- **Raycasts:** ray-vs-OBB on a 32-stud grid over the static world. Moving runtime doors (BankGate) and every
+  character, NPC and squad are tested live.
+- **Movement:** straight-line Humanoid:MoveTo at WalkSpeed, as the game has no pathfinding.
+  - Blocked by collidable parts at knee and chest height.
+  - Slides along axis-aligned walls; stuck in concave corners.
+  - Feet follow the surface.
+  - There is no physics engine, no body width, no animation and no network lag.
+- **Health:** Roblox's default Health script, +1 % of MaxHealth per second. The game has no override.
+- **Raider:** a level-20 veteran with the StarterRifle (18 damage, 8 rounds/s, magazine 30, 2.2 s reload).
+  - Aim: the Touch class; each shot is off by a Gaussian 3° (thumb aim + the gun's 2.5° spread). The client's ray
+    names the NPC it hit, as CombatController does, and the server re-checks it.
+  - Reaction to a new target: 0.2–0.45 s per run.
+  - Holds (breach 3 s, grab 2 s) are made standing still, without shooting.
+- **Success = the bag delivered and paid** ("ops" cash on the raider's own plot, plot 3).
+  - The route: out of the door, into a car parked at the plaza edge (220, -196), a 100 studs/s drive down Bank Street
+    and round to plot 3.
+  - A death ends the attempt (no respawn and return).
+  - "Grabbed" (the Ops job's own success condition) is reported too.
+- **Scenarios:** each starts on Bank Street 112 studs south of the door, and the guards wake at 200.
+  - **solo_foot:** walk up, breach, fight from the vault centre, grab, walk out.
+  - **solo_cover:** the same, but every 0.75 s it moves to the spot in the crack ring that the fewest living guards can
+    shoot (1-stud grid, ties to the nearest spot). It grabs from the least-exposed spot in the prompt's reach once
+    nobody sees it (8 s at most). After the grab it heals in cover to 70 HP (60 s at most) before it walks out.
+  - **squad_attack / squad_follow:** the solo_cover play with 5 soldiers on ATTACK or FOLLOW.
+  - **squad_wait:** the raider waits on Bank Street, out of the guards' aggro, until the ATTACK squad has no guard left
+    to shoot (120 s at most), then does the solo_cover play.
+- **Seeds:** 100 per scenario (spec asks ≥ 20). Each seed sets the NPC hit rolls, the aim errors, the reaction time, a
+  ±4-stud start offset and a 0–1.4 s lead.
+  - The lead randomises the phase against the 0.35 s NPC think loop. Without it, run-to-run history set that phase, and
+    one config change swung solo_cover from 51 % to 84 % with nothing else changed.
+- **Targets:**
+  - squad_attack, squad_follow and squad_wait ≥ 70 % delivered;
+  - solo_cover 10–40 %;
+  - solo_foot must not beat solo_cover. The spec gives it no band.
+- **Tuning:** only the bank site's values in OpsConfig. Hit chance lives in CombatFairnessConfig, which is not this
+  job's file, so it was not an option.
+
+**CP-5 · H2 failed on the shipped bank values; two bank-job values tuned (Breach hold 3 → 7 s, crack ring r 8 → 6).**
+Results are "delivered %" from the headless stand-in; seeds in brackets.
+- **Before** (bank as shipped, Jobs-ON copy):
+  - solo_cover **48.3 %** [300] (95 % CI 42.7–54.0). This misses the 10–40 % band.
+  - solo_foot 4 % [100].
+  - squad_attack 74.3 % [300] (CI 69–79).
+  - squad_follow 78 % [100].
+  - squad_wait 100 % [100].
+  - Median breach → grab 52 s; breach → delivered 60 s.
+  - Guard hits on the raider per run: solo_cover 9.6 (114 HP), squad_attack 6.2, squad_follow 7.5, squad_wait 0.7.
+- **What decides a run:** most failures are deaths in the first ~5 s after the breach. G5 inside, plus G3 and G4 sliding
+  to the opening's edges, fire at the raider as they walk in. A raider who survives that hides inside the hall, where
+  jammed guards cannot see.
+- **Single-value tries** [100 each]:
+
+  | Change | solo_cover | squad_follow |
+  |---|---|---|
+  | r 7 | 42 | 78 |
+  | r 6.5 | 42 | 80 |
+  | r 6 | 28 | 57 |
+  | Crack 60 s | 46 | 75 |
+  | +1 breach guard far down Bank Street (reserve 8) | 40 | 62 |
+  | Breach hold 6 s | 56 | 87 (squad_attack 83) |
+
+- **Two-value tries:**
+
+  | Change | solo_cover | squad_follow | squad_attack |
+  |---|---|---|---|
+  | r 7 + crack 60 | 49 | 83 | — |
+  | far guard + crack 60 | 41 | 60 | — |
+  | hold 6 + r 6.5 | 47 | — | 67 |
+  | hold 5 + r 6 | 31 | — | 60 |
+  | hold 6 + r 6 | 26 / 30 [200] | 99.5 [200] | 69.3 [300] (CI 64–75) |
+  | **hold 7 + r 6** | 31 | — | 74 [200] |
+
+  With hold 6 + r 6, squad_wait is 100 % and solo_foot 0 %. That pair misses the squad_attack target by a hair.
+- **Why hold 7 + r 6:**
+  - No single value met both targets. A smaller ring removes the hidden corners a lone raider cracks from, but on its
+    own it also sinks the squads.
+  - The longer hold is squad time. During it the plaza guards are still passive, and squad hits never provoke them
+    (CP-6). A solo raider gains nothing from it, because nobody shoots during the hold.
+  - It is the smallest change found that meets every target. The margin is thin for squad_attack (see "after").
+- **After** (final working-tree files, Jobs-ON copy): see CP-5b (cutprep/h2/out/z*).
+- **Trade-offs for the owner:**
+  - A 7 s breach hold on a phone is long. It still works with one finger, and the guards stay passive while it runs.
+  - The spec chose 3 s (it overruled the geometry's 4 s).
+  - With r 6, about the front 2 studs (door side) of the 12 × 12 gold VaultPad fall outside the crack ring. The pad
+    centre (220, −224) is 2 studs from the anchor, so standing on the middle or back of the pad counts.
+  - Stale comments to update in files this job does not own:
+    - WorldConfig's `Town.Bank.Door` comment ("hold 3 s") and `Town.Bank.Vault` R = 8;
+    - MapSetup's header ("crack ring … r 8").
+  - Lane O's own driver check `bank-breach-prompt-hold3` now expects the old value.
+- **Reverse:** `Hold = 3`, `R = 8` in the Town.Bank stages, and drop the two H2 pins.
+- **Run-to-run noise:** squad runs are not bit-identical between builds. Table iteration over Instances follows memory
+  layout, so a comment change moved a few squad_follow runs. Solo runs reproduce exactly.
+
+**CP-5b · H2 after (final working-tree files, Jobs-ON copy, headless stand-in):**
+
+| Scenario | Delivered | 95 % CI | Grabbed | Died | Guard hits / run |
+|---|---|---|---|---|---|
+| solo_cover [200] | **29.0 %** | 22.7–35.3 | 36.5 % | 71 % | 9.6 (112 HP) |
+| solo_foot [100] | 0 % | — | 0 % | 67 %; the rest held out until the lockdown with no progress | 8.2 |
+| squad_attack [300] | **78.0 %** | 73.3–82.7 | 78 % | 22 % | 6.6 |
+| squad_follow [200] | **100 %** | — | 100 % | 0 % | 3.5 |
+| squad_wait [100] | **100 %** | — | 100 % | 0 % | 0 |
+
+- Median breach → grab 52 s (squads 51.5–54 s); breach → delivered 57–63 s.
+- Every target is met on these seeds and settings: squads ≥ 70 %, solo with cover inside 10–40 %, solo on foot not above
+  solo with cover. The verifier's wider runs do not hold that up, so H2 is **not** cleared (CP-9).
+- H2 side checks (cutprep/h2/out/checks_final.txt), 14 of 15:
+  - hall 17 parts; WE_BankVault tagged once; all 7 posts clear;
+  - 7 guards down with no respawn while Active;
+  - Cargo.MaxBagsInWorld 3: a 4th grab is refused with "Too many bags out"; a carrier's death drops a 1-part bag and
+    the world still refuses a 4th;
+  - the 1 failure is the leash check: G1 and G2 get stuck on the planters (CP-6).
+
+**CP-5a · H2 numbers are from the headless stand-in, not Roblox.** Still needs a device:
+- how Roblox Humanoids really jam or slide at the hall's piers, columns and planters;
+- real touch aim;
+- network lag;
+- a real squad's pathing through the 10-wide door;
+- rival players (none in H2: the bag-steal and ping pressure are not simulated).
+
+**CP-6 · Findings about code this job does not own. Nothing was changed; the owners should look.**
+- **Squad hits never provoke a Passive group.**
+  - SquadOrdersService calls `Humanoid:TakeDamage` directly, so CombatService's "a hit provokes the group" path never
+    runs.
+  - An ATTACK or FOLLOW squad can therefore clear the bank plaza while the guards stand passive: squad_wait delivered in
+    100 of 100 runs.
+  - Before the breach the Ops top-up (18 s) refills the posts, so a waiting squad kills 7–17 guards per run (mostly 12 or 17) with
+    no cash, because UnitKillCreditOnAttack is false.
+- **The novice shield's bank rule reads BankRaidConfig.** With the cutover (BankRaidConfig.Enabled = false), the
+  canonical shield driver fails 2 checks: "bank: inside the guard ring → shield ended" and "InvulnerableUntil back to
+  normal". HEAD + cutover fails the same 2, so this job did not cause it. CombatService's "engaging the bank" test should
+  follow the Ops bank site at the cutover.
+- **G1 / G2 get stuck in front of the planters.** They chase a raider out in front of the planters, then walk home in a
+  straight line into the planter and stick 6.9 studs from home. The spec's H2 check "back within 4 studs of home 20 s
+  after losing the target" fails for these two. That is lane N's walk-home plus lane BK's planters; the run is
+  cutprep/h2/out/checks_on.txt.
+- **Guards get stuck.** Without pathfinding, provoked guards jam against the hall's front piers, the column–pier gaps
+  and the outside of the side walls (R1 and R2 spawn outside those walls). A raider can then hide inside the hall.
+  This is the main thing that makes solo play possible. Needs a device check: does Roblox's Humanoid get stuck in the
+  same places?
+
+**CP-7 · What the builder verified, and on which trees (0a04776; re-run on 5dd5f35 in CP-8).**
+- **Trees:**
+  - Every run used HEAD 0a04776 plus this job's three working-tree files (`cutprep/cand`, Jobs OFF as shipped).
+  - The same tree was also run after apply_cutover.py (`cutprep/cand_on`, Jobs ON).
+  - Other lanes' uncommitted working-tree files were left out.
+- **Parse:** 10 of 10 OK, all `--!strict`.
+- **luau-lsp:** output identical to HEAD on both trees (56 distinct diagnostics, 0 new).
+- **BuyPathStatic:**
+  - OFF + cutprep pins: 2903 / 0.
+  - ON + pins + the cutover swaps: 2905 / 0.
+  - HEAD + pins (control): 2893 / 10. All 10 new-behaviour pins bite at HEAD.
+- **World sim:** 12 of 12 steps ok on both trees.
+- **DataService:** 24 / 0 on both trees.
+- **Novice shield:**
+  - OFF: 145 / 0.
+  - ON: 143 / 2, the same 2 as HEAD + cutover (CP-6).
+- **real_play_bk (legacy bank, OFF):**
+  - 0 looted, 0 hidden spots.
+  - The no-anchor fallback run: 0 hidden spots and 0 untouched loots, against 32 and 6 of 28 at HEAD.
+  - ON: BankRaidService is retired, so it spawns no guards; nothing to test.
+- **Gate door test** (cutprep/gate/gate_door_test.luau):
+  - ON: 24 / 0.
+  - HEAD + cutover (control): 11 / 13.
+  - OFF: not applicable. Jobs are off, so the gate stays open as MapSetup builds it.
+- **Ops lane drivers (KB, N, O, M1):**
+  - Identical to HEAD (OFF) and to HEAD + cutover (ON), except one stale check.
+  - That check is lane O's own `bank-breach-prompt-hold3` (+1 FAIL in 4 fake-core runs, both trees). It expects the old
+    3 s hold.
+- **Census:** Full / Low on ON and Full on OFF. The busiest 512-stud circle's worst case is 493 + 4 + 3 = 500 (cap 500).
+  The 1024-stud circle is 928 (cap 1200).
+  - ON census "5 bank guards alive": stale, the same as the integration found.
+- **H2 driver:** cutprep/h2_bank_balance.luau (prelude + body; run with h2/run_h2.sh). Side checks:
+  h2/h2_checks.luau.
+- **HUD:** no client file changed, so the HUD harness was not re-run.
+
+**CP-8 · Re-verified on HEAD 5dd5f35 (streaming phase 2: EmpireBank is one Atomic Model, capture zones sit in
+`Territories.<Id>_Zone`). Headless stand-in, not Roblox.**
+- **Trees:**
+  - OFF (the commit): 5dd5f35 + the three files (BankRaidConfig, OpsConfig, OpsSites; 5dd5f35 touches none of them)
+    + `tools/BuyPathStatic.py` (the 5dd5f35 file, the two needle changes of CP-1, the cutprep pin block).
+  - ON (test only): OFF after apply_cutover.py. Control: 5dd5f35 after apply_cutover.py.
+- **Parse:** 8 of 8 OK (`--!strict`). **luau-lsp:** the same diagnostics as HEAD on OFF and ON (0 new).
+- **BuyPathStatic:**
+  - HEAD 3126 / 0. OFF 3138 / 0. ON (+ the cutover swaps) 3140 / 0.
+  - HEAD + the new pins (control) 3128 / 10: all 10 new-behaviour pins bite.
+  - OFF with the old file: 3124 / 2 (the two P0-post needles; hence the needle changes).
+- **rojo build:** OK on HEAD, OFF and ON.
+- **OFF = HEAD:** world sim 12 / 12, DataService 24 / 0, novice shield 145 / 0, the 15 combat / squad / raid / shield
+  suites (pre-existing fails only: f_squad 1, r_server 1, raid_f2 1, shield_c 4, adv_squad 1 coroutine error),
+  real_play_bk with the anchors, and the Ops lane drivers (except lane O's stale `bank-breach-prompt-hold3`, CP-5).
+- **real_play_bk with the anchors deleted (fallback posts):** OFF 0 hidden spots, 0 loots; HEAD 32 hidden spots, 7 of 28
+  looted (6 untouched).
+- **Gate door (CP-2) after the streaming change:** BankGate is a child of the EmpireBank Model and still carries
+  `WE_OpenCFrame` / `WE_ClosedCFrame`; OpsSites.FindDoor finds it from BankPlaza's parent. ON 24 / 0; HEAD + cutover 11 / 13.
+- **ON side checks:** H2 checks 14 / 1 (leash, CP-6); exploit driver 23 / 1 (E4, CP-9); shield 143 / 2 (CP-6). Line for
+  line the same as on ab9245a.
+- **Census:** busiest 512-stud circle 493 + 4 + 3 = 500 (cap 500) OFF and ON; HEAD with 4 bags 501. 1024-stud circle 928.
+  The same as on ab9245a; only the capture zones' paths moved.
+- **H2 reduced (ON, 100 seeds each):**
+  - solo_cover 30 / 100, the same run for every seed as on ab9245a.
+  - Squads, 200 seeds: squad_attack 5 units 151 / 200 on both HEADs; 3 units 100 vs 103; squad_follow 3 units 130 vs 140.
+  - Squad runs do not repeat in the stand-in. The ab9245a tree re-run on seeds 0–99 gave squad_follow 62, where it
+    had given 71. So these gaps are harness noise, not a change.
+
+**CP-9 · H2 is NOT cleared. Jobs stay OFF.** This commit only stages the cutover values; nothing is live until
+`OpsConfig.Enabled` flips. Blockers before the cutover (verifier runs, headless stand-in):
+1. **Squad success rests on a bug (CP-6).** In a verifier copy where squad hits provoke the guard group (as player hits
+   do), squad_attack and squad_follow deliver 0 / 100 each. Fix the provoke path, then re-tune.
+2. **Small squads miss the target.** With 3 units, squad_attack is about 50 % (100–103 / 200) and squad_follow 65–70 %,
+   against ≥ 70 %. 5-unit squad_attack is 75.5 % (95 % CI 69–81): a thin margin.
+3. **Phone-like play misses the solo band.** With 5° aim error, 0.4–0.8 s reactions and a 2 s cover step, solo_cover is
+   3 / 100 (band 10–40 %). About 80 % of players are on phones.
+4. **Squad numbers are noisy.** The same tree and seeds gave 71, then 62 / 100. A squad pass needs more seeds or a
+   deterministic harness.
+5. **Exploit E4.** A bag dropped inside the hall can be picked up through the hall's solid back wall (7.8 studs). The
+   pickup prompt has `RequiresLineOfSight = false` and PickupDist 12, and the server checks no line of sight. Add a server
+   line-of-sight check on pickup.
+6. **Novice shield.** Its bank rule reads BankRaidConfig, so with the cutover 2 shield checks fail (143 / 2). It should
+   follow the Ops bank site.
+7. **Leash.** G1 and G2 stick on the planters (H2 checks 14 / 1).
+8. **Owner calls:**
+   - Grab `MaxBags` 4 vs `MaxBagsInWorld` 3 means most runs end on the 240 s lockdown (CP-3); this applies to all four
+     Grab sites (bank, Port customs, fuel, crates).
+   - The 7 s breach hold on a phone (CP-5).
+9. **Stale items to update at the cutover:**
+   - lane O's `bank-breach-prompt-hold3` check;
+   - the WorldConfig / MapSetup comments (hold 3, r 8);
+   - the census "5 bank guards alive" check (ON);
+   - the BankRaidService.luau header line 14 ("P0 posts clear of today's building").
+10. **Device checks (CP-5a):**
+    - Humanoids jamming at the piers and planters. This is what makes solo play possible in the stand-in.
+    - Real touch aim, lag, a squad through the 10-wide door, and rival players.
+
+For support: on seeds 5000–5099 the shipped values (hold 3, r 8) gave solo_cover 42 / 100; the tuned values give 30.
+So the tuning holds on seeds it was not tuned on.
+
+**Owner test on the phone (Jobs off):** the bank should play exactly as today.
+- Five guards stand at their usual posts; the doorway is open (the gate is raised under the roof) and you walk straight in.
+- A raid fights, pays and cools down as before.
+- There are no Breach / Grab hold prompts, cash bags or "Too many bags" toasts.
+
+**CP-L1 (lead) · Commit wording.** The OpsConfig comment above the bank Breach stage and the BuyPathStatic pin message were
+reworded before commit so the repo does not claim squads stay >= 70 %: H2 is not cleared (CP-9). Pin count: the block adds
+12 pins; 4 already pass at HEAD (WorldConfig G1/G5 rows, MapSetup gate attributes), so the 10 HEAD failures are the 8 new
+behaviour pins plus the 2 moved needles.
