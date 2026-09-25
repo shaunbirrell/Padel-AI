@@ -82,6 +82,15 @@ local AnalyticsConfig = {
 		NATION_PICKER_SHOWN = "NATION_PICKER_SHOWN", -- source ("join" / "flagpole" / "settings")
 		NATION_PICK = "NATION_PICK", -- exactly { id, source, first }
 		NATION_LATER = "NATION_LATER", -- count (NationPrompts after this LATER)
+		-- W3 step 2 Phase B: Jobs (OpsService; props: site, value, bags, drops, picked, lost)
+		OPS_OPEN = "OPS_OPEN", -- a big site opened (OpsDirector)
+		OPS_START = "OPS_START", -- a run went Active (breach / start / hack / plant / provoked)
+		OPS_DONE = "OPS_DONE", -- a run finished (paid at completion or bags out)
+		OPS_FAIL = "OPS_FAIL", -- lockdown / window / empty ring / abandoned
+		BAG_GRAB = "BAG_GRAB",
+		BAG_DROP = "BAG_DROP", -- the carrier died (or the deadline ran out: lost = true)
+		BAG_PICKUP = "BAG_PICKUP",
+		BAG_DELIVER = "BAG_DELIVER",
 	},
 }
 

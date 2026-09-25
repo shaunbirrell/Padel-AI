@@ -10,6 +10,16 @@
 	- ObjectiveType "Heist" (a bank job done; BankRaidService tracks it today, OpsService in Phase B).
 	- Go: a mission row with a Go key shows GO while it is incomplete. GO points the one objective marker
 	  (Client/Modules/ObjectiveMarker) at the nearest target the SERVER sent for that key; never a fixed marker.
+
+	W3 step 2 Phase B, lane M1 (jobs):
+	- OpsObjectives (Checkpoint, Camp, Uplink, Delivery, Job) are reported by OpsService (TrackProgress, 1 per finished
+	  job for each type in OpsConfig.Kinds[kind].Track). They are live ONLY while OpsService's hook says so
+	  (MissionService.SetOpsHooks: ObjectiveLive), so with no hook (OpsConfig.Enabled = false) the offer is exactly
+	  Phase A's. Heist stays in LiveObjectives: BankRaidService reports it until the cutover, OpsService after.
+	- Go keys Checkpoint / Camp / Uplink / Job / Cargo / Hostiles are answered by the same hook (GoTargets: every Open
+	  site of that key; the server sends the GoMaxTargets nearest to the player, the client picks the nearest).
+	  With no hook they have no target: a Required one keeps its mission off the offer, Hostiles just hides GO.
+	- Capture has no Go key yet (TerritoryService is batch B's; a neutral-zone pointer must skip every Home Outpost).
 ]]
 
 export type DailyMissionDef = {
@@ -17,6 +27,7 @@ export type DailyMissionDef = {
 	DisplayName: string,
 	Description: string,
 	-- KillNPC | KillPlayer | CaptureTerritory | PurchaseUpgrade | EarnCash | SpawnVehicle | RecruitSoldiers | Heist
+	-- | Checkpoint | Camp | Uplink | Delivery | Job (the last five: MissionConfig.OpsObjectives, live through OpsService)
 	ObjectiveType: string,
 	Target: number,
 	RewardCash: number,
@@ -30,7 +41,9 @@ export type GoDef = {
 	Short: string, -- objective marker / compass label: 2-7 capitals, device-neutral ("BANK")
 	-- server only: the WE_ActivityAnchor id to point at once it exists (lane BK stamps the bank's)
 	Anchor: string?,
-	-- a mission that uses this Go is offered only while the server resolves at least one target (the job is on)
+	-- a mission that uses this Go is offered only while the key is served (the job is on): the old resolver has a
+	-- target, or OpsService's hook answers the key (a table, even an empty one while every site is busy: the offer
+	-- never reshuffles when a site cools or the director rotates; GO shows once a site is Open again)
 	Required: boolean?,
 }
 
@@ -62,8 +75,7 @@ local MissionConfig = {
 	},
 
 	-- Objective types some server system reports through MissionService.TrackProgress today. A mission or daily op
-	-- whose type is not listed is never offered (it could not be finished). Phase B (OpsService) adds Checkpoint,
-	-- Camp, Uplink, Delivery and Job.
+	-- whose type is not listed here (or live through OpsObjectives) is never offered (it could not be finished).
 	LiveObjectives = {
 		KillNPC = true,
 		KillPlayer = true,
@@ -75,15 +87,35 @@ local MissionConfig = {
 		Heist = true, -- BankRaidService: a bank job done (lane F)
 	} :: { [string]: boolean },
 
+	-- Objective types only OpsService reports (W3 step 2 Phase B). Live ONLY while its hook's ObjectiveLive(type) is
+	-- true (a live job site reports it); never through LiveObjectives, so they stay off until the Ops cutover.
+	OpsObjectives = {
+		Checkpoint = true, -- a road checkpoint taken
+		Camp = true, -- a raid camp cleared (its chest opened)
+		Uplink = true, -- an uplink hacked and held
+		Delivery = true, -- a cargo haul brought home (the heist yards and the black box; the bank counts as Heist)
+		Job = true, -- any job finished
+	} :: { [string]: boolean },
+
 	-- GO targets. Where a Go key points is decided on the SERVER per player (MissionService) and sent with the
-	-- mission; the client picks the one nearest to the player. Phase B adds Checkpoint / Hostiles / Capture / Job.
+	-- mission; the client picks the one nearest to the player. OpsService's hook answers first (Phase B); a key it
+	-- does not know falls back to the Anchor / BankRaidConfig resolver.
 	Go = {
 		Bank = {
 			Short = "BANK",
 			Anchor = "Town.Bank.Vault", -- until it exists: BankRaidConfig.Position
-			Required = true, -- only while BankRaidConfig.Enabled
+			Required = true, -- only while BankRaidConfig.Enabled (or, after the cutover, while the bank is an Ops site)
 		},
+		-- Phase B (lane M1): answered only by OpsService's hook (every Open site of these kinds)
+		Checkpoint = { Short = "POST", Required = true },
+		Camp = { Short = "CAMP", Required = true },
+		Uplink = { Short = "UPLINK", Required = true },
+		Job = { Short = "JOB", Required = true }, -- any Open job
+		Cargo = { Short = "CARGO", Required = true }, -- the heist yards and the black box (Delivery)
+		Hostiles = { Short = "HOSTILE" }, -- the nearest Open checkpoint or camp (KillNPC); no hook = no GO button
 	} :: { [string]: GoDef },
+	GoMaxTargets = 16, -- GO targets sent per entry: the nearest to the player (MissionController reads at most 16)
+	GoRefreshSeconds = 30, -- while OpsService's hook is set: re-send a player's list when its targets change (0 = off)
 
 	-- Missions panel row button (GO / CLAIM), in v (the panel's UI scale): 112 x 72 v is about 73 x 47 real px on a
 	-- phone (spec w3s2 activities §9); the desktop button is DesktopButtonW wide and the desktop tap height tall.
@@ -104,6 +136,7 @@ local MissionConfig = {
 			RewardXP = 80,
 			RewardGold = 0,
 			MinLevel = 1,
+			Go = "Hostiles", -- GO once OpsService has an Open checkpoint or camp
 		},
 		DailyCapture = {
 			Id = "DailyCapture",

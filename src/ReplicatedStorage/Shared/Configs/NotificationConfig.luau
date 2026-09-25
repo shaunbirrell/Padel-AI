@@ -20,6 +20,10 @@
 export type RewriteRule = { Match: string, Replace: string?, Type: string? }
 export type ThrottleRule = { Match: string, MinGapSeconds: number?, OncePerText: boolean? }
 
+-- W3 step 2 Phase B Jobs: OpsService throttles its lines on the server; the client floor below reuses its numbers
+local OpsConfig = require(script.Parent.OpsConfig)
+local OPS_DIRECTOR = OpsConfig.Director
+
 local NotificationConfig = {
 	-- legacy fields (kept for any caller that still reads them)
 	DefaultDuration = 4,
@@ -83,6 +87,12 @@ local NotificationConfig = {
 		{ Match = "is robbing your ATM", MinGapSeconds = 15 },
 		{ Match = "^Nothing to collect yet", MinGapSeconds = 20 },
 		{ Match = "^Cash drop is recharging", MinGapSeconds = 30 },
+		-- Jobs (OpsConfig.Text.Toast; a job or player name is never a nation): one "open" / "raid" line per 10 min,
+		-- the server-wide "robbed" line and the bag alert at most once a minute
+		{ Match = " is open$", MinGapSeconds = OPS_DIRECTOR.OpenToastGapSeconds }, -- "<Job title> is open"
+		{ Match = "^Empire Bank raid started$", MinGapSeconds = OPS_DIRECTOR.OpenToastGapSeconds },
+		{ Match = " robbed the Empire Bank$", MinGapSeconds = OPS_DIRECTOR.RobbedLineGapSeconds },
+		{ Match = "^Bank bag on the move$", MinGapSeconds = OPS_DIRECTOR.RobbedLineGapSeconds },
 	} :: { ThrottleRule }),
 
 	-- 5. One failed purchase = one line. WorldPromptController shows the failure first (WE_BuyAck / PurchaseResult,

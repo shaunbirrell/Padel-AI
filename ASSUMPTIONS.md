@@ -3169,3 +3169,488 @@ headless stand-in, not in Roblox.
 - **BK-L3 Pending edits in phase-B-owned files** (w3s2/buildBK/pending_edits.md): BankRaidConfig.GuardPosts fallback posts
   that follow the hall (only used if the anchors go missing), and OpsSites.SetDoor must use WE_Open/ClosedCFrame. Applied
   with the phase B commit.
+
+## 2026-09-25 — World step 2 phase B: jobs at every place (Ops server, NPC core, JOBS board, mission types) - shipped OFF
+
+## 2026-09-25 — W3 step 2 Phase B: Jobs (Ops) at every place + JOBS board, shipped OFF (lanes KB, N, O, U, M1)
+
+### Integration (all reversible)
+- INT-B-1 Jobs ship OFF. OpsConfig.Enabled, every Kinds[k].Enabled and every site Enabled stay false;
+  BankRaidConfig.Enabled stays true (BankRaidService keeps the bank job); CombatConfig.FieldBootstrap stays true (the
+  legacy field NPCs keep the camp posts). The cutover is not made in this commit. It is blocked on: the spec §7 H2 bank
+  balance run (>= 70 % squad / 10-40 % solo), which has no driver yet; the 512-stud circle budget with bags (INT-B-6);
+  the device-only streaming rule 2 (runtime ModelStreamingMode = Persistent on far ActivityHost models); and the owner's
+  Phase B phone test. The cutover script and pin swaps are ready (integ/apply_cutover.py, integ/bps_cutover_swaps.py).
+- INT-B-2 The lanes' pending edits are applied (batch B part 2 is committed, c51ec9b): MonetizationConfig
+  CashMultExemptReasons.ops = true (KB §1 / O §1); TutorialController skips the automatic guide line while an objective
+  marker is up (U §2); OpsConfig.Ui.PingTtlSeconds / ForgetStuds and Text.Row.Steal / HomeShort / Empty (U §1);
+  OpsService GO_KINDS.Cargo (M1 §1). MissionController's MAX_GO_TARGETS stays a literal 16 (M1 §2, optional; equal to
+  MissionConfig.GoMaxTargets).
+- INT-B-3 The automatic guide line is not queued behind a GO: while ObjectiveMarker.Current() ~= nil the guide tick
+  returns before the auto-guide check, so the auto line fires on the first idle tick after the marker ends (the idle
+  timer keeps running). A player-tapped console / ATM / guide GO still replaces the marker (the latest GO wins).
+- INT-B-4 With Text.Row.Empty set, the JOBS section shows one "No jobs open · back soon" line whenever Jobs are on and
+  nothing is open, including the moment before the first OpsState snapshot; the daily claim rows then sit under it in
+  the list. Lane U's two fallback checks (u_board "board_empty: no JOBS section", u_flow "no OpsState yet: no JOBS
+  section") encode the pre-edit fallback; the integration copies integ/states/u_board_i.luau and u_flow_i.luau check the
+  new behaviour.
+- INT-B-5 Cutover scope, when it comes: all 32 sites. HEAD 1811c46 already ships all 17 places (enable steps 2-3), so
+  "Town + enable step 1" in the Phase B brief predates it. The lane O / M1 "step1" expectations (22 live sites, uplinks
+  off) and the step-1 W3 driver's anchor counts (165) are stale for the same reason; they are test data, not bugs.
+- INT-B-6 512-stud circle budget at the cutover: after lane BK the busiest circle is 493 static (was 489 in spec §3), so
+  the spec's worst case is now 493 + 4 dropped bags (Cargo.MaxBagsInWorld) + 4 crate parts = 501 > 500. Before any
+  cutover, set Cargo.MaxBagsInWorld = 3 (500) or free one static part in that circle. No effect while Jobs are off.
+- INT-B-7 Checkpoint drive-through (owner test step 6), measured on the real stack: an untouched checkpoint never shoots
+  a passing driver (0 hits); for up to CombatConfig.NPCStance.CalmSeconds (30 s) after an on-foot fight, a passing
+  seated driver can be shot (3-6 hits per pass in the stand-in, whose line of sight is always clear); once calm, 0 hits.
+  An abandoned run stays "Active" with 4 calm guards while any player is within the sleep radius (seen for 400 s); the
+  guards do not fire. Accepted as designed; lane O may end an abandoned Checkpoint run later.
+- INT-B-8 Lane N verifier additions N-17 (a leashed NPC holds at the leash edge and fights from there) and N-18 (a group
+  that ever had a Passive member keeps its Posts quiet) change the contract §5.3 leash wording; accepted by the
+  integrator. To undo N-17, remove the atLeashEdge branch in CombatNPC.
+- INT-B-9 The EMPIRE BANK sign is painted by MapSetup (lane BK); with BankRaidConfig.Enabled = false BankRaidService.Init
+  returns early and the sign stays painted (boot and census on the cutover tree: 17 / 17 world signs, BankSign painted).
+  At the cutover BankRaidService / BankRaidController files stay (Init returns); only Bootstrap's safeInit line goes.
+
+### Lane KB (verbatim: buildB/KB/assumptions.txt)
+W3 step 2 Phase B, lane KB (contracts): assumptions for ASSUMPTIONS.md. Every one is reversible; the lead merges them.
+Files: Shared/Configs/OpsConfig.luau (new), Shared/Constants.luau, Server/Modules/RemoteSetup.luau.
+Contract: scratchpad/w3s2/buildB/KB/contract.md.
+
+KB-1   OpsConfig is pure data, shared by server and client, and requires nothing.
+       - The client reads each site's Name / Title / Short / Kind / Hard / Big from OpsConfig.Get(Id), so the
+         OpsState payload carries only the server-decided fields: State, Left, Pay, MyCd, Guards, HeldBy, and X/Y/Z in
+         Full snapshots.
+       - Payload types are OpsConfig exports (spec §1.12). Types.luau is not touched.
+
+KB-2   There are 32 sites (spec §5), keyed "<POI>.<Site>" to the Phase A anchor ids:
+       - Bank 1 and checkpoints 12;
+       - caches 3 (Market, Ruins, Oasis);
+       - VaultLite 3 (Port Customs, Depot Fuel, Armory Cache);
+       - Oil Pumps 1, uplinks 3, Ruins holdout 1, Crash black box 1;
+       - camps 3, forts 2, rig decks 2.
+       Big rotation: the bank (pinned) plus the 9 spec §1.7 sites.
+
+KB-3   Mission tracking per kind:
+       - Vault (bank) -> Heist + Job.
+       - VaultLite and Cargo -> Delivery + Job, not Heist.
+       - So the Daily Op "Rob the Bank" (Heist, "Loot the Empire Bank vault") counts only the bank. Activities §4
+         also counted armory and depot bags as Heist; flipping that back is one Track list.
+       - Checkpoint -> Checkpoint + Job, Camp -> Camp + Job, Uplink -> Uplink + Job, everything else -> Job.
+
+KB-4   Player-facing names are device-neutral and name no nation (the unit driver checks 164 strings against 200
+       nation names).
+       - JOBS titles come from the activities list, e.g. Rob the Bank, Take Checkpoint, Smuggler Cargo, Depot Heist,
+         Armory Vault, Sabotage Pumps, Tower Uplink / Hack Uplink / Radar Hack, Hold the Village, Hidden Cache, Black
+         Box, Smuggler Stash, Cash Box, Raid Camp, Breach the Fort, Storm the Rig.
+       - Label names: Customs Yard, Fuel Yard, Arms Cache, Oil Pumps, Control Tower, Relay Mast, Radar Console,
+         Village Square, Black Box, Ironclad Gate, Sandhold Gate; North / East / South / West Checkpoint; Port / Signal
+         Checkpoint; Depot / Armory East / West Post; Rig Alpha / Bravo Post / Deck.
+
+KB-5   Streaming (Phase A residual risk: an anchor host part can be up to ~380 studs away). Prompts and labels
+       parent to the anchor Attachment when:
+       - its host is within 64 studs; or
+       - the host's Model holds exactly 1 BasePart (the ActivityHost cluster). That Model is then set to
+         ModelStreamingMode = Persistent, which keeps 1 invisible part per POI on every client.
+       Otherwise the site is off. No carrier part is ever added.
+       Measured: every far anchor today (13 Full, 11 Low; 24 / 22 with every POI on) sits on a 1-part host model.
+       Needs a device check.
+
+KB-6   Coexistence until the cutover:
+       - Town.Bank runs only while BankRaidConfig.Enabled == false, so there are never two bank jobs.
+       - The camps run only while CombatConfig.FieldBootstrap == false, so there are never two garrisons on the
+         WE_NPCSpawn posts.
+
+KB-7   OpsConfig.Rewards.RequireCashExempt = true: OpsService stays off, and logs once, until
+       MonetizationConfig.CashMultExemptReasons has ops = true. That is a pending edit in a batch B file
+       (pending_edits.md §1).
+
+KB-8   Stance timings live in the NPC core, so there is one copy: CombatConfig.NPCStance, lane N, with
+       ProvokeHoldSeconds 2, CalmSeconds 30 and HomeSlack 2.
+       OpsConfig holds only the per-site ProvokeRadius (default 25):
+       - bank 8, checkpoints 25;
+       - VaultLite 12, oil 20, uplinks 15.
+
+KB-9   Rigs:
+       - Site cooldown 480 s (activities gives only the fort gate's 8 min).
+       - Deck guards: 3 OilRigGuard on a ring of radius 20 at 0 / 120 / 240 degrees around the TerritoryConfig deck
+         position (standing Y 28.05 = the MapSetup deck top), Aggressive, leash 25 (the deck is 48 studs wide).
+       - GO target: the shore Pier anchor.
+       - No job label: the capture zone's own label covers the deck.
+
+KB-10  Checkpoints:
+       - Held time = the site's HeldSeconds 600; Rewards.Rows.Checkpoint.SiteCd = 0.
+       - The rig checkpoints have no alarm (G1 / G2 / G3, reserve 3), so their template Alarm / R1 / R2 anchors are
+         unused.
+
+KB-11  The Armory's "Heavy at crack" spawns on post G2, as a second garrison row on the same post. Lane O keys
+       garrison rows by index.
+
+KB-12  Stances:
+       - Uplink posts are Passive (leash 40) until the hack starts; waves are Aggressive.
+       - The holdout has no standing garrison; its G1–G3 anchors are wave fallbacks.
+       - Crash guards are Aggressive, leash 40.
+       - Depot.Fuel.G1 is Optional: its N_Watch1 tower is Tier 1 today, so this is only defensive.
+
+KB-13  Rewards:
+       - Pay rows are pay.py's table (14 rows, including Phase C's SupplyRun).
+       - Player cooldowns are per site (profile.Ops.Cd[siteId]).
+       - Diminishing returns are counted per pay row per UTC day: DimN 3 for the bank, 8 for checkpoints, 6 otherwise.
+       - Caches have no site cooldown and a 600 s player cooldown.
+
+KB-14  Prompt ActionText may be up to 13 characters. Activities said 12, but its own list has "Open cash box" and
+       "Start holdout", which are 13.
+
+KB-15  Every carried item (Vault, VaultLite, Cargo) is pinged every 10 s to non-allies (never for a novice carrier).
+       Only the bank bag also gets the "Bank bag on the move" toast.
+
+KB-16  Lockdowns, where activities gives none (est.):
+       - Port 180 (Depot 180 and Armory 200 are activities' figures);
+       - Oil 150, measured from the first plant (90 s window + 10 s fuse + slack);
+       - uplinks: hack seconds + 120;
+       - holdout 210, crash 180;
+       - the fort gate stays blown 480 s.
+
+KB-17  Participation radius is measured from the site's Target anchor:
+       - bank 28 around the door (covers the vault at 13.5 and the plaza front);
+       - VaultLite 40, uplinks 14 (the ring), holdout 30, crash 60, checkpoints 60, camps 120, forts 80, rigs 80,
+         oil 150.
+
+KB-18  The 3 Jobs remotes (OpsState, OpsProgress as RemoteEvents; OpsPing as an UnreliableRemoteEvent) are created at
+       every boot, even while Jobs are off (the v71 M2 precedent). There is no Ops client -> server remote.
+
+KB-19  A missing CombatConfig.NPCTypes.CampCommander (before lane N lands) spawns HeavyInfantry for the commander.
+       Any other missing NPC type turns the site off.
+
+KB-20  At an Open site of a hostile kind (Camp, Siege, Rig), the world label sub-line reads HOSTILE instead of OPEN.
+
+### Lane N (verbatim: buildB/N/assumptions.txt)
+W3 step 2 Phase B, lane N (NPC core): ASSUMPTIONS.md lines. All reversible; only the lead edits ASSUMPTIONS.md.
+Files: Shared/Configs/CombatConfig.luau, Server/Services/CombatService/init.luau, Server/Services/CombatService/CombatNPC.luau.
+
+- N-1 (Post in a passive group holds fire): a Post / Static NPC holds fire (it only turns) until its group is provoked
+  when it has its own ProvokeRadius or its group has a Passive member. Posts in Aggressive groups (camp towers) fire
+  freely. Why: the bank's interior post (G5) and the Depot tower post (G1) sit in Passive groups; without this they
+  would shoot players walking up to read the sign and drive-through commuters, which the Passive rule forbids.
+  Reverse: in CombatNPC.thinkStance, make `held` true only for stance == "Passive".
+- N-2 (distances): the leash and the "at home" slack (NPCStance.HomeSlack 2) are flat XZ studs from Home, so a Home
+  lifted by OpsConfig.Npc.RootLift never leaves an NPC walking forever. ProvokeRadius and AggroRange are 3D, like
+  CombatNPC.NearestPlayer today.
+- N-3 (leash): past Leash the NPC drops its target and walks Home, ignoring targets until it is back within HomeSlack
+  (hysteresis, so it does not flicker at the edge). With no target, a leashed or Passive NPC walks Home. An
+  Aggressive NPC with no Leash keeps today's behaviour (it stays where the chase left it). Known effect: a player
+  standing just past the leash but inside AggroRange makes a leashed guard walk out and back without firing.
+- N-4 (OnNPCDeath timing): listeners run deferred (task.defer, same frame) after the kill rewards, each in its own
+  pcall, so a listener may spawn or despawn NPCs even when the death happened inside a splash loop over the NPC
+  records. Nothing is scheduled while no listener is registered.
+- N-5 (respawn keeps opts): an opts NPC without NoRespawn respawns with a copy of its opts (group, stance, leash,
+  home). 2-argument NPCs respawn exactly as today.
+- N-6 (ProvokeGroup / CalmGroup returns): ProvokeGroup returns the number of living members (all stances); an unknown
+  or empty group returns 0 and stores nothing. While already provoked, the longer calm time wins. CalmGroup returns
+  the living members calmed, 0 if the group was already calm. CalmGroup never changes a member's stance: Aggressive
+  reinforcements stay Aggressive (OpsService despawns or keeps them).
+- N-7 (group lifetime): a group's provoke state is dropped when its last member is destroyed; a garrison spawned into
+  an empty group starts calm.
+- N-8 (proximity provoke): any living player ON FOOT (Humanoid.SeatPart == nil) within ProvokeRadius of any member's
+  Home, continuously for NPCStance.ProvokeHoldSeconds (not necessarily the same player). Sampled on the 0.35 s think
+  tick, so it lands at about 2.1 s.
+- N-9 (contact): a provoked group stays provoked while any member has any player (seated or not) inside its
+  AggroRange, or a member is hurt by a player; it calms NPCStance.CalmSeconds (30) after the last contact.
+- N-10 (reaction on provoke): a Passive NPC keeps no aim target while calm, so the P1-2 reaction delay starts when it
+  is provoked (no instant first shot).
+- N-11 (hurt provokes): a player's (or their squad unit's) damage provokes the group of a grouped or non-Aggressive
+  NPC; damage with no attacker does not. An ungrouped Passive NPC provokes only itself.
+- N-12 (DespawnNPC on a dying NPC): it removes it at once and fires nothing; for a record without NoRespawn a respawn
+  already scheduled by its death still happens (Ops always spawns with NoRespawn).
+- N-13 (CampCommander): a regular type (counts against the 18, not the +4), dark olive (72, 78, 44), and it wears the
+  heavy kit (back pack) so it reads as the camp boss.
+- N-14 (counts): NPCCounts counts rec.Alive exactly like the cap (an NPC in its 0.35 s removal window after a death
+  with no killer still counts); GroupNPCs lists only NPCs that are Alive with Health > 0. Special = a type in
+  CombatConfig.SpecialNPCTypes or opts.OverCap; an unknown type id spawns as Infantry and counts as regular.
+- N-15 (opts sanitising): GroupId 1..64 characters; Leash in (0, 1e5); ProvokeRadius in (0, 1e4); an unknown Stance
+  becomes Aggressive; Static wins over Stance (always Post); Home must be a CFrame, else the spawn CFrame.
+- N-16 (FieldBootstrap gate): the check sits in CombatService.Init (the NPC think loop still runs with it false);
+  BootstrapNPCs itself stays callable. Ships true; the integrator flips it with the Ops cutover.
+
+Verifier additions (adversarial pass; they replace the "Known effect" sentence of N-3 and extend N-1):
+- N-17 (leash edge): a leashed NPC never chases past its leash. When its target stands outside the leash circle and
+  the NPC is within one think step (max(HomeSlack, WalkSpeed x NPCThinkInterval)) of the leash, it stops and fights
+  from there like a Post (the same line-of-sight and hit-chance gates). Why: with "turn back at the leash" a player
+  standing past Leash + 0.85 x Range and inside AggroRange (checkpoint Infantry 85-90 studs, Heavy 97-100, rig
+  guards 106-120) drew 0 shots in 60 s while shooting the guard (today's unleashed guard: 82). The walk-home and
+  target drop past the leash (N-3) still apply when the NPC is pushed past it, or when it has no target.
+  Reverse: in CombatNPC.thinkStance, remove the atLeashEdge branch.
+- N-18 (sticky passive group): a GroupId that has ever had a Passive member keeps its Post / Static members holding
+  fire until provoked, even after the group empties and a Post is re-spawned first (a top-up or a wake that spawns
+  the static row before the Passive rows). The set is keyed by GroupId (the Ops site ids), never cleared.
+  Reverse: drop passiveGroupIds from the held test.
+
+### Lane O (verbatim: buildB/O/assumptions.txt)
+W3 step 2 Phase B, lane O (Ops server): assumptions for ASSUMPTIONS.md. Every one is reversible; the lead merges them.
+Files: Server/Services/OpsService/{init, OpsZones, OpsGarrison, OpsCargo, OpsKinds, OpsDirector, OpsSites, OpsRewards}
+(new), Shared/Configs/OpsConfig (additive values), Server/Modules/ProfileSchema (Ops block), Shared/Configs/
+AnalyticsConfig (8 events), Server/Bootstrap.server (safeInit OpsService after SquadOrdersService).
+Contract: scratchpad/w3s2/buildB/KB/contract.md §4. Everything ships OFF (OpsConfig.Enabled = false).
+
+O-1  Participation ("present") = within PresentR of the NEAREST of the site's zone points: the Target anchor, every
+     stage anchor (At / AtAny) and config deck posts. Reason: the Oil pumps are up to ~330 studs apart and the rig
+     Pier (the GO point) is 145 studs from the deck, so one centre would never count the players doing the job.
+     Wake / sleep distances use the same points.
+O-2  On-foot presence is required at Vault, VaultLite, Cache, Uplink and Holdout (activities §2.2). At Checkpoint,
+     Camp, Siege, Sabotage, Rig and Cargo a seated player counts as present; the rigs also skip the height test (a
+     boat sits ~26 studs below the deck). Every job prompt needs the player on foot (no prompt exists at the rigs).
+O-3  Who is paid at completion: Checkpoint = the taker + clan allies present; Uplink / Holdout = the starter's team
+     (the starter + clan allies) present (uplinks by ring share >= PresentShare); Camp / Siege / Rig / Sabotage =
+     everyone present PresentSeconds (or since the run began, if shorter); Cache = the opener; carry kinds pay at
+     delivery (the grabber the bag's value, a picker Cargo.PickerMult of it). Nobody on that site's cooldown is paid;
+     the paid player's cooldown starts (saved in profile.Ops.Cd). Rivals keep only their normal per-kill NPC cash.
+O-4  Any job action (breach, start, cut alarm, take, hack, holdout, plant, grab, recover, bag pickup) ends the F6
+     novice shield (CombatService.EndNoviceShield(player, "ops")), so a shielded player never carries an unkillable
+     bag. A carrier counts as a novice for pings while FirstJoinUnix is < Cargo.NoviceSeconds old or
+     NoviceShieldDone ~= true. Opening a cache does not end the shield.
+O-5  Contest freeze (every ring except the bank crack): progress moves only while an eligible ally of the starter is
+     in the ring; a non-ally alone freezes it (no decay) and sees "ENEMY IN RING"; teleport-locked players neither
+     help nor contest. The bank crack (NoContest) progresses for any eligible player in the vault ring.
+O-6  The crack never decays when empty; a player hit within Zones.UnderFireSeconds (sampled health drop) or seated
+     is blocked (UNDER FIRE / LEAVE VEHICLE) while others may still progress it. Players on this site's cooldown may
+     still help crack (co-op) but every stage prompt (breach, start, grab, ...) re-checks the cooldown.
+O-7  Hack fails when the progress is back at 0 and the ring has had no team member for EmptyFail (default 10) s;
+     Hold fails after EmptyFail s with no team member in the ring (an enemy-only ring counts as empty).
+O-8  Waves: all-or-nothing per wave; the next wave waits while it would pass min(Npc.WaveMaxAlive, reservation).
+     Wave NPCs are Aggressive, leash = wave ring + 20 (activities' "leash 90" for the 70 ring). Wave and reinforcement
+     NPCs despawn at the end of a run; the standing garrison is calmed (CalmGroup) and walks home.
+O-9  A bag never travels by teleport or a new character: an on-foot jump of > Zones.TeleportStuds in one tick, or a
+     new character root, drops it where the carrier stood; a death drops it (CombatService.OnPlayerDeath, plus a
+     4 Hz fallback at the last live position). No delivery while teleport-locked. A reset is never a free trip home.
+O-10 A bag's value is fixed at the grab (Quote at that moment: R, Private, Diminish); Runs / Total / BestBag count at
+     delivery for the deliverer; a pickup sets no cooldown (activities §2.4).
+O-11 No plot: a bag is delivered within Cargo.FallbackRadius (30, new value) of Cargo.FallbackHome (Pool_Town).
+O-12 Runtime doors (BankGate, the Port HeistGate) toggle CanCollide + WE_GateState only (contract §4.1: no
+     transparency change, no movement). A door closes only once nobody stands within the site's PresentR, so nobody
+     is ever shut inside the hall or the yard. The Port's HeistGate is the nearest part of that name within 24 studs
+     of the Gate anchor in POI_Port (found once at site init).
+O-13 A Held checkpoint's CheckpointSign takes NationColorService.GetColor(taker) (the captured-ring colour rule) and
+     is restored when Held ends; never a flag or a name. Held ends only once no player is within RegarrisonClear;
+     the site is then Dormant and re-garrisons on the next wake.
+O-14 Camps, checkpoints, rigs and forts go Active when a guard is hurt or killed, or an on-foot player stays within
+     ProvokeRadius (default Npc.DefaultProvokeRadius) of a guard's home for CombatConfig.NPCStance.ProvokeHoldSeconds
+     (2 s if lane N's table is missing); participation counts from then. Seated players never provoke by proximity.
+O-15 Ledger: a site reserves its Need at wake and keeps it while awake; it is released on sleep, and at the end of a
+     run when no NPC of the site is left standing (so a cooling, cleared camp does not hold 6 slots). The free count
+     is also capped by CombatService.NPCCounts (legacy field / bank NPCs before the cutover). A woken site whose
+     CombatService spawns come back short of min(MinGarrison, standing posts) goes Quiet (never a clearable empty site).
+O-16 Director: rotating slots = BigOpenMax minus the live Pinned sites (with the bank not live, 3 rotate). Big sites
+     start Closed; the first director pass at resolve is silent (no toasts at boot); a site that just rotated out
+     waits one pass. The "<Title> is open" toast is throttled per player with the key "ops_open".
+O-17 The Ruins cache moves to the next present cache after each opening. OpsState deltas of a site with Rotate carry
+     X / Y / Z (additive to the contract's "deltas without X/Y/Z" so the GO point follows the live cache).
+O-18 Fuse damage goes through CombatService.ApplyRadiusDamage(planter, charge + 2 studs, DamageR, Damage,
+     { WeaponId = "OpsCharge", RequireLos = false, Quiet = true }): normal PvP and splash rules, the planter and
+     clan allies spared. The blown-pump look is Smoke emitters on the pump anchors (at most 2, 30 s), no tilted part.
+O-19 Smoke: one emitter per Active big site (the bank's on its StateBanner, else on the Target anchor), at most 3 in
+     the world; Sparks only on the bank vault during the crack. 0 lights, 0 Neon, 0 parts added by prompts / labels.
+O-20 OpsConfig additive values (lane O owns OpsConfig; types unchanged): Ui.LabelLift = 7 (the label floats above the
+     standing-surface anchor), Cargo.FallbackRadius = 30, Text.Toast NeedShare / JobCooldown / HandsFull / BagsFull
+     (device-neutral, no nation names; KB's contract driver still 89/0 at Full and Low).
+O-21 BankRaidConfig is not edited: its Enabled = false is the integrator's cutover flag (coexistence: Town.Bank is
+     live only while it is false). Bootstrap keeps safeInit("BankRaidService") until then.
+O-22 Sites resolve 3 s after Init (the POI dressing and its anchors are built a few frames after MapSetup); a site
+     waiting for anchors, or one whose anchor lost its host, is re-resolved on the 30 s health check (one tag walk).
+     Switch / POI / coexistence reasons are not re-checked at runtime (configs do not change live).
+O-23 The one-time tips: "Jobs are on the map · see Missions" (Seen bit Intro) 8 s after the profile loads, only after
+     the tutorial and only while a job is live; "Rob the bank: breach the door" (Seen bit BankVisit) within
+     Director.FirstVisitRadius of the bank while not hit in the last 5 s. CheckpointVisit / BagIntro bits are unused.
+O-24 Missions (lane M1 hook): GoTargets("Bank") = the bank's Door only while the bank is an Ops site, else nil (the
+     old resolver); Checkpoint / Camp / Uplink / Hostiles / Job = every Open or Dormant site of those kinds (the
+     client picks the nearest); ObjectiveLive(type) = a live site reports it (Heist: nil unless the bank is an Ops
+     site). SetOpsHooks is called only when MissionService has it.
+O-25 profile.Ops sanitise details: Cd keys must look like "<POI>.<Site>"; when more than MaxCdKeys remain, the
+     latest-ending are kept; Runs keys are strings of at most 32 characters (at most MaxCdKeys of them).
+O-26 Test-only fixture: the lane O drivers stamp WorldConfig.Town.BankAnchors on a stand-in BankPlaza with a BankGate
+     and a StateBanner when the tree has no lane BK hall; with lane BK's MapSetup from the working tree the same
+     scenarios pass on the real hall (no fixture).
+O-27 (verifier fix) A seated player whose root moves more than Zones.TeleportStudsSeated (150 studs per 0.25 s tick,
+     i.e. 600 studs/s: over twice the fastest vehicle's server cap of about 283 studs/s) counts as a teleport too:
+     participation resets, the 15 s lockout applies and a carried bag drops where the vehicle was. Real driving
+     never trips it; a client-owned vehicle moved into the own plot (or a server rescue while seated) does.
+O-28 (verifier fix) At Open, a killed guard is topped up no sooner than Npc.TopUpDelaySeconds (18) after its death,
+     and never sooner than CombatConfig.NPCRespawnSeconds, on top of the TopUpClearRadius rule: a sniper outside
+     60 studs cannot farm NPC kill rewards faster than the legacy respawn.
+O-29 (verifier fix) A run's allies are the starter plus the starter's clan as read once at activation, so a starter
+     who leaves mid-run (ClanService then returns nil for them) does not turn their clan-mates into "enemies" who
+     freeze the ring and lose the uplink / holdout pay.
+
+### Lane U (verbatim: buildB/U/assumptions.txt)
+W3 step 2 Phase B, lane U (Jobs client). Lines for ASSUMPTIONS.md; only the lead edits it. Every item is reversible.
+
+U-1 Ships OFF on the client.
+    - While OpsConfig.Enabled is false, OpsController.Init returns at once: no gui, remote bind, loop or JOBS source.
+    - The Missions panel is then exactly the M0 panel. Checked: u_off, cand and base render the same.
+    - The integrator flips OpsConfig.Enabled at the cutover; nothing client-side needs to change.
+
+U-2 JOBS sit at the top of the Missions list (contract: "above the daily rows").
+    - While any JOBS row shows, the spinner and daily-reward claim rows join the scrolling list.
+    - A claimable claim row stays above the JOBS rows (it is the reason for the rail badge). A claim row with nothing to
+      claim goes below them.
+    - With no JOBS rows the claim rows go back to their fixed M0 place.
+    - Measured in the headless harness: at 844x390 the header and all 3 rows fit, even with one claimable row on top.
+    - At 800x360 the 3rd row needs one short scroll when a claim row is on top.
+    - Why: with the claim rows fixed on top, the list had room for 1.8 job rows at 844x390, and the bank row was below
+      the fold.
+    - The JOBS header is 6 v shorter than 22 + 10 so the 3 rows fit at 844x390.
+
+U-3 Which rows ("the bank always shows its countdown" read together with "row 3 = the bank if open, else the
+    next-nearest open job").
+    - Row 1 is the carried job or the tracked job. Row 2 is the nearest open job.
+    - Row 3 is, in order of preference:
+      - one "Steal the Bag" row (somebody else's dropped bag or pinged carrier; never the local player's own bag);
+      - else the bank if it is open;
+      - else the next-nearest open job;
+      - else the bank's countdown row ("CLOSED 4:10" / "YOURS IN 7:30", no GO).
+    - With nothing tracked, the free row is the next-nearest open job.
+    - "Open" means Dormant, Open or Active (a RAID ON job may be joined) and not on the player's own cooldown.
+    - Held, Cooling, Closed and Quiet sites never offer GO.
+
+U-4 GO re-resolves when it is tapped, per player.
+    - A site that closed after the rows were drawn falls back to the nearest open site with the same job Title. All 12
+      checkpoints share "Take Checkpoint" and all camps share "Raid Camp".
+    - The same fallback applies while travelling, if the tracked site closes and the player did not finish it.
+    - A job is done when the player's own cooldown starts, the player holds the post (HeldBy), or the carried bag is
+      delivered or lost.
+    - Title rather than Kind groups the jobs: Kind "Cache" mixes the cash box, the ruins cache and the stash.
+
+U-5 Arrival and the end of tracking.
+    - Arrival (Ui.ArriveStuds 30) hides the marker. The job stays tracked for the card, which shows the first step:
+      "Breach the front door" at the bank, "Clear N guards" where guards stand, else "Go to <place> · <d>".
+    - Tracking ends when:
+      - the job is done;
+      - another GO takes the marker (a mission GO, a console / ATM / guide line);
+      - the card's X or the row's STOP is used;
+      - the marker times out (Ui.MarkerTimeoutSeconds 360);
+      - the player walks more than 400 studs (Npc.SleepRadius; pending Ui.ForgetStuds) from the job after arriving.
+
+U-6 Carrying.
+    - Carrying auto-tracks the player's own Home: marker and compass read BASE (pending Text.Row.HomeShort).
+    - The card reads "GET THE BAG HOME" with "m:ss left · you are marked", and has no X.
+    - While carrying, the card shows even inside the player's own plot and while driving. Only a panel or death hides it.
+    - Delivery or loss (Carrying = nil) clears the marker and the tracking.
+
+U-7 The job card also hides while Driving, unless the player is carrying.
+    - This is not in the contract's HideWhen {Tutorial, Modal, Dead, InOwnPlot}.
+    - Why: while driving, the compass and the marker guide the player, and the SPD pill and drive hints own the top stack
+      (CLAUDE.md: nothing that covers the screen while driving).
+    - The card collapses whenever the hold pill shows (one message at a time). The pill yields to the territory capture
+      pill.
+
+U-8 ObjectiveMarker keeps its U0 numbers for a plain Show (arrival 24 studs, timeout 10 min), so the live M0 mission GO
+    does not change.
+    - Jobs pass OpsConfig.Ui numbers (30 studs, 360 s) through the additive ShowWith.
+    - U0-1's plan to move OBJ into OpsConfig.Ui is not done, because it would change the live GO.
+
+U-9 The latest GO wins, both ways.
+    - ConsoleWaypoint.Show / ShowAtm clear the objective marker (the contract's 2 lines).
+    - ObjectiveMarker.Show / ShowWith end a running console line (activities §1.2 "Show() calls ConsoleWaypoint.Clear()").
+      Before this, a marker shown during a console line only started hidden.
+    - This is live even while Jobs are OFF: a Base-panel GO, an ATM line or a guide-chip GO now clears a Mission GO marker
+      instead of hiding it, and a Mission GO ends those lines.
+    - U0's u0_marker "yield" checks describe the old behaviour. u0_marker_b (U/states) holds the Phase B version, and
+      u0_cycle now passes.
+    - The tutorial guide's AUTOMATIC console line (12 s idle in the player's own plot, once per pick) can therefore clear
+      a Mission GO marker. That is pending edit §2 in TutorialController.
+
+U-10 OpsPing.
+    - A pinged carrier stays a steal target for 25 s (2.5 x Remote.PingSeconds; pending Ui.PingTtlSeconds).
+    - Pings from the local player are ignored.
+    - The UnreliableRemoteEvent is found with a bounded poll: 60 tries, 1 s apart.
+
+U-11 Points without a height (Home, bags, pings) stand on WorldConfig.Activity.FloorY (0.5).
+    - The marker's arrival test is 3D, so on the flat desert the root's +3 is well inside the 30-stud radius.
+
+U-12 Pill copy.
+    - Stages without a Text.Pill string (Grab, Start, Plant, Recover, Open) show the stage's prompt words in capitals,
+      for example "GRAB CASH".
+    - Fuse shows the job title in capitals.
+    - "WAVE n OF m" replaces the title for 2 s when a new wave starts.
+    - Blocked "Cooldown" shows the player's own cooldown as m:ss.
+    - The value slot shows seconds left as m:ss when the stage carries them.
+    - The pill hides after 1.75 s without progress, in case the final {Site} payload is lost.
+
+U-13 Kind icons are Frame-built HudIcons:
+    - Cash: vault, heist yards, cargo, caches, steal;
+    - Flag: checkpoints (the plain generic pennant HudIcons documents as never a country's flag);
+    - Gear: uplinks;
+    - Shield: holdout, carrying;
+    - Crosshair: camps, forts, rigs, sabotage.
+    - The difficulty word is OpsConfig.Text.Row.Hard / Easy, coloured red / green.
+
+U-14 Client toast floors reuse the OpsConfig.Director numbers (NotificationConfig.Throttle):
+    - "<job> is open" and "Empire Bank raid started": at most 1 per 600 s;
+    - "... robbed the Empire Bank" and "Bank bag on the move": at most 1 per 60 s.
+    - The server already throttles these (OpsDirector), so this is only a floor. OpsController itself never toasts.
+
+U-15 The steal row's sub-line is the distance alone until OpsConfig.Text.Row.Steal lands.
+    - With Jobs on and nothing live there is no JOBS section until Text.Row.Empty lands (pending edit §1).
+
+U-16 (verifier) The latest GO wins after arrival too, and a moving target is chased again.
+    - After arrival the job's marker is gone; if any other marker or console / ATM line is up (ObjectiveMarker.OnTop()),
+      that is a newer GO: the job is untracked (its card goes; the other marker is never touched).
+    - Before re-resolving a closed site, OpsController first checks for a newer GO, so a re-resolve never replaces a
+      mission / console GO shown in the same second.
+    - A tracked bag (or your Home while carrying) that is more than 2 x Ui.ArriveStuds (60 studs) away after arrival gets
+      a fresh marker (the carrier ran off). Sites keep the arrival rule (no re-show inside a job area).
+
+### Lane M1 (verbatim: buildB/M1/assumptions.txt)
+W3 step 2 Phase B, lane M1 (missions): ASSUMPTIONS.md lines. Every one is reversible. Only the lead edits ASSUMPTIONS.md.
+
+M1-1  Ops objective types (Checkpoint, Camp, Uplink, Delivery, Job; MissionConfig.OpsObjectives) are live ONLY while
+      OpsService's hook reports them (MissionService.SetOpsHooks -> ObjectiveLive(type) == true), never through
+      LiveObjectives. Heist stays in LiveObjectives (BankRaidService reports it until the cutover, OpsService after).
+      With no hook (OpsConfig.Enabled = false) every offer, GO target and payout is byte-identical to Phase A.
+M1-2  A Required Go gates the offer by "served", not by "a site is Open right now": the old resolver has a target, or
+      the Ops hook answers the key with a table, even an empty one. So the day's list never reshuffles when sites
+      cool, are held or rotate out; the GO button shows only while a target exists. Reverse: in isLive, test
+      #goLookup(go).List == 0 instead of Served.
+M1-3  Each mission entry sends at most MissionConfig.GoMaxTargets = 16 GO targets: the ones nearest the player's
+      character (server positions) when the list is sent. MissionController (also capped at 16) picks the nearest at GO time.
+M1-4  GO refresher: while the Ops hook is set, every GoRefreshSeconds = 30 s a player's list is re-sent only if it
+      changed (a Go key's targets, the offer, progress, the UTC day or the daily-login state). Worst case: 1 send per
+      30 s per player. With no hook there is no timer at all. GoRefreshSeconds = 0 turns it off.
+M1-5  New daily ops (rewards and levels estimated from the activities design's pay table, §2.5):
+      - DailyOpCamp "Raid a Camp": Camp x1, $4,000 / 100 XP / 2 gold, MinLevel 2, Go Camp. It matches the checkpoint
+        op: a 3-minute camp raid against 2 x 2-minute checkpoints.
+      - DailyOpUplink "Hack an Uplink": Uplink x1, $5,000 / 120 XP / 3 gold, MinLevel 3, Go Uplink. It matches the jobs
+        op; MinLevel 3 because the waves bring Heavies.
+M1-6  DailyOpCargo "Haul Cargo": Delivery x1, $5,000 / 120 XP / 3 gold, MinLevel 3, with a new Go key Cargo (CARGO,
+      Required). This goes beyond contract §7's list. It gives the Delivery type a mission and a precise pointer; the
+      activities design's "Job" pointer for Delivery could send a player to a checkpoint, which never gives cargo. The
+      op is never offered until OpsService answers Go "Cargo" (a one-line lane O edit, pending_edits.md §1). Reverse:
+      delete the op row and the Cargo Go key.
+M1-7  Go "Hostiles" (HOSTILE, not Required) is on DailyKillNPC and DailyOpKillNPC. It points at the nearest Open
+      checkpoint or camp. With no hook, or none Open, there is no GO button and the mission is still offered.
+M1-8  Capture has no Go key yet. TerritoryService (batch B) does have read APIs (GetController / GetRuntime), but a
+      neutral-zone pointer must skip every player's Home Outpost (owner-only) and the oil platforms you can only reach
+      by boat. That belongs to the TerritoryService owner (lane T or batch B).
+M1-9  Slot 1 below the bank's level (DailyOpsConfig.OtherJobs) stays {Checkpoint, Jobs}, as in the activities design.
+      Camp, Uplink and Cargo rotate in slots 2-3. At level 3+ the non-bank pool has 8 ops (2 per day, a 4-day cycle).
+M1-10 Hook answers (GoTargets and ObjectiveLive) are cached for 30 s, like the Phase A GO cache. SetOpsHooks clears both
+      caches, so a hook swap takes effect at once. A hook that errors is warned and treated as "not mine" for GO
+      (fall back to the old resolver) and "not live" for objectives.
+M1-11 The Phase A pinned line `if BankRaidConfig.Enabled == false then` (BuyPathStatic :3627) is kept on purpose. It is
+      the fallback when the hook does not answer "Bank"; after the cutover the hook's Ops bank point answers first.
+M1-12 Lane M1 was built and tested on HEAD c51ec9b (batch B part 2 committed), not the 97b5ba9 named in the task. Lanes
+      N, O and U use the same base.
+M1-3a (verifier M1v) When a key has more than GoMaxTargets targets, the refresh signature also names WHICH 16 were sent
+      (their indices in the hook's list). A player who walks or drives across the map is re-sent the 16 now nearest at
+      the next refresh (at most 1 send per GoRefreshSeconds). Before the fix, a player who moved 2,000 studs was still
+      pointed at a Job 1,269 studs away while one was 690 studs away. Reverse: drop "goBit ..= setKey" in buildPayload.
+
+
+### Lead
+- **PB-L1 Jobs ship OFF** (OpsConfig.Enabled = false, every kind/site off; BankRaidService + FieldBootstrap unchanged). The
+  code, NPC core API and JOBS board are in; the cutover waits on: the spec §7 H2 bank balance test (squad >= 70 %, solo
+  10-40 %), Cargo.MaxBagsInWorld = 3 (4 bags + crates would make the busiest 512 circle 501 > 500), a device test of the
+  Persistent one-part host models under streaming, and the owner's phone test.
+- **PB-L2 Live now even with Jobs off:** "the latest GO wins" between Missions / Base-panel / ATM / guide GO, and the automatic
+  guide line waits while an objective marker is up (it used to wipe a Missions GO marker after 12 s idle).
+- **PB-L3 Lane BK pending edits still open** (w3s2/buildBK/pending_edits.md: BankRaidConfig.GuardPosts fallback posts that
+  follow the hall; OpsSites.SetDoor uses WE_Open/ClosedCFrame) - a separate follow-up commit.

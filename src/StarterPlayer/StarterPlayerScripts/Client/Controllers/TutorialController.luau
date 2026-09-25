@@ -69,6 +69,7 @@ local PlotFrame = require(Shared.Util.PlotFrame)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
+local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 
 local TutorialController = {}
 
@@ -1095,6 +1096,9 @@ local function guideTick()
 		idleAnchor = p
 		idleSince = now
 		return
+	end
+	if ObjectiveMarker.Current() ~= nil then
+		return -- a job / mission GO is up: the automatic guide line never replaces it (the latest GO wins)
 	end
 	if (guideKind == "Build" or guideKind == "Collect") and guidePick ~= "" and autoGuidedFor ~= guidePick
 		and now - idleSince >= GUIDE.AutoGuideIdleSeconds and ConsoleWaypoint.Current() == nil then

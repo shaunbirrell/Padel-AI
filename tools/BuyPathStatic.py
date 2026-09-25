@@ -3932,6 +3932,223 @@ must_not_contain(BK_MS, 'BANK_GATE_LIFT', 'W3s2 BK integ: no raised-and-hanging 
 must_contain(BK_MS, 'gate.CanQuery = false', 'W3s2 BK integ: the open gate never blocks shots or line of sight')
 must_contain(BK_WC, 'SurfaceGuis = 17', 'W3s2 BK integ: world sign budget stays 17 (6 gate pads + EMPIRE BANK + Town + 9 POI boards = 17)')
 
+# --- W3 step 2 Phase B lane KB (contracts): OpsConfig ships OFF, the 3 Jobs remotes (server -> client only) ---
+KB_OPS = 'src/ReplicatedStorage/Shared/Configs/OpsConfig.luau'
+KB_CONST = 'src/ReplicatedStorage/Shared/Constants.luau'
+KB_RS = 'src/ServerScriptService/Server/Modules/RemoteSetup.luau'
+must_contain(KB_OPS, '\tEnabled = false, -- master switch', 'W3s2 KB: Jobs (OpsConfig.Enabled) ship OFF until the integrator cuts over')
+must_not_contain(KB_OPS, 'Enabled = true', 'W3s2 KB: every Jobs kind / site switch ships false')
+must_contain(KB_OPS, 'export type OpsStatePayload = {', 'W3s2 KB: OpsState payload type (contract)')
+must_contain(KB_OPS, 'export type OpsProgressPayload = {', 'W3s2 KB: OpsProgress payload type (contract)')
+must_contain(KB_OPS, 'export type OpsPingPayload = { U: number, X: number, Z: number }', 'W3s2 KB: OpsPing payload type (contract)')
+must_contain(KB_OPS, 'CashReason = "ops",', 'W3s2 KB: job pay goes through AddCash with reason "ops"')
+must_contain(KB_OPS, 'RequireCashExempt = true,', 'W3s2 KB: Jobs stay off until "ops" is cash-multiplier exempt')
+must_contain(KB_OPS, 'Rows = {\n\t\t\tBank = { Minutes = 10, Floor = 15000, Cap = 300000, XP = 250, PlayerCd = 900,', 'W3s2 KB: bank pay row (spec §5: $36,000 at R = 60/s, $15,000 floor)')
+must_contain(KB_OPS, 'Budget = 18, -- regular slots', 'W3s2 KB: NPC ledger budget 18 (+4 headroom), spec §4')
+must_contain(KB_OPS, 'Checkpoint = { OnFoot = 150, Any = 40 },', 'W3s2 KB: checkpoint wake radii (drive-through traffic never wakes them)')
+must_contain(KB_OPS, 'LabelMaxDistance = 40,', 'W3s2 KB: job world labels MaxDistance <= 40')
+must_not_contain(KB_OPS, 'require(', 'W3s2 KB: OpsConfig is pure data (safe on client and server)')
+must_not_contain(KB_OPS, 'WaitForChild(', 'W3s2 KB: OpsConfig never waits')
+must_contain(KB_CONST, 'OpsState = "OpsState",', 'W3s2 KB: Constants OpsState remote')
+must_contain(KB_CONST, 'OpsProgress = "OpsProgress",', 'W3s2 KB: Constants OpsProgress remote')
+must_contain(KB_CONST, 'OpsPing = "OpsPing",', 'W3s2 KB: Constants OpsPing remote')
+must_not_contain(KB_CONST, 'RequestOps', 'W3s2 KB: no Ops client -> server remote (every job action is a server prompt)')
+_kb_rs = read(KB_RS) or ''
+_kb_ev = _kb_rs.split('local EVENTS = {', 1)[1].split('\n}', 1)[0] if 'local EVENTS = {' in _kb_rs else ''
+_kb_un = _kb_rs.split('local UNRELIABLE = {', 1)[1].split('\n}', 1)[0] if 'local UNRELIABLE = {' in _kb_rs else ''
+if 'Constants.RemoteNames.OpsState,' in _kb_ev and 'Constants.RemoteNames.OpsProgress,' in _kb_ev and 'OpsPing' not in _kb_ev:
+    ok('W3s2 KB: RemoteSetup EVENTS has OpsState + OpsProgress (RemoteEvents), not OpsPing')
+else:
+    bad('W3s2 KB: RemoteSetup EVENTS must list OpsState + OpsProgress and not OpsPing')
+if 'Constants.RemoteNames.OpsPing,' in _kb_un and 'OpsState' not in _kb_un and 'OpsProgress' not in _kb_un:
+    ok('W3s2 KB: RemoteSetup UNRELIABLE has OpsPing (UnreliableRemoteEvent, spec §8)')
+else:
+    bad('W3s2 KB: RemoteSetup UNRELIABLE must list OpsPing only')
+
+# --- W3 step 2 Phase B lane N (NPC core): SpawnNPC opts, stances, leash, groups, no-respawn, OnNPCDeath ---
+N_CC = 'src/ReplicatedStorage/Shared/Configs/CombatConfig.luau'
+N_CS = 'src/ServerScriptService/Server/Services/CombatService/init.luau'
+N_NPC = 'src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau'
+# spec §8 Phase B (lane N)
+must_contain(N_CS, 'NoRespawn', 'W3s2 N: SpawnNPC opts.NoRespawn (spec §8)')
+must_contain(N_CC, 'SpecialNPCTypes', 'W3s2 N: the special NPC list lives in CombatConfig (spec §8)')
+must_contain(N_NPC, 'Stance', 'W3s2 N: CombatNPC stances (spec §8)')
+# CombatConfig (contract §5.1); FieldBootstrap ships true: the integrator swaps this needle for 'FieldBootstrap = false,' at the cutover
+must_contain(N_CC, 'SpecialNPCTypes = { "BankGuard", "OilRigGuard", "FortGuard" } :: { string },', 'W3s2 N: special types = BankGuard, OilRigGuard, FortGuard (today\'s list, now config)')
+must_contain(N_CC, 'SpecialOverCap = 4,', 'W3s2 N: special / OverCap headroom +4 (18 + 4 = 22)')
+must_contain(N_CC, 'MaxActiveNPCs = 18,', 'W3s2 N: the regular NPC cap stays 18 (spec §4)')
+must_contain(N_CC, '\tFieldBootstrap = true,', 'W3s2 N: legacy field NPCs ship ON until the Ops cutover (swap to false there)')
+must_contain(N_CC, 'ProvokeHoldSeconds = 2,', 'W3s2 N: an on-foot player provokes a Passive group after 2 s')
+must_contain(N_CC, 'CalmSeconds = 30,', 'W3s2 N: a provoked group calms 30 s after its last contact')
+must_contain(N_CC, 'CampCommander = {', 'W3s2 N: the CampCommander NPC type (OpsConfig.Npc.CommanderType)')
+# CombatService (contract §5.2)
+must_contain(N_CS, 'function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?): NPCRecord?', 'W3s2 N: SpawnNPC(type, at, opts?) (2-argument calls unchanged)')
+must_contain(N_CS, 'local isSpecial = table.find(CombatConfig.SpecialNPCTypes, tid) ~= nil or o.OverCap', 'W3s2 N: the cap reads the special list from config; OverCap counts as special')
+must_contain(N_CS, 'if aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then', 'W3s2 N: cap 18 regular, 22 with the special headroom')
+must_not_contain(N_CS, 'tid == "BankGuard" or tid == "OilRigGuard" or tid == "FortGuard"', 'W3s2 N: no hard-coded special list in SpawnNPC')
+must_contain(N_CS, 'fireNPCDeath(rec, attacker, byUnit == true) -- lane N\n\tif rec.NoRespawn then\n\t\treturn -- lane N: an Ops garrison NPC is never respawned', 'W3s2 N: a killed NoRespawn NPC reports its death and is never respawned')
+must_contain(N_CS, 'fireNPCDeath(rec, nil, false) -- lane N: no killer\n\t\t\tif not rec.NoRespawn then', 'W3s2 N: a death with no killer reports it (Killer nil) and skips the respawn for NoRespawn')
+must_contain(N_CS, 'if rec.DeathFired then\n\t\treturn\n\tend\n\trec.DeathFired = true', 'W3s2 N: OnNPCDeath fires once per death')
+must_contain(N_CS, 'xpcall(entry.Fn, function(err: any)\n\t\t\t\twarn("[CombatService] OnNPCDeath listener error:", err)', 'W3s2 N: each OnNPCDeath listener runs in its own pcall')
+must_contain(N_CS, 'function CombatService.OnNPCDeath(fn: (info: NPCDeathInfo) -> ()): () -> ()', 'W3s2 N: OnNPCDeath API (contract §5.2)')
+must_contain(N_CS, 'function CombatService.DespawnNPC(id: string): boolean', 'W3s2 N: DespawnNPC API (silent: no pay, no respawn, no death event)')
+must_contain(N_CS, 'rec.DeathFired = true -- never reported as a death\n\trec.Alive = false', 'W3s2 N: DespawnNPC pays nothing and reports nothing')
+must_contain(N_CS, 'function CombatService.ProvokeGroup(groupId: string, seconds: number?): number', 'W3s2 N: ProvokeGroup API')
+must_contain(N_CS, 'function CombatService.CalmGroup(groupId: string): number', 'W3s2 N: CalmGroup API')
+must_contain(N_CS, 'function CombatService.GroupNPCs(groupId: string): { NPCInfo }', 'W3s2 N: GroupNPCs API')
+must_contain(N_CS, 'function CombatService.NPCCounts(): { Regular: number, Special: number, Total: number }', 'W3s2 N: NPCCounts API')
+must_contain(N_CS, 'CombatNPC.ProvokeGroup(npcRecords, rec.GroupId or rec.Id, nil, clock())', 'W3s2 N: a player (or squad unit) hurting a grouped NPC provokes its group')
+must_contain(N_CS, 'if CombatConfig.FieldBootstrap ~= false then\n\t\t\tCombatService.BootstrapNPCs()', 'W3s2 N: FieldBootstrap = false skips the legacy field NPCs')
+must_contain(N_CS, 'model:SetAttribute("WE_Static", true)', 'W3s2 N: a static post carries WE_Static')
+# CombatNPC (contract §5.3); the P1-2 LOS / hit-chance needles (existing) stay as they are
+must_contain(N_NPC, 'if hum and root and hum.Health > 0 and hum.SeatPart == nil then', 'W3s2 N: only an ON-FOOT player provokes by proximity (drive-through commuters are never shot)')
+must_contain(N_NPC, 'local canMove = stance ~= "Post"', 'W3s2 N: a Post / Static NPC never calls MoveTo')
+must_contain(N_NPC, 'elseif not rec.Returning and d2 > rec.Leash * rec.Leash then', 'W3s2 N: the leash (past Leash it walks Home, target dropped)')
+must_contain(N_NPC, 'if canMove and dist > rec.Def.Range * 0.85 then', 'W3s2 N: a Post never chases; walkers chase exactly as before')
+must_contain(N_NPC, 'if rec.Leash == nil and not usesGroup(rec) then', 'W3s2 N: an NPC with no opts takes today\'s Think path')
+must_not_contain(N_NPC, 'GetDescendants', 'W3s2 N: no tree scans in the NPC think loop')
+must_not_contain(N_NPC, 'RenderStepped', 'W3s2 N: NPC think stays on the 0.35 s server loop')
+# verifier additions (lane N adversarial pass): leash edge holds and fires; a passive group's Post stays quiet after a wipe
+must_contain(N_NPC, 'if target and canMove and rec.Leash ~= nil and atLeashEdge(rec, target) then', 'W3s2 N verifier: a leashed NPC stops at the leash edge and fights from there (no free kills from just outside the leash)')
+must_contain(N_NPC, 'local passiveGroupIds: { [string]: boolean } = {}', 'W3s2 N verifier: a Post re-spawned alone into an emptied passive group still holds fire')
+
+# --- W3 step 2 Phase B lane O (Ops server): the only way to act is a rate-limited server prompt; ships OFF ---
+O_DIR = 'src/ServerScriptService/Server/Services/OpsService/'
+O_FILES = ['init', 'OpsZones', 'OpsGarrison', 'OpsCargo', 'OpsKinds', 'OpsDirector', 'OpsSites', 'OpsRewards']
+O_INIT = O_DIR + 'init.luau'
+must_contain(O_INIT, 'RateLimitService.Allow(player, "ops_prompt"', 'W3s2 O: every Ops prompt is rate-limited (spec §8)')
+must_contain(O_INIT, 'if OpsConfig.Enabled ~= true then', 'W3s2 O: OpsService.Init returns at once while OpsConfig.Enabled is off')
+must_contain(O_INIT, 'if OpsConfig.Rewards.RequireCashExempt and not cashExempt() then', 'W3s2 O: no job pays while "ops" is not cash-multiplier exempt')
+must_contain(O_INIT, 'if not seatedOk and hum.SeatPart ~= nil then', 'W3s2 O: job prompts need the player on foot (server re-check)')
+must_contain(O_INIT, 'if (root.Position - at).Magnitude > dist + Z.PromptSlack then', 'W3s2 O: prompt distance re-checked with server positions')
+must_contain(O_INIT, 'OpsCargo.DropFor(player, prevPos)', 'W3s2 O: a teleport / new character drops a carried bag (no free trip home)')
+for _f in O_FILES:
+    must_not_contain(O_DIR + _f + '.luau', 'OnServerEvent', 'W3s2 O: no client -> server remote handler in OpsService/' + _f + ' (spec §8)')
+    must_not_contain(O_DIR + _f + '.luau', 'OnServerInvoke', 'W3s2 O: no RemoteFunction handler in OpsService/' + _f)
+    must_not_contain(O_DIR + _f + '.luau', 'Neon', 'W3s2 O: no Neon from OpsService/' + _f)
+    must_not_contain(O_DIR + _f + '.luau', 'PointLight', 'W3s2 O: 0 lights from OpsService/' + _f)
+    must_not_contain(O_DIR + _f + '.luau', 'AlwaysOnTop', 'W3s2 O: job labels never AlwaysOnTop (OpsService/' + _f + ')')
+    must_not_contain(O_DIR + _f + '.luau', 'RenderStepped', 'W3s2 O: no per-frame work in OpsService/' + _f)
+    must_not_contain(O_DIR + _f + '.luau', 'WaitForChild("Shared")', 'W3s2 O: never WaitForChild without a timeout (OpsService/' + _f + ')')
+    must_not_contain(O_DIR + _f + '.luau', 'GiveCash', 'W3s2 O: no GiveCash in OpsService/' + _f)
+for _f in ['init', 'OpsZones', 'OpsGarrison', 'OpsCargo', 'OpsKinds', 'OpsDirector', 'OpsRewards']:
+    must_not_contain(O_DIR + _f + '.luau', 'GetDescendants', 'W3s2 O: no descendant scans in the Ops tick modules (' + _f + ')')
+must_contain(O_DIR + 'OpsRewards.luau', 'EconomyService.AddCash(player, cash, R.CashReason)', 'W3s2 O: job cash only through EconomyService.AddCash("ops")')
+must_contain(O_DIR + 'OpsRewards.luau', 'pcall(XPService.AddXP, player, xp, R.XPReason)', 'W3s2 O: job XP only through XPService.AddXP("ops")')
+must_contain(O_DIR + 'OpsRewards.luau', 'return math.max(0, perTick / tick)', 'W3s2 O: pay R comes from the saved BaseUpgrades (TycoonMath), never the client')
+must_contain(O_DIR + 'OpsSites.luau', 'Enum.ModelStreamingMode.Persistent', 'W3s2 O: streaming host rule 2 (1-part ActivityHost model Persistent)')
+must_contain(O_DIR + 'OpsSites.luau', 'WorldLabel.SetRole(made, nil)', 'W3s2 O: site labels are never the objective marker')
+must_contain(O_DIR + 'OpsSites.luau', 'if def.Kind == "Vault" and BankRaidConfig.Enabled ~= false then', 'W3s2 O: never two bank jobs (coexistence until the cutover)')
+must_contain(O_DIR + 'OpsSites.luau', 'if def.Kind == "Camp" and (CombatConfig :: any).FieldBootstrap ~= false then', 'W3s2 O: never two garrisons on the camp posts')
+must_contain(O_DIR + 'OpsGarrison.luau', 'opts.NoRespawn = true', 'W3s2 O: job NPCs never respawn (lane N NoRespawn)')
+must_contain(O_DIR + 'OpsCargo.luau', 'return #bags < C.MaxBagsInWorld', 'W3s2 O: at most Cargo.MaxBagsInWorld bags (512-stud circle budget)')
+must_contain(O_DIR + 'OpsCargo.luau', 'not ctx.Zones.Locked(carrier, nowC) and inHome(carrier, s.Pos)', 'W3s2 O: bags deliver only in the own plot, never while teleport-locked')
+must_contain('src/ServerScriptService/Server/Modules/ProfileSchema.luau', 'Ops = { Cd = {}, DayKey = 0, Runs = {}, Seen = 0, Total = 0, BestBag = 0 },', 'W3s2 O: profile Ops default (spec §8 "Ops = {")')
+must_contain('src/ServerScriptService/Server/Modules/ProfileSchema.luau', 'ensureOpsFields(profile, os.time())', 'W3s2 O: Migrate sanitises profile.Ops')
+must_contain('src/ReplicatedStorage/Shared/Configs/AnalyticsConfig.luau', 'OPS_DONE = "OPS_DONE",', 'W3s2 O: Jobs analytics events')
+must_contain('src/ReplicatedStorage/Shared/Configs/AnalyticsConfig.luau', 'BAG_DELIVER = "BAG_DELIVER",', 'W3s2 O: bag analytics events')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'LabelLift = 7,', 'W3s2 O: site label lift (OpsConfig.Ui)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'FallbackRadius = 30,', 'W3s2 O: no-plot bag delivery radius (OpsConfig.Cargo)')
+_o_boot = read('src/ServerScriptService/Server/Bootstrap.server.luau') or ''
+_o_sq = _o_boot.find('safeInit("SquadOrdersService", SquadOrdersService, deps)')
+_o_op = _o_boot.find('safeInit("OpsService", OpsService, deps)')
+if _o_sq >= 0 and _o_op > _o_sq and 'local OpsService = safeRequire("OpsService", Services.OpsService)' in _o_boot and '\tOpsService = OpsService,' in _o_boot:
+    ok('W3s2 O: Bootstrap inits OpsService after SquadOrdersService (spec §8 safeInit("OpsService"))')
+else:
+    bad('W3s2 O: Bootstrap must safeRequire + deps + safeInit("OpsService", ...) after SquadOrdersService')
+
+# --- W3 step 2 Phase B lane O, verifier fixes: seated teleport, NPC kill farm, stale spawn generation, starter clan ---
+O_DIR = 'src/ServerScriptService/Server/Services/OpsService/'
+must_contain(O_DIR + 'OpsZones.luau', 'local base = if seated or s.Seated then (Z.TeleportStudsSeated or 150) else Z.TeleportStuds', 'W3s2 O: a seated teleport (client-owned vehicle moved home) also drops the bag and locks out')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'TeleportStudsSeated = 150,', 'W3s2 O: seated teleport threshold (> 2x the fastest vehicle cap per 0.25 s tick)')
+must_contain(O_DIR + 'OpsGarrison.luau', 'local tooSoon = playersClear ~= nil and deadAt[i] ~= nil and nowC - deadAt[i] < delay', 'W3s2 O: an Open top-up never respawns a killed guard sooner than the respawn delay (no kill farm)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'TopUpDelaySeconds = 18,', 'W3s2 O: top-up delay = CombatConfig.NPCRespawnSeconds')
+must_contain(O_DIR + 'OpsGarrison.luau', 'return -- a Sleep reset Pending and cancelled this spawn', 'W3s2 O: a cancelled staggered spawn never counts down a later generation')
+must_contain(O_DIR + 'OpsKinds.luau', 'rt.StarterClan = if player then ctx.Zones.ClanOf(player) else nil', 'W3s2 O: the starter clan is read once at activation (a leaving starter never strands the team)')
+
+# --- W3 step 2 Phase B lane U (Jobs client): JOBS board, job card + hold pill, GO = the nearest per-player target ---
+U_OC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/OpsController.luau'
+U_OJ = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/OpsJobs.luau'
+U_OM = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/ObjectiveMarker.luau'
+U_MC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau'
+U_CW = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/ConsoleWaypoint.luau'
+U_BOOT = 'src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau'
+U_NC = 'src/ReplicatedStorage/Shared/Configs/NotificationConfig.luau'
+must_contain(U_OC, 'if OpsConfig.Enabled ~= true then', 'W3s2 U: the Jobs client is a no-op while OpsConfig.Enabled is false (ships OFF)')
+must_contain(U_OC, 'ObjectiveMarker.ShowWith(p, MARKER_OPTS)', 'W3s2 U: job GO points the one objective marker (OpsConfig.Ui arrival / timeout)')
+must_contain(U_OC, 'HudLayout.RegisterTopStack("OpsCard", c, HudConfig.TopStack.Order.Objective, { Space = "Hud" })', 'W3s2 U: the job card lives in the top stack Objective slot')
+must_contain(U_OC, 'HudLayout.RegisterTopStack("OpsProgress", p.Frame, HudConfig.TopStack.Order.Progress, { Space = "Hud" })', 'W3s2 U: the hold pill lives in the top stack Progress slot')
+must_contain(U_OC, 'local HIDE_CARD = { "Tutorial", "Modal", "Dead", "InOwnPlot", "Driving" }', 'W3s2 U: the job card never shows in a panel, the tutorial, your plot or while driving')
+must_contain(U_OC, 'Remotes.TryGetUnreliableEvent(Constants.RemoteNames.OpsPing)', 'W3s2 U: OpsPing (UnreliableRemoteEvent) is polled with a bounded retry')
+for _n in ('FireServer', 'Remotes.GetUnreliableEvent(', 'RenderStepped', 'Heartbeat', 'GetDescendants', 'WaitForChild("Shared")', 'WaitForChild("PlayerGui")'):
+    must_not_contain(U_OC, _n, 'W3s2 U: OpsController has no %s (no job request, no per-frame work, bounded waits)' % _n)
+must_contain(U_OJ, 'function OpsJobs.Rows(cache: Cache, me: Me?, trackedId: string?, userId: number, now: number?): { Row }', 'W3s2 U: the pure JOBS resolver (contract §6)')
+must_contain(U_OJ, 'function OpsJobs.GoFor(cache: Cache, id: string, me: Me?, userId: number, now: number?): Point?', 'W3s2 U: GO resolves the current per-player point')
+must_contain(U_OJ, 'function OpsJobs.NearestLike(cache: Cache, id: string, me: Me?, now: number?): string?', 'W3s2 U: a closed job re-resolves to the nearest open one of that job')
+for _n in ('Instance.new', 'os.clock(', 'FireServer', 'Heartbeat', 'GetDescendants', 'workspace', 'Workspace'):
+    must_not_contain(U_OJ, _n, 'W3s2 U: OpsJobs is pure (no %s)' % _n)
+must_contain(U_OM, 'function ObjectiveMarker.ShowWith(target: Target, opts: Opts?)', 'W3s2 U: ObjectiveMarker.ShowWith (additive; Show stays frozen)')
+must_contain(U_OM, 'function ObjectiveMarker.Move(x: number, y: number, z: number): boolean', 'W3s2 U: the marker follows a moving job (bag / rotating cache) without a rebuild')
+must_contain(U_OM, 'function ObjectiveMarker.Ended(): string?', 'W3s2 U: Ended() tells an arrival from another GO')
+must_contain(U_MC, 'function MissionController.SetJobsSource(src: JobsSource?)', 'W3s2 U: the Missions panel hosts the JOBS rows')
+must_contain(U_MC, 'local JOBS_UI = OpsConfig.Ui.Jobs', 'W3s2 U: JOBS row sizes come from OpsConfig.Ui (config first)')
+must_contain(U_MC, 'local btnH = if isTouch then math.max(JOBS_UI.GoH, TAP) else TAP', 'W3s2 U: JOBS GO >= 72 v on touch (46.8 real px)')
+must_contain(U_MC, 'local JOBS_ROW_ORDER = -100 -- above the daily rows', 'W3s2 U: JOBS sit above the daily rows')
+_u_cw = read(U_CW) or ''
+_u_clr = 'pcall(function() local req: any = require; req(script.Parent.ObjectiveMarker).Clear() end)'
+if _u_cw.count(_u_clr) == 2 and _u_cw.find('function ConsoleWaypoint.Show(') < _u_cw.find(_u_clr) < _u_cw.find('function ConsoleWaypoint.ShowAtm(') < _u_cw.rfind(_u_clr):
+    ok('W3s2 U: ConsoleWaypoint.Show and ShowAtm clear the objective marker (the latest GO wins)')
+else:
+    bad('W3s2 U: ConsoleWaypoint.Show and ShowAtm must each clear the objective marker')
+must_contain(U_BOOT, 'safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild("OpsController", 5) :: Instance))', 'W3s2 U: OpsController starts from the client Bootstrap (guarded)')
+must_contain(U_NC, '{ Match = " robbed the Empire Bank$", MinGapSeconds = OPS_DIRECTOR.RobbedLineGapSeconds },', 'W3s2 U: the robbed line is at most one a minute on the client too')
+must_contain(U_NC, '{ Match = " is open$", MinGapSeconds = OPS_DIRECTOR.OpenToastGapSeconds },', 'W3s2 U: "<job> is open" at most once per 10 min on the client too')
+# --- W3 step 2 Phase B lane U, verifier fixes (the latest GO wins after arrival too; a bag that runs off is chased) ---
+must_contain(U_OC, 'if rev == myRev and not (arrived and ObjectiveMarker.OnTop()) then', 'W3s2 U: after arrival a newer marker or console line untracks the job (the card never names a stale job)')
+must_contain(U_OC, 'checkMarker() -- first: a newer GO (mission / console) wins before anything here could re-show our marker', 'W3s2 U: a job re-resolve never replaces a newer GO marker')
+must_contain(U_OC, 'refollowIfFar(id, p, me) -- the carrier ran off: chase it again', 'W3s2 U: a bag that runs off after arrival gets its marker back')
+must_contain(U_OJ, 's = string.gsub(s, SEP .. SEP, SEP)', 'W3s2 U: a JOBS sub-line never shows a double separator')
+
+# --- W3 step 2 Phase B lane M1 (missions): Ops objective types live only through OpsService's hook; GO from the hook ---
+M1_MSV = 'src/ServerScriptService/Server/Services/MissionService.luau'
+M1_MCF = 'src/ReplicatedStorage/Shared/Configs/MissionConfig.luau'
+M1_DOC = 'src/ReplicatedStorage/Shared/Configs/DailyOpsConfig.luau'
+must_contain(M1_MSV, 'function MissionService.SetOpsHooks(hooks: OpsHooks?)', 'W3s2 M1: OpsService hands MissionService its hooks (contract §7)')
+must_contain(M1_MSV, 'if MissionConfig.OpsObjectives[objectiveType] == true then\n\t\treturn opsObjectiveLive(objectiveType)', 'W3s2 M1: an Ops objective is live only while the hook says so')
+must_contain(M1_MSV, 'local ok, res = pcall(hooks.GoTargets, kind)', 'W3s2 M1: GO asks the Ops hook first; a failing hook never breaks the missions')
+must_contain(M1_MSV, 'gd.Required == true and not goLookup(go).Served', 'W3s2 M1: a Required GO gates the offer by "served", so busy sites never reshuffle the day')
+must_contain(M1_MSV, 'local near, setKey = nearestTargets(targets, player)', 'W3s2 M1: each entry sends the GoMaxTargets targets nearest the player')
+must_contain(M1_MSV, 'goBit ..= setKey', 'W3s2 M1 (verifier): the refresh signature names the nearest set, so a moving player is re-sent the targets now nearest')
+must_contain(M1_MSV, 'if gen ~= hookGen or opsHooks == nil then', 'W3s2 M1: the GO refresher runs only while the Ops hook is set')
+must_not_contain(M1_MSV, 'Heartbeat', 'W3s2 M1: no per-frame work in MissionService (the refresher is a 30 s timer)')
+must_not_contain(M1_MSV, 'RenderStepped', 'W3s2 M1: no per-frame work in MissionService')
+must_contain(M1_MCF, 'OpsObjectives = {', 'W3s2 M1: Checkpoint / Camp / Uplink / Delivery / Job are Ops objectives')
+must_contain(M1_MCF, 'Checkpoint = { Short = "POST", Required = true },', 'W3s2 M1: Go Checkpoint (nearest Open checkpoint)')
+must_contain(M1_MCF, 'Camp = { Short = "CAMP", Required = true },', 'W3s2 M1: Go Camp')
+must_contain(M1_MCF, 'Uplink = { Short = "UPLINK", Required = true },', 'W3s2 M1: Go Uplink')
+must_contain(M1_MCF, 'Job = { Short = "JOB", Required = true },', 'W3s2 M1: Go Job (nearest Open job)')
+must_contain(M1_MCF, 'Hostiles = { Short = "HOSTILE" },', 'W3s2 M1: Go Hostiles for KillNPC (not Required: GO only with a target)')
+must_contain(M1_MCF, 'GoMaxTargets = 16,', 'W3s2 M1: at most 16 GO targets per entry (MissionController reads 16)')
+must_contain(M1_MCF, 'GoRefreshSeconds = 30,', 'W3s2 M1: GO lists refresh at most every 30 s per player')
+_m1_mcf = read(M1_MCF) or ''
+_m1_lo = _m1_mcf.split('LiveObjectives = {', 1)[1].split('}', 1)[0] if 'LiveObjectives = {' in _m1_mcf else None
+if _m1_lo is not None and 'Heist = true' in _m1_lo and not any(('\t%s = true' % k) in _m1_lo for k in ('Checkpoint', 'Camp', 'Uplink', 'Delivery', 'Job')):
+    ok('W3s2 M1: LiveObjectives keeps Heist and lists no Ops objective (they are live only through OpsService)')
+else:
+    bad('W3s2 M1: LiveObjectives must keep Heist and must not list Checkpoint / Camp / Uplink / Delivery / Job')
+must_contain(M1_DOC, 'Id = "DailyOpCamp",', 'W3s2 M1: Raid a Camp daily op')
+must_contain(M1_DOC, 'Id = "DailyOpUplink",', 'W3s2 M1: Hack an Uplink daily op')
+must_contain(M1_DOC, 'Id = "DailyOpCargo",', 'W3s2 M1: Haul Cargo daily op (offered once the hook serves Go Cargo)')
+must_contain(M1_DOC, 'Go = "Checkpoint",', 'W3s2 M1: Take 2 Checkpoints has GO')
+must_contain(M1_DOC, 'Go = "Job",', 'W3s2 M1: Finish 3 Jobs has GO')
+
+# --- W3 step 2 Phase B integration: the lanes' pending edits (applied by the integrator after batch B part 2 committed) ---
+must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'ops = true, -- W3s2 Jobs', 'W3s2 Jobs: "ops" cash is multiplier-exempt')
+must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau', 'if ObjectiveMarker.Current() ~= nil then', 'W3s2 U: the automatic guide line never replaces a job / mission GO')
+must_contain('src/ServerScriptService/Server/Services/OpsService/init.luau', 'Cargo = { VaultLite = true, Cargo = true },', 'W3s2 M1: OpsService answers Go Cargo (the Haul Cargo daily op)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'PingTtlSeconds = 25,', 'W3s2 U: a pinged carrier stays a Steal row 25 s (OpsConfig.Ui, config first)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'Empty = "No jobs open · back soon",', 'W3s2 U: the JOBS header line when nothing is open')
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

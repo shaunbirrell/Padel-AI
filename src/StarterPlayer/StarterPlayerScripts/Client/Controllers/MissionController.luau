@@ -8,7 +8,13 @@
 	W3 step 2 lane M0: each mission row has ONE right-hand button (MissionConfig.Ui, 112 x 72 v on touch): CLAIM when
 	complete, GO while incomplete when the server sent GO targets (e.g. "Rob the Bank"), nothing otherwise (a
 	claimed row shows a plain DONE tag). GO closes the panel and points the one objective marker (ObjectiveMarker)
-	at the target nearest to the player; it grants nothing — progress and rewards stay on the server. ]]
+	at the target nearest to the player; it grants nothing — progress and rewards stay on the server.
+	W3 step 2 Phase B lane U — JOBS: while OpsController runs (OpsConfig.Enabled) it hands this panel a jobs source
+	(SetJobsSource) and the list starts with a "JOBS" header and up to 3 rows (OpsConfig.Ui.Jobs: 92 v rows, 24 / 22 v
+	text, a 48 v kind icon, a 112 x 72 v GO = 46.8 real px under the 0.65 panel scale) above the daily rows. GO asks
+	OpsController to track that job (the point is resolved per player at that moment) and closes the panel; the
+	tracked row shows STOP. Rows rebuild when the source changes, countdowns tick at 1 Hz while the panel is open.
+	With no source (Jobs off) the panel is exactly the M0 panel. Copy: OpsConfig.Text.Row (no key names). ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -22,8 +28,10 @@ local Types = require(Shared.Types)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
 local MissionConfig = require(Shared.Configs.MissionConfig)
+local OpsConfig = require(Shared.Configs.OpsConfig)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 
@@ -183,26 +191,344 @@ local function rowButton(row: Frame, name: string, text: string, bg: Color3, fg:
 	return btn
 end
 
+-- ── JOBS (W3 step 2 Phase B, lane U) ──────────────────────────────────────────────────────────────────────────
+export type JobsRow = {
+	Id: string,
+	Title: string,
+	Sub: string,
+	Hard: boolean,
+	Go: { Short: string, X: number, Y: number, Z: number }?,
+	Tracked: boolean,
+	Steal: boolean?,
+	Kind: string,
+}
+export type JobsSource = {
+	Rows: () -> { JobsRow },
+	Go: (id: string) -> boolean, -- true = the marker is up (the panel closes)
+	Stop: () -> (),
+	Version: () -> number,
+}
+local jobsSource: JobsSource? = nil
+local jobsFrame: Frame? = nil
+-- the two claim rows (spinner / daily login) sit fixed above the list (M0); while JOBS rows show they join the list so
+-- the jobs fit above the fold on a phone: a claimable row first (the rail badge's reason), then JOBS, then the rest
+local panelFrame: Frame? = nil
+local spinRow: Frame? = nil
+local dailyRow: Frame? = nil
+local claimsInList = false
+local fixedListY = 0 -- the list's top under the fixed claim rows (M0)
+local titleH = 0 -- the list's top with the claim rows inside it
+local CLAIM_READY_ORDER = -300
+local CLAIM_REST_ORDER = -50
+local jobsSubs: { [string]: TextLabel } = {} -- row id -> its sub-line (1 Hz countdown text)
+local jobsKey = "" -- what the built rows show (ids, GO / STOP): rebuilt only when it changes
+local JOBS_UI = OpsConfig.Ui.Jobs
+local JOBS_TEXT = OpsConfig.Text.Row
+local JOBS_ROW_ORDER = -100 -- above the daily rows (LayoutOrder 1..n)
+local JOBS_GAP = 6
+local JOBS_EMPTY: string? = (JOBS_TEXT :: any).Empty -- pending OpsConfig field; nil = no JOBS section when empty
+-- kind -> HudIcons shape (Frame-built icons only; the Flag is a plain pennant, never a country's flag)
+local JOBS_ICON: { [string]: string } = {
+	Vault = "Cash",
+	VaultLite = "Cash",
+	Cargo = "Cash",
+	Cache = "Cash",
+	Steal = "Cash",
+	Home = "Shield",
+	Checkpoint = "Flag",
+	Uplink = "Gear",
+	Holdout = "Shield",
+	Camp = "Crosshair",
+	Siege = "Crosshair",
+	Rig = "Crosshair",
+	Sabotage = "Crosshair",
+}
+local HARD_COLOR = Color3.fromRGB(255, 120, 104)
+local EASY_COLOR = Color3.fromRGB(110, 230, 120)
+
+local onJobGo: (id: string) -> () -- set after setOpen (GO closes the panel)
+local onJobStop: () -> ()
+
+local function jobsRows(): { JobsRow }
+	local src = jobsSource
+	if src == nil then
+		return {}
+	end
+	local ok, rows = pcall(src.Rows)
+	if ok and type(rows) == "table" then
+		return rows
+	end
+	return {}
+end
+
+local function jobsKeyOf(rows: { JobsRow }): string
+	local parts = table.create(#rows)
+	for i, r in ipairs(rows) do
+		parts[i] = r.Id .. (if r.Tracked then "#T" elseif r.Go then "#G" else "#-") .. "|" .. r.Title
+	end
+	return table.concat(parts, ",")
+end
+
+local function jobRow(parent: Frame, r: JobsRow, i: number, y: number, rowH: number)
+	local TAP = PanelShell.TouchMinV()
+	local titleSize = PanelShell.Text(JOBS_UI.TitleSize)
+	local subSize = PanelShell.Text(JOBS_UI.SubSize)
+	local btnW = if isTouch then JOBS_UI.GoW else MissionConfig.Ui.DesktopButtonW
+	local btnH = if isTouch then math.max(JOBS_UI.GoH, TAP) else TAP
+	local icon = if isTouch then JOBS_UI.IconSize else math.min(JOBS_UI.IconSize, 36)
+	local diffW = 72
+
+	local row = Instance.new("Frame")
+	row.Name = "Job_" .. tostring(i)
+	row.Position = UDim2.fromOffset(0, y)
+	row.Size = UDim2.new(1, 0, 0, rowH)
+	row.BackgroundColor3 = Constants.Colors.Background
+	row.BorderSizePixel = 0
+	row.Parent = parent
+	corner(row, 8)
+	if r.Tracked then
+		local st = Instance.new("UIStroke")
+		st.Color = Constants.Colors.GoldBright
+		st.Thickness = 2
+		st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		st.Parent = row
+	end
+
+	HudIcons.Make(JOBS_ICON[r.Kind] or "Dot", row, {
+		Name = "Icon",
+		Size = UDim2.fromOffset(icon, icon),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Color = if r.Tracked then Constants.Colors.GoldBright else Constants.Colors.Text,
+		Fill = Constants.Colors.Background,
+	})
+
+	local left = 10 + icon + 10
+	local blockH = titleSize + 4 + subSize
+	local top = math.max(4, math.floor((rowH - blockH) / 2))
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Position = UDim2.fromOffset(left, top)
+	title.Size = UDim2.new(1, -(left + btnW + 16 + diffW), 0, titleSize + 2)
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = titleSize
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextColor3 = Constants.Colors.Text
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	title.Text = r.Title
+	title.Parent = row
+
+	local diff = Instance.new("TextLabel")
+	diff.Name = "Difficulty"
+	diff.BackgroundTransparency = 1
+	diff.AnchorPoint = Vector2.new(1, 0)
+	diff.Position = UDim2.new(1, -(btnW + 16), 0, top)
+	diff.Size = UDim2.fromOffset(diffW, titleSize + 2)
+	diff.Font = Enum.Font.GothamBold
+	diff.TextSize = subSize
+	diff.TextXAlignment = Enum.TextXAlignment.Right
+	diff.TextColor3 = if r.Hard then HARD_COLOR else EASY_COLOR
+	diff.Text = if r.Hard then JOBS_TEXT.Hard else JOBS_TEXT.Easy
+	diff.Parent = row
+
+	local sub = Instance.new("TextLabel")
+	sub.Name = "Sub"
+	sub.BackgroundTransparency = 1
+	sub.Position = UDim2.fromOffset(left, top + titleSize + 4)
+	sub.Size = UDim2.new(1, -(left + btnW + 16), 0, subSize + 2)
+	sub.Font = Enum.Font.GothamMedium
+	sub.TextSize = subSize
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+	sub.TextColor3 = if r.Tracked then Constants.Colors.GoldBright else Constants.Colors.Muted
+	sub.TextTruncate = Enum.TextTruncate.AtEnd
+	sub.Text = r.Sub
+	sub.Parent = row
+	jobsSubs[r.Id] = sub
+
+	if r.Tracked then
+		local btn = rowButton(row, "StopButton", JOBS_TEXT.Stop, Color3.fromRGB(70, 74, 80), Constants.Colors.Text, btnW, btnH)
+		btn.Activated:Connect(function()
+			onJobStop()
+		end)
+	elseif r.Go ~= nil then
+		local id = r.Id
+		local btn = rowButton(row, "GoButton", JOBS_TEXT.Go, Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
+		btn.Activated:Connect(function()
+			onJobGo(id)
+		end)
+	end
+end
+
+local function spinClaimable(): boolean
+	return spinnerReady or (spinnerKnown and os.clock() >= spinnerReadyAt)
+end
+
+local function dailyClaimable(): boolean
+	local s = state
+	return s ~= nil and s.DailyLogin ~= nil and s.DailyLogin.AlreadyClaimedToday ~= true
+end
+
+-- fixed claim rows (M0) while there is no JOBS block; inside the list, ordered by claimability, while there is one
+local function placeClaims()
+	local list, panel, sr, dr = listFrame, panelFrame, spinRow, dailyRow
+	if not (list and panel and sr and dr) then
+		return
+	end
+	local TAP = PanelShell.TouchMinV()
+	local live = jobsFrame ~= nil and (jobsFrame :: Frame).Parent == list
+	if live ~= claimsInList then
+		claimsInList = live
+		if live then
+			for _, r in ipairs({ sr, dr }) do
+				r.Parent = list
+				r.Size = UDim2.new(1, -8, 0, TAP + 8)
+			end
+			list.Position = UDim2.fromOffset(12, titleH)
+			list.Size = UDim2.new(1, -24, 1, -(titleH + 12))
+		else
+			sr.Parent = panel
+			sr.Position = UDim2.fromOffset(12, titleH)
+			sr.Size = UDim2.new(1, -24, 0, TAP + 8)
+			dr.Parent = panel
+			dr.Position = UDim2.fromOffset(12, titleH + TAP + 8 + 6)
+			dr.Size = UDim2.new(1, -24, 0, TAP + 8)
+			list.Position = UDim2.fromOffset(12, fixedListY)
+			list.Size = UDim2.new(1, -24, 1, -(fixedListY + 12))
+		end
+	end
+	if live then
+		local so = if spinClaimable() then CLAIM_READY_ORDER else CLAIM_REST_ORDER
+		local dn = if dailyClaimable() then CLAIM_READY_ORDER + 1 else CLAIM_REST_ORDER + 1
+		if sr.LayoutOrder ~= so then
+			sr.LayoutOrder = so
+		end
+		if dr.LayoutOrder ~= dn then
+			dr.LayoutOrder = dn
+		end
+	end
+end
+
+-- (re)build the JOBS block at the top of the list; with force = false only the sub-lines change when the rows are
+-- the same ones (countdowns, distances)
+local function refreshJobs(force: boolean)
+	local list = listFrame
+	if list == nil then
+		return
+	end
+	local rows = if jobsSource then jobsRows() else {}
+	local key = jobsKeyOf(rows)
+	local jf = jobsFrame
+	if not force and jf and jf.Parent == list and key == jobsKey then
+		for _, r in ipairs(rows) do
+			local lab = jobsSubs[r.Id]
+			if lab and lab.Text ~= r.Sub then
+				lab.Text = r.Sub
+			end
+		end
+		placeClaims()
+		return
+	end
+	jobsKey = key
+	table.clear(jobsSubs)
+	if jf then
+		jf:Destroy()
+	end
+	jobsFrame = nil
+	if jobsSource == nil or (#rows == 0 and JOBS_EMPTY == nil) then
+		placeClaims()
+		return
+	end
+	local TAP = PanelShell.TouchMinV()
+	local headerSize = PanelShell.Text(JOBS_UI.HeaderSize)
+	local headerH = headerSize + 6
+	local titleSize = PanelShell.Text(JOBS_UI.TitleSize)
+	local subSize = PanelShell.Text(JOBS_UI.SubSize)
+	local btnH = if isTouch then math.max(JOBS_UI.GoH, TAP) else TAP
+	local rowH = if isTouch then math.max(JOBS_UI.RowH, btnH + 12) else math.max(btnH + 12, 8 + titleSize + 4 + subSize + 8)
+	local n = #rows
+	local bodyH = if n > 0 then n * rowH + (n - 1) * JOBS_GAP else subSize + 12
+
+	local f = Instance.new("Frame")
+	f.Name = "Jobs"
+	f.LayoutOrder = JOBS_ROW_ORDER
+	f.Size = UDim2.new(1, -8, 0, headerH + bodyH + 4)
+	f.BackgroundTransparency = 1
+	f.BorderSizePixel = 0
+	f.Parent = list
+	jobsFrame = f
+
+	local header = Instance.new("TextLabel")
+	header.Name = "Header"
+	header.BackgroundTransparency = 1
+	header.Position = UDim2.fromOffset(4, 0)
+	header.Size = UDim2.new(1, -8, 0, headerH)
+	header.Font = Enum.Font.GothamBold
+	header.TextSize = headerSize
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.TextColor3 = Constants.Colors.GoldBright
+	header.Text = JOBS_TEXT.Header
+	header.Parent = f
+
+	if n == 0 then
+		local empty = Instance.new("TextLabel")
+		empty.Name = "Empty"
+		empty.BackgroundTransparency = 1
+		empty.Position = UDim2.fromOffset(4, headerH)
+		empty.Size = UDim2.new(1, -8, 0, subSize + 8)
+		empty.Font = Enum.Font.GothamMedium
+		empty.TextSize = subSize
+		empty.TextXAlignment = Enum.TextXAlignment.Left
+		empty.TextColor3 = Constants.Colors.Muted
+		empty.TextTruncate = Enum.TextTruncate.AtEnd
+		empty.Text = JOBS_EMPTY or ""
+		empty.Parent = f
+		placeClaims()
+		return
+	end
+	for i, r in ipairs(rows) do
+		jobRow(f, r, i, headerH + (i - 1) * (rowH + JOBS_GAP), rowH)
+	end
+	placeClaims()
+end
+
+--[[ OpsController (lane U) hands the panel its jobs; nil removes the JOBS section. ]]
+function MissionController.SetJobsSource(src: JobsSource?)
+	jobsSource = src
+	if menuOpen then
+		refreshJobs(true)
+	end
+end
+
+--[[ The jobs changed (OpsState / a ping / tracking): rebuild the JOBS rows if the panel is open. ]]
+function MissionController.JobsChanged()
+	if menuOpen then
+		refreshJobs(false)
+	end
+end
+
 local function refresh()
 	if not listFrame then
 		return
 	end
 	paintSpinner()
 	for _, child in ipairs(listFrame:GetChildren()) do
-		if child:IsA("Frame") or (child:IsA("TextLabel") and child.Name == "EmptyState") then
+		if (child:IsA("Frame") and child ~= spinRow and child ~= dailyRow) or (child:IsA("TextLabel") and child.Name == "EmptyState") then
 			child:Destroy()
 		end
 	end
-	if not state then
-		emptyState(listFrame, "Loading missions… stand by for server sync.")
-		return
-	end
+	jobsFrame = nil
 	local layout = listFrame:FindFirstChildOfClass("UIListLayout")
 	if not layout then
 		local l = Instance.new("UIListLayout")
 		l.Padding = UDim.new(0, 6)
 		l.SortOrder = Enum.SortOrder.LayoutOrder
 		l.Parent = listFrame
+	end
+	refreshJobs(true)
+	if not state then
+		emptyState(listFrame, "Loading missions… stand by for server sync.")
+		return
 	end
 
 	if #state.Daily == 0 then
@@ -353,6 +679,10 @@ local function setOpen(open: boolean)
 	end
 	if open then
 		refresh()
+		local list = listFrame
+		if list and jobsFrame then
+			list.CanvasPosition = Vector2.new(0, 0) -- the JOBS rows are the first thing you see
+		end
 	end
 end
 
@@ -371,6 +701,32 @@ onGo = function(entry: any)
 		warn("[WAR EMPIRE] MissionController: ObjectiveMarker.Show failed: " .. tostring(err))
 	end
 	setOpen(false)
+end
+
+-- JOBS GO: OpsController tracks the job (point resolved now, per player); the panel gets out of the way
+onJobGo = function(id: string)
+	local src = jobsSource
+	if src == nil then
+		return
+	end
+	local ok, went = pcall(src.Go, id)
+	if not ok then
+		warn("[WAR EMPIRE] MissionController: jobs GO failed: " .. tostring(went))
+	end
+	if ok and went == true then
+		setOpen(false)
+	else
+		refreshJobs(true) -- the row went stale (the job closed): show what is open now
+	end
+end
+
+onJobStop = function()
+	local src = jobsSource
+	if src then
+		pcall(AudioController.PlayClick)
+		pcall(src.Stop)
+	end
+	refreshJobs(true)
 end
 
 -- a claim row (spinner / daily login): info text left, a TAP-tall button right
@@ -461,8 +817,11 @@ function MissionController.Init()
 	end)
 
 	local y = TAP + 8
+	titleH = y
+	panelFrame = panel
 	-- v70: FREE SUPPLY SPIN (was the SPIN chip on the cash pill)
-	local _, sInfo, sBtn = claimRow(panel, "SpinnerRow", y, "CLAIM")
+	local sRow, sInfo, sBtn = claimRow(panel, "SpinnerRow", y, "CLAIM")
+	spinRow = sRow
 	spinInfo = sInfo
 	spinBtn = sBtn
 	sBtn.Activated:Connect(function()
@@ -474,7 +833,8 @@ function MissionController.Init()
 	end)
 	y += TAP + 8 + 6
 
-	local _, dInfo, dBtn = claimRow(panel, "DailyRow", y, "CLAIM DAILY")
+	local dRow, dInfo, dBtn = claimRow(panel, "DailyRow", y, "CLAIM DAILY")
+	dailyRow = dRow
 	dInfo.Text = "Daily reward"
 	dInfo.Font = Enum.Font.GothamMedium
 	dailyInfo = dInfo
@@ -484,6 +844,7 @@ function MissionController.Init()
 		fire(Constants.RemoteNames.RequestClaimDailyReward)
 	end)
 	y += TAP + 8 + 8
+	fixedListY = y
 
 	local list = Instance.new("ScrollingFrame")
 	list.Name = "List"
@@ -536,6 +897,9 @@ function MissionController.Init()
 			task.wait(1)
 			if menuOpen and spinnerKnown and not spinnerReady then
 				paintSpinner()
+			end
+			if menuOpen and jobsSource then
+				refreshJobs(false) -- countdowns / distances (text only unless the rows changed); claim row order
 			end
 		end
 	end)

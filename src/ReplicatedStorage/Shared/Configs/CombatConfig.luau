@@ -54,6 +54,20 @@ local CombatConfig = {
 	NPCAlsoSpawnNearTerritories = false,
 	MaxTerritoryNPCSpawns = 4,
 
+	-- W3 step 2 Phase B, lane N (NPC core; spec w3s2 §4, contract §5). The cap stays MaxActiveNPCs (18 regular);
+	-- these types, and SpawnNPC's opts.OverCap event NPCs, may go SpecialOverCap past it (18 + 4 = 22 alive at most).
+	SpecialNPCTypes = { "BankGuard", "OilRigGuard", "FortGuard" } :: { string },
+	SpecialOverCap = 4,
+	-- The legacy field NPCs (BootstrapNPCs over the WE_NPCSpawn anchors). Ships true (today). The Ops cutover sets
+	-- it false: the camps' garrisons then come from OpsService, never two garrisons on the same posts.
+	FieldBootstrap = true,
+	-- SpawnNPC opts.Stance: "Aggressive" (today) | "Passive" (holds fire until provoked) | "Post" (never walks)
+	NPCStance = {
+		ProvokeHoldSeconds = 2, -- Passive: an on-foot player inside ProvokeRadius of a Home this long provokes the group
+		CalmSeconds = 30, -- a provoked group calms this long after its last contact (a target in AggroRange, or hurt)
+		HomeSlack = 2, -- studs (flat): "at home" for the walk back
+	},
+
 	NPCTypes = {
 		Infantry = {
 			Id = "Infantry",
@@ -123,6 +137,21 @@ local CombatConfig = {
 			CashReward = 120,
 			XPReward = 35,
 			Color = Color3.fromRGB(100, 95, 70),
+		},
+		-- W3 step 2 Phase B, lane N: the camp boss (OpsConfig.Npc.CommanderType). A regular type: it counts against the
+		-- 18, not the +4 headroom.
+		CampCommander = {
+			Id = "CampCommander",
+			DisplayName = "Camp Commander",
+			Health = 260,
+			Damage = 14,
+			FireRate = 1.5,
+			Range = 80,
+			WalkSpeed = 10,
+			AggroRange = 100,
+			CashReward = 250,
+			XPReward = 60,
+			Color = Color3.fromRGB(72, 78, 44),
 		},
 	} :: { [string]: NPCTypeDef },
 

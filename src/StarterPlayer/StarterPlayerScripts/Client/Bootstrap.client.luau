@@ -49,5 +49,6 @@ safeInit("BusinessVisuals", safeRequire("BusinessVisuals", Modules:WaitForChild(
 safeInit("ProducerLabels", safeRequire("ProducerLabels", Modules:WaitForChild("ProducerLabels", 5) :: Instance)) -- owner-only "+$N every 5s" over the nearest own yard / pump (EconomyConfig.ProducerLabels.Enabled)
 safeInit("NextPadChevrons", safeRequire("NextPadChevrons", Modules:WaitForChild("NextPadChevrons", 5) :: Instance)) -- gold floor chevrons to the next pad on the own plot (TycoonGuideConfig.Chevrons.Enabled)
 safeInit("LabelGovernor", safeRequire("LabelGovernor", Modules:WaitForChild("LabelGovernor", 5) :: Instance)) -- at most 3 base labels on screen (WorldLabelConfig.BaseLabelGovernor.Enabled)
+safeInit("OpsController", safeRequire("OpsController", Controllers:WaitForChild("OpsController", 5) :: Instance)) -- W3s2 Phase B Jobs: JOBS rows, job card, hold pill (a no-op while OpsConfig.Enabled is false)
 
 print("[WAR EMPIRE] Client Bootstrap ready.")
