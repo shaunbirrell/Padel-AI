@@ -19,6 +19,13 @@
 	  * subtitle "Income $46/s  buy at each console" from WE_IncomePerSec (what the ATM really receives).
 	  With the guide on, "+$N/s" replaces the old "+N/t" row suffix; with the guide off the rows and the subtitle
 	  read exactly as before v72 (flags off = HEAD).
+	F5 one pointer: the NEXT badge / gold outline follow the same rule as the console NEXT tag (WorldPromptController)
+	and the floor chevrons, TycoonMath.GuideTarget. While the tutorial runs (TycoonGuideConfig.Chevrons.FollowTutorial)
+	it marks the active step's own pad (Command Center, Barracks) for its first level and no row on other steps
+	(Collect cash points at the ATM); after it, the server's pick WE_NextBuy "Id:Level" (the row whose next level that
+	is). The step comes from TutorialStateUpdate / PlayerStateUpdate; while a step is up on the HUD ("Tutorial" flag)
+	but not known here, no row is NEXT. Row rebuilds while open are coalesced to at most one per RELIST_MIN_GAP
+	(10 Hz); nothing runs per frame.
 ]]
 
 local Players = game:GetService("Players")
@@ -34,6 +41,7 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local BusinessConfig = require(Shared.Configs.BusinessConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local TycoonMath = require(Shared.Util.TycoonMath)
@@ -51,6 +59,7 @@ local GUIDE_ON = TycoonGuideConfig.Enabled -- v72 rows / NEXT / subtitle
 local GT = TycoonGuideConfig.Text
 local BIZ_ORDER = 1000 -- LayoutOrder base of the WAR BUSINESSES header + business rows (after the buildings)
 local NEXT_INK = Color3.fromRGB(28, 22, 6) -- dark text on the gold NEXT badge
+local RELIST_MIN_GAP = 0.1 -- seconds between row rebuilds while open (CLAUDE.md: UI refresh <= 10 Hz)
 
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
@@ -64,6 +73,13 @@ local screenGui: ScreenGui? = nil
 local listFrame: ScrollingFrame? = nil
 local subLabel: TextLabel? = nil
 local shell: PanelShell.Shell? = nil
+local relistQueued = false
+local lastRelist = -math.huge
+
+-- F5 one pointer: the tutorial step the server last pushed (tutKnown) / nil once the tutorial is complete
+local tutKnown = false
+local tutStep: TycoonMath.GuideStep? = nil
+local tutPayloadStep: TycoonMath.GuideStep = { PadStructureId = nil, Pointer = nil } -- a step Id this config lacks
 
 local setOpen: (boolean) -> ()
 
@@ -114,6 +130,36 @@ local function refreshSubtitle()
 	sub.Text = table.concat(parts, " · ") .. string.format("  (every %ds)", tickSec)
 end
 
+-- F5 one pointer: remember the tutorial step (TutorialStateUpdate / PlayerStateUpdate), like WorldPromptController
+local function applyTutorialStep(complete: boolean, id: any, pad: any, pointer: any)
+	tutKnown = true
+	if complete then
+		tutStep = nil
+		return
+	end
+	local i = if typeof(id) == "string" then TutorialConfig.IndexOf(id) else nil
+	local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+	if def ~= nil then
+		tutStep = def
+	else
+		tutPayloadStep.PadStructureId = if typeof(pad) == "string" then pad else nil
+		tutPayloadStep.Pointer = if typeof(pointer) == "string" then pointer else nil
+		tutStep = tutPayloadStep
+	end
+end
+
+-- The row that gets the NEXT badge: (structure id, the level it points at) from TycoonMath.GuideTarget (the tutorial
+-- step's pad while it runs, else WE_NextBuy), the same rule as the console NEXT tag; (nil, 0) = no row.
+local function guideNext(): (string?, number)
+	local step: TycoonMath.GuideStep? = nil
+	if tutKnown then
+		step = tutStep
+	elseif HudLayout.GetFlag("Tutorial") then
+		return nil, 0 -- a tutorial step is up but has not reached this controller yet: no NEXT row
+	end
+	return TycoonMath.GuideTarget(step, player:GetAttribute("WE_NextBuy"))
+end
+
 -- v72: width (v) of the gold NEXT badge for text size `size`
 local function badgeWidth(text: string, size: number): number
 	local ok, v = pcall(function(): Vector2
@@ -158,11 +204,13 @@ local function refreshList(scrollToNext: boolean?)
 	local descSize = PanelShell.Text(12)
 	local btnW = if PanelShell.IsTouch() then 120 else 88 -- GO / MAX chip (was the "BUY $N +N/t" button)
 
-	-- v72 guide: the server's pick (WE_NextBuy) and the income multiplier the rows' +$/s use
+	-- v72 guide: the one pointer (tutorial step pad, else the server's pick WE_NextBuy) and the income multiplier the
+	-- rows' +$/s use
 	local nextId: string? = nil
+	local nextTarget = 0 -- the level the pointer marks (GuideTarget)
 	local mult = 1
 	if GUIDE_ON then
-		nextId = TycoonMath.Decode(player:GetAttribute("WE_NextBuy"))
+		nextId, nextTarget = guideNext()
 		mult = attrNum("WE_IncomeMult", 1)
 		if mult <= 0 then
 			mult = 1
@@ -179,7 +227,8 @@ local function refreshList(scrollToNext: boolean?)
 			local nextLevel = level + 1
 			local cost = if nextLevel <= def.MaxLevel then def.Costs[nextLevel] else nil
 			local isBusiness = def.Kind ~= nil and def.Kind == BusinessConfig.Kind
-			local isNext = nextId ~= nil and structureId == nextId
+			-- the console rule: the pointer's id AND the level this row would buy next
+			local isNext = nextId ~= nil and structureId == nextId and nextTarget == level + 1
 			local layoutOrder = if isBusiness then BIZ_ORDER + order else order
 
 			-- v72: one WAR BUSINESSES header above the first business row
@@ -384,6 +433,22 @@ local function refreshList(scrollToNext: boolean?)
 	end
 end
 
+-- While open, rows follow cash / upgrades / the pointer at most once per RELIST_MIN_GAP (10 Hz): a burst of pushes
+-- (EconomyUpdate + WE_Cash for one buy, a server re-pick, a tutorial step) is one rebuild. Closed: nothing runs.
+local function queueRelist()
+	if not menuOpen or relistQueued then
+		return
+	end
+	relistQueued = true
+	task.delay(math.max(0, lastRelist + RELIST_MIN_GAP - os.clock()), function()
+		relistQueued = false
+		if menuOpen then
+			lastRelist = os.clock()
+			refreshList()
+		end
+	end)
+end
+
 function setOpen(open: boolean)
 	menuOpen = open
 	if screenGui then
@@ -398,6 +463,7 @@ function setOpen(open: boolean)
 	end
 	if open then
 		refreshSubtitle()
+		lastRelist = os.clock()
 		refreshList(true)
 	end
 end
@@ -525,9 +591,7 @@ function BaseController.Init()
 			passivePerTick = base.PassiveIncomePerTick
 		end
 		refreshSubtitle()
-		if menuOpen then
-			refreshList()
-		end
+		queueRelist()
 	end)
 
 	Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate, function(payload: any)
@@ -541,9 +605,7 @@ function BaseController.Init()
 		local v = tonumber(n)
 		if typeof(v) == "number" then
 			cash = math.floor(v)
-			if menuOpen then
-				refreshList()
-			end
+			queueRelist()
 		end
 	end
 
@@ -558,6 +620,19 @@ function BaseController.Init()
 
 	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: Types.PlayerStatePayload)
 		applyCash(state.Cash)
+		-- F5 one pointer: the tutorial step (index in the current order) or complete (the NEXT row follows it)
+		if GUIDE_ON then
+			if state.TutorialComplete == true then
+				applyTutorialStep(true, nil, nil, nil)
+				queueRelist()
+			elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
+				local def = TutorialConfig.GetStep(state.TutorialStep)
+				if def ~= nil then
+					applyTutorialStep(false, def.Id, nil, nil)
+					queueRelist()
+				end
+			end
+		end
 		if state.Base then
 			upgrades = state.Base.Upgrades
 			if typeof(state.Base.PlotId) == "number" then
@@ -587,13 +662,20 @@ function BaseController.Init()
 	-- v72 guide: the server re-picks / re-stamps these (at most every few seconds): subtitle + rows follow
 	if GUIDE_ON then
 		player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(refreshSubtitle)
-		local function relist()
-			if menuOpen then
-				refreshList()
+		player:GetAttributeChangedSignal("WE_NextBuy"):Connect(queueRelist)
+		player:GetAttributeChangedSignal("WE_IncomeMult"):Connect(queueRelist)
+		-- F5 one pointer: the NEXT row follows the tutorial step (TutorialStateUpdate / the HUD "Tutorial" flag)
+		Remotes.BindEvent(Constants.RemoteNames.TutorialStateUpdate, function(payload: any)
+			if typeof(payload) == "table" then
+				applyTutorialStep(payload.Complete == true, payload.Id, payload.PadStructureId, payload.Pointer)
+				queueRelist()
 			end
-		end
-		player:GetAttributeChangedSignal("WE_NextBuy"):Connect(relist)
-		player:GetAttributeChangedSignal("WE_IncomeMult"):Connect(relist)
+		end)
+		HudLayout.FlagChanged:Connect(function(name: string)
+			if name == "Tutorial" and not tutKnown then
+				queueRelist()
+			end
+		end)
 	end
 
 	refreshSubtitle()

@@ -6,8 +6,9 @@
 
 	Owner default D1 (roadmap §8): Game Settings → Security → "Allow Loading Third Party Assets" stays OFF.
 	With it OFF, LoadAssetAsync only loads assets the game creator owns or was granted, so each third-party
-	ID below fails once (VisualAssetService caches the failure) and the Part kit stays. None of these IDs is
-	owned by Roblox (economy API, 2026-09-24).
+	ID below fails (a "not authorized / not trusted" error is final at once; any other error is retried in the
+	background, LoadRetry* below, then cached) and the Part kit stays. None of these IDs is owned by Roblox
+	(economy API, 2026-09-24).
 
 	W1 CFG (roadmap §1.4, §2.2 item 5): these entries are set to 0 and fall back to the Part kit
 	(vehicles first try their KitFamilyFallback body):
@@ -51,7 +52,35 @@ export type AssetRef = {
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
-	MaxLoadAttempts = 48,
+	MaxLoadAttempts = 48, -- per server, first tries + retries; an id asked for after that keeps its Part kit (one Output line)
+	-- A LoadAsset that fails with a transient error (HTTP 5xx / 429 / timeout) is retried in the background, never in
+	-- the caller's thread (boot and spawns never wait): up to LoadRetryCount more tries, LoadRetryDelay seconds after
+	-- the failure, x LoadRetryBackoff after each (20 s, 40 s). Every retry counts toward MaxLoadAttempts. An error
+	-- containing any LoadRetryPermanentErrors text (lower-case) is final: no retry. Until a retry succeeds the Part kit
+	-- look stays; hosts dressed before it keep their Part kit, later ones get the model.
+	LoadRetryCount = 2,
+	LoadRetryDelay = 20,
+	LoadRetryBackoff = 2,
+	-- the last LoadRetryReserve attempts of MaxLoadAttempts are kept for FIRST loads (a later spawn's model): a retry
+	-- that would use one is not made (the id is final, one line). Keeps a full outage at boot from using up the
+	-- budget later ids need (fix57 census: <= 19 ids at boot, <= 6 later, fallbacks included).
+	LoadRetryReserve = 12,
+	LoadRetryPermanentErrors = {
+		"not trusted",
+		"not authorized",
+		"not authorised",
+		"permission",
+		"forbidden",
+		"http 403",
+		"http 400",
+		"http 404",
+		"does not exist",
+		"not found",
+		"moderated",
+		"not approved",
+		"archived",
+		"invalid",
+	},
 	MaxPartsPerModel = 40, -- CLAUDE.md catalog budget: an inserted template with more BaseParts is refused (Part kit stays)
 	FitShadowShare = 0.5, -- fitted vehicle bodies: only parts at least this share of the chassis length cast a shadow
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)

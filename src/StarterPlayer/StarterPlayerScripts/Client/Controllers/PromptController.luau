@@ -25,6 +25,11 @@
 	v72 (TycoonGuideConfig.Enabled only): on touch the pill lane moves right so its left edge clears the thumb zone
 	(TycoonMath.ActionLaneShiftV with TycoonGuideConfig.BuyLane, like the BUY button), and pills stacked above the
 	BUY button clear its 72 v touch height (BuyLane.TouchSize).
+
+	Per-prompt state (adopted / disabledByUs / suppressed) lives in STRONG tables: a weak-keyed entry could vanish when
+	Roblox collects the prompt's Lua wrapper while the prompt still exists (a MAX / locked console's pill came back
+	after walking away). Each prompt gets one Destroying + AncestryChanged pair when it first enters a table; either
+	event (destroyed, or no longer a descendant of the DataModel) prunes it from every table and disconnects the pair.
 ]]
 
 local Players = game:GetService("Players")
@@ -81,15 +86,67 @@ local screen: ScreenGui? = nil
 local laneFrame: Frame? = nil
 local pills: { [ProximityPrompt]: Pill } = {}
 local pillSeq = 0
-local adopted: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
-local disabledByUs: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
-local suppressed: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
+-- Per-prompt state. STRONG tables (Roblox may collect an Instance's Lua wrapper while nothing strong holds it, so a
+-- weak-keyed entry can vanish while the prompt still exists, e.g. a MAX console's suppression while the player is out
+-- of range). Every key is tracked (tracked[prompt] = its connections) and pruned from all four tables when the prompt
+-- is destroyed or leaves the DataModel (streamed out / removed).
+local adopted: { [ProximityPrompt]: boolean } = {}
+local disabledByUs: { [ProximityPrompt]: boolean } = {}
+local suppressed: { [ProximityPrompt]: boolean } = {}
+local tracked: { [ProximityPrompt]: { RBXScriptConnection } } = {}
 local myPlotId: number? = nil
 local buyActive = false
 local started = false
 local shutDown = false
 local lanePending = false
 local globalConns: { RBXScriptConnection } = {}
+
+local removePill: (ProximityPrompt) -> () -- pills section below
+
+---------------------------------------------------------------------------------------------------------------
+-- per-prompt bookkeeping (strong keys, pruned on Destroying / leaving the DataModel; event-driven, no polling)
+---------------------------------------------------------------------------------------------------------------
+
+-- forget `prompt` everywhere: its adopted / disabledByUs / suppressed entries, its connections, and a pill it still has
+local function prune(prompt: ProximityPrompt)
+	local conns = tracked[prompt]
+	if conns == nil then
+		return
+	end
+	tracked[prompt] = nil
+	adopted[prompt] = nil
+	disabledByUs[prompt] = nil
+	suppressed[prompt] = nil
+	for _, c in ipairs(conns) do
+		c:Disconnect()
+	end
+	if pills[prompt] then
+		removePill(prompt)
+	end
+end
+
+-- One Destroying + AncestryChanged pair per prompt, made before any per-prompt table holds it (idempotent). A prompt
+-- already outside the DataModel is refused (false): with deferred events a DescendantAdded / PromptShown can arrive
+-- after it left, and its prune events may already have fired, so a stored entry could never be pruned.
+local function track(prompt: ProximityPrompt): boolean
+	if tracked[prompt] ~= nil then
+		return true
+	end
+	if not prompt:IsDescendantOf(game) then
+		return false
+	end
+	local conns: { RBXScriptConnection } = {}
+	tracked[prompt] = conns
+	table.insert(conns, prompt.Destroying:Connect(function()
+		prune(prompt)
+	end))
+	table.insert(conns, prompt.AncestryChanged:Connect(function()
+		if not prompt:IsDescendantOf(game) then
+			prune(prompt)
+		end
+	end))
+	return true
+end
 
 ---------------------------------------------------------------------------------------------------------------
 -- ownership
@@ -171,7 +228,9 @@ local function applyOwnerOnly(prompt: ProximityPrompt)
 		if prompt.Enabled then
 			prompt.Enabled = false
 		end
-		disabledByUs[prompt] = true
+		if track(prompt) then
+			disabledByUs[prompt] = true
+		end
 	elseif disabledByUs[prompt] then
 		disabledByUs[prompt] = nil
 		prompt.Enabled = true
@@ -408,7 +467,7 @@ local function resetFill(pill: Pill, seconds: number?)
 	end)
 end
 
-local function removePill(prompt: ProximityPrompt)
+function removePill(prompt: ProximityPrompt)
 	local pill = pills[prompt]
 	if not pill then
 		return
@@ -566,19 +625,28 @@ local function adopt(inst: Instance)
 	if adopted[prompt] then
 		return
 	end
+	if not track(prompt) then
+		return -- left the DataModel before this (deferred) event ran; DescendantAdded adopts it if it comes back
+	end
 	adopted[prompt] = true
 	pcall(function()
 		prompt.Style = Enum.ProximityPromptStyle.Custom
 	end)
 	if OWNER_ONLY[prompt.Name] then
 		applyOwnerOnly(prompt)
-		prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
+		local conn = prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
 			-- the server re-replicating Enabled = true must not re-open someone else's console / terminal / car
 			if prompt.Enabled and isForeign(prompt) then
 				prompt.Enabled = false
 				disabledByUs[prompt] = true
 			end
 		end)
+		-- kept with the prompt's tracked connections: pruning disconnects it, so a prompt that comes back into the
+		-- DataModel is adopted afresh with exactly one listener
+		local conns = tracked[prompt]
+		if conns then
+			table.insert(conns, conn)
+		end
 	end
 end
 
@@ -644,6 +712,9 @@ function PromptController.SetSuppressed(prompt: ProximityPrompt, on: boolean)
 		return
 	end
 	if on then
+		if not track(prompt) then
+			return -- not in the DataModel (streamed out / removed): nothing to hide, nothing to remember
+		end
 		suppressed[prompt] = true
 	else
 		suppressed[prompt] = nil
@@ -806,6 +877,25 @@ function PromptController.GetPillTexts(): { string }
 		table.insert(out, pill.Label.Text)
 	end
 	return out
+end
+
+--[[ QA: sizes of the per-prompt tables (leak checks) and whether `prompt` is suppressed right now. ]]
+function PromptController._Stats(prompt: ProximityPrompt?): { Tracked: number, Adopted: number, Suppressed: number, DisabledByUs: number, Pills: number, IsSuppressed: boolean }
+	local function count(t: { [any]: any }): number
+		local n = 0
+		for _ in pairs(t) do
+			n += 1
+		end
+		return n
+	end
+	return {
+		Tracked = count(tracked),
+		Adopted = count(adopted),
+		Suppressed = count(suppressed),
+		DisabledByUs = count(disabledByUs),
+		Pills = count(pills),
+		IsSuppressed = prompt ~= nil and suppressed[prompt] == true,
+	}
 end
 
 return PromptController

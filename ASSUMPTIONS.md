@@ -2698,3 +2698,108 @@ U0-9  Bounded waits. CompassController and TerritoryController used ReplicatedSt
 - **PA-L3 Bank posts are absolute coordinates.** If the bank / vault ever moves without the anchors / GuardPosts, guards
   are stranded (a lone player could loot untouched). Lane BK must re-run the v2 driver and real_play coverage.
 - **PA-L4 Enable steps 2 and 3 stay OFF** until lane BK frees sign budget (18 signs needed vs 17).
+
+## 2026-09-25 — Small fixes: prompt tables, asset retry, Base-panel NEXT badge, prestige in the pick
+
+# fix57 assumptions (small fixes: PromptController strong tables, VisualAssetService retry / logs, Base-panel NEXT badge, BusinessService prestige)
+
+Each is reversible; the one-line revert is given. To be merged into ASSUMPTIONS.md by the lead (this lane does not edit it).
+
+## PromptController (StarterPlayer/.../Client/Controllers/PromptController.luau)
+
+- **A1 Strong tables + one prune pair per prompt.** `adopted`, `disabledByUs`, `suppressed` are plain (strong) tables.
+  A prompt is `track`ed (one `Destroying` + one `AncestryChanged` connection) the first time any of the three stores it;
+  either event (destroyed, or `not prompt:IsDescendantOf(game)`) prunes it from all three, disconnects the pair and
+  removes a pill it still has. No polling, nothing per frame. Revert: restore the three `setmetatable({} :: any, { __mode = "k" })` lines and drop `track`/`prune`.
+- **A2 Orphans are refused.** `track` returns false for a prompt already outside the DataModel, so `adopt`,
+  `applyOwnerOnly` and `SetSuppressed(on)` store nothing for it (a deferred DescendantAdded / PromptShown can arrive after
+  the prompt left, when its prune events have already fired; storing it would leak). If it re-enters the DataModel,
+  DescendantAdded adopts it afresh. Behaviour change only for prompts outside the DataModel (they have no pill anyway).
+- **A3 The owner-only `Enabled` listener is kept with the tracked connections** and disconnected on prune (HEAD never
+  disconnected it). A prompt that leaves and re-enters the DataModel therefore gets exactly one listener, not two.
+- **A4 A pruned prompt that we disabled (foreign console) is simply forgotten.** If the same instance comes back
+  (non-streaming re-parent) `adopt` re-runs `applyOwnerOnly` (foreign → disabled again). A prompt that was foreign when
+  it left and is the player's own when it comes back keeps `Enabled = false` until the server re-replicates Enabled;
+  HEAD had the same gap (its plot-change loops skip parent-less prompts). Streamed-out prompts come back as new instances.
+- **A5 `PromptController._Stats(prompt?)`** is a QA hook (table sizes + IsSuppressed), like `GetHeldCount`.
+- **A6 GC model in the sim.** The client sim hands prompts to Lua through a weak-valued wrapper cache (lane 27 style).
+  In that model HEAD's owner-only `Enabled` listener closure pins the console prompt's wrapper, so HEAD keeps the MAX
+  console hidden too; the loss shows for a prompt without that listener (generic prompt: HEAD 12/13, this tree 19/19).
+  In Roblox a connection closure keeps the userdata alive the same way, so the live symptom on WE_ServerBuyPrompt may
+  have been latent; the fix no longer depends on that incidental pin.
+
+## VisualAssetService / VisualAssetConfig
+
+- **A7 Retry only transient errors, in the background.** A LoadAsset error whose text contains any
+  `LoadRetryPermanentErrors` entry (lower-case: not trusted / not authori[sz]ed / permission / forbidden / http 400/403/404 /
+  does not exist / not found / moderated / not approved / archived / invalid) is final at once (one line). Any other error
+  is retried by `task.delay` (never in the caller's thread) `LoadRetryCount = 2` times, `LoadRetryDelay = 20` s then
+  `x LoadRetryBackoff = 2` (20 s, then 40 s). The exact live error texts were NOT observed (headless sim only): check
+  Output; a permanent error missing from the list is only retried twice, then final (harmless). Revert: `LoadRetryCount = 0`.
+- **A8 Callers never wait on a retry.** While a retry is pending or running (`cooling`), `loadModel` returns nil at once
+  (Part kit look). First-try callers still wait for an in-flight first insert, as on HEAD.
+- **A9 Hosts dressed during the cool-down keep their Part kit** (no re-dress when a retry succeeds); later spawns /
+  dresses get the model. The vehicle-pack preload in `Init` benefits directly (the next 4x4 gets the body).
+- **A10 One Output line per outcome.** Transient failures with retries left are silent; the id prints one warn when it
+  gives up ("LoadAsset failed <id> after 3 tries (...) — Part kit look stays") or one print when a retry loads it
+  ("<id> loaded on retry N"). Permanent: one warn at once. Refused piece / model: one warn naming the piece, part count
+  and cap. Load cap: one warn per id ("load cap reached ... <id> not loaded").
+- **A11 `LoadRetryReserve = 12`.** Retries never use the last 12 of `MaxLoadAttempts`; they are kept for first loads.
+  Without it a full outage at boot (19 ids x 3 tries = 57) used up 48 before the 6 later ids had a first try (worse than
+  HEAD, which spends 25). With it the worst case is 38 at boot + 6 later = 44 <= 48. Revert: `LoadRetryReserve = 0`.
+- **A12 `MaxLoadAttempts` stays 48** (docs/ASSET_SHORTLIST.md C8 keeps 48). Census (headless world sim, a594cfb + these
+  files): a live server asks for 13 distinct ids at boot + 0 for the first owner's plot L1->L5 + 4 later (dropper FX,
+  oil-pump prop, L5 flag, L5 floodlight) = 17 when loads succeed; 19 at boot + 6 later = 25 when every insert fails
+  (fallback ids: TentAlt, FloodlightTower, 3 ATM alts, TutorialArrowAlt, VfxSparkles, OilPumpjackAlt). 20 more ids are
+  reachable only through BaseService's PreferMesh block (`StructureVisualConfig.PreferMeshWhenAssetIdSet = false`: no
+  live caller) and 13 more only with no live caller at all; with those counted the cap is hit at id 49/50. Raise to
+  75 (= 3 x 25) only if every retry must run in a full outage, or when PreferMesh is switched on.
+- **A13 59 configured ids, not 56.** Counted as every `ModelAssetId > 0` in VisualAssetConfig (any depth <= 4,
+  duplicates once); StructureVisualConfig mesh ids and the hard-coded hangar add none new. 9 are never asked in the
+  sim (TutorialBeam, Buildings.BaseGate, 2 GateDefense AutoGun ids, TutorialArrowAlt / VfxSparkles / 3 ATM alts when
+  the primary loads).
+- **A14 Part cap stays 40.** The LUV green camo Body is 39 parts; at 41 the piece is refused with one line
+  (`refused 6418221666 "Light Utility Vehicle (green camo)/Body": 41 parts > cap 40 (VisualAssetConfig.MaxPartsPerModel)
+  — Part kit look stays`) and every 4x4 keeps the Part-kit look (verified: TryAttachVehicleVisual false, no kit part
+  hidden, no WE_CatalogVisual, logged once for any number of spawns).
+- **A15 Log wording changed.** "pack piece skipped ..." and "refused %d: %d parts (cap %d) — Part kit stays" are now the
+  "refused ..." lines above; a transient first failure no longer prints "LoadAsset failed" at once. The W3 LOOK lane's
+  `t_look_unit.luau` checks the old wording (LOOK-U2-once, LOOK-U5-missing, LOOK-U6-piece41: 62/65 on this tree);
+  fix57/drv/t_look_unit_fix57.luau is the same driver with those 3 expectations updated (65/65 here, 62/65 on HEAD).
+- **A16 `_Stats()` gains Requested / CapRefused / Cooling / Failed; `_Requested()` lists the ids asked for** (QA hooks).
+
+## Base panel (BaseController)
+
+- **A17 Same rule as the console NEXT tag.** `TycoonMath.GuideTarget(step, WE_NextBuy)` with no `upgrades` (no local
+  PickCheapest fallback), exactly like WorldPromptController.isNextPick: the tutorial step's pad for level 0 -> 1, no row
+  on the ATM / claim / recruit / outpost / 4x4 steps, no row while the HUD "Tutorial" flag is up but no step is known;
+  after the tutorial the WE_NextBuy row whose NEXT level it names (a stale "Id:Level" marks nothing, as on the console).
+  The step comes from TutorialStateUpdate and PlayerStateUpdate (TutorialStep index / TutorialComplete), guide on only.
+- **A18 Row rebuilds while open are coalesced to <= 10 Hz** (`RELIST_MIN_GAP = 0.1`, task.delay): cash, BaseStateUpdate,
+  WE_NextBuy, WE_IncomeMult, tutorial step, Tutorial flag. Opening the panel still rebuilds at once (and scrolls to NEXT).
+  HEAD rebuilt synchronously on every cash push (40 rebuilds for 40 changes in 0.2 s in the harness; now 3).
+- **A19 The list scrolls to the NEXT row only when the panel opens** (unchanged); a NEXT change while open does not move
+  the scroll.
+
+## BusinessService
+
+- **A20 `Prestige = tonumber(profile.Prestige) or 0`** goes into the PickContext. Only PickMode "Cheapest"
+  (TycoonMath.PickCheapest, the live mode) filters rebirth zones; PickMode "Score" (TycoonMath.Candidates) ignores
+  Prestige - TycoonMath is not this lane's file. At HEAD no zone structure is in BaseConfig.StructureOrder yet, so the
+  pick is unchanged today; the driver adds three zone pads to prove the filter (excluded below the tier, included at it,
+  nested zone needs its parent).
+
+## Verifier fix (fix57 adversarial pass)
+
+- **A21 Waiters wake after the outcome is recorded.** `loadAttempt` now sets `failed` / `cooling` (and prints the final
+  line) BEFORE `releaseWaiters`. Before this, a thread woken from the first insert whose caller asked for the same id
+  again (a dress loop, another piece of the same pack) found neither flag set and started a second insert: one wasted
+  attempt per race, a doubled retry schedule for transient errors and two "LoadAsset failed" lines for permanent ones
+  (HEAD set `failed` inside insertAsset, before the wake, so this was a regression). Verifier driver
+  fix57/ver/drv/vas_adv.luau A1/A2: 1 LoadAsset call + 1 line (was 2 + 2 for the permanent case). Pin added to pins.txt.
+- **A22 A prompt that leaves the DataModel and comes back as the SAME instance loses its suppression** (pruned as the
+  brief asks). WorldPromptController re-applies SetSuppressed on its next console refresh (throttled billboard refresh:
+  cash / upgrade / pick changes), so a MAX console's pill could show briefly in that window; streamed-in consoles are
+  new instances on Roblox anyway (same as HEAD).
+
+- **FX-L1 (lead):** a prompt that leaves the DataModel and returns as the same object loses its suppression until the next console refresh (HEAD kept it). With StreamingEnabled off this needs a destroy/re-parent, which the game never does; re-check in streaming phase 2.

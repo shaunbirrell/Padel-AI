@@ -23,7 +23,8 @@
 	Next buy (TycoonGuideConfig.Enabled only): WE_NextBuy = "<Id>:<TargetLevel>" | "Soldier:0" | "" on the Player,
 	re-picked on profile load, plot ready, every purchase, army change and every RepickSeconds since the player's
 	last pick (TycoonMath.PickNext, sticky by Hysteresis). Written only when the value changes. Reads server state
-	only: the profile, SoldierService count / cap and WE_IncomePerSec (EconomyService). Advice only: the server
+	only: the profile (upgrades, cash, ATM, Prestige for the rebirth-zone filter), SoldierService count / cap and
+	WE_IncomePerSec (EconomyService). Advice only: the server
 	re-checks every buy. Also stamps WE_AtmPos (the player's OWN ATM position) on plot ready, nil on release, so
 	the client's "Collect at your ATM" line never needs the ATM part streamed in.
 ]]
@@ -294,6 +295,8 @@ function BusinessService.ComputeNextBuy(player: Player): string
 		Soldiers = soldiers,
 		SoldierCap = cap,
 		Current = if typeof(cur) == "string" and cur ~= "" then cur else nil,
+		-- rebirth zones: a pad in a zone this player's Prestige has not opened is never the pick (PickCheapest filter)
+		Prestige = tonumber(profile.Prestige) or 0,
 	})
 	return TycoonMath.Encode(pick)
 end
