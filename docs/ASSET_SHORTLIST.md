@@ -738,3 +738,5 @@ Weapons = {
 - **Server-side animation loading:** whether `AnimationTrack.Length` fills in on a Studio Run-mode server for the animation check. If every line says FAIL with no "Failed to load animation" error, the check itself is at fault, not the ids.
 - **Live loading:** whether every Roblox-owned id loads on the live server. The docs say it does; step 9 proves it.
 - **Nothing was run in Roblox.**
+
+Nation flags come only from `assets/flags` (flag-icons, MIT, rendered by `tools/gen_nation_flags.py`); never wire a flag model or decal from the Creator Store.

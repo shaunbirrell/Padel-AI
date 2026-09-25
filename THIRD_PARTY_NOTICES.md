@@ -130,3 +130,23 @@ every script and Sound, and share a template; no code change is needed.
 | Rocket projectile mesh | 94690081 (texture 94689966) | MESH_BattleGameRocketLauncherAmmo | `WeaponConfig.RocketLauncher.Projectile.MeshId` (0 today) |
 
 The kit's scripts (WeaponsSystem) are never used; the game re-implements the behaviours in its own code.
+
+<!-- Lane A1: append to THIRD_PARTY_NOTICES.md as the next section (after "## 5. Roblox Weapons Kit models"). -->
+
+## 6. Nation flag images (MIT, flag-icons)
+
+The nation flags (`assets/flags/atlas_<group>.png`, 7 images of 1024 x 512, and the optional per-flag PNGs) are rendered by
+`tools/gen_nation_flags.py` from **flag-icons** by Panayiotis Lipiridis: <https://github.com/lipis/flag-icons>.
+
+| Item | Value |
+|---|---|
+| Version | 7.5.0 (npm `flag-icons`, <https://registry.npmjs.org/flag-icons/-/flag-icons-7.5.0.tgz>) |
+| Integrity | `sha512-kd+MNXviFIg5hijH766tt+3x76ele1AXlo4zDdCxIvqWZhKt4T83bOtxUOOMlTx/EcFdUMH5yvQgYlFh1EqqFg==` (checked on every run) |
+| Upstream fix after 7.5.0 | `flags/4x3/pa.svg` from commit `086f7e97d657358203916dbe84f61c2bccaa81eb` ("Fix white border in Panama flag (#1440)"), sha256 `5e034a8ad127c43b19f52c648fe808160ab4ddb117afa4204772af96566d31bc` |
+| Licence | MIT, "Copyright (c) 2013 Panayiotis Lipiridis". Full text: `assets/flags/LICENSE-flag-icons.txt` |
+| Local changes | 4x3 SVGs rasterised (cairosvg, 4x supersampled), downscaled to 104 x 78, packed into atlases with an edge-extended gutter; anti-aliasing seams made opaque. The flag designs are not altered. |
+| Pins | `assets/flags/atlas_manifest.json` (per-SVG sha256, per-atlas sha256, cell table); `python3 tools/gen_nation_flags.py --verify` |
+
+Use: the player's own nation flag on their base (NationFlag, lane B) and the nation picker (NationController, lane C).
+Uploaded to Roblox by the game owner as ordinary images (ids in `src/ReplicatedStorage/Shared/Configs/NationFlagIds.luau`).
+The MIT licence allows this use; keep `LICENSE-flag-icons.txt` next to the images.

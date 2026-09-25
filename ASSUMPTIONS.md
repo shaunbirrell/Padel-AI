@@ -1347,3 +1347,33 @@ Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.D
 - **Part budget (Lane D):** floor chevrons are gone (`BaseLayoutConfig.FloorChevrons = false`, static and pointing the wrong way; dynamic owner-only chevrons are planned with the owner's feature list), static soldier kits drop 7 small detail parts each (`StructureVisualConfig.StaticSoldierDetail = false`), and gate signs get padding so long names fit. Parts per base at L5: 2,666 (cap 2,700; was 2,704 before the businesses).
 - **Early wait accepted (lead decision; owner delegated):** the economy model's longest wait in the first 10 minutes is 141 s (Arms Crate Line L2, then Command Center L2) against a 120 s design target. The measured fixes either did not help or cut 30-minute income below its floor, and the guide chip shows a "ready in m:ss" countdown during the wait. Revisit after real play data.
 - **Armor Plate Press income is 1.2x the spec** (120/220/360/580/860 per tick) so 30-minute income stays above 280 $/s with the 34 % soldier rule; revert is those five numbers.
+
+## 2026-09-25 — Nations step A0 (country list, flag art, tools)
+<!-- Lane A1: append to ASSUMPTIONS.md under a "## 2026-09-25 — Nations (country choice + flags)" heading. -->
+
+### From the spec (section 6, verbatim; rewrite #71 in place)
+- Rewrite #71: "Nation = the country the player chooses (NationConfig, 200 entries). The legacy 8-colour NationColorId is kept, and is used only as the banner colour for NEUTRAL players."
+- Roster: the 193 UN members, plus VA, PS, TW, XK, GB-ENG, GB-SCT and GB-WLS. The last six are in OwnerReview and on by default; the owner can switch each off in one line. Northern Irish players pick Ireland or the UK. Afghanistan uses the tricolour.
+- Nation changes: free for 10 minutes after the first pick (at most 5 changes), then one per 24 h, enforced on the server. No cost. NEUTRAL is stored as a value, not as nil.
+- The IP-based country is a badged suggestion only. It is never pre-selected, never shown to others, never stored and never logged.
+- No DataVersion bump: the nation fields are filled in and sanitised on every load (the ensureFeatureFields precedent).
+- World flags are 4:3 Textures cropped from 7 regional atlases. The back face is not mirrored, so the hoist appears at the fly end from behind. The per-flag PNG path is kept as a fallback.
+- Outpost flags are OFF at launch (policy caution around territory). The owner can switch them on.
+- No gate flag, because strike fire spawns at the gate. The nuke aim point moves to Z=56 on MainRoad.
+- Player-list emoji stay off until the device test passes; the column shows ISO codes until then.
+- The picker opens by itself for non-admins only after all atlas ids are wired.
+
+### Lane A0 builder decisions (all reversible)
+- **Review atlas = 14 flags:** the spec's estimated 12 (AO BB GT HT IQ IR KE MZ OM SA SZ AF) plus **BN** (Arabic script in the crest) and **LK** (lion holding a sword), by the spec's own rule "flags with emblems or script". Moving a nation between atlases = edit its AtlasGroup/AtlasCell, re-run `tools/gen_nation_flags.py`, re-upload the 2 changed atlases (`--verify` and BuyPathStatic fail until then).
+- **Cell geometry:** the spec's "112x84 cell, 4 px gutter, 104x78 flag" cannot all hold (84 - 78 = 6). Kept the 112x84 cell (9x6 in 1024x512) and the true 4:3 104x78 flag; the edge-extended gutter is 4 px left/right and 3 px top/bottom.
+- **Art source pinned:** flag-icons 7.5.0 from the npm tarball (sha512 checked) plus one upstream fix (Panama, commit 086f7e9, sha256 checked). 7.5.0 already has Syria's current green-white-black three-star flag.
+- **Opaque flags:** rasterising leaves anti-aliasing seams of partial alpha between adjacent shapes (e.g. Bahamas, Papua New Guinea); the generator makes every rectangular flag fully opaque (colour is the coverage-weighted blend), so a Texture never shows the part through a seam.
+- **Nepal is a cut-out:** `Cutout = true` in NationConfig; its atlas cell keeps transparency outside the flag shape (picker shows the tile behind it). On an opaque flag part the part colour shows around it; lane B picks the backing (suggest part Transparency = 1 while a texture shows; Textures still draw).
+- **Square flags (Switzerland, Vatican)** use flag-icons' 4:3 form (field colour extended), like every other world flag on the 4:3 parts.
+- **Texture crop convention unverified:** `NationConfig.Atlas.OffsetSignU/V = 1`, `VFromBottom = false` assume "a larger offset shows content further right / lower, image top-left at the face top-left". The 5-minute Studio atlas-crop test confirms or flips these 3 values; no code changes.
+- **Mip bleed:** at mip level 2+ (far away) neighbouring cells bleed into a flag's edge (the gutter covers levels 0-1). Part of the Studio test at 60 studs; if it shows, fall back to per-flag ids for the affected flags.
+- **Search aliases:** added DRC, East Timor, St Lucia, PNG; dropped aliases that repeated the Name. "Macedonia" is deliberately not an alias. Search folds the roster's accents (Côte, São Tomé, Türkiye).
+- **Player-list code:** `NationConfig.Code` gives ENG / SCT / WLS for the GB-* ids and "-" for No flag.
+- **Per-flag fallback PNGs** are 256x192 (`NationConfig.Atlas.PerFlagW/H`), written only with `--per-flag`, not committed.
+- **Manifest:** `assets/flags/atlas_manifest.json` (source pins, per-atlas sha256, cell table) lets `--verify` and BuyPathStatic catch a config change without a re-render.
+- **Lead decisions:** BN and LK join the Review atlas (script / sword in the emblem); Bolivia and Ecuador stay in the Americas atlas (official coats of arms). A0 ships config, maths, tools and art only: nothing in the game uses nations until lanes A1/B/C land.

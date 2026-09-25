@@ -2443,6 +2443,128 @@ must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", 
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "signCap.MaxTextSize = 64", "v72 gate-sign text capped (reads in full)")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "(BaseLayout.Config().InnerWall or {}).SignInsetStuds", "v72 gate-sign inset from BaseLayoutConfig.InnerWall.SignInsetStuds")
 
+# ===== Nations lane A0 (NationConfig / NationFlagIds / NationTexture / assets/flags) =====
+# Paste-ready for tools/BuyPathStatic.py (lane A1), before the final parse_gate() call. Uses the file's own helpers
+# (ok / bad / read / must_contain / must_not_contain, ROOT, re, sys). Checked with build/A0/verify_pins.py against
+# (a) HEAD 1ce4828 + the A0 files (all PASS), (b) the live working tree (all PASS), (c) mutated copies (each FAILs).
+# Spec: fb2/spec_nations.md section 4 "BuyPathStatic rules" (R14 allowlist, denylist, ids unique, utf8.len(Short) <= 14,
+# atlas cells unique within each group, NationFlagIds keys subset of the roster) + section 2 toggles + guard pins.
+
+NAT_CFG = "src/ReplicatedStorage/Shared/Configs/NationConfig.luau"
+NAT_IDS = "src/ReplicatedStorage/Shared/Configs/NationFlagIds.luau"
+NAT_TEX = "src/ReplicatedStorage/Shared/Util/NationTexture.luau"
+NAT_UN193 = set("""
+AD AE AF AG AL AM AO AR AT AU AZ BA BB BD BE BF BG BH BI BJ BN BO BR BS BT BW BY BZ CA CD CF CG CH CI CL CM CN CO CR CU
+CV CY CZ DE DJ DK DM DO DZ EC EE EG ER ES ET FI FJ FM FR GA GB GD GE GH GM GN GQ GR GT GW GY HN HR HT HU ID IE IL IN IQ
+IR IS IT JM JO JP KE KG KH KI KM KN KP KR KW KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MG MH MK ML MM MN MR MT MU
+MV MW MX MY MZ NA NE NG NI NL NO NP NR NZ OM PA PE PG PH PK PL PT PW PY QA RO RS RU RW SA SB SC SD SE SG SI SK SL SM SN
+SO SR SS ST SV SY SZ TD TG TH TJ TL TM TN TO TR TT TV TZ UA UG US UY UZ VC VE VN VU WS YE ZA ZM ZW
+""".split())
+NAT_EXTRA = {"VA", "PS", "TW", "XK", "GB-ENG", "GB-SCT", "GB-WLS"}  # observer states + owner-approved (OwnerReview)
+NAT_DENY = {"GB-NIR", "EH", "ES-CT", "ES-PV", "ARAB", "EU", "UN", "XX", "HK", "MO", "CEFTA"}
+
+
+def nations_roster() -> None:
+    import struct
+    import subprocess
+
+    body = read(NAT_CFG)
+    if body is None:
+        bad(f"nations: missing {NAT_CFG}")
+        return
+    rows = re.findall(
+        r'^\t\t\{ Id = "([^"]+)", Name = "((?:[^"\\]|\\.)*)", Short = "((?:[^"\\]|\\.)*)", Region = "(\w+)", '
+        r'Color = Color3\.fromRGB\(\d+, \d+, \d+\), AtlasGroup = "(\w+)", AtlasCell = (\d+)',
+        body, re.M,
+    )
+    ids = [r[0] for r in rows]
+    raw_rows = len(re.findall(r'^\t\t\{ Id = "', body, re.M))
+    (ok if len(rows) == raw_rows == 200 else bad)(f"nations: roster has 200 well-formed rows (parsed {len(rows)} of {raw_rows})")
+    (ok if len(NAT_UN193) == 193 else bad)("nations: allowlist holds the 193 UN members")
+    allow = NAT_UN193 | NAT_EXTRA
+    extra = sorted(set(ids) - allow)
+    missing = sorted(allow - set(ids))
+    (ok if not extra else bad)(f"nations: every id is allowlisted (UN 193 + VA PS TW XK GB-ENG GB-SCT GB-WLS){' - not: ' + ', '.join(extra) if extra else ''}")
+    (ok if not missing else bad)(f"nations: every allowlisted nation is available{' - missing: ' + ', '.join(missing) if missing else ''}")
+    denied_in = sorted(set(ids) & NAT_DENY)
+    (ok if not denied_in else bad)(f"nations: no denied id in the roster{' - found ' + ', '.join(denied_in) if denied_in else ''}")
+    dm = re.search(r"^\tDenied = \{([^}]*)\},", body, re.M)
+    cfg_deny = set(re.findall(r'"([^"]+)"', dm.group(1))) if dm else set()
+    (ok if NAT_DENY <= cfg_deny else bad)("nations: NationConfig.Denied lists every denied id")
+    dups = sorted({i for i in ids if ids.count(i) > 1})
+    (ok if not dups else bad)(f"nations: ids unique{' - dup ' + ', '.join(dups) if dups else ''}")
+    (ok if "NEUTRAL" not in ids and 'NeutralId = "NEUTRAL",' in body else bad)("nations: NEUTRAL is the stored 'No flag' value, never a nation id")
+    long_short = [f"{r[0]}={len(r[2])}" for r in rows if not 2 <= len(r[2]) <= 14]  # len(str) == utf8.len
+    (ok if not long_short else bad)(f"nations: utf8.len(Short) <= 14{' - ' + ', '.join(long_short) if long_short else ''}")
+    gm = re.search(r"^\t\tGroups = \{([^}]*)\}", body, re.M)
+    groups = re.findall(r'"(\w+)"', gm.group(1)) if gm else []
+    (ok if groups == ["Europe", "Americas", "Asia", "Africa", "MiddleEast", "Oceania", "Review"] else bad)("nations: 7 atlas groups")
+    cells: dict[tuple[str, str], str] = {}
+    bad_cells = []
+    for r in rows:
+        key = (r[4], r[5])
+        if key in cells or r[4] not in groups or not 0 <= int(r[5]) < 54 or r[4] not in (r[3], "Review"):
+            bad_cells.append(r[0])
+        cells[key] = r[0]
+    (ok if not bad_cells else bad)(f"nations: atlas cells unique within each group, inside the 9x6 grid, group = region or Review{' - ' + ', '.join(bad_cells) if bad_cells else ''}")
+    ids_body = read(NAT_IDS) or ""
+    am = re.search(r"\n\tAtlas = \{\n(.*?)\n\t\} :: \{ \[string\]: number \},\n", ids_body, re.S)
+    fm = re.search(r"\n\tFlags = \{\n(.*?)\t\} :: \{ \[string\]: number \},\n", ids_body, re.S)
+    akeys = re.findall(r"^\t\t(\w+) = \d+,$", am.group(1), re.M) if am else []
+    fkeys = re.findall(r'^\t\t\["([^"]+)"\] = \d+,$', fm.group(1), re.M) if fm else []
+    (ok if sorted(akeys) == sorted(groups) else bad)("nations: NationFlagIds.Atlas has exactly the 7 atlas groups")
+    (ok if fm is not None and set(fkeys) <= set(ids) else bad)("nations: NationFlagIds.Flags keys are roster ids")
+    nums = [int(n) for n in re.findall(r"= (\d+),", (am.group(1) if am else "") + (fm.group(1) if fm else ""))]
+    live = [n for n in nums if n > 0]
+    (ok if len(live) == len(set(live)) else bad)("nations: each uploaded flag image id is used once")
+    r = subprocess.run([sys.executable, str(ROOT / "tools" / "gen_nation_flags.py"), "--verify"], capture_output=True, text=True)
+    (ok if r.returncode == 0 else bad)(f"nations: assets/flags atlases + manifest match NationConfig (gen_nation_flags.py --verify){' - ' + (r.stderr or r.stdout).strip()[:200] if r.returncode else ''}")
+    oversize = []
+    for g in groups:
+        p = ROOT / "assets" / "flags" / f"atlas_{g}.png"
+        head = p.read_bytes()[:24] if p.is_file() else b""
+        w, h = struct.unpack(">II", head[16:24]) if head[:8] == b"\x89PNG\r\n\x1a\n" else (0, 0)
+        if not (0 < w <= 1024 and 0 < h <= 1024) or not p.is_file() or p.stat().st_size > 1_000_000:
+            oversize.append(g)
+    (ok if not oversize else bad)(f"nations: every atlas PNG exists, <= 1024 px and <= 1 MB{' - ' + ', '.join(oversize) if oversize else ''}")
+    lic = read("assets/flags/LICENSE-flag-icons.txt") or ""
+    (ok if "The MIT License" in lic and "Copyright (c) 2013 Panayiotis Lipiridis" in lic and "Version:  7.5.0" in lic else bad)("nations: flag-icons MIT licence + pinned version recorded next to the art")
+
+
+nations_roster()
+# config toggles the spec pins (section 2): privacy, policy caution, live gating, change limits
+for _needle, _label in (
+    ("SuggestPreselect = false,", "IP suggestion never pre-selected (R3)"),
+    ("LiveRequiresArt = true,", "picker auto-opens for non-admins only once the art is wired (R10)"),
+    ("OutpostFlags = false,", "outposts keep banner colour at launch (R6)"),
+    ("PlayerListEmoji = false,", "player-list emoji off until the device test"),
+    ("FreeRepickSeconds = 600,", "free re-pick window 10 min"),
+    ("FreeRepickMax = 5,", "at most 5 changes in the free window (R2)"),
+    ("ChangeCooldownSeconds = 86400,", "then one change per 24 h"),
+    ("MaxJoinPrompts = 3,", "LATER re-offers at most 3 joins"),
+    ('if typeof(id) ~= "string" or #id > 8 then', "Get: strings of at most 8 bytes only"),
+    ("if n == nil or NationConfig.OwnerReview[id] == false then", "Get: OwnerReview off hides a nation"),
+    ("if not denied[n.Id] then", "Get never returns a denied id"),
+):
+    must_contain(NAT_CFG, _needle, f"nations: {_label}")
+# NationTexture stays pure maths (shared by server + client, headless-tested)
+for _needle in ("Instance.new", "GetService", "WaitForChild", "RenderStepped", "Heartbeat", "task.wait", "workspace", "Workspace"):
+    must_not_contain(NAT_TEX, _needle, f"nations: NationTexture has no {_needle} (pure maths)")
+must_contain(NAT_TEX, "local offU = (A.OffsetSignU * rect.X * su) % tileU", "nations: Texture crop offset from NationConfig.Atlas.OffsetSignU (Studio test knob)")
+must_contain(NAT_TEX, 'string.format("rbxassetid://%d", atlasId)', "nations: image ids formatted as integers (15-digit ids)")
+# guard pins (spec R5 / section 4): nations never reach combat, strike, nuke or raid code. All pass today.
+for _rel in sorted({str(p.relative_to(ROOT)) for pat in (
+    "src/ServerScriptService/Server/Services/MissileStrikeService.luau",
+    "src/ServerScriptService/Server/Services/BankRaidService.luau",
+    "src/ServerScriptService/Server/Services/GateDefenseService.luau",
+    "src/ServerScriptService/Server/Services/CombatService/*.luau",
+    "src/**/*Nuke*.luau",
+) for p in ROOT.glob(pat)}):
+    for _needle in ("NationConfig", "WE_NationId", "GetNationId", "WE_NationFlag"):
+        must_not_contain(_rel, _needle, f"nations: {_rel.rsplit('/', 1)[-1]} never references {_needle}")
+
+must_contain("CLAUDE.md", "Real countries appear only as a player's own cosmetic nation", "nations: CLAUDE.md country rule")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
