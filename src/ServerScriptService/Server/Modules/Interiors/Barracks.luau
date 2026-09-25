@@ -98,7 +98,9 @@ return function(ictx: any, api: any)
 	api.chair(Vector3.new(6.4, y1, deskZ - 2.0), Vector3.new(0, 0, 1))
 	if lv >= 2 then
 		api.box("FlagPole", Vector3.new(0.2, 7.4, 0.2), Vector3.new(3.8, y1 + 3.7, deskZ - 1.8), col.Metal, Enum.Material.Metal, false)
-		api.box("FlagCloth", Vector3.new(2.6, 1.7, 0.06), Vector3.new(3.8 + 1.4, y1 + 6.4, deskZ - 1.8), col.Flag, Enum.Material.Fabric, false)
+		-- fb2: flag cloths are 0.12 thick and tagged WE_FlagHost (the nation flag binds to their Front / Back faces)
+		local cloth = api.box("FlagCloth", Vector3.new(2.6, 1.7, 0.12), Vector3.new(3.8 + 1.4, y1 + 6.4, deskZ - 1.8), col.Flag, Enum.Material.Fabric, false)
+		cloth:SetAttribute("WE_FlagHost", true)
 	end
 
 	-- ── Duty roster / training terminal on the east wall → Missions ─────────
@@ -194,7 +196,9 @@ return function(ictx: any, api: any)
 			api.box("FilingCabinet", Vector3.new(1.4, 3.8, 1.3), Vector3.new(X1 - 0.8, y2 + 1.9, Z1 - 0.8), col.Metal, Enum.Material.Metal)
 			-- flag in the office corner by the partition, cloth hanging toward the room (clear of the map)
 			api.box("OfficerFlagPole", Vector3.new(0.2, 7.2, 0.2), Vector3.new(X1 - 1.6, y2 + 3.6, 2.2), col.Metal, Enum.Material.Metal, false)
-			api.box("OfficerFlag", Vector3.new(2.4, 1.7, 0.06), Vector3.new(X1 - 1.6 - 1.3, y2 + 6.2, 2.2), col.Flag, Enum.Material.Fabric, false)
+			-- fb2: 0.12 thick + WE_FlagHost (nation flag on the Front / Back faces)
+			local officerFlag = api.box("OfficerFlag", Vector3.new(2.4, 1.7, 0.12), Vector3.new(X1 - 1.6 - 1.3, y2 + 6.2, 2.2), col.Flag, Enum.Material.Fabric, false)
+			officerFlag:SetAttribute("WE_FlagHost", true)
 		end
 		if lv >= 5 then
 			api.box("OfficerRug", Vector3.new(5.0, 0.06, 6.0), Vector3.new(odX + 0.8, y2 + 0.03, odZ), col.Rug, Enum.Material.Fabric, false)

@@ -7,6 +7,11 @@
 	Tap → HudLayout.Signals.CompassTapped (TerritoryController opens the territory list under the chip).
 	RadarReveal (flag "Radar", TerritoryController) → a pulsing purple dot at the chip's left edge.
 	Gone: the 210x52 two-line card under the weapon panel and its "◎ nearest territory" line.
+	W3 step 2 lane U0 — TRACKED MODE: while the one objective marker (Modules/ObjectiveMarker, set by a mission GO)
+	has a target, the chip points at IT instead of your base: the label reads the target's short name ("BANK", in
+	gold), the arrow and distance follow the target, and the chip also shows inside your own plot (GO is usually
+	tapped at home). It still hides while a panel is open. Arrival / Clear / timeout → back to BASE. The chip reads
+	ObjectiveMarker.Revision() each tick and copies the target only when it changed (no per-tick allocation).
 ]]
 
 local Players = game:GetService("Players")
@@ -15,7 +20,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
@@ -25,6 +30,7 @@ local UIUtil = require(Shared.Util.UIUtil)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local HUDController = require(script.Parent.HUDController)
+local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 
 local CompassController = {}
 
@@ -36,8 +42,15 @@ local myPlotId: number? = nil
 local chip: TextButton? = nil
 local arrow: Frame? = nil
 local distLabel: TextLabel? = nil
+local baseLabel: TextLabel? = nil
 local baseKnown = false
 local accum = 0
+
+-- tracked mode (ObjectiveMarker): the target copied when ObjectiveMarker.Revision() changes
+local tracked: ObjectiveMarker.Target? = nil
+local trackedRev = -1
+local HIDE_BASE = if C.HideInsideOwnPlot then { "InOwnPlot", "Modal" } else { "Modal" }
+local HIDE_TRACKED = { "Modal" }
 
 local function formatDist(studs: number): string
 	if studs < 1000 then
@@ -96,9 +109,67 @@ local function setKnown(known: boolean)
 	end
 end
 
+-- visible: base mode needs the base position and hides inside your own plot; tracked mode needs neither
+local function chipVisible(): boolean
+	return tracked ~= nil or baseKnown
+end
+
+local function bindChip()
+	local c = chip
+	if c then
+		HudLayout.BindVisibility(c, { HideWhen = if tracked ~= nil then HIDE_TRACKED else HIDE_BASE }, chipVisible)
+	end
+end
+
+-- re-read the objective only when ObjectiveMarker changed it; switch the label and the visibility rule
+local function syncTracked()
+	local rev = ObjectiveMarker.Revision()
+	if rev == trackedRev then
+		return
+	end
+	trackedRev = rev
+	local was = tracked ~= nil
+	tracked = ObjectiveMarker.Current()
+	local t = tracked
+	local bl = baseLabel
+	if bl then
+		bl.Text = if t then t.Short else "BASE"
+		bl.TextColor3 = if t then C.ArrowColor else HudConfig.Colors.White
+	end
+	if was ~= (t ~= nil) then
+		bindChip()
+	end
+	local dl = distLabel
+	if dl then
+		dl.Text = "…" -- until this tick's distance
+	end
+end
+
 local function tickCompass()
+	syncTracked()
 	local pos, look = getRoot()
 	local center = baseWorldPos()
+	local t = tracked
+	if t then
+		-- tracked: keep publishing InOwnPlot for the rest of the HUD, then point at the objective
+		if not center then
+			setKnown(false)
+		elseif pos then
+			HudLayout.SetFlag("InOwnPlot", insideOwnPlot(pos, center))
+			setKnown(true)
+		end
+		if not pos or not look then
+			return -- respawning: keep the last state
+		end
+		local target = Vector3.new(t.X, pos.Y, t.Z)
+		if arrow then
+			HudIcons.SetRotation(arrow, relativeBearing(pos, target, look))
+		end
+		if distLabel then
+			distLabel.Text = formatDist(Vector3.new(t.X - pos.X, 0, t.Z - pos.Z).Magnitude)
+		end
+		return
+	end
 	if not center then
 		setKnown(false)
 		return
@@ -213,6 +284,7 @@ local function buildChip(area: Frame)
 	base.Text = "BASE"
 	base.Active = false
 	base.Parent = c
+	baseLabel = base
 
 	local dist = Instance.new("TextLabel")
 	dist.Name = "Distance"
@@ -236,10 +308,7 @@ local function buildChip(area: Frame)
 	end)
 	c.Parent = area
 	chip = c
-	local hideWhen = if C.HideInsideOwnPlot then { "InOwnPlot", "Modal" } else { "Modal" }
-	HudLayout.BindVisibility(c, { HideWhen = hideWhen }, function(): boolean
-		return baseKnown
-	end)
+	bindChip()
 	HudLayout.SetRect("Compass", c)
 end
 

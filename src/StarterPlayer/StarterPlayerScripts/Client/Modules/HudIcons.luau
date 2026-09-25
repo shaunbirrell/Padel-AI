@@ -14,7 +14,7 @@
 	masks (gear hole, ring centres, clipboard rows, cart slots) are painted with it (default HudConfig PillBg).
 	"Cash" has its own fixed greens and a 42:32 box (HudConfig.CashPill.IconSize).
 
-	Kinds: Cart Cycle Helmet Car Clipboard Gear Cash Shield Crosshair Arrow Plus Up Down Close Chevron Dot
+	Kinds: Cart Cycle Helmet Car Clipboard Gear Cash Shield Crosshair Arrow Plus Up Down Close Chevron Dot Flag
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -192,6 +192,11 @@ SHAPES.Close = { -- ✕
 	{ x = 0.5, y = 0.5, w = 0.16, h = 0.84, role = "Ink", r = 0.5, rot = -45 },
 }
 SHAPES.Dot = { box(0.2, 0.2, 0.6, 0.6, "Ink", 0.5) }
+-- F3 Empire Tax chip: a plain pennant on a pole (2 Frames). Generic on purpose: never a country's flag (CLAUDE.md).
+SHAPES.Flag = {
+	box(0.2, 0.08, 0.1, 0.84, "Ink", 0.5), -- pole
+	box(0.3, 0.12, 0.52, 0.38, "Ink", 0.12), -- cloth
+}
 
 local KINDS: { string } = {}
 for k in pairs(SHAPES) do

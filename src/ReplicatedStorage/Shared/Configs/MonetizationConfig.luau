@@ -19,7 +19,24 @@
 	  Feature = "Name"                  the SKU belongs to a feature that is not live yet (M3: shown only when the
 	                                    ReplicatedStorage attribute WE_Feature_<Name> is true and Id ~= 0). Until
 	                                    M3 ships, every Feature SKU also carries HideFromShop = true.
-	New SKUs stay Id = 0 until the owner creates them; game passes are created with Item for Sale OFF (J3). ]]
+	  SoldFrom = "Panel"                the SKU is sold from that panel only (HideFromShop keeps it out of the Shop
+	                                    list; the Id wiring tool does not ask to remove HideFromShop for it).
+	New SKUs stay Id = 0 until the owner creates them; game passes are created with Item for Sale OFF (J3).
+	Owner's 11 features (lane K1, spec_f11 §2): GamePasses.ImpulseSpeed (5 R$ Speed Pass), DevProducts.RebirthKeepBase
+	(50 R$ keep-base rebirth token, counter grant GrantKeepBaseRebirths), the GoldenPumpjack Shop row (lights up when
+	the Id is pasted), DeathSpeedOffer (one death offer per session) and PremiumPads (the ATM pad slots). Every new Id
+	stays 0 until the owner creates the product: nothing prompts, no pad is built and no Shop row shows while it is 0. ]]
+
+-- F1: one PremiumPads slot (see MonetizationConfig.PremiumPads)
+export type PremiumPadOffer = { Kind: "GamePass" | "DevProduct", Key: string }
+export type PremiumPadSlot = {
+	Id: string,
+	Label: string,
+	Color: Color3,
+	Offset: Vector3,
+	Offers: { PremiumPadOffer },
+	OwnedIfAny: { string }?,
+}
 
 local MonetizationConfig = {
 	GamePasses = {
@@ -58,6 +75,17 @@ local MonetizationConfig = {
 			DisplayName = "Auto Collect",
 			RobuxPrice = 99,
 			Description = "Auto-claims Money Collector without touch",
+		},
+		-- F8 (owner's 11 features): 5 R$ Speed Pass, walk speed x WalkSpeedMult forever. Id = 0 until the owner creates
+		-- the pass. The 99 R$ Speed Boost Developer Product (DevProducts.SpeedBoost) stays; owning both gives the higher
+		-- multiplier (MonetizationService.SpeedMultFor). Keep this key name: BuyPathStatic matches the first Speed Boost
+		-- product block by its key.
+		ImpulseSpeed = {
+			Id = 0,
+			DisplayName = "Speed Pass",
+			RobuxPrice = 5,
+			WalkSpeedMult = 1.15,
+			Description = "Run 15% faster, forever",
 		},
 		-- v71 money (M1): premium Robux vehicles (plan §2.2, PremiumVehicleConfig.Lineup PassKey). Id = 0 until the
 		-- owner creates each pass (Item for Sale OFF until the M6 publish, J3). HideFromShop until M3's feature gate
@@ -219,12 +247,13 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "SpeedBoost",
 			OneTime = true, -- v69: permanent boolean flag
+			WalkSpeedMult = 1.25, -- F8: was MonetizationService SPEED_BOOST_MULT; the Speed Pass is 1.15
 			Description = "Permanent move-speed boost",
 		},
-		-- Cosmetic oil pump gold dress — Id=0: MapSetup hides GoldenPump pad until Id set;
-		-- ProcessReceipt + GrantEntitlement ready when Creator Dashboard Id is pasted.
-		-- v71 money (M0): one-time Developer Product (J29), 49 R$. M0b: paste the Id AND remove HideFromShop in the
-		-- same commit (the Shop row stays hidden until then).
+		-- Cosmetic oil pump gold dress. v71 money (M0): one-time Developer Product (J29), 49 R$.
+		-- F9 (owner's 11 features): lights up when the Id is pasted. While Id = 0 the Shop skips the row (it skips
+		-- every Id 0 Developer Product) and no gold pad is built at the pumps; once the Id is live the Shop row and the
+		-- pump pad appear with no other edit. ProcessReceipt + GrantEntitlement are ready.
 		GoldenPumpjack = {
 			Id = 0,
 			DisplayName = "Golden Pumpjacks",
@@ -233,8 +262,7 @@ local MonetizationConfig = {
 			Gold = 0,
 			GrantEntitlement = "GoldenPumpjack",
 			OneTime = true, -- boolean entitlement: a second purchase adds nothing; the Shop shows OWNED
-			HideFromShop = true,
-			Description = "Gold-dress every oil pump on your base",
+			Description = "Gold-dress every oil pump on your base  pumps at Walls Lv 2",
 		},
 		-- v71 money (M1, owner decision D2): Commander Starter Pack v2, same Id, 149 R$, one time (J14: no timer until
 		-- M3's real 72 h window). $50,000 + Auto Collect (permanent); a buyer who already owns Auto Collect gets
@@ -275,6 +303,23 @@ local MonetizationConfig = {
 			HideFromShop = true,
 			Description = "3 Nukes (save 14%)",
 		},
+		-- F7 (owner's 11 features): 50 R$ keep-base rebirth. Consumable: each receipt adds one token to
+		-- profile.KeepBaseRebirths (CounterGrants.GrantKeepBaseRebirths), granted only in ProcessReceipt and saved
+		-- before PurchaseGranted. The rebirth itself runs after the save (PrestigeService OnGranted listener,
+		-- PrestigeConfig.KeepBase); a token that cannot be used yet is banked and never expires. Sold only from the
+		-- Rebirth panel (SoldFrom), never from the Shop list. Id = 0 until the owner creates it: the Rebirth panel
+		-- shows SOON and never prompts. Paste the Id only after the double prestige multiplier (B1) is fixed.
+		RebirthKeepBase = {
+			Id = 0,
+			DisplayName = "Keep-Base Rebirth",
+			RobuxPrice = 50,
+			Cash = 0,
+			Gold = 0,
+			GrantKeepBaseRebirths = 1,
+			HideFromShop = true,
+			SoldFrom = "RebirthPanel",
+			Description = "Rebirth and keep every base upgrade",
+		},
 	},
 	--[[ v71 money (M1): counter grants — the ONLY product fields ProcessReceipt adds to a profile number. Field is the
 		profile key (a whole number >= 0), Stats (optional) a counter table + key bumped by the same amount,
@@ -288,6 +333,12 @@ local MonetizationConfig = {
 			Currency = "Nukes",
 			MaxPerReceipt = 100,
 		},
+		-- F7: keep-base rebirth tokens (DevProducts.RebirthKeepBase); WE_KeepBaseRebirths is display only
+		GrantKeepBaseRebirths = {
+			Field = "KeepBaseRebirths",
+			Attribute = "WE_KeepBaseRebirths",
+			MaxPerReceipt = 1,
+		},
 	},
 	-- v71 money (M1, D2): one-time thank-you for players who bought the old 249 R$ Starter Bundle: Auto Collect on
 	-- their next join. Entitlements[Flag] marks it done (set even when they already owned Auto Collect).
@@ -296,6 +347,43 @@ local MonetizationConfig = {
 		IfEntitlement = "StarterBundle",
 		GrantEntitlement = "AutoCollect",
 		Flag = "StarterGoodwillV2",
+	},
+	--[[ F1 (owner's 11 features): walk-over pads beside the ATM, in this order (MapSetup.buildPremiumPads reads it).
+		At most 3 slots: CLAUDE.md allows at most 3 world labels on screen at a base (VIP is sold in the Shop only; the
+		Golden Pump pad sits at the pumps, PlotOilPumpConfig.Golden). Per slot:
+		  Offset      plot-local offset from the ATM cluster anchor (the pad turns with the plot)
+		  Offers      the first offer whose Id is not 0 is the one the pad sells; a slot with no live offer is not built
+		  OwnedIfAny  owning any of these keys (game pass, or the entitlement a Developer Product grants) shows OWNED
+		              and never prompts; default = the offer's own key
+		Pads are 7x7-stud floor triggers (no tap target); each label is stud-scaled, MaxDistance = LabelMaxDistance,
+		never AlwaysOnTop, tagged WorldLabelConfig.BaseLabelTag. The server decides ownership and "coming soon". ]]
+	PremiumPads = {
+		LabelMaxDistance = 20,
+		Slots = {
+			{
+				Id = "AutoCollect",
+				Label = "Auto Collect",
+				Color = Color3.fromRGB(220, 50, 50), -- red
+				Offset = Vector3.new(-10, 0.55, 14),
+				Offers = { { Kind = "GamePass", Key = "AutoCollect" } },
+			},
+			{
+				Id = "DoubleCash",
+				Label = "2x Cash",
+				Color = Color3.fromRGB(255, 210, 40), -- yellow
+				Offset = Vector3.new(0, 0.55, 16),
+				Offers = { { Kind = "GamePass", Key = "DoubleCash" } },
+			},
+			{
+				Id = "Speed",
+				Label = "Speed",
+				Color = Color3.fromRGB(60, 190, 255), -- cyan
+				Offset = Vector3.new(10, 0.55, 14),
+				-- the 5 R$ pass once its Id is live, else the 99 R$ Speed Boost product; owning either = OWNED
+				Offers = { { Kind = "GamePass", Key = "ImpulseSpeed" }, { Kind = "DevProduct", Key = "SpeedBoost" } },
+				OwnedIfAny = { "ImpulseSpeed", "SpeedBoost" },
+			},
+		} :: { PremiumPadSlot },
 	},
 	--[[ v71 money (M1): optional second argument of RequestPurchaseDevProduct / RequestPurchaseGamePass (where the
 		prompt came from). Analytics only; anything not listed is logged as "other". A receipt within
@@ -319,6 +407,7 @@ local MonetizationConfig = {
 		nuke_tile = true,
 		nuke_card = true,
 		silo = true,
+		rebirth_panel = true, -- F7: the Keep-Base Rebirth button in the Rebirth confirm modal
 	} :: { [string]: boolean },
 	IntentAttributionSeconds = 180,
 	-- Loot-box style RNG marked policy-pending — do not enable without compliance review
@@ -326,6 +415,17 @@ local MonetizationConfig = {
 	-- v71 money (M0): empty, so a PvP death no longer offers 2x Cash to players who already own it; the M3 Offer
 	-- Director's death card replaces this toast. Keep the DeathShopOffers key (CombatService / ShopController read it).
 	DeathShopOffers = {} :: { string },
+	-- F8 (owner's 11 features): the ONE death offer that is allowed, kept apart from DeathShopOffers (which stays
+	-- empty: no 2x Cash / Cash Mega offer after a death). MonetizationService.TryDeathSpeedOffer sends
+	-- DeathShopOffer { Offers = { PassKey } } after a PvP non-blast death only when the pass Id is live, the player
+	-- owns none of SkipIfOwnsAny, the tutorial is complete (RequireTutorialComplete), it is the first send this
+	-- session (OncePerSession) and a soft-offer slot is free (SoftOfferSession* budget below).
+	DeathSpeedOffer = {
+		PassKey = "ImpulseSpeed",
+		OncePerSession = true,
+		SkipIfOwnsAny = { "ImpulseSpeed", "SpeedBoost" } :: { string },
+		RequireTutorialComplete = true,
+	},
 	-- v32: one-shot soft offer (server marks StarterBundleOffered).
 	-- v71 money (M1): never during the tutorial. TutorialService schedules it AfterTutorialSeconds after the tutorial
 	-- completes (finished or skipped), or DelaySeconds after load when it is already done, and sends it through
@@ -397,5 +497,30 @@ local MonetizationConfig = {
 		achievement = true,
 	},
 }
+
+--[[ F1: the offer a PremiumPads slot sells right now: the first offer whose GamePasses / DevProducts entry exists with
+	a non-zero Id, or nil when none is live (the pad is not built). Pure; the server and the client call it alike. ]]
+function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
+	for _, offer in ipairs(slot.Offers) do
+		local section: any = if offer.Kind == "GamePass"
+			then MonetizationConfig.GamePasses
+			elseif offer.Kind == "DevProduct" then MonetizationConfig.DevProducts
+			else nil
+		local def = section and section[offer.Key]
+		if typeof(def) == "table" and typeof(def.Id) == "number" and def.Id ~= 0 then
+			return offer
+		end
+	end
+	return nil
+end
+
+-- F1: the keys whose ownership makes a slot's pad read OWNED (OwnedIfAny, else the live offer's own key).
+function MonetizationConfig.PadOwnedKeys(slot: PremiumPadSlot): { string }
+	if slot.OwnedIfAny ~= nil and #slot.OwnedIfAny > 0 then
+		return slot.OwnedIfAny
+	end
+	local offer = MonetizationConfig.LivePadOffer(slot)
+	return if offer then { offer.Key } else {}
+end
 
 return MonetizationConfig

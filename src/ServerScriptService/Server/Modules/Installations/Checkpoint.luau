@@ -1,84 +1,125 @@
 --!strict
 --[[
 	Gate checkpoint installation for DefensiveWalls (HollowBuildingBuilder, StructureVisualConfig.Installations).
-	20 x 10 beside the main road just inside the main gate. The perimeter walls themselves are still built by
-	StructureKitBuilder.SyncPerimeterWalls — this is the visible "defences" post at the gate.
-	L1 guard booth, raised boom barrier, jersey barriers, floodlight   L2 razor wire
-	L3 tank traps, more barriers   L4 sandbagged gun nest   L5 second floodlight, gold booth trim
+	The perimeter walls themselves are still built by StructureKitBuilder.SyncPerimeterWalls — this is the visible
+	"defences" post at the main gate.
+
+	v73 (owner: "the checkpoint looks terrible at front of base"). Re-authored at player scale around the road:
+	  site (-18, 146), local +X toward the main road (road edge local x = 11, centre 18), +Z toward the gate wall.
+	  The foundation (kit Body, 6 x 6) is now the flag plinth: the base flag (nation flag later) is the first thing
+	  a player sees at the gate. The guard booth stands at the road edge (7.4 tall, glass band at eye height), the
+	  boom barrier sits on the spawn side of the booth with its arm raised over the road (never blocks a vehicle),
+	  jersey barriers shield the booth from the gate, one angled floodlight lights the lane (SpotLight).
+	L1 plinth + flag, booth, boom, 2 jersey barriers, floodlight   L2 2 more barriers   L3 tank traps by the wall
+	L4 sandbagged gun nest at the flag   L5 second floodlight, gold booth edge + flag finial
+	No razor-wire pipes, no tray: every prop off the plinth stands on the ground (y = 0).
 ]]
+
+local Shared = game:GetService("ReplicatedStorage"):WaitForChild("Shared")
+local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
+local LIGHTS = (StructureVisualConfig :: any).BuildingLights or {}
 
 return function(ictx: any, api: any)
 	local col = ictx.Colors
 	local lv = ictx.Level
-	local y0 = ictx.Y0
-	local concrete = Color3.fromRGB(170, 166, 154)
+	local y0 = ictx.Y0 -- plinth top
+	local concrete = Color3.fromRGB(176, 172, 160)
+	local boothCol = Color3.fromRGB(206, 200, 182)
+	local olive = Color3.fromRGB(74, 84, 60)
+	local hazard = col.Accent
+	local rust = Color3.fromRGB(104, 76, 56)
 
-	-- L5 gold edge band around a roof (matches the walk-in buildings' gold parapet cap)
-	local function goldEdge(cx: number, y: number, cz: number, w: number, d: number)
-		api.box("GoldTrim", Vector3.new(w, 0.3, 0.3), Vector3.new(cx, y, cz + d * 0.5), col.Gold, Enum.Material.Metal, false)
-		api.box("GoldTrim", Vector3.new(w, 0.3, 0.3), Vector3.new(cx, y, cz - d * 0.5), col.Gold, Enum.Material.Metal, false)
-		api.box("GoldTrim", Vector3.new(0.3, 0.3, d), Vector3.new(cx + w * 0.5, y, cz), col.Gold, Enum.Material.Metal, false)
-		api.box("GoldTrim", Vector3.new(0.3, 0.3, d), Vector3.new(cx - w * 0.5, y, cz), col.Gold, Enum.Material.Metal, false)
-	end
-
-	-- Guard booth by the road (+X side), door facing the road
-	local bx, bz = 6.2, 0
-	api.box("Booth", Vector3.new(4.4, 3.4, 4.4), Vector3.new(bx, y0 + 1.7, bz), col.Wall, Enum.Material.Concrete)
-	for _, w in ipairs({ { 0, -2.25, 0 }, { -2.25, 0, 90 }, { 0, 2.25, 0 } }) do
-		local win = api.part("BoothWindow", Vector3.new(2.6, 1.3, 0.12), CFrame.new(bx + w[1], y0 + 2.4, bz + w[2]) * CFrame.Angles(0, math.rad(w[3]), 0), col.Glass, Enum.Material.Glass, false)
-		win.Transparency = 0.25
-	end
-	api.box("BoothDoor", Vector3.new(0.12, 2.8, 1.6), Vector3.new(bx + 2.25, y0 + 1.4, bz), col.Metal, Enum.Material.Metal, false)
-	api.box("BoothRoof", Vector3.new(5.6, 0.4, 5.6), Vector3.new(bx, y0 + 3.6, bz), col.Trim, Enum.Material.Metal)
+	-- Flag on the plinth (kit Body): the hero flag at the gate. The cloth (0.12 thick along X) is the nation-flag
+	-- decal host (attribute WE_FlagHost; its Left / Right faces carry the decal).
+	api.box("FlagPole", Vector3.new(0.4, 16, 0.4), Vector3.new(0, y0 + 8, 0), col.Metal, Enum.Material.Metal)
+	local cloth = api.box("Flag", Vector3.new(0.12, 3.2, 5.4), Vector3.new(0, y0 + 14.2, 2.9), col.Flag, Enum.Material.Fabric, false)
+	cloth:SetAttribute("WE_FlagHost", true)
 	if lv >= 5 then
-		goldEdge(bx, y0 + 3.95, bz, 5.6, 5.6)
+		api.ball("FlagTip", 0.9, Vector3.new(0, y0 + 16.4, 0), col.Gold, Enum.Material.SmoothPlastic, false)
 	end
-	local sign = api.box("BoothSign", Vector3.new(4.6, 0.9, 0.15), Vector3.new(bx, y0 + 4.3, bz - 2.3), col.Dark, Enum.Material.Metal, false)
+
+	-- Guard booth at the road edge (solid, not walk-in): concrete base, glass band at eye height, olive roof.
+	-- x 7.2: the 7.4-wide roof ends at x 10.9, inside the main road's edge (local x 11 = world x -7)
+	local bx, bz, bw = 7.2, -3.5, 6
+	api.box("Booth", Vector3.new(bw, 3.6, bw), Vector3.new(bx, 1.8, bz), boothCol, Enum.Material.Concrete)
+	local glass = api.box("BoothGlass", Vector3.new(bw - 0.2, 3.2, bw - 0.2), Vector3.new(bx, 5.2, bz), Color3.fromRGB(96, 124, 136), Enum.Material.Glass)
+	glass.Transparency = 0.2
+	for _, o in ipairs({ { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }) do
+		api.box("BoothPost", Vector3.new(0.35, 3.2, 0.35), Vector3.new(bx + o[1] * (bw * 0.5 - 0.05), 5.2, bz + o[2] * (bw * 0.5 - 0.05)), col.Dark, Enum.Material.Metal, false)
+	end
+	api.box("BoothRoof", Vector3.new(bw + 1.4, 0.6, bw + 1.4), Vector3.new(bx, 7.1, bz), olive, Enum.Material.Metal)
+	if lv >= 5 then
+		api.box("GoldTrim", Vector3.new(bw + 1.6, 0.18, bw + 1.6), Vector3.new(bx, 6.72, bz), col.Gold, Enum.Material.Metal, false)
+	end
+	api.box("BoothDoor", Vector3.new(0.12, 6.6, 2.4), Vector3.new(bx - bw * 0.5 - 0.06, 3.3, bz), col.Dark, Enum.Material.Metal, false)
+	-- warm light inside the glass band: the booth reads as manned at night
+	local boothLight = Instance.new("PointLight")
+	boothLight.Range = math.min(10, LIGHTS.MaxRange or 10)
+	boothLight.Brightness = 1.2 * (LIGHTS.BrightnessScale or 0.35)
+	boothLight.Color = col.Light
+	boothLight.Shadows = false
+	boothLight.Parent = glass
+	-- sign on the roof, facing into the compound (players heading for the gate read it)
+	local sign = api.box("BoothSign", Vector3.new(5.4, 1.3, 0.25), Vector3.new(bx, 8.05, bz), col.Dark, Enum.Material.Metal, false)
 	api.surfaceText(sign, Enum.NormalId.Front, { "CHECKPOINT" }, col.Accent, col.Dark, Enum.Font.GothamBlack)
 
-	-- Boom barrier post at the road edge, arm raised (decorative, never blocks the road)
-	api.box("BoomPost", Vector3.new(0.8, 2.2, 0.8), Vector3.new(9.4, y0 + 1.1, 3), col.Accent, Enum.Material.SmoothPlastic)
-	api.part("BoomArm", Vector3.new(0.3, 0.3, 7), CFrame.new(9.4, y0 + 2.2, 3) * CFrame.Angles(math.rad(70), 0, 0) * CFrame.new(0, 0, -3.3), Color3.fromRGB(235, 235, 225), Enum.Material.SmoothPlastic, false)
-
-	-- Jersey barriers along the front edge
-	local n = if lv >= 3 then 5 else 3
-	for i = 0, n - 1 do
-		local x = -9 + i * 3.6
-		api.box("JerseyBase", Vector3.new(3.4, 0.9, 1.4), Vector3.new(x, y0 + 0.45, 3.6), concrete, Enum.Material.Concrete)
-		api.box("JerseyTop", Vector3.new(3.4, 1.7, 0.6), Vector3.new(x, y0 + 1.75, 3.6), concrete, Enum.Material.Concrete)
-		api.box("JerseyStripe", Vector3.new(0.5, 0.9, 0.62), Vector3.new(x - 1.4, y0 + 1.9, 3.6), col.Accent, Enum.Material.SmoothPlastic, false)
-		if lv >= 2 then
-			local coil = api.cylinder("RazorWire", Vector3.new(3.3, 0.9, 0.9), CFrame.new(x, y0 + 3.05, 3.6), col.Metal, Enum.Material.DiamondPlate, false)
-			coil.Transparency = 0.35
-		end
+	-- Boom barrier: cabinet at the road edge on the spawn side of the booth, arm across the road raised 80°
+	-- (open: decorative, never blocks a vehicle; CanCollide off on the arm)
+	local px, pz = 10.6, -7.6
+	api.box("BoomPost", Vector3.new(0.9, 3.4, 0.9), Vector3.new(px, 1.7, pz), hazard, Enum.Material.SmoothPlastic)
+	local pivot = Vector3.new(px, 3.4, pz)
+	local a = math.rad(80)
+	local dir = Vector3.new(math.cos(a), math.sin(a), 0)
+	local armLen = 12.5
+	local armCF = CFrame.lookAt(pivot, pivot + dir)
+	api.part("BoomArm", Vector3.new(0.45, 0.45, armLen), armCF * CFrame.new(0, 0, -armLen * 0.5), Color3.fromRGB(236, 236, 228), Enum.Material.SmoothPlastic, false)
+	for _, k in ipairs({ 0.35, 0.75 }) do
+		api.part("BoomStripe", Vector3.new(0.5, 0.5, 1.6), armCF * CFrame.new(0, 0, -armLen * k), Color3.fromRGB(186, 44, 40), Enum.Material.SmoothPlastic, false)
 	end
 
-	-- Floodlights
+	-- Jersey barriers shielding the booth from the gate (L1: 2, L2+: 4), on the ground. 2 parts each (base + top).
+	-- x <= 7.9: clear of the L4+ gate AutoGun nest (GateDefenseService, gate-local (-7, 0, -7.5) = here (11, 5) +- 2.75)
+	local jx = { 6.2, 2.6, -1.0, -4.6 }
+	for i = 1, (if lv >= 2 then 4 else 2) do
+		local x = jx[i]
+		api.box("JerseyBase", Vector3.new(3.4, 1.0, 1.5), Vector3.new(x, 0.5, 4.5), concrete, Enum.Material.Concrete)
+		api.box("JerseyTop", Vector3.new(3.4, 1.8, 0.7), Vector3.new(x, 1.9, 4.5), concrete, Enum.Material.Concrete)
+	end
+
+	-- Floodlight: pole + angled housing + lens, aimed down at the lane (SpotLight, v70 light rules)
 	local function flood(fx: number, fz: number)
-		api.box("FloodPole", Vector3.new(0.3, 7, 0.3), Vector3.new(fx, y0 + 3.5, fz), col.Metal, Enum.Material.Metal, false)
-		local lamp = api.box("FloodLamp", Vector3.new(1.4, 0.8, 0.5), Vector3.new(fx, y0 + 7, fz + 0.3), col.Light, Enum.Material.SmoothPlastic, false)
-		api.light(lamp, 22, 1.3, col.Light)
+		api.box("FloodPole", Vector3.new(0.4, 10, 0.4), Vector3.new(fx, 5, fz), col.Metal, Enum.Material.Metal, false)
+		local head = CFrame.new(fx, 10.2, fz) * CFrame.Angles(0, 0, math.rad(-35))
+		api.part("FloodHousing", Vector3.new(1.1, 1.0, 1.8), head, col.Dark, Enum.Material.Metal, false)
+		local lens = api.part("FloodLens", Vector3.new(0.1, 0.8, 1.6), head * CFrame.new(0.6, 0, 0), LIGHTS.FixtureColor or col.Light, LIGHTS.FixtureMaterial or Enum.Material.SmoothPlastic, false)
+		local spot = Instance.new("SpotLight")
+		spot.Face = Enum.NormalId.Right
+		spot.Angle = 70
+		spot.Range = math.min(30, LIGHTS.SpotMaxRange or 30)
+		spot.Brightness = 2 * (LIGHTS.BrightnessScale or 0.35)
+		spot.Color = col.Light
+		spot.Shadows = false
+		spot.Parent = lens
 	end
-	flood(-9.4, -3.5)
+	flood(4.2, -7.4)
 	if lv >= 5 then
-		flood(2.5, -3.5)
+		flood(-2.8, 6.6)
 	end
 
-	-- Czech hedgehog tank traps (L3+)
+	-- Czech hedgehog tank traps between the barriers and the wall (L3+): thick rusty beams
 	if lv >= 3 then
-		for i = 0, 2 do
-			local tx = -8 + i * 3.4
-			local c = CFrame.new(tx, y0 + 1.25, 0.2)
-			api.part("TankTrap", Vector3.new(0.4, 0.4, 3), c * CFrame.Angles(math.rad(45), 0, 0), col.Dark, Enum.Material.Metal)
-			api.part("TankTrap", Vector3.new(0.4, 0.4, 3), c * CFrame.Angles(0, 0, math.rad(45)) * CFrame.Angles(0, math.rad(90), 0), col.Dark, Enum.Material.Metal)
-			api.part("TankTrap", Vector3.new(0.4, 0.4, 3), c * CFrame.Angles(0, math.rad(45), math.rad(-45)), col.Dark, Enum.Material.Metal)
+		for _, tx in ipairs({ 2.4, -3.6 }) do
+			local c = CFrame.new(tx, 1.75, 7.2) -- beam ends on the ground; clear of the perimeter wall (6.3 thick at L5)
+			api.part("TankTrap", Vector3.new(0.7, 0.7, 4.2), c * CFrame.Angles(math.rad(45), 0, 0), rust, Enum.Material.CorrodedMetal)
+			api.part("TankTrap", Vector3.new(0.7, 0.7, 4.2), c * CFrame.Angles(0, 0, math.rad(45)) * CFrame.Angles(0, math.rad(90), 0), rust, Enum.Material.CorrodedMetal)
+			api.part("TankTrap", Vector3.new(0.7, 0.7, 4.2), c * CFrame.Angles(0, math.rad(45), math.rad(-45)), rust, Enum.Material.CorrodedMetal)
 		end
 	end
 
-	-- Sandbagged gun nest (L4+)
+	-- Sandbagged gun nest at the flag, facing the gate (L4+)
 	if lv >= 4 then
-		api.sandbags(-4.6, 0.2, -2.8, y0)
-		api.box("NestTripod", Vector3.new(0.4, 1.4, 0.4), Vector3.new(-2.2, y0 + 0.7, -1.8), col.Metal, Enum.Material.Metal, false)
-		api.box("NestGun", Vector3.new(0.5, 0.5, 1.6), Vector3.new(-2.2, y0 + 1.6, -1.6), col.Dark, Enum.Material.Metal, false)
+		api.sandbags(-2.6, 2.6, 2.2, y0)
+		api.box("NestTripod", Vector3.new(0.4, 1.4, 0.4), Vector3.new(1.3, y0 + 0.7, 1.0), col.Metal, Enum.Material.Metal, false)
+		api.box("NestGun", Vector3.new(0.5, 0.5, 1.6), Vector3.new(1.3, y0 + 1.6, 1.3), col.Dark, Enum.Material.Metal, false)
 	end
 end

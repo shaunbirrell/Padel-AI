@@ -9,8 +9,13 @@
 	  CurrencyPill  bottom-left: cash icon · number (count-up); "+$141" floats rise from its right end
 	WE_TopStrip (DisplayOrder 56, the Roblox topbar row, real px — Roblox's own buttons are 44 px there too)
 	  LevelChip (tap / hover → the GoalLabel tooltip) · SettingsGear · CashPlus (bills + green +, cash packs; it
-	  left the pill: mobile merge gate #6, the thumbstick zone) · ShieldChip (while WE_ShieldUntil runs)
-	  CompassController adds the compass chip at the right end.
+	  left the pill: mobile merge gate #6, the thumbstick zone) · EmpireTaxChip (F3) · ShieldChip (while
+	  WE_ShieldUntil runs). CompassController adds the compass chip at the right end.
+	  F3 EmpireTaxChip: flag + "+10%" in gold (HudConfig.TopStrip.EmpireTax, real px), shown while the server's
+	  WE_EmpireTaxPct (EconomyConfig.OutpostIncomeBuff.Attribute) is > 0; a tap opens the Territories dropdown
+	  (HudLayout.Emit("CompassTapped")). HideWhenCrowded: when the left group would reach the compass (compass left
+	  - Gap) the chip drops its flag (Compact), then hides; it grows back only with TAX_HYSTERESIS_PX to spare.
+	  Re-checked on events only (the % / level / shield / compass text or visibility / layout), never per frame.
 
 	REMOVED from the screen (spec §3.7; where each thing lives now):
 	  LevelPanel goal / rebirth text → the level-chip tooltip (GoalLabel) + the Rebirth "!" badge
@@ -18,6 +23,10 @@
 	  SeasonLabel → Progression panel header · SpinnerButton → Missions badge + the Missions panel claim row
 	  PassiveHint → Base panel subtitle · GoldLabel "◆ 0" → Shop header (gold > 0)
 	  PendingLabel "+$N pending" → the in-world ATM screen · the 7-tile MobileActionBar dock → Rail + TopStrip gear
+
+	v72 (TycoonGuideConfig.Enabled and PillIncome only): the pill reads "13,594  +$24/s". The suffix (IncomeLabel) is
+	green, 20 v, not tappable, TycoonMath.RatePerSecText(WE_IncomePerSec) (the server's steady income into the ATM),
+	refreshed at most TextRefreshHz (2 Hz) and hidden while the rate floors to 0.
 ]]
 
 local Players = game:GetService("Players")
@@ -34,7 +43,10 @@ local Types = require(Shared.Types)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
 local LevelConfig = require(Shared.Configs.LevelConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local TycoonMath = require(Shared.Util.TycoonMath)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 
@@ -71,6 +83,25 @@ local shieldChip: Frame? = nil
 local shieldText: TextLabel? = nil
 local shieldLoop = false
 
+-- F3 Empire Tax chip (see the header). Rows are measured from their parts (TextService widths) and their laid-out
+-- AbsoluteSize, whichever is larger, so the crowding check never under-counts a chip whose AutomaticSize is pending.
+type Row = { Chip: GuiObject, PadL: number, PadR: number, Gap: number, Parts: { GuiObject } }
+local TAX_PAD_L = 8 -- real px
+local TAX_PAD_R = 10
+local TAX_GAP = 4 -- flag to text
+local TAX_TAP_MIN = 44 -- real px: the Compact chip never gets narrower than a touch target
+local TAX_HYSTERESIS_PX = 6 -- spare room needed before the chip grows back (Hidden → Compact → Full)
+local TAX_ATTR: string = (EconomyConfig.OutpostIncomeBuff and EconomyConfig.OutpostIncomeBuff.Attribute) or "WE_EmpireTaxPct"
+local taxChip: TextButton? = nil
+local taxIcon: Frame? = nil
+local taxText: TextLabel? = nil
+local taxPct = 0
+local taxMode = "Hidden" -- "Full" | "Compact" | "Hidden"
+local leftRows: { Row } = {} -- Level, Settings, CashPlus, Shield (every left chip except the tax chip)
+local compassRow: Row? = nil
+local shieldIcon: Frame? = nil
+local shieldCompact = false -- the raid shield chip dropped its icon (still crowded with the tax chip hidden)
+
 -- Rail
 local rail: Frame? = nil
 local railGrid: UIGridLayout? = nil
@@ -82,6 +113,9 @@ local pill: Frame? = nil
 local cashLabel: TextLabel? = nil
 local cashPop: UIScale? = nil
 local plusSlot: Frame? = nil
+local incomeLabel: TextLabel? = nil -- v72 "+$24/s" suffix (guide on)
+local incomeQueued = false
+local incomeShownAt = -math.huge
 local cashTarget: number? = nil -- last synced cash; nil until the first sync (the label shows "$…")
 local countFrom, countTo, countElapsed, counting = 0, 0, 0, false
 local flashToken = 0
@@ -163,6 +197,51 @@ local function chipBase(inst: GuiObject)
 	inst.BackgroundTransparency = TS.BgTransparency
 	inst.BorderSizePixel = 0
 	UIUtil.Corner(inst, TS.Corner)
+end
+
+-- real px width of a TextLabel's text (TextService; 0 when unavailable)
+local function textWidth(lab: TextLabel): number
+	local ok, v = pcall(function(): Vector2
+		return TextService:GetTextSize(lab.Text, lab.TextSize, lab.Font, Vector2.new(4000, 1000))
+	end)
+	return if ok and typeof(v) == "Vector2" then v.X else 0
+end
+
+local function partWidth(p: GuiObject): number
+	if p:IsA("TextLabel") and p.AutomaticSize ~= Enum.AutomaticSize.None then
+		return math.max(p.Size.X.Offset, textWidth(p))
+	end
+	return p.Size.X.Offset
+end
+
+-- a TopStrip chip = UIPadding + a horizontal UIListLayout of Parts; width in real px (the TopStrip has no UIScale).
+-- allParts: count hidden parts too (the chip's full width, e.g. the shield chip while it has dropped its icon)
+local function rowWidth(r: Row, allParts: boolean?): number
+	local sum, n = 0, 0
+	for _, p in ipairs(r.Parts) do
+		if allParts or p.Visible then
+			sum += partWidth(p)
+			n += 1
+		end
+	end
+	local est = r.PadL + r.PadR + sum + r.Gap * math.max(0, n - 1)
+	return math.max(est, r.Chip.Size.X.Offset, r.Chip.AbsoluteSize.X)
+end
+
+-- a Row for a chip built elsewhere (the compass): its UIPadding, UIListLayout and GuiObject children, read once
+local function rowOf(chip: GuiObject): Row
+	local r: Row = { Chip = chip, PadL = 0, PadR = 0, Gap = 0, Parts = {} }
+	for _, c in ipairs(chip:GetChildren()) do
+		if c:IsA("UIPadding") then
+			r.PadL = c.PaddingLeft.Offset
+			r.PadR = c.PaddingRight.Offset
+		elseif c:IsA("UIListLayout") then
+			r.Gap = c.Padding.Offset
+		elseif c:IsA("GuiObject") then
+			table.insert(r.Parts, c)
+		end
+	end
+	return r
 end
 
 local function withCommas(n: number): string
@@ -260,6 +339,29 @@ local function hideGoalTip()
 	end
 end
 
+local refreshEmpireTax: () -> ()
+
+-- the compass chip (CompassController parents it into the same TopbarArea, before or after this runs): measure it,
+-- and re-check the Empire Tax chip when it shows / hides or its text (the distance) changes
+local function watchCompass(c: Instance)
+	if c.Name ~= "Compass" or not c:IsA("GuiObject") or (compassRow and compassRow.Chip == c) then
+		return
+	end
+	local row = rowOf(c)
+	compassRow = row
+	c:GetPropertyChangedSignal("Visible"):Connect(function()
+		refreshEmpireTax()
+	end)
+	for _, part in ipairs(row.Parts) do
+		if part:IsA("TextLabel") then
+			part:GetPropertyChangedSignal("Text"):Connect(function()
+				refreshEmpireTax()
+			end)
+		end
+	end
+	refreshEmpireTax()
+end
+
 local function buildTopStrip()
 	local area = ensureTopStrip()
 	if not area then
@@ -335,6 +437,7 @@ local function buildTopStrip()
 	fill.Parent = barBg
 	UIUtil.Corner(fill, math.ceil(L.BarSize.Y / 2))
 	xpBarFill = fill
+	table.insert(leftRows, { Chip = chip :: GuiObject, PadL = 14, PadR = 14, Gap = 8, Parts = { cap, num, barBg } })
 
 	-- GoalLabel tooltip: a small dark card under the chip (line 1 goal, line 2 rebirth summary)
 	local tip = Instance.new("Frame")
@@ -420,6 +523,7 @@ local function buildTopStrip()
 		end
 	end)
 	gear.Parent = group
+	table.insert(leftRows, { Chip = gear :: GuiObject, PadL = 0, PadR = 0, Gap = 0, Parts = {} })
 
 	-- Buy-cash chip (mobile merge gate #6): cash bills + green "+" → cash packs. It was the pill's "+", which sat
 	-- in the thumbstick zone (bottom-left); up here it can never be hit by a thumb that is walking.
@@ -437,7 +541,7 @@ local function buildTopStrip()
 		chipBase(cashPlus)
 		padding(cashPlus, CP.PadLeft, CP.PadRight)
 		hList(cashPlus, CP.Gap)
-		HudIcons.Make("Cash", cashPlus, {
+		local cashIcon = HudIcons.Make("Cash", cashPlus, {
 			Name = "Icon",
 			Size = UDim2.fromOffset(CP.IconSize.X, CP.IconSize.Y),
 			LayoutOrder = 1,
@@ -477,13 +581,56 @@ local function buildTopStrip()
 		cashPlus.Activated:Connect(openShopFromHud)
 		cashPlus.Parent = group
 		HudLayout.SetRect("CashPlus", cashPlus)
+		table.insert(leftRows, { Chip = cashPlus :: GuiObject, PadL = CP.PadLeft, PadR = CP.PadRight, Gap = CP.Gap, Parts = { cashIcon, disc } })
+	end
+
+	-- F3 Empire Tax chip: gold flag + "+10%", only while WE_EmpireTaxPct > 0 (refreshEmpireTax). A tap opens the
+	-- Territories dropdown, the same list as the compass chip (TerritoryController heads it "Empire Tax +N%").
+	local E = (TS :: any).EmpireTax
+	if type(E) == "table" then
+		local tax = Instance.new("TextButton")
+		tax.Name = "EmpireTaxChip"
+		tax.LayoutOrder = 4
+		tax.Size = UDim2.fromOffset(E.MinWidth, E.Height)
+		tax.AutomaticSize = Enum.AutomaticSize.X
+		tax.AutoButtonColor = false
+		tax.Text = ""
+		tax.Active = true
+		tax.Selectable = true
+		tax.Visible = false
+		chipBase(tax)
+		padding(tax, TAX_PAD_L, TAX_PAD_R)
+		local taxList = hList(tax, TAX_GAP)
+		taxList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		taxIcon = HudIcons.Make("Flag", tax, {
+			Name = "Icon",
+			Size = UDim2.fromOffset(E.IconSize, E.IconSize),
+			Color = E.Color,
+			Fill = TS.Bg,
+			LayoutOrder = 1,
+			ZIndex = 2,
+		})
+		local tt = label(tax, "EmpireTaxText", Fonts.Display, E.TextSize, E.Color, "+0%")
+		tt.Size = UDim2.new(0, 0, 1, 0)
+		tt.AutomaticSize = Enum.AutomaticSize.X
+		tt.LayoutOrder = 2
+		tt.ZIndex = 2
+		UIUtil.TextOutline(tt, TS.TextStroke)
+		taxText = tt
+		tax.Activated:Connect(function()
+			HudLayout.Emit("CompassTapped")
+		end)
+		tax.Parent = group
+		taxChip = tax
+		HudLayout.SetRect("EmpireTax", tax)
+		HudLayout.AssertTouchTarget(tax, "TopStrip EmpireTax")
 	end
 
 	-- Shield chip (raid victim shield): cyan shield + "9:12" while WE_ShieldUntil is in the future
 	local SH = TS.Shield
 	local sh = Instance.new("Frame")
 	sh.Name = "ShieldChip"
-	sh.LayoutOrder = 4
+	sh.LayoutOrder = 5
 	sh.Size = UDim2.fromOffset(0, TS.Height)
 	sh.AutomaticSize = Enum.AutomaticSize.X
 	sh.Active = false
@@ -491,7 +638,7 @@ local function buildTopStrip()
 	chipBase(sh)
 	padding(sh, 10, 14)
 	hList(sh, 6)
-	HudIcons.Make("Shield", sh, { Name = "Icon", Size = UDim2.fromOffset(SH.IconSize, SH.IconSize), Color = SH.IconColor, LayoutOrder = 1 })
+	local shIcon = HudIcons.Make("Shield", sh, { Name = "Icon", Size = UDim2.fromOffset(SH.IconSize, SH.IconSize), Color = SH.IconColor, LayoutOrder = 1 })
 	local st = label(sh, "ShieldText", Fonts.Display, SH.TextSize, Colors.White, "")
 	st.Size = UDim2.new(0, 0, 1, 0)
 	st.AutomaticSize = Enum.AutomaticSize.X
@@ -500,10 +647,130 @@ local function buildTopStrip()
 	sh.Parent = group
 	shieldChip = sh
 	shieldText = st
+	shieldIcon = shIcon
+	table.insert(leftRows, { Chip = sh :: GuiObject, PadL = 10, PadR = 14, Gap = 6, Parts = { shIcon, st } })
+	-- the shield chip sits right of the tax chip: its "9:59" (and it showing / hiding) moves the left group's end
+	sh:GetPropertyChangedSignal("Visible"):Connect(function()
+		refreshEmpireTax()
+	end)
+	st:GetPropertyChangedSignal("Text"):Connect(function()
+		refreshEmpireTax()
+	end)
 
 	tip.Parent = area
 	group.Parent = area
 	HudLayout.SetRect("LevelChip", chip)
+
+	local existing = area:FindFirstChild("Compass")
+	if existing then
+		watchCompass(existing)
+	end
+	area.ChildAdded:Connect(watchCompass)
+end
+
+--[[ F3 HideWhenCrowded, pure (exported for the client sim). Real px along the TopStrip row: usedPx = where the left
+	group ends without the tax chip (EdgePad + chips + gaps), limitPx = where it must stop (compass left - Gap, or the
+	row's right edge - EdgePad), fullPx / compactPx = the chip with / without its flag. current = the mode shown now:
+	growing back (Hidden → Compact → Full) needs TAX_HYSTERESIS_PX to spare, so a compass distance ticking 99m → 100m
+	never makes the chip flicker. Returns "Full", "Compact" or "Hidden". ]]
+function HUDController.EmpireTaxFit(usedPx: number, fullPx: number, compactPx: number, limitPx: number, gapPx: number, current: string?): string
+	local rank = if current == "Full" then 2 elseif current == "Compact" then 1 else 0
+	local function fits(w: number, grow: boolean): boolean
+		return usedPx + gapPx + w + (if grow then TAX_HYSTERESIS_PX else 0) <= limitPx
+	end
+	if fits(fullPx, rank < 2) then
+		return "Full"
+	end
+	if fits(compactPx, rank < 1) then
+		return "Compact"
+	end
+	return "Hidden"
+end
+
+-- "+10%" (whole %; the server writes whole numbers)
+function HUDController.EmpireTaxText(pct: number): string
+	return string.format("+%d%%", math.floor(pct + 0.5))
+end
+
+refreshEmpireTax = function()
+	local chip, txt, icon = taxChip, taxText, taxIcon
+	local E = (TS :: any).EmpireTax
+	local v = player:GetAttribute(TAX_ATTR)
+	local pct = if typeof(v) == "number" and v == v and v > 0 and v < math.huge then math.floor(v + 0.5) else 0
+	taxPct = pct
+	-- nothing to fit (no Empire Tax, no raid shield): the usual case, no measuring
+	local sh, shIcon = shieldChip, shieldIcon
+	if (pct <= 0 or not chip) and not (sh and sh.Visible) then
+		taxMode = "Hidden"
+		if chip and chip.Visible then
+			chip.Visible = false
+		end
+		shieldCompact = false
+		if shIcon and not shIcon.Visible then
+			shIcon.Visible = true
+		end
+		return
+	end
+	-- where the left group ends without the tax chip (the shield counted with its icon) and where it must stop
+	local used, n = TS.EdgePad, 0
+	for _, r in ipairs(leftRows) do
+		if r.Chip.Visible then
+			used += rowWidth(r, true)
+			n += 1
+		end
+	end
+	used += TS.Gap * math.max(0, n - 1)
+	local limit = HudLayout.TopbarRect().Width - TS.EdgePad
+	local cr = compassRow
+	if cr and cr.Chip.Parent and cr.Chip.Visible then
+		limit -= rowWidth(cr) + TS.Gap
+	end
+
+	-- 1) the Empire Tax chip: Full, Compact (no flag) or Hidden
+	local mode = "Hidden"
+	local taxW = 0
+	if chip and txt and pct > 0 and type(E) == "table" then
+		local text = HUDController.EmpireTaxText(pct)
+		if txt.Text ~= text then
+			txt.Text = text
+		end
+		local tw = textWidth(txt)
+		local fullPx = math.max(E.MinWidth, TAX_PAD_L + E.IconSize + TAX_GAP + tw + TAX_PAD_R)
+		local compactPx = math.max(TAX_TAP_MIN, TAX_PAD_L + tw + TAX_PAD_R)
+		mode = if E.HideWhenCrowded ~= false then HUDController.EmpireTaxFit(used, fullPx, compactPx, limit, TS.Gap, taxMode) else "Full"
+		taxW = if mode == "Full" then fullPx elseif mode == "Compact" then compactPx else 0
+	end
+	taxMode = mode
+	if chip then
+		if icon and icon.Visible ~= (mode == "Full") then
+			icon.Visible = mode == "Full"
+		end
+		local minW = if mode == "Full" and type(E) == "table" then E.MinWidth else TAX_TAP_MIN
+		if type(E) == "table" and chip.Size.X.Offset ~= minW then
+			chip.Size = UDim2.fromOffset(minW, E.Height)
+		end
+		local show = mode ~= "Hidden"
+		if chip.Visible ~= show then
+			chip.Visible = show
+		end
+	end
+
+	-- 2) still crowded with the tax chip gone (e.g. 800x360 with a notch, Lv 10+, shielded, outside the base):
+	-- the raid shield chip drops its icon and keeps its "9:59"; it gets it back with TAX_HYSTERESIS_PX to spare
+	if sh and shIcon then
+		local need = used + (if taxW > 0 then TS.Gap + taxW else 0)
+		local compact = sh.Visible and need > limit - (if shieldCompact then TAX_HYSTERESIS_PX else 0)
+		shieldCompact = compact
+		if shIcon.Visible == compact then
+			shIcon.Visible = not compact
+		end
+	end
+end
+
+-- test hook (client sims): what the chip shows now (+ whether the shield chip dropped its icon)
+function HUDController._EmpireTaxState(): (number, string, boolean, string, boolean)
+	local chip, txt = taxChip, taxText
+	return taxPct, taxMode, chip ~= nil and chip.Visible, if txt then txt.Text else "", shieldCompact
 end
 
 local function shieldLeft(): number
@@ -705,11 +972,28 @@ local function buildPill(screen: ScreenGui)
 	cashLabel = cash
 	cashPop = cp
 
+	-- v72: "+$24/s" after the number (green, 20 v = 14 real px on phones; a label, never a tap target)
+	local incomeOn = TycoonGuideConfig.Enabled == true and TycoonGuideConfig.PillIncome == true
+	if incomeOn then
+		local inc = label(p, "IncomeLabel", Fonts.Display, 20, HudConfig.CashFloat.GainColor, "")
+		inc.LayoutOrder = 3
+		inc.Size = UDim2.new(0, 0, 1, 0)
+		inc.AutomaticSize = Enum.AutomaticSize.X
+		inc.TextXAlignment = Enum.TextXAlignment.Left
+		inc.Active = false
+		inc.Visible = false -- until WE_IncomePerSec > 0
+		inc.ZIndex = 13
+		inc.TextStrokeColor3 = Colors.Ink
+		inc.TextStrokeTransparency = 0.25
+		UIUtil.TextOutline(inc, 2)
+		incomeLabel = inc
+	end
+
 	-- PlusSlot: the cash floats' anchor at the pill's right end. The green + itself is the TopStrip's CashPlus
 	-- chip (mobile merge gate #6: out of the thumbstick zone) unless HudConfig.CashPill.PlusOnPill brings it back.
 	local slot = Instance.new("Frame")
 	slot.Name = "PlusSlot"
-	slot.LayoutOrder = 3
+	slot.LayoutOrder = if incomeOn then 4 else 3
 	slot.Size = UDim2.fromOffset(if P.PlusOnPill then P.PlusVisual else P.PlusSlotWidth, P.PlusVisual)
 	slot.BackgroundTransparency = 1
 	slot.BorderSizePixel = 0
@@ -777,6 +1061,42 @@ buildPillPlus = function(slot: Frame)
 		press.Scale = 1
 	end)
 	cashPlus.Activated:Connect(openShopFromHud)
+end
+
+-- v72 pill suffix: "+$24/s" from the server's WE_IncomePerSec (0 / missing / floors to "0" -> hidden)
+local function applyIncome()
+	incomeQueued = false
+	incomeShownAt = os.clock()
+	local lab = incomeLabel
+	if not lab then
+		return
+	end
+	local v = player:GetAttribute("WE_IncomePerSec")
+	local rate = if typeof(v) == "number" and v == v then v else 0
+	local show = rate > 0 and TycoonMath.RateText(rate) ~= "0"
+	if show then
+		-- "+$1,234/s": RateText floors but has no thousands separator; from $1,000/s the floored whole dollars get
+		-- TycoonMath.Commas (identical to RatePerSecText below that)
+		local text = if rate >= 1000
+			then string.format(TycoonGuideConfig.Text.PerSec, TycoonMath.Commas(rate))
+			else TycoonMath.RatePerSecText(rate)
+		if lab.Text ~= text then
+			lab.Text = text
+		end
+	end
+	if lab.Visible ~= show then
+		lab.Visible = show
+	end
+end
+
+-- at most TextRefreshHz: the first change after a quiet spell shows at once, a burst coalesces into one update
+local function queueIncome()
+	if incomeQueued or not incomeLabel then
+		return
+	end
+	incomeQueued = true
+	local gap = 1 / math.max(0.1, TycoonGuideConfig.TextRefreshHz)
+	task.delay(math.max(0, gap - (os.clock() - incomeShownAt)), applyIncome)
 end
 
 local function renderCash(v: number)
@@ -1085,9 +1405,19 @@ function HUDController.Init()
 	HudLayout.SetRect("Rail", r)
 
 	buildPill(screen)
+	if incomeLabel then
+		player:GetAttributeChangedSignal("WE_IncomePerSec"):Connect(queueIncome)
+		applyIncome()
+	end
 	buildTopStrip()
+	-- F3: the Empire Tax chip follows the server's WE_EmpireTaxPct (display only) and re-fits on a layout change
+	player:GetAttributeChangedSignal(TAX_ATTR):Connect(refreshEmpireTax)
+	refreshEmpireTax()
 
 	HudLayout.LayoutChanged:Connect(layoutRail)
+	HudLayout.LayoutChanged:Connect(function()
+		refreshEmpireTax()
+	end)
 	HudLayout.BadgeChanged:Connect(function(id: string, text: string?)
 		local btn = railTiles[id]
 		if btn then
@@ -1295,6 +1625,7 @@ function HUDController.ShowLevelUpCelebration(level: number, _unlockMessage: str
 	if levelLabel then
 		levelLabel.Text = tostring(math.floor(level))
 	end
+	refreshEmpireTax() -- a wider level number moves the left group's end
 	local pop, stroke = chipPop, chipStroke
 	if pop then
 		pop.Scale = 1
@@ -1449,8 +1780,9 @@ end
 
 function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoal: string?)
 	local lv = math.floor(tonumber(level) or 0)
-	if levelLabel then
+	if levelLabel and levelLabel.Text ~= tostring(lv) then
 		levelLabel.Text = tostring(lv)
+		refreshEmpireTax() -- a wider level number moves the left group's end
 	end
 	local maxed = xpToNext == math.huge or xpToNext <= 0
 	local alpha = if maxed then 1 else math.clamp(xp / xpToNext, 0, 1)
@@ -1470,8 +1802,10 @@ function HUDController.SetXP(level: number, xp: number, xpToNext: number, hudGoa
 	if lv >= minPrestige then
 		rebirthText = string.format("Rebirth READY · %s · +%d%% cash forever · Keep all Robux Items%s", feeBit, bonusPct, rebirthHow)
 	else
-		local pct = math.clamp(math.floor((lv / minPrestige) * 100), 0, 99)
-		rebirthText = string.format("Rebirth %d/%d (%d%%) · %s · +%d%%/P", lv, minPrestige, pct, feeBit, bonusPct)
+		-- F11: the same XP-based % as the Rebirth panel (PrestigeConfig.ProgressPct: Lv 20 → 17, Lv 39 → 93);
+		-- below the rebirth level it never shows 100
+		local pct = math.clamp(PrestigeConfig.ProgressPct(lv, tonumber(xp) or 0), 0, 99)
+		rebirthText = string.format("Rebirth %d%%  Lv %d/%d · %s · +%d%%/P", pct, lv, minPrestige, feeBit, bonusPct)
 		if lv >= minPrestige - nearBand then
 			rebirthText ..= " · Keep all Robux Items"
 		end

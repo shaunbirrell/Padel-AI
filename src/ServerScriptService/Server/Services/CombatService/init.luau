@@ -16,6 +16,18 @@
 	    shooter; projectile launch / explosion events.
 	  - Server APIs for other services: ApplyHit, ApplyRadiusDamage, ApplyBlastDamage, IsSpawnInvulnerable,
 	    OnPlayerDeath (the DeathShopOffer toast is built-in listener #1).
+
+	F6 novice shield (owner's 11 features, CombatFairnessConfig.NoviceShield; off until lane Z):
+	  - A player whose save says the tutorial is not complete and NoviceShieldDone is false is shielded for this
+	    session: InvulnerableUntil = math.huge (so every damage path here, CombatNPC's hit roll and the assist skip
+	    them), the replicated character attribute WE_ShieldUntil and a visible server ForceField "WE_NoviceShield".
+	    It survives respawns. GateDefenseService guards skip them (SetShieldCheck, injected from Init).
+	  - It ends for good (profile.NoviceShieldDone = true, one Text.Off toast) on the first of: drawing a weapon, the
+	    first accepted shot (before any hit resolves), an accepted squad order or missile strike, contesting a zone,
+	    tutorial complete or skip, holding an ATM raid or entering the Empire Bank's guard ring (1 Hz sweep), or
+	    MaxSeconds of play this session. Never re-granted.
+	  - A shielded player deals no damage to other players, their vehicles or gates: such a hit ends the shield first.
+	  - APIs: IsNoviceShielded(player) -> boolean, EndNoviceShield(player, reason) -> boolean (true = it ended now).
 ]]
 
 local Players = game:GetService("Players")
@@ -38,6 +50,7 @@ local AimAssistConfig = require(Shared.Configs.AimAssistConfig) -- W2
 local CombatFeelConfig = require(Shared.Configs.CombatFeelConfig) -- W2
 local VehicleCombatConfig = require(Shared.Configs.VehicleCombatConfig) -- W2 (M4)
 local VehicleConfig = require(Shared.Configs.VehicleConfig) -- W2: vehicle names in hit feedback
+local BankRaidConfig = require(Shared.Configs.BankRaidConfig) -- F6: the guarded bank ends a novice shield
 
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
@@ -165,6 +178,21 @@ local W2 = {
 	deathHandled = (setmetatable({}, { __mode = "k" }) :: any) :: { [Humanoid]: boolean }, -- once per death
 	aimStats = {} :: { [string]: { [string]: number } }, -- class -> { Exact, Claim, Assist, Miss }
 	aimStatsLoggedAt = 0,
+}
+-- F6 novice shield: per-player session state and helpers, grouped in one table like W2 (functions further down)
+local NS = {
+	ForceField = "WE_NoviceShield", -- the server ForceField's name
+	Active = {} :: { [number]: { Deadline: number, OnToasted: boolean } }, -- userId -> shielded this session
+	SweepRunning = false,
+	-- EndNoviceShield reason -> the CombatFairnessConfig.NoviceShield switch that allows it (other reasons always end it)
+	ReasonFlag = {
+		draw = "EndOnDraw",
+		fire = "EndOnFire",
+		order = "EndOnSquadOrder",
+		strike = "EndOnSquadOrder",
+		contest = "EndOnContestedCapture",
+		tutorial = "EndOnTutorialComplete",
+	} :: { [string]: string },
 }
 
 local function clock(): number
@@ -301,6 +329,140 @@ local function getState(player: Player): CombatState?
 	return state
 end
 
+-- ── F6 novice shield (owner's 11 features; CombatFairnessConfig.NoviceShield) ─────────────────────────────────
+function NS.cfg(): any
+	return (CombatFairnessConfig :: any).NoviceShield
+end
+
+function NS.serverNow(): number
+	local ok, t = pcall(function()
+		return Workspace:GetServerTimeNow()
+	end)
+	return if ok and typeof(t) == "number" then t else os.time()
+end
+
+-- one character (idempotent): the replicated end time (the MaxSeconds cap; client bubble fallback and AimTargets
+-- read it) and the visible server ForceField
+function NS.dress(player: Player, character: Model?)
+	local rec = NS.Active[player.UserId]
+	if rec == nil or character == nil or character.Parent == nil then
+		return
+	end
+	character:SetAttribute(CombatFeelConfig.ShieldAttribute, NS.serverNow() + math.max(0, rec.Deadline - clock()))
+	if character:FindFirstChild(NS.ForceField) == nil then
+		local ff = Instance.new("ForceField")
+		ff.Name = NS.ForceField
+		ff.Visible = true
+		ff.Parent = character
+	end
+end
+
+-- (re)apply to the combat state and the current character; the Text.On toast once per session
+function NS.apply(player: Player, character: Model?)
+	local rec = NS.Active[player.UserId]
+	if rec == nil then
+		return
+	end
+	local state = combatStates[player.UserId]
+	if state then
+		state.InvulnerableUntil = math.huge
+	end
+	NS.dress(player, character)
+	local cfg = NS.cfg()
+	if not rec.OnToasted and NotificationService and typeof(cfg) == "table" and typeof(cfg.Text) == "table" then
+		rec.OnToasted = true
+		-- a short delay so the client's toast stack is listening on a fresh join (optional config key)
+		task.delay(tonumber(cfg.OnToastDelaySeconds) or 3, function()
+			if NS.Active[player.UserId] == rec and player.Parent ~= nil then
+				NotificationService.Notify(player, cfg.Text.On, "Info")
+			end
+		end)
+	end
+end
+
+-- A shielded player who holds an ATM raid (WE_RaidingPlot) or walks inside the Empire Bank's guard ring: the
+-- bank vault is guarded only by NPCs, whose shots skip InvulnerableUntil = math.huge, so an unended shield would
+-- loot the vault for free (every rejoin re-grants the shield). Ends it for good (reason "raid", no config switch).
+function NS.engaging(player: Player): boolean
+	if player:GetAttribute("WE_RaidingPlot") ~= nil then
+		return true
+	end
+	if BankRaidConfig.Enabled ~= true then
+		return false
+	end
+	local _, _, root = characterParts(player)
+	if root == nil then
+		return false
+	end
+	local r = math.max(tonumber(BankRaidConfig.VaultRadius) or 12, tonumber(BankRaidConfig.GuardRingRadius) or 18)
+	for _, inst in ipairs(getTaggedCached(Constants.Tags.BankVault)) do
+		if inst:IsA("BasePart") and (inst.Position - root.Position).Magnitude <= r then
+			return true
+		end
+	end
+	return false
+end
+
+-- 1 Hz while anyone is shielded: the MaxSeconds cap, and the tutorial ending (complete or skip) even when no
+-- other service calls EndNoviceShield
+function NS.sweep()
+	local t = clock()
+	for uid, rec in pairs(NS.Active) do
+		local player = Players:GetPlayerByUserId(uid)
+		if player == nil then
+			NS.Active[uid] = nil
+		elseif t >= rec.Deadline then
+			CombatService.EndNoviceShield(player, "timeout")
+		elseif NS.engaging(player) then
+			CombatService.EndNoviceShield(player, "raid")
+		else
+			local profile = DataService and DataService.GetProfile(player)
+			if profile and profile.TutorialComplete == true then
+				CombatService.EndNoviceShield(player, "tutorial")
+			end
+		end
+	end
+end
+
+function NS.startSweep()
+	if NS.SweepRunning then
+		return
+	end
+	NS.SweepRunning = true
+	task.spawn(function()
+		while next(NS.Active) ~= nil do
+			task.wait(1)
+			local ok, err = pcall(function()
+				NS.sweep()
+			end)
+			if not ok then
+				warn("[CombatService] novice shield sweep:", err)
+			end
+		end
+		NS.SweepRunning = false
+	end)
+end
+
+-- the real save is in: shielded this session iff the flag is on, the tutorial is not complete and it never ended
+function NS.onLoad(player: Player, profile: any)
+	local cfg = NS.cfg()
+	if typeof(cfg) ~= "table" or cfg.Enabled ~= true or typeof(profile) ~= "table" then
+		return
+	end
+	if profile.TutorialComplete == true or profile.NoviceShieldDone == true or NS.Active[player.UserId] ~= nil then
+		return
+	end
+	NS.Active[player.UserId] = { Deadline = clock() + math.max(0, tonumber(cfg.MaxSeconds) or 900), OnToasted = false }
+	NS.apply(player, player.Character)
+	NS.startSweep()
+end
+
+-- May `attacker` hurt another player, a vehicle or a gate? A shielded attacker's hit ends the shield first
+-- (reason "fire", EndOnFire); with that switch off nothing lands. nil (no attacker) is always allowed.
+function NS.allowsAttack(attacker: Player?): boolean
+	return attacker == nil or NS.Active[attacker.UserId] == nil or CombatService.EndNoviceShield(attacker, "fire")
+end
+
 local function damageFor(def: WeaponDef, attacker: Player?): number
 	local base = CombatDamage.DamageFor(def, attacker)
 	local boosted = base * researchMult(attacker, "WeaponDamage") -- v69 research
@@ -427,6 +589,9 @@ local function hurtPlayer(attacker: Player?, victim: Player, damage: number, wea
 			return 0, false
 		end
 		if attacker == victim and not GameConfig.FriendlyFire then
+			return 0, false
+		end
+		if attacker ~= victim and not NS.allowsAttack(attacker) then -- F6: a shielded player deals no PvP damage
 			return 0, false
 		end
 	end
@@ -1133,9 +1298,59 @@ local function isClanAlly(a: Player, b: Player): boolean
 	return okA and okB and ca ~= nil and ca == cb
 end
 
+-- true during the spawn shield and the whole F6 novice shield (InvulnerableUntil = math.huge)
 function CombatService.IsSpawnInvulnerable(player: Player): boolean
 	local s = combatStates[player.UserId]
 	return s ~= nil and clock() < s.InvulnerableUntil
+end
+
+-- F6 (spec §2 cross-lane API): is this player under the novice shield this session?
+function CombatService.IsNoviceShielded(player: Player): boolean
+	return typeof(player) == "Instance" and player:IsA("Player") and NS.Active[player.UserId] ~= nil
+end
+
+--[[ F6 (spec §2 cross-lane API): end the novice shield for good. reason: "draw" | "fire" | "order" | "strike" |
+	"contest" | "tutorial" | "timeout" (any other string always ends it). A reason whose NoviceShield switch
+	(NS.ReasonFlag) is false is ignored. Returns true when the shield ended now: InvulnerableUntil back to 0, the
+	ForceField and WE_ShieldUntil removed, profile.NoviceShieldDone = true (saved), one Text.Off toast. Callers in other
+	services wrap it in pcall and a nil check. ]]
+function CombatService.EndNoviceShield(player: Player, reason: string): boolean
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return false
+	end
+	local uid = player.UserId
+	if NS.Active[uid] == nil then
+		return false
+	end
+	local cfg = NS.cfg()
+	local flag = NS.ReasonFlag[if typeof(reason) == "string" then reason else ""]
+	if flag ~= nil and typeof(cfg) == "table" and cfg[flag] == false then
+		return false
+	end
+	NS.Active[uid] = nil
+	local state = combatStates[uid]
+	if state and state.InvulnerableUntil == math.huge then
+		state.InvulnerableUntil = 0
+	end
+	local char = player.Character
+	if char then
+		local ff = char:FindFirstChild(NS.ForceField)
+		if ff then
+			ff:Destroy()
+		end
+		if char:GetAttribute(CombatFeelConfig.ShieldAttribute) ~= nil then
+			char:SetAttribute(CombatFeelConfig.ShieldAttribute, nil)
+		end
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	if profile then
+		profile.NoviceShieldDone = true
+		DataService.MarkDirty(player)
+	end
+	if NotificationService and typeof(cfg) == "table" and typeof(cfg.Text) == "table" then
+		NotificationService.Notify(player, cfg.Text.Off, "Warn")
+	end
+	return true
 end
 
 --[[ W2 (contracts §3.1): one hit on whatever `hit` belongs to (player > NPC > registered vehicle > gate).
@@ -1188,7 +1403,7 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 		return { Kind = "NPC", Dealt = dealt, Killed = killed, Target = model }
 	elseif kind == "Vehicle" then
 		local veh = ref :: Model
-		if veh == firing then
+		if veh == firing or not NS.allowsAttack(attacker) then -- F6: a shielded attacker's hit ends the shield first
 			return { Kind = "Vehicle", Dealt = 0, Killed = false, Target = veh }
 		end
 		local class, mult = vehicleClassFor(weaponId, opts.Class, opts.WeaponMult)
@@ -1219,7 +1434,7 @@ function CombatService.ApplyHit(attacker: Player?, hit: Instance, amount: number
 	elseif kind == "Gate" then
 		local part = ref :: BasePart
 		local landed = false
-		if attacker and GateDefenseService and GateDefenseService.ApplyDamage then
+		if attacker and GateDefenseService and GateDefenseService.ApplyDamage and NS.allowsAttack(attacker) then
 			local ok, res = pcall(GateDefenseService.ApplyDamage, attacker, part, amount, weaponId)
 			landed = ok and res == true
 		end
@@ -1379,6 +1594,9 @@ function CombatService.ApplyBlastDamage(attacker: Player?, humanoid: Humanoid, d
 		if attacker ~= nil and (not GameConfig.PvPEnabled or attacker == victim) then
 			return 0, false
 		end
+		if not NS.allowsAttack(attacker) then -- F6: a shielded attacker deals no PvP damage
+			return 0, false
+		end
 		if CombatService.IsSpawnInvulnerable(victim) or humanoid.Health <= 0 then
 			return 0, false
 		end
@@ -1496,6 +1714,9 @@ local function setGunOut(player: Player, weaponId: string?)
 end
 
 function CombatService.SetDrawn(player: Player, drawn: boolean)
+	if drawn == true and NS.Active[player.UserId] ~= nil then
+		CombatService.EndNoviceShield(player, "draw") -- F6: drawing a weapon ends the novice shield (EndOnDraw)
+	end
 	local state = combatStates[player.UserId]
 	local _, hum = characterParts(player)
 	local alive = state ~= nil and state.Alive and hum ~= nil and hum.Health > 0
@@ -1564,12 +1785,14 @@ local function projectileImpact(
 		end
 		CombatService.ApplyRadiusDamage(attacker, center, pd.Splash, amount, { WeaponId = weaponId, MinMult = pd.SplashMinMult })
 		local class, mult = vehicleClassFor(weaponId, nil, nil)
-		pcall(VehicleHealth.ApplyRadiusDamage, center, pd.Splash, amount, attacker, class, {
-			MinMult = pd.SplashMinMult,
-			WeaponMult = mult,
-			IgnoreModel = direct,
-			WeaponId = weaponId,
-		})
+		if NS.allowsAttack(attacker) then -- F6: no vehicle splash from a shielded attacker
+			pcall(VehicleHealth.ApplyRadiusDamage, center, pd.Splash, amount, attacker, class, {
+				MinMult = pd.SplashMinMult,
+				WeaponMult = mult,
+				IgnoreModel = direct,
+				WeaponId = weaponId,
+			})
+		end
 	end
 	pcall(CombatFx.Explode, attacker.UserId, weaponId, launchedAt, center, pd.Splash, id)
 end
@@ -1742,6 +1965,10 @@ function CombatService.RequestFire(player: Player, payload: any): boolean
 	state.Ammo -= 1
 	state.LastFireAt = math.max(state.LastFireAt + minInterval, clock()) -- v69 research: was = clock()
 	guns[state.WeaponId] = math.max(gunAt + minInterval, clock()) -- v69 research
+	-- F6: the first accepted shot ends the novice shield before any hit is resolved (EndOnFire)
+	if NS.Active[player.UserId] ~= nil then
+		CombatService.EndNoviceShield(player, "fire")
+	end
 	pushState(player)
 
 	-- W2 (contracts §1.1, §2.3): input class for the assist; an accepted shot means the gun is out
@@ -1915,12 +2142,15 @@ local function deathInfoOf(humanoid: Humanoid?): DeathInfo
 end
 
 --[[ Built-in OnPlayerDeath listener #1 (moved as-is from onPlayerDeath; skipped for blast deaths, nuke §15.2).
-	v30: PvP death → DeathShopOffer toast (DoubleCash GP + SpeedBoost DP; live Ids only; debounced) ]]
+	v30: PvP death → DeathShopOffer toast (MonetizationConfig.DeathShopOffers; live Ids only; debounced).
+	F8 (owner's 11 features): PvP non-blast death → MonetizationService.TryDeathSpeedOffer (one Speed Pass offer per
+	session; it checks the live Id, ownership, the tutorial and the soft-offer slot). No separate "Boost?" text toast:
+	the offer toast itself is the message. ]]
 local function deathShopOfferListener(victim: Player, killer: Player?, info: DeathInfo)
 	if info.BlastSource ~= nil then
 		return
 	end
-	if killer and killer ~= victim and NotificationService then
+	if killer and killer ~= victim then
 		local now = os.clock()
 		local prev = lastDeathShopAt[victim.UserId] or 0
 		if now - prev >= DEATH_SHOP_DEBOUNCE then
@@ -1928,27 +2158,21 @@ local function deathShopOfferListener(victim: Player, killer: Player?, info: Dea
 			local MonetizationConfig = require(ReplicatedStorage.Shared.Configs.MonetizationConfig)
 			local offers = (MonetizationConfig :: any).DeathShopOffers or { "DoubleCash", "SpeedBoost" }
 			local liveOffers = {}
-			local labels = {}
 			for _, key in ipairs(offers) do
-				local live, label = resolveDeathOfferLive(MonetizationConfig, key)
-				if live and label then
+				local live = resolveDeathOfferLive(MonetizationConfig, key)
+				if live then
 					table.insert(liveOffers, key)
-					table.insert(labels, label)
 				end
 			end
-			if #liveOffers > 0 then
-				NotificationService.Notify(
-					victim,
-					"Boost? " .. table.concat(labels, " / ") .. " — tap toast",
-					"Info",
-					5
-				)
-				if RemoteSetup then
-					local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
-					if remote then
-						(remote :: RemoteEvent):FireClient(victim, { Offers = liveOffers })
-					end
+			if #liveOffers > 0 and RemoteSetup then
+				local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+				if remote then
+					(remote :: RemoteEvent):FireClient(victim, { Offers = liveOffers })
 				end
+			end
+			-- F8: the Speed Pass death offer (before the Cash Mega soft offer, so it gets the soft-offer slot)
+			if MonetizationService and MonetizationService.TryDeathSpeedOffer then
+				pcall(MonetizationService.TryDeathSpeedOffer, victim)
 			end
 			-- v37: CashMega soft offer on death path if not already offered (existing Id only)
 			if MonetizationService and MonetizationService.TrySoftOfferCashMega then
@@ -2023,6 +2247,7 @@ local function onCharacterAdded(player: Player, character: Model)
 			state.Ammo = magSize(player, def) -- v69 research
 			state.ReloadingUntil = 0
 		end
+		NS.apply(player, character) -- F6: a novice shield survives respawns (no-op when not shielded)
 	end
 
 	task.defer(function()
@@ -2084,6 +2309,11 @@ function CombatService.Init(deps: { [string]: any })
 		clock = clock,
 	})
 	W2.aimStatsLoggedAt = clock()
+	-- F6: gate guards and AutoGuns skip a novice-shielded player. Injected: GateDefenseService takes no CombatService
+	-- dep and never requires it (join-hotfix pins).
+	if GateDefenseService and GateDefenseService.SetShieldCheck then
+		pcall(GateDefenseService.SetShieldCheck, CombatService.IsNoviceShielded)
+	end
 	-- W2: optional gun meshes (nothing to load while every WeaponConfig VisualAssetId is 0)
 	task.spawn(function()
 		xpcall(WeaponAssetLoader.Start, function(err: any)
@@ -2165,6 +2395,7 @@ function CombatService.Init(deps: { [string]: any })
 		ensureStarter(profile)
 		DataService.MarkDirty(player)
 		getState(player)
+		NS.onLoad(player, profile) -- F6: novice shield for this session (flag, tutorial, NoviceShieldDone)
 		local wid = profile.EquippedWeapon or WeaponConfig.DefaultWeapon
 		CombatService.EquipWeapon(player, wid)
 		pushState(player)
@@ -2179,6 +2410,7 @@ function CombatService.Init(deps: { [string]: any })
 		W2.inputClassAt[player.UserId] = nil
 		CombatFx.Forget(player.UserId)
 		Projectile.ForgetOwner(player.UserId)
+		NS.Active[player.UserId] = nil -- F6: an unfinished shield is not saved as done (the next session grants it)
 	end)
 
 	task.spawn(function()

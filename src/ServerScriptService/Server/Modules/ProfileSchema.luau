@@ -124,7 +124,8 @@ local function ensureMoneyFields(profile: any)
 	end
 	profile.PremiumTrials = trials
 
-	-- Rebirth expansion (the Expansion Permit / Rebirth Skip counters were cut, J12)
+	-- Rebirth expansion (the Expansion Permit / Rebirth Skip counters were cut, J12; F7 replaced the Rebirth Skip
+	-- idea with the keep-base token profile.KeepBaseRebirths, sanitised in ensureFeatureFields below)
 	local rebirth = if typeof(profile.Rebirth) == "table" then profile.Rebirth else {}
 	local seen = if typeof(rebirth.ZonesSeen) == "table" then rebirth.ZonesSeen else {}
 	for k, v in pairs(seen) do
@@ -156,6 +157,83 @@ local function ensureMoneyFields(profile: any)
 		profile.AnnouncePurchases = true
 	end
 	profile.VipSupplyAt = nonNegInt(profile.VipSupplyAt)
+end
+
+-- Owner's 11 features (lane K1) ─────────────────────────────────────────────────────────────────────────────
+-- Tutorial step order of this build. A profile's TutorialOrderVersion says which order its TutorialStep index was
+-- saved in (missing = 1, the pre-F6 order); TutorialService migrates old indexes (TutorialConfig.LegacyOrderV1) and
+-- then stamps the current version. New profiles take TutorialConfig.OrderVersion (2 once the F6 order ships; 1 until
+-- then, so a profile made before that build is still migrated). A config error falls back to 1 (never blocks a load).
+local function currentTutorialOrderVersion(): number
+	local ok, cfg = pcall(function()
+		return require(Shared.Configs.TutorialConfig) :: any
+	end)
+	local v = if ok and typeof(cfg) == "table" then tonumber(cfg.OrderVersion) else nil
+	if v == nil or v ~= v or v < 1 or v == math.huge then
+		return 1
+	end
+	return math.floor(v)
+end
+local TUTORIAL_ORDER_VERSION = currentTutorialOrderVersion()
+
+-- Default-fill + sanitise the F6 / F7 / F10 fields (idempotent, no DataVersion bump). raw* are the values the saved
+-- data had BEFORE the v0 default fill in Migrate, so "missing" keeps its own meaning for very old saves.
+--   KeepBaseRebirths      whole number >= 0 (F7 keep-base tokens; added only by ProcessReceipt, spent by PrestigeService)
+--   TutorialOrderVersion  whole number >= 1; missing = 1
+--   NoviceShieldDone      boolean; missing = TutorialComplete (a player who finished the tutorial never gets it)
+--   StarterOutpostTaken   boolean; missing = false (F10 first Home Outpost capture)
+local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShieldDone: any)
+	profile.KeepBaseRebirths = nonNegInt(profile.KeepBaseRebirths)
+	if rawTutorialOrder == nil then
+		profile.TutorialOrderVersion = 1
+	else
+		local order = nonNegInt(rawTutorialOrder)
+		profile.TutorialOrderVersion = if order >= 1 then order else 1
+	end
+	if typeof(rawShieldDone) == "boolean" then
+		profile.NoviceShieldDone = rawShieldDone
+	else
+		profile.NoviceShieldDone = profile.TutorialComplete == true
+	end
+	if typeof(profile.StarterOutpostTaken) ~= "boolean" then
+		profile.StarterOutpostTaken = false
+	end
+end
+
+-- Nations (cosmetic country, nations spec section 2) ────────────────────────────────────────────────────────
+-- Default-fill + sanitise on every load (idempotent, no DataVersion bump: the ensureFeatureFields precedent).
+--   NationId           nil = never picked (the picker asks again), NationConfig.NeutralId ("No flag", stored as a
+--                      value so it is never asked again), or an id NationConfig.Get accepts. Anything else (unknown,
+--                      denied, switched off in OwnerReview, not a string) becomes nil, so that player re-picks free.
+--   NationSetAt        whole number >= 0: os.time() of the last accepted change (0 = never)
+--   NationFreeUntil    whole number >= 0: end of the free re-pick window (0 = not started)
+--   NationFreeChanges  whole number >= 0: changes made inside the free window
+--   NationPrompts      whole number 0..99: LATER count (the join picker stops at NationConfig.MaxJoinPrompts)
+-- NationColorId (the legacy 8-colour banner id, v4) is never touched here.
+-- NationConfig is loaded in a pcall (the TutorialConfig precedent above): a broken config edit must never block a
+-- profile load. Without it, a saved string id of 1..8 bytes is kept as it is (nothing is lost) and anything else
+-- becomes nil.
+local MAX_NATION_PROMPTS = 99
+local nationCfgOk, nationCfg = pcall(function()
+	return require(Shared.Configs.NationConfig) :: any
+end)
+local NationConfig: any = if nationCfgOk and typeof(nationCfg) == "table" and typeof(nationCfg.Get) == "function"
+	then nationCfg
+	else nil
+
+local function ensureNationFields(profile: any)
+	local id = profile.NationId
+	if NationConfig ~= nil then
+		if id ~= NationConfig.NeutralId and NationConfig.Get(id) == nil then
+			profile.NationId = nil
+		end
+	elseif typeof(id) ~= "string" or #id < 1 or #id > 8 then
+		profile.NationId = nil
+	end
+	profile.NationSetAt = nonNegInt(profile.NationSetAt)
+	profile.NationFreeUntil = nonNegInt(profile.NationFreeUntil)
+	profile.NationFreeChanges = nonNegInt(profile.NationFreeChanges)
+	profile.NationPrompts = math.min(nonNegInt(profile.NationPrompts), MAX_NATION_PROMPTS)
 end
 
 function ProfileSchema.CreateDefault(): PlayerProfile
@@ -246,6 +324,17 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Monetization = defaultMonetization(),
 		AnnouncePurchases = true,
 		VipSupplyAt = 0,
+		-- Owner's 11 features: see ensureFeatureFields (Migrate fills the same keys into older saves)
+		KeepBaseRebirths = 0,
+		TutorialOrderVersion = TUTORIAL_ORDER_VERSION,
+		NoviceShieldDone = false,
+		StarterOutpostTaken = false,
+		-- Nations: see ensureNationFields (Migrate fills the same keys into older saves). NationId nil = never picked.
+		NationId = nil,
+		NationSetAt = 0,
+		NationFreeUntil = 0,
+		NationFreeChanges = 0,
+		NationPrompts = 0,
 	}
 end
 
@@ -260,6 +349,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 
 	local profile = data :: PlayerProfile
 	local version = tonumber(profile.DataVersion) or 0
+	-- read before the v0 default fill below (see ensureFeatureFields)
+	local rawTutorialOrder = (data :: any).TutorialOrderVersion
+	local rawShieldDone = (data :: any).NoviceShieldDone
 
 	-- v0 / missing → fill defaults then set version
 	if version < 1 then
@@ -494,6 +586,10 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	-- v71 money (M2): nuke / premium vehicle / rebirth / offer / accounting blocks (idempotent; no version bump)
 	ensureMoneyFields(profile)
+	-- Owner's 11 features: keep-base tokens, tutorial order version, novice shield, Home Outpost (idempotent)
+	ensureFeatureFields(profile, rawTutorialOrder, rawShieldDone)
+	-- Nations: chosen country + change timers (idempotent; NationColorId untouched)
+	ensureNationFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

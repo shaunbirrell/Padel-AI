@@ -1,5 +1,14 @@
 --!strict
---[[ Territories + coastal oil platforms with capture stipends. ]]
+--[[ Territories + coastal oil platforms with capture stipends.
+	F10 (owner's 11 features, lane K1): Starter = one owner-only Home Outpost per plot at plot-local (LocalX, LocalZ),
+	about 100 studs out of the gate. While Starter.Enabled, the loop at the bottom appends Starter_P1 .. Starter_P6 to
+	Territories (IsStarter = true, PlotId = n, BonusType "EmpireTax", BonusValue 0; worth
+	EconomyConfig.OutpostIncomeBuff.StarterPct, never a stack, no stipend, cannot be stolen, evicted or nuked).
+	Off = no rows, nothing changes. No require cycle: this file requires only BaseConfig and Shared/Util/PlotFrame
+	(EconomyConfig, LevelConfig and OilRigConfig mention TerritoryConfig in comments only). ]]
+
+local BaseConfig = require(script.Parent.BaseConfig)
+local PlotFrame = require(script.Parent.Parent.Util.PlotFrame)
 
 export type TerritoryDef = {
 	Id: string,
@@ -16,6 +25,11 @@ export type TerritoryDef = {
 	IsFortress: boolean?,
 	GuardNPCType: string?,
 	GuardCount: number?,
+	-- F10 Home Outposts (TerritoryConfig.Starter)
+	IsStarter: boolean?, -- true only on the Starter_P<n> rows
+	PlotId: number?, -- the plot whose owner alone can capture it (OwnerOnly)
+	OwnerOnly: boolean?, -- only BaseService.GetOwnerUserId(PlotId) captures or contests
+	Light: boolean?, -- false = no WE_OwnerLight / stripe on the marker
 }
 
 local TerritoryConfig = {
@@ -33,6 +47,24 @@ local TerritoryConfig = {
 	-- v70 waterways: vehicle passengers neither capture nor contest (only the driver of a vehicle counts), so a crewed
 	-- boat or jeep no longer contests its own capture. Naval outposts (oil rigs): WaterConfig.NavalOutposts.
 	VehiclePassengersCount = false,
+
+	-- F10: owner-only Home Outpost per plot (see the header). Switched on by lane Z (reversible: false removes the six
+	-- rows and the tutorial falls back to 4x4 then outpost, tutorial order version 2).
+	Starter = {
+		Enabled = true,
+		LocalX = 38, -- plot-local; +Z = out of the main gate (PlotFrame / BaseLayout frame)
+		LocalZ = 252,
+		Radius = 20,
+		CaptureTimeSeconds = 10,
+		StipendCash = 0,
+		DisplayName = "Home Outpost",
+		Description = "Your own outpost: +5% Empire Tax while you hold it.",
+		Color = Color3.fromRGB(90, 200, 120),
+		OwnerOnly = true,
+		Light = false,
+		IdPrefix = "Starter_P", -- row ids Starter_P1 .. Starter_P<MaxPlots>
+		GroundY = 1, -- world Y of the marker centre (same as the land outposts)
+	},
 
 	-- Periodic stipend for owned territories (MT-style ~every 90s)
 	CaptureStipend = {
@@ -200,5 +232,35 @@ local TerritoryConfig = {
 		},
 	} :: { [string]: TerritoryDef },
 }
+
+-- F10: the Home Outpost rows, built only while Starter.Enabled (require time; pure math, no instances).
+if TerritoryConfig.Starter.Enabled then
+	local st = TerritoryConfig.Starter
+	for n = 1, BaseConfig.MaxPlots do
+		local p = PlotFrame.LocalToWorld(n, st.LocalX, st.LocalZ)
+		local id = st.IdPrefix .. tostring(n)
+		TerritoryConfig.Territories[id] = {
+			Id = id,
+			DisplayName = st.DisplayName,
+			Description = st.Description,
+			CaptureTimeSeconds = st.CaptureTimeSeconds,
+			BonusType = "EmpireTax",
+			BonusValue = 0,
+			Position = Vector3.new(p.X, st.GroundY, p.Z),
+			Radius = st.Radius,
+			Color = st.Color,
+			StipendCash = st.StipendCash,
+			IsStarter = true,
+			PlotId = n,
+			OwnerOnly = st.OwnerOnly,
+			Light = st.Light,
+		}
+	end
+end
+
+-- F10: true for a Home Outpost row (TerritoryService.IsStarterId, NukeConfig target filter, radar, lists).
+function TerritoryConfig.IsStarterDef(def: TerritoryDef?): boolean
+	return def ~= nil and def.IsStarter == true
+end
 
 return TerritoryConfig

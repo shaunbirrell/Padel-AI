@@ -477,6 +477,36 @@ local VehicleConfig = {
 		-- Mobile P1-8: the client-side owner nameplate (never AlwaysOnTop; MaxDistance is capped at 40 in code)
 		Nameplate = { MaxDistance = 36, WidthStuds = 2, HeightStuds = 0.4, HeightPx = 20, MinText = 14, MaxText = 20 },
 
+		--[[ Rollover fix (owner, phone, 2026-09-24: "The quad falls over when driving super easy"). Built once per
+			vehicle by VehicleService (createMovers), Car mode only, for the KitFamilies listed in Families:
+			  * Ballast: one invisible part (no collide / query / touch) welded to the Chassis between the wheels,
+			    BallastHeight of the way from the tyres' ground line up to the axles, weighing Ballast x (kit mass +
+			    RiderMass). A seated rider joins the chassis assembly: on the bare quad he was 37 % of the mass, 3 studs
+			    above the chassis centre (static stability factor 0.70-0.88 → 1.4-1.8 with ballast + wider track).
+			  * WE_DriveAttach (where WE_DriveLV pushes) moves to that centre of mass (rider included), so the drive's
+			    cornering / braking force no longer rolls or pitches the car.
+			  * WE_UprightAO: roll / pitch only (primary axis = chassis up, yaw free). MaxTorque tops WE_DriveAO up to
+			    UprightFrac x weight x min(half track, half wheelbase) — below gravity's own righting moment, so slopes,
+			    ramps and landings still follow the ground; it cannot lift a car off its side (flip recovery does).
+			  * TrackScale (by vehicle id): physics wheels further out. They are hidden under the fitted body; the Part
+			    kit simply shows wider-set wheels.
+			Families not listed (tracked, air, naval) get none of this. ]]
+		Stability = {
+			RiderMass = 14, -- a seated R15 character (~20 cubic studs of body at density 0.7), for sizing only
+			RiderLift = 1.3, -- its centre of mass above the driver seat's top face (studs)
+			BallastHeight = 0.5, -- 0 = the tyres' ground line, 1 = the axle line
+			BallastDensityMax = 100, -- Roblox's CustomPhysicalProperties cap; a heavier ballast grows thicker instead
+			DriveAtCoM = true,
+			UprightResponsiveness = 12,
+			UprightMaxAngularVelocity = 2.5,
+			Families = {
+				WheeledLight = { Ballast = 1.0, UprightFrac = 0.75 },
+				WheeledTruck = { Ballast = 0.4, UprightFrac = 0.6 },
+				WheeledAPC = { Ballast = 0.4, UprightFrac = 0.6 },
+			} :: { [string]: { Ballast: number, UprightFrac: number } },
+			TrackScale = { UtilityQuad = 1.2, ReconBuggy = 1.1, DispatchCar = 1.1 } :: { [string]: number },
+		},
+
 		-- Speed resync (every mode): actual forward speed this far below the commanded speed for
 		-- Seconds straight → commanded = actual + gap (a vehicle pushed into a wall never winds up).
 		Resync = { Gap = 10, CarGap = 6, Seconds = 0.3, GraceSeconds = 1 },
@@ -486,16 +516,37 @@ local VehicleConfig = {
 				WheeledMinSpeed = 40, -- WE_MaxSpeed = max(def.Speed, 40) (40-68)
 				TrackedMinSpeed = 18, -- tracked: clamp(def.Speed, 18, 36)
 				TrackedMaxSpeed = 36,
-				Wheeled = { Accel = 28, Brake = 60, Coast = 10, TurnRate = 2.4, MinTurnFactor = 0.35, Grip = 8 },
-				Tracked = { Accel = 16, Brake = 40, Coast = 10, TurnRate = 1.5, MinTurnFactor = 0.7, Grip = 12 },
+				-- MaxLatAccel (rollover fix): speed-sensitive steering. The turn rate is capped at MaxLatAccel / speed
+				-- (studs/s²; 120 = 0.61 g at Gravity 196.2), so full stick at top speed no longer asks for 0.7-1.1 g.
+				-- Below 50 studs/s nothing changes (2.4 rad/s x 50 = 120).
+				Wheeled = { Accel = 28, Brake = 60, Coast = 10, TurnRate = 2.4, MinTurnFactor = 0.35, Grip = 8, MaxLatAccel = 120 },
+				Tracked = { Accel = 16, Brake = 40, Coast = 10, TurnRate = 1.5, MinTurnFactor = 0.7, Grip = 12, MaxLatAccel = 120 },
 				ReverseFrac = 0.45, -- reverse max = 0.45 x Max
 				ReverseAccelFrac = 0.7, -- reverse accel = Accel x 0.7
 				TurnSpeedRef = 12, -- full turn rate from this speed up
 				YawResyncRad = 0.6, -- collision spun the car this far off → take the real heading
-				FlipUpY = 0.3, -- UpVector.Y below this ...
-				FlipSeconds = 2, -- ... this long → hop
-				HopSeconds = 0.5,
-				HopSpeed = 15,
+				--[[ Flip recovery (rollover fix; replaces the old 0.5 s x 15 studs/s hop). Same maths on the driver's client
+					(VehicleDriveClient Laws.FlipRecover), in server drive (carStep) and for an empty car (Car idle law).
+					On its side or roof (UpY below FlipUpY) and slower than RecoverSpeed for FlipSeconds, with no other
+					player within RecoverClearRadius of the car's footprint: X/Z held still, lifted at RecoverLiftSpeed to
+					RecoverLift studs above where it lay while WE_DriveAO levels it (at most RecoverSpin rad/s), then lowered
+					at RecoverLiftSpeed until it touches down. Ends when down, after RecoverMaxSeconds, or when it has moved
+					more than RecoverMaxStuds from the start (then it just drops). RecoverCooldown seconds between tries and
+					at most RecoverMaxPerMinute starts per minute. No remote, no teleport: only the movers' targets.
+					While UpY is below FlipUpY the car also has no traction and no steering (the commanded speed brakes to 0):
+					the old law drove a car on its side along the ground at full speed, so it never stopped to be righted. ]]
+				FlipUpY = 0.5, -- UpVector.Y below this = tilted past 60° (a ballasted quad tips over by itself at ~61°) ...
+				FlipSeconds = 1.5, -- ... and slower than RecoverSpeed this long → right it
+				RecoverSpeed = 3,
+				RecoverLift = 2.5,
+				RecoverLiftSpeed = 6,
+				RecoverDoneUpY = 0.9,
+				RecoverMaxSeconds = 2.5,
+				RecoverMaxStuds = 5,
+				RecoverCooldown = 4,
+				RecoverMaxPerMinute = 5,
+				RecoverClearRadius = 4,
+				RecoverSpin = 2.5,
 				-- Physics wheels roll free on hinges. Yawing a fixed-axle car makes every wheel slip sideways,
 				-- which wheel friction resists with mu x load x |wheel Z|; the AlignOrientation must beat it or the
 				-- car cannot turn. Low friction (weight 100 = the wheel's value wins over the ground's) keeps the

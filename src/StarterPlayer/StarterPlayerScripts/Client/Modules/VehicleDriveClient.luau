@@ -69,12 +69,14 @@ export type Sense = {
 	WaterY: number?,
 	WaterNear: boolean?,
 	WaterFar: boolean?,
+	Clear: boolean?, -- rollover fix: false = another player is within reach of this flipped car (no righting); nil = clear
 }
 
 -- Restricted: the air-box guard steered / capped this step (the HUD shows the "Restricted airspace" line)
 export type Hud = { Speed: number, Alt: number?, Throttle: number?, Tag: string?, Restricted: boolean? }
 
-export type Out = { Velocity: Vector3, HoldVertical: boolean, Orientation: CFrame, Hud: Hud }
+-- Righting: flip recovery is lifting / levelling the car (applyOut sets WE_DriveAO.MaxAngularVelocity = Car.RecoverSpin)
+export type Out = { Velocity: Vector3, HoldVertical: boolean, Orientation: CFrame, Hud: Hud, Righting: boolean? }
 
 -- JEEP-2 World v2 air box for Heli / Plane (Laws.AirBoxParams; VehicleConfig.Drive.AirBox): Box edges + law tunables
 export type AirBox = {
@@ -127,7 +129,12 @@ export type State = {
 	-- car / boat
 	Speed: number,
 	FlipFor: number,
-	HopLeft: number,
+	HopLeft: number, -- flip recovery: seconds left of the current righting (0 = none)
+	RightFrom: Vector3?, -- where the righting started
+	RightDown: number?, -- seconds spent lowering it (nil = still lifting / levelling)
+	RightCool: number,
+	RightClock: number, -- the law's own clock (sum of dt) for the per-minute cap
+	RightTimes: { number },
 	-- heli
 	Fwd: number,
 	Side: number,
@@ -213,12 +220,21 @@ local DEFAULTS: any = {
 			ReverseAccelFrac = 0.7,
 			TurnSpeedRef = 12,
 			YawResyncRad = 0.6,
-			FlipUpY = 0.3,
-			FlipSeconds = 2,
-			HopSeconds = 0.5,
-			HopSpeed = 15,
-			Wheeled = { Accel = 28, Brake = 60, Coast = 10, TurnRate = 2.4, MinTurnFactor = 0.35, Grip = 8 },
-			Tracked = { Accel = 16, Brake = 40, Coast = 10, TurnRate = 1.5, MinTurnFactor = 0.7, Grip = 12 },
+			-- rollover fix: flip recovery (VehicleConfig.Drive.Modes.Car; Laws.FlipRecover)
+			FlipUpY = 0.5,
+			FlipSeconds = 1.5,
+			RecoverSpeed = 3,
+			RecoverLift = 2.5,
+			RecoverLiftSpeed = 6,
+			RecoverDoneUpY = 0.9,
+			RecoverMaxSeconds = 2.5,
+			RecoverMaxStuds = 5,
+			RecoverCooldown = 4,
+			RecoverMaxPerMinute = 5,
+			RecoverClearRadius = 4,
+			RecoverSpin = 2.5,
+			Wheeled = { Accel = 28, Brake = 60, Coast = 10, TurnRate = 2.4, MinTurnFactor = 0.35, Grip = 8, MaxLatAccel = 120 },
+			Tracked = { Accel = 16, Brake = 40, Coast = 10, TurnRate = 1.5, MinTurnFactor = 0.7, Grip = 12, MaxLatAccel = 120 },
 		},
 		Heli = {
 			Accel = 22,
@@ -305,7 +321,7 @@ local DEFAULT_MAX_SPEED: { [string]: number } = { Car = 40, Heli = 60, Plane = 1
 local VALID_MODES: { [string]: boolean } = { Car = true, Heli = true, Plane = true, Boat = true }
 -- per-variant car keys: a tracked vehicle never falls back to the wheeled value of these
 local CAR_VARIANT_KEYS: { [string]: boolean } =
-	{ Accel = true, Brake = true, Coast = true, TurnRate = true, MinTurnFactor = true, Grip = true }
+	{ Accel = true, Brake = true, Coast = true, TurnRate = true, MinTurnFactor = true, Grip = true, MaxLatAccel = true }
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Math helpers (spec 2.0 conventions)
@@ -535,6 +551,11 @@ local function blankState(mode: string): State
 		Speed = 0,
 		FlipFor = 0,
 		HopLeft = 0,
+		RightFrom = nil,
+		RightDown = nil,
+		RightCool = 0,
+		RightClock = 0,
+		RightTimes = {},
 		Fwd = 0,
 		Side = 0,
 		Vy = 0,
@@ -647,6 +668,65 @@ local function speedUpdate(
 	return math.clamp(speed, -rev, max)
 end
 
+--[[ Rollover fix: flip recovery (server copy: VehicleService._FlipRecover, for server drive and empty cars). On its side
+	or roof (UpY < FlipUpY) and slower than RecoverSpeed for FlipSeconds, with nobody else near (sense.Clear ~= false),
+	not cooling down and under RecoverMaxPerMinute starts in the last 60 s of the law's clock: X/Z held still, lifted at
+	RecoverLiftSpeed to RecoverLift studs above where it lay while WE_DriveAO levels it, then lowered at RecoverLiftSpeed
+	until it touches down. Ends when down, after RecoverMaxSeconds or past RecoverMaxStuds from the start. Returns the
+	mover velocity while righting, nil otherwise. Pure (tested headless). ]]
+function Laws.FlipRecover(st: State, C: { [string]: number }, sense: Sense, dt: number): Vector3?
+	local clock = st.RightClock + dt
+	st.RightClock = clock
+	st.RightCool = math.max(0, st.RightCool - dt)
+	local pos = sense.Position
+	if st.HopLeft > 0 then
+		st.HopLeft -= dt
+		local from = st.RightFrom or pos
+		local down = st.RightDown
+		if down == nil and sense.UpY >= C.RecoverDoneUpY then
+			down = 0 -- level again: lower it onto its wheels
+		end
+		local landed = down ~= nil and down >= 0.1 and sense.Velocity.Y > -0.5 * C.RecoverLiftSpeed
+		if landed or st.HopLeft <= 0 or (pos - from).Magnitude > C.RecoverMaxStuds then
+			st.HopLeft = 0
+			st.RightFrom = nil
+			st.RightDown = nil
+			st.FlipFor = 0
+			st.RightCool = C.RecoverCooldown
+			return nil
+		end
+		if down ~= nil then
+			st.RightDown = down + dt
+			return Vector3.new(0, -C.RecoverLiftSpeed, 0)
+		end
+		local rise = pos.Y - from.Y
+		return Vector3.new(0, math.clamp((C.RecoverLift - rise) * 4, 0, C.RecoverLiftSpeed), 0)
+	end
+	local v = sense.Velocity
+	if sense.UpY < C.FlipUpY and Vector3.new(v.X, 0, v.Z).Magnitude < C.RecoverSpeed then
+		st.FlipFor += dt
+	else
+		st.FlipFor = 0
+	end
+	if st.FlipFor < C.FlipSeconds or st.RightCool > 0 or sense.Clear == false then
+		return nil
+	end
+	local times = st.RightTimes
+	while #times > 0 and clock - times[1] >= 60 do
+		table.remove(times, 1)
+	end
+	if #times >= C.RecoverMaxPerMinute then
+		st.RightCool = 60 - (clock - times[1]) -- wait for the oldest start to leave the minute
+		return nil
+	end
+	table.insert(times, clock)
+	st.FlipFor = 0
+	st.HopLeft = C.RecoverMaxSeconds
+	st.RightFrom = pos
+	st.RightDown = nil
+	return Vector3.new(0, C.RecoverLiftSpeed, 0)
+end
+
 -- 2.1 CAR (wheeled + tracked)
 local function stepCar(st: State, P: Params, input: Input, sense: Sense, dt: number): Out
 	local C = P.C
@@ -654,36 +734,40 @@ local function stepCar(st: State, P: Params, input: Input, sense: Sense, dt: num
 	local Max = P.MaxSpeed
 	local Rev = C.ReverseFrac * Max
 	st.Speed = resync(st, C, st.Speed, sense.Velocity:Dot(fwd(st.Heading)), dt)
-	st.Speed = speedUpdate(st.Speed, t, Max, Rev, P.Accel, C.Brake, C.Coast, C.ReverseAccelFrac, dt)
+	if sense.UpY < C.FlipUpY then
+		-- rollover fix: no traction and no steering on its side / roof (the law used to drive a flipped car along
+		-- on its side at full speed, so it never stopped long enough to be righted)
+		s = 0
+		st.Speed = approach(st.Speed, 0, C.Brake, dt)
+	else
+		st.Speed = speedUpdate(st.Speed, t, Max, Rev, P.Accel, C.Brake, C.Coast, C.ReverseAccelFrac, dt)
+	end
 	local dir = if st.Speed < -0.5 then -1 else 1
-	st.Heading -= s * P.TurnRate * math.clamp(math.abs(st.Speed) / C.TurnSpeedRef, C.MinTurnFactor, 1) * dir * dt
+	local spd = math.abs(st.Speed)
+	local turn = s * P.TurnRate * math.clamp(spd / C.TurnSpeedRef, C.MinTurnFactor, 1)
+	local latMax = C.MaxLatAccel or 0
+	if latMax > 0 and spd > 1 then
+		turn = math.clamp(turn, -latMax / spd, latMax / spd) -- rollover fix: speed-sensitive steering
+	end
+	st.Heading -= turn * dir * dt
 	if math.abs(wrap(sense.Yaw - st.Heading)) > C.YawResyncRad then
 		st.Heading = sense.Yaw -- a collision spun us: stop fighting it
 	end
 	local r = right(st.Heading)
 	local lat = sense.Velocity:Dot(r) * math.exp(-C.Grip * dt)
 	local vel = fwd(st.Heading) * st.Speed + r * lat
-	local hold = false
-	-- unstick: upside down for FlipSeconds -> short vertical hop while the AO rights the car
-	if sense.UpY < C.FlipUpY then
-		st.FlipFor += dt
-	else
-		st.FlipFor = 0
-	end
-	if st.FlipFor >= C.FlipSeconds then
-		st.FlipFor = 0
-		st.HopLeft = C.HopSeconds
-	end
-	if st.HopLeft > 0 then
-		st.HopLeft -= dt
-		vel = Vector3.new(vel.X, C.HopSpeed, vel.Z)
-		hold = true
+	-- rollover fix: on its side / roof and stopped → flip recovery (replaces the old 15 studs/s hop)
+	local rv = Laws.FlipRecover(st, C, sense, dt)
+	if rv then
+		st.Speed = 0
+		vel = rv
 	end
 	return {
 		Velocity = vel,
-		HoldVertical = hold,
+		HoldVertical = rv ~= nil,
 		Orientation = orient(0, st.Heading, 0),
-		Hud = { Speed = math.abs(st.Speed) },
+		Hud = { Speed = math.abs(st.Speed), Tag = if rv then "RIGHTING" else nil },
+		Righting = rv ~= nil,
 	}
 end
 
@@ -1245,6 +1329,10 @@ type Drive = {
 	NextAirCheck: number,
 	-- JEEP-2: the "Restricted airspace" line shows until this os.clock() (the guard acted within NoticeHoldSeconds)
 	RestrictedUntil: number,
+	-- rollover fix: flip recovery is righting (WE_DriveAO spin lowered); "nobody else near" re-checked at most 5 Hz
+	Righting: boolean,
+	ClearAt: number,
+	ClearVal: boolean,
 }
 
 local WATER_TAG_DEFAULT = "WE_Water"
@@ -2558,6 +2646,34 @@ local function locateMovers(d: Drive)
 	d.AO = if ao and ao:IsA("AlignOrientation") then ao else nil
 end
 
+-- rollover fix: any other player (not riding this car) with a root part within `radius` of `pos`
+local function othersNear(model: Model, pos: Vector3, radius: number): boolean
+	local me = Players.LocalPlayer
+	for _, plr in ipairs(Players:GetPlayers()) do
+		local ch = plr.Character
+		if plr ~= me and ch then
+			local root = ch:FindFirstChild("HumanoidRootPart")
+			if root and root:IsA("BasePart") and (root.Position - pos).Magnitude <= radius then
+				local hum = ch:FindFirstChildOfClass("Humanoid")
+				local seat = if hum then hum.SeatPart else nil
+				local riding = seat ~= nil and seat:IsDescendantOf(model)
+				if not riding and hum then
+					for _, c in ipairs(model:GetChildren()) do
+						if (c:IsA("Seat") or c:IsA("VehicleSeat")) and (c :: any).Occupant == hum then
+							riding = true
+							break
+						end
+					end
+				end
+				if not riding then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
 local function buildSense(d: Drive): Sense
 	local cf = d.Chassis.CFrame
 	local pos = cf.Position
@@ -2574,6 +2690,14 @@ local function buildSense(d: Drive): Sense
 	}
 	if d.Mode == "Boat" then
 		sense.WaterY = Laws.WaterSurfaceAt(waterParts, pos, 0, landProbe)
+	elseif d.Mode == "Car" and sense.UpY < (d.Params.C.FlipUpY or 0.5) then
+		-- rollover fix: a flipped car checks (5 Hz at most) that no other player is within reach before righting
+		local t = sense.Time
+		if t - d.ClearAt >= 0.2 then
+			d.ClearAt = t
+			d.ClearVal = not othersNear(d.Model, pos, math.max(d.Params.HalfLength, d.Params.HalfWidth) + (d.Params.C.RecoverClearRadius or 4))
+		end
+		sense.Clear = d.ClearVal
 	end
 	return sense
 end
@@ -2591,6 +2715,14 @@ local function applyOut(d: Drive, out: Out)
 		lv.MaxAxesForce = Vector3.new(F, wantY, F)
 	end
 	ao.CFrame = out.Orientation
+	local righting = out.Righting == true
+	if righting ~= d.Righting then
+		-- rollover fix: level the car gently while righting, then the server's normal limit (WE_Spin) again
+		d.Righting = righting
+		ao.MaxAngularVelocity = if righting
+			then (d.Params.C.RecoverSpin or 2.5)
+			else (tonumber(ao:GetAttribute("WE_Spin")) or ao.MaxAngularVelocity)
+	end
 end
 
 local stopDrive: () -> ()
@@ -2707,7 +2839,11 @@ local function watchClient(d: Drive, input: Input, auth: any, dt: number, now: n
 	local v = d.Chassis.AssemblyLinearVelocity
 	local air = d.Mode == "Heli" or d.Mode == "Plane"
 	local spd = if air then v.Magnitude else Vector3.new(v.X, 0, v.Z).Magnitude
+	-- rollover fix: on its side / roof the law has no traction by design and a righting lifts it straight up, so the
+	-- stick held meanwhile is not "stuck" (a Stuck report here tripped the server watchdog → server drive)
 	local push = pushing(d, input)
+		and not d.Righting
+		and not (d.Mode == "Car" and d.Chassis.CFrame.UpVector.Y < (d.Params.C.FlipUpY or 0.5))
 	d.NoDriveFor = if push and spd < DBG.NoDriveSpeed then d.NoDriveFor + dt else 0
 	d.MovedFor = if spd >= 3 then d.MovedFor + dt else 0
 	-- the Stuck clock only runs under Client authority (a car stuck in server drive is the server's to report)
@@ -2836,6 +2972,12 @@ stopDrive = function()
 	for _, c in ipairs(d.Conns) do
 		c:Disconnect()
 	end
+	local ao = d.AO
+	if d.Righting and ao then
+		-- rollover fix: my local spin limit would outlive the sit (the server never re-sends an unchanged value)
+		d.Righting = false
+		ao.MaxAngularVelocity = tonumber(ao:GetAttribute("WE_Spin")) or ao.MaxAngularVelocity
+	end
 	unbindActions()
 	hideControls()
 	unlockJump()
@@ -2925,6 +3067,9 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 		AirLocked = false,
 		NextAirCheck = 0,
 		RestrictedUntil = 0,
+		Righting = false,
+		ClearAt = -math.huge,
+		ClearVal = true,
 	}
 	local proto = model:GetAttribute("WE_ProtocolVersion")
 	if typeof(proto) == "number" and proto ~= PROTOCOL_VERSION then

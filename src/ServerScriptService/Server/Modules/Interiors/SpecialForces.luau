@@ -130,7 +130,10 @@ return function(ictx: any, api: any)
 	end
 
 	-- Unit colours between the two front windows
-	local flag = B("UnitFlag", 1.8, 3.2, 0.08, -6.5, y1 + 6.0, Z1 - 0.04, col.Flag, M.Fabric, false)
+	-- fb2: 0.12 thick (back face still flush on the front wall) + WE_FlagHost; the nation flag binds to the Front face,
+	-- which also carries the SPECIAL FORCES text
+	local flag = B("UnitFlag", 1.8, 3.2, 0.12, -6.5, y1 + 6.0, Z1 - 0.06, col.Flag, M.Fabric, false)
+	flag:SetAttribute("WE_FlagHost", true)
 	api.surfaceText(flag, N.Front, if lv >= 5 then { "TIER ONE", "SPECIAL", "FORCES" } else { "SPECIAL", "FORCES" }, col.Sandbag, col.Flag, Enum.Font.GothamBlack)
 
 	-- ── PT corner along the back wall (single storey only; the stairs take this strip from L3) ──

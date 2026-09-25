@@ -29,6 +29,7 @@ local Constants = require(Shared.Constants)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P0-6 new-thief protection
+local TycoonMath = require(Shared.Util.TycoonMath) -- F4 ATM screen: ShortCash digits, "+$24/s" rate
 local ServerModules = script.Parent.Parent.Modules
 local RemoteSetup = require(ServerModules.RemoteSetup)
 
@@ -392,7 +393,8 @@ local function syncAtmScreen(part: BasePart, pending: number, title: string?)
 	local sg = screen:FindFirstChild("WE_ATMScreen")
 	local digits = sg and sg:FindFirstChild("Digits")
 	if sg and digits and digits:IsA("TextLabel") then
-		local text = string.format("$%s", tostring(math.floor(pending)))
+		-- F4: "$1,240" / "$25K" / "$1.9M" (TycoonMath.ShortCash, the same money format as the rest of the HUD)
+		local text = TycoonMath.ShortCash(pending)
 		if digits.Text ~= text then
 			digits.Text = text
 			digits.TextColor3 = if pending > 0 then Color3.fromRGB(70, 255, 120) else Color3.fromRGB(40, 120, 70)
@@ -429,9 +431,24 @@ local function isBeingRobbed(plotId: number): boolean
 	return false
 end
 
--- ATM screen status line (raid spec §1.10): shield > being robbed > AutoCollect > walk-in. Painted on the ATM's
--- own screen (v71), so it reads only up close and never floats over the HUD.
-local function atmTitle(owner: Player?, plotId: number?): string
+-- F4: the fallback status (pinned) and the empty-ATM rate ("+$24/s" from the owner's server-stamped WE_IncomePerSec:
+-- what the ATM really receives per second, multipliers in; only while it is > 0, else the fallback).
+local ATM_WALK_IN_TITLE = "ATM · WALK IN TO COLLECT"
+
+local function atmRateTitle(owner: Player): string?
+	local ok, v = pcall(function()
+		return owner:GetAttribute("WE_IncomePerSec")
+	end)
+	local rate = if ok then tonumber(v) else nil
+	if rate == nil or rate ~= rate or rate <= 0 or rate == math.huge then
+		return nil
+	end
+	return TycoonMath.RatePerSecText(rate)
+end
+
+-- ATM screen status line (raid spec §1.10; F4): shield > being robbed > AutoCollect > (cash waiting ? walk-in :
+-- "+$24/s"). Painted on the ATM's own screen (v71), so it reads only up close and never floats over the HUD.
+local function atmTitle(owner: Player?, plotId: number?, pending: number?): string
 	if owner then
 		local profile = profileOf(owner)
 		local shield = raidNum(profile, "ShieldUntil")
@@ -445,8 +462,14 @@ local function atmTitle(owner: Player?, plotId: number?): string
 		if autoCollectFlag[owner.UserId] == true then
 			return "ATM · AUTO-COLLECT"
 		end
+		if pending ~= nil and pending <= 0 then
+			local rateTitle = atmRateTitle(owner)
+			if rateTitle then
+				return rateTitle
+			end
+		end
 	end
-	return "ATM · WALK IN TO COLLECT"
+	return ATM_WALK_IN_TITLE
 end
 
 local function refreshBillboard(part: BasePart, pending: number, title: string?)
@@ -1103,7 +1126,7 @@ function MoneyCollectorService.RefreshAllBillboards()
 			local plotId = plotIdOf(inst)
 			local owner = if plotId ~= nil then findOwnerByPlot(plotId) else nil
 			local amount = if owner then MoneyCollectorService.GetRaidableBalance(owner) else 0
-			refreshBillboard(inst, amount, atmTitle(owner, plotId))
+			refreshBillboard(inst, amount, atmTitle(owner, plotId, amount))
 		end
 	end
 end
@@ -1116,7 +1139,7 @@ function MoneyCollectorService.RefreshForPlayer(player: Player)
 	local amount = MoneyCollectorService.GetRaidableBalance(player)
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
 		if inst:IsA("BasePart") and plotIdOf(inst) == plotId then
-			refreshBillboard(inst, amount, atmTitle(player, plotId))
+			refreshBillboard(inst, amount, atmTitle(player, plotId, amount))
 		end
 	end
 end

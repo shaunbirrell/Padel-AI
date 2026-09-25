@@ -1155,3 +1155,2017 @@ Owner: "Inside the research department you should be able to upgrade soldiers, g
 - **W3 contract pin on `WorldPOI.Build`.** B1 typed `occ` through a local alias (`type Occupancy = WorldDress.Occupancy`), so the pinned signature is `function WorldPOI.Build(dressing: Instance, quality: string, occ: Occupancy?): Summary`. The type is identical. Revert: none needed.
 - **W3 BuyPathStatic retirements.** Lines 235, 586, 587, 617, 618, 619, 642, 678, 1430 (MapDressing coordinate-list sections deleted) and 1734 (`OrphanMode = "Report",`) are retired; their replacement pins are in the W3 block. The needles `WreckScorch`, `RoadCrater` and `RoadChevron` get no replacement (the names stay hygiene marking prefixes).
 - **W3 old jeep suite.** `w2/cc2/t_jeep_server_k2pin.luau` (K2) expects the stub asset shape, not the real Roblox LUV pack. `w3/LOOK/t_jeep_server_look.luau` with `fakes.luau` replaces it (131/131).
+
+## 2026-09-24 — Crossroads Town v2 (denser, taller; owner found step 1 too sparse)
+## W3 Town v2 (densify): assumptions (reversible; append to ASSUMPTIONS.md)
+
+- **Town budget is set by the 512-stud circle, not by taste.** Everything outside the Town inside the busiest 512 circle
+  (centre about (128, 128)) is 121 parts: 73 world parts plus the 48 skyline parts that count in every circle. So the Town
+  can hold at most 379 parts before a 512 circle passes 500. `POIs.Town.Budget` goes from 220 to 370 (the build uses 368),
+  which leaves the busiest circle at 488 (grid 128) or 489 (grid 16). To undo: lower `Budget`. Rows past the cap are skipped
+  with a warning, never placed.
+- **Town lights go from 6 to 8.** The 6 street lamps stay. 2 wall lanterns are added: 1 part plus 1 PointLight each, on the
+  NW plaza block (facing the flag) and the first east-arm block. They share the street lamps' light policy through
+  `nightLamp`: Brightness 0.6, Range 16, no shadows, tagged `WE_NightLight`, night only. There are now 13 world lights,
+  under the cap of 24. Low keeps all 8.
+- **The 30-stud road rule is unchanged.** Frontage blocks still use a disc: the AABB half-diagonal, 30 + 0.6 off each
+  road centre line. That puts shop fronts 33–39 studs from the centre line, so the verge is about 26–32 studs wide. The rule
+  was not changed to a per-box test because the verifier's W3-zones and TOWN-clusters checks use the disc. If the owner
+  wants narrower streets, a box rule would bring the fronts to 30.
+- **The parked burnt truck and a jersey barricade are street clusters.** They are tested part by part, like checkpoints and
+  lamps: every collidable part is at least 13 from the line and every visible part at least 9. `SE_Wreck` moved from
+  (250, 52) onto the east-arm verge at (232, 14.5). The barricade is on the north-arm verge at the plaza corner. W3-road
+  still counts 0 collidables within 12 of a road line.
+- **`RadioMast` is built now.** It was a step-2 kit whose spec size was 10 × 90 × 10. It is now step 1, "Town+POI", 5
+  parts and 6 × 90 × 6: a plinth, 2 tapering sections, a red painted tip (never Neon) and a relay dish. The Signal Station
+  can reuse it later. The kit unit test's `KIT-step2 RadioMast` check is replaced by the normal step-1 kit checks.
+- **New kit `TownBlock`.** It has 1–6 storeys at 7 studs each.
+  - **Parts:** 1 solid body (cover, H4), 1 parapet slab, 1 inset window strip per upper storey per face, a door or a
+    shopfront (rolled shutter plus cloth awning), and rooftop tanks, a hut, a mast or a dish.
+  - **Variants:** `damaged` (the top storey's +X half is blown off and a fallen slab lies on the roof) and `gutted` (a
+    burnt-out shell).
+  - **Tower blocks:** blocks with 5 or more storeys use Concrete in a light-concrete colour automatically.
+  - **Shadows:** one shadow caster per block, so the Town has 56 casters (cap 60).
+  - **Options:** new optional `KitOpts` / `KitPlace` fields `Width`, `Depth`, `Storeys`, `Roof`, `Lantern`. Existing kits
+    and their APIs are unchanged.
+  - **Footprint cache:** the key now includes these fields.
+- **`AdobeHouse` and `RuinedHouse` are no longer placed in the Town.** `TownBlock` replaces them, with terrain rubble by
+  the damaged and gutted blocks. Both kits stay in the catalogue, unchanged.
+- **Moves and removals:**
+  - Landmarks:
+    - The clock tower moved 4.5 studs toward the plaza, to (95.5, 95.5). That is the least clearance its disc needs from
+      r 124.
+    - The water tower moved 8 west, to (−126, −175), so it closes the new market lane.
+  - Market lane:
+    - The 4 stalls now stand in the lane between 2 lane blocks.
+    - The separate crate stack is gone; the stalls carry crates.
+  - Town Square:
+    - One bench pair was dropped.
+  - Unchanged: the checkpoints (r 310), the board, the square tiles, the fountain and the motor pool jerseys.
+- **The SW plaza corner stays open toward the Town Square**, so the flag looks across to the fountain and the radio mast.
+  A 2-part sandbag arc marks the corner.
+- **Low keeps Tier 1 only: 215 parts, which is 58 % of 368 (cap 220).** Tier 1 holds the first block of each road arm,
+  the plaza blocks, the 4 landmarks, the south lane block, 2 stalls, the square's south block, the checkpoints, lamps,
+  board, tiles, fountain and the wreck.
+- **Terrain rubble:** 9 groups by the damaged and gutted blocks, giving 25 prims in the Town (cap 40, unchanged).
+- **Driver expectations updated where the design changed on purpose.**
+  - W3 acceptance (`S/w3/densify/drivers/w3_driver.luau`):
+    - `W3-town-budget` reads `POIs.Town.Budget` and fails above 370.
+    - `W3-town-lights` reads `POIs.Town.Lights` and fails above 8.
+    - `W3-town-signs` reads `POIs.Town.Signs` and fails above 1.
+  - Town driver (`S/w3/densify/drivers/b1_driver.luau`): `TOWN-lights` expects 8, not 6.
+  - Kit unit test (`S/w3/densify/drivers/kits_driver.luau`): 38 new `TownBlock` and `RadioMast` checks.
+  - Run unchanged, the step-1 drivers fail only those 3 checks: W3-town-budget, W3-town-lights and TOWN-lights.
+- **Renders only:** the renderer draws thin façade parts (window strips, doors, shutters) over the wall they sit on.
+  Before this, a painter sorted by centroid could hide them behind their own wall. This affects the pictures only.
+
+### Verifier additions (adversarial pass)
+- **The sum of the POI budgets is now 1,770, against the §7.1 plan of 1,700 or less.** At HEAD it was 1,620. Only the Town
+  is enabled today, so nothing is over a cap at runtime (1,444 parts outside the bases, cap 2,900). Before the other 17
+  POIs are built, their budgets must drop by 70 in total, or the lead must re-baseline §7.1. Town v2 is the reason for the
+  change, and the lead accepted Town growth of about 150–170. To undo: lower `POIs.Town.Budget`.
+- **The sum of the POI light caps is now 25, up from 23.** Non-POI world lights are 5 today (13 − 8), so with every POI
+  at its cap the world would plan 30 lights against the cap of 24. HEAD was already over, at 28. The next POI lane must cut
+  its light caps.
+- **Two floating details were fixed in `TownBlock`.**
+  - `RoofDish` sat 0.62 studs above the roof. It now sits on it: its centre is at `roofY + 1.3`, with a tilted half-height
+    of 1.28.
+  - `LampLantern` stood 0.15 studs off the wall. It now touches the wall at `fz - 0.4`, reaching 0.8 in front.
+  - Neither fix changes a part count, a Footprint extent that the layout uses, or a pin.
+
+## 2026-09-24 — Rollover fix (owner: "The quad falls over when driving super easy")
+## Rollover fix (owner report 2026-09-24: "The quad falls over when driving super easy") — assumptions
+
+Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.Drive.Stability` and
+`VehicleConfig.Drive.Modes.Car`; one-line reverts are given).
+
+1. **Rider mass for sizing = 14 (R15 at density 0.7), sitting 1.3 studs above the seat's top face.** Used only to
+   size the ballast, to place the drive point at the centre of mass and to size the upright assist. The real rider joins
+   the chassis assembly through the SeatWeld. Sensitivity was measured for riders of 10, 14 and 20 (Rthro). With a
+   20-mass rider the quad's static stability factor is 1.55 and it tips at 57°; at HEAD it was 0.80 and 39°.
+2. **Ballast = 1.0 x (kit + rider) for light 4x4s and the quad, and 0.4 x for trucks and APCs. Tracked, air and naval
+   get none.** The mover force (`WE_DriveLV`) and torque (`WE_DriveAO`) scale with mass, so acceleration, top speed and
+   turning feel stay the same. The heavier car pushes harder in car-vs-car and car-vs-player collisions: a light 4x4
+   goes from 77 to 154 mass, and trucks go up x1.4. Revert: `Families = {}`.
+3. **Ballast sits at `BallastHeight = 0.5`, halfway between the tyres' ground line and the axles.** This is below the
+   chassis. It is invisible, has no collision, query or touch, and is welded to the Chassis. It is not physically
+   plausible, but it is invisible, and it lowers the centre of mass more for the same mass.
+4. **The drive point (`WE_DriveAttach`) moves to the nominal centre of mass** (`DriveAtCoM = true`), so the drive's
+   cornering and braking force produces no roll or pitch moment. `WE_DriveAO` shares the attachment, and its torque
+   does not depend on where the attachment sits. Revert: `DriveAtCoM = false`.
+5. **`WE_UprightAO` is a roll/pitch-only AlignOrientation.** It tops `WE_DriveAO` up to `UprightFrac` (0.75 for light
+   vehicles, 0.6 for trucks and APCs) x weight x min(half track, half wheelbase). That total stays below gravity's own
+   righting moment, so the assist cannot lift wheels on slopes or ramps and cannot right a car that is lying on its
+   side. Assumption: `AlignType.PrimaryAxisParallel` aligns the attachment's X axis in the same direction as the goal's
+   X axis (world up); `PrimaryAxisOnly = true` is also set. This needs a device.
+6. **Wider track by vehicle id: UtilityQuad x1.2 (3.60 → 4.32 studs), ReconBuggy x1.1, DispatchCar x1.1.** The physics
+   wheels are hidden under the fitted Light Utility Vehicle body, so the change does not show. The Part kit shows the
+   wheels further out, which reads as a quad. Revert: `TrackScale = {}`.
+7. **Speed-sensitive steering: the turn rate is capped at `MaxLatAccel / speed`, with `MaxLatAccel` = 120 studs/s²
+   (0.61 g).** Nothing changes below 50 studs/s. At the quad's top speed of 58 the turn rate is 2.07 rad/s instead of
+   2.4. At 87 (1.5x research) it is 1.38. Tracked vehicles never reach the cap.
+8. **No traction and no steering while flipped (UpY < `FlipUpY` = 0.5, tilted past 60°).** The commanded speed brakes
+   to 0 at the class's `Brake` rate. At HEAD, a car on its side with the stick held was driven along the ground at up to
+   60 studs/s. This matches the "SPD 45" in the owner's screenshot.
+9. **Flip recovery replaces the old 0.5 s x 15 studs/s hop** (the hop moved the car up to 7.5 studs up plus its
+   horizontal speed). The recovery starts after 1.5 s on its side or roof below 3 studs/s:
+   - It holds X/Z still, lifts at 6 studs/s to 2.5 studs, levels the car at 2.5 rad/s through `WE_DriveAO`, then lowers
+     it at 6 studs/s until it touches down.
+   - It gives up after 2.5 s, or once it has moved more than 5 studs from the start.
+   - It waits 4 s between tries, allows at most 5 starts per minute, and never starts while another player (not a rider
+     of this car) is within 4 studs of the car's footprint.
+   - The same law runs on the driver's client, in server drive, and for an empty car (the server idle law).
+   - The per-minute count resets when the driver exits and sits again. This is harmless: a try lifts 2.5 studs at most
+     and never moves the car horizontally, and the server validator is unchanged.
+10. **The owner standing next to his own empty, flipped car blocks the idle recovery** (he counts as "another player"
+    until he sits in it). If he sits back in, the client law rights it with him aboard. If he steps about 4 studs away,
+    the server rights it. Alternative, if the owner prefers: exclude the owner in the idle case.
+11. **The two existing checks that pinned the old hop now fail by design and have patched copies:**
+    - `water/build/v/t_server.luau (h)`: "hop at 2.0 s, Vy 15"
+    - `jeep2/suites/t_client_jeep.luau 1h`: "0.5 s hop Vy 15"
+    The patched copies (`rollover/patched/`) check righting at 1.5 s with Vy 6 and X/Z at 0. The suite owners should
+    adopt them.
+12. **The catalog vehicle dress (W3 LOOK Light Utility Vehicle body) was checked, not changed.**
+    `VisualAssetService.weldCloneToPrimary` makes every clone part CanCollide, CanQuery and CanTouch false and Massless
+    true. The existing K2 test confirms it, and a pin is proposed. It adds no mass and no collision width. No
+    VisualAssetService edit was needed.
+
+13. **(Verifier) The watchdog ignores a flipped car.** Without traction a car on its side does not move, and the
+    righting lifts it straight up. A driver who sat into a flipped car and held the stick therefore tripped the
+    "nomove" watchdog after 1.2 s (server check) or the client's Stuck report after 1.5 s. That forced server drive,
+    and after righting it was counted toward `SessionTrips` (2 trips = every later ground sit starts in server drive).
+    Now the server watchdog does not count "pushing" while UpY < `FlipUpY` or for `RecoverMaxSeconds` (2.5 s) after the
+    last flipped sample, and the client does not run its Stuck clock while flipped or righting. An upright car that is
+    pinned still trips exactly as before (tested). Revert: remove the two blocks marked "rollover fix" in
+    `watchdogStep` / `watchClient`.
+
+## 2026-09-25 — v72 war businesses + next-buy guide (shipped with both flags OFF)
+## v72 Tycoon Guide and War Businesses (merged from lanes K, A, B1, B2, C + integration; all reversible)
+
+### Flags and scope
+- `BusinessConfig.Enabled` and `TycoonGuideConfig.Enabled` ship **false**. With both off, server, world, census, HUD and every suite match HEAD (measured). Flip both together, only after Lane D (MapSetup + StructureVisualConfig, `build/integ/laneD.diff`) lands; then also flip the two `Enabled = false` pins to `Enabled = true`.
+- Server gating: business world code (SyncBusiness / SyncPlot / ClearPlot) runs only with BusinessConfig on; BusinessService.Init connects nothing (no re-pick loop, no WE_NextBuy / WE_AtmPos) with the guide off. WE_PassiveTick only with businesses on; WE_IncomeMult with either flag; WE_IncomePerSec and the "+$/s" toast suffix only with the guide on.
+- Client gating: every new B1 / B2 branch checks the guide flag (F3 BUY-lane shift and F5 Plot-1 arrow hide included); BusinessVisuals follows BusinessConfig only.
+
+### Economy (owner sign-off pending)
+- Business numbers and requirements are a proposal, tuned in BusinessConfig (table in BALANCE.md). Arms Crate Line requires Ammo Works L1 + Weapons Facility L1.
+- Armor Plate Press IncomePerTick is 1.2x the spec draft ({120,220,360,580,860}) so guided run D with the 34 % soldier rule reaches 295 $/s at 30 min (spec 274). Revert = those five numbers.
+- OPEN: guided run C's longest wait in the first 10 min is 141 s (target <= 120 s; Arms Crate Line L2 at 6:58). Armor/Rocket numbers cannot fix it (it happens before the Armor Press unlocks). Lead/owner decides.
+- Soldiers are offered by the pick only while the config-computed training share is < 0.34.
+- Displayed $/s = TycoonMath.PerSecText: step gain x WE_IncomeMult / 5, floored (one decimal below $10/s, whole dollars above; oil unscaled). It can under-read for prestiged players (double-prestige bug out of scope). A "+$N" pop can read $1 high at prestige >= 1 (WE_IncomeMult rounded to 0.01, pay floors twice).
+- WE_IncomePerSec = last passive + training + plot_oil grants / 5; a reason drops out after 2 missed ticks. In Studio with FastPassiveIncome it over-reads ~5x (live unaffected).
+- Passive formula moved to TycoonMath.BasePassivePerTick: identical for valid saves; junk saved levels are clamped.
+
+### Tutorial and guide
+- Tutorial step 6 is Ammo Works only while BusinessConfig.Enabled (Barracks moves into the guide Opening); flags off it stays the Barracks buy. No Tutorial_Business marker part: GO resolves through PadStructureId to your own kiosk; the beam re-aims every 2 s until the kiosk streams in.
+- Guide chip shows only after the tutorial, only inside your own plot; hidden on Tutorial, Modal, Driving, Dead, RecentCombat, AtConsole. The pick is advice only; the server re-checks every buy. Hide = 300 s or until the next successful purchase ack.
+- Auto-guide: 12 s idle (<= 2 studs moved per 1 Hz sample) with the chip on screen, > 20 studs from the target, Build/Collect only, once per pick.
+- The Command Center L1 unlock text ("6 new buildings") never fits the chip hint at 20 v in the harness; it is dropped per spec.
+- Base panel: businesses after the 15 buildings under a WAR BUSINESSES header; gold outline + NEXT badge on the pick; flags off keeps HEAD's "+N/t" rows via string.format.
+
+### Buy surfaces
+- BUY 300x72 v on touch (336x58 v on desktop with the guide on, incl. the key cap shown only for keyboard/gamepad PreferredInput, never in Collect). Two 20 v lines, never scaled below 20 v; line 1 falls back to the short name, then no name.
+- The thumb-zone lane shift (TycoonMath.ActionLaneShiftV; Lane 0 owns HudLayout) applies on touch only.
+- Earn (red) tap still sends the buy request (server answers InsufficientCash); only Collect (amber) sends nothing and draws the line to your own ATM.
+- Console tag: owner-only, stud-scaled, fixed 16/15 px text, never AlwaysOnTop; ranges 18 (build) / 14 (upgrade) / 40 (the NEXT pick). Business kiosks have no SurfaceGui and no Neon; visitors see an unnamed kiosk.
+- Cash pill "+$N/s" suffix: green 20 v, not tappable, <= 2 Hz, hidden at 0, behind PillIncome; uses commas from $1,000/s (TycoonMath.RateText has none). It sits in the bottom-left zone under the owner's v70 decision.
+- ConsoleTag / BuyLane / auto-guide / Hide / pill keys live in TycoonGuideConfig, not HudConfig. ShortNames (<= 10 chars) for the 15 buildings live there too.
+
+### World and budget
+- Business sites plot-local (-30,100), (-66,100), (34,60), (70,60), Yaw 180, kiosks 10 studs toward the gate; built only on owned plots. Rebirth and admin resetbase reset businesses to L0.
+- Lane D: FloorChevrons = false (static arrows removed), StaticSoldierDetail = false (static soldier kit 9 parts, -84 per base), gate signs inset by InnerWall.SignInsetStuds x PixelsPerStud (80 px) with text capped at 64 px. StairStyle = "Steps"; ramps are a reserve cut only (nothing reads the key yet).
+
+### Client visuals
+- Up to 3 crates per own line within 80 studs (1 at saved Graphics Quality 1-3; Automatic counts as full), pooled, moved by one BulkMoveTo at <= 20 Hz; other players' lines never animate.
+- "+$N" pop (floor(IncomePerTick x WE_IncomeMult)) on each WE_PassiveTick, at most 2 per tick, within 28 studs of the character, 1.2 s, billboard MaxDistance 40. The server now stamps WE_IncomeMult before WE_PassiveTick so the pop uses the current multiplier.
+
+### Tests
+- The flags-ON gate uses the kiosk-aware drivers build/A/gate_driver_biz.luau and tut_driver_biz.luau; the originals (polish/C/gate_driver, tut_driver) fail on a flags-ON tree by design (no kiosks before a plot is owned / MapSetup-only world). Switch worldhook/verify/run_all.sh to them at the flip.
+
+## 2026-09-25 — v72 switched on (businesses + next-buy guide live)
+- **Flags on:** `BusinessConfig.Enabled` and `TycoonGuideConfig.Enabled` are true. To turn both off, set them false (tutorial step 6 goes back to Barracks automatically).
+- **Part budget (Lane D):** floor chevrons are gone (`BaseLayoutConfig.FloorChevrons = false`, static and pointing the wrong way; dynamic owner-only chevrons are planned with the owner's feature list), static soldier kits drop 7 small detail parts each (`StructureVisualConfig.StaticSoldierDetail = false`), and gate signs get padding so long names fit. Parts per base at L5: 2,666 (cap 2,700; was 2,704 before the businesses).
+- **Early wait accepted (lead decision; owner delegated):** the economy model's longest wait in the first 10 minutes is 141 s (Arms Crate Line L2, then Command Center L2) against a 120 s design target. The measured fixes either did not help or cut 30-minute income below its floor, and the guide chip shows a "ready in m:ss" countdown during the wait. Revisit after real play data.
+- **Armor Plate Press income is 1.2x the spec** (120/220/360/580/860 per tick) so 30-minute income stays above 280 $/s with the 34 % soldier rule; revert is those five numbers.
+
+## 2026-09-25 — Nations step A0 (country list, flag art, tools)
+<!-- Lane A1: append to ASSUMPTIONS.md under a "## 2026-09-25 — Nations (country choice + flags)" heading. -->
+
+### From the spec (section 6, verbatim; rewrite #71 in place)
+- Rewrite #71: "Nation = the country the player chooses (NationConfig, 200 entries). The legacy 8-colour NationColorId is kept, and is used only as the banner colour for NEUTRAL players."
+- Roster: the 193 UN members, plus VA, PS, TW, XK, GB-ENG, GB-SCT and GB-WLS. The last six are in OwnerReview and on by default; the owner can switch each off in one line. Northern Irish players pick Ireland or the UK. Afghanistan uses the tricolour.
+- Nation changes: free for 10 minutes after the first pick (at most 5 changes), then one per 24 h, enforced on the server. No cost. NEUTRAL is stored as a value, not as nil.
+- The IP-based country is a badged suggestion only. It is never pre-selected, never shown to others, never stored and never logged.
+- No DataVersion bump: the nation fields are filled in and sanitised on every load (the ensureFeatureFields precedent).
+- World flags are 4:3 Textures cropped from 7 regional atlases. The back face is not mirrored, so the hoist appears at the fly end from behind. The per-flag PNG path is kept as a fallback.
+- Outpost flags are OFF at launch (policy caution around territory). The owner can switch them on.
+- No gate flag, because strike fire spawns at the gate. The nuke aim point moves to Z=56 on MainRoad.
+- Player-list emoji stay off until the device test passes; the column shows ISO codes until then.
+- The picker opens by itself for non-admins only after all atlas ids are wired.
+
+### Lane A0 builder decisions (all reversible)
+- **Review atlas = 14 flags:** the spec's estimated 12 (AO BB GT HT IQ IR KE MZ OM SA SZ AF) plus **BN** (Arabic script in the crest) and **LK** (lion holding a sword), by the spec's own rule "flags with emblems or script". Moving a nation between atlases = edit its AtlasGroup/AtlasCell, re-run `tools/gen_nation_flags.py`, re-upload the 2 changed atlases (`--verify` and BuyPathStatic fail until then).
+- **Cell geometry:** the spec's "112x84 cell, 4 px gutter, 104x78 flag" cannot all hold (84 - 78 = 6). Kept the 112x84 cell (9x6 in 1024x512) and the true 4:3 104x78 flag; the edge-extended gutter is 4 px left/right and 3 px top/bottom.
+- **Art source pinned:** flag-icons 7.5.0 from the npm tarball (sha512 checked) plus one upstream fix (Panama, commit 086f7e9, sha256 checked). 7.5.0 already has Syria's current green-white-black three-star flag.
+- **Opaque flags:** rasterising leaves anti-aliasing seams of partial alpha between adjacent shapes (e.g. Bahamas, Papua New Guinea); the generator makes every rectangular flag fully opaque (colour is the coverage-weighted blend), so a Texture never shows the part through a seam.
+- **Nepal is a cut-out:** `Cutout = true` in NationConfig; its atlas cell keeps transparency outside the flag shape (picker shows the tile behind it). On an opaque flag part the part colour shows around it; lane B picks the backing (suggest part Transparency = 1 while a texture shows; Textures still draw).
+- **Square flags (Switzerland, Vatican)** use flag-icons' 4:3 form (field colour extended), like every other world flag on the 4:3 parts.
+- **Texture crop convention unverified:** `NationConfig.Atlas.OffsetSignU/V = 1`, `VFromBottom = false` assume "a larger offset shows content further right / lower, image top-left at the face top-left". The 5-minute Studio atlas-crop test confirms or flips these 3 values; no code changes.
+- **Mip bleed:** at mip level 2+ (far away) neighbouring cells bleed into a flag's edge (the gutter covers levels 0-1). Part of the Studio test at 60 studs; if it shows, fall back to per-flag ids for the affected flags.
+- **Search aliases:** added DRC, East Timor, St Lucia, PNG; dropped aliases that repeated the Name. "Macedonia" is deliberately not an alias. Search folds the roster's accents (Côte, São Tomé, Türkiye).
+- **Player-list code:** `NationConfig.Code` gives ENG / SCT / WLS for the GB-* ids and "-" for No flag.
+- **Per-flag fallback PNGs** are 256x192 (`NationConfig.Atlas.PerFlagW/H`), written only with `--per-flag`, not committed.
+- **Manifest:** `assets/flags/atlas_manifest.json` (source pins, per-atlas sha256, cell table) lets `--verify` and BuyPathStatic catch a config change without a re-render.
+- **Lead decisions:** BN and LK join the Review atlas (script / sword in the emblem); Bolivia and Ecuador stay in the Americas atlas (official coats of arms). A0 ships config, maths, tools and art only: nothing in the game uses nations until lanes A1/B/C land.
+
+## 2026-09-25 — Base identity (owner: buildings look the same, checkpoint, watchtower, helicopter)
+# fb2 v73 base identity (owner feedback 2) — ASSUMPTIONS.md lines, merged by the integration verifier
+# Paste as one section. Supersedes the spec line "The old StructureKitBuilder branch stays as dead code until after v72".
+# Sources: build/A/assumptions.txt, build/D/assumptions.txt, build/E/assumptions.txt (+ integration notes at the end).
+
+## Distinct buildings, gate checkpoint, watchtower, helipad (Lane A)
+## From the spec (spec_base.md "ASSUMPTIONS.md lines"), adjusted to what landed
+- The base-identity pass replaces the shared walk-in shell with a roof, entrance and signature per building (StructureVisualConfig.HollowBuildings: RoofStyle / Entrance / Signatures / Colors.Frame / WallMaterial). Reversible: set RoofStyle to "Flat" and Entrance to "Awning" (and drop Signatures) per building. HollowBuildingBuilder GEN 2 -> 3, so live models rebuild once.
+- The parked helipad helicopter is removed. The real helicopter appears on the pad once it is unlocked (level 10 or higher).
+- The helipad is built as an installation (StructureVisualConfig.Installations.Helipad -> Modules/Installations/Helipad.luau). The old StructureKitBuilder "helipad" kit branch (incl. the 9-part ParkedHeli + its dress host) is deleted in the same change (see the helicopter clean-up lines below), so removing the Installations.Helipad row now gives the generic 5-part hut, not the old pad.
+- The watchtower cabin is 8.5 studs high (Installations.Watchtowers.CabinClearHeight) and its roof has no collision / no query, so it fits avatars up to about 7.5 studs.
+- The checkpoint boom stays raised (80 degrees) and has no collision, so it never blocks vehicles.
+- Nation flags will be Decals on parts with the attribute WE_FlagHost (0 extra parts, 0 SurfaceGuis). Every lane A flag cloth (the 7 walk-in building flags, the gate plinth flag, the watchtower L5 flag; 9 per base at L5, 54 world-wide in the census) is 0.12 thick along X and carries WE_FlagHost = true.
+
+## Lane A decisions (reversible; each measured headlessly)
+- Research Lab signature is SolarDish (2 tilted solar panels + a dish, from the identity-kit design), not the partkit radome: the Radar installation owns the dome silhouette. Config keys HollowBuildings.ResearchLab.SolarPanels / DishAt / Colors.Solar.
+- Windows were re-placed against the existing interiors (the partkit ribbons put glass behind furniture; the interior checker's "window" rule failed in 4 buildings): Command Center front ribbon x -10.5..2 (clear of the corner locker) and upper ribbon split at the council terminal; Barracks UpperWindowBottom 3.2 (prototype 2.6 cut through the upper office partition); Special Forces slits at x -12 / -9 / -3 (clear of the unit flag); Research Lab ribbons split at the glass partitions / server racks, WindowBottom 4.2 and an UpperBackWindowsX row. Cost: +14 parts per base at L5 against the prototype estimate (2,521 measured vs ~2,507). Interiors are unchanged.
+- Checkpoint booth at local x 7.2 (spec 7.5): its 7.4-wide roof now ends at x 10.9, inside the main road's edge (local x 11); at 7.5 it hung 0.2 studs over the road at 6.8 studs high.
+- Checkpoint jersey barriers at local x 6.2 / 2.6 / -1.0 / -4.6 (spec 8.2 / 4.6 / 1.0 / -2.6): the first barrier overlapped the L4+ gate AutoGun nest (GateDefenseService, gate-local (-7, 0, -7.5)); gate_L5 test failed on it.
+- Checkpoint tank-trap centre 1.75 above the ground (prototype 1.5 buried the beam ends 0.23 studs).
+- Helipad floodlights stand at the pad's front corners (+-15.2, +15.2) instead of (+-15.2, +12): 8.9 studs (was 7.0) from HelipadSpot (8, 8), outside a large rotor disc. Fuel tank rests on the ground (centre = radius, kit prototype floated 0.2).
+- The helipad deck is the standard 0.8-stud installation foundation (top 0.4 above the plot pad; the old kit deck top was 1.17). VehicleConfig.Spawn.HelipadDeckHeight (1.2, the no-ray fallback) is not changed by this lane; with no ray hit a helicopter would spawn 0.8 above the deck and settle.
+- The L3+ watchtower MG stays on the front half-wall with its barrel 1.7 studs past the 10 x 10 footprint (non-colliding, 20+ studs up); the stock check_installation.py footprint rule flags it, the lane A installation check allows it.
+
+## Static soldiers and flag hosts (Lane D)
+- **Static soldiers stand on the floor** (`MapSetup.makeSoldierKit`): callers pass the torso centre at floor + 2.1 but the R6 legs hang 3 below it, so all 12 static soldiers per base (2 yard workers, 3 stall soldiers, 6 rear-gate guards, 1 sea-gate guard) stood 0.9-1.1 studs sunk. The torso is lifted 0.9 (`cf * CFrame.new(0, 0.9, 0)`), yard workers pass y 2.8 (YardPad top 0.7 + 2.1) and stall soldiers 2.7. Measured feet-to-floor gap: -1.10..-0.90 before, -0.02..+0.05 after (72 static soldiers, FaceMapCentre on and off). **Rollback:** torso `CFrame = cf`, callers 2.6.
+- **Stall soldiers use y 2.7 (spec), not 2.65:** 2.7 puts the feet +0.05 above the stall floor of stalls 2-3 and -0.02 into the plaza road that runs under stall 1; 2.65 would be exact on the stall floor but -0.07 into that road.
+- **Boots follow the legs:** with `StructureVisualConfig.StaticSoldierDetail = true` the boots now sit at torso -2.825 (bottom = leg bottom) instead of -3.1 (0.275 lower), so detail-on soldiers also stand on the floor (measured -0.02..+0.05). No effect while StaticSoldierDetail is false (the v72 default). **Rollback:** -3.1.
+- **Round helmets:** the static soldier helmet is 1.3 x 0.75 x 1.35 with a `SpecialMesh` (Sphere), offset (0, 0.36, 0.02) from the head (was a flat 1.2 x 0.5 x 1.2 box). 0 extra parts (one SpecialMesh per soldier, 72 on the map). Dome shape not checked in Studio.
+- **Catalog soldier overlay:** `VisualAssetService.TryAttachCharacterVisual` pivots the catalog character to the HumanoidRootPart, so the +0.9 lift also lifts a loaded catalog soldier by 0.9. This is right when the catalog rig's pivot is its HRP centre 3 studs above its feet (standard R6/R15); not verified in Roblox.
+- **Flag hosts (Lane D share):** `ParadeFlag` (MapSetup), the Barracks desk `FlagCloth` and `OfficerFlag` (Interiors/Barracks.luau) and the Special Forces `UnitFlag` (Interiors/SpecialForces.luau) are 0.12 thick and carry `WE_FlagHost = true`. The lead's "officer / unit flags" live in the two Interiors modules, not in MapSetup, so Lane D edited only those flag lines there (no other lane or job owns those files). UnitFlag keeps its back face flush on the wall (centre Z1 - 0.06). 0 parts, 0 SurfaceGuis added. **Rollback:** drop the attribute; thickness 0.14 / 0.06 / 0.06 / 0.08.
+- **Flag host faces differ by part:** ParadeFlag (like the HollowBuildingBuilder / Watchtower flags) is thin on X (nation decal on Left / Right); the three interior flags are thin on Z (Front / Back). The nation binder should pick the two faces normal to the smallest Size axis. UnitFlag's Front face already carries the "SPECIAL FORCES" SurfaceGui text, and its Back face is against the wall: the binder must decide whether the decal goes under that text or skips hosts that carry a SurfaceGui.
+- **Territory outpost flags are not flag hosts:** MapSetup's `<Id>_Flag` (0.22 thick, `WE_Flag`, recoloured by TerritoryService) is left untagged; whether outposts fly the owner's nation flag is the nation job's / TerritoryService owner's call.
+- **No MAP_GEN bump for Lane D:** the live place is a Rojo build without a baked map, so every server runs `MapSetup.Run` and gets the new soldiers. (ASSUMPTIONS.md:1048, the W3 line, says "no bump unless MapSetup itself changes"; MapSetup does change here, so this is a deliberate exception, reversible by bumping MAP_GEN 81/80 -> 83/82 together with BuyPathStatic pin `81 else 80`.) If a map was ever saved into the place in Studio, it keeps the sunk soldiers until `MapSetup.MAP_GEN` moves.
+
+## Helicopter clean-up and Helipad console line (Lane E)
+- The dead Helipad part kit (StructureKitBuilder `kit == "helipad"` branch: pad, ring bars, H, 4 neon floodlight balls,
+  windsock, ops hut) and its 9-part parked helicopter mock-up + WE_DressHost_ParkedHeli dress host are deleted; the
+  Helipad is only the Installations/Helipad model (Lane A). This REPLACES the spec line "The old StructureKitBuilder
+  branch stays as dead code until after v72" (v72 is committed, so the deferred item was done). Reversible: git revert
+  of the StructureKitBuilder hunk.
+- Lane E must ship together with (or after) Lane A's `Installations.Helipad` row. Without it (or with
+  `Installations.Helipad.Enabled = false`, or `BaseLayoutConfig.Enabled = false`) the Helipad falls to the generic
+  `else` kit (a 5-part hut), not the old pad. Headless check: HEAD + Lane E only builds that hut at L1-L5.
+- EnsureKit no longer lists the Helipad among structures that must have dress hosts, and the Helipad left the
+  `flatKit` list: with the Helipad an installation both entries were dead, and in the fallback above they would
+  have rebuilt the kit on every EnsureKit call.
+- BaseService keeps the `ParkedBoat` visuals branch (Dock boat unchanged); only the `ParkedHeli` role left it.
+  VisualAssetService.TryAttachParkedPresence (not a Lane E file) still checks both roles; for the Helipad it now
+  finds no WE_DressVehicle host and returns false, which is harmless.
+- "HELIS AT LV 10" is the lowest UnlockLevel among VehicleConfig air vehicles whose RequiresStructure is the Helipad
+  and that need no prestige or rebirth flag (today 10: Scout Helicopter, Utility Helicopter), falling back to 10.
+  It is computed once when UpgradePadService loads, so the line follows VehicleConfig if the ladder changes.
+- The line lives on the Helipad console's EXISTING screen (MapSetup's WE_ConsoleScreen SurfaceGui), added by
+  UpgradePadService as a second TextLabel parented UNDER the screen's own label (no new SurfaceGui; the budget stays
+  1,115). WorldPromptController rewrites the SurfaceGui's first direct TextLabel per viewer (name / price / MAX) and
+  never reaches this one, so every viewer sees it at every level. The screen's own label gives up its bottom 28 %
+  (the owner's 3-line name / price / income text renders up to about 28 % smaller on this one console; the
+  one-line name other players see is width-bound and does not shrink). The spec asked for the line "in
+  UpgradePadService"; UpgradePadService had no Helipad text of its own, the custom pill lane never draws a prompt's
+  ObjectText, and the console's "Build / Upgrade" pill hides while the BUY button shows, so the screen is the only
+  place a phone player would read it. Reversible: delete the addHeliNote call in attachSlot.
+- The line is always shown (the server does not know the viewer's player level). It is copy for phones: no key names.
+
+## Integration notes (verifier)
+- Ship Lanes A, D and E as one commit: Lane E's deletion of the old helipad kit relies on Lane A's Installations.Helipad row, and the merged BuyPathStatic block pins all three.
+- The helipad deck is 0.77 studs lower than before (deck top 1.40 above the plot origin in the t_server driver's frame, was 2.17). The shared test driver rollover/patched/t_server.luau:570 still expects 2.17 and must be changed to 1.40; helicopters spawn Landed on the new deck (291/0 and 290/1 with 1.40; the 1 is the "boat without Hello" fail that HEAD has too).
+- VehicleConfig.Spawn.HelipadDeckHeight stays 1.2 (only used when the spawn ray hits nothing); not in this job's files.
+- Lane D's needle on the old helmet was narrowed to 'Name = "Helmet",
+		Size = Vector3.new(1.2, 0.5, 1.2),' so a future 1.2 x 0.5 x 1.2 part elsewhere in MapSetup does not trip it.
+- Interiors/Barracks.luau and Interiors/SpecialForces.luau are edited only on their flag lines (Lane D, "officer" and "unit" flags live there, not in MapSetup). No other job lists these files.
+- Each base now has 13 WE_FlagHost parts at L5 (78 world-wide), all 0.12 thick: 7 building flags, gate plinth flag, watchtower L5 flag (thin on X), ParadeFlag (thin on X), Barracks FlagCloth + OfficerFlag and SF UnitFlag (thin on Z). The nation binder should use the two faces normal to the smallest Size axis.
+- **Lead decisions:** the Interiors/Barracks and Interiors/SpecialForces flag lines are part of this change (flag hosts); MAP_GEN is not bumped for the soldier-kit change (only affects a map saved into the place in Studio; the live place builds at runtime).
+
+## 2026-09-25 — Owner's 11 options, batch A (pads, Speed Pass, golden pump, keep-base rebirth, rebirth screen, beginner shield; flags off where noted)
+## Owner's 11 features, batch A (K1 contracts, M money server, C combat, P prestige, S Shop client)
+
+Merged by the batch-A integration verifier for Z-lite to append to ASSUMPTIONS.md. Every line is reversible. Every
+feature flag ships OFF and every new product Id stays 0 (ImpulseSpeed, RebirthKeepBase, GoldenPumpjack).
+
+### Lead decisions (spec §7) recorded with batch A
+- KeepCash = false on the keep-base path. PendingCash is kept on both rebirth paths (no reset). Rebirth % is XP-based
+  (`PrestigeConfig.ProgressMode = "XP"`). Speed tiers: Speed Pass x1.15 (pass), Speed Boost x1.25 (product).
+  Novice shield MaxSeconds = 900. PersistClaims ships as specified behind its flag (off until lane Z).
+- B1 (double prestige multiplier) is fixed in batch B's economy lane (EconomyService / BaseService), not in batch A.
+  RebirthKeepBase must not be pasted before that fix lands (spec §6).
+
+### Spec §5 lines that batch A implements (config / server / client side; the rest land with batch B)
+- (§5 #2) Pad colours in `MonetizationConfig.PremiumPads`: Auto Collect red, 2x Cash yellow, Speed cyan. The pads
+  themselves are rebuilt by lane W (batch B); until then today's MapSetup pads (VIP, yellow Speed Boost) stay.
+- (§5 #11, amended by lane C's verifier) The novice shield ends on draw, fire, squad order, strike, contest (lane W
+  call, batch B), tutorial end or skip, holding an ATM raid or entering the Empire Bank guard ring ("raid"), or after
+  900 s. It is never re-granted. Ships with `CombatFairnessConfig.NoviceShield.Enabled = false`.
+- (§5 #13) Keep-base rebirth is a consumable DevProduct that grants a token; the rebirth runs after the save; the
+  Lv 40 gate stays; KeepCash = false; tokens never expire. Supersedes J12 (RebirthConfig.luau:11-13).
+- (§5 #14) PendingCash is kept on both rebirth paths, as today, and is not listed in the modal.
+- (§5 #15) Rebirth progress is XP-based. Reversible to "Level".
+- (§5 #16) The free rebirth modal is the confirmation (2 presses in total, no extra "Sure?" arm).
+- (§5 #17) Speed Pass 5 R$ x1.15, Speed Boost 99 R$ x1.25, owning both gives the max. One death offer per session
+  after the tutorial, inside the D8 soft-offer budget.
+- (§5 #18, config part) Golden pump dress is Metal, Reflectance 0.2, no Neon. HideFromShop removed from
+  GoldenPumpjack, so the Shop row appears on paste. Supersedes the M0b "remove it in the same commit" step.
+- (§5 #20) Feature flags ship off in contracts and are switched on at integration (lane Z).
+
+
+### Lane K1
+
+These are the K1 lines only. The shared spec §5 lines 1-20 are Z's list; K1 implements the config side of #1, #4, #5,
+#13, #14, #15, #17, #18, #19 and #20. Every feature flag ships OFF.
+
+1. **New profiles take the tutorial order version from TutorialConfig.OrderVersion, not a literal 2.**
+   `ProfileSchema.CreateDefault().TutorialOrderVersion = TutorialConfig.OrderVersion or 1`. Today TutorialConfig has
+   no `OrderVersion`, so new profiles get 1. Once lane K2 adds `OrderVersion = 2`, new profiles get 2, as the spec says.
+   Why: batch A (this lane) can reach the live game before batch B (K2 + T). A literal 2 would mark players who join in
+   that window as "new order" while TutorialService still saves step indexes in the v72 order. Lane T would then skip
+   their migration and map their step index to the wrong step. Missing still means 1. A config error at require time
+   falls back to 1 and never blocks a profile load. Revert: write `TutorialOrderVersion = 2` in CreateDefault.
+2. **"Missing" is judged on the saved data, before the v0 default fill.** Migrate reads `TutorialOrderVersion` and
+   `NoviceShieldDone` from the raw save first. A save without `DataVersion` (v0) therefore still gets order version 1
+   and `NoviceShieldDone = TutorialComplete`, instead of the CreateDefault values. Tested (v0 case in k1_driver).
+3. **NoviceShieldDone defaults to TutorialComplete only when missing or not a boolean.** A saved boolean is never
+   rewritten, even `false` with `TutorialComplete = true`. CombatService (lane C) checks
+   `not TutorialComplete and not NoviceShieldDone`, so this is the same thing without a write on every load.
+4. **KeepBaseRebirths, StarterOutpostTaken and TutorialOrderVersion are sanitised on every load.** Tokens are a whole
+   number >= 0 capped at 1e15 (the same nonNegInt as the M2 money fields). The order version is a whole number >= 1.
+   StarterOutpostTaken is false unless it is a boolean. No DataVersion bump (still 8).
+5. **Home Outpost marker height is Y = 1** (`TerritoryConfig.Starter.GroundY`), the same as every land outpost.
+   PlotFrame.LocalToWorld returns the plot pad centre height (0.5), and the row keeps only its X/Z. X/Z match the
+   spec's live layout on all 6 plots (tested with FaceMapCentre true and false).
+6. **The Starter row carries a Description** ("Your own outpost: +5% Empire Tax while you hold it."), because
+   `TerritoryDef.Description` is required. `Starter.IdPrefix = "Starter_P"` builds the ids. The "+5%" in that text is
+   literal: TerritoryConfig must not require EconomyConfig (spec require rule). Keep it in step with
+   `EconomyConfig.OutpostIncomeBuff.StarterPct`.
+7. **PlotFrame also exports PlotCFrame, PlotPosition and FacesMapCentre.** They are moved verbatim with PlotYaw
+   (BaseLayout.luau 47-80), and lane W's BaseLayout delegation needs PlotCFrame. PlotFrame requires only
+   BaseLayoutConfig and BaseConfig. An unknown plot id returns an un-turned offset instead of erroring at require time.
+8. **Empire Tax toasts take the TOTAL %.** ToastSecured and ToastLost take (pct). ToastStolenFromYou and ToastStealGain
+   take (zone, pct). ToastClaimHeld takes (zone, holder). Until lane W ships, today's TerritoryService formats
+   ToastStolenFromYou with one argument inside a pcall. The format error is caught there, and it shows its built-in
+   "Outpost lost: <zone> stolen" line. The steal toast shows the per-stack % (EconomyService returns it). Neither
+   path errors. `ToastTemplate` (legacy alias) is unchanged.
+9. **RebirthSummary is built from ResetFor(path).** If a reset flag changes, the modal lines change with it (for
+   example, KeepCash = true would move "Cash back to $10,000" into KEEP as "Your Cash"). The server reset and the
+   modal cannot drift apart. `ctx.Prestige` is the CURRENT prestige, and "Total now +N%" is (Prestige + 1) x 10.
+   `NextUnlockName(prestige)` returns the unlock with AtPrestige == prestige + 1, the one this rebirth gives.
+   An unlock name that would push the line over 30 characters first loses its "(...)" note, then its "+ second item",
+   and only then is cut with "...". The ASCII "..." is used, never the '·' or '→' characters.
+10. **ProgressPct "Level" mode = floor(100 x Level / MinLevelToPrestige).** This is the reversible alternative to
+    "XP". Lv 40+ is 100 in both modes. Junk input counts as Lv 1 / 0 XP.
+11. **Pure helpers live in the configs, not the services.** They are `MonetizationConfig.LivePadOffer(slot)` /
+    `PadOwnedKeys(slot)` (F1 first-live-offer rule, one copy for MapSetup, PremiumPadService and ShopController),
+    `PrestigeConfig.ResetFor` / `NextUnlockName`, `TerritoryConfig.IsStarterDef(def)` and
+    `NukeConfig.IsTerritoryTargetable(def)`. Configs stay the single source.
+12. **PremiumPads slot type is exported** (`MonetizationConfig.PremiumPadSlot` / `PremiumPadOffer`). The
+    Speed slot's `OwnedIfAny` is the only one set. The other two default to the live offer's own key.
+13. **GoldenPumpjack loses HideFromShop now (Id still 0).** Today's ShopController already skips every Id 0
+    DevProduct row (ShopController.luau:700), so nothing new shows until the Id is pasted. The scratch M1 driver check
+    "Golden Pumpjacks still Id 0 + hidden" (m1_receipt_driver.luau:274) now fails by design. The updated copy
+    (build/K1/m1_receipt_driver_f9.luau: "Id 0, no HideFromShop") passes 116/0.
+14. **`GamePasses.ImpulseSpeed` has no HideFromShop.** Until lane S ships "skip Id == 0 passes" in the Shop pass loop,
+    today's ShopController would list it as "Pass: Speed Pass ... coming soon (no charge)". promptGamePass still
+    refuses Id 0, so nothing prompts. K1 and S commit together in batch A, so this state never ships.
+15. **`CombatFairnessConfig.NoviceShield.MaxSeconds` counts shielded play from when the shield starts in a session.**
+    Lane C owns the timer. Ending is permanent (NoviceShieldDone), so rejoining never restarts a shield that has ended.
+    Lead decision: 900 s.
+16. **`PrestigeStatePayload` is a new export in Types.** It lists the v71 PrestigeStateUpdate fields plus the optional
+    F7/F11 fields (KeepBaseTokens, KeepBaseLive, KeepBasePrice, ProgressPct, Level, XP, Summary). It is display only.
+
+### Lane M
+
+These are lane M's lines only. Lane M implements the server side of spec §5 #1 (OWNED pads), #17 (speed tiers and the
+one death offer), #13 (the keep-base receipt; no new branch) and #18 (the golden pump pad is sold like any pad).
+
+1. **Speed is the highest multiplier owned, read from the session cache only.** `MonetizationService.SpeedMultFor(p)`
+   takes the highest `WalkSpeedMult` among the owned speed SKUs (Speed Pass x1.15, Speed Boost x1.25), so owning
+   both gives x1.25 (WalkSpeed 20), never 1.15 x 1.25. It reads the session pass cache and the saved entitlements
+   only: it never yields and never calls Roblox, so it is safe inside the receipt's no-yield window and on respawn.
+   The speed is re-applied on respawn (0.3 s after CharacterAdded, as before), right after the profile load (a
+   character that spawned before the load gets it then), when a speed pass flips to owned (OnPassOwned: join check,
+   retried check or confirmed purchase) and when a speed entitlement is granted (receipt). Revert: the old code
+   applied a hard-coded x1.25 for the SpeedBoost entitlement only.
+2. **WalkSpeedMult sanity cap.** A config value above 2 is capped at 2 (`MAX_WALK_SPEED_MULT`), and a value <= 1 or
+   junk counts as "no speed SKU". With no speed SKU owned the server never touches WalkSpeed (the game default stays),
+   exactly as before.
+3. **The death speed offer needs known ownership.** `TryDeathSpeedOffer` sends nothing while the player's first
+   pass check has not run, or while a failed ownership check is still being retried (or its retries ran out this
+   session). "Unknown" is never treated as "not owned", so an owner is never offered the pass. Nothing is spent then.
+4. **The death offer spends nothing when refused.** The once-per-session mark is set only when the offer is sent,
+   and the D8 soft-offer slot (`ClaimSoftOfferSlot`) is claimed last, after every other gate. A player whose first
+   PvP death came mid-tutorial, or while another offer held the slot, can still get it on a later death this session.
+   `OncePerSession` and `RequireTutorialComplete` count as true when the key is missing from the config.
+5. **A premium pad is OWNED when any of its keys is owned.** Keys = the offer itself, the pad's `OwnedIfAny`
+   attribute (comma list; at most 8 names of letters, digits and _; spaces trimmed; anything else ignored) and the
+   `OwnedIfAny` of the `MonetizationConfig.PremiumPads` slot that offers the pad's Kind + Key. The config lookup
+   means a pad built before lane W adds the attribute (today's Speed Boost pad) already honours the Speed Pass. A key
+   counts as owned when it is an owned game pass, an entitlement of that name, or the entitlement a Developer Product
+   of that name grants (Auto Collect from the Starter Pack counts). An owned pad never prompts and toasts OWNED.
+6. **The pad server sells what the pad says.** PremiumPadService prompts the pad's `OfferKind` / `OfferKey`
+   (server-authored attributes); it does not re-pick the first live offer at prompt time. Lane W builds each pad
+   from `MonetizationConfig.LivePadOffer(slot)`, and Ids only change with a publish. A pad whose offer Id is 0 still
+   never prompts ("coming soon" toast), as before.
+7. **Wire tool and SoldFrom.** `tools/wire-monetization-ids.py` prints no HideFromShop NOTE for an entry that has
+   `SoldFrom` (RebirthKeepBase is sold from the Rebirth panel only and keeps `HideFromShop = true`). A `Feature` SKU
+   still gets its keep-hidden NOTE first; an entry with neither still gets the remove-it NOTE.
+8. **Keep-base receipt: no new code path.** The RebirthKeepBase receipt runs through the existing M1 CounterGrants
+   branch: +1 `KeepBaseRebirths` token, saved together with the receipt id before PurchaseGranted; a failed save
+   answers NotProcessedYet and fires no OnGranted; a replay or an in-flight duplicate adds nothing. `OnGranted`
+   carries `Source = "rebirth_panel"` only when the Rebirth panel's intent is younger than
+   `IntentAttributionSeconds` (180 s); otherwise `"none"` and the token stays banked. MonetizationService never runs
+   a rebirth.
+
+### Lane C
+
+These are the lane C lines only. They implement spec §5 #11 (the shield's end triggers) and the server half of #17
+(one Speed Pass death offer). `CombatFairnessConfig.NoviceShield.Enabled` ships false; lane Z switches it on.
+
+1. **The 900 s cap counts from this session's grant.** The shield starts when the real save loads
+   (`not TutorialComplete and not NoviceShieldDone`). A player who leaves before any end trigger keeps
+   `NoviceShieldDone = false`, so the next session starts a fresh 900 s. The profile has no "seconds used" field. The
+   shield never protects an attack (every attack ends it), and the guarded Empire Bank and ATM raids end it (line 11),
+   so a rejoin gains nothing offensive. Revert: add a saved
+   seconds counter.
+2. **The novice shield's `WE_ShieldUntil` is the character attribute (`CombatFeelConfig.ShieldAttribute`), not the
+   player attribute.** Its value is server time + the seconds left of the cap. The client bubble fallback
+   (WeaponVisuals) and the aim help (AimTargets) already read that attribute. The player attribute `WE_ShieldUntil` is
+   MoneyCollectorService's raid-shield mirror (os.time). The HUD raid chip reads it, and MoneyCollectorService clears
+   it on load. Writing it would show a misleading "15:00" raid countdown and race that clear. The visible cue is the
+   ForceField plus the On and Off toasts. Revert: lane H reads a separate signal (see open issues).
+3. **Gate guards and AutoGuns skip only novice-shielded players (`IsNoviceShielded`), not the 3 s spawn shield.**
+   GateDefense's own 4 s `SpawnGraceSeconds` already covers the spawn shield. So the join-hotfix behaviour is unchanged
+   for everyone else. Attacking a gate still ends that grace, and holding an ATM raid (`WE_RaidingPlot`) overrides the
+   novice shield there too, so a raid is never free. CombatService.Init hands the check in through
+   `GateDefenseService.SetShieldCheck`: GateDefense takes no CombatService dep and never requires it.
+4. **A shielded player never deals PvP damage.** Hits on another player, a vehicle or a gate end the shield first
+   (reason "fire"), then land. This covers RequestFire, which ends the shield before any hit resolves, and every
+   other ApplyHit / ApplyBlastDamage / ApplyRadiusDamage / projectile path. With `EndOnFire = false`, such hits deal 0
+   and the shield stays. Hits on NPCs are not PvP and do not end it outside RequestFire, so squad escorts can fight
+   NPCs next to a novice.
+5. **Any accepted squad order ends the shield, Follow included** (the owner said "until you ... order"). A refused
+   order does not end it (no soldiers, invalid id, disabled order).
+6. **A launched missile strike ends the attacker's shield**, under the `EndOnSquadOrder` switch, as the K1 config
+   comment says. A refused launch does not. A shielded player's own base can still be struck: missiles never hurt
+   players, and raids keep their own new-player rules.
+7. **The On toast shows once per session, 3 s after the grant**, so the client toast stack is listening on a fresh
+   join. The delay reads the optional key `NoviceShield.OnToastDelaySeconds` (default 3; not in the config today). It
+   never shows after the shield has ended. The Off toast shows exactly once, on the end.
+8. **A 1 Hz sweep, running only while someone is shielded, ends the shield when `profile.TutorialComplete` becomes
+   true** (complete or skip), even before lane T calls `EndNoviceShield(p, "tutorial")`. Lane T's call just makes it
+   instant. In Studio with `DevConfig.SkipTutorial`, a player may see one Off toast about 1 s after joining.
+9. **Being shot at never ends the shield.** NPCs still pick a shielded novice as their target and miss every shot:
+   no damage, no CombatHitFeedback, no client auto-draw. `CombatNPC.NearestPlayer` is not a lane C file.
+10. **The death listener sends no separate text toast.** The "Boost? ... tap toast" Notify is deleted. The
+    `DeathShopOffer` remote still fires only for live `DeathShopOffers` keys, which is an empty list (M1 ban). The new
+    `pcall(MonetizationService.TryDeathSpeedOffer, victim)` runs for PvP non-blast deaths, before the Cash Mega soft
+    offer, so it gets the soft-offer slot. Cash Mega already ignores the "death" reason.
+11. **(Verifier fix) Holding an ATM raid or entering the Empire Bank's guard ring ends the shield** (reason "raid",
+    no config switch; the 1 Hz sweep, radius = max(BankRaidConfig.VaultRadius, GuardRingRadius) = 18 studs from any
+    `WE_BankVault` part). The bank is guarded only by NPCs, whose shots skip `InvulnerableUntil = math.huge`, so an
+    unended shield looted the vault for free: in the headless stand-in a shielded novice took $34,243 at full health,
+    and the shield comes back on every rejoin while the tutorial is unfinished. ATM raids are already blocked for an
+    unfinished tutorial (`ThiefRequireTutorialDone`); the `WE_RaidingPlot` check is a backstop for
+    `EndOnTutorialComplete = false`. Revert: drop `NS.engaging` from the sweep.
+
+### Lane P
+
+- F7 keep-base auto-use: a Keep-Base Rebirth token is used right after its receipt is SAVED (MonetizationService.OnGranted, never inside ProcessReceipt) only when PrestigeConfig.KeepBase.AutoUseOnGrant is true, the purchase intent was logged this session (event.Source ~= "none", i.e. RequestPurchaseDevProduct("RebirthKeepBase", "rebirth_panel") within MonetizationConfig.IntentAttributionSeconds = 180 s) and the player can rebirth now. Otherwise the token is banked. PrestigeConfig.KeepBase.IntentWindowSeconds (180) is documentation only: the window is IntentAttributionSeconds, keep the two equal. Undo: AutoUseOnGrant = false (always bank; the player presses USE SAVED).
+- F7 a saved token is always usable from the modal (USE SAVED), even when KeepBase.Enabled = false or the product Id is 0: it was paid for. Enabled and the Id only decide whether the modal SELLS the product (PrestigeStateUpdate.KeepBaseLive = Enabled and Id ~= 0; the client also refuses to prompt while its config Id is 0).
+- F7 banked-token toast differs from the spec copy ("... used on your next Rebirth"), because a free rebirth never spends a token (spec K5): "Keep-Base Rebirth saved  use it at Lv 40" (below Lv 40), "Keep-Base Rebirth saved  use it in Rebirth" (eligible, no intent), "Keep-Base Rebirth saved" (at MaxPrestige). No toast when a tap in the same frame already used the token.
+- F7 two requests in the same frame (the OnGranted auto-use plus a USE SAVED or REBIRTH tap) give exactly one rebirth: DoPrestige checks and mutates without yielding, so the second request sees Level 1 and is refused ("Reach Lv 40 to rebirth"). If the free REBIRTH wins the frame, the new token stays banked (Robux never lost).
+- F7 KeepCash = false and PendingCash is kept on both paths (lead decisions); PendingCash is not listed in the modal.
+- F7 admin test command "givekeepbase" (RequestAdminCommand) and owner chat "/givekeepbase [1-5]": adds 1-5 Keep-Base Rebirth tokens to the caller only (anything else = 1), admin allowlist only (it is NOT in AdminConfig.MoneyCommands, so Studio does not open it to other players). Purpose: the owner can test USE SAVED on his phone before the product Id is pasted. Undo: delete the "givekeepbase" branches in AdminService.
+- F11 refusal copy: LevelTooLow "Reach Lv 40 to rebirth", MaxPrestige "Max rebirth reached", NeedCashFee "Not enough cash to rebirth", NoKeepBaseToken "No Keep-Base Rebirth saved", NoProfile "Still loading, try again" (was "Cannot prestige: <code>"). A refusal also pushes PrestigeStateUpdate so the modal leaves REBIRTHING....
+- F11 "Base buildings (N built)" counts structure LEVELS bought (sum of BaseUpgrades over BaseConfig.Structures, businesses included while merged), per the K1 contract.
+- F11 PrestigeStateUpdate is pushed on join, after a rebirth, on a refusal, when a level-up flips READY (via XPService's existing MaybeNearPrestigeToast call) and after base buys (BaseUpgradeChanged, coalesced to one push per 1.5 s), so the modal's REBIRTH button and "(N built)" line are current. The panel's % bar follows XPUpdate live (PrestigeConfig.ProgressPct on the client).
+- F11 modal column order: RESET, GAIN, KEEP (the spec lists KEEP / RESET / GAIN). Inside each section the lines only that path has come first and are highlighted (free: "Base buildings (N built)", "War businesses"; keep-base: "Base buildings and levels"), so what you lose and the difference between the two paths are in view on an 800x360 phone without scrolling. Every server line is shown exactly once. Undo: the section list in RebirthConfirm.ColumnRows.
+- F11 modal buttons: REBIRTH / KEEP BASE are 50 real px tall (72 v at the phone scale) and up to 196 real px wide; they shrink in width only as far as needed to stay inside the right 60 % of the safe area and 16 px clear of the Roblox jump button (measured in the HUD harness: 844x390 164 px, 956x440 188 px, 932x430 183 px, 800x360 179 px, 800x360 with 32 px notches 160 px, tablet / desktop / 1080p 196-197 px; every one ends 18 px left of the jump button). The empty footer left side shows one status line (text only).
+- F11 KEEP BASE button precedence: MAX REBIRTH (at MaxPrestige) > REBIRTHING... (a request is on its way) > saved tokens (USE SAVED (n) when eligible, else "Lv 40 needed") > product not live ("KEEP BASE  SOON", never prompts) > not eligible ("Lv 40 needed", never sells early) > "KEEP BASE  R$ 50" (intent + PromptProductPurchase). REBIRTHING... ends on the next PrestigeStateUpdate, a cancelled Robux sheet, or a timeout (8 s for a rebirth request, 120 s while the sheet is open, 30 s after a purchase).
+- F11 the modal's close control returns to the Rebirth panel; tapping the dim closes both; a rebirth that goes through closes both.
+- F11 Rebirth panel: CONFIRM REBIRTH now sits right under the progress block (in view without scrolling at 800x360), above the "Keep all your Robux Items!" banner, the fee line and the unlock track. The unlock track label is sized to its entries (it was a fixed height and the 13 entries overflowed onto the next label).
+- F11 device detection: the Rebirth panel uses touch sizes when the device has a touch screen OR PreferredInput is Touch (HudLayout.IsTouch() or not HudLayout.PrefersKeys()); no Rebirth copy names a key. (Was UserInputService.TouchEnabled.)
+- F7 hard prerequisite (unchanged, lane E): fix B1 (the double prestige multiplier) before pasting the RebirthKeepBase Id; until then "+10% cash forever" is not exactly true and a keep-base rebirth compounds it.
+
+### Lane S
+
+These are the lane S lines only. The shared spec §5 lines 1-20 are Z's list; lane S implements the Shop side of #1, #2,
+#17 and #18 (F1 pads OWNED, F2 Mega Cash hero, F8 Speed Pass row and death offer, F9 Golden Pumpjacks row). All of
+this is display and prompting only: grants stay ProcessReceipt / pass ownership on the server.
+
+1. **The Speed Pass Shop row and pad read OWNED for a Speed Boost owner; the Speed Boost row stays buyable for a Speed
+   Pass owner.** Owning both gives the higher multiplier (x1.25), not the sum, so a 5 R$ pass would add nothing for a
+   Speed Boost owner, while Speed Boost is a real upgrade (x1.15 -> x1.25) for a pass owner. The pass rows and every
+   pad use the PremiumPads slot's OwnedIfAny keys (the same rule as PremiumPadService.alreadyOwns); Developer Product
+   rows keep their own one-time rule. The pass prompt shows "Already owned" instead of a Robux sheet.
+   Revert: use `passOwnedKnown(key)` instead of `offerOwned("GamePass", key)` in ShopController refreshOwnedRows / promptGamePass.
+2. **OWNED comes only from the server.** The client's 20 s `UserOwnsGamePassAsync` loop is gone. Rows and pads follow the server's `WE_Ent_<key>` attributes (join check, confirmed
+   purchase, saved entitlements) and this session's purchases, refreshed on attribute change, purchase finished and pad
+   stream-in. If the server's join check fails, a pad can look buyable until the server's retry succeeds; stepping on
+   it still gets the server's "OWNED" answer, because the server decides.
+3. **The hero title is 24 v, not `PanelShell.Text(16)`.** Text(16) clamps to the same 20 v as every row title on touch,
+   so the hero would not stand out on phones. The hero title shrinks to fit (TextScaled, from 24 v down to the plain
+   row size) so the narrow 480 v desktop panel never cuts it. Extra polish beyond the spec: a dark gold row background
+   and a gold BUY face with dark text. Revert: the HERO_ROW_* constants and heroTitleSize in ShopController.
+4. **At Id 0 the Shop prompt helpers stop before anything leaves the client.** promptGamePass / promptDevProduct show
+   "Coming soon" and send neither the intent remote nor a Roblox prompt. Before, the intent fired, the server logged a
+   SHOP_PROMPT with productId 0 and toasted "…not configured (placeholder ID)" to the player. No Shop row, pad or offer
+   reaches this path today (they all skip Id 0); it is a guard.
+5. **Purchase sources (analytics only, all already whitelisted in MonetizationConfig.PurchaseSources):** Shop rows send
+   "shop", or "hud_plus" when the Shop was opened from the cash "+"; world pads "pad"; the soft offers "offer"; the
+   Starter Pack offer "starter_offer"; the PvP death offer "death_card". The rail Shop tile and the P key count as
+   "shop" (spec F2), not "rail_shop".
+6. **No Cash Pack Mega highlight after the Speed Pass death offer.** M1 removed every 799 R$ push after a death; the
+   v35 "highlight Mega on the next Shop open" continuity stays for any other death offer only.
+7. **Stable Shop order.** After the four cash packs (Mega hero first), the other Developer Products and then the passes
+   are each sorted by Robux price, then key, instead of table hash order. So a pasted Id always lands in the same place:
+   Golden Pumpjacks (49 R$) leads the products and the 5 R$ Speed Pass leads the passes.
+8. **Pass titles:** "Pass: VIP", but a pass whose name already says "Pass" has no prefix ("Speed Pass").
+9. **Shop rows refresh only while the Shop is open.** `WE_Cash` changes on every payout, so the rows are rebuilt on open
+   and on changes while open, never in the background on a phone. The world pads refresh on `WE_Ent_*` changes only.
+10. **VIP stays a Shop row** (and its soft offer stays); lane W removes only the VIP pad.
+
+### Integration notes (batch-A verifier)
+- Contract drift accepted by the lane verifiers, recorded here so batch B builds on the real names:
+  (a) the novice shield writes the CHARACTER attribute `WE_ShieldUntil` (server time), not the player attribute (that
+  one is MoneyCollectorService's raid-shield mirror). A HUD chip for the novice shield (lane H) needs a new signal.
+  (b) GateDefenseService gets `IsNoviceShielded` through `GateDefenseService.SetShieldCheck` (no CombatService dep).
+  (c) New profiles take `TutorialOrderVersion` from `TutorialConfig.OrderVersion or 1` (lane K2 must add
+  `OrderVersion = 2`); old saves missing the field get 1.
+- Batch A and its BuyPathStatic changes (merged block + the 2 lane S needle replacements) must land in ONE commit:
+  K1 alone would show a "Speed Pass ... coming soon" Shop row that lane S removes, and ShopController alone fails the
+  2 old needles.
+- `MonetizationConfig.IntentAttributionSeconds` (180) decides auto-use of a keep-base token;
+  `PrestigeConfig.KeepBase.IntentWindowSeconds` (180) is documentation only. Keep them equal.
+- The keep-base path skips `RefreshAllVisuals`; that is correct only while `RebirthConfig.ZonesLive = false`.
+- `/givekeepbase` (AdminService) grants a Robux-priced token outside ProcessReceipt for owner testing; admin
+  allowlist only (UserId 470626172). Delete its branches before the Id is pasted if it should not stay live.
+- **Lead approvals:** all spec deviations listed by the batch-A integration verifier are accepted (TutorialOrderVersion from config; WE_ShieldUntil on the character; injected GateDefense shield check; rebirth modal copy/column order; Shop hero 24 v; Speed Pass row OWNED for Speed Boost owners).
+
+## 2026-09-25 — Follow-ups: WeaponVisuals animation cache (#27) and canyon-edge toe ramp (#32)
+
+## Lane 27 — WeaponVisuals trackCache (strong, pruned) — assumptions (reversible)
+
+- **A27-1 Only the local character is cached.** `trackFor` is only ever called with `player.Character` (hold + reload), so on `CharacterAdded(char)` every cached set whose Animator is not under `char` is stale and is dropped. If a future caller animates other characters through `trackFor`, `pruneTracks(char, false)` must be narrowed. Revert: drop the `pruneTracks(char, false)` line (Destroying / AncestryChanged / CharacterRemoving still prune).
+- **A27-2 Dropped tracks are `Stop(0)` + `Destroy()`ed (pcall'd).** AnimationTrack is an Instance and destroying it frees it. If an engine version refuses `Destroy` on a track, the pcall hides it and the track still dies with its Animator. Revert: remove `tr:Destroy()`.
+- **A27-3 No cache entry for an Animator outside the DataModel.** `LoadAnimation` needs the Animator in the DataModel, so `trackFor` now returns nil early there (it failed inside the pcall before). A set made then could never be pruned by AncestryChanged.
+- **A27-4 Animator that leaves and re-enters the DataModel loses its cached tracks.** The hold stops and replays on the next `SetLocalWeapon` (fresh track, old one destroyed). The game never reparents characters (grep: no `Character.Parent =` writes), so this is theoretical.
+- **A27-5 CharacterAdded no longer blindly clears `holdTrack`.** An old character's hold is cleared by `dropTracks`; a hold already started on the NEW character (another CharacterAdded handler ran first) stays tracked, so the next holster stops it instead of leaving it looping untracked. `HudConfig.Hotbar.DrawnOnSpawn = false`, so at spawn this path is normally idle.
+- **A27-6 Test hook.** `WeaponVisuals.AnimCacheStats()` (Animators / Tracks) is public for tests only; it allocates one small table per call and nothing calls it at runtime.
+
+## Lane 32: drivable canyon-edge toe (rollover finding: the owner's quad tripped where Terrain sits 2–5.5 studs above the Part ground). Assumptions, reversible; the lead merges them into ASSUMPTIONS.md
+
+1. **The skirt band is now a toe ramp, not a rock shelf.**
+   - Each belt segment's skirt becomes two Rock prims:
+     - a support FillBlock from FootY (-4) to `Terrain.Toe.Y` (0), which lies under the Part ground;
+     - a FillWedge rising from `Toe.Y` at the belt's inner edge to `Talus.Min` (8) at `Skirt.To` (= `Talus.From`).
+   - The support block keeps the voxels under the ramp full. Without it, smooth terrain meshes a thin wedge as a floating sheet near the voxel's centre, which would be a lip of its own.
+   - The random 2.5–5.5 shelf height is still drawn from the seeded stream, so every face, stratum, mesa, butte and alcove position is unchanged: the face, strata, mesa, butte, cover and landmark prims are byte-identical to HEAD. The drawn value is no longer used.
+   - Revert: restore the old `block("skirt", …, skirtTop, …)` line. One commit touches it.
+2. **The side profile's toe and talus now equal the far shore's.**
+   - `Side.Skirt` changed from 0..18 to 0..26. `Side.Talus` changed from 18..48 to 26..56 (Min 8, Max 20).
+   - The corner fans at the far shore use the Side profile. With different toes they met the far shore with a 2.5–3.2 stud step.
+   - The side toe is now 17° and the talus is 22°. The side face foot drops from y 15.2 to y 12. Faces and mesas do not move.
+   - `WorldTerrain.Check` now reports any mismatch.
+   - Revert: the two lines at WorldConfig.luau:195-196 (working tree) / HEAD:138-139.
+3. **Buried prims may lie under sea water.**
+   - A prim whose Top is at or below `Toe.BuriedTop` (0.5, the Part ground top) is exempt from the public-water keep-out. The ring keep-out still applies.
+   - Only the toe's support block qualifies. Over the Bay's outer sea ends it sits under the ground tiles and below the water surface (1.5), so boats and players never meet it.
+   - The ramp over those headlands keeps Top 8 ≥ `HeadlandMinTop` 2.5.
+   - The boats' land probe now sees land about 5 studs further out, where the ramp crosses the water surface (y 1.45 at d ≈ 4.7), instead of at the old shelf edge.
+4. **Boulders stay off the toe.**
+   - They are placed on the talus between its foot (`Talus.From + r`) and the face foot, using the same random draws. The draw count is unchanged: at HEAD every boulder already drew its `along` value.
+   - A half-buried ball on the ramp is a 2–6 stud lip. Boulders are now obstacles at the cliff foot and are listed apart in the measurements, as is the lighthouse rock pad.
+5. **Hip carves at the four rig-lagoon notch run ends.**
+   - Affected run ends: E at z -846 and -654, W at 654 and 846.
+   - Four Air prims per end trim the toe and talus in the last 36 studs to min(f(across), f(along)), so they fall to the sand at the lagoon bank. Before, the toe and talus showed a side wall of 0.5–14.3 studs there. The four prims are two upside-down FillWedges (CFrame × Angles(π,0,0)) and two FillBlocks.
+   - The cliff face keeps its side, which is a wall.
+   - The W1 terrain_probe ignores Air, so it sees the un-carved (higher) ends. Its containment result is conservative.
+6. **`Terrain.Gen` changed from 1 to 2**, so a server or saved place that already holds stamped Gen 1 terrain clears it and refills it with the new toe.
+7. **Accepted leftovers (not seams):**
+   - The alcove scoops keep their bowl walls (32 pre-existing Air balls in the face foot, unchanged except that the Side alcove floor follows the new talus height of 12).
+   - The lighthouse rock pad (top 6) is a 5.5-stud plinth at the far-shore beach. Its height is tied to `FarShore.Lighthouse.BaseY` in another WorldConfig section.
+   - The toe ramp now rises against the back of the lighthouse plinth, covering about 2.7 of its 4 studs at the back edge. It also buries the stranded freighter's bow keel up to y 7.7 (was 5.2).
+8. **More corner-fan skirt prims are dropped by the existing ring keep-out.**
+   - At corners 1 and 2, the fans' first and last segments have a rotated AABB that reaches x/z ±1845. Four prims per corner are dropped (HEAD dropped 2 per corner).
+   - The neighbouring fans and runs cover the area: the measured toe has no step there.
+   - Output shows 5 `[WAR EMPIRE] WorldTerrain: dropped cornerN/skirt inside the ring (…)` warnings, as at HEAD.
+9. **Not changed (outside the Terrain section):** the `Profile` type comment at WorldConfig.luau:22 still says "FillBlock Rock shelf, top Min..Max". Suggested text: `Skirt: Band, -- toe: Rock FillWedge Terrain.Toe.Y -> Talus.Min over From..To (= Talus.From); Min/Max only rolled`.
+
+## 2026-09-25 — Countries: save fields, picker, flag on your base (nations A1 + B + C; outpost part B2 later)
+
+### A1
+<!-- Lane A1 (nations): the integrator appends this to ASSUMPTIONS.md under the heading below (the A0 section asks
+     for it), and rewrites #71 in place (A0 listed the spec's section 6 lines already; they are not repeated here). -->
+
+## 2026-09-25 — Nations (country choice + flags)
+
+### Rewrite in place
+- #71 becomes: "**Nation** — Nation = the country the player chooses (NationConfig, 200 entries). The legacy 8-colour NationColorId is kept, and is used only as the banner colour for NEUTRAL players."
+
+### Lane A1 builder decisions (all reversible)
+- **Save fields (no DataVersion bump, stays 8):** `NationId` (nil = never picked, `"NEUTRAL"` = No flag, else a NationConfig id), `NationSetAt`, `NationFreeUntil`, `NationFreeChanges`, `NationPrompts`. `ProfileSchema.ensureNationFields` fills and cleans them on every load, next to `ensureFeatureFields`. `NationColorId` is never touched.
+- **Unknown ids are cleared, not kept:** a saved id that `NationConfig.Get` rejects (unknown, denied, not a string, an OwnerReview nation switched off, wrong case, over 8 bytes) becomes nil, so that player gets the picker again with a free first pick. Ids are matched exactly; nothing is trimmed or case-folded.
+- **Switching the feature off keeps choices:** `NationConfig.Enabled = false` does not clear anyone's NationId; only `Get` decides.
+- **ProfileSchema loads NationConfig in a pcall** (the TutorialConfig precedent), so a broken NationConfig edit can never stop profiles loading. In that case a saved string id of 1–8 bytes is kept unchecked (nothing lost) and anything else becomes nil. Tested with NationConfig broken and missing.
+- **Counter limits:** the 4 numbers are whole numbers ≥ 0 (junk, NaN, inf and negatives become 0; huge values cap at 1e15, like the money fields). `NationPrompts` also caps at 99. `NationFreeChanges` is not capped at load: the RequestSetNation handler enforces `FreeRepickMax`.
+- **Shared payload types:** `Types.NationRequestPayload` (`{Action, Id?, Source}`) and `Types.NationStatePayload` (the NationColorUpdate push) record the contract between lanes B and C. Pick replies carry `Result` = "ok" / "cooldown" / "loading" / "invalid". A LATER, a rate-limited request and a malformed payload get no reply, and the client times out.
+- **Analytics names:** `NATION_PICKER_SHOWN {source}`, `NATION_PICK {id, source, first}`, `NATION_LATER {count}`. The IP suggestion has no event and no field. `NATION_COLOR_ASSIGN` stays, because NationColorService still logs the legacy colour.
+- **Nuke base aim point** moved from plot-local (0, 8) to (0, 56) on MainRoad, 48 studs in front of the flagpole, so a player's flag is never the aim point. Nothing reads it yet (NukeService is not built; the #14 nuke design, `money/nuke.md` line 112, still says (0, 8)). World sim, plot 1 at L5: only the ground, the pad and the MainRoad slab (top Y 1.12) lie under the new point. The old point was directly over the FlagPole, whose top is at Y 30, so a downward ground ray would have stopped on the pole.
+
+### C
+<!-- Lane C (nations): the integrator appends these lines to ASSUMPTIONS.md under
+     "## 2026-09-25 — Nations (country choice + flags)", after the lane A1 block. All reversible. -->
+
+### Lane C builder decisions (the picker, Settings row, panel routing)
+- **Tabs:** Search, For you, then the 6 regions in `NationConfig.RegionOrder` (short `RegionLabel` names). No A–Z tab: Search covers it and a 200-tile tab would be slow to scroll on a phone. The strip scrolls sideways, edge fades show there is more, and the selected tab is scrolled into view.
+- **"For you" order:** the player's current flag (Settings / flagpole only, badged "Your flag"), then the IP suggestion (badged "Suggested", never selected), then `NationConfig.Featured`, then "No flag" last.
+- **Nothing is selected when the picker opens,** in every mode. CONFIRM stays grey until a tile is tapped. It also stays grey on the player's current flag ("Already your flag") and while `WE_NationNextAt` (or a "cooldown" reply) is in the future ("Next change in 23h"). The server still decides; this only avoids sending a pick that will be refused.
+- **Join picker timing:** it opens once per session, 1.0 s after the first CharacterAdded (or after Init, if the character already exists), and only while `WE_NationNeedsPick` is true. It waits while any of Driving, Dead, RecentCombat or Modal is on, and opens 1.0 s after they have all cleared. The Tutorial flag does not block it, because the spec lists only those four.
+- **LATER:** in join mode, every close path counts as LATER: the LATER button, a tap on the dim, another panel opening, or CloseAllPanels. It is sent at most once per session and never after an accepted pick. Once it is sent, the picker never opens by itself again that session.
+- **The 5 s reply wait:** after a pick is sent, the client waits up to 5 s for a `Result` on NationColorUpdate, or for `WE_NationId` to become the picked id. Without either, it shows "No answer. Try again." While the RequestSetNation remote does not exist, `Remotes.FireServer` gives up after 3 s and the line reads "Can't save now. Try later.". A "cooldown" reply's NextChangeAt is trusted only until the next nation attribute changes.
+- **Search stays on the device:** at most 64 bytes, folded with `NationConfig.Fold`, 0.15 s debounce, up to 30 results. "No flag" is found by its label. The typed text is never sent, stored or shown back ("No match" / "Type a country name"), and it is cleared when the picker closes.
+- **Phone-first geometry, in v (real px = v × 0.70 on phones):**
+  - Every tap target is at least 68 v. That covers tabs, tiles (136 v tall, at least 132 v wide), CONFIRM (112 v, or 68 v minimum on short screens), LATER / CLOSE and the search box. Text is at least 20 v.
+  - On touch, the tabs, search box and grid start 4 v to the right of the left-40 % line of the safe area. Only the non-tappable preview sits in the thumbstick zone.
+  - The action column widens (on tablets) or CONFIRM shortens so the grid and buttons stay at least 20 real px from the Roblox jump button. The jump button is modelled on the default TouchGui: 70 px at (-95, -90) from the bottom-right of the safe area when min(screen) ≤ 500, otherwise 120 px at (-170, -210).
+- **Layout switch:** `HudLayout.IsTouch()` chooses the layout, the same switch every panel uses. It only picks the layout: no picker text changes with the device, so the picker copy never names a key and needs no `PreferredInput` branch.
+- **ScrollingFrame.CanvasPosition is in unscaled (v) units under the gui's UIScale,** as the HUD harness assumes. If a phone shows the selected tab only half in view, this is the first thing to check.
+- **Art not uploaded yet:** before the atlases are uploaded (every `NationFlagIds` id is 0), only the join picker is gated (`LiveRequiresArt`, admin exempt), as the spec says. Settings CHANGE and the flagpole prompt still open the picker for everyone, with colour + code tiles, so the choice works before the art arrives.
+- **Settings "YOUR FLAG" row:** it sits under SOUND. It has a banner-colour swatch, the Short name ("Not chosen" / "No flag") and a 170 × 68 v CHANGE button, and CHANGE opens the picker in Settings mode. At 844×390 this pushes SUPPLY SPINNER about 45 v below the fold, so the Settings list now scrolls on phones. The spinner claim is also in Missions.
+- **Loading and memory:** NationController is required and started by UIController inside a pcall, like PromptController. Bootstrap.client is not touched. The atlas preload (when ids exist) runs once, in a pcall inside `task.spawn`, when NeedsPick turns true or on the first open. Tile images are cleared on close so the textures can be released. The tile pool grows to the largest tab (Africa, 54 tiles) and is reused.
+
+### B
+<!-- Lane B (nations): the integrator appends these lines to ASSUMPTIONS.md under
+     "## 2026-09-25 — Nations (country choice + flags)", after the lane A1 and lane C blocks. All reversible. -->
+
+### Lane B lead decisions (binding for lane B)
+- **No player-list column.** The Roblox player list is a leaderboard, and CLAUDE.md says a real country never appears on a leaderboard. The nation is therefore a player attribute only (`WE_NationId`), with no "Nation" leaderstat. This overrides the spec's "set the attribute and the leaderstat" and spec R16. `NationConfig.PlayerListColumn`, `PlayerListColumnName` and `PlayerListEmoji` are unused now.
+- **"No flag" does not use up the first pick.** A pick is also allowed when `NationId == "NEUTRAL"` and `NationFreeUntil == 0`. The first real country then opens the 10-minute free window: `NationFreeUntil = now + 600`, set only while it is 0, so the window opens once per profile. A No-flag pick made inside the window counts as one of the 5 changes.
+- **Picking the flag you already have** replies `Result = "ok"` with the current state. It writes nothing, sends no toast and logs no analytics.
+- **A saved `NationSetAt` later than now** (clock skew or a corrupt save) counts as 0 for the 24 h cooldown.
+- **`WE_NationNextAt`** is 0 exactly when a pick would be accepted right now. Otherwise it holds the time the next pick becomes allowed. One `task.delay` per player updates it when the free window closes and when the cooldown ends. The delay fires 1 s after the change, is replaced on every refresh and is cancelled on leave. There are no polling loops.
+- **Art gate.** Until `NationTexture.ArtReady()` (every atlas id in `NationFlagIds` set), non-admins see nothing of the feature. It uses the same expression as lane C's auto-open: `not NationConfig.LiveRequiresArt or ArtReady() or player in AdminConfig.UserIds`.
+  - While the gate is closed, a non-admin gets no flagpole prompt, no Settings row, no IP lookup, no "join" `NATION_PICKER_SHOWN` and no toast, and their base flags stay the builder's plain army green.
+  - Their territory tint stays the legacy colour (`GetColor`), and `GetNationId` returns nil.
+  - The server still decides a forged pick. It only changes that player's own saved choice and shows nothing.
+  - Setting `LiveRequiresArt = false` opens the feature for everyone before the art exists.
+- **TerritoryService is lane B2.** `NationColorService` calls `TerritoryService.RefreshOwnerFlags(userId)` only when `NationConfig.OutpostFlags` is on and the function exists. The contested amber fallback, the R15 cache rule and outpost flags are B2's.
+- **Strike code never references nations.** No Fire, Smoke or Explosion is ever parented to a flag. The flags stand 146+ studs from the main gate, where every strike effect spawns. The CLAUDE.md nation rule says a flag is never a target, so both flag cloths are `CanQuery = false` and `CanTouch = false`: shots, hit effects and touches pass through them.
+
+### Lane B builder decisions
+- **Service name.** `NationColorService` keeps its file name and deps key, and its header calls it NationService. `GetColor` returns the chosen nation's banner colour while the art gate lets that player's nation show. Otherwise it returns the legacy 8-colour, which also stays the colour of No-flag players.
+- **Legacy colour.** The legacy colour is assigned silently on the first load; the "Nation color: …" toast is gone. `NationColorId` is never wiped.
+- **Order of checks on `RequestSetNation`.**
+  1. The rate limit: `RateLimitService` with key "RequestSetNation", 0.5 tokens/s, burst 3.
+  2. The payload must be a table, with `Action` exactly "pick" or "later" and `Source` exactly "join", "flagpole" or "settings".
+  3. For a pick, `Id` must be a string of at most 8 bytes that is `NeutralId` or passes `NationConfig.Get`. The id stored is always NationConfig's own string.
+  4. With no profile loaded, the reply is "loading".
+- **What gets no reply.** A rate-limited request, a malformed payload and a LATER all get no reply. A pick while `NationConfig.Enabled = false` gets "invalid".
+- **LATER.**
+  - It is accepted only with `Source = "join"`, only while NeedsPick is true, and once per session (a server-side flag cleared on leave).
+  - It does `NationPrompts + 1`, capped at 99, and sets `WE_NationNeedsPick = false` for the rest of the session.
+  - After 3 LATERs the join picker stops, and Settings still works.
+- **Toast** (to the picker only): "Flag raised: <Short>". For No flag it reads "Plain flag raised".
+- **IP suggestion.**
+  - It is looked up only for players who pass the art gate, runs in a pcall inside `task.spawn`, and an answer that takes over 5 s is dropped.
+  - Only a code that `NationConfig.Get` accepts is sent, as `Suggested`, with `FireClient` to that player only. It is kept in server memory for the session, so `nationreset` can send it again, and is cleared on leave.
+  - It is never logged, never an attribute and never saved.
+- **Analytics.**
+  - `NATION_PICKER_SHOWN {source="join"}` is logged when the join-time push has NeedsPick and the art gate passes.
+  - `NATION_PICKER_SHOWN {source="flagpole"}` is logged on the owner's server-side prompt trigger, rate-limited to 0.2/s with a burst of 2.
+  - "settings" is not logged; that gap is accepted, as the contract allows.
+- **NationFlag (new `Server/Modules/NationFlag.luau`).** `NationColorService` calls it from `BaseService.OnPlotReady` and after each accepted pick. It needs no Bootstrap hook.
+  - It dresses exactly 2 parts per owned plot:
+    - `LayoutGround.ParadeFlag` is turned to 6 × 4.5 × 0.14 on the pole's +X side, facing the plot's +Z axis (the main gate).
+    - The Command Center building's `Flag` is trimmed to 0.12 × 3.6 × 4.8. It keeps the builder's orientation, so it faces sideways and not the gate, following the spec's dimensions.
+  - The hoist sits 0.05 studs from its pole. The new position is computed from the pole each time, so a repeat call changes nothing.
+  - HQ rebuilds (level changes) are dressed through the plot folder's `DescendantAdded`, which does one name compare per added instance.
+  - Each flag is tagged `WE_NationFlag` with the attribute `WE_NationShaped`. It gets exactly 2 Textures (`WE_NationTexA`/`B`) on the thin-axis faces. The attribute `WE_NationShown` is the idempotence key, and `WE_NationPlainColor` stores the builder's green so it can be restored.
+  - Before the art exists the Textures are blank, with Transparency 1. The part shows the nation's banner colour for an owner who passes the gate, and army green for everyone else.
+  - The reshape, tag and blank Textures apply to every owned plot, including non-admin ones. Non-admins see a plain green 4:3 cloth.
+  - When the owner leaves, the flags go back to army green and the Textures are blanked. Parts are never destroyed.
+- **Flagpole prompt.**
+  - It is a `WE_PanelPrompt` on `FlagBase`:
+    - attributes `WE_OpenPanel = "Nation"` and `WE_OpenTab = "flagpole"`
+    - text "Change flag" / "Your flag"
+    - hold time 0, range 12, key F on keyboard only
+  - It exists only while the plot has an owner and that owner passes the art gate. It is removed on leave.
+  - Other players' clients hide it (`OwnerOnlyPromptNames`), and the server's `Triggered` handler checks the owner again.
+- **`nationreset`.** It is an admin-allowlist command on the `RequestAdminCommand` remote, and also the chat line `/nationreset` so the owner can run it on a phone. It is not a Studio-open money command.
+  - It clears only the caller's own `NationId`, `NationSetAt`, `NationFreeUntil`, `NationFreeChanges` and `NationPrompts`.
+  - It then refreshes the attributes, flags and state push. The IP suggestion is sent again if one was found this session.
+- **SettingsController (lane C's file, one edit for lead decision 6).** The YOUR FLAG row is left out when the art gate is closed for this player. The rest of Settings is unchanged: non-admins before the art get HEAD's Settings layout, and admins get lane C's row.
+- **Budget, measured in the headless world sim on all 6 plots at L1 and L5.** Per base: +0 parts, +0 SurfaceGuis, +0 lights, +0 neon, +4 Textures, and +1 ProximityPrompt only for an owner who passes the art gate. An accepted pick changed 4 instances (28 property writes). A repeat plot-ready call wrote nothing.
+- **Colour cache.** It is still cleared on PlayerRemoving, as at HEAD. The R15 rule (keep a leaver's colour while they own territory) needs TerritoryService and is lane B2's.
+- **`/nationreset` is hidden from chat autocomplete** (verifier fix, lead decision 6). The `WE_NationReset` TextChatCommand is created for every client, like `/level` and `/xp`, so it sets `AutocompleteVisible = false` in a pcall. Typing "/" in chat then never lists it for anyone, and the admin still types it in full. The server gate is unchanged: `AdminService.IsAdmin`.
+
+### Lead
+- **N-L1 Shipped without lane B2 (TerritoryService).** A1+B+C are committed first; B2 (contested amber fallback when two
+  colours are < 0.25 apart, owned-outpost colour fallback away from NPC red / Clan blue / amber, R15 colour cache for
+  leavers who still own territory, RefreshOwnerFlags + outpost flag sizes behind OutpostFlags = false) follows once the
+  W3 phase A job releases TerritoryService. Until then GetColor returns a nation colour only for admins (art gate), so
+  only an admin's outposts can take a nation tint. The flag art must NOT be uploaded/wired before B2 is pushed.
+- **N-L2 HQ roof flag faces sideways** (thin along X per the spec, seen edge-on from the gate). Accepted for now; the
+  Buildings lane can turn it natively later and NationFlag then only re-dresses it.
+- **N-L3 NationConfig.PlayerListColumn is dead config** (lead decision 1: no nation in the player list, CLAUDE.md bans
+  countries on leaderboards). Left in place (A0 file); nothing reads it.
+- **N-L4 NationController.Open guard** (lead fix from the lane B verifier): a flagpole tap from a player with
+  WE_NoPlot = true never opens the picker, and Open() always respects the art gate. The prompt text itself can still
+  show to a base-less player on another player's flagpole after the art is live (PromptController "no plot = not
+  foreign"); fix with the PromptController weak-table follow-up.
+- **N-L5 Nuke (#14):** the nuke core radius 75 / full 150 still covers the flags from the new aim point (0, 56); when
+  NukeService is built it must hide or blank WE_NationFlag parts during the strike (CLAUDE.md: never a flag beside
+  strike effects).
+
+## 2026-09-25 — Owner options batch B part 1 (tutorial order, cheapest NEXT, chevrons/labels behind flags, Empire Tax, prestige fix, squad formation)
+
+## Owner's 11 features, batch B part 1 (K2 tutorial/guide contracts, E economy, T tutorial, G guidance labels, Q squad formation)
+
+Merged by the batch-B part-1 integration verifier for lane Z to append to ASSUMPTIONS.md. Every line is reversible.
+Flags as shipped: TycoonGuideConfig.Chevrons.Enabled = false, EconomyConfig.ProducerLabels.Enabled = false,
+WorldLabelConfig.BaseLabelGovernor.Enabled = false, TerritoryConfig.Starter.Enabled = false,
+OutpostIncomeBuff.PersistClaims = false, CombatFairnessConfig.NoviceShield.Enabled = false.
+Ships ON by design: TutorialConfig.OrderVersion = 2 (7-step order, Jeep before Outpost while Starter is off),
+TycoonGuideConfig.PickMode = "Cheapest" (spec §1.2), the ATM screen digits/rate (E-10), the B1 fix (E-1).
+Ships ON pending the lead's OK: console NEXT tag follows the tutorial (G-6; undo: Chevrons.FollowTutorial = false),
+OrdersConfig.FollowPath.Enabled = true (Q-3) and the wing swap (Q-4).
+
+### Lead decisions recorded with batch B part 1
+- B1 is fixed in lane E: prestige is applied once, in EconomyService's grant stack (BaseService / SoldierService no
+  longer multiply it). Players who already rebirthed earn less passive/training income than before (+10 %/+50 % at
+  prestige 1/5 instead of +21 %/+125 %). RebirthKeepBase may be pasted only after this lands.
+- PendingCash is kept on rebirth; rebirth % is XP-based; PersistClaims stays behind its flag (lane Z).
+
+### K2 (TutorialConfig, TycoonGuideConfig, TycoonMath)
+K2-1. F6 AdvanceOn uses the real TutorialService.Notify event types. The spec's shorthand maps as follows: "Recruit" = RecruitSoldiers, "Capture" = CaptureTerritory, "Jeep" = SpawnVehicle. ClaimBase advances on PlotAssigned (as today). Reversible: edit AdvanceOn per step.
+
+K2-2. F6 migration of a v1 step index uses "first step not done yet":
+   - `TutorialConfig.MigrateLegacyStep` treats every v1 step before the saved index as done, by Id through LegacyAlias. It returns the first step of the current order that is not done.
+   - A same-Id mapping would move v1 steps 2 and 3 (Income or ClickDropper, Command Center not bought) straight to Collect cash, and skip the Command Center step.
+   - The cost: a v1 player saved on step 8 (Outpost; the 4x4 already done) repeats the 4x4 step once the Home Outpost is on.
+   - Reversible: TutorialService may map by Id instead.
+
+K2-3. F6 the saved TutorialStep index is read in the order that is live when the profile loads. OrderVersion stays 2 whatever the Home Outpost flag says.
+   - A player mid-tutorial when lane Z flips `TerritoryConfig.Starter.Enabled` can see steps 6 and 7 trade places once.
+   - Only the 4x4 and Outpost steps are affected: the step may repeat or be skipped, and there is no money effect.
+   - Reversible: give the Jeep-first order its own OrderVersion.
+
+K2-4. F6 the Collect cash step carries `Pointer = "ATM"`. That is how the F5 chevrons and GuideTarget know the step points at the own ATM when it has no PadStructureId. Reversible: remove the field; GuideTarget then shows no pointer on that step.
+
+K2-5. F5 PickCheapest keeps only Cash-currency structures. This is a guard, and no structure uses Gold today.
+   - It filters rebirth zones through `RebirthConfig.IsStructureOpen(prestige or 0)`.
+   - BusinessService does not pass Prestige yet. That is harmless while no zone structure is in StructureOrder, which is true today.
+   - Reversible.
+
+K2-6. F5 PickMode "Cheapest" ignores the v72 Opening, soldiers and stickiness (Hysteresis). The Score path is kept untouched: `PickMode = "Score"` restores v72 exactly.
+
+K2-7. F5 Footprints are one axis-aligned plot-local rectangle per BaseLayoutConfig site. The sizes come from these configs:
+   - walk-in: StructureVisualConfig.HollowBuildings Width × Depth;
+   - outdoor: Installations Width × Depth;
+   - business: the BusinessConfig Kit "Slab" (22×12);
+   - Dock: Palettes TargetFootprint 44×28, a rough box that misses its pier. The Dock sits behind the inner wall and its kiosk is in the main compound.
+   - Entrances and signature pieces (porticos, berms, loading dock) are not in the rectangles.
+   - Reversible: add a Footprint override table.
+
+K2-8. F5 the walk-in ApproachPoint is `DoorLeadStuds` (5) straight out of the front door (HollowBuildings DoorX, Depth / 2), turned by the site Yaw. Kiosks and businesses use their kiosk, and the ATM uses Courtyard.Collector.
+
+K2-9. F5 one pointer during the tutorial: `TycoonMath.GuideTarget` gives the active step's own pad (PadBuy), the ATM (Collect cash) or nothing. The spec's §1.2 FollowTutorial deviation now applies to every surface that uses GuideTarget.
+   - With the businesses on, WE_NextBuy for a fresh player is AmmoWorks:1 ($600, the cheapest pad), while tutorial step 2 is the Command Center.
+   - So lane G should put the console NEXT tag on GuideTarget too (a recommendation, not a K2 change).
+   - The Base-panel badge (BaseController, in no lane) keeps showing WE_NextBuy.
+
+K2-10. F5 economy (python model, not Roblox): PickMode Cheapest fixes the v72 Run C 10-minute wait but lowers the 30-60 min income, because the pick never offers soldiers and prefers cheap, low-yield levels. The owner asked for "cheapest", so this ships. The owner decides whether to accept the slower ramp or tune later (Run D band 280-380 $/s at 30 min is not met).
+
+    | Run | Score pick (v72) | Cheapest pick (K2) |
+    |---|---|---|
+    | C: longest wait in the first 10 min | 141 s (fails the 120 s target) | 107 s (passes) |
+    | C: $/s at 30 / 60 min | 177 / 346 | 136 / 268 |
+    | D: $/s at 30 / 60 min | 295 / 531 (passes the 280-380 and ≤ 560 bands) | 136 / 268, the same as C because the pick never offers soldiers (fails the 280-380 band) |
+    | D with the player also recruiting under the 34% rule (sensitivity) | – | 204 / 394 |
+
+### E (EconomyService, SoldierService, MoneyCollectorService, BaseService B1 lines)
+
+E-1. **B1 fixed: prestige is applied once, in EconomyService's grant stack** (lead decision). BaseService's passive per-tick
+     amount (passiveMultAndFlat) and SoldierService's training per-tick amount no longer multiply prestige (they were
+     x(1 + 0.10 P) and x(1 + 0.05 P) on top of EconomyService's x(1 + 0.10 P)). Prestige 1 now pays exactly +10 % on passive and
+     training (was +21 % passive, +15.5 % training); prestige 5 pays +50 % (was +125 % / +87.5 %). This makes PrestigeConfig's
+     "+10% cash forever" and the RebirthSummary "Total now +N%" true, so RebirthKeepBase can be pasted after batch B lands.
+     It lowers the income of players who have already rebirthed (their prestige bonus was double-counted). Revert: restore the
+     prestige factor in BaseService passiveMultAndFlat and SoldierService trainingIncomePerTick.
+E-2. **The per-tick training number shown in the Army panel (SoldierStateUpdate.TrainingIncomePerTick) and in PlayerState is
+     pre-multiplier** (soldiers x $8), like the client's own fallback and BaseService's PassiveIncomePerTick. It never
+     over-promises; the real paid amount (multipliers in) is WE_IncomePerSec (cash pill, ATM) and WE_TickTraining (F4 label).
+     The BaseService PlayerState line is edited only because it duplicated SoldierService's B1 formula.
+E-3. **The server Training Yard pop is skipped while EconomyConfig.ProducerLabels.Enabled is true, not deleted.** Spec F4 says
+     "delete"; with the flag off (today) the yard would otherwise lose its only income feedback until lane Z switches the
+     client label on. With the flag on, SoldierService makes 0 BillboardGuis (tested over 20 ticks). Lane Z may delete
+     refreshTrainingYardFeedback once the flag is on for good. Revert: call it unconditionally.
+E-4. **WE_TickTraining = the last training grant with every multiplier in** (prestige, Empire Tax, 2x Cash, season), written only
+     when it changes and only while ProducerLabels.Enabled (not tied to TycoonGuideConfig.Enabled). It is not cleared when the army
+     drops to 0; the client label hides itself when there are no soldiers (spec F4). Oil needs no attribute (plot_oil is exempt;
+     the label reads PlotOilPumpConfig.CashPerTick).
+E-5. **Empire Tax = min(50, captured-outpost stacks x 10 + 5 for the player's OWN Home Outpost)**, applied as one factor
+     x(1 + pct/100) in the non-exempt grant stack, multiplicative with prestige, 2x Cash and season (the existing stack order).
+     collector, plot_oil, atm_raid, admin, devproduct and the other CashMultExemptReasons stay exempt; missions and capture
+     stipends are taxed (as before). The Home Outpost adds its 5 only while its TerritoryConfig row exists (Starter.Enabled)
+     and def.PlotId == profile.BasePlotId; another plot's Home Outpost gives nothing.
+E-6. **A Home Outpost id is never a stack**, also a leftover "Starter_P<n>" id saved while the Starter was on and read while it is
+     off (matched by TerritoryConfig.Starter.IdPrefix); such a leftover gives neither a stack nor the 5 %.
+E-7. **WE_EmpireTaxPct is written by SyncOutpostIncomeStacks (and the legacy GrantOutpostIncomeStack) only when it changes; nil
+     and 0 both mean "none"** (a player who never held a zone gets no attribute write). It is not written on profile load by
+     EconomyService: TerritoryService's load hook already calls SyncOutpostIncomeStacks.
+E-8. **SyncOutpostIncomeStacks now returns a 4th value, the total Empire Tax %**; the first three (old stacks, new stacks,
+     per-stack %) are unchanged, so today's TerritoryService toasts keep working. Lane W's config toasts (total %) should use the
+     4th value or EconomyService.EmpireTaxPct(p).
+E-9. **PersistClaims needs no branch in EconomyService.** The % is always derived from the profile (profile.Territories ->
+     OutpostIncomeStacks, BasePlotId), which is what persists; re-planting saved claims on join and releasing them on leave is
+     lane W's (TerritoryService), which calls SyncOutpostIncomeStacks afterwards. See the open issue for lane W on the leave path.
+E-10. **ATM screen (F4)**: digits use TycoonMath.ShortCash ("$1,240", "$25K", "$1.9M"; were raw "$1240"). Status priority
+     shield > being robbed > AUTO-COLLECT > (cash waiting ? "ATM · WALK IN TO COLLECT" : "+$24/s" from the owner's
+     WE_IncomePerSec, floored like the HUD). With no rate yet (WE_IncomePerSec missing or 0, e.g. while TycoonGuideConfig is off)
+     the empty ATM keeps the walk-in line. This is not flag-gated: it adds no instance, label or SurfaceGui (spec F4 ships it
+     with lane E). An unowned ATM shows $0 and the walk-in line, as before.
+
+### T (TutorialService, TutorialController)
+T-1  Tutorial dispatch (F6): a TutorialService.Notify advances only the ACTIVE step, and only when that step's
+     TutorialConfig AdvanceOn lists the event. An "Upgrade" also needs detail == the step's PadStructureId (a
+     string; a nil or junk detail never advances). No step index is hard-coded in TutorialService, so the order lives
+     in TutorialConfig alone. Reversible: restore the v72 STEP_* chain (git history) together with the v1 config.
+
+T-2  Save migration (F6): on profile load, a save whose TutorialOrderVersion is below TutorialConfig.OrderVersion
+     (missing = 1 = the v1 order) and whose tutorial is not finished moves to TutorialConfig.MigrateLegacyStep(step):
+     the first F6 step not yet done (v1 steps 2-4 -> Command Center, 5 -> Recruit, 6 -> Barracks, 7 -> the first of
+     4x4 / Outpost in the current order, 8 -> Outpost, 9+ -> finished). Owned buy steps are then skipped as before.
+     A finished tutorial keeps its step; only the version stamp changes. Every migrated save is stamped with
+     OrderVersion and marked dirty. A save from a NEWER order (a rollback of this build) is left alone and never
+     stamped down, so a step index is never migrated twice. Reset (admin) stamps the current version (step 1 is the
+     same step in every order).
+
+T-3  A migrated save past the last step, or one where every remaining step is already done, is marked
+     TutorialComplete at load (so the tutorial never sits on a step index past the end).
+
+T-4  Novice shield (F6): the tutorial ending ends the shield at once: the last step, SKIP, and a tutorial found
+     finished at load each call pcall(CombatService.EndNoviceShield, player, "tutorial") (CombatService from the
+     Bootstrap deps; nil-checked). CombatService's own 1 Hz sweep remains the backstop. With
+     CombatFairnessConfig.NoviceShield.Enabled = false (today) the call is a no-op.
+
+T-5  Starter Pack after the tutorial (spec §5 line 12): the tutorial can now end in a vehicle, so the after-tutorial
+     offer (tutorial complete or SKIP) first waits until the player is in no seat (Humanoid.SeatPart == nil), checked
+     at 1 Hz, for at most 300 s in total (one budget for the whole schedule, retries included); then the existing
+     gate (MonetizationService.TrySoftOfferStarterBundle) is called as before, and it and the HUD throttle still
+     decide. A player on foot sees no change (+3 s). The at-load ("session", +8 s) offer is unchanged. The 300 s and
+     1 Hz are local constants with optional overrides MonetizationConfig.StarterBundleOffer.SeatedWaitSeconds /
+     SeatedCheckSeconds (lane T may not edit MonetizationConfig; lane Z may add the two keys there, config-first).
+
+T-6  Home Outpost already taken (F6/F10): while TerritoryConfig.Starter.Enabled, the Outpost step counts as done when
+     profile.StarterOutpostTaken is true (set by lane W on the first capture). Reason: later sessions own the Home
+     Outpost from the start, so it can never be captured again for the step, and the next zone is over the 30 s
+     walk. With the Starter off (today) nothing changes. Reversible: drop the Outpost branch of stepAlreadyDone.
+
+T-7  Outpost target (F6/F10, client): the tutorial Outpost beam goes to the player's OWN Home Outpost
+     (Starter_P<plot>) while it exists on the client and the player does not hold it; another plot's Home Outpost is
+     never a target (only its owner can take it), and a Home Outpost is never chosen while the plot id is unknown.
+     "Nearest" for every other zone is measured from the player's own main gate (plot-local (0, PlotSize/2) through
+     PlotFrame, pure config, streaming-safe), not from the character, so the answer is the same anywhere in the base
+     and never a zone behind the walled plot (HEAD picked WestDepot behind plot 2's rear wall from the spawn; the gate
+     picks CentralPlaza in front of the gate). Changed tutorial-target results on the live map (Starter off,
+     FaceMapCentre true): plots 2-5 now go to CentralPlaza (was WestDepot / NorthRidge / SouthDocks / EastArmory);
+     plots 1 and 6 unchanged. Tier order otherwise as before (neutral land, then other uncontested land, then
+     rigs / forts, then contested / own).
+
+T-8  With the Starter off (today) the order is 4x4 (step 6) then Outpost (step 7): the first capture is a drive from
+     the gate of 631-755 studs to the zone centre (plot 1 RadarHill 631, plots 2/5 CentralPlaza 755, plots 3/4
+     CentralPlaza 640, plot 6 OilFields 631; FaceMapCentre true), about 12-14 s at the Field 4x4's 55 studs/s, so
+     no empty walk over 30 s. With the Starter on: console -> gate -> Home Outpost ring edge = 200 studs on every
+     plot (12.5 s on foot at 16 studs/s), under the 480-stud acceptance.
+
+T-9  Tutorial re-aim (client): any step whose beam target is a world part (a console, the own spawn / ATM / manual
+     dropper, a zone) re-aims on the existing 1 Hz tick, at most every 2 s, while that part is not on this client
+     (streamed out, or built after the step was pushed). Steps that open a panel (Recruit, 4x4) never re-aim. This
+     replaces v72's Ammo Works-only re-aim (no step is a business since K2). The 1 Hz tick now always runs (it ran
+     whenever TycoonGuideConfig or BusinessConfig was on, i.e. live today); the guide parts still no-op while the
+     guide flag is off.
+
+T-10 The objective chip's step disc shows the step number 1-7 (payload Total = TutorialConfig.StepCount() = 7); spec
+     "update the chip /7" is read as the total becoming 7. No "n/7" text was added (the disc is 36 v; it would not
+     fit the circle at phone scale).
+
+T-11 The TutorialStateUpdate payload also carries Pointer (TutorialConfig step field; "ATM" on Collect cash), for lane
+     G's chevrons / console NEXT tag. Clients that ignore it are unaffected.
+
+T-12 Known limit (from K2 note 5, unchanged): when lane Z flips TerritoryConfig.Starter.Enabled, OrderVersion stays 2,
+     so a player saved on step 7 (Outpost, 4x4 already done) at that moment is put back on the 4x4 step (now 7) and
+     never gets the Outpost step: one repeat, one skip. A player saved on step 6 (4x4 not done) just does Outpost,
+     then 4x4. (With T-6, a player who already took the Home Outpost skips it anyway.)
+
+### G (NextPadChevrons, ProducerLabels, LabelGovernor, WorldLabel, Bootstrap, BusinessVisuals, WorldPromptController)
+G-1. F4 LabelGovernor: "at most 3 on screen at a base" counts every BillboardGui tagged WE_BaseLabel except the one label whose WE_LabelRole is "objective". The objective marker is never held and never takes one of the 3 slots. Reversible: count it (drop the exemption in LabelGovernor.isExempt).
+
+G-2. F4 LabelGovernor holds EVERY governed label that is not among the 3 nearest drawable ones (not only the ones in range), and a newly tagged label starts held. So the cap holds between passes too. The cost: a label can show up to one frame late when it is created, and up to one pass (0.25 s at Hz 4) late when its owner shows it again while it is held (a business pop that lives 1.2 s). Reversible: hold only labels within their MaxDistance.
+
+G-3. F4 "Nearest" = straight distance from the camera to the label's adornee (a Model uses its PrimaryPart; no adornee = its parent part / attachment) plus StudsOffsetWorldSpace, and only labels within their own MaxDistance count. There is no view-frustum test: a label behind the camera can hold a slot, so at worst fewer than 3 are visible, never more. Reversible.
+
+G-4. F4 WorldLabel owns a label's Enabled on the client: shown = its owner wants it AND the owner filter does not hide it (someone else's owner-only label) AND the governor does not hold it. The owner's wish is what WorldLabel.SetShown was last told, or any Enabled change WorldLabel did not write (server replication, other code). Client code that hides a tagged label must call SetShown: BusinessVisuals pops, the console / NEXT tags and the producer label do. Known limit (the same one the owner filter already documents): a write that does not change the value fires no event, so a server hide of a label that is held at that moment is missed. No server code toggles Enabled on base labels today. The owner-filter behaviour is unchanged (scripted differential trace identical on HEAD's WorldLabel and lane G's).
+
+G-5. F4 every console price / NEXT tag on the own plot (WE_PriceBillboard) is a governed base label, not only the gold NEXT one: the spec's §1.1 says every base BillboardGui carries the tag, and any console tag becomes the NEXT tag when it is the pick. The NEXT tag gets no priority: near the ATM the 3 pads can win the slots. The floor chevrons still point the way. Reversible: tag only the pick's tag.
+
+G-6. F5 one pointer, console NEXT tag: the gold "NEXT" console tag now marks TycoonMath.GuideTarget's pad, the same target as the chevrons. That is the active tutorial step's own pad (Command Center, Barracks) while the tutorial runs, no console on the other steps, then WE_NextBuy. This ships ON with no flag of its own, because PickMode "Cheapest" also ships on: without it, during tutorial step 2 (Command Center) the gold NEXT tag would sit on Ammo Works (the cheapest pad) and contradict the tutorial. Reversible: TycoonGuideConfig.Chevrons.FollowTutorial = false (this also switches the chevrons to WE_NextBuy during the tutorial). The Base-panel NEXT badge (BaseController, in no lane) still shows WE_NextBuy.
+
+G-7. F5 when this client never received the current tutorial step (the TutorialStateUpdate push reached TutorialController before lane G's modules connected), but the HUD "Tutorial" flag says a step is up, the chevrons and the console NEXT tag show nothing until the next tutorial push. They never fall back to the post-tutorial pick in that case. Reversible.
+
+G-8. F5 a chevron is left out when its whole reach, about 2.07 studs from its centre point (arm ends plus half a bar width), would touch a TycoonMath.Footprints rectangle or the pad edge. The spec only skips centre points inside a footprint, so this is stricter: no bar pokes into a building or off the pad. The other chevrons keep their 5-stud slots. In the sweep, about 15% of slots are left out, and a player standing right beside a business line can see no chevrons until the straight line leaves its footprint. Reversible: the CLEAR constant in NextPadChevrons.
+
+G-9. F5 chevron look: transparency runs from TransparencyNear on the chevron nearest the player to TransparencyFar on slot Count, linearly. The bar centre sits at pad top + Lift (0.12); bars are 0.08 thick, so over the road asphalt (top at pad + 0.12) 0.04 studs show. Two bars meet at the tip, which points at the target. Reversible.
+
+G-10. F5 "GO beam up" = ConsoleWaypoint.Current() ~= nil, meaning the Base panel / guide chip GO line: the chevrons step aside while it shows. The tutorial's own thin guide beam does NOT hide them, because the spec wants chevrons during the tutorial ("a fresh alt sees chevrons to the CC door, then the ATM, then the Barracks"). Reversible.
+
+G-11. F5 / F4 own plot id: BaseStateUpdate / PlayerStateUpdate PlotId, else the plot whose pad holds the server-stamped WE_AtmPos or WE_ConsolePos_CommandCenter. That uses no server call: NextPadChevrons is pinned against InvokeServer. While the id is unknown the chevrons retry every RetargetRetrySeconds. The chevron target itself is config-only (ApproachPoint + PlotFrame), so nothing waits for a console part to stream in.
+
+G-12. F4 the producer label is one client BillboardGui in a local Workspace folder "WE_ProducerLabelLocal", the same pattern as BusinessVisuals' pops. Its Adornee is the chosen producer part. It pulses (UIScale 1 -> 1.15 -> 1 over PulseSeconds, one reused TweenService tween, no Lua per-frame work) on each WE_PassiveTick / WE_TickTraining change. When neither changes for two ticks (businesses off) it pulses on a local 5 s clock. Reversible.
+
+G-13. F4 the yard label shows WE_TickTraining (EconomyService, lane E) and only while it is > 0 AND the last SoldierStateUpdate / PlayerStateUpdate TrainingIncomePerTick is > 0 (verifier fix: the server writes WE_TickTraining only on a grant, so after the soldiers are dismissed it keeps the last value). No soldiers, no yard label. Before any push reports TrainingIncomePerTick, WE_TickTraining > 0 alone decides. The pump label always shows PlotOilPumpConfig.CashPerTick ($18). Other plots' producers are never anchors.
+
+### Q (base identity lane C: SquadOrdersService, OrdersConfig)
+Q-1  Squad Follow slots come from OrdersConfig.FollowSlots, as the base spec gives them: {-5.5,1.5}, {5.5,1.5},
+     {-10,3.5}, {10,3.5}, {-14.5,5.5}. +X is the player's right and +Z is behind the player. This gives two wings beside
+     the player instead of rows 6-9.5 studs straight behind (the old grid put slot 2 on the camera line and slot 5 in
+     front of the avatar). Reversible: set FollowSlots = {} to go back to the old grid, which is kept as the fallback.
+
+Q-2  Slots 6-8 (only reachable with Squad Expansion research) repeat slots 1-3, one rank (FollowRankStepZ = 3.5)
+     further back per rank. They do not use the old grid, whose slot 6 sits at the camera's shoulder and whose slot 8 sits
+     on the camera line once zoomed out. Both prototypes wrapped slots 6-8 onto slots 1-3, which puts two units on one
+     spot. Reversible: this is one line in formationOffset, and FollowRankStepZ = 0 reproduces the prototypes' wrap.
+
+Q-3  FollowPath ships ON (OrdersConfig.FollowPath.Enabled = true). This is not in the spec's lane C file list, but the
+     spec's owner test 6 expects the units to "walk beside you, including through doors and narrow lanes". With the slots
+     alone, the headless sim got 0 of 5 units through a 6-stud door and 3 of 5 through an 8-stud lane.
+     What it does, in order:
+       - if a unit's 2-stud body cannot walk straight to its slot, it stands against the wall beside the player (WallGap
+         1.5, never nearer than MinSide 3 to the player's centre line);
+       - failing that, it squeezes 2 studs in toward the player when a wall end is in its way;
+       - failing that, it walks the player's own trail (a point every 3 studs, last 12 kept).
+     Server raycasts only; no pathfinding, no new remotes or parts.
+     Reversible: FollowPath.Enabled = false restores the plain MoveTo to the slot.
+
+Q-4  After a turn the squad swaps its wings left <-> right when that is clearly shorter for the whole squad
+     (FollowMirrorHysteresis = 3 studs per unit). Units then keep to their side instead of crossing behind the player.
+     Distances only, no rays. Reversible: set FollowMirrorHysteresis = math.huge.
+
+Q-5  Facing is measured against the slot. A walking unit faces where it walks, and a unit in its slot (within
+     FollowArriveStuds = 2) faces where the player faces. HEAD's "face the player beyond 10 studs" rule would make the
+     10-15.5-stud wings crab-walk sideways. The old player-distance rules (FollowDistance / FollowStopDistance) still apply
+     with the old grid (FollowSlots = {}).
+
+Q-6  A replacement unit takes the lowest free slot. At HEAD it took #Units + 1, so after a death two units shared the last
+     slot and slot 2 stayed empty; the stand-in shows "1,3,4,5,6,7,8,8" at HEAD. Dropping soldiers removes the outermost
+     slot first, where HEAD removed the newest unit.
+
+Q-7  A new unit spawns in its slot. When a wall stands between the player and the slot (e.g. recruiting inside the
+     Barracks), it spawns at the old grid spot. If that is blocked too, it spawns on the player's trail, and if that
+     fails, in the slot as before. The trail is recorded for every player with a character, 2.5 times a second: one
+     distance check, and a point only after 3 studs of movement on the ground.
+
+Q-8  The helmet is a dome: a SpecialMesh Sphere on the existing Helmet part, 1.3 x 0.75 x 1.35 at (0, 1.91, 0.02). That
+     is 0 new parts and 1 new SpecialMesh instance per field unit (at most 8 per player). The catalog character overlay,
+     when it loads, still hides the primitive body as before.
+
+Q-9  The formation test's camera model is taken from the PlayerModule defaults as I remember them: zoom 12.5, initial
+     pitch -15 deg, focus at the root + 1.5, vertical FOV 70. I assumed that on touch devices the default camera follows
+     behind the character while it moves. This needs a phone to confirm.
+
+### Integration notes (batch B part 1 verifier)
+- INT-1. K2 and T land in one commit (with E, G, Q in the same commit here): K2 alone leaves HEAD's TutorialService on
+  the deleted TutorialConfig.BusinessStepIndex (1 type error, tutorial broken).
+- INT-2. Scratch suites that encode pre-batch-B behaviour must be switched by lane Z (they are not repo tests):
+  worldhook tut_true/tut_false (tut_driver_biz, "nearest zone from the spawn", 57/4 and 60/1) -> T/t_client_driver.luau;
+  tycoon/build/A/biz_driver_a.luau -> E/biz_driver_a_e.luau is still 63/6 on the batch (K2's 6 intended pick/tutorial
+  changes) -> use E/biz_driver_k2_e.luau (71/0); K2/biz_driver_k2.luau -> E/biz_driver_k2_e.luau;
+  agentf/f2/raid_driver_f2.luau -> E/raid_driver_f2_e.luau; m1 b2_service_driver -> T/b2svc_laststep.luau once the
+  Starter flag is flipped.
+- INT-3. BuyPathStatic: retire pins 475, 2156-2159, 2272, 2273, 2382; change needle 1641; insert integB1/bps_block.py
+  before parse_gate() (see integB1/bps_changes.txt). Pin 476 ("ManualDrop") now matches only a comment - lane Z may retire.
+
+### Lead
+- **B1-L1 Cheapest-first NEXT pick ships ON (owner option #5).** `TycoonGuideConfig.PickMode = "Cheapest"`. Model: a
+  player who only follows the NEXT pick earns 136 $/s at 30 min (v72 score pick: 295), because the cheapest-pad pick
+  never offers soldiers (training income); a player who also recruits on their own: 204 $/s. Early pacing is better
+  (longest wait in the first 10 minutes 107 s vs 141 s). Revert in one line: `PickMode = "Score"`.
+- **B1-L2 Accepted as shipped:** the console NEXT tag follows the tutorial step (G-6, undo `Chevrons.FollowTutorial =
+  false`); squad FollowPath on + wing swap (Q-3/Q-4); prestige is now exactly +10 % per rebirth on passive income and
+  training (the old code applied it twice).
+
+## 2026-09-25 — World step 2 phase A: 17 places (enable step 1 on), bank findable, Missions GO + objective marker, supply crates, checkpoint anchors
+
+# W3 step 2 Phase A — merged ASSUMPTIONS (for the lead to append to ASSUMPTIONS.md; all reversible)
+
+Integration verifier, HEAD 56c0627. Order: spec §9 lines that Phase A makes true, then the integration's own lines,
+then every lane's file verbatim (L0, K, P, D1, D2, D3, F, M0, U0). Nothing here was tested in Roblox.
+
+## Spec §9 lines made true by Phase A (the rest land with Phase B / C)
+- §9.2 One anchor system: `WE_ActivityAnchor` Attachments, ids `<POI>.<Site>.<Role>`; OpsProps / `WE_OpsProp` dropped.
+- §9.5 Checkpoint garrison template = Booth, Alarm, G1, G2 + alarm reinforcements R1/R2 (Probe); all 12 checkpoints carry it.
+- §9.7 Supply crates are 2 parts; MaxActive 2; lifetime 120 s.
+- §9.8 World sign budget is 17 (pool pads stay labelled until lane BK removes them).
+- §9.9 The four `WE_OwnerLight` PointLights are removed (world lights 13 → 9 with every POI off).
+- §9.10 The Port rectangle starts at Z0 1150.
+- §9.11 LowShare 0.75 for the small POIs.
+- §9.12 Camp sandbags are exempt from their own camp's NPC-anchor keep-out; the camps are in enable step 1.
+- §9.13 The P0 bank cooldown is stored in `profile.Raid.BankCooldownUntil` (no schema edit).
+- §9.22 Reserved anchors (Depot/Oil trucks, Armory bunker, Airstrip hangar, Oasis well) are built but are not jobs.
+- Not yet true (lane BK, deferred): §9.3 bank hall + StateBanner, §9.4 BankGate raised.
+
+## Integration (INT)
+INT-1. Enable step 1 (Port, Depot, Armory, OilField, RigA, RigB, Quarry, RidgeCamp, DuneCamp) is ON in WorldConfig.
+       Steps 2 (Signal, Airstrip, Radar, FortI, FortS) and 3 (Ruins, Crash, Oasis) stay OFF until lane BK removes the
+       4 pool-pad "Garage" labels: with step 2 on the world needs 18 signs for a budget of 17 — in the live startup
+       order (BankRaidService.Init paints first) the AIRSTRIP board is refused, in the other order EMPIRE BANK is refused
+       (census s2_full_t_audit); step 3 adds RUINED VILLAGE, CRASH SITE and OASIS (all refused). Every other check passes
+       at steps 2 and 3, so the flip is the only change needed after BK (swap the 5 "waits for lane BK" BuyPathStatic
+       needles to Enabled = true). Revert step 1: set the 9 rows back to Enabled = false and drop the step-1 needle.
+INT-2. TerritoryService/init.luau line 17: `ReplicatedStorage:WaitForChild("Shared", 60)` (was unbounded; the lane gate
+       forbids an unbounded WaitForChild in a changed file). Pinned must_not_contain `WaitForChild("Shared")`.
+INT-3. WorldConfig.luau: lane 32's `Terrain.Toe` block is kept where HEAD 56c0627 has it (after `Side`); the working
+       tree had it moved above `Ring` by a merge. Same table, same values; the committed diff shows only L0 + INT-1.
+INT-4. P-verifier's `V-npcpost-clear` (AABB, 1.5-stud threshold) flags the 10 legacy camp posts at 0.73–1.40 from their
+       sandbags; the exact oriented-box distance is 1.90–1.99 (integ/postclear.py) and P-anchor-clear / D3-clear-all
+       pass. Treated as a false positive of that check, not a defect.
+INT-5. U0-6 (the objective marker is screen-px sized with no MaxDistance, AlwaysOnTop) is accepted as the ONE active
+       objective marker CLAUDE.md allows; the "stud-scaled, MaxDistance ≤ 40" rule is read as applying to world labels
+       other than that marker. Lead to confirm when appending.
+INT-6. L0's aa_driver "layout-stub" checks (3) now fail by design: D1–D3 replaced the empty POILayouts stubs.
+       The u0_cycle state's "console GO clears the marker" check fails by design until Phase B patches ConsoleWaypoint.
+
+
+## Lane L0 (verbatim: build/L0/assumptions.txt)
+
+```
+W3 step 2, lane L0 (contracts): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible.
+
+L0-1. The South Port footprint starts at Z0 1150 now, as the spec says, and not at its enable step. A disabled POI
+      footprint is still a keep-out for the travel dressing, so this moves some Full-quality natural scatter clusters
+      (flora, rocks, stumps) into other scatter slots: 4 clusters with FaceMapCentre = true, 10 with false. Cluster
+      and part counts do not change, Low quality is identical and every check passes. Revert: set the Port row's
+      Z0 back to 1180. With 1180 the world dumps match HEAD exactly (control run B/world/x_*).
+L0-2. ActivityAnchors is also the single writer. Stamp, FromRow and FromTemplate let WorldPOI (P) and MapSetup (BK)
+      write the same attributes and the same position rules. The reader API (List(site?, kind?), Get(id)) is the one
+      the spec gives. List(site) also accepts a bare POI id ("Port") and returns the whole place.
+L0-3. The anchor attributes use the WE_Activity* prefix: Id, Site, POI, Role, Kind, Yaw, R, Prompt, BoxW, BoxL and
+      Probe. WE_Anchor* is never used, because the H1 cluster attributes already use it. The door attribute is WE_Part,
+      as the spec says.
+L0-4. An anchor's world position is on the standing surface: WorldConfig.Activity.FloorY 0.5 plus the row's Y (0 is the
+      ground, 14 a watchtower deck, 1.1 the bank plaza). Prompts and labels add their own lift.
+L0-5. The checkpoint site segment is the checkpoint cluster's Id. A POI with a single checkpoint names that cluster "CP":
+      D1 renames Port CP_Port, RigA CP_Rig and RigB CP_Rig; D2 renames Signal CP_S. Every Checkpoint kit, the rig
+      checkpoints included, gets all 6 template anchors. The rig rule ("3 posts, no alarm") is applied in OpsConfig,
+      which does not use the rig's Alarm, R1 or R2.
+L0-6. The template's R1 and R2 face the checkpoint (local Yaw 180) and carry Probe = true, so they are clearance-checked
+      at runtime (spec §1.3).
+L0-7. Town.Market.Box is at (-81, -169.3), 1.8 studs in front of the NW_Stall_1 counter. It is kind "search" with R 5
+      and a hold prompt, and it Requires NW_Stall_1.
+L0-8. The bank's 10 anchors are config rows in WorldConfig.Town.BankAnchors, which BK stamps on BankPlaza. Posts on
+      the plaza have Y 1.1. Guards face Bank Street (Yaw 180), R1 faces west (Yaw 90) and R2 faces east (Yaw -90).
+      Until BK lands nothing stamps them, and BankRaidService keeps its fallback posts.
+L0-9. Ids the spec's rename list did not cover: RigA.Pier and RigB.Pier become RigA.Deck.Pier and RigB.Deck.Pier (site
+      "Deck" is the Storm-the-Rig job). Ruins.Holdout.Ring is kind "hold" with R 30 (the draft had kind "arena").
+L0-10. The step-2 kit Specs follow the geometry model (geo/kits.py). CargoPlaneWreck was reserved and unused, so it is
+      replaced by PlaneWreck (nose 3 / mid 4 / tail 2 parts). HoldPad, PipeRun, Terminal, ActivityHost and Runway are
+      new rows. Step stays 2 for all of them.
+L0-11. TownBlock "hall" has exactly 7 parts at Storeys 2 with no Roof or Lantern: 5 walls around a centred opening
+      min(10, Width - 8) wide, plus a roof slab with the parapet, plus 1 window strip. This matches geo/bank.py. "roller"
+      adds 0 parts over the door. "metal" changes colour and material only.
+L0-12. KitSpec gains Variants (the exact part count for each variant) and KitOpts gains R (HoldPad) and Taxiway (Runway).
+      These are type-only changes, and no step-1 behaviour changes.
+L0-13. PoiBoard rows in the POI layouts leave Text nil. The board text is POILayout.Board, which WorldPOI fills the way it
+      fills Town.BoardText. The drafts' Text = BOARD (a boolean) does not type-check.
+L0-14. The palette gains Metal, MetalDark, Aluminium, RadarWhite, Canvas, PalmTrunk, PalmFrond, Asphalt, RunwayPaint,
+      PadPaint and PondWater. Kits gains HoldPad = { R 10, 3 .. 24, Top 0.13 }, Runway = { Width 40, Top 0.12,
+      TaxiwayWidth 20 } and WatchtowerDeckY = 14. All of these are for lane K, which may ignore them.
+```
+
+## Lane K (verbatim: build/K/assumptions.txt)
+
+```
+W3 step 2, lane K (kits): ASSUMPTIONS.md lines (all reversible; the lead merges them into ASSUMPTIONS.md).
+
+K-1. Owner feedback #29 ("the checkpoint booth is taller than your avatar") applies to the world Checkpoint kit as well
+     as the base gate: the booth is 7 tall (was 5; roof top 7.4) with its window and sign raised to eye height. Its
+     footprint (x 15.5 .. 19.5, z -0.2 .. 4.2), the part count (8) and the kit AABB (36.3 x 12.9 x 11.9) are
+     unchanged, so the checkpoint anchor template clearances hold (re-checked at 5 yaws: 1.5 minimum). The 4 Town
+     checkpoints change look (16 parts resized / moved, 0 added). Revert: the 4 numbers in Builders.Checkpoint.
+K-2. The world Watchtower follows the owner's base-tower fix: 8.5 studs clear above the deck (TOWER_HEADROOM), a roof
+     with no collision (heads, jumps and the Poppercam never catch on it), and a climbable TrussPart ladder at the
+     back that tops out 2 above the deck (step off without jumping). The deck stays at Kits.WatchtowerDeckY (14) and
+     stops at z 2 so the ladder rises beside it; the kit is 9 x 23 x 9 (the geometry plan said 21 tall; its XZ
+     footprint is unchanged). 8 parts: 4 legs to the roof, deck, front half-wall, roof, ladder.
+K-3. HeistGate (CompoundWall "gate") and BunkerDoor are built CLOSED: collidable, WE_RuntimeDoor = true,
+     WE_GateState = "closed" (attribute names from WorldConfig.Activity). The HeistGate is 16 x 4.4 x 1.2 steel
+     (DiamondPlate) on the wall line (z 0 .. 1.2). Phase B (OpsService) opens them; in Phase A the Port yard is still
+     reachable over its chest-high walls.
+K-4. WireFence collides (nobody walks through a fence) and is 45 % see-through; Specs Solid is now true. It is not H4
+     cover ("Wire" is a soft keyword).
+K-5. Runway: opts.Taxiway is a WORLD rect { X0, X1, Z0, Z1 }, built axis-aligned; without it the 5th part is a
+     touchdown aim marking, so the count is always 5. Length is clamped 200 .. 2000. Footprint(Runway, { Taxiway })
+     keeps the rect in world terms (the count is right; its extents are not pivot-relative).
+K-6. PipeRun Length > 64 spans more than a cluster may (H10), so Finish refuses it; the layouts use Length 40.
+K-7. Specs sizes are the measured default builds: PlaneWreck 34.2 x 10 x 22 (nose 12 x 10 x 26, tail 7.3 x 12 x 18;
+     the plan said the tail was 10 wide), HeliWreck 9.7 x 5.7 x 24, Tent 7.8 x 4.9 x 9, Pumpjack 4 x 9.9 x 14,
+     PipeRun 40 x 1.8 x 1.8, Watchtower 9 x 23 x 9. Every new kit's XZ footprint stays inside the geometry model
+     (w3s2/geo/kits.py) within 0.13 studs, and its shadow casters are <= the model's.
+K-8. TownBlock "hall": back wall, 2 side walls (between the piers and the back wall, so no faces z-fight) and 2 front
+     piers round a centred full-height opening clamp(W - 8, 4, 10) wide, all 1.2 thick and collidable; 1 roof slab
+     carrying the parapet (the block's one shadow caster; Roof "bare" = a thinner flush slab); the usual window strips.
+     "hall" ignores "damaged", "shop" and "roller"; a Lantern sits on the pier. "metal" = Metal material + Palette.Metal
+     walls (opts.Color still wins). "roller" = one min(12, W - 6) x 5.6 roller door (>= 4 wide) instead of the door.
+K-9. ContainerStack Count 4 / 5 keep the front row's top container (15 tall); the plan modelled them 7.5 tall. No
+     layout uses 4 or 5.
+K-10. Specs.Variants counts per unit for Count / Length kits (DrumGroup "fire" = 1 per drum, so 3 at the default
+     Count 3), as the L0 contract says.
+K-11. No kit adds a light, particle, Fire, Beam or GUI: the "fire" drums are scorched drums, the flare stack's flame is
+     a painted ball (the spec's particle budget has no room for them).
+K-12. The Hangar has a flat collidable roof (12.9 clear inside, 11.5 under a yellow lintel) so the phone camera pulls in
+     under it instead of showing the roof top.
+K-13. The Palm's crown is centred over the pivot (the trunk foot sits 1.3 x Scale toward +X), inside the model's
+     10 x 10 footprint.
+K-14. (adversarial verifier) Runway paint (centre line, thresholds, aim point) stands 0.06 proud of the asphalt, as the
+     road dashes do (was 0.02: a gap that thin flickers on phone depth buffers at airstrip viewing distance). The asphalt
+     and the taxiway slab are Runway.Top - 0.06 thick; the top stays Runway.Top (0.62 world); 5 parts, no collision.
+K-15. (adversarial verifier) Fountain "well": the 2 posts are 4.8 tall (were 4.6) so their tops no longer lie in the
+     winch beam's top plane (coplanar faces flicker). The well is 5.4 x 4.8 x 5; 4 parts; the XZ footprint is unchanged.
+```
+
+## Lane P (verbatim: build/P/assumptions.txt)
+
+```
+W3 step 2, lane P (platform): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible.
+
+P-1.  Dockside goes with the built Port. MapDressing skips the legacy DocksideDressing quay kit once WorldPOI reports
+      the Port row Built (at least one cluster), not merely Enabled: an enabled Port that builds nothing (missing
+      layout rows) keeps the old quay kit, so the harbour is never bare. Revert: test WorldConfig Enabled instead.
+P-2.  Camp exemption scope. An NPC spawn anchor inside a POI footprint of Kind "camp" belongs to that camp
+      (WorldDress.Zones: Circle.Owner). With AllowPOI = that camp, every cluster of the camp (not only the sandbags)
+      may stand at its own anchors, exactly the geometry model's rule (geo/zones.py OWN_NPC). Every other place and the
+      travel dressing still keep 10 studs out. Today only the sandbag lines stand near the posts.
+P-3.  The ActivityHost cluster (every kit Class "anchor") passes WorldDress.Blocked with the default 13-stud road
+      clearance (not the 30-stud block rule), may sit over an event anchor, and is not added to the occupancy. This is
+      the geometry model's rule (check.py role "anchor"); RigA / RigB hosts stand 20 from a road line.
+P-4.  Flat markings (every part non-colliding, top <= 0.75: PaveTile, HoldPad) over an event anchor are re-tested with
+      the new BlockOpts.SkipEvents (every other keep-out still counts). The step-1 Town rule dropped only the first
+      reason when it was an event anchor; the Town's result is unchanged (B1 dumps identical).
+P-5.  InWater = true clusters skip only the water keep-out (AllowWater) and carry WE_AllowInWater (Waterways cull, H3).
+      There is no runtime "crane legs on land" check; the geometry model checked the drafted positions.
+P-6.  Infra rows (the airstrip runway) build first, in both qualities, and count against the POI's cap and Low share, as
+      the geometry model counted them. They form one Model POI_<Id>.Infra carrying the H1 cluster attributes plus
+      WE_Infra = true. Each strip must be flat (no collision, top <= 0.75), inside the footprint, clear of every zone
+      (tested as discs along its long side; the road corridor and event anchors ignored) and carry no light or sign,
+      or it is skipped and warned.
+P-7.  The WE_Infra attribute is a literal in WorldPOI and WorldHygiene, read loosely through
+      WorldConfig.Hygiene.InfraAttr (not in the config yet; the lead may add InfraAttr = "WE_Infra").
+P-8.  Terrain rubble at a layout place: seed = Town.Seed hashed with the POI Id (stable in the sim and live); the
+      per-place prim cap is Town.MaxTerrainPrims (40); a rock's centre stays inside a rect footprint and its disc inside
+      a circle footprint (the geometry model's rule; the Town's rocks all pass it, no change).
+P-9.  Town anchor rows host on the first part of a kit with no mesh overlay in the cluster they Require (a refinement
+      of "the first BasePart in build order" so a deferred overlay can never replace the host). NW_Stall_1 -> the
+      StallCounter, as the contract says.
+P-10. An anchor row is skipped and warned when its id is not of this place, its Requires names no cluster of this
+      place, it lies outside the footprint, or its id was already stamped at this place. A row whose Requires cluster
+      was not built (Quality Low: Tier 2; or a cluster skipped and already warned) is absent without a new warning and
+      counted in POISummary.AnchorsAbsent. The checkpoint template's R1 / R2 (Probe) may lie outside the footprint.
+P-11. Only the first Checkpoint kit in a cluster gets the template (ids are per cluster); a second one is warned.
+P-12. Summary changes: POISummary.Budget is now the Full cap (Budget - Reserve; the Town stays 370); new fields
+      POISummary.Anchors / AnchorsAbsent and Summary.Anchors; one extra Output line per place with anchors
+      ("[WAR EMPIRE] WorldPOI: <q> <Id> activity anchors N stamped, M absent"). The existing summary line is unchanged.
+P-13. WE_RuntimeDoor (WorldConfig.Activity.RuntimeDoorAttr) in WorldHygiene: such a part is never an H2 or H3 hit, never
+      made solid by H4 and never reported as H2 / H4. H5 (no Neon) and H9 (shadows) still apply to it, and it still goes
+      with its kit when another part of that kit breaks a rule, or with an H1 orphan cluster.
+P-14. H9 now also covers flat dressing markings (no collision, top <= RoadMinTop: hold pads, runway strips, paving):
+      they never cast a shadow (Enforce clears CastShadow; Report lists it). Outside the dressing folders only the old
+      small-caster rule is reported. Rules.FlatMarking names the test; H4 skips flat markings explicitly (it already did
+      by height).
+P-15. The capture flags' WE_OwnerLight is removed with no replacement light; a leftover one on a flag is destroyed on
+      the next marker refresh. The painted flag, stripe and nation diamond show the owner.
+P-16. Step-2 kit counting: a kit with a builder counts WorldKits.Footprint(kit, opts).Parts (step 1 or 2); a kit with no
+      builder counts 0 (WorldKits.Add builds nothing for it); a step-1 kit whose Footprint fails still counts PartsMax.
+```
+
+## Lane D1 (verbatim: build/D1/assumptions.txt)
+
+```
+W3 step 2, lane D1 (data: POILayouts/Industry): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible
+(revert = the geometry draft's value, w3s2/geo/luau/POILayouts_Industry.luau / geo/layouts.py).
+
+D1-1. Anchor spots corrected against the real lane K builds (contract §1: every non-Probe anchor >= MinClear 1 from a
+      collidable part). The draft typed several anchors in world studs without the cluster's yaw, or on a part:
+      - Port.Customs.Vault (276,1183) -> (267,1192): the centre of E_Cargo's painted HoldPad (cluster yaw 90 puts the pad
+        at local (0,-9) -> world (267,1192)); the ring players see and the job's zone now coincide (R 7).
+      - Port.Customs.Gate (250,1193) -> (246,1195), Yaw -90: outside the yard, 2 studs in front of the HeistGate (the draft
+        spot was 0.8 behind it, inside the yard).
+      - Port.Customs.Loot (276,1195) -> (273.5,1192), Yaw -90: on the pad, 2.5 studs in front of the crates (was 0.46).
+      - Armory.Cache.Loot (1292,172) -> (1297,174), Yaw 90: 2.3 east of the arms crates, facing them (was 0.19).
+      - Armory.Bunker.Door (1420,175) Yaw 0 -> (1420,173.5) Yaw 180: 2 studs in front of the blast door (was 0.5).
+      - OilField.Pumps.Pump1..4 moved off the pumpjack centre (0 clear) to 2.7 beside the base on the field side,
+        facing the pump: (1112,876) Yaw 0, (1182,966) Yaw 0, (876,1112) Yaw 90, (966,1182) Yaw 90; the pump stays inside
+        the R 5 zone.
+      - RigA/RigB.Deck.Pier (±1660, ∓750) -> (±1655, ∓750): the draft spot lay on MapSetup's <Rig>_RampApproach slab
+        (x 1659..1689, 0 clear); now on the sand 4 studs inland of the stair landing.
+D1-2. A door anchor faces its door part (the Town bank's Door convention): Port.Customs.Gate faces east, Armory.Bunker.Door
+      faces south.
+D1-3. Prompt = "hold" marks every anchor where the merged job table (spec §1.7) names a hold: breach (Port.Customs.Gate,
+      Armory.Bunker.Door, as drafted), start (Depot.Fuel.Pump "Start siphon", Armory.Cache.Vault "Start crack"), grab
+      (Port.Customs.Loot, Armory.Cache.Loot) and plant (OilField.Pumps.Pump1..4). Crack rings that start on breach
+      (Port.Customs.Vault) stay prompt-less like the bank Vault; reserved spots (trucks, valve) have none. OpsService
+      (lane O) may override from OpsConfig. D2 / D3 should follow the same rule so the three groups read alike.
+D1-4. The customs yard is closed on foot except through the HeistGate (0 parts added: Port stays 129 / 132 Full, 76 Low):
+      E_YardN / E_YardS move 2.8 west (x 267.2) so they meet the west wall, and the customs shed E_Customs moves to
+      x 292.2 and widens 30 -> 38 so it meets both wall ends (the draft left a 2.8 gap at each west corner and a 5-stud
+      gap at each east corner). Port.Customs.G1 moves from (288,1212), now inside the shed, to (280,1210), the yard's
+      south-east corner. The walls are still chest-high (3.0 .. 3.9; a jump clears them), so Phase B must gate the crack
+      by job stage, not by physical access.
+D1-5. Depot N_Watch1 stays Tier 1 (as drafted), so the tower post Depot.Fuel.G1 (deck Y 14) exists at Quality Low too;
+      spec §4's "Depot Fuel: 2 on Low (the tower post needs Full)" is conservative - lane O can reserve 3 on both.
+D1-6. OilField.Pumps.G1..G3 keep the draft positions (spec §1.5 renames them only): they guard the manifold and yard,
+      150-300 studs from the pumpjacks. Lane O may want wave points or posts nearer the pumps.
+D1-7. Armory.Cache.G1 / G2 keep the draft positions, which are beside (not behind) the gun pits, 6.2 studs from the
+      sandbags; only the comments were corrected.
+D1-8. Board texts are the TerritoryConfig capture names in capitals (SOUTH DOCKS, WEST DEPOT, EAST ARMORY, OIL FIELDS), as
+      drafted, not the WorldConfig POI Names ("South Port", "West Supply Depot", "Oil Field"): the board matches the
+      capture label players already see there.
+D1-9. The reserved vehicle box Depot.Fuel.Truck shares its centre with the Depot.Fuel.Pump ring (as drafted): whoever
+      spawns the tanker later must first check the ring is empty.
+```
+
+## Lane D2 (verbatim: build/D2/assumptions.txt)
+
+```
+W3 step 2, lane D2 (data, POILayouts/Frontier.luau): lines for ASSUMPTIONS.md. The lead merges them; all reversible.
+
+D2-1. Console anchors are standing spots. Airstrip.Tower.Console, Signal.Relay.Console and Radar.Uplink.Console stand
+      in front of the Terminal's screen (the kit's -Z side), never inside the desk (WorldConfig.Activity.MinClear: "no
+      anchor within 1 stud of a collidable part"; the spec's checkpoint Alarm console follows the same rule). To keep
+      the spec's console coordinates ((662, -1318), (-196, -1300), (-1068.9, -945.8)), each Terminal kit moves 2.5
+      studs back inside its cluster (KitPlace Z = 2.5) instead of the anchor moving. The anchor is now 1.5 clear of the
+      desk. The Signal relay HoldPad (R 6) stays concentric with its console anchor. At the Airstrip the desk's sandbag
+      arc is at the player's back (2.4 clear). No part count changes.
+      Revert: set the Terminal back to Z = 0 and move each anchor instead (lane K's suggested spots in
+      build/K/ctx/anchor_clearance.txt).
+D2-2. The Airstrip tower uplink gets its own 2 posts (L0 contract §9 open issue 3): Airstrip.Tower.G1 (671, -1336), beside the
+      tower's west wall (3.0 clear), and Airstrip.Tower.G2 (689, -1336), beside the tower's east wall (3.0 clear). Both
+      posts stay outside the console's R 6 zone (20.1 and 32.4 studs away), so a guard never stands in, and a wave
+      that falls back to "the nearest post" never spawns inside, the ring the player holds. (Verifier fix: the builder's
+      G2 at (667, -1318) was 5.0 from the console, inside R 6.) The tower cluster is Tier 1, so the posts exist on Low too.
+      The anchor counts change: Airstrip goes from 7 to 9 (Hangar 5, Tower 3, Apron 1), and the contract total from
+      173 to 175. Lane P's driver EXP table and L0's anchor_list must read Airstrip = 9.
+      Revert: delete the 2 rows. OpsConfig then has to name posts for the uplink waves.
+D2-3. The reserved Airstrip hangar anchors follow the built kits. The draft rows did not match N_Cargo's yaw-180 kit
+      placement: Vault was 3.3 from the crates and 10 from the pad centre, and Loot was 13 from the crates.
+      - Airstrip.Hangar.Vault = N_Cargo's HoldPad centre (355, -1333), R 7.
+      - Airstrip.Hangar.Loot = the ammo crates' open (south) side (368, -1334.4), 1.6 clear.
+      This changes no job: the hangar is reserved (spec §1.7).
+D2-4. Fort Sandhold's tank wreck moves from the draft's (-1395, 1285) to (-1396, 1282). At the draft spot its tracks
+      cut 0.8 stud into Trench_1 (oriented-box check on the real build). It is now 2.35 clear and still inside the r 200
+      footprint.
+D2-5. Prompt = "hold" marks where a job puts a hold prompt: the 3 uplink consoles (start), Airstrip.Hangar.Vault
+      (start crack) and .Loot (grab), and both FortX.Breach.Gate (plant the charge). This matches lane D1 and
+      Town.BankAnchors. OpsConfig decides the hold times; the geometry draft's "hold 8 s" note is dropped (spec: Signal
+      uplink 60 s, Radar 45 s).
+D2-6. Anchor Yaw is the way the post or spot faces.
+      - Radar.Uplink.G1 / G2 face out over their sandbags (Yaw 20 / -22; the draft had 0).
+      - Radar.Uplink.Console takes its cluster's Yaw (-88, facing the hill; the draft had 0), like the other consoles
+        and the template's Alarm.
+D2-7. The fort breach points (FortI.Breach.Gate, FortS.Breach.Gate) are kind "door" with no Part, as the L0 anchor list
+      has them. The fort has no gate part (spec assumption 23), so OpsService treats the planted charge as the
+      objective.
+D2-8. Every other Frontier cluster, rock, the runway Infra row and every other anchor position is the geometry draft's,
+      with only the contract's mechanical edits:
+      - the require path;
+      - no Text = BOARD;
+      - CP_S renamed to CP;
+      - the template-made Signal.CP_S.* rows deleted;
+      - the §1.5 ids (Radar.Uplink.*, FortI/FortS.Breach.*, Airstrip.Apron.Arena).
+```
+
+## Lane D3 (verbatim: build/D3/assumptions.txt)
+
+```
+W3 step 2, lane D3 (data: POILayouts/Wilds): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible
+(revert = the geometry draft's value, w3s2/geo/luau/POILayouts_Wilds.luau / geo/layouts.py). Every number below was
+measured on the real lane K builds in the headless stand-in (B = scratchpad w3s2/build/D3, dumps B/world/m_s*/).
+
+D3-1. Anchor spots corrected against the real builds (contract §1: every non-Probe anchor >= MinClear 1 from a
+      collidable part). The draft placed three kinds of anchor on or away from their props:
+      - Ruins.Caches.Cache1..3 sat at the centre of their gutted shells, under the collapsed floor slab (0 clear; the slab
+        is ~1.8 up there, so nobody can stand on the spot). They move to the shells' open end (a gutted TownBlock has no
+        +X side wall): local (7.5, 0.5) of R_1, (9, 0.5) of R_4, (7, 0.5) of R_7 -> world (-596.17, -1355.36),
+        (-455.24, -1294.18), (-607.48, -1259.29). Each is 2.8-3.4 clear of the slab, 5-8 from the back wall and front stub,
+        inside the shell footprint, and a 1-stud-clear walk leads out of the open side.
+      - Oasis.Stash.Box (-1378, 600) -> (-1381.42, 606.2), Yaw 0 -> 120: the draft spot was 8.9 from the stash crates,
+        outside its own R 5 search ring. It is now 2.5 behind the crates on the pond / road side, facing them (7.1 from
+        the spec §1.7 coordinate).
+      - Oasis.Well.Pad (-1248, 512) -> (-1248, 509.5): the well was 7 from the pad's centre, outside its R 6 ring. Now the
+        well is inside the ring and the pad stands 2 clear of the well wall, facing it (Yaw 0). It stays reserved.
+D3-2. Crash.BlackBox.G2 (-470, 1145.5) -> (-467, 1158.5), Yaw 20 unchanged. The draft said "behind Cargo_1" but put the
+      post on the crates' north side, where players arrive from (the roads and plots are north). Now the crates stand
+      between the post and the north (6.2 clear). G1 and G3 keep the draft spots and yaws.
+D3-3. Facing (the idle look direction; NPC AI still turns to fight):
+      - The camps' legacy posts face over their sandbag line: Yaw = that Bags_n cluster's Yaw. The draft had Yaw 0 for
+        all ten. The geometry put each bag line 1.9-2.0 in front of its post, facing out of the camp.
+      - The holdout posts face the ring centre. G1 180 -> 170, G2 0 -> 69, G3 135 -> -139; the draft's G2 and G3 looked
+        away from the square.
+      - The deck posts keep the tower's Yaw, looking over the front half-wall.
+      - Post positions are unchanged: the old NPCSpawns spots and the draft's spots.
+D3-4. The camp commanders (spec §1.7: within 25 of the Chest, clear per overlap.py). The rule used:
+      - 10-15 studs from the chest's ring centre, outside its R 6 ring;
+      - on the chest's far side from the map centre (the roads and plots players drive in from), facing that way;
+      - no part's XZ box + 0.5 contains the spot (overlap.py's rule), >= 5 clear of any collidable, >= 60 from every other post.
+      Results:
+      - Quarry.Camp.Cmdr at (-1388, -1366), Yaw -135: 11.3 from the chest, 9.6 clear.
+      - RidgeCamp.Camp.Cmdr at (1434, -1052), Yaw 135: 12.5 from the chest, 5.1 clear of the burn drum, 17.3 from the
+        technical and 13.7 from its sandbag nest.
+      - DuneCamp.Camp.Cmdr at (1484, 1188), Yaw 45: 14.6 from the chest, standing behind the ammo crates (5.6 clear),
+        35.5 from the heli wreck.
+      Lane O (CampCommander type) may move them; the anchor is 0 parts.
+D3-5. Prompt = "hold" goes where a job puts a hold prompt, following D1-3 and the Town.Market.Box and checkpoint Booth rows:
+      - Camp.Chest (open);
+      - Ruins.Caches.* and Oasis.Stash.Box (search);
+      - Crash.BlackBox.Recorder (recover).
+      The stand-in zones (Ruins.Holdout.Ring, Oasis.Well.Pad) and all posts have none. OpsService may override this.
+D3-6. The geometry is unchanged. Every cluster and rock row is the geometry draft's, bar Text = BOARD. The Board texts
+      stay as drafted: RUINED VILLAGE, CRASH SITE, OASIS. The camps have no board (Signs 0).
+D3-7. Crash.Salvage.Arena has no R, like the other arena rows (D1's Port / OilField, D2's Airstrip). Lane O picks the
+      event radius.
+D3-8. Ruins.Holdout.Ring (spec: R 30 on the VillageSquare spot) has no collidable part inside it. The nearest cover is
+      the Car_2 / Car_1 wrecks at 42-44 from the centre. Holders stand on open sand (the scorch Terrain is flat).
+      No part was added (Ruins builds 78 of 81). Lane O may prefer the draft's R 20, or cover in Phase B.
+```
+
+## Lane F (verbatim: build/F/assumptions.txt)
+
+```
+W3 step 2, lane F (bank findable): ASSUMPTIONS.md lines for the lead to paste (all reversible).
+
+F-1  Guard posts. BankRaidService spawns one BankGuard on every "Town.Bank" npc anchor whose role is G<n>
+     (ActivityAnchors.List("Town.Bank", "npc"); R1/R2 are Phase B alarm reinforcements and are skipped). Until lane BK
+     stamps those anchors, it uses BankRaidConfig.GuardPosts: the spec's P0 posts (212,-206), (228,-206), (204,-216),
+     (236,-216), (220,-198), standing on the plaza top (Y 1.6) or the ground (Y 0.5 for the street post), all facing
+     south (+Z, yaw 180), root 3 studs above the standing surface. Revert: restore the ring (not advised: 2 of 5 spawn
+     inside today's building).
+
+F-2  BankRaidConfig.GuardRingRadius (18) stays in the config, re-described as the bank zone radius: WorldDress uses it
+     for the dressing keep-out (18 + BankExtra 14 = 32) and CombatService's novice shield uses it for "engaging the
+     bank". BankRaidService no longer reads it (spec §8 pin). Removing the key would add type errors in those 2
+     files, which lane F does not own.
+
+F-3  Cooldown on the profile. profile.Raid.BankCooldownUntil (os.time seconds) with no ProfileSchema edit:
+     ProfileSchema.Migrate keeps unknown keys in Raid (it only default-fills ShieldUntil / StrikeCooldownUntil /
+     DefensesDownUntil), as for Raid.RaidCooldownUntil (MoneyCollectorService). BankRaidService sanitises it on every
+     profile load: not a finite number or <= 0 -> removed; more than one cooldown (CooldownSeconds 300) past now ->
+     clamped to now + 300; whole seconds. A player whose save has not loaded (GetProfile nil) cannot loot and gets no
+     hold progress. Phase B reads max(Raid.BankCooldownUntil, Ops.Cd.Bank) once, then writes to Ops only.
+
+F-4  First-visit tip. "Empire Bank: stand on the vault to loot" (Info toast), once per player, the first time the
+     player's root is within 150 studs (XZ) of BankRaidConfig.Position; never while the player was hit in the last
+     5 s (retried on a later tick); saved as profile.Raid.BankSeen = true (same no-schema-edit rule as F-3; a
+     non-boolean value is removed on load). Phase B moves it to Ops.Seen bit 2.
+
+F-5  Label. The public vault label reads "Empire Bank" + "OPEN · rob the vault" (green) or "RAID ON" (amber, while
+     anyone on foot holds the vault). The server also sets the label attribute WE_BankState = "open" | "raid".
+     "CLOSED <m>m" (grey) is drawn by BankRaidController on the cooling player's own client only (the cooldown is
+     per player; the label replicates to everyone); it is refreshed at 1 Hz while a cooldown runs and hands back to
+     the public line when it ends. No $ figures in the label.
+
+F-6  On foot. A raider whose Humanoid.SeatPart is set gets Blocked = "Vehicle" (HUD pill "LEAVE VEHICLE", amber),
+     no progress and no pay; progress is frozen, not reset (like UNDER FIRE). A seated player with no hold
+     progress never flips the label to RAID ON (one who held on foot first and then sat keeps RAID ON until the
+     frozen progress is dropped by leaving the vault). On cooldown the pill shows the cooldown, not LEAVE VEHICLE.
+
+F-7  EMPIRE BANK sign. BankRaidService paints the bank's "BankSign" part through WorldKits.Sign (inside the world
+     sign budget WorldConfig.Budgets.SurfaceGuis, LampLens text, MaxDistance 80), only when that part has no
+     SurfaceGui yet (so lane BK's own paint wins), on the face turned most toward +Z (the street). It tries in Init
+     (synchronously, before MapSetup's deferred MapDressing paints the POI boards) and again 2 s later.
+
+F-8  Reward toast "Bank job +$23,456" (commas; "bank_raid" is exempt from the cash multipliers, so the toast equals
+     the payout). The old "· cooldown 5m" suffix is dropped (the pill and the CLOSED line show it). A failed AddCash
+     (no profile) pays nothing and sets no cooldown.
+
+F-9  Missions. BankRaidService calls MissionService.TrackProgress(player, "Heist", 1) after a paid raid (pcall);
+     until lane M0 adds a "Heist" mission it is a no-op.
+
+F-10 Supply crate = 2 parts (crate + lid). The Neon ring, the Neon beacon ball, both straps AND the catalog crate
+     overlay (VisualAssetService.TryAttachCashCrateVisual, asset 16803204916, part count unknown, live-only) are
+     dropped, so every crate is exactly 2 parts on live too. MaxActive 2, LifetimeSeconds 120 (spec §3). The lid is
+     CanCollide / CanQuery / CanTouch / CastShadow off. The claim toast is "Supply drop +$8,500" (commas).
+     Revert of the overlay: only if its part count is known and the lid is dropped to keep the crate <= 2 parts.
+
+F-11 CombatConfig.NPCAlsoSpawnNearTerritories = false. The headless census shows it removes BOTH territory-marker
+     field NPCs: the Infantry on the Town plaza (19, 15) and the HeavyInfantry "rig stand-in" on CoastalOilAlpha
+     (1780, 31, -753). NPCs alive after boot: 12 -> 10; after the bank: 17 -> 15 (spec §7 expected 16 and asked
+     for the rig stand-in to be confirmed by census: it is removed too).
+
+F-12 Bounded waits. BankRaidService / SupplyDropService / BankRaidController wait at most 60 s for
+     ReplicatedStorage.Shared and the controller at most 30 s for PlayerGui (then it warns and the bank HUD is off).
+```
+
+## Lane M0 (verbatim: build/M0/assumptions.txt)
+
+```
+W3 step 2, lane M0 (missions): assumptions for ASSUMPTIONS.md (all reversible; the lead merges them).
+Files: MissionConfig.luau, DailyOpsConfig.luau, MissionService.luau, MissionController.luau.
+
+M0-1  DailyOpCheckpoint ("Take 2 Checkpoints") and DailyOpJobs ("Finish 3 Jobs") are in the Daily Ops pool now but
+      are never offered until Phase B: an op or mission is offered only when MissionConfig.LiveObjectives lists
+      its ObjectiveType, and nothing reports "Checkpoint" or "Job" before OpsService. Phase B lane M1 adds them
+      (plus Camp, Uplink, Delivery). Reason: never offer a mission that cannot be finished.
+M0-2  Rotation: each pool is dealt k picks per UTC day from a seeded permutation that is re-shuffled every cycle
+      of ceil(n / k) days, rather than an independent seeded shuffle per day. This guarantees every unlocked
+      mission is offered once in every cycle (cycles are at most 7 days). Measured over 14 days for 60 players: the longest gap
+      between two offers of the same mission is 7 days at level 1 and 5 days at levels 5 and 20. Seed = Park-Miller
+      hash of (UserId, cycle, salt); pure integer maths, no Random and no saved state, so all servers agree.
+M0-3  Slot 1 of the Daily Ops is Rob the Bank from level 3 while the bank job is on; below that (or with the bank
+      off) slot 1 is a seeded pick of the live OtherJobs, and with none live the 3 slots rotate through the rest.
+M0-4  Picks follow the player's level at the moment they are computed (no saved "level of the day"). So that a
+      level-up or rebirth mid-day never hides work, any mission with progress today stays offered: it takes the
+      place of the last pick of its kind (op / mission) without progress.
+M0-5  Only today's offered missions can be claimed (ClaimDailyMission returns "NotOffered" otherwise). A completed
+      mission always stays in the offer (M0-4), so nothing that was earned becomes unclaimable.
+M0-6  With DailyOpsConfig.Enabled = false the daily missions fill the list back up to MaxActiveDaily (6).
+M0-7  GO target for "Bank": the server resolves the WE_ActivityAnchor "Town.Bank.Vault" (ActivityAnchors, required
+      lazily with pcall; re-read at most every 30 s) and falls back to BankRaidConfig.Position until lane BK
+      stamps it. The bank op and its GO exist only while BankRaidConfig.Enabled ~= false. Phase B lane M1 must
+      point this at OpsService's bank site before BankRaidConfig.Enabled is set false at the cutover (and swap
+      the BuyPathStatic pin "if BankRaidConfig.Enabled == false then").
+M0-8  Go / GoTargets ride on the mission entry through an any-cast; Types.luau (in flight) is not edited (same
+      pattern as spec §1.12). The client picks the target nearest (XZ) to its character; with no character, the
+      first one. GO sends nothing to the server and grants nothing.
+M0-9  Row controls: one right-hand control per row. CLAIM (complete), GO (incomplete, with a server GO target),
+      nothing (incomplete without one; the old disabled "..." button is gone), and a plain DONE tag (not a
+      button) for a claimed row. GO/CLAIM are 112 x 72 v on touch (MissionConfig.Ui); desktop 96 x 44 v.
+M0-10 GO is XP blue with dark text (contrast about 7:1); CLAIM keeps the Accent green.
+M0-11 Copy keeps the existing "Daily Op:" prefix: "Daily Op: Rob the Bank" / "Loot the Empire Bank vault"
+      (Phase A's raid is stand-on-vault; M1 can change it to "Deliver 1 bank bag" in Phase B),
+      "Daily Op: Take 2 Checkpoints" / "Take 2 enemy checkpoints", "Daily Op: Finish 3 Jobs" / "Finish 3 jobs
+      anywhere". Rewards per the activities design: $6,000/150 XP/4 gold (L3), $4,000/100/2 (L2), $5,000/120/3 (L2).
+M0-12 "Heist" counts any bank job BankRaidService reports (lane F's TrackProgress("Heist", 1)). Phase B decides
+      whether armory / depot heists should also count toward "Rob the Bank" (a separate BankHeist type if not).
+M0-13 Money copy uses commas: toast "Mission reward $6,000", row "$6,000 + 150XP", daily "Claim Day 3 reward $3,500".
+M0-14 HEAD moved from 116d859 to 56c0627 during this job. The 4 M0 files are identical at both, and every M0
+      comparison uses a clean 56c0627 export.
+M0-4a (verifier fix) The slot-1 job op (DailyOpsConfig.FirstJob, Rob the Bank) is never displaced by a sticky entry.
+      Case found: a level-2 player who progressed all three base ops levels to 3 the same day; the third op used to
+      replace Rob the Bank. Now it takes another op place without progress, or is added at the end of the ops, so
+      that day's list can be 7 rows (4 ops + 3 missions).
+```
+
+## Lane U0 (verbatim: build/U0/assumptions.txt)
+
+```
+W3 step 2, lane U0 (pointer): assumptions for ASSUMPTIONS.md (the lead adds them; all reversible).
+
+U0-1  Marker tunables. The objective-only numbers (ArriveRadius 24 studs, TimeoutSeconds 600, MarkerLift 6 studs,
+      title 20 px, distance 16 px, 12-character label cap) sit in a local OBJ table at the top of ObjectiveMarker.luau.
+      No config file is in lane U0: HudConfig is in flight (owner-11 batch A) and OpsConfig does not exist until
+      Phase B lane O. The line and marker look (beam widths and colour, marker width 140-300 px, RefreshHz, RetrySeconds)
+      is read from ConsoleBuyConfig.Waypoint (read only), so the mission GO line looks the same as the Base-panel GO line.
+      Phase B (lane O or U) moves OBJ into OpsConfig.Ui.
+
+U0-2  Additive API. ObjectiveMarker keeps the three frozen signatures (Show / Clear / Current) and adds three read-only
+      helpers that allocate nothing:
+      - Revision(): bumps on Show, Clear, arrival and timeout;
+      - Showing(): true while this marker is drawn;
+      - OnTop(): true while an objective marker is on top, meaning this one or the ConsoleWaypoint line it yields to.
+
+U0-3  One AlwaysOnTop label. TerritoryController's contested diamond yields whenever OnTop() is true. That includes the
+      ConsoleWaypoint line (a Base-panel GO or the tutorial auto-guide), because its marker is also an AlwaysOnTop
+      objective marker. The yield is local to the client: AlwaysOnTop is set to false on WE_FlagBillboard. When the marker
+      goes, the server's choice is restored from the WE_LabelRole attribute ("contested" means on top). The server's
+      value never changes.
+
+U0-4  Compass tracked mode. The compass tracks whenever ObjectiveMarker has a target, and that includes the time the
+      marker is hidden behind a ConsoleWaypoint line. The compass is HUD, not a world label, so a GO always gets
+      feedback. In tracked mode:
+      - the chip shows even inside the player's own plot, because GO is usually tapped at home;
+      - it still hides while a panel is open;
+      - the label is the target's Short in gold (HudConfig.TopStrip.Compass.ArrowColor);
+      - arrival, Clear or timeout returns it to BASE.
+
+U0-5  Arrival and timeout. Arrival is a 3D distance of 24 studs or less from the target's standing point, so a heli
+      flying over the target does not count. A target is dropped after 600 s. Time spent hidden behind a ConsoleWaypoint
+      line still counts toward the 600 s. The distance shown is the XZ distance, "%dm" under 1 km and "%.1fkm" above,
+      the same format the compass uses.
+
+U0-6  World-label exception for the ONE objective marker. The marker is pixel-sized (140-300 x 44 real px, text
+      20 / 16 px) with an unlimited MaxDistance, like ConsoleWaypoint's v71 marker. CLAUDE.md's "stud-scaled,
+      MaxDistance <= 40" rule is for ordinary world labels: an objective 600+ studs away must still be visible. It is
+      client-only, transient (after GO only), carries WE_LabelRole "objective", and is the only label the game draws
+      AlwaysOnTop on purpose.
+
+U0-7  Zero parts. The anchor is an Attachment in Workspace.Terrain (client-local, never replicated). The Beam is also
+      parented to Terrain; only its start Attachment sits on the character, so a respawn re-attaches just that
+      Attachment (throttled to RetrySeconds). Needs a real-device check (see the open issues).
+
+U0-8  ConsoleWaypoint is required lazily, inside the first ConsoleWaypoint.Current() check. Phase B's two ConsoleWaypoint
+      lines (Show / ShowAtm call ObjectiveMarker.Clear()) therefore cannot form a require cycle. The client sim checks
+      both cases: the lazy require works, and an eager require stack-overflows (B/states/u0_cycle.luau).
+
+U0-9  Bounded waits. CompassController and TerritoryController used ReplicatedStorage:WaitForChild("Shared") and
+      player:WaitForChild("PlayerGui") with no timeout. The lane gate forbids that, so both now use timeouts:
+      - Shared waits 60 s;
+      - PlayerGui is found with FindFirstChildOfClass first, then waits 30 s; on failure it warns and the capture bar
+        is left unparented.
+      Behaviour is unchanged whenever these objects exist, which they always do on a live client.
+```
+
+### Lead
+- **PA-L1 Objective marker (INT-5) confirmed:** the Missions GO marker is the ONE active objective marker CLAUDE.md
+  allows `AlwaysOnTop` for; it is screen-sized with no distance limit and is cleared on arrival / new objective.
+- **PA-L2 Batch-A shield driver 6(e) was a stale test, not a bug.** It tagged a stand-in vault 36,000 studs away; Phase A
+  guards stand at fixed bank posts (Town.Bank G anchors / BankRaidConfig.GuardPosts) and no longer follow the tag. Real
+  play at MapSetup's VaultPad (headless, 7 seeds x 2 spots): the shield ends at 4.0 s, first hit 4.0-5.0 s, the novice
+  dies at 5.4-7.1 s, 0/14 loots; every one of 982 standable vault spots is in some guard's line of sight. Replacement
+  check: scratchpad w3s2/build/bankfix/drv/shield_driver_v2.luau (145/0; fails when posts move 500 studs or hit chance 0).
+- **PA-L3 Bank posts are absolute coordinates.** If the bank / vault ever moves without the anchors / GuardPosts, guards
+  are stranded (a lone player could loot untouched). Lane BK must re-run the v2 driver and real_play coverage.
+- **PA-L4 Enable steps 2 and 3 stay OFF** until lane BK frees sign budget (18 signs needed vs 17).
+
+## 2026-09-25 — Small fixes: prompt tables, asset retry, Base-panel NEXT badge, prestige in the pick
+
+# fix57 assumptions (small fixes: PromptController strong tables, VisualAssetService retry / logs, Base-panel NEXT badge, BusinessService prestige)
+
+Each is reversible; the one-line revert is given. To be merged into ASSUMPTIONS.md by the lead (this lane does not edit it).
+
+## PromptController (StarterPlayer/.../Client/Controllers/PromptController.luau)
+
+- **A1 Strong tables + one prune pair per prompt.** `adopted`, `disabledByUs`, `suppressed` are plain (strong) tables.
+  A prompt is `track`ed (one `Destroying` + one `AncestryChanged` connection) the first time any of the three stores it;
+  either event (destroyed, or `not prompt:IsDescendantOf(game)`) prunes it from all three, disconnects the pair and
+  removes a pill it still has. No polling, nothing per frame. Revert: restore the three `setmetatable({} :: any, { __mode = "k" })` lines and drop `track`/`prune`.
+- **A2 Orphans are refused.** `track` returns false for a prompt already outside the DataModel, so `adopt`,
+  `applyOwnerOnly` and `SetSuppressed(on)` store nothing for it (a deferred DescendantAdded / PromptShown can arrive after
+  the prompt left, when its prune events have already fired; storing it would leak). If it re-enters the DataModel,
+  DescendantAdded adopts it afresh. Behaviour change only for prompts outside the DataModel (they have no pill anyway).
+- **A3 The owner-only `Enabled` listener is kept with the tracked connections** and disconnected on prune (HEAD never
+  disconnected it). A prompt that leaves and re-enters the DataModel therefore gets exactly one listener, not two.
+- **A4 A pruned prompt that we disabled (foreign console) is simply forgotten.** If the same instance comes back
+  (non-streaming re-parent) `adopt` re-runs `applyOwnerOnly` (foreign → disabled again). A prompt that was foreign when
+  it left and is the player's own when it comes back keeps `Enabled = false` until the server re-replicates Enabled;
+  HEAD had the same gap (its plot-change loops skip parent-less prompts). Streamed-out prompts come back as new instances.
+- **A5 `PromptController._Stats(prompt?)`** is a QA hook (table sizes + IsSuppressed), like `GetHeldCount`.
+- **A6 GC model in the sim.** The client sim hands prompts to Lua through a weak-valued wrapper cache (lane 27 style).
+  In that model HEAD's owner-only `Enabled` listener closure pins the console prompt's wrapper, so HEAD keeps the MAX
+  console hidden too; the loss shows for a prompt without that listener (generic prompt: HEAD 12/13, this tree 19/19).
+  In Roblox a connection closure keeps the userdata alive the same way, so the live symptom on WE_ServerBuyPrompt may
+  have been latent; the fix no longer depends on that incidental pin.
+
+## VisualAssetService / VisualAssetConfig
+
+- **A7 Retry only transient errors, in the background.** A LoadAsset error whose text contains any
+  `LoadRetryPermanentErrors` entry (lower-case: not trusted / not authori[sz]ed / permission / forbidden / http 400/403/404 /
+  does not exist / not found / moderated / not approved / archived / invalid) is final at once (one line). Any other error
+  is retried by `task.delay` (never in the caller's thread) `LoadRetryCount = 2` times, `LoadRetryDelay = 20` s then
+  `x LoadRetryBackoff = 2` (20 s, then 40 s). The exact live error texts were NOT observed (headless sim only): check
+  Output; a permanent error missing from the list is only retried twice, then final (harmless). Revert: `LoadRetryCount = 0`.
+- **A8 Callers never wait on a retry.** While a retry is pending or running (`cooling`), `loadModel` returns nil at once
+  (Part kit look). First-try callers still wait for an in-flight first insert, as on HEAD.
+- **A9 Hosts dressed during the cool-down keep their Part kit** (no re-dress when a retry succeeds); later spawns /
+  dresses get the model. The vehicle-pack preload in `Init` benefits directly (the next 4x4 gets the body).
+- **A10 One Output line per outcome.** Transient failures with retries left are silent; the id prints one warn when it
+  gives up ("LoadAsset failed <id> after 3 tries (...) — Part kit look stays") or one print when a retry loads it
+  ("<id> loaded on retry N"). Permanent: one warn at once. Refused piece / model: one warn naming the piece, part count
+  and cap. Load cap: one warn per id ("load cap reached ... <id> not loaded").
+- **A11 `LoadRetryReserve = 12`.** Retries never use the last 12 of `MaxLoadAttempts`; they are kept for first loads.
+  Without it a full outage at boot (19 ids x 3 tries = 57) used up 48 before the 6 later ids had a first try (worse than
+  HEAD, which spends 25). With it the worst case is 38 at boot + 6 later = 44 <= 48. Revert: `LoadRetryReserve = 0`.
+- **A12 `MaxLoadAttempts` stays 48** (docs/ASSET_SHORTLIST.md C8 keeps 48). Census (headless world sim, a594cfb + these
+  files): a live server asks for 13 distinct ids at boot + 0 for the first owner's plot L1->L5 + 4 later (dropper FX,
+  oil-pump prop, L5 flag, L5 floodlight) = 17 when loads succeed; 19 at boot + 6 later = 25 when every insert fails
+  (fallback ids: TentAlt, FloodlightTower, 3 ATM alts, TutorialArrowAlt, VfxSparkles, OilPumpjackAlt). 20 more ids are
+  reachable only through BaseService's PreferMesh block (`StructureVisualConfig.PreferMeshWhenAssetIdSet = false`: no
+  live caller) and 13 more only with no live caller at all; with those counted the cap is hit at id 49/50. Raise to
+  75 (= 3 x 25) only if every retry must run in a full outage, or when PreferMesh is switched on.
+- **A13 59 configured ids, not 56.** Counted as every `ModelAssetId > 0` in VisualAssetConfig (any depth <= 4,
+  duplicates once); StructureVisualConfig mesh ids and the hard-coded hangar add none new. 9 are never asked in the
+  sim (TutorialBeam, Buildings.BaseGate, 2 GateDefense AutoGun ids, TutorialArrowAlt / VfxSparkles / 3 ATM alts when
+  the primary loads).
+- **A14 Part cap stays 40.** The LUV green camo Body is 39 parts; at 41 the piece is refused with one line
+  (`refused 6418221666 "Light Utility Vehicle (green camo)/Body": 41 parts > cap 40 (VisualAssetConfig.MaxPartsPerModel)
+  — Part kit look stays`) and every 4x4 keeps the Part-kit look (verified: TryAttachVehicleVisual false, no kit part
+  hidden, no WE_CatalogVisual, logged once for any number of spawns).
+- **A15 Log wording changed.** "pack piece skipped ..." and "refused %d: %d parts (cap %d) — Part kit stays" are now the
+  "refused ..." lines above; a transient first failure no longer prints "LoadAsset failed" at once. The W3 LOOK lane's
+  `t_look_unit.luau` checks the old wording (LOOK-U2-once, LOOK-U5-missing, LOOK-U6-piece41: 62/65 on this tree);
+  fix57/drv/t_look_unit_fix57.luau is the same driver with those 3 expectations updated (65/65 here, 62/65 on HEAD).
+- **A16 `_Stats()` gains Requested / CapRefused / Cooling / Failed; `_Requested()` lists the ids asked for** (QA hooks).
+
+## Base panel (BaseController)
+
+- **A17 Same rule as the console NEXT tag.** `TycoonMath.GuideTarget(step, WE_NextBuy)` with no `upgrades` (no local
+  PickCheapest fallback), exactly like WorldPromptController.isNextPick: the tutorial step's pad for level 0 -> 1, no row
+  on the ATM / claim / recruit / outpost / 4x4 steps, no row while the HUD "Tutorial" flag is up but no step is known;
+  after the tutorial the WE_NextBuy row whose NEXT level it names (a stale "Id:Level" marks nothing, as on the console).
+  The step comes from TutorialStateUpdate and PlayerStateUpdate (TutorialStep index / TutorialComplete), guide on only.
+- **A18 Row rebuilds while open are coalesced to <= 10 Hz** (`RELIST_MIN_GAP = 0.1`, task.delay): cash, BaseStateUpdate,
+  WE_NextBuy, WE_IncomeMult, tutorial step, Tutorial flag. Opening the panel still rebuilds at once (and scrolls to NEXT).
+  HEAD rebuilt synchronously on every cash push (40 rebuilds for 40 changes in 0.2 s in the harness; now 3).
+- **A19 The list scrolls to the NEXT row only when the panel opens** (unchanged); a NEXT change while open does not move
+  the scroll.
+
+## BusinessService
+
+- **A20 `Prestige = tonumber(profile.Prestige) or 0`** goes into the PickContext. Only PickMode "Cheapest"
+  (TycoonMath.PickCheapest, the live mode) filters rebirth zones; PickMode "Score" (TycoonMath.Candidates) ignores
+  Prestige - TycoonMath is not this lane's file. At HEAD no zone structure is in BaseConfig.StructureOrder yet, so the
+  pick is unchanged today; the driver adds three zone pads to prove the filter (excluded below the tier, included at it,
+  nested zone needs its parent).
+
+## Verifier fix (fix57 adversarial pass)
+
+- **A21 Waiters wake after the outcome is recorded.** `loadAttempt` now sets `failed` / `cooling` (and prints the final
+  line) BEFORE `releaseWaiters`. Before this, a thread woken from the first insert whose caller asked for the same id
+  again (a dress loop, another piece of the same pack) found neither flag set and started a second insert: one wasted
+  attempt per race, a doubled retry schedule for transient errors and two "LoadAsset failed" lines for permanent ones
+  (HEAD set `failed` inside insertAsset, before the wake, so this was a regression). Verifier driver
+  fix57/ver/drv/vas_adv.luau A1/A2: 1 LoadAsset call + 1 line (was 2 + 2 for the permanent case). Pin added to pins.txt.
+- **A22 A prompt that leaves the DataModel and comes back as the SAME instance loses its suppression** (pruned as the
+  brief asks). WorldPromptController re-applies SetSuppressed on its next console refresh (throttled billboard refresh:
+  cash / upgrade / pick changes), so a MAX console's pill could show briefly in that window; streamed-in consoles are
+  new instances on Roblox anyway (same as HEAD).
+
+- **FX-L1 (lead):** a prompt that leaves the DataModel and returns as the same object loses its suppression until the next console refresh (HEAD kept it). With StreamingEnabled off this needs a destroy/re-parent, which the game never does; re-check in streaming phase 2.
+
+## 2026-09-25 — Owner options batch B part 2 + switch-on (Empire Tax chip, Home Outpost, premium pads, golden pump, producer labels, chevrons, novice shield, nation outpost colours B2)
+
+## Owner's 11 features, batch B part 2 (H HUD, W world + nations B2, Z switch-on)
+
+Merged by lane Z (integB2) for the lead to append to ASSUMPTIONS.md. Every line is reversible. All tests behind these
+lines are headless stand-in / Python runs, not Roblox; nothing here has run on a phone.
+
+Flags after lane Z: ON = TerritoryConfig.Starter.Enabled, EconomyConfig.OutpostIncomeBuff.PersistClaims,
+EconomyConfig.ProducerLabels.Enabled, CombatFairnessConfig.NoviceShield.Enabled, TycoonGuideConfig.Chevrons.Enabled,
+WorldLabelConfig.BaseLabelGovernor.Enabled. Stays OFF = NationConfig.OutpostFlags (lead decision). Ships ON by earlier
+lead decision = TycoonGuideConfig.PickMode "Cheapest". TutorialConfig.OrderVersion is now 3 (it follows the Home Outpost).
+
+### Lead decisions recorded with batch B part 2
+- PickMode "Cheapest" ships ON; prestige is +10 % per rebirth (B1 fix); KeepCash = false; PendingCash is kept on rebirth;
+  rebirth % is XP-based; the objective marker is the one AlwaysOnTop marker (the governor never holds it).
+- NationConfig.OutpostFlags stays OFF (flags on zones need the owner's art and sign-off).
+
+### Spec §5 lines that are now live (they were written for the flag flip)
+- §5.3 LabelGovernor ON: at most 3 base labels on screen; the objective label is exempt. Undo: BaseLabelGovernor.Enabled = false.
+- §5.4 Empire Tax +10 % per captured outpost, +5 % for the own Home Outpost, cap +50 %, on every non-exempt income reason.
+- §5.5 PersistClaims = true: claims persist across servers (re-planted on join onto Neutral / NPC zones, released on
+  leave, dropped when another online player holds the zone). Supersedes ASSUMPTIONS #99. Undo: PersistClaims = false.
+- §5.6 Producer labels ON: one owner-only client label on the nearest producer + the painted ATM screen (reverses agent F's
+  v70/v71 removals, same caps). Undo: ProducerLabels.Enabled = false.
+- §5.7 / §5.8 Cheapest pick drives NEXT / chevrons; chevrons ON and follow the tutorial step. Undo: Chevrons.Enabled = false.
+- §5.10 OutpostBeforeJeep() is now true: the live order is the owner's (Home Outpost 6, 4x4 7).
+- §5.11 Novice shield ON (draw, fire, squad order, strike, contest, tutorial end or skip, 900 s; never re-granted).
+  Undo: NoviceShield.Enabled = false.
+- §5.19 Home Outpost live at plot-local (38, 252), radius 20, 10 s, owner-only, +5 %, 4-part kit, no light.
+- §5.20 Feature flags shipped off in the contract lanes and are switched on here (lane Z).
+
+### Z (lane Z: flag flips, tutorial order version, docs)
+Z-1. **TutorialConfig.OrderVersion follows the Home Outpost switch: 3 while TerritoryConfig.Starter.Enabled (outpost 6,
+     4x4 7), 2 while it is off (4x4 6, outpost 7).** One order version now names ONE fixed order
+     (TutorialConfig.SavedOrders[2] / [3]; version 1 or missing = LegacyOrderV1), so a saved step index is always read in
+     the order it was saved in. TutorialService migrates every KNOWN other version on load, in either direction (so the
+     switch stays reversible); a version this build does not know (a newer build's save) is left alone and never stamped
+     down. New profiles are stamped with 3 (ProfileSchema reads OrderVersion). This supersedes K2-3 and T-12 ("OrderVersion
+     stays 2 whatever the flag says") and removes the cost named in K2-2 (a v1 step-8 save repeating the 4x4).
+Z-2. **A done Outpost / 4x4 step is never asked twice (TutorialConfig.CarryDoneIds = {Outpost, Jeep}).** When a migration
+     moves a save to a step and the new order puts an already-done Outpost or 4x4 step after it, that Id is kept in
+     profile.TutorialDoneAhead ({[Id] = true}) and TutorialService treats it as done (skipped like an owned buy step).
+     Concretely (B1 residual risk 4): a v2 save on step 7 (4x4 spawned, outpost owed) now lands on Outpost (6) and the
+     tutorial completes on the capture; a v2 save on step 6 plays Outpost then 4x4; v1 step 8 behaves like v2 step 7.
+     Carried Ids survive a later migration (union) and a rejoin (ProfileSchema.DeepCopy / Migrate keep the key; no schema
+     change, no DataVersion bump); Reset clears them; junk values skip nothing. Other done steps a new order puts later
+     are asked again, as K2-2 already decided (a v1 save that collected before buying the Command Center collects again).
+     Reversible: empty CarryDoneIds.
+Z-3. **Rolling update.** An old-build server (B1, OrderVersion 2) that loads a v3 save during the update reads its step in
+     the 4x4-first order (steps 6/7 swap once for that session). Publish with "Migrate to Latest Update" so old servers
+     close; no money effect.
+Z-4. **The gold-pad gate constants stay in PlotOilPumpService** (GOLD_PAD_GATE_CLEAR 24 / GOLD_PAD_BESIDE_PUMP 8.5,
+     W-14). Moving them to PlotOilPumpConfig.Golden means editing lane W's file for a non-bug; left for the lead together
+     with the W-14 sign-off. Nothing is live until the GoldenPumpjack Id is pasted.
+Z-5. **Docs.** docs/LIVE_PLACE.md product tables are re-read from MonetizationConfig (every GamePass / DevProduct key with
+     its Id, price and where it is sold; ExtraSoldierSlot 99 R$, StarterBundle 149 R$; Nuke, NukeBundle3, PV_*,
+     RebirthBoost, ImpulseSpeed, RebirthKeepBase added) plus the 3 new Creator Dashboard items and the paste steps; a
+     BuyPathStatic check keeps the doc's Ids equal to the config. BALANCE.md gets the Empire Tax rows and the Territory
+     line is corrected (capture 20-50 s, Home Outpost 10 s, MaxPersonalTerritories 6, was "3").
+Z-6. **Scratch drivers switched for the flags-ON tree** (scratch only, never the repo): worldhook tut_* -> W's
+     t_client_driver_w (T's original injects duplicate Home Outpost markers: 76/2 with the Starter on, kept as tcl_*);
+     biz -> E/biz_driver_k2_e; raid -> E/raid_driver_f2_e; b2svc -> T/b2svc_laststep; f3_driver_b -> W/f3_driver_b_w.
+     Drivers that asserted "flag ships false" / "OrderVersion 2" got lane Z copies (integB2/zdrv/*_z.luau) with only those
+     expectations changed; the originals still pass on the flags-OFF variant (cand_off).
+Z-7. **HUD stand-in gap:** the integB2 copy of the harness's rbxsim adds Workspace:BulkMoveTo (moves each part, as lane G's
+     g_guidance_on state already did), because the chevrons are now on in every state. Stand-in only; the game uses the
+     engine's BulkMoveTo.
+Z-8. **Economy model with Empire Tax** (Python, integB2/econ/econ_z.py over K2's econ_k2.py): Empire Tax multiplies
+     passive/business income and training, not plot oil; the Home Outpost (+5 %) is taken at the tutorial's step 6
+     (modelled at 120 s), captured outposts at 10 / 20 min in the "home1" / "home2" scenarios. Not Roblox.
+Z-9. **Known, not changed (W verifier risk 1):** with both PersistClaims and the Home Outpost on, saved claims are
+     re-planted only because TerritoryService's profile-loaded listener runs before BaseService's plot-ready (BaseService
+     defers RefreshAllVisuals). If BaseService ever fired plot-ready synchronously at load, the Home Outpost hold would
+     rewrite profile.Territories first and the other saved claims would be lost for that join (Empire Tax 5 instead of
+     25 in the verifier's reverse-order driver). No path does this today.
+
+### H (HUDController, HudIcons, TerritoryController)
+
+H-1. F3 Empire Tax chip crowding: HideWhenCrowded degrades in two steps instead of one. When the full chip (gold
+     flag + "+10%", about 83 real px) would reach the compass chip (compass left - Gap), it first drops the flag
+     ("Compact", "+10%" only, never under 44 real px wide), then hides. It grows back only with 6 real px to spare, so
+     the compass distance ticking 99m -> 100m never makes it flicker. Reason: on 844x390 outside the base the full
+     chip has only a few px to spare (and none with a two-digit level); the compact chip keeps the % on screen there.
+     The spec said "hide". Reversible: make EmpireTaxFit return "Hidden" instead of "Compact".
+
+H-2. The spec's "fits at 844 and 956 (compass left edge at 720 and 812)" does not hold: in the HUD harness the compass
+     chip ("BASE 869m", 136 px) starts at x 649 on 844x390 and at 746 on 956x440. Harness results outside the base
+     (compass showing), Lv 7 / Lv 40: 844x390 Full / (shielded) hidden; 956x440 Full / Compact; 932x430, 800x360 Full /
+     (shielded) hidden; 800x360 with a notch Compact / (shielded) hidden; 1180x820 and desktop always Full. Inside the
+     own base the compass hides and the chip is Full everywhere. The harness text widths are the stand-in's estimates;
+     on a device the same rule uses the real font widths, so the switch points move by a few px.
+
+H-3. F3 crowding also covers a HEAD overlap: at 800x360 with a notch (safe 32 px), Lv 10+, outside the base, with the
+     raid shield running, the Shield chip ran 9 px under the compass chip (HEAD, harness). Now, once the Empire Tax
+     chip is hidden and it is still crowded, the Shield chip drops its icon and keeps "9:59". In the harness this
+     happens on 800x360-notch and 844x390 while shielded outside the base (the stand-in's text-width estimate is a
+     few px wider than the harness layout's there, so the check errs on the safe side). Reversible: remove step 2 of
+     refreshEmpireTax.
+
+H-4. The crowding check is event-driven only (the %, the level number, the shield chip text / visibility, the compass
+     chip text / visibility, a layout change), never per frame. It measures each chip as the larger of its laid-out
+     AbsoluteSize and a TextService estimate of its parts, so a chip whose AutomaticSize has not resolved yet is
+     never under-counted. When there is no Empire Tax and no shield it measures nothing.
+
+H-5. F3 dropdown header: "Empire Tax +N%" in the chip gold while N > 0; "TERRITORIES" (white) at 0, so a player who
+     holds nothing still sees what the list is. Spec wrote only "Empire Tax +N%".
+
+H-6. F3 toast: "Empire Tax +N%" (Info) fires when the server's WE_EmpireTaxPct changes to N > 0. It is skipped when a
+     server toast whose text contains "Empire Tax" (EconomyConfig.OutpostIncomeBuff.DisplayName) arrived from 2 s
+     before the change up to the decision, which runs 0.6 s after the change (attribute and remote-event order is
+     not guaranteed). It is also skipped for 10 s after the first TerritoryStateUpdate (joining, re-planted claims,
+     the Home Outpost held from the start) and when the % drops to 0 (the server's loss toast says it). One visible
+     case: lane W's silent Home Outpost hold (OnPlotReady) more than 10 s after joining shows "Empire Tax +5%" once.
+
+H-7. F10 list: every non-starter zone is listed; of the Home Outposts only the one whose plot is the player's own
+     (TerritoryConfig.Starter row PlotId, or the Starter_P<n> id when this client's config has no such row). While
+     the own plot is not known yet (no BaseStateUpdate / PlayerStateUpdate.Base), only a Home Outpost the player
+     holds is listed. The count ("2/12") counts listed rows only.
+
+H-8. Territories list text on touch is 20 v (14 real px at the phone scale 0.70), was 16 v (11.2 px, HEAD). The list is
+     340 v wide on touch (was 300) and the tag column 112 v (was 104), so "Coastal Oil Bravo" and "CONTESTED" fit.
+     Desktop keeps 16 v / 300 / 104.
+
+H-9. F11 level-chip tooltip reads "Rebirth 17%  Lv 20/40 · Fee: none · +10%/P" (XP-based PrestigeConfig.ProgressPct,
+     the same number as the Rebirth panel; capped at 99 below Lv 40). It was "Rebirth 20/40 (50%) · ..." (level-based).
+
+H-10. HudIcons "Flag" is a plain pennant on a pole (2 Frames, the chip gold). It is never a country flag, so the nation
+     rules (Textures/Decals only, owner-approved list) do not apply to it.
+
+Known, not changed (pre-existing on HEAD, same geometry): the Territories dropdown, when open on a touch screen, extends
+into the harness's "Reserved: vehicle/combat controls (bottom-right)" box (zone=1 on the 5 phone-size viewports). The
+list is a registered Modal panel: the touch combat buttons and the ammo readout hide on "Modal" (HudConfig.TouchCombat /
+Ammo HideWhen), the vehicle controls exist only while Driving and the list closes on Driving and death; the harness shows
+0 overlaps in that snapshot. It is not one of CLAUDE.md's reserved zones (thumbstick,
+jump + 16 px, top-bar pills: all 0). A fix that keeps it out of the box would cut the list to about 2 rows on 844x390.
+
+### W (MapSetup, BaseLayout, TerritoryService, TerritoryCapture, TerritoryRadar, PlotOilPumpService; nations B2)
+Note (lane Z): W's "flags stay as shipped" line is superseded by Z-1..Z-2 and the flag list above: Starter and
+PersistClaims are now ON; OutpostFlags stays OFF. All W tests are headless stand-in runs, not Roblox.
+
+W-1. **The ATM pads are MonetizationConfig.PremiumPads.Slots, built in slot order (red Auto Collect, yellow 2x Cash, cyan
+     Speed).** A slot is built only while LivePadOffer finds an offer with Id ~= 0 (today: both passes, and the Speed slot
+     sells the 99 R$ Speed Boost product until the 5 R$ Speed Pass Id is pasted). No VIP pad and no Golden Pump pad at
+     the ATM. The pad keeps its Neon top (it is the offer; 3 per base, 18 in all) and its name `PremiumPad_<OfferKey>`.
+     Each pad gets OfferKind / OfferKey / OwnedIfAny (comma string) / PlotId / PadSlot and one label (MaxDistance
+     PremiumPads.LabelMaxDistance = 20, tagged WE_BaseLabel). Revert: re-add a slot in PremiumPads.
+W-2. **MapSetup builds the capture zones from TerritoryConfig.Territories** (one source). It keeps only its own build
+     data: the build order of the original eleven zones (so their parts are made in the same order as before) and each
+     fort's gate side (FortIronclad +Z, FortSandhold -Z). Any other row is built after them, sorted by id. Side effect:
+     the initial marker / ring / flag colour of a neutral zone is now TerritoryConfig's colour (e.g. Central Plaza
+     200,200,80 instead of MapSetup's 180,170,50). TerritoryService already painted the config colour on its first
+     tick, so nothing changes once the server runs; the fort keeps and lintels were already the same colour.
+W-3. **MapSetup.MAP_GEN = (FaceMapCentre ? 83 : 82) + (Starter.Enabled ? 10 : 0).** 80/81 -> 82/83 rebuilds a baked map
+     that still has the VIP pad; +10 makes flipping the Home Outpost flag rebuild a baked map as well. The parity still
+     encodes FaceMapCentre. Revert: the old expression.
+W-4. **Home Outpost kit = 4 parts** (invisible marker with both capture tags, TerritoryId, PlotId, IsStarter, OwnerOnly
+     attributes; ring D = 2R + 8 = 48; pole; flag) plus the usual WE_ZoneLabel "Home Outpost" (MaxDistance 40) and, at
+     runtime, TerritoryService's 28 px flag diamond (MaxDistance 40). No stripe, finial or light. The label is visible to
+     every player near it (it only names the zone; only the owner can take it).
+W-5. **Owner-only capture** = TerritoryCapture counts only BaseService.GetOwnerUserId(def.PlotId) (bound by TerritoryService
+     through SetPlotOwnerResolver). Anyone else neither captures nor contests; a Home Outpost whose plot has no owner on
+     this server counts nobody. The marker's half-diagonal still widens the radius as for every zone (R 20 -> ~28 studs).
+W-6. **Home Outpost rules.** 10 s capture; +StarterPct (5) Empire Tax via EconomyService (never a stack); never counted
+     toward MaxPersonalTerritories and never evicted; never stolen (only the owner counts); no stipend (StipendCash 0);
+     no clan-war capture credit (ClanWarService.OnTerritoryCaptured is skipped); the capture still counts for
+     Stats.TerritoriesCaptured, missions and the tutorial (it can happen once per account: StarterOutpostTaken).
+     The first capture sets profile.StarterOutpostTaken; afterwards BaseService.OnPlotReady makes the plot owner hold it
+     silently (no toast, stat, mission or tutorial event) and recounts the Empire Tax (SyncOutpostIncomeStacks). It goes
+     back to Neutral when its owner leaves, and when the plot changes hands (a stale holder is released on OnPlotReady;
+     a Home Outpost the player holds on another plot is released too). Revert: TerritoryConfig.Starter.Enabled = false.
+W-7. **Other plots' Home Outposts are not in a player's TerritoryStateUpdate list** (TerritoryRadar.ShownTo, server side),
+     so the Territories dropdown, compass and tutorial never offer a zone the player cannot take. A player with no plot
+     sees no Home Outpost. Other zones are unchanged.
+W-8. **Empire Tax toasts take the TOTAL % after the change** (EconomyConfig.OutpostIncomeBuff templates, K1 #8):
+     capture "Outpost taken  Empire Tax +N%" (shown when the total went up, incl. the Home Outpost's +5); steal
+     "Took <zone>  Empire Tax +N%"; the victim "<zone> taken  Empire Tax +N%"; an eviction "Outpost lost  Empire Tax
+     +N%". A capture that does not raise the total (already at +50 %) keeps the old "★ SECURED <zone>! <description>"
+     line. A missing or broken template falls back to a plain line (never errors). The hard-coded
+     "★ SECURED %s — +%d%% Income (yours)" is gone.
+W-9. **PersistClaims (flag, off until lane Z).** On join, before the profile is rewritten from this server's zones,
+     every saved claim (profile.Territories) is re-planted when the zone is Neutral (also a neutral zone being contested)
+     or NPC-held: the player owns it with the normal ProtectedUntil = now + ProtectionPeriodSeconds, silently (no toast,
+     stat, mission or tutorial event), up to MaxPersonalTerritories. A claim on a zone another ONLINE player holds is
+     dropped with "<zone> is held by <DisplayName>" (Warn). A claim on a clan-held zone, a leftover offline holder's
+     zone or a zone that no longer exists is dropped silently. Home Outpost ids are never re-planted. On leave the
+     player's zones go back to Neutral WITHOUT touching the saved profile, so the next server re-plants them. Flag off =
+     HEAD behaviour (claims are per server; a leaver keeps world ownership until someone takes it).
+W-10. **F6: a shielded novice inside a contested zone loses the shield** (CombatService.EndNoviceShield(p, "contest"),
+     pcall; CombatService applies its EndOnContestedCapture switch). An owner-only Home Outpost is never contested.
+W-11. **F4: PlotOilPumpService makes no BillboardGui per tick.** The "+$18" pop is deleted; the owner's label is the client
+     ProducerLabels module (lane G, behind EconomyConfig.ProducerLabels.Enabled). Until lane Z flips that flag there is
+     NO "+$18" label over the pumps at all (the training-yard pop stays server-side behind the same flag, lane E-2).
+W-12. **F9 golden dress:** Derrick / WalkingBeam / HorseHead gold Metal + Reflectance 0.2; the pump Pad stays Asphalt with a
+     gold colour; every BasePart of the catalog clone is gold Metal (so a Neon piece of the catalog model is Metal too),
+     its MeshPart TextureID is cleared and SurfaceAppearance / Texture / Decal children are removed. Re-applied right
+     after the deferred TryAttachPropVisual. No light.
+W-13. **F9 gold pad:** one 7x7x0.45 gold Metal WE_PremiumPad (OfferKind DevProduct, OfferKey GoldenPumpjack, PlotId,
+     named PremiumPad_GoldenPumpjack) with one "Golden Pump" / "R$" label named WE_PremiumBillboard (so the Shop's OWNED
+     look finds it; MaxDistance Golden.LabelMaxDistance = 20, tagged WE_BaseLabel), built only while the Id is live and
+     the plot owner does not own it, so nothing appears until the Id is pasted. Spot: between the two pumps (lateral 0),
+     PadOffsetStuds (10) toward the plot, outside the wall.
+W-14. **F9 deviation: the gold pad never sits in the main gate lane.** On plots 3 and 4 the pumps flank the main gate (the
+     spec's side finding), so the spec spot is 8 studs in front of the gate centre and every walk out of the gate would
+     show the owner a Robux sheet. Where the spec spot is closer than 24 studs to the main gate centre (plot-local
+     (0, PlotSize/2) through PlotFrame), the pad moves beside the outer pump, on the pump line (lateral +19.5): 26.5 studs
+     from the gate centre, clear of both pumps. Plots 1, 2, 5, 6 keep the spec spot (85 studs from their gate). The 24 /
+     8.5 studs are local constants in PlotOilPumpService (GOLD_PAD_GATE_CLEAR / GOLD_PAD_BESIDE_PUMP); lane Z may move
+     them to PlotOilPumpConfig.Golden (config-first). Revert: delete the 4-line gate check.
+W-15. **BaseLayout.FacesMapCentre / PlotYaw / PlotCFrame delegate to Shared/Util/PlotFrame** (same maths, one copy).
+     BaseLayout's other helpers are unchanged.
+W-16. **Nations B2 (a)(b) contested colours.** Two contester colours closer than NationConfig.ContestMinColorDistance
+     (0.25 RGB) pulse contester A <-> amber (255,140,35) instead of A <-> B; if A itself is within 0.25 of amber the pulse
+     is plain amber. The capture HUD gets the same rule: B is sent as amber, and neither colour is sent when A reads as
+     amber (the HUD then runs its own amber pulse). Far colours are unchanged (A <-> B).
+W-17. **Nations B2 (c) owned colours.** A player-held zone never takes a colour within 0.25 of NPC red (210,45,45), Clan
+     blue (70,120,240) or contested amber: it falls back to the player's legacy roster colour, else (55,210,95). This
+     also fixes the legacy Crimson / Azure / Amber roster colours, which read as NPC-, clan- or contest-held at HEAD
+     (3 of 8 roster colours now show green on the zones they own). Contester colours are not changed (the pulse rule
+     handles them).
+W-18. **Nations B2 (d) R15 cache in TerritoryService** (no NationColorService change): the owner's colour (and nation id
+     while OutpostFlags is on) is cached while they are online and kept after they leave only while that UserId still
+     owns a zone (PersistClaims off: soft release). The entry is dropped on the first release that leaves them owning
+     nothing (and on leave when they own nothing), so the cache never grows with the server's lifetime.
+W-19. **Nations B2 (e) outpost flags behind NationConfig.OutpostFlags (false).** Off: flag sizes and look exactly as HEAD,
+     no Texture is ever created on a zone flag and no WE_NationShown attribute is written. On: 4:3 sizes 4.8x3.6
+     (owned), 5.2x3.9 (contested), 3.6x2.7 (neutral / NPC); two Textures (WE_NationTexA/B, created on first show) on
+     the thin faces show the owner's nation (NationColorService.GetNationId, already art-gated) only while the zone is
+     Player-owned and not contested, and only when art is wired (NationTexture.Source); otherwise they are blank. The
+     stripe hides (Transparency 1) while a flag image shows. Never a SurfaceGui, no light, no nation name in any toast.
+     A leaver's nation flag stays while they still own the zone (R15 cache). RefreshOwnerFlags(userId) redraws the
+     zones that user owns or contests (NationColorService calls it after a pick, only while OutpostFlags is on).
+W-20. **No NukeService exists in the tree** that targets territories, so the F10 "nukes skip it" rule lives only in
+     NukeConfig.IsTerritoryTargetable (K1, tested); TerritoryService adds nothing for it.
+
+### Lead
+- **B2-L1 Switched ON in this commit (owner's options):** TerritoryConfig.Starter (Home Outpost), OutpostIncomeBuff.PersistClaims,
+  ProducerLabels, NoviceShield, Chevrons, BaseLabelGovernor. NationConfig.OutpostFlags stays OFF. Tutorial OrderVersion is 3
+  while the Home Outpost is on (2 while off); saves migrate both ways and finished steps the new order puts later are carried.
+- **B2-L2 Owner sign-offs still open (reversible, shipped as built):** gold pad beside the outer pump on plots 3 and 4 (W-14);
+  3 legacy roster colours now shown green on owned outposts (contrast fallback); a novice's shield ends when they contest a
+  zone; re-planted claims can take NPC zones on join; stipend-hopping estimate ~1.5x. Economy: a player who only follows NEXT
+  earns 142 $/s at 30 min with just the Home Outpost (+5 %), 158 with one more outpost; below the 280-380 band - the
+  one-line revert is PickMode = "Score".
+- **B2-L3 Publish with "Migrate to Latest Update":** an old server that loads a v3 tutorial save would swap steps 6 and 7 once.
+
+## 2026-09-25 — Empire Bank hall (lane BK) + world enable steps 2 and 3 (all 17 places on)
+
+## W3 step 2: lane BK (Empire Bank hall) + enable steps 2 and 3, integration (all reversible)
+
+Ship set: `src/ServerScriptService/Server/Modules/MapSetup.luau` (lane BK + the BK verifier's gate fix) and
+`src/ReplicatedStorage/Shared/Configs/WorldConfig.luau` (`Enabled` flips only). Verified together on clean HEAD c51ec9b + these
+2 files (`buildBK/fin/cand`, md5s in `buildBK/fin/files.md5`). Every number comes from the headless stand-in, not Roblox.
+
+- **INT-BK-1. Enable steps 2 (Signal, Airstrip, Radar, FortI, FortS) and 3 (Ruins, Crash, Oasis) are ON.** Every cap
+  passes at step 3 (Full/Low x FaceMapCentre true/false): 17 / 17 world signs, 0 boards blank, in both startup orders;
+  parts outside bases 2,452 / 2,451 Full (cap 2,900), 1,679 / 1,676 Low (cap 1,900); world lights 21 Full / 19 Low (cap 24), 0 out of policy;
+  Neon 0 outside the bases (world total 306, same as HEAD); anchors equal expected (175 Full, 170 Low); hygiene H1-H10 0; 0 floating groups;
+  0 collidable POI parts in a road lane. The spec asks for the owner's sign-off on the renders before each step: the
+  renders are in `buildBK/fin/render/`. Revert: flip the 8 rows back to `Enabled = false` and apply the old side of
+  `integ_bps_changes.txt` (the 5 "steps 2-3 off" needles) and drop the 4 step-2/3 pins in `integ_bps_block.py`.
+- **INT-BK-2. The busiest 512-stud circle is not changed by steps 2 and 3.** With step 1 only (same MapSetup) it is
+  495 static (FaceMapCentre false) / 495 (true); with steps 2-3 it is 495 / 493. The new places are 900+ studs from it.
+- **INT-BK-3. Phase B's bags do not fit in that circle yet.** Static 495, measured with supply crates 497, bound 499
+  (cap 500). Phase B's at most 4 bags add up to 4 parts: 501 measured-worst, 503 bound. This is a Phase B entry
+  condition, not an enable-step failure: before bags ship, Phase B must free at least 3 parts in the circle round
+  (-128, -88) (options: each gate-pad post + board as 1 part, or at most 1 loose bag in the world).
+- **INT-BK-4. `V-npcpost-clear` stays a known false positive** (camp posts 0.73-1.40 studs by the AABB shortcut; the
+  oriented distance is 1.90-1.99, driver D3POST lines). It fails the same way at HEAD and is in the step-1 camps, not
+  steps 2-3.
+- **INT-BK-5. Pins.** The Phase A integration's 5 "steps 2-3 off" needles are swapped for "on" needles, lane BK's 27 pins are
+  kept (one label reworded: the gate is built open, no longer "raised"), and 6 integration pins hold the verifier's
+  up-and-over gate pose, `CanQuery = false`, the closed pose and the 17-sign budget. `apply_pins.py` applies all of it.
+- **INT-BK-6. The lane F census check "BankGate raised (bottom 10.8)" reads the gate's unrotated Size.** The gate
+  really lies flat at y 14.98-15.58 (verifier's gate driver). The check passes for the right reason (nothing hangs in
+  the opening) but its printed bottom is not the true bottom. Test-only; no game change.
+
+### Lane BK assumptions (verbatim, `buildBK/assumptions.txt`)
+
+## W3 step 2 lane BK: Empire Bank hall + enable steps 2 and 3 (all reversible)
+
+Files: `src/ServerScriptService/Server/Modules/MapSetup.luau` (the bank hall and the pool-pad signs) and
+`src/ReplicatedStorage/Shared/Configs/WorldConfig.luau` (`Enabled` flips only). Every result was measured in the
+headless stand-in, not in Roblox.
+
+- **BK-1. The bank is 17 parts, the same count as the old block** (spec w3s2 §1.1):
+  - BankPlaza (36 × 1.2 × 36, top 1.6);
+  - the WorldKits TownBlock "hall" shell (7 parts: 24 × 22, 2 storeys, pale limestone walls, facing south down Bank Street);
+  - 2 marble portico columns;
+  - the EMPIRE BANK board;
+  - BankGate;
+  - a round VaultDoor on the back wall;
+  - the gold VaultPad;
+  - 2 concrete planters;
+  - the StateBanner on the roof.
+
+  It has no beacon, no kerb, no light, no Neon and no MapSetup billboard: BankRaidService's vault label is the only one.
+  The hall walls and roof block shots (CanQuery on). Two parts cast shadows: the back wall and the roof.
+  Revert: restore the old block from HEAD c51ec9b (MapSetup "Empire Bank (raid stub)").
+- **BK-2. The columns stand 1 stud further out than the geometry draft:** x 212 and 228 instead of 213 and 227.
+  - At the draft positions, the near column hid up to 8 % of the sign from the edges of Bank Street (92.3 % worst view).
+  - Now the sign is 100 % visible from all 25 street viewpoints within its 80-stud range.
+  - HEAD's old columns hid about a third of the old sign: 78 % mean, 65 % worst.
+  - Guard posts G3 and G4 stay 1.53 studs clear of the columns.
+- **BK-3. The vault pad centre is (220, −224), 2 studs toward the door from the Town.Bank.Vault anchor at (220, −226).**
+  - The legacy raid counts anyone within BankRaidConfig.VaultRadius 12 of the tagged pad.
+  - With the pad at −226, that radius reached through the back wall: 43 standable spots behind the bank were inside it,
+    and no guard could see them. A raider could loot from outside the building.
+  - At −224, a raider pressed against the back or side walls outside stands at least 12.5 studs from the centre.
+    The coverage map has 1,439 spots and 0 are hidden from every guard.
+  - The jobs' crack ring (Phase B) still uses the anchor at (220, −226), r 8.
+  - Revert: VaultRadius 8 and the pad back to −226, changed together (pending_edits.md §1).
+- **BK-4. The vault pad is a flat 12 × 12 square, not a round disc.**
+  - A flat Cylinder has to be rotated, and BankRaidService's label sits on the pad through StudsOffsetWorldSpace. I did
+    not rely on how Roblox applies that offset to a rotated part.
+  - The owner's test says "gold pad".
+- **BK-5. BankGate is built open as an up-and-over door** (verifier fix; the builder's version hung it upright 6 studs up).
+  - Open: tipped flat (90 degrees about X) just under the roof slab: x 215–225, y 14.98–15.58, z −223.9 to −214.9, 0.02 under the
+    roof, overlapping no part. The upright raised slab (y 7.6–16.6 in the opening) sat between a follow camera outside the
+    hall and a raider on the vault: in a sightline model (camera 10–15 studs behind, pitch 15–25 degrees) it hid the
+    raider's focus point in 115 of 115 vault-centre cases, and a CanCollide-false part never pops the Roblox camera in.
+    Flat under the ceiling: 0 of 115.
+  - CanCollide and CanQuery are false, WE_GateState is "open", and it carries WE_RuntimeDoor.
+  - WE_ClosedCFrame (upright, y 1.6–10.6, filling the 10-wide opening) and WE_OpenCFrame (the flat ceiling pose) hold its
+    two positions for the jobs. Phase B's OpsSites.SetDoor must set the CFrame from them (pending_edits.md §2).
+  - Revert: open = closed + (0, 6, 0) (the builder's raised pose).
+- **BK-6. The StateBanner's bottom sits on the roof top** (y 16.8, centre 19.8). The spec gives a centre of y 20, which
+  assumed the draft's 0.2-stud-thicker roof.
+- **BK-7. The 4 pool pads lose their sign post, board and "Garage" label entirely,** rather than keeping a blank board.
+  - This removes 8 parts outside the bases, 2 of them inside the busiest 512-stud circle: 497 → 495 static.
+  - The circle's bound with 2 supply crates goes from 501 (over the cap at HEAD) to 499.
+  - Plan A (each client paints its own gate-pad sign) can bring pool labels back later.
+- **BK-8. MapSetup paints EMPIRE BANK itself.** It uses WorldKits.Sign on the board's street face (Back, +Z), right after
+  the gate pads and before MapDressing paints the POI boards. BankRaidService's paint-if-missing stays as the fallback.
+  At step 3 the world holds 17 of 17 signs with none refused, in both startup orders.
+- **BK-9. No MAP_GEN bump.**
+  - The live place is a Rojo build with no baked map, the same reasoning as the Lane D line.
+  - A map saved into the place in Studio keeps the old bank until MAP_GEN moves.
+  - Revert/bump: 84/85 + (Starter ? 10 : 0), together with the BuyPathStatic map-gen pin.
+- **BK-10. Enable steps 2 and 3 are switched on:** Signal, Airstrip, Radar, FortI, FortS, Ruins, Crash and Oasis are
+  `Enabled = true`.
+  - The spec asks for owner sign-off on the renders at each step. The integrator's renders of every place are in
+    `w3s2/build/integ/renders/`, and the bank renders are in `w3s2/buildBK/render/`.
+  - Revert: flip the 8 rows back and swap the pins back (bps_changes.txt).
+- **BK-11. MapSetup's `beacon` helper is deleted.** It had no caller left once the bank beacon went.
+- **BK-12. Test drivers were adapted to the hall (scratch copies only):**
+  - real_play and shield_driver_v2 probe the floor from y 12, because the y-40 probe landed the walker on the hall roof;
+  - integ_driver expects the 10 Town.Bank anchors;
+  - wh_driver's V9-signs expects 6 pad signs;
+  - the mission driver gained a "map" mode that uses the real MapSetup anchors.
+- **BK-13. BankRaidConfig is unchanged** (Phase B owns it).
+  - BankRaidService already prefers MapSetup's G anchors.
+  - The fallback GuardPosts still sit round the old building. Moving them to the anchor positions is in pending_edits.md §1.
+- **BK-14. G5 is the only guard with a view deep inside the hall** (spec §5). 1,091 of the 1,439 vault spots are seen
+  by exactly one guard. A squad that kills G5 first has the interior to itself. The spec accepts this, and squad
+  balance is Phase B's H2 test.
+
+### Lead
+- **BK-L1 Enable steps 2 and 3 are ON without a separate render sign-off.** The owner delegated ("keep building how you
+  are, you decide"); every census check passes and the renders are in scratchpad w3s2/buildBK/fin/render/. Revert: flip
+  the 8 WorldConfig rows back to Enabled = false and swap the 5 step pins back (INT-BK-1).
+- **BK-L2 Headroom:** busiest 512-stud circle 493/495 static, 497/499 worst with crates (cap 500); world signs 17/17.
+  Phase B (jobs) must not add parts or runtime signs in that circle without freeing some first.
+- **BK-L3 Pending edits in phase-B-owned files** (w3s2/buildBK/pending_edits.md): BankRaidConfig.GuardPosts fallback posts
+  that follow the hall (only used if the anchors go missing), and OpsSites.SetDoor must use WE_Open/ClosedCFrame. Applied
+  with the phase B commit.

@@ -3,7 +3,11 @@
 	v70 "clean screen" (spec §3.7 / §3.8): the season banner left the HUD — the season line sits under this
 	panel's title (SeasonStateUpdate). The near-rebirth banner became the Rebirth tile's "!" badge. A registered
 	Modal panel (HudLayout id "Rebirth") with the black dim; one HUD scale + safe area; every tappable ≥ 44 real
-	px on touch. Server-authoritative: every button only fires its request remote. ]]
+	px on touch. Server-authoritative: every button only fires its request remote.
+	Owner's 11 features F11 (lane P): the rebirth block is a progress bar "Rebirth 17%  Lv 20/40" (XP-based,
+	PrestigeConfig.ProgressPct, following XPUpdate live) and a checklist (Reach Lv 40 / No fee). CONFIRM REBIRTH
+	opens the RebirthConfirm modal (free and 50 R$ keep-base paths, what each keeps and resets); the rebirth request
+	itself is fired from that modal only. ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -16,10 +20,13 @@ local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local PrestigeConfig = require(Shared.Configs.PrestigeConfig)
 local ProgressionUI = require(script.ProgressionUI)
 local ProgressionBattlePass = require(script.ProgressionBattlePass)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
+local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+local RebirthConfirm = require(script.Parent.Parent.Modules.RebirthConfirm)
 local NotificationController = require(script.Parent.NotificationController)
 
 local ProgressionController = {}
@@ -27,12 +34,22 @@ local ProgressionController = {}
 local PANEL_ID = "Rebirth"
 
 local player = Players.LocalPlayer
-local isTouch = UserInputService.TouchEnabled
+-- layout switch (big touch targets), set in Init: a touch screen, or the player's preferred input is touch
+-- (CLAUDE.md "copy by device": PreferredInput via HudLayout.PrefersKeys, not TouchEnabled alone). No copy here names a key.
+local isTouch = false
 local menuOpen = false
 local screenGui: ScreenGui? = nil
 local shell: PanelShell.Shell? = nil
 local seasonLabel: TextLabel? = nil
-local prestigeLabel: TextLabel? = nil
+-- F11 rebirth progress block (replaces the old one-line "Rebirth P0 | Cash +0% now | ... | Can: no")
+local progressLabel: TextLabel? = nil
+local progressFill: Frame? = nil
+local rebirthInfoLabel: TextLabel? = nil
+type CheckItem = { Box: Frame, Mark: TextLabel, Label: TextLabel }
+local checkLevel: CheckItem? = nil
+local checkFee: CheckItem? = nil
+local liveLevel: number? = nil -- XPUpdate (fresher than the last PrestigeStateUpdate)
+local liveXP: number? = nil
 local unlockLabel: TextLabel? = nil
 local prestigeConfirm: TextLabel? = nil
 local prestigeKeepBanner: TextLabel? = nil
@@ -163,26 +180,69 @@ local function promptPremium()
 	end)
 end
 
-local function refreshLabelsImmediate()
-	if prestigeLabel then
-		if typeof(prestigeState) == "table" then
-			local p = tonumber(prestigeState.Prestige) or 0
-			local cur = tonumber(prestigeState.CashMultPercent)
-				or math.floor(p * (tonumber(prestigeState.CashBonusPerLevel) or 0.10) * 100)
-			local nxt = tonumber(prestigeState.NextCashMultPercent)
-				or math.floor((p + 1) * (tonumber(prestigeState.CashBonusPerLevel) or 0.10) * 100)
-			prestigeLabel.Text = string.format(
-				"Rebirth P%d  |  Cash +%d%% now  |  Next +%d%%  |  Need Lv %d  |  Can: %s",
-				p,
-				cur,
-				nxt,
-				tonumber(prestigeState.MinLevel) or 40,
-				if prestigeState.CanPrestige then "YES" else "no"
-			)
+local function setCheck(item: CheckItem?, done: boolean, text: string)
+	if not item then
+		return
+	end
+	item.Label.Text = text
+	item.Label.TextColor3 = if done then Constants.Colors.TextOnDark else Constants.Colors.Muted
+	item.Box.BackgroundColor3 = if done then Constants.Colors.Accent else Constants.Colors.Background
+	item.Mark.Visible = done
+end
+
+--[[ F11: "Rebirth 17%  Lv 20/40", the bar, the checklist and the cash line. Level / XP follow XPUpdate live; the rest
+	comes from PrestigeStateUpdate. Cheap (text + one Size), so XPUpdate can call it directly. ]]
+local function refreshProgress()
+	local st = if typeof(prestigeState) == "table" then prestigeState else nil
+	local minLv = math.floor(tonumber(st and st.MinLevel) or PrestigeConfig.MinLevelToPrestige)
+	local level = liveLevel or tonumber(st and st.Level)
+	local xp = liveXP or tonumber(st and st.XP) or 0
+	local p = math.floor(tonumber(st and st.Prestige) or 0)
+	local maxP = tonumber(st and st.MaxPrestige) or PrestigeConfig.MaxPrestige
+	local maxed = st ~= nil and p >= maxP
+	local pct = if level then PrestigeConfig.ProgressPct(level, xp) else math.floor(tonumber(st and st.ProgressPct) or 0)
+	local fee = tonumber(st and st.CashFee) or 0
+	local lab = progressLabel
+	if lab then
+		if maxed then
+			lab.Text = string.format("Max rebirth reached  P%d", p)
+		elseif level and level >= minLv then
+			lab.Text = string.format("Rebirth READY  Lv %d/%d", math.floor(level), minLv)
+		elseif level then
+			lab.Text = string.format("Rebirth %d%%  Lv %d/%d", pct, math.floor(level), minLv)
 		else
-			prestigeLabel.Text = "Rebirth data loading… reach max level to prestige (+10% cash / rebirth)."
+			lab.Text = string.format("Rebirth at Lv %d  loading...", minLv)
+		end
+		lab.TextColor3 = if level and level >= minLv and not maxed then Constants.Colors.GoldBright else Constants.Colors.TextOnDark
+	end
+	local fill = progressFill
+	if fill then
+		local shown = if maxed then 1 elseif level then math.clamp(pct / 100, 0, 1) else 0
+		fill.Size = UDim2.fromScale(shown, 1)
+	end
+	setCheck(checkLevel, level ~= nil and level >= minLv, string.format("Reach Lv %d", minLv))
+	if fee > 0 then
+		local cash = tonumber(player:GetAttribute("WE_Cash")) or 0
+		setCheck(checkFee, cash >= fee, string.format("Fee $%s", commas(fee)))
+	else
+		setCheck(checkFee, true, "No fee")
+	end
+	local info = rebirthInfoLabel
+	if info then
+		if st then
+			local cur = tonumber(st.CashMultPercent) or math.floor(p * (tonumber(st.CashBonusPerLevel) or 0.10) * 100)
+			local nxt = tonumber(st.NextCashMultPercent) or math.floor((p + 1) * (tonumber(st.CashBonusPerLevel) or 0.10) * 100)
+			info.Text = if maxed
+				then string.format("Rebirths %d  Cash +%d%% forever", p, cur)
+				else string.format("Rebirths %d  Cash +%d%% now  next +%d%%", p, cur, nxt)
+		else
+			info.Text = "Each rebirth: +10% cash forever"
 		end
 	end
+end
+
+local function refreshLabelsImmediate()
+	refreshProgress()
 	if unlockLabel then
 		if typeof(prestigeState) == "table" and typeof(prestigeState.UnlockTrack) == "table" then
 			local lines = { "Unlock track:" }
@@ -418,6 +478,8 @@ local function applySeason(payload: any)
 end
 
 function ProgressionController.Init()
+	isTouch = HudLayout.IsTouch() or not HudLayout.PrefersKeys()
+	RebirthConfirm.Init({ Fire = fire })
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireProgression"
 	PanelShell.Screen(screen) -- DisplayOrder 60 (Panels), one HUD scale + safe area
@@ -551,9 +613,96 @@ function ProgressionController.Init()
 	end
 
 	section("REBIRTH / PRESTIGE")
-	prestigeLabel = body(40)
-	unlockLabel = body(110)
-	prestigeConfirm = body(52)
+	do
+		-- F11 progress block: "Rebirth 17%  Lv 20/40", the bar, the checklist, the cash line
+		local ps = PanelShell.Text(16)
+		local pl = Instance.new("TextLabel")
+		pl.Name = "RebirthProgress"
+		pl.BackgroundTransparency = 1
+		pl.Position = UDim2.fromOffset(16, y)
+		pl.Size = UDim2.new(1, -32, 0, ps + 6)
+		pl.Font = Enum.Font.GothamBold
+		pl.TextSize = ps
+		pl.TextXAlignment = Enum.TextXAlignment.Left
+		pl.TextTruncate = Enum.TextTruncate.AtEnd
+		pl.TextColor3 = Constants.Colors.TextOnDark
+		pl.Text = ""
+		pl.Parent = scroll
+		progressLabel = pl
+		y += ps + 8
+		local barH = if isTouch then 16 else 12
+		local bg = Instance.new("Frame")
+		bg.Name = "RebirthBar"
+		bg.Position = UDim2.fromOffset(16, y)
+		bg.Size = UDim2.new(1, -32, 0, barH)
+		bg.BackgroundColor3 = Constants.Colors.Background
+		bg.BorderSizePixel = 0
+		bg.Parent = scroll
+		UIUtil.Corner(bg, 6)
+		UIUtil.Stroke(bg, Constants.Colors.Gold, 1).Transparency = 0.4
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.Size = UDim2.fromScale(0, 1)
+		fill.BackgroundColor3 = Constants.Colors.Gold
+		fill.BorderSizePixel = 0
+		fill.Parent = bg
+		UIUtil.Corner(fill, 6)
+		progressFill = fill
+		y += barH + 8
+		-- checklist: two items side by side ([box] Reach Lv 40   [box] No fee)
+		local cs = PanelShell.Text(14)
+		local box = cs + 4
+		local function checkItem(xScale: number, xOffset: number): CheckItem
+			local b = Instance.new("Frame")
+			b.Name = "CheckBox"
+			b.Position = UDim2.new(xScale, xOffset, 0, y)
+			b.Size = UDim2.fromOffset(box, box)
+			b.BackgroundColor3 = Constants.Colors.Background
+			b.BorderSizePixel = 0
+			b.Parent = scroll
+			UIUtil.Corner(b, 5)
+			UIUtil.Stroke(b, Constants.Colors.Muted, 1.5)
+			local mark = Instance.new("TextLabel")
+			mark.Name = "Mark"
+			mark.BackgroundTransparency = 1
+			mark.Size = UDim2.fromScale(1, 1)
+			mark.Font = Enum.Font.GothamBold
+			mark.TextSize = cs
+			mark.TextColor3 = Constants.Colors.TextOnDark
+			mark.Text = "✓"
+			mark.Visible = false
+			mark.Parent = b
+			local lab = Instance.new("TextLabel")
+			lab.Name = "CheckLabel"
+			lab.BackgroundTransparency = 1
+			lab.Position = UDim2.new(xScale, xOffset + box + 8, 0, y)
+			lab.Size = UDim2.new(0.5, -(box + 32), 0, box)
+			lab.Font = Enum.Font.GothamBold
+			lab.TextSize = cs
+			lab.TextXAlignment = Enum.TextXAlignment.Left
+			lab.TextTruncate = Enum.TextTruncate.AtEnd
+			lab.TextColor3 = Constants.Colors.Muted
+			lab.Text = ""
+			lab.Parent = scroll
+			return { Box = b, Mark = mark, Label = lab }
+		end
+		checkLevel = checkItem(0, 16)
+		checkFee = checkItem(0.5, 8)
+		y += box + 8
+	end
+	rebirthInfoLabel = body(16)
+	-- F11: CONFIRM REBIRTH right under the progress block (in view without scrolling on an 800x360 phone); it opens
+	-- the confirm modal (what each path keeps / resets) and the rebirth request is fired there
+	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
+		ProgressionController.ConfirmRebirth()
+	end)
+	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
+	rebirthBtn.TextColor3 = Constants.Colors.Gold
+	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	if isTouch then
+		rebirthBtn.Size = UDim2.new(1, -32, 0, TAP)
+	end
+	y += rowH + 10
 	-- Competitor rebirth trust cue (Entitlements / GamePasses never cleared on prestige)
 	do
 		local keepH = if isTouch then 44 else 34
@@ -575,17 +724,11 @@ function ProgressionController.Init()
 		prestigeKeepBanner = keep
 		y += keepH + 6
 	end
-	local rebirthBtn = btn(if isTouch then "CONFIRM REBIRTH (+10% CASH)" else "CONFIRM REBIRTH", 220, function()
-		print("[Progression] CONFIRM REBIRTH tap")
-		fire(Constants.RemoteNames.RequestPrestige)
-	end)
-	rebirthBtn.BackgroundColor3 = Constants.Colors.Gunmetal
-	rebirthBtn.TextColor3 = Constants.Colors.Gold
-	UIUtil.Stroke(rebirthBtn, Constants.Colors.Gold, 1.5).ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	if isTouch then
-		rebirthBtn.Size = UDim2.new(1, -32, 0, TAP)
-	end
-	y += rowH + 10
+	prestigeConfirm = body(52)
+	-- the unlock track: one line per RebirthUnlocks entry + the title, 1.25 lines of height each (it used to be a
+	-- fixed 110 and the 13 entries ran over the labels below it)
+	unlockLabel = body(15 * (1 + math.max(1, #PrestigeConfig.RebirthUnlocks)))
+	y += 6
 
 	section("BATTLE PASS")
 	do
@@ -734,7 +877,26 @@ function ProgressionController.Init()
 
 	Remotes.BindEvent(Constants.RemoteNames.PrestigeStateUpdate, function(payload: any)
 		prestigeState = payload
+		if typeof(payload) == "table" and typeof(payload.Level) == "number" then
+			liveLevel = payload.Level
+			liveXP = tonumber(payload.XP) or 0
+		end
+		RebirthConfirm.SetState(payload)
 		refreshLabels()
+	end)
+	-- F11: the % bar and READY follow XP live (the state push only comes on join, rebirth and READY flips)
+	Remotes.BindEvent(Constants.RemoteNames.XPUpdate, function(payload: any)
+		if typeof(payload) ~= "table" or typeof(payload.Level) ~= "number" then
+			return
+		end
+		local xp = tonumber(payload.XP) or 0
+		if payload.Level == liveLevel and xp == liveXP then
+			return
+		end
+		liveLevel = payload.Level
+		liveXP = xp
+		RebirthConfirm.SetLevel(payload.Level)
+		refreshProgress()
 	end)
 	Remotes.BindEvent(Constants.RemoteNames.BattlePassStateUpdate, function(payload: any)
 		bpState = payload
@@ -768,6 +930,16 @@ function ProgressionController.Init()
 		end
 	end)
 	refreshLabelsImmediate()
+end
+
+--[[ F11: the Rebirth panel's CONFIRM REBIRTH: the confirm modal over the current state. Its close control comes back
+	here; a rebirth that goes through closes both. ]]
+function ProgressionController.ConfirmRebirth()
+	RebirthConfirm.Open(prestigeState, {
+		OnBack = function()
+			setOpen(true)
+		end,
+	})
 end
 
 function ProgressionController.Toggle()

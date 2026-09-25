@@ -18,11 +18,28 @@ local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
+local NationConfig = require(Shared.Configs.NationConfig)
+local NationTexture = require(Shared.Util.NationTexture)
+local AdminConfig = require(Shared.Configs.AdminConfig)
 
 local ClientSettings = require(script.Parent.Parent.Modules.ClientSettings)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
+
+-- Nations (lane C): CHANGE opens the picker. Required defensively (UIController does the same), so a broken picker
+-- can never take the Settings panel down; the YOUR FLAG row is simply left out then.
+local NationController: any = nil
+do
+	local mod = script.Parent:FindFirstChild("NationController")
+	if mod and mod:IsA("ModuleScript") then
+		local req: any = require
+		local ok, res = pcall(req, mod)
+		if ok and typeof(res) == "table" and typeof(res.Open) == "function" then
+			NationController = res
+		end
+	end
+end
 
 local SettingsController = {}
 
@@ -245,6 +262,75 @@ function SettingsController.Init()
 	end)
 	sfxBtn = sb
 	y += TAP + 14
+
+	-- Your flag (nations): the country shown on your own base. CHANGE opens the picker in Settings mode
+	-- (NationController.Open(nil)); the server decides whether a change is allowed. 68 v tall on every device
+	-- (47.6 real px on phones), text >= 20 v on touch.
+	-- Lead decision 6 (nations lane B): until the flag art is uploaded (NationTexture.ArtReady) only admins see
+	-- nations at all, so the row is left out for everyone else (same gate as the join picker and the flagpole prompt).
+	local nationArtOk = not NationConfig.LiveRequiresArt
+		or NationTexture.ArtReady()
+		or table.find(AdminConfig.UserIds, player.UserId) ~= nil
+	if NationController and NationConfig.Enabled and nationArtOk then
+		section("YOUR FLAG")
+		local changeW, changeH = 170, 68
+		local swatch = Instance.new("Frame")
+		swatch.Name = "NationSwatch"
+		swatch.Position = UDim2.fromOffset(16, y + 10)
+		swatch.Size = UDim2.fromOffset(64, 48) -- 4:3, the flag's banner colour
+		swatch.BackgroundColor3 = Constants.Colors.Olive
+		swatch.BorderSizePixel = 0
+		swatch.Active = false
+		swatch.Parent = body
+		UIUtil.Corner(swatch, 4)
+		UIUtil.Stroke(swatch)
+		local nameLab = Instance.new("TextLabel")
+		nameLab.Name = "NationName"
+		nameLab.BackgroundTransparency = 1
+		nameLab.Position = UDim2.fromOffset(16 + 64 + 12, y)
+		nameLab.Size = UDim2.new(1, -(16 + 64 + 12 + 16 + changeW + GAP), 0, changeH)
+		nameLab.Font = Enum.Font.GothamBold
+		nameLab.TextSize = PanelShell.Text(14)
+		nameLab.TextColor3 = Constants.Colors.Text
+		nameLab.TextXAlignment = Enum.TextXAlignment.Left
+		nameLab.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLab.Text = "Not chosen"
+		nameLab.Parent = body
+		local change = Instance.new("TextButton")
+		change.Name = "NationChange"
+		change.Position = UDim2.new(1, -(16 + changeW), 0, y)
+		change.Size = UDim2.fromOffset(changeW, changeH)
+		change.BackgroundColor3 = Constants.Colors.Accent
+		change.Font = Enum.Font.GothamBold
+		change.TextSize = PanelShell.Text(14)
+		change.TextColor3 = Constants.Colors.Text
+		change.Text = "CHANGE"
+		change.BorderSizePixel = 0
+		change.Active = true
+		UIUtil.Corner(change, 8)
+		change.Parent = body
+		change.Activated:Connect(function()
+			AudioController.PlayClick()
+			NationController.Open(nil) -- Settings mode (the picker's own panel replaces this one)
+		end)
+		local function refreshNation()
+			local id = player:GetAttribute("WE_NationId")
+			local def = NationConfig.Get(id)
+			if def then
+				nameLab.Text = def.Short
+				swatch.BackgroundColor3 = def.Color
+			elseif id == NationConfig.NeutralId then
+				nameLab.Text = NationConfig.NeutralLabel
+				swatch.BackgroundColor3 = Constants.Colors.Olive
+			else
+				nameLab.Text = "Not chosen"
+				swatch.BackgroundColor3 = Constants.Colors.Gunmetal
+			end
+		end
+		player:GetAttributeChangedSignal("WE_NationId"):Connect(refreshNation)
+		refreshNation()
+		y += changeH + 14
+	end
 
 	-- Promo codes (server-validated, once each)
 	section("REDEEM CODE")

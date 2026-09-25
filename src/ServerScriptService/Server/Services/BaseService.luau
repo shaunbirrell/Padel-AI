@@ -18,11 +18,15 @@ local DevConfig = require(Shared.Configs.DevConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local Types = require(Shared.Types)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
+local TycoonMath = require(Shared.Util.TycoonMath) -- v72: one passive formula (paid here, shown on the client)
+local BusinessConfig = require(Shared.Configs.BusinessConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
 local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
 local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildingBuilder)
+local BusinessService = require(script.Parent.BusinessService) -- v72 war businesses: stateless world builder
 
 local BaseService = {}
 
@@ -173,6 +177,7 @@ function BaseService.ReleasePlot(player: Player): boolean
 			pcall(function()
 				StructureKitBuilder.ClearPlotExtras(plotId)
 			end)
+			pcall(BusinessService.OnPlotReleased, player, plotId) -- v72: the plot's business lines + WE_AtmPos go
 			plotOwners[plotId] = nil
 			released = true
 		end
@@ -242,23 +247,69 @@ function BaseService.OnPlotReady(cb: (Player, number) -> ())
 	end
 end
 
-function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile, player: Player?): number
-	local total = EconomyConfig.PassiveIncome.BaseCashPerTick
-	local rates = EconomyConfig.PassiveIncome.PerLevelRates
-	for structureId, level in pairs(profile.BaseUpgrades) do
-		local rate = rates[structureId]
-		if rate and level > 0 then
-			total += rate * level
-		end
-	end
-	local mult = 1 + (profile.Prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
+-- v72: territory % (what ComputePassiveIncomePerTick multiplies by) and the territory flat $ per tick.
+-- B1 (owner's 11 features, lane E): no prestige here. EconomyService.AccruePendingCash("passive") applies prestige once
+-- (+10 % per prestige); applying it here as well paid x1.21 at prestige 1 instead of x1.10.
+local function passiveMultAndFlat(profile: Types.PlayerProfile, player: Player?): (number, number)
+	local mult = 1
+	local flat = 0
 	-- Territory ownership bonuses (Phase 5)
 	if player and TerritoryService and TerritoryService.GetPassiveCashBonus then
-		local bonusMult, flat = TerritoryService.GetPassiveCashBonus(player)
-		mult += bonusMult
-		total += flat
+		local bonusMult, bonusFlat = TerritoryService.GetPassiveCashBonus(player)
+		mult += tonumber(bonusMult) or 0
+		flat = tonumber(bonusFlat) or 0
 	end
+	return mult, flat
+end
+
+function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile, player: Player?): number
+	-- v72: TycoonMath is the one formula (buildings rate x level as before; war businesses their IncomePerTick
+	-- table, only while BusinessConfig.Enabled). Saved levels are clamped there: junk never throws or overpays.
+	local total = TycoonMath.BasePassivePerTick(profile.BaseUpgrades)
+	local mult, flat = passiveMultAndFlat(profile, player)
+	total += flat
 	return math.floor(total * mult)
+end
+
+-- v72: the multiplier ComputePassiveIncomePerTick applies (territory %; B1: prestige is in EconomyService's stack).
+-- WE_IncomeMult = this x EconomyService.GetCashMult(player, "passive") (what one config $ pays into the ATM).
+function BaseService.PassiveMultiplier(profile: Types.PlayerProfile, player: Player?): number
+	local mult = passiveMultAndFlat(profile, player)
+	return mult
+end
+
+-- v72: WE_IncomeMult for `player` now (rounded to 0.01; 1 without a profile). Display only, never a grant.
+function BaseService.IncomeMult(player: Player): number
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
+	if not profile then
+		return 1
+	end
+	local cashMult = 1
+	if EconomyService and EconomyService.GetCashMult then
+		local okM, m = pcall(EconomyService.GetCashMult, player, "passive")
+		if okM and typeof(m) == "number" and m == m then
+			cashMult = m
+		end
+	end
+	return math.floor(BaseService.PassiveMultiplier(profile, player) * cashMult * 100 + 0.5) / 100
+end
+
+-- v72: "  +$3.3/s" for the purchase toast (TycoonGuideConfig.Text.ToastSuffix + TycoonMath.PerSecText of the level's
+-- gain x WE_IncomeMult, oil unscaled). "" while the guide is off or the level adds no income.
+function BaseService.PurchaseToastSuffix(player: Player, structureId: string, newLevel: number): string
+	if not TycoonGuideConfig.Enabled then
+		return ""
+	end
+	local lv = math.floor(tonumber(newLevel) or 0)
+	if lv < 1 then
+		return ""
+	end
+	local gain = TycoonMath.StepGainPerTick(structureId, lv - 1, BaseService.IncomeMult(player))
+	if gain <= 0 then
+		return ""
+	end
+	return string.format(TycoonGuideConfig.Text.ToastSuffix, TycoonMath.PerSecText(gain))
 end
 
 function BaseService.PushState(player: Player)
@@ -630,7 +681,8 @@ function BaseService.PurchaseUpgrade(player: Player, structureId: string, opts: 
 		BaseService.UpdateVisuals(player, structureId, targetLevel)
 	end)
 	-- v69: can yield (game-pass ownership lookup on a cold cache) — never hold the BUY reply for it
-	if targetLevel >= 3 and MonetizationService and MonetizationService.TrySoftOfferVIP then
+	-- v72: a war business level is not a "structure L3" moment (def.Kind == BusinessConfig.Kind skips the offer)
+	if targetLevel >= 3 and def.Kind ~= BusinessConfig.Kind and MonetizationService and MonetizationService.TrySoftOfferVIP then
 		task.defer(function()
 			pcall(MonetizationService.TrySoftOfferVIP, player, "structure_l3")
 		end)
@@ -920,8 +972,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child.Transparency = if lv == 0 then 0.9 else 0.05
 					child.Color = Color3.fromRGB(55, 60, 58)
 				end
-			elseif role == "ParkedHeli" or role == "ParkedBoat" then
-				-- v37: static parked presence — solid at L1+ (mesh may soften later)
+			elseif role == "ParkedBoat" then
+				-- v37: static parked boat at the Dock — solid at L1+ (mesh may soften later). fb2: the Helipad's
+				-- parked helicopter mock-up is gone (the Helipad is an installation), so only the boat is left.
 				child.Transparency = if lv == 0 then 1 else 0.08
 				child.Material = Enum.Material.Metal
 				child.CastShadow = lv > 0
@@ -1081,6 +1134,13 @@ function BaseService.UpdateVisuals(player: Player, structureId: string, level: n
 		warn("[BaseService] UpdateVisuals skipped — no plot", player.Name, structureId)
 		return
 	end
+	-- v72: a war business is built by BusinessService (line kit + its own kiosk), never by the structure kits
+	if TycoonMath.IsBusiness(structureId) then
+		xpcall(BusinessService.SyncBusiness, function(errB)
+			warn("[BaseService] BusinessService.SyncBusiness failed", structureId, errB)
+		end, plotId, structureId, tonumber(level) or 0, player.UserId)
+		return
+	end
 	local slots = findUpgradeSlots(plotId, structureId)
 	local lvNum = tonumber(level) or 0
 	if #slots == 0 and lvNum >= 1 then
@@ -1156,8 +1216,8 @@ function BaseService.NuclearRehydrateKits(player: Player)
 	-- v45: iterate BaseConfig.Structures keys (not only BaseUpgrades pairs) so missing keys still get L0/L1 kits
 	local seen: { [string]: boolean } = {}
 	local function rehydrateOne(structureId: string, rawLevel: any)
-		if seen[structureId] then
-			return
+		if seen[structureId] or TycoonMath.IsBusiness(structureId) then
+			return -- v72: businesses have no structure kit (BusinessService builds them in RefreshAllVisuals)
 		end
 		seen[structureId] = true
 		local lv = math.clamp(tonumber(rawLevel) or 0, 0, 5)
@@ -1228,8 +1288,10 @@ function BaseService.RefreshAllVisuals(player: Player)
 	end
 	-- Apply every structure from profile (L0 = faint placeholder; L1+ spawn/solid kit)
 	for structureId in pairs(BaseConfig.Structures) do
-		local level = tonumber(profile.BaseUpgrades[structureId]) or 0
-		BaseService.UpdateVisuals(player, structureId, level)
+		if not TycoonMath.IsBusiness(structureId) then -- v72: businesses in one SyncPlot below
+			local level = tonumber(profile.BaseUpgrades[structureId]) or 0
+			BaseService.UpdateVisuals(player, structureId, level)
+		end
 	end
 	-- DefensiveWalls / Watchtowers / BaseCeiling again after pads/kits (slot race heal)
 	do
@@ -1240,6 +1302,11 @@ function BaseService.RefreshAllVisuals(player: Player)
 		local towerLv = tonumber(profile.BaseUpgrades.Watchtowers) or 0
 		pcall(StructureKitBuilder.SyncCornerTowers, plotId, towerLv)
 	end
+	-- v72: every war business line at its saved level (L0 kiosk included) before plot-ready, so the kiosks exist
+	-- for UpgradePadService's console stamps and the tutorial / guide GO (no-op while BusinessConfig is off)
+	xpcall(BusinessService.SyncPlot, function(errB)
+		warn("[BaseService] BusinessService.SyncPlot failed", errB)
+	end, plotId, profile.BaseUpgrades, player.UserId)
 	-- v69: walls + GatePosts now exist for this owner → gate guards / AutoGuns / oil pumps sync to the loaded save
 	if player.Parent and ownedPlotOf(player.UserId) == plotId then
 		firePlotReady(player, plotId)
@@ -1283,8 +1350,8 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 			if count < (cfg.MinSoldiersForIncome or 1) then
 				return 0
 			end
-			local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)
-			return math.floor(count * (cfg.CashPerSoldierPerTick or 0) * prestigeMult)
+			-- B1: pre-multiplier, like SoldierService (prestige is applied once, by EconomyService)
+			return math.floor(count * (cfg.CashPerSoldierPerTick or 0))
 		end)(),
 		Base = {
 			PlotId = profile.BasePlotId,
@@ -1518,9 +1585,11 @@ function BaseService.Init(deps: { [string]: any })
 			local def = BaseConfig.Structures[structureId :: string]
 			local name = if def then def.DisplayName else tostring(structureId)
 			-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
+			-- v72: "  +$3.3/s" suffix while the tycoon guide is on ("" otherwise)
+			local okS, suffix = pcall(BaseService.PurchaseToastSuffix, player, structureId :: string, result.NewLevel or 0)
 			NotificationService.Notify(
 				player,
-				string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
+				string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0) .. (if okS and typeof(suffix) == "string" then suffix else ""),
 				"Success",
 				3.5
 			)
@@ -1687,6 +1756,22 @@ function BaseService.Init(deps: { [string]: any })
 							EconomyService.AccruePendingCash(player, amount, "passive")
 						else
 							EconomyService.AddCash(player, amount, "passive")
+						end
+						-- v72: the client's "+$N" business pops key off WE_PassiveTick; WE_IncomeMult scales every
+						-- "+$/s" the client shows (written only when it changes). WE_IncomeMult goes first, so the pop
+						-- fired by this tick's WE_PassiveTick already reads this tick's multiplier.
+						if BusinessConfig.Enabled or TycoonGuideConfig.Enabled then
+							pcall(function()
+								local m = BaseService.IncomeMult(player)
+								if player:GetAttribute("WE_IncomeMult") ~= m then
+									player:SetAttribute("WE_IncomeMult", m)
+								end
+							end)
+							if BusinessConfig.Enabled then
+								pcall(function()
+									player:SetAttribute("WE_PassiveTick", (tonumber(player:GetAttribute("WE_PassiveTick")) or 0) + 1)
+								end)
+							end
 						end
 					end
 				end

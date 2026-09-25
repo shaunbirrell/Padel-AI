@@ -1,19 +1,41 @@
 --!strict
 --[[
 	Daily objective missions (progress tracked server-side) + legacy timed missions.
+
+	W3 step 2, lane M0 (spec w3s2 §6 Phase A):
+	- The daily offer ROTATES (MissionService): 3 Daily Ops (DailyOpsConfig) + 3 daily missions = MaxActiveDaily 6.
+	  Levels 1..Rotation.NewPlayerMaxLevel get the Rotation.Fixed missions plus NewPlayerPicks rotating ones; higher
+	  levels get Rotation.Picks rotating out of every unlocked mission. Picks are seeded by (UserId, UTC day), so they
+	  are stable for the day, need no save, and every unlocked mission comes round within a few days.
+	- ObjectiveType "Heist" (a bank job done; BankRaidService tracks it today, OpsService in Phase B).
+	- Go: a mission row with a Go key shows GO while it is incomplete. GO points the one objective marker
+	  (Client/Modules/ObjectiveMarker) at the nearest target the SERVER sent for that key; never a fixed marker.
 ]]
 
 export type DailyMissionDef = {
 	Id: string,
 	DisplayName: string,
 	Description: string,
-	ObjectiveType: string, -- KillNPC | KillPlayer | CaptureTerritory | PurchaseUpgrade | EarnCash | SpawnVehicle | RecruitSoldiers
+	-- KillNPC | KillPlayer | CaptureTerritory | PurchaseUpgrade | EarnCash | SpawnVehicle | RecruitSoldiers | Heist
+	ObjectiveType: string,
 	Target: number,
 	RewardCash: number,
 	RewardXP: number,
 	RewardGold: number?,
 	MinLevel: number,
+	Go: string?, -- a MissionConfig.Go key (GO button while incomplete)
 }
+
+export type GoDef = {
+	Short: string, -- objective marker / compass label: 2-7 capitals, device-neutral ("BANK")
+	-- server only: the WE_ActivityAnchor id to point at once it exists (lane BK stamps the bank's)
+	Anchor: string?,
+	-- a mission that uses this Go is offered only while the server resolves at least one target (the job is on)
+	Required: boolean?,
+}
+
+-- One GO target as sent to the client (world studs). MissionService adds Go / GoTargets to a mission entry.
+export type GoTarget = { X: number, Y: number, Z: number }
 
 export type MissionDef = {
 	Id: string,
@@ -27,9 +49,49 @@ export type MissionDef = {
 }
 
 local MissionConfig = {
-	-- How many daily missions are offered (first N unlocked by level from DailyMissions order)
+	-- How many entries the daily list offers in total: the Daily Ops first, then the daily missions
 	MaxActiveDaily = 6, -- includes Daily Ops when merged
 	RefreshOnUtcDayChange = true,
+
+	-- Which daily missions are offered each UTC day (MissionService; seeded by UserId + day, nothing saved)
+	Rotation = {
+		NewPlayerMaxLevel = 4, -- levels 1..4: Fixed + NewPlayerPicks rotating missions
+		Fixed = { "DailyUpgrade", "DailyRecruit" }, -- first-5-minute missions for new players
+		NewPlayerPicks = 1,
+		Picks = 3, -- from NewPlayerMaxLevel + 1: this many rotate out of every unlocked daily mission
+	},
+
+	-- Objective types some server system reports through MissionService.TrackProgress today. A mission or daily op
+	-- whose type is not listed is never offered (it could not be finished). Phase B (OpsService) adds Checkpoint,
+	-- Camp, Uplink, Delivery and Job.
+	LiveObjectives = {
+		KillNPC = true,
+		KillPlayer = true,
+		CaptureTerritory = true,
+		PurchaseUpgrade = true,
+		EarnCash = true,
+		SpawnVehicle = true,
+		RecruitSoldiers = true,
+		Heist = true, -- BankRaidService: a bank job done (lane F)
+	} :: { [string]: boolean },
+
+	-- GO targets. Where a Go key points is decided on the SERVER per player (MissionService) and sent with the
+	-- mission; the client picks the one nearest to the player. Phase B adds Checkpoint / Hostiles / Capture / Job.
+	Go = {
+		Bank = {
+			Short = "BANK",
+			Anchor = "Town.Bank.Vault", -- until it exists: BankRaidConfig.Position
+			Required = true, -- only while BankRaidConfig.Enabled
+		},
+	} :: { [string]: GoDef },
+
+	-- Missions panel row button (GO / CLAIM), in v (the panel's UI scale): 112 x 72 v is about 73 x 47 real px on a
+	-- phone (spec w3s2 activities §9); the desktop button is DesktopButtonW wide and the desktop tap height tall.
+	Ui = {
+		ButtonW = 112,
+		ButtonH = 72,
+		DesktopButtonW = 96,
+	},
 
 	DailyMissions = {
 		DailyKillNPC = {
@@ -111,6 +173,7 @@ local MissionConfig = {
 		},
 	} :: { [string]: DailyMissionDef },
 
+	-- Display order, and the order of the rotation pool (MissionService)
 	DailyMissionOrder = {
 		"DailyUpgrade", -- v37: first 5-min completable
 		"DailyRecruit",

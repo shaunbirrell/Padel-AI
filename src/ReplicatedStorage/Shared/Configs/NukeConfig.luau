@@ -98,11 +98,16 @@ local NukeConfig = {
 	},
 
 	Targeting = {
-		BaseAimPoint = { X = 0, Z = 8 }, -- plot-local (plaza / flagpole); converted through the pad CFrame
+		-- plot-local, converted through the pad CFrame. Nations: on MainRoad (BaseLayoutConfig), 48 studs in front of the
+		-- flagpole (Courtyard.Flagpole Z = 8), so a player's nation flag is never the aim point (BuyPathStatic: >= 30 studs)
+		BaseAimPoint = { X = 0, Z = 56 },
 		PlotClearance = 25,
 		MapHalfExtent = 2350,
 		GroundRayTop = 600,
-		IncludeBank = true, -- + every TerritoryConfig.Territories entry
+		IncludeBank = true, -- + every TerritoryConfig.Territories entry except the Home Outposts (below)
+		-- F10 (owner's 11 features): a Home Outpost (TerritoryConfig row with IsStarter = true) is never a nuke target
+		-- (NukeConfig.IsTerritoryTargetable)
+		SkipStarterOutposts = true,
 	},
 
 	Rewards = {
@@ -255,6 +260,17 @@ end
 
 function NukeConfig.SiloCapacity(level: number): number
 	return NukeConfig.Silo.Capacity[math.floor(level)] or 0
+end
+
+-- F10: the nuke target filter for a TerritoryConfig.Territories row (Home Outposts are skipped).
+function NukeConfig.IsTerritoryTargetable(def: { IsStarter: boolean? }?): boolean
+	if def == nil then
+		return false
+	end
+	if NukeConfig.Targeting.SkipStarterOutposts and def.IsStarter == true then
+		return false
+	end
+	return true
 end
 
 function NukeConfig.FormatTime(seconds: number): string

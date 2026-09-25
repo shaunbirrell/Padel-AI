@@ -21,6 +21,15 @@
 	The engine still owns triggering (keyboard / gamepad keys, hold timing, MaxActivationDistance, Triggered on the
 	server) — nothing here grants anything. If Init fails before the pills exist, prompts keep the Default style
 	(adoption runs LAST, after the lane and the PromptShown handlers are up — spec risk #2).
+
+	v72 (TycoonGuideConfig.Enabled only): on touch the pill lane moves right so its left edge clears the thumb zone
+	(TycoonMath.ActionLaneShiftV with TycoonGuideConfig.BuyLane, like the BUY button), and pills stacked above the
+	BUY button clear its 72 v touch height (BuyLane.TouchSize).
+
+	Per-prompt state (adopted / disabledByUs / suppressed) lives in STRONG tables: a weak-keyed entry could vanish when
+	Roblox collects the prompt's Lua wrapper while the prompt still exists (a MAX / locked console's pill came back
+	after walking away). Each prompt gets one Destroying + AncestryChanged pair when it first enters a table; either
+	event (destroyed, or no longer a descendant of the DataModel) prunes it from every table and disconnects the pair.
 ]]
 
 local Players = game:GetService("Players")
@@ -33,13 +42,16 @@ local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local HudConfig = require(Shared.Configs.HudConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local UIUtil = require(Shared.Util.UIUtil)
+local TycoonMath = require(Shared.Util.TycoonMath)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 
 local PromptController = {}
 
 local LANE = HudConfig.ActionLane
+local BUY_LANE = TycoonGuideConfig.BuyLane
 local COLORS = HudConfig.Colors
 local FONT_DISPLAY = HudConfig.Fonts.Display
 local FONT_BODY = HudConfig.Fonts.Body
@@ -74,15 +86,67 @@ local screen: ScreenGui? = nil
 local laneFrame: Frame? = nil
 local pills: { [ProximityPrompt]: Pill } = {}
 local pillSeq = 0
-local adopted: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
-local disabledByUs: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
-local suppressed: { [ProximityPrompt]: boolean } = setmetatable({} :: any, { __mode = "k" })
+-- Per-prompt state. STRONG tables (Roblox may collect an Instance's Lua wrapper while nothing strong holds it, so a
+-- weak-keyed entry can vanish while the prompt still exists, e.g. a MAX console's suppression while the player is out
+-- of range). Every key is tracked (tracked[prompt] = its connections) and pruned from all four tables when the prompt
+-- is destroyed or leaves the DataModel (streamed out / removed).
+local adopted: { [ProximityPrompt]: boolean } = {}
+local disabledByUs: { [ProximityPrompt]: boolean } = {}
+local suppressed: { [ProximityPrompt]: boolean } = {}
+local tracked: { [ProximityPrompt]: { RBXScriptConnection } } = {}
 local myPlotId: number? = nil
 local buyActive = false
 local started = false
 local shutDown = false
 local lanePending = false
 local globalConns: { RBXScriptConnection } = {}
+
+local removePill: (ProximityPrompt) -> () -- pills section below
+
+---------------------------------------------------------------------------------------------------------------
+-- per-prompt bookkeeping (strong keys, pruned on Destroying / leaving the DataModel; event-driven, no polling)
+---------------------------------------------------------------------------------------------------------------
+
+-- forget `prompt` everywhere: its adopted / disabledByUs / suppressed entries, its connections, and a pill it still has
+local function prune(prompt: ProximityPrompt)
+	local conns = tracked[prompt]
+	if conns == nil then
+		return
+	end
+	tracked[prompt] = nil
+	adopted[prompt] = nil
+	disabledByUs[prompt] = nil
+	suppressed[prompt] = nil
+	for _, c in ipairs(conns) do
+		c:Disconnect()
+	end
+	if pills[prompt] then
+		removePill(prompt)
+	end
+end
+
+-- One Destroying + AncestryChanged pair per prompt, made before any per-prompt table holds it (idempotent). A prompt
+-- already outside the DataModel is refused (false): with deferred events a DescendantAdded / PromptShown can arrive
+-- after it left, and its prune events may already have fired, so a stored entry could never be pruned.
+local function track(prompt: ProximityPrompt): boolean
+	if tracked[prompt] ~= nil then
+		return true
+	end
+	if not prompt:IsDescendantOf(game) then
+		return false
+	end
+	local conns: { RBXScriptConnection } = {}
+	tracked[prompt] = conns
+	table.insert(conns, prompt.Destroying:Connect(function()
+		prune(prompt)
+	end))
+	table.insert(conns, prompt.AncestryChanged:Connect(function()
+		if not prompt:IsDescendantOf(game) then
+			prune(prompt)
+		end
+	end))
+	return true
+end
 
 ---------------------------------------------------------------------------------------------------------------
 -- ownership
@@ -164,7 +228,9 @@ local function applyOwnerOnly(prompt: ProximityPrompt)
 		if prompt.Enabled then
 			prompt.Enabled = false
 		end
-		disabledByUs[prompt] = true
+		if track(prompt) then
+			disabledByUs[prompt] = true
+		end
 	elseif disabledByUs[prompt] then
 		disabledByUs[prompt] = nil
 		prompt.Enabled = true
@@ -281,6 +347,25 @@ local function sizePill(pill: Pill)
 	end
 end
 
+-- v72 F3 (guide on, touch): how far (v) the centred lane of width widthV moves right to clear the thumb zone
+local function laneShiftV(widthV: number): number
+	if not (TycoonGuideConfig.Enabled == true and isTouch()) then
+		return 0
+	end
+	return TycoonMath.ActionLaneShiftV(HudLayout.ContentSizeV(), widthV, BUY_LANE.ThumbZoneFrac, BUY_LANE.ClearPx, HudLayout.Scale())
+end
+
+-- the BUY button's size (WorldPromptController): v72 guide on touch = BuyLane.TouchSize
+local function buyButtonSize(): UDim2
+	if not isTouch() then
+		return LANE.BuyButtonSize
+	end
+	if TycoonGuideConfig.Enabled == true then
+		return UDim2.fromOffset(BUY_LANE.TouchSize.X, BUY_LANE.TouchSize.Y)
+	end
+	return LANE.BuyButtonSizeTouch
+end
+
 local function relayout()
 	lanePending = false
 	local lane = laneFrame
@@ -319,10 +404,10 @@ local function relayout()
 	-- the BUY button owns the lane slot while it shows: other pills (a terminal next to a console) sit just above it
 	local bottom = HudLayout.ActionLaneBottomV()
 	if buyActive then
-		local buySize = if isTouch() then LANE.BuyButtonSizeTouch else LANE.BuyButtonSize
+		local buySize = buyButtonSize()
 		bottom += buySize.Y.Offset + LANE.PromptGap
 	end
-	lane.Position = UDim2.new(0.5, 0, 1, -bottom)
+	lane.Position = UDim2.new(0.5, laneShiftV(math.max(1, totalW)), 1, -bottom)
 	lane:SetAttribute("WE_PillCount", shown)
 	HudLayout.RefreshVisibility(lane)
 end
@@ -382,7 +467,7 @@ local function resetFill(pill: Pill, seconds: number?)
 	end)
 end
 
-local function removePill(prompt: ProximityPrompt)
+function removePill(prompt: ProximityPrompt)
 	local pill = pills[prompt]
 	if not pill then
 		return
@@ -540,19 +625,28 @@ local function adopt(inst: Instance)
 	if adopted[prompt] then
 		return
 	end
+	if not track(prompt) then
+		return -- left the DataModel before this (deferred) event ran; DescendantAdded adopts it if it comes back
+	end
 	adopted[prompt] = true
 	pcall(function()
 		prompt.Style = Enum.ProximityPromptStyle.Custom
 	end)
 	if OWNER_ONLY[prompt.Name] then
 		applyOwnerOnly(prompt)
-		prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
+		local conn = prompt:GetPropertyChangedSignal("Enabled"):Connect(function()
 			-- the server re-replicating Enabled = true must not re-open someone else's console / terminal / car
 			if prompt.Enabled and isForeign(prompt) then
 				prompt.Enabled = false
 				disabledByUs[prompt] = true
 			end
 		end)
+		-- kept with the prompt's tracked connections: pruning disconnects it, so a prompt that comes back into the
+		-- DataModel is adopted afresh with exactly one listener
+		local conns = tracked[prompt]
+		if conns then
+			table.insert(conns, conn)
+		end
 	end
 end
 
@@ -618,6 +712,9 @@ function PromptController.SetSuppressed(prompt: ProximityPrompt, on: boolean)
 		return
 	end
 	if on then
+		if not track(prompt) then
+			return -- not in the DataModel (streamed out / removed): nothing to hide, nothing to remember
+		end
 		suppressed[prompt] = true
 	else
 		suppressed[prompt] = nil
@@ -648,7 +745,7 @@ function PromptController.Init()
 	local lane = Instance.new("Frame")
 	lane.Name = "Lane"
 	lane.AnchorPoint = Vector2.new(0.5, 1)
-	lane.Position = UDim2.new(0.5, 0, 1, -HudLayout.ActionLaneBottomV())
+	lane.Position = UDim2.new(0.5, laneShiftV(1), 1, -HudLayout.ActionLaneBottomV())
 	lane.Size = UDim2.fromOffset(1, LANE.PromptHeight)
 	lane.BackgroundTransparency = 1
 	lane.BorderSizePixel = 0
@@ -780,6 +877,25 @@ function PromptController.GetPillTexts(): { string }
 		table.insert(out, pill.Label.Text)
 	end
 	return out
+end
+
+--[[ QA: sizes of the per-prompt tables (leak checks) and whether `prompt` is suppressed right now. ]]
+function PromptController._Stats(prompt: ProximityPrompt?): { Tracked: number, Adopted: number, Suppressed: number, DisabledByUs: number, Pills: number, IsSuppressed: boolean }
+	local function count(t: { [any]: any }): number
+		local n = 0
+		for _ in pairs(t) do
+			n += 1
+		end
+		return n
+	end
+	return {
+		Tracked = count(tracked),
+		Adopted = count(adopted),
+		Suppressed = count(suppressed),
+		DisabledByUs = count(disabledByUs),
+		Pills = count(pills),
+		IsSuppressed = prompt ~= nil and suppressed[prompt] == true,
+	}
 end
 
 return PromptController

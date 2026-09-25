@@ -13,6 +13,10 @@
 	remote calls.
 	The marker is the one AlwaysOnTop objective marker (CLAUDE.md world labels): transient, only after GO, 14-20 px
 	text (UITextSizeConstraint), sized to the structure name so long names never shrink below 14 px.
+	v72 guide: ShowAtm(plotId?) draws the same line to the player's OWN ATM (the "Collect at your ATM" state of the BUY
+	button and the guide chip). Target: the own WE_MoneyCollector part (PlotId = plotId) when it is on this client,
+	else the server-stamped WE_AtmPos (streaming-safe; never another player's ATM). Same beam, marker, arrival, timeout
+	and RefreshHz rules as a console line; the marker reads TycoonGuideConfig.Text.ChipGoCollect ("ATM").
 ]]
 
 local Players = game:GetService("Players")
@@ -20,9 +24,13 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local CollectionService = game:GetService("CollectionService")
+
 local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
+local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local ConsoleWaypoint = {}
@@ -30,8 +38,9 @@ local ConsoleWaypoint = {}
 local player = Players.LocalPlayer
 local W = ConsoleBuyConfig.Waypoint
 
-local current: string? = nil -- structureId being guided to
+local current: string? = nil -- structureId being guided to (ConsoleWaypoint.AtmKey while guiding to the ATM)
 local currentPlot: number? = nil
+local guidingAtm = false -- v72: ShowAtm (the target is the player's own ATM, not a console)
 local startedAt = 0
 local lastAttemptAt = -math.huge
 local target: BasePart? = nil -- console part or local anchor
@@ -61,7 +70,11 @@ function ConsoleWaypoint.Clear()
 		stepConn = nil
 	end
 	current, currentPlot = nil, nil
+	guidingAtm = false
 end
+
+-- ConsoleWaypoint.Current() while ShowAtm is guiding (no structure id is ever "ATM")
+ConsoleWaypoint.AtmKey = "ATM"
 
 function ConsoleWaypoint.Current(): string?
 	return current
@@ -76,16 +89,35 @@ local function rootPart(): BasePart?
 	return nil
 end
 
+-- v72: the player's OWN ATM part (Money Collector tagged with PlotId == plotId) when it is on this client
+local function ownAtm(plotId: number): BasePart?
+	local hrp = rootPart()
+	local best: BasePart? = nil
+	local bestD = math.huge
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.MoneyCollector)) do
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == plotId and inst:IsDescendantOf(Workspace) then
+			local d = if hrp then (inst.Position - hrp.Position).Magnitude else 0
+			if best == nil or d < bestD then
+				best, bestD = inst, d
+			end
+		end
+	end
+	return best
+end
+
 local function realConsole(structureId: string): BasePart?
 	local plotId = currentPlot
 	if plotId == nil then
 		return nil
 	end
+	if guidingAtm then
+		return ownAtm(plotId)
+	end
 	return ConsoleLocator.Find(plotId, structureId)
 end
 
 local function stampedPos(structureId: string): Vector3?
-	local pos = player:GetAttribute("WE_ConsolePos_" .. structureId)
+	local pos = player:GetAttribute(if guidingAtm then "WE_AtmPos" else "WE_ConsolePos_" .. structureId)
 	return if typeof(pos) == "Vector3" then pos else nil
 end
 
@@ -147,7 +179,7 @@ local function build(structureId: string)
 	beam = b
 
 	local def = BaseConfig.Structures[structureId]
-	local title = string.upper(if def then def.DisplayName else structureId)
+	local title = string.upper(if guidingAtm then TycoonGuideConfig.Text.ChipGoCollect elseif def then def.DisplayName else structureId)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "WE_ConsoleWaypoint"
 	bb.Adornee = tp
@@ -246,6 +278,23 @@ function ConsoleWaypoint.Show(structureId: string, plotId: number?): boolean
 	end
 	build(structureId) -- no-op while respawning; step() retries
 	stepAcc = math.huge -- first step runs at once (distance label)
+	stepConn = RunService.Heartbeat:Connect(step)
+	return true
+end
+
+--[[ v72 guide: the same line to the local player's OWN ATM ("Collect $N at your ATM"). plotId: the player's plot
+	(nil: only the server-stamped WE_AtmPos is used). false when neither the ATM part nor WE_AtmPos is known. ]]
+function ConsoleWaypoint.ShowAtm(plotId: number?): boolean
+	ConsoleWaypoint.Clear()
+	guidingAtm = true
+	local key = ConsoleWaypoint.AtmKey
+	current, currentPlot, startedAt = key, plotId, os.clock()
+	if not resolvable(key) then
+		ConsoleWaypoint.Clear()
+		return false
+	end
+	build(key)
+	stepAcc = math.huge
 	stepConn = RunService.Heartbeat:Connect(step)
 	return true
 end

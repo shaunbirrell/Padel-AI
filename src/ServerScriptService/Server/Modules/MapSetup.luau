@@ -9,7 +9,10 @@
 	WorldBounds builds the skyline / ground and air walls / seabed tint / far shore, WorldTerrain fills the canyon edge
 	(each call guarded: a failure never stops the map build). The mesa Part ring, the ground fill patches, the 20 static
 	soldier statues, the "OIL FIELD" pads and the grey landmark hosts are gone. Spawns come from WorldConfig.Spawns:
-	10 painted garage pads (6 outside the front gates), invisible NPC / event anchors, no beacons, no Neon.
+	10 painted garage pads (6 outside the front gates, the only ones with a "Garage" sign), invisible NPC / event
+	anchors, no beacons, no Neon.
+	W3 step 2 lane BK: the Empire Bank is a walk-in hall (buildEmpireBank: 17 parts, the open BankGate, the StateBanner,
+	the Town.Bank.* activity anchors on BankPlaza).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -31,6 +34,9 @@ local WaterConfig = require(SharedConfigs:WaitForChild("WaterConfig"))
 local WorldLabel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("WorldLabel"))
 -- World v2: spawn pads / anchors (Spawns) and the SafetyCatch look (Bounds.SafetyCatch)
 local WorldConfig = require(SharedConfigs:WaitForChild("WorldConfig"))
+-- F10 (owner's 11 features): the capture zones (incl. the Home Outposts) are TerritoryConfig's rows
+-- (ReplicatedStorage.Shared ships with the place and replicates before any server script runs: no wait needed)
+local TerritoryConfig = require(ReplicatedStorage.Shared.Configs.TerritoryConfig)
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -105,20 +111,53 @@ local PLOT_POSITIONS = {
 -- World v2 (spec §3.4): each fort's wall toward its nearest road has a 16-wide gate (GateSide = the gated wall)
 local FORT_GATE_WIDTH = 16
 
-local TERRITORIES = {
-	{ Id = "CentralPlaza", DisplayName = "Central Plaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 70 },
-	{ Id = "NorthRidge", DisplayName = "North Ridge", Pos = Vector3.new(0, 1, -1300), Color = Color3.fromRGB(55, 120, 180), Radius = 60 },
-	{ Id = "SouthDocks", DisplayName = "South Docks", Pos = Vector3.new(0, 1, 1300), Color = Color3.fromRGB(45, 110, 150), Radius = 60 },
-	{ Id = "EastArmory", DisplayName = "East Armory", Pos = Vector3.new(1300, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 55 },
-	{ Id = "WestDepot", DisplayName = "West Depot", Pos = Vector3.new(-1300, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 55 },
-	{ Id = "OilFields", DisplayName = "Oil Fields", Pos = Vector3.new(950, 1, 950), Color = Color3.fromRGB(150, 110, 40), Radius = 65 },
-	{ Id = "RadarHill", DisplayName = "Radar Hill", Pos = Vector3.new(-950, 1, -950), Color = Color3.fromRGB(130, 70, 170), Radius = 60 },
-	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
-	{ Id = "CoastalOilAlpha", DisplayName = "Coastal Oil Alpha", Pos = Vector3.new(1800, 28, -750), Color = Color3.fromRGB(190, 145, 45), Radius = 48, OilRig = true },
-	{ Id = "CoastalOilBravo", DisplayName = "Coastal Oil Bravo", Pos = Vector3.new(-1800, 28, 750), Color = Color3.fromRGB(170, 125, 40), Radius = 48, OilRig = true },
-	{ Id = "FortIronclad", DisplayName = "Fort Ironclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true, GateSide = 1 }, -- +Z wall, toward RoadZ-800
-	{ Id = "FortSandhold", DisplayName = "Fort Sandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true, GateSide = -1 }, -- -Z wall, toward RoadZ800
+-- F10 (owner's 11 features, lane W): the capture zones come from TerritoryConfig.Territories (one source: position,
+-- radius, colour, oil rig / fortress). MapSetup keeps only what is its own: the build order of the original eleven
+-- (so their parts are made in the same order as before) and each fort's gate wall. Any other row (the Home Outposts
+-- Starter_P1..P6 while TerritoryConfig.Starter.Enabled) is built after them, sorted by id.
+local TERRITORY_BUILD_ORDER = {
+	"CentralPlaza",
+	"NorthRidge",
+	"SouthDocks",
+	"EastArmory",
+	"WestDepot",
+	"OilFields",
+	"RadarHill",
+	"CoastalOilAlpha", -- coastal oil decks (Y = the TerritoryConfig / OilRigConfig platform height)
+	"CoastalOilBravo",
+	"FortIronclad",
+	"FortSandhold",
 }
+-- World v2 (spec §3.4): the fort wall facing the nearest road has the gate (1 = +Z wall, -1 = -Z wall)
+local FORT_GATE_SIDE: { [string]: number } = {
+	FortIronclad = 1, -- toward RoadZ-800
+	FortSandhold = -1, -- toward RoadZ800
+}
+
+-- Ordered TerritoryConfig rows to build (every row exactly once)
+local function territoryDefsInBuildOrder(): { TerritoryConfig.TerritoryDef }
+	local rows = TerritoryConfig.Territories
+	local out: { TerritoryConfig.TerritoryDef } = {}
+	local seen: { [string]: boolean } = {}
+	for _, id in ipairs(TERRITORY_BUILD_ORDER) do
+		local def = rows[id]
+		if def then
+			table.insert(out, def)
+			seen[id] = true
+		end
+	end
+	local rest: { string } = {}
+	for id in pairs(rows) do
+		if not seen[id] then
+			table.insert(rest, id)
+		end
+	end
+	table.sort(rest)
+	for _, id in ipairs(rest) do
+		table.insert(out, rows[id])
+	end
+	return out
+end
 
 local function ensureFolder(name, parent)
 	local existing = parent:FindFirstChild(name)
@@ -279,34 +318,8 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	return bb
 end
 
--- v70: `turn` (optional) = the plot frame for a plot beacon, so the beacon turns with its plot
--- World v2 W1 (spec §5.2 row 2): a painted pole + SmoothPlastic tip, no Neon and no glow disc. Only the bank keeps one;
--- garage pads, naval pontoons and capture zones have none.
-local function beacon(parent, at: Vector3, color, name, turn: CFrame?)
-	local function place(dy: number): CFrame
-		local cf = CFrame.new(at + Vector3.new(0, dy, 0))
-		return if turn then cf * turn.Rotation else cf
-	end
-	part({
-		Name = name or "Beacon",
-		Size = Vector3.new(0.55, 12, 0.55),
-		CFrame = place(6),
-		Color = Color3.fromRGB(40, 45, 42),
-		Material = Enum.Material.Metal,
-		CanCollide = false,
-		Parent = parent,
-	})
-	part({
-		Name = (name or "Beacon") .. "_Tip",
-		Size = Vector3.new(1.6, 1.6, 1.6),
-		CFrame = place(13),
-		Color = color,
-		Material = Enum.Material.SmoothPlastic,
-		Shape = Enum.PartType.Ball,
-		CanCollide = false,
-		Parent = parent,
-	})
-end
+-- World v2 W1 (spec §5.2 row 2) / W3 step 2 lane BK: no beacon pole anywhere outside the bases (the bank's was the
+-- last one; its roof StateBanner and the EMPIRE BANK sign mark it now), so the beacon helper is gone.
 
 -- v68: terminal look for console-mode upgrade slots (screen + button); decoration only, not kit roles
 local function dressConsole(plinth, title)
@@ -493,10 +506,14 @@ end
 
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
-local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: string?, labelColor, health, npcType, npcId)
+local function makeSoldierKit(parentFolder, name, cf: CFrame, bodyColor, labelText: string?, labelColor, health, npcType, npcId)
 	-- Visual props for Training Yard / static kits. R15-ready catalog overlay via VisualAssetConfig;
 	-- Part-kit military placeholder (R6-ish ~5 stud) when mesh IDs missing / StudioSkipWorldDressing.
 	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
+	-- v72 budget: StructureVisualConfig.StaticSoldierDetail = false drops the 7 small detail parts (Shemagh, VestPouch,
+	-- BootL/R, RifleStock, RifleBarrel, Accent): 9 parts per static soldier (Pack adds 1 for Heavy). No other code welds
+	-- or looks up these names on a static kit.
+	local detail = (StructureVisualConfig :: any).StaticSoldierDetail ~= false
 	local model = Instance.new("Model")
 	model.Name = name
 	if npcId then
@@ -534,7 +551,9 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		vestCol = Color3.fromRGB(40, 50, 65)
 		accentCol = Color3.fromRGB(90, 140, 220)
 	end
-	-- R6 torso = 2×2×1; lift so feet sit on ground (cf is approx mid-body)
+	-- R6 torso = 2×2×1. fb2: callers pass cf = floor top + 2.1 (the torso centre), but the legs hang 3 below the torso
+	-- centre, so every static soldier stood 0.9-1.1 studs sunk into the floor. Lift the torso 0.9: the leg bottoms (and
+	-- the boots, when StaticSoldierDetail is on) sit on the floor, and a catalog overlay pivoted to the HRP stands too.
 	local torso = part({
 		Name = "HumanoidRootPart",
 		Size = Vector3.new(2, 2, 1),
@@ -542,7 +561,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = true,
-		CFrame = cf,
+		CFrame = cf * CFrame.new(0, 0.9, 0),
 		Parent = model,
 	})
 	local head = part({
@@ -556,26 +575,33 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		Shape = Enum.PartType.Ball,
 		Parent = model,
 	})
-	part({
+	-- fb2: domed steel helmet (was a flat 1.2 x 0.5 box cap). The SpecialMesh sphere fills the part's box, so the dome
+	-- covers the top of the head with a small brim; a SpecialMesh is not a part (0 extra parts per soldier).
+	local helmet = part({
 		Name = "Helmet",
-		Size = Vector3.new(1.2, 0.5, 1.2),
+		Size = Vector3.new(1.3, 0.75, 1.35),
 		Color = helmCol,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame * CFrame.new(0, 0.38, 0),
+		CFrame = head.CFrame * CFrame.new(0, 0.36, 0.02),
 		Parent = model,
 	})
-	part({
-		Name = "Shemagh",
-		Size = Vector3.new(1.25, 0.45, 1.15),
-		Color = Color3.fromRGB(200, 185, 150),
-		Material = Enum.Material.Fabric,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = head.CFrame * CFrame.new(0, -0.32, 0.05),
-		Parent = model,
-	})
+	local dome = Instance.new("SpecialMesh")
+	dome.MeshType = Enum.MeshType.Sphere
+	dome.Parent = helmet
+	if detail then
+		part({
+			Name = "Shemagh",
+			Size = Vector3.new(1.25, 0.45, 1.15),
+			Color = Color3.fromRGB(200, 185, 150),
+			Material = Enum.Material.Fabric,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = head.CFrame * CFrame.new(0, -0.32, 0.05),
+			Parent = model,
+		})
+	end
 	part({
 		Name = "Vest",
 		Size = Vector3.new(2.1, 1.2, 1.15),
@@ -586,16 +612,18 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = torso.CFrame * CFrame.new(0, 0.15, 0),
 		Parent = model,
 	})
-	part({
-		Name = "VestPouch",
-		Size = Vector3.new(1.5, 0.45, 0.3),
-		Color = Color3.fromRGB(90, 80, 55),
-		Material = Enum.Material.Fabric,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.05, -0.6),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "VestPouch",
+			Size = Vector3.new(1.5, 0.45, 0.3),
+			Color = Color3.fromRGB(90, 80, 55),
+			Material = Enum.Material.Fabric,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0, 0.05, -0.6),
+			Parent = model,
+		})
+	end
 	-- R6 arms 1×2×1
 	part({
 		Name = "ArmL",
@@ -638,36 +666,42 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = torso.CFrame * CFrame.new(0.5, -2, 0),
 		Parent = model,
 	})
-	part({
-		Name = "BootL",
-		Size = Vector3.new(1.05, 0.35, 1.15),
-		Color = Color3.fromRGB(35, 32, 28),
-		Material = Enum.Material.SmoothPlastic,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(-0.5, -3.1, 0.1),
-		Parent = model,
-	})
-	part({
-		Name = "BootR",
-		Size = Vector3.new(1.05, 0.35, 1.15),
-		Color = Color3.fromRGB(35, 32, 28),
-		Material = Enum.Material.SmoothPlastic,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0.5, -3.1, 0.1),
-		Parent = model,
-	})
-	part({
-		Name = "RifleStock",
-		Size = Vector3.new(0.3, 0.4, 0.9),
-		Color = Color3.fromRGB(55, 48, 38),
-		Material = Enum.Material.Wood,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(1.15, 0.15, 0.35),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "BootL",
+			Size = Vector3.new(1.05, 0.35, 1.15),
+			Color = Color3.fromRGB(35, 32, 28),
+			Material = Enum.Material.SmoothPlastic,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(-0.5, -2.825, 0.1), -- fb2: boot bottom = leg bottom (was 0.275 lower)
+			Parent = model,
+		})
+	end
+	if detail then
+		part({
+			Name = "BootR",
+			Size = Vector3.new(1.05, 0.35, 1.15),
+			Color = Color3.fromRGB(35, 32, 28),
+			Material = Enum.Material.SmoothPlastic,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0.5, -2.825, 0.1), -- fb2: boot bottom = leg bottom (was 0.275 lower)
+			Parent = model,
+		})
+	end
+	if detail then
+		part({
+			Name = "RifleStock",
+			Size = Vector3.new(0.3, 0.4, 0.9),
+			Color = Color3.fromRGB(55, 48, 38),
+			Material = Enum.Material.Wood,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(1.15, 0.15, 0.35),
+			Parent = model,
+		})
+	end
 	part({
 		Name = "Rifle",
 		Size = Vector3.new(0.25, 0.25, 2.4),
@@ -678,26 +712,30 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		CFrame = torso.CFrame * CFrame.new(1.15, 0.2, -0.95),
 		Parent = model,
 	})
-	part({
-		Name = "RifleBarrel",
-		Size = Vector3.new(0.14, 0.14, 0.9),
-		Color = Color3.fromRGB(25, 25, 28),
-		Material = Enum.Material.Metal,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(1.15, 0.22, -2.25),
-		Parent = model,
-	})
-	part({
-		Name = "Accent",
-		Size = Vector3.new(1.6, 0.1, 0.28),
-		Color = accentCol,
-		Material = Enum.Material.Metal,
-		Anchored = true,
-		CanCollide = false,
-		CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
-		Parent = model,
-	})
+	if detail then
+		part({
+			Name = "RifleBarrel",
+			Size = Vector3.new(0.14, 0.14, 0.9),
+			Color = Color3.fromRGB(25, 25, 28),
+			Material = Enum.Material.Metal,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(1.15, 0.22, -2.25),
+			Parent = model,
+		})
+	end
+	if detail then
+		part({
+			Name = "Accent",
+			Size = Vector3.new(1.6, 0.1, 0.28),
+			Color = accentCol,
+			Material = Enum.Material.Metal,
+			Anchored = true,
+			CanCollide = false,
+			CFrame = torso.CFrame * CFrame.new(0, 0.85, -0.5),
+			Parent = model,
+		})
+	end
 	if role == "HeavyInfantry" or role == "Heavy" then
 		part({
 			Name = "Pack",
@@ -965,7 +1003,10 @@ MapSetup.GROUND_TILES = GROUND_TILES_PER_SIDE * GROUND_TILES_PER_SIDE
 -- saved with an older layout (unturned plots, one WaterPlane) never keeps it. The stamp also encodes
 -- BaseLayoutConfig.FaceMapCentre (even = off, odd = on), so flipping the flag rebuilds a map baked with the other value.
 -- World v2 W1: 70/71 → 80/81, so a saved map with the mesa ring, statues, beacons and old spawn rings is rebuilt.
-MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 81 else 80
+-- F1 / F10 (owner's 11 features): 80/81 → 82/83 (the ATM pads follow MonetizationConfig.PremiumPads: no VIP pad), and
+-- +10 while TerritoryConfig.Starter.Enabled (the 6 Home Outpost kits), so flipping that flag also rebuilds a baked map.
+-- +10 keeps the FaceMapCentre parity (even = off, odd = on).
+MapSetup.MAP_GEN = (if BaseLayout.FacesMapCentre() then 83 else 82) + (if TerritoryConfig.Starter.Enabled then 10 else 0)
 
 -- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
 function MapSetup.CountGroundTiles(setup: Instance): number
@@ -1273,7 +1314,9 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		local f = cfg.Courtyard.Flagpole
 		part({ Name = "FlagBase", Size = Vector3.new(4, 1, 4), CFrame = at(f.X, padTop + 0.5, f.Z), Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
 		part({ Name = "FlagPole", Size = Vector3.new(0.5, 28, 0.5), CFrame = at(f.X, padTop + 15, f.Z), Color = steel, Material = Enum.Material.Metal, CanCollide = true, Parent = folder })
-		part({ Name = "ParadeFlag", Size = Vector3.new(0.14, 4.4, 7.5), CFrame = at(f.X, padTop + 25.8, f.Z - 3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
+		-- fb2: flag cloths are 0.12 thick and tagged WE_FlagHost (the nation flag binds to their Left / Right faces)
+		local paradeFlag = part({ Name = "ParadeFlag", Size = Vector3.new(0.12, 4.4, 7.5), CFrame = at(f.X, padTop + 25.8, f.Z - 3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
+		paradeFlag:SetAttribute("WE_FlagHost", true)
 	end
 
 	-- Dock basin: water surface + concrete kerb
@@ -1405,6 +1448,20 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		lbl.TextColor3 = yellow
 		lbl.Text = (REAR_GATE_LABELS[g.Id] or string.upper(g.Id)) .. " · LOCKED"
 		lbl.Parent = sg
+		-- v72 (phone HUD audit F4): inset the sign text so the gate name reads in full (TextScaled filled the whole
+		-- board and clipped at the edges); InnerWall.SignInsetStuds x PixelsPerStud left/right, capped text size
+		do
+			local insetPx = math.floor(((BaseLayout.Config().InnerWall or {}).SignInsetStuds or 2.0) * sg.PixelsPerStud + 0.5)
+			local signPad = Instance.new("UIPadding")
+			signPad.PaddingLeft = UDim.new(0, insetPx)
+			signPad.PaddingRight = UDim.new(0, insetPx)
+			signPad.PaddingTop = UDim.new(0, 6)
+			signPad.PaddingBottom = UDim.new(0, 6)
+			signPad.Parent = lbl
+			local signCap = Instance.new("UITextSizeConstraint")
+			signCap.MaxTextSize = 64
+			signCap.Parent = lbl
+		end
 		local leafH = iw.Height - 2
 		for i, sx in ipairs({ -1, 1 }) do
 			local leaf = part({
@@ -1531,6 +1588,20 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		lbl.TextColor3 = yellow
 		lbl.Text = SG.Label .. " · LOCKED"
 		lbl.Parent = sg
+		-- v72 (phone HUD audit F4): inset the sign text so the gate name reads in full (TextScaled filled the whole
+		-- board and clipped at the edges); InnerWall.SignInsetStuds x PixelsPerStud left/right, capped text size
+		do
+			local insetPx = math.floor(((BaseLayout.Config().InnerWall or {}).SignInsetStuds or 2.0) * sg.PixelsPerStud + 0.5)
+			local signPad = Instance.new("UIPadding")
+			signPad.PaddingLeft = UDim.new(0, insetPx)
+			signPad.PaddingRight = UDim.new(0, insetPx)
+			signPad.PaddingTop = UDim.new(0, 6)
+			signPad.PaddingBottom = UDim.new(0, 6)
+			signPad.Parent = lbl
+			local signCap = Instance.new("UITextSizeConstraint")
+			signCap.MaxTextSize = 64
+			signCap.Parent = lbl
+		end
 
 		-- leaves: WE_GateLeaf = LeafSlide (-1 = slide plot-local west into the wall line), WE_ClosedCFrame after placing
 		for i, lf in ipairs(SG.Leaves) do
@@ -1779,50 +1850,45 @@ end
 
 
 
-local function premiumOfferIdLive(kind: string, key: string): boolean
-	-- Hide pads until Creator Dashboard Id exists (GoldenPumpjack Id=0 → no pad)
-	if kind == "GamePass" then
-		local def = MonetizationConfig.GamePasses[key]
-		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
-	elseif kind == "DevProduct" then
-		local def = MonetizationConfig.DevProducts[key]
-		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
-	end
-	return false
-end
-
 -- v70: F = plot frame, atmLocal = plot-local ATM cluster anchor (pads turn with the plot)
-local PREMIUM_TAG_RANGE = 20
+-- F1 (owner's 11 features, lane W): the pads are MonetizationConfig.PremiumPads.Slots, in order (red Auto Collect,
+-- yellow 2x Cash, cyan Speed). A slot is built only while one of its offers has a live Id (LivePadOffer: the first
+-- offer with Id ~= 0, e.g. the Speed slot sells the 99 R$ Speed Boost until the 5 R$ Speed Pass Id is pasted).
+-- The server decides OWNED (PremiumPadService.alreadyOwns, incl. the slot's OwnedIfAny keys); the Shop client dims an
+-- owned pad. VIP is a Shop row only and the Golden Pump pad stands at the pumps (PlotOilPumpService), so at most 3
+-- pads and 3 labels sit at the ATM (CLAUDE.md: at most 3 labels on screen at a base). The pad keeps its Neon top
+-- (it is the offer; census cap 18) and has no light. Each label is stud-scaled, MaxDistance PremiumPads.LabelMaxDistance,
+-- never AlwaysOnTop, and tagged WorldLabelConfig.BaseLabelTag for the client LabelGovernor.
 local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
-	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed; GoldenPump only if Id≠0
-	-- v70 (HUD spec §5): plain stud-scaled tag "Auto Collect" / "R$" (was a dark card "AUTO COLLECT · R$"); the pad
-	-- keeps its Neon (it is the offer), its PointLight is gone (light budget). PREMIUM_TAG_RANGE keeps the four tags
-	-- off screen while you stand at the ATM (CLAUDE.md: at most 3 labels on screen at a base).
-	local offers = {
-		{ Key = "AutoCollect", Kind = "GamePass", Label = "Auto Collect", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
-		{ Key = "VIP", Kind = "GamePass", Label = "VIP", Color = Color3.fromRGB(180, 60, 220), Offset = Vector3.new(-18, 0.55, 8) },
-		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x Cash", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
-		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "Speed Boost", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
-		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "Golden Pump", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
-	}
-	for _, offer in ipairs(offers) do
-		if not premiumOfferIdLive(offer.Kind, offer.Key) then
-			continue
+	local labelRange = MonetizationConfig.PremiumPads.LabelMaxDistance
+	for _, slot in ipairs(MonetizationConfig.PremiumPads.Slots) do
+		local offer = MonetizationConfig.LivePadOffer(slot)
+		if offer == nil then
+			continue -- no live Id for this slot: no pad, no label, nothing to prompt
 		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
 			Size = Vector3.new(7, 0.45, 7),
-			CFrame = F * CFrame.new(atmLocal + offer.Offset),
-			Color = offer.Color,
+			CFrame = F * CFrame.new(atmLocal + slot.Offset),
+			Color = slot.Color,
 			Material = Enum.Material.Neon,
 			CanCollide = true,
 			Parent = folder,
 		})
 		pad:SetAttribute("PlotId", plotId)
-		pad:SetAttribute("OfferKey", offer.Key)
 		pad:SetAttribute("OfferKind", offer.Kind)
+		pad:SetAttribute("OfferKey", offer.Key)
+		pad:SetAttribute("OwnedIfAny", table.concat(MonetizationConfig.PadOwnedKeys(slot), ","))
+		pad:SetAttribute("PadSlot", slot.Id)
 		CollectionService:AddTag(pad, TAG_PREMIUM)
-		WorldLabel.Create(pad, offer.Label, { Name = "WE_PremiumBillboard", Sub = "R$", Color = offer.Color, MaxDistance = PREMIUM_TAG_RANGE, Offset = Vector3.new(0, 5.5, 0) })
+		WorldLabel.Create(pad, slot.Label, {
+			Name = "WE_PremiumBillboard",
+			Sub = "R$",
+			Color = slot.Color,
+			MaxDistance = labelRange,
+			Offset = Vector3.new(0, 5.5, 0),
+			BaseLabel = true, -- CollectionService tag WorldLabelConfig.BaseLabelTag (the LabelGovernor's cap)
+		})
 	end
 end
 
@@ -2031,6 +2097,206 @@ local function withWorldModule(name: string, fn: (any) -> ()): boolean
 		warn("[WAR EMPIRE] MapSetup: " .. name .. " failed (map continues):", err)
 	end
 	return ok
+end
+
+-- ── Empire Bank (W3 step 2 lane BK; spec scratchpad w3s2 §1.1–§1.2, §5, §6; geometry w3s2/geo/bank.py) ──────────
+--[[ A walk-in hall in the Town v2 style, facing south down Bank Street. 17 parts, the same count as the old block, so
+	the busiest 512-stud circle does not move:
+	  BankPlaza      36 x 1.2 x 36, top 1.6 (the hall floor); hosts the Town.Bank.* activity anchors (WorldConfig.Town.
+	                 BankAnchors, stamped through ActivityAnchors.Stamp: 0 parts)
+	  BankHall       the WorldKits TownBlock "hall" shell (7 parts): back wall, 2 side walls, 2 front piers round a 10-wide
+	                 full-height opening, the roof slab, the upper window strip; 24 x 22, 2 storeys (x 208..232, z -236..-214)
+	  BankColumnW/E  2 portico columns, both outside the sign's width, so neither hides the EMPIRE BANK sign
+	  BankSign       the EMPIRE BANK board over the opening, painted here (WorldKits.Sign, inside the world sign budget,
+	                 before MapDressing paints the POI boards); BankRaidService paints it only if it has no sign yet
+	  BankGate       the bar gate in the opening, built OPEN until the jobs take it over (Phase B): an up-and-over
+	                 door tipped flat under the roof slab (a raised upright slab sat between a follow camera outside and
+	                 a raider on the vault, and a CanCollide-false part never pops the camera in), CanCollide false,
+	                 WE_GateState "open", a runtime door (WE_RuntimeDoor: WorldHygiene Enforce leaves it alone);
+	                 WE_ClosedCFrame / WE_OpenCFrame are its two positions
+	  VaultDoor      the round vault door on the back wall (dressing)
+	  VaultPad       the gold pad (12 x 12, no collision), tag WE_BankVault, centre (220, -224) inside the hall: 2 studs
+	                 toward the door from the Town.Bank.Vault anchor (220, -226), so the legacy stand-on-vault raid
+	                 (BankRaidConfig.VaultRadius 12 round this part) never reaches round the back wall, where no guard
+	                 can see (the jobs' crack ring is the anchor's, r 8, inside the hall)
+	  PlanterW/E     2 concrete planters on the plaza (cover for guards G1 / G2 and for raiders)
+	  StateBanner    8 x 6 x 0.4 standing on the roof, no collision, no raycasts; green = open (Phase B recolours it)
+	No beacon, no kerb, no light, no Neon and no billboard here (BankRaidService owns the one vault label). The hall
+	parts come from the kit (PreferMesh never applies: TownBlock has no mesh overlay). BANK_POS is also
+	BankRaidConfig.Position (a separate literal: BuyPathStatic pins both), and every coordinate below is absolute, like
+	the anchors and the fallback guard posts. ]]
+local BANK_POS = Vector3.new(220, 1, -220) -- the plaza centre = BankRaidConfig.Position
+local BANK_FLOOR_Y = 1.6 -- the plaza top (the hall floor; the anchors' Y 1.1 above WorldConfig.Activity.FloorY 0.5)
+local BANK_HALL_W, BANK_HALL_D, BANK_HALL_STOREYS = 24, 22, 2
+local BANK_HALL_CENTRE_Z = -225 -- front (the opening) at z -214, back at z -236
+local BANK_GATE_CEILING_GAP = 0.02 -- open: the gate lies flat this far under the roof slab (y 14.98..15.58, z -223.9..-214.9)
+local BANK_VAULT_Z = -224 -- the vault pad centre (the Town.Bank.Vault anchor stays at -226; see the header)
+local BANK_BANNER_OPEN = Color3.fromRGB(70, 170, 90) -- StateBanner "open" (OpsConfig.Ui.BannerColors.Open in Phase B)
+local BANK_SIGN_TEXT = "EMPIRE BANK" -- = BankRaidConfig.Sign.Text
+
+local function buildEmpireBank(root: Folder)
+	local bankFolder = ensureFolder("EmpireBank", root)
+	local plaza = part({
+		Name = "BankPlaza",
+		Size = Vector3.new(36, 1.2, 36),
+		Position = BANK_POS,
+		Color = Color3.fromRGB(168, 160, 144),
+		Material = Enum.Material.Pavement,
+		Parent = bankFolder,
+	})
+
+	-- the hall shell (WorldKits TownBlock "hall": exactly 7 parts at 2 storeys, no Roof / Lantern); its front (local -Z)
+	-- turns to face south (+Z)
+	local roofTop = BANK_FLOOR_Y + BANK_HALL_STOREYS * 7 + 1.2 -- the kit's roof slab top (read back from the part below)
+	local roofBottom = BANK_FLOOR_Y + BANK_HALL_STOREYS * 7 -- the roof slab's underside = the wall tops (read back too)
+	withWorldModule("WorldKits", function(WorldKits: any)
+		local hall = Instance.new("Model")
+		hall.Name = "BankHall"
+		local n = WorldKits.Add(hall, "TownBlock", CFrame.new(220, BANK_FLOOR_Y, BANK_HALL_CENTRE_Z) * CFrame.Angles(0, math.pi, 0), {
+			Width = BANK_HALL_W,
+			Depth = BANK_HALL_D,
+			Storeys = BANK_HALL_STOREYS,
+			Variant = "hall",
+			Color = Color3.fromRGB(214, 206, 188), -- pale limestone walls (trim 20 % darker)
+		})
+		hall.Parent = bankFolder
+		local roof = hall:FindFirstChild("HallRoof")
+		if roof and roof:IsA("BasePart") then
+			roofTop = roof.Position.Y + roof.Size.Y * 0.5
+			roofBottom = roof.Position.Y - roof.Size.Y * 0.5
+		end
+		if n ~= 7 then
+			warn("[WAR EMPIRE] MapSetup: the Empire Bank hall has " .. tostring(n) .. " parts (want 7)")
+		end
+	end)
+
+	-- portico columns (x 211.3..212.7 and 227.3..228.7, just in front of the piers): 1.3 outside the sign's x 214..226,
+	-- so no view from Bank Street loses a corner of the sign behind one (the geometry draft's x 213 / 227 hid up to 8 %
+	-- of it from the street's edges); guard posts G3 / G4 stay 1.5 clear of them
+	for _, c in ipairs({ { Name = "BankColumnW", X = 212 }, { Name = "BankColumnE", X = 228 } }) do
+		part({
+			Name = c.Name,
+			Size = Vector3.new(1.4, 14, 1.4),
+			Position = Vector3.new(c.X, BANK_FLOOR_Y + 7, -212.5),
+			Color = Color3.fromRGB(232, 228, 216),
+			Material = Enum.Material.Marble,
+			CanCollide = true,
+			Parent = bankFolder,
+		})
+	end
+
+	-- EMPIRE BANK: a dark board (cream text reads on it) over the opening, x 214..226, y 13.6..15.4, its street face +Z
+	local sign = part({
+		Name = "BankSign",
+		Size = Vector3.new(12, 1.8, 0.4),
+		Position = Vector3.new(220, BANK_FLOOR_Y + 12.9, -213.6),
+		Color = Color3.fromRGB(34, 38, 48),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	sign.CanQuery = false
+	sign.CanTouch = false
+	withWorldModule("WorldKits", function(WorldKits: any)
+		if sign:FindFirstChildWhichIsA("SurfaceGui") == nil and WorldKits.Sign(sign, Enum.NormalId.Back, BANK_SIGN_TEXT) == nil then
+			warn("[WAR EMPIRE] MapSetup: EMPIRE BANK sign not painted (world sign budget)")
+		end
+	end)
+
+	-- the bar gate (10 x 9 x 0.6 in the opening, x 215..225): open until OpsService runs the heist (Phase B). Open is
+	-- up-and-over: tipped flat (90 degrees about X) and lying just under the roof slab, its outer edge on the closed
+	-- gate's street face, so nothing hangs in the opening between the camera and a raider inside
+	local gateClosed = CFrame.new(220, BANK_FLOOR_Y + 4.5, -214.6)
+	local gateOpen = CFrame.new(220, roofBottom - BANK_GATE_CEILING_GAP - 0.3, -214.9 - 4.5) * CFrame.Angles(math.rad(90), 0, 0)
+	local gate = part({
+		Name = "BankGate",
+		Size = Vector3.new(10, 9, 0.6),
+		CFrame = gateOpen,
+		Color = Color3.fromRGB(52, 54, 52),
+		Material = Enum.Material.DiamondPlate,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	gate.CanQuery = false
+	gate.CanTouch = false
+	local act = WorldConfig.Activity
+	gate:SetAttribute(act.RuntimeDoorAttr, true) -- WE_RuntimeDoor
+	gate:SetAttribute(act.GateStateAttr, "open") -- WE_GateState
+	gate:SetAttribute("WE_ClosedCFrame", gateClosed)
+	gate:SetAttribute("WE_OpenCFrame", gateOpen)
+
+	-- the round vault door on the back wall (a disc 7.6 across, 1 thick, its face 1 stud into the hall)
+	part({
+		Name = "VaultDoor",
+		Size = Vector3.new(1, 7.6, 7.6),
+		CFrame = CFrame.new(220, BANK_FLOOR_Y + 4.2, -234.3) * CFrame.Angles(0, math.rad(90), 0),
+		Shape = Enum.PartType.Cylinder,
+		Color = Color3.fromRGB(150, 150, 142),
+		Material = Enum.Material.DiamondPlate,
+		CanCollide = true,
+		Parent = bankFolder,
+	})
+
+	-- the vault: a flat gold pad inside the hall (unrotated, so the label's world offset stays straight up). BANK_VAULT_Z
+	-- keeps VaultRadius 12 inside the walls at the back and sides (a raider pressed against the back wall outside
+	-- stands >= 12.5 from its centre) and lets it reach just out of the opening, in view of the front guards
+	local vault = part({
+		Name = "VaultPad",
+		Size = Vector3.new(12, 0.12, 12),
+		Position = Vector3.new(220, BANK_FLOOR_Y + 0.06, BANK_VAULT_Z),
+		Color = Color3.fromRGB(214, 176, 72),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	vault.CanQuery = false
+	vault.CanTouch = false
+	vault:SetAttribute("BankId", "EmpireBank")
+	CollectionService:AddTag(vault, "WE_BankVault")
+
+	-- concrete planters on the plaza front (x 203..209 / 231..237, z -207..-205, 3 tall)
+	for _, pl in ipairs({ { Name = "PlanterW", X = 206 }, { Name = "PlanterE", X = 234 } }) do
+		part({
+			Name = pl.Name,
+			Size = Vector3.new(6, 3, 2),
+			Position = Vector3.new(pl.X, BANK_FLOOR_Y + 1.5, -206),
+			Color = Color3.fromRGB(148, 144, 132),
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			Parent = bankFolder,
+		})
+	end
+
+	-- the state banner standing on the roof, facing Bank Street
+	local banner = part({
+		Name = "StateBanner",
+		Size = Vector3.new(8, 6, 0.4),
+		Position = Vector3.new(226, roofTop + 3, -232),
+		Color = BANK_BANNER_OPEN,
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	banner.CanQuery = false
+	banner.CanTouch = false
+
+	-- the Town.Bank.* anchors (Door, Vault, Loot, guard posts G1..G5, reinforcements R1 / R2) on the plaza: 0 parts.
+	-- BankRaidService takes its guard posts from the G anchors (else BankRaidConfig.GuardPosts); OpsService reads all.
+	local stamped = 0
+	withWorldModule("ActivityAnchors", function(ActivityAnchors: any)
+		for _, row in ipairs(WorldConfig.Town.BankAnchors) do
+			if ActivityAnchors.Stamp(plaza, ActivityAnchors.FromRow(row)) ~= nil then
+				stamped += 1
+			end
+		end
+	end)
+	local nParts = 0
+	for _, d in ipairs(bankFolder:GetDescendants()) do
+		if d:IsA("BasePart") then
+			nParts += 1
+		end
+	end
+	print(string.format("[WAR EMPIRE] MapSetup: Empire Bank hall built (%d parts, %d Town.Bank anchors)", nParts, stamped))
 end
 
 function MapSetup.Run()
@@ -2247,7 +2513,10 @@ function MapSetup.Run()
 			buildStructureKit(plotFolder, plotId, pos, offset, def)
 		end
 
-		paintPlotFloorChevrons(plotFolder, pos)
+		-- v72: static arrows off by default (they pointed back at the gate; the per-player NEXT pointer replaces them)
+		if not BaseLayout.Enabled() or BaseLayout.Config().FloorChevrons ~= false then
+			paintPlotFloorChevrons(plotFolder, pos)
+		end
 		dressPlotPadSandbags(plotFolder, pos)
 
 		-- Training Yard targets (soldiers "train" → server cash; visual only)
@@ -2295,7 +2564,8 @@ function MapSetup.Run()
 		end
 		-- Training workers (visual only — income is SoldierService tick). v70 (HUD spec §5): no name tag over them
 		for wi = 1, 2 do
-			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.6, 42)
+			-- fb2: y = YardPad top (0.7) + 2.1, so the lifted kit's feet stand on the yard pad (was 2.6: 0.2 lower)
+			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.8, 42)
 			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
 			makeSoldierKit(
 				yardFolder,
@@ -2411,7 +2681,8 @@ function MapSetup.Run()
 					{ Kind = "Guard", Label = "GUARD", Body = Color3.fromRGB(45, 55, 70), Accent = Color3.fromRGB(90, 140, 220) },
 				}
 				local roleDef = stallRoles[((si - 1) % #stallRoles) + 1]
-				local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
+				-- fb2: y = StallFloor top (0.55) + 2.15: feet within 0.05 of the stall floor and of the plaza road under stall 1
+				local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.7, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
 				makeSoldierKit(
 					stall,
 					"Stall" .. roleDef.Kind .. si,
@@ -2596,7 +2867,14 @@ function MapSetup.Run()
 	end
 
 	local territories = ensureFolder("Territories", root)
-	for _, def in ipairs(TERRITORIES) do
+	for _, def in ipairs(territoryDefsInBuildOrder()) do
+		local pos = def.Position
+		local isOilRig = def.IsOilRig == true
+		local isFort = def.IsFortress == true
+		local gateSide = FORT_GATE_SIDE[def.Id]
+		-- F10: a Home Outpost (TerritoryConfig.Starter row) is a 4-part kit: invisible marker (capture volume, tags,
+		-- PlotId), ring, pole and flag. No stripe, no finial, no light (TerritoryService never adds one either).
+		local isStarter = TerritoryConfig.IsStarterDef(def)
 		local diameter = (def.Radius or 30) * 2
 		-- World v2 (spec §3.5): the capture marker keeps its Size (TerritoryCapture reads its half-diagonal) but is an
 		-- invisible, non-colliding volume (it was a glowing 1.5-tall slab across five roads). The visible cue is the
@@ -2604,7 +2882,7 @@ function MapSetup.Run()
 		local marker = part({
 			Name = def.Id,
 			Size = Vector3.new(diameter, 1.5, diameter),
-			Position = def.Pos,
+			Position = pos,
 			Color = def.Color,
 			Transparency = 1,
 			Material = Enum.Material.SmoothPlastic,
@@ -2618,6 +2896,13 @@ function MapSetup.Run()
 		marker:SetAttribute("OwnerType", "Neutral")
 		marker:SetAttribute("OwnerUserId", 0)
 		marker:SetAttribute("CaptureProgress", 0)
+		if isStarter then
+			-- F10: owner-only (TerritoryCapture counts only BaseService.GetOwnerUserId(PlotId)); clients read these to
+			-- list / point at their OWN Home Outpost only
+			marker:SetAttribute("PlotId", def.PlotId)
+			marker:SetAttribute("IsStarter", true)
+			marker:SetAttribute("OwnerOnly", def.OwnerOnly == true)
+		end
 		CollectionService:AddTag(marker, TAG_TERRITORY)
 		CollectionService:AddTag(marker, TAG_CAPTURE)
 
@@ -2632,12 +2917,12 @@ function MapSetup.Run()
 
 		-- Flat disc (spec §3.5): a Cylinder lying on its side, top at y 0.58 on the ground (on the deck top for a rig,
 		-- sized to the 48-stud deck instead of overhanging the sea)
-		local ringD = if def.OilRig then math.min(diameter + 8, 46) else diameter + 8
-		local ringTop = if def.OilRig then def.Pos.Y + 0.13 else GROUND_TOP_Y + 0.08
+		local ringD = if isOilRig then math.min(diameter + 8, 46) else diameter + 8
+		local ringTop = if isOilRig then pos.Y + 0.13 else GROUND_TOP_Y + 0.08
 		local ring = part({
 			Name = def.Id .. "_Ring",
 			Size = Vector3.new(0.12, ringD, ringD),
-			CFrame = CFrame.new(def.Pos.X, ringTop - 0.06, def.Pos.Z) * CFrame.Angles(0, 0, math.rad(90)),
+			CFrame = CFrame.new(pos.X, ringTop - 0.06, pos.Z) * CFrame.Angles(0, 0, math.rad(90)),
 			Color = def.Color,
 			Transparency = 0.55,
 			CanCollide = false,
@@ -2652,7 +2937,7 @@ function MapSetup.Run()
 		part({
 			Name = def.Id .. "_FlagPole",
 			Size = Vector3.new(0.4, 14, 0.4),
-			Position = def.Pos + Vector3.new(0, 7, 0),
+			Position = pos + Vector3.new(0, 7, 0),
 			Color = Color3.fromRGB(55, 55, 55),
 			Material = Enum.Material.Metal,
 			CanCollide = false,
@@ -2661,7 +2946,7 @@ function MapSetup.Run()
 		local flag = part({
 			Name = def.Id .. "_Flag",
 			Size = Vector3.new(5.5, 3.2, 0.22),
-			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
+			Position = pos + Vector3.new(2.8, 12.2, 0),
 			Color = def.Color,
 			Material = Enum.Material.SmoothPlastic, -- painted (TerritoryService keeps it SmoothPlastic)
 			CanCollide = false,
@@ -2670,10 +2955,13 @@ function MapSetup.Run()
 		})
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
+		if isStarter then
+			continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)
+		end
 		part({
 			Name = def.Id .. "_FlagStripe",
 			Size = Vector3.new(5.5, 0.45, 0.28),
-			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
+			Position = pos + Vector3.new(2.8, 12.2, 0),
 			Color = Color3.fromRGB(245, 245, 245),
 			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
@@ -2683,7 +2971,7 @@ function MapSetup.Run()
 		part({
 			Name = def.Id .. "_Finial",
 			Size = Vector3.new(0.7, 0.7, 0.7),
-			Position = def.Pos + Vector3.new(0, 14.4, 0),
+			Position = pos + Vector3.new(0, 14.4, 0),
 			Color = Color3.fromRGB(230, 190, 60),
 			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Ball,
@@ -2694,12 +2982,12 @@ function MapSetup.Run()
 		-- World v2 W1: no beacon pole in the capture zone (the flag pole and the disc mark it)
 
 		-- Coastal oil platform deck + legs + harder NPC guards
-		if def.OilRig then
-			local deckY = def.Pos.Y
+		if isOilRig then
+			local deckY = pos.Y
 			local deck = part({
 				Name = def.Id .. "_Deck",
 				Size = Vector3.new(48, 2.5, 48),
-				Position = Vector3.new(def.Pos.X, deckY - 1.2, def.Pos.Z),
+				Position = Vector3.new(pos.X, deckY - 1.2, pos.Z),
 				Color = Color3.fromRGB(90, 95, 100),
 				Material = Enum.Material.Metal,
 				Parent = territories,
@@ -2712,7 +3000,7 @@ function MapSetup.Run()
 					part({
 						Name = def.Id .. "_Leg",
 						Size = Vector3.new(3, deckY, 3),
-						Position = Vector3.new(def.Pos.X + ox, deckY / 2, def.Pos.Z + oz),
+						Position = Vector3.new(pos.X + ox, deckY / 2, pos.Z + oz),
 						Color = Color3.fromRGB(60, 65, 70),
 						Material = Enum.Material.Metal,
 						Parent = territories,
@@ -2723,7 +3011,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_Derrick",
 				Size = Vector3.new(4, 22, 4),
-				Position = Vector3.new(def.Pos.X + 14, deckY + 11, def.Pos.Z + 14),
+				Position = Vector3.new(pos.X + 14, deckY + 11, pos.Z + 14),
 				Color = Color3.fromRGB(180, 140, 50),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2732,7 +3020,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_CraneArm",
 				Size = Vector3.new(14, 1.2, 1.2),
-				Position = Vector3.new(def.Pos.X + 7, deckY + 20, def.Pos.Z + 14),
+				Position = Vector3.new(pos.X + 7, deckY + 20, pos.Z + 14),
 				Color = Color3.fromRGB(160, 120, 45),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2741,7 +3029,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_HelipadMark",
 				Size = Vector3.new(10, 0.3, 10),
-				Position = Vector3.new(def.Pos.X - 12, deckY + 0.2, def.Pos.Z - 12),
+				Position = Vector3.new(pos.X - 12, deckY + 0.2, pos.Z - 12),
 				Color = Color3.fromRGB(40, 45, 50),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2750,7 +3038,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_DeckRim",
 				Size = Vector3.new(46, 0.35, 0.5),
-				Position = Vector3.new(def.Pos.X, deckY + 0.3, def.Pos.Z + 23),
+				Position = Vector3.new(pos.X, deckY + 0.3, pos.Z + 23),
 				Color = Color3.fromRGB(255, 180, 60),
 				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
@@ -2761,12 +3049,12 @@ function MapSetup.Run()
 			-- v70 (§7.1): on the waterways map the stairs are the rig's pier across the lagoon, snapped to the X axis
 			-- toward the map centre (Alpha steps x 1765 → 1684, approach pad on the inner bank; Bravo mirrored)
 			local inland = if WaterConfig.RigPierAxisAligned == true
-				then Vector3.new(-math.sign(def.Pos.X), 0, 0)
-				else Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+				then Vector3.new(-math.sign(pos.X), 0, 0)
+				else Vector3.new(-pos.X, 0, -pos.Z)
 			if inland.Magnitude < 0.1 then
-				inland = Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+				inland = Vector3.new(-pos.X, 0, -pos.Z)
 			end
-			buildOilDeckRamp(territories, def.Id, def.Pos, inland)
+			buildOilDeckRamp(territories, def.Id, pos, inland)
 			if WaterConfig.Enabled == true then
 				-- Concrete footing round each leg at the waterline: a boat's land probe that starts inside a 28-tall leg
 				-- misses the leg, but sees the footing top (2.5)
@@ -2776,7 +3064,7 @@ function MapSetup.Run()
 						part({
 							Name = def.Id .. "_LegFooting",
 							Size = lf,
-							Position = Vector3.new(def.Pos.X + ox, GROUND_TOP_Y + lf.Y * 0.5, def.Pos.Z + oz),
+							Position = Vector3.new(pos.X + ox, GROUND_TOP_Y + lf.Y * 0.5, pos.Z + oz),
 							Color = Color3.fromRGB(120, 118, 110),
 							Material = Enum.Material.Concrete,
 							CanCollide = true,
@@ -2789,7 +3077,7 @@ function MapSetup.Run()
 				-- 5-10 and the shelf; every land probe sees this top first, so boats brake before it. Walkable.
 				local pf = WaterConfig.RigPierFooting
 				local dir = inland.Unit
-				local mid = Vector3.new(def.Pos.X, GROUND_TOP_Y + pf.Height * 0.5, def.Pos.Z) + dir * ((pf.Near + pf.Far) * 0.5)
+				local mid = Vector3.new(pos.X, GROUND_TOP_Y + pf.Height * 0.5, pos.Z) + dir * ((pf.Near + pf.Far) * 0.5)
 				part({
 					Name = def.Id .. "_PierFooting",
 					Size = Vector3.new(pf.HalfWidth * 2, pf.Height, pf.Far - pf.Near),
@@ -2804,7 +3092,7 @@ function MapSetup.Run()
 		end
 
 		-- Fortress walls / keep (named forts with higher stipend)
-		if def.Fortress then
+		if isFort then
 			local wallH = 8
 			local wallT = 2.2
 			local span = (def.Radius or 48) * 1.35
@@ -2816,7 +3104,7 @@ function MapSetup.Run()
 			}
 			-- World v2 (spec §3.4): the wall facing the fort's nearest road (GateSide: 1 = +Z wall, -1 = -Z wall) is two
 			-- pieces with a FORT_GATE_WIDTH gap, so infantry and vehicles can drive in (the fort was a closed box)
-			local gateWall = if def.GateSide == 1 then 1 elseif def.GateSide == -1 then 2 else nil
+			local gateWall = if gateSide == 1 then 1 elseif gateSide == -1 then 2 else nil
 			for wi, wd in ipairs(wallDefs) do
 				if wi == gateWall then
 					local pieceLen = (span * 2 - FORT_GATE_WIDTH) * 0.5
@@ -2824,7 +3112,7 @@ function MapSetup.Run()
 						part({
 							Name = def.Id .. "_Wall" .. wi .. (if k == 1 then "" else "b"),
 							Size = Vector3.new(pieceLen, wallH, wallT),
-							Position = def.Pos + wd[2] + Vector3.new(sgn * (FORT_GATE_WIDTH * 0.5 + pieceLen * 0.5), 0, 0),
+							Position = pos + wd[2] + Vector3.new(sgn * (FORT_GATE_WIDTH * 0.5 + pieceLen * 0.5), 0, 0),
 							Color = Color3.fromRGB(95, 90, 75),
 							Material = Enum.Material.Concrete,
 							Parent = territories,
@@ -2834,7 +3122,7 @@ function MapSetup.Run()
 					part({
 						Name = def.Id .. "_Wall" .. wi,
 						Size = wd[1],
-						Position = def.Pos + wd[2],
+						Position = pos + wd[2],
 						Color = Color3.fromRGB(95, 90, 75),
 						Material = Enum.Material.Concrete,
 						Parent = territories,
@@ -2844,7 +3132,7 @@ function MapSetup.Run()
 			local keep = part({
 				Name = def.Id .. "_Keep",
 				Size = Vector3.new(14, 16, 14),
-				Position = def.Pos + Vector3.new(0, 8, 0),
+				Position = pos + Vector3.new(0, 8, 0),
 				Color = def.Color,
 				Material = Enum.Material.Brick,
 				Parent = territories,
@@ -2853,7 +3141,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_KeepRoof",
 				Size = Vector3.new(16, 1.5, 16),
-				Position = def.Pos + Vector3.new(0, 16.5, 0),
+				Position = pos + Vector3.new(0, 16.5, 0),
 				Color = Color3.fromRGB(70, 65, 55),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2869,7 +3157,7 @@ function MapSetup.Run()
 				part({
 					Name = def.Id .. "_Tower",
 					Size = Vector3.new(5, 12, 5),
-					Position = def.Pos + corner + Vector3.new(0, 6, 0),
+					Position = pos + corner + Vector3.new(0, 6, 0),
 					Color = Color3.fromRGB(85, 80, 65),
 					Material = Enum.Material.Brick,
 					Parent = territories,
@@ -2877,11 +3165,11 @@ function MapSetup.Run()
 			end
 			-- SmoothPlastic lintel over the gate (was a Neon strip on a wall with no gate); non-colliding, so it never
 			-- snags a tall vehicle
-			local gz = if def.GateSide == -1 then -span else span
+			local gz = if gateSide == -1 then -span else span
 			local lintel = part({
 				Name = def.Id .. "_GateLintel",
 				Size = Vector3.new(FORT_GATE_WIDTH + 2, 1, wallT + 0.4),
-				Position = def.Pos + Vector3.new(0, wallH - 0.5, gz),
+				Position = pos + Vector3.new(0, wallH - 0.5, gz),
 				Color = def.Color,
 				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
@@ -2894,8 +3182,9 @@ function MapSetup.Run()
 
 	-- World v2 (spec §3.3): spawn pads and anchors come from WorldConfig.Spawns (the three makeSpawnFolder rings at
 	-- 650 / 550 / 500 are gone: their pads sat on the roads, carried Neon edges, H marks and a beacon pole through the jeep).
-	--   VehicleSpawns  10 garage pads (WE_VehicleSpawn): painted Concrete aprons + a painted kerb, a 1-post "Garage"
-	--                  sign (SurfaceGui, <= 80 studs; the world's only painted signs) on the back edge; no beacon, no billboard, no Neon. Gate_P1..P6 sit
+	--   VehicleSpawns  10 garage pads (WE_VehicleSpawn): painted Concrete aprons + a painted kerb; the 6 gate pads carry a
+	--                  1-post "Garage" sign (SurfaceGui, <= 80 studs) on the back edge, the 4 pool pads none (lane BK: the
+	--                  world sign budget); no beacon, no billboard, no Neon. Gate_P1..P6 sit
 	--                  62 studs outside each plot's front gate (plot-local, so they turn with the plot) and face the plot
 	--                  forward; the pools face Yaw. VehicleService spawns on the pad heading (yawOf(pad.CFrame)).
 	--   NPCSpawns      10 invisible anchors (WE_NPCSpawn) in the Quarry / Ridge / Dune camps (CombatNPC.GatherSpawns)
@@ -2946,6 +3235,12 @@ function MapSetup.Run()
 		})
 		CollectionService:AddTag(pad, TAG_VEHICLE)
 		paintEdge(pad, COL_VEHICLE:Lerp(Color3.new(1, 1, 1), 0.55), 0.35)
+		-- W3 step 2 lane BK (spec w3s2 §1.10): only the 6 gate pads (PlotId rows) carry the "Garage" sign; the 4 pool
+		-- pads have no sign post, board or label, so the world sign budget (WorldConfig.Budgets.SurfaceGuis 17) holds the
+		-- 6 gate pads, the Town board, EMPIRE BANK and the 9 POI boards
+		if def.PlotId == nil then
+			continue
+		end
 		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
 		local back = spawnCfg.PadSize.Z * 0.5 + 0.4
 		local topY = spawnCfg.PadSize.Y * 0.5
@@ -3036,8 +3331,8 @@ function MapSetup.Run()
 	-- only: a pad in the water must never be picked as a ground-vehicle / jeep spawn.
 	-- World v2 (spec §3.3): the deck + 1 painted trim part (a lighter inset, so the pontoon reads as a pad from a boat);
 	-- no beacon pole in the water, no Neon edge and no floating billboard. No painted name either: the world's painted
-	-- signs stay within WorldConfig.Budgets.SurfaceGuis (12; the 10 garage signs use 10) and the SurfaceGui hard cap
-	-- (6 bases at L5 already hold 1,104 of 1,134). Boats spawn from the Garage menu, so nobody has to find a pontoon.
+	-- signs stay within WorldConfig.Budgets.SurfaceGuis (17: 6 gate-pad garage signs, the Town board, EMPIRE BANK and the
+	-- 9 POI boards) and the SurfaceGui hard cap. Boats spawn from the Garage menu, so nobody has to find a pontoon.
 	do
 		local navalFolder = ensureFolder("NavalSpawns", root)
 		local padSize = WaterConfig.NavalPadSize
@@ -3071,86 +3366,9 @@ function MapSetup.Run()
 	-- NPC pads, 4 per oil rig, 4 per fort) that never moved, carried a WE_NPC tag squads shot at, and stood on roads.
 	-- Guards and hostiles are live CombatService NPCs (NPC anchors above, TerritoryConfig GuardNPCType).
 
-	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
-	local bankFolder = ensureFolder("EmpireBank", root)
-	local bankPos = Vector3.new(220, 1, -220) -- matches BankRaidConfig.Position -- matches BankRaidConfig.Position
-	local bankPad = part({
-		Name = "BankPlaza",
-		Size = Vector3.new(36, 1.2, 36),
-		Position = bankPos,
-		Color = Color3.fromRGB(45, 50, 70),
-		Material = Enum.Material.Concrete,
-		Parent = bankFolder,
-	})
-	paintEdge(bankPad, Color3.fromRGB(90, 120, 200), 0.4) -- World v2 W1: painted kerb (nothing glows outside the bases)
-	part({
-		Name = "BankBuilding",
-		Size = Vector3.new(22, 14, 18),
-		Position = bankPos + Vector3.new(0, 7.5, -4),
-		Color = Color3.fromRGB(55, 62, 85),
-		Material = Enum.Material.Metal,
-		Parent = bankFolder,
-	})
-	part({
-		Name = "BankRoof",
-		Size = Vector3.new(24, 1.2, 20),
-		Position = bankPos + Vector3.new(0, 15, -4),
-		Color = Color3.fromRGB(40, 45, 60),
-		Material = Enum.Material.Metal,
-		Parent = bankFolder,
-	})
-	-- Columns + painted entrance (visual kits v2; World v2 W1: sign, vault pad and ring are SmoothPlastic, not Neon)
-	for _, ox in ipairs({ -8, -2.5, 2.5, 8 }) do
-		part({
-			Name = "BankColumn",
-			Size = Vector3.new(1.4, 12, 1.4),
-			Position = bankPos + Vector3.new(ox, 6.5, 5.5),
-			Color = Color3.fromRGB(70, 78, 100),
-			Material = Enum.Material.Marble,
-			Parent = bankFolder,
-		})
-	end
-	part({
-		Name = "BankDoor",
-		Size = Vector3.new(4.5, 6, 0.4),
-		Position = bankPos + Vector3.new(0, 3.5, 5.2),
-		Color = Color3.fromRGB(30, 35, 50),
-		Material = Enum.Material.Metal,
-		Parent = bankFolder,
-	})
-	part({
-		Name = "BankSign",
-		Size = Vector3.new(10, 1.2, 0.4),
-		Position = bankPos + Vector3.new(0, 12.5, 5.2),
-		Color = Color3.fromRGB(230, 190, 60),
-		Material = Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		Parent = bankFolder,
-	})
-	local vault = part({
-		Name = "VaultPad",
-		Size = Vector3.new(10, 1.4, 10),
-		Position = bankPos + Vector3.new(0, 1.2, 8),
-		Color = Color3.fromRGB(200, 170, 60),
-		Material = Enum.Material.SmoothPlastic,
-		Parent = bankFolder,
-	})
-	part({
-		Name = "VaultRing",
-		Size = Vector3.new(12, 0.35, 12),
-		Position = bankPos + Vector3.new(0, 1.9, 8),
-		Color = Color3.fromRGB(90, 140, 220),
-		Material = Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		Transparency = 0.35,
-		Parent = bankFolder,
-	})
-	vault:SetAttribute("BankId", "EmpireBank")
-	CollectionService:AddTag(vault, "WE_BankVault")
-	plainBillboard(vault, "EMPIRE BANK · Stand to RAID cash", Vector2.new(280, 40), 8, Color3.fromRGB(255, 220, 120))
-	beacon(bankFolder, bankPos + Vector3.new(14, 0, 14), Color3.fromRGB(90, 130, 220), "BankBeacon")
-	-- Bank guards spawned live via CombatService.SpawnNPC("BankGuard", cf) in BankRaidService
-	-- (static makeSoldierKit props removed — they were Anchored stick figures with double nametags)
+	-- Empire Bank (W3 step 2 lane BK): the walk-in hall, its vault pad, open gate, state banner and Town.Bank.* anchors
+	-- (buildEmpireBank above). Bank guards are live CombatService NPCs spawned by BankRaidService on the G anchors.
+	buildEmpireBank(root)
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)

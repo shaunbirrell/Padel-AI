@@ -1,8 +1,15 @@
 --!strict
 --[[
-	MVP interactive tutorial (v31 first-2-min):
-	claim → MoneyCollector → ClickDropper → CommandCenter buy → recruit → barracks → jeep → outpost
+	MVP interactive tutorial (v31 first-2-min), F6 order (the owner's 7 steps; TutorialConfig.OrderVersion 3 with the
+	Home Outpost on, 2 with it off):
+	claim → Command Center buy → collect cash (a cash drop also counts) → recruit → Barracks buy → Home Outpost → 4x4
+	While TerritoryConfig.Starter is off, the last two swap (4x4, then outpost: the 30 s travel rule).
 	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
+	F6 dispatch: a Notify advances the ACTIVE step only, when its TutorialConfig AdvanceOn lists the event type (an
+	"Upgrade" also needs detail == the step's PadStructureId). No step index is hard-coded here, so the order lives in
+	TutorialConfig alone. A save made in an older order (TutorialOrderVersion) is moved to the first step of this order
+	it has not done yet (TutorialConfig.MigrateLegacyStep) when the profile loads, then stamped with OrderVersion.
+	The tutorial ending (last step or SKIP) ends the F6 novice shield (CombatService.EndNoviceShield, "tutorial").
 ]]
 
 local Players = game:GetService("Players")
@@ -14,6 +21,7 @@ local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local GameConfig = require(Shared.Configs.GameConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
@@ -24,15 +32,15 @@ local RemoteSetup: any = nil
 local NotificationService: any = nil
 local RateLimitService: any = nil
 local MonetizationService: any = nil
+local CombatService: any = nil -- F6: EndNoviceShield (batch A lane C API), pcall + nil-check
 
+-- Step 1 (ClaimBase) is the first step in every order; every other step is found through TutorialConfig
 local STEP_CLAIM = 1
-local STEP_INCOME = 2
-local STEP_DROPPER = 3
-local STEP_COMMAND = 4
-local STEP_RECRUIT = 5
-local STEP_BARRACKS = 6
-local STEP_JEEP = 7
-local STEP_OUTPOST = 8
+
+-- F6: the order the saved TutorialStep index is read in (config; 1 when a build has no OrderVersion)
+local function orderVersion(): number
+	return tonumber((TutorialConfig :: any).OrderVersion) or 1
+end
 
 -- Debounce rapid Notify spam (collector ticks, double hooks) — per step, so a different step's event right
 -- after an advance (e.g. CC bought 0.5 s after the dropper step) is never dropped
@@ -70,6 +78,7 @@ local function pushTutorial(player: Player)
 		PadStructureId = if stepDef then stepDef.PadStructureId else nil,
 		CtaAction = if stepDef then stepDef.CtaAction else nil,
 		CtaLabel = if stepDef then stepDef.CtaLabel else nil,
+		Pointer = if stepDef then stepDef.Pointer else nil, -- F5: "ATM" on the collect step (chevrons / GO line)
 	})
 end
 
@@ -85,12 +94,27 @@ end
 	it (live Id, unoffered = profile.StarterBundleOffered, unowned, the soft-offer slot / D8 budget; true = sent,
 	nil = not wanted, false = slot busy) down the existing path: the StarterBundleOffer remote → ShopController's
 	StarterBundleToast → NotificationController.ShowOffer, so the HUD throttle still decides when the card shows.
-	A busy slot is retried STARTER_RETRIES times, one soft-offer cooldown apart. Nothing here grants or prompts. ]]
+	A busy slot is retried STARTER_RETRIES times, one soft-offer cooldown apart. Nothing here grants or prompts.
+	F6: the tutorial can now end in a vehicle (the last step is the 4x4 while the Home Outpost is off, and a capture can
+	be made from the driver's seat), so an after-tutorial offer first waits until the player is on foot
+	(Humanoid.SeatPart == nil): checked every STARTER_SEATED_CHECK_SECONDS (1 Hz) for up to STARTER_SEATED_WAIT_SECONDS
+	(300 s) in total, then the gate is called as before (it and the HUD throttle still decide). A player on foot sees
+	no change: the first check passes at once. Optional config keys: StarterBundleOffer.SeatedWaitSeconds /
+	SeatedCheckSeconds. ]]
 local STARTER_AFTER_TUTORIAL_SECONDS = 3
 local STARTER_AT_LOAD_SECONDS = 8
 local STARTER_RETRIES = 2
+local STARTER_SEATED_WAIT_SECONDS = 300
+local STARTER_SEATED_CHECK_SECONDS = 1
 local starterToken: { [number]: number } = {} -- userId -> the pending offer schedule (one at a time)
 local starterSeq = 0
+
+-- F6: sitting in any seat (driving or riding): no offer card while driving (CLAUDE.md: no pop-ups while driving)
+local function isSeated(player: Player): boolean
+	local char = player.Character
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	return hum ~= nil and hum.SeatPart ~= nil
+end
 
 local function scheduleStarterOffer(player: Player, afterTutorial: boolean)
 	local mon = MonetizationService
@@ -118,9 +142,17 @@ local function scheduleStarterOffer(player: Player, afterTutorial: boolean)
 		else tonumber(cfg and cfg.DelaySeconds) or STARTER_AT_LOAD_SECONDS
 	local cooldown = tonumber((MonetizationConfig :: any).SoftOfferSessionCooldownSeconds) or 60
 	local reason = if afterTutorial then "tutorial_complete" else "session"
+	-- F6: the seated wait (after the tutorial only); one budget for the whole schedule, retries included
+	local seatedLeft = if afterTutorial then math.max(0, tonumber(cfg and cfg.SeatedWaitSeconds) or STARTER_SEATED_WAIT_SECONDS) else 0
+	local seatedStep = math.max(0.25, tonumber(cfg and cfg.SeatedCheckSeconds) or STARTER_SEATED_CHECK_SECONDS)
 	local function attempt(n: number)
 		if starterToken[uid] ~= my then
 			return -- left the server
+		end
+		if seatedLeft > 0 and player.Parent and isSeated(player) then
+			seatedLeft -= seatedStep
+			task.delay(seatedStep, attempt, n) -- still in a seat: look again in 1 s
+			return
 		end
 		local sent: boolean? = nil
 		if player.Parent then
@@ -144,20 +176,49 @@ local function scheduleStarterOffer(player: Player, afterTutorial: boolean)
 end
 
 --[[ v69: buy steps (PadStructureId) for a structure the player already owns are done — skip them. The HUD goal
-	sends new players to buy Command Center before step 4, which then only advanced on ANOTHER CC purchase
-	($8,000 for L2); same for Barracks at step 6. Returns the first step that still needs doing. ]]
+	sends new players to buy Command Center early, which then only advanced on ANOTHER CC purchase ($8,000 for L2);
+	same for Barracks. Returns the first step that still needs doing.
+	F6 / F10: with the Home Outpost on (TerritoryConfig.Starter.Enabled), the Outpost step is done too once the player
+	has taken their own Home Outpost (profile.StarterOutpostTaken, set by the first capture): later sessions own it
+	from the start, so it could never be captured again for the step, and the next zone is over the 30 s walk.
+	Lane Z: a step the save already finished in its old order but the new order puts later (profile.TutorialDoneAhead,
+	set by migrateOrder, e.g. the 4x4 of a v2 save that still owes the outpost) is done too. ]]
+local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef?): boolean
+	if def == nil then
+		return false
+	end
+	local ahead = profile.TutorialDoneAhead
+	if typeof(ahead) == "table" and ahead[def.Id] == true then
+		return true
+	end
+	local sid = def.PadStructureId
+	if typeof(sid) == "string" then
+		local upgrades = if typeof(profile.BaseUpgrades) == "table" then profile.BaseUpgrades else {}
+		return (tonumber(upgrades[sid]) or 0) >= 1
+	end
+	if def.Id == "Outpost" then
+		return TerritoryConfig.Starter.Enabled == true and profile.StarterOutpostTaken == true
+	end
+	return false
+end
+
 local function skipOwnedBuySteps(profile: any, step: number): number
-	local upgrades = if typeof(profile.BaseUpgrades) == "table" then profile.BaseUpgrades else {}
 	local total = TutorialConfig.StepCount()
-	while step <= total do
-		local def = TutorialConfig.GetStep(step)
-		local sid = if def then def.PadStructureId else nil
-		if typeof(sid) ~= "string" or (tonumber(upgrades[sid]) or 0) < 1 then
-			break
-		end
+	while step <= total and stepAlreadyDone(profile, TutorialConfig.GetStep(step)) do
 		step += 1
 	end
 	return step
+end
+
+-- F6: the tutorial is over (last step, SKIP, or already done at load): end the novice shield now. CombatService's
+-- own 1 Hz sweep also ends it on TutorialComplete; this call makes it immediate. Harmless when no shield is up.
+local function endNoviceShield(player: Player)
+	if CombatService and typeof(CombatService.EndNoviceShield) == "function" then
+		local ok, err = pcall(CombatService.EndNoviceShield, player, "tutorial")
+		if not ok then
+			warn("[TutorialService] EndNoviceShield failed:", err)
+		end
+	end
 end
 
 local function setStep(player: Player, step: number, complete: boolean?)
@@ -175,6 +236,7 @@ local function setStep(player: Player, step: number, complete: boolean?)
 		NotificationService.Notify(player, "Tutorial complete — BUILD. CONQUER. DOMINATE.", "Success")
 	end
 	if complete then
+		endNoviceShield(player) -- F6
 		scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
 	end
 end
@@ -222,6 +284,7 @@ function TutorialService.Complete(player: Player)
 	if NotificationService then
 		NotificationService.Notify(player, "Tutorial skipped.", "Info", 2)
 	end
+	endNoviceShield(player) -- F6: SKIP ends the novice shield too
 	scheduleStarterOffer(player, true) -- v71 money (M1): the Starter Pack offer 3 s after the tutorial
 end
 
@@ -235,6 +298,8 @@ function TutorialService.Reset(player: Player)
 	end
 	profile.TutorialComplete = false
 	profile.TutorialStep = STEP_CLAIM
+	profile.TutorialOrderVersion = orderVersion() -- F6: step 1 is the same step in every order
+	profile.TutorialDoneAhead = nil -- lane Z: a fresh run owes every step
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 end
@@ -263,29 +328,16 @@ function TutorialService.Notify(player: Player, eventType: string, detail: any?)
 		DataService.MarkDirty(player)
 	end
 
-	if eventType == "PlotAssigned" and step == STEP_CLAIM then
-		-- v69: server full → no plot yet; the claim step waits until a plot is handed out
-		if profile.BasePlotId == nil then
-			return
-		end
-		advanceTo(player, STEP_CLAIM)
-	elseif eventType == "PassiveIncome" and step == STEP_INCOME then
-		advanceTo(player, STEP_INCOME)
-	elseif eventType == "ManualDrop" and step == STEP_DROPPER then
-		advanceTo(player, STEP_DROPPER)
-	elseif eventType == "Upgrade" and typeof(detail) == "string" then
-		if detail == "CommandCenter" and step == STEP_COMMAND then
-			advanceTo(player, STEP_COMMAND)
-		elseif detail == "Barracks" and step == STEP_BARRACKS then
-			advanceTo(player, STEP_BARRACKS)
-		end
-	elseif eventType == "RecruitSoldiers" and step == STEP_RECRUIT then
-		advanceTo(player, STEP_RECRUIT)
-	elseif eventType == "SpawnVehicle" and step == STEP_JEEP then
-		-- MilitaryJeep or any vehicle spawn satisfies jeep step
-		advanceTo(player, STEP_JEEP)
-	elseif eventType == "CaptureTerritory" and step == STEP_OUTPOST then
-		advanceTo(player, STEP_OUTPOST)
+	-- v69: server full → no plot yet; the claim step waits until a plot is handed out
+	if eventType == "PlotAssigned" and profile.BasePlotId == nil then
+		return
+	end
+	-- F6: only the ACTIVE step can finish, and only on an event its AdvanceOn lists ("Upgrade" = its own console buy;
+	-- any vehicle spawn = the 4x4 step; a collect or a cash drop ("ManualDrop") = the collect step)
+	local def = TutorialConfig.GetStep(step)
+	if def and typeof(def.AdvanceOn) == "table" and table.find(def.AdvanceOn, eventType)
+		and (eventType ~= "Upgrade" or (typeof(detail) == "string" and detail == def.PadStructureId)) then
+		advanceTo(player, step)
 	end
 end
 
@@ -295,6 +347,7 @@ function TutorialService.Init(deps: { [string]: any })
 	NotificationService = deps.NotificationService
 	RateLimitService = deps.RateLimitService
 	MonetizationService = deps.MonetizationService -- v71 money (M1): TrySoftOfferStarterBundle (Starter Pack gate)
+	CombatService = deps.CombatService -- F6: EndNoviceShield (CombatService.Init runs later; called only at run time)
 
 	local skipRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSkipTutorial) :: RemoteEvent
 	skipRemote.OnServerEvent:Connect(function(player: Player)
@@ -307,12 +360,44 @@ function TutorialService.Init(deps: { [string]: any })
 		TutorialService.Complete(player)
 	end)
 
+	--[[ F6: a TutorialStep saved in another order (TutorialOrderVersion ~= OrderVersion; missing = 1 = the v1 order)
+		moves to the first step of this order the player has not done yet (TutorialConfig.MigrateLegacyStep: v1 steps
+		2-4 -> Command Center, never past it), then the profile is stamped with this order. A finished tutorial keeps its
+		step (only the stamp changes). Lane Z: every known order migrates, in either direction (OrderVersion follows the
+		Home Outpost switch: 2 = 4x4 first, 3 = outpost first); a step already done that the new order puts later is kept
+		in TutorialDoneAhead (never asked twice). A save from an order this build does not know (a newer build) is left
+		alone (never stamped down, so it is never migrated twice). ]]
+	local function migrateOrder(player: Player, profile: any)
+		local current = orderVersion()
+		local saved = tonumber(profile.TutorialOrderVersion) or 1
+		if saved == current or TutorialConfig.SavedOrder(saved) == nil then
+			return
+		end
+		if profile.TutorialComplete ~= true then
+			local oldStep = profile.TutorialStep
+			profile.TutorialStep = TutorialConfig.MigrateLegacyStep(oldStep, nil, saved)
+			-- a done step stays done in every order: keep what an earlier migration carried
+			local ahead = TutorialConfig.DoneAhead(oldStep, saved) or {}
+			if typeof(profile.TutorialDoneAhead) == "table" then
+				for id, v in pairs(profile.TutorialDoneAhead) do
+					if typeof(id) == "string" and v == true then
+						ahead[id] = true
+					end
+				end
+			end
+			profile.TutorialDoneAhead = if next(ahead) ~= nil then ahead else nil
+		end
+		profile.TutorialOrderVersion = current
+		DataService.MarkDirty(player)
+	end
+
 	local function onProfileLoaded(player: Player, profile: any)
 		if not tutorialEnabled() then
 			profile.TutorialComplete = true
 			pushTutorial(player)
 			return
 		end
+		migrateOrder(player, profile)
 		if RunService:IsStudio() and DevConfig.SkipTutorial then
 			-- DataService already may have set TutorialComplete
 			pushTutorial(player)
@@ -335,8 +420,14 @@ function TutorialService.Init(deps: { [string]: any })
 			end
 			DataService.MarkDirty(player)
 		end
+		-- F6: a migrated v1 save past the last step (or everything already done) is a finished tutorial
+		if profile.TutorialStep > TutorialConfig.StepCount() and profile.TutorialComplete ~= true then
+			profile.TutorialComplete = true
+			DataService.MarkDirty(player)
+		end
 		pushTutorial(player)
 		if profile.TutorialComplete then
+			endNoviceShield(player) -- F6 (no-op unless a shield is already up)
 			return
 		end
 		-- Plot assignment counts as claim-base progress

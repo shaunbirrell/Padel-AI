@@ -30,6 +30,17 @@ local WorldLabelConfig = {
 	RoleAttribute = "WE_LabelRole", -- "objective" | "contested" (unset = normal label)
 	OwnerAttribute = "WE_LabelOwner", -- UserId: only that player sees the label (client filter; 0/unset = everyone)
 	OwnerTag = "WE_OwnerLabel", -- CollectionService tag on owner-only labels (what the client filter watches)
+	-- F1/F4/F9 (owner's 11 features): every BillboardGui at a base (premium pads, the gold pump pad, the producer
+	-- label, the NEXT tag, business pops) carries this CollectionService tag (WorldLabel.Create opts.BaseLabel).
+	BaseLabelTag = "WE_BaseLabel",
+	-- The client LabelGovernor makes "at most 3 labels on screen at a base" true: Hz times a second it keeps the
+	-- MaxOnScreen tagged labels nearest the camera (within their own MaxDistance) enabled and disables the rest.
+	-- It never touches a label whose RoleAttribute is "objective". On since lane Z (reversible).
+	BaseLabelGovernor = {
+		Enabled = true,
+		MaxOnScreen = 3,
+		Hz = 4,
+	},
 	-- Billboard text, real px (world GUIs are not under the HUD UIScale). Fixed TextSize, never TextScaled.
 	TextSize = 16,
 	SubTextSize = 14,

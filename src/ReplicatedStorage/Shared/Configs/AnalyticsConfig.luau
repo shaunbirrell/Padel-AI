@@ -78,6 +78,10 @@ local AnalyticsConfig = {
 		FIRST_PURCHASE = "FIRST_PURCHASE",
 		SHORTFALL_CHIP = "SHORTFALL_CHIP",
 		ANNOUNCE_SHOWN = "ANNOUNCE_SHOWN",
+		-- Nations (cosmetic country; nations spec section 2). The IP-based suggestion is never logged, in any field.
+		NATION_PICKER_SHOWN = "NATION_PICKER_SHOWN", -- source ("join" / "flagpole" / "settings")
+		NATION_PICK = "NATION_PICK", -- exactly { id, source, first }
+		NATION_LATER = "NATION_LATER", -- count (NationPrompts after this LATER)
 	},
 }
 

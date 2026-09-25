@@ -7,8 +7,9 @@
 
 	World v2 W3 (gap/world_v2_spec.md §4, roadmap §2.4 WORLD-B builder 2): every prop now belongs to a place. Dress runs,
 	in this order, each step guarded so a failure warns and the rest still builds:
-	  1. WorldPOI.Build     — the named places (W3 step 1: Crossroads Town only), WorldDressing.POI_<Id>
-	  2. DocksideDressing   — the legacy South Docks quay kit, as-is until the Port POI step (inside the Port footprint)
+	  1. WorldPOI.Build     — the named places (every enabled POI in WorldConfig.POIs), WorldDressing.POI_<Id>
+	  2. DocksideDressing   — the legacy South Docks quay kit, as-is while the Port POI is off (inside the Port
+	                          footprint); W3 step 2: once WorldPOI has built the Port, the quay kit is not built at all
 	  3. WorldDress.Build   — the travel dressing between the places: road rhythm, junction kits, canal / shore features,
 	                          natural scatter (WorldDressing.Rhythm / Junctions / Shore / Scatter)
 	  4. Waterways.CullDressing — the safety net (nothing in the water, on a plot pad or in a road lane)
@@ -150,6 +151,9 @@ end
 local function at(origin: Vector3, ox: number, oy: number, oz: number): Vector3
 	return origin + Vector3.new(ox, oy, oz)
 end
+
+-- W3 step 2 (spec w3s2 §6 lane P): the POI that replaces the Dockside quay kit once WorldPOI has built it
+local DOCKSIDE_POI = "Port"
 
 
 -- ── Dockside kits (legacy, as-is until the Port POI step; World v2 W3 kept only what DocksideDressing uses) ──
@@ -507,21 +511,28 @@ function MapDressing.Dress(root: Instance, opts: { Quality: string? }?)
 		end
 	end
 
-	-- 1) POIs (W3 step 1: Crossroads Town)
+	-- 1) POIs (every enabled place; W3 step 2 adds the 17 layouts as their enable steps flip them on)
 	local wp = getWorldModule("WorldPOI")
+	local portBuilt = false
 	if wp then
 		local okP, errP = pcall(wp.Build, dressing, quality, occ)
 		if not okP then
 			warn("[MapDressing] WorldPOI.Build failed:", errP)
+		elseif type(errP) == "table" and type(errP.POIs) == "table" then
+			for _, row in ipairs(errP.POIs) do
+				if type(row) == "table" and row.Id == DOCKSIDE_POI and row.Built == true then
+					portBuilt = true
+				end
+			end
 		end
 	end
 
-	-- 2) the legacy quay kit, as-is (inside the reserved Port footprint)
+	-- 2) the legacy quay kit, as-is (inside the reserved Port footprint) — only while the Port POI is not built
 	-- 7) Dockside — v70: re-laid round the South Docks harbour (water x -240..240, z 1364..1490). Piers stand in the
 	-- harbour off the quay (WE_AllowInWater); crates / drums / lights on the quay (z 1330..1360) beside them, never in
 	-- front of a pier. Piers at x -220 / -185 / 185 / 220 stay clear of the capture lens (|x| <= 56), the slips
 	-- (|x| 64..108) and P4's channel mouth (x -148..-108). Low: 2 piers; Full: 4.
-	do
+	if not portBuilt then
 		local f = Instance.new("Folder")
 		f.Name = "DocksideDressing"
 		f.Parent = dressing

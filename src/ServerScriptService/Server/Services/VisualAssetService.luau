@@ -12,6 +12,14 @@
 	  • Templates live in ServerStorage.WE_VisualAssetTemplates (never ReplicatedStorage).
 	  • CloneKitMesh(key): one Roblox-owned mesh piece for a WorldKits Part kit (VisualAssetConfig.DesertKit).
 	  • Vehicle refs with Fit = "Kit" scale the body to the kit chassis and hide the Part-kit visuals (physics unchanged).
+
+	Load failures (each one leaves the Part kit look and prints one Output line):
+	  • transient (HTTP 5xx / throttle / timeout): retried in the BACKGROUND (task.delay), VisualAssetConfig
+	    LoadRetryCount times, LoadRetryDelay s then x LoadRetryBackoff. While a retry is pending or running, callers
+	    get nil at once (no caller ever waits on a retry). Retries count toward MaxLoadAttempts and never use its last
+	    LoadRetryReserve attempts (kept for first loads). Silent until it loads (one print) or gives up (one warn).
+	  • permanent (LoadRetryPermanentErrors text, no Model, template prep error, over the part cap / Humanoid): final.
+	  • MaxLoadAttempts reached: an id asked for after that is not loaded ("load cap" line, once per id).
 ]]
 
 local InsertService = game:GetService("InsertService")
@@ -43,7 +51,13 @@ type AssetRef = {
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
-local failed: { [number]: boolean } = {}
+local failed: { [number]: boolean } = {} -- final: never inserted again
+local retryTries: { [number]: number } = {} -- background retries scheduled so far per id
+local cooling: { [number]: boolean } = {} -- a background retry is pending or running: callers get nil at once
+local capLogged: { [number]: boolean } = {} -- "load cap" Output line printed once per id
+local requestOrder: { number } = {} -- QA (_Stats / _Requested): distinct ids that asked for an insert, in order
+local requestSeen: { [number]: boolean } = {}
+local capRefused = 0 -- distinct ids refused by MaxLoadAttempts
 local templateStrips: { [number]: { [string]: number } } = {} -- what loadModel stripped from each template
 local dressLogged: { [number]: boolean } = {} -- vehicle dress strip summary printed once per assetId
 local loadAttempts = 0
@@ -296,7 +310,10 @@ local function extractPiece(pack: Instance, ref: AssetRef): (Instance?, string?)
 	local n = countParts(t)
 	if n == 0 or n > maxParts() or hasHumanoid(t) then
 		t:Destroy()
-		return nil, string.format("refused: %d parts (cap %d)%s", n, maxParts(), if n > 0 and n <= maxParts() then ", Humanoid" else "")
+		if n > 0 and n <= maxParts() then
+			return nil, string.format("holds a Humanoid (%d parts)", n)
+		end
+		return nil, string.format("%d parts > cap %d (VisualAssetConfig.MaxPartsPerModel)", n, maxParts())
 	end
 	t.Name = "WE_Asset_" .. tostring(refId(ref)) .. "_" .. name .. (if ref.SubModel then "_" .. ref.SubModel else "")
 	t.Parent = ensureFolder()
@@ -314,7 +331,9 @@ local function splitPack(assetId: number, pack: Instance)
 				pieceCache[key] = t
 			else
 				pieceFailed[key] = why or "?"
-				warn("[VisualAssetService] pack piece skipped", assetId, ref.ChildName, why)
+				-- one line per piece (pieceFailed keeps it from being tried again); the Part kit look stays
+				warn(string.format("[VisualAssetService] refused %d \"%s%s\": %s — Part kit look stays", assetId,
+					tostring(ref.ChildName), if ref.SubModel then "/" .. ref.SubModel else "", why or "?"))
 			end
 		end
 	end
@@ -335,7 +354,10 @@ local function acceptTemplate(assetId: number, model: Model): Model?
 	if n > maxParts() or hasHumanoid(model) then
 		failed[assetId] = true
 		model:Destroy()
-		warn(string.format("[VisualAssetService] refused %d: %d parts (cap %d) — Part kit stays", assetId, n, maxParts()))
+		local why = if n > maxParts()
+			then string.format("%d parts > cap %d (VisualAssetConfig.MaxPartsPerModel)", n, maxParts())
+			else string.format("holds a Humanoid (%d parts)", n)
+		warn(string.format("[VisualAssetService] refused %d: %s — Part kit look stays", assetId, why))
 		return nil
 	end
 	model.Parent = ensureFolder()
@@ -343,24 +365,51 @@ local function acceptTemplate(assetId: number, model: Model): Model?
 	return model
 end
 
--- InsertService (AssetService fallback) → the asset's Model, or nil. Yields.
-local function insertAsset(assetId: number): Model?
+-- true when a LoadAsset error message says retrying cannot help (VisualAssetConfig.LoadRetryPermanentErrors)
+local function isPermanentError(msg: string): boolean
+	local lower = string.lower(msg)
+	local list = (VisualAssetConfig :: any).LoadRetryPermanentErrors
+	if typeof(list) ~= "table" then
+		return false
+	end
+	for _, pat in ipairs(list) do
+		if typeof(pat) == "string" and pat ~= "" and string.find(lower, pat, 1, true) then
+			return true
+		end
+	end
+	return false
+end
+
+-- InsertService (AssetService fallback) → the asset's Model, or (nil, "transient" | "permanent", error text). Yields.
+-- Marks and logs nothing for a LoadAsset error: loadAttempt decides (silent background retry, or one final line).
+local function insertAsset(assetId: number): (Model?, string?, string?)
 	local ok, result = pcall(function()
 		return InsertService:LoadAsset(assetId)
 	end)
+	local errs: { string } = {}
 	if not ok or typeof(result) ~= "Instance" then
+		table.insert(errs, tostring(result))
 		-- AssetService fallback (newer API)
 		local AssetService = game:GetService("AssetService")
 		if AssetService and (AssetService :: any).LoadAssetAsync then
 			ok, result = pcall(function()
 				return (AssetService :: any):LoadAssetAsync(assetId)
 			end)
+			if not ok or typeof(result) ~= "Instance" then
+				table.insert(errs, tostring(result))
+			end
 		end
 	end
 	if not ok or typeof(result) ~= "Instance" then
-		failed[assetId] = true
-		warn("[VisualAssetService] LoadAsset failed", assetId, result)
-		return nil
+		-- transient only when no message says the asset can never load here
+		local kind = "transient"
+		for _, e in ipairs(errs) do
+			if isPermanentError(e) then
+				kind = "permanent"
+				break
+			end
+		end
+		return nil, kind, table.concat(errs, " | ")
 	end
 
 	local container = result :: Instance
@@ -377,10 +426,9 @@ local function insertAsset(assetId: number): Model?
 		end
 	end
 	if not model then
-		failed[assetId] = true
 		container:Destroy()
-		warn("[VisualAssetService] No Model in asset", assetId)
-		return nil
+		warn("[VisualAssetService] No Model in asset", assetId, "— Part kit look stays")
+		return nil, "logged", nil
 	end
 	if container ~= model then
 		model.Parent = nil
@@ -388,7 +436,7 @@ local function insertAsset(assetId: number): Model?
 			container:Destroy()
 		end)
 	end
-	return model
+	return model, nil, nil
 end
 
 local function releaseWaiters(assetId: number)
@@ -399,6 +447,115 @@ local function releaseWaiters(assetId: number)
 			task.spawn(co)
 		end
 	end
+end
+
+local function maxLoadAttempts(): number
+	return tonumber(VisualAssetConfig.MaxLoadAttempts) or 36
+end
+
+-- retries may use the load budget only up to MaxLoadAttempts - LoadRetryReserve (the rest is kept for first loads)
+local function retryBudgetLeft(): boolean
+	local reserve = math.max(0, math.floor(tonumber(VisualAssetConfig.LoadRetryReserve) or 0))
+	return loadAttempts < maxLoadAttempts() - reserve
+end
+
+-- the load cap refuses assetId: one Output line per id (the Part kit look stays)
+local function refuseOverCap(assetId: number)
+	if capLogged[assetId] then
+		return
+	end
+	capLogged[assetId] = true
+	capRefused += 1
+	warn(string.format("[VisualAssetService] load cap reached (%d attempts, VisualAssetConfig.MaxLoadAttempts): %d not loaded — Part kit look stays",
+		maxLoadAttempts(), assetId))
+end
+
+local scheduleRetry: (number, string) -> ()
+
+-- One insert of assetId (counts toward MaxLoadAttempts; the caller checked the cap). Other first-try callers for the id
+-- wait on inflight[assetId]; during a retry cooling[assetId] stays set, so nobody waits on it. A transient failure
+-- schedules a background retry; any other failure is final.
+local function loadAttempt(assetId: number): Model?
+	loadAttempts += 1
+	inflight[assetId] = {}
+	local kind: string? = nil
+	local errText = "?"
+	local ok, res = pcall(function(): Model?
+		local model, why, text = insertAsset(assetId)
+		if model == nil then
+			kind = why
+			errText = text or "?"
+			return nil
+		end
+		local kept = acceptTemplate(assetId, model)
+		if kept then
+			print("[VisualAssetService] Cached catalog model", assetId, kept.Name)
+		end
+		return kept
+	end)
+	-- record the outcome (failed / cooling) BEFORE waking waiters: a woken waiter whose caller asks for the same id
+	-- again (a dress loop, another piece of the same pack) must see it, never start a second insert
+	if not ok then
+		failed[assetId] = true
+		warn("[VisualAssetService] template prep failed", assetId, res)
+	elseif res == nil and kind == "transient" then
+		scheduleRetry(assetId, errText) -- silent until it finally loads (one print) or gives up (one warn)
+	elseif res == nil and kind == "permanent" then
+		failed[assetId] = true
+		warn(string.format("[VisualAssetService] LoadAsset failed %d (%s) — Part kit look stays", assetId, errText))
+	elseif res == nil and kind ~= nil then
+		failed[assetId] = true -- no Model in the asset (already logged): never inserted again
+	end
+	releaseWaiters(assetId)
+	if not ok then
+		return nil
+	end
+	return res
+end
+
+-- a transient failure that will not be retried (again): final, one Output line
+local function giveUp(assetId: number, tries: number, errText: string, why: string?)
+	cooling[assetId] = nil
+	failed[assetId] = true
+	warn(string.format("[VisualAssetService] LoadAsset failed %d after %d %s (%s%s) — Part kit look stays", assetId,
+		tries, if tries == 1 then "try" else "tries", errText, if why then "; " .. why else ""))
+end
+
+-- Background retry after a transient failure: LoadRetryDelay s, then x LoadRetryBackoff each time; after
+-- LoadRetryCount retries the id is final. Never yields the caller (task.delay); the budget is re-checked when it runs.
+function scheduleRetry(assetId: number, errText: string)
+	local tries = retryTries[assetId] or 0
+	local maxTries = math.max(0, math.floor(tonumber(VisualAssetConfig.LoadRetryCount) or 0))
+	if tries >= maxTries then
+		giveUp(assetId, tries + 1, errText, nil)
+		return
+	end
+	if not retryBudgetLeft() then
+		giveUp(assetId, tries + 1, errText, "no retry: the last load attempts are kept for first loads")
+		return
+	end
+	retryTries[assetId] = tries + 1
+	cooling[assetId] = true
+	local base = math.max(0, tonumber(VisualAssetConfig.LoadRetryDelay) or 20)
+	local mult = math.max(1, tonumber(VisualAssetConfig.LoadRetryBackoff) or 2)
+	task.delay(base * mult ^ tries, function()
+		if cache[assetId] or packDone[assetId] or failed[assetId] then
+			cooling[assetId] = nil
+			return
+		end
+		if not retryBudgetLeft() then
+			giveUp(assetId, tries + 1, errText, "no retry: the last load attempts are kept for first loads")
+			return
+		end
+		loadAttempt(assetId) -- cooling stays set meanwhile: callers get nil, nobody waits on a retry
+		if cache[assetId] or packDone[assetId] then
+			cooling[assetId] = nil
+			print(string.format("[VisualAssetService] %d loaded on retry %d", assetId, tries + 1))
+		elseif failed[assetId] then
+			cooling[assetId] = nil
+		end
+		-- else: another retry is scheduled (cooling stays set)
+	end)
 end
 
 -- Whole-model template for assetId (nil for packs: use templateForRef). One insert per id at a time: a second caller
@@ -414,6 +571,9 @@ local function loadModel(assetId: number, forceInsert: boolean?): Model?
 	if shouldSkipInserts() and not forceInsert then
 		return nil
 	end
+	if cooling[assetId] then
+		return nil -- a background retry is pending / running: the Part kit look now, never a wait
+	end
 	local waiting = inflight[assetId]
 	if waiting then
 		if coroutine.isyieldable() then
@@ -422,29 +582,15 @@ local function loadModel(assetId: number, forceInsert: boolean?): Model?
 		end
 		return cache[assetId]
 	end
-	if loadAttempts >= (VisualAssetConfig.MaxLoadAttempts or 36) then
+	if not requestSeen[assetId] then
+		requestSeen[assetId] = true
+		table.insert(requestOrder, assetId)
+	end
+	if loadAttempts >= maxLoadAttempts() then
+		refuseOverCap(assetId)
 		return nil
 	end
-	loadAttempts += 1
-	inflight[assetId] = {}
-	local ok, res = pcall(function(): Model?
-		local model = insertAsset(assetId)
-		if model == nil then
-			return nil
-		end
-		local kept = acceptTemplate(assetId, model)
-		if kept then
-			print("[VisualAssetService] Cached catalog model", assetId, kept.Name)
-		end
-		return kept
-	end)
-	releaseWaiters(assetId)
-	if not ok then
-		failed[assetId] = true
-		warn("[VisualAssetService] template prep failed", assetId, res)
-		return nil
-	end
-	return res
+	return loadAttempt(assetId)
 end
 
 -- Template for a config ref: the piece (ChildName / SubModel) of a pack, else the whole model. May yield (insert).
@@ -1684,14 +1830,23 @@ function VisualAssetService._SetTemplate(assetId: number, model: Model)
 	end
 	cache[assetId] = nil
 	failed[assetId] = nil
+	cooling[assetId] = nil
+	retryTries[assetId] = nil
 	packDone[assetId] = nil
 	dressLogged[assetId] = nil
 	acceptTemplate(assetId, model)
 end
 
--- Test hook: loader counters.
-function VisualAssetService._Stats(): { LoadAttempts: number, Cached: number, Pieces: number, PiecesFailed: number, PacksSplit: number }
-	local c, p, f, d = 0, 0, 0, 0
+-- Test hook: loader counters. Requested = distinct ids that asked for an insert (first tries), CapRefused = distinct
+-- ids refused by MaxLoadAttempts, Cooling = ids with a background retry pending / running, Failed = final failures.
+function VisualAssetService._Stats(): { LoadAttempts: number, Cached: number, Pieces: number, PiecesFailed: number, PacksSplit: number, Requested: number, CapRefused: number, Cooling: number, Failed: number }
+	local c, p, f, d, cool, fin = 0, 0, 0, 0, 0, 0
+	for _ in pairs(cooling) do
+		cool += 1
+	end
+	for _ in pairs(failed) do
+		fin += 1
+	end
 	for _ in pairs(cache) do
 		c += 1
 	end
@@ -1704,7 +1859,22 @@ function VisualAssetService._Stats(): { LoadAttempts: number, Cached: number, Pi
 	for _ in pairs(packDone) do
 		d += 1
 	end
-	return { LoadAttempts = loadAttempts, Cached = c, Pieces = p, PiecesFailed = f, PacksSplit = d }
+	return {
+		LoadAttempts = loadAttempts,
+		Cached = c,
+		Pieces = p,
+		PiecesFailed = f,
+		PacksSplit = d,
+		Requested = #requestOrder,
+		CapRefused = capRefused,
+		Cooling = cool,
+		Failed = fin,
+	}
+end
+
+-- Test hook: the distinct ids that asked for an insert, in first-request order (a copy).
+function VisualAssetService._Requested(): { number }
+	return table.clone(requestOrder)
 end
 
 return VisualAssetService

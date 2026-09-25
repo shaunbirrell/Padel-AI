@@ -303,3 +303,5 @@ W3 LOOK (Roblox-owned, loads with the switch OFF; the headless stand-in is not R
 3. Developer Console (F9) after a publish: `Split pack 6418221666`, `Split pack 6933438443`, `Split pack 6933790012` and no
    `LoadAsset failed` line for these three IDs. A failed load only means the Part kits stay.
 4. Studio: Game Settings › Security › "Allow Loading Third Party Assets" stays OFF.
+
+Nation flags are not Creator Store assets: they are our own renders of MIT-licensed flag-icons SVGs (`assets/flags/LICENSE-flag-icons.txt`, THIRD_PARTY_NOTICES.md section 6).

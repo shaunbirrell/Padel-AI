@@ -40,6 +40,7 @@ local RateLimitService: any = nil
 local BaseService: any = nil
 local GateDefenseService: any = nil
 local AnalyticsService: any = nil
+local CombatService: any = nil -- F6 novice shield: a launched strike ends it (deps.CombatService; pcall'd)
 
 export type StrikeResult = {
 	Kind: string, -- "Launched" | "Hit" | "Intercepted" | "Refunded" | "Refused"
@@ -618,6 +619,10 @@ local function launch(attacker: Player, targetUserId: number): (boolean, string?
 		(fxRemote :: RemoteEvent):FireAllClients(fx)
 	end
 	task.delay(flight, resolve, strike.Id)
+	-- F6 (owner's 11 features): launching a strike ends the attacker's novice shield for good (EndOnSquadOrder)
+	if CombatService and CombatService.EndNoviceShield then
+		pcall(CombatService.EndNoviceShield, attacker, "strike")
+	end
 	if AnalyticsService and AnalyticsService.Log then
 		local props = { VictimUserId = victim.UserId, Outcome = strike.Outcome, Chance = chance, Distance = math.floor(distance) }
 		task.spawn(function()
@@ -687,6 +692,7 @@ function MissileStrikeService.Init(deps: { [string]: any })
 	BaseService = deps.BaseService
 	GateDefenseService = deps.GateDefenseService
 	AnalyticsService = deps.AnalyticsService
+	CombatService = deps.CombatService -- F6 novice shield
 
 	local remote = RemoteSetup.Get(Constants.RemoteNames.RequestMissileStrike)
 	if remote and remote:IsA("RemoteEvent") then

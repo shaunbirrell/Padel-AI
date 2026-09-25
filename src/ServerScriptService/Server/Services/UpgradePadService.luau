@@ -18,6 +18,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
+local VehicleConfig = require(Shared.Configs.VehicleConfig)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 
 local UpgradePadService = {}
@@ -170,10 +171,18 @@ local function notifyPurchaseResult(player: Player, structureId: string, result:
 	local def = BaseConfig.Structures[structureId]
 	if result.Ok then
 		local name = if def then def.DisplayName else tostring(structureId)
+		-- v72: "  +$3.3/s" suffix while the tycoon guide is on (BaseService.PurchaseToastSuffix; "" otherwise)
+		local suffix = ""
+		if BaseService and BaseService.PurchaseToastSuffix then
+			local okS, s = pcall(BaseService.PurchaseToastSuffix, player, structureId, result.NewLevel or 0)
+			if okS and typeof(s) == "string" then
+				suffix = s
+			end
+		end
 		-- "%s Lv %d": FredokaOne has no "→" (HUD v70 spec §4.2 / risk #5)
 		NotificationService.Notify(
 			player,
-			string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0),
+			string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0) .. suffix,
 			"Success",
 			4
 		)
@@ -347,6 +356,55 @@ local function onPadTouched(part: BasePart, hit: BasePart)
 	tryServerPurchase(player, part, structureId, false)
 end
 
+-- fb2: the Helipad console screen carries one fixed line, "HELIS AT LV 10" (the lowest player level of a helicopter
+-- that needs only the Helipad; VehicleConfig). There is no parked helicopter on the pad any more, so this says when
+-- one comes. No new SurfaceGui: the line is a TextLabel inside MapSetup's existing WE_ConsoleScreen, parented under
+-- that screen's own label. WorldPromptController rewrites the screen's first TextLabel per viewer (name / price /
+-- MAX) and never finds this one, so the line stays for every viewer. The screen's label gives up its bottom strip.
+local HELI_NOTE_NAME = "WE_HeliNote"
+local HELI_NOTE_SHARE = 0.28 -- share of the screen height for the line (the other lines keep 0.72)
+
+local function firstHeliLevel(): number
+	local best: number? = nil
+	for _, def in pairs(VehicleConfig.Vehicles) do
+		local req = def.RequiresStructure
+		if def.Category == "Air" and req ~= nil and req.StructureId == "Helipad" and def.RequiresPrestige == nil and def.RequiresRebirthFlag == nil then
+			if best == nil or def.UnlockLevel < best then
+				best = def.UnlockLevel
+			end
+		end
+	end
+	return best or 10
+end
+local HELI_NOTE_TEXT = string.format("HELIS AT LV %d", firstHeliLevel())
+
+-- true once the line is on the screen (or already was); false while MapSetup has not dressed the console yet
+local function addHeliNote(part: BasePart): boolean
+	local screen = part:FindFirstChild("ConsoleScreen")
+	local sg = screen and screen:FindFirstChild("WE_ConsoleScreen")
+	local lbl = sg and sg:FindFirstChildWhichIsA("TextLabel")
+	if not lbl or not lbl:IsA("TextLabel") then
+		return false
+	end
+	if lbl:FindFirstChild(HELI_NOTE_NAME) then
+		return true
+	end
+	lbl.Size = UDim2.fromScale(1, 1 - HELI_NOTE_SHARE)
+	local note = Instance.new("TextLabel")
+	note.Name = HELI_NOTE_NAME
+	-- below the shrunk label (a child may draw outside its parent; ClipsDescendants is off)
+	note.Position = UDim2.fromScale(0, 1)
+	note.Size = UDim2.fromScale(1, HELI_NOTE_SHARE / (1 - HELI_NOTE_SHARE))
+	note.BackgroundColor3 = lbl.BackgroundColor3
+	note.BorderSizePixel = 0
+	note.Font = lbl.Font
+	note.TextScaled = true
+	note.TextColor3 = Color3.fromRGB(255, 214, 96) -- amber: an unlock hint, apart from the green name / price
+	note.Text = HELI_NOTE_TEXT
+	note.Parent = lbl
+	return true
+end
+
 local function attachSlot(part: BasePart)
 	if attached[part] then
 		hardenPad(part)
@@ -420,6 +478,14 @@ local function attachSlot(part: BasePart)
 	prompt.GamepadKeyCode = Enum.KeyCode.ButtonX
 	prompt.Style = Enum.ProximityPromptStyle.Default
 	prompt.Parent = part
+	-- MapSetup tags the slot before it dresses the console, so the screen may not exist yet
+	if console and structureId == "Helipad" and not addHeliNote(part) then
+		trackConn(part, part.ChildAdded:Connect(function(child)
+			if child.Name == "ConsoleScreen" then
+				task.defer(addHeliNote, part)
+			end
+		end))
+	end
 	trackConn(part, prompt.Triggered:Connect(function(who: Player)
 		local character = who.Character
 		if character and isSeated(character) then

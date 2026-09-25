@@ -184,6 +184,42 @@ local function runMoneyCommand(deps: { [string]: any }, player: Player, cmd: str
 	return "unknown"
 end
 
+--[[ F7 test (owner's 11 features, lane P): give yourself n (1-5) Keep-Base Rebirth tokens so the keep-base path
+	("USE SAVED" in the Rebirth modal) can be tested on a phone before the product Id is pasted. Admin allowlist
+	ONLY (never the Studio-open money commands, never another player). Returns the reply text. ]]
+local function giveKeepBaseTokens(deps: { [string]: any }, player: Player, n: number?): string
+	local prestige = deps.PrestigeService
+	if not (prestige and typeof(prestige.AdminGiveKeepBase) == "function") then
+		return "givekeepbase: not built yet"
+	end
+	local ok, res, err = pcall(prestige.AdminGiveKeepBase, player, n or 1)
+	if not ok then
+		warn("[AdminService] givekeepbase failed:", res)
+		return "givekeepbase failed (see Output)"
+	end
+	if res ~= true then
+		return "givekeepbase refused: " .. tostring(err)
+	end
+	return string.format("Admin: Keep-Base Rebirths saved %d", prestige.KeepBaseTokens(player))
+end
+
+--[[ Nations test (lane B): clear the CALLER's own nation fields (NationId, NationSetAt, NationFreeUntil,
+	NationFreeChanges, NationPrompts) so the join picker and the free first pick can be tested again. Admin allowlist
+	ONLY (the remote handler and the chat hook both return for anyone else); it never takes a target player.
+	Returns the reply text. ]]
+local function nationReset(deps: { [string]: any }, player: Player): string
+	local svc = deps.NationColorService
+	if not (svc and typeof(svc.AdminReset) == "function") then
+		return "nationreset: not built yet"
+	end
+	local ok, res = pcall(svc.AdminReset, player)
+	if not ok then
+		warn("[AdminService] nationreset failed:", res)
+		return "nationreset failed (see Output)"
+	end
+	return if res == true then "Admin: flag choice reset" else "nationreset: still loading"
+end
+
 --- Force Cash = AdminPlaytestCash for allowlisted admins (mid-session recovery).
 local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
 	local target = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 0)
@@ -330,6 +366,18 @@ function AdminService.Init(deps: { [string]: any })
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
 			end
+		elseif cmd == "givekeepbase" then
+			-- F7 test tokens: reached only by the admin allowlist (not a MoneyCommands entry, so no Studio opening)
+			local reply = giveKeepBaseTokens(deps, player, RemoteGuard.ClampPositiveInt(arg1, 5))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, "Success")
+			end
+		elseif cmd == "nationreset" then
+			-- nations test: the caller's own nation fields only (admin allowlist; not a MoneyCommands entry)
+			local reply = nationReset(deps, player)
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, "Success")
+			end
 		elseif cmd == "prestige" or cmd == "forceprestige" then
 			if deps.PrestigeService and deps.PrestigeService.DoPrestige then
 				-- force: temporarily ignore level gate via SetLevel first if needed
@@ -448,7 +496,9 @@ function AdminService.Init(deps: { [string]: any })
 		end
 		local isLevelCmd = cmd == "level" or cmd == "setlevel"
 		local isXpCmd = cmd == "xp" or cmd == "givexp"
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd then
+		local isKeepBaseCmd = cmd == "givekeepbase"
+		local isNationResetCmd = cmd == "nationreset"
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd and not isNationResetCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -459,6 +509,24 @@ function AdminService.Init(deps: { [string]: any })
 		end
 		lastAdminChat[player.UserId] = { Text = text, At = nowClock }
 		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		-- F7: owner playtest — /givekeepbase [1-5] (Keep-Base Rebirth tokens; admin allowlist only, see above)
+		if isKeepBaseCmd then
+			local reply = giveKeepBaseTokens(deps, player, RemoteGuard.ClampPositiveInt(tonumber(rest), 5))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, "Success")
+			end
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_givekeepbase", arg = string.sub(tostring(rest), 1, 8) })
+			return
+		end
+		-- nations: owner playtest on a phone — /nationreset clears the caller's own flag choice (allowlist only)
+		if isNationResetCmd then
+			local reply = nationReset(deps, player)
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, "Success")
+			end
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_nationreset" })
 			return
 		end
 		-- v71: owner playtest — /level <n> (default ADMIN_DEFAULT_LEVEL) and /xp <n> (default ADMIN_DEFAULT_XP).
@@ -551,8 +619,16 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" }, { "WE_NationReset", "/nationreset" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
+				if spec[1] == "WE_NationReset" then
+					-- nations: never offered in chat autocomplete (lead decision 6: nothing of the feature shows for
+					-- non-admins before the flag art is live); the admin still types it
+					local cmdAny: any = c
+					pcall(function()
+						cmdAny.AutocompleteVisible = false
+					end)
+				end
 				c.Triggered:Connect(function(textSource: TextSource, unfilteredText: string)
 					local player = Players:GetPlayerByUserId(textSource.UserId)
 					if player then
@@ -578,6 +654,8 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 9) == "/setlevel"
 					or string.sub(lower, 1, 3) == "/xp"
 					or string.sub(lower, 1, 7) == "/givexp"
+					or string.sub(lower, 1, 13) == "/givekeepbase"
+					or string.sub(lower, 1, 12) == "/nationreset"
 				if not isAdminLine then
 					return
 				end

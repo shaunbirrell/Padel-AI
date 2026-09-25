@@ -33,6 +33,11 @@
 	                                                          reason: "ring" | "road" | "water:<rect>" | "plot:<n>" |
 	                                                          "apron:<n>" | "pad:<id>" | "capture:<id>" | "structure:<n>" |
 	                                                          "anchor:<id>" | "clear:<n>" | "poi:<Id>" | "occupied:<kind>"
+	                                                          W3 step 2: a camp's own NPC anchors (inside a Kind "camp"
+	                                                          footprint) are no keep-out when AllowPOI names that camp
+	                                                          (its sandbags stand at the guard posts); opts.SkipEvents
+	                                                          lets a flat marking / the invisible activity host lie over
+	                                                          an event anchor (every other zone still counts)
 	  WorldDress.RoadDist(zones, x, z) -> number             XZ distance to the nearest road centre segment
 	  WorldDress.POIDist(poi, x, z) -> number                XZ distance to a POI footprint (0 inside)
 	  WorldDress.Quality(q?) -> "Full" | "Low"
@@ -55,7 +60,7 @@ local Waterways = require(script.Parent.Waterways)
 local WorldKits = require(script.Parent.WorldKits)
 
 export type Rect = { Name: string, X0: number, X1: number, Z0: number, Z1: number }
-export type Circle = { Name: string, X: number, Z: number, R: number }
+export type Circle = { Name: string, X: number, Z: number, R: number, Owner: string? } -- Owner: the camp an NPC anchor belongs to
 export type Road = Waterways.RoadLine
 export type POIZone = { Id: string, Enabled: boolean, Rect: Rect?, Circle: Circle? }
 export type Point = { X: number, Z: number }
@@ -83,6 +88,7 @@ export type BlockOpts = {
 	Spacing: number?, -- min edge-to-edge gap to every disc already in the occupancy (nil = no spacing test)
 	AllowWater: boolean?, -- jetty stub / barge / hull: skip the water test (the cluster carries WE_AllowInWater)
 	SkipRing: boolean?,
+	SkipEvents: boolean?, -- W3 step 2: a flat marking / the invisible activity host may lie over an event anchor
 }
 export type SectionSummary = {
 	Name: string, -- "Rhythm" | "Junctions" | "Shore" | "Scatter"
@@ -152,6 +158,27 @@ end
 
 function WorldDress.Quality(q: string?): string
 	return if string.lower(tostring(q or "Low")) == "full" then "Full" else "Low"
+end
+
+local EVENT_PREFIX = "Event_" -- the event-anchor zone names (Blocked: "anchor:Event_<Id>")
+local CAMP_KIND = "camp" -- WorldConfig.POIs Kind of the camps whose NPC anchors are their own guard posts
+
+-- the camp POI whose footprint holds (x, z), if any (enabled or not: a disabled camp builds nothing anyway)
+local function campOf(x: number, z: number): string?
+	for _, p in ipairs(WorldConfig.POIs) do
+		if p.Kind == CAMP_KIND then
+			local zone: POIZone = { Id = p.Id, Enabled = true, Rect = nil, Circle = nil }
+			if p.Rect then
+				zone.Rect = { Name = p.Id, X0 = p.Rect.X0, X1 = p.Rect.X1, Z0 = p.Rect.Z0, Z1 = p.Rect.Z1 }
+			elseif p.Circle then
+				zone.Circle = { Name = p.Id, X = p.Circle.X, Z = p.Circle.Z, R = p.Circle.R }
+			end
+			if (zone.Rect ~= nil or zone.Circle ~= nil) and WorldDress.POIDist(zone, x, z) <= 0 then
+				return p.Id
+			end
+		end
+	end
+	return nil
 end
 
 -- ── the shared keep-out source ────────────────────────────────────────────────────────────────────────────────────
@@ -227,12 +254,14 @@ function WorldDress.Zones(): Zones
 	local guardR: number = BankRaidConfig.GuardRingRadius or 18
 	table.insert(zones.Structures, { Name = "EmpireBank", X = bank.X, Z = bank.Z, R = guardR + K.BankExtra })
 
-	-- event anchors (supply crates land there) and NPC anchors (hostile spawns)
+	-- event anchors (supply crates land there) and NPC anchors (hostile spawns). W3 step 2: an NPC anchor inside a camp
+	-- footprint (POI Kind "camp") belongs to that camp (Owner): the camp's own clusters may stand at it (the sandbags its
+	-- guards stand behind), every other cluster still keeps out
 	for _, a in ipairs(WorldConfig.Spawns.Event) do
-		table.insert(zones.Anchors, { Name = "Event_" .. a.Id, X = a.X, Z = a.Z, R = K.EventClear })
+		table.insert(zones.Anchors, { Name = EVENT_PREFIX .. a.Id, X = a.X, Z = a.Z, R = K.EventClear })
 	end
 	for _, a in ipairs(WorldConfig.Spawns.NPC) do
-		table.insert(zones.Anchors, { Name = "NPC_" .. a.Id, X = a.X, Z = a.Z, R = K.NPCClear })
+		table.insert(zones.Anchors, { Name = "NPC_" .. a.Id, X = a.X, Z = a.Z, R = K.NPCClear, Owner = campOf(a.X, a.Z) })
 	end
 
 	-- rig pier corridors (WorldConfig.Hygiene.ClearRects)
@@ -310,7 +339,9 @@ function WorldDress.Blocked(occ: Occupancy, x: number, z: number, r: number, opt
 		end
 	end
 	for _, c in ipairs(zones.Anchors) do
-		if math.sqrt((x - c.X) ^ 2 + (z - c.Z) ^ 2) - r < c.R then
+		local own = c.Owner ~= nil and c.Owner == o.AllowPOI -- a camp's own guard post
+		local event = o.SkipEvents == true and string.sub(c.Name, 1, #EVENT_PREFIX) == EVENT_PREFIX
+		if not own and not event and math.sqrt((x - c.X) ^ 2 + (z - c.Z) ^ 2) - r < c.R then
 			return "anchor:" .. c.Name
 		end
 	end

@@ -47,15 +47,42 @@ local EconomyConfig = {
 	-- (periodic cash for owned territories / coastal oil).
 
 	-- Contested outpost income: stacks recount from owned territories (stealable).
+	-- F3 (owner's 11 features): shown to players as "Empire Tax". Every captured outpost (not the Home Outpost) is one
+	-- stack: +MultPerStack on every non-exempt income reason; the player's own Home Outpost (TerritoryConfig.Starter)
+	-- adds StarterPct and is never a stack; the total is capped at MaxStacks * MultPerStack (+50 %).
+	-- EconomyService.EmpireTaxPct(p) is the whole-number total; it is mirrored (display only, written on change) to
+	-- the player attribute Attribute. PersistClaims: saved claims are re-planted on join in any server (Neutral or
+	-- NPC-held zones), released when the player leaves, dropped when another online player holds the zone; false =
+	-- claims live only in the current server (lane Z switches it on). Toast args: ToastSecured / ToastLost (total %),
+	-- ToastStolenFromYou / ToastStealGain (zone name, total %), ToastClaimHeld (zone name, holder name).
 	OutpostIncomeBuff = {
+		DisplayName = "Empire Tax",
 		MultPerStack = 0.10, -- +10% per stack
 		MaxStacks = 5, -- cap +50%
-		ToastSecured = "Outpost secured — +%d%% Income (yours)",
-		ToastLost = "Outpost lost — Income buff dropped (stolen)",
-		ToastStolenFromYou = "%s stolen by enemy — −Income buff",
-		ToastStealGain = "Stole %s — +%d%% Income is now yours",
+		StarterPct = 5, -- F10: the player's own Home Outpost, whole percent (not a stack)
+		Attribute = "WE_EmpireTaxPct", -- player attribute, whole percent (0 = chip hidden)
+		PersistClaims = true, -- F3: on since lane Z (reversible)
+		ToastSecured = "Outpost taken  Empire Tax +%d%%",
+		ToastLost = "Outpost lost  Empire Tax +%d%%",
+		ToastStolenFromYou = "%s taken  Empire Tax +%d%%",
+		ToastStealGain = "Took %s  Empire Tax +%d%%",
+		ToastClaimHeld = "%s is held by %s",
 		-- Legacy alias kept for older callers
 		ToastTemplate = "Outpost secured — +%d%% Income (yours)",
+	},
+
+	-- F4 (owner's 11 features): one client-only, owner-only floating label on the nearest own producer (Training Yard,
+	-- oil pumps) within RadiusStuds, re-picked ScanHz times a second, pulsing for PulseSeconds on each income tick.
+	-- Text sizes are real px (world labels are not UIScaled); MaxDistance in studs (CLAUDE.md: <= 40). Off until
+	-- lane Z (the client module ships with it); on since lane Z (reversible).
+	ProducerLabels = {
+		Enabled = true,
+		RadiusStuds = 24,
+		ScanHz = 4,
+		PulseSeconds = 0.6,
+		TextSize = 18,
+		SubSize = 14,
+		MaxDistance = 24,
 	},
 
 	-- PvP ATM raid: touch another player's WE_MoneyCollector to steal PendingCash.

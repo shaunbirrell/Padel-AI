@@ -210,10 +210,21 @@ local StructureVisualConfig = {
 		PowerStation = { Enabled = true, Module = "PowerStation", Width = 30, Depth = 22 },
 		Radar = { Enabled = true, Module = "Radar", Width = 24, Depth = 20 },
 		MissileDefense = { Enabled = true, Module = "MissileDefense", Width = 24, Depth = 22 },
-		Watchtowers = { Enabled = true, Module = "Watchtower", Width = 10, Depth = 10 },
-		DefensiveWalls = { Enabled = true, Module = "Checkpoint", Width = 20, Depth = 10 },
+		Watchtowers = { Enabled = true, Module = "Watchtower", Width = 10, Depth = 10, CabinClearHeight = 8.5, HalfWallHeight = 3.4 }, -- v73: cabin fits a 7.5-stud avatar + 1 stud
+		DefensiveWalls = { Enabled = true, Module = "Checkpoint", Width = 6, Depth = 6 }, -- v73: the foundation is the gate flag plinth (was a 20 x 10 grey tray)
 		Airfield = { Enabled = true, Module = "Airfield", Width = 58, Depth = 34 },
+		-- v73 (owner: "the default helicopter on the pad is horrific"): the helipad is an installation (flush ring + H,
+		-- ops hut, floodlight). No parked mock-up: the player's own helicopter lands on VehicleConfig HelipadSpots once
+		-- it is unlocked. With this row StructureKitBuilder's old "helipad" kit (incl. the 9-part ParkedHeli) is skipped.
+		Helipad = { Enabled = true, Module = "Helipad", Width = 28, Depth = 28, Colors = { Floor = Color3.fromRGB(72, 74, 72) } },
 	},
+
+	-- v72 budget (phone): static soldier kits (gate guards, yard workers) without the 7 small detail parts
+	-- (MapSetup.makeSoldierKit): 16 -> 9 parts each, -84 parts per base. true = the old detailed kit.
+	StaticSoldierDetail = false,
+	-- v72: walk-in building stairs stay step boxes. "Ramp" (one wedge per flight, -75 parts per base at L5) is a
+	-- reserve cut only; nothing reads this key until that cut is needed.
+	StairStyle = "Steps",
 
 	HollowBuildings = {
 		-- Shared by every walk-in building; per-building entries override (Colors merge key by key).
@@ -253,16 +264,28 @@ local StructureVisualConfig = {
 				Flag = Color3.fromRGB(70, 110, 60),
 			},
 		},
+		--[[ v73 distinct shells (owner: "all the buildings look too similar"). Footprints, doors, consoles and
+			interiors are unchanged; each building gets its own roof form, wall material, colours, windows, entrance
+			and one or two signature pieces, so it can be named on a phone without reading the sign:
+			  RoofStyle     "Flat" (parapet) | "Gable" (two wedges) | "Vault" (plank barrel) | "Sawtooth" | "Lid" (bunker slab)
+			  Entrance      "Awning" | "Portico" | "LeanTo" | "CamoNet" | "BlastDoor" | "Slab" | "Canopy" | "HangarDoors"
+			  Signatures    ControlCab, Berms, Bastions, Slits, VentStacks, LatticeMast, SolarDish, FacadeBand,
+			                LoadingDock, Chimney, StoveChimney
+			  window lists  a number (centre, WindowWidth) or { X = centre, W = width } (ribbon windows)
+			Colors.Frame = exterior trim (mullions, ledges, caps, bands, awning); Colors.Trim stays the interior
+			furniture colour. Colors.RoofSkin = pitched / vaulted roof. ]]
 		CommandCenter = {
 			Enabled = true,
 			Interior = "CommandCenter",
 			Width = 26,
 			Depth = 20,
 			DoorX = 7,
-			FrontWindowsX = { -8.5, -2 },
+			UpperStoryHeight = 11, -- one stud taller than the Lab: the HQ block is the tallest
+			WallMaterial = Enum.Material.Plaster,
+			FrontWindowsX = { { X = -4.25, W = 12.5 } }, -- ribbon window (x -10.5..2, clear of the front-corner locker)
 			BackWindowsX = { -6, 4 }, -- ground floor only while single-storey (stairs take the back wall)
 			WestWindowsZ = { -7 },
-			UpperWindowsX = { -8.5, -2, 7 },
+			UpperWindowsX = { { X = -5.5, W = 12 }, { X = 8, W = 7 } }, -- ribbon split at the council terminal (x 1.3..3.7)
 			AnnexLevel = 2,
 			AnnexWidth = 12,
 			AnnexDepth = 14,
@@ -270,8 +293,17 @@ local StructureVisualConfig = {
 			TwoStoryLevel = 3,
 			RoofAccessLevel = 4,
 			HelipadLevel = 5,
+			Entrance = "Portico",
+			EntranceSandbags = false,
+			Signatures = { "ControlCab" },
 			SignText = "COMMAND CENTER",
-			SignX = 0,
+			SignX = -6,
+			SignWidth = 12,
+			Colors = {
+				Wall = Color3.fromRGB(216, 200, 160), -- warm sandstone render (dE 25 from the white Lab)
+				Frame = Color3.fromRGB(46, 58, 76), -- navy slate
+				Glass = Color3.fromRGB(70, 96, 120), -- dark ribbon glass
+			},
 		},
 		Barracks = {
 			Enabled = true,
@@ -279,14 +311,33 @@ local StructureVisualConfig = {
 			Width = 32,
 			Depth = 24,
 			DoorX = 10,
+			StoryHeight = 10, -- low timber hut (interior tallest item 9.3)
+			UpperStoryHeight = 9,
+			WallMaterial = Enum.Material.WoodPlanks,
+			WindowWidth = 3.2,
+			WindowHeight = 4.2,
+			WindowBottom = 3.2,
+			UpperWindowHeight = 3.8,
+			UpperWindowBottom = 3.2, -- clear of the upper office partition (top 3.0 above the floor)
 			FrontWindowsX = { -11, -4, 3 },
 			BackWindowsX = { -10, 0, 10 },
 			WestWindowsZ = { -6, 6 },
 			EastWindowsZ = { -6, 6 },
 			UpperWindowsX = { -11, -4, 3, 10 },
 			TwoStoryLevel = 3,
+			RoofStyle = "Gable",
+			RoofRise = 6,
+			RoofMaterial = Enum.Material.RoofShingles,
+			RoofPlant = false,
+			Entrance = "LeanTo",
+			Signatures = { "StoveChimney" },
 			SignText = "BARRACKS",
-			Colors = { Wall = Color3.fromRGB(196, 184, 150) },
+			Colors = {
+				Wall = Color3.fromRGB(104, 116, 78), -- olive painted timber
+				Frame = Color3.fromRGB(226, 220, 200), -- cream window trim
+				RoofSkin = Color3.fromRGB(106, 58, 44), -- red-brown shingles
+				Chimney = Color3.fromRGB(92, 60, 50),
+			},
 		},
 		WeaponsFacility = {
 			Enabled = true,
@@ -294,13 +345,35 @@ local StructureVisualConfig = {
 			Width = 30,
 			Depth = 22,
 			DoorX = 9,
-			FrontWindowsX = { -10, -3 },
-			BackWindowsX = { -8, 8 },
-			WestWindowsZ = { 0 },
-			EastWindowsZ = { 0 },
+			StoryHeight = 10, -- low bunker (interior tallest item 8.2)
+			UpperStoryHeight = 9,
+			FrontWindowsX = {}, -- blind walls: a magazine has no windows
+			BackWindowsX = {},
+			WestWindowsZ = {},
+			EastWindowsZ = {},
+			UpperWindowsX = {},
+			UpperSideWindows = false,
 			TwoStoryLevel = 4,
+			RoofStyle = "Lid",
+			LidThickness = 1.6,
+			LidOverhang = 1.2,
+			RoofPlant = false,
+			Entrance = "BlastDoor",
+			EntranceSandbags = false,
+			DoorFrameWidth = 0.9,
+			DoorFrameDepth = 0.9,
+			Signatures = { "Berms", "Bastions", "Slits", "VentStacks" },
 			SignText = "ARMORY",
-			Colors = { Wall = Color3.fromRGB(184, 176, 156) },
+			SignX = -7, -- clear of the rolled-aside blast door leaf
+			SignWidth = 12,
+			Colors = {
+				Wall = Color3.fromRGB(120, 114, 104), -- dark poured concrete
+				Frame = Color3.fromRGB(64, 62, 58),
+				Roof = Color3.fromRGB(98, 96, 90),
+				DoorFrame = Color3.fromRGB(214, 178, 64), -- hazard-yellow portal
+				Door = Color3.fromRGB(58, 62, 60),
+				Berm = Color3.fromRGB(134, 114, 80),
+			},
 		},
 		SpecialForcesFacility = {
 			Enabled = true,
@@ -308,10 +381,29 @@ local StructureVisualConfig = {
 			Width = 30,
 			Depth = 22,
 			DoorX = 9,
-			FrontWindowsX = { -10, -3 },
+			WallMaterial = Enum.Material.Slate,
+			WindowWidth = 1.2, -- slit windows
+			WindowHeight = 4.6,
+			WindowBottom = 3.4,
+			UpperWindowWidth = 1.2,
+			UpperWindowHeight = 4.2,
+			UpperWindowBottom = 2.8,
+			WindowMullion = false,
+			WindowLedge = false,
+			FrontWindowsX = { -12, -9, -3 }, -- clear of the unit flag (x -7.4..-5.6) and the briefing terminal
 			TwoStoryLevel = 3,
+			Entrance = "CamoNet",
+			NetX = 7,
+			Signatures = { "LatticeMast" },
+			MastHeight = 36, -- below the Command Center mast (40): the HQ stays the tallest point
 			SignText = "SPECIAL FORCES",
-			Colors = { Wall = Color3.fromRGB(128, 128, 120), Trim = Color3.fromRGB(52, 56, 50) },
+			Colors = {
+				Wall = Color3.fromRGB(62, 66, 64), -- charcoal
+				Trim = Color3.fromRGB(52, 56, 50),
+				Frame = Color3.fromRGB(28, 30, 29),
+				Glass = Color3.fromRGB(40, 52, 58),
+				Net = Color3.fromRGB(86, 98, 62),
+			},
 		},
 		VehicleDepot = {
 			Enabled = true,
@@ -323,12 +415,22 @@ local StructureVisualConfig = {
 			DoorX = 2,
 			DoorWidth = 16,
 			DoorHeight = 11,
-			FrontWindowsX = { -13.5 },
+			WallMaterial = Enum.Material.Metal,
+			FrontWindowsX = {}, -- the open door leaves cover the facade
 			WestWindowsZ = { -6, 6 },
 			EastWindowsZ = { -6, 6 },
-			Skylights = true,
+			RoofStyle = "Vault",
+			RoofRise = 9,
+			RoofPlant = false,
+			Entrance = "HangarDoors",
 			SignText = "VEHICLE DEPOT",
-			Colors = { Wall = Color3.fromRGB(172, 170, 160) },
+			Colors = {
+				Wall = Color3.fromRGB(98, 118, 136), -- blue-grey steel cladding
+				Frame = Color3.fromRGB(58, 64, 70),
+				RoofSkin = Color3.fromRGB(150, 156, 158),
+				Door = Color3.fromRGB(84, 94, 100),
+				Glass = Color3.fromRGB(150, 190, 210),
+			},
 		},
 		Warehouse = {
 			Enabled = true,
@@ -340,10 +442,19 @@ local StructureVisualConfig = {
 			DoorX = 3,
 			DoorWidth = 12,
 			DoorHeight = 10,
+			WallMaterial = Enum.Material.Brick,
 			FrontWindowsX = { -11.5 },
-			Skylights = true,
+			RoofStyle = "Sawtooth",
+			SawTeeth = 4,
+			RoofRise = 4.5,
+			RoofPlant = false,
+			Signatures = { "LoadingDock", "Chimney" },
 			SignText = "WAREHOUSE",
-			Colors = { Wall = Color3.fromRGB(190, 172, 140) },
+			Colors = {
+				Wall = Color3.fromRGB(146, 84, 60), -- red-brown brick
+				Frame = Color3.fromRGB(60, 58, 54),
+				RoofSkin = Color3.fromRGB(96, 98, 100),
+			},
 		},
 		ResearchLab = {
 			Enabled = true,
@@ -351,13 +462,31 @@ local StructureVisualConfig = {
 			Width = 30,
 			Depth = 22,
 			DoorX = 9,
-			FrontWindowsX = { -10, -3.5, 3 },
-			BackWindowsX = { -8, 0, 8 },
-			WestWindowsZ = { -5, 5 },
-			EastWindowsZ = { -5, 5 },
+			WallMaterial = Enum.Material.Plaster,
+			WindowHeight = 3.6,
+			WindowBottom = 4.2, -- sill above the weapons terminal screen and prototype rack on the east wall
+			-- ribbon glazing, split where an interior glass partition / server rack meets the wall
+			FrontWindowsX = { { X = -10.05, W = 6.3 }, { X = -1.45, W = 8.9 } },
+			BackWindowsX = { { X = -9.25, W = 7.5 }, { X = 9.25, W = 7.5 } },
+			UpperBackWindowsX = { { X = -1, W = 20 } },
+			WestWindowsZ = { { X = -3, W = 8 }, { X = 4.5, W = 5 } },
+			EastWindowsZ = { { X = 0, W = 14 } },
+			UpperWindowsX = { { X = -9.4, W = 5.2 }, { X = 3.1, W = 17.8 } },
 			TwoStoryLevel = 3,
+			RoofPlant = false,
+			Entrance = "Slab",
+			EntranceSandbags = false,
+			Signatures = { "SolarDish", "FacadeBand" }, -- solar panels + dish, not a radome (the Radar has the dome)
+			SolarPanels = { { X = -8.5, Z = -3 }, { X = -0.5, Z = -3 } }, -- roof-local centres, tilted toward the front
+			DishAt = { X = 9, Z = -6 },
 			SignText = "RESEARCH LAB",
-			Colors = { Wall = Color3.fromRGB(206, 204, 196), Trim = Color3.fromRGB(88, 104, 112) },
+			Colors = {
+				Wall = Color3.fromRGB(236, 238, 236), -- clean white
+				Trim = Color3.fromRGB(88, 104, 112),
+				Frame = Color3.fromRGB(36, 128, 130), -- teal
+				Glass = Color3.fromRGB(120, 196, 200),
+				Solar = Color3.fromRGB(38, 54, 98),
+			},
 		},
 	},
 }
