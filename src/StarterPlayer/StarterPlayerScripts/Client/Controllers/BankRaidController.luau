@@ -14,11 +14,18 @@
 	is not). Refreshed at 1 Hz only while a cooldown runs or has just ended; the label is found through the vault's
 	CollectionService tag (streaming-safe: no label streamed in → nothing to draw). Display only: the server decides
 	every payout.
+
+	streaming2 lane C4 (F22): the kept label counts as live only while it IsDescendantOf(Workspace). When the vault
+	streams out, the engine parents the top of what left (the vault, or the bank Model above it) to nil, so the
+	label's own Parent stays set; the old `bb.Parent` test kept writing into a label that was not in the world. Now it
+	is dropped and found again through the tag once it is back (the LabelGovernor pattern). With streaming off the
+	two tests agree: a destroyed label has no Parent.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
@@ -91,7 +98,7 @@ end
 -- ── the bank's world label: this player's CLOSED line ───────────────────────────────────────────────────────
 local function findLabel(): BillboardGui?
 	local bb = labelRef
-	if bb and bb.Parent then
+	if bb and bb:IsDescendantOf(Workspace) then -- F22: Parent stays set when the vault streams out
 		return bb
 	end
 	labelRef = nil

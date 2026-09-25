@@ -3,15 +3,29 @@
 	FallSafetyService — teleport to plot spawn instead of void-Kill when
 	HumanoidRootPart falls below FALL_Y (e.g. off oil decks / past Ground).
 	Does not replace collide floor / SafetyCatch; soft recovery layer.
+
+	streaming2 S1 (F3), only while Workspace.StreamingEnabled is on (StreamPrefetch.Enabled()):
+	- no rescue while player.GameplayPaused: the phone is waiting for the ground to stream in (StreamingIntegrityMode
+	  PauseOutsideLoadedArea), it is not falling. A rescue would send it to another spot it has not streamed, again
+	  and again, with a toast each time.
+	- no rescue while a pre-fetched move (StreamPrefetch) is already taking the player home;
+	- the rescue goes through BaseService.TeleportToPlot, which pre-fetches the plot before the move;
+	- the toast is NotifyThrottled: at most one per StreamingConfig.FallToastCooldown seconds.
+	With streaming off every rescue and its toast are exactly as before.
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+local StreamingConfig = require(ReplicatedStorage:WaitForChild("Shared", 60).Configs.StreamingConfig)
+local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)
 
 local FallSafetyService = {}
 
 local FALL_Y = 0.15 -- Ground top ~0.5; rescue as soon as under / through floor plane
 local COOLDOWN_SEC = 0.9
+local FALL_TOAST = "Rescued from fall — returned to base."
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -19,6 +33,11 @@ local NotificationService: any = nil
 local lastRescueAt: { [number]: number } = {}
 
 local function rescue(player: Player, root: BasePart)
+	local streaming = StreamPrefetch.Enabled()
+	-- streaming2 S1 (F3): a paused phone waits for its ground; a pre-fetched move home is already on its way
+	if streaming and (player.GameplayPaused or StreamPrefetch.IsMoving(player)) then
+		return
+	end
 	local now = os.clock()
 	local last = lastRescueAt[player.UserId] or 0
 	if now - last < COOLDOWN_SEC then
@@ -33,15 +52,16 @@ local function rescue(player: Player, root: BasePart)
 	if BaseService and BaseService.TeleportToPlot then
 		BaseService.TeleportToPlot(player)
 	else
-		-- Fallback: origin above Ground
-		local character = player.Character
-		if character then
-			character:PivotTo(CFrame.new(0, 8, 0))
-		end
+		-- Fallback: origin above Ground (pre-fetched while streaming is on)
+		StreamPrefetch.PivotTo(player, CFrame.new(0, 8, 0))
 	end
 
-	if NotificationService and NotificationService.Notify then
-		NotificationService.Notify(player, "Rescued from fall — returned to base.", "Info", 3)
+	if NotificationService then
+		if streaming and NotificationService.NotifyThrottled then
+			NotificationService.NotifyThrottled(player, FALL_TOAST, "Info", 3, StreamingConfig.FallToastCooldown, "FallSafety")
+		elseif NotificationService.Notify then
+			NotificationService.Notify(player, FALL_TOAST, "Info", 3)
+		end
 	end
 	print("[FallSafety] rescued", player.Name, "from Y<", FALL_Y)
 end

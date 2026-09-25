@@ -15,6 +15,9 @@
 	The kit's "Body" part is only the foundation slab (see StructureKitBuilder), so EnsureKit / applyKitVisuals
 	invariants (Body exists, solid at L1+) still hold. Everything else lives in the Model and is rebuilt when
 	the level changes.
+
+	streaming2 S4 (F11): WE_Building is ModelStreamingMode Atomic, set before it is parented (inert while
+	Workspace.StreamingEnabled is false). Its WE_Spinner sub-models stay Default inside it: the Atomic parent carries them.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -1216,6 +1219,10 @@ function HollowBuildingBuilder.Sync(plinth: BasePart, structureId: string, level
 		existing:Destroy()
 	end
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F11): a building (21-273 parts, consoles, prompts, GUIs) reaches a client whole or not at all.
+	-- Set first; the model is built unparented and parented last, so every part is an initial descendant. A level
+	-- change rebuilds the whole model, so the initial-only atomicity rule always covers it. No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = MODEL_NAME
 	model:SetAttribute("WE_BuildingLevel", lv)
 	model:SetAttribute("WE_BuildingGen", GEN)

@@ -20,6 +20,16 @@
 	  plot from BaseStateUpdate / PlayerStateUpdate); other plots' Home Outposts are never listed or counted.
 	* RADAR HILL reveal → the HudLayout flag "Radar" (CompassController draws the purple dot on the chip) + the
 	  enemy Highlights (kept) + a "RADAR ON" row in the list.
+	  Streaming 2, lane C2 (spec F7): under instance streaming this client holds only the characters inside its stream
+	  radius (StreamingMinRadius 64 on a phone short of memory), not all 550 studs of the reveal. While streaming is on
+	  the server adds RadarTargets (UserId + position) to the payload: a revealed character this client holds keeps the
+	  Highlight; one it does not hold gets a radar ping instead: a thin column (a Beam between two Attachments on
+	  Workspace.Terrain, which never streams out) rising from the server's position, sized in real px from the camera
+	  (5 x 64 px at any range), at most RADAR_PING.Max, nearest first, updated with the 5 Hz radar tick. No text and no
+	  BillboardGui (a world label caps MaxDistance at 40 and these players are always farther than 64), never
+	  AlwaysOnTop, no connections. With streaming off there is no list and the reveal is exactly the old one.
+	  F22: a flag diamond counts as present only while it IsDescendantOf(Workspace) (its Parent stays set when the flag
+	  streams out).
 	* W3 step 2 lane U0 — ONE AlwaysOnTop label: TerritoryService makes a flag's WE_FlagBillboard diamond draw through
 	  walls while the zone is contested (WorldLabel.SetRole "contested"). While an objective marker is on screen
 	  (ObjectiveMarker.OnTop(): a mission GO line, or the ConsoleWaypoint line it yields to) this client turns that
@@ -32,6 +42,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local Constants = require(Shared.Constants)
@@ -66,6 +77,30 @@ local contestedColB: Color3? = nil
 local radarActive = false
 local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
+-- lane C2 (F7): the server's reveal list (only while streaming is on; nil = none: the Highlight loop alone decides)
+local radarTargets: { Types.RadarTargetPayload }? = nil
+local radarTargetsAt = 0 -- os.clock() when that list arrived
+type Ping = { Base: Attachment, Top: Attachment, Beam: Beam, Pos: Vector3, Width: number, Height: number }
+local radarPings: { [number]: Ping } = {} -- UserId -> its ping
+local pingWanted: { [number]: boolean } = {} -- reused by every radar tick (no allocation per tick)
+-- The ping's look. A Beam has no MaxDistance and draws at any range, hidden by the world like any part; its size is
+-- set in REAL px from the camera (studs = px x distance x view height per px), so a ping 530 studs away reads as well
+-- as one at 80. Candidates for TerritoryConfig / HudConfig (lane C2 may edit only its three files).
+local RADAR_PING = {
+	Max = 5, -- pings at once (the server sends nearest first); spec lane C2: <= 5, the CLAUDE.md outpost label cap
+	WidthPx = 5, -- real px at the bottom (FaceCamera), a quarter of that at the top
+	HeightPx = 64, -- real px tall, upward from the reported root position
+	MinWidthStuds = 1, -- floors for a very near ping
+	MinHeightStuds = 12,
+	ResizeRatio = 0.08, -- rewrite the size only when it is off by more than this (camera moved)
+	ColorBase = Color3.fromRGB(200, 80, 80), -- the reveal Highlight's fill ...
+	ColorTop = Color3.fromRGB(255, 180, 80), -- ... and outline
+	TransparencyBase = 0.15,
+	TransparencyTop = 0.85,
+	LightEmission = 1,
+	MoveStuds = 0.5, -- re-place a ping only when its target moved this far
+	StaleSeconds = 5, -- no fresh list for this long (a holder gets one about every 1 s): the pings go
+}
 
 -- F3 Empire Tax toast + list header (see the header comment)
 local BUFF = EconomyConfig.OutpostIncomeBuff
@@ -147,8 +182,24 @@ local function touchMinV(): number
 end
 
 ---------------------------------------------------------------------------------------------------------------
--- radar (Radar Hill reveal) — unchanged behaviour, the badge became the "Radar" flag
+-- radar (Radar Hill reveal) — the badge became the "Radar" flag; lane C2 adds the pings while streaming is on
 ---------------------------------------------------------------------------------------------------------------
+
+local function destroyPing(userId: number)
+	local ping = radarPings[userId]
+	if ping then
+		radarPings[userId] = nil
+		ping.Beam:Destroy()
+		ping.Base:Destroy()
+		ping.Top:Destroy()
+	end
+end
+
+local function clearRadarPings()
+	for userId in pairs(radarPings) do
+		destroyPing(userId)
+	end
+end
 
 local function clearRadarHighlights()
 	for userId, h in pairs(radarHighlights) do
@@ -156,6 +207,115 @@ local function clearRadarHighlights()
 			h:Destroy()
 		end
 		radarHighlights[userId] = nil
+	end
+	clearRadarPings() -- lane C2: the pings go with the Highlights (none exist while streaming is off)
+end
+
+-- lane C2: studs per real px per stud of distance for this camera (vertical view), and the camera's position
+local function pingScale(): (number, Vector3?)
+	local cam = Workspace.CurrentCamera
+	local fov = if cam then cam.FieldOfView else 70
+	local viewH = if cam then cam.ViewportSize.Y else 0
+	if typeof(fov) ~= "number" or fov <= 1 or fov >= 179 then
+		fov = 70
+	end
+	if typeof(viewH) ~= "number" or viewH < 100 then
+		viewH = 390 -- a phone in landscape
+	end
+	return 2 * math.tan(math.rad(fov) * 0.5) / viewH, if cam then cam.CFrame.Position else nil
+end
+
+-- lane C2: a ping for userId at pos (Terrain's frame is the world frame), RADAR_PING.WidthPx x HeightPx real px as
+-- seen from camPos; built once, then only moved / resized
+local function placePing(userId: number, pos: Vector3, terrain: Terrain, perPx: number, camPos: Vector3?)
+	local d = if camPos then math.max((camPos - pos).Magnitude, 1) else radarRadius
+	local width = math.max(RADAR_PING.WidthPx * perPx * d, RADAR_PING.MinWidthStuds)
+	local height = math.max(RADAR_PING.HeightPx * perPx * d, RADAR_PING.MinHeightStuds)
+	local ping: Ping? = radarPings[userId]
+	if ping and ping.Base.Parent ~= terrain then
+		destroyPing(userId) -- someone removed it: build it again
+		ping = nil
+	end
+	if ping then
+		local moved = (ping.Pos - pos).Magnitude >= RADAR_PING.MoveStuds
+		local resized = math.abs(width - ping.Width) > ping.Width * RADAR_PING.ResizeRatio
+		if resized then
+			ping.Beam.Width0 = width
+			ping.Beam.Width1 = width * 0.25
+			ping.Width = width
+			ping.Height = height
+		end
+		if moved then
+			ping.Base.Position = pos
+			ping.Pos = pos
+		end
+		if moved or resized then
+			ping.Top.Position = pos + Vector3.new(0, ping.Height, 0)
+		end
+		return
+	end
+	local base = Instance.new("Attachment")
+	base.Name = "WE_RadarPingBase"
+	base.Position = pos
+	base.Parent = terrain
+	local top = Instance.new("Attachment")
+	top.Name = "WE_RadarPingTop"
+	top.Position = pos + Vector3.new(0, height, 0)
+	top.Parent = terrain
+	local beam = Instance.new("Beam")
+	beam.Name = "WE_RadarPing"
+	beam.Attachment0 = base
+	beam.Attachment1 = top
+	beam.FaceCamera = true
+	beam.Segments = 1
+	beam.Width0 = width
+	beam.Width1 = width * 0.25
+	beam.LightEmission = RADAR_PING.LightEmission
+	beam.LightInfluence = 0
+	beam.Color = ColorSequence.new(RADAR_PING.ColorBase, RADAR_PING.ColorTop)
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, RADAR_PING.TransparencyBase),
+		NumberSequenceKeypoint.new(1, RADAR_PING.TransparencyTop),
+	})
+	beam:SetAttribute("UserId", userId)
+	beam.Parent = terrain
+	radarPings[userId] = { Base = base, Top = top, Beam = beam, Pos = pos, Width = width, Height = height }
+end
+
+-- lane C2: a character this client holds (under streaming a revealed player may be absent, or parented to nil)
+local function heldHere(char: Model?): boolean
+	return char ~= nil and char:IsDescendantOf(Workspace)
+end
+
+--[[ lane C2 (F7): pings for the server's revealed players that have no Highlight and whose character this client
+	does not hold, nearest first, at most RADAR_PING.Max. Everything else loses its ping. ]]
+local function updatePings(highlighted: { [number]: boolean })
+	table.clear(pingWanted)
+	local list = radarTargets
+	local terrain = Workspace:FindFirstChildOfClass("Terrain")
+	if list and terrain and os.clock() - radarTargetsAt <= RADAR_PING.StaleSeconds then
+		local perPx, camPos = pingScale()
+		local shown = 0
+		for _, t in ipairs(list) do
+			if shown >= RADAR_PING.Max then
+				break
+			end
+			local userId = if typeof(t) == "table" then t.UserId else nil
+			local pos = if typeof(t) == "table" then t.Pos else nil
+			if typeof(userId) == "number" and typeof(pos) == "Vector3" and userId ~= player.UserId and not highlighted[userId] then
+				local other = Players:GetPlayerByUserId(userId)
+				if other and not heldHere(other.Character) then
+					placePing(userId, pos, terrain, perPx, camPos)
+					pingWanted[userId] = true
+					shown += 1
+				end
+			end
+		end
+	end
+	for userId in pairs(radarPings) do
+		if not pingWanted[userId] then
+			destroyPing(userId)
+		end
 	end
 end
 
@@ -187,13 +347,15 @@ local function updateRadar()
 		return
 	end
 
+	-- lane C2: with the server's list (streaming on) a Highlight goes only on a character this client holds
+	local streamView = radarTargets ~= nil
 	local seen: { [number]: boolean } = {}
 	for _, other in ipairs(Players:GetPlayers()) do
 		if other ~= player then
 			local char = other.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-			if char and root and humanoid and humanoid.Health > 0 then
+			if char and root and humanoid and humanoid.Health > 0 and (not streamView or heldHere(char)) then
 				local dist = (root.Position - myRoot.Position).Magnitude
 				if dist <= radarRadius then
 					seen[other.UserId] = true
@@ -211,6 +373,12 @@ local function updateRadar()
 			radarHighlights[userId] = nil
 		end
 	end
+	-- lane C2: pings for the revealed players this client does not hold (never while streaming is off)
+	if streamView then
+		updatePings(seen)
+	elseif next(radarPings) ~= nil then
+		clearRadarPings()
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -225,6 +393,8 @@ local DIAMOND = {
 local ROLE_ATTR = WorldLabelConfig.RoleAttribute
 local MARKER_TAGS = { Constants.Tags.CaptureZone, Constants.Tags.Territory }
 local diamonds: { [BillboardGui]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+-- F22 (lane C2): diamonds whose flag was streamed out when the yield last changed
+local diamondsOut: { [BillboardGui]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local markerOnTop = false
 local diamondAccum = 0
 local rescanAccum = 0
@@ -291,11 +461,24 @@ local function syncDiamonds(elapsed: number)
 			rescanDiamonds()
 		end
 		for bb in pairs(diamonds) do
-			if bb.Parent then
+			if bb:IsDescendantOf(Workspace) then -- F22: Parent stays set when the flag streams out
 				applyDiamond(bb)
+				diamondsOut[bb] = nil
+			else
+				diamondsOut[bb] = true -- F22: set once it has streamed back in (below)
 			end
 		end
 		return
+	end
+	-- F22 (lane C2): a diamond that was streamed out when the yield changed takes the current state once it is back
+	-- (a local AlwaysOnTop may survive the stream cycle; usually an empty table)
+	if next(diamondsOut) ~= nil then
+		for bb in pairs(diamondsOut) do
+			if bb:IsDescendantOf(Workspace) then
+				diamondsOut[bb] = nil
+				applyDiamond(bb)
+			end
+		end
 	end
 	if on then
 		rescanAccum += elapsed
@@ -958,6 +1141,7 @@ function TerritoryController.Init()
 			h:Destroy()
 			radarHighlights[leaving.UserId] = nil
 		end
+		destroyPing(leaving.UserId) -- lane C2
 	end)
 end
 
@@ -966,6 +1150,14 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 
 	radarActive = payload.RadarReveal == true
 	radarRadius = tonumber(payload.RadarRadius) or TerritoryConfig.RadarRevealRadius or 220
+	-- lane C2: the server's reveal list comes only while streaming is on
+	local targets = payload.RadarTargets
+	if radarActive and typeof(targets) == "table" then
+		radarTargets = targets
+		radarTargetsAt = os.clock()
+	else
+		radarTargets = nil
+	end
 	HudLayout.SetFlag("Radar", radarActive)
 	if not radarActive then
 		clearRadarHighlights()

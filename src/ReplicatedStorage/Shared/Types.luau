@@ -312,6 +312,13 @@ export type TerritoryEntryPayload = {
 	Contested: boolean,
 }
 
+-- Streaming 2, lane C2 (spec F7): one player a Radar Hill holder reveals. Instance-free (F31): the client may not
+-- hold that character under instance streaming, so it draws a marker at Pos instead of the Highlight.
+export type RadarTargetPayload = {
+	UserId: number,
+	Pos: Vector3, -- the server's HumanoidRootPart position when the payload was built
+}
+
 export type TerritoryStatePayload = {
 	Territories: { TerritoryEntryPayload },
 	LocalCapture: {
@@ -323,6 +330,9 @@ export type TerritoryStatePayload = {
 	}?,
 	RadarReveal: boolean?,
 	RadarRadius: number?,
+	-- lane C2: sent only while Workspace.StreamingEnabled and RadarReveal is true; the other living players within
+	-- RadarRadius, nearest first (nil with streaming off: every character is on every client)
+	RadarTargets: { RadarTargetPayload }?,
 }
 
 export type MissionEntryPayload = {

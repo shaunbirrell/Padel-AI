@@ -27,10 +27,17 @@
 	      blue or contested amber (legacy roster colour, else green); a leaver's colour is kept while that UserId still
 	      owns a zone (R15, then dropped); outpost nation flags (Textures only, never a SurfaceGui) and their sizes sit
 	      behind NationConfig.OutpostFlags (off), shown only on a Player-owned, uncontested zone (RefreshOwnerFlags).
+	Streaming 2, lane C2 (spec F7): Radar Hill reveals the other players within RadarRevealRadius (550), but under
+	      instance streaming a client holds only the characters inside its stream radius (StreamingMinRadius 64 on a
+	      phone short of memory). While Workspace.StreamingEnabled, a radar holder's payload lists them as RadarTargets
+	      (UserId + HumanoidRootPart position, Instance-free, nearest first) and the holder gets its own payload every
+	      RADAR_STREAM.PushSeconds, so TerritoryController can mark the ones it has not streamed in. With streaming off
+	      the payload and the push rate are exactly as before (every character is on every client).
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
@@ -89,6 +96,13 @@ local territories: { [string]: TerritoryRuntime } = {}
 local firstOutpostLogged: { [number]: boolean } = {}
 local lastPushAt = 0
 local pushDirty = true
+
+-- Streaming 2, lane C2 (see the header). Candidates for TerritoryConfig (lane C2 may edit only its three files).
+local RADAR_STREAM = {
+	PushSeconds = 1, -- a radar holder's own payload rate while streaming is on (the full push is every 2 s idle)
+	MaxTargets = 16, -- nearest first; the client draws at most 5 markers
+}
+local lastRadarPushAt: { [Player]: number } = {} -- os.clock() of the last payload that carried RadarTargets
 
 local function ownerTypes()
 	return TerritoryConfig.OwnerTypes
@@ -558,6 +572,61 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	end
 end
 
+-- lane C2: Workspace.StreamingEnabled (a place setting the engine fixes for the server's life; read per call, pcall'd)
+local function streamingOn(): boolean
+	local ok, on = pcall(function()
+		return Workspace.StreamingEnabled
+	end)
+	return ok and on == true
+end
+
+local function liveRoot(p: Player): BasePart?
+	local character = p.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if root and root:IsA("BasePart") and humanoid and humanoid.Health > 0 then
+		return root
+	end
+	return nil
+end
+
+--[[ lane C2 (F7): the players a radar holder reveals, as the client decides for the characters it holds (every other
+	living player whose HumanoidRootPart is within radius of the holder's): UserId + position, nearest first, at most
+	RADAR_STREAM.MaxTargets. Instance-free (F31). Server data only: nothing here comes from a client. ]]
+local function radarTargetsFor(viewer: Player, radius: number): { Types.RadarTargetPayload }
+	local out: { Types.RadarTargetPayload } = {}
+	local myRoot = liveRoot(viewer)
+	if not myRoot then
+		return out
+	end
+	local origin = myRoot.Position
+	local dist: { [number]: number } = {}
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= viewer then
+			local root = liveRoot(other)
+			if root then
+				local pos = root.Position
+				local d = (pos - origin).Magnitude
+				if d <= radius then
+					dist[other.UserId] = d
+					table.insert(out, { UserId = other.UserId, Pos = pos })
+				end
+			end
+		end
+	end
+	table.sort(out, function(a: Types.RadarTargetPayload, b: Types.RadarTargetPayload): boolean
+		local da, db = dist[a.UserId], dist[b.UserId]
+		if da ~= db then
+			return da < db
+		end
+		return a.UserId < b.UserId
+	end)
+	for i = #out, RADAR_STREAM.MaxTargets + 1, -1 do
+		out[i] = nil
+	end
+	return out
+end
+
 local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePayload
 	local list: { Types.TerritoryEntryPayload } = {}
 	local localCapture = {
@@ -629,12 +698,18 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 		radar = TerritoryService.HasRadarReveal(player)
 	end
 
-	return {
+	local payload: Types.TerritoryStatePayload = {
 		Territories = list,
 		LocalCapture = localCapture,
 		RadarReveal = radar,
 		RadarRadius = radarRadius,
 	}
+	-- lane C2 (F7): the reveal list, only while streaming is on (nil otherwise: the payload is as before)
+	if player and radar and streamingOn() then
+		payload.RadarTargets = radarTargetsFor(player, radarRadius)
+		lastRadarPushAt[player] = os.clock()
+	end
+	return payload
 end
 
 function TerritoryService.PushAll()
@@ -1262,6 +1337,7 @@ function TerritoryService.Init(deps: { [string]: any })
 		-- F10: a Home Outpost always goes back to Neutral when its owner leaves.
 		local uid = player.UserId
 		firstOutpostLogged[uid] = nil
+		lastRadarPushAt[player] = nil
 		local persist = persistClaimsOn()
 		for _, rt in pairs(territories) do
 			if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == uid and (persist or isStarterRt(rt)) then
@@ -1294,6 +1370,16 @@ function TerritoryService.Init(deps: { [string]: any })
 				if now - lastPushAt >= (if anyProgress then 0.5 else 2.0) then
 					TerritoryService.PushAll()
 					pushDirty = false
+				end
+			end
+			-- lane C2 (F7): while streaming is on, a radar holder's markers move only when a payload lands, so a
+			-- holder gets its own every RADAR_STREAM.PushSeconds (one or two players at a time; nothing when off)
+			if streamingOn() then
+				for _, player in ipairs(Players:GetPlayers()) do
+					local last = lastRadarPushAt[player]
+					if (last == nil or now - last >= RADAR_STREAM.PushSeconds) and TerritoryService.HasRadarReveal(player) then
+						TerritoryService.PushPlayer(player)
+					end
 				end
 			end
 		end

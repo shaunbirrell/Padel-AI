@@ -7,7 +7,8 @@
 	  SyncBusiness(plotId, id, level, owner?)  one business after a buy / rebirth / admin reset (UpdateVisuals)
 	  ClearPlot(plotId)                        plot released (the next owner gets fresh L0 kiosks)
 	  Plot<N>/WE_Businesses/WE_Business_<Id> (Model, tag WE_Business, attrs PlotId / BusinessId / Level / OwnerUserId /
-	  WE_SiteCFrame)
+	  WE_SiteCFrame; streaming2 S4: ModelStreamingMode Atomic, built unparented and parented once whole, so the tag
+	  added-signals fire on a finished kiosk; inert while Workspace.StreamingEnabled is false)
 	    Console  WE_UpgradeSlot console (PlotId, StructureId, WE_Console): UpgradePadService adds the hold prompt,
 	             ConsoleLocator finds it, BaseService.PurchaseUpgrade buys at it (console-only buying, no bypass).
 	             No screen gui, no Neon, no light (budget).
@@ -162,14 +163,20 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 	if siteCF == nil then
 		return
 	end
+	-- streaming2 S4 (F11): a new kiosk is Atomic and is built unparented, then parented once it is whole (below), so its
+	-- console, kit parts, attributes and tags are all initial descendants: a client gets the whole kiosk or none of it.
+	-- A later level-up adds parts to the parented model (they stream in normally, inside the same 22-stud kiosk).
+	-- Inert while Workspace.StreamingEnabled is false: the finished tree is the same.
+	local newModel: Model? = nil
 	if model == nil then
 		local m = Instance.new("Model")
+		m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 		m.Name = name
 		m:SetAttribute("PlotId", plotId)
 		m:SetAttribute("BusinessId", id)
 		m:SetAttribute("WE_SiteCFrame", siteCF)
-		m.Parent = folder
 		model = m
+		newModel = m
 	end
 	local m = model :: Model
 	ensureConsole(m, plotId, id, plotPos :: Vector3)
@@ -206,6 +213,9 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 	end
 	if not CollectionService:HasTag(m, BusinessConfig.Tag) then
 		CollectionService:AddTag(m, BusinessConfig.Tag)
+	end
+	if newModel ~= nil then
+		newModel.Parent = folder -- streaming2 S4: parented last, whole (see above)
 	end
 end
 

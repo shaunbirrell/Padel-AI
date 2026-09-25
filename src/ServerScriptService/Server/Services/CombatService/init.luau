@@ -35,6 +35,9 @@
 	hurting a grouped NPC provokes its group. APIs: OnNPCDeath(fn) (once per death, after rewards; listeners
 	deferred, each in its own pcall), DespawnNPC(id) (silent), ProvokeGroup / CalmGroup / GroupNPCs(groupId),
 	NPCCounts(). CombatConfig.FieldBootstrap == false skips BootstrapNPCs. Stances live in CombatNPC.Think.
+
+	streaming2 lane S2: TeleportToBase moves through StreamPrefetch while Workspace.StreamingEnabled is on (the old
+	PivotTo when it is off), and every SpawnNPC Model is ModelStreamingMode Atomic, set before it is parented.
 ]]
 
 local Players = game:GetService("Players")
@@ -127,6 +130,7 @@ type NPCRecord = {
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
+local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch) -- streaming2 S2: pre-fetched respawn hop
 
 local CombatService = {}
 
@@ -545,6 +549,11 @@ function CombatService.GetPlotSpawnCFrame(plotId: number): CFrame?
 	return nil
 end
 
+--[[ streaming2 S2 (F1): the hop onto the own plot after every spawn (CharacterAdded). While Workspace.StreamingEnabled
+	is on it goes through StreamPrefetch: a far hop (a spawn that did not use the own RespawnLocation) streams the plot
+	in first (RequestStreamAroundAsync), and joins the move already in flight for this player (BaseService's join)
+	instead of racing it. The usual respawn lands on the own PlayerSpawn (BaseService sets RespawnLocation), so this is
+	a few studs and needs no pre-fetch. With streaming off it is the old move, at once. ]]
 function CombatService.TeleportToBase(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
@@ -553,7 +562,11 @@ function CombatService.TeleportToBase(player: Player)
 	local cf = CombatService.GetPlotSpawnCFrame(profile.BasePlotId)
 	local character = player.Character
 	if cf and character then
-		character:PivotTo(cf)
+		if StreamPrefetch.Enabled() then
+			StreamPrefetch.PivotTo(player, cf)
+		else
+			character:PivotTo(cf)
+		end
 	end
 end
 
@@ -915,6 +928,9 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?
 	npcSerial += 1
 
 	local model = Instance.new("Model")
+	-- streaming2 S2 (F10): set before the Model is parented, so the NPC (root, Humanoid, welded kit, catalog visual)
+	-- reaches a client whole or not at all. Covers every NPC, Ops garrisons included. No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = def.DisplayName
 	model:SetAttribute("NPCId", id)
 	model:SetAttribute("NPCType", tid)

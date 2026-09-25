@@ -30,6 +30,11 @@
 	  * jeep F9 / V8: while I sit in any vehicle seat, every ProximityPrompt outside WarEmpireVehicles is hushed
 	    locally (MaxActivationDistance 0) and put back on the way out
 
+	streaming2 lane C3 (acts only while Workspace.StreamingEnabled is true; with it false, as at 0a04776):
+	  * F13: a hushed prompt that streams out and back in is hushed again when it shows (a local write can be lost)
+	  * F16: a Humanoid that replicates after its character still binds (no 10 s give-up)
+	  * F17: an aircraft's AGL ray over ground that has not streamed in uses the last hit or the desert floor
+
 	Requiring this module does nothing heavy (GetService only). Init() is called by VehicleController.
 ]]
 
@@ -214,6 +219,10 @@ local DEFAULTS: any = {
 	},
 	-- W7: SPD pill / hint placement (VehicleConfig.Drive.Hud overrides)
 	Hud = { PillStackOrder = 25, HintStackOrder = 26, DiagStackOrder = 27, StackWidthScale = 0.62, DesktopPillInset = 14 },
+	-- streaming2 F17: an aircraft's AGL ray that hits nothing while Workspace.StreamingEnabled is on (VehicleConfig.Drive.Ground
+	-- overrides key by key). FallbackY = the desert floor top (MapSetup GROUND_TOP_Y 0.5), the lowest ground on the map;
+	-- LastHitRadius = how far (flat studs) from its last hit the ray may still use that hit's height.
+	Ground = { FallbackY = 0.5, LastHitRadius = 16 },
 	Modes = {
 		Car = {
 			ReverseFrac = 0.45,
@@ -1423,6 +1432,7 @@ local EXIT: any = DEFAULTS.Exit
 local PLATE: any = DEFAULTS.Nameplate
 local AIRC: any = DEFAULTS.AirBox -- JEEP-2: Notice / NoticeHoldSeconds (the law reads Params.AirBox)
 local HUDC: any = DEFAULTS.Hud -- W7: pill / hint placement
+local GROUND: any = DEFAULTS.Ground -- streaming2 F17: AGL ray-miss fallback
 local debugUser = false
 
 -- W7: HudLayout (sibling module), required lazily; false = not available (headless tests) → fixed positions
@@ -1436,11 +1446,21 @@ local shownPrompts: { [ProximityPrompt]: boolean } = {}
 local hushedPrompts: { [ProximityPrompt]: Hushed } = {}
 local hushOn = false
 
+-- streaming2 F16: the character's ChildAdded while its Humanoid has not arrived yet (streaming on only)
+local humWaitConn: RBXScriptConnection? = nil
+
 -- P1-8 owner nameplates (client-only BillboardGuis in PlayerGui, adorned to each of my vehicles' Chassis)
 local plates: { [Model]: BillboardGui } = {}
 
 local function localPlayer(): Player
 	return Players.LocalPlayer
+end
+
+-- streaming2: the place's StreamingEnabled (set in default.project.json, never by a script). Every lane C3 change
+-- (F13 prompt re-hush, F16 late Humanoid, F17 AGL ray miss) acts only while it is true; with it false this module
+-- behaves as at 0a04776.
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
 end
 
 -- Drive.<name> with DEFAULTS.<name> filled in, key by key, only when the types match
@@ -1462,6 +1482,7 @@ local function refreshConfig()
 	PLATE = cfgSection("Nameplate")
 	AIRC = cfgSection("AirBox")
 	HUDC = cfgSection("Hud")
+	GROUND = cfgSection("Ground")
 	local uid = localPlayer().UserId
 	local ids: any = DBG.UserIds
 	debugUser = DBG.All == true or (typeof(ids) == "table" and table.find(ids, uid) ~= nil)
@@ -1573,6 +1594,31 @@ local function landProbe(x: number, z: number, top: number): boolean
 	return hit ~= nil and hit.Position.Y > top - 0.05
 end
 
+-- streaming2 F17: where the AGL ray last hit the ground (plain numbers: the ray runs every frame, nothing is allocated)
+local lastGroundX, lastGroundZ, lastGroundY = 0, 0, 0
+local haveLastGround = false
+
+--[[ streaming2 F17: the AGL when the down-ray hits nothing while Workspace.StreamingEnabled is on, i.e. the ground
+	below has not streamed in (high up, under memory pressure). The ground is the last one this ray hit while the
+	aircraft is still within Ground.LastHitRadius of that spot (flat distance), else Ground.FallbackY (the desert floor
+	top, the lowest ground on the map). A last hit that reads Exit.LockAGL or less AND lower than the floor would read
+	(the aircraft has just left a roof or cliff edge) is not trusted: the floor wins, so a miss never lands an
+	aircraft in mid-air or frees its jump button there. ]]
+local function missAGL(pos: Vector3, clearance: number): number
+	local floorAGL = (pos.Y - GROUND.FallbackY) - clearance
+	if haveLastGround then
+		local dx, dz = pos.X - lastGroundX, pos.Z - lastGroundZ
+		local r = GROUND.LastHitRadius
+		if dx * dx + dz * dz <= r * r then
+			local agl = (pos.Y - lastGroundY) - clearance
+			if agl > EXIT.LockAGL or agl >= floorAGL then
+				return agl
+			end
+		end
+	end
+	return floorAGL
+end
+
 local function groundAGL(pos: Vector3, clearance: number): number
 	local params = rayParams
 	if not params then
@@ -1580,9 +1626,13 @@ local function groundAGL(pos: Vector3, clearance: number): number
 	end
 	local hit = Workspace:Raycast(pos, Vector3.new(0, -AGL_RAY, 0), params)
 	if not hit then
-		return math.huge
+		-- streaming off: nothing below within AGL_RAY really means nothing (0a04776)
+		return if streamingOn() then missAGL(pos, clearance) else math.huge
 	end
-	return (pos.Y - hit.Position.Y) - clearance
+	local groundY = hit.Position.Y
+	lastGroundX, lastGroundZ, lastGroundY = pos.X, pos.Z, groundY
+	haveLastGround = true
+	return (pos.Y - groundY) - clearance
 end
 
 -- ── prompts: only the owner sees "Drive", and not while already driving ─────
@@ -1695,6 +1745,17 @@ local function restorePrompts()
 	end
 end
 
+--[[ Is a shown prompt gone from the world? streaming2 F13: with streaming on, what streams out is the prompt's PART
+	(parented to nil, not destroyed), so the prompt keeps its Parent: only IsDescendantOf(Workspace) tells. A gone
+	prompt is forgotten, not hushed: a local write on it can be lost when it streams back in, and PromptShown hushes it
+	then. Streaming off: the 0a04776 test. ]]
+local function promptGone(prompt: ProximityPrompt): boolean
+	if streamingOn() then
+		return not prompt:IsDescendantOf(Workspace)
+	end
+	return prompt.Parent == nil
+end
+
 local function setPromptHush(on: boolean)
 	if on == hushOn then
 		return
@@ -1702,7 +1763,7 @@ local function setPromptHush(on: boolean)
 	hushOn = on
 	if on then
 		for prompt in pairs(shownPrompts) do
-			if prompt.Parent == nil then
+			if promptGone(prompt) then
 				shownPrompts[prompt] = nil
 			else
 				hushPrompt(prompt)
@@ -1721,9 +1782,22 @@ end
 
 local function onPromptShown(prompt: ProximityPrompt)
 	shownPrompts[prompt] = true
-	if hushOn then
-		hushPrompt(prompt)
+	if not hushOn then
+		return
 	end
+	local rec = hushedPrompts[prompt]
+	if rec ~= nil and streamingOn() then
+		--[[ streaming2 F13: a hushed prompt that streamed out and back in can come back with the server's range (local
+			writes "can be lost", maybe with no changed signal): it is showing again, so hush it again and keep that
+			range for the restore. ]]
+		local r = prompt.MaxActivationDistance
+		if typeof(r) == "number" and r > 0 then
+			rec.Range = r
+			prompt.MaxActivationDistance = 0
+		end
+		return
+	end
+	hushPrompt(prompt)
 end
 
 local function onPromptHidden(prompt: ProximityPrompt)
@@ -3135,12 +3209,15 @@ local function checkSeat(hum: Humanoid)
 	end
 end
 
-local function bindCharacter(char: Model)
-	local h = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 10)
-	if not (h and h:IsA("Humanoid")) then
-		return
+local function stopHumanoidWait()
+	local c = humWaitConn
+	humWaitConn = nil
+	if c then
+		c:Disconnect()
 	end
-	local hum: Humanoid = h
+end
+
+local function bindHumanoid(hum: Humanoid)
 	hum.Seated:Connect(function(isSeated: boolean, seatPart: BasePart?)
 		if isSeated and seatPart and seatPart:IsA("VehicleSeat") and seatPart.Name == "DriverSeat" then
 			startDrive(hum, seatPart)
@@ -3162,6 +3239,31 @@ local function bindCharacter(char: Model)
 	checkSeat(hum)
 	refreshPlates()
 	syncPromptHush()
+end
+
+local function bindCharacter(char: Model)
+	stopHumanoidWait()
+	local h: Instance? = char:FindFirstChildOfClass("Humanoid")
+	if not h and streamingOn() then
+		--[[ streaming2 F16: under streaming the character model is parented before its descendants have replicated,
+			so its Humanoid can come later than any fixed wait. Bind whenever it arrives (the HudLayout pattern); the
+			next character and CharacterRemoving stop the wait. ]]
+		humWaitConn = char.ChildAdded:Connect(function(c: Instance)
+			if c:IsA("Humanoid") then
+				stopHumanoidWait()
+				bindHumanoid(c)
+			end
+		end)
+		return
+	end
+	if not h then
+		h = char:WaitForChild("Humanoid", 10) -- streaming off: the character arrives whole (0a04776)
+	end
+	if not (h and h:IsA("Humanoid")) then
+		return
+	end
+	local hum: Humanoid = h
+	bindHumanoid(hum)
 end
 
 -- test hook: device class is read once in Init; the headless tests flip it to cover the touch layout
@@ -3264,6 +3366,7 @@ function VehicleDriveClient.Init()
 		task.spawn(bindCharacter, char)
 	end)
 	plr.CharacterRemoving:Connect(function()
+		stopHumanoidWait() -- streaming2 F16 (nil while streaming is off)
 		stopDrive()
 		setPromptHush(false)
 	end)

@@ -114,6 +114,9 @@ end
 
 local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F11): the pump (pad, derrick, beam, head) reaches a client whole or not at all. Set before the
+	-- model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = "PlotOilPump_" .. tostring(index)
 
 	local pad = Instance.new("Part")

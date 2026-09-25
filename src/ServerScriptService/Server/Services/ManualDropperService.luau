@@ -6,6 +6,12 @@
 	v71 (HUD v70 spec §5): the "$15" tag and the "+$15" pop are Shared/Util/WorldLabel labels owned by the plot's
 	owner (the client filter hides them for everyone else), stud-scaled, never AlwaysOnTop. The plate keeps its
 	glow but no PointLight (light budget).
+
+	streaming2 lane C1 (F5): while Workspace.StreamingEnabled is on, the owner's plate position is stamped on the
+	Player as WE_DropperPos (the ATM-side plate, else the Training Yard one), like UpgradePadService's
+	WE_ConsolePos_<sid> and BusinessService's WE_AtmPos, so the tutorial beam has an end while the plate is streamed
+	out on that client. Stamped on plot ready and kept right by the 2 s owner sync (hand-outs, late claims, release,
+	rebuilt plates). Streaming off: no hook, no attribute (HEAD behaviour).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -296,6 +302,45 @@ local function syncTagOwners()
 	end
 end
 
+-- C1 F5: the tutorial's dropper position (see the header). Only while streaming is on (a place setting).
+local ATTR_DROPPER_POS = "WE_DropperPos"
+
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
+
+-- the plate the tutorial points at on a plot: the one beside the ATM, else the Training Yard one
+local function dropperPosOf(plotId: number): Vector3?
+	local best: BasePart? = nil
+	for pad in pairs(wired) do
+		if pad.Parent and pad:GetAttribute("PlotId") == plotId and (best == nil or pad.Name == "ManualDropper_Collector") then
+			best = pad
+		end
+	end
+	return if best then best.Position else nil
+end
+
+local function stampDropperPos(player: Player, plotId: number?)
+	if player.Parent == nil or not streamingOn() then
+		return
+	end
+	local pos = if plotId ~= nil then dropperPosOf(plotId) else nil
+	if player:GetAttribute(ATTR_DROPPER_POS) ~= pos then
+		player:SetAttribute(ATTR_DROPPER_POS, pos)
+	end
+end
+
+-- every player's stamp follows the plot they own now (nil when they have none)
+local function syncDropperStamps()
+	if not (streamingOn() and BaseService and BaseService.GetOwnedPlotId) then
+		return
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local ok, plotId = pcall(BaseService.GetOwnedPlotId, player)
+		stampDropperPos(player, if ok and typeof(plotId) == "number" then plotId else nil)
+	end
+end
+
 local function wireDropper(pad: BasePart)
 	if wired[pad] then
 		return
@@ -463,10 +508,16 @@ function ManualDropperService.Init(deps: { [string]: any })
 		end)
 	end)
 
+	-- C1 F5: the tutorial's dropper position on the owner (streaming only; see the header)
+	if streamingOn() and BaseService and BaseService.OnPlotReady then
+		BaseService.OnPlotReady(stampDropperPos)
+	end
+
 	task.spawn(function()
 		while true do
 			task.wait(2)
 			syncTagOwners()
+			syncDropperStamps()
 		end
 	end)
 

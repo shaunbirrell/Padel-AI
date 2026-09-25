@@ -71,6 +71,7 @@ local refreshQueued = false
 local lastRefreshAt = -math.huge
 local expiryAt = math.huge -- earliest pending over-bar expiry already scheduled
 local humConn: RBXScriptConnection? = nil
+local humWaitConn: RBXScriptConnection? = nil -- streaming2 F16: the character's ChildAdded until its Humanoid arrives
 local stats = { Refreshes = 0, Bursts = 0, OverShown = 0, HudShown = false }
 
 local function now(): number
@@ -568,21 +569,55 @@ local function onSeatChanged(hum: Humanoid)
 	requestRefresh()
 end
 
+-- streaming2: the place's StreamingEnabled (default.project.json; scripts cannot set it). The F16 late-Humanoid bind
+-- acts only while it is true; with it false the bind is the 0a04776 one.
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
+
+local function stopHumanoidWait()
+	local c = humWaitConn
+	humWaitConn = nil
+	if c then
+		c:Disconnect()
+	end
+end
+
+local function bindHumanoid(hum: Humanoid)
+	local old = humConn
+	if old then
+		old:Disconnect()
+	end
+	humConn = hum:GetPropertyChangedSignal("SeatPart"):Connect(function()
+		onSeatChanged(hum)
+	end)
+	onSeatChanged(hum)
+end
+
 local function bindCharacter(character: Model)
+	stopHumanoidWait()
 	task.spawn(function()
-		local found = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 10)
+		local found: Instance? = character:FindFirstChildOfClass("Humanoid")
+		if not found and streamingOn() then
+			--[[ streaming2 F16: under streaming the character model is parented before its descendants have
+				replicated, so its Humanoid can come later than any fixed wait. Bind whenever it arrives (the HudLayout
+				pattern); the next character and CharacterRemoving stop the wait. ]]
+			humWaitConn = character.ChildAdded:Connect(function(c: Instance)
+				if c:IsA("Humanoid") then
+					stopHumanoidWait()
+					bindHumanoid(c)
+				end
+			end)
+			return
+		end
+		if not found then
+			found = character:WaitForChild("Humanoid", 10) -- streaming off: the character arrives whole (0a04776)
+		end
 		if not (found and found:IsA("Humanoid")) then
 			return
 		end
 		local hum: Humanoid = found
-		local old = humConn
-		if old then
-			old:Disconnect()
-		end
-		humConn = hum:GetPropertyChangedSignal("SeatPart"):Connect(function()
-			onSeatChanged(hum)
-		end)
-		onSeatChanged(hum)
+		bindHumanoid(hum)
 	end)
 end
 
@@ -608,6 +643,7 @@ function VehicleCombatClient.Init()
 			bindCharacter(character)
 		end)
 		lp.CharacterRemoving:Connect(function()
+			stopHumanoidWait() -- streaming2 F16 (nil while streaming is off)
 			seated = nil
 			requestRefresh()
 		end)

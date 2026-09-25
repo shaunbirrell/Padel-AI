@@ -3831,3 +3831,296 @@ AW-I7 WE_Build is not bumped (the owner's publish bot does it).
   was dropped. It stays pending until that loader gets the cap (after streaming2-build commits, same file as the :576 default).
   The BuyPathStatic AutoGun pin is now `AutoGun = { ModelAssetId = 0,` so the promote tool can rewrite it. Undo:
   `tools/wire-asset-ids.py demote <id>`.
+
+## 2026-09-25 — Streaming phase 2 (lanes T, S1-S4, C1-C4): streaming fixes shipped with StreamingEnabled still OFF
+
+Every item below is inert while `Workspace.StreamingEnabled` is false (default.project.json, lane Z, not in this batch) and is
+reversible. Evidence is the headless stand-in (scratchpad/sim/stream_standin.luau), not Roblox; spec §6 lists the device checks.
+Lane T (the stand-in) has no ASSUMPTIONS lines. Lanes S5 (ActivityHost Persistent), C5 (WaitForChild timeouts) and Z (the switch) are
+not in this batch.
+
+### Spec §5 (STR-1..STR-9 except STR-4, which lands with lane S5; STR-3 as adapted by lane S1, STR-6 as held by lane S4, STR-8 as filled in by lane C1)
+
+- **STR-1:** `StreamingTargetRadius` 512 and `MinRadius` 64. They were chosen from stand-in part counts, not from measured memory. The fallback is 768. The owner re-decides after the device memory check.
+- **STR-2:** The only streaming switch is `Workspace.StreamingEnabled` in `default.project.json`, because scripts cannot set it. `PredictiveStreamingMode` and `EnableSLIMAvatars` are left out because the pinned Rojo 7.4.4 rejects them, and Studio-only settings are overwritten by the next Open Cloud publish.
+- **STR-3 (lane S1):** RespawnLocation is the player's own PlotN.PlayerSpawn (a Neutral SpawnLocation, so Player.yaml accepts it).
+    - Set at every plot assignment (AssignPlot: join, hand-out, late claim; setUpGainedPlot again) and cleared in
+      ReleasePlot and when the server is full.
+    - Set only while Workspace.StreamingEnabled is true (see S1-1). With streaming off respawns stay as they are
+      today: any Neutral spawn, then CombatService.TeleportToBase.
+    - The first spawn of a session is still random (CharacterAutoLoads stays on, the reversible choice). It is
+      covered by AddReplicationFocus(own PlayerSpawn) as soon as AssignPlot returns, plus one pre-fetched move home.
+      The focus is removed when that move lands, or after StreamingConfig.JoinFocusMaxSeconds (40 s) at the latest.
+- **STR-5:** Local property writes on server instances are treated as lost on stream-in (the docs say "can be lost"). Client code re-applies them on the shown or added signal.
+- **STR-6 (lane S4):** Plots stay Folders; buildings are Atomic; nothing is PersistentPerPlayer (spec §1, §5 as written; lane S4 holds it:
+    BuyPathStatic scans src/ for PersistentPerPlayer, and Bases.Plot1..6 are checked to be Folders in the stand-in).
+- **STR-7:** Client rays and aim help see only streamed geometry. The server re-cast is authoritative (by design).
+- **STR-8 (lane C1, filled in):** The dropper tutorial position is a new server stamp, the Player attribute `WE_DropperPos` (ManualDropperService). It holds the owner's ATM-side plate (`ManualDropper_Collector`), else the Training Yard plate. It is set on plot ready and kept right by the existing 2 s owner sync (hand-outs, late claims, release, rebuilt plates), and cleared when the player has no plot. It exists only while `Workspace.StreamingEnabled` is on. The `ClickDropper` step is legacy today (`TutorialConfig.LegacyAlias` maps it to Income), so the stamp only serves a legacy or unknown payload. Reversible: delete the stamp and the client falls back to waiting for the part (HEAD).
+- **STR-9:** Far-shore props stay Default, so they are rarely seen at 512. This stands unless the owner chooses Persistent.
+
+### Lane S1 (spawn, teleport, join)
+
+S1-1 Every lane-S1 behaviour change applies only while Workspace.StreamingEnabled is true (StreamPrefetch.Enabled(),
+    read on each call). That covers:
+    - RespawnLocation;
+    - the join focus and the single pre-fetched join move;
+    - PlotAssigned after the move;
+    - the conditional 0.5 / 2 / 5 s kit heal;
+    - no fall rescue while paused or while a move is in flight;
+    - the throttled fall toast.
+    With it false, the join, TeleportToPlot, the hand-out, the late claim and FallSafety behave exactly as at HEAD
+    0a04776: two teleports with the 0.35 s / 1.0 s re-applies, four kit rebuilds, PlotAssigned before the move, and a
+    toast on every rescue. In the headless stand-in the streaming-off event logs of HEAD and this lane are identical.
+    Why: the lane ships before the switch (lane Z), and turning streaming off again gives back the exact old join.
+    Reversible: drop the Enabled() checks to use the new join with streaming off too.
+
+S1-2 No stacked retries while streaming is on. The 0.35 s / 1.0 s blind re-applies are replaced by one settle check
+    0.6 s after a far move (StreamingConfig.SettleCheckSeconds).
+    - The move is re-applied once, and only when the character is back within NearStuds (64) of where it started
+      and more than 64 from the target, i.e. the spawn or physics undid the pivot.
+    - A player who walked away is never pulled back.
+    - Whether the engine ever undoes a pivot made right after a spawn is a device check (the old retries assumed it).
+
+S1-3 StreamPrefetch.PivotTo keeps at most one move in flight per player. A second call while the first is
+    pre-fetching re-targets it: the newest target wins, and it is pre-fetched again when it is more than NearStuds from
+    the fetched spot (at most 3 rounds). Every caller's OnDone runs once, after the single move.
+    - A move shorter than NearStuds (64 = StreamingMinRadius) makes no pre-fetch and happens inside the call.
+    - A RequestStreamAroundAsync that throws is pcall'd and warned, and the move still happens (as in the docs'
+      teleport example).
+    - A request that never returns (it should, after its timeout) makes the flight stale after 3 x timeout + 5 s
+      (20 s by default). The next move then starts afresh and takes over its callbacks, and FallSafety stops waiting
+      for it.
+
+S1-4 FallSafety, while streaming is on:
+    - no rescue while player.GameplayPaused (the client is waiting for its ground, not falling);
+    - no rescue while a StreamPrefetch move is in flight;
+    - the toast goes through NotifyThrottled with StreamingConfig.FallToastCooldown = 8 s.
+    GameplayPaused is set by the client. A client that fakes it only turns off its own fall rescue; the SafetyCatch
+    floor still holds it.
+
+S1-5 F18 (join rebuilds, streaming on only):
+    - The kit is always rebuilt at join (the first pass).
+    - The 0.5 / 2 / 5 s passes rebuild only when the base needs healing: an owned L1+ structure with no UpgradeSlot on
+      its plot, or a slot without its WE_KitGen stamp or without any WE_KitRole part.
+    - The check is read-only and walks the UpgradeSlot tag once.
+    - Map rebuilds still refresh every online player through Bootstrap's afterMapRebuild (unchanged).
+
+### Lane S2 (CombatService)
+
+S2-1 TeleportToBase still runs after every spawn (CombatService CharacterAdded, deferred). It is kept as a short safety hop
+    onto the own PlayerSpawn.
+    - While Workspace.StreamingEnabled is true it moves through StreamPrefetch.PivotTo (lane S1):
+      - A hop longer than StreamingConfig.NearStuds (64) is pre-fetched first (RequestStreamAroundAsync, 5 s timeout).
+      - It joins a move already in flight for that player (BaseService's join) instead of making a second one.
+      - The usual respawn lands on the own RespawnLocation (lane S1), so the hop is a few studs: no pre-fetch, one move.
+    - With it false the hop is HEAD's exact code (character:PivotTo(cf), at once, no velocity reset). In the headless
+      stand-in the streaming-off event logs of HEAD and this lane are byte-identical.
+    - Reversible: drop the Enabled() branch to use StreamPrefetch with streaming off too.
+
+S2-2 Every NPC Model made by CombatService.SpawnNPC is ModelStreamingMode Atomic. That covers the field NPCs, the bank
+    guards (BankRaidService), and the Ops garrisons (OpsGarrison -> SpawnNPC).
+    - It is set right after Instance.new("Model"), before any child or the Model itself is parented.
+    - It is set whatever StreamingEnabled says: the property has no effect with streaming off (ModelStreamingMode.yaml),
+      like WorldKits' Atomic clusters.
+    - Atomicity covers only the initial descendants (techniques.md). Things added after the parent (the NPCFaceGyro
+      BodyGyro, creator tags) replicate normally. They are server-physics or server-only, so a client that gets them a
+      moment later is fine.
+    - Reversible: delete the one line.
+
+S2-3 What the headless stand-in can and cannot show for F10:
+    - Today's NPC is one unanchored welded assembly. Under Improved model streaming the stand-in already keeps it whole
+      or absent at the radius edge, on HEAD as well (the docs: assemblies stream in as units).
+    - Atomic makes a measured difference in two cases:
+      - Legacy model streaming, the engine default if Improved is ever not applied: HEAD leaves a Model + Humanoid
+        shell with no parts on the client.
+      - A body whose welds broke on death (Humanoid.BreakJointsOnDeath, default true; destroyNPC runs 0.35 s later).
+    - The Model/Humanoid-before-parts arrival order under Improved (Nonatomic) is not modelled.
+    - Device check: NPCs at the edge of view never show without their body or weapon.
+
+S2-4 The lane S2 test drivers emulate one engine rule the stand-in lacks: Player:LoadCharacter spawns the character at
+    player.RespawnLocation when it is set (Player.yaml:955-966), else on a Neutral SpawnLocation. The engine picks at
+    random; the driver picks in a fixed cycle so HEAD and the candidate see the same spawns.
+    - Whether the engine honours a RespawnLocation set just before the first spawn of a session is a device check.
+    - The "far hop" tests force a spawn away from home to cover the case where it does not.
+
+### Lane S3 (vehicles)
+
+- **S3-1 (streaming2 lane S3, F8):** `VehicleConfig.Drive.Spawn.AutoSitPrefetchTimeout` is 3 s, shorter than the join's `StreamingConfig.PrefetchTimeout` of 5 s. The reasons:
+  - At `StreamingTargetRadius` 512 the whole own plot stays inside the radius from anywhere on it. In the stand-in, the longest home auto-sit move is 439 studs (a car, from the far plot corner), which is under 512 − 64. So the request normally returns at once.
+  - The timeout only matters on a phone that has streamed out under memory pressure. The sit waits at most this long and then happens anyway.
+  - This is reversible: it is one config number. Re-decide it after the device check (spec §6).
+- **S3-2 (F8):** The pre-fetch is made once per SPAWN, at the move target (the spot 2.5 studs above the seat where the player is put), and only when that spot is more than `StreamingConfig.NearStuds` (64) from the player's root part.
+  - Sit attempts that fall while it runs do nothing.
+  - When it returns, the whole attempt schedule (0 / 0.2 / 0.5 / 1 / 2 s) runs again, so a long request never loses the auto-sit.
+  - A request that throws is warned (inside `StreamPrefetch.Request`) and the move still happens.
+  - A request that never returns leaves the vehicle unseated with its Drive prompt (the existing fallback). There is no extra stale timer, because RequestStreamAroundAsync has its own timeout (Player.yaml).
+- **S3-3 (F8):** VehicleService calls `StreamPrefetch.Request`, not `StreamPrefetch.PivotTo`. The seat move stays `hrp.CFrame = seat.CFrame * (0, 2.5, 0)` followed by `Seat:Sit` in the same thread, and a vehicle SPAWN never re-targets a join or TeleportToPlot move that is in flight. `StreamPrefetch` is a module-table field (`VehicleService._StreamPrefetch`), because VehicleService is at Luau's 200-local limit for module locals (an extra module local fails to compile).
+- **S3-4 (F9):** `buildVehicleModel` sets `ModelStreamingMode = Atomic` right after `Instance.new("Model")`. This covers every vehicle: RequestSpawn and the `_Build` test hook. The catalog look body (`VisualAssetService.TryAttachVehicleVisual`) is attached synchronously before the first parent, so it is part of the atomic initial replication. Anything added after the spawn streams normally (techniques.md:79). Today the wreck look only recolours parts, and the Drive prompt is added in the same server step as the parent.
+- **S3-5 (F8):** Only the garage auto-sit move is pre-fetched. The anti-cheat snaps to `LastValid` move the vehicle a short way, not the player across the map. Walking up and tapping the Drive prompt is always near, because the prompt's `MaxActivationDistance` is 14.
+
+### Lane S4 (base and world models)
+
+S4-1 ModelStreamingMode Atomic, always set before the Model is first parented, on:
+    - WE_Building (HollowBuildingBuilder; built unparented, parented last, as before);
+    - the business kiosks WE_Business_<Id> (BusinessService; now built unparented and parented once whole);
+    - PlotOilPump_<n>; the static soldier rigs (MapSetup makeSoldierKit: training workers, stall soldiers, rear and sea
+      gate guards); the GateDefense guards and both AutoGun paths (catalog clone and part kit); squad units;
+    - one Model per capture zone, Territories.<TerritoryId>_Zone (marker, _Ring, _FlagPole, _Flag, plus _FlagStripe and
+      _Finial off the Home Outposts), built unparented and parented once whole;
+    - the Empire Bank: one Model named EmpireBank (was a Folder), built unparented and parented once whole.
+    Inert while Workspace.StreamingEnabled is false (default.project.json; lane Z).
+
+S4-2 The two container changes (zone Models, the bank Model) are NOT gated on Workspace.StreamingEnabled: they ship now,
+    with streaming still off, so the live game runs the new shape before the switch and lane Z stays one property.
+    - Why it is safe: every repo lookup is by tag (WE_CaptureZone, WE_Territory, WE_BankVault), by sibling from the
+      marker (TerritoryService :449 / :484 / :542 / :547, TerritoryController rescanDiamonds), by ancestor name
+      ("EmpireBank", "Territories": BankRaidService, WorldHygiene BillboardAllowAncestors, WaterConfig RoadCull), or a
+      recursive find from the plaza's parent (OpsSites FindDoor / FindBanner). No repo code reads Territories' direct
+      children. BuyPathStatic has no path pin on a moved part.
+    - Stand-in proof, streaming off: a dump of all 28,151 instances under Workspace and Players (every property,
+      attribute, tag, in tree order) is byte-identical to HEAD once the <Id>_Zone level is removed and EmpireBank's
+      class is ignored.
+    - Scratchpad drivers that read Territories' direct children (f11/build/W/w_server_driver.luau zonePart,
+      w3s2/buildBK/drv/wh_driver_bk.luau SPEC-3.5) need a recursive lookup; lane S4 has patched copies in
+      streaming2/build/S4/drv/ (identical results on HEAD and the candidate).
+    Reversible: parent the zone pieces back to Territories, and use ensureFolder("EmpireBank", root) again.
+
+S4-3 "Initial descendants" = whatever the Model holds when the server script that parented it yields. Things added after
+    parenting in the same resumption (the AutoGun's WE_TurretMarker ring, a rig's NPCLabel billboard, a guard's
+    NPCFaceGyro) replicate with the model. Things added later stream in normally (docs: atomicity is initial-only):
+    a kiosk's kit parts after a level-up (inside the same 22-stud kiosk), a gate guard's catalog visual when its first
+    insert yields (cosmetic, welded to the root). Reversible: move those additions before the Parent line.
+
+S4-4 Nested Default models stay Default (WE_Spinner inside WE_Building, BankHall inside EmpireBank): the Atomic parent
+    carries them (docs: an Atomic model's descendants stream together; only a Persistent child changes that). Left
+    Default on purpose: catalog SandbagNest / sandbag clones beside the AutoGun, the Airstrip Infra model, and the
+    far-shore Lighthouse / Freighters (F27, the owner's call); fort walls / keep / towers and rig deck / legs / pier stay
+    loose parts in Territories (spec F12).
+
+S4-5 Whole buildings cost parts at some foci. In the stand-in (3D rules, target radius 512) a phone holds:
+    - at every own spawn: unchanged (2,647-2,765);
+    - P5/P6 gap: 4,367 -> 4,959; Bank: 1,209 -> 1,358; Port: 1,318 -> 1,596; Town: 469 (unchanged);
+    - over a 64-stud grid of 3,721 foci: worst 4,394 -> 4,990 (25.0 % -> 28.4 % of 17,572), mean 1,009 -> 1,051
+      (+4 %); at 768 (the fallback radius) worst 6,742 -> 7,241, mean 2,177 -> 2,242.
+    A building that touches the radius now comes in whole (up to 273 parts) instead of in pieces. This is the price of
+    "never half-built" (spec F11). The device memory check (spec §6.1) decides; the spec §1 table's "worst focus
+    4,367 (25 %)" now reads about 4,990 (28 %). Reversible: drop Atomic on WE_Building only (the biggest family).
+
+### Lane C1 (tutorial pointers)
+
+- **C1-1:** Every lane C1 path is gated on `Workspace.StreamingEnabled`, which is a place setting. The client reads it where it matters, and at Init for the `TerritoryStateUpdate` listener. ManualDropperService reads it at Init for the plot-ready hook. With it off, TutorialController and ManualDropperService behave as HEAD 0a04776 (headless OFF event logs byte-identical, with and without the stand-in). Reversible: the lane can ship before lane Z.
+- **C1-2:** While a step's target part is not on this client, the beam ends on a client Attachment in `Workspace.Terrain` at the stamped or config position (the ObjectiveMarker pattern). There is no SelectionBox then. Stream-out is detected by `AncestryChanged` on the target, deferred, so the fallback is immediate. The swap back to the part runs on the existing 1 Hz tick, at most every `REAIM_SECONDS` (2 s), so it takes 3 s or less. An event-driven swap was not added (no extra connections). Reversible.
+- **C1-3:** ClaimBase, streaming on: the own `PlayerSpawn` part, else its config position (`PlotFrame.PlotCFrame(plotPos) * (SpawnOffset.X, 2, SpawnOffset.Z)`, as MapSetup builds it; checked equal for plots 1-6 at FaceMapCentre on and off). The plot-pad fallback is used only with streaming off (HEAD), because the pad centre is about 136 studs from the spawn.
+- **C1-4:** PadBuy, streaming on: a console on this client wins. Otherwise the stamped `WE_ConsolePos_<sid>` wins over a legacy pad for the same structure that happens to be streamed in, because the stamp is the console the server's `ConsoleLocator.Find` picked.
+- **C1-5:** Income and ClickDropper, streaming on: the nearest own tagged part on this client, unless the stamped position is nearer to the player (0.5-stud tolerance). Income's Terrain fallback needs `WE_AtmPos`, which BusinessService stamps only while `TycoonGuideConfig.Enabled` (true today). With the guide off, Income waits for the ATM part, as at HEAD.
+- **C1-6:** Outpost (F6), streaming on: the pick ranks every `TerritoryConfig.Territories` zone at its config position (MapSetup builds the marker there) with HEAD's tiers and own-gate distance. Zone state comes from the last `TerritoryStateUpdate`, else the marker's attributes when it is streamed in, else Neutral. Ties go to the lower id. While the beam is on Terrain, the tick re-ranks every 2 s, so a zone that is taken or becomes contested moves the end. On a streamed-in zone part it keeps HEAD's behaviour (re-ranked on re-aim only).
+- **C1-7:** F23 is fixed in `watchMarker`, which runs only while `TycoonGuideConfig.Enabled` (HIDE_MARKER_DRESSING, true today). Tutorial markers are targets only for unknown future steps. For those, a stream-out never re-aims (there is no position), so the beam's attachment comes back with the marker, as at HEAD.
+
+### Lane C2 (radar)
+
+- **C2-1 (lane C2, F7):** The radar marker for a revealed player this client has not streamed in is a "ping": a thin column (a Beam between two client Attachments on `Workspace.Terrain`, which never streams out) rising from the server's position. It is sized in real px from the camera (5 px wide at the base, 64 px tall, at any distance), and it is hidden by the world like any part. It has no text and no BillboardGui. A world label must keep `MaxDistance` <= 40 (CLAUDE.md), and a streamed-out character is always farther than `StreamingMinRadius` (64), so a label could never be seen. It is never `AlwaysOnTop` (a Beam cannot be). At most 5 pings (the outpost label cap), nearest first. Reversible: the look is one local table (`RADAR_PING` in TerritoryController).
+- **C2-2 (lane C2):** Everything in lane C2 is gated on `Workspace.StreamingEnabled`, so it is a no-op until lane Z. The server adds `RadarTargets` to a payload only when the viewer holds the radar and streaming is on. The client draws pings only when the payload carries that list. With streaming off, the payload, the push rate and the client reveal are HEAD's (the stand-in OFF logs, 240 payloads and the Highlight timeline, are byte-identical). Reversible.
+- **C2-3 (lane C2):** While streaming is on, a radar holder gets its own full `TerritoryStateUpdate` every 1 s (`RADAR_STREAM.PushSeconds`), so a ping is at most about 1.3 s behind. There is no new remote. A lighter UnreliableRemoteEvent would need Constants and RemoteSetup, which are outside the lane. The server tunables (`PushSeconds` 1, `MaxTargets` 16) and the client look (`RADAR_PING`) are local tables. They are candidates for TerritoryConfig and HudConfig, because lane C2 may edit only its three files.
+- **C2-4 (lane C2):** Who is revealed matches HEAD's client loop: every other living player whose HumanoidRootPart is within `RadarRevealRadius` (550) of the holder's. There is no clan or friend filter. The list is built on the server from server positions (no client input), nearest first, at most 16, Instance-free (F31: `{ UserId, Pos }`). A player this client holds keeps HEAD's Highlight (local distance) and never gets a ping. With the list present, a Highlight goes only on a character that `IsDescendantOf(Workspace)` (HEAD parked one on a streamed-out model, where it cannot draw).
+- **C2-5 (lane C2):** Pings go when:
+  - no fresh list has arrived for 5 s
+  - the radar is lost
+  - the holder has no root (dead or respawning)
+  - the revealed player leaves
+  A listed UserId this client does not know gets no ping. The stand-in models a streamed-out character as parented to nil with `Player.Character` still set. The code handles both that and a nil `Character`.
+- **C2-6 (lane C2, F22 Territory):** The contested-diamond yield treats a diamond as present only while `bb:IsDescendantOf(Workspace)` (its Parent stays set when the flag streams out). A diamond skipped while its flag was out gets the current state from the 4 Hz tick once it is back (`diamondsOut`). The stand-in showed that the literal fix alone leaves a kept local `AlwaysOnTop = false` on a contested zone after the flag streams back in. STR-5 says local writes "can be lost", so both cases are covered. Reversible.
+
+### Lane C3 (vehicle client)
+
+- **C3-1 (lane C3, streaming2):** Every lane C3 path (F13, F16, F17) is gated on `Workspace.StreamingEnabled`, which VehicleDriveClient and VehicleCombatClient read through a local `streamingOn()` where it matters. With it off, both files behave as at 0a04776: the headless OFF story logs are byte-identical to HEAD, and the 13 vehicle suites and the HUD harness (4 states × 7 viewports) give the same output. Reversible: the lane can ship before lane Z.
+- **C3-2 (F13, prompt hush):** With streaming on, a shown prompt counts as gone when `not prompt:IsDescendantOf(Workspace)`, because a stream-out parents the prompt's part to nil and leaves the prompt's own Parent set. A prompt that is gone when the player sits is forgotten, not hushed. A hushed prompt that shows again with a range above 0 (its local 0 was lost on stream-in) is set back to 0, and that range becomes the one restored when the player gets up. This relies on the engine firing `PromptShown` for a prompt that streams back in within range, which only a device can confirm (spec §6.3). With streaming off, the liveness test stays `prompt.Parent == nil`. Reversible.
+- **C3-3 (F16, late Humanoid):** With streaming on, if a new character has no Humanoid yet, VehicleDriveClient (drive binding, prompt hush) and VehicleCombatClient (vehicle HP bar) wait for it through `character.ChildAdded` with no time limit, following the HudLayout pattern. The wait ends when the Humanoid arrives, when the next character comes, or on `CharacterRemoving`. A Humanoid added to a character that has already been removed binds nothing. With streaming off, both keep 0a04776's `WaitForChild("Humanoid", 10)`, which has a timeout and so meets the CLAUDE.md rule. Reversible.
+- **C3-4 (F17, aircraft AGL ray):** With streaming on, a down-ray from an aircraft that hits nothing treats the ground as:
+  - the height of the last ground the ray hit, while the aircraft is within `Ground.LastHitRadius` (16 studs, flat distance) of that spot;
+  - otherwise `Ground.FallbackY` (0.5), the top of the desert floor (MapSetup `GROUND_TOP_Y`) and the lowest ground on the map.
+
+  A stale last hit is not trusted when both of these hold: it reads `Exit.LockAGL` (8) or less, and it is lower than the floor would read (the aircraft has just left a roof or cliff edge). The floor is used instead, so a miss can never land an aircraft or free the jump button in mid-air.
+
+  With streaming off a miss still returns `math.huge` ("ALT --"), as at 0a04776. The two values live in VehicleDriveClient's `DEFAULTS.Ground`, the module's existing default table, which `VehicleConfig.Drive.Ground` overrides key by key. VehicleConfig.luau belongs to lane S3 in this job, so the section is not mirrored there yet (a follow-up). Reversible.
+
+### Lane C4 (client misc)
+
+- **C4-1 (lane C4, streaming2):** Each lane C4 behaviour change is gated on `Workspace.StreamingEnabled`, which the files read directly:
+  - F14: the console-screen listener
+  - F19: skipping the untagged-slot walk
+  - F21: the rest-offset cache
+  - F16: dropping the 10 s give-up
+
+  With it off, the four files behave as at 0a04776. The headless OFF story logs of HEAD and the candidate are byte-identical. Two removals are not gated, because with streaming off they had no effect:
+  - The F19 label hook matched nothing: no code makes a `WE_WorkerTag` or `WE_TrainingEarnBillboard` any more.
+  - The F22 test `bb:IsDescendantOf(Workspace)` agrees with `bb.Parent` for a destroyed label.
+
+  The F21 connection bookkeeping (store, then disconnect on drop) is not gated either. It changes only the connection count. Reversible: the lane can ship before lane Z.
+- **C4-2 (F14, console screen):** While streaming is on, each console slot (`WE_Console`) listens to `ChildAdded` for its `ConsoleScreen` part and marks the billboards dirty. The next throttled pass (0.35 s) then writes the owner's line again. This covers two cases:
+  - a screen part that streams in after its plinth
+  - a screen part that comes back with the server's text, because the local `Text` write "can be lost" (STR-5)
+
+  The listener lives in `slotConns`, so it goes with the slot's other connections when the plinth streams out. With streaming off it is not connected: a screen the server re-creates at run time keeps the server text until the next state update, as at 0a04776.
+- **C4-3 (F19, the untagged fallback):** While streaming is on, `rescanUntaggedSlots` (the walk over `Bases` for `StructureId` parts without the `WE_UpgradeSlot` tag) returns at once. The tag's added signal is the only binding path, and it fires on every stream-in.
+
+  The L5 world sim has 94 tagged `StructureId` BaseParts under `Bases` and 0 untagged ones. There are three producers:
+  - MapSetup plinths, which are tagged
+  - BusinessService consoles, which are tagged
+  - HollowBuildingBuilder, which sets `StructureId` on a Model, not a BasePart
+
+  So the walk has nothing to find. With streaming off it still runs, as at 0a04776, and it could be deleted later.
+- **C4-4 (F21, spinners):** While streaming is on, a spinner part's rest offset from its pivot is taken from the first time this client sees the part, and kept in two places:
+  - the spinner's own `seen` map, which holds it strongly for as long as the spinner is tracked, so a part that streams out on its own keeps its entry
+  - a weak-keyed table, which covers a spinner Model re-tracked after its tag comes back
+
+  The weak table is best effort: Roblox can collect an Instance key that no script holds (the WeaponVisuals trackCache lesson). A part that streams back in, or a re-tracked Model whose entries survived, reuses the offset.
+
+  This assumes the server never moves a spinner part while keeping the same instance. That holds today: a level change rebuilds the building with new instances.
+
+  With lane S4, `WE_Building` is Atomic and a spinner part can no longer stream out on its own. The whole-building case turns out in step either way, so after S4 the cache only removes the dependence on whether the engine resets local CFrames.
+- **C4-5 (F16, combat late Humanoid):** A new character's Humanoid binds through `character.ChildAdded` (the HudLayout pattern) whenever it arrives, matched by class (`IsA("Humanoid")`). 0a04776 waited for the name "Humanoid" and then checked the class, which is the same for a standard character.
+
+  While streaming is on there is no time limit. The next character ends the wait, and so does `CharacterRemoving` of that same character. A late `CharacterRemoving` of the previous character leaves it alone.
+
+  With streaming off, the wait gives up after 10 s, as at 0a04776. The state lives in the existing Feel / W2 tables, because CombatController is near Luau's 200-local limit.
+- **C4-6 (F22, bank label):** The kept label counts as live only while `bb:IsDescendantOf(Workspace)`. In the stand-in, HEAD also redraws within 1 s once the vault streams back in, because the same instance returns and `WorldLabel.SetText` compares live text. The visible change is only this:
+  - no writes go into a label that has left the world
+  - the label is found again through the tag
+
+  Whether local writes survive a stream-in is a device check (spec §6.3).
+- **C4-7 (F30):** This is a comment only, at the two client rays in CombatController (the fire ray and the holstered-FIRE line-of-sight ray). They see only streamed-in geometry, and the server re-cast decides (STR-7). AimTargets.luau:404 is outside lane C4's files and was left unchanged.
+
+### Integration (lanes T, S1-S4, C1-C4)
+
+- **STR-INT-1 One commit.** The 24 files of lanes S1-S4 and C1-C4 ship together. CombatService (S2) and VehicleService (S3) require
+  `Server/Modules/StreamPrefetch` (S1) when they load; without it combat and vehicles do not load. The integrated candidate is
+  the current HEAD plus exactly these 24 files. The full gate ran on 0a04776 + 24 and again on f41bce4 + 24 (the two
+  asset-wiring commits f41bce4 and ab9245a touch none of the 24), with the same results; on ab9245a + 24 BuyPathStatic,
+  luau-lsp, the worldhook suites, the world sim, DataService and the census were re-run, again with the same results.
+- **STR-INT-2 Test harness, not game.** Lane S4 puts each capture zone in `Territories.<Id>_Zone` and makes EmpireBank a Model.
+  Scratchpad drivers that read Territories' direct children fail for path reasons only; from now on use the lane S4 copies
+  (`streaming2/build/S4/drv/t_client_driver_w_s4.luau`, `w_server_driver_s4.luau`, `wh_driver_s4_full.luau`). The original
+  tutorial client driver gives 76/2 on the candidate and the patched one 78/0 (78/0 on HEAD with either). No repo code reads
+  Territories' direct children.
+- **STR-INT-3 Stand-in connection counts.** With lane S1 in the tree the headless stand-in counts one more live connection in
+  every driver (StreamPrefetch's server-side `Players.PlayerRemoving`), because server and client share one tree there.
+- **STR-INT-4 Lane T's `stream_server_driver.luau`** sets `GameplayPaused` before its own move, so its "F3 no rescue while
+  GameplayPaused" target reads NOT MET on the candidate. With the two lines swapped (`build/S1/drv_T_swapped.luau`) HEAD is
+  NOT MET and the candidate MET (12 of 12). Driver bug, not game code.
+- **STR-INT-5 Tunables still local (follow-up, config-first).** Lane C2's `RADAR_STREAM` (TerritoryService) and `RADAR_PING`
+  (TerritoryController), and lane C3's `DEFAULTS.Ground` (VehicleDriveClient; overridable by `VehicleConfig.Drive.Ground`) live
+  in their modules because each lane could edit only its own files. Move them to TerritoryConfig / HudConfig / VehicleConfig
+  in a later commit; no behaviour change.
+- **STR-INT-6 Open outside this batch.** TutorialService's own OnProfileLoaded PlotAssigned replay still fires before the
+  pre-fetched join move while streaming is on (S1 open issue 1; C1's Terrain beam softens it). Fix in TutorialService before
+  lane Z. Lane S5 (ActivityHost Persistent, STR-4), lane C5 (WaitForChild timeouts) and lane Z (the switch) are still to come.
+
+### Lead
+- **STR-L1 Committed with StreamingEnabled still OFF.** All 24 files go together (CombatService and VehicleService require
+  StreamPrefetch at load). S5 (ActivityHost Persistent), C5 (WaitForChild timeouts) and Z (the switch, after the owner's device
+  test) come later.
+- **STR-L2 Two shape changes are live with streaming off (S4-2):** capture zones sit in `Territories.<Id>_Zone` and EmpireBank
+  is a Model. No repo code reads the old shape (integration grep + suites identical to HEAD); scratchpad drivers that did are
+  replaced by the patched copies in streaming2/build/S4/drv/.
+- **STR-L3 Radar marker:** with streaming on, a far radar ping shows as a thin beam column instead of the spec's text label
+  (C2-1). Owner call before lane Z.
