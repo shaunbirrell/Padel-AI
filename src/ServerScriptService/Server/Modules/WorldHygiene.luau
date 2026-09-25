@@ -21,8 +21,15 @@
 	  H7  No part over 2,040 studs on any axis.                                                    → check only
 	  H8  <= 24 lights outside the bases; Brightness <= 0.8, Range <= 18, Shadows off, tag WE_NightLight.
 	                                                                                  → clamp, tag, drop extras
-	  H9  CastShadow only on parts >= 8 studs; <= 300 casters outside the bases.                          → set
-	  H10 Streaming structure: no dressing Model wider than 64 studs.                              → check only
+	  H9  CastShadow only on parts >= 8 studs; <= 300 casters outside the bases. W3 step 2: a flat dressing marking
+	      (no collision, top <= 0.75: a HoldPad disc, a Runway strip, paving) never casts a shadow.        → set
+	  H10 Streaming structure: no dressing Model wider than 64 studs (W3 step 2: a POI's Infra Model — the runway
+	      strips, attribute WE_Infra — is exempt; it is flat and never streams as one piece).        → check only
+
+	W3 step 2 (spec w3s2 §1.2, §6 lane P): a part carrying WE_RuntimeDoor = true (WorldConfig.Activity.RuntimeDoorAttr:
+	BankGate, HeistGate, BunkerDoor — the jobs raise and lower it at runtime) is left alone: never an H2 / H3 hit, never
+	made solid by H4, never reported as H2 / H4. Its whole kit still goes when another part of that kit breaks a rule.
+	Flat markings (HoldPad, Runway, PaveTile) are never H2 / H4 by construction: Rules.FlatMarking names the test.
 
 	Enforce acts ONLY inside the dressing folders (Hygiene.DressingFolders: WorldDressing, DesertFlora, and W3's
 	WorldPOI / WorldKits). Everything else outside the bases (Map, Territories, spawns, MapSetup blocks) is reported,
@@ -101,6 +108,10 @@ local RULES = { "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10" }
 local ELEMENTS_ATTR: string = (H :: any).ElementsAttr or "WE_Elements"
 -- W3: H1 units per WE_Anchor class (informational, Report.Census "Anchor_<class>")
 local ANCHOR_CLASSES = { "poi", "road", "junction", "water", "natural", "none" }
+-- W3 step 2: a POI's Infra Model (WorldPOI; exempt from H10) and the runtime doors (left alone). Read loosely so the
+-- module type-checks whether or not WorldConfig names them
+local INFRA_ATTR: string = (H :: any).InfraAttr or "WE_Infra"
+local RUNTIME_DOOR_ATTR: string = ((WorldConfig :: any).Activity and (WorldConfig :: any).Activity.RuntimeDoorAttr) or "WE_RuntimeDoor"
 
 -- ── small helpers ────────────────────────────────────────────────────────────
 
@@ -341,9 +352,19 @@ function Rules.RoadExempt(part: Instance, stop: Instance?): boolean
 	return ROAD_EXEMPT_NAMES[part.Name] == true or attrUp(part, "WE_AllowOnRoad", stop) or underNames(part, ROAD_EXEMPT_ANC, stop)
 end
 
+-- W3 step 2: a gate / door part the jobs move at runtime (WE_RuntimeDoor): the rules leave it alone
+function Rules.RuntimeDoor(part: Instance): boolean
+	return part:GetAttribute(RUNTIME_DOOR_ATTR) == true
+end
+
+-- W3 step 2: a flat marking lying on the floor (HoldPad disc, Runway strip, paving): no collision, top <= RoadMinTop
+function Rules.FlatMarking(part: BasePart, b: Box): boolean
+	return not part.CanCollide and b.Y1 <= H.RoadMinTop
+end
+
 -- H2: nil or the reason
 function Rules.H2(ctx: Ctx, part: BasePart, b: Box): string?
-	if b.Y1 <= H.RoadMinTop then
+	if b.Y1 <= H.RoadMinTop or Rules.RuntimeDoor(part) then
 		return nil
 	end
 	local gap = roadGap(ctx, b)
@@ -394,9 +415,9 @@ function Rules.H3(ctx: Ctx, b: Box): (string?, boolean)
 	return nil, false
 end
 
--- H4: a visible man-made cover part that should collide
+-- H4: a visible man-made cover part that should collide (a runtime door decides its own collision)
 function Rules.H4Candidate(part: BasePart, b: Box, stop: Instance?): boolean
-	if part:IsA("MeshPart") or part.Transparency >= 0.9 then
+	if part:IsA("MeshPart") or part.Transparency >= 0.9 or Rules.RuntimeDoor(part) or Rules.FlatMarking(part, b) then
 		return false
 	end
 	if b.Y1 - GROUND_TOP_Y < H.SolidMinHeight then
@@ -450,9 +471,13 @@ function Rules.H8(light: Light): string?
 	return if #bad > 0 then table.concat(bad, ", ") else nil
 end
 
-function Rules.H9(part: BasePart): boolean
+-- H9: a caster smaller than ShadowMinSize; with the part's box (dressing only), also a flat marking casting a shadow
+function Rules.H9(part: BasePart, b: Box?): boolean
+	if not part.CastShadow then
+		return false
+	end
 	local s = part.Size
-	return part.CastShadow and math.max(s.X, s.Y, s.Z) < H.ShadowMinSize
+	return math.max(s.X, s.Y, s.Z) < H.ShadowMinSize or (b ~= nil and Rules.FlatMarking(part, b))
 end
 
 WorldHygiene.Rules = Rules
@@ -778,8 +803,8 @@ function WorldHygiene.Report(root: Instance, opts: Opts?): Report
 				end
 				if d.CastShadow then
 					rep.Census.ShadowCasters += 1
-					if Rules.H9(d) then
-						addViolation(rep, "H9", path, "small shadow caster", x, z)
+					if Rules.H9(d, if isDressing then b else nil) then
+						addViolation(rep, "H9", path, if Rules.H9(d) then "small shadow caster" else "flat marking casts a shadow", x, z)
 					end
 				end
 				if d.CanCollide and d.Transparency >= 0.95 and not isV2 then
@@ -793,7 +818,7 @@ function WorldHygiene.Report(root: Instance, opts: Opts?): Report
 				end
 				if isDressing then
 					local zone, wet = Rules.H3(ctx, b)
-					if zone and not (wet and attrUp(d, "WE_AllowInWater", root)) then
+					if zone and not (wet and attrUp(d, "WE_AllowInWater", root)) and not Rules.RuntimeDoor(d) then
 						addViolation(rep, "H3", path, zone, x, z)
 					end
 					if Rules.H4Candidate(d, b, root) and not (d.CanCollide and d.CanQuery) then
@@ -833,9 +858,9 @@ function WorldHygiene.Report(root: Instance, opts: Opts?): Report
 		end
 		if isDressing then
 			rep.DressingParts += topParts
-			-- H10: dressing Models wider than MaxModelSpan
+			-- H10: dressing Models wider than MaxModelSpan (a POI's flat Infra strips are exempt)
 			for _, d in ipairs(all) do
-				if d:IsA("Model") then
+				if d:IsA("Model") and d:GetAttribute(INFRA_ATTR) ~= true then
 					local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
 					for _, q in ipairs(d:GetDescendants()) do
 						local qb = if q:IsA("BasePart") then boxes[q] else nil
@@ -1035,7 +1060,7 @@ local function enforceFolder(folder: Instance, ctx: Ctx, actions: { [string]: nu
 		return false
 	end
 	for _, p in ipairs(parts) do
-		if not isDoomed(p) then
+		if not isDoomed(p) and not Rules.RuntimeDoor(p) then
 			local zone, wet = Rules.H3(ctx, boxes[p])
 			if zone and not (wet and inWaterAllowed(p)) then
 				doom(p, "H3", if wet then inWaterAllowed else noProtection)
@@ -1062,9 +1087,9 @@ local function enforceFolder(folder: Instance, ctx: Ctx, actions: { [string]: nu
 		end
 	end
 
-	-- H9: no small shadow casters
+	-- H9: no small shadow casters, no flat marking casting a shadow
 	for _, p in ipairs(parts) do
-		if not isDoomed(p) and Rules.H9(p) then
+		if not isDoomed(p) and Rules.H9(p, boxes[p]) then
 			p.CastShadow = false
 			actions.H9 += 1
 		end

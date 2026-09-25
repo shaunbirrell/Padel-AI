@@ -2167,3 +2167,534 @@ Q-9  The formation test's camera model is taken from the PlayerModule defaults a
 - **B1-L2 Accepted as shipped:** the console NEXT tag follows the tutorial step (G-6, undo `Chevrons.FollowTutorial =
   false`); squad FollowPath on + wing swap (Q-3/Q-4); prestige is now exactly +10 % per rebirth on passive income and
   training (the old code applied it twice).
+
+## 2026-09-25 — World step 2 phase A: 17 places (enable step 1 on), bank findable, Missions GO + objective marker, supply crates, checkpoint anchors
+
+# W3 step 2 Phase A — merged ASSUMPTIONS (for the lead to append to ASSUMPTIONS.md; all reversible)
+
+Integration verifier, HEAD 56c0627. Order: spec §9 lines that Phase A makes true, then the integration's own lines,
+then every lane's file verbatim (L0, K, P, D1, D2, D3, F, M0, U0). Nothing here was tested in Roblox.
+
+## Spec §9 lines made true by Phase A (the rest land with Phase B / C)
+- §9.2 One anchor system: `WE_ActivityAnchor` Attachments, ids `<POI>.<Site>.<Role>`; OpsProps / `WE_OpsProp` dropped.
+- §9.5 Checkpoint garrison template = Booth, Alarm, G1, G2 + alarm reinforcements R1/R2 (Probe); all 12 checkpoints carry it.
+- §9.7 Supply crates are 2 parts; MaxActive 2; lifetime 120 s.
+- §9.8 World sign budget is 17 (pool pads stay labelled until lane BK removes them).
+- §9.9 The four `WE_OwnerLight` PointLights are removed (world lights 13 → 9 with every POI off).
+- §9.10 The Port rectangle starts at Z0 1150.
+- §9.11 LowShare 0.75 for the small POIs.
+- §9.12 Camp sandbags are exempt from their own camp's NPC-anchor keep-out; the camps are in enable step 1.
+- §9.13 The P0 bank cooldown is stored in `profile.Raid.BankCooldownUntil` (no schema edit).
+- §9.22 Reserved anchors (Depot/Oil trucks, Armory bunker, Airstrip hangar, Oasis well) are built but are not jobs.
+- Not yet true (lane BK, deferred): §9.3 bank hall + StateBanner, §9.4 BankGate raised.
+
+## Integration (INT)
+INT-1. Enable step 1 (Port, Depot, Armory, OilField, RigA, RigB, Quarry, RidgeCamp, DuneCamp) is ON in WorldConfig.
+       Steps 2 (Signal, Airstrip, Radar, FortI, FortS) and 3 (Ruins, Crash, Oasis) stay OFF until lane BK removes the
+       4 pool-pad "Garage" labels: with step 2 on the world needs 18 signs for a budget of 17 — in the live startup
+       order (BankRaidService.Init paints first) the AIRSTRIP board is refused, in the other order EMPIRE BANK is refused
+       (census s2_full_t_audit); step 3 adds RUINED VILLAGE, CRASH SITE and OASIS (all refused). Every other check passes
+       at steps 2 and 3, so the flip is the only change needed after BK (swap the 5 "waits for lane BK" BuyPathStatic
+       needles to Enabled = true). Revert step 1: set the 9 rows back to Enabled = false and drop the step-1 needle.
+INT-2. TerritoryService/init.luau line 17: `ReplicatedStorage:WaitForChild("Shared", 60)` (was unbounded; the lane gate
+       forbids an unbounded WaitForChild in a changed file). Pinned must_not_contain `WaitForChild("Shared")`.
+INT-3. WorldConfig.luau: lane 32's `Terrain.Toe` block is kept where HEAD 56c0627 has it (after `Side`); the working
+       tree had it moved above `Ring` by a merge. Same table, same values; the committed diff shows only L0 + INT-1.
+INT-4. P-verifier's `V-npcpost-clear` (AABB, 1.5-stud threshold) flags the 10 legacy camp posts at 0.73–1.40 from their
+       sandbags; the exact oriented-box distance is 1.90–1.99 (integ/postclear.py) and P-anchor-clear / D3-clear-all
+       pass. Treated as a false positive of that check, not a defect.
+INT-5. U0-6 (the objective marker is screen-px sized with no MaxDistance, AlwaysOnTop) is accepted as the ONE active
+       objective marker CLAUDE.md allows; the "stud-scaled, MaxDistance ≤ 40" rule is read as applying to world labels
+       other than that marker. Lead to confirm when appending.
+INT-6. L0's aa_driver "layout-stub" checks (3) now fail by design: D1–D3 replaced the empty POILayouts stubs.
+       The u0_cycle state's "console GO clears the marker" check fails by design until Phase B patches ConsoleWaypoint.
+
+
+## Lane L0 (verbatim: build/L0/assumptions.txt)
+
+```
+W3 step 2, lane L0 (contracts): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible.
+
+L0-1. The South Port footprint starts at Z0 1150 now, as the spec says, and not at its enable step. A disabled POI
+      footprint is still a keep-out for the travel dressing, so this moves some Full-quality natural scatter clusters
+      (flora, rocks, stumps) into other scatter slots: 4 clusters with FaceMapCentre = true, 10 with false. Cluster
+      and part counts do not change, Low quality is identical and every check passes. Revert: set the Port row's
+      Z0 back to 1180. With 1180 the world dumps match HEAD exactly (control run B/world/x_*).
+L0-2. ActivityAnchors is also the single writer. Stamp, FromRow and FromTemplate let WorldPOI (P) and MapSetup (BK)
+      write the same attributes and the same position rules. The reader API (List(site?, kind?), Get(id)) is the one
+      the spec gives. List(site) also accepts a bare POI id ("Port") and returns the whole place.
+L0-3. The anchor attributes use the WE_Activity* prefix: Id, Site, POI, Role, Kind, Yaw, R, Prompt, BoxW, BoxL and
+      Probe. WE_Anchor* is never used, because the H1 cluster attributes already use it. The door attribute is WE_Part,
+      as the spec says.
+L0-4. An anchor's world position is on the standing surface: WorldConfig.Activity.FloorY 0.5 plus the row's Y (0 is the
+      ground, 14 a watchtower deck, 1.1 the bank plaza). Prompts and labels add their own lift.
+L0-5. The checkpoint site segment is the checkpoint cluster's Id. A POI with a single checkpoint names that cluster "CP":
+      D1 renames Port CP_Port, RigA CP_Rig and RigB CP_Rig; D2 renames Signal CP_S. Every Checkpoint kit, the rig
+      checkpoints included, gets all 6 template anchors. The rig rule ("3 posts, no alarm") is applied in OpsConfig,
+      which does not use the rig's Alarm, R1 or R2.
+L0-6. The template's R1 and R2 face the checkpoint (local Yaw 180) and carry Probe = true, so they are clearance-checked
+      at runtime (spec §1.3).
+L0-7. Town.Market.Box is at (-81, -169.3), 1.8 studs in front of the NW_Stall_1 counter. It is kind "search" with R 5
+      and a hold prompt, and it Requires NW_Stall_1.
+L0-8. The bank's 10 anchors are config rows in WorldConfig.Town.BankAnchors, which BK stamps on BankPlaza. Posts on
+      the plaza have Y 1.1. Guards face Bank Street (Yaw 180), R1 faces west (Yaw 90) and R2 faces east (Yaw -90).
+      Until BK lands nothing stamps them, and BankRaidService keeps its fallback posts.
+L0-9. Ids the spec's rename list did not cover: RigA.Pier and RigB.Pier become RigA.Deck.Pier and RigB.Deck.Pier (site
+      "Deck" is the Storm-the-Rig job). Ruins.Holdout.Ring is kind "hold" with R 30 (the draft had kind "arena").
+L0-10. The step-2 kit Specs follow the geometry model (geo/kits.py). CargoPlaneWreck was reserved and unused, so it is
+      replaced by PlaneWreck (nose 3 / mid 4 / tail 2 parts). HoldPad, PipeRun, Terminal, ActivityHost and Runway are
+      new rows. Step stays 2 for all of them.
+L0-11. TownBlock "hall" has exactly 7 parts at Storeys 2 with no Roof or Lantern: 5 walls around a centred opening
+      min(10, Width - 8) wide, plus a roof slab with the parapet, plus 1 window strip. This matches geo/bank.py. "roller"
+      adds 0 parts over the door. "metal" changes colour and material only.
+L0-12. KitSpec gains Variants (the exact part count for each variant) and KitOpts gains R (HoldPad) and Taxiway (Runway).
+      These are type-only changes, and no step-1 behaviour changes.
+L0-13. PoiBoard rows in the POI layouts leave Text nil. The board text is POILayout.Board, which WorldPOI fills the way it
+      fills Town.BoardText. The drafts' Text = BOARD (a boolean) does not type-check.
+L0-14. The palette gains Metal, MetalDark, Aluminium, RadarWhite, Canvas, PalmTrunk, PalmFrond, Asphalt, RunwayPaint,
+      PadPaint and PondWater. Kits gains HoldPad = { R 10, 3 .. 24, Top 0.13 }, Runway = { Width 40, Top 0.12,
+      TaxiwayWidth 20 } and WatchtowerDeckY = 14. All of these are for lane K, which may ignore them.
+```
+
+## Lane K (verbatim: build/K/assumptions.txt)
+
+```
+W3 step 2, lane K (kits): ASSUMPTIONS.md lines (all reversible; the lead merges them into ASSUMPTIONS.md).
+
+K-1. Owner feedback #29 ("the checkpoint booth is taller than your avatar") applies to the world Checkpoint kit as well
+     as the base gate: the booth is 7 tall (was 5; roof top 7.4) with its window and sign raised to eye height. Its
+     footprint (x 15.5 .. 19.5, z -0.2 .. 4.2), the part count (8) and the kit AABB (36.3 x 12.9 x 11.9) are
+     unchanged, so the checkpoint anchor template clearances hold (re-checked at 5 yaws: 1.5 minimum). The 4 Town
+     checkpoints change look (16 parts resized / moved, 0 added). Revert: the 4 numbers in Builders.Checkpoint.
+K-2. The world Watchtower follows the owner's base-tower fix: 8.5 studs clear above the deck (TOWER_HEADROOM), a roof
+     with no collision (heads, jumps and the Poppercam never catch on it), and a climbable TrussPart ladder at the
+     back that tops out 2 above the deck (step off without jumping). The deck stays at Kits.WatchtowerDeckY (14) and
+     stops at z 2 so the ladder rises beside it; the kit is 9 x 23 x 9 (the geometry plan said 21 tall; its XZ
+     footprint is unchanged). 8 parts: 4 legs to the roof, deck, front half-wall, roof, ladder.
+K-3. HeistGate (CompoundWall "gate") and BunkerDoor are built CLOSED: collidable, WE_RuntimeDoor = true,
+     WE_GateState = "closed" (attribute names from WorldConfig.Activity). The HeistGate is 16 x 4.4 x 1.2 steel
+     (DiamondPlate) on the wall line (z 0 .. 1.2). Phase B (OpsService) opens them; in Phase A the Port yard is still
+     reachable over its chest-high walls.
+K-4. WireFence collides (nobody walks through a fence) and is 45 % see-through; Specs Solid is now true. It is not H4
+     cover ("Wire" is a soft keyword).
+K-5. Runway: opts.Taxiway is a WORLD rect { X0, X1, Z0, Z1 }, built axis-aligned; without it the 5th part is a
+     touchdown aim marking, so the count is always 5. Length is clamped 200 .. 2000. Footprint(Runway, { Taxiway })
+     keeps the rect in world terms (the count is right; its extents are not pivot-relative).
+K-6. PipeRun Length > 64 spans more than a cluster may (H10), so Finish refuses it; the layouts use Length 40.
+K-7. Specs sizes are the measured default builds: PlaneWreck 34.2 x 10 x 22 (nose 12 x 10 x 26, tail 7.3 x 12 x 18;
+     the plan said the tail was 10 wide), HeliWreck 9.7 x 5.7 x 24, Tent 7.8 x 4.9 x 9, Pumpjack 4 x 9.9 x 14,
+     PipeRun 40 x 1.8 x 1.8, Watchtower 9 x 23 x 9. Every new kit's XZ footprint stays inside the geometry model
+     (w3s2/geo/kits.py) within 0.13 studs, and its shadow casters are <= the model's.
+K-8. TownBlock "hall": back wall, 2 side walls (between the piers and the back wall, so no faces z-fight) and 2 front
+     piers round a centred full-height opening clamp(W - 8, 4, 10) wide, all 1.2 thick and collidable; 1 roof slab
+     carrying the parapet (the block's one shadow caster; Roof "bare" = a thinner flush slab); the usual window strips.
+     "hall" ignores "damaged", "shop" and "roller"; a Lantern sits on the pier. "metal" = Metal material + Palette.Metal
+     walls (opts.Color still wins). "roller" = one min(12, W - 6) x 5.6 roller door (>= 4 wide) instead of the door.
+K-9. ContainerStack Count 4 / 5 keep the front row's top container (15 tall); the plan modelled them 7.5 tall. No
+     layout uses 4 or 5.
+K-10. Specs.Variants counts per unit for Count / Length kits (DrumGroup "fire" = 1 per drum, so 3 at the default
+     Count 3), as the L0 contract says.
+K-11. No kit adds a light, particle, Fire, Beam or GUI: the "fire" drums are scorched drums, the flare stack's flame is
+     a painted ball (the spec's particle budget has no room for them).
+K-12. The Hangar has a flat collidable roof (12.9 clear inside, 11.5 under a yellow lintel) so the phone camera pulls in
+     under it instead of showing the roof top.
+K-13. The Palm's crown is centred over the pivot (the trunk foot sits 1.3 x Scale toward +X), inside the model's
+     10 x 10 footprint.
+K-14. (adversarial verifier) Runway paint (centre line, thresholds, aim point) stands 0.06 proud of the asphalt, as the
+     road dashes do (was 0.02: a gap that thin flickers on phone depth buffers at airstrip viewing distance). The asphalt
+     and the taxiway slab are Runway.Top - 0.06 thick; the top stays Runway.Top (0.62 world); 5 parts, no collision.
+K-15. (adversarial verifier) Fountain "well": the 2 posts are 4.8 tall (were 4.6) so their tops no longer lie in the
+     winch beam's top plane (coplanar faces flicker). The well is 5.4 x 4.8 x 5; 4 parts; the XZ footprint is unchanged.
+```
+
+## Lane P (verbatim: build/P/assumptions.txt)
+
+```
+W3 step 2, lane P (platform): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible.
+
+P-1.  Dockside goes with the built Port. MapDressing skips the legacy DocksideDressing quay kit once WorldPOI reports
+      the Port row Built (at least one cluster), not merely Enabled: an enabled Port that builds nothing (missing
+      layout rows) keeps the old quay kit, so the harbour is never bare. Revert: test WorldConfig Enabled instead.
+P-2.  Camp exemption scope. An NPC spawn anchor inside a POI footprint of Kind "camp" belongs to that camp
+      (WorldDress.Zones: Circle.Owner). With AllowPOI = that camp, every cluster of the camp (not only the sandbags)
+      may stand at its own anchors, exactly the geometry model's rule (geo/zones.py OWN_NPC). Every other place and the
+      travel dressing still keep 10 studs out. Today only the sandbag lines stand near the posts.
+P-3.  The ActivityHost cluster (every kit Class "anchor") passes WorldDress.Blocked with the default 13-stud road
+      clearance (not the 30-stud block rule), may sit over an event anchor, and is not added to the occupancy. This is
+      the geometry model's rule (check.py role "anchor"); RigA / RigB hosts stand 20 from a road line.
+P-4.  Flat markings (every part non-colliding, top <= 0.75: PaveTile, HoldPad) over an event anchor are re-tested with
+      the new BlockOpts.SkipEvents (every other keep-out still counts). The step-1 Town rule dropped only the first
+      reason when it was an event anchor; the Town's result is unchanged (B1 dumps identical).
+P-5.  InWater = true clusters skip only the water keep-out (AllowWater) and carry WE_AllowInWater (Waterways cull, H3).
+      There is no runtime "crane legs on land" check; the geometry model checked the drafted positions.
+P-6.  Infra rows (the airstrip runway) build first, in both qualities, and count against the POI's cap and Low share, as
+      the geometry model counted them. They form one Model POI_<Id>.Infra carrying the H1 cluster attributes plus
+      WE_Infra = true. Each strip must be flat (no collision, top <= 0.75), inside the footprint, clear of every zone
+      (tested as discs along its long side; the road corridor and event anchors ignored) and carry no light or sign,
+      or it is skipped and warned.
+P-7.  The WE_Infra attribute is a literal in WorldPOI and WorldHygiene, read loosely through
+      WorldConfig.Hygiene.InfraAttr (not in the config yet; the lead may add InfraAttr = "WE_Infra").
+P-8.  Terrain rubble at a layout place: seed = Town.Seed hashed with the POI Id (stable in the sim and live); the
+      per-place prim cap is Town.MaxTerrainPrims (40); a rock's centre stays inside a rect footprint and its disc inside
+      a circle footprint (the geometry model's rule; the Town's rocks all pass it, no change).
+P-9.  Town anchor rows host on the first part of a kit with no mesh overlay in the cluster they Require (a refinement
+      of "the first BasePart in build order" so a deferred overlay can never replace the host). NW_Stall_1 -> the
+      StallCounter, as the contract says.
+P-10. An anchor row is skipped and warned when its id is not of this place, its Requires names no cluster of this
+      place, it lies outside the footprint, or its id was already stamped at this place. A row whose Requires cluster
+      was not built (Quality Low: Tier 2; or a cluster skipped and already warned) is absent without a new warning and
+      counted in POISummary.AnchorsAbsent. The checkpoint template's R1 / R2 (Probe) may lie outside the footprint.
+P-11. Only the first Checkpoint kit in a cluster gets the template (ids are per cluster); a second one is warned.
+P-12. Summary changes: POISummary.Budget is now the Full cap (Budget - Reserve; the Town stays 370); new fields
+      POISummary.Anchors / AnchorsAbsent and Summary.Anchors; one extra Output line per place with anchors
+      ("[WAR EMPIRE] WorldPOI: <q> <Id> activity anchors N stamped, M absent"). The existing summary line is unchanged.
+P-13. WE_RuntimeDoor (WorldConfig.Activity.RuntimeDoorAttr) in WorldHygiene: such a part is never an H2 or H3 hit, never
+      made solid by H4 and never reported as H2 / H4. H5 (no Neon) and H9 (shadows) still apply to it, and it still goes
+      with its kit when another part of that kit breaks a rule, or with an H1 orphan cluster.
+P-14. H9 now also covers flat dressing markings (no collision, top <= RoadMinTop: hold pads, runway strips, paving):
+      they never cast a shadow (Enforce clears CastShadow; Report lists it). Outside the dressing folders only the old
+      small-caster rule is reported. Rules.FlatMarking names the test; H4 skips flat markings explicitly (it already did
+      by height).
+P-15. The capture flags' WE_OwnerLight is removed with no replacement light; a leftover one on a flag is destroyed on
+      the next marker refresh. The painted flag, stripe and nation diamond show the owner.
+P-16. Step-2 kit counting: a kit with a builder counts WorldKits.Footprint(kit, opts).Parts (step 1 or 2); a kit with no
+      builder counts 0 (WorldKits.Add builds nothing for it); a step-1 kit whose Footprint fails still counts PartsMax.
+```
+
+## Lane D1 (verbatim: build/D1/assumptions.txt)
+
+```
+W3 step 2, lane D1 (data: POILayouts/Industry): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible
+(revert = the geometry draft's value, w3s2/geo/luau/POILayouts_Industry.luau / geo/layouts.py).
+
+D1-1. Anchor spots corrected against the real lane K builds (contract §1: every non-Probe anchor >= MinClear 1 from a
+      collidable part). The draft typed several anchors in world studs without the cluster's yaw, or on a part:
+      - Port.Customs.Vault (276,1183) -> (267,1192): the centre of E_Cargo's painted HoldPad (cluster yaw 90 puts the pad
+        at local (0,-9) -> world (267,1192)); the ring players see and the job's zone now coincide (R 7).
+      - Port.Customs.Gate (250,1193) -> (246,1195), Yaw -90: outside the yard, 2 studs in front of the HeistGate (the draft
+        spot was 0.8 behind it, inside the yard).
+      - Port.Customs.Loot (276,1195) -> (273.5,1192), Yaw -90: on the pad, 2.5 studs in front of the crates (was 0.46).
+      - Armory.Cache.Loot (1292,172) -> (1297,174), Yaw 90: 2.3 east of the arms crates, facing them (was 0.19).
+      - Armory.Bunker.Door (1420,175) Yaw 0 -> (1420,173.5) Yaw 180: 2 studs in front of the blast door (was 0.5).
+      - OilField.Pumps.Pump1..4 moved off the pumpjack centre (0 clear) to 2.7 beside the base on the field side,
+        facing the pump: (1112,876) Yaw 0, (1182,966) Yaw 0, (876,1112) Yaw 90, (966,1182) Yaw 90; the pump stays inside
+        the R 5 zone.
+      - RigA/RigB.Deck.Pier (±1660, ∓750) -> (±1655, ∓750): the draft spot lay on MapSetup's <Rig>_RampApproach slab
+        (x 1659..1689, 0 clear); now on the sand 4 studs inland of the stair landing.
+D1-2. A door anchor faces its door part (the Town bank's Door convention): Port.Customs.Gate faces east, Armory.Bunker.Door
+      faces south.
+D1-3. Prompt = "hold" marks every anchor where the merged job table (spec §1.7) names a hold: breach (Port.Customs.Gate,
+      Armory.Bunker.Door, as drafted), start (Depot.Fuel.Pump "Start siphon", Armory.Cache.Vault "Start crack"), grab
+      (Port.Customs.Loot, Armory.Cache.Loot) and plant (OilField.Pumps.Pump1..4). Crack rings that start on breach
+      (Port.Customs.Vault) stay prompt-less like the bank Vault; reserved spots (trucks, valve) have none. OpsService
+      (lane O) may override from OpsConfig. D2 / D3 should follow the same rule so the three groups read alike.
+D1-4. The customs yard is closed on foot except through the HeistGate (0 parts added: Port stays 129 / 132 Full, 76 Low):
+      E_YardN / E_YardS move 2.8 west (x 267.2) so they meet the west wall, and the customs shed E_Customs moves to
+      x 292.2 and widens 30 -> 38 so it meets both wall ends (the draft left a 2.8 gap at each west corner and a 5-stud
+      gap at each east corner). Port.Customs.G1 moves from (288,1212), now inside the shed, to (280,1210), the yard's
+      south-east corner. The walls are still chest-high (3.0 .. 3.9; a jump clears them), so Phase B must gate the crack
+      by job stage, not by physical access.
+D1-5. Depot N_Watch1 stays Tier 1 (as drafted), so the tower post Depot.Fuel.G1 (deck Y 14) exists at Quality Low too;
+      spec §4's "Depot Fuel: 2 on Low (the tower post needs Full)" is conservative - lane O can reserve 3 on both.
+D1-6. OilField.Pumps.G1..G3 keep the draft positions (spec §1.5 renames them only): they guard the manifold and yard,
+      150-300 studs from the pumpjacks. Lane O may want wave points or posts nearer the pumps.
+D1-7. Armory.Cache.G1 / G2 keep the draft positions, which are beside (not behind) the gun pits, 6.2 studs from the
+      sandbags; only the comments were corrected.
+D1-8. Board texts are the TerritoryConfig capture names in capitals (SOUTH DOCKS, WEST DEPOT, EAST ARMORY, OIL FIELDS), as
+      drafted, not the WorldConfig POI Names ("South Port", "West Supply Depot", "Oil Field"): the board matches the
+      capture label players already see there.
+D1-9. The reserved vehicle box Depot.Fuel.Truck shares its centre with the Depot.Fuel.Pump ring (as drafted): whoever
+      spawns the tanker later must first check the ring is empty.
+```
+
+## Lane D2 (verbatim: build/D2/assumptions.txt)
+
+```
+W3 step 2, lane D2 (data, POILayouts/Frontier.luau): lines for ASSUMPTIONS.md. The lead merges them; all reversible.
+
+D2-1. Console anchors are standing spots. Airstrip.Tower.Console, Signal.Relay.Console and Radar.Uplink.Console stand
+      in front of the Terminal's screen (the kit's -Z side), never inside the desk (WorldConfig.Activity.MinClear: "no
+      anchor within 1 stud of a collidable part"; the spec's checkpoint Alarm console follows the same rule). To keep
+      the spec's console coordinates ((662, -1318), (-196, -1300), (-1068.9, -945.8)), each Terminal kit moves 2.5
+      studs back inside its cluster (KitPlace Z = 2.5) instead of the anchor moving. The anchor is now 1.5 clear of the
+      desk. The Signal relay HoldPad (R 6) stays concentric with its console anchor. At the Airstrip the desk's sandbag
+      arc is at the player's back (2.4 clear). No part count changes.
+      Revert: set the Terminal back to Z = 0 and move each anchor instead (lane K's suggested spots in
+      build/K/ctx/anchor_clearance.txt).
+D2-2. The Airstrip tower uplink gets its own 2 posts (L0 contract §9 open issue 3): Airstrip.Tower.G1 (671, -1336), beside the
+      tower's west wall (3.0 clear), and Airstrip.Tower.G2 (689, -1336), beside the tower's east wall (3.0 clear). Both
+      posts stay outside the console's R 6 zone (20.1 and 32.4 studs away), so a guard never stands in, and a wave
+      that falls back to "the nearest post" never spawns inside, the ring the player holds. (Verifier fix: the builder's
+      G2 at (667, -1318) was 5.0 from the console, inside R 6.) The tower cluster is Tier 1, so the posts exist on Low too.
+      The anchor counts change: Airstrip goes from 7 to 9 (Hangar 5, Tower 3, Apron 1), and the contract total from
+      173 to 175. Lane P's driver EXP table and L0's anchor_list must read Airstrip = 9.
+      Revert: delete the 2 rows. OpsConfig then has to name posts for the uplink waves.
+D2-3. The reserved Airstrip hangar anchors follow the built kits. The draft rows did not match N_Cargo's yaw-180 kit
+      placement: Vault was 3.3 from the crates and 10 from the pad centre, and Loot was 13 from the crates.
+      - Airstrip.Hangar.Vault = N_Cargo's HoldPad centre (355, -1333), R 7.
+      - Airstrip.Hangar.Loot = the ammo crates' open (south) side (368, -1334.4), 1.6 clear.
+      This changes no job: the hangar is reserved (spec §1.7).
+D2-4. Fort Sandhold's tank wreck moves from the draft's (-1395, 1285) to (-1396, 1282). At the draft spot its tracks
+      cut 0.8 stud into Trench_1 (oriented-box check on the real build). It is now 2.35 clear and still inside the r 200
+      footprint.
+D2-5. Prompt = "hold" marks where a job puts a hold prompt: the 3 uplink consoles (start), Airstrip.Hangar.Vault
+      (start crack) and .Loot (grab), and both FortX.Breach.Gate (plant the charge). This matches lane D1 and
+      Town.BankAnchors. OpsConfig decides the hold times; the geometry draft's "hold 8 s" note is dropped (spec: Signal
+      uplink 60 s, Radar 45 s).
+D2-6. Anchor Yaw is the way the post or spot faces.
+      - Radar.Uplink.G1 / G2 face out over their sandbags (Yaw 20 / -22; the draft had 0).
+      - Radar.Uplink.Console takes its cluster's Yaw (-88, facing the hill; the draft had 0), like the other consoles
+        and the template's Alarm.
+D2-7. The fort breach points (FortI.Breach.Gate, FortS.Breach.Gate) are kind "door" with no Part, as the L0 anchor list
+      has them. The fort has no gate part (spec assumption 23), so OpsService treats the planted charge as the
+      objective.
+D2-8. Every other Frontier cluster, rock, the runway Infra row and every other anchor position is the geometry draft's,
+      with only the contract's mechanical edits:
+      - the require path;
+      - no Text = BOARD;
+      - CP_S renamed to CP;
+      - the template-made Signal.CP_S.* rows deleted;
+      - the §1.5 ids (Radar.Uplink.*, FortI/FortS.Breach.*, Airstrip.Apron.Arena).
+```
+
+## Lane D3 (verbatim: build/D3/assumptions.txt)
+
+```
+W3 step 2, lane D3 (data: POILayouts/Wilds): assumptions for ASSUMPTIONS.md (the lead appends them). All reversible
+(revert = the geometry draft's value, w3s2/geo/luau/POILayouts_Wilds.luau / geo/layouts.py). Every number below was
+measured on the real lane K builds in the headless stand-in (B = scratchpad w3s2/build/D3, dumps B/world/m_s*/).
+
+D3-1. Anchor spots corrected against the real builds (contract §1: every non-Probe anchor >= MinClear 1 from a
+      collidable part). The draft placed three kinds of anchor on or away from their props:
+      - Ruins.Caches.Cache1..3 sat at the centre of their gutted shells, under the collapsed floor slab (0 clear; the slab
+        is ~1.8 up there, so nobody can stand on the spot). They move to the shells' open end (a gutted TownBlock has no
+        +X side wall): local (7.5, 0.5) of R_1, (9, 0.5) of R_4, (7, 0.5) of R_7 -> world (-596.17, -1355.36),
+        (-455.24, -1294.18), (-607.48, -1259.29). Each is 2.8-3.4 clear of the slab, 5-8 from the back wall and front stub,
+        inside the shell footprint, and a 1-stud-clear walk leads out of the open side.
+      - Oasis.Stash.Box (-1378, 600) -> (-1381.42, 606.2), Yaw 0 -> 120: the draft spot was 8.9 from the stash crates,
+        outside its own R 5 search ring. It is now 2.5 behind the crates on the pond / road side, facing them (7.1 from
+        the spec §1.7 coordinate).
+      - Oasis.Well.Pad (-1248, 512) -> (-1248, 509.5): the well was 7 from the pad's centre, outside its R 6 ring. Now the
+        well is inside the ring and the pad stands 2 clear of the well wall, facing it (Yaw 0). It stays reserved.
+D3-2. Crash.BlackBox.G2 (-470, 1145.5) -> (-467, 1158.5), Yaw 20 unchanged. The draft said "behind Cargo_1" but put the
+      post on the crates' north side, where players arrive from (the roads and plots are north). Now the crates stand
+      between the post and the north (6.2 clear). G1 and G3 keep the draft spots and yaws.
+D3-3. Facing (the idle look direction; NPC AI still turns to fight):
+      - The camps' legacy posts face over their sandbag line: Yaw = that Bags_n cluster's Yaw. The draft had Yaw 0 for
+        all ten. The geometry put each bag line 1.9-2.0 in front of its post, facing out of the camp.
+      - The holdout posts face the ring centre. G1 180 -> 170, G2 0 -> 69, G3 135 -> -139; the draft's G2 and G3 looked
+        away from the square.
+      - The deck posts keep the tower's Yaw, looking over the front half-wall.
+      - Post positions are unchanged: the old NPCSpawns spots and the draft's spots.
+D3-4. The camp commanders (spec §1.7: within 25 of the Chest, clear per overlap.py). The rule used:
+      - 10-15 studs from the chest's ring centre, outside its R 6 ring;
+      - on the chest's far side from the map centre (the roads and plots players drive in from), facing that way;
+      - no part's XZ box + 0.5 contains the spot (overlap.py's rule), >= 5 clear of any collidable, >= 60 from every other post.
+      Results:
+      - Quarry.Camp.Cmdr at (-1388, -1366), Yaw -135: 11.3 from the chest, 9.6 clear.
+      - RidgeCamp.Camp.Cmdr at (1434, -1052), Yaw 135: 12.5 from the chest, 5.1 clear of the burn drum, 17.3 from the
+        technical and 13.7 from its sandbag nest.
+      - DuneCamp.Camp.Cmdr at (1484, 1188), Yaw 45: 14.6 from the chest, standing behind the ammo crates (5.6 clear),
+        35.5 from the heli wreck.
+      Lane O (CampCommander type) may move them; the anchor is 0 parts.
+D3-5. Prompt = "hold" goes where a job puts a hold prompt, following D1-3 and the Town.Market.Box and checkpoint Booth rows:
+      - Camp.Chest (open);
+      - Ruins.Caches.* and Oasis.Stash.Box (search);
+      - Crash.BlackBox.Recorder (recover).
+      The stand-in zones (Ruins.Holdout.Ring, Oasis.Well.Pad) and all posts have none. OpsService may override this.
+D3-6. The geometry is unchanged. Every cluster and rock row is the geometry draft's, bar Text = BOARD. The Board texts
+      stay as drafted: RUINED VILLAGE, CRASH SITE, OASIS. The camps have no board (Signs 0).
+D3-7. Crash.Salvage.Arena has no R, like the other arena rows (D1's Port / OilField, D2's Airstrip). Lane O picks the
+      event radius.
+D3-8. Ruins.Holdout.Ring (spec: R 30 on the VillageSquare spot) has no collidable part inside it. The nearest cover is
+      the Car_2 / Car_1 wrecks at 42-44 from the centre. Holders stand on open sand (the scorch Terrain is flat).
+      No part was added (Ruins builds 78 of 81). Lane O may prefer the draft's R 20, or cover in Phase B.
+```
+
+## Lane F (verbatim: build/F/assumptions.txt)
+
+```
+W3 step 2, lane F (bank findable): ASSUMPTIONS.md lines for the lead to paste (all reversible).
+
+F-1  Guard posts. BankRaidService spawns one BankGuard on every "Town.Bank" npc anchor whose role is G<n>
+     (ActivityAnchors.List("Town.Bank", "npc"); R1/R2 are Phase B alarm reinforcements and are skipped). Until lane BK
+     stamps those anchors, it uses BankRaidConfig.GuardPosts: the spec's P0 posts (212,-206), (228,-206), (204,-216),
+     (236,-216), (220,-198), standing on the plaza top (Y 1.6) or the ground (Y 0.5 for the street post), all facing
+     south (+Z, yaw 180), root 3 studs above the standing surface. Revert: restore the ring (not advised: 2 of 5 spawn
+     inside today's building).
+
+F-2  BankRaidConfig.GuardRingRadius (18) stays in the config, re-described as the bank zone radius: WorldDress uses it
+     for the dressing keep-out (18 + BankExtra 14 = 32) and CombatService's novice shield uses it for "engaging the
+     bank". BankRaidService no longer reads it (spec §8 pin). Removing the key would add type errors in those 2
+     files, which lane F does not own.
+
+F-3  Cooldown on the profile. profile.Raid.BankCooldownUntil (os.time seconds) with no ProfileSchema edit:
+     ProfileSchema.Migrate keeps unknown keys in Raid (it only default-fills ShieldUntil / StrikeCooldownUntil /
+     DefensesDownUntil), as for Raid.RaidCooldownUntil (MoneyCollectorService). BankRaidService sanitises it on every
+     profile load: not a finite number or <= 0 -> removed; more than one cooldown (CooldownSeconds 300) past now ->
+     clamped to now + 300; whole seconds. A player whose save has not loaded (GetProfile nil) cannot loot and gets no
+     hold progress. Phase B reads max(Raid.BankCooldownUntil, Ops.Cd.Bank) once, then writes to Ops only.
+
+F-4  First-visit tip. "Empire Bank: stand on the vault to loot" (Info toast), once per player, the first time the
+     player's root is within 150 studs (XZ) of BankRaidConfig.Position; never while the player was hit in the last
+     5 s (retried on a later tick); saved as profile.Raid.BankSeen = true (same no-schema-edit rule as F-3; a
+     non-boolean value is removed on load). Phase B moves it to Ops.Seen bit 2.
+
+F-5  Label. The public vault label reads "Empire Bank" + "OPEN · rob the vault" (green) or "RAID ON" (amber, while
+     anyone on foot holds the vault). The server also sets the label attribute WE_BankState = "open" | "raid".
+     "CLOSED <m>m" (grey) is drawn by BankRaidController on the cooling player's own client only (the cooldown is
+     per player; the label replicates to everyone); it is refreshed at 1 Hz while a cooldown runs and hands back to
+     the public line when it ends. No $ figures in the label.
+
+F-6  On foot. A raider whose Humanoid.SeatPart is set gets Blocked = "Vehicle" (HUD pill "LEAVE VEHICLE", amber),
+     no progress and no pay; progress is frozen, not reset (like UNDER FIRE). A seated player with no hold
+     progress never flips the label to RAID ON (one who held on foot first and then sat keeps RAID ON until the
+     frozen progress is dropped by leaving the vault). On cooldown the pill shows the cooldown, not LEAVE VEHICLE.
+
+F-7  EMPIRE BANK sign. BankRaidService paints the bank's "BankSign" part through WorldKits.Sign (inside the world
+     sign budget WorldConfig.Budgets.SurfaceGuis, LampLens text, MaxDistance 80), only when that part has no
+     SurfaceGui yet (so lane BK's own paint wins), on the face turned most toward +Z (the street). It tries in Init
+     (synchronously, before MapSetup's deferred MapDressing paints the POI boards) and again 2 s later.
+
+F-8  Reward toast "Bank job +$23,456" (commas; "bank_raid" is exempt from the cash multipliers, so the toast equals
+     the payout). The old "· cooldown 5m" suffix is dropped (the pill and the CLOSED line show it). A failed AddCash
+     (no profile) pays nothing and sets no cooldown.
+
+F-9  Missions. BankRaidService calls MissionService.TrackProgress(player, "Heist", 1) after a paid raid (pcall);
+     until lane M0 adds a "Heist" mission it is a no-op.
+
+F-10 Supply crate = 2 parts (crate + lid). The Neon ring, the Neon beacon ball, both straps AND the catalog crate
+     overlay (VisualAssetService.TryAttachCashCrateVisual, asset 16803204916, part count unknown, live-only) are
+     dropped, so every crate is exactly 2 parts on live too. MaxActive 2, LifetimeSeconds 120 (spec §3). The lid is
+     CanCollide / CanQuery / CanTouch / CastShadow off. The claim toast is "Supply drop +$8,500" (commas).
+     Revert of the overlay: only if its part count is known and the lid is dropped to keep the crate <= 2 parts.
+
+F-11 CombatConfig.NPCAlsoSpawnNearTerritories = false. The headless census shows it removes BOTH territory-marker
+     field NPCs: the Infantry on the Town plaza (19, 15) and the HeavyInfantry "rig stand-in" on CoastalOilAlpha
+     (1780, 31, -753). NPCs alive after boot: 12 -> 10; after the bank: 17 -> 15 (spec §7 expected 16 and asked
+     for the rig stand-in to be confirmed by census: it is removed too).
+
+F-12 Bounded waits. BankRaidService / SupplyDropService / BankRaidController wait at most 60 s for
+     ReplicatedStorage.Shared and the controller at most 30 s for PlayerGui (then it warns and the bank HUD is off).
+```
+
+## Lane M0 (verbatim: build/M0/assumptions.txt)
+
+```
+W3 step 2, lane M0 (missions): assumptions for ASSUMPTIONS.md (all reversible; the lead merges them).
+Files: MissionConfig.luau, DailyOpsConfig.luau, MissionService.luau, MissionController.luau.
+
+M0-1  DailyOpCheckpoint ("Take 2 Checkpoints") and DailyOpJobs ("Finish 3 Jobs") are in the Daily Ops pool now but
+      are never offered until Phase B: an op or mission is offered only when MissionConfig.LiveObjectives lists
+      its ObjectiveType, and nothing reports "Checkpoint" or "Job" before OpsService. Phase B lane M1 adds them
+      (plus Camp, Uplink, Delivery). Reason: never offer a mission that cannot be finished.
+M0-2  Rotation: each pool is dealt k picks per UTC day from a seeded permutation that is re-shuffled every cycle
+      of ceil(n / k) days, rather than an independent seeded shuffle per day. This guarantees every unlocked
+      mission is offered once in every cycle (cycles are at most 7 days). Measured over 14 days for 60 players: the longest gap
+      between two offers of the same mission is 7 days at level 1 and 5 days at levels 5 and 20. Seed = Park-Miller
+      hash of (UserId, cycle, salt); pure integer maths, no Random and no saved state, so all servers agree.
+M0-3  Slot 1 of the Daily Ops is Rob the Bank from level 3 while the bank job is on; below that (or with the bank
+      off) slot 1 is a seeded pick of the live OtherJobs, and with none live the 3 slots rotate through the rest.
+M0-4  Picks follow the player's level at the moment they are computed (no saved "level of the day"). So that a
+      level-up or rebirth mid-day never hides work, any mission with progress today stays offered: it takes the
+      place of the last pick of its kind (op / mission) without progress.
+M0-5  Only today's offered missions can be claimed (ClaimDailyMission returns "NotOffered" otherwise). A completed
+      mission always stays in the offer (M0-4), so nothing that was earned becomes unclaimable.
+M0-6  With DailyOpsConfig.Enabled = false the daily missions fill the list back up to MaxActiveDaily (6).
+M0-7  GO target for "Bank": the server resolves the WE_ActivityAnchor "Town.Bank.Vault" (ActivityAnchors, required
+      lazily with pcall; re-read at most every 30 s) and falls back to BankRaidConfig.Position until lane BK
+      stamps it. The bank op and its GO exist only while BankRaidConfig.Enabled ~= false. Phase B lane M1 must
+      point this at OpsService's bank site before BankRaidConfig.Enabled is set false at the cutover (and swap
+      the BuyPathStatic pin "if BankRaidConfig.Enabled == false then").
+M0-8  Go / GoTargets ride on the mission entry through an any-cast; Types.luau (in flight) is not edited (same
+      pattern as spec §1.12). The client picks the target nearest (XZ) to its character; with no character, the
+      first one. GO sends nothing to the server and grants nothing.
+M0-9  Row controls: one right-hand control per row. CLAIM (complete), GO (incomplete, with a server GO target),
+      nothing (incomplete without one; the old disabled "..." button is gone), and a plain DONE tag (not a
+      button) for a claimed row. GO/CLAIM are 112 x 72 v on touch (MissionConfig.Ui); desktop 96 x 44 v.
+M0-10 GO is XP blue with dark text (contrast about 7:1); CLAIM keeps the Accent green.
+M0-11 Copy keeps the existing "Daily Op:" prefix: "Daily Op: Rob the Bank" / "Loot the Empire Bank vault"
+      (Phase A's raid is stand-on-vault; M1 can change it to "Deliver 1 bank bag" in Phase B),
+      "Daily Op: Take 2 Checkpoints" / "Take 2 enemy checkpoints", "Daily Op: Finish 3 Jobs" / "Finish 3 jobs
+      anywhere". Rewards per the activities design: $6,000/150 XP/4 gold (L3), $4,000/100/2 (L2), $5,000/120/3 (L2).
+M0-12 "Heist" counts any bank job BankRaidService reports (lane F's TrackProgress("Heist", 1)). Phase B decides
+      whether armory / depot heists should also count toward "Rob the Bank" (a separate BankHeist type if not).
+M0-13 Money copy uses commas: toast "Mission reward $6,000", row "$6,000 + 150XP", daily "Claim Day 3 reward $3,500".
+M0-14 HEAD moved from 116d859 to 56c0627 during this job. The 4 M0 files are identical at both, and every M0
+      comparison uses a clean 56c0627 export.
+M0-4a (verifier fix) The slot-1 job op (DailyOpsConfig.FirstJob, Rob the Bank) is never displaced by a sticky entry.
+      Case found: a level-2 player who progressed all three base ops levels to 3 the same day; the third op used to
+      replace Rob the Bank. Now it takes another op place without progress, or is added at the end of the ops, so
+      that day's list can be 7 rows (4 ops + 3 missions).
+```
+
+## Lane U0 (verbatim: build/U0/assumptions.txt)
+
+```
+W3 step 2, lane U0 (pointer): assumptions for ASSUMPTIONS.md (the lead adds them; all reversible).
+
+U0-1  Marker tunables. The objective-only numbers (ArriveRadius 24 studs, TimeoutSeconds 600, MarkerLift 6 studs,
+      title 20 px, distance 16 px, 12-character label cap) sit in a local OBJ table at the top of ObjectiveMarker.luau.
+      No config file is in lane U0: HudConfig is in flight (owner-11 batch A) and OpsConfig does not exist until
+      Phase B lane O. The line and marker look (beam widths and colour, marker width 140-300 px, RefreshHz, RetrySeconds)
+      is read from ConsoleBuyConfig.Waypoint (read only), so the mission GO line looks the same as the Base-panel GO line.
+      Phase B (lane O or U) moves OBJ into OpsConfig.Ui.
+
+U0-2  Additive API. ObjectiveMarker keeps the three frozen signatures (Show / Clear / Current) and adds three read-only
+      helpers that allocate nothing:
+      - Revision(): bumps on Show, Clear, arrival and timeout;
+      - Showing(): true while this marker is drawn;
+      - OnTop(): true while an objective marker is on top, meaning this one or the ConsoleWaypoint line it yields to.
+
+U0-3  One AlwaysOnTop label. TerritoryController's contested diamond yields whenever OnTop() is true. That includes the
+      ConsoleWaypoint line (a Base-panel GO or the tutorial auto-guide), because its marker is also an AlwaysOnTop
+      objective marker. The yield is local to the client: AlwaysOnTop is set to false on WE_FlagBillboard. When the marker
+      goes, the server's choice is restored from the WE_LabelRole attribute ("contested" means on top). The server's
+      value never changes.
+
+U0-4  Compass tracked mode. The compass tracks whenever ObjectiveMarker has a target, and that includes the time the
+      marker is hidden behind a ConsoleWaypoint line. The compass is HUD, not a world label, so a GO always gets
+      feedback. In tracked mode:
+      - the chip shows even inside the player's own plot, because GO is usually tapped at home;
+      - it still hides while a panel is open;
+      - the label is the target's Short in gold (HudConfig.TopStrip.Compass.ArrowColor);
+      - arrival, Clear or timeout returns it to BASE.
+
+U0-5  Arrival and timeout. Arrival is a 3D distance of 24 studs or less from the target's standing point, so a heli
+      flying over the target does not count. A target is dropped after 600 s. Time spent hidden behind a ConsoleWaypoint
+      line still counts toward the 600 s. The distance shown is the XZ distance, "%dm" under 1 km and "%.1fkm" above,
+      the same format the compass uses.
+
+U0-6  World-label exception for the ONE objective marker. The marker is pixel-sized (140-300 x 44 real px, text
+      20 / 16 px) with an unlimited MaxDistance, like ConsoleWaypoint's v71 marker. CLAUDE.md's "stud-scaled,
+      MaxDistance <= 40" rule is for ordinary world labels: an objective 600+ studs away must still be visible. It is
+      client-only, transient (after GO only), carries WE_LabelRole "objective", and is the only label the game draws
+      AlwaysOnTop on purpose.
+
+U0-7  Zero parts. The anchor is an Attachment in Workspace.Terrain (client-local, never replicated). The Beam is also
+      parented to Terrain; only its start Attachment sits on the character, so a respawn re-attaches just that
+      Attachment (throttled to RetrySeconds). Needs a real-device check (see the open issues).
+
+U0-8  ConsoleWaypoint is required lazily, inside the first ConsoleWaypoint.Current() check. Phase B's two ConsoleWaypoint
+      lines (Show / ShowAtm call ObjectiveMarker.Clear()) therefore cannot form a require cycle. The client sim checks
+      both cases: the lazy require works, and an eager require stack-overflows (B/states/u0_cycle.luau).
+
+U0-9  Bounded waits. CompassController and TerritoryController used ReplicatedStorage:WaitForChild("Shared") and
+      player:WaitForChild("PlayerGui") with no timeout. The lane gate forbids that, so both now use timeouts:
+      - Shared waits 60 s;
+      - PlayerGui is found with FindFirstChildOfClass first, then waits 30 s; on failure it warns and the capture bar
+        is left unparented.
+      Behaviour is unchanged whenever these objects exist, which they always do on a live client.
+```
+
+### Lead
+- **PA-L1 Objective marker (INT-5) confirmed:** the Missions GO marker is the ONE active objective marker CLAUDE.md
+  allows `AlwaysOnTop` for; it is screen-sized with no distance limit and is cleared on arrival / new objective.
+- **PA-L2 Batch-A shield driver 6(e) was a stale test, not a bug.** It tagged a stand-in vault 36,000 studs away; Phase A
+  guards stand at fixed bank posts (Town.Bank G anchors / BankRaidConfig.GuardPosts) and no longer follow the tag. Real
+  play at MapSetup's VaultPad (headless, 7 seeds x 2 spots): the shield ends at 4.0 s, first hit 4.0-5.0 s, the novice
+  dies at 5.4-7.1 s, 0/14 loots; every one of 982 standable vault spots is in some guard's line of sight. Replacement
+  check: scratchpad w3s2/build/bankfix/drv/shield_driver_v2.luau (145/0; fails when posts move 500 studs or hit chance 0).
+- **PA-L3 Bank posts are absolute coordinates.** If the bank / vault ever moves without the anchors / GuardPosts, guards
+  are stranded (a lone player could loot untouched). Lane BK must re-run the v2 driver and real_play coverage.
+- **PA-L4 Enable steps 2 and 3 stay OFF** until lane BK frees sign budget (18 signs needed vs 17).

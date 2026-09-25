@@ -5,6 +5,11 @@
 	v71 (HUD v70 spec §5, roadmap §1.6): the crate stands ON THE GROUND under its anchor (a downward ray from the
 	WE_EventSpawn anchor or scatter point; anchors may be invisible and float), and its label is one stud-scaled
 	WorldLabel "Supply Drop" / "$8,500" (MaxDistance <= 40, never AlwaysOnTop).
+
+	W3 step 2, lane F (spec w3s2 §3): a crate is exactly 2 parts (the crate + its lid). The glowing ring, the beacon
+	ball, both straps and the catalog crate overlay (a model of unknown part count) are gone, and SupplyDropConfig
+	caps it at MaxActive 2 / LifetimeSeconds 120, so the busiest 512-stud circle stays <= 500 with the bank's
+	transients. Nothing here is Neon. The reward toast formats the cash with commas.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -13,7 +18,7 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local SupplyDropConfig = require(Shared.Configs.SupplyDropConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
@@ -151,7 +156,7 @@ local function spawnDrop()
 	for _ in pairs(active) do
 		count += 1
 	end
-	if count >= (SupplyDropConfig.MaxActive or 3) then
+	if count >= (SupplyDropConfig.MaxActive or 2) then
 		return
 	end
 
@@ -178,56 +183,34 @@ local function spawnDrop()
 	crate:SetAttribute("ClaimCash", cash)
 	CollectionService:AddTag(crate, Constants.Tags.SupplyDrop)
 
-	-- Visual kits v2: straps + lid + neon ring
-	local function decor(name: string, size: Vector3, offset: CFrame, color: Color3, mat: Enum.Material, shape: Enum.PartType?)
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = size
-		p.Anchored = true
-		p.CanCollide = false
-		p.Material = mat
-		p.Color = color
-		if shape then
-			p.Shape = shape
-		end
-		p.CFrame = crate.CFrame * offset
-		p.Parent = crate
-		return p
-	end
-	decor("StrapX", Vector3.new(crate.Size.X + 0.2, 0.35, 0.35), CFrame.new(0, 0.2, 0), Color3.fromRGB(40, 40, 42), Enum.Material.Metal, nil)
-	decor("StrapZ", Vector3.new(0.35, 0.35, crate.Size.Z + 0.2), CFrame.new(0, 0.2, 0), Color3.fromRGB(40, 40, 42), Enum.Material.Metal, nil)
-	decor("Lid", Vector3.new(crate.Size.X * 0.92, 0.4, crate.Size.Z * 0.92), CFrame.new(0, crate.Size.Y * 0.5 + 0.1, 0), Color3.fromRGB(180, 140, 50), Enum.Material.Metal, nil)
-	decor("Ring", Vector3.new(crate.Size.X + 1.5, 0.25, crate.Size.Z + 1.5), CFrame.new(0, -crate.Size.Y * 0.45, 0), Color3.fromRGB(255, 200, 80), Enum.Material.Neon, nil)
-
-	local tip = Instance.new("Part")
-	tip.Name = "Beacon"
-	tip.Size = Vector3.new(1.4, 1.4, 1.4)
-	tip.Shape = Enum.PartType.Ball
-	tip.Anchored = true
-	tip.CanCollide = false
-	tip.Material = Enum.Material.Neon
-	tip.Color = SupplyDropConfig.BeaconColor or Color3.fromRGB(255, 200, 80)
-	tip.CFrame = crate.CFrame * CFrame.new(0, 4, 0)
-	tip.Parent = crate
+	-- The one decor part: a darker lid (2 parts per crate; no ring, beacon, straps or catalog overlay: spec w3s2 §3)
+	local lid = Instance.new("Part")
+	lid.Name = "Lid"
+	lid.Size = Vector3.new(crate.Size.X * 0.92, 0.4, crate.Size.Z * 0.92)
+	lid.Anchored = true
+	lid.CanCollide = false
+	lid.CanQuery = false
+	lid.CanTouch = false
+	lid.CastShadow = false
+	lid.Material = Enum.Material.Metal
+	lid.Color = SupplyDropConfig.LidColor or Color3.fromRGB(180, 140, 50)
+	lid.TopSurface = Enum.SurfaceType.Smooth
+	lid.BottomSurface = Enum.SurfaceType.Smooth
+	lid.CFrame = crate.CFrame * CFrame.new(0, crate.Size.Y * 0.5 + 0.1, 0)
+	lid.Parent = crate
 
 	local bb = WorldLabel.Create(crate, "Supply Drop", {
 		Name = "Label",
 		Sub = "$" .. formatCash(cash),
 		Color = Color3.fromRGB(255, 220, 120),
 		SubColor = Color3.fromRGB(110, 255, 90),
-		Offset = Vector3.new(0, crate.Size.Y * 0.5 + 4, 0), -- above the beacon ball
+		Offset = Vector3.new(0, crate.Size.Y * 0.5 + (SupplyDropConfig.LabelLiftStuds or 3), 0), -- above the lid
 		MaxDistance = 40,
 	})
 	-- v31: never AlwaysOnTop — was covering structure name billboards on approach
 	bb.AlwaysOnTop = false
 
-	local ttl = SupplyDropConfig.LifetimeSeconds or 75
-	pcall(function()
-		local vas = require(script.Parent.VisualAssetService)
-		if vas and vas.TryAttachCashCrateVisual then
-			vas.TryAttachCashCrateVisual(crate)
-		end
-	end)
+	local ttl = SupplyDropConfig.LifetimeSeconds or 120
 
 	active[id] = {
 		Id = id,
@@ -242,7 +225,7 @@ local function claim(player: Player, rec: DropRec)
 	destroyDrop(rec.Id)
 	EconomyService.AddCash(player, rec.ClaimCash, "supply_drop")
 	if NotificationService then
-		NotificationService.Notify(player, string.format("Supply Drop +$%d", rec.ClaimCash), "Reward")
+		NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")
 	end
 	if AnalyticsService then
 		AnalyticsService.Log(AnalyticsConfig.Events.SUPPLY_DROP_CLAIM, player.UserId, {

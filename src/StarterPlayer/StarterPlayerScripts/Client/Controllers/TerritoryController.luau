@@ -15,24 +15,32 @@
 	  ✕, a tap outside, another panel, Driving or death close it.
 	* RADAR HILL reveal → the HudLayout flag "Radar" (CompassController draws the purple dot on the chip) + the
 	  enemy Highlights (kept) + a "RADAR ON" row in the list.
+	* W3 step 2 lane U0 — ONE AlwaysOnTop label: TerritoryService makes a flag's WE_FlagBillboard diamond draw through
+	  walls while the zone is contested (WorldLabel.SetRole "contested"). While an objective marker is on screen
+	  (ObjectiveMarker.OnTop(): a mission GO line, or the ConsoleWaypoint line it yields to) this client turns that
+	  off LOCALLY and restores the server's choice (the role) when the marker goes. Checked at 4 Hz (diamonds found by
+	  the capture-zone tags, rescanned once a second only while a marker is up; no whole-tree scan).
 	Display only: capture, ownership and payouts are server-side (TerritoryService).
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local Constants = require(Shared.Constants)
 local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
+local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 local UIUtil = require(Shared.Util.UIUtil)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local ProgressPill = require(script.Parent.Parent.Modules.ProgressPill)
+local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 local NotificationController = require(script.Parent.NotificationController)
 
 local TerritoryController = {}
@@ -169,6 +177,104 @@ local function updateRadar()
 			radarHighlights[userId] = nil
 		end
 	end
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- W3 step 2 lane U0: the contested diamond yields to the one objective marker (see the header)
+---------------------------------------------------------------------------------------------------------------
+
+local DIAMOND = {
+	Name = "WE_FlagBillboard", -- TerritoryService's diamond over <TerritoryId>_Flag
+	CheckSeconds = 0.25, -- is an objective marker up? (4 Hz; CLAUDE.md UI refresh <= 10 Hz)
+	RescanSeconds = 1, -- while one is up: find diamonds that streamed in since
+}
+local ROLE_ATTR = WorldLabelConfig.RoleAttribute
+local MARKER_TAGS = { Constants.Tags.CaptureZone, Constants.Tags.Territory }
+local diamonds: { [BillboardGui]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local markerOnTop = false
+local diamondAccum = 0
+local rescanAccum = 0
+
+-- what the server wants (WorldLabel.SetRole wrote the role before AlwaysOnTop), unless an objective marker is up
+local function diamondOnTop(bb: BillboardGui): boolean
+	if markerOnTop then
+		return false
+	end
+	local role = bb:GetAttribute(ROLE_ATTR)
+	return type(role) == "string" and WorldLabelConfig.AlwaysOnTopRoles[role] == true
+end
+
+local function applyDiamond(bb: BillboardGui)
+	local want = diamondOnTop(bb)
+	if bb.AlwaysOnTop ~= want then
+		bb.AlwaysOnTop = want
+	end
+end
+
+local function watchDiamond(bb: BillboardGui)
+	if diamonds[bb] then
+		applyDiamond(bb)
+		return
+	end
+	diamonds[bb] = true
+	-- a contest starting replicates AlwaysOnTop = true (and the role): yield again at once while a marker is up
+	bb:GetPropertyChangedSignal("AlwaysOnTop"):Connect(function()
+		if markerOnTop and bb.AlwaysOnTop then
+			bb.AlwaysOnTop = false
+		end
+	end)
+	bb:GetAttributeChangedSignal(ROLE_ATTR):Connect(function()
+		if markerOnTop and bb.AlwaysOnTop then
+			bb.AlwaysOnTop = false
+		end
+	end)
+	applyDiamond(bb)
+end
+
+-- the diamonds on this client (StreamingEnabled: only nearby zones), found through the capture-zone tags
+local function rescanDiamonds()
+	for _, tag in ipairs(MARKER_TAGS) do
+		for _, inst in ipairs(CollectionService:GetTagged(tag)) do
+			local tid = inst:GetAttribute("TerritoryId")
+			local parent = inst.Parent
+			if type(tid) == "string" and parent and inst:IsA("BasePart") then
+				local flag = parent:FindFirstChild(tid .. "_Flag")
+				local bb = flag and flag:FindFirstChild(DIAMOND.Name)
+				if bb and bb:IsA("BillboardGui") then
+					watchDiamond(bb)
+				end
+			end
+		end
+	end
+end
+
+local function syncDiamonds(elapsed: number)
+	local on = ObjectiveMarker.OnTop()
+	if on ~= markerOnTop then
+		markerOnTop = on
+		rescanAccum = 0
+		if on then
+			rescanDiamonds()
+		end
+		for bb in pairs(diamonds) do
+			if bb.Parent then
+				applyDiamond(bb)
+			end
+		end
+		return
+	end
+	if on then
+		rescanAccum += elapsed
+		if rescanAccum >= DIAMOND.RescanSeconds then
+			rescanAccum = 0
+			rescanDiamonds()
+		end
+	end
+end
+
+-- test hook (client sims): the yield state right now
+function TerritoryController._DiamondYield(): boolean
+	return markerOnTop
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -604,12 +710,29 @@ end
 
 ---------------------------------------------------------------------------------------------------------------
 
+local function playerGui(): PlayerGui?
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg then
+		return pg
+	end
+	local waited = player:WaitForChild("PlayerGui", 30)
+	if waited and waited:IsA("PlayerGui") then
+		return waited
+	end
+	return nil
+end
+
 function TerritoryController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireTerritory"
 	-- Core safe insets + the one HUD UIScale; DisplayOrder from HudConfig (28)
 	HudLayout.ApplyScreen(screen, { Insets = "Core" })
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = playerGui()
+	if pg then
+		screen.Parent = pg
+	else
+		warn("[WAR EMPIRE] TerritoryController: no PlayerGui after 30 s; capture bar not shown")
+	end
 	_gui = screen
 
 	local p = ProgressPill.Build(screen, "CaptureProgress")
@@ -642,6 +765,13 @@ function TerritoryController.Init()
 		if contestedPulseActive and cp and contestedColA and contestedColB then
 			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
 			cp.Fill.BackgroundColor3 = contestedColA:Lerp(contestedColB, pulse)
+		end
+		-- W3 step 2 lane U0: the contested diamond yields to the objective marker (4 Hz)
+		diamondAccum += dt
+		if diamondAccum >= DIAMOND.CheckSeconds then
+			local elapsed = diamondAccum
+			diamondAccum = 0
+			syncDiamonds(elapsed)
 		end
 		if not radarActive then
 			return

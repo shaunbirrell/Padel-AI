@@ -14,7 +14,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
@@ -224,23 +224,13 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		local basePos = marker.Position
 		flag.Size = if contested then Vector3.new(6.2, 3.6, 0.3) elseif rt.OwnerType == ot.Neutral then Vector3.new(4.2, 2.4, 0.22) else Vector3.new(5.5, 3.2, 0.28)
 		flag.Position = Vector3.new(basePos.X + flag.Size.X * 0.5 + 0.2, basePos.Y + flagLift - 1, basePos.Z)
-		-- Ownership flash light (brief)
-		local lightInst = flag:FindFirstChild("WE_OwnerLight")
-		local light: PointLight
-		if lightInst and lightInst:IsA("PointLight") then
-			light = lightInst
-		else
-			if lightInst then
-				lightInst:Destroy()
-			end
-			light = Instance.new("PointLight")
-			light.Name = "WE_OwnerLight"
-			light.Range = 28
-			light.Parent = flag
+		-- W3 step 2 (spec w3s2 §1.11, lane P): no owner light on the flag any more. It broke the world light policy
+		-- (Brightness 2.4-3.2 and Range 28 > 0.8 / 18, one per zone); the painted flag, stripe and diamond show the owner.
+		-- A leftover one (a place saved with an older build's flag) is removed.
+		local oldLight = flag:FindFirstChild("WE_OwnerLight")
+		if oldLight then
+			oldLight:Destroy()
 		end
-		light.Color = color
-		light.Brightness = if contested then 3.2 elseif rt.OwnerType == ot.Neutral then 0.4 else 2.4
-		light.Enabled = true
 
 		-- Keep stripe locked to flag (nation color visibility polish)
 		local stripe = parent:FindFirstChild(tid .. "_FlagStripe")

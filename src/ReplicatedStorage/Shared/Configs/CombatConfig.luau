@@ -48,7 +48,10 @@ local CombatConfig = {
 	MaxActiveNPCs = 18,
 	NPCRespawnSeconds = 18,
 	NPCThinkInterval = 0.35,
-	NPCAlsoSpawnNearTerritories = true,
+	-- W3 step 2, lane F (spec w3s2 §4): off. The random extra field NPCs near territory markers (a lone Infantry on
+	-- the Town plaza, a stand-in on a rig) are gone; field hostiles come only from the WE_NPCSpawn anchors, and the
+	-- NPC budget is left for the bank, the forts and the rigs.
+	NPCAlsoSpawnNearTerritories = false,
 	MaxTerritoryNPCSpawns = 4,
 
 	NPCTypes = {

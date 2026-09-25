@@ -4,22 +4,28 @@
 	the panel (fires RequestClaimSpinner; SpinnerService decides). The rail's Missions badge counts completed-
 	unclaimed missions + a claimable daily login + a READY spinner (HUDController). Opened from the rail's
 	Missions tile / M (HudConfig.Keys.Missions) / the terminal. A registered Modal panel (HudLayout id "Missions")
-	with the black dim; one HUD scale + safe area; every tappable ≥ 44 real px on touch. ]]
+	with the black dim; one HUD scale + safe area; every tappable ≥ 44 real px on touch.
+	W3 step 2 lane M0: each mission row has ONE right-hand button (MissionConfig.Ui, 112 x 72 v on touch): CLAIM when
+	complete, GO while incomplete when the server sent GO targets (e.g. "Rob the Bank"), nothing otherwise (a
+	claimed row shows a plain DONE tag). GO closes the panel and points the one objective marker (ObjectiveMarker)
+	at the target nearest to the player; it grants nothing — progress and rewards stay on the server. ]]
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local Types = require(Shared.Types)
 local DailyRewardConfig = require(Shared.Configs.DailyRewardConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
+local MissionConfig = require(Shared.Configs.MissionConfig)
 
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
+local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
 
 local MissionController = {}
 
@@ -60,6 +66,66 @@ local function fire(remoteName: string, ...: any)
 	task.spawn(Remotes.FireServer, remoteName, ...)
 end
 
+local function commas(n: number): string
+	local v = math.floor(n)
+	local str = tostring(math.abs(v))
+	local out = string.reverse((string.gsub(string.reverse(str), "(%d%d%d)", "%1,")))
+	if string.sub(out, 1, 1) == "," then
+		out = string.sub(out, 2)
+	end
+	return if v < 0 then "-" .. out else out
+end
+
+-- ── GO (W3 step 2) ──────────────────────────────────────────────────────────────────────────────────────────────
+local MAX_GO_TARGETS = 16
+
+local function finiteCoord(n: any): boolean
+	return type(n) == "number" and n == n and n > -1e6 and n < 1e6
+end
+
+--[[ The objective-marker target for a mission entry's GO: of the GoTargets the SERVER sent with the entry, the one
+	nearest (XZ) to `from` (the player's character; nil → the first valid one), labelled MissionConfig.Go[Go].Short.
+	nil when the entry has no usable Go (unknown key, no finite target). Pure; exported for tests. ]]
+function MissionController.GoTarget(entry: any, from: Vector3?): ObjectiveMarker.Target?
+	if type(entry) ~= "table" or type(entry.Go) ~= "string" or type(entry.GoTargets) ~= "table" then
+		return nil
+	end
+	local gd = MissionConfig.Go[entry.Go]
+	if gd == nil then
+		return nil
+	end
+	local best: any = nil
+	local bestD = math.huge
+	for i, t in ipairs(entry.GoTargets) do
+		if i > MAX_GO_TARGETS then
+			break
+		end
+		if type(t) == "table" and finiteCoord(t.X) and finiteCoord(t.Y) and finiteCoord(t.Z) then
+			local d = if from then (t.X - from.X) ^ 2 + (t.Z - from.Z) ^ 2 else i
+			if d < bestD then
+				bestD = d
+				best = t
+			end
+		end
+	end
+	if best == nil then
+		return nil
+	end
+	return { Short = gd.Short, X = best.X, Y = best.Y, Z = best.Z }
+end
+
+-- the character's root, if it is streamed in and spawned (never waited for)
+local function rootPosition(): Vector3?
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		return root.Position
+	end
+	return nil
+end
+
+local onGo: (entry: any) -> () -- set after setOpen (GO closes the panel)
+
 local function formatWait(seconds: number): string
 	local s = math.max(0, math.ceil(seconds))
 	if s >= 3600 then
@@ -97,6 +163,26 @@ local function paintSpinner()
 	end
 end
 
+-- a mission row's right-hand button (btnW x btnH v, vertically centred)
+local function rowButton(row: Frame, name: string, text: string, bg: Color3, fg: Color3, w: number, h: number): TextButton
+	local btn = Instance.new("TextButton")
+	btn.Name = name
+	btn.AnchorPoint = Vector2.new(1, 0.5)
+	btn.Position = UDim2.new(1, -8, 0.5, 0)
+	btn.Size = UDim2.fromOffset(w, h)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = PanelShell.Text(if isTouch then 22 else 16)
+	btn.Text = text
+	btn.TextColor3 = fg
+	btn.BackgroundColor3 = bg
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = true
+	btn.Active = true
+	corner(btn, 8)
+	btn.Parent = row
+	return btn
+end
+
 local function refresh()
 	if not listFrame then
 		return
@@ -127,11 +213,14 @@ local function refresh()
 	local titleSize = PanelShell.Text(14)
 	local descSize = PanelShell.Text(11)
 	local progSize = PanelShell.Text(11)
-	local btnW = if isTouch then 120 else 88
-	local rowH = math.max(TAP + 12, 6 + titleSize + 4 + descSize + 6 + progSize + 10)
+	local ui = MissionConfig.Ui
+	local btnW = if isTouch then ui.ButtonW else ui.DesktopButtonW
+	local btnH = if isTouch then math.max(ui.ButtonH, TAP) else TAP
+	local rowH = math.max(btnH + 12, 6 + titleSize + 4 + descSize + 6 + progSize + 10)
 
 	for i, mission in ipairs(state.Daily) do
 		local row = Instance.new("Frame")
+		row.Name = "Mission_" .. tostring(mission.Id)
 		row.Size = UDim2.new(1, -8, 0, rowH) -- v37 progress chip
 		row.BackgroundColor3 = Constants.Colors.Background
 		row.BorderSizePixel = 0
@@ -192,44 +281,45 @@ local function refresh()
 		prog.TextXAlignment = Enum.TextXAlignment.Left
 		prog.TextColor3 = Constants.Colors.Gold
 		local goldBit = if (mission.RewardGold or 0) > 0 then string.format(" · %dg", mission.RewardGold) else ""
-		prog.Text = string.format("%d/%d  ★ $%s + %dXP%s", mission.Progress, mission.Target, tostring(mission.RewardCash), mission.RewardXP, goldBit)
+		prog.Text = string.format("%d/%d  ★ $%s + %dXP%s", mission.Progress, mission.Target, commas(mission.RewardCash), mission.RewardXP, goldBit)
 		prog.TextTruncate = Enum.TextTruncate.AtEnd
 		prog.Parent = row
 
-		local btn = Instance.new("TextButton")
-		btn.AnchorPoint = Vector2.new(1, 0.5)
-		btn.Position = UDim2.new(1, -8, 0.5, 0)
-		btn.Size = UDim2.fromOffset(btnW, TAP)
-		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = PanelShell.Text(13)
-		btn.TextColor3 = Constants.Colors.Text
-		btn.BorderSizePixel = 0
-		corner(btn, 8)
-		btn.Parent = row
-
+		-- one right-hand button per row: CLAIM (complete) / GO (incomplete with a server GO target) / none
 		if mission.Claimed then
-			btn.Text = "DONE"
-			btn.BackgroundColor3 = Color3.fromRGB(50, 55, 60)
-			btn.Active = false
+			local done = Instance.new("TextLabel")
+			done.Name = "DoneTag"
+			done.AnchorPoint = Vector2.new(1, 0.5)
+			done.Position = UDim2.new(1, -8, 0.5, 0)
+			done.Size = UDim2.fromOffset(btnW, titleSize + 8)
+			done.BackgroundTransparency = 1
+			done.Font = Enum.Font.GothamBold
+			done.TextSize = titleSize
+			done.TextColor3 = Constants.Colors.Muted
+			done.Text = "DONE"
+			done.Parent = row
 		elseif mission.Complete then
-			btn.Text = "CLAIM"
-			btn.BackgroundColor3 = Constants.Colors.Accent
+			local btn = rowButton(row, "ClaimButton", "CLAIM", Constants.Colors.Accent, Constants.Colors.Text, btnW, btnH)
 			local missionId = mission.Id
 			btn.Activated:Connect(function()
 				pcall(AudioController.PlayClick)
 				fire(Constants.RemoteNames.RequestClaimMission, missionId)
 			end)
 		else
-			btn.Text = "…"
-			btn.BackgroundColor3 = Color3.fromRGB(45, 50, 55)
-			btn.Active = false
+			local goEntry: any = mission
+			if MissionController.GoTarget(goEntry, nil) ~= nil then
+				local btn = rowButton(row, "GoButton", "GO", Constants.Colors.XP, Constants.Colors.TextDark, btnW, btnH)
+				btn.Activated:Connect(function()
+					onGo(goEntry)
+				end)
+			end
 		end
 	end
 
 	if dailyInfo and state.DailyLogin then
 		local d = state.DailyLogin
 		local reward = DailyRewardConfig.Rewards[d.NextDay]
-		local rewardText = if reward then string.format("$%d", reward.Cash) else ""
+		local rewardText = if reward then "$" .. commas(reward.Cash) else ""
 		if d.AlreadyClaimedToday then
 			dailyInfo.Text = string.format("Daily streak: Day %d (claimed)", d.Streak)
 			if dailyBtn then
@@ -264,6 +354,23 @@ local function setOpen(open: boolean)
 	if open then
 		refresh()
 	end
+end
+
+-- GO: point the one objective marker at the nearest target, then get the panel out of the way
+onGo = function(entry: any)
+	local target = MissionController.GoTarget(entry, rootPosition())
+	if target == nil then
+		return
+	end
+	pcall(AudioController.PlayClick)
+	local ok, err = pcall(function(): any
+		ObjectiveMarker.Show(target)
+		return nil
+	end)
+	if not ok then
+		warn("[WAR EMPIRE] MissionController: ObjectiveMarker.Show failed: " .. tostring(err))
+	end
+	setOpen(false)
 end
 
 -- a claim row (spinner / daily login): info text left, a TAP-tall button right
@@ -306,11 +413,28 @@ local function claimRow(parent: Instance, name: string, y: number, btnText: stri
 	return row, info, b
 end
 
+local function playerGui(): PlayerGui?
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg then
+		return pg
+	end
+	local waited = player:WaitForChild("PlayerGui", 30)
+	if waited and waited:IsA("PlayerGui") then
+		return waited
+	end
+	return nil
+end
+
 function MissionController.Init()
+	local pg = playerGui()
+	if not pg then
+		warn("[WAR EMPIRE] MissionController: no PlayerGui after 30 s; Missions panel off")
+		return
+	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireMissions"
 	PanelShell.Screen(screen) -- DisplayOrder 60 (Panels), one HUD scale + safe area
-	screen.Parent = player:WaitForChild("PlayerGui")
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()

@@ -1933,7 +1933,7 @@ must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'OrphanMod
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'ElementsAttr = "WE_Elements",', 'W3 natural clusters stand alone by their element count (H1)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '"Dune", "DeadTree", "Stump", "FallenLog", "Reed", "Driftwood" },', 'W3 dead wood, reeds and driftwood are natural (H1)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 370, Enabled = true, Lights = 8, Signs = 1 },', 'W3 Town v2 builds Crossroads Town (370 parts: every 512 circle <= 500; 8 lights, 1 sign)')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 150, Enabled = false, Lights = 4, Signs = 0 },', 'W3 Town-first gate: South Port stays off until the owner signs off the Town')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Rect = { X0 = -330, X1 = 330, Z0 = 1150, Z1 = 1466 }, Budget = 140, Reserve = 8,', 'W3s2: South Port footprint from Z0 1150 and its caps (geometry plan)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Lamp = { Brightness = 0.6, Range = 16, Color = Color3.fromRGB(255, 236, 190) },', 'W3 Town lamps inside the light policy (H8)')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'MeshOverlays = 40,', 'W3 Roblox-owned mesh overlays capped per server')
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'RoadClear = 30, -- block clusters', 'W3 Town blocks keep 30 off the road lines (spec 3.2)')
@@ -3444,6 +3444,231 @@ must_contain(Q_SO, 'faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.Lo
 must_contain(Q_SO, 'params.RespectCanCollide = true', 'Lane C: FollowPath rays ignore non-colliding parts')
 must_not_contain(Q_SO, 'GetDescendants', 'Lane C: no whole-tree scans in the squad service')
 
+
+# --- W3 step 2 lane L0 (contracts): activity anchors, POI rows, sign budget, ObjectiveMarker frozen API ---
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'export type ActivityAnchor = {', 'W3s2 L0: activity anchor row type')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'SurfaceGuis = 17', 'W3s2 L0: world sign budget 17 (6 gate pads + Town + bank + 9 POI boards)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Tag = "WE_ActivityAnchor", -- CollectionService tag on every anchor Attachment', 'W3s2 L0: one anchor tag')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'CheckpointAnchors = {', 'W3s2 L0: checkpoint anchor template')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Role = "G1", Kind = "npc", X = -14.6, Z = 5.5, Yaw = 0 },', 'W3s2 L0: checkpoint post G1 clear of the far sandbag (not the blocked activities post)')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "Town.Market.Box", Kind = "search",', 'W3s2 L0: Town market cache anchor')
+must_contain('src/ServerScriptService/Server/Modules/ActivityAnchors.luau', 'GetTagged("WE_ActivityAnchor")', 'W3s2 L0: anchors are read from the tag')
+must_not_contain('src/ServerScriptService/Server/Modules/ActivityAnchors.luau', 'WaitForChild(', 'W3s2 L0: the anchor reader never waits on the tree')
+must_contain('src/ServerScriptService/Server/Modules/ActivityAnchors.luau', 'function ActivityAnchors.List(site: string?, kind: string?): { Anchor }', 'W3s2 L0: frozen reader API (List)')
+must_contain('src/ServerScriptService/Server/Modules/ActivityAnchors.luau', 'function ActivityAnchors.Get(id: string): Anchor?', 'W3s2 L0: frozen reader API (Get)')
+must_contain('src/ServerScriptService/Server/Modules/WorldKits.luau', 'ActivityHost = spec(1, 1, Vector3.new(1, 1, 1), "anchor", false, 2, "POI"),', 'W3s2 L0: one invisible anchor host kit per POI layout')
+must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Modules/ObjectiveMarker.luau', 'function ObjectiveMarker.Show(target: Target)', 'W3s2 L0: frozen ObjectiveMarker API (Show)')
+must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Modules/ObjectiveMarker.luau', 'function ObjectiveMarker.Clear()', 'W3s2 L0: frozen ObjectiveMarker API (Clear)')
+must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Modules/ObjectiveMarker.luau', 'function ObjectiveMarker.Current(): Target?', 'W3s2 L0: frozen ObjectiveMarker API (Current)')
+must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Modules/ObjectiveMarker.luau', 'GetDescendants', 'W3s2: the objective marker never scans the tree')
+
+# --- W3 step 2 lane K (kits): later-POI kit builders, owner feedback #29 (checkpoint booth, watchtower fit), runtime doors ---
+WK_ = 'src/ServerScriptService/Server/Modules/WorldKits.luau'
+must_contain(WK_, 'put(b, "CheckpointBooth", Vector3.new(4, 7, 4.4), CFrame.new(17.5, 3.5, 2.0), PAL.ConcreteLight, M.Concrete, true)', 'W3s2 K: checkpoint booth taller than an avatar, same footprint (template anchors stay clear)')
+must_contain(WK_, 'local TOWER_HEADROOM = 8.5', 'W3s2 K: world watchtower fits a 7.5-stud avatar (owner feedback #29)')
+must_contain(WK_, 'local deckY = KC.WatchtowerDeckY', 'W3s2 K: watchtower deck at WorldConfig.Kits.WatchtowerDeckY (tower posts stand on it)')
+must_contain(WK_, 'put(b, "TowerRoof", Vector3.new(9, 0.5, 9), CFrame.new(0, roofY + 0.25, 0), PAL.SteelDark, M.Metal, false, true)', 'W3s2 K: watchtower roof never collides (heads, jumps, Poppercam)')
+must_contain(WK_, 'local t = Instance.new("TrussPart")', 'W3s2 K: the watchtower ladder is climbable (TrussPart, touch-friendly)')
+must_contain(WK_, 'p:SetAttribute(A.RuntimeDoorAttr, true)', 'W3s2 K: BunkerDoor carries WE_RuntimeDoor (WorldHygiene leaves it alone)')
+must_contain(WK_, 'g:SetAttribute(A.RuntimeDoorAttr, true)', 'W3s2 K: HeistGate carries WE_RuntimeDoor')
+must_contain(WK_, 'runtimeDoor(put(b, "BunkerDoor",', 'W3s2 K: the bunker blast door part is named BunkerDoor (anchors name it)')
+must_contain(WK_, 'local g = put(b, "HeistGate",', 'W3s2 K: the yard gate part is named HeistGate (anchors name it)')
+must_contain(WK_, 'local gap = math.clamp(W - 8, 4, 10) -- the full-height opening (the door)', 'W3s2 K: TownBlock hall opening (the Empire Bank shell, lane BK)')
+must_contain(WK_, 'tostring(o.Lantern), tostring(o.R), if tw ~= nil then table.concat(tw, ",") else "nil" }, "|")', 'W3s2 K: Footprint cache keyed on R and Taxiway')
+must_contain(WK_, 'vcyl(b, "HoldPad", 0, 0, 0, HP.Top, r * 2, PAL.PadPaint, M.SmoothPlastic, false)', 'W3s2 K: hold pads are flat and never collide')
+must_contain(WK_, 'local p = put(b, "ActivityHost", Vector3.new(1, 1, 1), CFrame.new(0, 0.5, 0), PAL.SteelDark, M.SmoothPlastic, false)', 'W3s2 K: the anchor host never collides')
+must_contain(WK_, 'Builders.Runway = function(b: B)', 'W3s2 K: the airstrip runway is built (infra)')
+must_contain(WK_, 'Watchtower = spec(8, 8, Vector3.new(9, 23, 9), "manmade", true, 2, "POI"),', 'W3s2 K: watchtower catalogue row (8 parts, 23 tall with the headroom)')
+must_not_contain(WK_, 'Instance.new("ParticleEmitter")', 'W3s2 K: kits never add particles (phones)')
+must_not_contain(WK_, 'Instance.new("Fire")', 'W3s2 K: burn drums / flare stack are painted, no Fire')
+must_not_contain(WK_, 'Instance.new("SpotLight")', 'W3s2 K: kits add no spot lights (world light budget)')
+
+# --- W3 step 2 lane P (platform): WorldPOI layouts + activity anchors, camp exemption, hygiene, Dockside, owner lights ---
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'WE_ActivityAnchor', 'W3s2 P (spec 8): WorldPOI stamps the activity anchors (header names the tag; the pins below pin the calls)')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'local ActivityAnchors = require(script.Parent.ActivityAnchors)', 'W3s2 P: anchors written through the one writer')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'stamp(booth.Part, ActivityAnchors.FromTemplate(t, poi.Id, c.Id, booth.Frame))', 'W3s2 P: every built checkpoint gets the checkpoint template on its booth')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'stamp(target, ActivityAnchors.FromRow(a))', 'W3s2 P: layout rows on the ActivityHost, Town rows on their Required cluster')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'if req ~= nil and need == nil then', 'W3s2 P: a Requires anchor is stamped only when its cluster was built')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'local builder: ((Ctx) -> ())? = if p.Layout ~= nil then buildLayout else BUILDERS[p.Kind]', 'W3s2 P: every enabled layout POI builds from POILayouts')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'local fullCap = poi.Budget - (poi.Reserve or 0)', 'W3s2 P: a POI builds within Budget - Reserve (runtime transients kept free)')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'local share = poi.LowShare or WorldDressConfig.Quality.Low.POIShare', 'W3s2 P: Quality Low share per POI')
+must_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'model:SetAttribute(INFRA_ATTR, true)', 'W3s2 P: the runway strips live in one Infra model (H10 exempt)')
+must_not_contain('src/ServerScriptService/Server/Modules/WorldPOI.luau', 'if s == nil or s.Step ~= 1 then', 'W3s2 P: step-2 kits are counted through Footprint (no step-1-only count)')
+must_contain('src/ServerScriptService/Server/Modules/WorldDress.luau', 'local own = c.Owner ~= nil and c.Owner == o.AllowPOI -- a camp\'s own guard post', 'W3s2 P: a camp\'s own NPC anchors are no keep-out for its own clusters')
+must_contain('src/ServerScriptService/Server/Modules/WorldDress.luau', 'Owner = campOf(a.X, a.Z)', 'W3s2 P: NPC anchors know their camp')
+must_contain('src/ServerScriptService/Server/Modules/WorldDress.luau', 'SkipEvents: boolean?', 'W3s2 P: flat markings / the activity host may lie over an event anchor')
+must_contain('src/ServerScriptService/Server/Modules/WorldHygiene.luau', 'if d:IsA("Model") and d:GetAttribute(INFRA_ATTR) ~= true then', 'W3s2 P: H10 exempts a POI Infra model (runway strips)')
+must_contain('src/ServerScriptService/Server/Modules/WorldHygiene.luau', 'function Rules.RuntimeDoor(part: Instance): boolean', 'W3s2 P: runtime doors (WE_RuntimeDoor) are left alone')
+must_contain('src/ServerScriptService/Server/Modules/WorldHygiene.luau', 'if not isDoomed(p) and not Rules.RuntimeDoor(p) then', 'W3s2 P: Enforce H3 never destroys a runtime door')
+must_contain('src/ServerScriptService/Server/Modules/WorldHygiene.luau', 'or Rules.RuntimeDoor(part) or Rules.FlatMarking(part, b) then', 'W3s2 P: H4 never makes a runtime door or a flat marking solid')
+must_contain('src/ServerScriptService/Server/Modules/WorldHygiene.luau', 'return math.max(s.X, s.Y, s.Z) < H.ShadowMinSize or (b ~= nil and Rules.FlatMarking(part, b))', 'W3s2 P: H9 flat markings (hold pads, runway) cast no shadow')
+must_contain('src/ServerScriptService/Server/Modules/MapDressing.luau', 'if not portBuilt then', 'W3s2 P: the legacy Dockside quay kit is off once the Port POI is built')
+must_contain('src/ServerScriptService/Server/Modules/MapDressing.luau', 'local DOCKSIDE_POI = "Port"', 'W3s2 P: the Port replaces Dockside')
+must_not_contain('src/ServerScriptService/Server/Services/TerritoryService/init.luau', 'light.Name = "WE_OwnerLight"', 'W3s2 P (spec 8): no owner light on capture flags (light policy V3)')
+must_not_contain('src/ServerScriptService/Server/Services/TerritoryService/init.luau', 'Instance.new("PointLight")', 'W3s2 P: TerritoryService adds no world light')
+
+# --- W3 step 2 lane D1 (data): POILayouts/Industry (Port, Depot, Armory, OilField, RigA, RigB) ---
+_IND = 'src/ServerScriptService/Server/Modules/POILayouts/Industry.luau'
+must_contain(_IND, 'local WorldConfig = require(ReplicatedStorage.Shared.Configs.WorldConfig)', 'W3s2 D1: Industry layouts require only WorldConfig (no script.Parent path, no cycle)')
+must_not_contain(_IND, 'require(script.Parent', 'W3s2 D1: Industry layouts are data only')
+must_not_contain(_IND, 'WaitForChild(', 'W3s2 D1: Industry layouts never yield')
+must_not_contain(_IND, 'Text = BOARD', 'W3s2 D1: PoiBoard rows leave Text nil (WorldPOI paints Board within the sign budget)')
+must_not_contain(_IND, 'Id = "Port.Gate.', 'W3s2 D1 (spec 1.5): no per-checkpoint rows; the template makes Port.CP.*')
+must_contain(_IND, '{ Id = "CP", Block = "Road", Role = "checkpoint", Tier = 1, X = 0, Z = 1168,', 'W3s2 D1 (contract 4.3): the Port road checkpoint cluster is "CP"')
+must_contain(_IND, 'Prompt = "hold", Part = "HeistGate" }', 'W3s2 D1 (contract 4.7): the customs breach anchor names its door part')
+must_contain(_IND, 'Prompt = "hold", Part = "BunkerDoor" }', 'W3s2 D1 (contract 4.7): the bunker door anchor names its door part')
+must_contain(_IND, '{ Id = "RigA.Deck.Pier", Kind = "npc", X = 1655, Z = -750,', 'W3s2 D1: the Rig Alpha pier post stands clear of the stair landing (MinClear)')
+must_contain(_IND, 'Variant = "roller+metal+rear", Width = 38,', 'W3s2 D1: the customs shed closes the yard (the HeistGate is the way in on foot)')
+
+# --- W3 step 2 lane D2 (data): POILayouts/Frontier.luau (Airstrip, Signal, Radar, FortI, FortS) ---
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'local Layouts: { [string]: WorldConfig.POILayout } = {', 'W3s2 D2: the Frontier rows are typed POILayout (data only)')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'local WorldConfig = require(ReplicatedStorage.Shared.Configs.WorldConfig)', 'W3s2 D2: requires only WorldConfig, by the ReplicatedStorage path')
+must_not_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'script.Parent.Parent.WorldConfig', 'W3s2 D2: not the geometry draft require path')
+must_not_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'Text = BOARD', 'W3s2 D2: PoiBoard text comes from POILayout.Board')
+must_not_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'WaitForChild(', 'W3s2 D2: layout data never waits on the tree')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "CP", Block = "Road", Role = "checkpoint", Tier = 1, X = 0, Z = -1150, Yaw = 180, Street = true,', 'W3s2 D2: the Signal checkpoint cluster is "CP" (template ids Signal.CP.*)')
+must_not_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'CP_S', 'W3s2 D2: no draft checkpoint ids; the template makes Signal.CP.*')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "Airstrip.Tower.Console", Kind = "console", X = 662, Z = -1318,', 'W3s2 D2: tower uplink at the spec spot')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "Airstrip.Tower.G1", Kind = "npc",', 'W3s2 D2: the tower uplink has its own posts')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "Signal.Relay.Console", Kind = "console", X = -196, Z = -1300,', 'W3s2 D2: relay uplink at the spec spot')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "Radar.Uplink.Console", Kind = "console", X = -1068.9, Z = -945.8,', 'W3s2 D2: radar uplink at the spec spot')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Kit = "Terminal", X = 0, Z = 2.5 }', 'W3s2 D2: a console anchor stands in front of its desk, never inside it')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "FortI.Breach.Gate", Kind = "door",', 'W3s2 D2: Fort Ironclad breach point (spec §1.5 id)')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', '{ Id = "FortS.Breach.Gate", Kind = "door",', 'W3s2 D2: Fort Sandhold breach point (spec §1.5 id)')
+must_contain('src/ServerScriptService/Server/Modules/POILayouts/Frontier.luau', 'X = -1396, Z = 1282, Yaw = -155,', 'W3s2 D2: the Sandhold tank wreck clear of Trench_1')
+
+# --- W3 step 2 lane D3 (data): POILayouts/Wilds.luau (Ruins, Crash, Oasis, Quarry, RidgeCamp, DuneCamp) ---
+_WILDS = 'src/ServerScriptService/Server/Modules/POILayouts/Wilds.luau'
+must_contain(_WILDS, 'local Layouts: { [string]: WorldConfig.POILayout } = {', 'W3s2 D3: the Wilds rows are typed POILayout (data only)')
+must_contain(_WILDS, 'local WorldConfig = require(ReplicatedStorage.Shared.Configs.WorldConfig)', 'W3s2 D3: requires only WorldConfig, by the ReplicatedStorage path')
+must_not_contain(_WILDS, 'script.Parent.Parent.WorldConfig', 'W3s2 D3: not the geometry draft require path')
+must_not_contain(_WILDS, 'Text = BOARD', 'W3s2 D3: PoiBoard text comes from POILayout.Board')
+must_not_contain(_WILDS, 'WaitForChild(', 'W3s2 D3: layout data never waits on the tree')
+must_not_contain(_WILDS, 'Id = "Quarry.Chest"', 'W3s2 D3 (spec 1.5): ids are <POI>.<Site>.<Role> (Quarry.Camp.Chest)')
+must_not_contain(_WILDS, 'Id = "Ruins.Square"', 'W3s2 D3 (spec 1.5): the village square is Ruins.Holdout.Ring')
+must_contain(_WILDS, '{ Id = "Ruins.Holdout.Ring", Kind = "hold", X = -540, Z = -1300, Yaw = 0, R = 30 }', 'W3s2 D3 (spec 1.7): the holdout ring, r 30, on the VillageSquare spot')
+must_contain(_WILDS, '{ Id = "Crash.BlackBox.Recorder", Kind = "hold", X = -598, Z = 1168,', 'W3s2 D3 (spec 1.7): the black box at the cockpit')
+must_contain(_WILDS, '{ Id = "Oasis.Stash.Box", Kind = "search", X = -1381.42, Z = 606.2,', 'W3s2 D3: the stash search spot at the stash crates (not 8.9 away from them)')
+must_contain(_WILDS, '{ Id = "Quarry.Camp.Cmdr", Kind = "npc", X = -1388, Z = -1366,', 'W3s2 D3 (spec 1.7): Quarry commander within 25 of the chest, clear')
+must_contain(_WILDS, '{ Id = "RidgeCamp.Camp.Cmdr", Kind = "npc", X = 1434, Z = -1052,', 'W3s2 D3 (spec 1.7): Ridge commander within 25 of the chest, clear of the technical')
+must_contain(_WILDS, '{ Id = "DuneCamp.Camp.Cmdr", Kind = "npc", X = 1484, Z = 1188,', 'W3s2 D3 (spec 1.7): Dune commander within 25 of the chest, clear of the heli wreck')
+must_contain(_WILDS, 'Y = 14, Requires = "Watch" }', 'W3s2 D3: camp watchtower deck posts exist only where the (Tier 2) tower was built')
+
+# --- W3 step 2 lane F (bank findable): BankRaidService / BankRaidConfig / BankRaidController, SupplyDropService /
+# SupplyDropConfig, CombatConfig (spec w3s2 §6 Phase A lane F, §8 Phase A pins) ---
+_BRS = "src/ServerScriptService/Server/Services/BankRaidService.luau"
+_BRC = "src/ReplicatedStorage/Shared/Configs/BankRaidConfig.luau"
+_BRX = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BankRaidController.luau"
+_SDS = "src/ServerScriptService/Server/Services/SupplyDropService.luau"
+_SDC = "src/ReplicatedStorage/Shared/Configs/SupplyDropConfig.luau"
+_CCF = "src/ReplicatedStorage/Shared/Configs/CombatConfig.luau"
+# spec §8 Phase A (lane F)
+must_contain(_BRS, "BankCooldownUntil", "W3s2 F: the bank cooldown is saved on the profile (Raid.BankCooldownUntil)")
+must_contain(_BRS, "SeatPart", "W3s2 F: on-foot rule (a seated raider never loots)")
+must_not_contain(_BRS, "GuardRingRadius", "W3s2 F: no guard ring (fixed posts only)")
+must_not_contain(_SDS, "Enum.Material.Neon", "W3s2 F: supply crates never glow")
+must_contain(_SDC, "LifetimeSeconds = 120", "W3s2 F: supply crate lifetime 120 s")
+must_contain(_SDC, "MaxActive = 2", "W3s2 F: at most 2 supply crates (512-circle cap with transients)")
+must_contain(_CCF, "NPCAlsoSpawnNearTerritories = false", "W3s2 F: no random territory-marker NPCs (plaza Infantry, rig stand-in)")
+for _needle in ("MT raid", "Military Tycoon", "MT-style"):
+    must_not_contain(_BRC, _needle, "W3s2 F: no other game's name in BankRaidConfig (%s)" % _needle)
+# lane F behaviour
+must_contain(_BRS, 'pcall(ActivityAnchors.List, BankRaidConfig.AnchorSite, "npc")', "W3s2 F: guard posts from the Town.Bank npc anchors first")
+must_contain(_BRS, "for i, p in ipairs(BankRaidConfig.GuardPosts) do", "W3s2 F: P0 fallback posts from BankRaidConfig.GuardPosts")
+must_contain(_BRC, 'AnchorSite = "Town.Bank",', "W3s2 F: the bank anchor site id")
+must_contain(_BRC, 'GuardRolePattern = "^G%d+$",', "W3s2 F: only G<n> anchors are guard posts (R1/R2 are Phase B reinforcements)")
+must_contain(_BRC, "{ X = 212, Y = 1.6, Z = -206, Yaw = 180 },", "W3s2 F: P0 post front-left (clear in the HEAD dump)")
+must_contain(_BRC, "{ X = 220, Y = 0.5, Z = -198, Yaw = 180 },", "W3s2 F: P0 post on the street (clear in the HEAD dump)")
+must_contain(_BRS, 'blockedNow[uid] = "Vehicle"', "W3s2 F: a seated raider is Blocked = Vehicle (HUD: LEAVE VEHICLE)")
+must_contain(_BRS, "DataService.OnProfileLoaded(function(player: Player, profile: any)", "W3s2 F: saved cooldown sanitised + pushed when the save loads")
+must_contain(_BRS, "function BankRaidService.SanitizeCooldown(value: any, nowUnix: number): (number?, boolean)", "W3s2 F: local sanitiser (no ProfileSchema edit)")
+must_contain(_BRS, 'local untilT = cooldownUntil(player) -- nil: profile not loaded', "W3s2 F: no loot before the save loads")
+must_contain(_BRS, 'if sign:FindFirstChildWhichIsA("SurfaceGui") then', "W3s2 F: EMPIRE BANK painted only when the sign has none")
+must_contain(_BRS, "pcall(WorldKits.Sign, sign, faceToward(sign, SIGN.Facing), SIGN.Text)", "W3s2 F: the bank sign goes through the world sign budget")
+must_contain(_BRS, 'pcall(MissionService.TrackProgress, player, "Heist", 1)', "W3s2 F: a bank job counts for Heist missions")
+must_contain(_BRS, "string.format(TEXT.Reward, formatCash(cash))", "W3s2 F: reward toast with commas")
+must_contain(_BRS, "NotificationService.Notify(player, TEXT.FirstVisit, \"Info\")", "W3s2 F: one-time first-visit tip")
+must_contain(_BRS, 'bb:SetAttribute(LABEL.StateAttribute, if anyRaiding then "raid" else "open")', "W3s2 F: public label state for the client's CLOSED line")
+must_contain(_BRS, 'ReplicatedStorage:WaitForChild("Shared", 60)', "W3s2 F: bounded wait for Shared")
+must_contain(_BRC, 'OpenSub = "OPEN · rob the vault",', "W3s2 F: label line OPEN")
+must_contain(_BRC, 'RaidingSub = "RAID ON",', "W3s2 F: label line RAID ON")
+must_contain(_BRC, 'ClosedSub = "CLOSED %dm",', "W3s2 F: label line CLOSED <m>m")
+must_contain(_BRC, 'FirstVisit = "Empire Bank: stand on the vault to loot",', "W3s2 F: first-visit copy (no key names, no tap / click)")
+must_contain(_BRX, 'p.Title.Text = "LEAVE VEHICLE"', "W3s2 F: HUD pill LEAVE VEHICLE")
+must_contain(_BRX, 'local seated = payload.Blocked == "Vehicle"', "W3s2 F: pill reads the server's Blocked")
+must_contain(_BRX, "function BankRaidController.LabelLine(secondsLeft: number, publicState: any): (string, Color3)", "W3s2 F: client-only CLOSED line")
+must_contain(_BRX, "CollectionService:GetTagged(Constants.Tags.BankVault)", "W3s2 F: label found by tag (streaming-safe)")
+must_contain(_BRX, 'player:WaitForChild("PlayerGui", 30)', "W3s2 F: bounded PlayerGui wait")
+for _needle in ('WaitForChild("Shared")', 'WaitForChild("PlayerGui")', "GetDescendants", "RenderStepped"):
+    must_not_contain(_BRX, _needle, "W3s2 F: BankRaidController has no %s" % _needle)
+must_not_contain(_BRS, 'WaitForChild("Shared")', "W3s2 F: BankRaidService never waits forever")
+must_not_contain(_SDS, 'WaitForChild("Shared")', "W3s2 F: SupplyDropService never waits forever")
+must_contain(_SDS, 'lid.Name = "Lid"', "W3s2 F: 2-part crate (crate + lid)")
+for _needle in ('"Beacon"', "StrapX", "StrapZ", '"Ring"', "TryAttachCashCrateVisual"):
+    must_not_contain(_SDS, _needle, "W3s2 F: supply crate has no %s" % _needle)
+must_contain(_SDS, 'NotificationService.Notify(player, "Supply drop +$" .. formatCash(rec.ClaimCash), "Reward")', "W3s2 F: supply toast with commas")
+
+# W3 step 2 lane M0 (missions) pins: paste above the final `parse_gate()` call. Uses the file's own helpers.
+MC_ = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau"
+MSV_ = "src/ServerScriptService/Server/Services/MissionService.luau"
+MCF_ = "src/ReplicatedStorage/Shared/Configs/MissionConfig.luau"
+DOC_ = "src/ReplicatedStorage/Shared/Configs/DailyOpsConfig.luau"
+must_contain(MC_, '"GO"', "W3s2 M0: Missions rows have a GO button (spec §8)")
+must_contain(MC_, "ObjectiveMarker.Show(target)", "W3s2 M0: GO points the one objective marker")
+must_contain(MC_, "function MissionController.GoTarget(entry: any, from: Vector3?)", "W3s2 M0: GO resolves the nearest server-sent target")
+must_not_contain(MC_, "GetDescendants", "W3s2 M0: no whole-tree scans in the Missions panel")
+must_not_contain(MC_, 'WaitForChild("PlayerGui")', "W3s2 M0: PlayerGui wait has a timeout")
+must_contain(MCF_, "Heist = true,", "W3s2 M0: Heist objective is live (BankRaidService tracks it)")
+must_contain(MCF_, "ButtonW = 112,", "W3s2 M0: GO/CLAIM button 112 v wide on touch")
+must_contain(MCF_, "ButtonH = 72,", "W3s2 M0: GO/CLAIM button 72 v tall on touch")
+must_contain(MCF_, 'Anchor = "Town.Bank.Vault",', "W3s2 M0: bank GO target is the vault anchor (fallback BankRaidConfig.Position)")
+must_contain(DOC_, 'FirstJob = "DailyOpBank",', "W3s2 M0: slot 1 is Rob the Bank once unlocked")
+must_contain(DOC_, 'Id = "DailyOpCheckpoint",', "W3s2 M0: Take 2 Checkpoints op in the pool (live in Phase B)")
+must_contain(DOC_, 'Id = "DailyOpJobs",', "W3s2 M0: Finish 3 Jobs op in the pool (live in Phase B)")
+must_contain(MSV_, "local function rotatePick(", "W3s2 M0: the daily offer rotates (every unlocked mission comes round)")
+must_contain(MSV_, 'return false, "NotOffered"', "W3s2 M0: only today's offer can be claimed")
+must_contain(MSV_, "if BankRaidConfig.Enabled == false then", "W3s2 M0: no bank op / GO while the bank job is off (Phase B M1 re-points this)")
+must_not_contain(MSV_, "Random.new(", "W3s2 M0: picks are pure integer maths, the same on every server")
+must_not_contain(MSV_, 'WaitForChild("Shared")', "W3s2 M0: Shared wait has a timeout")
+for _f in (DOC_, MSV_):
+    for _n in ("MT raid", "Military Tycoon", "MT-style"):
+        must_not_contain(_f, _n, "W3s2 M0: no other game named in %s (spec §8)" % _f.split("/")[-1])
+
+# --- W3 step 2 lane U0 (pointer): the one AlwaysOnTop objective marker, compass tracked mode, contested-diamond yield ---
+U0_OM = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/ObjectiveMarker.luau'
+U0_CC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CompassController.luau'
+U0_TC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau'
+must_contain(U0_OM, 'AlwaysOnTop = true', 'W3s2 U0: the objective marker is the one AlwaysOnTop label')
+must_contain(U0_OM, 'ConsoleWaypoint.Current()', 'W3s2 U0: the objective marker yields to the console GO line')
+must_contain(U0_OM, 'return require(script.Parent.ConsoleWaypoint)', 'W3s2 U0: ConsoleWaypoint is required lazily (no require cycle when Phase B makes it call ObjectiveMarker.Clear)')
+must_contain(U0_OM, 'WorldLabel.SetRole(bb, "objective")', 'W3s2 U0: the marker carries WE_LabelRole objective (governor / policy leave it on top)')
+must_contain(U0_OM, 'local PERIOD = 1 / math.clamp(W.RefreshHz, 1, 10)', 'W3s2 U0: marker refresh <= 10 Hz')
+must_contain(U0_OM, 'stepConn = RunService.Heartbeat:Connect(step)', 'W3s2 U0: one Heartbeat connection, only while a target is set')
+must_contain(U0_OM, 'function ObjectiveMarker.OnTop(): boolean', 'W3s2 U0: OnTop() for the contested-diamond yield')
+must_contain(U0_OM, 'function ObjectiveMarker.Revision(): number', 'W3s2 U0: Revision() so the compass copies the target only on change')
+must_not_contain(U0_OM, 'RenderStepped', 'W3s2 U0: no per-frame render work in the marker')
+must_not_contain(U0_OM, 'WaitForChild("Shared")', 'W3s2 U0: bounded wait for Shared')
+must_contain(U0_CC, 'local rev = ObjectiveMarker.Revision()', 'W3s2 U0: compass tracked mode follows the objective marker')
+must_contain(U0_CC, 'local HIDE_TRACKED = { "Modal" }', 'W3s2 U0: the tracked compass also shows inside your own plot (hidden only by a panel)')
+must_not_contain(U0_CC, 'WaitForChild("Shared")', 'W3s2 U0: bounded wait for Shared')
+must_not_contain(U0_CC, 'GetDescendants', 'W3s2 U0: the compass never scans the tree')
+must_contain(U0_TC, 'local on = ObjectiveMarker.OnTop()', 'W3s2 U0: the contested diamond yields to the objective marker')
+must_contain(U0_TC, 'Name = "WE_FlagBillboard", -- TerritoryService', 'W3s2 U0: the yield targets TerritoryService\'s flag diamond')
+must_not_contain(U0_TC, 'WaitForChild("Shared")', 'W3s2 U0: bounded wait for Shared')
+must_not_contain(U0_TC, 'WaitForChild("PlayerGui")', 'W3s2 U0: bounded wait for PlayerGui')
+must_not_contain(U0_TC, 'GetDescendants', 'W3s2 U0: the diamond yield never scans the tree')
+
+# --- W3 step 2 Phase A integration ---
+must_not_contain('src/ServerScriptService/Server/Services/TerritoryService/init.luau', 'WaitForChild("Shared")', 'W3s2 integration: TerritoryService never waits forever on Shared (bounded 60 s)')
+# Enable steps (Phase A integration): step 1 (Industry + 3 camps) ON; steps 2 (Frontier) and 3 (Ruins, Crash, Oasis) stay OFF
+# until lane BK frees the 4 pool-pad sign slots: with them on, the 17-sign world budget refuses a POI board (AIRSTRIP /
+# RUINED VILLAGE / CRASH SITE / OASIS) or, if MapDressing paints first, the EMPIRE BANK sign. Lane BK swaps these 5 needles.
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 140, Reserve = 8, Enabled = true, Lights = 3, Signs = 1, Layout = "Industry"', 'W3s2 enable step 1: South Port (Industry + camps) is on')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 75, Reserve = 4, Enabled = false, Lights = 1, Signs = 1, Layout = "Frontier"', 'W3s2 enable step 2 waits for lane BK (sign budget): Signal off')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 85, Reserve = 6, Enabled = false, Lights = 2, Signs = 1, Layout = "Frontier"', 'W3s2 enable step 2 waits for lane BK (sign budget): Airstrip off')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 85, Reserve = 4, Enabled = false, Lights = 0, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3 waits for lane BK (sign budget): Ruins off')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 45, Reserve = 4, Enabled = false, Lights = 0, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3 waits for lane BK (sign budget): Crash off')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 60, Reserve = 2, Enabled = false, Lights = 2, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3 waits for lane BK (sign budget): Oasis off')
 
 parse_gate()
 

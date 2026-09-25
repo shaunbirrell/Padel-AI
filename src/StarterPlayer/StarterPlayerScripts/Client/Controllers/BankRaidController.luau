@@ -5,18 +5,27 @@
 	  in the vault, nothing held yet  "STAND TO LOOT $15K–$35K"   0%
 	  holding                         "RAIDING EMPIRE BANK"       62%   gold bar
 	  under fire                      "UNDER FIRE · CLEAR GUARDS" 62%   red bar + red edge
+	  seated on the vault             "LEAVE VEHICLE"             62%   amber bar + amber edge (W3 step 2, lane F)
 	  cooldown (standing on the vault) "EMPIRE BANK COOLDOWN"      4m    grey
 	Shows while InVault / HoldProgress > 0 / UnderFire (BankRaidStateUpdate), hidden while Dead.
-	Display only: the server decides every payout.
+
+	W3 step 2, lane F: the bank's world label (server: "Empire Bank" / "OPEN · rob the vault" / "RAID ON") shows
+	"CLOSED 4m" on THIS client while this player's own saved cooldown runs (the server label is public, the cooldown
+	is not). Refreshed at 1 Hz only while a cooldown runs or has just ended; the label is found through the vault's
+	CollectionService tag (streaming-safe: no label streamed in → nothing to draw). Display only: the server decides
+	every payout.
 ]]
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local HudConfig = require(Shared.Configs.HudConfig)
+local BankRaidConfig = require(Shared.Configs.BankRaidConfig)
 local Remotes = require(Shared.Remotes)
+local WorldLabel = require(Shared.Util.WorldLabel)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local ProgressPill = require(script.Parent.Parent.Modules.ProgressPill)
@@ -30,7 +39,15 @@ local pill: ProgressPill.Pill? = nil
 local active = false -- the server says the local player is at / in the vault (see Apply)
 
 local UNDER_FIRE = Color3.fromRGB(255, 96, 72)
+local VEHICLE = Color3.fromRGB(255, 176, 48)
 local HOLD_FILL = HudConfig.Colors.Gold
+local LABEL = BankRaidConfig.Label
+
+-- this player's own cooldown for the world label's CLOSED line (os.clock deadline; 0 = none)
+local closedUntil = 0
+local labelOverridden = false
+local labelRef: BillboardGui? = nil
+local labelLoop = false
 
 export type BankRaidStatePayload = {
 	BankId: string?,
@@ -42,6 +59,7 @@ export type BankRaidStatePayload = {
 	HoldProgress: number?,
 	InVault: boolean?,
 	UnderFire: boolean?,
+	Blocked: string?, -- "Vehicle": seated on the vault (no progress until on foot)
 	CashHintMin: number?,
 	CashHintMax: number?,
 }
@@ -70,20 +88,82 @@ local function shortCash(n: number): string
 	return "$" .. tostring(math.floor(n))
 end
 
+-- ── the bank's world label: this player's CLOSED line ───────────────────────────────────────────────────────
+local function findLabel(): BillboardGui?
+	local bb = labelRef
+	if bb and bb.Parent then
+		return bb
+	end
+	labelRef = nil
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BankVault)) do
+		local g = inst:FindFirstChild(LABEL.Name)
+		if g and g:IsA("BillboardGui") then
+			labelRef = g
+			return g
+		end
+	end
+	return nil
+end
+
+-- The line this client shows: CLOSED <m>m while its own cooldown runs, else the server's public state (read back
+-- from the label's WE_BankState attribute). Pure: exported for the headless tests.
+function BankRaidController.LabelLine(secondsLeft: number, publicState: any): (string, Color3)
+	if secondsLeft > 0 then
+		return string.format(LABEL.ClosedSub, math.max(1, math.ceil(secondsLeft / 60))), LABEL.ClosedColor
+	end
+	if publicState == "raid" then
+		return LABEL.RaidingSub, LABEL.RaidingColor
+	end
+	return LABEL.OpenSub, LABEL.OpenColor
+end
+
+local function refreshLabel()
+	local left = closedUntil - os.clock()
+	if left <= 0 and not labelOverridden then
+		return
+	end
+	local bb = findLabel()
+	if not bb then
+		return -- not streamed in (or no bank): drawn when it is
+	end
+	local sub, color = BankRaidController.LabelLine(left, bb:GetAttribute(LABEL.StateAttribute))
+	labelOverridden = left > 0
+	-- SetText writes only what differs; a server change to the label overwrites ours and is redrawn within 1 s
+	WorldLabel.SetText(bb, LABEL.Title, sub, color)
+end
+
+local function startLabelLoop()
+	if labelLoop then
+		return
+	end
+	labelLoop = true
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			refreshLabel()
+		end
+	end)
+end
+
 function BankRaidController.Apply(payload: BankRaidStatePayload)
 	if payload.Enabled == false then
 		setVisible(false)
 		return
 	end
 
+	local cd = math.max(0, math.floor(tonumber(payload.CooldownRemaining) or 0))
+	-- every push carries the authoritative remaining seconds (join, save loaded, loot, in the vault)
+	closedUntil = if cd > 0 then os.clock() + cd else 0
+	refreshLabel()
+
 	local inVault = payload.InVault == true
 	local underFire = payload.UnderFire == true
+	local seated = payload.Blocked == "Vehicle"
 	local hold = tonumber(payload.HoldProgress) or 0
 	local need = tonumber(payload.HoldNeed) or tonumber(payload.RaidHoldSeconds) or 8
 	if need <= 0 then
 		need = 8
 	end
-	local cd = math.max(0, math.floor(tonumber(payload.CooldownRemaining) or 0))
 	local name = payload.DisplayName or "Empire Bank"
 
 	local show = inVault or hold > 0 or underFire
@@ -102,6 +182,13 @@ function BankRaidController.Apply(payload: BankRaidStatePayload)
 			p.Fill.BackgroundColor3 = ProgressPill.Colors.Idle
 			ProgressPill.SetFraction(p, 0)
 			ProgressPill.ResetStroke(p)
+		elseif seated then
+			p.Title.Text = "LEAVE VEHICLE"
+			p.Title.TextColor3 = VEHICLE
+			p.Value.Text = ProgressPill.Percent(frac)
+			p.Fill.BackgroundColor3 = VEHICLE
+			ProgressPill.SetFraction(p, frac)
+			ProgressPill.AccentStroke(p, VEHICLE)
 		elseif underFire then
 			p.Title.Text = "UNDER FIRE · CLEAR GUARDS"
 			p.Title.TextColor3 = UNDER_FIRE
@@ -127,12 +214,29 @@ function BankRaidController.Apply(payload: BankRaidStatePayload)
 	setVisible(true)
 end
 
+local function playerGui(): PlayerGui?
+	local pg = player:FindFirstChildOfClass("PlayerGui")
+	if pg then
+		return pg
+	end
+	local waited = player:WaitForChild("PlayerGui", 30)
+	if waited and waited:IsA("PlayerGui") then
+		return waited
+	end
+	return nil
+end
+
 function BankRaidController.Init()
+	local pg = playerGui()
+	if not pg then
+		warn("[WAR EMPIRE] BankRaidController: no PlayerGui after 30 s; bank HUD off")
+		return
+	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireBankRaid"
 	-- Core safe insets + the one HUD UIScale; DisplayOrder from HudConfig (32: above the capture bar's gui)
 	HudLayout.ApplyScreen(screen, { Insets = "Core" })
-	screen.Parent = player:WaitForChild("PlayerGui")
+	screen.Parent = pg
 	_gui = screen
 
 	local p = ProgressPill.Build(screen, "BankRaidProgress")
@@ -142,6 +246,7 @@ function BankRaidController.Init()
 	end)
 	HudLayout.RegisterTopStack("BankRaid", p.Frame, HudConfig.TopStack.Order.Progress, { Space = "Hud" })
 
+	startLabelLoop()
 	Remotes.BindEvent(Constants.RemoteNames.BankRaidStateUpdate, function(payload: any)
 		if typeof(payload) ~= "table" then
 			return
