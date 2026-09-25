@@ -156,6 +156,40 @@ export type PlayerProfile = {
 	Monetization: MonetizationStats?,
 	AnnouncePurchases: boolean?, -- M8 purchase ticker opt-out (true = announce)
 	VipSupplyAt: number?, -- M8 daily VIP supply: os.time() of the last claim
+	-- Owner's 11 features (ProfileSchema default-fill + sanitise; no DataVersion bump)
+	KeepBaseRebirths: number?, -- F7 keep-base rebirth tokens (added only in ProcessReceipt; spent by PrestigeService)
+	TutorialOrderVersion: number?, -- F6 order the saved TutorialStep index uses (missing = 1, the pre-F6 order)
+	NoviceShieldDone: boolean?, -- F6 the novice shield has ended for good (never re-granted)
+	StarterOutpostTaken: boolean?, -- F10 first Home Outpost capture done (later sessions own it on plot ready)
+}
+
+-- F7 / F11 (owner's 11 features): PrestigeStateUpdate payload. The v71 fields plus the keep-base and progress fields
+-- (all display only; the server re-checks everything on RequestPrestige / ProcessReceipt).
+export type RebirthSummaryPayload = { Keep: { string }, Reset: { string }, Gain: { string } }
+
+export type PrestigeStatePayload = {
+	Prestige: number,
+	CanPrestige: boolean,
+	MinLevel: number,
+	MaxPrestige: number,
+	CashBonusPerLevel: number,
+	CashMultPercent: number,
+	NextCashMultPercent: number,
+	GoldBonusOnPrestige: number,
+	CashFee: number,
+	StartingCashAfter: number,
+	BaseCompletionPercent: number,
+	FeeSummary: string,
+	RebirthUnlocks: { [string]: boolean },
+	UnlockTrack: { any },
+	-- F7 / F11
+	KeepBaseTokens: number?, -- profile.KeepBaseRebirths
+	KeepBaseLive: boolean?, -- DevProducts.RebirthKeepBase.Id ~= 0 and PrestigeConfig.KeepBase.Enabled
+	KeepBasePrice: number?, -- RobuxPrice (50)
+	ProgressPct: number?, -- PrestigeConfig.ProgressPct(Level, XP)
+	Level: number?,
+	XP: number?,
+	Summary: { Cash: RebirthSummaryPayload, KeepBase: RebirthSummaryPayload }?, -- PrestigeConfig.RebirthSummary
 }
 
 export type EconomyUpdatePayload = {

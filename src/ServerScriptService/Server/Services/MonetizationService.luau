@@ -11,6 +11,11 @@
 	RefreshGamePassCache), pass checks in parallel (J21), Roblox AnalyticsService economy events (deferred, pcall),
 	a whitelisted `source` on RequestPurchase*. Offers: none before the tutorial is complete, the Starter Pack gate
 	TrySoftOfferStarterBundle (TutorialService schedules it), no Speed Boost / death Cash Mega pop-ups, D8 budget.
+	Owner's 11 features, lane M (spec_f11 F7 / F8): SpeedMultFor (the highest WalkSpeedMult among the speed SKUs the
+	player owns: Speed Pass x1.15, Speed Boost x1.25; never multiplied together), re-applied on respawn, on load and
+	when a speed pass flips to owned; TryDeathSpeedOffer (the one death offer, MonetizationConfig.DeathSpeedOffer).
+	The Keep-Base Rebirth receipt needs no branch of its own: CounterGrants.GrantKeepBaseRebirths banks the token,
+	it is saved before PurchaseGranted, and PrestigeService runs the rebirth from OnGranted (never in the receipt).
 ]]
 
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -85,6 +90,10 @@ local passCacheFilled: { [number]: boolean } = {}
 -- D8 session soft-offer budget, and the session start used by the tutorial quiet window
 local softOffersClaimed: { [number]: number } = {}
 local sessionStartAt: { [number]: number } = {}
+-- F8: the death speed offer was sent this session (userId -> true; cleared on PlayerRemoving)
+local deathSpeedSent: { [number]: boolean } = {}
+-- F8: sanity cap on a WalkSpeedMult config value (a typo must never launch players across the map)
+local MAX_WALK_SPEED_MULT = 2
 
 -- Whole number >= 0; junk (nil, strings, NaN, inf, negatives) becomes 0.
 local function nonNegInt(value: any): number
@@ -404,6 +413,92 @@ function MonetizationService.PlayerOwnsGamePass(player: Player, passKey: string)
 	return cache[passKey] == true
 end
 
+--[[ F8: ownership from what this session already knows: the pass cache (filled on join; mirrors entitlements and
+	confirmed purchases) or the saved entitlement. Never yields and never calls Roblox, so it is safe inside a
+	receipt's no-yield window and in a death listener. ]]
+local function ownsCached(player: Player, key: string): boolean
+	local cache = gamePassCache[player.UserId]
+	if cache ~= nil and cache[key] == true then
+		return true
+	end
+	local profile = DataService and DataService.GetProfile(player)
+	return typeof(profile) == "table" and typeof(profile.Entitlements) == "table" and profile.Entitlements[key] == true
+end
+
+-- F8: a SKU key (game pass or Developer Product) is owned: its own key, or the entitlement its product grants
+local function ownsSkuCached(player: Player, key: string): boolean
+	if ownsCached(player, key) then
+		return true
+	end
+	local dp = (MonetizationConfig.DevProducts :: any)[key]
+	local ent = if typeof(dp) == "table" then dp.GrantEntitlement else nil
+	return typeof(ent) == "string" and ent ~= key and ownsCached(player, ent)
+end
+
+-- F8: WalkSpeedMult of one config entry (1 when missing or junk; capped at MAX_WALK_SPEED_MULT)
+local function walkSpeedMultOf(def: any): number
+	local m = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+	if m == nil or m ~= m or m <= 1 then
+		return 1
+	end
+	return math.min(m, MAX_WALK_SPEED_MULT)
+end
+
+-- F8: the key (game pass, Developer Product or granted entitlement) belongs to a speed SKU
+local function isSpeedKey(key: string): boolean
+	if walkSpeedMultOf((MonetizationConfig.GamePasses :: any)[key]) > 1 then
+		return true
+	end
+	for dpKey, def in pairs(MonetizationConfig.DevProducts :: any) do
+		if walkSpeedMultOf(def) > 1 and (dpKey == key or def.GrantEntitlement == key) then
+			return true
+		end
+	end
+	return false
+end
+
+--[[ F8 (owner's 11 features): the walk-speed multiplier for this player = the HIGHEST WalkSpeedMult among the speed
+	SKUs they own (GamePasses.ImpulseSpeed x1.15, DevProducts.SpeedBoost x1.25), never the product of them: owning
+	both gives x1.25. 1 when none is owned. A pass whose Id is 0 is never owned outside Studio mocks. Never yields. ]]
+function MonetizationService.SpeedMultFor(player: Player): number
+	local best = 1
+	if typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return best
+	end
+	for passKey, def in pairs(MonetizationConfig.GamePasses :: any) do
+		local m = walkSpeedMultOf(def)
+		if m > best and ownsCached(player, passKey) then
+			best = m
+		end
+	end
+	for productKey, def in pairs(MonetizationConfig.DevProducts :: any) do
+		local m = walkSpeedMultOf(def)
+		if m > best and ownsSkuCached(player, productKey) then
+			best = m
+		end
+	end
+	return best
+end
+
+-- SpeedBoost / Speed Pass: permanent move speed on the current character (F8: SpeedMultFor, the max of the owned SKUs)
+local function applySpeedBoostToCharacter(player: Player)
+	local character = player.Character
+	if not character then
+		return
+	end
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	if not hum then
+		return
+	end
+	local mult = MonetizationService.SpeedMultFor(player)
+	if mult <= 1 then
+		return -- nothing owned: WalkSpeed stays the game default
+	end
+	local GameConfig = require(Shared.Configs.GameConfig)
+	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
+	hum.WalkSpeed = base * mult
+end
+
 function MonetizationService.SetMockGamePassOwned(player: Player, passKey: string, owned: boolean)
 	if not RunService:IsStudio() then
 		return
@@ -417,6 +512,10 @@ function MonetizationService.SetMockGamePassOwned(player: Player, passKey: strin
 		gamePassCache[player.UserId] = cache
 	end
 	cache[passKey] = owned
+	-- F8: a mocked Speed Pass applies at once (Studio only; the live path is OnPassOwned below)
+	if owned and isSpeedKey(passKey) then
+		applySpeedBoostToCharacter(player)
+	end
 end
 
 
@@ -425,22 +524,6 @@ local function ensureEntitlements(profile: any)
 		profile.Entitlements = {}
 	end
 	return profile.Entitlements
-end
-
-local SPEED_BOOST_MULT = 1.25
-
-local function applySpeedBoostToCharacter(player: Player)
-	local character = player.Character
-	if not character then
-		return
-	end
-	local hum = character:FindFirstChildOfClass("Humanoid")
-	if not hum then
-		return
-	end
-	local GameConfig = require(Shared.Configs.GameConfig)
-	local base = tonumber(GameConfig.DefaultWalkSpeed) or 16
-	hum.WalkSpeed = base * SPEED_BOOST_MULT
 end
 
 function MonetizationService.GrantEntitlement(player: Player, key: string)
@@ -510,8 +593,8 @@ function MonetizationService.GrantEntitlement(player: Player, key: string)
 			end
 		end)
 	end
-	-- SpeedBoost: permanent move-speed on current character
-	if key == "SpeedBoost" then
+	-- SpeedBoost (F8: any speed SKU): permanent move-speed on current character; no yield (receipt-safe)
+	if isSpeedKey(key) then
 		applySpeedBoostToCharacter(player)
 	end
 	DataService.MarkDirty(player)
@@ -841,6 +924,8 @@ function MonetizationService.Init(deps: { [string]: any })
 				end
 				gamePassCache[player.UserId] = cache
 			end
+			-- F8: the character can spawn before the pass cache and the profile are ready; apply the speed now
+			applySpeedBoostToCharacter(player)
 
 			-- v71 money (M1): display-only counter attributes (e.g. WE_Nukes); never read back by the server
 			local counterSpecs = (MonetizationConfig :: any).CounterGrants
@@ -872,24 +957,31 @@ function MonetizationService.Init(deps: { [string]: any })
 		softOffersClaimed[player.UserId] = nil
 		sessionStartAt[player.UserId] = nil
 		purchaseIntents[player.UserId] = nil
+		deathSpeedSent[player.UserId] = nil -- F8: the next session may get one death offer again
+	end)
+
+	-- F8: a speed pass that flips to owned (the join check, a retried check or a confirmed purchase) applies at once
+	MonetizationService.OnPassOwned(function(player: Player, passKey: string)
+		if player.Parent and isSpeedKey(passKey) then
+			applySpeedBoostToCharacter(player)
+		end
 	end)
 
 	-- Re-apply SpeedBoost WalkSpeed on respawn. v71 money (M1): the v36 spawn ("walk_speed") Speed Boost pop-up is
-	-- gone (it raced the Starter offer; SpeedBoostOffer.IgnoreReasons).
+	-- gone (it raced the Starter offer; SpeedBoostOffer.IgnoreReasons). F8: SpeedMultFor (Speed Pass or Speed Boost,
+	-- the higher one); it reads the session cache only, so a respawn never waits on a Roblox ownership call.
 	local function hookSpeed(player: Player)
 		player.CharacterAdded:Connect(function()
 			task.defer(function()
 				task.wait(0.3)
-				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
+				if player.Parent then
 					applySpeedBoostToCharacter(player)
 				end
 			end)
 		end)
 		if player.Character then
 			task.defer(function()
-				if MonetizationService.PlayerOwnsEntitlement(player, "SpeedBoost") then
-					applySpeedBoostToCharacter(player)
-				end
+				applySpeedBoostToCharacter(player)
 			end)
 		end
 	end
@@ -1379,6 +1471,67 @@ function MonetizationService.TrySoftOfferCashMega(player: Player, reason: string
 		end
 		-- (no companion Info line: the client offer toast carries the offer — HUD v70 spec §4.2)
 	end)
+end
+
+--[[ F8 (owner's 11 features): the ONE offer allowed after a death (MonetizationConfig.DeathSpeedOffer; DeathShopOffers
+	stays empty, so there is still no 2x Cash / Cash Mega death offer). CombatService calls it in a pcall after a PvP
+	death that was not a blast. Sends DeathShopOffer { Offers = { PassKey } } only when ALL of these hold:
+	  - the pass Id is not 0 (nothing is offered or prompted while it is 0);
+	  - the tutorial is complete (RequireTutorialComplete);
+	  - it is the first send this session (OncePerSession; deathSpeedSent, cleared on PlayerRemoving);
+	  - ownership is KNOWN (the join check has run and no failed check is waiting for a retry) and the victim owns
+	    none of SkipIfOwnsAny (Speed Pass or Speed Boost);
+	  - a D8 soft-offer slot is free (ClaimSoftOfferSlot, claimed last so a refused offer never spends one).
+	Never yields. Returns true when the offer was sent. The client still refuses it for an owner (WE_Ent_*). ]]
+function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
+	if typeof(victim) ~= "Instance" or not victim:IsA("Player") or not victim.Parent or not DataService then
+		return false
+	end
+	local cfg = (MonetizationConfig :: any).DeathSpeedOffer
+	if typeof(cfg) ~= "table" or typeof(cfg.PassKey) ~= "string" then
+		return false
+	end
+	local passKey: string = cfg.PassKey
+	local pass = (MonetizationConfig.GamePasses :: any)[passKey]
+	if typeof(pass) ~= "table" or typeof(pass.Id) ~= "number" or pass.Id == 0 then
+		return false
+	end
+	local userId = victim.UserId
+	if cfg.OncePerSession ~= false and deathSpeedSent[userId] == true then
+		return false
+	end
+	local profile = DataService.GetProfile(victim)
+	if not profile then
+		return false
+	end
+	if cfg.RequireTutorialComplete ~= false and profile.TutorialComplete ~= true then
+		return false
+	end
+	-- unknown ownership is never "not owned": no offer until the join check has run without a pending retry
+	if passCacheFilled[userId] ~= true or passRefreshRetries[userId] ~= nil then
+		return false
+	end
+	if ownsSkuCached(victim, passKey) then
+		return false
+	end
+	if typeof(cfg.SkipIfOwnsAny) == "table" then
+		for _, key in ipairs(cfg.SkipIfOwnsAny) do
+			if typeof(key) == "string" and ownsSkuCached(victim, key) then
+				return false
+			end
+		end
+	end
+	if not MonetizationService.ClaimSoftOfferSlot(victim) then
+		return false
+	end
+	deathSpeedSent[userId] = true
+	if RemoteSetup then
+		local remote = RemoteSetup.Get(Constants.RemoteNames.DeathShopOffer)
+		if remote and remote:IsA("RemoteEvent") then
+			(remote :: RemoteEvent):FireClient(victim, { Offers = { passKey } })
+		end
+	end
+	return true
 end
 
 

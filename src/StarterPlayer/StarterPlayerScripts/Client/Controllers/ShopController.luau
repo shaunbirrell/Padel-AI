@@ -12,7 +12,18 @@
 	  * The seven upsell cards (StarterBundleToast, AutoCollectToast, DoubleCashToast, VIPToast, SpeedBoostToast,
 	    CashMegaToast, DeathShopToast) are thin wrappers around NotificationController.ShowOffer — ONE throttled
 	    offer toast in the top-centre stack. OnGet = the same promptDevProduct / promptGamePass as before.
-	  * AtmRaidHud is the TopStack "Progress" pill (was a full-width chip over the jump button). ]]
+	  * AtmRaidHud is the TopStack "Progress" pill (was a full-width chip over the jump button).
+	Owner's 11 features, lane S (spec_f11 F1 / F2 / F8 / F9):
+	  * OWNED comes only from the server (player attribute WE_Ent_<key>, MonetizationService) or a purchase made
+	    this session; the client never asks Roblox about pass ownership itself. The ATM pads (and the golden pump
+	    pad) read OWNED for game passes AND Developer Products, including a slot's OwnedIfAny keys (the Speed pad:
+	    Speed Pass or Speed Boost) and entitlements another product granted (Auto Collect from the Starter Pack).
+	  * Nothing prompts while an Id is 0: Id 0 passes get no Shop row, and promptGamePass / promptDevProduct stop
+	    at Id 0 before any remote or Roblox prompt. An owned pass shows "Already owned" instead of a prompt.
+	  * Every prompt forwards its source (shop, hud_plus, pad, offer, starter_offer, death_card; analytics only).
+	  * Cash Pack Mega is a permanent hero row (gold stroke, taller, bigger title). VIP stays a Shop row.
+	  * The one PvP death offer is the Speed Pass (MonetizationConfig.DeathSpeedOffer), never shown to a player
+	    who owns any of its SkipIfOwnsAny keys. ]]
 
 local Players = game:GetService("Players")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -47,8 +58,8 @@ local screenGui: ScreenGui? = nil
 local shell: PanelShell.Shell? = nil
 local goldChip: Frame? = nil
 local goldText: TextLabel? = nil
--- UserOwnsGamePassAsync results (refreshed every 20 s by the premium-pad block); read without yielding
-local ownedCache: { [string]: boolean } = {}
+-- F2: where the Shop was opened from (the purchase source its rows send): "hud_plus" from the cash "+", else "shop"
+local openSource = "shop"
 
 -- v69: tabs
 local panelTitle: TextLabel? = nil
@@ -56,6 +67,11 @@ local tabLists: { [string]: ScrollingFrame } = {}
 local tabButtons: { [string]: TextButton } = {}
 local activeTab = "Supply"
 local TAB_TITLES: { [string]: string } = { Supply = "Supply Depot", Weapons = "Armory" }
+
+-- F2: the permanent Cash Pack Mega hero row (gold stroke, 22 v taller, bigger gold title, gold BUY face)
+local HERO_ROW_BG = Color3.fromRGB(46, 38, 18)
+local HERO_ROW_STROKE = 2
+local HERO_ROW_EXTRA_H = 22
 
 -- v69: what the rows show as owned / locked. Display only — the server validates every BUY, EQUIP and receipt.
 local knownLevel: number? = nil -- WE_Level attribute / XPUpdate / PlayerState, whichever arrived last
@@ -67,6 +83,7 @@ local sessionOwnedProducts: { [string]: boolean } = {} -- one-time products boug
 local sessionOwnedPasses: { [string]: boolean } = {}
 local refreshQueued = false
 local refreshShopRows: () -> () = function() end -- set in Init
+local refreshPremiumPads: () -> () = function() end -- set in Init (F1: OWNED look of the world pads)
 local lastSnapshotAt = -math.huge
 
 local function corner(parent: Instance, r: number)
@@ -158,16 +175,98 @@ local function isOneTimeOwned(productKey: string): boolean
 	return false
 end
 
---[[ v70: a GamePass is known owned (display / offer gating only): bought this session, replicated by the server
-	(WE_Ent_<passKey>, MonetizationService), or a cached UserOwnsGamePassAsync hit. Never yields. ]]
+--[[ v70: a GamePass is known owned (display / offer gating only): bought this session, or replicated by the server
+	(WE_Ent_<passKey>, MonetizationService: its join check, a confirmed purchase, or a saved entitlement).
+	F1: no client-side ownership polling any more; the server attribute is the one source. Never yields. ]]
 local function passOwnedKnown(passKey: string): boolean
 	if sessionOwnedPasses[passKey] == true then
 		return true
 	end
-	if player:GetAttribute("WE_Ent_" .. passKey) == true then
+	return player:GetAttribute("WE_Ent_" .. passKey) == true
+end
+
+--[[ F1: one key is owned (display only): a game pass or entitlement the server reports (WE_Ent_<key>), a one-time
+	Developer Product (isOneTimeOwned), or the entitlement a Developer Product of that name grants. ]]
+local function ownsKey(key: string): boolean
+	if passOwnedKnown(key) or isOneTimeOwned(key) then
 		return true
 	end
-	return ownedCache[passKey] == true
+	local dp = (MonetizationConfig.DevProducts :: any)[key]
+	local ent = if typeof(dp) == "table" then dp.GrantEntitlement else nil
+	return typeof(ent) == "string" and ent ~= "" and player:GetAttribute("WE_Ent_" .. ent) == true
+end
+
+local MAX_OWNED_KEYS = 8 -- same cap as PremiumPadService: a pad's OwnedIfAny attribute is read up to this many keys
+
+local function isKeyName(v: any): boolean
+	return typeof(v) == "string" and #v > 0 and #v <= 64 and string.match(v, "^[%w_]+$") ~= nil
+end
+
+--[[ F1: the extra keys whose ownership makes an offer read OWNED (the same rule as PremiumPadService.alreadyOwns):
+	the pad's OwnedIfAny attribute (comma string, written by the server when it builds the pad) plus the OwnedIfAny of
+	every MonetizationConfig.PremiumPads slot that sells this Kind + Key (MonetizationConfig.PadOwnedKeys). ]]
+local function ownedIfAnyKeys(kind: string, key: string, part: Instance?): { string }
+	local out: { string } = {}
+	local seen: { [string]: boolean } = {}
+	local function add(k: any)
+		if #out < MAX_OWNED_KEYS and isKeyName(k) and not seen[k] then
+			seen[k] = true
+			table.insert(out, k)
+		end
+	end
+	local attr = if part then part:GetAttribute("OwnedIfAny") else nil
+	if typeof(attr) == "string" and #attr <= 512 then
+		for _, k in ipairs(string.split(attr, ",")) do
+			add(string.match(k, "^%s*(.-)%s*$"))
+		end
+	end
+	local pads = (MonetizationConfig :: any).PremiumPads
+	local slots = if typeof(pads) == "table" then pads.Slots else nil
+	if typeof(slots) == "table" then
+		for _, slot in ipairs(slots) do
+			local offers = if typeof(slot) == "table" then slot.Offers else nil
+			if typeof(offers) ~= "table" then
+				continue
+			end
+			for _, offer in ipairs(offers) do
+				if typeof(offer) == "table" and offer.Kind == kind and offer.Key == key then
+					for _, k in ipairs(MonetizationConfig.PadOwnedKeys(slot)) do
+						add(k)
+					end
+					break
+				end
+			end
+		end
+	end
+	return out
+end
+
+--[[ F1: an offer (a pad, a pass row, a pass prompt) is owned: its own key, or any of its OwnedIfAny keys. The Speed
+	Pass therefore reads OWNED for a Speed Boost owner (the higher multiplier wins, so the pass would add nothing).
+	Developer Product Shop rows keep their own rule (isOneTimeOwned), so a Speed Pass owner can still buy Speed Boost. ]]
+local function offerOwned(kind: string, key: string, part: Instance?): boolean
+	if ownsKey(key) then
+		return true
+	end
+	for _, k in ipairs(ownedIfAnyKeys(kind, key, part)) do
+		if ownsKey(k) then
+			return true
+		end
+	end
+	return false
+end
+
+-- F8: owns any of these keys (DeathSpeedOffer.SkipIfOwnsAny)
+local function ownsAnyKey(keys: any): boolean
+	if typeof(keys) ~= "table" then
+		return false
+	end
+	for _, k in ipairs(keys) do
+		if isKeyName(k) and ownsKey(k) then
+			return true
+		end
+	end
+	return false
 end
 
 --[[ v70 (spec §4.3): every upsell goes through ONE offer toast (throttled / deferred by NotificationController). ]]
@@ -315,15 +414,21 @@ local function highlightCashMegaRow()
 	end
 	task.delay(4, function()
 		if row.Parent then
-			row.BackgroundColor3 = Constants.Colors.Background
+			-- F2: the hero row goes back to its permanent gold look, any other row to plain
+			local hero = row:GetAttribute("WE_HeroRow") == true
+			row.BackgroundColor3 = if hero then HERO_ROW_BG else Constants.Colors.Background
 			if stroke.Parent then
-				stroke.Thickness = 0
+				stroke.Thickness = if hero then HERO_ROW_STROKE else 0
 			end
 		end
 	end)
 end
 
-local function setOpen(open: boolean)
+-- source: the purchase source of this open (F2: "hud_plus" from the cash "+"); a fresh open without one is "shop"
+local function setOpen(open: boolean, source: string?)
+	if open then
+		openSource = source or (if menuOpen then openSource else "shop")
+	end
 	menuOpen = open
 	if screenGui then
 		local panel = screenGui:FindFirstChild("Panel")
@@ -350,7 +455,12 @@ local function setOpen(open: boolean)
 	end
 end
 
-local function promptDevProduct(productKey: string)
+-- v71 money (M1): the optional 2nd arg of RequestPurchase* (analytics only; the server whitelists it, else "other")
+local function cleanSource(source: string?): string
+	return if typeof(source) == "string" and source ~= "" then source else "shop"
+end
+
+local function promptDevProduct(productKey: string, source: string?)
 	local def = MonetizationConfig.DevProducts[productKey]
 	if not def then
 		return
@@ -361,16 +471,17 @@ local function promptDevProduct(productKey: string)
 		queueRefresh()
 		return
 	end
-	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
-	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey)
-	if def.Id and def.Id ~= 0 then
-		MarketplaceService:PromptProductPurchase(player, def.Id)
-	else
-		warn("[Shop] Product ID placeholder for", productKey, "— set MonetizationConfig DevProduct Ids")
+	-- Nothing prompts while the Id is 0 (the owner has not created the product yet): no intent, no Roblox sheet
+	if (tonumber(def.Id) or 0) == 0 then
+		toast("Coming soon", "Info")
+		return
 	end
+	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey, cleanSource(source))
+	MarketplaceService:PromptProductPurchase(player, def.Id)
 end
 
-local function promptGamePass(passKey: string)
+local function promptGamePass(passKey: string, source: string?)
 	local def = MonetizationConfig.GamePasses[passKey]
 	if not def then
 		return
@@ -379,13 +490,20 @@ local function promptGamePass(passKey: string)
 	if (def :: any).HideFromShop == true then
 		return
 	end
-	-- Log intent on server; NEVER treat client confirmation as a grant
-	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey)
-	if def.Id and def.Id ~= 0 then
-		MarketplaceService:PromptGamePassPurchase(player, def.Id)
-	else
-		warn("[Shop] GamePass ID placeholder for", passKey, "— set MonetizationConfig GamePass Ids")
+	-- F1: an owned pass (or one whose OwnedIfAny key is owned: the Speed Pass for a Speed Boost owner) never prompts
+	if offerOwned("GamePass", passKey) then
+		toast("Already owned", "Info")
+		queueRefresh()
+		return
 	end
+	-- Nothing prompts while the Id is 0
+	if (tonumber(def.Id) or 0) == 0 then
+		toast("Coming soon", "Info")
+		return
+	end
+	-- Log intent on server; NEVER treat client confirmation as a grant
+	task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey, cleanSource(source))
+	MarketplaceService:PromptGamePassPurchase(player, def.Id)
 end
 
 function ShopController.Init()
@@ -397,11 +515,21 @@ function ShopController.Init()
 		local lastDeathToastAt = -math.huge
 		local DEATH_TOAST_DEBOUNCE = 10
 
+		-- F8: MonetizationConfig.DeathSpeedOffer (the one death offer: the Speed Pass)
+		local speedOffer: any = (MonetizationConfig :: any).DeathSpeedOffer
+		local speedPassKey: string? = if typeof(speedOffer) == "table" and typeof(speedOffer.PassKey) == "string"
+			then speedOffer.PassKey
+			else nil
+
 		local function resolveOfferPrompt(key: string): (string?, string?, number?, string?)
+			-- F8: never offer the Speed Pass to a player who owns any SkipIfOwnsAny key (Speed Pass or Speed Boost)
+			if key == speedPassKey and ownsAnyKey(speedOffer.SkipIfOwnsAny) then
+				return nil, nil, nil, nil
+			end
 			-- Prefer live GamePass, then live DevProduct (DoubleCash is GP; SpeedBoost is DP)
 			local gp = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
 			if gp and typeof(gp.Id) == "number" and gp.Id ~= 0 then
-				if passOwnedKnown(key) then
+				if offerOwned("GamePass", key) then
 					return nil, nil, nil, nil
 				end
 				return "GamePass", key, gp.Id, gp.DisplayName or key
@@ -436,18 +564,30 @@ function ShopController.Init()
 						else (MonetizationConfig.DevProducts :: any)[k]
 					local robux = if typeof(def) == "table" then tonumber(def.RobuxPrice) else nil
 					local desc = if typeof(def) == "table" and typeof(def.Description) == "string" then def.Description else nil
-					pendingCashMegaHighlight = true -- v35: CashMega highlight if the shop opens next
+					local title = "Back stronger: " .. name
+					local sub = desc or "Boost after death"
+					if k == speedPassKey then
+						-- F8 copy: "Run faster" / "Speed Pass  +15% forever" / "GET R$ 5" (from the config values).
+						-- No Cash Pack Mega highlight after this offer (M1: no 799 R$ push after a death).
+						local mult = if typeof(def) == "table" then tonumber(def.WalkSpeedMult) else nil
+						title = "Run faster"
+						sub = if mult and mult > 1
+							then string.format("%s  +%d%% forever", name, math.floor((mult - 1) * 100 + 0.5))
+							else name
+					else
+						pendingCashMegaHighlight = true -- v35: CashMega highlight if the shop opens next
+					end
 					local offerKind, offerKey = kind, k
 					return showOffer({
 						Key = "DeathShopToast",
-						Title = "Back stronger: " .. name,
-						Sub = desc or "Boost after death",
+						Title = title,
+						Sub = sub,
 						Cta = ctaFor(robux),
 						OnGet = function()
 							if offerKind == "GamePass" then
-								promptGamePass(offerKey)
+								promptGamePass(offerKey, "death_card")
 							else
-								promptDevProduct(offerKey)
+								promptDevProduct(offerKey, "death_card")
 							end
 						end,
 					})
@@ -614,36 +754,60 @@ function ShopController.Init()
 	local rowBtnW = if isTouch then 140 else 100
 	local rowTitleSize = PanelShell.Text(14)
 	local rowSubSize = PanelShell.Text(11)
-	local function buildRow(parentList: ScrollingFrame, layoutOrder: number, rowName: string, label: string, sub: string, btnText: string): (Frame, TextLabel, TextButton)
+	-- F2: the hero title. PanelShell.Text(16) clamps to the same 20 v as every row title on touch, so the hero uses
+	-- 24 v (16.8 real px on phones) to stand out on the device most players use.
+	local heroTitleSize = PanelShell.Text(24)
+	local function buildRow(parentList: ScrollingFrame, layoutOrder: number, rowName: string, label: string, sub: string, btnText: string, hero: boolean?): (Frame, TextLabel, TextButton)
+		local isHero = hero == true
+		local titleSize = if isHero then heroTitleSize else rowTitleSize
+		local rowH = math.max(rowBtnH + 10, rowTitleSize + rowSubSize + 22) + (if isHero then HERO_ROW_EXTRA_H else 0)
+		-- the hero centres its two lines in the taller row; every other row keeps the v69 7 v top
+		local titleY = if isHero then math.floor((rowH - (titleSize + 4 + 6 + rowSubSize + 4)) / 2) else 7
 		local row = Instance.new("Frame")
 		row.Name = "ShopRow_" .. rowName
-		row.Size = UDim2.new(1, -8, 0, math.max(rowBtnH + 10, rowTitleSize + rowSubSize + 22))
-		row.BackgroundColor3 = Constants.Colors.Background
+		row.Size = UDim2.new(1, -8, 0, rowH)
+		row.BackgroundColor3 = if isHero then HERO_ROW_BG else Constants.Colors.Background
 		row.BorderSizePixel = 0
 		row.LayoutOrder = layoutOrder
 		row.Parent = parentList
 		corner(row, 8)
+		if isHero then
+			row:SetAttribute("WE_HeroRow", true)
+			local heroStroke = Instance.new("UIStroke")
+			heroStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			heroStroke.Color = Constants.Colors.Gold
+			heroStroke.Thickness = HERO_ROW_STROKE
+			heroStroke.Parent = row
+		end
 
 		local t = Instance.new("TextLabel")
 		t.BackgroundTransparency = 1
-		t.Position = UDim2.fromOffset(12, 7)
-		t.Size = UDim2.new(1, -(rowBtnW + 30), 0, rowTitleSize + 4)
-		t.Font = Enum.Font.GothamBold
-		t.TextSize = rowTitleSize
+		t.Position = UDim2.fromOffset(12, titleY)
+		t.Size = UDim2.new(1, -(rowBtnW + 30), 0, titleSize + 4)
+		t.Font = if isHero then HudConfig.Fonts.Display else Enum.Font.GothamBold
+		t.TextSize = titleSize
 		t.TextXAlignment = Enum.TextXAlignment.Left
 		t.TextTruncate = Enum.TextTruncate.AtEnd
-		t.TextColor3 = Constants.Colors.Text
+		t.TextColor3 = if isHero then Constants.Colors.GoldBright else Constants.Colors.Text
 		t.Text = label
+		if isHero then
+			-- the hero title shrinks to fit a narrow panel (desktop 480 v), never below a plain row title
+			t.TextScaled = true
+			local fit = Instance.new("UITextSizeConstraint")
+			fit.MinTextSize = rowTitleSize
+			fit.MaxTextSize = titleSize
+			fit.Parent = t
+		end
 		t.Parent = row
 
 		local s = Instance.new("TextLabel")
 		s.BackgroundTransparency = 1
-		s.Position = UDim2.fromOffset(12, 7 + rowTitleSize + 6)
+		s.Position = UDim2.fromOffset(12, titleY + titleSize + 6)
 		s.Size = UDim2.new(1, -(rowBtnW + 30), 0, rowSubSize + 4)
 		s.Font = Enum.Font.GothamMedium
 		s.TextSize = rowSubSize
 		s.TextXAlignment = Enum.TextXAlignment.Left
-		s.TextColor3 = Constants.Colors.Muted
+		s.TextColor3 = if isHero then Constants.Colors.Text else Constants.Colors.Muted
 		s.TextTruncate = Enum.TextTruncate.AtEnd
 		s.Text = sub
 		s.Parent = row
@@ -653,17 +817,18 @@ function ShopController.Init()
 		btn.AnchorPoint = Vector2.new(1, 0.5)
 		btn.Position = UDim2.new(1, -8, 0.5, 0)
 		btn.Size = UDim2.fromOffset(rowBtnW, rowBtnH)
-		btn.BackgroundColor3 = Constants.Colors.Gunmetal
+		-- F2: the hero's BUY face is gold with dark text (the plain rows keep the gunmetal face)
+		btn.BackgroundColor3 = if isHero then Constants.Colors.Gold else Constants.Colors.Gunmetal
 		btn.Font = Enum.Font.GothamBold
 		btn.TextSize = PanelShell.Text(12)
-		btn.TextColor3 = Color3.fromRGB(255, 248, 230)
+		btn.TextColor3 = if isHero then Constants.Colors.TextDark else Color3.fromRGB(255, 248, 230)
 		btn.Text = btnText
 		btn.BorderSizePixel = 0
 		btn.Active = true
 		corner(btn, 8)
 		local btnStroke = Instance.new("UIStroke")
 		btnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		btnStroke.Color = Constants.Colors.Gold
+		btnStroke.Color = if isHero then Constants.Colors.GoldBright else Constants.Colors.Gold
 		btnStroke.Thickness = 1.25
 		btnStroke.Parent = btn
 		btn.Parent = row
@@ -673,9 +838,9 @@ function ShopController.Init()
 
 	local order = 0
 	-- SUPPLY row. onClick nil = display-only row: its button is disabled (never a dead gold BUY).
-	local function addRow(label: string, sub: string, onClick: (() -> ())?, btnText: string?, rowKey: string?): TextButton
+	local function addRow(label: string, sub: string, onClick: (() -> ())?, btnText: string?, rowKey: string?, hero: boolean?): TextButton
 		order += 1
-		local _, _, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY")
+		local _, _, btn = buildRow(list, order, rowKey or tostring(order), label, sub, btnText or "BUY", hero)
 		btn.Activated:Connect(function()
 			if onClick == nil or btn:GetAttribute("WE_Disabled") == true then
 				return
@@ -717,16 +882,36 @@ function ShopController.Init()
 		end
 		local title = def.DisplayName
 		if heroLabel then
+			-- F2: the title carries "BEST OFFER"; the sub is just what you get (no second "BEST OFFER —")
 			title = heroLabel .. " · " .. title
-			sub = "BEST OFFER — " .. sub
 		end
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "BUY"
 		local btn = addRow(title, sub, function()
-			promptDevProduct(key)
-		end, btnLabel, key)
+			promptDevProduct(key, openSource)
+		end, btnLabel, key, heroLabel ~= nil)
 		if def.OneTime == true then
 			oneTimeRows[key] = { Btn = btn, Label = btnLabel }
 		end
+	end
+
+	-- F9: a stable row order (Robux price, then key) instead of the table's hash order, so a newly pasted Id (Golden
+	-- Pumpjacks, the Speed Pass) always lands in the same place on every server
+	local function sortedKeys(section: any): { string }
+		local keys: { string } = {}
+		for key in pairs(section) do
+			if typeof(key) == "string" then
+				table.insert(keys, key)
+			end
+		end
+		table.sort(keys, function(a: string, b: string): boolean
+			local pa = tonumber(section[a].RobuxPrice) or 0
+			local pb = tonumber(section[b].RobuxPrice) or 0
+			if pa ~= pb then
+				return pa < pb
+			end
+			return a < b
+		end)
+		return keys
 	end
 
 	-- Hero CashMega first, then remaining cash packs, then other DevProducts
@@ -748,23 +933,30 @@ function ShopController.Init()
 			end
 		end
 	end
-	for key, def in pairs(MonetizationConfig.DevProducts) do
+	for _, key in ipairs(sortedKeys(MonetizationConfig.DevProducts)) do
 		if not listed[key] then
-			addDevRow(key, def, nil)
+			addDevRow(key, (MonetizationConfig.DevProducts :: any)[key], nil)
 		end
 	end
 
-	for key, def in pairs(MonetizationConfig.GamePasses) do
+	for _, key in ipairs(sortedKeys(MonetizationConfig.GamePasses)) do
+		local def: any = (MonetizationConfig.GamePasses :: any)[key]
 		-- v69: HideFromShop passes are not sold (ExtraPlotCosmetic "Elite Base Theme": nothing applies it yet)
-		if (def :: any).HideFromShop == true then
+		if def.HideFromShop == true then
 			continue
 		end
-		local stub = (tonumber(def.Id) or 0) == 0
+		-- F8: an Id 0 pass (the Speed Pass until the owner creates it) gets no row at all: it appears, with no
+		-- other edit, once its Id is pasted. Nothing is ever prompted for an Id 0 pass.
+		if (tonumber(def.Id) or 0) == 0 then
+			continue
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
-		local sub = (def.Description or "") .. (if stub then " · coming soon (no charge)" else "")
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
-		local btn = addRow("Pass: " .. def.DisplayName, sub, function()
-			promptGamePass(key)
+		local name = tostring(def.DisplayName or key)
+		-- "Pass: VIP", but "Speed Pass" (not "Pass: Speed Pass")
+		local passTitle = if string.find(string.lower(name), "pass", 1, true) then name else "Pass: " .. name
+		local btn = addRow(passTitle, tostring(def.Description or ""), function()
+			promptGamePass(key, openSource)
 		end, btnLabel, "Pass_" .. key)
 		passRows[key] = { Btn = btn, Label = btnLabel }
 	end
@@ -874,14 +1066,21 @@ function ShopController.Init()
 				setRowButton(r.Btn, r.Label, "buy")
 			end
 		end
+		-- F1: pass rows follow the server's WE_Ent_<key> (and the pad slot's OwnedIfAny) both ways
 		for key, r in pairs(passRows) do
-			if passOwnedKnown(key) then
+			if offerOwned("GamePass", key) then
 				setRowButton(r.Btn, "OWNED", "owned")
+			else
+				setRowButton(r.Btn, r.Label, "buy")
 			end
 		end
 	end
 
 	refreshShopRows = function()
+		-- phones: no row work while the Shop is closed (WE_Cash changes on every payout); setOpen(true) refreshes
+		if not menuOpen then
+			return
+		end
 		refreshWeaponRows()
 		refreshOwnedRows()
 	end
@@ -902,8 +1101,12 @@ function ShopController.Init()
 					knownLevel = v
 				end
 				queueRefresh()
-			elseif attr == "WE_Cash" or string.sub(attr, 1, 7) == "WE_Ent_" then
+			elseif attr == "WE_Cash" then
 				queueRefresh()
+			elseif string.sub(attr, 1, 7) == "WE_Ent_" then
+				-- F1: the server reports a pass / entitlement: Shop rows AND the world pads flip to OWNED
+				queueRefresh()
+				refreshPremiumPads()
 			end
 		end)
 		Remotes.BindEvent(Constants.RemoteNames.XPUpdate, function(payload: any)
@@ -937,6 +1140,7 @@ function ShopController.Init()
 					end
 				end
 				queueRefresh()
+				refreshPremiumPads()
 			end)
 		end)
 		pcall(function()
@@ -950,6 +1154,7 @@ function ShopController.Init()
 					end
 				end
 				queueRefresh()
+				refreshPremiumPads()
 			end)
 		end)
 		-- Armory terminal (WE_OpenPanel "Shop" with a weapons prompt, or WE_ShopTab) lands on WEAPONS.
@@ -970,24 +1175,14 @@ function ShopController.Init()
 
 
 
-	-- v31: VIP / AutoCollect / other GamePass pads → OWNED (hide R$ prompt look)
+	--[[ v31 → F1: the ATM pads (and the golden pump pad) → OWNED look (dimmed, "OWNED" tag, WE_LocalOwned) for game
+		passes AND Developer Products, including a slot's OwnedIfAny keys and entitlements another product granted
+		(Auto Collect from the Starter Pack). Ownership comes only from the server's WE_Ent_<key> attributes (and this
+		session's purchases): refreshed when a WE_Ent_* attribute changes, when a purchase finishes and when a pad
+		streams in. No polling loop, no per-frame work, and no client ownership web call. Display only: the server
+		(PremiumPadService.alreadyOwns) decides whether a pad prompts. ]]
 	do
-		local function queryOwnsGamePass(key: string): boolean
-			if ownedCache[key] ~= nil then
-				return ownedCache[key] == true
-			end
-			local def = MonetizationConfig.GamePasses and MonetizationConfig.GamePasses[key]
-			local id = def and tonumber(def.Id) or 0
-			if id == 0 then
-				ownedCache[key] = false
-				return false
-			end
-			local ok, owns = pcall(function()
-				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, id)
-			end)
-			ownedCache[key] = ok and owns == true
-			return ownedCache[key] == true
-		end
+		local PAD_TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
 
 		local function applyOwnedVisual(part: BasePart, owned: boolean)
 			local bb = part:FindFirstChild("WE_PremiumBillboard")
@@ -1018,42 +1213,37 @@ function ShopController.Init()
 			end
 		end
 
-		local function refreshPremiumOwned()
-			local tag = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
-			for _, inst in ipairs(CollectionService:GetTagged(tag)) do
-				if inst:IsA("BasePart") then
-					local kind = inst:GetAttribute("OfferKind")
-					local key = inst:GetAttribute("OfferKey")
-					if kind == "GamePass" and typeof(key) == "string" then
-						applyOwnedVisual(inst, queryOwnsGamePass(key))
-					end
-				end
+		local function applyPad(inst: Instance)
+			if not inst:IsA("BasePart") then
+				return
 			end
-			-- v69: Shop pass rows show OWNED too (session purchases / WE_Ent_<pass> stay OWNED even if the check lags)
-			for key, r in pairs(passRows) do
-				if passOwnedKnown(key) or queryOwnsGamePass(key) then
-					setRowButton(r.Btn, "OWNED", "owned")
-				else
-					setRowButton(r.Btn, r.Label, "buy")
-				end
+			local kind = inst:GetAttribute("OfferKind")
+			local key = inst:GetAttribute("OfferKey")
+			if (kind == "GamePass" or kind == "DevProduct") and isKeyName(key) then
+				applyOwnedVisual(inst, offerOwned(kind :: string, key :: string, inst))
 			end
 		end
 
-		task.spawn(function()
-			task.wait(1.5)
-			refreshPremiumOwned()
-		end)
-		task.spawn(function()
-			while true do
-				task.wait(20)
-				-- Re-query occasionally (purchase mid-session)
-				table.clear(ownedCache)
-				refreshPremiumOwned()
+		-- one pass over the tagged pads (a CollectionService list, never a workspace scan), coalesced per frame
+		local padRefreshQueued = false
+		refreshPremiumPads = function()
+			if padRefreshQueued then
+				return
 			end
-		end)
-		CollectionService:GetInstanceAddedSignal((Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"):Connect(function(inst)
+			padRefreshQueued = true
+			task.defer(function()
+				padRefreshQueued = false
+				for _, inst in ipairs(CollectionService:GetTagged(PAD_TAG)) do
+					applyPad(inst)
+				end
+			end)
+		end
+
+		refreshPremiumPads()
+		-- a pad that streams in (StreamingEnabled) or is rebuilt gets its look once its attributes are there
+		CollectionService:GetInstanceAddedSignal(PAD_TAG):Connect(function(inst)
 			if inst:IsA("BasePart") then
-				task.defer(refreshPremiumOwned)
+				task.defer(applyPad, inst)
 			end
 		end)
 	end
@@ -1084,7 +1274,7 @@ function ShopController.Init()
 				Cta = ctaFor(robux),
 				OnGet = function()
 					-- PromptProductPurchase only — grants via ProcessReceipt
-					promptDevProduct("StarterBundle")
+					promptDevProduct("StarterBundle", "starter_offer")
 				end,
 			})
 		end
@@ -1114,7 +1304,7 @@ function ShopController.Init()
 				Sub = tostring(p.DisplayName or def.DisplayName or "Auto Collect") .. " · collects for you",
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
-					promptGamePass("AutoCollect")
+					promptGamePass("AutoCollect", "offer")
 				end,
 			})
 		end
@@ -1144,7 +1334,7 @@ function ShopController.Init()
 				Sub = tostring(p.DisplayName or def.DisplayName or "2x Cash") .. " · every payout, forever",
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
-					promptGamePass("DoubleCash")
+					promptGamePass("DoubleCash", "offer")
 				end,
 			})
 		end
@@ -1174,7 +1364,7 @@ function ShopController.Init()
 				Sub = "+25% cash · prestige presence",
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
-					promptGamePass("VIP")
+					promptGamePass("VIP", "offer")
 				end,
 			})
 		end
@@ -1204,7 +1394,7 @@ function ShopController.Init()
 				Sub = if typeof(def.Description) == "string" and def.Description ~= "" then def.Description else "Run faster across the map",
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
-					promptDevProduct("SpeedBoost")
+					promptDevProduct("SpeedBoost", "offer")
 				end,
 			})
 		end
@@ -1237,7 +1427,7 @@ function ShopController.Init()
 				Cta = ctaFor(tonumber(p.RobuxPrice) or tonumber(def.RobuxPrice)),
 				OnGet = function()
 					pendingCashMegaHighlight = true
-					promptDevProduct("CashMega")
+					promptDevProduct("CashMega", "offer")
 				end,
 			})
 		end
@@ -1476,10 +1666,19 @@ function ShopController.Init()
 		if typeof(kind) ~= "string" or typeof(key) ~= "string" then
 			return
 		end
+		if kind ~= "GamePass" and kind ~= "DevProduct" then
+			return
+		end
+		-- F1: an owned pad never prompts (the server checks first; this covers a WE_Ent_* that landed in between)
+		if offerOwned(kind, key) then
+			toast("Already owned", "Info")
+			refreshPremiumPads()
+			return
+		end
 		if kind == "GamePass" then
-			promptGamePass(key)
-		elseif kind == "DevProduct" then
-			promptDevProduct(key)
+			promptGamePass(key, "pad")
+		else
+			promptDevProduct(key, "pad")
 		end
 	end)
 
@@ -1540,7 +1739,7 @@ end
 	Visual only — no toast, no purchase prompt. ]]
 function ShopController.OpenCashPacks()
 	pendingCashMegaHighlight = true
-	setOpen(true)
+	setOpen(true, "hud_plus") -- F2: the rows bought from here report source "hud_plus"
 end
 
 --[[ v69: open on a tab ("Supply" | "Weapons"). The Armory terminal lands on Weapons via PromptTriggered. ]]

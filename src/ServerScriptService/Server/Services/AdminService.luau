@@ -184,6 +184,25 @@ local function runMoneyCommand(deps: { [string]: any }, player: Player, cmd: str
 	return "unknown"
 end
 
+--[[ F7 test (owner's 11 features, lane P): give yourself n (1-5) Keep-Base Rebirth tokens so the keep-base path
+	("USE SAVED" in the Rebirth modal) can be tested on a phone before the product Id is pasted. Admin allowlist
+	ONLY (never the Studio-open money commands, never another player). Returns the reply text. ]]
+local function giveKeepBaseTokens(deps: { [string]: any }, player: Player, n: number?): string
+	local prestige = deps.PrestigeService
+	if not (prestige and typeof(prestige.AdminGiveKeepBase) == "function") then
+		return "givekeepbase: not built yet"
+	end
+	local ok, res, err = pcall(prestige.AdminGiveKeepBase, player, n or 1)
+	if not ok then
+		warn("[AdminService] givekeepbase failed:", res)
+		return "givekeepbase failed (see Output)"
+	end
+	if res ~= true then
+		return "givekeepbase refused: " .. tostring(err)
+	end
+	return string.format("Admin: Keep-Base Rebirths saved %d", prestige.KeepBaseTokens(player))
+end
+
 --- Force Cash = AdminPlaytestCash for allowlisted admins (mid-session recovery).
 local function grantAdminPlaytestCashFloor(player: Player): (boolean, number)
 	local target = math.floor(tonumber(AdminConfig.AdminPlaytestCash) or 0)
@@ -330,6 +349,12 @@ function AdminService.Init(deps: { [string]: any })
 			if deps.TutorialService and deps.TutorialService.Reset then
 				deps.TutorialService.Reset(player)
 			end
+		elseif cmd == "givekeepbase" then
+			-- F7 test tokens: reached only by the admin allowlist (not a MoneyCommands entry, so no Studio opening)
+			local reply = giveKeepBaseTokens(deps, player, RemoteGuard.ClampPositiveInt(arg1, 5))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, "Success")
+			end
 		elseif cmd == "prestige" or cmd == "forceprestige" then
 			if deps.PrestigeService and deps.PrestigeService.DoPrestige then
 				-- force: temporarily ignore level gate via SetLevel first if needed
@@ -448,7 +473,8 @@ function AdminService.Init(deps: { [string]: any })
 		end
 		local isLevelCmd = cmd == "level" or cmd == "setlevel"
 		local isXpCmd = cmd == "xp" or cmd == "givexp"
-		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd then
+		local isKeepBaseCmd = cmd == "givekeepbase"
+		if cmd ~= "cash" and cmd ~= "givecash" and not isLevelCmd and not isXpCmd and not isKeepBaseCmd then
 			return
 		end
 		-- v71: one chat line can arrive via Player.Chatted, TextChatCommand and MessageReceived — run it once
@@ -459,6 +485,15 @@ function AdminService.Init(deps: { [string]: any })
 		end
 		lastAdminChat[player.UserId] = { Text = text, At = nowClock }
 		if not RemoteGuard.RequireProfile(DataService, player) then
+			return
+		end
+		-- F7: owner playtest — /givekeepbase [1-5] (Keep-Base Rebirth tokens; admin allowlist only, see above)
+		if isKeepBaseCmd then
+			local reply = giveKeepBaseTokens(deps, player, RemoteGuard.ClampPositiveInt(tonumber(rest), 5))
+			if deps.NotificationService then
+				deps.NotificationService.Notify(player, reply, "Success")
+			end
+			AnalyticsService.Log("ADMIN_COMMAND", player.UserId, { command = "chat_givekeepbase", arg = string.sub(tostring(rest), 1, 8) })
 			return
 		end
 		-- v71: owner playtest — /level <n> (default ADMIN_DEFAULT_LEVEL) and /xp <n> (default ADMIN_DEFAULT_XP).
@@ -551,7 +586,7 @@ function AdminService.Init(deps: { [string]: any })
 				end
 			end)
 			-- v71: owner playtest level / XP (admin allowlist only; see onAdminChat)
-			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" } }) do
+			for _, spec in ipairs({ { "WE_Level", "/level", "/setlevel" }, { "WE_XP", "/xp", "/givexp" }, { "WE_KeepBase", "/givekeepbase" } }) do
 				local c = ensureCommand(spec[1], spec[2], spec[3])
 				c.Triggered:Connect(function(textSource: TextSource, unfilteredText: string)
 					local player = Players:GetPlayerByUserId(textSource.UserId)
@@ -578,6 +613,7 @@ function AdminService.Init(deps: { [string]: any })
 					or string.sub(lower, 1, 9) == "/setlevel"
 					or string.sub(lower, 1, 3) == "/xp"
 					or string.sub(lower, 1, 7) == "/givexp"
+					or string.sub(lower, 1, 13) == "/givekeepbase"
 				if not isAdminLine then
 					return
 				end

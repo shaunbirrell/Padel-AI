@@ -18,6 +18,8 @@ Rules (v71 money, M0):
   * An Id another entry of the same section already has is refused, even with --force (ProcessReceipt would
     grant either row).
   * Nothing is written unless every key in the JSON passes these checks.
+  * An entry with SoldFrom = "Panel" is sold from that panel only (e.g. DevProducts.RebirthKeepBase from the
+    Rebirth panel): it keeps HideFromShop = true, so no NOTE asks to remove it (F7, owner's 11 features).
 After a publish that pastes Ids, the owner runs Migrate to Latest Update (receipts for unknown Ids are retried).
 """
 from __future__ import annotations
@@ -238,12 +240,16 @@ def main(argv: list[str]) -> int:
             entry_text = text[e_open:e_close + 1]
             if re.search(r"\bHideFromShop\s*=\s*true\b", entry_text):
                 feature = re.search(r"\bFeature\s*=\s*\"(\w+)\"", entry_text)
+                sold_from = re.search(r"\bSoldFrom\s*=\s*\"(\w+)\"", entry_text)
                 if feature:
                     # v71 money (M1): a Feature SKU stays hidden until its feature ships (M3 feature gate, J3)
                     notes.append(
                         f"NOTE {label} is a Feature SKU ({feature.group(1)}): keep HideFromShop = true until the publish "
                         f"that makes that feature live (pasting the Id alone does not sell it)"
                     )
+                elif sold_from:
+                    # F7: sold from its own panel (SoldFrom), never from the Shop list: HideFromShop stays, no NOTE
+                    pass
                 else:
                     notes.append(f"NOTE {label} still has HideFromShop = true: remove it in the same commit to sell it")
         # Two entries with one Id make ProcessReceipt / the pass cache pick either row (wrong grant): never allowed,

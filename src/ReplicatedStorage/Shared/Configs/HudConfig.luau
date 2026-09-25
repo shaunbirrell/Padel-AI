@@ -131,7 +131,8 @@ HudConfig.TopStrip = {
 	TextStroke = 1.2, -- real px Colors.Ink outline on the chips' Display-font numbers
 	Bg = Color3.fromRGB(18, 20, 24),
 	BgTransparency = 0.25, -- visually matches Roblox's own topbar pills
-	LeftItems = { "Level", "Settings", "CashPlus", "Shield" }, -- order; Shield only while shielded
+	-- order; EmpireTax only while WE_EmpireTaxPct > 0 (F3), Shield only while shielded
+	LeftItems = { "Level", "Settings", "CashPlus", "EmpireTax", "Shield" },
 	Level = {
 		MinWidth = 118,
 		CaptionSize = 14, -- "LV" (real px: Scale.MinTextPx)
@@ -161,6 +162,18 @@ HudConfig.TopStrip = {
 		PadLeft = 10,
 		PadRight = 7,
 		Gap = 6,
+	},
+	-- F3 (owner's 11 features): Empire Tax chip "+10%" (HudIcons Flag + text), real px like every TopStrip chip. Shown
+	-- only while the player attribute EconomyConfig.OutpostIncomeBuff.Attribute (WE_EmpireTaxPct) is > 0; a tap opens
+	-- the Territories dropdown (HudLayout.Signals.CompassTapped). HideWhenCrowded: hidden while the left group would
+	-- reach the compass (compass left - Gap), e.g. 800x360 while the Shield chip shows.
+	EmpireTax = {
+		MinWidth = 76,
+		Height = 44, -- real px (the chip IS the tap target)
+		IconSize = 22,
+		TextSize = 18, -- "+10%"
+		Color = Color3.fromRGB(255, 208, 64),
+		HideWhenCrowded = true,
 	},
 	Shield = { -- raids: victim shield after being robbed (player attribute WE_ShieldUntil, os.time())
 		Attribute = "WE_ShieldUntil",

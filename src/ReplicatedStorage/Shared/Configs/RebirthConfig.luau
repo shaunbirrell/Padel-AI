@@ -11,6 +11,10 @@
 	Judge rulings applied (money/plan.md §1):
 	- J12: the Expansion Permit and Rebirth Skip products are cut this round (no config entries, no
 	  NextPermitZone, no profile counters). Revisit after 2 weeks of rebirth KPIs.
+	  Superseded in part by the owner's 11 features (F7, ASSUMPTIONS): the 50 R$ Keep-Base Rebirth
+	  (MonetizationConfig.DevProducts.RebirthKeepBase) is a consumable token counted in profile.KeepBaseRebirths and
+	  spent by PrestigeService (PrestigeConfig.KeepBase); the rebirth runs after the receipt is saved, never inside it.
+	  The Expansion Permit stays cut.
 	- J13: Rebirth Boost is +15% cash per rebirth (instead of +10%) and 1.5x starting cash. Gold stays x1
 	  (Boost.GoldMult = 1) until a Gold sink ships; then raise it together with the pass description. ]]
 

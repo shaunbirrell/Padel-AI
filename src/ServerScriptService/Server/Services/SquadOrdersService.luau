@@ -35,6 +35,7 @@ local AntiExploitService: any = nil
 local VisualAssetService: any = nil
 local BaseService: any = nil
 local ResearchService: any = nil -- v69 research (deps.ResearchService)
+local CombatService: any = nil -- F6 novice shield: an accepted order ends it (deps.CombatService; pcall'd)
 
 export type OrderId = "Follow" | "Attack" | "Hold" | "Retreat"
 
@@ -659,6 +660,10 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	pushState(player)
 	-- the order echo is this flash + the Army popover (no "Squad: X" toast per order — spec §4.2)
 	flashOrderBillboard(player, st, order :: OrderId)
+	-- F6 (owner's 11 features): an accepted order ends the novice shield for good (EndOnSquadOrder)
+	if CombatService and CombatService.EndNoviceShield then
+		pcall(CombatService.EndNoviceShield, player, "order")
+	end
 	return true, nil
 end
 
@@ -691,6 +696,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	VisualAssetService = deps.VisualAssetService
 	BaseService = deps.BaseService
 	ResearchService = deps.ResearchService -- v69 research
+	CombatService = deps.CombatService -- F6 novice shield (Init order does not matter: used only on an order)
 
 	if not OrdersConfig.Enabled then
 		print("[WAR EMPIRE] SquadOrdersService disabled (OrdersConfig.Enabled=false)")

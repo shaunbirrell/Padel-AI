@@ -54,6 +54,28 @@ local CombatFairnessConfig = {
 	-- Attack-order hits credit the owner too? Off: Attack units roam with no leash and no line of sight, so an idle
 	-- owner hidden behind a wall near the bank earned ~$9,150 in 10 min in the verifier sim (HEAD: $0). Escort only.
 	UnitKillCreditOnAttack = false,
+
+	-- ── F6 · novice shield (CombatService; owner's 11 features) ──────────────────────────────────────────────────
+	-- A brand-new player (tutorial not complete, profile.NoviceShieldDone false) spawns with a visible ForceField
+	-- (WE_NoviceShield) and cannot be damaged or targeted (InvulnerableUntil = math.huge, WE_ShieldUntil set). It ends
+	-- for good (NoviceShieldDone = true, one Text.Off toast) on the first of: drawing a weapon (EndOnDraw), the first
+	-- accepted shot (EndOnFire), an accepted squad order or missile strike (EndOnSquadOrder), contesting a zone
+	-- (EndOnContestedCapture), tutorial complete or skip (EndOnTutorialComplete), or MaxSeconds of shielded play.
+	-- Never re-granted once it has ended. Text is device-neutral (no keys, no "tap" / "click"), at most 42 characters.
+	-- Off until lane Z.
+	NoviceShield = {
+		Enabled = false,
+		MaxSeconds = 900,
+		EndOnDraw = true,
+		EndOnFire = true,
+		EndOnSquadOrder = true,
+		EndOnTutorialComplete = true,
+		EndOnContestedCapture = true,
+		Text = {
+			On = "Shield on until you draw a weapon",
+			Off = "Shield off. You can be attacked.",
+		},
+	},
 }
 
 return CombatFairnessConfig

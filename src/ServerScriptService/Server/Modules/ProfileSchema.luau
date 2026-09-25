@@ -124,7 +124,8 @@ local function ensureMoneyFields(profile: any)
 	end
 	profile.PremiumTrials = trials
 
-	-- Rebirth expansion (the Expansion Permit / Rebirth Skip counters were cut, J12)
+	-- Rebirth expansion (the Expansion Permit / Rebirth Skip counters were cut, J12; F7 replaced the Rebirth Skip
+	-- idea with the keep-base token profile.KeepBaseRebirths, sanitised in ensureFeatureFields below)
 	local rebirth = if typeof(profile.Rebirth) == "table" then profile.Rebirth else {}
 	local seen = if typeof(rebirth.ZonesSeen) == "table" then rebirth.ZonesSeen else {}
 	for k, v in pairs(seen) do
@@ -156,6 +157,47 @@ local function ensureMoneyFields(profile: any)
 		profile.AnnouncePurchases = true
 	end
 	profile.VipSupplyAt = nonNegInt(profile.VipSupplyAt)
+end
+
+-- Owner's 11 features (lane K1) ─────────────────────────────────────────────────────────────────────────────
+-- Tutorial step order of this build. A profile's TutorialOrderVersion says which order its TutorialStep index was
+-- saved in (missing = 1, the pre-F6 order); TutorialService migrates old indexes (TutorialConfig.LegacyOrderV1) and
+-- then stamps the current version. New profiles take TutorialConfig.OrderVersion (2 once the F6 order ships; 1 until
+-- then, so a profile made before that build is still migrated). A config error falls back to 1 (never blocks a load).
+local function currentTutorialOrderVersion(): number
+	local ok, cfg = pcall(function()
+		return require(Shared.Configs.TutorialConfig) :: any
+	end)
+	local v = if ok and typeof(cfg) == "table" then tonumber(cfg.OrderVersion) else nil
+	if v == nil or v ~= v or v < 1 or v == math.huge then
+		return 1
+	end
+	return math.floor(v)
+end
+local TUTORIAL_ORDER_VERSION = currentTutorialOrderVersion()
+
+-- Default-fill + sanitise the F6 / F7 / F10 fields (idempotent, no DataVersion bump). raw* are the values the saved
+-- data had BEFORE the v0 default fill in Migrate, so "missing" keeps its own meaning for very old saves.
+--   KeepBaseRebirths      whole number >= 0 (F7 keep-base tokens; added only by ProcessReceipt, spent by PrestigeService)
+--   TutorialOrderVersion  whole number >= 1; missing = 1
+--   NoviceShieldDone      boolean; missing = TutorialComplete (a player who finished the tutorial never gets it)
+--   StarterOutpostTaken   boolean; missing = false (F10 first Home Outpost capture)
+local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShieldDone: any)
+	profile.KeepBaseRebirths = nonNegInt(profile.KeepBaseRebirths)
+	if rawTutorialOrder == nil then
+		profile.TutorialOrderVersion = 1
+	else
+		local order = nonNegInt(rawTutorialOrder)
+		profile.TutorialOrderVersion = if order >= 1 then order else 1
+	end
+	if typeof(rawShieldDone) == "boolean" then
+		profile.NoviceShieldDone = rawShieldDone
+	else
+		profile.NoviceShieldDone = profile.TutorialComplete == true
+	end
+	if typeof(profile.StarterOutpostTaken) ~= "boolean" then
+		profile.StarterOutpostTaken = false
+	end
 end
 
 function ProfileSchema.CreateDefault(): PlayerProfile
@@ -246,6 +288,11 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Monetization = defaultMonetization(),
 		AnnouncePurchases = true,
 		VipSupplyAt = 0,
+		-- Owner's 11 features: see ensureFeatureFields (Migrate fills the same keys into older saves)
+		KeepBaseRebirths = 0,
+		TutorialOrderVersion = TUTORIAL_ORDER_VERSION,
+		NoviceShieldDone = false,
+		StarterOutpostTaken = false,
 	}
 end
 
@@ -260,6 +307,9 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 
 	local profile = data :: PlayerProfile
 	local version = tonumber(profile.DataVersion) or 0
+	-- read before the v0 default fill below (see ensureFeatureFields)
+	local rawTutorialOrder = (data :: any).TutorialOrderVersion
+	local rawShieldDone = (data :: any).NoviceShieldDone
 
 	-- v0 / missing → fill defaults then set version
 	if version < 1 then
@@ -494,6 +544,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	end
 	-- v71 money (M2): nuke / premium vehicle / rebirth / offer / accounting blocks (idempotent; no version bump)
 	ensureMoneyFields(profile)
+	-- Owner's 11 features: keep-base tokens, tutorial order version, novice shield, Home Outpost (idempotent)
+	ensureFeatureFields(profile, rawTutorialOrder, rawShieldDone)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

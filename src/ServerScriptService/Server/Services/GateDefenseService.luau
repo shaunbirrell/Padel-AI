@@ -99,6 +99,9 @@ local syncBusy: { [number]: boolean } = {}
 local syncAgain: { [number]: boolean } = {}
 local victimHitAt: { [number]: number } = {}
 local graceFrom: { [number]: number } = {} -- UserId → os.clock of the last character spawn / save load (spawn grace)
+-- F6 novice shield: CombatService.IsNoviceShielded, handed in by CombatService.Init through SetShieldCheck (this
+-- service takes no CombatService dep and never requires it). nil = nobody is shielded.
+local shieldCheck: ((Player) -> boolean)? = nil
 local catalogCache: { [number]: Model } = {}
 local catalogFailed: { [number]: boolean } = {}
 
@@ -779,7 +782,10 @@ end
 	for SpawnGraceSeconds after each character spawn and after the save loads (the move home is deferred). A
 	respawned raider is moved to their own plot at once. The grace ends early for anyone holding an ATM raid or
 	hitting a gate / guard (ApplyDamage), so a player left on a gate pad (no plot: server over MaxPlots) cannot
-	use it to attack. ]]
+	use it to attack.
+	F6 (owner's 11 features): a player under the novice shield (CombatService) counts as in grace too, so guards and
+	AutoGuns neither target nor damage them and the owner gets no "BASE UNDER ATTACK" for them; holding an ATM raid
+	still ends it here first. ]]
 local function inSpawnGrace(player: Player): boolean
 	if DataService and DataService.GetProfile and DataService.GetProfile(player) == nil then
 		return true
@@ -787,12 +793,24 @@ local function inSpawnGrace(player: Player): boolean
 	if player:GetAttribute("WE_RaidingPlot") ~= nil then
 		return false
 	end
+	local check = shieldCheck
+	if check ~= nil then
+		local ok, shielded = pcall(check, player)
+		if ok and shielded == true then
+			return true
+		end
+	end
 	local from = graceFrom[player.UserId]
 	return from ~= nil and nowClock() - from < (GateDefenseConfig.SpawnGraceSeconds or 4)
 end
 
 local function startSpawnGrace(player: Player)
 	graceFrom[player.UserId] = nowClock()
+end
+
+-- F6: CombatService.Init hands in CombatService.IsNoviceShielded (nil clears it)
+function GateDefenseService.SetShieldCheck(fn: ((Player) -> boolean)?)
+	shieldCheck = fn
 end
 
 local function rateLimitVictim(userId: number): boolean

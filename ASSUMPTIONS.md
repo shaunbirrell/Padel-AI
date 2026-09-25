@@ -1451,3 +1451,266 @@ Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.D
 - Interiors/Barracks.luau and Interiors/SpecialForces.luau are edited only on their flag lines (Lane D, "officer" and "unit" flags live there, not in MapSetup). No other job lists these files.
 - Each base now has 13 WE_FlagHost parts at L5 (78 world-wide), all 0.12 thick: 7 building flags, gate plinth flag, watchtower L5 flag (thin on X), ParadeFlag (thin on X), Barracks FlagCloth + OfficerFlag and SF UnitFlag (thin on Z). The nation binder should use the two faces normal to the smallest Size axis.
 - **Lead decisions:** the Interiors/Barracks and Interiors/SpecialForces flag lines are part of this change (flag hosts); MAP_GEN is not bumped for the soldier-kit change (only affects a map saved into the place in Studio; the live place builds at runtime).
+
+## 2026-09-25 — Owner's 11 options, batch A (pads, Speed Pass, golden pump, keep-base rebirth, rebirth screen, beginner shield; flags off where noted)
+## Owner's 11 features, batch A (K1 contracts, M money server, C combat, P prestige, S Shop client)
+
+Merged by the batch-A integration verifier for Z-lite to append to ASSUMPTIONS.md. Every line is reversible. Every
+feature flag ships OFF and every new product Id stays 0 (ImpulseSpeed, RebirthKeepBase, GoldenPumpjack).
+
+### Lead decisions (spec §7) recorded with batch A
+- KeepCash = false on the keep-base path. PendingCash is kept on both rebirth paths (no reset). Rebirth % is XP-based
+  (`PrestigeConfig.ProgressMode = "XP"`). Speed tiers: Speed Pass x1.15 (pass), Speed Boost x1.25 (product).
+  Novice shield MaxSeconds = 900. PersistClaims ships as specified behind its flag (off until lane Z).
+- B1 (double prestige multiplier) is fixed in batch B's economy lane (EconomyService / BaseService), not in batch A.
+  RebirthKeepBase must not be pasted before that fix lands (spec §6).
+
+### Spec §5 lines that batch A implements (config / server / client side; the rest land with batch B)
+- (§5 #2) Pad colours in `MonetizationConfig.PremiumPads`: Auto Collect red, 2x Cash yellow, Speed cyan. The pads
+  themselves are rebuilt by lane W (batch B); until then today's MapSetup pads (VIP, yellow Speed Boost) stay.
+- (§5 #11, amended by lane C's verifier) The novice shield ends on draw, fire, squad order, strike, contest (lane W
+  call, batch B), tutorial end or skip, holding an ATM raid or entering the Empire Bank guard ring ("raid"), or after
+  900 s. It is never re-granted. Ships with `CombatFairnessConfig.NoviceShield.Enabled = false`.
+- (§5 #13) Keep-base rebirth is a consumable DevProduct that grants a token; the rebirth runs after the save; the
+  Lv 40 gate stays; KeepCash = false; tokens never expire. Supersedes J12 (RebirthConfig.luau:11-13).
+- (§5 #14) PendingCash is kept on both rebirth paths, as today, and is not listed in the modal.
+- (§5 #15) Rebirth progress is XP-based. Reversible to "Level".
+- (§5 #16) The free rebirth modal is the confirmation (2 presses in total, no extra "Sure?" arm).
+- (§5 #17) Speed Pass 5 R$ x1.15, Speed Boost 99 R$ x1.25, owning both gives the max. One death offer per session
+  after the tutorial, inside the D8 soft-offer budget.
+- (§5 #18, config part) Golden pump dress is Metal, Reflectance 0.2, no Neon. HideFromShop removed from
+  GoldenPumpjack, so the Shop row appears on paste. Supersedes the M0b "remove it in the same commit" step.
+- (§5 #20) Feature flags ship off in contracts and are switched on at integration (lane Z).
+
+
+### Lane K1
+
+These are the K1 lines only. The shared spec §5 lines 1-20 are Z's list; K1 implements the config side of #1, #4, #5,
+#13, #14, #15, #17, #18, #19 and #20. Every feature flag ships OFF.
+
+1. **New profiles take the tutorial order version from TutorialConfig.OrderVersion, not a literal 2.**
+   `ProfileSchema.CreateDefault().TutorialOrderVersion = TutorialConfig.OrderVersion or 1`. Today TutorialConfig has
+   no `OrderVersion`, so new profiles get 1. Once lane K2 adds `OrderVersion = 2`, new profiles get 2, as the spec says.
+   Why: batch A (this lane) can reach the live game before batch B (K2 + T). A literal 2 would mark players who join in
+   that window as "new order" while TutorialService still saves step indexes in the v72 order. Lane T would then skip
+   their migration and map their step index to the wrong step. Missing still means 1. A config error at require time
+   falls back to 1 and never blocks a profile load. Revert: write `TutorialOrderVersion = 2` in CreateDefault.
+2. **"Missing" is judged on the saved data, before the v0 default fill.** Migrate reads `TutorialOrderVersion` and
+   `NoviceShieldDone` from the raw save first. A save without `DataVersion` (v0) therefore still gets order version 1
+   and `NoviceShieldDone = TutorialComplete`, instead of the CreateDefault values. Tested (v0 case in k1_driver).
+3. **NoviceShieldDone defaults to TutorialComplete only when missing or not a boolean.** A saved boolean is never
+   rewritten, even `false` with `TutorialComplete = true`. CombatService (lane C) checks
+   `not TutorialComplete and not NoviceShieldDone`, so this is the same thing without a write on every load.
+4. **KeepBaseRebirths, StarterOutpostTaken and TutorialOrderVersion are sanitised on every load.** Tokens are a whole
+   number >= 0 capped at 1e15 (the same nonNegInt as the M2 money fields). The order version is a whole number >= 1.
+   StarterOutpostTaken is false unless it is a boolean. No DataVersion bump (still 8).
+5. **Home Outpost marker height is Y = 1** (`TerritoryConfig.Starter.GroundY`), the same as every land outpost.
+   PlotFrame.LocalToWorld returns the plot pad centre height (0.5), and the row keeps only its X/Z. X/Z match the
+   spec's live layout on all 6 plots (tested with FaceMapCentre true and false).
+6. **The Starter row carries a Description** ("Your own outpost: +5% Empire Tax while you hold it."), because
+   `TerritoryDef.Description` is required. `Starter.IdPrefix = "Starter_P"` builds the ids. The "+5%" in that text is
+   literal: TerritoryConfig must not require EconomyConfig (spec require rule). Keep it in step with
+   `EconomyConfig.OutpostIncomeBuff.StarterPct`.
+7. **PlotFrame also exports PlotCFrame, PlotPosition and FacesMapCentre.** They are moved verbatim with PlotYaw
+   (BaseLayout.luau 47-80), and lane W's BaseLayout delegation needs PlotCFrame. PlotFrame requires only
+   BaseLayoutConfig and BaseConfig. An unknown plot id returns an un-turned offset instead of erroring at require time.
+8. **Empire Tax toasts take the TOTAL %.** ToastSecured and ToastLost take (pct). ToastStolenFromYou and ToastStealGain
+   take (zone, pct). ToastClaimHeld takes (zone, holder). Until lane W ships, today's TerritoryService formats
+   ToastStolenFromYou with one argument inside a pcall. The format error is caught there, and it shows its built-in
+   "Outpost lost: <zone> stolen" line. The steal toast shows the per-stack % (EconomyService returns it). Neither
+   path errors. `ToastTemplate` (legacy alias) is unchanged.
+9. **RebirthSummary is built from ResetFor(path).** If a reset flag changes, the modal lines change with it (for
+   example, KeepCash = true would move "Cash back to $10,000" into KEEP as "Your Cash"). The server reset and the
+   modal cannot drift apart. `ctx.Prestige` is the CURRENT prestige, and "Total now +N%" is (Prestige + 1) x 10.
+   `NextUnlockName(prestige)` returns the unlock with AtPrestige == prestige + 1, the one this rebirth gives.
+   An unlock name that would push the line over 30 characters first loses its "(...)" note, then its "+ second item",
+   and only then is cut with "...". The ASCII "..." is used, never the '·' or '→' characters.
+10. **ProgressPct "Level" mode = floor(100 x Level / MinLevelToPrestige).** This is the reversible alternative to
+    "XP". Lv 40+ is 100 in both modes. Junk input counts as Lv 1 / 0 XP.
+11. **Pure helpers live in the configs, not the services.** They are `MonetizationConfig.LivePadOffer(slot)` /
+    `PadOwnedKeys(slot)` (F1 first-live-offer rule, one copy for MapSetup, PremiumPadService and ShopController),
+    `PrestigeConfig.ResetFor` / `NextUnlockName`, `TerritoryConfig.IsStarterDef(def)` and
+    `NukeConfig.IsTerritoryTargetable(def)`. Configs stay the single source.
+12. **PremiumPads slot type is exported** (`MonetizationConfig.PremiumPadSlot` / `PremiumPadOffer`). The
+    Speed slot's `OwnedIfAny` is the only one set. The other two default to the live offer's own key.
+13. **GoldenPumpjack loses HideFromShop now (Id still 0).** Today's ShopController already skips every Id 0
+    DevProduct row (ShopController.luau:700), so nothing new shows until the Id is pasted. The scratch M1 driver check
+    "Golden Pumpjacks still Id 0 + hidden" (m1_receipt_driver.luau:274) now fails by design. The updated copy
+    (build/K1/m1_receipt_driver_f9.luau: "Id 0, no HideFromShop") passes 116/0.
+14. **`GamePasses.ImpulseSpeed` has no HideFromShop.** Until lane S ships "skip Id == 0 passes" in the Shop pass loop,
+    today's ShopController would list it as "Pass: Speed Pass ... coming soon (no charge)". promptGamePass still
+    refuses Id 0, so nothing prompts. K1 and S commit together in batch A, so this state never ships.
+15. **`CombatFairnessConfig.NoviceShield.MaxSeconds` counts shielded play from when the shield starts in a session.**
+    Lane C owns the timer. Ending is permanent (NoviceShieldDone), so rejoining never restarts a shield that has ended.
+    Lead decision: 900 s.
+16. **`PrestigeStatePayload` is a new export in Types.** It lists the v71 PrestigeStateUpdate fields plus the optional
+    F7/F11 fields (KeepBaseTokens, KeepBaseLive, KeepBasePrice, ProgressPct, Level, XP, Summary). It is display only.
+
+### Lane M
+
+These are lane M's lines only. Lane M implements the server side of spec §5 #1 (OWNED pads), #17 (speed tiers and the
+one death offer), #13 (the keep-base receipt; no new branch) and #18 (the golden pump pad is sold like any pad).
+
+1. **Speed is the highest multiplier owned, read from the session cache only.** `MonetizationService.SpeedMultFor(p)`
+   takes the highest `WalkSpeedMult` among the owned speed SKUs (Speed Pass x1.15, Speed Boost x1.25), so owning
+   both gives x1.25 (WalkSpeed 20), never 1.15 x 1.25. It reads the session pass cache and the saved entitlements
+   only: it never yields and never calls Roblox, so it is safe inside the receipt's no-yield window and on respawn.
+   The speed is re-applied on respawn (0.3 s after CharacterAdded, as before), right after the profile load (a
+   character that spawned before the load gets it then), when a speed pass flips to owned (OnPassOwned: join check,
+   retried check or confirmed purchase) and when a speed entitlement is granted (receipt). Revert: the old code
+   applied a hard-coded x1.25 for the SpeedBoost entitlement only.
+2. **WalkSpeedMult sanity cap.** A config value above 2 is capped at 2 (`MAX_WALK_SPEED_MULT`), and a value <= 1 or
+   junk counts as "no speed SKU". With no speed SKU owned the server never touches WalkSpeed (the game default stays),
+   exactly as before.
+3. **The death speed offer needs known ownership.** `TryDeathSpeedOffer` sends nothing while the player's first
+   pass check has not run, or while a failed ownership check is still being retried (or its retries ran out this
+   session). "Unknown" is never treated as "not owned", so an owner is never offered the pass. Nothing is spent then.
+4. **The death offer spends nothing when refused.** The once-per-session mark is set only when the offer is sent,
+   and the D8 soft-offer slot (`ClaimSoftOfferSlot`) is claimed last, after every other gate. A player whose first
+   PvP death came mid-tutorial, or while another offer held the slot, can still get it on a later death this session.
+   `OncePerSession` and `RequireTutorialComplete` count as true when the key is missing from the config.
+5. **A premium pad is OWNED when any of its keys is owned.** Keys = the offer itself, the pad's `OwnedIfAny`
+   attribute (comma list; at most 8 names of letters, digits and _; spaces trimmed; anything else ignored) and the
+   `OwnedIfAny` of the `MonetizationConfig.PremiumPads` slot that offers the pad's Kind + Key. The config lookup
+   means a pad built before lane W adds the attribute (today's Speed Boost pad) already honours the Speed Pass. A key
+   counts as owned when it is an owned game pass, an entitlement of that name, or the entitlement a Developer Product
+   of that name grants (Auto Collect from the Starter Pack counts). An owned pad never prompts and toasts OWNED.
+6. **The pad server sells what the pad says.** PremiumPadService prompts the pad's `OfferKind` / `OfferKey`
+   (server-authored attributes); it does not re-pick the first live offer at prompt time. Lane W builds each pad
+   from `MonetizationConfig.LivePadOffer(slot)`, and Ids only change with a publish. A pad whose offer Id is 0 still
+   never prompts ("coming soon" toast), as before.
+7. **Wire tool and SoldFrom.** `tools/wire-monetization-ids.py` prints no HideFromShop NOTE for an entry that has
+   `SoldFrom` (RebirthKeepBase is sold from the Rebirth panel only and keeps `HideFromShop = true`). A `Feature` SKU
+   still gets its keep-hidden NOTE first; an entry with neither still gets the remove-it NOTE.
+8. **Keep-base receipt: no new code path.** The RebirthKeepBase receipt runs through the existing M1 CounterGrants
+   branch: +1 `KeepBaseRebirths` token, saved together with the receipt id before PurchaseGranted; a failed save
+   answers NotProcessedYet and fires no OnGranted; a replay or an in-flight duplicate adds nothing. `OnGranted`
+   carries `Source = "rebirth_panel"` only when the Rebirth panel's intent is younger than
+   `IntentAttributionSeconds` (180 s); otherwise `"none"` and the token stays banked. MonetizationService never runs
+   a rebirth.
+
+### Lane C
+
+These are the lane C lines only. They implement spec §5 #11 (the shield's end triggers) and the server half of #17
+(one Speed Pass death offer). `CombatFairnessConfig.NoviceShield.Enabled` ships false; lane Z switches it on.
+
+1. **The 900 s cap counts from this session's grant.** The shield starts when the real save loads
+   (`not TutorialComplete and not NoviceShieldDone`). A player who leaves before any end trigger keeps
+   `NoviceShieldDone = false`, so the next session starts a fresh 900 s. The profile has no "seconds used" field. The
+   shield never protects an attack (every attack ends it), and the guarded Empire Bank and ATM raids end it (line 11),
+   so a rejoin gains nothing offensive. Revert: add a saved
+   seconds counter.
+2. **The novice shield's `WE_ShieldUntil` is the character attribute (`CombatFeelConfig.ShieldAttribute`), not the
+   player attribute.** Its value is server time + the seconds left of the cap. The client bubble fallback
+   (WeaponVisuals) and the aim help (AimTargets) already read that attribute. The player attribute `WE_ShieldUntil` is
+   MoneyCollectorService's raid-shield mirror (os.time). The HUD raid chip reads it, and MoneyCollectorService clears
+   it on load. Writing it would show a misleading "15:00" raid countdown and race that clear. The visible cue is the
+   ForceField plus the On and Off toasts. Revert: lane H reads a separate signal (see open issues).
+3. **Gate guards and AutoGuns skip only novice-shielded players (`IsNoviceShielded`), not the 3 s spawn shield.**
+   GateDefense's own 4 s `SpawnGraceSeconds` already covers the spawn shield. So the join-hotfix behaviour is unchanged
+   for everyone else. Attacking a gate still ends that grace, and holding an ATM raid (`WE_RaidingPlot`) overrides the
+   novice shield there too, so a raid is never free. CombatService.Init hands the check in through
+   `GateDefenseService.SetShieldCheck`: GateDefense takes no CombatService dep and never requires it.
+4. **A shielded player never deals PvP damage.** Hits on another player, a vehicle or a gate end the shield first
+   (reason "fire"), then land. This covers RequestFire, which ends the shield before any hit resolves, and every
+   other ApplyHit / ApplyBlastDamage / ApplyRadiusDamage / projectile path. With `EndOnFire = false`, such hits deal 0
+   and the shield stays. Hits on NPCs are not PvP and do not end it outside RequestFire, so squad escorts can fight
+   NPCs next to a novice.
+5. **Any accepted squad order ends the shield, Follow included** (the owner said "until you ... order"). A refused
+   order does not end it (no soldiers, invalid id, disabled order).
+6. **A launched missile strike ends the attacker's shield**, under the `EndOnSquadOrder` switch, as the K1 config
+   comment says. A refused launch does not. A shielded player's own base can still be struck: missiles never hurt
+   players, and raids keep their own new-player rules.
+7. **The On toast shows once per session, 3 s after the grant**, so the client toast stack is listening on a fresh
+   join. The delay reads the optional key `NoviceShield.OnToastDelaySeconds` (default 3; not in the config today). It
+   never shows after the shield has ended. The Off toast shows exactly once, on the end.
+8. **A 1 Hz sweep, running only while someone is shielded, ends the shield when `profile.TutorialComplete` becomes
+   true** (complete or skip), even before lane T calls `EndNoviceShield(p, "tutorial")`. Lane T's call just makes it
+   instant. In Studio with `DevConfig.SkipTutorial`, a player may see one Off toast about 1 s after joining.
+9. **Being shot at never ends the shield.** NPCs still pick a shielded novice as their target and miss every shot:
+   no damage, no CombatHitFeedback, no client auto-draw. `CombatNPC.NearestPlayer` is not a lane C file.
+10. **The death listener sends no separate text toast.** The "Boost? ... tap toast" Notify is deleted. The
+    `DeathShopOffer` remote still fires only for live `DeathShopOffers` keys, which is an empty list (M1 ban). The new
+    `pcall(MonetizationService.TryDeathSpeedOffer, victim)` runs for PvP non-blast deaths, before the Cash Mega soft
+    offer, so it gets the soft-offer slot. Cash Mega already ignores the "death" reason.
+11. **(Verifier fix) Holding an ATM raid or entering the Empire Bank's guard ring ends the shield** (reason "raid",
+    no config switch; the 1 Hz sweep, radius = max(BankRaidConfig.VaultRadius, GuardRingRadius) = 18 studs from any
+    `WE_BankVault` part). The bank is guarded only by NPCs, whose shots skip `InvulnerableUntil = math.huge`, so an
+    unended shield looted the vault for free: in the headless stand-in a shielded novice took $34,243 at full health,
+    and the shield comes back on every rejoin while the tutorial is unfinished. ATM raids are already blocked for an
+    unfinished tutorial (`ThiefRequireTutorialDone`); the `WE_RaidingPlot` check is a backstop for
+    `EndOnTutorialComplete = false`. Revert: drop `NS.engaging` from the sweep.
+
+### Lane P
+
+- F7 keep-base auto-use: a Keep-Base Rebirth token is used right after its receipt is SAVED (MonetizationService.OnGranted, never inside ProcessReceipt) only when PrestigeConfig.KeepBase.AutoUseOnGrant is true, the purchase intent was logged this session (event.Source ~= "none", i.e. RequestPurchaseDevProduct("RebirthKeepBase", "rebirth_panel") within MonetizationConfig.IntentAttributionSeconds = 180 s) and the player can rebirth now. Otherwise the token is banked. PrestigeConfig.KeepBase.IntentWindowSeconds (180) is documentation only: the window is IntentAttributionSeconds, keep the two equal. Undo: AutoUseOnGrant = false (always bank; the player presses USE SAVED).
+- F7 a saved token is always usable from the modal (USE SAVED), even when KeepBase.Enabled = false or the product Id is 0: it was paid for. Enabled and the Id only decide whether the modal SELLS the product (PrestigeStateUpdate.KeepBaseLive = Enabled and Id ~= 0; the client also refuses to prompt while its config Id is 0).
+- F7 banked-token toast differs from the spec copy ("... used on your next Rebirth"), because a free rebirth never spends a token (spec K5): "Keep-Base Rebirth saved  use it at Lv 40" (below Lv 40), "Keep-Base Rebirth saved  use it in Rebirth" (eligible, no intent), "Keep-Base Rebirth saved" (at MaxPrestige). No toast when a tap in the same frame already used the token.
+- F7 two requests in the same frame (the OnGranted auto-use plus a USE SAVED or REBIRTH tap) give exactly one rebirth: DoPrestige checks and mutates without yielding, so the second request sees Level 1 and is refused ("Reach Lv 40 to rebirth"). If the free REBIRTH wins the frame, the new token stays banked (Robux never lost).
+- F7 KeepCash = false and PendingCash is kept on both paths (lead decisions); PendingCash is not listed in the modal.
+- F7 admin test command "givekeepbase" (RequestAdminCommand) and owner chat "/givekeepbase [1-5]": adds 1-5 Keep-Base Rebirth tokens to the caller only (anything else = 1), admin allowlist only (it is NOT in AdminConfig.MoneyCommands, so Studio does not open it to other players). Purpose: the owner can test USE SAVED on his phone before the product Id is pasted. Undo: delete the "givekeepbase" branches in AdminService.
+- F11 refusal copy: LevelTooLow "Reach Lv 40 to rebirth", MaxPrestige "Max rebirth reached", NeedCashFee "Not enough cash to rebirth", NoKeepBaseToken "No Keep-Base Rebirth saved", NoProfile "Still loading, try again" (was "Cannot prestige: <code>"). A refusal also pushes PrestigeStateUpdate so the modal leaves REBIRTHING....
+- F11 "Base buildings (N built)" counts structure LEVELS bought (sum of BaseUpgrades over BaseConfig.Structures, businesses included while merged), per the K1 contract.
+- F11 PrestigeStateUpdate is pushed on join, after a rebirth, on a refusal, when a level-up flips READY (via XPService's existing MaybeNearPrestigeToast call) and after base buys (BaseUpgradeChanged, coalesced to one push per 1.5 s), so the modal's REBIRTH button and "(N built)" line are current. The panel's % bar follows XPUpdate live (PrestigeConfig.ProgressPct on the client).
+- F11 modal column order: RESET, GAIN, KEEP (the spec lists KEEP / RESET / GAIN). Inside each section the lines only that path has come first and are highlighted (free: "Base buildings (N built)", "War businesses"; keep-base: "Base buildings and levels"), so what you lose and the difference between the two paths are in view on an 800x360 phone without scrolling. Every server line is shown exactly once. Undo: the section list in RebirthConfirm.ColumnRows.
+- F11 modal buttons: REBIRTH / KEEP BASE are 50 real px tall (72 v at the phone scale) and up to 196 real px wide; they shrink in width only as far as needed to stay inside the right 60 % of the safe area and 16 px clear of the Roblox jump button (measured in the HUD harness: 844x390 164 px, 956x440 188 px, 932x430 183 px, 800x360 179 px, 800x360 with 32 px notches 160 px, tablet / desktop / 1080p 196-197 px; every one ends 18 px left of the jump button). The empty footer left side shows one status line (text only).
+- F11 KEEP BASE button precedence: MAX REBIRTH (at MaxPrestige) > REBIRTHING... (a request is on its way) > saved tokens (USE SAVED (n) when eligible, else "Lv 40 needed") > product not live ("KEEP BASE  SOON", never prompts) > not eligible ("Lv 40 needed", never sells early) > "KEEP BASE  R$ 50" (intent + PromptProductPurchase). REBIRTHING... ends on the next PrestigeStateUpdate, a cancelled Robux sheet, or a timeout (8 s for a rebirth request, 120 s while the sheet is open, 30 s after a purchase).
+- F11 the modal's close control returns to the Rebirth panel; tapping the dim closes both; a rebirth that goes through closes both.
+- F11 Rebirth panel: CONFIRM REBIRTH now sits right under the progress block (in view without scrolling at 800x360), above the "Keep all your Robux Items!" banner, the fee line and the unlock track. The unlock track label is sized to its entries (it was a fixed height and the 13 entries overflowed onto the next label).
+- F11 device detection: the Rebirth panel uses touch sizes when the device has a touch screen OR PreferredInput is Touch (HudLayout.IsTouch() or not HudLayout.PrefersKeys()); no Rebirth copy names a key. (Was UserInputService.TouchEnabled.)
+- F7 hard prerequisite (unchanged, lane E): fix B1 (the double prestige multiplier) before pasting the RebirthKeepBase Id; until then "+10% cash forever" is not exactly true and a keep-base rebirth compounds it.
+
+### Lane S
+
+These are the lane S lines only. The shared spec §5 lines 1-20 are Z's list; lane S implements the Shop side of #1, #2,
+#17 and #18 (F1 pads OWNED, F2 Mega Cash hero, F8 Speed Pass row and death offer, F9 Golden Pumpjacks row). All of
+this is display and prompting only: grants stay ProcessReceipt / pass ownership on the server.
+
+1. **The Speed Pass Shop row and pad read OWNED for a Speed Boost owner; the Speed Boost row stays buyable for a Speed
+   Pass owner.** Owning both gives the higher multiplier (x1.25), not the sum, so a 5 R$ pass would add nothing for a
+   Speed Boost owner, while Speed Boost is a real upgrade (x1.15 -> x1.25) for a pass owner. The pass rows and every
+   pad use the PremiumPads slot's OwnedIfAny keys (the same rule as PremiumPadService.alreadyOwns); Developer Product
+   rows keep their own one-time rule. The pass prompt shows "Already owned" instead of a Robux sheet.
+   Revert: use `passOwnedKnown(key)` instead of `offerOwned("GamePass", key)` in ShopController refreshOwnedRows / promptGamePass.
+2. **OWNED comes only from the server.** The client's 20 s `UserOwnsGamePassAsync` loop is gone. Rows and pads follow the server's `WE_Ent_<key>` attributes (join check, confirmed
+   purchase, saved entitlements) and this session's purchases, refreshed on attribute change, purchase finished and pad
+   stream-in. If the server's join check fails, a pad can look buyable until the server's retry succeeds; stepping on
+   it still gets the server's "OWNED" answer, because the server decides.
+3. **The hero title is 24 v, not `PanelShell.Text(16)`.** Text(16) clamps to the same 20 v as every row title on touch,
+   so the hero would not stand out on phones. The hero title shrinks to fit (TextScaled, from 24 v down to the plain
+   row size) so the narrow 480 v desktop panel never cuts it. Extra polish beyond the spec: a dark gold row background
+   and a gold BUY face with dark text. Revert: the HERO_ROW_* constants and heroTitleSize in ShopController.
+4. **At Id 0 the Shop prompt helpers stop before anything leaves the client.** promptGamePass / promptDevProduct show
+   "Coming soon" and send neither the intent remote nor a Roblox prompt. Before, the intent fired, the server logged a
+   SHOP_PROMPT with productId 0 and toasted "…not configured (placeholder ID)" to the player. No Shop row, pad or offer
+   reaches this path today (they all skip Id 0); it is a guard.
+5. **Purchase sources (analytics only, all already whitelisted in MonetizationConfig.PurchaseSources):** Shop rows send
+   "shop", or "hud_plus" when the Shop was opened from the cash "+"; world pads "pad"; the soft offers "offer"; the
+   Starter Pack offer "starter_offer"; the PvP death offer "death_card". The rail Shop tile and the P key count as
+   "shop" (spec F2), not "rail_shop".
+6. **No Cash Pack Mega highlight after the Speed Pass death offer.** M1 removed every 799 R$ push after a death; the
+   v35 "highlight Mega on the next Shop open" continuity stays for any other death offer only.
+7. **Stable Shop order.** After the four cash packs (Mega hero first), the other Developer Products and then the passes
+   are each sorted by Robux price, then key, instead of table hash order. So a pasted Id always lands in the same place:
+   Golden Pumpjacks (49 R$) leads the products and the 5 R$ Speed Pass leads the passes.
+8. **Pass titles:** "Pass: VIP", but a pass whose name already says "Pass" has no prefix ("Speed Pass").
+9. **Shop rows refresh only while the Shop is open.** `WE_Cash` changes on every payout, so the rows are rebuilt on open
+   and on changes while open, never in the background on a phone. The world pads refresh on `WE_Ent_*` changes only.
+10. **VIP stays a Shop row** (and its soft offer stays); lane W removes only the VIP pad.
+
+### Integration notes (batch-A verifier)
+- Contract drift accepted by the lane verifiers, recorded here so batch B builds on the real names:
+  (a) the novice shield writes the CHARACTER attribute `WE_ShieldUntil` (server time), not the player attribute (that
+  one is MoneyCollectorService's raid-shield mirror). A HUD chip for the novice shield (lane H) needs a new signal.
+  (b) GateDefenseService gets `IsNoviceShielded` through `GateDefenseService.SetShieldCheck` (no CombatService dep).
+  (c) New profiles take `TutorialOrderVersion` from `TutorialConfig.OrderVersion or 1` (lane K2 must add
+  `OrderVersion = 2`); old saves missing the field get 1.
+- Batch A and its BuyPathStatic changes (merged block + the 2 lane S needle replacements) must land in ONE commit:
+  K1 alone would show a "Speed Pass ... coming soon" Shop row that lane S removes, and ShopController alone fails the
+  2 old needles.
+- `MonetizationConfig.IntentAttributionSeconds` (180) decides auto-use of a keep-base token;
+  `PrestigeConfig.KeepBase.IntentWindowSeconds` (180) is documentation only. Keep them equal.
+- The keep-base path skips `RefreshAllVisuals`; that is correct only while `RebirthConfig.ZonesLive = false`.
+- `/givekeepbase` (AdminService) grants a Robux-priced token outside ProcessReceipt for owner testing; admin
+  allowlist only (UserId 470626172). Delete its branches before the Id is pasted if it should not stay live.
+- **Lead approvals:** all spec deviations listed by the batch-A integration verifier are accepted (TutorialOrderVersion from config; WE_ShieldUntil on the character; injected GateDefense shield check; rebirth modal copy/column order; Shop hero 24 v; Speed Pass row OWNED for Speed Boost owners).

@@ -3,6 +3,12 @@
 	ATM-cluster premium pads (AutoCollect / DoubleCash / SpeedBoost / GoldenPumpjack).
 	Server validates own-plot + debounce, then FireClient PromptPremiumPad.
 	Client prompts Marketplace; grants only via ProcessReceipt / GamePass ownership.
+	F1 / F9 (owner's 11 features, lane M): the ATM pads come from MonetizationConfig.PremiumPads.Slots (the first live
+	offer of a slot is the one its pad sells) and the golden pump pad sits by the pumps; every pad is a WE_PremiumPad
+	part with OfferKind / OfferKey / PlotId (and OwnedIfAny) attributes. OWNED = the offer, or any key of the slot's
+	OwnedIfAny (pad attribute and config), is owned as a game pass or an entitlement, which includes Developer
+	Products and entitlements granted by another product (Auto Collect from the Starter Pack). An owned pad never
+	prompts; a pad whose offer Id is 0 never prompts either.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -25,6 +31,7 @@ local BaseService: any = nil
 
 local TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
 local DEBOUNCE_SEC = 2.5
+local MAX_OWNED_KEYS = 8 -- F1: a pad's OwnedIfAny attribute is read up to this many keys
 local OVERLAP_MARGIN = 3.5
 local SPATIAL_INTERVAL = 0.25
 
@@ -85,7 +92,66 @@ local function isSeated(character: Model): boolean
 	return seat:IsA("VehicleSeat") or seat:IsA("Seat")
 end
 
-local function alreadyOwns(player: Player, kind: string, key: string): boolean
+local function isKeyName(v: any): boolean
+	return typeof(v) == "string" and #v > 0 and #v <= 64 and string.match(v, "^[%w_]+$") ~= nil
+end
+
+--[[ F1: the extra keys whose ownership makes this pad OWNED: the pad's OwnedIfAny attribute (comma string, written
+	by the server when it builds the pad) plus the OwnedIfAny of every PremiumPads slot that offers this Kind + Key
+	(so a pad built before the attribute existed, e.g. the Speed Boost pad, still honours the Speed Pass). ]]
+local function ownedIfAnyKeys(part: BasePart?, kind: string, key: string): { string }
+	local out: { string } = {}
+	local seen: { [string]: boolean } = {}
+	local function add(k: any)
+		if #out < MAX_OWNED_KEYS and isKeyName(k) and not seen[k] then
+			seen[k] = true
+			table.insert(out, k)
+		end
+	end
+	local attr = if part then part:GetAttribute("OwnedIfAny") else nil
+	if typeof(attr) == "string" and #attr <= 512 then
+		for _, k in ipairs(string.split(attr, ",")) do
+			add(string.match(k, "^%s*(.-)%s*$"))
+		end
+	end
+	local pads = (MonetizationConfig :: any).PremiumPads
+	local slots = if typeof(pads) == "table" then pads.Slots else nil
+	if typeof(slots) == "table" then
+		for _, slot in ipairs(slots) do
+			local offers = if typeof(slot) == "table" then slot.Offers else nil
+			if typeof(offers) ~= "table" then
+				continue
+			end
+			for _, offer in ipairs(offers) do
+				if typeof(offer) == "table" and offer.Kind == kind and offer.Key == key then
+					for _, k in ipairs(MonetizationConfig.PadOwnedKeys(slot)) do
+						add(k)
+					end
+					break
+				end
+			end
+		end
+	end
+	return out
+end
+
+-- one key: a game pass, an entitlement of that name, or the entitlement a Developer Product of that name grants
+local function ownsKey(player: Player, key: string): boolean
+	if MonetizationService.PlayerOwnsGamePass and MonetizationService.PlayerOwnsGamePass(player, key) then
+		return true
+	end
+	if MonetizationService.PlayerOwnsEntitlement and MonetizationService.PlayerOwnsEntitlement(player, key) then
+		return true
+	end
+	local dp = (MonetizationConfig.DevProducts :: any)[key]
+	local ent = if typeof(dp) == "table" then dp.GrantEntitlement else nil
+	if typeof(ent) == "string" and ent ~= key and MonetizationService.PlayerOwnsEntitlement then
+		return MonetizationService.PlayerOwnsEntitlement(player, ent) == true
+	end
+	return false
+end
+
+local function alreadyOwns(player: Player, kind: string, key: string, part: BasePart?): boolean
 	if not MonetizationService then
 		return false
 	end
@@ -97,10 +163,18 @@ local function alreadyOwns(player: Player, kind: string, key: string): boolean
 			return true
 		end
 	elseif kind == "DevProduct" then
-		local def = MonetizationConfig.DevProducts[key]
-		local ent = def and def.GrantEntitlement
+		local def = (MonetizationConfig.DevProducts :: any)[key]
+		local ent = if typeof(def) == "table" then def.GrantEntitlement else nil
 		if typeof(ent) == "string" and MonetizationService.PlayerOwnsEntitlement then
-			return MonetizationService.PlayerOwnsEntitlement(player, ent) == true
+			if MonetizationService.PlayerOwnsEntitlement(player, ent) == true then
+				return true
+			end
+		end
+	end
+	-- F1: OwnedIfAny (Speed pad: owning the Speed Pass OR Speed Boost = OWNED, whichever the pad sells)
+	for _, k in ipairs(ownedIfAnyKeys(part, kind, key)) do
+		if ownsKey(player, k) then
+			return true
 		end
 	end
 	return false
@@ -157,7 +231,7 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 		return
 	end
 
-	if alreadyOwns(player, kind, offerKey) then
+	if alreadyOwns(player, kind, offerKey, part) then
 		if NotificationService and not fromStanding then
 			if NotificationService.NotifyThrottled then
 				NotificationService.NotifyThrottled(player, "OWNED", "Info", 2, 4, "prem_owned_" .. offerKey)
