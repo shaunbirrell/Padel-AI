@@ -3657,15 +3657,15 @@ must_not_contain(U0_TC, 'GetDescendants', 'W3s2 U0: the diamond yield never scan
 
 # --- W3 step 2 Phase A integration ---
 must_not_contain('src/ServerScriptService/Server/Services/TerritoryService/init.luau', 'WaitForChild("Shared")', 'W3s2 integration: TerritoryService never waits forever on Shared (bounded 60 s)')
-# Enable steps (Phase A integration): step 1 (Industry + 3 camps) ON; steps 2 (Frontier) and 3 (Ruins, Crash, Oasis) stay OFF
-# until lane BK frees the 4 pool-pad sign slots: with them on, the 17-sign world budget refuses a POI board (AIRSTRIP /
-# RUINED VILLAGE / CRASH SITE / OASIS) or, if MapDressing paints first, the EMPIRE BANK sign. Lane BK swaps these 5 needles.
+# Enable steps (Phase A integration + lane BK): step 1 (Industry + 3 camps), step 2 (Frontier) and step 3 (Ruins, Crash,
+# Oasis) are ON. Lane BK removed the 4 pool-pad labels and paints EMPIRE BANK in MapSetup (before the POI boards): the
+# world holds 17 / 17 signs, no board refused (lane BK census, both startup orders).
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 140, Reserve = 8, Enabled = true, Lights = 3, Signs = 1, Layout = "Industry"', 'W3s2 enable step 1: South Port (Industry + camps) is on')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 75, Reserve = 4, Enabled = false, Lights = 1, Signs = 1, Layout = "Frontier"', 'W3s2 enable step 2 waits for lane BK (sign budget): Signal off')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 85, Reserve = 6, Enabled = false, Lights = 2, Signs = 1, Layout = "Frontier"', 'W3s2 enable step 2 waits for lane BK (sign budget): Airstrip off')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 85, Reserve = 4, Enabled = false, Lights = 0, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3 waits for lane BK (sign budget): Ruins off')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 45, Reserve = 4, Enabled = false, Lights = 0, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3 waits for lane BK (sign budget): Crash off')
-must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 60, Reserve = 2, Enabled = false, Lights = 2, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3 waits for lane BK (sign budget): Oasis off')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 75, Reserve = 4, Enabled = true, Lights = 1, Signs = 1, Layout = "Frontier"', 'W3s2 enable step 2: Signal Station is on')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 85, Reserve = 6, Enabled = true, Lights = 2, Signs = 1, Layout = "Frontier"', 'W3s2 enable step 2: Desert Airstrip is on')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 85, Reserve = 4, Enabled = true, Lights = 0, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3: Ruined Village is on')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 45, Reserve = 4, Enabled = true, Lights = 0, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3: Crash Site is on')
+must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 60, Reserve = 2, Enabled = true, Lights = 2, Signs = 1, Layout = "Wilds"', 'W3s2 enable step 3: Oasis is on')
 
 
 # ── fix57 pins (PromptController strong tables, VisualAssetService retry / logs, Base-panel NEXT badge, BusinessService prestige) ──
@@ -3886,6 +3886,51 @@ must_contain(Z_DOC, "| Developer Product | Keep-Base Rebirth | 50 R$ |", "Z docs
 must_contain(Z_DOC, "| Developer Product | Golden Pumpjacks | 49 R$ |", "Z docs: the 3 new Creator Dashboard items")
 must_contain("BALANCE.md", "### Empire Tax (owner's 11 features, F3 / F10)", "Z docs: BALANCE Empire Tax rows")
 must_contain("BALANCE.md", "| Your own Home Outpost | **+5%** |", "Z docs: BALANCE Home Outpost row")
+
+# --- W3 step 2 lane BK (Empire Bank hall) + enable steps 2 and 3 (integration block). Inserted above the final `parse_gate()`
+# call by buildBK/apply_pins.py. Verified on clean HEAD c51ec9b + MapSetup.luau + WorldConfig.luau (buildBK/fin/cand):
+# headless stand-in, not Roblox.
+BK_MS = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+BK_WC = "src/ReplicatedStorage/Shared/Configs/WorldConfig.luau"
+# spec w3s2 §8 Phase A pins for lane BK
+must_contain(BK_MS, '"StateBanner"', 'W3s2 BK: the bank StateBanner on the roof')
+must_contain(BK_MS, 'WE_RuntimeDoor', 'W3s2 BK: BankGate is a runtime door (WorldHygiene leaves it alone)')
+must_not_contain(BK_MS, 'beacon(bankFolder', 'W3s2 BK: no bank beacon')
+# the hall and its parts
+must_contain(BK_MS, 'local function buildEmpireBank(root: Folder)', 'W3s2 BK: one Empire Bank builder')
+must_contain(BK_MS, 'buildEmpireBank(root)', 'W3s2 BK: MapSetup.Run builds the bank hall')
+must_contain(BK_MS, 'local n = WorldKits.Add(hall, "TownBlock", CFrame.new(220, BANK_FLOOR_Y, BANK_HALL_CENTRE_Z) * CFrame.Angles(0, math.pi, 0), {', 'W3s2 BK: the hall is the WorldKits TownBlock shell facing Bank Street')
+must_contain(BK_MS, 'Variant = "hall",', 'W3s2 BK: TownBlock "hall" variant (7 parts)')
+must_contain(BK_MS, 'local BANK_POS = Vector3.new(220, 1, -220) -- the plaza centre = BankRaidConfig.Position', 'W3s2 BK: bank plaza centre (kept equal to BankRaidConfig.Position)')
+must_contain('src/ReplicatedStorage/Shared/Configs/BankRaidConfig.luau', 'Position = Vector3.new(220, 1, -220),', 'W3s2 BK: BankRaidConfig.Position = MapSetup BANK_POS (two literals, pinned together)')
+must_contain(BK_MS, 'local BANK_VAULT_Z = -224 -- the vault pad centre', 'W3s2 BK: vault pad 2 studs toward the door (radius 12 never reaches round the back wall)')
+must_contain(BK_MS, 'CollectionService:AddTag(vault, "WE_BankVault")', 'W3s2 BK: the one tagged vault is VaultPad')
+must_contain(BK_MS, 'gate:SetAttribute(act.RuntimeDoorAttr, true) -- WE_RuntimeDoor', 'W3s2 BK: BankGate carries the runtime-door attribute')
+must_contain(BK_MS, 'gate:SetAttribute(act.GateStateAttr, "open") -- WE_GateState', 'W3s2 BK: BankGate built open until Phase B')
+must_contain(BK_MS, 'CFrame = gateOpen,', 'W3s2 BK: BankGate built in its open (up-and-over) position')
+must_contain(BK_MS, 'gate:SetAttribute("WE_ClosedCFrame", gateClosed)', 'W3s2 BK: BankGate keeps its closed position for the jobs')
+must_contain(BK_MS, 'for _, row in ipairs(WorldConfig.Town.BankAnchors) do', 'W3s2 BK: the Town.Bank.* anchors come from WorldConfig.Town.BankAnchors')
+must_contain(BK_MS, 'if ActivityAnchors.Stamp(plaza, ActivityAnchors.FromRow(row)) ~= nil then', 'W3s2 BK: anchors stamped on BankPlaza through ActivityAnchors.Stamp (0 parts)')
+must_contain(BK_MS, 'WorldKits.Sign(sign, Enum.NormalId.Back, BANK_SIGN_TEXT)', 'W3s2 BK: EMPIRE BANK painted by MapSetup inside the world sign budget, before the POI boards')
+must_contain(BK_MS, '{ Name = "BankColumnW", X = 212 }, { Name = "BankColumnE", X = 228 }', 'W3s2 BK: the columns stand outside the sign (never hide EMPIRE BANK)')
+must_not_contain(BK_MS, 'paintEdge(bankPad', 'W3s2 BK: no painted kerb round the bank plaza')
+must_not_contain(BK_MS, 'plainBillboard(vault', "W3s2 BK: no MapSetup vault card (BankRaidService's label is the one)")
+must_not_contain(BK_MS, 'local function beacon(', 'W3s2 BK: no beacon helper left (nothing outside the bases has a beacon)')
+must_contain(BK_MS, 'if def.PlotId == nil then\n\t\t\tcontinue\n\t\tend\n\t\t-- 1-post sign on the back edge', 'W3s2 BK: the 4 pool pads carry no Garage sign (world sign budget 17)')
+# enable steps 2 (Frontier: Signal, Airstrip, Radar, FortI, FortS) and 3 (Ruins, Crash, Oasis) ON: with the 4 pool-pad
+# labels gone the world holds 17 / 17 signs (6 gate pads, EMPIRE BANK, the Town board, 9 POI boards), none refused
+must_contain(BK_WC, 'Budget = 33, Reserve = 2, Enabled = true, Lights = 0, Signs = 0, Layout = "Frontier", LowShare = 0.75', 'W3s2 enable step 2: Radar Hill is on')
+must_contain(BK_WC, '{ Id = "FortI", Name = "Fort Ironclad approach", Kind = "fort", Circle = { X = 1450, Z = -1450, R = 230 }, Budget = 53, Reserve = 2, Enabled = true,', 'W3s2 enable step 2: Fort Ironclad approach is on')
+must_contain(BK_WC, '{ Id = "FortS", Name = "Fort Sandhold approach", Kind = "fort", Circle = { X = -1450, Z = 1450, R = 200 }, Budget = 53, Reserve = 2, Enabled = true,', 'W3s2 enable step 2: Fort Sandhold approach is on')
+must_not_contain(BK_WC, 'Enabled = false, Lights', 'W3s2 enable steps 1-3: every POI row is on')
+# integration (lane BK verifier fix + enable steps): the open gate lies flat under the roof slab (never hangs upright in the
+# doorway between the camera and a raider inside); the closed pose still fills the opening; the Phase A sign budget holds
+must_contain(BK_MS, 'local BANK_GATE_CEILING_GAP = 0.02', 'W3s2 BK integ: the open bank gate lies just under the roof slab')
+must_contain(BK_MS, 'local gateOpen = CFrame.new(220, roofBottom - BANK_GATE_CEILING_GAP - 0.3, -214.9 - 4.5) * CFrame.Angles(math.rad(90), 0, 0)', 'W3s2 BK integ: open gate = up-and-over pose (flat, inside the hall)')
+must_contain(BK_MS, 'local gateClosed = CFrame.new(220, BANK_FLOOR_Y + 4.5, -214.6)', 'W3s2 BK integ: the closed gate fills the 10-wide opening')
+must_not_contain(BK_MS, 'BANK_GATE_LIFT', 'W3s2 BK integ: no raised-and-hanging gate pose left')
+must_contain(BK_MS, 'gate.CanQuery = false', 'W3s2 BK integ: the open gate never blocks shots or line of sight')
+must_contain(BK_WC, 'SurfaceGuis = 17', 'W3s2 BK integ: world sign budget stays 17 (6 gate pads + EMPIRE BANK + Town + 9 POI boards = 17)')
 
 parse_gate()
 

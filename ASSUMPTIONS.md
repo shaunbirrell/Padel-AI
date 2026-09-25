@@ -3048,3 +3048,124 @@ W-20. **No NukeService exists in the tree** that targets territories, so the F10
   earns 142 $/s at 30 min with just the Home Outpost (+5 %), 158 with one more outpost; below the 280-380 band - the
   one-line revert is PickMode = "Score".
 - **B2-L3 Publish with "Migrate to Latest Update":** an old server that loads a v3 tutorial save would swap steps 6 and 7 once.
+
+## 2026-09-25 — Empire Bank hall (lane BK) + world enable steps 2 and 3 (all 17 places on)
+
+## W3 step 2: lane BK (Empire Bank hall) + enable steps 2 and 3, integration (all reversible)
+
+Ship set: `src/ServerScriptService/Server/Modules/MapSetup.luau` (lane BK + the BK verifier's gate fix) and
+`src/ReplicatedStorage/Shared/Configs/WorldConfig.luau` (`Enabled` flips only). Verified together on clean HEAD c51ec9b + these
+2 files (`buildBK/fin/cand`, md5s in `buildBK/fin/files.md5`). Every number comes from the headless stand-in, not Roblox.
+
+- **INT-BK-1. Enable steps 2 (Signal, Airstrip, Radar, FortI, FortS) and 3 (Ruins, Crash, Oasis) are ON.** Every cap
+  passes at step 3 (Full/Low x FaceMapCentre true/false): 17 / 17 world signs, 0 boards blank, in both startup orders;
+  parts outside bases 2,452 / 2,451 Full (cap 2,900), 1,679 / 1,676 Low (cap 1,900); world lights 21 Full / 19 Low (cap 24), 0 out of policy;
+  Neon 0 outside the bases (world total 306, same as HEAD); anchors equal expected (175 Full, 170 Low); hygiene H1-H10 0; 0 floating groups;
+  0 collidable POI parts in a road lane. The spec asks for the owner's sign-off on the renders before each step: the
+  renders are in `buildBK/fin/render/`. Revert: flip the 8 rows back to `Enabled = false` and apply the old side of
+  `integ_bps_changes.txt` (the 5 "steps 2-3 off" needles) and drop the 4 step-2/3 pins in `integ_bps_block.py`.
+- **INT-BK-2. The busiest 512-stud circle is not changed by steps 2 and 3.** With step 1 only (same MapSetup) it is
+  495 static (FaceMapCentre false) / 495 (true); with steps 2-3 it is 495 / 493. The new places are 900+ studs from it.
+- **INT-BK-3. Phase B's bags do not fit in that circle yet.** Static 495, measured with supply crates 497, bound 499
+  (cap 500). Phase B's at most 4 bags add up to 4 parts: 501 measured-worst, 503 bound. This is a Phase B entry
+  condition, not an enable-step failure: before bags ship, Phase B must free at least 3 parts in the circle round
+  (-128, -88) (options: each gate-pad post + board as 1 part, or at most 1 loose bag in the world).
+- **INT-BK-4. `V-npcpost-clear` stays a known false positive** (camp posts 0.73-1.40 studs by the AABB shortcut; the
+  oriented distance is 1.90-1.99, driver D3POST lines). It fails the same way at HEAD and is in the step-1 camps, not
+  steps 2-3.
+- **INT-BK-5. Pins.** The Phase A integration's 5 "steps 2-3 off" needles are swapped for "on" needles, lane BK's 27 pins are
+  kept (one label reworded: the gate is built open, no longer "raised"), and 6 integration pins hold the verifier's
+  up-and-over gate pose, `CanQuery = false`, the closed pose and the 17-sign budget. `apply_pins.py` applies all of it.
+- **INT-BK-6. The lane F census check "BankGate raised (bottom 10.8)" reads the gate's unrotated Size.** The gate
+  really lies flat at y 14.98-15.58 (verifier's gate driver). The check passes for the right reason (nothing hangs in
+  the opening) but its printed bottom is not the true bottom. Test-only; no game change.
+
+### Lane BK assumptions (verbatim, `buildBK/assumptions.txt`)
+
+## W3 step 2 lane BK: Empire Bank hall + enable steps 2 and 3 (all reversible)
+
+Files: `src/ServerScriptService/Server/Modules/MapSetup.luau` (the bank hall and the pool-pad signs) and
+`src/ReplicatedStorage/Shared/Configs/WorldConfig.luau` (`Enabled` flips only). Every result was measured in the
+headless stand-in, not in Roblox.
+
+- **BK-1. The bank is 17 parts, the same count as the old block** (spec w3s2 §1.1):
+  - BankPlaza (36 × 1.2 × 36, top 1.6);
+  - the WorldKits TownBlock "hall" shell (7 parts: 24 × 22, 2 storeys, pale limestone walls, facing south down Bank Street);
+  - 2 marble portico columns;
+  - the EMPIRE BANK board;
+  - BankGate;
+  - a round VaultDoor on the back wall;
+  - the gold VaultPad;
+  - 2 concrete planters;
+  - the StateBanner on the roof.
+
+  It has no beacon, no kerb, no light, no Neon and no MapSetup billboard: BankRaidService's vault label is the only one.
+  The hall walls and roof block shots (CanQuery on). Two parts cast shadows: the back wall and the roof.
+  Revert: restore the old block from HEAD c51ec9b (MapSetup "Empire Bank (raid stub)").
+- **BK-2. The columns stand 1 stud further out than the geometry draft:** x 212 and 228 instead of 213 and 227.
+  - At the draft positions, the near column hid up to 8 % of the sign from the edges of Bank Street (92.3 % worst view).
+  - Now the sign is 100 % visible from all 25 street viewpoints within its 80-stud range.
+  - HEAD's old columns hid about a third of the old sign: 78 % mean, 65 % worst.
+  - Guard posts G3 and G4 stay 1.53 studs clear of the columns.
+- **BK-3. The vault pad centre is (220, −224), 2 studs toward the door from the Town.Bank.Vault anchor at (220, −226).**
+  - The legacy raid counts anyone within BankRaidConfig.VaultRadius 12 of the tagged pad.
+  - With the pad at −226, that radius reached through the back wall: 43 standable spots behind the bank were inside it,
+    and no guard could see them. A raider could loot from outside the building.
+  - At −224, a raider pressed against the back or side walls outside stands at least 12.5 studs from the centre.
+    The coverage map has 1,439 spots and 0 are hidden from every guard.
+  - The jobs' crack ring (Phase B) still uses the anchor at (220, −226), r 8.
+  - Revert: VaultRadius 8 and the pad back to −226, changed together (pending_edits.md §1).
+- **BK-4. The vault pad is a flat 12 × 12 square, not a round disc.**
+  - A flat Cylinder has to be rotated, and BankRaidService's label sits on the pad through StudsOffsetWorldSpace. I did
+    not rely on how Roblox applies that offset to a rotated part.
+  - The owner's test says "gold pad".
+- **BK-5. BankGate is built open as an up-and-over door** (verifier fix; the builder's version hung it upright 6 studs up).
+  - Open: tipped flat (90 degrees about X) just under the roof slab: x 215–225, y 14.98–15.58, z −223.9 to −214.9, 0.02 under the
+    roof, overlapping no part. The upright raised slab (y 7.6–16.6 in the opening) sat between a follow camera outside the
+    hall and a raider on the vault: in a sightline model (camera 10–15 studs behind, pitch 15–25 degrees) it hid the
+    raider's focus point in 115 of 115 vault-centre cases, and a CanCollide-false part never pops the Roblox camera in.
+    Flat under the ceiling: 0 of 115.
+  - CanCollide and CanQuery are false, WE_GateState is "open", and it carries WE_RuntimeDoor.
+  - WE_ClosedCFrame (upright, y 1.6–10.6, filling the 10-wide opening) and WE_OpenCFrame (the flat ceiling pose) hold its
+    two positions for the jobs. Phase B's OpsSites.SetDoor must set the CFrame from them (pending_edits.md §2).
+  - Revert: open = closed + (0, 6, 0) (the builder's raised pose).
+- **BK-6. The StateBanner's bottom sits on the roof top** (y 16.8, centre 19.8). The spec gives a centre of y 20, which
+  assumed the draft's 0.2-stud-thicker roof.
+- **BK-7. The 4 pool pads lose their sign post, board and "Garage" label entirely,** rather than keeping a blank board.
+  - This removes 8 parts outside the bases, 2 of them inside the busiest 512-stud circle: 497 → 495 static.
+  - The circle's bound with 2 supply crates goes from 501 (over the cap at HEAD) to 499.
+  - Plan A (each client paints its own gate-pad sign) can bring pool labels back later.
+- **BK-8. MapSetup paints EMPIRE BANK itself.** It uses WorldKits.Sign on the board's street face (Back, +Z), right after
+  the gate pads and before MapDressing paints the POI boards. BankRaidService's paint-if-missing stays as the fallback.
+  At step 3 the world holds 17 of 17 signs with none refused, in both startup orders.
+- **BK-9. No MAP_GEN bump.**
+  - The live place is a Rojo build with no baked map, the same reasoning as the Lane D line.
+  - A map saved into the place in Studio keeps the old bank until MAP_GEN moves.
+  - Revert/bump: 84/85 + (Starter ? 10 : 0), together with the BuyPathStatic map-gen pin.
+- **BK-10. Enable steps 2 and 3 are switched on:** Signal, Airstrip, Radar, FortI, FortS, Ruins, Crash and Oasis are
+  `Enabled = true`.
+  - The spec asks for owner sign-off on the renders at each step. The integrator's renders of every place are in
+    `w3s2/build/integ/renders/`, and the bank renders are in `w3s2/buildBK/render/`.
+  - Revert: flip the 8 rows back and swap the pins back (bps_changes.txt).
+- **BK-11. MapSetup's `beacon` helper is deleted.** It had no caller left once the bank beacon went.
+- **BK-12. Test drivers were adapted to the hall (scratch copies only):**
+  - real_play and shield_driver_v2 probe the floor from y 12, because the y-40 probe landed the walker on the hall roof;
+  - integ_driver expects the 10 Town.Bank anchors;
+  - wh_driver's V9-signs expects 6 pad signs;
+  - the mission driver gained a "map" mode that uses the real MapSetup anchors.
+- **BK-13. BankRaidConfig is unchanged** (Phase B owns it).
+  - BankRaidService already prefers MapSetup's G anchors.
+  - The fallback GuardPosts still sit round the old building. Moving them to the anchor positions is in pending_edits.md §1.
+- **BK-14. G5 is the only guard with a view deep inside the hall** (spec §5). 1,091 of the 1,439 vault spots are seen
+  by exactly one guard. A squad that kills G5 first has the interior to itself. The spec accepts this, and squad
+  balance is Phase B's H2 test.
+
+### Lead
+- **BK-L1 Enable steps 2 and 3 are ON without a separate render sign-off.** The owner delegated ("keep building how you
+  are, you decide"); every census check passes and the renders are in scratchpad w3s2/buildBK/fin/render/. Revert: flip
+  the 8 WorldConfig rows back to Enabled = false and swap the 5 step pins back (INT-BK-1).
+- **BK-L2 Headroom:** busiest 512-stud circle 493/495 static, 497/499 worst with crates (cap 500); world signs 17/17.
+  Phase B (jobs) must not add parts or runtime signs in that circle without freeing some first.
+- **BK-L3 Pending edits in phase-B-owned files** (w3s2/buildBK/pending_edits.md): BankRaidConfig.GuardPosts fallback posts
+  that follow the hall (only used if the anchors go missing), and OpsSites.SetDoor must use WE_Open/ClosedCFrame. Applied
+  with the phase B commit.

@@ -9,7 +9,10 @@
 	WorldBounds builds the skyline / ground and air walls / seabed tint / far shore, WorldTerrain fills the canyon edge
 	(each call guarded: a failure never stops the map build). The mesa Part ring, the ground fill patches, the 20 static
 	soldier statues, the "OIL FIELD" pads and the grey landmark hosts are gone. Spawns come from WorldConfig.Spawns:
-	10 painted garage pads (6 outside the front gates), invisible NPC / event anchors, no beacons, no Neon.
+	10 painted garage pads (6 outside the front gates, the only ones with a "Garage" sign), invisible NPC / event
+	anchors, no beacons, no Neon.
+	W3 step 2 lane BK: the Empire Bank is a walk-in hall (buildEmpireBank: 17 parts, the open BankGate, the StateBanner,
+	the Town.Bank.* activity anchors on BankPlaza).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -315,34 +318,8 @@ local function plainBillboard(parent, text, size, offsetY, textColor)
 	return bb
 end
 
--- v70: `turn` (optional) = the plot frame for a plot beacon, so the beacon turns with its plot
--- World v2 W1 (spec §5.2 row 2): a painted pole + SmoothPlastic tip, no Neon and no glow disc. Only the bank keeps one;
--- garage pads, naval pontoons and capture zones have none.
-local function beacon(parent, at: Vector3, color, name, turn: CFrame?)
-	local function place(dy: number): CFrame
-		local cf = CFrame.new(at + Vector3.new(0, dy, 0))
-		return if turn then cf * turn.Rotation else cf
-	end
-	part({
-		Name = name or "Beacon",
-		Size = Vector3.new(0.55, 12, 0.55),
-		CFrame = place(6),
-		Color = Color3.fromRGB(40, 45, 42),
-		Material = Enum.Material.Metal,
-		CanCollide = false,
-		Parent = parent,
-	})
-	part({
-		Name = (name or "Beacon") .. "_Tip",
-		Size = Vector3.new(1.6, 1.6, 1.6),
-		CFrame = place(13),
-		Color = color,
-		Material = Enum.Material.SmoothPlastic,
-		Shape = Enum.PartType.Ball,
-		CanCollide = false,
-		Parent = parent,
-	})
-end
+-- World v2 W1 (spec §5.2 row 2) / W3 step 2 lane BK: no beacon pole anywhere outside the bases (the bank's was the
+-- last one; its roof StateBanner and the EMPIRE BANK sign mark it now), so the beacon helper is gone.
 
 -- v68: terminal look for console-mode upgrade slots (screen + button); decoration only, not kit roles
 local function dressConsole(plinth, title)
@@ -2122,6 +2099,206 @@ local function withWorldModule(name: string, fn: (any) -> ()): boolean
 	return ok
 end
 
+-- ── Empire Bank (W3 step 2 lane BK; spec scratchpad w3s2 §1.1–§1.2, §5, §6; geometry w3s2/geo/bank.py) ──────────
+--[[ A walk-in hall in the Town v2 style, facing south down Bank Street. 17 parts, the same count as the old block, so
+	the busiest 512-stud circle does not move:
+	  BankPlaza      36 x 1.2 x 36, top 1.6 (the hall floor); hosts the Town.Bank.* activity anchors (WorldConfig.Town.
+	                 BankAnchors, stamped through ActivityAnchors.Stamp: 0 parts)
+	  BankHall       the WorldKits TownBlock "hall" shell (7 parts): back wall, 2 side walls, 2 front piers round a 10-wide
+	                 full-height opening, the roof slab, the upper window strip; 24 x 22, 2 storeys (x 208..232, z -236..-214)
+	  BankColumnW/E  2 portico columns, both outside the sign's width, so neither hides the EMPIRE BANK sign
+	  BankSign       the EMPIRE BANK board over the opening, painted here (WorldKits.Sign, inside the world sign budget,
+	                 before MapDressing paints the POI boards); BankRaidService paints it only if it has no sign yet
+	  BankGate       the bar gate in the opening, built OPEN until the jobs take it over (Phase B): an up-and-over
+	                 door tipped flat under the roof slab (a raised upright slab sat between a follow camera outside and
+	                 a raider on the vault, and a CanCollide-false part never pops the camera in), CanCollide false,
+	                 WE_GateState "open", a runtime door (WE_RuntimeDoor: WorldHygiene Enforce leaves it alone);
+	                 WE_ClosedCFrame / WE_OpenCFrame are its two positions
+	  VaultDoor      the round vault door on the back wall (dressing)
+	  VaultPad       the gold pad (12 x 12, no collision), tag WE_BankVault, centre (220, -224) inside the hall: 2 studs
+	                 toward the door from the Town.Bank.Vault anchor (220, -226), so the legacy stand-on-vault raid
+	                 (BankRaidConfig.VaultRadius 12 round this part) never reaches round the back wall, where no guard
+	                 can see (the jobs' crack ring is the anchor's, r 8, inside the hall)
+	  PlanterW/E     2 concrete planters on the plaza (cover for guards G1 / G2 and for raiders)
+	  StateBanner    8 x 6 x 0.4 standing on the roof, no collision, no raycasts; green = open (Phase B recolours it)
+	No beacon, no kerb, no light, no Neon and no billboard here (BankRaidService owns the one vault label). The hall
+	parts come from the kit (PreferMesh never applies: TownBlock has no mesh overlay). BANK_POS is also
+	BankRaidConfig.Position (a separate literal: BuyPathStatic pins both), and every coordinate below is absolute, like
+	the anchors and the fallback guard posts. ]]
+local BANK_POS = Vector3.new(220, 1, -220) -- the plaza centre = BankRaidConfig.Position
+local BANK_FLOOR_Y = 1.6 -- the plaza top (the hall floor; the anchors' Y 1.1 above WorldConfig.Activity.FloorY 0.5)
+local BANK_HALL_W, BANK_HALL_D, BANK_HALL_STOREYS = 24, 22, 2
+local BANK_HALL_CENTRE_Z = -225 -- front (the opening) at z -214, back at z -236
+local BANK_GATE_CEILING_GAP = 0.02 -- open: the gate lies flat this far under the roof slab (y 14.98..15.58, z -223.9..-214.9)
+local BANK_VAULT_Z = -224 -- the vault pad centre (the Town.Bank.Vault anchor stays at -226; see the header)
+local BANK_BANNER_OPEN = Color3.fromRGB(70, 170, 90) -- StateBanner "open" (OpsConfig.Ui.BannerColors.Open in Phase B)
+local BANK_SIGN_TEXT = "EMPIRE BANK" -- = BankRaidConfig.Sign.Text
+
+local function buildEmpireBank(root: Folder)
+	local bankFolder = ensureFolder("EmpireBank", root)
+	local plaza = part({
+		Name = "BankPlaza",
+		Size = Vector3.new(36, 1.2, 36),
+		Position = BANK_POS,
+		Color = Color3.fromRGB(168, 160, 144),
+		Material = Enum.Material.Pavement,
+		Parent = bankFolder,
+	})
+
+	-- the hall shell (WorldKits TownBlock "hall": exactly 7 parts at 2 storeys, no Roof / Lantern); its front (local -Z)
+	-- turns to face south (+Z)
+	local roofTop = BANK_FLOOR_Y + BANK_HALL_STOREYS * 7 + 1.2 -- the kit's roof slab top (read back from the part below)
+	local roofBottom = BANK_FLOOR_Y + BANK_HALL_STOREYS * 7 -- the roof slab's underside = the wall tops (read back too)
+	withWorldModule("WorldKits", function(WorldKits: any)
+		local hall = Instance.new("Model")
+		hall.Name = "BankHall"
+		local n = WorldKits.Add(hall, "TownBlock", CFrame.new(220, BANK_FLOOR_Y, BANK_HALL_CENTRE_Z) * CFrame.Angles(0, math.pi, 0), {
+			Width = BANK_HALL_W,
+			Depth = BANK_HALL_D,
+			Storeys = BANK_HALL_STOREYS,
+			Variant = "hall",
+			Color = Color3.fromRGB(214, 206, 188), -- pale limestone walls (trim 20 % darker)
+		})
+		hall.Parent = bankFolder
+		local roof = hall:FindFirstChild("HallRoof")
+		if roof and roof:IsA("BasePart") then
+			roofTop = roof.Position.Y + roof.Size.Y * 0.5
+			roofBottom = roof.Position.Y - roof.Size.Y * 0.5
+		end
+		if n ~= 7 then
+			warn("[WAR EMPIRE] MapSetup: the Empire Bank hall has " .. tostring(n) .. " parts (want 7)")
+		end
+	end)
+
+	-- portico columns (x 211.3..212.7 and 227.3..228.7, just in front of the piers): 1.3 outside the sign's x 214..226,
+	-- so no view from Bank Street loses a corner of the sign behind one (the geometry draft's x 213 / 227 hid up to 8 %
+	-- of it from the street's edges); guard posts G3 / G4 stay 1.5 clear of them
+	for _, c in ipairs({ { Name = "BankColumnW", X = 212 }, { Name = "BankColumnE", X = 228 } }) do
+		part({
+			Name = c.Name,
+			Size = Vector3.new(1.4, 14, 1.4),
+			Position = Vector3.new(c.X, BANK_FLOOR_Y + 7, -212.5),
+			Color = Color3.fromRGB(232, 228, 216),
+			Material = Enum.Material.Marble,
+			CanCollide = true,
+			Parent = bankFolder,
+		})
+	end
+
+	-- EMPIRE BANK: a dark board (cream text reads on it) over the opening, x 214..226, y 13.6..15.4, its street face +Z
+	local sign = part({
+		Name = "BankSign",
+		Size = Vector3.new(12, 1.8, 0.4),
+		Position = Vector3.new(220, BANK_FLOOR_Y + 12.9, -213.6),
+		Color = Color3.fromRGB(34, 38, 48),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	sign.CanQuery = false
+	sign.CanTouch = false
+	withWorldModule("WorldKits", function(WorldKits: any)
+		if sign:FindFirstChildWhichIsA("SurfaceGui") == nil and WorldKits.Sign(sign, Enum.NormalId.Back, BANK_SIGN_TEXT) == nil then
+			warn("[WAR EMPIRE] MapSetup: EMPIRE BANK sign not painted (world sign budget)")
+		end
+	end)
+
+	-- the bar gate (10 x 9 x 0.6 in the opening, x 215..225): open until OpsService runs the heist (Phase B). Open is
+	-- up-and-over: tipped flat (90 degrees about X) and lying just under the roof slab, its outer edge on the closed
+	-- gate's street face, so nothing hangs in the opening between the camera and a raider inside
+	local gateClosed = CFrame.new(220, BANK_FLOOR_Y + 4.5, -214.6)
+	local gateOpen = CFrame.new(220, roofBottom - BANK_GATE_CEILING_GAP - 0.3, -214.9 - 4.5) * CFrame.Angles(math.rad(90), 0, 0)
+	local gate = part({
+		Name = "BankGate",
+		Size = Vector3.new(10, 9, 0.6),
+		CFrame = gateOpen,
+		Color = Color3.fromRGB(52, 54, 52),
+		Material = Enum.Material.DiamondPlate,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	gate.CanQuery = false
+	gate.CanTouch = false
+	local act = WorldConfig.Activity
+	gate:SetAttribute(act.RuntimeDoorAttr, true) -- WE_RuntimeDoor
+	gate:SetAttribute(act.GateStateAttr, "open") -- WE_GateState
+	gate:SetAttribute("WE_ClosedCFrame", gateClosed)
+	gate:SetAttribute("WE_OpenCFrame", gateOpen)
+
+	-- the round vault door on the back wall (a disc 7.6 across, 1 thick, its face 1 stud into the hall)
+	part({
+		Name = "VaultDoor",
+		Size = Vector3.new(1, 7.6, 7.6),
+		CFrame = CFrame.new(220, BANK_FLOOR_Y + 4.2, -234.3) * CFrame.Angles(0, math.rad(90), 0),
+		Shape = Enum.PartType.Cylinder,
+		Color = Color3.fromRGB(150, 150, 142),
+		Material = Enum.Material.DiamondPlate,
+		CanCollide = true,
+		Parent = bankFolder,
+	})
+
+	-- the vault: a flat gold pad inside the hall (unrotated, so the label's world offset stays straight up). BANK_VAULT_Z
+	-- keeps VaultRadius 12 inside the walls at the back and sides (a raider pressed against the back wall outside
+	-- stands >= 12.5 from its centre) and lets it reach just out of the opening, in view of the front guards
+	local vault = part({
+		Name = "VaultPad",
+		Size = Vector3.new(12, 0.12, 12),
+		Position = Vector3.new(220, BANK_FLOOR_Y + 0.06, BANK_VAULT_Z),
+		Color = Color3.fromRGB(214, 176, 72),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	vault.CanQuery = false
+	vault.CanTouch = false
+	vault:SetAttribute("BankId", "EmpireBank")
+	CollectionService:AddTag(vault, "WE_BankVault")
+
+	-- concrete planters on the plaza front (x 203..209 / 231..237, z -207..-205, 3 tall)
+	for _, pl in ipairs({ { Name = "PlanterW", X = 206 }, { Name = "PlanterE", X = 234 } }) do
+		part({
+			Name = pl.Name,
+			Size = Vector3.new(6, 3, 2),
+			Position = Vector3.new(pl.X, BANK_FLOOR_Y + 1.5, -206),
+			Color = Color3.fromRGB(148, 144, 132),
+			Material = Enum.Material.Concrete,
+			CanCollide = true,
+			Parent = bankFolder,
+		})
+	end
+
+	-- the state banner standing on the roof, facing Bank Street
+	local banner = part({
+		Name = "StateBanner",
+		Size = Vector3.new(8, 6, 0.4),
+		Position = Vector3.new(226, roofTop + 3, -232),
+		Color = BANK_BANNER_OPEN,
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+		Parent = bankFolder,
+	})
+	banner.CanQuery = false
+	banner.CanTouch = false
+
+	-- the Town.Bank.* anchors (Door, Vault, Loot, guard posts G1..G5, reinforcements R1 / R2) on the plaza: 0 parts.
+	-- BankRaidService takes its guard posts from the G anchors (else BankRaidConfig.GuardPosts); OpsService reads all.
+	local stamped = 0
+	withWorldModule("ActivityAnchors", function(ActivityAnchors: any)
+		for _, row in ipairs(WorldConfig.Town.BankAnchors) do
+			if ActivityAnchors.Stamp(plaza, ActivityAnchors.FromRow(row)) ~= nil then
+				stamped += 1
+			end
+		end
+	end)
+	local nParts = 0
+	for _, d in ipairs(bankFolder:GetDescendants()) do
+		if d:IsA("BasePart") then
+			nParts += 1
+		end
+	end
+	print(string.format("[WAR EMPIRE] MapSetup: Empire Bank hall built (%d parts, %d Town.Bank anchors)", nParts, stamped))
+end
+
 function MapSetup.Run()
 	-- Normal gravity so characters fall onto terrain (not float/void)
 	Workspace.Gravity = 196.2
@@ -3005,8 +3182,9 @@ function MapSetup.Run()
 
 	-- World v2 (spec §3.3): spawn pads and anchors come from WorldConfig.Spawns (the three makeSpawnFolder rings at
 	-- 650 / 550 / 500 are gone: their pads sat on the roads, carried Neon edges, H marks and a beacon pole through the jeep).
-	--   VehicleSpawns  10 garage pads (WE_VehicleSpawn): painted Concrete aprons + a painted kerb, a 1-post "Garage"
-	--                  sign (SurfaceGui, <= 80 studs; the world's only painted signs) on the back edge; no beacon, no billboard, no Neon. Gate_P1..P6 sit
+	--   VehicleSpawns  10 garage pads (WE_VehicleSpawn): painted Concrete aprons + a painted kerb; the 6 gate pads carry a
+	--                  1-post "Garage" sign (SurfaceGui, <= 80 studs) on the back edge, the 4 pool pads none (lane BK: the
+	--                  world sign budget); no beacon, no billboard, no Neon. Gate_P1..P6 sit
 	--                  62 studs outside each plot's front gate (plot-local, so they turn with the plot) and face the plot
 	--                  forward; the pools face Yaw. VehicleService spawns on the pad heading (yawOf(pad.CFrame)).
 	--   NPCSpawns      10 invisible anchors (WE_NPCSpawn) in the Quarry / Ridge / Dune camps (CombatNPC.GatherSpawns)
@@ -3057,6 +3235,12 @@ function MapSetup.Run()
 		})
 		CollectionService:AddTag(pad, TAG_VEHICLE)
 		paintEdge(pad, COL_VEHICLE:Lerp(Color3.new(1, 1, 1), 0.55), 0.35)
+		-- W3 step 2 lane BK (spec w3s2 §1.10): only the 6 gate pads (PlotId rows) carry the "Garage" sign; the 4 pool
+		-- pads have no sign post, board or label, so the world sign budget (WorldConfig.Budgets.SurfaceGuis 17) holds the
+		-- 6 gate pads, the Town board, EMPIRE BANK and the 9 POI boards
+		if def.PlotId == nil then
+			continue
+		end
 		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
 		local back = spawnCfg.PadSize.Z * 0.5 + 0.4
 		local topY = spawnCfg.PadSize.Y * 0.5
@@ -3147,8 +3331,8 @@ function MapSetup.Run()
 	-- only: a pad in the water must never be picked as a ground-vehicle / jeep spawn.
 	-- World v2 (spec §3.3): the deck + 1 painted trim part (a lighter inset, so the pontoon reads as a pad from a boat);
 	-- no beacon pole in the water, no Neon edge and no floating billboard. No painted name either: the world's painted
-	-- signs stay within WorldConfig.Budgets.SurfaceGuis (12; the 10 garage signs use 10) and the SurfaceGui hard cap
-	-- (6 bases at L5 already hold 1,104 of 1,134). Boats spawn from the Garage menu, so nobody has to find a pontoon.
+	-- signs stay within WorldConfig.Budgets.SurfaceGuis (17: 6 gate-pad garage signs, the Town board, EMPIRE BANK and the
+	-- 9 POI boards) and the SurfaceGui hard cap. Boats spawn from the Garage menu, so nobody has to find a pontoon.
 	do
 		local navalFolder = ensureFolder("NavalSpawns", root)
 		local padSize = WaterConfig.NavalPadSize
@@ -3182,86 +3366,9 @@ function MapSetup.Run()
 	-- NPC pads, 4 per oil rig, 4 per fort) that never moved, carried a WE_NPC tag squads shot at, and stood on roads.
 	-- Guards and hostiles are live CombatService NPCs (NPC anchors above, TerritoryConfig GuardNPCType).
 
-	-- Empire Bank (raid stub) — high-value vault + BankGuard NPCs
-	local bankFolder = ensureFolder("EmpireBank", root)
-	local bankPos = Vector3.new(220, 1, -220) -- matches BankRaidConfig.Position -- matches BankRaidConfig.Position
-	local bankPad = part({
-		Name = "BankPlaza",
-		Size = Vector3.new(36, 1.2, 36),
-		Position = bankPos,
-		Color = Color3.fromRGB(45, 50, 70),
-		Material = Enum.Material.Concrete,
-		Parent = bankFolder,
-	})
-	paintEdge(bankPad, Color3.fromRGB(90, 120, 200), 0.4) -- World v2 W1: painted kerb (nothing glows outside the bases)
-	part({
-		Name = "BankBuilding",
-		Size = Vector3.new(22, 14, 18),
-		Position = bankPos + Vector3.new(0, 7.5, -4),
-		Color = Color3.fromRGB(55, 62, 85),
-		Material = Enum.Material.Metal,
-		Parent = bankFolder,
-	})
-	part({
-		Name = "BankRoof",
-		Size = Vector3.new(24, 1.2, 20),
-		Position = bankPos + Vector3.new(0, 15, -4),
-		Color = Color3.fromRGB(40, 45, 60),
-		Material = Enum.Material.Metal,
-		Parent = bankFolder,
-	})
-	-- Columns + painted entrance (visual kits v2; World v2 W1: sign, vault pad and ring are SmoothPlastic, not Neon)
-	for _, ox in ipairs({ -8, -2.5, 2.5, 8 }) do
-		part({
-			Name = "BankColumn",
-			Size = Vector3.new(1.4, 12, 1.4),
-			Position = bankPos + Vector3.new(ox, 6.5, 5.5),
-			Color = Color3.fromRGB(70, 78, 100),
-			Material = Enum.Material.Marble,
-			Parent = bankFolder,
-		})
-	end
-	part({
-		Name = "BankDoor",
-		Size = Vector3.new(4.5, 6, 0.4),
-		Position = bankPos + Vector3.new(0, 3.5, 5.2),
-		Color = Color3.fromRGB(30, 35, 50),
-		Material = Enum.Material.Metal,
-		Parent = bankFolder,
-	})
-	part({
-		Name = "BankSign",
-		Size = Vector3.new(10, 1.2, 0.4),
-		Position = bankPos + Vector3.new(0, 12.5, 5.2),
-		Color = Color3.fromRGB(230, 190, 60),
-		Material = Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		Parent = bankFolder,
-	})
-	local vault = part({
-		Name = "VaultPad",
-		Size = Vector3.new(10, 1.4, 10),
-		Position = bankPos + Vector3.new(0, 1.2, 8),
-		Color = Color3.fromRGB(200, 170, 60),
-		Material = Enum.Material.SmoothPlastic,
-		Parent = bankFolder,
-	})
-	part({
-		Name = "VaultRing",
-		Size = Vector3.new(12, 0.35, 12),
-		Position = bankPos + Vector3.new(0, 1.9, 8),
-		Color = Color3.fromRGB(90, 140, 220),
-		Material = Enum.Material.SmoothPlastic,
-		CanCollide = false,
-		Transparency = 0.35,
-		Parent = bankFolder,
-	})
-	vault:SetAttribute("BankId", "EmpireBank")
-	CollectionService:AddTag(vault, "WE_BankVault")
-	plainBillboard(vault, "EMPIRE BANK · Stand to RAID cash", Vector2.new(280, 40), 8, Color3.fromRGB(255, 220, 120))
-	beacon(bankFolder, bankPos + Vector3.new(14, 0, 14), Color3.fromRGB(90, 130, 220), "BankBeacon")
-	-- Bank guards spawned live via CombatService.SpawnNPC("BankGuard", cf) in BankRaidService
-	-- (static makeSoldierKit props removed — they were Anchored stick figures with double nametags)
+	-- Empire Bank (W3 step 2 lane BK): the walk-in hall, its vault pad, open gate, state banner and Town.Bank.* anchors
+	-- (buildEmpireBank above). Bank guards are live CombatService NPCs spawned by BankRaidService on the G anchors.
+	buildEmpireBank(root)
 
 	local tutorialFolder = ensureFolder("TutorialMarkers", root)
 	local function tutorialMarker(name, pos, color, stepId)
