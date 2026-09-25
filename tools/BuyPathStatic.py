@@ -580,7 +580,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 kit_gen_at_least(32, "KIT_GEN 27 (v39 hotfix)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "special"', "SpecialForcesFacility special kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "Special Forces compound", "SF densify comment")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: ~28 stud marked pad", "Helipad densify")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: ~28 stud marked pad", "fb2 Helipad old part kit gone (now Installations/Helipad)")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "v35: naval pier + bollards", "Dock densify")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 29", "BuildingDressGen 29 (v42)")
 # W3 RETIRED: must_contain("src/ServerScriptService/Server/Modules/MapDressing.luau", "Landmarks_v35", "Map landmarks folder")
@@ -646,15 +646,15 @@ must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "Tu
 
 
 # --- v37 air/naval presence + midgame polish: parked heli/boat, runway, missions, level-up, CashMega soft, garage ---
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_ParkedHeli", "Helipad parked heli host")
-must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ParkedHeli", "Helipad parked heli Part-kit")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_ParkedHeli", "fb2 Helipad parked heli dress host gone")
+must_not_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ParkedHeli", "fb2 Helipad parked heli Part-kit gone")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "WE_DressHost_ParkedBoat", "Dock parked boat host")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ParkedBoat", "Dock parked boat Part-kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "threshold chevrons", "Airfield threshold chevrons")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "centerline", "Airfield centerline markings")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "TryAttachParkedPresence", "Parked presence mesh attach")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "TryAttachParkedPresence", "BaseService parked presence call")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'role == "ParkedHeli"', "ParkedHeli kit role visuals")
+must_not_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'role == "ParkedHeli"', "fb2 ParkedHeli kit role visuals gone")
 must_contain("src/ReplicatedStorage/Shared/Configs/MissionConfig.luau", "completable in first", "Mission first-5-min Target")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/MissionController.luau", "ProgressChip", "Missions progress chip")
 must_contain("src/ServerScriptService/Server/Services/XPService.luau", "LevelUp = leveledUp", "XP LevelUp payload flag")
@@ -2564,6 +2564,73 @@ for _rel in sorted({str(p.relative_to(ROOT)) for pat in (
         must_not_contain(_rel, _needle, f"nations: {_rel.rsplit('/', 1)[-1]} never references {_needle}")
 
 must_contain("CLAUDE.md", "Real countries appear only as a player's own cosmetic nation", "nations: CLAUDE.md country rule")
+
+# ── fb2 v73 base identity (owner feedback 2): Lanes A + D + E, merged by the integration verifier ──
+# --- v73 base identity (fb2 Lane A): distinct shells, gate checkpoint, watchtower fit, helipad installation ---
+_SVC = "src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau"
+_HBB = "src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau"
+_CKP = "src/ServerScriptService/Server/Modules/Installations/Checkpoint.luau"
+_TWR = "src/ServerScriptService/Server/Modules/Installations/Watchtower.luau"
+_HLP = "src/ServerScriptService/Server/Modules/Installations/Helipad.luau"
+must_contain(_SVC, "CabinClearHeight = 8.5", "v73 watchtower cabin fits a 7.5-stud avatar + 1 stud")
+must_contain(_SVC, 'RoofStyle = "Vault"', "v73 distinct shells: Vehicle Depot vaulted hangar roof")
+must_contain(_SVC, 'Module = "Helipad"', "v73 helipad is an installation (old kit + parked heli skipped)")
+must_contain(_SVC, 'DefensiveWalls = { Enabled = true, Module = "Checkpoint", Width = 6, Depth = 6 }', "v73 checkpoint foundation = 6 x 6 flag plinth")
+must_contain(_SVC, 'Signatures = { "SolarDish", "FacadeBand" }', "v73 Lab solar panels + dish, not a radome (Radar owns the dome)")
+must_contain(_HBB, "WE_FlagHost", "v73 building flag cloth is a nation-flag host")
+must_contain(_HBB, "local GEN = 3", "v73 walk-in shells rebuild once (GEN 3)")
+must_not_contain(_HBB, "Radome", "v73 no radome on the Lab")
+must_not_contain(_HLP, "ParkedHeli", "v73 helipad: no parked helicopter mock-up")
+must_contain(_HLP, "floodlight(api, Vector3.new(hw + 1.2, ground, hw + 1.2), Vector3.new(0, y0, 0), 9, false, col)", "v73 helipad L4 floodlight unlit (light budget)")
+must_not_contain(_CKP, "RazorWire", "v73 checkpoint: razor wire removed")
+must_not_contain(_CKP, "JerseyStripe", "v73 checkpoint: jersey barriers are 2 parts")
+must_contain(_CKP, 'cloth:SetAttribute("WE_FlagHost", true)', "v73 gate plinth flag is the hero nation-flag host")
+must_contain(_CKP, 'api.part("BoomArm", Vector3.new(0.45, 0.45, armLen), armCF * CFrame.new(0, 0, -armLen * 0.5), Color3.fromRGB(236, 236, 228), Enum.Material.SmoothPlastic, false)', "v73 boom arm raised and non-colliding (never blocks a vehicle)")
+must_contain(_CKP, "local jx = { 6.2, 2.6, -1.0, -4.6 }", "v73 jersey barriers clear of the L4+ gate AutoGun nest")
+must_contain(_TWR, "CabinClearHeight", "v73 watchtower headroom from config")
+must_contain(_TWR, "local ladderH = 2 * math.ceil((h + 0.5) / 2)", "v73 watchtower ladder always tops out above the deck")
+must_contain(_TWR, 'cloth:SetAttribute("WE_FlagHost", true)', "v73 watchtower L5 flag is a nation-flag host")
+
+# fb2 Lane A verifier additions (entry lamp / solar panel / bollard supports)
+must_contain(_HBB, 'box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, lampY, lampZ)', "v73 entry lamp hangs under its entrance cover or is wall-mounted (never floating)")
+must_contain(_HBB, "roofTop + 0.15 * math.cos(a) + 1.7 * math.sin(a)", "v73 Lab solar panels rest on the roof slab")
+
+# fb2 Lane D (static soldiers + flag hosts). Verified on HEAD 1ce4828 + Lane D files (MapSetup, Interiors/Barracks, Interiors/SpecialForces).
+MSD = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+must_contain(MSD, "CFrame = cf * CFrame.new(0, 0.9, 0),", "fb2 static soldier torso lifted 0.9 (feet on the floor, not 0.9-1.1 sunk)")
+must_contain(MSD, "local function makeSoldierKit(parentFolder, name, cf: CFrame,", "fb2 makeSoldierKit cf typed CFrame")
+must_contain(MSD, "dome.MeshType = Enum.MeshType.Sphere", "fb2 static soldier helmet is a sphere dome")
+must_contain(MSD, 'Name = "Helmet",\n\t\tSize = Vector3.new(1.3, 0.75, 1.35),', "fb2 static soldier dome helmet size")
+must_not_contain(MSD, 'Name = "Helmet",\n\t\tSize = Vector3.new(1.2, 0.5, 1.2),', "fb2 old flat box helmet gone")
+must_contain(MSD, "CFrame = torso.CFrame * CFrame.new(-0.5, -2.825, 0.1),", "fb2 BootL bottom = leg bottom (detail on)")
+must_contain(MSD, "CFrame = torso.CFrame * CFrame.new(0.5, -2.825, 0.1),", "fb2 BootR bottom = leg bottom (detail on)")
+must_contain(MSD, "local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.8, 42)", "fb2 training workers stand on the yard pad (y 2.8)")
+must_contain(MSD, "local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.7, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)", "fb2 stall soldiers y 2.7, turn kept")
+must_contain(MSD, 'local paradeFlag = part({ Name = "ParadeFlag", Size = Vector3.new(0.12, 4.4, 7.5),', "fb2 parade flag cloth 0.12 thick")
+must_contain(MSD, 'paradeFlag:SetAttribute("WE_FlagHost", true)', "fb2 parade flag is a nation flag host")
+_IB = "src/ServerScriptService/Server/Modules/Interiors/Barracks.luau"
+must_contain(_IB, 'local cloth = api.box("FlagCloth", Vector3.new(2.6, 1.7, 0.12),', "fb2 Barracks desk flag cloth 0.12 thick")
+must_contain(_IB, 'cloth:SetAttribute("WE_FlagHost", true)', "fb2 Barracks desk flag is a nation flag host")
+must_contain(_IB, 'local officerFlag = api.box("OfficerFlag", Vector3.new(2.4, 1.7, 0.12),', "fb2 officer flag 0.12 thick")
+must_contain(_IB, 'officerFlag:SetAttribute("WE_FlagHost", true)', "fb2 officer flag is a nation flag host")
+_ISF = "src/ServerScriptService/Server/Modules/Interiors/SpecialForces.luau"
+must_contain(_ISF, 'local flag = B("UnitFlag", 1.8, 3.2, 0.12, -6.5, y1 + 6.0, Z1 - 0.06,', "fb2 unit flag 0.12 thick, back face flush on the wall")
+must_contain(_ISF, 'flag:SetAttribute("WE_FlagHost", true)', "fb2 unit flag is a nation flag host")
+
+# fb2 Lane E (deferred items 1-2: dead helipad kit + parked heli removed; Helipad console line). Verified on HEAD 1ce4828 + Lane A + Lane E files.
+_E_SKB = "src/ServerScriptService/Server/Modules/StructureKitBuilder.luau"
+_E_BS = "src/ServerScriptService/Server/Services/BaseService.luau"
+_E_UPS = "src/ServerScriptService/Server/Services/UpgradePadService.luau"
+must_not_contain(_E_SKB, 'elseif kit == "helipad" then', "fb2 dead helipad kit branch deleted (Helipad is an installation)")
+must_not_contain(_E_SKB, 'structureId == "SpecialForcesFacility" or structureId == "Helipad"', "fb2 EnsureKit no longer waits for Helipad dress hosts")
+must_contain(_E_SKB, 'or nm == "ShowroomFlagHost" or child:GetAttribute("WE_KitRole") == "ParkedBoat" then', "fb2 Dock parked boat still counts as dress")
+must_contain(_E_BS, 'elseif role == "ParkedBoat" then', "fb2 Dock parked boat visuals kept")
+must_not_contain(_E_BS, "ParkedHeli", "fb2 no parked heli handling left in BaseService")
+must_contain(_E_UPS, 'local HELI_NOTE_TEXT = string.format("HELIS AT LV %d", firstHeliLevel())', "fb2 Helipad console says when helicopters come (HELIS AT LV 10)")
+must_contain(_E_UPS, 'req.StructureId == "Helipad" and def.RequiresPrestige == nil and def.RequiresRebirthFlag == nil', "fb2 HELIS AT LV = lowest Helipad heli UnlockLevel (VehicleConfig)")
+must_contain(_E_UPS, 'if console and structureId == "Helipad" and not addHeliNote(part) then', "fb2 HELIS line only on the Helipad console")
+must_contain(_E_UPS, "note.Parent = lbl", "fb2 HELIS line sits under the screen label (WorldPromptController never overwrites it)")
+must_not_contain(_E_UPS, 'Instance.new("SurfaceGui")', "fb2 Helipad console line adds no SurfaceGui (budget)")
 
 parse_gate()
 

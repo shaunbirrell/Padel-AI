@@ -26,7 +26,7 @@ local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
 local HollowBuildingBuilder = {}
 
 local MODEL_NAME = "WE_Building"
-local GEN = 2
+local GEN = 3 -- v73 distinct shells: live models built by GEN 2 rebuild once
 
 type Opening = {
 	Center: number, -- along the wall's local X
@@ -189,6 +189,40 @@ local function box(ctx: Ctx, name: string, size: Vector3, pos: Vector3, color: C
 	return part(ctx, name, size, ctx.origin * CFrame.new(pos), color, material, collide)
 end
 
+-- v73: WedgePart in building space. Roblox wedge: the slope faces local -Z (and up), the tall face is local +Z.
+local function wedgeAt(ctx: Ctx, name: string, size: Vector3, localCF: CFrame, color: Color3, material: Enum.Material, collide: boolean?): WedgePart
+	local w = Instance.new("WedgePart")
+	w.Name = name
+	w.Anchored = true
+	w.Size = size
+	w.CFrame = ctx.origin * localCF
+	w.Color = color
+	w.Material = material
+	w.TopSurface = Enum.SurfaceType.Smooth
+	w.BottomSurface = Enum.SurfaceType.Smooth
+	w.CanCollide = if collide == nil then true else collide
+	w.CanTouch = false
+	w.CanQuery = w.CanCollide
+	w.CastShadow = true
+	w.Parent = ctx.model
+	return w
+end
+
+-- v73: vertical cylinder (Roblox cylinders run along local X) standing on y0 in building space
+local function column(ctx: Ctx, name: string, diameter: number, height: number, x: number, y0: number, z: number, color: Color3, material: Enum.Material, collide: boolean?): Part
+	local p = part(ctx, name, Vector3.new(height, diameter, diameter), ctx.origin * CFrame.new(x, y0 + height * 0.5, z) * CFrame.Angles(0, 0, math.pi * 0.5), color, material, collide)
+	p.Shape = Enum.PartType.Cylinder
+	return p
+end
+
+-- v73: window list entry = a number (centre, default width) or { X = centre, W = width }
+local function winAt(e: any, defW: number): (number, number)
+	if typeof(e) == "table" then
+		return tonumber(e.X) or 0, tonumber(e.W) or defW
+	end
+	return tonumber(e) or 0, defW
+end
+
 local LIGHTS = (StructureVisualConfig :: any).BuildingLights or {}
 local FIXTURE_MATERIAL: Enum.Material = LIGHTS.FixtureMaterial or Enum.Material.Neon
 
@@ -268,11 +302,14 @@ local function wall(ctx: Ctx, name: string, wallCF: CFrame, len: number, height:
 	end)
 	local x0 = -len * 0.5
 	local x1 = len * 0.5
+	-- v73 distinct shells: per-building wall material / frame colour (StructureVisualConfig.HollowBuildings)
+	local wallMat: Enum.Material = c.WallMaterial or Enum.Material.Concrete
+	local frameCol: Color3 = col.Frame or col.Trim
 	local function seg(a: number, b: number, y0: number, y1: number)
 		if b - a < 0.05 or y1 - y0 < 0.05 then
 			return
 		end
-		part(ctx, name, Vector3.new(b - a, y1 - y0, t), wallCF * CFrame.new((a + b) * 0.5, (y0 + y1) * 0.5, 0), col.Wall, Enum.Material.Concrete)
+		part(ctx, name, Vector3.new(b - a, y1 - y0, t), wallCF * CFrame.new((a + b) * 0.5, (y0 + y1) * 0.5, 0), col.Wall, wallMat)
 	end
 	local cursor = x0
 	for _, o in ipairs(openings) do
@@ -289,8 +326,17 @@ local function wall(ctx: Ctx, name: string, wallCF: CFrame, len: number, height:
 				pane.Transparency = 0.45
 				pane.Reflectance = 0.08
 				pane.CastShadow = false
-				part(ctx, name .. "Mullion", Vector3.new(0.2, o.Height, 0.3), wallCF * CFrame.new((oa + ob) * 0.5, midY, 0), col.Trim, Enum.Material.Metal, false)
-				part(ctx, name .. "Ledge", Vector3.new(w + 0.6, 0.3, 0.7), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom - 0.15, t * 0.5 + 0.2), col.Trim, Enum.Material.Metal, false)
+				if c.WindowMullion ~= false and w > 2 then
+					-- one mullion per ~4.5 studs (a ribbon window reads as a row of panes, a normal window keeps one)
+					local n = if w >= 9 then math.floor(w / 4.5) else 1
+					for k = 1, n do
+						local mx = oa + w * k / (n + 1)
+						part(ctx, name .. "Mullion", Vector3.new(0.2, o.Height, 0.3), wallCF * CFrame.new(mx, midY, 0), frameCol, Enum.Material.Metal, false)
+					end
+				end
+				if c.WindowLedge ~= false then
+					part(ctx, name .. "Ledge", Vector3.new(w + 0.6, 0.3, 0.7), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom - 0.15, t * 0.5 + 0.2), frameCol, Enum.Material.Metal, false)
+				end
 			elseif o.Garage then
 				local frameT = t + 0.4
 				for _, edge in ipairs({ oa + 0.3, ob - 0.3 }) do
@@ -300,10 +346,13 @@ local function wall(ctx: Ctx, name: string, wallCF: CFrame, len: number, height:
 				local drum = part(ctx, name .. "ShutterDrum", Vector3.new(w - 0.6, 1.4, 1.4), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom + o.Height - 0.5, -t * 0.5 - 0.7), col.Metal, Enum.Material.DiamondPlate, false)
 				drum.Shape = Enum.PartType.Cylinder
 			else
-				local frameT = t + 0.3
-				part(ctx, name .. "DoorFrame", Vector3.new(0.35, o.Height, frameT), wallCF * CFrame.new(oa + 0.175, midY, 0), col.Metal, Enum.Material.Metal, false)
-				part(ctx, name .. "DoorFrame", Vector3.new(0.35, o.Height, frameT), wallCF * CFrame.new(ob - 0.175, midY, 0), col.Metal, Enum.Material.Metal, false)
-				part(ctx, name .. "DoorFrame", Vector3.new(w, 0.35, frameT), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom + o.Height - 0.175, 0), col.Metal, Enum.Material.Metal, false)
+				-- v73: a heavier, coloured frame reads as a blast-door portal (Armory) at no extra parts
+				local fw: number = c.DoorFrameWidth or 0.35
+				local frameT = t + (c.DoorFrameDepth or 0.3)
+				local dcol: Color3 = col.DoorFrame or col.Metal
+				part(ctx, name .. "DoorFrame", Vector3.new(fw, o.Height, frameT), wallCF * CFrame.new(oa + fw * 0.5, midY, 0), dcol, Enum.Material.Metal, false)
+				part(ctx, name .. "DoorFrame", Vector3.new(fw, o.Height, frameT), wallCF * CFrame.new(ob - fw * 0.5, midY, 0), dcol, Enum.Material.Metal, false)
+				part(ctx, name .. "DoorFrame", Vector3.new(w, fw, frameT), wallCF * CFrame.new((oa + ob) * 0.5, baseY + o.Bottom + o.Height - fw * 0.5, 0), dcol, Enum.Material.Metal, false)
 			end
 			cursor = ob
 		end
@@ -541,14 +590,27 @@ local function build(ctx: Ctx)
 	local helipad = lv >= c.HelipadLevel
 	local goldCap = helipad or lv >= (c.GoldCapLevel or 5)
 	local garage = c.DoorStyle == "Garage"
+	-- v73 distinct shells (StructureVisualConfig.HollowBuildings): roof form, wall material, entrance, signatures
+	local roofStyle: string = c.RoofStyle or "Flat"
+	local entrance: string = c.Entrance or (if garage then "Canopy" else "Awning")
+	local sig: { [string]: boolean } = {}
+	for _, s in ipairs(c.Signatures or {}) do
+		sig[s] = true
+	end
+	local wallMat: Enum.Material = c.WallMaterial or Enum.Material.Concrete
+	local frameCol: Color3 = col.Frame or col.Trim
+	local roofCol: Color3 = col.RoofSkin or col.Roof
+	local roofMat: Enum.Material = c.RoofMaterial or Enum.Material.Metal
 
 	local y1 = 0.4 -- ground floor top (foundation slab = kit Body)
 	local y2 = y1 + H1 + 0.8 -- upper floor top
 	local roofBottom = if twoStory then y2 + H2 else y1 + H1
-	local roofTop = roofBottom + 0.8
+	local slabT = if roofStyle == "Lid" then (c.LidThickness or 1.6) else 0.8
+	local roofTop = roofBottom + slabT
 
 	local doorX, doorW, doorH = c.DoorX, c.DoorWidth, c.DoorHeight
 	local winW, winH, winBottom = c.WindowWidth, c.WindowHeight, c.WindowBottom
+	local upW, upH, upBottom = c.UpperWindowWidth or winW, c.UpperWindowHeight or 3.0, c.UpperWindowBottom or 3.2
 
 	-- Stairwell (two storeys) along the back wall, climbing toward +X.
 	local stairW = 4.5
@@ -574,23 +636,26 @@ local function build(ctx: Ctx)
 	local frontOpen: { Opening } = {
 		{ Center = doorX, Width = doorW, Bottom = 0, Height = doorH, Glass = false, Garage = garage },
 	}
-	for _, wx in ipairs(c.FrontWindowsX or {}) do
-		table.insert(frontOpen, { Center = wx, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
+	for _, e in ipairs(c.FrontWindowsX or {}) do
+		local wx, ww = winAt(e, winW)
+		table.insert(frontOpen, { Center = wx, Width = ww, Bottom = winBottom, Height = winH, Glass = true })
 	end
 	wall(ctx, "WallFront", frontCF, W, H1, y1, frontOpen)
 
 	local backOpen: { Opening } = {}
 	if not twoStory then
-		for _, wx in ipairs(c.BackWindowsX or {}) do
+		for _, e in ipairs(c.BackWindowsX or {}) do
+			local wx, ww = winAt(e, winW)
 			-- back wall local X is mirrored (rotated 180°)
-			table.insert(backOpen, { Center = -wx, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
+			table.insert(backOpen, { Center = -wx, Width = ww, Bottom = winBottom, Height = winH, Glass = true })
 		end
 	end
 	wall(ctx, "WallBack", backCF, W, H1, y1, backOpen)
 
 	local westOpen: { Opening } = {}
-	for _, wz in ipairs(c.WestWindowsZ or {}) do
-		table.insert(westOpen, { Center = wz, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
+	for _, e in ipairs(c.WestWindowsZ or {}) do
+		local wz, ww = winAt(e, winW)
+		table.insert(westOpen, { Center = wz, Width = ww, Bottom = winBottom, Height = winH, Glass = true })
 	end
 	wall(ctx, "WallWest", westCF, sideLen, H1, y1, westOpen)
 
@@ -598,8 +663,9 @@ local function build(ctx: Ctx)
 	if hasAnnex then
 		table.insert(eastOpen, { Center = -annexZc, Width = 4, Bottom = 0, Height = 7.5, Glass = false })
 	else
-		for _, wz in ipairs(c.EastWindowsZ or {}) do
-			table.insert(eastOpen, { Center = -wz, Width = winW, Bottom = winBottom, Height = winH, Glass = true })
+		for _, e in ipairs(c.EastWindowsZ or {}) do
+			local wz, ww = winAt(e, winW)
+			table.insert(eastOpen, { Center = -wz, Width = ww, Bottom = winBottom, Height = winH, Glass = true })
 		end
 	end
 	wall(ctx, "WallEast", eastCF, sideLen, H1, y1, eastOpen)
@@ -607,21 +673,27 @@ local function build(ctx: Ctx)
 	-- Upper storey
 	if twoStory then
 		local upFront: { Opening } = {}
-		for _, wx in ipairs(c.UpperWindowsX or c.FrontWindowsX or {}) do
-			table.insert(upFront, { Center = wx, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true })
+		for _, e in ipairs(c.UpperWindowsX or c.FrontWindowsX or {}) do
+			local wx, ww = winAt(e, upW)
+			table.insert(upFront, { Center = wx, Width = ww, Bottom = upBottom, Height = upH, Glass = true })
 		end
 		wall(ctx, "WallFront2", frontCF, W, H2, y2, upFront)
 		local upBack: { Opening } = {}
-		for _, wx in ipairs(c.BackWindowsX or {}) do
-			table.insert(upBack, { Center = -wx, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true })
+		for _, e in ipairs(c.UpperBackWindowsX or c.BackWindowsX or {}) do
+			local wx, ww = winAt(e, upW)
+			table.insert(upBack, { Center = -wx, Width = ww, Bottom = upBottom, Height = upH, Glass = true })
 		end
 		wall(ctx, "WallBack2", backCF, W, H2, y2, upBack)
-		wall(ctx, "WallWest2", westCF, sideLen, H2, y2, { { Center = 0, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true } })
-		wall(ctx, "WallEast2", eastCF, sideLen, H2, y2, { { Center = 0, Width = winW, Bottom = 3.2, Height = 3.0, Glass = true } })
-		box(ctx, "StoreyBand", Vector3.new(W + 0.4, 0.8, 0.3), Vector3.new(0, y2 - 0.4, hd + 0.15), col.Trim, Enum.Material.Metal, false)
-		box(ctx, "StoreyBand", Vector3.new(W + 0.4, 0.8, 0.3), Vector3.new(0, y2 - 0.4, -hd - 0.15), col.Trim, Enum.Material.Metal, false)
-		box(ctx, "StoreyBand", Vector3.new(0.3, 0.8, D + 0.4), Vector3.new(hw + 0.15, y2 - 0.4, 0), col.Trim, Enum.Material.Metal, false)
-		box(ctx, "StoreyBand", Vector3.new(0.3, 0.8, D + 0.4), Vector3.new(-hw - 0.15, y2 - 0.4, 0), col.Trim, Enum.Material.Metal, false)
+		local upSide: { Opening } = {}
+		if c.UpperSideWindows ~= false then
+			upSide = { { Center = 0, Width = upW, Bottom = upBottom, Height = upH, Glass = true } }
+		end
+		wall(ctx, "WallWest2", westCF, sideLen, H2, y2, table.clone(upSide))
+		wall(ctx, "WallEast2", eastCF, sideLen, H2, y2, table.clone(upSide))
+		box(ctx, "StoreyBand", Vector3.new(W + 0.4, 0.8, 0.3), Vector3.new(0, y2 - 0.4, hd + 0.15), frameCol, Enum.Material.Metal, false)
+		box(ctx, "StoreyBand", Vector3.new(W + 0.4, 0.8, 0.3), Vector3.new(0, y2 - 0.4, -hd - 0.15), frameCol, Enum.Material.Metal, false)
+		box(ctx, "StoreyBand", Vector3.new(0.3, 0.8, D + 0.4), Vector3.new(hw + 0.15, y2 - 0.4, 0), frameCol, Enum.Material.Metal, false)
+		box(ctx, "StoreyBand", Vector3.new(0.3, 0.8, D + 0.4), Vector3.new(-hw - 0.15, y2 - 0.4, 0), frameCol, Enum.Material.Metal, false)
 
 		slab(ctx, "Floor2", -hw + t, hw - t, -hd + t, hd - t, y2 - 0.8, 0.8, col.Floor, Enum.Material.Concrete, { stairX0 - 0.2, stairX1, stairZ0 - 0.1, stairZ1 + 0.2 })
 		for k = 1, stepCount do
@@ -631,61 +703,190 @@ local function build(ctx: Ctx)
 		railing(ctx, Vector3.new(stairX0 - 0.2, y2, stairZ1 + 0.3), Vector3.new(stairX1 - 2.4, y2, stairZ1 + 0.3), 3)
 	end
 
-	-- Roof slab + parapet
+	-- Roof: the ceiling slab (every style) + the building's own roof form
 	local roofHole: { number }? = nil
 	local trussX = hw - t - 1.3
 	local trussZ = hd - t - 1.3
 	if roofAccess then
 		roofHole = { trussX - 1.6, trussX + 1.6, trussZ - 1.6, trussZ + 1.6 }
 	end
-	slab(ctx, "Roof", -hw, hw, -hd, hd, roofBottom, 0.8, col.Roof, Enum.Material.Concrete, roofHole)
 	local parH = 1.4
-	box(ctx, "Parapet", Vector3.new(W, parH, t), Vector3.new(0, roofTop + parH * 0.5, hd - t * 0.5), col.Wall, Enum.Material.Concrete)
-	box(ctx, "Parapet", Vector3.new(W, parH, t), Vector3.new(0, roofTop + parH * 0.5, -hd + t * 0.5), col.Wall, Enum.Material.Concrete)
-	box(ctx, "Parapet", Vector3.new(t, parH, D - 2 * t), Vector3.new(hw - t * 0.5, roofTop + parH * 0.5, 0), col.Wall, Enum.Material.Concrete)
-	box(ctx, "Parapet", Vector3.new(t, parH, D - 2 * t), Vector3.new(-hw + t * 0.5, roofTop + parH * 0.5, 0), col.Wall, Enum.Material.Concrete)
-	local capColor = if goldCap then col.Gold else col.Trim
-	box(ctx, "ParapetCap", Vector3.new(W + 0.3, 0.3, t + 0.3), Vector3.new(0, roofTop + parH + 0.15, hd - t * 0.5), capColor, Enum.Material.Metal, false)
-	box(ctx, "ParapetCap", Vector3.new(W + 0.3, 0.3, t + 0.3), Vector3.new(0, roofTop + parH + 0.15, -hd + t * 0.5), capColor, Enum.Material.Metal, false)
-	box(ctx, "ParapetCap", Vector3.new(t + 0.3, 0.3, D), Vector3.new(hw - t * 0.5, roofTop + parH + 0.15, 0), capColor, Enum.Material.Metal, false)
-	box(ctx, "ParapetCap", Vector3.new(t + 0.3, 0.3, D), Vector3.new(-hw + t * 0.5, roofTop + parH + 0.15, 0), capColor, Enum.Material.Metal, false)
+	if roofStyle == "Lid" then
+		-- bunker lid: one thick slab overhanging every wall, no parapet (Armory)
+		local ov: number = c.LidOverhang or 1.2
+		slab(ctx, "Roof", -hw - ov, hw + ov, -hd - ov, hd + ov, roofBottom, slabT, col.Roof, Enum.Material.Concrete, roofHole)
+		parH = 0
+		if goldCap then
+			box(ctx, "LidTrim", Vector3.new(W + 2 * ov + 0.1, 0.35, 0.35), Vector3.new(0, roofTop - 0.175, hd + ov), col.Gold, Enum.Material.Metal, false)
+		end
+	else
+		slab(ctx, "Roof", -hw, hw, -hd, hd, roofBottom, 0.8, col.Roof, Enum.Material.Concrete, roofHole)
+	end
+	if roofStyle == "Flat" then
+		box(ctx, "Parapet", Vector3.new(W, parH, t), Vector3.new(0, roofTop + parH * 0.5, hd - t * 0.5), col.Wall, wallMat)
+		box(ctx, "Parapet", Vector3.new(W, parH, t), Vector3.new(0, roofTop + parH * 0.5, -hd + t * 0.5), col.Wall, wallMat)
+		box(ctx, "Parapet", Vector3.new(t, parH, D - 2 * t), Vector3.new(hw - t * 0.5, roofTop + parH * 0.5, 0), col.Wall, wallMat)
+		box(ctx, "Parapet", Vector3.new(t, parH, D - 2 * t), Vector3.new(-hw + t * 0.5, roofTop + parH * 0.5, 0), col.Wall, wallMat)
+		local capColor = if goldCap then col.Gold else frameCol
+		box(ctx, "ParapetCap", Vector3.new(W + 0.3, 0.3, t + 0.3), Vector3.new(0, roofTop + parH + 0.15, hd - t * 0.5), capColor, Enum.Material.Metal, false)
+		box(ctx, "ParapetCap", Vector3.new(W + 0.3, 0.3, t + 0.3), Vector3.new(0, roofTop + parH + 0.15, -hd + t * 0.5), capColor, Enum.Material.Metal, false)
+		box(ctx, "ParapetCap", Vector3.new(t + 0.3, 0.3, D), Vector3.new(hw - t * 0.5, roofTop + parH + 0.15, 0), capColor, Enum.Material.Metal, false)
+		box(ctx, "ParapetCap", Vector3.new(t + 0.3, 0.3, D), Vector3.new(-hw + t * 0.5, roofTop + parH + 0.15, 0), capColor, Enum.Material.Metal, false)
+	elseif roofStyle == "Gable" then
+		-- pitched roof, ridge along X: two wedges back to back on the ceiling slab (Barracks)
+		local rise: number = c.RoofRise or 6
+		local ov: number = c.RoofOverhang or 1
+		local run = hd + ov
+		local len = W + 2 * ov
+		wedgeAt(ctx, "RoofPitch", Vector3.new(len, rise, run), CFrame.new(0, roofTop + rise * 0.5, run * 0.5) * CFrame.Angles(0, math.pi, 0), roofCol, roofMat)
+		wedgeAt(ctx, "RoofPitch", Vector3.new(len, rise, run), CFrame.new(0, roofTop + rise * 0.5, -run * 0.5), roofCol, roofMat)
+		box(ctx, "RoofRidge", Vector3.new(len + 0.2, 0.45, 0.9), Vector3.new(0, roofTop + rise, 0), if goldCap then col.Gold else frameCol, Enum.Material.Metal, false)
+		parH = rise
+	elseif roofStyle == "Vault" then
+		-- segmental barrel vault across the facade (hangar), glazed arch end at the front (Vehicle Depot)
+		local rise: number = c.RoofRise or 9
+		local ov: number = c.RoofOverhang or 0.6
+		local a = hw + ov
+		local R = (a * a + rise * rise) / (2 * rise)
+		local yc = roofTop + rise - R
+		local th0 = math.asin(a / R)
+		local n: number = c.VaultSegments or 8
+		local dth = 2 * th0 / n
+		local chord = 2 * R * math.sin(dth * 0.5)
+		local th = 0.6
+		local len = D + 2 * (c.RoofEndOverhang or 1.2)
+		local rm = R * math.cos(dth * 0.5) + th * 0.5
+		for i = 0, n - 1 do
+			local phi = -th0 + (i + 0.5) * dth
+			part(ctx, "VaultPlank", Vector3.new(chord + 0.3, th, len), ctx.origin * CFrame.new(rm * math.sin(phi), yc + rm * math.cos(phi), 0) * CFrame.Angles(0, 0, -phi), roofCol, roofMat)
+		end
+		local strips: number = c.VaultEndStrips or 4
+		local hs = rise / strips
+		for s = 0, strips - 1 do
+			local yb = roofTop + s * hs
+			local yq = math.min(roofTop + (s + 1) * hs, roofTop + rise - 0.35)
+			local half = math.min(hw, math.sqrt(math.max(0, R * R - (yq - yc) ^ 2)))
+			if half > 0.5 and yq > yb + 0.1 then
+				local g = box(ctx, "VaultEndGlass", Vector3.new(2 * half, yq - yb, 0.3), Vector3.new(0, (yb + yq) * 0.5, hd - t * 0.5), col.Glass, Enum.Material.Glass, false)
+				g.Transparency = 0.3
+				box(ctx, "VaultEnd", Vector3.new(2 * half, yq - yb, t), Vector3.new(0, (yb + yq) * 0.5, -hd + t * 0.5), col.Wall, wallMat)
+			end
+		end
+		if goldCap then
+			box(ctx, "VaultCrown", Vector3.new(0.9, 0.3, len + 0.1), Vector3.new(0, roofTop + rise + th + 0.1, 0), col.Gold, Enum.Material.Metal, false)
+		end
+		parH = rise + th
+	elseif roofStyle == "Sawtooth" then
+		-- factory sawtooth: ridges run front to back so the zigzag reads from the road (Warehouse)
+		local teeth: number = c.SawTeeth or 4
+		local rise: number = c.RoofRise or 4.5
+		local tw = W / teeth
+		local len = D + 1
+		for k = 0, teeth - 1 do
+			local cx = -hw + (k + 0.5) * tw
+			wedgeAt(ctx, "SawTooth", Vector3.new(len, rise, tw), CFrame.new(cx, roofTop + rise * 0.5, 0) * CFrame.Angles(0, math.pi * 0.5, 0), roofCol, roofMat)
+			local g = box(ctx, "SawGlass", Vector3.new(0.2, rise - 0.7, len - 1.2), Vector3.new(cx + tw * 0.5 + 0.12, roofTop + rise * 0.5 - 0.15, 0), col.Glass, Enum.Material.Glass, false)
+			g.Transparency = 0.25
+		end
+		if goldCap then
+			box(ctx, "SawTrim", Vector3.new(W + 0.2, 0.35, 0.35), Vector3.new(0, roofTop + 0.18, hd + 0.35), col.Gold, Enum.Material.Metal, false)
+		end
+		parH = rise
+	end
 
 	-- Rooftop plant
-	box(ctx, "ACUnit", Vector3.new(3, 1.6, 2.4), Vector3.new(-hw + 5, roofTop + 0.8, -hd + 3), col.Metal, Enum.Material.DiamondPlate)
-	box(ctx, "ACUnit", Vector3.new(3, 1.6, 2.4), Vector3.new(-hw + 9, roofTop + 0.8, -hd + 3), col.Metal, Enum.Material.DiamondPlate)
-	box(ctx, "Vent", Vector3.new(1.2, 1.4, 1.2), Vector3.new(hw - 3, roofTop + 0.7, 0), col.Dark, Enum.Material.Metal)
-	if c.Skylights then
+	if c.RoofPlant ~= false then
+		box(ctx, "ACUnit", Vector3.new(3, 1.6, 2.4), Vector3.new(-hw + 5, roofTop + 0.8, -hd + 3), col.Metal, Enum.Material.DiamondPlate)
+		box(ctx, "ACUnit", Vector3.new(3, 1.6, 2.4), Vector3.new(-hw + 9, roofTop + 0.8, -hd + 3), col.Metal, Enum.Material.DiamondPlate)
+		box(ctx, "Vent", Vector3.new(1.2, 1.4, 1.2), Vector3.new(hw - 3, roofTop + 0.7, 0), col.Dark, Enum.Material.Metal)
+	end
+	if c.Skylights and roofStyle == "Flat" then
 		for i, sx in ipairs({ -hw * 0.45, 0, hw * 0.45 }) do
 			local sky = box(ctx, "Skylight" .. i, Vector3.new(5, 0.5, 3.4), Vector3.new(sx, roofTop + 0.25, hd * 0.2), col.Glass, Enum.Material.Glass, false)
 			sky.Transparency = 0.35
 		end
 	end
 
-	-- Entrance: awning or garage canopy, lamp, sign, sandbags
+	-- Entrance (v73: one style per building)
 	local awnY = y1 + doorH + 1.0
-	if garage then
+	if entrance == "Canopy" then
 		box(ctx, "Canopy", Vector3.new(doorW + 4, 0.4, 4.6), Vector3.new(doorX, awnY, hd + 2.3), col.Metal, Enum.Material.DiamondPlate)
+	elseif entrance == "HangarDoors" then
+		-- two hangar door leaves rolled open to either side on a track beam across the facade (Vehicle Depot)
+		local leafW: number = c.HangarLeafWidth or 8
 		for _, sx in ipairs({ -1, 1 }) do
-			box(ctx, "BollardHazard", Vector3.new(0.9, 1.6, 0.9), Vector3.new(doorX + sx * (doorW * 0.5 + 1.2), y1 + 0.8, hd + 1.2), col.Accent, Enum.Material.SmoothPlastic)
+			box(ctx, "HangarLeaf", Vector3.new(leafW, doorH + 0.6, 0.5), Vector3.new(doorX + sx * (doorW * 0.5 + leafW * 0.5), y1 + (doorH + 0.6) * 0.5, hd + 0.45), col.Door or col.Metal, Enum.Material.Metal, false)
 		end
+		box(ctx, "HangarTrack", Vector3.new(W, 0.6, 0.7), Vector3.new(0, y1 + doorH + 0.4, hd + 0.5), col.Dark, Enum.Material.Metal, false)
+	elseif entrance == "Portico" then
+		-- two columns, an entablature and a pediment over the door (Command Center)
+		local pw = doorW + 4.4
+		for _, sx in ipairs({ -1, 1 }) do
+			column(ctx, "PorticoColumn", 1.2, awnY - y1, doorX + sx * (pw * 0.5 - 0.9), y1, hd + 3.6, frameCol, Enum.Material.Concrete)
+		end
+		box(ctx, "PorticoBeam", Vector3.new(pw, 0.8, 4.6), Vector3.new(doorX, awnY + 0.4, hd + 2.3), col.Wall, wallMat)
+		local rise, run = 2.2, pw * 0.5
+		wedgeAt(ctx, "Pediment", Vector3.new(4.6, rise, run), CFrame.new(doorX - run * 0.5, awnY + 0.8 + rise * 0.5, hd + 2.3) * CFrame.Angles(0, math.pi * 0.5, 0), frameCol, Enum.Material.Metal)
+		wedgeAt(ctx, "Pediment", Vector3.new(4.6, rise, run), CFrame.new(doorX + run * 0.5, awnY + 0.8 + rise * 0.5, hd + 2.3) * CFrame.Angles(0, -math.pi * 0.5, 0), frameCol, Enum.Material.Metal)
+	elseif entrance == "LeanTo" then
+		-- sloped hut porch roof on two posts (Barracks)
+		wedgeAt(ctx, "PorchRoof", Vector3.new(doorW + 3, 1.2, 3.8), CFrame.new(doorX, awnY, hd + 1.9) * CFrame.Angles(0, math.pi, 0), roofCol, roofMat)
+		for _, sx in ipairs({ -1, 1 }) do
+			box(ctx, "AwningPost", Vector3.new(0.4, awnY - 0.6 - y1, 0.4), Vector3.new(doorX + sx * (doorW * 0.5 + 1.2), y1 + (awnY - 0.6 - y1) * 0.5, hd + 3.4), frameCol, Enum.Material.Wood)
+		end
+	elseif entrance == "CamoNet" then
+		-- camouflage net on two poles, sagging away from the wall (Special Forces)
+		local netW: number = c.NetWidth or (doorW + 10)
+		local netX: number = c.NetX or doorX
+		local net = part(ctx, "CamoNet", Vector3.new(netW, 0.15, 6.6), ctx.origin * CFrame.new(netX, awnY + 0.3, hd + 3.2) * CFrame.Angles(math.rad(9), 0, 0), col.Net or col.Trim, Enum.Material.Fabric, false)
+		net.CanQuery = false
+		for _, sx in ipairs({ -1, 1 }) do
+			box(ctx, "AwningPost", Vector3.new(0.3, awnY - 0.3 - y1, 0.3), Vector3.new(netX + sx * (netW * 0.5 - 1), y1 + (awnY - 0.3 - y1) * 0.5, hd + 5.8), col.Metal, Enum.Material.Metal)
+		end
+	elseif entrance == "BlastDoor" then
+		-- heavy door leaf rolled aside + hazard band; the door frame itself is the thick yellow portal (Armory)
+		local leafX = doorX - doorW - 0.2
+		box(ctx, "BlastLeaf", Vector3.new(doorW + 0.4, doorH + 0.4, 0.6), Vector3.new(leafX, y1 + (doorH + 0.4) * 0.5, hd + 0.4), col.Door or col.Metal, Enum.Material.DiamondPlate)
+		box(ctx, "BlastLeafBand", Vector3.new(doorW + 0.45, 0.7, 0.64), Vector3.new(leafX, y1 + doorH * 0.55, hd + 0.4), col.Accent, Enum.Material.SmoothPlastic, false)
+	elseif entrance == "Slab" then
+		-- cantilevered flat canopy, no posts (Research Lab)
+		box(ctx, "Awning", Vector3.new(doorW + 3, 0.35, 3.6), Vector3.new(doorX, awnY, hd + 1.8), frameCol, Enum.Material.Metal)
 	else
-		box(ctx, "Awning", Vector3.new(doorW + 3, 0.35, 3.6), Vector3.new(doorX, awnY, hd + 1.8), col.Trim, Enum.Material.Metal)
+		box(ctx, "Awning", Vector3.new(doorW + 3, 0.35, 3.6), Vector3.new(doorX, awnY, hd + 1.8), frameCol, Enum.Material.Metal)
 		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX - doorW * 0.5 - 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
 		box(ctx, "AwningPost", Vector3.new(0.35, awnY - y1, 0.35), Vector3.new(doorX + doorW * 0.5 + 1.2, y1 + (awnY - y1) * 0.5, hd + 3.3), col.Metal, Enum.Material.Metal)
 	end
+	if garage then
+		for _, sx in ipairs({ -1, 1 }) do
+			-- stands on the ground outside the foundation slab (was 0.4 in the air); top unchanged at y1 + 1.6
+			box(ctx, "BollardHazard", Vector3.new(0.9, y1 + 1.6, 0.9), Vector3.new(doorX + sx * (doorW * 0.5 + 1.2), (y1 + 1.6) * 0.5, hd + 1.2), col.Accent, Enum.Material.SmoothPlastic)
+		end
+	end
 	-- entry lamp fitting only (v70 light budget: no PointLight)
-	box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, awnY - 0.3, hd + 1.4), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
-	local signW = math.min(W - 6, 16)
+	-- v73: the fitting hangs under whatever covers the door (flush under the portico beam / porch roof); with no
+	-- cover over it (camo net slopes up to the wall, blast door, hangar track) it is wall-mounted above the door
+	local lampY, lampZ = awnY - 0.3, hd + 1.4
+	if entrance == "Portico" then
+		lampY = awnY - 0.1
+	elseif entrance == "LeanTo" then
+		lampY = awnY - 0.7
+	elseif entrance == "CamoNet" or entrance == "BlastDoor" then
+		lampZ = hd + 0.4
+	elseif entrance == "HangarDoors" then
+		lampY, lampZ = y1 + doorH + 0.4, hd + 1.25
+	end
+	box(ctx, "EntryLamp", Vector3.new(1.4, 0.2, 0.8), Vector3.new(doorX, lampY, lampZ), LIGHTS.FixtureColor or col.Light, FIXTURE_MATERIAL, false)
+	local signW: number = c.SignWidth or math.min(W - 6, 16)
 	local signY = math.min(awnY + 1.6, y1 + H1 - 1.2)
 	local signX = c.SignX or 0
 	-- only slide the sign sideways if it would hang down over the doorway
 	if math.abs(signX - doorX) < (signW + doorW) * 0.5 and signY - 1 < y1 + doorH + 0.4 then
 		signX = if doorX > 0 then doorX - doorW * 0.5 - signW * 0.5 - 1 else doorX + doorW * 0.5 + signW * 0.5 + 1
 	end
-	local sign = box(ctx, "Sign", Vector3.new(signW, 2.0, 0.3), Vector3.new(signX, signY, hd + 0.15), col.Dark, Enum.Material.Metal, false)
+	local sign = box(ctx, "Sign", Vector3.new(signW, 2.0, 0.3), Vector3.new(signX, signY, hd + 0.15), col.SignBoard or col.Dark, Enum.Material.Metal, false)
 	-- NormalId.Back is the +Z face = the building front
-	surfaceText(sign, Enum.NormalId.Back, { c.SignText or "COMMAND CENTER" }, col.Accent, col.Dark, Enum.Font.GothamBlack, SURFACE_FAR)
-	if not garage then
+	surfaceText(sign, Enum.NormalId.Back, { c.SignText or "COMMAND CENTER" }, col.Accent, col.SignBoard or col.Dark, Enum.Font.GothamBlack, SURFACE_FAR)
+	if not garage and c.EntranceSandbags ~= false then
 		sandbags(ctx, doorX + doorW * 0.5 + 1.6, doorX + doorW * 0.5 + 6.5, hd + 1.6, 0)
 	end
 
@@ -695,11 +896,97 @@ local function build(ctx: Ctx)
 		-- always clear the roofline (two-storey from L3), taller again at L5
 		local poleH = roofTop + parH + (if helipad then 9 else 4)
 		box(ctx, "FlagPole", Vector3.new(0.4, poleH, 0.4), Vector3.new(flagX, poleH * 0.5, hd + 1), col.Metal, Enum.Material.Metal)
-		box(ctx, "Flag", Vector3.new(0.12, 3.6, 6), Vector3.new(flagX, poleH - 2.2, hd + 1 - 3.2), col.Flag, Enum.Material.Fabric, false)
+		-- v73: the cloth is 0.12 thick along X; its Left / Right faces are the nation-flag decal host (WE_FlagHost)
+		local cloth = box(ctx, "Flag", Vector3.new(0.12, 3.6, 6), Vector3.new(flagX, poleH - 2.2, hd + 1 - 3.2), col.Flag, Enum.Material.Fabric, false)
+		cloth:SetAttribute("WE_FlagHost", true)
 		if goldCap then
 			-- v70: painted gold ball (was Neon: spec §5, no neon that is not a light source)
 			box(ctx, "FlagTip", Vector3.new(0.9, 0.9, 0.9), Vector3.new(flagX, poleH + 0.4, hd + 1), col.Gold, Enum.Material.SmoothPlastic, false).Shape = Enum.PartType.Ball
 		end
+	end
+
+	-- v73 signature features (one or two per building; StructureVisualConfig.HollowBuildings.<Id>.Signatures)
+	if sig.ControlCab and twoStory then
+		-- rooftop control cab with a glass band: the HQ is the tallest block on the base (Command Center)
+		local cx, cz, cw, cd, ch = -hw + 4.6, 2, 7, 10, 4.6
+		box(ctx, "CabBody", Vector3.new(cw, ch, cd), Vector3.new(cx, roofTop + ch * 0.5, cz), col.Wall, wallMat)
+		local band = box(ctx, "CabGlass", Vector3.new(cw + 0.12, 1.8, cd + 0.12), Vector3.new(cx, roofTop + ch - 1.5, cz), col.Glass, Enum.Material.Glass, false)
+		band.Transparency = 0.15
+		box(ctx, "CabRoof", Vector3.new(cw + 1.2, 0.5, cd + 1.2), Vector3.new(cx, roofTop + ch + 0.25, cz), frameCol, Enum.Material.Metal)
+	end
+	if sig.Berms then
+		-- earth berms banked against both side walls (Armory)
+		local bh: number = c.BermHeight or 5
+		local br: number = c.BermRun or 5
+		wedgeAt(ctx, "Berm", Vector3.new(D - 1, bh, br), CFrame.new(-hw - br * 0.5, y1 + bh * 0.5 - 0.4, 0) * CFrame.Angles(0, math.pi * 0.5, 0), col.Berm or col.Sandbag, Enum.Material.Ground)
+		wedgeAt(ctx, "Berm", Vector3.new(D - 1, bh, br), CFrame.new(hw + br * 0.5, y1 + bh * 0.5 - 0.4, 0) * CFrame.Angles(0, -math.pi * 0.5, 0), col.Berm or col.Sandbag, Enum.Material.Ground)
+	end
+	if sig.Bastions then
+		-- sloped concrete buttresses at the front corners (Armory)
+		for _, sx in ipairs({ -1, 1 }) do
+			wedgeAt(ctx, "Buttress", Vector3.new(2.6, H1 - 1.5, 3), CFrame.new(sx * (hw - 1.3), y1 + (H1 - 1.5) * 0.5, hd + 1.5) * CFrame.Angles(0, math.pi, 0), col.Wall, wallMat)
+		end
+	end
+	if sig.Slits then
+		-- dark firing slits painted on the blind facade (no wall cut: 1 part each)
+		for _, sx in ipairs(c.SlitX or { -11, -5 }) do
+			box(ctx, "Slit", Vector3.new(3, 0.6, 0.12), Vector3.new(sx, y1 + 5.6, hd + 0.06), col.Dark, Enum.Material.SmoothPlastic, false)
+		end
+	end
+	if sig.VentStacks then
+		for _, p in ipairs({ Vector2.new(-hw + 6, -hd + 5), Vector2.new(hw - 8, -hd + 5) }) do
+			column(ctx, "VentStack", 1.4, 2.2, p.X, roofTop, p.Y, col.Metal, Enum.Material.Metal)
+		end
+	end
+	if sig.LatticeMast then
+		-- tall lattice comms mast beside the building + dish (Special Forces). Not climbable: CanCollide off.
+		local mh: number = c.MastHeight or 40
+		local mx, mz = hw + 2.4, -hd + 2.4
+		local mast = Instance.new("TrussPart")
+		mast.Name = "CommsMast"
+		mast.Anchored = true
+		mast.Size = Vector3.new(2, mh, 2)
+		mast.CFrame = ctx.origin * CFrame.new(mx, mh * 0.5, mz)
+		mast.Color = col.Metal
+		mast.Material = Enum.Material.Metal
+		mast.CanCollide = false
+		mast.CanQuery = false
+		mast.CanTouch = false
+		mast.Parent = ctx.model
+		box(ctx, "MastArm", Vector3.new(0.3, 0.3, 6), Vector3.new(mx, mh - 2, mz), col.Metal, Enum.Material.Metal, false)
+		local dish = part(ctx, "Dish", Vector3.new(0.4, 4.2, 4.2), ctx.origin * CFrame.new(mx, mh - 6, mz + 1.4) * CFrame.Angles(0, math.rad(-70), math.rad(20)), Color3.fromRGB(210, 212, 206), Enum.Material.SmoothPlastic, false)
+		dish.Shape = Enum.PartType.Cylinder
+	end
+	if sig.SolarDish then
+		-- solar panels tilted toward the avenue + a small dish on the flat roof (Research Lab). Not a radome: the Radar
+		-- installation owns the dome silhouette. Panels and dish sit on the roof slab, clear of the parapet; no collision.
+		local a = math.rad(22)
+		for _, e in ipairs(c.SolarPanels or { { X = -8.5, Z = -3 }, { X = -0.5, Z = -3 } }) do
+			local panel = part(ctx, "SolarPanel", Vector3.new(7, 0.3, 3.4), ctx.origin * CFrame.new(e.X, roofTop + 0.15 * math.cos(a) + 1.7 * math.sin(a), e.Z) * CFrame.Angles(a, 0, 0), col.Solar or col.Glass, Enum.Material.SmoothPlastic, false)
+			panel.Reflectance = 0.12
+		end
+		local d = c.DishAt or { X = hw - 6, Z = -hd + 5 }
+		box(ctx, "DishMount", Vector3.new(0.6, 2.2, 0.6), Vector3.new(d.X, roofTop + 1.1, d.Z), col.Metal, Enum.Material.Metal, false)
+		local dish = part(ctx, "Dish", Vector3.new(0.4, 4.2, 4.2), ctx.origin * CFrame.new(d.X, roofTop + 3, d.Z) * CFrame.Angles(0, math.rad(-120), math.rad(35)), Color3.fromRGB(220, 222, 218), Enum.Material.SmoothPlastic, false)
+		dish.Shape = Enum.PartType.Cylinder
+	end
+	if sig.FacadeBand and not twoStory then
+		box(ctx, "FacadeBand", Vector3.new(W + 0.2, 1.2, 0.2), Vector3.new(0, roofBottom - 0.6, hd + 0.1), frameCol, Enum.Material.SmoothPlastic, false)
+	end
+	if sig.LoadingDock then
+		-- raised loading dock left of the roller door (Warehouse)
+		local dx0, dx1 = -hw + 0.8, doorX - doorW * 0.5 - 2.2
+		box(ctx, "LoadingDock", Vector3.new(dx1 - dx0, 1.6, 4), Vector3.new((dx0 + dx1) * 0.5, 0.8, hd + 2), col.Floor, Enum.Material.Concrete)
+		box(ctx, "DockBumper", Vector3.new(dx1 - dx0, 0.5, 0.3), Vector3.new((dx0 + dx1) * 0.5, 1.1, hd + 4.15), col.Dark, Enum.Material.Rubber, false)
+	end
+	if sig.Chimney then
+		local ch = roofTop + parH + 4
+		column(ctx, "Chimney", 2.2, ch, -hw + 3, 0, -hd - 1.3, col.Wall, wallMat)
+	end
+	if sig.StoveChimney then
+		-- brick stove chimney through the back roof slope, near one gable end (Barracks)
+		local ch = parH + 1.6
+		box(ctx, "Chimney", Vector3.new(1.4, ch, 1.4), Vector3.new(hw - 4, roofTop + ch * 0.5, -hd * 0.3), col.Chimney or col.Dark, Enum.Material.Brick)
 	end
 
 	-- Ceiling lights: fittings in two rows (ground) / one row (upper), spaced ~9 studs. v70 light budget: only the

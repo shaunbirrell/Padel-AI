@@ -493,7 +493,7 @@ end
 
 
 -- Desert camo infantry Part kit — vest / helmet / shemagh accents, clearer rifle
-local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: string?, labelColor, health, npcType, npcId)
+local function makeSoldierKit(parentFolder, name, cf: CFrame, bodyColor, labelText: string?, labelColor, health, npcType, npcId)
 	-- Visual props for Training Yard / static kits. R15-ready catalog overlay via VisualAssetConfig;
 	-- Part-kit military placeholder (R6-ish ~5 stud) when mesh IDs missing / StudioSkipWorldDressing.
 	-- Live combat NPCs use CombatService.SpawnNPC (BankGuard etc.).
@@ -538,7 +538,9 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		vestCol = Color3.fromRGB(40, 50, 65)
 		accentCol = Color3.fromRGB(90, 140, 220)
 	end
-	-- R6 torso = 2×2×1; lift so feet sit on ground (cf is approx mid-body)
+	-- R6 torso = 2×2×1. fb2: callers pass cf = floor top + 2.1 (the torso centre), but the legs hang 3 below the torso
+	-- centre, so every static soldier stood 0.9-1.1 studs sunk into the floor. Lift the torso 0.9: the leg bottoms (and
+	-- the boots, when StaticSoldierDetail is on) sit on the floor, and a catalog overlay pivoted to the HRP stands too.
 	local torso = part({
 		Name = "HumanoidRootPart",
 		Size = Vector3.new(2, 2, 1),
@@ -546,7 +548,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		Material = Enum.Material.Fabric,
 		Anchored = true,
 		CanCollide = true,
-		CFrame = cf,
+		CFrame = cf * CFrame.new(0, 0.9, 0),
 		Parent = model,
 	})
 	local head = part({
@@ -560,16 +562,21 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 		Shape = Enum.PartType.Ball,
 		Parent = model,
 	})
-	part({
+	-- fb2: domed steel helmet (was a flat 1.2 x 0.5 box cap). The SpecialMesh sphere fills the part's box, so the dome
+	-- covers the top of the head with a small brim; a SpecialMesh is not a part (0 extra parts per soldier).
+	local helmet = part({
 		Name = "Helmet",
-		Size = Vector3.new(1.2, 0.5, 1.2),
+		Size = Vector3.new(1.3, 0.75, 1.35),
 		Color = helmCol,
 		Material = Enum.Material.Metal,
 		Anchored = true,
 		CanCollide = false,
-		CFrame = head.CFrame * CFrame.new(0, 0.38, 0),
+		CFrame = head.CFrame * CFrame.new(0, 0.36, 0.02),
 		Parent = model,
 	})
+	local dome = Instance.new("SpecialMesh")
+	dome.MeshType = Enum.MeshType.Sphere
+	dome.Parent = helmet
 	if detail then
 		part({
 			Name = "Shemagh",
@@ -654,7 +661,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 			Material = Enum.Material.SmoothPlastic,
 			Anchored = true,
 			CanCollide = false,
-			CFrame = torso.CFrame * CFrame.new(-0.5, -3.1, 0.1),
+			CFrame = torso.CFrame * CFrame.new(-0.5, -2.825, 0.1), -- fb2: boot bottom = leg bottom (was 0.275 lower)
 			Parent = model,
 		})
 	end
@@ -666,7 +673,7 @@ local function makeSoldierKit(parentFolder, name, cf, bodyColor, labelText: stri
 			Material = Enum.Material.SmoothPlastic,
 			Anchored = true,
 			CanCollide = false,
-			CFrame = torso.CFrame * CFrame.new(0.5, -3.1, 0.1),
+			CFrame = torso.CFrame * CFrame.new(0.5, -2.825, 0.1), -- fb2: boot bottom = leg bottom (was 0.275 lower)
 			Parent = model,
 		})
 	end
@@ -1291,7 +1298,9 @@ local function buildLayoutGround(plotFolder: Folder, plotId: number, pos: Vector
 		local f = cfg.Courtyard.Flagpole
 		part({ Name = "FlagBase", Size = Vector3.new(4, 1, 4), CFrame = at(f.X, padTop + 0.5, f.Z), Color = Color3.fromRGB(150, 146, 134), Material = Enum.Material.Concrete, CanCollide = true, Parent = folder })
 		part({ Name = "FlagPole", Size = Vector3.new(0.5, 28, 0.5), CFrame = at(f.X, padTop + 15, f.Z), Color = steel, Material = Enum.Material.Metal, CanCollide = true, Parent = folder })
-		part({ Name = "ParadeFlag", Size = Vector3.new(0.14, 4.4, 7.5), CFrame = at(f.X, padTop + 25.8, f.Z - 3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
+		-- fb2: flag cloths are 0.12 thick and tagged WE_FlagHost (the nation flag binds to their Left / Right faces)
+		local paradeFlag = part({ Name = "ParadeFlag", Size = Vector3.new(0.12, 4.4, 7.5), CFrame = at(f.X, padTop + 25.8, f.Z - 3.9), Color = Color3.fromRGB(70, 110, 60), Material = Enum.Material.Fabric, CanCollide = false, Parent = folder })
+		paradeFlag:SetAttribute("WE_FlagHost", true)
 	end
 
 	-- Dock basin: water surface + concrete kerb
@@ -2344,7 +2353,8 @@ function MapSetup.Run()
 		end
 		-- Training workers (visual only — income is SoldierService tick). v70 (HUD spec §5): no name tag over them
 		for wi = 1, 2 do
-			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.6, 42)
+			-- fb2: y = YardPad top (0.7) + 2.1, so the lifted kit's feet stand on the yard pad (was 2.6: 0.2 lower)
+			local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.8, 42)
 			-- P0: dress as Worker→Infantry mesh (force catalog even in StudioSkipWorldDressing)
 			makeSoldierKit(
 				yardFolder,
@@ -2460,7 +2470,8 @@ function MapSetup.Run()
 					{ Kind = "Guard", Label = "GUARD", Body = Color3.fromRGB(45, 55, 70), Accent = Color3.fromRGB(90, 140, 220) },
 				}
 				local roleDef = stallRoles[((si - 1) % #stallRoles) + 1]
-				local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.6, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
+				-- fb2: y = StallFloor top (0.55) + 2.15: feet within 0.05 of the stall floor and of the plaza road under stall 1
+				local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.7, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)
 				makeSoldierKit(
 					stall,
 					"Stall" .. roleDef.Kind .. si,

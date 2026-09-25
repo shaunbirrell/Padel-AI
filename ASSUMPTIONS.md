@@ -1377,3 +1377,77 @@ Reversible assumptions for ASSUMPTIONS.md (all tunables live in `VehicleConfig.D
 - **Per-flag fallback PNGs** are 256x192 (`NationConfig.Atlas.PerFlagW/H`), written only with `--per-flag`, not committed.
 - **Manifest:** `assets/flags/atlas_manifest.json` (source pins, per-atlas sha256, cell table) lets `--verify` and BuyPathStatic catch a config change without a re-render.
 - **Lead decisions:** BN and LK join the Review atlas (script / sword in the emblem); Bolivia and Ecuador stay in the Americas atlas (official coats of arms). A0 ships config, maths, tools and art only: nothing in the game uses nations until lanes A1/B/C land.
+
+## 2026-09-25 — Base identity (owner: buildings look the same, checkpoint, watchtower, helicopter)
+# fb2 v73 base identity (owner feedback 2) — ASSUMPTIONS.md lines, merged by the integration verifier
+# Paste as one section. Supersedes the spec line "The old StructureKitBuilder branch stays as dead code until after v72".
+# Sources: build/A/assumptions.txt, build/D/assumptions.txt, build/E/assumptions.txt (+ integration notes at the end).
+
+## Distinct buildings, gate checkpoint, watchtower, helipad (Lane A)
+## From the spec (spec_base.md "ASSUMPTIONS.md lines"), adjusted to what landed
+- The base-identity pass replaces the shared walk-in shell with a roof, entrance and signature per building (StructureVisualConfig.HollowBuildings: RoofStyle / Entrance / Signatures / Colors.Frame / WallMaterial). Reversible: set RoofStyle to "Flat" and Entrance to "Awning" (and drop Signatures) per building. HollowBuildingBuilder GEN 2 -> 3, so live models rebuild once.
+- The parked helipad helicopter is removed. The real helicopter appears on the pad once it is unlocked (level 10 or higher).
+- The helipad is built as an installation (StructureVisualConfig.Installations.Helipad -> Modules/Installations/Helipad.luau). The old StructureKitBuilder "helipad" kit branch (incl. the 9-part ParkedHeli + its dress host) is deleted in the same change (see the helicopter clean-up lines below), so removing the Installations.Helipad row now gives the generic 5-part hut, not the old pad.
+- The watchtower cabin is 8.5 studs high (Installations.Watchtowers.CabinClearHeight) and its roof has no collision / no query, so it fits avatars up to about 7.5 studs.
+- The checkpoint boom stays raised (80 degrees) and has no collision, so it never blocks vehicles.
+- Nation flags will be Decals on parts with the attribute WE_FlagHost (0 extra parts, 0 SurfaceGuis). Every lane A flag cloth (the 7 walk-in building flags, the gate plinth flag, the watchtower L5 flag; 9 per base at L5, 54 world-wide in the census) is 0.12 thick along X and carries WE_FlagHost = true.
+
+## Lane A decisions (reversible; each measured headlessly)
+- Research Lab signature is SolarDish (2 tilted solar panels + a dish, from the identity-kit design), not the partkit radome: the Radar installation owns the dome silhouette. Config keys HollowBuildings.ResearchLab.SolarPanels / DishAt / Colors.Solar.
+- Windows were re-placed against the existing interiors (the partkit ribbons put glass behind furniture; the interior checker's "window" rule failed in 4 buildings): Command Center front ribbon x -10.5..2 (clear of the corner locker) and upper ribbon split at the council terminal; Barracks UpperWindowBottom 3.2 (prototype 2.6 cut through the upper office partition); Special Forces slits at x -12 / -9 / -3 (clear of the unit flag); Research Lab ribbons split at the glass partitions / server racks, WindowBottom 4.2 and an UpperBackWindowsX row. Cost: +14 parts per base at L5 against the prototype estimate (2,521 measured vs ~2,507). Interiors are unchanged.
+- Checkpoint booth at local x 7.2 (spec 7.5): its 7.4-wide roof now ends at x 10.9, inside the main road's edge (local x 11); at 7.5 it hung 0.2 studs over the road at 6.8 studs high.
+- Checkpoint jersey barriers at local x 6.2 / 2.6 / -1.0 / -4.6 (spec 8.2 / 4.6 / 1.0 / -2.6): the first barrier overlapped the L4+ gate AutoGun nest (GateDefenseService, gate-local (-7, 0, -7.5)); gate_L5 test failed on it.
+- Checkpoint tank-trap centre 1.75 above the ground (prototype 1.5 buried the beam ends 0.23 studs).
+- Helipad floodlights stand at the pad's front corners (+-15.2, +15.2) instead of (+-15.2, +12): 8.9 studs (was 7.0) from HelipadSpot (8, 8), outside a large rotor disc. Fuel tank rests on the ground (centre = radius, kit prototype floated 0.2).
+- The helipad deck is the standard 0.8-stud installation foundation (top 0.4 above the plot pad; the old kit deck top was 1.17). VehicleConfig.Spawn.HelipadDeckHeight (1.2, the no-ray fallback) is not changed by this lane; with no ray hit a helicopter would spawn 0.8 above the deck and settle.
+- The L3+ watchtower MG stays on the front half-wall with its barrel 1.7 studs past the 10 x 10 footprint (non-colliding, 20+ studs up); the stock check_installation.py footprint rule flags it, the lane A installation check allows it.
+
+## Static soldiers and flag hosts (Lane D)
+- **Static soldiers stand on the floor** (`MapSetup.makeSoldierKit`): callers pass the torso centre at floor + 2.1 but the R6 legs hang 3 below it, so all 12 static soldiers per base (2 yard workers, 3 stall soldiers, 6 rear-gate guards, 1 sea-gate guard) stood 0.9-1.1 studs sunk. The torso is lifted 0.9 (`cf * CFrame.new(0, 0.9, 0)`), yard workers pass y 2.8 (YardPad top 0.7 + 2.1) and stall soldiers 2.7. Measured feet-to-floor gap: -1.10..-0.90 before, -0.02..+0.05 after (72 static soldiers, FaceMapCentre on and off). **Rollback:** torso `CFrame = cf`, callers 2.6.
+- **Stall soldiers use y 2.7 (spec), not 2.65:** 2.7 puts the feet +0.05 above the stall floor of stalls 2-3 and -0.02 into the plaza road that runs under stall 1; 2.65 would be exact on the stall floor but -0.07 into that road.
+- **Boots follow the legs:** with `StructureVisualConfig.StaticSoldierDetail = true` the boots now sit at torso -2.825 (bottom = leg bottom) instead of -3.1 (0.275 lower), so detail-on soldiers also stand on the floor (measured -0.02..+0.05). No effect while StaticSoldierDetail is false (the v72 default). **Rollback:** -3.1.
+- **Round helmets:** the static soldier helmet is 1.3 x 0.75 x 1.35 with a `SpecialMesh` (Sphere), offset (0, 0.36, 0.02) from the head (was a flat 1.2 x 0.5 x 1.2 box). 0 extra parts (one SpecialMesh per soldier, 72 on the map). Dome shape not checked in Studio.
+- **Catalog soldier overlay:** `VisualAssetService.TryAttachCharacterVisual` pivots the catalog character to the HumanoidRootPart, so the +0.9 lift also lifts a loaded catalog soldier by 0.9. This is right when the catalog rig's pivot is its HRP centre 3 studs above its feet (standard R6/R15); not verified in Roblox.
+- **Flag hosts (Lane D share):** `ParadeFlag` (MapSetup), the Barracks desk `FlagCloth` and `OfficerFlag` (Interiors/Barracks.luau) and the Special Forces `UnitFlag` (Interiors/SpecialForces.luau) are 0.12 thick and carry `WE_FlagHost = true`. The lead's "officer / unit flags" live in the two Interiors modules, not in MapSetup, so Lane D edited only those flag lines there (no other lane or job owns those files). UnitFlag keeps its back face flush on the wall (centre Z1 - 0.06). 0 parts, 0 SurfaceGuis added. **Rollback:** drop the attribute; thickness 0.14 / 0.06 / 0.06 / 0.08.
+- **Flag host faces differ by part:** ParadeFlag (like the HollowBuildingBuilder / Watchtower flags) is thin on X (nation decal on Left / Right); the three interior flags are thin on Z (Front / Back). The nation binder should pick the two faces normal to the smallest Size axis. UnitFlag's Front face already carries the "SPECIAL FORCES" SurfaceGui text, and its Back face is against the wall: the binder must decide whether the decal goes under that text or skips hosts that carry a SurfaceGui.
+- **Territory outpost flags are not flag hosts:** MapSetup's `<Id>_Flag` (0.22 thick, `WE_Flag`, recoloured by TerritoryService) is left untagged; whether outposts fly the owner's nation flag is the nation job's / TerritoryService owner's call.
+- **No MAP_GEN bump for Lane D:** the live place is a Rojo build without a baked map, so every server runs `MapSetup.Run` and gets the new soldiers. (ASSUMPTIONS.md:1048, the W3 line, says "no bump unless MapSetup itself changes"; MapSetup does change here, so this is a deliberate exception, reversible by bumping MAP_GEN 81/80 -> 83/82 together with BuyPathStatic pin `81 else 80`.) If a map was ever saved into the place in Studio, it keeps the sunk soldiers until `MapSetup.MAP_GEN` moves.
+
+## Helicopter clean-up and Helipad console line (Lane E)
+- The dead Helipad part kit (StructureKitBuilder `kit == "helipad"` branch: pad, ring bars, H, 4 neon floodlight balls,
+  windsock, ops hut) and its 9-part parked helicopter mock-up + WE_DressHost_ParkedHeli dress host are deleted; the
+  Helipad is only the Installations/Helipad model (Lane A). This REPLACES the spec line "The old StructureKitBuilder
+  branch stays as dead code until after v72" (v72 is committed, so the deferred item was done). Reversible: git revert
+  of the StructureKitBuilder hunk.
+- Lane E must ship together with (or after) Lane A's `Installations.Helipad` row. Without it (or with
+  `Installations.Helipad.Enabled = false`, or `BaseLayoutConfig.Enabled = false`) the Helipad falls to the generic
+  `else` kit (a 5-part hut), not the old pad. Headless check: HEAD + Lane E only builds that hut at L1-L5.
+- EnsureKit no longer lists the Helipad among structures that must have dress hosts, and the Helipad left the
+  `flatKit` list: with the Helipad an installation both entries were dead, and in the fallback above they would
+  have rebuilt the kit on every EnsureKit call.
+- BaseService keeps the `ParkedBoat` visuals branch (Dock boat unchanged); only the `ParkedHeli` role left it.
+  VisualAssetService.TryAttachParkedPresence (not a Lane E file) still checks both roles; for the Helipad it now
+  finds no WE_DressVehicle host and returns false, which is harmless.
+- "HELIS AT LV 10" is the lowest UnlockLevel among VehicleConfig air vehicles whose RequiresStructure is the Helipad
+  and that need no prestige or rebirth flag (today 10: Scout Helicopter, Utility Helicopter), falling back to 10.
+  It is computed once when UpgradePadService loads, so the line follows VehicleConfig if the ladder changes.
+- The line lives on the Helipad console's EXISTING screen (MapSetup's WE_ConsoleScreen SurfaceGui), added by
+  UpgradePadService as a second TextLabel parented UNDER the screen's own label (no new SurfaceGui; the budget stays
+  1,115). WorldPromptController rewrites the SurfaceGui's first direct TextLabel per viewer (name / price / MAX) and
+  never reaches this one, so every viewer sees it at every level. The screen's own label gives up its bottom 28 %
+  (the owner's 3-line name / price / income text renders up to about 28 % smaller on this one console; the
+  one-line name other players see is width-bound and does not shrink). The spec asked for the line "in
+  UpgradePadService"; UpgradePadService had no Helipad text of its own, the custom pill lane never draws a prompt's
+  ObjectText, and the console's "Build / Upgrade" pill hides while the BUY button shows, so the screen is the only
+  place a phone player would read it. Reversible: delete the addHeliNote call in attachSlot.
+- The line is always shown (the server does not know the viewer's player level). It is copy for phones: no key names.
+
+## Integration notes (verifier)
+- Ship Lanes A, D and E as one commit: Lane E's deletion of the old helipad kit relies on Lane A's Installations.Helipad row, and the merged BuyPathStatic block pins all three.
+- The helipad deck is 0.77 studs lower than before (deck top 1.40 above the plot origin in the t_server driver's frame, was 2.17). The shared test driver rollover/patched/t_server.luau:570 still expects 2.17 and must be changed to 1.40; helicopters spawn Landed on the new deck (291/0 and 290/1 with 1.40; the 1 is the "boat without Hello" fail that HEAD has too).
+- VehicleConfig.Spawn.HelipadDeckHeight stays 1.2 (only used when the spawn ray hits nothing); not in this job's files.
+- Lane D's needle on the old helmet was narrowed to 'Name = "Helmet",
+		Size = Vector3.new(1.2, 0.5, 1.2),' so a future 1.2 x 0.5 x 1.2 part elsewhere in MapSetup does not trip it.
+- Interiors/Barracks.luau and Interiors/SpecialForces.luau are edited only on their flag lines (Lane D, "officer" and "unit" flags live there, not in MapSetup). No other job lists these files.
+- Each base now has 13 WE_FlagHost parts at L5 (78 world-wide), all 0.12 thick: 7 building flags, gate plinth flag, watchtower L5 flag (thin on X), ParadeFlag (thin on X), Barracks FlagCloth + OfficerFlag and SF UnitFlag (thin on Z). The nation binder should use the two faces normal to the smallest Size axis.
+- **Lead decisions:** the Interiors/Barracks and Interiors/SpecialForces flag lines are part of this change (flag hosts); MAP_GEN is not bumped for the soldier-kit change (only affects a map saved into the place in Studio; the live place builds at runtime).

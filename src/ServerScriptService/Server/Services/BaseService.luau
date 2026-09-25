@@ -970,8 +970,9 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 					child.Transparency = if lv == 0 then 0.9 else 0.05
 					child.Color = Color3.fromRGB(55, 60, 58)
 				end
-			elseif role == "ParkedHeli" or role == "ParkedBoat" then
-				-- v37: static parked presence — solid at L1+ (mesh may soften later)
+			elseif role == "ParkedBoat" then
+				-- v37: static parked boat at the Dock — solid at L1+ (mesh may soften later). fb2: the Helipad's
+				-- parked helicopter mock-up is gone (the Helipad is an installation), so only the boat is left.
 				child.Transparency = if lv == 0 then 1 else 0.08
 				child.Material = Enum.Material.Metal
 				child.CastShadow = lv > 0
