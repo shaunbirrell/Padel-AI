@@ -13,6 +13,18 @@
 	  • CloneKitMesh(key): one Roblox-owned mesh piece for a WorldKits Part kit (VisualAssetConfig.DesertKit).
 	  • Vehicle refs with Fit = "Kit" scale the body to the kit chassis and hide the Part-kit visuals (physics unchanged).
 
+	Owner asset list (2026-09-25, docs/ASSET_WIRING.md):
+	  • AssetRef.OmitParts: BaseParts of a pack piece with these names are removed before the part count (the Roblox
+	    Pickup Truck Body is 41 parts; without its tail-light glass it is 40).
+	  • VisualAssetConfig.StripEffectsAssetIds: for these whole models Fire / Smoke / Sparkles / ParticleEmitter / lights /
+	    Beam / Trail are removed at load (the Roblox oil drum keeps no smoke). Every other id keeps its effects.
+	  • AssetRef.NoFamilyFallback: a vehicle ref at 0 keeps its Part kit and never takes a KitFamilyFallback body.
+	  • A ref's PendingAssetId (the owner's third-party pick) is never read here (no load, no MaxLoadAttempts cost):
+	    tools/wire-asset-ids.py moves it to ModelAssetId.
+	  • The Airfield hangar is VisualAssetConfig.Buildings.Hangar (0 = the Part shed, no load).
+	  • CloneKitMesh marks a piece with its ref's Yaw (attribute WE_KitYaw) for WorldKits; IsKitMeshWired(key) tells
+	    WorldKits, from config only, whether a key can ever give a mesh (an unwired key takes no overlay slot).
+
 	Load failures (each one leaves the Part kit look and prints one Output line):
 	  • transient (HTTP 5xx / throttle / timeout): retried in the BACKGROUND (task.delay), VisualAssetConfig
 	    LoadRetryCount times, LoadRetryDelay s then x LoadRetryBackoff. While a retry is pending or running, callers
@@ -48,6 +60,8 @@ type AssetRef = {
 	Yaw: number?,
 	HideKit: boolean?,
 	KeepVisible: { string }?,
+	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
+	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
@@ -184,10 +198,44 @@ local function stripSummary(counts: { [string]: number }): string
 	return "stripped " .. table.concat(parts, ", ")
 end
 
+-- owner list: whole models listed in VisualAssetConfig.StripEffectsAssetIds lose their effects at load
+local EFFECT_CLASSES = { "Fire", "Smoke", "Sparkles", "ParticleEmitter", "Light", "Beam", "Trail" }
+
+local function stripsEffects(assetId: number): boolean
+	local list = (VisualAssetConfig :: any).StripEffectsAssetIds
+	if typeof(list) ~= "table" then
+		return false
+	end
+	for _, id in ipairs(list) do
+		if id == assetId then
+			return true
+		end
+	end
+	return false
+end
+
+-- Destroys every effect under root; adds what went to counts.
+local function stripEffects(root: Instance, counts: { [string]: number })
+	for _, d in ipairs(root:GetDescendants()) do
+		if d.Parent ~= nil then
+			for _, cls in ipairs(EFFECT_CLASSES) do
+				if d:IsA(cls) then
+					counts[d.ClassName] = (counts[d.ClassName] or 0) + 1
+					d:Destroy()
+					break
+				end
+			end
+		end
+	end
+end
+
 -- Template prep shared by loadModel and the test hook: dress-strip once, then anchor for the template.
 local function prepareTemplate(assetId: number, model: Model)
 	stripScripts(model)
 	templateStrips[assetId] = stripDress(model)
+	if stripsEffects(assetId) then
+		stripEffects(model, templateStrips[assetId])
+	end
 	model.Name = "WE_Asset_" .. tostring(assetId)
 	-- Anchor all for template; clones will reconfigure
 	for _, d in ipairs(model:GetDescendants()) do
@@ -252,8 +300,24 @@ local function isPack(assetId: number): boolean
 	return #pieceRefsFor(assetId) > 0
 end
 
+-- the OmitParts names of a ref ({} when none)
+local function omitNames(ref: AssetRef): { string }
+	local out: { string } = {}
+	local list = ref.OmitParts
+	if typeof(list) == "table" then
+		for _, nm in ipairs(list) do
+			if typeof(nm) == "string" and nm ~= "" then
+				table.insert(out, nm)
+			end
+		end
+	end
+	return out
+end
+
 local function pieceKey(ref: AssetRef): string
+	local omit = omitNames(ref)
 	return tostring(refId(ref)) .. "|" .. tostring(ref.ChildName) .. "|" .. tostring(ref.SubModel or "") .. "|" .. (if ref.StripDecals then "d" else "")
+		.. (if #omit > 0 then "|-" .. table.concat(omit, ",") else "")
 end
 
 -- One configured piece of a prepared pack → its own template (or nil + reason). The pack itself is not changed.
@@ -305,6 +369,19 @@ local function extractPiece(pack: Instance, ref: AssetRef): (Instance?, string?)
 	for _, d in ipairs(if t:IsA("BasePart") then { t :: Instance } else t:GetDescendants()) do
 		if d:IsA("BasePart") and d.Material == Enum.Material.Neon then
 			d.Material = Enum.Material.SmoothPlastic -- no Neon from store pieces (phone bloom, world rule)
+		end
+	end
+	-- owner list: OmitParts (e.g. the Pickup Truck's tail-light glass) go before the part count
+	local omit = omitNames(ref)
+	if #omit > 0 and not t:IsA("BasePart") then
+		local drop: { [string]: boolean } = {}
+		for _, nm in ipairs(omit) do
+			drop[nm] = true
+		end
+		for _, d in ipairs(t:GetDescendants()) do
+			if d.Parent ~= nil and d:IsA("BasePart") and drop[d.Name] then
+				d:Destroy()
+			end
 		end
 	end
 	local n = countParts(t)
@@ -675,6 +752,9 @@ local function resolveVehicleRef(vehicleId: string, kitFamily: string?): AssetRe
 	local ref = vehicles[vehicleId]
 	if refId(ref) > 0 then
 		return ref :: AssetRef
+	end
+	if typeof(ref) == "table" and ref.NoFamilyFallback == true then
+		return nil -- owner list: this vehicle keeps its own Part kit (never a family body)
 	end
 	if kitFamily and VisualAssetConfig.KitFamilyFallback[kitFamily] then
 		local fb = vehicles[VisualAssetConfig.KitFamilyFallback[kitFamily]]
@@ -1086,7 +1166,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 		return true
 	end
 
-	-- Airfield COMPOSITE: runway 70×1×10 + asphalt decal + Hangar 6015472062
+	-- Airfield COMPOSITE: runway 70×1×10 + asphalt decal + VisualAssetConfig.Buildings.Hangar (0 = the Part shed)
 	if structureId == "Airfield" then
 		local folder = Instance.new("Model")
 		folder.Name = "WE_AirfieldComposite"
@@ -1123,8 +1203,9 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			dash.Parent = folder
 		end
 
-		local hangarId = 6015472062
-		local hangarTemplate = loadModel(hangarId)
+		-- owner rule 5 (2026-09-25): the hangar id comes from config; 0 = the Part shed, no LoadAsset call
+		local hangarId = refId((VisualAssetConfig.Buildings :: any).Hangar)
+		local hangarTemplate = if hangarId > 0 then loadModel(hangarId) else nil
 		if hangarTemplate then
 			local hangar = hangarTemplate:Clone()
 			scaleModelToFootprint(hangar, footprintFor("Hangar"))
@@ -1149,7 +1230,9 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			end
 			hangar.Parent = folder
 		else
-			warn("[VisualAssetService] Hangar insert failed — Part shed fallback", hangarId)
+			if hangarId > 0 then
+				warn("[VisualAssetService] Hangar insert failed — Part shed fallback", hangarId)
+			end
 			local shed = Instance.new("Part")
 			shed.Name = "WE_HangarShed"
 			shed.Size = Vector3.new(40, 18, 28)
@@ -1170,7 +1253,7 @@ function VisualAssetService.TryAttachBuildingVisual(hostPart: BasePart, structur
 			mouth.CFrame = shed.CFrame * CFrame.new(-20.2, -1, 0)
 			mouth:SetAttribute("WE_AirfieldComposite", true)
 			mouth.Parent = folder
-			hangarId = -6015472062
+			hangarId = if hangarId > 0 then -hangarId else 0 -- a failed id is stored negative; 0 = no hangar model
 		end
 
 		keepKitSolid()
@@ -1749,7 +1832,19 @@ function VisualAssetService.CloneKitMesh(key: string): BasePart?
 	mp.Name = key .. "Mesh"
 	mp:SetAttribute("WE_Decor", true)
 	mp:SetAttribute("WE_KitMesh", key)
+	if typeof(ref.Yaw) == "number" then
+		mp:SetAttribute("WE_KitYaw", ref.Yaw) -- WorldKits turns the piece by it (Driftwood, CarWreck)
+	end
 	return mp
+end
+
+--[[ Owner list: true when VisualAssetConfig.DesertKit[key] names a piece (id > 0 and a ChildName), i.e. CloneKitMesh
+	can ever return a mesh for it. Config only: never loads, never yields. WorldKits spends no MeshOverlays slot on a
+	key that is not wired. ]]
+function VisualAssetService.IsKitMeshWired(key: string): boolean
+	local kit = (VisualAssetConfig :: any).DesertKit
+	local ref: any = if typeof(kit) == "table" then kit[key] else nil
+	return refId(ref) > 0 and typeof(ref.ChildName) == "string"
 end
 
 

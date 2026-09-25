@@ -66,6 +66,11 @@
 	             through a SpecialMesh (net 0; a separate collider would add a part)
 	  "collider" multi-part solid kits (Wreck "car"): the largest part becomes the invisible box collider sized to the
 	             kit, the other parts go, one mesh is added (net 2 - n)
+	A piece whose ref has Yaw = +-90 / 270 (attribute WE_KitYaw from CloneKitMesh; Driftwood, CarWreck) is turned by it
+	and takes the box with X and Z swapped, so its long axis lies on the kit's. A key VisualAssetService.IsKitMeshWired
+	calls unwired (config id 0) takes no MeshOverlays slot, and one wired key takes at most ceil(cap / wired keys used
+	by Specs) slots, so the kits built first (Town crates, reeds, wrecks) cannot use up the cap before the travel
+	dressing's logs, driftwood, dead trees, stumps and grass (headless world sim: 40 slots went to 3 keys before).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -268,7 +273,7 @@ WorldKits.Specs = {
 	Log = spec(1, 1, Vector3.new(1.5, 1.5, 9), "natural", false, 1, "Travel", { Mesh = "Log" }),
 	Reeds = spec(2, 2, Vector3.new(3.5, 3.2, 2.3), "natural", false, 1, "Travel", { Mesh = "Reeds" }),
 	DuneGrass = spec(2, 2, Vector3.new(4.8, 1.1, 3.5), "natural", false, 1, "Travel", { Mesh = "DuneGrass" }),
-	Driftwood = spec(2, 2, Vector3.new(7.05, 0.9, 3.8), "natural", false, 1, "Travel", { Mesh = "Log" }),
+	Driftwood = spec(2, 2, Vector3.new(7.05, 0.9, 3.8), "natural", false, 1, "Travel", { Mesh = "Driftwood" }), -- own key (sharing "Log" squashed the Z-long log piece onto this X-long box)
 	-- Step 2 — later POIs (W3 step 2, spec w3s2 §6 lane K; rows = the geometry plan's kit list: exact parts at default
 	-- opts, measured AABB of the default build at yaw 0). Reserved rows (no builder: TrenchRun, Bollard, GaragePadV2,
 	-- PontoonV2, AmmoShed, Campfire) make Add warn once and return 0; no layout uses them.
@@ -375,6 +380,8 @@ local openClusters = setmetatable({} :: { [Model]: boolean }, { __mode = "k" })
 local pendingSigns = setmetatable({} :: { [Model]: number }, { __mode = "k" })
 local pendingMesh = setmetatable({} :: { [Model]: { Overlay } }, { __mode = "k" })
 local overlaysQueued = 0
+local overlaysByKey: { [string]: number } = {} -- slots spent per mesh key (owner list: fair share of the cap)
+local keyShare: number? = nil -- most slots one wired key may take (ceil(cap / wired keys); set on first use)
 
 function WorldKits.NewCluster(name: string, attrs: ClusterAttrs): Model
 	local m = Instance.new("Model")
@@ -1499,6 +1506,24 @@ local function gone(inst: Instance): boolean
 	return inst.Parent == nil
 end
 
+-- the mesh's frame and size inside a kit box: a WE_KitYaw quarter turn (90 / 180 / 270, or -90) turns the piece,
+-- and an odd one swaps the box's X and Z so the piece's long axis lies on the kit's
+local function yawedBox(m: BasePart, boxCf: CFrame, size: Vector3): (CFrame, Vector3)
+	local yaw = tonumber(m:GetAttribute("WE_KitYaw")) or 0
+	if yaw % 90 ~= 0 then
+		return boxCf, size
+	end
+	local q = math.floor(yaw / 90 + 0.5) % 4
+	if q == 0 then
+		return boxCf, size
+	end
+	local cf = boxCf * CFrame.Angles(0, math.rad(q * 90), 0)
+	if q % 2 == 1 then
+		return cf, Vector3.new(size.Z, size.Y, size.X)
+	end
+	return cf, size
+end
+
 local function applyOverlay(cluster: Model, ov: Overlay, vas: any)
 	local alive: { BasePart } = {}
 	for _, p in ipairs(ov.Parts) do
@@ -1559,8 +1584,9 @@ local function applyOverlay(cluster: Model, ov: Overlay, vas: any)
 			end
 			local frame = ov.Frame - ov.Frame.Position + p.Position
 			local boxCf, size = boxIn(frame, { p })
-			m.CFrame = boxCf
-			m.Size = size
+			local meshCf, meshSize = yawedBox(m, boxCf, size)
+			m.CFrame = meshCf
+			m.Size = meshSize
 			m.Name = p.Name
 			m.Parent = p.Parent
 			p:Destroy() -- net 0 parts
@@ -1595,21 +1621,58 @@ local function applyOverlay(cluster: Model, ov: Overlay, vas: any)
 		biggest.CanQuery = true
 		biggest.CastShadow = false
 		biggest.Name = "WreckCollider"
-		m.CFrame = boxCf
-		m.Size = size
+		local meshCf, meshSize = yawedBox(m, boxCf, size)
+		m.CFrame = meshCf
+		m.Size = meshSize
 		m.Name = ov.Key .. "Mesh"
 		m.Parent = cluster -- 1 collider + 1 mesh replace n >= 2 parts
 	end
 end
 
+-- ceil(cap / the number of distinct wired mesh keys in Specs), computed once (config lookups only, never yields)
+local function shareOfCap(isWired: (string) -> boolean, cap: number): number
+	local share = keyShare
+	if share == nil then
+		local seen: { [string]: boolean } = {}
+		local n = 0
+		for _, sp in pairs(WorldKits.Specs) do
+			local key = sp.Mesh
+			if key ~= nil and not seen[key] then
+				seen[key] = true
+				local ok, w = pcall(isWired, key)
+				if ok and w == true then
+					n += 1
+				end
+			end
+		end
+		share = if n > 0 then math.ceil(cap / n) else cap
+		keyShare = share
+	end
+	return share :: number
+end
+
 local function scheduleOverlays(cluster: Model, list: { Overlay })
 	local cap = KC.MeshOverlays
 	local take: { Overlay } = {}
+	-- owner list: a key that can never give a mesh (config id 0) takes no slot, and no key takes more than its share
+	-- of the cap (config lookups only, never yields)
+	local vasNow = getVAS()
+	local isWired = if vasNow and type(vasNow.IsKitMeshWired) == "function" then vasNow.IsKitMeshWired else nil
 	for _, ov in ipairs(list) do
 		if overlaysQueued >= cap then
 			break
 		end
+		if isWired then
+			local okW, wired = pcall(isWired, ov.Key)
+			if okW and wired == false then
+				continue
+			end
+			if (overlaysByKey[ov.Key] or 0) >= shareOfCap(isWired, cap) then
+				continue
+			end
+		end
 		overlaysQueued += 1
+		overlaysByKey[ov.Key] = (overlaysByKey[ov.Key] or 0) + 1
 		table.insert(take, ov)
 	end
 	if #take == 0 then
@@ -1641,6 +1704,11 @@ end
 function WorldKits.Discard(cluster: Model)
 	closeCluster(cluster)
 	cluster:Destroy()
+end
+
+-- Test hook (headless sim): mesh overlay slots spent so far, per key, and the per-key share of the cap (nil = unset).
+function WorldKits._OverlayStats(): { Queued: number, ByKey: { [string]: number }, Share: number? }
+	return { Queued = overlaysQueued, ByKey = table.clone(overlaysByKey), Share = keyShare }
 end
 
 function WorldKits.Finish(cluster: Model, parent: Instance): ClusterInfo

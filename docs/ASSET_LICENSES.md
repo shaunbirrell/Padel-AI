@@ -5,16 +5,28 @@ Scope: every non-zero Creator Store ID in `src/ReplicatedStorage/Shared/Configs/
 Data: Roblox economy API `economy.roblox.com/v2/assets/<id>/details`, read 2026-09-24, and the toolbox stats in
 `gap/asset_stats.json` (triangles, scripts). Nothing here was loaded in Roblox. The headless sim is not Roblox.
 
-Owner: CFG (W1) writes this file with `VisualAssetConfig`; LOOK (W3) and W6a update it in the same commit as any ID change.
-Last update: W3 LOOK, 2026-09-24 — Roblox-owned packs wired (§3.0), 19 third-party world-dressing IDs dropped (§2c), and the
-24 IDs cleared in 859dedc moved out of §3 (§2b).
+Owner: CFG (W1) writes this file with `VisualAssetConfig`; LOOK (W3) and W6a update it in the same commit as any ID change;
+`tools/wire-asset-ids.py` adds the §3.1 row of every owner pick it promotes (docs/ASSET_WIRING.md).
+Last update: owner asset list (assetwire), 2026-09-25 — Roblox-owned picks wired (§3.0: Dune Buggy, Pickup Truck, Van,
+Smoking Barrel, the six Weapons Kit guns, the grenade and rocket meshes, and the Synty log, twig and sedan pieces), the three
+heavy building models cleared by owner rule 5 (§2d), the owner-picks table added (§3.1, empty until a promote) and the
+ownership facts of 2026-09-25 (§1). Before that: W3 LOOK, 2026-09-24 — Roblox-owned packs wired (§3.0), 19 third-party
+world-dressing IDs dropped (§2c), and the 24 IDs cleared in 859dedc moved out of §3 (§2b).
 
 ## 1. Rules
 
 **How these IDs load.** Owner default D1 keeps Game Settings › Security › "Allow Loading Third Party Assets" **OFF**.
-`AssetService:LoadAssetAsync` then loads only assets the game creator owns or has been granted, or that Roblox owns. **Only
-the §3.0 IDs are owned by Roblox; none of the others is owned by Roblox or by the game owner**, so on live every third-party
-ID fails once, `VisualAssetService` caches the failure, and the Part kit stays. An ID starts to show only if the owner clicks "Get Model" on it (or turns the setting on, which D1 rejects).
+`AssetService:LoadAssetAsync` then loads only assets that Roblox owns (§3.0) or that the game's owner owns or was granted.
+WAR EMPIRE belongs to the user shaunie6 (UserId 470626172, games API 2026-09-25), so a third-party ID starts to show once
+that account clicks "Get Model" on it (turning the setting on is rejected by D1). Inventory API checks
+(`inventory.roblox.com/v1/users/470626172/items/Asset/<id>`, every call HTTP 200):
+- 2026-09-25 08:02–08:05 UTC: the owner owns 147 of the 151 ids on his own list (docs/ASSET_WIRING.md), every third-party
+  one. Two of them were live config ids and so loaded on live once owned: `GateDefense.AutoGun` 4923345827 (set to 0 =
+  Part-built gate gun in the asset-wiring commit, 2026-09-25: MG 34-like, no part cap on that loader) and
+  `IndustrialProps.OilPumpjackAlt` 15192621369 (§3, capped loader, kept). The other owner picks wait in `PendingAssetId`, which no loader reads,
+  until `tools/wire-asset-ids.py` promotes them (§3.1).
+- 2026-09-25 08:39 UTC: none of the other 51 third-party ids in `VisualAssetConfig` / `StructureVisualConfig` is owned, so on
+  live each of them fails once, `VisualAssetService` caches the failure, and the Part kit stays.
 
 **Terms for a free Creator Store asset.** The uploader keeps the copyright and grants Roblox a licence that Roblox may
 sublicense "to other Users and Creators" (Roblox Terms of Use, Creator Terms, "Roblox License to UGC"). The Creator Store
@@ -127,20 +139,58 @@ the literal is pinned by BuyPathStatic).
 | [11138299907](https://create.roblox.com/store/asset/11138299907) | Boat Dock | v6cvk (User) | world landmark with no caller | `Landmarks.Pier` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
 | [55228082](https://create.roblox.com/store/asset/55228082) | Spy Bunker | Azraekan (User) | world landmark with no caller | `Landmarks.SpyBunker` | Part kit (vehicles: KitFamilyFallback body, else Part kit) |
 
+### 2d. Cleared by owner rule 5 (2026-09-25, owner asset list)
+
+The owner's rule 5 replaces the three heaviest building models. None of them loaded at runtime (PreferMesh is off and the
+structure consoles return before any building dress), so nothing on screen changes. BuyPathStatic now forbids all three in
+`VisualAssetConfig`, `StructureVisualConfig` and `VisualAssetService`.
+
+| Asset ID | Creator Store name | Uploader | Reason | Keys now 0 | Fallback |
+|---|---|---|---|---|---|
+| [138331074285379](https://create.roblox.com/store/asset/138331074285379) | Military Base | VenomStar40066 (User) | Owner rule 5: 232,800 triangles | `Buildings.CommandCenter`, `StructureVisualConfig.CommandCenter` | Part-kit shell; the owner's pick 43803492 waits in `PendingAssetId` |
+| [18798977801](https://create.roblox.com/store/asset/18798977801) | Military Barracks | VoidableCircuit (User) | Owner rule 5: 336,948 triangles | `Buildings.Barracks`, `Buildings.SpecialForcesFacility`, `StructureVisualConfig.Barracks`, `StructureVisualConfig.SpecialForcesFacility` | Part-kit shells; the owner's picks 8637034739 and 10112923897 wait in `PendingAssetId` |
+| [6015472062](https://create.roblox.com/store/asset/6015472062) | Hangar | afterrburner (User) | Owner rule 5: 45,887 triangles | `Buildings.Hangar`; the Airfield composite in `VisualAssetService` reads `Buildings.Hangar` instead of a hard-coded id | Part shed; the owner's pick 5343886540 waits in `PendingAssetId` |
+
+### 2e. Replaced by owner picks (moved here by `tools/wire-asset-ids.py`)
+
+When a promoted owner pick replaces an id that then appears nowhere under `src/`, the tool moves that id's §3 row here and
+notes the pick. Empty until the first promote.
+
+| Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
+|---|---|---|---|---|---|---|---|---|
+| [6883609157](https://create.roblox.com/store/asset/6883609157) | Military Tent | ForestFireTree1 (User) | Model | 2023-11-29 | 9,932 | 0 | `WarzoneProps.Tent` | replaced by owner pick 182529039 (Tent), 2026-09-25 |
+| [1143305733](https://create.roblox.com/store/asset/1143305733) | Blinking Tutorial Arrow | MajorMent (User) | Model | 2017-10-30 | 40 | 2 | `TutorialArrow` | Listing: "By MajorMent": credited here; replaced by owner pick 632958370 (TutorialArrow), 2026-09-25 |
+| [91071319](https://create.roblox.com/store/asset/91071319) | Concrete Barrier | HabaneroDude (User) | Model | 2016-08-27 | 868 | 0 | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` | replaced by owner pick 2766525411 (Jersey), 2026-09-25 |
+| [976333542](https://create.roblox.com/store/asset/976333542) | Military Crate | sam_youwell (User) | Model | 2017-08-13 | 1,196 | 0 | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` | replaced by owner pick 2930926216 (MilitaryCrate), 2026-09-25 |
+| [13525922265](https://create.roblox.com/store/asset/13525922265) | Realistic Oil Pumpjack | Unit5532 (User) | Model | 2023-05-23 | 11,318 | 0 | `IndustrialProps.OilPumpjack` | replaced by owner pick 15192621369 (PlotOilPump), 2026-09-25 |
+<!-- wire-asset-ids:replaced:end -->
+
 ## 3.0 Roblox-owned IDs (W3 LOOK; load with the third-party switch OFF)
 
-Creator **Roblox (User 1, verified badge)** for all four, read from the public economy API on **2026-09-24** (no login):
+Creator **Roblox (User 1, verified badge)** for every row, read from the public economy API on **2026-09-24** (no login):
 `GET https://economy.roblox.com/v2/assets/<id>/details` → `"Creator":{"Id":1,"Name":"Roblox","CreatorType":"User",...,"HasVerifiedBadge":true}`,
 `"IsForSale":false`, `"IsPublicDomain":true` (free); these are the fields that matter from each raw response (the W3
 LOOK lane keeps the full responses with its test evidence). Roblox's docs for `InsertService:LoadAsset` / `AssetService` allow assets "owned by Roblox" with
 "Allow Loading Third Party Assets" OFF, so the owner clicks nothing.
 
-| Asset ID | Store name | Creator | Type | Updated | What we take (never the whole asset) | Used by | Evidence |
+| Asset ID | Store name | Creator | Type | Updated | What we take | Used by | Evidence |
 |---|---|---|---|---|---|---|---|
-| [6418221666](https://create.roblox.com/store/asset/6418221666) | Light Utility Vehicle | Roblox (User 1) | Model | 2023-11-03 | Child `Light Utility Vehicle (green camo)` › `Body` only: 39 MeshParts. Its Chassis, 16 scripts, seats, remotes and sounds are destroyed at load; the 41 camo Decals are stripped (the camo images are uploaded by user Orlando777, 715494, not Roblox, and cost draw calls). Neon lights become SmoothPlastic | `Vehicles.MilitaryJeep` and through `KitFamilyFallback.WheeledLight` the other light 4x4s (`ArmedJeep`, `ScoutCar`, `ReconBuggy`, `UtilityQuad`, `DispatchCar`). The Part kit still drives; the Armed 4x4 keeps its Part turret | [economy API](https://economy.roblox.com/v2/assets/6418221666/details) |
-| [6933438443](https://create.roblox.com/store/asset/6933438443) | Synty Nature Pack | Roblox (User 1) | Model | 2021-06-10 | One MeshPart per kit, texture cleared, recoloured: `Meshes/PolygonNature_Tree_Pine_Dead_01`, `…_Tree_Stump_01`, `…_Plant_Reeds_01`, `…_Plant_01` | `DesertKit.DeadTree`, `Stump`, `Reeds`, `DuneGrass` (WorldKits mesh overlays) | [economy API](https://economy.roblox.com/v2/assets/6933438443/details) |
+| [6418221666](https://create.roblox.com/store/asset/6418221666) | Light Utility Vehicle | Roblox (User 1) | Model | 2023-11-03 | Child `Light Utility Vehicle (green camo)` › `Body` only: 39 MeshParts. Its Chassis, 16 scripts, seats, remotes and sounds are destroyed at load; the 41 camo Decals are stripped (the camo images are uploaded by user Orlando777, 715494, not Roblox, and cost draw calls). Neon lights become SmoothPlastic | `Vehicles.MilitaryJeep` and through `KitFamilyFallback.WheeledLight` the other light 4x4s (`ArmedJeep`, `ScoutCar`, `DispatchCar`; since 2026-09-25 the Utility Quad and Recon Buggy wear the Dune Buggy below). The Part kit still drives; the Armed 4x4 keeps its Part turret | [economy API](https://economy.roblox.com/v2/assets/6418221666/details) |
+| [6933438443](https://create.roblox.com/store/asset/6933438443) | Synty Nature Pack | Roblox (User 1) | Model | 2021-06-10 | One MeshPart per kit, texture cleared, recoloured: `Meshes/PolygonNature_Tree_Pine_Dead_01`, `…_Tree_Stump_01`, `…_Plant_Reeds_01`, `…_Plant_01`, and since 2026-09-25 `…_Tree_Log_01` (fallen log) and `…_Tree_Twig_02` (driftwood, turned 90°) | `DesertKit.DeadTree`, `Stump`, `Reeds`, `DuneGrass`, `Log`, `Driftwood` (WorldKits mesh overlays) | [economy API](https://economy.roblox.com/v2/assets/6933438443/details) |
 | [6933790012](https://create.roblox.com/store/asset/6933790012) | Synty Dungeon Pack: Weapons & Props | Roblox (User 1) | Model | 2021-06-10 | `Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04` | `DesertKit.CrateWood` | [economy API](https://economy.roblox.com/v2/assets/6933790012/details) |
-| [6933556508](https://create.roblox.com/store/asset/6933556508) | Synty City Pack | Roblox (User 1) | Model | 2021-06-10 | Verified, **not wired** (every City key is 0): the bench, sedan and van pieces do not fit the current WorldKits boxes | `DesertKit.Bench`, `CarWreck`, `VanWreck`, `Skip` (all 0) | [economy API](https://economy.roblox.com/v2/assets/6933556508/details) |
+| [6933556508](https://create.roblox.com/store/asset/6933556508) | Synty City Pack | Roblox (User 1) | Model | 2021-06-10 | `Meshes/PolygonCity_Props_SM_Veh_Car_Sedan_01` only (since 2026-09-25): texture cleared, recoloured CorrodedMetal as a burnt wreck, turned 90° onto the kit's long axis; 5,524 tris, at most 6 per 512-stud circle. The bench, van and skip pieces stay unwired (they do not fit the WorldKits boxes) | `DesertKit.CarWreck` (`Bench`, `VanWreck`, `Skip` stay 0) | [economy API](https://economy.roblox.com/v2/assets/6933556508/details) |
+| [6433272094](https://create.roblox.com/store/asset/6433272094) | Dune Buggy | Roblox (User 1) | Model | 2021-02-24 | Child `Dune Buggy (beige)` › `Body` only: 23 MeshParts, no decals (13,625 tris). Chassis, 12 scripts, seats and sounds are destroyed at load; fitted to the kit chassis | `Vehicles.UtilityQuad`, `Vehicles.ReconBuggy` (dress only; the Part kit drives) | [economy API](https://economy.roblox.com/v2/assets/6433272094/details) |
+| [6418225759](https://create.roblox.com/store/asset/6418225759) | Pickup Truck | Roblox (User 1) | Model | 2023-11-03 | Child `Pickup Truck (bronze)` › `Body`: 41 MeshParts, minus the overlapping `light_tail_glass` (`OmitParts`) = 40, the cap (15,746 tris); decals stripped; fitted to the kit chassis | `Vehicles.PatrolTruck`, `Vehicles.EscortTruck` (dress only) | [economy API](https://economy.roblox.com/v2/assets/6418225759/details) |
+| [6433316269](https://create.roblox.com/store/asset/6433316269) | Van | Roblox (User 1) | Model | 2021-02-24 | Child `Van (white)` › `Body`: 26 MeshParts, no decals (8,390 tris); fitted to the kit chassis | `Vehicles.CargoVan` (dress only) | [economy API](https://economy.roblox.com/v2/assets/6433316269/details) |
+| [23153991](https://create.roblox.com/store/asset/23153991) | Smoking Barrel | Roblox (User 1) | Model | 2010-03-01 | The whole model: 4 CylinderMesh parts (384 tris). Its Smoke is removed when the template is prepared (`StripEffectsAssetIds`) | `WarzoneProps.OilBarrel` (training-yard drums; replaces the third-party 25623924 there) | [economy API](https://economy.roblox.com/v2/assets/23153991/details) |
+| [4842207161](https://create.roblox.com/store/asset/4842207161) | Auto Rifle | Roblox (User 1) | Model | 2023-06-15 | Tool `AR` › Model `AR` plus the Tool's `Handle` made invisible (the grip). The kit's WeaponsSystem scripts (6) and its Sounds are never copied; loads through `WeaponAssetLoader` (outside the 48 load attempts) | `WeaponConfig` StarterRifle, AssaultRifle | [economy API](https://economy.roblox.com/v2/assets/4842207161/details) |
+| [4842212980](https://create.roblox.com/store/asset/4842212980) | Submachine Gun | Roblox (User 1) | Model | 2023-06-15 | Tool `SMG` › Model `SMG` + invisible `Handle`, as above | `WeaponConfig` SMG | [economy API](https://economy.roblox.com/v2/assets/4842212980/details) |
+| [4842197274](https://create.roblox.com/store/asset/4842197274) | Pistol | Roblox (User 1) | Model | 2023-06-15 | Tool `Pistol` › Model `Pistol` + invisible `Handle`, as above | `WeaponConfig` Pistol | [economy API](https://economy.roblox.com/v2/assets/4842197274/details) |
+| [4842215723](https://create.roblox.com/store/asset/4842215723) | Shotgun | Roblox (User 1) | Model | 2023-06-15 | Tool `Shotgun` › Model `Shotgun` + invisible `Handle`, as above | `WeaponConfig` Shotgun | [economy API](https://economy.roblox.com/v2/assets/4842215723/details) |
+| [4842218829](https://create.roblox.com/store/asset/4842218829) | Sniper Rifle | Roblox (User 1) | Model | 2023-06-15 | Tool `Sniper` › Model `Sniper` + invisible `Handle`, as above | `WeaponConfig` Sniper | [economy API](https://economy.roblox.com/v2/assets/4842218829/details) |
+| [4842186817](https://create.roblox.com/store/asset/4842186817) | Rocket Launcher | Roblox (User 1) | Model | 2023-06-15 | Tool `Rocket Launcher` › Model `RocketLauncher` + invisible `Handle`, as above | `WeaponConfig` RocketLauncher | [economy API](https://economy.roblox.com/v2/assets/4842186817/details) |
+| [232379763](https://create.roblox.com/store/asset/232379763) | MESH_ArmyGuy_Grenade, with texture [232379808](https://create.roblox.com/store/asset/232379808) TX_ArmyGuy_Grenade_v2 | Roblox (User 1) | Mesh + Image | 2015-03-31 | `MeshId` / `TextureId` of the client grenade's SpecialMesh (1,350 faces); no LoadAsset, no model | `WeaponConfig.Weapons.Grenade.Projectile` | [economy API](https://economy.roblox.com/v2/assets/232379763/details), [texture](https://economy.roblox.com/v2/assets/232379808/details) |
+| [94690081](https://create.roblox.com/store/asset/94690081) | MESH_BattleGameRocketLauncherAmmo, with texture [94689966](https://create.roblox.com/store/asset/94689966) TX_BattleGameRocketLauncher | Roblox (User 1) | Mesh + Image | 2012-10-09 | `MeshId` / `TextureId` of the rocket in flight (336 faces); no LoadAsset, no model | `WeaponConfig.Weapons.RocketLauncher.Projectile` | [economy API](https://economy.roblox.com/v2/assets/94690081/details), [texture](https://economy.roblox.com/v2/assets/94689966/details) |
 
 **Terms.**
 - Synty packs: Roblox's DevForum announcement "Free Synty Asset Packs Released in the Marketplace" (topic 1283755,
@@ -148,6 +198,17 @@ LOOK lane keeps the full responses with its test evidence). Roblox's docs for `I
   Use on Roblox only.
 - Light Utility Vehicle: made and published by Roblox, free, Creator Store terms (use on Roblox). We use its body mesh as
   dress under our own vehicle names ("Field 4x4" …); its scripts trust the client and are never used (roadmap §1.4).
+- Dune Buggy, Pickup Truck and Van (2026-09-25): the same terms and the same use as the Light Utility Vehicle (Body only,
+  under our own vehicle names). Their inner mesh uploaders were not re-checked; we never reference inner ids.
+- Weapons Kit guns (4842…, 2026-09-25): made and published by Roblox (User 1), Endorsed, free. Licence code `RBX-LUL`
+  (docs/ASSET_SHORTLIST.md §2: a Roblox-owned kit under Roblox's Limited Use License): use inside Roblox only, and keep this
+  attribution: **gun models from Roblox's Weapons Kit (Roblox)**. We use the visual Model and the Tool's Handle only; the
+  kit's WeaponsSystem scripts and its Sounds (owned by a user and a group, not Roblox) are never copied. The Auto Rifle and
+  Rocket Launcher shapes are generic AK- and RPG-pattern looks on unnamed Roblox models; the owner listed both himself
+  (ASSUMPTIONS: owner yes; one-line revert `VisualAssetId = 0`).
+- Grenade and rocket meshes and textures (2026-09-25): Roblox-owned content ids (economy API: creator Roblox, not for sale),
+  set by id on a client SpecialMesh; never loaded as a model.
+- Smoking Barrel (2026-09-25): a free Roblox-owned model; used whole (4 parts) with its smoke removed.
 - The meshes and textures inside these models were uploaded by the accounts that built them for Roblox (checked on the
   economy API: oggo732, 1114780684, for the LUV and Nature meshes; Klaugrana001, 1453730866, for the City and Dungeon
   meshes and the pack textures). We never reference those inner ids in config; they arrive inside the Roblox-owned model
@@ -158,15 +219,35 @@ pieces (`ChildName`, found with `FindFirstChild(name, true)`, never split on "/"
 <= 40 parts (`MaxPartsPerModel`) with no Humanoid or it is refused; templates live in `ServerStorage`; a failed load is
 cached and the Part kit stays.
 
-## 3. Remaining third-party IDs (56) and why each is allowed
+## 3.1 Owner picks (third-party, promoted by `tools/wire-asset-ids.py`)
+
+The owner listed his own Creator Store picks on 2026-09-25 (docs/ASSET_WIRING.md). A third-party pick first waits in
+`PendingAssetId`, which no loader reads. `tools/wire-asset-ids.py promote` moves it into `ModelAssetId` only when it is in
+the owner's inventory, the store still shows the same creator and a free price, the owner said yes where the row needs it,
+and a Studio `WE_CHECK` showed at most 40 parts and no Humanoid where the row needs it. In the same commit it appends the
+row below. Rules 1–5 of §1 hold for every row; scripts are stripped at load. Empty until the first promote.
+
+| Asset ID | Creator Store name | Uploader | Type | Verified (UTC) | Triangles | Scripts | Used by | Notes |
+|---|---|---|---|---|---|---|---|---|
+| [182529039](https://create.roblox.com/store/asset/182529039) | Military Canvas Tent | Quenty (User 4397833) | Model | inventory API 2026-09-25T09:40:02Z (cached) | 3,908 | 0 (stripped) | `WarzoneProps.Tent` | owner list 2026-09-25 (Tent); Get Model by the game owner |
+| [632958370](https://create.roblox.com/store/asset/632958370) | Arrow | isaacbeyo (User 73935815) | Model | inventory API 2026-09-25T09:40:04Z (cached) | 36 | 0 (stripped) | `TutorialArrow` | owner list 2026-09-25 (Tutorial Arrow); Get Model by the game owner |
+| [2766525411](https://create.roblox.com/store/asset/2766525411) | road barrier | SiameseMouse (User 795584330) | Model | inventory API 2026-09-25T09:40:06Z (cached) | 368 | 0 (stripped) | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` | owner list 2026-09-25 (Jersey); Get Model by the game owner |
+| [2930926216](https://create.roblox.com/store/asset/2930926216) | Military Crates | XIArchangel (User 27223140) | Model | inventory API 2026-09-25T09:40:08Z (cached) | 2,222 | 0 (stripped) | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` | owner list 2026-09-25 (Military Crate); Get Model by the game owner |
+| [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User 1607785544) | Model | inventory API 2026-09-25T09:40:10Z (cached) | 1,398 | 0 (stripped) | `IndustrialProps.OilPumpjack` | owner list 2026-09-25 (Plot Oil Pump); Get Model by the game owner |
+| [15271872710](https://create.roblox.com/store/asset/15271872710) | SandBag Wall | Herbie778811 (User 561823031) | Model | inventory API 2026-09-25T09:40:13Z (cached) | 240 | 0 (stripped) | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` | owner list 2026-09-25 (Sandbag Line); Get Model by the game owner |
+| [18220523228](https://create.roblox.com/store/asset/18220523228) | ATM | 0GColt (User 3592203545) | Model | inventory API 2026-09-25T09:40:16Z (cached) | 1,032 | 0 (stripped) | `MoneyCollector` | owner list 2026-09-25 (Money Collector); Get Model by the game owner |
+<!-- wire-asset-ids:owner-picks:end -->
+
+## 3. Remaining third-party IDs (53) and why each is allowed
 
 Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes rules 1–5 in §1 unless the note says
 "Watch". "Scripts" is the count inside the upload; all are stripped before use. Triangles are from the toolbox API.
 
 ### Vehicles (dress on the Part-kit chassis; physics stays the Part kit)
 
-None. Every third-party vehicle id was cleared (§2, §2b); the light 4x4s use the Roblox-owned body in §3.0 and every other
-family keeps its Part kit.
+None. Every third-party vehicle id was cleared (§2, §2b); the light 4x4s, the quad, buggy, pickups and van use the
+Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owner's vehicle picks wait in `PendingAssetId`
+(never loaded) until they are promoted (§3.1).
 
 ### Characters (dress on Part-kit NPCs)
 
@@ -180,11 +261,8 @@ family keeps its Part kit.
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [18798977801](https://create.roblox.com/store/asset/18798977801) | Military Barracks | VoidableCircuit (User) | Model | 2024-08-04 | 336,948 | 0 | `Buildings.Barracks`, `Buildings.SpecialForcesFacility`, `StructureVisualConfig.Barracks`, `StructureVisualConfig.SpecialForcesFacility` | 336,948 triangles: W3 phase-out (phone budget) |
 | [85138026](https://create.roblox.com/store/asset/85138026) | USM Gate Please Favorte! | FearlessIantheKiller (User) | Model | 2012-07-01 | 5,876 | 9 | `Buildings.BaseGate` | Watch: "USM" in the title. Check in Studio for national insignia before the owner Gets it |
-| [138331074285379](https://create.roblox.com/store/asset/138331074285379) | Military Base | VenomStar40066 (User) | Model | 2026-02-14 | 232,800 | 1 | `Buildings.CommandCenter`, `StructureVisualConfig.CommandCenter` | 232,800 triangles: W3 phase-out (phone budget) |
 | [17701461178](https://create.roblox.com/store/asset/17701461178) | Shipping Containers | VGVC2 (User) | Model | 2024-06-02 | 6,176 | 0 | `Buildings.Dock`, `StructureVisualConfig.Dock` | Watch: check the doors for real shipping-line logos before the owner Gets it |
-| [6015472062](https://create.roblox.com/store/asset/6015472062) | Hangar | afterrburner (User) | Model | 2020-11-28 | 45,887 | 0 | `Buildings.Hangar`, `VisualAssetService (Airfield composite hangar)` |  |
 | [14313845338](https://create.roblox.com/store/asset/14313845338) | Airport | DeadGamerTuPanaPro (User) | Model | 2023-08-04 | 4,778 | 0 | `Buildings.Helipad`, `StructureVisualConfig.Helipad` |  |
 | [14000967030](https://create.roblox.com/store/asset/14000967030) | Coal power plant | Steveli76 (User) | Model | 2023-07-08 | 27,560 | 0 | `Buildings.PowerStation`, `StructureVisualConfig.PowerStation` |  |
 | [9559610195](https://create.roblox.com/store/asset/9559610195) | Radar Dish W/Base | ThugulusPrime (User) | Model | 2022-05-06 | 18,700 | 2 | `Buildings.Radar`, `StructureVisualConfig.Radar` |  |
@@ -198,9 +276,9 @@ family keeps its Part kit.
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [4923345827](https://create.roblox.com/store/asset/4923345827) | Machine Gun Nest | Byrdknight (User) | Model | 2020-04-20 | 4,999 | 0 | `GateDefense.AutoGun`, `GateDefenseService default` |  |
+| [4923345827](https://create.roblox.com/store/asset/4923345827) | Machine Gun Nest | Byrdknight (User) | Model | 2020-04-20 | 4,999 | 0 | `GateDefenseService default` only (config AutoGun = 0 since 2026-09-25) | Watch: the game owner owns it since 2026-09-25 (inventory API 08:05 UTC), it loaded on live on the gate AutoGuns at walls level 4+ until the config was set to 0 the same day (GateDefenseService's own loader: no part cap, outside the 48); GateDefenseService still names it as a default and that line is deferred to after streaming2-build. The owner's pick 114570602 replaces it at promote batch P1; a WWII MG 34-like silhouette, so the owner rejected it for the sandbag nest |
 | [10354803684](https://create.roblox.com/store/asset/10354803684) | Military turret | gtddgc8 (User) | Model | 2022-07-25 | 14,754 | 5 | `GateDefense.AutoGunElevatedAlt` | The 2022 original of the 2026 re-upload 71964514000054 (dropped) |
-| [3525056989](https://create.roblox.com/store/asset/3525056989) | Realistic Sandbag | 0TacoMillitary0 (User) | Model | 2019-07-24 | 1,868 | 0 | `GateDefense.Sandbags`, `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags`, `GateDefenseService default` |  |
+| [3525056989](https://create.roblox.com/store/asset/3525056989) | Realistic Sandbag | 0TacoMillitary0 (User) | Model | 2019-07-24 | 1,868 | 0 | `GateDefense.Sandbags`, `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags`, `GateDefenseService default` | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` moved to owner pick 15271872710 on 2026-09-25 |
 
 ### Collector, effects, showroom, tutorial
 
@@ -216,7 +294,6 @@ family keeps its Part kit.
 | [130578088310000](https://create.roblox.com/store/asset/130578088310000) | sci-fi pedestal display stand platform showcase | XxDriftAlphaSkaterxX (User) | Model | 2026-03-25 | 5,936 | 1 | `ShowroomPedestal` |  |
 | [5267267960](https://create.roblox.com/store/asset/5267267960) | Statue Podium | Trevor C. Fan Group! (Group) | Model | 2020-07-01 | 192 | 0 | `ShowroomPodium` |  |
 | [5389482912](https://create.roblox.com/store/asset/5389482912) | Rotating Platform | Ender17143 (User) | Model | 2020-07-20 | 24 | 1 | `ShowroomRotator` |  |
-| [1143305733](https://create.roblox.com/store/asset/1143305733) | Blinking Tutorial Arrow | MajorMent (User) | Model | 2017-10-30 | 40 | 2 | `TutorialArrow` | Listing: "By MajorMent": credited here |
 | [6333395014](https://create.roblox.com/store/asset/6333395014) | Arrow pointing down | DyingInisde (User) | Model | 2021-02-01 | 32 | 0 | `TutorialArrowAlt` |  |
 | [88687072714005](https://create.roblox.com/store/asset/88687072714005) | Laser Beam Effect | eazypro29 (User) | Model | 2025-06-16 | 0 | 0 | `TutorialBeam` |  |
 | [1679839739](https://create.roblox.com/store/asset/1679839739) | Flag Pole | HerrDirektorZach (User) | Model | 2018-04-28 | 792 | 0 | `UpgradeFlag`, `WarzoneProps.Flag`, `WarzoneProps.FlagPole` |  |
@@ -228,20 +305,17 @@ family keeps its Part kit.
 |---|---|---|---|---|---|---|---|---|
 | [16382915010](https://create.roblox.com/store/asset/16382915010) | Ammo Box | ajh2k21 (User) | Model | 2024-02-15 | 21,472 | 0 | `WarzoneProps.AmmoBox` |  |
 | [1291725699](https://create.roblox.com/store/asset/1291725699) | [FREE] Barbed Wire Fence | CentralCityLaw (User) | Model | 2018-01-01 | 312 | 1 | `WarzoneProps.BarbedWire` |  |
-| [91071319](https://create.roblox.com/store/asset/91071319) | Concrete Barrier | HabaneroDude (User) | Model | 2016-08-27 | 868 | 0 | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` |  |
 | [53591587](https://create.roblox.com/store/asset/53591587) | Crate/Box | griflay (User) | Model | 2011-06-10 | 24 | 0 | `WarzoneProps.Crate`, `WarzoneProps.Drum` | "Area 51" in the listing is a place name, not a design |
 | [1454179642](https://create.roblox.com/store/asset/1454179642) | [Highly Detailed] Flag Pole | Owl4110 (User) | Model | 2018-02-24 | 912 | 0 | `WarzoneProps.FlagPoleHD` |  |
 | [116763933](https://create.roblox.com/store/asset/116763933) | Floodlight | ChillyRaptor (User) | Model | 2013-05-24 | 204 | 1 | `WarzoneProps.Floodlight`, `WarzoneProps.Lamp` |  |
 | [4893998573](https://create.roblox.com/store/asset/4893998573) | Floodlight | VladimirDeliyUA (User) | Model | 2020-04-13 | 2,074 | 0 | `WarzoneProps.FloodlightAlt` |  |
 | [1160141839](https://create.roblox.com/store/asset/1160141839) | Non-Laggy Fuel Cans and Oil Barrels | WOLFENCHAN (Group) | Model | 2017-11-07 | 7,350 | 0 | `WarzoneProps.FuelCans`, `IndustrialProps.FuelCans` |  |
-| [976333542](https://create.roblox.com/store/asset/976333542) | Military Crate | sam_youwell (User) | Model | 2017-08-13 | 1,196 | 0 | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` |  |
 | [16540055496](https://create.roblox.com/store/asset/16540055496) | Military Crates | Antonov_Slonovskaya (User) | Model | 2024-02-27 | 8,254 | 0 | `WarzoneProps.MilitaryCratePack` |  |
-| [25623924](https://create.roblox.com/store/asset/25623924) | Oil Barrel | raldude1 (User) | Model | 2010-04-15 | 480 | 0 | `WarzoneProps.OilBarrel`, `WarzoneProps.Fence`, `IndustrialProps.OilBarrel` |  |
+| [25623924](https://create.roblox.com/store/asset/25623924) | Oil Barrel | raldude1 (User) | Model | 2010-04-15 | 480 | 0 | `WarzoneProps.Fence`, `IndustrialProps.OilBarrel` | Since 2026-09-25 `WarzoneProps.OilBarrel` is the Roblox Smoking Barrel 23153991 (§3.0) |
 | [19277831](https://create.roblox.com/store/asset/19277831) | radio antenna | ak74dd (User) | Model | 2009-12-15 | 652 | 0 | `WarzoneProps.RadioAntenna`, `WarzoneProps.Radio` |  |
 | [42209845](https://create.roblox.com/store/asset/42209845) | Radio Antenna | MrTw0fer (User) | Model | 2010-12-16 | 360 | 0 | `WarzoneProps.RadioAntennaAlt` |  |
 | [12651656400](https://create.roblox.com/store/asset/12651656400) | Sandbag Barrier | Aheadit (User) | Model | 2023-03-01 | 7,493 | 0 | `WarzoneProps.SandbagBarrier` |  |
 | [25733125](https://create.roblox.com/store/asset/25733125) | Sandbag wall | SpecialOp (User) | Model | 2010-04-17 | 3,624 | 0 | `WarzoneProps.SandbagWall`, `WarzoneProps.Barrier` |  |
-| [6883609157](https://create.roblox.com/store/asset/6883609157) | Military Tent | ForestFireTree1 (User) | Model | 2023-11-29 | 9,932 | 0 | `WarzoneProps.Tent` |  |
 | [3133150032](https://create.roblox.com/store/asset/3133150032) | Military Tent | MrKotikXD (User) | Model | 2022-01-22 | 38,324 | 9 | `WarzoneProps.TentAlt` |  |
 
 ### Desert props
@@ -259,8 +333,7 @@ family keeps its Part kit.
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [13525922265](https://create.roblox.com/store/asset/13525922265) | Realistic Oil Pumpjack | Unit5532 (User) | Model | 2023-05-23 | 11,318 | 0 | `IndustrialProps.OilPumpjack` |  |
-| [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User) | Model | 2023-11-03 | 1,398 | 0 | `IndustrialProps.OilPumpjackAlt` | Listing: "Mesh Inspiration: Karcist" (inspiration only) |
+| [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User) | Model | 2023-11-03 | 1,398 | 0 | `IndustrialProps.OilPumpjackAlt` | Listing: "Mesh Inspiration: Karcist" (inspiration only). Owned by the game owner since 2026-09-25 (08:05 UTC), so it loads on live when the primary 13525922265 (not owned) fails; the owner's pick for the plot pump (promote batch P1 moves it to `OilPumpjack`); promoted to `IndustrialProps.OilPumpjack` on 2026-09-25 (§3.1) |
 
 ### Landmarks
 
@@ -303,5 +376,8 @@ W3 LOOK (Roblox-owned, loads with the switch OFF; the headless stand-in is not R
 3. Developer Console (F9) after a publish: `Split pack 6418221666`, `Split pack 6933438443`, `Split pack 6933790012` and no
    `LoadAsset failed` line for these three IDs. A failed load only means the Part kits stay.
 4. Studio: Game Settings › Security › "Allow Loading Third Party Assets" stays OFF.
+
+Owner asset list (2026-09-25): what to test on the phone for the Roblox-owned picks and for each promote batch is in
+docs/ASSET_WIRING.md §1.
 
 Nation flags are not Creator Store assets: they are our own renders of MIT-licensed flag-icons SVGs (`assets/flags/LICENSE-flag-icons.txt`, THIRD_PARTY_NOTICES.md section 6).

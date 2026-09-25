@@ -2,6 +2,7 @@
 
 **Date:** 2026-09-24. **Repo:** read at `f9985c2`; `VisualAssetConfig.luau` and `SoundConfig.luau` are a snapshot (another workflow edits them).
 **Machine-readable twin:** `docs/asset_shortlist.json`.
+**Owner's own list (2026-09-25):** this sheet is superseded for the owner's Creator Store list by `docs/ASSET_WIRING.md` (what is wired, what waits for `tools/wire-asset-ids.py`, and why).
 
 **How every id here was checked.** The judge looked up 423 asset ids again today, not trusting the earlier research:
 - `economy.roblox.com/v2/assets/<id>/details` for every id: Name, Creator (name, type, id, badge), AssetTypeId, IsForSale, IsPublicDomain, PriceInRobux, Created, Updated;

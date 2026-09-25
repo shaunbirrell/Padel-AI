@@ -49,7 +49,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(84, 86, 80),
 			Kit = "hq",
 			TargetFootprint = Vector3.new(36, 16, 28),
-			MeshAssetId = 138331074285379,
+			MeshAssetId = 0, -- owner rule 5 (2026-09-25): heavy HQ model cleared; owner pick pending (VisualAssetConfig.Buildings)
 		},
 		Barracks = {
 			Plinth = Color3.fromRGB(72, 82, 58),
@@ -58,7 +58,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(86, 98, 64),
 			Kit = "barracks",
 			TargetFootprint = Vector3.new(28, 12, 16),
-			MeshAssetId = 18798977801,
+			MeshAssetId = 0, -- owner rule 5 (2026-09-25): heavy barracks model cleared; owner pick pending (VisualAssetConfig.Buildings)
 		},
 		VehicleDepot = {
 			Plinth = Color3.fromRGB(72, 82, 58),
@@ -103,7 +103,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(70, 72, 68),
 			Kit = "airfield",
 			TargetFootprint = Vector3.new(72, 1, 14),
-			MeshAssetId = 0, -- COMPOSITE runway + Hangar 6015472062; REJECT 12370174722
+			MeshAssetId = 0, -- COMPOSITE runway + VisualAssetConfig.Buildings.Hangar (0 = Part shed); REJECT 12370174722
 		},
 		DefensiveWalls = {
 			Plinth = Color3.fromRGB(72, 82, 58),
@@ -176,7 +176,7 @@ local StructureVisualConfig = {
 			Roof = Color3.fromRGB(60, 62, 58),
 			Kit = "special",
 			TargetFootprint = Vector3.new(32, 16, 20),
-			MeshAssetId = 18798977801,
+			MeshAssetId = 0, -- owner rule 5 (2026-09-25): heavy barracks model cleared; owner pick pending (VisualAssetConfig.Buildings)
 		},
 	} :: { [string]: StructurePalette },
 

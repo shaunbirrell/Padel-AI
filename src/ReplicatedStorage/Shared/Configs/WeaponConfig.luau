@@ -56,7 +56,9 @@ local WeaponConfig = {
 			Spread = 2.5,
 			CostCash = 0,
 			Visual = "Rifle",
-			VisualAssetId = 0,
+			VisualAssetId = 4842207161, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "AR",
+			VisualChild = "AR",
 			Tracer = true,
 			Recoil = { Kick = 0.6, Side = 0.25, Recover = 12 },
 			Falloff = { Start = 110, MinMult = 0.7 },
@@ -75,7 +77,9 @@ local WeaponConfig = {
 			Spread = 2.0,
 			CostCash = 5000,
 			Visual = "Carbine",
-			VisualAssetId = 0,
+			VisualAssetId = 4842207161, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "AR",
+			VisualChild = "AR",
 			Tracer = true,
 			Recoil = { Kick = 0.7, Side = 0.3, Recover = 12 },
 			Falloff = { Start = 110, MinMult = 0.7 },
@@ -94,7 +98,9 @@ local WeaponConfig = {
 			Spread = 4.0,
 			CostCash = 6500,
 			Visual = "SMG",
-			VisualAssetId = 0,
+			VisualAssetId = 4842212980, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "SMG",
+			VisualChild = "SMG",
 			Tracer = true,
 			Recoil = { Kick = 0.45, Side = 0.35, Recover = 14 },
 			Falloff = { Start = 50, MinMult = 0.6 },
@@ -113,7 +119,9 @@ local WeaponConfig = {
 			Spread = 1.5,
 			CostCash = 1500,
 			Visual = "Pistol",
-			VisualAssetId = 0,
+			VisualAssetId = 4842197274, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "Pistol",
+			VisualChild = "Pistol",
 			Tracer = true,
 			Recoil = { Kick = 1.0, Side = 0.2, Recover = 10 },
 			Falloff = { Start = 40, MinMult = 0.7 },
@@ -133,7 +141,9 @@ local WeaponConfig = {
 			CostCash = 12000,
 			Pellets = 6,
 			Visual = "Shotgun",
-			VisualAssetId = 0,
+			VisualAssetId = 4842215723, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "Shotgun",
+			VisualChild = "Shotgun",
 			Tracer = true,
 			Recoil = { Kick = 2.2, Side = 0.5, Recover = 8 },
 			Falloff = { Start = 18, MinMult = 0.4 },
@@ -152,7 +162,9 @@ local WeaponConfig = {
 			Spread = 0.3,
 			CostCash = 25000,
 			Visual = "LongRifle",
-			VisualAssetId = 0,
+			VisualAssetId = 4842218829, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "Sniper",
+			VisualChild = "Sniper",
 			Tracer = true,
 			Recoil = { Kick = 2.8, Side = 0.3, Recover = 6 },
 		},
@@ -170,10 +182,12 @@ local WeaponConfig = {
 			Spread = 0.5,
 			CostCash = 50000,
 			Visual = "Launcher",
-			VisualAssetId = 0,
+			VisualAssetId = 4842186817, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)
+			VisualToolName = "Rocket Launcher",
+			VisualChild = "RocketLauncher",
 			Tracer = false,
 			Recoil = { Kick = 3.0, Side = 0.4, Recover = 5 },
-			Projectile = { Speed = 140, GravityFactor = 0, Splash = 10, SplashMinMult = 0.3, MaxSeconds = 1.9, MeshId = 0, TextureId = 0 },
+			Projectile = { Speed = 140, GravityFactor = 0, Splash = 10, SplashMinMult = 0.3, MaxSeconds = 1.9, MeshId = 94690081, TextureId = 94689966 }, -- Roblox rocket mesh (owner list "CruiseMissile")
 		},
 		Grenade = {
 			Id = "Grenade",
@@ -192,7 +206,7 @@ local WeaponConfig = {
 			VisualAssetId = 0,
 			Tracer = false,
 			Recoil = { Kick = 0.8, Side = 0.2, Recover = 8 },
-			Projectile = { Speed = 80, GravityFactor = 0.3, Splash = 12, SplashMinMult = 0.25, MaxSeconds = 1.6, MeshId = 0, TextureId = 0 },
+			Projectile = { Speed = 80, GravityFactor = 0.3, Splash = 12, SplashMinMult = 0.25, MaxSeconds = 1.6, MeshId = 232379763, TextureId = 232379808 }, -- Roblox grenade mesh
 		},
 	} :: { [string]: WeaponDef },
 
