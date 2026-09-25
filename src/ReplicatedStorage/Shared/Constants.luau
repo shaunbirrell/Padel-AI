@@ -85,6 +85,10 @@ Constants.RemoteNames = {
 	RequestRedeemCode = "RequestRedeemCode",
 	CodeStateUpdate = "CodeStateUpdate",
 	NationColorUpdate = "NationColorUpdate",
+	-- Nations (cosmetic country flag): client -> server Types.NationRequestPayload { Action = "pick" | "later", Id?,
+	-- Source }. Replies go to that player only on NationColorUpdate. The server validates everything (rate limit,
+	-- NationConfig.Get) and grants nothing but the cosmetic choice.
+	RequestSetNation = "RequestSetNation",
 	RequestClaimSpinner = "RequestClaimSpinner",
 	SpinnerStateUpdate = "SpinnerStateUpdate",
 	BankRaidStateUpdate = "BankRaidStateUpdate",

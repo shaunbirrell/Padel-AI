@@ -2896,6 +2896,321 @@ must_contain(L32T, 'emitHip(plan, c, run, true)', 'Lane 32: hip at a run end bef
 must_contain(L32T, 'local buried = p.Top <= c.Toe.BuriedTop', 'Lane 32: buried prims exempt from the water keep-out only')
 must_contain(L32T, '"Side and FarShore toe / talus differ', 'Lane 32: Check flags a toe/talus mismatch between profiles')
 
+# ===== Nations lane A1 (Constants / Types / AnalyticsConfig / NukeConfig / ProfileSchema) =====
+# Paste-ready for tools/BuyPathStatic.py, before the final parse_gate() call (after the lane A0 nations block).
+# It uses the file's own helpers (ok / bad / read / must_contain / must_not_contain, ROOT, re).
+# Checked with fb2/nations/A1/verify_pins.sh against:
+#   (a) HEAD 34c18f3 + the 5 A1 files: all PASS, and BuyPathStatic has 0 FAIL overall;
+#   (b) the live shared working tree with the same pins merged: all PASS;
+#   (c) HEAD without the A1 files, and mutated copies: every A1 pin group FAILs (the pins catch a revert).
+# Existing needles: none changed. The pins that already read these files (Constants :62 :253 :312 ... ,
+# ProfileSchema :252 :593 :628 :665 :1117 :1267 :1441 :2698-2703, NukeConfig :1444 :2696 :2697, Types :2704 :2705)
+# still PASS unchanged. The old aim point text "BaseAimPoint = { X = 0, Z = 8 }" was not pinned by anyone.
+# Spec: fb2/spec_nations.md section 2 (Data, NukeConfig), section 4 (DataService cases, BuyPathStatic rules).
+
+NAT_CONST = "src/ReplicatedStorage/Shared/Constants.luau"
+NAT_TYPES = "src/ReplicatedStorage/Shared/Types.luau"
+NAT_ANALYTICS = "src/ReplicatedStorage/Shared/Configs/AnalyticsConfig.luau"
+NAT_NUKE = "src/ReplicatedStorage/Shared/Configs/NukeConfig.luau"
+NAT_SCHEMA = "src/ServerScriptService/Server/Modules/ProfileSchema.luau"
+NAT_BLC = "src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau"
+
+# remote name (client -> server request only; replies go out on NationColorUpdate)
+must_contain(NAT_CONST, 'RequestSetNation = "RequestSetNation",', "nations: RequestSetNation remote name")
+must_contain(NAT_CONST, 'NationColorUpdate = "NationColorUpdate",', "nations: NationColorUpdate stays the server -> player channel")
+must_not_contain(NAT_CONST, "GiveNation", "nations: no Give* nation remote")
+# profile fields + payload types
+for _needle in (
+    "NationId: string?,",
+    "NationSetAt: number?,",
+    "NationFreeUntil: number?,",
+    "NationFreeChanges: number?,",
+    "NationPrompts: number?,",
+    "export type NationRequestPayload = {",
+    "export type NationStatePayload = {",
+):
+    must_contain(NAT_TYPES, _needle, f"nations: Types {_needle}")
+# analytics: the three spec events; the IP suggestion is never an event or a field (R3)
+for _ev in ("NATION_PICKER_SHOWN", "NATION_PICK", "NATION_LATER"):
+    must_contain(NAT_ANALYTICS, f'{_ev} = "{_ev}",', f"nations: analytics event {_ev}")
+for _needle in ("suggestedMatch", "SUGGEST"):
+    must_not_contain(NAT_ANALYTICS, _needle, f"nations: no {_needle} in analytics (the IP suggestion is never logged)")
+# ProfileSchema: defaults, sanitiser, call site, pcall guard, no DataVersion bump
+must_contain(NAT_SCHEMA, "\t\tNationId = nil,\n\t\tNationSetAt = 0,\n\t\tNationFreeUntil = 0,\n\t\tNationFreeChanges = 0,\n\t\tNationPrompts = 0,\n", "nations: CreateDefault nation defaults (NationId nil = never picked)")
+must_contain(NAT_SCHEMA, "\tensureFeatureFields(profile, rawTutorialOrder, rawShieldDone)\n\t-- Nations: chosen country + change timers (idempotent; NationColorId untouched)\n\tensureNationFields(profile)\n", "nations: ensureNationFields runs on every Migrate, next to ensureFeatureFields")
+must_contain(NAT_SCHEMA, "if id ~= NationConfig.NeutralId and NationConfig.Get(id) == nil then\n\t\t\tprofile.NationId = nil", "nations: saved NationId kept only if NEUTRAL or NationConfig.Get passes")
+must_contain(NAT_SCHEMA, "profile.NationSetAt = nonNegInt(profile.NationSetAt)", "nations: NationSetAt sanitised (whole number >= 0)")
+must_contain(NAT_SCHEMA, "profile.NationFreeUntil = nonNegInt(profile.NationFreeUntil)", "nations: NationFreeUntil sanitised")
+must_contain(NAT_SCHEMA, "profile.NationFreeChanges = nonNegInt(profile.NationFreeChanges)", "nations: NationFreeChanges sanitised")
+must_contain(NAT_SCHEMA, "profile.NationPrompts = math.min(nonNegInt(profile.NationPrompts), MAX_NATION_PROMPTS)", "nations: NationPrompts sanitised and capped")
+must_contain(NAT_SCHEMA, "local MAX_NATION_PROMPTS = 99", "nations: NationPrompts cap 99")
+must_contain(NAT_SCHEMA, "return require(Shared.Configs.NationConfig) :: any", "nations: NationConfig loaded in a pcall (a broken config never blocks a profile load)")
+must_not_contain(NAT_SCHEMA, "local NationConfig = require(", "nations: ProfileSchema never requires NationConfig outside the pcall")
+
+
+def nations_a1_checks() -> None:
+    body = read(NAT_SCHEMA) or ""
+    m = re.search(r"\nlocal function ensureNationFields\(profile: any\)\n(.*?)\nend\n", body, re.S)
+    fn = m.group(1) if m else ""
+    (ok if m and "NationColorId" not in fn and "DataVersion" not in fn else bad)(
+        "nations: ensureNationFields never touches NationColorId or DataVersion"
+    )
+    call = body.find("\tensureNationFields(profile)\n")
+    final = body.find("\tprofile.DataVersion = Constants.CURRENT_DATA_VERSION\n\treturn profile")
+    (ok if 0 < call < final else bad)("nations: ensureNationFields runs before Migrate stamps DataVersion and returns")
+    # nuke aim point (spec R5 / section 2): >= 30 studs from the flagpole, on MainRoad, plot-local
+    nb = read(NAT_NUKE) or ""
+    lb = read(NAT_BLC) or ""
+    am = re.search(r"BaseAimPoint = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}", nb)
+    fm = re.search(r"\n\t\tFlagpole = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \},", lb)
+    rm = re.search(r'\{ Name = "MainRoad", X = (-?[\d.]+), Z = (-?[\d.]+), SizeX = ([\d.]+), SizeZ = ([\d.]+) \}', lb)
+    if not (am and fm and rm):
+        bad("nations: NukeConfig BaseAimPoint / BaseLayoutConfig Courtyard.Flagpole / MainRoad not found")
+        return
+    ax, az = float(am.group(1)), float(am.group(2))
+    fx, fz = float(fm.group(1)), float(fm.group(2))
+    d = ((ax - fx) ** 2 + (az - fz) ** 2) ** 0.5
+    (ok if d >= 30 else bad)(f"nations: nuke base aim point >= 30 studs from Courtyard.Flagpole ({d:.1f})")
+    rx, rz, sx, sz = (float(g) for g in rm.groups())
+    (ok if abs(ax - rx) <= sx / 2 and abs(az - rz) <= sz / 2 else bad)("nations: nuke base aim point lies on MainRoad")
+
+
+nations_a1_checks()
+must_not_contain(NAT_NUKE, "BaseAimPoint = { X = 0, Z = 8 }", "nations: the nuke no longer aims at the plaza flagpole")
+# spec section 4: no Checkpoint file references a nation (the flag never sits at the gate, where strike fire spawns)
+for _rel in sorted(str(p.relative_to(ROOT)) for p in ROOT.glob("src/**/*Checkpoint*.luau")):
+    for _needle in ("NationConfig", "WE_NationId", "GetNationId", "WE_NationFlag"):
+        must_not_contain(_rel, _needle, f"nations: {_rel.rsplit('/', 1)[-1]} never references {_needle}")
+
+# ===== Nations lane C (NationController / UIController / SettingsController) =====
+# Paste-ready for tools/BuyPathStatic.py, before the final parse_gate() call, AFTER the lane A1 nations block
+# (fb2/nations/A1/pins.txt). Uses the file's own helpers (ok / bad / read / must_contain / must_not_contain, re).
+# Checked with fb2/nations/C/verify_pins.sh (A1 pins + these merged): HEAD 56c0627 + A1 + C -> 45 C pins PASS,
+# BuyPathStatic PASS=2032 FAIL=0; the live shared tree copy -> 45/45 C pins PASS (its 10 other FAILs are other jobs'
+# unfinished Tutorial / W3 edits); clean HEAD -> every C pin FAILs (no picker); fb2/nations/C/mutate_pins.sh -> 17
+# mutations, each caught. Existing needles: none changed (UIController's panelOpeners
+# lines, the PANELS "Missiles" line, the PromptController guard and SettingsController's applySheet stay as they were).
+# Spec: fb2/spec_nations.md section 2 Client + section 4 BuyPathStatic rules; contract fb2/nations/A1/contract.md 5.
+
+NAT_NC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NationController.luau"
+NAT_UIC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/UIController.luau"
+NAT_SC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/SettingsController.luau"
+
+# picker: never a world flag look, never per-frame work, never a blocking wait
+for _needle in ("SurfaceGui", "PointLight", "Neon", "RenderStepped", "Heartbeat", "BindToRenderStep", "GetDescendants",
+                "Remotes.GetEvent(", "Workspace:FindFirstChild", "workspace:FindFirstChild"):
+    must_not_contain(NAT_NC, _needle, f"nations C: NationController has no {_needle}")
+# the request: FireServer inside task.spawn (gives up after 3 s while the remote is missing), exact payloads only
+must_contain(NAT_NC, 'local payload = { Action = "pick", Id = id, Source = mode }', "nations C: pick payload is exactly {Action, Id, Source}")
+must_contain(NAT_NC, 'local payload = { Action = "later", Source = "join" }', "nations C: later payload is exactly {Action, Source}")
+must_contain(NAT_NC, "local sent = Remotes.FireServer(Constants.RemoteNames.RequestSetNation, payload)", "nations C: pick goes out with Remotes.FireServer (bounded)")
+must_contain(NAT_NC, 'finishPick(serial, "nosend")', "nations C: missing remote -> friendly failure, CONFIRM back")
+must_contain(NAT_NC, 'finishPick(serial, "timeout")', "nations C: no reply within 5 s -> friendly failure")
+must_contain(NAT_NC, "local REPLY_TIMEOUT = 5", "nations C: pick waits at most 5 s")
+# privacy (spec R3): nothing selected at the start, suggestion only a badge, search text stays on the device
+must_contain(NAT_NC, "selectedId = nil -- nothing selected at the start (spec R3)", "nations C: nothing selected when the picker opens")
+must_contain(NAT_NC, 't.Badge.Text = "Suggested"', "nations C: the suggestion is a badged tile")
+must_not_contain(NAT_NC, "selectedId = suggestedId", "nations C: the suggestion is never pre-selected")
+must_not_contain(NAT_NC, "player:SetAttribute(", "nations C: the client never writes nation attributes (no suggestion attribute)")
+# closing the join picker without CONFIRM counts as LATER, once per session (spec R9)
+must_contain(NAT_NC, "sendLater() -- spec R9", "nations C: join close without CONFIRM = LATER")
+must_contain(NAT_NC, "if laterSent then\n\t\treturn\n\tend\n\tlaterSent = true", "nations C: LATER sent once per session")
+# auto-open gates (spec section 2 Client)
+must_contain(NAT_NC, 'local BLOCK_FLAGS = { "Driving", "Dead", "RecentCombat", "Modal" }', "nations C: join picker waits for Driving / Dead / RecentCombat / Modal")
+must_contain(NAT_NC, "local AUTO_OPEN_DELAY = 1.0", "nations C: join picker 1.0 s after the first CharacterAdded")
+must_contain(NAT_NC, "return not NationConfig.LiveRequiresArt or artReady or isAdmin", "nations C: LiveRequiresArt gate (admin exempt)")
+must_contain(NAT_NC, "isAdmin = table.find(AdminConfig.UserIds, player.UserId) ~= nil", "nations C: admin = AdminConfig.UserIds")
+must_contain(NAT_NC, "player.CharacterAdded:Connect(armAutoOpen)", "nations C: auto-open armed by CharacterAdded")
+# fallback tile + atlas preload (pcall inside task.spawn)
+must_contain(NAT_NC, "code.Text = NationConfig.Code(def.Id)", "nations C: fallback tile = banner colour + code")
+must_contain(NAT_NC, "task.spawn(function()\n\t\tlocal ok, err = pcall(function()\n\t\t\tContentProvider:PreloadAsync(list)", "nations C: atlas PreloadAsync in pcall inside task.spawn")
+# phone-first sizes (v; phones 0.70): taps >= 68 v, thumb-zone line, jump clearance
+must_contain(NAT_NC, "ThumbZone = 0.40,", "nations C: tabs / grid start right of the left-40 % thumb zone")
+must_contain(NAT_NC, "JumpClearPx = 20,", "nations C: >= 20 real px from the jump button")
+# UIController: panel registry + opener + guarded init
+must_contain(NAT_UIC, 'table.insert(PANELS, { Id = "Nation", Controller = NationController })', "nations C: Nation joins the one-panel-at-a-time registry")
+must_contain(NAT_UIC, "panelOpeners.Nation = NationController.Open", "nations C: flagpole prompt (WE_OpenPanel Nation) routes to the picker")
+must_contain(NAT_UIC, 'safeInit("Nation", NationController.Init)', "nations C: NationController.Init guarded")
+must_contain(NAT_UIC, "local ok, res = pcall(req, mod)\n\t\tif ok and typeof(res) == \"table\" then\n\t\t\tNationController = res", "nations C: NationController required defensively")
+# Settings: YOUR FLAG row, CHANGE >= 68 v, opens Settings mode
+must_contain(NAT_SC, "local changeW, changeH = 170, 68", "nations C: Settings CHANGE button 170 x 68 v")
+must_contain(NAT_SC, "NationController.Open(nil) -- Settings mode", "nations C: Settings CHANGE opens the picker in Settings mode")
+must_contain(NAT_SC, 'change.Name = "NationChange"', "nations C: Settings NationChange button")
+
+
+def nations_c_checks() -> None:
+    body = read(NAT_NC) or ""
+    if not body:
+        bad("nations C: NationController missing")
+        return
+    (ok if body.startswith("--!strict\n") else bad)("nations C: NationController is --!strict")
+    # copy by device: no key names / "click" / "press" in any string literal (no PrefersKeys branch exists)
+    lits = re.findall(r'"((?:[^"\\\n]|\\.)*)"', body)
+    badlits = [s for s in lits if re.search(r"click|press|keycode|\bkey\b|tap to", s, re.I)]
+    (ok if not badlits and "KeyCode" not in body else bad)(f"nations C: no key names / click / press in picker copy {badlits[:3]}")
+    # never WaitForChild without a timeout
+    (ok if not re.search(r"WaitForChild\(\s*\"[^\"]*\"\s*\)", body) else bad)("nations C: no WaitForChild without a timeout")
+    # exactly two requests: pick + later
+    n = body.count("Remotes.FireServer(")
+    (ok if n == 2 else bad)(f"nations C: exactly two RequestSetNation sends (pick, later): {n}")
+    # tap targets >= 68 v and text >= 20 v in the geometry table
+    g = re.search(r"\nlocal G = \{\n(.*?)\n\}\n", body, re.S)
+    vals = dict(re.findall(r"\t(\w+) = (\d+(?:\.\d+)?),", g.group(1))) if g else {}
+    need = ("TabH", "SecondH", "ConfirmMinH", "SearchH", "TileH", "TileMinW", "TabMinW")
+    small = [k for k in need if float(vals.get(k, 0)) < 68]
+    (ok if g and not small else bad)(f"nations C: picker tap sizes >= 68 v {small}")
+    sizes = [int(x) for x in re.findall(r"(?:label|button)\([^\n]*?, (\d+), (?:true|false|COL\.\w+)\)", body)]
+    (ok if sizes and min(sizes) >= 20 else bad)(f"nations C: picker text sizes >= 20 v (min {min(sizes) if sizes else None})")
+    # the flagpole prompt lives in the world; nothing else in the client may open the picker with a nation id
+    ui = read(NAT_UIC) or ""
+    (ok if ui.count("NationController") >= 5 else bad)("nations C: UIController wires NationController (require, PANELS, Init, opener)")
+
+
+nations_c_checks()
+
+# ===== Nations lane B (NationColorService / NationFlag / RemoteSetup / AdminService / SettingsController art gate) =====
+# Paste-ready for tools/BuyPathStatic.py, before the final parse_gate() call, AFTER the lane A1 and lane C nations
+# blocks (fb2/nations/A1/pins.txt, fb2/nations/C/pins.txt). Uses the file's own helpers (ok / bad / read /
+# must_contain / must_not_contain, re). Spec: fb2/spec_nations.md section 2 Server + section 4 BuyPathStatic rules;
+# lead decisions 1-8 (fb2/nations/B/assumptions.md). Checked with fb2/nations/B/verify_pins.sh (A1 + C + B merged):
+#   HEAD 56c0627 + A1 + C + B      -> 93 B pins PASS, BuyPathStatic PASS=2125 FAIL=0;
+#   HEAD 56c0627 + A1 + C (no B)   -> 85 B pins FAIL (every new-behaviour pin); the 8 that PASS there are guards that
+#                                     already hold (no leaderstats / StringValue / FireAllClients / NotifyAll in
+#                                     NationColorService, nationreset not a money command, --!strict, no suggestion
+#                                     leak, flag-to-gate distance from BaseLayoutConfig);
+#   live shared tree copy          -> 93/93 B pins PASS (its 10 other FAILs are other jobs' unfinished Tutorial / W3 edits);
+#   fb2/nations/B/mutate_pins.sh   -> 25 mutations, each caught.
+# Existing needles: none changed (RemoteSetup :63 :314 :1155-1157 :1172 :1237 :1439 :2165, AdminService :932 :1440
+# :1779-1780 :2816, SettingsController :1679, TerritoryService :505 all still PASS).
+
+NAT_NCS = "src/ServerScriptService/Server/Services/NationColorService.luau"
+NAT_NF = "src/ServerScriptService/Server/Modules/NationFlag.luau"
+NAT_RS = "src/ServerScriptService/Server/Modules/RemoteSetup.luau"
+NAT_AS = "src/ServerScriptService/Server/Services/AdminService.luau"
+NAT_SCB = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/SettingsController.luau"
+NAT_BLCB = "src/ReplicatedStorage/Shared/Configs/BaseLayoutConfig.luau"
+
+# remote: the server creates RequestSetNation next to NationColorUpdate (A1 contract section 1)
+must_contain(NAT_RS, "\tConstants.RemoteNames.NationColorUpdate,\n\tConstants.RemoteNames.RequestSetNation,\n", "nations B: RemoteSetup creates RequestSetNation")
+# handler order (spec R17): rate limit first, table / Action / Source, then the id, then the profile
+must_contain(NAT_NCS, 'if not RateLimitService.Allow(player, "RequestSetNation", NationConfig.RequestRate, NationConfig.RequestBurst) then', "nations B: RequestSetNation rate-limited first (RateLimitService.Allow)")
+must_contain(NAT_NCS, 'if typeof(payload) ~= "table" then', "nations B: payload must be a table")
+must_contain(NAT_NCS, 'if action ~= "pick" and action ~= "later" then', "nations B: Action exactly pick / later")
+must_contain(NAT_NCS, 'if source ~= "join" and source ~= "flagpole" and source ~= "settings" then', "nations B: Source exactly join / flagpole / settings")
+must_contain(NAT_NCS, 'if typeof(raw) == "string" and #raw <= 8 then', "nations B: Id a string of <= 8 bytes")
+must_contain(NAT_NCS, "local def = NationConfig.Get(raw)", "nations B: Id checked with NationConfig.Get (exact match)")
+must_contain(NAT_NCS, "id = def.Id -- NationConfig's own string, never the client's", "nations B: the stored id is NationConfig's string")
+must_contain(NAT_NCS, 'reply(player, { Result = "invalid" })', "nations B: bad id -> invalid")
+must_contain(NAT_NCS, 'reply(player, { Result = "loading" })', "nations B: no profile -> loading")
+must_contain(NAT_NCS, 'reply(player, { Result = "cooldown", NextChangeAt = nextAt })', "nations B: cooldown reply carries NextChangeAt")
+# pick rules + lead decisions 2-5
+must_contain(NAT_NCS, "if id == NationConfig.NeutralId and freeUntil == 0 then\n\t\treturn 0 -- No flag before the first real country (lead decision 2)", "nations B: No flag does not use up the first pick (decision 2)")
+must_contain(NAT_NCS, "if now < freeUntil and num(profile.NationFreeChanges) < NationConfig.FreeRepickMax then", "nations B: free window with FreeRepickMax changes")
+must_contain(NAT_NCS, "if setAt > now then\n\t\tsetAt = 0 -- clock skew / corrupt save (lead decision 4)", "nations B: future NationSetAt counts as 0 (decision 4)")
+must_contain(NAT_NCS, "local at = setAt + NationConfig.ChangeCooldownSeconds\n\treturn if now >= at then 0 else at", "nations B: WE_NationNextAt = 0 exactly when a pick is allowed (decision 5)")
+must_contain(NAT_NCS, 'if savedId(profile) == id then\n\t\t-- already this flag: "ok", nothing written, no toast (lead decision 3)', "nations B: same id -> ok, no write (decision 3)")
+must_contain(NAT_NCS, "if id ~= NationConfig.NeutralId and freeUntil == 0 then\n\t\tprofile.NationFreeUntil = now + NationConfig.FreeRepickSeconds", "nations B: the first REAL pick opens the free window once")
+must_contain(NAT_NCS, "if now < freeUntil and not first then\n\t\tprofile.NationFreeChanges = num(profile.NationFreeChanges) + 1", "nations B: changes inside the window are counted")
+must_contain(NAT_NCS, "refreshTimer[uid] = task.delay(at - now + 1, function()", "nations B: one task.delay per player keeps WE_NationNextAt exact")
+must_contain(NAT_NCS, "pcall(task.cancel, timer)", "nations B: the timer is cancelled on leave")
+# LATER: only while NeedsPick, once per session, join only
+must_contain(NAT_NCS, 'if source ~= "join" then\n\t\t\treturn -- LATER exists only in the join picker', "nations B: LATER only from the join picker")
+must_contain(NAT_NCS, "if not needsPick(uid, profile) then\n\t\treturn -- NeedsPick already false", "nations B: LATER only while NeedsPick")
+must_contain(NAT_NCS, "laterUsed[uid] = true\n\tprofile.NationPrompts = math.min(num(profile.NationPrompts) + 1, MAX_PROMPTS)", "nations B: LATER once per session, NationPrompts + 1 (cap 99)")
+# analytics: exact props, never the suggestion
+must_contain(NAT_NCS, "log(AnalyticsConfig.Events.NATION_PICK, uid, { id = id, source = source, first = first })", "nations B: NATION_PICK {id, source, first}")
+must_contain(NAT_NCS, "log(AnalyticsConfig.Events.NATION_LATER, uid, { count = profile.NationPrompts })", "nations B: NATION_LATER {count}")
+must_contain(NAT_NCS, 'log(AnalyticsConfig.Events.NATION_PICKER_SHOWN, uid, { source = "join" })', "nations B: NATION_PICKER_SHOWN join")
+must_contain(NAT_NCS, 'log(AnalyticsConfig.Events.NATION_PICKER_SHOWN, player.UserId, { source = "flagpole" })', "nations B: NATION_PICKER_SHOWN flagpole")
+# suggestion: pcall, 5 s cap, roster ids only, that player only
+must_contain(NAT_NCS, "return LocalizationService:GetCountryRegionForPlayerAsync(player)", "nations B: IP country lookup (server)")
+must_contain(NAT_NCS, 'if not ok or typeof(code) ~= "string" or os.clock() - t0 > SUGGEST_TIMEOUT then', "nations B: lookup in pcall, answers after 5 s dropped")
+must_contain(NAT_NCS, "local SUGGEST_TIMEOUT = 5", "nations B: suggestion cap 5 s")
+must_contain(NAT_NCS, "local def = NationConfig.Get(string.upper(code))", "nations B: only a roster id is suggested")
+# art gate (decision 6), admin = AdminConfig.UserIds
+must_contain(NAT_NCS, "return NationConfig.Enabled and (not NationConfig.LiveRequiresArt or artReady or isAdminUser(userId))", "nations B: nations shown only with art or to admins (decision 6)")
+must_contain(NAT_NCS, "return table.find(AdminConfig.UserIds, userId) ~= nil", "nations B: admin = AdminConfig.UserIds")
+must_contain(NAT_NCS, "artReady = NationTexture.ArtReady()", "nations B: art readiness from NationTexture")
+# toast to the picker only; silent legacy colour; outposts feature-checked (TerritoryService is lane B2)
+must_contain(NAT_NCS, 'pcall(NotificationService.Notify, player, if def then "Flag raised: " .. def.Short else "Plain flag raised", "Success")', "nations B: 'Flag raised: <Short>' toast to the picker")
+must_not_contain(NAT_NCS, "Nation color: ", "nations B: the legacy colour is assigned silently")
+must_contain(NAT_NCS, 'if NationConfig.OutpostFlags and TerritoryService and typeof(TerritoryService.RefreshOwnerFlags) == "function" then', "nations B: RefreshOwnerFlags only behind OutpostFlags and only if it exists")
+must_contain(NAT_NCS, "NationService (nations spec section 2 Server, lane B)", "nations B: header names NationService")
+must_contain(NAT_NCS, "function NationColorService.GetNationId(userId: number): string?", "nations B: GetNationId")
+must_contain(NAT_NCS, "function NationColorService.AdminReset(player: Player): boolean", "nations B: AdminReset (caller's own fields)")
+# decision 1: no player-list column / leaderstat; nothing broadcast
+for _needle in ("leaderstats", 'Instance.new("StringValue")', "FireAllClients", "NotifyAll"):
+    must_not_contain(NAT_NCS, _needle, f"nations B: NationColorService has no {_needle} (no leaderboard, nothing broadcast)")
+# NationFlag: the two base flags only, Textures only, owner-only prompt behind the art gate
+must_contain(NAT_NF, 'NationFlag.Tag = "WE_NationFlag"', "nations B: flag parts tagged WE_NationFlag")
+must_contain(NAT_NF, "local PARADE_SIZE = Vector3.new(6, 4.5, 0.14)", "nations B: parade flag 6 x 4.5 x 0.14 (4:3)")
+must_contain(NAT_NF, "local HQ_SIZE = Vector3.new(0.12, 3.6, 4.8)", "nations B: HQ flag 0.12 x 3.6 x 4.8 (4:3)")
+must_contain(NAT_NF, 'local parade = childPart(ground, "ParadeFlag")', "nations B: the parade flag is LayoutGround.ParadeFlag")
+must_contain(NAT_NF, 'return inst.Name == "WE_Building" and inst:IsA("Model") and inst:GetAttribute("StructureId") == "CommandCenter"', "nations B: the HQ flag is the Command Center building's Flag")
+must_contain(NAT_NF, "state.AddedConn = folder.DescendantAdded:Connect(function(inst: Instance)", "nations B: HQ rebuilds re-dressed via DescendantAdded")
+must_contain(NAT_NF, 'local TEXTURE_NAMES = { "WE_NationTexA", "WE_NationTexB" }', "nations B: exactly two Textures per flag")
+must_contain(NAT_NF, "local faceA, faceB = NationTexture.ThinFaces(flag.Size.X, flag.Size.Y, flag.Size.Z)", "nations B: Textures on the thinnest axis' faces")
+must_contain(NAT_NF, "if flag:GetAttribute(SHOWN_ATTR) == key then\n\t\treturn -- nothing changed: no writes", "nations B: idempotent re-apply (WE_NationShown key)")
+must_contain(NAT_NF, 'local SHOWN_ATTR = "WE_NationShown"', "nations B: WE_NationShown attribute")
+must_contain(NAT_NF, "local want = base ~= nil and view ~= nil and view.OwnerUserId ~= nil and view.Show", "nations B: flagpole prompt only for an owner the art gate lets see nations")
+must_contain(NAT_NF, 'local PROMPT_NAME = "WE_PanelPrompt" -- HudConfig.ActionLane.OwnerOnlyPromptNames', "nations B: prompt name is owner-only on the client")
+must_contain(NAT_NF, 'prompt:SetAttribute("WE_OpenPanel", "Nation")\n\tprompt:SetAttribute("WE_OpenTab", "flagpole")', "nations B: prompt opens the picker in flagpole mode")
+must_contain(NAT_NF, "if owner == nil or who.UserId ~= owner then", "nations B: prompt Triggered checks the owner on the server")
+must_contain(NAT_NF, "function NationFlag.ResetPlot(plotId: number)", "nations B: reset to army green on leave")
+must_contain(NAT_NF, "\tif flag.CanQuery then\n\t\tflag.CanQuery = false\n\tend", "nations B: a flag is never a target (shots / hit effects pass through)")
+for _needle in ("SurfaceGui", "PointLight", "SpotLight", "SurfaceLight", "Neon", "Decal", "BillboardGui", '"Fire"', '"Smoke"', '"Explosion"',
+                "GetDescendants", "Heartbeat", "RenderStepped", "WaitForChild", "flag:Destroy()", "parade:Destroy()", "hq:Destroy()",
+                'GetAttribute("WE_FlagHost")', "Checkpoint", "GateCf"):
+    must_not_contain(NAT_NF, _needle, f"nations B: NationFlag has no {_needle}")
+must_not_contain(NAT_NCS, "WaitForChild(", "nations B: NationColorService never waits without a timeout")
+# AdminService: nationreset, admin allowlist only, the caller's own fields only (remote + phone chat)
+must_contain(NAT_AS, 'elseif cmd == "nationreset" then', "nations B: nationreset admin command")
+must_contain(NAT_AS, "local ok, res = pcall(svc.AdminReset, player)", "nations B: nationreset acts on the caller only")
+must_contain(NAT_AS, 'local isNationResetCmd = cmd == "nationreset"', "nations B: /nationreset chat command (phone)")
+must_contain(NAT_AS, '{ "WE_NationReset", "/nationreset" }', "nations B: /nationreset TextChatCommand")
+must_contain(NAT_AS, "cmdAny.AutocompleteVisible = false", "nations B: /nationreset never offered in chat autocomplete (decision 6, verifier)")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/AdminConfig.luau", "nationreset", "nations B: nationreset is not a Studio-open money command")
+# SettingsController: the YOUR FLAG row hidden for non-admins until the art is ready (decision 6)
+must_contain(NAT_SCB, "local nationArtOk = not NationConfig.LiveRequiresArt\n\t\tor NationTexture.ArtReady()\n\t\tor table.find(AdminConfig.UserIds, player.UserId) ~= nil", "nations B: Settings row art / admin gate")
+must_contain(NAT_SCB, "if NationController and NationConfig.Enabled and nationArtOk then", "nations B: Settings row shown only when the gate passes")
+
+
+def nations_b_checks() -> None:
+    body = read(NAT_NCS) or ""
+    if not body:
+        bad("nations B: NationColorService missing")
+        return
+    (ok if body.startswith("--!strict\n") else bad)("nations B: NationColorService is --!strict")
+    nf = read(NAT_NF) or ""
+    (ok if nf.startswith("--!strict\n") else bad)("nations B: NationFlag is --!strict")
+    # the IP suggestion never reaches analytics, attributes or the profile
+    leaks = [ln.strip() for ln in body.splitlines()
+             if ("log(" in ln or "SetAttribute" in ln or "setAttr(" in ln or "profile." in ln) and "suggest" in ln.lower()]
+    (ok if not leaks else bad)(f"nations B: the suggestion is never logged / an attribute / saved {leaks[:2]}")
+    # the suggestion goes to that player only
+    sug = re.search(r"suggestion\[uid\] = def\.Id\n(.*?)\n\tend\)\nend", body, re.S)
+    (ok if sug and "remote():FireClient(player," in sug.group(1) else bad)("nations B: Suggested is sent with FireClient(player) only")
+    # NationFlag parts stay where strike effects cannot reach: >= 30 studs from the gate (plot front, BaseLayoutConfig)
+    lb = read(NAT_BLCB) or ""
+    fm = re.search(r"\n\t\tFlagpole = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \},", lb)
+    cm = re.search(r"\n\t\tCommandCenter = \{ Site = \{ X = (-?[\d.]+), Z = (-?[\d.]+) \}", lb)
+    pm = re.search(r"\n\tPlotSize = ([\d.]+),", lb)
+    if not (fm and cm and pm):
+        bad("nations B: BaseLayoutConfig Flagpole / CommandCenter site / PlotSize not found")
+        return
+    gate_z = float(pm.group(1)) / 2
+    parade_gap = gate_z - float(fm.group(2)) - 6.4  # flag reach from the pole: 0.25 + 0.05 + 6 (+ margin)
+    hq_gap = gate_z - float(cm.group(2)) - 20.0  # HQ flag within 20 studs of the CC site (26 x 20 footprint, pole 2.5 out)
+    (ok if parade_gap >= 30 and hq_gap >= 30 else bad)(f"nations B: parade / HQ flags >= 30 studs from the main gate ({parade_gap:.0f}, {hq_gap:.0f})")
+
+
+nations_b_checks()
+
+# --- Nations (lead): the flagpole/Settings picker never opens for a player with no base or before the art gate ---
+NC_LEAD = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NationController.luau"
+must_contain(NC_LEAD, 'if tab == "flagpole" and player:GetAttribute("WE_NoPlot") == true then', "nations: a base-less player's tap on another flagpole never opens the picker")
+must_contain(NC_LEAD, "\tif not artGateOk() then\n\t\treturn\n\tend\n\topenAs(", "nations: Open() respects the art gate (admins only until the flag art is uploaded)")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

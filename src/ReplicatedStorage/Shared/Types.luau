@@ -161,6 +161,39 @@ export type PlayerProfile = {
 	TutorialOrderVersion: number?, -- F6 order the saved TutorialStep index uses (missing = 1, the pre-F6 order)
 	NoviceShieldDone: boolean?, -- F6 the novice shield has ended for good (never re-granted)
 	StarterOutpostTaken: boolean?, -- F10 first Home Outpost capture done (later sessions own it on plot ready)
+	-- Nations: the player's own cosmetic country (ProfileSchema ensureNationFields default-fills + sanitises on every
+	-- load; no DataVersion bump). Written only by the server (NationColorService); NationColorId above is kept as
+	-- the banner colour for "No flag" players.
+	NationId: string?, -- nil = never picked (or cleared by the sanitiser); "NEUTRAL" = No flag; else a NationConfig id
+	NationSetAt: number?, -- os.time() of the last accepted change (0 = never)
+	NationFreeUntil: number?, -- end of the free re-pick window (0 = not started; set once, at the first real pick)
+	NationFreeChanges: number?, -- changes made inside the free window (NationConfig.FreeRepickMax)
+	NationPrompts: number?, -- LATER count; the join picker stops at NationConfig.MaxJoinPrompts (saved value <= 99)
+}
+
+-- Nations: RequestSetNation (client -> server). Display intent only: the server re-checks every field in this
+-- order (nations spec R17): a table; Action is "pick" or "later"; Id (pick only) is a string of at most 8 bytes
+-- that is NationConfig.NeutralId or exactly matches a NationConfig.Get entry; Source is "join", "flagpole" or
+-- "settings". Anything else is dropped.
+export type NationRequestPayload = {
+	Action: string, -- "pick" | "later"
+	Id: string?, -- pick: a NationConfig id or "NEUTRAL"
+	Source: string, -- "join" | "flagpole" | "settings"
+}
+
+-- Nations: NationColorUpdate (server -> that player only). The legacy colour fields, then the nation state; a
+-- reply to RequestSetNation also carries Result (and NextChangeAt on "cooldown"). Display only.
+export type NationStatePayload = {
+	NationColorId: string?, -- legacy 8-colour id (the banner colour while NationId is nil or "NEUTRAL")
+	DisplayName: string?,
+	Color: { R: number, G: number, B: number }?,
+	NationId: string?, -- nil = never picked; "NEUTRAL"; or a NationConfig id
+	NeedsPick: boolean?, -- open the picker in join mode (NationId nil and NationPrompts < MaxJoinPrompts)
+	Suggested: string?, -- IP-based roster id for THIS player only, this session only: a badged tile, never selected
+	FreeUntil: number?, -- os.time() end of the free re-pick window (0 = none)
+	FreeChangesLeft: number?, -- changes left inside the free window
+	NextChangeAt: number?, -- os.time() of the next allowed change (0 = now)
+	Result: string?, -- reply to a pick: "ok" | "cooldown" | "loading" | "invalid" (a LATER gets no reply)
 }
 
 -- F7 / F11 (owner's 11 features): PrestigeStateUpdate payload. The v71 fields plus the keep-base and progress fields

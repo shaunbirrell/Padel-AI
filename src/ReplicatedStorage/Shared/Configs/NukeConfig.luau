@@ -98,7 +98,9 @@ local NukeConfig = {
 	},
 
 	Targeting = {
-		BaseAimPoint = { X = 0, Z = 8 }, -- plot-local (plaza / flagpole); converted through the pad CFrame
+		-- plot-local, converted through the pad CFrame. Nations: on MainRoad (BaseLayoutConfig), 48 studs in front of the
+		-- flagpole (Courtyard.Flagpole Z = 8), so a player's nation flag is never the aim point (BuyPathStatic: >= 30 studs)
+		BaseAimPoint = { X = 0, Z = 56 },
 		PlotClearance = 25,
 		MapHalfExtent = 2350,
 		GroundRayTop = 600,

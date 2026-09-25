@@ -200,6 +200,42 @@ local function ensureFeatureFields(profile: any, rawTutorialOrder: any, rawShiel
 	end
 end
 
+-- Nations (cosmetic country, nations spec section 2) ────────────────────────────────────────────────────────
+-- Default-fill + sanitise on every load (idempotent, no DataVersion bump: the ensureFeatureFields precedent).
+--   NationId           nil = never picked (the picker asks again), NationConfig.NeutralId ("No flag", stored as a
+--                      value so it is never asked again), or an id NationConfig.Get accepts. Anything else (unknown,
+--                      denied, switched off in OwnerReview, not a string) becomes nil, so that player re-picks free.
+--   NationSetAt        whole number >= 0: os.time() of the last accepted change (0 = never)
+--   NationFreeUntil    whole number >= 0: end of the free re-pick window (0 = not started)
+--   NationFreeChanges  whole number >= 0: changes made inside the free window
+--   NationPrompts      whole number 0..99: LATER count (the join picker stops at NationConfig.MaxJoinPrompts)
+-- NationColorId (the legacy 8-colour banner id, v4) is never touched here.
+-- NationConfig is loaded in a pcall (the TutorialConfig precedent above): a broken config edit must never block a
+-- profile load. Without it, a saved string id of 1..8 bytes is kept as it is (nothing is lost) and anything else
+-- becomes nil.
+local MAX_NATION_PROMPTS = 99
+local nationCfgOk, nationCfg = pcall(function()
+	return require(Shared.Configs.NationConfig) :: any
+end)
+local NationConfig: any = if nationCfgOk and typeof(nationCfg) == "table" and typeof(nationCfg.Get) == "function"
+	then nationCfg
+	else nil
+
+local function ensureNationFields(profile: any)
+	local id = profile.NationId
+	if NationConfig ~= nil then
+		if id ~= NationConfig.NeutralId and NationConfig.Get(id) == nil then
+			profile.NationId = nil
+		end
+	elseif typeof(id) ~= "string" or #id < 1 or #id > 8 then
+		profile.NationId = nil
+	end
+	profile.NationSetAt = nonNegInt(profile.NationSetAt)
+	profile.NationFreeUntil = nonNegInt(profile.NationFreeUntil)
+	profile.NationFreeChanges = nonNegInt(profile.NationFreeChanges)
+	profile.NationPrompts = math.min(nonNegInt(profile.NationPrompts), MAX_NATION_PROMPTS)
+end
+
 function ProfileSchema.CreateDefault(): PlayerProfile
 	local now = os.time()
 	return {
@@ -293,6 +329,12 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		TutorialOrderVersion = TUTORIAL_ORDER_VERSION,
 		NoviceShieldDone = false,
 		StarterOutpostTaken = false,
+		-- Nations: see ensureNationFields (Migrate fills the same keys into older saves). NationId nil = never picked.
+		NationId = nil,
+		NationSetAt = 0,
+		NationFreeUntil = 0,
+		NationFreeChanges = 0,
+		NationPrompts = 0,
 	}
 end
 
@@ -546,6 +588,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	ensureMoneyFields(profile)
 	-- Owner's 11 features: keep-base tokens, tutorial order version, novice shield, Home Outpost (idempotent)
 	ensureFeatureFields(profile, rawTutorialOrder, rawShieldDone)
+	-- Nations: chosen country + change timers (idempotent; NationColorId untouched)
+	ensureNationFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

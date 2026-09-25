@@ -47,6 +47,22 @@ do
 	end
 end
 
+-- Nations (lane C): the "Choose your nation" picker. Required defensively like PromptController: a missing or broken
+-- picker must never take the other panels down with it (the flagpole prompt then just warns "unknown panel").
+local NationController: any = nil
+do
+	local mod = script.Parent:FindFirstChild("NationController")
+	if mod and mod:IsA("ModuleScript") then
+		local req: any = require
+		local ok, res = pcall(req, mod)
+		if ok and typeof(res) == "table" then
+			NationController = res
+		else
+			warn("[WAR EMPIRE] NationController failed to load — nation picker off:", res)
+		end
+	end
+end
+
 -- Every panel HudLayout keeps exclusive (spec §3.8). A controller that registers itself wins; UIController files a
 -- Fallback registration (IsOpen / Close) for the rest. "Orders" = the Army popover (OrdersController).
 local PANELS: { { Id: string, Controller: any } } = {
@@ -61,6 +77,9 @@ local PANELS: { { Id: string, Controller: any } } = {
 	{ Id = "Research", Controller = ResearchController },
 	{ Id = "Missiles", Controller = MissileController },
 }
+if NationController then
+	table.insert(PANELS, { Id = "Nation", Controller = NationController }) -- nations: the country picker
+end
 
 local function panelController(id: string): any
 	for _, p in ipairs(PANELS) do
@@ -170,6 +189,9 @@ function UIController.Init()
 	safeInit("BankRaid", BankRaidController.Init)
 	safeInit("Research", ResearchController.Init)
 	safeInit("Missiles", MissileController.Init)
+	if NationController and typeof(NationController.Init) == "function" then
+		safeInit("Nation", NationController.Init) -- nations: join picker (auto-open) + flagpole / Settings opener
+	end
 	safeInit("Panels", registerPanels)
 
 	-- Rail / gear / cash + press: the opener, ONE click sound, no toast (the panel opening is the feedback).
@@ -262,6 +284,10 @@ function UIController.Init()
 		Research = ResearchController.Open,
 		Missiles = MissileController.Open,
 	}
+	-- nations: the flagpole prompt (server, WE_OpenPanel = "Nation", WE_OpenTab = "flagpole") opens the picker
+	if NationController and typeof(NationController.Open) == "function" then
+		panelOpeners.Nation = NationController.Open
+	end
 	ProximityPromptService.PromptTriggered:Connect(function(prompt: ProximityPrompt, who: Player)
 		if who ~= Players.LocalPlayer then
 			return

@@ -1764,3 +1764,129 @@ this is display and prompting only: grants stay ProcessReceipt / pass ownership 
    - The neighbouring fans and runs cover the area: the measured toe has no step there.
    - Output shows 5 `[WAR EMPIRE] WorldTerrain: dropped cornerN/skirt inside the ring (…)` warnings, as at HEAD.
 9. **Not changed (outside the Terrain section):** the `Profile` type comment at WorldConfig.luau:22 still says "FillBlock Rock shelf, top Min..Max". Suggested text: `Skirt: Band, -- toe: Rock FillWedge Terrain.Toe.Y -> Talus.Min over From..To (= Talus.From); Min/Max only rolled`.
+
+## 2026-09-25 — Countries: save fields, picker, flag on your base (nations A1 + B + C; outpost part B2 later)
+
+### A1
+<!-- Lane A1 (nations): the integrator appends this to ASSUMPTIONS.md under the heading below (the A0 section asks
+     for it), and rewrites #71 in place (A0 listed the spec's section 6 lines already; they are not repeated here). -->
+
+## 2026-09-25 — Nations (country choice + flags)
+
+### Rewrite in place
+- #71 becomes: "**Nation** — Nation = the country the player chooses (NationConfig, 200 entries). The legacy 8-colour NationColorId is kept, and is used only as the banner colour for NEUTRAL players."
+
+### Lane A1 builder decisions (all reversible)
+- **Save fields (no DataVersion bump, stays 8):** `NationId` (nil = never picked, `"NEUTRAL"` = No flag, else a NationConfig id), `NationSetAt`, `NationFreeUntil`, `NationFreeChanges`, `NationPrompts`. `ProfileSchema.ensureNationFields` fills and cleans them on every load, next to `ensureFeatureFields`. `NationColorId` is never touched.
+- **Unknown ids are cleared, not kept:** a saved id that `NationConfig.Get` rejects (unknown, denied, not a string, an OwnerReview nation switched off, wrong case, over 8 bytes) becomes nil, so that player gets the picker again with a free first pick. Ids are matched exactly; nothing is trimmed or case-folded.
+- **Switching the feature off keeps choices:** `NationConfig.Enabled = false` does not clear anyone's NationId; only `Get` decides.
+- **ProfileSchema loads NationConfig in a pcall** (the TutorialConfig precedent), so a broken NationConfig edit can never stop profiles loading. In that case a saved string id of 1–8 bytes is kept unchecked (nothing lost) and anything else becomes nil. Tested with NationConfig broken and missing.
+- **Counter limits:** the 4 numbers are whole numbers ≥ 0 (junk, NaN, inf and negatives become 0; huge values cap at 1e15, like the money fields). `NationPrompts` also caps at 99. `NationFreeChanges` is not capped at load: the RequestSetNation handler enforces `FreeRepickMax`.
+- **Shared payload types:** `Types.NationRequestPayload` (`{Action, Id?, Source}`) and `Types.NationStatePayload` (the NationColorUpdate push) record the contract between lanes B and C. Pick replies carry `Result` = "ok" / "cooldown" / "loading" / "invalid". A LATER, a rate-limited request and a malformed payload get no reply, and the client times out.
+- **Analytics names:** `NATION_PICKER_SHOWN {source}`, `NATION_PICK {id, source, first}`, `NATION_LATER {count}`. The IP suggestion has no event and no field. `NATION_COLOR_ASSIGN` stays, because NationColorService still logs the legacy colour.
+- **Nuke base aim point** moved from plot-local (0, 8) to (0, 56) on MainRoad, 48 studs in front of the flagpole, so a player's flag is never the aim point. Nothing reads it yet (NukeService is not built; the #14 nuke design, `money/nuke.md` line 112, still says (0, 8)). World sim, plot 1 at L5: only the ground, the pad and the MainRoad slab (top Y 1.12) lie under the new point. The old point was directly over the FlagPole, whose top is at Y 30, so a downward ground ray would have stopped on the pole.
+
+### C
+<!-- Lane C (nations): the integrator appends these lines to ASSUMPTIONS.md under
+     "## 2026-09-25 — Nations (country choice + flags)", after the lane A1 block. All reversible. -->
+
+### Lane C builder decisions (the picker, Settings row, panel routing)
+- **Tabs:** Search, For you, then the 6 regions in `NationConfig.RegionOrder` (short `RegionLabel` names). No A–Z tab: Search covers it and a 200-tile tab would be slow to scroll on a phone. The strip scrolls sideways, edge fades show there is more, and the selected tab is scrolled into view.
+- **"For you" order:** the player's current flag (Settings / flagpole only, badged "Your flag"), then the IP suggestion (badged "Suggested", never selected), then `NationConfig.Featured`, then "No flag" last.
+- **Nothing is selected when the picker opens,** in every mode. CONFIRM stays grey until a tile is tapped. It also stays grey on the player's current flag ("Already your flag") and while `WE_NationNextAt` (or a "cooldown" reply) is in the future ("Next change in 23h"). The server still decides; this only avoids sending a pick that will be refused.
+- **Join picker timing:** it opens once per session, 1.0 s after the first CharacterAdded (or after Init, if the character already exists), and only while `WE_NationNeedsPick` is true. It waits while any of Driving, Dead, RecentCombat or Modal is on, and opens 1.0 s after they have all cleared. The Tutorial flag does not block it, because the spec lists only those four.
+- **LATER:** in join mode, every close path counts as LATER: the LATER button, a tap on the dim, another panel opening, or CloseAllPanels. It is sent at most once per session and never after an accepted pick. Once it is sent, the picker never opens by itself again that session.
+- **The 5 s reply wait:** after a pick is sent, the client waits up to 5 s for a `Result` on NationColorUpdate, or for `WE_NationId` to become the picked id. Without either, it shows "No answer. Try again." While the RequestSetNation remote does not exist, `Remotes.FireServer` gives up after 3 s and the line reads "Can't save now. Try later.". A "cooldown" reply's NextChangeAt is trusted only until the next nation attribute changes.
+- **Search stays on the device:** at most 64 bytes, folded with `NationConfig.Fold`, 0.15 s debounce, up to 30 results. "No flag" is found by its label. The typed text is never sent, stored or shown back ("No match" / "Type a country name"), and it is cleared when the picker closes.
+- **Phone-first geometry, in v (real px = v × 0.70 on phones):**
+  - Every tap target is at least 68 v. That covers tabs, tiles (136 v tall, at least 132 v wide), CONFIRM (112 v, or 68 v minimum on short screens), LATER / CLOSE and the search box. Text is at least 20 v.
+  - On touch, the tabs, search box and grid start 4 v to the right of the left-40 % line of the safe area. Only the non-tappable preview sits in the thumbstick zone.
+  - The action column widens (on tablets) or CONFIRM shortens so the grid and buttons stay at least 20 real px from the Roblox jump button. The jump button is modelled on the default TouchGui: 70 px at (-95, -90) from the bottom-right of the safe area when min(screen) ≤ 500, otherwise 120 px at (-170, -210).
+- **Layout switch:** `HudLayout.IsTouch()` chooses the layout, the same switch every panel uses. It only picks the layout: no picker text changes with the device, so the picker copy never names a key and needs no `PreferredInput` branch.
+- **ScrollingFrame.CanvasPosition is in unscaled (v) units under the gui's UIScale,** as the HUD harness assumes. If a phone shows the selected tab only half in view, this is the first thing to check.
+- **Art not uploaded yet:** before the atlases are uploaded (every `NationFlagIds` id is 0), only the join picker is gated (`LiveRequiresArt`, admin exempt), as the spec says. Settings CHANGE and the flagpole prompt still open the picker for everyone, with colour + code tiles, so the choice works before the art arrives.
+- **Settings "YOUR FLAG" row:** it sits under SOUND. It has a banner-colour swatch, the Short name ("Not chosen" / "No flag") and a 170 × 68 v CHANGE button, and CHANGE opens the picker in Settings mode. At 844×390 this pushes SUPPLY SPINNER about 45 v below the fold, so the Settings list now scrolls on phones. The spinner claim is also in Missions.
+- **Loading and memory:** NationController is required and started by UIController inside a pcall, like PromptController. Bootstrap.client is not touched. The atlas preload (when ids exist) runs once, in a pcall inside `task.spawn`, when NeedsPick turns true or on the first open. Tile images are cleared on close so the textures can be released. The tile pool grows to the largest tab (Africa, 54 tiles) and is reused.
+
+### B
+<!-- Lane B (nations): the integrator appends these lines to ASSUMPTIONS.md under
+     "## 2026-09-25 — Nations (country choice + flags)", after the lane A1 and lane C blocks. All reversible. -->
+
+### Lane B lead decisions (binding for lane B)
+- **No player-list column.** The Roblox player list is a leaderboard, and CLAUDE.md says a real country never appears on a leaderboard. The nation is therefore a player attribute only (`WE_NationId`), with no "Nation" leaderstat. This overrides the spec's "set the attribute and the leaderstat" and spec R16. `NationConfig.PlayerListColumn`, `PlayerListColumnName` and `PlayerListEmoji` are unused now.
+- **"No flag" does not use up the first pick.** A pick is also allowed when `NationId == "NEUTRAL"` and `NationFreeUntil == 0`. The first real country then opens the 10-minute free window: `NationFreeUntil = now + 600`, set only while it is 0, so the window opens once per profile. A No-flag pick made inside the window counts as one of the 5 changes.
+- **Picking the flag you already have** replies `Result = "ok"` with the current state. It writes nothing, sends no toast and logs no analytics.
+- **A saved `NationSetAt` later than now** (clock skew or a corrupt save) counts as 0 for the 24 h cooldown.
+- **`WE_NationNextAt`** is 0 exactly when a pick would be accepted right now. Otherwise it holds the time the next pick becomes allowed. One `task.delay` per player updates it when the free window closes and when the cooldown ends. The delay fires 1 s after the change, is replaced on every refresh and is cancelled on leave. There are no polling loops.
+- **Art gate.** Until `NationTexture.ArtReady()` (every atlas id in `NationFlagIds` set), non-admins see nothing of the feature. It uses the same expression as lane C's auto-open: `not NationConfig.LiveRequiresArt or ArtReady() or player in AdminConfig.UserIds`.
+  - While the gate is closed, a non-admin gets no flagpole prompt, no Settings row, no IP lookup, no "join" `NATION_PICKER_SHOWN` and no toast, and their base flags stay the builder's plain army green.
+  - Their territory tint stays the legacy colour (`GetColor`), and `GetNationId` returns nil.
+  - The server still decides a forged pick. It only changes that player's own saved choice and shows nothing.
+  - Setting `LiveRequiresArt = false` opens the feature for everyone before the art exists.
+- **TerritoryService is lane B2.** `NationColorService` calls `TerritoryService.RefreshOwnerFlags(userId)` only when `NationConfig.OutpostFlags` is on and the function exists. The contested amber fallback, the R15 cache rule and outpost flags are B2's.
+- **Strike code never references nations.** No Fire, Smoke or Explosion is ever parented to a flag. The flags stand 146+ studs from the main gate, where every strike effect spawns. The CLAUDE.md nation rule says a flag is never a target, so both flag cloths are `CanQuery = false` and `CanTouch = false`: shots, hit effects and touches pass through them.
+
+### Lane B builder decisions
+- **Service name.** `NationColorService` keeps its file name and deps key, and its header calls it NationService. `GetColor` returns the chosen nation's banner colour while the art gate lets that player's nation show. Otherwise it returns the legacy 8-colour, which also stays the colour of No-flag players.
+- **Legacy colour.** The legacy colour is assigned silently on the first load; the "Nation color: …" toast is gone. `NationColorId` is never wiped.
+- **Order of checks on `RequestSetNation`.**
+  1. The rate limit: `RateLimitService` with key "RequestSetNation", 0.5 tokens/s, burst 3.
+  2. The payload must be a table, with `Action` exactly "pick" or "later" and `Source` exactly "join", "flagpole" or "settings".
+  3. For a pick, `Id` must be a string of at most 8 bytes that is `NeutralId` or passes `NationConfig.Get`. The id stored is always NationConfig's own string.
+  4. With no profile loaded, the reply is "loading".
+- **What gets no reply.** A rate-limited request, a malformed payload and a LATER all get no reply. A pick while `NationConfig.Enabled = false` gets "invalid".
+- **LATER.**
+  - It is accepted only with `Source = "join"`, only while NeedsPick is true, and once per session (a server-side flag cleared on leave).
+  - It does `NationPrompts + 1`, capped at 99, and sets `WE_NationNeedsPick = false` for the rest of the session.
+  - After 3 LATERs the join picker stops, and Settings still works.
+- **Toast** (to the picker only): "Flag raised: <Short>". For No flag it reads "Plain flag raised".
+- **IP suggestion.**
+  - It is looked up only for players who pass the art gate, runs in a pcall inside `task.spawn`, and an answer that takes over 5 s is dropped.
+  - Only a code that `NationConfig.Get` accepts is sent, as `Suggested`, with `FireClient` to that player only. It is kept in server memory for the session, so `nationreset` can send it again, and is cleared on leave.
+  - It is never logged, never an attribute and never saved.
+- **Analytics.**
+  - `NATION_PICKER_SHOWN {source="join"}` is logged when the join-time push has NeedsPick and the art gate passes.
+  - `NATION_PICKER_SHOWN {source="flagpole"}` is logged on the owner's server-side prompt trigger, rate-limited to 0.2/s with a burst of 2.
+  - "settings" is not logged; that gap is accepted, as the contract allows.
+- **NationFlag (new `Server/Modules/NationFlag.luau`).** `NationColorService` calls it from `BaseService.OnPlotReady` and after each accepted pick. It needs no Bootstrap hook.
+  - It dresses exactly 2 parts per owned plot:
+    - `LayoutGround.ParadeFlag` is turned to 6 × 4.5 × 0.14 on the pole's +X side, facing the plot's +Z axis (the main gate).
+    - The Command Center building's `Flag` is trimmed to 0.12 × 3.6 × 4.8. It keeps the builder's orientation, so it faces sideways and not the gate, following the spec's dimensions.
+  - The hoist sits 0.05 studs from its pole. The new position is computed from the pole each time, so a repeat call changes nothing.
+  - HQ rebuilds (level changes) are dressed through the plot folder's `DescendantAdded`, which does one name compare per added instance.
+  - Each flag is tagged `WE_NationFlag` with the attribute `WE_NationShaped`. It gets exactly 2 Textures (`WE_NationTexA`/`B`) on the thin-axis faces. The attribute `WE_NationShown` is the idempotence key, and `WE_NationPlainColor` stores the builder's green so it can be restored.
+  - Before the art exists the Textures are blank, with Transparency 1. The part shows the nation's banner colour for an owner who passes the gate, and army green for everyone else.
+  - The reshape, tag and blank Textures apply to every owned plot, including non-admin ones. Non-admins see a plain green 4:3 cloth.
+  - When the owner leaves, the flags go back to army green and the Textures are blanked. Parts are never destroyed.
+- **Flagpole prompt.**
+  - It is a `WE_PanelPrompt` on `FlagBase`:
+    - attributes `WE_OpenPanel = "Nation"` and `WE_OpenTab = "flagpole"`
+    - text "Change flag" / "Your flag"
+    - hold time 0, range 12, key F on keyboard only
+  - It exists only while the plot has an owner and that owner passes the art gate. It is removed on leave.
+  - Other players' clients hide it (`OwnerOnlyPromptNames`), and the server's `Triggered` handler checks the owner again.
+- **`nationreset`.** It is an admin-allowlist command on the `RequestAdminCommand` remote, and also the chat line `/nationreset` so the owner can run it on a phone. It is not a Studio-open money command.
+  - It clears only the caller's own `NationId`, `NationSetAt`, `NationFreeUntil`, `NationFreeChanges` and `NationPrompts`.
+  - It then refreshes the attributes, flags and state push. The IP suggestion is sent again if one was found this session.
+- **SettingsController (lane C's file, one edit for lead decision 6).** The YOUR FLAG row is left out when the art gate is closed for this player. The rest of Settings is unchanged: non-admins before the art get HEAD's Settings layout, and admins get lane C's row.
+- **Budget, measured in the headless world sim on all 6 plots at L1 and L5.** Per base: +0 parts, +0 SurfaceGuis, +0 lights, +0 neon, +4 Textures, and +1 ProximityPrompt only for an owner who passes the art gate. An accepted pick changed 4 instances (28 property writes). A repeat plot-ready call wrote nothing.
+- **Colour cache.** It is still cleared on PlayerRemoving, as at HEAD. The R15 rule (keep a leaver's colour while they own territory) needs TerritoryService and is lane B2's.
+- **`/nationreset` is hidden from chat autocomplete** (verifier fix, lead decision 6). The `WE_NationReset` TextChatCommand is created for every client, like `/level` and `/xp`, so it sets `AutocompleteVisible = false` in a pcall. Typing "/" in chat then never lists it for anyone, and the admin still types it in full. The server gate is unchanged: `AdminService.IsAdmin`.
+
+### Lead
+- **N-L1 Shipped without lane B2 (TerritoryService).** A1+B+C are committed first; B2 (contested amber fallback when two
+  colours are < 0.25 apart, owned-outpost colour fallback away from NPC red / Clan blue / amber, R15 colour cache for
+  leavers who still own territory, RefreshOwnerFlags + outpost flag sizes behind OutpostFlags = false) follows once the
+  W3 phase A job releases TerritoryService. Until then GetColor returns a nation colour only for admins (art gate), so
+  only an admin's outposts can take a nation tint. The flag art must NOT be uploaded/wired before B2 is pushed.
+- **N-L2 HQ roof flag faces sideways** (thin along X per the spec, seen edge-on from the gate). Accepted for now; the
+  Buildings lane can turn it natively later and NationFlag then only re-dresses it.
+- **N-L3 NationConfig.PlayerListColumn is dead config** (lead decision 1: no nation in the player list, CLAUDE.md bans
+  countries on leaderboards). Left in place (A0 file); nothing reads it.
+- **N-L4 NationController.Open guard** (lead fix from the lane B verifier): a flagpole tap from a player with
+  WE_NoPlot = true never opens the picker, and Open() always respects the art gate. The prompt text itself can still
+  show to a base-less player on another player's flagpole after the art is live (PromptController "no plot = not
+  foreign"); fix with the PromptController weak-table follow-up.
+- **N-L5 Nuke (#14):** the nuke core radius 75 / full 150 still covers the flags from the new aim point (0, 56); when
+  NukeService is built it must hide or blank WE_NationFlag parts during the strike (CLAUDE.md: never a flag beside
+  strike effects).
