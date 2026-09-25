@@ -13,7 +13,9 @@
 	Pops    "+$N" (TycoonMath.PopText = floor(IncomePerTick[level] x WE_IncomeMult)) over the bins of your nearest lines
 	        each time the server bumps the Player attribute WE_PassiveTick (every 5 s): at most MaxPopsPerTick, only
 	        for lines whose bin is within PopRadius of your character. MaxPopsPerTick pooled WorldLabel billboards,
-	        animated at 10 Hz by the same Heartbeat (no thread per pop).
+	        animated at 10 Hz by the same Heartbeat (no thread per pop). F4: the pops are base labels (tag
+	        WorldLabelConfig.BaseLabelTag, shown / hidden with WorldLabel.SetShown), so the client LabelGovernor
+	        counts them toward the "at most 3 labels on screen at a base" cap.
 	Streaming-safe: lines come and go with the BusinessConfig.Tag tag (stream in / out); parts are looked up with
 	FindFirstChild on the scan, never WaitForChild, and the step never touches a server part. Other players' lines
 	stay static (their Models are tracked but skipped). Owner-only by construction: everything here is local.
@@ -394,6 +396,7 @@ local function showPop(k: number, bin: BasePart, text: string)
 			Studs = POP_STUDS,
 			Offset = POP_OFFSET,
 			Parent = crateFolder(), -- local folder: the pool survives the bin streaming out
+			BaseLabel = true, -- F4: counted by the LabelGovernor
 		}
 		local gui = WorldLabel.Create(bin, text, opts)
 		local title = gui:FindFirstChild("Title")
@@ -406,7 +409,7 @@ local function showPop(k: number, bin: BasePart, text: string)
 	end
 	local pop = p :: Pop
 	fadePop(pop, 0)
-	pop.gui.Enabled = true
+	WorldLabel.SetShown(pop.gui, true) -- F4: through WorldLabel, so a governor hold is kept
 	if pop.startAt < 0 then
 		popsLive += 1
 	end
@@ -424,7 +427,7 @@ local function animatePops(now: number)
 			if k >= 1 then
 				p.startAt = -1
 				popsLive -= 1
-				p.gui.Enabled = false
+				WorldLabel.SetShown(p.gui, false)
 			else
 				p.gui.StudsOffsetWorldSpace = POP_OFFSET + Vector3.new(0, POP_RISE * k, 0)
 				fadePop(p, if k <= POP_HOLD then 0 else (k - POP_HOLD) / (1 - POP_HOLD))

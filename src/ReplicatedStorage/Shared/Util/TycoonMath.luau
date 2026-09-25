@@ -13,6 +13,10 @@
 
 	Display rules (spec v72 section 3): RateText floors (one decimal below 10, whole numbers from 10 up, ".0" dropped),
 	ShortCash gives "$600", "$1,240", "$25K", "$1.9M", and every string comes from TycoonGuideConfig.Text.
+
+	F5 (owner's 11 features, lane K2): PickCheapest (the one pointer while TycoonGuideConfig.PickMode = "Cheapest"),
+	ApproachPoint / Footprints (plot-local geometry for the client floor chevrons, from the layout configs only: no
+	workspace, safe under StreamingEnabled) and GuideTarget (tutorial step first, then the pick).
 ]]
 
 local Configs = script.Parent.Parent.Configs -- ReplicatedStorage.Shared is replicated before any script runs
@@ -22,6 +26,9 @@ local BusinessConfig = require(Configs.BusinessConfig)
 local PlotOilPumpConfig = require(Configs.PlotOilPumpConfig)
 local SoldierConfig = require(Configs.SoldierConfig)
 local TycoonGuideConfig = require(Configs.TycoonGuideConfig)
+local RebirthConfig = require(Configs.RebirthConfig)
+local BaseLayoutConfig = require(Configs.BaseLayoutConfig)
+local StructureVisualConfig = require(Configs.StructureVisualConfig)
 
 local TycoonMath = {}
 
@@ -43,7 +50,14 @@ export type PickContext = {
 	Soldiers: number?, -- nil = soldiers are not offered
 	SoldierCap: number?,
 	Current: string?, -- current WE_NextBuy (sticky)
+	Prestige: number?, -- F5: rebirth zones (RebirthConfig.IsStructureOpen); nil = 0
 }
+
+-- F5: a plot-local axis-aligned rectangle (studs) around one structure / business site
+export type Footprint = { Id: string, MinX: number, MaxX: number, MinZ: number, MaxZ: number }
+
+-- F5: the active tutorial step as GuideTarget needs it (a TutorialConfig step def fits)
+export type GuideStep = { PadStructureId: string?, Pointer: string? }
 
 export type MoneyState = "Buy" | "Collect" | "Earn"
 
@@ -269,10 +283,43 @@ function TycoonMath.Decode(s: any): (string?, number)
 	return id, tonumber(lv) or 0
 end
 
---[[ The one next buy: the first Opening entry that is a candidate now, else the best Score. Sticky: while
-	ctx.Current is still a candidate, a challenger must score below Hysteresis x the current score. Deterministic
-	(ties -> cheaper, then StructureOrder). nil when nothing is left. Callers check TycoonGuideConfig.Enabled. ]]
+--[[ F5: the cheapest unpaid console pad. Candidates are BaseConfig.StructureOrder (the businesses are appended there
+	while BusinessConfig.Enabled): Cash structures below MaxLevel whose requirements are met and whose rebirth zone is
+	open (RebirthConfig.IsStructureOpen at `prestige`, nil = 0). The lowest next price wins; ties go to the lower
+	target level, then the earlier StructureOrder entry. Never soldiers or Robux items; affordability is not a filter.
+	nil when nothing is left. ]]
+function TycoonMath.PickCheapest(upgrades: { [string]: any }?, prestige: number?): Candidate?
+	local p = math.max(0, math.floor(num(prestige)))
+	local best: Candidate? = nil
+	for _, id in ipairs(BaseConfig.StructureOrder) do
+		local def = BaseConfig.Structures[id]
+		local lv = TycoonMath.Level(upgrades, id)
+		local cost = TycoonMath.NextCost(id, lv)
+		if def ~= nil and def.Currency == "Cash" and cost ~= nil and (TycoonMath.MeetsRequirements(id, upgrades))
+			and RebirthConfig.IsStructureOpen(p, nil, id) then
+			local cur = best
+			if cur == nil or cost < cur.Cost or (cost == cur.Cost and lv + 1 < cur.Level) then
+				best = {
+					Id = id,
+					Level = lv + 1,
+					Cost = cost,
+					GainPerTick = TycoonMath.StepGainPerTick(id, lv),
+					Unlock = TycoonMath.UnlockText(id, lv + 1),
+				}
+			end
+		end
+	end
+	return best
+end
+
+--[[ The one next buy. PickMode "Cheapest" (F5): PickCheapest (no soldiers, no stickiness). PickMode "Score" (v72):
+	the first Opening entry that is a candidate now, else the best Score. Sticky: while ctx.Current is still a
+	candidate, a challenger must score below Hysteresis x the current score. Deterministic (ties -> cheaper, then
+	StructureOrder). nil when nothing is left. Callers check TycoonGuideConfig.Enabled. ]]
 function TycoonMath.PickNext(ctx: PickContext): Candidate?
+	if TycoonGuideConfig.PickMode == "Cheapest" then
+		return TycoonMath.PickCheapest(ctx.Upgrades, ctx.Prestige)
+	end
 	local cands = TycoonMath.Candidates(ctx)
 	if #cands == 0 then
 		return nil
@@ -302,6 +349,171 @@ function TycoonMath.PickNext(ctx: PickContext): Candidate?
 		end
 	end
 	return best
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- F5 guide geometry (plot-local studs: +Z = the plot front, same frame as BaseLayoutConfig; to world with
+-- Shared/Util/PlotFrame.LocalToWorld). Configs only: never reads the workspace.
+---------------------------------------------------------------------------------------------------------------
+
+TycoonMath.ATM_TARGET = "ATM" -- GuideTarget / ApproachPoint id of the player's own ATM (TutorialConfig Pointer)
+
+-- building-local (x, z) turned by a site Yaw (degrees; BaseLayout.Rotate / CFrame.Angles(0, yaw, 0) convention)
+local function turn(x: number, z: number, yawDeg: number): (number, number)
+	local a = math.rad(yawDeg)
+	return x * math.cos(a) + z * math.sin(a), -x * math.sin(a) + z * math.cos(a)
+end
+
+-- building-local width (X) x depth (Z) of a site's footprint, or nil (walk-in shell, outdoor installation, business
+-- line slab, else the palette's target footprint)
+local function footprintSize(id: string): (number?, number?)
+	local hb: any = (StructureVisualConfig :: any).HollowBuildings
+	local c: any = if typeof(hb) == "table" then hb[id] else nil
+	if typeof(c) == "table" and tonumber(c.Width) and tonumber(c.Depth) then
+		return tonumber(c.Width), tonumber(c.Depth)
+	end
+	local inst: any = (StructureVisualConfig :: any).Installations
+	c = if typeof(inst) == "table" then inst[id] else nil
+	if typeof(c) == "table" and tonumber(c.Width) and tonumber(c.Depth) then
+		return tonumber(c.Width), tonumber(c.Depth)
+	end
+	if BusinessConfig.Businesses[id] ~= nil then
+		for _, kp in ipairs(BusinessConfig.Kit) do
+			if kp.Role == "Slab" then
+				return kp.Size.X, kp.Size.Z
+			end
+		end
+	end
+	local pal = StructureVisualConfig.Palettes[id]
+	if pal and pal.TargetFootprint then
+		return pal.TargetFootprint.X, pal.TargetFootprint.Z
+	end
+	return nil, nil
+end
+
+local footprintCache: { Footprint }? = nil
+
+--[[ One plot-local rectangle per structure site (BaseLayoutConfig.Structures; business sites only while
+	BusinessConfig.Enabled), the axis-aligned box around the turned footprint. Built once (configs are static); the
+	returned list is shared: read it, never change it. Empty while BaseLayoutConfig is off. ]]
+function TycoonMath.Footprints(): { Footprint }
+	local cached = footprintCache
+	if cached ~= nil then
+		return cached
+	end
+	local out: { Footprint } = {}
+	if BaseLayoutConfig.Enabled then
+		local ids: { string } = {}
+		for id in pairs(BaseLayoutConfig.Structures) do
+			if BusinessConfig.Businesses[id] == nil or BusinessConfig.Enabled then
+				table.insert(ids, id)
+			end
+		end
+		table.sort(ids)
+		for _, id in ipairs(ids) do
+			local s = BaseLayoutConfig.Structures[id]
+			local w, d = footprintSize(id)
+			if w ~= nil and d ~= nil then
+				local a = math.rad(s.Yaw or 0)
+				local hx = 0.5 * (math.abs(w * math.cos(a)) + math.abs(d * math.sin(a)))
+				local hz = 0.5 * (math.abs(w * math.sin(a)) + math.abs(d * math.cos(a)))
+				table.insert(out, {
+					Id = id,
+					MinX = s.Site.X - hx,
+					MaxX = s.Site.X + hx,
+					MinZ = s.Site.Z - hz,
+					MaxZ = s.Site.Z + hz,
+				})
+			end
+		end
+	end
+	footprintCache = out
+	return out
+end
+
+-- The Id of the first footprint containing plot-local (x, z), grown by `margin` studs (default 0), else nil
+function TycoonMath.InFootprint(x: number, z: number, margin: number?): string?
+	local m = num(margin)
+	for _, f in ipairs(TycoonMath.Footprints()) do
+		if x >= f.MinX - m and x <= f.MaxX + m and z >= f.MinZ - m and z <= f.MaxZ + m then
+			return f.Id
+		end
+	end
+	return nil
+end
+
+--[[ Where a player walks to buy `id` (plot-local, Y = 0 = the plot pad centre height):
+	  walk-in building  DoorLeadStuds out of its front door (StructureVisualConfig.HollowBuildings DoorX / Depth)
+	  kiosk / business  the kiosk (BaseLayoutConfig Kiosk)
+	  "ATM"             the ATM (BaseLayoutConfig.Courtyard.Collector)
+	nil for an unknown id or while BaseLayoutConfig is off. ]]
+function TycoonMath.ApproachPoint(id: string): Vector3?
+	if not BaseLayoutConfig.Enabled then
+		return nil
+	end
+	if id == TycoonMath.ATM_TARGET then
+		local c = BaseLayoutConfig.Courtyard.Collector
+		return Vector3.new(c.X, 0, c.Z)
+	end
+	local s = BaseLayoutConfig.Structures[id]
+	if s == nil then
+		return nil
+	end
+	if s.WalkIn then
+		local hb: any = (StructureVisualConfig :: any).HollowBuildings
+		local c: any = if typeof(hb) == "table" then hb[id] else nil
+		local doorX = if typeof(c) == "table" then tonumber(c.DoorX) else nil
+		local depth = if typeof(c) == "table" then tonumber(c.Depth) else nil
+		if doorX ~= nil and depth ~= nil then
+			local lx, lz = turn(doorX, depth * 0.5 + num(TycoonGuideConfig.Chevrons.DoorLeadStuds), s.Yaw or 0)
+			return Vector3.new(s.Site.X + lx, 0, s.Site.Z + lz)
+		end
+		if s.Console then
+			local lx, lz = turn(s.Console.X, s.Console.Z, s.Yaw or 0)
+			return Vector3.new(s.Site.X + lx, 0, s.Site.Z + lz)
+		end
+	end
+	local k = s.Kiosk or s.Site
+	return Vector3.new(k.X, 0, k.Z)
+end
+
+-- F5 chevron count for a player `distance` studs from the approach point:
+-- clamp(floor((d - LeadStuds - StopShortStuds) / SpacingStuds) + 1, 0, Count); 0 within HideWithinStuds.
+function TycoonMath.ChevronCount(distance: number): number
+	local c = TycoonGuideConfig.Chevrons
+	local d = num(distance)
+	if d <= c.HideWithinStuds then
+		return 0
+	end
+	return math.clamp(math.floor((d - c.LeadStuds - c.StopShortStuds) / c.SpacingStuds) + 1, 0, c.Count)
+end
+
+--[[ F5 one pointer: what the floor chevrons point at (and what every NEXT surface should mark during the tutorial).
+	step: the ACTIVE tutorial step def (nil once the tutorial is complete or skipped). While Chevrons.FollowTutorial:
+	a step with PadStructureId -> (that id, 1); Pointer "ATM" -> ("ATM", 0); any other step -> (nil, 0).
+	Otherwise the pick: WE_NextBuy ("Id:Level"); when that is missing or empty and `upgrades` is given, the local
+	PickCheapest(upgrades, prestige). Soldiers -> (nil, 0). Display only: the server re-checks every buy. ]]
+function TycoonMath.GuideTarget(step: GuideStep?, nextBuy: any, upgrades: { [string]: any }?, prestige: number?): (string?, number)
+	if step ~= nil and TycoonGuideConfig.Chevrons.FollowTutorial then
+		if step.PadStructureId ~= nil then
+			return step.PadStructureId, 1
+		end
+		if step.Pointer == TycoonMath.ATM_TARGET then
+			return TycoonMath.ATM_TARGET, 0
+		end
+		return nil, 0
+	end
+	local id, lv = TycoonMath.Decode(nextBuy)
+	if id == nil and upgrades ~= nil then
+		local c = TycoonMath.PickCheapest(upgrades, prestige)
+		if c then
+			id, lv = c.Id, c.Level
+		end
+	end
+	if id == nil or id == TycoonGuideConfig.SoldierCandidateId then
+		return nil, 0
+	end
+	return id, lv
 end
 
 ---------------------------------------------------------------------------------------------------------------

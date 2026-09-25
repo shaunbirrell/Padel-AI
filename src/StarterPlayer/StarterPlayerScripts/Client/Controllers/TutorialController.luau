@@ -1,6 +1,8 @@
 --!strict
 --[[
-	Interactive tutorial (v31 steps): claim → collect → click-dropper → CC → recruit → barracks → jeep → outpost.
+	Interactive tutorial, F6 order (TutorialConfig, 7 steps): claim → Command Center → collect cash → recruit →
+	Barracks → Home Outpost → 4x4 (Outpost and 4x4 swap while TerritoryConfig.Starter is off). The server owns the
+	order and the step; this controller never counts steps by index (Outpost is step 6 or 7): it keys on the step Id.
 
 	v70 "clean screen" (spec §3.4 item 3): the step is an OBJECTIVE CHIP in the top-centre stack (HudLayout
 	TopStack "Objective"; was a 94 %-wide 168 v card across mid-screen):
@@ -15,7 +17,10 @@
 	parts are all built on Plot 1, so 5 of 6 players were led into someone else's base):
 	  ClaimBase -> own PlayerSpawn · Income -> own WE_MoneyCollector · ClickDropper -> own WE_ManualDropper ·
 	  CommandCenter / Barracks -> own console (ConsoleLocator) · Recruit / Jeep -> no beam (GO opens Army / Garage) ·
-	  Outpost -> nearest uncontested, walkable territory. No plot id yet -> no beam (re-aimed when it arrives).
+	  Outpost -> the player's OWN Home Outpost (F10 Starter_P<plot>, while it exists and is not theirs yet), else the
+	  nearest uncontested, walkable territory; other plots' Home Outposts are never a target, and "nearest" is measured
+	  from the player's own main gate (plot-local (0, PlotSize/2), PlotFrame: pure config, streaming-safe).
+	  No plot id yet -> no beam (re-aimed when it arrives).
 	  A marker part is only ever shown when it IS the target (unknown future steps, and only inside the own plot).
 	v71 console-only buying: the CommandCenter / Barracks GO only re-aims the beam at the console; it never opens the
 	Base panel (that panel cannot buy any more).
@@ -37,8 +42,8 @@
 	  F5: tutorial marker dressing (the catalog arrow VisualAssetService welds under the Plot-1 markers) is hidden
 	  locally (LocalTransparencyModifier) unless that marker is the active target; markers and arrows that replicate
 	  late are handled as they arrive (events, no polling).
-	  Tutorial step 6 (Ammo Works while BusinessConfig.Enabled) has no marker part: it resolves through PadStructureId
-	  to the player's own kiosk, and re-aims at most every BUSINESS_REAIM_SECONDS until the kiosk is on this client.
+	F6: a step that points at a world part whose target is not on this client yet (streamed out, built after the
+	push) re-aims at most every REAIM_SECONDS (1 Hz tick) until it is; steps that open a panel never re-aim.
 ]]
 
 local Players = game:GetService("Players")
@@ -56,10 +61,11 @@ local UIUtil = require(Shared.Util.UIUtil)
 local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
-local BusinessConfig = require(Shared.Configs.BusinessConfig)
+local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 local TycoonMath = require(Shared.Util.TycoonMath)
+local PlotFrame = require(Shared.Util.PlotFrame)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
@@ -250,10 +256,33 @@ local function ownSpawn(plotId: number): BasePart?
 	return ownPlotPad(plotId) -- the spawn streamed out / renamed: the plot pad is still inside the plot
 end
 
--- Outpost: the nearest zone the player can take on foot. Tiers: neutral land zone, then any uncontested land zone
--- they do not own, then any uncontested zone (oil rigs need a boat, forts have guards), then anything.
-local function nearestOutpost(origin: Vector3, userId: number): BasePart?
+-- F6 / F10: the player's own main gate in world space (plot-local (0, PlotSize/2), +Z = plot front). Pure config
+-- (PlotFrame), so it is right while the plot is streamed out.
+local function ownGatePos(plotId: number): Vector3
+	local half = (tonumber(BaseLayoutConfig.PlotSize) or 320) * 0.5
+	return PlotFrame.LocalToWorld(plotId, 0, half)
+end
+
+-- F10: the plot a Home Outpost zone belongs to (TerritoryConfig.Starter rows: IsStarter + PlotId; the marker's
+-- PlotId attribute or the Starter_P<n> id when the row is not in this client's config); nil = not a Home Outpost
+local function starterPlotOf(tid: any, def: any, inst: Instance): number?
+	local prefix = TerritoryConfig.Starter.IdPrefix
+	local named = typeof(tid) == "string" and string.sub(tid, 1, #prefix) == prefix
+	if not ((def ~= nil and def.IsStarter == true) or named) then
+		return nil
+	end
+	local fromDef = if def ~= nil then tonumber(def.PlotId) else nil
+	return fromDef or tonumber(inst:GetAttribute("PlotId")) or (if named then tonumber(string.sub(tid, #prefix + 1)) else nil)
+end
+
+-- Outpost: the zone the player can take on foot. Tiers: the player's OWN Home Outpost while they do not hold it (F10,
+-- about 100 studs out of the gate, owner-only), then a neutral land zone, then any uncontested land zone they do not
+-- own, then any uncontested zone (oil rigs need a boat, forts have guards), then anything. Another plot's Home
+-- Outpost is never a target (only its owner can take it). Distance from the own gate when the plot is known
+-- (F6: the same answer wherever the player stands in the base), else from `origin`.
+local function nearestOutpost(origin: Vector3, userId: number, plotId: number?): BasePart?
 	local ot = TerritoryConfig.OwnerTypes
+	local from = if plotId ~= nil then ownGatePos(plotId) else origin
 	local best: BasePart? = nil
 	local bestScore = math.huge
 	local seen: { [Instance]: boolean } = {}
@@ -263,15 +292,22 @@ local function nearestOutpost(origin: Vector3, userId: number): BasePart?
 				seen[inst] = true
 				local tid = inst:GetAttribute("TerritoryId")
 				local def = if typeof(tid) == "string" then (TerritoryConfig.Territories :: any)[tid] else nil
-				local ownerType = inst:GetAttribute("OwnerType")
-				local contested = ownerType == ot.Contested
-				local mine = ownerType == ot.Player and inst:GetAttribute("OwnerUserId") == userId
-				local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
-				local tier = if contested or mine then 3 elseif hard then 2 elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1 else 0
-				local score = tier * OUTPOST_TIER_GAP + (inst.Position - origin).Magnitude
-				if score < bestScore then
-					bestScore = score
-					best = inst
+				local starterPlot = starterPlotOf(tid, def, inst)
+				if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
+					local ownerType = inst:GetAttribute("OwnerType")
+					local contested = ownerType == ot.Contested
+					local mine = ownerType == ot.Player and inst:GetAttribute("OwnerUserId") == userId
+					local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
+					local tier = if starterPlot ~= nil then (if mine then 3 else -1)
+						elseif contested or mine then 3
+						elseif hard then 2
+						elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1
+						else 0
+					local score = tier * OUTPOST_TIER_GAP + (inst.Position - from).Magnitude
+					if score < bestScore then
+						bestScore = score
+						best = inst
+					end
 				end
 			end
 		end
@@ -285,7 +321,7 @@ end
 	plotId: the player's own plot (nil = not known yet -> no per-player beam); origin: where "nearest" is measured. ]]
 function TutorialController.ResolveTarget(stepId: string?, markerName: string?, padStructureId: string?, plotId: number?, origin: Vector3, userId: number?): BasePart?
 	if stepId == "Outpost" or markerName == "Tutorial_Outpost" then
-		return nearestOutpost(origin, userId or player.UserId)
+		return nearestOutpost(origin, userId or player.UserId, plotId)
 	end
 	if stepId == "RecruitSoldiers" or markerName == "Tutorial_Recruit" or stepId == "Jeep" or markerName == "Tutorial_Jeep" then
 		return nil -- GO opens Army / the Garage; nothing to walk to
@@ -800,7 +836,7 @@ local GT = TycoonGuideConfig.Text
 local GUIDE_PAD_L = 16 -- v: the guide chip has no step disc, so its text starts near the pill edge
 local GO_FACE_PAD = 20 -- v of gold face around the GO / ATM / ARMY word
 local IDLE_MOVE_STUDS = 2 -- auto-guide "idle": the character moved less than this between 1 Hz samples
-local BUSINESS_REAIM_SECONDS = 2 -- tutorial step 6: re-aim at the own kiosk this often until it is on this client
+local REAIM_SECONDS = 2 -- F6: a step's world target not on this client yet: re-aim this often until it is
 
 type GuideKind = "Build" | "Collect" | "Earn" | "Soldier"
 type GuideAction = "Console" | "Atm" | "Army"
@@ -826,7 +862,7 @@ local etaDeadline: number? = nil -- Earn: os.clock() when wallet + ATM should co
 local autoGuidedFor: string? = nil -- the pick GO already fired for (auto or tapped): auto-guide once per pick
 local idleAnchor: Vector3? = nil
 local idleSince = 0.0
-local lastBusinessReaim = -math.huge
+local lastReaim = -math.huge
 
 local function attrNum(name: string, default: number): number
 	local v = tonumber(player:GetAttribute(name) :: any)
@@ -1021,15 +1057,27 @@ local function rootPos(): Vector3?
 	return if hrp and hrp:IsA("BasePart") then hrp.Position else nil
 end
 
--- 1 Hz (EtaRefreshHz): the "ready in" countdown, Hide expiry, auto-guide and the step-6 kiosk re-aim
+-- F6: does the active step point at a part in the world? (a console, the own spawn / ATM / dropper, a zone; the
+-- Recruit and 4x4 steps open a panel instead). Per-player targets need the plot id first.
+local function stepHasWorldTarget(): boolean
+	local id = currentStepId
+	if id == "Outpost" then
+		return true
+	end
+	if myPlotId == nil then
+		return false
+	end
+	return currentPadStructureId ~= nil or id == "ClaimBase" or id == "Income" or id == "ClickDropper"
+end
+
+-- 1 Hz (EtaRefreshHz): the tutorial target re-aim (always); with the guide flag also the "ready in" countdown,
+-- Hide expiry and auto-guide
 local function guideTick()
 	local now = os.clock()
 	local hp = highlightPart
-	local sid = currentPadStructureId
-	if stepActive and (hp == nil or hp.Parent == nil) and myPlotId ~= nil and sid ~= nil and TycoonMath.IsBusiness(sid)
-		and now - lastBusinessReaim >= BUSINESS_REAIM_SECONDS then
-		lastBusinessReaim = now
-		setWaypoint(currentMarkerName, sid)
+	if stepActive and (hp == nil or hp.Parent == nil) and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
+		lastReaim = now
+		setWaypoint(currentMarkerName, currentPadStructureId)
 	end
 	local c = guideChip
 	if not (GUIDE.Enabled and c) then
@@ -1288,20 +1336,19 @@ function TutorialController.Init()
 		end)
 		renderGuide(true)
 	end
-	if GUIDE.Enabled or BusinessConfig.Enabled then
-		task.spawn(function()
-			local period = 1 / math.max(GUIDE.EtaRefreshHz or 1, 0.1)
-			local warned = false
-			while true do
-				task.wait(period)
-				local ok, err = pcall(guideTick :: () -> any)
-				if not ok and not warned then
-					warned = true
-					warn("[Tutorial] guide tick failed:", err)
-				end
+	-- 1 Hz tick (the tutorial re-aim runs whatever the guide flag; the guide parts no-op while it is off)
+	task.spawn(function()
+		local period = 1 / math.max(GUIDE.EtaRefreshHz or 1, 0.1)
+		local warned = false
+		while true do
+			task.wait(period)
+			local ok, err = pcall(guideTick :: () -> any)
+			if not ok and not warned then
+				warned = true
+				warn("[Tutorial] guide tick failed:", err)
 			end
-		end)
-	end
+		end
+	end)
 end
 
 return TutorialController

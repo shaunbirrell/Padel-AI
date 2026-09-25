@@ -472,7 +472,6 @@ must_contain("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau", "19
 # --- v31 onboarding + overlay harden + OWNED pads + WASD tip ---
 must_contain("src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau", "ClickDropper", "Tutorial ClickDropper step")
 must_contain("src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau", 'Id = "Income"', "Tutorial Income early")
-must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", "STEP_DROPPER", "TutorialService STEP_DROPPER")
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", '"ManualDrop"', "TutorialService ManualDrop event")
 must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "ManualDrop", "ManualDropper tutorial Notify")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "Tutorial_Dropper", "MapSetup Tutorial_Dropper marker")
@@ -1638,7 +1637,7 @@ must_contain(TC, "nearestOwnTagged(Constants.Tags.MoneyCollector, plotId, origin
 must_contain(TC, "nearestOwnTagged(MANUAL_DROPPER_TAG, plotId, origin)", "P0-6 Dropper -> own manual dropper")
 must_contain(TC, "return ConsoleLocator.Find(plotId, padStructureId)", "P0-6 buy steps -> own console")
 must_contain(TC, "return ownSpawn(plotId)", "P0-6 ClaimBase -> own PlayerSpawn")
-must_contain(TC, "return nearestOutpost(origin, userId or player.UserId)", "P0-6 Outpost -> nearest uncontested zone")
+must_contain(TC, "return nearestOutpost(origin, userId or player.UserId, plotId)", "P0-6 Outpost -> own Home Outpost, else the nearest uncontested zone (F6: from the own gate)")
 must_contain(TC, "and insidePad(pad, inst.Position) then", "P0-6 a named marker only inside the own plot")
 must_not_contain(TC, "Workspace:FindFirstChild(markerName, true)", "P0-6 no world-wide marker lookup by name")
 must_not_contain(TC, "findPadByStructure", "P0-6 no nearest-any-plot pad fallback")
@@ -2153,10 +2152,6 @@ must_contain(BLC, "FloorChevrons = false,", "v72 static floor arrows off (read b
 must_contain(BLC, "SignInsetStuds = 2.0,", "v72 gate-sign inset key (read by MapSetup once Lane D lands)")
 
 # --- TutorialConfig step 6 ---
-must_contain(TUC, 'MarkerName = "Tutorial_Business",', "v72 tutorial step 6 marker name (no marker part: GO resolves via PadStructureId)")
-must_contain(TUC, 'PadStructureId = "AmmoWorks",', "v72 tutorial step 6 buys Ammo Works at your own kiosk")
-must_contain(TUC, 'Hint = "Build your Ammo Works. It makes cash.",', "v72 tutorial step 6 copy (<= 42, device-neutral)")
-must_contain(TUC, "if BusinessConfig.Enabled then\n\tTutorialConfig.Steps[TutorialConfig.BusinessStepIndex] = TutorialConfig.BusinessStep", "v72 step 6 = Ammo Works only while businesses are on (else Barracks)")
 must_contain(TUC, 'Id = "Barracks",', "v72 flags-off step 6 stays the Barracks buy")
 
 # --- other files stay untouched by v72 (spec section 7 "Unchanged") ---
@@ -2269,8 +2264,6 @@ must_contain(ECO, "if not TycoonGuideConfig.Enabled or reason == nil or TycoonGu
 must_contain(SOL, "function SoldierService.GetCap(player: Player): number", "v72 SoldierService.GetCap (next-buy soldier offer)")
 must_contain(UPS, 'string.format("Purchase SUCCESSFUL! %s Lv %d", name, result.NewLevel or 0) .. suffix', "v72 kiosk hold-prompt toast carries the +$/s suffix")
 must_contain(UPS, "BaseService.PurchaseToastSuffix", "v72 one toast-suffix function for both buy paths")
-must_contain(TUS, "local STEP_BUSINESS = TutorialConfig.BusinessStepIndex", "v72 tutorial step 6 index from TutorialConfig")
-must_contain(TUS, "elseif step == STEP_BUSINESS and detail == businessStepStructureId() then", "v72 step 6 advances on Steps[6].PadStructureId (AmmoWorks on, Barracks off)")
 must_not_contain(TUS, 'detail == "Barracks"', "v72 no hard-coded Barracks step")
 must_contain(BOOT, 'local BusinessService = safeRequire("BusinessService", Services.BusinessService)', "v72 Bootstrap requires BusinessService")
 must_contain(BOOT, 'safeInit("BusinessService", BusinessService, deps)', "v72 Bootstrap inits BusinessService")
@@ -2379,7 +2372,6 @@ must_not_contain(B2_TC, "Heartbeat:Connect", "v72 tutorial / guide chip: no per-
 must_contain(B2_TC, "local HIDE_MARKER_DRESSING = TycoonGuideConfig.Enabled", "v72 F5 gated with the guide flag (flags off = HEAD)")
 must_contain(B2_TC, "d.LocalTransparencyModifier = if isActive then 0 else 1", "v72 F5 the Plot-1 tutorial arrow is hidden locally unless its marker is the target")
 must_contain(B2_TC, "CollectionService:GetInstanceAddedSignal(Constants.Tags.TutorialMarker):Connect(watchMarker)", "v72 F5 late markers / arrows start hidden (events, no polling)")
-must_contain(B2_TC, "and sid ~= nil and TycoonMath.IsBusiness(sid)", "v72 step 6 (a business) re-aims until the own kiosk is on this client")
 
 # --- Base panel (BaseController) ---
 must_contain(B2_BC, "ht.Text = GT.PanelHeader", "v72 WAR BUSINESSES header")
@@ -3210,6 +3202,248 @@ nations_b_checks()
 NC_LEAD = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/NationController.luau"
 must_contain(NC_LEAD, 'if tab == "flagpole" and player:GetAttribute("WE_NoPlot") == true then', "nations: a base-less player's tap on another flagpole never opens the picker")
 must_contain(NC_LEAD, "\tif not artGateOk() then\n\t\treturn\n\tend\n\topenAs(", "nations: Open() respects the art gate (admins only until the flag art is uploaded)")
+
+# ── Owner's 11 features, lane K2 (F5 chevrons / cheapest pick, F6 tutorial order) ─────────────────────────────
+K2_TUC = "src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau"
+K2_TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
+K2_TMU = "src/ReplicatedStorage/Shared/Util/TycoonMath.luau"
+K2_TER = "src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau"
+# F6 TutorialConfig
+must_contain(K2_TUC, "\tOrderVersion = 2,", "F6 TutorialConfig OrderVersion = 2 (new profiles are stamped with it)")
+must_contain(K2_TUC, "\tLegacyOrderV1 = {\n\t\t\"ClaimBase\",\n\t\t\"Income\",\n\t\t\"ClickDropper\",\n\t\t\"CommandCenter\",\n\t\t\"RecruitSoldiers\",\n\t\t\"Barracks\",\n\t\t\"Jeep\",\n\t\t\"Outpost\",\n\t} :: { string },", "F6 saved v1 step indexes are read in the v1 order")
+must_contain(K2_TUC, 'LegacyAlias = { ClickDropper = "Income", AmmoWorks = "Barracks" } :: { [string]: string },', "F6 legacy step aliases (drop step folded into Income, v72 Ammo Works -> Barracks)")
+must_contain(K2_TUC, "function TutorialConfig.OutpostBeforeJeep(): boolean\n\treturn TerritoryConfig.Starter.Enabled == true\nend", "F6 outpost before the 4x4 only with the Home Outpost (30 s travel rule)")
+must_contain(K2_TUC, "TutorialConfig.Steps = TutorialConfig.BuildSteps(TutorialConfig.OutpostBeforeJeep())", "F6 Jeep-then-Outpost fallback while the Home Outpost is off")
+must_contain(K2_TUC, 'AdvanceOn = { "PassiveIncome", "ManualDrop" },', "F6 a cash drop also finishes Collect cash (drop step folded in)")
+must_contain(K2_TUC, 'AdvanceOn = { "CaptureTerritory" },', "F6 Outpost step advances on a capture")
+must_contain(K2_TUC, 'AdvanceOn = { "SpawnVehicle" },', "F6 4x4 step advances on a vehicle spawn")
+must_contain(K2_TUC, 'Hint = "Recruit a soldier. They train for cash.",', "F6 Recruit copy (device-neutral, <= 42)")
+must_contain(K2_TUC, 'Pointer = "ATM",', "F5 the Collect cash step points at the own ATM")
+must_contain(K2_TUC, "function TutorialConfig.MigrateLegacyStep(", "F6 v1 -> v2 step migration helper (first step not done)")
+must_not_contain(K2_TUC, "BusinessStepIndex", "F6 v72 Ammo Works tutorial step removed (the NEXT chip introduces it)")
+must_not_contain(K2_TUC, "Tutorial_Business", "F6 no business tutorial marker")
+must_not_contain(K2_TUC, 'PadStructureId = "AmmoWorks",', "F6 no Ammo Works tutorial buy")
+must_not_contain(K2_TUC, "require(script.Parent.BusinessConfig)", "F6 TutorialConfig no longer reads BusinessConfig")
+must_not_contain(K2_TER, "TutorialConfig", "F6 no require cycle: TerritoryConfig never reads TutorialConfig")
+_k2_tuc = read(K2_TUC) or ""
+_k2_steps = _k2_tuc[_k2_tuc.find("\tSteps = {"):] if "\tSteps = {" in _k2_tuc else ""
+_k2_ids = re.findall(r'\n\t\t\tId = "(\w+)"', _k2_steps[: _k2_steps.find("\n\t} :: { TutorialStepDef },")] if _k2_steps else "")
+if _k2_ids == ["ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep"]:
+    ok("F6 the owner's 7-step order (Claim, CC, Collect, Recruit, Barracks, Outpost, 4x4)")
+else:
+    bad(f"F6 tutorial step order wrong: {_k2_ids}")
+# F5 TycoonGuideConfig
+must_contain(K2_TGC, 'PickMode = "Cheapest",', "F5 one pointer: the cheapest unpaid pad drives WE_NextBuy / NEXT / chevrons")
+must_contain(K2_TGC, "\tChevrons = {\n\t\tEnabled = false,", "F5 floor chevrons off until integration (lane Z flips)")
+must_contain(K2_TGC, "FollowTutorial = true,", "F5 chevrons follow the tutorial step while it runs")
+must_contain(K2_TGC, 'HideWhen = { "Driving", "Dead", "RecentCombat", "Drawn", "Modal", "AtConsole" } :: { string },', "F5 chevrons hide while driving / dead / in combat / drawn / panel / at a console")
+must_contain(K2_TGC, "DoorLeadStuds = 5,", "F5 walk-in approach point 5 studs out of the door")
+_k2_tgc = read(K2_TGC) or ""
+_k2_chev = _k2_tgc[_k2_tgc.find("\tChevrons = {"):] if "\tChevrons = {" in _k2_tgc else ""
+_k2_hz = re.search(r"\n\t\tRefreshHz = ([\d.]+),", _k2_chev)
+if _k2_hz and 0 < float(_k2_hz.group(1)) <= 10:
+    ok(f"F5 chevron RefreshHz {_k2_hz.group(1)} <= 10 (UI refresh cap)")
+else:
+    bad("F5 chevron RefreshHz missing or above 10")
+if "Neon" not in _k2_chev[: _k2_chev.find("\n\t},")] if _k2_chev else False:
+    ok("F5 chevron config names no Neon material")
+else:
+    bad("F5 chevron config block missing or names Neon")
+# F5 TycoonMath
+must_contain(K2_TMU, "function TycoonMath.PickCheapest(upgrades: { [string]: any }?, prestige: number?): Candidate?", "F5 PickCheapest (pure)")
+must_contain(K2_TMU, 'if TycoonGuideConfig.PickMode == "Cheapest" then\n\t\treturn TycoonMath.PickCheapest(ctx.Upgrades, ctx.Prestige)\n\tend', "F5 PickNext = PickCheapest in Cheapest mode (never soldiers)")
+must_contain(K2_TMU, "and RebirthConfig.IsStructureOpen(p, nil, id) then", "F5 a closed rebirth zone is never the pick")
+must_contain(K2_TMU, "if cur == nil or cost < cur.Cost or (cost == cur.Cost and lv + 1 < cur.Level) then", "F5 ties: lower target level, then StructureOrder")
+must_contain(K2_TMU, "function TycoonMath.ApproachPoint(id: string): Vector3?", "F5 plot-local approach point (door + lead / kiosk / ATM)")
+must_contain(K2_TMU, "function TycoonMath.Footprints(): { Footprint }", "F5 one footprint rectangle per site")
+must_contain(K2_TMU, "function TycoonMath.GuideTarget(", "F5 one pointer: tutorial step first, then the pick")
+must_not_contain(K2_TMU, "Workspace", "F5 TycoonMath geometry never reads the workspace (streaming-safe)")
+must_not_contain(K2_TMU, "workspace:", "F5 TycoonMath geometry never reads the workspace (streaming-safe)")
+
+# ── Owner's 11 features, lane T (F6 tutorial order dispatch, migration, novice-shield end, Starter Pack seat wait;
+#    F6/F10 Outpost target = own Home Outpost, gate-measured) ───────────────────────────────────────────────────
+T_TUS = "src/ServerScriptService/Server/Services/TutorialService.luau"
+T_TC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau"
+# F6 dispatch: the ACTIVE step's AdvanceOn (spec pin `def.AdvanceOn`), no fixed step indexes
+must_contain(T_TUS, "def.AdvanceOn", "F6 TutorialService advances on the step's AdvanceOn (replaces STEP_DROPPER)")
+must_contain(T_TUS, "local def = TutorialConfig.GetStep(step)\n\tif def and typeof(def.AdvanceOn) == \"table\" and table.find(def.AdvanceOn, eventType)\n\t\tand (eventType ~= \"Upgrade\" or (typeof(detail) == \"string\" and detail == def.PadStructureId)) then\n\t\tadvanceTo(player, step)", "F6 only the active step finishes; an Upgrade only for its own PadStructureId")
+must_contain(T_TUS, "if eventType == \"PlotAssigned\" and profile.BasePlotId == nil then\n\t\treturn", "F6 no plot yet: the claim step waits")
+for _n in ("STEP_BUSINESS", "BusinessStepIndex", "businessStepStructureId", "STEP_INCOME", "STEP_COMMAND", "STEP_RECRUIT", "STEP_JEEP", "STEP_OUTPOST", "STEP_DROPPER"):
+    must_not_contain(T_TUS, _n, f"F6 TutorialService has no fixed step index ({_n}); the order lives in TutorialConfig")
+# F6 migration of saves made in the v1 order, stamped, never twice / never down
+must_contain(T_TUS, "profile.TutorialStep = TutorialConfig.MigrateLegacyStep(profile.TutorialStep)", "F6 v1 saves move to the first F6 step not done")
+must_contain(T_TUS, "local saved = tonumber(profile.TutorialOrderVersion) or 1\n\t\tif saved >= current then\n\t\t\treturn", "F6 migrate only older orders (missing = 1); never stamp a newer save down")
+must_contain(T_TUS, "profile.TutorialOrderVersion = current\n\t\tDataService.MarkDirty(player)", "F6 migrated saves are stamped with OrderVersion (saved)")
+must_contain(T_TUS, "\t\tmigrateOrder(player, profile)\n", "F6 migration runs on profile load")
+must_contain(T_TUS, "profile.TutorialOrderVersion = orderVersion() -- F6: step 1 is the same step in every order", "F6 Reset stamps the order version")
+must_contain(T_TUS, "return TerritoryConfig.Starter.Enabled == true and profile.StarterOutpostTaken == true", "F6/F10 Outpost step done once the own Home Outpost was taken (Starter on only)")
+# F6 novice shield ends when the tutorial ends (complete, SKIP, done at load); batch A lane C API, pcall + nil-check
+must_contain(T_TUS, "CombatService = deps.CombatService", "F6 TutorialService gets CombatService from the deps")
+must_contain(T_TUS, "pcall(CombatService.EndNoviceShield, player, \"tutorial\")", "F6 tutorial end calls EndNoviceShield(p, \"tutorial\") in a pcall")
+must_contain(T_TUS, "if complete then\n\t\tendNoviceShield(player) -- F6", "F6 the last step ends the novice shield")
+must_contain(T_TUS, "endNoviceShield(player) -- F6: SKIP ends the novice shield too", "F6 SKIP ends the novice shield")
+# F6 Starter Pack after the tutorial waits until the player is out of any seat (1 Hz, <= 300 s), then the gate as before
+must_contain(T_TUS, "local STARTER_SEATED_WAIT_SECONDS = 300", "F6 Starter offer seat wait capped at 300 s")
+must_contain(T_TUS, "local STARTER_SEATED_CHECK_SECONDS = 1", "F6 Starter offer seat check at 1 Hz")
+must_contain(T_TUS, "return hum ~= nil and hum.SeatPart ~= nil", "F6 seated = Humanoid.SeatPart set")
+must_contain(T_TUS, "if seatedLeft > 0 and player.Parent and isSeated(player) then", "F6 no Starter offer card while driving")
+# F6/F10 client: Outpost = own Home Outpost first, never another plot's; nearest measured from the own gate
+must_contain(T_TC, "return nearestOutpost(origin, userId or player.UserId, plotId)", "F6 Outpost resolves with the own plot id (Home Outpost, gate origin)")
+must_contain(T_TC, "local from = if plotId ~= nil then ownGatePos(plotId) else origin", "F6 Outpost distance from the own main gate, not the character")
+must_contain(T_TC, "return PlotFrame.LocalToWorld(plotId, 0, half)", "F6 own gate from PlotFrame (pure config, streaming-safe; no MapSetup)")
+must_contain(T_TC, "if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then", "F10 another plot's Home Outpost is never a tutorial target")
+must_contain(T_TC, "local tier = if starterPlot ~= nil then (if mine then 3 else -1)", "F10 the own Home Outpost (not yet held) is the first choice")
+# F6: any step with a world target re-aims (<= every 2 s on the 1 Hz tick) until its part is on this client
+must_contain(T_TC, "if stepActive and (hp == nil or hp.Parent == nil) and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then", "F6 a missing tutorial target re-aims on the 1 Hz tick (streaming-safe)")
+must_contain(T_TC, "local REAIM_SECONDS = 2", "F6 re-aim at most every 2 s")
+must_not_contain(T_TC, "BUSINESS_REAIM_SECONDS", "F6 no business-only tutorial re-aim (no step is a business)")
+
+# ── Owner's 11 features, lane E (B1 single prestige, F3 Empire Tax economy side, F4 producer numbers + ATM screen) ──
+E_ECO = "src/ServerScriptService/Server/Services/EconomyService.luau"
+E_SOL = "src/ServerScriptService/Server/Services/SoldierService.luau"
+E_MCS = "src/ServerScriptService/Server/Services/MoneyCollectorService.luau"
+E_BSV = "src/ServerScriptService/Server/Services/BaseService.luau"
+# B1: prestige is applied once (EconomyService's stack); the per-tick producers are pre-multiplier
+must_contain(E_ECO, "mult = 1 + prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0)", "B1 prestige lives in EconomyService's grant stack (applied once)")
+must_not_contain(E_BSV, "local mult = 1 + ((tonumber(profile.Prestige) or 0) * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))", "B1 BaseService passive per-tick no longer multiplies prestige (x1.21 at P1)")
+must_contain(E_BSV, "local function passiveMultAndFlat(profile: Types.PlayerProfile, player: Player?): (number, number)\n\tlocal mult = 1\n", "B1 BaseService passive multiplier starts at 1 (territory % only)")
+must_not_contain(E_SOL, "local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)", "B1 SoldierService training no longer multiplies prestige (x1.155 at P1)")
+must_not_contain(E_BSV, "local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)", "B1 PlayerState training display matches SoldierService (pre-multiplier)")
+must_contain(E_SOL, "\tlocal per = cfg.CashPerSoldierPerTick or 0\n\treturn math.floor(count * per)\nend", "B1 training per tick = soldiers x CashPerSoldierPerTick before multipliers")
+# F3 Empire Tax
+must_contain(E_ECO, "WE_EmpireTaxPct", "F3 EconomyService publishes WE_EmpireTaxPct (spec pin)")
+must_contain(E_ECO, "function EconomyService.EmpireTaxPct(player: Player): number", "F3 EconomyService.EmpireTaxPct(p) export (cross-lane API)")
+must_contain(E_ECO, "local taxPct = empireTaxPct(profile)\n\t\tif taxPct > 0 then\n\t\t\tmult *= (1 + taxPct / 100)", "F3 the grant multiplier uses the total Empire Tax % (1 + pct/100)")
+must_contain(E_ECO, "return 1 + empireTaxPct(profile) / 100", "F3 GetOutpostIncomeMultiplier = 1 + pct/100")
+must_contain(E_ECO, "return math.clamp(pct, 0, cap)", "F3 Empire Tax capped at MaxStacks x MultPerStack (+50 %)")
+must_contain(E_ECO, "pct += math.max(0, math.floor(tonumber(buff.StarterPct) or 0))", "F3/F10 own Home Outpost adds StarterPct")
+must_contain(E_ECO, "return def ~= nil and TerritoryConfig.IsStarterDef(def) and def.PlotId == plot", "F10 only the player's OWN Home Outpost counts")
+must_contain(E_ECO, "\t\tfor id in pairs(profile.Territories) do\n\t\t\tif not isStarterId(id) then\n\t\t\t\towned += 1", "F3 a Home Outpost is never a stack")
+must_contain(E_ECO, "if cur ~= pct and not (cur == nil and pct == 0) then", "F3-8 WE_EmpireTaxPct written only when it changes")
+must_contain(E_ECO, "return oldStacks, newStacks, perStack, total", "F3 SyncOutpostIncomeStacks keeps (old, new, per-stack %) and adds the total %")
+must_contain(E_ECO, "local TerritoryConfig = require(Shared.Configs.TerritoryConfig)", "F3 EconomyService reads the Home Outpost rows from TerritoryConfig")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau", "EconomyService", "F3 no require cycle: TerritoryConfig never reads EconomyService")
+# F4 producer numbers (the client labels read them)
+must_contain(E_ECO, 'local TICK_TRAINING_ATTR = "WE_TickTraining"', "F4 WE_TickTraining attribute (last training grant)")
+must_contain(E_ECO, 'if reason ~= "training" or not (labels and labels.Enabled == true) then', "F4 WE_TickTraining gated on EconomyConfig.ProducerLabels.Enabled, training only")
+must_contain(E_ECO, "if player:GetAttribute(TICK_TRAINING_ATTR) ~= granted then", "F4 WE_TickTraining written only when it changes")
+_e_eco = read(E_ECO) or ""
+_e_nt = _e_eco.find("noteTrainingTick(player, reason, granted) -- F4")
+_e_gate = _e_eco.find("if not TycoonGuideConfig.Enabled or reason == nil or TycoonGuideConfig.SteadyIncomeReasons[reason] ~= true then")
+if _e_nt != -1 and _e_gate != -1 and _e_nt < _e_gate:
+    ok("F4 WE_TickTraining runs before the guide gate (its own flag, not TycoonGuideConfig.Enabled)")
+else:
+    bad(f"F4 WE_TickTraining must run before the TycoonGuide gate in noteSteadyIncome (nt={_e_nt} gate={_e_gate})")
+must_contain(E_SOL, "if not EconomyConfig.ProducerLabels.Enabled then\n\t\t\t\t\t\t\trefreshTrainingYardFeedback(player, profile, amount)", "F4 no server yard pop while the client producer label is on")
+# F4 ATM screen
+must_contain(E_MCS, "local text = TycoonMath.ShortCash(pending)", "F4 ATM digits use TycoonMath.ShortCash")
+must_contain(E_MCS, "return TycoonMath.RatePerSecText(rate)", "F4 empty ATM shows +$N/s from WE_IncomePerSec")
+must_contain(E_MCS, 'owner:GetAttribute("WE_IncomePerSec")', "F4 the ATM rate is the owner's server-stamped WE_IncomePerSec")
+must_contain(E_MCS, 'local ATM_WALK_IN_TITLE = "ATM · WALK IN TO COLLECT"', "F4 pinned walk-in line kept as the fallback constant")
+_e_mcs = read(E_MCS) or ""
+_e_at = _e_mcs.find("local function atmTitle(")
+_e_body = _e_mcs[_e_at:_e_mcs.find("\nend\n", _e_at)] if _e_at != -1 else ""
+_e_order = [_e_body.find(x) for x in ('"ATM · SHIELD "', '"ATM BEING ROBBED!"', '"ATM · AUTO-COLLECT"', "atmRateTitle(owner)", "return ATM_WALK_IN_TITLE")]
+if _e_body and all(i != -1 for i in _e_order) and _e_order == sorted(_e_order) and "if pending ~= nil and pending <= 0 then" in _e_body:
+    ok("F4 ATM status order: shield > robbed > AUTO-COLLECT > (cash waiting ? walk-in : +$N/s)")
+else:
+    bad(f"F4 ATM status order wrong: {_e_order}")
+must_contain(E_MCS, "refreshBillboard(inst, amount, atmTitle(player, plotId, amount))", "F4 own-ATM refresh passes the balance to the status")
+must_contain(E_MCS, "refreshBillboard(inst, amount, atmTitle(owner, plotId, amount))", "F4 all-ATM refresh passes the balance to the status")
+must_not_contain(E_MCS, "BillboardGui", "F4 the ATM rate is painted on the ATM screen, never a floating label")
+
+# ── Owner's 11 features, lane G (F4 producer labels + label governor, F5 floor chevrons; client only) ────────────
+G_NPC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/NextPadChevrons.luau"
+G_PL = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/ProducerLabels.luau"
+G_LG = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/LabelGovernor.luau"
+G_WL = "src/ReplicatedStorage/Shared/Util/WorldLabel.luau"
+G_BOOT = "src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau"
+G_BZV = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/BusinessVisuals.luau"
+G_WPC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau"
+# F5 NextPadChevrons (spec F5 pins): client-only, no per-frame scans, no server calls, no light / GUI / beam, budget-free
+for _needle in ("RenderStepped", "GetDescendants", "FireServer", "InvokeServer", "Neon", "PointLight", "SpotLight", "BillboardGui", "SurfaceGui", "Beam"):
+    must_not_contain(G_NPC, _needle, f"F5 NextPadChevrons: no {_needle}")
+must_contain(G_NPC, "Workspace:BulkMoveTo(parts, cframes, Enum.BulkMoveMode.FireCFrameChanged)", "F5 chevrons move with one BulkMoveTo into preallocated arrays")
+must_contain(G_NPC, "Workspace.CurrentCamera", "F5 chevron pool lives under the local camera (client-only, never replicated)")
+must_contain(G_NPC, "p.CastShadow = false", "F5 chevron bars cast no shadow")
+must_contain(G_NPC, "p.Material = Enum.Material.SmoothPlastic", "F5 chevron bars are painted SmoothPlastic")
+must_contain(G_NPC, "if started or C.Enabled ~= true then", "F5 chevrons inert while TycoonGuideConfig.Chevrons.Enabled is false")
+must_contain(G_NPC, "local PERIOD = 1 / math.clamp(C.RefreshHz, 1, 10)", "F5 chevron refresh <= 10 Hz")
+must_contain(G_NPC, "if mx * mx + mz * mz < MOVE2 then", "F5 re-laid only when the character moved MoveThresholdStuds")
+must_contain(G_NPC, "TycoonMath.GuideTarget(step, player:GetAttribute(\"WE_NextBuy\"), upgrades)", "F5 one pointer: tutorial step first, then WE_NextBuy / local PickCheapest")
+must_contain(G_NPC, "TycoonMath.ApproachPoint(id)", "F5 chevrons end at the plot-local approach point (door + lead / kiosk / ATM)")
+must_contain(G_NPC, "TycoonMath.InFootprint(cx, cz, CLEAR) ~= nil", "F5 no chevron inside (or touching) a building footprint")
+must_contain(G_NPC, "local count = TycoonMath.ChevronCount(d)", "F5 chevron count from TycoonMath.ChevronCount (0 within HideWithinStuds)")
+must_contain(G_NPC, "return ConsoleWaypoint.Current() ~= nil", "F5 chevrons step aside while the GO beam is up")
+must_contain(G_NPC, "for _, name in ipairs(C.HideWhen) do", "F5 chevrons hidden on every Chevrons.HideWhen HUD flag")
+must_contain(G_NPC, 'return nil, HudLayout.GetFlag("Tutorial")', "F5 no pointer while a tutorial step is up but not known here (never the post-tutorial pick)")
+must_not_contain(G_NPC, "MapSetup", "F5 chevrons never depend on MapSetup (config + PlotFrame only)")
+# F4 ProducerLabels
+for _needle in ("GetDescendants", "RenderStepped", "AlwaysOnTop = true", "FireServer", "InvokeServer"):
+    must_not_contain(G_PL, _needle, f"F4 ProducerLabels: no {_needle}")
+must_contain(G_PL, 'local LABEL_NAME = "WE_ProducerLabel"', "F4 producer label (replaces the server WE_OilCashPop pops, BuyPathStatic.py:455)")
+must_contain(G_PL, "if started or CFG.Enabled ~= true then", "F4 producer labels inert while EconomyConfig.ProducerLabels.Enabled is false")
+must_contain(G_PL, "local period = 1 / math.clamp(CFG.ScanHz, 1, 10)", "F4 producer label scan <= 10 Hz")
+must_contain(G_PL, "BaseLabel = true,", "F4 the producer label counts toward the base label cap")
+must_contain(G_PL, "g.Adornee = anchor -- only the adornee moves", "F4 one label: only its adornee moves")
+must_contain(G_PL, 'local v = tonumber(player:GetAttribute("WE_TickTraining"))', "F4 yard amount = the server's last training grant")
+must_contain(G_PL, "math.floor(PlotOilPumpConfig.CashPerTick)", "F4 pump amount from PlotOilPumpConfig.CashPerTick")
+must_contain(G_PL, "local yardOn = training > 0 and trainingPays ~= false", "F4 soldiers dismissed: no yard label (WE_TickTraining keeps the last grant)")
+must_contain(G_PL, "Remotes.BindEvent(Constants.RemoteNames.SoldierStateUpdate", "F4 the yard label follows SoldierStateUpdate TrainingIncomePerTick")
+must_contain(G_PL, 'local bases = if setup then setup:FindFirstChild("Bases") else nil', "F4 anchors from the own plot folder (FindFirstChild, streaming-safe)")
+# F4 LabelGovernor
+for _needle in ("GetDescendants", "RenderStepped", "AlwaysOnTop = true", "FireServer", "InvokeServer"):
+    must_not_contain(G_LG, _needle, f"F4 LabelGovernor: no {_needle}")
+must_contain(G_LG, "if started or CFG.Enabled ~= true then", "F4 label governor inert while WorldLabelConfig.BaseLabelGovernor.Enabled is false")
+must_contain(G_LG, 'local EXEMPT_ROLE = "objective"', "F4 the governor never touches the objective marker")
+must_contain(G_LG, "local period = 1 / math.clamp(tonumber(CFG.Hz) or 4, 1, 10)", "F4 governor pass <= 10 Hz")
+must_contain(G_LG, "WorldLabel.Hold(gui, not pick[i])", "F4 every governed label outside the nearest MaxOnScreen is held off")
+must_contain(G_LG, "WorldLabel.Hold(gui, true) -- held until the next pass decides", "F4 a newly tagged label starts held (the cap holds between passes)")
+for _f in (G_NPC, G_PL, G_LG):
+    _t = read(_f) or ""
+    if _t and not re.search(r'WaitForChild\("[^"]*"\)', _t):
+        ok(f"lane G {_f.rsplit('/', 1)[-1]}: every WaitForChild has a timeout")
+    else:
+        bad(f"lane G {_f.rsplit('/', 1)[-1]}: WaitForChild without a timeout (or file missing)")
+# Bootstrap wiring (guarded, bounded waits)
+must_contain(G_BOOT, 'safeInit("ProducerLabels", safeRequire("ProducerLabels", Modules:WaitForChild("ProducerLabels", 5) :: Instance))', "F4 ProducerLabels init guarded")
+must_contain(G_BOOT, 'safeInit("NextPadChevrons", safeRequire("NextPadChevrons", Modules:WaitForChild("NextPadChevrons", 5) :: Instance))', "F5 NextPadChevrons init guarded")
+must_contain(G_BOOT, 'safeInit("LabelGovernor", safeRequire("LabelGovernor", Modules:WaitForChild("LabelGovernor", 5) :: Instance))', "F4 LabelGovernor init guarded")
+# WorldLabel: base-label tag + one arbiter for Enabled on the client
+must_contain(G_WL, "BaseLabel: boolean?,", "F4 WorldLabel.Create opts.BaseLabel")
+must_contain(G_WL, "CollectionService:AddTag(bb, BASE_TAG)", "F4 opts.BaseLabel tags WorldLabelConfig.BaseLabelTag")
+must_contain(G_WL, "local on = w and foreign[gui] ~= true and held[gui] ~= true", "F4 a label shows only when its owner wants it and neither the owner filter nor the governor hides it")
+must_contain(G_WL, "function WorldLabel.SetShown(gui: LayerCollector, on: boolean)", "F4 client code shows / hides tagged labels through WorldLabel.SetShown")
+must_contain(G_WL, "function WorldLabel.Hold(gui: LayerCollector, on: boolean)", "F4 LabelGovernor holds labels through WorldLabel.Hold")
+# BusinessVisuals pops and WorldPromptController tags are governed base labels
+must_contain(G_BZV, "BaseLabel = true, -- F4: counted by the LabelGovernor", "F4 business pops are base labels")
+must_contain(G_BZV, "WorldLabel.SetShown(pop.gui, true)", "F4 pops shown through WorldLabel (a governor hold is kept)")
+must_not_contain(G_BZV, "pop.gui.Enabled = true", "F4 pops never write Enabled directly")
+must_not_contain(G_BZV, "p.gui.Enabled = false", "F4 pops never write Enabled directly")
+must_contain(G_WPC, "WorldLabel.TagBaseLabel(bb) -- F4: counted by the LabelGovernor", "F4 console / NEXT tags are base labels")
+must_contain(G_WPC, "WorldLabel.SetShown(bb, want) -- F4: writes only on change, keeps a LabelGovernor hold", "F4 the 4 Hz price-tag pass never undoes a governor hold")
+must_not_contain(G_WPC, "bb.Enabled = want", "F4 the price-tag pass writes Enabled only through WorldLabel")
+must_contain(G_WPC, 'local id, lv = TycoonMath.GuideTarget(step, player:GetAttribute("WE_NextBuy"))', "F5 one pointer: the console NEXT tag marks the tutorial step's pad, else WE_NextBuy")
+
+# --- Base identity lane C (lane Q of the f11 job): squad Follow slots beside the player instead of rows between the
+# camera and the player, domed helmet, FollowPath door / lane / wall assist, wing mirroring after a turn ---
+Q_OC = 'src/ReplicatedStorage/Shared/Configs/OrdersConfig.luau'
+Q_SO = 'src/ServerScriptService/Server/Services/SquadOrdersService.luau'
+must_contain(Q_OC, 'FollowSlots = {', 'Lane C: Follow slots beside the player (spec pin)')
+must_contain(Q_OC, '{ X = -5.5, Z = 1.5 },\n\t\t{ X = 5.5, Z = 1.5 },\n\t\t{ X = -10, Z = 3.5 },\n\t\t{ X = 10, Z = 3.5 },\n\t\t{ X = -14.5, Z = 5.5 },', 'Lane C: spec slot values (+X right, +Z behind the player)')
+must_contain(Q_OC, 'FollowPath = {\n\t\tEnabled = true,', 'Lane C: FollowPath (door / lane / wall assist) ships on')
+must_contain(Q_SO, 'MeshType.Sphere', 'Lane C: domed helmet (spec pin)')
+must_contain(Q_SO, 'weldPart("Helmet", Vector3.new(1.3, 0.75, 1.35), CFrame.new(0, 1.91, 0.02)', 'Lane C: helmet 1.3 x 0.75 x 1.35 at (0, 1.91, 0.02), 0 extra parts')
+must_not_contain(Q_SO, 'Vector3.new(1.2, 0.5, 1.2), CFrame.new(0, 1.95, 0)', 'Lane C: no flat box helmet cap')
+must_contain(Q_SO, 'local slots = (OrdersConfig :: any).FollowSlots', 'Lane C: formationOffset reads OrdersConfig.FollowSlots')
+must_contain(Q_SO, '\treturn gridOffset(slot)\nend', 'Lane C: empty or malformed FollowSlots fall back to the old grid')
+must_contain(Q_SO, 'return Vector3.new(col * spacing, 0, 6 + (row - 1) * spacing)', 'Lane C: old grid formula kept for the fallback')
+must_contain(Q_SO, 'while used[slot] do', 'Lane C: a replacement unit takes the lowest free slot (no doubled slot)')
+must_contain(Q_SO, 'updateMirror(st, proot.CFrame)', 'Lane C: wings swap sides after a turn (nobody crosses behind the player)')
+must_contain(Q_SO, 'faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.LookVector * 8)', 'Lane C: a unit in its slot faces where the player faces (no crab-walking wings)')
+must_contain(Q_SO, 'params.RespectCanCollide = true', 'Lane C: FollowPath rays ignore non-colliding parts')
+must_not_contain(Q_SO, 'GetDescendants', 'Lane C: no whole-tree scans in the squad service')
+
 
 parse_gate()
 

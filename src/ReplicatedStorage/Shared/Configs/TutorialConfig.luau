@@ -1,18 +1,27 @@
 --!strict
 --[[ Interactive tutorial steps — short plain copy, one step at a time.
-	v31 first-2-min: Claim → MoneyCollector → ClickDropper → CommandCenter buy,
-	then Recruit → Barracks → Jeep (players see "4x4") → Outpost.
 	v71 P1-15: device-neutral copy (about 80% of players are on phones): no key names, no "click"; the chip's GO
 	button runs CtaAction. Buy steps point at the structure's own console (console-only buying): at L0 the BUY
 	button there reads BUILD. The beam target of every step is the player's OWN plot (TutorialController.ResolveTarget).
 	Hints stay <= 42 characters: the objective chip shows 2 hint lines, about 44 characters on an 800x360 phone.
-	v72: while BusinessConfig.Enabled, step 6 (BusinessStepIndex) is the first war business, Ammo Works, instead of
-	the Barracks buy (Barracks moves into TycoonGuideConfig.Opening). No marker part is built for it: GO resolves
-	through PadStructureId to the player's own console, so a missing "Tutorial_Business" marker is fine. Businesses
-	off: step 6 stays the Barracks buy (exactly as before v72).
+
+	F6 (owner's 11 features, lane K2), OrderVersion 2, the owner's 7-step order:
+	  1 ClaimBase  2 CommandCenter  3 Income (the old ClickDropper step is folded in: a cash drop also counts)
+	  4 RecruitSoldiers  5 Barracks  6 Outpost (the own Home Outpost)  7 Jeep
+	The outpost-before-4x4 order is only legal with the Home Outpost (F10, TerritoryConfig.Starter): without it the
+	nearest zone is a 34-45 s walk, over the 30 s travel rule. So OutpostBeforeJeep() follows Starter.Enabled, and
+	while it is false the last two steps swap to Jeep then Outpost (the 4x4 is the shortcut to the zone).
+	v72's Ammo Works step 6 is gone: the first war business is introduced after the tutorial by the NEXT chip
+	(TycoonGuideConfig.PickMode "Cheapest": Ammo Works L1 $600 is the cheapest pad once the tutorial is done).
+
+	AdvanceOn lists the TutorialService.Notify event types that finish a step (PlotAssigned | Upgrade |
+	RecruitSoldiers | PassiveIncome | ManualDrop | SpawnVehicle | CaptureTerritory). An "Upgrade" finishes a step only
+	when its detail (the structure id) equals the step's PadStructureId. Step Ids are stable save keys: a saved
+	TutorialStep index is read in the order its TutorialOrderVersion names (missing = 1 = LegacyOrderV1) and moved to
+	this order by MigrateLegacyStep.
 ]]
 
-local BusinessConfig = require(script.Parent.BusinessConfig)
+local TerritoryConfig = require(script.Parent.TerritoryConfig)
 
 export type TutorialStepDef = {
 	Id: string,
@@ -23,10 +32,33 @@ export type TutorialStepDef = {
 	PadStructureId: string?,
 	CtaAction: string?,
 	CtaLabel: string?,
+	-- F6: the Notify event types that finish this step (see the header)
+	AdvanceOn: { string },
+	-- F5 pointer while this step is active (chevrons / GO line): "ATM" = the player's own ATM. nil = the step's
+	-- PadStructureId console when it has one, else no floor pointer (Recruit / Outpost / Jeep: GO opens a panel or
+	-- the zone beam leads).
+	Pointer: string?,
 }
 
 local TutorialConfig = {
 	Enabled = true,
+	-- F6: the order a profile's TutorialStep index is saved in (ProfileSchema stamps new profiles with it;
+	-- TutorialService migrates older versions with MigrateLegacyStep, then stamps it).
+	OrderVersion = 2,
+	-- The v1 order (v31 .. v72) by step Id, index = the saved TutorialStep. "ClickDropper" and v72's "AmmoWorks"
+	-- (step 6 while the businesses were on) are not steps any more: LegacyAlias names the step that replaces them.
+	LegacyOrderV1 = {
+		"ClaimBase",
+		"Income",
+		"ClickDropper",
+		"CommandCenter",
+		"RecruitSoldiers",
+		"Barracks",
+		"Jeep",
+		"Outpost",
+	} :: { string },
+	LegacyAlias = { ClickDropper = "Income", AmmoWorks = "Barracks" } :: { [string]: string },
+	-- The owner's order (OutpostBeforeJeep() true). BuildSteps swaps Outpost and Jeep while it is false.
 	Steps = {
 		{
 			Id = "ClaimBase",
@@ -36,24 +68,7 @@ local TutorialConfig = {
 			HighlightHint = "BasePad",
 			CtaAction = "WatchHud",
 			CtaLabel = "GO TO BASE",
-		},
-		{
-			Id = "Income",
-			Title = "Collect cash",
-			Hint = "Walk up to your ATM to collect cash.",
-			MarkerName = "Tutorial_Income",
-			HighlightHint = "CashHUD",
-			CtaAction = "WatchHud",
-			CtaLabel = "COLLECT",
-		},
-		{
-			Id = "ClickDropper",
-			Title = "Grab cash drops",
-			Hint = "Grab the green cash drop by your ATM.",
-			MarkerName = "Tutorial_Dropper",
-			HighlightHint = "CashHUD",
-			CtaAction = "WatchHud",
-			CtaLabel = "CASH DROP",
+			AdvanceOn = { "PlotAssigned" },
 		},
 		{
 			Id = "CommandCenter",
@@ -64,15 +79,28 @@ local TutorialConfig = {
 			PadStructureId = "CommandCenter",
 			CtaAction = "PadBuy",
 			CtaLabel = "GO",
+			AdvanceOn = { "Upgrade" },
+		},
+		{
+			Id = "Income",
+			Title = "Collect cash",
+			Hint = "Walk up to your ATM to collect cash.",
+			MarkerName = "Tutorial_Income",
+			HighlightHint = "CashHUD",
+			CtaAction = "WatchHud",
+			CtaLabel = "COLLECT",
+			AdvanceOn = { "PassiveIncome", "ManualDrop" },
+			Pointer = "ATM",
 		},
 		{
 			Id = "RecruitSoldiers",
-			Title = "Recruit workers",
-			Hint = "Open Army and recruit a soldier.",
+			Title = "Recruit soldiers",
+			Hint = "Recruit a soldier. They train for cash.",
 			MarkerName = "Tutorial_Recruit",
 			HighlightHint = "Army",
 			CtaAction = "OpenArmy",
 			CtaLabel = "ARMY",
+			AdvanceOn = { "RecruitSoldiers" },
 		},
 		{
 			Id = "Barracks",
@@ -83,15 +111,7 @@ local TutorialConfig = {
 			PadStructureId = "Barracks",
 			CtaAction = "PadBuy",
 			CtaLabel = "GO",
-		},
-		{
-			Id = "Jeep", -- JEEP-2: the id / marker stay (TutorialService, MapSetup's Tutorial_Jeep); the copy says 4x4
-			Title = "Spawn 4x4",
-			Hint = "Open the Garage and spawn your 4x4.",
-			MarkerName = "Tutorial_Jeep",
-			HighlightHint = "Garage",
-			CtaAction = "OpenGarage",
-			CtaLabel = "GARAGE",
+			AdvanceOn = { "Upgrade" },
 		},
 		{
 			Id = "Outpost",
@@ -101,26 +121,47 @@ local TutorialConfig = {
 			HighlightHint = "Territory",
 			CtaAction = "Capture",
 			CtaLabel = "FIND ZONE",
+			AdvanceOn = { "CaptureTerritory" },
+		},
+		{
+			Id = "Jeep", -- JEEP-2: the id / marker stay (TutorialService, MapSetup's Tutorial_Jeep); the copy says 4x4
+			Title = "Spawn 4x4",
+			Hint = "Open the Garage and spawn your 4x4.",
+			MarkerName = "Tutorial_Jeep",
+			HighlightHint = "Garage",
+			CtaAction = "OpenGarage",
+			CtaLabel = "GARAGE",
+			AdvanceOn = { "SpawnVehicle" },
 		},
 	} :: { TutorialStepDef },
 }
 
--- v72: step 6 = the Ammo Works buy while the war businesses are on (TutorialService advances it on a purchase whose
--- id equals Steps[BusinessStepIndex].PadStructureId)
-TutorialConfig.BusinessStepIndex = 6
-TutorialConfig.BusinessStep = {
-	Id = "AmmoWorks",
-	Title = "Ammo Works",
-	Hint = "Build your Ammo Works. It makes cash.",
-	MarkerName = "Tutorial_Business",
-	HighlightHint = "Console",
-	PadStructureId = "AmmoWorks",
-	CtaAction = "PadBuy",
-	CtaLabel = "GO",
-} :: TutorialStepDef
-if BusinessConfig.Enabled then
-	TutorialConfig.Steps[TutorialConfig.BusinessStepIndex] = TutorialConfig.BusinessStep
+-- F6 / F10: the owner's outpost-then-4x4 order only while the Home Outpost exists (30 s travel rule)
+function TutorialConfig.OutpostBeforeJeep(): boolean
+	return TerritoryConfig.Starter.Enabled == true
 end
+
+local OWNER_STEPS = TutorialConfig.Steps -- the literal list above (never changed)
+
+-- The 7 steps in order; outpostFirst = false swaps Outpost and Jeep (Jeep 6, Outpost 7). Pure: returns a new list.
+function TutorialConfig.BuildSteps(outpostFirst: boolean): { TutorialStepDef }
+	local steps: { TutorialStepDef } = {}
+	local iOutpost, iJeep = 0, 0
+	for i, def in ipairs(OWNER_STEPS) do
+		steps[i] = def
+		if def.Id == "Outpost" then
+			iOutpost = i
+		elseif def.Id == "Jeep" then
+			iJeep = i
+		end
+	end
+	if not outpostFirst and iOutpost > 0 and iJeep > 0 then
+		steps[iOutpost], steps[iJeep] = steps[iJeep], steps[iOutpost]
+	end
+	return steps
+end
+
+TutorialConfig.Steps = TutorialConfig.BuildSteps(TutorialConfig.OutpostBeforeJeep())
 
 function TutorialConfig.GetStep(index: number): TutorialStepDef?
 	return TutorialConfig.Steps[index]
@@ -128,6 +169,57 @@ end
 
 function TutorialConfig.StepCount(): number
 	return #TutorialConfig.Steps
+end
+
+-- Index of a step Id in `steps` (default: the current Steps), or nil
+function TutorialConfig.IndexOf(id: string, steps: { TutorialStepDef }?): number?
+	for i, def in ipairs(steps or TutorialConfig.Steps) do
+		if def.Id == id then
+			return i
+		end
+	end
+	return nil
+end
+
+-- true when `eventType` (with `detail`) finishes step `def` (F6 AdvanceOn rule; the dispatcher TutorialService uses)
+function TutorialConfig.Advances(def: TutorialStepDef?, eventType: string, detail: any?): boolean
+	if def == nil or table.find(def.AdvanceOn, eventType) == nil then
+		return false
+	end
+	if eventType == "Upgrade" then
+		return def.PadStructureId ~= nil and detail == def.PadStructureId
+	end
+	return true
+end
+
+--[[ F6 migration: a TutorialStep index saved in the v1 order -> the index of the first step of the current order
+	(`steps`, default Steps) the player has not done yet. Every v1 step before `oldStep` counts as done, by Id through
+	LegacyAlias. So v1 step 2 or 3 (Income / ClickDropper, Command Center not bought) -> 2 (Command Center, never
+	skipped), v1 6 (Barracks, or v72's Ammo Works) -> 5, v1 7 (Jeep) -> the first of Outpost / Jeep in this order.
+	The caller (TutorialService) then skips buy steps for structures already owned. oldStep < 1 or junk -> 1; oldStep
+	past the v1 list -> #steps + 1 (done; TutorialComplete decides on its own). Pure. ]]
+function TutorialConfig.MigrateLegacyStep(oldStep: any, steps: { TutorialStepDef }?): number
+	local list = steps or TutorialConfig.Steps
+	local n = tonumber(oldStep)
+	if n == nil or n ~= n or n < 1 then
+		return 1
+	end
+	local old = math.floor(n)
+	local legacy = TutorialConfig.LegacyOrderV1
+	if old > #legacy then
+		return #list + 1
+	end
+	local done: { [string]: boolean } = {}
+	for i = 1, old - 1 do
+		local id = legacy[i]
+		done[TutorialConfig.LegacyAlias[id] or id] = true
+	end
+	for i, def in ipairs(list) do
+		if not done[def.Id] then
+			return i
+		end
+	end
+	return #list + 1
 end
 
 return TutorialConfig

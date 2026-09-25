@@ -45,5 +45,9 @@ safeInit("StudioSmokeClient", StudioSmokeClient)
 safeInit("WorldSpinners", WorldSpinners)
 safeInit("AudioHooks", safeRequire("AudioHooks", Modules:WaitForChild("AudioHooks", 5) :: Instance)) -- W1 SND: sound cues from existing remotes / HUD signals (client only)
 safeInit("BusinessVisuals", safeRequire("BusinessVisuals", Modules:WaitForChild("BusinessVisuals", 5) :: Instance)) -- v72: own war-business crates + "+$N" pops (client-only look; no-op while BusinessConfig.Enabled is false)
+-- F4 / F5 (owner's 11 features): client-only guidance, each a no-op while its flag is off
+safeInit("ProducerLabels", safeRequire("ProducerLabels", Modules:WaitForChild("ProducerLabels", 5) :: Instance)) -- owner-only "+$N every 5s" over the nearest own yard / pump (EconomyConfig.ProducerLabels.Enabled)
+safeInit("NextPadChevrons", safeRequire("NextPadChevrons", Modules:WaitForChild("NextPadChevrons", 5) :: Instance)) -- gold floor chevrons to the next pad on the own plot (TycoonGuideConfig.Chevrons.Enabled)
+safeInit("LabelGovernor", safeRequire("LabelGovernor", Modules:WaitForChild("LabelGovernor", 5) :: Instance)) -- at most 3 base labels on screen (WorldLabelConfig.BaseLabelGovernor.Enabled)
 
 print("[WAR EMPIRE] Client Bootstrap ready.")

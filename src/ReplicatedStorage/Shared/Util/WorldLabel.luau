@@ -16,6 +16,11 @@
 	  WorldLabel.SetOwner(gui, userId?)                only that player sees it (nil = everyone)
 	  WorldLabel.SetRole(bb, role?)                    "objective" | "contested" -> AlwaysOnTop; nil -> off
 	  WorldLabel.StartOwnerFilter() -> boolean         CLIENT, once (WorldPromptController.Init); false on the server
+	  WorldLabel.TagBaseLabel(gui)                     F4: tag a label built by hand as a base label (see BaseLabel)
+	  WorldLabel.SetShown(gui, on)                     CLIENT code that owns a label shows / hides it through this
+	  WorldLabel.Hold(gui, held)                       CLIENT, LabelGovernor only: keep the label off while held
+	  WorldLabel.Wanted(gui) -> boolean                CLIENT: its owner wants it on, and it is not someone else's
+	  WorldLabel.IsHeld(gui) -> boolean                CLIENT: the LabelGovernor holds it off
 
 	opts (all optional)
 	  Name         instance name; keep pinned names ("WE_FlagBillboard", "WE_GateSign"). Default "WE_WorldLabel" /
@@ -30,6 +35,16 @@
 	  Role         "objective" | "contested": the only labels allowed AlwaysOnTop (billboard only)
 	  PixelsPerStud  surface only (default 40)
 	  Parent       default: the resolved adornee (billboard) / the part (surface)
+	  BaseLabel    F4 (billboard): tag it WorldLabelConfig.BaseLabelTag, so the client LabelGovernor counts it toward
+	               "at most 3 labels on screen at a base" (pads, gold pump pad, producer label, NEXT tag, pops)
+
+	Client Enabled arbitration (F4). Three things can switch a label off on this client: its owner (the server's
+	replicated Enabled, or the client code that made it), the owner filter below (someone else's owner-only label)
+	and the LabelGovernor (over the on-screen cap). The label shows only when its owner wants it AND nothing else
+	hides it. The owner's wish is what SetShown was last told, or any Enabled change this module did not write. A
+	write that does not change the value fires no event, so client code that hides a tagged label calls SetShown and
+	never writes Enabled itself (a held label is already off: "Enabled = false" would be lost and the governor would
+	switch it back on). While nothing is held (LabelGovernor off) SetShown is exactly "Enabled = on".
 
 	Owner-only (no PlayerGui copies): the label stays in Workspace with attribute WE_LabelOwner = UserId and the
 	CollectionService tag "WE_OwnerLabel" (names in WorldLabelConfig). Each client's StartOwnerFilter sets
@@ -64,6 +79,7 @@ export type Options = {
 	Role: Role?,
 	PixelsPerStud: number?,
 	Parent: Instance?,
+	BaseLabel: boolean?,
 }
 
 local WorldLabel = {}
@@ -75,6 +91,7 @@ local MUTED = HudConfig.Colors.Muted
 local ROLE_ATTR = WorldLabelConfig.RoleAttribute
 local OWNER_ATTR = WorldLabelConfig.OwnerAttribute
 local OWNER_TAG = WorldLabelConfig.OwnerTag
+local BASE_TAG = WorldLabelConfig.BaseLabelTag
 
 local function clampSize(v: number, lo: number, hi: number): number
 	return math.clamp(math.floor(v + 0.5), lo, hi)
@@ -226,8 +243,18 @@ function WorldLabel.Create(adornee: Instance, text: string, opts: Options?): Bil
 	if o.OwnerUserId ~= nil then
 		WorldLabel.SetOwner(bb, o.OwnerUserId)
 	end
+	if o.BaseLabel == true then
+		CollectionService:AddTag(bb, BASE_TAG) -- before parenting: the governor sees it once, fully built
+	end
 	bb.Parent = o.Parent or target or adornee
 	return bb
+end
+
+-- F4: a base label built without Create (the v72 console tags) joins the LabelGovernor's cap
+function WorldLabel.TagBaseLabel(gui: LayerCollector)
+	if not CollectionService:HasTag(gui, BASE_TAG) then
+		CollectionService:AddTag(gui, BASE_TAG)
+	end
 end
 
 local function faceSize(part: BasePart, face: Enum.NormalId): Vector2
@@ -267,11 +294,49 @@ function WorldLabel.Surface(part: BasePart, face: Enum.NormalId, text: string, o
 	return sg
 end
 
--- ── client: owner-only filter ───────────────────────────────────────────────────────────────────────────────
+-- ── client: who decides Enabled (owner filter + LabelGovernor; see the header) ──────────────────────────────
+-- want[gui]: what the label's owner (the server / the client code that made it) wants. foreign: someone else's
+-- owner-only label (the owner filter). held: over the on-screen cap (LabelGovernor). wrote: the last value this
+-- module wrote, so its own writes are not mistaken for the owner's wish (signals are deferred: no re-entrancy flag).
 local filterStarted = false
-local watched: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
-local serverEnabled: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
-local forced: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" }) -- value this client wrote
+local listening: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
+local want: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
+local wrote: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
+local foreign: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
+local held: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
+
+local function apply(gui: LayerCollector)
+	local w = want[gui]
+	if w == nil then
+		w = gui.Enabled
+		want[gui] = w
+	end
+	local on = w and foreign[gui] ~= true and held[gui] ~= true
+	if gui.Enabled ~= on then
+		wrote[gui] = on
+		gui.Enabled = on
+	end
+end
+
+-- start following the label's Enabled (once per label): a change this module did not write is the owner's new wish
+local function listen(gui: LayerCollector)
+	if listening[gui] then
+		return
+	end
+	listening[gui] = true
+	-- nothing hides a label before it is listened to, so its Enabled right now is its owner's wish
+	want[gui] = gui.Enabled
+	wrote[gui] = nil
+	gui:GetPropertyChangedSignal("Enabled"):Connect(function()
+		local w = wrote[gui]
+		if w ~= nil and gui.Enabled == w then
+			return -- this module's own write
+		end
+		want[gui] = gui.Enabled
+		wrote[gui] = nil
+		apply(gui)
+	end)
+end
 
 local function ownerOf(gui: Instance): number?
 	local v = gui:GetAttribute(OWNER_ATTR)
@@ -281,24 +346,57 @@ local function ownerOf(gui: Instance): number?
 	return nil
 end
 
-local function applyFilter(gui: LayerCollector, me: number)
+--[[ Client code that owns a label shows / hides it through this (never "Enabled = x" on a tagged label). ]]
+function WorldLabel.SetShown(gui: LayerCollector, on: boolean)
+	want[gui] = on
+	apply(gui)
+end
+
+--[[ LabelGovernor only: held = keep the label off (its owner's wish is kept and comes back on release). ]]
+function WorldLabel.Hold(gui: LayerCollector, on: boolean)
+	if (held[gui] == true) == on then
+		return
+	end
+	listen(gui)
+	held[gui] = on
+	apply(gui)
+end
+
+function WorldLabel.IsHeld(gui: LayerCollector): boolean
+	return held[gui] == true
+end
+
+--[[ True when the label's owner wants it on and it is not another player's owner-only label (the LabelGovernor's
+	"could be on screen" test; distance is the governor's job). ]]
+function WorldLabel.Wanted(gui: LayerCollector): boolean
+	if foreign[gui] == true then
+		return false
+	end
 	local owner = ownerOf(gui)
-	if owner ~= nil and owner ~= me then
-		if forced[gui] == nil then
-			serverEnabled[gui] = gui.Enabled
-		end
-		forced[gui] = false
-		if gui.Enabled then
-			gui.Enabled = false
-		end
-	elseif forced[gui] ~= nil then
-		forced[gui] = nil
-		local want = serverEnabled[gui]
-		if want ~= nil and gui.Enabled ~= want then
-			gui.Enabled = want
+	if owner ~= nil then
+		local lp = Players.LocalPlayer
+		if lp == nil or owner ~= lp.UserId then
+			return false
 		end
 	end
+	local w = want[gui]
+	if w == nil then
+		return gui.Enabled
+	end
+	return w
 end
+
+-- owner-only filter: someone else's label is held off on this client; handed to this player, its owner's wish returns
+local function applyFilter(gui: LayerCollector, me: number)
+	local owner = ownerOf(gui)
+	local other = owner ~= nil and owner ~= me
+	if (foreign[gui] == true) ~= other then
+		foreign[gui] = other
+	end
+	apply(gui)
+end
+
+local watched: { [LayerCollector]: boolean } = setmetatable({} :: any, { __mode = "k" })
 
 local function watch(inst: Instance, me: number)
 	if not (inst:IsA("BillboardGui") or inst:IsA("SurfaceGui")) then
@@ -310,16 +408,8 @@ local function watch(inst: Instance, me: number)
 		return
 	end
 	watched[gui] = true
-	serverEnabled[gui] = gui.Enabled
+	listen(gui)
 	gui:GetAttributeChangedSignal(OWNER_ATTR):Connect(function()
-		applyFilter(gui, me)
-	end)
-	gui:GetPropertyChangedSignal("Enabled"):Connect(function()
-		local f = forced[gui]
-		if f ~= nil and gui.Enabled == f then
-			return -- this client's own write (signals are deferred, so no re-entrancy flag)
-		end
-		serverEnabled[gui] = gui.Enabled
 		applyFilter(gui, me)
 	end)
 	applyFilter(gui, me)

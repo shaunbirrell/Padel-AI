@@ -7,10 +7,14 @@
 	  2. Prestige: × (1 + Prestige * EconomyConfig.PrestigeCashMultiplierPerLevel)
 	  3. Monetization VIP/DoubleCash: × MonetizationService.GetCashMultiplier
 	  4. Season: × SeasonService.GetCashMult()
-	  5. OutpostIncomeStacks: × (1 + stacks * OutpostIncomeBuff.MultPerStack)
-	     (stacks recount from owned territories — contested / stealable)
+	  5. Empire Tax (F3): × (1 + EmpireTaxPct / 100). EmpireTaxPct = OutpostIncomeStacks x MultPerStack (10 %) plus
+	     StarterPct (5 %) while the player holds their OWN Home Outpost, capped at MaxStacks x MultPerStack (50 %).
+	     Stacks recount from owned territories (contested / stealable); a Home Outpost is never a stack.
 	Passive income accrues to PendingCash (Money Collector); CollectPendingCash grants Cash.
 	ATM raid transfers PendingCash thief←victim without re-applying multipliers.
+
+	B1 (owner's 11 features, lane E): prestige is applied ONCE, here (step 2). BaseService's passive per-tick amount
+	and SoldierService's training per-tick amount are pre-multiplier, so prestige 1 pays exactly +10 %.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -18,6 +22,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local Types = require(Shared.Types)
 
 local EconomyService = {}
@@ -116,6 +121,81 @@ local NEVER_MULTIPLIED: { [string]: boolean } = {
 	atm_raid = true,
 }
 
+--[[ F3 Empire Tax (EconomyConfig.OutpostIncomeBuff). A Home Outpost row (TerritoryConfig.Starter, F10) is never a
+	stack: its id carries Starter.IdPrefix (so does a leftover id saved while the Starter was on, if it is off now).
+	Only the player's OWN Home Outpost (def.PlotId == profile.BasePlotId; the row exists only while Starter.Enabled)
+	adds StarterPct. Pure reads of the profile: no workspace, no yield. ]]
+local function isStarterId(id: any): boolean
+	if typeof(id) ~= "string" then
+		return false
+	end
+	if TerritoryConfig.IsStarterDef(TerritoryConfig.Territories[id]) then
+		return true
+	end
+	local prefix = TerritoryConfig.Starter and TerritoryConfig.Starter.IdPrefix
+	return typeof(prefix) == "string" and prefix ~= "" and string.sub(id, 1, #prefix) == prefix
+end
+
+local function ownsOwnStarter(profile: any): boolean
+	local st = TerritoryConfig.Starter
+	local plotId = tonumber(profile.BasePlotId)
+	local owned = profile.Territories
+	if not st or plotId == nil or plotId ~= plotId or typeof(owned) ~= "table" then
+		return false
+	end
+	local plot = math.floor(plotId)
+	local id = tostring(st.IdPrefix) .. tostring(plot)
+	if owned[id] ~= true then
+		return false
+	end
+	local def = TerritoryConfig.Territories[id]
+	return def ~= nil and TerritoryConfig.IsStarterDef(def) and def.PlotId == plot
+end
+
+-- whole % per captured outpost (10), MaxStacks (5) and the cap (50); float-safe (0.1 x 100 -> 10)
+local function empireTaxSteps(): (number, number, number)
+	local buff = EconomyConfig.OutpostIncomeBuff
+	local perStack = math.floor(((buff and buff.MultPerStack) or 0.10) * 100 + 0.5)
+	local maxStacks = math.max(0, math.floor((buff and buff.MaxStacks) or 5))
+	return perStack, maxStacks, maxStacks * perStack
+end
+
+local function storedStacks(profile: any, maxStacks: number): number
+	local n = tonumber(profile.OutpostIncomeStacks) or 0
+	if n ~= n then
+		return 0
+	end
+	return math.clamp(math.floor(n), 0, maxStacks)
+end
+
+-- Whole-number Empire Tax % for a profile: min(cap, stacks x 10 + (own Home Outpost held and StarterPct or 0))
+local function empireTaxPct(profile: any): number
+	local buff = EconomyConfig.OutpostIncomeBuff
+	if not buff or typeof(profile) ~= "table" then
+		return 0
+	end
+	local perStack, maxStacks, cap = empireTaxSteps()
+	local pct = storedStacks(profile, maxStacks) * perStack
+	if ownsOwnStarter(profile) then
+		pct += math.max(0, math.floor(tonumber(buff.StarterPct) or 0))
+	end
+	return math.clamp(pct, 0, cap)
+end
+
+local EMPIRE_TAX_ATTR = "WE_EmpireTaxPct" -- = EconomyConfig.OutpostIncomeBuff.Attribute (fallback only)
+
+-- WE_EmpireTaxPct (display only: the HUD chip). Written only when the value changes; nil and 0 both mean "none".
+local function publishEmpireTax(player: Player, pct: number)
+	local buff = EconomyConfig.OutpostIncomeBuff
+	local attr = if buff and typeof(buff.Attribute) == "string" then buff.Attribute else EMPIRE_TAX_ATTR
+	pcall(function()
+		local cur = player:GetAttribute(attr)
+		if cur ~= pct and not (cur == nil and pct == 0) then
+			player:SetAttribute(attr, pct)
+		end
+	end)
+end
+
 local function cashMultFor(player: Player, profile: any, reason: string?): number
 	local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 	local reasonKey = reason or ""
@@ -126,13 +206,10 @@ local function cashMultFor(player: Player, profile: any, reason: string?): numbe
 		-- v69: prestige is part of the non-exempt stack (was applied to exempt reasons too)
 		local prestige = math.max(0, tonumber(profile.Prestige) or 0)
 		mult = 1 + prestige * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0)
-		-- Permanent outpost capture stacks (passive / structure / training AccruePendingCash)
-		local buff = EconomyConfig.OutpostIncomeBuff
-		if buff then
-			local stacks = math.clamp(math.floor(tonumber(profile.OutpostIncomeStacks) or 0), 0, buff.MaxStacks or 5)
-			if stacks > 0 then
-				mult *= (1 + stacks * (buff.MultPerStack or 0.10))
-			end
+		-- F3 Empire Tax: captured outposts (+10 % each) and the own Home Outpost (+5 %), capped at +50 %
+		local taxPct = empireTaxPct(profile)
+		if taxPct > 0 then
+			mult *= (1 + taxPct / 100)
 		end
 		if MonetizationService and MonetizationService.GetCashMultiplier then
 			mult *= MonetizationService.GetCashMultiplier(player)
@@ -166,7 +243,25 @@ end
 type SteadyEntry = { Amount: number, At: number }
 local steadyIncome: { [number]: { [string]: SteadyEntry } } = {}
 
+-- F4 WE_TickTraining: the last training grant ($ per training tick, multipliers in) for the client's Training Yard
+-- label (ProducerLabels). Gated on EconomyConfig.ProducerLabels.Enabled only (not the guide flag); written only when
+-- the value changes. Oil pumps need no attribute: plot_oil is exempt, the label reads PlotOilPumpConfig.CashPerTick.
+local TICK_TRAINING_ATTR = "WE_TickTraining"
+
+local function noteTrainingTick(player: Player, reason: string?, granted: number)
+	local labels = EconomyConfig.ProducerLabels
+	if reason ~= "training" or not (labels and labels.Enabled == true) then
+		return
+	end
+	pcall(function()
+		if player:GetAttribute(TICK_TRAINING_ATTR) ~= granted then
+			player:SetAttribute(TICK_TRAINING_ATTR, granted)
+		end
+	end)
+end
+
 local function noteSteadyIncome(player: Player, reason: string?, granted: number)
+	noteTrainingTick(player, reason, granted) -- F4 (own flag; runs even while the guide is off)
 	if not TycoonGuideConfig.Enabled or reason == nil or TycoonGuideConfig.SteadyIncomeReasons[reason] ~= true then
 		return
 	end
@@ -419,16 +514,23 @@ function EconomyService.GetGold(player: Player): number
 end
 
 function EconomyService.GetOutpostIncomeMultiplier(player: Player): number
-	local profile = getDataService().GetProfile(player)
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
 	if not profile then
 		return 1
 	end
-	local buff = EconomyConfig.OutpostIncomeBuff
-	if not buff then
-		return 1
+	return 1 + empireTaxPct(profile) / 100
+end
+
+--[[ F3: the player's Empire Tax as a whole percent (0..50): captured outposts x 10 + 5 for the own Home Outpost,
+	capped. The same number cashMultFor pays with and WE_EmpireTaxPct shows. 0 without a profile. Never yields. ]]
+function EconomyService.EmpireTaxPct(player: Player): number
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
+	if not profile then
+		return 0
 	end
-	local stacks = math.clamp(math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0), 0, buff.MaxStacks or 5)
-	return 1 + stacks * (buff.MultPerStack or 0.10)
+	return empireTaxPct(profile)
 end
 
 --[[ Grant one outpost income stack (capped). Prefer SyncOutpostIncomeStacks for contested ownership. ]]
@@ -449,35 +551,46 @@ function EconomyService.GrantOutpostIncomeStack(player: Player): (boolean, numbe
 	stacks += 1
 	(profile :: any).OutpostIncomeStacks = stacks
 	getDataService().MarkDirty(player)
-	local pct = math.floor((buff.MultPerStack or 0.10) * 100)
+	publishEmpireTax(player, empireTaxPct(profile))
+	local pct = empireTaxSteps()
 	return true, stacks, pct
 end
 
 --[[
-	Recount OutpostIncomeStacks from profile.Territories (owned zone ids).
-	Returns (oldStacks, newStacks, percentPerStack).
+	Recount OutpostIncomeStacks from profile.Territories (owned zone ids). F3: Home Outposts (Starter rows) are never
+	a stack; the own one adds StarterPct to the total instead. Publishes WE_EmpireTaxPct (only when it changes).
+	Returns (oldStacks, newStacks, percentPerStack, totalEmpireTaxPct). The 4th value is new in F3 (callers that read
+	three values are unchanged); toasts that name the total use it or EconomyService.EmpireTaxPct.
+	PersistClaims (EconomyConfig.OutpostIncomeBuff, lane W): the % is always derived from the profile, which is what
+	persists; re-planting saved claims on join / releasing them on leave is TerritoryService's, which calls this after.
 ]]
-function EconomyService.SyncOutpostIncomeStacks(player: Player): (number, number, number)
-	local profile = getDataService().GetProfile(player)
+function EconomyService.SyncOutpostIncomeStacks(player: Player): (number, number, number, number)
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
 	if not profile then
-		return 0, 0, 0
+		return 0, 0, 0, 0
 	end
-	local buff = EconomyConfig.OutpostIncomeBuff
-	local maxStacks = if buff then (buff.MaxStacks or 5) else 5
-	local pct = math.floor(((buff and buff.MultPerStack) or 0.10) * 100)
+	local perStack, maxStacks = empireTaxSteps()
 	local owned = 0
 	if typeof(profile.Territories) == "table" then
-		for _ in pairs(profile.Territories) do
-			owned += 1
+		for id in pairs(profile.Territories) do
+			if not isStarterId(id) then
+				owned += 1
+			end
 		end
 	end
 	local newStacks = math.clamp(owned, 0, maxStacks)
 	local oldStacks = math.floor(tonumber((profile :: any).OutpostIncomeStacks) or 0)
+	if oldStacks ~= oldStacks then
+		oldStacks = 0
+	end
 	if oldStacks ~= newStacks then
 		(profile :: any).OutpostIncomeStacks = newStacks
-		getDataService().MarkDirty(player)
+		DS.MarkDirty(player)
 	end
-	return oldStacks, newStacks, pct
+	local total = empireTaxPct(profile)
+	publishEmpireTax(player, total)
+	return oldStacks, newStacks, perStack, total
 end
 
 --[[

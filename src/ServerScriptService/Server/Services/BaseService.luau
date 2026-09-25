@@ -247,9 +247,11 @@ function BaseService.OnPlotReady(cb: (Player, number) -> ())
 	end
 end
 
--- v72: prestige + territory % (what ComputePassiveIncomePerTick multiplies by) and the territory flat $ per tick
+-- v72: territory % (what ComputePassiveIncomePerTick multiplies by) and the territory flat $ per tick.
+-- B1 (owner's 11 features, lane E): no prestige here. EconomyService.AccruePendingCash("passive") applies prestige once
+-- (+10 % per prestige); applying it here as well paid x1.21 at prestige 1 instead of x1.10.
 local function passiveMultAndFlat(profile: Types.PlayerProfile, player: Player?): (number, number)
-	local mult = 1 + ((tonumber(profile.Prestige) or 0) * (EconomyConfig.PrestigeCashMultiplierPerLevel or 0))
+	local mult = 1
 	local flat = 0
 	-- Territory ownership bonuses (Phase 5)
 	if player and TerritoryService and TerritoryService.GetPassiveCashBonus then
@@ -269,7 +271,7 @@ function BaseService.ComputePassiveIncomePerTick(profile: Types.PlayerProfile, p
 	return math.floor(total * mult)
 end
 
--- v72: the multiplier ComputePassiveIncomePerTick applies (prestige + territory %), before EconomyService's stack.
+-- v72: the multiplier ComputePassiveIncomePerTick applies (territory %; B1: prestige is in EconomyService's stack).
 -- WE_IncomeMult = this x EconomyService.GetCashMult(player, "passive") (what one config $ pays into the ATM).
 function BaseService.PassiveMultiplier(profile: Types.PlayerProfile, player: Player?): number
 	local mult = passiveMultAndFlat(profile, player)
@@ -1348,8 +1350,8 @@ local function buildPlayerState(player: Player): Types.PlayerStatePayload?
 			if count < (cfg.MinSoldiersForIncome or 1) then
 				return 0
 			end
-			local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)
-			return math.floor(count * (cfg.CashPerSoldierPerTick or 0) * prestigeMult)
+			-- B1: pre-multiplier, like SoldierService (prestige is applied once, by EconomyService)
+			return math.floor(count * (cfg.CashPerSoldierPerTick or 0))
 		end)(),
 		Base = {
 			PlotId = profile.BasePlotId,

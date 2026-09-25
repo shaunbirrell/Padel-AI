@@ -1890,3 +1890,280 @@ this is display and prompting only: grants stay ProcessReceipt / pass ownership 
 - **N-L5 Nuke (#14):** the nuke core radius 75 / full 150 still covers the flags from the new aim point (0, 56); when
   NukeService is built it must hide or blank WE_NationFlag parts during the strike (CLAUDE.md: never a flag beside
   strike effects).
+
+## 2026-09-25 — Owner options batch B part 1 (tutorial order, cheapest NEXT, chevrons/labels behind flags, Empire Tax, prestige fix, squad formation)
+
+## Owner's 11 features, batch B part 1 (K2 tutorial/guide contracts, E economy, T tutorial, G guidance labels, Q squad formation)
+
+Merged by the batch-B part-1 integration verifier for lane Z to append to ASSUMPTIONS.md. Every line is reversible.
+Flags as shipped: TycoonGuideConfig.Chevrons.Enabled = false, EconomyConfig.ProducerLabels.Enabled = false,
+WorldLabelConfig.BaseLabelGovernor.Enabled = false, TerritoryConfig.Starter.Enabled = false,
+OutpostIncomeBuff.PersistClaims = false, CombatFairnessConfig.NoviceShield.Enabled = false.
+Ships ON by design: TutorialConfig.OrderVersion = 2 (7-step order, Jeep before Outpost while Starter is off),
+TycoonGuideConfig.PickMode = "Cheapest" (spec §1.2), the ATM screen digits/rate (E-10), the B1 fix (E-1).
+Ships ON pending the lead's OK: console NEXT tag follows the tutorial (G-6; undo: Chevrons.FollowTutorial = false),
+OrdersConfig.FollowPath.Enabled = true (Q-3) and the wing swap (Q-4).
+
+### Lead decisions recorded with batch B part 1
+- B1 is fixed in lane E: prestige is applied once, in EconomyService's grant stack (BaseService / SoldierService no
+  longer multiply it). Players who already rebirthed earn less passive/training income than before (+10 %/+50 % at
+  prestige 1/5 instead of +21 %/+125 %). RebirthKeepBase may be pasted only after this lands.
+- PendingCash is kept on rebirth; rebirth % is XP-based; PersistClaims stays behind its flag (lane Z).
+
+### K2 (TutorialConfig, TycoonGuideConfig, TycoonMath)
+K2-1. F6 AdvanceOn uses the real TutorialService.Notify event types. The spec's shorthand maps as follows: "Recruit" = RecruitSoldiers, "Capture" = CaptureTerritory, "Jeep" = SpawnVehicle. ClaimBase advances on PlotAssigned (as today). Reversible: edit AdvanceOn per step.
+
+K2-2. F6 migration of a v1 step index uses "first step not done yet":
+   - `TutorialConfig.MigrateLegacyStep` treats every v1 step before the saved index as done, by Id through LegacyAlias. It returns the first step of the current order that is not done.
+   - A same-Id mapping would move v1 steps 2 and 3 (Income or ClickDropper, Command Center not bought) straight to Collect cash, and skip the Command Center step.
+   - The cost: a v1 player saved on step 8 (Outpost; the 4x4 already done) repeats the 4x4 step once the Home Outpost is on.
+   - Reversible: TutorialService may map by Id instead.
+
+K2-3. F6 the saved TutorialStep index is read in the order that is live when the profile loads. OrderVersion stays 2 whatever the Home Outpost flag says.
+   - A player mid-tutorial when lane Z flips `TerritoryConfig.Starter.Enabled` can see steps 6 and 7 trade places once.
+   - Only the 4x4 and Outpost steps are affected: the step may repeat or be skipped, and there is no money effect.
+   - Reversible: give the Jeep-first order its own OrderVersion.
+
+K2-4. F6 the Collect cash step carries `Pointer = "ATM"`. That is how the F5 chevrons and GuideTarget know the step points at the own ATM when it has no PadStructureId. Reversible: remove the field; GuideTarget then shows no pointer on that step.
+
+K2-5. F5 PickCheapest keeps only Cash-currency structures. This is a guard, and no structure uses Gold today.
+   - It filters rebirth zones through `RebirthConfig.IsStructureOpen(prestige or 0)`.
+   - BusinessService does not pass Prestige yet. That is harmless while no zone structure is in StructureOrder, which is true today.
+   - Reversible.
+
+K2-6. F5 PickMode "Cheapest" ignores the v72 Opening, soldiers and stickiness (Hysteresis). The Score path is kept untouched: `PickMode = "Score"` restores v72 exactly.
+
+K2-7. F5 Footprints are one axis-aligned plot-local rectangle per BaseLayoutConfig site. The sizes come from these configs:
+   - walk-in: StructureVisualConfig.HollowBuildings Width × Depth;
+   - outdoor: Installations Width × Depth;
+   - business: the BusinessConfig Kit "Slab" (22×12);
+   - Dock: Palettes TargetFootprint 44×28, a rough box that misses its pier. The Dock sits behind the inner wall and its kiosk is in the main compound.
+   - Entrances and signature pieces (porticos, berms, loading dock) are not in the rectangles.
+   - Reversible: add a Footprint override table.
+
+K2-8. F5 the walk-in ApproachPoint is `DoorLeadStuds` (5) straight out of the front door (HollowBuildings DoorX, Depth / 2), turned by the site Yaw. Kiosks and businesses use their kiosk, and the ATM uses Courtyard.Collector.
+
+K2-9. F5 one pointer during the tutorial: `TycoonMath.GuideTarget` gives the active step's own pad (PadBuy), the ATM (Collect cash) or nothing. The spec's §1.2 FollowTutorial deviation now applies to every surface that uses GuideTarget.
+   - With the businesses on, WE_NextBuy for a fresh player is AmmoWorks:1 ($600, the cheapest pad), while tutorial step 2 is the Command Center.
+   - So lane G should put the console NEXT tag on GuideTarget too (a recommendation, not a K2 change).
+   - The Base-panel badge (BaseController, in no lane) keeps showing WE_NextBuy.
+
+K2-10. F5 economy (python model, not Roblox): PickMode Cheapest fixes the v72 Run C 10-minute wait but lowers the 30-60 min income, because the pick never offers soldiers and prefers cheap, low-yield levels. The owner asked for "cheapest", so this ships. The owner decides whether to accept the slower ramp or tune later (Run D band 280-380 $/s at 30 min is not met).
+
+    | Run | Score pick (v72) | Cheapest pick (K2) |
+    |---|---|---|
+    | C: longest wait in the first 10 min | 141 s (fails the 120 s target) | 107 s (passes) |
+    | C: $/s at 30 / 60 min | 177 / 346 | 136 / 268 |
+    | D: $/s at 30 / 60 min | 295 / 531 (passes the 280-380 and ≤ 560 bands) | 136 / 268, the same as C because the pick never offers soldiers (fails the 280-380 band) |
+    | D with the player also recruiting under the 34% rule (sensitivity) | – | 204 / 394 |
+
+### E (EconomyService, SoldierService, MoneyCollectorService, BaseService B1 lines)
+
+E-1. **B1 fixed: prestige is applied once, in EconomyService's grant stack** (lead decision). BaseService's passive per-tick
+     amount (passiveMultAndFlat) and SoldierService's training per-tick amount no longer multiply prestige (they were
+     x(1 + 0.10 P) and x(1 + 0.05 P) on top of EconomyService's x(1 + 0.10 P)). Prestige 1 now pays exactly +10 % on passive and
+     training (was +21 % passive, +15.5 % training); prestige 5 pays +50 % (was +125 % / +87.5 %). This makes PrestigeConfig's
+     "+10% cash forever" and the RebirthSummary "Total now +N%" true, so RebirthKeepBase can be pasted after batch B lands.
+     It lowers the income of players who have already rebirthed (their prestige bonus was double-counted). Revert: restore the
+     prestige factor in BaseService passiveMultAndFlat and SoldierService trainingIncomePerTick.
+E-2. **The per-tick training number shown in the Army panel (SoldierStateUpdate.TrainingIncomePerTick) and in PlayerState is
+     pre-multiplier** (soldiers x $8), like the client's own fallback and BaseService's PassiveIncomePerTick. It never
+     over-promises; the real paid amount (multipliers in) is WE_IncomePerSec (cash pill, ATM) and WE_TickTraining (F4 label).
+     The BaseService PlayerState line is edited only because it duplicated SoldierService's B1 formula.
+E-3. **The server Training Yard pop is skipped while EconomyConfig.ProducerLabels.Enabled is true, not deleted.** Spec F4 says
+     "delete"; with the flag off (today) the yard would otherwise lose its only income feedback until lane Z switches the
+     client label on. With the flag on, SoldierService makes 0 BillboardGuis (tested over 20 ticks). Lane Z may delete
+     refreshTrainingYardFeedback once the flag is on for good. Revert: call it unconditionally.
+E-4. **WE_TickTraining = the last training grant with every multiplier in** (prestige, Empire Tax, 2x Cash, season), written only
+     when it changes and only while ProducerLabels.Enabled (not tied to TycoonGuideConfig.Enabled). It is not cleared when the army
+     drops to 0; the client label hides itself when there are no soldiers (spec F4). Oil needs no attribute (plot_oil is exempt;
+     the label reads PlotOilPumpConfig.CashPerTick).
+E-5. **Empire Tax = min(50, captured-outpost stacks x 10 + 5 for the player's OWN Home Outpost)**, applied as one factor
+     x(1 + pct/100) in the non-exempt grant stack, multiplicative with prestige, 2x Cash and season (the existing stack order).
+     collector, plot_oil, atm_raid, admin, devproduct and the other CashMultExemptReasons stay exempt; missions and capture
+     stipends are taxed (as before). The Home Outpost adds its 5 only while its TerritoryConfig row exists (Starter.Enabled)
+     and def.PlotId == profile.BasePlotId; another plot's Home Outpost gives nothing.
+E-6. **A Home Outpost id is never a stack**, also a leftover "Starter_P<n>" id saved while the Starter was on and read while it is
+     off (matched by TerritoryConfig.Starter.IdPrefix); such a leftover gives neither a stack nor the 5 %.
+E-7. **WE_EmpireTaxPct is written by SyncOutpostIncomeStacks (and the legacy GrantOutpostIncomeStack) only when it changes; nil
+     and 0 both mean "none"** (a player who never held a zone gets no attribute write). It is not written on profile load by
+     EconomyService: TerritoryService's load hook already calls SyncOutpostIncomeStacks.
+E-8. **SyncOutpostIncomeStacks now returns a 4th value, the total Empire Tax %**; the first three (old stacks, new stacks,
+     per-stack %) are unchanged, so today's TerritoryService toasts keep working. Lane W's config toasts (total %) should use the
+     4th value or EconomyService.EmpireTaxPct(p).
+E-9. **PersistClaims needs no branch in EconomyService.** The % is always derived from the profile (profile.Territories ->
+     OutpostIncomeStacks, BasePlotId), which is what persists; re-planting saved claims on join and releasing them on leave is
+     lane W's (TerritoryService), which calls SyncOutpostIncomeStacks afterwards. See the open issue for lane W on the leave path.
+E-10. **ATM screen (F4)**: digits use TycoonMath.ShortCash ("$1,240", "$25K", "$1.9M"; were raw "$1240"). Status priority
+     shield > being robbed > AUTO-COLLECT > (cash waiting ? "ATM · WALK IN TO COLLECT" : "+$24/s" from the owner's
+     WE_IncomePerSec, floored like the HUD). With no rate yet (WE_IncomePerSec missing or 0, e.g. while TycoonGuideConfig is off)
+     the empty ATM keeps the walk-in line. This is not flag-gated: it adds no instance, label or SurfaceGui (spec F4 ships it
+     with lane E). An unowned ATM shows $0 and the walk-in line, as before.
+
+### T (TutorialService, TutorialController)
+T-1  Tutorial dispatch (F6): a TutorialService.Notify advances only the ACTIVE step, and only when that step's
+     TutorialConfig AdvanceOn lists the event. An "Upgrade" also needs detail == the step's PadStructureId (a
+     string; a nil or junk detail never advances). No step index is hard-coded in TutorialService, so the order lives
+     in TutorialConfig alone. Reversible: restore the v72 STEP_* chain (git history) together with the v1 config.
+
+T-2  Save migration (F6): on profile load, a save whose TutorialOrderVersion is below TutorialConfig.OrderVersion
+     (missing = 1 = the v1 order) and whose tutorial is not finished moves to TutorialConfig.MigrateLegacyStep(step):
+     the first F6 step not yet done (v1 steps 2-4 -> Command Center, 5 -> Recruit, 6 -> Barracks, 7 -> the first of
+     4x4 / Outpost in the current order, 8 -> Outpost, 9+ -> finished). Owned buy steps are then skipped as before.
+     A finished tutorial keeps its step; only the version stamp changes. Every migrated save is stamped with
+     OrderVersion and marked dirty. A save from a NEWER order (a rollback of this build) is left alone and never
+     stamped down, so a step index is never migrated twice. Reset (admin) stamps the current version (step 1 is the
+     same step in every order).
+
+T-3  A migrated save past the last step, or one where every remaining step is already done, is marked
+     TutorialComplete at load (so the tutorial never sits on a step index past the end).
+
+T-4  Novice shield (F6): the tutorial ending ends the shield at once: the last step, SKIP, and a tutorial found
+     finished at load each call pcall(CombatService.EndNoviceShield, player, "tutorial") (CombatService from the
+     Bootstrap deps; nil-checked). CombatService's own 1 Hz sweep remains the backstop. With
+     CombatFairnessConfig.NoviceShield.Enabled = false (today) the call is a no-op.
+
+T-5  Starter Pack after the tutorial (spec §5 line 12): the tutorial can now end in a vehicle, so the after-tutorial
+     offer (tutorial complete or SKIP) first waits until the player is in no seat (Humanoid.SeatPart == nil), checked
+     at 1 Hz, for at most 300 s in total (one budget for the whole schedule, retries included); then the existing
+     gate (MonetizationService.TrySoftOfferStarterBundle) is called as before, and it and the HUD throttle still
+     decide. A player on foot sees no change (+3 s). The at-load ("session", +8 s) offer is unchanged. The 300 s and
+     1 Hz are local constants with optional overrides MonetizationConfig.StarterBundleOffer.SeatedWaitSeconds /
+     SeatedCheckSeconds (lane T may not edit MonetizationConfig; lane Z may add the two keys there, config-first).
+
+T-6  Home Outpost already taken (F6/F10): while TerritoryConfig.Starter.Enabled, the Outpost step counts as done when
+     profile.StarterOutpostTaken is true (set by lane W on the first capture). Reason: later sessions own the Home
+     Outpost from the start, so it can never be captured again for the step, and the next zone is over the 30 s
+     walk. With the Starter off (today) nothing changes. Reversible: drop the Outpost branch of stepAlreadyDone.
+
+T-7  Outpost target (F6/F10, client): the tutorial Outpost beam goes to the player's OWN Home Outpost
+     (Starter_P<plot>) while it exists on the client and the player does not hold it; another plot's Home Outpost is
+     never a target (only its owner can take it), and a Home Outpost is never chosen while the plot id is unknown.
+     "Nearest" for every other zone is measured from the player's own main gate (plot-local (0, PlotSize/2) through
+     PlotFrame, pure config, streaming-safe), not from the character, so the answer is the same anywhere in the base
+     and never a zone behind the walled plot (HEAD picked WestDepot behind plot 2's rear wall from the spawn; the gate
+     picks CentralPlaza in front of the gate). Changed tutorial-target results on the live map (Starter off,
+     FaceMapCentre true): plots 2-5 now go to CentralPlaza (was WestDepot / NorthRidge / SouthDocks / EastArmory);
+     plots 1 and 6 unchanged. Tier order otherwise as before (neutral land, then other uncontested land, then
+     rigs / forts, then contested / own).
+
+T-8  With the Starter off (today) the order is 4x4 (step 6) then Outpost (step 7): the first capture is a drive from
+     the gate of 631-755 studs to the zone centre (plot 1 RadarHill 631, plots 2/5 CentralPlaza 755, plots 3/4
+     CentralPlaza 640, plot 6 OilFields 631; FaceMapCentre true), about 12-14 s at the Field 4x4's 55 studs/s, so
+     no empty walk over 30 s. With the Starter on: console -> gate -> Home Outpost ring edge = 200 studs on every
+     plot (12.5 s on foot at 16 studs/s), under the 480-stud acceptance.
+
+T-9  Tutorial re-aim (client): any step whose beam target is a world part (a console, the own spawn / ATM / manual
+     dropper, a zone) re-aims on the existing 1 Hz tick, at most every 2 s, while that part is not on this client
+     (streamed out, or built after the step was pushed). Steps that open a panel (Recruit, 4x4) never re-aim. This
+     replaces v72's Ammo Works-only re-aim (no step is a business since K2). The 1 Hz tick now always runs (it ran
+     whenever TycoonGuideConfig or BusinessConfig was on, i.e. live today); the guide parts still no-op while the
+     guide flag is off.
+
+T-10 The objective chip's step disc shows the step number 1-7 (payload Total = TutorialConfig.StepCount() = 7); spec
+     "update the chip /7" is read as the total becoming 7. No "n/7" text was added (the disc is 36 v; it would not
+     fit the circle at phone scale).
+
+T-11 The TutorialStateUpdate payload also carries Pointer (TutorialConfig step field; "ATM" on Collect cash), for lane
+     G's chevrons / console NEXT tag. Clients that ignore it are unaffected.
+
+T-12 Known limit (from K2 note 5, unchanged): when lane Z flips TerritoryConfig.Starter.Enabled, OrderVersion stays 2,
+     so a player saved on step 7 (Outpost, 4x4 already done) at that moment is put back on the 4x4 step (now 7) and
+     never gets the Outpost step: one repeat, one skip. A player saved on step 6 (4x4 not done) just does Outpost,
+     then 4x4. (With T-6, a player who already took the Home Outpost skips it anyway.)
+
+### G (NextPadChevrons, ProducerLabels, LabelGovernor, WorldLabel, Bootstrap, BusinessVisuals, WorldPromptController)
+G-1. F4 LabelGovernor: "at most 3 on screen at a base" counts every BillboardGui tagged WE_BaseLabel except the one label whose WE_LabelRole is "objective". The objective marker is never held and never takes one of the 3 slots. Reversible: count it (drop the exemption in LabelGovernor.isExempt).
+
+G-2. F4 LabelGovernor holds EVERY governed label that is not among the 3 nearest drawable ones (not only the ones in range), and a newly tagged label starts held. So the cap holds between passes too. The cost: a label can show up to one frame late when it is created, and up to one pass (0.25 s at Hz 4) late when its owner shows it again while it is held (a business pop that lives 1.2 s). Reversible: hold only labels within their MaxDistance.
+
+G-3. F4 "Nearest" = straight distance from the camera to the label's adornee (a Model uses its PrimaryPart; no adornee = its parent part / attachment) plus StudsOffsetWorldSpace, and only labels within their own MaxDistance count. There is no view-frustum test: a label behind the camera can hold a slot, so at worst fewer than 3 are visible, never more. Reversible.
+
+G-4. F4 WorldLabel owns a label's Enabled on the client: shown = its owner wants it AND the owner filter does not hide it (someone else's owner-only label) AND the governor does not hold it. The owner's wish is what WorldLabel.SetShown was last told, or any Enabled change WorldLabel did not write (server replication, other code). Client code that hides a tagged label must call SetShown: BusinessVisuals pops, the console / NEXT tags and the producer label do. Known limit (the same one the owner filter already documents): a write that does not change the value fires no event, so a server hide of a label that is held at that moment is missed. No server code toggles Enabled on base labels today. The owner-filter behaviour is unchanged (scripted differential trace identical on HEAD's WorldLabel and lane G's).
+
+G-5. F4 every console price / NEXT tag on the own plot (WE_PriceBillboard) is a governed base label, not only the gold NEXT one: the spec's §1.1 says every base BillboardGui carries the tag, and any console tag becomes the NEXT tag when it is the pick. The NEXT tag gets no priority: near the ATM the 3 pads can win the slots. The floor chevrons still point the way. Reversible: tag only the pick's tag.
+
+G-6. F5 one pointer, console NEXT tag: the gold "NEXT" console tag now marks TycoonMath.GuideTarget's pad, the same target as the chevrons. That is the active tutorial step's own pad (Command Center, Barracks) while the tutorial runs, no console on the other steps, then WE_NextBuy. This ships ON with no flag of its own, because PickMode "Cheapest" also ships on: without it, during tutorial step 2 (Command Center) the gold NEXT tag would sit on Ammo Works (the cheapest pad) and contradict the tutorial. Reversible: TycoonGuideConfig.Chevrons.FollowTutorial = false (this also switches the chevrons to WE_NextBuy during the tutorial). The Base-panel NEXT badge (BaseController, in no lane) still shows WE_NextBuy.
+
+G-7. F5 when this client never received the current tutorial step (the TutorialStateUpdate push reached TutorialController before lane G's modules connected), but the HUD "Tutorial" flag says a step is up, the chevrons and the console NEXT tag show nothing until the next tutorial push. They never fall back to the post-tutorial pick in that case. Reversible.
+
+G-8. F5 a chevron is left out when its whole reach, about 2.07 studs from its centre point (arm ends plus half a bar width), would touch a TycoonMath.Footprints rectangle or the pad edge. The spec only skips centre points inside a footprint, so this is stricter: no bar pokes into a building or off the pad. The other chevrons keep their 5-stud slots. In the sweep, about 15% of slots are left out, and a player standing right beside a business line can see no chevrons until the straight line leaves its footprint. Reversible: the CLEAR constant in NextPadChevrons.
+
+G-9. F5 chevron look: transparency runs from TransparencyNear on the chevron nearest the player to TransparencyFar on slot Count, linearly. The bar centre sits at pad top + Lift (0.12); bars are 0.08 thick, so over the road asphalt (top at pad + 0.12) 0.04 studs show. Two bars meet at the tip, which points at the target. Reversible.
+
+G-10. F5 "GO beam up" = ConsoleWaypoint.Current() ~= nil, meaning the Base panel / guide chip GO line: the chevrons step aside while it shows. The tutorial's own thin guide beam does NOT hide them, because the spec wants chevrons during the tutorial ("a fresh alt sees chevrons to the CC door, then the ATM, then the Barracks"). Reversible.
+
+G-11. F5 / F4 own plot id: BaseStateUpdate / PlayerStateUpdate PlotId, else the plot whose pad holds the server-stamped WE_AtmPos or WE_ConsolePos_CommandCenter. That uses no server call: NextPadChevrons is pinned against InvokeServer. While the id is unknown the chevrons retry every RetargetRetrySeconds. The chevron target itself is config-only (ApproachPoint + PlotFrame), so nothing waits for a console part to stream in.
+
+G-12. F4 the producer label is one client BillboardGui in a local Workspace folder "WE_ProducerLabelLocal", the same pattern as BusinessVisuals' pops. Its Adornee is the chosen producer part. It pulses (UIScale 1 -> 1.15 -> 1 over PulseSeconds, one reused TweenService tween, no Lua per-frame work) on each WE_PassiveTick / WE_TickTraining change. When neither changes for two ticks (businesses off) it pulses on a local 5 s clock. Reversible.
+
+G-13. F4 the yard label shows WE_TickTraining (EconomyService, lane E) and only while it is > 0 AND the last SoldierStateUpdate / PlayerStateUpdate TrainingIncomePerTick is > 0 (verifier fix: the server writes WE_TickTraining only on a grant, so after the soldiers are dismissed it keeps the last value). No soldiers, no yard label. Before any push reports TrainingIncomePerTick, WE_TickTraining > 0 alone decides. The pump label always shows PlotOilPumpConfig.CashPerTick ($18). Other plots' producers are never anchors.
+
+### Q (base identity lane C: SquadOrdersService, OrdersConfig)
+Q-1  Squad Follow slots come from OrdersConfig.FollowSlots, as the base spec gives them: {-5.5,1.5}, {5.5,1.5},
+     {-10,3.5}, {10,3.5}, {-14.5,5.5}. +X is the player's right and +Z is behind the player. This gives two wings beside
+     the player instead of rows 6-9.5 studs straight behind (the old grid put slot 2 on the camera line and slot 5 in
+     front of the avatar). Reversible: set FollowSlots = {} to go back to the old grid, which is kept as the fallback.
+
+Q-2  Slots 6-8 (only reachable with Squad Expansion research) repeat slots 1-3, one rank (FollowRankStepZ = 3.5)
+     further back per rank. They do not use the old grid, whose slot 6 sits at the camera's shoulder and whose slot 8 sits
+     on the camera line once zoomed out. Both prototypes wrapped slots 6-8 onto slots 1-3, which puts two units on one
+     spot. Reversible: this is one line in formationOffset, and FollowRankStepZ = 0 reproduces the prototypes' wrap.
+
+Q-3  FollowPath ships ON (OrdersConfig.FollowPath.Enabled = true). This is not in the spec's lane C file list, but the
+     spec's owner test 6 expects the units to "walk beside you, including through doors and narrow lanes". With the slots
+     alone, the headless sim got 0 of 5 units through a 6-stud door and 3 of 5 through an 8-stud lane.
+     What it does, in order:
+       - if a unit's 2-stud body cannot walk straight to its slot, it stands against the wall beside the player (WallGap
+         1.5, never nearer than MinSide 3 to the player's centre line);
+       - failing that, it squeezes 2 studs in toward the player when a wall end is in its way;
+       - failing that, it walks the player's own trail (a point every 3 studs, last 12 kept).
+     Server raycasts only; no pathfinding, no new remotes or parts.
+     Reversible: FollowPath.Enabled = false restores the plain MoveTo to the slot.
+
+Q-4  After a turn the squad swaps its wings left <-> right when that is clearly shorter for the whole squad
+     (FollowMirrorHysteresis = 3 studs per unit). Units then keep to their side instead of crossing behind the player.
+     Distances only, no rays. Reversible: set FollowMirrorHysteresis = math.huge.
+
+Q-5  Facing is measured against the slot. A walking unit faces where it walks, and a unit in its slot (within
+     FollowArriveStuds = 2) faces where the player faces. HEAD's "face the player beyond 10 studs" rule would make the
+     10-15.5-stud wings crab-walk sideways. The old player-distance rules (FollowDistance / FollowStopDistance) still apply
+     with the old grid (FollowSlots = {}).
+
+Q-6  A replacement unit takes the lowest free slot. At HEAD it took #Units + 1, so after a death two units shared the last
+     slot and slot 2 stayed empty; the stand-in shows "1,3,4,5,6,7,8,8" at HEAD. Dropping soldiers removes the outermost
+     slot first, where HEAD removed the newest unit.
+
+Q-7  A new unit spawns in its slot. When a wall stands between the player and the slot (e.g. recruiting inside the
+     Barracks), it spawns at the old grid spot. If that is blocked too, it spawns on the player's trail, and if that
+     fails, in the slot as before. The trail is recorded for every player with a character, 2.5 times a second: one
+     distance check, and a point only after 3 studs of movement on the ground.
+
+Q-8  The helmet is a dome: a SpecialMesh Sphere on the existing Helmet part, 1.3 x 0.75 x 1.35 at (0, 1.91, 0.02). That
+     is 0 new parts and 1 new SpecialMesh instance per field unit (at most 8 per player). The catalog character overlay,
+     when it loads, still hides the primitive body as before.
+
+Q-9  The formation test's camera model is taken from the PlayerModule defaults as I remember them: zoom 12.5, initial
+     pitch -15 deg, focus at the root + 1.5, vertical FOV 70. I assumed that on touch devices the default camera follows
+     behind the character while it moves. This needs a phone to confirm.
+
+### Integration notes (batch B part 1 verifier)
+- INT-1. K2 and T land in one commit (with E, G, Q in the same commit here): K2 alone leaves HEAD's TutorialService on
+  the deleted TutorialConfig.BusinessStepIndex (1 type error, tutorial broken).
+- INT-2. Scratch suites that encode pre-batch-B behaviour must be switched by lane Z (they are not repo tests):
+  worldhook tut_true/tut_false (tut_driver_biz, "nearest zone from the spawn", 57/4 and 60/1) -> T/t_client_driver.luau;
+  tycoon/build/A/biz_driver_a.luau -> E/biz_driver_a_e.luau is still 63/6 on the batch (K2's 6 intended pick/tutorial
+  changes) -> use E/biz_driver_k2_e.luau (71/0); K2/biz_driver_k2.luau -> E/biz_driver_k2_e.luau;
+  agentf/f2/raid_driver_f2.luau -> E/raid_driver_f2_e.luau; m1 b2_service_driver -> T/b2svc_laststep.luau once the
+  Starter flag is flipped.
+- INT-3. BuyPathStatic: retire pins 475, 2156-2159, 2272, 2273, 2382; change needle 1641; insert integB1/bps_block.py
+  before parse_gate() (see integB1/bps_changes.txt). Pin 476 ("ManualDrop") now matches only a comment - lane Z may retire.
+
+### Lead
+- **B1-L1 Cheapest-first NEXT pick ships ON (owner option #5).** `TycoonGuideConfig.PickMode = "Cheapest"`. Model: a
+  player who only follows the NEXT pick earns 136 $/s at 30 min (v72 score pick: 295), because the cheapest-pad pick
+  never offers soldiers (training income); a player who also recruits on their own: 204 $/s. Early pacing is better
+  (longest wait in the first 10 minutes 107 s vs 141 s). Revert in one line: `PickMode = "Score"`.
+- **B1-L2 Accepted as shipped:** the console NEXT tag follows the tutorial step (G-6, undo `Chevrons.FollowTutorial =
+  false`); squad FollowPath on + wing swap (Q-3/Q-4); prestige is now exactly +10 % per rebirth on passive income and
+  training (the old code applied it twice).

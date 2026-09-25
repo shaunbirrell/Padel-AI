@@ -10,6 +10,7 @@ local Constants = require(Shared.Constants)
 local SoldierConfig = require(Shared.Configs.SoldierConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
 
 local TRAIN_POP_RADIUS = 28 -- studs: the "+$N" training pop shows only to the owner standing this close (spec §5)
@@ -45,6 +46,8 @@ local function slowDownToast(player: Player, what: string)
 	end
 end
 
+-- Training $ per tick BEFORE multipliers. B1 (owner's 11 features, lane E): prestige is applied once, by
+-- EconomyService.AccruePendingCash (reason "training", +10 % per prestige), not here as well (was x1.05 more each).
 local function trainingIncomePerTick(profile: any): number
 	local cfg = SoldierConfig.TrainingIncome
 	if not cfg then
@@ -56,8 +59,7 @@ local function trainingIncomePerTick(profile: any): number
 		return 0
 	end
 	local per = cfg.CashPerSoldierPerTick or 0
-	local prestigeMult = 1 + ((tonumber(profile.Prestige) or 0) * 0.05)
-	return math.floor(count * per * prestigeMult)
+	return math.floor(count * per)
 end
 
 
@@ -381,7 +383,11 @@ function SoldierService.Init(deps: { [string]: any })
 						else
 							EconomyService.AddCash(player, amount, "training")
 						end
-						refreshTrainingYardFeedback(player, profile, amount)
+						-- F4: with EconomyConfig.ProducerLabels on, the client's owner-only yard label (WE_TickTraining)
+						-- replaces this server pop, so the server makes no BillboardGui per tick
+						if not EconomyConfig.ProducerLabels.Enabled then
+							refreshTrainingYardFeedback(player, profile, amount)
+						end
 					end
 				end
 			end

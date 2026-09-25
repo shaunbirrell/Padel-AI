@@ -24,9 +24,43 @@ local OrdersConfig = {
 	},
 
 	ThinkInterval = 0.4,
-	FollowDistance = 10,
-	FollowStopDistance = 6,
-	FormationSpacing = 3.5,
+	FollowDistance = 10, -- old grid only (FollowSlots empty): face the player beyond this
+	FollowStopDistance = 6, -- old grid only: stop within this of the player
+	FormationSpacing = 3.5, -- old grid (3 wide, rows 6 / 9.5 / 13 studs straight behind the player)
+	-- Base identity lane C (owner: the squad blocked the camera). Follow slots in player-local studs: +X is the
+	-- player's right, +Z is BEHIND the player. Two wings beside the player, clear of the third-person camera's
+	-- line to the player (the old grid put 2 of 5 units right between the camera and you). Slot 6+ (Squad
+	-- Expansion research) repeats the list FollowRankStepZ further back per rank. Empty list = the old grid.
+	FollowSlots = {
+		{ X = -5.5, Z = 1.5 },
+		{ X = 5.5, Z = 1.5 },
+		{ X = -10, Z = 3.5 },
+		{ X = 10, Z = 3.5 },
+		{ X = -14.5, Z = 5.5 },
+	},
+	FollowRankStepZ = 3.5,
+	FollowArriveStuds = 2, -- within this of its slot a unit stands still and faces where the player faces
+	FollowMirrorHysteresis = 3, -- after a turn the wings swap sides when that saves this many studs per unit
+	-- FollowPath: a unit that cannot walk straight to its slot stands against the wall beside the player when the slot
+	-- is inside or behind that wall (walking along a building), squeezes in when a wall end is in its way, else walks
+	-- the player's own trail (a 6-stud door, a narrow lane, a floor above) and fans back out once its slot is
+	-- walkable. Server raycasts per unit per think (2.5 Hz): 0 in its slot, 2 on the way, 5 against a wall, 5-11 on
+	-- the trail, a full trail scan only on losing its place (at most every RescanSeconds when nothing is walkable).
+	-- Enabled = false = straight MoveTo, as before.
+	FollowPath = {
+		Enabled = true,
+		CrumbSpacing = 3, -- studs the player moves before a new trail point
+		MaxCrumbs = 12,
+		ResetJump = 40, -- a jump this far (respawn, recall, vehicle) starts a new trail
+		ReachStuds = 2.5, -- a unit this close to its trail point takes the next one
+		StopGap = 4, -- trail points closer than this to the player are skipped (a cut-off unit stops behind you)
+		RescanSeconds = 2,
+		RayDrop = 1, -- rays run this far below the root centres (knee-to-waist): kerbs and pads never block
+		RayHalfWidth = 0.9, -- one ray along each edge of the unit's 2-stud body
+		WallGap = 1.5, -- a unit against a wall stands this far off it
+		MinSide = 3, -- ...and only when that leaves this much room from the player's centre line (else the trail)
+		SqueezeStuds = 2, -- a wall end in the way of an open slot: aim this much nearer the player instead
+	},
 	AttackAggroRange = 120,
 	AttackRange = 55,
 	AttackDamage = 8,

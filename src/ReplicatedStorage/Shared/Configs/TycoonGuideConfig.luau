@@ -15,17 +15,24 @@
 	live here, not in HudConfig.
 
 	Enabled = false until integration (the lead flips it together with BusinessConfig.Enabled).
+
+	F5 (owner's 11 features, lane K2): PickMode "Cheapest" = the one pointer is the cheapest unpaid console pad
+	(TycoonMath.PickCheapest: the lowest next price among open, non-maxed structures and businesses; never soldiers or
+	Robux items; affordability ignored). It drives WE_NextBuy, so the NEXT chip, the console NEXT tag, the Base-panel
+	badge and the floor chevrons (Chevrons below) all agree. PickMode "Score" = the v72 Opening + payback score.
 ]]
 
 local TycoonGuideConfig = {
 	Enabled = true,
 
-	-- Pick rules (TycoonMath.PickNext). Opening: the first entry that is open now (requirements met, level not owned)
-	-- wins. After the Opening the candidate with the lowest score wins:
+	-- F5: "Cheapest" (TycoonMath.PickCheapest; ties -> lower target level, then StructureOrder) | "Score" (v72 below)
+	PickMode = "Cheapest",
+	-- PickMode "Score" rules (TycoonMath.PickNext). Opening: the first entry that is open now (requirements met, level
+	-- not owned) wins. After the Opening the candidate with the lowest score wins:
 	--   score = WaitWeight * secondsUntilAffordable(wallet + ATM) + cost / ((gainPerTick + UnlockValuePerTick) / 5)
 	Opening = { "CommandCenter:1", "AmmoWorks:1", "WeaponsFacility:1", "ArmsCrateLine:1", "Barracks:1" },
 	WaitWeight = 1.0,
-	IncludeSoldiers = true, -- "Recruit soldiers" is a candidate (ARMY opens the Army panel); false = consoles only
+	IncludeSoldiers = true, -- "Score" only: "Recruit soldiers" is a candidate (ARMY opens the Army panel); "Cheapest" never
 	SoldierCandidateId = "Soldier", -- WE_NextBuy = "Soldier:0"
 	-- Soldiers are offered only while training income (soldiers x SoldierConfig.TrainingIncome.CashPerSoldierPerTick)
 	-- is below this share of the total base income per tick (passive + training + plot oil).
@@ -165,6 +172,36 @@ local TycoonGuideConfig = {
 	TextRefreshHz = 2, -- cash pill +$/s suffix and console tags
 	EtaRefreshHz = 1, -- "ready in m:ss" on the chip / BUY button
 	PillIncome = true, -- "+$N/s" suffix on the cash pill (green, 20 v, not tappable)
+
+	--[[ F5 floor chevrons (Client/Modules/NextPadChevrons, lane G): client-only, owner-only gold floor bars that lead
+		from the player to TycoonMath.ApproachPoint of the pick (WE_NextBuy, else the local PickCheapest), inside the own
+		plot only. Two bars at +-BarAngleDeg make one chevron; Count chevrons SpacingStuds apart, the first LeadStuds
+		ahead of the player, the last StopShortStuds before the target; none within HideWithinStuds of it; points inside
+		a TycoonMath.Footprints rectangle are skipped. Re-laid at RefreshHz only when the player moved
+		MoveThresholdStuds or the target changed (BulkMoveTo, a 2 x Count part pool under the camera; no Neon, light,
+		Beam or GUI; CastShadow off). FollowTutorial: while the tutorial runs they follow the active step instead
+		(TycoonMath.GuideTarget: a PadBuy step's own pad, the Income step's ATM, else none). Hidden while any HideWhen
+		flag is set (HudLayout flags; "Drawn" = weapon out). Enabled = false until integration (lane Z). ]]
+	Chevrons = {
+		Enabled = false,
+		Count = 5,
+		SpacingStuds = 5,
+		LeadStuds = 6,
+		StopShortStuds = 4,
+		HideWithinStuds = 10,
+		DoorLeadStuds = 5, -- walk-in approach point: this far out of the front door (TycoonMath.ApproachPoint)
+		RefreshHz = 4, -- <= 10 (UI refresh cap)
+		MoveThresholdStuds = 1.5,
+		RetargetRetrySeconds = 1, -- the target pad is not streamed in yet: retry this often
+		BarSize = Vector3.new(0.35, 0.08, 2.4),
+		BarAngleDeg = 45,
+		Lift = 0.12, -- above the pad top
+		Color = Color3.fromRGB(255, 208, 64),
+		TransparencyNear = 0.2,
+		TransparencyFar = 0.55,
+		HideWhen = { "Driving", "Dead", "RecentCombat", "Drawn", "Modal", "AtConsole" } :: { string },
+		FollowTutorial = true,
+	},
 }
 
 return TycoonGuideConfig

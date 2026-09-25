@@ -41,6 +41,16 @@
 	    "$600  +$3.3/s" (green when wallet + ATM covers it, red otherwise) / "Needs Weapons Facility 1" / "MAX LEVEL"
 	    (kiosks without a screen). Console screens of the 15 buildings read "WAREHOUSE\n$3.2K\n+$5.2/s".
 	  * Every number is TycoonMath over configs x the server-stamped WE_IncomeMult; no remote is added.
+
+	F4 / F5 (owner's 11 features, lane G):
+	  * One pointer: the gold NEXT tag marks what the floor chevrons point at (TycoonMath.GuideTarget): while the
+	    tutorial runs (TycoonGuideConfig.Chevrons.FollowTutorial) the active step's own pad (Command Center, Barracks)
+	    and no console otherwise (the Collect cash step points at the ATM; claim / recruit / outpost / 4x4 at none);
+	    after it, the server's pick WE_NextBuy (the cheapest unpaid pad). The step comes from TutorialStateUpdate /
+	    PlayerStateUpdate; while a step is up on the HUD (HudLayout "Tutorial") but not known here, no console is NEXT.
+	  * The price / NEXT tags are base labels (WorldLabel.TagBaseLabel: the client LabelGovernor counts them toward
+	    "at most 3 labels on screen at a base"), and every show / hide goes through WorldLabel.SetShown, so a governor
+	    hold is never undone by the 4 Hz pass below.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -58,6 +68,7 @@ local Types = require(Shared.Types)
 local HudConfig = require(Shared.Configs.HudConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local TutorialConfig = require(Shared.Configs.TutorialConfig)
 local TycoonMath = require(Shared.Util.TycoonMath)
 
 local VehicleController = require(script.Parent.VehicleController)
@@ -163,9 +174,38 @@ local function stepGainText(structureId: string, level: number): string
 	return TycoonMath.PerSecText(TycoonMath.StepGainPerTick(structureId, level, incomeMult()))
 end
 
--- the server's pick (WE_NextBuy "Id:Level") is buying level + 1 of structureId
+-- F5 one pointer: the tutorial step the server last pushed (tutKnown) / nil once the tutorial is complete
+local tutKnown = false
+local tutStep: TycoonMath.GuideStep? = nil
+local tutPayloadStep: TycoonMath.GuideStep = { PadStructureId = nil, Pointer = nil } -- a step Id this config lacks
+
+local function applyTutorialStep(complete: boolean, id: any, pad: any, pointer: any)
+	tutKnown = true
+	if complete then
+		tutStep = nil
+		return
+	end
+	local i = if typeof(id) == "string" then TutorialConfig.IndexOf(id) else nil
+	local def = if i ~= nil then TutorialConfig.Steps[i] else nil
+	if def ~= nil then
+		tutStep = def
+	else
+		tutPayloadStep.PadStructureId = if typeof(pad) == "string" then pad else nil
+		tutPayloadStep.Pointer = if typeof(pointer) == "string" then pointer else nil
+		tutStep = tutPayloadStep
+	end
+end
+
+-- the one pointer (TycoonMath.GuideTarget: the tutorial step's pad, else the server's pick WE_NextBuy "Id:Level")
+-- is buying level + 1 of structureId
 local function isNextPick(structureId: string, level: number): boolean
-	local id, lv = TycoonMath.Decode(player:GetAttribute("WE_NextBuy"))
+	local step: TycoonMath.GuideStep? = nil
+	if tutKnown then
+		step = tutStep
+	elseif HudLayout.GetFlag("Tutorial") then
+		return false -- a tutorial step is up but has not reached this controller yet: no NEXT tag anywhere
+	end
+	local id, lv = TycoonMath.GuideTarget(step, player:GetAttribute("WE_NextBuy"))
 	return id == structureId and lv == level + 1
 end
 
@@ -989,7 +1029,7 @@ local function hidePriceBillboard(part: BasePart)
 	for _, holder in ipairs({ host, part } :: { Instance? }) do
 		local existing = holder and holder:FindFirstChild(BILLBOARD_NAME)
 		if existing and existing:IsA("BillboardGui") then
-			existing.Enabled = false
+			WorldLabel.SetShown(existing, false) -- F4: through WorldLabel (a LabelGovernor hold stays consistent)
 		end
 	end
 	-- MapSetup non-price Label billboards on other parts are left alone
@@ -1089,14 +1129,16 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 		existing.Adornee = adornee
 		existing.Parent = adornee
 		setBillboardNearOnly(existing, nil, part)
-		existing.Enabled = not nearAtmNow
+		WorldLabel.TagBaseLabel(existing) -- F4: counted by the LabelGovernor
+		WorldLabel.SetShown(existing, not nearAtmNow)
 		return existing
 	end
 	local legacy = part:FindFirstChild("Label")
 	if legacy and legacy:IsA("BillboardGui") then
 		legacy.Name = BILLBOARD_NAME
 		setBillboardNearOnly(legacy, nil, part)
-		legacy.Enabled = not nearAtmNow
+		WorldLabel.TagBaseLabel(legacy)
+		WorldLabel.SetShown(legacy, not nearAtmNow)
 		return legacy
 	end
 
@@ -1105,7 +1147,8 @@ local function ensurePriceBillboard(part: BasePart): BillboardGui
 	bb.Name = BILLBOARD_NAME
 	setBillboardNearOnly(bb, nil, part)
 	bb.Adornee = adornee
-	bb.Enabled = not nearAtmNow
+	WorldLabel.SetShown(bb, not nearAtmNow)
+	WorldLabel.TagBaseLabel(bb) -- F4: counted by the LabelGovernor (tagged before it is parented)
 	bb.Parent = adornee
 
 	local backdrop = Instance.new("Frame")
@@ -1782,9 +1825,7 @@ local function worldLabelPass()
 			local bb = (host and host:FindFirstChild(BILLBOARD_NAME)) or part:FindFirstChild(BILLBOARD_NAME)
 			if bb and bb:IsA("BillboardGui") then
 				local want = not nearAtm and not priceHidden[part] and part:GetAttribute("WE_PriceForceHidden") ~= true
-				if bb.Enabled ~= want then
-					bb.Enabled = want
-				end
+				WorldLabel.SetShown(bb, want) -- F4: writes only on change, keeps a LabelGovernor hold
 			end
 		end
 	end
@@ -1983,6 +2024,18 @@ function WorldPromptController.Init()
 			player:GetAttributeChangedSignal(attr):Connect(onGuideInput)
 		end
 		HudLayout.InputModeChanged:Connect(onGuideInput) -- the "E" key cap follows PreferredInput
+		-- F5 one pointer: the NEXT tag follows the tutorial step (TutorialStateUpdate / the HUD "Tutorial" flag)
+		Remotes.BindEvent(Constants.RemoteNames.TutorialStateUpdate, function(payload: any)
+			if typeof(payload) == "table" then
+				applyTutorialStep(payload.Complete == true, payload.Id, payload.PadStructureId, payload.Pointer)
+				markBillboardsDirty()
+			end
+		end)
+		HudLayout.FlagChanged:Connect(function(name: string)
+			if name == "Tutorial" then
+				markBillboardsDirty()
+			end
+		end)
 	end
 
 	Remotes.BindEvent(Constants.RemoteNames.EconomyUpdate, function(payload: Types.EconomyUpdatePayload)
@@ -2146,6 +2199,15 @@ function WorldPromptController.Init()
 
 	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: Types.PlayerStatePayload)
 		applyCash(state.Cash)
+		-- F5 one pointer: the tutorial step (index in the current order) or complete
+		if state.TutorialComplete == true then
+			applyTutorialStep(true, nil, nil, nil)
+		elseif state.TutorialComplete == false and typeof(state.TutorialStep) == "number" then
+			local def = TutorialConfig.GetStep(state.TutorialStep)
+			if def ~= nil then
+				applyTutorialStep(false, def.Id, nil, nil)
+			end
+		end
 		if state.Base then
 			upgrades = state.Base.Upgrades
 			if typeof(state.Base.PlotId) == "number" then
