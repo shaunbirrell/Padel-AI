@@ -5,11 +5,15 @@
 
 	The belt starts 12 studs outside the ring canal (x ±1852, z -1852; the rig lagoons step it out to ±1902) and runs
 	down both sides to the Bay's far shore at z 2234, which closes the old open sea. Profile, outward from the water:
-	skirt (Rock shelf, top 2.5–5.5: the boats' +6 land probe sees it = shore brake) → talus (Ground, 8 rising to <= 20)
-	→ vertical Sandstone face 90–150 with flush Limestone / Slate strata → 1–2 stepped mesas 160–300 → a butte every 4th
-	segment; a shallow alcove every 5th; 1–3 boulders. Quarter-circle corners with a bigger butte. Sand slabs hide the
+	toe (Rock ramp from under the sand, Terrain.Toe.Y, up to the talus foot over the skirt band 0..26: no lip for a
+	car; the boats' +6 land probe sees it ~5 studs in = shore brake) → talus (Ground, 8 rising to <= 20; the same toe
+	and talus on every run, so corners and run joins have no step) → vertical Sandstone face 90–150 with flush
+	Limestone / Slate strata → 1–2 stepped mesas 160–300 → a butte every 4th segment; a shallow alcove every 5th; 1–3
+	boulders at the cliff foot (on the talus, never on the toe). Quarter-circle corners with a bigger butte. Where a run
+	stops at a rig-lagoon notch, hip carves bring its toe and talus down to the sand (no side wall). Sand slabs hide the
 	outer sea ends behind the headlands; a rock pad carries the far-shore lighthouse (WorldBounds builds the tower).
-	No voxel ever lands inside the playable ring or in public water (Check). No terrain water (boats sail WE_Water parts).
+	No voxel ever lands inside the playable ring or in public water (Check; the toe's support block lies under the Part
+	ground, so it may). No terrain water (boats sail WE_Water parts).
 
 	PUBLIC API (server only; nothing here is hooked yet — the post-F hook step calls it from MapSetup.Run):
 	  WorldTerrain.Plan(cfg?: TerrainCfg, phase?: number) -> { Prim }
@@ -41,7 +45,7 @@ export type Prim = {
 	Radius: number?, -- Ball / Cylinder
 	Height: number?, -- Cylinder (along the CFrame's Y axis)
 	Material: Enum.Material,
-	Tag: string, -- skirt | talus | face | strata | mesa | butte | alcove | boulder | corner | cover | landmark
+	Tag: string, -- skirt | talus | face | strata | mesa | butte | alcove | boulder | corner | cover | landmark | hip
 	Run: string, -- N | E | W | S (far shore) | <side>notch | corner<k> | cover | landmark
 	Top: number, -- world Y of the primitive's top (checks)
 }
@@ -127,7 +131,8 @@ end
 
 -- ── the edge polyline: straight runs, each with its outward normal and profile ───────────────────────────────
 
-type Run = { Name: string, A: Vector3, B: Vector3, N: Vector3, Profile: Profile }
+-- HipA / HipB: that end of the run stops at a rig-lagoon notch (not at a corner fan): Plan carves a hip there
+type Run = { Name: string, A: Vector3, B: Vector3, N: Vector3, Profile: Profile, HipA: boolean?, HipB: boolean? }
 
 local function sideRuns(c: TerrainCfg, side: string, sign: number): { Run }
 	local e = c.Edge
@@ -146,12 +151,20 @@ local function sideRuns(c: TerrainCfg, side: string, sign: number): { Run }
 	local z = -inner
 	for _, n in ipairs(notches) do
 		if n.Z0 > z then
-			table.insert(out, { Name = side, A = Vector3.new(sign * inner, 0, z), B = Vector3.new(sign * inner, 0, n.Z0), N = normal, Profile = c.Side })
+			table.insert(out, {
+				Name = side,
+				A = Vector3.new(sign * inner, 0, z),
+				B = Vector3.new(sign * inner, 0, n.Z0),
+				N = normal,
+				Profile = c.Side,
+				HipA = z > -inner,
+				HipB = true,
+			})
 		end
 		table.insert(out, { Name = side .. "notch", A = Vector3.new(sign * n.Out, 0, n.Z0), B = Vector3.new(sign * n.Out, 0, n.Z1), N = normal, Profile = c.Side })
 		z = n.Z1
 	end
-	table.insert(out, { Name = side, A = Vector3.new(sign * inner, 0, z), B = Vector3.new(sign * inner, 0, far), N = normal, Profile = c.Side })
+	table.insert(out, { Name = side, A = Vector3.new(sign * inner, 0, z), B = Vector3.new(sign * inner, 0, far), N = normal, Profile = c.Side, HipA = z > -inner })
 	return out
 end
 
@@ -218,9 +231,28 @@ local function emitSegment(plan: { Prim }, rng: Random, c: TerrainCfg, noise: (n
 		return cf
 	end
 
-	-- 1) skirt: Rock shelf, top 2.5..5.5
-	local skirtTop = rng:NextNumber(pr.Skirt.Min, pr.Skirt.Max)
-	block("skirt", mats.Skirt, pr.Skirt.From, pr.Skirt.To, foot, skirtTop, 0, g.Width(pr.Skirt.To), 0)
+	-- 1) toe (the skirt band): a Rock ramp, not a shelf. A support block FootY..Toe.Y (buried under the Part ground:
+	--    it keeps the voxels under the ramp full, so the smooth-terrain surface sits where the wedge says) and a
+	--    FillWedge rising Toe.Y -> Talus.Min over Skirt.From..Skirt.To (= Talus.From). The belt grows out of the sand
+	--    with no lip and meets the talus foot level: the old 2.5..5.5 shelf edge, the shelf -> talus step and the
+	--    shelf-height jumps between segments tripped vehicles. The Skirt Min..Max roll is still drawn, so the seeded
+	--    stream (faces, mesas, buttes, alcoves, boulders) is unchanged.
+	rng:NextNumber(pr.Skirt.Min, pr.Skirt.Max)
+	local toe = c.Toe
+	local sw = g.Width(pr.Skirt.To)
+	block("skirt", mats.Skirt, pr.Skirt.From, pr.Skirt.To, foot, toe.Y, 0, sw, 0)
+	do
+		local cf = frame(at((pr.Skirt.From + pr.Skirt.To) * 0.5, 0, (toe.Y + pr.Talus.Min) * 0.5), g.N)
+		table.insert(plan, {
+			Op = "Wedge",
+			CFrame = cf,
+			Size = Vector3.new(sw, pr.Talus.Min - toe.Y, pr.Skirt.To - pr.Skirt.From),
+			Material = mats.Skirt,
+			Tag = "skirt",
+			Run = g.Run,
+			Top = pr.Talus.Min,
+		})
+	end
 
 	-- 2) talus: Ground block to Min, then a wedge rising Min -> Max (<= MaxTalusTop) toward the face
 	local talusTop = math.min(pr.Talus.Max, c.MaxTalusTop)
@@ -336,16 +368,16 @@ local function emitSegment(plan: { Prim }, rng: Random, c: TerrainCfg, noise: (n
 		})
 	end
 
-	-- 8) boulders on the skirt and talus (half buried, fully inside the belt)
+	-- 8) boulders at the cliff foot: on the talus between its foot and the face (half buried, fully inside the belt),
+	--    never on the toe ramp, where a half-buried ball is a lip a car trips on. Same draws as before.
 	local nb = rng:NextInteger(pr.Boulders[1], pr.Boulders[2])
 	for _ = 1, nb do
 		local r = rng:NextNumber(pr.BoulderR[1], pr.BoulderR[2])
-		local d = rng:NextNumber(r + 1, math.max(r + 1, pr.Talus.To - r))
+		local lo = pr.Talus.From + r
+		local d = rng:NextNumber(lo, math.max(lo, faceFrom))
 		local span = g.Width(d) * 0.5 - r
 		local along = if span > 0 then rng:NextNumber(-span, span) else 0
-		local ground = if d <= pr.Skirt.To
-			then skirtTop
-			else lerp(pr.Talus.Min, talusTop, (d - pr.Talus.From) / (pr.Talus.To - pr.Talus.From))
+		local ground = lerp(pr.Talus.Min, talusTop, math.clamp((d - pr.Talus.From) / (pr.Talus.To - pr.Talus.From), 0, 1))
 		local y = ground - 0.3 * r
 		table.insert(plan, {
 			Op = "Ball",
@@ -356,6 +388,51 @@ local function emitSegment(plan: { Prim }, rng: Random, c: TerrainCfg, noise: (n
 			Run = g.Run,
 			Top = y + r,
 		})
+	end
+end
+
+-- ── hip at a notch run end ──────────────────────────────────────────────────────────────────────────────────
+-- A run that stops at a rig-lagoon notch used to end square: its toe and talus showed a side wall 0.5..15 studs
+-- tall to the lagoon bank. Four Air prims, filled after the run's own prims, trim the toe and talus inside the last
+-- D studs of the run (D = the face foot, Face.From - FaceOverlap) to min(f(across), f(along)): a hip roof that falls
+-- to the sand at the run end. f = the toe ramp (Toe.Y at 0 -> Talus.Min at Skirt.To) then the talus. Each profile
+-- plane is an upside-down FillWedge (it clears everything between its slope and its flat top); a block clears the rest
+-- up to HipClear above the talus (boulder caps). The cliff face (from D outward) keeps its side.
+local function emitHip(plan: { Prim }, c: TerrainCfg, run: Run, atB: boolean)
+	local pr = run.Profile
+	local toe = c.Toe
+	local t = (run.B - run.A).Unit
+	local u = if atB then -t else t -- from the run end into the run
+	local p0 = if atB then run.B else run.A
+	local n = run.N
+	local D = pr.Face.From - pr.FaceOverlap
+	local T = pr.Skirt.To
+	local talusTop = math.min(pr.Talus.Max, c.MaxTalusTop)
+	local fD = lerp(pr.Talus.Min, talusTop, math.clamp((D - pr.Talus.From) / (pr.Talus.To - pr.Talus.From), 0, 1))
+	local clear = fD + toe.HipClear
+	local flip = CFrame.Angles(math.pi, 0, 0) -- about the frame's X (across): the wedge's slope now bounds it from below
+	local function add(op: string, along0: number, along1: number, y0: number, y1: number, flipped: boolean)
+		local cf = frame(p0 + n * (D * 0.5) + u * ((along0 + along1) * 0.5) + UP * ((y0 + y1) * 0.5), u)
+		table.insert(plan, {
+			Op = op,
+			CFrame = if flipped then cf * flip else cf,
+			Size = Vector3.new(D, y1 - y0, along1 - along0),
+			Material = Enum.Material.Air,
+			Tag = "hip",
+			Run = run.Name,
+			Top = y1,
+		})
+	end
+	if D <= 0 or T <= 0 then
+		return
+	end
+	local toeTo = math.min(T, D)
+	local toeTop = lerp(toe.Y, pr.Talus.Min, toeTo / T)
+	add("Wedge", 0, toeTo, toe.Y, toeTop, true)
+	add("Block", 0, toeTo, toeTop, clear, false)
+	if D > T and fD > pr.Talus.Min then
+		add("Wedge", T, D, pr.Talus.Min, fD, true)
+		add("Block", T, D, fD, clear, false)
 	end
 end
 
@@ -371,8 +448,10 @@ local function primViolation(p: Prim, c: TerrainCfg): string?
 		return string.format("inside the ring (%.0f..%.0f, %.0f..%.0f)", x0, x1, z0, z1)
 	end
 	local inner = c.Edge.Inner
+	-- a prim whose top is at or under the Part ground (the toe's support block) is never seen and never meets a hull
+	local buried = p.Top <= c.Toe.BuriedTop
 	for _, w in ipairs(WaterConfig.Public) do
-		if x1 > w.X0 and x0 < w.X1 and z1 > w.Z0 and z0 < w.Z1 then
+		if not buried and x1 > w.X0 and x0 < w.X1 and z1 > w.Z0 and z0 < w.Z1 then
 			local headland = (x0 >= inner or x1 <= -inner) and p.Top >= c.HeadlandMinTop
 			if not headland then
 				return string.format("in water %s (%.0f..%.0f, %.0f..%.0f, top %.1f)", w.Name, x0, x1, z0, z1, p.Top)
@@ -396,6 +475,20 @@ function WorldTerrain.Check(plan: { Prim }, cfg: TerrainCfg?): { string }
 	end
 	if #plan > c.MaxPrims then
 		table.insert(out, string.format("%d prims > cap %d", #plan, c.MaxPrims))
+	end
+	-- profile: the toe ramp must end where the talus starts, and every run / corner must share one toe + talus
+	-- (a fan or run join between two different profiles is a step)
+	local side, far = c.Side, c.FarShore
+	for _, pr in ipairs({ side, far }) do
+		if pr.Skirt.To ~= pr.Talus.From then
+			table.insert(out, string.format("toe ends at %g but the talus starts at %g", pr.Skirt.To, pr.Talus.From))
+		end
+	end
+	if side.Skirt.From ~= far.Skirt.From or side.Skirt.To ~= far.Skirt.To or side.Talus.To ~= far.Talus.To or side.Talus.Min ~= far.Talus.Min or side.Talus.Max ~= far.Talus.Max then
+		table.insert(out, "Side and FarShore toe / talus differ (a step where the far-shore corner fans meet the far shore)")
+	end
+	if c.Toe.Y > c.Toe.BuriedTop then
+		table.insert(out, string.format("toe low edge %.1f above the Part ground %.1f (a lip)", c.Toe.Y, c.Toe.BuriedTop))
 	end
 	return out
 end
@@ -473,6 +566,13 @@ function WorldTerrain.Plan(cfg: TerrainCfg?, phase: number?): { Prim }
 				Corner = false,
 				Straight = k == 1 or k == #cs - 1,
 			})
+		end
+		-- after the run's own fills, so the carve cuts them (no later prim reaches the hip square)
+		if run.HipA then
+			emitHip(plan, c, run, false)
+		end
+		if run.HipB then
+			emitHip(plan, c, run, true)
 		end
 		sBase += len
 	end

@@ -105,7 +105,7 @@ local WorldConfig = {
 		Seed = 70802,
 		-- Workspace.Terrain:GetAttribute("WE_TerrainGen") == Gen → Build skips. A different stamp clears the terrain
 		-- first (World v2 owns all terrain: nothing else in the game fills voxels).
-		Gen = 1,
+		Gen = 2, -- 2: lane 32 toe ramp + notch hips (a server that finds Gen 1 terrain clears and refills it)
 		ClearOnRegen = true,
 		Decoration = false, -- no animated grass (phones)
 		YieldEvery = 50, -- Build yields (task.wait) every N fills
@@ -133,10 +133,12 @@ local WorldConfig = {
 			CornerButteR = { 45, 55 },
 			CornerButteH = { 320, 340 },
 		},
-		-- Canal / sea-cliff profile (east, west, north). Heights are world Y of the top.
+		-- Canal / sea-cliff profile (east, west, north). Heights are world Y of the top. Toe and talus = the far shore's
+		-- (lane 32: one ramp 0 -> 8 over 26 studs (17°), then the talus at 0.4 (22°) to the face foot, y 12 here): the
+		-- far-shore corner fans use this profile, so any difference would be a step where they meet the far shore.
 		Side = {
-			Skirt = { From = 0, To = 18, Min = 2.5, Max = 5.5 },
-			Talus = { From = 18, To = 48, Min = 8, Max = 20 },
+			Skirt = { From = 0, To = 26, Min = 2.5, Max = 5.5 },
+			Talus = { From = 26, To = 56, Min = 8, Max = 20 },
 			Face = { From = 48, To = 108, Min = 90, Max = 150 },
 			FaceOverlap = 12,
 			FaceYawJitter = 6,
@@ -160,6 +162,14 @@ local WorldConfig = {
 			Boulders = { 1, 3 },
 			BoulderR = { 3, 9 },
 		} :: Profile,
+		-- Lane 32: the skirt band (Profile.Skirt From..To) is a drivable toe, not a shelf: a Rock FillWedge from Toe.Y up
+		-- to the talus foot (Talus.Min at Talus.From = Skirt.To) on a support block FootY..Toe.Y. Skirt Min / Max are no
+		-- longer heights (still rolled: the seeded stream is unchanged). The old 2.5–5.5 shelf edge tripped vehicles.
+		Toe = {
+			Y = 0, -- the ramp's low edge, under the Part ground top (0.5): the rock grows out of the sand with no lip
+			BuriedTop = 0.5, -- a prim whose top is at or under the Part ground is buried (Check lets it lie under water)
+			HipClear = 24, -- notch run-end hip carves clear this far above the talus (boulder caps)
+		},
 		-- The Bay's far shore (south of the sea): beach skirt, sea cliffs 80–160, mesas 140–260.
 		FarShore = {
 			Skirt = { From = 0, To = 26, Min = 2.5, Max = 5.5 },

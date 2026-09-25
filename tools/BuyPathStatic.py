@@ -2849,6 +2849,53 @@ must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptGamePass("AutoCollect", "offer")', 'S: AutoCollect offer source')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'promptDevProduct("CashMega", "offer")', 'S: CashMega offer source')
 
+# Lane 27 pins for tools/BuyPathStatic.py (append before the final parse_gate() call).
+# Verified 2026-09-25 on tree copies (python3 tools/BuyPathStatic_l27.py, LUAU_COMPILE set, parse gate on):
+#   HEAD 785c760 + lane 27 WeaponVisuals.luau : Done PASS=1688 FAIL=0  (all 10 pins PRESENT; 9 must_contain + 1 must_not_contain pass)
+#   clean HEAD 785c760                        : Done PASS=1678 FAIL=10 (all 10 pins ABSENT / weak __mode present -> they discriminate)
+#   unpinned BuyPathStatic.py on both trees    : PASS=1678 FAIL=0
+# --- lane 27: WeaponVisuals trackCache is a STRONG table pruned on Animator removal / respawn (no weak Instance keys) ---
+WV_L27 = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/WeaponVisuals.luau"
+must_contain(WV_L27, "local trackCache: { [Animator]: TrackSet } = {}", "lane27: WeaponVisuals trackCache is a strong table keyed by Animator")
+must_not_contain(WV_L27, "__mode", "lane27: WeaponVisuals has no weak tables (a weak Instance key can drop while the Instance lives)")
+must_contain(WV_L27, "animator.Destroying:Connect(function()", "lane27: a cached set is dropped when its Animator is destroyed")
+must_contain(WV_L27, "animator.AncestryChanged:Connect(function()", "lane27: a cached set is dropped when its Animator leaves the DataModel")
+must_contain(WV_L27, "player.CharacterRemoving:Connect(function(char: Model)", "lane27: CharacterRemoving prunes the leaving character's tracks")
+must_contain(WV_L27, "pruneTracks(char, true)", "lane27: CharacterRemoving -> pruneTracks(char, true)")
+must_contain(WV_L27, "pruneTracks(char, false)", "lane27: CharacterAdded keeps only the new character's tracks")
+must_contain(WV_L27, "tr:Destroy()", "lane27: dropped AnimationTracks are stopped and destroyed")
+must_contain(WV_L27, "if found == nil or not found:IsDescendantOf(game) then", "lane27: no LoadAnimation / cache entry for an Animator outside the DataModel")
+must_contain(WV_L27, "function WeaponVisuals.AnimCacheStats(): { Animators: number, Tracks: number }", "lane27: AnimCacheStats test hook")
+
+# LANE 32 proposed tools/BuyPathStatic.py pins: paste above the final `parse_gate()` call. Uses the file's own helpers.
+# Verified on tree copies (git HEAD 34c18f3 = same WorldTerrain / WorldConfig as 785c760):
+#   HEAD                         : PASS=1926 FAIL=0
+#   HEAD + lane 32 files         : PASS=1926 FAIL=0   (no existing needle broken)
+#   HEAD + lane 32 files + pins  : PASS=1943 FAIL=0   (all 17 present)
+#   HEAD + pins                  : 16 FAIL (the new behaviour is absent at HEAD), 1 PASS (far-shore toe/talus unchanged)
+# Absence pins use must_not_contain (must_absent only looks at asset-id assignment lines).
+# --- Lane 32 (owner's quad tripped on the canyon edge): the Terrain skirt band is a drivable toe ramp (no 2.5-5.5 lip),
+# one toe + talus for every run and corner, boulders off the toe, hip carves at the rig-lagoon notch run ends ---
+L32T = 'src/ServerScriptService/Server/Modules/WorldTerrain.luau'
+L32C = 'src/ReplicatedStorage/Shared/Configs/WorldConfig.luau'
+must_contain(L32C, 'Gen = 2, -- 2: lane 32 toe ramp + notch hips', 'Lane 32: terrain stamp bumped so stamped Gen 1 terrain is cleared and refilled')
+must_contain(L32C, "Y = 0, -- the ramp's low edge, under the Part ground top (0.5)", 'Lane 32: toe ramp starts under the sand (no lip)')
+must_contain(L32C, 'BuriedTop = 0.5, -- a prim whose top is at or under the Part ground is buried', 'Lane 32: buried support block may lie under sea water')
+must_contain(L32C, 'HipClear = 24, -- notch run-end hip carves', 'Lane 32: hip carve clearance')
+must_contain(L32C, 'Skirt = { From = 0, To = 26, Min = 2.5, Max = 5.5 },\n\t\t\tTalus = { From = 26, To = 56, Min = 8, Max = 20 },\n\t\t\tFace = { From = 48, To = 108,', 'Lane 32: side toe/talus = far shore toe/talus (17 deg ramp, then 22 deg talus)')
+must_contain(L32C, 'Skirt = { From = 0, To = 26, Min = 2.5, Max = 5.5 },\n\t\t\tTalus = { From = 26, To = 56, Min = 8, Max = 20 },\n\t\t\tFace = { From = 56, To = 116,', 'Lane 32: far-shore toe/talus unchanged')
+must_not_contain(L32C, 'Skirt = { From = 0, To = 18,', 'Lane 32: no 18-stud side shelf (step at the far-shore corner fans)')
+must_contain(L32T, 'rng:NextNumber(pr.Skirt.Min, pr.Skirt.Max)\n\tlocal toe = c.Toe', 'Lane 32: skirt roll still drawn (seeded faces / mesas / buttes unchanged)')
+must_contain(L32T, 'block("skirt", mats.Skirt, pr.Skirt.From, pr.Skirt.To, foot, toe.Y, 0, sw, 0)', 'Lane 32: buried support block under the toe ramp')
+must_contain(L32T, 'Size = Vector3.new(sw, pr.Talus.Min - toe.Y, pr.Skirt.To - pr.Skirt.From),', 'Lane 32: toe FillWedge rises to the talus foot')
+must_not_contain(L32T, 'local skirtTop = rng:NextNumber', 'Lane 32: no random-height rock shelf (2.5-5.5 lip, 3-stud jumps between segments)')
+must_contain(L32T, 'local lo = pr.Talus.From + r\n\t\tlocal d = rng:NextNumber(lo, math.max(lo, faceFrom))', 'Lane 32: boulders at the cliff foot, never on the toe')
+must_contain(L32T, 'local function emitHip(plan: { Prim }, c: TerrainCfg, run: Run, atB: boolean)', 'Lane 32: hip carve at notch run ends')
+must_contain(L32T, 'emitHip(plan, c, run, false)', 'Lane 32: hip at a run start after a notch')
+must_contain(L32T, 'emitHip(plan, c, run, true)', 'Lane 32: hip at a run end before a notch')
+must_contain(L32T, 'local buried = p.Top <= c.Toe.BuriedTop', 'Lane 32: buried prims exempt from the water keep-out only')
+must_contain(L32T, '"Side and FarShore toe / talus differ', 'Lane 32: Check flags a toe/talus mismatch between profiles')
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

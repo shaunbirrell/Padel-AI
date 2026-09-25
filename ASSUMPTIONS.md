@@ -1714,3 +1714,53 @@ this is display and prompting only: grants stay ProcessReceipt / pass ownership 
 - `/givekeepbase` (AdminService) grants a Robux-priced token outside ProcessReceipt for owner testing; admin
   allowlist only (UserId 470626172). Delete its branches before the Id is pasted if it should not stay live.
 - **Lead approvals:** all spec deviations listed by the batch-A integration verifier are accepted (TutorialOrderVersion from config; WE_ShieldUntil on the character; injected GateDefense shield check; rebirth modal copy/column order; Shop hero 24 v; Speed Pass row OWNED for Speed Boost owners).
+
+## 2026-09-25 — Follow-ups: WeaponVisuals animation cache (#27) and canyon-edge toe ramp (#32)
+
+## Lane 27 — WeaponVisuals trackCache (strong, pruned) — assumptions (reversible)
+
+- **A27-1 Only the local character is cached.** `trackFor` is only ever called with `player.Character` (hold + reload), so on `CharacterAdded(char)` every cached set whose Animator is not under `char` is stale and is dropped. If a future caller animates other characters through `trackFor`, `pruneTracks(char, false)` must be narrowed. Revert: drop the `pruneTracks(char, false)` line (Destroying / AncestryChanged / CharacterRemoving still prune).
+- **A27-2 Dropped tracks are `Stop(0)` + `Destroy()`ed (pcall'd).** AnimationTrack is an Instance and destroying it frees it. If an engine version refuses `Destroy` on a track, the pcall hides it and the track still dies with its Animator. Revert: remove `tr:Destroy()`.
+- **A27-3 No cache entry for an Animator outside the DataModel.** `LoadAnimation` needs the Animator in the DataModel, so `trackFor` now returns nil early there (it failed inside the pcall before). A set made then could never be pruned by AncestryChanged.
+- **A27-4 Animator that leaves and re-enters the DataModel loses its cached tracks.** The hold stops and replays on the next `SetLocalWeapon` (fresh track, old one destroyed). The game never reparents characters (grep: no `Character.Parent =` writes), so this is theoretical.
+- **A27-5 CharacterAdded no longer blindly clears `holdTrack`.** An old character's hold is cleared by `dropTracks`; a hold already started on the NEW character (another CharacterAdded handler ran first) stays tracked, so the next holster stops it instead of leaving it looping untracked. `HudConfig.Hotbar.DrawnOnSpawn = false`, so at spawn this path is normally idle.
+- **A27-6 Test hook.** `WeaponVisuals.AnimCacheStats()` (Animators / Tracks) is public for tests only; it allocates one small table per call and nothing calls it at runtime.
+
+## Lane 32: drivable canyon-edge toe (rollover finding: the owner's quad tripped where Terrain sits 2–5.5 studs above the Part ground). Assumptions, reversible; the lead merges them into ASSUMPTIONS.md
+
+1. **The skirt band is now a toe ramp, not a rock shelf.**
+   - Each belt segment's skirt becomes two Rock prims:
+     - a support FillBlock from FootY (-4) to `Terrain.Toe.Y` (0), which lies under the Part ground;
+     - a FillWedge rising from `Toe.Y` at the belt's inner edge to `Talus.Min` (8) at `Skirt.To` (= `Talus.From`).
+   - The support block keeps the voxels under the ramp full. Without it, smooth terrain meshes a thin wedge as a floating sheet near the voxel's centre, which would be a lip of its own.
+   - The random 2.5–5.5 shelf height is still drawn from the seeded stream, so every face, stratum, mesa, butte and alcove position is unchanged: the face, strata, mesa, butte, cover and landmark prims are byte-identical to HEAD. The drawn value is no longer used.
+   - Revert: restore the old `block("skirt", …, skirtTop, …)` line. One commit touches it.
+2. **The side profile's toe and talus now equal the far shore's.**
+   - `Side.Skirt` changed from 0..18 to 0..26. `Side.Talus` changed from 18..48 to 26..56 (Min 8, Max 20).
+   - The corner fans at the far shore use the Side profile. With different toes they met the far shore with a 2.5–3.2 stud step.
+   - The side toe is now 17° and the talus is 22°. The side face foot drops from y 15.2 to y 12. Faces and mesas do not move.
+   - `WorldTerrain.Check` now reports any mismatch.
+   - Revert: the two lines at WorldConfig.luau:195-196 (working tree) / HEAD:138-139.
+3. **Buried prims may lie under sea water.**
+   - A prim whose Top is at or below `Toe.BuriedTop` (0.5, the Part ground top) is exempt from the public-water keep-out. The ring keep-out still applies.
+   - Only the toe's support block qualifies. Over the Bay's outer sea ends it sits under the ground tiles and below the water surface (1.5), so boats and players never meet it.
+   - The ramp over those headlands keeps Top 8 ≥ `HeadlandMinTop` 2.5.
+   - The boats' land probe now sees land about 5 studs further out, where the ramp crosses the water surface (y 1.45 at d ≈ 4.7), instead of at the old shelf edge.
+4. **Boulders stay off the toe.**
+   - They are placed on the talus between its foot (`Talus.From + r`) and the face foot, using the same random draws. The draw count is unchanged: at HEAD every boulder already drew its `along` value.
+   - A half-buried ball on the ramp is a 2–6 stud lip. Boulders are now obstacles at the cliff foot and are listed apart in the measurements, as is the lighthouse rock pad.
+5. **Hip carves at the four rig-lagoon notch run ends.**
+   - Affected run ends: E at z -846 and -654, W at 654 and 846.
+   - Four Air prims per end trim the toe and talus in the last 36 studs to min(f(across), f(along)), so they fall to the sand at the lagoon bank. Before, the toe and talus showed a side wall of 0.5–14.3 studs there. The four prims are two upside-down FillWedges (CFrame × Angles(π,0,0)) and two FillBlocks.
+   - The cliff face keeps its side, which is a wall.
+   - The W1 terrain_probe ignores Air, so it sees the un-carved (higher) ends. Its containment result is conservative.
+6. **`Terrain.Gen` changed from 1 to 2**, so a server or saved place that already holds stamped Gen 1 terrain clears it and refills it with the new toe.
+7. **Accepted leftovers (not seams):**
+   - The alcove scoops keep their bowl walls (32 pre-existing Air balls in the face foot, unchanged except that the Side alcove floor follows the new talus height of 12).
+   - The lighthouse rock pad (top 6) is a 5.5-stud plinth at the far-shore beach. Its height is tied to `FarShore.Lighthouse.BaseY` in another WorldConfig section.
+   - The toe ramp now rises against the back of the lighthouse plinth, covering about 2.7 of its 4 studs at the back edge. It also buries the stranded freighter's bow keel up to y 7.7 (was 5.2).
+8. **More corner-fan skirt prims are dropped by the existing ring keep-out.**
+   - At corners 1 and 2, the fans' first and last segments have a rotated AABB that reaches x/z ±1845. Four prims per corner are dropped (HEAD dropped 2 per corner).
+   - The neighbouring fans and runs cover the area: the measured toe has no step there.
+   - Output shows 5 `[WAR EMPIRE] WorldTerrain: dropped cornerN/skirt inside the ring (…)` warnings, as at HEAD.
+9. **Not changed (outside the Terrain section):** the `Profile` type comment at WorldConfig.luau:22 still says "FillBlock Rock shelf, top Min..Max". Suggested text: `Skirt: Band, -- toe: Rock FillWedge Terrain.Toe.Y -> Talus.Min over From..To (= Talus.From); Min/Max only rolled`.

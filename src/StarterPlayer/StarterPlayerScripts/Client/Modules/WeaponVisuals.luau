@@ -17,6 +17,7 @@
 	  OnHitFeedback(payload)                     hit / kill / headshot sound, damage number, target bar, haptic
 	  MuzzleWorldPosition() -> Vector3?          where the local tracers start
 	  Stats()                                    live counts (tests); never above the caps
+	  AnimCacheStats()                           cached Animators / AnimationTracks (tests); flat across respawns
 
 	PHONE BUDGET (HudConfig.CombatFx; touch in brackets)
 	  tracers      Beams between pooled Terrain attachments, 0 parts, Tracers.Max 16 [10]
@@ -1055,7 +1056,13 @@ local wantDrawn = false
 local holdTrack: AnimationTrack? = nil
 local holdKey: string? = nil
 local animCache: { [string]: Animation } = {}
-local trackCache: { [Instance]: { [string]: AnimationTrack } } = setmetatable({} :: any, { __mode = "k" })
+-- Loaded AnimationTracks per Animator. STRONG keys on purpose: a weak-keyed table on an Instance can lose its entry
+-- while the Instance still exists (Roblox makes a new Luau userdata for it after a GC), and the next trackFor would
+-- LoadAnimation again and stack duplicate tracks. A set is dropped (tracks stopped + destroyed, signals disconnected)
+-- when its Animator is destroyed or leaves the DataModel, and on the local CharacterRemoving / CharacterAdded, so
+-- only the local character's Animator is ever cached (<= 4 tracks: three holds + reload).
+type TrackSet = { Tracks: { [string]: AnimationTrack }, Conns: { RBXScriptConnection } }
+local trackCache: { [Animator]: TrackSet } = {}
 local buildRetryRunning = false
 
 local function animatorOf(character: Model?): Animator?
@@ -1073,21 +1080,69 @@ local function animatorOf(character: Model?): Animator?
 	return nil
 end
 
+local function dropTracks(animator: Animator)
+	local set = trackCache[animator]
+	if set == nil then
+		return
+	end
+	trackCache[animator] = nil
+	for _, c in ipairs(set.Conns) do
+		c:Disconnect()
+	end
+	for _, tr in pairs(set.Tracks) do
+		if tr == holdTrack then
+			holdTrack = nil
+			holdKey = nil
+		end
+		pcall(function()
+			tr:Stop(0)
+			tr:Destroy()
+		end)
+	end
+end
+
+-- respawn: CharacterRemoving (removing = true) drops the sets under the leaving character; CharacterAdded
+-- (removing = false) keeps only the sets under the new one. A set whose Animator left the DataModel always goes.
+local function pruneTracks(char: Model, removing: boolean)
+	for animator in pairs(trackCache) do
+		if animator:IsDescendantOf(char) == removing or not animator:IsDescendantOf(game) then
+			dropTracks(animator) -- clearing an existing key during pairs is allowed
+		end
+	end
+end
+
+local function newTrackSet(animator: Animator): TrackSet
+	local set: TrackSet = { Tracks = {}, Conns = {} }
+	table.insert(
+		set.Conns,
+		animator.Destroying:Connect(function()
+			dropTracks(animator)
+		end)
+	)
+	table.insert(
+		set.Conns,
+		animator.AncestryChanged:Connect(function()
+			if not animator:IsDescendantOf(game) then
+				dropTracks(animator)
+			end
+		end)
+	)
+	trackCache[animator] = set
+	return set
+end
+
 local function trackFor(character: Model?, id: number): AnimationTrack?
 	if id <= 0 then
 		return nil
 	end
-	local animator = animatorOf(character)
-	if not animator then
-		return nil
+	local found = animatorOf(character)
+	if found == nil or not found:IsDescendantOf(game) then
+		return nil -- LoadAnimation needs the Animator in the DataModel (and nothing would ever prune its set)
 	end
+	local animator: Animator = found
 	local key = tostring(math.floor(id))
-	local byAnim = trackCache[animator]
-	if byAnim == nil then
-		byAnim = {}
-		trackCache[animator] = byAnim
-	end
-	local cached = (byAnim :: { [string]: AnimationTrack })[key]
+	local set = trackCache[animator]
+	local cached = if set then set.Tracks[key] else nil
 	if cached then
 		return cached
 	end
@@ -1099,13 +1154,14 @@ local function trackFor(character: Model?, id: number): AnimationTrack?
 		anim = a
 	end
 	local ok, track = pcall(function(): AnimationTrack
-		return (animator :: Animator):LoadAnimation(anim :: Animation)
+		return animator:LoadAnimation(anim :: Animation)
 	end)
-	if ok and track then
-		(byAnim :: { [string]: AnimationTrack })[key] = track
-		return track
+	if not ok or not track then
+		return nil -- R6 / blocked id: fail quietly
 	end
-	return nil -- R6 / blocked id: fail quietly
+	local into: TrackSet = set or newTrackSet(animator)
+	into.Tracks[key] = track
+	return track
 end
 
 local function holdIdFor(weaponId: string?): number
@@ -2011,6 +2067,18 @@ function WeaponVisuals.LocalGunParts(): number
 	return if g then g.Parts else 0
 end
 
+-- cached animation sets (tests: at most 1 Animator and 4 tracks, however many respawns)
+function WeaponVisuals.AnimCacheStats(): { Animators: number, Tracks: number }
+	local animators, tracks = 0, 0
+	for _, set in pairs(trackCache) do
+		animators += 1
+		for _ in pairs(set.Tracks) do
+			tracks += 1
+		end
+	end
+	return { Animators = animators, Tracks = tracks }
+end
+
 WeaponVisuals._OnFx = onFx -- tests: feed WeaponFx payloads without the remote
 
 function WeaponVisuals.Init()
@@ -2044,10 +2112,14 @@ function WeaponVisuals.Init()
 	end
 	Players.PlayerAdded:Connect(trackPlayer)
 	Players.PlayerRemoving:Connect(untrackPlayer)
-	player.CharacterAdded:Connect(function()
+	player.CharacterRemoving:Connect(function(char: Model)
+		pruneTracks(char, true) -- the leaving character's tracks: stopped, destroyed, uncached
+	end)
+	player.CharacterAdded:Connect(function(char: Model)
 		localGun = nil -- the old gun left with the old character
-		holdTrack = nil
-		holdKey = nil
+		-- every set not under the new character goes (clears holdTrack when it was one of them); a hold already
+		-- started on the new character stays tracked so the next holster can stop it
+		pruneTracks(char, false)
 		wantDrawn = false
 	end)
 	HudLayout.LayoutChanged:Connect(layoutTargetBar)
