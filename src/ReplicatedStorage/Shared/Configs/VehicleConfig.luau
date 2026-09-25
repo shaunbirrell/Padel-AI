@@ -763,6 +763,11 @@ local VehicleConfig = {
 			-- ... except inside your own plot: the garage flow keeps seating you on your own car pad / helipad / runway /
 			-- dock basin (139-279 studs from the base spawn, up to ~500 from a plot corner); nothing further than this
 			AutoSitHomeRadius = 520,
+			-- streaming2 S3 (F8): when the seat is further than StreamingConfig.NearStuds (64) from the player, the
+			-- server calls Player:RequestStreamAroundAsync at the spot on the seat where it will put the player, and
+			-- waits for it before the move. This is the request timeout in seconds. The sit happens when the request
+			-- returns or times out. Read only while Workspace.StreamingEnabled is true.
+			AutoSitPrefetchTimeout = 3,
 			DamageLockSeconds = 5, -- SPAWN refused this long after the player's character took damage
 		},
 	},

@@ -44,6 +44,14 @@
 	  late are handled as they arrive (events, no polling).
 	F6: a step that points at a world part whose target is not on this client yet (streamed out, built after the
 	push) re-aims at most every REAIM_SECONDS (1 Hz tick) until it is; steps that open a panel never re-aim.
+	streaming2 lane C1 (F5 / F6 / F23; every path is gated on Workspace.StreamingEnabled, so with it off this is HEAD):
+	  the beam never waits for a streamed part. ResolveTargetPos gives the part when it is on this client, else the
+	  position the server stamped or the config gives (PadBuy WE_ConsolePos_<sid>, Income WE_AtmPos, ClickDropper
+	  WE_DropperPos, ClaimBase PlotFrame + SpawnOffset, Outpost TerritoryConfig); the beam then ends on a client
+	  Attachment in Workspace.Terrain there (the ObjectiveMarker pattern) with no SelectionBox. The part streams in ->
+	  the 1 Hz tick swaps the beam to it (<= REAIM_SECONDS); it streams out -> AncestryChanged falls back to Terrain at
+	  once. The Outpost pick ranks the config zones with the last TerritoryStateUpdate, so it is the same zone whatever
+	  is streamed in. The active marker's Transparency is set again when it streams back in.
 ]]
 
 local Players = game:GetService("Players")
@@ -99,6 +107,16 @@ local stepActive = false -- a step is showing (drives the "Tutorial" flag and th
 local rawTitle = ""
 local rawHint = ""
 
+-- streaming2 lane C1 (streaming only; see the header)
+local terrainEnd = false -- attach1 is a client Attachment in Workspace.Terrain (the target part is not on this client)
+local targetConn: RBXScriptConnection? = nil -- AncestryChanged on the part the beam ends on
+local zoneList: { any }? = nil -- the last TerritoryStateUpdate.Territories (F6: zone state while zones are streamed out)
+
+-- C1: a place setting (the client cannot change it), read where it matters
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
+
 -- chip internals, v (the gui carries HudLayout's MobileScale)
 local PAD_L = 10
 local DISC = 36
@@ -132,6 +150,12 @@ local function clearWaypoint()
 		end
 		highlightPart = nil
 	end
+	local tc = targetConn
+	if tc then
+		targetConn = nil
+		tc:Disconnect()
+	end
+	terrainEnd = false
 	currentMarkerName = nil
 end
 
@@ -195,6 +219,12 @@ local function watchMarker(inst: Instance)
 	for _, d in ipairs(marker:GetDescendants()) do
 		showDressing(d, isActive())
 	end
+	-- C1 F23: the active marker streamed back in may carry the server's Transparency 1 again (local writes can be lost
+	-- on stream-in): show it again (syncMarkerVisibility's values)
+	if streamingOn() and isActive() then
+		marker.Transparency = 0.25
+		marker.LocalTransparencyModifier = 0
+	end
 	watchedMarkers[marker] = marker.DescendantAdded:Connect(function(d: Instance)
 		local on = isActive()
 		showDressing(d, on)
@@ -246,7 +276,8 @@ local function nearestOwnTagged(tag: string, plotId: number, origin: Vector3): B
 	return best
 end
 
-local function ownSpawn(plotId: number): BasePart?
+-- the own PlayerSpawn part when it is on this client (Bases / PlotN are Folders: always present)
+local function ownSpawnPart(plotId: number): BasePart?
 	local root = Workspace:FindFirstChild("WarEmpireSetup")
 	local bases = root and root:FindFirstChild("Bases")
 	local folder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
@@ -254,7 +285,44 @@ local function ownSpawn(plotId: number): BasePart?
 	if sp and sp:IsA("BasePart") then
 		return sp
 	end
+	return nil
+end
+
+local function ownSpawn(plotId: number): BasePart?
+	local sp = ownSpawnPart(plotId)
+	if sp then
+		return sp
+	end
 	return ownPlotPad(plotId) -- the spawn streamed out / renamed: the plot pad is still inside the plot
+end
+
+-- C1 F5: the own PlayerSpawn's world position from config (MapSetup builds it at PlotCFrame * (SpawnOffset.X, 2,
+-- SpawnOffset.Z); BaseService.plotSpawnOffset), for the ClaimBase beam while the plot is not streamed in
+local SPAWN_LIFT = 2
+local function ownSpawnPos(plotId: number): Vector3?
+	local plotPos = PlotFrame.PlotPosition(plotId)
+	if plotPos == nil then
+		return nil
+	end
+	local sp = if BaseLayoutConfig.Enabled == true then BaseLayoutConfig.SpawnOffset else { X = 0, Z = 55 }
+	return PlotFrame.PlotCFrame(plotPos):PointToWorldSpace(Vector3.new(sp.X, SPAWN_LIFT, sp.Z))
+end
+
+-- C1 F5: a Vector3 the server stamped on the local player (nil when unset)
+local function stampedPos(attr: string): Vector3?
+	local v = player:GetAttribute(attr)
+	return if typeof(v) == "Vector3" then v else nil
+end
+
+-- C1 F5: the nearest own tagged part on this client, unless the server-stamped position (the part the server picked,
+-- maybe streamed out) is nearer: the beam then ends on Terrain there until that part streams in
+local function nearestOwnOrStamp(tag: string, plotId: number, origin: Vector3, attr: string): (BasePart?, Vector3?)
+	local part = nearestOwnTagged(tag, plotId, origin)
+	local pos = stampedPos(attr)
+	if pos ~= nil and (part == nil or (pos - origin).Magnitude + 0.5 < (part.Position - origin).Magnitude) then
+		return nil, pos
+	end
+	return part, nil
 end
 
 -- F6 / F10: the player's own main gate in world space (plot-local (0, PlotSize/2), +Z = plot front). Pure config
@@ -266,14 +334,29 @@ end
 
 -- F10: the plot a Home Outpost zone belongs to (TerritoryConfig.Starter rows: IsStarter + PlotId; the marker's
 -- PlotId attribute or the Starter_P<n> id when the row is not in this client's config); nil = not a Home Outpost
-local function starterPlotOf(tid: any, def: any, inst: Instance): number?
+local function starterPlotOf(tid: any, def: any, inst: Instance?): number?
 	local prefix = TerritoryConfig.Starter.IdPrefix
 	local named = typeof(tid) == "string" and string.sub(tid, 1, #prefix) == prefix
 	if not ((def ~= nil and def.IsStarter == true) or named) then
 		return nil
 	end
 	local fromDef = if def ~= nil then tonumber(def.PlotId) else nil
-	return fromDef or tonumber(inst:GetAttribute("PlotId")) or (if named then tonumber(string.sub(tid, #prefix + 1)) else nil)
+	local fromInst = if inst ~= nil then tonumber(inst:GetAttribute("PlotId")) else nil
+	return fromDef or fromInst or (if named then tonumber(string.sub(tid, #prefix + 1)) else nil)
+end
+
+-- One zone's Outpost score (lower wins), for nearestOutpost and outpostFromConfig. Tiers: see nearestOutpost.
+local function outpostScore(def: any, starterPlot: number?, ownerType: any, ownerUserId: any, userId: number, pos: Vector3, from: Vector3): number
+	local ot = TerritoryConfig.OwnerTypes
+	local contested = ownerType == ot.Contested
+	local mine = ownerType == ot.Player and ownerUserId == userId
+	local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
+	local tier = if starterPlot ~= nil then (if mine then 3 else -1)
+		elseif contested or mine then 3
+		elseif hard then 2
+		elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1
+		else 0
+	return tier * OUTPOST_TIER_GAP + (pos - from).Magnitude
 end
 
 -- Outpost: the zone the player can take on foot. Tiers: the player's OWN Home Outpost while they do not hold it (F10,
@@ -282,7 +365,6 @@ end
 -- Outpost is never a target (only its owner can take it). Distance from the own gate when the plot is known
 -- (F6: the same answer wherever the player stands in the base), else from `origin`.
 local function nearestOutpost(origin: Vector3, userId: number, plotId: number?): BasePart?
-	local ot = TerritoryConfig.OwnerTypes
 	local from = if plotId ~= nil then ownGatePos(plotId) else origin
 	local best: BasePart? = nil
 	local bestScore = math.huge
@@ -295,16 +377,8 @@ local function nearestOutpost(origin: Vector3, userId: number, plotId: number?):
 				local def = if typeof(tid) == "string" then (TerritoryConfig.Territories :: any)[tid] else nil
 				local starterPlot = starterPlotOf(tid, def, inst)
 				if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
-					local ownerType = inst:GetAttribute("OwnerType")
-					local contested = ownerType == ot.Contested
-					local mine = ownerType == ot.Player and inst:GetAttribute("OwnerUserId") == userId
-					local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
-					local tier = if starterPlot ~= nil then (if mine then 3 else -1)
-						elseif contested or mine then 3
-						elseif hard then 2
-						elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1
-						else 0
-					local score = tier * OUTPOST_TIER_GAP + (inst.Position - from).Magnitude
+					local score = outpostScore(def, starterPlot, inst:GetAttribute("OwnerType"), inst:GetAttribute("OwnerUserId"), userId,
+						inst.Position, from)
 					if score < bestScore then
 						bestScore = score
 						best = inst
@@ -314,6 +388,53 @@ local function nearestOutpost(origin: Vector3, userId: number, plotId: number?):
 		end
 	end
 	return best
+end
+
+--[[ C1 F6 (streaming): the same pick over EVERY TerritoryConfig zone, streamed in or not. A zone's owner comes from
+	the last TerritoryStateUpdate (it lists every zone this player may see; another plot's Home Outpost is left out and
+	skipped here anyway), else from its marker's attributes when the marker is on this client, else Neutral. The zone
+	position is TerritoryConfig's (MapSetup builds the marker there). Ties go to the lower id. Returns the zone's id,
+	position and marker part (nil while it is streamed out). ]]
+local function outpostFromConfig(origin: Vector3, userId: number, plotId: number?): (string?, Vector3?, BasePart?)
+	local from = if plotId ~= nil then ownGatePos(plotId) else origin
+	local state: { [string]: any } = {}
+	local list = zoneList
+	if list then
+		for _, e in ipairs(list) do
+			if typeof(e) == "table" and typeof(e.Id) == "string" then
+				state[e.Id] = e
+			end
+		end
+	end
+	local parts: { [string]: BasePart } = {}
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.Territory)) do
+		local tid = inst:GetAttribute("TerritoryId")
+		if typeof(tid) == "string" and inst:IsA("BasePart") and inst:IsDescendantOf(Workspace) then
+			parts[tid] = inst
+		end
+	end
+	local bestId: string? = nil
+	local bestPos: Vector3? = nil
+	local bestScore = math.huge
+	for tid, def in pairs(TerritoryConfig.Territories :: any) do
+		local pos = def.Position
+		if typeof(tid) == "string" and typeof(pos) == "Vector3" then
+			local part: BasePart? = parts[tid] -- nil while the marker is streamed out
+			local starterPlot = starterPlotOf(tid, def, part)
+			if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
+				local e = state[tid]
+				local ownerType: any = if e ~= nil then e.OwnerType elseif part ~= nil then part:GetAttribute("OwnerType") else nil
+				local ownerUserId: any = if e ~= nil then e.OwnerUserId elseif part ~= nil then part:GetAttribute("OwnerUserId") else nil
+				local score = outpostScore(def, starterPlot, ownerType, ownerUserId, userId, pos, from)
+				if score < bestScore or (score == bestScore and bestId ~= nil and tid < (bestId :: string)) then
+					bestScore = score
+					bestId = tid
+					bestPos = pos
+				end
+			end
+		end
+	end
+	return bestId, bestPos, if bestId ~= nil then parts[bestId] else nil
 end
 
 --[[ Where the tutorial beam points for a step. Pure (reads the world, builds nothing), exported for the headless
@@ -357,6 +478,57 @@ function TutorialController.ResolveTarget(stepId: string?, markerName: string?, 
 	return nil
 end
 
+--[[ C1 F5 / F6: where the beam ends when the target part may not be on this client (StreamingEnabled). Returns
+	(part, nil) when the target part is streamed in, (nil, position) when it is not but the server stamped or the
+	config gives where it is (the beam then ends on a Terrain attachment there), (nil, nil) for no beam. Same
+	arguments and the same own-plot rules as ResolveTarget; with Workspace.StreamingEnabled false it IS ResolveTarget
+	and never returns a position. Pure (reads the world and the player's attributes, builds nothing). ]]
+function TutorialController.ResolveTargetPos(stepId: string?, markerName: string?, padStructureId: string?, plotId: number?, origin: Vector3, userId: number?): (BasePart?, Vector3?)
+	if not streamingOn() then
+		return TutorialController.ResolveTarget(stepId, markerName, padStructureId, plotId, origin, userId), nil
+	end
+	if stepId == "Outpost" or markerName == "Tutorial_Outpost" then
+		local _, pos, part = outpostFromConfig(origin, userId or player.UserId, plotId)
+		if part then
+			return part, nil
+		end
+		return nil, pos
+	end
+	if stepId == "RecruitSoldiers" or markerName == "Tutorial_Recruit" or stepId == "Jeep" or markerName == "Tutorial_Jeep" then
+		return nil, nil
+	end
+	if plotId == nil then
+		return nil, nil
+	end
+	if typeof(padStructureId) == "string" and padStructureId ~= "" then
+		local part = ConsoleLocator.Find(plotId, padStructureId)
+		if part and ConsoleLocator.IsConsole(part) then
+			return part, nil
+		end
+		-- the console is streamed out: its stamped position (UpgradePadService) before any legacy pad on this client
+		local pos = stampedPos("WE_ConsolePos_" .. padStructureId)
+		if pos then
+			return nil, pos
+		end
+		return part, nil
+	end
+	if stepId == "ClaimBase" or markerName == "Tutorial_ClaimBase" then
+		local sp = ownSpawnPart(plotId)
+		if sp then
+			return sp, nil
+		end
+		return nil, ownSpawnPos(plotId) -- not the plot pad: the spawn itself, from config
+	end
+	if stepId == "Income" or markerName == "Tutorial_Income" then
+		return nearestOwnOrStamp(Constants.Tags.MoneyCollector, plotId, origin, "WE_AtmPos")
+	end
+	if stepId == "ClickDropper" or markerName == "Tutorial_Dropper" then
+		return nearestOwnOrStamp(MANUAL_DROPPER_TAG, plotId, origin, "WE_DropperPos")
+	end
+	-- an unknown step's named marker has no stamped position: the part, or nothing (as ResolveTarget)
+	return TutorialController.ResolveTarget(stepId, markerName, padStructureId, plotId, origin, userId), nil
+end
+
 local function originPos(): Vector3
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -367,13 +539,77 @@ local function originPos(): Vector3
 	return if pad then pad.Position else Vector3.zero
 end
 
+local function newBeam(a0: Attachment, a1: Attachment, parent: Instance): Beam
+	local beam = Instance.new("Beam")
+	beam.Name = "WE_TutorialBeam"
+	beam.Attachment0 = a0
+	beam.Attachment1 = a1
+	beam.FaceCamera = true
+	-- v68: subtle guide (was a thick glowing neon line): thin, mostly transparent, fading out toward the target
+	beam.Width0 = 0.22
+	beam.Width1 = 0.12
+	beam.Color = ColorSequence.new(Color3.fromRGB(240, 214, 110))
+	beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.85) })
+	beam.LightEmission = 0.2
+	beam.Parent = parent
+	return beam
+end
+
+-- C1 F5: the beam end while the target part is not on this client: a client Attachment in Workspace.Terrain at the
+-- stamped / config position (the ObjectiveMarker pattern; Terrain's frame is the world frame, and a client-made
+-- Attachment there is never streamed). No SelectionBox (it needs the part).
+local function beamToTerrain(pos: Vector3)
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then
+		return -- respawning: CharacterAdded / the tick re-aim
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Name = "WE_TutAtt0"
+	a0.Parent = hrp
+	attach0 = a0
+	local a1 = Instance.new("Attachment")
+	a1.Name = "WE_TutAtt1"
+	a1.Position = pos
+	a1.Parent = Workspace.Terrain
+	attach1 = a1
+	terrainEnd = true
+	guideBeam = newBeam(a0, a1, hrp)
+end
+
+-- set once setWaypoint exists (the stream-out handler below re-aims through it)
+local reaimNow: () -> () = function() end
+
+-- C1 F5: the part the beam ends on leaves Workspace (streamed out: it, or its Atomic model, is parented to nil) ->
+-- fall back to Terrain at once when the step has a stamped / config position. A step without one (an unknown step's
+-- marker) keeps HEAD's behaviour: the beam's attachment comes back with the part.
+local function watchTarget(target: BasePart)
+	targetConn = target.AncestryChanged:Connect(function()
+		if highlightPart ~= target or target:IsDescendantOf(Workspace) then
+			return
+		end
+		task.defer(function()
+			if not stepActive or highlightPart ~= target or target:IsDescendantOf(Workspace) then
+				return
+			end
+			local _, pos = TutorialController.ResolveTargetPos(currentStepId, currentMarkerName, currentPadStructureId, myPlotId, originPos())
+			if pos ~= nil then
+				reaimNow()
+			end
+		end)
+	end)
+end
+
 local function setWaypoint(markerName: string?, padStructureId: string?)
 	clearWaypoint()
 	currentMarkerName = markerName
 	currentPadStructureId = padStructureId
-	local target = TutorialController.ResolveTarget(currentStepId, markerName, padStructureId, myPlotId, originPos())
+	local target, endPos = TutorialController.ResolveTargetPos(currentStepId, markerName, padStructureId, myPlotId, originPos())
 	syncMarkerVisibility(target)
 	if not target then
+		if endPos ~= nil then
+			beamToTerrain(endPos) -- C1: streaming only (ResolveTargetPos gives no position with it off)
+		end
 		return
 	end
 	highlightPart = target
@@ -383,6 +619,9 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	sel.Color3 = Constants.Colors.Gold
 	sel.LineThickness = 0.06
 	sel.Parent = target
+	if streamingOn() then
+		watchTarget(target)
+	end
 
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -399,19 +638,22 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	a1.Parent = target
 	attach1 = a1
 
-	local beam = Instance.new("Beam")
-	beam.Name = "WE_TutorialBeam"
-	beam.Attachment0 = a0
-	beam.Attachment1 = a1
-	beam.FaceCamera = true
-	-- v68: subtle guide (was a thick glowing neon line): thin, mostly transparent, fading out toward the target
-	beam.Width0 = 0.22
-	beam.Width1 = 0.12
-	beam.Color = ColorSequence.new(Color3.fromRGB(240, 214, 110))
-	beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.85) })
-	beam.LightEmission = 0.2
-	beam.Parent = hrp
-	guideBeam = beam
+	guideBeam = newBeam(a0, a1, hrp)
+end
+reaimNow = function()
+	setWaypoint(currentMarkerName, currentPadStructureId)
+end
+
+-- C1 (1 Hz tick, <= every REAIM_SECONDS) while the beam ends on Terrain: the part streamed in -> the beam swaps to it
+-- (and the SelectionBox comes back); the stamp moved -> the anchor follows without a rebuild
+local function refreshTerrainEnd()
+	local part, pos = TutorialController.ResolveTargetPos(currentStepId, currentMarkerName, currentPadStructureId, myPlotId, originPos())
+	local a1 = attach1
+	if part ~= nil or pos == nil or a1 == nil or a1.Parent == nil then
+		setWaypoint(currentMarkerName, currentPadStructureId)
+	elseif (a1.Position - pos).Magnitude > 0.5 then
+		a1.Position = pos
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -1076,7 +1318,19 @@ end
 local function guideTick()
 	local now = os.clock()
 	local hp = highlightPart
-	if stepActive and (hp == nil or hp.Parent == nil) and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
+	if streamingOn() then
+		-- C1: on Terrain -> swap to the part once it streams in; on a part that left Workspace (a streamed-out Atomic
+		-- model keeps the part's Parent) or no beam yet -> re-aim
+		if stepActive and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
+			if terrainEnd then
+				lastReaim = now
+				refreshTerrainEnd()
+			elseif hp == nil or not hp:IsDescendantOf(Workspace) then
+				lastReaim = now
+				setWaypoint(currentMarkerName, currentPadStructureId)
+			end
+		end
+	elseif stepActive and (hp == nil or hp.Parent == nil) and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
 		lastReaim = now
 		setWaypoint(currentMarkerName, currentPadStructureId)
 	end
@@ -1292,6 +1546,16 @@ function TutorialController.Init()
 			applyPlotId(base.PlotId)
 		end
 	end)
+
+	-- C1 F6 (streaming only): the zone state the Outpost pick reads while zones are streamed out (the list is kept by
+	-- reference; the pick reads it at most every REAIM_SECONDS)
+	if streamingOn() then
+		Remotes.BindEvent(Constants.RemoteNames.TerritoryStateUpdate, function(payload: any)
+			if typeof(payload) == "table" and typeof(payload.Territories) == "table" then
+				zoneList = payload.Territories
+			end
+		end)
+	end
 
 	player.CharacterAdded:Connect(function()
 		if currentMarkerName and stepActive then

@@ -47,6 +47,9 @@ local VehicleService = {}
 -- W2 (CC-2): vehicle HP for every vehicle. A module-table field, not a local (this file sits at Luau's 200-register
 -- limit for module locals).
 VehicleService._VehicleHealth = require(script.Parent.Parent.Modules.VehicleHealth)
+-- streaming2 S3 (F8): pre-fetches a far seat's area before the auto-sit move (RequestSpawn). A no-op while
+-- Workspace.StreamingEnabled is false. A module-table field for the same register-limit reason.
+VehicleService._StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)
 
 local Drive = VehicleConfig.Drive
 local CarCfg = Drive.Modes.Car
@@ -1289,6 +1292,10 @@ end
 
 local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: number, bonus: number?, armorMult: number?): Model
 	local model = Instance.new("Model")
+	-- streaming2 S3 (F9): the chassis and each hinge-wheel assembly stream as one unit, so a phone never gets a
+	-- chassis without wheels. Set before the model is ever parented, because the mode applies from the first
+	-- replication. It has no effect while Workspace.StreamingEnabled is false.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = def.DisplayName
 	model:SetAttribute("VehicleId", def.Id)
 	model:SetAttribute("OwnerUserId", ownerUserId)
@@ -4136,7 +4143,21 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			return hrp ~= nil and hrp:IsA("BasePart") and (hrp.Position - rec.Chassis.Position).Magnitude - reach <= sitRadius
 		end
 		autoSeat = seatNear()
-		local function trySit()
+		-- streaming2 S3 (F8): before moving the player onto a seat further away than StreamingConfig.NearStuds, the
+		-- server asks for that area to stream in first. It sends one RequestStreamAroundAsync per spawn, with timeout
+		-- Drive.Spawn.AutoSitPrefetchTimeout, so the driver's client never takes over the physics on ground it has not
+		-- loaded. Sit attempts that fire while the request runs do nothing, and the attempt schedule restarts when it
+		-- returns. With streaming off there is no request and the moves are the same as before.
+		local prefetch = "none" -- "none" | "running" | "done"
+		local trySit: () -> ()
+		local function scheduleSits()
+			task.defer(trySit)
+			task.delay(0.2, trySit)
+			task.delay(0.5, trySit)
+			task.delay(1.0, trySit)
+			task.delay(2.0, trySit)
+		end
+		trySit = function()
 			if rec.EverSeated or not player.Parent or not model.Parent or not seat.Parent then
 				return
 			end
@@ -4144,6 +4165,19 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			local hum = character and character:FindFirstChildOfClass("Humanoid")
 			local hrp = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hum and hrp and seat.Occupant == nil and seatNear() then
+				local StreamPrefetch = VehicleService._StreamPrefetch
+				if prefetch ~= "done" and StreamPrefetch.Enabled() then
+					local dest = (seat.CFrame * CFrame.new(0, 2.5, 0)).Position -- where the move below puts the root part
+					if not StreamPrefetch.IsNear(player, dest) then
+						if prefetch == "none" then
+							prefetch = "running"
+							StreamPrefetch.Request(player, dest, SpawnCfg.AutoSitPrefetchTimeout) -- yields; pcall'd inside
+							prefetch = "done"
+							scheduleSits() -- re-runs every check: the player, vehicle or seat may have changed meanwhile
+						end
+						return
+					end
+				end
 				-- Place character on seat so Sit always has a valid near-seat humanoid
 				hrp.CFrame = seat.CFrame * CFrame.new(0, 2.5, 0)
 				pcall(function()
@@ -4151,11 +4185,7 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 				end)
 			end
 		end
-		task.defer(trySit)
-		task.delay(0.2, trySit)
-		task.delay(0.5, trySit)
-		task.delay(1.0, trySit)
-		task.delay(2.0, trySit)
+		scheduleSits()
 	end
 
 	if profile.Stats then

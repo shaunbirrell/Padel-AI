@@ -343,6 +343,9 @@ local respawnGuard: (plotId: number, slot: number, ownerUserId: number, def: Plo
 
 local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, stats: any, parent: Folder, plotId: number): GuardUnit
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F10): a gate guard (root, welded kit, Humanoid) reaches a client whole or not at all. Set before
+	-- the model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = "GateGuard_" .. tostring(slot)
 	model:SetAttribute("GateGuard", true)
 	model:SetAttribute("OwnerUserId", ownerUserId)
@@ -487,6 +490,8 @@ end
 local function partKitAutoGun(at: CFrame, parent: Instance): (Model, BasePart)
 	-- v35: obvious HMG tripod + long barrel + muzzle tip (readable at gate flanks)
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F10): the AutoGun reaches a client whole or not at all; set before it is parented (below)
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = "GateAutoGun_Fallback"
 	local base = Instance.new("Part")
 	base.Name = "Base"
@@ -598,6 +603,8 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 				d.CanCollide = false
 			end
 		end
+		-- streaming2 S4 (F10): the catalog AutoGun is Atomic too, set before it is parented. No effect with streaming off.
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 		model.Parent = parent
 		yawPart = model.PrimaryPart :: BasePart
 		local named = model:FindFirstChild("Barrel", true) or model:FindFirstChild("Yaw", true)

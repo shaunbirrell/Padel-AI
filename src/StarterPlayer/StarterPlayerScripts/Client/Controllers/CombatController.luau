@@ -76,6 +76,15 @@
 	  DRAWN                  RequestSetDrawn (boolean, trailing-edge, <= 2/s) so the server sets WE_GunOut for the
 	                         other clients' gun models.
 	  (W2 state lives in the Feel / W2 tables: this module is near Luau's 200-local limit.)
+
+	STREAMING (streaming2 lane C4)
+	  F16  A new character's Humanoid binds whenever it arrives (char.ChildAdded, the HudLayout pattern), not
+	       through a 10 s WaitForChild after which combat stayed unbound for the whole life. While
+	       Workspace.StreamingEnabled is on there is no time limit (a character is parented before its descendants
+	       have replicated); the next character and CharacterRemoving end the wait. Streaming off: the character
+	       arrives whole, and the wait still gives up after 10 s, as at 0a04776.
+	  F30  The local fire ray and the holstered-FIRE line-of-sight rays see only streamed-in geometry. Both are
+	       hints: the server re-casts every shot on the whole world and decides the hit.
 ]]
 
 local Players = game:GetService("Players")
@@ -121,6 +130,9 @@ type FeelState = {
 	DrawnTimer: boolean,
 	LastDrawnSendAt: number,
 	Bloom: UIScale?,
+	HumWait: RBXScriptConnection?, -- streaming2 F16: the character's ChildAdded until its Humanoid arrives
+	HumWaitChar: Instance?, -- the character that wait belongs to
+	HumWaitSerial: number, -- bumped whenever that wait ends (a pending streaming-off give-up checks it)
 }
 local Feel: FeelState
 do
@@ -162,6 +174,9 @@ do
 		DrawnTimer = false,
 		LastDrawnSendAt = -math.huge,
 		Bloom = nil,
+		HumWait = nil,
+		HumWaitChar = nil,
+		HumWaitSerial = 0,
 	}
 end
 local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
@@ -1285,6 +1300,8 @@ requestFire = function()
 	local wid = activeWeaponId() or currentWeaponId
 	local def = if wid then WeaponConfig.Weapons[wid] else nil
 	local reach = if def then (tonumber(def.Range) or 496) + Feel.HitSlop else 500
+	-- streaming2 F30: this ray sees only what has streamed in here (a far wall may be missing), so HitPosition and the
+	-- target ids are hints; the server re-casts on the whole world and decides the hit
 	local result = Workspace:Raycast(origin, direction * reach, W2.shotFilter())
 	if result then
 		payload.HitPosition = result.Position
@@ -1507,6 +1524,7 @@ local function scanHostiles(): boolean
 			lastScanResult = true -- the camera sits on the target: nothing can be in between
 			break
 		end
+		-- streaming2 F30: sees only streamed-in walls, so FIRE can dim on a target behind unstreamed cover (display only)
 		local hit = Workspace:Raycast(origin, dir, params)
 		if hit == nil or hit.Instance:IsDescendantOf(candModel[best]) then
 			lastScanResult = true
@@ -2049,7 +2067,23 @@ local function bindHumanoid(hum: Humanoid)
 	onSeatContext()
 end
 
+-- streaming2 F16: end the wait for a late Humanoid (next character, bound, the off give-up, or CharacterRemoving of
+-- the character it belongs to: `removed`)
+function W2.stopHumanoidWait(removed: Instance?)
+	if removed ~= nil and removed ~= Feel.HumWaitChar then
+		return
+	end
+	Feel.HumWaitSerial += 1
+	local c = Feel.HumWait
+	Feel.HumWait = nil
+	Feel.HumWaitChar = nil
+	if c then
+		c:Disconnect()
+	end
+end
+
 local function onCharacter(char: Model)
+	W2.stopHumanoidWait()
 	-- every life starts holstered (HudConfig.Hotbar.DrawnOnSpawn)
 	drawn = HB.DrawnOnSpawn == true
 	stopFiring()
@@ -2061,12 +2095,23 @@ local function onCharacter(char: Model)
 		bindHumanoid(h)
 		return
 	end
-	task.spawn(function()
-		local found = char:WaitForChild("Humanoid", 10)
-		if found and found:IsA("Humanoid") and player.Character == char then
-			bindHumanoid(found)
+	-- streaming2 F16: bind the Humanoid whenever it arrives (the HudLayout pattern)
+	Feel.HumWaitChar = char
+	Feel.HumWait = char.ChildAdded:Connect(function(c: Instance)
+		if c:IsA("Humanoid") and player.Character == char then
+			W2.stopHumanoidWait()
+			bindHumanoid(c)
 		end
 	end)
+	if Workspace.StreamingEnabled ~= true then
+		-- streaming off: the character arrives whole, so give up after 10 s as 0a04776 did
+		local serial = Feel.HumWaitSerial
+		task.delay(10, function()
+			if Feel.HumWaitSerial == serial then
+				W2.stopHumanoidWait()
+			end
+		end)
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -2172,6 +2217,7 @@ function CombatController.Init()
 	HudLayout.LayoutChanged:Connect(placeCombatControls)
 
 	player.CharacterAdded:Connect(onCharacter)
+	player.CharacterRemoving:Connect(W2.stopHumanoidWait) -- streaming2 F16
 	if player.Character then
 		onCharacter(player.Character)
 	end

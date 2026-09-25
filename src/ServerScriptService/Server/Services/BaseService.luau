@@ -21,8 +21,10 @@ local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 local TycoonMath = require(Shared.Util.TycoonMath) -- v72: one passive formula (paid here, shown on the client)
 local BusinessConfig = require(Shared.Configs.BusinessConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local StreamingConfig = require(Shared.Configs.StreamingConfig) -- streaming2 S1
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch) -- streaming2 S1: pre-fetched moves
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
 local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
 local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildingBuilder)
@@ -117,6 +119,43 @@ local function setNoPlotFlag(player: Player, noPlot: boolean)
 	end)
 end
 
+-- streaming2 S1 (F2): the plot's own SpawnLocation (MapSetup: Plot<n>.PlayerSpawn, Neutral, Duration 0), found the
+-- way GetPlotSpawnCFrame finds the teleport target (the plot pad's folder)
+local function plotSpawnLocation(plotId: number): SpawnLocation?
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == plotId then
+			local spawn = inst.Parent and inst.Parent:FindFirstChild("PlayerSpawn")
+			if spawn and spawn:IsA("SpawnLocation") then
+				return spawn
+			end
+			return nil
+		end
+	end
+	return nil
+end
+
+--[[ streaming2 S1 (F2): respawn on the own plot, not on a random plot gate (maybe an enemy's, and a cross-map hop the
+	phone has not streamed). Player.yaml: RespawnLocation takes a Neutral SpawnLocation under Workspace. nil clears it.
+	Only while Workspace.StreamingEnabled is on: with streaming off respawns stay exactly as before. ]]
+local function setRespawnAtPlot(player: Player, plotId: number?)
+	if not StreamPrefetch.Enabled() then
+		return
+	end
+	local spawn = if plotId ~= nil then plotSpawnLocation(plotId) else nil
+	xpcall(function()
+		if player.RespawnLocation == spawn then
+			return
+		elseif spawn then
+			player.RespawnLocation = spawn
+		else
+			local anyPlayer: any = player -- typed SpawnLocation, but nil is the documented "default spawning"
+			anyPlayer.RespawnLocation = nil
+		end
+	end, function(err: any)
+		warn("[BaseService] RespawnLocation not set for", player.Name, err)
+	end)
+end
+
 --[[ v69: returns the player's plot, or nil when every plot is owned. Never hands out a plot someone else owns:
 	v63 forced plot 1 here, so the 7th+ player shared plot 1 with its owner — each one's refresh redrew the other's
 	kits and walls at their own levels, and the extra player's ReleasePlot wiped the real owner's base. ]]
@@ -135,6 +174,7 @@ function BaseService.AssignPlot(player: Player): number?
 			DS.MarkDirty(player)
 		end
 		setNoPlotFlag(player, false)
+		setRespawnAtPlot(player, held)
 		return held
 	end
 
@@ -147,6 +187,7 @@ function BaseService.AssignPlot(player: Player): number?
 			DS.MarkDirty(player)
 		end
 		setNoPlotFlag(player, false)
+		setRespawnAtPlot(player, saved)
 		return saved
 	end
 
@@ -159,6 +200,7 @@ function BaseService.AssignPlot(player: Player): number?
 			DS.MarkDirty(player)
 		end
 		setNoPlotFlag(player, true)
+		setRespawnAtPlot(player, nil)
 		return nil
 	end
 
@@ -166,6 +208,7 @@ function BaseService.AssignPlot(player: Player): number?
 	profile.BasePlotId = plotId
 	DS.MarkDirty(player)
 	setNoPlotFlag(player, false)
+	setRespawnAtPlot(player, plotId)
 	return plotId
 end
 
@@ -181,6 +224,9 @@ function BaseService.ReleasePlot(player: Player): boolean
 			plotOwners[plotId] = nil
 			released = true
 		end
+	end
+	if released then
+		setRespawnAtPlot(player, nil) -- streaming2 S1 (F2): the plot is no longer theirs
 	end
 	return released
 end
@@ -393,11 +439,21 @@ local function noPlotDropCFrame(): CFrame
 	return fallback
 end
 
---[[ Moves the player onto THEIR plot (true), or — with no plot free — onto neutral ground (false). ]]
-function BaseService.TeleportToPlot(player: Player): boolean
+--[[ Moves the player onto THEIR plot (true), or — with no plot free — onto neutral ground (false).
+	streaming2 S1 (F1): while Workspace.StreamingEnabled is on, the move goes through StreamPrefetch: the destination is
+	pre-fetched first (RequestStreamAroundAsync), one move is in flight per player, and the stacked re-applies are
+	gone (one settle check instead). With streaming off the move is the old one: at once, then again at 0.35 s and 1.0 s.
+	onArrived(moved), optional, runs once: after the move, or at once when there is nothing to move. ]]
+function BaseService.TeleportToPlot(player: Player, onArrived: ((boolean) -> ())?): boolean
+	local function arrived(moved: boolean)
+		if onArrived then
+			task.spawn(onArrived, moved) -- its own thread: a failing callback never breaks the teleport
+		end
+	end
 	local DS = getDataService()
 	local profile = if DS then DS.GetProfile(player) else nil
 	if not profile then
+		arrived(false)
 		return false
 	end
 	-- v69: only ever a plot this player owns (v63 forced BasePlotId=1 → another player's base)
@@ -412,17 +468,13 @@ function BaseService.TeleportToPlot(player: Player): boolean
 		cf = noPlotDropCFrame()
 	end
 	if not cf then
+		arrived(false)
 		return false
 	end
 	local target: CFrame = cf
 	local function apply(character: Model)
 		if character and character.Parent then
-			character:PivotTo(target)
-			local hrp = character:FindFirstChild("HumanoidRootPart")
-			if hrp and hrp:IsA("BasePart") then
-				hrp.AssemblyLinearVelocity = Vector3.zero
-				hrp.AssemblyAngularVelocity = Vector3.zero
-			end
+			StreamPrefetch.Place(character, target) -- PivotTo + zero velocity
 		end
 	end
 	local function applyWithRetries(character: Model)
@@ -439,21 +491,34 @@ function BaseService.TeleportToPlot(player: Player): boolean
 			end
 		end)
 	end
+	local function moveNow(character: Model)
+		if StreamPrefetch.Enabled() then
+			StreamPrefetch.PivotTo(player, target, { OnDone = arrived })
+		else
+			applyWithRetries(character)
+			arrived(character.Parent ~= nil)
+		end
+	end
 	if player.Character then
-		applyWithRetries(player.Character)
+		moveNow(player.Character)
 	else
 		local conn: RBXScriptConnection?
+		local spawned = false
 		conn = player.CharacterAdded:Connect(function(character)
+			spawned = true
 			if conn then
 				conn:Disconnect()
 			end
 			task.defer(function()
-				applyWithRetries(character)
+				moveNow(character)
 			end)
 		end)
 		task.delay(30, function()
 			if conn then
 				conn:Disconnect()
+			end
+			if not spawned then
+				arrived(false)
 			end
 		end)
 	end
@@ -1268,6 +1333,57 @@ function BaseService.NuclearRehydrateKits(player: Player)
 	end
 end
 
+--[[ streaming2 S1 (F18): does the player's base need the join heal? True when an owned (L1+) structure kit on their
+	plot has no upgrade slot, or a slot without its kit (no WE_KitGen stamp, or no WE_KitRole part). Read-only: no tag
+	or attribute is written, and it walks the UpgradeSlot tag once (no GetDescendants). ]]
+local function kitNeedsHeal(player: Player): boolean
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
+	local plotId = ownedPlotOf(player.UserId)
+	if not profile or plotId == nil then
+		return false -- nothing to heal (NuclearRehydrateKits would do nothing either)
+	end
+	local slotsOf: { [string]: { BasePart } } = {}
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == plotId then
+			local sid = inst:GetAttribute("StructureId")
+			if typeof(sid) == "string" then
+				local list = slotsOf[sid]
+				if list == nil then
+					list = {}
+					slotsOf[sid] = list
+				end
+				table.insert(list, inst)
+			end
+		end
+	end
+	for structureId in pairs(BaseConfig.Structures) do
+		local lv = tonumber(profile.BaseUpgrades[structureId]) or 0
+		if lv >= 1 and not TycoonMath.IsBusiness(structureId) then
+			local slots = slotsOf[structureId]
+			if slots == nil then
+				return true
+			end
+			for _, plinth in ipairs(slots) do
+				if plinth:GetAttribute("WE_KitGen") == nil then
+					return true
+				end
+				local hasKit = false
+				for _, ch in ipairs(plinth:GetChildren()) do
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") ~= nil then
+						hasKit = true
+						break
+					end
+				end
+				if not hasKit then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
 function BaseService.RefreshAllVisuals(player: Player)
 	local profile = getDataService().GetProfile(player)
 	if not profile then
@@ -1410,8 +1526,19 @@ local function setUpGainedPlot(plr: Player, plotId: number)
 	if NotificationService and NotificationService.Notify then
 		pcall(NotificationService.Notify, plr, string.format("A base freed up — Base %d is yours now!", plotId), "Success", 6)
 	end
-	pcall(BaseService.TeleportToPlot, plr)
-	notifyTutorialPlotAssigned(plr)
+	if StreamPrefetch.Enabled() then
+		-- streaming2 S1 (F2 / F15): respawn here from now on; PlotAssigned once the pre-fetched move has landed
+		setRespawnAtPlot(plr, plotId)
+		local okTp = pcall(BaseService.TeleportToPlot, plr, function()
+			notifyTutorialPlotAssigned(plr)
+		end)
+		if not okTp then
+			notifyTutorialPlotAssigned(plr)
+		end
+	else
+		pcall(BaseService.TeleportToPlot, plr)
+		notifyTutorialPlotAssigned(plr)
+	end
 	pcall(BaseService.PushState, plr)
 	pcall(function()
 		local st = buildPlayerState(plr)
@@ -1668,16 +1795,34 @@ function BaseService.Init(deps: { [string]: any })
 				end
 			end)
 		end
-		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
-		task.defer(function()
-			BaseService.TeleportToPlot(player)
-		end)
-		task.delay(1.5, function()
-			if player.Parent then
+		local streaming = StreamPrefetch.Enabled() -- streaming2 S1: false = the join below is exactly the old one
+		if streaming then
+			-- streaming2 S1 (F1 / F2 / F15): the first spawn of a session is random (the save loads after it). The
+			-- own PlayerSpawn is a replication focus until ONE pre-fetched move lands the player home, and the
+			-- tutorial hears PlotAssigned only then (before, it pointed at a plot the phone had not streamed yet).
+			local releaseFocus = StreamPrefetch.HoldFocus(
+				player,
+				if assignedPlot ~= nil then plotSpawnLocation(assignedPlot) else nil,
+				StreamingConfig.JoinFocusMaxSeconds
+			)
+			task.defer(function()
+				BaseService.TeleportToPlot(player, function()
+					releaseFocus()
+					notifyTutorialPlotAssigned(player)
+				end)
+			end)
+		else
+			-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
+			task.defer(function()
 				BaseService.TeleportToPlot(player)
-			end
-		end)
-		notifyTutorialPlotAssigned(player)
+			end)
+			task.delay(1.5, function()
+				if player.Parent then
+					BaseService.TeleportToPlot(player)
+				end
+			end)
+			notifyTutorialPlotAssigned(player)
+		end
 		BaseService.PushState(player)
 		-- Dense re-push already below; keep an immediate second Push after plot assign
 		EconomyService.Push(player)
@@ -1712,13 +1857,15 @@ function BaseService.Init(deps: { [string]: any })
 			end)
 		end)
 		-- v45 P0: nuclear kit rebuild then RefreshAllVisuals at 0 / 0.5 / 2 / 5s (map-heal race)
+		-- streaming2 S1 (F18): with streaming on, the 0.5 / 2 / 5 s passes rebuild only a base whose kit is broken.
+		-- Each rebuild is re-sent to every client streaming this base while the joining phone does its first stream.
 		task.defer(function()
 			pcall(BaseService.NuclearRehydrateKits, player)
 			BaseService.RefreshAllVisuals(player)
 		end)
 		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
 			task.delay(delaySec, function()
-				if player.Parent then
+				if player.Parent and (not streaming or kitNeedsHeal(player)) then
 					pcall(BaseService.NuclearRehydrateKits, player)
 					BaseService.RefreshAllVisuals(player)
 				end

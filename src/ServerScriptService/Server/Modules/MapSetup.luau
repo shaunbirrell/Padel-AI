@@ -13,6 +13,11 @@
 	anchors, no beacons, no Neon.
 	W3 step 2 lane BK: the Empire Bank is a walk-in hall (buildEmpireBank: 17 parts, the open BankGate, the StateBanner,
 	the Town.Bank.* activity anchors on BankPlaza).
+	streaming2 S4 (spec streaming2 §1, F11 / F12 / F24): ModelStreamingMode Atomic, always set before the Model is
+	parented, on the static soldier rigs (makeSoldierKit), the Empire Bank (one Model "EmpireBank") and one Model per
+	capture zone (Territories.<Id>_Zone: the marker, _Ring, _FlagPole, _Flag and, off the Home Outposts, _FlagStripe
+	and _Finial; fort walls / keep / towers and rig decks / legs / piers stay loose). Plots stay Folders. Inert while
+	Workspace.StreamingEnabled is false (the default.project.json switch): the same parts, only grouped.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -515,6 +520,9 @@ local function makeSoldierKit(parentFolder, name, cf: CFrame, bodyColor, labelTe
 	-- or looks up these names on a static kit.
 	local detail = (StructureVisualConfig :: any).StaticSoldierDetail ~= false
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F11): a static rig (parts, Humanoid, catalog visual) reaches a client whole or not at all. Set
+	-- before the model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = name
 	if npcId then
 		model:SetAttribute("NPCId", npcId)
@@ -2135,14 +2143,26 @@ local BANK_BANNER_OPEN = Color3.fromRGB(70, 170, 90) -- StateBanner "open" (OpsC
 local BANK_SIGN_TEXT = "EMPIRE BANK" -- = BankRaidConfig.Sign.Text
 
 local function buildEmpireBank(root: Folder)
-	local bankFolder = ensureFolder("EmpireBank", root)
+	-- streaming2 S4 (F24): the bank is ONE Atomic Model "EmpireBank" (was a Folder of 10 loose parts + the Default BankHall),
+	-- so a client gets the plaza, hall, gate, vault pad, sign and banner together or none of them (17 parts, 36 studs
+	-- across). Same name and the same children, so every lookup still works (BankRaidService's "EmpireBank" ancestor walk,
+	-- OpsSites' door / banner search from BankPlaza's parent, the vault by its WE_BankVault tag, Hygiene's
+	-- BillboardAllowAncestors). Atomic is set first; the model is built unparented and parented once whole (after the
+	-- anchors, below), so every piece is an initial descendant. Inert while Workspace.StreamingEnabled is false.
+	local oldBank = root:FindFirstChild("EmpireBank")
+	if oldBank then
+		oldBank:Destroy()
+	end
+	local bankModel = Instance.new("Model")
+	bankModel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	bankModel.Name = "EmpireBank"
 	local plaza = part({
 		Name = "BankPlaza",
 		Size = Vector3.new(36, 1.2, 36),
 		Position = BANK_POS,
 		Color = Color3.fromRGB(168, 160, 144),
 		Material = Enum.Material.Pavement,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 
 	-- the hall shell (WorldKits TownBlock "hall": exactly 7 parts at 2 storeys, no Roof / Lantern); its front (local -Z)
@@ -2159,7 +2179,7 @@ local function buildEmpireBank(root: Folder)
 			Variant = "hall",
 			Color = Color3.fromRGB(214, 206, 188), -- pale limestone walls (trim 20 % darker)
 		})
-		hall.Parent = bankFolder
+		hall.Parent = bankModel
 		local roof = hall:FindFirstChild("HallRoof")
 		if roof and roof:IsA("BasePart") then
 			roofTop = roof.Position.Y + roof.Size.Y * 0.5
@@ -2181,7 +2201,7 @@ local function buildEmpireBank(root: Folder)
 			Color = Color3.fromRGB(232, 228, 216),
 			Material = Enum.Material.Marble,
 			CanCollide = true,
-			Parent = bankFolder,
+			Parent = bankModel,
 		})
 	end
 
@@ -2193,7 +2213,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(34, 38, 48),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	sign.CanQuery = false
 	sign.CanTouch = false
@@ -2215,7 +2235,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(52, 54, 52),
 		Material = Enum.Material.DiamondPlate,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	gate.CanQuery = false
 	gate.CanTouch = false
@@ -2234,7 +2254,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(150, 150, 142),
 		Material = Enum.Material.DiamondPlate,
 		CanCollide = true,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 
 	-- the vault: a flat gold pad inside the hall (unrotated, so the label's world offset stays straight up). BANK_VAULT_Z
@@ -2247,7 +2267,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(214, 176, 72),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	vault.CanQuery = false
 	vault.CanTouch = false
@@ -2263,7 +2283,7 @@ local function buildEmpireBank(root: Folder)
 			Color = Color3.fromRGB(148, 144, 132),
 			Material = Enum.Material.Concrete,
 			CanCollide = true,
-			Parent = bankFolder,
+			Parent = bankModel,
 		})
 	end
 
@@ -2275,7 +2295,7 @@ local function buildEmpireBank(root: Folder)
 		Color = BANK_BANNER_OPEN,
 		Material = Enum.Material.Fabric,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	banner.CanQuery = false
 	banner.CanTouch = false
@@ -2290,8 +2310,9 @@ local function buildEmpireBank(root: Folder)
 			end
 		end
 	end)
+	bankModel.Parent = root -- streaming2 S4: parented whole
 	local nParts = 0
-	for _, d in ipairs(bankFolder:GetDescendants()) do
+	for _, d in ipairs(bankModel:GetDescendants()) do
 		if d:IsA("BasePart") then
 			nParts += 1
 		end
@@ -2876,6 +2897,15 @@ function MapSetup.Run()
 		-- PlotId), ring, pole and flag. No stripe, no finial, no light (TerritoryService never adds one either).
 		local isStarter = TerritoryConfig.IsStarterDef(def)
 		local diameter = (def.Radius or 30) * 2
+		-- streaming2 S4 (F12): the zone's marker, ring, pole and flag (and the stripe and finial off a Home Outpost) are
+		-- one Atomic Model, so a client never has the marker without its <Id>_Flag sibling (TerritoryController's
+		-- diamond lookup) or the flag without the marker. Siblings stay siblings: TerritoryService finds them from
+		-- marker.Parent as before, the marker by its tags. Fort walls / keep / towers and rig decks / legs stay loose in
+		-- Territories. Built unparented and parented once whole (below), so every piece is an initial descendant.
+		-- Inert while Workspace.StreamingEnabled is false: the same parts, one level deeper.
+		local zone = Instance.new("Model")
+		zone.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+		zone.Name = def.Id .. "_Zone"
 		-- World v2 (spec §3.5): the capture marker keeps its Size (TerritoryCapture reads its half-diagonal) but is an
 		-- invisible, non-colliding volume (it was a glowing 1.5-tall slab across five roads). The visible cue is the
 		-- flat <Id>_Ring disc below; TerritoryService writes only the owner colour.
@@ -2887,7 +2917,7 @@ function MapSetup.Run()
 			Transparency = 1,
 			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
-			Parent = territories,
+			Parent = zone,
 		})
 		marker.CanQuery = false
 		marker.CanTouch = false
@@ -2928,7 +2958,7 @@ function MapSetup.Run()
 			CanCollide = false,
 			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Cylinder,
-			Parent = territories,
+			Parent = zone,
 		})
 		ring.CanQuery = false
 		ring.CanTouch = false
@@ -2941,7 +2971,7 @@ function MapSetup.Run()
 			Color = Color3.fromRGB(55, 55, 55),
 			Material = Enum.Material.Metal,
 			CanCollide = false,
-			Parent = territories,
+			Parent = zone,
 		})
 		local flag = part({
 			Name = def.Id .. "_Flag",
@@ -2951,11 +2981,12 @@ function MapSetup.Run()
 			Material = Enum.Material.SmoothPlastic, -- painted (TerritoryService keeps it SmoothPlastic)
 			CanCollide = false,
 			Transparency = 0.08,
-			Parent = territories,
+			Parent = zone,
 		})
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
 		if isStarter then
+			zone.Parent = territories -- streaming2 S4: parented whole
 			continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)
 		end
 		part({
@@ -2966,7 +2997,7 @@ function MapSetup.Run()
 			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
 			Transparency = 0.15,
-			Parent = territories,
+			Parent = zone,
 		})
 		part({
 			Name = def.Id .. "_Finial",
@@ -2976,8 +3007,9 @@ function MapSetup.Run()
 			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Ball,
 			CanCollide = false,
-			Parent = territories,
+			Parent = zone,
 		})
+		zone.Parent = territories -- streaming2 S4: parented whole, before the loose fort / rig pieces
 
 		-- World v2 W1: no beacon pole in the capture zone (the flag pole and the disc mark it)
 

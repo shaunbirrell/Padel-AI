@@ -487,6 +487,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	local id = string.format("squad_%d_%d", owner.UserId, unitSerial)
 
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F10): a squad soldier (root, welded kit, Humanoid, catalog visual) reaches a client whole or not at
+	-- all. Set before the model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = (OrdersConfig.DisplayName or "Squad") .. tostring(slot)
 	model:SetAttribute("SquadUnitId", id)
 	model:SetAttribute("OwnerUserId", owner.UserId)

@@ -51,6 +51,17 @@
 	  * The price / NEXT tags are base labels (WorldLabel.TagBaseLabel: the client LabelGovernor counts them toward
 	    "at most 3 labels on screen at a base"), and every show / hide goes through WorldLabel.SetShown, so a governor
 	    hold is never undone by the 4 Hz pass below.
+
+	streaming2 lane C4 (StreamingEnabled):
+	  * F14: a console's screen is its own part (MapSetup.dressConsole), so it can stream in after its plinth, or
+	    leave and come back with the server's text (the local price text "can be lost" on stream-in). While
+	    streaming is on, each console's ChildAdded("ConsoleScreen") marks the billboards dirty, so the next throttled
+	    pass writes the owner's line again. Streaming off: not connected.
+	  * F19: the global Workspace.DescendantAdded hook that hid the removed "TRAINING" labels is gone, with its start
+	    scan. Nothing in the game makes either label any more, so it matched nothing, streaming on or off; under
+	    streaming it ran for every instance that streamed in. While streaming is on, the untagged-StructureId
+	    fallback walk is skipped too: every StructureId part is tagged (MapSetup plinths, BusinessService consoles),
+	    and the tag's added signal fires on each stream-in. Streaming off: the walk runs as before.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -271,6 +282,12 @@ local activeBuyPart: BasePart? = nil
 -- v68: consoles (BaseLayoutConfig) — the BUY button shows when you walk up; buying needs a tap or the prompt
 local function isConsolePart(part: BasePart): boolean
 	return part:GetAttribute("WE_Console") == true
+end
+
+-- streaming2: the place's StreamingEnabled (default.project.json; scripts cannot set it). The lane C4 changes act
+-- only while it is true.
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
 end
 
 local function padKey(part: BasePart, structureId: string): string
@@ -1621,6 +1638,14 @@ local function attachUpgradeSlot(part: BasePart)
 	end
 
 	refreshSlotBillboard(part)
+	-- streaming2 F14: the screen part streamed in (late, or again with the server's text): redraw on the next pass
+	if streamingOn() and isConsolePart(part) then
+		trackConn(slotConns, part, part.ChildAdded:Connect(function(child: Instance)
+			if child.Name == "ConsoleScreen" then
+				markBillboardsDirty()
+			end
+		end))
+	end
 
 	trackConn(slotConns, part, part.Touched:Connect(function(hit)
 		local char = player.Character
@@ -1744,21 +1769,9 @@ end
 local WORLD_LABEL_PASS_SEC = 0.25
 local lastWorldLabelPass = 0
 
--- v70: the "TRAINING" worker tags and the training "+$/tick" billboard are removed from the design (spec §5);
--- until the server stops creating them the client keeps them off — event-driven (the per-frame
--- workspace:GetDescendants() scan that hid them near pads is gone).
-local REMOVED_WORLD_LABELS: { [string]: boolean } = { WE_WorkerTag = true, WE_TrainingEarnBillboard = true }
-local function hideRemovedLabel(inst: Instance)
-	if inst:IsA("BillboardGui") and REMOVED_WORLD_LABELS[inst.Name] then
-		local bb: BillboardGui = inst
-		bb.Enabled = false
-		bb:GetPropertyChangedSignal("Enabled"):Connect(function()
-			if bb.Enabled then
-				bb.Enabled = false
-			end
-		end)
-	end
-end
+-- v70: the "TRAINING" worker tags and the training "+$/tick" billboard are removed from the design (spec §5). The
+-- server no longer creates either, so the client hook that switched them off is gone too (streaming2 F19: it was a
+-- Workspace.DescendantAdded listener that ran for every instance, and under streaming for every stream-in).
 
 -- 4 Hz: SupplyDrop labels step aside near your consoles / ATM; price labels hide near the ATM. A label hidden on
 -- purpose (hidePriceBillboard: another plot, MAX) or by WE_PriceForceHidden is never switched back on here.
@@ -1921,6 +1934,10 @@ end
 
 -- Attribute fallback: StructureId pads under WarEmpireSetup.Bases missing the tag
 local function rescanUntaggedSlots()
+	if streamingOn() then
+		-- streaming2 F19: the tag path binds every slot, on stream-in too; this walk would only see streamed parts
+		return
+	end
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	if not setup then
 		return
@@ -2241,10 +2258,6 @@ function WorldPromptController.Init()
 		end
 		bindAllTags()
 		startOverlapLoop()
-		Workspace.DescendantAdded:Connect(hideRemovedLabel)
-		for _, d in ipairs(setup and setup:GetDescendants() or {}) do
-			hideRemovedLabel(d)
-		end
 		refreshAllBillboardsNow()
 		rescanUntaggedSlots()
 		local n = 0

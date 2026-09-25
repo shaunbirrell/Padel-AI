@@ -4257,6 +4257,213 @@ must_contain(AW2_TOOL, "REQUEST_GAP = 0.55", "assetwire L2: at most 2 network re
 must_not_contain(AW2_TOOL, "files.set(SVC_REL", "assetwire L2: the promote tool never writes StructureVisualConfig")
 must_not_contain(AW2_TOOL, "import requests", "assetwire L2: the promote tool is standard library only")
 
+# ===== streaming2 (lanes T, S1-S4, C1-C4): pins appended by the integrator; all inert while Workspace.StreamingEnabled is false =====
+# Lane T (streaming stand-in): no BuyPathStatic pins.
+# Spec §4 lists no pins for lane T, and lane T changes no repo file (it lives in scratchpad/sim/ only), so there is
+# nothing to pin and nothing to verify on the tree. The existing pins it relies on are untouched:
+#   WorldKits.luau `m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic` (BuyPathStatic.py:1919) and the WorldBounds
+#   skyline Persistent pin.
+# --- streaming2 lane S1 (spawn, teleport, join; gate): pre-fetched cross-map moves, own-plot respawn, fall rescue ---
+# Spec §4 lane S1 pins first, then the pins that hold this lane's "no-op while Workspace.StreamingEnabled is false" rule.
+S1_SP = 'src/ServerScriptService/Server/Modules/StreamPrefetch.luau'
+S1_SC = 'src/ReplicatedStorage/Shared/Configs/StreamingConfig.luau'
+S1_BS = 'src/ServerScriptService/Server/Services/BaseService.luau'
+S1_FS = 'src/ServerScriptService/Server/Services/FallSafetyService.luau'
+must_contain(S1_SP, 'RequestStreamAroundAsync', 'streaming2 S1 F1: StreamPrefetch pre-fetches the destination (Player:RequestStreamAroundAsync)')
+must_contain(S1_SP, 'Workspace.StreamingEnabled', 'streaming2 S1 F1: StreamPrefetch reads Workspace.StreamingEnabled (the default.project.json switch)')
+must_contain(S1_SP, 'pcall(', 'streaming2 S1 F1: the pre-fetch is pcall-wrapped (a failed request never blocks the move)')
+must_contain(S1_SP, 'local ok, err = pcall(player.RequestStreamAroundAsync, player, pos, timeout or StreamingConfig.PrefetchTimeout)', 'streaming2 S1 F1: one pcall-wrapped RequestStreamAroundAsync with the config timeout')
+must_contain(S1_SP, '\tif not StreamPrefetch.Enabled() then\n\t\t-- streaming off: the plain move, at once (no RequestStreamAroundAsync call)', 'streaming2 S1: with streaming off PivotTo moves at once and makes no streaming call')
+must_contain(S1_SP, '\t\t-- one move in flight per player: re-target it; its worker pre-fetches the new spot when it is far', 'streaming2 S1 F1: at most one move in flight per player (the newest target wins)')
+must_contain(S1_SP, 'local Shared = ReplicatedStorage:WaitForChild("Shared", 60)', 'streaming2 S1: StreamPrefetch never waits forever for Shared')
+must_contain(S1_SC, 'PrefetchTimeout =', 'streaming2 S1: StreamingConfig.PrefetchTimeout (config first)')
+must_contain(S1_SC, '\tNearStuds = 64,', 'streaming2 S1: a move shorter than NearStuds (<= Workspace.StreamingMinRadius 64) needs no pre-fetch')
+must_contain(S1_BS, 'StreamPrefetch.PivotTo(', 'streaming2 S1 F1: TeleportToPlot moves through StreamPrefetch while streaming is on')
+must_contain(S1_BS, 'player.RespawnLocation =', 'streaming2 S1 F2: players respawn on their own Plot<n>.PlayerSpawn')
+must_not_contain(S1_BS, 'character:PivotTo(target)', 'streaming2 S1 F1: no bare cross-map PivotTo in TeleportToPlot (the old :420 line)')
+must_contain(S1_BS, 'local function setRespawnAtPlot(player: Player, plotId: number?)\n\tif not StreamPrefetch.Enabled() then\n\t\treturn\n\tend', 'streaming2 S1 F2: RespawnLocation is set only while streaming is on (respawns unchanged with it off)')
+must_contain(S1_BS, 'setRespawnAtPlot(player, nil) -- streaming2 S1 (F2): the plot is no longer theirs', 'streaming2 S1 F2: ReleasePlot clears RespawnLocation')
+must_contain(S1_BS, 'local releaseFocus = StreamPrefetch.HoldFocus(', 'streaming2 S1 F2: the first spawn gets the own PlayerSpawn as a replication focus until the move lands')
+must_contain(S1_BS, 'BaseService.TeleportToPlot(player, function()\n\t\t\t\t\treleaseFocus()\n\t\t\t\t\tnotifyTutorialPlotAssigned(player)', 'streaming2 S1 F15: PlotAssigned goes to the tutorial after the pre-fetched move (streaming on)')
+must_contain(S1_BS, 'if player.Parent and (not streaming or kitNeedsHeal(player)) then', 'streaming2 S1 F18: with streaming on the 0.5 / 2 / 5 s join passes rebuild only a broken kit (off: unchanged)')
+must_contain(S1_FS, 'GameplayPaused', 'streaming2 S1 F3: no fall rescue while the client is paused for streaming')
+must_contain(S1_FS, 'NotifyThrottled', 'streaming2 S1 F3: the fall toast is throttled')
+must_not_contain(S1_FS, 'character:PivotTo(CFrame.new(0, 8, 0))', 'streaming2 S1 F3: the fallback rescue move goes through StreamPrefetch')
+must_contain(S1_FS, 'if streaming and (player.GameplayPaused or StreamPrefetch.IsMoving(player)) then', 'streaming2 S1 F3: no rescue while paused or while a pre-fetched move is on its way (streaming on only)')
+must_contain(S1_FS, 'NotificationService.NotifyThrottled(player, FALL_TOAST, "Info", 3, StreamingConfig.FallToastCooldown, "FallSafety")', 'streaming2 S1 F3: one fall toast per StreamingConfig.FallToastCooldown')
+# --- streaming2 lane S2 (CombatService; gate): pre-fetched respawn hop, Atomic NPC models ---
+# Spec §4 lane S2 pins first, then the pins that hold this lane's "no-op while Workspace.StreamingEnabled is false" rule
+# and the "Atomic before Parent" order. Needs lane S1's pins (StreamPrefetch.luau) merged first.
+S2_CS = 'src/ServerScriptService/Server/Services/CombatService/init.luau'
+must_contain(S2_CS, 'StreamPrefetch.PivotTo(', 'streaming2 S2 F1: TeleportToBase (every CharacterAdded) moves through StreamPrefetch while streaming is on')
+must_contain(S2_CS, 'ModelStreamingMode = Enum.ModelStreamingMode.Atomic', 'streaming2 S2 F10: SpawnNPC Models are Atomic (whole or absent on a client)')
+must_contain(S2_CS, 'local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)', 'streaming2 S2: CombatService uses the lane S1 pre-fetch helper')
+must_contain(S2_CS, '\t\tif StreamPrefetch.Enabled() then\n\t\t\tStreamPrefetch.PivotTo(player, cf)\n\t\telse\n\t\t\tcharacter:PivotTo(cf)\n\t\tend', 'streaming2 S2: with streaming off TeleportToBase is the old move, at once (no RequestStreamAroundAsync)')
+must_contain(S2_CS, '\tlocal model = Instance.new("Model")\n\t-- streaming2 S2 (F10): set before the Model is parented, so the NPC (root, Humanoid, welded kit, catalog visual)\n\t-- reaches a client whole or not at all. Covers every NPC, Ops garrisons included. No effect with streaming off.\n\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n', 'streaming2 S2 F10: Atomic is set on the new NPC Model before anything is parented to it or it is parented')
+# --- streaming2 lane S3 (vehicles; gate): Atomic vehicle Models (F9), far-seat pre-fetch before the auto-sit move (F8) ---
+# Spec §4 lane S3 pins first, then the pins that hold this lane's "no-op while Workspace.StreamingEnabled is false" rule.
+S3_VS = 'src/ServerScriptService/Server/Services/VehicleService.luau'
+S3_VC = 'src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau'
+must_contain(S3_VS, 'ModelStreamingMode = Enum.ModelStreamingMode.Atomic', 'streaming2 S3 F9: vehicle Models are Atomic (a chassis never streams in without its hinge wheels)')
+must_contain(S3_VS, 'StreamPrefetch.', 'streaming2 S3 F8: VehicleService uses the S1 StreamPrefetch helper')
+must_contain(S3_VS, '\tlocal model = Instance.new("Model")\n\t-- streaming2 S3 (F9)', 'streaming2 S3 F9: Atomic is set right after the vehicle Model is created, before it is ever parented')
+must_contain(S3_VS, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = def.DisplayName\n', 'streaming2 S3 F9: buildVehicleModel sets Atomic first, before any part or Parent')
+must_contain(S3_VS, 'VehicleService._StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)', 'streaming2 S3 F8: StreamPrefetch is a module-table field (VehicleService sits at the 200-local limit)')
+must_contain(S3_VS, '\t\t\t\tif prefetch ~= "done" and StreamPrefetch.Enabled() then\n', 'streaming2 S3 F8: the seat pre-fetch runs only while Workspace.StreamingEnabled is true (auto-sit unchanged with it off)')
+must_contain(S3_VS, 'StreamPrefetch.Request(player, dest, SpawnCfg.AutoSitPrefetchTimeout) -- yields; pcall\'d inside', 'streaming2 S3 F8: one pcall-wrapped pre-fetch at the move target, with the VehicleConfig timeout')
+must_contain(S3_VS, 'scheduleSits() -- re-runs every check: the player, vehicle or seat may have changed meanwhile', 'streaming2 S3 F8: the sit attempts restart after the pre-fetch returns (a long pre-fetch never loses the auto-sit)')
+must_contain(S3_VC, '\t\t\tAutoSitPrefetchTimeout = 3,', 'streaming2 S3 F8: the seat pre-fetch timeout lives in VehicleConfig.Drive.Spawn (config first)')
+# --- streaming2 lane S4 (base and world models; gate): Atomic buildings, kiosks, pumps, rigs, guards, AutoGuns, squad units,
+# capture zones and the Empire Bank (F10 squad / gate, F11, F12, F24). Spec §4 lane S4 pins first, then the pins that hold
+# "Atomic is set before the Model is parented" and the container shapes the lookups rely on. Every one is inert while
+# Workspace.StreamingEnabled is false (default.project.json, lane Z).
+S4_HBB = 'src/ServerScriptService/Server/Modules/HollowBuildingBuilder.luau'
+S4_BIZ = 'src/ServerScriptService/Server/Services/BusinessService.luau'
+S4_PMP = 'src/ServerScriptService/Server/Services/PlotOilPumpService.luau'
+S4_SQD = 'src/ServerScriptService/Server/Services/SquadOrdersService.luau'
+S4_GDS = 'src/ServerScriptService/Server/Services/GateDefenseService.luau'
+S4_MS = 'src/ServerScriptService/Server/Modules/MapSetup.luau'
+for _rel, _what in ((S4_HBB, 'WE_Building'), (S4_BIZ, 'business kiosks'), (S4_PMP, 'plot oil pumps'), (S4_SQD, 'squad units'), (S4_GDS, 'gate guards and AutoGuns'), (S4_MS, 'static rigs, capture zones and the Empire Bank')):
+    must_contain(_rel, 'ModelStreamingMode = Enum.ModelStreamingMode.Atomic', f'streaming2 S4: {_what} are ModelStreamingMode Atomic')
+_ppp = []
+for _dp, _dn, _fn in _os.walk(ROOT / "src"):
+    for _f in _fn:
+        if _f.endswith(".luau") and "PersistentPerPlayer" in (read(_os.path.relpath(_os.path.join(_dp, _f), ROOT)) or ""):
+            _ppp.append(_f)
+if not _ppp:
+    ok("streaming2 S4: no PersistentPerPlayer anywhere in src/ (plots stay Folders, never per-player persistent)")
+else:
+    bad(f"streaming2 S4: PersistentPerPlayer found in {sorted(_ppp)}")
+must_contain(S4_HBB, '\tlocal model = Instance.new("Model")\n\t-- streaming2 S4 (F11)', 'streaming2 S4 F11: Atomic is set right after the WE_Building Model is created')
+must_contain(S4_HBB, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = MODEL_NAME\n', 'streaming2 S4 F11: WE_Building is Atomic before it is built and parented (built unparented, parented last)')
+must_contain(S4_BIZ, '\t\tlocal m = Instance.new("Model")\n\t\tm.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\t\tm.Name = name\n', 'streaming2 S4 F11: a new business kiosk is Atomic from creation')
+must_not_contain(S4_BIZ, '\t\tm:SetAttribute("WE_SiteCFrame", siteCF)\n\t\tm.Parent = folder\n', 'streaming2 S4 F11: a new kiosk is no longer parented empty and then filled')
+must_contain(S4_BIZ, '\tif newModel ~= nil then\n\t\tnewModel.Parent = folder -- streaming2 S4: parented last, whole (see above)\n\tend\nend', 'streaming2 S4 F11: a new kiosk is parented last, whole (console, kit, attributes, tags)')
+must_contain(S4_PMP, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = "PlotOilPump_" .. tostring(index)', 'streaming2 S4 F11: the plot oil pump is Atomic before it is filled and parented')
+must_contain(S4_SQD, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = (OrdersConfig.DisplayName or "Squad") .. tostring(slot)', 'streaming2 S4 F10: a squad unit is Atomic before it is filled and parented')
+must_contain(S4_GDS, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = "GateGuard_" .. tostring(slot)', 'streaming2 S4 F10: a gate guard is Atomic before it is filled and parented')
+must_contain(S4_GDS, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = "GateAutoGun_Fallback"', 'streaming2 S4 F10: the part-kit AutoGun is Atomic before it is filled and parented')
+must_contain(S4_GDS, '\t\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\t\tmodel.Parent = parent\n\t\tyawPart = model.PrimaryPart :: BasePart', 'streaming2 S4 F10: the catalog AutoGun is Atomic before it is parented')
+must_contain(S4_MS, '\tlocal model = Instance.new("Model")\n\t-- streaming2 S4 (F11): a static rig', 'streaming2 S4 F11: static soldier rigs (makeSoldierKit) are Atomic from creation')
+must_contain(S4_MS, '\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tmodel.Name = name\n', 'streaming2 S4 F11: makeSoldierKit sets Atomic before any part or Parent')
+must_contain(S4_MS, '\tlocal bankModel = Instance.new("Model")\n\tbankModel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\tbankModel.Name = "EmpireBank"\n', 'streaming2 S4 F24: the Empire Bank is one Atomic Model named EmpireBank (BankRaidService / OpsSites lookups keep working)')
+must_contain(S4_MS, '\tbankModel.Parent = root -- streaming2 S4: parented whole\n', 'streaming2 S4 F24: the bank Model is parented once whole (after the Town.Bank anchors)')
+must_not_contain(S4_MS, 'ensureFolder("EmpireBank", root)', 'streaming2 S4 F24: no loose EmpireBank Folder')
+must_contain(S4_MS, '\t\tlocal zone = Instance.new("Model")\n\t\tzone.ModelStreamingMode = Enum.ModelStreamingMode.Atomic\n\t\tzone.Name = def.Id .. "_Zone"\n', 'streaming2 S4 F12: one Atomic Model per capture zone (Territories.<Id>_Zone)')
+must_contain(S4_MS, '\t\t\tzone.Parent = territories -- streaming2 S4: parented whole\n\t\t\tcontinue -- F10: the Home Outpost kit ends here', 'streaming2 S4 F12: a Home Outpost zone Model is parented whole (marker, ring, pole, flag)')
+must_contain(S4_MS, '\t\tzone.Parent = territories -- streaming2 S4: parented whole, before the loose fort / rig pieces\n', 'streaming2 S4 F12: a land / sea zone Model is parented whole (with stripe and finial); fort and rig pieces stay loose')
+must_contain(S4_MS, '\t\t\tName = def.Id .. "_Flag",\n\t\t\tSize = Vector3.new(5.5, 3.2, 0.22),\n\t\t\tPosition = pos + Vector3.new(2.8, 12.2, 0),\n\t\t\tColor = def.Color,\n\t\t\tMaterial = Enum.Material.SmoothPlastic, -- painted (TerritoryService keeps it SmoothPlastic)\n\t\t\tCanCollide = false,\n\t\t\tTransparency = 0.08,\n\t\t\tParent = zone,', 'streaming2 S4 F12: the flag stays a sibling of its marker (TerritoryService :449 / TerritoryController rescanDiamonds)')
+must_contain(S4_MS, '\t\tlocal plotFolder = Instance.new("Folder")\n\t\tplotFolder.Name = "Plot" .. plotId\n', 'streaming2 S4 (spec §1): plots stay Folders (never an Atomic or per-player persistent Model)')
+# --- streaming2 lane C1 (tutorial pointers; gate: new players): the beam never waits for a streamed part ---
+# Spec §4 lane C1 pins first (WE_ConsolePos_ and WE_AtmPos already hold at HEAD through the v72 guide chip; Workspace.Terrain
+# is new), then the pins that hold F5 / F6 / F23, the dropper stamp, and the "no-op while Workspace.StreamingEnabled is false" rule.
+C1_TC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TutorialController.luau'
+C1_MD = 'src/ServerScriptService/Server/Services/ManualDropperService.luau'
+must_contain(C1_TC, 'Workspace.Terrain', 'streaming2 C1 F5: the tutorial beam can end on a client Attachment in Workspace.Terrain')
+must_contain(C1_TC, 'WE_ConsolePos_', 'streaming2 C1 F5: PadBuy steps use the server console stamp WE_ConsolePos_<sid>')
+must_contain(C1_TC, 'WE_AtmPos', 'streaming2 C1 F5: the Income step uses the server ATM stamp WE_AtmPos')
+must_contain(C1_TC, 'function TutorialController.ResolveTargetPos(', 'streaming2 C1 F5: the beam target resolver that also gives a position while the part is streamed out')
+must_contain(C1_TC, '\tif not streamingOn() then\n\t\treturn TutorialController.ResolveTarget(stepId, markerName, padStructureId, plotId, origin, userId), nil\n\tend', 'streaming2 C1: with Workspace.StreamingEnabled false the beam target is ResolveTarget (HEAD) and never a Terrain position')
+must_contain(C1_TC, 'local function streamingOn(): boolean\n\treturn Workspace.StreamingEnabled == true\nend', 'streaming2 C1: every tutorial streaming path reads Workspace.StreamingEnabled (the default.project.json switch)')
+must_contain(C1_TC, 'local target, endPos = TutorialController.ResolveTargetPos(currentStepId, markerName, padStructureId, myPlotId, originPos())', 'streaming2 C1 F5: setWaypoint aims through ResolveTargetPos')
+must_contain(C1_TC, '\ta1.Position = pos\n\ta1.Parent = Workspace.Terrain', 'streaming2 C1 F5: the Terrain beam end sits at the stamped / config position')
+must_contain(C1_TC, 'local pos = stampedPos("WE_ConsolePos_" .. padStructureId)', 'streaming2 C1 F5: a streamed-out console -> its stamped position')
+must_contain(C1_TC, 'return nearestOwnOrStamp(Constants.Tags.MoneyCollector, plotId, origin, "WE_AtmPos")', 'streaming2 C1 F5: Income -> own ATM part, else WE_AtmPos')
+must_contain(C1_TC, 'return nearestOwnOrStamp(MANUAL_DROPPER_TAG, plotId, origin, "WE_DropperPos")', 'streaming2 C1 F5: ClickDropper -> own dropper plate, else WE_DropperPos')
+must_contain(C1_TC, 'return nil, ownSpawnPos(plotId) -- not the plot pad: the spawn itself, from config', 'streaming2 C1 F5: ClaimBase -> own PlayerSpawn, else its config position (PlotFrame + SpawnOffset)')
+must_contain(C1_TC, 'return PlotFrame.PlotCFrame(plotPos):PointToWorldSpace(Vector3.new(sp.X, SPAWN_LIFT, sp.Z))', 'streaming2 C1 F5: the ClaimBase config position is MapSetup\'s PlayerSpawn frame')
+must_contain(C1_TC, 'targetConn = target.AncestryChanged:Connect(function()', 'streaming2 C1 F5: the beam falls back to Terrain as soon as its part streams out')
+must_contain(C1_TC, 'elseif hp == nil or not hp:IsDescendantOf(Workspace) then', 'streaming2 C1 F5: with streaming on the re-aim tick tests IsDescendantOf(Workspace), not Parent (Atomic models)')
+must_contain(C1_TC, '\t\t\tif terrainEnd then\n\t\t\t\tlastReaim = now\n\t\t\t\trefreshTerrainEnd()', 'streaming2 C1 F5: on Terrain, the 1 Hz tick swaps the beam to the part once it streams in')
+must_contain(C1_TC, 'local _, pos, part = outpostFromConfig(origin, userId or player.UserId, plotId)', 'streaming2 C1 F6: with streaming on the Outpost pick ranks every TerritoryConfig zone, streamed in or not')
+must_contain(C1_TC, 'local ownerType: any = if e ~= nil then e.OwnerType elseif part ~= nil then part:GetAttribute("OwnerType") else nil', 'streaming2 C1 F6: zone owner from the last TerritoryStateUpdate, else the marker, else Neutral')
+must_contain(C1_TC, '\tif streamingOn() then\n\t\tRemotes.BindEvent(Constants.RemoteNames.TerritoryStateUpdate, function(payload: any)', 'streaming2 C1 F6: the zone-state listener exists only while streaming is on')
+must_contain(C1_TC, '\tif streamingOn() and isActive() then\n\t\tmarker.Transparency = 0.25', 'streaming2 C1 F23: the active marker is shown again when it streams back in')
+must_contain(C1_MD, 'WE_DropperPos', 'streaming2 C1 F5 / STR-8: the dropper position stamp (attribute WE_DropperPos on the Player)')
+must_contain(C1_MD, 'local function streamingOn(): boolean\n\treturn Workspace.StreamingEnabled == true\nend', 'streaming2 C1: ManualDropperService reads Workspace.StreamingEnabled')
+must_contain(C1_MD, '\tif player.Parent == nil or not streamingOn() then\n\t\treturn\n\tend', 'streaming2 C1: WE_DropperPos is stamped only while streaming is on (off: no attribute, HEAD)')
+must_contain(C1_MD, '\tif streamingOn() and BaseService and BaseService.OnPlotReady then\n\t\tBaseService.OnPlotReady(stampDropperPos)', 'streaming2 C1: the dropper stamp hooks plot ready only while streaming is on')
+must_contain(C1_MD, '\t\t\tsyncTagOwners()\n\t\t\tsyncDropperStamps()', 'streaming2 C1: the 2 s owner sync keeps WE_DropperPos on the current owner (hand-out, late claim, release)')
+# --- streaming2 lane C2 (radar): Radar Hill reveals from server data, not from streamed characters (F7, F22 Territory) ---
+# Spec §4 lane C2 pin first, then the pins that hold F7 / F22 and the "no-op while Workspace.StreamingEnabled is false" rule.
+C2_TC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau'
+C2_TS = 'src/ServerScriptService/Server/Services/TerritoryService/init.luau'
+C2_TY = 'src/ReplicatedStorage/Shared/Types.luau'
+must_not_contain(C2_TC, 'if bb.Parent then', 'streaming2 C2 F22: a flag diamond is live only while it IsDescendantOf(Workspace) (Parent stays set when the flag streams out)')
+must_contain(C2_TC, 'if bb:IsDescendantOf(Workspace) then -- F22: Parent stays set when the flag streams out', 'streaming2 C2 F22: the contested-diamond yield skips a streamed-out diamond')
+must_contain(C2_TC, '\t\t\telse\n\t\t\t\tdiamondsOut[bb] = true -- F22: set once it has streamed back in (below)', 'streaming2 C2 F22: a diamond skipped while streamed out takes the current yield state once it is back')
+must_contain(C2_TY, 'export type RadarTargetPayload = {\n\tUserId: number,\n\tPos: Vector3,', 'streaming2 C2 F7: the radar payload entry is Instance-free (UserId + position, F31)')
+must_contain(C2_TY, 'RadarTargets: { RadarTargetPayload }?,', 'streaming2 C2 F7: TerritoryStatePayload.RadarTargets (optional: absent with streaming off)')
+must_contain(C2_TS, '\tif player and radar and streamingOn() then\n\t\tpayload.RadarTargets = radarTargetsFor(player, radarRadius)', 'streaming2 C2 F7: only a radar holder gets RadarTargets, and only while Workspace.StreamingEnabled (off: the payload is as before)')
+must_contain(C2_TS, '\tlocal ok, on = pcall(function()\n\t\treturn Workspace.StreamingEnabled\n\tend)', 'streaming2 C2: TerritoryService reads Workspace.StreamingEnabled (the default.project.json switch), pcall-wrapped')
+must_contain(C2_TS, 'local function radarTargetsFor(viewer: Player, radius: number): { Types.RadarTargetPayload }', 'streaming2 C2 F7: the reveal list is built on the server from server positions (no client input)')
+must_contain(C2_TS, '\t\t\tif streamingOn() then\n\t\t\t\tfor _, player in ipairs(Players:GetPlayers()) do\n\t\t\t\t\tlocal last = lastRadarPushAt[player]', 'streaming2 C2 F7: a radar holder gets its own payload about every second, only while streaming is on')
+must_contain(C2_TS, '\tPushSeconds = 1,', 'streaming2 C2 F7: radar holder payload rate (<= 1 Hz extra per holder; remote traffic stays far under 20 Hz)')
+must_contain(C2_TC, '\t\t\tif char and root and humanoid and humanoid.Health > 0 and (not streamView or heldHere(char)) then', 'streaming2 C2 F7: with the server list a Highlight goes only on a character this client holds (off: HEAD loop)')
+must_contain(C2_TC, '\tif streamView then\n\t\tupdatePings(seen)', 'streaming2 C2 F7: pings only while the payload carries RadarTargets (streaming on)')
+must_contain(C2_TC, '\tbeam.Parent = terrain', 'streaming2 C2 F7: the radar ping is a client Beam on Workspace.Terrain attachments (never streamed out)')
+must_contain(C2_TC, '\tMax = 5, -- pings at once', 'streaming2 C2 F7: at most 5 radar pings on screen')
+must_contain(C2_TC, '\tWidthPx = 5, -- real px', 'streaming2 C2 F7: the ping is sized in real px (reads the same at 80 and 530 studs on a phone)')
+must_not_contain(C2_TC, 'Instance.new("BillboardGui")', 'streaming2 C2 F7: the radar adds no world label (MaxDistance <= 40 would hide it; no AlwaysOnTop)')
+must_not_contain(C2_TC, 'GetDescendants', 'streaming2 C2: no whole-tree scan in the radar or the diamond yield')
+# --- streaming2 lane C3 (vehicle client): prompt hush survives a re-stream, late Humanoid binds, AGL ray miss ---
+# Spec §4 lane C3 pins first, then the pins that hold F13 / F16 / F17 and this lane's "no-op while
+# Workspace.StreamingEnabled is false" rule (every C3 path reads streamingOn(); off = 0a04776).
+C3_VDC = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau'
+C3_VCC = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleCombatClient.luau'
+must_not_contain(C3_VDC, 'if prompt.Parent == nil then', 'streaming2 C3 F13: the hush liveness test is not Parent (a streamed-out part keeps its prompt\'s Parent)')
+must_contain(C3_VDC, 'IsDescendantOf(Workspace)', 'streaming2 C3 F13: the hush liveness test is IsDescendantOf(Workspace)')
+must_contain(C3_VDC, 'local function streamingOn(): boolean\n\treturn Workspace.StreamingEnabled == true\nend', 'streaming2 C3: VehicleDriveClient reads Workspace.StreamingEnabled (the default.project.json switch)')
+must_contain(C3_VDC, '\tif streamingOn() then\n\t\treturn not prompt:IsDescendantOf(Workspace)\n\tend\n\treturn prompt.Parent == nil', 'streaming2 C3 F13: streamed-out prompts are forgotten at sit (streaming off: the 0a04776 Parent test)')
+must_contain(C3_VDC, '\tlocal rec = hushedPrompts[prompt]\n\tif rec ~= nil and streamingOn() then', 'streaming2 C3 F13: a hushed prompt that shows again after a re-stream is hushed again (streaming on only)')
+must_contain(C3_VDC, '\t\tif typeof(r) == "number" and r > 0 then\n\t\t\trec.Range = r\n\t\t\tprompt.MaxActivationDistance = 0\n\t\tend', 'streaming2 C3 F13: the re-hush keeps the server range for the restore')
+must_contain(C3_VDC, 'return if streamingOn() then missAGL(pos, clearance) else math.huge', 'streaming2 C3 F17: an AGL ray miss is finite only while streaming is on (off: math.huge, 0a04776)')
+must_contain(C3_VDC, '\t\t\tif agl > EXIT.LockAGL or agl >= floorAGL then\n\t\t\t\treturn agl', 'streaming2 C3 F17: a stale last hit never lands an aircraft in mid-air (roof / cliff edge: the floor wins)')
+must_contain(C3_VDC, '\tlastGroundX, lastGroundZ, lastGroundY = pos.X, pos.Z, groundY', 'streaming2 C3 F17: the last ground hit is kept in plain numbers (no per-frame allocation)')
+must_contain(C3_VDC, 'Ground = { FallbackY = 0.5, LastHitRadius = 16 },', 'streaming2 C3 F17: the ray-miss fallback is a Drive default section (VehicleConfig.Drive.Ground overrides it key by key)')
+must_contain(C3_VDC, '\tGROUND = cfgSection("Ground")', 'streaming2 C3 F17: Drive.Ground is resolved with the other Drive sections')
+must_not_contain(C3_VDC, 'char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 10)', 'streaming2 C3 F16: VehicleDriveClient no longer gives up on a late Humanoid while streaming is on')
+must_contain(C3_VDC, '\tif not h and streamingOn() then', 'streaming2 C3 F16: VehicleDriveClient waits for the Humanoid through ChildAdded only while streaming is on')
+must_contain(C3_VDC, '\t\thumWaitConn = char.ChildAdded:Connect(function(c: Instance)\n\t\t\tif c:IsA("Humanoid") then\n\t\t\t\tstopHumanoidWait()\n\t\t\t\tbindHumanoid(c)', 'streaming2 C3 F16: VehicleDriveClient binds the Humanoid whenever it arrives (the HudLayout pattern)')
+must_contain(C3_VDC, '\t\th = char:WaitForChild("Humanoid", 10) -- streaming off: the character arrives whole (0a04776)', 'streaming2 C3 F16: streaming off keeps the 0a04776 10 s wait (never an unbounded WaitForChild)')
+must_contain(C3_VDC, '\t\tstopHumanoidWait() -- streaming2 F16 (nil while streaming is off)\n\t\tstopDrive()', 'streaming2 C3 F16: CharacterRemoving stops the Humanoid wait (VehicleDriveClient)')
+must_contain(C3_VCC, 'local function streamingOn(): boolean\n\treturn Workspace.StreamingEnabled == true\nend', 'streaming2 C3: VehicleCombatClient reads Workspace.StreamingEnabled (the default.project.json switch)')
+must_not_contain(C3_VCC, 'character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 10)', 'streaming2 C3 F16: VehicleCombatClient no longer gives up on a late Humanoid while streaming is on')
+must_contain(C3_VCC, '\t\tif not found and streamingOn() then', 'streaming2 C3 F16: VehicleCombatClient waits for the Humanoid through ChildAdded only while streaming is on')
+must_contain(C3_VCC, '\t\t\thumWaitConn = character.ChildAdded:Connect(function(c: Instance)\n\t\t\t\tif c:IsA("Humanoid") then\n\t\t\t\t\tstopHumanoidWait()\n\t\t\t\t\tbindHumanoid(c)', 'streaming2 C3 F16: VehicleCombatClient binds the Humanoid (HP bar) whenever it arrives')
+must_contain(C3_VCC, '\t\t\tfound = character:WaitForChild("Humanoid", 10) -- streaming off: the character arrives whole (0a04776)', 'streaming2 C3 F16: VehicleCombatClient keeps the 0a04776 10 s wait with streaming off')
+must_contain(C3_VCC, '\t\t\tstopHumanoidWait() -- streaming2 F16 (nil while streaming is off)\n\t\t\tseated = nil', 'streaming2 C3 F16: CharacterRemoving stops the Humanoid wait (VehicleCombatClient)')
+# --- streaming2 lane C4 (client misc): console screen redraw, dead label hook, spinner rest offsets, bank label, late Humanoid ---
+# Spec §4 lane C4 pins first, then the pins that hold F14 / F16 / F19 / F21 / F22 / F30 and this lane's "no-op while
+# Workspace.StreamingEnabled is false" rule (F14 and the F19 fallback skip read streamingOn(); F21's cache is read and
+# written only while it is on; F16 keeps the 0a04776 10 s give-up while it is off).
+C4_WPC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau'
+C4_WS = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/WorldSpinners.luau'
+C4_BRC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BankRaidController.luau'
+C4_CC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau'
+must_not_contain(C4_WPC, 'Workspace.DescendantAdded:Connect(hideRemovedLabel)', 'streaming2 C4 F19: no global Workspace.DescendantAdded hook for the removed TRAINING labels (it ran for every streamed-in instance)')
+must_not_contain(C4_BRC, 'if bb and bb.Parent then', 'streaming2 C4 F22: the bank label ref is not kept on Parent (Parent stays set when the vault streams out)')
+must_not_contain(C4_CC, 'char:WaitForChild("Humanoid", 10)', 'streaming2 C4 F16: combat no longer gives up on a late Humanoid after a 10 s WaitForChild')
+must_not_contain(C4_WPC, 'hideRemovedLabel', 'streaming2 C4 F19: the dead label hook and its start scan are gone')
+must_contain(C4_WPC, 'local function streamingOn(): boolean\n\treturn Workspace.StreamingEnabled == true\nend', 'streaming2 C4: WorldPromptController reads Workspace.StreamingEnabled (the default.project.json switch)')
+must_contain(C4_WPC, '\tif streamingOn() and isConsolePart(part) then\n\t\ttrackConn(slotConns, part, part.ChildAdded:Connect(function(child: Instance)\n\t\t\tif child.Name == "ConsoleScreen" then\n\t\t\t\tmarkBillboardsDirty()', 'streaming2 C4 F14: a console screen that streams in (late, or again with the server text) redraws the owner line; tracked in slotConns; streaming on only')
+must_contain(C4_WPC, 'local function rescanUntaggedSlots()\n\tif streamingOn() then\n\t\t-- streaming2 F19: the tag path binds every slot, on stream-in too', 'streaming2 C4 F19: the untagged-StructureId walk is skipped while streaming is on (off: the 0a04776 walk)')
+must_contain(C4_BRC, 'local Workspace = game:GetService("Workspace")', 'streaming2 C4 F22: BankRaidController has the Workspace service for the liveness test')
+must_contain(C4_BRC, 'if bb and bb:IsDescendantOf(Workspace) then', 'streaming2 C4 F22: the bank label ref is live only while it IsDescendantOf(Workspace) (the LabelGovernor pattern)')
+must_contain(C4_WS, 'local restOffsets: { [BasePart]: CFrame } = setmetatable({}, { __mode = "k" }) :: any', 'streaming2 C4 F21: first-seen spinner rest offsets in a weak-keyed table')
+must_contain(C4_WS, '\t\tlocal cached: CFrame? = if streaming then (s.seen[p] or restOffsets[p]) else nil', 'streaming2 C4 F21: a re-added spinner part reuses its first-seen rest offset, only while streaming is on (off: read from the part, 0a04776)')
+must_contain(C4_WS, '\t\tif streaming then\n\t\t\ts.seen[p] = offset\n\t\t\tif cached == nil then\n\t\t\t\trestOffsets[p] = offset', 'streaming2 C4 F21: the rest offset is kept only while streaming is on (strong per spinner, weak across re-tracks)')
+must_contain(C4_WS, '\tseen: { [BasePart]: CFrame }, -- streaming2 F21', 'streaming2 C4 F21: each spinner holds its parts\' first offsets strongly while tracked (a weak Instance key alone can be collected)')
+must_contain(C4_WS, '\ts.conn = m.DescendantAdded:Connect(function(d: Instance)', 'streaming2 C4 F21: each spinner keeps its DescendantAdded connection')
+must_contain(C4_WS, 'local function untrack(m: Model)\n\tlocal s = spinners[m]\n\tspinners[m] = nil\n\tlocal c = s and s.conn\n\tif c then\n\t\tc:Disconnect()', 'streaming2 C4 F21: a dropped spinner disconnects its DescendantAdded (no pile-up on re-track)')
+must_not_contain(C4_WS, '\tm.DescendantAdded:Connect(', 'streaming2 C4 F21: no unstored spinner DescendantAdded connection')
+must_contain(C4_CC, '\tFeel.HumWait = char.ChildAdded:Connect(function(c: Instance)\n\t\tif c:IsA("Humanoid") and player.Character == char then\n\t\t\tW2.stopHumanoidWait()\n\t\t\tbindHumanoid(c)', 'streaming2 C4 F16: combat binds the Humanoid whenever it arrives (the HudLayout pattern)')
+must_contain(C4_CC, '\tif Workspace.StreamingEnabled ~= true then\n\t\t-- streaming off: the character arrives whole, so give up after 10 s as 0a04776 did\n\t\tlocal serial = Feel.HumWaitSerial\n\t\ttask.delay(10, function()', 'streaming2 C4 F16: with streaming off the late-Humanoid wait still gives up after 10 s (0a04776); no time limit while streaming is on')
+must_contain(C4_CC, '\tplayer.CharacterRemoving:Connect(W2.stopHumanoidWait) -- streaming2 F16', 'streaming2 C4 F16: CharacterRemoving ends the Humanoid wait')
+must_contain(C4_CC, '-- streaming2 F30: this ray sees only what has streamed in here', 'streaming2 C4 F30: the local fire ray is marked as a streamed-geometry hint (the server re-casts)')
+must_contain(C4_CC, '-- streaming2 F30: sees only streamed-in walls', 'streaming2 C4 F30: the holstered-FIRE LOS ray is marked as a streamed-geometry hint')
+
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
