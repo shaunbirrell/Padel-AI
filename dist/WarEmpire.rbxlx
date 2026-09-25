@@ -8112,6 +8112,40 @@ return SpinnerConfig
         </Item>
         <Item class="ModuleScript" referent="50">
           <Properties>
+            <string name="Name">StreamingConfig</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	StreamingConfig (streaming2, lane S1): tunables for the code that has to behave under instance streaming.
+
+	THE SWITCH IS NOT HERE. Workspace.StreamingEnabled, the two radii and the integrity mode live in
+	default.project.json (Workspace $properties): the engine does not let a script set StreamingEnabled, so the project
+	file is the flag. Every reader of this config is a no-op while Workspace.StreamingEnabled is false
+	(StreamPrefetch.Enabled()), so it ships before the switch and a rollback of the switch restores the old behaviour.
+]]
+
+local StreamingConfig = {
+	-- Player:RequestStreamAroundAsync timeout (seconds) before a cross-map move (StreamPrefetch.PivotTo). The move
+	-- happens when the request returns or gives up, so a slow phone waits at most this long.
+	PrefetchTimeout = 5,
+	-- A move shorter than this needs no pre-fetch: the client always holds StreamingMinRadius round its character.
+	-- Keep it <= Workspace.StreamingMinRadius in default.project.json (64).
+	NearStuds = 64,
+	-- One check this long after a pre-fetched move: when the character is back where it started (the spawn or its
+	-- physics undid the pivot), it is moved once more. Replaces the stacked 0.35 s / 1.0 s blind re-applies.
+	SettleCheckSeconds = 0.6,
+	-- The first spawn of a session is random (the save loads after it). The own PlayerSpawn is an extra replication
+	-- focus from the plot assignment until the pre-fetched move home lands, and never longer than this (seconds).
+	JoinFocusMaxSeconds = 40,
+	-- FallSafety: at most one "Rescued from fall" toast per player in this many seconds.
+	FallToastCooldown = 8,
+}
+
+return StreamingConfig
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="51">
+          <Properties>
             <string name="Name">StructureVisualConfig</string>
             <string name="Source"><![CDATA[--!strict
 --[[
@@ -8610,7 +8644,7 @@ return StructureVisualConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="51">
+        <Item class="ModuleScript" referent="52">
           <Properties>
             <string name="Name">SupplyDropConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8646,7 +8680,7 @@ return SupplyDropConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="52">
+        <Item class="ModuleScript" referent="53">
           <Properties>
             <string name="Name">TerritoryConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -8918,7 +8952,7 @@ return TerritoryConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="53">
+        <Item class="ModuleScript" referent="54">
           <Properties>
             <string name="Name">TutorialConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9212,7 +9246,7 @@ return TutorialConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="54">
+        <Item class="ModuleScript" referent="55">
           <Properties>
             <string name="Name">TycoonGuideConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9425,7 +9459,7 @@ return TycoonGuideConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="55">
+        <Item class="ModuleScript" referent="56">
           <Properties>
             <string name="Name">VehicleCombatConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -9559,7 +9593,7 @@ return VehicleCombatConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="56">
+        <Item class="ModuleScript" referent="57">
           <Properties>
             <string name="Name">VehicleConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10327,6 +10361,11 @@ local VehicleConfig = {
 			-- ... except inside your own plot: the garage flow keeps seating you on your own car pad / helipad / runway /
 			-- dock basin (139-279 studs from the base spawn, up to ~500 from a plot corner); nothing further than this
 			AutoSitHomeRadius = 520,
+			-- streaming2 S3 (F8): when the seat is further than StreamingConfig.NearStuds (64) from the player, the
+			-- server calls Player:RequestStreamAroundAsync at the spot on the seat where it will put the player, and
+			-- waits for it before the move. This is the request timeout in seconds. The sit happens when the request
+			-- returns or times out. Read only while Workspace.StreamingEnabled is true.
+			AutoSitPrefetchTimeout = 3,
 			DamageLockSeconds = 5, -- SPAWN refused this long after the player's character took damage
 		},
 	},
@@ -10336,7 +10375,7 @@ return VehicleConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="57">
+        <Item class="ModuleScript" referent="58">
           <Properties>
             <string name="Name">VehicleWeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -10566,7 +10605,7 @@ return VehicleWeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="58">
+        <Item class="ModuleScript" referent="59">
           <Properties>
             <string name="Name">VisualAssetConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11114,7 +11153,7 @@ return VisualAssetConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="59">
+        <Item class="ModuleScript" referent="60">
           <Properties>
             <string name="Name">WaterConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11331,7 +11370,7 @@ return WaterConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="60">
+        <Item class="ModuleScript" referent="61">
           <Properties>
             <string name="Name">WeaponConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -11590,7 +11629,7 @@ return WeaponConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="61">
+        <Item class="ModuleScript" referent="62">
           <Properties>
             <string name="Name">WorldConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12449,7 +12488,7 @@ return WorldConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="62">
+        <Item class="ModuleScript" referent="63">
           <Properties>
             <string name="Name">WorldDressConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12684,7 +12723,7 @@ return WorldDressConfig
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="63">
+        <Item class="ModuleScript" referent="64">
           <Properties>
             <string name="Name">WorldLabelConfig</string>
             <string name="Source"><![CDATA[--!strict
@@ -12749,7 +12788,7 @@ return WorldLabelConfig
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="64">
+      <Item class="ModuleScript" referent="65">
         <Properties>
           <string name="Name">Constants</string>
           <string name="Source"><![CDATA[--!strict
@@ -12942,7 +12981,7 @@ return Constants
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="65">
+      <Item class="ModuleScript" referent="66">
         <Properties>
           <string name="Name">Remotes</string>
           <string name="Source"><![CDATA[--!strict
@@ -13114,7 +13153,7 @@ return Remotes
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="66">
+      <Item class="ModuleScript" referent="67">
         <Properties>
           <string name="Name">Types</string>
           <string name="Source"><![CDATA[--!strict
@@ -13431,6 +13470,13 @@ export type TerritoryEntryPayload = {
 	Contested: boolean,
 }
 
+-- Streaming 2, lane C2 (spec F7): one player a Radar Hill holder reveals. Instance-free (F31): the client may not
+-- hold that character under instance streaming, so it draws a marker at Pos instead of the Highlight.
+export type RadarTargetPayload = {
+	UserId: number,
+	Pos: Vector3, -- the server's HumanoidRootPart position when the payload was built
+}
+
 export type TerritoryStatePayload = {
 	Territories: { TerritoryEntryPayload },
 	LocalCapture: {
@@ -13442,6 +13488,9 @@ export type TerritoryStatePayload = {
 	}?,
 	RadarReveal: boolean?,
 	RadarRadius: number?,
+	-- lane C2: sent only while Workspace.StreamingEnabled and RadarReveal is true; the other living players within
+	-- RadarRadius, nearest first (nil with streaming off: every character is on every client)
+	RadarTargets: { RadarTargetPayload }?,
 }
 
 export type MissionEntryPayload = {
@@ -13508,11 +13557,11 @@ return {}
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="67">
+      <Item class="Folder" referent="68">
         <Properties>
           <string name="Name">Util</string>
         </Properties>
-        <Item class="ModuleScript" referent="68">
+        <Item class="ModuleScript" referent="69">
           <Properties>
             <string name="Name">ConsoleLocator</string>
             <string name="Source"><![CDATA[--!strict
@@ -13663,7 +13712,7 @@ return ConsoleLocator
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="69">
+        <Item class="ModuleScript" referent="70">
           <Properties>
             <string name="Name">NationTexture</string>
             <string name="Source"><![CDATA[--!strict
@@ -13828,7 +13877,7 @@ return NationTexture
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="70">
+        <Item class="ModuleScript" referent="71">
           <Properties>
             <string name="Name">PlotFrame</string>
             <string name="Source"><![CDATA[--!strict
@@ -13910,7 +13959,7 @@ return PlotFrame
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="71">
+        <Item class="ModuleScript" referent="72">
           <Properties>
             <string name="Name">TycoonMath</string>
             <string name="Source"><![CDATA[--!strict
@@ -14559,7 +14608,7 @@ return TycoonMath
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="72">
+        <Item class="ModuleScript" referent="73">
           <Properties>
             <string name="Name">UIUtil</string>
             <string name="Source"><![CDATA[--!strict
@@ -15108,7 +15157,7 @@ return UIUtil
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="73">
+        <Item class="ModuleScript" referent="74">
           <Properties>
             <string name="Name">WorldLabel</string>
             <string name="Source"><![CDATA[--!strict
@@ -15552,11 +15601,11 @@ return WorldLabel
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="74">
+      <Item class="Folder" referent="75">
         <Properties>
           <string name="Name">Vendor</string>
         </Properties>
-        <Item class="ModuleScript" referent="75">
+        <Item class="ModuleScript" referent="76">
           <Properties>
             <string name="Name">Shake</string>
             <string name="Source"><![CDATA[--!strict
@@ -16109,7 +16158,7 @@ return {
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="76">
+        <Item class="ModuleScript" referent="77">
           <Properties>
             <string name="Name">Spring</string>
             <string name="Source"><![CDATA[--!strict
@@ -16219,7 +16268,7 @@ return Spring
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="77">
+        <Item class="ModuleScript" referent="78">
           <Properties>
             <string name="Name">Trove</string>
             <string name="Source"><![CDATA[--!strict
@@ -17022,15 +17071,15 @@ return {
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="78">
+  <Item class="ServerScriptService" referent="79">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="79">
+    <Item class="Folder" referent="80">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="80">
+      <Item class="Script" referent="81">
         <Properties>
           <string name="Name">Bootstrap</string>
           <token name="RunContext">0</token>
@@ -17619,7 +17668,7 @@ print("[WAR EMPIRE] CHECKLIST: 1) resetmap MANDATORY if void/dead-space persists
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Script" referent="81">
+      <Item class="Script" referent="82">
         <Properties>
           <string name="Name">EarlyRemotes</string>
           <token name="RunContext">0</token>
@@ -17692,7 +17741,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 76)
+		player:SetAttribute("WE_Build", 77)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -17721,11 +17770,11 @@ print("[WAR EMPIRE] EarlyRemotes v63: WE_Remotes + leaderstats seed ready")
 ]]></string>
         </Properties>
       </Item>
-      <Item class="Folder" referent="82">
+      <Item class="Folder" referent="83">
         <Properties>
           <string name="Name">Modules</string>
         </Properties>
-        <Item class="ModuleScript" referent="83">
+        <Item class="ModuleScript" referent="84">
           <Properties>
             <string name="Name">ActivityAnchors</string>
             <string name="Source"><![CDATA[--!strict
@@ -18066,7 +18115,7 @@ return ActivityAnchors
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="84">
+        <Item class="ModuleScript" referent="85">
           <Properties>
             <string name="Name">BaseLayout</string>
             <string name="Source"><![CDATA[--!strict
@@ -18215,7 +18264,7 @@ return BaseLayout
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="85">
+        <Item class="ModuleScript" referent="86">
           <Properties>
             <string name="Name">DesertFlora</string>
             <string name="Source"><![CDATA[--!strict
@@ -18557,7 +18606,7 @@ return DesertFlora
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="86">
+        <Item class="ModuleScript" referent="87">
           <Properties>
             <string name="Name">HollowBuildingBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -18577,6 +18626,9 @@ return DesertFlora
 	The kit's "Body" part is only the foundation slab (see StructureKitBuilder), so EnsureKit / applyKitVisuals
 	invariants (Body exists, solid at L1+) still hold. Everything else lives in the Model and is rebuilt when
 	the level changes.
+
+	streaming2 S4 (F11): WE_Building is ModelStreamingMode Atomic, set before it is parented (inert while
+	Workspace.StreamingEnabled is false). Its WE_Spinner sub-models stay Default inside it: the Atomic parent carries them.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -19778,6 +19830,10 @@ function HollowBuildingBuilder.Sync(plinth: BasePart, structureId: string, level
 		existing:Destroy()
 	end
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F11): a building (21-273 parts, consoles, prompts, GUIs) reaches a client whole or not at all.
+	-- Set first; the model is built unparented and parented last, so every part is an initial descendant. A level
+	-- change rebuilds the whole model, so the initial-only atomicity rule always covers it. No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = MODEL_NAME
 	model:SetAttribute("WE_BuildingLevel", lv)
 	model:SetAttribute("WE_BuildingGen", GEN)
@@ -19811,11 +19867,11 @@ return HollowBuildingBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="87">
+        <Item class="Folder" referent="88">
           <Properties>
             <string name="Name">Installations</string>
           </Properties>
-          <Item class="ModuleScript" referent="88">
+          <Item class="ModuleScript" referent="89">
             <Properties>
               <string name="Name">Airfield</string>
               <string name="Source"><![CDATA[--!strict
@@ -19948,7 +20004,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="89">
+          <Item class="ModuleScript" referent="90">
             <Properties>
               <string name="Name">Checkpoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -20079,7 +20135,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="90">
+          <Item class="ModuleScript" referent="91">
             <Properties>
               <string name="Name">Helipad</string>
               <string name="Source"><![CDATA[--!strict
@@ -20187,7 +20243,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="91">
+          <Item class="ModuleScript" referent="92">
             <Properties>
               <string name="Name">MissileDefense</string>
               <string name="Source"><![CDATA[--!strict
@@ -20291,7 +20347,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="92">
+          <Item class="ModuleScript" referent="93">
             <Properties>
               <string name="Name">PowerStation</string>
               <string name="Source"><![CDATA[--!strict
@@ -20441,7 +20497,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="93">
+          <Item class="ModuleScript" referent="94">
             <Properties>
               <string name="Name">Radar</string>
               <string name="Source"><![CDATA[--!strict
@@ -20549,7 +20605,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="94">
+          <Item class="ModuleScript" referent="95">
             <Properties>
               <string name="Name">Watchtower</string>
               <string name="Source"><![CDATA[--!strict
@@ -20658,11 +20714,11 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="95">
+        <Item class="Folder" referent="96">
           <Properties>
             <string name="Name">Interiors</string>
           </Properties>
-          <Item class="ModuleScript" referent="96">
+          <Item class="ModuleScript" referent="97">
             <Properties>
               <string name="Name">Armory</string>
               <string name="Source"><![CDATA[--!strict
@@ -20978,7 +21034,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="97">
+          <Item class="ModuleScript" referent="98">
             <Properties>
               <string name="Name">Barracks</string>
               <string name="Source"><![CDATA[--!strict
@@ -21191,7 +21247,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="98">
+          <Item class="ModuleScript" referent="99">
             <Properties>
               <string name="Name">CommandCenter</string>
               <string name="Source"><![CDATA[--!strict
@@ -21333,7 +21389,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="99">
+          <Item class="ModuleScript" referent="100">
             <Properties>
               <string name="Name">ResearchLab</string>
               <string name="Source"><![CDATA[--!strict
@@ -21729,7 +21785,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="100">
+          <Item class="ModuleScript" referent="101">
             <Properties>
               <string name="Name">SpecialForces</string>
               <string name="Source"><![CDATA[--!strict
@@ -21961,7 +22017,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="101">
+          <Item class="ModuleScript" referent="102">
             <Properties>
               <string name="Name">VehicleDepot</string>
               <string name="Source"><![CDATA[--!strict
@@ -22245,7 +22301,7 @@ end
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="102">
+          <Item class="ModuleScript" referent="103">
             <Properties>
               <string name="Name">Warehouse</string>
               <string name="Source"><![CDATA[--!strict
@@ -22629,7 +22685,7 @@ end
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="103">
+        <Item class="ModuleScript" referent="104">
           <Properties>
             <string name="Name">MapDressing</string>
             <string name="Source"><![CDATA[--!strict
@@ -23240,7 +23296,7 @@ return MapDressing
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="104">
+        <Item class="ModuleScript" referent="105">
           <Properties>
             <string name="Name">MapSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -23258,6 +23314,11 @@ return MapDressing
 	anchors, no beacons, no Neon.
 	W3 step 2 lane BK: the Empire Bank is a walk-in hall (buildEmpireBank: 17 parts, the open BankGate, the StateBanner,
 	the Town.Bank.* activity anchors on BankPlaza).
+	streaming2 S4 (spec streaming2 §1, F11 / F12 / F24): ModelStreamingMode Atomic, always set before the Model is
+	parented, on the static soldier rigs (makeSoldierKit), the Empire Bank (one Model "EmpireBank") and one Model per
+	capture zone (Territories.<Id>_Zone: the marker, _Ring, _FlagPole, _Flag and, off the Home Outposts, _FlagStripe
+	and _Finial; fort walls / keep / towers and rig decks / legs / piers stay loose). Plots stay Folders. Inert while
+	Workspace.StreamingEnabled is false (the default.project.json switch): the same parts, only grouped.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -23760,6 +23821,9 @@ local function makeSoldierKit(parentFolder, name, cf: CFrame, bodyColor, labelTe
 	-- or looks up these names on a static kit.
 	local detail = (StructureVisualConfig :: any).StaticSoldierDetail ~= false
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F11): a static rig (parts, Humanoid, catalog visual) reaches a client whole or not at all. Set
+	-- before the model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = name
 	if npcId then
 		model:SetAttribute("NPCId", npcId)
@@ -25380,14 +25444,26 @@ local BANK_BANNER_OPEN = Color3.fromRGB(70, 170, 90) -- StateBanner "open" (OpsC
 local BANK_SIGN_TEXT = "EMPIRE BANK" -- = BankRaidConfig.Sign.Text
 
 local function buildEmpireBank(root: Folder)
-	local bankFolder = ensureFolder("EmpireBank", root)
+	-- streaming2 S4 (F24): the bank is ONE Atomic Model "EmpireBank" (was a Folder of 10 loose parts + the Default BankHall),
+	-- so a client gets the plaza, hall, gate, vault pad, sign and banner together or none of them (17 parts, 36 studs
+	-- across). Same name and the same children, so every lookup still works (BankRaidService's "EmpireBank" ancestor walk,
+	-- OpsSites' door / banner search from BankPlaza's parent, the vault by its WE_BankVault tag, Hygiene's
+	-- BillboardAllowAncestors). Atomic is set first; the model is built unparented and parented once whole (after the
+	-- anchors, below), so every piece is an initial descendant. Inert while Workspace.StreamingEnabled is false.
+	local oldBank = root:FindFirstChild("EmpireBank")
+	if oldBank then
+		oldBank:Destroy()
+	end
+	local bankModel = Instance.new("Model")
+	bankModel.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	bankModel.Name = "EmpireBank"
 	local plaza = part({
 		Name = "BankPlaza",
 		Size = Vector3.new(36, 1.2, 36),
 		Position = BANK_POS,
 		Color = Color3.fromRGB(168, 160, 144),
 		Material = Enum.Material.Pavement,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 
 	-- the hall shell (WorldKits TownBlock "hall": exactly 7 parts at 2 storeys, no Roof / Lantern); its front (local -Z)
@@ -25404,7 +25480,7 @@ local function buildEmpireBank(root: Folder)
 			Variant = "hall",
 			Color = Color3.fromRGB(214, 206, 188), -- pale limestone walls (trim 20 % darker)
 		})
-		hall.Parent = bankFolder
+		hall.Parent = bankModel
 		local roof = hall:FindFirstChild("HallRoof")
 		if roof and roof:IsA("BasePart") then
 			roofTop = roof.Position.Y + roof.Size.Y * 0.5
@@ -25426,7 +25502,7 @@ local function buildEmpireBank(root: Folder)
 			Color = Color3.fromRGB(232, 228, 216),
 			Material = Enum.Material.Marble,
 			CanCollide = true,
-			Parent = bankFolder,
+			Parent = bankModel,
 		})
 	end
 
@@ -25438,7 +25514,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(34, 38, 48),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	sign.CanQuery = false
 	sign.CanTouch = false
@@ -25460,7 +25536,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(52, 54, 52),
 		Material = Enum.Material.DiamondPlate,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	gate.CanQuery = false
 	gate.CanTouch = false
@@ -25479,7 +25555,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(150, 150, 142),
 		Material = Enum.Material.DiamondPlate,
 		CanCollide = true,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 
 	-- the vault: a flat gold pad inside the hall (unrotated, so the label's world offset stays straight up). BANK_VAULT_Z
@@ -25492,7 +25568,7 @@ local function buildEmpireBank(root: Folder)
 		Color = Color3.fromRGB(214, 176, 72),
 		Material = Enum.Material.SmoothPlastic,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	vault.CanQuery = false
 	vault.CanTouch = false
@@ -25508,7 +25584,7 @@ local function buildEmpireBank(root: Folder)
 			Color = Color3.fromRGB(148, 144, 132),
 			Material = Enum.Material.Concrete,
 			CanCollide = true,
-			Parent = bankFolder,
+			Parent = bankModel,
 		})
 	end
 
@@ -25520,7 +25596,7 @@ local function buildEmpireBank(root: Folder)
 		Color = BANK_BANNER_OPEN,
 		Material = Enum.Material.Fabric,
 		CanCollide = false,
-		Parent = bankFolder,
+		Parent = bankModel,
 	})
 	banner.CanQuery = false
 	banner.CanTouch = false
@@ -25535,8 +25611,9 @@ local function buildEmpireBank(root: Folder)
 			end
 		end
 	end)
+	bankModel.Parent = root -- streaming2 S4: parented whole
 	local nParts = 0
-	for _, d in ipairs(bankFolder:GetDescendants()) do
+	for _, d in ipairs(bankModel:GetDescendants()) do
 		if d:IsA("BasePart") then
 			nParts += 1
 		end
@@ -26121,6 +26198,15 @@ function MapSetup.Run()
 		-- PlotId), ring, pole and flag. No stripe, no finial, no light (TerritoryService never adds one either).
 		local isStarter = TerritoryConfig.IsStarterDef(def)
 		local diameter = (def.Radius or 30) * 2
+		-- streaming2 S4 (F12): the zone's marker, ring, pole and flag (and the stripe and finial off a Home Outpost) are
+		-- one Atomic Model, so a client never has the marker without its <Id>_Flag sibling (TerritoryController's
+		-- diamond lookup) or the flag without the marker. Siblings stay siblings: TerritoryService finds them from
+		-- marker.Parent as before, the marker by its tags. Fort walls / keep / towers and rig decks / legs stay loose in
+		-- Territories. Built unparented and parented once whole (below), so every piece is an initial descendant.
+		-- Inert while Workspace.StreamingEnabled is false: the same parts, one level deeper.
+		local zone = Instance.new("Model")
+		zone.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+		zone.Name = def.Id .. "_Zone"
 		-- World v2 (spec §3.5): the capture marker keeps its Size (TerritoryCapture reads its half-diagonal) but is an
 		-- invisible, non-colliding volume (it was a glowing 1.5-tall slab across five roads). The visible cue is the
 		-- flat <Id>_Ring disc below; TerritoryService writes only the owner colour.
@@ -26132,7 +26218,7 @@ function MapSetup.Run()
 			Transparency = 1,
 			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
-			Parent = territories,
+			Parent = zone,
 		})
 		marker.CanQuery = false
 		marker.CanTouch = false
@@ -26173,7 +26259,7 @@ function MapSetup.Run()
 			CanCollide = false,
 			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Cylinder,
-			Parent = territories,
+			Parent = zone,
 		})
 		ring.CanQuery = false
 		ring.CanTouch = false
@@ -26186,7 +26272,7 @@ function MapSetup.Run()
 			Color = Color3.fromRGB(55, 55, 55),
 			Material = Enum.Material.Metal,
 			CanCollide = false,
-			Parent = territories,
+			Parent = zone,
 		})
 		local flag = part({
 			Name = def.Id .. "_Flag",
@@ -26196,11 +26282,12 @@ function MapSetup.Run()
 			Material = Enum.Material.SmoothPlastic, -- painted (TerritoryService keeps it SmoothPlastic)
 			CanCollide = false,
 			Transparency = 0.08,
-			Parent = territories,
+			Parent = zone,
 		})
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
 		if isStarter then
+			zone.Parent = territories -- streaming2 S4: parented whole
 			continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)
 		end
 		part({
@@ -26211,7 +26298,7 @@ function MapSetup.Run()
 			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
 			Transparency = 0.15,
-			Parent = territories,
+			Parent = zone,
 		})
 		part({
 			Name = def.Id .. "_Finial",
@@ -26221,8 +26308,9 @@ function MapSetup.Run()
 			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Ball,
 			CanCollide = false,
-			Parent = territories,
+			Parent = zone,
 		})
+		zone.Parent = territories -- streaming2 S4: parented whole, before the loose fort / rig pieces
 
 		-- World v2 W1: no beacon pole in the capture zone (the flag pole and the disc mark it)
 
@@ -26776,7 +26864,7 @@ return MapSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="105">
+        <Item class="ModuleScript" referent="106">
           <Properties>
             <string name="Name">NationFlag</string>
             <string name="Source"><![CDATA[--!strict
@@ -27154,11 +27242,11 @@ return NationFlag
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="106">
+        <Item class="Folder" referent="107">
           <Properties>
             <string name="Name">POILayouts</string>
           </Properties>
-          <Item class="ModuleScript" referent="107">
+          <Item class="ModuleScript" referent="108">
             <Properties>
               <string name="Name">Frontier</string>
               <string name="Source"><![CDATA[--!strict
@@ -27358,7 +27446,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="108">
+          <Item class="ModuleScript" referent="109">
             <Properties>
               <string name="Name">Industry</string>
               <string name="Source"><![CDATA[--!strict
@@ -27623,7 +27711,7 @@ return Layouts
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="109">
+          <Item class="ModuleScript" referent="110">
             <Properties>
               <string name="Name">Wilds</string>
               <string name="Source"><![CDATA[--!strict
@@ -27872,7 +27960,7 @@ return Layouts
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="110">
+        <Item class="ModuleScript" referent="111">
           <Properties>
             <string name="Name">ProfileSchema</string>
             <string name="Source"><![CDATA[--!strict
@@ -28598,7 +28686,7 @@ return ProfileSchema
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="111">
+        <Item class="ModuleScript" referent="112">
           <Properties>
             <string name="Name">Projectile</string>
             <string name="Source"><![CDATA[--!strict
@@ -28796,7 +28884,7 @@ return Projectile
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="112">
+        <Item class="ModuleScript" referent="113">
           <Properties>
             <string name="Name">RemoteGuard</string>
             <string name="Source"><![CDATA[--!strict
@@ -28864,7 +28952,7 @@ return RemoteGuard
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="113">
+        <Item class="ModuleScript" referent="114">
           <Properties>
             <string name="Name">RemoteSetup</string>
             <string name="Source"><![CDATA[--!strict
@@ -29176,7 +29264,7 @@ return RemoteSetup
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="114">
+        <Item class="ModuleScript" referent="115">
           <Properties>
             <string name="Name">SessionLock</string>
             <string name="Source"><![CDATA[--!strict
@@ -29435,7 +29523,277 @@ return SessionLock
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="115">
+        <Item class="ModuleScript" referent="116">
+          <Properties>
+            <string name="Name">StreamPrefetch</string>
+            <string name="Source"><![CDATA[--!strict
+--[[
+	StreamPrefetch (streaming2 lane S1, spec F1): the one way the server moves a character far across the map.
+
+	Under instance streaming a phone only holds the world round its character. A PivotTo to a far spot lands the
+	player where nothing has streamed in yet: a pause screen, or a fall through missing ground. The server asks the
+	engine to stream the destination first with Player:RequestStreamAroundAsync (Player.yaml; techniques.md
+	"Proactive streaming"), then moves the character.
+
+	OFF SWITCH. Everything here is a no-op while Workspace.StreamingEnabled is false (default.project.json is the
+	flag): no RequestStreamAroundAsync / AddReplicationFocus call is made, and PivotTo moves at once, inside the call.
+
+	API
+	  Enabled(): boolean                         Workspace.StreamingEnabled
+	  Place(character, cf): boolean              PivotTo + zero root velocity, now, no pre-fetch
+	  IsNear(player, pos): boolean               the character is within StreamingConfig.NearStuds of pos
+	  Request(player, pos, timeout?): boolean    YIELDS while streaming is on: pcall'd RequestStreamAroundAsync
+	                                             (false only when the request threw); true at once when off
+	  PivotTo(player, cf, opts?): boolean        pre-fetch (only when the move is longer than NearStuds), then Place,
+	                                             in its own thread. At most one move in flight per player: a call
+	                                             while one is pre-fetching re-targets it (the newest target wins and
+	                                             is pre-fetched too when far from the fetched one). opts.OnDone(moved)
+	                                             runs once, after the move. No stacked retries: one settle check
+	                                             (StreamingConfig.SettleCheckSeconds) moves the character again only
+	                                             when it snapped back to where it started.
+	  IsMoving(player): boolean                  a pre-fetched move is still on its way (FallSafety waits for it)
+	  HoldFocus(player, part, maxSeconds?)       AddReplicationFocus(part) until the returned release() runs, or
+	                                             maxSeconds (default StreamingConfig.JoinFocusMaxSeconds) pass
+]]
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+local StreamingConfig = require(Shared.Configs.StreamingConfig)
+
+local StreamPrefetch = {}
+
+export type Opts = {
+	Timeout: number?, -- RequestStreamAroundAsync timeout (default StreamingConfig.PrefetchTimeout)
+	OnDone: ((moved: boolean) -> ())?, -- runs once, after the move (moved = false: no character / player left)
+}
+
+type Flight = {
+	Target: CFrame,
+	Timeout: number,
+	Done: { (boolean) -> () },
+	Deadline: number, -- os.clock(): past it the flight is stale (see STALE_SLACK)
+	Abandoned: boolean,
+}
+
+-- A re-targeted flight pre-fetches again; after this many rounds it moves to the newest target as it is.
+local MAX_ROUNDS = 3
+-- RequestStreamAroundAsync gives up after its timeout (Player.yaml), so a flight lasts at most MAX_ROUNDS timeouts.
+-- Should one ever hang, it goes stale this many seconds later: the next move starts afresh (and takes over its
+-- callbacks), and FallSafety stops waiting for it. The hung worker, if it ever wakes, moves nothing.
+local STALE_SLACK = 5
+
+local flights: { [Player]: Flight } = {} -- the move in flight per player
+local moveGen: { [Player]: number } = {} -- bumped by every PivotTo: a newer move cancels an older settle check
+
+Players.PlayerRemoving:Connect(function(player: Player)
+	flights[player] = nil -- its worker sees player.Parent == nil and drops the move
+	moveGen[player] = nil
+end)
+
+-- Read on every call (never cached): the engine fixes it for the server's life, the headless stand-in toggles it.
+-- Workspace.yaml: read security None; pcall'd anyway because the join path runs through here.
+function StreamPrefetch.Enabled(): boolean
+	local ok, on = pcall(function()
+		return Workspace.StreamingEnabled
+	end)
+	return ok and on == true
+end
+
+local function rootOf(character: Model?): BasePart?
+	if character == nil then
+		return nil
+	end
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		return root
+	end
+	return character.PrimaryPart
+end
+
+-- PivotTo + zero velocity: exactly the move BaseService.TeleportToPlot made before streaming2.
+function StreamPrefetch.Place(character: Model?, cf: CFrame): boolean
+	if character == nil or character.Parent == nil then
+		return false
+	end
+	character:PivotTo(cf)
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if hrp and hrp:IsA("BasePart") then
+		hrp.AssemblyLinearVelocity = Vector3.zero
+		hrp.AssemblyAngularVelocity = Vector3.zero
+	end
+	return true
+end
+
+function StreamPrefetch.IsNear(player: Player, pos: Vector3): boolean
+	local root = rootOf(player.Character)
+	return root ~= nil and (root.Position - pos).Magnitude <= StreamingConfig.NearStuds
+end
+
+function StreamPrefetch.Request(player: Player, pos: Vector3, timeout: number?): boolean
+	if not StreamPrefetch.Enabled() then
+		return true
+	end
+	local ok, err = pcall(player.RequestStreamAroundAsync, player, pos, timeout or StreamingConfig.PrefetchTimeout)
+	if not ok then
+		warn("[StreamPrefetch] RequestStreamAroundAsync failed for", player.Name, err)
+	end
+	return ok
+end
+
+-- The player's flight unless it is stale. A stale flight stays in the table, marked Abandoned, so the next PivotTo
+-- takes over its callbacks.
+local function liveFlight(player: Player): Flight?
+	local flight = flights[player]
+	if flight == nil or flight.Abandoned then
+		return nil
+	end
+	if os.clock() > flight.Deadline then
+		flight.Abandoned = true
+		warn("[StreamPrefetch] a pre-fetched move went stale for", player.Name)
+		return nil
+	end
+	return flight
+end
+
+function StreamPrefetch.IsMoving(player: Player): boolean
+	return liveFlight(player) ~= nil
+end
+
+-- Pre-fetch until the (maybe re-targeted) destination is covered. Yields; the caller clears the flight right after,
+-- with no yield in between, so a re-target can never slip in after the last check.
+local function prefetchRounds(player: Player, flight: Flight)
+	local fetched: Vector3? = nil
+	for _ = 1, MAX_ROUNDS do
+		if player.Parent == nil then
+			return
+		end
+		local pos = flight.Target.Position
+		local covered = if fetched ~= nil
+			then (fetched - pos).Magnitude <= StreamingConfig.NearStuds
+			else StreamPrefetch.IsNear(player, pos)
+		if covered then
+			return
+		end
+		fetched = pos
+		StreamPrefetch.Request(player, pos, flight.Timeout)
+	end
+end
+
+local function placeAndWatch(player: Player, target: CFrame): boolean
+	local character = player.Character
+	local root = rootOf(character)
+	local from = if root then root.Position else nil
+	if not StreamPrefetch.Place(character, target) then
+		return false
+	end
+	-- One settle check (no stacked retries): spawn / physics can undo a pivot made right after a spawn. Only a far
+	-- move can visibly be undone, and "undone" means back where it started, never "walked a few studs".
+	local near = StreamingConfig.NearStuds
+	if from ~= nil and character ~= nil and (from - target.Position).Magnitude > near then
+		local gen = moveGen[player]
+		task.delay(StreamingConfig.SettleCheckSeconds, function()
+			if moveGen[player] ~= gen or liveFlight(player) ~= nil or player.Character ~= character then
+				return -- a newer move (or a new life) owns the character
+			end
+			local r = rootOf(character)
+			if r ~= nil and (r.Position - target.Position).Magnitude > near and (r.Position - from).Magnitude <= near then
+				StreamPrefetch.Place(character, target)
+			end
+		end)
+	end
+	return true
+end
+
+local function runFlight(player: Player, flight: Flight)
+	xpcall(prefetchRounds, function(err: any)
+		warn("[StreamPrefetch] pre-fetch failed for", player.Name, err)
+	end, player, flight)
+	if flight.Abandoned then
+		return -- went stale while it hung; a newer flight owns the move and these callbacks
+	end
+	if flights[player] == flight then
+		flights[player] = nil
+	end
+	local moved = false
+	if player.Parent ~= nil then
+		local okMove, res = pcall(placeAndWatch, player, flight.Target)
+		if not okMove then
+			warn("[StreamPrefetch] move failed for", player.Name, res)
+		end
+		moved = okMove and res == true
+	end
+	for _, cb in ipairs(flight.Done) do
+		task.spawn(cb, moved)
+	end
+end
+
+function StreamPrefetch.PivotTo(player: Player, cf: CFrame, opts: Opts?): boolean
+	local onDone = if opts then opts.OnDone else nil
+	if not StreamPrefetch.Enabled() then
+		-- streaming off: the plain move, at once (no RequestStreamAroundAsync call)
+		local moved = StreamPrefetch.Place(player.Character, cf)
+		if onDone then
+			task.spawn(onDone, moved)
+		end
+		return moved
+	end
+	moveGen[player] = (moveGen[player] or 0) + 1
+	local timeout = if opts and opts.Timeout then opts.Timeout else StreamingConfig.PrefetchTimeout
+	local prev = flights[player] -- when liveFlight calls it stale, its callbacks move to the new flight
+	local flight = liveFlight(player)
+	if flight then
+		-- one move in flight per player: re-target it; its worker pre-fetches the new spot when it is far
+		flight.Target = cf
+		flight.Timeout = timeout
+		flight.Deadline = math.max(flight.Deadline, os.clock() + MAX_ROUNDS * timeout + STALE_SLACK)
+		if onDone then
+			table.insert(flight.Done, onDone)
+		end
+		return true
+	end
+	local newFlight: Flight = {
+		Target = cf,
+		Timeout = timeout,
+		Done = if prev then prev.Done else {}, -- a stale flight's callbacks ride on this one
+		Deadline = os.clock() + MAX_ROUNDS * timeout + STALE_SLACK,
+		Abandoned = false,
+	}
+	if onDone then
+		table.insert(newFlight.Done, onDone)
+	end
+	flights[player] = newFlight
+	task.spawn(runFlight, player, newFlight)
+	return true
+end
+
+function StreamPrefetch.HoldFocus(player: Player, part: BasePart?, maxSeconds: number?): () -> ()
+	if part == nil or not StreamPrefetch.Enabled() then
+		return function() end
+	end
+	local held = pcall(player.AddReplicationFocus, player, part)
+	if not held then
+		return function() end
+	end
+	local released = false
+	local function release()
+		if released then
+			return
+		end
+		released = true
+		pcall(player.RemoveReplicationFocus, player, part)
+	end
+	task.delay(maxSeconds or StreamingConfig.JoinFocusMaxSeconds, release)
+	return release
+end
+
+return StreamPrefetch
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="117">
           <Properties>
             <string name="Name">StructureKitBuilder</string>
             <string name="Source"><![CDATA[--!strict
@@ -31012,7 +31370,7 @@ return StructureKitBuilder
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="116">
+        <Item class="ModuleScript" referent="118">
           <Properties>
             <string name="Name">StudioBuySmoke</string>
             <string name="Source"><![CDATA[--!strict
@@ -31303,7 +31661,7 @@ return StudioBuySmoke
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="117">
+        <Item class="ModuleScript" referent="119">
           <Properties>
             <string name="Name">VehicleHealth</string>
             <string name="Source"><![CDATA[--!strict
@@ -32127,7 +32485,7 @@ return VehicleHealth
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="118">
+        <Item class="ModuleScript" referent="120">
           <Properties>
             <string name="Name">Waterways</string>
             <string name="Source"><![CDATA[--!strict
@@ -32951,7 +33309,7 @@ return Waterways
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="119">
+        <Item class="ModuleScript" referent="121">
           <Properties>
             <string name="Name">WeaponAssetLoader</string>
             <string name="Source"><![CDATA[--!strict
@@ -33242,7 +33600,7 @@ return WeaponAssetLoader
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="120">
+        <Item class="ModuleScript" referent="122">
           <Properties>
             <string name="Name">WorldAtmosphere</string>
             <string name="Source"><![CDATA[--!strict
@@ -33525,7 +33883,7 @@ return WorldAtmosphere
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="121">
+        <Item class="ModuleScript" referent="123">
           <Properties>
             <string name="Name">WorldBounds</string>
             <string name="Source"><![CDATA[--!strict
@@ -33926,7 +34284,7 @@ return WorldBounds
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="122">
+        <Item class="ModuleScript" referent="124">
           <Properties>
             <string name="Name">WorldDress</string>
             <string name="Source"><![CDATA[--!strict
@@ -35597,7 +35955,7 @@ return WorldDress
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="123">
+        <Item class="ModuleScript" referent="125">
           <Properties>
             <string name="Name">WorldHygiene</string>
             <string name="Source"><![CDATA[--!strict
@@ -36856,7 +37214,7 @@ return WorldHygiene
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="124">
+        <Item class="ModuleScript" referent="126">
           <Properties>
             <string name="Name">WorldKits</string>
             <string name="Source"><![CDATA[--!strict
@@ -38777,7 +39135,7 @@ return WorldKits
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="125">
+        <Item class="ModuleScript" referent="127">
           <Properties>
             <string name="Name">WorldLabelPolicy</string>
             <string name="Source"><![CDATA[--!strict
@@ -38923,7 +39281,7 @@ return WorldLabelPolicy
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="126">
+        <Item class="ModuleScript" referent="128">
           <Properties>
             <string name="Name">WorldPOI</string>
             <string name="Source"><![CDATA[--!strict
@@ -39814,7 +40172,7 @@ return WorldPOI
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="127">
+        <Item class="ModuleScript" referent="129">
           <Properties>
             <string name="Name">WorldTerrain</string>
             <string name="Source"><![CDATA[--!strict
@@ -40575,11 +40933,11 @@ return WorldTerrain
           </Properties>
         </Item>
       </Item>
-      <Item class="Folder" referent="128">
+      <Item class="Folder" referent="130">
         <Properties>
           <string name="Name">Services</string>
         </Properties>
-        <Item class="ModuleScript" referent="129">
+        <Item class="ModuleScript" referent="131">
           <Properties>
             <string name="Name">AdminService</string>
             <string name="Source"><![CDATA[--!strict
@@ -41264,7 +41622,7 @@ return AdminService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="130">
+        <Item class="ModuleScript" referent="132">
           <Properties>
             <string name="Name">AnalyticsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -41313,7 +41671,7 @@ return AnalyticsService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="131">
+        <Item class="ModuleScript" referent="133">
           <Properties>
             <string name="Name">AntiExploitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -41434,7 +41792,7 @@ return AntiExploitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="132">
+        <Item class="ModuleScript" referent="134">
           <Properties>
             <string name="Name">BankRaidService</string>
             <string name="Source"><![CDATA[--!strict
@@ -42110,7 +42468,7 @@ return BankRaidService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="133">
+        <Item class="ModuleScript" referent="135">
           <Properties>
             <string name="Name">BaseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -42136,8 +42494,10 @@ local ConsoleLocator = require(Shared.Util.ConsoleLocator)
 local TycoonMath = require(Shared.Util.TycoonMath) -- v72: one passive formula (paid here, shown on the client)
 local BusinessConfig = require(Shared.Configs.BusinessConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
+local StreamingConfig = require(Shared.Configs.StreamingConfig) -- streaming2 S1
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
+local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch) -- streaming2 S1: pre-fetched moves
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
 local StructureKitBuilder = require(script.Parent.Parent.Modules.StructureKitBuilder)
 local HollowBuildingBuilder = require(script.Parent.Parent.Modules.HollowBuildingBuilder)
@@ -42232,6 +42592,43 @@ local function setNoPlotFlag(player: Player, noPlot: boolean)
 	end)
 end
 
+-- streaming2 S1 (F2): the plot's own SpawnLocation (MapSetup: Plot<n>.PlayerSpawn, Neutral, Duration 0), found the
+-- way GetPlotSpawnCFrame finds the teleport target (the plot pad's folder)
+local function plotSpawnLocation(plotId: number): SpawnLocation?
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.BasePlot)) do
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == plotId then
+			local spawn = inst.Parent and inst.Parent:FindFirstChild("PlayerSpawn")
+			if spawn and spawn:IsA("SpawnLocation") then
+				return spawn
+			end
+			return nil
+		end
+	end
+	return nil
+end
+
+--[[ streaming2 S1 (F2): respawn on the own plot, not on a random plot gate (maybe an enemy's, and a cross-map hop the
+	phone has not streamed). Player.yaml: RespawnLocation takes a Neutral SpawnLocation under Workspace. nil clears it.
+	Only while Workspace.StreamingEnabled is on: with streaming off respawns stay exactly as before. ]]
+local function setRespawnAtPlot(player: Player, plotId: number?)
+	if not StreamPrefetch.Enabled() then
+		return
+	end
+	local spawn = if plotId ~= nil then plotSpawnLocation(plotId) else nil
+	xpcall(function()
+		if player.RespawnLocation == spawn then
+			return
+		elseif spawn then
+			player.RespawnLocation = spawn
+		else
+			local anyPlayer: any = player -- typed SpawnLocation, but nil is the documented "default spawning"
+			anyPlayer.RespawnLocation = nil
+		end
+	end, function(err: any)
+		warn("[BaseService] RespawnLocation not set for", player.Name, err)
+	end)
+end
+
 --[[ v69: returns the player's plot, or nil when every plot is owned. Never hands out a plot someone else owns:
 	v63 forced plot 1 here, so the 7th+ player shared plot 1 with its owner — each one's refresh redrew the other's
 	kits and walls at their own levels, and the extra player's ReleasePlot wiped the real owner's base. ]]
@@ -42250,6 +42647,7 @@ function BaseService.AssignPlot(player: Player): number?
 			DS.MarkDirty(player)
 		end
 		setNoPlotFlag(player, false)
+		setRespawnAtPlot(player, held)
 		return held
 	end
 
@@ -42262,6 +42660,7 @@ function BaseService.AssignPlot(player: Player): number?
 			DS.MarkDirty(player)
 		end
 		setNoPlotFlag(player, false)
+		setRespawnAtPlot(player, saved)
 		return saved
 	end
 
@@ -42274,6 +42673,7 @@ function BaseService.AssignPlot(player: Player): number?
 			DS.MarkDirty(player)
 		end
 		setNoPlotFlag(player, true)
+		setRespawnAtPlot(player, nil)
 		return nil
 	end
 
@@ -42281,6 +42681,7 @@ function BaseService.AssignPlot(player: Player): number?
 	profile.BasePlotId = plotId
 	DS.MarkDirty(player)
 	setNoPlotFlag(player, false)
+	setRespawnAtPlot(player, plotId)
 	return plotId
 end
 
@@ -42296,6 +42697,9 @@ function BaseService.ReleasePlot(player: Player): boolean
 			plotOwners[plotId] = nil
 			released = true
 		end
+	end
+	if released then
+		setRespawnAtPlot(player, nil) -- streaming2 S1 (F2): the plot is no longer theirs
 	end
 	return released
 end
@@ -42508,11 +42912,21 @@ local function noPlotDropCFrame(): CFrame
 	return fallback
 end
 
---[[ Moves the player onto THEIR plot (true), or — with no plot free — onto neutral ground (false). ]]
-function BaseService.TeleportToPlot(player: Player): boolean
+--[[ Moves the player onto THEIR plot (true), or — with no plot free — onto neutral ground (false).
+	streaming2 S1 (F1): while Workspace.StreamingEnabled is on, the move goes through StreamPrefetch: the destination is
+	pre-fetched first (RequestStreamAroundAsync), one move is in flight per player, and the stacked re-applies are
+	gone (one settle check instead). With streaming off the move is the old one: at once, then again at 0.35 s and 1.0 s.
+	onArrived(moved), optional, runs once: after the move, or at once when there is nothing to move. ]]
+function BaseService.TeleportToPlot(player: Player, onArrived: ((boolean) -> ())?): boolean
+	local function arrived(moved: boolean)
+		if onArrived then
+			task.spawn(onArrived, moved) -- its own thread: a failing callback never breaks the teleport
+		end
+	end
 	local DS = getDataService()
 	local profile = if DS then DS.GetProfile(player) else nil
 	if not profile then
+		arrived(false)
 		return false
 	end
 	-- v69: only ever a plot this player owns (v63 forced BasePlotId=1 → another player's base)
@@ -42527,17 +42941,13 @@ function BaseService.TeleportToPlot(player: Player): boolean
 		cf = noPlotDropCFrame()
 	end
 	if not cf then
+		arrived(false)
 		return false
 	end
 	local target: CFrame = cf
 	local function apply(character: Model)
 		if character and character.Parent then
-			character:PivotTo(target)
-			local hrp = character:FindFirstChild("HumanoidRootPart")
-			if hrp and hrp:IsA("BasePart") then
-				hrp.AssemblyLinearVelocity = Vector3.zero
-				hrp.AssemblyAngularVelocity = Vector3.zero
-			end
+			StreamPrefetch.Place(character, target) -- PivotTo + zero velocity
 		end
 	end
 	local function applyWithRetries(character: Model)
@@ -42554,21 +42964,34 @@ function BaseService.TeleportToPlot(player: Player): boolean
 			end
 		end)
 	end
+	local function moveNow(character: Model)
+		if StreamPrefetch.Enabled() then
+			StreamPrefetch.PivotTo(player, target, { OnDone = arrived })
+		else
+			applyWithRetries(character)
+			arrived(character.Parent ~= nil)
+		end
+	end
 	if player.Character then
-		applyWithRetries(player.Character)
+		moveNow(player.Character)
 	else
 		local conn: RBXScriptConnection?
+		local spawned = false
 		conn = player.CharacterAdded:Connect(function(character)
+			spawned = true
 			if conn then
 				conn:Disconnect()
 			end
 			task.defer(function()
-				applyWithRetries(character)
+				moveNow(character)
 			end)
 		end)
 		task.delay(30, function()
 			if conn then
 				conn:Disconnect()
+			end
+			if not spawned then
+				arrived(false)
 			end
 		end)
 	end
@@ -43383,6 +43806,57 @@ function BaseService.NuclearRehydrateKits(player: Player)
 	end
 end
 
+--[[ streaming2 S1 (F18): does the player's base need the join heal? True when an owned (L1+) structure kit on their
+	plot has no upgrade slot, or a slot without its kit (no WE_KitGen stamp, or no WE_KitRole part). Read-only: no tag
+	or attribute is written, and it walks the UpgradeSlot tag once (no GetDescendants). ]]
+local function kitNeedsHeal(player: Player): boolean
+	local DS = getDataService()
+	local profile = if DS then DS.GetProfile(player) else nil
+	local plotId = ownedPlotOf(player.UserId)
+	if not profile or plotId == nil then
+		return false -- nothing to heal (NuclearRehydrateKits would do nothing either)
+	end
+	local slotsOf: { [string]: { BasePart } } = {}
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.UpgradeSlot)) do
+		if inst:IsA("BasePart") and tonumber(inst:GetAttribute("PlotId") :: any) == plotId then
+			local sid = inst:GetAttribute("StructureId")
+			if typeof(sid) == "string" then
+				local list = slotsOf[sid]
+				if list == nil then
+					list = {}
+					slotsOf[sid] = list
+				end
+				table.insert(list, inst)
+			end
+		end
+	end
+	for structureId in pairs(BaseConfig.Structures) do
+		local lv = tonumber(profile.BaseUpgrades[structureId]) or 0
+		if lv >= 1 and not TycoonMath.IsBusiness(structureId) then
+			local slots = slotsOf[structureId]
+			if slots == nil then
+				return true
+			end
+			for _, plinth in ipairs(slots) do
+				if plinth:GetAttribute("WE_KitGen") == nil then
+					return true
+				end
+				local hasKit = false
+				for _, ch in ipairs(plinth:GetChildren()) do
+					if ch:IsA("BasePart") and ch:GetAttribute("WE_KitRole") ~= nil then
+						hasKit = true
+						break
+					end
+				end
+				if not hasKit then
+					return true
+				end
+			end
+		end
+	end
+	return false
+end
+
 function BaseService.RefreshAllVisuals(player: Player)
 	local profile = getDataService().GetProfile(player)
 	if not profile then
@@ -43525,8 +43999,19 @@ local function setUpGainedPlot(plr: Player, plotId: number)
 	if NotificationService and NotificationService.Notify then
 		pcall(NotificationService.Notify, plr, string.format("A base freed up — Base %d is yours now!", plotId), "Success", 6)
 	end
-	pcall(BaseService.TeleportToPlot, plr)
-	notifyTutorialPlotAssigned(plr)
+	if StreamPrefetch.Enabled() then
+		-- streaming2 S1 (F2 / F15): respawn here from now on; PlotAssigned once the pre-fetched move has landed
+		setRespawnAtPlot(plr, plotId)
+		local okTp = pcall(BaseService.TeleportToPlot, plr, function()
+			notifyTutorialPlotAssigned(plr)
+		end)
+		if not okTp then
+			notifyTutorialPlotAssigned(plr)
+		end
+	else
+		pcall(BaseService.TeleportToPlot, plr)
+		notifyTutorialPlotAssigned(plr)
+	end
 	pcall(BaseService.PushState, plr)
 	pcall(function()
 		local st = buildPlayerState(plr)
@@ -43771,7 +44256,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 76)
+			player:SetAttribute("WE_Build", 77)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -43783,16 +44268,34 @@ function BaseService.Init(deps: { [string]: any })
 				end
 			end)
 		end
-		-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
-		task.defer(function()
-			BaseService.TeleportToPlot(player)
-		end)
-		task.delay(1.5, function()
-			if player.Parent then
+		local streaming = StreamPrefetch.Enabled() -- streaming2 S1: false = the join below is exactly the old one
+		if streaming then
+			-- streaming2 S1 (F1 / F2 / F15): the first spawn of a session is random (the save loads after it). The
+			-- own PlayerSpawn is a replication focus until ONE pre-fetched move lands the player home, and the
+			-- tutorial hears PlotAssigned only then (before, it pointed at a plot the phone had not streamed yet).
+			local releaseFocus = StreamPrefetch.HoldFocus(
+				player,
+				if assignedPlot ~= nil then plotSpawnLocation(assignedPlot) else nil,
+				StreamingConfig.JoinFocusMaxSeconds
+			)
+			task.defer(function()
+				BaseService.TeleportToPlot(player, function()
+					releaseFocus()
+					notifyTutorialPlotAssigned(player)
+				end)
+			end)
+		else
+			-- ALWAYS teleport onto THEIR plot after character exists (retry inside TeleportToPlot)
+			task.defer(function()
 				BaseService.TeleportToPlot(player)
-			end
-		end)
-		notifyTutorialPlotAssigned(player)
+			end)
+			task.delay(1.5, function()
+				if player.Parent then
+					BaseService.TeleportToPlot(player)
+				end
+			end)
+			notifyTutorialPlotAssigned(player)
+		end
 		BaseService.PushState(player)
 		-- Dense re-push already below; keep an immediate second Push after plot assign
 		EconomyService.Push(player)
@@ -43827,13 +44330,15 @@ function BaseService.Init(deps: { [string]: any })
 			end)
 		end)
 		-- v45 P0: nuclear kit rebuild then RefreshAllVisuals at 0 / 0.5 / 2 / 5s (map-heal race)
+		-- streaming2 S1 (F18): with streaming on, the 0.5 / 2 / 5 s passes rebuild only a base whose kit is broken.
+		-- Each rebuild is re-sent to every client streaming this base while the joining phone does its first stream.
 		task.defer(function()
 			pcall(BaseService.NuclearRehydrateKits, player)
 			BaseService.RefreshAllVisuals(player)
 		end)
 		for _, delaySec in ipairs({ 0.5, 2.0, 5.0 }) do
 			task.delay(delaySec, function()
-				if player.Parent then
+				if player.Parent and (not streaming or kitNeedsHeal(player)) then
 					pcall(BaseService.NuclearRehydrateKits, player)
 					BaseService.RefreshAllVisuals(player)
 				end
@@ -43899,7 +44404,7 @@ return BaseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="134">
+        <Item class="ModuleScript" referent="136">
           <Properties>
             <string name="Name">BattlePassService</string>
             <string name="Source"><![CDATA[--!strict
@@ -44258,7 +44763,7 @@ return BattlePassService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="135">
+        <Item class="ModuleScript" referent="137">
           <Properties>
             <string name="Name">BusinessService</string>
             <string name="Source"><![CDATA[--!strict
@@ -44270,7 +44775,8 @@ return BattlePassService
 	  SyncBusiness(plotId, id, level, owner?)  one business after a buy / rebirth / admin reset (UpdateVisuals)
 	  ClearPlot(plotId)                        plot released (the next owner gets fresh L0 kiosks)
 	  Plot<N>/WE_Businesses/WE_Business_<Id> (Model, tag WE_Business, attrs PlotId / BusinessId / Level / OwnerUserId /
-	  WE_SiteCFrame)
+	  WE_SiteCFrame; streaming2 S4: ModelStreamingMode Atomic, built unparented and parented once whole, so the tag
+	  added-signals fire on a finished kiosk; inert while Workspace.StreamingEnabled is false)
 	    Console  WE_UpgradeSlot console (PlotId, StructureId, WE_Console): UpgradePadService adds the hold prompt,
 	             ConsoleLocator finds it, BaseService.PurchaseUpgrade buys at it (console-only buying, no bypass).
 	             No screen gui, no Neon, no light (budget).
@@ -44425,14 +44931,20 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 	if siteCF == nil then
 		return
 	end
+	-- streaming2 S4 (F11): a new kiosk is Atomic and is built unparented, then parented once it is whole (below), so its
+	-- console, kit parts, attributes and tags are all initial descendants: a client gets the whole kiosk or none of it.
+	-- A later level-up adds parts to the parented model (they stream in normally, inside the same 22-stud kiosk).
+	-- Inert while Workspace.StreamingEnabled is false: the finished tree is the same.
+	local newModel: Model? = nil
 	if model == nil then
 		local m = Instance.new("Model")
+		m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 		m.Name = name
 		m:SetAttribute("PlotId", plotId)
 		m:SetAttribute("BusinessId", id)
 		m:SetAttribute("WE_SiteCFrame", siteCF)
-		m.Parent = folder
 		model = m
+		newModel = m
 	end
 	local m = model :: Model
 	ensureConsole(m, plotId, id, plotPos :: Vector3)
@@ -44469,6 +44981,9 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 	end
 	if not CollectionService:HasTag(m, BusinessConfig.Tag) then
 		CollectionService:AddTag(m, BusinessConfig.Tag)
+	end
+	if newModel ~= nil then
+		newModel.Parent = folder -- streaming2 S4: parented last, whole (see above)
 	end
 end
 
@@ -44635,7 +45150,7 @@ return BusinessService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="136">
+        <Item class="ModuleScript" referent="138">
           <Properties>
             <string name="Name">CaptureStipendService</string>
             <string name="Source"><![CDATA[--!strict
@@ -44742,7 +45257,7 @@ return CaptureStipendService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="137">
+        <Item class="ModuleScript" referent="139">
           <Properties>
             <string name="Name">ClanService</string>
             <string name="Source"><![CDATA[--!strict
@@ -45369,7 +45884,7 @@ return ClanService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="138">
+        <Item class="ModuleScript" referent="140">
           <Properties>
             <string name="Name">ClanWarService</string>
             <string name="Source"><![CDATA[--!strict
@@ -45828,7 +46343,7 @@ return ClanWarService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="139">
+        <Item class="ModuleScript" referent="141">
           <Properties>
             <string name="Name">CodesService</string>
             <string name="Source"><![CDATA[--!strict
@@ -45981,7 +46496,7 @@ return CodesService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="140">
+        <Item class="ModuleScript" referent="142">
           <Properties>
             <string name="Name">CombatService</string>
             <string name="Source"><![CDATA[--!strict
@@ -46021,6 +46536,9 @@ return CodesService
 	hurting a grouped NPC provokes its group. APIs: OnNPCDeath(fn) (once per death, after rewards; listeners
 	deferred, each in its own pcall), DespawnNPC(id) (silent), ProvokeGroup / CalmGroup / GroupNPCs(groupId),
 	NPCCounts(). CombatConfig.FieldBootstrap == false skips BootstrapNPCs. Stances live in CombatNPC.Think.
+
+	streaming2 lane S2: TeleportToBase moves through StreamPrefetch while Workspace.StreamingEnabled is on (the old
+	PivotTo when it is off), and every SpawnNPC Model is ModelStreamingMode Atomic, set before it is parented.
 ]]
 
 local Players = game:GetService("Players")
@@ -46113,6 +46631,7 @@ type NPCRecord = {
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 local BaseLayout = require(script.Parent.Parent.Modules.BaseLayout) -- v70: plot frame
+local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch) -- streaming2 S2: pre-fetched respawn hop
 
 local CombatService = {}
 
@@ -46531,6 +47050,11 @@ function CombatService.GetPlotSpawnCFrame(plotId: number): CFrame?
 	return nil
 end
 
+--[[ streaming2 S2 (F1): the hop onto the own plot after every spawn (CharacterAdded). While Workspace.StreamingEnabled
+	is on it goes through StreamPrefetch: a far hop (a spawn that did not use the own RespawnLocation) streams the plot
+	in first (RequestStreamAroundAsync), and joins the move already in flight for this player (BaseService's join)
+	instead of racing it. The usual respawn lands on the own PlayerSpawn (BaseService sets RespawnLocation), so this is
+	a few studs and needs no pre-fetch. With streaming off it is the old move, at once. ]]
 function CombatService.TeleportToBase(player: Player)
 	local profile = DataService.GetProfile(player)
 	if not profile or not profile.BasePlotId then
@@ -46539,7 +47063,11 @@ function CombatService.TeleportToBase(player: Player)
 	local cf = CombatService.GetPlotSpawnCFrame(profile.BasePlotId)
 	local character = player.Character
 	if cf and character then
-		character:PivotTo(cf)
+		if StreamPrefetch.Enabled() then
+			StreamPrefetch.PivotTo(player, cf)
+		else
+			character:PivotTo(cf)
+		end
 	end
 end
 
@@ -46901,6 +47429,9 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?
 	npcSerial += 1
 
 	local model = Instance.new("Model")
+	-- streaming2 S2 (F10): set before the Model is parented, so the NPC (root, Humanoid, welded kit, catalog visual)
+	-- reaches a client whole or not at all. Covers every NPC, Ops garrisons included. No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = def.DisplayName
 	model:SetAttribute("NPCId", id)
 	model:SetAttribute("NPCType", tid)
@@ -48656,7 +49187,7 @@ end
 return CombatService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="141">
+          <Item class="ModuleScript" referent="143">
             <Properties>
               <string name="Name">CombatAssist</string>
               <string name="Source"><![CDATA[--!strict
@@ -48877,7 +49408,7 @@ return CombatAssist
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="142">
+          <Item class="ModuleScript" referent="144">
             <Properties>
               <string name="Name">CombatDamage</string>
               <string name="Source"><![CDATA[--!strict
@@ -49001,7 +49532,7 @@ return CombatDamage
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="143">
+          <Item class="ModuleScript" referent="145">
             <Properties>
               <string name="Name">CombatFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -49179,7 +49710,7 @@ return CombatFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="144">
+          <Item class="ModuleScript" referent="146">
             <Properties>
               <string name="Name">CombatNPC</string>
               <string name="Source"><![CDATA[--!strict
@@ -49831,7 +50362,7 @@ return CombatNPC
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="145">
+          <Item class="ModuleScript" referent="147">
             <Properties>
               <string name="Name">CombatWeaponLogic</string>
               <string name="Source"><![CDATA[--!strict
@@ -49885,7 +50416,7 @@ return CombatWeaponLogic
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="146">
+        <Item class="ModuleScript" referent="148">
           <Properties>
             <string name="Name">DataService</string>
             <string name="Source"><![CDATA[--!strict
@@ -50056,7 +50587,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 76)
+		player:SetAttribute("WE_Build", 77)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -50190,7 +50721,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=76",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=77",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -50368,7 +50899,7 @@ return DataService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="147">
+        <Item class="ModuleScript" referent="149">
           <Properties>
             <string name="Name">EconomyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -51006,7 +51537,7 @@ return EconomyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="148">
+        <Item class="ModuleScript" referent="150">
           <Properties>
             <string name="Name">FallSafetyService</string>
             <string name="Source"><![CDATA[--!strict
@@ -51014,15 +51545,29 @@ return EconomyService
 	FallSafetyService — teleport to plot spawn instead of void-Kill when
 	HumanoidRootPart falls below FALL_Y (e.g. off oil decks / past Ground).
 	Does not replace collide floor / SafetyCatch; soft recovery layer.
+
+	streaming2 S1 (F3), only while Workspace.StreamingEnabled is on (StreamPrefetch.Enabled()):
+	- no rescue while player.GameplayPaused: the phone is waiting for the ground to stream in (StreamingIntegrityMode
+	  PauseOutsideLoadedArea), it is not falling. A rescue would send it to another spot it has not streamed, again
+	  and again, with a toast each time.
+	- no rescue while a pre-fetched move (StreamPrefetch) is already taking the player home;
+	- the rescue goes through BaseService.TeleportToPlot, which pre-fetches the plot before the move;
+	- the toast is NotifyThrottled: at most one per StreamingConfig.FallToastCooldown seconds.
+	With streaming off every rescue and its toast are exactly as before.
 ]]
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+
+local StreamingConfig = require(ReplicatedStorage:WaitForChild("Shared", 60).Configs.StreamingConfig)
+local StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)
 
 local FallSafetyService = {}
 
 local FALL_Y = 0.15 -- Ground top ~0.5; rescue as soon as under / through floor plane
 local COOLDOWN_SEC = 0.9
+local FALL_TOAST = "Rescued from fall — returned to base."
 
 local BaseService: any = nil
 local NotificationService: any = nil
@@ -51030,6 +51575,11 @@ local NotificationService: any = nil
 local lastRescueAt: { [number]: number } = {}
 
 local function rescue(player: Player, root: BasePart)
+	local streaming = StreamPrefetch.Enabled()
+	-- streaming2 S1 (F3): a paused phone waits for its ground; a pre-fetched move home is already on its way
+	if streaming and (player.GameplayPaused or StreamPrefetch.IsMoving(player)) then
+		return
+	end
 	local now = os.clock()
 	local last = lastRescueAt[player.UserId] or 0
 	if now - last < COOLDOWN_SEC then
@@ -51044,15 +51594,16 @@ local function rescue(player: Player, root: BasePart)
 	if BaseService and BaseService.TeleportToPlot then
 		BaseService.TeleportToPlot(player)
 	else
-		-- Fallback: origin above Ground
-		local character = player.Character
-		if character then
-			character:PivotTo(CFrame.new(0, 8, 0))
-		end
+		-- Fallback: origin above Ground (pre-fetched while streaming is on)
+		StreamPrefetch.PivotTo(player, CFrame.new(0, 8, 0))
 	end
 
-	if NotificationService and NotificationService.Notify then
-		NotificationService.Notify(player, "Rescued from fall — returned to base.", "Info", 3)
+	if NotificationService then
+		if streaming and NotificationService.NotifyThrottled then
+			NotificationService.NotifyThrottled(player, FALL_TOAST, "Info", 3, StreamingConfig.FallToastCooldown, "FallSafety")
+		elseif NotificationService.Notify then
+			NotificationService.Notify(player, FALL_TOAST, "Info", 3)
+		end
 	end
 	print("[FallSafety] rescued", player.Name, "from Y<", FALL_Y)
 end
@@ -51099,7 +51650,7 @@ return FallSafetyService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="149">
+        <Item class="ModuleScript" referent="151">
           <Properties>
             <string name="Name">GateDefenseService</string>
             <string name="Source"><![CDATA[--!strict
@@ -51447,6 +51998,9 @@ local respawnGuard: (plotId: number, slot: number, ownerUserId: number, def: Plo
 
 local function spawnGuardModel(ownerUserId: number, slot: number, at: CFrame, stats: any, parent: Folder, plotId: number): GuardUnit
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F10): a gate guard (root, welded kit, Humanoid) reaches a client whole or not at all. Set before
+	-- the model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = "GateGuard_" .. tostring(slot)
 	model:SetAttribute("GateGuard", true)
 	model:SetAttribute("OwnerUserId", ownerUserId)
@@ -51591,6 +52145,8 @@ end
 local function partKitAutoGun(at: CFrame, parent: Instance): (Model, BasePart)
 	-- v35: obvious HMG tripod + long barrel + muzzle tip (readable at gate flanks)
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F10): the AutoGun reaches a client whole or not at all; set before it is parented (below)
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = "GateAutoGun_Fallback"
 	local base = Instance.new("Part")
 	base.Name = "Base"
@@ -51702,6 +52258,8 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 				d.CanCollide = false
 			end
 		end
+		-- streaming2 S4 (F10): the catalog AutoGun is Atomic too, set before it is parented. No effect with streaming off.
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 		model.Parent = parent
 		yawPart = model.PrimaryPart :: BasePart
 		local named = model:FindFirstChild("Barrel", true) or model:FindFirstChild("Yaw", true)
@@ -53015,7 +53573,7 @@ return GateDefenseService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="150">
+        <Item class="ModuleScript" referent="152">
           <Properties>
             <string name="Name">ManualDropperService</string>
             <string name="Source"><![CDATA[--!strict
@@ -53026,6 +53584,12 @@ return GateDefenseService
 	v71 (HUD v70 spec §5): the "$15" tag and the "+$15" pop are Shared/Util/WorldLabel labels owned by the plot's
 	owner (the client filter hides them for everyone else), stud-scaled, never AlwaysOnTop. The plate keeps its
 	glow but no PointLight (light budget).
+
+	streaming2 lane C1 (F5): while Workspace.StreamingEnabled is on, the owner's plate position is stamped on the
+	Player as WE_DropperPos (the ATM-side plate, else the Training Yard one), like UpgradePadService's
+	WE_ConsolePos_<sid> and BusinessService's WE_AtmPos, so the tutorial beam has an end while the plate is streamed
+	out on that client. Stamped on plot ready and kept right by the 2 s owner sync (hand-outs, late claims, release,
+	rebuilt plates). Streaming off: no hook, no attribute (HEAD behaviour).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -53316,6 +53880,45 @@ local function syncTagOwners()
 	end
 end
 
+-- C1 F5: the tutorial's dropper position (see the header). Only while streaming is on (a place setting).
+local ATTR_DROPPER_POS = "WE_DropperPos"
+
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
+
+-- the plate the tutorial points at on a plot: the one beside the ATM, else the Training Yard one
+local function dropperPosOf(plotId: number): Vector3?
+	local best: BasePart? = nil
+	for pad in pairs(wired) do
+		if pad.Parent and pad:GetAttribute("PlotId") == plotId and (best == nil or pad.Name == "ManualDropper_Collector") then
+			best = pad
+		end
+	end
+	return if best then best.Position else nil
+end
+
+local function stampDropperPos(player: Player, plotId: number?)
+	if player.Parent == nil or not streamingOn() then
+		return
+	end
+	local pos = if plotId ~= nil then dropperPosOf(plotId) else nil
+	if player:GetAttribute(ATTR_DROPPER_POS) ~= pos then
+		player:SetAttribute(ATTR_DROPPER_POS, pos)
+	end
+end
+
+-- every player's stamp follows the plot they own now (nil when they have none)
+local function syncDropperStamps()
+	if not (streamingOn() and BaseService and BaseService.GetOwnedPlotId) then
+		return
+	end
+	for _, player in ipairs(Players:GetPlayers()) do
+		local ok, plotId = pcall(BaseService.GetOwnedPlotId, player)
+		stampDropperPos(player, if ok and typeof(plotId) == "number" then plotId else nil)
+	end
+end
+
 local function wireDropper(pad: BasePart)
 	if wired[pad] then
 		return
@@ -53483,10 +54086,16 @@ function ManualDropperService.Init(deps: { [string]: any })
 		end)
 	end)
 
+	-- C1 F5: the tutorial's dropper position on the owner (streaming only; see the header)
+	if streamingOn() and BaseService and BaseService.OnPlotReady then
+		BaseService.OnPlotReady(stampDropperPos)
+	end
+
 	task.spawn(function()
 		while true do
 			task.wait(2)
 			syncTagOwners()
+			syncDropperStamps()
 		end
 	end)
 
@@ -53497,7 +54106,7 @@ return ManualDropperService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="151">
+        <Item class="ModuleScript" referent="153">
           <Properties>
             <string name="Name">MissileStrikeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -54224,7 +54833,7 @@ return MissileStrikeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="152">
+        <Item class="ModuleScript" referent="154">
           <Properties>
             <string name="Name">MissionService</string>
             <string name="Source"><![CDATA[--!strict
@@ -55294,7 +55903,7 @@ return MissionService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="153">
+        <Item class="ModuleScript" referent="155">
           <Properties>
             <string name="Name">MonetizationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -56838,7 +57447,7 @@ return MonetizationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="154">
+        <Item class="ModuleScript" referent="156">
           <Properties>
             <string name="Name">MoneyCollectorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -58217,7 +58826,7 @@ return MoneyCollectorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="155">
+        <Item class="ModuleScript" referent="157">
           <Properties>
             <string name="Name">NationColorService</string>
             <string name="Source"><![CDATA[--!strict
@@ -58783,7 +59392,7 @@ return NationColorService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="156">
+        <Item class="ModuleScript" referent="158">
           <Properties>
             <string name="Name">NotificationService</string>
             <string name="Source"><![CDATA[--!strict
@@ -58856,7 +59465,7 @@ return NotificationService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="157">
+        <Item class="ModuleScript" referent="159">
           <Properties>
             <string name="Name">OpsService</string>
             <string name="Source"><![CDATA[--!strict
@@ -60005,7 +60614,7 @@ end
 return OpsService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="158">
+          <Item class="ModuleScript" referent="160">
             <Properties>
               <string name="Name">OpsCargo</string>
               <string name="Source"><![CDATA[--!strict
@@ -60478,7 +61087,7 @@ return OpsCargo
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="159">
+          <Item class="ModuleScript" referent="161">
             <Properties>
               <string name="Name">OpsDirector</string>
               <string name="Source"><![CDATA[--!strict
@@ -60626,7 +61235,7 @@ return OpsDirector
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="160">
+          <Item class="ModuleScript" referent="162">
             <Properties>
               <string name="Name">OpsGarrison</string>
               <string name="Source"><![CDATA[--!strict
@@ -61123,7 +61732,7 @@ return OpsGarrison
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="161">
+          <Item class="ModuleScript" referent="163">
             <Properties>
               <string name="Name">OpsKinds</string>
               <string name="Source"><![CDATA[--!strict
@@ -61952,7 +62561,7 @@ return OpsKinds
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="162">
+          <Item class="ModuleScript" referent="164">
             <Properties>
               <string name="Name">OpsRewards</string>
               <string name="Source"><![CDATA[--!strict
@@ -62250,7 +62859,7 @@ return OpsRewards
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="163">
+          <Item class="ModuleScript" referent="165">
             <Properties>
               <string name="Name">OpsSites</string>
               <string name="Source"><![CDATA[--!strict
@@ -62716,7 +63325,7 @@ return OpsSites
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="164">
+          <Item class="ModuleScript" referent="166">
             <Properties>
               <string name="Name">OpsZones</string>
               <string name="Source"><![CDATA[--!strict
@@ -62905,7 +63514,7 @@ return OpsZones
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="165">
+        <Item class="ModuleScript" referent="167">
           <Properties>
             <string name="Name">PlotOilPumpService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63024,6 +63633,9 @@ end
 
 local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F11): the pump (pad, derrick, beam, head) reaches a client whole or not at all. Set before the
+	-- model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = "PlotOilPump_" .. tostring(index)
 
 	local pad = Instance.new("Part")
@@ -63334,7 +63946,7 @@ return PlotOilPumpService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="166">
+        <Item class="ModuleScript" referent="168">
           <Properties>
             <string name="Name">PremiumPadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -63754,7 +64366,7 @@ return PremiumPadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="167">
+        <Item class="ModuleScript" referent="169">
           <Properties>
             <string name="Name">PrestigeService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64392,7 +65004,7 @@ return PrestigeService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="168">
+        <Item class="ModuleScript" referent="170">
           <Properties>
             <string name="Name">RateLimitService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64444,7 +65056,7 @@ return RateLimitService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="169">
+        <Item class="ModuleScript" referent="171">
           <Properties>
             <string name="Name">ResearchService</string>
             <string name="Source"><![CDATA[--!strict
@@ -64942,7 +65554,7 @@ return ResearchService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="170">
+        <Item class="ModuleScript" referent="172">
           <Properties>
             <string name="Name">SeasonService</string>
             <string name="Source"><![CDATA[--!strict
@@ -65206,7 +65818,7 @@ return SeasonService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="171">
+        <Item class="ModuleScript" referent="173">
           <Properties>
             <string name="Name">SoldierService</string>
             <string name="Source"><![CDATA[--!strict
@@ -65610,7 +66222,7 @@ return SoldierService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="172">
+        <Item class="ModuleScript" referent="174">
           <Properties>
             <string name="Name">SpinnerService</string>
             <string name="Source"><![CDATA[--!strict
@@ -65769,7 +66381,7 @@ return SpinnerService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="173">
+        <Item class="ModuleScript" referent="175">
           <Properties>
             <string name="Name">SquadOrdersService</string>
             <string name="Source"><![CDATA[--!strict
@@ -66261,6 +66873,9 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	local id = string.format("squad_%d_%d", owner.UserId, unitSerial)
 
 	local model = Instance.new("Model")
+	-- streaming2 S4 (F10): a squad soldier (root, welded kit, Humanoid, catalog visual) reaches a client whole or not at
+	-- all. Set before the model is parented (it is filled first, parented below). No effect with streaming off.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = (OrdersConfig.DisplayName or "Squad") .. tostring(slot)
 	model:SetAttribute("SquadUnitId", id)
 	model:SetAttribute("OwnerUserId", owner.UserId)
@@ -66944,7 +67559,7 @@ return SquadOrdersService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="174">
+        <Item class="ModuleScript" referent="176">
           <Properties>
             <string name="Name">SupplyDropService</string>
             <string name="Source"><![CDATA[--!strict
@@ -67266,7 +67881,7 @@ return SupplyDropService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="175">
+        <Item class="ModuleScript" referent="177">
           <Properties>
             <string name="Name">TerritoryService</string>
             <string name="Source"><![CDATA[--!strict
@@ -67298,10 +67913,17 @@ return SupplyDropService
 	      blue or contested amber (legacy roster colour, else green); a leaver's colour is kept while that UserId still
 	      owns a zone (R15, then dropped); outpost nation flags (Textures only, never a SurfaceGui) and their sizes sit
 	      behind NationConfig.OutpostFlags (off), shown only on a Player-owned, uncontested zone (RefreshOwnerFlags).
+	Streaming 2, lane C2 (spec F7): Radar Hill reveals the other players within RadarRevealRadius (550), but under
+	      instance streaming a client holds only the characters inside its stream radius (StreamingMinRadius 64 on a
+	      phone short of memory). While Workspace.StreamingEnabled, a radar holder's payload lists them as RadarTargets
+	      (UserId + HumanoidRootPart position, Instance-free, nearest first) and the holder gets its own payload every
+	      RADAR_STREAM.PushSeconds, so TerritoryController can mark the ones it has not streamed in. With streaming off
+	      the payload and the push rate are exactly as before (every character is on every client).
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
@@ -67360,6 +67982,13 @@ local territories: { [string]: TerritoryRuntime } = {}
 local firstOutpostLogged: { [number]: boolean } = {}
 local lastPushAt = 0
 local pushDirty = true
+
+-- Streaming 2, lane C2 (see the header). Candidates for TerritoryConfig (lane C2 may edit only its three files).
+local RADAR_STREAM = {
+	PushSeconds = 1, -- a radar holder's own payload rate while streaming is on (the full push is every 2 s idle)
+	MaxTargets = 16, -- nearest first; the client draws at most 5 markers
+}
+local lastRadarPushAt: { [Player]: number } = {} -- os.clock() of the last payload that carried RadarTargets
 
 local function ownerTypes()
 	return TerritoryConfig.OwnerTypes
@@ -67829,6 +68458,61 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	end
 end
 
+-- lane C2: Workspace.StreamingEnabled (a place setting the engine fixes for the server's life; read per call, pcall'd)
+local function streamingOn(): boolean
+	local ok, on = pcall(function()
+		return Workspace.StreamingEnabled
+	end)
+	return ok and on == true
+end
+
+local function liveRoot(p: Player): BasePart?
+	local character = p.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if root and root:IsA("BasePart") and humanoid and humanoid.Health > 0 then
+		return root
+	end
+	return nil
+end
+
+--[[ lane C2 (F7): the players a radar holder reveals, as the client decides for the characters it holds (every other
+	living player whose HumanoidRootPart is within radius of the holder's): UserId + position, nearest first, at most
+	RADAR_STREAM.MaxTargets. Instance-free (F31). Server data only: nothing here comes from a client. ]]
+local function radarTargetsFor(viewer: Player, radius: number): { Types.RadarTargetPayload }
+	local out: { Types.RadarTargetPayload } = {}
+	local myRoot = liveRoot(viewer)
+	if not myRoot then
+		return out
+	end
+	local origin = myRoot.Position
+	local dist: { [number]: number } = {}
+	for _, other in ipairs(Players:GetPlayers()) do
+		if other ~= viewer then
+			local root = liveRoot(other)
+			if root then
+				local pos = root.Position
+				local d = (pos - origin).Magnitude
+				if d <= radius then
+					dist[other.UserId] = d
+					table.insert(out, { UserId = other.UserId, Pos = pos })
+				end
+			end
+		end
+	end
+	table.sort(out, function(a: Types.RadarTargetPayload, b: Types.RadarTargetPayload): boolean
+		local da, db = dist[a.UserId], dist[b.UserId]
+		if da ~= db then
+			return da < db
+		end
+		return a.UserId < b.UserId
+	end)
+	for i = #out, RADAR_STREAM.MaxTargets + 1, -1 do
+		out[i] = nil
+	end
+	return out
+end
+
 local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePayload
 	local list: { Types.TerritoryEntryPayload } = {}
 	local localCapture = {
@@ -67900,12 +68584,18 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 		radar = TerritoryService.HasRadarReveal(player)
 	end
 
-	return {
+	local payload: Types.TerritoryStatePayload = {
 		Territories = list,
 		LocalCapture = localCapture,
 		RadarReveal = radar,
 		RadarRadius = radarRadius,
 	}
+	-- lane C2 (F7): the reveal list, only while streaming is on (nil otherwise: the payload is as before)
+	if player and radar and streamingOn() then
+		payload.RadarTargets = radarTargetsFor(player, radarRadius)
+		lastRadarPushAt[player] = os.clock()
+	end
+	return payload
 end
 
 function TerritoryService.PushAll()
@@ -68533,6 +69223,7 @@ function TerritoryService.Init(deps: { [string]: any })
 		-- F10: a Home Outpost always goes back to Neutral when its owner leaves.
 		local uid = player.UserId
 		firstOutpostLogged[uid] = nil
+		lastRadarPushAt[player] = nil
 		local persist = persistClaimsOn()
 		for _, rt in pairs(territories) do
 			if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == uid and (persist or isStarterRt(rt)) then
@@ -68567,6 +69258,16 @@ function TerritoryService.Init(deps: { [string]: any })
 					pushDirty = false
 				end
 			end
+			-- lane C2 (F7): while streaming is on, a radar holder's markers move only when a payload lands, so a
+			-- holder gets its own every RADAR_STREAM.PushSeconds (one or two players at a time; nothing when off)
+			if streamingOn() then
+				for _, player in ipairs(Players:GetPlayers()) do
+					local last = lastRadarPushAt[player]
+					if (last == nil or now - last >= RADAR_STREAM.PushSeconds) and TerritoryService.HasRadarReveal(player) then
+						TerritoryService.PushPlayer(player)
+					end
+				end
+			end
 		end
 	end)
 
@@ -68584,7 +69285,7 @@ end
 return TerritoryService
 ]]></string>
           </Properties>
-          <Item class="ModuleScript" referent="176">
+          <Item class="ModuleScript" referent="178">
             <Properties>
               <string name="Name">TerritoryCapture</string>
               <string name="Source"><![CDATA[--!strict
@@ -68714,7 +69415,7 @@ return TerritoryCapture
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="177">
+          <Item class="ModuleScript" referent="179">
             <Properties>
               <string name="Name">TerritoryOwnership</string>
               <string name="Source"><![CDATA[--!strict
@@ -68791,7 +69492,7 @@ return TerritoryOwnership
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="178">
+          <Item class="ModuleScript" referent="180">
             <Properties>
               <string name="Name">TerritoryRadar</string>
               <string name="Source"><![CDATA[--!strict
@@ -68860,7 +69561,7 @@ return TerritoryRadar
             </Properties>
           </Item>
         </Item>
-        <Item class="ModuleScript" referent="179">
+        <Item class="ModuleScript" referent="181">
           <Properties>
             <string name="Name">TutorialService</string>
             <string name="Source"><![CDATA[--!strict
@@ -69334,7 +70035,7 @@ return TutorialService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="180">
+        <Item class="ModuleScript" referent="182">
           <Properties>
             <string name="Name">UpgradePadService</string>
             <string name="Source"><![CDATA[--!strict
@@ -70046,7 +70747,7 @@ return UpgradePadService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="181">
+        <Item class="ModuleScript" referent="183">
           <Properties>
             <string name="Name">VehicleService</string>
             <string name="Source"><![CDATA[--!strict
@@ -70098,6 +70799,9 @@ local VehicleService = {}
 -- W2 (CC-2): vehicle HP for every vehicle. A module-table field, not a local (this file sits at Luau's 200-register
 -- limit for module locals).
 VehicleService._VehicleHealth = require(script.Parent.Parent.Modules.VehicleHealth)
+-- streaming2 S3 (F8): pre-fetches a far seat's area before the auto-sit move (RequestSpawn). A no-op while
+-- Workspace.StreamingEnabled is false. A module-table field for the same register-limit reason.
+VehicleService._StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)
 
 local Drive = VehicleConfig.Drive
 local CarCfg = Drive.Modes.Car
@@ -71340,6 +72044,10 @@ end
 
 local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: number, bonus: number?, armorMult: number?): Model
 	local model = Instance.new("Model")
+	-- streaming2 S3 (F9): the chassis and each hinge-wheel assembly stream as one unit, so a phone never gets a
+	-- chassis without wheels. Set before the model is ever parented, because the mode applies from the first
+	-- replication. It has no effect while Workspace.StreamingEnabled is false.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model.Name = def.DisplayName
 	model:SetAttribute("VehicleId", def.Id)
 	model:SetAttribute("OwnerUserId", ownerUserId)
@@ -74187,7 +74895,21 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			return hrp ~= nil and hrp:IsA("BasePart") and (hrp.Position - rec.Chassis.Position).Magnitude - reach <= sitRadius
 		end
 		autoSeat = seatNear()
-		local function trySit()
+		-- streaming2 S3 (F8): before moving the player onto a seat further away than StreamingConfig.NearStuds, the
+		-- server asks for that area to stream in first. It sends one RequestStreamAroundAsync per spawn, with timeout
+		-- Drive.Spawn.AutoSitPrefetchTimeout, so the driver's client never takes over the physics on ground it has not
+		-- loaded. Sit attempts that fire while the request runs do nothing, and the attempt schedule restarts when it
+		-- returns. With streaming off there is no request and the moves are the same as before.
+		local prefetch = "none" -- "none" | "running" | "done"
+		local trySit: () -> ()
+		local function scheduleSits()
+			task.defer(trySit)
+			task.delay(0.2, trySit)
+			task.delay(0.5, trySit)
+			task.delay(1.0, trySit)
+			task.delay(2.0, trySit)
+		end
+		trySit = function()
 			if rec.EverSeated or not player.Parent or not model.Parent or not seat.Parent then
 				return
 			end
@@ -74195,6 +74917,19 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			local hum = character and character:FindFirstChildOfClass("Humanoid")
 			local hrp = character and character:FindFirstChild("HumanoidRootPart") :: BasePart?
 			if hum and hrp and seat.Occupant == nil and seatNear() then
+				local StreamPrefetch = VehicleService._StreamPrefetch
+				if prefetch ~= "done" and StreamPrefetch.Enabled() then
+					local dest = (seat.CFrame * CFrame.new(0, 2.5, 0)).Position -- where the move below puts the root part
+					if not StreamPrefetch.IsNear(player, dest) then
+						if prefetch == "none" then
+							prefetch = "running"
+							StreamPrefetch.Request(player, dest, SpawnCfg.AutoSitPrefetchTimeout) -- yields; pcall'd inside
+							prefetch = "done"
+							scheduleSits() -- re-runs every check: the player, vehicle or seat may have changed meanwhile
+						end
+						return
+					end
+				end
 				-- Place character on seat so Sit always has a valid near-seat humanoid
 				hrp.CFrame = seat.CFrame * CFrame.new(0, 2.5, 0)
 				pcall(function()
@@ -74202,11 +74937,7 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 				end)
 			end
 		end
-		task.defer(trySit)
-		task.delay(0.2, trySit)
-		task.delay(0.5, trySit)
-		task.delay(1.0, trySit)
-		task.delay(2.0, trySit)
+		scheduleSits()
 	end
 
 	if profile.Stats then
@@ -74468,7 +75199,7 @@ return VehicleService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="182">
+        <Item class="ModuleScript" referent="184">
           <Properties>
             <string name="Name">VisualAssetService</string>
             <string name="Source"><![CDATA[--!strict
@@ -76449,7 +77180,7 @@ return VisualAssetService
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="183">
+        <Item class="ModuleScript" referent="185">
           <Properties>
             <string name="Name">XPService</string>
             <string name="Source"><![CDATA[--!strict
@@ -76615,19 +77346,19 @@ return XPService
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="184">
+  <Item class="StarterPlayer" referent="186">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="185">
+    <Item class="StarterPlayerScripts" referent="187">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="186">
+      <Item class="Folder" referent="188">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="187">
+        <Item class="LocalScript" referent="189">
           <Properties>
             <string name="Name">Bootstrap</string>
             <string name="Source"><![CDATA[--!strict
@@ -76687,11 +77418,11 @@ print("[WAR EMPIRE] Client Bootstrap ready.")
 ]]></string>
           </Properties>
         </Item>
-        <Item class="Folder" referent="188">
+        <Item class="Folder" referent="190">
           <Properties>
             <string name="Name">Controllers</string>
           </Properties>
-          <Item class="ModuleScript" referent="189">
+          <Item class="ModuleScript" referent="191">
             <Properties>
               <string name="Name">ArmyController</string>
               <string name="Source"><![CDATA[--!strict
@@ -77352,7 +78083,7 @@ return ArmyController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="190">
+          <Item class="ModuleScript" referent="192">
             <Properties>
               <string name="Name">BankRaidController</string>
               <string name="Source"><![CDATA[--!strict
@@ -77371,11 +78102,18 @@ return ArmyController
 	is not). Refreshed at 1 Hz only while a cooldown runs or has just ended; the label is found through the vault's
 	CollectionService tag (streaming-safe: no label streamed in → nothing to draw). Display only: the server decides
 	every payout.
+
+	streaming2 lane C4 (F22): the kept label counts as live only while it IsDescendantOf(Workspace). When the vault
+	streams out, the engine parents the top of what left (the vault, or the bank Model above it) to nil, so the
+	label's own Parent stays set; the old `bb.Parent` test kept writing into a label that was not in the world. Now it
+	is dropped and found again through the tag once it is back (the LabelGovernor pattern). With streaming off the
+	two tests agree: a destroyed label has no Parent.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
@@ -77448,7 +78186,7 @@ end
 -- ── the bank's world label: this player's CLOSED line ───────────────────────────────────────────────────────
 local function findLabel(): BillboardGui?
 	local bb = labelRef
-	if bb and bb.Parent then
+	if bb and bb:IsDescendantOf(Workspace) then -- F22: Parent stays set when the vault streams out
 		return bb
 	end
 	labelRef = nil
@@ -77618,7 +78356,7 @@ return BankRaidController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="191">
+          <Item class="ModuleScript" referent="193">
             <Properties>
               <string name="Name">BaseController</string>
               <string name="Source"><![CDATA[--!strict
@@ -78309,7 +79047,7 @@ return BaseController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="192">
+          <Item class="ModuleScript" referent="194">
             <Properties>
               <string name="Name">CombatController</string>
               <string name="Source"><![CDATA[--!strict
@@ -78390,6 +79128,15 @@ return BaseController
 	  DRAWN                  RequestSetDrawn (boolean, trailing-edge, <= 2/s) so the server sets WE_GunOut for the
 	                         other clients' gun models.
 	  (W2 state lives in the Feel / W2 tables: this module is near Luau's 200-local limit.)
+
+	STREAMING (streaming2 lane C4)
+	  F16  A new character's Humanoid binds whenever it arrives (char.ChildAdded, the HudLayout pattern), not
+	       through a 10 s WaitForChild after which combat stayed unbound for the whole life. While
+	       Workspace.StreamingEnabled is on there is no time limit (a character is parented before its descendants
+	       have replicated); the next character and CharacterRemoving end the wait. Streaming off: the character
+	       arrives whole, and the wait still gives up after 10 s, as at 0a04776.
+	  F30  The local fire ray and the holstered-FIRE line-of-sight rays see only streamed-in geometry. Both are
+	       hints: the server re-casts every shot on the whole world and decides the hit.
 ]]
 
 local Players = game:GetService("Players")
@@ -78435,6 +79182,9 @@ type FeelState = {
 	DrawnTimer: boolean,
 	LastDrawnSendAt: number,
 	Bloom: UIScale?,
+	HumWait: RBXScriptConnection?, -- streaming2 F16: the character's ChildAdded until its Humanoid arrives
+	HumWaitChar: Instance?, -- the character that wait belongs to
+	HumWaitSerial: number, -- bumped whenever that wait ends (a pending streaming-off give-up checks it)
 }
 local Feel: FeelState
 do
@@ -78476,6 +79226,9 @@ do
 		DrawnTimer = false,
 		LastDrawnSendAt = -math.huge,
 		Bloom = nil,
+		HumWait = nil,
+		HumWaitChar = nil,
+		HumWaitSerial = 0,
 	}
 end
 local W2 = {} -- W2 helper functions (defined below, as table fields for the same register reason)
@@ -79599,6 +80352,8 @@ requestFire = function()
 	local wid = activeWeaponId() or currentWeaponId
 	local def = if wid then WeaponConfig.Weapons[wid] else nil
 	local reach = if def then (tonumber(def.Range) or 496) + Feel.HitSlop else 500
+	-- streaming2 F30: this ray sees only what has streamed in here (a far wall may be missing), so HitPosition and the
+	-- target ids are hints; the server re-casts on the whole world and decides the hit
 	local result = Workspace:Raycast(origin, direction * reach, W2.shotFilter())
 	if result then
 		payload.HitPosition = result.Position
@@ -79821,6 +80576,7 @@ local function scanHostiles(): boolean
 			lastScanResult = true -- the camera sits on the target: nothing can be in between
 			break
 		end
+		-- streaming2 F30: sees only streamed-in walls, so FIRE can dim on a target behind unstreamed cover (display only)
 		local hit = Workspace:Raycast(origin, dir, params)
 		if hit == nil or hit.Instance:IsDescendantOf(candModel[best]) then
 			lastScanResult = true
@@ -80363,7 +81119,23 @@ local function bindHumanoid(hum: Humanoid)
 	onSeatContext()
 end
 
+-- streaming2 F16: end the wait for a late Humanoid (next character, bound, the off give-up, or CharacterRemoving of
+-- the character it belongs to: `removed`)
+function W2.stopHumanoidWait(removed: Instance?)
+	if removed ~= nil and removed ~= Feel.HumWaitChar then
+		return
+	end
+	Feel.HumWaitSerial += 1
+	local c = Feel.HumWait
+	Feel.HumWait = nil
+	Feel.HumWaitChar = nil
+	if c then
+		c:Disconnect()
+	end
+end
+
 local function onCharacter(char: Model)
+	W2.stopHumanoidWait()
 	-- every life starts holstered (HudConfig.Hotbar.DrawnOnSpawn)
 	drawn = HB.DrawnOnSpawn == true
 	stopFiring()
@@ -80375,12 +81147,23 @@ local function onCharacter(char: Model)
 		bindHumanoid(h)
 		return
 	end
-	task.spawn(function()
-		local found = char:WaitForChild("Humanoid", 10)
-		if found and found:IsA("Humanoid") and player.Character == char then
-			bindHumanoid(found)
+	-- streaming2 F16: bind the Humanoid whenever it arrives (the HudLayout pattern)
+	Feel.HumWaitChar = char
+	Feel.HumWait = char.ChildAdded:Connect(function(c: Instance)
+		if c:IsA("Humanoid") and player.Character == char then
+			W2.stopHumanoidWait()
+			bindHumanoid(c)
 		end
 	end)
+	if Workspace.StreamingEnabled ~= true then
+		-- streaming off: the character arrives whole, so give up after 10 s as 0a04776 did
+		local serial = Feel.HumWaitSerial
+		task.delay(10, function()
+			if Feel.HumWaitSerial == serial then
+				W2.stopHumanoidWait()
+			end
+		end)
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -80486,6 +81269,7 @@ function CombatController.Init()
 	HudLayout.LayoutChanged:Connect(placeCombatControls)
 
 	player.CharacterAdded:Connect(onCharacter)
+	player.CharacterRemoving:Connect(W2.stopHumanoidWait) -- streaming2 F16
 	if player.Character then
 		onCharacter(player.Character)
 	end
@@ -80596,7 +81380,7 @@ return CombatController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="193">
+          <Item class="ModuleScript" referent="195">
             <Properties>
               <string name="Name">CompassController</string>
               <string name="Source"><![CDATA[--!strict
@@ -80946,7 +81730,7 @@ return CompassController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="194">
+          <Item class="ModuleScript" referent="196">
             <Properties>
               <string name="Name">HUDController</string>
               <string name="Source"><![CDATA[--!strict
@@ -82795,7 +83579,7 @@ return HUDController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="195">
+          <Item class="ModuleScript" referent="197">
             <Properties>
               <string name="Name">MissileController</string>
               <string name="Source"><![CDATA[--!strict
@@ -84673,7 +85457,7 @@ return MissileController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="196">
+          <Item class="ModuleScript" referent="198">
             <Properties>
               <string name="Name">MissionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -85617,7 +86401,7 @@ return MissionController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="197">
+          <Item class="ModuleScript" referent="199">
             <Properties>
               <string name="Name">NationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -87073,7 +87857,7 @@ return NationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="198">
+          <Item class="ModuleScript" referent="200">
             <Properties>
               <string name="Name">NotificationController</string>
               <string name="Source"><![CDATA[--!strict
@@ -88170,7 +88954,7 @@ return NotificationController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="199">
+          <Item class="ModuleScript" referent="201">
             <Properties>
               <string name="Name">OpsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -89063,7 +89847,7 @@ return OpsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="200">
+          <Item class="ModuleScript" referent="202">
             <Properties>
               <string name="Name">OrdersController</string>
               <string name="Source"><![CDATA[--!strict
@@ -89619,7 +90403,7 @@ return OrdersController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="201">
+          <Item class="ModuleScript" referent="203">
             <Properties>
               <string name="Name">ProgressionController</string>
               <string name="Source"><![CDATA[--!strict
@@ -90589,7 +91373,7 @@ end
 return ProgressionController
 ]]></string>
             </Properties>
-            <Item class="ModuleScript" referent="202">
+            <Item class="ModuleScript" referent="204">
               <Properties>
                 <string name="Name">ProgressionBattlePass</string>
                 <string name="Source"><![CDATA[--!strict
@@ -90750,7 +91534,7 @@ return ProgressionBattlePass
 ]]></string>
               </Properties>
             </Item>
-            <Item class="ModuleScript" referent="203">
+            <Item class="ModuleScript" referent="205">
               <Properties>
                 <string name="Name">ProgressionUI</string>
                 <string name="Source"><![CDATA[--!strict
@@ -90790,7 +91574,7 @@ return ProgressionUI
               </Properties>
             </Item>
           </Item>
-          <Item class="ModuleScript" referent="204">
+          <Item class="ModuleScript" referent="206">
             <Properties>
               <string name="Name">PromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -91697,7 +92481,7 @@ return PromptController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="205">
+          <Item class="ModuleScript" referent="207">
             <Properties>
               <string name="Name">ResearchController</string>
               <string name="Source"><![CDATA[--!strict
@@ -92789,7 +93573,7 @@ return ResearchController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="206">
+          <Item class="ModuleScript" referent="208">
             <Properties>
               <string name="Name">SettingsController</string>
               <string name="Source"><![CDATA[--!strict
@@ -93291,7 +94075,7 @@ return SettingsController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="207">
+          <Item class="ModuleScript" referent="209">
             <Properties>
               <string name="Name">ShopController</string>
               <string name="Source"><![CDATA[--!strict
@@ -95064,7 +95848,7 @@ return ShopController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="208">
+          <Item class="ModuleScript" referent="210">
             <Properties>
               <string name="Name">TerritoryController</string>
               <string name="Source"><![CDATA[--!strict
@@ -95089,6 +95873,16 @@ return ShopController
 	  plot from BaseStateUpdate / PlayerStateUpdate); other plots' Home Outposts are never listed or counted.
 	* RADAR HILL reveal → the HudLayout flag "Radar" (CompassController draws the purple dot on the chip) + the
 	  enemy Highlights (kept) + a "RADAR ON" row in the list.
+	  Streaming 2, lane C2 (spec F7): under instance streaming this client holds only the characters inside its stream
+	  radius (StreamingMinRadius 64 on a phone short of memory), not all 550 studs of the reveal. While streaming is on
+	  the server adds RadarTargets (UserId + position) to the payload: a revealed character this client holds keeps the
+	  Highlight; one it does not hold gets a radar ping instead: a thin column (a Beam between two Attachments on
+	  Workspace.Terrain, which never streams out) rising from the server's position, sized in real px from the camera
+	  (5 x 64 px at any range), at most RADAR_PING.Max, nearest first, updated with the 5 Hz radar tick. No text and no
+	  BillboardGui (a world label caps MaxDistance at 40 and these players are always farther than 64), never
+	  AlwaysOnTop, no connections. With streaming off there is no list and the reveal is exactly the old one.
+	  F22: a flag diamond counts as present only while it IsDescendantOf(Workspace) (its Parent stays set when the flag
+	  streams out).
 	* W3 step 2 lane U0 — ONE AlwaysOnTop label: TerritoryService makes a flag's WE_FlagBillboard diamond draw through
 	  walls while the zone is contested (WorldLabel.SetRole "contested"). While an objective marker is on screen
 	  (ObjectiveMarker.OnTop(): a mission GO line, or the ConsoleWaypoint line it yields to) this client turns that
@@ -95101,6 +95895,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- ships with the place (Rojo); bounded wait anyway
 local Constants = require(Shared.Constants)
@@ -95135,6 +95930,30 @@ local contestedColB: Color3? = nil
 local radarActive = false
 local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
+-- lane C2 (F7): the server's reveal list (only while streaming is on; nil = none: the Highlight loop alone decides)
+local radarTargets: { Types.RadarTargetPayload }? = nil
+local radarTargetsAt = 0 -- os.clock() when that list arrived
+type Ping = { Base: Attachment, Top: Attachment, Beam: Beam, Pos: Vector3, Width: number, Height: number }
+local radarPings: { [number]: Ping } = {} -- UserId -> its ping
+local pingWanted: { [number]: boolean } = {} -- reused by every radar tick (no allocation per tick)
+-- The ping's look. A Beam has no MaxDistance and draws at any range, hidden by the world like any part; its size is
+-- set in REAL px from the camera (studs = px x distance x view height per px), so a ping 530 studs away reads as well
+-- as one at 80. Candidates for TerritoryConfig / HudConfig (lane C2 may edit only its three files).
+local RADAR_PING = {
+	Max = 5, -- pings at once (the server sends nearest first); spec lane C2: <= 5, the CLAUDE.md outpost label cap
+	WidthPx = 5, -- real px at the bottom (FaceCamera), a quarter of that at the top
+	HeightPx = 64, -- real px tall, upward from the reported root position
+	MinWidthStuds = 1, -- floors for a very near ping
+	MinHeightStuds = 12,
+	ResizeRatio = 0.08, -- rewrite the size only when it is off by more than this (camera moved)
+	ColorBase = Color3.fromRGB(200, 80, 80), -- the reveal Highlight's fill ...
+	ColorTop = Color3.fromRGB(255, 180, 80), -- ... and outline
+	TransparencyBase = 0.15,
+	TransparencyTop = 0.85,
+	LightEmission = 1,
+	MoveStuds = 0.5, -- re-place a ping only when its target moved this far
+	StaleSeconds = 5, -- no fresh list for this long (a holder gets one about every 1 s): the pings go
+}
 
 -- F3 Empire Tax toast + list header (see the header comment)
 local BUFF = EconomyConfig.OutpostIncomeBuff
@@ -95216,8 +96035,24 @@ local function touchMinV(): number
 end
 
 ---------------------------------------------------------------------------------------------------------------
--- radar (Radar Hill reveal) — unchanged behaviour, the badge became the "Radar" flag
+-- radar (Radar Hill reveal) — the badge became the "Radar" flag; lane C2 adds the pings while streaming is on
 ---------------------------------------------------------------------------------------------------------------
+
+local function destroyPing(userId: number)
+	local ping = radarPings[userId]
+	if ping then
+		radarPings[userId] = nil
+		ping.Beam:Destroy()
+		ping.Base:Destroy()
+		ping.Top:Destroy()
+	end
+end
+
+local function clearRadarPings()
+	for userId in pairs(radarPings) do
+		destroyPing(userId)
+	end
+end
 
 local function clearRadarHighlights()
 	for userId, h in pairs(radarHighlights) do
@@ -95225,6 +96060,115 @@ local function clearRadarHighlights()
 			h:Destroy()
 		end
 		radarHighlights[userId] = nil
+	end
+	clearRadarPings() -- lane C2: the pings go with the Highlights (none exist while streaming is off)
+end
+
+-- lane C2: studs per real px per stud of distance for this camera (vertical view), and the camera's position
+local function pingScale(): (number, Vector3?)
+	local cam = Workspace.CurrentCamera
+	local fov = if cam then cam.FieldOfView else 70
+	local viewH = if cam then cam.ViewportSize.Y else 0
+	if typeof(fov) ~= "number" or fov <= 1 or fov >= 179 then
+		fov = 70
+	end
+	if typeof(viewH) ~= "number" or viewH < 100 then
+		viewH = 390 -- a phone in landscape
+	end
+	return 2 * math.tan(math.rad(fov) * 0.5) / viewH, if cam then cam.CFrame.Position else nil
+end
+
+-- lane C2: a ping for userId at pos (Terrain's frame is the world frame), RADAR_PING.WidthPx x HeightPx real px as
+-- seen from camPos; built once, then only moved / resized
+local function placePing(userId: number, pos: Vector3, terrain: Terrain, perPx: number, camPos: Vector3?)
+	local d = if camPos then math.max((camPos - pos).Magnitude, 1) else radarRadius
+	local width = math.max(RADAR_PING.WidthPx * perPx * d, RADAR_PING.MinWidthStuds)
+	local height = math.max(RADAR_PING.HeightPx * perPx * d, RADAR_PING.MinHeightStuds)
+	local ping: Ping? = radarPings[userId]
+	if ping and ping.Base.Parent ~= terrain then
+		destroyPing(userId) -- someone removed it: build it again
+		ping = nil
+	end
+	if ping then
+		local moved = (ping.Pos - pos).Magnitude >= RADAR_PING.MoveStuds
+		local resized = math.abs(width - ping.Width) > ping.Width * RADAR_PING.ResizeRatio
+		if resized then
+			ping.Beam.Width0 = width
+			ping.Beam.Width1 = width * 0.25
+			ping.Width = width
+			ping.Height = height
+		end
+		if moved then
+			ping.Base.Position = pos
+			ping.Pos = pos
+		end
+		if moved or resized then
+			ping.Top.Position = pos + Vector3.new(0, ping.Height, 0)
+		end
+		return
+	end
+	local base = Instance.new("Attachment")
+	base.Name = "WE_RadarPingBase"
+	base.Position = pos
+	base.Parent = terrain
+	local top = Instance.new("Attachment")
+	top.Name = "WE_RadarPingTop"
+	top.Position = pos + Vector3.new(0, height, 0)
+	top.Parent = terrain
+	local beam = Instance.new("Beam")
+	beam.Name = "WE_RadarPing"
+	beam.Attachment0 = base
+	beam.Attachment1 = top
+	beam.FaceCamera = true
+	beam.Segments = 1
+	beam.Width0 = width
+	beam.Width1 = width * 0.25
+	beam.LightEmission = RADAR_PING.LightEmission
+	beam.LightInfluence = 0
+	beam.Color = ColorSequence.new(RADAR_PING.ColorBase, RADAR_PING.ColorTop)
+	beam.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, RADAR_PING.TransparencyBase),
+		NumberSequenceKeypoint.new(1, RADAR_PING.TransparencyTop),
+	})
+	beam:SetAttribute("UserId", userId)
+	beam.Parent = terrain
+	radarPings[userId] = { Base = base, Top = top, Beam = beam, Pos = pos, Width = width, Height = height }
+end
+
+-- lane C2: a character this client holds (under streaming a revealed player may be absent, or parented to nil)
+local function heldHere(char: Model?): boolean
+	return char ~= nil and char:IsDescendantOf(Workspace)
+end
+
+--[[ lane C2 (F7): pings for the server's revealed players that have no Highlight and whose character this client
+	does not hold, nearest first, at most RADAR_PING.Max. Everything else loses its ping. ]]
+local function updatePings(highlighted: { [number]: boolean })
+	table.clear(pingWanted)
+	local list = radarTargets
+	local terrain = Workspace:FindFirstChildOfClass("Terrain")
+	if list and terrain and os.clock() - radarTargetsAt <= RADAR_PING.StaleSeconds then
+		local perPx, camPos = pingScale()
+		local shown = 0
+		for _, t in ipairs(list) do
+			if shown >= RADAR_PING.Max then
+				break
+			end
+			local userId = if typeof(t) == "table" then t.UserId else nil
+			local pos = if typeof(t) == "table" then t.Pos else nil
+			if typeof(userId) == "number" and typeof(pos) == "Vector3" and userId ~= player.UserId and not highlighted[userId] then
+				local other = Players:GetPlayerByUserId(userId)
+				if other and not heldHere(other.Character) then
+					placePing(userId, pos, terrain, perPx, camPos)
+					pingWanted[userId] = true
+					shown += 1
+				end
+			end
+		end
+	end
+	for userId in pairs(radarPings) do
+		if not pingWanted[userId] then
+			destroyPing(userId)
+		end
 	end
 end
 
@@ -95256,13 +96200,15 @@ local function updateRadar()
 		return
 	end
 
+	-- lane C2: with the server's list (streaming on) a Highlight goes only on a character this client holds
+	local streamView = radarTargets ~= nil
 	local seen: { [number]: boolean } = {}
 	for _, other in ipairs(Players:GetPlayers()) do
 		if other ~= player then
 			local char = other.Character
 			local root = char and char:FindFirstChild("HumanoidRootPart") :: BasePart?
 			local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-			if char and root and humanoid and humanoid.Health > 0 then
+			if char and root and humanoid and humanoid.Health > 0 and (not streamView or heldHere(char)) then
 				local dist = (root.Position - myRoot.Position).Magnitude
 				if dist <= radarRadius then
 					seen[other.UserId] = true
@@ -95280,6 +96226,12 @@ local function updateRadar()
 			radarHighlights[userId] = nil
 		end
 	end
+	-- lane C2: pings for the revealed players this client does not hold (never while streaming is off)
+	if streamView then
+		updatePings(seen)
+	elseif next(radarPings) ~= nil then
+		clearRadarPings()
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -95294,6 +96246,8 @@ local DIAMOND = {
 local ROLE_ATTR = WorldLabelConfig.RoleAttribute
 local MARKER_TAGS = { Constants.Tags.CaptureZone, Constants.Tags.Territory }
 local diamonds: { [BillboardGui]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+-- F22 (lane C2): diamonds whose flag was streamed out when the yield last changed
+local diamondsOut: { [BillboardGui]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 local markerOnTop = false
 local diamondAccum = 0
 local rescanAccum = 0
@@ -95360,11 +96314,24 @@ local function syncDiamonds(elapsed: number)
 			rescanDiamonds()
 		end
 		for bb in pairs(diamonds) do
-			if bb.Parent then
+			if bb:IsDescendantOf(Workspace) then -- F22: Parent stays set when the flag streams out
 				applyDiamond(bb)
+				diamondsOut[bb] = nil
+			else
+				diamondsOut[bb] = true -- F22: set once it has streamed back in (below)
 			end
 		end
 		return
+	end
+	-- F22 (lane C2): a diamond that was streamed out when the yield changed takes the current state once it is back
+	-- (a local AlwaysOnTop may survive the stream cycle; usually an empty table)
+	if next(diamondsOut) ~= nil then
+		for bb in pairs(diamondsOut) do
+			if bb:IsDescendantOf(Workspace) then
+				diamondsOut[bb] = nil
+				applyDiamond(bb)
+			end
+		end
 	end
 	if on then
 		rescanAccum += elapsed
@@ -96027,6 +96994,7 @@ function TerritoryController.Init()
 			h:Destroy()
 			radarHighlights[leaving.UserId] = nil
 		end
+		destroyPing(leaving.UserId) -- lane C2
 	end)
 end
 
@@ -96035,6 +97003,14 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 
 	radarActive = payload.RadarReveal == true
 	radarRadius = tonumber(payload.RadarRadius) or TerritoryConfig.RadarRevealRadius or 220
+	-- lane C2: the server's reveal list comes only while streaming is on
+	local targets = payload.RadarTargets
+	if radarActive and typeof(targets) == "table" then
+		radarTargets = targets
+		radarTargetsAt = os.clock()
+	else
+		radarTargets = nil
+	end
 	HudLayout.SetFlag("Radar", radarActive)
 	if not radarActive then
 		clearRadarHighlights()
@@ -96059,7 +97035,7 @@ return TerritoryController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="209">
+          <Item class="ModuleScript" referent="211">
             <Properties>
               <string name="Name">TutorialController</string>
               <string name="Source"><![CDATA[--!strict
@@ -96108,6 +97084,14 @@ return TerritoryController
 	  late are handled as they arrive (events, no polling).
 	F6: a step that points at a world part whose target is not on this client yet (streamed out, built after the
 	push) re-aims at most every REAIM_SECONDS (1 Hz tick) until it is; steps that open a panel never re-aim.
+	streaming2 lane C1 (F5 / F6 / F23; every path is gated on Workspace.StreamingEnabled, so with it off this is HEAD):
+	  the beam never waits for a streamed part. ResolveTargetPos gives the part when it is on this client, else the
+	  position the server stamped or the config gives (PadBuy WE_ConsolePos_<sid>, Income WE_AtmPos, ClickDropper
+	  WE_DropperPos, ClaimBase PlotFrame + SpawnOffset, Outpost TerritoryConfig); the beam then ends on a client
+	  Attachment in Workspace.Terrain there (the ObjectiveMarker pattern) with no SelectionBox. The part streams in ->
+	  the 1 Hz tick swaps the beam to it (<= REAIM_SECONDS); it streams out -> AncestryChanged falls back to Terrain at
+	  once. The Outpost pick ranks the config zones with the last TerritoryStateUpdate, so it is the same zone whatever
+	  is streamed in. The active marker's Transparency is set again when it streams back in.
 ]]
 
 local Players = game:GetService("Players")
@@ -96163,6 +97147,16 @@ local stepActive = false -- a step is showing (drives the "Tutorial" flag and th
 local rawTitle = ""
 local rawHint = ""
 
+-- streaming2 lane C1 (streaming only; see the header)
+local terrainEnd = false -- attach1 is a client Attachment in Workspace.Terrain (the target part is not on this client)
+local targetConn: RBXScriptConnection? = nil -- AncestryChanged on the part the beam ends on
+local zoneList: { any }? = nil -- the last TerritoryStateUpdate.Territories (F6: zone state while zones are streamed out)
+
+-- C1: a place setting (the client cannot change it), read where it matters
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
+
 -- chip internals, v (the gui carries HudLayout's MobileScale)
 local PAD_L = 10
 local DISC = 36
@@ -96196,6 +97190,12 @@ local function clearWaypoint()
 		end
 		highlightPart = nil
 	end
+	local tc = targetConn
+	if tc then
+		targetConn = nil
+		tc:Disconnect()
+	end
+	terrainEnd = false
 	currentMarkerName = nil
 end
 
@@ -96259,6 +97259,12 @@ local function watchMarker(inst: Instance)
 	for _, d in ipairs(marker:GetDescendants()) do
 		showDressing(d, isActive())
 	end
+	-- C1 F23: the active marker streamed back in may carry the server's Transparency 1 again (local writes can be lost
+	-- on stream-in): show it again (syncMarkerVisibility's values)
+	if streamingOn() and isActive() then
+		marker.Transparency = 0.25
+		marker.LocalTransparencyModifier = 0
+	end
 	watchedMarkers[marker] = marker.DescendantAdded:Connect(function(d: Instance)
 		local on = isActive()
 		showDressing(d, on)
@@ -96310,7 +97316,8 @@ local function nearestOwnTagged(tag: string, plotId: number, origin: Vector3): B
 	return best
 end
 
-local function ownSpawn(plotId: number): BasePart?
+-- the own PlayerSpawn part when it is on this client (Bases / PlotN are Folders: always present)
+local function ownSpawnPart(plotId: number): BasePart?
 	local root = Workspace:FindFirstChild("WarEmpireSetup")
 	local bases = root and root:FindFirstChild("Bases")
 	local folder = bases and bases:FindFirstChild("Plot" .. tostring(plotId))
@@ -96318,7 +97325,44 @@ local function ownSpawn(plotId: number): BasePart?
 	if sp and sp:IsA("BasePart") then
 		return sp
 	end
+	return nil
+end
+
+local function ownSpawn(plotId: number): BasePart?
+	local sp = ownSpawnPart(plotId)
+	if sp then
+		return sp
+	end
 	return ownPlotPad(plotId) -- the spawn streamed out / renamed: the plot pad is still inside the plot
+end
+
+-- C1 F5: the own PlayerSpawn's world position from config (MapSetup builds it at PlotCFrame * (SpawnOffset.X, 2,
+-- SpawnOffset.Z); BaseService.plotSpawnOffset), for the ClaimBase beam while the plot is not streamed in
+local SPAWN_LIFT = 2
+local function ownSpawnPos(plotId: number): Vector3?
+	local plotPos = PlotFrame.PlotPosition(plotId)
+	if plotPos == nil then
+		return nil
+	end
+	local sp = if BaseLayoutConfig.Enabled == true then BaseLayoutConfig.SpawnOffset else { X = 0, Z = 55 }
+	return PlotFrame.PlotCFrame(plotPos):PointToWorldSpace(Vector3.new(sp.X, SPAWN_LIFT, sp.Z))
+end
+
+-- C1 F5: a Vector3 the server stamped on the local player (nil when unset)
+local function stampedPos(attr: string): Vector3?
+	local v = player:GetAttribute(attr)
+	return if typeof(v) == "Vector3" then v else nil
+end
+
+-- C1 F5: the nearest own tagged part on this client, unless the server-stamped position (the part the server picked,
+-- maybe streamed out) is nearer: the beam then ends on Terrain there until that part streams in
+local function nearestOwnOrStamp(tag: string, plotId: number, origin: Vector3, attr: string): (BasePart?, Vector3?)
+	local part = nearestOwnTagged(tag, plotId, origin)
+	local pos = stampedPos(attr)
+	if pos ~= nil and (part == nil or (pos - origin).Magnitude + 0.5 < (part.Position - origin).Magnitude) then
+		return nil, pos
+	end
+	return part, nil
 end
 
 -- F6 / F10: the player's own main gate in world space (plot-local (0, PlotSize/2), +Z = plot front). Pure config
@@ -96330,14 +97374,29 @@ end
 
 -- F10: the plot a Home Outpost zone belongs to (TerritoryConfig.Starter rows: IsStarter + PlotId; the marker's
 -- PlotId attribute or the Starter_P<n> id when the row is not in this client's config); nil = not a Home Outpost
-local function starterPlotOf(tid: any, def: any, inst: Instance): number?
+local function starterPlotOf(tid: any, def: any, inst: Instance?): number?
 	local prefix = TerritoryConfig.Starter.IdPrefix
 	local named = typeof(tid) == "string" and string.sub(tid, 1, #prefix) == prefix
 	if not ((def ~= nil and def.IsStarter == true) or named) then
 		return nil
 	end
 	local fromDef = if def ~= nil then tonumber(def.PlotId) else nil
-	return fromDef or tonumber(inst:GetAttribute("PlotId")) or (if named then tonumber(string.sub(tid, #prefix + 1)) else nil)
+	local fromInst = if inst ~= nil then tonumber(inst:GetAttribute("PlotId")) else nil
+	return fromDef or fromInst or (if named then tonumber(string.sub(tid, #prefix + 1)) else nil)
+end
+
+-- One zone's Outpost score (lower wins), for nearestOutpost and outpostFromConfig. Tiers: see nearestOutpost.
+local function outpostScore(def: any, starterPlot: number?, ownerType: any, ownerUserId: any, userId: number, pos: Vector3, from: Vector3): number
+	local ot = TerritoryConfig.OwnerTypes
+	local contested = ownerType == ot.Contested
+	local mine = ownerType == ot.Player and ownerUserId == userId
+	local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
+	local tier = if starterPlot ~= nil then (if mine then 3 else -1)
+		elseif contested or mine then 3
+		elseif hard then 2
+		elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1
+		else 0
+	return tier * OUTPOST_TIER_GAP + (pos - from).Magnitude
 end
 
 -- Outpost: the zone the player can take on foot. Tiers: the player's OWN Home Outpost while they do not hold it (F10,
@@ -96346,7 +97405,6 @@ end
 -- Outpost is never a target (only its owner can take it). Distance from the own gate when the plot is known
 -- (F6: the same answer wherever the player stands in the base), else from `origin`.
 local function nearestOutpost(origin: Vector3, userId: number, plotId: number?): BasePart?
-	local ot = TerritoryConfig.OwnerTypes
 	local from = if plotId ~= nil then ownGatePos(plotId) else origin
 	local best: BasePart? = nil
 	local bestScore = math.huge
@@ -96359,16 +97417,8 @@ local function nearestOutpost(origin: Vector3, userId: number, plotId: number?):
 				local def = if typeof(tid) == "string" then (TerritoryConfig.Territories :: any)[tid] else nil
 				local starterPlot = starterPlotOf(tid, def, inst)
 				if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
-					local ownerType = inst:GetAttribute("OwnerType")
-					local contested = ownerType == ot.Contested
-					local mine = ownerType == ot.Player and inst:GetAttribute("OwnerUserId") == userId
-					local hard = def ~= nil and (def.IsOilRig == true or def.IsFortress == true)
-					local tier = if starterPlot ~= nil then (if mine then 3 else -1)
-						elseif contested or mine then 3
-						elseif hard then 2
-						elseif ownerType ~= nil and ownerType ~= ot.Neutral then 1
-						else 0
-					local score = tier * OUTPOST_TIER_GAP + (inst.Position - from).Magnitude
+					local score = outpostScore(def, starterPlot, inst:GetAttribute("OwnerType"), inst:GetAttribute("OwnerUserId"), userId,
+						inst.Position, from)
 					if score < bestScore then
 						bestScore = score
 						best = inst
@@ -96378,6 +97428,53 @@ local function nearestOutpost(origin: Vector3, userId: number, plotId: number?):
 		end
 	end
 	return best
+end
+
+--[[ C1 F6 (streaming): the same pick over EVERY TerritoryConfig zone, streamed in or not. A zone's owner comes from
+	the last TerritoryStateUpdate (it lists every zone this player may see; another plot's Home Outpost is left out and
+	skipped here anyway), else from its marker's attributes when the marker is on this client, else Neutral. The zone
+	position is TerritoryConfig's (MapSetup builds the marker there). Ties go to the lower id. Returns the zone's id,
+	position and marker part (nil while it is streamed out). ]]
+local function outpostFromConfig(origin: Vector3, userId: number, plotId: number?): (string?, Vector3?, BasePart?)
+	local from = if plotId ~= nil then ownGatePos(plotId) else origin
+	local state: { [string]: any } = {}
+	local list = zoneList
+	if list then
+		for _, e in ipairs(list) do
+			if typeof(e) == "table" and typeof(e.Id) == "string" then
+				state[e.Id] = e
+			end
+		end
+	end
+	local parts: { [string]: BasePart } = {}
+	for _, inst in ipairs(CollectionService:GetTagged(Constants.Tags.Territory)) do
+		local tid = inst:GetAttribute("TerritoryId")
+		if typeof(tid) == "string" and inst:IsA("BasePart") and inst:IsDescendantOf(Workspace) then
+			parts[tid] = inst
+		end
+	end
+	local bestId: string? = nil
+	local bestPos: Vector3? = nil
+	local bestScore = math.huge
+	for tid, def in pairs(TerritoryConfig.Territories :: any) do
+		local pos = def.Position
+		if typeof(tid) == "string" and typeof(pos) == "Vector3" then
+			local part: BasePart? = parts[tid] -- nil while the marker is streamed out
+			local starterPlot = starterPlotOf(tid, def, part)
+			if starterPlot == nil or (plotId ~= nil and starterPlot == plotId) then
+				local e = state[tid]
+				local ownerType: any = if e ~= nil then e.OwnerType elseif part ~= nil then part:GetAttribute("OwnerType") else nil
+				local ownerUserId: any = if e ~= nil then e.OwnerUserId elseif part ~= nil then part:GetAttribute("OwnerUserId") else nil
+				local score = outpostScore(def, starterPlot, ownerType, ownerUserId, userId, pos, from)
+				if score < bestScore or (score == bestScore and bestId ~= nil and tid < (bestId :: string)) then
+					bestScore = score
+					bestId = tid
+					bestPos = pos
+				end
+			end
+		end
+	end
+	return bestId, bestPos, if bestId ~= nil then parts[bestId] else nil
 end
 
 --[[ Where the tutorial beam points for a step. Pure (reads the world, builds nothing), exported for the headless
@@ -96421,6 +97518,57 @@ function TutorialController.ResolveTarget(stepId: string?, markerName: string?, 
 	return nil
 end
 
+--[[ C1 F5 / F6: where the beam ends when the target part may not be on this client (StreamingEnabled). Returns
+	(part, nil) when the target part is streamed in, (nil, position) when it is not but the server stamped or the
+	config gives where it is (the beam then ends on a Terrain attachment there), (nil, nil) for no beam. Same
+	arguments and the same own-plot rules as ResolveTarget; with Workspace.StreamingEnabled false it IS ResolveTarget
+	and never returns a position. Pure (reads the world and the player's attributes, builds nothing). ]]
+function TutorialController.ResolveTargetPos(stepId: string?, markerName: string?, padStructureId: string?, plotId: number?, origin: Vector3, userId: number?): (BasePart?, Vector3?)
+	if not streamingOn() then
+		return TutorialController.ResolveTarget(stepId, markerName, padStructureId, plotId, origin, userId), nil
+	end
+	if stepId == "Outpost" or markerName == "Tutorial_Outpost" then
+		local _, pos, part = outpostFromConfig(origin, userId or player.UserId, plotId)
+		if part then
+			return part, nil
+		end
+		return nil, pos
+	end
+	if stepId == "RecruitSoldiers" or markerName == "Tutorial_Recruit" or stepId == "Jeep" or markerName == "Tutorial_Jeep" then
+		return nil, nil
+	end
+	if plotId == nil then
+		return nil, nil
+	end
+	if typeof(padStructureId) == "string" and padStructureId ~= "" then
+		local part = ConsoleLocator.Find(plotId, padStructureId)
+		if part and ConsoleLocator.IsConsole(part) then
+			return part, nil
+		end
+		-- the console is streamed out: its stamped position (UpgradePadService) before any legacy pad on this client
+		local pos = stampedPos("WE_ConsolePos_" .. padStructureId)
+		if pos then
+			return nil, pos
+		end
+		return part, nil
+	end
+	if stepId == "ClaimBase" or markerName == "Tutorial_ClaimBase" then
+		local sp = ownSpawnPart(plotId)
+		if sp then
+			return sp, nil
+		end
+		return nil, ownSpawnPos(plotId) -- not the plot pad: the spawn itself, from config
+	end
+	if stepId == "Income" or markerName == "Tutorial_Income" then
+		return nearestOwnOrStamp(Constants.Tags.MoneyCollector, plotId, origin, "WE_AtmPos")
+	end
+	if stepId == "ClickDropper" or markerName == "Tutorial_Dropper" then
+		return nearestOwnOrStamp(MANUAL_DROPPER_TAG, plotId, origin, "WE_DropperPos")
+	end
+	-- an unknown step's named marker has no stamped position: the part, or nothing (as ResolveTarget)
+	return TutorialController.ResolveTarget(stepId, markerName, padStructureId, plotId, origin, userId), nil
+end
+
 local function originPos(): Vector3
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -96431,13 +97579,77 @@ local function originPos(): Vector3
 	return if pad then pad.Position else Vector3.zero
 end
 
+local function newBeam(a0: Attachment, a1: Attachment, parent: Instance): Beam
+	local beam = Instance.new("Beam")
+	beam.Name = "WE_TutorialBeam"
+	beam.Attachment0 = a0
+	beam.Attachment1 = a1
+	beam.FaceCamera = true
+	-- v68: subtle guide (was a thick glowing neon line): thin, mostly transparent, fading out toward the target
+	beam.Width0 = 0.22
+	beam.Width1 = 0.12
+	beam.Color = ColorSequence.new(Color3.fromRGB(240, 214, 110))
+	beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.85) })
+	beam.LightEmission = 0.2
+	beam.Parent = parent
+	return beam
+end
+
+-- C1 F5: the beam end while the target part is not on this client: a client Attachment in Workspace.Terrain at the
+-- stamped / config position (the ObjectiveMarker pattern; Terrain's frame is the world frame, and a client-made
+-- Attachment there is never streamed). No SelectionBox (it needs the part).
+local function beamToTerrain(pos: Vector3)
+	local char = player.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) then
+		return -- respawning: CharacterAdded / the tick re-aim
+	end
+	local a0 = Instance.new("Attachment")
+	a0.Name = "WE_TutAtt0"
+	a0.Parent = hrp
+	attach0 = a0
+	local a1 = Instance.new("Attachment")
+	a1.Name = "WE_TutAtt1"
+	a1.Position = pos
+	a1.Parent = Workspace.Terrain
+	attach1 = a1
+	terrainEnd = true
+	guideBeam = newBeam(a0, a1, hrp)
+end
+
+-- set once setWaypoint exists (the stream-out handler below re-aims through it)
+local reaimNow: () -> () = function() end
+
+-- C1 F5: the part the beam ends on leaves Workspace (streamed out: it, or its Atomic model, is parented to nil) ->
+-- fall back to Terrain at once when the step has a stamped / config position. A step without one (an unknown step's
+-- marker) keeps HEAD's behaviour: the beam's attachment comes back with the part.
+local function watchTarget(target: BasePart)
+	targetConn = target.AncestryChanged:Connect(function()
+		if highlightPart ~= target or target:IsDescendantOf(Workspace) then
+			return
+		end
+		task.defer(function()
+			if not stepActive or highlightPart ~= target or target:IsDescendantOf(Workspace) then
+				return
+			end
+			local _, pos = TutorialController.ResolveTargetPos(currentStepId, currentMarkerName, currentPadStructureId, myPlotId, originPos())
+			if pos ~= nil then
+				reaimNow()
+			end
+		end)
+	end)
+end
+
 local function setWaypoint(markerName: string?, padStructureId: string?)
 	clearWaypoint()
 	currentMarkerName = markerName
 	currentPadStructureId = padStructureId
-	local target = TutorialController.ResolveTarget(currentStepId, markerName, padStructureId, myPlotId, originPos())
+	local target, endPos = TutorialController.ResolveTargetPos(currentStepId, markerName, padStructureId, myPlotId, originPos())
 	syncMarkerVisibility(target)
 	if not target then
+		if endPos ~= nil then
+			beamToTerrain(endPos) -- C1: streaming only (ResolveTargetPos gives no position with it off)
+		end
 		return
 	end
 	highlightPart = target
@@ -96447,6 +97659,9 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	sel.Color3 = Constants.Colors.Gold
 	sel.LineThickness = 0.06
 	sel.Parent = target
+	if streamingOn() then
+		watchTarget(target)
+	end
 
 	local char = player.Character
 	local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -96463,19 +97678,22 @@ local function setWaypoint(markerName: string?, padStructureId: string?)
 	a1.Parent = target
 	attach1 = a1
 
-	local beam = Instance.new("Beam")
-	beam.Name = "WE_TutorialBeam"
-	beam.Attachment0 = a0
-	beam.Attachment1 = a1
-	beam.FaceCamera = true
-	-- v68: subtle guide (was a thick glowing neon line): thin, mostly transparent, fading out toward the target
-	beam.Width0 = 0.22
-	beam.Width1 = 0.12
-	beam.Color = ColorSequence.new(Color3.fromRGB(240, 214, 110))
-	beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 0.85) })
-	beam.LightEmission = 0.2
-	beam.Parent = hrp
-	guideBeam = beam
+	guideBeam = newBeam(a0, a1, hrp)
+end
+reaimNow = function()
+	setWaypoint(currentMarkerName, currentPadStructureId)
+end
+
+-- C1 (1 Hz tick, <= every REAIM_SECONDS) while the beam ends on Terrain: the part streamed in -> the beam swaps to it
+-- (and the SelectionBox comes back); the stamp moved -> the anchor follows without a rebuild
+local function refreshTerrainEnd()
+	local part, pos = TutorialController.ResolveTargetPos(currentStepId, currentMarkerName, currentPadStructureId, myPlotId, originPos())
+	local a1 = attach1
+	if part ~= nil or pos == nil or a1 == nil or a1.Parent == nil then
+		setWaypoint(currentMarkerName, currentPadStructureId)
+	elseif (a1.Position - pos).Magnitude > 0.5 then
+		a1.Position = pos
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -97140,7 +98358,19 @@ end
 local function guideTick()
 	local now = os.clock()
 	local hp = highlightPart
-	if stepActive and (hp == nil or hp.Parent == nil) and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
+	if streamingOn() then
+		-- C1: on Terrain -> swap to the part once it streams in; on a part that left Workspace (a streamed-out Atomic
+		-- model keeps the part's Parent) or no beam yet -> re-aim
+		if stepActive and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
+			if terrainEnd then
+				lastReaim = now
+				refreshTerrainEnd()
+			elseif hp == nil or not hp:IsDescendantOf(Workspace) then
+				lastReaim = now
+				setWaypoint(currentMarkerName, currentPadStructureId)
+			end
+		end
+	elseif stepActive and (hp == nil or hp.Parent == nil) and stepHasWorldTarget() and now - lastReaim >= REAIM_SECONDS then
 		lastReaim = now
 		setWaypoint(currentMarkerName, currentPadStructureId)
 	end
@@ -97357,6 +98587,16 @@ function TutorialController.Init()
 		end
 	end)
 
+	-- C1 F6 (streaming only): the zone state the Outpost pick reads while zones are streamed out (the list is kept by
+	-- reference; the pick reads it at most every REAIM_SECONDS)
+	if streamingOn() then
+		Remotes.BindEvent(Constants.RemoteNames.TerritoryStateUpdate, function(payload: any)
+			if typeof(payload) == "table" and typeof(payload.Territories) == "table" then
+				zoneList = payload.Territories
+			end
+		end)
+	end
+
 	player.CharacterAdded:Connect(function()
 		if currentMarkerName and stepActive then
 			task.defer(function()
@@ -97423,7 +98663,7 @@ return TutorialController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="210">
+          <Item class="ModuleScript" referent="212">
             <Properties>
               <string name="Name">UIController</string>
               <string name="Source"><![CDATA[--!strict
@@ -97748,7 +98988,7 @@ return UIController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="211">
+          <Item class="ModuleScript" referent="213">
             <Properties>
               <string name="Name">VehicleController</string>
               <string name="Source"><![CDATA[--!strict
@@ -99093,7 +100333,7 @@ return VehicleController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="212">
+          <Item class="ModuleScript" referent="214">
             <Properties>
               <string name="Name">WorldPromptController</string>
               <string name="Source"><![CDATA[--!strict
@@ -99149,6 +100389,17 @@ return VehicleController
 	  * The price / NEXT tags are base labels (WorldLabel.TagBaseLabel: the client LabelGovernor counts them toward
 	    "at most 3 labels on screen at a base"), and every show / hide goes through WorldLabel.SetShown, so a governor
 	    hold is never undone by the 4 Hz pass below.
+
+	streaming2 lane C4 (StreamingEnabled):
+	  * F14: a console's screen is its own part (MapSetup.dressConsole), so it can stream in after its plinth, or
+	    leave and come back with the server's text (the local price text "can be lost" on stream-in). While
+	    streaming is on, each console's ChildAdded("ConsoleScreen") marks the billboards dirty, so the next throttled
+	    pass writes the owner's line again. Streaming off: not connected.
+	  * F19: the global Workspace.DescendantAdded hook that hid the removed "TRAINING" labels is gone, with its start
+	    scan. Nothing in the game makes either label any more, so it matched nothing, streaming on or off; under
+	    streaming it ran for every instance that streamed in. While streaming is on, the untagged-StructureId
+	    fallback walk is skipped too: every StructureId part is tagged (MapSetup plinths, BusinessService consoles),
+	    and the tag's added signal fires on each stream-in. Streaming off: the walk runs as before.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -99369,6 +100620,12 @@ local activeBuyPart: BasePart? = nil
 -- v68: consoles (BaseLayoutConfig) — the BUY button shows when you walk up; buying needs a tap or the prompt
 local function isConsolePart(part: BasePart): boolean
 	return part:GetAttribute("WE_Console") == true
+end
+
+-- streaming2: the place's StreamingEnabled (default.project.json; scripts cannot set it). The lane C4 changes act
+-- only while it is true.
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
 end
 
 local function padKey(part: BasePart, structureId: string): string
@@ -100719,6 +101976,14 @@ local function attachUpgradeSlot(part: BasePart)
 	end
 
 	refreshSlotBillboard(part)
+	-- streaming2 F14: the screen part streamed in (late, or again with the server's text): redraw on the next pass
+	if streamingOn() and isConsolePart(part) then
+		trackConn(slotConns, part, part.ChildAdded:Connect(function(child: Instance)
+			if child.Name == "ConsoleScreen" then
+				markBillboardsDirty()
+			end
+		end))
+	end
 
 	trackConn(slotConns, part, part.Touched:Connect(function(hit)
 		local char = player.Character
@@ -100842,21 +102107,9 @@ end
 local WORLD_LABEL_PASS_SEC = 0.25
 local lastWorldLabelPass = 0
 
--- v70: the "TRAINING" worker tags and the training "+$/tick" billboard are removed from the design (spec §5);
--- until the server stops creating them the client keeps them off — event-driven (the per-frame
--- workspace:GetDescendants() scan that hid them near pads is gone).
-local REMOVED_WORLD_LABELS: { [string]: boolean } = { WE_WorkerTag = true, WE_TrainingEarnBillboard = true }
-local function hideRemovedLabel(inst: Instance)
-	if inst:IsA("BillboardGui") and REMOVED_WORLD_LABELS[inst.Name] then
-		local bb: BillboardGui = inst
-		bb.Enabled = false
-		bb:GetPropertyChangedSignal("Enabled"):Connect(function()
-			if bb.Enabled then
-				bb.Enabled = false
-			end
-		end)
-	end
-end
+-- v70: the "TRAINING" worker tags and the training "+$/tick" billboard are removed from the design (spec §5). The
+-- server no longer creates either, so the client hook that switched them off is gone too (streaming2 F19: it was a
+-- Workspace.DescendantAdded listener that ran for every instance, and under streaming for every stream-in).
 
 -- 4 Hz: SupplyDrop labels step aside near your consoles / ATM; price labels hide near the ATM. A label hidden on
 -- purpose (hidePriceBillboard: another plot, MAX) or by WE_PriceForceHidden is never switched back on here.
@@ -101019,6 +102272,10 @@ end
 
 -- Attribute fallback: StructureId pads under WarEmpireSetup.Bases missing the tag
 local function rescanUntaggedSlots()
+	if streamingOn() then
+		-- streaming2 F19: the tag path binds every slot, on stream-in too; this walk would only see streamed parts
+		return
+	end
 	local setup = Workspace:FindFirstChild("WarEmpireSetup")
 	if not setup then
 		return
@@ -101339,10 +102596,6 @@ function WorldPromptController.Init()
 		end
 		bindAllTags()
 		startOverlapLoop()
-		Workspace.DescendantAdded:Connect(hideRemovedLabel)
-		for _, d in ipairs(setup and setup:GetDescendants() or {}) do
-			hideRemovedLabel(d)
-		end
 		refreshAllBillboardsNow()
 		rescanUntaggedSlots()
 		local n = 0
@@ -101371,11 +102624,11 @@ return WorldPromptController
             </Properties>
           </Item>
         </Item>
-        <Item class="Folder" referent="213">
+        <Item class="Folder" referent="215">
           <Properties>
             <string name="Name">Modules</string>
           </Properties>
-          <Item class="ModuleScript" referent="214">
+          <Item class="ModuleScript" referent="216">
             <Properties>
               <string name="Name">AimTargets</string>
               <string name="Source"><![CDATA[--!strict
@@ -101918,7 +103171,7 @@ return AimTargets
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="215">
+          <Item class="ModuleScript" referent="217">
             <Properties>
               <string name="Name">AudioController</string>
               <string name="Source"><![CDATA[--!strict
@@ -102741,7 +103994,7 @@ return AudioController
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="216">
+          <Item class="ModuleScript" referent="218">
             <Properties>
               <string name="Name">AudioHooks</string>
               <string name="Source"><![CDATA[--!strict
@@ -103269,7 +104522,7 @@ return AudioHooks
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="217">
+          <Item class="ModuleScript" referent="219">
             <Properties>
               <string name="Name">BusinessVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -103798,7 +105051,7 @@ return BusinessVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="218">
+          <Item class="ModuleScript" referent="220">
             <Properties>
               <string name="Name">CameraFx</string>
               <string name="Source"><![CDATA[--!strict
@@ -104342,7 +105595,7 @@ return CameraFx
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="219">
+          <Item class="ModuleScript" referent="221">
             <Properties>
               <string name="Name">ClientSettings</string>
               <string name="Source"><![CDATA[--!strict
@@ -104410,7 +105663,7 @@ return ClientSettings
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="220">
+          <Item class="ModuleScript" referent="222">
             <Properties>
               <string name="Name">ConsoleWaypoint</string>
               <string name="Source"><![CDATA[--!strict
@@ -104720,7 +105973,7 @@ return ConsoleWaypoint
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="221">
+          <Item class="ModuleScript" referent="223">
             <Properties>
               <string name="Name">HudIcons</string>
               <string name="Source"><![CDATA[--!strict
@@ -105065,7 +106318,7 @@ return HudIcons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="222">
+          <Item class="ModuleScript" referent="224">
             <Properties>
               <string name="Name">HudLayout</string>
               <string name="Source"><![CDATA[--!strict
@@ -106378,7 +107631,7 @@ return HudLayout
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="223">
+          <Item class="ModuleScript" referent="225">
             <Properties>
               <string name="Name">LabelGovernor</string>
               <string name="Source"><![CDATA[--!strict
@@ -106611,7 +107864,7 @@ return LabelGovernor
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="224">
+          <Item class="ModuleScript" referent="226">
             <Properties>
               <string name="Name">NextPadChevrons</string>
               <string name="Source"><![CDATA[--!strict
@@ -107099,7 +108352,7 @@ return NextPadChevrons
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="225">
+          <Item class="ModuleScript" referent="227">
             <Properties>
               <string name="Name">ObjectiveMarker</string>
               <string name="Source"><![CDATA[--!strict
@@ -107558,7 +108811,7 @@ return ObjectiveMarker
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="226">
+          <Item class="ModuleScript" referent="228">
             <Properties>
               <string name="Name">OpsJobs</string>
               <string name="Source"><![CDATA[--!strict
@@ -108182,7 +109435,7 @@ return OpsJobs
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="227">
+          <Item class="ModuleScript" referent="229">
             <Properties>
               <string name="Name">PanelShell</string>
               <string name="Source"><![CDATA[--!strict
@@ -108424,7 +109677,7 @@ return PanelShell
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="228">
+          <Item class="ModuleScript" referent="230">
             <Properties>
               <string name="Name">ProducerLabels</string>
               <string name="Source"><![CDATA[--!strict
@@ -108857,7 +110110,7 @@ return ProducerLabels
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="229">
+          <Item class="ModuleScript" referent="231">
             <Properties>
               <string name="Name">ProgressPill</string>
               <string name="Source"><![CDATA[--!strict
@@ -109032,7 +110285,7 @@ return ProgressPill
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="230">
+          <Item class="ModuleScript" referent="232">
             <Properties>
               <string name="Name">RebirthConfirm</string>
               <string name="Source"><![CDATA[--!strict
@@ -109914,7 +111167,7 @@ return RebirthConfirm
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="231">
+          <Item class="ModuleScript" referent="233">
             <Properties>
               <string name="Name">StudioSmokeClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -109979,7 +111232,7 @@ return StudioSmokeClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="232">
+          <Item class="ModuleScript" referent="234">
             <Properties>
               <string name="Name">VehicleCombatClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -110055,6 +111308,7 @@ local refreshQueued = false
 local lastRefreshAt = -math.huge
 local expiryAt = math.huge -- earliest pending over-bar expiry already scheduled
 local humConn: RBXScriptConnection? = nil
+local humWaitConn: RBXScriptConnection? = nil -- streaming2 F16: the character's ChildAdded until its Humanoid arrives
 local stats = { Refreshes = 0, Bursts = 0, OverShown = 0, HudShown = false }
 
 local function now(): number
@@ -110552,21 +111806,55 @@ local function onSeatChanged(hum: Humanoid)
 	requestRefresh()
 end
 
+-- streaming2: the place's StreamingEnabled (default.project.json; scripts cannot set it). The F16 late-Humanoid bind
+-- acts only while it is true; with it false the bind is the 0a04776 one.
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
+
+local function stopHumanoidWait()
+	local c = humWaitConn
+	humWaitConn = nil
+	if c then
+		c:Disconnect()
+	end
+end
+
+local function bindHumanoid(hum: Humanoid)
+	local old = humConn
+	if old then
+		old:Disconnect()
+	end
+	humConn = hum:GetPropertyChangedSignal("SeatPart"):Connect(function()
+		onSeatChanged(hum)
+	end)
+	onSeatChanged(hum)
+end
+
 local function bindCharacter(character: Model)
+	stopHumanoidWait()
 	task.spawn(function()
-		local found = character:FindFirstChildOfClass("Humanoid") or character:WaitForChild("Humanoid", 10)
+		local found: Instance? = character:FindFirstChildOfClass("Humanoid")
+		if not found and streamingOn() then
+			--[[ streaming2 F16: under streaming the character model is parented before its descendants have
+				replicated, so its Humanoid can come later than any fixed wait. Bind whenever it arrives (the HudLayout
+				pattern); the next character and CharacterRemoving stop the wait. ]]
+			humWaitConn = character.ChildAdded:Connect(function(c: Instance)
+				if c:IsA("Humanoid") then
+					stopHumanoidWait()
+					bindHumanoid(c)
+				end
+			end)
+			return
+		end
+		if not found then
+			found = character:WaitForChild("Humanoid", 10) -- streaming off: the character arrives whole (0a04776)
+		end
 		if not (found and found:IsA("Humanoid")) then
 			return
 		end
 		local hum: Humanoid = found
-		local old = humConn
-		if old then
-			old:Disconnect()
-		end
-		humConn = hum:GetPropertyChangedSignal("SeatPart"):Connect(function()
-			onSeatChanged(hum)
-		end)
-		onSeatChanged(hum)
+		bindHumanoid(hum)
 	end)
 end
 
@@ -110592,6 +111880,7 @@ function VehicleCombatClient.Init()
 			bindCharacter(character)
 		end)
 		lp.CharacterRemoving:Connect(function()
+			stopHumanoidWait() -- streaming2 F16 (nil while streaming is off)
 			seated = nil
 			requestRefresh()
 		end)
@@ -110633,7 +111922,7 @@ return VehicleCombatClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="233">
+          <Item class="ModuleScript" referent="235">
             <Properties>
               <string name="Name">VehicleDriveClient</string>
               <string name="Source"><![CDATA[--!strict
@@ -110667,6 +111956,11 @@ return VehicleCombatClient
 	    desktop / gamepad the pill takes the ammo readout's slot (bottom-right)
 	  * jeep F9 / V8: while I sit in any vehicle seat, every ProximityPrompt outside WarEmpireVehicles is hushed
 	    locally (MaxActivationDistance 0) and put back on the way out
+
+	streaming2 lane C3 (acts only while Workspace.StreamingEnabled is true; with it false, as at 0a04776):
+	  * F13: a hushed prompt that streams out and back in is hushed again when it shows (a local write can be lost)
+	  * F16: a Humanoid that replicates after its character still binds (no 10 s give-up)
+	  * F17: an aircraft's AGL ray over ground that has not streamed in uses the last hit or the desert floor
 
 	Requiring this module does nothing heavy (GetService only). Init() is called by VehicleController.
 ]]
@@ -110852,6 +112146,10 @@ local DEFAULTS: any = {
 	},
 	-- W7: SPD pill / hint placement (VehicleConfig.Drive.Hud overrides)
 	Hud = { PillStackOrder = 25, HintStackOrder = 26, DiagStackOrder = 27, StackWidthScale = 0.62, DesktopPillInset = 14 },
+	-- streaming2 F17: an aircraft's AGL ray that hits nothing while Workspace.StreamingEnabled is on (VehicleConfig.Drive.Ground
+	-- overrides key by key). FallbackY = the desert floor top (MapSetup GROUND_TOP_Y 0.5), the lowest ground on the map;
+	-- LastHitRadius = how far (flat studs) from its last hit the ray may still use that hit's height.
+	Ground = { FallbackY = 0.5, LastHitRadius = 16 },
 	Modes = {
 		Car = {
 			ReverseFrac = 0.45,
@@ -112061,6 +113359,7 @@ local EXIT: any = DEFAULTS.Exit
 local PLATE: any = DEFAULTS.Nameplate
 local AIRC: any = DEFAULTS.AirBox -- JEEP-2: Notice / NoticeHoldSeconds (the law reads Params.AirBox)
 local HUDC: any = DEFAULTS.Hud -- W7: pill / hint placement
+local GROUND: any = DEFAULTS.Ground -- streaming2 F17: AGL ray-miss fallback
 local debugUser = false
 
 -- W7: HudLayout (sibling module), required lazily; false = not available (headless tests) → fixed positions
@@ -112074,11 +113373,21 @@ local shownPrompts: { [ProximityPrompt]: boolean } = {}
 local hushedPrompts: { [ProximityPrompt]: Hushed } = {}
 local hushOn = false
 
+-- streaming2 F16: the character's ChildAdded while its Humanoid has not arrived yet (streaming on only)
+local humWaitConn: RBXScriptConnection? = nil
+
 -- P1-8 owner nameplates (client-only BillboardGuis in PlayerGui, adorned to each of my vehicles' Chassis)
 local plates: { [Model]: BillboardGui } = {}
 
 local function localPlayer(): Player
 	return Players.LocalPlayer
+end
+
+-- streaming2: the place's StreamingEnabled (set in default.project.json, never by a script). Every lane C3 change
+-- (F13 prompt re-hush, F16 late Humanoid, F17 AGL ray miss) acts only while it is true; with it false this module
+-- behaves as at 0a04776.
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
 end
 
 -- Drive.<name> with DEFAULTS.<name> filled in, key by key, only when the types match
@@ -112100,6 +113409,7 @@ local function refreshConfig()
 	PLATE = cfgSection("Nameplate")
 	AIRC = cfgSection("AirBox")
 	HUDC = cfgSection("Hud")
+	GROUND = cfgSection("Ground")
 	local uid = localPlayer().UserId
 	local ids: any = DBG.UserIds
 	debugUser = DBG.All == true or (typeof(ids) == "table" and table.find(ids, uid) ~= nil)
@@ -112211,6 +113521,31 @@ local function landProbe(x: number, z: number, top: number): boolean
 	return hit ~= nil and hit.Position.Y > top - 0.05
 end
 
+-- streaming2 F17: where the AGL ray last hit the ground (plain numbers: the ray runs every frame, nothing is allocated)
+local lastGroundX, lastGroundZ, lastGroundY = 0, 0, 0
+local haveLastGround = false
+
+--[[ streaming2 F17: the AGL when the down-ray hits nothing while Workspace.StreamingEnabled is on, i.e. the ground
+	below has not streamed in (high up, under memory pressure). The ground is the last one this ray hit while the
+	aircraft is still within Ground.LastHitRadius of that spot (flat distance), else Ground.FallbackY (the desert floor
+	top, the lowest ground on the map). A last hit that reads Exit.LockAGL or less AND lower than the floor would read
+	(the aircraft has just left a roof or cliff edge) is not trusted: the floor wins, so a miss never lands an
+	aircraft in mid-air or frees its jump button there. ]]
+local function missAGL(pos: Vector3, clearance: number): number
+	local floorAGL = (pos.Y - GROUND.FallbackY) - clearance
+	if haveLastGround then
+		local dx, dz = pos.X - lastGroundX, pos.Z - lastGroundZ
+		local r = GROUND.LastHitRadius
+		if dx * dx + dz * dz <= r * r then
+			local agl = (pos.Y - lastGroundY) - clearance
+			if agl > EXIT.LockAGL or agl >= floorAGL then
+				return agl
+			end
+		end
+	end
+	return floorAGL
+end
+
 local function groundAGL(pos: Vector3, clearance: number): number
 	local params = rayParams
 	if not params then
@@ -112218,9 +113553,13 @@ local function groundAGL(pos: Vector3, clearance: number): number
 	end
 	local hit = Workspace:Raycast(pos, Vector3.new(0, -AGL_RAY, 0), params)
 	if not hit then
-		return math.huge
+		-- streaming off: nothing below within AGL_RAY really means nothing (0a04776)
+		return if streamingOn() then missAGL(pos, clearance) else math.huge
 	end
-	return (pos.Y - hit.Position.Y) - clearance
+	local groundY = hit.Position.Y
+	lastGroundX, lastGroundZ, lastGroundY = pos.X, pos.Z, groundY
+	haveLastGround = true
+	return (pos.Y - groundY) - clearance
 end
 
 -- ── prompts: only the owner sees "Drive", and not while already driving ─────
@@ -112333,6 +113672,17 @@ local function restorePrompts()
 	end
 end
 
+--[[ Is a shown prompt gone from the world? streaming2 F13: with streaming on, what streams out is the prompt's PART
+	(parented to nil, not destroyed), so the prompt keeps its Parent: only IsDescendantOf(Workspace) tells. A gone
+	prompt is forgotten, not hushed: a local write on it can be lost when it streams back in, and PromptShown hushes it
+	then. Streaming off: the 0a04776 test. ]]
+local function promptGone(prompt: ProximityPrompt): boolean
+	if streamingOn() then
+		return not prompt:IsDescendantOf(Workspace)
+	end
+	return prompt.Parent == nil
+end
+
 local function setPromptHush(on: boolean)
 	if on == hushOn then
 		return
@@ -112340,7 +113690,7 @@ local function setPromptHush(on: boolean)
 	hushOn = on
 	if on then
 		for prompt in pairs(shownPrompts) do
-			if prompt.Parent == nil then
+			if promptGone(prompt) then
 				shownPrompts[prompt] = nil
 			else
 				hushPrompt(prompt)
@@ -112359,9 +113709,22 @@ end
 
 local function onPromptShown(prompt: ProximityPrompt)
 	shownPrompts[prompt] = true
-	if hushOn then
-		hushPrompt(prompt)
+	if not hushOn then
+		return
 	end
+	local rec = hushedPrompts[prompt]
+	if rec ~= nil and streamingOn() then
+		--[[ streaming2 F13: a hushed prompt that streamed out and back in can come back with the server's range (local
+			writes "can be lost", maybe with no changed signal): it is showing again, so hush it again and keep that
+			range for the restore. ]]
+		local r = prompt.MaxActivationDistance
+		if typeof(r) == "number" and r > 0 then
+			rec.Range = r
+			prompt.MaxActivationDistance = 0
+		end
+		return
+	end
+	hushPrompt(prompt)
 end
 
 local function onPromptHidden(prompt: ProximityPrompt)
@@ -113773,12 +115136,15 @@ local function checkSeat(hum: Humanoid)
 	end
 end
 
-local function bindCharacter(char: Model)
-	local h = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 10)
-	if not (h and h:IsA("Humanoid")) then
-		return
+local function stopHumanoidWait()
+	local c = humWaitConn
+	humWaitConn = nil
+	if c then
+		c:Disconnect()
 	end
-	local hum: Humanoid = h
+end
+
+local function bindHumanoid(hum: Humanoid)
 	hum.Seated:Connect(function(isSeated: boolean, seatPart: BasePart?)
 		if isSeated and seatPart and seatPart:IsA("VehicleSeat") and seatPart.Name == "DriverSeat" then
 			startDrive(hum, seatPart)
@@ -113800,6 +115166,31 @@ local function bindCharacter(char: Model)
 	checkSeat(hum)
 	refreshPlates()
 	syncPromptHush()
+end
+
+local function bindCharacter(char: Model)
+	stopHumanoidWait()
+	local h: Instance? = char:FindFirstChildOfClass("Humanoid")
+	if not h and streamingOn() then
+		--[[ streaming2 F16: under streaming the character model is parented before its descendants have replicated,
+			so its Humanoid can come later than any fixed wait. Bind whenever it arrives (the HudLayout pattern); the
+			next character and CharacterRemoving stop the wait. ]]
+		humWaitConn = char.ChildAdded:Connect(function(c: Instance)
+			if c:IsA("Humanoid") then
+				stopHumanoidWait()
+				bindHumanoid(c)
+			end
+		end)
+		return
+	end
+	if not h then
+		h = char:WaitForChild("Humanoid", 10) -- streaming off: the character arrives whole (0a04776)
+	end
+	if not (h and h:IsA("Humanoid")) then
+		return
+	end
+	local hum: Humanoid = h
+	bindHumanoid(hum)
 end
 
 -- test hook: device class is read once in Init; the headless tests flip it to cover the touch layout
@@ -113902,6 +115293,7 @@ function VehicleDriveClient.Init()
 		task.spawn(bindCharacter, char)
 	end)
 	plr.CharacterRemoving:Connect(function()
+		stopHumanoidWait() -- streaming2 F16 (nil while streaming is off)
 		stopDrive()
 		setPromptHush(false)
 	end)
@@ -113950,7 +115342,7 @@ return VehicleDriveClient
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="234">
+          <Item class="ModuleScript" referent="236">
             <Properties>
               <string name="Name">WeaponVisuals</string>
               <string name="Source"><![CDATA[--!strict
@@ -116085,7 +117477,7 @@ return WeaponVisuals
 ]]></string>
             </Properties>
           </Item>
-          <Item class="ModuleScript" referent="235">
+          <Item class="ModuleScript" referent="237">
             <Properties>
               <string name="Name">WorldSpinners</string>
               <string name="Source"><![CDATA[--!strict
@@ -116095,6 +117487,18 @@ return WeaponVisuals
 	replicates per frame. Only spinners within SPIN_RANGE of the camera are updated.
 
 	Model attributes: WE_SpinPivot (CFrame, world) and WE_SpinRPM (number).
+
+	streaming2 lane C4 (F21), StreamingEnabled: a spinner part can stream out and back in (the same instance), and
+	the whole Model can leave and come back (its tag is removed and added again). The CFrame it comes back with can
+	still hold this client's local spin: the docs say local writes "can be" lost, so they can also be kept. Reading
+	that as the rest pose would turn the part out of step with the rest of the dish. So, only while
+	Workspace.StreamingEnabled is on, the rest offset from the first time this client saw a part is kept and used
+	again: in the spinner's own `seen` map (strong, for as long as the spinner is tracked, so a part that streams out
+	on its own keeps its entry) and in a weak-keyed table for a Model that is tracked again (best effort: Roblox may
+	collect an Instance key that no script holds; inside lane S4's Atomic WE_Building the Model leaves and comes back
+	as one unit, so its parts stay in step with each other anyway). Each Model's DescendantAdded connection is stored
+	and disconnected when the spinner is dropped, so a re-tracked Model never stacks a second one. With streaming off
+	the offset is read from the part as at 0a04776 (nothing streams, so nothing is ever re-added).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -116111,14 +117515,41 @@ type Spinner = {
 	rate: number, -- radians per second
 	angle: number,
 	parts: { [BasePart]: CFrame }, -- part → offset from the pivot at angle 0
+	seen: { [BasePart]: CFrame }, -- streaming2 F21: every part seen while tracked → its first offset (streaming on)
+	conn: RBXScriptConnection?, -- the Model's DescendantAdded (disconnected when the spinner is dropped)
 }
 
 local spinners: { [Model]: Spinner } = {}
+-- streaming2 F21: part → its rest offset from the pivot, as first seen (read and written only while streaming is on)
+local restOffsets: { [BasePart]: CFrame } = setmetatable({}, { __mode = "k" }) :: any
+
+-- the place's StreamingEnabled (default.project.json; scripts cannot set it)
+local function streamingOn(): boolean
+	return Workspace.StreamingEnabled == true
+end
 
 local function addPart(s: Spinner, p: Instance)
 	if p:IsA("BasePart") and not s.parts[p] then
-		-- the server built it at angle 0, so its current CFrame is the rest pose
-		s.parts[p] = s.pivot:ToObjectSpace(p.CFrame)
+		local streaming = streamingOn()
+		local cached: CFrame? = if streaming then (s.seen[p] or restOffsets[p]) else nil
+		-- the server built it at angle 0, so its CFrame when first seen is the rest pose
+		local offset: CFrame = if cached ~= nil then cached else s.pivot:ToObjectSpace(p.CFrame)
+		if streaming then
+			s.seen[p] = offset
+			if cached == nil then
+				restOffsets[p] = offset
+			end
+		end
+		s.parts[p] = offset
+	end
+end
+
+local function untrack(m: Model)
+	local s = spinners[m]
+	spinners[m] = nil
+	local c = s and s.conn
+	if c then
+		c:Disconnect()
 	end
 end
 
@@ -116131,19 +117562,16 @@ local function track(m: Instance)
 	if typeof(pivot) ~= "CFrame" or typeof(rpm) ~= "number" then
 		return
 	end
-	local s: Spinner = { pivot = pivot, rate = rpm * math.pi * 2 / 60, angle = 0, parts = {} }
+	local s: Spinner = { pivot = pivot, rate = rpm * math.pi * 2 / 60, angle = 0, parts = {}, seen = {}, conn = nil }
 	spinners[m] = s
 	for _, d in ipairs(m:GetDescendants()) do
 		addPart(s, d)
 	end
-	-- StreamingEnabled can deliver parts after the Model
-	m.DescendantAdded:Connect(function(d: Instance)
+	-- StreamingEnabled can deliver parts after the Model, or take one out and bring it back
+	s.conn = m.DescendantAdded:Connect(function(d: Instance)
 		local cur = spinners[m]
 		if cur then
-			-- a late part arrives in its rest pose; store its offset as if at angle 0
-			if d:IsA("BasePart") and not cur.parts[d] then
-				cur.parts[d] = cur.pivot:ToObjectSpace(d.CFrame)
-			end
+			addPart(cur, d)
 		end
 	end)
 end
@@ -116158,7 +117586,7 @@ function WorldSpinners.Init()
 	end)
 	CollectionService:GetInstanceRemovedSignal(TAG):Connect(function(m: Instance)
 		if m:IsA("Model") then
-			spinners[m] = nil
+			untrack(m)
 		end
 	end)
 	RunService.RenderStepped:Connect(function(dt: number)
@@ -116166,7 +117594,7 @@ function WorldSpinners.Init()
 		local camPos = if cam then cam.CFrame.Position else Vector3.zero
 		for m, s in pairs(spinners) do
 			if m.Parent == nil then
-				spinners[m] = nil
+				untrack(m)
 			elseif (s.pivot.Position - camPos).Magnitude <= SPIN_RANGE then
 				s.angle = (s.angle + s.rate * dt) % (math.pi * 2)
 				local frame = s.pivot * CFrame.Angles(0, s.angle, 0)
@@ -116190,7 +117618,7 @@ return WorldSpinners
       </Item>
     </Item>
   </Item>
-  <Item class="Workspace" referent="236">
+  <Item class="Workspace" referent="238">
     <Properties>
       <string name="Name">Workspace</string>
       <bool name="FilteringEnabled">true</bool>
