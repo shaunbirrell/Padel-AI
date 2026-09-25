@@ -4,8 +4,15 @@
 	Income → PendingCash. Part kit + optional IndustrialPack dress.
 	Does NOT touch OilRig Alpha/Bravo far POIs.
 
-	v71 (HUD v70 spec §5): no neon IncomePad and no "+$/tick" card over each pump; the "+$18" pop is an owner-only
-	stud-scaled WorldLabel, made only while the owner stands within PopOwnerRadius of that pump.
+	v71 (HUD v70 spec §5): no neon IncomePad and no "+$/tick" card over each pump.
+	F4 (owner's 11 features, lane W): no server "+$18" pop either. The owner's one "+$18 / every 5s" label is the
+	client ProducerLabels module (EconomyConfig.ProducerLabels), so the server makes no BillboardGui per tick.
+	F9 Golden Pumpjacks (MonetizationConfig.DevProducts.GoldenPumpjack, PlotOilPumpConfig.Golden): an owner's pumps
+	are gold Metal with Reflectance (never a glowing material, no light); the catalog mesh clone is recoloured too
+	(re-applied after the deferred prop attach). While the Id is live and the plot owner does not own it, ONE 7x7 gold
+	pad (WE_PremiumPad, PremiumPadService prompts it) stands between the pumps, PadOffsetStuds toward the plot, with
+	one stud-scaled "Golden Pump" label (MaxDistance LabelMaxDistance, never AlwaysOnTop, tagged
+	WorldLabelConfig.BaseLabelTag for the client LabelGovernor). The re-sync on grant (MonetizationService) removes it.
 ]]
 
 local Players = game:GetService("Players")
@@ -18,9 +25,20 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local PlotOilPumpConfig = require(Shared.Configs.PlotOilPumpConfig)
+local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local PlotFrame = require(Shared.Util.PlotFrame)
 
-local POP_OWNER_RADIUS = 28 -- studs (HudConfig.WorldLabels.Transient range): no pop for an owner who is not there
+local GOLDEN_KEY = "GoldenPumpjack" -- MonetizationConfig.DevProducts key and entitlement
+local GOLD_PAD_TAG = (Constants.Tags and Constants.Tags.PremiumPad) or "WE_PremiumPad"
+-- F9: the pump kit parts that take the gold Metal dress (the Pad keeps its Asphalt, gold coloured)
+local GOLDEN_KIT_PARTS: { [string]: boolean } = { Derrick = true, WalkingBeam = true, HorseHead = true }
+-- F9 (lane W assumption): the walk-over gold pad never sits in the main gate lane. Where the spec spot (lateral 0,
+-- PadOffsetStuds toward the plot) is closer than this to the main gate centre (plot-local (0, PlotSize/2): plots 3
+-- and 4, whose pumps flank the gate), the pad moves beside the outer pump instead, on the pump line, so an owner
+-- walking out of the gate is never shown a Robux sheet. Candidate for PlotOilPumpConfig.Golden (lane Z, config-first).
+local GOLD_PAD_GATE_CLEAR = 24
+local GOLD_PAD_BESIDE_PUMP = 8.5 -- studs from a pump centre to the pad centre (pump pad half 4 + gap 1 + pad half 3.5)
 
 local PlotOilPumpService = {}
 
@@ -65,6 +83,33 @@ local function wallsLevelFor(player: Player): number
 		return 0
 	end
 	return tonumber(profile.BaseUpgrades.DefensiveWalls) or 0
+end
+
+--[[ F9: gold dress (PlotOilPumpConfig.Golden). Kit parts Derrick / WalkingBeam / HorseHead: gold Metal + Reflectance;
+	the Pad stays Asphalt with a gold colour; the catalog mesh clone (under the Derrick, VisualAssetService): every
+	BasePart gold Metal, its MeshPart textures cleared, SurfaceAppearance / Texture / Decal removed. Idempotent;
+	one pass over this pump model only (a few parts, on build / grant, never per frame). ]]
+local function applyGoldenDress(model: Model)
+	local g = PlotOilPumpConfig.Golden
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			if d.Parent == model and d.Name == "Pad" then
+				d.Color = g.Color
+			elseif d.Parent ~= model or GOLDEN_KIT_PARTS[d.Name] then
+				d.Color = g.Color
+				d.Material = g.Material
+				d.Reflectance = g.Reflectance
+				if d:IsA("MeshPart") then
+					pcall(function()
+						d.TextureID = ""
+					end)
+				end
+			end
+		elseif d:IsA("SurfaceAppearance") or d:IsA("Texture") or d:IsA("Decal") then
+			d:Destroy()
+		end
+	end
+	model:SetAttribute("WE_GoldenPump", true)
 end
 
 local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
@@ -122,6 +167,10 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 			pcall(function()
 				VisualAssetService.TryAttachPropVisual(tower, PlotOilPumpConfig.VisualPropKey or "IndustrialPack")
 			end)
+			-- F9: the catalog clone arrives after SyncPlot dressed the kit: gold it too
+			if model.Parent and model:GetAttribute("WE_GoldenPump") == true then
+				applyGoldenDress(model)
+			end
 		end)
 	end
 
@@ -145,18 +194,6 @@ local function buildPumpKit(at: CFrame, parent: Instance, index: number): Model
 
 
 	return model
-end
-
-local function applyGoldenDress(model: Model)
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") then
-			if d.Name == "Pad" or d.Name == "Derrick" or d.Name == "WalkingBeam" or d.Name == "HorseHead" then
-				d.Color = Color3.fromRGB(255, 195, 60)
-				d.Material = Enum.Material.Neon
-			end
-		end
-	end
-	model:SetAttribute("WE_GoldenPump", true)
 end
 
 function PlotOilPumpService.SyncPlot(plotId: number)
@@ -207,6 +244,10 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	local out = (half + (PlotOilPumpConfig.WallClearanceStuds or 18)) / axis
 	local spread = PlotOilPumpConfig.LateralSpreadStuds or 22
 	local count = math.clamp(PlotOilPumpConfig.PumpsPerPlot or 2, 1, 2)
+	local hasGold = owner ~= nil
+		and MonetizationService ~= nil
+		and MonetizationService.PlayerOwnsEntitlement ~= nil
+		and MonetizationService.PlayerOwnsEntitlement(owner, GOLDEN_KEY) == true
 
 	for i = 1, count do
 		local lat = if count == 1 then 0 elseif i == 1 then -spread * 0.5 else spread * 0.5
@@ -215,16 +256,49 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 		local pump = buildPumpKit(look, folder, i)
 		pump:SetAttribute("PlotId", plotId)
 		pump:SetAttribute("OwnerUserId", ownerUserId)
-		local hasGold = owner
-			and MonetizationService
-			and MonetizationService.PlayerOwnsEntitlement
-			and MonetizationService.PlayerOwnsEntitlement(owner, "GoldenPumpjack")
 		if hasGold then
 			applyGoldenDress(pump)
 		end
 		pcall(function()
 			CollectionService:AddTag(pump, TAG)
 		end)
+	end
+
+	-- F9: the Golden Pump pad, only while the Id is live and the owner does not own it (nothing prompts at Id 0)
+	local goldDef = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
+	local goldLive = typeof(goldDef) == "table" and typeof(goldDef.Id) == "number" and goldDef.Id ~= 0
+	if goldLive and not hasGold then
+		local g = PlotOilPumpConfig.Golden
+		local padPos = (plotPos :: Vector3) + toward * (out - (g.PadOffsetStuds or 10)) + Vector3.new(0, 0.3, 0)
+		local gate = PlotFrame.LocalToWorld(plotId, 0, half)
+		if Vector3.new(padPos.X - gate.X, 0, padPos.Z - gate.Z).Magnitude < GOLD_PAD_GATE_CLEAR then
+			local lat = (if count == 1 then 0 else spread * 0.5) + GOLD_PAD_BESIDE_PUMP
+			padPos = (plotPos :: Vector3) + toward * out + right * lat + Vector3.new(0, 0.3, 0)
+		end
+		local pad = Instance.new("Part")
+		pad.Name = "PremiumPad_" .. GOLDEN_KEY
+		pad.Size = Vector3.new(7, 0.45, 7)
+		pad.CFrame = CFrame.lookAt(padPos, padPos + toward)
+		pad.Anchored = true
+		pad.CanCollide = true
+		pad.Color = g.Color
+		pad.Material = g.Material
+		pad.Reflectance = g.Reflectance
+		pad.TopSurface = Enum.SurfaceType.Smooth
+		pad.BottomSurface = Enum.SurfaceType.Smooth
+		pad:SetAttribute("PlotId", plotId)
+		pad:SetAttribute("OfferKind", "DevProduct")
+		pad:SetAttribute("OfferKey", GOLDEN_KEY)
+		WorldLabel.Create(pad, "Golden Pump", {
+			Name = "WE_PremiumBillboard", -- the Shop client's OWNED look finds the pad label by this name
+			Sub = "R$",
+			Color = g.Color,
+			MaxDistance = g.LabelMaxDistance,
+			Offset = Vector3.new(0, 5.5, 0),
+			BaseLabel = true, -- WorldLabelConfig.BaseLabelTag: counted by the client LabelGovernor
+		})
+		CollectionService:AddTag(pad, GOLD_PAD_TAG) -- PremiumPadService attaches through its tag listener
+		pad.Parent = folder
 	end
 
 	if RunService:IsStudio() then
@@ -334,37 +408,8 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 							end
 						end
 						if n > 0 then
+							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
 							EconomyService.AccruePendingCash(owner, cash * n, reason)
-							-- "+$18" pop on each pump, owner-only and only while the owner is close (spec §5)
-							local char = owner.Character
-							local hrp = char and char:FindFirstChild("HumanoidRootPart")
-							for _, ch in ipairs(folder:GetChildren()) do
-								if hrp and hrp:IsA("BasePart") and ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
-									local anchor = ch.PrimaryPart
-									if anchor and (anchor.Position - hrp.Position).Magnitude <= POP_OWNER_RADIUS then
-										local pop = WorldLabel.Create(anchor, string.format("+$%d", cash), {
-											Name = "WE_OilCashPop",
-											Color = Color3.fromRGB(100, 255, 140),
-											TextSize = 18,
-											Studs = Vector2.new(3, 1.2),
-											Offset = Vector3.new(0, 4.5, 0),
-											MaxDistance = POP_OWNER_RADIUS,
-											OwnerUserId = ownerId,
-										})
-										local popLab = pop:FindFirstChild("Title")
-										task.spawn(function()
-											for i = 1, 6 do
-												pop.StudsOffsetWorldSpace = Vector3.new(0, 4.5 + i * 0.35, 0)
-												if popLab and popLab:IsA("TextLabel") then
-													popLab.TextTransparency = i / 7
-												end
-												task.wait(0.1)
-											end
-											pop:Destroy()
-										end)
-									end
-								end
-							end
 						end
 					end
 				end

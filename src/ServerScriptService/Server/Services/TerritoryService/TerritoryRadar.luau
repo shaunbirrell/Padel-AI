@@ -46,4 +46,17 @@ function TerritoryRadar.RevealRadius(): number
 	return TerritoryConfig.RadarRevealRadius or 220
 end
 
+--[[ F10 (owner's 11 features, lane W): is this zone listed for a viewer whose own plot is viewerPlotId? Every zone
+	is, except another plot's Home Outpost (TerritoryConfig.Starter row): only its owner can take it, so it never shows
+	in anyone else's territory list, radar or tutorial target. A viewer without a plot (nil) sees no Home Outpost. ]]
+function TerritoryRadar.ShownTo(def: TerritoryConfig.TerritoryDef?, viewerPlotId: number?): boolean
+	if def == nil then
+		return false
+	end
+	if not TerritoryConfig.IsStarterDef(def) then
+		return true
+	end
+	return viewerPlotId ~= nil and def.PlotId == viewerPlotId
+end
+
 return TerritoryRadar

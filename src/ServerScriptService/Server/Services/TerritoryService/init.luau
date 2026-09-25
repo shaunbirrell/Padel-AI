@@ -8,6 +8,25 @@
 	basePos.Y + flagLift − 1 (oil-rig decks too); the zone label is one stud-scaled WorldLabel with the zone name
 	in the owner colour (capture % and "contested" live on the HUD capture bar); the WE_FlagBillboard diamond is
 	28 px and draws through walls only while contested (WorldLabel.SetRole). No "Capturing X..." toast.
+
+	Owner's 11 features, lane W:
+	  F3  Empire Tax. Capture / loss / steal toasts are EconomyConfig.OutpostIncomeBuff templates with the player's
+	      TOTAL Empire Tax % (EconomyService.SyncOutpostIncomeStacks recounts it from profile.Territories).
+	      PersistClaims (flag): on join, replantClaims re-plants the saved claims onto Neutral / NPC-held zones (a zone
+	      another online player holds is dropped with the ToastClaimHeld toast), and on leave the leaver's zones go back
+	      to Neutral (the saved claims are NOT wiped, so the next server re-plants them). Off = the old soft release.
+	  F6  A shielded novice standing in a contested zone loses the novice shield (CombatService.EndNoviceShield
+	      "contest", pcall).
+	  F10 Home Outposts (TerritoryConfig.Starter rows, IsStarterId): owner-only capture (TerritoryCapture), 10 s,
+	      +StarterPct Empire Tax, never a stack, never counted toward MaxPersonalTerritories, never evicted or stolen,
+	      no stipend, no light or stripe. The first capture sets profile.StarterOutpostTaken; later the plot owner holds
+	      it automatically on BaseService.OnPlotReady. It goes back to Neutral when the owner leaves or the plot changes
+	      hands. Other plots' Home Outposts are not in a player's territory list (TerritoryRadar.ShownTo).
+	  Nations B2: the contested pulse and the capture HUD fall back to amber when the two nation colours are closer
+	      than NationConfig.ContestMinColorDistance; an owned zone never takes a colour that reads as NPC red, Clan
+	      blue or contested amber (legacy roster colour, else green); a leaver's colour is kept while that UserId still
+	      owns a zone (R15, then dropped); outpost nation flags (Textures only, never a SurfaceGui) and their sizes sit
+	      behind NationConfig.OutpostFlags (off), shown only on a Player-owned, uncontested zone (RefreshOwnerFlags).
 ]]
 
 local Players = game:GetService("Players")
@@ -20,6 +39,10 @@ local Types = require(Shared.Types)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig) -- F3 toasts + PersistClaims (EconomyConfig requires nothing)
+local NationConfig = require(Shared.Configs.NationConfig) -- B2: contest colour distance, OutpostFlags
+local NationColorConfig = require(Shared.Configs.NationColorConfig) -- B2: the legacy roster colour fallback
+local NationTexture = require(Shared.Util.NationTexture) -- B2: outpost flag Textures (behind OutpostFlags)
 
 local TerritoryRadar = require(script.TerritoryRadar)
 local TerritoryOwnership = require(script.TerritoryOwnership)
@@ -60,6 +83,7 @@ local TutorialService: any = nil
 local RemoteSetup: any = nil
 local BaseService: any = nil
 local NationColorService: any = nil
+local CombatService: any = nil -- F6: EndNoviceShield("contest")
 
 local territories: { [string]: TerritoryRuntime } = {}
 local firstOutpostLogged: { [number]: boolean } = {}
@@ -107,6 +131,211 @@ local function countPersonalTerritories(userId: number): number
 		end
 	end
 	return n
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- F10 Home Outposts (TerritoryConfig.Starter rows)
+---------------------------------------------------------------------------------------------------------------
+
+--[[ F10 (spec §2 cross-lane API): true for a Home Outpost id (a TerritoryConfig.Starter row, only while
+	Starter.Enabled). Never yields. ]]
+function TerritoryService.IsStarterId(id: any): boolean
+	if typeof(id) ~= "string" then
+		return false
+	end
+	return TerritoryConfig.IsStarterDef(TerritoryConfig.Territories[id])
+end
+
+local function isStarterRt(rt: TerritoryRuntime): boolean
+	return TerritoryConfig.IsStarterDef(rt.Def)
+end
+
+-- the runtime of plot plotId's Home Outpost, or nil (Starter off / unknown plot)
+local function starterRtForPlot(plotId: any): TerritoryRuntime?
+	if typeof(plotId) ~= "number" then
+		return nil
+	end
+	local st = TerritoryConfig.Starter
+	local id = tostring(st.IdPrefix) .. tostring(plotId)
+	local rt = territories[id]
+	if rt and isStarterRt(rt) and rt.Def.PlotId == plotId then
+		return rt
+	end
+	return nil
+end
+
+-- F10: personal zones that count toward MaxPersonalTerritories (a Home Outpost never does)
+local function countPersonalNonStarter(userId: number): number
+	local n = 0
+	for _, rt in pairs(territories) do
+		if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == userId and not isStarterRt(rt) then
+			n += 1
+		end
+	end
+	return n
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Nations B2: colours that never read as NPC / Clan / contested, and the R15 leaver cache
+---------------------------------------------------------------------------------------------------------------
+
+local AMBER = Color3.fromRGB(255, 140, 35) -- contested
+local NPC_RED = Color3.fromRGB(210, 45, 45) -- NPC-held
+local CLAN_BLUE = Color3.fromRGB(70, 120, 240) -- clan-held
+local OWNED_FALLBACK = Color3.fromRGB(55, 210, 95) -- a player-held zone with no usable colour
+
+-- RGB distance (0..1.73)
+local function colorDistance(a: Color3, b: Color3): number
+	local dr, dg, db = a.R - b.R, a.G - b.G, a.B - b.B
+	return math.sqrt(dr * dr + dg * dg + db * db)
+end
+
+local function tooClose(a: Color3, b: Color3): boolean
+	local minD = tonumber((NationConfig :: any).ContestMinColorDistance) or 0.25
+	return colorDistance(a, b) < minD
+end
+
+-- a colour that would read as NPC-held, clan-held or contested
+local function nearReserved(c: Color3): boolean
+	return tooClose(c, NPC_RED) or tooClose(c, CLAN_BLUE) or tooClose(c, AMBER)
+end
+
+local function rawNationColor(userId: number?): Color3?
+	if typeof(userId) ~= "number" or userId <= 0 or not NationColorService or not NationColorService.GetColor then
+		return nil
+	end
+	local ok, c = pcall(NationColorService.GetColor, userId)
+	return if ok and typeof(c) == "Color3" then c else nil
+end
+
+-- the player's legacy 8-colour roster colour (NationColorConfig), or nil
+local function legacyRosterColor(userId: number): Color3?
+	if not NationColorService or not NationColorService.GetColorId then
+		return nil
+	end
+	local ok, id = pcall(NationColorService.GetColorId, userId)
+	if not ok or typeof(id) ~= "string" then
+		return nil
+	end
+	for _, def in ipairs(NationColorConfig.Colors) do
+		if def.Id == id then
+			return def.Color
+		end
+	end
+	return nil
+end
+
+--[[ R15: the colour (and nation id, for the outpost flag) of every player who owns a zone, refreshed while they are
+	online. NationColorService forgets a leaver at once; this keeps the leaver's entry only while that UserId still
+	owns at least one zone, then drops it (pruneOwnerCache), so it never grows with the server's lifetime. ]]
+type OwnerLook = { Color: Color3, NationId: string? }
+local ownerLookCache: { [number]: OwnerLook } = {}
+local FALLBACK_LOOK: OwnerLook = { Color = OWNED_FALLBACK, NationId = nil }
+
+local function nationIdFor(userId: number): string?
+	if not NationColorService or not NationColorService.GetNationId then
+		return nil
+	end
+	local ok, id = pcall(NationColorService.GetNationId, userId) -- art-gated: nil until nations may be shown
+	return if ok and typeof(id) == "string" then id else nil
+end
+
+-- B2 (c): an owned zone's colour. The nation (or legacy) colour, unless it reads as NPC red, Clan blue or contested
+-- amber: then the legacy roster colour, else OWNED_FALLBACK. Offline owner: the cached look (R15).
+local function ownerLook(userId: number): OwnerLook
+	local raw = rawNationColor(userId)
+	if raw then
+		local c = raw
+		if nearReserved(c) then
+			local legacy = legacyRosterColor(userId)
+			c = if legacy and not nearReserved(legacy) then legacy else OWNED_FALLBACK
+		end
+		local nid = if NationConfig.OutpostFlags == true then nationIdFor(userId) else nil
+		local cached = ownerLookCache[userId]
+		if cached and cached.Color == c and cached.NationId == nid then
+			return cached
+		end
+		local look: OwnerLook = { Color = c, NationId = nid }
+		ownerLookCache[userId] = look
+		return look
+	end
+	return ownerLookCache[userId] or FALLBACK_LOOK
+end
+
+-- R15: drop a UserId's cached look once it owns no zone (called after every release)
+local function pruneOwnerCache(userId: number?)
+	if typeof(userId) == "number" and ownerLookCache[userId] ~= nil and countPersonalTerritories(userId) == 0 then
+		ownerLookCache[userId] = nil
+	end
+end
+
+-- B2 (a) / (b): the two contester colours, with B replaced by amber when A and B are too close to tell apart, and
+-- both dropped (the default amber pulse) when A itself reads as amber.
+local function contestColors(rt: TerritoryRuntime): (Color3?, Color3?)
+	local colA = rawNationColor(rt.ContesterA)
+	local colB = rawNationColor(rt.ContesterB)
+	if colA and colB and tooClose(colA, colB) then
+		if tooClose(colA, AMBER) then
+			return nil, nil
+		end
+		return colA, AMBER
+	end
+	return colA, colB
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- Nations B2 (e): outpost nation flags, behind NationConfig.OutpostFlags (off). Textures only, never a SurfaceGui.
+---------------------------------------------------------------------------------------------------------------
+
+local FLAG_TEXTURE_NAMES = { "WE_NationTexA", "WE_NationTexB" }
+local FLAG_SHOWN_ATTR = "WE_NationShown"
+-- 4:3 flag sizes while OutpostFlags is on (owned / contested / neutral)
+local OUTPOST_FLAG_OWNED = Vector3.new(4.8, 3.6, 0.28)
+local OUTPOST_FLAG_CONTESTED = Vector3.new(5.2, 3.9, 0.3)
+local OUTPOST_FLAG_NEUTRAL = Vector3.new(3.6, 2.7, 0.22)
+
+--[[ Show nationId's flag on a zone flag part (2 Textures on the thin faces, like Modules/NationFlag), or blank them
+	(nationId nil, or no art wired). Textures are created only when a flag is first shown. Idempotent: an unchanged
+	view writes nothing (WE_NationShown key). Returns true while a nation flag image shows. ]]
+local function dressOutpostFlag(flag: BasePart, nationId: string?): boolean
+	local def = if nationId then NationConfig.Get(nationId) else nil
+	local faceA, faceB, w, h = NationTexture.ThinFaces(flag.Size.X, flag.Size.Y, flag.Size.Z)
+	local src = if def then NationTexture.Source(def.Id) else nil
+	local props = if src then NationTexture.TextureProps(w, h, src.Rect) else nil
+	local image = if src and props then src.Image else ""
+	local key = string.format("%s|%.2fx%.2f|%s", if def and image ~= "" then def.Id else "-", w, h, image)
+	if flag:GetAttribute(FLAG_SHOWN_ATTR) == key then
+		return image ~= ""
+	end
+	local faces = { faceA, faceB }
+	for i, name in ipairs(FLAG_TEXTURE_NAMES) do
+		local t = flag:FindFirstChild(name)
+		local tex: Texture? = if t and t:IsA("Texture") then t else nil
+		if image ~= "" and props then
+			if tex == nil then
+				local created = Instance.new("Texture")
+				created.Name = name
+				created.Parent = flag
+				tex = created
+			end
+			local tx = tex :: Texture
+			local face = (Enum.NormalId :: any)[faces[i]]
+			if tx.Face ~= face then
+				tx.Face = face
+			end
+			tx.Texture = image
+			tx.StudsPerTileU = props.StudsPerTileU
+			tx.StudsPerTileV = props.StudsPerTileV
+			tx.OffsetStudsU = props.OffsetStudsU
+			tx.OffsetStudsV = props.OffsetStudsV
+			tx.Transparency = 0
+		elseif tex then
+			tex.Texture = ""
+			tex.Transparency = 1
+		end
+	end
+	flag:SetAttribute(FLAG_SHOWN_ATTR, key)
+	return image ~= ""
 end
 
 local function syncProfileOwnership(player: Player)
@@ -160,35 +389,38 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 	local color: Color3
 	local flagTransparency = 0.15
 	local flagLift = 12 -- studs above the marker for the flag centre (+ basePos.Y − 1 below)
+	local ownerNationId: string? = nil -- B2 (e): the owner's nation flag (only while OutpostFlags is on)
 
 	if contested then
-		-- v38: pulse between both nation colors when two contesting players known
-		local ca = rt.ContesterA or 0
-		local cb = rt.ContesterB or 0
-		local colA = if ca > 0 and NationColorService and NationColorService.GetColor then NationColorService.GetColor(ca) else nil
-		local colB = if cb > 0 and NationColorService and NationColorService.GetColor then NationColorService.GetColor(cb) else nil
+		-- v38: pulse between both nation colors when two contesting players known.
+		-- Nations B2 (a): two colours closer than NationConfig.ContestMinColorDistance pulse A <-> amber instead
+		-- (contestColors hands back amber as B), and a colour that itself reads as amber is plain amber.
+		local colA, colB = contestColors(rt)
 		if colA and colB then
 			local pulse = (math.sin(os.clock() * 4) + 1) * 0.5
 			color = colA:Lerp(colB, pulse)
-		elseif colA then
+		elseif colA and not tooClose(colA, AMBER) then
 			local pulse = (math.sin(os.clock() * 5) + 1) * 0.5
-			color = colA:Lerp(Color3.fromRGB(255, 140, 35), pulse)
+			color = colA:Lerp(AMBER, pulse)
 		else
-			color = Color3.fromRGB(255, 140, 35)
+			color = AMBER
 		end
 		flagTransparency = 0.05
 		flagLift = 13.5
 	elseif rt.OwnerType == ot.Player then
-		local nation = if NationColorService and NationColorService.GetColor then NationColorService.GetColor(rt.OwnerUserId) else nil
-		color = nation or Color3.fromRGB(55, 210, 95)
+		-- Nations B2 (c): never a colour that reads as NPC red, Clan blue or contested amber; R15: an owner who left
+		-- keeps the cached colour while they still own a zone
+		local look = ownerLook(rt.OwnerUserId)
+		color = look.Color
+		ownerNationId = look.NationId
 		flagTransparency = 0.0
 		flagLift = 14.5
 	elseif rt.OwnerType == ot.NPC then
-		color = Color3.fromRGB(210, 45, 45)
+		color = NPC_RED
 		flagTransparency = 0.05
 		flagLift = 13.2
 	elseif rt.OwnerType == ot.Clan then
-		color = Color3.fromRGB(70, 120, 240)
+		color = CLAN_BLUE
 		flagTransparency = 0.0
 		flagLift = 14.0
 	else
@@ -222,23 +454,39 @@ local function updateMarkerVisual(rt: TerritoryRuntime)
 		-- Raise owned flags; lower neutral so ownership reads at a glance. Height from the marker, so a flag on
 		-- an oil-rig deck (marker high above the sea) stays on its pole instead of dropping to y ≈ 12.
 		local basePos = marker.Position
-		flag.Size = if contested then Vector3.new(6.2, 3.6, 0.3) elseif rt.OwnerType == ot.Neutral then Vector3.new(4.2, 2.4, 0.22) else Vector3.new(5.5, 3.2, 0.28)
+		local outpostFlags = NationConfig.OutpostFlags == true
+		if outpostFlags then
+			-- Nations B2 (e): 4:3 flag sizes for the nation Texture (owned / contested / neutral)
+			flag.Size = if contested then OUTPOST_FLAG_CONTESTED elseif rt.OwnerType == ot.Neutral then OUTPOST_FLAG_NEUTRAL else OUTPOST_FLAG_OWNED
+		else
+			flag.Size = if contested then Vector3.new(6.2, 3.6, 0.3) elseif rt.OwnerType == ot.Neutral then Vector3.new(4.2, 2.4, 0.22) else Vector3.new(5.5, 3.2, 0.28)
+		end
 		flag.Position = Vector3.new(basePos.X + flag.Size.X * 0.5 + 0.2, basePos.Y + flagLift - 1, basePos.Z)
+		-- Nations B2 (e): a nation flag only on a Player-owned, uncontested zone, and only while OutpostFlags is on
+		-- (with it off no Texture is ever made here). Never a SurfaceGui; never while contested (no flag as a target).
+		local nationFlagShows = false
+		if outpostFlags then
+			local showId = if not contested and rt.OwnerType == ot.Player then ownerNationId else nil
+			nationFlagShows = dressOutpostFlag(flag, showId)
+		end
 		-- W3 step 2 (spec w3s2 §1.11, lane P): no owner light on the flag any more. It broke the world light policy
 		-- (Brightness 2.4-3.2 and Range 28 > 0.8 / 18, one per zone); the painted flag, stripe and diamond show the owner.
-		-- A leftover one (a place saved with an older build's flag) is removed.
-		local oldLight = flag:FindFirstChild("WE_OwnerLight")
-		if oldLight then
-			oldLight:Destroy()
+		-- A leftover one (a place saved with an older build's flag) is removed. F10: a Home Outpost never had one.
+		if not isStarterRt(rt) then
+			local oldLight = flag:FindFirstChild("WE_OwnerLight")
+			if oldLight then
+				oldLight:Destroy()
+			end
 		end
 
-		-- Keep stripe locked to flag (nation color visibility polish)
-		local stripe = parent:FindFirstChild(tid .. "_FlagStripe")
+		-- Keep stripe locked to flag (nation color visibility polish). F10: a Home Outpost has no stripe.
+		-- Nations B2 (e): the stripe hides (Transparency 1) while a nation flag image shows.
+		local stripe = if isStarterRt(rt) then nil else parent:FindFirstChild(tid .. "_FlagStripe")
 		if stripe and stripe:IsA("BasePart") then
 			stripe.Size = Vector3.new(flag.Size.X, math.max(0.35, flag.Size.Y * 0.14), flag.Size.Z + 0.06)
 			stripe.Position = flag.Position
 			stripe.Color = Color3.fromRGB(245, 245, 245)
-			stripe.Transparency = if rt.OwnerType == ot.Neutral then 0.45 else 0.08
+			stripe.Transparency = if nationFlagShows then 1 elseif rt.OwnerType == ot.Neutral then 0.45 else 0.08
 		end
 
 		-- Nation-colour diamond over the flag: 28 px, MaxDistance <= 40, through walls ONLY while contested
@@ -319,8 +567,19 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 		Contested = false,
 		Protected = false,
 	}
+	-- F10: another plot's Home Outpost is not listed (only its owner can take it; TerritoryRadar.ShownTo)
+	local viewerPlotId: number? = nil
+	if player and BaseService and BaseService.GetOwnedPlotId then
+		local okPlot, pid = pcall(BaseService.GetOwnedPlotId, player)
+		if okPlot and typeof(pid) == "number" then
+			viewerPlotId = pid
+		end
+	end
 
 	for _, rt in pairs(territories) do
+		if not TerritoryRadar.ShownTo(rt.Def, viewerPlotId) then
+			continue
+		end
 		table.insert(list, {
 			Id = rt.Id,
 			DisplayName = rt.Def.DisplayName,
@@ -342,20 +601,20 @@ local function buildPayloadForPlayer(player: Player?): Types.TerritoryStatePaylo
 			localCapture.Protected = rt.ProtectedUntil > nowUnix()
 				and rt.OwnerUserId ~= TerritoryConfig.NeutralOwnerId
 				and rt.OwnerUserId ~= player.UserId
-			-- v38: dual nation colors for contested pulse HUD
+			-- v38: dual nation colors for contested pulse HUD.
+			-- Nations B2 (b): the same rule as the world pulse (contestColors): two colours too close to tell apart
+			-- send B = amber, and a colour that itself reads as amber sends neither (the HUD's own amber pulse), so
+			-- the capture bar never pulses between two identical colours.
 			if rt.Contested then
-				local function packColor(uid: number?): { number }?
-					if not uid or uid <= 0 then
-						return nil
-					end
-					local c = if NationColorService and NationColorService.GetColor then NationColorService.GetColor(uid) else nil
+				local function packColor(c: Color3?): { number }?
 					if not c then
 						return nil
 					end
 					return { c.R, c.G, c.B }
 				end
-				;(localCapture :: any).ContesterColorA = packColor(rt.ContesterA)
-				;(localCapture :: any).ContesterColorB = packColor(rt.ContesterB)
+				local colA, colB = contestColors(rt)
+				;(localCapture :: any).ContesterColorA = packColor(colA)
+				;(localCapture :: any).ContesterColorB = packColor(colB)
 			end
 		end
 	end
@@ -464,6 +723,40 @@ function TerritoryService.GetRadarRevealRadius(): number
 	return TerritoryConfig.RadarRevealRadius or 220
 end
 
+-- F3: the player's total Empire Tax % (EconomyService.EmpireTaxPct), 0 when unknown
+local function empireTaxPctOf(player: Player): number
+	if _EconomyService and _EconomyService.EmpireTaxPct then
+		local ok, pct = pcall(_EconomyService.EmpireTaxPct, player)
+		if ok and typeof(pct) == "number" then
+			return pct
+		end
+	end
+	return 0
+end
+
+-- F3: recount the outpost stacks from profile.Territories (EconomyService.SyncOutpostIncomeStacks, which also writes
+-- WE_EmpireTaxPct on change). Returns (oldStacks, newStacks, total Empire Tax %).
+local function syncEmpireTax(player: Player): (number, number, number)
+	if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
+		local oldStacks, newStacks, _perStack, total = _EconomyService.SyncOutpostIncomeStacks(player)
+		local pct = if typeof(total) == "number" then total else empireTaxPctOf(player)
+		return tonumber(oldStacks) or 0, tonumber(newStacks) or 0, pct
+	end
+	return 0, 0, empireTaxPctOf(player)
+end
+
+-- F3: a toast from an EconomyConfig.OutpostIncomeBuff template (never errors: a bad template gives the fallback)
+local function fmtToast(template: any, fallback: string, ...: any): string
+	if typeof(template) ~= "string" then
+		return fallback
+	end
+	local ok, msg = pcall(string.format, template, ...)
+	return if ok and typeof(msg) == "string" then msg else fallback
+end
+
+--[[ reason: "captured" (stolen by another player), "max_personal" (evicted by the owner's own new capture),
+	"leave" (F3 PersistClaims / F10: the owner is leaving the server: the runtime goes Neutral but the profile is NOT
+	touched, so the saved claims survive for the next server), "plot" (F10: a Home Outpost whose plot changed hands). ]]
 local function releaseOwnership(rt: TerritoryRuntime, reason: string)
 	local prevUserId = rt.OwnerUserId
 	local prevType = rt.OwnerType
@@ -471,39 +764,35 @@ local function releaseOwnership(rt: TerritoryRuntime, reason: string)
 	rt.OwnerUserId = TerritoryConfig.NeutralOwnerId
 	rt.ClanId = nil
 	rt.ProtectedUntil = 0
+	pushDirty = true
 
 	if prevType == ownerTypes().Player and prevUserId > 0 then
 		local prevPlayer = Players:GetPlayerByUserId(prevUserId)
-		if prevPlayer then
+		if prevPlayer and reason ~= "leave" then
 			syncProfileOwnership(prevPlayer)
-			-- Contested: recount OutpostIncomeStacks from remaining owned zones
-			if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
-				_EconomyService.SyncOutpostIncomeStacks(prevPlayer)
-			end
-			if NotificationService then
+			-- Contested: recount OutpostIncomeStacks from remaining owned zones (SyncOutpostIncomeStacks)
+			local _, _, pct = syncEmpireTax(prevPlayer)
+			if NotificationService and reason ~= "plot" then
 				local zoneName = if rt.Def and rt.Def.DisplayName then rt.Def.DisplayName else "Outpost"
-				local lostToast = string.format("Outpost lost: %s stolen — Income buff dropped", zoneName)
-				pcall(function()
-					local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-					if buff and typeof(buff.ToastStolenFromYou) == "string" then
-						lostToast = string.format(buff.ToastStolenFromYou, zoneName)
-					elseif buff and typeof(buff.ToastLost) == "string" then
-						lostToast = buff.ToastLost
-					end
-				end)
+				local buff = EconomyConfig.OutpostIncomeBuff
+				-- F3: the TOTAL Empire Tax % left ("Central Plaza taken  Empire Tax +10%")
+				local lostToast = if reason == "captured"
+					then fmtToast(buff and buff.ToastStolenFromYou, "Outpost lost: " .. zoneName, zoneName, pct)
+					else fmtToast(buff and buff.ToastLost, "Outpost lost", pct)
 				NotificationService.Notify(prevPlayer, lostToast, "Warn", 4.5)
 			end
-			if AnalyticsService then
-				AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_LOST, prevUserId, {
-					territory = rt.Id,
-					reason = reason,
-				})
-			end
-			if BaseService then
-				BaseService.PushState(prevPlayer)
-			end
+		end
+		if prevPlayer and AnalyticsService then
+			AnalyticsService.Log(AnalyticsConfig.Events.TERRITORY_LOST, prevUserId, {
+				territory = rt.Id,
+				reason = reason,
+			})
+		end
+		if prevPlayer and reason ~= "leave" and BaseService then
+			BaseService.PushState(prevPlayer)
 		end
 	end
+	pruneOwnerCache(prevUserId) -- R15: the leaver's colour goes once they own no zone
 end
 
 local function awardCapture(player: Player, rt: TerritoryRuntime)
@@ -511,17 +800,18 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	if not profile then
 		return
 	end
+	local starter = isStarterRt(rt) -- F10 Home Outpost
+	local beforePct = empireTaxPctOf(player)
 
-	-- Enforce max personal territories
-	local owned = countPersonalTerritories(player.UserId)
+	-- Enforce max personal territories. F10: a Home Outpost never counts toward the cap and is never evicted.
 	-- If already owning this one (re-secure), skip max check
 	local alreadyOwns = rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == player.UserId
-	if not alreadyOwns and owned >= TerritoryConfig.MaxPersonalTerritories then
+	if not starter and not alreadyOwns and countPersonalNonStarter(player.UserId) >= TerritoryConfig.MaxPersonalTerritories then
 		-- Drop oldest unprotected personal territory
 		local oldest: TerritoryRuntime? = nil
 		local oldestTime = math.huge
 		for _, other in pairs(territories) do
-			if other.Id ~= rt.Id and other.OwnerType == ownerTypes().Player and other.OwnerUserId == player.UserId then
+			if other.Id ~= rt.Id and other.OwnerType == ownerTypes().Player and other.OwnerUserId == player.UserId and not isStarterRt(other) then
 				if other.ProtectedUntil < oldestTime then
 					oldestTime = other.ProtectedUntil
 					oldest = other
@@ -534,17 +824,22 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 		end
 	end
 
-	-- Previous owner loses it (v33: mark steal for toast clarity)
+	-- Previous owner loses it (v33: mark steal for toast clarity). F10: a Home Outpost is never stolen: a stale owner
+	-- (the plot changed hands) just lets go of it, with no steal toast.
 	local stoleFromPlayer = false
 	if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId ~= player.UserId and rt.OwnerUserId > 0 then
-		stoleFromPlayer = true
-		releaseOwnership(rt, "captured")
+		if starter then
+			releaseOwnership(rt, "plot")
+		else
+			stoleFromPlayer = true
+			releaseOwnership(rt, "captured")
+		end
 	end
 
 	rt.OwnerType = ownerTypes().Player
 	rt.OwnerUserId = player.UserId
 	rt.ClanId = profile.ClanId
-	if ClanWarService and ClanWarService.OnTerritoryCaptured then
+	if ClanWarService and ClanWarService.OnTerritoryCaptured and not starter then
 		ClanWarService.OnTerritoryCaptured(player)
 	end
 	rt.Progress = 0
@@ -553,17 +848,22 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 	rt.ContesterA = nil
 	rt.ContesterB = nil
 	rt.ProtectedUntil = nowUnix() + TerritoryConfig.ProtectionPeriodSeconds
+	pushDirty = true
 
+	-- F10: the first Home Outpost capture is remembered; later sessions hold it from the start (OnPlotReady)
+	if starter and (profile :: any).StarterOutpostTaken ~= true then
+		(profile :: any).StarterOutpostTaken = true
+	end
 	profile.Stats.TerritoriesCaptured += 1
 	syncProfileOwnership(player)
 
-	-- Contested income buff: recount stacks from owned zones (stealable by re-capture)
+	-- F3 Empire Tax: recount from owned zones (stealable by re-capture); the toast names the TOTAL %
 	local incomeToastShown = false
 	local incomePct = 0
 	if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
-		local oldStacks, newStacks, pct = _EconomyService.SyncOutpostIncomeStacks(player)
-		if newStacks > oldStacks and pct > 0 then
-			incomePct = pct
+		local _, _, total = syncEmpireTax(player)
+		if total > beforePct then
+			incomePct = total
 			incomeToastShown = true
 		end
 	elseif _EconomyService and _EconomyService.GrantOutpostIncomeStack then
@@ -578,20 +878,11 @@ local function awardCapture(player: Player, rt: TerritoryRuntime)
 		local zoneName = rt.Def.DisplayName
 		local wasSteal = stoleFromPlayer
 		if incomeToastShown then
-			-- v33: explicit who gets the +income
-			local stealTpl = nil
-			pcall(function()
-				local buff = require(Shared.Configs.EconomyConfig).OutpostIncomeBuff
-				if buff then
-					stealTpl = buff.ToastStealGain
-				end
-			end)
-			local msg
-			if wasSteal and typeof(stealTpl) == "string" then
-				msg = string.format(stealTpl, zoneName, incomePct)
-			else
-				msg = string.format("★ SECURED %s — +%d%% Income (yours)", zoneName, incomePct)
-			end
+			-- v33: explicit who gets the +income. F3: "Took Central Plaza  Empire Tax +20%" / "Outpost taken  Empire Tax +10%"
+			local buff = EconomyConfig.OutpostIncomeBuff
+			local msg = if wasSteal
+				then fmtToast(buff and buff.ToastStealGain, "★ SECURED " .. zoneName, zoneName, incomePct)
+				else fmtToast(buff and buff.ToastSecured, "★ SECURED " .. zoneName, incomePct)
 			NotificationService.Notify(player, msg, "Reward", 5)
 		else
 			local bonusHint = rt.Def.Description or ""
@@ -666,6 +957,16 @@ local function tickTerritory(rt: TerritoryRuntime, dt: number)
 
 	if uniqueCount >= 2 then
 		rt.Contested = true
+		-- F6: contesting a zone ends a novice's shield for good (CombatService decides; its EndOnContestedCapture
+		-- switch can turn this reason off). Cross-lane call: pcall + nil check.
+		if CombatService and CombatService.IsNoviceShielded and CombatService.EndNoviceShield then
+			for _, p in ipairs(inside) do
+				local okShield, shielded = pcall(CombatService.IsNoviceShielded, p)
+				if okShield and shielded == true then
+					pcall(CombatService.EndNoviceShield, p, "contest")
+				end
+			end
+		end
 		-- v38: remember first two contesting players for dual-color pulse
 		do
 			local ids: { number } = {}
@@ -752,6 +1053,128 @@ function TerritoryService.BeginCapture(player: Player, territoryId: any): (boole
 	return true, nil
 end
 
+--[[ Nations B2 (e): redraw every zone this UserId owns or contests (NationColorService calls it after an accepted
+	nation pick while NationConfig.OutpostFlags is on). Never yields. ]]
+function TerritoryService.RefreshOwnerFlags(userId: number)
+	if typeof(userId) ~= "number" then
+		return
+	end
+	for _, rt in pairs(territories) do
+		if rt.OwnerUserId == userId or rt.ContesterA == userId or rt.ContesterB == userId then
+			updateMarkerVisual(rt)
+		end
+	end
+end
+
+local function persistClaimsOn(): boolean
+	local buff = EconomyConfig.OutpostIncomeBuff
+	return buff ~= nil and buff.PersistClaims == true
+end
+
+--[[ F3 PersistClaims: re-plant the claims this player's last server saved (profile.Territories) before
+	syncProfileOwnership rewrites that list from this server's zones. A claim on a Neutral (incl. a neutral zone being
+	contested) or NPC-held zone becomes the player's again with the normal protection period; a claim on a zone
+	another ONLINE player holds is dropped with the ToastClaimHeld toast; any other claim (clan-held, a leftover
+	offline holder, a zone that no longer exists) is dropped silently. Home Outposts are skipped (OnPlotReady holds
+	the own one). At most MaxPersonalTerritories are planted. No capture toast, stat, mission or tutorial event. ]]
+local function replantClaims(player: Player)
+	local profile = DataService.GetProfile(player)
+	if not profile or typeof(profile.Territories) ~= "table" then
+		return
+	end
+	local ot = ownerTypes()
+	local ids: { string } = {}
+	for id, v in pairs(profile.Territories) do
+		if typeof(id) == "string" and v == true then
+			table.insert(ids, id)
+		end
+	end
+	table.sort(ids)
+	local owned = countPersonalNonStarter(player.UserId)
+	local now = nowUnix()
+	local buff = EconomyConfig.OutpostIncomeBuff
+	for _, id in ipairs(ids) do
+		local rt = territories[id]
+		if rt == nil or isStarterRt(rt) then
+			continue
+		end
+		if rt.OwnerType == ot.Player and rt.OwnerUserId == player.UserId then
+			continue -- still ours on this server
+		end
+		local free = rt.OwnerUserId == TerritoryConfig.NeutralOwnerId or rt.OwnerType == ot.NPC
+		if free and owned < TerritoryConfig.MaxPersonalTerritories then
+			rt.OwnerType = ot.Player
+			rt.OwnerUserId = player.UserId
+			rt.ClanId = profile.ClanId
+			rt.Progress = 0
+			rt.CapturingUserId = 0
+			rt.ProtectedUntil = now + TerritoryConfig.ProtectionPeriodSeconds
+			owned += 1
+			pushDirty = true
+			updateMarkerVisual(rt)
+		elseif rt.OwnerType == ot.Player and rt.OwnerUserId > 0 and NotificationService then
+			local holder = Players:GetPlayerByUserId(rt.OwnerUserId)
+			if holder then
+				local zoneName = rt.Def.DisplayName
+				NotificationService.Notify(
+					player,
+					fmtToast(buff and buff.ToastClaimHeld, zoneName .. " is held", zoneName, holder.DisplayName),
+					"Warn",
+					4.5
+				)
+			end
+		end
+	end
+end
+
+-- F10: the owner holds their Home Outpost from the start once they have taken it (StarterOutpostTaken). Silent (no
+-- capture toast / stat / mission / tutorial event); it adds StarterPct to the Empire Tax (SyncOutpostIncomeStacks).
+local function holdStarter(player: Player, rt: TerritoryRuntime, profile: any)
+	rt.OwnerType = ownerTypes().Player
+	rt.OwnerUserId = player.UserId
+	rt.ClanId = profile.ClanId
+	rt.Progress = 0
+	rt.CapturingUserId = 0
+	rt.Contested = false
+	rt.ContesterA = nil
+	rt.ContesterB = nil
+	rt.ProtectedUntil = 0 -- owner-only: nobody else can take it anyway
+	pushDirty = true
+	syncProfileOwnership(player)
+	syncEmpireTax(player)
+	if BaseService then
+		BaseService.PushState(player)
+	end
+	updateMarkerVisual(rt)
+end
+
+--[[ F10 BaseService.OnPlotReady (listener only): a Home Outpost follows its plot's owner. Another holder of this
+	plot's Home Outpost (the plot changed hands) and any Home Outpost this player holds on another plot go back to
+	Neutral; then the owner holds their own one if they have taken it before. Idempotent. ]]
+local function onPlotReady(player: Player, plotId: number)
+	ensureRuntime()
+	local uid = player.UserId
+	local ot = ownerTypes()
+	for _, other in pairs(territories) do
+		if isStarterRt(other) and other.OwnerType == ot.Player and other.OwnerUserId == uid and other.Def.PlotId ~= plotId then
+			releaseOwnership(other, "plot")
+			updateMarkerVisual(other)
+		end
+	end
+	local rt = starterRtForPlot(plotId)
+	if rt == nil then
+		return -- Starter off (no row) or unknown plot
+	end
+	if rt.OwnerType == ot.Player and rt.OwnerUserId ~= uid then
+		releaseOwnership(rt, "plot")
+		updateMarkerVisual(rt)
+	end
+	local profile = DataService.GetProfile(player)
+	if profile and (profile :: any).StarterOutpostTaken == true and not (rt.OwnerType == ot.Player and rt.OwnerUserId == uid) then
+		holdStarter(player, rt, profile)
+	end
+end
+
 --[[ Seed a few territories as NPC-held for contested feel (Studio / empty servers). ]]
 local function seedNpcOwners()
 	local npcHeld = { "EastArmory", "RadarHill", "CoastalOilAlpha", "CoastalOilBravo" }
@@ -779,6 +1202,14 @@ function TerritoryService.Init(deps: { [string]: any })
 	RemoteSetup = deps.RemoteSetup
 	BaseService = deps.BaseService
 	NationColorService = deps.NationColorService
+	CombatService = deps.CombatService
+
+	-- F10: OwnerOnly zones (Home Outposts) count only their plot's owner (TerritoryCapture.PlayersInZone)
+	if BaseService and BaseService.GetOwnerUserId then
+		TerritoryCapture.SetPlotOwnerResolver(function(plotId: number): number?
+			return BaseService.GetOwnerUserId(plotId)
+		end)
+	end
 
 	TerritoryOwnership.Bind({
 		territories = territories,
@@ -806,16 +1237,39 @@ function TerritoryService.Init(deps: { [string]: any })
 	end)
 
 	DataService.OnProfileLoaded(function(player: Player, _profile: Types.PlayerProfile)
-		syncProfileOwnership(player)
-		if _EconomyService and _EconomyService.SyncOutpostIncomeStacks then
-			_EconomyService.SyncOutpostIncomeStacks(player)
+		ensureRuntime()
+		-- F3 PersistClaims: the saved claims first (profile.Territories still holds the last server's list)
+		if persistClaimsOn() then
+			replantClaims(player)
 		end
+		syncProfileOwnership(player)
+		-- recount OutpostIncomeStacks / WE_EmpireTaxPct (EconomyService.SyncOutpostIncomeStacks)
+		syncEmpireTax(player)
 		TerritoryService.PushPlayer(player)
 	end)
 
+	-- F10: a Home Outpost follows its plot's owner (listener only; BaseService is not edited)
+	if BaseService and BaseService.OnPlotReady then
+		local okHook, errHook = pcall(BaseService.OnPlotReady, onPlotReady)
+		if not okHook then
+			warn("[TerritoryService] OnPlotReady hook failed:", errHook)
+		end
+	end
+
 	Players.PlayerRemoving:Connect(function(player)
-		-- Soft-release: keep world ownership so others can contest; clear profile sync only
-		firstOutpostLogged[player.UserId] = nil
+		-- Soft-release (PersistClaims off): keep world ownership so others can contest; clear profile sync only.
+		-- F3 PersistClaims on: the leaver's zones go back to Neutral (their saved claims are kept for the next server).
+		-- F10: a Home Outpost always goes back to Neutral when its owner leaves.
+		local uid = player.UserId
+		firstOutpostLogged[uid] = nil
+		local persist = persistClaimsOn()
+		for _, rt in pairs(territories) do
+			if rt.OwnerType == ownerTypes().Player and rt.OwnerUserId == uid and (persist or isStarterRt(rt)) then
+				releaseOwnership(rt, "leave")
+				updateMarkerVisual(rt)
+			end
+		end
+		pruneOwnerCache(uid)
 	end)
 
 	-- Capture loop

@@ -31,6 +31,9 @@ local WaterConfig = require(SharedConfigs:WaitForChild("WaterConfig"))
 local WorldLabel = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("WorldLabel"))
 -- World v2: spawn pads / anchors (Spawns) and the SafetyCatch look (Bounds.SafetyCatch)
 local WorldConfig = require(SharedConfigs:WaitForChild("WorldConfig"))
+-- F10 (owner's 11 features): the capture zones (incl. the Home Outposts) are TerritoryConfig's rows
+-- (ReplicatedStorage.Shared ships with the place and replicates before any server script runs: no wait needed)
+local TerritoryConfig = require(ReplicatedStorage.Shared.Configs.TerritoryConfig)
 
 local TAG_BASE = "WE_BasePlot"
 local TAG_SLOT = "WE_UpgradeSlot"
@@ -105,20 +108,53 @@ local PLOT_POSITIONS = {
 -- World v2 (spec §3.4): each fort's wall toward its nearest road has a 16-wide gate (GateSide = the gated wall)
 local FORT_GATE_WIDTH = 16
 
-local TERRITORIES = {
-	{ Id = "CentralPlaza", DisplayName = "Central Plaza", Pos = Vector3.new(0, 1, 0), Color = Color3.fromRGB(180, 170, 50), Radius = 70 },
-	{ Id = "NorthRidge", DisplayName = "North Ridge", Pos = Vector3.new(0, 1, -1300), Color = Color3.fromRGB(55, 120, 180), Radius = 60 },
-	{ Id = "SouthDocks", DisplayName = "South Docks", Pos = Vector3.new(0, 1, 1300), Color = Color3.fromRGB(45, 110, 150), Radius = 60 },
-	{ Id = "EastArmory", DisplayName = "East Armory", Pos = Vector3.new(1300, 1, 0), Color = Color3.fromRGB(170, 55, 55), Radius = 55 },
-	{ Id = "WestDepot", DisplayName = "West Depot", Pos = Vector3.new(-1300, 1, 0), Color = Color3.fromRGB(55, 140, 70), Radius = 55 },
-	{ Id = "OilFields", DisplayName = "Oil Fields", Pos = Vector3.new(950, 1, 950), Color = Color3.fromRGB(150, 110, 40), Radius = 65 },
-	{ Id = "RadarHill", DisplayName = "Radar Hill", Pos = Vector3.new(-950, 1, -950), Color = Color3.fromRGB(130, 70, 170), Radius = 60 },
-	-- Coastal oil decks (Y matches TerritoryConfig / OilRigConfig platform height)
-	{ Id = "CoastalOilAlpha", DisplayName = "Coastal Oil Alpha", Pos = Vector3.new(1800, 28, -750), Color = Color3.fromRGB(190, 145, 45), Radius = 48, OilRig = true },
-	{ Id = "CoastalOilBravo", DisplayName = "Coastal Oil Bravo", Pos = Vector3.new(-1800, 28, 750), Color = Color3.fromRGB(170, 125, 40), Radius = 48, OilRig = true },
-	{ Id = "FortIronclad", DisplayName = "Fort Ironclad", Pos = Vector3.new(1450, 1, -1450), Color = Color3.fromRGB(140, 145, 155), Radius = 55, Fortress = true, GateSide = 1 }, -- +Z wall, toward RoadZ-800
-	{ Id = "FortSandhold", DisplayName = "Fort Sandhold", Pos = Vector3.new(-1450, 1, 1450), Color = Color3.fromRGB(190, 155, 90), Radius = 55, Fortress = true, GateSide = -1 }, -- -Z wall, toward RoadZ800
+-- F10 (owner's 11 features, lane W): the capture zones come from TerritoryConfig.Territories (one source: position,
+-- radius, colour, oil rig / fortress). MapSetup keeps only what is its own: the build order of the original eleven
+-- (so their parts are made in the same order as before) and each fort's gate wall. Any other row (the Home Outposts
+-- Starter_P1..P6 while TerritoryConfig.Starter.Enabled) is built after them, sorted by id.
+local TERRITORY_BUILD_ORDER = {
+	"CentralPlaza",
+	"NorthRidge",
+	"SouthDocks",
+	"EastArmory",
+	"WestDepot",
+	"OilFields",
+	"RadarHill",
+	"CoastalOilAlpha", -- coastal oil decks (Y = the TerritoryConfig / OilRigConfig platform height)
+	"CoastalOilBravo",
+	"FortIronclad",
+	"FortSandhold",
 }
+-- World v2 (spec §3.4): the fort wall facing the nearest road has the gate (1 = +Z wall, -1 = -Z wall)
+local FORT_GATE_SIDE: { [string]: number } = {
+	FortIronclad = 1, -- toward RoadZ-800
+	FortSandhold = -1, -- toward RoadZ800
+}
+
+-- Ordered TerritoryConfig rows to build (every row exactly once)
+local function territoryDefsInBuildOrder(): { TerritoryConfig.TerritoryDef }
+	local rows = TerritoryConfig.Territories
+	local out: { TerritoryConfig.TerritoryDef } = {}
+	local seen: { [string]: boolean } = {}
+	for _, id in ipairs(TERRITORY_BUILD_ORDER) do
+		local def = rows[id]
+		if def then
+			table.insert(out, def)
+			seen[id] = true
+		end
+	end
+	local rest: { string } = {}
+	for id in pairs(rows) do
+		if not seen[id] then
+			table.insert(rest, id)
+		end
+	end
+	table.sort(rest)
+	for _, id in ipairs(rest) do
+		table.insert(out, rows[id])
+	end
+	return out
+end
 
 local function ensureFolder(name, parent)
 	local existing = parent:FindFirstChild(name)
@@ -990,7 +1026,10 @@ MapSetup.GROUND_TILES = GROUND_TILES_PER_SIDE * GROUND_TILES_PER_SIDE
 -- saved with an older layout (unturned plots, one WaterPlane) never keeps it. The stamp also encodes
 -- BaseLayoutConfig.FaceMapCentre (even = off, odd = on), so flipping the flag rebuilds a map baked with the other value.
 -- World v2 W1: 70/71 → 80/81, so a saved map with the mesa ring, statues, beacons and old spawn rings is rebuilt.
-MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 81 else 80
+-- F1 / F10 (owner's 11 features): 80/81 → 82/83 (the ATM pads follow MonetizationConfig.PremiumPads: no VIP pad), and
+-- +10 while TerritoryConfig.Starter.Enabled (the 6 Home Outpost kits), so flipping that flag also rebuilds a baked map.
+-- +10 keeps the FaceMapCentre parity (even = off, odd = on).
+MapSetup.MAP_GEN = (if BaseLayout.FacesMapCentre() then 83 else 82) + (if TerritoryConfig.Starter.Enabled then 10 else 0)
 
 -- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
 function MapSetup.CountGroundTiles(setup: Instance): number
@@ -1834,50 +1873,45 @@ end
 
 
 
-local function premiumOfferIdLive(kind: string, key: string): boolean
-	-- Hide pads until Creator Dashboard Id exists (GoldenPumpjack Id=0 → no pad)
-	if kind == "GamePass" then
-		local def = MonetizationConfig.GamePasses[key]
-		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
-	elseif kind == "DevProduct" then
-		local def = MonetizationConfig.DevProducts[key]
-		return def ~= nil and typeof(def.Id) == "number" and def.Id ~= 0
-	end
-	return false
-end
-
 -- v70: F = plot frame, atmLocal = plot-local ATM cluster anchor (pads turn with the plot)
-local PREMIUM_TAG_RANGE = 20
+-- F1 (owner's 11 features, lane W): the pads are MonetizationConfig.PremiumPads.Slots, in order (red Auto Collect,
+-- yellow 2x Cash, cyan Speed). A slot is built only while one of its offers has a live Id (LivePadOffer: the first
+-- offer with Id ~= 0, e.g. the Speed slot sells the 99 R$ Speed Boost until the 5 R$ Speed Pass Id is pasted).
+-- The server decides OWNED (PremiumPadService.alreadyOwns, incl. the slot's OwnedIfAny keys); the Shop client dims an
+-- owned pad. VIP is a Shop row only and the Golden Pump pad stands at the pumps (PlotOilPumpService), so at most 3
+-- pads and 3 labels sit at the ATM (CLAUDE.md: at most 3 labels on screen at a base). The pad keeps its Neon top
+-- (it is the offer; census cap 18) and has no light. Each label is stud-scaled, MaxDistance PremiumPads.LabelMaxDistance,
+-- never AlwaysOnTop, and tagged WorldLabelConfig.BaseLabelTag for the client LabelGovernor.
 local function buildPremiumPads(folder: Folder, plotId: number, F: CFrame, atmLocal: Vector3)
-	-- Competitor ATM-cluster: red AutoCollect / 2x Cash, yellow Speed; GoldenPump only if Id≠0
-	-- v70 (HUD spec §5): plain stud-scaled tag "Auto Collect" / "R$" (was a dark card "AUTO COLLECT · R$"); the pad
-	-- keeps its Neon (it is the offer), its PointLight is gone (light budget). PREMIUM_TAG_RANGE keeps the four tags
-	-- off screen while you stand at the ATM (CLAUDE.md: at most 3 labels on screen at a base).
-	local offers = {
-		{ Key = "AutoCollect", Kind = "GamePass", Label = "Auto Collect", Color = Color3.fromRGB(220, 50, 50), Offset = Vector3.new(-10, 0.55, 14) },
-		{ Key = "VIP", Kind = "GamePass", Label = "VIP", Color = Color3.fromRGB(180, 60, 220), Offset = Vector3.new(-18, 0.55, 8) },
-		{ Key = "DoubleCash", Kind = "GamePass", Label = "2x Cash", Color = Color3.fromRGB(255, 70, 40), Offset = Vector3.new(0, 0.55, 16) },
-		{ Key = "SpeedBoost", Kind = "DevProduct", Label = "Speed Boost", Color = Color3.fromRGB(255, 210, 40), Offset = Vector3.new(10, 0.55, 14) },
-		{ Key = "GoldenPumpjack", Kind = "DevProduct", Label = "Golden Pump", Color = Color3.fromRGB(255, 180, 40), Offset = Vector3.new(0, 0.55, 22) },
-	}
-	for _, offer in ipairs(offers) do
-		if not premiumOfferIdLive(offer.Kind, offer.Key) then
-			continue
+	local labelRange = MonetizationConfig.PremiumPads.LabelMaxDistance
+	for _, slot in ipairs(MonetizationConfig.PremiumPads.Slots) do
+		local offer = MonetizationConfig.LivePadOffer(slot)
+		if offer == nil then
+			continue -- no live Id for this slot: no pad, no label, nothing to prompt
 		end
 		local pad = part({
 			Name = "PremiumPad_" .. offer.Key,
 			Size = Vector3.new(7, 0.45, 7),
-			CFrame = F * CFrame.new(atmLocal + offer.Offset),
-			Color = offer.Color,
+			CFrame = F * CFrame.new(atmLocal + slot.Offset),
+			Color = slot.Color,
 			Material = Enum.Material.Neon,
 			CanCollide = true,
 			Parent = folder,
 		})
 		pad:SetAttribute("PlotId", plotId)
-		pad:SetAttribute("OfferKey", offer.Key)
 		pad:SetAttribute("OfferKind", offer.Kind)
+		pad:SetAttribute("OfferKey", offer.Key)
+		pad:SetAttribute("OwnedIfAny", table.concat(MonetizationConfig.PadOwnedKeys(slot), ","))
+		pad:SetAttribute("PadSlot", slot.Id)
 		CollectionService:AddTag(pad, TAG_PREMIUM)
-		WorldLabel.Create(pad, offer.Label, { Name = "WE_PremiumBillboard", Sub = "R$", Color = offer.Color, MaxDistance = PREMIUM_TAG_RANGE, Offset = Vector3.new(0, 5.5, 0) })
+		WorldLabel.Create(pad, slot.Label, {
+			Name = "WE_PremiumBillboard",
+			Sub = "R$",
+			Color = slot.Color,
+			MaxDistance = labelRange,
+			Offset = Vector3.new(0, 5.5, 0),
+			BaseLabel = true, -- CollectionService tag WorldLabelConfig.BaseLabelTag (the LabelGovernor's cap)
+		})
 	end
 end
 
@@ -2656,7 +2690,14 @@ function MapSetup.Run()
 	end
 
 	local territories = ensureFolder("Territories", root)
-	for _, def in ipairs(TERRITORIES) do
+	for _, def in ipairs(territoryDefsInBuildOrder()) do
+		local pos = def.Position
+		local isOilRig = def.IsOilRig == true
+		local isFort = def.IsFortress == true
+		local gateSide = FORT_GATE_SIDE[def.Id]
+		-- F10: a Home Outpost (TerritoryConfig.Starter row) is a 4-part kit: invisible marker (capture volume, tags,
+		-- PlotId), ring, pole and flag. No stripe, no finial, no light (TerritoryService never adds one either).
+		local isStarter = TerritoryConfig.IsStarterDef(def)
 		local diameter = (def.Radius or 30) * 2
 		-- World v2 (spec §3.5): the capture marker keeps its Size (TerritoryCapture reads its half-diagonal) but is an
 		-- invisible, non-colliding volume (it was a glowing 1.5-tall slab across five roads). The visible cue is the
@@ -2664,7 +2705,7 @@ function MapSetup.Run()
 		local marker = part({
 			Name = def.Id,
 			Size = Vector3.new(diameter, 1.5, diameter),
-			Position = def.Pos,
+			Position = pos,
 			Color = def.Color,
 			Transparency = 1,
 			Material = Enum.Material.SmoothPlastic,
@@ -2678,6 +2719,13 @@ function MapSetup.Run()
 		marker:SetAttribute("OwnerType", "Neutral")
 		marker:SetAttribute("OwnerUserId", 0)
 		marker:SetAttribute("CaptureProgress", 0)
+		if isStarter then
+			-- F10: owner-only (TerritoryCapture counts only BaseService.GetOwnerUserId(PlotId)); clients read these to
+			-- list / point at their OWN Home Outpost only
+			marker:SetAttribute("PlotId", def.PlotId)
+			marker:SetAttribute("IsStarter", true)
+			marker:SetAttribute("OwnerOnly", def.OwnerOnly == true)
+		end
 		CollectionService:AddTag(marker, TAG_TERRITORY)
 		CollectionService:AddTag(marker, TAG_CAPTURE)
 
@@ -2692,12 +2740,12 @@ function MapSetup.Run()
 
 		-- Flat disc (spec §3.5): a Cylinder lying on its side, top at y 0.58 on the ground (on the deck top for a rig,
 		-- sized to the 48-stud deck instead of overhanging the sea)
-		local ringD = if def.OilRig then math.min(diameter + 8, 46) else diameter + 8
-		local ringTop = if def.OilRig then def.Pos.Y + 0.13 else GROUND_TOP_Y + 0.08
+		local ringD = if isOilRig then math.min(diameter + 8, 46) else diameter + 8
+		local ringTop = if isOilRig then pos.Y + 0.13 else GROUND_TOP_Y + 0.08
 		local ring = part({
 			Name = def.Id .. "_Ring",
 			Size = Vector3.new(0.12, ringD, ringD),
-			CFrame = CFrame.new(def.Pos.X, ringTop - 0.06, def.Pos.Z) * CFrame.Angles(0, 0, math.rad(90)),
+			CFrame = CFrame.new(pos.X, ringTop - 0.06, pos.Z) * CFrame.Angles(0, 0, math.rad(90)),
 			Color = def.Color,
 			Transparency = 0.55,
 			CanCollide = false,
@@ -2712,7 +2760,7 @@ function MapSetup.Run()
 		part({
 			Name = def.Id .. "_FlagPole",
 			Size = Vector3.new(0.4, 14, 0.4),
-			Position = def.Pos + Vector3.new(0, 7, 0),
+			Position = pos + Vector3.new(0, 7, 0),
 			Color = Color3.fromRGB(55, 55, 55),
 			Material = Enum.Material.Metal,
 			CanCollide = false,
@@ -2721,7 +2769,7 @@ function MapSetup.Run()
 		local flag = part({
 			Name = def.Id .. "_Flag",
 			Size = Vector3.new(5.5, 3.2, 0.22),
-			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
+			Position = pos + Vector3.new(2.8, 12.2, 0),
 			Color = def.Color,
 			Material = Enum.Material.SmoothPlastic, -- painted (TerritoryService keeps it SmoothPlastic)
 			CanCollide = false,
@@ -2730,10 +2778,13 @@ function MapSetup.Run()
 		})
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
+		if isStarter then
+			continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)
+		end
 		part({
 			Name = def.Id .. "_FlagStripe",
 			Size = Vector3.new(5.5, 0.45, 0.28),
-			Position = def.Pos + Vector3.new(2.8, 12.2, 0),
+			Position = pos + Vector3.new(2.8, 12.2, 0),
 			Color = Color3.fromRGB(245, 245, 245),
 			Material = Enum.Material.SmoothPlastic,
 			CanCollide = false,
@@ -2743,7 +2794,7 @@ function MapSetup.Run()
 		part({
 			Name = def.Id .. "_Finial",
 			Size = Vector3.new(0.7, 0.7, 0.7),
-			Position = def.Pos + Vector3.new(0, 14.4, 0),
+			Position = pos + Vector3.new(0, 14.4, 0),
 			Color = Color3.fromRGB(230, 190, 60),
 			Material = Enum.Material.SmoothPlastic,
 			Shape = Enum.PartType.Ball,
@@ -2754,12 +2805,12 @@ function MapSetup.Run()
 		-- World v2 W1: no beacon pole in the capture zone (the flag pole and the disc mark it)
 
 		-- Coastal oil platform deck + legs + harder NPC guards
-		if def.OilRig then
-			local deckY = def.Pos.Y
+		if isOilRig then
+			local deckY = pos.Y
 			local deck = part({
 				Name = def.Id .. "_Deck",
 				Size = Vector3.new(48, 2.5, 48),
-				Position = Vector3.new(def.Pos.X, deckY - 1.2, def.Pos.Z),
+				Position = Vector3.new(pos.X, deckY - 1.2, pos.Z),
 				Color = Color3.fromRGB(90, 95, 100),
 				Material = Enum.Material.Metal,
 				Parent = territories,
@@ -2772,7 +2823,7 @@ function MapSetup.Run()
 					part({
 						Name = def.Id .. "_Leg",
 						Size = Vector3.new(3, deckY, 3),
-						Position = Vector3.new(def.Pos.X + ox, deckY / 2, def.Pos.Z + oz),
+						Position = Vector3.new(pos.X + ox, deckY / 2, pos.Z + oz),
 						Color = Color3.fromRGB(60, 65, 70),
 						Material = Enum.Material.Metal,
 						Parent = territories,
@@ -2783,7 +2834,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_Derrick",
 				Size = Vector3.new(4, 22, 4),
-				Position = Vector3.new(def.Pos.X + 14, deckY + 11, def.Pos.Z + 14),
+				Position = Vector3.new(pos.X + 14, deckY + 11, pos.Z + 14),
 				Color = Color3.fromRGB(180, 140, 50),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2792,7 +2843,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_CraneArm",
 				Size = Vector3.new(14, 1.2, 1.2),
-				Position = Vector3.new(def.Pos.X + 7, deckY + 20, def.Pos.Z + 14),
+				Position = Vector3.new(pos.X + 7, deckY + 20, pos.Z + 14),
 				Color = Color3.fromRGB(160, 120, 45),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2801,7 +2852,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_HelipadMark",
 				Size = Vector3.new(10, 0.3, 10),
-				Position = Vector3.new(def.Pos.X - 12, deckY + 0.2, def.Pos.Z - 12),
+				Position = Vector3.new(pos.X - 12, deckY + 0.2, pos.Z - 12),
 				Color = Color3.fromRGB(40, 45, 50),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2810,7 +2861,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_DeckRim",
 				Size = Vector3.new(46, 0.35, 0.5),
-				Position = Vector3.new(def.Pos.X, deckY + 0.3, def.Pos.Z + 23),
+				Position = Vector3.new(pos.X, deckY + 0.3, pos.Z + 23),
 				Color = Color3.fromRGB(255, 180, 60),
 				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,
@@ -2821,12 +2872,12 @@ function MapSetup.Run()
 			-- v70 (§7.1): on the waterways map the stairs are the rig's pier across the lagoon, snapped to the X axis
 			-- toward the map centre (Alpha steps x 1765 → 1684, approach pad on the inner bank; Bravo mirrored)
 			local inland = if WaterConfig.RigPierAxisAligned == true
-				then Vector3.new(-math.sign(def.Pos.X), 0, 0)
-				else Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+				then Vector3.new(-math.sign(pos.X), 0, 0)
+				else Vector3.new(-pos.X, 0, -pos.Z)
 			if inland.Magnitude < 0.1 then
-				inland = Vector3.new(-def.Pos.X, 0, -def.Pos.Z)
+				inland = Vector3.new(-pos.X, 0, -pos.Z)
 			end
-			buildOilDeckRamp(territories, def.Id, def.Pos, inland)
+			buildOilDeckRamp(territories, def.Id, pos, inland)
 			if WaterConfig.Enabled == true then
 				-- Concrete footing round each leg at the waterline: a boat's land probe that starts inside a 28-tall leg
 				-- misses the leg, but sees the footing top (2.5)
@@ -2836,7 +2887,7 @@ function MapSetup.Run()
 						part({
 							Name = def.Id .. "_LegFooting",
 							Size = lf,
-							Position = Vector3.new(def.Pos.X + ox, GROUND_TOP_Y + lf.Y * 0.5, def.Pos.Z + oz),
+							Position = Vector3.new(pos.X + ox, GROUND_TOP_Y + lf.Y * 0.5, pos.Z + oz),
 							Color = Color3.fromRGB(120, 118, 110),
 							Material = Enum.Material.Concrete,
 							CanCollide = true,
@@ -2849,7 +2900,7 @@ function MapSetup.Run()
 				-- 5-10 and the shelf; every land probe sees this top first, so boats brake before it. Walkable.
 				local pf = WaterConfig.RigPierFooting
 				local dir = inland.Unit
-				local mid = Vector3.new(def.Pos.X, GROUND_TOP_Y + pf.Height * 0.5, def.Pos.Z) + dir * ((pf.Near + pf.Far) * 0.5)
+				local mid = Vector3.new(pos.X, GROUND_TOP_Y + pf.Height * 0.5, pos.Z) + dir * ((pf.Near + pf.Far) * 0.5)
 				part({
 					Name = def.Id .. "_PierFooting",
 					Size = Vector3.new(pf.HalfWidth * 2, pf.Height, pf.Far - pf.Near),
@@ -2864,7 +2915,7 @@ function MapSetup.Run()
 		end
 
 		-- Fortress walls / keep (named forts with higher stipend)
-		if def.Fortress then
+		if isFort then
 			local wallH = 8
 			local wallT = 2.2
 			local span = (def.Radius or 48) * 1.35
@@ -2876,7 +2927,7 @@ function MapSetup.Run()
 			}
 			-- World v2 (spec §3.4): the wall facing the fort's nearest road (GateSide: 1 = +Z wall, -1 = -Z wall) is two
 			-- pieces with a FORT_GATE_WIDTH gap, so infantry and vehicles can drive in (the fort was a closed box)
-			local gateWall = if def.GateSide == 1 then 1 elseif def.GateSide == -1 then 2 else nil
+			local gateWall = if gateSide == 1 then 1 elseif gateSide == -1 then 2 else nil
 			for wi, wd in ipairs(wallDefs) do
 				if wi == gateWall then
 					local pieceLen = (span * 2 - FORT_GATE_WIDTH) * 0.5
@@ -2884,7 +2935,7 @@ function MapSetup.Run()
 						part({
 							Name = def.Id .. "_Wall" .. wi .. (if k == 1 then "" else "b"),
 							Size = Vector3.new(pieceLen, wallH, wallT),
-							Position = def.Pos + wd[2] + Vector3.new(sgn * (FORT_GATE_WIDTH * 0.5 + pieceLen * 0.5), 0, 0),
+							Position = pos + wd[2] + Vector3.new(sgn * (FORT_GATE_WIDTH * 0.5 + pieceLen * 0.5), 0, 0),
 							Color = Color3.fromRGB(95, 90, 75),
 							Material = Enum.Material.Concrete,
 							Parent = territories,
@@ -2894,7 +2945,7 @@ function MapSetup.Run()
 					part({
 						Name = def.Id .. "_Wall" .. wi,
 						Size = wd[1],
-						Position = def.Pos + wd[2],
+						Position = pos + wd[2],
 						Color = Color3.fromRGB(95, 90, 75),
 						Material = Enum.Material.Concrete,
 						Parent = territories,
@@ -2904,7 +2955,7 @@ function MapSetup.Run()
 			local keep = part({
 				Name = def.Id .. "_Keep",
 				Size = Vector3.new(14, 16, 14),
-				Position = def.Pos + Vector3.new(0, 8, 0),
+				Position = pos + Vector3.new(0, 8, 0),
 				Color = def.Color,
 				Material = Enum.Material.Brick,
 				Parent = territories,
@@ -2913,7 +2964,7 @@ function MapSetup.Run()
 			part({
 				Name = def.Id .. "_KeepRoof",
 				Size = Vector3.new(16, 1.5, 16),
-				Position = def.Pos + Vector3.new(0, 16.5, 0),
+				Position = pos + Vector3.new(0, 16.5, 0),
 				Color = Color3.fromRGB(70, 65, 55),
 				Material = Enum.Material.Metal,
 				CanCollide = false,
@@ -2929,7 +2980,7 @@ function MapSetup.Run()
 				part({
 					Name = def.Id .. "_Tower",
 					Size = Vector3.new(5, 12, 5),
-					Position = def.Pos + corner + Vector3.new(0, 6, 0),
+					Position = pos + corner + Vector3.new(0, 6, 0),
 					Color = Color3.fromRGB(85, 80, 65),
 					Material = Enum.Material.Brick,
 					Parent = territories,
@@ -2937,11 +2988,11 @@ function MapSetup.Run()
 			end
 			-- SmoothPlastic lintel over the gate (was a Neon strip on a wall with no gate); non-colliding, so it never
 			-- snags a tall vehicle
-			local gz = if def.GateSide == -1 then -span else span
+			local gz = if gateSide == -1 then -span else span
 			local lintel = part({
 				Name = def.Id .. "_GateLintel",
 				Size = Vector3.new(FORT_GATE_WIDTH + 2, 1, wallT + 0.4),
-				Position = def.Pos + Vector3.new(0, wallH - 0.5, gz),
+				Position = pos + Vector3.new(0, wallH - 0.5, gz),
 				Color = def.Color,
 				Material = Enum.Material.SmoothPlastic,
 				CanCollide = false,

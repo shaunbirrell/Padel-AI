@@ -16,6 +16,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local BaseLayoutConfig = require(Shared.Configs.BaseLayoutConfig)
+-- F10 (owner's 11 features, lane W): the plot yaw / frame maths lives in Shared/Util/PlotFrame (moved there verbatim
+-- by lane K1 so configs and the client can use it); BaseLayout delegates, so server and client can never disagree.
+local PlotFrame = require(Shared.Util.PlotFrame)
 
 local BaseLayout = {}
 
@@ -44,39 +47,20 @@ function BaseLayout.Site(structureId: string): any?
 	return (BaseLayoutConfig.Structures :: any)[structureId]
 end
 
--- v70: true when plots are turned to face the map centre (waterways layout)
+-- v70: true when plots are turned to face the map centre (waterways layout). F10: PlotFrame.FacesMapCentre.
 function BaseLayout.FacesMapCentre(): boolean
-	return BaseLayout.Enabled() and (BaseLayoutConfig :: any).FaceMapCentre == true
+	return PlotFrame.FacesMapCentre()
 end
 
--- v70: plot yaw in degrees (0 / 90 / -90 / 180). Front (main gate) toward the map centre.
+-- v70: plot yaw in degrees (0 / 90 / -90 / 180). Front (main gate) toward the map centre. F10: PlotFrame.PlotYaw.
 function BaseLayout.PlotYaw(plotPos: Vector3): number
-	if not BaseLayout.FacesMapCentre() then
-		return 0
-	end
-	local x, z = plotPos.X, plotPos.Z
-	if math.abs(x) < 1 and math.abs(z) < 1 then
-		return 0
-	end
-	if math.abs(x) >= math.abs(z) then
-		return if x < 0 then 90 else -90
-	end
-	return if z < 0 then 0 else 180
-end
-
--- Exact quarter-turn rotation (no 6e-17 noise from cos(pi/2)), same matrix as CFrame.Angles(0, rad(yaw), 0).
-local function yawRotation(yaw: number): CFrame
-	local c = if yaw == 0 then 1 elseif yaw == 180 or yaw == -180 then -1 else 0
-	local s = if yaw == 90 then 1 elseif yaw == -90 then -1 else 0
-	if c == 0 and s == 0 then
-		return CFrame.Angles(0, math.rad(yaw), 0)
-	end
-	return CFrame.new(0, 0, 0, c, 0, s, 0, 1, 0, -s, 0, c)
+	return PlotFrame.PlotYaw(plotPos)
 end
 
 -- v70: plot frame at the plot position (pad centre height). World = PlotCFrame(plotPos) * plot-local.
+-- F10: PlotFrame.PlotCFrame (exact quarter-turn matrix, no 6e-17 noise from cos(pi/2)).
 function BaseLayout.PlotCFrame(plotPos: Vector3): CFrame
-	return CFrame.new(plotPos) * yawRotation(BaseLayout.PlotYaw(plotPos))
+	return PlotFrame.PlotCFrame(plotPos)
 end
 
 -- v70: unit vector of the plot FRONT (local +Z) in world space

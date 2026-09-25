@@ -48,9 +48,10 @@ local TerritoryConfig = {
 	-- boat or jeep no longer contests its own capture. Naval outposts (oil rigs): WaterConfig.NavalOutposts.
 	VehiclePassengersCount = false,
 
-	-- F10: owner-only Home Outpost per plot (see the header). Flag ships OFF; lane Z switches it on.
+	-- F10: owner-only Home Outpost per plot (see the header). Switched on by lane Z (reversible: false removes the six
+	-- rows and the tutorial falls back to 4x4 then outpost, tutorial order version 2).
 	Starter = {
-		Enabled = false,
+		Enabled = true,
 		LocalX = 38, -- plot-local; +Z = out of the main gate (PlotFrame / BaseLayout frame)
 		LocalZ = 252,
 		Radius = 20,

@@ -19,6 +19,12 @@
 	when its detail (the structure id) equals the step's PadStructureId. Step Ids are stable save keys: a saved
 	TutorialStep index is read in the order its TutorialOrderVersion names (missing = 1 = LegacyOrderV1) and moved to
 	this order by MigrateLegacyStep.
+
+	Lane Z (the Home Outpost switch-on): an order version names ONE fixed order (SavedOrder), so OrderVersion follows
+	the switch: 2 = the owner's steps with the 4x4 before the outpost (the order v2 saves were made in, Home Outpost
+	off), 3 = the owner's order, outpost before the 4x4 (Home Outpost on). A save made in another known order is
+	migrated when it loads, in either direction; a step it already did that the new order puts later (a v2 save that
+	spawned the 4x4 and still owes the outpost) is carried as DoneAhead, so it is never asked for twice.
 ]]
 
 local TerritoryConfig = require(script.Parent.TerritoryConfig)
@@ -43,8 +49,9 @@ export type TutorialStepDef = {
 local TutorialConfig = {
 	Enabled = true,
 	-- F6: the order a profile's TutorialStep index is saved in (ProfileSchema stamps new profiles with it;
-	-- TutorialService migrates older versions with MigrateLegacyStep, then stamps it).
-	OrderVersion = 2,
+	-- TutorialService migrates other known versions with MigrateLegacyStep, then stamps it). Lane Z: 3 while the
+	-- Home Outpost is on (outpost, then 4x4), 2 while it is off (4x4, then outpost); see SavedOrders.
+	OrderVersion = if TerritoryConfig.Starter.Enabled == true then 3 else 2,
 	-- The v1 order (v31 .. v72) by step Id, index = the saved TutorialStep. "ClickDropper" and v72's "AmmoWorks"
 	-- (step 6 while the businesses were on) are not steps any more: LegacyAlias names the step that replaces them.
 	LegacyOrderV1 = {
@@ -58,6 +65,16 @@ local TutorialConfig = {
 		"Outpost",
 	} :: { string },
 	LegacyAlias = { ClickDropper = "Income", AmmoWorks = "Barracks" } :: { [string]: string },
+	-- Lane Z: the fixed order of every later OrderVersion, by step Id (index = the saved TutorialStep). 2 is the order
+	-- the v2 build shipped with (Home Outpost off: 4x4 6, outpost 7); 3 is the owner's order (outpost 6, 4x4 7).
+	SavedOrders = {
+		[2] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Jeep", "Outpost" },
+		[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },
+	} :: { [number]: { string } },
+	-- Lane Z: the steps whose finish is carried (DoneAhead) when a new order puts them after the step a save moves to:
+	-- the Outpost / 4x4 pair the Home Outpost switch reorders. Any other done step after it is asked again (K2's "first
+	-- step not done" rule: a v1 save that collected before buying the Command Center is taught to collect again).
+	CarryDoneIds = { Outpost = true, Jeep = true } :: { [string]: boolean },
 	-- The owner's order (OutpostBeforeJeep() true). BuildSteps swaps Outpost and Jeep while it is false.
 	Steps = {
 		{
@@ -192,34 +209,80 @@ function TutorialConfig.Advances(def: TutorialStepDef?, eventType: string, detai
 	return true
 end
 
+-- Lane Z: the step Ids, in order, of a saved OrderVersion (1 or missing = LegacyOrderV1); nil for an order this build
+-- does not know (a newer build's save: left alone).
+function TutorialConfig.SavedOrder(version: any): { string }?
+	local v = tonumber(version) or 1
+	if v == 1 then
+		return TutorialConfig.LegacyOrderV1
+	end
+	return TutorialConfig.SavedOrders[v]
+end
+
+-- The step Ids (aliases applied) a save at `old` in `legacy` order has finished: every step before it
+local function doneBefore(legacy: { string }, old: number): { [string]: boolean }
+	local done: { [string]: boolean } = {}
+	for i = 1, math.min(old - 1, #legacy) do
+		local id = legacy[i]
+		done[TutorialConfig.LegacyAlias[id] or id] = true
+	end
+	return done
+end
+
 --[[ F6 migration: a TutorialStep index saved in the v1 order -> the index of the first step of the current order
 	(`steps`, default Steps) the player has not done yet. Every v1 step before `oldStep` counts as done, by Id through
 	LegacyAlias. So v1 step 2 or 3 (Income / ClickDropper, Command Center not bought) -> 2 (Command Center, never
 	skipped), v1 6 (Barracks, or v72's Ammo Works) -> 5, v1 7 (Jeep) -> the first of Outpost / Jeep in this order.
 	The caller (TutorialService) then skips buy steps for structures already owned. oldStep < 1 or junk -> 1; oldStep
 	past the v1 list -> #steps + 1 (done; TutorialComplete decides on its own). Pure. ]]
-function TutorialConfig.MigrateLegacyStep(oldStep: any, steps: { TutorialStepDef }?): number
+-- fromVersion (lane Z): the order oldStep was saved in (default 1 = LegacyOrderV1; see SavedOrder).
+function TutorialConfig.MigrateLegacyStep(oldStep: any, steps: { TutorialStepDef }?, fromVersion: number?): number
 	local list = steps or TutorialConfig.Steps
 	local n = tonumber(oldStep)
 	if n == nil or n ~= n or n < 1 then
 		return 1
 	end
 	local old = math.floor(n)
-	local legacy = TutorialConfig.LegacyOrderV1
+	local legacy = TutorialConfig.SavedOrder(fromVersion) or TutorialConfig.LegacyOrderV1
 	if old > #legacy then
 		return #list + 1
 	end
-	local done: { [string]: boolean } = {}
-	for i = 1, old - 1 do
-		local id = legacy[i]
-		done[TutorialConfig.LegacyAlias[id] or id] = true
-	end
+	local done = doneBefore(legacy, old)
 	for i, def in ipairs(list) do
 		if not done[def.Id] then
 			return i
 		end
 	end
 	return #list + 1
+end
+
+--[[ Lane Z: the steps a save already finished that the new order (`steps`, default Steps) puts AFTER the step it
+	migrates to (CarryDoneIds only), as { [Id] = true }, or nil when there are none. Only the Outpost / 4x4 swap makes
+	one: a v2 (or v1) save that spawned the 4x4 and still owes the outpost moves to Outpost (6 in order 3) with
+	{ Jeep = true }, so the 4x4 step is skipped instead of asked for again. TutorialService keeps it on the profile
+	(TutorialDoneAhead). Pure. ]]
+function TutorialConfig.DoneAhead(oldStep: any, fromVersion: number?, steps: { TutorialStepDef }?): { [string]: boolean }?
+	local list = steps or TutorialConfig.Steps
+	local n = tonumber(oldStep)
+	if n == nil or n ~= n or n < 1 then
+		return nil
+	end
+	local old = math.floor(n)
+	local legacy = TutorialConfig.SavedOrder(fromVersion) or TutorialConfig.LegacyOrderV1
+	if old > #legacy then
+		return nil
+	end
+	local target = TutorialConfig.MigrateLegacyStep(old, list, fromVersion)
+	local done = doneBefore(legacy, old)
+	local ahead: { [string]: boolean }? = nil
+	for i, def in ipairs(list) do
+		if i > target and done[def.Id] and TutorialConfig.CarryDoneIds[def.Id] == true then
+			local a: { [string]: boolean } = ahead or {}
+			a[def.Id] = true
+			ahead = a
+		end
+	end
+	return ahead
 end
 
 return TutorialConfig

@@ -61,7 +61,7 @@ local EconomyConfig = {
 		MaxStacks = 5, -- cap +50%
 		StarterPct = 5, -- F10: the player's own Home Outpost, whole percent (not a stack)
 		Attribute = "WE_EmpireTaxPct", -- player attribute, whole percent (0 = chip hidden)
-		PersistClaims = false, -- F3: lane Z sets true (reversible)
+		PersistClaims = true, -- F3: on since lane Z (reversible)
 		ToastSecured = "Outpost taken  Empire Tax +%d%%",
 		ToastLost = "Outpost lost  Empire Tax +%d%%",
 		ToastStolenFromYou = "%s taken  Empire Tax +%d%%",
@@ -74,9 +74,9 @@ local EconomyConfig = {
 	-- F4 (owner's 11 features): one client-only, owner-only floating label on the nearest own producer (Training Yard,
 	-- oil pumps) within RadiusStuds, re-picked ScanHz times a second, pulsing for PulseSeconds on each income tick.
 	-- Text sizes are real px (world labels are not UIScaled); MaxDistance in studs (CLAUDE.md: <= 40). Off until
-	-- lane Z (the client module ships with it).
+	-- lane Z (the client module ships with it); on since lane Z (reversible).
 	ProducerLabels = {
-		Enabled = false,
+		Enabled = true,
 		RadiusStuds = 24,
 		ScanHz = 4,
 		PulseSeconds = 0.6,

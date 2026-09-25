@@ -1,6 +1,7 @@
 --!strict
 --[[
-	MVP interactive tutorial (v31 first-2-min), F6 order (TutorialConfig.OrderVersion 2, the owner's 7 steps):
+	MVP interactive tutorial (v31 first-2-min), F6 order (the owner's 7 steps; TutorialConfig.OrderVersion 3 with the
+	Home Outpost on, 2 with it off):
 	claim → Command Center buy → collect cash (a cash drop also counts) → recruit → Barracks buy → Home Outpost → 4x4
 	While TerritoryConfig.Starter is off, the last two swap (4x4, then outpost: the 30 s travel rule).
 	Server-authoritative step advancement; client shows UI + optional markers. SKIP kept.
@@ -179,10 +180,16 @@ end
 	same for Barracks. Returns the first step that still needs doing.
 	F6 / F10: with the Home Outpost on (TerritoryConfig.Starter.Enabled), the Outpost step is done too once the player
 	has taken their own Home Outpost (profile.StarterOutpostTaken, set by the first capture): later sessions own it
-	from the start, so it could never be captured again for the step, and the next zone is over the 30 s walk. ]]
+	from the start, so it could never be captured again for the step, and the next zone is over the 30 s walk.
+	Lane Z: a step the save already finished in its old order but the new order puts later (profile.TutorialDoneAhead,
+	set by migrateOrder, e.g. the 4x4 of a v2 save that still owes the outpost) is done too. ]]
 local function stepAlreadyDone(profile: any, def: TutorialConfig.TutorialStepDef?): boolean
 	if def == nil then
 		return false
+	end
+	local ahead = profile.TutorialDoneAhead
+	if typeof(ahead) == "table" and ahead[def.Id] == true then
+		return true
 	end
 	local sid = def.PadStructureId
 	if typeof(sid) == "string" then
@@ -292,6 +299,7 @@ function TutorialService.Reset(player: Player)
 	profile.TutorialComplete = false
 	profile.TutorialStep = STEP_CLAIM
 	profile.TutorialOrderVersion = orderVersion() -- F6: step 1 is the same step in every order
+	profile.TutorialDoneAhead = nil -- lane Z: a fresh run owes every step
 	DataService.MarkDirty(player)
 	pushTutorial(player)
 end
@@ -352,19 +360,32 @@ function TutorialService.Init(deps: { [string]: any })
 		TutorialService.Complete(player)
 	end)
 
-	--[[ F6: a TutorialStep saved in an older order (TutorialOrderVersion below OrderVersion; missing = 1 = the v1
-		order) moves to the first step of this order the player has not done yet (TutorialConfig.MigrateLegacyStep:
-		v1 steps 2-4 -> Command Center, never past it), then the profile is stamped with this order. A finished
-		tutorial keeps its step (only the stamp changes). A save from a NEWER order is left alone (never stamped down,
-		so it is never migrated twice). ]]
+	--[[ F6: a TutorialStep saved in another order (TutorialOrderVersion ~= OrderVersion; missing = 1 = the v1 order)
+		moves to the first step of this order the player has not done yet (TutorialConfig.MigrateLegacyStep: v1 steps
+		2-4 -> Command Center, never past it), then the profile is stamped with this order. A finished tutorial keeps its
+		step (only the stamp changes). Lane Z: every known order migrates, in either direction (OrderVersion follows the
+		Home Outpost switch: 2 = 4x4 first, 3 = outpost first); a step already done that the new order puts later is kept
+		in TutorialDoneAhead (never asked twice). A save from an order this build does not know (a newer build) is left
+		alone (never stamped down, so it is never migrated twice). ]]
 	local function migrateOrder(player: Player, profile: any)
 		local current = orderVersion()
 		local saved = tonumber(profile.TutorialOrderVersion) or 1
-		if saved >= current then
+		if saved == current or TutorialConfig.SavedOrder(saved) == nil then
 			return
 		end
 		if profile.TutorialComplete ~= true then
-			profile.TutorialStep = TutorialConfig.MigrateLegacyStep(profile.TutorialStep)
+			local oldStep = profile.TutorialStep
+			profile.TutorialStep = TutorialConfig.MigrateLegacyStep(oldStep, nil, saved)
+			-- a done step stays done in every order: keep what an earlier migration carried
+			local ahead = TutorialConfig.DoneAhead(oldStep, saved) or {}
+			if typeof(profile.TutorialDoneAhead) == "table" then
+				for id, v in pairs(profile.TutorialDoneAhead) do
+					if typeof(id) == "string" and v == true then
+						ahead[id] = true
+					end
+				end
+			end
+			profile.TutorialDoneAhead = if next(ahead) ~= nil then ahead else nil
 		end
 		profile.TutorialOrderVersion = current
 		DataService.MarkDirty(player)

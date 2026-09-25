@@ -2803,3 +2803,248 @@ Each is reversible; the one-line revert is given. To be merged into ASSUMPTIONS.
   new instances on Roblox anyway (same as HEAD).
 
 - **FX-L1 (lead):** a prompt that leaves the DataModel and returns as the same object loses its suppression until the next console refresh (HEAD kept it). With StreamingEnabled off this needs a destroy/re-parent, which the game never does; re-check in streaming phase 2.
+
+## 2026-09-25 — Owner options batch B part 2 + switch-on (Empire Tax chip, Home Outpost, premium pads, golden pump, producer labels, chevrons, novice shield, nation outpost colours B2)
+
+## Owner's 11 features, batch B part 2 (H HUD, W world + nations B2, Z switch-on)
+
+Merged by lane Z (integB2) for the lead to append to ASSUMPTIONS.md. Every line is reversible. All tests behind these
+lines are headless stand-in / Python runs, not Roblox; nothing here has run on a phone.
+
+Flags after lane Z: ON = TerritoryConfig.Starter.Enabled, EconomyConfig.OutpostIncomeBuff.PersistClaims,
+EconomyConfig.ProducerLabels.Enabled, CombatFairnessConfig.NoviceShield.Enabled, TycoonGuideConfig.Chevrons.Enabled,
+WorldLabelConfig.BaseLabelGovernor.Enabled. Stays OFF = NationConfig.OutpostFlags (lead decision). Ships ON by earlier
+lead decision = TycoonGuideConfig.PickMode "Cheapest". TutorialConfig.OrderVersion is now 3 (it follows the Home Outpost).
+
+### Lead decisions recorded with batch B part 2
+- PickMode "Cheapest" ships ON; prestige is +10 % per rebirth (B1 fix); KeepCash = false; PendingCash is kept on rebirth;
+  rebirth % is XP-based; the objective marker is the one AlwaysOnTop marker (the governor never holds it).
+- NationConfig.OutpostFlags stays OFF (flags on zones need the owner's art and sign-off).
+
+### Spec §5 lines that are now live (they were written for the flag flip)
+- §5.3 LabelGovernor ON: at most 3 base labels on screen; the objective label is exempt. Undo: BaseLabelGovernor.Enabled = false.
+- §5.4 Empire Tax +10 % per captured outpost, +5 % for the own Home Outpost, cap +50 %, on every non-exempt income reason.
+- §5.5 PersistClaims = true: claims persist across servers (re-planted on join onto Neutral / NPC zones, released on
+  leave, dropped when another online player holds the zone). Supersedes ASSUMPTIONS #99. Undo: PersistClaims = false.
+- §5.6 Producer labels ON: one owner-only client label on the nearest producer + the painted ATM screen (reverses agent F's
+  v70/v71 removals, same caps). Undo: ProducerLabels.Enabled = false.
+- §5.7 / §5.8 Cheapest pick drives NEXT / chevrons; chevrons ON and follow the tutorial step. Undo: Chevrons.Enabled = false.
+- §5.10 OutpostBeforeJeep() is now true: the live order is the owner's (Home Outpost 6, 4x4 7).
+- §5.11 Novice shield ON (draw, fire, squad order, strike, contest, tutorial end or skip, 900 s; never re-granted).
+  Undo: NoviceShield.Enabled = false.
+- §5.19 Home Outpost live at plot-local (38, 252), radius 20, 10 s, owner-only, +5 %, 4-part kit, no light.
+- §5.20 Feature flags shipped off in the contract lanes and are switched on here (lane Z).
+
+### Z (lane Z: flag flips, tutorial order version, docs)
+Z-1. **TutorialConfig.OrderVersion follows the Home Outpost switch: 3 while TerritoryConfig.Starter.Enabled (outpost 6,
+     4x4 7), 2 while it is off (4x4 6, outpost 7).** One order version now names ONE fixed order
+     (TutorialConfig.SavedOrders[2] / [3]; version 1 or missing = LegacyOrderV1), so a saved step index is always read in
+     the order it was saved in. TutorialService migrates every KNOWN other version on load, in either direction (so the
+     switch stays reversible); a version this build does not know (a newer build's save) is left alone and never stamped
+     down. New profiles are stamped with 3 (ProfileSchema reads OrderVersion). This supersedes K2-3 and T-12 ("OrderVersion
+     stays 2 whatever the flag says") and removes the cost named in K2-2 (a v1 step-8 save repeating the 4x4).
+Z-2. **A done Outpost / 4x4 step is never asked twice (TutorialConfig.CarryDoneIds = {Outpost, Jeep}).** When a migration
+     moves a save to a step and the new order puts an already-done Outpost or 4x4 step after it, that Id is kept in
+     profile.TutorialDoneAhead ({[Id] = true}) and TutorialService treats it as done (skipped like an owned buy step).
+     Concretely (B1 residual risk 4): a v2 save on step 7 (4x4 spawned, outpost owed) now lands on Outpost (6) and the
+     tutorial completes on the capture; a v2 save on step 6 plays Outpost then 4x4; v1 step 8 behaves like v2 step 7.
+     Carried Ids survive a later migration (union) and a rejoin (ProfileSchema.DeepCopy / Migrate keep the key; no schema
+     change, no DataVersion bump); Reset clears them; junk values skip nothing. Other done steps a new order puts later
+     are asked again, as K2-2 already decided (a v1 save that collected before buying the Command Center collects again).
+     Reversible: empty CarryDoneIds.
+Z-3. **Rolling update.** An old-build server (B1, OrderVersion 2) that loads a v3 save during the update reads its step in
+     the 4x4-first order (steps 6/7 swap once for that session). Publish with "Migrate to Latest Update" so old servers
+     close; no money effect.
+Z-4. **The gold-pad gate constants stay in PlotOilPumpService** (GOLD_PAD_GATE_CLEAR 24 / GOLD_PAD_BESIDE_PUMP 8.5,
+     W-14). Moving them to PlotOilPumpConfig.Golden means editing lane W's file for a non-bug; left for the lead together
+     with the W-14 sign-off. Nothing is live until the GoldenPumpjack Id is pasted.
+Z-5. **Docs.** docs/LIVE_PLACE.md product tables are re-read from MonetizationConfig (every GamePass / DevProduct key with
+     its Id, price and where it is sold; ExtraSoldierSlot 99 R$, StarterBundle 149 R$; Nuke, NukeBundle3, PV_*,
+     RebirthBoost, ImpulseSpeed, RebirthKeepBase added) plus the 3 new Creator Dashboard items and the paste steps; a
+     BuyPathStatic check keeps the doc's Ids equal to the config. BALANCE.md gets the Empire Tax rows and the Territory
+     line is corrected (capture 20-50 s, Home Outpost 10 s, MaxPersonalTerritories 6, was "3").
+Z-6. **Scratch drivers switched for the flags-ON tree** (scratch only, never the repo): worldhook tut_* -> W's
+     t_client_driver_w (T's original injects duplicate Home Outpost markers: 76/2 with the Starter on, kept as tcl_*);
+     biz -> E/biz_driver_k2_e; raid -> E/raid_driver_f2_e; b2svc -> T/b2svc_laststep; f3_driver_b -> W/f3_driver_b_w.
+     Drivers that asserted "flag ships false" / "OrderVersion 2" got lane Z copies (integB2/zdrv/*_z.luau) with only those
+     expectations changed; the originals still pass on the flags-OFF variant (cand_off).
+Z-7. **HUD stand-in gap:** the integB2 copy of the harness's rbxsim adds Workspace:BulkMoveTo (moves each part, as lane G's
+     g_guidance_on state already did), because the chevrons are now on in every state. Stand-in only; the game uses the
+     engine's BulkMoveTo.
+Z-8. **Economy model with Empire Tax** (Python, integB2/econ/econ_z.py over K2's econ_k2.py): Empire Tax multiplies
+     passive/business income and training, not plot oil; the Home Outpost (+5 %) is taken at the tutorial's step 6
+     (modelled at 120 s), captured outposts at 10 / 20 min in the "home1" / "home2" scenarios. Not Roblox.
+Z-9. **Known, not changed (W verifier risk 1):** with both PersistClaims and the Home Outpost on, saved claims are
+     re-planted only because TerritoryService's profile-loaded listener runs before BaseService's plot-ready (BaseService
+     defers RefreshAllVisuals). If BaseService ever fired plot-ready synchronously at load, the Home Outpost hold would
+     rewrite profile.Territories first and the other saved claims would be lost for that join (Empire Tax 5 instead of
+     25 in the verifier's reverse-order driver). No path does this today.
+
+### H (HUDController, HudIcons, TerritoryController)
+
+H-1. F3 Empire Tax chip crowding: HideWhenCrowded degrades in two steps instead of one. When the full chip (gold
+     flag + "+10%", about 83 real px) would reach the compass chip (compass left - Gap), it first drops the flag
+     ("Compact", "+10%" only, never under 44 real px wide), then hides. It grows back only with 6 real px to spare, so
+     the compass distance ticking 99m -> 100m never makes it flicker. Reason: on 844x390 outside the base the full
+     chip has only a few px to spare (and none with a two-digit level); the compact chip keeps the % on screen there.
+     The spec said "hide". Reversible: make EmpireTaxFit return "Hidden" instead of "Compact".
+
+H-2. The spec's "fits at 844 and 956 (compass left edge at 720 and 812)" does not hold: in the HUD harness the compass
+     chip ("BASE 869m", 136 px) starts at x 649 on 844x390 and at 746 on 956x440. Harness results outside the base
+     (compass showing), Lv 7 / Lv 40: 844x390 Full / (shielded) hidden; 956x440 Full / Compact; 932x430, 800x360 Full /
+     (shielded) hidden; 800x360 with a notch Compact / (shielded) hidden; 1180x820 and desktop always Full. Inside the
+     own base the compass hides and the chip is Full everywhere. The harness text widths are the stand-in's estimates;
+     on a device the same rule uses the real font widths, so the switch points move by a few px.
+
+H-3. F3 crowding also covers a HEAD overlap: at 800x360 with a notch (safe 32 px), Lv 10+, outside the base, with the
+     raid shield running, the Shield chip ran 9 px under the compass chip (HEAD, harness). Now, once the Empire Tax
+     chip is hidden and it is still crowded, the Shield chip drops its icon and keeps "9:59". In the harness this
+     happens on 800x360-notch and 844x390 while shielded outside the base (the stand-in's text-width estimate is a
+     few px wider than the harness layout's there, so the check errs on the safe side). Reversible: remove step 2 of
+     refreshEmpireTax.
+
+H-4. The crowding check is event-driven only (the %, the level number, the shield chip text / visibility, the compass
+     chip text / visibility, a layout change), never per frame. It measures each chip as the larger of its laid-out
+     AbsoluteSize and a TextService estimate of its parts, so a chip whose AutomaticSize has not resolved yet is
+     never under-counted. When there is no Empire Tax and no shield it measures nothing.
+
+H-5. F3 dropdown header: "Empire Tax +N%" in the chip gold while N > 0; "TERRITORIES" (white) at 0, so a player who
+     holds nothing still sees what the list is. Spec wrote only "Empire Tax +N%".
+
+H-6. F3 toast: "Empire Tax +N%" (Info) fires when the server's WE_EmpireTaxPct changes to N > 0. It is skipped when a
+     server toast whose text contains "Empire Tax" (EconomyConfig.OutpostIncomeBuff.DisplayName) arrived from 2 s
+     before the change up to the decision, which runs 0.6 s after the change (attribute and remote-event order is
+     not guaranteed). It is also skipped for 10 s after the first TerritoryStateUpdate (joining, re-planted claims,
+     the Home Outpost held from the start) and when the % drops to 0 (the server's loss toast says it). One visible
+     case: lane W's silent Home Outpost hold (OnPlotReady) more than 10 s after joining shows "Empire Tax +5%" once.
+
+H-7. F10 list: every non-starter zone is listed; of the Home Outposts only the one whose plot is the player's own
+     (TerritoryConfig.Starter row PlotId, or the Starter_P<n> id when this client's config has no such row). While
+     the own plot is not known yet (no BaseStateUpdate / PlayerStateUpdate.Base), only a Home Outpost the player
+     holds is listed. The count ("2/12") counts listed rows only.
+
+H-8. Territories list text on touch is 20 v (14 real px at the phone scale 0.70), was 16 v (11.2 px, HEAD). The list is
+     340 v wide on touch (was 300) and the tag column 112 v (was 104), so "Coastal Oil Bravo" and "CONTESTED" fit.
+     Desktop keeps 16 v / 300 / 104.
+
+H-9. F11 level-chip tooltip reads "Rebirth 17%  Lv 20/40 · Fee: none · +10%/P" (XP-based PrestigeConfig.ProgressPct,
+     the same number as the Rebirth panel; capped at 99 below Lv 40). It was "Rebirth 20/40 (50%) · ..." (level-based).
+
+H-10. HudIcons "Flag" is a plain pennant on a pole (2 Frames, the chip gold). It is never a country flag, so the nation
+     rules (Textures/Decals only, owner-approved list) do not apply to it.
+
+Known, not changed (pre-existing on HEAD, same geometry): the Territories dropdown, when open on a touch screen, extends
+into the harness's "Reserved: vehicle/combat controls (bottom-right)" box (zone=1 on the 5 phone-size viewports). The
+list is a registered Modal panel: the touch combat buttons and the ammo readout hide on "Modal" (HudConfig.TouchCombat /
+Ammo HideWhen), the vehicle controls exist only while Driving and the list closes on Driving and death; the harness shows
+0 overlaps in that snapshot. It is not one of CLAUDE.md's reserved zones (thumbstick,
+jump + 16 px, top-bar pills: all 0). A fix that keeps it out of the box would cut the list to about 2 rows on 844x390.
+
+### W (MapSetup, BaseLayout, TerritoryService, TerritoryCapture, TerritoryRadar, PlotOilPumpService; nations B2)
+Note (lane Z): W's "flags stay as shipped" line is superseded by Z-1..Z-2 and the flag list above: Starter and
+PersistClaims are now ON; OutpostFlags stays OFF. All W tests are headless stand-in runs, not Roblox.
+
+W-1. **The ATM pads are MonetizationConfig.PremiumPads.Slots, built in slot order (red Auto Collect, yellow 2x Cash, cyan
+     Speed).** A slot is built only while LivePadOffer finds an offer with Id ~= 0 (today: both passes, and the Speed slot
+     sells the 99 R$ Speed Boost product until the 5 R$ Speed Pass Id is pasted). No VIP pad and no Golden Pump pad at
+     the ATM. The pad keeps its Neon top (it is the offer; 3 per base, 18 in all) and its name `PremiumPad_<OfferKey>`.
+     Each pad gets OfferKind / OfferKey / OwnedIfAny (comma string) / PlotId / PadSlot and one label (MaxDistance
+     PremiumPads.LabelMaxDistance = 20, tagged WE_BaseLabel). Revert: re-add a slot in PremiumPads.
+W-2. **MapSetup builds the capture zones from TerritoryConfig.Territories** (one source). It keeps only its own build
+     data: the build order of the original eleven zones (so their parts are made in the same order as before) and each
+     fort's gate side (FortIronclad +Z, FortSandhold -Z). Any other row is built after them, sorted by id. Side effect:
+     the initial marker / ring / flag colour of a neutral zone is now TerritoryConfig's colour (e.g. Central Plaza
+     200,200,80 instead of MapSetup's 180,170,50). TerritoryService already painted the config colour on its first
+     tick, so nothing changes once the server runs; the fort keeps and lintels were already the same colour.
+W-3. **MapSetup.MAP_GEN = (FaceMapCentre ? 83 : 82) + (Starter.Enabled ? 10 : 0).** 80/81 -> 82/83 rebuilds a baked map
+     that still has the VIP pad; +10 makes flipping the Home Outpost flag rebuild a baked map as well. The parity still
+     encodes FaceMapCentre. Revert: the old expression.
+W-4. **Home Outpost kit = 4 parts** (invisible marker with both capture tags, TerritoryId, PlotId, IsStarter, OwnerOnly
+     attributes; ring D = 2R + 8 = 48; pole; flag) plus the usual WE_ZoneLabel "Home Outpost" (MaxDistance 40) and, at
+     runtime, TerritoryService's 28 px flag diamond (MaxDistance 40). No stripe, finial or light. The label is visible to
+     every player near it (it only names the zone; only the owner can take it).
+W-5. **Owner-only capture** = TerritoryCapture counts only BaseService.GetOwnerUserId(def.PlotId) (bound by TerritoryService
+     through SetPlotOwnerResolver). Anyone else neither captures nor contests; a Home Outpost whose plot has no owner on
+     this server counts nobody. The marker's half-diagonal still widens the radius as for every zone (R 20 -> ~28 studs).
+W-6. **Home Outpost rules.** 10 s capture; +StarterPct (5) Empire Tax via EconomyService (never a stack); never counted
+     toward MaxPersonalTerritories and never evicted; never stolen (only the owner counts); no stipend (StipendCash 0);
+     no clan-war capture credit (ClanWarService.OnTerritoryCaptured is skipped); the capture still counts for
+     Stats.TerritoriesCaptured, missions and the tutorial (it can happen once per account: StarterOutpostTaken).
+     The first capture sets profile.StarterOutpostTaken; afterwards BaseService.OnPlotReady makes the plot owner hold it
+     silently (no toast, stat, mission or tutorial event) and recounts the Empire Tax (SyncOutpostIncomeStacks). It goes
+     back to Neutral when its owner leaves, and when the plot changes hands (a stale holder is released on OnPlotReady;
+     a Home Outpost the player holds on another plot is released too). Revert: TerritoryConfig.Starter.Enabled = false.
+W-7. **Other plots' Home Outposts are not in a player's TerritoryStateUpdate list** (TerritoryRadar.ShownTo, server side),
+     so the Territories dropdown, compass and tutorial never offer a zone the player cannot take. A player with no plot
+     sees no Home Outpost. Other zones are unchanged.
+W-8. **Empire Tax toasts take the TOTAL % after the change** (EconomyConfig.OutpostIncomeBuff templates, K1 #8):
+     capture "Outpost taken  Empire Tax +N%" (shown when the total went up, incl. the Home Outpost's +5); steal
+     "Took <zone>  Empire Tax +N%"; the victim "<zone> taken  Empire Tax +N%"; an eviction "Outpost lost  Empire Tax
+     +N%". A capture that does not raise the total (already at +50 %) keeps the old "★ SECURED <zone>! <description>"
+     line. A missing or broken template falls back to a plain line (never errors). The hard-coded
+     "★ SECURED %s — +%d%% Income (yours)" is gone.
+W-9. **PersistClaims (flag, off until lane Z).** On join, before the profile is rewritten from this server's zones,
+     every saved claim (profile.Territories) is re-planted when the zone is Neutral (also a neutral zone being contested)
+     or NPC-held: the player owns it with the normal ProtectedUntil = now + ProtectionPeriodSeconds, silently (no toast,
+     stat, mission or tutorial event), up to MaxPersonalTerritories. A claim on a zone another ONLINE player holds is
+     dropped with "<zone> is held by <DisplayName>" (Warn). A claim on a clan-held zone, a leftover offline holder's
+     zone or a zone that no longer exists is dropped silently. Home Outpost ids are never re-planted. On leave the
+     player's zones go back to Neutral WITHOUT touching the saved profile, so the next server re-plants them. Flag off =
+     HEAD behaviour (claims are per server; a leaver keeps world ownership until someone takes it).
+W-10. **F6: a shielded novice inside a contested zone loses the shield** (CombatService.EndNoviceShield(p, "contest"),
+     pcall; CombatService applies its EndOnContestedCapture switch). An owner-only Home Outpost is never contested.
+W-11. **F4: PlotOilPumpService makes no BillboardGui per tick.** The "+$18" pop is deleted; the owner's label is the client
+     ProducerLabels module (lane G, behind EconomyConfig.ProducerLabels.Enabled). Until lane Z flips that flag there is
+     NO "+$18" label over the pumps at all (the training-yard pop stays server-side behind the same flag, lane E-2).
+W-12. **F9 golden dress:** Derrick / WalkingBeam / HorseHead gold Metal + Reflectance 0.2; the pump Pad stays Asphalt with a
+     gold colour; every BasePart of the catalog clone is gold Metal (so a Neon piece of the catalog model is Metal too),
+     its MeshPart TextureID is cleared and SurfaceAppearance / Texture / Decal children are removed. Re-applied right
+     after the deferred TryAttachPropVisual. No light.
+W-13. **F9 gold pad:** one 7x7x0.45 gold Metal WE_PremiumPad (OfferKind DevProduct, OfferKey GoldenPumpjack, PlotId,
+     named PremiumPad_GoldenPumpjack) with one "Golden Pump" / "R$" label named WE_PremiumBillboard (so the Shop's OWNED
+     look finds it; MaxDistance Golden.LabelMaxDistance = 20, tagged WE_BaseLabel), built only while the Id is live and
+     the plot owner does not own it, so nothing appears until the Id is pasted. Spot: between the two pumps (lateral 0),
+     PadOffsetStuds (10) toward the plot, outside the wall.
+W-14. **F9 deviation: the gold pad never sits in the main gate lane.** On plots 3 and 4 the pumps flank the main gate (the
+     spec's side finding), so the spec spot is 8 studs in front of the gate centre and every walk out of the gate would
+     show the owner a Robux sheet. Where the spec spot is closer than 24 studs to the main gate centre (plot-local
+     (0, PlotSize/2) through PlotFrame), the pad moves beside the outer pump, on the pump line (lateral +19.5): 26.5 studs
+     from the gate centre, clear of both pumps. Plots 1, 2, 5, 6 keep the spec spot (85 studs from their gate). The 24 /
+     8.5 studs are local constants in PlotOilPumpService (GOLD_PAD_GATE_CLEAR / GOLD_PAD_BESIDE_PUMP); lane Z may move
+     them to PlotOilPumpConfig.Golden (config-first). Revert: delete the 4-line gate check.
+W-15. **BaseLayout.FacesMapCentre / PlotYaw / PlotCFrame delegate to Shared/Util/PlotFrame** (same maths, one copy).
+     BaseLayout's other helpers are unchanged.
+W-16. **Nations B2 (a)(b) contested colours.** Two contester colours closer than NationConfig.ContestMinColorDistance
+     (0.25 RGB) pulse contester A <-> amber (255,140,35) instead of A <-> B; if A itself is within 0.25 of amber the pulse
+     is plain amber. The capture HUD gets the same rule: B is sent as amber, and neither colour is sent when A reads as
+     amber (the HUD then runs its own amber pulse). Far colours are unchanged (A <-> B).
+W-17. **Nations B2 (c) owned colours.** A player-held zone never takes a colour within 0.25 of NPC red (210,45,45), Clan
+     blue (70,120,240) or contested amber: it falls back to the player's legacy roster colour, else (55,210,95). This
+     also fixes the legacy Crimson / Azure / Amber roster colours, which read as NPC-, clan- or contest-held at HEAD
+     (3 of 8 roster colours now show green on the zones they own). Contester colours are not changed (the pulse rule
+     handles them).
+W-18. **Nations B2 (d) R15 cache in TerritoryService** (no NationColorService change): the owner's colour (and nation id
+     while OutpostFlags is on) is cached while they are online and kept after they leave only while that UserId still
+     owns a zone (PersistClaims off: soft release). The entry is dropped on the first release that leaves them owning
+     nothing (and on leave when they own nothing), so the cache never grows with the server's lifetime.
+W-19. **Nations B2 (e) outpost flags behind NationConfig.OutpostFlags (false).** Off: flag sizes and look exactly as HEAD,
+     no Texture is ever created on a zone flag and no WE_NationShown attribute is written. On: 4:3 sizes 4.8x3.6
+     (owned), 5.2x3.9 (contested), 3.6x2.7 (neutral / NPC); two Textures (WE_NationTexA/B, created on first show) on
+     the thin faces show the owner's nation (NationColorService.GetNationId, already art-gated) only while the zone is
+     Player-owned and not contested, and only when art is wired (NationTexture.Source); otherwise they are blank. The
+     stripe hides (Transparency 1) while a flag image shows. Never a SurfaceGui, no light, no nation name in any toast.
+     A leaver's nation flag stays while they still own the zone (R15 cache). RefreshOwnerFlags(userId) redraws the
+     zones that user owns or contests (NationColorService calls it after a pick, only while OutpostFlags is on).
+W-20. **No NukeService exists in the tree** that targets territories, so the F10 "nukes skip it" rule lives only in
+     NukeConfig.IsTerritoryTargetable (K1, tested); TerritoryService adds nothing for it.
+
+### Lead
+- **B2-L1 Switched ON in this commit (owner's options):** TerritoryConfig.Starter (Home Outpost), OutpostIncomeBuff.PersistClaims,
+  ProducerLabels, NoviceShield, Chevrons, BaseLabelGovernor. NationConfig.OutpostFlags stays OFF. Tutorial OrderVersion is 3
+  while the Home Outpost is on (2 while off); saves migrate both ways and finished steps the new order puts later are carried.
+- **B2-L2 Owner sign-offs still open (reversible, shipped as built):** gold pad beside the outer pump on plots 3 and 4 (W-14);
+  3 legacy roster colours now shown green on owned outposts (contrast fallback); a novice's shield ends when they contest a
+  zone; re-planted claims can take NPC zones on join; stipend-hopping estimate ~1.5x. Economy: a player who only follows NEXT
+  earns 142 $/s at 30 min with just the Home Outpost (+5 %), 158 with one more outpost; below the 280-380 band - the
+  one-line revert is PickMode = "Score".
+- **B2-L3 Publish with "Migrate to Latest Update":** an old server that loads a v3 tutorial save would swap steps 6 and 7 once.

@@ -35,9 +35,9 @@ local WorldLabelConfig = {
 	BaseLabelTag = "WE_BaseLabel",
 	-- The client LabelGovernor makes "at most 3 labels on screen at a base" true: Hz times a second it keeps the
 	-- MaxOnScreen tagged labels nearest the camera (within their own MaxDistance) enabled and disables the rest.
-	-- It never touches a label whose RoleAttribute is "objective". Off until lane Z (reversible).
+	-- It never touches a label whose RoleAttribute is "objective". On since lane Z (reversible).
 	BaseLabelGovernor = {
-		Enabled = false,
+		Enabled = true,
 		MaxOnScreen = 3,
 		Hz = 4,
 	},

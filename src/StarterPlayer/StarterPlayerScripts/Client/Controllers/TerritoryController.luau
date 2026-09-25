@@ -7,12 +7,17 @@
 	  so it works the same for land outposts and the v70 naval outposts (oil rigs taken by a boat's driver or from
 	  the deck) and stays visible while Driving. Contested → amber edge + "CONTESTED · NAME" and the nation-colour
 	  pulse (contestedPulseActive); Protected → blue "PROTECTED · NAME" (capture slowed).
-	* "Outposts held: N" → one silent Info toast through NotificationController when the count changes. The old
-	  mid-screen TerritoryAlert label and its 50 % / 90 % milestone lines are gone: the % is on the bar.
-	* TERRITORY LIST → a dropdown under the compass chip, opened by HudLayout.Signals.CompassTapped (it was an
-	  always-on panel over the rail). It is a registered panel ("Territories"): one panel at a time and Modal
-	  while open, so the combat buttons hide and the list may use the right-hand column down to the jump button.
-	  ✕, a tap outside, another panel, Driving or death close it.
+	* F3 "Empire Tax +N%" → one silent Info toast through NotificationController when the server's WE_EmpireTaxPct
+	  (EconomyConfig.OutpostIncomeBuff.Attribute) rises or falls to N > 0 (it replaced "Outposts held: N"). Skipped
+	  when a server toast named Empire Tax within TAX.SkipWindow (2 s) of the change (the capture / loss toasts carry
+	  the %), and while joining. The old mid-screen TerritoryAlert label and its 50 % / 90 % lines are gone.
+	* TERRITORY LIST → a dropdown under the compass chip, opened by HudLayout.Signals.CompassTapped (the compass chip
+	  and the TopStrip Empire Tax chip both emit it; it was an always-on panel over the rail). It is a registered
+	  panel ("Territories"): one panel at a time and Modal while open, so the combat buttons hide and the list may
+	  use the right-hand column down to the jump button. ✕, a tap outside, another panel, Driving or death close it.
+	  Header "Empire Tax +N%" (gold) while N > 0, else "TERRITORIES".
+	* F10 Home Outposts: the list shows only the player's OWN one (TerritoryConfig.Starter rows, PlotId = the own
+	  plot from BaseStateUpdate / PlayerStateUpdate); other plots' Home Outposts are never listed or counted.
 	* RADAR HILL reveal → the HudLayout flag "Radar" (CompassController draws the purple dot on the chip) + the
 	  enemy Highlights (kept) + a "RADAR ON" row in the list.
 	* W3 step 2 lane U0 — ONE AlwaysOnTop label: TerritoryService makes a flag's WE_FlagBillboard diamond draw through
@@ -34,6 +39,7 @@ local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
 local TerritoryConfig = require(Shared.Configs.TerritoryConfig)
+local EconomyConfig = require(Shared.Configs.EconomyConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
 local UIUtil = require(Shared.Util.UIUtil)
 
@@ -61,14 +67,30 @@ local radarActive = false
 local radarRadius = 550
 local radarHighlights: { [number]: Highlight } = {}
 
--- "Outposts held: N" (nil until the first payload: joining never toasts)
-local lastOwned: number? = nil
+-- F3 Empire Tax toast + list header (see the header comment)
+local BUFF = EconomyConfig.OutpostIncomeBuff
+local TAX = {
+	Attr = (BUFF and BUFF.Attribute) or "WE_EmpireTaxPct",
+	Name = (BUFF and BUFF.DisplayName) or "Empire Tax",
+	SkipWindow = 2, -- s: a server toast naming Empire Tax this close to the change already said it
+	Settle = 0.6, -- s: decide this long after the change, so a server toast landing just after the attribute counts
+	JoinQuietSeconds = 10, -- s after the first TerritoryStateUpdate: re-planted claims / the Home Outpost never toast
+	Color = ((HudConfig.TopStrip :: any).EmpireTax and (HudConfig.TopStrip :: any).EmpireTax.Color) or HudConfig.Colors.Gold,
+}
+local taxPct = 0
+local taxBaselineAt: number? = nil -- os.clock() of the first TerritoryStateUpdate (nil: still joining)
+local taxToken = 0
+local lastServerTaxToastAt = -math.huge
+
+-- F10: the own plot (BaseStateUpdate / PlayerStateUpdate), for the own-Home-Outpost-only list
+local myPlotId: number? = nil
 
 -- dropdown list (panel "Territories")
 local PANEL_ID = "Territories"
 local listPanel: Frame? = nil
 local listScroll: ScrollingFrame? = nil
 local listCount: TextLabel? = nil
+local listTitle: TextLabel? = nil
 local listDim: Frame? = nil
 local listOpen = false
 local listDirty = true
@@ -77,13 +99,17 @@ local lastPayload: Types.TerritoryStatePayload? = nil
 -- Dropdown geometry, v (the gui carries HudLayout's MobileScale). Candidates for HudConfig.TopStrip.Compass.List.
 local LIST = {
 	Width = 300,
+	WidthTouch = 340, -- room for 20 v names ("Coastal Oil Bravo") beside a 20 v tag
 	RowH = 30,
 	Gap = 6, -- under the compass chip
 	PadX = 12,
 	PadBottom = 8,
 	TitleSize = 20,
-	TextSize = 16, -- 11.2 real px at the phone scale (HudConfig.Scale.MinTextPx)
+	TextSize = 16, -- desktop (the HUD scale there keeps it >= 14 real px)
+	TextSizeTouch = 20, -- 14 real px at the phone scale 0.70 (CLAUDE.md text floor; was 16 v = 11.2 px)
+	CountWidth = 56, -- "3/12" right of the title
 	TagWidth = 104,
+	TagWidthTouch = 112, -- "CONTESTED" at 20 v
 	DotSize = 10,
 	MinHeight = 140,
 	-- touch: stay above Roblox's jump button (top at H − 90 real, see HudConfig.TouchCombat) plus a 10 px gap
@@ -103,6 +129,14 @@ local COL = {
 	Protected = Color3.fromRGB(140, 180, 255),
 	Radar = HudConfig.TopStrip.Compass.RadarDot,
 }
+
+local function textSizeV(): number
+	return if HudLayout.IsTouch() then LIST.TextSizeTouch else LIST.TextSize
+end
+
+local function tagWidthV(): number
+	return if HudLayout.IsTouch() then LIST.TagWidthTouch else LIST.TagWidth
+end
 
 local function touchMinV(): number
 	if HudLayout.IsTouch() then
@@ -304,11 +338,48 @@ local function describe(entry: Types.TerritoryEntryPayload, capturingId: string?
 	return { Name = name, Tag = "NEUTRAL", Color = COL.Neutral, NameColor = COL.Neutral, Rank = 5 }
 end
 
+-- F10: the plot a Home Outpost row belongs to (TerritoryConfig.Starter rows: IsStarter + PlotId, or the Starter_P<n>
+-- id when this client's config has no such row); nil = not a Home Outpost, -1 = a Home Outpost of unknown plot
+local function starterPlotOf(id: string): number?
+	local st = TerritoryConfig.Starter
+	local prefix = if st and type(st.IdPrefix) == "string" and st.IdPrefix ~= "" then st.IdPrefix else "Starter_P"
+	local def = TerritoryConfig.Territories[id]
+	local named = string.sub(id, 1, #prefix) == prefix
+	if not (TerritoryConfig.IsStarterDef(def) or named) then
+		return nil
+	end
+	local fromDef = if def then tonumber(def.PlotId) else nil
+	return fromDef or (if named then tonumber(string.sub(id, #prefix + 1)) else nil) or -1
+end
+
+--[[ F10, pure (exported for the client sim): does the dropdown list this row? Every zone, except Home Outposts: only
+	the one on the player's own plot (myPlot); while the plot is not known yet, only one the player holds. ]]
+function TerritoryController.Lists(entry: Types.TerritoryEntryPayload, myPlot: number?, myUserId: number): boolean
+	local plot = starterPlotOf(tostring(entry.Id))
+	if plot == nil then
+		return true
+	end
+	if myPlot ~= nil then
+		return plot == myPlot
+	end
+	return entry.OwnerType == "Player" and entry.OwnerUserId == myUserId
+end
+
+local function listed(payload: Types.TerritoryStatePayload?): { Types.TerritoryEntryPayload }
+	local out = {}
+	for _, entry in ipairs(if payload then payload.Territories or {} else {}) do
+		if typeof(entry) == "table" and TerritoryController.Lists(entry, myPlotId, player.UserId) then
+			table.insert(out, entry)
+		end
+	end
+	return out
+end
+
 local function rowCount(payload: Types.TerritoryStatePayload?): number
 	if not payload then
 		return 1
 	end
-	local n = #(payload.Territories or {})
+	local n = #listed(payload)
 	if n == 0 then
 		n = 1 -- the empty-state line
 	end
@@ -323,7 +394,7 @@ local function makeText(parent: Instance, name: string, text: string, color: Col
 	t.Name = name
 	t.BackgroundTransparency = 1
 	t.Font = HudConfig.Fonts.Body
-	t.TextSize = LIST.TextSize
+	t.TextSize = textSizeV()
 	t.TextColor3 = color
 	t.TextXAlignment = Enum.TextXAlignment.Left
 	t.TextYAlignment = Enum.TextYAlignment.Center
@@ -347,7 +418,7 @@ local function rebuildList()
 			child:Destroy()
 		end
 	end
-	local list = if payload then payload.Territories or {} else {}
+	local list = listed(payload)
 	local lc = if payload then payload.LocalCapture else nil
 	local capId: string? = nil
 	local capPct = 0
@@ -410,12 +481,12 @@ local function rebuildList()
 
 		local nameLabel = makeText(row, "Name", info.Name, info.NameColor)
 		nameLabel.Position = UDim2.fromOffset(LIST.DotSize + 8, 0)
-		nameLabel.Size = UDim2.new(1, -(LIST.DotSize + 8 + LIST.TagWidth), 1, 0)
+		nameLabel.Size = UDim2.new(1, -(LIST.DotSize + 8 + tagWidthV()), 1, 0)
 
 		local tag = makeText(row, "Tag", info.Tag, info.Color)
 		tag.AnchorPoint = Vector2.new(1, 0)
 		tag.Position = UDim2.fromScale(1, 0)
-		tag.Size = UDim2.new(0, LIST.TagWidth, 1, 0)
+		tag.Size = UDim2.new(0, tagWidthV(), 1, 0)
 		tag.TextXAlignment = Enum.TextXAlignment.Right
 
 		row.Parent = scroll
@@ -461,7 +532,7 @@ local function placeList()
 	right = math.min(right, content.Max.X)
 	local bottom = content.Max.Y - (if HudLayout.IsTouch() then LIST.JumpClearPx else HudConfig.Edge * s)
 	local availV = math.max(LIST.MinHeight, (bottom - top) / s)
-	local widthV = math.max(200, math.min(LIST.Width, (right - content.Min.X) / s - HudConfig.Edge))
+	local widthV = math.max(200, math.min(if HudLayout.IsTouch() then LIST.WidthTouch else LIST.Width, (right - content.Min.X) / s - HudConfig.Edge))
 	-- whole rows only (the rest scrolls), so no row is ever cut in half at the bottom edge
 	local hv = headerV()
 	local fitRows = math.max(1, math.floor((availV - hv - LIST.PadBottom) / LIST.RowH))
@@ -531,22 +602,24 @@ local function buildList(screen: ScreenGui)
 	title.Name = "Title"
 	title.BackgroundTransparency = 1
 	title.Position = UDim2.fromOffset(LIST.PadX, 0)
-	title.Size = UDim2.new(0, 0, 0, hv)
-	title.AutomaticSize = Enum.AutomaticSize.X
+	-- up to the count (F3: "Empire Tax +50%" is longer than "TERRITORIES")
+	title.Size = UDim2.new(1, -(LIST.PadX + LIST.CountWidth + hv + 4), 0, hv)
 	title.Font = HudConfig.Fonts.Display
 	title.TextSize = LIST.TitleSize
 	title.TextColor3 = HudConfig.Colors.White
 	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.Text = "TERRITORIES"
 	title.Active = false
 	title.ZIndex = 7
 	title.Parent = f
 	UIUtil.TextOutline(title, 1.4)
+	listTitle = title
 
 	local count = makeText(f, "Count", "0/0", HudConfig.Colors.Muted)
 	count.AnchorPoint = Vector2.new(1, 0)
 	count.Position = UDim2.new(1, -(hv + 4), 0, 0)
-	count.Size = UDim2.new(0, 64, 0, hv)
+	count.Size = UDim2.new(0, LIST.CountWidth, 0, hv)
 	count.TextXAlignment = Enum.TextXAlignment.Right
 	listCount = count
 
@@ -633,6 +706,68 @@ local function buildList(screen: ScreenGui)
 			placeList()
 		end
 	end)
+end
+
+---------------------------------------------------------------------------------------------------------------
+-- F3 Empire Tax: list header + "Empire Tax +N%" toast (display only; the server owns the %)
+---------------------------------------------------------------------------------------------------------------
+
+local function readTaxPct(): number
+	local v = player:GetAttribute(TAX.Attr)
+	return if typeof(v) == "number" and v == v and v > 0 and v < math.huge then math.floor(v + 0.5) else 0
+end
+
+-- "Empire Tax +20%" (the list header and the toast)
+function TerritoryController.TaxText(pct: number): string
+	return string.format("%s +%d%%", TAX.Name, math.floor(pct + 0.5))
+end
+
+--[[ Pure (exported for the client sim): toast "Empire Tax +N%" for a change at changedAt? Not for 0, not while
+	joining (joinedAt nil or within JoinQuietSeconds), and not when a server toast naming Empire Tax came at serverAt
+	within SkipWindow before the change or after it (the decision runs Settle seconds after the change). ]]
+function TerritoryController.ShouldToastTax(pct: number, changedAt: number, serverAt: number, joinedAt: number?): boolean
+	if pct <= 0 or joinedAt == nil or changedAt - joinedAt < TAX.JoinQuietSeconds then
+		return false
+	end
+	return serverAt < changedAt - TAX.SkipWindow
+end
+
+local function retitle()
+	local t = listTitle
+	if not t then
+		return
+	end
+	local text = if taxPct > 0 then TerritoryController.TaxText(taxPct) else "TERRITORIES"
+	if t.Text ~= text then
+		t.Text = text
+	end
+	t.TextColor3 = if taxPct > 0 then TAX.Color else HudConfig.Colors.White
+end
+
+local function onTaxChanged()
+	local pct = readTaxPct()
+	if pct == taxPct then
+		return
+	end
+	taxPct = pct
+	retitle()
+	taxToken += 1
+	local my = taxToken
+	local changedAt = os.clock()
+	task.delay(TAX.Settle, function()
+		-- a newer change decides for itself; the % must still be this one
+		if my ~= taxToken or readTaxPct() ~= pct then
+			return
+		end
+		if TerritoryController.ShouldToastTax(pct, changedAt, lastServerTaxToastAt, taxBaselineAt) then
+			NotificationController.Show(TerritoryController.TaxText(pct), "Info")
+		end
+	end)
+end
+
+-- test hook (client sims): (current %, list header text)
+function TerritoryController._TaxState(): (number, string)
+	return taxPct, if listTitle then listTitle.Text else ""
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -744,6 +879,40 @@ function TerritoryController.Init()
 
 	buildList(screen)
 
+	-- F3: the Empire Tax % (server attribute) heads the list and toasts on change
+	taxPct = readTaxPct()
+	retitle()
+	player:GetAttributeChangedSignal(TAX.Attr):Connect(onTaxChanged)
+	-- the server's capture / loss toasts name the % already ("Outpost taken  Empire Tax +10%"): remember when
+	Remotes.BindEvent(Constants.RemoteNames.Notification, function(payload: any)
+		if type(payload) == "table" and type(payload.Message) == "string" and string.find(payload.Message, TAX.Name, 1, true) then
+			lastServerTaxToastAt = os.clock()
+		end
+	end)
+
+	-- F10: the own plot, so the list shows only the own Home Outpost
+	local function applyPlot(id: any)
+		if typeof(id) ~= "number" or id ~= id or id == myPlotId then
+			return
+		end
+		myPlotId = id
+		listDirty = true
+		if listOpen then
+			rebuildList()
+			placeList()
+		end
+	end
+	Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: any)
+		if typeof(base) == "table" then
+			applyPlot(base.PlotId)
+		end
+	end)
+	Remotes.BindEvent(Constants.RemoteNames.PlayerStateUpdate, function(state: any)
+		if typeof(state) == "table" and typeof(state.Base) == "table" then
+			applyPlot(state.Base.PlotId)
+		end
+	end)
+
 	local applyToken = 0
 	Remotes.BindEvent(Constants.RemoteNames.TerritoryStateUpdate, function(payload: Types.TerritoryStatePayload)
 		if typeof(payload) ~= "table" then
@@ -811,17 +980,9 @@ function TerritoryController.Apply(payload: Types.TerritoryStatePayload)
 		placeList()
 	end
 
-	local owned = 0
-	for _, entry in ipairs(payload.Territories or {}) do
-		if entry.OwnerUserId == player.UserId and entry.OwnerType == "Player" then
-			owned += 1
-		end
-	end
-	local prev = lastOwned
-	lastOwned = owned
-	if prev ~= nil and owned ~= prev and owned > 0 then
-		-- silent Info line in the toast lane (was the TerritoryAlert label)
-		NotificationController.Show(string.format("Outposts held: %d", owned), "Info")
+	-- F3: the first payload ends "joining" for the Empire Tax toast (it replaced "Outposts held: N")
+	if taxBaselineAt == nil then
+		taxBaselineAt = os.clock()
 	end
 end
 

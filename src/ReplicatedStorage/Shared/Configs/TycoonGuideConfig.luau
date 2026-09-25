@@ -181,9 +181,9 @@ local TycoonGuideConfig = {
 		MoveThresholdStuds or the target changed (BulkMoveTo, a 2 x Count part pool under the camera; no Neon, light,
 		Beam or GUI; CastShadow off). FollowTutorial: while the tutorial runs they follow the active step instead
 		(TycoonMath.GuideTarget: a PadBuy step's own pad, the Income step's ATM, else none). Hidden while any HideWhen
-		flag is set (HudLayout flags; "Drawn" = weapon out). Enabled = false until integration (lane Z). ]]
+		flag is set (HudLayout flags; "Drawn" = weapon out). Enabled since integration (lane Z; reversible). ]]
 	Chevrons = {
-		Enabled = false,
+		Enabled = true,
 		Count = 5,
 		SpacingStuds = 5,
 		LeadStuds = 6,

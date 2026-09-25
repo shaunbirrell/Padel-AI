@@ -62,9 +62,9 @@ local CombatFairnessConfig = {
 	-- accepted shot (EndOnFire), an accepted squad order or missile strike (EndOnSquadOrder), contesting a zone
 	-- (EndOnContestedCapture), tutorial complete or skip (EndOnTutorialComplete), or MaxSeconds of shielded play.
 	-- Never re-granted once it has ended. Text is device-neutral (no keys, no "tap" / "click"), at most 42 characters.
-	-- Off until lane Z.
+	-- On since lane Z (reversible).
 	NoviceShield = {
-		Enabled = false,
+		Enabled = true,
 		MaxSeconds = 900,
 		EndOnDraw = true,
 		EndOnFire = true,

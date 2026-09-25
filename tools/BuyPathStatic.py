@@ -450,9 +450,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "PromptGamePassPurchase", "Death/shop GamePass prompt")
 must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "DEATH_SHOP_DEBOUNCE", "Death shop server debounce")
 must_contain("src/ServerScriptService/Server/Services/CombatService/init.luau", "resolveDeathOfferLive", "Death shop live Id filter")
-must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "premiumOfferIdLive", "Premium pad Id≠0 gate")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "local offer = MonetizationConfig.LivePadOffer(slot)", "Premium pad Id≠0 gate (F1: MonetizationConfig.LivePadOffer)")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "atmCluster", "Chevrons to ATM/premium cluster")
-must_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "WE_OilCashPop", "Oil pump floating +$ pop")
 must_not_contain("src/ServerScriptService/Server/Services/PlotOilPumpService.luau", "OilIncomeBillboard", "v71 no oil +$/tick card (spec §5)")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmyController.luau", "COMMANDER PACK", "Army Commander Pack Robux row")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ArmyController.luau", "ExtraSoldierSlot", "Army ExtraSoldierSlot offer")
@@ -475,7 +474,6 @@ must_contain("src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau", 'Id = "
 must_contain("src/ServerScriptService/Server/Services/TutorialService.luau", '"ManualDrop"', "TutorialService ManualDrop event")
 must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "ManualDrop", "ManualDropper tutorial Notify")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "Tutorial_Dropper", "MapSetup Tutorial_Dropper marker")
-must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'Key = "VIP"', "MapSetup VIP premium pad")
 must_contain("src/ServerScriptService/Server/Services/SupplyDropService.luau", "AlwaysOnTop = false", "SupplyDrop AlwaysOnTop false")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "SupplyDrop", "WorldPrompt hides SupplyDrop near pads")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "SECURED", "Capture SECURED celebration toast")
@@ -507,7 +505,6 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", 'ArmedJe
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", 'id == "ArmedJeep"', "Garage lists ArmedJeep")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", 'id == "ArmedJeep"', "ArmedJeep same WheeledLight kit")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "startGroundDrive", "ArmedJeep drivability via startGroundDrive")
-must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'Key = "VIP"', "VIP premium pad")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau", "WE_LocalOwned", "VIP pad OWNED visual no-regress")
 # No-regress v32
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", "LinearVelocity", "Jeep LV no-regress v32")
@@ -1453,7 +1450,7 @@ must_contain(SKBW, "closed * CFrame.new(sx * (leaf.Size.X + 0.3), 0, 0)", "v70 g
 must_contain(MSW, 'gateWater:SetAttribute("WE_GatePlotId", plotId)', "J3 SeaGateWater uses WE_GatePlotId")
 must_not_contain(MSW, 'Name = "GatePost"', "rear-gate posts are RearGatePost (GateDefense fallback)")
 must_contain(MSW, 'root:SetAttribute("WE_MapGen", MapSetup.MAP_GEN)', "v70 map-gen stamp")
-must_contain(MSW, "MapSetup.MAP_GEN = if BaseLayout.FacesMapCentre() then 81 else 80", "map stamp encodes FaceMapCentre (80/81)")
+must_contain(MSW, "MapSetup.MAP_GEN = (if BaseLayout.FacesMapCentre() then 83 else 82) + (if TerritoryConfig.Starter.Enabled then 10 else 0)", "map stamp encodes FaceMapCentre (82/83) and the Home Outposts (+10)")
 # World v2 W1 hook (WORLD-A): Phase 1 modules wired in, dead world props gone
 must_contain(MSW, "withWorldModule(\"WorldAtmosphere\", function(m: any)", "World v2 atmosphere hook guarded")
 must_contain(MSW, "withWorldModule(\"WorldTerrain\", function(m: any)", "World v2 terrain hook guarded")
@@ -3209,7 +3206,7 @@ K2_TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
 K2_TMU = "src/ReplicatedStorage/Shared/Util/TycoonMath.luau"
 K2_TER = "src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau"
 # F6 TutorialConfig
-must_contain(K2_TUC, "\tOrderVersion = 2,", "F6 TutorialConfig OrderVersion = 2 (new profiles are stamped with it)")
+must_contain(K2_TUC, "\tOrderVersion = if TerritoryConfig.Starter.Enabled == true then 3 else 2,", "F6 / Z TutorialConfig OrderVersion 3 with the Home Outpost on, 2 off (new profiles are stamped with it)")
 must_contain(K2_TUC, "\tLegacyOrderV1 = {\n\t\t\"ClaimBase\",\n\t\t\"Income\",\n\t\t\"ClickDropper\",\n\t\t\"CommandCenter\",\n\t\t\"RecruitSoldiers\",\n\t\t\"Barracks\",\n\t\t\"Jeep\",\n\t\t\"Outpost\",\n\t} :: { string },", "F6 saved v1 step indexes are read in the v1 order")
 must_contain(K2_TUC, 'LegacyAlias = { ClickDropper = "Income", AmmoWorks = "Barracks" } :: { [string]: string },', "F6 legacy step aliases (drop step folded into Income, v72 Ammo Works -> Barracks)")
 must_contain(K2_TUC, "function TutorialConfig.OutpostBeforeJeep(): boolean\n\treturn TerritoryConfig.Starter.Enabled == true\nend", "F6 outpost before the 4x4 only with the Home Outpost (30 s travel rule)")
@@ -3234,7 +3231,7 @@ else:
     bad(f"F6 tutorial step order wrong: {_k2_ids}")
 # F5 TycoonGuideConfig
 must_contain(K2_TGC, 'PickMode = "Cheapest",', "F5 one pointer: the cheapest unpaid pad drives WE_NextBuy / NEXT / chevrons")
-must_contain(K2_TGC, "\tChevrons = {\n\t\tEnabled = false,", "F5 floor chevrons off until integration (lane Z flips)")
+must_contain(K2_TGC, "\tChevrons = {\n\t\tEnabled = true,", "F5 floor chevrons on (lane Z)")
 must_contain(K2_TGC, "FollowTutorial = true,", "F5 chevrons follow the tutorial step while it runs")
 must_contain(K2_TGC, 'HideWhen = { "Driving", "Dead", "RecentCombat", "Drawn", "Modal", "AtConsole" } :: { string },', "F5 chevrons hide while driving / dead / in combat / drawn / panel / at a console")
 must_contain(K2_TGC, "DoorLeadStuds = 5,", "F5 walk-in approach point 5 studs out of the door")
@@ -3271,8 +3268,8 @@ must_contain(T_TUS, "if eventType == \"PlotAssigned\" and profile.BasePlotId == 
 for _n in ("STEP_BUSINESS", "BusinessStepIndex", "businessStepStructureId", "STEP_INCOME", "STEP_COMMAND", "STEP_RECRUIT", "STEP_JEEP", "STEP_OUTPOST", "STEP_DROPPER"):
     must_not_contain(T_TUS, _n, f"F6 TutorialService has no fixed step index ({_n}); the order lives in TutorialConfig")
 # F6 migration of saves made in the v1 order, stamped, never twice / never down
-must_contain(T_TUS, "profile.TutorialStep = TutorialConfig.MigrateLegacyStep(profile.TutorialStep)", "F6 v1 saves move to the first F6 step not done")
-must_contain(T_TUS, "local saved = tonumber(profile.TutorialOrderVersion) or 1\n\t\tif saved >= current then\n\t\t\treturn", "F6 migrate only older orders (missing = 1); never stamp a newer save down")
+must_contain(T_TUS, "profile.TutorialStep = TutorialConfig.MigrateLegacyStep(oldStep, nil, saved)", "F6 / Z saves in another known order move to the first step not done")
+must_contain(T_TUS, "local saved = tonumber(profile.TutorialOrderVersion) or 1\n\t\tif saved == current or TutorialConfig.SavedOrder(saved) == nil then\n\t\t\treturn", "F6 / Z migrate every known other order (missing = 1); never stamp an unknown (newer) save down")
 must_contain(T_TUS, "profile.TutorialOrderVersion = current\n\t\tDataService.MarkDirty(player)", "F6 migrated saves are stamped with OrderVersion (saved)")
 must_contain(T_TUS, "\t\tmigrateOrder(player, profile)\n", "F6 migration runs on profile load")
 must_contain(T_TUS, "profile.TutorialOrderVersion = orderVersion() -- F6: step 1 is the same step in every order", "F6 Reset stamps the order version")
@@ -3709,6 +3706,186 @@ must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseCont
 must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau', 'RenderStepped', 'fix57 Base panel does no per-frame work')
 must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau', 'Heartbeat', 'fix57 Base panel does no per-frame work (Heartbeat)')
 must_contain('src/ServerScriptService/Server/Services/BusinessService.luau', 'Prestige = tonumber(profile.Prestige) or 0,', "fix57 WE_NextBuy pick gets the player's Prestige (rebirth-zone filter)")
+
+# ===== Batch B part 2 merged pins: lane H, lane W, lane Z (integB2) =====
+# ----- lane H -----
+# --- owner's 11 features, lane H (HUDController, HudIcons, TerritoryController): F3 Empire Tax chip + list header +
+# toast, F10 own-Home-Outpost-only list, F11 XP-based rebirth % in the level-chip tooltip. Verified with lane H's
+# apply_pins.py on copies: present on HEAD + lane H's 3 files; every must_contain below is absent on HEAD a594cfb.
+H_HUD = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau"
+H_ICONS = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/HudIcons.luau"
+H_TC = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau"
+must_contain(H_HUD, 'tax.Name = "EmpireTaxChip"', "F3 TopStrip Empire Tax chip")
+must_contain(H_HUD, 'local TAX_ATTR: string = (EconomyConfig.OutpostIncomeBuff and EconomyConfig.OutpostIncomeBuff.Attribute) or "WE_EmpireTaxPct"', "F3 chip reads the server's WE_EmpireTaxPct via EconomyConfig (display only)")
+must_contain(H_HUD, "player:GetAttributeChangedSignal(TAX_ATTR):Connect(refreshEmpireTax)", "F3 chip follows the attribute (event-driven, no per-frame poll)")
+must_contain(H_HUD, 'taxIcon = HudIcons.Make("Flag", tax, {', "F3 chip = HudIcons Flag + \"+N%\"")
+must_contain(H_HUD, 'return string.format("+%d%%", math.floor(pct + 0.5))', "F3 chip text \"+10%\"")
+must_contain(H_HUD, 'tax.Activated:Connect(function()\n\t\t\tHudLayout.Emit("CompassTapped")', "F3 a tap on the chip opens the Territories dropdown")
+must_contain(H_HUD, "function HUDController.EmpireTaxFit(usedPx: number, fullPx: number, compactPx: number, limitPx: number, gapPx: number, current: string?): string", "F3 HideWhenCrowded: Full / Compact / Hidden before the compass")
+must_contain(H_HUD, "mode = if E.HideWhenCrowded ~= false then HUDController.EmpireTaxFit(used, fullPx, compactPx, limit, TS.Gap, taxMode) else \"Full\"", "F3 HideWhenCrowded honours HudConfig.TopStrip.EmpireTax")
+must_contain(H_HUD, "local TAX_TAP_MIN = 44 -- real px", "F3 the compact chip stays a 44 px real tap target")
+must_contain(H_HUD, "local compact = sh.Visible and need > limit - (if shieldCompact then TAX_HYSTERESIS_PX else 0)", "F3 800x360: the raid shield chip drops its icon instead of running under the compass")
+must_contain(H_HUD, "sh.LayoutOrder = 5", "F3 TopStrip order Level, Settings, CashPlus, EmpireTax, Shield")
+must_contain(H_HUD, "local pct = math.clamp(PrestigeConfig.ProgressPct(lv, tonumber(xp) or 0), 0, 99)", "F11 level-chip tooltip % = PrestigeConfig.ProgressPct (XP-based)")
+must_not_contain(H_HUD, "math.floor((lv / minPrestige) * 100)", "F11 no level-based rebirth % left in the HUD")
+must_contain(H_ICONS, "SHAPES.Flag = {", "F3 HudIcons Flag (2 Frames, generic pennant)")
+must_contain(H_TC, "function TerritoryController.Lists(entry: Types.TerritoryEntryPayload, myPlot: number?, myUserId: number): boolean", "F10 list filter: only the own Home Outpost")
+must_contain(H_TC, "if typeof(entry) == \"table\" and TerritoryController.Lists(entry, myPlotId, player.UserId) then", "F10 the dropdown rows and count use the filter")
+must_contain(H_TC, "Remotes.BindEvent(Constants.RemoteNames.BaseStateUpdate, function(base: any)", "F10 own plot from BaseStateUpdate (never WaitForChild)")
+must_contain(H_TC, 'local text = if taxPct > 0 then TerritoryController.TaxText(taxPct) else "TERRITORIES"', "F3 dropdown header \"Empire Tax +N%\"")
+must_contain(H_TC, "string.find(payload.Message, TAX.Name, 1, true)", "F3 client toast skipped when the server's toast named Empire Tax")
+must_contain(H_TC, "SkipWindow = 2,", "F3 server-toast window 2 s")
+must_contain(H_TC, "NotificationController.Show(TerritoryController.TaxText(pct), \"Info\")", "F3 \"Empire Tax +N%\" toast")
+must_not_contain(H_TC, "Outposts held: %d", "F3 the \"Outposts held: N\" toast is gone")
+must_contain(H_TC, "TextSizeTouch = 20,", "Territories list text 14 real px on phones (was 16 v = 11.2 px)")
+must_not_contain(H_TC, "RenderStepped", "Territory HUD: no per-frame render work")
+must_not_contain(H_HUD, "RenderStepped", "HUD: no per-frame render work")
+must_not_contain(H_HUD, "GetDescendants", "HUD TopStrip fit never scans the tree")
+
+# ----- lane W -----
+# ── Owner's 11 features, lane W (batch B part 2): F1 pads, F3 Empire Tax server, F4 no server pump pop, F6 contest,
+#    F9 golden pump, F10 Home Outpost, BaseLayout -> PlotFrame; nations B2 (TerritoryService) ────────────────────────
+W_MSW = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+W_BLY = "src/ServerScriptService/Server/Modules/BaseLayout.luau"
+W_TSV = "src/ServerScriptService/Server/Services/TerritoryService/init.luau"
+W_TCA = "src/ServerScriptService/Server/Services/TerritoryService/TerritoryCapture.luau"
+W_TRA = "src/ServerScriptService/Server/Services/TerritoryService/TerritoryRadar.luau"
+W_POP = "src/ServerScriptService/Server/Services/PlotOilPumpService.luau"
+# F1 premium pads (MapSetup.buildPremiumPads)
+must_contain(W_MSW, "for _, slot in ipairs(MonetizationConfig.PremiumPads.Slots) do", "F1 ATM pads come from MonetizationConfig.PremiumPads.Slots (no hard-coded table)")
+must_contain(W_MSW, 'pad:SetAttribute("OwnedIfAny", table.concat(MonetizationConfig.PadOwnedKeys(slot), ","))', "F1 pad carries OwnedIfAny (Speed pad OWNED by either SKU)")
+must_contain(W_MSW, "local labelRange = MonetizationConfig.PremiumPads.LabelMaxDistance", "F1 pad label range from PremiumPads.LabelMaxDistance")
+must_contain(W_MSW, "BaseLabel = true, -- CollectionService tag WorldLabelConfig.BaseLabelTag (the LabelGovernor's cap)", "F1 pad labels tagged WE_BaseLabel (LabelGovernor)")
+must_not_contain(W_MSW, 'Key = "VIP"', "F1 VIP is a Shop row only: no VIP pad at the ATM (label cap)")
+must_not_contain(W_MSW, '{ Key = "GoldenPumpjack"', "F1 the Golden Pump pad stands at the pumps (F9), not the ATM")
+must_not_contain(W_MSW, "PREMIUM_TAG_RANGE", "F1 no local pad label range (config)")
+# F10 Home Outpost kits (MapSetup) + one source for the zones
+must_contain(W_MSW, "local rows = TerritoryConfig.Territories", "F10 MapSetup builds the zones from TerritoryConfig.Territories")
+must_contain(W_MSW, "for _, def in ipairs(territoryDefsInBuildOrder()) do", "F10 every TerritoryConfig row is built (Home Outposts included)")
+must_not_contain(W_MSW, "local TERRITORIES = {", "F10 no local copy of the territory table in MapSetup")
+must_contain(W_MSW, "continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)", "F10 Home Outpost = 4-part kit (no stripe / finial / light)")
+must_contain(W_MSW, 'marker:SetAttribute("PlotId", def.PlotId)', "F10 Home Outpost marker names its plot (clients list / point at their own only)")
+# BaseLayout delegates to Shared/Util/PlotFrame
+must_contain(W_BLY, "return PlotFrame.PlotYaw(plotPos)", "F10 BaseLayout.PlotYaw delegates to PlotFrame")
+must_contain(W_BLY, "return PlotFrame.PlotCFrame(plotPos)", "F10 BaseLayout.PlotCFrame delegates to PlotFrame")
+must_not_contain(W_BLY, "local function yawRotation(", "F10 one copy of the plot yaw maths (PlotFrame)")
+# TerritoryCapture / TerritoryRadar (F10)
+must_contain(W_TCA, 'if typeof(def) ~= "table" or def.OwnerOnly ~= true then', "F10 TerritoryCapture reads OwnerOnly")
+must_contain(W_TCA, "if onlyUserId ~= nil and player.UserId ~= onlyUserId then", "F10 OwnerOnly: only the plot owner captures or contests")
+must_contain(W_TSV, "TerritoryCapture.SetPlotOwnerResolver(function(plotId: number): number?", "F10 OwnerOnly bound to BaseService.GetOwnerUserId")
+must_contain(W_TRA, "function TerritoryRadar.ShownTo(", "F10 TerritoryRadar skips other plots' Home Outposts")
+must_contain(W_TSV, "if not TerritoryRadar.ShownTo(rt.Def, viewerPlotId) then", "F10 another plot's Home Outpost is not in a player's territory list")
+# TerritoryService F10
+must_contain(W_TSV, "function TerritoryService.IsStarterId(id: any): boolean", "F10 cross-lane API TerritoryService.IsStarterId")
+must_contain(W_TSV, "if not starter and not alreadyOwns and countPersonalNonStarter(player.UserId) >= TerritoryConfig.MaxPersonalTerritories then", "F10 a Home Outpost never counts toward MaxPersonalTerritories")
+must_contain(W_TSV, "and not isStarterRt(other) then", "F10 a Home Outpost is never evicted")
+must_contain(W_TSV, "(profile :: any).StarterOutpostTaken = true", "F10 the first Home Outpost capture is saved")
+must_contain(W_TSV, "pcall(BaseService.OnPlotReady, onPlotReady)", "F10 the Home Outpost follows its plot owner (OnPlotReady listener)")
+must_contain(W_TSV, "\tsyncProfileOwnership(player)\n\tsyncEmpireTax(player)\n\tif BaseService then\n\t\tBaseService.PushState(player)\n\tend\n\tupdateMarkerVisual(rt)", "F10 holding the Home Outpost recounts the Empire Tax (SyncOutpostIncomeStacks)")
+must_contain(W_TSV, "ClanWarService.OnTerritoryCaptured and not starter then", "F10 a Home Outpost capture is not a clan-war capture")
+# TerritoryService F3
+must_contain(W_TSV, "local function replantClaims(player: Player)", "F3 replantClaims (spec pin)")
+must_contain(W_TSV, "if persistClaimsOn() then\n\t\t\treplantClaims(player)\n\t\tend\n\t\tsyncProfileOwnership(player)", "F3 saved claims are re-planted before the profile is rewritten from this server")
+must_contain(W_TSV, "return buff ~= nil and buff.PersistClaims == true", "F3 PersistClaims flag gates re-plant and the leave release")
+must_contain(W_TSV, 'releaseOwnership(rt, "leave")', "F3 PersistClaims / F10: the leaver's zones go back to Neutral")
+must_contain(W_TSV, 'if prevPlayer and reason ~= "leave" then', "F3 the leave release never rewrites the saved claims")
+must_contain(W_TSV, "fmtToast(buff and buff.ToastSecured,", "F3 capture toast = EconomyConfig ToastSecured with the total %")
+must_contain(W_TSV, "fmtToast(buff and buff.ToastStolenFromYou,", "F3 victim toast = ToastStolenFromYou (zone, total %)")
+must_contain(W_TSV, "fmtToast(buff and buff.ToastStealGain,", "F3 steal toast = ToastStealGain (zone, total %)")
+must_contain(W_TSV, "fmtToast(buff and buff.ToastClaimHeld,", "F3 a claim held by another online player is dropped with ToastClaimHeld")
+must_not_contain(W_TSV, "— +%d%% Income (yours)", "F3 no hard-coded per-stack capture toast")
+# TerritoryService F6
+must_contain(W_TSV, 'pcall(CombatService.EndNoviceShield, p, "contest")', "F6 contesting a zone ends a novice's shield (pcall)")
+must_contain(W_TSV, "CombatService = deps.CombatService", "F6 TerritoryService takes CombatService from deps (no require)")
+# Nations B2
+must_contain(W_TSV, "local minD = tonumber((NationConfig :: any).ContestMinColorDistance) or 0.25", "nations B2 contest colour distance from NationConfig")
+must_contain(W_TSV, "\t\treturn colA, AMBER\n", "nations B2 (a) close contest colours pulse against amber")
+must_contain(W_TSV, "local colA, colB = contestColors(rt)\n\t\t\t\t;(localCapture :: any).ContesterColorA = packColor(colA)", "nations B2 (b) the capture HUD uses the same amber rule")
+must_contain(W_TSV, "c = if legacy and not nearReserved(legacy) then legacy else OWNED_FALLBACK", "nations B2 (c) an owned zone never reads as NPC / Clan / contested")
+must_contain(W_TSV, "local function pruneOwnerCache(userId: number?)", "nations B2 (d) R15 leaver colour kept only while they own a zone")
+must_contain(W_TSV, "function TerritoryService.RefreshOwnerFlags(userId: number)", "nations B2 (e) RefreshOwnerFlags (NationColorService calls it behind OutpostFlags)")
+must_contain(W_TSV, "local outpostFlags = NationConfig.OutpostFlags == true", "nations B2 (e) outpost flags behind NationConfig.OutpostFlags")
+must_contain(W_TSV, "local showId = if not contested and rt.OwnerType == ot.Player then ownerNationId else nil", "nations B2 (e) a nation flag only on a Player-owned, uncontested zone")
+must_not_contain(W_TSV, 'Instance.new("SurfaceGui")', "nations: zone flags are Textures, never SurfaceGuis")
+must_not_contain(W_TSV, ".Short", "nations: no nation name in any capture / loss toast")
+# F4 / F9 PlotOilPumpService
+must_not_contain(W_POP, "WE_OilCashPop", "F4 no server pump pop (the client ProducerLabels shows +$18 / every 5s)")
+must_not_contain(W_POP, "Enum.Material.Neon", "F9 golden pump dress is Metal, never Neon")
+must_contain(W_POP, "d.Reflectance = g.Reflectance", "F9 gold Metal + Reflectance from PlotOilPumpConfig.Golden")
+must_contain(W_POP, 'if model.Parent and model:GetAttribute("WE_GoldenPump") == true then\n\t\t\t\tapplyGoldenDress(model)', "F9 the catalog clone is gold-dressed after the deferred attach")
+must_contain(W_POP, "if goldLive and not hasGold then", "F9 gold pad only while the Id is live and the owner does not own it")
+must_contain(W_POP, 'pad:SetAttribute("OfferKey", GOLDEN_KEY)', "F9 gold pad is a PremiumPadService pad (DevProduct GoldenPumpjack)")
+must_contain(W_POP, "BaseLabel = true, -- WorldLabelConfig.BaseLabelTag: counted by the client LabelGovernor", "F9 gold pad label tagged WE_BaseLabel")
+must_contain(W_POP, "MaxDistance = g.LabelMaxDistance,", "F9 gold pad label range from PlotOilPumpConfig.Golden")
+must_contain(W_POP, "if Vector3.new(padPos.X - gate.X, 0, padPos.Z - gate.Z).Magnitude < GOLD_PAD_GATE_CLEAR then", "F9 the gold pad never sits in the main gate lane")
+must_not_contain(W_POP, "AlwaysOnTop = true", "F9 no AlwaysOnTop label at the pumps")
+
+# ----- lane Z -----
+
+# ── Owner's 11 features, lane Z (batch B switch-on): the six feature flags ON, nations outpost flags OFF,
+#    tutorial order version follows the Home Outpost (3 on / 2 off) with a two-way save migration, docs ─────────
+Z_TER = "src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau"
+Z_ECO = "src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau"
+Z_CFC = "src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau"
+Z_WLC = "src/ReplicatedStorage/Shared/Configs/WorldLabelConfig.luau"
+Z_TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
+Z_TUC = "src/ReplicatedStorage/Shared/Configs/TutorialConfig.luau"
+Z_TUS = "src/ServerScriptService/Server/Services/TutorialService.luau"
+Z_NAT = "src/ReplicatedStorage/Shared/Configs/NationConfig.luau"
+# flags switched on (spec §1 item 9); each is reversible by setting it back to false
+must_contain(Z_TER, "\tStarter = {\n\t\tEnabled = true,", "Z: F10 Home Outpost on")
+must_contain(Z_ECO, "\t\tPersistClaims = true,", "Z: F3 Empire Tax claims persist across servers")
+must_contain(Z_ECO, "\tProducerLabels = {\n\t\tEnabled = true,", "Z: F4 producer labels on")
+must_contain(Z_CFC, "\tNoviceShield = {\n\t\tEnabled = true,", "Z: F6 novice shield on")
+must_contain(Z_WLC, "\tBaseLabelGovernor = {\n\t\tEnabled = true,", "Z: F4 base label governor on (<= 3 base labels on screen)")
+must_contain(Z_WLC, "\t\tMaxOnScreen = 3,", "Z: governor cap stays 3 (CLAUDE.md world-label cap at a base)")
+must_contain(Z_TGC, 'PickMode = "Cheapest",', "Z: lead decision - PickMode Cheapest ships on")
+# nations: outpost flags stay OFF at launch (lead decision; the existing 'OutpostFlags = false,' pin also holds it)
+must_not_contain(Z_NAT, "OutpostFlags = true", "Z: nations outpost flags stay off")
+# tutorial order: one version = one fixed order; the Home Outpost switch picks 3 (outpost, 4x4) or 2 (4x4, outpost)
+must_contain(Z_TUC, '\t\t[2] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Jeep", "Outpost" },', "Z: order 2 = the order v2 saves were made in (4x4 before the outpost)")
+must_contain(Z_TUC, '\t\t[3] = { "ClaimBase", "CommandCenter", "Income", "RecruitSoldiers", "Barracks", "Outpost", "Jeep" },', "Z: order 3 = the owner's order (outpost before the 4x4)")
+must_contain(Z_TUC, "function TutorialConfig.SavedOrder(version: any): { string }?", "Z: saved order lookup (nil = unknown, newer build)")
+must_contain(Z_TUC, "function TutorialConfig.MigrateLegacyStep(oldStep: any, steps: { TutorialStepDef }?, fromVersion: number?): number", "Z: migration reads the save in its own order")
+must_contain(Z_TUC, "function TutorialConfig.DoneAhead(oldStep: any, fromVersion: number?, steps: { TutorialStepDef }?): { [string]: boolean }?", "Z: steps already done that the new order puts later")
+must_contain(Z_TUS, "profile.TutorialDoneAhead = if next(ahead) ~= nil then ahead else nil", "Z: a done 4x4 / outpost is carried across the order change")
+must_contain(Z_TUS, "local ahead = profile.TutorialDoneAhead\n\tif typeof(ahead) == \"table\" and ahead[def.Id] == true then\n\t\treturn true", "Z: a step carried as done is never asked for twice")
+must_contain(Z_TUS, "profile.TutorialDoneAhead = nil -- lane Z: a fresh run owes every step", "Z: Reset clears the carried steps")
+_z_tuc = read(Z_TUC) or ""
+if "\tOrderVersion = if TerritoryConfig.Starter.Enabled == true then 3 else 2," in _z_tuc and "TutorialConfig.Steps = TutorialConfig.BuildSteps(TutorialConfig.OutpostBeforeJeep())" in _z_tuc:
+    ok("Z: OrderVersion and the step order follow the same switch (Starter.Enabled)")
+else:
+    bad("Z: OrderVersion must follow TerritoryConfig.Starter.Enabled like the step order")
+# docs: LIVE_PLACE product table matches MonetizationConfig (every Id in the doc = the config Id), and the new rows
+Z_MON = "src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau"
+Z_DOC = "docs/LIVE_PLACE.md"
+_z_mon = read(Z_MON) or ""
+_z_doc = read(Z_DOC) or ""
+_z_ids = {}
+for _sec in ("GamePasses", "DevProducts"):
+    _i = _z_mon.find("\t" + _sec + " = {")
+    _j = _z_mon.find("\n\t},", _i)
+    _blk = _z_mon[_i:_j] if _i >= 0 and _j > _i else ""
+    _z_ids[_sec] = dict(re.findall(r"\n\t\t(\w+) = \{(?:[^\n]*\n\s*)?\s*Id = (\d+),", _blk))
+for _sec, _hdr in (("GamePasses", "### GamePasses"), ("DevProducts", "### DevProducts")):
+    _i = _z_doc.find(_hdr)
+    _j = _z_doc.find("\n### ", _i + 1)
+    _tbl = _z_doc[_i:_j] if _i >= 0 else ""
+    _rows = re.findall(r"\n\| (\w+) \| [^|]+ \| (\d+)", _tbl)
+    _cfg = _z_ids.get(_sec, {})
+    _docd = {k: v for k, v in _rows}
+    if _cfg and set(_docd) == set(_cfg) and all(_docd[k] == _cfg[k] for k in _cfg):
+        ok(f"Z docs: LIVE_PLACE {_sec} table lists every config key with its Id ({len(_cfg)})")
+    else:
+        _miss = sorted(set(_cfg) - set(_docd))
+        _extra = sorted(set(_docd) - set(_cfg))
+        _diff = sorted(k for k in _cfg if k in _docd and _docd[k] != _cfg[k])
+        bad(f"Z docs: LIVE_PLACE {_sec} table out of sync (missing {_miss}, extra {_extra}, wrong Id {_diff})")
+must_contain(Z_DOC, "| Game Pass | Speed Pass | 5 R$ |", "Z docs: the 3 new Creator Dashboard items")
+must_contain(Z_DOC, "| Developer Product | Keep-Base Rebirth | 50 R$ |", "Z docs: the 3 new Creator Dashboard items")
+must_contain(Z_DOC, "| Developer Product | Golden Pumpjacks | 49 R$ |", "Z docs: the 3 new Creator Dashboard items")
+must_contain("BALANCE.md", "### Empire Tax (owner's 11 features, F3 / F10)", "Z docs: BALANCE Empire Tax rows")
+must_contain("BALANCE.md", "| Your own Home Outpost | **+5%** |", "Z docs: BALANCE Home Outpost row")
 
 parse_gate()
 

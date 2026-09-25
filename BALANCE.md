@@ -103,7 +103,22 @@ Player max health: **100**. Spawn invuln: **3s**. Tune in `CombatConfig` / `Weap
 | Oil Fields | +$50 / passive tick |
 | Radar Hill | Minimap reveal (stub) |
 
-Capture times 20–40s. Max personal territories: **3**. Protection: **45s**.
+Capture times 20–50s (Home Outpost 10 s). Max personal territories: **6** (`TerritoryConfig.MaxPersonalTerritories`). Protection: **45s**.
+
+### Empire Tax (owner's 11 features, F3 / F10)
+
+Config: `EconomyConfig.OutpostIncomeBuff`, `TerritoryConfig.Starter`. Server only (`EconomyService.EmpireTaxPct`); the HUD chip only shows `WE_EmpireTaxPct`.
+
+| Source | Empire Tax | Notes |
+|--------|-----------|-------|
+| Each captured outpost you hold | **+10%** | One stack per zone; the Home Outpost is never a stack and never counts toward the zone cap (`MaxPersonalTerritories = 6`). |
+| Your own Home Outpost | **+5%** | One per plot, about 100 studs out of your gate; only you can take it (10 s); no guards, no stipend, never stolen, evicted or nuked. |
+| Total cap | **+50%** | `MaxStacks 5 × 10%`. |
+
+- Applies to every cash reason that is not exempt (`MonetizationConfig.CashMultExemptReasons` plus EconomyService's never-multiplied list): passive and business income, training, missions, stipends. Exempt: the ATM `collector` (already multiplied when it accrued), `plot_oil`, Robux, admin, refunds, rebirth, battle pass, codes, spinner, supply drops, bank raid, clan war, the manual drop and ATM raids.
+- Multiplies with prestige (+10% per rebirth), VIP / 2x Cash and the season.
+- Persists across servers (`PersistClaims = true`): saved claims are re-planted on join onto Neutral or NPC-held zones, dropped when another online player holds the zone, released when you leave. Losing a zone drops the %.
+- Rebirth keeps Empire Tax (outposts are not reset).
 
 ## Daily missions (Phase 6)
 
