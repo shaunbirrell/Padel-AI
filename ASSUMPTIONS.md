@@ -3825,3 +3825,9 @@ AW-I7 WE_Build is not bumped (the owner's publish bot does it).
   with no part cap. The owner pick 114570602 stays pending (P1). `GateDefenseService.luau:576` still names 4923345827 as the
   default for a MISSING config key; changing that line is deferred until streaming2-build commits (file locked).
 - **AW-L2 WE_Build not bumped** (the owner's publish bot bumps it); the owner's prompt asked for it, noted in the report.
+- **AW-L3 First promote holds the gate gun back (7 of the 8 P1 ids).** Tent, Tutorial Arrow, Jersey, Military Crate, Plot Oil
+  Pump, Sandbag Line and Money Collector load through VisualAssetService (40-part cap, one load attempt each). The Auto Gun
+  pick 114570602 loads through GateDefenseService's own loader, which has no part or Humanoid check; the same reason 4923345827
+  was dropped. It stays pending until that loader gets the cap (after streaming2-build commits, same file as the :576 default).
+  The BuyPathStatic AutoGun pin is now `AutoGun = { ModelAssetId = 0,` so the promote tool can rewrite it. Undo:
+  `tools/wire-asset-ids.py demote <id>`.

@@ -31,10 +31,17 @@ Test on your phone in landscape, at Graphics Quality 3 if you can (a mid-range A
 - **Training yard:** the oil drums show, with no smoke.
 - **Roads and shores:** logs, driftwood, dead trees, stumps, grass tufts and dark car wrecks are not squashed or sideways.
   Watch the frame rate near the Town and near a group of wrecks.
-- **Walls level 4 and up:** note which gate gun shows. Until the first promote batch it is the machine-gun model you listed
-  for the sandbag nest (you own it now, so it loads); the first batch swaps in your tripod gun pick.
+- **Walls level 4 and up:** the gate gun is our own Part-built gun. The machine-gun model you listed for the sandbag nest
+  is not used (it looks like a real WWII gun). Your tripod gun pick 114570602 waits for the Studio check in section 5.
 
 After each promote batch the lead adds that batch's phone checks here.
+
+**First promote batch (2026-09-25, 7 of your picks):** each one shows your model, or our Part build if it fails to load.
+- **Money Collector:** the ATM model sits on its pad at the right size; tapping it still collects.
+- **Plot oil pumps:** your pumpjack model on every pump, not floating or sunk; golden pumps still turn gold.
+- **Sandbag lines, road barriers, military crates, tents** (base yards, outposts, the Town): upright, on the ground, not
+  giant or tiny. Road barriers also stand in for traffic cones and crates for pallets.
+- **Tutorial arrow:** a new player's arrow points at the next step and is not sideways.
 
 ## 2. Wired now (27)
 
@@ -179,6 +186,7 @@ Run, paste the script with the list below, copy every line that starts with `WE_
 to the lead. A model passes with `parts` 40 or less and `humanoids=0`; for vehicles the `size` tells the tool which way the
 model faces.
 
+- **Gate gun (held back from the first batch):** 114570602
 - **Batch P2 (walls and buildings):** 52154909, 4005471827, 5343886540, 6980242709, 8333853928, 13183571527
 - **Batch P3 (vehicles):** 31538715, 43773162, 2474869838, 2627182035, 3304171953, 3553891209, 4954987035, 5177695483, 5318635087, 8455894899, 8546141386, 9076240315, 10069416832, 11357157285, 11552687660, 11756438288, 15838664806
 
@@ -412,9 +420,9 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Armor Plate Press | waits on another job's file | – | – | yes | BusinessService (streaming2-build): business dress hook |
 | Rocket Assembly | waits on another job's file | – | – | Roblox (no Get) | BusinessService (streaming2-build): business dress hook |
 | Manual Dropper | waits on another job's file | – | – | yes | ManualDropperService (streaming2-build lane C1): dropper dress hook |
-| Plot Oil Pump | owner pick, waits for promote | 13525922265 | 15192621369 | yes | ready, batch P1 |
+| Plot Oil Pump | owner pick, waits for promote | 15192621369 | – | yes | promoted (live) |
 | Oil Rig | kept our build | – | – | yes | [WEAK]; likely over 40 parts; our oil-rig kit is the gameplay platform |
-| Money Collector | owner pick, waits for promote | 0 | 18220523228 | yes | ready, batch P1 |
+| Money Collector | owner pick, waits for promote | 18220523228 | – | yes | promoted (live) |
 | Training Yard | rejected | – | – | yes | wrong item: a group-training button board, not a military yard |
 | Premium Pad | kept our build | – | – | no | you said no good match: keep our build |
 | Supply Drop Crate | needs new code first | – | – | yes | needs one call in SupplyDropService (drop crate dress) |
@@ -438,7 +446,7 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Home Outpost | waits on another job's file | – | – | Roblox (no Get) | MapSetup (streaming2-build): Home Outpost dress hook |
 | Hangar | owner pick, waits for promote | 0 | 5343886540 | yes | your yes/no + Studio check, batch P2 (recorded only) |
 | Bunker | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY); 43 parts, 3 wedges must be dropped |
-| Tent | owner pick, waits for promote | 6883609157 | 182529039 | yes | ready, batch P1 |
+| Tent | owner pick, waits for promote | 182529039 | – | yes | promoted (live) |
 | Market Stall | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
 | Water Tower | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
 | Clock Tower | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
@@ -460,9 +468,9 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Base Gate | needs new code first | – | – | yes | needs one call in StructureKitBuilder (gate arch dress) |
 | Compound Wall | rejected | – | – | yes | wrong scale: a stone ring around a whole 512-stud baseplate |
 | Wire Fence | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
-| Sandbag Line | owner pick, waits for promote | 3525056989 | 15271872710 | yes | ready, batch P1 |
+| Sandbag Line | owner pick, waits for promote | 15271872710 | – | yes | promoted (live) |
 | Sandbag Nest | rejected | – | – | yes | wrong item: a lone WWII-style machine gun with no sandbags |
-| Jersey | owner pick, waits for promote | 91071319 | 2766525411 | yes | ready, batch P1 |
+| Jersey | owner pick, waits for promote | 2766525411 | – | yes | promoted (live) |
 | Revetment | rejected | – | – | Roblox (no Get) | no gain: one flat slab like our own kit; it would only use a load |
 | Tank Trap | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
 | Barbed Wire | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
@@ -584,7 +592,7 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Rocket Pods | kept our build | – | – | yes | [WEAK]; the asset is a whole car; our kit is the pod |
 | Nuke | needs new code first | – | – | yes | needs a nuke-strike effect module (none exists) |
 | Crate Stack | wired (Roblox-owned) | 6933790012 | – | Roblox (no Get) | Synty wooden crates (already live) |
-| Military Crate | owner pick, waits for promote | 976333542 | 2930926216 | yes | ready, batch P1 |
+| Military Crate | owner pick, waits for promote | 2930926216 | – | yes | promoted (live) |
 | Ammo Box | rejected | – | – | yes | ripped from another game (Fallout 4), real ammo stencils |
 | Oil Barrel | wired (Roblox-owned) | 23153991 | – | Roblox (no Get) | Roblox oil drum, smoke removed |
 | Drum Group | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY) |
@@ -621,7 +629,7 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Desert Rock | needs new code first | – | – | Roblox (no Get) | not recommended: world rocks are terrain (0 parts) |
 | Desert Mesa | needs new code first | – | – | Roblox (no Get) | needs a horizon host in MapSetup (another job's file) |
 | Hold Pad | needs new code first | – | – | Roblox (no Get) | needs the world-model overlay job (W-OVERLAY) |
-| Tutorial Arrow | owner pick, waits for promote | 1143305733 | 632958370 | yes | ready, batch P1 |
+| Tutorial Arrow | owner pick, waits for promote | 632958370 | – | yes | promoted (live) |
 | Showroom Podium | rejected | – | – | yes | wrong item: a record player |
 | Cash Pile | needs new code first | – | – | yes | needs a host; the bills must be stripped (real currency art) |
 

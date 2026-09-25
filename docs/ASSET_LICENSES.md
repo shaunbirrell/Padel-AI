@@ -158,6 +158,11 @@ notes the pick. Empty until the first promote.
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
+| [6883609157](https://create.roblox.com/store/asset/6883609157) | Military Tent | ForestFireTree1 (User) | Model | 2023-11-29 | 9,932 | 0 | `WarzoneProps.Tent` | replaced by owner pick 182529039 (Tent), 2026-09-25 |
+| [1143305733](https://create.roblox.com/store/asset/1143305733) | Blinking Tutorial Arrow | MajorMent (User) | Model | 2017-10-30 | 40 | 2 | `TutorialArrow` | Listing: "By MajorMent": credited here; replaced by owner pick 632958370 (TutorialArrow), 2026-09-25 |
+| [91071319](https://create.roblox.com/store/asset/91071319) | Concrete Barrier | HabaneroDude (User) | Model | 2016-08-27 | 868 | 0 | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` | replaced by owner pick 2766525411 (Jersey), 2026-09-25 |
+| [976333542](https://create.roblox.com/store/asset/976333542) | Military Crate | sam_youwell (User) | Model | 2017-08-13 | 1,196 | 0 | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` | replaced by owner pick 2930926216 (MilitaryCrate), 2026-09-25 |
+| [13525922265](https://create.roblox.com/store/asset/13525922265) | Realistic Oil Pumpjack | Unit5532 (User) | Model | 2023-05-23 | 11,318 | 0 | `IndustrialProps.OilPumpjack` | replaced by owner pick 15192621369 (PlotOilPump), 2026-09-25 |
 <!-- wire-asset-ids:replaced:end -->
 
 ## 3.0 Roblox-owned IDs (W3 LOOK; load with the third-party switch OFF)
@@ -224,6 +229,13 @@ row below. Rules 1–5 of §1 hold for every row; scripts are stripped at load. 
 
 | Asset ID | Creator Store name | Uploader | Type | Verified (UTC) | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
+| [182529039](https://create.roblox.com/store/asset/182529039) | Military Canvas Tent | Quenty (User 4397833) | Model | inventory API 2026-09-25T09:40:02Z (cached) | 3,908 | 0 (stripped) | `WarzoneProps.Tent` | owner list 2026-09-25 (Tent); Get Model by the game owner |
+| [632958370](https://create.roblox.com/store/asset/632958370) | Arrow | isaacbeyo (User 73935815) | Model | inventory API 2026-09-25T09:40:04Z (cached) | 36 | 0 (stripped) | `TutorialArrow` | owner list 2026-09-25 (Tutorial Arrow); Get Model by the game owner |
+| [2766525411](https://create.roblox.com/store/asset/2766525411) | road barrier | SiameseMouse (User 795584330) | Model | inventory API 2026-09-25T09:40:06Z (cached) | 368 | 0 (stripped) | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` | owner list 2026-09-25 (Jersey); Get Model by the game owner |
+| [2930926216](https://create.roblox.com/store/asset/2930926216) | Military Crates | XIArchangel (User 27223140) | Model | inventory API 2026-09-25T09:40:08Z (cached) | 2,222 | 0 (stripped) | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` | owner list 2026-09-25 (Military Crate); Get Model by the game owner |
+| [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User 1607785544) | Model | inventory API 2026-09-25T09:40:10Z (cached) | 1,398 | 0 (stripped) | `IndustrialProps.OilPumpjack` | owner list 2026-09-25 (Plot Oil Pump); Get Model by the game owner |
+| [15271872710](https://create.roblox.com/store/asset/15271872710) | SandBag Wall | Herbie778811 (User 561823031) | Model | inventory API 2026-09-25T09:40:13Z (cached) | 240 | 0 (stripped) | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` | owner list 2026-09-25 (Sandbag Line); Get Model by the game owner |
+| [18220523228](https://create.roblox.com/store/asset/18220523228) | ATM | 0GColt (User 3592203545) | Model | inventory API 2026-09-25T09:40:16Z (cached) | 1,032 | 0 (stripped) | `MoneyCollector` | owner list 2026-09-25 (Money Collector); Get Model by the game owner |
 <!-- wire-asset-ids:owner-picks:end -->
 
 ## 3. Remaining third-party IDs (53) and why each is allowed
@@ -266,7 +278,7 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 |---|---|---|---|---|---|---|---|---|
 | [4923345827](https://create.roblox.com/store/asset/4923345827) | Machine Gun Nest | Byrdknight (User) | Model | 2020-04-20 | 4,999 | 0 | `GateDefenseService default` only (config AutoGun = 0 since 2026-09-25) | Watch: the game owner owns it since 2026-09-25 (inventory API 08:05 UTC), it loaded on live on the gate AutoGuns at walls level 4+ until the config was set to 0 the same day (GateDefenseService's own loader: no part cap, outside the 48); GateDefenseService still names it as a default and that line is deferred to after streaming2-build. The owner's pick 114570602 replaces it at promote batch P1; a WWII MG 34-like silhouette, so the owner rejected it for the sandbag nest |
 | [10354803684](https://create.roblox.com/store/asset/10354803684) | Military turret | gtddgc8 (User) | Model | 2022-07-25 | 14,754 | 5 | `GateDefense.AutoGunElevatedAlt` | The 2022 original of the 2026 re-upload 71964514000054 (dropped) |
-| [3525056989](https://create.roblox.com/store/asset/3525056989) | Realistic Sandbag | 0TacoMillitary0 (User) | Model | 2019-07-24 | 1,868 | 0 | `GateDefense.Sandbags`, `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags`, `GateDefenseService default` |  |
+| [3525056989](https://create.roblox.com/store/asset/3525056989) | Realistic Sandbag | 0TacoMillitary0 (User) | Model | 2019-07-24 | 1,868 | 0 | `GateDefense.Sandbags`, `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags`, `GateDefenseService default` | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` moved to owner pick 15271872710 on 2026-09-25 |
 
 ### Collector, effects, showroom, tutorial
 
@@ -282,7 +294,6 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 | [130578088310000](https://create.roblox.com/store/asset/130578088310000) | sci-fi pedestal display stand platform showcase | XxDriftAlphaSkaterxX (User) | Model | 2026-03-25 | 5,936 | 1 | `ShowroomPedestal` |  |
 | [5267267960](https://create.roblox.com/store/asset/5267267960) | Statue Podium | Trevor C. Fan Group! (Group) | Model | 2020-07-01 | 192 | 0 | `ShowroomPodium` |  |
 | [5389482912](https://create.roblox.com/store/asset/5389482912) | Rotating Platform | Ender17143 (User) | Model | 2020-07-20 | 24 | 1 | `ShowroomRotator` |  |
-| [1143305733](https://create.roblox.com/store/asset/1143305733) | Blinking Tutorial Arrow | MajorMent (User) | Model | 2017-10-30 | 40 | 2 | `TutorialArrow` | Listing: "By MajorMent": credited here |
 | [6333395014](https://create.roblox.com/store/asset/6333395014) | Arrow pointing down | DyingInisde (User) | Model | 2021-02-01 | 32 | 0 | `TutorialArrowAlt` |  |
 | [88687072714005](https://create.roblox.com/store/asset/88687072714005) | Laser Beam Effect | eazypro29 (User) | Model | 2025-06-16 | 0 | 0 | `TutorialBeam` |  |
 | [1679839739](https://create.roblox.com/store/asset/1679839739) | Flag Pole | HerrDirektorZach (User) | Model | 2018-04-28 | 792 | 0 | `UpgradeFlag`, `WarzoneProps.Flag`, `WarzoneProps.FlagPole` |  |
@@ -294,20 +305,17 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 |---|---|---|---|---|---|---|---|---|
 | [16382915010](https://create.roblox.com/store/asset/16382915010) | Ammo Box | ajh2k21 (User) | Model | 2024-02-15 | 21,472 | 0 | `WarzoneProps.AmmoBox` |  |
 | [1291725699](https://create.roblox.com/store/asset/1291725699) | [FREE] Barbed Wire Fence | CentralCityLaw (User) | Model | 2018-01-01 | 312 | 1 | `WarzoneProps.BarbedWire` |  |
-| [91071319](https://create.roblox.com/store/asset/91071319) | Concrete Barrier | HabaneroDude (User) | Model | 2016-08-27 | 868 | 0 | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` |  |
 | [53591587](https://create.roblox.com/store/asset/53591587) | Crate/Box | griflay (User) | Model | 2011-06-10 | 24 | 0 | `WarzoneProps.Crate`, `WarzoneProps.Drum` | "Area 51" in the listing is a place name, not a design |
 | [1454179642](https://create.roblox.com/store/asset/1454179642) | [Highly Detailed] Flag Pole | Owl4110 (User) | Model | 2018-02-24 | 912 | 0 | `WarzoneProps.FlagPoleHD` |  |
 | [116763933](https://create.roblox.com/store/asset/116763933) | Floodlight | ChillyRaptor (User) | Model | 2013-05-24 | 204 | 1 | `WarzoneProps.Floodlight`, `WarzoneProps.Lamp` |  |
 | [4893998573](https://create.roblox.com/store/asset/4893998573) | Floodlight | VladimirDeliyUA (User) | Model | 2020-04-13 | 2,074 | 0 | `WarzoneProps.FloodlightAlt` |  |
 | [1160141839](https://create.roblox.com/store/asset/1160141839) | Non-Laggy Fuel Cans and Oil Barrels | WOLFENCHAN (Group) | Model | 2017-11-07 | 7,350 | 0 | `WarzoneProps.FuelCans`, `IndustrialProps.FuelCans` |  |
-| [976333542](https://create.roblox.com/store/asset/976333542) | Military Crate | sam_youwell (User) | Model | 2017-08-13 | 1,196 | 0 | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` |  |
 | [16540055496](https://create.roblox.com/store/asset/16540055496) | Military Crates | Antonov_Slonovskaya (User) | Model | 2024-02-27 | 8,254 | 0 | `WarzoneProps.MilitaryCratePack` |  |
 | [25623924](https://create.roblox.com/store/asset/25623924) | Oil Barrel | raldude1 (User) | Model | 2010-04-15 | 480 | 0 | `WarzoneProps.Fence`, `IndustrialProps.OilBarrel` | Since 2026-09-25 `WarzoneProps.OilBarrel` is the Roblox Smoking Barrel 23153991 (§3.0) |
 | [19277831](https://create.roblox.com/store/asset/19277831) | radio antenna | ak74dd (User) | Model | 2009-12-15 | 652 | 0 | `WarzoneProps.RadioAntenna`, `WarzoneProps.Radio` |  |
 | [42209845](https://create.roblox.com/store/asset/42209845) | Radio Antenna | MrTw0fer (User) | Model | 2010-12-16 | 360 | 0 | `WarzoneProps.RadioAntennaAlt` |  |
 | [12651656400](https://create.roblox.com/store/asset/12651656400) | Sandbag Barrier | Aheadit (User) | Model | 2023-03-01 | 7,493 | 0 | `WarzoneProps.SandbagBarrier` |  |
 | [25733125](https://create.roblox.com/store/asset/25733125) | Sandbag wall | SpecialOp (User) | Model | 2010-04-17 | 3,624 | 0 | `WarzoneProps.SandbagWall`, `WarzoneProps.Barrier` |  |
-| [6883609157](https://create.roblox.com/store/asset/6883609157) | Military Tent | ForestFireTree1 (User) | Model | 2023-11-29 | 9,932 | 0 | `WarzoneProps.Tent` |  |
 | [3133150032](https://create.roblox.com/store/asset/3133150032) | Military Tent | MrKotikXD (User) | Model | 2022-01-22 | 38,324 | 9 | `WarzoneProps.TentAlt` |  |
 
 ### Desert props
@@ -325,8 +333,7 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [13525922265](https://create.roblox.com/store/asset/13525922265) | Realistic Oil Pumpjack | Unit5532 (User) | Model | 2023-05-23 | 11,318 | 0 | `IndustrialProps.OilPumpjack` |  |
-| [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User) | Model | 2023-11-03 | 1,398 | 0 | `IndustrialProps.OilPumpjackAlt` | Listing: "Mesh Inspiration: Karcist" (inspiration only). Owned by the game owner since 2026-09-25 (08:05 UTC), so it loads on live when the primary 13525922265 (not owned) fails; the owner's pick for the plot pump (promote batch P1 moves it to `OilPumpjack`) |
+| [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User) | Model | 2023-11-03 | 1,398 | 0 | `IndustrialProps.OilPumpjackAlt` | Listing: "Mesh Inspiration: Karcist" (inspiration only). Owned by the game owner since 2026-09-25 (08:05 UTC), so it loads on live when the primary 13525922265 (not owned) fails; the owner's pick for the plot pump (promote batch P1 moves it to `OilPumpjack`); promoted to `IndustrialProps.OilPumpjack` on 2026-09-25 (§3.1) |
 
 ### Landmarks
 

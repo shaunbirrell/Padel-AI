@@ -346,7 +346,7 @@ local VisualAssetConfig = {
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	-- W1 CFG drop (paid): 0 is skipped, so TryAttachCollectorVisual tries the fallback, then the alts, then the Part kit
-	MoneyCollector = { ModelAssetId = 0, PendingAssetId = 18220523228, Note = "owner pick ATM (0GColt): pending, P1 (no gate); W1 CFG drop (paid); until then MoneyCollectorFallback, then the alts" } :: AssetRef,
+	MoneyCollector = { ModelAssetId = 18220523228, Note = "owner pick: ATM by 0GColt (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 	MoneyCollectorFallback = { ModelAssetId = 175462478, Note = "ATM fallback classic" } :: AssetRef,
 	MoneyCollectorAlts = {
 		{ ModelAssetId = 90362241548850, Note = "ATM alt A" } :: AssetRef,
@@ -363,22 +363,22 @@ local VisualAssetConfig = {
 	ShowroomPedestal = { ModelAssetId = 130578088310000, Note = "Showroom pedestal" } :: AssetRef,
 	ShowroomRotator = { ModelAssetId = 5389482912, Note = "Showroom rotator / turntable" } :: AssetRef,
 	-- Tutorial guidance
-	TutorialArrow = { ModelAssetId = 1143305733, PendingAssetId = 632958370, Note = "Tutorial arrow prefer; alt 6333395014; owner pick Arrow (isaacbeyo): pending, P1 (no gate); replaces this id at promote" } :: AssetRef,
+	TutorialArrow = { ModelAssetId = 632958370, Note = "owner pick: Arrow by isaacbeyo (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 	TutorialArrowAlt = { ModelAssetId = 6333395014, Note = "Tutorial arrow alt" } :: AssetRef,
 	TutorialBeam = { ModelAssetId = 88687072714005, Note = "Tutorial neon beam mesh/texture" } :: AssetRef,
 
 	-- KEY LABELS fixed (IDs unchanged); legacy aliases kept for callers
 	WarzoneProps = {
-		Sandbag = { ModelAssetId = 3525056989, PendingAssetId = 15271872710, Note = "owner pick SandBag Wall (Herbie778811): pending, P1 (no gate); replaces this id at promote" } :: AssetRef,
+		Sandbag = { ModelAssetId = 15271872710, Note = "owner pick: SandBag Wall by Herbie778811 (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		SandbagBarrier = { ModelAssetId = 12651656400, Note = "Warzone SandbagBarrier" } :: AssetRef,
 		SandbagWall = { ModelAssetId = 25733125, Note = "Warzone SandbagWall" } :: AssetRef,
-		ConcreteBarrier = { ModelAssetId = 91071319, PendingAssetId = 2766525411, Note = "owner pick road barrier (SiameseMouse): pending, P1 (no gate); replaces this id at promote" } :: AssetRef,
+		ConcreteBarrier = { ModelAssetId = 2766525411, Note = "owner pick: road barrier by SiameseMouse (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		Crate = { ModelAssetId = 53591587, Note = "Warzone Crate" } :: AssetRef,
-		MilitaryCrate = { ModelAssetId = 976333542, PendingAssetId = 2930926216, Note = "owner pick Military Crates (XIArchangel): pending, P1 (no gate); replaces this id at promote" } :: AssetRef,
+		MilitaryCrate = { ModelAssetId = 2930926216, Note = "owner pick: Military Crates by XIArchangel (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		AmmoBox = { ModelAssetId = 16382915010, Note = "Warzone AmmoBox" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 23153991, Note = "owner list: Roblox Smoking Barrel, whole model (4 parts), smoke removed (StripEffectsAssetIds)" } :: AssetRef,
 		BarbedWire = { ModelAssetId = 1291725699, Note = "Warzone BarbedWire" } :: AssetRef,
-		Tent = { ModelAssetId = 6883609157, PendingAssetId = 182529039, Note = "owner pick Military Canvas Tent (Quenty): pending, P1 (no gate); replaces this id at promote" } :: AssetRef,
+		Tent = { ModelAssetId = 182529039, Note = "owner pick: Military Canvas Tent by Quenty (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		RadioAntenna = { ModelAssetId = 19277831, PendingAssetId = 1439808070, Note = "owner pick Antenna (Sereinmachy): pending, P1i (inert while PreferMesh is off); StructureDress only" } :: AssetRef,
 		Floodlight = { ModelAssetId = 116763933, Note = "Warzone Floodlight" } :: AssetRef,
 		FloodlightTower = { ModelAssetId = 107381977457431, Note = "Floodlight tower prefer" } :: AssetRef,
@@ -406,11 +406,11 @@ local VisualAssetConfig = {
 		StreetLampAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 provenance, 8 scripts; no caller) — Part kit" } :: AssetRef,
 		MilitaryCratePack = { ModelAssetId = 16540055496, Note = "Military Crates pack variety" } :: AssetRef,
 		-- Legacy key aliases (same IDs)
-		Sandbags = { ModelAssetId = 3525056989, PendingAssetId = 15271872710, Note = "owner pick SandBag Wall (Herbie778811): pending, P1 (no gate); alias of Sandbag" } :: AssetRef,
+		Sandbags = { ModelAssetId = 15271872710, Note = "owner pick: SandBag Wall by Herbie778811 (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		Barrier = { ModelAssetId = 25733125, Note = "alias → SandbagWall" } :: AssetRef,
-		Cone = { ModelAssetId = 91071319, PendingAssetId = 2766525411, Note = "owner pick road barrier (SiameseMouse): pending, P1 (no gate); alias of ConcreteBarrier" } :: AssetRef,
+		Cone = { ModelAssetId = 2766525411, Note = "owner pick: road barrier by SiameseMouse (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		Drum = { ModelAssetId = 53591587, Note = "alias → Crate" } :: AssetRef,
-		Pallet = { ModelAssetId = 976333542, PendingAssetId = 2930926216, Note = "owner pick Military Crates (XIArchangel): pending, P1 (no gate); alias of MilitaryCrate" } :: AssetRef,
+		Pallet = { ModelAssetId = 2930926216, Note = "owner pick: Military Crates by XIArchangel (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		CamoNet = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		CamoNetAlt = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world-dressing host; no caller) — Part kit" } :: AssetRef,
 		Fence = { ModelAssetId = 25623924, Note = "legacy alias of the old OilBarrel id (no caller; WarzoneProps.OilBarrel is the Roblox barrel now)" } :: AssetRef,
@@ -448,8 +448,8 @@ local VisualAssetConfig = {
 	-- Tier 2: oil spectacle + map landmarks (REJECT Ultrapump 1837698074)
 	IndustrialProps = {
 		IndustrialPack = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit (oil spectacle)" } :: AssetRef,
-		OilPumpjack = { ModelAssetId = 13525922265, PendingAssetId = 15192621369, Note = "owner pick Oil Rig / Pumpjack (sadfiacs): pending, P1 (no gate); promote also sets OilPumpjackAlt = 0 (same id)" } :: AssetRef,
-		OilPumpjackAlt = { ModelAssetId = 15192621369, Note = "Oil Rig / Pumpjack alt" } :: AssetRef,
+		OilPumpjack = { ModelAssetId = 15192621369, Note = "owner pick: Oil Rig / Pumpjack by sadfiacs (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
+		OilPumpjackAlt = { ModelAssetId = 0, Note = "0 since 2026-09-25: 15192621369 (PlotOilPump) is the primary now (tools/wire-asset-ids.py)" } :: AssetRef,
 		RustyPipes = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans cluster" } :: AssetRef,
