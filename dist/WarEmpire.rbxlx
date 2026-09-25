@@ -263,8 +263,8 @@ return AnalyticsConfig
 
 	W3 step 2, lane F ("bank findable", spec w3s2 §6 Phase A):
 	- Guards stand on FIXED posts, never a ring round the vault (the ring put 2 of 5 inside the building).
-	  BankRaidService reads the geometry's "Town.Bank" npc anchors (roles G1..Gn, WE_ActivityAnchor) and falls back
-	  to GuardPosts below while the bank has no anchors (today's building, until lane BK's hall lands).
+	  BankRaidService reads the geometry's "Town.Bank" npc anchors (roles G1..Gn, WE_ActivityAnchor; MapSetup stamps
+	  them on BankPlaza with the walk-in hall, lane BK) and falls back to GuardPosts below if they are missing.
 	- Only a raider ON FOOT holds the vault (seated → "LEAVE VEHICLE" on the HUD, no progress, no pay).
 	- The cooldown is saved as profile.Raid.BankCooldownUntil (os.time seconds; sanitised by BankRaidService).
 	- The vault label reads "Empire Bank" + one state line: OPEN · rob the vault / RAID ON (everyone) and
@@ -298,14 +298,15 @@ local BankRaidConfig = {
 	GuardRolePattern = "^G%d+$",
 	-- HumanoidRootPart height above the standing surface (R6: 2-stud legs + half the 2-stud torso)
 	GuardRootLift = 3,
-	-- P0 posts (spec w3s2 §6 lane F): front ±8 at z +14, sides ±16 at z +4, one at z +22 from Position; all clear of
-	-- today's building, columns and vault pad in the HEAD dump. Used only while no "Town.Bank" G anchors exist.
+	-- Fallback posts (lane BK): the same five posts as the Town.Bank G1..G5 anchors MapSetup stamps on BankPlaza (G1 / G2
+	-- behind the planters, G3 / G4 beside the columns, G5 inside the hall by the vault door). Used only while no
+	-- "Town.Bank" G anchors exist.
 	GuardPosts = {
-		{ X = 212, Y = 1.6, Z = -206, Yaw = 180 },
-		{ X = 228, Y = 1.6, Z = -206, Yaw = 180 },
-		{ X = 204, Y = 1.6, Z = -216, Yaw = 180 },
-		{ X = 236, Y = 1.6, Z = -216, Yaw = 180 },
-		{ X = 220, Y = 0.5, Z = -198, Yaw = 180 },
+		{ X = 206, Y = 1.6, Z = -209.5, Yaw = 180 },
+		{ X = 234, Y = 1.6, Z = -209.5, Yaw = 180 },
+		{ X = 210.5, Y = 1.6, Z = -210.5, Yaw = 180 },
+		{ X = 229.5, Y = 1.6, Z = -210.5, Yaw = 180 },
+		{ X = 227, Y = 1.6, Z = -231, Yaw = 180 },
 	} :: { GuardPost },
 	NotifyOnRaid = true,
 	-- v71: the hold freezes only while the raider was hit within this many seconds (was: any health below 95 %)
@@ -5099,7 +5100,7 @@ local OpsConfig = {
 		PickupDist = 12,
 		PickerMult = 0.6, -- a picker who is not the grabber gets this share (fresh deadline)
 		MaxHandoffs = 3, -- the 4th drop destroys it
-		MaxBagsInWorld = 4, -- carried + dropped, all sites (the 512-circle budget, spec §3)
+		MaxBagsInWorld = 3, -- carried + dropped, all sites: busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500 (cap 500)
 		NoviceSeconds = 600, -- carriers younger than this (FirstJoinUnix; NoviceShieldDone once it lands) are never pinged
 		DeliveryPad = 12, -- delivered inside the OWN plot square: |dx|, |dz| <= PlotSize / 2 + this
 		HomeTowardGate = 150, -- OpsStatePayload.Home: plot centre moved this far toward the front gate
@@ -5347,8 +5348,11 @@ table.insert(Sites, {
 	Wake = "Bank",
 	ProvokeRadius = 8, -- walking up to read the sign or to breach does not start a fight
 	Stages = {
-		{ Id = "Breach", At = "Door", Prompt = "Breach", Hold = 3, Dist = 10 },
-		{ Id = "Crack", At = "Vault", Seconds = 45, R = 8 },
+		-- H2 bank balance (cutover prep, headless stand-in): hold 3 -> 7 s and crack ring r 8 -> 6 took a solo raider using
+		-- cover from 48 % to ~30 %; 5-unit squads ~75 %, 3-unit squads ~50-65 %, and squad success relies on squad hits not
+		-- provoking the guards. H2 is NOT cleared: Jobs stay OFF (ASSUMPTIONS CP-9)
+		{ Id = "Breach", At = "Door", Prompt = "Breach", Hold = 7, Dist = 10 },
+		{ Id = "Crack", At = "Vault", Seconds = 45, R = 6 },
 		{ Id = "Grab", At = "Loot", Prompt = "GrabCash", Hold = 2, Dist = 9, MaxBags = 4 },
 		{ Id = "Carry" },
 	},
@@ -17741,7 +17745,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 77)
+		player:SetAttribute("WE_Build", 78)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -44256,7 +44260,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 77)
+			player:SetAttribute("WE_Build", 78)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -50587,7 +50591,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 77)
+		player:SetAttribute("WE_Build", 78)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -50721,7 +50725,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=77",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=78",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -63188,6 +63192,14 @@ function OpsSites.SetDoor(rt: any, open: boolean)
 	end
 	if door.CanCollide == open then
 		door.CanCollide = not open
+	end
+	-- the bank gate slides (MapSetup stores both positions); a HeistGate without the attributes only toggles
+	local cf = door:GetAttribute(if open then "WE_OpenCFrame" else "WE_ClosedCFrame")
+	if typeof(cf) == "CFrame" and door.CFrame ~= cf then
+		door.CFrame = cf
+	end
+	if door.CanQuery == open then
+		door.CanQuery = not open -- a closed gate stops shots; a raised one never blocks a raycast
 	end
 end
 
