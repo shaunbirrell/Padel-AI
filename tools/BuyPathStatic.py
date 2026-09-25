@@ -328,7 +328,8 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "ProtectCollectorRadius", "GateDefenseConfig ProtectCollectorRadius")
 must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "AutoGunMinWallsLevel", "GateDefenseConfig AutoGunMinWallsLevel")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "GateDefense", "VisualAssetConfig.GateDefense")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "4923345827", "GateAutoGun Machine Gun Nest")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "AutoGun = { ModelAssetId = 0, PendingAssetId = 114570602,", "GateDefense.AutoGun: Part-built gun until the owner pick 114570602 is promoted (4923345827 MG 34-like dropped)")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 4923345827", "4923345827 (WWII MG 34-like, no part cap) is never a live gate-gun id")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "0", "SandbagNest")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "GateGuard", "Characters.GateGuard")
 must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "function GateDefenseService.SyncPlot", "GateDefenseService.SyncPlot")
@@ -794,7 +795,7 @@ must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", 
 # --- v42 DESIGN_WIRE_GAPS fill: Hangar≠Warehouse≠Depot, Missile≠Tower, tank/arty/naval split ---
 must_contain("docs/DESIGN_WIRE_GAPS_v40.md", "15942568272", "v42 gaps doc Warehouse ID")
 must_contain("docs/DESIGN_WIRE_GAPS_v40.md", "11962508154", "v42 gaps doc MissileDefense ID")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Hangar = { ModelAssetId = 6015472062", "v42 Hangar KEEP")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Hangar = { ModelAssetId = 0", "v42 Hangar key kept; owner rule 5 cleared the heavy hangar model (pick waits in PendingAssetId)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Warehouse = { ModelAssetId = 15942568272", "v42 Warehouse distinct")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "VehicleDepot = { ModelAssetId = 12208876851", "v42 VehicleDepot distinct")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MissileDefense = { ModelAssetId = 0", "v42 MissileDefense ≠ Watchtower")
@@ -4148,6 +4149,113 @@ must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/Tutorial
 must_contain('src/ServerScriptService/Server/Services/OpsService/init.luau', 'Cargo = { VaultLite = true, Cargo = true },', 'W3s2 M1: OpsService answers Go Cargo (the Haul Cargo daily op)')
 must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'PingTtlSeconds = 25,', 'W3s2 U: a pinged carrier stays a Steal row 25 s (OpsConfig.Ui, config first)')
 must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', 'Empty = "No jobs open · back soon",', 'W3s2 U: the JOBS header line when nothing is open')
+
+# --- assetwire lane L1 (owner asset list 2026-09-25): VisualAssetConfig + StructureVisualConfig. Paste above the final
+# `parse_gate()` call (apply_pins.py does it). Verified on clean HEAD 0a04776 + the two L1 config files: headless, not Roblox.
+AW_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+AW_SVC = "src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau"
+AW_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+AW_GDS = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+# owner rule 5: the three heavy building models never return (the VisualAssetService 6015472062 pin lands with lane L3)
+for _aw_heavy in ("138331074285379", "18798977801", "6015472062"):
+    must_not_contain(AW_VAC, _aw_heavy, f"assetwire rule 5: heavy id {_aw_heavy} never returns (VisualAssetConfig)")
+    must_not_contain(AW_SVC, _aw_heavy, f"assetwire rule 5: heavy id {_aw_heavy} never returns (StructureVisualConfig)")
+for _aw_heavy in ("138331074285379", "18798977801"):
+    must_not_contain(AW_VAS, _aw_heavy, f"assetwire rule 5: heavy id {_aw_heavy} never returns (VisualAssetService)")
+# third-party picks wait in PendingAssetId: typed, and never read by a loader (no load attempt, no budget cost)
+must_contain(AW_VAC, "PendingAssetId: number?", "assetwire: AssetRef.PendingAssetId (the owner's third-party pick, never loaded)")
+must_contain(AW_VAC, "OmitParts: { string }?", "assetwire: AssetRef.OmitParts (pack piece parts removed before the part count)")
+must_contain(AW_VAC, "NoFamilyFallback: boolean?", "assetwire: AssetRef.NoFamilyFallback (a vehicle ref at 0 keeps the Part kit)")
+must_not_contain(AW_VAS, ".PendingAssetId", "assetwire: VisualAssetService never reads PendingAssetId")
+must_not_contain(AW_GDS, ".PendingAssetId", "assetwire: GateDefenseService never reads PendingAssetId")
+# LIVE-NOW: Roblox-owned car bodies (Body sub-model, fitted to the kit, decals off)
+must_contain(AW_VAC, 'ModelAssetId = 6433272094,\n\t\t\tChildName = "Dune Buggy (beige)",\n\t\t\tSubModel = "Body",\n\t\t\tFit = "Kit",', "assetwire: Utility Quad / Recon Buggy wear the Roblox Dune Buggy (beige) Body, fitted to the kit")
+must_contain(AW_VAC, 'ModelAssetId = 6433316269,\n\t\t\tChildName = "Van (white)",\n\t\t\tSubModel = "Body",\n\t\t\tFit = "Kit",', "assetwire: Cargo Van wears the Roblox Van (white) Body, fitted to the kit")
+must_contain(AW_VAC, 'ModelAssetId = 6418225759,\n\t\t\tChildName = "Pickup Truck (bronze)",\n\t\t\tSubModel = "Body",\n\t\t\tFit = "Kit",', "assetwire: Patrol / Escort Truck wear the Roblox Pickup Truck (bronze) Body, fitted to the kit")
+must_contain(AW_VAC, 'OmitParts = { "light_tail_glass" },', "assetwire: the Pickup Body drops its tail-light glass (41 -> 40 parts, the cap)")
+must_contain(AW_VAC, "BridgeLayer = { ModelAssetId = 0, NoFamilyFallback = true,", "assetwire: Bridge Layer keeps its Part kit (owner: no good match)")
+must_contain(AW_VAC, "OilBarrel = { ModelAssetId = 23153991,", "assetwire: training-yard oil drum = Roblox Smoking Barrel")
+must_contain(AW_VAC, "StripEffectsAssetIds = { 23153991", "assetwire: the Smoking Barrel loses its smoke (StripEffectsAssetIds)")
+must_contain(AW_VAC, 'Log = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Tree_Log_01",', "assetwire: fallen logs wear Synty Tree_Log_01")
+must_contain(AW_VAC, 'Driftwood = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Tree_Twig_02", Yaw = 90,', "assetwire: driftwood has its own key (Tree_Twig_02 turned 90)")
+must_contain(AW_VAC, 'CarWreck = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Props_SM_Veh_Car_Sedan_01", Yaw = 90,', "assetwire: car wrecks = Synty sedan turned 90")
+# the load budget stays 48 / 12 (pins 3697 / 3700 unchanged); pending ids are never loaded
+must_contain(AW_VAC, "past MaxLoadAttempts - 8 (= 40)", "assetwire: the promote tool's live-id budget is MaxLoadAttempts - 8")
+# rule 4 is untouched: structure kits never prefer a mesh
+must_contain(AW_SVC, "PreferMeshWhenAssetIdSet = false", "assetwire: PreferMeshWhenAssetIdSet stays false (owner rule 4)")
+# --- assetwire lane L1 pin that needs lane L3 in the same tree (VisualAssetService.luau still holds the hangar id 3 times
+# at HEAD: :1089 comment, :1126 local hangarId, :1173 sentinel). FAILS on the L1-only tree by design; INTEG adds it with L3.
+must_not_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "6015472062", "assetwire rule 5: heavy id 6015472062 never returns (VisualAssetService: the Airfield composite reads Buildings.Hangar)")
+# --- assetwire lane L3 (owner asset list 2026-09-25): WeaponConfig, WeaponAssetLoader, VisualAssetService, WorldKits.
+# Paste above the final `parse_gate()` call, after lane L1's block (+ its bps_pins_after_L3.txt, which carries the
+# VisualAssetService 6015472062 must_not_contain). Verified headless on clean HEAD 0a04776 + L1's two config files + these
+# four files (not Roblox): FAIL=0.
+AW_WC = "src/ReplicatedStorage/Shared/Configs/WeaponConfig.luau"
+AW_WAL = "src/ServerScriptService/Server/Modules/WeaponAssetLoader.luau"
+AW_VAS3 = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+AW_WK = "src/ServerScriptService/Server/Modules/WorldKits.luau"
+# LIVE-NOW guns: the Roblox Weapons Kit (creator Roblox, User 1), one Tool + its gun Model each (VisualChild required:
+# the whole Tool is 17-19 parts, over the loader's 16)
+for _aw_id, _aw_tool, _aw_child in (("4842207161", "AR", "AR"), ("4842212980", "SMG", "SMG"), ("4842197274", "Pistol", "Pistol"),
+        ("4842215723", "Shotgun", "Shotgun"), ("4842218829", "Sniper", "Sniper"), ("4842186817", "Rocket Launcher", "RocketLauncher")):
+    must_contain(AW_WC, f'VisualAssetId = {_aw_id}, -- Roblox Weapons Kit (owner list 2026-09-25; docs/ASSET_WIRING.md)\n\t\t\tVisualToolName = "{_aw_tool}",\n\t\t\tVisualChild = "{_aw_child}",', f"assetwire L3: gun visual {_aw_id} Tool {_aw_tool} > Model {_aw_child}")
+must_contain(AW_WC, "MeshId = 94690081, TextureId = 94689966 }", "assetwire L3: rocket in flight = Roblox rocket mesh + texture")
+must_contain(AW_WC, "MeshId = 232379763, TextureId = 232379808 }", "assetwire L3: grenade in flight = Roblox grenade mesh + texture")
+# WeaponAssetLoader: the gun Model is ONE clone (kit joints stay on the copies), plus the kit's invisible Handle at the
+# gun's HandleAttachment, welded to it (the client grips the part named Handle); kit flash Beams / effects go
+must_contain(AW_WAL, "local MAX_PARTS = 16", "assetwire L3: gun template part cap unchanged (16)")
+must_contain(AW_WAL, "local copyOrNil: Instance? = source:Clone() -- nil when the source is not Archivable", "assetwire L3: gun Model copied as one clone (joints remapped)")
+must_not_contain(AW_WAL, "c:Clone().Parent = model", "assetwire L3: no part-by-part gun copy (left kit joints pointing at the source asset)")
+must_contain(AW_WAL, "function WeaponAssetLoader._AddGripHandle(model: Model, kitHandle: BasePart, body: BasePart?)", "assetwire L3: kit Handle copied into the gun template")
+must_contain(AW_WAL, "h.CFrame = anchorPart.CFrame * att.CFrame -- where the kit's equip weld puts the Handle", "assetwire L3: grip Handle placed on the gun's HandleAttachment")
+must_contain(AW_WAL, "h.Transparency = 1", "assetwire L3: grip Handle invisible")
+must_contain(AW_WAL, 'w.Name = "WE_GripWeld"', "assetwire L3: grip Handle welded to the gun body")
+must_contain(AW_WAL, 'if d:IsA("LuaSourceContainer") or d:IsA("Sound") or isEffect(d) then', "assetwire L3: gun templates keep no scripts, sounds or effects")
+# VisualAssetService: OmitParts before the part count, StripEffectsAssetIds, NoFamilyFallback, Hangar from config,
+# kit piece yaw + IsKitMeshWired (the pinned part-cap lines 2002 / 2003 / 3691 / 3692 are unchanged)
+must_contain(AW_VAS3, "-- owner list: OmitParts (e.g. the Pickup Truck's tail-light glass) go before the part count", "assetwire L3: pack piece OmitParts removed before the part count")
+must_contain(AW_VAS3, '.. (if #omit > 0 then "|-" .. table.concat(omit, ",") else "")', "assetwire L3: the piece key carries OmitParts")
+must_contain(AW_VAS3, 'local EFFECT_CLASSES = { "Fire", "Smoke", "Sparkles", "ParticleEmitter", "Light", "Beam", "Trail" }', "assetwire L3: effect classes stripped for StripEffectsAssetIds")
+must_contain(AW_VAS3, "if stripsEffects(assetId) then", "assetwire L3: only StripEffectsAssetIds lose their effects (MoneyBagFX keeps its particles)")
+must_contain(AW_VAS3, 'if typeof(ref) == "table" and ref.NoFamilyFallback == true then', "assetwire L3: a NoFamilyFallback vehicle never takes the family body")
+must_contain(AW_VAS3, "local hangarId = refId((VisualAssetConfig.Buildings :: any).Hangar)", "assetwire L3 rule 5: the Airfield hangar id comes from config")
+must_contain(AW_VAS3, "local hangarTemplate = if hangarId > 0 then loadModel(hangarId) else nil", "assetwire L3 rule 5: hangar 0 = Part shed, no LoadAsset call")
+must_contain(AW_VAS3, 'mp:SetAttribute("WE_KitYaw", ref.Yaw)', "assetwire L3: kit mesh piece carries its ref Yaw")
+must_contain(AW_VAS3, "function VisualAssetService.IsKitMeshWired(key: string): boolean", "assetwire L3: config-only wired check for kit mesh keys")
+# WorldKits: Driftwood has its own mesh key, yaw-turned pieces, unwired keys take no overlay slot, each wired key takes
+# at most its share of the cap (the cap stays 40, pin 1935)
+must_contain(AW_WK, 'Driftwood = spec(2, 2, Vector3.new(7.05, 0.9, 3.8), "natural", false, 1, "Travel", { Mesh = "Driftwood" }),', "assetwire L3: driftwood uses its own mesh key (never the Z-long log)")
+must_contain(AW_WK, "local function yawedBox(m: BasePart, boxCf: CFrame, size: Vector3): (CFrame, Vector3)", "assetwire L3: WE_KitYaw turns a kit mesh onto the kit's long axis")
+must_contain(AW_WK, "local meshCf, meshSize = yawedBox(m, boxCf, size)", "assetwire L3: each / collider overlays use the yawed box")
+must_contain(AW_WK, "if okW and wired == false then", "assetwire L3: an unwired mesh key takes no MeshOverlays slot")
+must_contain(AW_WK, "local function shareOfCap(isWired: (string) -> boolean, cap: number): number", "assetwire L3: one wired mesh key takes at most ceil(cap / wired keys) overlay slots")
+must_contain(AW_WK, "if (overlaysByKey[ov.Key] or 0) >= shareOfCap(isWired, cap) then", "assetwire L3: the overlay cap is shared, so the travel dressing's logs / dead trees / stumps get slots")
+# --- assetwire lane L2 (owner asset list 2026-09-25): docs/ASSET_WIRING.md, docs/ASSET_LICENSES.md, tools/wire-asset-ids.py.
+# Paste above the final `parse_gate()` call. Verified on clean HEAD 0a04776 + the L2 files (and + lane L1): headless, not Roblox.
+AW2_WIRING = "docs/ASSET_WIRING.md"
+AW2_LIC = "docs/ASSET_LICENSES.md"
+AW2_TOOL = "tools/wire-asset-ids.py"
+# the owner page keeps the block the promote tool regenerates
+must_contain(AW2_WIRING, "<!-- wire-asset-ids:begin (generated by tools/wire-asset-ids.py render; do not edit by hand) -->", "assetwire L2: ASSET_WIRING.md status block start (tools/wire-asset-ids.py render)")
+must_contain(AW2_WIRING, "<!-- wire-asset-ids:end -->", "assetwire L2: ASSET_WIRING.md status block end")
+# the licence file keeps the tables the promote tool appends to
+must_contain(AW2_LIC, "## 3.1 Owner picks (third-party, promoted by `tools/wire-asset-ids.py`)", "assetwire L2: ASSET_LICENSES.md §3.1 owner picks")
+must_contain(AW2_LIC, "<!-- wire-asset-ids:owner-picks:end -->", "assetwire L2: ASSET_LICENSES.md §3.1 marker (promote appends rows above it)")
+must_contain(AW2_LIC, "<!-- wire-asset-ids:replaced:end -->", "assetwire L2: ASSET_LICENSES.md §2e marker (replaced ids)")
+must_contain(AW2_LIC, "### 2d. Cleared by owner rule 5 (2026-09-25, owner asset list)", "assetwire L2: the rule-5 heavy ids are documented as cleared")
+# every Roblox-owned id this build wires has its licence row (§3.0); the kit guns keep their attribution
+for _aw2_id in ("6433272094", "6418225759", "6433316269", "23153991", "4842207161", "4842212980", "4842197274", "4842215723", "4842218829", "4842186817", "232379763", "232379808", "94690081", "94689966"):
+    must_contain(AW2_LIC, f"[{_aw2_id}](https://create.roblox.com/store/asset/{_aw2_id})", f"assetwire L2: licence row for Roblox-owned {_aw2_id}")
+must_contain(AW2_LIC, "**gun models from Roblox's Weapons Kit (Roblox)**", "assetwire L2: Weapons Kit attribution (RBX-LUL)")
+# the promote tool's gates stay in place
+must_contain(AW2_TOOL, "OWNER_USER_ID = 470626172", "assetwire L2: promote checks the inventory of the game's owner (shaunie6)")
+must_contain(AW2_TOOL, "BUDGET_MARGIN = 8", "assetwire L2: promote refuses a batch above MaxLoadAttempts - 8")
+must_contain(AW2_TOOL, "MAX_PARTS = 40", "assetwire L2: STUDIO gate needs WE_CHECK parts <= 40")
+must_contain(AW2_TOOL, 'elif wc.get("humanoids") != 0:', "assetwire L2: STUDIO gate needs WE_CHECK humanoids = 0")
+must_contain(AW2_TOOL, 'if tree.prefer_mesh() != "false":', "assetwire L2: promote refuses unless PreferMeshWhenAssetIdSet is false (rule 4)")
+must_contain(AW2_TOOL, "REQUEST_GAP = 0.55", "assetwire L2: at most 2 network requests per second")
+must_not_contain(AW2_TOOL, "files.set(SVC_REL", "assetwire L2: the promote tool never writes StructureVisualConfig")
+must_not_contain(AW2_TOOL, "import requests", "assetwire L2: the promote tool is standard library only")
 
 parse_gate()
 

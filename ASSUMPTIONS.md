@@ -3654,3 +3654,174 @@ M1-3a (verifier M1v) When a key has more than GoMaxTargets targets, the refresh 
   guide line waits while an objective marker is up (it used to wipe a Missions GO marker after 12 s idle).
 - **PB-L3 Lane BK pending edits still open** (w3s2/buildBK/pending_edits.md: BankRaidConfig.GuardPosts fallback posts that
   follow the hall; OpsSites.SetDoor uses WE_Open/ClosedCFrame) - a separate follow-up commit.
+
+## 2026-09-25 — Owner Creator Store list (217 items / 151 ids): Roblox-owned pieces wired live, third-party picks waiting in PendingAssetId, promote tool (assetwire L1 + L2 + L3, integration)
+
+All reversible. Tested headless (the stand-in), not in Roblox. Owner-facing page: docs/ASSET_WIRING.md.
+
+### Spec-level (decide step, spec §11.1)
+AW-S1 The owner listing Roblox's Auto Rifle / Rocket Launcher counts as his yes on the AK- / RPG-pattern looks of the
+      Roblox Weapons Kit guns (shortlist §0.5). Revert = `VisualAssetId = 0` on StarterRifle, AssaultRifle and
+      RocketLauncher in WeaponConfig.
+AW-S2 "CruiseMissile" = the rocket in flight (RocketLauncher projectile), not the Missile Command strike missile.
+AW-S3 MedevacHeli waits for 11357157285 ("Rescue Helicopter"), identical to the owner's 11357398877, to save a load.
+      (Its Note still names the owner's title; the promote tool rewrites the Note.)
+AW-S4 A config field no caller reads counts as NO-FIELD. Structure / StructureDress building fields are inert by design
+      (PreferMeshWhenAssetIdSet = false) and still carry the owner's pick as PendingAssetId.
+AW-S5 ManualDropperService.luau is treated as locked: streaming2-build lane C1 is editing it (its header says so),
+      although it is not on the lead's list. The ManualDropper row is DEFERRED.
+AW-S6 The "not owned" finding of 2026-09-24 is superseded: shaunie6 owned 147 of 151 owner ids at 08:02-08:05 UTC, and
+      all 43 waiting ids at 08:50 UTC (inventory API, HTTP 200).
+AW-S7 AutoGun keeps 4923345827 until promote batch P1 swaps in 114570602 (no visual change in between). Because the owner
+      now owns 4923345827, gate AutoGuns at walls level 4+ already load it on live (GateDefenseService's own loader).
+
+### Lane L1 (VisualAssetConfig.luau + StructureVisualConfig.luau)
+1. **Pending picks use one field, `PendingAssetId`.** The lead's brief gave "StoreAssetId + StoreName + StoreCreator" as an example. The spec contract (§5.2 step 7) has `tools/wire-asset-ids.py` delete `PendingAssetId = <id>, ` and rewrite `Note`. Extra fields would be left behind, stale, after a promote. So the store name and creator are in the ref's `Note`, in the form "owner pick <store name> (<creator>): pending, <batch> (<gates>)". Revert: add typed fields and teach the tool to drop them.
+2. **Where the field sits.** On single-line refs, `PendingAssetId = <id>, ` always comes directly after `ModelAssetId = <n>, ` and before `Note`. Every BuyPathStatic prefix pin (for example `APC = { ModelAssetId = 0`) and the tool's exact-text edit both keep working. The field is never the last one in a ref.
+3. **KEEP-PART-KIT and REJECT keys get a decision note but no id.** Their notes record the owner-list decision without the rejected id, so no rejected id appears anywhere in the config.
+   - Pinned note prefixes are kept: Destroyer "W1 CFG drop (real-world ship)", and the LandingCraft / AssaultLanding / AmphibAssault "REJECT 13195201090" text.
+   - Notes avoid naming real-world designs.
+4. **The DEFERRED rows' config halves are not added now.** They land with their host change in the locked files:
+   - `VAC.Businesses.*`, `VAC.Landmarks.HomeOutpost`, `VAC.IndustrialProps.ManualDropper`, `VAC.VehicleWeapons`;
+   - PremiumRazorfang / PremiumBastion / PremiumTidebreaker. VAS.Init pre-inserts every Vehicles ref that has a ChildName, so a car ref with no vehicle def would still spend a boot load.
+5. **Oil barrel.** Only `WarzoneProps.OilBarrel` changes to 23153991. That is the ref `TryAttachPropVisual(host, "OilBarrel")` resolves, because WarzoneProps is the first prop bucket.
+   - `IndustrialProps.OilBarrel` is shadowed and stays 25623924.
+   - The `Fence` alias also stays 25623924 (no caller; note updated), so BPS pin 285 "ModelAssetId = 25623924" still passes.
+6. **`StripEffectsAssetIds` pin.** The pin checks the prefix `StripEffectsAssetIds = { 23153991`, not the spec's closed-brace form. The DEFERRED BusinessService job can then append 31603741 / 4362642898 without rewriting a pin.
+7. **Pin 797 is swapped, not deleted.** It becomes `Hangar = { ModelAssetId = 0` (bps_changes.txt). The promote tool rewrites it to `Hangar = { ModelAssetId = 5343886540` at P2.
+   - The rule-5 must_not_contain pin for 6015472062 in VisualAssetService.luau is in bps_pins_after_L3.txt. It fails on the L1-only tree, where the VAS literal still appears 3 times, and passes once lane L3 lands.
+8. **Yaw 0 for the Roblox car bodies.** Dune Buggy (beige), Van (white) and Pickup Truck (bronze) all use Yaw 0. The headless Fit test on the real HEAD VehicleService kits puts the headlights at -Z, the tail lights at +Z and the left tyres on -X for all five keys. Nose direction on a device is still unverified.
+9. **The Pickup on an L1-only tree.** PatrolTruck / EscortTruck carry `OmitParts = { "light_tail_glass" }`, but HEAD VisualAssetService ignores OmitParts. On an L1-only tree:
+   - the Pickup Body is refused at 41 parts, with one Output line;
+   - it costs one boot load attempt;
+   - the Part kit stays.
+   Lane L3 makes it 40.
+10. **The L1 config alone is not shippable.** Measured in the headless sim with the real Synty files, with no lane L3:
+    - CarWreck overlays are squashed up to 4.26x (max/min axis stretch), because Yaw is ignored;
+    - the barrel keeps its Smoke;
+    - the Driftwood kit still asks for the "Log" key. No Log / Driftwood overlay fell inside the 40-slot cap in this sim, but slot order on live can differ.
+    L1 and L3 must land in one commit (spec §7).
+11. **Other heavy ids are left alone.** WeaponsFacility 4120970784 (213,994 tris) and VehicleDepot / HangarAlt 12208876851 (202,920 tris) are not rule-5 ids and stay as they are. They are inert while PreferMesh is off, and the owner picks replace them at promote (spec §3 note).
+12. **Load budget.** MaxLoadAttempts stays 48 and LoadRetryReserve stays 12. A comment records the promote tool's live-id budget, MaxLoadAttempts - 8 = 40.
+
+### Lane L2 (tools/wire-asset-ids.py, docs/ASSET_WIRING.md, docs/ASSET_LICENSES.md, docs/ASSET_SHORTLIST.md)
+1. **Lane files.** The lead limited L2 to `docs/ASSET_WIRING.md` (new), `docs/ASSET_LICENSES.md`, one cross-reference line in
+   `docs/ASSET_SHORTLIST.md` and `tools/wire-asset-ids.py` (new). So the spec's `docs/asset_wiring.json` registry is not a
+   committed file: the registry (217 rows, one per owner key, plus the store data of every listed id) is embedded in the
+   tool, generated from the decide step's per-key decisions and the store/toolbox checks. The unit tests
+   (`test_wire_asset_ids.py`) and the doc checker (`check_docs.py`) stay in the lane's scratch folder; INTEG may copy the
+   tests to `tools/`. Revert: none needed (no repo file depends on them).
+2. **Undo journal.** `docs/asset_wiring.json` is created by the tool on the first real promote (not in this build) and holds
+   the per-id undo record for `demote`; the tool deletes it again when the last promotion is demoted, so promote + demote is
+   byte-identical. It is committed together with the promote.
+3. **Unit of promotion = asset id.** Every key that uses an id is promoted together (a key argument expands to its id), so one
+   id gets one licence row and one BuyPathStatic rewrite. Revert: `demote <id>`.
+4. **"Already live" is a no-op success** (`ALREADY LIVE`, exit 0) rather than a refusal (spec §5.2 step 1 listed it as a
+   refusal), so a batch can be re-run after a partial promote; it changes no byte (tested).
+5. **Verify criterion:** after the edit, BuyPathStatic must show no FAIL line that was not there in a run just before the edit
+   (and FAIL=0 when that baseline was 0), because the shared working tree carries other jobs' failing pins (3 today). Any new
+   FAIL, a luau-compile error, or BuyPathStatic not finishing restores every file.
+6. **Load-budget model.** The tool counts, in the census "everything loads" mode, the first non-zero id of each live
+   VisualAssetService chain (characters, the MapSetup / BaseService / plot-pump props, ATM chain, tutorial arrow, collect FX,
+   every DesertKit key, both wall chains, and every VehicleConfig vehicle with its KitFamilyFallback body). WarzoneProps
+   FloodlightTower is left out (asked only when the plot-warzone host is still undressed). Calibration: HEAD 18 (census
+   measured 18), HEAD + L1 22 (spec 22), + P1 22, + P2 walls 24 (spec 23-24; the L1-2 wall chain is counted too, on
+   purpose), + P3 41 > 40 → refused (spec 40-41), after the §4.3 clean-up 39 (spec 37-38: the tool counts MoneyBagFX and
+   VfxSparkles as one chain, so that clean-up frees 2 slots in its count, not 3). The model is not Roblox; the census stays
+   the gate after each promote.
+7. **Store re-check compares the group id.** For a group upload the economy API's `Creator.Id` is an agent id and
+   `CreatorTargetId` is the group id (live check 08:51 UTC, 15838664806 Confused Giants Studio: Id 4984294394, group
+   33020211). The tool compares `CreatorTargetId` (falls back to `Id`).
+8. **Licence rows for waiting picks are written at promote, not now.** A `PendingAssetId` is never loaded, and
+   ASSET_LICENSES.md covers ids the game loads; the tool appends the §3.1 row in the promote commit. The licence-coverage
+   check skips PendingAssetId values.
+9. **Section numbers in ASSET_LICENSES.md:** §2d = "Cleared by owner rule 5" (the 3 heavy ids), §2e = "Replaced by owner
+   picks" (filled by the tool), §3.1 = "Owner picks" (filled by the tool). The spec used "§2d" for both tables.
+10. **A replaced id that stays in `src/`** (e.g. 3525056989, still `GateDefense.Sandbags` and the GateDefenseService default;
+    4923345827, still the GateDefenseService default until the DEFERRED change) keeps its §3 row; the tool appends
+    "<fields> moved to owner pick <id> on <date>" to its Notes. An id that leaves `src/` moves to §2e.
+11. **Weapons Kit attribution text** is ours: "gun models from Roblox's Weapons Kit (Roblox)", with the shortlist's licence
+    code RBX-LUL; no official attribution wording was found. Revert: edit the line in ASSET_LICENSES.md §3.0 terms.
+12. **Ownership facts used in the docs:** 147 of 151 owner-list ids owned at 08:02-08:05 UTC (decide step); re-checked live by
+    this lane: the 43 waiting ids all owned, store details unchanged (08:50-08:51 UTC, 70 calls + 16 for the P1 dry run, all
+    HTTP 200); the 51 other third-party ids in VisualAssetConfig / StructureVisualConfig not owned (08:39 UTC, 51 calls). The
+    task note "expect 0 owned today" is superseded by these results.
+13. **Status table source.** The generated table in ASSET_WIRING.md was rendered from the working-tree configs (= lane L1's
+    two config files; identical in L3's merged tree). On a HEAD-only tree `render --check` reports it stale; INTEG runs
+    `python3 tools/wire-asset-ids.py render --check` on the merged tree (it passes on HEAD + L1 + L3 + L2).
+14. **ASSET_SHORTLIST.md** gets only the one cross-reference line (lead's restriction); the spec's extra notes for its §4
+    (187790284 allowed by rule 9; 13437018139 owned but no host) and §3.2 (the owner's list overrides "vehicle families stay
+    Part kits" through the promote gates) are covered in ASSET_WIRING.md instead.
+15. **Owner-facing item names** are the owner's keys split into words ("Defensive Walls L3"); store titles appear only in the
+    docs, never in game. "Hesco Barrier" is the owner's own key name (the config key `Hesco` already exists).
+
+### Lane L3 (WeaponConfig, WeaponAssetLoader, VisualAssetService, WorldKits)
+1. **Gun Tool variant.** Spec §7 picks the first Tool of each Weapons Kit item ("AR", "SMG", "Pistol", "Shotgun", "Sniper",
+   "Rocket Launcher"). That means StarterRifle and AssaultRifle look the same. docs/ASSET_SHORTLIST.md §6 C4 had picked
+   the colour variants AR2 (grey) and AR3 (dark). They are the same asset id and differ only in the texture.
+   Revert / alternative: `VisualToolName = "AR2"` / `"AR3"` in WeaponConfig (no load cost).
+2. **Grip.** The Weapons Kit welds its invisible Tool.Handle to the gun only at equip time, and it does this with its own
+   scripts at the gun's "HandleAttachment". WeaponAssetLoader re-creates that relation in its own code (no kit code is
+   copied). The Handle clone is placed on HandleAttachment's world CFrame, set to Transparency 1, and welded to that part
+   (Weld "WE_GripWeld"). Our client already grips the part named Handle. Headless check for all 7 guns: the barrel lies
+   along the Handle's -Z with the top up, and the muzzle sits 0.8–4.6 studs ahead of the grip on the barrel axis. The
+   kit's Tool.Grip (identity) is not used by our client.
+3. **Muzzle.** Each kit gun has a flash Beam, "MuzzleFlash", whose two end attachments sit 0.375 studs off the barrel
+   axis. The Beam and those two attachments are stripped, together with any ParticleEmitter, Trail, Fire, Smoke, Sparkles
+   or light in a gun template. The client's muzzle search then finds "TipAttachment", which is on the barrel axis. The
+   client still draws its own flash.
+4. **One clone.** VisualChild is now copied as one clone. At HEAD the loader cloned it part by part, which left the kit's
+   magazine WeldConstraint and bolt Motor6D pointing at the source asset. Under Roblox's clone rule (emulated in the
+   test), the magazine and bolt then came loose on clients. This was a latent bug, because every VisualAssetId was 0.
+5. **Overlay fair share (beyond spec §7 item 4(iii); lead decision).** With only the spec change (unwired keys take no
+   slot), the headless Full world still gave all 40 slots to CrateWood 19, Reeds 14 and CarWreck 7. DeadTree, Stump,
+   Log, Driftwood and DuneGrass got 0, so the LIVE-NOW logs and driftwood and the "already live" dead trees, stumps and
+   grass never showed. Each wired key now takes at most ceil(40 / wired keys in Specs) slots. That is 5 on the merged
+   tree and 8 on HEAD config. The number is derived from the existing cap, so there is no new tunable, and the cap stays
+   40.
+   - Result on the merged tree (Full): CrateWood 5, Reeds 5, CarWreck 5, DeadTree 5, Stump 5, Log 5, Driftwood 3,
+     DuneGrass 2 = 35 slots.
+   - Visible trade-off: Town has fewer skinned crate stacks (19 → 5) and fewer reed meshes (14 → 5), and wrecks go 7 → 5.
+   - Revert = delete the `shareOfCap` check in WorldKits.scheduleOverlays. That returns to first-come order.
+6. **Hangar sentinel.** When `Buildings.Hangar` is 0, the host gets the Part shed with `WE_CatalogAssetId = 0` (0 still
+   counts as dressed, so there is no re-dress) and no LoadAsset call is made. When a configured id fails, it is stored
+   negative as before.
+7. **IsKitMeshWired is config only.** It returns true when the id is above 0 and a ChildName is set. A piece that is
+   refused at load (over the part cap) still takes its slots, as at HEAD.
+8. **Rocket mesh orientation.** The vertex profile of mesh 94690081 puts the fins (radius 0.33) at +Z and the warhead at
+   -Z. WeaponVisuals flies the body with CFrame.lookAt, so -Z is forward and the nose leads with no client change. This
+   comes from the geometry only and has not been checked in Roblox.
+9. **Grenade in hand.** It stays the Part kit (Grenade VisualAssetId 0). Only the in-flight mesh is wired, as spec §7
+   says.
+10. **Where the gun templates live.** They stay in ReplicatedStorage.WE_WeaponTemplates by the existing W2 design, because
+    the client builds the gun. There are 7 templates of at most 5 parts each, loaded once per distinct id (6 ids),
+    outside VisualAssetConfig.MaxLoadAttempts.
+
+### Integration (lead)
+AW-I1 **L1, L2 and L3 land in one commit** with the merged BuyPathStatic block (pin 797 swap, then the L1, L1-after-L3,
+      L3 and L2 pins above the final parse_gate()). On an L1-only tree wrecks are squashed, the barrel smokes and the pickup
+      is refused; on a HEAD-only tree the ASSET_WIRING status table reads stale.
+AW-I2 **The overlay fair share (lane L3 item 5) is accepted.** Without it the spec's own "every wired key gets slots" test
+      fails and the logs / driftwood this build wires never show. Trade-off: Town crate skins 19 -> 5, reed meshes 14 -> 5,
+      wrecks 7 -> 5; 35 of 40 slots used. Revert = delete the `shareOfCap` if-block in WorldKits.scheduleOverlays and its
+      2 BuyPathStatic pins.
+AW-I3 **Driftwood stretch 2.36 is accepted**, just over the DesertKit fit note of 2.2 (the long log's box is 7.05 x 0.9 x 2.1
+      and Tree_Twig_02 is thin). The piece lies along the right axis and is not squashed. Revert =
+      `DesertKit.Driftwood.ModelAssetId = 0` (the Part logs stay).
+AW-I4 **Superseded tests are left as they are**, not edited: 6 checks of the old W3 LOOK unit test (U1-owned, U1-family,
+      U1-onlyjeep, U2-unwired, U3-pieces, U9-quad-attached) and the 4 K3 checks of the jeep server look test (UtilityQuad and
+      ReconBuggy "LUV body") encode the pre-owner-list state. The assetwire LOOK unit test (MERGED mode, 128 checks) covers
+      the new state, including Fit = Kit on the real VehicleService kits.
+AW-I5 **The L2 unit tests and doc checker are not committed** (lane file list; their fixtures live in scratch). They pass
+      against the candidate (32/32; licence coverage 71/71, 0 bad links).
+AW-I6 **The integration does not edit the shared working-tree BuyPathStatic** (other jobs share it). The merged block goes
+      in with the commit; until then the shared tree fails pin 797 by design, plus 2 BankRaidConfig pins from
+      jobs-cutover-prep.
+AW-I7 WE_Build is not bumped (the owner's publish bot does it).
+
+### Lead
+- **AW-L1 Gate AutoGun off the store model now.** `VisualAssetConfig.GateDefense.AutoGun.ModelAssetId` 4923345827 -> 0 in this
+  commit (Part-built gate gun): the owner's Get Model made it load on live, and it is a WWII MG 34-like silhouette on a loader
+  with no part cap. The owner pick 114570602 stays pending (P1). `GateDefenseService.luau:576` still names 4923345827 as the
+  default for a MISSING config key; changing that line is deferred until streaming2-build commits (file locked).
+- **AW-L2 WE_Build not bumped** (the owner's publish bot bumps it); the owner's prompt asked for it, noted in the report.
