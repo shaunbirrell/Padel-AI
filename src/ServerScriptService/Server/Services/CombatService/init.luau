@@ -28,6 +28,13 @@
 	    MaxSeconds of play this session. Never re-granted.
 	  - A shielded player deals no damage to other players, their vehicles or gates: such a hit ends the shield first.
 	  - APIs: IsNoviceShielded(player) -> boolean, EndNoviceShield(player, reason) -> boolean (true = it ended now).
+
+	W3 step 2 Phase B, lane N NPC core (contract §5): SpawnNPC(type, at, opts?) takes NPCSpawnOpts (GroupId,
+	NoRespawn, Home, Leash, Stance, ProvokeRadius, OverCap, Static); with no opts every call behaves as before.
+	The cap is MaxActiveNPCs regular, + SpecialOverCap for CombatConfig.SpecialNPCTypes and opts.OverCap. A player
+	hurting a grouped NPC provokes its group. APIs: OnNPCDeath(fn) (once per death, after rewards; listeners
+	deferred, each in its own pcall), DespawnNPC(id) (silent), ProvokeGroup / CalmGroup / GroupNPCs(groupId),
+	NPCCounts(). CombatConfig.FieldBootstrap == false skips BootstrapNPCs. Stances live in CombatNPC.Think.
 ]]
 
 local Players = game:GetService("Players")
@@ -104,6 +111,18 @@ type NPCRecord = {
 	AimSince: number,
 	AimBlocked: boolean, -- P1-2: the last line-of-sight check failed (the reaction delay restarts on regaining sight)
 	KillCtx: { Quiet: boolean?, NoKillMarker: boolean? }?, -- W2: set around TakeDamage so an immediate Died pays quietly
+	-- W3 step 2 Phase B, lane N (SpawnNPC opts; a 2-argument spawn gets the defaults, i.e. today's NPC)
+	GroupId: string?, -- an Ops site id; ProvokeGroup / CalmGroup / GroupNPCs / OnNPCDeath carry it
+	NoRespawn: boolean, -- never respawned
+	Home: CFrame, -- leash home and calm-down point (default: the spawn CFrame)
+	Leash: number?, -- flat studs from Home (nil: no leash)
+	Stance: string, -- "Aggressive" (default) | "Passive" | "Post"
+	ProvokeRadius: number?, -- Passive: an on-foot player this close to Home provokes the group
+	Static: boolean, -- WE_Static: never MoveTo (implies Post)
+	OverCap: boolean, -- may use the SpecialOverCap headroom
+	SpawnOpts: NPCSpawnOpts?, -- a copy of the opts, reused by a respawn (nil for a 2-argument spawn)
+	Returning: boolean, -- walking back past the leash (targets ignored until home)
+	DeathFired: boolean, -- OnNPCDeath fired (or silenced by DespawnNPC): once per death
 }
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
@@ -136,6 +155,19 @@ export type RadiusOpts = {
 }
 export type RadiusResult = { Players: number, Npcs: number, Killed: number, Dealt: number }
 export type DeathInfo = { WeaponId: string?, BlastSource: string?, Quiet: boolean }
+-- W3 step 2 Phase B, lane N (contract §5.2)
+export type NPCSpawnOpts = {
+	GroupId: string?, -- an Ops site id ("Town.Bank"); ProvokeGroup / CalmGroup / GroupNPCs / OnNPCDeath carry it
+	NoRespawn: boolean?, -- never respawned (neither after a kill nor after a death with no killer)
+	Home: CFrame?, -- leash home and calm-down point (default: the spawn CFrame `at`)
+	Leash: number?, -- studs from Home; nil = no leash (today)
+	Stance: string?, -- "Aggressive" (nil = today) | "Passive" | "Post"
+	ProvokeRadius: number?, -- Passive only (default: never provoked by proximity)
+	OverCap: boolean?, -- may use the SpecialOverCap headroom like a special type (event NPCs)
+	Static: boolean?, -- model attribute WE_Static = true; never MoveTo (tower deck, interior); implies Stance "Post"
+}
+export type NPCInfo = { Id: string, TypeId: string, GroupId: string?, Alive: boolean, Position: Vector3, Provoked: boolean, Stance: string }
+export type NPCDeathInfo = { Id: string, TypeId: string, GroupId: string?, Killer: Player?, ByUnit: boolean, Position: Vector3 }
 
 -- feedback / credit switches for one damage call (internal)
 type FbOpts = {
@@ -193,6 +225,11 @@ local NS = {
 		contest = "EndOnContestedCapture",
 		tutorial = "EndOnTutorialComplete",
 	} :: { [string]: string },
+}
+
+-- W3 step 2 Phase B, lane N: NPC death listeners (OnNPCDeath)
+local NPCCore = {
+	deathListeners = {} :: { { Fn: (NPCDeathInfo) -> () } },
 }
 
 local function clock(): number
@@ -680,9 +717,39 @@ local function destroyNPC(rec: NPCRecord)
 	rec.Alive = false
 	npcRecords[rec.Id] = nil
 	CombatFx.Forget(rec.Id) -- W2 verify: its WeaponFx shooter bucket goes too (NPC ids never repeat)
+	CombatNPC.ForgetRecord(npcRecords, rec) -- lane N: its group's stance state goes with the last member
 	if rec.Model and rec.Model.Parent then
 		rec.Model:Destroy()
 	end
+end
+
+--[[ Lane N: OnNPCDeath, once per death (DeathFired), after rewards. The listeners run deferred (a death can happen
+	inside a damage loop over the NPC records, and a listener may spawn or despawn NPCs), each in its own pcall.
+	Nothing is scheduled while no listener is registered. ]]
+local function fireNPCDeath(rec: NPCRecord, killer: Player?, byUnit: boolean)
+	if rec.DeathFired then
+		return
+	end
+	rec.DeathFired = true
+	if #NPCCore.deathListeners == 0 then
+		return
+	end
+	local info: NPCDeathInfo = {
+		Id = rec.Id,
+		TypeId = rec.TypeId,
+		GroupId = rec.GroupId,
+		Killer = killer,
+		ByUnit = byUnit,
+		Position = rec.Root.Position,
+	}
+	local list = table.clone(NPCCore.deathListeners)
+	task.defer(function()
+		for _, entry in ipairs(list) do
+			xpcall(entry.Fn, function(err: any)
+				warn("[CombatService] OnNPCDeath listener error:", err)
+			end, info)
+		end
+	end)
 end
 
 -- W2 (F hand-off): per-type respawn time (CombatConfig.NPCTypes[*].RespawnSeconds), else the global one
@@ -734,8 +801,13 @@ function CombatService.OnNPCKilled(attacker: Player, rec: NPCRecord, byUnit: boo
 	task.delay(0.35, function()
 		destroyNPC(rec)
 	end)
+	fireNPCDeath(rec, attacker, byUnit == true) -- lane N
+	if rec.NoRespawn then
+		return -- lane N: an Ops garrison NPC is never respawned
+	end
+	local spawnOpts = rec.SpawnOpts
 	task.delay(npcRespawnSeconds(rec), function()
-		CombatService.SpawnNPC(typeId, spawnCf)
+		CombatService.SpawnNPC(typeId, spawnCf, spawnOpts)
 	end)
 end
 
@@ -763,6 +835,10 @@ local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponI
 	end
 	local killed = rec.Humanoid.Health <= 0
 	local quiet = fb ~= nil and fb.Quiet == true
+	if attacker and (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then
+		-- lane N: a player (or their squad unit) hurting a grouped / Passive NPC provokes its whole group
+		CombatNPC.ProvokeGroup(npcRecords, rec.GroupId or rec.Id, nil, clock())
+	end
 	if attacker and not quiet and not (fb and fb.NoAttackerFb == true) then
 		hitFeedback(attacker, {
 			Kind = if killed then "Kill" else "Hit",
@@ -787,12 +863,42 @@ local function damageNPC(attacker: Player, npcId: string, damage: number, weapon
 	return dealt > 0
 end
 
-function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
+--[[ Lane N: SpawnNPC opts, sanitised (server callers only, but never trusted blindly). nil / not a table = today's
+	NPC: Aggressive, no leash, no group, respawns at `at`. ]]
+local function npcSpawnOpts(opts: any, at: CFrame)
+	local o = if typeof(opts) == "table" then opts else nil
+	local static = o ~= nil and o.Static == true
+	local stance = "Aggressive"
+	if static then
+		stance = "Post" -- Static implies Post
+	elseif o ~= nil and (o.Stance == "Passive" or o.Stance == "Post") then
+		stance = o.Stance
+	end
+	local function posNum(v: any, max: number): number?
+		return if typeof(v) == "number" and v > 0 and v < max then v else nil
+	end
+	local gid = if o ~= nil and typeof(o.GroupId) == "string" and #o.GroupId > 0 and #o.GroupId <= 64 then o.GroupId else nil
+	return {
+		GroupId = gid :: string?,
+		NoRespawn = o ~= nil and o.NoRespawn == true,
+		Home = if o ~= nil and typeof(o.Home) == "CFrame" then o.Home :: CFrame else at,
+		Leash = if o ~= nil then posNum(o.Leash, 1e5) else nil,
+		Stance = stance,
+		ProvokeRadius = if o ~= nil then posNum(o.ProvokeRadius, 1e4) else nil,
+		OverCap = o ~= nil and o.OverCap == true,
+		Static = static,
+		Copy = if o ~= nil then (table.clone(o) :: any) :: NPCSpawnOpts else nil,
+	}
+end
+
+function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?): NPCRecord?
 	local tid = typeId or CombatConfig.DefaultNPCType
-	local isSpecial = tid == "BankGuard" or tid == "OilRigGuard" or tid == "FortGuard"
+	local o = npcSpawnOpts(opts, at)
+	-- lane N: the special list comes from config (BankGuard / OilRigGuard / FortGuard); opts.OverCap counts as special
+	local isSpecial = table.find(CombatConfig.SpecialNPCTypes, tid) ~= nil or o.OverCap
 	local cap = CombatConfig.MaxActiveNPCs or 18
-	-- Special guards may exceed soft field pool by +4 so bank always gets guards
-	if aliveNPCCount() >= (if isSpecial then cap + 4 else cap) then
+	-- Special guards may exceed soft field pool by SpecialOverCap (+4) so bank always gets guards
+	if aliveNPCCount() >= (if isSpecial then cap + CombatConfig.SpecialOverCap else cap) then
 		print(string.format("[CombatService] SpawnNPC blocked at cap alive=%d tid=%s", aliveNPCCount(), tostring(tid)))
 		return nil
 	end
@@ -812,6 +918,9 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 	model.Name = def.DisplayName
 	model:SetAttribute("NPCId", id)
 	model:SetAttribute("NPCType", tid)
+	if o.Static then
+		model:SetAttribute("WE_Static", true) -- lane N: a tower-deck / interior post that never walks
+	end
 
 	local root = Instance.new("Part")
 	root.Name = "HumanoidRootPart"
@@ -856,7 +965,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		math.clamp(math.floor(def.Color.G * 255) - 10, 20, 255),
 		math.clamp(math.floor(def.Color.B * 255) - 15, 20, 255)
 	)
-	local isHeavy = tid == "HeavyInfantry" or tid == "OilRigGuard" or tid == "FortGuard"
+	local isHeavy = tid == "HeavyInfantry" or tid == "OilRigGuard" or tid == "FortGuard" or tid == "CampCommander"
 	local isBank = tid == "BankGuard"
 	-- R6-ish: head +1.5, arms ±1.5, legs ±0.5 @ -2
 	local headPart = weldPart("Head", Vector3.new(1.05, 1.05, 1.05), CFrame.new(0, 1.55, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
@@ -941,8 +1050,20 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 		AimSince = 0,
 		AimBlocked = false,
 		KillCtx = nil,
+		GroupId = o.GroupId,
+		NoRespawn = o.NoRespawn,
+		Home = o.Home,
+		Leash = o.Leash,
+		Stance = o.Stance,
+		ProvokeRadius = o.ProvokeRadius,
+		Static = o.Static,
+		OverCap = o.OverCap,
+		SpawnOpts = o.Copy,
+		Returning = false,
+		DeathFired = false,
 	}
 	npcRecords[id] = rec
+	CombatNPC.JoinGroup(npcRecords, rec) -- lane N (no-op for a 2-argument spawn)
 
 	humanoid.Died:Connect(function()
 		if not rec.Alive then
@@ -964,9 +1085,13 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame): NPCRecord?
 			task.delay(0.35, function()
 				destroyNPC(rec)
 			end)
-			task.delay(npcRespawnSeconds(rec), function()
-				CombatService.SpawnNPC(t, spawnCf)
-			end)
+			fireNPCDeath(rec, nil, false) -- lane N: no killer
+			if not rec.NoRespawn then
+				local spawnOpts = rec.SpawnOpts
+				task.delay(npcRespawnSeconds(rec), function()
+					CombatService.SpawnNPC(t, spawnCf, spawnOpts)
+				end)
+			end
 		end
 	end)
 
@@ -999,6 +1124,88 @@ function CombatService.BootstrapNPCs()
 	if RunService:IsStudio() then
 		print(string.format("[CombatService] Spawned %d NPCs (cap %d)", spawned, CombatConfig.MaxActiveNPCs))
 	end
+end
+
+--[[ Lane N (contract §5.2): `fn(info)` once per NPC death (grouped or not, with or without a killer), after the
+	kill rewards. Listeners run deferred, in registration order, each in its own pcall. Returns a disconnect. ]]
+function CombatService.OnNPCDeath(fn: (info: NPCDeathInfo) -> ()): () -> ()
+	local entry = { Fn = fn }
+	table.insert(NPCCore.deathListeners, entry)
+	return function()
+		local i = table.find(NPCCore.deathListeners, entry)
+		if i then
+			table.remove(NPCCore.deathListeners, i)
+		end
+	end
+end
+
+-- Lane N: silent removal (sleeping garrisons, site resets): no reward, no respawn, no OnNPCDeath. false if unknown.
+function CombatService.DespawnNPC(id: string): boolean
+	if typeof(id) ~= "string" then
+		return false
+	end
+	local rec = npcRecords[id]
+	if not rec then
+		return false
+	end
+	rec.DeathFired = true -- never reported as a death
+	rec.Alive = false -- a Died fired by the removal pays nothing and respawns nothing
+	destroyNPC(rec)
+	return true
+end
+
+--[[ Lane N: provoke a group: its Passive (and passive-group Post) members fight until `seconds` (default
+	CombatConfig.NPCStance.CalmSeconds) after the group's last contact. Returns how many living members it has. ]]
+function CombatService.ProvokeGroup(groupId: string, seconds: number?): number
+	if typeof(groupId) ~= "string" then
+		return 0
+	end
+	return CombatNPC.ProvokeGroup(npcRecords, groupId, seconds, clock())
+end
+
+-- Lane N: a provoked group calms now; its Passive members walk Home. Returns how many were calmed.
+function CombatService.CalmGroup(groupId: string): number
+	if typeof(groupId) ~= "string" then
+		return 0
+	end
+	return CombatNPC.CalmGroup(npcRecords, groupId)
+end
+
+-- Lane N: the group's living NPCs, as a copy (never call it per frame)
+function CombatService.GroupNPCs(groupId: string): { NPCInfo }
+	local out: { NPCInfo } = {}
+	if typeof(groupId) ~= "string" then
+		return out
+	end
+	for _, rec in pairs(npcRecords) do
+		if rec.Alive and rec.GroupId == groupId and rec.Humanoid.Health > 0 then
+			table.insert(out, {
+				Id = rec.Id,
+				TypeId = rec.TypeId,
+				GroupId = rec.GroupId,
+				Alive = true,
+				Position = rec.Root.Position,
+				Provoked = CombatNPC.IsProvoked(rec),
+				Stance = rec.Stance,
+			})
+		end
+	end
+	return out
+end
+
+-- Lane N: living NPCs against the cap (Special = CombatConfig.SpecialNPCTypes + OverCap; Regular <= 18, Total <= 22)
+function CombatService.NPCCounts(): { Regular: number, Special: number, Total: number }
+	local regular, special = 0, 0
+	for _, rec in pairs(npcRecords) do
+		if rec.Alive then
+			if rec.OverCap or table.find(CombatConfig.SpecialNPCTypes, rec.TypeId) ~= nil then
+				special += 1
+			else
+				regular += 1
+			end
+		end
+	end
+	return { Regular = regular, Special = special, Total = regular + special }
 end
 
 function CombatService.EquipWeapon(player: Player, weaponId: any): (boolean, string?)
@@ -2415,7 +2622,10 @@ function CombatService.Init(deps: { [string]: any })
 
 	task.spawn(function()
 		task.wait(1)
-		CombatService.BootstrapNPCs()
+		-- lane N: false at the Ops cutover (the camps' garrisons come from OpsService, never two on the same posts)
+		if CombatConfig.FieldBootstrap ~= false then
+			CombatService.BootstrapNPCs()
+		end
 		while true do
 			task.wait(CombatConfig.NPCThinkInterval)
 			thinkNPCs()

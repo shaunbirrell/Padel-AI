@@ -490,6 +490,7 @@ local MonetizationConfig = {
 		manual_dropper = true, -- fixed click awards stay $10–25
 		atm_raid = true,
 		plot_oil = true, -- plot pump PendingCash via AccruePendingCash
+		ops = true, -- W3s2 Jobs: fixed job pay (OpsConfig.Rewards), never pass-multiplied
 	},
 	XPMultExemptReasons = {
 		admin = true,

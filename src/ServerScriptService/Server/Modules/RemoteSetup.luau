@@ -102,12 +102,17 @@ local EVENTS = {
 	Constants.RemoteNames.ShortfallChip,
 	-- W2 Combat Core: client -> server drawn/holstered state (WE_GunOut)
 	Constants.RemoteNames.RequestSetDrawn,
+	-- W3 step 2 Phase B Jobs: server -> client pushes only (OpsService fires them while OpsConfig.Enabled; nobody
+	-- listens on the server: there is no Ops OnServerEvent)
+	Constants.RemoteNames.OpsState,
+	Constants.RemoteNames.OpsProgress,
 }
 
 -- v71 money (M2): UnreliableRemoteEvents (server → client cosmetic Fx; ordering and delivery not guaranteed)
 local UNRELIABLE = {
 	Constants.RemoteNames.VehicleWeaponFx,
 	Constants.RemoteNames.WeaponFx, -- W2 Combat Core: bullet tracers / projectile launch + explosion (CombatService)
+	Constants.RemoteNames.OpsPing, -- W3 step 2 Phase B Jobs: a bag carrier's position, every 10 s to non-allies (OpsService)
 }
 local UNRELIABLE_SET: { [string]: boolean } = {}
 for _, name in ipairs(UNRELIABLE) do

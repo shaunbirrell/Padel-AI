@@ -11,10 +11,24 @@
 	- An entry whose def has a Go key carries Go + GoTargets (server-resolved world points, e.g. the bank vault
 	  anchor, else BankRaidConfig.Position) while incomplete; MissionController's GO points the objective marker at
 	  the nearest one. Nothing the client sends is trusted: claims re-check the offer, the progress and Claimed.
+
+	W3 step 2 Phase B, lane M1 (jobs):
+	- MissionService.SetOpsHooks({ GoTargets, ObjectiveLive }) is called once by OpsService.Init while it runs (nil
+	  clears; never yields). With no hook the offer, the GO targets and the pushes are exactly Phase A's.
+	- An Ops objective (MissionConfig.OpsObjectives: Checkpoint, Camp, Uplink, Delivery, Job) is live only while
+	  hooks.ObjectiveLive(type) == true. OpsService reports progress through TrackProgress(player, type, 1), the only
+	  entry point it uses; nothing here trusts the client.
+	- resolveGo asks hooks.GoTargets(key) first; nil ("not mine") falls back to the Phase A resolver. A Required key
+	  keeps its mission on the offer while it is SERVED (the hook answers, even with no Open site right now), so the
+	  day's list never reshuffles when a site cools or the director rotates.
+	- Each entry carries the GoMaxTargets targets nearest to the player's character (server positions); the client
+	  picks the nearest. While a hook is set, a GoRefreshSeconds timer re-sends a player's list only when it changed
+	  (a target list, the offer, or the day), so GO never points at a site that closed long ago.
 ]]
 
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local Types = require(Shared.Types)
@@ -28,6 +42,12 @@ local BankRaidConfig = require(Shared.Configs.BankRaidConfig)
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
 
 local MissionService = {}
+
+-- OpsService's side of the missions (W3 step 2 Phase B). nil from either function means "not mine".
+export type OpsHooks = {
+	GoTargets: (goKey: string) -> { MissionConfig.GoTarget }?, -- every Open site of that Go key (the client picks)
+	ObjectiveLive: (objectiveType: string) -> boolean?, -- does a live job site report this objective type?
+}
 
 local DataService: any = nil
 local EconomyService: any = nil
@@ -116,7 +136,13 @@ end
 
 -- ── GO targets (server side; the client only draws the marker) ─────────────────────────────────────────────────
 local GO_CACHE_SECONDS = 30 -- anchors are stamped once at world build; re-read at most this often
-local goCache: { [string]: { At: number, List: { MissionConfig.GoTarget } } } = {}
+local GO_CACHE_MAX = 64 -- targets kept per key (the payload sends the GoMaxTargets nearest)
+type GoCacheRow = { At: number, List: { MissionConfig.GoTarget }, Served: boolean }
+local goCache: { [string]: GoCacheRow } = {}
+local goRev: { [string]: number } = {} -- bumped when a key's target list changes (the refresher compares these)
+local liveCache: { [string]: { At: number, Live: boolean } } = {}
+local opsHooks: OpsHooks? = nil
+local hookGen = 0
 local anchorsModule: any = nil
 local anchorsTried = false
 
@@ -148,16 +174,45 @@ local function round1(n: number): number
 	return math.floor(n * 10 + 0.5) / 10
 end
 
-local function resolveGo(kind: string): { MissionConfig.GoTarget }
+local function finiteCoord(n: any): boolean
+	return type(n) == "number" and n == n and n > -1e6 and n < 1e6
+end
+
+-- a hook's answer, checked: finite points only, rounded, at most GO_CACHE_MAX
+local function cleanTargets(raw: { any }): { MissionConfig.GoTarget }
+	local out: { MissionConfig.GoTarget } = {}
+	for _, t in ipairs(raw) do
+		if #out >= GO_CACHE_MAX then
+			break
+		end
+		if type(t) == "table" and finiteCoord(t.X) and finiteCoord(t.Y) and finiteCoord(t.Z) then
+			table.insert(out, { X = round1(t.X), Y = round1(t.Y), Z = round1(t.Z) })
+		end
+	end
+	return out
+end
+
+--[[ The targets of a Go key and whether the key is SERVED. OpsService's hook answers first: a table (even an empty
+	one while no site of that key is Open) serves the key; nil means "not mine" and the Phase A resolver runs. ]]
+local function resolveGo(kind: string): ({ MissionConfig.GoTarget }, boolean)
 	local gd = MissionConfig.Go[kind]
 	if gd == nil then
-		return {}
+		return {}, false
+	end
+	local hooks = opsHooks
+	if hooks ~= nil and type(hooks.GoTargets) == "function" then
+		local ok, res = pcall(hooks.GoTargets, kind)
+		if not ok then
+			warn("[MissionService] Ops GoTargets(" .. kind .. ") failed: " .. tostring(res))
+		elseif type(res) == "table" then
+			return cleanTargets(res), true
+		end
 	end
 	local p: Vector3? = nil
 	if kind == "Bank" then
-		-- Phase A: the bank job is BankRaidService's (Phase B lane M1 points this at OpsService's bank site)
+		-- no Ops bank site (yet): the bank job is BankRaidService's until the cutover
 		if BankRaidConfig.Enabled == false then
-			return {}
+			return {}, false
 		end
 		if gd.Anchor then
 			p = anchorPosition(gd.Anchor)
@@ -169,20 +224,116 @@ local function resolveGo(kind: string): { MissionConfig.GoTarget }
 		p = anchorPosition(gd.Anchor)
 	end
 	if p == nil then
-		return {}
+		return {}, false
 	end
-	return { { X = round1(p.X), Y = round1(p.Y), Z = round1(p.Z) } }
+	return { { X = round1(p.X), Y = round1(p.Y), Z = round1(p.Z) } }, true
 end
 
-local function goTargets(kind: string): { MissionConfig.GoTarget }
+local function sameTargets(a: { MissionConfig.GoTarget }, b: { MissionConfig.GoTarget }): boolean
+	if #a ~= #b then
+		return false
+	end
+	for i, t in ipairs(a) do
+		local u = b[i]
+		if t.X ~= u.X or t.Y ~= u.Y or t.Z ~= u.Z then
+			return false
+		end
+	end
+	return true
+end
+
+-- (targets, served) for a Go key, re-resolved at most every GO_CACHE_SECONDS
+local function goLookup(kind: string): GoCacheRow
 	local now = os.clock()
 	local c = goCache[kind]
 	if c and now - c.At < GO_CACHE_SECONDS then
-		return c.List
+		return c
 	end
-	local list = resolveGo(kind)
-	goCache[kind] = { At = now, List = list }
-	return list
+	local list, served = resolveGo(kind)
+	if c == nil or c.Served ~= served or not sameTargets(c.List, list) then
+		goRev[kind] = (goRev[kind] or 0) + 1
+	end
+	local row: GoCacheRow = { At = now, List = list, Served = served }
+	goCache[kind] = row
+	return row
+end
+
+local function goTargets(kind: string): { MissionConfig.GoTarget }
+	return goLookup(kind).List
+end
+
+-- the player's character root on the SERVER (nil while they have none); never waited for
+local function rootPosition(player: Player): Vector3?
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if root and root:IsA("BasePart") then
+		return root.Position
+	end
+	return nil
+end
+
+--[[ At most GoMaxTargets of a key's targets for this player: the nearest to their character (the client re-picks).
+	The second value names the chosen set ("" when nothing was cut): it goes into the refresh signature, so a player
+	who walks or drives across the map is re-sent the targets now nearest (at most once per refresh). ]]
+local function nearestTargets(list: { MissionConfig.GoTarget }, player: Player): ({ MissionConfig.GoTarget }, string)
+	local max = math.max(1, math.floor(tonumber(MissionConfig.GoMaxTargets) or 16))
+	if #list <= max then
+		return list, ""
+	end
+	local idx: { number } = table.create(#list)
+	for i = 1, #list do
+		idx[i] = i
+	end
+	local at = rootPosition(player)
+	if at then
+		local ax, az = at.X, at.Z
+		table.sort(idx, function(i: number, j: number): boolean
+			local a, b = list[i], list[j]
+			local da, db = (a.X - ax) ^ 2 + (a.Z - az) ^ 2, (b.X - ax) ^ 2 + (b.Z - az) ^ 2
+			if da ~= db then
+				return da < db
+			end
+			return i < j
+		end)
+	end
+	local out: { MissionConfig.GoTarget } = table.create(max)
+	local chosen: { number } = table.create(max)
+	for k = 1, max do
+		out[k] = list[idx[k]]
+		chosen[k] = idx[k]
+	end
+	table.sort(chosen)
+	return out, "~" .. table.concat(chosen, ".")
+end
+
+-- an Ops objective is live only while OpsService's hook says so (cached like the GO targets)
+local function opsObjectiveLive(objectiveType: string): boolean
+	local hooks = opsHooks
+	if hooks == nil or type(hooks.ObjectiveLive) ~= "function" then
+		return false
+	end
+	local now = os.clock()
+	local c = liveCache[objectiveType]
+	if c and now - c.At < GO_CACHE_SECONDS then
+		return c.Live
+	end
+	local ok, res = pcall(hooks.ObjectiveLive, objectiveType)
+	if not ok then
+		warn("[MissionService] Ops ObjectiveLive(" .. objectiveType .. ") failed: " .. tostring(res))
+	end
+	local live = ok and res == true
+	liveCache[objectiveType] = { At = now, Live = live }
+	return live
+end
+
+local function objectiveLive(objectiveType: any): boolean
+	if type(objectiveType) ~= "string" then
+		return false
+	end
+	if MissionConfig.OpsObjectives[objectiveType] == true then
+		return opsObjectiveLive(objectiveType)
+	end
+	return MissionConfig.LiveObjectives[objectiveType] == true
 end
 
 -- ── the daily offer ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -267,15 +418,15 @@ local function dayIndexOf(dayKey: number): number
 	return era * 146097 + doe - 719468
 end
 
--- can this def be offered right now (its objective is tracked, and a Required Go has a target)?
+-- can this def be offered right now (its objective is tracked, and a Required Go is served)?
 local function isLive(def: any): boolean
-	if MissionConfig.LiveObjectives[def.ObjectiveType] ~= true then
+	if not objectiveLive(def.ObjectiveType) then
 		return false
 	end
 	local go = def.Go
 	if type(go) == "string" then
 		local gd = MissionConfig.Go[go]
-		if gd and gd.Required == true and #goTargets(go) == 0 then
+		if gd and gd.Required == true and not goLookup(go).Served then
 			return false
 		end
 	end
@@ -421,15 +572,14 @@ local function activeDailyIds(player: Player, profile: Types.PlayerProfile): { s
 	return offerFor(player.UserId, profile)
 end
 
-function MissionService.Push(player: Player)
-	if not DataService or not RemoteSetup then
-		return
-	end
-	local profile = DataService.GetProfile(player)
-	if not profile then
-		return
-	end
+-- what each player was last sent (weak keys: a player who left is dropped with their Player object)
+local lastSig: { [Player]: string } = setmetatable({}, { __mode = "k" }) :: any
+
+--[[ The player's mission state and a short signature of everything in it that can change without a TrackProgress
+	(the offer, the day, each Go key's target revision). The refresher re-sends only when the signature changes. ]]
+local function buildPayload(player: Player, profile: Types.PlayerProfile): (Types.MissionStatePayload, string)
 	ensureDaily(profile)
+	local sig: { string } = { tostring(profile.DailyMissions.DayKey) }
 
 	local dailyPayload: { Types.MissionEntryPayload } = {}
 	for _, id in ipairs(activeDailyIds(player, profile)) do
@@ -453,14 +603,19 @@ function MissionService.Push(player: Player)
 			}
 			-- W3 step 2: GO while incomplete. Extra fields ride on the entry without a Types edit (Types is in flight)
 			local go = def.Go
+			local goBit = ""
 			if type(go) == "string" and not complete and not claimed and MissionConfig.Go[go] ~= nil then
 				local targets = goTargets(go)
+				goBit = go .. "@" .. tostring(goRev[go] or 0)
 				if #targets > 0 then
 					local e: any = entry
 					e.Go = go
-					e.GoTargets = targets
+					local near, setKey = nearestTargets(targets, player)
+					e.GoTargets = near
+					goBit ..= setKey
 				end
 			end
+			table.insert(sig, id .. ":" .. tostring(entry.Progress) .. ":" .. (if claimed then "C" elseif complete then "D" else "") .. goBit)
 			table.insert(dailyPayload, entry)
 		end
 	end
@@ -478,9 +633,79 @@ function MissionService.Push(player: Player)
 			AlreadyClaimedToday = already,
 		},
 	}
+	table.insert(sig, if already then "L1" else "L0")
+	return payload, table.concat(sig, "|")
+end
 
+local function send(player: Player, payload: Types.MissionStatePayload, sig: string)
+	lastSig[player] = sig
 	local remote = RemoteSetup.Get(Constants.RemoteNames.MissionStateUpdate) :: RemoteEvent
 	remote:FireClient(player, payload)
+end
+
+function MissionService.Push(player: Player)
+	if not DataService or not RemoteSetup then
+		return
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local payload, sig = buildPayload(player, profile)
+	send(player, payload, sig)
+end
+
+-- ── Ops hooks (W3 step 2 Phase B) ─────────────────────────────────────────────────────────────────────────────────
+-- re-send a player's list only when it changed (a Go key's targets, the offer or the day); never per frame
+local function refreshPlayer(player: Player)
+	if lastSig[player] == nil or not DataService or not RemoteSetup then
+		return -- never pushed yet: the profile-load push comes first
+	end
+	local profile = DataService.GetProfile(player)
+	if not profile then
+		return
+	end
+	local payload, sig = buildPayload(player, profile)
+	if sig ~= lastSig[player] then
+		send(player, payload, sig)
+	end
+end
+
+local function scheduleRefresh(gen: number)
+	local period = tonumber(MissionConfig.GoRefreshSeconds) or 0
+	if period <= 0 then
+		return
+	end
+	task.delay(math.max(5, period), function()
+		if gen ~= hookGen or opsHooks == nil then
+			return -- the hooks were replaced or cleared: that call runs its own timer
+		end
+		for _, player in ipairs(Players:GetPlayers()) do
+			local ok, err = pcall(function(): any
+				refreshPlayer(player)
+				return nil
+			end)
+			if not ok then
+				warn("[MissionService] GO refresh failed: " .. tostring(err))
+			end
+		end
+		scheduleRefresh(gen)
+	end)
+end
+
+--[[ OpsService.Init calls this once while it runs; nil clears it. Never yields. Hook answers are cached like the GO
+	targets (GO_CACHE_SECONDS) and a hook that errors counts as "not mine". ]]
+function MissionService.SetOpsHooks(hooks: OpsHooks?)
+	if hooks ~= nil and type(hooks) ~= "table" then
+		return
+	end
+	opsHooks = hooks
+	hookGen += 1
+	table.clear(goCache)
+	table.clear(liveCache)
+	if hooks ~= nil then
+		scheduleRefresh(hookGen)
+	end
 end
 
 function MissionService.GrantAchievement(player: Player, achievementId: string): boolean

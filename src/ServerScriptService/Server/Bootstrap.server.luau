@@ -62,6 +62,7 @@ local NationColorService = safeRequire("NationColorService", Services.NationColo
 local CaptureStipendService = safeRequire("CaptureStipendService", Services.CaptureStipendService)
 local SupplyDropService = safeRequire("SupplyDropService", Services.SupplyDropService)
 local BankRaidService = safeRequire("BankRaidService", Services.BankRaidService)
+local OpsService = safeRequire("OpsService", Services.OpsService) -- W3s2 Phase B Jobs (OpsConfig.Enabled; ships off)
 local SpinnerService = safeRequire("SpinnerService", Services.SpinnerService)
 local UpgradePadService = safeRequire("UpgradePadService", Services.UpgradePadService)
 local PremiumPadService = safeRequire("PremiumPadService", Services.PremiumPadService)
@@ -107,6 +108,7 @@ local deps: { [string]: any } = {
 	CaptureStipendService = CaptureStipendService,
 	SupplyDropService = SupplyDropService,
 	BankRaidService = BankRaidService,
+	OpsService = OpsService,
 	SpinnerService = SpinnerService,
 	UpgradePadService = UpgradePadService,
 	PremiumPadService = PremiumPadService,
@@ -543,6 +545,7 @@ safeInit("BattlePassService", BattlePassService, deps)
 safeInit("SoldierService", SoldierService, deps)
 safeInit("BusinessService", BusinessService, deps) -- v72: after SoldierService (GetCap / OnArmyChanged); no-op while the guide is off
 safeInit("SquadOrdersService", SquadOrdersService, deps)
+safeInit("OpsService", OpsService, deps) -- W3s2 Jobs: after Data / Combat / Mission / Clan / SquadOrders; off while OpsConfig.Enabled = false
 safeInit("SeasonService", SeasonService, deps)
 safeInit("ClanWarService", ClanWarService, deps)
 safeInit("CodesService", CodesService, deps)

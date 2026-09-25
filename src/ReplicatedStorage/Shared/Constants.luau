@@ -135,6 +135,11 @@ Constants.RemoteNames = {
 	WeaponFx = "WeaponFx",
 	RequestSetDrawn = "RequestSetDrawn",
 	GetPlayerState = "GetPlayerState",
+	-- W3 step 2 Phase B, Jobs ("Ops"; OpsConfig.Enabled gates every sender). Server -> client only: there is NO Ops
+	-- client -> server remote (every job action is a server ProximityPrompt). Payload types: OpsConfig exports.
+	OpsState = "OpsState", -- RemoteEvent, per player: OpsStatePayload (Full on join + every 60 s, deltas <= 2 Hz)
+	OpsProgress = "OpsProgress", -- RemoteEvent, per player: OpsProgressPayload (4 Hz, only inside a job zone)
+	OpsPing = "OpsPing", -- UnreliableRemoteEvent (RemoteSetup UNRELIABLE list): OpsPingPayload, every 10 s per carrier
 }
 
 Constants.DataStoreName = "WarEmpire_PlayerData_v2" -- v55: intentional bump; fresh CreateDefault + StartingCash (kills stuck $0 v1 saves)

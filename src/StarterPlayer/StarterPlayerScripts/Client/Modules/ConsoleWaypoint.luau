@@ -270,6 +270,7 @@ end
 	nil falls back to the server-stamped position). Returns false when neither the console part nor a stamped position
 	is known yet (the caller shows ConsoleBuyConfig.Text.NoConsole). ]]
 function ConsoleWaypoint.Show(structureId: string, plotId: number?): boolean
+	pcall(function() local req: any = require; req(script.Parent.ObjectiveMarker).Clear() end) -- W3s2 Phase B: the latest GO wins (one guide line)
 	ConsoleWaypoint.Clear()
 	current, currentPlot, startedAt = structureId, plotId, os.clock()
 	if not resolvable(structureId) then
@@ -285,6 +286,7 @@ end
 --[[ v72 guide: the same line to the local player's OWN ATM ("Collect $N at your ATM"). plotId: the player's plot
 	(nil: only the server-stamped WE_AtmPos is used). false when neither the ATM part nor WE_AtmPos is known. ]]
 function ConsoleWaypoint.ShowAtm(plotId: number?): boolean
+	pcall(function() local req: any = require; req(script.Parent.ObjectiveMarker).Clear() end) -- W3s2 Phase B: the latest GO wins (one guide line)
 	ConsoleWaypoint.Clear()
 	guidingAtm = true
 	local key = ConsoleWaypoint.AtmKey

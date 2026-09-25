@@ -236,6 +236,81 @@ local function ensureNationFields(profile: any)
 	profile.NationPrompts = math.min(nonNegInt(profile.NationPrompts), MAX_NATION_PROMPTS)
 end
 
+-- W3 step 2 Phase B Jobs (OpsService, lane O) ─────────────────────────────────────────────────────────────
+-- profile.Ops, accessed as (profile :: any).Ops like Raid (no Types edit, no DataVersion bump). Default-filled and
+-- sanitised on every load (idempotent). Limits from OpsConfig.Profile (loaded in a pcall like NationConfig above: a
+-- broken config never blocks a load; the fallbacks are the same numbers).
+--   Cd       { [siteId] = os.time() until }: string "<POI>.<Site>" keys, finite numbers only, expired dropped,
+--            at most now + MaxCdAhead, at most MaxCdKeys keys (the latest-ending kept)
+--   DayKey   whole number >= 0 (the UTC day Runs counts)
+--   Runs     { [payRow] = whole number >= 0 } (string keys, at most MaxCdKeys)
+--   Seen     bit flags 0 .. SeenMax
+--   Total, BestBag  whole numbers >= 0
+local opsCfgOk, opsCfg = pcall(function()
+	return require(Shared.Configs.OpsConfig) :: any
+end)
+local OPS_PROFILE: any = if opsCfgOk and typeof(opsCfg) == "table" and typeof(opsCfg.Profile) == "table"
+	then opsCfg.Profile
+	else { MaxCdKeys = 32, MaxCdAhead = 86400, SeenMax = 1048576 }
+
+local function ensureOpsFields(profile: any, nowUnix: number)
+	local ops = profile.Ops
+	if typeof(ops) ~= "table" then
+		ops = {}
+		profile.Ops = ops
+	end
+	local maxKeys = math.max(1, nonNegInt(OPS_PROFILE.MaxCdKeys))
+	local cd: { [string]: number } = {}
+	local kept: { { K: string, V: number } } = {}
+	if typeof(ops.Cd) == "table" then
+		local cap = nowUnix + nonNegInt(OPS_PROFILE.MaxCdAhead)
+		for k, v in pairs(ops.Cd) do
+			local n = tonumber(v)
+			if typeof(k) == "string" and string.match(k, "^[%w_]+%.[%w_]+$") ~= nil and typeof(v) == "number"
+				and n ~= nil and n == n and n > nowUnix and n < math.huge
+			then
+				table.insert(kept, { K = k, V = math.floor(math.min(n, cap)) })
+			end
+		end
+	end
+	table.sort(kept, function(a, b)
+		if a.V ~= b.V then
+			return a.V > b.V
+		end
+		return a.K < b.K
+	end)
+	for i, e in ipairs(kept) do
+		if i > maxKeys then
+			break
+		end
+		cd[e.K] = e.V
+	end
+	ops.Cd = cd
+	ops.DayKey = nonNegInt(ops.DayKey)
+	local runs: { [string]: number } = {}
+	local nRuns = 0
+	if typeof(ops.Runs) == "table" then
+		local keys: { string } = {}
+		for k in pairs(ops.Runs) do
+			if typeof(k) == "string" and #k <= 32 then
+				table.insert(keys, k)
+			end
+		end
+		table.sort(keys)
+		for _, k in ipairs(keys) do
+			if nRuns >= maxKeys then
+				break
+			end
+			runs[k] = nonNegInt(ops.Runs[k])
+			nRuns += 1
+		end
+	end
+	ops.Runs = runs
+	ops.Seen = math.min(nonNegInt(ops.Seen), nonNegInt(OPS_PROFILE.SeenMax))
+	ops.Total = nonNegInt(ops.Total)
+	ops.BestBag = nonNegInt(ops.BestBag)
+end
+
 function ProfileSchema.CreateDefault(): PlayerProfile
 	local now = os.time()
 	return {
@@ -310,6 +385,8 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		-- v69: Research Lab upgrades (UpgradeId → level) and raid / missile-strike timers (os.time seconds)
 		Research = {},
 		Raid = { ShieldUntil = 0, StrikeCooldownUntil = 0, DefensesDownUntil = 0 },
+		-- W3 step 2 Phase B Jobs: see ensureOpsFields (Migrate fills the same defaults into older saves)
+		Ops = { Cd = {}, DayKey = 0, Runs = {}, Seen = 0, Total = 0, BestBag = 0 },
 		-- v71 money (M2): see ensureMoneyFields (Migrate fills the same defaults into older saves)
 		Nukes = 0,
 		TacticalNukes = 0,
@@ -590,6 +667,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	ensureFeatureFields(profile, rawTutorialOrder, rawShieldDone)
 	-- Nations: chosen country + change timers (idempotent; NationColorId untouched)
 	ensureNationFields(profile)
+	-- W3 step 2 Phase B Jobs: cooldowns / today's runs / seen tips (idempotent; no version bump)
+	ensureOpsFields(profile, os.time())
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

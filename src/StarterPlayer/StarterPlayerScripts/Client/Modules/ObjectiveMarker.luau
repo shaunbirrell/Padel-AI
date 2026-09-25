@@ -17,6 +17,16 @@
 	  ObjectiveMarker.OnTop() -> boolean      an objective marker is drawing AlwaysOnTop right now (this one, or the
 	                                          ConsoleWaypoint line it yields to): TerritoryController's contested
 	                                          diamond yields to it, so only ONE AlwaysOnTop label is on screen
+	Additive (Phase B lane U; OpsController follows a job with them, the frozen three are unchanged):
+	  ObjectiveMarker.ShowWith(target, opts?) Show with this target's own arrival radius / timeout
+	                                          (opts = { ArriveStuds?, TimeoutSeconds? }: OpsConfig.Ui for jobs);
+	                                          Show(target) = ShowWith(target, nil) = the OBJ numbers below
+	  ObjectiveMarker.Move(x, y, z) -> boolean  the current target moved (a carried bag, a rotating cache): same label,
+	                                          same timeout, the line and marker follow without a rebuild; Revision()
+	                                          bumps. false when there is no target or the point is not finite
+	  ObjectiveMarker.Ended() -> string?      how the last target ended: "Arrived" | "Timeout" | "Cleared" (Clear(),
+	                                          a ConsoleWaypoint GO); nil while one is set (a Show over a Show just
+	                                          replaces it: Revision() tells the old owner)
 
 	What it draws (client only, nothing replicates, 0 parts): an invisible Attachment in Workspace.Terrain at the
 	target (+ MarkerLift), a thin Beam from the local character to it (the "GO line"), and ONE BillboardGui on it:
@@ -26,8 +36,9 @@
 
 	Yields to ConsoleWaypoint: while ConsoleWaypoint.Current() ~= nil (a Base-panel GO or the tutorial's guide line
 	to your own console / ATM) the line and marker are hidden (Enabled = false) and come back when that line ends.
-	ConsoleWaypoint is read only (Current()) and required lazily, so Phase B's two ConsoleWaypoint lines that call
-	ObjectiveMarker.Clear() cannot make a require cycle.
+	ConsoleWaypoint is required lazily, so Phase B's two ConsoleWaypoint lines that call ObjectiveMarker.Clear() cannot
+	make a require cycle. Phase B (lane U): the latest GO wins both ways — a console GO clears this marker (those two
+	lines) and a Show / ShowWith ends a running console line (ConsoleWaypoint.Clear()), so the yield is only a guard.
 
 	Cost: one Heartbeat connection only while a target is set; the work inside runs at <= RefreshHz (<= 10 Hz, the
 	CLAUDE.md UI refresh cap): arrival / timeout / yield checks and a distance text rewritten only when the shown
@@ -48,6 +59,7 @@ local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
 
 export type Target = { Short: string, X: number, Y: number, Z: number }
+export type Opts = { ArriveStuds: number?, TimeoutSeconds: number? }
 
 local ObjectiveMarker = {}
 
@@ -68,6 +80,9 @@ local player = Players.LocalPlayer
 local current: Target? = nil
 local warnedBad = false
 local revision = 0
+local arriveR = OBJ.ArriveRadius -- this target's (ShowWith opts, else OBJ)
+local timeoutS = OBJ.TimeoutSeconds
+local ended: string? = nil -- Ended()
 local startedAt = 0
 local lastAttemptAt = -math.huge
 local stepConn: RBXScriptConnection? = nil
@@ -86,7 +101,7 @@ local distLabel: TextLabel? = nil
 -- ConsoleWaypoint (read only, lazy: see the header)
 ---------------------------------------------------------------------------------------------------------------
 
-type ConsoleWaypointApi = { Current: () -> string? }
+type ConsoleWaypointApi = { Current: () -> string?, Clear: (() -> ())? }
 local ConsoleWaypoint: ConsoleWaypointApi? = nil
 local cwTried = false
 
@@ -107,6 +122,24 @@ local function consoleGuiding(): boolean
 		return false
 	end
 	return ConsoleWaypoint.Current() ~= nil
+end
+
+-- Phase B: a new objective ends a running console line (the latest GO wins; the console GO clears us likewise)
+local function endConsoleLine()
+	if not consoleGuiding() then
+		return
+	end
+	local cw = ConsoleWaypoint
+	local clear = cw and cw.Clear
+	if clear then
+		local ok, err = pcall(function(): any
+			clear()
+			return nil
+		end)
+		if not ok then
+			warn("[ObjectiveMarker] ConsoleWaypoint.Clear failed:", err)
+		end
+	end
 end
 
 ---------------------------------------------------------------------------------------------------------------
@@ -268,12 +301,13 @@ local function stop()
 	end
 end
 
-local function clearNow()
+local function clearNow(reason: string)
 	stop()
 	destroyVisuals()
 	if current ~= nil then
 		current = nil
 		revision += 1
+		ended = reason
 	end
 	yielded = false
 end
@@ -286,12 +320,12 @@ local function step(dt: number)
 	stepAcc = 0
 	local c = current
 	if c == nil then
-		clearNow()
+		clearNow("Cleared")
 		return
 	end
 	local now = os.clock()
-	if now - startedAt > OBJ.TimeoutSeconds then
-		clearNow()
+	if now - startedAt > timeoutS then
+		clearNow("Timeout")
 		return
 	end
 	local hrp = rootPart()
@@ -299,8 +333,8 @@ local function step(dt: number)
 	if hrp then
 		local p = hrp.Position
 		local dx, dy, dz = p.X - c.X, p.Y - c.Y, p.Z - c.Z
-		if dx * dx + dy * dy + dz * dz <= OBJ.ArriveRadius * OBJ.ArriveRadius then
-			clearNow()
+		if dx * dx + dy * dy + dz * dz <= arriveR * arriveR then
+			clearNow("Arrived")
 			return
 		end
 	end
@@ -339,7 +373,7 @@ end
 -- API
 ---------------------------------------------------------------------------------------------------------------
 
-function ObjectiveMarker.Show(target: Target)
+function ObjectiveMarker.ShowWith(target: Target, opts: Opts?)
 	local t: any = target
 	if type(t) ~= "table" or type(t.Short) ~= "string" or t.Short == "" or not (finite(t.X) and finite(t.Y) and finite(t.Z)) then
 		if not warnedBad then
@@ -349,8 +383,13 @@ function ObjectiveMarker.Show(target: Target)
 		return
 	end
 	stop()
+	endConsoleLine()
+	local o: any = opts
+	arriveR = if type(o) == "table" and finite(o.ArriveStuds) then math.clamp(o.ArriveStuds, 4, 200) else OBJ.ArriveRadius
+	timeoutS = if type(o) == "table" and finite(o.TimeoutSeconds) then math.clamp(o.TimeoutSeconds, 10, 3600) else OBJ.TimeoutSeconds
 	current = { Short = t.Short, X = t.X, Y = t.Y, Z = t.Z }
 	revision += 1
+	ended = nil
 	startedAt = os.clock()
 	yielded = consoleGuiding()
 	build() -- the line starts at once (or after a respawn: step() retries)
@@ -358,8 +397,37 @@ function ObjectiveMarker.Show(target: Target)
 	stepConn = RunService.Heartbeat:Connect(step)
 end
 
+function ObjectiveMarker.Show(target: Target)
+	ObjectiveMarker.ShowWith(target, nil)
+end
+
 function ObjectiveMarker.Clear()
-	clearNow()
+	clearNow("Cleared")
+end
+
+function ObjectiveMarker.Move(x: number, y: number, z: number): boolean
+	local c = current
+	if c == nil or not (finite(x) and finite(y) and finite(z)) then
+		return false
+	end
+	if c.X == x and c.Y == y and c.Z == z then
+		return true
+	end
+	c.X, c.Y, c.Z = x, y, z
+	revision += 1
+	local a = anchor
+	if a then
+		a.Position = Vector3.new(x, y + OBJ.MarkerLift, z)
+	end
+	stepKey = -1 -- the distance text is rewritten on the next step
+	return true
+end
+
+function ObjectiveMarker.Ended(): string?
+	if current ~= nil then
+		return nil
+	end
+	return ended
 end
 
 function ObjectiveMarker.Current(): Target?
