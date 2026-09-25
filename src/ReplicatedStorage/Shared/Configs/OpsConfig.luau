@@ -240,7 +240,7 @@ local OpsConfig = {
 		PickupDist = 12,
 		PickerMult = 0.6, -- a picker who is not the grabber gets this share (fresh deadline)
 		MaxHandoffs = 3, -- the 4th drop destroys it
-		MaxBagsInWorld = 4, -- carried + dropped, all sites (the 512-circle budget, spec §3)
+		MaxBagsInWorld = 3, -- carried + dropped, all sites: busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500 (cap 500)
 		NoviceSeconds = 600, -- carriers younger than this (FirstJoinUnix; NoviceShieldDone once it lands) are never pinged
 		DeliveryPad = 12, -- delivered inside the OWN plot square: |dx|, |dz| <= PlotSize / 2 + this
 		HomeTowardGate = 150, -- OpsStatePayload.Home: plot centre moved this far toward the front gate
@@ -488,8 +488,11 @@ table.insert(Sites, {
 	Wake = "Bank",
 	ProvokeRadius = 8, -- walking up to read the sign or to breach does not start a fight
 	Stages = {
-		{ Id = "Breach", At = "Door", Prompt = "Breach", Hold = 3, Dist = 10 },
-		{ Id = "Crack", At = "Vault", Seconds = 45, R = 8 },
+		-- H2 bank balance (cutover prep, headless stand-in): hold 3 -> 7 s and crack ring r 8 -> 6 took a solo raider using
+		-- cover from 48 % to ~30 %; 5-unit squads ~75 %, 3-unit squads ~50-65 %, and squad success relies on squad hits not
+		-- provoking the guards. H2 is NOT cleared: Jobs stay OFF (ASSUMPTIONS CP-9)
+		{ Id = "Breach", At = "Door", Prompt = "Breach", Hold = 7, Dist = 10 },
+		{ Id = "Crack", At = "Vault", Seconds = 45, R = 6 },
 		{ Id = "Grab", At = "Loot", Prompt = "GrabCash", Hold = 2, Dist = 9, MaxBags = 4 },
 		{ Id = "Carry" },
 	},

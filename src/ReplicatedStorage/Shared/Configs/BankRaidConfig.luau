@@ -4,8 +4,8 @@
 
 	W3 step 2, lane F ("bank findable", spec w3s2 §6 Phase A):
 	- Guards stand on FIXED posts, never a ring round the vault (the ring put 2 of 5 inside the building).
-	  BankRaidService reads the geometry's "Town.Bank" npc anchors (roles G1..Gn, WE_ActivityAnchor) and falls back
-	  to GuardPosts below while the bank has no anchors (today's building, until lane BK's hall lands).
+	  BankRaidService reads the geometry's "Town.Bank" npc anchors (roles G1..Gn, WE_ActivityAnchor; MapSetup stamps
+	  them on BankPlaza with the walk-in hall, lane BK) and falls back to GuardPosts below if they are missing.
 	- Only a raider ON FOOT holds the vault (seated → "LEAVE VEHICLE" on the HUD, no progress, no pay).
 	- The cooldown is saved as profile.Raid.BankCooldownUntil (os.time seconds; sanitised by BankRaidService).
 	- The vault label reads "Empire Bank" + one state line: OPEN · rob the vault / RAID ON (everyone) and
@@ -39,14 +39,15 @@ local BankRaidConfig = {
 	GuardRolePattern = "^G%d+$",
 	-- HumanoidRootPart height above the standing surface (R6: 2-stud legs + half the 2-stud torso)
 	GuardRootLift = 3,
-	-- P0 posts (spec w3s2 §6 lane F): front ±8 at z +14, sides ±16 at z +4, one at z +22 from Position; all clear of
-	-- today's building, columns and vault pad in the HEAD dump. Used only while no "Town.Bank" G anchors exist.
+	-- Fallback posts (lane BK): the same five posts as the Town.Bank G1..G5 anchors MapSetup stamps on BankPlaza (G1 / G2
+	-- behind the planters, G3 / G4 beside the columns, G5 inside the hall by the vault door). Used only while no
+	-- "Town.Bank" G anchors exist.
 	GuardPosts = {
-		{ X = 212, Y = 1.6, Z = -206, Yaw = 180 },
-		{ X = 228, Y = 1.6, Z = -206, Yaw = 180 },
-		{ X = 204, Y = 1.6, Z = -216, Yaw = 180 },
-		{ X = 236, Y = 1.6, Z = -216, Yaw = 180 },
-		{ X = 220, Y = 0.5, Z = -198, Yaw = 180 },
+		{ X = 206, Y = 1.6, Z = -209.5, Yaw = 180 },
+		{ X = 234, Y = 1.6, Z = -209.5, Yaw = 180 },
+		{ X = 210.5, Y = 1.6, Z = -210.5, Yaw = 180 },
+		{ X = 229.5, Y = 1.6, Z = -210.5, Yaw = 180 },
+		{ X = 227, Y = 1.6, Z = -231, Yaw = 180 },
 	} :: { GuardPost },
 	NotifyOnRaid = true,
 	-- v71: the hold freezes only while the raider was hit within this many seconds (was: any health below 95 %)

@@ -325,6 +325,14 @@ function OpsSites.SetDoor(rt: any, open: boolean)
 	if door.CanCollide == open then
 		door.CanCollide = not open
 	end
+	-- the bank gate slides (MapSetup stores both positions); a HeistGate without the attributes only toggles
+	local cf = door:GetAttribute(if open then "WE_OpenCFrame" else "WE_ClosedCFrame")
+	if typeof(cf) == "CFrame" and door.CFrame ~= cf then
+		door.CFrame = cf
+	end
+	if door.CanQuery == open then
+		door.CanQuery = not open -- a closed gate stops shots; a raised one never blocks a raycast
+	end
 end
 
 -- the bank's StateBanner (lane BK), found once from the Door anchor's host folder; nil until BK lands
