@@ -562,6 +562,29 @@ local VisualAssetConfig = {
 		VanWreck = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Veh_Car_Van_01", Color = Color3.fromRGB(45, 42, 40), Material = Enum.Material.CorrodedMetal, ClearTexture = true, Note = "Synty City: burnt van (5,665 tris) — no caller" } :: AssetRef,
 		Pebbles = { ModelAssetId = 0, ChildName = "Meshes/PolygonNature_Terrain_Rubble_Pebbles_01", Color = Color3.fromRGB(150, 135, 110), Material = Enum.Material.Ground, ClearTexture = true, Note = "Synty Nature: pebbles (168 tris) — no caller" } :: AssetRef,
 		Skip = { ModelAssetId = 0, ChildName = "Meshes/PolygonCity_Props_SM_Prop_Skip_02", Color = Color3.fromRGB(70, 85, 55), Material = Enum.Material.Metal, ClearTexture = true, Note = "Synty City: skip (1,352 tris) — no caller" } :: AssetRef,
+		--[[ Crossroads Town buildings (owner feedback 2026-09-27: "need to be actual Roblox buildings"). WorldKits
+			TownHouse stacks these pieces per WorldConfig.Kits.TownHouse.Styles, at scale 1. Same Roblox-made pack as
+			CarWreck (6933556508, creator Roblox, User 1): 0 new load attempts. The texture atlas STAYS (no ClearTexture:
+			it draws the windows, brick and stone); these pieces sample none of the atlas's text regions (UV check,
+			ownervis assets.md §2.3). Every piece is one MeshPart with no glass child (the loader drops children). ]]
+		TownShop = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_06", Note = "Synty City: one-storey shop, rolled shutter (264 tris)" } :: AssetRef,
+		TownAptDoorA = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Door_01", Note = "Synty City: brick ground floor with a stoop door (629 tris)" } :: AssetRef,
+		TownAptDoorB = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Door_02", Note = "Synty City: brick ground floor, plain door (616 tris)" } :: AssetRef,
+		TownAptFloorA = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_02", Note = "Synty City: brick upper floor, arched windows (1,032 tris)" } :: AssetRef,
+		TownAptFloorB = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_03", Note = "Synty City: brick upper floor, bay window (500 tris)" } :: AssetRef,
+		TownAptStack = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Stack_01", Note = "Synty City: three brick floors in one piece (1,360 tris)" } :: AssetRef,
+		TownAptRoofA = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Roof_01", Note = "Synty City: flat roof (140 tris)" } :: AssetRef,
+		TownAptRoofB = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Apartment_Roof_02", Note = "Synty City: cornice roof (164 tris)" } :: AssetRef,
+		TownOfficeBase = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_OfficeOld_Small_Base_01", Note = "Synty City: sandstone hall, 2 storeys (4,756 tris)" } :: AssetRef,
+		TownOfficeTop = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_OfficeOld_Small_Roof_01", Note = "Synty City: sandstone hall top storey (1,882 tris)" } :: AssetRef,
+		-- Training Yard (owner feedback 2026-09-27; TrainingYardBuilder, TrainingYardConfig): pieces of the live Dungeon
+		-- pack (0 new load attempts), fitted by the builder, the pack texture KEPT (one shared atlas: planks, metal bands,
+		-- rungs; no text or emblem on these pieces, ownervis/assets.md §3.4). ClearTexture = true + Color turns any of them
+		-- into a flat colour (no atlas on phones). The hurdles reuse the live Log key above.
+		YardCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04", Note = "Synty Dungeon: wooden supply crate (598 tris), textured; training-yard crate stack" } :: AssetRef,
+		YardAmmoCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Metal_01", Note = "Synty Dungeon: metal-bound crate (662 tris), textured; training-yard ammo crate" } :: AssetRef,
+		YardRack = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_WeaponRack_01", Note = "Synty Dungeon: empty wooden rack (213 tris, no weapons modelled), textured; training-yard rifle rack (mesh only)" } :: AssetRef,
+		YardLadder = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Ladder_01", Note = "Synty Dungeon: ladder (268 tris), textured; leans on the training-yard jump wall (mesh only)" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- HQ / Barracks interior dress keys (hosts in StructureKitBuilder)

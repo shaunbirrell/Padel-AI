@@ -66,7 +66,12 @@
 	             through a SpecialMesh (net 0; a separate collider would add a part)
 	  "collider" multi-part solid kits (Wreck "car"): the largest part becomes the invisible box collider sized to the
 	             kit, the other parts go, one mesh is added (net 2 - n)
-	A piece whose ref has Yaw = +-90 / 270 (attribute WE_KitYaw from CloneKitMesh; Driftwood, CarWreck) is turned by it
+	  "building" Crossroads Town buildings (TownHouse, owner feedback 2026-09-27): a style's Roblox-made pieces
+             (WorldConfig.Kits.TownHouse.Styles) are stacked at scale 1, all or nothing; the fallback's k piece boxes +
+             1 front detail become 1 invisible box collider + k meshes (net 0). Own cap: Kits.TownHouse.Overlays.
+             The meshes collide and are queryable (Kits.TownHouse.MeshCollide), so Roblox's Poppercam stops the
+             camera at the brick: it ignores the invisible collider (transparency >= 0.25)
+A piece whose ref has Yaw = +-90 / 270 (attribute WE_KitYaw from CloneKitMesh; Driftwood, CarWreck) is turned by it
 	and takes the box with X and Z swapped, so its long axis lies on the kit's. A key VisualAssetService.IsKitMeshWired
 	calls unwired (config id 0) takes no MeshOverlays slot, and one wired key takes at most ceil(cap / wired keys used
 	by Specs) slots, so the kits built first (Town crates, reeds, wrecks) cannot use up the cap before the travel
@@ -101,6 +106,7 @@ export type KitSpec = {
 	Lights: number,
 	Signs: number,
 	Mesh: string?, -- VisualAssetConfig.DesertKit key (Roblox-owned Synty piece) for the deferred overlay
+	Overlay: string?, -- "building": a deferred multi-piece overlay replaces the kit's parts (TownHouse; keys per style)
 	Water: boolean, -- may step into water (its cluster carries WE_AllowInWater)
 	Step: number,
 	Use: string,
@@ -110,6 +116,7 @@ export type KitSpec = {
 
 export type KitOpts = {
 	Variant: string?, -- Wreck: "car" | "truck" | "tank" | "gun"; RoadMarker: "km" | "hazard"; AdobeHouse: "tall" | "wide" | "shop"; CrateStack: "ammo"
+	-- TownHouse: a WorldConfig.Kits.TownHouse.Styles name ("shop" | "walkup" | "walkupB" | "tower" | "towerB" | "office")
 	-- W3 step 2: WaterTower "broken"; Fountain "well"; CompoundWall "gate"; DrumGroup "fire"; PlaneWreck "nose" | "mid" |
 	-- "tail"; HoldPad "pond"; PipeRun "rack" (Specs[kit].Variants gives each one's part count)
 	Count: number?, -- CrateStack / DrumGroup units
@@ -121,7 +128,7 @@ export type KitOpts = {
 	Mesh: boolean?, -- try the Roblox-owned mesh overlay when Specs[kit].Mesh is set (default true)
 	Seed: number?, -- per-instance jitter (default: from the pivot position)
 	-- Town v2 (TownBlock only; see its builder)
-	Width: number?, -- front width, local X (default 20)
+	Width: number?, -- front width, local X (default 20); Sidewalk: the strip's width (local Z)
 	Depth: number?, -- local Z (default 16)
 	Storeys: number?, -- 1 .. 6 (default 2), 7 studs each; 5+ = a concrete tower block
 	Roof: string?, -- "+"-joined: "bare", "tank", "tanks", "hut", "mast", "dish"
@@ -196,7 +203,7 @@ local KC = WorldConfig.Kits
 local PAL = KC.Palette
 local M = Enum.Material
 
-type SpecExtra = { Lights: number?, Signs: number?, Mesh: string?, Water: boolean?, Unit: string?, Variants: { [string]: number }? }
+type SpecExtra = { Lights: number?, Signs: number?, Mesh: string?, Overlay: string?, Water: boolean?, Unit: string?, Variants: { [string]: number }? }
 
 local function spec(
 	parts: number,
@@ -218,6 +225,7 @@ local function spec(
 		Lights = e.Lights or 0,
 		Signs = e.Signs or 0,
 		Mesh = e.Mesh,
+		Overlay = e.Overlay,
 		Water = e.Water == true,
 		Step = step,
 		Use = use,
@@ -250,6 +258,12 @@ WorldKits.Specs = {
 	-- height, + 1 roof slab with the parapet, + 1 upper-front window strip when Storeys >= 2; no door; roof details as
 	-- usual): exactly 7 parts at Storeys 2 with no Roof / Lantern (the Empire Bank, lane BK, counts on it)
 	RadioMast = spec(5, 5, Vector3.new(6, 90, 6), "manmade", true, 1, "Town+POI"), -- lattice mast, 90 tall (Town landmark; later the Signal Station)
+	-- Crossroads Town buildings (owner feedback 2026-09-27: "actual Roblox buildings"): Variant = a Kits.TownHouse style;
+	-- Parts = its pieces + 1 (the live overlay leaves the same count: 1 collider + 1 mesh per piece), + 1 with Lantern.
+	-- Default "shop". TownBlock stays as it is for the other places and the bank hall.
+	TownHouse = spec(2, 5, Vector3.new(18, 11, 20.6), "manmade", true, 1, "Town", { Overlay = "building", Variants = { shop = 2, walkup = 4, walkupB = 4, tower = 4, towerB = 4, office = 3 } }),
+	-- Town pavements: one flat strip (InfraRow, Length along local X, Kits.Sidewalk.Width across, no collision)
+	Sidewalk = spec(1, 1, Vector3.new(160, 0.14, 26), "infra", false, 1, "Town"),
 	-- Step 1 — shared by the Town and the travel dressing
 	CrateStack = spec(3, 6, Vector3.new(5.2, 4.8, 2.9), "manmade", true, 1, "Town+Travel", { Mesh = "CrateWood", Unit = "crate" }),
 	DrumGroup = spec(3, 6, Vector3.new(3.2, 2.2, 3.0), "manmade", true, 1, "Town+Travel", { Unit = "drum", Variants = { fire = 1 } }), -- "fire" (W3 step 2, camps): burn barrels, no light
@@ -380,6 +394,7 @@ local openClusters = setmetatable({} :: { [Model]: boolean }, { __mode = "k" })
 local pendingSigns = setmetatable({} :: { [Model]: number }, { __mode = "k" })
 local pendingMesh = setmetatable({} :: { [Model]: { Overlay } }, { __mode = "k" })
 local overlaysQueued = 0
+local buildingsQueued = 0 -- TownHouse overlays (own cap: WorldConfig.Kits.TownHouse.Overlays)
 local overlaysByKey: { [string]: number } = {} -- slots spent per mesh key (owner list: fair share of the cap)
 local keyShare: number? = nil -- most slots one wired key may take (ceil(cap / wired keys); set on first use)
 
@@ -901,6 +916,61 @@ Builders.RadioMast = function(b: B)
 	put(b, "MastSection", Vector3.new(2.2, 30, 2.2), CFrame.new(0, 57, 0), PAL.Steel, M.DiamondPlate, true, true)
 	put(b, "MastTip", Vector3.new(1, 18, 1), CFrame.new(0, 81, 0), PAL.TarpRed, M.SmoothPlastic, true)
 	put(b, "MastDish", Vector3.new(0.5, 4.4, 4.4), CFrame.new(0, 48, -1.35) * ZCYL, PAL.ConcreteLight, M.SmoothPlastic, false, false, Enum.PartType.Cylinder)
+end
+
+--[[ A Crossroads Town building (owner feedback 2026-09-27: "need to be actual Roblox buildings"). Variant = a
+	WorldConfig.Kits.TownHouse style: Roblox-made Synty City pieces stacked bottom to top at scale 1, each piece's box
+	centred on X at its Z (the pieces share a 17.4-stud wall core), its bottom at Y. The Part fallback (shown until the
+	deferred overlay swaps it, and kept for good if a piece fails to load) is one collidable box per piece in the style's
+	colour + one front detail (a door, or a rolled shutter), so it counts exactly what the overlay leaves: 1 invisible box
+	collider + 1 mesh per piece. The ground-floor box is the building's one shadow caster (H9) when the style has
+	Shadow (the one-storey shops cast none: the Town keeps <= 60 casters). Lantern: a wall lamp
+	0.4 in front of the ground floor's front wall (WallFront), outside the overlay (1 part + 1 WE_NightLight). The pivot
+	is the wall core's centre on the floor; the front (door) faces local -Z. ]]
+local warnedStyle: { [string]: boolean } = {}
+Builders.TownHouse = function(b: B)
+	local style = b.Opts.Variant or "shop"
+	local st = KC.TownHouse.Styles[style]
+	if st == nil then
+		if not warnedStyle[style] then
+			warnedStyle[style] = true
+			warn("[WorldKits] TownHouse: unknown style " .. style .. " (WorldConfig.Kits.TownHouse.Styles)")
+		end
+		return
+	end
+	local list: { BasePart } = {}
+	local col = b.Opts.Color or st.Color
+	for i, pc in ipairs(st.Pieces) do
+		local sz = pc.Size
+		table.insert(list, put(b, "HouseBlock", sz, CFrame.new(0, pc.Y + sz.Y * 0.5, pc.Z), col, st.Material, true, i == 1 and st.Shadow))
+	end
+	local g = st.Pieces[1]
+	local gz = g.Z - g.Size.Z * 0.5 -- the ground box's front face
+	if st.Front == "shutter" then
+		local w = math.max(g.Size.X - 7, 4)
+		table.insert(list, put(b, "HouseShutter", Vector3.new(w, 7, 0.2), CFrame.new(-1.5, 3.5, gz - 0.1), PAL.SteelDark, M.CorrodedMetal, false))
+	else
+		table.insert(list, put(b, "HouseDoor", Vector3.new(4, 7.6, 0.2), CFrame.new(0, 3.8, gz - 0.1), PAL.WoodDark, M.Wood, false))
+	end
+	if b.Opts.Lantern == true then
+		local lamp = put(b, "LampLantern", Vector3.new(0.8, 1.1, 0.8), CFrame.new(g.Size.X * 0.5 - 1.6, 6.2, st.WallFront - 0.4), PAL.LampLens, M.SmoothPlastic, false)
+		if b.Opts.Light ~= false then
+			nightLamp(lamp)
+		end
+	end
+	if b.Opts.Mesh ~= false then
+		table.insert(b.Overlays, { Key = style, Mode = "building", Frame = b.CF, Parts = list })
+	end
+end
+
+-- A Town pavement (InfraRow): one flat, non-colliding paving strip, Length along local X, Width (default
+-- Kits.Sidewalk.Width) across,
+-- top Kits.Sidewalk.Top above the floor (0.64 world: flush with the road top 0.625, under Hygiene.RoadMinTop).
+Builders.Sidewalk = function(b: B)
+	local SW = KC.Sidewalk
+	local L = math.clamp(b.Opts.Length or 160, SW.MinLength, SW.MaxLength)
+	local W = math.clamp(b.Opts.Width or SW.Width, SW.MinWidth, SW.MaxWidth)
+	put(b, "SidewalkPaving", Vector3.new(L, SW.Top, W), CFrame.new(0, SW.Top * 0.5, 0), b.Opts.Color or PAL.Paving, M.Pavement, false)
 end
 
 -- W3 step 2: the later POIs (spec w3s2 §6 lane K; contract w3s2/build/L0/contract.md §5) ─────────────────────────────
@@ -1524,6 +1594,77 @@ local function yawedBox(m: BasePart, boxCf: CFrame, size: Vector3): (CFrame, Vec
 	return cf, size
 end
 
+-- A TownHouse overlay (Mode "building"): every piece of the style is cloned first; if any piece is missing (unwired,
+-- a failed load, the sim) nothing changes and the Part fallback stays. Then the largest fallback part becomes the
+-- invisible box collider (the style's wall Core, CoreZ, over the fallback's full height), the other fallback parts go
+-- and the pieces are placed at scale 1 in the kit frame: k + 1 parts in, 1 collider + k meshes out.
+local function applyBuilding(cluster: Model, ov: Overlay, vas: any, alive: { BasePart })
+	local TH = KC.TownHouse
+	local st = TH.Styles[ov.Key]
+	if st == nil then
+		return
+	end
+	local meshes: { BasePart } = {}
+	for _, pc in ipairs(st.Pieces) do
+		local m = cloneMesh(vas, pc.Key)
+		if m == nil then
+			for _, x in ipairs(meshes) do
+				x:Destroy()
+			end
+			return
+		end
+		table.insert(meshes, m)
+	end
+	-- the first pack load yields: look at the cluster and its parts again after it
+	local keep: { BasePart } = {}
+	for _, p in ipairs(alive) do
+		if p.Parent ~= nil and p:IsDescendantOf(cluster) then
+			table.insert(keep, p)
+		end
+	end
+	if gone(cluster) or #keep == 0 then
+		for _, x in ipairs(meshes) do
+			x:Destroy()
+		end
+		return
+	end
+	local boxCf, size = boxIn(ov.Frame, keep)
+	local biggest = keep[1]
+	for _, p in ipairs(keep) do
+		if p.Size.X * p.Size.Y * p.Size.Z > biggest.Size.X * biggest.Size.Y * biggest.Size.Z then
+			biggest = p
+		end
+	end
+	for _, p in ipairs(keep) do
+		if p ~= biggest then
+			p:Destroy()
+		end
+	end
+	-- the collider covers the style's wall core over the full height (not the stoop or the cornice overhang)
+	biggest.CFrame = ov.Frame * CFrame.new(0, (boxCf.Position.Y - ov.Frame.Position.Y), st.CoreZ)
+	biggest.Size = Vector3.new(st.Core.X, size.Y, st.Core.Z)
+	biggest.Transparency = 1
+	biggest.CanCollide = true
+	biggest.CanQuery = true
+	biggest.CastShadow = false
+	biggest.Name = "HouseCollider"
+	-- the camera (fix round 1): Roblox's Poppercam pulls the camera in front of a part only when its ray can hit it
+	-- (CanCollide + CanQuery, in a collision group that collides with Default: the Poppercam's RaycastParams keep the
+	-- Default group and RespectCanCollide) and it is nearly opaque (transparency < 0.25). The collider is invisible,
+	-- so the textured pieces must be those occluders: they collide on their own geometry, stay in the Default group
+	-- and never fire Touched. The wall-core collider stays as the guaranteed wall for players and shots.
+	local solid = TH.MeshCollide == true
+	for i, m in ipairs(meshes) do
+		local pc = st.Pieces[i]
+		m.CFrame = ov.Frame * CFrame.new(0, pc.Y + m.Size.Y * 0.5, pc.Z)
+		m.CastShadow = TH.MeshShadow == true and st.Shadow and i == 1
+		m.CanCollide = solid
+		m.CanQuery = solid
+		m.CanTouch = false
+		m.Parent = cluster -- 1 collider + k meshes replace the k + 1 fallback parts: never adds a part
+	end
+end
+
 local function applyOverlay(cluster: Model, ov: Overlay, vas: any)
 	local alive: { BasePart } = {}
 	for _, p in ipairs(ov.Parts) do
@@ -1532,6 +1673,10 @@ local function applyOverlay(cluster: Model, ov: Overlay, vas: any)
 		end
 	end
 	if #alive == 0 or cluster.Parent == nil then
+		return
+	end
+	if ov.Mode == "building" then
+		applyBuilding(cluster, ov, vas, alive)
 		return
 	end
 	if ov.Mode == "skin" then
@@ -1651,6 +1796,21 @@ local function shareOfCap(isWired: (string) -> boolean, cap: number): number
 	return share :: number
 end
 
+-- true when every piece key of a TownHouse style is wired (config lookups only, never yields)
+local function buildingWired(isWired: (string) -> boolean, style: string): boolean
+	local st = KC.TownHouse.Styles[style]
+	if st == nil then
+		return false
+	end
+	for _, pc in ipairs(st.Pieces) do
+		local ok, w = pcall(isWired, pc.Key)
+		if not ok or w ~= true then
+			return false
+		end
+	end
+	return true
+end
+
 local function scheduleOverlays(cluster: Model, list: { Overlay })
 	local cap = KC.MeshOverlays
 	local take: { Overlay } = {}
@@ -1659,6 +1819,14 @@ local function scheduleOverlays(cluster: Model, list: { Overlay })
 	local vasNow = getVAS()
 	local isWired = if vasNow and type(vasNow.IsKitMeshWired) == "function" then vasNow.IsKitMeshWired else nil
 	for _, ov in ipairs(list) do
+		if ov.Mode == "building" then
+			-- a building needs every piece of its style wired (else it keeps its Part fallback and takes no slot)
+			if buildingsQueued < KC.TownHouse.Overlays and (isWired == nil or buildingWired(isWired, ov.Key)) then
+				buildingsQueued += 1
+				table.insert(take, ov)
+			end
+			continue
+		end
 		if overlaysQueued >= cap then
 			break
 		end
@@ -1706,9 +1874,10 @@ function WorldKits.Discard(cluster: Model)
 	cluster:Destroy()
 end
 
--- Test hook (headless sim): mesh overlay slots spent so far, per key, and the per-key share of the cap (nil = unset).
-function WorldKits._OverlayStats(): { Queued: number, ByKey: { [string]: number }, Share: number? }
-	return { Queued = overlaysQueued, ByKey = table.clone(overlaysByKey), Share = keyShare }
+-- Test hook (headless sim): mesh overlay slots spent so far, per key, the per-key share of the cap (nil = unset) and the
+-- TownHouse building overlays queued.
+function WorldKits._OverlayStats(): { Queued: number, ByKey: { [string]: number }, Share: number?, Buildings: number }
+	return { Queued = overlaysQueued, ByKey = table.clone(overlaysByKey), Share = keyShare, Buildings = buildingsQueued }
 end
 
 function WorldKits.Finish(cluster: Model, parent: Instance): ClusterInfo

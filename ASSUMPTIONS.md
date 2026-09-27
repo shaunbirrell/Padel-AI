@@ -6837,3 +6837,178 @@ L1b_out/rfx2/mcs_merged_c14.luau a8593b407c08d71554aa6fd5dfe0ba1e. Tree L1b_out/
 3726 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T2 ATM trace identical to c1475e9 alone (49 lines; 0 money-bag instances,
 HEAD 28); ECON-1 econ1_drv tree5 16 / 0; T15 241 / 0 and 235 / 0; T16 126 / 0; world sim 12 steps ok; DataService
 24 / 0; rojo builds.
+
+## Town v3: Roblox-made buildings in Crossroads Town (owner feedback 2026-09-27; TOWN lane, base 3b5ac28)
+
+Owner: "The buildings in that town are terrible and need to be actual Roblox buildings." Each item below is a reversible
+assumption. The rows go into ASSUMPTIONS.md next to the W3 Town entries.
+
+1. **Pieces.** Every building is stacked from Synty City Pack 6933556508 pieces.
+   - The creator was re-read on the economy API on 2026-09-27 at 21:53 UTC: Roblox, User 1, verified, IsPublicDomain.
+   - The pack already loads live for DesertKit.CarWreck, so this adds 0 load attempts. The wire tool reads the same
+     before and after: 25/56 live ids, 8/24 outage, 25/40 boot.
+   - 10 pieces are used, all glass-free, one MeshPart each. None samples the atlas's text regions (assets.md §2.3).
+   - Revert: set those DesertKit keys to 0. The Part fallback then stays everywhere.
+2. **Scale and texture.** The pieces are kept at scale 1: 11-stud storeys and about 8-stud doors.
+   - The texture atlas is kept (no ClearTexture), so the buildings show red brick and sandstone with real windows, not
+     the old sand palette.
+   - If the owner wants all-sand buildings: set ClearTexture + Color on the 10 keys. This flattens the windows.
+3. **All 40 box buildings are replaced.** This includes the 5 "damaged" and 3 "gutted" ruin boxes, which were part of
+   the look the owner rejected.
+   - The Town now has 48 building rows with 50 buildings. Two rows hold a pair: the square's west side and the motor-pool
+     garages.
+   - 8 rows are new: NW_N5, NW_W5, NE_N5, NE_Bank_E, SW_S5, SW_W5, SE_E5, SE_S4.
+   - War flavour stays through the terrain rubble, moved to the back lots, and the scorch patch.
+4. **Kinds of building:**
+   - 17 one-storey shutter shops;
+   - 15 + 15 two-storey brick walk-ups (two facades);
+   - 2 four-storey apartment blocks: NW_Ring, which keeps its wall lantern, and NE_TowerBlock, which keeps its Id, Role
+     and Tier;
+   - 1 sandstone hall: SW_Square_S, closing the Town Square.
+
+   NE_TowerBlock was the "ruined 6-storey tower block" (top 45.7). It is now an intact 4-storey block (top 47). The
+   pinned row prefix is unchanged.
+5. **Frontage.** Every frontage building faces its road. The pivot sits so the disc edge is at least 30.4 from the road
+   line (RoadClear 30 is unchanged).
+   - Fronts sit about 33.6–35 from the centre line, with 7–9-stud alleys between buildings.
+   - The market lane, Bank Street (now lined on both sides), the Town Square, the Pool_Town pad (+16) and the plaza
+     clear (r 124) are all kept.
+6. **Pavements are new, not asked for.** They are added because the bare sand between the buildings was a large part of
+   the bad look.
+   - There are 10 flat, non-colliding Infra strips (Kit Sidewalk, 10 parts, top 0.64): each arm's two frontages,
+     Bank Street and the market lane.
+   - They are built in Low and Full.
+   - Revert: `Town.Infra = {}`.
+7. **Part count.** The Part fallback is one box per piece plus a door or shutter, so the census counts exactly what the
+   live overlay leaves: 1 invisible collider + 1 mesh per piece (stand-in: 302 → 302 parts, 115 meshes, 50 colliders).
+   - Town Full: 368 → 302 (cap 370).
+   - Town Low: 215 → 160 (cap floor(0.6 × 302) = 181).
+   - Busiest 512 circle, static: 493 → 427 (cap 500, so 73 parts of headroom).
+   - Busiest 1024 circle: 922 → 856 (cap 1,200).
+8. **Fallback look.** When a load fails, a building shows as its storey boxes in brick, sandstone or concrete colour
+   with a door or shutter. There are no painted window stripes.
+   - The overlay is all or nothing per building: if any piece is missing, the building stays Part.
+   - A wall lantern hangs on the mesh wall. While the fallback shows, the lantern sits inside the fallback box and cannot
+     be seen.
+9. **Collider.** The live collider is the style's 17.4-stud wall core (the office's is 34.8), at full height. Players and
+   shots meet the wall. The stoop steps and the cornice overhang are visual only.
+10. **Overlay cap.** Building overlays have their own cap, `Kits.TownHouse.Overlays = 56` (50 are used). The travel
+    dressing keeps its 40 MeshOverlays slots; the stand-in still uses 35 of them.
+11. **Shadows.** One shadow caster per building, the ground floor. The one-storey shops cast none. The Town has 49
+    casters, within the 60 limit.
+12. **Distinct meshes.** The Town uses 10 distinct building meshes; assets.md suggested at most 8. Variety was chosen
+    over 2 draw-call groups, and all 10 share one atlas.
+    - LOD0 triangles are about 61.6k for the whole Town. Within 250 studs of a phone camera the worst case is about
+      16k, and about 48k in view out to 500 studs.
+    - Roblox LODs cut the distant ones.
+    - This needs the device check.
+13. **Other lanes' work is not touched:**
+    - the Empire Bank hall (MapSetup, still TownBlock "hall");
+    - TownBlock itself (17 other places);
+    - the checkpoints, stalls, landmarks and lamps;
+    - the Town anchors: 35, identical.
+14. **W3 Town check driver.** The driver (`w3/densify/drivers/b1_driver.luau` → `ownervis/town/drivers/town_v3.luau`) now
+    skips `POI_Town.Infra` in the cluster check. That model is the platform's WE_Infra strip, exempt from H10 like the
+    airstrip runway. Its parts still go through the road, keep-out and decor checks. Every B1 threshold is unchanged.
+
+## Town v3 fix round 1 (reviewer: public spaces showed backs; the camera went through every building)
+
+15. **Every public space shows fronts.** The Synty pieces have windowless, flat-coloured backs and side walls. So a
+    building next to a public space must face it, even when the space is not a road.
+    - **Town Square:** the north and east sides are new rows facing into the square (SW_SqN1..3, SW_SqE1..3, walk-ups,
+      fronts 4 studs outside the paving). Their backs face the road rows' backs across a 28-stud service yard.
+    - **Plaza corners:** a walk-up facing the plaza closes the mouth of each yard (SW_YardE, SW_YardN).
+    - **Market lane:** a second lane-facing walk-up on each side reaches the road (NW_Lane_S2, NW_Lane_N2). NW_PlazaN
+      stands back to back with NW_Lane_S2 and faces the plaza. NW_N2 and NW_N3 swap styles, so the lane-mouth corner
+      is brick, not the grey shop box.
+    - **Arm ends:** the first building of six arm rows turns to face the flag along its road (NW_W1, NE_N1, NE_E1,
+      SW_S1, SW_W1, SE_E1). From the road it shows its side.
+      - Not NW_N1: its back would then face the market lane.
+      - The WorldPOI disc keep-out holds these end-caps 1.7 studs off the pavement edge, so a thin strip of sand shows.
+    - Revert: the 11 new rows out, and the old row lines back (out/rebased files, cand_r0).
+16. **Measured, not claimed.** `fix1/front_metric.py` classes every visible Roblox-mesh wall pixel as front, side or
+    back, using the triangle normal against the piece's front. The sandstone hall counts as all front: it has windows
+    on four sides. This is the stand-in rasteriser, not Roblox. Numbers are in the report and gates_summary.
+17. **Budgets (all inside the caps):**
+    - Town Full: 302 → 346 (cap 370). Low: 160 → 184 (cap floor(0.6 × 346) = 207).
+    - Busiest 512 circle: 427 → 471 (cap 500). Busiest 1024 circle: 856 → 900 (cap 1,200).
+    - Overlays: 50 → 61 kits. `Kits.TownHouse.Overlays` rises from 56 to 64; it is the Town's own cap.
+    - **Shadow casters: 49 → 60, exactly the TOWN-H9 limit (<= 60), with no headroom left.** The next Town addition
+      needs a caster traded first. Cheapest option: turn SW_YardE / SW_YardN into shops.
+    - Load attempts are unchanged: 0 new ids, census identical to head (same 25 / 33 ids, attempts 18 / 43).
+    - LOD0 triangles: the whole Town goes 61.6k → 78.8k. The worst phone camera within 250 studs is the owner's square
+      spot: 10.3k → 21.3k. It is the heaviest view now and part of phone test D.
+18. **Camera (Poppercam).** Roblox's current PlayerModule Popper was read from the Roblox-Client-Tracker mirror
+    (fetched 2026-09-27; `fix1/Popper.lua`).
+    - With the flag `UserRaycastUpdateAPI2`, it casts `workspace:Raycast` with RaycastParams that have
+      RespectCanCollide = true and the default collision group ("Default"). A hit occludes only when the part's total
+      transparency is < 0.25.
+    - So the reviewer's first option would hide the pieces from the camera ray: a collision group that collides with
+      nothing also does not collide with Default, and the ray skips it.
+    - Chosen fix: the placed pieces stay in Default, with CanCollide and CanQuery on and CanTouch off
+      (`Kits.TownHouse.MeshCollide = true`). The wall-core collider stays, so the part count is unchanged.
+    - Players now also collide with the pieces' own collision shape. The pack serialises no CollisionFidelity, so it
+      is Default. Expected effects:
+      - the doorstep can be stepped on;
+      - the cornice and roof overhang block like the wall;
+      - shots hit the visible stonework.
+    - Needs the device test (phone test C.2 and C.3). Revert: MeshCollide = false.
+19. **Rebase.** Main moved to c1475e9 while this lane ran. Only VisualAssetConfig (aircraft weapons rows) and
+    BuyPathStatic changed under the lane's files. Both were 3-way merged cleanly (`git merge-file`, 0 conflicts);
+    see rebased_c1475e9/. The other 4 files are byte-identical on both bases.
+20. **Drivers.**
+    - `drivers/town_v3.luau` gains TOWN-v3-public: the 21 buildings on the square, the lane, the plaza corners and the
+      arm ends face their space. TOWN-v3-fronts skips the six end-caps.
+    - `drivers/overlay.luau`:
+      - pieces must collide, be queryable and never Touch, in the Default group;
+      - new check OV-camera: every face of every building's wall core, on a 2-stud grid, must be covered by an opaque,
+        collidable, queryable Default-group part;
+      - counts are now 148 meshes and 61 colliders.
+
+# Assumptions: owner-vis yard lane (Training Yard redesign), 2026-09-27
+
+Each assumption can be undone with a config change or a revert. The integrator merges these into `ASSUMPTIONS.md`.
+
+- **YA-1 Layout.** The yard becomes a 3-lane shooting range that runs from the plaza towards the Research Lab (+X):
+  - the firing line is at plot-local x 41, the targets at x 63, and a 6-stud sand berm at x 64..71;
+  - the range floor (still named `YardPad`) is 36 × 22, centred on (54, 30);
+  - beyond the berm, at x 74..84, are a small obstacle course (z 20..31) and a supply corner with a tent and crates (z 34..44).
+
+  I kept the strip behind the firing line (x 30..40) empty. Otherwise the phone camera behind a player standing at the line has crates or a tent between it and the player, which the first draft showed. I also kept the walk to the Research Lab door (z 2..14) and the walk to the business kiosks (z ≥ 46) clear.
+  Undo: edit `TrainingYardConfig.Pieces` / `Figures` / `Decor`.
+- **YA-2 Fewer figures.** The 5 statues (3 stall statues and 2 workers) become 3 soldiers at the firing line, facing downrange. Their kinds are Infantry, HeavyInfantry and Guard, with the old stall colours.
+  - They are built only through MapSetup's `makeSoldierKit` (the R-RIG statue path). R-RIG is not implemented here, and today's Part-kit figure is the fallback.
+  - On the R-RIG v3 tree merged with this change, all 3 are rigged with no change in part count (28).
+  - I did not add an "instructor" figure. The task asked for fewer figures, and his squad of 5 already stands beside him.
+- **YA-3 No sandbags in the yard.** The yard asks for none of the owner-picked Tent (182529039, plus its alt 3133150032), SandBag Wall (15271872710) or Military Crates (2930926216). `WarzoneProps.Sandbag` / `Crate` / `MilitaryCrate` are not touched and still dress the other 11 sandbag hosts per base. Tent and TentAlt now have no caller.
+  - `tools/wire-asset-ids.py` still counts them: its `PROP_KEYS` list is config-based, so status still reads 25/56 and 25/40.
+  - The stand-in census shows the server asks for fewer ids: 16 boot ids instead of 18 when healthy, and 22 instead of 25 in an outage.
+  - I did not edit the tool's registry (another lane's file).
+- **YA-4 Meshes.** The meshes are Roblox-made Synty pieces (creator Roblox, User 1), and every piece comes from a pack that already loads live, so there are 0 new load attempts.
+  - Dungeon pack 6933790012 gives the `YardCrate` (Crate_Wood_04), `YardAmmoCrate` (Crate_Metal_01), `YardRack` (WeaponRack_01, mesh only) and `YardLadder` (Ladder_01, mesh only) pieces.
+  - The hurdles reuse the live `DesertKit.Log` key (Nature 6933438443, texture cleared).
+  - The Dungeon pieces keep their pack texture, which is one shared 1024² atlas; per ownervis/assets.md §3.4 they carry no text or emblem.
+  - I dropped a City-pack traffic cone so phones do not load a second atlas.
+  - Undo: `ClearTexture = true` plus a `Color` on a key gives a flat colour; `TrainingYardConfig.UseMeshes = false` gives the Part look with no loads.
+- **YA-5 Replace, never add.** A mesh is fitted inside its Part piece's box (one uniform scale, standing on the box bottom).
+  - A colliding piece (crates, logs) stays as an invisible collider.
+  - A non-colliding piece is destroyed.
+  - Decor meshes (rack, ladder) have no Part piece.
+  - The census counts every level on all 6 plots: 65 parts for the Part look (HEAD 84) and 76 with every mesh loaded, so ≤ 84 either way.
+  - Meshes go through `VisualAssetService.CloneKitMesh` and are capped at `MaxMeshesPerYard = 16` (11 configured). They are separate from `WorldConfig.Kits.MeshOverlays = 40`, which is WorldKits' world-overlay budget and does not count plot yards.
+- **YA-6 Cash plate.** `YardEarnAnchor` moves to yard-local (-16, 5.5, -9), so ManualDropperService (HEAD and v1b alike, `YardOffset (6, 0, -4)` unchanged) builds `ManualDropper_Yard` at plot-local (36, 17).
+  - That spot is open concrete at the corner of the Research Lab walk, off the range floor. The nearest colliding part is the 0.2-high range floor, 0.8 studs away; at HEAD the plate overlapped the old pad and sat 1.4 studs from a crate host.
+  - It is 22.2 studs from the `YardPad` centre, inside ProducerLabels' 24-stud radius.
+  - The contract is kept: the `TrainingYard` folder, `YardPad`, `YardAnchor`, `YardEarnAnchor`, `TrainingTarget1..3` + `WE_TrainingTarget`.
+- **YA-7 No text in the yard.** The yard has no text. The 3 stall-sign SurfaceGuis go (−3 SurfaceGuis per base), and no billboard or light is added.
+- **YA-8 Code placement.** The yard moves out of MapSetup (3,567 → 3,342 lines) into `Modules/TrainingYardBuilder.luau` (build) and `Configs/TrainingYardConfig.luau` (every position, size and colour, config first). MapSetup passes `makeSoldierKit` in, so figures keep one builder.
+- **YA-9 Pins.** Three BuyPathStatic pins named the old yard code: `SquadStalls`, the worker line and the stall-soldier line. They are replaced in place (bps_pins.txt).
+- **YA-10 Merge risk (for the integrator).** The Town lane may add keys to the same `VisualAssetConfig.DesertKit` table and rows to the same `ASSET_LICENSES.md` Synty rows; both are plain additive merges.
+  - R-RIG v3 (`design3/rig/v3/tree_c`) merges cleanly with this change: `git merge-file` exit 0 on MapSetup, VisualAssetConfig and ASSET_LICENSES.
+  - Dropper v1b (`droppers/build/L1b`) merges cleanly too: 6 files, exit 0. The plate lands at (36, 17) on all 6 plots and the yard's Neon is 0.
+- **YA-11 Ship order (fix round 1).** The squad of 5 (SquadOrdersService followers, not part of the yard) and the 3 shooters are Part-kit block soldiers until R-RIG ships. In the phone_owner camera they fill the lower half of the frame, so on its own this lane changes the range but not the "rows of block soldiers" look (after_live vs after_with_rrig renders).
+  - Recommended: land this lane in the same push as R-RIG v3. The merge is clean and the yard stays at 65 parts with 3 rigged shooters (gates_summary.txt). Then use `out/owner_text_with_rrig`.
+  - If this lane ships first, use `out/owner_text`. Its line 6 says the squad and shooters keep the block look until the soldier update.
+  - The yard lane does not restyle the squad or `makeSoldierKit`; that is R-RIG's scope. Undo: none needed (text only).
+
+- **VIS-INT-1 (integrator, 2026-09-27).** Town and Training Yard lanes landed together by 3-way merge onto 5c8f57e. The textual conflicts were resolved by keeping both lanes' blocks: VisualAssetConfig (Town* and Yard* DesertKit rows) and BuyPathStatic (both pin blocks). ASSET_LICENSES keeps one row per pack: the Town lane's text for City 6933556508 and the Yard lane's text for Dungeon 6933790012. The yard pin that bans Neon in TrainingYardConfig now also bans `Enum.Material.Neon` (review Low). The yard ships before R-RIG (the soldiers keep the block look until the soldier update); the owner text says so.

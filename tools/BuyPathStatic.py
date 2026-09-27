@@ -295,7 +295,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "ShowroomFlagHost", "Depot flag host")
 must_not_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'oilFolder.Name = "OilSpectacle"', "World v2 W1: oil spectacle removed")
 must_not_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", 'lm.Name = "WarzoneLandmarks"', "World v2 W1: landmarks removed")
-must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "SquadStalls", "TrainingYard Tent stalls")
+must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "TrainingYardBuilder.Build(", "owner-vis yard: MapSetup builds the Training Yard through TrainingYardBuilder (was the SquadStalls tents)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "96059329869678", "Palm MapDressing")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "0", "AsphaltDecal")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MeshId = 0", "DesertRock MeshPart")
@@ -2050,6 +2050,63 @@ must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "N
 must_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', '{ Id = "SW_RadioMast", Block = "SW", Role = "mast", Tier = 1,', 'W3 Town v2: radio mast landmark (SW, Tier 1)')
 must_not_contain('src/ReplicatedStorage/Shared/Configs/WorldConfig.luau', 'Budget = 220, Enabled = true, Lights = 6, Signs = 1 },', 'W3 Town v2: the step-1 Town caps are retired')
 
+# --- Town v3 (owner feedback 2026-09-27: "The buildings in that town are terrible and need to be actual Roblox
+# buildings"): every Crossroads Town building is a TownHouse of Roblox-made Synty City pieces (6933556508, creator
+# Roblox, User 1, already live for CarWreck: 0 new load attempts), stacked at scale 1 by a deferred all-or-nothing
+# overlay that never adds a part; the Part fallback stays when a load fails; paved frontages (Town.Infra) ---
+TV3_WK = 'src/ServerScriptService/Server/Modules/WorldKits.luau'
+TV3_WC = 'src/ReplicatedStorage/Shared/Configs/WorldConfig.luau'
+TV3_VAC = 'src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau'
+TV3_POI = 'src/ServerScriptService/Server/Modules/WorldPOI.luau'
+must_contain(TV3_WK, 'TownHouse = spec(2, 5, Vector3.new(18, 11, 20.6), "manmade", true, 1, "Town", { Overlay = "building", Variants = { shop = 2, walkup = 4, walkupB = 4, tower = 4, towerB = 4, office = 3 } }),', 'Town v3: TownHouse catalogue row (fallback parts = pieces + 1 = the live overlay count)')
+must_contain(TV3_WK, 'Builders.TownHouse = function(b: B)', 'Town v3: the TownHouse builder (Part fallback: one box per piece + one front detail)')
+must_contain(TV3_WK, 'table.insert(b.Overlays, { Key = style, Mode = "building", Frame = b.CF, Parts = list })', 'Town v3: every building queues its deferred Roblox-piece overlay (lantern kept out of it)')
+must_contain(TV3_WK, 'm.Parent = cluster -- 1 collider + k meshes replace the k + 1 fallback parts: never adds a part', 'Town v3: the building overlay never adds a part')
+must_contain(TV3_WK, 'if buildingsQueued < KC.TownHouse.Overlays and (isWired == nil or buildingWired(isWired, ov.Key)) then', 'Town v3: building overlays have their own cap and need every piece wired (MeshOverlays stays with the travel dressing)')
+must_contain(TV3_WK, 'biggest.Size = Vector3.new(st.Core.X, size.Y, st.Core.Z)', 'Town v3: the live collider is the building\'s wall core (players and shots meet the wall, not the stoop)')
+must_contain(TV3_WK, 'm.CastShadow = TH.MeshShadow == true and st.Shadow and i == 1', 'Town v3: one shadow caster per building at most (Town <= 60 casters)')
+must_contain(TV3_WK, 'Sidewalk = spec(1, 1, Vector3.new(160, 0.14, 26), "infra", false, 1, "Town"),', 'Town v3: pavement strip catalogue row (flat, no collision, infra)')
+must_contain(TV3_WC, '			Overlays = 64,', 'Town v3: per-server cap on building overlays (59 buildings, 61 kits since fix round 1)')
+must_contain(TV3_WC, '		Sidewalk = { Width = 26, Top = 0.14, MinLength = 40, MaxLength = 400, MinWidth = 6, MaxWidth = 48 },', 'Town v3: pavements stay flat (top 0.64 world <= RoadMinTop)')
+must_not_contain(TV3_WC, 'Kit = "TownBlock"', 'Town v3: no Part-box TownBlock building left in the Crossroads Town')
+must_contain(TV3_POI, 'Infra = T.Infra, Anchors = T.Anchors', 'Town v3: the Town builds its pavement rows (WorldConfig.Town.Infra)')
+must_contain(TV3_POI, 'local plain = spec ~= nil and spec.Mesh == nil and spec.Overlay == nil', 'Town v3: a kit with a deferred overlay never hosts an activity anchor')
+for _k, _piece in (('TownShop', 'Shop_06'), ('TownAptDoorA', 'Apartment_Door_01'), ('TownAptDoorB', 'Apartment_Door_02'),
+                   ('TownAptFloorA', 'Apartment_02'), ('TownAptFloorB', 'Apartment_03'), ('TownAptStack', 'Apartment_Stack_01'),
+                   ('TownAptRoofA', 'Apartment_Roof_01'), ('TownAptRoofB', 'Apartment_Roof_02'),
+                   ('TownOfficeBase', 'OfficeOld_Small_Base_01'), ('TownOfficeTop', 'OfficeOld_Small_Roof_01')):
+    must_contain(TV3_VAC, '%s = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_%s", Note = ' % (_k, _piece), 'Town v3: %s is the Roblox-made City piece %s (live pack, atlas kept)' % (_k, _piece))
+must_not_contain(TV3_VAC, '_glass", Note', 'Town v3: no shop-glass child piece (the loader drops children; glass-free pieces only)')
+# Town v3 fix round 1 (reviewer): (a) the camera stops at the brick. Roblox's Poppercam (PlayerModule Popper) casts
+# workspace:Raycast with RaycastParams that RespectCanCollide and keep the Default collision group, and only a part with
+# transparency < 0.25 occludes; the wall-core collider is invisible, so the placed pieces themselves must collide, be
+# queryable and stay in the Default group (a no-collide collision group would hide them from that ray too)
+must_contain(TV3_WC, '			MeshCollide = true,', 'Town v3 fix1: building pieces collide so the Poppercam stops the camera at the wall')
+must_contain(TV3_WK, '\tlocal solid = TH.MeshCollide == true\n', 'Town v3 fix1: the overlay reads the MeshCollide switch')
+must_contain(TV3_WK, '\t\tm.CanCollide = solid\n\t\tm.CanQuery = solid\n\t\tm.CanTouch = false\n\t\tm.Parent = cluster -- 1 collider + k meshes', 'Town v3 fix1: every placed piece collides and is queryable (Poppercam occluder), never Touched')
+must_not_contain(TV3_WK, 'CollisionGroup', 'Town v3 fix1: no Town piece is moved out of the Default collision group (the Poppercam ray would skip it)')
+# (b) every public space shows fronts: the square's N and E sides face INTO the square, the yard mouths and NW_PlazaN
+# face the plaza, the market lane is lane-facing to the road, and six arm rows start with a plaza end-cap
+for _row in ('{ Id = "SW_SqN1", Block = "SW", Role = "block", Tier = 1, X = -135, Z = 92.3, Yaw = 180,',
+             '{ Id = "SW_SqN2", Block = "SW", Role = "block", Tier = 1, X = -161.5, Z = 92.3, Yaw = 180,',
+             '{ Id = "SW_SqN3", Block = "SW", Role = "block", Tier = 1, X = -188, Z = 92.3, Yaw = 180,',
+             '{ Id = "SW_SqE1", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 135, Yaw = 90,',
+             '{ Id = "SW_SqE2", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 161.5, Yaw = 90,',
+             '{ Id = "SW_SqE3", Block = "SW", Role = "block", Tier = 1, X = -92.3, Z = 188, Yaw = 90,',
+             '{ Id = "SW_YardE", Block = "SW", Role = "block", Tier = 2, X = -68, Z = 121, Yaw = 0,',
+             '{ Id = "SW_YardN", Block = "SW", Role = "block", Tier = 2, X = -120, Z = 70, Yaw = -90,',
+             '{ Id = "NW_PlazaN", Block = "NW", Role = "block", Tier = 2, X = -66, Z = -126, Yaw = 180,',
+             '{ Id = "NW_Lane_S2", Block = "NW", Role = "block", Tier = 2, X = -66, Z = -147, Yaw = 0,',
+             '{ Id = "NW_Lane_N2", Block = "NW", Role = "block", Tier = 2, X = -65.5, Z = -202, Yaw = 180,',
+             '{ Id = "NW_N2", Block = "NW", Role = "block", Tier = 2, X = -44.7, Z = -200, Yaw = -90, Kits = { { Kit = "TownHouse", X = 0, Z = 0, Variant = "walkup" } } },',
+             '{ Id = "NW_W1", Block = "NW", Role = "block", Tier = 1, X = -131.5, Z = -44.5, Yaw = -90,',
+             '{ Id = "NE_N1", Block = "NE", Role = "block", Tier = 1, X = 44.5, Z = -131.5, Yaw = 180,',
+             '{ Id = "NE_E1", Block = "NE", Role = "block", Tier = 1, X = 131.5, Z = -43.8, Yaw = 90,',
+             '{ Id = "SW_S1", Block = "SW", Role = "block", Tier = 1, X = -44.1, Z = 131.5, Yaw = 0,',
+             '{ Id = "SW_W1", Block = "SW", Role = "block", Tier = 1, X = -131.5, Z = 44.5, Yaw = -90,',
+             '{ Id = "SE_E1", Block = "SE", Role = "block", Tier = 1, X = 131.5, Z = 44.5, Yaw = 90,'):
+    must_contain(TV3_WC, _row, 'Town v3 fix1: row faces its public space: ' + _row.split('"')[1])
+
 # --- Rollover fix (owner 2026-09-24: "The quad falls over when driving super easy"): ballast + drive at the centre of
 # mass + roll/pitch assist + speed-sensitive steering + no traction while flipped + gentle flip recovery ---
 RVC = 'src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau'
@@ -2595,8 +2652,8 @@ must_contain(MSD, 'Name = "Helmet",\n\t\tSize = Vector3.new(1.3, 0.75, 1.35),', 
 must_not_contain(MSD, 'Name = "Helmet",\n\t\tSize = Vector3.new(1.2, 0.5, 1.2),', "fb2 old flat box helmet gone")
 must_contain(MSD, "CFrame = torso.CFrame * CFrame.new(-0.5, -2.825, 0.1),", "fb2 BootL bottom = leg bottom (detail on)")
 must_contain(MSD, "CFrame = torso.CFrame * CFrame.new(0.5, -2.825, 0.1),", "fb2 BootR bottom = leg bottom (detail on)")
-must_contain(MSD, "local wLocal = yardShift + Vector3.new(-40 + wi * 20, 2.8, 42)", "fb2 training workers stand on the yard pad (y 2.8)")
-must_contain(MSD, "local soldierCf = F * CFrame.new(sOrigin + Vector3.new(-1.5, 2.7, 1.5)) * CFrame.Angles(0, math.rad(160 + si * 8), 0)", "fb2 stall soldiers y 2.7, turn kept")
+must_contain("src/ReplicatedStorage/Shared/Configs/TrainingYardConfig.luau", "FigureRootY = 2.3,", "owner-vis yard: the firing-line soldiers stand on the range floor (root 0.5 + 2.3 = 2.8, like the fb2 workers)")
+must_not_contain(MSD, "local soldierCf = F * CFrame.new(sOrigin", "owner-vis yard: the stall statues are gone (3 firing-line soldiers instead of 3 stall statues + 2 workers)")
 must_contain(MSD, 'local paradeFlag = part({ Name = "ParadeFlag", Size = Vector3.new(0.12, 4.4, 7.5),', "fb2 parade flag cloth 0.12 thick")
 must_contain(MSD, 'paradeFlag:SetAttribute("WE_FlagHost", true)', "fb2 parade flag is a nation flag host")
 _IB = "src/ServerScriptService/Server/Modules/Interiors/Barracks.luau"
@@ -7580,6 +7637,47 @@ def _d3_rfx2_rules() -> None:
 _d3_rfx2_rules()
 # --- end of the droppers v1b lane L3b block ---
 
+# --- owner-vis yard lane (owner feedback 2026-09-27: "the soldier training area is terrible"). Training Yard rebuilt as
+# a 3-lane range + obstacle course + supply corner from TrainingYardConfig (TrainingYardBuilder); each pin shown failing
+# on HEAD 3b5ac28 (ownervis/yard/out/bps_pins.txt).
+TYB = "src/ServerScriptService/Server/Modules/TrainingYardBuilder.luau"
+TYC = "src/ReplicatedStorage/Shared/Configs/TrainingYardConfig.luau"
+TY_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+must_contain(MSD, "local TrainingYardBuilder = require(script.Parent.TrainingYardBuilder)", "owner-vis yard: MapSetup requires TrainingYardBuilder (no unbounded wait)")
+must_contain(MSD, "\t\t\tif BaseLayout.Enabled() then BaseLayout.Config().Courtyard.TrainingYard else nil,\n\t\t\tmakeSoldierKit\n", "owner-vis yard: the yard sits at Courtyard.TrainingYard and its figures are MapSetup's makeSoldierKit statues")
+for _ty_gone in ('TryAttachPropVisual(tentHost, "Tent")', 'TryAttachPropVisual(sandHost, "Sandbag")', 'Name = "StallSign"', 'Name = "TentHost"'):
+    must_not_contain(MSD, _ty_gone, f"owner-vis yard: MapSetup no longer builds `{_ty_gone}` (grey tent boxes / beige stepped SandBag Wall / stall sign SurfaceGuis)")
+# the contract other code reads: folder, YardPad, anchors, targets
+must_contain(TYB, 'folder.Name = "TrainingYard"\n\tfolder.Parent = plotFolder', "owner-vis yard: Plot<n>.TrainingYard folder (ManualDropperService / SoldierService / ProducerLabels)")
+must_contain(TYC, '{ Name = "YardPad", Shape = "Block",', "owner-vis yard: the range floor is still the YardPad part (ProducerLabels yard label anchor)")
+must_contain(TYB, 'invisibleAnchor(folder, "YardAnchor",', "owner-vis yard: YardAnchor kept")
+must_contain(TYB, 'invisibleAnchor(folder, "YardEarnAnchor",', "owner-vis yard: YardEarnAnchor kept (the yard cash plate is built from it)")
+must_contain(TYC, "YardEarnAnchor = { X = -16, Y = 5.5, Z = -9 },", "owner-vis yard: the cash plate lands on open ground at yard-local (-10, -13), off the range floor, <= 24 studs from YardPad")
+must_contain(TYB, 'p:SetAttribute("WE_TrainingTarget", true)', "owner-vis yard: TrainingTarget boards keep WE_TrainingTarget + PlotId")
+must_contain(TYC, 'table.insert(pieces, { Name = "TrainingTarget" .. i,', "owner-vis yard: targets keep the TrainingTarget1..3 names")
+# figures: R-RIG statue path (makeSoldierKit with the npc type), today's Part-kit look the fallback
+must_contain(TYB, "makeSoldierKit(folder, fig.Name, cf, fig.Body, nil, fig.Accent, TrainingYardConfig.FigureHealth, fig.Kind, nil)", "owner-vis yard: figures only through makeSoldierKit (R-RIG turns them into Roblox's Soldier)")
+must_contain(TYC, '{ Name = "YardShooter1", Kind = "Infantry", X = -7, Z = LANES[1], Yaw = -90,', "owner-vis yard: 3 soldiers at the firing line facing downrange (was 5 statues)")
+# meshes: Roblox-made Synty pieces of live packs, deferred, replace-never-add, capped, Part look complete on its own
+must_contain(TYB, "local ok, res = pcall(vas.CloneKitMesh, key)", "owner-vis yard: meshes only through VisualAssetService.CloneKitMesh (Roblox-owned DesertKit pieces)")
+must_contain(TYB, "\tif TrainingYardConfig.UseMeshes then\n\t\ttask.defer(function()", "owner-vis yard: the mesh dress is deferred (CloneKitMesh may yield on a pack's first load)")
+must_contain(TYB, "host.Transparency = 1 -- stays the collider under the mesh", "owner-vis yard: a colliding host stays as an invisible collider under its mesh")
+must_contain(TYB, "\t\t\t\telse\n\t\t\t\t\thost:Destroy()\n", "owner-vis yard: a non-colliding host is replaced by its mesh (replace, never add)")
+must_contain(TYB, "local k = math.min(hs.X / ext.X, hs.Y / ext.Y, hs.Z / ext.Z)", "owner-vis yard: a mesh is fitted inside its host box (one uniform scale)")
+must_contain(TYC, "MaxMeshesPerYard = 16,", "owner-vis yard: at most 16 mesh pieces per yard")
+must_contain(TYB, "if placed >= cap then\n\t\t\treturn placed", "owner-vis yard: the per-yard mesh cap is enforced")
+for _ty_key, _ty_ref in (
+    ("YardCrate", 'YardCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Wood_04",'),
+    ("YardAmmoCrate", 'YardAmmoCrate = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Crate_Metal_01",'),
+    ("YardRack", 'YardRack = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_WeaponRack_01",'),
+    ("YardLadder", 'YardLadder = { ModelAssetId = 6933790012, ChildName = "Meshes/PolygonDungeon_Props_SM_Prop_Ladder_01",'),
+):
+    must_contain(TY_VAC, _ty_ref, f"owner-vis yard: DesertKit.{_ty_key} is a Roblox-made Synty piece of a pack that already loads live (0 new ids)")
+# phone budget: no lights, Neon, SurfaceGuis, billboards, unbounded waits or third-party store keys in the yard
+for _ty_bad in ("PointLight", "SpotLight", "SurfaceLight", "Enum.Material.Neon", "SurfaceGui", "BillboardGui", "WaitForChild", "TryAttachPropVisual"):
+    must_not_contain(TYB, _ty_bad, f"owner-vis yard: TrainingYardBuilder has no `{_ty_bad}`")
+for _ty_bad in ("M.Neon", "Enum.Material.Neon", "Sandbag", "15271872710", "182529039", "2930926216"):
+    must_not_contain(TYC, _ty_bad, f"owner-vis yard: TrainingYardConfig has no `{_ty_bad}` (no Neon; the owner-picked SandBag Wall / Tent / Military Crates stay off the yard)")
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

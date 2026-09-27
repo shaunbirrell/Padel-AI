@@ -43,10 +43,13 @@
 	    mode; OpsSites only checks it. Its anchors sit up to ~380 studs away, so it must be on every client.
 	  * Every part stays inside the POI footprint (rect: every part's AABB; circle: the cluster disc). Terrain rubble /
 	    scorch (WorldKits.Rock, 0 parts) passes Blocked too and keeps its centre (rect) / disc (circle) inside.
-	  * Infra rows (the airstrip runway) are flat strips under POI_<Id>.Infra (one Model, WE_Infra: exempt from H10):
-	    every part flat and non-collidable, inside the footprint, and sampled along its length through Blocked.
-	  * The blocks are WorldKits.TownBlock rows; their Width / Depth / Storeys / Roof / Lantern (and HoldPad R) pass
-	    through kitOpts, so the planned count (Footprint) and the build always use the same options.
+	  * Infra rows (the airstrip runway, the Town pavements) are flat strips under POI_<Id>.Infra (one Model, WE_Infra:
+	    exempt from H10): every part flat and non-collidable, inside the footprint, and sampled along its length through
+	    Blocked. The Town's rows are WorldConfig.Town.Infra.
+	  * The Town's buildings are WorldKits.TownHouse rows (owner feedback 2026-09-27: Roblox-made pieces over a Part
+	    fallback; a kit with a deferred overlay never hosts an anchor); the other places' blocks are TownBlock rows. Their
+	    Variant / Width / Depth / Storeys / Roof / Lantern (and HoldPad R) pass through kitOpts, so the planned count
+	    (Footprint) and the build always use the same options.
 
 	ACTIVITY ANCHORS (W3 step 2; WorldConfig.Activity): invisible Attachments tagged WE_ActivityAnchor (0 parts), each
 	stamped through ActivityAnchors.Stamp, the one writer:
@@ -314,7 +317,7 @@ local function planned(c: TownCluster): (number, number, number)
 end
 
 local function infraOpts(inf: WorldConfig.InfraRow): WorldKits.KitOpts
-	return { Length = inf.Length, Taxiway = inf.Taxiway }
+	return { Length = inf.Length, Taxiway = inf.Taxiway, Width = inf.Width }
 end
 
 local function infraParts(inf: WorldConfig.InfraRow): number
@@ -371,7 +374,7 @@ end
 -- remember the parts the anchors may host on (the booth of each checkpoint, the activity host, a plain first part)
 local function noteKit(built: Built, kitId: string, parts: { BasePart }, kcf: CFrame)
 	local spec = WorldKits.Specs[kitId]
-	local plain = spec ~= nil and spec.Mesh == nil -- no deferred mesh overlay can replace or skin these parts
+	local plain = spec ~= nil and spec.Mesh == nil and spec.Overlay == nil -- no deferred mesh overlay can replace or skin these parts
 	local booth: BasePart? = nil
 	for _, p in ipairs(parts) do
 		if built.First == nil and plain then
@@ -754,7 +757,7 @@ end
 -- Crossroads Town: its rows live in WorldConfig.Town
 local function buildTown(ctx: Ctx)
 	local T = WorldConfig.Town
-	buildPlace(ctx, { Clusters = T.Clusters, Rocks = T.Rocks, Infra = {}, Anchors = T.Anchors, Board = T.BoardText, Seed = T.Seed, Layout = false })
+	buildPlace(ctx, { Clusters = T.Clusters, Rocks = T.Rocks, Infra = T.Infra, Anchors = T.Anchors, Board = T.BoardText, Seed = T.Seed, Layout = false })
 end
 
 -- POILayouts groups, required once (a failed or missing module warns and its places build nothing)
