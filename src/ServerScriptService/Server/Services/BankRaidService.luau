@@ -21,16 +21,31 @@
 	- The EMPIRE BANK sign is painted (WorldKits.Sign, inside the world sign budget) only when BankSign has none.
 	- Reward toast "Bank job +$23,456" (commas), MissionService.TrackProgress(player, "Heist", 1), and a one-time
 	  first-visit tip (profile.Raid.BankSeen) within BankRaidConfig.FirstVisitRadius.
+
+	Owner phone test 2026-09-27 ("the bank guards respawn super fast, never a chance to rob"), BankRaidConfig.GuardRespawn:
+	- The guards are spawned with SpawnNPC opts { NoRespawn = true } (their fight is unchanged: Aggressive, no leash, no
+	  group), so CombatService no longer brings each one back 18 s after its own death. This service keeps one slot per
+	  post and brings the dead ones back as a GROUP: DelaySeconds after the LAST bank-guard death (a payout brings it
+	  forward to AfterRaidSeconds after it; each guard at most MaxDownSeconds after its own death), never while a vault
+	  hold is running (at most RaidDeferMaxSeconds past due),
+	  never sooner than CombatService's own respawn time after a guard's death (no faster kill farm), only on a post no
+	  living player is near (ClearRadius) or can see (SightRadius, a ray from the eye), and ForceAfterSeconds past due
+	  anyway (never within MinSpawnStuds of a player; an occupied post uses the nearest clear spot), so a camper or an
+	  AFK farmer on the vault still meets the guards before the 5 min cooldown ends. The post test (a few raycasts per
+	  dead guard and player) runs at most once per CheckSeconds, and only while guards are due.
+	- GuardRespawn.Enabled = false: the old per-guard respawn exactly (2-argument SpawnNPC).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
 local Constants = require(Shared.Constants)
 local BankRaidConfig = require(Shared.Configs.BankRaidConfig)
+local CombatConfig = require(Shared.Configs.CombatConfig)
 local AnalyticsConfig = require(Shared.Configs.AnalyticsConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
 
@@ -60,6 +75,26 @@ local signTried = false
 -- under fire = a health drop seen within UnderFireSeconds (sampled on the 4 Hz tick; regen never counts)
 local lastHealth: { [number]: number } = {}
 local hurtAt: { [number]: number } = {}
+
+-- guard roster (BankRaidConfig.GuardRespawn): one slot per post, os.clock() times
+type GuardSlot = {
+	Post: CFrame,
+	Rec: any?, -- the living CombatService NPC record; nil = dead (DeadAt set) or never spawned (DeadAt nil: no delay)
+	DeadAt: number?,
+}
+local slots: { GuardSlot } = {}
+local lastGuardDeathAt: number? = nil -- every bank-guard death restarts the group clock
+local lastRaidEndAt: number? = nil -- the latest payout
+local nextRespawnCheckAt = 0
+local sightParams: RaycastParams? = nil
+local GUARD_OPTS = { NoRespawn = true } -- SpawnNPC copies its opts; today's fight otherwise (Aggressive, no leash / group)
+local SIGHT_IGNORE_FOLDERS = { "WarEmpireNPCs", "WarEmpireSquads" }
+local RING_STEPS = 8
+
+local function groupRespawnOn(): boolean
+	local gr = BankRaidConfig.GuardRespawn
+	return gr ~= nil and gr.Enabled == true
+end
 
 local LABEL = BankRaidConfig.Label
 local TEXT = BankRaidConfig.Text
@@ -353,22 +388,231 @@ local function spawnBankGuards()
 
 	local posts, source = BankRaidService.GuardPosts()
 	local typeId = BankRaidConfig.GuardNPCType or "BankGuard"
+	local group = groupRespawnOn()
 	local spawned = 0
 	for _, cf in ipairs(posts) do
-		local rec = CombatService.SpawnNPC(typeId, cf)
+		-- group respawn: this service brings the guard back (NoRespawn); off: CombatService's own per-guard respawn
+		local rec = if group then CombatService.SpawnNPC(typeId, cf, GUARD_OPTS) else CombatService.SpawnNPC(typeId, cf)
+		if group then
+			table.insert(slots, { Post = cf, Rec = rec, DeadAt = nil })
+			if rec then
+				rec.Model:SetAttribute("WE_BankPost", #slots) -- which post (tests / the Studio explorer)
+			end
+		end
 		if rec then
 			spawned += 1
 		end
 	end
-	print(string.format("[WAR EMPIRE] BankRaidService: spawned %d %s combat NPCs at bank (%d fixed posts from %s)", spawned, typeId, #posts, source))
+	print(string.format("[WAR EMPIRE] BankRaidService: spawned %d %s combat NPCs at bank (%d fixed posts from %s; %s)", spawned, typeId, #posts, source,
+		if group then "group respawn" else "per-guard respawn"))
 	if spawned == 0 then
 		warn("[WAR EMPIRE] BankRaidService: ZERO BankGuards — will retry once in 3s")
 		guardsSpawned = false
+		table.clear(slots)
 		task.delay(3, function()
 			if not guardsSpawned then
 				spawnBankGuards()
 			end
 		end)
+	end
+end
+
+-- ── group respawn (BankRaidConfig.GuardRespawn) ────────────────────────────────────────────────────────────
+-- CombatService's own respawn time for the guard type (NPCTypes[type].RespawnSeconds, else NPCRespawnSeconds): the
+-- floor, so no guard is ever back sooner after its own death than before the group respawn (no faster kill farm)
+local function guardFloorSeconds(): number
+	local def: any = CombatConfig.NPCTypes[BankRaidConfig.GuardNPCType or "BankGuard"]
+	local t = if def then tonumber(def.RespawnSeconds) else nil
+	if t and t > 0 then
+		return t
+	end
+	return tonumber(CombatConfig.NPCRespawnSeconds) or 18
+end
+
+--[[ os.clock() when the dead guards are due back as a group: the last bank-guard death + DelaySeconds, or a later
+	payout + AfterRaidSeconds if that is sooner (each guard: at most MaxDownSeconds after its own death, see
+	slotDueAt). nil while no guard has died (or the group respawn is off). For tests too. ]]
+function BankRaidService.GuardsDueAt(): number?
+	local last = lastGuardDeathAt
+	local gr = BankRaidConfig.GuardRespawn
+	if last == nil or gr == nil then
+		return nil
+	end
+	local due = last + gr.DelaySeconds
+	local raidEnd = lastRaidEndAt
+	if raidEnd ~= nil and raidEnd >= last then
+		due = math.min(due, raidEnd + gr.AfterRaidSeconds)
+	end
+	return due
+end
+
+-- the roster for tests / the Studio console: per post, alive or when its death was seen (os.clock())
+function BankRaidService.GuardRoster(): { { Post: CFrame, Alive: boolean, DeadAt: number? } }
+	local out = {}
+	for _, slot in ipairs(slots) do
+		table.insert(out, { Post = slot.Post, Alive = slot.Rec ~= nil, DeadAt = slot.DeadAt })
+	end
+	return out
+end
+
+type Viewer = { Root: Vector3, Eye: Vector3 }
+
+-- living players (root, eye) + what a sight ray ignores: every character, a seated player's vehicle, NPCs, squads
+local function livingViewers(): ({ Viewer }, { Instance })
+	local list: { Viewer } = {}
+	local ignore: { Instance } = {}
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local char = pl.Character
+		if char then
+			table.insert(ignore, char)
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			if hrp and hrp:IsA("BasePart") and hum and hum.Health > 0 then
+				table.insert(list, { Root = hrp.Position, Eye = hrp.Position + Vector3.new(0, 1.5, 0) })
+				local seat = hum.SeatPart
+				local vehicle = if seat then seat:FindFirstAncestorOfClass("Model") else nil
+				if vehicle and vehicle ~= char then
+					table.insert(ignore, vehicle)
+				end
+			end
+		end
+	end
+	for _, name in ipairs(SIGHT_IGNORE_FOLDERS) do
+		local f = Workspace:FindFirstChild(name)
+		if f then
+			table.insert(ignore, f)
+		end
+	end
+	return list, ignore
+end
+
+local function clearRay(from: Vector3, to: Vector3, params: RaycastParams): boolean
+	local d = to - from
+	if d.Magnitude < 1e-3 then
+		return true
+	end
+	return Workspace:Raycast(from, d, params) == nil
+end
+
+-- no living player within ClearRadius of the post, and none within SightRadius who can see its torso or head
+local function postIsFree(p: Vector3, viewers: { Viewer }, params: RaycastParams): boolean
+	local gr = BankRaidConfig.GuardRespawn
+	local head = p + Vector3.new(0, 1.5, 0)
+	for _, v in ipairs(viewers) do
+		local d = (v.Root - p).Magnitude
+		if d < gr.ClearRadius then
+			return false
+		end
+		if d <= gr.SightRadius and (clearRay(v.Eye, p, params) or clearRay(v.Eye, head, params)) then
+			return false
+		end
+	end
+	return true
+end
+
+local function farFromAll(p: Vector3, viewers: { Viewer }, minD: number): boolean
+	for _, v in ipairs(viewers) do
+		if (v.Root - p).Magnitude < minD then
+			return false
+		end
+	end
+	return true
+end
+
+--[[ A forced spawn for a post a player stands on: the nearest spot MinSpawnStuds .. MinSpawnStuds + 6 from the post
+	that is MinSpawnStuds from every player, reachable in a straight line from the post (nothing collidable at knee or
+	chest height: the same room, never inside a wall) and has a floor under it. nil = none (tried again next check). ]]
+local function displacedSpot(post: CFrame, viewers: { Viewer }, params: RaycastParams): CFrame?
+	local gr = BankRaidConfig.GuardRespawn
+	local p = post.Position
+	local lift = BankRaidConfig.GuardRootLift or 3
+	local knee, chest = Vector3.new(0, -1.2, 0), Vector3.new(0, 0.5, 0)
+	for r = gr.MinSpawnStuds, gr.MinSpawnStuds + 6, 3 do
+		for i = 0, RING_STEPS - 1 do
+			local a = i * (2 * math.pi / RING_STEPS)
+			local q = p + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
+			if farFromAll(q, viewers, gr.MinSpawnStuds) and clearRay(p + knee, q + knee, params) and clearRay(p + chest, q + chest, params) then
+				local floor = Workspace:Raycast(q, Vector3.new(0, -(lift + 2), 0), params)
+				if floor then
+					return CFrame.new(floor.Position + Vector3.new(0, lift, 0)) * (post - post.Position)
+				end
+			end
+		end
+	end
+	return nil
+end
+
+-- someone's vault hold is running (the previous tick's state)
+local function raidRunning(): boolean
+	for uid, prog in pairs(holdProgress) do
+		if prog > 0 and inVaultNow[uid] == true then
+			return true
+		end
+	end
+	return false
+end
+
+--[[ The 4 Hz step: note the deaths, then (at most once per CheckSeconds, only while guards are due) bring back the
+	dead guards whose post is free, or any blocked one ForceAfterSeconds past due. ]]
+local function stepGuards(nowC: number)
+	if #slots == 0 or not groupRespawnOn() then
+		return
+	end
+	local anyDown = false
+	for _, slot in ipairs(slots) do
+		local rec = slot.Rec
+		if rec ~= nil and not (rec.Alive == true and rec.Humanoid.Health > 0 and rec.Model.Parent ~= nil) then
+			slot.Rec = nil
+			slot.DeadAt = nowC
+			lastGuardDeathAt = nowC
+		end
+		if slot.Rec == nil then
+			anyDown = true
+		end
+	end
+	if not anyDown or nowC < nextRespawnCheckAt then
+		return
+	end
+	local gr = BankRaidConfig.GuardRespawn
+	nextRespawnCheckAt = nowC + gr.CheckSeconds
+	local due = BankRaidService.GuardsDueAt() or -math.huge
+	local floorS = guardFloorSeconds()
+	local robbing = raidRunning()
+	local vs: { Viewer } = {}
+	local prepared = false -- the players and the ray filter, read once per check and only when a guard is due
+	local params = sightParams or RaycastParams.new()
+	sightParams = params
+	local typeId = BankRaidConfig.GuardNPCType or "BankGuard"
+	for i, slot in ipairs(slots) do
+		local deadAt = slot.DeadAt
+		-- the group due, capped at MaxDownSeconds after this guard's own death, never before the CombatService floor
+		local slotDue = if deadAt then math.max(math.min(due, deadAt + gr.MaxDownSeconds), deadAt + floorS) else due
+		-- a robbery in progress: nobody walks in on it (at most RaidDeferMaxSeconds past due)
+		if slot.Rec == nil and nowC >= slotDue and not (robbing and nowC < slotDue + gr.RaidDeferMaxSeconds) then
+			if not prepared then
+				prepared = true
+				local ignore: { Instance }
+				vs, ignore = livingViewers()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.FilterDescendantsInstances = ignore
+				params.IgnoreWater = true
+				params.RespectCanCollide = true
+			end
+			local cf: CFrame? = nil
+			if postIsFree(slot.Post.Position, vs, params) then
+				cf = slot.Post
+			elseif nowC >= slotDue + gr.ForceAfterSeconds then
+				cf = if farFromAll(slot.Post.Position, vs, gr.MinSpawnStuds) then slot.Post else displacedSpot(slot.Post, vs, params)
+			end
+			if cf then
+				local rec = CombatService.SpawnNPC(typeId, cf, GUARD_OPTS)
+				if rec then -- nil: the NPC cap is full; tried again next check
+					slot.Rec = rec
+					slot.DeadAt = nil
+					rec.Model:SetAttribute("WE_BankPost", i)
+				end
+			end
+		end
 	end
 end
 
@@ -415,6 +659,7 @@ local function completeRaid(player: Player)
 		pushState(player, { InVault = false, UnderFire = false })
 		return -- no profile: nothing paid, so no cooldown either
 	end
+	lastRaidEndAt = os.clock() -- GuardRespawn.AfterRaidSeconds: the bank refills after a payout
 	local cd = BankRaidConfig.CooldownSeconds or 300
 	setCooldown(player, os.time() + cd)
 	if BankRaidConfig.NotifyOnRaid and NotificationService then
@@ -542,6 +787,7 @@ function BankRaidService.Init(deps: { [string]: any })
 		end
 		local step = accum
 		accum = 0
+		stepGuards(os.clock()) -- before the vault lookup: the guards come back even if the vault is missing
 
 		local vault = findVault()
 		if not vault then

@@ -12,10 +12,14 @@
 	gold), the arrow and distance follow the target, and the chip also shows inside your own plot (GO is usually
 	tapped at home). It still hides while a panel is open. Arrival / Clear / timeout → back to BASE. The chip reads
 	ObjectiveMarker.Revision() each tick and copies the target only when it changed (no per-tick allocation).
+	Owner phone 2026-09-27: Roblox's own topbar health bar shows in this chip's slot (top-right) whenever you are hurt
+	and covered "BASE 1.2km" at the bank. Init switches it off (HudConfig.TopStrip.Compass.HideRobloxHealthBar): our
+	health bar above the hotbar and the red DamageEdge (CombatController) already show health, so the slot is ours.
 ]]
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -312,7 +316,30 @@ local function buildChip(area: Frame)
 	HudLayout.SetRect("Compass", c)
 end
 
+-- Roblox's topbar health bar sits in the compass slot while you are hurt (owner screenshot): off, config-first.
+-- SetCoreGuiEnabled is a plain client call; pcall'd and retried a few times in case a slow client is not ready.
+local function hideRobloxHealthBar()
+	if C.HideRobloxHealthBar ~= true then
+		return
+	end
+	task.spawn(function()
+		for attempt = 1, 5 do
+			local ok = pcall(function()
+				StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+			end)
+			if ok then
+				return
+			end
+			if attempt < 5 then
+				task.wait(1)
+			end
+		end
+		warn("[CompassController] could not hide the Roblox health bar (it may cover the compass while hurt)")
+	end)
+end
+
 function CompassController.Init()
+	hideRobloxHealthBar()
 	local area = HUDController.GetTopStripArea()
 	if area then
 		buildChip(area)

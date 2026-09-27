@@ -193,6 +193,12 @@ HudConfig.TopStrip = {
 		OwnPlotMarginStuds = 12,
 		RadarDot = Color3.fromRGB(190, 110, 255), -- 8 px pulsing dot at the chip's left while RadarReveal is on
 		TapOpensTerritories = true, -- tap → TerritoryController dropdown under the chip (the old list)
+		-- Owner phone screenshot 2026-09-27 (at the bank, being shot): Roblox's own topbar health bar draws in THIS chip's
+		-- slot (top-right of the topbar row, same 44 px pill, same edge pad) whenever you are hurt, so a yellow bar sat
+		-- over "BASE 1.2km". Our health bar above the hotbar (Health, CombatController) and the red DamageEdge already
+		-- show health, so CompassController switches the Roblox copy off (StarterGui:SetCoreGuiEnabled Health, false).
+		-- false = Roblox's bar comes back (and covers the compass again while hurt).
+		HideRobloxHealthBar = true,
 	},
 }
 
@@ -459,6 +465,18 @@ HudConfig.Health = {
 	HideAfterFullSeconds = 3,
 	HideWhen = { "Driving", "Dead", "Modal" },
 	LowHpVignette = 0.25, -- below 25 % a soft red screen-edge vignette replaces the full-screen red strobe
+	-- In a seat that cannot shoot (a driver, a closed-vehicle passenger) the combat HUD hides, so the SAME bar moves to
+	-- the top-centre stack, right under VehicleCombatClient's vehicle bar (VehicleCombatConfig.Ui.HudBar
+	-- TouchStackOrder 24) and above the SPD pill (25): open-vehicle drivers still take hits to their own Humanoid, and
+	-- Roblox's topbar health bar is off (TopStrip.Compass.HideRobloxHealthBar). Same ShowWhen as on foot.
+	-- Enabled = false: HEAD (no player bar while seated). Sizes in REAL px (no UIScale maths in config).
+	Seated = {
+		Enabled = true,
+		StackOrder = 24.5,
+		WidthPx = 230, -- = VehicleCombatConfig.Ui.HudBar.Width, so the two bars line up
+		HeightPx = 10, -- = VehicleCombatConfig.Ui.HudBar.Height
+		HideWhen = { "Dead", "Modal" },
+	},
 }
 
 HudConfig.ActionLane = {

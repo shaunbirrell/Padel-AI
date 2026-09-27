@@ -6487,6 +6487,110 @@ must_contain(AW_CLI, "b.Hint.Visible = keys and k ~= nil", "airweapons: key hint
 for _aw_bad in ("RenderStepped", "Heartbeat", "GetDescendants", 'WaitForChild("WE_Remotes")'):
     must_not_contain(AW_CLI, _aw_bad, f"airweapons: fire buttons never use `{_aw_bad}`")
 
+# --- ownerfb BANK lane (owner phone 2026-09-27): "the bank guards respawn super fast, never a chance to rob the bank" and
+#     the yellow bar over the compass. Live Jobs-OFF bank: BankRaidService owns the guard respawn (SpawnNPC NoRespawn) and
+#     brings the dead guards back as one group (BankRaidConfig.GuardRespawn); CompassController turns Roblox's own topbar
+#     health bar off (it drew in the compass slot while hurt). Kill cash / XP, CombatService's respawn time and the
+#     Jobs-ON staged values (OpsConfig top-up, 670bbf6) are unchanged. Stand-in drivers: ownerfb/bank (not Roblox). ---
+BG_BRS = 'src/ServerScriptService/Server/Services/BankRaidService.luau'
+BG_BRC = 'src/ReplicatedStorage/Shared/Configs/BankRaidConfig.luau'
+BG_CC = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CompassController.luau'
+# the numbers (config-first): a 90 s window after the last kill, 30 s after a payout, each guard back within 180 s of its
+# own death (+45 s forced), a hold defers them 60 s at most, never within 25 studs / in sight (150) unless forced, and
+# never within 8 studs even then
+for _bg in ('\tGuardRespawn = {\n\t\tEnabled = true,', '\t\tDelaySeconds = 90,', '\t\tMaxDownSeconds = 180,', '\t\tAfterRaidSeconds = 30,',
+            '\t\tRaidDeferMaxSeconds = 60,', '\t\tClearRadius = 25,', '\t\tSightRadius = 150,', '\t\tForceAfterSeconds = 45,',
+            '\t\tMinSpawnStuds = 8,', '\t\tCheckSeconds = 1,'):
+    must_contain(BG_BRC, _bg, 'ownerfb bank: BankRaidConfig.GuardRespawn `%s`' % _bg.split('\n')[-1].strip())
+# the guards are NoRespawn in group mode (CombatService no longer brings each back 18 s after its own death); the kill
+# switch keeps the old 2-argument spawn
+must_contain(BG_BRS, 'local GUARD_OPTS = { NoRespawn = true }', 'ownerfb bank: bank guards spawn NoRespawn (BankRaidService owns the respawn)')
+must_contain(BG_BRS, 'local rec = if group then CombatService.SpawnNPC(typeId, cf, GUARD_OPTS) else CombatService.SpawnNPC(typeId, cf)', 'ownerfb bank: GuardRespawn.Enabled = false keeps the old per-guard respawn')
+must_contain(BG_BRS, '\treturn gr ~= nil and gr.Enabled == true', 'ownerfb bank: the group respawn runs only with GuardRespawn.Enabled')
+# the respawn rules: group due, per-guard MaxDown cap, CombatService floor (no faster kill farm), robbery defer, free
+# post (no player near / in sight), forced (never within MinSpawnStuds; an occupied post moves)
+must_contain(BG_BRS, '\tlocal due = last + gr.DelaySeconds', 'ownerfb bank: the group clock is the last guard death + DelaySeconds')
+must_contain(BG_BRS, '\t\tdue = math.min(due, raidEnd + gr.AfterRaidSeconds)', 'ownerfb bank: a payout brings the refill forward to AfterRaidSeconds after it')
+must_contain(BG_BRS, 'local slotDue = if deadAt then math.max(math.min(due, deadAt + gr.MaxDownSeconds), deadAt + floorS) else due', 'ownerfb bank: each guard at most MaxDownSeconds after its own death, never before the CombatService floor')
+must_contain(BG_BRS, '\treturn tonumber(CombatConfig.NPCRespawnSeconds) or 18', 'ownerfb bank: the floor is CombatService\'s own respawn time (no faster kill farm)')
+must_contain(BG_BRS, 'and not (robbing and nowC < slotDue + gr.RaidDeferMaxSeconds)', 'ownerfb bank: nobody walks in on a running vault hold (RaidDeferMaxSeconds cap)')
+must_contain(BG_BRS, '\t\tif d < gr.ClearRadius then\n\t\t\treturn false\n\t\tend\n\t\tif d <= gr.SightRadius and (clearRay(v.Eye, p, params) or clearRay(v.Eye, head, params)) then', 'ownerfb bank: a free post has no player within ClearRadius and none in sight within SightRadius')
+must_contain(BG_BRS, '\t\t\telseif nowC >= slotDue + gr.ForceAfterSeconds then\n\t\t\t\tcf = if farFromAll(slot.Post.Position, vs, gr.MinSpawnStuds) then slot.Post else displacedSpot(slot.Post, vs, params)', 'ownerfb bank: forced after ForceAfterSeconds, never within MinSpawnStuds (an occupied post moves)')
+must_contain(BG_BRS, '\tlastRaidEndAt = os.clock() -- GuardRespawn.AfterRaidSeconds', 'ownerfb bank: a payout is noted for the refill (after AddCash succeeded)')
+must_contain(BG_BRS, '\t\tstepGuards(os.clock()) -- before the vault lookup', 'ownerfb bank: the 4 Hz bank tick steps the guard roster')
+must_contain(BG_BRS, '\tif not anyDown or nowC < nextRespawnCheckAt then\n\t\treturn\n\tend\n\tlocal gr = BankRaidConfig.GuardRespawn\n\tnextRespawnCheckAt = nowC + gr.CheckSeconds', 'ownerfb bank: the post / sight test runs at most once per CheckSeconds and only while a guard is down')
+must_not_contain(BG_BRS, 'WaitForChild("NPCs")', 'ownerfb bank: no unbounded wait for the NPC folder (FindFirstChild only)')
+# unchanged: kill cash / XP per bank guard, CombatService's respawn time, the Jobs-ON top-up (670bbf6)
+must_contain('src/ReplicatedStorage/Shared/Configs/CombatConfig.luau', '\t\t\tCashReward = 150,\n\t\t\tXPReward = 45,\n\t\t\tColor = Color3.fromRGB(55, 65, 120),', 'ownerfb bank: bank-guard kill cash 150 / XP 45 unchanged')
+must_contain('src/ReplicatedStorage/Shared/Configs/CombatConfig.luau', '\tNPCRespawnSeconds = 18,', 'ownerfb bank: CombatConfig.NPCRespawnSeconds unchanged (18)')
+must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '\t\tTopUpDelaySeconds = 18,', 'ownerfb bank: the Jobs-ON bank top-up delay is unchanged (Jobs OFF; cutover item, ASSUMPTIONS BG-7)')
+# the compass slot: Roblox's topbar health bar is off (our health bar + DamageEdge show health)
+must_contain('src/ReplicatedStorage/Shared/Configs/HudConfig.luau', '\t\tHideRobloxHealthBar = true,', 'ownerfb bank: HudConfig.TopStrip.Compass.HideRobloxHealthBar')
+must_contain(BG_CC, '\t\t\t\tStarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)', 'ownerfb bank: the compass turns Roblox\'s topbar health bar off (it drew in the compass slot)')
+must_contain(BG_CC, 'function CompassController.Init()\n\thideRobloxHealthBar()', 'ownerfb bank: the health bar goes off at compass Init')
+must_contain(BG_CC, '\tif C.HideRobloxHealthBar ~= true then\n\t\treturn\n\tend', 'ownerfb bank: the Roblox health bar switch is config-first')
+# fix round 1: with Roblox's topbar bar off, the player's own health still shows in a seat that cannot shoot (a driver
+# of an open vehicle takes guard hits to his Humanoid): the same bar moves to the top-centre stack under the vehicle bar
+BG_CMB = 'src/StarterPlayer/StarterPlayerScripts/Client/Controllers/CombatController.luau'
+must_contain('src/ReplicatedStorage/Shared/Configs/HudConfig.luau', '\tSeated = {\n\t\tEnabled = true,\n\t\tStackOrder = 24.5,\n\t\tWidthPx = 230, -- = VehicleCombatConfig.Ui.HudBar.Width, so the two bars line up\n\t\tHeightPx = 10, -- = VehicleCombatConfig.Ui.HudBar.Height\n\t\tHideWhen = { "Dead", "Modal" },\n\t},', 'ownerfb bank fix1: HudConfig.Health.Seated (on, order 24.5 under the vehicle bar, no "Driving" in HideWhen)')
+must_contain(BG_CMB, '\tlocal want = typeof(cfg) == "table" and cfg.Enabled == true and not seatAllowsFire()', 'ownerfb bank fix1: the seated health bar is config-first and follows seatAllowsFire')
+must_contain(BG_CMB, '\t\tHudLayout.BindVisibility(hp, { ShowWhen = HP.ShowWhen, HideWhen = cfg.HideWhen })\n\t\tHudLayout.RegisterTopStack("PlayerHP", hp, tonumber(cfg.StackOrder) or 24.5, { Space = "Hud" })', 'ownerfb bank fix1: seated, the health bar joins the top stack with Seated.HideWhen')
+must_contain(BG_CMB, '\tHudLayout.UnregisterTopStack("PlayerHP")', 'ownerfb bank fix1: on foot again, the health bar leaves the top stack')
+must_contain(BG_CMB, '\tHudLayout.BindVisibility(hp, HP, seatAllowsFire)\nend', 'ownerfb bank fix1: on foot again, the on-foot rule is restored')
+must_contain(BG_CMB, 'local function refreshBound()\n\tW2.placeHealth()', 'ownerfb bank fix1: every seat / Driving change re-places the health bar')
+must_contain(BG_CMB, '\t\tif hp and not Feel.HpStacked then\n\t\t\thp.Size = UDim2.fromOffset(math.max(w, HP.MinWidth), HP.Height)', 'ownerfb bank fix1: the hotbar never resizes the seated bar')
+
+# --- ownerfb/gate (owner phone feedback 2026-09-27, "The turrets should be outside the gate"): the AutoGun nests stand
+# OUTSIDE the main gate, one each side of the approach, backs to the wall; the guards stay inside; an AutoGun fires at
+# the first enemy it can SEE (its side of the wall first, the last ray probing the rest in turn), every shot rolls a hit
+# chance and shows a tracer (CLAUDE.md combat fairness), no ray reads "clear" past its length, and an outside gun's
+# reach is capped (AutoGunOutsideMaxRange) so the default Starter Rifle can still siege the gate from beyond it.
+# Headless-verified (NOT Roblox): every pin below PASSES on the ownerfb/gate candidate; each [new], [fix1] or [fix2] pin
+# FAILS on clean 3b5ac28 (28); each [fix2] pin also FAILS on the fix-round-1 candidate (4, and nothing else fails there);
+# the one [guard] pin passes on every tree on purpose (the guards must stay inside). Paste above the final
+# `parse_gate()` call.
+OFG_GDS = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+OFG_GDC = "src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau"
+must_contain(OFG_GDC, "\tAutoGunOutside = true,", "ownerfb/gate [new]: AutoGun nests stand OUTSIDE the main gate (config switch on; false = the v69 inside posts)")
+must_contain(OFG_GDC, "\tAutoGunOutsideFlankX = 16,", "ownerfb/gate [new]: outside nests 16 studs either side of the gate centre (a 30-degree approach of the widest body passes)")
+must_contain(OFG_GDC, "\tAutoGunOutsideWallGap = 4.5,", "ownerfb/gate [new]: outside nests 4.5 studs past the wall's outer face (a full 2.2-stud sandbag still clears the wall)")
+must_contain(OFG_GDS, 'for _, name in ipairs({ "WallGate_L", "WallGate_R" }) do', "ownerfb/gate [new]: the wall thickness is read from the built gate-face wall, never assumed")
+must_contain(OFG_GDS, "local gunOutZ = if outside then gateWallHalfThickness(plotFolder, posts) + GateDefenseConfig.AutoGunOutsideWallGap else 0", "ownerfb/gate [new]: outside post = wall outer face + AutoGunOutsideWallGap")
+must_contain(OFG_GDS, "then gateCf * CFrame.new(sx, 0, gunOutZ) * CFrame.Angles(0, math.pi + math.rad(yaw), 0)", "ownerfb/gate [new]: outside post on gate-local +Z (away from PlayerSpawn), facing out, toed in by AutoGunYawDeg")
+must_contain(OFG_GDS, "local at = gateCf * CFrame.new(sx, 0, -guardInside)", "ownerfb/gate [guard]: the gate guards stay INSIDE the gate (they chase to the ATM; a closed gate would lock them out)")
+must_contain(OFG_GDS, "for _, c in ipairs(enemiesInAggro(def, fromPos, aggro, aggro)) do", "ownerfb/gate [new]: an AutoGun walks the enemies in priority order")
+must_not_contain(OFG_GDS, "local plr, hum, troot, dist = nearestEnemy(def, fromPos, aggro, aggro)", "ownerfb/gate [new]: an AutoGun no longer locks on a top-priority enemy behind the wall")
+must_contain(OFG_GDS, "\t\tif insidePlot(def, c.Root.Position) ~= t.Outside then\n\t\t\ttable.insert(cands, c)", "ownerfb/gate [fix1]: enemies on the gun's side of the wall are tried first (3 behind the wall no longer switch the outside guns off)")
+must_contain(OFG_GDS, "local head = math.min(n, rays - 1)", "ownerfb/gate [fix1]: all rays but the last go to the top of the list")
+must_contain(OFG_GDS, "local at = idx or (head + 1 + (t.ProbeStep % (n - head)))", "ownerfb/gate [fix1]: the last ray probes the rest of the list in turn (stays on an enemy it sees)")
+must_contain(OFG_GDS, "\t\t\tt.ProbeStep = at - head -- next think: the one after it", "ownerfb/gate [fix1]: an unseen probe moves on next think")
+must_contain(OFG_GDS, "\t\t\tt.Outside = outside\n", "ownerfb/gate [fix1]: each gun knows which side of the wall it stands on")
+must_contain(OFG_GDS, "\tif dir.Magnitude > (GateDefenseConfig.LosMaxDistance or 125) then\n\t\treturn false\n\tend", "ownerfb/gate [fix1]: past the ray length the target is NOT in sight (was cut at 110 and read as clear)")
+must_not_contain(OFG_GDS, "dir = dir.Unit * maxD", "ownerfb/gate [fix1]: the line-of-sight ray is never cut short and read as clear")
+must_contain(OFG_GDC, "\tLosMaxDistance = 125,", "ownerfb/gate [fix1]: LosMaxDistance 125 >= every TurretRange / AggroRange / ShootRange (115 / 120 / 78)")
+must_contain(OFG_GDS, "\t\tlocal hit = turretRng:NextNumber() < turretHitChance(dist, aggro)\n\t\tif hit then\n\t\t\tdealDamage(", "ownerfb/gate [new]: every AutoGun shot rolls the hit chance (CLAUDE.md: NPC shots need line of sight and a hit chance)")
+must_contain(OFG_GDS, "\t\tturretShotFx(def, t, fromPos, troot.Position, hit)", "ownerfb/gate [fix1]: every AutoGun roll, hit or miss, shows a tracer")
+must_contain(OFG_GDS, 'pcall(fx.Bullet, "gate:" .. tostring(def.PlotId) .. ":" .. tostring(t.Slot), 0, "NPC", origin, landed, if hit then "P" else "M")', "ownerfb/gate [fix1]: AutoGun tracers go through the W2 WeaponFx path (CombatFx.Bullet: UnreliableRemoteEvent, per-gun + per-recipient buckets)")
+must_contain(OFG_GDS, 'local fxModule = cs and cs:FindFirstChild("CombatFx")', "ownerfb/gate [fix1]: CombatFx found without WaitForChild and without requiring CombatService")
+must_contain(OFG_GDC, "\tTurretShotFx = true,", "ownerfb/gate [fix1]: AutoGun shot effects on")
+must_contain(OFG_GDC, "\tTurretHitChanceNear = 0.75,", "ownerfb/gate [new]: AutoGun hit chance 0.75 at or inside TurretHitNearStuds")
+must_contain(OFG_GDC, "\tTurretHitChanceFar = 0.30,", "ownerfb/gate [new]: AutoGun hit chance 0.30 at the gun's reach")
+must_contain(OFG_GDC, "\tTurretLosChecksPerThink = 3,", "ownerfb/gate [new]: at most 3 line-of-sight rays per AutoGun per think")
+must_contain(OFG_GDC, "\tAutoGunOutsideMaxRange = 100,", "ownerfb/gate [fix2]: an outside AutoGun reaches at most 100 studs (Starter Rifle reach 124 keeps a ~106-124 band to siege the gate; L5's 115 left ~2)")
+must_contain(OFG_GDS, "\tlocal aggro = turretReach(stats, t.Outside)\n", "ownerfb/gate [fix2]: an AutoGun's engage + hit-chance reach comes from turretReach (outside cap)")
+must_contain(OFG_GDS, "\tif outside and typeof(cap) == \"number\" and cap > 0 then\n\t\tr = math.min(r, cap)\n\tend", "ownerfb/gate [fix2]: outside posts take min(TurretRange, AutoGunOutsideMaxRange); inside (rollback) posts keep TurretRange")
+must_not_contain(OFG_GDS, "local aggro = stats.TurretRange or 100", "ownerfb/gate [fix2]: an AutoGun no longer engages at the raw level TurretRange")
+# results (LUAU_COMPILE=scratchpad/bin/luau-compile, headless; fix round 2): CAND (3b5ac28 + this lane + this block) Done PASS=3418 FAIL=0 (29/29 ownerfb pins PASS);
+# clean 3b5ac28 + this block: Done PASS=3390 FAIL=28 = exactly the 28 [new]/[fix1]/[fix2] pins, 0 other failures; the [guard] pin passes;
+# fix-round-1 candidate + this block: Done PASS=3414 FAIL=4 = exactly the 4 [fix2] pins;
+# CAND + vscale R2.2 files (GateDefenseService 3-way merged, 0 conflicts) + the vscale bps_pins.txt block together: Done PASS=3514 FAIL=0.
+# ownerfb/gate [fix3, integrator]: ApplyDamage's player gate-hit limit lives in config (was a literal 120); the outside-gun
+# cap must leave the Starter Rifle a siege band inside it (cap 100 + ~6 post offset < 120).
+OFG_GDS_F3 = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+must_contain(OFG_GDC, "\tGateHitMaxDistance = 120,", "ownerfb/gate [fix3]: GateHitMaxDistance 120 in GateDefenseConfig")
+must_contain(OFG_GDS_F3, "else GateDefenseConfig.GateHitMaxDistance", "ownerfb/gate [fix3]: ApplyDamage reads GateDefenseConfig.GateHitMaxDistance")
+must_not_contain(OFG_GDS_F3, "GuardHitMaxDistance else 120", "ownerfb/gate [fix3]: no literal 120 gate-hit limit in ApplyDamage")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

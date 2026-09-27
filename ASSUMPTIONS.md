@@ -5210,3 +5210,275 @@ Everything below is server-side and can be reverted by config (spec_xp.md §13).
 - **A-AW-16: fire-button placement and keys.** The buttons sit left of the ▼ button (phones: ▲▼ above the jump button). When the EXIT pill is beside ▼, they sit left of EXIT instead. They are 64 real px on phones and 72 on tablets and desktop, in their own ScreenGui without a UIScale. PC keys: left mouse = button 1, R = button 2. Gamepad: Y / X. Keys and hints show only when PreferredInput is keyboard or gamepad. Revert: `AircraftWeaponConfig.Ui` and `AirWeaponsClient.Layout`.
 - **A-AW-17: combined request cap.** A pilot sends at most 10 fire requests per second across all buttons (`Ui.MaxRequestHz`). With the 10 Hz drive input stream that stays within 20 remote sends per second.
 - **A-AW-18: the v79 vehicle-gun hooks are reused as muzzle points.** Six aircraft refs were added to `VisualAssetConfig.VehicleWeapons` with ModelAssetId 0, so nothing loads. Their `Mount` kit parts are the muzzles and bays: Cockpit, StubWingL (mirrored), Nose, WingL (mirrored), Chassis, Bay. Their allow-lists match the armed aircraft (a test checks this). A future dress id on AirStrikeBombs would be fitted into the Chassis box, so give it HideParts / FitScale first.
+
+## 2026-09-27 — Owner phone feedback: bank guards come back as one group after a real window; Roblox's health bar off the compass slot
+
+Owner: "When you kill the bank guards they respawn super fast, doesn't ever give you a chance to rob the bank", plus the
+screenshot's yellow bar over the top-right compass pill. Live bank = Jobs OFF (BankRaidService + CombatService).
+All numbers below are from the headless stand-in (ownerfb/bank drivers), NOT Roblox.
+
+- **BG-1 What HEAD does.** BankRaidService spawns the five guards with a 2-argument `CombatService.SpawnNPC`, so
+  CombatService brings EACH guard back `CombatConfig.NPCRespawnSeconds` (18 s) after its own death, on its post, whoever
+  stands there. A phone fight of five 200 HP guards takes 16-48 s, so the first guards are back before the last one
+  falls. Stand-in, scripted kills 4 / 8 / 12 s apart: last kill -> first guard back +2.0 s / -14.0 s / -30.0 s (2 and 3
+  guards already back at the last kill); the raider reaches the vault 4.4 s after the last kill, is shot, never gets
+  paid and dies (+17.9 s / +8.4 s / +4.5 s). Realistic phone raids (10 seeds, 3 lives, 45 s back after a death): with a
+  3-unit escort 6/10 robbed, alone 2/10.
+- **BG-2 The fix (config-first, `BankRaidConfig.GuardRespawn`).** Guards spawn with `SpawnNPC(..., { NoRespawn = true })`
+  (their fight is unchanged: Aggressive, no leash, no group) and BankRaidService keeps one slot per post:
+  `DelaySeconds 90` after the LAST bank-guard death (every kill restarts it), a payout brings it to `AfterRaidSeconds
+  30` after the payout, each guard at most `MaxDownSeconds 180` after its own death, never sooner than CombatService's
+  own respawn time after its own death, never while a vault hold runs (`RaidDeferMaxSeconds 60` past due at most), only
+  on a post with no living player within `ClearRadius 25` and none within `SightRadius 150` who can see it, and
+  `ForceAfterSeconds 45` past due anyway, never within `MinSpawnStuds 8` of a player. Checks run at most once per
+  `CheckSeconds 1`, only while a guard is due. Why 90: the measured walk-in + 6 s hold is 10.2 s from the plaza (vault
+  reached +4.4 s); 90 s also covers a death, the 5 s respawn and a ~40 s drive back. Stand-in after the fix: no guard
+  back inside the window at any cadence, paid +10.2 s after the last kill, 0 hits; realistic raids 10/10 with the
+  escort (0.8 deaths per run) and 10/10 alone (1.4). Reversible: config only; `Enabled = false` restores HEAD exactly
+  (the window driver's output with the switch off is byte-identical to HEAD's for TL, FARM, PART and DEFER).
+- **BG-3 "Never in sight / on top" has one exception: the camper rule.** The inside post (G5, by the vault door) is the
+  only post that sees the vault centre, and all five posts are within 25 studs of it, so a player standing on the vault
+  would block every normal respawn for ever and could rob again every 5 minutes (mutant m5 "no forced rule": 2 payouts
+  while AFK). So a guard blocked 45 s past due comes back even in view, never within 8 studs; a post a player stands on
+  moves the guard to the nearest clear spot 8-14 studs away (a straight clear line from the post at knee and chest
+  height, a floor under it). Stand-in: AFK on the vault after the payout -> guards back +75 s, AFK player hit +76 s,
+  dead +81 s, 1 payout; AFK on the inside post -> the out-of-sight front guards come back +30 s and walk in; AFK with a
+  3-unit escort for 900 s -> 1 payout. No spawn in any run came within 8 studs of a player; every near / in-sight spawn
+  was a forced one.
+- **BG-4 MaxDownSeconds 180 per guard.** Without it, killing the one guard nobody can see (G5 comes back "free") every
+  91 s kept the other four away for ever (first cut, stand-in: 14 kills in 900 s, four guards never back). With it, no
+  guard stayed dead longer than 226 s in the 900 s farm (mutant m7 without the cap: 899 s).
+- **BG-5 Kill cash / XP and the farm rules are unchanged.** BankGuard CashReward 150 / XPReward 45, the squad unit
+  shares and `UnitKillCreditOnAttack false` are untouched (pinned). The kill farm only gets slower: a farmer on Bank
+  Street killing every guard 1 s after it appears, 900 s: HEAD 240 kills ($36,000, 16/min), candidate 25 ($3,750,
+  1.7/min), $150 per kill on both.
+- **BG-6 The floor.** A guard is never back sooner than CombatService's own respawn time (`NPCTypes.BankGuard.RespawnSeconds`
+  if set, else `NPCRespawnSeconds` 18) after its own death. With Delay 2 / AfterRaid 1 / ForceAfter 1 the shortest death
+  -> back at the same post was 18.2 s (mutant m3 without the floor: 2.2 s).
+- **BG-7 Jobs ON is untouched.** At the cutover `BankRaidConfig.Enabled = false` (OpsSites refuses two bank jobs), so
+  none of this runs; the Ops bank keeps its own top-up (`OpsConfig.Npc.TopUpDelaySeconds 18`, `TopUpClearRadius 60`,
+  Open state only; no top-up while a heist is Active). The 670bbf6 pins (GuardPosts, Breach 7 s, Crack r 6, 3 bags) all
+  pass on the candidate. Cutover item for CP-9: if the owner likes the group window, mirror it in the Ops top-up.
+- **BG-8 The yellow bar is Roblox's own topbar health bar** (CoreGuiType.Health), shown while hurt. Measured from the
+  owner's 2868x1320 screenshot (@3x = 956x440): a 138x44 pill at y 12 whose right edge is 12 px inside the safe inset,
+  exactly the compass chip's rect (744,12 138x44 in the HUD harness at 956x440). Fix: `CompassController.Init` turns it
+  off (`HudConfig.TopStrip.Compass.HideRobloxHealthBar = true`, pcall, 5 tries 1 s apart). The game's own health bar
+  above the hotbar and the red DamageEdge flash (CombatController) stay; Roblox's red damage vignette goes with its bar.
+  Reversible: set the key false. The stand-in only records the SetCoreGuiEnabled call; the owner confirms on his phone.
+- **BG-9 HUD harness model of that bar:** a core zone at (W - R - 150, 12, 138, 44) on every viewport unless the client
+  called `SetCoreGuiEnabled(Health, false)` (lane copy of run_audit.py; the shared check_hud.py is not edited). HEAD:
+  the compass intrudes at 844x390, 956x440, 800x360, 1180x820 and 1280x720 in every bank snapshot; candidate: none.
+  Other viewports' offsets are assumed from the one measured screenshot.
+- **BG-10 Each bank guard carries a `WE_BankPost` attribute** (its post number): one attribute per guard, used by the
+  tests and handy in the Studio explorer.
+- **BG-11 Stand-in limits.** No pathfinding (MoveTo walks straight and slides along walls, as Roblox's MoveTo does
+  without PathfindingService), no physics, seeded hit rolls; the 45 s trip back after a death is a model. Guards walking
+  in to an AFK player depend on the hall doorway geometry; confirm on a device.
+- **BG-13 (fix round 1) Your own health while driving.** With Roblox's topbar bar off (BG-8), a driver had no health
+  readout at all: our bar hid while `Driving` (HudConfig.Health.HideWhen) and in any seat that cannot shoot, and
+  VehicleCombatClient's bar shows the vehicle's HP. Open-vehicle drivers (WE_Exposed, e.g. the Jeep) still take guard
+  hits to their own Humanoid. Fix, config-first (`HudConfig.Health.Seated`): in a seat that cannot shoot
+  (`not seatAllowsFire()`: a driver, a closed-vehicle passenger), CombatController moves the SAME health bar (one fill,
+  same colours) into the top-centre stack at order 24.5, right under the vehicle bar (24) and above the SPD pill (25),
+  230 x 10 real px like the vehicle bar, with `HideWhen = { "Dead", "Modal" }` and the on-foot ShowWhen (Hurt /
+  RecentCombat, so it hides 3 s after full HP). On foot it goes back above the hotbar with the on-foot rule. Desktop /
+  gamepad use the same top-centre slot (their vehicle bar stays bottom-right). `Seated.Enabled = false` = the round-0
+  behaviour (no player bar while seated). The v70 HUD spec line "health hidden while driving" is superseded for this
+  reason. Stand-in HUD harness, bank_owner `hurt_driving` (own Jeep, VehicleSeat, WE_Exposed, 55 HP, vehicle 210/300):
+  player bar visible at 844x390, 956x440, 800x360, 1180x820 and 1280x720, 0 overlaps; HEAD and the Enabled=false
+  mutant: no player bar. Not checked in Roblox: the owner confirms on his phone.
+- **BG-14 Pre-existing, not this lane (note for the vehicle lane):** at 1180x820 (tablet, large jump button) the seated
+  `VehicleHUD/WE_VehicleControls/Exit` pill (1046,652 111x63) sits on the Roblox jump button (Z-zone intrusion, jump gap
+  -60 px) in both `hurt_driving` and v70_drive, identical on HEAD. VehicleDriveClient is not edited here.
+- **BG-12 Not this lane:** the HUD harness THUMB finding at 844x390 (Hotbar Slot1 at (345,333) with three weapons) is
+  identical on HEAD.
+
+## 2026-09-27 — Owner phone feedback: the gate AutoGuns stand outside the gate (lane ownerfb/gate)
+
+The owner said "The turrets should be outside the gate". His screenshot shows the two orange-camo tripod AutoGuns
+inside the gate, next to his squad. Only `GateDefenseConfig` and `GateDefenseService` change. The guards, the gate
+barrier, the friendly gate, strikes, allies and the novice shield are not touched. Tested in the headless stand-in
+only, NOT in Roblox.
+
+- **OFG-1 Where the guns stand now (config first).** Each nest is the gun, its painted ring and 3 sandbags.
+  - `AutoGunOutside = true` puts one nest on each side of the approach, outside the wall.
+  - `AutoGunOutsideFlankX = 16`: each nest centre is 16 studs from the gate centre, along the wall. The opening is 10
+    wide (±5).
+  - `AutoGunOutsideWallGap = 4.5`: the nest centre is 4.5 studs past the wall's outer face. The service reads the wall
+    thickness from the built `WallGate_L` / `WallGate_R` pieces (3.5 to 6.3 thick by walls level); it is never assumed.
+  - Each gun faces out and turns 15° in toward the approach centre line (`AutoGunYawDeg`, unchanged key).
+  - The sandbags stay behind each gun, between the gun and the wall.
+  - Rollback: `AutoGunOutside = false` puts the guns back on the v69 posts inside the gate
+    (`RaidConfig.Defense.AutoGunInsideStuds`). RaidConfig is not edited because the vscale lane owns it; its comment
+    about "guns at 7.5" now describes only the rollback posts.
+- **OFG-2 Measured placement, all 6 plots × walls L1–L5.** Driver `ownerfb/gate/drv/gp_place.luau`, run on the real map
+  with a real part raycast and the real tripod gun file 114570602. Walls L1–3 have no guns; L4–5 have 2 guns per plot.
+  - **Nothing touched:** the whole nest clears the wall by at least 1.29 studs and stands 3.9+ studs off the plot pad.
+  - **On the ground:** every piece's lowest point is 0.000 above the map `Ground` under it (outside the pad the ground
+    is 0.5 below the pad top; the raycast finds it). The painted ring is 0.06 above it.
+  - **Nothing overlaps:** no nest part is inside any world part (oriented-box test), and nothing else stands under or
+    over a nest's footprint (no road, pump, sign or starter zone).
+  - **The approach stays clear:**
+    - The straight lane: every nest part is 13.93 studs from the centre line. The widest car body, the van at 11.63
+      with mirrors, needs 5.82 + 1 margin.
+    - A 30° approach into the gate centre: 8.7–9.2 studs.
+    - The line from the garage pad to the gate: 12.3–15.4 studs.
+    - The garage pad itself is 54 studs away. The checkpoint booth is inside the walls.
+  - **Clear line of sight:** each gun sees 154/154 approach points in TurretRange (100%) and the gate front. At HEAD the
+    inside guns saw 26/154 (17%) through the opening.
+  - **Cars drive through without touching a gun:** the van, pickup, 4x4 and quad bodies were swept straight through the
+    gate and from the garage pad. On 3b5ac28 the van body passes through 27 gun, ring and sandbag parts at every gate;
+    this is the vscale lane's own note that the van and trucks drive visibly through the sandbags. Now 0.
+  - **Same result merged with vscale:** with the vscale R2.2 files merged in (0 conflicts), placement is still 348/348
+    at L4 and L5.
+- **OFG-3 The guards stay inside (evidence, not preference).**
+  - From their posts inside, the guards see 72/144 sample points around the 6 ATMs. From the same posts mirrored
+    outside they see 0/144.
+  - Guards only chase to points inside the plot (`clampInsidePlot`), and a closed gate barrier collides, so guards
+    posted outside would be locked out.
+  - In the stand-in, the guards alone hit a raider holding the ATM 25 times in 10 s. The guns outside hit him 0 times.
+- **OFG-4 How a gun picks its target (it used to lock on something it cannot see).**
+  - v69 took the top-priority enemy (the raider at the ATM) and fired only if it could see him. From outside the wall,
+    that would freeze both guns while an attacker shoots the gate.
+  - Now a gun takes the first enemy it can SEE, spending at most `TurretLosChecksPerThink = 3` line-of-sight rays per
+    think (5 Hz). If it sees nobody, it neither turns nor fires.
+  - Fix round 1 (review): the order is enemies on the gun's side of the wall first (outside posts: outside the plot
+    pad), then the rest; each side keeps the old priority (raider, near the ATM, nearest). The first 2 rays go to the
+    top of that list. The 3rd ray probes the rest of the list in turn, one enemy per think, and stays on an enemy it
+    can see. So enemies the gun cannot see never use up every ray: before this fix a raider + 2 players at the ATM, or
+    3 intruders just inside the gate, switched both guns off (0 hits on an attacker in the open).
+  - Stand-in, L5 (L4 in brackets), 4 s each: raider at the ATM + attacker outside: 18 (18) gun hits on the attacker, 0
+    on the raider. Raider + 2 at the ATM + attacker 40 out: 16 (16) hits, round 0 had 0. 3 intruders inside the gate +
+    attacker 50 out: 15 (15), round 0 had 0. 3 enemies boxed in cover outside, each nearer both guns (10-41 studs)
+    than an attacker in the open 60 out (55 studs): 14 (15), round 0 had 0. The reviewer's own driver `rv_adv.luau`:
+    R1 20 hits (was 0), R2 18 (was 0).
+  - A player hugging the wall next to a nest while another enemy is nearer is not shot until that one is gone: a gun
+    engages one target at a time (review R5; the ray to him is clear, checked with a debug cast).
+- **OFG-5 Hit chance for AutoGun shots (CLAUDE.md: "NPC shots need line of sight and a hit chance").**
+  - Before, every AutoGun shot with line of sight hit.
+  - Now a shot hits with `TurretHitChanceNear = 0.75` at or inside `TurretHitNearStuds = 20`, falling linearly to
+    `TurretHitChanceFar = 0.30` at the level's TurretRange. These are the CombatFairnessConfig NPC numbers. A miss still
+    spends the shot.
+  - Measured over 600 shots per spot: a hit ratio of 0.663 against 0.655 expected, and 0.422 against 0.423 at L5
+    (L4: 0.645 / 0.637 and 0.350 / 0.360).
+  - The guards are unchanged and still have no hit chance. That gap is older than this lane and is left for the combat
+    spec lane.
+- **OFG-6 Balance change (real line of sight, 10 s, 100-HP target, victim limiter on).** Damage per second at L5, HEAD
+  → this lane (fix round 2 numbers; the gun reach is capped at 100, OFG-13):
+
+  | Where the attacker stands | HEAD | This lane |
+  |---|---|---|
+  | Sieging 25 out, 20 to the side | 120 | 103 |
+  | Gate front, 6 out | 120 | 117 |
+  | Centre line, 60 out | 0 | 106 |
+  | Far flank, 80 out, 50 to the side | 140 | 87 |
+  | Just inside the gate | 120 | 50 |
+  | Holding the ATM | 50 | 50 |
+  | Centre line, 110-124 out (Starter Rifle still hits the gate) | 0 | 0 |
+
+  At L4: 100 → 87, 100 → 98, 0 → 84, 0 → 68, 100 → 45, 45 → 45, and 0 → 0 at 110-124 out.
+  - The guns now cover the front of the base out to about 106 studs on the centre line (reach 100 from the posts at
+    L4 and L5). That includes the plot's own garage pad (about 75 studs out) and its owner-only Home Outpost (about
+    90 studs out). Allies are never hit.
+  - The space inside the gate is now the guards' alone.
+  - Reversible in config: `AutoGunOutsideMaxRange`, `Levels[n].TurretRange` or the hit chance.
+  - Spawn grace and the novice shield still apply first. PlayerSpawn is inside the walls, so the guns cannot see it.
+- **OFG-7 Sandbags in the stand-in are a proxy.** The store file 3525056989 needs a login, so each stand-in bag is one
+  2.2 x 0.8 x 1.3 box. The 4.5-stud wall gap was chosen so that even a full 2.2 x 2.2 bag, at any turn, clears the wall
+  by at least 0.65 (driver check "clears the wall even as a full 2.2 x 2.2 bag"). The real bag's look is unverified.
+- **OFG-8 Plots 3 and 4:** the near-plot oil pumps (pads at x ±7–15, 15.5–23.5 studs out) stand between a player
+  walking up the centre line and the guns, so they partly hide the guns from that camera (render
+  `cand_p3_approach.png`). Their derricks, beams and heads do not collide, so the guns' line of sight is still 100%.
+  This is visual only; nothing is moved.
+- **OFG-9 Suites:**
+  - The v69 G1 check "AutoGuns stand INSIDE" now fails by design: 2 checks each in `hotfix/gate/gate_driver_loaded`
+    (L4, L5), `hooks/gate/gateL5_fake`, `f11/build/C/gate_shield_driver`, `hooks/gate/shield_fake` and
+    `water/verify/strikes_rot/gate_driver`.
+  - The lane copies `ownerfb/gate/drv/gate_loaded_out.luau` and `gateL5_fake_out.luau` change only that check (guards
+    inside, guns outside). They pass 53/53 on this lane and fail exactly the 2 gun checks on 3b5ac28.
+  - Every other failure line is the same as on HEAD and older than this lane: `shield_c` 4, `raid_f2` 1, and 5 in
+    `strikes_rot/gate_driver` (7 there now, the 5 plus the 2 by-design gun checks).
+  - Fix round 1: all 18 suites re-run on the fixed candidate; every summary and every FAIL line is identical to round 0
+    (`runs/suites_fix1cand`). The lane combat driver `gp_combat.luau` now has C7-C11: 22/22 at L5 and 21/21 at L4 on
+    the candidate, 22/22 on the vscale merge; the round-0 candidate fails 8 of them (C7, C8, C9, C9c, C10, 3 x C11).
+  - Fix round 2 (the reach cap, OFG-13): one more failure appears, by design, in the upstream L5 gate suites
+    `gate_loaded5`, `gate_fake5`, `gate_shield` and `gate_shield_fake`: "TurretDamage research 1.5: AutoGun hits 0".
+    That check puts its target 95 studs deep INSIDE the walls. These suites have no raycast, so the outside guns used
+    to "see" him through the wall; on a real map the wall blocks them, and he is now also beyond their reach (about
+    103 studs from each post). The lane copies `gate_loaded_out.luau` / `gateL5_fake_out.luau` move that one target
+    outside, 90 out on the approach (84 from each gun, beyond the guards' ShootRange): 53/53 at L5 and L4 and 53/53
+    fake. Every other summary and FAIL line of the 18 suites is identical to fix round 1 (`runs/suites_fix2cand`,
+    `runs/suites_fix2cand_b`). `gp_combat.luau` now has C12 too: 31/31 at L5 and L4 and on the vscale merge.
+  - Stand-in only, older than this lane: in the non-fake gate suites the procedural fallback gun (used only when the
+    catalog gun 114570602 does not load) drifts to huge coordinates after it turns a few times (HEAD L4: Base at
+    y = -4.9e29; candidate L4/L5 too). The live catalog gun (the fake suite and `gp_combat`) does not drift. This looks
+    like the stand-in's `PivotTo`, not the game; it is not investigated further here.
+- **OFG-10 No client file change.** GateDefenseConfig lives in Shared, but only the server reads it (GateDefenseService,
+  and MissileStrikeService for `AutoGunMinWallsLevel`). The client already draws the AutoGun tracers: they arrive on
+  the existing WeaponFx remote in the same shape as NPC shots (`S = 0`, weapon `"NPC"`, kind `"P"` / `"M"`), which
+  `WeaponVisuals` turns into a tracer beam and the NPC rifle sound. The part count per base is identical at every level
+  (L1 1594 … L5 2568; defense folder 28 / 98; re-run in fix round 1: census identical to HEAD). The NEXT chevrons draw
+  only on the player's own pad, and the guns are now off the pad, so they no longer stand where the chevrons run
+  inside the gate. The Checkpoint.luau comment about keeping jersey barriers clear of the "L4+ gate AutoGun nest" no
+  longer applies; the file is left as is.
+- **OFG-11 Line of sight fails closed past its ray (fix round 1, review).** `hasLos` used to cut the ray at
+  `LosMaxDistance = 110` and call the target visible when nothing was hit in that length. At L5 the guns engage out to
+  115, so a target 110-115 studs out behind cover was shot through it (outside the gate this band is open ground).
+  - Now a target farther than `LosMaxDistance` is NOT in sight, and `LosMaxDistance` is 125, above every level's
+    TurretRange (max 115), AggroRange (max 120) and ShootRange (max 78). Guards only shoot inside ShootRange, so they
+    are unaffected.
+  - Stand-in: a target 112.5 studs from both guns behind an 80 x 30 wall at 117.5 out: 0 hits in 6 s (round 0: 14;
+    reviewer's R3 on round 0: 17). The same spot with no wall: 17 hits (the control).
+  - Fix round 2: with the reach cap (OFG-13) that spot is beyond both outside guns (112.5 > 100), so C9 still reads
+    0 hits and the C9b control is skipped (it only runs when the spot is within reach). The fail-closed ray still
+    matters for the rollback inside posts (TurretRange 115 at L5).
+- **OFG-12 AutoGun shots are visible (fix round 1, review).** Every AutoGun roll, hit or miss, now sends one bullet
+  effect through the existing W2 path `CombatService/CombatFx.Bullet` (UnreliableRemoteEvent `WeaponFx`, per-shooter
+  and per-recipient token buckets, every send pcall'd). Each gun has its own shooter key `gate:<plot>:<slot>`.
+  - A hit lands on the target; a miss lands 2-4 studs beside him (`TurretShotFxMissOffsetMin/Max`). The tracer starts
+    `TurretShotFxMuzzleStuds = 2.5` along the aim from the gun's aim part. `TurretShotFx = false` switches it off.
+  - How it is wired (reversible assumption): GateDefenseService finds the `CombatFx` module next to it with
+    `FindFirstChild` once, lazily, inside a pcall, and requires only that module (it needs only Shared). No
+    WaitForChild, no `deps.CombatService`, no require of CombatService: the join-hotfix pins still pass. CombatService
+    binds the remote in its own Init; before that, or if the module is missing, the effect is dropped and the shot
+    still happens. Chosen over a new Init dep because a dep needs a Bootstrap edit, and over a setter injected from
+    `CombatService/init.luau` because the squad-fairness lane is editing that file.
+  - The tracer is the W2 client beam: 0.09 studs wide, pale yellow, 0.08 s, the same as NPC soldiers' shots. From
+    60-100 studs on a phone it may be hard to see. If the owner reports that, a bolder AutoGun tracer is a client
+    change (`WeaponVisuals`, weapon id) for another lane; this lane does not touch the client.
+  - Traffic: a gun fires at most once per think (5 Hz), so the two guns add at most 10 events/s to a player near the
+    gate (measured: 10.0/s on the target and on a nearby clan-mate), under the CLAUDE.md 20 Hz per-player cap and the
+    W2 per-shooter bucket (20 Hz). The gate guards still fire silently (older than this lane; left for the combat spec
+    lane).
+  - With the victim limiter on (`DamageCooldownGlobal` 0.08 s), when both guns hit in the same tick the second hit's
+    damage is dropped but its tracer still lands on the target. Cosmetic only.
+  - Stand-in, 10 s at L5 (limiter off): 100 shots, 100 events (62 hits on the target, 38 misses all 2-4 studs beside
+    him), every origin at the muzzle, every key `gate:1:1` / `gate:1:2`. Round 0 sent 0 events. The real tracer beam and
+    sound on a phone are NOT verified (the client in the stand-in is not Roblox).
+- **OFG-13 The outside guns stop short of the Starter Rifle's reach (fix round 2, review; option a, config first).**
+  - The problem: the outside posts stand about 7.7 studs out and 16 to the side. With L5's TurretRange 115 the guns hit
+    out to about 122 studs on the centre line. The default Starter Rifle hits the gate from 124 out (WeaponConfig
+    Range 120 + CombatConfig.HitPositionSlopStuds 4; the gate takes no falloff). So a raider with the default loadout had
+    about 2 studs (122-124 out) on the centre line, and none off it, to shoot the gate without being shot. At HEAD the
+    guns stood inside and did not fire anywhere from 40 to 124 out. The guns cannot be damaged, and their tracer is
+    thin, so on a phone that read as dying in about a second with no counterplay.
+  - The fix: `AutoGunOutsideMaxRange = 100`. An outside gun engages, fires and sets its hit-chance falloff within
+    min(Levels[n].TurretRange, AutoGunOutsideMaxRange) of the gun (`turretReach` in GateDefenseService). L4 is
+    unchanged (its TurretRange is already 100); L5 now reaches as far as L4 and still hits harder (28 vs 22 per hit).
+    Inside posts (the `AutoGunOutside = false` rollback) keep TurretRange.
+  - The result (stand-in, real line of sight, fake catalog gun): the default rifle has an 18.3-stud band on the centre
+    line at L5 (106.4 to 124.7 out; 18.6 at L4) where it reaches the gate and neither gun reaches him. Off the axis the
+    band is wider: 0 gun hits at (±40, 112) and (-60, 100). The guns still defend 60 and 100 out (21 and 19 hits in
+    6 s). Reviewer sweep re-run (`runs/fx2_sw_cand{4,5}`): L5 0 dps from 110 out to 124 on the centre line and at
+    (±40, 112) and (-60, 100); 56 dps at 106 out; 51 dps at (-90, 70) (97 from the near gun); L4 identical to before.
+  - Pinned: `gp_combat.luau` C12a (reach <= rifle reach - 15), C12b (band >= 10 studs), C12c (0 gun hits at 6 spots
+    where the rifle reaches the gate), C12d (hits at 60 and 100 out). The fix-round-1 candidate fails 7 of them (C12a,
+    C12b, 5 x C12c: 22, 18, 12, 9, 9 hits); this candidate passes all 10 at L4 and L5 and on the vscale merge.
+    BuyPathStatic: 4 new [fix2] pins, failing on 3b5ac28 and on the fix-round-1 candidate.
+  - Keep `AutoGunOutsideMaxRange` at or below the default rifle's reach minus 15 if WeaponConfig or the posts change.
+    The AR (140), Sniper and RPG out-range the guns by more.
+  - Not verified in Roblox: that a phone player can actually land Starter Rifle hits on the gate barrier from 110-124
+    studs (aim assist, spread 2.5 and camera at that distance). Phone test step 5 checks it.
+
+- **OFG-F3 (integrator, supersedes the band numbers above).** A review found that `GateDefenseService.ApplyDamage` refuses a player's gate hit when their root is more than 120 studs from the barrier part's centre, while the numbers above used the rifle ray's reach (124). The real Starter Rifle siege band at L4/L5 is therefore about 106 to 120 studs out on the centre line (about 13.5 studs, wider off the axis), not 106-124. The 120 now lives in config as `GateDefenseConfig.GateHitMaxDistance` (pinned; aircraft weapons may extend it). The cap `AutoGunOutsideMaxRange = 100` is unchanged and still leaves the band. Revert: set the config back or inline 120. The phone test says "about 105 to 120".
+- **BG-F2 (integrator).** The bank phone test names the starter car by its in-game name "Field 4x4" (not a brand), and describes the guard respawn spot as "away from where you are standing" (the sight test uses the character's eye, so a third-person camera can sometimes see the spot). Reviewer Low notes kept as follow-ups: a behaviour test for a camper standing on a guard post (today pinned as text), the seated health bar has no icon, and a chain of allies arriving one after another can each rob one clearing (bounded by the 90 s cap and the 300 s personal cooldown).

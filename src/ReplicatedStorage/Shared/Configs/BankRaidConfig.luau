@@ -49,6 +49,31 @@ local BankRaidConfig = {
 		{ X = 229.5, Y = 1.6, Z = -210.5, Yaw = 180 },
 		{ X = 227, Y = 1.6, Z = -231, Yaw = 180 },
 	} :: { GuardPost },
+	-- Owner phone test 2026-09-27: "when you kill the bank guards they respawn super fast, it never gives you a chance to
+	-- rob the bank". Was: each guard came back CombatConfig.NPCRespawnSeconds (18 s) after its OWN death, on its post,
+	-- wherever the raider stood, so a phone player's five-guard fight (20-40 s) never emptied the bank. Now
+	-- BankRaidService owns the respawn (SpawnNPC opts NoRespawn) and brings the dead guards back as ONE group:
+	--   due      = the last bank-guard death + DelaySeconds (every kill restarts it), or a payout + AfterRaidSeconds if
+	--              that is sooner; for each guard at most MaxDownSeconds after its own death (a fight cannot keep it
+	--              away for ever), never sooner than CombatConfig.NPCRespawnSeconds after it (no faster kill farm)
+	--   robbing  = someone's vault hold is running: nobody comes back, at most RaidDeferMaxSeconds past due
+	--   free     = no living player within ClearRadius of the post and none within SightRadius who can see it
+	--   forced   = still blocked ForceAfterSeconds past due (a camper, an AFK farmer on the vault): the guard comes back
+	--              anyway, never within MinSpawnStuds of a player (an occupied post moves it to the nearest clear spot)
+	-- Kill cash / XP (CombatConfig.NPCTypes.BankGuard, CombatFairnessConfig unit shares) are unchanged.
+	-- Enabled = false restores the old per-guard respawn exactly. Jobs ON (OpsService, Town.Bank) does not read this.
+	GuardRespawn = {
+		Enabled = true,
+		DelaySeconds = 90, -- walk-in + the 6 s hold is ~15-25 s on a phone; 90 also covers a death, the respawn and the drive back
+		MaxDownSeconds = 180, -- killing the one returning guard every DelaySeconds cannot keep the other four away
+		AfterRaidSeconds = 30, -- after a payout the robbers get this long to walk away before the bank refills
+		RaidDeferMaxSeconds = 60,
+		ClearRadius = 25, -- studs (3D, root to post)
+		SightRadius = 150, -- studs; a player's eye (root + 1.5) sees the post's torso or head (collidable parts block)
+		ForceAfterSeconds = 45,
+		MinSpawnStuds = 8,
+		CheckSeconds = 1, -- the post / sight test runs at most this often, and only while guards are due
+	},
 	NotifyOnRaid = true,
 	-- v71: the hold freezes only while the raider was hit within this many seconds (was: any health below 95 %)
 	UnderFireSeconds = 2,
