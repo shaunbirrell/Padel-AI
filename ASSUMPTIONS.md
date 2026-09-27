@@ -4569,3 +4569,52 @@ the fixes from the three adversarial reviews (code, budget, orientation) of the 
   question, phone lines, AW-H11 purchase numbers) are fixed in this commit. Known and accepted: the ground probe assumes a
   flat plot (all shipped plots are flat); the outage gate may admit ~3 more late boot loads than the census holds, so
   any batch within 3 of the reserve needs a census_fail run first.
+
+## 2026-09-27 — Streaming lane S5 (ActivityHost Persistent at build; finding F4) - shipped with StreamingEnabled still OFF
+
+Lane S5 (built on 670bbf6, applied unchanged onto cb2f357: the hooks batch does not touch these 3 files). Every item is reversible. Everything here is inert while Workspace.StreamingEnabled is false (default.project.json,
+lane Z). Tested in the headless stand-in only (sim/rbxsim.luau + sim/stream_standin.luau), not in Roblox.
+
+STR-4 (spec §5, as written) ActivityHost clusters are Persistent when built. The OpsSites runtime switch is kept only
+    as a guard, because the docs do not describe what a runtime mode change does to clients that already hold the model.
+
+S5-1 The one place that decides the mode is WorldPOI.placeClusters: a cluster whose every kit is Class "anchor"
+    (isHostCluster; in practice the 17 POI layout "Host" rows, 1 ActivityHost part each) gets
+    ModelStreamingMode = Persistent after it passed the zone / cap tests and right before WorldKits.Finish parents it.
+    WorldKits.NewCluster keeps its generic Atomic default (BuyPathStatic pin kept), so the host goes Atomic -> Persistent
+    while still unparented: no client ever sees a mode change. The Host rows are Tier 1, so Quality Low builds them too.
+    Reversible: delete the 3-line `if hostOnly then ... end` block in WorldPOI AND restore OpsSites.Persist's write
+    (reverting WorldPOI alone would turn every far-hosted Ops site Off through the S5-2 guard).
+
+S5-2 The OpsSites rule is now a guard that fails closed. Rule 2 (far host, > NearHostStuds) passes only when the host's
+    Model holds exactly one BasePart AND is already Persistent; otherwise the site is Off with one logged reason
+    ("... whose Model is not Persistent (streaming rule)"). HEAD set Persistent at goLive instead. OpsSites.Persist keeps
+    its signature and the goLive call, but never writes ModelStreamingMode: it only warns if handed a non-Persistent
+    Model (unreachable, Resolve filters those). Because WorldPOI builds every host Persistent, no site changes state:
+    the Ops lane drivers give identical results on HEAD and the candidate, Jobs OFF and in a Jobs-ON copy.
+
+S5-3 OpsConfig.Streaming.NearHostStuds stays 64 = StreamingMinRadius (spec §1). Stand-in check, Min 64 (memory pressure):
+    every prompt / label anchor that is NOT on an ActivityHost (27: CheckpointBooth 24, BankPlaza 2, StallCounter 1;
+    each at most 8 studs from its host) has its host present even with the player 14 studs out from the anchor on the
+    far side (the MaxActivationDistance cap), so no margin is added now. A future anchor on a far multi-part cluster makes its site Off (rule 3, logged).
+    Limit (review): NearHostStuds = MinRadius alone does not keep a NEAR host streamed in for an anchor 54-64 studs from it
+    (prompt Dist up to 10) or a label anchor more than 24 studs from it (label MaxDistance 40) under memory pressure. No such
+    anchor exists today (all at most 8.3 studs). A future anchor placed farther needs the tighter rule
+    d + max(stage.Dist, Ui.LabelMaxDistance) <= StreamingMinRadius, or a Persistent host.
+
+S5-4 Cost: 17 invisible, non-colliding 1-stud parts held on every client whatever the focus (0 lights, 0 SurfaceGuis,
+    0 neon). World census unchanged: 17,572 parts, 231 lights (stand-in, 6 plots at L5, Full dressing). Persistent
+    Models in the world: 18 = 17 ActivityHost + WE_Skyline.
+
+S5-5 The 24 checkpoint route anchors (<POI>.CP*.R1 / R2: no prompt, no label; server-side NPC posts) have their host
+    streamed out at their own position under memory pressure (Min 64). Not a client problem: the server always holds
+    them. Left as they are.
+
+S5-6 BuyPathStatic pin "exactly two Persistent writes in src/ (WorldBounds skyline, WorldPOI ActivityHost)". If the
+    owner later makes the far-shore props Persistent (F27, STR-9), that pin must list the new file too.
+
+S5-7 (integration) One more BuyPathStatic pin from review: WorldPOI holds exactly one `.ModelStreamingMode =` assignment
+    and none after `local info = WorldKits.Finish(model, ctx.Folder)`, so a late Atomic/Persistent write on a parented host
+    fails the static gate, not only the stand-in. The Jobs-ON end state differs from 670bbf6 in one way: 670bbf6's runtime
+    Persist left 2 of the 17 host Models Atomic (POIs with no far anchor); now all 17 are Persistent at build (same live
+    and off sites).

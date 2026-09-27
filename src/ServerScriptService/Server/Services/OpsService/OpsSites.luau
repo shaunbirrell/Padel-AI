@@ -12,8 +12,9 @@
 	     falls back to Npc.CommanderFallback);
 	  5. every anchor role resolves (ActivityAnchors records read ONCE by OpsService), Optional roles excepted;
 	  6. the streaming host rule (OpsConfig.Streaming) for every prompt and label anchor: the host part is within
-	     NearHostStuds, or its Model holds exactly one BasePart (the POI's ActivityHost cluster), which is then set
-	     to ModelStreamingMode.Persistent. Otherwise Off. No part is ever added to carry a prompt.
+	     NearHostStuds, or its Model holds exactly one BasePart and is already ModelStreamingMode.Persistent (the POI's
+	     ActivityHost cluster: WorldPOI builds it Persistent, streaming2 S5). Otherwise Off. This is only a guard:
+	     OpsSites never changes a streaming mode. No part is ever added to carry a prompt.
 
 	World bits, all on existing instances: ProximityPrompts and the one world label per site are parented to the anchor
 	Attachment (never a new part); the bank's BankGate / the Port's HeistGate (WE_RuntimeDoor parts) toggle CanCollide
@@ -146,6 +147,10 @@ function OpsSites.Resolve(def: OpsConfig.SiteDef, anchors: { [string]: any }): (
 			if d > OpsConfig.Streaming.NearHostStuds then
 				local model = host.Parent
 				if OpsConfig.Streaming.PersistHostModel and model ~= nil and model:IsA("Model") and partsIn(model) == 1 then
+					-- streaming2 S5 guard: the far host's Model must already be Persistent (WorldPOI sets it at build)
+					if (model :: Model).ModelStreamingMode ~= Enum.ModelStreamingMode.Persistent then
+						return nil, string.format("anchor %s is %.0f studs from its host, whose Model is not Persistent (streaming rule)", role, d)
+					end
 					if table.find(persist, model :: Model) == nil then
 						table.insert(persist, model :: Model)
 					end
@@ -158,11 +163,15 @@ function OpsSites.Resolve(def: OpsConfig.SiteDef, anchors: { [string]: any }): (
 	return byRole, persist
 end
 
+--[[ streaming2 S5 (F4): a no-op guard, kept so OpsService's goLive call stays as it is. The mode is decided once, when
+	WorldPOI builds the ActivityHost cluster (Persistent, before it is parented). The docs do not describe what a runtime
+	mode change does on clients that already hold the model, so this never writes ModelStreamingMode. Resolve only hands
+	over far-host Models that are already Persistent; anything else would be reported here and left as it is. ]]
 function OpsSites.Persist(models: { Model })
 	for _, m in ipairs(models) do
-		pcall(function()
-			(m :: any).ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-		end)
+		if m.ModelStreamingMode ~= Enum.ModelStreamingMode.Persistent then
+			warn(string.format("[OpsSites] %s is not Persistent (WorldPOI sets it at build); left as it is", m:GetFullName()))
+		end
 	end
 end
 

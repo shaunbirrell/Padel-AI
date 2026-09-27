@@ -4619,6 +4619,59 @@ def _hk_business_roles() -> None:
 
 _hk_business_roles()
 
+# --- streaming2 lane S5 (ActivityHost Persistent; gate, and the hard gate before Jobs ON): finding F4 ---
+# Spec §4 lane S5 pins first, then the pins that hold "exactly one place decides the ActivityHost mode, at build time,
+# before the host is parented" and "the OpsSites runtime rule is a guard that never writes a mode". Every one is inert
+# while Workspace.StreamingEnabled is false (default.project.json, lane Z). Kept: WorldKits' generic Atomic pin
+# (m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic), the skyline Persistent pin, and W3s2 O's OpsSites pin
+# 'Enum.ModelStreamingMode.Persistent' (the guard's comparison still carries it).
+S5_POI = 'src/ServerScriptService/Server/Modules/WorldPOI.luau'
+S5_OS = 'src/ServerScriptService/Server/Services/OpsService/OpsSites.luau'
+S5_OC = 'src/ReplicatedStorage/Shared/Configs/OpsConfig.luau'
+must_contain(S5_POI, 'Enum.ModelStreamingMode.Persistent', 'streaming2 S5 F4: WorldPOI sets the ActivityHost cluster ModelStreamingMode Persistent (spec §4)')
+must_contain(S5_OC, 'NearHostStuds = 64,', 'streaming2 S5: OpsConfig.Streaming.NearHostStuds = 64, <= StreamingMinRadius 64 (spec §4)')
+must_contain(S5_POI, '\t\tif hostOnly then\n\t\t\t-- streaming2 S5 (F4)', 'streaming2 S5 F4: only the host-only cluster (every kit of Class "anchor") is made Persistent')
+must_contain(S5_POI, '\t\t\tmodel.ModelStreamingMode = Enum.ModelStreamingMode.Persistent\n\t\tend\n\t\tlocal info = WorldKits.Finish(model, ctx.Folder)\n', 'streaming2 S5 F4: the mode is set right before WorldKits.Finish parents the cluster (at build, never after)')
+must_contain(S5_POI, '\t\tlocal hostOnly = isHostCluster(c)\n', 'streaming2 S5 F4: the Persistent test is WorldPOI\'s host-cluster test (isHostCluster)')
+must_contain(S5_OS, '\t\t\t\t\tif (model :: Model).ModelStreamingMode ~= Enum.ModelStreamingMode.Persistent then\n\t\t\t\t\t\treturn nil, ', 'streaming2 S5: OpsSites turns a site Off when a far host\'s Model is not already Persistent (guard)')
+must_contain(S5_OS, 'function OpsSites.Persist(models: { Model })\n\tfor _, m in ipairs(models) do\n\t\tif m.ModelStreamingMode ~= Enum.ModelStreamingMode.Persistent then\n\t\t\twarn(', 'streaming2 S5: OpsSites.Persist is a no-op guard (reports, never writes)')
+if re.search(r'\.ModelStreamingMode\s*=(?!=)', read(S5_OS) or '') is None and (read(S5_OS) or '') != '':
+    ok('streaming2 S5: OpsSites never assigns ModelStreamingMode (no runtime mode change on a model clients already hold)')
+else:
+    bad('streaming2 S5: OpsSites assigns ModelStreamingMode at runtime (the mode is decided once, in WorldPOI at build)')
+import os as _s5os
+_s5_persist = {}
+for _dp, _dn, _fn in _s5os.walk(ROOT / "src"):
+    for _f in _fn:
+        if _f.endswith(".luau"):
+            _rel = _s5os.path.relpath(_s5os.path.join(_dp, _f), ROOT)
+            _n = len(re.findall(r'ModelStreamingMode\s*=\s*Enum\.ModelStreamingMode\.Persistent\b', read(_rel) or ''))
+            if _n:
+                _s5_persist[_rel] = _n
+_s5_want = {'src/ServerScriptService/Server/Modules/WorldBounds.luau': 1, S5_POI: 1}
+if _s5_persist == _s5_want:
+    ok('streaming2 S5: exactly two Persistent writes in src/ (WorldBounds skyline, WorldPOI ActivityHost), one each')
+else:
+    bad(f'streaming2 S5: Persistent writes in src/ are {sorted(_s5_persist.items())}, want {sorted(_s5_want.items())}')
+must_contain(S5_OC, '\t\tNearHostStuds = 64, -- <= Workspace.StreamingMinRadius (64)', 'streaming2 S5: NearHostStuds carries its <= StreamingMinRadius note')
+_s5_oc = read(S5_OC) or ''
+_s5_m = re.search(r'\n\t\tNearHostStuds = (\d+(?:\.\d+)?),', _s5_oc)
+_s5_mm = re.search(r'"StreamingMinRadius"\s*:\s*(\d+(?:\.\d+)?)', read('default.project.json') or '')
+_s5_min = float(_s5_mm.group(1)) if _s5_mm else 64.0  # the spec §1 value until lane Z writes it into default.project.json
+if _s5_m and float(_s5_m.group(1)) <= _s5_min:
+    ok(f'streaming2 S5: OpsConfig.Streaming.NearHostStuds {_s5_m.group(1)} <= StreamingMinRadius {_s5_min:g}')
+else:
+    bad(f'streaming2 S5: OpsConfig.Streaming.NearHostStuds missing or > StreamingMinRadius {_s5_min:g}')
+_s5_poi_src = read(S5_POI) or ''
+_s5_assign = len(re.findall(r'\.ModelStreamingMode\s*=(?!=)', _s5_poi_src))
+_s5_fin = _s5_poi_src.find('\t\tlocal info = WorldKits.Finish(model, ctx.Folder)\n')
+_s5_late = _s5_fin >= 0 and re.search(r'\.ModelStreamingMode\s*=(?!=)', _s5_poi_src[_s5_fin:]) is not None
+if _s5_assign == 1 and _s5_fin >= 0 and not _s5_late:
+    ok('streaming2 S5 F4: WorldPOI assigns ModelStreamingMode exactly once (the hostOnly block), never after WorldKits.Finish parents the cluster')
+else:
+    bad(f'streaming2 S5 F4: WorldPOI has {_s5_assign} ModelStreamingMode assignment(s), late write after Finish: {_s5_late} (want exactly 1, before Finish: no runtime mode change on a Model clients already hold)')
+# Note: the isHostCluster pin and both NearHostStuds pins also pass on 670bbf6/cb2f357; they guard future edits.
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
