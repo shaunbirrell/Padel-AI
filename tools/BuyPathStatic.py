@@ -4769,6 +4769,58 @@ must_not_contain(C5_VDC, 'WaitForChild("Shared"):WaitForChild(', 'streaming2 C5 
 must_contain(C5_CLOC, 'local Shared = script.Parent.Parent -- this module lives in Shared.Util: no wait', 'streaming2 C5 F33: ConsoleLocator reaches Shared through its own parent (never yields)')
 must_not_contain(C5_CLOC, 'WaitForChild(', 'streaming2 C5 F33: ConsoleLocator never waits (its header says so)')
 
+# --- server size (2026-09-27): one base per player. The place's Max Players (place settings, not code; the public API
+# games.roblox.com/v1/games?universeIds=10767159222 read maxPlayers 6 on 2026-09-27)
+# must equal BaseConfig.MaxPlots; GameConfig.MaxPlayersPerServer and GameConfig.BasePlotCount record the same number.
+# BaseService.Init warns once in the server log when Players.MaxPlayers > MaxPlots (developer-facing, no behaviour
+# change). Every pin below FAILS on 5e021d8. Headless only (not Roblox).
+MP_GC = 'src/ReplicatedStorage/Shared/Configs/GameConfig.luau'
+MP_BC = 'src/ReplicatedStorage/Shared/Configs/BaseConfig.luau'
+MP_BS = 'src/ServerScriptService/Server/Services/BaseService.luau'
+MP_DOC = 'docs/LIVE_PLACE.md'
+def _mp_num(rel, pat):
+    m = re.search(pat, read(rel) or '', re.M)
+    return int(m.group(1)) if m else None
+_mp_max = _mp_num(MP_GC, r'^\tMaxPlayersPerServer = (\d+),')
+_mp_cnt = _mp_num(MP_GC, r'^\tBasePlotCount = (\d+),')
+_mp_plots = _mp_num(MP_BC, r'^\tMaxPlots = (\d+),')
+if _mp_plots is not None and _mp_max == _mp_plots:
+    ok(f'server size: GameConfig.MaxPlayersPerServer {_mp_max} == BaseConfig.MaxPlots {_mp_plots} (one base per player)')
+else:
+    bad(f'server size: GameConfig.MaxPlayersPerServer {_mp_max} != BaseConfig.MaxPlots {_mp_plots} (must be equal: one base per player, = the place Max Players)')
+if _mp_plots is not None and _mp_cnt == _mp_plots and _mp_max == _mp_cnt:
+    ok(f'server size: GameConfig.BasePlotCount {_mp_cnt} == MaxPlayersPerServer {_mp_max} == BaseConfig.MaxPlots {_mp_plots}')
+else:
+    bad(f'server size: GameConfig.BasePlotCount {_mp_cnt}, MaxPlayersPerServer {_mp_max}, BaseConfig.MaxPlots {_mp_plots} are not all equal')
+must_contain(MP_GC, "\t-- One base per player: must equal the place's Max Players setting (place settings, not code) and\n\t-- BaseConfig.MaxPlots.", 'server size: GameConfig.MaxPlayersPerServer carries the "= place Max Players = BaseConfig.MaxPlots" note')
+_mp_bs = read(MP_BS) or ''
+_mp_fn_i = _mp_bs.find('\nlocal function warnIfServerBiggerThanPlots()\n')
+_mp_fn_j = _mp_bs.find('\nend\n', _mp_fn_i) if _mp_fn_i >= 0 else -1
+_mp_fn = _mp_bs[_mp_fn_i:_mp_fn_j] if _mp_fn_i >= 0 and _mp_fn_j > _mp_fn_i else ''
+if ('return Players.MaxPlayers' in _mp_fn and 'pcall(function()' in _mp_fn and 'maxPlayers > BaseConfig.MaxPlots then' in _mp_fn
+        and '\t\twarn(string.format(' in _mp_fn and 'if serverSizeChecked then' in _mp_fn):
+    ok('server size: BaseService boot check reads Players.MaxPlayers in a pcall, warns once when it is > BaseConfig.MaxPlots')
+else:
+    bad('server size: BaseService has no warnIfServerBiggerThanPlots boot check (pcall Players.MaxPlayers > BaseConfig.MaxPlots -> one warn)')
+_mp_forbid = [w for w in ('Notify', 'Kick', 'Teleport', 'FireClient', 'FireAllClients', 'SetAttribute', 'Destroy') if w in _mp_fn]
+if _mp_fn and not _mp_forbid:
+    ok('server size: the boot check is developer-facing only (no Notify / Kick / Teleport / FireClient / SetAttribute)')
+else:
+    bad(f'server size: boot check missing or has player-facing side effects {_mp_forbid} (log only: no kick, no teleport, no message)')
+_mp_init_i = _mp_bs.find('\nfunction BaseService.Init(deps: { [string]: any })\n')
+_mp_init_j = _mp_bs.find('\nend\n', _mp_init_i) if _mp_init_i >= 0 else -1
+_mp_init = _mp_bs[_mp_init_i:_mp_init_j] if _mp_init_i >= 0 and _mp_init_j > _mp_init_i else ''
+if '\n\tpcall(warnIfServerBiggerThanPlots)' in _mp_init and _mp_fn_i >= 0 and _mp_fn_i < _mp_init_i:
+    ok('server size: BaseService.Init runs the boot check through pcall (once per server)')
+else:
+    bad('server size: BaseService.Init does not call pcall(warnIfServerBiggerThanPlots)')
+_mp_doc = read(MP_DOC) or ''
+_mp_dm = re.search(r'\n## Server size\n\n- \*\*Max Players = (\d+)\*\*', _mp_doc)
+if _mp_dm and _mp_plots is not None and int(_mp_dm.group(1)) == _mp_plots:
+    ok(f'server size: docs/LIVE_PLACE.md "Server size" says Max Players = {_mp_dm.group(1)} = BaseConfig.MaxPlots')
+else:
+    bad(f'server size: docs/LIVE_PLACE.md has no "## Server size" note with Max Players = BaseConfig.MaxPlots ({_mp_plots})')
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

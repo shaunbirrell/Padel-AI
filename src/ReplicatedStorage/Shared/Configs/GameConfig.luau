@@ -4,7 +4,10 @@
 local GameConfig = {
 	DisplayName = "WAR EMPIRE",
 	Tagline = "BUILD. CONQUER. DOMINATE.",
-	MaxPlayersPerServer = 12,
+	-- One base per player: must equal the place's Max Players setting (place settings, not code) and
+	-- BaseConfig.MaxPlots. A player past the plot count joins with no base. BaseService warns in the server log at boot
+	-- when the place allows more players than there are plots.
+	MaxPlayersPerServer = 6,
 	BasePlotCount = 6,
 	RespawnTimeSeconds = 5,
 	FriendlyFire = false,

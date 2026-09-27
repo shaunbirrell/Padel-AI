@@ -4720,3 +4720,39 @@ C5-7 Stand-in only: every timing above (the 60.0 / 120.1 / 180.2 s warns for Sha
     - server-side WaitForChild calls. src/ServerScriptService still has 81 unbounded (one-argument) WaitForChild
       calls in 50 files, plus 22 that already pass a timeout. This lane changes no server file, so the count is the
       same as HEAD 5e021d8. They are left for a server lane.
+
+## 2026-09-27 — Server size: Max Players 6, one base per player
+
+The owner relayed a chatbot's claim that the live place runs at Max Players 50 with only 6 base plots. The public API contradicts it: `games.roblox.com/v1/games?universeIds=10767159222` (no auth) returned
+`"maxPlayers":6` for root place 97112936860418 at 2026-09-27 15:34 and 15:37 UTC (the API's `updated` field was
+2026-09-25T09:53:29Z; `servers/Public` listed no running servers). The v68 entry (2026-09-24, item 1 "No plot hijack")
+had already asked for Max Players 6 in the place settings, so it was probably set then (it may also have been changed
+today, after the chatbot's message; the API does not say). Whether it was ever above 6, and so whether a 7th player
+explains the owner's sister's join report (2026-09-24 "Join hotfix" entry), cannot be determined from here. This entry only lines the repo up with the live 6
+(config number, boot warning, pins, LIVE_PLACE note); no place setting change is needed, the owner only confirms it
+still reads 6. Every item is reversible. Tested in the headless stand-in only (sim/rbxsim.luau), not in Roblox.
+
+MP-1 `GameConfig.MaxPlayersPerServer` 12 -> 6. Nothing in src reads it (it was 12 and unused; the real cap is the
+    place's Max Players setting, 6 per the public API); it now records the one-base-per-player rule and equals
+    `BaseConfig.MaxPlots` and `GameConfig.BasePlotCount`. Reversible: set it back and delete the first two MP-3 pins
+    (the number comparisons).
+MP-2 One developer-only check at boot, first line of `BaseService.Init` (`pcall(warnIfServerBiggerThanPlots)`): reads
+    `Players.MaxPlayers` in a pcall and, if it is a number greater than `BaseConfig.MaxPlots`, logs ONE server
+    warning ("[BaseService] Server size: ... Set Max Players to 6 in the place settings ..."). A module flag keeps it to
+    one per server even if Init runs twice. No player message, no kick, no teleport, no attribute; players past the
+    plot count still get the v69 no-plot path (WE_NoPlot, notice, next freed base). In a Studio play session Players.MaxPlayers comes
+    from the engine, not the file, so it may differ from the live setting (not checked); a Studio warning is not proof
+    the live place is above 6. The headless stand-in defaults Players.MaxPlayers to 20, so world-sim / DataService runs
+    print this warning once (one more warning than before, expected). Reversible: delete the function and its one call.
+MP-3 BuyPathStatic pins (tools/BuyPathStatic.py, above the final `parse_gate()`): the three numbers
+    (`GameConfig.MaxPlayersPerServer`, `GameConfig.BasePlotCount`, `BaseConfig.MaxPlots`) are parsed and must be equal;
+    the boot check exists, reads `Players.MaxPlayers`, compares with `BaseConfig.MaxPlots`, is called from
+    `BaseService.Init`, and never notifies, kicks, teleports or sets an attribute; docs/LIVE_PLACE.md has the
+    "Server size" note with Max Players equal to `BaseConfig.MaxPlots`. Each one fails on 5e021d8.
+MP-4 The Max Players value is a place setting outside the repo. Anyone can read the live value without auth from
+    games.roblox.com/v1/games?universeIds=10767159222 (field `maxPlayers`; 6 on 2026-09-27). The boot warning is the
+    in-server signal, in the server log (Developer Console, Server tab). A change applies to new servers only. The
+    BuyPathStatic pins are static and do not call the API.
+MP-5 More than 6 per server (8 to 12) needs more plots first (BaseConfig.PlotPositions + MapSetup pads), then the
+    three numbers and Max Players together, and a recheck of server-wide caps shared by every player (for example
+    CombatConfig.MaxActiveNPCs = 18).
