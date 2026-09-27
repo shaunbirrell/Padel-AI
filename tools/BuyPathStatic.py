@@ -501,7 +501,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopCont
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "WE_FlagBillboard", "Capture flag floating billboard")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "FlagStripe", "FlagStripe nation visibility")
 must_contain("src/ServerScriptService/Server/Services/TerritoryService/init.luau", "NationColorService", "NationColorService capture color")
-must_contain("src/ServerScriptService/Server/Services/ManualDropperService.luau", "CashPopGlow", "Manual dropper green $ pop glow")
+# ◆ droppers v1b: the plate pop is drawn by the client (ProductionFx, lane L3b pins "CashPopGlow" there); the server keeps its colour in config
+must_contain("src/ReplicatedStorage/Shared/Configs/ManualDropperConfig.luau", "PopGlowColor = Color3.fromRGB(8, 36, 14),", "Manual dropper green $ pop glow (v1b: the client pop's CashPopGlow colour, config)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau", 'ArmedJeep = V("ArmedJeep", "Armed 4x4"', "ArmedJeep DisplayName")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", 'id == "ArmedJeep"', "Garage lists ArmedJeep")
 must_contain("src/ServerScriptService/Server/Services/VehicleService.luau", 'id == "ArmedJeep"', "ArmedJeep same WheeledLight kit")
@@ -6727,6 +6728,857 @@ must_contain(SQF_NPC, 'function CombatNPC.HoldsFire(rec: any): boolean\n\treturn
 must_not_contain(SQF_NPC, 'Provoker', 'squadfair v3 (guard, passes on HEAD): no provoker rule in CombatNPC (it let one player switch a guard group off)')
 must_not_contain(SQF_CS, 'NoteProvoker', 'squadfair v3 (guard, passes on HEAD): hurtNPC names no provoker')
 must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
+
+# --- droppers v1b lane L1b (plate server; spec_droppers.md §13 "New pins, v1b" for the L1b files) ---
+# Paste directly above the final `parse_gate()` call, after the v1a L1a block (`_dr_bz_rules()`). A pin here either
+# fails on the L1a base tree or passes there by design (the must_not_contain pins, the economy guard, HEAD's money-path
+# code that v1b keeps) and was shown failing on a mutated copy of L1b (L1b_out/bps_pins.txt, L1b_out/pin_evidence.txt).
+# The ProductionFx / LabelGovernor / WorldLabelConfig v1b pins of §13 belong to lane L3b (their needles come from its code).
+# Money: the plate still pays only through the server's own prompt / ClickDetector -> tryAward (owner, cooldown, rate
+# limit) -> takeBudget(n) -> ONE AccruePendingCash of pickAward() * n. Fix round 1 pins that whole path (a bundle costs
+# the n awards it pays for, the refill runs on real time only, one grant per grab). DropperFx is server -> owner only
+# (no OnServerEvent). BundleAwards = 5 is OD-4 = A.
+# Fix round 3 (revision 3, lead decision; reviews rv1b_feedback_3 / rv1b_money_3): the ATM hold keys are gone (every
+# grab shows its world pop), "Recharging" has a reliable server source (RechargeAttribute), the 3600 s budget clear is
+# tied to the leave that started it (leave token), and five new scans: the budget's lifetime, the DropperFx listener
+# scan in its multi-line forms, exactly one sendDropFx call, no config override after its table (ManualDropperConfig,
+# MonetizationConfig.CashMultExemptReasons), and EconomyService used only for the one pinned grant. Each is shown
+# failing on a mutated copy (L1b_out/fix3/mutants.txt). The block ends with an explicit end marker.
+# Refix round 1 (review rv4_money_1): the rest of the budget path is pinned. budgetState moves the buckets too (it calls
+# refillBudget), so it is pinned whole, like sendDropFx and cooldownKey, and a scan (_db_rfx1_rules) checks that
+# refillBudget / takeBudget / budgetState / stampRecharge are called only at their pinned sites with the pinned clock,
+# and that the bucket fields are written only inside refillBudget and takeBudget. Each is shown failing on a mutated
+# copy (L1b_out/rfx1/mutants.txt, rows M1-M9).
+# Refix round 2 (review rv4_money_2): the ECON-1 C1 exemption pin reads the comment-stripped MonetizationConfig and wants
+# exactly ONE top-level manual_dropper key in CashMultExemptReasons, = true (a `--[[ ]]` around it or a later duplicate
+# `= false` now fails); the economy guard's ManualDropperConfig money keys are each assigned exactly once, to the pinned
+# value (comments stripped, top level); and `_db_rfx2_rules` pins the tryAward wiring (one tryAward per click / prompt).
+# Each is shown failing on a mutated copy (L1b_out/rfx2/mutants.txt, rows MA-MF and N4).
+DR_MDC = "src/ReplicatedStorage/Shared/Configs/ManualDropperConfig.luau"
+DR_MDS = "src/ServerScriptService/Server/Services/ManualDropperService.luau"
+DR_MCS = "src/ServerScriptService/Server/Services/MoneyCollectorService.luau"
+DR_RS = "src/ServerScriptService/Server/Modules/RemoteSetup.luau"
+DR_CONST = "src/ReplicatedStorage/Shared/Constants.luau"
+DR_SND1B = "src/ReplicatedStorage/Shared/Configs/SoundConfig.luau"
+DR_MON1B = "src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau"
+# ManualDropperConfig: the shipped bundle (OD-4 = A) and the v1b keys; economy guard on the award and the budgets
+for _db_needle, _db_label in (
+    ("BundleAwards = 5,", "one tap pays a 5-award bundle ($75; OD-4 = A; 1 = option E, a visible pin edit)"),
+    ("PromptHoldDuration = 0,", "the plate stays one instant tap (no hold; spec §21 R9)"),
+    ("PlateNeon = false,", "the plate inset is plain SmoothPlastic (OD-6; world Neon 306 -> 294)"),
+    ("FxEvent = true,", "the owner-only DropperFx packet is on"),
+    ('BudgetEmptyToast = "Cash drop is recharging",', "short recharge toast (NotificationConfig Throttle ^Cash drop is recharging)"),
+    ('RechargeTag = "Recharging",', "plate tag while no bundle is left (device-neutral)"),
+    ("DropPointClearance = 0.3,", "bundle lands 0.3 over a dressed plate's model"),
+    ('RechargeAttribute = "WE_DropRechargeAt",', "the server-authoritative Recharging attribute (revision 3; a look only, never money)"),
+    ("FxMaxPayloadAmount = 10000,", "client drops a DropperFx amount above 10,000"),
+    ("FxMaxPayloadStuds = 60,", "client drops a DropperFx point over 60 studs from the character"),
+):
+    must_contain(DR_MDC, _db_needle, f"droppers v1b: ManualDropperConfig {_db_label}")
+# revision 3: the ATM hold / float-attribution keys are gone with the hold (every paid grab shows its world pop)
+for _db_needle in ("AtmPopHoldSeconds", "AtmFloatLookBackSeconds", "AtmHoldNearStuds"):
+    must_not_contain(DR_MDC, _db_needle, f"droppers v1b revision 3: ManualDropperConfig has no `{_db_needle}` (no pop hold, no float attribution)")
+for _db_row in ("AwardAmount = 15,", "MaxAwardsPerMinute = 30,", "MaxAwardsPerHour = 600,", "CooldownSeconds = 0.35,", "RateLimitRate = 4,", "RateLimitBurst = 3,"):
+    must_contain(DR_MDC, _db_row, f"droppers v1b economy guard: ManualDropperConfig keeps `{_db_row}` (the plate's cap on money is unchanged)")
+# ManualDropperService: bundle through the one server-validated award path; owner-only unreliable effect; no server pop
+for _db_needle, _db_label in (
+    ("BundleAwards", "reads BundleAwards"),
+    ("\treturn math.clamp(math.floor(raw), 1, perMinute)", "bundleAwards() clamps to 1..MaxAwardsPerMinute (a bigger bundle could never be paid)"),
+    ("\tif typeof(raw) ~= \"number\" or raw ~= raw then\n\t\treturn 1\n\tend", "a non-number / NaN BundleAwards pays 1 award"),
+    # fix round 1: from the signature, so `take` is pinned to n (a bundle of n costs n awards, as it pays n: ECON-1)
+    ("local function takeBudget(userId: number, now: number, n: number?): boolean\n\tlocal take = n or 1\n\tlocal b = refillBudget(userId, now)\n\tif b.minute < take or b.hour < take then\n\t\treturn false\n\tend\n\tb.minute -= take\n\tb.hour -= take\n\treturn true\nend\n", "takeBudget, whole: a bundle of n costs n awards (take = n) and needs n in BOTH buckets (no partial bundle)"),
+    ("\tlocal n = bundleAwards()\n\tif not takeBudget(player.UserId, now, n) then", "tryAward takes the whole bundle from the budget before paying"),
+    ('\tlocal amount = pickAward() * n -- droppers v1b: one bundle = n awards, one grant (exempt: "manual_dropper")\n\tlocal ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")\n\tif ok then\n\t\tsendDropFx(player, dropper, amount, n, now)\n', "one AccruePendingCash per bundle, multiplier-exempt reason manual_dropper, then straight to the effect"),
+    ("\t\tsendDropFx(player, dropper, amount, n, now)\n\t\tstampRecharge(player, now, n) -- revision 3: the reliable \"Recharging\" (set when this grab emptied the budget)\n\t\tif TutorialService and TutorialService.Notify then\n\t\t\tTutorialService.Notify(player, \"ManualDrop\")", "the effect packet is sent only after the grant succeeded, then the Recharging stamp and the tutorial Notify"),
+    ("FireClient(player", "DropperFx goes to the grabber only (FireClient, never FireAllClients)"),
+    ("RemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx):FireClient(player, dropPoint(pad), amount, left, eta)", "DropperFx payload (dropPoint, amount, left, eta) on the UnreliableRemoteEvent"),
+    ("Constants.RemoteNames.DropperFx", "uses the Constants remote name"),
+    ('"WE_CatalogProp"', "dressed-plate drop point from the hooks dress Model WE_CatalogProp"),
+    ("\tif cached and cached.dress == dress then\n\t\treturn cached.point\n\tend", "drop point cached per plate, keyed by the dress instance"),
+    ("BaseLabel = true, -- droppers v1b: counted by the LabelGovernor", "plate tag is a governed base label"),
+    ("\tneon.Material = insetMaterial()", "new plate inset material from PlateNeon"),
+    ("\t\tif inset.Material ~= material then\n\t\t\tinset.Material = material", "a pre-v1b Neon inset is converted once (compare-first)"),
+):
+    must_contain(DR_MDS, _db_needle, f"droppers v1b: ManualDropperService {_db_label}")
+# fix round 1 (review rv1b_money_1): the rest of the money path, whole functions / exact lines from the code, so a
+# one-line edit of what a grab pays, costs or refills is a visible pin edit. Each is shown failing on its own
+# (L1b_out/tools/mutate.py --each).
+for _db_needle, _db_label in (
+    ("local function budgetLimits(): (number, number)\n\tlocal perMinute = math.max(1, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerMinute) or 30))\n\tlocal perHour = math.max(perMinute, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerHour) or 600))\n\treturn perMinute, perHour\nend\n",
+     "budgetLimits, whole: the buckets hold MaxAwardsPerMinute / MaxAwardsPerHour from config"),
+    ("local function bundleAwards(): number\n\tlocal perMinute = budgetLimits()\n\tlocal raw: any = ManualDropperConfig.BundleAwards\n\tif typeof(raw) ~= \"number\" or raw ~= raw then\n\t\treturn 1\n\tend\n\treturn math.clamp(math.floor(raw), 1, perMinute)\nend\n",
+     "bundleAwards, whole: the bundle is ManualDropperConfig.BundleAwards, clamped to 1..MaxAwardsPerMinute"),
+    ("local function refillBudget(userId: number, now: number): Budget\n\tlocal perMinute, perHour = budgetLimits()\n\tlocal b = budgets[userId]\n\tif not b then\n\t\tb = { minute = perMinute, hour = perHour, at = now }\n\t\tbudgets[userId] = b\n\tend\n\tlocal dt = math.max(0, now - b.at)\n\tb.at = now\n\tb.minute = math.min(perMinute, b.minute + dt * perMinute / 60)\n\tb.hour = math.min(perHour, b.hour + dt * perHour / 3600)\n\treturn b\nend\n",
+     "refillBudget, whole: the buckets refill from the real elapsed time only (dt = now - b.at) at MaxAwardsPerMinute a minute and MaxAwardsPerHour an hour"),
+    ("local function pickAward(): number\n\tlocal fixed = ManualDropperConfig.AwardAmount\n\tif typeof(fixed) == \"number\" and fixed > 0 then\n\t\treturn math.floor(fixed)\n\tend\n",
+     "pickAward pays ManualDropperConfig.AwardAmount ($15) per award"),
+    ("local function ownsPlot(player: Player, plotId: any): boolean\n\tif typeof(plotId) ~= \"number\" then\n\t\treturn false\n\tend\n\tlocal profile = DataService and DataService.GetProfile(player)\n\tif not profile then\n\t\treturn false\n\tend\n\treturn profile.BasePlotId == plotId\nend\n",
+     "ownsPlot, whole: only the plot's owner (loaded profile, BasePlotId) can grab"),
+    ("local function tryAward(player: Player, dropper: BasePart)\n\tif not ManualDropperConfig.Enabled then\n\t\treturn\n\tend\n\tif not player or not player.Parent then\n\t\treturn\n\tend\n\tlocal plotId = dropper:GetAttribute(\"PlotId\")\n\tif not ownsPlot(player, plotId) then\n\t\treturn\n\tend\n\n\tlocal key = cooldownKey(player, dropper)\n\tlocal now = os.clock()\n\tlocal cd = ManualDropperConfig.CooldownSeconds or 0.35\n\tlocal last = lastAwardAt[key]\n\tif last and (now - last) < cd then\n\t\treturn\n\tend\n\n\tif RateLimitService and RateLimitService.Allow then\n\t\tlocal rate = ManualDropperConfig.RateLimitRate or 4\n\t\tlocal burst = ManualDropperConfig.RateLimitBurst or 3\n\t\tif not RateLimitService.Allow(player, \"manual_dropper\", rate, burst) then\n\t\t\treturn\n\t\tend\n\tend\n\n\tif not EconomyService or not EconomyService.AccruePendingCash then\n\t\treturn\n\tend\n\tlastAwardAt[key] = now\n",
+     "tryAward gates, in order: enabled, player present, owner, per-plate cooldown, RateLimitService, then the budget"),
+    # revision 3: "Recharging" from the server (a Player attribute; a look only: the budget still pays or refuses every tap)
+    ("local RECHARGE_ATTR: string = ManualDropperConfig.RechargeAttribute or \"WE_DropRechargeAt\"\n", "RechargeAttribute is the config key"),
+    ("local function serverNow(): number?\n\tlocal ok, t = pcall(Workspace.GetServerTimeNow, Workspace)\n\treturn if ok and typeof(t) == \"number\" and t == t then t else nil\nend\n",
+     "serverNow, whole: the synchronized server clock the client compares with (nil: no stamp)"),
+    ("local function stampRecharge(player: Player, now: number, n: number)\n\tlocal left, eta = budgetState(player.UserId, now, n)\n\tlocal want: number? = nil\n\tif left < 1 then\n\t\tlocal t = serverNow()\n\t\tif t == nil then\n\t\t\treturn\n\t\tend\n\t\twant = t + eta\n\tend\n\tlocal have = player:GetAttribute(RECHARGE_ATTR)\n\tif want == nil then\n\t\tif have ~= nil then\n\t\t\tplayer:SetAttribute(RECHARGE_ATTR, nil)\n\t\tend\n\telseif typeof(have) ~= \"number\" or math.abs(have - want) > 0.05 then\n\t\tplayer:SetAttribute(RECHARGE_ATTR, want)\n\tend\nend\n",
+     "stampRecharge, whole: while the budget holds no bundle the attribute is the server time it is ready (nil once it holds one), compare-first"),
+    ("\tif not takeBudget(player.UserId, now, n) then\n\t\tstampRecharge(player, now, n) -- revision 3: the refused tap re-states \"Recharging\" (a lost packet, a rejoin)\n",
+     "a refused tap re-states Recharging (reliable: survives a lost packet)"),
+    # revision 3: the leave token (review rv1b_money_3: an older leave's timer cleared a later visit's budget)
+    ("local leaveToken: { [number]: number } = {}\n\nlocal function bumpLeaveToken(userId: number): number\n\tlocal token = (leaveToken[userId] or 0) + 1\n\tleaveToken[userId] = token\n\treturn token\nend\n",
+     "bumpLeaveToken, whole: every leave and join of a UserId gets a newer token"),
+    ("\t\ttask.defer(syncTagOwners)\n\t\t-- Budget refills fully within an hour; drop it then unless the player came back. Revision 3: only this leave's\n\t\t-- timer may do it (leave token; a later join or leave makes it stale).\n\t\tlocal token = bumpLeaveToken(userId)\n\t\ttask.delay(3600, function()\n\t\t\tif leaveToken[userId] == token and not Players:GetPlayerByUserId(userId) then\n\t\t\t\tbudgets[userId] = nil\n\t\t\t\tleaveToken[userId] = nil\n\t\t\tend\n\t\tend)\n\tend)\n",
+     "PlayerRemoving: the budget is kept for an hour and cleared only by THIS leave's timer (token current, player away)"),
+    ("\tPlayers.PlayerAdded:Connect(function(player)\n\t\tlocal userId = player.UserId\n\t\tbumpLeaveToken(userId)\n\t\tif budgets[userId] ~= nil then\n\t\t\tstampRecharge(player, os.clock(), bundleAwards())\n\t\tend\n\tend)\n",
+     "PlayerAdded: a join makes older leave timers stale and a same-server rejoin gets Recharging at once (the budget is kept, never reset)"),
+):
+    must_contain(DR_MDS, _db_needle, f"droppers v1b: ManualDropperService {_db_label}")
+for _db_needle, _db_label in (
+    ("PlayMoneyBagFX", "no money-bag model on a grab (OD-6)"),
+    ("Enum.Material.Neon", "no Neon material literal (world Neon over its 300 target)"),
+    ('"CashPop"', "no server-built +$ pop (the client draws the world pop)"),
+    ("OnServerEvent", "no client -> server remote (the grab is the server's own prompt / ClickDetector)"),
+    ("AddXP", "grabs pay no XP (spec_xp: purchase XP only)"),
+    ("FireAllClients", "the plate effect never goes to every client"),
+):
+    must_not_contain(DR_MDS, _db_needle, f"droppers v1b: ManualDropperService {_db_label}")
+# ECON-1 condition C1 (droppers/econ1/econ1.md §4): the plate grant keeps its multiplier-exempt reason
+must_contain(DR_MDS, 'EconomyService.AccruePendingCash(player, amount, "manual_dropper")', "droppers v1b ECON-1 C1: the bundle is granted under the exempt reason manual_dropper")
+must_not_contain(DR_MCS, "PlayMoneyBagFX", "droppers v1b: MoneyCollectorService makes no money-bag model on a collect (OD-6; the client sparkles at WE_AtmPos)")
+must_contain(DR_RS, "Constants.RemoteNames.DropperFx,", "droppers v1b: RemoteSetup lists DropperFx")
+must_contain(DR_CONST, 'DropperFx = "DropperFx",', "droppers v1b: Constants.RemoteNames.DropperFx")
+must_contain(DR_SND1B, '["Drop.Coin"] = { Id = 9113849492,', "droppers v1b: Drop.Coin reuses the Cash.Collect file 9113849492")
+
+
+_DB_LONG_OPEN = re.compile(r"\[(=*)\[")
+
+
+def _db_luau_code(src: str) -> str:
+    """Luau source with every comment removed: `-- line` and `--[[ ]]` / `--[==[ ]==]` long comments (the level must
+    match to close). Strings ("", '', ``, [[ ]] / [==[ ]==]) are kept as they are, so `--` inside a string is not a
+    comment. Line breaks are kept."""
+    out, i, n = [], 0, len(src)
+    while i < n:
+        c = src[i]
+        if c == "-" and src.startswith("--", i):
+            m = _DB_LONG_OPEN.match(src, i + 2)
+            if m:
+                close = "]" + m.group(1) + "]"
+                j = src.find(close, m.end())
+                j = n if j < 0 else j + len(close)
+                out.append("\n" * src.count("\n", i, j))
+            else:
+                j = src.find("\n", i)
+                j = n if j < 0 else j
+            i = j
+            continue
+        if c in "\"'`":
+            j = i + 1
+            while j < n and src[j] != c and src[j] != "\n":
+                j += 2 if src[j] == "\\" else 1
+            j = min(n, j + 1)
+            out.append(src[i:j])
+            i = j
+            continue
+        if c == "[":
+            m = _DB_LONG_OPEN.match(src, i)
+            if m:
+                close = "]" + m.group(1) + "]"
+                j = src.find(close, m.end())
+                j = n if j < 0 else j + len(close)
+                out.append(src[i:j])
+                i = j
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def _db_rhs(code: str, i: int) -> str:
+    """The right-hand side of an assignment starting at code[i]: up to the first line break outside (), [], {} and, for a
+    function literal, up to its closing `end` at the statement's indentation."""
+    depth, j, n = 0, i, len(code)
+    first = code[i:].lstrip()
+    if first.startswith("function"):
+        ls = code.rfind("\n", 0, i) + 1
+        ind = re.match(r"[ \t]*", code[ls:]).group(0)
+        m = re.search(r"\n" + re.escape(ind) + r"end\b", code[i:])
+        return code[i:i + m.end()] if m else code[i:]
+    while j < n:
+        c = code[j]
+        if c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c in "\"'`":
+            k = j + 1
+            while k < n and code[k] != c and code[k] != "\n":
+                k += 2 if code[k] == "\\" else 1
+            j = k
+        elif c == "\n" and depth <= 0:
+            break
+        j += 1
+    return code[i:j]
+
+
+def _db_dropperfx_listeners() -> list:
+    """revision 3 (review rv1b_money_3 / rv1b_feedback_3): DropperFx is server -> client only. In every src .luau file
+    (comments stripped), flag any client -> server use of it: on one line (`...DropperFx...OnServerEvent`), or through a
+    name that holds the remote (or its name, or a function that returns it) and is used on a later line: `local r =
+    RemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx)` ... `r.OnServerEvent:Connect(...)`; `local ok, remote =
+    pcall(function() return Remotes.GetUnreliableEvent(...DropperFx) end)` ... `remote:FireServer()`; an alias of an
+    alias; a dotted name; `local function get() return ...DropperFx... end` ... `get():FireServer()`.
+    Not a holder: a table constructor that merely lists the name (RemoteSetup's UNRELIABLE list), the ok flag of a pcall,
+    a function that mentions the remote without returning it (the scan has no scopes, so names are kept this narrow)."""
+    hits = []
+    use = r"\s*(?:\([^()\n]*\))?\s*[.:]\s*(?:OnServerEvent|FireServer)\b"
+
+    def mentions(text, tainted):
+        return "DropperFx" in text or any(re.search(r"(?<![\w.])" + re.escape(t) + r"\b", text) for t in tainted)
+
+    def returns(body, tainted):
+        return any(mentions(r, tainted) for r in re.findall(r"(?m)\breturn\b([^\n]*)", body))
+
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        code = _db_luau_code(p.read_text(encoding="utf-8"))
+        if "DropperFx" not in code:
+            continue
+        rel = str(p.relative_to(ROOT))
+        if re.search(r"DropperFx[^\n]*(OnServerEvent|FireServer)", code):
+            hits.append(rel + " (one line)")
+            continue
+        tainted = set()
+        for _ in range(8):
+            before = len(tainted)
+            for m in re.finditer(r"(?m)^[ \t]*(?:local[ \t]+)?([A-Za-z_][\w.]*(?:[ \t]*:[^=,\n]+)?(?:[ \t]*,[ \t]*[A-Za-z_][\w.]*(?:[ \t]*:[^=,\n]+)?)*)[ \t]*=(?!=)", code):
+                rhs = _db_rhs(code, m.end())
+                body = rhs.strip()
+                if body.startswith("{"):
+                    continue  # a table constructor lists names; it is not the remote
+                if body.startswith("function"):
+                    hit = returns(body, tainted)
+                else:
+                    hit = mentions(rhs, tainted)
+                if hit:
+                    names = [re.match(r"\s*([A-Za-z_][\w.]*)", part).group(1) for part in m.group(1).split(",")]
+                    if body.startswith("pcall(") and len(names) > 1:
+                        names = names[1:]  # `ok, value = pcall(...)`: the flag is not the remote
+                    tainted.update(names)
+            for m in re.finditer(r"(?m)^([ \t]*)(?:local[ \t]+)?function[ \t]+([A-Za-z_][\w.:]*)[ \t]*\(", code):
+                e = re.search(r"\n" + re.escape(m.group(1)) + r"end\b", code[m.end():])
+                fbody = code[m.end():m.end() + e.end()] if e else code[m.end():]
+                if returns(fbody, tainted):
+                    tainted.add(m.group(2).replace(":", "."))
+            if len(tainted) == before:
+                break
+        for t in sorted(tainted):
+            if re.search(r"(?<![\w.])" + re.escape(t) + use, code):
+                hits.append(f"{rel} (via {t})")
+    return hits
+
+
+def _db_table_end(code: str, start: int) -> int:
+    """Index just past the `}` that closes the table literal opened at code[start] == "{" (strings skipped)."""
+    depth, j, n = 0, start, len(code)
+    while j < n:
+        c = code[j]
+        if c in "\"'`":
+            k = j + 1
+            while k < n and code[k] != c and code[k] != "\n":
+                k += 2 if code[k] == "\\" else 1
+            j = k
+        elif c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return j + 1
+        j += 1
+    return -1
+
+
+def _db_top_level(body: str) -> str:
+    """refix 2: a table constructor's body with everything nested inside it (the contents of (), {} and the strings in
+    them) blanked to spaces, line breaks kept, so a key found in the result is a key of THIS table, not of a nested one
+    or of a call's argument list. Strings at the top level are kept (the `["key"] =` form)."""
+    out, depth, j, n = [], 0, 0, len(body)
+    while j < n:
+        c = body[j]
+        if c in "\"'`":
+            k = j + 1
+            while k < n and body[k] != c and body[k] != "\n":
+                k += 2 if body[k] == "\\" else 1
+            k = min(n, k + 1)
+            piece = body[j:k]
+            out.append(piece if depth == 0 else re.sub(r"[^\n]", " ", piece))
+            j = k
+            continue
+        if c in "({":
+            depth += 1
+            out.append(c if depth == 1 else " ")
+        elif c in ")}":
+            out.append(c if depth == 1 else " ")
+            depth -= 1
+        else:
+            out.append(c if depth == 0 or c == "\n" else " ")
+        j += 1
+    return "".join(out)
+
+
+def _db_key_values(top: str, key: str) -> list:
+    """refix 2: every value assigned to `key` at a table's top level (from _db_top_level), in source order, in both
+    forms `key = v` and `["key"] = v` / `['key'] = v`; each value is the text up to the next `,` / `;` / line break,
+    stripped. A key written twice gives two values (Luau keeps the last one)."""
+    pat = r"(?:(?<![\w.])" + re.escape(key) + r"|\[\s*([\"'])" + re.escape(key) + r"\1\s*\])\s*=(?!=)[ \t]*([^,;\n]*)"
+    return [m.group(2).strip() for m in re.finditer(pat, top)]
+
+
+# refix 2: the economy guard's ManualDropperConfig money keys and their pinned values (ECON-1 / OD-4 = A)
+_DB_ECON_KEYS = (("AwardAmount", "15"), ("BundleAwards", "5"), ("MaxAwardsPerMinute", "30"), ("MaxAwardsPerHour", "600"),
+                 ("CooldownSeconds", "0.35"), ("RateLimitRate", "4"), ("RateLimitBurst", "3"))
+
+
+def _db_plate_rules() -> None:
+    """droppers v1b static rules (T6b, one grant per grab, and the remote / sound shape)."""
+    # fix round 1: ONE AccruePendingCash call in ManualDropperService (comments stripped): the pinned grant in tryAward.
+    # Every other mention of the name must be the nil guard `not EconomyService.AccruePendingCash then`, so a second
+    # call, a bracket-index call (`EconomyService["AccruePendingCash"](`) or a local alias all fail.
+    mds_code = _db_luau_code(read(DR_MDS) or "")
+    calls = len(re.findall(r"AccruePendingCash\s*\(", mds_code))
+    guards = len(re.findall(r"\bnot EconomyService\.AccruePendingCash then\b", mds_code))
+    refs = len(re.findall(r"AccruePendingCash", mds_code))
+    if calls == 1 and refs == calls + guards:
+        ok(f"droppers v1b: ManualDropperService makes exactly one AccruePendingCash call, comments stripped (other mentions: {guards} nil guard)")
+    else:
+        bad(f"droppers v1b: ManualDropperService must make exactly one AccruePendingCash call, comments stripped (calls {calls}, mentions {refs}, nil guards {guards})")
+    mdc = read(DR_MDC) or ""
+    # T6b: 1 <= BundleAwards <= MaxAwardsPerMinute (a bundle above the minute bucket could never be paid)
+    ba = re.search(r"^\s*BundleAwards = ([^,\n]+),", mdc, re.M)
+    mpm = re.search(r"^\s*MaxAwardsPerMinute = (\d+),", mdc, re.M)
+    bav = int(ba.group(1)) if ba and re.fullmatch(r"\d+", ba.group(1).strip()) else None
+    mpv = int(mpm.group(1)) if mpm else None
+    if bav is not None and mpv is not None and 1 <= bav <= mpv:
+        ok(f"droppers v1b: 1 <= BundleAwards ({bav}) <= MaxAwardsPerMinute ({mpv})")
+    else:
+        bad(f"droppers v1b: BundleAwards must be a whole number in 1..MaxAwardsPerMinute (got {ba.group(1) if ba else None} / {mpv})")
+    # ECON-1 C1: manual_dropper = true inside MonetizationConfig.CashMultExemptReasons (not commented out, not false):
+    # passes, VIP, Empire Tax, prestige and season never multiply a $75 bundle.
+    # refix 2 (review rv4_money_2): read on the comment-stripped code (a `--[[ ]]` around the line is no longer "there"),
+    # and the table's top level holds exactly ONE manual_dropper key, in either form (`manual_dropper =` or
+    # `["manual_dropper"] =`), whose value is `true` (a later duplicate `= false` wins in Luau, so a second key fails).
+    mon = _db_luau_code(read(DR_MON1B) or "")
+    ex = re.search(r"\n\tCashMultExemptReasons\s*=\s*\{", mon)
+    ex_end = _db_table_end(mon, ex.end() - 1) if ex else -1
+    ex_top = _db_top_level(mon[ex.end():ex_end - 1]) if ex and ex_end > 0 else ""
+    md_vals = _db_key_values(ex_top, "manual_dropper")
+    if ex and ex_end > 0 and md_vals == ["true"]:
+        ok("droppers v1b ECON-1 C1: exactly one manual_dropper key in CashMultExemptReasons and it is `= true` (comments stripped; the plate is never multiplied)")
+    else:
+        bad(f"droppers v1b ECON-1 C1: MonetizationConfig.CashMultExemptReasons must hold exactly one `manual_dropper = true` (comments stripped; table found {bool(ex and ex_end > 0)}, manual_dropper values {md_vals})")
+    # refix 2 (review rv4_money_2, Low): the economy guard's ManualDropperConfig keys, on the comment-stripped table's top
+    # level: each key is assigned exactly once, to the pinned value (a later duplicate key overrides the pinned line in
+    # Luau, and a block-commented line is not there)
+    mdc_code = _db_luau_code(mdc)
+    mt = re.match(r"\s*local ManualDropperConfig\s*=\s*\{", mdc_code)
+    mt_end = _db_table_end(mdc_code, mt.end() - 1) if mt else -1
+    mdc_top = _db_top_level(mdc_code[mt.end():mt_end - 1]) if mt and mt_end > 0 else ""
+    wrong = {}
+    for key, want in _DB_ECON_KEYS:
+        vals = _db_key_values(mdc_top, key)
+        if vals != [want]:
+            wrong[key] = vals
+    if mt and mt_end > 0 and not wrong:
+        ok("droppers v1b refix 2 economy guard: ManualDropperConfig assigns each money key exactly once, to its pinned value (comments stripped, top level): " + ", ".join(f"{k} = {v}" for k, v in _DB_ECON_KEYS))
+    else:
+        bad(f"droppers v1b refix 2 economy guard: ManualDropperConfig money keys missing, duplicated or changed (comments stripped, top level; table found {bool(mt and mt_end > 0)}; key -> values found {wrong})")
+    # DropperFx: an UnreliableRemoteEvent (RemoteSetup UNRELIABLE list, not EVENTS) with no server listener anywhere
+    rs = read(DR_RS) or ""
+    unrel = re.search(r"\nlocal UNRELIABLE = \{(.*?)\n\}", rs, re.S)
+    events = re.search(r"\nlocal EVENTS = \{(.*?)\n\}", rs, re.S)
+    listeners = _db_dropperfx_listeners()  # revision 3: one-line AND multi-line forms (see the function)
+    if unrel and "RemoteNames.DropperFx" in unrel.group(1) and (events is None or "RemoteNames.DropperFx" not in events.group(1)) and not listeners:
+        ok("droppers v1b: DropperFx is an UNRELIABLE remote only, and no file listens to or fires it from a client")
+    else:
+        bad(f"droppers v1b: DropperFx must be in UNRELIABLE only with no OnServerEvent / FireServer (listeners {listeners})")
+    # Drop.Coin: an id another key already uses (no new sound id), World bus, quiet, short range
+    snd = read(DR_SND1B) or ""
+    body = re.search(r"SoundConfig\.Sounds = \{(.*?)\n\} :: \{ \[string\]: SoundDef \}", snd, re.S)
+    keys = dict(re.findall(r'\["([\w.]+)"\] = \{ Id = (\w+),', body.group(1))) if body else {}
+    m = re.search(r'\["Drop\.Coin"\] = \{([^}]*)\}', body.group(1)) if body else None
+    others = {v for k, v in keys.items() if k != "Drop.Coin"}
+    vol = re.search(r"Volume = (\d+(?:\.\d+)?)", m.group(1)) if m else None
+    md = re.search(r"MaxDistance = (\d+(?:\.\d+)?)", m.group(1)) if m else None
+    if m and keys.get("Drop.Coin") in others and '"World"' in m.group(1) and vol and float(vol.group(1)) <= 0.3 and md and 0 < float(md.group(1)) <= 40:
+        ok("droppers v1b: Drop.Coin reuses an existing sound id, World bus, Volume <= 0.3, MaxDistance <= 40")
+    else:
+        bad(f"droppers v1b: Drop.Coin shape wrong (id {keys.get('Drop.Coin')})")
+
+
+_db_plate_rules()
+
+
+def _db_fix3_rules() -> None:
+    """droppers v1b fix round 3 (revision 3; reviews rv1b_money_3 / rv1b_feedback_3): the budget's lifetime, exactly one
+    effect packet per paid grab, EconomyService used only for the pinned grant, and no config value overridden after its
+    table (ManualDropperConfig; MonetizationConfig.CashMultExemptReasons, ECON-1 C1)."""
+    mds = _db_luau_code(read(DR_MDS) or "")
+    # (1) the budget's lifetime: created in refillBudget, removed only by the leave timer of the LAST leave
+    writes = re.findall(r"\bbudgets\s*\[[^\]\n]*\]\s*=(?!=)[^\n]*", mds)
+    whole = re.findall(r"\bbudgets\s*=(?!=)", mds)
+    tok = re.findall(r"\bleaveToken\s*\[[^\]\n]*\]\s*=(?!=)[^\n]*", mds)
+    bumps = re.findall(r"\bbumpLeaveToken\s*\(", mds)
+    timer = re.search(r"\n\t\ttask\.delay\(3600, function\(\)\n\t\t\tif leaveToken\[userId\] == token and not Players:GetPlayerByUserId\(userId\) then\n\t\t\t\tbudgets\[userId\] = nil\n\t\t\t\tleaveToken\[userId\] = nil\n\t\t\tend\n\t\tend\)\n", mds)
+    other = re.search(r"(?:table\.clear|rawset|setmetatable|table\.remove)\s*\(\s*(?:budgets|leaveToken)\b", mds)
+    if (sorted(w.strip() for w in writes) == ["budgets[userId] = b", "budgets[userId] = nil"] and whole == []
+            and sorted(t.strip() for t in tok) == ["leaveToken[userId] = nil", "leaveToken[userId] = token"]
+            and len(bumps) == 3 and len(re.findall(r"task\.delay\s*\(\s*3600", mds)) == 1 and timer and not other):
+        ok("droppers v1b revision 3: the plate budget is created only in refillBudget and removed only by the timer of the LAST leave (leave token; comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: the plate budget's lifetime changed (budgets[..] writes {writes}, whole-table writes {len(whole)}, leaveToken writes {tok}, bumpLeaveToken mentions {len(bumps)} (want def + 2 calls), token-guarded 3600 s timer {bool(timer)}, clear/rawset {bool(other)})")
+    # (2) exactly one effect packet per paid grab: sendDropFx defined once and called once (the pinned call after the
+    # grant), one FireClient, one DropperFx remote fetch
+    sdf = re.findall(r"\bsendDropFx\b", mds)
+    calls = re.findall(r"(?<!function )\bsendDropFx\s*\(", mds)
+    fc = re.findall(r"FireClient\s*\(", mds)
+    gu = re.findall(r"GetUnreliable\s*\(", mds)
+    if len(sdf) == 2 and len(calls) == 1 and len(fc) == 1 and len(gu) == 1:
+        ok("droppers v1b revision 3: exactly one sendDropFx call (the pinned one after the grant), one FireClient, one DropperFx fetch in ManualDropperService (comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: ManualDropperService must send the effect exactly once per paid grab (sendDropFx mentions {len(sdf)} (want 2), calls {len(calls)} (want 1), FireClient {len(fc)}, GetUnreliable {len(gu)})")
+    # (3) EconomyService: only the pinned grant (a second grant through AddCash / AddGold / any other function or an alias fails)
+    allowed = ["local EconomyService: any = nil", "EconomyService = deps.EconomyService",
+               "if not EconomyService or not EconomyService.AccruePendingCash then",
+               'local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")']
+    rest, counts = mds, []
+    for a in allowed:
+        counts.append(rest.count(a))
+        rest = rest.replace(a, "")
+    left = re.findall(r"[^\n]*\bEconomyService\b[^\n]*", rest)
+    if counts == [1, 1, 1, 1] and not left:
+        ok("droppers v1b revision 3: ManualDropperService uses EconomyService only for the one pinned AccruePendingCash grant (no AddCash / AddGold / alias; comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: ManualDropperService uses EconomyService beyond the pinned grant (allowed lines found {counts}, other mentions {[x.strip() for x in left]})")
+    # (4) ManualDropperConfig: the file is its table and `return`, nothing after (no post-table override), and no src
+    # file writes any of its keys at run time (through the name or any local alias)
+    mdc = _db_luau_code(read(DR_MDC) or "")
+    m = re.match(r"\s*local ManualDropperConfig = \{", mdc)
+    end = _db_table_end(mdc, m.end() - 1) if m else -1
+    tail = mdc[end:] if end > 0 else ""
+    shape = bool(m) and end > 0 and re.fullmatch(r"\s*return ManualDropperConfig\s*", tail) is not None
+    meta = re.search(r"\b(?:setmetatable|rawset|getmetatable)\b|__index|__newindex", mdc)
+    writers = []
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        code = _db_luau_code(p.read_text(encoding="utf-8"))
+        if "ManualDropperConfig" not in code:
+            continue
+        rel = str(p.relative_to(ROOT))
+        names = {"ManualDropperConfig"}
+        for _ in range(4):
+            for a in re.finditer(r"(?m)^[ \t]*local[ \t]+([A-Za-z_]\w*)(?:[ \t]*:[^=\n]+)?[ \t]*=[ \t]*([^\n]*)$", code):
+                rhs = a.group(2)
+                if re.search(r"\brequire\b[^\n]*\bManualDropperConfig\b", rhs) or \
+                   re.fullmatch(r"\s*(?:" + "|".join(map(re.escape, sorted(names))) + r")\s*(?:::[^\n]*)?", rhs):
+                    names.add(a.group(1))
+        for nm in sorted(names):
+            if re.search(r"(?<![\w.])" + re.escape(nm) + r"\s*(?:\.\s*\w+|\[[^\]\n]*\])\s*=(?!=)", code) or \
+               re.search(r"(?:rawset|setmetatable|table\.clear|table\.insert|table\.remove)\s*\(\s*" + re.escape(nm) + r"\b", code):
+                writers.append(f"{rel} (via {nm})")
+    if shape and not meta and not writers:
+        ok("droppers v1b revision 3: ManualDropperConfig is its table and `return` only (no override after the table, no metatable), and no src file writes a ManualDropperConfig key (comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3: ManualDropperConfig can be overridden (table then return only {shape}, metatable {bool(meta)}, writers {writers})")
+    # (5) ECON-1 C1: MonetizationConfig.CashMultExemptReasons is only ever the table literal; no src file writes, clears
+    # or re-assigns it or one of its reasons (manual_dropper) after the table, directly or through an alias
+    offenders = []
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        raw = _db_luau_code(p.read_text(encoding="utf-8"))
+        if "CashMultExemptReasons" not in raw:
+            continue
+        code = re.sub(r"\[\s*[\"']([A-Za-z_]\w*)[\"']\s*\]", r".\1", raw)  # t["k"] -> t.k
+        rel = str(p.relative_to(ROOT))
+        defs = re.findall(r"(?m)^[ \t]*CashMultExemptReasons\s*=(?!=)", code)
+        if rel != DR_MON1B and defs:
+            offenders.append(f"{rel}: CashMultExemptReasons re-assigned")
+        if rel == DR_MON1B and len(defs) != 1:
+            offenders.append(f"{rel}: {len(defs)} CashMultExemptReasons definitions (want the one in the table)")
+        if re.search(r"CashMultExemptReasons\s*(?:\.\s*\w+|\[[^\]\n]*\])\s*=(?!=)", code) or \
+           re.search(r"\.\s*CashMultExemptReasons\s*=(?!=)", code):
+            offenders.append(f"{rel}: writes CashMultExemptReasons")
+        if re.search(r"(?:rawset|setmetatable|table\.clear|table\.remove|table\.insert)\s*\(\s*[\w.]*CashMultExemptReasons\b", code):
+            offenders.append(f"{rel}: clears / rawsets CashMultExemptReasons")
+        for a in re.finditer(r"(?m)^[ \t]*local[ \t]+([A-Za-z_]\w*)(?:[ \t]*:[^=\n]+)?[ \t]*=[ \t]*[\w.]*CashMultExemptReasons\b[^\n]*$", code):
+            al = a.group(1)
+            if re.search(r"(?<![\w.])" + re.escape(al) + r"\s*(?:\.\s*\w+|\[[^\]\n]*\])\s*=(?!=)", code) or \
+               re.search(r"(?:rawset|setmetatable|table\.clear|table\.remove|table\.insert)\s*\(\s*" + re.escape(al) + r"\b", code):
+                offenders.append(f"{rel}: writes CashMultExemptReasons through the alias {al}")
+    mon = _db_luau_code(read(DR_MON1B) or "")
+    mm = re.search(r"\nlocal MonetizationConfig = \{", mon)
+    mend = _db_table_end(mon, mm.end() - 1) if mm else -1
+    after = mon[mend:] if mend > 0 else ""
+    if mend < 0 or re.search(r"\bmanual_dropper\b|CashMultExemptReasons", after):
+        offenders.append(f"{DR_MON1B}: manual_dropper / CashMultExemptReasons named after the MonetizationConfig table")
+    if not offenders:
+        ok("droppers v1b revision 3 ECON-1 C1: MonetizationConfig.CashMultExemptReasons (manual_dropper) is never overridden after its table, in any src file, directly or through an alias (comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3 ECON-1 C1: CashMultExemptReasons can be overridden: {offenders}")
+
+
+
+_db_fix3_rules()
+# refix round 1 (review rv4_money_1): budgetState is not read-only (it calls refillBudget, which moves the buckets and
+# b.at) and it runs on every paid grab (twice), every refused tap and every same-server rejoin; sendDropFx calls it; the
+# per-plate cooldown key decides which taps reach the budget. Each is pinned whole, from its signature to `end`.
+for _db_needle, _db_label in (
+    ("local function budgetState(userId: number, now: number, n: number): (number, number)\n\tlocal perMinute, perHour = budgetLimits()\n\tlocal b = refillBudget(userId, now)\n\tlocal left = math.floor(math.min(b.minute, b.hour) / n)\n\tif left >= 1 then\n\t\treturn left, 0\n\tend\n\treturn 0, math.max(0, (n - b.minute) / (perMinute / 60), (n - b.hour) / (perHour / 3600))\nend\n",
+     "budgetState, whole: it refills on the caller's clock only (refillBudget(userId, now)) and writes nothing else"),
+    ("local function sendDropFx(player: Player, pad: BasePart, amount: number, n: number, now: number)\n\tif ManualDropperConfig.FxEvent == false then\n\t\treturn\n\tend\n\tlocal left, eta = budgetState(player.UserId, now, n)\n\tlocal ok, err = pcall(function()\n\t\tRemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx):FireClient(player, dropPoint(pad), amount, left, eta)\n\tend)\n\tif not ok then\n\t\twarn(\"[ManualDropper] DropperFx failed:\", err)\n\tend\nend\n",
+     "sendDropFx, whole: the packet reads the budget on the grab's own clock (budgetState(player.UserId, now, n)) and goes to the grabber only"),
+    ("local function cooldownKey(player: Player, dropper: BasePart): string\n\treturn tostring(player.UserId) .. \"|\" .. dropper:GetFullName()\nend\n",
+     "cooldownKey, whole: one cooldown per player and plate (not per tap)"),
+):
+    must_contain(DR_MDS, _db_needle, f"droppers v1b refix 1: ManualDropperService {_db_label}")
+
+
+_DB_TRYAWARD_TAIL = "\tlastAwardAt[key] = now\n\tlocal n = bundleAwards()\n\tif not takeBudget(player.UserId, now, n) then\n\t\tstampRecharge(player, now, n) -- revision 3: the refused tap re-states \"Recharging\" (a lost packet, a rejoin)\n\t\tif NotificationService and NotificationService.NotifyThrottled then\n\t\t\tNotificationService.NotifyThrottled(\n\t\t\t\tplayer,\n\t\t\t\tManualDropperConfig.BudgetEmptyToast or \"Cash drop is recharging\",\n\t\t\t\t\"Info\",\n\t\t\t\t3,\n\t\t\t\tManualDropperConfig.BudgetEmptyToastCooldown or 20,\n\t\t\t\t\"manual_dropper_budget\"\n\t\t\t)\n\t\tend\n\t\treturn\n\tend\n\tlocal amount = pickAward() * n -- droppers v1b: one bundle = n awards, one grant (exempt: \"manual_dropper\")\n\tlocal ok = EconomyService.AccruePendingCash(player, amount, \"manual_dropper\")\n\tif ok then\n\t\tsendDropFx(player, dropper, amount, n, now)\n\t\tstampRecharge(player, now, n) -- revision 3: the reliable \"Recharging\" (set when this grab emptied the budget)\n\t\tif TutorialService and TutorialService.Notify then\n\t\t\tTutorialService.Notify(player, \"ManualDrop\")\n\t\tend\n\tend\nend\n"
+
+
+def _db_rfx1_rules() -> None:
+    """droppers v1b refix round 1 (review rv4_money_1): the budget buckets move only on the real clock, at the pinned
+    call sites. On the comment-stripped ManualDropperService:
+      * refillBudget: defined once, called exactly twice, both `refillBudget(userId, now)` (takeBudget, budgetState);
+      * takeBudget: called exactly once, `takeBudget(player.UserId, now, n)` (tryAward);
+      * budgetState: called exactly twice, both `budgetState(player.UserId, now, n)` (sendDropFx, stampRecharge);
+      * stampRecharge: called exactly three times: `stampRecharge(player, now, n)` twice (refused tap, paid grab) and
+        `stampRecharge(player, os.clock(), bundleAwards())` once (PlayerAdded);
+      * no other mention of these names (an alias such as `local rb = refillBudget` fails);
+      * the bucket fields (`minute`, `hour`, `at`) are written only inside refillBudget and takeBudget: no `.minute =`,
+        `.hour -=`, `["at"] =`, rawset or table constructor with these keys anywhere else."""
+    mds = _db_luau_code(read(DR_MDS) or "")
+    problems = []
+
+    def body_of(name):
+        m = re.search(r"(?m)^local function " + name + r"\(.*\n(?:[\t ].*\n|\n)*?end\n", mds)
+        return m.group(0) if m else None
+
+    want = {
+        "refillBudget": ["refillBudget(userId, now)"] * 2,
+        "takeBudget": ["takeBudget(player.UserId, now, n)"],
+        "budgetState": ["budgetState(player.UserId, now, n)"] * 2,
+        "stampRecharge": ["stampRecharge(player, now, n)"] * 2 + ["stampRecharge(player, os.clock(), bundleAwards())"],
+    }
+    for name, calls in want.items():
+        defs = re.findall(r"(?m)^local function " + name + r"\(", mds)
+        mentions = re.findall(r"(?<![\w.:])" + name + r"\b", mds)
+        found = [c.group(0) for c in re.finditer(r"(?<![\w.:])(?<!function )" + name + r"\s*\([^()\n]*(?:\([^()\n]*\)[^()\n]*)*\)", mds)]
+        if len(defs) != 1:
+            problems.append(f"{name} defined {len(defs)} times (want 1)")
+        if sorted(found) != sorted(calls):
+            problems.append(f"{name} calls {found} (want {calls})")
+        if len(mentions) != 1 + len(calls):
+            problems.append(f"{name} named {len(mentions)} times (want {1 + len(calls)}: the definition and the pinned calls; an alias or a passed reference fails)")
+    rb, tb = body_of("refillBudget"), body_of("takeBudget")
+    if rb is None or tb is None:
+        problems.append("refillBudget / takeBudget body not found")
+    rest = mds
+    for b in (rb, tb):
+        if b:
+            rest = rest.replace(b, "")
+    field = r"(?:minute|hour|at)"
+    w1 = re.findall(r"[^\n]*[.:]\s*" + field + r"\s*(?:[-+*/%^]|\.\.)?=(?!=)[^\n]*", rest)
+    w2 = re.findall(r"[^\n]*\[\s*[\"']" + field + r"[\"']\s*\]\s*(?:[-+*/%^]|\.\.)?=(?!=)[^\n]*", rest)
+    w3 = re.findall(r"[^\n]*rawset\s*\([^\n]*[\"']" + field + r"[\"'][^\n]*", rest)
+    w4 = re.findall(r"[^\n]*\{[^}\n]*\b" + field + r"\s*=(?!=)[^\n]*", rest)
+    for w in w1 + w2 + w3 + w4:
+        problems.append(f"bucket field written outside refillBudget / takeBudget: `{w.strip()}`")
+    # tryAward from `lastAwardAt[key] = now` to its `end`, compared with comments stripped and blank / trailing space
+    # ignored (a comment line is harmless; any code line between the pinned ones is a pin edit)
+    def norm(t):
+        return "\n".join(ln.rstrip() for ln in t.split("\n") if ln.strip())
+    tail = norm(_db_luau_code(_DB_TRYAWARD_TAIL))
+    if tail and tail in norm(mds):
+        ok("droppers v1b refix 1: ManualDropperService tryAward, the rest after the gates up to its `end`: the bundle n and the clock now are taken, paid and stamped with no line between them (no `now +=`, no `n =` after the budget; comments stripped)")
+    else:
+        bad("droppers v1b refix 1: ManualDropperService tryAward, the rest after the gates up to its `end`: the bundle n and the clock now are taken, paid and stamped with no line between them (no `now +=`, no `n =` after the budget; comments stripped) — changed")
+    if not problems:
+        ok("droppers v1b refix 1: the plate budget moves only in refillBudget / takeBudget, on the pinned clock, at the pinned call sites (refillBudget x2, takeBudget x1, budgetState x2, stampRecharge x3; comments stripped)")
+    else:
+        bad(f"droppers v1b refix 1: the plate budget can move off the pinned path: {problems}")
+
+
+_db_rfx1_rules()
+
+
+def _db_rfx2_rules() -> None:
+    """droppers v1b refix round 2 (review rv4_money_2, Low): one grant per grab also at the wiring. On the comment-
+    stripped ManualDropperService, tryAward is named exactly 3 times (its definition and the two handler calls), and each
+    handler (the ClickDetector's MouseClick and the prompt's Triggered) is exactly `tryAward(player, pad)` and nothing else,
+    so a second, delayed tryAward per tap (`task.delay(0.4, tryAward, player, pad)`) or an alias fails."""
+    mds = _db_luau_code(read(DR_MDS) or "")
+    names = re.findall(r"\btryAward\b", mds)
+    defs = re.findall(r"(?m)^local function tryAward\(player: Player, dropper: BasePart\)$", mds)
+    calls = re.findall(r"(?<!function )\btryAward\s*\(([^)\n]*)\)", mds)
+    handlers = re.findall(r"\.(MouseClick|Triggered):Connect\(function\(player: Player\)\n\t\t\ttryAward\(player, pad\)\n\t\tend\)\n", mds)
+    if len(names) == 3 and len(defs) == 1 and calls == ["player, pad", "player, pad"] and sorted(handlers) == ["MouseClick", "Triggered"]:
+        ok("droppers v1b refix 2: tryAward runs once per click / prompt trigger (defined once; called only as the whole body of the MouseClick and Triggered handlers; comments stripped)")
+    else:
+        bad(f"droppers v1b refix 2: tryAward wiring changed (mentions {len(names)} (want 3), definitions {len(defs)}, calls {calls} (want 2 x `player, pad`), handlers {handlers} (want MouseClick + Triggered, each only `tryAward(player, pad)`))")
+
+
+_db_rfx2_rules()
+# --- end of the droppers v1b lane L1b block ---
+
+# --- droppers v1b lane L3b (plate client; spec_droppers.md §13 "New pins, v1b" for ProductionFx, LabelGovernor,
+# WorldLabelConfig) ---
+# Paste directly above the final `parse_gate()` call, after the v1a L3a block (its last line is the ProductionFx
+# WaitForChild rule) and, at L4b, after the L1b block (`_db_plate_rules()`). Every must_contain and rule here fails on the
+# base tree (L3a + L1b's config / remote files: v1a ProductionFx, lane G's LabelGovernor, no PriorityAttribute); the two
+# must_not_contain pins pass there by design and fail on a mutated copy (L3b_out/tools/mutate_l3b.py).
+# The plate response is client-only and owner-only: it reads the server's one DropperFx packet, never sends anything.
+# Fix round 3 (revision 3, lead decision after review rv1b_feedback_3): EVERY paid packet shows one world pop and its
+# chirp, at once; the hold / cancel / float-attribution code and its pins are gone (the hold keys are now forbidden), and
+# "Recharging" also comes from the server's reliable RechargeAttribute. New rule `_d3_fix3_rules` (always the pop; only the
+# server writes the attribute). Each new pin is shown failing on a mutated copy (L3b_out/fix3/mutants.txt).
+# Refix round 1 (review rv4_feedback_1): a zoomed-out camera (the pop's rise beyond its MaxDistance) still gets the pop:
+# popSpot draws it PopNearCameraStuds from the camera on the line of sight to the plate. popSpot is pinned whole, the
+# anchor is placed only from it, and `_d3_rfx1_rules` checks the single placement (L1b_out/rfx1/mutants.txt, rows Q1-Q5).
+# Refix round 2 (review rv4_feedback_2): while a plate tag reads "Recharging" it carries the label priority (the ATM
+# plate's tag was held off by the 3 premium-pad labels), cleared when the recharge ends; and a late left >= 1 packet no
+# longer ends a recharge the server's attribute still stands behind. `_d3_rfx2_rules` checks who sets / clears the
+# priority (L1b_out/rfx2/mutants.txt, rows S1-S8).
+DR3B_MDC = "src/ReplicatedStorage/Shared/Configs/ManualDropperConfig.luau"
+DR3B_PFX = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/ProductionFx.luau"
+DR3B_LG = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/LabelGovernor.luau"
+DR3B_WLC = "src/ReplicatedStorage/Shared/Configs/WorldLabelConfig.luau"
+# spec §13 ProductionFx needles, then the exact lines that carry the v1b rules (spec §3.7 / §3.8 / §7 / §10.3)
+for _d3_needle, _d3_label in (
+    ("CashPopGlow", "the plate pop keeps HEAD's green glow (UIStroke CashPopGlow; the ◆ pin moved here from ManualDropperService)"),
+    ("Remotes.GetUnreliableEvent(Constants.RemoteNames.DropperFx)", "DropperFx through the Remotes helper's bounded wait (no unbounded WaitForChild)"),
+    ("BaseLabel = true", "the plate pop is a governed base label (at most 3 on screen)"),
+    ("PriorityAttribute", "the plate pop carries WorldLabelConfig.PriorityAttribute"),
+    ("\t\ttask.defer(afterInit)", "Init defers its one start task (the first recharge read + the remote wait; Init never yields)"),
+    ("\tremote.OnClientEvent:Connect(onDropperFx)", "the listener is the server -> client packet only"),
+    ("\tif not (finiteIn(amount, 1, MAX_AMOUNT) and finiteIn(left, 0, 1000) and finiteIn(eta, 0, 3600)) then",
+     "payload checks: amount 1..FxMaxPayloadAmount, left 0..1000, eta 0..3600, all finite"),
+    ("\treturn at ~= nil and (at - (dropPoint :: Vector3)).Magnitude <= MAX_STUDS", "payload checks: drop point within FxMaxPayloadStuds of the character"),
+    ('local DEAD_FLAG = "Dead" -- the one Fx.HideWhen flag the plate response obeys', "the plate's answer to a tap ignores Fx.HideWhen except Dead"),
+    # revision 3 (lead decision): every paid packet shows its world pop and chirp at once; nothing holds, cancels or
+    # attributes it (the whole handler, so a hold, a HUD-flag mute or a float check in front of the pop is a pin edit)
+    ("local function onDropperFx(dropPoint: any, amount: any, left: any, eta: any)\n\tplateCount(\"Packets\")\n\tif not validPayload(dropPoint, amount, left, eta) then\n\t\tplateCount(\"Junk\")\n\t\treturn\n\tend\n\tif isDead() then\n\t\tplateCount(\"Dead\") -- no character in prompt or click range: a stray packet shows nothing\n\t\treturn\n\tend\n\tlocal pos = dropPoint :: Vector3\n\tlocal plate = plateAt(pos)\n\tlocal plotId = if plate then plotOf(plate) else nil\n\tif plotId ~= nil then\n\t\tlastPlotId = plotId\n\tend\n\tapplyRecharge(plotId or lastPlotId, math.floor(left :: number), eta :: number)\n\tdropBundle(pos)\n",
+     "onDropperFx, whole up to the pop: junk and Dead are the only ways out before the bundle and the pop (revision 3)"),
+    ("\tshowPop(pos, amount :: number, plate)\nend\n", "every valid paid packet ends in the world pop + chirp (revision 3: no hold, no cancel, no float attribution)"),
+    ("\t\tWorldLabel.SetShown(tag, false) -- the pop takes the tag's place (the cap of 3 holds)", "the plate tag hides while its pop shows"),
+    ("\tg:SetAttribute(PRIORITY_ATTR, true)", "the pooled pop is the one label kept first"),
+    ("\tWorldLabel.SetShown(g, false)", "the pooled pop starts hidden"),
+    ("\tsound(COIN_KEY, spot)\n", "the pop plays its Drop.Coin chirp where the pop is drawn (refix 1: a far camera still hears it)"),
+    ("\t\t\t\tif pcall(pc.SetSuppressed, prompt, true) then", "Recharging: the plate pills hide (PromptController.SetSuppressed)"),
+    ("\t\t\t\tWorldLabel.SetText(tag, RECHARGE_TEXT)", "Recharging: the plate tags read RechargeTag"),
+    ("\ttask.delay(math.clamp(rechargeUntil - now, 0.01, RECHARGE_CHECK), rechargeTick)", "the Recharging check runs at 4 Hz only while a recharge is pending, and lands on time"),
+    ('local RECHARGE_CHECK = 0.25 -- s: the "Recharging" check runs at 4 Hz, only while a recharge is pending', "Recharging check period 0.25 s (<= 10 Hz UI refresh)"),
+    # revision 3: "Recharging" from the server's reliable attribute (a lost left = 0 packet, a same-server rejoin)
+    ('local RECHARGE_ATTR: string = if type(MD.RechargeAttribute) == "string" then MD.RechargeAttribute else "WE_DropRechargeAt"', "reads ManualDropperConfig.RechargeAttribute"),
+    ("\tplayer:GetAttributeChangedSignal(RECHARGE_ATTR):Connect(onRechargeAttr)", "watches the server's RechargeAttribute (reliable)"),
+    ("local function afterInit()\n\tpcall(onRechargeAttr)\n\tbindDropperFx()\nend\n", "the start task reads RechargeAttribute once (set before this client started: a rejoin), pcall'd so it never stops the remote bind"),
+    ("local function onRechargeAttr()\n\tlocal at = player:GetAttribute(RECHARGE_ATTR)\n\tif at == nil then\n\t\tif rechargeUntil > 0 then\n\t\t\tendRecharge()\n\t\tend\n\t\treturn\n\tend\n\tlocal now = serverNow()\n\tif typeof(at) ~= \"number\" or at ~= at or now == nil then\n\t\treturn\n\tend\n\tlocal seconds = (at :: number) - now\n\tif seconds > 0 and seconds <= 3600 then\n\t\tplateCount(\"RechargeAttr\")\n\t\tstartRecharge(ownPlot(), seconds)\n\tend\nend\n",
+     "onRechargeAttr, whole: the attribute's server time starts a recharge until then; nil ends it (the server is the judge)"),
+    ("\tif FX.Enabled ~= true or reducedMotion() then", "ReducedMotion / Fx.Enabled = false: no bundle fall"),
+    ('\t\tlocal ctrls = modules and modules.Parent and modules.Parent:FindFirstChild("Controllers")', "PromptController is a lazy, pcall'd lookup (read-only use of a C5 file)"),
+    ('\tnf.Name = "WE_ProductionFxLocal" -- local only: never under a server part', "the bundles live in a local folder (streaming-safe)"),
+    ("\tp.CanQuery = false", "the pooled bundle never blocks a query / click"),
+    ("\tif was > 0 and v <= 0 then\n\t\tlocal atm = player:GetAttribute(\"WE_AtmPos\")", "the ATM payout (WE_PendingCash > 0 -> 0) is observed, never written"),
+    ('\treturn burst("Atm", atmPos + ATM_LIFT, if ProductionFx.IsLowFx() then FX.AtmEmitLow else FX.AtmEmit, false) > 0', "the ATM sparkle: AtmEmit (AtmEmitLow on low FX) through the one token bucket"),
+):
+    must_contain(DR3B_PFX, _d3_needle, f"droppers v1b ProductionFx: {_d3_label}")
+for _d3_needle, _d3_label in (
+    ("AlwaysOnTop = true", "the plate pop is never AlwaysOnTop"),
+    ("TextScaled = true", "fixed 14-20 px world text (never TextScaled)"),
+    # revision 3: the hold and the float attribution are gone for good
+    ("CashFloatRequested", "no pill-float watch (revision 3: the pop never waits for, or is cancelled by, a float)"),
+    ("AtmPopHoldSeconds", "no pop hold (revision 3)"),
+    ("AtmFloatLookBackSeconds", "no float look-back (revision 3)"),
+    ("AtmHoldNearStuds", "no near-the-ATM special case (revision 3)"),
+):
+    must_not_contain(DR3B_PFX, _d3_needle, f"droppers v1b ProductionFx: {_d3_label}")
+# LabelGovernor: the priority read (one attribute read per drawable label per pass, no allocation)
+must_contain(DR3B_LG, "local PRIORITY_ATTR = WorldLabelConfig.PriorityAttribute", "droppers v1b LabelGovernor: reads WorldLabelConfig.PriorityAttribute")
+must_contain(DR3B_LG, "\t\t\t\tif gui:GetAttribute(PRIORITY_ATTR) == true then\n\t\t\t\t\td = -1", "droppers v1b LabelGovernor: a priority label ranks as distance -1 (kept first, still counted in MaxOnScreen)")
+# WorldLabelConfig
+must_contain(DR3B_WLC, 'PriorityAttribute = "WE_LabelPriority",', "droppers v1b WorldLabelConfig: PriorityAttribute = \"WE_LabelPriority\" (DR-20)")
+
+
+def _d3_plate_rules() -> None:
+    """droppers v1b L3b static rules: where the priority sits in the governor pass, and who may use it."""
+    lg = read(DR3B_LG) or ""
+    # the priority is applied only to a label that can draw (inside the MaxDistance test), before it is ranked
+    m = re.search(r"if d <= gui\.MaxDistance and d < HUGE then\n(.*?)\n\t\t\t\tif kept < cap then", lg, re.S)
+    if m and "GetAttribute(PRIORITY_ATTR) == true" in m.group(1):
+        ok("droppers v1b LabelGovernor: the priority applies only to a drawable label (inside the MaxDistance test), before ranking")
+    else:
+        bad("droppers v1b LabelGovernor: the priority read must sit inside `if d <= gui.MaxDistance and d < HUGE then`, before the ranking")
+    # only the pooled plate pop sets the priority attribute; the key string lives in WorldLabelConfig alone
+    setters, keyed = [], []
+    for p in sorted((ROOT / "src").rglob("*.luau")):
+        body = p.read_text(encoding="utf-8")
+        rel = str(p.relative_to(ROOT))
+        if "SetAttribute(PRIORITY_ATTR" in body or re.search(r"SetAttribute\([^,\n]*PriorityAttribute", body):
+            setters.append(rel)
+        if "WE_LabelPriority" in body:
+            keyed.append(rel)
+    if setters == [DR3B_PFX] and keyed == [DR3B_WLC]:
+        ok("droppers v1b: only ProductionFx sets the label priority (the pooled plate pop; refix 2: the own plate tag while Recharging); the key string is only in WorldLabelConfig")
+    else:
+        bad(f"droppers v1b: label priority setters {setters} / key string in {keyed} (want only ProductionFx / WorldLabelConfig)")
+    # the plate response never talks back: no line names DropperFx together with a client -> server call
+    pfx = read(DR3B_PFX) or ""
+    if pfx and not re.search(r"(FireServer|InvokeServer|OnServerEvent)", pfx):
+        ok("droppers v1b ProductionFx: no client -> server call (the grab is the server's own prompt / ClickDetector)")
+    else:
+        bad("droppers v1b ProductionFx: FireServer / InvokeServer / OnServerEvent found (or file missing)")
+
+
+_d3_plate_rules()
+
+
+def _d3_fix3_rules() -> None:
+    """droppers v1b L3b fix round 3 (revision 3): every valid paid packet shows the world pop (the pop is called from the
+    packet handler only, once, unconditionally at its end), and only the server writes the RechargeAttribute."""
+    pfx = _db_code3(read(DR3B_PFX) or "")
+    m = re.search(r"\nlocal function onDropperFx\(dropPoint: any, amount: any, left: any, eta: any\)\n(.*?)\nend\n", pfx, re.S)
+    body = m.group(1) if m else ""
+    calls = re.findall(r"(?<!function )\bshowPop\s*\(", pfx)
+    last = [ln for ln in body.split("\n") if ln.strip()][-1:] if body else []
+    rets = re.findall(r"\breturn\b", body)
+    gated = re.search(r"(?m)^\t(?:if|elseif|while|for|repeat)\b(?![^\n]*(?:validPayload|isDead\(\)|plotId ~= nil))", body)
+    if m and len(calls) == 1 and last == ["\tshowPop(pos, amount :: number, plate)"] and len(rets) == 2 and not gated:
+        ok("droppers v1b revision 3 ProductionFx: every valid paid packet ends in the one world pop (showPop called once, unconditionally, at the end of onDropperFx; junk and Dead the only early returns; comments stripped)")
+    else:
+        bad(f"droppers v1b revision 3 ProductionFx: the pop is no longer shown for every paid packet (onDropperFx found {bool(m)}, showPop calls {len(calls)} (want 1), last statement {last}, returns {len(rets)} (want 2), other gate {gated.group(0).strip() if gated else None})")
+    writers = []
+    for p in sorted((ROOT / "src/StarterPlayer").rglob("*.luau")):
+        code = _db_code3(p.read_text(encoding="utf-8"))
+        if re.search(r"SetAttribute\s*\(\s*(?:RECHARGE_ATTR|[\w.]*RechargeAttribute|[\"']WE_DropRechargeAt[\"'])", code):
+            writers.append(str(p.relative_to(ROOT)))
+    if not writers:
+        ok("droppers v1b revision 3: no client file writes RechargeAttribute (the server is its only writer; the client reads it)")
+    else:
+        bad(f"droppers v1b revision 3: client files write RechargeAttribute: {writers}")
+
+
+def _db_code3(src: str) -> str:
+    """Luau source with -- line and --[[ ]] / --[==[ ]==] comments removed (strings kept). Same rules as the L1b block's
+    _db_luau_code, repeated here so this block also runs without the L1b block (the L3b tree alone)."""
+    out, i, n = [], 0, len(src)
+    long_open = re.compile(r"\[(=*)\[")
+    while i < n:
+        c = src[i]
+        if c == "-" and src.startswith("--", i):
+            mm = long_open.match(src, i + 2)
+            if mm:
+                close = "]" + mm.group(1) + "]"
+                j = src.find(close, mm.end())
+                j = n if j < 0 else j + len(close)
+                out.append("\n" * src.count("\n", i, j))
+            else:
+                j = src.find("\n", i)
+                j = n if j < 0 else j
+            i = j
+            continue
+        if c in "\"'`":
+            j = i + 1
+            while j < n and src[j] != c and src[j] != "\n":
+                j += 2 if src[j] == "\\" else 1
+            j = min(n, j + 1)
+            out.append(src[i:j])
+            i = j
+            continue
+        if c == "[":
+            mm = long_open.match(src, i)
+            if mm:
+                close = "]" + mm.group(1) + "]"
+                j = src.find(close, mm.end())
+                j = n if j < 0 else j + len(close)
+                out.append(src[i:j])
+                i = j
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+_d3_fix3_rules()
+# refix round 1 (review rv4_feedback_1): the pop is drawn at any camera distance
+for _d3_needle, _d3_label in (
+    ("local POP_NEAR_CAMERA = math.max(4, cfgNum(MD.PopNearCameraStuds, 24))", "reads ManualDropperConfig.PopNearCameraStuds"),
+    ("local function popSpot(pos: Vector3, maxDist: number): Vector3\n\tlocal cam = Workspace.CurrentCamera\n\tif cam == nil then\n\t\treturn pos\n\tend\n\tlocal ok, camPos = pcall(function(): Vector3\n\t\treturn cam.CFrame.Position\n\tend)\n\tif not ok or typeof(camPos) ~= \"Vector3\" or not finitePos(camPos) then\n\t\treturn pos\n\tend\n\tlocal start = pos + POP_START\n\tlocal far = math.max((start - camPos).Magnitude, (pos + POP_END - camPos).Magnitude)\n\tif far <= maxDist - 1 then\n\t\treturn pos\n\tend\n\tlocal rise = (POP_END - POP_START).Magnitude\n\tlocal near = math.min(POP_NEAR_CAMERA, math.max(4, maxDist - rise - 1))\n\tlocal ray = start - camPos\n\tif ray.Magnitude < 1e-3 then\n\t\treturn pos\n\tend\n\tplateCount(\"PopNear\")\n\treturn camPos + ray.Unit * near - POP_START\nend\n",
+     "popSpot, whole: at the plate while the pop's rise stays within MaxDistance - 1 of the camera, else PopNearCameraStuds from the camera on the line of sight to the plate (always drawn, over the plate on screen)"),
+    ("\tlocal spot = popSpot(pos, gui.MaxDistance) -- refix 1: a far camera still gets the pop (and hears the chirp)\n\tanchor.WorldPosition = spot\n",
+     "showPop places the pooled pop only through popSpot, with the pop's own MaxDistance"),
+):
+    must_contain(DR3B_PFX, _d3_needle, f"droppers v1b refix 1 ProductionFx: {_d3_label}")
+must_contain(DR3B_MDC, "\tPopNearCameraStuds = 24,", "droppers v1b refix 1 ManualDropperConfig: PopNearCameraStuds = 24 (a far camera's pop is drawn 24 studs from it)")
+
+
+def _d3_rfx1_rules() -> None:
+    """droppers v1b L3b refix round 1: the pooled pop's anchor is moved in exactly one place (`anchor.WorldPosition = spot`,
+    spot from the one popSpot call), so no path can put the pop back at the plate for a far camera; comments stripped."""
+    pfx = _db_code3(read(DR3B_PFX) or "")
+    places = re.findall(r"[^\n]*\b(?:anchor|popAnchor|a)\s*\.\s*WorldPosition\s*=(?!=)[^\n]*", pfx)
+    spots = re.findall(r"(?<!function )\bpopSpot\s*\(", pfx)
+    named = re.findall(r"\bpopSpot\b", pfx)
+    if [x.strip() for x in places] == ["anchor.WorldPosition = spot"] and len(spots) == 1 and len(named) == 2:
+        ok("droppers v1b refix 1 ProductionFx: the pop's anchor is placed once, from the one popSpot call (comments stripped)")
+    else:
+        bad(f"droppers v1b refix 1 ProductionFx: the pop's anchor placement changed (placements {[x.strip() for x in places]}, popSpot calls {len(spots)} (want 1), mentions {len(named)} (want 2))")
+
+
+_d3_rfx1_rules()
+# refix round 2 (review rv4_feedback_2): "Recharging" is kept first by the LabelGovernor, and a late packet cannot end it
+for _d3_needle, _d3_label in (
+    ("\t\t\t\tif tag:GetAttribute(PRIORITY_ATTR) ~= true then\n\t\t\t\t\ttag:SetAttribute(PRIORITY_ATTR, true)\n\t\t\t\t\tranked = true\n\t\t\t\tend\n\t\t\t\tpriorityTags[tag] = true\n",
+     "Recharging: the tag that reads RechargeTag carries the label priority (kept first, within the cap of 3; compare-first)"),
+    ("\tif ranked then\n\t\tgovernorPass() -- decide at once", "Recharging: the LabelGovernor decides at once when a tag gains the priority"),
+    ("\tfor tag in pairs(priorityTags) do\n\t\tif tag.Parent ~= nil then\n\t\t\ttag:SetAttribute(PRIORITY_ATTR, nil) -- refix 2: back to a plain governed label (\"$75\" ranks by distance)\n\t\tend\n\tend\n\ttable.clear(priorityTags)\n\tgovernorPass()\n",
+     "the recharge's end clears the tags' priority (the \"$75\" tag ranks by distance again) and re-runs the governor"),
+    ("local function attrSaysEmpty(): boolean\n\tlocal at = player:GetAttribute(RECHARGE_ATTR)\n\tlocal now = serverNow()\n\treturn typeof(at) == \"number\" and at == at and now ~= nil and (at :: number) - now > REORDER_SLACK\nend\n",
+     "attrSaysEmpty, whole: the server's attribute still says the budget is empty (more than REORDER_SLACK s ahead)"),
+    ("\tif left >= 1 then\n\t\tif rechargeUntil > 0 and not attrSaysEmpty() then\n\t\t\tendRecharge() -- a paid grab: the budget holds bundles again\n",
+     "a late left >= 1 packet does not end a recharge the server's attribute still stands behind (unreliable packets can reorder)"),
+    ("local REORDER_SLACK = 0.1\n", "the reorder slack is 0.1 s"),
+):
+    must_contain(DR3B_PFX, _d3_needle, f"droppers v1b refix 2 ProductionFx: {_d3_label}")
+
+
+def _d3_rfx2_rules() -> None:
+    """droppers v1b L3b refix round 2: in ProductionFx (comments stripped) the label priority is written in exactly three
+    places: the pooled pop (`g:SetAttribute(PRIORITY_ATTR, true)`, in ensurePop), the Recharging tag (`= true`, in
+    writeRecharge) and its clear (`= nil`, in endRecharge); priorityTags is filled only in writeRecharge and emptied only
+    in endRecharge. So no other label (a pad, the producer label) can take a first place, and the tag's priority cannot
+    outlive the recharge."""
+    pfx = _db_code3(read(DR3B_PFX) or "")
+
+    def body(name):
+        m = re.search(r"\nlocal function " + name + r"\([^\n]*\n(.*?)\nend\n", pfx, re.S)
+        return m.group(1) if m else None
+
+    sets = [x.strip() for x in re.findall(r"[^\n]*SetAttribute\s*\(\s*PRIORITY_ATTR[^\n]*", pfx)]
+    other = re.findall(r"[^\n]*\bPRIORITY_ATTR\b[^\n]*", pfx)
+    ep, wr, er = body("ensurePop"), body("writeRecharge"), body("endRecharge")
+    placed = (ep is not None and "g:SetAttribute(PRIORITY_ATTR, true)" in ep
+              and wr is not None and "tag:SetAttribute(PRIORITY_ATTR, true)" in wr
+              and er is not None and "tag:SetAttribute(PRIORITY_ATTR, nil)" in er)
+    fills = re.findall(r"priorityTags\s*\[[^\]\n]*\]\s*=(?!=)[^\n]*", pfx)
+    clears = re.findall(r"table\.clear\s*\(\s*priorityTags\s*\)", pfx)
+    mentions = re.findall(r"\bpriorityTags\b", pfx)
+    tidy = (len(fills) == 1 and wr is not None and "priorityTags[tag] = true" in wr and len(clears) == 1
+            and er is not None and "table.clear(priorityTags)" in er and len(mentions) == 4)
+    if sorted(sets) == sorted(["g:SetAttribute(PRIORITY_ATTR, true)", "tag:SetAttribute(PRIORITY_ATTR, true)", "tag:SetAttribute(PRIORITY_ATTR, nil)"]) \
+            and len(other) == 5 and placed and tidy:
+        ok("droppers v1b refix 2 ProductionFx: the label priority is set only on the pooled pop (ensurePop) and on a Recharging tag (writeRecharge), cleared in endRecharge, and priorityTags is filled / emptied only there (comments stripped)")
+    else:
+        bad(f"droppers v1b refix 2 ProductionFx: the label priority's writers changed (SetAttribute(PRIORITY_ATTR ...) lines {sets}, PRIORITY_ATTR lines {len(other)} (want 5: the local, the pop, the tag's read, set and clear), in their functions {placed}, priorityTags fills {len(fills)} / clears {len(clears)} / mentions {len(mentions)} (want 1 / 1 / 4))")
+
+
+_d3_rfx2_rules()
+# --- end of the droppers v1b lane L3b block ---
 
 parse_gate()
 

@@ -88,6 +88,11 @@ SoundConfig.Sounds = {
 	-- Biz.FirstLand: one metal clack when the first product of a newly bought level lands (after the purchase stinger).
 	["Biz.Ship"] = { Id = 9113849492, Volume = 0.18, RollOff = "InverseTapered", MaxDistance = 28, Pitch = 1.5, CooldownSeconds = 4, Priority = 1, Bus = "World", MaxSeconds = 0.35, LengthSeconds = 0.35 }, -- [PSE] "Coins Or Keys Jingle 6" 9113849492 (the Cash.Collect file), high and short
 	["Biz.FirstLand"] = { Id = 9119915230, Volume = 0.25, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1, CooldownSeconds = 0.5, Priority = 2, Bus = "World", LengthSeconds = 1 }, -- [PSE] "Tank Impact 1 (SFX)" 9119915230 (the Impact.Metal file)
+	-- Drop.Coin (droppers v1b, revision 3): the chirp with the plate's world "+$N" pop, on EVERY paid grab. When the ATM
+	-- collects the grab at once, its pill float plays its own Cash.Collect jingle as well (as today: up to two "+$" and
+	-- two sounds per grab; nothing waits for or cancels either). CooldownSeconds 0.15 (refix 2): paid grabs are >= 0.35 s
+	-- apart on the server, so packet jitter never drops a grab's chirp.
+	["Drop.Coin"] = { Id = 9113849492, Volume = 0.3, RollOff = "InverseTapered", MaxDistance = 30, Pitch = 1.35, CooldownSeconds = 0.15, Priority = 2, Bus = "World", MaxSeconds = 0.5, LengthSeconds = 0.5 }, -- [PSE] "Coins Or Keys Jingle 6" 9113849492 (the Cash.Collect file), short chirp
 
 	-- ── outposts (TerritoryStateUpdate diffs) ─────────────────────────────────────────────────────────────────
 	["Capture.Start"] = { Id = ENG_PING, Volume = 0.6, RollOff = "Linear", MaxDistance = 0, Pitch = 0.85, CooldownSeconds = 3, Priority = 3, Bus = "Stinger", LengthSeconds = 0.4 }, -- [ENG] electronicpingshort.wav ("radio" cue)

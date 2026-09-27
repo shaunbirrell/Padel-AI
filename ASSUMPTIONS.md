@@ -6002,3 +6002,838 @@ four trees (HEAD 5e021d8, v3, HEAD 670bbf6, round 2).
   not seed-deterministic, and 41 / 46 / 47 % (3.2 / 3.1 / round 3) are one noise band.
 - The Jobs-ON bank retune (wake-up rules, guard setup or breach timings) stays with the combat lane. Jobs stay OFF on
   live, so the live game is unaffected.
+
+## 2026-09-27 — Droppers v1b lane L1b (plate server; spec_droppers.md §3.8, OD-4 = A, ECON-1 OK with conditions)
+
+These are the spec's §14 lines that lane L1b's keys carry. Merge them at L4b together with the L3b lines (DR-16 and DR-20 are L3b's).
+- Every line can be reversed in config.
+- Every number is from the headless stand-in (fake clock, signals fired directly), config arithmetic or the Python model. None of it is Roblox.
+
+DR-8 Plate:
+- One tap (`PromptHoldDuration` 0, and the plate's ClickDetector) pays a `BundleAwards` bundle, in ONE `AccruePendingCash(player, amount, "manual_dropper")`.
+  - `BundleAwards = 5` ships: $75 a tap.
+  - OD-4 = A was chosen by the owner on 2026-09-27 (`droppers/OWNER_DECISIONS.md`).
+  - ECON-1 was signed "OK with conditions" (`droppers/econ1/econ1.md`). Conditions C1-C3 are met in L1b:
+    - the exemption pins;
+    - T1 f on the real EconomyService: GetCashMult(manual_dropper) = 1, passive = 5.906;
+    - the economy guard pins.
+  - C4 (re-run `econ1/run_all.sh` on the merged tree) is L4b's.
+- Both buckets must hold `BundleAwards` (no partial bundle).
+- `BundleAwards` is clamped at runtime to 1..MaxAwardsPerMinute; a non-number or NaN pays 1. BuyPathStatic also rejects a config outside that range.
+- AwardAmount 15, cooldown 0.35 s, RateLimit 4/s burst 3, and the budgets of 30 a minute and 600 an hour are unchanged. That means:
+  - at most $450 a burst;
+  - $18,000 in the first hour (measured 1,195 awards; hour 2: 600);
+  - $9,000 an hour after.
+- Reversible, one line each:
+  - `BundleAwards = 1` (option E): today's $15 taps. T1 l shows the pay output is identical to the base, line for line.
+  - `MaxAwardsPerMinute = 15` (option C).
+- The recharge toast is "Cash drop is recharging" (NotificationConfig's Match rule is kept).
+
+DR-9 Plate inset and money-bag model:
+- The plate inset `DropNeon` (name kept) is SmoothPlastic (`PlateNeon = false`): world Neon 306 -> 294 (T4).
+- The MoneyBagFX callers are removed from the plate grab and the ATM collect.
+- The id and `VisualAssetService.PlayMoneyBagFX` stay until v1.1.
+
+DR-10 `DropperFx`:
+- An owner-only UnreliableRemoteEvent with payload (dropPoint, amount, left, eta), one per paid grab, none on a refused grab.
+- The client drops junk (amount 1..10,000, left 0..1,000, eta 0..3,600, within 60 studs).
+- A dropped packet loses an effect, never money.
+- There is no OnServerEvent (BuyPathStatic rule).
+
+DR-11 (v1b part) `Drop.Coin` reuses the Cash.Collect file 9113849492:
+- pitch 1.35, volume 0.3, World bus, 30 studs, MaxSeconds 0.5, cooldown 0.3 s;
+- it is the chirp with the plate's world pop, never with the pill float.
+
+DR-19 Dressed-plate drop point:
+- When the plate carries a hooks dress (a `WE_CatalogProp` Model), the bundle falls onto the dress's world bounding-box top + 0.3, over the plate centre.
+- Otherwise it falls onto the plate kit top.
+- It is cached per plate and keyed by the dress instance, so there is one GetBoundingBox per (re)dress.
+- Studio check at P4 (hooks ask 1c).
+
+ECON-1 (econ lane, 2026-09-27): OD-4 = A signed OK with conditions:
+- `BundleAwards = 5` keeps today's caps ($15 awards, 30/min, 600/h).
+- The plate stays multiplier-exempt (`manual_dropper`), raidable at 10 % 1:1, and pays no XP.
+- Model ceiling for a player who maxes the plate: +18.6 % $/s at 10 min, +35.7 % at 30 min, +11.3 % at 1 h.
+- Reversible: `BundleAwards = 1` (or `MaxAwardsPerMinute = 15`).
+- (Quoted from `droppers/econ1/econ1.md` §7. The econ lane owns this line; it is listed here so L4b merges it with DR-8.)
+
+**Lane L1b's own assumptions** (reversible; recorded because the spec left them open or they deviate slightly)
+
+L1b-1 "Plate top" for the drop point (undressed plate):
+- It is the top face of the plate KIT, that is the inset `DropNeon` top, 0.15 above the plate part's own top.
+- The reason: the bundle then never sinks into the inset.
+- T1 g2 checks it.
+
+L1b-2 `PlateNeon = true` (the revert) needs a Neon enum:
+- The spec asks for both "Material from PlateNeon" and `must_not_contain "Enum.Material.Neon"` in ManualDropperService.
+- So the revert path names the material by string (`(Enum.Material :: any)["Neon"]`).
+- The only way to Neon is a visible edit of the pinned config line `PlateNeon = false,`, and the census (T4) counts Neon.
+
+L1b-3 Extra config keys (config first; the spec listed the others):
+- `PopColor` (80, 255, 120), `PopGlowColor` (8, 36, 14) and `PopGlowThickness` 1.4 hold the HEAD pop look for the client.
+- ◆ The HEAD pin "Manual dropper green $ pop glow" (BuyPathStatic.py:504, `CashPopGlow` in ManualDropperService) is retargeted to `PopGlowColor = Color3.fromRGB(8, 36, 14),` in ManualDropperConfig.
+- Lane L3b adds `CashPopGlow` on ProductionFx (spec §13 ◆).
+
+L1b-4 `WorldLabelConfig.PriorityAttribute` is not in L1b:
+- The spec's §10.1 header says L1b owns every v1b key.
+- But the §11 lane table and the workflow's L1b file list give WorldLabelConfig to L3b.
+- The name is fixed by the spec ("WE_LabelPriority"), so L3b adds it.
+
+L1b-5 `bundleAwards()` accepts only a number:
+- A string, even "5", nil and NaN all give 1; the spec's sketch used `tonumber`.
+- It fails safe toward today's $15 taps. T1 m covers 31 -> 30, 0 / -1 / nil / "five" / NaN -> 1, and 2.7 -> 2.
+
+L1b-6 The plate tag keeps WorldLabel's default 16 px:
+- Spec §6 says "tag and pop 20 px". The pop's 20 px is `PopTextPx`.
+- The tag stays at HEAD's size, so "Recharging" fits its 3 x 1.2-stud box.
+- Both sizes are within 14-20 px.
+
+L1b-7 A pre-v1b plate's tag is updated in place (`WorldLabel.SetText` + `TagBaseLabel`), not destroyed and rebuilt:
+- 0 new instances, and the owner attribute is kept.
+- The inset material and the prompt `HoldDuration` are compare-first too.
+- A second scan changes nothing (T1 k2).
+
+L1b-8 The drop point reads only a Model named `WE_CatalogProp` (VisualAssetService's Model dress path):
+- The MeshPart fallback (`WE_CatalogProp_ManualDropper`) is not configured for the plate (no MeshId).
+- If it ever is, the bundle lands on the plate kit top.
+
+L1b-9 `eta` is measured in seconds from the server's send. The client adds it to its own receipt time. The server stays the judge: an early tap gets the throttled toast.
+
+L1b-10 Base tree: L1b is `droppers/build/L1a` (v1a L1a on 5e021d8), as the workflow asked.
+- HEAD has since moved to 3b5ac28 (C5, server size 6, WE_CHECK v75).
+- Of L1b's files, only tools/BuyPathStatic.py changed there.
+- A forward check of L1a + L1b onto 3b5ac28 gives BuyPathStatic PASS 3488 / FAIL 0 (fix round 1; round 0: 3481). The only merge conflict is the shared append point above `parse_gate()`.
+
+L1b-11 (fix round 1) The L1b pins cover the plate's whole money path, including HEAD code that v1b keeps:
+- `tryAward`'s gates in order (enabled, player present, owner, per-plate cooldown, RateLimitService), `ownsPlot`, `budgetLimits`, `pickAward`'s fixed award, and `bundleAwards`, `refillBudget` and `takeBudget` whole.
+- One rule: ManualDropperService makes exactly one `AccruePendingCash` call once comments are stripped. Its only other mention is the nil guard.
+- The reason: the review showed one-line edits that pay $75 for 1 award of budget, or that pay twice, passing BuyPathStatic.
+- Cost: any later edit to these lines needs a visible pin edit in the same commit.
+- Reversible: delete or loosen the pins in the L1b block (BuyPathStatic only; no game code changed in fix round 1).
+- Not pinned here: EconomyService's `isExempt` line. EconomyService is not an L1b file, and lane X1 edits it. ECON-1 C2 (T1 f on the real EconomyService) and C4 (the L4b re-run) cover it dynamically.
+
+## Fix round 2 (2026-09-27, review rv1b_feedback_2)
+
+**No L1b change.** The one blocking issue (an Auto Collect owner's grab losing its only "+$75" to a kill float) is in
+lane L3b's client ProductionFx, and is fixed there (L3b_out/assumptions.md, "Fix round 2"). Nothing in L1b's server
+code decides which "+$" the player sees: the server pays, sends the one DropperFx packet and, when the ATM collects,
+the Collect notification. Evidence that L1b needs no edit:
+- L1b's 7 files are byte-identical to fix round 1 (md5s in job_md5.txt re-checked; `diff -rq build/L1a build/L1b`:
+  the same 7 files), and the 4 config / remote files in build/L3b are still byte-identical to build/L1b.
+- BuyPathStatic on build/L1b: PASS 3342 / FAIL 0, unchanged (fix2/bps_L1b_fix2.txt).
+- L3b's new client rule relies on one server fact that L1b's MoneyCollectorService keeps from HEAD: `Collect` floats
+  exactly `granted`, which EconomyService.CollectPendingCash returns as the same floored `PendingCash` that pushEconomy
+  writes to `WE_PendingCash`. L3b pins it (`_d3_float_source_rule`, in the L3b block; it passes on build/L1b and on the
+  merge preview v1a_rb + L1b + L3b: BuyPathStatic 3511 / 0). A later change to what `Collect` floats (a collect bonus,
+  a rounding change) must change ProductionFx with it; otherwise the ATM plate would show two "+$" (the L3b server
+  mutant S1: T15 shows 1 pop + 1 float at the walk-in), never zero.
+- T15 runs L1b's frozen ManualDropperService and MoneyCollectorService read-only (overlay): B5 71 / 0, B1 69 / 0, now
+  including the real 2 s Auto Collect loop paying the grab out silently at +0.05 to +0.30 s in cases m1-m4.
+
+## Fix round 3 (2026-09-27, lead decision after reviews rv1b_feedback_3 / rv1b_money_3; revision 3 of the spec)
+
+**Lead decision (reversible; spec §14 DR-16 revised, DR-21 new; spec §21 "Revision 3" V1-V5):** "exactly one +$75" is
+replaced by "at least one, at most two": every paid grab shows the world pop "+$75" with its chirp (lane L3b, client);
+the ATM pill float is unchanged. L1b's part: remove the hold keys, give "Recharging" a reliable server source, fix the
+3600 s budget clear, and add the pins the money review asked for. The money is unchanged (award, bundle, buckets,
+cooldown, rate limit, exemption, no XP; T5: only BundleAwards differs from HEAD among the money keys, as before).
+
+Changes (round-2 copies in fix3/round2; md5s in job_md5.txt):
+- ManualDropperConfig c98961e3 -> d1045a63: `AtmHoldNearStuds`, `AtmPopHoldSeconds`, `AtmFloatLookBackSeconds` removed
+  (pinned absent); `RechargeAttribute = "WE_DropRechargeAt"` added. build/L3b's copy is byte-identical.
+- ManualDropperService 15c25452 -> 2d34cb85:
+  - `stampRecharge(player, now, n)`: while the budget holds no bundle, the Player attribute RechargeAttribute =
+    `Workspace:GetServerTimeNow()` + eta (the seconds until a bundle is back); nil once it holds one. Compare-first (a
+    change under 0.05 s writes nothing). Called by the paid grab (after `sendDropFx`), by a refused tap (the budget
+    branch only, after the cooldown and rate limit passed) and by a join whose kept budget holds no bundle.
+  - the leave token: every leave and join bumps `leaveToken[userId]`; the leave's 3600 s timer clears the budget only
+    if its token is still the latest AND the player is not in the server.
+  - no new remote, no new money path, no per-frame work; the attribute is a look, never money.
+
+DR-21 (server half) "Recharging" from the server: the attribute above. It is state, not an effect, so it is written
+even with `FxEvent = false` (T1 n6). The client reads it at start and on change (lane L3b, DR-21 client half).
+
+**Lane L1b's own assumptions, fix round 3** (reversible)
+L1b-12 The attribute uses the server clock `Workspace:GetServerTimeNow()` (pcall'd), because the client compares it with
+its own `GetServerTimeNow()`. If the server clock cannot be read, nothing is stamped (the packet path stays). The ready
+time does not move while an empty budget refills, so a spammed refused tap rewrites nothing (0 replication traffic).
+Revert: drop `RechargeAttribute` from the config (then `stampRecharge` still writes the default key; to remove it,
+delete the 3 calls).
+L1b-13 Leave token: `leaveToken` holds one number per user seen in this server, cleared together with the budget by the
+last leave's timer. Why: HEAD's timer checked only "not in the server", so a player who left, came back, drained the
+budget and left again briefly just before the FIRST leave's timer fired got a full budget (review rv1b_money_3 X2,
+pre-existing). Now only the last leave's timer clears. The budget still survives a same-server rejoin (HEAD behaviour).
+Revert: the PlayerRemoving block to HEAD's.
+L1b-14 A same-server rejoin keeps the budget (HEAD) and gets RechargeAttribute on the new Player object at once if that
+budget holds no bundle; a rejoin on another server starts full (budgets are per server, as in HEAD; not a v1b change).
+
+**Pins (bps_block_L1b.py 86eedb9b; bps_pins.txt; pin_evidence.txt):** 68 block lines + the ◆ retarget. New: the three
+absent hold keys, `RechargeAttribute`, bumpLeaveToken / stampRecharge / serverNow whole, the token-guarded timer, the two
+stamp call lines, and `_db_fix3_rules` (budget lifetime; one sendDropFx; EconomyService only for the pinned grant;
+ManualDropperConfig is its table, no src file writes a key; CashMultExemptReasons.manual_dropper never overridden after
+its table, in any src file) and the DropperFx listener scan now follows the remote through locals (two-line form,
+pcall, function return, alias, dotted holder). L1b tree 3356 / 0; L1a base + block 3310 / 46 (0 outside the block);
+round-2 L1b files 13 block FAILs; merge preview 3539 / 0.
+Mutants (tools/mutate_fix3.py; fix3/mutants_block.txt, fix3/mutants.txt): 43 rows, all as expected: 30 L1b mutants
+(L1-L6 budget lifetime / leave token, R1-R4 stamp, D1-D3 packet, E1-E3 grant, C1-C5 config override, X1-X4 exemption
+override, F1-F5 listener forms) and 9 L3b mutants FAIL, each with 0 FAILs outside the blocks; 4 controls (K1-K4) PASS.
+Old mutants on the new block: grouped A 17 FAIL, B 4 FAIL (fix3/oldmut/grouped_*.txt), 19 singles as expected
+(fix3/singles_block.txt). Every block line that passes on the L1a base fails on at least one mutant (checked label by
+label).
+
+**Tests (headless stand-in, NOT Roblox):**
+- T1 (t1/t1_plate_driver.luau; new cases n0-n6, o1-o3, p1-p3; shims: `GetServerTimeNow` = the virtual clock, a real
+  `GetPlayerByUserId`, 3600 s timers held and fired by the case): **B5 48 / 0, B1 23 / 0**; PAYSEQ (option-E pay
+  output) B1 identical to L1a. Controls with the same driver: L1a 9 / 28 (B5), 13 / 8 (B1); round-2 service
+  (15c25452) 40 / 8 (n1, n3, n4, n6, o1, p1-p3); mutant "timer without the token" 45 / 3 (p1-p3); mutant "budget
+  cleared on leave" 42 / 6 (o1-o3, p1-p3).
+- T2 ATM trace identical to L1a (49 lines), 0 money-bag instances; T4 census: lights 231, neon 294 (L1a 306), SurfaceGuis
+  1121 (0 with MaxDistance > 80), billboards 57 (0 > 40), 2566 parts / 49 neon per base; T5 as above; world sim 12
+  steps ok; DataService 24 / 0; parse ok; lsp 348 = 348 lines, 0 new vs L1a; rojo builds.
+- ECON-1 run_all.sh on a merged copy (v1a_rb + L1b + L3b + both blocks): head / b1 / b5 / b5x1 / l1b 16 / 0 each,
+  econ_alt.txt identical to revision 2 (L1b_out/fix3/econ1run/run_all.log).
+
+For the owner, on his phone: superseded by the OWNER PHONE TEST in "Refix round 1" below (the "6 fast taps" and
+"leave and rejoin the same server" steps were wrong for a phone).
+
+## Refix round 1 (2026-09-27, reviews rv4_money_1 and rv4_feedback_1; spec "21 (cont.). Revision 3, refix round 1")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log:
+"at least one, at most two" "+$" per paid grab; the plate's world pop "+$75" and its chirp on EVERY paid grab (no hold,
+no cancel, no attribution; exempt from the fight / drive / panel mute except when dead); the ATM pill float exactly as
+today when the ATM collects. The hold / cancel code and its three config keys stay removed and pinned absent. The
+LabelGovernor priority for the pop stays.
+
+L1b-15 (review rv4_money_1, Medium) The money pins now cover the whole budget path. No shipped server code changed
+(ManualDropperService is still 2d34cb85); only the L1b block (bps_block_L1b.py) did:
+  - `budgetState`, `sendDropFx` and `cooldownKey` pinned whole (signature to `end`), and `tryAward` checked from
+    `lastAwardAt[key] = now` to its `end` with comments stripped (so no `now +=` / `n =` line can sit between the
+    pinned lines, while a comment line stays harmless: control K5, and the round-1 single control C2);
+  - rule `_db_rfx1_rules` on the comment-stripped file: `refillBudget` defined once and called exactly twice as
+    `refillBudget(userId, now)`; `takeBudget` called once as `takeBudget(player.UserId, now, n)`; `budgetState` twice as
+    `budgetState(player.UserId, now, n)`; `stampRecharge` three times (`(player, now, n)` x2 and
+    `(player, os.clock(), bundleAwards())`); no other mention of those names (no alias); the bucket fields `minute`,
+    `hour`, `at` written only inside `refillBudget` and `takeBudget` (dot, compound, bracket, rawset or table
+    constructor).
+  - Mutants (tools/mutate_fix3.py rows M1-M10; rfx1/mutants.txt): M1 (budgetState refill at now + 60), M2 (budgetState
+    tops up the minute bucket), M3 (sendDropFx reads the budget at now + 10) are the review's own; M4 per-tap cooldown
+    key; M5 a fourth stampRecharge on a future clock; M6 refillBudget through an alias; M7 a bracket write of the hour
+    bucket; M8 `now += 60` inside tryAward; M9 `n = n * 2` after the budget; M10 a second takeBudget. Each fails the
+    block and the full BuyPathStatic, with 0 FAILs outside the block.
+  - T1 (B5) on M1 / M2 / M3 / M8 / M9 (rfx1/logs/t1_money_mutants.txt): M1 25 / 23 (hour1 = 50,000 awards against a
+    cap of 1,200), M2 25 / 23 (the 7th tap at +3 s paid), M3 26 / 22 (hour1 1,795, hour2 900: +50 %), M8 43 / 5 (the
+    rate stays, the same-server rejoin checks o1-o3 break), M9 36 / 12 (each grab pays 10 awards and costs 5).
+  - On the L1a base, 4 of the 5 new checks FAIL; `cooldownKey` passes there by design (HEAD code v1b keeps) and fails on
+    M4.
+
+L1b-16 (config) `PopNearCameraStuds = 24` is added to ManualDropperConfig (lane L1b owns every v1b key; read by the
+client only, never money). ManualDropperConfig d1045a63 -> 1126735715528bda71bac0392b54045d, byte-identical in L3b.
+
+L1b-17 (owner phone test, reviews rv4_feedback_1 items 2 and 3) The "leave and rejoin the same server" step is removed
+(the recharge is over in 5-10 s, before a phone can rejoin; T1 o1-o3 and T15 R0 cover it, and it needs a Studio
+two-client or server-console check), and "6 fast taps" becomes "about twice a second, 6 times" (faster taps are
+refused by the cooldown / rate limit and show nothing, by design). DR-23. The text below is the same, word for word,
+in L3b_out/assumptions.md, the lane report and spec §18 B.
+
+OWNER PHONE TEST (refix 1; SUPERSEDED by the one in "Refix round 2" below: steps 2 and 3 changed):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate, with
+   the chirp.
+3. Tap "Grab Cash" about twice a second, 6 times: every tap pops "+$75"; then the pill disappears and the plate reads
+   "Recharging" for about 8 seconds, then one bundle every 10 seconds. Taps faster than about twice a second are
+   ignored by the plate's short cooldown and show nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 1; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx1/logs/gate_rfx1.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 4 L3b files; L3b's ManualDropperConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a).
+- BuyPathStatic: L1b 3361 / 0; L1a + L1b block 3311 / 50 (0 outside the block); L3b 3362 / 0; L3b base + L3b block
+  3323 / 39 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3549 / 0, lsp 0 new. The review's base
+  (HEAD 3b5ac28 + v1a + L1b + L3b + both blocks, L1b_out/rfx1/fwd3b5): 3630 / 0 (was 3620 / 0), T1 48 / 0 and 23 / 0,
+  T15 225 / 0 and 221 / 0.
+- rojo builds L1b and L3b; world sim 12 steps ok (L1b, L3b, preview); DataService 24 / 0 (L1b, L3b, preview).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 225 / 0, B1 221 / 0 (was 151 / 148; new cases FC 27-400 studs, FZ zoom sweep, TR tap rhythm). The round-3
+  ProductionFx against the same driver: B5 187 / 38, B1 183 / 38 (every FC case from 34 studs and every FZ zoom from 25:
+  0 pops, 0 chirps). The review's own driver (rv4_feedback_1/y_driver.luau, copied unchanged): 21 / 0 (was 19 / 2).
+- T16 120 / 0 (L3b); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim 60 / 0, identical to
+  L3a; HUD harness 7 viewports x droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the pop
+  is a world label; the 4 droppers_plate rows with an issue are the pre-existing prompt-lane overlap).
+- Merge preview T16: 126 / 0 in the first full gate and in 14 of 14 reruns (2 on its exact tree path); ONE run (the
+  second full gate, while other jobs loaded the machine) showed 125 / 1: "F3 0 Instance.new after warm-up: Part=5"
+  (L3b_out/rfx1/runs/t16_gate_flake). Not reproduced; the same driver with the round-3 ProductionFx passed 8 / 8. The
+  5 Parts are not a ProductionFx pool (its only Parts are the 2 pooled bundles, made at warm-up; popSpot makes nothing).
+  Recorded as an open stand-in flake for L4b to watch, not claimed as fixed.
+- HEAD moved during this round (not by this lane): 3b5ac28 -> 882faf9, which commits droppers v1a. On 882faf9 the 9 v1b
+  files' bases are exactly the lane bases (ProductionFx = L3a's de2d2062, SoundConfig = L1a's 20185c76, the rest =
+  HEAD), so the lane files drop in unchanged. Forward check (git archive 882faf9 + the 9 files + both blocks,
+  L1b_out/rfx1/fwd882): BuyPathStatic 3642 / 0 (HEAD alone 3521 / 0), T1 48 / 0 and 23 / 0, T15 225 / 0 and 221 / 0,
+  T16 126 / 0, world sim 12 steps ok, DataService 24 / 0.
+
+## Refix round 2 (2026-09-27, reviews rv4_money_2 and rv4_feedback_2; spec "21 (cont.). Revision 3, refix round 2")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log
+(now also "21 (cont.). Revision 3, refix round 2"): "at least one, at most two" "+$" per paid grab; the plate's world
+pop "+$75" and its chirp on EVERY paid grab (no hold, no cancel, no attribution; exempt from the fight / drive / panel
+mute except when dead); the ATM pill float exactly as today when the ATM collects. The hold / cancel code and its three
+config keys stay removed and pinned absent. The LabelGovernor priority for the pop stays.
+
+L1b-18 (review rv4_money_2, Medium) The ECON-1 C1 exemption pin read the raw MonetizationConfig, so `--[[ ... ]]` around
+`manual_dropper = true,` (review MB) or a later `manual_dropper = false,` in the same table (MA; Luau keeps the last
+value) passed both static gates while the plate lost its multiplier exemption (T1: 442 per grab for a stacked player,
+about $70k in the first hour instead of $18k). Fixed in the pin block only (ManualDropperService unchanged, 2d34cb85):
+  - the C1 rule runs on `_db_luau_code(read(DR_MON1B))` (comments stripped) and, on the top level of the
+    CashMultExemptReasons table, wants exactly ONE manual_dropper key in either form (`manual_dropper =` /
+    `["manual_dropper"] =`), whose value is `true` (so `true and false` fails too);
+  - mutants in tools/mutate_fix3.py: MA_dupkey_false, MA2_dupkey_bracket_false, MB_blockcomment, MB2_linecomment,
+    MB3_value_expr each FAIL the block and the full BuyPathStatic (3362 / 1, 0 outside); controls K6 (the bracket form),
+    K7 (a commented duplicate) PASS (rfx2/mutants.txt). The review's MA and MB applied to the current HEAD 90cad49 +
+    v1b tree: full BuyPathStatic 3732 / 1 each (was 3724 / 0), the refix-1 block passes both (rfx2/oldblock_vs_new.txt).
+L1b-19 (review rv4_money_2, Low, same class) The economy guard's ManualDropperConfig rows were substring pins, so a later
+duplicate key (MC `AwardAmount = 150,`: $750 a grab; MD `MaxAwardsPerHour = 6000,`) or a block-commented key (MF) passed.
+New rule: on the comment-stripped table's top level, AwardAmount 15, BundleAwards 5, MaxAwardsPerMinute 30,
+MaxAwardsPerHour 600, CooldownSeconds 0.35, RateLimitRate 4 and RateLimitBurst 3 are each assigned exactly once, to that
+value. Mutants MC, MD, ME (a bracket-form duplicate), MF FAIL; control K8 (a nested table's own key) PASSes.
+L1b-20 (review rv4_money_2, Low) One grant per grab at the wiring: rule _db_rfx2_rules wants tryAward named exactly 3
+times (its definition and the MouseClick / Triggered handlers, each only `tryAward(player, pad)`). Mutants N4 (the
+review's `task.delay(0.4, tryAward, player, pad)`) and N4b (an alias) FAIL.
+L1b-21 (reviews rv4_money_2 / rv4_feedback_2, Low; DR-25) SoundConfig["Drop.Coin"]: CooldownSeconds 0.3 -> 0.15 (paid
+grabs are >= 0.35 s apart on the server; 0.03-0.20 s packet jitter could bring two packets under 0.3 s and drop that
+grab's chirp: review Z2, 4-5 chirps for 6 pops), and the stale "the jingle or this, never both" comment now describes
+revision 3. SoundConfig 5241fc0c -> afc4521d8045b78676174976e0428a6f, byte-identical in L3b; L1b_contract.md updated.
+The Drop.Coin shape rule (id reused, World bus, Volume <= 0.3, MaxDistance <= 40) is unchanged and passes.
+L1b-22 (owner phone test; review rv4_feedback_2 Medium, DR-24) Step 3 now starts "Zoom back in to a normal view, stand
+next to either plate" (the tag is drawn only within 30 studs of the camera, and step 2 had just zoomed out), and says
+"the plate itself reads Recharging"; lane L3b makes that true at the ATM plate beside the premium pads (L3b-19). Step 2
+says the chirp may be faint from far out. The refix-1 text above is superseded by this one.
+
+OWNER PHONE TEST (refix 2; this exact text is in both lanes' assumptions files, the report and spec §18 B):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate (from
+   far out its chirp may be faint).
+3. Zoom back in to a normal view, stand next to either plate and tap "Grab Cash" about twice a second, 6 times: every
+   tap pops "+$75"; then the pill disappears and the plate itself reads "Recharging" for about 8 seconds, then one
+   bundle every 10 seconds. Taps faster than about twice a second are ignored by the plate's short cooldown and show
+   nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 2; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx2/logs/gate_rfx2.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 5 L3b files; L3b's ManualDropperConfig and SoundConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a); HEAD 90cad49 348 / fwd90c
+  348, 0 new.
+- BuyPathStatic: L1b 3363 / 0; L1a + L1b block 3312 / 51 (0 outside the block); L3b 3369 / 0; L3b base + L3b block
+  3323 / 46 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3558 / 0, lsp 0 new.
+- Forward check on the CURRENT HEAD 90cad49 (X1 XP rebalance landed; ECON-1 C4 on the X1 tree), L1b_out/rfx2/fwd90c =
+  git archive 90cad49 + the 9 v1b files + both blocks: every v1b file's base there equals the lane base (the files drop
+  in unchanged); BuyPathStatic 3733 / 0 (HEAD alone 3603 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T15 241 / 0 and
+  235 / 0; T16 126 / 0; world sim 12 steps ok; DataService 24 / 0; rojo builds.
+- rojo builds L1b, L3b and the preview; world sim 12 steps ok (L1b, L3b, preview, fwd90c); DataService 24 / 0 (all).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 241 / 0, B1 235 / 0 on L3b, the preview and fwd90c (was 225 / 221; new cases PD, JC, RO). The refix-1 client
+  files (ProductionFx a82f5240 + SoundConfig 5241fc0c) on the same driver: B5 234 / 7 (PD x3: the tag drawn with the priority on 0
+  of the Recharging frames; JC x3: 4 / 4 / 5 chirps for 6 pops; RO: the pill shown for 7.10 s of 7.20 s), B1 232 / 3 (JC).
+  The review's own drivers copied unchanged (rv4_feedback_2/drv z_driver / z3b_driver) on fwd90c: 42 / 1 (was 37 / 6):
+  Z2 6 / 6 / 6 chirps, Z3 "tag drawn during Recharging true", Z4 0.00 s wrong; the one FAIL left is Z1 (open, below).
+- T16 120 / 0 (L3b), 126 / 0 (fwd90c); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim
+  60 / 0, identical to L3a; lane L2 drivers with the real ProductionFx: identical to v1a_rb; HUD harness 7 viewports x
+  droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the 4 droppers_plate rows with an issue
+  are the pre-existing prompt-lane overlap).
+- The known T16 F3 warm-up flake ("0 Instance.new after warm-up: Part=5") showed once in the merge preview (125 / 1).
+  Reruns on the rebuilt preview tree: 5 of 6 pass with the refix-2 files, and 7 of 8 pass with the refix-1 client files
+  (the same Part=5 line in the failing run), so it is not this round's change; the review traced the 5 Parts to lane
+  L2's BusinessVisuals one-time measure (L3b_out/rfx2/runs/t16_preview_rerun*, t16_preview_rfx1_rerun*). Open for L4b.
+
+Open (Low, not blocking; recorded, not claimed fixed):
+- Review Z1: a pop kept at the plate when the camera is 26-29 studs away can leave its MaxDistance within a few frames
+  if the player walks away at once (5-7 frames drawn); standing players always see it. Possible fix: keep the pop at
+  the plate only with ~6 studs margin (a pinned popSpot change).
+- The far-camera chirp's loudness (24 studs from the listener, InverseTapered): device only; step 2 now says it may be
+  faint.
+- The pre-existing prompt-lane overlap at 844x390 / 800x360 notch (25-33 px into the bottom-right reserved zone).
+- The T16 F3 warm-up flake above (a harness fix: snapshot after BusinessVisuals has measured).
+Still needs a real device: "Recharging" drawn on the ATM plate beside the three premium-pad labels; the pop and
+"Recharging" readability at 20 px; the ATM double "+$"; real unreliable packet loss / reorder and GetServerTimeNow skew;
+frame cost at Graphics Quality 3 on a mid-range Android; a same-server rejoin (Studio two-client).
+
+Forward check 2 (refix round 2): HEAD moved again during this round, not by this lane: 90cad49 -> c1475e9 (27b063d
+the ATM screen shows PendingCash only; 22b63e0 aircraft weapons; c1475e9 bank guards / gate AutoGuns). 8 of the 9 v1b
+files' bases are unchanged there. MoneyCollectorService is NOT: 27b063d edits it (atmScreenBalance, two call sites, one
+comment), so L4b must 3-way merge it, not copy lane L1b's file (a plain copy would revert 27b063d). `git merge-file`
+(ours = L1b's file, base = L1a's, theirs = c1475e9's) merges with 0 conflicts (the hunks do not overlap):
+L1b_out/rfx2/mcs_merged_c14.luau a8593b407c08d71554aa6fd5dfe0ba1e. Tree L1b_out/rfx2/fwdc14 = git archive c1475e9 + the
+8 unchanged-base v1b files + that merged MoneyCollectorService + both blocks: BuyPathStatic 3856 / 0 (HEAD alone
+3726 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T2 ATM trace identical to c1475e9 alone (49 lines; 0 money-bag instances,
+HEAD 28); ECON-1 econ1_drv tree5 16 / 0; T15 241 / 0 and 235 / 0; T16 126 / 0; world sim 12 steps ok; DataService
+24 / 0; rojo builds.
+
+## 2026-09-27 — Droppers v1b lane L3b (plate client; spec_droppers.md §3.7, §3.8, §7, §8, §10.3, §21 R1; OD-4 = A, OD-6 yes)
+
+These are the spec's §14 lines that lane L3b's code carries (DR-16 as revised in revision 3, DR-20, the client halves of
+DR-10 / DR-11 / DR-21), plus L3b's own reversible choices. Fix round 3 (revision 3, 2026-09-27) rewrote DR-16 and
+removed L3b-1, L3b-9 and L3b-11 (the hold and the float attribution are gone); the round-1 / round-2 text is kept in
+fix3/round2/assumptions.md. Merge them at L4b together with the L1b lines (DR-8, DR-9, DR-10, DR-11, DR-19, ECON-1).
+- Client only and owner only: ProductionFx reads the server's one DropperFx packet and Player attributes. It sends
+  nothing, writes no money and no server state (only local Enabled / Text writes on the player's own plate tag and
+  prompt pill), and grants nothing.
+- Every number below is from the headless stand-in (one Luau VM for the server and one client, virtual clock, the
+  network as a scheduler delay). None of it is Roblox.
+
+DR-16 (revision 3, lead decision 2026-09-27; replaces "exactly one +$ per grab") At least one, at most two "+$" per plate
+grab:
+- Every paid DropperFx packet that passes the payload checks shows the world pop "+$N" over the drop point and plays
+  `Drop.Coin`, at once (the frame it arrives), on both plates, for every player. Nothing holds, cancels or attributes
+  it: no `HudLayout.CashFloatRequested` watch, no `AtmHoldNearStuds` / `AtmPopHoldSeconds` / `AtmFloatLookBackSeconds`
+  (removed, pinned absent).
+- When the ATM collects the grab at once (walk-in circle, no Auto Collect), its own pill float shows the same money too,
+  with its jingle: HEAD's double signal, the most a grab shows.
+- The plate response ignores `Fx.HideWhen` except `Dead`; the pop keeps `WE_LabelPriority` (DR-20).
+- Why: the round-2 attribution could show ZERO "+$" (review rv1b_feedback_3: a Collect-pill tap or a walk-in income
+  collect just before the grab, an Auto Collect owner's silent payout, the HUD's float rate cap). Zero is a failure;
+  two is today's behaviour.
+- Reversible: `fix3/round2/ProductionFx.luau` (the round-2 file) + the three keys in ManualDropperConfig.
+- Stand-in (T15, real ManualDropperService / MoneyCollectorService / EconomyService / NotificationService server side,
+  the real client boot): every paid grab in cases a-l, m1-m4, d2, d3, the review's X1-X9, a 6-tap burst and a far
+  camera shows exactly one pop at once and one chirp, and at most one grab float: B5 151 / 0, B1 148 / 0.
+
+DR-20 `WorldLabelConfig.PriorityAttribute = "WE_LabelPriority"`:
+- The LabelGovernor ranks a drawable label with this attribute at distance -1, so it is always among the kept
+  `MaxOnScreen` 3; it still counts toward the cap.
+- Only ProductionFx's one pooled plate pop sets it (BuyPathStatic rule). The grabbed plate's own "$75" tag is hidden
+  locally while the pop shows (`WorldLabel.SetShown`), so the pop takes its place.
+- Stand-in (T15 g): with 3 nearer base labels on screen, the pop shows at once and the on-screen count stays <= 3 on
+  every frame.
+
+DR-10 (client half) The client drops a DropperFx packet unless dropPoint is a finite Vector3 within `FxMaxPayloadStuds`
+60 of the character, amount is finite in 1..`FxMaxPayloadAmount` 10,000, left in 0..1,000 and eta in 0..3,600
+(T15: 18 junk payloads, 0 errors). The listener binds in a deferred thread through `Remotes.GetUnreliableEvent`
+(bounded); `ProductionFx.Init` never yields (T17). A remote that appears 10 s late is still bound (T15); none at all:
+the wait gives up quietly after about 210 s (T17 "noremote").
+
+DR-11 (client half) `Drop.Coin` plays with every world pop, positional at the drop point, through AudioController and
+ProductionFx's local 0.3 s key cooldown (below the 0.35 s grab cooldown: a 6-tap burst chirps 6 times in T15 BU); the
+pill float keeps its own Cash.Collect jingle (AudioHooks).
+
+DR-21 (client half, revision 3) "Recharging" also comes from the server's Player attribute
+`ManualDropperConfig.RechargeAttribute` ("WE_DropRechargeAt" = the server time when the next bundle is ready; nil once
+the budget holds one). ProductionFx reads it once in its one deferred start task (pcall'd, before the remote bind) and on
+every change; a time in the future starts a recharge until then, nil ends one. It hides both own pills and writes the
+tags exactly like the packet's `left = 0`. So a lost left = 0 packet (T15 R2) and a same-server rejoin (T15 R0: the
+client starts after the server's join stamp, 0 packets) still show "Recharging", restored at the server's time. The
+client never writes the attribute (BuyPathStatic rule).
+
+**Lane L3b's own assumptions** (reversible; recorded because the spec left them open or the build refines them)
+
+L3b-1 REMOVED in fix round 3 (revision 3: no float attribution). Round-2 text kept for the record:
+The ATM's own float is told apart from any other gain float (a kill reward) by its EXACT
+amount. This refines spec §3.7's "a float counts only if its amount is at least the grab's amount":
+- The server's collect grants floor(PendingCash), writes that same number to `WE_PendingCash` just before it empties
+  it, and floats exactly it (MoneyCollectorService.Collect -> EconomyService.CollectPendingCash / pushEconomy, HEAD code;
+  pinned by the rule `_d3_float_source_rule`).
+- A float counts as the ATM's when it equals the payout the client saw (`WE_PendingCash` falling from > 0 to 0) within
+  `AtmFloatLookBackSeconds`, in either order: a float that comes while the ATM still reads exactly that balance waits
+  up to 0.3 s for the payout. One payout explains one float. A float that comes while the ATM holds cash and is not
+  its balance (the far spot) never touches a grab.
+- With the ATM reading empty and no such payout (the grab was accrued and collected in one server step, so the client
+  never saw it in the ATM: case k), a float may cancel ONE waiting grab of exactly its amount that came after the last
+  payout the client saw. It never becomes look-back credit and never clears the credit an ATM float left (d2).
+- Before judging a float, ProductionFx reads `WE_PendingCash` itself: the attribute's changed signal is deferred, so a
+  float handled in the same frame as a payout would otherwise see an empty ATM with a stale payout time (m4, d3).
+- Why: round 1's rule (any float >= the grab within 0.3 s of a payout, or any float while the ATM reads empty) let a kill
+  reward ("Raider down (+$90)", CashReward 50-250) hide the only "+$" of an Auto Collect owner's grab, whose ATM pays out
+  silently (review rv1b_feedback_2: 6-13 % of such grabs in a fight). Round 1's reasons still hold: T15 j ($20) and l
+  ($100) keep their pops.
+- Cost: a double (never zero) wherever the float and the payout the client saw differ (see Fix round 2 below).
+- Revert: `fix2/round1/ProductionFx.luau` (round 1's rule) or the spec's plain amount rule.
+
+L3b-2 The whole plate response (bundle, pop and chirp) follows the Dead-only gate, not just the pop. The bundle is the
+physical answer to the tap. Under Driving / Modal / RecentCombat the ATM sparkle and the line effects stay quiet (T16 F).
+
+L3b-3 `Fx.Enabled = false` (the first phone lever) removes the bundle fall and the ATM sparkle; the plate pop and chirp
+stay, because they are the grab's only feedback (the server pop is gone in v1b). The server's `FxEvent = false` removes
+the whole plate response.
+
+L3b-4 `GuiService.ReducedMotionEnabled`: no bundle fall and no pop rise (the pop fades in place); the chirp stays.
+
+L3b-5 One pooled pop: a new grab restarts it with that grab's "+$N" (no merged total) at the new drop point; when it
+moves to the other plate, the first plate's tag comes back. HEAD's look is kept: 20 px, (80, 255, 120), UIStroke
+"CashPopGlow" (8, 36, 14) 1.4, starts 1.2 studs over the drop point, rises `PopupRiseStuds` 3.2 over `PopupDuration`
+0.55 s while fading to 0.85, MaxDistance 30, never AlwaysOnTop.
+
+L3b-6 The pooled pop is made when the DropperFx listener binds (right after boot), not on the first grab, so the
+LabelGovernor already tracks it: a label tagged later is held until the governor's next pass, which would delay the
+first pop by a frame. Cost: 5 instances per client (Attachment on Terrain, BillboardGui, 2 TextLabels, UIStroke).
+
+L3b-7 ProductionFx asks the LabelGovernor for a pass (`LabelGovernor.Pass`, lazy pcall'd) when the pop shows and when
+it ends, so the pop appears the same frame and the tag returns at once instead of waiting up to 0.25 s for the 4 Hz
+pass. At most 2 passes per grab (<= about 6 a second during a burst).
+
+L3b-8 "Recharging" (left = 0, or the server's RechargeAttribute, fix round 3):
+- The grabbed plate is the tracked plate (tag "WE_ManualDropper") whose centre is within 2.5 studs (X/Z) of the drop
+  point; both plates with its `PlotId` get `PromptController.SetSuppressed(prompt, true)` and the tag text
+  `RechargeTag`. Without a match the last matched plot is used.
+- The 4 Hz check runs only while a recharge is pending, re-applies to a plate that streamed back in, and lands exactly
+  on eta (T15: restored at +0.000 s). A paid packet (left >= 1) ends a recharge at once. The tag gets back the text it
+  had before (the server's "$75").
+
+L3b-9 REMOVED in fix round 3 (no near-the-ATM rule). Round-2 text: "Near the ATM" used the Player attribute `WE_AtmPos`; when it is missing (the guide off), the plot's tagged ATM
+part if it is streamed in; with neither the pop shows at once (today's double signal at the ATM, never zero).
+
+L3b-10 The bundle: 2 pooled parts (round robin) in a local Workspace folder `WE_ProductionFxLocal`, axis-aligned,
+CanCollide / CanQuery / CanTouch / CastShadow off, hidden by Transparency. Its bottom lands on the drop point. A Tween is
+made again only when the landing point moves (the two plates), else the one Tween is replayed.
+
+L3b-11 REMOVED in fix round 3 (nothing waits). Round-2 text: Waiting grabs lived in a ring of 4 (the shipped cooldown and rate limit allow at most 3 in 0.45 s); if it ever
+overflows, the oldest shows its pop at once rather than being lost.
+
+L3b-12 The ATM sparkle fires on every `WE_PendingCash` drop from > 0 to 0 within `Fx.AtmRadius` 16 of `WE_AtmPos`,
+including the silent Auto Collect loop (every 2 s while income waits) and the walk-in collect, through the HideWhen gates,
+ReducedMotion, low FX (`AtmEmitLow`) and the one 16-per-second token bucket. A raid (a partial drop) never sparkles.
+
+L3b-13 If `WE_Remotes` is not there yet, the bind waits for it with a ChildAdded connection (no WaitForChild, no yield),
+then does the bounded remote wait. HudLayout is required only once the remote is bound. This keeps the lane C client sim
+(no remotes folder there) at its 60/60 HEAD checks.
+
+**Stand-in notes (tests, not the game)**
+- T15 driver: CollectionService added / removed signals fire DEFERRED when a tagged instance enters / leaves the
+  DataModel, as in Roblox (rbxsim fired them at AddTag time only, synchronously; with that, ManualDropperService's own
+  InstanceAdded handler wired the Yard plate before its prompt existed). Server -> client remotes are delivered one
+  60 fps frame later (case d / e change one remote's delivery).
+- HUD harness copy (L3b_out/hx): DropperFx is created as an UnreliableRemoteEvent, as RemoteSetup makes it.
+
+**Pre-existing, not changed by v1b (for the owner / L4b)**
+- With the ATM "Collect" pill and the plate's "Grab Cash" pill both showing (as today at the ATM plate), the prompt lane
+  enters the bottom-right reserved zone (vehicle / combat controls): 25 px at 844x390 and 33 px at 800x360 with notch,
+  identical on the base tree (PromptController, a C5 file). While the plate recharges, v1b hides one pill and the lane is
+  clean. Device check on the owner's phone.
+
+## Fix round 2 (2026-09-27, review rv1b_feedback_2: "Auto Collect owners who grab cash during a fight often see no +$75")
+
+(SUPERSEDED by fix round 3 below: the float attribution this section describes is removed. Kept as the record.)
+
+**Verdict: a real defect, in lane L3b (ProductionFx only).** Reproduced on the round-1 code with the new T15 cases: in a
+fight, an Auto Collect owner's grab at the ATM plate showed ZERO "+$" in all 4 timings (m1-m4), in both modes (B5 "+$75"
+and B1 "+$15"). The reviewer's figures (D2 7/7 zero; 6-13 % zero in its Monte Carlo) are on its own driver.
+
+Why (three paths, all in the float attribution):
+- m1 / m2: round 1 counted ANY gain float >= the grab as the ATM's own when it came within 0.3 s of a payout (either
+  order). An Auto Collect owner's ATM pays out silently (no float of its own), so a kill float ("Raider down (+$90)")
+  near that silent payout cancelled the grab's only signal, the world pop.
+- m3: with the ATM reading empty, round 1 let any float >= the grab cancel any waiting grab.
+- m4 (found here; the reviewer's proof patch still fails it): a float handled in the same frame as a payout whose
+  `WE_PendingCash` changed signal has not run yet (signals are deferred) saw an empty ATM with a stale payout time. In a
+  Monte Carlo of 600 fight grabs on the reviewer's patch, all 4 remaining zeros were this race (fix2/dbg/rv_s*_g*.txt,
+  traces "float 90 pend 0 ... CANCEL ... pending 75 -> 0" in one frame).
+
+The fix (ProductionFx, `atmFloat` / `onPendingCash` / `onCashFloat`; md5 a3798e0b -> 67b53dc5; L3b-1 above is the rule):
+1. A payout records exactly what the ATM paid (`paidAmount = was`), and a float counts as the ATM's only if it equals
+   it (`math.abs(amount - paidAmount) < 0.5`) within `AtmFloatLookBackSeconds`, either order. One payout explains one
+   float (`paidAmount = -1` once matched).
+2. A float that comes while the ATM still holds cash waits for the payout only if it is exactly the ATM's balance, and
+   the payout confirms it only if it pays exactly that.
+3. With the ATM reading empty and no matching payout, a float may cancel ONE waiting grab of exactly its amount that
+   came after the last payout the client saw (the same-step collect, case k). `holdAt` records when each grab came.
+4. Only a confirmed float sets look-back credit; any other float leaves it alone (round 1 cleared it: d2).
+5. `onCashFloat` first calls `onPendingCash()`, so a payout whose deferred signal has not run yet is seen (m4, d3). The
+   later signal then sees no change (no second sparkle).
+No new config key, no new instance, no per-frame work, nothing sent to the server. Parse ok; lsp 348 = 348 lines, 0 new.
+
+Tests (headless stand-in, NOT Roblox; every number below is from it):
+- T15 (lane driver, tools/t15_driver.luau, new cases m1-m4, d2, d3): **B5 PASS 71 / FAIL 0, B1 PASS 69 / FAIL 0**
+  (runs/t15). m1-m4 use the REAL 2 s Auto Collect loop (phase-locked by timing its ticks) and the real kill reroute;
+  measured silent payouts at +0.300 / +0.100 / +0.050 / +0.200 s, the pop at 0.467 s, one chirp, the kill float shown.
+  Controls with the same driver: round-1 ProductionFx B5 66/5, B1 64/5 (m1-m4 ZERO, d3 double; fix2/runs/t15_round1);
+  the reviewer's proof patch B5 68/3, B1 66/3 (m4 ZERO, d2 and d3 double; fix2/runs/t15_reviewer). Base tree control
+  (v1a ProductionFx): B5 35/36 as expected.
+- The reviewer's own driver (rv1b_feedback_2/r2_driver.luau, copied unchanged to fix2/tools) on this tree: B5 35/0,
+  B1 30/0; D2 7 of 7 "one"; J 0/60 zero for both the owner and the non-owner; Monte Carlo 80 grabs at a 3 s and a 5 s
+  mean kill gap: 0/80 zero, 0 double (fix2/runs/r2). Its F case (same-step walk-in collect AND the float 0.1 s before
+  the unreliable packet) stays a DOUBLE, as in round 1 and in its patch (degraded, never zero).
+- J-only Monte Carlo (fix2/tools/dbg_j_driver.luau: full budget, 150 grabs a run, only grabs whose packet arrived,
+  kill floats as a Poisson stream, the real Auto Collect loop): **fix round 2: 0 zero / 0 double in 600 grabs** (seeds
+  1-4, mean gaps 3, 3, 2, 5 s); the reviewer's patch: 1 + 1 + 2 + 0 = 4 zero in 600 (all the same-frame race).
+- Mutants (fix2/mutants.txt): each single undo of the new rule (M1-M8) FAILs at least one BuyPathStatic check; T15 also
+  catches M1, M5, M6 (d3), M7 (d2); M2 / M3 and M4 / M6 guard each other and T15 catches each pair (M2+M3: m1;
+  M4+M6, i.e. the reviewer's patch: m4, d3). M8 (consume once) has no T15 effect (it needs a second unrelated float of
+  the same amount); its pin holds it. Server premise mutants: S1 (Collect floats `granted * 1.1`) FAILs the premise rule
+  and makes T15 show TWO "+$" at the walk-in (c, d, k, d2, d3; never zero); S2 (WE_PendingCash unfloored) FAILs the rule.
+- T16 120/0, T17 all variants pass (normal 12, disabled 12, throw 7, throwreq 7, missing 7, noremote 8, base 5),
+  Bootstrap identical to HEAD. Lane C client sim 60/0, identical to L3a. World sim 12 steps ok; DataService 24/0.
+  rojo builds. HUD harness: 105 state x viewport x snapshot rows, 0 differ from the base tree; the 4 droppers_plate rows
+  with an issue are the pre-existing prompt-lane overlap listed above (identical on the base).
+- BuyPathStatic (final block, fix2/bps_final.txt): L3b tree PASS 3361 / FAIL 0 (base 3314 + 47). Base + the block
+  3318 / 43, 0 FAILs outside the block. HEAD 5e021d8: 46 FAIL (+ the premise rule, HEAD code). Mutant A: 5 FAIL, 0
+  outside. Round-1 ProductionFx FAILs 10 checks, the reviewer's patch 8 (pin_evidence.txt).
+- Merge preview v1a_rb + L1b + L3b (logs/gate_all.txt; BuyPathStatic with the final blocks fix2/preview_bps_final.txt):
+  BuyPathStatic 3511 / 0 (round 1: 3504), lsp 0 new, T15 71/0 + 69/0, T16 126/0, T17 all pass, world sim ok, DS 24/0,
+  rojo ok; lane L2's t7 / t17 drivers with the real ProductionFx identical to v1a_rb (t7's 1 FAIL is v1a_rb's own).
+
+Pins (bps_block_L3b.py; bps_pins.txt; pin_evidence.txt): 4 round-1 pins replaced by 9 exact-line pins, plus the rule
+`_d3_float_rule` (exactly 4 `atmFloat` calls; the 2 confirmed calls in `onCashFloat` guarded only by "no ATM attribute"
+or the exact payout match; the payout read first) and the premise rule `_d3_float_source_rule` (the ATM's Collect float
+is exactly the floored `WE_PendingCash` its collect empties). The block ends with an explicit end marker now;
+tools/apply_block.py replaces an earlier copy up to it (a re-apply of an extended block left a stale tail before).
+
+What is left (degraded to a DOUBLE, never zero; all recorded, none measured on a device):
+- a float later than 0.45 s (a server hitch; case e, unchanged);
+- a same-step walk-in collect whose reliable float overtakes the unreliable packet (the reviewer's F; unchanged);
+- the client missed the ATM's last balance (an income accrue and the collect coalesced in one replication step), so
+  the float and the payout it saw differ;
+- a same-step walk-in collect with income already waiting (the float is grab + income, the payout seen is the income).
+  Estimate, not measured: about 1 in 15 walk-in grabs land in the pass's frame, and income waits in the ATM about 7 %
+  of the time (3 sources every 5 s, collected within 0.25 s), so roughly 0.5 % of walk-in grabs;
+- an ATM float followed by an unrelated float before its payout (the waiting slot keeps the exact balance only).
+Residual ZERO needs an unrelated gain float of EXACTLY the payout amount within 0.3 s (or exactly the grab while its
+accrue is still unseen). Amounts checked in this tree: NPC kill floats 50 / 90 / 120 / 140 / 250 near a base (squad
+share 0.5: 25 / 45 / 60 / 70 / 125); the only 150 (squad 75) is the Bank Guard, at the Empire Bank, away from the plate;
+PvP kill 150; vehicle bounty floor(MaxHP x 0.08) up to 500 (not enumerated). A later lane could remove even this by
+tagging the float's source (HudLayout / NotificationController are not L3b files).
+
+For the owner, on his phone (adds to §18 B1-B3): own Auto Collect, stand at the ATM plate while raiders attack the base,
+tap the plate between kills: every tap shows exactly one "+$75" over the plate with the chirp, even when a kill "+$90"
+floats at the cash pill at the same moment. Without Auto Collect, at the ATM: exactly one "+$75" (the pill float), no
+world pop.
+
+## Fix round 3 (2026-09-27, lead decision after review rv1b_feedback_3; revision 3 of the spec)
+
+**What the review found:** the round-2 rule "hold the plate pop 0.45 s and cancel it if an ATM pill float appears; a
+float up to 0.3 s earlier already showed the grab" could show ZERO "+$75" (the reviewer's X1-X3, X9). **Lead decision:**
+"at least one, at most two" (DR-16 above). **Also fixed here:** "Recharging" from a server-authoritative source that
+survives a lost unreliable packet and a same-server rejoin (DR-21, with lane L1b's server half).
+
+Changes (ProductionFx 67b53dc5 -> see job_md5.txt; ManualDropperConfig = lane L1b's, byte-identical):
+- `onDropperFx`: payload check, Dead check, plate, recharge, bundle, then `showPop` unconditionally. Deleted: the hold
+  ring (`startHold` / `releaseHold`, `HOLD_SLOTS`), `atmFloat`, `onCashFloat`, the credit / payout / candidate state, the
+  `CashFloatRequested` connection and `atmPosFor`. `onPendingCash` keeps only the ATM sparkle.
+- "Recharging": `startRecharge(plot, seconds)` (both sources), `applyRecharge` (packet), `onRechargeAttr` (attribute),
+  `ownPlot()` (the packet's plot, else a tracked plate whose tag's `WE_LabelOwner` is this player), `serverNow()`
+  (`Workspace:GetServerTimeNow()` pcall'd; no clock = the attribute is ignored, the packet path stays).
+- Init still schedules exactly ONE task (`afterInit`: the first attribute read, pcall'd, then the bounded remote bind;
+  T16 A1, T17). One attribute changed-signal connection. No per-frame work, no new instance, nothing sent to the server.
+
+**Lane L3b's own assumptions, fix round 3** (reversible)
+L3b-14 Without a packet (a rejoin), the own plot is found through the plate tag's owner attribute (`WE_LabelOwner`,
+the server keeps it on the plot owner every 2 s). If no plate or tag is streamed in yet, the 4 Hz recharge check keeps
+trying until one is (or the recharge ends).
+L3b-15 The attribute is compared with the client's `Workspace:GetServerTimeNow()`; if that cannot be read, the attribute
+is ignored (never compared with a local clock) and the packet's eta is used as before.
+L3b-16 Both sources can arrive for one grab (packet and attribute, the same server clock); the later one sets the end
+time. The packet's eta is measured from its arrival (a little late on a slow network), the attribute from the server's
+clock (exact); the check lands within one 0.25 s tick either way (T15: restored at +0.000 / +0.017 / +0.033 s).
+
+**Tests (headless stand-in, NOT Roblox):**
+- T15 (tools/t15_driver.luau, rewritten for revision 3; the round-2 driver is fix3/round2/t15_driver.luau): **B5 PASS 151
+  / FAIL 0, B1 PASS 148 / FAIL 0** (fix3/runs/t15). Every paid grab: exactly one pop at once (<= 1 frame after its
+  packet), one chirp, at most one grab float; zero is a failure. Cases: junk, a, b, c (pop + float), d, e, f, g, h (+
+  Dead), i (B1), j / l, k, BU (6 taps: 6 pops, 6 chirps), FC (camera 27 studs: drawn all 33 frames of its 0.55 s life,
+  farthest 27.1 studs; 34 studs recorded: not drawn, beyond MaxDistance 30 as HEAD's pop), m1-m4, d2, d3, X1, X1b, X2, X2b, X3, X4, X5, X6, X7, X8, X9, R0 (rejoin),
+  R1, R2 (lost packet), totals (Pops == Packets - Junk - Dead: 48 == 67 - 18 - 1 in B5).
+- Controls with the same driver: the round-2 ProductionFx B5 107 / 44, B1 106 / 42 (the review's zero cases X1, X2, X3,
+  X5-X9 show 0 pops; a, b, e, j, l, m1-m4 show the pop 0.467 s late; R0 / R2 no Recharging); the round-2 server
+  (ManualDropperService 15c25452) B5 142 / 9, B1 141 / 7 (no attribute: R0, R1's attribute check, R2).
+- T16 120 / 0 (F3: every grab's pop at once; E: <= 2 task.defer sites, <= 4 task.delay sites), T17 all 7 variants pass,
+  Bootstrap identical to HEAD.
+- Other gates (L1b_out/fix3/logs/gate_fix3.txt): parse ok (4 files); lsp 348 = 348 lines, 0 new vs the base and vs
+  L1a; BuyPathStatic L3b 3357 / 0, base + block 3322 / 35 (0 outside); rojo builds; world sim 12 steps ok; DataService
+  24 / 0; lane C client sim 60 / 0, identical to L3a; HUD harness 7 viewports (phone, owner, small, smallnotch, tablet,
+  desktop, fhd) x droppers_plate (plate_pills, plate_float, plate_recharging), owner, newplayer, panels (9 panels with
+  data): 105 rows, 0 differ from the base tree; the 4 droppers_plate rows with an issue (phone and smallnotch,
+  plate_pills and plate_float) are the pre-existing prompt-lane overlap noted above, identical on the base; the
+  plate_recharging rows are clean at every viewport. The panels state (seeded data: cash, level, soldiers, squad) has
+  13 rows with pre-existing issues (fhd overlaps; Base / Garage / Shop off-screen at phone, small, smallnotch, owner),
+  identical on the base tree (no L3b file draws a panel). Tally: fix3/logs/hud_tally.txt.
+- Merge preview (v1a_rb + L1b + L3b, both final blocks; runs/preview): BuyPathStatic 3539 / 0, lsp 0 new, T15 151 / 0
+  and 148 / 0, T16 126 / 0, T17 all pass, world sim ok, DS 24 / 0, rojo ok, lane L2's t7 / t17 drivers with the real
+  ProductionFx identical to v1a_rb (t7's 1 FAIL is v1a_rb's own).
+
+For the owner, on his phone: superseded by the OWNER PHONE TEST in "Refix round 1" below (the "6 fast taps" and
+"leave and rejoin the same server" steps were wrong for a phone).
+
+## Refix round 1 (2026-09-27, reviews rv4_feedback_1 and rv4_money_1; spec "21 (cont.). Revision 3, refix round 1")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log:
+"at least one, at most two" "+$" per paid grab; the plate's world pop "+$75" and its chirp on EVERY paid grab (no hold,
+no cancel, no attribution; exempt from the fight / drive / panel mute except when dead); the ATM pill float exactly as
+today when the ATM collects. The hold / cancel code and its config keys stay removed (pinned absent); the
+LabelGovernor priority for the pop stays.
+
+L3b-17 (DR-22; review rv4_feedback_1 item 4, Medium) The far-camera pop. With a zoomed-out camera the round-3 pop
+(MaxDistance 30, the governor's `d <= gui.MaxDistance`) was never drawn: zero "+$75" (and the chirp, MaxDistance 30,
+out of hearing) at the review's zoom 25+ with the player 10 studs from the plate. Now `ProductionFx.popSpot` places the
+pooled pop's anchor:
+  - at the plate (the packet's drop point, HEAD's place) while the pop's whole rise (start and end) stays within
+    MaxDistance - 1 of the camera;
+  - otherwise `ManualDropperConfig.PopNearCameraStuds` (24) studs from the camera on the camera -> pop-start line of
+    sight (capped at MaxDistance - rise - 1 = 25.8), so it lands on the same screen point over the plate, the engine
+    and the LabelGovernor always draw it, and the chirp plays there (`sound(COIN_KEY, spot)`).
+  One camera read per paid grab; no per-frame work, no new instance, no client -> server call. MaxDistance stays 30
+  (under the 40 cap), the pop is still one governed label (cap of 3 holds) and never AlwaysOnTop.
+  Chosen over the review's two options: (a) MaxDistance 40 alone still leaves zero beyond 40 studs (zoom 30+);
+  (b) a pill-float fallback adds into the ATM's own float when the ATM collects at once (HUDController merges floats
+  inside MergeWindow: "+$150" for $75) and needs attribution again. Reversible: `local spot = pos` in showPop.
+  The text is always 20 px (WorldLabel text is fixed px, the box is stud-scaled); drawn nearer, the rise covers more
+  screen. Still needs a device: that it reads as "over the plate" while the camera moves during the 0.55 s pop.
+
+L3b-18 (owner phone test; DR-23) See L1b-17: no same-server rejoin step, and a paid tap rhythm.
+
+OWNER PHONE TEST (refix 1; SUPERSEDED by the one in "Refix round 2" below: steps 2 and 3 changed):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate, with
+   the chirp.
+3. Tap "Grab Cash" about twice a second, 6 times: every tap pops "+$75"; then the pill disappears and the plate reads
+   "Recharging" for about 8 seconds, then one bundle every 10 seconds. Taps faster than about twice a second are
+   ignored by the plate's short cooldown and show nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 1; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx1/logs/gate_rfx1.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 4 L3b files; L3b's ManualDropperConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a).
+- BuyPathStatic: L1b 3361 / 0; L1a + L1b block 3311 / 50 (0 outside the block); L3b 3362 / 0; L3b base + L3b block
+  3323 / 39 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3549 / 0, lsp 0 new. The review's base
+  (HEAD 3b5ac28 + v1a + L1b + L3b + both blocks, L1b_out/rfx1/fwd3b5): 3630 / 0 (was 3620 / 0), T1 48 / 0 and 23 / 0,
+  T15 225 / 0 and 221 / 0.
+- rojo builds L1b and L3b; world sim 12 steps ok (L1b, L3b, preview); DataService 24 / 0 (L1b, L3b, preview).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 225 / 0, B1 221 / 0 (was 151 / 148; new cases FC 27-400 studs, FZ zoom sweep, TR tap rhythm). The round-3
+  ProductionFx against the same driver: B5 187 / 38, B1 183 / 38 (every FC case from 34 studs and every FZ zoom from 25:
+  0 pops, 0 chirps). The review's own driver (rv4_feedback_1/y_driver.luau, copied unchanged): 21 / 0 (was 19 / 2).
+- T16 120 / 0 (L3b); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim 60 / 0, identical to
+  L3a; HUD harness 7 viewports x droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the pop
+  is a world label; the 4 droppers_plate rows with an issue are the pre-existing prompt-lane overlap).
+- Merge preview T16: 126 / 0 in the first full gate and in 14 of 14 reruns (2 on its exact tree path); ONE run (the
+  second full gate, while other jobs loaded the machine) showed 125 / 1: "F3 0 Instance.new after warm-up: Part=5"
+  (L3b_out/rfx1/runs/t16_gate_flake). Not reproduced; the same driver with the round-3 ProductionFx passed 8 / 8. The
+  5 Parts are not a ProductionFx pool (its only Parts are the 2 pooled bundles, made at warm-up; popSpot makes nothing).
+  Recorded as an open stand-in flake for L4b to watch, not claimed as fixed.
+- HEAD moved during this round (not by this lane): 3b5ac28 -> 882faf9, which commits droppers v1a. On 882faf9 the 9 v1b
+  files' bases are exactly the lane bases (ProductionFx = L3a's de2d2062, SoundConfig = L1a's 20185c76, the rest =
+  HEAD), so the lane files drop in unchanged. Forward check (git archive 882faf9 + the 9 files + both blocks,
+  L1b_out/rfx1/fwd882): BuyPathStatic 3642 / 0 (HEAD alone 3521 / 0), T1 48 / 0 and 23 / 0, T15 225 / 0 and 221 / 0,
+  T16 126 / 0, world sim 12 steps ok, DataService 24 / 0.
+
+## Refix round 2 (2026-09-27, reviews rv4_feedback_2 and rv4_money_2; spec "21 (cont.). Revision 3, refix round 2")
+
+The lead decision of revision 3 is unchanged and still recorded as DR-16 (spec §14) and in the spec's revision log
+(now also "21 (cont.). Revision 3, refix round 2"): "at least one, at most two" "+$" per paid grab; the plate's world
+pop "+$75" and its chirp on EVERY paid grab (no hold, no cancel, no attribution; exempt from the fight / drive / panel
+mute except when dead); the ATM pill float exactly as today when the ATM collects. The hold / cancel code and its three
+config keys stay removed and pinned absent. The LabelGovernor priority for the pop stays.
+
+L3b-19 (DR-24; review rv4_feedback_2, Medium) Owner step 3 "the plate reads Recharging" failed on a correct build at the
+ATM plate: the plate tag became a governed base label in v1b, and the LabelGovernor kept the three premium-pad labels
+(MapSetup.buildPremiumPads, 5.5 studs over pads at the ATM + (-10,14), (0,16), (10,14), MaxDistance 20) and held the tag
+off at 15-17 % of normal spots; the pill hid with nothing on the plate saying why. Fix (ProductionFx f29940c4):
+  - writeRecharge gives each own plate tag that reads RechargeTag WorldLabelConfig.PriorityAttribute (compare-first;
+    one LabelGovernor pass when it is newly set), endRecharge clears it (and runs one pass). The tag still counts
+    toward the cap of 3; the pop hides the grabbed plate's tag while it shows, so the two never compete; outside a
+    recharge the "$75" tag ranks by distance exactly as before.
+  - LabelGovernor (b68c03f6) and WorldLabelConfig (6209f2b5) changed in comments only (the priority now has two users).
+  - T15 PD (the three pad labels with the review's geometry): the fixture reproduces Z3 (the "$75" tag held at 5 of 32
+    spots); at 3 of those spots a 6-grab burst gives 6 paid, 6 pops, then the tag drawn with priority on every one of
+    the 176 Recharging frames after the last pop; at most 3 base labels on every frame; after the recharge the tag reads
+    "$75", has no priority and is held again. The refix-1 ProductionFx: 0 frames (PD FAILs; the review's Z3 on
+    that build: the tag not drawn at all during Recharging).
+  - The other half of the review's cause (step 2 leaves the camera zoomed out past the tag's MaxDistance 30) is fixed in
+    the text: step 3 now starts "Zoom back in to a normal view, stand next to either plate" (L1b-22).
+L3b-20 (review rv4_feedback_2, Low) applyRecharge no longer ends a recharge on a left >= 1 packet while the server's
+reliable RechargeAttribute is still more than 0.1 s in the future (an older packet delivered late; unreliable packets
+can reorder). If the attribute has not arrived yet, the old behaviour stands and the attribute restarts the recharge
+when it lands. T15 RO: the review's Z4 (the 5th grab's left = 1 packet 0.6 s late) now shows the pill 0.00 s of 7.20 s
+(refix 1: 7.10 s); the pills come back after eta.
+L3b-21 (DR-25) The Drop.Coin cooldown change is lane L1b's (L1b-21); T15 JC (6 grabs 0.36 s apart, jitter 0.03-0.20 s,
+3 seeds) gives 6 pops and 6 chirps each (refix 1: 4 / 4 / 5 chirps).
+L3b-22 (owner phone test) See L1b-22. The refix-1 text above is superseded by this one.
+
+OWNER PHONE TEST (refix 2; this exact text is in both lanes' assumptions files, the report and spec §18 B):
+1. Tap "Grab Cash" at either plate: a green bundle drops and "+$75" pops over the plate with a chirp. Next to the ATM
+   (without Auto Collect) your cash pill also counts up "+$75": the same money shown twice, as before.
+2. Zoom the camera far out (pinch out as far as it goes) and tap "Grab Cash": "+$75" still pops over the plate (from
+   far out its chirp may be faint).
+3. Zoom back in to a normal view, stand next to either plate and tap "Grab Cash" about twice a second, 6 times: every
+   tap pops "+$75"; then the pill disappears and the plate itself reads "Recharging" for about 8 seconds, then one
+   bundle every 10 seconds. Taps faster than about twice a second are ignored by the plate's short cooldown and show
+   nothing: that is expected, not a missing "+$75".
+4. Tap the Collect pill, then "Grab Cash" right after: "+$75" still pops over the plate.
+5. With a 2x Cash or VIP pass a grab still adds exactly $75 to the ATM, and the XP bar never moves.
+Not a phone test: "Recharging" after leaving and rejoining the same server. It lasts only 5-10 s after a burst (up to
+about 30 s once a long session has used the hour's budget), which is over before a phone can rejoin, and a phone cannot
+pick the same server. T1 o1-o3 and T15 R0 cover it in the stand-in; it needs a Studio two-client test or the server
+console.
+
+Gates (refix round 2; headless stand-in and static checks only, never Roblox or a phone; L1b_out/rfx2/logs/gate_rfx2.txt):
+- Parse (luau-compile --binary) ok on the 6 L1b and 5 L3b files; L3b's ManualDropperConfig and SoundConfig == L1b's.
+- luau-lsp: L1a 348 / L1b 348, 0 new; L3b base 348 / L3b 348, 0 new (vs base and vs L1a); HEAD 90cad49 348 / fwd90c
+  348, 0 new.
+- BuyPathStatic: L1b 3363 / 0; L1a + L1b block 3312 / 51 (0 outside the block); L3b 3369 / 0; L3b base + L3b block
+  3323 / 46 (0 outside). Merge preview (v1a_rb + L1b + L3b + both blocks) 3558 / 0, lsp 0 new.
+- Forward check on the CURRENT HEAD 90cad49 (X1 XP rebalance landed; ECON-1 C4 on the X1 tree), L1b_out/rfx2/fwd90c =
+  git archive 90cad49 + the 9 v1b files + both blocks: every v1b file's base there equals the lane base (the files drop
+  in unchanged); BuyPathStatic 3733 / 0 (HEAD alone 3603 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T15 241 / 0 and
+  235 / 0; T16 126 / 0; world sim 12 steps ok; DataService 24 / 0; rojo builds.
+- rojo builds L1b, L3b and the preview; world sim 12 steps ok (L1b, L3b, preview, fwd90c); DataService 24 / 0 (all).
+- T1: B5 48 / 0, B1 23 / 0; PAYSEQ B1 identical to L1a; T2 ATM trace identical to L1a (49 lines, 0 money-bag instances);
+  T4 census unchanged (lights 231, neon 294, SurfaceGuis 1121, billboards 57, 2566 parts / 49 neon per base); T5: only
+  BundleAwards differs from HEAD among the money keys; ECON-1 run_all.sh on a merged copy: head / b1 / b5 / b5x1 / l1b
+  16 / 0 each, econ_alt identical to revision 2.
+- T15: B5 241 / 0, B1 235 / 0 on L3b, the preview and fwd90c (was 225 / 221; new cases PD, JC, RO). The refix-1 client
+  files (ProductionFx a82f5240 + SoundConfig 5241fc0c) on the same driver: B5 234 / 7 (PD x3: the tag drawn with the priority on 0
+  of the Recharging frames; JC x3: 4 / 4 / 5 chirps for 6 pops; RO: the pill shown for 7.10 s of 7.20 s), B1 232 / 3 (JC).
+  The review's own drivers copied unchanged (rv4_feedback_2/drv z_driver / z3b_driver) on fwd90c: 42 / 1 (was 37 / 6):
+  Z2 6 / 6 / 6 chirps, Z3 "tag drawn during Recharging true", Z4 0.00 s wrong; the one FAIL left is Z1 (open, below).
+- T16 120 / 0 (L3b), 126 / 0 (fwd90c); T17 all 7 variants pass, Bootstrap.client identical to HEAD; lane C client sim
+  60 / 0, identical to L3a; lane L2 drivers with the real ProductionFx: identical to v1a_rb; HUD harness 7 viewports x
+  droppers_plate / owner / newplayer / panels: 105 rows, 0 differ from the base (the 4 droppers_plate rows with an issue
+  are the pre-existing prompt-lane overlap).
+- The known T16 F3 warm-up flake ("0 Instance.new after warm-up: Part=5") showed once in the merge preview (125 / 1).
+  Reruns on the rebuilt preview tree: 5 of 6 pass with the refix-2 files, and 7 of 8 pass with the refix-1 client files
+  (the same Part=5 line in the failing run), so it is not this round's change; the review traced the 5 Parts to lane
+  L2's BusinessVisuals one-time measure (L3b_out/rfx2/runs/t16_preview_rerun*, t16_preview_rfx1_rerun*). Open for L4b.
+
+Open (Low, not blocking; recorded, not claimed fixed):
+- Review Z1: a pop kept at the plate when the camera is 26-29 studs away can leave its MaxDistance within a few frames
+  if the player walks away at once (5-7 frames drawn); standing players always see it. Possible fix: keep the pop at
+  the plate only with ~6 studs margin (a pinned popSpot change).
+- The far-camera chirp's loudness (24 studs from the listener, InverseTapered): device only; step 2 now says it may be
+  faint.
+- The pre-existing prompt-lane overlap at 844x390 / 800x360 notch (25-33 px into the bottom-right reserved zone).
+- The T16 F3 warm-up flake above (a harness fix: snapshot after BusinessVisuals has measured).
+Still needs a real device: "Recharging" drawn on the ATM plate beside the three premium-pad labels; the pop and
+"Recharging" readability at 20 px; the ATM double "+$"; real unreliable packet loss / reorder and GetServerTimeNow skew;
+frame cost at Graphics Quality 3 on a mid-range Android; a same-server rejoin (Studio two-client).
+
+Forward check 2 (refix round 2): HEAD moved again during this round, not by this lane: 90cad49 -> c1475e9 (27b063d
+the ATM screen shows PendingCash only; 22b63e0 aircraft weapons; c1475e9 bank guards / gate AutoGuns). 8 of the 9 v1b
+files' bases are unchanged there. MoneyCollectorService is NOT: 27b063d edits it (atmScreenBalance, two call sites, one
+comment), so L4b must 3-way merge it, not copy lane L1b's file (a plain copy would revert 27b063d). `git merge-file`
+(ours = L1b's file, base = L1a's, theirs = c1475e9's) merges with 0 conflicts (the hunks do not overlap):
+L1b_out/rfx2/mcs_merged_c14.luau a8593b407c08d71554aa6fd5dfe0ba1e. Tree L1b_out/rfx2/fwdc14 = git archive c1475e9 + the
+8 unchanged-base v1b files + that merged MoneyCollectorService + both blocks: BuyPathStatic 3856 / 0 (HEAD alone
+3726 / 0); lsp 0 new; T1 B5 48 / 0, B1 23 / 0; T2 ATM trace identical to c1475e9 alone (49 lines; 0 money-bag instances,
+HEAD 28); ECON-1 econ1_drv tree5 16 / 0; T15 241 / 0 and 235 / 0; T16 126 / 0; world sim 12 steps ok; DataService
+24 / 0; rojo builds.

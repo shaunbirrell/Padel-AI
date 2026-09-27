@@ -113,6 +113,7 @@ local UNRELIABLE = {
 	Constants.RemoteNames.VehicleWeaponFx,
 	Constants.RemoteNames.WeaponFx, -- W2 Combat Core: bullet tracers / projectile launch + explosion (CombatService)
 	Constants.RemoteNames.OpsPing, -- W3 step 2 Phase B Jobs: a bag carrier's position, every 10 s to non-allies (OpsService)
+	Constants.RemoteNames.DropperFx, -- droppers v1b: the plate grab effect, owner-only (ManualDropperService)
 }
 local UNRELIABLE_SET: { [string]: boolean } = {}
 for _, name in ipairs(UNRELIABLE) do

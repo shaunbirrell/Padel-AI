@@ -1001,7 +1001,7 @@ end
 -- ── collect ────────────────────────────────────────────────────────────────
 
 -- silent: the AutoCollect loop collects every few seconds; the cash readout updating is the feedback.
--- v69: silent also skips the money-bag FX and the soft offers (they ran every 2 s for AutoCollect owners).
+-- v69: silent also skips the soft offers (they ran every 2 s for AutoCollect owners). droppers v1b: no collect FX here.
 function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boolean, number)
 	if not EconomyService or not EconomyService.CollectPendingCash then
 		return false, 0
@@ -1105,33 +1105,9 @@ function MoneyCollectorService.Collect(player: Player, silent: boolean?): (boole
 			MonetizationService.TrySoftOfferCashMega(player, "pending_collect", granted)
 		end)
 	end
-	-- v69: FX on its own thread (a catalog load can yield; the collect path never does)
-	task.spawn(function()
-		pcall(function()
-			local vas = require(script.Parent.VisualAssetService) :: any
-			local plotId = ownedPlotOf(player)
-			local pos: Vector3? = nil
-			local parent: Instance? = nil
-			if plotId ~= nil then
-				for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
-					if inst:IsA("BasePart") and inst:GetAttribute("PlotId") == plotId then
-						pos = inst.Position + Vector3.new(0, 4, 0)
-						parent = inst.Parent
-						break
-					end
-				end
-			end
-			if not pos then
-				local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-				if hrp and hrp:IsA("BasePart") then
-					pos = hrp.Position
-				end
-			end
-			if pos and vas and vas.PlayMoneyBagFX then
-				vas.PlayMoneyBagFX(pos, parent)
-			end
-		end)
-	end)
+	-- droppers v1b (OD-6): no server collect FX any more (it was a thread, a GetTagged pass and a money-bag model
+	-- replicated to every client). The owner's client draws a small sparkle at WE_AtmPos when its WE_PendingCash
+	-- drops to 0 nearby (Client/Modules/ProductionFx); the collect itself, its float and its toast are unchanged.
 	return true, granted
 end
 

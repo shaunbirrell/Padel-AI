@@ -15,6 +15,26 @@
 
 	Owner asset list hook (2026-09-25): a newly built plate gets a deferred VisualAssetService.TryAttachPropVisual(plate,
 	"ManualDropper") (VisualAssetConfig.IndustrialProps.ManualDropper; 0 / pending = no load, the plate look stays).
+
+	droppers v1b (spec_droppers.md §3.8, owner decision OD-4 = A): one tap (the prompt or the ClickDetector; both still
+	instant and both through tryAward) pays a bundle of ManualDropperConfig.BundleAwards awards (5 x $15 = $75) with ONE
+	AccruePendingCash(player, amount, "manual_dropper") (multiplier-exempt, into the ATM). The bundle needs that many
+	awards in BOTH budget buckets (no partial bundle); the award, cooldown, rate limit and the minute / hour budgets are
+	unchanged, so the cap on money is unchanged. BundleAwards is clamped to 1..MaxAwardsPerMinute (a larger bundle could
+	never be paid). The server builds no pop and no model any more: after a paid grab it sends the grabber one
+	owner-only unreliable DropperFx packet (drop point, amount, bundles left, seconds until the next one) and the client
+	(Client/Modules/ProductionFx) draws the falling bundle and the world "+$75" pop on every paid grab (revision 3). The
+	plate inset is plain green (PlateNeon = false) and the "$75" tag is a governed base label (LabelGovernor: at most 3
+	on screen at a base). There is still no client -> server remote: the client sends no amount and no target.
+
+	droppers v1b revision 3:
+	  * "Recharging" has a reliable, server-authoritative source: while the budget holds no bundle the Player attribute
+	    ManualDropperConfig.RechargeAttribute = Workspace:GetServerTimeNow() when the next bundle is ready (nil once it
+	    holds one). Stamped by the grab that empties the budget, by a tap the budget refuses and by a same-server rejoin
+	    (PlayerAdded with a kept budget), compare-first. It is a look only: every tap is still paid or refused here, on
+	    the budget itself. No new remote.
+	  * The v69 budget kept for an hour after a leave is cleared only by the timer of the LAST leave (a leave token
+	    bumped on every leave and join), so an older leave's timer can no longer refill a player who left again briefly.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -26,6 +46,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local ManualDropperConfig = require(Shared.Configs.ManualDropperConfig)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local RemoteSetup = require(script.Parent.Parent.Modules.RemoteSetup) -- droppers v1b: the owner-only DropperFx packet
 
 local ManualDropperService = {}
 
@@ -50,6 +71,16 @@ local wired: { [BasePart]: boolean } = {}
 -- same-server rejoin does not reset it.
 type Budget = { minute: number, hour: number, at: number }
 local budgets: { [number]: Budget } = {}
+-- droppers v1b revision 3 (leave token): bumped on every leave and every join of a UserId. The 3600 s clear runs only
+-- for the leave that started it (its token still current and the player still away), so the budget is dropped an
+-- hour after the LAST leave and never by an older leave's timer during a later brief absence.
+local leaveToken: { [number]: number } = {}
+
+local function bumpLeaveToken(userId: number): number
+	local token = (leaveToken[userId] or 0) + 1
+	leaveToken[userId] = token
+	return token
+end
 
 local function budgetLimits(): (number, number)
 	local perMinute = math.max(1, math.floor(tonumber(ManualDropperConfig.MaxAwardsPerMinute) or 30))
@@ -57,8 +88,19 @@ local function budgetLimits(): (number, number)
 	return perMinute, perHour
 end
 
--- Consumes one award from the player's budget; false when either bucket is empty.
-local function takeBudget(userId: number, now: number): boolean
+-- droppers v1b: awards per grab (the bundle). A number only (nil, NaN, a string -> 1), floored, clamped to
+-- 1..MaxAwardsPerMinute: a bundle above the minute bucket could never be paid (takeBudget would never find it).
+local function bundleAwards(): number
+	local perMinute = budgetLimits()
+	local raw: any = ManualDropperConfig.BundleAwards
+	if typeof(raw) ~= "number" or raw ~= raw then
+		return 1
+	end
+	return math.clamp(math.floor(raw), 1, perMinute)
+end
+
+-- Refills the player's buckets up to `now` (first sight: both full) and returns them.
+local function refillBudget(userId: number, now: number): Budget
 	local perMinute, perHour = budgetLimits()
 	local b = budgets[userId]
 	if not b then
@@ -69,12 +111,61 @@ local function takeBudget(userId: number, now: number): boolean
 	b.at = now
 	b.minute = math.min(perMinute, b.minute + dt * perMinute / 60)
 	b.hour = math.min(perHour, b.hour + dt * perHour / 3600)
-	if b.minute < 1 or b.hour < 1 then
+	return b
+end
+
+-- Consumes n awards (default 1) from the player's budget; false (and nothing taken) unless BOTH buckets hold n.
+local function takeBudget(userId: number, now: number, n: number?): boolean
+	local take = n or 1
+	local b = refillBudget(userId, now)
+	if b.minute < take or b.hour < take then
 		return false
 	end
-	b.minute -= 1
-	b.hour -= 1
+	b.minute -= take
+	b.hour -= take
 	return true
+end
+
+-- droppers v1b: (bundles of n the budget holds now, seconds until the next one when it holds none; else 0).
+-- Consumes nothing. The client shows "Recharging" and hides the pill for `eta` seconds when `left` is 0.
+local function budgetState(userId: number, now: number, n: number): (number, number)
+	local perMinute, perHour = budgetLimits()
+	local b = refillBudget(userId, now)
+	local left = math.floor(math.min(b.minute, b.hour) / n)
+	if left >= 1 then
+		return left, 0
+	end
+	return 0, math.max(0, (n - b.minute) / (perMinute / 60), (n - b.hour) / (perHour / 3600))
+end
+
+-- droppers v1b revision 3: the reliable half of "Recharging" (see the header). The ready time of an empty budget does
+-- not move while it refills, so a refused tap rewrites nothing (compare-first, 0.05 s tolerance).
+local RECHARGE_ATTR: string = ManualDropperConfig.RechargeAttribute or "WE_DropRechargeAt"
+
+-- the clock the client compares the attribute with; nil if it cannot be read (then nothing is stamped)
+local function serverNow(): number?
+	local ok, t = pcall(Workspace.GetServerTimeNow, Workspace)
+	return if ok and typeof(t) == "number" and t == t then t else nil
+end
+
+local function stampRecharge(player: Player, now: number, n: number)
+	local left, eta = budgetState(player.UserId, now, n)
+	local want: number? = nil
+	if left < 1 then
+		local t = serverNow()
+		if t == nil then
+			return
+		end
+		want = t + eta
+	end
+	local have = player:GetAttribute(RECHARGE_ATTR)
+	if want == nil then
+		if have ~= nil then
+			player:SetAttribute(RECHARGE_ATTR, nil)
+		end
+	elseif typeof(have) ~= "number" or math.abs(have - want) > 0.05 then
+		player:SetAttribute(RECHARGE_ATTR, want)
+	end
 end
 
 local function pickAward(): number
@@ -105,51 +196,69 @@ local function ownsPlot(player: Player, plotId: any): boolean
 	return profile.BasePlotId == plotId
 end
 
--- "+$15" rising from the plate — only the player who grabbed it sees it (owner-only WorldLabel)
-local function spawnFloatingCash(dropper: BasePart, amount: number, ownerUserId: number)
-	local top = dropper.Size.Y * 0.5
-	local bb = WorldLabel.Create(dropper, string.format("+$%d", amount), {
-		Name = "CashPop",
-		Color = Color3.fromRGB(80, 255, 120),
-		TextSize = 20,
-		Studs = Vector2.new(3, 1.2),
-		Offset = Vector3.new(0, top + 1.2, 0),
-		MaxDistance = 30,
-		OwnerUserId = ownerUserId,
-	})
-	local label = bb:FindFirstChild("Title")
-	if label and label:IsA("TextLabel") then
-		-- Competitor-style $ pop: dark green glow outline (replaces the ink text stroke on this label)
-		local glow = Instance.new("UIStroke")
-		glow.Name = "CashPopGlow"
-		glow.Color = Color3.fromRGB(8, 36, 14)
-		glow.Thickness = 1.4
-		glow.Parent = label
+-- droppers v1b (spec §3.8): where the client's bundle lands, in world space.
+--   * Undressed plate: the top face of the plate kit (the inset "DropNeon" stands 0.15 above the plate itself).
+--   * A plate the hooks lane dressed (WE_CatalogAssetId + the Model "WE_CatalogProp" that weldCloneToPrimary names):
+--     that model stands from the plate's LOWEST point (Fit = "Ground"), so the plate top can be inside it; the bundle
+--     lands on the model's bounding-box top + DropPointClearance, over the plate centre.
+-- Cached per plate, keyed by the dress instance: one GetBoundingBox on the first grab after a (re)dress, else none.
+type DropCache = { dress: Instance?, point: Vector3 }
+local dropCache: { [BasePart]: DropCache } = setmetatable({} :: any, { __mode = "k" })
+
+local function plateTop(pad: BasePart): number
+	local top = pad.Position.Y + pad.Size.Y * 0.5
+	local inset = pad:FindFirstChild("DropNeon")
+	if inset and inset:IsA("BasePart") then
+		top = math.max(top, inset.Position.Y + inset.Size.Y * 0.5)
 	end
+	return top
+end
 
-	local rise = ManualDropperConfig.PopupRiseStuds or 3.2
-	local dur = ManualDropperConfig.PopupDuration or 0.55
-	task.spawn(function()
-		local steps = 6
-		for i = 1, steps do
-			if not bb.Parent then
-				return
-			end
-			local t = i / steps
-			bb.StudsOffsetWorldSpace = Vector3.new(0, top + 1.2 + rise * t, 0)
-			if label and label:IsA("TextLabel") then
-				label.TextTransparency = t * 0.85
-			end
-			task.wait(dur / steps)
+local function dropPoint(pad: BasePart): Vector3
+	local dress: Instance? = nil
+	if pad:GetAttribute("WE_CatalogAssetId") ~= nil then
+		local prop = pad:FindFirstChild("WE_CatalogProp")
+		if prop and prop:IsA("Model") then
+			dress = prop
 		end
-		bb:Destroy()
-	end)
+	end
+	local cached = dropCache[pad]
+	if cached and cached.dress == dress then
+		return cached.point
+	end
+	local pos = pad.Position
+	local y = plateTop(pad)
+	if dress ~= nil then
+		local ok, cf, size = pcall(function()
+			return (dress :: Model):GetBoundingBox()
+		end)
+		if ok and typeof(cf) == "CFrame" and typeof(size) == "Vector3" then
+			-- world half-height of the (possibly turned) box
+			local half = math.abs(cf.RightVector.Y) * size.X * 0.5
+				+ math.abs(cf.UpVector.Y) * size.Y * 0.5
+				+ math.abs(cf.LookVector.Y) * size.Z * 0.5
+			y = cf.Position.Y + half + (tonumber(ManualDropperConfig.DropPointClearance) or 0.3)
+		end
+	end
+	local point = Vector3.new(pos.X, y, pos.Z)
+	dropCache[pad] = { dress = dress, point = point }
+	return point
+end
 
-	pcall(function()
-		if VisualAssetService and VisualAssetService.PlayMoneyBagFX then
-			VisualAssetService.PlayMoneyBagFX(dropper.Position + Vector3.new(0, 1.5, 0), dropper.Parent or dropper)
-		end
+-- droppers v1b: the grab's effect goes to the grabber only, as one unreliable packet (a lost packet loses the effect,
+-- never money). Replaces HEAD's server BillboardGui + UIStroke + task loop + money-bag model, which replicated to
+-- every client on every tap. Payload: (dropPoint, amount, left, eta), see budgetState.
+local function sendDropFx(player: Player, pad: BasePart, amount: number, n: number, now: number)
+	if ManualDropperConfig.FxEvent == false then
+		return
+	end
+	local left, eta = budgetState(player.UserId, now, n)
+	local ok, err = pcall(function()
+		RemoteSetup.GetUnreliable(Constants.RemoteNames.DropperFx):FireClient(player, dropPoint(pad), amount, left, eta)
 	end)
+	if not ok then
+		warn("[ManualDropper] DropperFx failed:", err)
+	end
 end
 
 local function tryAward(player: Player, dropper: BasePart)
@@ -184,7 +293,9 @@ local function tryAward(player: Player, dropper: BasePart)
 		return
 	end
 	lastAwardAt[key] = now
-	if not takeBudget(player.UserId, now) then
+	local n = bundleAwards()
+	if not takeBudget(player.UserId, now, n) then
+		stampRecharge(player, now, n) -- revision 3: the refused tap re-states "Recharging" (a lost packet, a rejoin)
 		if NotificationService and NotificationService.NotifyThrottled then
 			NotificationService.NotifyThrottled(
 				player,
@@ -197,14 +308,39 @@ local function tryAward(player: Player, dropper: BasePart)
 		end
 		return
 	end
-	local amount = pickAward()
+	local amount = pickAward() * n -- droppers v1b: one bundle = n awards, one grant (exempt: "manual_dropper")
 	local ok = EconomyService.AccruePendingCash(player, amount, "manual_dropper")
 	if ok then
-		spawnFloatingCash(dropper, amount, player.UserId)
+		sendDropFx(player, dropper, amount, n, now)
+		stampRecharge(player, now, n) -- revision 3: the reliable "Recharging" (set when this grab emptied the budget)
 		if TutorialService and TutorialService.Notify then
 			TutorialService.Notify(player, "ManualDrop")
 		end
 	end
+end
+
+-- droppers v1b: the plate tag shows one bundle ("$75"; "$15" with BundleAwards = 1)
+local function tagText(): string
+	local per = ManualDropperConfig.AwardAmount or ManualDropperConfig.MinAward or 10
+	return (ManualDropperConfig.BillboardLabel or "$") .. tostring(per * bundleAwards())
+end
+
+-- droppers v1b (OD-6): the inset is plain SmoothPlastic; PlateNeon = true is the one-line revert to HEAD's glow. The
+-- Neon material is named by string on purpose: this file is pinned to hold no Neon literal, so the pinned config line
+-- `PlateNeon = false,` is the only way back to Neon (and the census counts every Neon part).
+local function insetMaterial(): Enum.Material
+	return if ManualDropperConfig.PlateNeon == true then (Enum.Material :: any)["Neon"] else Enum.Material.SmoothPlastic
+end
+
+local function makeTag(pad: BasePart)
+	WorldLabel.Create(pad, tagText(), {
+		Name = "WE_DropperLabel",
+		Color = Color3.fromRGB(100, 255, 140),
+		Studs = ManualDropperConfig.LabelStuds,
+		MaxDistance = ManualDropperConfig.LabelMaxDistance,
+		OwnerUserId = NOBODY, -- syncTagOwners hands it to the plot owner (≤ 2 s)
+		BaseLabel = true, -- droppers v1b: counted by the LabelGovernor (at most 3 base labels on screen)
+	})
 end
 
 local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3, plotId: number): BasePart
@@ -234,20 +370,13 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 	neon.Size = Vector3.new(size.X * 0.7, 0.2, size.Z * 0.7)
 	neon.Anchored = true
 	neon.CanCollide = false
-	neon.Material = Enum.Material.Neon
+	neon.Material = insetMaterial()
 	neon.Color = ManualDropperConfig.NeonAccentColor or Color3.fromRGB(90, 255, 120)
 	neon.CFrame = pad.CFrame * CFrame.new(0, size.Y * 0.5 + 0.05, 0)
 	neon.Parent = pad
 
-	-- v71: no PointLight (the neon plate is the glow; light budget) and an owner-only "$15" tag
-	local shown = ManualDropperConfig.AwardAmount or ManualDropperConfig.MinAward or 10
-	WorldLabel.Create(pad, (ManualDropperConfig.BillboardLabel or "$") .. tostring(shown), {
-		Name = "WE_DropperLabel",
-		Color = Color3.fromRGB(100, 255, 140),
-		Studs = ManualDropperConfig.LabelStuds,
-		MaxDistance = ManualDropperConfig.LabelMaxDistance,
-		OwnerUserId = NOBODY, -- syncTagOwners hands it to the plot owner (≤ 2 s)
-	})
+	-- v71: no PointLight (light budget) and an owner-only tag; droppers v1b: "$75" (one bundle), a governed base label
+	makeTag(pad)
 
 	local click = Instance.new("ClickDetector")
 	click.Name = "DropClick"
@@ -272,22 +401,36 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 end
 
 -- Older server builds left a PointLight and a carded price tag on the plate: strip / rebuild them once.
+-- droppers v1b: a pre-v1b plate (Neon inset, ungoverned "$15" tag) is brought to the v1b look once; every write is
+-- compare-first, so a plate already in that look is left untouched.
 local function upgradeLegacyKit(pad: BasePart)
 	local light = pad:FindFirstChildOfClass("PointLight")
 	if light then
 		light:Destroy()
 	end
+	local inset = pad:FindFirstChild("DropNeon")
+	if inset and inset:IsA("BasePart") then
+		local material = insetMaterial()
+		if inset.Material ~= material then
+			inset.Material = material
+		end
+	end
 	local tag = pad:FindFirstChild("WE_DropperLabel")
 	if tag and not tag:FindFirstChild("Title") then
 		tag:Destroy()
-		local shown = ManualDropperConfig.AwardAmount or ManualDropperConfig.MinAward or 10
-		WorldLabel.Create(pad, (ManualDropperConfig.BillboardLabel or "$") .. tostring(shown), {
-			Name = "WE_DropperLabel",
-			Color = Color3.fromRGB(100, 255, 140),
-			Studs = ManualDropperConfig.LabelStuds,
-			MaxDistance = ManualDropperConfig.LabelMaxDistance,
-			OwnerUserId = NOBODY,
-		})
+		makeTag(pad)
+	elseif tag and tag:IsA("BillboardGui") then
+		local text = tagText()
+		local title = tag:FindFirstChild("Title")
+		if title and title:IsA("TextLabel") and title.Text ~= text then
+			WorldLabel.SetText(tag, text)
+		end
+		WorldLabel.TagBaseLabel(tag) -- no-op when it is already a base label
+	end
+	local prompt = pad:FindFirstChild("DropPrompt")
+	local hold = ManualDropperConfig.PromptHoldDuration or 0
+	if prompt and prompt:IsA("ProximityPrompt") and prompt.HoldDuration ~= hold then
+		prompt.HoldDuration = hold
 	end
 end
 
@@ -508,12 +651,24 @@ function ManualDropperService.Init(deps: { [string]: any })
 			end
 		end
 		task.defer(syncTagOwners)
-		-- Budget refills fully within an hour; drop it then unless the player came back.
+		-- Budget refills fully within an hour; drop it then unless the player came back. Revision 3: only this leave's
+		-- timer may do it (leave token; a later join or leave makes it stale).
+		local token = bumpLeaveToken(userId)
 		task.delay(3600, function()
-			if not Players:GetPlayerByUserId(userId) then
+			if leaveToken[userId] == token and not Players:GetPlayerByUserId(userId) then
 				budgets[userId] = nil
+				leaveToken[userId] = nil
 			end
 		end)
+	end)
+	-- revision 3: a join makes every earlier leave's timer stale; a same-server rejoin whose kept budget holds no bundle
+	-- gets "Recharging" at once (the client reads the attribute when it starts)
+	Players.PlayerAdded:Connect(function(player)
+		local userId = player.UserId
+		bumpLeaveToken(userId)
+		if budgets[userId] ~= nil then
+			stampRecharge(player, os.clock(), bundleAwards())
+		end
 	end)
 
 	-- C1 F5: the tutorial's dropper position on the owner (streaming only; see the header)
