@@ -88,6 +88,35 @@ Bake only when:
 
 Never bake a Roblox-owned pick just because you can: it already loads.
 
+### C. Baking inside Roblox after each publish (the owner's call 12, docs/ASSET_WIRING.md §4)
+
+A script run through Open Cloud Luau Execution on the live place loads the owned models (`InsertService:LoadAsset`, the
+same check as A), strips them, parents them to `ServerStorage.WE_AssetTemplates` and saves the place
+(`AssetService:SavePlaceAsync`). Nothing leaves Roblox and nothing enters the repo, so the §B licence blocker does not
+apply.
+
+**What the save holds.** Roblox's Luau Execution reference
+(create.roblox.com/docs/en-us/cloud/reference/features/luau-execution.md, section LuauExecutionSessionTask, read
+2026-09-27) says a task "executes a given Luau script in the context of a specific version of a place. In a task,
+physics simulation does not run. Server and local scripts within the place also do not automatically run." The same
+page says a task's data model changes stay local to it, and its introduction says "You can save changes using
+`SavePlaceAsync`". So a bake saves the published place plus the models it adds: our boot scripts (MapSetup, POIs, NPCs)
+do not run in the task and build nothing into the save. Costs:
+- **The save setting.** Creator Hub › the place › **Permissions** › "Allow place to be updated using Save Place API"
+  must be on (places made in Studio need it). While it is on, any server-side code in the live game can overwrite the
+  place, not only the bake. It is a different setting from "Allow Loading Third Party Assets", which stays **OFF**.
+- It must re-run after **every** Rojo publish (a publish replaces the place), against the version just published: a
+  task loads one place version and `SavePlaceAsync` "overwrites the previous state of the place", so a bake of an older
+  version would put that version back over the newer publish. Servers that start before the bake finishes still load
+  by id (A). Each run adds a place version, and an active Team Create session in Studio blocks every save.
+- `VisualAssetService` needs a baked-template lookup before LoadAsset (not built), and the live place then differs from
+  the tested Rojo build (the headless tests cannot see it).
+- Prove it on a separate test place first (the setting, the save, the lookup) before it ever runs on the live place.
+
+For servers that start after a bake it saves the runtime loads (boot time, load budget, failed loads); the models' mesh
+and texture content still streams to clients as before. It is the fallback if the `WE_LIVE` check (§5 step 5c) ever
+shows a live server refusing an owned id, once it is proven on a test place; A stays the default.
+
 ### Rules for anyone wiring ids (Grok included)
 
 1. Never turn "Allow Loading Third Party Assets" on. Never buy anything.
@@ -526,6 +555,28 @@ Grok does store clicks, Studio checks and a report. **Grok does not edit repo fi
    ```
 
    Nothing is parented to the workspace, so no script inside a model runs. For each list-B model, `parts` must be **40 or less**; if it is more, report it and the lead will not wire it. A Studio `OK` is a strong sign but not final proof: the live server log after publishing (step 9) is.
+
+   Done for the owner's 24 picks of batches P2 and P3 on 2026-09-25 (Open Cloud Luau Execution in the live place,
+   version 75; results in docs/ASSET_WIRING.md §5). Step 5's script runs either way: Open Cloud, or the Studio command
+   bar after Run.
+
+5b. **Second check** (`WE_CHECK2`, added 2026-09-27) for the 11 picks the first check passed but did not settle (the
+   fighter jet, light helicopters, APC, military truck, recon plane, gunboat, the walls, the dock, and the three close
+   ones over 40 parts). The script is `tools/WeCheck2.luau`; run it like step 5 through Open Cloud Luau Execution on the
+   live place (it is too long for the Developer Console box). It loads each model, prints every part's name, class,
+   size, place, direction and material, the seats, sub-models, effects, lights and any text or image ids, then destroys
+   the model. It parents nothing, saves nothing and publishes nothing, and every step runs inside `pcall`. Copy every
+   line that starts with `WE_CHECK2`; the last one says `DONE`.
+
+5c. **Live-server load check** (`WE_LIVE`, added 2026-09-27). Join the **live** game (a PC is easiest), open the
+   Developer Console (F9, or type `/console` in chat), switch to **Server**, paste this one line into the command bar and
+   wait for `WE_LIVE DONE`. It prints the server's creator and place version and one `WE_LIVE OK <id> parts=N` or
+   `WE_LIVE FAIL <id> <error>` line for each of 19 ids: the 8 third-party picks that already load by id and the 11 of
+   step 5b. It parents nothing, destroys each copy and does not touch the game's own model loads.
+
+   ```lua
+   local IS,RS=game:GetService("InsertService"),game:GetService("RunService") print("WE_LIVE server studio="..tostring(RS:IsStudio()).." creator="..tostring(game.CreatorType)..":"..tostring(game.CreatorId).." place="..tostring(game.PlaceId).." ver="..tostring(game.PlaceVersion).." job="..tostring(game.JobId)) task.spawn(function() for _,id in ipairs({18220523228,15192621369,15271872710,2766525411,2930926216,182529039,632958370,114570602,3553891209,2474869838,9076240315,8546141386,4954987035,15838664806,6980242709,13183571527,5318635087,8455894899,11357157285}) do local m local ok,err=pcall(function() m=IS:LoadAsset(id) local p=0 for _,d in ipairs(m:GetDescendants()) do if d:IsA("BasePart") then p+=1 end end print("WE_LIVE OK "..id.." parts="..p) end) if m then pcall(function() m:Destroy() end) end if not ok then print("WE_LIVE FAIL "..id.." "..tostring(err)) end end print("WE_LIVE DONE") end)
+   ```
 
 6. **Studio sound, image and mesh check** (Edit mode is fine). Paste the block and copy every `WE_CONTENT` line. The two `rbxasset://sounds/…wav` lines are expected to say Failure: that confirms the silent-UI finding.
 

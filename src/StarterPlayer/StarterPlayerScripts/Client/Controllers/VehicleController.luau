@@ -31,7 +31,13 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local VehicleController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] VehicleController: no ReplicatedStorage.Shared after 60 s; not started")
+	return VehicleController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -69,8 +75,6 @@ export type RowState = {
 	Reason: string?, -- Locked: short reason
 	Need: number?, -- CantAfford: cash missing
 }
-
-local VehicleController = {}
 
 local PANEL_ID = "Garage"
 
@@ -864,7 +868,13 @@ local function buildGui()
 	screen.Enabled = true
 	-- v70: DisplayOrder 60 (Panels) above the HUD rail (55); one HUD scale + safe area (HudLayout.ApplyScreen)
 	PanelShell.Screen(screen)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] VehicleController: no PlayerGui after 30 s; Garage panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()

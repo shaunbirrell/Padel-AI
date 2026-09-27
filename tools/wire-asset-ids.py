@@ -17,7 +17,16 @@ Commands
             [--allow-budget] [--dry-run] [--no-verify]
     demote <id|key ...> [--dry-run] [--no-verify]
                                  undo a promotion (journal in docs/asset_wiring.json); refuses when the text changed since
+    reject <id|key ...> | --all --we-check FILE [--dry-run] [--no-verify]
+                                 a REJECT row whose id the owner's WE_CHECK refused (parts > 40 or a Humanoid): remove its
+                                 PendingAssetId from each config target, keep ModelAssetId (every BuyPathStatic prefix pin
+                                 holds), rewrite the Note, refresh the status table. Undo = git revert (no journal).
     render [--check]             rewrite (or check) the generated status table in docs/ASSET_WIRING.md
+Check on record: STUDIO_DONE (below the registry) holds the part counts of the owner's WE_CHECK run (2026-09-25, Open
+Cloud Luau Execution in the live place, version 75), so status / render stop asking for it. HOLD names what still blocks a
+pick the check did not settle (a second check, a code fix, an owner call): promote refuses an id on HOLD until its HOLD
+line is deleted, in the same commit as the promote. YAW_HINT is the vehicle yaw read from the store pictures (wc2/veh);
+promote uses it when --yaw is not given. Promote still reads the WE_CHECK lines themselves (--we-check FILE).
 Global options: --root DIR (default: this repo), --cache DIR (default ~/.cache/war-empire/wire-asset-ids),
                 --now ISO-UTC (tests), --max-age SECONDS (ownership cache age accepted by promote, default 900).
 
@@ -31,7 +40,9 @@ Gates, in order (any failure refuses that id; nothing is half-written):
   4. flags: OWNER needs --owner-ok <id>; STUDIO needs a `WE_CHECK OK <id> ... parts=N ... humanoids=0` line in
      --we-check FILE with N <= 40 (docs/ASSET_SHORTLIST.md §5 step 5). A WE_CHECK FAIL line refuses. OMIT needs the
      config ref to hold OmitParts first (the part the Studio check named, e.g. a translucent bounds box).
-  5. vehicles get Fit = "Kit", Yaw, HideKit, StripDecals; Yaw 0 when the WE_CHECK size has Z >= X, else 90 (--yaw).
+     Then HOLD: an id on HOLD (below the registry) is refused until its HOLD line is deleted.
+  5. vehicles get Fit = "Kit", Yaw, HideKit, StripDecals; Yaw = --yaw, else YAW_HINT, else 0 when the WE_CHECK size has
+     Z >= X and 90 otherwise (that size rule is wrong for 4 of the 6 vehicle picks the check passed: wc2/veh).
   6. load budget: the distinct live VisualAssetService ids after the batch must stay <= MaxLoadAttempts - 8; and in
      an outage (every load fails, retries stop at MaxLoadAttempts - LoadRetryReserve), every id a PLOT / LATER chain
      can ask for (fallbacks included, boot ids excepted) needs one of the LoadRetryReserve first loads, and the boot
@@ -104,13 +115,13 @@ REGISTRY_ROWS = [
     ('SupplySpinner', 'DROPPERS / PRODUCERS', 'NO-FIELD', 97392503970266, 97392503970266, '', '-', '', [], [], '', 'not recommended: the spinner is a screen panel, not a world object'),
     ('CommandCenter', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 43803492, 43803492, 'OWNER INERT', 'never', 'P2', ['Buildings.CommandCenter'], [], '', '396 tris vs 232,800 (heavy id); roofless walled box, plainer than our shell; description "My Conquerors command center for Mastersticks11" (built for another Roblox game)'),
     ('Barracks', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 8637034739, 8637034739, 'INERT', 'never', 'P1i', ['Buildings.Barracks'], [], '', '2,596 tris vs 336,948; gabled hall, 37/3 votes'),
-    ('VehicleDepot', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 4005471827, 4005471827, 'STUDIO INERT', 'never', 'P2', ['Buildings.VehicleDepot'], [], '', '4,376 tris; thumbnail shows only a corner: bounds much larger than the building'),
+    ('VehicleDepot', 'BUILDINGS / STRUCTURES', 'REJECT', 4005471827, 4005471827, '', '-', '', ['Buildings.VehicleDepot'], [], '', 'owner check (Open Cloud, v75): 113 parts (cap 40), 12 lights'),
     ('WeaponsFacility', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 11850705638, 11850705638, 'OWNER INERT', 'never', 'P2', ['Buildings.WeaponsFacility'], [], '', '3,194 tris; neon sign "ARMORY 1"; description "crim inspired.." (probably the game Criminality, unverified)'),
     ('Helipad', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 45369635, 45369635, 'INERT', 'never', 'P1i', ['Buildings.Helipad'], [], '', '14-tri pad with H decal'),
-    ('Dock', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 13183571527, 13183571527, 'STUDIO INERT', 'never', 'P2', ['Buildings.Dock'], [], '', '4,198 tris, plank-by-plank: likely > 40 parts'),
+    ('Dock', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 13183571527, 13183571527, 'STUDIO INERT', 'never', 'P2', ['Buildings.Dock'], [], '', '4,198 tris; owner check (Open Cloud, v75): 2 parts; recorded only (PreferMesh off); fit not reviewed'),
     ('Airfield', 'BUILDINGS / STRUCTURES', 'NO-FIELD', 163825225, 163825225, '', '-', '', [], [], '', 'not recommended: the airfield builds its own runway'),
     ('Runway', 'BUILDINGS / STRUCTURES', 'NO-FIELD', 163825225, 163825225, '', '-', '', [], [], '', 'needs the world-model overlay job (W-OVERLAY)'),
-    ('Watchtowers', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 52154909, 52154909, 'STUDIO INERT', 'never', 'P2', ['Buildings.Watchtowers'], [], '', '2011 model, no toolbox tri summary; tripod lamps may carry Lights'),
+    ('Watchtowers', 'BUILDINGS / STRUCTURES', 'REJECT', 52154909, 52154909, '', '-', '', ['Buildings.Watchtowers'], [], '', 'owner check (Open Cloud, v75): 135 parts (cap 40), 19 scripts, 20 fire/smoke effects'),
     ('Radar', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 856258654, 856258654, 'INERT', 'never', 'P1i', ['Buildings.Radar'], [], '', '7,600 tris (one per base max)'),
     ('ResearchLab', 'BUILDINGS / STRUCTURES', 'REJECT', 115528226, 115528226, '', '-', '', [], [], '', 'wrong item: a spiky sci-fi hull listed as a vehicle'),
     ('MissileDefense', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 3461514733, 3461514733, 'INERT', 'never', 'P1i', ['Buildings.MissileDefense'], [], '', '1,144 tris toy single missile, no better than kit'),
@@ -119,7 +130,7 @@ REGISTRY_ROWS = [
     ('SpecialForcesFacility', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 10112923897, 10112923897, 'WEAK INERT', 'never', 'P1i', ['Buildings.SpecialForcesFacility'], [], '', '4,680 tris; translucent roof sheet (overdraw)'),
     ('EmpireBank', 'BUILDINGS / STRUCTURES', 'REJECT', 10153551618, 10153551618, '', '-', '', [], [], '', "wrong item: this store 'bank' is a park bench"),
     ('HomeOutpost', 'BUILDINGS / STRUCTURES', 'LIVE-NOW', 80566030, 80566030, '', 'BOOT', '', ['Landmarks.HomeOutpost'], [], '', 'Roblox Capture Points pad at each Home Outpost (its beam and highlight parts dropped)'),
-    ('Hangar', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 5343886540, 5343886540, 'OWNER STUDIO INERT', 'never', 'P2', ['Buildings.Hangar'], [], '', '10,358 tris vs 45,887; plain block, no opening visible; store description "[ Content Deleted ]" (moderated text)'),
+    ('Hangar', 'BUILDINGS / STRUCTURES', 'REJECT', 5343886540, 5343886540, '', '-', '', ['Buildings.Hangar'], [], '', 'owner check (Open Cloud, v75): 871 parts (cap 40), 4 lights'),
     ('Bunker', 'BUILDINGS / STRUCTURES', 'NO-FIELD', 62623350, 62623350, '', '-', '', [], [], '', 'needs the world-model overlay job (W-OVERLAY); 43 parts, 3 wedges must be dropped'),
     ('Tent', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 182529039, 182529039, '', 'BOOT', 'P1', ['WarzoneProps.Tent'], [], '', '3,908 tris, 2610/390 votes, shortlist P1'),
     ('MarketStall', 'BUILDINGS / STRUCTURES', 'NO-FIELD', 13958174035, 13958174035, 'STUDIO', '-', '', [], [], '', 'needs the world-model overlay job (W-OVERLAY)'),
@@ -139,7 +150,7 @@ REGISTRY_ROWS = [
     ('AmmoShed', 'BUILDINGS / STRUCTURES', 'NO-FIELD', 9359074735, 9359074735, '', '-', '', [], [], '', 'needs the world-model overlay job (W-OVERLAY)'),
     ('Fountain', 'BUILDINGS / STRUCTURES', 'REJECT', 56447829, 56447829, '', '-', '', [], [], '', '47 parts (over the 40-part cap), and it is a well'),
     ('DefensiveWalls', 'WALLS / BARRIERS', 'PENDING-GET', 6980242709, 6980242709, 'STUDIO', 'PLOT', 'P2', ['Buildings.DefensiveWalls'], [], '', '240 tris, 485/15 votes; StructureKitBuilder.SyncPerimeterWalls calls TryAttachBuildingVisual directly (NOT behind PreferMesh), max 4 segments per plot'),
-    ('DefensiveWallsL3', 'WALLS / BARRIERS', 'PENDING-GET', 8333853928, 8333853928, 'STUDIO', 'PLOT', 'P2', ['Buildings.DefensiveWallsL3'], [], '', '486-tri T-wall; would load at PLOT for L3+ walls'),
+    ('DefensiveWallsL3', 'WALLS / BARRIERS', 'REJECT', 8333853928, 8333853928, '', '-', '', ['Buildings.DefensiveWallsL3'], [], '', 'owner check (Open Cloud, v75): 46 parts (cap 40); wall models cannot leave parts out'),
     ('BaseGate', 'WALLS / BARRIERS', 'NO-FIELD', 199293130, 199293130, '', '-', '', [], [], '', 'needs one call in StructureKitBuilder (gate arch dress)'),
     ('CompoundWall', 'WALLS / BARRIERS', 'REJECT', 3528925155, 3528925155, '', '-', '', [], [], '', 'wrong scale: a stone ring around a whole 512-stud baseplate'),
     ('WireFence', 'WALLS / BARRIERS', 'NO-FIELD', 2680065782, 2680065782, '', '-', '', [], [], '', 'needs the world-model overlay job (W-OVERLAY)'),
@@ -169,7 +180,7 @@ REGISTRY_ROWS = [
     ('FuelTanker', 'VEHICLES', 'PENDING-GET', 5318635087, 5318635087, 'STUDIO', 'LATER', 'P3', ['Vehicles.FuelTanker'], [], '', 'toy-like red/silver tanker, 3,432 tris, Part-built (count unverified)'),
     ('EngineeringTruck', 'VEHICLES', 'REJECT', 32520888, 32520888, '', '-', '', [], [], '', 'cannot be checked: the only picture shows the inside of a block'),
     ('FlatbedHauler', 'VEHICLES', 'PENDING-GET', 8455894899, 8455894899, 'STUDIO', 'LATER', 'P3', ['Vehicles.FlatbedHauler'], [], '', 'low-poly flatbed, 1,040 tris; 1 decal unseen'),
-    ('RadarTruck', 'VEHICLES', 'PENDING-GET', 31538715, 31538715, 'STUDIO', 'LATER', 'P3', ['Vehicles.RadarTruck'], [], '', 'blocky olive truck with radar panel, 2,256 tris; 1 decal unseen'),
+    ('RadarTruck', 'VEHICLES', 'REJECT', 31538715, 31538715, '', '-', '', ['Vehicles.RadarTruck'], [], '', 'owner check (Open Cloud, v75): 93 parts (cap 40)'),
     ('MineClearer', 'VEHICLES', 'REJECT', 4128281751, 4128281751, '', '-', '', [], [], '', 'wrong item (a wheel loader) and unclear origin'),
     ('PremiumBastion', 'VEHICLES', 'DEFERRED', 16835152672, 16835152672, '', '-', '', [], [], '', 'VehicleConfig + VehicleService (streaming2-build): premium vehicle def'),
     ('APC', 'VEHICLES', 'PENDING-GET', 9076240315, 9076240315, 'STUDIO', 'LATER', 'P3', ['Vehicles.APC'], [], '', 'fictional wedge APC, 3,314 tris, 3 MeshParts; wheels not visible in the thumbnail'),
@@ -177,12 +188,12 @@ REGISTRY_ROWS = [
     ('CommandVehicle', 'VEHICLES', 'PENDING-GET', 9076240315, 9076240315, 'STUDIO', 'LATER', 'P3', ['Vehicles.CommandVehicle'], [], '', 'fictional wedge APC, 3,314 tris, 3 MeshParts; wheels not visible in the thumbnail'),
     ('WheeledIFV', 'VEHICLES', 'PENDING-GET', 9076240315, 9076240315, 'STUDIO', 'LATER', 'P3', ['Vehicles.WheeledIFV'], [], '', 'fictional wedge APC, 3,314 tris, 3 MeshParts; wheels not visible in the thumbnail'),
     ('AmphibiousAPC', 'VEHICLES', 'PENDING-GET', 9076240315, 9076240315, 'STUDIO', 'LATER', 'P3', ['Vehicles.AmphibiousAPC'], [], '', 'fictional wedge APC, 3,314 tris, 3 MeshParts; wheels not visible in the thumbnail'),
-    ('CombatIFV', 'VEHICLES', 'PENDING-GET', 11552687660, 11552687660, 'STUDIO', 'LATER', 'P3', ['Vehicles.CombatIFV'], [], '', 'fictional tracked IFV, 12,866 tris all Parts (likely > 40: the loader refuses it and the Part kit stays); store description has real-nation jingoism (never shown)'),
-    ('AssaultIFV', 'VEHICLES', 'PENDING-GET', 11552687660, 11552687660, 'STUDIO', 'LATER', 'P3', ['Vehicles.AssaultIFV'], [], '', 'fictional tracked IFV, 12,866 tris all Parts (likely > 40: the loader refuses it and the Part kit stays); store description has real-nation jingoism (never shown)'),
-    ('FlameCarrier', 'VEHICLES', 'PENDING-GET', 11552687660, 11552687660, 'STUDIO', 'LATER', 'P3', ['Vehicles.FlameCarrier'], [], '', 'fictional tracked IFV, 12,866 tris all Parts (likely > 40: the loader refuses it and the Part kit stays); store description has real-nation jingoism (never shown)'),
+    ('CombatIFV', 'VEHICLES', 'REJECT', 11552687660, 11552687660, '', '-', '', ['Vehicles.CombatIFV'], [], '', 'owner check (Open Cloud, v75): 321 parts (cap 40)'),
+    ('AssaultIFV', 'VEHICLES', 'REJECT', 11552687660, 11552687660, '', '-', '', ['Vehicles.AssaultIFV'], [], '', 'owner check (Open Cloud, v75): 321 parts (cap 40)'),
+    ('FlameCarrier', 'VEHICLES', 'REJECT', 11552687660, 11552687660, '', '-', '', ['Vehicles.FlameCarrier'], [], '', 'owner check (Open Cloud, v75): 321 parts (cap 40)'),
     ('BridgeLayer', 'VEHICLES', 'KEEP-PART-KIT', 11552687660, 11552687660, '', '-', '', ['Vehicles.BridgeLayer'], [], '', "you said no good match: keep our build (it never borrows another tank's body)"),
-    ('MissileTruck', 'VEHICLES', 'PENDING-GET', 3304171953, 3304171953, 'STUDIO', 'LATER', 'P3', ['Vehicles.MissileTruck'], [], '', 'blocky MRL truck, 3,048 tris'),
-    ('RocketArtillery', 'VEHICLES', 'PENDING-GET', 3304171953, 3304171953, 'STUDIO', 'LATER', 'P3', ['Vehicles.RocketArtillery'], [], '', 'blocky MRL truck, 3,048 tris'),
+    ('MissileTruck', 'VEHICLES', 'REJECT', 3304171953, 3304171953, '', '-', '', ['Vehicles.MissileTruck'], [], '', 'owner check (Open Cloud, v75): 219 parts (cap 40)'),
+    ('RocketArtillery', 'VEHICLES', 'REJECT', 3304171953, 3304171953, '', '-', '', ['Vehicles.RocketArtillery'], [], '', 'owner check (Open Cloud, v75): 219 parts (cap 40)'),
     ('LightTank', 'VEHICLES', 'KEEP-PART-KIT', 13049288544, 13049288544, 'WEAK', '-', '', [], [], '', '[WEAK]; a green box tank, cruder than our tank kit (7 tanks would share it)'),
     ('MediumTank', 'VEHICLES', 'KEEP-PART-KIT', 13049288544, 13049288544, 'WEAK', '-', '', [], [], '', '[WEAK]; a green box tank, cruder than our tank kit (7 tanks would share it)'),
     ('HeavyTank', 'VEHICLES', 'KEEP-PART-KIT', 13049288544, 13049288544, 'WEAK', '-', '', [], [], '', '[WEAK]; a green box tank, cruder than our tank kit (7 tanks would share it)'),
@@ -191,17 +202,17 @@ REGISTRY_ROWS = [
     ('AssaultGun', 'VEHICLES', 'KEEP-PART-KIT', 13049288544, 13049288544, 'WEAK', '-', '', [], [], '', '[WEAK]; a green box tank, cruder than our tank kit (7 tanks would share it)'),
     ('LightScoutTank', 'VEHICLES', 'KEEP-PART-KIT', 13049288544, 13049288544, 'WEAK', '-', '', [], [], '', '[WEAK]; a green box tank, cruder than our tank kit (7 tanks would share it)'),
     ('PremiumWarlord', 'VEHICLES', 'KEEP-PART-KIT', 93078960435881, 93078960435881, 'WEAK', '-', '', [], [], '', '[WEAK]; brick-built toy tank, far over 40 parts; paid slot'),
-    ('SPAAG', 'VEHICLES', 'PENDING-GET', 10069416832, 10069416832, 'STUDIO WEAK', 'LATER', 'P3', ['Vehicles.SPAAG'], [], '', 'fictional twin-gatling SPAAG, 12,554 tris all Parts (count unverified)'),
-    ('MobileSAM', 'VEHICLES', 'PENDING-GET', 10069416832, 10069416832, 'STUDIO WEAK', 'LATER', 'P3', ['Vehicles.MobileSAM'], [], '', 'fictional twin-gatling SPAAG, 12,554 tris all Parts (count unverified)'),
+    ('SPAAG', 'VEHICLES', 'REJECT', 10069416832, 10069416832, '', '-', '', ['Vehicles.SPAAG'], [], '', 'owner check (Open Cloud, v75): 301 parts (cap 40)'),
+    ('MobileSAM', 'VEHICLES', 'REJECT', 10069416832, 10069416832, '', '-', '', ['Vehicles.MobileSAM'], [], '', 'owner check (Open Cloud, v75): 301 parts (cap 40)'),
     ('MortarCarrier', 'VEHICLES', 'KEEP-PART-KIT', 8182414481, 8182414481, 'WEAK', '-', '', [], [], '', '[WEAK]; a tripod mortar with no vehicle'),
     ('MobileArtillery', 'VEHICLES', 'KEEP-PART-KIT', 10745209274, 10745209274, 'WEAK', '-', '', [], [], '', '[WEAK]; a crude block gun, worse than our kit'),
     ('HowitzerTruck', 'VEHICLES', 'KEEP-PART-KIT', 10745209274, 10745209274, 'WEAK', '-', '', [], [], '', '[WEAK]; a crude block gun, worse than our kit'),
     ('SiegeMortar', 'VEHICLES', 'KEEP-PART-KIT', 10745209274, 10745209274, 'WEAK', '-', '', [], [], '', '[WEAK]; a crude block gun, worse than our kit'),
     ('LightScoutHeli', 'VEHICLES', 'PENDING-GET', 2474869838, 2474869838, 'STUDIO', 'LATER', 'P3', ['Vehicles.LightScoutHeli'], [], '', 'untextured low-poly heli, 1,016 tris, 1 MeshPart'),
     ('UtilityHeli', 'VEHICLES', 'PENDING-GET', 2474869838, 2474869838, 'STUDIO', 'LATER', 'P3', ['Vehicles.UtilityHeli'], [], '', 'untextured low-poly heli, 1,016 tris, 1 MeshPart'),
-    ('TransportHeli', 'VEHICLES', 'PENDING-GET', 2627182035, 2627182035, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.TransportHeli'], [], '', 'tandem-rotor layout reads CH-47-like; 14,826 tris all Parts (likely > 40)'),
-    ('HeavyLiftHeli', 'VEHICLES', 'PENDING-GET', 2627182035, 2627182035, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.HeavyLiftHeli'], [], '', 'tandem-rotor layout reads CH-47-like; 14,826 tris all Parts (likely > 40)'),
-    ('LightTransportHeli', 'VEHICLES', 'PENDING-GET', 2627182035, 2627182035, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.LightTransportHeli'], [], '', 'tandem-rotor layout reads CH-47-like; 14,826 tris all Parts (likely > 40)'),
+    ('TransportHeli', 'VEHICLES', 'REJECT', 2627182035, 2627182035, '', '-', '', ['Vehicles.TransportHeli'], [], '', 'owner check (Open Cloud, v75): 109 parts (cap 40)'),
+    ('HeavyLiftHeli', 'VEHICLES', 'REJECT', 2627182035, 2627182035, '', '-', '', ['Vehicles.HeavyLiftHeli'], [], '', 'owner check (Open Cloud, v75): 109 parts (cap 40)'),
+    ('LightTransportHeli', 'VEHICLES', 'REJECT', 2627182035, 2627182035, '', '-', '', ['Vehicles.LightTransportHeli'], [], '', 'owner check (Open Cloud, v75): 109 parts (cap 40)'),
     ('GunshipHeli', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
     ('AttackHelicopter', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
     ('EscortHeli', 'VEHICLES', 'REJECT', 14652689347, 14652689347, '', '-', '', [], [], '', 'copy of a game-franchise gunship (Half-Life 2)'),
@@ -221,10 +232,10 @@ REGISTRY_ROWS = [
     ('LightFighter', 'VEHICLES', 'PENDING-GET', 3553891209, 3553891209, 'STUDIO', 'LATER', 'P3', ['Vehicles.LightFighter'], [], '', "fictional concept fighter, 3,032 tris, 1 MeshPart; the 2026-09-24 judge's JetFighter pick"),
     ('StrikeBomber', 'VEHICLES', 'REJECT', 12592130497, 12592130497, '', '-', '', [], [], '', 'national-style roundel on the wing; made by someone else'),
     ('ReconPlane', 'VEHICLES', 'PENDING-GET', 4954987035, 4954987035, 'OWNER STUDIO', 'LATER', 'P3', ['Vehicles.ReconPlane'], [], '', 'crude wood-textured plane (reads as a wooden toy; lane B: worse than the kit)'),
-    ('PatrolBoat', 'VEHICLES', 'PENDING-GET', 5177695483, 5177695483, 'STUDIO', 'LATER', 'P3', ['Vehicles.PatrolBoat'], [], '', 'RHIB-style patrol boat, 4,562 tris; 1 decal unseen (coast-guard text risk)'),
-    ('FastAttackCraft', 'VEHICLES', 'PENDING-GET', 5177695483, 5177695483, 'STUDIO', 'LATER', 'P3', ['Vehicles.FastAttackCraft'], [], '', 'RHIB-style patrol boat, 4,562 tris; 1 decal unseen (coast-guard text risk)'),
-    ('CoastCutter', 'VEHICLES', 'PENDING-GET', 5177695483, 5177695483, 'STUDIO', 'LATER', 'P3', ['Vehicles.CoastCutter'], [], '', 'RHIB-style patrol boat, 4,562 tris; 1 decal unseen (coast-guard text risk)'),
-    ('TorpedoBoat', 'VEHICLES', 'PENDING-GET', 5177695483, 5177695483, 'STUDIO', 'LATER', 'P3', ['Vehicles.TorpedoBoat'], [], '', 'RHIB-style patrol boat, 4,562 tris; 1 decal unseen (coast-guard text risk)'),
+    ('PatrolBoat', 'VEHICLES', 'REJECT', 5177695483, 5177695483, '', '-', '', ['Vehicles.PatrolBoat'], [], '', 'owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long'),
+    ('FastAttackCraft', 'VEHICLES', 'REJECT', 5177695483, 5177695483, '', '-', '', ['Vehicles.FastAttackCraft'], [], '', 'owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long'),
+    ('CoastCutter', 'VEHICLES', 'REJECT', 5177695483, 5177695483, '', '-', '', ['Vehicles.CoastCutter'], [], '', 'owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long'),
+    ('TorpedoBoat', 'VEHICLES', 'REJECT', 5177695483, 5177695483, '', '-', '', ['Vehicles.TorpedoBoat'], [], '', 'owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long'),
     ('Gunboat', 'VEHICLES', 'PENDING-GET', 15838664806, 15838664806, 'STUDIO', 'LATER', 'P3', ['Vehicles.Gunboat'], [], '', 'clean low-poly gunboat, 4,428 tris'),
     ('MissileBoat', 'VEHICLES', 'PENDING-GET', 15838664806, 15838664806, 'STUDIO', 'LATER', 'P3', ['Vehicles.MissileBoat'], [], '', 'clean low-poly gunboat, 4,428 tris'),
     ('MineLayer', 'VEHICLES', 'PENDING-GET', 15838664806, 15838664806, 'STUDIO', 'LATER', 'P3', ['Vehicles.MineLayer'], [], '', 'clean low-poly gunboat, 4,428 tris'),
@@ -237,9 +248,9 @@ REGISTRY_ROWS = [
     ('Frigate', 'VEHICLES', 'KEEP-PART-KIT', 418143173, 418143173, 'WEAK', '-', '', [], [], '', '[WEAK]; a plain hull with no guns; our warship kit reads better'),
     ('CarrierEscort', 'VEHICLES', 'KEEP-PART-KIT', 418143173, 418143173, 'WEAK', '-', '', [], [], '', '[WEAK]; a plain hull with no guns; our warship kit reads better'),
     ('RiverBoat', 'VEHICLES', 'REJECT', 44658425, 44658425, '', '-', '', [], [], '', 'wrong item (a theme-park raft) and made by someone else'),
-    ('HoverTransport', 'VEHICLES', 'PENDING-GET', 43773162, 43773162, 'STUDIO', 'LATER', 'P3', ['Vehicles.HoverTransport'], [], '', 'single-seat hovercraft, 12,160 tris, 1 script stripped'),
+    ('HoverTransport', 'VEHICLES', 'REJECT', 43773162, 43773162, '', '-', '', ['Vehicles.HoverTransport'], [], '', 'owner check (Open Cloud, v75): 211 parts (cap 40)'),
     ('HospitalShip', 'VEHICLES', 'REJECT', 12209928092, 12209928092, '', '-', '', [], [], '', 'red-cross emblems and a copy of a named real ship'),
-    ('SupplyShip', 'VEHICLES', 'PENDING-GET', 11756438288, 11756438288, 'STUDIO', 'LATER', 'P3', ['Vehicles.SupplyShip'], [], '', 'generic coastal cargo ship, 6,176 tris'),
+    ('SupplyShip', 'VEHICLES', 'REJECT', 11756438288, 11756438288, '', '-', '', ['Vehicles.SupplyShip'], [], '', 'owner check (Open Cloud, v75): 174 parts (cap 40)'),
     ('PremiumTidebreaker', 'VEHICLES', 'DEFERRED', 4128350737, 4128350737, 'OWNER STUDIO', '-', '', [], [], '', 'VehicleConfig + VehicleService (streaming2-build): premium vehicle def, then a Studio look'),
     ('Soldier', 'SOLDIERS / UNITS', 'RIG', 187790284, 187790284, '', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
     ('Infantry', 'SOLDIERS / UNITS', 'RIG', 187790284, 187790284, '', '-', '', [], [], '', 'needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues)'),
@@ -465,6 +476,37 @@ STORE = {
 NOT_OWNED_0805 = [89668347, 94690081, 232379763, 4559046046]
 # fmt: on
 # <<< REGISTRY
+
+# The owner's check on record (docs/ASSET_SHORTLIST.md §5 step 5, without the kids= field): run on 2026-09-25 through Open
+# Cloud Luau Execution in the live place (version 75) as shaunie6. All 24 ids loaded (via=InsertService).
+# id -> WE_CHECK parts (the lines themselves: docs/ASSET_WIRING.md §5). Display only; promote reads --we-check FILE.
+STUDIO_CHECK_SOURCE = "owner's Open Cloud run in the live place, version 75, 2026-09-25"
+STUDIO_CHECK_DATE = "2026-09-25"
+STUDIO_DONE: dict[int, int] = {
+    114570602: 31, 52154909: 135, 4005471827: 113, 5343886540: 871, 6980242709: 20, 8333853928: 46, 13183571527: 2,
+    31538715: 93, 43773162: 211, 2474869838: 1, 2627182035: 109, 3304171953: 219, 3553891209: 25, 4954987035: 20,
+    5177695483: 114, 5318635087: 55, 8455894899: 53, 8546141386: 1, 9076240315: 12, 10069416832: 301, 11357157285: 78,
+    11552687660: 321, 11756438288: 174, 15838664806: 3,
+}
+# Waiting picks the check did not settle (wc2 analysts, 2026-09-25; rebuilt on 5e021d8): id -> what still blocks the promote.
+# Promote refuses an id listed here; delete its line in the same commit as its promote. The status table shows the text.
+HOLD: dict[int, str] = {
+    3553891209: "your call 12 (load by id, or bake after each publish)",  # passes every gate; waits on the owner's call
+    6980242709: "a VisualAssetService wall-fit fix, then the second check",  # its only caller would bury it in the wall
+    2474869838: "second check (which way the nose points)",
+    9076240315: "second check + a driver-seat code fix",  # the driver would sit above the roof (stand-in)
+    15838664806: "second check (the 2,048-stud part) + a scale code fix",
+    8546141386: "second check (which end is the cab)",
+    4954987035: "second check (which end is the nose)",
+    5318635087: "second check (which small parts can go)",
+    8455894899: "second check (which small parts can go)",
+    11357157285: "second check (a smaller part of it)",
+}
+# Vehicle yaw read from the store pictures (wc2/veh, calibrated on Roblox's own car packs); promote uses it when --yaw is
+# not given. The second check (WE_CHECK2) may correct it: pass --yaw to override.
+YAW_HINT: dict[int, int] = {
+    3553891209: 90, 2474869838: 90, 9076240315: 0, 8546141386: 180, 4954987035: -90, 15838664806: -90,
+}
 
 DECISION_LABEL = {
     "LIVE-NOW": "wired (Roblox-owned)",
@@ -1368,19 +1410,26 @@ def gate_text(r: Row, state: str) -> str:
         why = r.why if len(r.why) <= 90 else r.why[:87].rstrip() + "…"
         return why.replace("|", "/")
     if state == "live":
-        return "promoted (live)"
+        return "promoted (recorded only)" if "INERT" in r.flags else "promoted (live)"
     if state != "pending":
         return "not in config yet"
     need = []
     if "OWNER" in r.flags:
         need.append("your yes/no")
-    if "STUDIO" in r.flags:
+    done = ""
+    if "STUDIO" in r.flags and r.id in STUDIO_DONE:
+        n = STUDIO_DONE[r.id]
+        done = (f"check passed ({n} part{'' if n == 1 else 's'}); " if n <= MAX_PARTS
+                else f"check: {n} parts (over {MAX_PARTS}); ")
+    elif "STUDIO" in r.flags:
         need.append("Studio check")
     if "OMIT" in r.flags:
         need.append("OmitParts")
+    if r.id in HOLD:
+        need.append(HOLD[r.id])
     base = " + ".join(need) if need else "ready"
     extra = " (recorded only)" if "INERT" in r.flags else ""
-    return f"{base}, batch {r.batch}{extra}"
+    return f"{done}{base}, batch {r.batch}{extra}"
 
 
 def render_status(tree: Tree) -> str:
@@ -1655,6 +1704,8 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
             no_omit = [r.targets[0] for r in rows if tree.vac.raw(r.targets[0], "OmitParts") is None]
             if no_omit:
                 why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"
+        if not why and aid in HOLD:
+            why = f"on hold: {HOLD[aid]} (docs/ASSET_WIRING.md §5; delete its HOLD line in this tool when that is done)"
         if not why:
             for r in rows:
                 if r.targets and r.targets[0].startswith("Businesses."):
@@ -1665,7 +1716,7 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
             lines_out.append(f"REFUSED {aid} ({keys}): {why}")
             refused_n += 1
             continue
-        yaw = yaw_override.get(aid)
+        yaw = yaw_override.get(aid, YAW_HINT.get(aid))
         if yaw is None and wc and wc.get("size"):
             x, _y, z = wc["size"]
             yaw = 0 if z >= x else 90
@@ -1683,7 +1734,9 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
             swap_paths: list[str] = []
             used_by: list[str] = []
             weak = any("WEAK" in r.flags for r in rows)
-            note = f"owner pick: {s[0]} by {s[1]} (promoted {today} by tools/wire-asset-ids.py{'; [WEAK] use but flag' if weak else ''})"
+            inert = all("INERT" in r.flags for r in rows)
+            note = (f"owner pick: {s[0]} by {s[1]} (promoted {today} by tools/wire-asset-ids.py{'; [WEAK] use but flag' if weak else ''}"
+                    f"{'; recorded only: not loaded while PreferMesh is off, fit not reviewed' if inert else ''})")
             for r in rows:
                 vehicle = r.targets[0].startswith("Vehicles.")
                 fields = [("Fit", '"Kit"'), ("Yaw", str(plan["yaw"])), ("HideKit", "true"), ("StripDecals", "true")] if vehicle else []
@@ -1852,7 +1905,9 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
         print(f"BuyPathStatic after: {after_msg} (no new FAIL)")
     print(f"written: {', '.join(files.changed())}")
     print("next: run the fix57 census (cap_refused must stay 0), then commit these files together.")
-    print("phone test: " + "; ".join(f"{plain(r.key)} shows the new model (Part kit if it fails)" for aid in ok_ids for r in PENDING_BY_ID[aid][:3]))
+    print("phone test: " + "; ".join(
+        (f"{plain(r.key)}: nothing changes on screen (recorded only; our Part build stays)" if "INERT" in r.flags
+         else f"{plain(r.key)} shows the new model (Part kit if it fails)") for aid in ok_ids for r in PENDING_BY_ID[aid][:3]))
     print("suggested commit: feat(assets): promote owner picks " + ", ".join(str(i) for i in ok_ids) + " (tools/wire-asset-ids.py)")
     return 0 if refused_n == 0 else 1
 
@@ -1936,6 +1991,136 @@ def cmd_demote(a: argparse.Namespace, root: Path) -> int:
     return 0 if bad == 0 else 1
 
 
+def reject_note(r: Row, path: str, old_note: str | None, live: int, wc: dict) -> str:
+    """The Note of a ref whose owner pick the check refused (text before 'owner pick' in the old Note is kept)."""
+    s = STORE[r.id]
+    prefix = ""
+    if old_note and old_note.startswith('"') and old_note.endswith('"'):
+        i = old_note[1:-1].find("owner pick")
+        prefix = old_note[1:-1][:i] if i > 0 else ""
+    parts = wc.get("parts") or 0
+    why = f"{parts} parts > {MAX_PARTS}" if parts > MAX_PARTS else f"{wc.get('humanoids')} Humanoid"
+    if path.startswith("Vehicles."):
+        tail = "family body / Part kit"
+    elif live > 0:
+        tail = "the current id stays (inert while PreferMesh is off)"
+    elif path == "Buildings.DefensiveWallsL3":
+        tail = "L3+ walls read DefensiveWalls next, else the Part kit"
+    else:
+        tail = "Part kit"
+    return f"{prefix}owner pick {s[0].strip()} ({s[1]}) not used: owner check {STUDIO_CHECK_DATE} (Open Cloud, v75), {why} - {tail}"
+
+
+def cmd_reject(a: argparse.Namespace, root: Path) -> int:
+    we = parse_we_check(Path(a.we_check).read_text(encoding="utf-8"))
+    rej_rows: dict[int, list[Row]] = {}
+    for r in ordered_rows():
+        if r.decision == "REJECT" and r.targets:
+            rej_rows.setdefault(r.id, []).append(r)
+    ids: list[int] = []
+    lines_out: list[str] = []
+    bad = 0
+    for x in (sorted(rej_rows) if a.all else a.targets):
+        aid = int(x) if str(x).isdigit() else (REG[x].id if x in REG else -1)
+        if aid not in rej_rows:
+            known = REG.get(str(x)) or next((r for r in REG.values() if r.id == aid), None)
+            if known is None:
+                why = "unknown id or key"
+            elif known.decision == "REJECT":
+                why = f"{known.key} is a REJECT row with no config target (nothing to clean)"
+            else:
+                why = f"{known.key} is {known.decision}: set its registry row to REJECT with the WE_CHECK numbers first"
+            lines_out.append(f"REFUSED {x}: {why}")
+            bad += 1
+        elif aid not in ids:
+            ids.append(aid)
+    files = Files(root)
+    vac = files.get(VAC_REL) or ""
+    done: list[int] = []
+    for aid in ids:
+        rows = rej_rows[aid]
+        keys = ", ".join(r.key for r in rows)
+        wc = we.get(aid)
+        if not wc:
+            lines_out.append(f"REFUSED {aid} ({keys}): no WE_CHECK line in {a.we_check}")
+            bad += 1
+            continue
+        if not wc["ok"]:
+            lines_out.append(f"REFUSED {aid} ({keys}): WE_CHECK FAIL ({wc['why']}) is a load failure, not a part count; re-run the check")
+            bad += 1
+            continue
+        if (wc.get("parts") or 0) <= MAX_PARTS and not wc.get("humanoids"):
+            lines_out.append(f"REFUSED {aid} ({keys}): WE_CHECK parts={wc.get('parts')} humanoids={wc.get('humanoids')} passes; promote it instead")
+            bad += 1
+            continue
+        before = vac
+        try:
+            changed_paths: list[str] = []
+            for r in rows:
+                for path in r.targets:
+                    cfg = Config(vac, VAC_REL)
+                    pend = cfg.raw(path, "PendingAssetId")
+                    if pend is None:
+                        continue
+                    if pend != str(aid):
+                        raise ToolError(f"{path}: PendingAssetId is {pend}, not {aid}")
+                    live = cfg.num(path)
+                    note = reject_note(r, path, cfg.raw(path, "Note"), live, wc)
+                    vac, _old = promote_ref_text(vac, VAC_REL, path, live, aid, [], note)
+                    changed_paths.append(path)
+        except ToolError as e:
+            vac = before
+            lines_out.append(f"REFUSED {aid} ({keys}): {e}")
+            bad += 1
+            continue
+        if not changed_paths:
+            lines_out.append(f"ALREADY CLEAN {aid} ({keys}): no PendingAssetId left")
+            continue
+        done.append(aid)
+        lines_out.append(f"{'WOULD REJECT' if a.dry_run else 'REJECTED'} {aid} (WE_CHECK parts={wc.get('parts')}): "
+                         f"PendingAssetId removed from {', '.join(changed_paths)}; ModelAssetId unchanged")
+    for ln in lines_out:
+        print(ln)
+    if not done:
+        print("nothing to reject")
+        return 1 if bad else 0
+    for h in HEAVY_IDS:
+        if id_token(h).search(vac) and not id_token(h).search(files.orig.get(VAC_REL) or ""):
+            raise ToolError(f"rule 5 id {h} would appear")
+    files.set(VAC_REL, vac)
+    try:
+        doc = files.get(WIRING_REL)
+        if doc is not None:
+            t2 = Tree(root)
+            t2.vac = Config(vac, VAC_REL)
+            files.set(WIRING_REL, replace_status_block(doc, render_status(t2)))
+    except ToolError as e:
+        print(f"WARN status table not refreshed: {e}")
+    if a.dry_run:
+        sys.stdout.write(files.diff())
+        print(f"dry run: {len(files.changed())} files would change: {', '.join(files.changed())}; nothing written")
+        return 0 if bad == 0 else 1
+    base_fail, base_lines = None, []
+    if not a.no_verify:
+        base_fail, base_lines, base_msg = run_bps(root)
+        print(f"BuyPathStatic before: {base_msg}")
+    files.write()
+    if not a.no_verify:
+        err = compile_luau(root, [r for r in files.changed() if r.endswith(".luau")])
+        after_fail, after_lines, after_msg = run_bps(root)
+        new_fails = [ln for ln in after_lines if ln not in base_lines]
+        if err or after_fail is None or new_fails or (base_fail == 0 and after_fail != 0):
+            files.restore()
+            print(f"VERIFY FAILED ({err or after_msg}); every file restored")
+            for ln in new_fails[:20]:
+                print("  " + ln)
+            return 1
+        print(f"BuyPathStatic after: {after_msg} (no new FAIL)")
+    print(f"written: {', '.join(files.changed())}")
+    print("load budget: unchanged (a PendingAssetId is never loaded). Commit with the registry rows and docs/ASSET_WIRING.md §6.1.")
+    return 0 if bad == 0 else 1
+
+
 def cmd_status(a: argparse.Namespace, root: Path) -> int:
     tree = Tree(root)
     rows = []
@@ -1944,7 +2129,8 @@ def cmd_status(a: argparse.Namespace, root: Path) -> int:
         live = tree.row_live_id(r)
         pend = tree.vac.raw(r.targets[0], "PendingAssetId") if r.targets and tree.vac.has(r.targets[0]) else None
         rows.append({"key": r.key, "decision": r.decision, "id": r.id, "live": live, "pending": pend, "flags": sorted(r.flags),
-                     "batch": r.batch, "state": state, "gate": gate_text(r, state), "owned_0805": owned_0805(r.id) if r.id else None})
+                     "batch": r.batch, "state": state, "gate": gate_text(r, state), "owned_0805": owned_0805(r.id) if r.id else None,
+                     "studio_parts": STUDIO_DONE.get(r.id), "hold": HOLD.get(r.id) if r.decision == "PENDING-GET" else None})
     proj = project_live_ids(tree.vac, tree.svc, tree.families)
     boot_ids, after_ids = outage_ids(tree.vac, tree.svc, tree.families)
     reserve = retry_reserve(tree.vac)
@@ -1969,6 +2155,8 @@ def cmd_status(a: argparse.Namespace, root: Path) -> int:
     print(f"load budget: {len(proj)} distinct live VisualAssetService ids (cap {budget_cap(tree.vac)})")
     print(f"outage budget: {len(after_ids)} ids first asked after boot (LoadRetryReserve {reserve}); "
           f"{len(boot_ids)} boot ids (MaxLoadAttempts - LoadRetryReserve = {max_attempts(tree.vac) - reserve})")
+    print(f"check on record: {len(STUDIO_DONE)} ids ({STUDIO_CHECK_SOURCE}); on hold: "
+          + (", ".join(f"{i} ({HOLD[i]})" for i in sorted(HOLD)) or "none"))
     heavy = [h for h in HEAVY_IDS if id_token(h).search(tree.vac.text) or (tree.svc and id_token(h).search(tree.svc.text))]
     if heavy:
         print(f"WARN rule 5 heavy ids still in config: {heavy}")
@@ -2061,6 +2249,12 @@ def main(argv: list[str] | None = None) -> int:
     de.add_argument("targets", nargs="+")
     de.add_argument("--dry-run", dest="dry_run", action="store_true")
     de.add_argument("--no-verify", dest="no_verify", action="store_true")
+    rj = sub.add_parser("reject")
+    rj.add_argument("targets", nargs="*")
+    rj.add_argument("--all", action="store_true")
+    rj.add_argument("--we-check", dest="we_check", required=True)
+    rj.add_argument("--dry-run", dest="dry_run", action="store_true")
+    rj.add_argument("--no-verify", dest="no_verify", action="store_true")
     re_ = sub.add_parser("render")
     re_.add_argument("--check", action="store_true")
     a = p.parse_args(argv)
@@ -2070,8 +2264,10 @@ def main(argv: list[str] | None = None) -> int:
             if not a.targets and not a.batch:
                 raise ToolError("promote needs ids, keys or --batch")
             return cmd_promote(a, root)
+        if a.cmd == "reject" and not a.targets and not a.all:
+            raise ToolError("reject needs ids, keys or --all")
         return {"status": cmd_status, "pending": cmd_pending, "check": cmd_check, "demote": cmd_demote,
-                "render": cmd_render}[a.cmd](a, root)
+                "reject": cmd_reject, "render": cmd_render}[a.cmd](a, root)
     except ToolError as e:
         print(f"ERROR {e}", file=sys.stderr)
         return 1

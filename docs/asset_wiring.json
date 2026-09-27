@@ -29,6 +29,31 @@
    "moves": [],
    "utc": "2026-09-25T10:23:30Z"
   },
+  "13183571527": {
+   "hunks": {
+    "docs/ASSET_LICENSES.md": [
+     [
+      "",
+      "| [13183571527](https://create.roblox.com/store/asset/13183571527) | boat dock | tihi2 (User 335409984) | Model | inventory API 2026-09-27T13:52:21Z (cached) | 4,198 | 0 (stripped) | `Buildings.Dock` | owner list 2026-09-25 (Dock); Get Model by the game owner; WE_CHECK parts=2 humanoids=0 |\n"
+     ],
+     [
+      "| [17701461178](https://create.roblox.com/store/asset/17701461178) | Shipping Containers | VGVC2 (User) | Model | 2024-06-02 | 6,176 | 0 | `Buildings.Dock`, `StructureVisualConfig.Dock` | Watch: check the doors for real shipping-line logos before the owner Gets it |\n",
+      "| [17701461178](https://create.roblox.com/store/asset/17701461178) | Shipping Containers | VGVC2 (User) | Model | 2024-06-02 | 6,176 | 0 | `Buildings.Dock`, `StructureVisualConfig.Dock` | Watch: check the doors for real shipping-line logos before the owner Gets it; `Buildings.Dock` moved to owner pick 13183571527 on 2026-09-27 |\n"
+     ]
+    ],
+    "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau": [
+     [
+      "\t\tDock = { ModelAssetId = 17701461178, PendingAssetId = 13183571527, Note = \"owner pick boat dock (tihi2): pending, P2 (Studio WE_CHECK, inert while PreferMesh is off); the current id stays until promoted\" } :: AssetRef,\n",
+      "\t\tDock = { ModelAssetId = 13183571527, Note = \"owner pick: boat dock by tihi2 (promoted 2026-09-27 by tools/wire-asset-ids.py; recorded only: not loaded while PreferMesh is off, fit not reviewed)\" } :: AssetRef,\n"
+     ]
+    ]
+   },
+   "keys": [
+    "Dock"
+   ],
+   "moves": [],
+   "utc": "2026-09-27T13:52:35Z"
+  },
   "15192621369": {
    "hunks": {
     "docs/ASSET_LICENSES.md": [

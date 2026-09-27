@@ -1855,7 +1855,10 @@ return EconomyConfig
 local GameConfig = {
 	DisplayName = "WAR EMPIRE",
 	Tagline = "BUILD. CONQUER. DOMINATE.",
-	MaxPlayersPerServer = 12,
+	-- One base per player: must equal the place's Max Players setting (place settings, not code) and
+	-- BaseConfig.MaxPlots. A player past the plot count joins with no base. BaseService warns in the server log at boot
+	-- when the place allows more players than there are plots.
+	MaxPlayersPerServer = 6,
 	BasePlotCount = 6,
 	RespawnTimeSeconds = 5,
 	FriendlyFire = false,
@@ -10789,13 +10792,13 @@ local VisualAssetConfig = {
 		TankDestroyer = { ModelAssetId = 0, Note = "owner list: [WEAK] low-poly tank declined, our Part kit reads better - Part kit" } :: AssetRef,
 		AssaultGun = { ModelAssetId = 0, Note = "owner list: [WEAK] low-poly tank declined, our Part kit reads better - Part kit" } :: AssetRef,
 		-- Free heli family
-		TransportHeli = { ModelAssetId = 0, PendingAssetId = 2627182035, Note = "owner pick transport helicopter (blokkere): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		TransportHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
 		AttackHelicopter = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
-		LightTransportHeli = { ModelAssetId = 0, PendingAssetId = 2627182035, Note = "owner pick transport helicopter (blokkere): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		LightTransportHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
 		NightAttackHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		LightScoutHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		GunshipHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
-		HeavyLiftHeli = { ModelAssetId = 0, PendingAssetId = 2627182035, Note = "owner pick transport helicopter (blokkere): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		HeavyLiftHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
 		RescueHeli = { ModelAssetId = 0, PendingAssetId = 11357157285, Note = "owner pick Rescue Helicopter (KiboSprite): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
@@ -10829,20 +10832,20 @@ local VisualAssetConfig = {
 		TankerPlane = { ModelAssetId = 0, Note = "owner list: pick rejected (47 parts > 40 and a real-world look) - family body / Part kit" } :: AssetRef,
 		-- Free naval family
 		_FallbackNaval = { ModelAssetId = 0, Note = "Free Boat (Creator Store)" } :: AssetRef,
-		PatrolBoat = { ModelAssetId = 0, PendingAssetId = 5177695483, Note = "owner pick Patrol Boat (pirateparty1234): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		FastAttackCraft = { ModelAssetId = 0, PendingAssetId = 5177695483, Note = "owner pick Patrol Boat (pirateparty1234): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		PatrolBoat = { ModelAssetId = 0, Note = "owner pick Patrol Boat (pirateparty1234) not used: owner check 2026-09-25 (Open Cloud, v75), 114 parts > 40 - family body / Part kit" } :: AssetRef,
+		FastAttackCraft = { ModelAssetId = 0, Note = "owner pick Patrol Boat (pirateparty1234) not used: owner check 2026-09-25 (Open Cloud, v75), 114 parts > 40 - family body / Part kit" } :: AssetRef,
 		RiverBoat = { ModelAssetId = 0, Note = "owner list: pick rejected (wrong item: a theme-park raft; provenance) - family body / Part kit" } :: AssetRef,
-		CoastCutter = { ModelAssetId = 0, PendingAssetId = 5177695483, Note = "owner pick Patrol Boat (pirateparty1234): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		TorpedoBoat = { ModelAssetId = 0, PendingAssetId = 5177695483, Note = "owner pick Patrol Boat (pirateparty1234): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		CoastCutter = { ModelAssetId = 0, Note = "owner pick Patrol Boat (pirateparty1234) not used: owner check 2026-09-25 (Open Cloud, v75), 114 parts > 40 - family body / Part kit" } :: AssetRef,
+		TorpedoBoat = { ModelAssetId = 0, Note = "owner pick Patrol Boat (pirateparty1234) not used: owner check 2026-09-25 (Open Cloud, v75), 114 parts > 40 - family body / Part kit" } :: AssetRef,
 		Gunboat = { ModelAssetId = 0, PendingAssetId = 15838664806, Note = "owner pick Basic Gunboat (Confused Giants Studio): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		MissileBoat = { ModelAssetId = 0, PendingAssetId = 15838664806, Note = "owner pick Basic Gunboat (Confused Giants Studio): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		MineLayer = { ModelAssetId = 0, PendingAssetId = 15838664806, Note = "owner pick Basic Gunboat (Confused Giants Studio): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		CoastalMonitor = { ModelAssetId = 0, PendingAssetId = 15838664806, Note = "owner pick Basic Gunboat (Confused Giants Studio): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		LandingCraft = { ModelAssetId = 0, Note = "Part-kit barge — REJECT 13195201090 template; owner list: pick rejected (wrong item: a space lander)" } :: AssetRef,
 		AssaultLanding = { ModelAssetId = 0, Note = "Part-kit — REJECT 13195201090; owner list: pick rejected (wrong item: a space lander)" } :: AssetRef,
-		HoverTransport = { ModelAssetId = 0, PendingAssetId = 43773162, Note = "owner pick HoverCraft (Fractality): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		HoverTransport = { ModelAssetId = 0, Note = "owner pick HoverCraft (Fractality) not used: owner check 2026-09-25 (Open Cloud, v75), 211 parts > 40 - family body / Part kit" } :: AssetRef,
 		HospitalShip = { ModelAssetId = 0, Note = "owner list: pick rejected (protected emblem and a named real ship) - family body / Part kit" } :: AssetRef,
-		SupplyShip = { ModelAssetId = 0, PendingAssetId = 11756438288, Note = "owner pick Cargo Ship (Yorsiur): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		SupplyShip = { ModelAssetId = 0, Note = "owner pick Cargo Ship (Yorsiur) not used: owner check 2026-09-25 (Open Cloud, v75), 174 parts > 40 - family body / Part kit" } :: AssetRef,
 		AmphibAssault = { ModelAssetId = 0, Note = "Part-kit capital stub — REJECT 13195201090; owner list: pick rejected (wrong item: a space lander)" } :: AssetRef,
 		Corvette = { ModelAssetId = 0, Note = "owner list: [WEAK] plain warship hull declined, our NavalCapital kit reads better - Part kit" } :: AssetRef,
 		Destroyer = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit; owner list: [WEAK] warship pick declined" } :: AssetRef,
@@ -10858,9 +10861,9 @@ local VisualAssetConfig = {
 		EngineeringTruck = { ModelAssetId = 0, Note = "owner list: pick rejected (cannot be checked from the store) - family body / Part kit" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 0, PendingAssetId = 8455894899, Note = "owner pick FlatBed Truck (YourBoi_JonnyBoi): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		AmmoCarrier = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		MissileTruck = { ModelAssetId = 0, PendingAssetId = 3304171953, Note = "owner pick missile truck (KlassicKanadian): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		MissileTruck = { ModelAssetId = 0, Note = "owner pick missile truck (KlassicKanadian) not used: owner check 2026-09-25 (Open Cloud, v75), 219 parts > 40 - family body / Part kit" } :: AssetRef,
 		AntiAirTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		RadarTruck = { ModelAssetId = 0, PendingAssetId = 31538715, Note = "owner pick RMAR truck radar (Armour_Fox): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		RadarTruck = { ModelAssetId = 0, Note = "owner pick RMAR truck radar (Armour_Fox) not used: owner check 2026-09-25 (Open Cloud, v75), 93 parts > 40 - family body / Part kit" } :: AssetRef,
 		CargoVan = {
 			ModelAssetId = 6433316269,
 			ChildName = "Van (white)",
@@ -10888,16 +10891,16 @@ local VisualAssetConfig = {
 		CommandVehicle = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		WheeledIFV = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		AmphibiousAPC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		CombatIFV = { ModelAssetId = 0, PendingAssetId = 11552687660, Note = "owner pick Fiction IFV (spookstiy): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		AssaultIFV = { ModelAssetId = 0, PendingAssetId = 11552687660, Note = "owner pick Fiction IFV (spookstiy): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		CombatIFV = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
+		AssaultIFV = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
 		BridgeLayer = { ModelAssetId = 0, NoFamilyFallback = true, Note = "owner list: no good match, keep the current build (Part kit; NoFamilyFallback: never a TrackedIFV family body)" } :: AssetRef,
 		MineClearer = { ModelAssetId = 0, Note = "owner list: pick rejected (wrong item, provenance unverified) - family body / Part kit" } :: AssetRef,
-		FlameCarrier = { ModelAssetId = 0, PendingAssetId = 11552687660, Note = "owner pick Fiction IFV (spookstiy): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		SPAAG = { ModelAssetId = 0, PendingAssetId = 10069416832, Note = "owner pick anti aircraft Tank (XCX1001): pending, P3 (Studio WE_CHECK, [WEAK]); family body / Part kit until promoted" } :: AssetRef,
-		MobileSAM = { ModelAssetId = 0, PendingAssetId = 10069416832, Note = "owner pick anti aircraft Tank (XCX1001): pending, P3 (Studio WE_CHECK, [WEAK]); family body / Part kit until promoted" } :: AssetRef,
+		FlameCarrier = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
+		SPAAG = { ModelAssetId = 0, Note = "owner pick anti aircraft Tank (XCX1001) not used: owner check 2026-09-25 (Open Cloud, v75), 301 parts > 40 - family body / Part kit" } :: AssetRef,
+		MobileSAM = { ModelAssetId = 0, Note = "owner pick anti aircraft Tank (XCX1001) not used: owner check 2026-09-25 (Open Cloud, v75), 301 parts > 40 - family body / Part kit" } :: AssetRef,
 		MortarCarrier = { ModelAssetId = 0, Note = "owner list: [WEAK] a stand-alone mortar, no vehicle - Part kit" } :: AssetRef,
 		MobileArtillery = { ModelAssetId = 0, Note = "owner list: [WEAK] crude towed gun declined, our Part kit reads better - Part kit" } :: AssetRef,
-		RocketArtillery = { ModelAssetId = 0, PendingAssetId = 3304171953, Note = "owner pick missile truck (KlassicKanadian): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		RocketArtillery = { ModelAssetId = 0, Note = "owner pick missile truck (KlassicKanadian) not used: owner check 2026-09-25 (Open Cloud, v75), 219 parts > 40 - family body / Part kit" } :: AssetRef,
 		HowitzerTruck = { ModelAssetId = 0, Note = "owner list: [WEAK] crude towed gun declined, our Part kit reads better - Part kit" } :: AssetRef,
 		SiegeMortar = { ModelAssetId = 0, Note = "owner list: [WEAK] crude towed gun declined, our Part kit reads better - Part kit" } :: AssetRef,
 		LightScoutTank = { ModelAssetId = 0, Note = "owner list: [WEAK] low-poly tank declined, our Part kit reads better - Part kit" } :: AssetRef,
@@ -10941,26 +10944,26 @@ local VisualAssetConfig = {
 		-- Free Barracks / HQ / hangar / dock (Get Model). Part kits remain primary fallback.
 		CommandCenter = { ModelAssetId = 0, PendingAssetId = 43803492, Note = "owner rule 5: heavy HQ model cleared (Part kit / walk-in shell); owner pick Command Center (Firebrand1): pending, P2 (owner yes/no, inert while PreferMesh is off)" } :: AssetRef,
 		Barracks = { ModelAssetId = 0, PendingAssetId = 8637034739, Note = "owner rule 5: heavy barracks model cleared; owner pick Military Barracks /Hostel (AviGaTro): pending, P1i (inert while PreferMesh is off)" } :: AssetRef,
-		VehicleDepot = { ModelAssetId = 12208876851, PendingAssetId = 4005471827, Note = "owner pick Military garage (TamasdztYT): pending, P2 (Studio WE_CHECK, inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
+		VehicleDepot = { ModelAssetId = 12208876851, Note = "owner pick Military garage (TamasdztYT) not used: owner check 2026-09-25 (Open Cloud, v75), 113 parts > 40 - the current id stays (inert while PreferMesh is off)" } :: AssetRef,
 		WeaponsFacility = { ModelAssetId = 4120970784, PendingAssetId = 11850705638, Note = "owner pick Armory (DISPLAYMODELS): pending, P2 (owner yes/no, inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
 		Warehouse = { ModelAssetId = 15942568272, PendingAssetId = 8076230849, Note = "owner pick Warehouse (sydneycrosby_875): pending, P1i (inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
-		Hangar = { ModelAssetId = 0, PendingAssetId = 5343886540, Note = "owner rule 5: heavy hangar model cleared (the Airfield composite builds its Part shed); owner pick plane hangar (Hyperalis): pending, P2 (owner yes/no, Studio WE_CHECK, inert while PreferMesh is off)" } :: AssetRef,
+		Hangar = { ModelAssetId = 0, Note = "owner rule 5: heavy hangar model cleared (the Airfield composite builds its Part shed); owner pick plane hangar (Hyperalis) not used: owner check 2026-09-25 (Open Cloud, v75), 871 parts > 40 - Part kit" } :: AssetRef,
 		HangarAlt = { ModelAssetId = 12208876851, Note = "Hangar insert fallback" } :: AssetRef,
 		BaseGate = { ModelAssetId = 85138026, Note = "Gate arch prop ONLY — DisplayName Base Gate" } :: AssetRef,
 		ResearchLab = { ModelAssetId = 17725725, Note = "Research lab" } :: AssetRef,
 		SpecialForcesFacility = { ModelAssetId = 0, PendingAssetId = 10112923897, Note = "owner rule 5: heavy barracks model cleared; owner pick Military defense outpost (Roseaity): pending, P1i ([WEAK], inert while PreferMesh is off)" } :: AssetRef,
-		Watchtowers = { ModelAssetId = 108525417345747, PendingAssetId = 52154909, Note = "owner pick guard tower (Morniratu): pending, P2 (Studio WE_CHECK, inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
+		Watchtowers = { ModelAssetId = 108525417345747, Note = "owner pick guard tower (Morniratu) not used: owner check 2026-09-25 (Open Cloud, v75), 135 parts > 40 - the current id stays (inert while PreferMesh is off)" } :: AssetRef,
 		Radar = { ModelAssetId = 9559610195, PendingAssetId = 856258654, Note = "owner pick Radar Station (VexHavoc): pending, P1i (inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
 		-- W1 CFG drop (real-world system). NOTE: ResolveBuildingAssetId then reads StructureVisualConfig.Palettes
 		-- .MissileDefense.MeshAssetId — that file must be 0 too for a Part kit (see docs/ASSET_LICENSES.md).
 		MissileDefense = { ModelAssetId = 0, PendingAssetId = 3461514733, Note = "owner pick Missile Launcher (cwd30): pending, P1i (inert while PreferMesh is off); W1 CFG drop (real-world system): Part kit until promoted" } :: AssetRef,
-		DefensiveWalls = { ModelAssetId = 0, PendingAssetId = 6980242709, Note = "owner pick Military Wall (SMehmetaga): pending, P2 (Studio WE_CHECK); perimeter-wall fallback (L3+ walls read DefensiveWallsL3 first)" } :: AssetRef,
-		DefensiveWallsL3 = { ModelAssetId = 0, PendingAssetId = 8333853928, Note = "owner pick T WALL (steveaut): pending, P2 (Studio WE_CHECK); L3+ perimeter walls" } :: AssetRef,
+		DefensiveWalls = { ModelAssetId = 0, PendingAssetId = 6980242709, Note = "owner pick Military Wall (SMehmetaga): pending, P2; passed the owner check 2026-09-25 (20 parts) but held (tools/wire-asset-ids.py HOLD): its only caller, StructureKitBuilder at walls L3+, would leave it buried in the wall, because weldScaledBuilding re-pivots the clone to the wall centre (weldCloneToPrimary without keepPlace) after scaling a Z-long model into the 24x8x3 X-long footprint; needs that VisualAssetService fit fix, then the second check. L3+ walls read this ref (DefensiveWallsL3 is 0)" } :: AssetRef,
+		DefensiveWallsL3 = { ModelAssetId = 0, Note = "owner pick T WALL (steveaut) not used: owner check 2026-09-25 (Open Cloud, v75), 46 parts > 40 - L3+ walls read DefensiveWalls next, else the Part kit" } :: AssetRef,
 		PowerStation = { ModelAssetId = 14000967030, PendingAssetId = 6869290892, Note = "owner pick Power Station (bossmanjesus101): pending, P1i (inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
 		Bunker = { ModelAssetId = 0, Note = "W1 CFG drop (off the Creator Store) — Part kit" } :: AssetRef,
 		Helipad = { ModelAssetId = 14313845338, PendingAssetId = 45369635, Note = "owner pick Helipad (sleitnick): pending, P1i (inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
 		Airfield = { ModelAssetId = 0, Note = "COMPOSITE runway + Buildings.Hangar (0 = Part shed); REJECT 12370174722" } :: AssetRef,
-		Dock = { ModelAssetId = 17701461178, PendingAssetId = 13183571527, Note = "owner pick boat dock (tihi2): pending, P2 (Studio WE_CHECK, inert while PreferMesh is off); the current id stays until promoted" } :: AssetRef,
+		Dock = { ModelAssetId = 13183571527, Note = "owner pick: boat dock by tihi2 (promoted 2026-09-27 by tools/wire-asset-ids.py; recorded only: not loaded while PreferMesh is off, fit not reviewed)" } :: AssetRef,
 		-- Anti-heli Base Ceiling: Part-kit only (no invented / paid roof IDs)
 		BaseCeiling = { ModelAssetId = 0, Note = "Part-kit anti-heli roof — no free dedicated Model" } :: AssetRef,
 	} :: { [string]: AssetRef },
@@ -13637,9 +13640,8 @@ return {}
 
 local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = script.Parent.Parent -- this module lives in Shared.Util: no wait (streaming2 C5, the PlotFrame pattern)
 local Constants = require(Shared.Constants)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 
@@ -17795,7 +17797,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 79)
+		player:SetAttribute("WE_Build", 80)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -44114,7 +44116,33 @@ local function handOutFreePlots(leaving: Player?)
 	end
 end
 
+-- Server size (2026-09-27): one base per player, so the place's Max Players (a place setting, not code) must not be
+-- more than BaseConfig.MaxPlots (= GameConfig.MaxPlayersPerServer). A joiner past the plot count gets no base (v69
+-- WE_NoPlot path). Checked once at boot; developer log only: no player message, no kick, no teleport.
+local serverSizeChecked = false
+local function warnIfServerBiggerThanPlots()
+	if serverSizeChecked then
+		return
+	end
+	serverSizeChecked = true
+	local ok, maxPlayers = pcall(function(): any
+		return Players.MaxPlayers
+	end)
+	if ok and typeof(maxPlayers) == "number" and maxPlayers > BaseConfig.MaxPlots then
+		warn(string.format(
+			"[BaseService] Server size: this place's Max Players is %d but the map has %d base plots, so every player"
+				.. " past %d joins with no base. Set Max Players to %d in the place settings (no publish needed; new"
+				.. " servers only).",
+			math.floor(maxPlayers),
+			BaseConfig.MaxPlots,
+			BaseConfig.MaxPlots,
+			BaseConfig.MaxPlots
+		))
+	end
+end
+
 function BaseService.Init(deps: { [string]: any })
+	pcall(warnIfServerBiggerThanPlots) -- server size vs plot count: one server-log warning, nothing else
 	assert(deps.DataService, "BaseService.Init missing deps.DataService")
 	assert(deps.EconomyService, "BaseService.Init missing deps.EconomyService")
 	DataService = deps.DataService
@@ -44325,7 +44353,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 79)
+			player:SetAttribute("WE_Build", 80)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -50668,7 +50696,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 79)
+		player:SetAttribute("WE_Build", 80)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -50802,7 +50830,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=79",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=80",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -78140,16 +78168,106 @@ return XPService
             <string name="Source"><![CDATA[--!strict
 --[[ WAR EMPIRE — Client Bootstrap ]]
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Wait for Shared; WE_Remotes created by server EarlyRemotes (BindEvent handles late)
-ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: every wait is bounded (CLAUDE.md), but a slow phone gets time: up to 180 s for Shared, in 60 s
+-- slices with one warn per slice. If Shared never comes, one small "rejoin" notice (only when PlayerGui is there)
+-- and a clean stop: nothing is required, so no controller can throw or hang. With Shared here, every module's own
+-- 60 s Shared wait returns at once. The numbers live here, not in Shared/Configs: Configs is inside the missing folder.
+local SHARED_WAIT_SLICE_S = 60
+local SHARED_WAIT_MAX_S = 180
+-- PlayerGui gets the same slow-phone time, once, here (see the PlayerGui gate below)
+local PLAYERGUI_WAIT_SLICE_S = 60
+local PLAYERGUI_WAIT_MAX_S = 180
 
-local Controllers = script.Parent:WaitForChild("Controllers")
-local Modules = script.Parent:WaitForChild("Modules")
+-- One small, phone-readable notice: top centre under the Roblox top bar (clear of the thumbstick zone, the jump
+-- button and the top-bar pills), 20 px text, nothing tappable, no key names.
+local function showLoadFailedNotice()
+	local player = Players.LocalPlayer
+	local pg = if player then player:WaitForChild("PlayerGui", 10) else nil
+	if not pg then
+		warn("[WAR EMPIRE] Client Bootstrap: no PlayerGui after 10 s; load notice not shown")
+		return
+	end
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "WE_LoadFailed"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = false
+	gui.DisplayOrder = 100
+	local label = Instance.new("TextLabel")
+	label.Name = "Notice"
+	label.Active = false
+	label.AnchorPoint = Vector2.new(0.5, 0)
+	label.Position = UDim2.new(0.5, 0, 0, 8)
+	label.Size = UDim2.fromOffset(300, 64)
+	label.BackgroundColor3 = Color3.fromRGB(18, 20, 24)
+	label.BackgroundTransparency = 0.1
+	label.BorderSizePixel = 0
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 20
+	label.TextColor3 = Color3.fromRGB(255, 255, 255)
+	label.TextWrapped = true
+	label.Text = "Game failed to load.\nPlease rejoin."
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 10)
+	corner.Parent = label
+	label.Parent = gui
+	gui.Parent = pg
+end
+
+local sharedFolder: Instance? = nil
+local waitedS = 0
+while not sharedFolder and waitedS < SHARED_WAIT_MAX_S do
+	sharedFolder = ReplicatedStorage:WaitForChild("Shared", SHARED_WAIT_SLICE_S)
+	if not sharedFolder then
+		waitedS += SHARED_WAIT_SLICE_S
+		warn(string.format("[WAR EMPIRE] Client Bootstrap: no ReplicatedStorage.Shared after %d s; %s", waitedS,
+			if waitedS < SHARED_WAIT_MAX_S then "still waiting (slow connection?)" else "giving up, client not started"))
+	end
+end
+if not sharedFolder then
+	showLoadFailedNotice()
+	return
+end
+
+-- PlayerGui gate (streaming2 C5 fix 2): the same 60 s slices up to 180 s, one warn per slice, once for every
+-- controller and before any require. Each controller's own 30 s PlayerGui wait then returns at once, so a late
+-- PlayerGui can no longer leave the HUD (left rail, cash pill) or any other panel off for the whole session.
+-- With no PlayerGui nothing can be shown (not even the rejoin notice), so the client stops cleanly.
+local localPlayer = Players.LocalPlayer
+local playerGui: Instance? = nil
+local pgWaitedS = 0
+while localPlayer and not playerGui and pgWaitedS < PLAYERGUI_WAIT_MAX_S do
+	playerGui = localPlayer:WaitForChild("PlayerGui", PLAYERGUI_WAIT_SLICE_S)
+	if not playerGui then
+		pgWaitedS += PLAYERGUI_WAIT_SLICE_S
+		warn(string.format("[WAR EMPIRE] Client Bootstrap: no PlayerGui after %d s; %s", pgWaitedS,
+			if pgWaitedS < PLAYERGUI_WAIT_MAX_S then "still waiting (slow connection?)" else "giving up, client not started"))
+	end
+end
+if not playerGui then
+	if not localPlayer then
+		warn("[WAR EMPIRE] Client Bootstrap: no LocalPlayer; client not started")
+	end
+	return
+end
+
+-- Controllers / Modules ship in this folder with the script, so these return at once (bounded anyway)
+local Controllers = script.Parent:WaitForChild("Controllers", 30)
+local Modules = script.Parent:WaitForChild("Modules", 30)
+if not Controllers or not Modules then
+	warn("[WAR EMPIRE] Client Bootstrap: no Controllers / Modules folder after 30 s; client not started")
+	return
+end
 -- v70: every controller loads and starts inside its own pcall, so one failure (e.g. combat) can never take
 -- the garage / driving / HUD down with it.
-local function safeRequire(name: string, inst: Instance): any
+local function safeRequire(name: string, inst: Instance?): any
+	if not inst then
+		warn("[WAR EMPIRE] require " .. name .. " failed: module missing (bounded wait gave up)")
+		return nil
+	end
 	local ok, mod = pcall(require, inst :: ModuleScript)
 	if not ok then
 		warn("[WAR EMPIRE] require " .. name .. " failed:", mod)
@@ -78168,11 +78286,11 @@ local function safeInit(name: string, mod: any)
 	end
 end
 
-local UIController = safeRequire("UIController", Controllers:WaitForChild("UIController"))
-local CombatController = safeRequire("CombatController", Controllers:WaitForChild("CombatController"))
-local VehicleController = safeRequire("VehicleController", Controllers:WaitForChild("VehicleController"))
-local StudioSmokeClient = safeRequire("StudioSmokeClient", Modules:WaitForChild("StudioSmokeClient"))
-local WorldSpinners = safeRequire("WorldSpinners", Modules:WaitForChild("WorldSpinners"))
+local UIController = safeRequire("UIController", Controllers:WaitForChild("UIController", 5))
+local CombatController = safeRequire("CombatController", Controllers:WaitForChild("CombatController", 5))
+local VehicleController = safeRequire("VehicleController", Controllers:WaitForChild("VehicleController", 5))
+local StudioSmokeClient = safeRequire("StudioSmokeClient", Modules:WaitForChild("StudioSmokeClient", 5))
+local WorldSpinners = safeRequire("WorldSpinners", Modules:WaitForChild("WorldSpinners", 5))
 
 print("[WAR EMPIRE] Client Bootstrap starting...")
 
@@ -78213,7 +78331,13 @@ local UserInputService = game:GetService("UserInputService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ArmyController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ArmyController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ArmyController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -78223,8 +78347,6 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local NotificationController = require(script.Parent.NotificationController)
-
-local ArmyController = {}
 
 local PANEL_ID = "Army"
 
@@ -78397,7 +78519,13 @@ function ArmyController.Init()
 	screen.Name = "WarEmpireArmy"
 	-- v70: one HUD scale + the safe area (was IgnoreGuiInset = true: the title sat under the Roblox topbar)
 	PanelShell.Screen(screen)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] ArmyController: no PlayerGui after 30 s; Army panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()
@@ -79170,7 +79298,13 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local BaseController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] BaseController: no ReplicatedStorage.Shared after 60 s; not started")
+	return BaseController
+end
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local EconomyConfig = require(Shared.Configs.EconomyConfig)
@@ -79188,8 +79322,6 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local NotificationController = require(script.Parent.NotificationController)
 local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
-
-local BaseController = {}
 
 local PANEL_ID = "Base"
 local GUIDE_ON = TycoonGuideConfig.Enabled -- v72 rows / NEXT / subtitle
@@ -79630,7 +79762,13 @@ function BaseController.Init()
 	gui.Name = "WarEmpireBaseUI"
 	-- DisplayOrder 58 (HudConfig.DisplayOrder.WarEmpireBaseUI): above the HUD (55); one HUD scale + safe area
 	PanelShell.Screen(gui, HudConfig.DisplayOrder.WarEmpireBaseUI)
-	gui.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] BaseController: no PlayerGui after 30 s; Base panel off")
+		gui:Destroy()
+		return
+	end
+	gui.Parent = pg
 	screenGui = gui
 
 	local TAP = PanelShell.TouchMinV()
@@ -82547,7 +82685,13 @@ local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local HUDController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] HUDController: no ReplicatedStorage.Shared after 60 s; not started")
+	return HUDController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
@@ -82560,8 +82704,6 @@ local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local TycoonMath = require(Shared.Util.TycoonMath)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
-
-local HUDController = {}
 
 -- One rail tile binding (UIController): Id = HudConfig.Rail.Tiles[].Id; Name = the pinned child name ("DockMissions").
 -- OnLongPress (optional): a finger / mouse held on the tile for LONG_PRESS_SECONDS runs it instead of OnClick
@@ -83892,7 +84034,13 @@ function HUDController.Init()
 	-- above the world HUDs (combat 25 … orders 52) so rail tiles receive clicks; below modal panels (60+)
 	screen.DisplayOrder = 55
 	HudLayout.ApplyScreen(screen, { DisplayOrder = HudConfig.DisplayOrder.WarEmpireHUD })
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] HUDController: no PlayerGui after 30 s; HUD off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	_gui = screen
 
 	-- Left rail (tiles come from BindActionBar)
@@ -84389,7 +84537,13 @@ local Debris = game:GetService("Debris")
 local SoundService = game:GetService("SoundService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local MissileController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] MissileController: no ReplicatedStorage.Shared after 60 s; not started")
+	return MissileController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -84398,8 +84552,6 @@ local ClientSettings = require(script.Parent.Parent.Modules.ClientSettings)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout) -- v70: the banner is the top-centre stack's "Alert"
 local HudConfig = require(Shared.Configs.HudConfig)
-
-local MissileController = {}
 
 local player = Players.LocalPlayer
 local isTouch = UserInputService.TouchEnabled
@@ -88665,7 +88817,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local NotificationController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] NotificationController: no ReplicatedStorage.Shared after 60 s; not started")
+	return NotificationController
+end
 local Constants = require(Shared.Constants)
 local HudConfig = require(Shared.Configs.HudConfig)
 local NotificationConfig = require(Shared.Configs.NotificationConfig)
@@ -88675,8 +88833,6 @@ local UIUtil = require(Shared.Util.UIUtil)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
-
-local NotificationController = {}
 
 export type OfferDef = {
 	Key: string,
@@ -89629,7 +89785,11 @@ function NotificationController.Init()
 	if gui and gui.Parent then
 		return
 	end
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] NotificationController: no PlayerGui after 30 s; toasts off")
+		return
+	end
 	local old = pg:FindFirstChild("WarEmpireNotifications")
 	if old then
 		old:Destroy()
@@ -90649,7 +90809,13 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local OrdersController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] OrdersController: no ReplicatedStorage.Shared after 60 s; not started")
+	return OrdersController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -90663,8 +90829,6 @@ local AudioController = require(script.Parent.Parent.Modules.AudioController)
 
 local NotificationController = require(script.Parent.NotificationController)
 local ArmyController = require(script.Parent.ArmyController)
-
-local OrdersController = {}
 
 local PANEL_ID = "Orders"
 local WALKIE = OrdersConfig.Walkie
@@ -91095,7 +91259,13 @@ function OrdersController.Init()
 	screen.Name = "WarEmpireOrders"
 	-- the one HUD scale + safe area (HudLayout.ApplyScreen); DisplayOrder 52: under the rail (55), which it sits beside
 	PanelShell.Screen(screen, HudConfig.DisplayOrder.WarEmpireOrders)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] OrdersController: no PlayerGui after 30 s; Army orders off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	build(screen)
@@ -91198,7 +91368,13 @@ local UserInputService = game:GetService("UserInputService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ProgressionController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ProgressionController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ProgressionController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -91212,8 +91388,6 @@ local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local RebirthConfirm = require(script.Parent.Parent.Modules.RebirthConfirm)
 local NotificationController = require(script.Parent.NotificationController)
-
-local ProgressionController = {}
 
 local PANEL_ID = "Rebirth"
 
@@ -91667,7 +91841,13 @@ function ProgressionController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireProgression"
 	PanelShell.Screen(screen) -- DisplayOrder 60 (Panels), one HUD scale + safe area
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] ProgressionController: no PlayerGui after 30 s; Rebirth panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()
@@ -92156,13 +92336,17 @@ return ProgressionController
 --[[ Battle Pass track preview rebuild (extracted from ProgressionController). ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ProgressionBattlePass = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ProgressionBattlePass: no ReplicatedStorage.Shared after 60 s; not started")
+	return ProgressionBattlePass
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local ProgressionUI = require(script.Parent.ProgressionUI)
-
-local ProgressionBattlePass = {}
 
 function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, bpState: any)
 	if not trackList or typeof(bpState) ~= "table" then
@@ -92395,15 +92579,19 @@ local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local PromptController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] PromptController: no ReplicatedStorage.Shared after 60 s; not started")
+	return PromptController
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local UIUtil = require(Shared.Util.UIUtil)
 local TycoonMath = require(Shared.Util.TycoonMath)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
-
-local PromptController = {}
 
 local LANE = HudConfig.ActionLane
 local BUY_LANE = TycoonGuideConfig.BuyLane
@@ -93087,7 +93275,11 @@ function PromptController.Init()
 		return
 	end
 	started = true
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] PromptController: no PlayerGui after 30 s; Roblox default prompts kept")
+		return
+	end
 	local old = pg:FindFirstChild("WE_PromptLane")
 	if old then
 		old:Destroy()
@@ -93284,7 +93476,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared") -- already loaded: the client Bootstrap waits for it
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ResearchController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ResearchController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ResearchController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local ResearchConfig = require(Shared.Configs.ResearchConfig)
@@ -93318,8 +93516,6 @@ type RowRefs = {
 	LastToastAt: number,
 }
 type TabRefs = { Button: TextButton, Bar: Frame, Title: TextLabel, Progress: TextLabel }
-
-local ResearchController = {}
 
 -- ── layout (logical px inside the 800 x 340 panel) ─────────────────────────────
 local PANEL_W, PANEL_H = 800, 340
@@ -94367,7 +94563,13 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local SettingsController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] SettingsController: no ReplicatedStorage.Shared after 60 s; not started")
+	return SettingsController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -94394,8 +94596,6 @@ do
 		end
 	end
 end
-
-local SettingsController = {}
 
 local PANEL_ID = "Settings"
 
@@ -94523,7 +94723,13 @@ function SettingsController.Init()
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireSettings"
 	PanelShell.Screen(screen) -- DisplayOrder 60 (Panels), one HUD scale + safe area
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] SettingsController: no PlayerGui after 30 s; Settings panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()
@@ -94889,7 +95095,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ShopController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ShopController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ShopController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -94900,8 +95112,6 @@ local NotificationController = require(script.Parent.NotificationController)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
-
-local ShopController = {}
 
 local PANEL_ID = "Shop"
 
@@ -95466,7 +95676,13 @@ function ShopController.Init()
 	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	-- v70: one HUD scale + the safe area (HudLayout.ApplyScreen via PanelShell); DisplayOrder stays Panels = 60
 	PanelShell.Screen(screen, HudConfig.DisplayOrder.Panels)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] ShopController: no PlayerGui after 30 s; Shop panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()
@@ -97877,7 +98093,13 @@ local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local TutorialController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] TutorialController: no ReplicatedStorage.Shared after 60 s; not started")
+	return TutorialController
+end
 local Constants = require(Shared.Constants)
 local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
@@ -97894,8 +98116,6 @@ local PlotFrame = require(Shared.Util.PlotFrame)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
-
-local TutorialController = {}
 
 local player = Players.LocalPlayer
 
@@ -99319,7 +99539,11 @@ local function refreshGuideVisibility()
 end
 
 function TutorialController.Init()
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] TutorialController: no PlayerGui after 30 s; tutorial off")
+		return
+	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireTutorial"
 	-- Core safe insets + the one HUD UIScale; DisplayOrder from HudConfig (50, under the HUD rail / TopStrip)
@@ -99800,7 +100024,13 @@ local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local VehicleController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] VehicleController: no ReplicatedStorage.Shared after 60 s; not started")
+	return VehicleController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -99838,8 +100068,6 @@ export type RowState = {
 	Reason: string?, -- Locked: short reason
 	Need: number?, -- CantAfford: cash missing
 }
-
-local VehicleController = {}
 
 local PANEL_ID = "Garage"
 
@@ -100633,7 +100861,13 @@ local function buildGui()
 	screen.Enabled = true
 	-- v70: DisplayOrder 60 (Panels) above the HUD rail (55); one HUD scale + safe area (HudLayout.ApplyScreen)
 	PanelShell.Screen(screen)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] VehicleController: no PlayerGui after 30 s; Garage panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()
@@ -101185,7 +101419,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local WorldPromptController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] WorldPromptController: no ReplicatedStorage.Shared after 60 s; not started")
+	return WorldPromptController
+end
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local Remotes = require(Shared.Remotes)
@@ -101222,8 +101462,6 @@ local WorldLabel = require(Shared.Util.WorldLabel)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 -- any: ConsoleWaypoint.ShowAtm arrives with the v72 guide lane; every call is guarded (`if ConsoleWaypoint.ShowAtm`)
 local ConsoleWaypoint: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
-
-local WorldPromptController = {}
 
 local PROMPT_NAME = "WE_WorldPrompt"
 local BILLBOARD_NAME = "WE_PriceBillboard"
@@ -101711,11 +101949,14 @@ local function placeBuyLane()
 	end
 end
 
-local function ensurePadBuyGui(): TextButton
+local function ensurePadBuyGui(): TextButton?
 	if buyBtn and buyBtn.Parent then
 		return buyBtn
 	end
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:FindFirstChildOfClass("PlayerGui") -- streaming2 C5: never waits (runs on refreshes)
+	if not pg then
+		return nil -- no PlayerGui yet: skip this refresh, the next one tries again
+	end
 	local existing = pg:FindFirstChild(BUY_GUI_NAME)
 	if existing and existing:IsA("ScreenGui") then
 		existing:Destroy()
@@ -102020,6 +102261,9 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	end
 
 	local btn = ensurePadBuyGui()
+	if not btn then
+		return
+	end
 	activeBuyStructureId = structureId
 	activeBuyPart = part
 	if guideOn() then
@@ -103985,7 +104229,13 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local ClientSettings = require(script.Parent.ClientSettings)
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local AudioController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] AudioController: no ReplicatedStorage.Shared after 60 s; not started")
+	return AudioController
+end
 local SoundConfig = require(Shared.Configs.SoundConfig)
 
 type SoundDef = SoundConfig.SoundDef
@@ -104025,8 +104275,6 @@ export type Stats = {
 	ByKey: { [string]: number },
 	LastKey: string?,
 }
-
-local AudioController = {}
 
 local Mix = SoundConfig.Mix
 local STOP_FADE = 0.4 -- s: MaxSeconds one-shots fade out instead of cutting
@@ -104807,7 +105055,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local AudioHooks = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] AudioHooks: no ReplicatedStorage.Shared after 60 s; not started")
+	return AudioHooks
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local SoundConfig = require(Shared.Configs.SoundConfig)
@@ -104817,8 +105071,6 @@ local AudioController = require(script.Parent.AudioController)
 local HudLayout = require(script.Parent.HudLayout)
 
 local Hooks = SoundConfig.Hooks
-
-local AudioHooks = {}
 
 local initDone = false
 
@@ -106470,14 +106722,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CollectionService = game:GetService("CollectionService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ConsoleWaypoint = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ConsoleWaypoint: no ReplicatedStorage.Shared after 60 s; not started")
+	return ConsoleWaypoint
+end
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
-
-local ConsoleWaypoint = {}
 
 local player = Players.LocalPlayer
 local W = ConsoleBuyConfig.Waypoint
@@ -106773,10 +107029,14 @@ return ConsoleWaypoint
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local HudConfig = require(Shared.Configs.HudConfig)
-
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
 local HudIcons = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] HudIcons: no ReplicatedStorage.Shared after 60 s; not started")
+	return HudIcons
+end
+local HudConfig = require(Shared.Configs.HudConfig)
 
 export type IconOpts = {
 	Size: UDim2?, -- default UDim2.fromOffset(24, 24) (v units under a HUD UIScale)
@@ -107143,11 +107403,15 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local HudLayout = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] HudLayout: no ReplicatedStorage.Shared after 60 s; not started")
+	return HudLayout
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
-
-local HudLayout = {}
 
 export type Rule = { ShowWhen: { string }?, HideWhen: { string }? }
 -- what BindVisibility / EvalRule accept: any table with HideWhen and/or ShowWhen (HudConfig.Rail, .Hotbar, ...)
@@ -110241,14 +110505,18 @@ return OpsJobs
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local PanelShell = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] PanelShell: no ReplicatedStorage.Shared after 60 s; not started")
+	return PanelShell
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
 
 local HudLayout = require(script.Parent.HudLayout)
 local HudIcons = require(script.Parent.HudIcons)
-
-local PanelShell = {}
 
 -- 64 v: the rail tile / hotbar slot size, = HudConfig.Scale.TouchMinPx (44) / Scale.Min (0.70) rounded up
 local TOUCH_MIN_V = math.max(HudConfig.Hotbar.Slot, math.ceil(HudConfig.Scale.TouchMinPx / HudConfig.Scale.Min))
@@ -110908,11 +111176,15 @@ return ProducerLabels
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ProgressPill = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ProgressPill: no ReplicatedStorage.Shared after 60 s; not started")
+	return ProgressPill
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
-
-local ProgressPill = {}
 
 export type Pill = {
 	Frame: Frame,
@@ -111097,7 +111369,13 @@ local Workspace = game:GetService("Workspace")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local RebirthConfirm = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] RebirthConfirm: no ReplicatedStorage.Shared after 60 s; not started")
+	return RebirthConfirm
+end
 local Constants = require(Shared.Constants)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
@@ -111106,8 +111384,6 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local HudLayout = require(script.Parent.HudLayout)
 local PanelShell = require(script.Parent.PanelShell)
-
-local RebirthConfirm = {}
 
 local PANEL_ID = "RebirthConfirm"
 local SOURCE = "rebirth_panel" -- MonetizationConfig.PurchaseSources (purchase intent → PrestigeService auto-use)
@@ -114213,9 +114489,14 @@ local function preferredInput(): string
 end
 
 local function loadShared()
-	-- Shared is already loaded by VehicleController (the only caller of Init), so these never wait long
+	-- Shared is already loaded by VehicleController (the only caller of Init), so this never waits long
+	local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- bounded (streaming2 C5, CLAUDE.md)
+	if not Shared then
+		warn("[WAR EMPIRE] VehicleDriveClient: no ReplicatedStorage.Shared after 60 s; driving keeps its defaults")
+		return
+	end
 	local okC, C = pcall(function(): any
-		return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Constants"))
+		return require(Shared.Constants)
 	end)
 	if okC and typeof(C) == "table" then
 		if typeof(C.Tags) == "table" and typeof(C.Tags.Water) == "string" then
@@ -114226,7 +114507,7 @@ local function loadShared()
 		end
 	end
 	local okR, R = pcall(function(): any
-		return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
+		return require(Shared.Remotes)
 	end)
 	if okR and typeof(R) == "table" then
 		RemotesMod = R
@@ -114234,7 +114515,7 @@ local function loadShared()
 		warn("[VehicleDriveClient] Remotes module:", R)
 	end
 	local okV, V = pcall(function(): any
-		return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs"):WaitForChild("VehicleConfig"))
+		return require(Shared.Configs.VehicleConfig)
 	end)
 	if okV and typeof(V) == "table" and typeof(V.Drive) == "table" then
 		driveCfg = V.Drive

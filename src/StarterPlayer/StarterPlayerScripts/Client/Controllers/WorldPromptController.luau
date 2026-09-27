@@ -71,7 +71,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local WorldPromptController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] WorldPromptController: no ReplicatedStorage.Shared after 60 s; not started")
+	return WorldPromptController
+end
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local Remotes = require(Shared.Remotes)
@@ -108,8 +114,6 @@ local WorldLabel = require(Shared.Util.WorldLabel)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 -- any: ConsoleWaypoint.ShowAtm arrives with the v72 guide lane; every call is guarded (`if ConsoleWaypoint.ShowAtm`)
 local ConsoleWaypoint: any = require(script.Parent.Parent.Modules.ConsoleWaypoint)
-
-local WorldPromptController = {}
 
 local PROMPT_NAME = "WE_WorldPrompt"
 local BILLBOARD_NAME = "WE_PriceBillboard"
@@ -597,11 +601,14 @@ local function placeBuyLane()
 	end
 end
 
-local function ensurePadBuyGui(): TextButton
+local function ensurePadBuyGui(): TextButton?
 	if buyBtn and buyBtn.Parent then
 		return buyBtn
 	end
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:FindFirstChildOfClass("PlayerGui") -- streaming2 C5: never waits (runs on refreshes)
+	if not pg then
+		return nil -- no PlayerGui yet: skip this refresh, the next one tries again
+	end
 	local existing = pg:FindFirstChild(BUY_GUI_NAME)
 	if existing and existing:IsA("ScreenGui") then
 		existing:Destroy()
@@ -906,6 +913,9 @@ local function refreshPadBuyButton(part: BasePart?, structureId: string?)
 	end
 
 	local btn = ensurePadBuyGui()
+	if not btn then
+		return
+	end
 	activeBuyStructureId = structureId
 	activeBuyPart = part
 	if guideOn() then

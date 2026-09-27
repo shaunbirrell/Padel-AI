@@ -61,7 +61,13 @@ local TextService = game:GetService("TextService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local TutorialController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] TutorialController: no ReplicatedStorage.Shared after 60 s; not started")
+	return TutorialController
+end
 local Constants = require(Shared.Constants)
 local HudConfig = require(Shared.Configs.HudConfig)
 local Remotes = require(Shared.Remotes)
@@ -78,8 +84,6 @@ local PlotFrame = require(Shared.Util.PlotFrame)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local ConsoleWaypoint = require(script.Parent.Parent.Modules.ConsoleWaypoint)
 local ObjectiveMarker = require(script.Parent.Parent.Modules.ObjectiveMarker)
-
-local TutorialController = {}
 
 local player = Players.LocalPlayer
 
@@ -1503,7 +1507,11 @@ local function refreshGuideVisibility()
 end
 
 function TutorialController.Init()
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] TutorialController: no PlayerGui after 30 s; tutorial off")
+		return
+	end
 	local screen = Instance.new("ScreenGui")
 	screen.Name = "WarEmpireTutorial"
 	-- Core safe insets + the one HUD UIScale; DisplayOrder from HudConfig (50, under the HUD rail / TopStrip)

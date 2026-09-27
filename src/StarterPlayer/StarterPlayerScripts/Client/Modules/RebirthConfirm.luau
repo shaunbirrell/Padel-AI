@@ -31,7 +31,13 @@ local Workspace = game:GetService("Workspace")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local RebirthConfirm = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] RebirthConfirm: no ReplicatedStorage.Shared after 60 s; not started")
+	return RebirthConfirm
+end
 local Constants = require(Shared.Constants)
 local UIUtil = require(Shared.Util.UIUtil)
 local HudConfig = require(Shared.Configs.HudConfig)
@@ -40,8 +46,6 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 
 local HudLayout = require(script.Parent.HudLayout)
 local PanelShell = require(script.Parent.PanelShell)
-
-local RebirthConfirm = {}
 
 local PANEL_ID = "RebirthConfirm"
 local SOURCE = "rebirth_panel" -- MonetizationConfig.PurchaseSources (purchase intent → PrestigeService auto-use)

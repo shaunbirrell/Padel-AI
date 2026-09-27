@@ -22,7 +22,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared") -- already loaded: the client Bootstrap waits for it
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ResearchController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ResearchController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ResearchController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local ResearchConfig = require(Shared.Configs.ResearchConfig)
@@ -56,8 +62,6 @@ type RowRefs = {
 	LastToastAt: number,
 }
 type TabRefs = { Button: TextButton, Bar: Frame, Title: TextLabel, Progress: TextLabel }
-
-local ResearchController = {}
 
 -- ── layout (logical px inside the 800 x 340 panel) ─────────────────────────────
 local PANEL_W, PANEL_H = 800, 340

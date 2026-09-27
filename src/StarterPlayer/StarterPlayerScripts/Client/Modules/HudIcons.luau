@@ -19,10 +19,14 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
-local HudConfig = require(Shared.Configs.HudConfig)
-
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
 local HudIcons = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] HudIcons: no ReplicatedStorage.Shared after 60 s; not started")
+	return HudIcons
+end
+local HudConfig = require(Shared.Configs.HudConfig)
 
 export type IconOpts = {
 	Size: UDim2?, -- default UDim2.fromOffset(24, 24) (v units under a HUD UIScale)

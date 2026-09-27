@@ -1094,8 +1094,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1160,7 +1160,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 79)', "v79 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1233,9 +1233,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 79)', "v79 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1262,9 +1262,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 79)', "v79 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1317,9 +1317,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 79)', "v79 WE_Build=79 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 79)', "v79 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -4672,6 +4672,211 @@ else:
     bad(f'streaming2 S5 F4: WorldPOI has {_s5_assign} ModelStreamingMode assignment(s), late write after Finish: {_s5_late} (want exactly 1, before Finish: no runtime mode change on a Model clients already hold)')
 # Note: the isHostCluster pin and both NearHostStuds pins also pass on 670bbf6/cb2f357; they guard future edits.
 
+# --- streaming2 lane C5 (F33): every client WaitForChild is bounded (CLAUDE.md): Shared 60 s per module (Bootstrap:
+#     60 s slices up to 180 s, then one rejoin notice), PlayerGui 30 s per controller (Bootstrap: 60 s slices up to
+#     180 s before any require, so those 30 s waits return at once) ---
+# A client-wide scan first (every file under Client and under ReplicatedStorage, which the client requires too), then
+# the Bootstrap gate, the per-module Shared guard, the per-controller PlayerGui guard and the three special cases.
+C5_CL = 'src/StarterPlayer/StarterPlayerScripts/Client'
+C5_BOOT = C5_CL + '/Bootstrap.client.luau'
+C5_WPC = C5_CL + '/Controllers/WorldPromptController.luau'
+C5_VDC = C5_CL + '/Modules/VehicleDriveClient.luau'
+C5_CLOC = 'src/ReplicatedStorage/Shared/Util/ConsoleLocator.luau'
+_c5_files, _c5_unbounded, _c5_shared, _c5_pg = [], [], [], []
+for _c5_base in (C5_CL, 'src/ReplicatedStorage'):
+    for _c5_p in sorted((ROOT / _c5_base).rglob('*.lua*')):
+        if _c5_p.suffix not in ('.luau', '.lua'):
+            continue
+        _c5_rel = _c5_p.relative_to(ROOT).as_posix()
+        _c5_files.append(_c5_rel)
+        _c5_body = _c5_p.read_text(encoding='utf-8')
+        if 'WaitForChild("Shared")' in _c5_body:
+            _c5_shared.append(_c5_rel)
+        if 'WaitForChild("PlayerGui")' in _c5_body:
+            _c5_pg.append(_c5_rel)
+        for _c5_i, _c5_line in enumerate(_c5_body.split('\n'), 1):
+            # code before a line comment; a one-argument WaitForChild (literal or variable) has no timeout
+            if re.search(r':WaitForChild\(\s*[^,()]*\)', _c5_line.split('--', 1)[0]):
+                _c5_unbounded.append(f'{_c5_rel}:{_c5_i}')
+(ok if len(_c5_files) > 60 and not _c5_unbounded else bad)(
+    f'streaming2 C5 F33: no one-argument (unbounded) WaitForChild in {len(_c5_files)} client / ReplicatedStorage files'
+    + (f' — unbounded: {", ".join(_c5_unbounded)}' if _c5_unbounded else ''))
+(ok if not _c5_shared else bad)('streaming2 C5 F33: no bare WaitForChild("Shared") on the client' + (f' — in {", ".join(_c5_shared)}' if _c5_shared else ''))
+(ok if not _c5_pg else bad)('streaming2 C5 F33: no bare WaitForChild("PlayerGui") on the client' + (f' — in {", ".join(_c5_pg)}' if _c5_pg else ''))
+# Bootstrap [PB]: a slow phone gets 180 s for Shared (60 s slices, one warn each; nothing required, nothing thrown, no
+# hang); if Shared never comes, ONE small top-centre notice (bounded PlayerGui wait, 20 px, not tappable, no key names)
+# and a clean return before any require. Bounded folder waits, and safeRequire takes a missing module.
+must_contain(C5_BOOT, 'local SHARED_WAIT_SLICE_S = 60\nlocal SHARED_WAIT_MAX_S = 180\n', 'streaming2 C5 F33: Bootstrap waits for Shared in 60 s slices up to 180 s (slow phones)')
+must_contain(C5_BOOT, 'while not sharedFolder and waitedS < SHARED_WAIT_MAX_S do\n\tsharedFolder = ReplicatedStorage:WaitForChild("Shared", SHARED_WAIT_SLICE_S)\n\tif not sharedFolder then\n\t\twaitedS += SHARED_WAIT_SLICE_S\n\t\twarn(', 'streaming2 C5 F33: every Bootstrap Shared slice is bounded and warns once')
+must_contain(C5_BOOT, 'if not sharedFolder then\n\tshowLoadFailedNotice()\n\treturn\nend', 'streaming2 C5 F33: no Shared after 180 s: one rejoin notice, then Bootstrap stops cleanly')
+must_not_contain(C5_BOOT, 'WaitForChild("Shared", 60) then', 'streaming2 C5 F33: the old 60 s Bootstrap give-up is gone (a slow phone must not end with a dead client)')
+must_contain(C5_BOOT, '\tlocal pg = if player then player:WaitForChild("PlayerGui", 10) else nil\n\tif not pg then\n\t\twarn(', 'streaming2 C5 F33: the load notice waits for PlayerGui 10 s at most and is skipped without it')
+must_contain(C5_BOOT, '\tgui.IgnoreGuiInset = false\n', 'streaming2 C5 F33: the load notice sits under the Roblox top bar (never over its pills)')
+must_contain(C5_BOOT, '\tlabel.Active = false\n\tlabel.AnchorPoint = Vector2.new(0.5, 0)\n\tlabel.Position = UDim2.new(0.5, 0, 0, 8)\n\tlabel.Size = UDim2.fromOffset(300, 64)\n', 'streaming2 C5 F33: the load notice is top centre, 300x64, not tappable (clear of thumbstick and jump)')
+must_contain(C5_BOOT, '\tlabel.TextSize = 20\n', 'streaming2 C5 F33: the load notice text is 20 px (phone-readable, no UIScale)')
+_c5_boot = (ROOT / C5_BOOT).read_text(encoding='utf-8') if (ROOT / C5_BOOT).is_file() else ''
+_c5_texts = re.findall(r'label\.Text = "([^"]*)"', _c5_boot)
+(ok if len(_c5_texts) == 1 and not re.search(r'(?i)click|press|tap|\bkey|keyboard|mouse|\b(esc|enter|space|shift|ctrl|f\d+)\b', _c5_texts[0]) else bad)(
+    'streaming2 C5 F33: exactly one load notice, and its copy names no key and says no "click"' + (f' — {_c5_texts!r}' if _c5_texts else ' — none found'))
+_c5_ni, _c5_ri = _c5_boot.find('\tshowLoadFailedNotice()\n\treturn\nend'), _c5_boot.find('safeRequire("UIController"')
+(ok if 0 <= _c5_ni < _c5_ri else bad)('streaming2 C5 F33: Bootstrap returns on a missing Shared before any controller is required')
+# Bootstrap PlayerGui gate (fix round 2): the same 60 s slices up to 180 s, once for every controller, after Shared and
+# before any require, so a late PlayerGui can no longer leave the HUD (left rail, cash pill) off for the session; with
+# no PlayerGui at all nothing can be shown, so Bootstrap warns and stops before any require.
+must_contain(C5_BOOT, 'local PLAYERGUI_WAIT_SLICE_S = 60\nlocal PLAYERGUI_WAIT_MAX_S = 180\n', 'streaming2 C5 F33: Bootstrap waits for PlayerGui in 60 s slices up to 180 s (slow phones; the HUD must not stay off)')
+must_contain(C5_BOOT, 'while localPlayer and not playerGui and pgWaitedS < PLAYERGUI_WAIT_MAX_S do\n\tplayerGui = localPlayer:WaitForChild("PlayerGui", PLAYERGUI_WAIT_SLICE_S)\n\tif not playerGui then\n\t\tpgWaitedS += PLAYERGUI_WAIT_SLICE_S\n\t\twarn(', 'streaming2 C5 F33: every Bootstrap PlayerGui slice is bounded and warns once')
+must_contain(C5_BOOT, 'if not playerGui then\n\tif not localPlayer then\n\t\twarn("[WAR EMPIRE] Client Bootstrap: no LocalPlayer; client not started")\n\tend\n\treturn\nend\n', 'streaming2 C5 F33: no PlayerGui after 180 s: Bootstrap stops cleanly (nothing required, nothing thrown)')
+_c5_si, _c5_gi = _c5_boot.find('if not sharedFolder then\n\tshowLoadFailedNotice()'), _c5_boot.find('while localPlayer and not playerGui')
+_c5_gr, _c5_fi = _c5_boot.find('if not playerGui then\n'), _c5_boot.find('script.Parent:WaitForChild("Controllers"')
+(ok if 0 <= _c5_si < _c5_gi < _c5_gr < _c5_fi < _c5_ri else bad)('streaming2 C5 F33: the Bootstrap PlayerGui gate runs after the Shared gate and before any controller is required')
+must_contain(C5_BOOT, 'local Controllers = script.Parent:WaitForChild("Controllers", 30)\nlocal Modules = script.Parent:WaitForChild("Modules", 30)\nif not Controllers or not Modules then', 'streaming2 C5 F33: Bootstrap folder waits are bounded and checked')
+must_contain(C5_BOOT, 'local function safeRequire(name: string, inst: Instance?): any\n\tif not inst then\n\t\twarn(', 'streaming2 C5 F33: safeRequire warns on a module whose bounded wait gave up (no pcall(require, nil))')
+for _c5_n in ('UIController', 'CombatController', 'VehicleController'):
+    must_contain(C5_BOOT, f'local {_c5_n} = safeRequire("{_c5_n}", Controllers:WaitForChild("{_c5_n}", 5))', f'streaming2 C5 F33: Bootstrap {_c5_n} wait is bounded')
+for _c5_n in ('StudioSmokeClient', 'WorldSpinners'):
+    must_contain(C5_BOOT, f'local {_c5_n} = safeRequire("{_c5_n}", Modules:WaitForChild("{_c5_n}", 5))', f'streaming2 C5 F33: Bootstrap {_c5_n} wait is bounded')
+# every module that waited forever for Shared: the table is declared first, a missing Shared warns once and returns it
+for _c5_rel, _c5_m in (
+    ('Controllers/PromptController.luau', 'PromptController'), ('Controllers/VehicleController.luau', 'VehicleController'),
+    ('Controllers/TutorialController.luau', 'TutorialController'), ('Controllers/ShopController.luau', 'ShopController'),
+    ('Controllers/ArmyController.luau', 'ArmyController'), ('Controllers/MissileController.luau', 'MissileController'),
+    ('Controllers/HUDController.luau', 'HUDController'), ('Controllers/SettingsController.luau', 'SettingsController'),
+    ('Controllers/ProgressionController/init.luau', 'ProgressionController'),
+    ('Controllers/ProgressionController/ProgressionBattlePass.luau', 'ProgressionBattlePass'),
+    ('Controllers/BaseController.luau', 'BaseController'), ('Controllers/OrdersController.luau', 'OrdersController'),
+    ('Controllers/WorldPromptController.luau', 'WorldPromptController'), ('Controllers/ResearchController.luau', 'ResearchController'),
+    ('Controllers/NotificationController.luau', 'NotificationController'), ('Modules/PanelShell.luau', 'PanelShell'),
+    ('Modules/AudioController.luau', 'AudioController'), ('Modules/ConsoleWaypoint.luau', 'ConsoleWaypoint'),
+    ('Modules/AudioHooks.luau', 'AudioHooks'), ('Modules/HudLayout.luau', 'HudLayout'), ('Modules/ProgressPill.luau', 'ProgressPill'),
+    ('Modules/HudIcons.luau', 'HudIcons'), ('Modules/RebirthConfirm.luau', 'RebirthConfirm'),
+):
+    must_contain(f'{C5_CL}/{_c5_rel}', f'local {_c5_m} = {{}}\nlocal Shared = ReplicatedStorage:WaitForChild("Shared", 60)\nif not Shared then\n\twarn("[WAR EMPIRE] {_c5_m}: no ReplicatedStorage.Shared after 60 s; not started")\n\treturn {_c5_m}\nend', f'streaming2 C5 F33: {_c5_m} waits 60 s for Shared, then warns and returns itself (never throws)')
+# every controller that waited forever for PlayerGui: 30 s, warn with its name, leave that panel off
+for _c5_rel, _c5_m in (
+    ('Controllers/PromptController.luau', 'PromptController'), ('Controllers/VehicleController.luau', 'VehicleController'),
+    ('Controllers/TutorialController.luau', 'TutorialController'), ('Controllers/ShopController.luau', 'ShopController'),
+    ('Controllers/ArmyController.luau', 'ArmyController'), ('Controllers/HUDController.luau', 'HUDController'),
+    ('Controllers/SettingsController.luau', 'SettingsController'), ('Controllers/ProgressionController/init.luau', 'ProgressionController'),
+    ('Controllers/BaseController.luau', 'BaseController'), ('Controllers/OrdersController.luau', 'OrdersController'),
+    ('Controllers/NotificationController.luau', 'NotificationController'),
+):
+    must_contain(f'{C5_CL}/{_c5_rel}', f'\tlocal pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)\n\tif not pg then\n\t\twarn("[WAR EMPIRE] {_c5_m}: no PlayerGui after 30 s;', f'streaming2 C5 F33: {_c5_m} waits 30 s for PlayerGui, then warns and leaves its GUI off')
+must_contain(C5_WPC, 'local function ensurePadBuyGui(): TextButton?\n', 'streaming2 C5 F33: the pad BUY gui may be missing (caller skips that refresh)')
+must_contain(C5_WPC, '\tlocal pg = player:FindFirstChildOfClass("PlayerGui") -- streaming2 C5: never waits (runs on refreshes)\n\tif not pg then\n\t\treturn nil', 'streaming2 C5 F33: the pad BUY refresh never waits on PlayerGui')
+must_contain(C5_WPC, '\tlocal btn = ensurePadBuyGui()\n\tif not btn then\n\t\treturn\n\tend\n', 'streaming2 C5 F33: the pad BUY refresh handles a missing gui')
+must_contain(C5_VDC, '\tlocal Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- bounded (streaming2 C5, CLAUDE.md)\n\tif not Shared then\n\t\twarn("[WAR EMPIRE] VehicleDriveClient:', 'streaming2 C5 F33: VehicleDriveClient.loadShared waits 60 s once, then keeps the driving defaults')
+must_not_contain(C5_VDC, 'WaitForChild("Shared"):WaitForChild(', 'streaming2 C5 F33: no chained unbounded Shared child waits in VehicleDriveClient')
+must_contain(C5_CLOC, 'local Shared = script.Parent.Parent -- this module lives in Shared.Util: no wait', 'streaming2 C5 F33: ConsoleLocator reaches Shared through its own parent (never yields)')
+must_not_contain(C5_CLOC, 'WaitForChild(', 'streaming2 C5 F33: ConsoleLocator never waits (its header says so)')
+
+# --- server size (2026-09-27): one base per player. The place's Max Players (place settings, not code; the public API
+# games.roblox.com/v1/games?universeIds=10767159222 read maxPlayers 6 on 2026-09-27)
+# must equal BaseConfig.MaxPlots; GameConfig.MaxPlayersPerServer and GameConfig.BasePlotCount record the same number.
+# BaseService.Init warns once in the server log when Players.MaxPlayers > MaxPlots (developer-facing, no behaviour
+# change). Every pin below FAILS on 5e021d8. Headless only (not Roblox).
+MP_GC = 'src/ReplicatedStorage/Shared/Configs/GameConfig.luau'
+MP_BC = 'src/ReplicatedStorage/Shared/Configs/BaseConfig.luau'
+MP_BS = 'src/ServerScriptService/Server/Services/BaseService.luau'
+MP_DOC = 'docs/LIVE_PLACE.md'
+def _mp_num(rel, pat):
+    m = re.search(pat, read(rel) or '', re.M)
+    return int(m.group(1)) if m else None
+_mp_max = _mp_num(MP_GC, r'^\tMaxPlayersPerServer = (\d+),')
+_mp_cnt = _mp_num(MP_GC, r'^\tBasePlotCount = (\d+),')
+_mp_plots = _mp_num(MP_BC, r'^\tMaxPlots = (\d+),')
+if _mp_plots is not None and _mp_max == _mp_plots:
+    ok(f'server size: GameConfig.MaxPlayersPerServer {_mp_max} == BaseConfig.MaxPlots {_mp_plots} (one base per player)')
+else:
+    bad(f'server size: GameConfig.MaxPlayersPerServer {_mp_max} != BaseConfig.MaxPlots {_mp_plots} (must be equal: one base per player, = the place Max Players)')
+if _mp_plots is not None and _mp_cnt == _mp_plots and _mp_max == _mp_cnt:
+    ok(f'server size: GameConfig.BasePlotCount {_mp_cnt} == MaxPlayersPerServer {_mp_max} == BaseConfig.MaxPlots {_mp_plots}')
+else:
+    bad(f'server size: GameConfig.BasePlotCount {_mp_cnt}, MaxPlayersPerServer {_mp_max}, BaseConfig.MaxPlots {_mp_plots} are not all equal')
+must_contain(MP_GC, "\t-- One base per player: must equal the place's Max Players setting (place settings, not code) and\n\t-- BaseConfig.MaxPlots.", 'server size: GameConfig.MaxPlayersPerServer carries the "= place Max Players = BaseConfig.MaxPlots" note')
+_mp_bs = read(MP_BS) or ''
+_mp_fn_i = _mp_bs.find('\nlocal function warnIfServerBiggerThanPlots()\n')
+_mp_fn_j = _mp_bs.find('\nend\n', _mp_fn_i) if _mp_fn_i >= 0 else -1
+_mp_fn = _mp_bs[_mp_fn_i:_mp_fn_j] if _mp_fn_i >= 0 and _mp_fn_j > _mp_fn_i else ''
+if ('return Players.MaxPlayers' in _mp_fn and 'pcall(function()' in _mp_fn and 'maxPlayers > BaseConfig.MaxPlots then' in _mp_fn
+        and '\t\twarn(string.format(' in _mp_fn and 'if serverSizeChecked then' in _mp_fn):
+    ok('server size: BaseService boot check reads Players.MaxPlayers in a pcall, warns once when it is > BaseConfig.MaxPlots')
+else:
+    bad('server size: BaseService has no warnIfServerBiggerThanPlots boot check (pcall Players.MaxPlayers > BaseConfig.MaxPlots -> one warn)')
+_mp_forbid = [w for w in ('Notify', 'Kick', 'Teleport', 'FireClient', 'FireAllClients', 'SetAttribute', 'Destroy') if w in _mp_fn]
+if _mp_fn and not _mp_forbid:
+    ok('server size: the boot check is developer-facing only (no Notify / Kick / Teleport / FireClient / SetAttribute)')
+else:
+    bad(f'server size: boot check missing or has player-facing side effects {_mp_forbid} (log only: no kick, no teleport, no message)')
+_mp_init_i = _mp_bs.find('\nfunction BaseService.Init(deps: { [string]: any })\n')
+_mp_init_j = _mp_bs.find('\nend\n', _mp_init_i) if _mp_init_i >= 0 else -1
+_mp_init = _mp_bs[_mp_init_i:_mp_init_j] if _mp_init_i >= 0 and _mp_init_j > _mp_init_i else ''
+if '\n\tpcall(warnIfServerBiggerThanPlots)' in _mp_init and _mp_fn_i >= 0 and _mp_fn_i < _mp_init_i:
+    ok('server size: BaseService.Init runs the boot check through pcall (once per server)')
+else:
+    bad('server size: BaseService.Init does not call pcall(warnIfServerBiggerThanPlots)')
+_mp_doc = read(MP_DOC) or ''
+_mp_dm = re.search(r'\n## Server size\n\n- \*\*Max Players = (\d+)\*\*', _mp_doc)
+if _mp_dm and _mp_plots is not None and int(_mp_dm.group(1)) == _mp_plots:
+    ok(f'server size: docs/LIVE_PLACE.md "Server size" says Max Players = {_mp_dm.group(1)} = BaseConfig.MaxPlots')
+else:
+    bad(f'server size: docs/LIVE_PLACE.md has no "## Server size" note with Max Players = BaseConfig.MaxPlots ({_mp_plots})')
+
+# --- wc2/r2: the owner's check (WE_CHECK through Open Cloud Luau Execution in the live place, version 75, 2026-09-25),
+# rebuilt on 5e021d8 (after the hooks lane). Paste above the final `parse_gate()` call. Headless-verified: every pin below
+# PASSES on the wc2/r2 candidate and FAILS on clean 5e021d8 (bps_head_withpins.log). Changes no existing pin.
+WC2_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+WC2_TOOL = "tools/wire-asset-ids.py"
+WC2_WIRING = "docs/ASSET_WIRING.md"
+WC2_SL = "docs/ASSET_SHORTLIST.md"
+WC2_CHECK2 = "tools/WeCheck2.luau"
+WC2_REJECTED = ("52154909", "4005471827", "5343886540", "8333853928", "31538715", "43773162", "2627182035", "3304171953",
+                "5177695483", "10069416832", "11552687660", "11756438288")
+# 12 owner picks over MaxPartsPerModel are REJECT (targets kept): their PendingAssetId is gone and must not come back
+# without a new check; the second-check script never loads them
+for _wc2_id in WC2_REJECTED:
+    must_not_contain(WC2_VAC, f"PendingAssetId = {_wc2_id}", f"wc2: owner pick {_wc2_id} refused by the owner's check (over 40 parts) stays out of the config")
+    must_contain(WC2_TOOL, f"'REJECT', {_wc2_id}, {_wc2_id}, '', '-', '', ['", f"wc2: registry row(s) of {_wc2_id} are REJECT with their config targets kept")
+    must_not_contain(WC2_CHECK2, f"{_wc2_id},", f"wc2: the second check does not load refused pick {_wc2_id}")
+must_contain(WC2_TOOL, 'rj = sub.add_parser("reject")', "wc2: the promote tool has a reject path for picks the owner's check refused")
+must_contain(WC2_TOOL, 'passes; promote it instead")', "wc2: reject refuses an id whose WE_CHECK line passes the cap")
+# the Dock pick is recorded only (Buildings.Dock is read only while PreferMeshWhenAssetIdSet is on; it stays false)
+must_contain(WC2_VAC, 'Dock = { ModelAssetId = 13183571527, Note = "owner pick: boat dock by tihi2', "wc2: Buildings.Dock records owner pick 13183571527 (recorded only)")
+# the check is on record; promote keeps the hooks lane's OMIT gate and refuses a pick on HOLD right after it
+must_contain(WC2_TOOL, 'STUDIO_CHECK_SOURCE = "owner\'s Open Cloud run in the live place, version 75, 2026-09-25"', "wc2: the tool records the owner's check (live place v75)")
+must_contain(WC2_TOOL, '                why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"\n        if not why and aid in HOLD:\n            why = f"on hold: {HOLD[aid]}', "wc2: promote runs the OMIT gate, then refuses a pick on HOLD")
+must_contain(WC2_TOOL, '    if "OMIT" in r.flags:\n        need.append("OmitParts")\n    if r.id in HOLD:\n        need.append(HOLD[r.id])', "wc2: the status gate text keeps OmitParts and shows the HOLD reason")
+must_contain(WC2_TOOL, "yaw = yaw_override.get(aid, YAW_HINT.get(aid))", "wc2: promote takes a held vehicle's yaw from YAW_HINT unless --yaw is given")
+# held picks: the jet waits on the owner's call 12, the walls on the VisualAssetService fit fix, the rest on the second check.
+# Each keeps ModelAssetId 0 and its PendingAssetId (no runtime load; the tool refuses a promote while the HOLD line
+# is there). Delete a HOLD line (and its pin here) in the same commit as its promote.
+must_contain(WC2_TOOL, '    3553891209: "your call 12 (load by id, or bake after each publish)",', "wc2: the fighter jet waits on the owner's call 12")
+must_contain(WC2_TOOL, '    6980242709: "a VisualAssetService wall-fit fix, then the second check",', "wc2: the walls pick waits on the VisualAssetService fit fix (its only caller buries it)")
+for _wc2_h in ("2474869838", "9076240315", "15838664806", "8546141386", "4954987035", "5318635087", "8455894899", "11357157285"):
+    must_contain(WC2_TOOL, f'    {_wc2_h}: "second check', f"wc2: {_wc2_h} waits on the second check (HOLD)")
+must_contain(WC2_VAC, 'DefensiveWalls = { ModelAssetId = 0, PendingAssetId = 6980242709, Note = "owner pick Military Wall (SMehmetaga): pending, P2; passed the owner check', "wc2: the walls pick stays pending and its Note records the fit finding")
+# call 12 is a fair choice (load by id, or a post-publish bake inside Roblox), and the owner can run both checks himself
+must_contain(WC2_WIRING, "12. **Store models: load them while the game runs (A), or bake them into the place after every publish (B)?**", "wc2: ASSET_WIRING §4 call 12 offers load-by-id or a post-publish bake")
+must_contain(WC2_WIRING, "- **B. Bake after every publish.**", "wc2: call 12 describes the post-publish bake and its costs")
+must_contain(WC2_SL, "### C. Baking inside Roblox after each publish", "wc2: ASSET_SHORTLIST §1.C documents the post-publish bake")
+# option B is described as Roblox documents it: the Luau Execution reference says a task runs one place version and the
+# place's own server and local scripts do not run there, so a bake saves the published place plus the baked models (no
+# "whole running server"). Its real costs stay on the page, and the exact place setting is named (it is not the
+# forbidden "Allow Loading Third Party Assets")
+must_contain(WC2_WIRING, "and the place's own server and local scripts do not run.", "wc2: call 12 B says what Roblox's docs say: place scripts do not run in a Luau Execution task")
+must_contain(WC2_SL, "Server and local scripts within the place also do not automatically run.", "wc2: ASSET_SHORTLIST §1.C quotes Roblox's Luau Execution reference on place scripts")
+for _wc2_doc in (WC2_WIRING, WC2_SL):
+    must_not_contain(_wc2_doc, "whole running server", f"wc2: {_wc2_doc} does not say the bake saves a running server (Roblox's docs: place scripts do not run in a task)")
+must_contain(WC2_WIRING, '"Allow place to be updated using Save Place API" must be on', "wc2: call 12 B names the Save Place API place setting")
+must_contain(WC2_SL, '**Permissions** › "Allow place to be updated using Save Place API"', "wc2: ASSET_SHORTLIST §1.C names the Save Place API place setting")
+# the load budget: the census holds 21 first loads after boot, so the last of P2 / P3 / P4 needs a slot freed first
+must_contain(WC2_WIRING, "So **before the last of the three batches** (the one that brings the count to 22)", "wc2: ASSET_WIRING §8 says to free a load slot before the last batch")
+must_contain(WC2_SL, "5b. **Second check** (`WE_CHECK2`", "wc2: ASSET_SHORTLIST step 5b points to tools/WeCheck2.luau")
+must_contain(WC2_SL, "5c. **Live-server load check** (`WE_LIVE`", "wc2: ASSET_SHORTLIST step 5c holds the WE_LIVE one-liner")
+# the second check is read-only: loads, measures, destroys; never parents, saves or publishes
+must_contain(WC2_CHECK2, "-- WE_CHECK2: WAR EMPIRE second model check (read-only).", "wc2: tools/WeCheck2.luau is the owner's second check")
+must_contain(WC2_CHECK2, "\t\t\ttoDestroy:Destroy()", "wc2: the second check destroys every model it loaded")
+for _wc2_bad in (".Parent =", "SavePlaceAsync", "PublishAsync", "DataStoreService", "HttpService", "Instance.new("):
+    must_not_contain(WC2_CHECK2, _wc2_bad, f"wc2: the second check never uses `{_wc2_bad}`")
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

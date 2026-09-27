@@ -1572,7 +1572,33 @@ local function handOutFreePlots(leaving: Player?)
 	end
 end
 
+-- Server size (2026-09-27): one base per player, so the place's Max Players (a place setting, not code) must not be
+-- more than BaseConfig.MaxPlots (= GameConfig.MaxPlayersPerServer). A joiner past the plot count gets no base (v69
+-- WE_NoPlot path). Checked once at boot; developer log only: no player message, no kick, no teleport.
+local serverSizeChecked = false
+local function warnIfServerBiggerThanPlots()
+	if serverSizeChecked then
+		return
+	end
+	serverSizeChecked = true
+	local ok, maxPlayers = pcall(function(): any
+		return Players.MaxPlayers
+	end)
+	if ok and typeof(maxPlayers) == "number" and maxPlayers > BaseConfig.MaxPlots then
+		warn(string.format(
+			"[BaseService] Server size: this place's Max Players is %d but the map has %d base plots, so every player"
+				.. " past %d joins with no base. Set Max Players to %d in the place settings (no publish needed; new"
+				.. " servers only).",
+			math.floor(maxPlayers),
+			BaseConfig.MaxPlots,
+			BaseConfig.MaxPlots,
+			BaseConfig.MaxPlots
+		))
+	end
+end
+
 function BaseService.Init(deps: { [string]: any })
+	pcall(warnIfServerBiggerThanPlots) -- server size vs plot count: one server-log warning, nothing else
 	assert(deps.DataService, "BaseService.Init missing deps.DataService")
 	assert(deps.EconomyService, "BaseService.Init missing deps.EconomyService")
 	DataService = deps.DataService
@@ -1783,7 +1809,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 79)
+			player:SetAttribute("WE_Build", 80)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then

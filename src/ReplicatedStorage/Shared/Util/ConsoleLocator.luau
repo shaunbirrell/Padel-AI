@@ -17,9 +17,8 @@
 
 local CollectionService = game:GetService("CollectionService")
 local Workspace = game:GetService("Workspace")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Shared = script.Parent.Parent -- this module lives in Shared.Util: no wait (streaming2 C5, the PlotFrame pattern)
 local Constants = require(Shared.Constants)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 

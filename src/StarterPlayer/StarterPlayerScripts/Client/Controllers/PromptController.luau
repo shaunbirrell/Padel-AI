@@ -40,15 +40,19 @@ local TextService = game:GetService("TextService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local PromptController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] PromptController: no ReplicatedStorage.Shared after 60 s; not started")
+	return PromptController
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local UIUtil = require(Shared.Util.UIUtil)
 local TycoonMath = require(Shared.Util.TycoonMath)
 
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
-
-local PromptController = {}
 
 local LANE = HudConfig.ActionLane
 local BUY_LANE = TycoonGuideConfig.BuyLane
@@ -732,7 +736,11 @@ function PromptController.Init()
 		return
 	end
 	started = true
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] PromptController: no PlayerGui after 30 s; Roblox default prompts kept")
+		return
+	end
 	local old = pg:FindFirstChild("WE_PromptLane")
 	if old then
 		old:Destroy()

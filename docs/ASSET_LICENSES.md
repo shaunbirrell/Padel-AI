@@ -151,7 +151,7 @@ structure consoles return before any building dress), so nothing on screen chang
 |---|---|---|---|---|---|
 | [138331074285379](https://create.roblox.com/store/asset/138331074285379) | Military Base | VenomStar40066 (User) | Owner rule 5: 232,800 triangles | `Buildings.CommandCenter`, `StructureVisualConfig.CommandCenter` | Part-kit shell; the owner's pick 43803492 waits in `PendingAssetId` |
 | [18798977801](https://create.roblox.com/store/asset/18798977801) | Military Barracks | VoidableCircuit (User) | Owner rule 5: 336,948 triangles | `Buildings.Barracks`, `Buildings.SpecialForcesFacility`, `StructureVisualConfig.Barracks`, `StructureVisualConfig.SpecialForcesFacility` | Part-kit shells; the owner's picks 8637034739 and 10112923897 wait in `PendingAssetId` |
-| [6015472062](https://create.roblox.com/store/asset/6015472062) | Hangar | afterrburner (User) | Owner rule 5: 45,887 triangles | `Buildings.Hangar`; the Airfield composite in `VisualAssetService` reads `Buildings.Hangar` instead of a hard-coded id | Part shed; the owner's pick 5343886540 waits in `PendingAssetId` |
+| [6015472062](https://create.roblox.com/store/asset/6015472062) | Hangar | afterrburner (User) | Owner rule 5: 45,887 triangles | `Buildings.Hangar`; the Airfield composite in `VisualAssetService` reads `Buildings.Hangar` instead of a hard-coded id | Part shed; the owner's pick 5343886540 is not used (871 parts in the owner's check, 2026-09-25) |
 
 ### 2e. Replaced by owner picks (moved here by `tools/wire-asset-ids.py`)
 
@@ -233,7 +233,11 @@ The owner listed his own Creator Store picks on 2026-09-25 (docs/ASSET_WIRING.md
 `PendingAssetId`, which no loader reads. `tools/wire-asset-ids.py promote` moves it into `ModelAssetId` only when it is in
 the owner's inventory, the store still shows the same creator and a free price, the owner said yes where the row needs it,
 and a Studio `WE_CHECK` showed at most 40 parts and no Humanoid where the row needs it. In the same commit it appends the
-row below. Rules 1–5 of §1 hold for every row; scripts are stripped at load. Empty until the first promote.
+row below. Rules 1–5 of §1 hold for every row; scripts are stripped at load.
+Picks the owner's check refused (over 40 parts; `WE_CHECK` run through Open Cloud in the live place, version 75,
+2026-09-25) never get a row: `tools/wire-asset-ids.py reject` removes their id from `src/`, and docs/ASSET_WIRING.md
+§6.1 lists them. The Dock row (13183571527) is recorded only: `Buildings.Dock` is read only when buildings use store
+models (`PreferMeshWhenAssetIdSet`, off), so it does not load on live today.
 
 | Asset ID | Creator Store name | Uploader | Type | Verified (UTC) | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
@@ -245,6 +249,7 @@ row below. Rules 1–5 of §1 hold for every row; scripts are stripped at load. 
 | [15271872710](https://create.roblox.com/store/asset/15271872710) | SandBag Wall | Herbie778811 (User 561823031) | Model | inventory API 2026-09-25T09:40:13Z (cached) | 240 | 0 (stripped) | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` | owner list 2026-09-25 (Sandbag Line); Get Model by the game owner |
 | [18220523228](https://create.roblox.com/store/asset/18220523228) | ATM | 0GColt (User 3592203545) | Model | inventory API 2026-09-25T09:40:16Z (cached) | 1,032 | 0 (stripped) | `MoneyCollector` | owner list 2026-09-25 (Money Collector); Get Model by the game owner |
 | [114570602](https://create.roblox.com/store/asset/114570602) | Tripod Mounted Machine Gun | GuestCapone (User 33412864) | Model | inventory API 2026-09-25T10:23:23Z (cached) | — | 0 (stripped) | `GateDefense.AutoGun` | owner list 2026-09-25 (Auto Gun); Get Model by the game owner. Provenance: part names credit co-builders sk3let0n (17 parts) and TehPwnzerLord (2); built with an in-game build tool (RobloxStamper / RobloxModel values, dropped at load); the listing itself passes rule 3. **Owner OK given 2026-09-27** (ASSUMPTIONS AW-H13) |
+| [13183571527](https://create.roblox.com/store/asset/13183571527) | boat dock | tihi2 (User 335409984) | Model | inventory API 2026-09-27T13:52:21Z (cached) | 4,198 | 0 (stripped) | `Buildings.Dock` | owner list 2026-09-25 (Dock); Get Model by the game owner; WE_CHECK parts=2 humanoids=0 |
 <!-- wire-asset-ids:owner-picks:end -->
 
 ## 3. Remaining third-party IDs (52) and why each is allowed
@@ -271,7 +276,7 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
 | [85138026](https://create.roblox.com/store/asset/85138026) | USM Gate Please Favorte! | FearlessIantheKiller (User) | Model | 2012-07-01 | 5,876 | 9 | `Buildings.BaseGate` | Watch: "USM" in the title. Check in Studio for national insignia before the owner Gets it |
-| [17701461178](https://create.roblox.com/store/asset/17701461178) | Shipping Containers | VGVC2 (User) | Model | 2024-06-02 | 6,176 | 0 | `Buildings.Dock`, `StructureVisualConfig.Dock` | Watch: check the doors for real shipping-line logos before the owner Gets it |
+| [17701461178](https://create.roblox.com/store/asset/17701461178) | Shipping Containers | VGVC2 (User) | Model | 2024-06-02 | 6,176 | 0 | `Buildings.Dock`, `StructureVisualConfig.Dock` | Watch: check the doors for real shipping-line logos before the owner Gets it; `Buildings.Dock` moved to owner pick 13183571527 on 2026-09-27 |
 | [14313845338](https://create.roblox.com/store/asset/14313845338) | Airport | DeadGamerTuPanaPro (User) | Model | 2023-08-04 | 4,778 | 0 | `Buildings.Helipad`, `StructureVisualConfig.Helipad` |  |
 | [14000967030](https://create.roblox.com/store/asset/14000967030) | Coal power plant | Steveli76 (User) | Model | 2023-07-08 | 27,560 | 0 | `Buildings.PowerStation`, `StructureVisualConfig.PowerStation` |  |
 | [9559610195](https://create.roblox.com/store/asset/9559610195) | Radar Dish W/Base | ThugulusPrime (User) | Model | 2022-05-06 | 18,700 | 2 | `Buildings.Radar`, `StructureVisualConfig.Radar` |  |

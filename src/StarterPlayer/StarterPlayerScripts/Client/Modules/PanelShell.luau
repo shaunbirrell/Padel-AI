@@ -25,14 +25,18 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local PanelShell = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] PanelShell: no ReplicatedStorage.Shared after 60 s; not started")
+	return PanelShell
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
 
 local HudLayout = require(script.Parent.HudLayout)
 local HudIcons = require(script.Parent.HudIcons)
-
-local PanelShell = {}
 
 -- 64 v: the rail tile / hotbar slot size, = HudConfig.Scale.TouchMinPx (44) / Scale.Min (0.70) rounded up
 local TOUCH_MIN_V = math.max(HudConfig.Hotbar.Slot, math.ceil(HudConfig.Scale.TouchMinPx / HudConfig.Scale.Min))

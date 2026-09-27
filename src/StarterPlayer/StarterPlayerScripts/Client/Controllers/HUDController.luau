@@ -36,7 +36,13 @@ local TextService = game:GetService("TextService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local HUDController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] HUDController: no ReplicatedStorage.Shared after 60 s; not started")
+	return HUDController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local Types = require(Shared.Types)
@@ -49,8 +55,6 @@ local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local TycoonMath = require(Shared.Util.TycoonMath)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
-
-local HUDController = {}
 
 -- One rail tile binding (UIController): Id = HudConfig.Rail.Tiles[].Id; Name = the pinned child name ("DockMissions").
 -- OnLongPress (optional): a finger / mouse held on the tile for LONG_PRESS_SECONDS runs it instead of OnClick
@@ -1381,7 +1385,13 @@ function HUDController.Init()
 	-- above the world HUDs (combat 25 … orders 52) so rail tiles receive clicks; below modal panels (60+)
 	screen.DisplayOrder = 55
 	HudLayout.ApplyScreen(screen, { DisplayOrder = HudConfig.DisplayOrder.WarEmpireHUD })
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] HUDController: no PlayerGui after 30 s; HUD off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	_gui = screen
 
 	-- Left rail (tiles come from BindActionBar)

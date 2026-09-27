@@ -10,6 +10,22 @@
 - **Age / access:** rated "Mild, Ages 16+". Until the game passes Roblox's Kids/Select review, only age-checked players 16+ and the owner's Trusted Friends can join (create.roblox.com/docs/production/publishing/kids-and-select, checked 2026-09-23).
 - **Devices:** Computer, Phone, Tablet enabled at create
 
+## Server size
+
+- **Max Players = 6** (public API `games.roblox.com/v1/games?universeIds=10767159222` → `"maxPlayers":6`, checked
+  2026-09-27 15:37 UTC, no auth). One base per player: the map has 6 base plots (`BaseConfig.MaxPlots = 6`, and
+  `GameConfig.MaxPlayersPerServer = 6` records the same number). If Max Players is ever set above 6, a 7th player
+  gets in with no base and waits for one to free up (v69 no-plot path).
+- Re-check the live value any time: `curl -sS "https://games.roblox.com/v1/games?universeIds=10767159222"`, field
+  `maxPlayers`.
+- It is a place setting (Max Players), not code: changing it needs no publish, and it is undone the same way. A change
+  applies to new servers only; servers already running keep their old size until they close.
+- When the place allows more players than there are plots, each new server logs one warning at boot:
+  `[BaseService] Server size: this place's Max Players is ...`. Server log only; players never see it.
+- 8 to 12 players per server needs more plots first (plot positions and pads). Then change Max Players,
+  `BaseConfig.MaxPlots` and both `GameConfig` numbers together, and recheck the server-wide caps that every player
+  shares (for example `CombatConfig.MaxActiveNPCs = 18`).
+
 ## Product IDs (MonetizationConfig)
 
 Source of truth: `src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau` (this table was re-read from it on

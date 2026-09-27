@@ -27,7 +27,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local NotificationController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] NotificationController: no ReplicatedStorage.Shared after 60 s; not started")
+	return NotificationController
+end
 local Constants = require(Shared.Constants)
 local HudConfig = require(Shared.Configs.HudConfig)
 local NotificationConfig = require(Shared.Configs.NotificationConfig)
@@ -37,8 +43,6 @@ local UIUtil = require(Shared.Util.UIUtil)
 local AudioController = require(script.Parent.Parent.Modules.AudioController)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
-
-local NotificationController = {}
 
 export type OfferDef = {
 	Key: string,
@@ -991,7 +995,11 @@ function NotificationController.Init()
 	if gui and gui.Parent then
 		return
 	end
-	local pg = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] NotificationController: no PlayerGui after 30 s; toasts off")
+		return
+	end
 	local old = pg:FindFirstChild("WarEmpireNotifications")
 	if old then
 		old:Destroy()

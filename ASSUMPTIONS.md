@@ -3688,7 +3688,7 @@ AW-S7 AutoGun keeps 4923345827 until promote batch P1 swaps in 114570602 (no vis
    - `IndustrialProps.OilBarrel` is shadowed and stays 25623924.
    - The `Fence` alias also stays 25623924 (no caller; note updated), so BPS pin 285 "ModelAssetId = 25623924" still passes.
 6. **`StripEffectsAssetIds` pin.** The pin checks the prefix `StripEffectsAssetIds = { 23153991`, not the spec's closed-brace form. The DEFERRED BusinessService job can then append 31603741 / 4362642898 without rewriting a pin.
-7. **Pin 797 is swapped, not deleted.** It becomes `Hangar = { ModelAssetId = 0` (bps_changes.txt). The promote tool rewrites it to `Hangar = { ModelAssetId = 5343886540` at P2.
+7. **Pin 797 is swapped, not deleted.** It becomes `Hangar = { ModelAssetId = 0` (bps_changes.txt). The promote tool rewrites it to `Hangar = { ModelAssetId = 5343886540` at P2. **Superseded 2026-09-27 (AW-W13):** 5343886540 is REJECT (871 parts in the owner's check), so the pin stays `Hangar = { ModelAssetId = 0`.
    - The rule-5 must_not_contain pin for 6015472062 in VisualAssetService.luau is in bps_pins_after_L3.txt. It fails on the L1-only tree, where the VAS literal still appears 3 times, and passes once lane L3 lands.
 8. **Yaw 0 for the Roblox car bodies.** Dune Buggy (beige), Van (white) and Pickup Truck (bronze) all use Yaw 0. The headless Fit test on the real HEAD VehicleService kits puts the headlights at -Z, the tail lights at +Z and the left tyres on -X for all five keys. Nose direction on a device is still unverified.
 9. **The Pickup on an L1-only tree.** PatrolTruck / EscortTruck carry `OmitParts = { "light_tail_glass" }`, but HEAD VisualAssetService ignores OmitParts. On an L1-only tree:
@@ -4618,3 +4618,239 @@ S5-7 (integration) One more BuyPathStatic pin from review: WorldPOI holds exactl
     fails the static gate, not only the stand-in. The Jobs-ON end state differs from 670bbf6 in one way: 670bbf6's runtime
     Persist left 2 of the 17 host Models Atomic (POIs with no far anchor); now all 17 are Persistent at build (same live
     and off sites).
+
+## 2026-09-27 — Streaming lane C5 (bounded client WaitForChild; finding F33) - live on ship (not a streaming change)
+
+Every item is reversible. This is not a streaming change: StreamingEnabled never touches ReplicatedStorage or PlayerGui,
+so all of it is live as soon as it ships. Tested in the headless stand-in only (scratchpad streaming2/build/C5: rbxsim +
+rbxsim_client + a late-Shared / late-PlayerGui driver; virtual clock, 0.1 s polls), not in Roblox and not on a phone.
+
+C5-1 Client Bootstrap: Shared gets 60 s slices, up to 180 s in total, so a slow phone is not left with a dead client.
+    There is one warn per slice ("... after 60 s; still waiting", "... after 120 s; still waiting", "... after 180 s;
+    giving up, client not started"). A Shared that arrives inside 180 s boots the client normally (stand-in: Shared at
+    70 s boots at 70.0 s, 39/39 Init).
+    - The two numbers are locals in Bootstrap (SHARED_WAIT_SLICE_S = 60, SHARED_WAIT_MAX_S = 180), not in Shared/Configs.
+      This is a deliberate config-first exception, because Configs lives inside the folder being waited for.
+    - Trade-off: a Shared that arrives after 180 s now ends in the notice (C5-2). HEAD 5e021d8 waited without limit:
+      it booted whenever Shared came, and hung silently if it never came.
+    - Reversible: raise SHARED_WAIT_MAX_S (for example to 300), or change the slice.
+    - PlayerGui has its own gate with the same numbers (C5-4). The two budgets are separate, so the longest wait before
+      the client starts is 180 s + 180 s = 360 s (stand-in: Shared at 170 s and PlayerGui at 330 s boots at 330.0 s).
+
+C5-2 Rejoin notice: shown when Shared never arrives. Bootstrap then returns before any require, so no controller can
+    throw or hang.
+    - It is one ScreenGui "WE_LoadFailed" (DisplayOrder 100, ResetOnSpawn false, IgnoreGuiInset false) holding one
+      TextLabel "Notice".
+    - Layout: 300x64 code px, top centre, 8 px under the Roblox top bar. Active = false, so nothing is tappable.
+    - Text: GothamBold 20 px, white on near-black (BackgroundTransparency 0.1), "Game failed to load.\nPlease rejoin.".
+      It names no keys and never says "click", so the copy is the same on every device.
+    - It has no UIScale, so 20 code px is 20 real px on a phone.
+    - It is shown only if PlayerGui appears within 10 s (a bounded wait). Otherwise there is one warn and no notice.
+    - No rejoin button. A TeleportService button would add a tap target and a new way to fail. The player leaves and
+      rejoins from the Roblox menu.
+    - Text and colours are hard-coded in Bootstrap for the same reason as C5-1.
+    - Reversible: delete showLoadFailedNotice and its one call.
+
+C5-3 Module guards: 23 client modules now wait 60 s for Shared, then warn and return their own (empty) module table.
+    That table is declared before the wait, so every consumer keeps the module's type.
+    - Bootstrap requires modules only after it has Shared, so in the real boot path these guards return at once.
+      They only matter if a module is required some other way.
+    - VehicleDriveClient.loadShared makes one bounded 60 s wait and then reads direct children. A missing Shared keeps
+      the driving defaults.
+    - ConsoleLocator lives in Shared.Util and runs on both server and client. It reaches Shared through
+      script.Parent.Parent and never waits (the PlotFrame pattern).
+    - Reversible per file.
+
+C5-4 PlayerGui waits:
+    - Bootstrap PlayerGui gate: after Shared is found and before any require, Bootstrap waits for PlayerGui in 60 s
+      slices, up to 180 s, with one warn per slice ("[WAR EMPIRE] Client Bootstrap: no PlayerGui after 60 s; still
+      waiting (slow connection?)", then 120 s, then "after 180 s; giving up, client not started").
+      - If PlayerGui never comes, Bootstrap warns and returns before any require. There is no notice, because without
+        PlayerGui nothing can be shown.
+      - The numbers are locals in Bootstrap (PLAYERGUI_WAIT_SLICE_S = 60, PLAYERGUI_WAIT_MAX_S = 180), the same
+        config-first exception as C5-1.
+    - 11 controllers keep their own 30 s PlayerGui wait (the CombatController pattern from spec F33). Each warns with
+      its own name and leaves its panel off. Because the gate runs first, these waits return at once in the real boot
+      path. They only matter if a controller is required some other way.
+    - WorldPromptController.ensurePadBuyGui never waits (FindFirstChildOfClass). With no PlayerGui it skips that
+      refresh, and the next refresh tries again.
+    - Why: without the gate, a PlayerGui more than 30 s late would leave WarEmpireHUD (left rail and cash pill) off
+      for the whole session (stand-in: 19 of 20 ScreenGuis at PlayerGui 35-60 s late); HEAD 5e021d8 built all 20.
+    - Stand-in results, PlayerGui late by 25, 35, 40, 45, 60, 90, 120 or 175 s, plus s70pg110, s150pg150
+      and s170pg330: 20 of 20 ScreenGuis, 39/39 Init, 0 errors, and no controller gave up waiting for PlayerGui. This
+      matches HEAD 5e021d8 in every case.
+    - Trade-offs:
+      - PlayerGui more than 180 s after Shared (pg185): cand2 stops at 180.2 s with no client. HEAD booted at 185.1 s.
+      - PlayerGui never arrives: HEAD hangs at the first controller for ever (3 Init, 2 unfinished). cand2 stops
+        cleanly at 180.2 s (3 warns, 0 Init, 0 errors).
+    - In Roblox, PlayerGui normally exists before StarterPlayerScripts run, so we expect neither case in practice. This
+      has not been measured on a device.
+    - Reversible: raise PLAYERGUI_WAIT_MAX_S, or delete the gate. Deleting it brings back the 30 s per-controller
+      behaviour, where the HUD can stay off when PlayerGui is more than 30 s late.
+
+C5-5 Bootstrap folder waits are bounded: Controllers and Modules 30 s, the five named controllers and modules 5 s (they
+    ship in the same folder as the script). safeRequire takes a nil Instance and warns instead of calling
+    pcall(require, nil).
+
+C5-6 Static gate: the C5 pin block (65 pins, headed "streaming2 lane C5 (F33)") sits in tools/BuyPathStatic.py just
+    before the final parse_gate().
+    - 4 pins cover the Bootstrap PlayerGui gate: its 60/180 numbers; each slice is bounded and warns;
+      it returns when PlayerGui never comes; and it runs after the Shared gate and before any controller is required.
+    - 16 of 16 mutations of Bootstrap fail at least one pin, including moving the gate after
+      the requires or before the Shared gate.
+    - It includes a scan of every file under StarterPlayer Client and ReplicatedStorage (120 files): a new
+      one-argument obj:WaitForChild("x") on one line fails BuyPathStatic. Other lanes must pass a timeout.
+    - Known limits (a regression guard, not a parser): the scan reads one line at a time and counts arguments, so it
+      does not catch a call whose only argument holds parentheses (WaitForChild(f(x))), a call split over several
+      lines, the string-call form (WaitForChild "x"), Instance.WaitForChild(obj, "x"), a call after a string holding
+      "--" on the same line, or a timeout that is not a real bound (math.huge). The guards' pins check the wait and
+      the warn, not the early return after it.
+    - The pins hard-code the numbers (60/180 slices, 30 s PlayerGui, TextSize 20, 300x64): changing a timeout per
+      C5-1 / C5-4 means changing the matching pin in the same commit. Two separate comment-aware argument counts over the same files found 0 such
+      calls (and 0 one-argument calls of any kind; HEAD 5e021d8 had 51 in 26 files).
+
+C5-7 Stand-in only: every timing above (the 60.0 / 120.1 / 180.2 s warns for Shared and for PlayerGui, the 70.0 s and
+    330.0 s boots, 180.2 s stops, and 185.1 s on HEAD) is the stand-in's virtual clock. The notice geometry comes from
+    the stand-in's Absolute* approximation (UDim2 plus ScreenGui insets), and the text width is an estimate (0.55 x size
+    per character).
+    Not tested:
+    - a real slow phone
+    - the real order in which Roblox replicates ReplicatedStorage and PlayerGui relative to PlayerScripts
+    - how the notice actually renders (GothamBold metrics, safe-area insets on a notched phone)
+    - server-side WaitForChild calls. src/ServerScriptService still has 81 unbounded (one-argument) WaitForChild
+      calls in 50 files, plus 22 that already pass a timeout. This lane changes no server file, so the count is the
+      same as HEAD 5e021d8. They are left for a server lane.
+
+## 2026-09-27 — Server size: Max Players 6, one base per player
+
+The owner relayed a chatbot's claim that the live place runs at Max Players 50 with only 6 base plots. The public API contradicts it: `games.roblox.com/v1/games?universeIds=10767159222` (no auth) returned
+`"maxPlayers":6` for root place 97112936860418 at 2026-09-27 15:34 and 15:37 UTC (the API's `updated` field was
+2026-09-25T09:53:29Z; `servers/Public` listed no running servers). The v68 entry (2026-09-24, item 1 "No plot hijack")
+had already asked for Max Players 6 in the place settings, so it was probably set then (it may also have been changed
+today, after the chatbot's message; the API does not say). Whether it was ever above 6, and so whether a 7th player
+explains the owner's sister's join report (2026-09-24 "Join hotfix" entry), cannot be determined from here. This entry only lines the repo up with the live 6
+(config number, boot warning, pins, LIVE_PLACE note); no place setting change is needed, the owner only confirms it
+still reads 6. Every item is reversible. Tested in the headless stand-in only (sim/rbxsim.luau), not in Roblox.
+
+MP-1 `GameConfig.MaxPlayersPerServer` 12 -> 6. Nothing in src reads it (it was 12 and unused; the real cap is the
+    place's Max Players setting, 6 per the public API); it now records the one-base-per-player rule and equals
+    `BaseConfig.MaxPlots` and `GameConfig.BasePlotCount`. Reversible: set it back and delete the first two MP-3 pins
+    (the number comparisons).
+MP-2 One developer-only check at boot, first line of `BaseService.Init` (`pcall(warnIfServerBiggerThanPlots)`): reads
+    `Players.MaxPlayers` in a pcall and, if it is a number greater than `BaseConfig.MaxPlots`, logs ONE server
+    warning ("[BaseService] Server size: ... Set Max Players to 6 in the place settings ..."). A module flag keeps it to
+    one per server even if Init runs twice. No player message, no kick, no teleport, no attribute; players past the
+    plot count still get the v69 no-plot path (WE_NoPlot, notice, next freed base). In a Studio play session Players.MaxPlayers comes
+    from the engine, not the file, so it may differ from the live setting (not checked); a Studio warning is not proof
+    the live place is above 6. The headless stand-in defaults Players.MaxPlayers to 20, so world-sim / DataService runs
+    print this warning once (one more warning than before, expected). Reversible: delete the function and its one call.
+MP-3 BuyPathStatic pins (tools/BuyPathStatic.py, above the final `parse_gate()`): the three numbers
+    (`GameConfig.MaxPlayersPerServer`, `GameConfig.BasePlotCount`, `BaseConfig.MaxPlots`) are parsed and must be equal;
+    the boot check exists, reads `Players.MaxPlayers`, compares with `BaseConfig.MaxPlots`, is called from
+    `BaseService.Init`, and never notifies, kicks, teleports or sets an attribute; docs/LIVE_PLACE.md has the
+    "Server size" note with Max Players equal to `BaseConfig.MaxPlots`. Each one fails on 5e021d8.
+MP-4 The Max Players value is a place setting outside the repo. Anyone can read the live value without auth from
+    games.roblox.com/v1/games?universeIds=10767159222 (field `maxPlayers`; 6 on 2026-09-27). The boot warning is the
+    in-server signal, in the server log (Developer Console, Server tab). A change applies to new servers only. The
+    BuyPathStatic pins are static and do not call the API.
+MP-5 More than 6 per server (8 to 12) needs more plots first (BaseConfig.PlotPositions + MapSetup pads), then the
+    three numbers and Max Players together, and a recheck of server-wide caps shared by every player (for example
+    CombatConfig.MaxActiveNPCs = 18).
+
+## 2026-09-27 — The owner's model check (WE_CHECK through Open Cloud, live place v75): 12 over-cap picks not used, Dock recorded, 10 picks held (wc2, rebuilt on 5e021d8)
+
+All reversible. Tested in the headless stand-in only, not in Roblox. Owner page: docs/ASSET_WIRING.md §4 call 12 and §5.
+Nothing in this entry loads a new model at runtime or changes what players see.
+
+- **AW-W1 12 ids / 21 keys are REJECT (over 40 parts in the owner's check).** 52154909, 4005471827, 5343886540,
+  8333853928, 31538715, 43773162, 2627182035, 3304171953, 5177695483, 10069416832, 11552687660, 11756438288. Their registry
+  rows are REJECT with the config targets kept, and `tools/wire-asset-ids.py reject --all` removed each `PendingAssetId`
+  and rewrote the Note. `ModelAssetId` is unchanged (VehicleDepot 12208876851 and Watchtowers 108525417345747 stay, inert
+  while PreferMesh is off; the rest stay 0), so every BuyPathStatic prefix pin holds. Loads, parts and lights do not
+  change: a PendingAssetId is never loaded. Reversible: `git revert` (reject keeps no journal).
+- **AW-W2 The fighter jet 3553891209 is held on the owner's call 12.** It passes every tool gate: with its HOLD line
+  removed, the promote gives Yaw 90 (YAW_HINT) and load budget 25 → 26. The owner asked about baking the models into the
+  place, so the jet waits for his answer (A = load by id, B = post-publish bake). On A: delete its `HOLD` line and its
+  BuyPathStatic HOLD pin, then `promote 3553891209 --we-check <his WE_CHECK lines>`. On B: the bake step (proven on a
+  test place first, AW-W3) and a baked-template lookup in VisualAssetService come first (not built).
+- **AW-W3 The post-publish Open Cloud bake is a fair option, not a forbidden one** (this replaces the scratch wc2/build
+  note "every bake route is blocked"). A script run through Open Cloud Luau Execution loads the owned models, parents
+  them to ServerStorage and calls `AssetService:SavePlaceAsync`. Nothing leaves Roblox and nothing enters the repo;
+  re-uploads, Packages and model files in the public repo stay off the table. What the save holds is documented, not
+  assumed: Roblox's Luau Execution reference (create.roblox.com/docs/en-us/cloud/reference/features/luau-execution.md,
+  LuauExecutionSessionTask, read 2026-09-27) says a task runs "in the context of a specific version of a place", that
+  "physics simulation does not run" and "Server and local scripts within the place also do not automatically run", and
+  its introduction says changes can be saved with `SavePlaceAsync`. So a bake saves the published place plus the models
+  it adds; our boot scripts (MapSetup world, POIs, NPCs) do not run in the task and put nothing into the save. Costs, in
+  call 12 and ASSET_SHORTLIST §1.C: (a) The setting is Creator Hub › place › Permissions › "Allow place to be updated
+  using Save Place API" (needed for places made in Studio); while it is on, any server-side code in the live game can
+  overwrite the place. It is not "Allow Loading Third Party Assets", which stays OFF. (b) Re-run after every Rojo publish,
+  against the version just published (`SavePlaceAsync` "overwrites the previous state of the place", so a bake of an
+  older version would put it back over the newer publish); servers that start before the bake finishes still load by
+  id; a place version per run; an active Team Create session blocks every save. (c) A VisualAssetService
+  baked-template lookup (not built), and a live place that differs from the tested build. (d) It is proven on a separate
+  test place first (the setting, the save, the lookup). Our recommendation is A, with B as the fallback only if
+  `WE_LIVE` ever shows a live server refusing an owned id, and only after the test-place proof. Reversible: the docs
+  text only; nothing is baked and no setting is changed.
+- **AW-W4 The evidence behind option A holds while WAR EMPIRE is owned by the user shaunie6 (470626172) and the Open
+  Cloud key is his.** LoadAsset checks the experience creator; his check ran on a Roblox server of this place and all 24
+  loaded via InsertService. Re-check (WE_LIVE) if the experience moves to a group or a collaborator's key runs a check.
+- **AW-W5 The walls pick 6980242709 is not promoted.** Its only live caller is `StructureKitBuilder` at walls level 3+
+  (`TryAttachBuildingVisual(ch, "DefensiveWalls", lv)`), and `VisualAssetService.weldScaledBuilding` scales the Z-long
+  model into the X-long 24 x 8 x 3 footprint (factor about 0.065) and then re-pivots it to the wall centre
+  (`weldCloneToPrimary(clone, hostPart, cloneName)` without `keepPlace`), so the dress sits inside the wall (walls lane
+  stand-in: a 0.22 x 0.93 x 3.00 piece, its bottom 11.21 studs below the wall top). It would add 40-60 parts per L3+ base
+  and 84-168 instance changes per wall level-up for nothing visible. Checked on 5e021d8: the code path is unchanged
+  (VisualAssetService.luau 1168-1178 and 1279-1296). Recorded as `HOLD` ("a VisualAssetService wall-fit fix, then the
+  second check") and in its config Note. The fix: `keepPlace = true` in weldScaledBuilding, plus a 90-degree yaw for walls
+  when the model is Z-long (or honour AssetRef.Yaw for buildings); then the second check, then the promote.
+- **AW-W6 The Dock pick 13183571527 is recorded (INERT) through the promote tool.** `Buildings.Dock` is read only by the
+  PreferMesh paths (off) and the Dock plinth is a console; the census asks for it only in the non-live PREFER phase. The
+  undo journal gains its entry and keeps the 8 existing ones byte for byte. The §3 licence row of 17701461178 keeps
+  `Buildings.Dock` under "Used by" with the tool's "moved to owner pick" note, because `demote 13183571527` needs the
+  journal hunk to match. Reversible: delete the wc2 Dock pin in BuyPathStatic (it refuses a demote otherwise), then
+  `demote 13183571527`; rehearsed on a copy, it gives back head's Dock line, licence rows and journal byte for byte (the
+  §3.1 sentence about the Dock row is deleted by hand, ASSET_WIRING §9).
+- **AW-W7 Promote-tool changes.** The `reject` command; `STUDIO_DONE` (the 24 part counts), `HOLD` (10 ids) and
+  `YAW_HINT` below the registry; gate_text keeps the hooks lane's OmitParts need and adds the check result and the HOLD
+  reason; promote runs the OMIT gate, then the HOLD gate; an INERT promote says "recorded only" in its Note and its phone
+  line; `status --json` gains `studio_parts` and `hold`; the Dock registry reason now carries the check result (2 parts).
+  Reversible: revert tools/wire-asset-ids.py.
+- **AW-W8 YAW_HINT is the default yaw for the held vehicles** (jet 90, light helicopters 90, APC 0, truck 180, recon plane
+  -90, gunboat -90: the vehicles lane read the store pictures, calibrated on Roblox's own car packs). The tool's size rule
+  gets 4 of these 6 wrong. Assumption: the picture reading is right; the second check can correct it, and `--yaw`
+  overrides it. Reversible: delete YAW_HINT and restore `yaw = yaw_override.get(aid)`.
+- **AW-W9 "Owner check (Open Cloud, v75)" in the new registry reasons and config Notes**, because the run was Open Cloud
+  Luau Execution, not Studio. Step 5 keeps its name "Studio check" (the P4 gate text still asks for it).
+- **AW-W10 The second check is one script, `tools/WeCheck2.luau`** (byte-identical to scratch wc2/script/we_check2.luau).
+  It replaces the scratch WE_TRIM and WE_GEO scripts, which are not shipped. Its 11 ids are the 10 HOLD ids and the Dock;
+  no REJECT id (BuyPathStatic pins and wc2/script/test/check_ids.py). Hardened here: every loaded copy is destroyed
+  outside the per-id pcall, and the final print pass runs in pcall with a fallback DONE line. It parents, saves and
+  publishes nothing. The BuyPathStatic parse gate covers tools/*.luau. Not run in Roblox.
+- **AW-W11 `WE_LIVE` checks 19 ids:** the 8 third-party picks that already load by id (the 7 first-batch picks and the
+  tripod gun 114570602) and the 11 ids of the second check; no rejected id. The header uses tostring, so a missing
+  property cannot stop the run. Stand-in run: 11 OK, 8 FAIL (no fixture), every copy destroyed, nothing parented. Not run
+  in Roblox.
+- **AW-W12 Load budget (docs/ASSET_WIRING.md §8): the tool admits every remaining batch, the census holds one fewer.**
+  The tool's own count on copies of the config with each batch promoted: today 25 of 56 healthy and 8 of 24 after boot;
+  P4 +4 (25 → 29, 8 → 12; the hooks-batch text said 28, the tool counts 4 distinct ids), the P2 wall +1, the 9 P3
+  vehicles +9; everything together 39 of 56 and 22 of 24. The census (census_all_w2 / census_fail_w2, stand-in, not
+  Roblox) runs on projections where the press has `ReplacesRoles = { "Signature" }` and a placeholder `OmitParts`, as
+  `promote` requires (business_roles_problem, OMIT gate), so it is dressed and loaded at PLOT (scratch
+  wc2/r2/fr1/mkproj_fr1.py). Everything promoted: 39 live ids on a healthy server (as the tool counts); in a full outage
+  BOOT uses 43 attempts, PLOT +5, and LATER reaches 64 with capRefused 1: RB_REFUSED_LIVE 1, the warzone Floodlight
+  116763933. So the census holds 21 first loads after boot, not 22. P4 + P3 (tool 21): 64 attempts, 0 refused. P4 alone
+  55, P4 + wall 56, 0 refused. Everything with MoneyBagFX and VfxSparkles at 0 (the clean-up's effect half; tool 20): 63
+  attempts, 0 refused. A projection without ReplacesRoles on the press never asks for it (38 healthy, 0 refused) and
+  understates the load, so budget projections set the press up as promote would. Rule: before the last of P2 / P3 / P4
+  (the batch that takes the after-boot count to 22) free at least one slot (the planned P3 clean-up first) or raise the
+  reserve on purpose after a clean census_fail run, and any batch past 21 after-boot loads needs census_fail first
+  (AW-L4). Reversible: docs text only; the projections live in scratch.
+- **AW-W13 Supersedes ASSUMPTIONS "Lane L1" item 7** (the promote tool would rewrite the Hangar pin to 5343886540 at P2):
+  5343886540 is REJECT (871 parts), and `Hangar = { ModelAssetId = 0` stays.
+- **AW-W14 The owner-page counts come from `status --json`:** waiting 52 (it still counts the Dock and the 8 live picks,
+  as before) and not used 53.
+- **AW-W15 AutoGun 114570602 is untouched** (hooks lane, live since cb2f357). It appears in STUDIO_DONE (31 parts) and in
+  WE_LIVE.
+- **AW-W16 Batch P4 (3322196012, 4362642898, 5589684833, 14408455045) still needs the first check.** The second check
+  does not cover it, because the promote tool reads `WE_CHECK OK` lines, not `WE_CHECK2` lines.

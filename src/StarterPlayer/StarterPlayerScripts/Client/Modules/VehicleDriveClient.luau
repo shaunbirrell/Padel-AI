@@ -1510,9 +1510,14 @@ local function preferredInput(): string
 end
 
 local function loadShared()
-	-- Shared is already loaded by VehicleController (the only caller of Init), so these never wait long
+	-- Shared is already loaded by VehicleController (the only caller of Init), so this never waits long
+	local Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- bounded (streaming2 C5, CLAUDE.md)
+	if not Shared then
+		warn("[WAR EMPIRE] VehicleDriveClient: no ReplicatedStorage.Shared after 60 s; driving keeps its defaults")
+		return
+	end
 	local okC, C = pcall(function(): any
-		return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Constants"))
+		return require(Shared.Constants)
 	end)
 	if okC and typeof(C) == "table" then
 		if typeof(C.Tags) == "table" and typeof(C.Tags.Water) == "string" then
@@ -1523,7 +1528,7 @@ local function loadShared()
 		end
 	end
 	local okR, R = pcall(function(): any
-		return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Remotes"))
+		return require(Shared.Remotes)
 	end)
 	if okR and typeof(R) == "table" then
 		RemotesMod = R
@@ -1531,7 +1536,7 @@ local function loadShared()
 		warn("[VehicleDriveClient] Remotes module:", R)
 	end
 	local okV, V = pcall(function(): any
-		return require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Configs"):WaitForChild("VehicleConfig"))
+		return require(Shared.Configs.VehicleConfig)
 	end)
 	if okV and typeof(V) == "table" and typeof(V.Drive) == "table" then
 		driveCfg = V.Drive

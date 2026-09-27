@@ -32,7 +32,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local AudioHooks = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] AudioHooks: no ReplicatedStorage.Shared after 60 s; not started")
+	return AudioHooks
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local SoundConfig = require(Shared.Configs.SoundConfig)
@@ -42,8 +48,6 @@ local AudioController = require(script.Parent.AudioController)
 local HudLayout = require(script.Parent.HudLayout)
 
 local Hooks = SoundConfig.Hooks
-
-local AudioHooks = {}
 
 local initDone = false
 
