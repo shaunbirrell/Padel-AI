@@ -3688,7 +3688,7 @@ AW-S7 AutoGun keeps 4923345827 until promote batch P1 swaps in 114570602 (no vis
    - `IndustrialProps.OilBarrel` is shadowed and stays 25623924.
    - The `Fence` alias also stays 25623924 (no caller; note updated), so BPS pin 285 "ModelAssetId = 25623924" still passes.
 6. **`StripEffectsAssetIds` pin.** The pin checks the prefix `StripEffectsAssetIds = { 23153991`, not the spec's closed-brace form. The DEFERRED BusinessService job can then append 31603741 / 4362642898 without rewriting a pin.
-7. **Pin 797 is swapped, not deleted.** It becomes `Hangar = { ModelAssetId = 0` (bps_changes.txt). The promote tool rewrites it to `Hangar = { ModelAssetId = 5343886540` at P2.
+7. **Pin 797 is swapped, not deleted.** It becomes `Hangar = { ModelAssetId = 0` (bps_changes.txt). The promote tool rewrites it to `Hangar = { ModelAssetId = 5343886540` at P2. **Superseded 2026-09-27 (AW-W13):** 5343886540 is REJECT (871 parts in the owner's check), so the pin stays `Hangar = { ModelAssetId = 0`.
    - The rule-5 must_not_contain pin for 6015472062 in VisualAssetService.luau is in bps_pins_after_L3.txt. It fails on the L1-only tree, where the VAS literal still appears 3 times, and passes once lane L3 lands.
 8. **Yaw 0 for the Roblox car bodies.** Dune Buggy (beige), Van (white) and Pickup Truck (bronze) all use Yaw 0. The headless Fit test on the real HEAD VehicleService kits puts the headlights at -Z, the tail lights at +Z and the left tyres on -X for all five keys. Nose direction on a device is still unverified.
 9. **The Pickup on an L1-only tree.** PatrolTruck / EscortTruck carry `OmitParts = { "light_tail_glass" }`, but HEAD VisualAssetService ignores OmitParts. On an L1-only tree:
@@ -4756,3 +4756,101 @@ MP-4 The Max Players value is a place setting outside the repo. Anyone can read 
 MP-5 More than 6 per server (8 to 12) needs more plots first (BaseConfig.PlotPositions + MapSetup pads), then the
     three numbers and Max Players together, and a recheck of server-wide caps shared by every player (for example
     CombatConfig.MaxActiveNPCs = 18).
+
+## 2026-09-27 — The owner's model check (WE_CHECK through Open Cloud, live place v75): 12 over-cap picks not used, Dock recorded, 10 picks held (wc2, rebuilt on 5e021d8)
+
+All reversible. Tested in the headless stand-in only, not in Roblox. Owner page: docs/ASSET_WIRING.md §4 call 12 and §5.
+Nothing in this entry loads a new model at runtime or changes what players see.
+
+- **AW-W1 12 ids / 21 keys are REJECT (over 40 parts in the owner's check).** 52154909, 4005471827, 5343886540,
+  8333853928, 31538715, 43773162, 2627182035, 3304171953, 5177695483, 10069416832, 11552687660, 11756438288. Their registry
+  rows are REJECT with the config targets kept, and `tools/wire-asset-ids.py reject --all` removed each `PendingAssetId`
+  and rewrote the Note. `ModelAssetId` is unchanged (VehicleDepot 12208876851 and Watchtowers 108525417345747 stay, inert
+  while PreferMesh is off; the rest stay 0), so every BuyPathStatic prefix pin holds. Loads, parts and lights do not
+  change: a PendingAssetId is never loaded. Reversible: `git revert` (reject keeps no journal).
+- **AW-W2 The fighter jet 3553891209 is held on the owner's call 12.** It passes every tool gate: with its HOLD line
+  removed, the promote gives Yaw 90 (YAW_HINT) and load budget 25 → 26. The owner asked about baking the models into the
+  place, so the jet waits for his answer (A = load by id, B = post-publish bake). On A: delete its `HOLD` line and its
+  BuyPathStatic HOLD pin, then `promote 3553891209 --we-check <his WE_CHECK lines>`. On B: the bake step (proven on a
+  test place first, AW-W3) and a baked-template lookup in VisualAssetService come first (not built).
+- **AW-W3 The post-publish Open Cloud bake is a fair option, not a forbidden one** (this replaces the scratch wc2/build
+  note "every bake route is blocked"). A script run through Open Cloud Luau Execution loads the owned models, parents
+  them to ServerStorage and calls `AssetService:SavePlaceAsync`. Nothing leaves Roblox and nothing enters the repo;
+  re-uploads, Packages and model files in the public repo stay off the table. What the save holds is documented, not
+  assumed: Roblox's Luau Execution reference (create.roblox.com/docs/en-us/cloud/reference/features/luau-execution.md,
+  LuauExecutionSessionTask, read 2026-09-27) says a task runs "in the context of a specific version of a place", that
+  "physics simulation does not run" and "Server and local scripts within the place also do not automatically run", and
+  its introduction says changes can be saved with `SavePlaceAsync`. So a bake saves the published place plus the models
+  it adds; our boot scripts (MapSetup world, POIs, NPCs) do not run in the task and put nothing into the save. Costs, in
+  call 12 and ASSET_SHORTLIST §1.C: (a) The setting is Creator Hub › place › Permissions › "Allow place to be updated
+  using Save Place API" (needed for places made in Studio); while it is on, any server-side code in the live game can
+  overwrite the place. It is not "Allow Loading Third Party Assets", which stays OFF. (b) Re-run after every Rojo publish,
+  against the version just published (`SavePlaceAsync` "overwrites the previous state of the place", so a bake of an
+  older version would put it back over the newer publish); servers that start before the bake finishes still load by
+  id; a place version per run; an active Team Create session blocks every save. (c) A VisualAssetService
+  baked-template lookup (not built), and a live place that differs from the tested build. (d) It is proven on a separate
+  test place first (the setting, the save, the lookup). Our recommendation is A, with B as the fallback only if
+  `WE_LIVE` ever shows a live server refusing an owned id, and only after the test-place proof. Reversible: the docs
+  text only; nothing is baked and no setting is changed.
+- **AW-W4 The evidence behind option A holds while WAR EMPIRE is owned by the user shaunie6 (470626172) and the Open
+  Cloud key is his.** LoadAsset checks the experience creator; his check ran on a Roblox server of this place and all 24
+  loaded via InsertService. Re-check (WE_LIVE) if the experience moves to a group or a collaborator's key runs a check.
+- **AW-W5 The walls pick 6980242709 is not promoted.** Its only live caller is `StructureKitBuilder` at walls level 3+
+  (`TryAttachBuildingVisual(ch, "DefensiveWalls", lv)`), and `VisualAssetService.weldScaledBuilding` scales the Z-long
+  model into the X-long 24 x 8 x 3 footprint (factor about 0.065) and then re-pivots it to the wall centre
+  (`weldCloneToPrimary(clone, hostPart, cloneName)` without `keepPlace`), so the dress sits inside the wall (walls lane
+  stand-in: a 0.22 x 0.93 x 3.00 piece, its bottom 11.21 studs below the wall top). It would add 40-60 parts per L3+ base
+  and 84-168 instance changes per wall level-up for nothing visible. Checked on 5e021d8: the code path is unchanged
+  (VisualAssetService.luau 1168-1178 and 1279-1296). Recorded as `HOLD` ("a VisualAssetService wall-fit fix, then the
+  second check") and in its config Note. The fix: `keepPlace = true` in weldScaledBuilding, plus a 90-degree yaw for walls
+  when the model is Z-long (or honour AssetRef.Yaw for buildings); then the second check, then the promote.
+- **AW-W6 The Dock pick 13183571527 is recorded (INERT) through the promote tool.** `Buildings.Dock` is read only by the
+  PreferMesh paths (off) and the Dock plinth is a console; the census asks for it only in the non-live PREFER phase. The
+  undo journal gains its entry and keeps the 8 existing ones byte for byte. The §3 licence row of 17701461178 keeps
+  `Buildings.Dock` under "Used by" with the tool's "moved to owner pick" note, because `demote 13183571527` needs the
+  journal hunk to match. Reversible: delete the wc2 Dock pin in BuyPathStatic (it refuses a demote otherwise), then
+  `demote 13183571527`; rehearsed on a copy, it gives back head's Dock line, licence rows and journal byte for byte (the
+  §3.1 sentence about the Dock row is deleted by hand, ASSET_WIRING §9).
+- **AW-W7 Promote-tool changes.** The `reject` command; `STUDIO_DONE` (the 24 part counts), `HOLD` (10 ids) and
+  `YAW_HINT` below the registry; gate_text keeps the hooks lane's OmitParts need and adds the check result and the HOLD
+  reason; promote runs the OMIT gate, then the HOLD gate; an INERT promote says "recorded only" in its Note and its phone
+  line; `status --json` gains `studio_parts` and `hold`; the Dock registry reason now carries the check result (2 parts).
+  Reversible: revert tools/wire-asset-ids.py.
+- **AW-W8 YAW_HINT is the default yaw for the held vehicles** (jet 90, light helicopters 90, APC 0, truck 180, recon plane
+  -90, gunboat -90: the vehicles lane read the store pictures, calibrated on Roblox's own car packs). The tool's size rule
+  gets 4 of these 6 wrong. Assumption: the picture reading is right; the second check can correct it, and `--yaw`
+  overrides it. Reversible: delete YAW_HINT and restore `yaw = yaw_override.get(aid)`.
+- **AW-W9 "Owner check (Open Cloud, v75)" in the new registry reasons and config Notes**, because the run was Open Cloud
+  Luau Execution, not Studio. Step 5 keeps its name "Studio check" (the P4 gate text still asks for it).
+- **AW-W10 The second check is one script, `tools/WeCheck2.luau`** (byte-identical to scratch wc2/script/we_check2.luau).
+  It replaces the scratch WE_TRIM and WE_GEO scripts, which are not shipped. Its 11 ids are the 10 HOLD ids and the Dock;
+  no REJECT id (BuyPathStatic pins and wc2/script/test/check_ids.py). Hardened here: every loaded copy is destroyed
+  outside the per-id pcall, and the final print pass runs in pcall with a fallback DONE line. It parents, saves and
+  publishes nothing. The BuyPathStatic parse gate covers tools/*.luau. Not run in Roblox.
+- **AW-W11 `WE_LIVE` checks 19 ids:** the 8 third-party picks that already load by id (the 7 first-batch picks and the
+  tripod gun 114570602) and the 11 ids of the second check; no rejected id. The header uses tostring, so a missing
+  property cannot stop the run. Stand-in run: 11 OK, 8 FAIL (no fixture), every copy destroyed, nothing parented. Not run
+  in Roblox.
+- **AW-W12 Load budget (docs/ASSET_WIRING.md §8): the tool admits every remaining batch, the census holds one fewer.**
+  The tool's own count on copies of the config with each batch promoted: today 25 of 56 healthy and 8 of 24 after boot;
+  P4 +4 (25 → 29, 8 → 12; the hooks-batch text said 28, the tool counts 4 distinct ids), the P2 wall +1, the 9 P3
+  vehicles +9; everything together 39 of 56 and 22 of 24. The census (census_all_w2 / census_fail_w2, stand-in, not
+  Roblox) runs on projections where the press has `ReplacesRoles = { "Signature" }` and a placeholder `OmitParts`, as
+  `promote` requires (business_roles_problem, OMIT gate), so it is dressed and loaded at PLOT (scratch
+  wc2/r2/fr1/mkproj_fr1.py). Everything promoted: 39 live ids on a healthy server (as the tool counts); in a full outage
+  BOOT uses 43 attempts, PLOT +5, and LATER reaches 64 with capRefused 1: RB_REFUSED_LIVE 1, the warzone Floodlight
+  116763933. So the census holds 21 first loads after boot, not 22. P4 + P3 (tool 21): 64 attempts, 0 refused. P4 alone
+  55, P4 + wall 56, 0 refused. Everything with MoneyBagFX and VfxSparkles at 0 (the clean-up's effect half; tool 20): 63
+  attempts, 0 refused. A projection without ReplacesRoles on the press never asks for it (38 healthy, 0 refused) and
+  understates the load, so budget projections set the press up as promote would. Rule: before the last of P2 / P3 / P4
+  (the batch that takes the after-boot count to 22) free at least one slot (the planned P3 clean-up first) or raise the
+  reserve on purpose after a clean census_fail run, and any batch past 21 after-boot loads needs census_fail first
+  (AW-L4). Reversible: docs text only; the projections live in scratch.
+- **AW-W13 Supersedes ASSUMPTIONS "Lane L1" item 7** (the promote tool would rewrite the Hangar pin to 5343886540 at P2):
+  5343886540 is REJECT (871 parts), and `Hangar = { ModelAssetId = 0` stays.
+- **AW-W14 The owner-page counts come from `status --json`:** waiting 52 (it still counts the Dock and the 8 live picks,
+  as before) and not used 53.
+- **AW-W15 AutoGun 114570602 is untouched** (hooks lane, live since cb2f357). It appears in STUDIO_DONE (31 parts) and in
+  WE_LIVE.
+- **AW-W16 Batch P4 (3322196012, 4362642898, 5589684833, 14408455045) still needs the first check.** The second check
+  does not cover it, because the promote tool reads `WE_CHECK OK` lines, not `WE_CHECK2` lines.

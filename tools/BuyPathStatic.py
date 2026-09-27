@@ -4821,6 +4821,62 @@ if _mp_dm and _mp_plots is not None and int(_mp_dm.group(1)) == _mp_plots:
 else:
     bad(f'server size: docs/LIVE_PLACE.md has no "## Server size" note with Max Players = BaseConfig.MaxPlots ({_mp_plots})')
 
+# --- wc2/r2: the owner's check (WE_CHECK through Open Cloud Luau Execution in the live place, version 75, 2026-09-25),
+# rebuilt on 5e021d8 (after the hooks lane). Paste above the final `parse_gate()` call. Headless-verified: every pin below
+# PASSES on the wc2/r2 candidate and FAILS on clean 5e021d8 (bps_head_withpins.log). Changes no existing pin.
+WC2_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+WC2_TOOL = "tools/wire-asset-ids.py"
+WC2_WIRING = "docs/ASSET_WIRING.md"
+WC2_SL = "docs/ASSET_SHORTLIST.md"
+WC2_CHECK2 = "tools/WeCheck2.luau"
+WC2_REJECTED = ("52154909", "4005471827", "5343886540", "8333853928", "31538715", "43773162", "2627182035", "3304171953",
+                "5177695483", "10069416832", "11552687660", "11756438288")
+# 12 owner picks over MaxPartsPerModel are REJECT (targets kept): their PendingAssetId is gone and must not come back
+# without a new check; the second-check script never loads them
+for _wc2_id in WC2_REJECTED:
+    must_not_contain(WC2_VAC, f"PendingAssetId = {_wc2_id}", f"wc2: owner pick {_wc2_id} refused by the owner's check (over 40 parts) stays out of the config")
+    must_contain(WC2_TOOL, f"'REJECT', {_wc2_id}, {_wc2_id}, '', '-', '', ['", f"wc2: registry row(s) of {_wc2_id} are REJECT with their config targets kept")
+    must_not_contain(WC2_CHECK2, f"{_wc2_id},", f"wc2: the second check does not load refused pick {_wc2_id}")
+must_contain(WC2_TOOL, 'rj = sub.add_parser("reject")', "wc2: the promote tool has a reject path for picks the owner's check refused")
+must_contain(WC2_TOOL, 'passes; promote it instead")', "wc2: reject refuses an id whose WE_CHECK line passes the cap")
+# the Dock pick is recorded only (Buildings.Dock is read only while PreferMeshWhenAssetIdSet is on; it stays false)
+must_contain(WC2_VAC, 'Dock = { ModelAssetId = 13183571527, Note = "owner pick: boat dock by tihi2', "wc2: Buildings.Dock records owner pick 13183571527 (recorded only)")
+# the check is on record; promote keeps the hooks lane's OMIT gate and refuses a pick on HOLD right after it
+must_contain(WC2_TOOL, 'STUDIO_CHECK_SOURCE = "owner\'s Open Cloud run in the live place, version 75, 2026-09-25"', "wc2: the tool records the owner's check (live place v75)")
+must_contain(WC2_TOOL, '                why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"\n        if not why and aid in HOLD:\n            why = f"on hold: {HOLD[aid]}', "wc2: promote runs the OMIT gate, then refuses a pick on HOLD")
+must_contain(WC2_TOOL, '    if "OMIT" in r.flags:\n        need.append("OmitParts")\n    if r.id in HOLD:\n        need.append(HOLD[r.id])', "wc2: the status gate text keeps OmitParts and shows the HOLD reason")
+must_contain(WC2_TOOL, "yaw = yaw_override.get(aid, YAW_HINT.get(aid))", "wc2: promote takes a held vehicle's yaw from YAW_HINT unless --yaw is given")
+# held picks: the jet waits on the owner's call 12, the walls on the VisualAssetService fit fix, the rest on the second check.
+# Each keeps ModelAssetId 0 and its PendingAssetId (no runtime load; the tool refuses a promote while the HOLD line
+# is there). Delete a HOLD line (and its pin here) in the same commit as its promote.
+must_contain(WC2_TOOL, '    3553891209: "your call 12 (load by id, or bake after each publish)",', "wc2: the fighter jet waits on the owner's call 12")
+must_contain(WC2_TOOL, '    6980242709: "a VisualAssetService wall-fit fix, then the second check",', "wc2: the walls pick waits on the VisualAssetService fit fix (its only caller buries it)")
+for _wc2_h in ("2474869838", "9076240315", "15838664806", "8546141386", "4954987035", "5318635087", "8455894899", "11357157285"):
+    must_contain(WC2_TOOL, f'    {_wc2_h}: "second check', f"wc2: {_wc2_h} waits on the second check (HOLD)")
+must_contain(WC2_VAC, 'DefensiveWalls = { ModelAssetId = 0, PendingAssetId = 6980242709, Note = "owner pick Military Wall (SMehmetaga): pending, P2; passed the owner check', "wc2: the walls pick stays pending and its Note records the fit finding")
+# call 12 is a fair choice (load by id, or a post-publish bake inside Roblox), and the owner can run both checks himself
+must_contain(WC2_WIRING, "12. **Store models: load them while the game runs (A), or bake them into the place after every publish (B)?**", "wc2: ASSET_WIRING §4 call 12 offers load-by-id or a post-publish bake")
+must_contain(WC2_WIRING, "- **B. Bake after every publish.**", "wc2: call 12 describes the post-publish bake and its costs")
+must_contain(WC2_SL, "### C. Baking inside Roblox after each publish", "wc2: ASSET_SHORTLIST §1.C documents the post-publish bake")
+# option B is described as Roblox documents it: the Luau Execution reference says a task runs one place version and the
+# place's own server and local scripts do not run there, so a bake saves the published place plus the baked models (no
+# "whole running server"). Its real costs stay on the page, and the exact place setting is named (it is not the
+# forbidden "Allow Loading Third Party Assets")
+must_contain(WC2_WIRING, "and the place's own server and local scripts do not run.", "wc2: call 12 B says what Roblox's docs say: place scripts do not run in a Luau Execution task")
+must_contain(WC2_SL, "Server and local scripts within the place also do not automatically run.", "wc2: ASSET_SHORTLIST §1.C quotes Roblox's Luau Execution reference on place scripts")
+for _wc2_doc in (WC2_WIRING, WC2_SL):
+    must_not_contain(_wc2_doc, "whole running server", f"wc2: {_wc2_doc} does not say the bake saves a running server (Roblox's docs: place scripts do not run in a task)")
+must_contain(WC2_WIRING, '"Allow place to be updated using Save Place API" must be on', "wc2: call 12 B names the Save Place API place setting")
+must_contain(WC2_SL, '**Permissions** › "Allow place to be updated using Save Place API"', "wc2: ASSET_SHORTLIST §1.C names the Save Place API place setting")
+# the load budget: the census holds 21 first loads after boot, so the last of P2 / P3 / P4 needs a slot freed first
+must_contain(WC2_WIRING, "So **before the last of the three batches** (the one that brings the count to 22)", "wc2: ASSET_WIRING §8 says to free a load slot before the last batch")
+must_contain(WC2_SL, "5b. **Second check** (`WE_CHECK2`", "wc2: ASSET_SHORTLIST step 5b points to tools/WeCheck2.luau")
+must_contain(WC2_SL, "5c. **Live-server load check** (`WE_LIVE`", "wc2: ASSET_SHORTLIST step 5c holds the WE_LIVE one-liner")
+# the second check is read-only: loads, measures, destroys; never parents, saves or publishes
+must_contain(WC2_CHECK2, "-- WE_CHECK2: WAR EMPIRE second model check (read-only).", "wc2: tools/WeCheck2.luau is the owner's second check")
+must_contain(WC2_CHECK2, "\t\t\ttoDestroy:Destroy()", "wc2: the second check destroys every model it loaded")
+for _wc2_bad in (".Parent =", "SavePlaceAsync", "PublishAsync", "DataStoreService", "HttpService", "Instance.new("):
+    must_not_contain(WC2_CHECK2, _wc2_bad, f"wc2: the second check never uses `{_wc2_bad}`")
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
