@@ -4975,7 +4975,7 @@ for _dr_needle, _dr_label in (
     ("ProductsPerTick = { 2, 2, 3, 3, 4 },", "Armor Plate Press k per beat 2/2/3/3/4"),
     ("ProductsPerTick = { 2, 2, 2, 3, 3 },", "Rocket Assembly k per beat 2/2/2/3/3"),
     ("LookTiers = {", "server look tiers in config"),
-    ('LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Chimney" },', "look tiers touch only Housing / Roof / BeltFrame / Bin / Chimney"),
+    # bizlook (2026-09-27): Chimney -> Hall (the head office); pinned in the bizlook block below
     ("RiseByLevel = { 1.0, 1.2, 1.4, 1.6, 1.8 },", "heap rise 1.0 .. 1.8 (full top 3.15 .. 3.95, under the awning)"),
     ("BeltFx = {\n\t\t\tEnabled = false,", "BeltFx code ships OFF (OD-7: on only after the owner's Studio check)"),
     ("Ghost = { Enabled = false,", "Ghost preview is v1.1 (off in v1a)"),
@@ -5003,8 +5003,7 @@ must_contain(DR_BZS, "if reflectance ~= nil and math.abs(p.Reflectance - reflect
 must_contain(DR_BZS, "\t\tp.Reflectance = reflectance -- droppers v1a look tier (Arsenal Roof), set before parenting", "droppers v1a: a new Arsenal Roof gets its Reflectance before it is parented")
 must_not_contain(DR_BZS, "AddXP", "droppers v1a: BusinessService grants no XP (spec_xp: purchase XP only)")
 # TycoonGuideConfig: BUY line 2 / NEXT chip names for business levels 2-5 (no [1]: it would shorten BUY line 1)
-for _dr_id in ("AmmoWorks", "ArmsCrateLine", "ArmorPlatePress", "RocketAssembly"):
-    must_contain(DR_TGC, f'{_dr_id} = {{ [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" }},', f"droppers v1a: {_dr_id} BUY line 2 / NEXT chip unlock names")
+# bizlook (2026-09-27): the unlock names now say what each level adds to the building; pinned in the bizlook block below
 # SoundConfig: the two v1a keys reuse ids already in SoundConfig (no new sound id)
 must_contain(DR_SND, '["Biz.Ship"] = { Id = 9113849492,', "droppers v1a: Biz.Ship reuses the Cash.Collect file 9113849492")
 must_contain(DR_SND, '["Biz.FirstLand"] = { Id = 9119915230,', "droppers v1a: Biz.FirstLand reuses the Impact.Metal file 9119915230")
@@ -7678,6 +7677,178 @@ for _ty_bad in ("PointLight", "SpotLight", "SurfaceLight", "Enum.Material.Neon",
     must_not_contain(TYB, _ty_bad, f"owner-vis yard: TrainingYardBuilder has no `{_ty_bad}`")
 for _ty_bad in ("M.Neon", "Enum.Material.Neon", "Sandbag", "15271872710", "182529039", "2930926216"):
     must_not_contain(TYC, _ty_bad, f"owner-vis yard: TrainingYardConfig has no `{_ty_bad}` (no Neon; the owner-picked SandBag Wall / Tent / Military Crates stay off the yard)")
+# --- bizlook (2026-09-27, owner: "The dropper should look like a legit high-end business"): the four war businesses
+# rebuilt as small branded company sites at the same part count per level (L0 4 / L1 10 / L2 12 / L3 14 / L4 15 /
+# L5 16), with Roblox-made Synty City building pieces (already live: 0 new load attempts) standing in for Part-kit roles
+# one for one. Every pin here fails on HEAD 90cad49 except 7 that hold there by design and fail on mutated copies
+# (bizlook/out/bps_pins.txt); the v1a line geometry (Belt / BeltFrame / Bin / Housing wall / PressRam) is pinned so the
+# machines, products, heap and pop keep their boxes.
+BL_BZC = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
+BL_BZS = "src/ServerScriptService/Server/Services/BusinessService.luau"
+BL_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+BL_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+BL_TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
+BL_TOOL = "tools/wire-asset-ids.py"
+BL_LIC = "docs/ASSET_LICENSES.md"
+for _bl_needle, _bl_label in (
+    ('{ Role = "Housing", MinLevel = 1, Size = Vector3.new(7, 7, 8), Offset = Vector3.new(-6.5, 3.5, 0), Material = Enum.Material.Brick, ColorKey = "Body", Collide = true },', "the workshop keeps the v1a Housing box (the ShellPress sits in its +X wall), brick"),
+    ('{ Role = "Belt", MinLevel = 1, Size = Vector3.new(9, 0.4, 2.6), Offset = Vector3.new(2, 2.4, 0), Material = Enum.Material.Fabric, ColorKey = "Belt" },', "the belt keeps its v1a box (products, machines, the belt dress)"),
+    ('{ Role = "BeltFrame", MinLevel = 1, Size = Vector3.new(9, 2.2, 2.2), Offset = Vector3.new(2, 1.1, 0), Material = Enum.Material.Metal, ColorKey = "Frame", Collide = true },', "the belt frame keeps its v1a box"),
+    ('{ Role = "Bin", MinLevel = 1, Size = Vector3.new(4, 2.2, 5), Offset = Vector3.new(8.5, 1.1, 0), Material = Enum.Material.Metal, ColorKey = "Dark", Collide = true },', "the bin keeps its v1a box (heap, pop, Ship FX)"),
+    ('{ Role = "Dock", MinLevel = 2, Size = Vector3.new(8.5, 6, 5.5), Offset = Vector3.new(8.25, 3, -6.75), Material = Enum.Material.Brick, ColorKey = "Body", Collide = true },', "L2 loading unit collider behind the bin: 6 studs high (the ATM behind Ammo Works stays in sight)"),
+    ('{ Role = "DockFront", MinLevel = 2, Size = Vector3.new(4.4, 4.6, 0.3), Offset = Vector3.new(8.5, 2.3, -3.9), Material = Enum.Material.Metal, ColorKey = "Shutter" },', "L2 loading unit front (Part-kit shutter; the roller-shutter piece takes its place)"),
+    ('{ Role = "Hall", MinLevel = 3, Size = Vector3.new(16, 9, 6), Offset = Vector3.new(-4, 4.5, -7), Material = Enum.Material.Metal, ColorKey = "Hall", Collide = true, Grow = {', "L3 head office collider behind the belt start (x -12 .. 4), grows at L4 / L5"),
+    ('{ FromLevel = 5, Size = Vector3.new(16, 14, 6), Offset = Vector3.new(-4, 7, -7) } } },', "the L5 office box is 16 x 14 x 6"),
+    ('{ Role = "HallFront", MinLevel = 3, Size = Vector3.new(16.3, 2, 6.3), Offset = Vector3.new(-4, 6.2, -7), Material = Enum.Material.Glass, ColorKey = "Glass", Reflectance = 0.25, Grow = {', "L3 office front (Part-kit window band; the office piece takes its place)"),
+    ('{ Role = "Canopy", MinLevel = 4, Size = Vector3.new(9.4, 0.4, 6.2), Offset = Vector3.new(1.3, 6.4, -1), Material = Enum.Material.Metal, ColorKey = "Canopy" },', "L4 canopy over the belt, x -3.4 .. 6: the bin and the pop stay open to the sky"),
+    ('{ Role = "Fascia", MinLevel = 5, Size = Vector3.new(16.4, 1.4, 6.4), Offset = Vector3.new(-4, 14.5, -7), Material = Enum.Material.SmoothPlastic, ColorKey = "Accent" },', "L5 brand band round the office top"),
+    ('LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Hall" },', "look tiers: Hall takes the Chimney's slot"),
+    ('{ FromLevel = 1, Name = "Field", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.Brick, Shade = 1, RoofReflectance = 0 },', "no rust tier: the Field workshop is brick"),
+    ("export type KitGrow = { FromLevel: number, Size: Vector3, Offset: Vector3 }", "KitGrow rows (a kit box per level)"),
+    ("Hopper = { Size = Vector3.new(3.4, 2.2, 2.2), Offset = Vector3.new(-6.5, 9.4, -0.5), Shape = Enum.PartType.Cylinder, Rot = Vector3.new(0, 0, 90) },", "Ammo Works' product sign: a brass casing standing on the workshop roof"),
+    ("PressRam = { Size = Vector3.new(3, 1.6, 3), Offset = Vector3.new(2, 4.4, 0) },", "the Armor press ram keeps its v1a box (the stamp rests inside it)"),
+):
+    must_contain(BL_BZC, _bl_needle, f"bizlook: BusinessConfig {_bl_label}")
+for _bl_row in (
+    'Palette = { Body = Color3.fromRGB(150, 88, 66), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(226, 160, 40) }, -- bizlook brand: amber',
+    'Palette = { Body = Color3.fromRGB(138, 92, 72), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(58, 150, 84) }, -- bizlook brand: green',
+    'Palette = { Body = Color3.fromRGB(126, 96, 84), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(46, 112, 196) }, -- bizlook brand: blue',
+    'Palette = { Body = Color3.fromRGB(156, 100, 76), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(204, 58, 48) }, -- bizlook brand: red',
+):
+    must_contain(BL_BZC, _bl_row, "bizlook: brand colour per business (amber / green / blue / red)")
+# BusinessService: growth written only when it differs, never on a dressed part; stretched pieces refitted; colliders
+# a piece hid shown again when it goes
+for _bl_needle, _bl_label in (
+    ("local function geomFor(kp: BusinessConfig.KitPart, lv: number): (Vector3, Vector3)", "one rule for a kit box at a level (Grow rows)"),
+    ("\tif kp.Grow == nil or p:GetAttribute(\"WE_CatalogAssetId\") ~= nil then\n\t\treturn\n\tend", "growth never moves a dressed part"),
+    ("\tif (p.Size - size).Magnitude > 0.001 then\n\t\tp.Size = size\n\tend", "growth writes Size only when it differs (idle re-sync = 0 writes)"),
+    ("\tif (p.Position - cf.Position).Magnitude > 0.001 then\n\t\tp.CFrame = cf\n\tend", "growth writes CFrame only when it differs"),
+    ("local size, offset = geomFor(kp, lv) -- bizlook: built at its level's box (0 extra writes)", "a new kit part is built at its level's box"),
+    ("applyGrow(have, kp, base, lv) -- bizlook: the level's box; writes only what differs", "an existing kit part gets its level's box"),
+    ("if have and have:IsA(\"BasePart\") and kp.MinLevel <= lv and needsRefit(have, lv) then", "a stretched piece whose box changed is rebuilt (the deferred dress fits it again)"),
+    ("\t\tif c:IsA(\"BasePart\") and c:GetAttribute(\"WE_BizHiddenBy\") == role then\n\t\t\tc.Transparency = 0", "a collider a piece hid shows again when the piece goes"),
+    ("showHidden(m, kp.Role) -- bizlook: a collider this role's piece hid shows again (if it stays)", "level-down / rebirth: hidden colliders come back"),
+):
+    must_contain(BL_BZS, _bl_needle, f"bizlook: BusinessService {_bl_label}")
+# VisualAssetConfig: the pieces (Roblox Synty City, already live) and their typed fields
+for _bl_needle, _bl_label in (
+    ('DockFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_06", ReplacesRoles = { "DockFront" }, Into = "Dock", Fit = "Stretch", Yaw = 180, HideRoles = { "Dock" },', "L2 loading unit = Roblox Synty roller-shutter unit, stretched into the Dock box, Dock hidden (collision kept)"),
+    ('HallFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_03", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, ToLevel = 4,', "L3-4 office = Roblox Synty two-storey office in the Hall box"),
+    ('HallFrontL5 = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_02", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, FromLevel = 5,', "L5 office = Roblox Synty three-storey glass-front office in the taller Hall box"),
+    ('Canopy = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_Cover_03", ReplacesRoles = { "Canopy" },', "L4 canopy = Roblox Synty corrugated canopy, fitted uniformly"),
+    ("Into: string?, -- BusinessPieces:", "AssetRef.Into is typed"),
+    ("HideRoles: { string }?, -- BusinessPieces:", "AssetRef.HideRoles is typed"),
+):
+    must_contain(BL_VAC, _bl_needle, f"bizlook: VisualAssetConfig {_bl_label}")
+# VisualAssetService: the piece path
+for _bl_needle, _bl_label in (
+    ("local pieces = (VisualAssetConfig :: any).BusinessPieces", "TryAttachBusinessVisual also dresses the shared BusinessPieces"),
+    ("if (ref.FromLevel ~= nil and lvNow < ref.FromLevel) or (ref.ToLevel ~= nil and lvNow > ref.ToLevel) then\n\t\treturn false", "a piece is worn only in its level range"),
+    ("if p:GetAttribute(\"WE_CatalogAssetId\") == assetId and (piece == nil or p:GetAttribute(\"WE_CatalogPiece\") == piece) then", "a pack piece counts as on only when the part wears that piece (the L5 office swap)"),
+    ("\t\t\t\tp.Size = if quarter then Vector3.new(box.Size.Z, box.Size.Y, box.Size.X) else box.Size\n\t\t\t\tp.CFrame = box.CFrame * CFrame.Angles(0, math.rad(yaw), 0)", "Fit = Stretch fills the Into box exactly (turned by Yaw)"),
+    ("\t\t\t\thp.Transparency = 1\n\t\t\t\thp.CastShadow = false\n\t\t\t\thp:SetAttribute(\"WE_BizHiddenBy\", roles[1])", "HideRoles only hides (the collider keeps CanCollide / CanQuery)"),
+    ("p:SetAttribute(\"WE_BizFitRole\", ref.Into) -- bizlook: BusinessService refits it when that box grows", "a stretched piece records the box it fills"),
+):
+    must_contain(BL_VAS, _bl_needle, f"bizlook: VisualAssetService {_bl_label}")
+must_not_contain(BL_VAS, "hp.CanCollide = false", "bizlook: a hidden collider is never made non-colliding")
+for _bl_id in ("AmmoWorks", "ArmsCrateLine", "ArmorPlatePress", "RocketAssembly"):
+    must_contain(BL_TGC, f'{_bl_id} = {{ [2] = "Loading bay", [3] = "Head office", [4] = "Belt canopy", [5] = "Company HQ" }},', f"bizlook: {_bl_id} BUY line 2 / NEXT chip names say what each level adds")
+must_contain(BL_TOOL, 'PIECE_BUCKETS = ("BusinessPieces",)', "bizlook: the promote tool's load budget counts the business pieces")
+must_contain(BL_TOOL, "for bucket in HOOK_BUCKETS + PIECE_BUCKETS:", "bizlook: ... in its live chains")
+must_contain(BL_LIC, "`BusinessPieces.DockFront`, `.HallFront`, `.HallFrontL5`, `.Canopy`", "bizlook: the pieces are on the Synty City licence row")
+
+
+def _bl_rules() -> None:
+    """bizlook static rules: part count per level; BusinessPieces replace known non-colliding roles, fill known
+    colliding boxes they hide, add no load id, and change piece only where the box changes; the site stays clear of
+    the pop, the ATM sight line and the neighbours."""
+    bz = read(BL_BZC) or ""
+    vac = read(BL_VAC) or ""
+    kitm = re.search(r"\n\tKit = \{(.*?)\n\t\} :: \{ KitPart \},", bz, re.S)
+    if not kitm:
+        bad("bizlook: BusinessConfig.Kit not found")
+        return
+    V = r"Vector3\.new\(([-\d.]+), ([-\d.]+), ([-\d.]+)\)"
+    kit = {}
+    for m in re.finditer(r'\{ Role = "(\w+)", MinLevel = (\d+), Size = ' + V + r", Offset = " + V + r"([^\n]*)", kitm.group(1)):
+        grows = [(int(g.group(1)), tuple(float(x) for x in g.group(2, 3, 4)), tuple(float(x) for x in g.group(5, 6, 7)))
+                 for g in re.finditer(r"\{ FromLevel = (\d+), Size = " + V + r", Offset = " + V + r" \}", m.group(9))]
+        kit[m.group(1)] = dict(min=int(m.group(2)), size=tuple(float(x) for x in m.group(3, 4, 5)),
+                               off=tuple(float(x) for x in m.group(6, 7, 8)), collide="Collide = true" in m.group(9), grow=grows)
+    counts = [3 + sum(1 for k in kit.values() if k["min"] <= lv) for lv in range(6)]
+    if counts == [4, 10, 12, 14, 15, 16]:
+        ok(f"bizlook: parts per business by level {counts} = v1a (console 3 included): nothing added at any level")
+    else:
+        bad(f"bizlook: parts per business by level {counts} (v1a: [4, 10, 12, 14, 15, 16])")
+
+    def box(role: str, lv: int):
+        k = kit[role]; s, o = k["size"], k["off"]
+        for fl, gs, go in k["grow"]:
+            if fl <= lv:
+                s, o = gs, go
+        return [o[i] - s[i] / 2 for i in range(3)], [o[i] + s[i] / 2 for i in range(3)]
+    probs = []
+    # the pop column (bin centre + (1, 5.5, 0), 3 x 3 studs, rise 1.5) and its low anchor stay outside every kit box
+    for lv in range(1, 6):
+        for role, k in kit.items():
+            if k["min"] > lv:
+                continue
+            lo, hi = box(role, lv)
+            if lo[0] < 11 and hi[0] > 8 and lo[1] < 8.1 and hi[1] > 6 and lo[2] < 1.5 and hi[2] > -1.5:
+                probs.append(f"L{lv} {role} box meets the pop column")
+    # ATM sight line (Ammo Works kiosk -> ATM passes x ~7 at the building line): tall boxes stand at x <= 4 (trims 4.25), and
+    # anything right of x 4 behind the line is <= 6 studs high; the whole site stays in x -13 .. 13, z -10.5 .. 6.1
+    for lv in range(1, 6):
+        for role, k in kit.items():
+            if k["min"] > lv:
+                continue
+            lo, hi = box(role, lv)
+            if hi[2] <= -3.5 and hi[0] > 4.25 and hi[1] > 6.01:
+                probs.append(f"L{lv} {role} is over 6 studs high right of x 4.25 behind the line")
+            if lo[0] < -13.01 or hi[0] > 13.01 or lo[2] < -10.51 or hi[2] > 6.11:
+                probs.append(f"L{lv} {role} leaves the site envelope")
+    if probs:
+        bad("bizlook: site geometry: " + "; ".join(probs))
+    else:
+        ok("bizlook: at L1-L5 no kit box meets the pop column, nothing right of x 4.25 behind the line is over 6 studs (ATM sight line), all inside x +-13 / z -10.5 .. 6.1")
+    # BusinessPieces
+    i = vac.find("\tBusinessPieces = {")
+    j = vac.find("} :: { [string]: AssetRef },", i)
+    if i < 0 or j < 0:
+        bad("bizlook: VisualAssetConfig.BusinessPieces not found")
+        return
+    body = vac[i:j]
+    other = vac[:i] + vac[j:]
+    live_other = {int(x) for x in re.findall(r"ModelAssetId = (\d+)", other) if int(x) > 0}
+    rows = re.findall(r"^\t\t(\w+) = \{([^\n]*)\} :: AssetRef,", body, re.M)
+    pprobs = []
+    for key, rb in rows:
+        mid = int((re.search(r"ModelAssetId = (\d+)", rb) or re.search("()", "0")).group(1) or 0)
+        roles = re.findall(r'"(\w+)"', (re.search(r"ReplacesRoles = \{([^}]*)\}", rb) or re.search("()", "")).group(1) or "")
+        into = (re.search(r'Into = "(\w+)"', rb) or re.search("()", "")).group(1) or None
+        hide = re.findall(r'"(\w+)"', (re.search(r"HideRoles = \{([^}]*)\}", rb) or re.search("()", "")).group(1) or "")
+        tolv = re.search(r"ToLevel = (\d+)", rb)
+        if mid and mid not in live_other:
+            pprobs.append(f"{key}: {mid} is a new load id")
+        if len(roles) != 1 or roles[0] not in kit or kit[roles[0]]["collide"]:
+            pprobs.append(f"{key}: ReplacesRoles {roles} must be one known non-colliding kit role")
+        if into is not None:
+            if into not in kit or not kit[into]["collide"] or hide != [into] or 'Fit = "Stretch"' not in rb:
+                pprobs.append(f"{key}: Into {into} must be a known colliding role, hidden (HideRoles = {{ Into }}), Fit Stretch")
+            elif roles and roles[0] in kit and kit[roles[0]]["min"] != kit[into]["min"]:
+                pprobs.append(f"{key}: {roles[0]} and {into} must appear at the same level")
+            if tolv:
+                t = int(tolv.group(1))
+                if box(into, t) == box(into, t + 1):
+                    pprobs.append(f"{key}: ToLevel {t} but the {into} box does not change at L{t + 1} (the piece swap needs a refit)")
+    if rows and not pprobs:
+        ok(f"bizlook: {len(rows)} BusinessPieces replace one non-colliding role each, fill a hidden collider's box where set, add no load id, swap only where the box changes")
+    else:
+        bad("bizlook: BusinessPieces: " + ("; ".join(pprobs) or "no rows"))
+
+
+_bl_rules()
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

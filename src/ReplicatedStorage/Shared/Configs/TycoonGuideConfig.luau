@@ -73,15 +73,17 @@ local TycoonGuideConfig = {
 		MissileDefense = { [1] = "Missile shield" },
 	} :: { [string]: { [number]: string } },
 	-- Unlock lines that only exist while BusinessConfig.Enabled (TycoonMath.UnlockText merges them)
-	-- Droppers v1a (spec §3.9): what each business level changes, on BUY line 2 ("+$4/s  Faster belt") and in the NEXT
-	-- chip's Buy hint ("$2,000  +$4/s  Faster belt"); each falls back to the plain "+$X/s" form when it does not fit.
+	-- Droppers v1a (spec §3.9): what each business level changes, on BUY line 2 ("+$4/s  Loading bay") and in the NEXT
+	-- chip's Buy hint ("$2,000  +$4/s  Loading bay"); each falls back to the plain "+$X/s" form when it does not fit.
 	-- No [1]: a level-1 unlock would switch BUY line 1 to BuyBuildShort and drop "BUILD AMMO WORKS".
+	-- bizlook (2026-09-27): the names say what each level adds to the building (BusinessConfig.Kit): L2 the loading
+	-- unit, L3 the head office, L4 the canopy over the belt, L5 the three-storey office with the brand band.
 	BusinessUnlocks = {
 		WeaponsFacility = { [1] = "Arms Crate Line" },
-		AmmoWorks = { [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" },
-		ArmsCrateLine = { [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" },
-		ArmorPlatePress = { [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" },
-		RocketAssembly = { [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" },
+		AmmoWorks = { [2] = "Loading bay", [3] = "Head office", [4] = "Belt canopy", [5] = "Company HQ" },
+		ArmsCrateLine = { [2] = "Loading bay", [3] = "Head office", [4] = "Belt canopy", [5] = "Company HQ" },
+		ArmorPlatePress = { [2] = "Loading bay", [3] = "Head office", [4] = "Belt canopy", [5] = "Company HQ" },
+		RocketAssembly = { [2] = "Loading bay", [3] = "Head office", [4] = "Belt canopy", [5] = "Company HQ" },
 	} :: { [string]: { [number]: string } },
 
 	-- Upper-case short names (<= 10 characters) for the BUY button / console tag when the full name does not fit.

@@ -32,6 +32,16 @@
 	  Products         per business and tier: raw look at spawn, done look after the machine hit (Color + Material).
 	  Visual           client lines, heap, clock, FX and the flags (BeltFx OFF in v1a; Ghost / Ambient are v1.1).
 	No stencils, insignia, flags, brands or real weapon names on any product.
+
+	bizlook (owner 2026-09-27: "The dropper should look like a legit high-end business"). The same part count per level
+	(L0 4 / L1 10 / L2 12 / L3 14 / L4 15 / L5 16, console included), rebuilt as a small branded company site: a brick
+	workshop with a brand-coloured cornice and a product sign on its roof (L1), a roller-shutter loading unit behind the
+	bin (L2), a two-storey head office behind the belt start (L3), a corrugated canopy over the belt and a taller office
+	(L4), a three-storey glass-front office with a brand band round its top (L5). The unit, the office and the canopy
+	are Roblox-made building pieces (VisualAssetConfig.BusinessPieces) that take the place of Part-kit roles one for
+	one; the Part kit (Dock / DockFront / Hall / HallFront / Canopy) is their fallback look. Belt / BeltFrame / Bin and
+	the Housing's +X wall keep their v1a boxes, so the machines, products, heap and "+$N" pop run exactly as in v1a.
+	Brand = the business Accent colour; no text, logo or insignia anywhere (no SurfaceGui).
 ]]
 
 export type Requirement = { StructureId: string, Level: number }
@@ -89,15 +99,21 @@ export type MachineDef = {
 	Sparks: boolean?, -- ProductionFx.Sparks at the tip on the hit
 }
 
+-- bizlook: a kit part's box from FromLevel on (the last row with FromLevel <= level wins; below the first row the
+-- KitPart's own Size / Offset). BusinessService writes Size / CFrame only when they differ (property-only growth).
+export type KitGrow = { FromLevel: number, Size: Vector3, Offset: Vector3 }
+
 export type KitPart = {
 	Role: string,
 	MinLevel: number, -- built when level >= MinLevel (0 = the empty slab before the first buy)
 	Size: Vector3,
 	Offset: Vector3, -- business-local: +X along the line (machine at -X, bin at +X), +Z = front (console side), Y up from the pad top
 	Material: Enum.Material,
-	ColorKey: string, -- "Body" | "Roof" | "Accent" | "Slab" | "Belt" | "Frame" | "Hazard" | "Gold" | "Dark"
+	ColorKey: string, -- a Palette key ("Body" | "Roof" | "Accent") or a SharedColors key
 	Shape: Enum.PartType?,
 	Collide: boolean?,
+	Grow: { KitGrow }?, -- bizlook: the box grows with the level (a stretched piece in it is refitted by BusinessService)
+	Reflectance: number?, -- bizlook: set once at build (the window band)
 }
 
 local BusinessConfig = {
@@ -122,7 +138,7 @@ local BusinessConfig = {
 			Costs = { 600, 2000, 6000, 18000, 55000 },
 			IncomePerTick = { 16, 36, 70, 125, 200 }, -- $/s at x1: 3.2 / 7.2 / 14 / 25 / 40
 			Requires = nil, -- buyable from the first second (tutorial step 6)
-			Palette = { Body = Color3.fromRGB(122, 128, 92), Roof = Color3.fromRGB(78, 84, 60), Accent = Color3.fromRGB(196, 150, 60) },
+			Palette = { Body = Color3.fromRGB(150, 88, 66), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(226, 160, 40) }, -- bizlook brand: amber
 			Signature = "Hopper",
 			Product = "AmmoBox",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
@@ -138,7 +154,7 @@ local BusinessConfig = {
 			IncomePerTick = { 40, 85, 160, 280, 450 }, -- $/s at x1: 8 / 17 / 32 / 56 / 90
 			-- v72: the Weapons Facility gates it (Weapons Facility itself needs Command Center 1)
 			Requires = { { StructureId = "AmmoWorks", Level = 1 }, { StructureId = "WeaponsFacility", Level = 1 } },
-			Palette = { Body = Color3.fromRGB(96, 104, 84), Roof = Color3.fromRGB(62, 66, 58), Accent = Color3.fromRGB(170, 120, 70) },
+			Palette = { Body = Color3.fromRGB(138, 92, 72), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(58, 150, 84) }, -- bizlook brand: green
 			Signature = "RackBar",
 			Product = "RifleCrate",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
@@ -155,7 +171,7 @@ local BusinessConfig = {
 			-- run earned 274 $/s at 30 min (target 280-380); this gives 295 (353 without the rule), <= 531 at 60 min
 			IncomePerTick = { 120, 220, 360, 580, 860 }, -- $/s at x1: 24 / 44 / 72 / 116 / 172
 			Requires = { { StructureId = "CommandCenter", Level = 2 }, { StructureId = "ArmsCrateLine", Level = 2 } },
-			Palette = { Body = Color3.fromRGB(120, 124, 128), Roof = Color3.fromRGB(70, 74, 78), Accent = Color3.fromRGB(200, 170, 70) },
+			Palette = { Body = Color3.fromRGB(126, 96, 84), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(46, 112, 196) }, -- bizlook brand: blue
 			Signature = "PressRam",
 			Product = "ArmorPlate",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
@@ -170,7 +186,7 @@ local BusinessConfig = {
 			Costs = { 30000, 90000, 270000, 800000, 2400000 },
 			IncomePerTick = { 260, 440, 700, 1050, 1500 }, -- $/s at x1: 52 / 88 / 140 / 210 / 300
 			Requires = { { StructureId = "CommandCenter", Level = 3 }, { StructureId = "ArmorPlatePress", Level = 2 } },
-			Palette = { Body = Color3.fromRGB(176, 170, 150), Roof = Color3.fromRGB(88, 90, 86), Accent = Color3.fromRGB(190, 70, 56) },
+			Palette = { Body = Color3.fromRGB(156, 100, 76), Roof = Color3.fromRGB(58, 60, 64), Accent = Color3.fromRGB(204, 58, 48) }, -- bizlook brand: red
 			Signature = "RocketBody",
 			Product = "Rocket",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
@@ -179,50 +195,64 @@ local BusinessConfig = {
 		},
 	} :: { [string]: BusinessDef },
 
-	-- Shared line kit (business-local). Level parts: L1 6, L2 +2, L3 +2, L4 +1, L5 +1 -> 12 + slab 1 + console 3 = 16.
+	-- Shared line kit (business-local). bizlook: the same count per level as v1a (L1 6, L2 +2, L3 +2, L4 +1, L5 +1 ->
+	-- 12 + slab 1 + console 3 = 16). Belt / BeltFrame / Bin and the Housing's +X wall (x = -3) keep their v1a boxes (the
+	-- machines, products, heap and pop read them). Layout: the brick workshop front-left (L1); a loading unit behind the
+	-- bin (L2: Dock, the collider, and DockFront, its shutter); the head office behind the belt start (L3: Hall, the
+	-- collider, and HallFront, its window band; the office grows L4 / L5 by Grow rows); a canopy over the belt (L4); a
+	-- brand band round the office top (L5). With the Roblox-made pieces of VisualAssetConfig.BusinessPieces on, DockFront
+	-- / HallFront / Canopy wear real building meshes fitted into the Dock / Hall / Canopy boxes and the Dock / Hall
+	-- colliders turn invisible (their collision stays); without them this Part kit is the look. The unit stays 6 studs
+	-- high and the office stands at x <= 4, so the ATM behind Ammo Works stays in sight from its kiosk; the canopy stops
+	-- at x 6, so the bin, heap and "+$N" pop stay open to the sky.
 	Kit = {
-		{ Role = "Slab", MinLevel = 0, Size = Vector3.new(22, 0.3, 12), Offset = Vector3.new(0, 0.15, 0), Material = Enum.Material.Concrete, ColorKey = "Slab", Collide = true },
-		{ Role = "Housing", MinLevel = 1, Size = Vector3.new(7, 7, 8), Offset = Vector3.new(-6.5, 3.5, 0), Material = Enum.Material.Metal, ColorKey = "Body", Collide = true },
-		{ Role = "Roof", MinLevel = 1, Size = Vector3.new(8, 0.6, 9), Offset = Vector3.new(-6.5, 7.3, 0), Material = Enum.Material.Metal, ColorKey = "Roof" },
+		{ Role = "Slab", MinLevel = 0, Size = Vector3.new(22, 0.3, 12), Offset = Vector3.new(0, 0.15, 0), Material = Enum.Material.Concrete, ColorKey = "Slab", Collide = true, Grow = { { FromLevel = 2, Size = Vector3.new(26, 0.3, 16), Offset = Vector3.new(0, 0.15, -2) } } },
+		{ Role = "Housing", MinLevel = 1, Size = Vector3.new(7, 7, 8), Offset = Vector3.new(-6.5, 3.5, 0), Material = Enum.Material.Brick, ColorKey = "Body", Collide = true },
+		{ Role = "Roof", MinLevel = 1, Size = Vector3.new(8, 0.7, 10.1), Offset = Vector3.new(-6.5, 7.35, 1.05), Material = Enum.Material.Metal, ColorKey = "Accent" },
 		{ Role = "Signature", MinLevel = 1, Size = Vector3.new(3, 2.5, 3), Offset = Vector3.new(-6.5, 8.9, 0), Material = Enum.Material.Metal, ColorKey = "Accent" },
 		{ Role = "Belt", MinLevel = 1, Size = Vector3.new(9, 0.4, 2.6), Offset = Vector3.new(2, 2.4, 0), Material = Enum.Material.Fabric, ColorKey = "Belt" },
 		{ Role = "BeltFrame", MinLevel = 1, Size = Vector3.new(9, 2.2, 2.2), Offset = Vector3.new(2, 1.1, 0), Material = Enum.Material.Metal, ColorKey = "Frame", Collide = true },
 		{ Role = "Bin", MinLevel = 1, Size = Vector3.new(4, 2.2, 5), Offset = Vector3.new(8.5, 1.1, 0), Material = Enum.Material.Metal, ColorKey = "Dark", Collide = true },
-		{ Role = "Chimney", MinLevel = 2, Size = Vector3.new(1.4, 6, 1.4), Offset = Vector3.new(-8.6, 10.6, -2.6), Material = Enum.Material.Metal, ColorKey = "Dark" },
-		{ Role = "Stock", MinLevel = 2, Size = Vector3.new(2.4, 2.4, 2.4), Offset = Vector3.new(-1, 1.2, -4), Material = Enum.Material.WoodPlanks, ColorKey = "Accent", Collide = true },
-		{ Role = "Awning", MinLevel = 3, Size = Vector3.new(10, 0.3, 4), Offset = Vector3.new(2.5, 5.2, 0), Material = Enum.Material.Metal, ColorKey = "Roof" },
-		{ Role = "Hazard", MinLevel = 3, Size = Vector3.new(22, 0.05, 0.8), Offset = Vector3.new(0, 0.33, 5.4), Material = Enum.Material.SmoothPlastic, ColorKey = "Hazard" },
-		{ Role = "Pallet", MinLevel = 4, Size = Vector3.new(3.5, 1.6, 3.5), Offset = Vector3.new(8.5, 0.8, -4.2), Material = Enum.Material.WoodPlanks, ColorKey = "Accent", Collide = true },
-		{ Role = "GoldTrim", MinLevel = 5, Size = Vector3.new(8.2, 0.3, 9.2), Offset = Vector3.new(-6.5, 6.9, 0), Material = Enum.Material.Metal, ColorKey = "Gold" },
+		{ Role = "Dock", MinLevel = 2, Size = Vector3.new(8.5, 6, 5.5), Offset = Vector3.new(8.25, 3, -6.75), Material = Enum.Material.Brick, ColorKey = "Body", Collide = true },
+		{ Role = "DockFront", MinLevel = 2, Size = Vector3.new(4.4, 4.6, 0.3), Offset = Vector3.new(8.5, 2.3, -3.9), Material = Enum.Material.Metal, ColorKey = "Shutter" },
+		{ Role = "Hall", MinLevel = 3, Size = Vector3.new(16, 9, 6), Offset = Vector3.new(-4, 4.5, -7), Material = Enum.Material.Metal, ColorKey = "Hall", Collide = true, Grow = { { FromLevel = 4, Size = Vector3.new(16, 10, 6), Offset = Vector3.new(-4, 5, -7) }, { FromLevel = 5, Size = Vector3.new(16, 14, 6), Offset = Vector3.new(-4, 7, -7) } } },
+		{ Role = "HallFront", MinLevel = 3, Size = Vector3.new(16.3, 2, 6.3), Offset = Vector3.new(-4, 6.2, -7), Material = Enum.Material.Glass, ColorKey = "Glass", Reflectance = 0.25, Grow = { { FromLevel = 4, Size = Vector3.new(16.3, 2.2, 6.3), Offset = Vector3.new(-4, 6.8, -7) }, { FromLevel = 5, Size = Vector3.new(16.3, 4.4, 6.3), Offset = Vector3.new(-4, 9, -7) } } },
+		{ Role = "Canopy", MinLevel = 4, Size = Vector3.new(9.4, 0.4, 6.2), Offset = Vector3.new(1.3, 6.4, -1), Material = Enum.Material.Metal, ColorKey = "Canopy" },
+		{ Role = "Fascia", MinLevel = 5, Size = Vector3.new(16.4, 1.4, 6.4), Offset = Vector3.new(-4, 14.5, -7), Material = Enum.Material.SmoothPlastic, ColorKey = "Accent" },
 	} :: { KitPart },
-	-- Signature overrides the Signature slot's size / offset / shape per business (still one part)
+	-- Signature overrides the Signature slot's size / offset / shape per business (still one part). bizlook: each line
+	-- wears its product on the workshop roof as a big "product sign" (Ammo: a brass casing standing up; Arms: an army
+	-- crate; Rocket: the Roblox Rocket dress); the Armor press keeps its ram over the belt (the stamp rests inside it).
+	-- Rot = degrees (X, Y, Z) applied after the offset; Material overrides the kit row's.
 	Signatures = {
-		Hopper = { Size = Vector3.new(3, 2.5, 3), Offset = Vector3.new(-6.5, 8.9, 0) },
-		RackBar = { Size = Vector3.new(0.5, 3.2, 6.5), Offset = Vector3.new(-2.8, 5.2, 0) },
+		Hopper = { Size = Vector3.new(3.4, 2.2, 2.2), Offset = Vector3.new(-6.5, 9.4, -0.5), Shape = Enum.PartType.Cylinder, Rot = Vector3.new(0, 0, 90) },
+		RackBar = { Size = Vector3.new(3.6, 2, 2.4), Offset = Vector3.new(-6.5, 8.7, -0.5), Material = Enum.Material.WoodPlanks },
 		PressRam = { Size = Vector3.new(3, 1.6, 3), Offset = Vector3.new(2, 4.4, 0) },
 		RocketBody = { Size = Vector3.new(7, 1.6, 1.6), Offset = Vector3.new(-6.5, 8.6, 0), Shape = Enum.PartType.Cylinder },
-	} :: { [string]: { Size: Vector3, Offset: Vector3, Shape: Enum.PartType? } },
+	} :: { [string]: { Size: Vector3, Offset: Vector3, Shape: Enum.PartType?, Rot: Vector3?, Material: Enum.Material? } },
 	SharedColors = {
-		Slab = Color3.fromRGB(128, 124, 112),
+		Slab = Color3.fromRGB(176, 174, 168), -- bizlook: a clean light forecourt
 		Belt = Color3.fromRGB(36, 38, 36),
 		Frame = Color3.fromRGB(70, 72, 68),
-		Hazard = Color3.fromRGB(214, 178, 64),
-		Gold = Color3.fromRGB(240, 196, 64),
 		Dark = Color3.fromRGB(52, 54, 50),
+		Hall = Color3.fromRGB(206, 208, 206), -- bizlook: the office's Part-kit cladding (hidden while the office piece is on)
+		Canopy = Color3.fromRGB(58, 60, 64), -- bizlook: charcoal canopy over the belt (Part-kit fallback of the canopy piece)
+		Glass = Color3.fromRGB(70, 118, 150), -- bizlook: the office's Part-kit window band
+		Shutter = Color3.fromRGB(196, 198, 196), -- bizlook: the loading bay's Part-kit shutter panel
 	} :: { [string]: Color3 },
 
 	--[[ Droppers v1a: server look tiers (spec §3.4; BusinessService applyLook). Property-only, 0 new parts: Material,
 		Color and the Roof Reflectance of the LookTierRoles kit parts. A new part is built with its tier look; an existing
 		one is written only where a value differs (a level-down / rebirth reapplies the lower tier; an idle re-sync
-		writes nothing). A part that carries WE_CatalogAssetId (hooks dress) is never written. Housing, BeltFrame and Bin
-		collide, so the hooks lane never replaces them; Roof and Chimney are skipped once dressed. Every other role
-		(Slab, Signature, Belt, Stock, Awning, Hazard, Pallet, GoldTrim) keeps its HEAD look. Works = the HEAD look.
-		Full rust (OD-2, after a Studio look): Field Material = CorrodedMetal. ]]
-	LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Chimney" },
+		writes nothing). A part that carries WE_CatalogAssetId (hooks dress) is never written.
+		bizlook: Chimney is gone (Hall takes its slot). No rust tier any more: OD-2's CorrodedMetal Field housing read as a
+		shed and the owner now asks for "a legit high-end business", so the workshop is brick at every tier (Field and
+		Works look the same); Arsenal paints the belt frame in the brand colour and gives the cornice a slight sheen. ]]
+	LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Hall" },
 	LookTiers = {
-		{ FromLevel = 1, Name = "Field", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.CorrodedMetal, Shade = 0.85, RoofReflectance = 0 },
-		{ FromLevel = 3, Name = "Works", Material = Enum.Material.Metal, Shade = 1, RoofReflectance = 0 },
-		{ FromLevel = 5, Name = "Arsenal", Material = Enum.Material.Metal, Shade = 1, PaintFrame = "Accent", RoofReflectance = 0.08 },
+		{ FromLevel = 1, Name = "Field", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.Brick, Shade = 1, RoofReflectance = 0 },
+		{ FromLevel = 3, Name = "Works", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.Brick, Shade = 1, RoofReflectance = 0 },
+		{ FromLevel = 5, Name = "Arsenal", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.Brick, Shade = 1, PaintFrame = "Accent", RoofReflectance = 0.08 },
 	} :: { LookTier },
 
 	-- Client-only visuals (Client/Modules/BusinessVisuals + ProductionFx). Cosmetic: the server never reads these.

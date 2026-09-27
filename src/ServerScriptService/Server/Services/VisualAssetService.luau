@@ -75,6 +75,10 @@ type AssetRef = {
 	KitFamilies: { string }?, -- hooks: VehicleWeapons: allow-listed kit families
 	Vehicles: { string }?, -- hooks: VehicleWeapons: allow-listed vehicle ids
 	HideParts: { string }?, -- hooks: VehicleWeapons: kit parts hidden once the dress attaches
+	Into: string?, -- bizlook: BusinessPieces: the kit role whose box the piece fills (default: the replaced role's own)
+	HideRoles: { string }?, -- bizlook: BusinessPieces: kit roles turned invisible (collision kept) once the piece is on
+	FromLevel: number?, -- bizlook: BusinessPieces: worn from this business level
+	ToLevel: number?, -- bizlook: BusinessPieces: ... up to this level
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
@@ -1688,13 +1692,14 @@ end
 
 -- the listed roles still to dress: { index into ReplacesRoles = its built, non-colliding kit part that does not wear
 -- assetId }, and how many built non-colliding roles there are (dressed or not)
-local function bizMissing(model: Model, roles: { string }, assetId: number, bizId: string): ({ [number]: BasePart }, number)
+local function bizMissing(model: Model, roles: { string }, assetId: number, bizId: string, piece: string?): ({ [number]: BasePart }, number)
 	local missing: { [number]: BasePart } = {}
 	local built = 0
 	for i, role in ipairs(roles) do
 		local p = model:FindFirstChild("Kit_" .. role)
 		if p and p:IsA("BasePart") then
-			if p:GetAttribute("WE_CatalogAssetId") == assetId then
+			-- bizlook: a pack piece is "on" only when the part wears that piece (one pack serves several roles / levels)
+			if p:GetAttribute("WE_CatalogAssetId") == assetId and (piece == nil or p:GetAttribute("WE_CatalogPiece") == piece) then
 				built += 1
 			elseif p.CanCollide then
 				-- a dress never takes a wall or a floor away: colliding kit parts are never taken over
@@ -1718,9 +1723,7 @@ end
 	Refused (one warn, the Part kit stays): more model parts than roles, roles with different kit MinLevels (a half-built
 	list), a mesh part on a Belt / Box role; colliding roles are never taken over. Same loader rules as every hook
 	(MaxPartsPerModel, Humanoid stripped, MaxLoadAttempts, StripEffectsAssetIds); anchored, non-colliding; a 0 id is a no-op. ]]
-function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean
-	local bucket = (VisualAssetConfig :: any).Businesses
-	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[id]) == "table" then bucket[id] :: AssetRef else nil
+local function attachBusinessRef(model: Model, id: string, level: number, ref: AssetRef?): boolean
 	local assetId = refId(ref)
 	if ref == nil or assetId == 0 or model.Parent == nil or (tonumber(level) or 0) < 1 then
 		return false -- 0 / PendingAssetId (never read here): no load; the Part kit stays
@@ -1738,7 +1741,21 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 			return false
 		end
 	end
-	local missing, built = bizMissing(model, roles, assetId, id)
+	-- bizlook (BusinessPieces): a piece worn only at some levels, and the box it fills (Into: default the role's own)
+	local lvNow = tonumber(level) or 0
+	if (ref.FromLevel ~= nil and lvNow < ref.FromLevel) or (ref.ToLevel ~= nil and lvNow > ref.ToLevel) then
+		return false
+	end
+	local piece: string? = if typeof(ref.ChildName) == "string" then ref.ChildName else nil
+	local intoPart: BasePart? = nil
+	if ref.Into ~= nil then
+		local ip = model:FindFirstChild("Kit_" .. ref.Into)
+		if ip == nil or not ip:IsA("BasePart") or ip:GetAttribute("WE_CatalogAssetId") ~= nil then
+			return false -- the box to fill is not built (or is itself dressed): the Part kit stays
+		end
+		intoPart = ip
+	end
+	local missing, built = bizMissing(model, roles, assetId, id, piece)
 	if next(missing) == nil then
 		return built > 0 -- every built role already wears it (a re-sync / level-up: nothing to do)
 	end
@@ -1751,9 +1768,12 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 	if parentNow == nil then
 		return false
 	end
-	missing, built = bizMissing(model, roles, assetId, id)
+	missing, built = bizMissing(model, roles, assetId, id, piece)
 	if next(missing) == nil then
 		return built > 0
+	end
+	if intoPart ~= nil and (intoPart.Parent ~= model or intoPart:GetAttribute("WE_CatalogAssetId") ~= nil) then
+		return false -- the box to fill went during the insert
 	end
 	local clone = cloneAsModel(template)
 	if not clone then
@@ -1784,9 +1804,20 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 			if roles[i] == "Belt" or ref.Fit == "Box" then
 				p.Size = kp.Size -- the client crates read Kit_Belt's box: keep it exactly
 				p.CFrame = kp.CFrame
+			elseif ref.Fit == "Stretch" then
+				-- bizlook: a building piece (a MeshPart) turned by Yaw, then stretched to fill the Into box exactly: the
+				-- front keeps its proportions when the box does, the depth is squashed (seen from the front on a phone)
+				local box = intoPart or kp
+				local yaw = tonumber(ref.Yaw) or 0
+				local quarter = math.floor(yaw / 90 + 0.5) % 2 == 1
+				p.Size = if quarter then Vector3.new(box.Size.Z, box.Size.Y, box.Size.X) else box.Size
+				p.CFrame = box.CFrame * CFrame.Angles(0, math.rad(yaw), 0)
 			else
 				local frame: CFrame = if typeof(site) == "CFrame" then site else kp.CFrame
 				local lo, hi = aabbIn(frame, { kp })
+				if intoPart ~= nil then
+					lo, hi = aabbIn(frame, { intoPart }) -- bizlook: a piece with Into fills that role's box
+				end
 				if not fitInBox({ p }, frame, lo, hi, true, 0, 1) then
 					continue
 				end
@@ -1800,13 +1831,51 @@ function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, le
 			p.Massless = true
 			p:SetAttribute("WE_BizRole", kp:GetAttribute("WE_BizRole"))
 			p:SetAttribute("WE_CatalogAssetId", assetId)
+			if piece ~= nil then
+				p:SetAttribute("WE_CatalogPiece", piece) -- bizlook: which pack piece (a level swap re-dresses the role)
+			end
+			if ref.Into ~= nil and ref.Fit == "Stretch" then
+				p:SetAttribute("WE_BizFitRole", ref.Into) -- bizlook: BusinessService refits it when that box grows
+			end
 			p.Parent = model
 			kp:Destroy()
 			dressed += 1
 		end
 	end
 	clone:Destroy() -- the wrapper and any part no missing role needed
+	-- bizlook: the collider boxes the piece stands in for turn invisible (their collision, query and name stay);
+	-- BusinessService shows them again when the piece goes (WE_BizHiddenBy = the role the piece replaced)
+	if dressed > 0 and ref.HideRoles ~= nil then
+		for _, hr in ipairs(ref.HideRoles) do
+			local hp = model:FindFirstChild("Kit_" .. hr)
+			if hp and hp:IsA("BasePart") and hp:GetAttribute("WE_CatalogAssetId") == nil then
+				hp.Transparency = 1
+				hp.CastShadow = false
+				hp:SetAttribute("WE_BizHiddenBy", roles[1])
+			end
+		end
+	end
 	return dressed > 0
+end
+
+-- bizlook: the line's own dress (VisualAssetConfig.Businesses[id]) plus the Roblox-made building pieces every line
+-- may wear (VisualAssetConfig.BusinessPieces). The same one-for-one rule for both: a piece takes a non-colliding kit
+-- role's place (PartsPerBusinessL5 holds); a colliding role is never taken over (a piece that stands in for a collider
+-- fills that collider's box, Into, and hides it, HideRoles, keeping its collision); a 0 id is a no-op. true when the
+-- line's own dress is on.
+function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean
+	local bucket = (VisualAssetConfig :: any).Businesses
+	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[id]) == "table" then bucket[id] :: AssetRef else nil
+	local dressed = attachBusinessRef(model, id, level, ref)
+	local pieces = (VisualAssetConfig :: any).BusinessPieces
+	if typeof(pieces) == "table" then
+		for _, pref in pairs(pieces) do
+			if typeof(pref) == "table" and model.Parent ~= nil then
+				attachBusinessRef(model, id, level, pref :: AssetRef)
+			end
+		end
+	end
+	return dressed
 end
 
 -- hooks (2026-09-25): is this vehicle on the weapon ref's allow-list (KitFamilies / Vehicles)? No list = nobody.

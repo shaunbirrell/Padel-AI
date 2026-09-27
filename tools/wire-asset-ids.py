@@ -952,6 +952,7 @@ CHAR_KINDS = ("Worker", "Infantry", "HeavyInfantry", "Guard", "Soldier", "GateGu
 PROP_KEYS = ("Tent", "Crate", "MilitaryCrate", "Sandbag", "Lantern", "OilBarrel", "ConcreteBarrier", "FuelTanks", "AmmoShed",
              "OilPumpjack", "Flag", "Floodlight", "HomeOutpost", "ManualDropper")
 HOOK_BUCKETS = ("Businesses", "VehicleWeapons")  # hooks (2026-09-25): business line dress (PLOT), turret dress (LATER)
+PIECE_BUCKETS = ("BusinessPieces",)  # bizlook (2026-09-27): shared business building pieces (pack pieces, PLOT)
 PROP_BUCKETS = ("WarzoneProps", "DesertProps", "MapDressing", "IndustrialProps", "Landmarks")
 PROP_ALT = {"Tent": "TentAlt", "OilPumpjack": "OilPumpjackAlt"}
 
@@ -975,7 +976,7 @@ def live_chains(vac: Config, svc: Config | None, families: dict[str, str] | None
     chains.append(("MoneyBagFX", [vac.num("MoneyBagFX"), vac.num("VfxSparkles")]))
     for key in vac.keys("DesertKit"):
         chains.append((f"DesertKit.{key}", [vac.num(f"DesertKit.{key}")]))
-    for bucket in HOOK_BUCKETS:
+    for bucket in HOOK_BUCKETS + PIECE_BUCKETS:
         for key in vac.keys(bucket):
             chains.append((f"{bucket}.{key}", [vac.num(f"{bucket}.{key}")]))
     svc_base = svc.num("Palettes.DefensiveWalls", "MeshAssetId") if svc else 0
@@ -1035,7 +1036,7 @@ def chain_phase(name: str, vac: Config) -> str:
         return "PLOT" if key in PLOT_PROPS else "LATER" if key in LATER_PROPS else "BOOT"
     if head in ("MoneyCollector", "TutorialArrow", "DesertKit"):
         return "BOOT"
-    if head in ("Businesses", "Buildings"):  # business line dress; DefensiveWalls chains
+    if head in ("Businesses", "Buildings", "BusinessPieces"):  # business line dress / pieces; DefensiveWalls chains
         return "PLOT"
     if head == "Vehicles":  # a ChildName piece is preloaded by VisualAssetService.Init
         return "BOOT" if vac.has(name) and vac.raw(name, "ChildName") is not None else "LATER"

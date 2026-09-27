@@ -72,6 +72,11 @@ export type AssetRef = {
 	KitFamilies: { string }?, -- VehicleWeapons: only vehicles of these VehicleConfig KitFamily values wear it
 	Vehicles: { string }?, -- VehicleWeapons: and / or only these vehicle ids
 	HideParts: { string }?, -- VehicleWeapons: kit parts made invisible once the dress attaches (the kit barrel)
+	-- bizlook (2026-09-27): BusinessPieces (Fit = "Stretch": a building piece turned by Yaw, then stretched to fill a box)
+	Into: string?, -- BusinessPieces: the kit role whose box the piece fills (default: the replaced role's own box)
+	HideRoles: { string }?, -- BusinessPieces: kit roles made invisible once the piece is on (their collision stays)
+	FromLevel: number?, -- BusinessPieces: worn from this business level (nil = from the role's first level)
+	ToLevel: number?, -- BusinessPieces: worn up to this business level (nil = to the top)
 }
 
 local VisualAssetConfig = {
@@ -378,6 +383,25 @@ local VisualAssetConfig = {
 		ArmsCrateLine = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" }, Note = "owner list: Roblox Conveyor Belt as the belt (same model as Ammo Works: one load)" } :: AssetRef,
 		ArmorPlatePress = { ModelAssetId = 0, PendingAssetId = 4362642898, Note = "0 = Part-kit press; owner pick Metal Factory (Press) (Ghosttony503): pending, P4 (Studio check: WE_CHECK, then OmitParts for its translucent bounds box and ReplacesRoles so it fits PartsPerBusinessL5)" } :: AssetRef,
 		RocketAssembly = { ModelAssetId = 31603741, OmitParts = { "Particles" }, ReplacesRoles = { "Signature" }, Note = "owner list: Roblox Rocket as the rocket body (its empty effects part dropped; Fire + Smoke removed, StripEffectsAssetIds)" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	-- bizlook (2026-09-27, owner: "The dropper should look like a legit high-end business"): Roblox-made building pieces
+	-- every war-business line wears (VisualAssetService.TryAttachBusinessVisual, after the line's own dress). All come
+	-- from Roblox's Synty City pack 6933556508 (creator Roblox, User 1; already loaded for DesertKit.CarWreck, so 0 new
+	-- load attempts), keep the pack's atlas texture (no text on these pieces: UV-checked) and replace a non-colliding kit
+	-- role one for one, so PartsPerBusinessL5 and the per-level counts hold. A piece with Into fills that kit role's box
+	-- (Fit = "Stretch": turned by Yaw, then stretched to the box; the front keeps its proportions, the depth is squashed)
+	-- and hides the HideRoles colliders (their collision stays); FromLevel / ToLevel pick the office piece by level, and
+	-- BusinessService refits a stretched piece when its box grows. 0 = the Part kit (the fallback look).
+	BusinessPieces = {
+		-- L2+: the loading unit behind the bin: a roller-shutter unit (Shop_06, 264 tris) in the 8.5 x 6 x 5.5 Dock box
+		DockFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_06", ReplacesRoles = { "DockFront" }, Into = "Dock", Fit = "Stretch", Yaw = 180, HideRoles = { "Dock" }, Note = "Synty City: roller-shutter unit as the loading bay" } :: AssetRef,
+		-- L3-4: the head office behind the belt start: a two-storey stone office (Station_03, 1,984 tris) in the Hall box
+		HallFront = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_03", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, ToLevel = 4, Note = "Synty City: two-storey office (L3-4)" } :: AssetRef,
+		-- L5: the head office grows into a three-storey glass-front block (Station_02, 1,527 tris) in the taller Hall box
+		HallFrontL5 = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Station_02", ReplacesRoles = { "HallFront" }, Into = "Hall", Fit = "Stretch", Yaw = 180, HideRoles = { "Hall" }, FromLevel = 5, Note = "Synty City: three-storey glass-front office (L5)" } :: AssetRef,
+		-- L4+: a corrugated lean-to canopy with tie rods over the belt (Shop_Cover_03, 122 tris), fitted uniformly
+		Canopy = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Buildings_SM_Bld_Shop_Cover_03", ReplacesRoles = { "Canopy" }, Note = "Synty City: corrugated canopy over the belt" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- Owner asset list hooks (2026-09-25): turret dress. VehicleService calls VisualAssetService.TryAttachVehicleWeaponVisual

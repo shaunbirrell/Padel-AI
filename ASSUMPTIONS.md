@@ -7012,3 +7012,27 @@ Each assumption can be undone with a config change or a revert. The integrator m
   - The yard lane does not restyle the squad or `makeSoldierKit`; that is R-RIG's scope. Undo: none needed (text only).
 
 - **VIS-INT-1 (integrator, 2026-09-27).** Town and Training Yard lanes landed together by 3-way merge onto 5c8f57e. The textual conflicts were resolved by keeping both lanes' blocks: VisualAssetConfig (Town* and Yard* DesertKit rows) and BuyPathStatic (both pin blocks). ASSET_LICENSES keeps one row per pack: the Town lane's text for City 6933556508 and the Yard lane's text for Dungeon 6933790012. The yard pin that bans Neon in TrainingYardConfig now also bans `Enum.Material.Neon` (review Low). The yard ships before R-RIG (the soldiers keep the block look until the soldier update); the owner text says so.
+
+## bizlook: war businesses look like real company sites (2026-09-27)
+Owner: "The droppers/businesses still look terrible. The dropper should look like a legit high-end business."
+- **BL-1 Same parts at every level.** Each business keeps v1a's count per level (L0 4 / L1 10 / L2 12 / L3 14 / L4 15 / L5 16, console included), so parts per base stay 2,566 at L5 on all 6 plots. The Chimney, Stock, Awning, Hazard, Pallet and GoldTrim parts are gone; Dock, DockFront, Hall, HallFront, Canopy and Fascia take their slots. Reversible: `BusinessConfig.Kit`.
+- **BL-2 The line is untouched.** Belt, BeltFrame, Bin, the Housing box (the ShellPress sits in its +X wall) and the Armor PressRam keep their v1a boxes, so the machines, products, heap, "+$N" pop and pop dodge are unchanged. The canopy stops at x 6 and nothing roofs the bin (T11 adapted: the canopy ends 2 studs before the pop column).
+- **BL-3 Roblox-made building pieces.** The loading unit (L2), the head office (L3-4 two storeys, L5 three storeys) and the belt canopy (L4) are Synty City pieces from Roblox's own pack 6933556508 (creator Roblox, User 1, re-checked on the public economy API 2026-09-27). The pack already loads live for the car wreck, so this adds 0 load attempts (wire-asset-ids status: 25 / 56, outage 8 / 24, same as HEAD). The pack's atlas texture stays; the UV check finds no text region on these four meshes. Each piece takes one non-colliding Part-kit role's place, so part counts hold. If the pack fails to load, or in Studio (StudioSkipWorldDressing), the Part kit shows instead.
+- **BL-4 Stretched meshes.** The unit and office pieces are MeshParts stretched to fill a Part box (Fit = "Stretch"): the front keeps its proportions (x 0.47 / y 0.55 for the unit, x 0.43 / y 0.45 and x 0.52 / y 0.47 for the offices) and the depth is squashed (0.18-0.29). From the front this reads as a normal building, but a sharp side view looks thin. Needs a device check.
+- **BL-5 Colliders stay Parts.** A piece never collides. The Dock and Hall boxes stay in place as the colliders and turn invisible while their piece is on (Transparency 1, CanCollide / CanQuery kept). BusinessService shows them again when the piece goes, and rebuilds and refits a stretched piece when its box grows (the office at L4 / L5, and the L5 piece swap).
+- **BL-6 No rust.** OD-2 (CorrodedMetal Field housing) is replaced by brick at every tier, because the owner now asks for "high-end". Field and Works look the same; Arsenal (L5) still paints the belt frame in the brand colour and gives the cornice a 0.08 sheen. Reversible: `LookTiers` HousingMaterial.
+- **BL-7 Brand colours.** Each business has one brand (Accent) colour: Ammo amber, Arms green, Armor blue, Rocket red. It shows on the workshop cornice (L1), the belt frame (L5) and the office's roof band (L5). The machines turn it at L5 through MachineColors.Arsenal = "Accent". There is no text, logo or insignia.
+- **BL-8 ATM stays visible.** Nothing right of x 4 behind the line rises above 6 studs, so from the Ammo Works kiosk the ATM behind it stays in view (a BuyPathStatic rule). The whole site stays inside x -13..13, z -10..6. At L5 on plot 1 it overlaps no other plot part (stand-in AABB check). This is a stand-in check only; see phone_test.
+- **BL-9 Unlock names.** The BUY line 2 / NEXT chip names are L2 "Loading bay", L3 "Head office", L4 "Belt canopy", L5 "Company HQ". All 35 HUD rows pass at every viewport ("Company HQ" also fits the small-phone chip, which "Arsenal paint" did not).
+- **BL-10 Not used.** The owner's Armor pick 4362642898 (28 parts) cannot fit a business without adding parts, so it stays pending. The Manual Dropper pick 14408455045 is not a business.
+
+### Owner decisions (defaults ship as listed)
+- Keep the four brand colours, or pick others (`BusinessConfig` Palette Accent).
+- Keep brick for the workshop, or go back to the v1a rust at L1-2 (`LookTiers` HousingMaterial).
+- If the stretched office or unit looks wrong on the phone, set that `VisualAssetConfig.BusinessPieces` row to `ModelAssetId = 0` (Part kit) with no other change.
+
+### Needs a real device
+- The pieces show their atlas texture in the live place (the live car wreck clears its texture, so no textured Synty piece has been seen live yet); run owner/WeCheck2.luau.
+- How the stretched office and unit read on a phone, and from the side.
+- Frame rate at Graphics Quality 3 with 4 businesses at L5 per base: about 1.9k extra triangles per business (office 1,527-1,984, unit 264, canopy 122), all on one shared atlas.
+- Walking into the office or unit is still blocked by the hidden box.
