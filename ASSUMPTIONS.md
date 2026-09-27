@@ -4618,3 +4618,105 @@ S5-7 (integration) One more BuyPathStatic pin from review: WorldPOI holds exactl
     fails the static gate, not only the stand-in. The Jobs-ON end state differs from 670bbf6 in one way: 670bbf6's runtime
     Persist left 2 of the 17 host Models Atomic (POIs with no far anchor); now all 17 are Persistent at build (same live
     and off sites).
+
+## 2026-09-27 — Streaming lane C5 (bounded client WaitForChild; finding F33) - live on ship (not a streaming change)
+
+Every item is reversible. This is not a streaming change: StreamingEnabled never touches ReplicatedStorage or PlayerGui,
+so all of it is live as soon as it ships. Tested in the headless stand-in only (scratchpad streaming2/build/C5: rbxsim +
+rbxsim_client + a late-Shared / late-PlayerGui driver; virtual clock, 0.1 s polls), not in Roblox and not on a phone.
+
+C5-1 Client Bootstrap: Shared gets 60 s slices, up to 180 s in total, so a slow phone is not left with a dead client.
+    There is one warn per slice ("... after 60 s; still waiting", "... after 120 s; still waiting", "... after 180 s;
+    giving up, client not started"). A Shared that arrives inside 180 s boots the client normally (stand-in: Shared at
+    70 s boots at 70.0 s, 39/39 Init).
+    - The two numbers are locals in Bootstrap (SHARED_WAIT_SLICE_S = 60, SHARED_WAIT_MAX_S = 180), not in Shared/Configs.
+      This is a deliberate config-first exception, because Configs lives inside the folder being waited for.
+    - Trade-off: a Shared that arrives after 180 s now ends in the notice (C5-2). HEAD 5e021d8 waited without limit:
+      it booted whenever Shared came, and hung silently if it never came.
+    - Reversible: raise SHARED_WAIT_MAX_S (for example to 300), or change the slice.
+    - PlayerGui has its own gate with the same numbers (C5-4). The two budgets are separate, so the longest wait before
+      the client starts is 180 s + 180 s = 360 s (stand-in: Shared at 170 s and PlayerGui at 330 s boots at 330.0 s).
+
+C5-2 Rejoin notice: shown when Shared never arrives. Bootstrap then returns before any require, so no controller can
+    throw or hang.
+    - It is one ScreenGui "WE_LoadFailed" (DisplayOrder 100, ResetOnSpawn false, IgnoreGuiInset false) holding one
+      TextLabel "Notice".
+    - Layout: 300x64 code px, top centre, 8 px under the Roblox top bar. Active = false, so nothing is tappable.
+    - Text: GothamBold 20 px, white on near-black (BackgroundTransparency 0.1), "Game failed to load.\nPlease rejoin.".
+      It names no keys and never says "click", so the copy is the same on every device.
+    - It has no UIScale, so 20 code px is 20 real px on a phone.
+    - It is shown only if PlayerGui appears within 10 s (a bounded wait). Otherwise there is one warn and no notice.
+    - No rejoin button. A TeleportService button would add a tap target and a new way to fail. The player leaves and
+      rejoins from the Roblox menu.
+    - Text and colours are hard-coded in Bootstrap for the same reason as C5-1.
+    - Reversible: delete showLoadFailedNotice and its one call.
+
+C5-3 Module guards: 23 client modules now wait 60 s for Shared, then warn and return their own (empty) module table.
+    That table is declared before the wait, so every consumer keeps the module's type.
+    - Bootstrap requires modules only after it has Shared, so in the real boot path these guards return at once.
+      They only matter if a module is required some other way.
+    - VehicleDriveClient.loadShared makes one bounded 60 s wait and then reads direct children. A missing Shared keeps
+      the driving defaults.
+    - ConsoleLocator lives in Shared.Util and runs on both server and client. It reaches Shared through
+      script.Parent.Parent and never waits (the PlotFrame pattern).
+    - Reversible per file.
+
+C5-4 PlayerGui waits:
+    - Bootstrap PlayerGui gate: after Shared is found and before any require, Bootstrap waits for PlayerGui in 60 s
+      slices, up to 180 s, with one warn per slice ("[WAR EMPIRE] Client Bootstrap: no PlayerGui after 60 s; still
+      waiting (slow connection?)", then 120 s, then "after 180 s; giving up, client not started").
+      - If PlayerGui never comes, Bootstrap warns and returns before any require. There is no notice, because without
+        PlayerGui nothing can be shown.
+      - The numbers are locals in Bootstrap (PLAYERGUI_WAIT_SLICE_S = 60, PLAYERGUI_WAIT_MAX_S = 180), the same
+        config-first exception as C5-1.
+    - 11 controllers keep their own 30 s PlayerGui wait (the CombatController pattern from spec F33). Each warns with
+      its own name and leaves its panel off. Because the gate runs first, these waits return at once in the real boot
+      path. They only matter if a controller is required some other way.
+    - WorldPromptController.ensurePadBuyGui never waits (FindFirstChildOfClass). With no PlayerGui it skips that
+      refresh, and the next refresh tries again.
+    - Why: without the gate, a PlayerGui more than 30 s late would leave WarEmpireHUD (left rail and cash pill) off
+      for the whole session (stand-in: 19 of 20 ScreenGuis at PlayerGui 35-60 s late); HEAD 5e021d8 built all 20.
+    - Stand-in results, PlayerGui late by 25, 35, 40, 45, 60, 90, 120 or 175 s, plus s70pg110, s150pg150
+      and s170pg330: 20 of 20 ScreenGuis, 39/39 Init, 0 errors, and no controller gave up waiting for PlayerGui. This
+      matches HEAD 5e021d8 in every case.
+    - Trade-offs:
+      - PlayerGui more than 180 s after Shared (pg185): cand2 stops at 180.2 s with no client. HEAD booted at 185.1 s.
+      - PlayerGui never arrives: HEAD hangs at the first controller for ever (3 Init, 2 unfinished). cand2 stops
+        cleanly at 180.2 s (3 warns, 0 Init, 0 errors).
+    - In Roblox, PlayerGui normally exists before StarterPlayerScripts run, so we expect neither case in practice. This
+      has not been measured on a device.
+    - Reversible: raise PLAYERGUI_WAIT_MAX_S, or delete the gate. Deleting it brings back the 30 s per-controller
+      behaviour, where the HUD can stay off when PlayerGui is more than 30 s late.
+
+C5-5 Bootstrap folder waits are bounded: Controllers and Modules 30 s, the five named controllers and modules 5 s (they
+    ship in the same folder as the script). safeRequire takes a nil Instance and warns instead of calling
+    pcall(require, nil).
+
+C5-6 Static gate: the C5 pin block (65 pins, headed "streaming2 lane C5 (F33)") sits in tools/BuyPathStatic.py just
+    before the final parse_gate().
+    - 4 pins cover the Bootstrap PlayerGui gate: its 60/180 numbers; each slice is bounded and warns;
+      it returns when PlayerGui never comes; and it runs after the Shared gate and before any controller is required.
+    - 16 of 16 mutations of Bootstrap fail at least one pin, including moving the gate after
+      the requires or before the Shared gate.
+    - It includes a scan of every file under StarterPlayer Client and ReplicatedStorage (120 files): a new
+      one-argument obj:WaitForChild("x") on one line fails BuyPathStatic. Other lanes must pass a timeout.
+    - Known limits (a regression guard, not a parser): the scan reads one line at a time and counts arguments, so it
+      does not catch a call whose only argument holds parentheses (WaitForChild(f(x))), a call split over several
+      lines, the string-call form (WaitForChild "x"), Instance.WaitForChild(obj, "x"), a call after a string holding
+      "--" on the same line, or a timeout that is not a real bound (math.huge). The guards' pins check the wait and
+      the warn, not the early return after it.
+    - The pins hard-code the numbers (60/180 slices, 30 s PlayerGui, TextSize 20, 300x64): changing a timeout per
+      C5-1 / C5-4 means changing the matching pin in the same commit. Two separate comment-aware argument counts over the same files found 0 such
+      calls (and 0 one-argument calls of any kind; HEAD 5e021d8 had 51 in 26 files).
+
+C5-7 Stand-in only: every timing above (the 60.0 / 120.1 / 180.2 s warns for Shared and for PlayerGui, the 70.0 s and
+    330.0 s boots, 180.2 s stops, and 185.1 s on HEAD) is the stand-in's virtual clock. The notice geometry comes from
+    the stand-in's Absolute* approximation (UDim2 plus ScreenGui insets), and the text width is an estimate (0.55 x size
+    per character).
+    Not tested:
+    - a real slow phone
+    - the real order in which Roblox replicates ReplicatedStorage and PlayerGui relative to PlayerScripts
+    - how the notice actually renders (GothamBold metrics, safe-area insets on a notched phone)
+    - server-side WaitForChild calls. src/ServerScriptService still has 81 unbounded (one-argument) WaitForChild
+      calls in 50 files, plus 22 that already pass a timeout. This lane changes no server file, so the count is the
+      same as HEAD 5e021d8. They are left for a server lane.

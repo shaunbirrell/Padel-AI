@@ -21,7 +21,13 @@ local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local OrdersController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] OrdersController: no ReplicatedStorage.Shared after 60 s; not started")
+	return OrdersController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -35,8 +41,6 @@ local AudioController = require(script.Parent.Parent.Modules.AudioController)
 
 local NotificationController = require(script.Parent.NotificationController)
 local ArmyController = require(script.Parent.ArmyController)
-
-local OrdersController = {}
 
 local PANEL_ID = "Orders"
 local WALKIE = OrdersConfig.Walkie
@@ -467,7 +471,13 @@ function OrdersController.Init()
 	screen.Name = "WarEmpireOrders"
 	-- the one HUD scale + safe area (HudLayout.ApplyScreen); DisplayOrder 52: under the rail (55), which it sits beside
 	PanelShell.Screen(screen, HudConfig.DisplayOrder.WarEmpireOrders)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] OrdersController: no PlayerGui after 30 s; Army orders off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	build(screen)

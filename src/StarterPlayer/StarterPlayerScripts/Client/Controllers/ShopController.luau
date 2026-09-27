@@ -33,7 +33,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local TextService = game:GetService("TextService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ShopController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ShopController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ShopController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -44,8 +50,6 @@ local NotificationController = require(script.Parent.NotificationController)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local HudIcons = require(script.Parent.Parent.Modules.HudIcons)
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
-
-local ShopController = {}
 
 local PANEL_ID = "Shop"
 
@@ -610,7 +614,13 @@ function ShopController.Init()
 	screen.DisplayOrder = 60 -- above HUD dock (55); panels must not open behind HUD
 	-- v70: one HUD scale + the safe area (HudLayout.ApplyScreen via PanelShell); DisplayOrder stays Panels = 60
 	PanelShell.Screen(screen, HudConfig.DisplayOrder.Panels)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] ShopController: no PlayerGui after 30 s; Shop panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()

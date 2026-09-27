@@ -10,7 +10,13 @@ local UserInputService = game:GetService("UserInputService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ArmyController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ArmyController: no ReplicatedStorage.Shared after 60 s; not started")
+	return ArmyController
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
@@ -20,8 +26,6 @@ local MonetizationConfig = require(Shared.Configs.MonetizationConfig)
 local PanelShell = require(script.Parent.Parent.Modules.PanelShell)
 local HudLayout = require(script.Parent.Parent.Modules.HudLayout)
 local NotificationController = require(script.Parent.NotificationController)
-
-local ArmyController = {}
 
 local PANEL_ID = "Army"
 
@@ -194,7 +198,13 @@ function ArmyController.Init()
 	screen.Name = "WarEmpireArmy"
 	-- v70: one HUD scale + the safe area (was IgnoreGuiInset = true: the title sat under the Roblox topbar)
 	PanelShell.Screen(screen)
-	screen.Parent = player:WaitForChild("PlayerGui")
+	local pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)
+	if not pg then
+		warn("[WAR EMPIRE] ArmyController: no PlayerGui after 30 s; Army panel off")
+		screen:Destroy()
+		return
+	end
+	screen.Parent = pg
 	screenGui = screen
 
 	local TAP = PanelShell.TouchMinV()

@@ -17,11 +17,15 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ProgressPill = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ProgressPill: no ReplicatedStorage.Shared after 60 s; not started")
+	return ProgressPill
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
-
-local ProgressPill = {}
 
 export type Pill = {
 	Frame: Frame,

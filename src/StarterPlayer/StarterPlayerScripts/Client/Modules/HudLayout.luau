@@ -44,11 +44,15 @@ local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local HudLayout = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] HudLayout: no ReplicatedStorage.Shared after 60 s; not started")
+	return HudLayout
+end
 local HudConfig = require(Shared.Configs.HudConfig)
 local UIUtil = require(Shared.Util.UIUtil)
-
-local HudLayout = {}
 
 export type Rule = { ShowWhen: { string }?, HideWhen: { string }? }
 -- what BindVisibility / EvalRule accept: any table with HideWhen and/or ShowWhen (HudConfig.Rail, .Hotbar, ...)

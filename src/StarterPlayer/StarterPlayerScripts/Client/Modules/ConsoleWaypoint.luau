@@ -26,14 +26,18 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CollectionService = game:GetService("CollectionService")
 
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ConsoleWaypoint = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ConsoleWaypoint: no ReplicatedStorage.Shared after 60 s; not started")
+	return ConsoleWaypoint
+end
 local Constants = require(Shared.Constants)
 local BaseConfig = require(Shared.Configs.BaseConfig)
 local ConsoleBuyConfig = require(Shared.Configs.ConsoleBuyConfig)
 local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)
 local ConsoleLocator = require(Shared.Util.ConsoleLocator)
-
-local ConsoleWaypoint = {}
 
 local player = Players.LocalPlayer
 local W = ConsoleBuyConfig.Waypoint

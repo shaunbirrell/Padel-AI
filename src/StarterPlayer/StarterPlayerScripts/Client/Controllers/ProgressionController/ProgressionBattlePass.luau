@@ -2,13 +2,17 @@
 --[[ Battle Pass track preview rebuild (extracted from ProgressionController). ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local ProgressionBattlePass = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] ProgressionBattlePass: no ReplicatedStorage.Shared after 60 s; not started")
+	return ProgressionBattlePass
+end
 local Constants = require(Shared.Constants)
 local Remotes = require(Shared.Remotes)
 local UIUtil = require(Shared.Util.UIUtil)
 local ProgressionUI = require(script.Parent.ProgressionUI)
-
-local ProgressionBattlePass = {}
 
 function ProgressionBattlePass.RebuildTrackPreview(trackList: ScrollingFrame?, bpState: any)
 	if not trackList or typeof(bpState) ~= "table" then

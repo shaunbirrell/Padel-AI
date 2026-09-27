@@ -33,7 +33,13 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local ClientSettings = require(script.Parent.ClientSettings)
-local Shared = ReplicatedStorage:WaitForChild("Shared")
+-- streaming2 C5: bounded wait (CLAUDE.md); a missing Shared warns and returns this module empty, never throws
+local AudioController = {}
+local Shared = ReplicatedStorage:WaitForChild("Shared", 60)
+if not Shared then
+	warn("[WAR EMPIRE] AudioController: no ReplicatedStorage.Shared after 60 s; not started")
+	return AudioController
+end
 local SoundConfig = require(Shared.Configs.SoundConfig)
 
 type SoundDef = SoundConfig.SoundDef
@@ -73,8 +79,6 @@ export type Stats = {
 	ByKey: { [string]: number },
 	LastKey: string?,
 }
-
-local AudioController = {}
 
 local Mix = SoundConfig.Mix
 local STOP_FADE = 0.4 -- s: MaxSeconds one-shots fade out instead of cutting

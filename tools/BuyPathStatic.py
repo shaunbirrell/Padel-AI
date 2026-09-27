@@ -4672,6 +4672,103 @@ else:
     bad(f'streaming2 S5 F4: WorldPOI has {_s5_assign} ModelStreamingMode assignment(s), late write after Finish: {_s5_late} (want exactly 1, before Finish: no runtime mode change on a Model clients already hold)')
 # Note: the isHostCluster pin and both NearHostStuds pins also pass on 670bbf6/cb2f357; they guard future edits.
 
+# --- streaming2 lane C5 (F33): every client WaitForChild is bounded (CLAUDE.md): Shared 60 s per module (Bootstrap:
+#     60 s slices up to 180 s, then one rejoin notice), PlayerGui 30 s per controller (Bootstrap: 60 s slices up to
+#     180 s before any require, so those 30 s waits return at once) ---
+# A client-wide scan first (every file under Client and under ReplicatedStorage, which the client requires too), then
+# the Bootstrap gate, the per-module Shared guard, the per-controller PlayerGui guard and the three special cases.
+C5_CL = 'src/StarterPlayer/StarterPlayerScripts/Client'
+C5_BOOT = C5_CL + '/Bootstrap.client.luau'
+C5_WPC = C5_CL + '/Controllers/WorldPromptController.luau'
+C5_VDC = C5_CL + '/Modules/VehicleDriveClient.luau'
+C5_CLOC = 'src/ReplicatedStorage/Shared/Util/ConsoleLocator.luau'
+_c5_files, _c5_unbounded, _c5_shared, _c5_pg = [], [], [], []
+for _c5_base in (C5_CL, 'src/ReplicatedStorage'):
+    for _c5_p in sorted((ROOT / _c5_base).rglob('*.lua*')):
+        if _c5_p.suffix not in ('.luau', '.lua'):
+            continue
+        _c5_rel = _c5_p.relative_to(ROOT).as_posix()
+        _c5_files.append(_c5_rel)
+        _c5_body = _c5_p.read_text(encoding='utf-8')
+        if 'WaitForChild("Shared")' in _c5_body:
+            _c5_shared.append(_c5_rel)
+        if 'WaitForChild("PlayerGui")' in _c5_body:
+            _c5_pg.append(_c5_rel)
+        for _c5_i, _c5_line in enumerate(_c5_body.split('\n'), 1):
+            # code before a line comment; a one-argument WaitForChild (literal or variable) has no timeout
+            if re.search(r':WaitForChild\(\s*[^,()]*\)', _c5_line.split('--', 1)[0]):
+                _c5_unbounded.append(f'{_c5_rel}:{_c5_i}')
+(ok if len(_c5_files) > 60 and not _c5_unbounded else bad)(
+    f'streaming2 C5 F33: no one-argument (unbounded) WaitForChild in {len(_c5_files)} client / ReplicatedStorage files'
+    + (f' — unbounded: {", ".join(_c5_unbounded)}' if _c5_unbounded else ''))
+(ok if not _c5_shared else bad)('streaming2 C5 F33: no bare WaitForChild("Shared") on the client' + (f' — in {", ".join(_c5_shared)}' if _c5_shared else ''))
+(ok if not _c5_pg else bad)('streaming2 C5 F33: no bare WaitForChild("PlayerGui") on the client' + (f' — in {", ".join(_c5_pg)}' if _c5_pg else ''))
+# Bootstrap [PB]: a slow phone gets 180 s for Shared (60 s slices, one warn each; nothing required, nothing thrown, no
+# hang); if Shared never comes, ONE small top-centre notice (bounded PlayerGui wait, 20 px, not tappable, no key names)
+# and a clean return before any require. Bounded folder waits, and safeRequire takes a missing module.
+must_contain(C5_BOOT, 'local SHARED_WAIT_SLICE_S = 60\nlocal SHARED_WAIT_MAX_S = 180\n', 'streaming2 C5 F33: Bootstrap waits for Shared in 60 s slices up to 180 s (slow phones)')
+must_contain(C5_BOOT, 'while not sharedFolder and waitedS < SHARED_WAIT_MAX_S do\n\tsharedFolder = ReplicatedStorage:WaitForChild("Shared", SHARED_WAIT_SLICE_S)\n\tif not sharedFolder then\n\t\twaitedS += SHARED_WAIT_SLICE_S\n\t\twarn(', 'streaming2 C5 F33: every Bootstrap Shared slice is bounded and warns once')
+must_contain(C5_BOOT, 'if not sharedFolder then\n\tshowLoadFailedNotice()\n\treturn\nend', 'streaming2 C5 F33: no Shared after 180 s: one rejoin notice, then Bootstrap stops cleanly')
+must_not_contain(C5_BOOT, 'WaitForChild("Shared", 60) then', 'streaming2 C5 F33: the old 60 s Bootstrap give-up is gone (a slow phone must not end with a dead client)')
+must_contain(C5_BOOT, '\tlocal pg = if player then player:WaitForChild("PlayerGui", 10) else nil\n\tif not pg then\n\t\twarn(', 'streaming2 C5 F33: the load notice waits for PlayerGui 10 s at most and is skipped without it')
+must_contain(C5_BOOT, '\tgui.IgnoreGuiInset = false\n', 'streaming2 C5 F33: the load notice sits under the Roblox top bar (never over its pills)')
+must_contain(C5_BOOT, '\tlabel.Active = false\n\tlabel.AnchorPoint = Vector2.new(0.5, 0)\n\tlabel.Position = UDim2.new(0.5, 0, 0, 8)\n\tlabel.Size = UDim2.fromOffset(300, 64)\n', 'streaming2 C5 F33: the load notice is top centre, 300x64, not tappable (clear of thumbstick and jump)')
+must_contain(C5_BOOT, '\tlabel.TextSize = 20\n', 'streaming2 C5 F33: the load notice text is 20 px (phone-readable, no UIScale)')
+_c5_boot = (ROOT / C5_BOOT).read_text(encoding='utf-8') if (ROOT / C5_BOOT).is_file() else ''
+_c5_texts = re.findall(r'label\.Text = "([^"]*)"', _c5_boot)
+(ok if len(_c5_texts) == 1 and not re.search(r'(?i)click|press|tap|\bkey|keyboard|mouse|\b(esc|enter|space|shift|ctrl|f\d+)\b', _c5_texts[0]) else bad)(
+    'streaming2 C5 F33: exactly one load notice, and its copy names no key and says no "click"' + (f' — {_c5_texts!r}' if _c5_texts else ' — none found'))
+_c5_ni, _c5_ri = _c5_boot.find('\tshowLoadFailedNotice()\n\treturn\nend'), _c5_boot.find('safeRequire("UIController"')
+(ok if 0 <= _c5_ni < _c5_ri else bad)('streaming2 C5 F33: Bootstrap returns on a missing Shared before any controller is required')
+# Bootstrap PlayerGui gate (fix round 2): the same 60 s slices up to 180 s, once for every controller, after Shared and
+# before any require, so a late PlayerGui can no longer leave the HUD (left rail, cash pill) off for the session; with
+# no PlayerGui at all nothing can be shown, so Bootstrap warns and stops before any require.
+must_contain(C5_BOOT, 'local PLAYERGUI_WAIT_SLICE_S = 60\nlocal PLAYERGUI_WAIT_MAX_S = 180\n', 'streaming2 C5 F33: Bootstrap waits for PlayerGui in 60 s slices up to 180 s (slow phones; the HUD must not stay off)')
+must_contain(C5_BOOT, 'while localPlayer and not playerGui and pgWaitedS < PLAYERGUI_WAIT_MAX_S do\n\tplayerGui = localPlayer:WaitForChild("PlayerGui", PLAYERGUI_WAIT_SLICE_S)\n\tif not playerGui then\n\t\tpgWaitedS += PLAYERGUI_WAIT_SLICE_S\n\t\twarn(', 'streaming2 C5 F33: every Bootstrap PlayerGui slice is bounded and warns once')
+must_contain(C5_BOOT, 'if not playerGui then\n\tif not localPlayer then\n\t\twarn("[WAR EMPIRE] Client Bootstrap: no LocalPlayer; client not started")\n\tend\n\treturn\nend\n', 'streaming2 C5 F33: no PlayerGui after 180 s: Bootstrap stops cleanly (nothing required, nothing thrown)')
+_c5_si, _c5_gi = _c5_boot.find('if not sharedFolder then\n\tshowLoadFailedNotice()'), _c5_boot.find('while localPlayer and not playerGui')
+_c5_gr, _c5_fi = _c5_boot.find('if not playerGui then\n'), _c5_boot.find('script.Parent:WaitForChild("Controllers"')
+(ok if 0 <= _c5_si < _c5_gi < _c5_gr < _c5_fi < _c5_ri else bad)('streaming2 C5 F33: the Bootstrap PlayerGui gate runs after the Shared gate and before any controller is required')
+must_contain(C5_BOOT, 'local Controllers = script.Parent:WaitForChild("Controllers", 30)\nlocal Modules = script.Parent:WaitForChild("Modules", 30)\nif not Controllers or not Modules then', 'streaming2 C5 F33: Bootstrap folder waits are bounded and checked')
+must_contain(C5_BOOT, 'local function safeRequire(name: string, inst: Instance?): any\n\tif not inst then\n\t\twarn(', 'streaming2 C5 F33: safeRequire warns on a module whose bounded wait gave up (no pcall(require, nil))')
+for _c5_n in ('UIController', 'CombatController', 'VehicleController'):
+    must_contain(C5_BOOT, f'local {_c5_n} = safeRequire("{_c5_n}", Controllers:WaitForChild("{_c5_n}", 5))', f'streaming2 C5 F33: Bootstrap {_c5_n} wait is bounded')
+for _c5_n in ('StudioSmokeClient', 'WorldSpinners'):
+    must_contain(C5_BOOT, f'local {_c5_n} = safeRequire("{_c5_n}", Modules:WaitForChild("{_c5_n}", 5))', f'streaming2 C5 F33: Bootstrap {_c5_n} wait is bounded')
+# every module that waited forever for Shared: the table is declared first, a missing Shared warns once and returns it
+for _c5_rel, _c5_m in (
+    ('Controllers/PromptController.luau', 'PromptController'), ('Controllers/VehicleController.luau', 'VehicleController'),
+    ('Controllers/TutorialController.luau', 'TutorialController'), ('Controllers/ShopController.luau', 'ShopController'),
+    ('Controllers/ArmyController.luau', 'ArmyController'), ('Controllers/MissileController.luau', 'MissileController'),
+    ('Controllers/HUDController.luau', 'HUDController'), ('Controllers/SettingsController.luau', 'SettingsController'),
+    ('Controllers/ProgressionController/init.luau', 'ProgressionController'),
+    ('Controllers/ProgressionController/ProgressionBattlePass.luau', 'ProgressionBattlePass'),
+    ('Controllers/BaseController.luau', 'BaseController'), ('Controllers/OrdersController.luau', 'OrdersController'),
+    ('Controllers/WorldPromptController.luau', 'WorldPromptController'), ('Controllers/ResearchController.luau', 'ResearchController'),
+    ('Controllers/NotificationController.luau', 'NotificationController'), ('Modules/PanelShell.luau', 'PanelShell'),
+    ('Modules/AudioController.luau', 'AudioController'), ('Modules/ConsoleWaypoint.luau', 'ConsoleWaypoint'),
+    ('Modules/AudioHooks.luau', 'AudioHooks'), ('Modules/HudLayout.luau', 'HudLayout'), ('Modules/ProgressPill.luau', 'ProgressPill'),
+    ('Modules/HudIcons.luau', 'HudIcons'), ('Modules/RebirthConfirm.luau', 'RebirthConfirm'),
+):
+    must_contain(f'{C5_CL}/{_c5_rel}', f'local {_c5_m} = {{}}\nlocal Shared = ReplicatedStorage:WaitForChild("Shared", 60)\nif not Shared then\n\twarn("[WAR EMPIRE] {_c5_m}: no ReplicatedStorage.Shared after 60 s; not started")\n\treturn {_c5_m}\nend', f'streaming2 C5 F33: {_c5_m} waits 60 s for Shared, then warns and returns itself (never throws)')
+# every controller that waited forever for PlayerGui: 30 s, warn with its name, leave that panel off
+for _c5_rel, _c5_m in (
+    ('Controllers/PromptController.luau', 'PromptController'), ('Controllers/VehicleController.luau', 'VehicleController'),
+    ('Controllers/TutorialController.luau', 'TutorialController'), ('Controllers/ShopController.luau', 'ShopController'),
+    ('Controllers/ArmyController.luau', 'ArmyController'), ('Controllers/HUDController.luau', 'HUDController'),
+    ('Controllers/SettingsController.luau', 'SettingsController'), ('Controllers/ProgressionController/init.luau', 'ProgressionController'),
+    ('Controllers/BaseController.luau', 'BaseController'), ('Controllers/OrdersController.luau', 'OrdersController'),
+    ('Controllers/NotificationController.luau', 'NotificationController'),
+):
+    must_contain(f'{C5_CL}/{_c5_rel}', f'\tlocal pg = player:WaitForChild("PlayerGui", 30) -- bounded (streaming2 C5, CLAUDE.md)\n\tif not pg then\n\t\twarn("[WAR EMPIRE] {_c5_m}: no PlayerGui after 30 s;', f'streaming2 C5 F33: {_c5_m} waits 30 s for PlayerGui, then warns and leaves its GUI off')
+must_contain(C5_WPC, 'local function ensurePadBuyGui(): TextButton?\n', 'streaming2 C5 F33: the pad BUY gui may be missing (caller skips that refresh)')
+must_contain(C5_WPC, '\tlocal pg = player:FindFirstChildOfClass("PlayerGui") -- streaming2 C5: never waits (runs on refreshes)\n\tif not pg then\n\t\treturn nil', 'streaming2 C5 F33: the pad BUY refresh never waits on PlayerGui')
+must_contain(C5_WPC, '\tlocal btn = ensurePadBuyGui()\n\tif not btn then\n\t\treturn\n\tend\n', 'streaming2 C5 F33: the pad BUY refresh handles a missing gui')
+must_contain(C5_VDC, '\tlocal Shared = ReplicatedStorage:WaitForChild("Shared", 60) -- bounded (streaming2 C5, CLAUDE.md)\n\tif not Shared then\n\t\twarn("[WAR EMPIRE] VehicleDriveClient:', 'streaming2 C5 F33: VehicleDriveClient.loadShared waits 60 s once, then keeps the driving defaults')
+must_not_contain(C5_VDC, 'WaitForChild("Shared"):WaitForChild(', 'streaming2 C5 F33: no chained unbounded Shared child waits in VehicleDriveClient')
+must_contain(C5_CLOC, 'local Shared = script.Parent.Parent -- this module lives in Shared.Util: no wait', 'streaming2 C5 F33: ConsoleLocator reaches Shared through its own parent (never yields)')
+must_not_contain(C5_CLOC, 'WaitForChild(', 'streaming2 C5 F33: ConsoleLocator never waits (its header says so)')
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
