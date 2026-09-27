@@ -12,6 +12,9 @@
 	WE_ConsolePos_<sid> and BusinessService's WE_AtmPos, so the tutorial beam has an end while the plate is streamed
 	out on that client. Stamped on plot ready and kept right by the 2 s owner sync (hand-outs, late claims, release,
 	rebuilt plates). Streaming off: no hook, no attribute (HEAD behaviour).
+
+	Owner asset list hook (2026-09-25): a newly built plate gets a deferred VisualAssetService.TryAttachPropVisual(plate,
+	"ManualDropper") (VisualAssetConfig.IndustrialProps.ManualDropper; 0 / pending = no load, the plate look stays).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -259,6 +262,11 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 	prompt.MaxActivationDistance = ManualDropperConfig.PromptMaxDistance or 12
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = pad
+
+	-- owner asset list hook: the dropper model on the plate (the plate is the kit's only host part; deferred, pcall'd)
+	if VisualAssetService and VisualAssetService.TryAttachPropVisual then
+		task.defer(pcall, VisualAssetService.TryAttachPropVisual, pad, "ManualDropper")
+	end
 
 	return pad
 end

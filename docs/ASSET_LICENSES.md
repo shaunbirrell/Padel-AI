@@ -7,7 +7,9 @@ Data: Roblox economy API `economy.roblox.com/v2/assets/<id>/details`, read 2026-
 
 Owner: CFG (W1) writes this file with `VisualAssetConfig`; LOOK (W3) and W6a update it in the same commit as any ID change;
 `tools/wire-asset-ids.py` adds the §3.1 row of every owner pick it promotes (docs/ASSET_WIRING.md).
-Last update: owner asset list (assetwire), 2026-09-25 — Roblox-owned picks wired (§3.0: Dune Buggy, Pickup Truck, Van,
+Last update: owner asset list hooks, 2026-09-25 — the Roblox Conveyor Belt, Rocket and Capture Points wired through the new
+business / Home Outpost hooks (§3.0), the gate AutoGun owner pick 114570602 promoted (§3.1) now that its loader has the
+40-part / no-Humanoid rule, and 4923345827 gone from `src/` (§2e). Before that: owner asset list (assetwire), 2026-09-25 — Roblox-owned picks wired (§3.0: Dune Buggy, Pickup Truck, Van,
 Smoking Barrel, the six Weapons Kit guns, the grenade and rocket meshes, and the Synty log, twig and sedan pieces), the three
 heavy building models cleared by owner rule 5 (§2d), the owner-picks table added (§3.1, empty until a promote) and the
 ownership facts of 2026-09-25 (§1). Before that: W3 LOOK, 2026-09-24 — Roblox-owned packs wired (§3.0), 19 third-party
@@ -163,6 +165,7 @@ notes the pick. Empty until the first promote.
 | [91071319](https://create.roblox.com/store/asset/91071319) | Concrete Barrier | HabaneroDude (User) | Model | 2016-08-27 | 868 | 0 | `WarzoneProps.ConcreteBarrier`, `WarzoneProps.Cone` | replaced by owner pick 2766525411 (Jersey), 2026-09-25 |
 | [976333542](https://create.roblox.com/store/asset/976333542) | Military Crate | sam_youwell (User) | Model | 2017-08-13 | 1,196 | 0 | `WarzoneProps.MilitaryCrate`, `WarzoneProps.Pallet` | replaced by owner pick 2930926216 (MilitaryCrate), 2026-09-25 |
 | [13525922265](https://create.roblox.com/store/asset/13525922265) | Realistic Oil Pumpjack | Unit5532 (User) | Model | 2023-05-23 | 11,318 | 0 | `IndustrialProps.OilPumpjack` | replaced by owner pick 15192621369 (PlotOilPump), 2026-09-25 |
+| [4923345827](https://create.roblox.com/store/asset/4923345827) | Machine Gun Nest | Byrdknight (User) | Model | 2020-04-20 | 4,999 | 0 | none (left `src/` 2026-09-25) | Watch: the game owner owns it since 2026-09-25 (inventory API 08:05 UTC), it loaded on live on the gate AutoGuns at walls level 4+ until the config was set to 0 the same day (GateDefenseService's own loader then had no part cap). A WWII MG 34-like silhouette, so the owner rejected it for the sandbag nest. The GateDefenseService default is 0 since the hooks commit (2026-09-25), so it left `src/`; replaced by owner pick 114570602 (AutoGun), 2026-09-25 |
 <!-- wire-asset-ids:replaced:end -->
 
 ## 3.0 Roblox-owned IDs (W3 LOOK; load with the third-party switch OFF)
@@ -191,6 +194,9 @@ LOOK lane keeps the full responses with its test evidence). Roblox's docs for `I
 | [4842186817](https://create.roblox.com/store/asset/4842186817) | Rocket Launcher | Roblox (User 1) | Model | 2023-06-15 | Tool `Rocket Launcher` › Model `RocketLauncher` + invisible `Handle`, as above | `WeaponConfig` RocketLauncher | [economy API](https://economy.roblox.com/v2/assets/4842186817/details) |
 | [232379763](https://create.roblox.com/store/asset/232379763) | MESH_ArmyGuy_Grenade, with texture [232379808](https://create.roblox.com/store/asset/232379808) TX_ArmyGuy_Grenade_v2 | Roblox (User 1) | Mesh + Image | 2015-03-31 | `MeshId` / `TextureId` of the client grenade's SpecialMesh (1,350 faces); no LoadAsset, no model | `WeaponConfig.Weapons.Grenade.Projectile` | [economy API](https://economy.roblox.com/v2/assets/232379763/details), [texture](https://economy.roblox.com/v2/assets/232379808/details) |
 | [94690081](https://create.roblox.com/store/asset/94690081) | MESH_BattleGameRocketLauncherAmmo, with texture [94689966](https://create.roblox.com/store/asset/94689966) TX_BattleGameRocketLauncher | Roblox (User 1) | Mesh + Image | 2012-10-09 | `MeshId` / `TextureId` of the rocket in flight (336 faces); no LoadAsset, no model | `WeaponConfig.Weapons.RocketLauncher.Projectile` | [economy API](https://economy.roblox.com/v2/assets/94690081/details), [texture](https://economy.roblox.com/v2/assets/94689966/details) |
+| [41324890](https://create.roblox.com/store/asset/41324890) | Conveyor Belt | Roblox (User 1) | Model | 2011-05-13 | The whole model: 1 block part (4 x 0.4 x 4) with its stripe Decal, stretched into the kit belt's box; its "Force Script" is stripped at load (static belt) and its Configuration dropped | `Businesses.AmmoWorks`, `Businesses.ArmsCrateLine` (the part takes the `Kit_Belt` place, so the business part count is unchanged) | [economy API](https://economy.roblox.com/v2/assets/41324890/details) (re-read 2026-09-25 10:25 UTC) |
+| [31603741](https://create.roblox.com/store/asset/31603741) | Rocket | Roblox (User 1) | Model | 2010-07-27 | Part `Rocket` (one mesh part, 448 tris), laid along the kit rocket body and scaled to its length; the empty `Particles` part is dropped (`OmitParts`) and its Fire + Smoke removed (`StripEffectsAssetIds`) | `Businesses.RocketAssembly` (takes the `Kit_Signature` place) | [economy API](https://economy.roblox.com/v2/assets/31603741/details) (re-read 2026-09-25 10:25 UTC) |
+| [80566030](https://create.roblox.com/store/asset/80566030) | Capture Points | Roblox (User 1) | Model | 2012-05-11 | The whole model: 6 CylinderMesh parts (a round pad, 17.5 studs); its 2 scripts are stripped at load and its translucent `Height` beam is made invisible (`TransparentParts`) | `Landmarks.HomeOutpost` (the pad at each Home Outpost, on the capture ring; welded, non-colliding) | [economy API](https://economy.roblox.com/v2/assets/80566030/details) (re-read 2026-09-25 10:25 UTC) |
 
 **Terms.**
 - Synty packs: Roblox's DevForum announcement "Free Synty Asset Packs Released in the Marketplace" (topic 1283755,
@@ -209,6 +215,8 @@ LOOK lane keeps the full responses with its test evidence). Roblox's docs for `I
 - Grenade and rocket meshes and textures (2026-09-25): Roblox-owned content ids (economy API: creator Roblox, not for sale),
   set by id on a client SpecialMesh; never loaded as a model.
 - Smoking Barrel (2026-09-25): a free Roblox-owned model; used whole (4 parts) with its smoke removed.
+- Conveyor Belt, Rocket and Capture Points (2026-09-25, hooks): free Roblox-owned models, the same terms; used as static
+  dress only (every script stripped, the rocket's fire and smoke removed, the capture beam hidden).
 - The meshes and textures inside these models were uploaded by the accounts that built them for Roblox (checked on the
   economy API: oggo732, 1114780684, for the LUV and Nature meshes; Klaugrana001, 1453730866, for the City and Dungeon
   meshes and the pack textures). We never reference those inner ids in config; they arrive inside the Roblox-owned model
@@ -236,9 +244,10 @@ row below. Rules 1–5 of §1 hold for every row; scripts are stripped at load. 
 | [15192621369](https://create.roblox.com/store/asset/15192621369) | Oil Rig / Pumpjack | sadfiacs (User 1607785544) | Model | inventory API 2026-09-25T09:40:10Z (cached) | 1,398 | 0 (stripped) | `IndustrialProps.OilPumpjack` | owner list 2026-09-25 (Plot Oil Pump); Get Model by the game owner |
 | [15271872710](https://create.roblox.com/store/asset/15271872710) | SandBag Wall | Herbie778811 (User 561823031) | Model | inventory API 2026-09-25T09:40:13Z (cached) | 240 | 0 (stripped) | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` | owner list 2026-09-25 (Sandbag Line); Get Model by the game owner |
 | [18220523228](https://create.roblox.com/store/asset/18220523228) | ATM | 0GColt (User 3592203545) | Model | inventory API 2026-09-25T09:40:16Z (cached) | 1,032 | 0 (stripped) | `MoneyCollector` | owner list 2026-09-25 (Money Collector); Get Model by the game owner |
+| [114570602](https://create.roblox.com/store/asset/114570602) | Tripod Mounted Machine Gun | GuestCapone (User 33412864) | Model | inventory API 2026-09-25T10:23:23Z (cached) | — | 0 (stripped) | `GateDefense.AutoGun` | owner list 2026-09-25 (Auto Gun); Get Model by the game owner. Provenance: part names credit co-builders sk3let0n (17 parts) and TehPwnzerLord (2); built with an in-game build tool (RobloxStamper / RobloxModel values, dropped at load); the listing itself passes rule 3. **Owner OK given 2026-09-27** (ASSUMPTIONS AW-H13) |
 <!-- wire-asset-ids:owner-picks:end -->
 
-## 3. Remaining third-party IDs (53) and why each is allowed
+## 3. Remaining third-party IDs (52) and why each is allowed
 
 Every row: free Creator Store asset, Roblox Terms (in-Roblox use only), passes rules 1–5 in §1 unless the note says
 "Watch". "Scripts" is the count inside the upload; all are stripped before use. Triangles are from the toolbox API.
@@ -276,7 +285,6 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [4923345827](https://create.roblox.com/store/asset/4923345827) | Machine Gun Nest | Byrdknight (User) | Model | 2020-04-20 | 4,999 | 0 | `GateDefenseService default` only (config AutoGun = 0 since 2026-09-25) | Watch: the game owner owns it since 2026-09-25 (inventory API 08:05 UTC), it loaded on live on the gate AutoGuns at walls level 4+ until the config was set to 0 the same day (GateDefenseService's own loader: no part cap, outside the 48); GateDefenseService still names it as a default and that line is deferred to after streaming2-build. The owner's pick 114570602 replaces it at promote batch P1; a WWII MG 34-like silhouette, so the owner rejected it for the sandbag nest |
 | [10354803684](https://create.roblox.com/store/asset/10354803684) | Military turret | gtddgc8 (User) | Model | 2022-07-25 | 14,754 | 5 | `GateDefense.AutoGunElevatedAlt` | The 2022 original of the 2026 re-upload 71964514000054 (dropped) |
 | [3525056989](https://create.roblox.com/store/asset/3525056989) | Realistic Sandbag | 0TacoMillitary0 (User) | Model | 2019-07-24 | 1,868 | 0 | `GateDefense.Sandbags`, `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags`, `GateDefenseService default` | `WarzoneProps.Sandbag`, `WarzoneProps.Sandbags` moved to owner pick 15271872710 on 2026-09-25 |
 

@@ -2,6 +2,33 @@
  "about": "undo journal of tools/wire-asset-ids.py (demote); edit only through the tool",
  "created_by_tool": true,
  "promoted": {
+  "114570602": {
+   "hunks": {
+    "docs/ASSET_LICENSES.md": [
+     [
+      "",
+      "| [114570602](https://create.roblox.com/store/asset/114570602) | Tripod Mounted Machine Gun | GuestCapone (User 33412864) | Model | inventory API 2026-09-25T10:23:23Z (cached) | — | 0 (stripped) | `GateDefense.AutoGun` | owner list 2026-09-25 (Auto Gun); Get Model by the game owner. Provenance: part names credit co-builders sk3let0n (17 parts) and TehPwnzerLord (2); built with an in-game build tool (RobloxStamper / RobloxModel values, dropped at load); the listing itself passes rule 3. **Owner OK given 2026-09-27** (ASSUMPTIONS AW-H13) |\n"
+     ]
+    ],
+    "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau": [
+     [
+      "\t\tAutoGun = { ModelAssetId = 0, PendingAssetId = 114570602, Note = \"0 = Part-built gate gun (4923345827 Machine Gun Nest dropped 2026-09-25: WWII MG 34-like silhouette, no part cap on this loader, loaded on live once the owner took it); owner pick Tripod Mounted Machine Gun (GuestCapone): pending, P1 (no gate)\" } :: AssetRef,\n",
+      "\t\tAutoGun = { ModelAssetId = 114570602, Note = \"owner pick: Tripod Mounted Machine Gun by GuestCapone (promoted 2026-09-25 by tools/wire-asset-ids.py)\" } :: AssetRef,\n"
+     ]
+    ],
+    "tools/BuyPathStatic.py": [
+     [
+      "must_contain(\"src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau\", \"AutoGun = { ModelAssetId = 0,\", \"GateDefense.AutoGun: Part-built gun until the owner pick 114570602 is promoted (4923345827 MG 34-like dropped)\")\n",
+      "must_contain(\"src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau\", \"AutoGun = { ModelAssetId = 114570602,\", \"GateDefense.AutoGun: Part-built gun until the owner pick 114570602 is promoted (4923345827 MG 34-like dropped) [owner pick 114570602, 2026-09-25]\")\n"
+     ]
+    ]
+   },
+   "keys": [
+    "AutoGun"
+   ],
+   "moves": [],
+   "utc": "2026-09-25T10:23:30Z"
+  },
   "15192621369": {
    "hunks": {
     "docs/ASSET_LICENSES.md": [

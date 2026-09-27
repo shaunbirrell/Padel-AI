@@ -51,20 +51,33 @@ export type AssetRef = {
 	Material: Enum.Material?, -- single-part pieces
 	ClearTexture: boolean?, -- TextureID = "" and no SurfaceAppearance: flat desert palette, no stray text
 	StripDecals: boolean?, -- drop Decals / Textures (phone draw calls; the LUV camo decals are not Roblox-owned images)
-	Fit: string?, -- "Kit": vehicle body scaled to the kit chassis length, tyres on the physics-wheel bottoms
-	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z)
+	Fit: string?, -- "Kit": vehicle body scaled to the kit chassis length, tyres on the physics-wheel bottoms; "Ground": a prop
+	-- stands upright at the host's centre, lowest point on the host's lowest point, scale 1; "Box": a one-part business model
+	-- is stretched into the kit part it replaces (block parts only; default: one uniform scale onto the parts' long side)
+	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z); GateDefense.AutoGun: degrees that
+	-- turn the model's barrel onto -Z (turned once in the template at load)
 	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
 	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
 	NoFamilyFallback: boolean?, -- vehicle ref at 0: keep the Part kit, never take the KitFamilyFallback body
+	-- Owner asset list hooks (2026-09-25: business / Home Outpost / dropper / turret dress). OmitParts also works on
+	-- whole-model props, businesses and vehicle weapons (the parts are dropped from each clone).
+	KeepHost: boolean?, -- props: the host part keeps its look (no fade under the model)
+	FitLong: number?, -- props: one uniform scale so the model's longest side is this many studs (default: scale 1)
+	ReplacesRoles: { string }?, -- Businesses: model part i takes over kit role i's part (named Kit_<Role>); one MinLevel
+	Mount: string?, -- VehicleWeapons: the vehicle kit part the weapon model sits on
+	FitScale: number?, -- VehicleWeapons: the model's longest side = the mount part's longest side x FitScale
+	KitFamilies: { string }?, -- VehicleWeapons: only vehicles of these VehicleConfig KitFamily values wear it
+	Vehicles: { string }?, -- VehicleWeapons: and / or only these vehicle ids
+	HideParts: { string }?, -- VehicleWeapons: kit parts made invisible once the dress attaches (the kit barrel)
 }
 
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
-	MaxLoadAttempts = 48, -- per server, first tries + retries; an id asked for after that keeps its Part kit (one Output line)
+	MaxLoadAttempts = 64, -- per server, first tries + retries; an id asked for after that keeps its Part kit (one Output line)
 	-- A LoadAsset that fails with a transient error (HTTP 5xx / 429 / timeout) is retried in the background, never in
 	-- the caller's thread (boot and spawns never wait): up to LoadRetryCount more tries, LoadRetryDelay seconds after
 	-- the failure, x LoadRetryBackoff after each (20 s, 40 s). Every retry counts toward MaxLoadAttempts. An error
@@ -76,9 +89,13 @@ local VisualAssetConfig = {
 	-- the last LoadRetryReserve attempts of MaxLoadAttempts are kept for FIRST loads (a later spawn's model): a retry
 	-- that would use one is not made (the id is final, one line). Keeps a full outage at boot from using up the
 	-- budget later ids need (fix57 census: <= 19 ids at boot, <= 6 later, fallbacks included).
-	LoadRetryReserve = 12,
-	-- Owner asset list (2026-09-25): 48 / 12 stay. tools/wire-asset-ids.py refuses a promote batch that would take the
-	-- distinct live ids past MaxLoadAttempts - 8 (= 40). PendingAssetId ids are never loaded, so they cost 0.
+	LoadRetryReserve = 24,
+	-- Owner asset list hooks (2026-09-25): 48 / 12 -> 64 / 24. Retries still stop at 40 attempts (64 - 24, as before);
+	-- the first-load reserve doubles, so a full outage keeps 24 first loads for the plot / later ids (walls, vehicle
+	-- bodies, turret dress, businesses). Healthy servers load the same ids as before; an outage costs at most 16 more
+	-- failed LoadAsset calls. tools/wire-asset-ids.py refuses a promote batch that takes the distinct live ids
+	-- past MaxLoadAttempts - 8 (= 56), or whose outage count (every id a plot / later chain can ask for, fallbacks
+	-- included) passes LoadRetryReserve. PendingAssetId ids are never loaded, so they cost 0.
 	LoadRetryPermanentErrors = {
 		"not trusted",
 		"not authorized",
@@ -97,8 +114,10 @@ local VisualAssetConfig = {
 	},
 	MaxPartsPerModel = 40, -- CLAUDE.md catalog budget: an inserted template with more BaseParts is refused (Part kit stays)
 	-- Whole models whose Fire / Smoke / Sparkles / ParticleEmitter / Light / Beam / Trail are removed when the template
-	-- is prepared (phone cost). 23153991 = Roblox "Smoking Barrel" (the training-yard oil drum, smoke removed).
-	StripEffectsAssetIds = { 23153991 },
+	-- is prepared (phone cost). 23153991 = Roblox "Smoking Barrel" (the training-yard oil drum, smoke removed);
+	-- 31603741 = Roblox "Rocket" (Rocket Assembly: Fire + Smoke removed); 4362642898 = the owner's pending Armor Plate
+	-- Press pick (its Smoke goes when it is promoted).
+	StripEffectsAssetIds = { 23153991, 31603741, 4362642898 },
 	FitShadowShare = 0.5, -- fitted vehicle bodies: only parts at least this share of the chassis length cast a shadow
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
@@ -336,13 +355,39 @@ local VisualAssetConfig = {
 	-- Gate defense (Design Bot GATE_DEFENSE_WIRE 2026-09-20)
 	GateDefense = {
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier — gate patrol" } :: AssetRef,
-		AutoGun = { ModelAssetId = 0, PendingAssetId = 114570602, Note = "0 = Part-built gate gun (4923345827 Machine Gun Nest dropped 2026-09-25: WWII MG 34-like silhouette, no part cap on this loader, loaded on live once the owner took it); owner pick Tripod Mounted Machine Gun (GuestCapone): pending, P1 (no gate)" } :: AssetRef,
+		-- Yaw 90: the store file's barrel points along +X (headless parse: the barrel cylinders ahead of the receiver, the single
+		-- tripod leg reaching forward, the rear grips behind, the ammo box on the left); GateDefenseService turns the template
+		-- once so it aims -Z, stands it on the ground and welds it to its aim part (only that part is anchored)
+		AutoGun = { ModelAssetId = 114570602, Yaw = 90, Note = "owner pick: Tripod Mounted Machine Gun by GuestCapone (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
 		SandbagNest = { ModelAssetId = 0, Note = "Circular sandbag ring under HMG" } :: AssetRef,
 		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
 	},
+
+	-- Owner asset list hooks (2026-09-25): war-business line dress. BusinessService.SyncBusiness defers
+	-- VisualAssetService.TryAttachBusinessVisual(model, id, level) after its kit loop. Model part i takes over the built
+	-- kit part of ReplacesRoles[i] (named Kit_<Role>, fitted into that part's own box), so a business never goes over
+	-- BusinessConfig.PartsPerBusinessL5 and the client's Kit_Belt crates keep working (a Belt part is always stretched
+	-- into the kit belt's box, block parts only). Refused (one warn, Part kit stays): more model parts than roles, roles
+	-- with different kit MinLevels, a colliding role. Anchored, non-colliding; a re-sync or level-up that finds every
+	-- built role dressed does nothing, and a role rebuilt after a level-down is dressed again.
+	Businesses = {
+		AmmoWorks = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" }, Note = "owner list: Roblox Conveyor Belt (1 part + its stripe decal; script stripped) as the belt" } :: AssetRef,
+		ArmsCrateLine = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" }, Note = "owner list: Roblox Conveyor Belt as the belt (same model as Ammo Works: one load)" } :: AssetRef,
+		ArmorPlatePress = { ModelAssetId = 0, PendingAssetId = 4362642898, Note = "0 = Part-kit press; owner pick Metal Factory (Press) (Ghosttony503): pending, P4 (Studio check: WE_CHECK, then OmitParts for its translucent bounds box and ReplacesRoles so it fits PartsPerBusinessL5)" } :: AssetRef,
+		RocketAssembly = { ModelAssetId = 31603741, OmitParts = { "Particles" }, ReplacesRoles = { "Signature" }, Note = "owner list: Roblox Rocket as the rocket body (its empty effects part dropped; Fire + Smoke removed, StripEffectsAssetIds)" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	-- Owner asset list hooks (2026-09-25): turret dress. VehicleService calls VisualAssetService.TryAttachVehicleWeaponVisual
+	-- only for a vehicle on the ref's allow-list (KitFamilies and / or Vehicles) whose kit has the Mount part. Dress only:
+	-- massless, non-colliding, welded to the mount (never anchored); HideParts turns the kit gun invisible once the dress is
+	-- on (its parts, collisions and combat stay). 0 = no load, no change.
+	VehicleWeapons = {
+		VehicleMG = { ModelAssetId = 0, PendingAssetId = 5589684833, Mount = "GunMount", FitScale = 3, Vehicles = { "ArmedJeep" }, HideParts = { "Barrel" }, Note = "0 = Part-kit gun; owner pick Mounted Machine Gun (ifyouaremethaniamyou): pending, P4 (Studio check); Armed 4x4 only" } :: AssetRef,
+		VehicleCannon = { ModelAssetId = 0, PendingAssetId = 3322196012, Mount = "Turret", FitScale = 1.6, KitFamilies = { "TrackedMBT" }, HideParts = { "Turret", "Barrel", "Mantlet" }, Note = "0 = Part-kit turret; owner pick Tank Turret (Nierse217): pending, P4 (Studio check; the store page says it may be asymmetrical); battle tanks only" } :: AssetRef,
+	} :: { [string]: AssetRef },
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	-- W1 CFG drop (paid): 0 is skipped, so TryAttachCollectorVisual tries the fallback, then the alts, then the Part kit
@@ -453,6 +498,8 @@ local VisualAssetConfig = {
 		RustyPipes = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans cluster" } :: AssetRef,
+		-- Owner asset list hook (2026-09-25): ManualDropperService dresses each dropper plate (TryAttachPropVisual)
+		ManualDropper = { ModelAssetId = 0, PendingAssetId = 14408455045, Fit = "Ground", FitLong = 4, KeepHost = true, Note = "0 = Part-kit plate; owner pick Tycoon Dropper (tinghang77): pending, P4 (Studio check; neon trim counts in the neon budget); at most 4 studs, the tap plate stays as it is" } :: AssetRef,
 		-- GasStation 5149705639 OPTIONAL heavy — not default
 		-- Ultrapump 1837698074 REJECT
 	} :: { [string]: AssetRef },
@@ -468,6 +515,8 @@ local VisualAssetConfig = {
 		Pier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world landmark; no caller) — Part kit" } :: AssetRef,
 		PierAlt = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		CheckpointBridge = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 real-world theme; WorldKits Checkpoint v2) — Part kit" } :: AssetRef,
+		-- Owner asset list hook (2026-09-25): MapSetup dresses each Home Outpost ring (TryAttachPropVisual, deferred)
+		HomeOutpost = { ModelAssetId = 80566030, Fit = "Ground", KeepHost = true, OmitParts = { "Height", "Highlight" }, Note = "owner list: Roblox Capture Points (2 scripts stripped) as the outpost pad: 4 parts, its translucent Height beam and invisible Highlight dropped" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	--[[ W3 LOOK: World v2 kit meshes (contracts §8.2; keys = WorldKits.Specs[kit].Mesh). One MeshPart from a Roblox-owned

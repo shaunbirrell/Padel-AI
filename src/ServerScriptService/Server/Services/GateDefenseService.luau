@@ -2,7 +2,15 @@
 --[[
 	Gate door defense — 2 GateGuards patrol + shoot enemies; L4+ AutoGun nests.
 	Reads GatePost parts from WE_PerimeterWalls (does NOT edit StructureKitBuilder).
-	Design Bot GATE_DEFENSE_WIRE: Guard 16134469614, AutoGun 4923345827, sandbag dress.
+	Design Bot GATE_DEFENSE_WIRE: Guard 16134469614, sandbag dress. AutoGun model: VisualAssetConfig.GateDefense.AutoGun
+	(0 = the Part-built gun; no hard-coded store id).
+	Owner asset list hooks (2026-09-25): loadCatalogModel applies the 40-part rule (VisualAssetConfig.MaxPartsPerModel)
+	and refuses any template holding a Humanoid (one warn; the Part kit stays; VisualAssetService strips a Humanoid
+	instead). It drops the templates' data objects (ValueBase / Configuration), inserts an id once (a second caller waits)
+	and retries a transient failure once, LoadRetryDelay later. A catalog AutoGun is turned once by its ref's Yaw (barrel
+	onto -Z) and aims by its largest upright part facing the barrel; a model with no such part is refused (a tilted gun
+	never shows). Every AutoGun piece (gun, marker ring, nest, sandbags) stands on the ground under its post, and the
+	catalog gun is one anchored aim part with the rest welded to it, so an aim moves one CFrame.
 	Aggro covers MoneyCollector ATM approach (raid deterrent). No exotic persist.
 
 	v69 (RaidConfig.Defense, spec §1.9): allies = owner + same clan (IsAlly); guards / AutoGuns posted INSIDE the
@@ -44,6 +52,7 @@ local EconomyService: any = nil
 local NotificationService: any = nil
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
+local GATE_POST_LIFT = 3 -- the gate CFrame stands this far above the gate posts' bottoms (the plot surface)
 local DEFENSE_FOLDER = "WE_GateDefense"
 local TAG_COLLECTOR = Constants.Tags.MoneyCollector
 
@@ -125,20 +134,56 @@ local function stripScripts(root: Instance)
 	end
 end
 
-local function loadCatalogModel(assetId: number): Model?
-	if assetId <= 0 or catalogFailed[assetId] then
-		return nil
+-- the VisualAssetService template rules: <= VisualAssetConfig.MaxPartsPerModel BaseParts and no Humanoid (nil = OK)
+local function catalogRefusal(model: Model): string?
+	local cap = tonumber((VisualAssetConfig :: any).MaxPartsPerModel) or 40
+	local n = 0
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Humanoid") then
+			return "holds a Humanoid"
+		elseif d:IsA("BasePart") then
+			n += 1
+		end
 	end
-	if catalogCache[assetId] then
-		return catalogCache[assetId]
+	if n > cap then
+		return string.format("%d parts > cap %d (VisualAssetConfig.MaxPartsPerModel)", n, cap)
 	end
+	return nil
+end
+
+local catalogInflight: { [number]: { thread } } = {} -- ids being inserted right now -> threads waiting for them
+local catalogRetryAt: { [number]: number } = {} -- after one transient failure: the os.clock() of the single retry
+
+-- true when a LoadAsset error says a retry cannot help (VisualAssetConfig.LoadRetryPermanentErrors, as VisualAssetService)
+local function permanentLoadError(msg: string): boolean
+	local lower = string.lower(msg)
+	local list = (VisualAssetConfig :: any).LoadRetryPermanentErrors
+	if typeof(list) == "table" then
+		for _, pat in ipairs(list) do
+			if typeof(pat) == "string" and pat ~= "" and string.find(lower, pat, 1, true) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- one LoadAsset + template prep; a LoadAsset error is final when permanent or on the retry, else one retry is allowed
+-- LoadRetryDelay seconds later (the next gate build after that time makes it)
+local function loadCatalogOnce(assetId: number, isRetry: boolean): Model?
 	local ok, result = pcall(function()
 		return InsertService:LoadAsset(assetId)
 	end)
 	if not ok or typeof(result) ~= "Instance" then
-		catalogFailed[assetId] = true
+		if isRetry or permanentLoadError(tostring(result)) then
+			catalogFailed[assetId] = true
+			catalogRetryAt[assetId] = nil
+		else
+			catalogRetryAt[assetId] = os.clock() + (tonumber(VisualAssetConfig.LoadRetryDelay) or 20)
+		end
 		return nil
 	end
+	catalogRetryAt[assetId] = nil
 	local container = result :: Instance
 	stripScripts(container)
 	local model: Model? = nil
@@ -160,6 +205,24 @@ local function loadCatalogModel(assetId: number): Model?
 		return nil
 	end
 	stripScripts(model)
+	-- owner asset list: no data objects (the store build tool's RobloxStamper / RobloxModel BoolValues: 62 on the tripod
+	-- gun) - they would replicate and be rebuilt on every gate sync for nothing
+	for _, d in ipairs(model:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("ValueBase") or d:IsA("Configuration")) then
+			d:Destroy()
+		end
+	end
+	-- owner asset list: the 40-part rule, and a Humanoid is refused here (AutoGun, SandbagNest, Sandbags: no character
+	-- model uses this loader); refused once, never tried again, the Part kit stays
+	local why = catalogRefusal(model)
+	if why then
+		catalogFailed[assetId] = true
+		warn(string.format("[GateDefense] refused catalog model %d: %s — Part kit stays", assetId, why))
+		pcall(function()
+			container:Destroy()
+		end)
+		return nil
+	end
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.Anchored = true
@@ -175,6 +238,37 @@ local function loadCatalogModel(assetId: number): Model?
 		end)
 	end
 	return model
+end
+
+local function loadCatalogModel(assetId: number): Model?
+	if assetId <= 0 or catalogFailed[assetId] then
+		return nil
+	end
+	local cached = catalogCache[assetId]
+	if cached then
+		return cached
+	end
+	local waiting = catalogInflight[assetId]
+	if waiting then
+		-- another gate build is inserting this id right now: wait for it (never two LoadAssets of one id)
+		if coroutine.isyieldable() then
+			table.insert(waiting, coroutine.running())
+			coroutine.yield()
+		end
+		return catalogCache[assetId]
+	end
+	local retryAt = catalogRetryAt[assetId]
+	if retryAt ~= nil and os.clock() < retryAt then
+		return nil -- one transient failure: the Part kit until the retry time (no LoadAsset, no wait)
+	end
+	catalogInflight[assetId] = {}
+	local ok, model = pcall(loadCatalogOnce, assetId, retryAt ~= nil)
+	local list = catalogInflight[assetId]
+	catalogInflight[assetId] = nil
+	for _, co in ipairs(list or {}) do
+		task.spawn(co)
+	end
+	return if ok then model else nil
 end
 
 local function scaleModelLongAxis(model: Model, targetStuds: number)
@@ -231,7 +325,7 @@ local function computeGateCFrame(plotFolder: Folder, posts: { BasePart }): CFram
 				look = Vector3.new(0, 0, 1)
 			end
 			local mid = posts[1].Position
-			local y = mid.Y - posts[1].Size.Y * 0.5 + 3
+			local y = mid.Y - posts[1].Size.Y * 0.5 + GATE_POST_LIFT
 			return CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(mid.X, y, mid.Z) + look.Unit)
 		end
 		return nil
@@ -250,7 +344,7 @@ local function computeGateCFrame(plotFolder: Folder, posts: { BasePart }): CFram
 	if outward.Magnitude < 0.05 then
 		outward = Vector3.new(0, 0, 1)
 	end
-	local y = math.min(a.Position.Y - a.Size.Y * 0.5, b.Position.Y - b.Size.Y * 0.5) + 3
+	local y = math.min(a.Position.Y - a.Size.Y * 0.5, b.Position.Y - b.Size.Y * 0.5) + GATE_POST_LIFT
 	local origin = Vector3.new(mid.X, y, mid.Z)
 	return CFrame.lookAt(origin, origin + outward.Unit)
 end
@@ -576,18 +670,134 @@ local function attachTurretVisualMarker(model: Model, at: CFrame)
 	ring.Parent = model
 end
 
+-- owner asset list: the ground under a gate post. The gate CFrame stands GATE_POST_LIFT above the gate posts' bottoms
+-- (the plot surface); a short downward ray (the defense folder excluded) finds the road / pad top within a stud of it.
+local function groundYAt(at: CFrame, exclude: Instance): number
+	local fallback = at.Position.Y - GATE_POST_LIFT
+	local ok, hit = pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = { exclude }
+		params.RespectCanCollide = true
+		return Workspace:Raycast(at.Position, Vector3.new(0, -(GATE_POST_LIFT + 2), 0), params)
+	end)
+	if ok and hit and math.abs(hit.Position.Y - fallback) <= 1 then
+		return hit.Position.Y
+	end
+	return fallback
+end
+
+-- owner asset list: one move that puts the lowest point of every BasePart under root on the ground it rests on: the
+-- highest surface under its footprint (centre and 4 corners, groundYAt each at the gate height; the gun nests sit on the
+-- road edge, 0.12 above the plot pad). Returns that ground height. Runs once per piece per gate build (no per-frame use).
+local function standOnGround(root: Model, at: CFrame, exclude: Instance): number
+	local minY = math.huge
+	local lo, hi = Vector3.new(math.huge, 0, math.huge), Vector3.new(-math.huge, 0, -math.huge)
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local cf, h = d.CFrame, d.Size * 0.5
+			local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+			local ex = math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z
+			local ey = math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z
+			local ez = math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+			local p = cf.Position
+			minY = math.min(minY, p.Y - ey)
+			lo = Vector3.new(math.min(lo.X, p.X - ex), 0, math.min(lo.Z, p.Z - ez))
+			hi = Vector3.new(math.max(hi.X, p.X + ex), 0, math.max(hi.Z, p.Z + ez))
+		end
+	end
+	if minY == math.huge then
+		return at.Position.Y - GATE_POST_LIFT
+	end
+	local y = at.Position.Y
+	local c = (lo + hi) * 0.5
+	local e = (hi - lo) * 0.45 -- corners just inside the footprint
+	local groundY = -math.huge
+	for _, off in ipairs({ Vector3.zero, Vector3.new(e.X, 0, e.Z), Vector3.new(-e.X, 0, e.Z), Vector3.new(e.X, 0, -e.Z), Vector3.new(-e.X, 0, -e.Z) }) do
+		groundY = math.max(groundY, groundYAt(CFrame.new(c.X + off.X, y, c.Z + off.Z), exclude))
+	end
+	if math.abs(groundY - minY) > 1e-4 then
+		root:PivotTo(root:GetPivot() + Vector3.new(0, groundY - minY, 0))
+	end
+	return groundY
+end
+
+--[[ owner asset list: thinkTurret turns the whole AutoGun so its YawPart's -Z faces the target (CFrame.lookAt), so the
+	aim part must stand upright with its front on the barrel. Once per template: turn every part by the ref's Yaw
+	(degrees about +Y, barrel onto -Z; baked, so later PivotTo / aims keep it), then mark as the aim part (PrimaryPart)
+	the largest upright part whose front is -Z. None (a wrong Yaw, a tilted model) → refused and never tried again: the
+	Part kit stays instead of a gun that aims sideways or lies on its side. ]]
+local function prepareAimTemplate(template: Model, assetId: number, yawDeg: number): boolean
+	if template:GetAttribute("WE_AimReady") == true then
+		return true
+	end
+	local parts: { BasePart } = {}
+	for _, d in ipairs(template:GetDescendants()) do
+		if d:IsA("BasePart") then
+			table.insert(parts, d)
+		end
+	end
+	if yawDeg ~= 0 and #parts > 0 then
+		local lo, hi = parts[1].Position, parts[1].Position
+		for _, p in ipairs(parts) do
+			lo, hi = lo:Min(p.Position), hi:Max(p.Position)
+		end
+		local c = (lo + hi) * 0.5
+		local turn = CFrame.new(c) * CFrame.Angles(0, math.rad(yawDeg), 0) * CFrame.new(-c)
+		for _, p in ipairs(parts) do
+			p.CFrame = turn * p.CFrame
+		end
+	end
+	local best: BasePart? = nil
+	local bestVol = -1
+	for _, p in ipairs(parts) do
+		local cf = p.CFrame
+		if cf.UpVector.Y >= 0.98 and cf.LookVector.Z <= -0.98 then
+			local vol = p.Size.X * p.Size.Y * p.Size.Z
+			if vol > bestVol then
+				best, bestVol = p, vol
+			end
+		end
+	end
+	if best == nil then
+		catalogFailed[assetId] = true
+		catalogCache[assetId] = nil
+		template:Destroy()
+		warn(string.format("[GateDefense] refused AutoGun model %d: no upright part faces the barrel after Yaw %s (VisualAssetConfig.GateDefense.AutoGun.Yaw) — Part kit stays", assetId, tostring(yawDeg)))
+		return false
+	end
+	best:SetAttribute("WE_AimPart", true)
+	template.PrimaryPart = best
+	template:SetAttribute("WE_AimReady", true)
+	return true
+end
+
 local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
 	local gd = (VisualAssetConfig :: any).GateDefense
-	local assetId = 4923345827
+	local assetId = 0 -- the config decides (a missing key = the Part-built gun)
+	local yawDeg = 0
 	if gd and gd.AutoGun and typeof(gd.AutoGun.ModelAssetId) == "number" then
 		assetId = gd.AutoGun.ModelAssetId
+		yawDeg = tonumber(gd.AutoGun.Yaw) or 0
 	end
+	-- every piece of the nest stands on the ground under the post (the gate CFrame is GATE_POST_LIFT above it)
+	local groundY = groundYAt(at, parent)
+	local base = at - Vector3.new(0, at.Position.Y - groundY, 0)
 	local template = loadCatalogModel(assetId)
+	if template and not prepareAimTemplate(template, assetId, yawDeg) then
+		template = nil
+	end
 	local model: Model
 	local yawPart: BasePart
 	if template then
 		model = template:Clone()
 		stripScripts(model)
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") and d:GetAttribute("WE_AimPart") == true then
+				model.PrimaryPart = d -- the aim part (set again on the copy)
+				break
+			end
+		end
 		scaleModelLongAxis(model, GateDefenseConfig.AutoGunLongAxisStuds or 5.5)
 		model.Name = "GateAutoGun_" .. tostring(slot)
 		if not model.PrimaryPart then
@@ -596,29 +806,40 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 				model.PrimaryPart = pp
 			end
 		end
-		model:PivotTo(at)
+		model:PivotTo(base)
+		groundY = standOnGround(model, at, parent) -- tripod feet on the ground; the aim part sits at barrel height above them
+		-- one anchored part (the aim part); every other part is welded to it (unanchored, massless, non-colliding), so an
+		-- aim sets one CFrame and replicates one part, not 32
+		local aim = model.PrimaryPart :: BasePart
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
-				d.Anchored = true
 				d.CanCollide = false
+				if d == aim then
+					d.Anchored = true
+				else
+					d.Anchored = false
+					d.Massless = true
+					local w = Instance.new("WeldConstraint")
+					w.Part0 = aim
+					w.Part1 = d
+					w.Parent = d
+				end
 			end
 		end
+		model:SetAttribute("WE_AimWelded", true)
 		-- streaming2 S4 (F10): the catalog AutoGun is Atomic too, set before it is parented. No effect with streaming off.
 		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 		model.Parent = parent
-		yawPart = model.PrimaryPart :: BasePart
-		local named = model:FindFirstChild("Barrel", true) or model:FindFirstChild("Yaw", true)
-		if named and named:IsA("BasePart") then
-			yawPart = named
-		end
+		yawPart = model.PrimaryPart :: BasePart -- the aim part (the one anchored part): thinkTurret turns the gun by it
 	else
-		model, yawPart = partKitAutoGun(at, parent)
+		model, yawPart = partKitAutoGun(base, parent)
+		groundY = standOnGround(model, at, parent)
 		model.Name = "GateAutoGun_" .. tostring(slot)
 	end
 
 	model:SetAttribute("GateAutoGun", true)
 	model:SetAttribute("FriendlyGate", true)
-	attachTurretVisualMarker(model, at)
+	attachTurretVisualMarker(model, at - Vector3.new(0, at.Position.Y - groundY, 0)) -- on the ground the gun stands on
 
 	-- Sandbag nest dress under gun
 	if gd and gd.SandbagNest and typeof(gd.SandbagNest.ModelAssetId) == "number" then
@@ -628,13 +849,14 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 			stripScripts(nest)
 			scaleModelLongAxis(nest, GateDefenseConfig.SandbagNestDiameterStuds or 8)
 			nest.Name = "SandbagNest_" .. tostring(slot)
-			nest:PivotTo(at * CFrame.new(0, -0.2, 0))
+			nest:PivotTo(base)
 			for _, d in ipairs(nest:GetDescendants()) do
 				if d:IsA("BasePart") then
 					d.Anchored = true
 					d.CanCollide = false
 				end
 			end
+			standOnGround(nest, at, parent)
 			nest.Parent = parent
 		end
 	end
@@ -649,7 +871,9 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 				stripScripts(bag)
 				scaleModelLongAxis(bag, 2.2)
 				local ox = (i - 2) * 1.4
-				bag:PivotTo(at * CFrame.new(ox, -0.1, 1.6 + (i % 2) * 0.4))
+				local spot = CFrame.new(ox, 0, 1.6 + (i % 2) * 0.4)
+				bag:PivotTo(base * spot)
+				standOnGround(bag, at, parent) -- its own ground (the road edge runs under the nest)
 				for _, d in ipairs(bag:GetDescendants()) do
 					if d:IsA("BasePart") then
 						d.Anchored = true
@@ -1728,7 +1952,9 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 	if (flat - t.YawPart.Position).Magnitude > 0.05 then
 		local look = CFrame.lookAt(t.YawPart.Position, flat)
 		-- Rotate whole model toward target when PrimaryPart is yaw
-		if t.Model.PrimaryPart then
+		if t.Model:GetAttribute("WE_AimWelded") == true then
+			t.YawPart.CFrame = look -- the catalog gun: its one anchored part; the welded rest follows (one CFrame replicates)
+		elseif t.Model.PrimaryPart then
 			local offset = t.Model.PrimaryPart.CFrame:ToObjectSpace(t.YawPart.CFrame)
 			t.Model:PivotTo(look * offset:Inverse())
 		else

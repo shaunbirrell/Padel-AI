@@ -17,6 +17,9 @@
 	  the kiosk before the first buy. Unowned plots have none. Static only: nothing here moves or ticks; crates and
 	  the "+$N" pops are client-only (Client/Modules/BusinessVisuals). Every world call is a no-op while
 	  BusinessConfig.Enabled is false.
+	  Owner asset list hook (2026-09-25): after the kit loop a deferred VisualAssetService.TryAttachBusinessVisual lets
+	  the line's catalog model (VisualAssetConfig.Businesses) take over its kit parts one for one (the Kit_<Role> names
+	  stay, so PartsPerBusinessL5 holds and the client belt crates still find Kit_Belt); a 0 id is a no-op.
 
 	Money: NONE here (no remote, no grant). Business income is part of BaseService.ComputePassiveIncomePerTick
 	(TycoonMath.BasePassivePerTick) and is paid into the ATM on the existing 5 s passive tick.
@@ -205,6 +208,15 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 			have:Destroy() -- rebirth reset / admin resetbase / level down
 		end
 	end
+	-- owner asset list hook: the line's catalog dress (VisualAssetConfig.Businesses). Deferred: a first load may yield, and
+	-- the kiosk is whole and parented by then; a re-sync that finds it in place does nothing. VisualAssetService is
+	-- required here, pcall'd (as BaseService does), so a dress-module error can never stop the business world.
+	task.defer(function()
+		local okVas, vas = pcall(require, script.Parent.VisualAssetService)
+		if okVas and vas and vas.TryAttachBusinessVisual then
+			pcall(vas.TryAttachBusinessVisual, m, id, lv)
+		end
+	end)
 	if m:GetAttribute("Level") ~= lv then
 		m:SetAttribute("Level", lv)
 	end

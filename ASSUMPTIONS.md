@@ -4415,3 +4415,157 @@ So the tuning holds on seeds it was not tuned on.
 reworded before commit so the repo does not claim squads stay >= 70 %: H2 is not cleared (CP-9). Pin count: the block adds
 12 pins; 4 already pass at HEAD (WorldConfig G1/G5 rows, MapSetup gate attributes), so the 10 HEAD failures are the 8 new
 behaviour pins plus the 2 moved needles.
+
+## 2026-09-25 — Owner asset list hooks: business lines, Home Outposts, dropper plates, vehicle turrets, gate AutoGun (the assetwire spec §9 DEFERRED rows)
+
+All reversible. Tested headless only (the stand-in, with InsertService faked from the real store files), not in Roblox.
+Owner page: docs/ASSET_WIRING.md §1 "Hooks batch". The premium vehicle defs (PremiumRazorfang / Bastion / Tidebreaker) are
+NOT in this batch (owner yes / no + monetization lane); they stay the 3 rows of ASSET_WIRING.md §6.4. This entry includes
+the fixes from the three adversarial reviews (code, budget, orientation) of the first version.
+
+- **AW-H1 GateDefense loader: the 40-part and no-Humanoid rules.** `loadCatalogModel` (GateDefenseService's own loader,
+  outside `MaxLoadAttempts`, as before) refuses a template with more BaseParts than `VisualAssetConfig.MaxPartsPerModel`
+  (40) or holding a Humanoid: `catalogFailed[id]`, one warn with the reason, the Part kit stays. VisualAssetService treats a
+  Humanoid differently: it strips it and keeps the model; GateDefense refuses. Its callers are AutoGun, SandbagNest and
+  GateDefense.Sandbags (gate guards use `VisualAssetService.TryAttachCharacterVisual`). The loader also:
+  - drops every ValueBase / Configuration from the template right after the script strip (the tripod gun file carries 62
+    RobloxStamper / RobloxModel BoolValues; clones never carry them);
+  - inserts an id once: a second gate build asking while the insert is in flight waits for it (never two LoadAssets);
+  - retries one transient failure (HTTP 5xx / throttle) once, `LoadRetryDelay` (20 s) later, at the next gate build; a
+    permanent error (`LoadRetryPermanentErrors`) or a second failure is final (Part kit for that server).
+  Its templates still live parented to nil, not in ServerStorage (unchanged; nil is not replicated).
+  Revert: delete the `catalogRefusal` block (loader rules), or the in-flight / retry wrapper (`loadCatalogModel`), in
+  GateDefenseService; pins to delete: the GateDefense loader lines of the hooks block (see AW-H14).
+- **AW-H2 No store id in GateDefenseService.** The `spawnAutoGun` default is 0 (a missing config key = the Part-built gun);
+  4923345827 is nowhere in `src/` (BuyPathStatic `must_not_contain`). Its licence row sits in §2e with Used by "none (left
+  `src/` 2026-09-25)".
+- **AW-H3 AutoGun orientation, ground and welds (config `GateDefense.AutoGun.Yaw = 90`).** From the anonymous download of
+  114570602 (xml, 31 Parts, parsed headless) four cues agree that the barrel points along file +X: the barrel cylinders sit
+  ahead of the receiver, the single tripod leg reaches forward, the rear grips sit behind, and the ammo box is on the left
+  (-Z) of a +X-facing gun. (The two small plates at the receiver run along the barrel: side plates, not a front shield.)
+  Yaw 90 turns +X onto -Z. Confidence high for axis and sign; not verified in Roblox.
+  - Once per template GateDefenseService turns every part by Yaw (baked) and marks as aim part (PrimaryPart and YawPart) the
+    largest part with UpVector.Y >= 0.98 and LookVector.Z <= -0.98: for 114570602 the receiver. No such part → refused, Part
+    kit. Scaled to `AutoGunLongAxisStuds` 5.5 (3.5 x 4.4 x 5.5 studs).
+  - Ground: the gate CFrame stands `GATE_POST_LIFT` (3) studs above the gate posts' bottoms. Every nest piece (gun, Part-kit
+    gun, marker ring, sandbag nest, each sandbag) is placed on the ground under it: the highest surface under its footprint,
+    found by five short downward rays (centre + 4 corners, defense folder excluded, colliders only), each hit accepted within
+    1 stud of the post bottom, else the post bottom. The nests sit on the road edge, 0.12 above the plot pad, hence the
+    footprint probe. This also grounds the older Part-built gun (it floated 2.48 studs at HEAD) and the sandbags.
+  - Welds: the catalog gun has one anchored part (the aim part); the other 30 are welded to it (WeldConstraint, unanchored,
+    massless, no collide), attribute `WE_AimWelded`; `thinkTurret` then sets the aim part's CFrame only, so an aim replicates
+    one part, not 31. The marker ring stays a separate anchored part on the ground. Cost: 60 WeldConstraints per gate sync.
+  - Headless evidence on an orthonormalizing, weld-following stand-in copy: lowest point = ground (gap 0.000), barrel .
+    toTarget 1.0000 aimed, aim UpVector.Y 1.000, rotations orthonormal after the whole raid run.
+  - Revert: `ModelAssetId = 0` → the Part-built gun (still grounded); `Yaw = 0` → refused → Part kit. Pins: AW-H14.
+- **AW-H4 AutoGun promoted with the tool.** `tools/wire-asset-ids.py promote 114570602` (P1 row, no gate; inventory API
+  10:23 UTC and store re-check 10:25 UTC: owned, GuestCapone 33412864, free) rewrote BuyPathStatic's AutoGun pin and added
+  the §3.1 licence row; `Yaw = 90, ` and the provenance note (AW-H13) were added after it (the journal's licence hunk was
+  updated to the amended row). `demote 114570602` alone is refused; the steps are in docs/ASSET_WIRING.md §9 and AW-H14 (tested
+  on a scratch copy: demote, then BuyPathStatic FAIL=0).
+- **AW-H5 Business dress: part i takes over role i, never adds a part.** `VisualAssetService.TryAttachBusinessVisual(model,
+  id, level)`, deferred from `BusinessService.SyncBusiness` after the kit loop (BusinessService requires VisualAssetService
+  inside that deferred closure, pcall'd, so a dress-module error can never stop the business world or BaseService):
+  - model part i (template order) takes over the built kit part of `ReplacesRoles[i]`: named `Kit_<Role>`, `WE_BizRole`,
+    anchored, non-colliding, fitted into THAT part's own box, and the kit part is destroyed. A business at L5 stays
+    `PartCount(5)` = 16 = `PartsPerBusinessL5`; SyncBusiness still finds each role by name;
+  - a Belt role (and any role of a `Fit = "Box"` ref) is stretched into its kit box exactly (block parts only; a mesh part
+    there is refused), so the client belt crates keep reading `Kit_Belt`'s box; any other role gets one uniform scale onto
+    its own box's long side, centred, bottom on the box bottom (a short side may stick out; the rocket does);
+  - "done" only when every built listed role wears the id: a role rebuilt plain (level down and up, a lost part) is dressed
+    again from the cached template, the others keep their instances;
+  - refused (one warn, Part kit): roles that are unknown or span kit MinLevels (a level-down would half-build it), more
+    model parts than roles, a mesh on a Belt / Box role. A colliding role (Slab, Housing, BeltFrame, Bin, Stock, Pallet) is
+    never taken over and its model part is not shifted onto another role. The promote tool and BuyPathStatic (static check)
+    refuse the same configs.
+  - Conveyor Belt 41324890 (Ammo Works, Arms Crate Line): `Fit = "Box"`, `ReplacesRoles = { "Belt" }`. Rocket 31603741
+    (Rocket Assembly): `OmitParts = { "Particles" }`, `ReplacesRoles = { "Signature" }`: a 7 x 3.5 x 3.5 part box lying on
+    the roof (the mesh's real proportions inside it need a Studio look). Nothing loads at L0.
+  - Revert: `Businesses.<Id>.ModelAssetId = 0` plus the pins in AW-H14.
+- **AW-H6 Armor Plate Press stays pending, with extra gates.** `Businesses.ArmorPlatePress = { ModelAssetId = 0,
+  PendingAssetId = 4362642898 }`; registry flags STUDIO + OMIT (promote refuses until the ref holds `OmitParts`, the
+  translucent bounds box the Studio check names) and the business gate (it needs `ReplacesRoles` of one MinLevel, no
+  colliding role, Belt only with `Fit = "Box"`, and no more parts than roles). 4362642898 is already in
+  `StripEffectsAssetIds` (never loaded while pending); the scratch licence-coverage checker counts that list as live, so
+  it reports this one id as "missing" until the promote adds its row.
+- **AW-H7 Manual Dropper host = the plate.** The dropper kit has no arm part, so the hook dresses the plate:
+  `task.defer(pcall, VisualAssetService.TryAttachPropVisual, pad, "ManualDropper")` for a newly built plate.
+  `IndustrialProps.ManualDropper = { ModelAssetId = 0, PendingAssetId = 14408455045, Fit = "Ground", FitLong = 4, KeepHost =
+  true }`: at most 4 studs (one uniform scale, `FitLong`), standing on the plate, and the tap plate keeps its look
+  (`KeepHost`, no 0.65 fade). Registry flag STUDIO, batch P4; its neon trim will count in the neon budget when promoted. Owner
+  check at P4: the prompt is still reachable at 800 x 360.
+- **AW-H8 Home Outpost pad.** `Landmarks.HomeOutpost = { ModelAssetId = 80566030, Fit = "Ground", KeepHost = true,
+  OmitParts = { "Height", "Highlight" } }`. Prop refs now apply `OmitParts` to whole models (and to business and weapon
+  refs), and every dress clone drops its Configuration / value objects. The pad is 4 parts (the translucent Height beam and
+  the invisible Highlight are gone), upright at the ring's centre, lowest point on the ring's lowest point, welded,
+  non-colliding (feet sink up to ~1 stud: ask for a sunk or walkable pad if it looks wrong); the ring keeps 0.55 and its
+  owner colour. World parts outside bases: 2,452 → 2,476. `TryAttachPropVisual` re-checks the host after the (yielding)
+  first load: a host destroyed or dressed meanwhile gets nothing. Revert: `ModelAssetId = 0` plus the pins in AW-H14.
+- **AW-H9 Vehicle turret dress: allow-listed.** `VisualAssetService.TryAttachVehicleWeaponVisual(model, weaponId, mount)`
+  and `VehicleWeaponAllowed(weaponId, vehicleId, kitFamily)`: a ref dresses only the vehicles on its allow-list (`Vehicles`
+  and / or `KitFamilies`; no list = nobody), checked in the VehicleService loop and again in the hook. `VehicleMG`: Armed
+  4x4 only (`Vehicles = { "ArmedJeep" }`, Mount GunMount, FitScale 3, `HideParts = { "Barrel" }`). `VehicleCannon`: the 9
+  TrackedMBT kits (`KitFamilies = { "TrackedMBT" }`, Mount Turret, FitScale 1.6, `HideParts = { "Turret", "Barrel",
+  "Mantlet" }`), never the AA, rocket, mine, bridge or boat kits. `HideParts` turn the kit gun invisible once the dress
+  attaches (its parts, collisions and combat stay). Dress only: massless, non-colliding, welded to the mount, built before the
+  vehicle is parented (Atomic). A 0 id is a no-op. VehicleService's chunk is at Luau's 200-local limit, so it requires
+  VisualAssetConfig inline in that loop. A weapon's `Yaw` is set by hand from the Studio check.
+- **AW-H10 Promote tool.** Registry: AmmoWorks, ArmsCrateLine, RocketAssembly, HomeOutpost → LIVE-NOW; ArmorPlatePress
+  (STUDIO OMIT), ManualDropper, VehicleMG, VehicleCannon (STUDIO) → PENDING-GET batch P4; DEFERRED 11 → 3 (the premium
+  vehicles). The load-budget model counts the Businesses / VehicleWeapons buckets and the HomeOutpost / ManualDropper prop
+  keys (22 → 25 live ids, as the census). New gates: (1) outage mode: every id a PLOT / LATER chain can ask for, fallbacks
+  included, boot ids excepted, must fit `LoadRetryReserve`, and the boot ids must fit `MaxLoadAttempts - LoadRetryReserve`
+  (phases follow the census: boot = characters Worker / Infantry / HeavyInfantry / Guard, the warzone props, ATM, tutorial
+  arrow, Desert kit, Home Outpost, ChildName vehicle packs; plot = businesses, walls, dropper; later = the rest, the safe
+  default for anything new); (2) Businesses refs: ReplacesRoles known, non-colliding, one MinLevel, Belt only with
+  `Fit = "Box"`. `--allow-budget` stays the only override (after a census run, fail mode included, with cap_refused = 0).
+  The tool's counts are at or above the census on every tree tried (it counts the press although its ref has no
+  ReplacesRoles yet). Scratch unit tests (a copy, hooks/tests/test_wire_asset_ids_hk.py): updated to this tree's baseline
+  (DEFERRED case → PremiumRazorfang, budget 25 / cap 56, outage 8 / 24, P4 in the batches), plus tests for the outage gate,
+  the business gate and the P4 dry run; the 10 tests that already fail on HEAD (their fixture assumes the P1 ids are still
+  pending) fail the same way here.
+- **AW-H11 Load budget 48 / 12 → 64 / 24.** `MaxLoadAttempts = 64`, `LoadRetryReserve = 24`: retries still stop at 40
+  attempts, the first-load reserve doubles. Healthy servers load the same ids; an outage costs at most 16 more failed
+  LoadAsset calls. Headless census (stand-in, not Roblox), head → this tree: all loads BOOT / PLOT / LATER 17 / 17 / 22 → 18
+  / 20 / 25; outage 45 / 48 → 51 / 64 attempts; third party failing 30 → 33; cap_refused 0 everywhere, and the census now
+  dresses every VehicleWeapons key on an allow-listed mount in LATER. Projections (same census, config-only copies): P4 54 /
+  64 in an outage; walls + 6 vehicle ids 58 / 64; walls + 6 vehicles + P4 61 / 64; cap_refused 0 in every mode. P3 (17
+  vehicle models) goes 27 → 44 healthy (cap 56) but 10 → 27 after-boot ids in an outage (reserve 24): the tool refuses it;
+  the planned clean-up (crate piece, two effect models) brings it to 25, still one over, so P3 needs a deliberate reserve
+  (e.g. 65 / 25) after a census_fail run, or more slots freed. Parts: base 2,520 → 2,566 (2 guns x 32 vs 9; cap 2,700,
+  target 2,000), world 2,452 → 2,476; lights 231, neon 306, SurfaceGuis 1,121 unchanged. Gate sync instance changes
+  (reviewer's driver) 109 → 253 (the catalog guns' parts, meshes and 60 welds; 317 before the BoolValue strip); the
+  walls purchases L4 / L5 go 272 → 416 and 280 → 424 (target 60, already missed at HEAD); an aim now writes one CFrame
+  (counted in the stand-in, replication not measured in Roblox). An outage also costs up to 3 GateDefense loader calls
+  (gate gun and sandbags, one retry each) on top of the 16 VisualAssetService attempts.
+- **AW-H12 WE_Build not bumped** (the owner's publish bot bumps it).
+- **AW-H13 Tripod gun provenance: owner OK given 2026-09-27.** The 114570602 listing passes rule 3 (GuestCapone, free, owned by the
+  game owner), but the file's own part names credit co-builders sk3let0n (17 parts, every barrel part) and TehPwnzerLord (2);
+  it was built with an in-game build tool (the RobloxStamper / RobloxModel values). The owner was told about the co-builders
+  and approved keeping it on 2026-09-27; the licence row says so. If he changes his mind, demote it (AW-H14) and the
+  Part-built gun returns.
+- **AW-H14 Reverts, with the exact BuyPathStatic lines (hooks block unless noted):**
+  - gate gun back to the Part kit: delete `Yaw = 90, ` from `GateDefense.AutoGun`; delete the pins `AutoGun = {
+    ModelAssetId = 114570602, Yaw = 90,` and `part names credit co-builders sk3let0n (17 parts) and TehPwnzerLord (2)`;
+    remove `"114570602"` from the `_hk_id` licence tuple; then `tools/wire-asset-ids.py demote 114570602` (it restores the
+    pending config line, the pre-existing `AutoGun = { ModelAssetId = 0,` pin and the licence row); by hand: the 3-line Yaw
+    comment above the ref and the gate-gun lines of ASSET_WIRING §1 / §7;
+  - a business line: `Businesses.<Id>.ModelAssetId = 0`; delete that line's pin (`AmmoWorks = { ModelAssetId = 41324890,
+    Fit = "Box", ReplacesRoles = { "Belt" },`, `ArmsCrateLine = { ModelAssetId = 41324890, ...`, or `RocketAssembly = {
+    ModelAssetId = 31603741, OmitParts = { "Particles" }, ReplacesRoles = { "Signature" },`); for Rocket Assembly also
+    `31603741` from the `StripEffectsAssetIds` pin if it is removed from the list; the `_hk_business_roles()` check then
+    counts one ref fewer (it fails only when no ref has ReplacesRoles: delete the call if all three go);
+  - the Home Outpost pad: `Landmarks.HomeOutpost.ModelAssetId = 0`; delete the pin `HomeOutpost = { ModelAssetId =
+    80566030, Fit = "Ground", KeepHost = true, OmitParts = { "Height", "Highlight" },`;
+  - the whole hooks code: delete the hooks block (from `# --- owner asset list hooks (2026-09-25)` to the line before the
+    final `parse_gate()`), and restore the three edited lines (hooks/bps_inplace.txt: `LoadRetryReserve = 12,`,
+    `MaxLoadAttempts = 48,`, `past MaxLoadAttempts - 8 (= 40)`) when 48 / 12 comes back;
+  - the budget alone (64 / 24 → 48 / 12): the two fix57 lines and the assetwire `(= 56)` line (hooks/bps_inplace.txt), and
+    the tool will then refuse any batch the outage reserve cannot hold.
+- **AW-L4 (lead) Hooks integration on 670bbf6.** BuyPathStatic line 331 is the promote tool's exact text (with the
+  `[owner pick 114570602, 2026-09-25]` label) so the journal's after-hunk matches and `demote 114570602` works on this tree.
+  The owner approved the tripod gun's provenance on 2026-09-27 (AW-H13; licence row and journal hunk updated together).
+  Three adversarial re-reviews: the majors lens PASS; the integration and cost lenses' findings (demote hunk, owner
+  question, phone lines, AW-H11 purchase numbers) are fixed in this commit. Known and accepted: the ground probe assumes a
+  flat plot (all shipped plots are flat); the outage gate may admit ~3 more late boot loads than the census holds, so
+  any batch within 3 of the reserve needs a census_fail run first.

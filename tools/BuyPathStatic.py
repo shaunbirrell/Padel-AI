@@ -328,7 +328,7 @@ must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 
 must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "ProtectCollectorRadius", "GateDefenseConfig ProtectCollectorRadius")
 must_contain("src/ReplicatedStorage/Shared/Configs/GateDefenseConfig.luau", "AutoGunMinWallsLevel", "GateDefenseConfig AutoGunMinWallsLevel")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "GateDefense", "VisualAssetConfig.GateDefense")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "AutoGun = { ModelAssetId = 0,", "GateDefense.AutoGun: Part-built gun until the owner pick 114570602 is promoted (4923345827 MG 34-like dropped)")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "AutoGun = { ModelAssetId = 114570602,", "GateDefense.AutoGun: Part-built gun until the owner pick 114570602 is promoted (4923345827 MG 34-like dropped) [owner pick 114570602, 2026-09-25]")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 4923345827", "4923345827 (WWII MG 34-like, no part cap) is never a live gate-gun id")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "0", "SandbagNest")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "GateGuard", "Characters.GateGuard")
@@ -3695,10 +3695,10 @@ must_contain('src/ServerScriptService/Server/Services/VisualAssetService.luau', 
 must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'LoadRetryCount = 2,', 'fix57 VAS retry count in config')
 must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'LoadRetryDelay = 20,', 'fix57 VAS first retry after 20 s')
 must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'LoadRetryBackoff = 2,', 'fix57 VAS exponential backoff x2')
-must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'LoadRetryReserve = 12,', 'fix57 VAS retries never take the last 12 attempts')
+must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'LoadRetryReserve = 24,', 'fix57 VAS retries never take the last 24 attempts (hooks lane 2026-09-25: 12 -> 24, first loads kept for plot / later ids in an outage)')
 must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'LoadRetryPermanentErrors = {', 'fix57 VAS permanent errors (not authorised / not trusted / ...) are never retried')
 must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'MaxPartsPerModel = 40,', 'fix57 catalog part cap stays 40 (CLAUDE.md)')
-must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'MaxLoadAttempts = 48,', 'fix57 load cap not raised (docs/ASSET_SHORTLIST.md C8)')
+must_contain('src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau', 'MaxLoadAttempts = 64,', 'fix57 load cap 64 (hooks lane 2026-09-25: 48 -> 64 with the reserve 24, retries still stop at 40; docs/ASSET_SHORTLIST.md C8)')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau', 'return TycoonMath.GuideTarget(step, player:GetAttribute("WE_NextBuy"))', 'fix57 Base-panel NEXT badge follows the console NEXT rule (GuideTarget)')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau', 'local isNext = nextId ~= nil and structureId == nextId and nextTarget == level + 1', "fix57 Base-panel NEXT marks the pointer's id AND next level")
 must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/BaseController.luau', 'nextId = TycoonMath.Decode(player:GetAttribute("WE_NextBuy"))', 'fix57 Base-panel NEXT no longer ignores the tutorial step')
@@ -4179,8 +4179,8 @@ must_contain(AW_VAC, "StripEffectsAssetIds = { 23153991", "assetwire: the Smokin
 must_contain(AW_VAC, 'Log = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Tree_Log_01",', "assetwire: fallen logs wear Synty Tree_Log_01")
 must_contain(AW_VAC, 'Driftwood = { ModelAssetId = 6933438443, ChildName = "Meshes/PolygonNature_Tree_Twig_02", Yaw = 90,', "assetwire: driftwood has its own key (Tree_Twig_02 turned 90)")
 must_contain(AW_VAC, 'CarWreck = { ModelAssetId = 6933556508, ChildName = "Meshes/PolygonCity_Props_SM_Veh_Car_Sedan_01", Yaw = 90,', "assetwire: car wrecks = Synty sedan turned 90")
-# the load budget stays 48 / 12 (pins 3697 / 3700 unchanged); pending ids are never loaded
-must_contain(AW_VAC, "past MaxLoadAttempts - 8 (= 40)", "assetwire: the promote tool's live-id budget is MaxLoadAttempts - 8")
+# the load budget is 64 / 24 since the hooks lane (the fix57 pins above); pending ids are never loaded
+must_contain(AW_VAC, "past MaxLoadAttempts - 8 (= 56)", "assetwire: the promote tool's live-id budget is MaxLoadAttempts - 8")
 # rule 4 is untouched: structure kits never prefer a mesh
 must_contain(AW_SVC, "PreferMeshWhenAssetIdSet = false", "assetwire: PreferMeshWhenAssetIdSet stays false (owner rule 4)")
 # --- assetwire lane L1 pin that needs lane L3 in the same tree (VisualAssetService.luau still holds the hangar id 3 times
@@ -4477,6 +4477,147 @@ must_contain('src/ServerScriptService/Server/Modules/MapSetup.luau', 'gate:SetAt
 must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '\t\tMaxBagsInWorld = 3,', 'W3s2 cutprep: at most 3 bags in the world (busiest 512-stud circle 493 static + 4 crate parts + 3 bags = 500)')
 must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '{ Id = "Breach", At = "Door", Prompt = "Breach", Hold = 7, Dist = 10 },', 'W3s2 cutprep H2: bank breach hold 7 s (staged for the cutover; H2 NOT cleared, ASSUMPTIONS CP-9)')
 must_contain('src/ReplicatedStorage/Shared/Configs/OpsConfig.luau', '{ Id = "Crack", At = "Vault", Seconds = 45, R = 6 },', 'W3s2 cutprep H2: bank crack ring r 6 round the Vault anchor (fewer blind corners for a lone raider)')
+
+# --- owner asset list hooks (2026-09-25): the DEFERRED rows of the assetwire spec §9 (business / Home Outpost / dropper /
+# turret dress hooks, the GateDefense loader rules and the gate AutoGun owner pick 114570602 with its Yaw), plus the
+# review fixes (vehicle allow-list, multi-role business rules, outage-aware load budget 64 / 24, grounded and welded
+# AutoGun, data objects dropped). Paste above the final `parse_gate()` call. Headless stand-in only (not Roblox).
+# Revert pins: ASSUMPTIONS.md AW-H14 lists, per revert, the exact lines of this block to delete.
+# Also edited in place above: the fix57 pins 'LoadRetryReserve = 24,' / 'MaxLoadAttempts = 64,' (were 12 / 48) and the
+# assetwire pin 'past MaxLoadAttempts - 8 (= 56)' (was 40).
+HK_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+HK_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+HK_GDS = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+HK_BZS = "src/ServerScriptService/Server/Services/BusinessService.luau"
+HK_BIZCFG = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
+HK_MDS = "src/ServerScriptService/Server/Services/ManualDropperService.luau"
+HK_MS = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+HK_VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+HK_TOOL = "tools/wire-asset-ids.py"
+HK_LIC = "docs/ASSET_LICENSES.md"
+HK_WIRING = "docs/ASSET_WIRING.md"
+# GateDefenseService loader: no hard-coded store gun; 40-part cap, a Humanoid refused; data objects dropped; one insert
+# per id (waiters), one delayed retry on a transient error
+must_not_contain(HK_GDS, "4923345827", "hooks: 4923345827 (WWII MG 34-like) is nowhere in GateDefenseService, not even as a default")
+must_contain(HK_GDS, "local assetId = 0 -- the config decides (a missing key = the Part-built gun)", "hooks: the AutoGun default is 0 (config wins)")
+must_contain(HK_GDS, "local cap = tonumber((VisualAssetConfig :: any).MaxPartsPerModel) or 40", "hooks: GateDefense loader reads the catalog part cap (MaxPartsPerModel)")
+must_contain(HK_GDS, 'if d:IsA("Humanoid") then\n\t\t\treturn "holds a Humanoid"', "hooks: GateDefense loader refuses a template with a Humanoid")
+must_contain(HK_GDS, "\tlocal why = catalogRefusal(model)\n\tif why then\n\t\tcatalogFailed[assetId] = true\n\t\twarn(string.format(\"[GateDefense] refused catalog model %d: %s — Part kit stays\", assetId, why))", "hooks: an over-cap / Humanoid gate model is refused once (warned, never tried again; Part kit stays)")
+must_contain(HK_GDS, "\tstripScripts(model)\n\t-- owner asset list: no data objects", "hooks: GateDefense templates drop their data objects right after the script strip")
+must_contain(HK_GDS, 'if d.Parent ~= nil and (d:IsA("ValueBase") or d:IsA("Configuration")) then\n\t\t\td:Destroy()', "hooks: no ValueBase / Configuration in a gate template (the tripod gun's 62 BoolValues)")
+must_contain(HK_GDS, "local waiting = catalogInflight[assetId]\n\tif waiting then", "hooks: a second gate build waits for the id's insert in flight (never two LoadAssets of one id)")
+must_contain(HK_GDS, "if isRetry or permanentLoadError(tostring(result)) then\n\t\t\tcatalogFailed[assetId] = true", "hooks: a permanent or second failure is final")
+must_contain(HK_GDS, "catalogRetryAt[assetId] = os.clock() + (tonumber(VisualAssetConfig.LoadRetryDelay) or 20)", "hooks: a transient gate-model failure gets one retry LoadRetryDelay later")
+# the gate AutoGun: turned by the config Yaw, aims by an upright part facing the barrel, stands on the ground, welded
+must_contain(HK_GDS, "yawDeg = tonumber(gd.AutoGun.Yaw) or 0", "hooks: the AutoGun turn comes from VisualAssetConfig.GateDefense.AutoGun.Yaw")
+must_contain(HK_GDS, "if template and not prepareAimTemplate(template, assetId, yawDeg) then", "hooks: the AutoGun template is turned once and gets an upright aim part, or is refused")
+must_contain(HK_GDS, "if cf.UpVector.Y >= 0.98 and cf.LookVector.Z <= -0.98 then", "hooks: the AutoGun aim part stands upright facing -Z (thinkTurret turns the model by it)")
+must_not_contain(HK_GDS, 'model:FindFirstChild("Barrel", true) or model:FindFirstChild("Yaw", true)', "hooks: the catalog AutoGun never aims by a part name (a tilted barrel part tipped the model over)")
+must_contain(HK_GDS, "local GATE_POST_LIFT = 3 -- the gate CFrame stands this far above the gate posts' bottoms", "hooks: the gate CFrame lift is one named constant")
+must_contain(HK_GDS, "local groundY = groundYAt(at, parent)\n\tlocal base = at - Vector3.new(0, at.Position.Y - groundY, 0)", "hooks: every AutoGun piece is placed from the ground under its post, not the gate CFrame 3 studs up")
+must_contain(HK_GDS, "model:PivotTo(base)\n\t\tgroundY = standOnGround(model, at, parent) -- tripod feet on the ground", "hooks: the catalog AutoGun's lowest point is on the ground")
+must_contain(HK_GDS, "model, yawPart = partKitAutoGun(base, parent)\n\t\tgroundY = standOnGround(model, at, parent)", "hooks: the Part-kit AutoGun stands on the ground too")
+must_contain(HK_GDS, "attachTurretVisualMarker(model, at - Vector3.new(0, at.Position.Y - groundY, 0))", "hooks: the turret marker ring lies on the ground the gun stands on")
+must_contain(HK_GDS, "bag:PivotTo(base * spot)\n\t\t\t\tstandOnGround(bag, at, parent)", "hooks: each sandbag stands on the ground under it")
+must_contain(HK_GDS, "groundY = math.max(groundY, groundYAt(CFrame.new(c.X + off.X, y, c.Z + off.Z), exclude))", "hooks: a gate piece rests on the highest surface under its footprint (centre + 4 corners)")
+must_not_contain(HK_GDS, "attachTurretVisualMarker(model, at)", "hooks: nothing of the nest floats at the gate CFrame height")
+must_contain(HK_GDS, 'local w = Instance.new("WeldConstraint")\n\t\t\t\t\tw.Part0 = aim', "hooks: every catalog AutoGun part is welded to the aim part")
+must_contain(HK_GDS, "\t\t\t\t\td.Anchored = false\n\t\t\t\t\td.Massless = true", "hooks: only the aim part is anchored (the rest unanchored, massless)")
+must_contain(HK_GDS, "if t.Model:GetAttribute(\"WE_AimWelded\") == true then\n\t\t\tt.YawPart.CFrame = look", "hooks: an aim moves one CFrame (the welded gun follows)")
+# VisualAssetConfig: the hook refs (config first); pending refs keep the `<Key> = { ModelAssetId = 0,` prefix the promote tool rewrites
+must_contain(HK_VAC, "AutoGun = { ModelAssetId = 114570602, Yaw = 90,", "hooks: gate AutoGun = owner pick 114570602, turned 90 degrees (the file's barrel points +X)")
+must_contain(HK_VAC, "StripEffectsAssetIds = { 23153991, 31603741, 4362642898 },", "hooks: the Roblox Rocket (and the pending press) lose their Fire / Smoke")
+must_contain(HK_VAC, 'AmmoWorks = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" },', "hooks: Ammo Works belt = Roblox Conveyor Belt (takes the Kit_Belt place)")
+must_contain(HK_VAC, 'ArmsCrateLine = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" },', "hooks: Arms Crate Line belt = Roblox Conveyor Belt (same load)")
+must_contain(HK_VAC, 'RocketAssembly = { ModelAssetId = 31603741, OmitParts = { "Particles" }, ReplacesRoles = { "Signature" },', "hooks: Rocket Assembly rocket body = Roblox Rocket (effects part dropped)")
+must_contain(HK_VAC, "ArmorPlatePress = { ModelAssetId = 0,", "hooks: Armor Plate Press keeps its Part kit until P4 (Studio check + OmitParts)")
+must_contain(HK_VAC, "ManualDropper = { ModelAssetId = 0,", "hooks: the dropper plate keeps its Part kit until P4 (Studio check)")
+must_contain(HK_VAC, 'Fit = "Ground", FitLong = 4, KeepHost = true,', "hooks: the dropper dress is at most 4 studs and never fades the tap plate")
+must_contain(HK_VAC, 'HomeOutpost = { ModelAssetId = 80566030, Fit = "Ground", KeepHost = true, OmitParts = { "Height", "Highlight" },', "hooks: Home Outpost pad = Roblox Capture Points, upright on the ring, its Height beam and Highlight dropped (4 parts)")
+must_contain(HK_VAC, "VehicleMG = { ModelAssetId = 0,", "hooks: vehicle MG keeps the kit gun until P4 (Studio check)")
+must_contain(HK_VAC, "VehicleCannon = { ModelAssetId = 0,", "hooks: vehicle cannon keeps the kit turret until P4 (Studio check)")
+must_contain(HK_VAC, 'Mount = "GunMount", FitScale = 3, Vehicles = { "ArmedJeep" }, HideParts = { "Barrel" },', "hooks: the MG dress is allow-listed to the Armed 4x4 and hides the kit barrel")
+must_contain(HK_VAC, 'Mount = "Turret", FitScale = 1.6, KitFamilies = { "TrackedMBT" }, HideParts = { "Turret", "Barrel", "Mantlet" },', "hooks: the cannon dress is allow-listed to battle tanks (TrackedMBT) and hides the kit gun")
+for _hk_field in ("KeepHost: boolean?", "FitLong: number?", "ReplacesRoles: { string }?", "Mount: string?", "FitScale: number?", "KitFamilies: { string }?", "Vehicles: { string }?", "HideParts: { string }?"):
+    must_contain(HK_VAC, _hk_field, f"hooks: AssetRef.{_hk_field.split(':')[0]} is typed")
+must_not_contain(HK_VAC, "TransparentParts", "hooks: no TransparentParts option (invisible parts are dropped with OmitParts)")
+# VisualAssetService: shared clone rules (OmitParts, data objects), the prop re-check after the yield, FitLong / KeepHost
+must_contain(HK_VAS, 'if d.Parent ~= nil and (d:IsA("Configuration") or d:IsA("ValueBase")) then', "hooks: dress clones drop their data objects")
+must_contain(HK_VAS, "dropOmitParts(clone, refT)\n\tdropDataChildren(clone)", "hooks: prop refs: OmitParts works on whole models, data objects dropped")
+must_contain(HK_VAS, "dropOmitParts(clone, ref)\n\tdropDataChildren(clone)", "hooks: business / turret refs: OmitParts and data objects dropped")
+must_contain(HK_VAS, 'if hostParent == nil or hostPart:GetAttribute("WE_CatalogAssetId") ~= nil then\n\t\treturn false', "hooks: a prop host gone or dressed during the insert is left alone")
+must_contain(HK_VAS, "scaleToLong(listParts(clone), fitLong)", "hooks: FitLong sets one uniform size")
+must_contain(HK_VAS, 'if not keepHost and kitRole ~= "Body" and kitRole ~= "Roof"', "hooks: KeepHost keeps the host's look")
+must_not_contain(HK_VAS, "TransparentParts", "hooks: VisualAssetService has no TransparentParts path")
+# VisualAssetService: businesses (per-role box, one MinLevel, Belt box kept, done only when every built role wears it)
+must_contain(HK_VAS, "function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean", "hooks: VisualAssetService.TryAttachBusinessVisual")
+must_contain(HK_VAS, "local template = templateForRef(ref) -- may yield on the first load of this id; cached afterwards", "hooks: business dress uses the capped loader (MaxPartsPerModel, Humanoid, MaxLoadAttempts, StripEffects)")
+must_contain(HK_VAS, "if lv == nil or lv ~= firstLevel then", "hooks: a business ref whose roles span MinLevels (or name an unknown role) is refused at runtime")
+must_contain(HK_VAS, "if next(missing) == nil then\n\t\treturn built > 0", "hooks: a business dress is done only when every built listed role wears the id")
+must_contain(HK_VAS, "elseif p.CanCollide then", "hooks: a colliding kit role is never taken over")
+must_contain(HK_VAS, "if #parts == 0 or #parts > #roles then", "hooks: a business dress never adds parts (one model part per replaced kit role: PartsPerBusinessL5 holds)")
+must_contain(HK_VAS, '(roles[i] == "Belt" or ref.Fit == "Box") and (p:IsA("MeshPart") or hasFileMesh(p))', "hooks: a mesh part is refused on a Belt / Box role")
+must_contain(HK_VAS, 'if roles[i] == "Belt" or ref.Fit == "Box" then\n\t\t\t\tp.Size = kp.Size -- the client crates read Kit_Belt\'s box: keep it exactly\n\t\t\t\tp.CFrame = kp.CFrame', "hooks: a Belt dress keeps the kit belt box exactly")
+must_contain(HK_VAS, "local lo, hi = aabbIn(frame, { kp })", "hooks: model part i is fitted into kit part i's own box")
+must_contain(HK_VAS, "\t\t\tp.Name = kp.Name\n\t\t\tp.Anchored = true\n\t\t\tp.CanCollide = false", "hooks: a business dress part keeps the Kit_<Role> name (client belt crates), anchored and non-colliding")
+# VisualAssetService: turret dress (allow-list, welded, kit gun hidden)
+must_contain(HK_VAS, "function VisualAssetService.VehicleWeaponAllowed(weaponId: string, vehicleId: string?, kitFamily: string?): boolean", "hooks: VisualAssetService.VehicleWeaponAllowed (KitFamilies / Vehicles; no list = nobody)")
+must_contain(HK_VAS, "function VisualAssetService.TryAttachVehicleWeaponVisual(hostModel: Model, weaponId: string, mountPart: BasePart): boolean", "hooks: VisualAssetService.TryAttachVehicleWeaponVisual")
+must_contain(HK_VAS, 'if not VisualAssetService.VehicleWeaponAllowed(weaponId, if typeof(vid) == "string" then vid else nil, if typeof(fam) == "string" then fam else nil) then', "hooks: the turret hook re-checks the allow-list itself")
+must_contain(HK_VAS, "if ref == nil or assetId == 0 then\n\t\treturn false -- 0 / PendingAssetId (never read here): no load; the kit gun stays", "hooks: the turret hook is a no-op for a 0 id")
+must_contain(HK_VAS, 'local attached = weldCloneToPrimary(clone, mountPart, "WE_CatalogWeapon_" .. weaponId, true)', "hooks: turret dress is welded, massless, non-colliding and never anchored (weldCloneToPrimary)")
+must_contain(HK_VAS, "for _, nm in ipairs(ref.HideParts or {}) do", "hooks: the ref's HideParts (the kit barrel) go invisible once the dress attaches")
+# the hosts
+must_not_contain(HK_BZS, "local VisualAssetService = require(script.Parent.VisualAssetService)", "hooks: BusinessService never requires VisualAssetService at load (a dress-module error cannot stop BaseService)")
+must_contain(HK_BZS, "local okVas, vas = pcall(require, script.Parent.VisualAssetService)", "hooks: BusinessService requires VisualAssetService lazily, pcall'd")
+must_contain(HK_BZS, "pcall(vas.TryAttachBusinessVisual, m, id, lv)", "hooks: SyncBusiness defers the business dress after its kit loop (pcall'd)")
+must_contain(HK_MDS, 'task.defer(pcall, VisualAssetService.TryAttachPropVisual, pad, "ManualDropper")', "hooks: a new dropper plate gets the deferred dropper dress")
+must_contain(HK_MS, '\t\t\ttask.defer(pcall, vas.TryAttachPropVisual, ring, "HomeOutpost")\n\t\t\tzone.Parent = territories -- streaming2 S4: parented whole\n\t\t\tcontinue -- F10: the Home Outpost kit ends here', "hooks: each Home Outpost ring gets the deferred capture-pad dress")
+must_contain(HK_VS, "for weaponId, wref in pairs(require(Shared.Configs.VisualAssetConfig).VehicleWeapons) do", "hooks: VehicleService reads the turret mounts from VisualAssetConfig.VehicleWeapons")
+must_contain(HK_VS, 'if mount and mount:IsA("BasePart") and VisualAssetService.VehicleWeaponAllowed(weaponId, id, family) then\n\t\t\tpcall(VisualAssetService.TryAttachVehicleWeaponVisual, model, weaponId, mount)', "hooks: only an allow-listed vehicle's mount gets the pcall'd turret dress")
+# the promote tool: OMIT gate, hook buckets, outage-aware budget, business role gate
+must_contain(HK_TOOL, "\"OMIT\" in flags", "hooks: promote refuses the press until its config ref holds OmitParts (flag OMIT)")
+must_contain(HK_TOOL, 'HOOK_BUCKETS = ("Businesses", "VehicleWeapons")', "hooks: the promote tool's load budget counts the business and turret dress")
+must_contain(HK_TOOL, "def outage_ids(vac: Config, svc: Config | None, families: dict[str, str] | None) -> tuple[set[int], set[int]]:", "hooks: the promote tool models outage mode (every chain member, by phase)")
+must_contain(HK_TOOL, "if over_outage and not a.allow_budget and ok_ids:", "hooks: promote refuses a batch past LoadRetryReserve in outage mode")
+must_contain(HK_TOOL, "def business_roles_problem(tree: \"Tree\", target: str) -> str | None:", "hooks: promote checks a Businesses ref's ReplacesRoles (one MinLevel, no colliding role, Belt = Box)")
+must_contain(HK_TOOL, "('HomeOutpost', 'BUILDINGS / STRUCTURES', 'LIVE-NOW', 80566030,", "hooks: registry: Home Outpost is LIVE-NOW")
+must_contain(HK_TOOL, "('VehicleCannon', 'WEAPONS', 'PENDING-GET', 3322196012, 3322196012, 'STUDIO', 'LATER', 'P4',", "hooks: registry: vehicle cannon waits for the Studio check (P4)")
+for _hk_id in ("41324890", "31603741", "80566030", "114570602"):
+    must_contain(HK_LIC, f"[{_hk_id}](https://create.roblox.com/store/asset/{_hk_id})", f"hooks: licence row for the newly live {_hk_id}")
+must_contain(HK_LIC, "part names credit co-builders sk3let0n (17 parts) and TehPwnzerLord (2)", "hooks: 114570602 provenance note (owner OK given 2026-09-27)")
+must_contain(HK_WIRING, "**Hooks batch (2026-09-25: the items that waited on another job's files):**", "hooks: ASSET_WIRING.md §1 has this batch's phone checks")
+
+
+def _hk_business_roles() -> None:
+    """hooks: every Businesses ref's ReplacesRoles are known, non-colliding BusinessConfig.Kit roles with one MinLevel,
+    and a Belt role has Fit = "Box" (VisualAssetService refuses the rest at runtime, the promote tool at promote)."""
+    vac = read(HK_VAC) or ""
+    biz = read(HK_BIZCFG) or ""
+    kit = {m.group(1): (int(m.group(2)), re.search(r"\bCollide\s*=\s*true\b", m.group(3)) is not None)
+           for m in re.finditer(r'\{\s*Role\s*=\s*"(\w+)"\s*,\s*MinLevel\s*=\s*(\d+)([^\n]*)', biz)}
+    i = vac.find("\tBusinesses = {")
+    j = vac.find("} :: { [string]: AssetRef },", i)
+    if i < 0 or j < 0 or not kit:
+        bad("hooks: Businesses bucket or BusinessConfig.Kit not found (ReplacesRoles check)")
+        return
+    n = 0
+    for m in re.finditer(r'^\t\t(\w+) = \{[^\n]*?ReplacesRoles = \{([^}]*)\}', vac[i:j], re.M):
+        n += 1
+        roles = re.findall(r'"(\w+)"', m.group(2))
+        unknown = [r for r in roles if r not in kit]
+        collide = [r for r in roles if r in kit and kit[r][1]]
+        levels = sorted({kit[r][0] for r in roles if r in kit})
+        belt_ok = "Belt" not in roles or 'Fit = "Box"' in m.group(0)
+        if roles and not unknown and not collide and len(levels) == 1 and belt_ok:
+            ok(f"hooks: Businesses.{m.group(1)} ReplacesRoles {roles} share MinLevel {levels[0]} (known, non-colliding kit roles)")
+        else:
+            bad(f"hooks: Businesses.{m.group(1)} ReplacesRoles {roles}: unknown {unknown}, colliding {collide}, MinLevels {levels}, Belt Fit Box {belt_ok}")
+    if n == 0:
+        bad("hooks: no Businesses ref with ReplacesRoles found (ReplacesRoles check)")
+
+
+_hk_business_roles()
 
 parse_gate()
 
