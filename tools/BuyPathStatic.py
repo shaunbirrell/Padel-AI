@@ -5226,6 +5226,1211 @@ def _dr_fx2_rules() -> None:
 
 _dr_fx2_rules()
 
+
+# --- XP rebalance lane X1 (spec_xp.md §10; v4 after the round-3 reviews): cheaper curve in LevelConfig (no require),
+# one-time purchase XP, snapshot-while-OFF backfill (XP-L1) paid only in the life it was taken in (H1), one config
+# validator shared by ProfileSchema and XPService (H2), backfill exempt from DoubleXP / territory (XP-L2); v4: an
+# orphaned level loop stops, a stored Owed is never re-capped at load, and only ProfileSchema / XPService write the
+# BuildXP save block; 4.1 (round-4 reviews): a grant nested in a running level loop is quiet, the writer scans match
+# every assignment operator (+= -= ..= ...), any `BuildXP =` sits at a pinned line, Owed / AtPrestige are touched only
+# inside their three functions, and the one-time purchase guards and every ownership / level write are pinned ---
+# The K1 pin "LevelConfig requires nothing" above stays. Every needle below is the exact file text and is terminated
+# (a trailing ',' / ')' / newline, or a whole function body), so a longer number or an extra clause cannot match. The
+# scans pin every SpendCash call site to its one file and function, forbid bracket indexing of EconomyService /
+# XPService, and forbid reassigning the pinned tunables. BuyPathStatic is a regression guard, not a security boundary:
+# aliases of EconomyService / XPService / the config tables (a local that holds them) are not followed.
+XP_LC = 'src/ReplicatedStorage/Shared/Configs/LevelConfig.luau'
+XP_XB = 'src/ReplicatedStorage/Shared/Configs/XPBalanceConfig.luau'
+XP_ECON = 'src/ServerScriptService/Server/Services/EconomyService.luau'
+XP_SVC = 'src/ServerScriptService/Server/Services/XPService.luau'
+XP_PS = 'src/ServerScriptService/Server/Modules/ProfileSchema.luau'
+XP_VCC = 'src/ReplicatedStorage/Shared/Configs/VehicleCombatConfig.luau'
+XP_MON = 'src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau'
+# curve
+must_not_contain(XP_LC, 'require(', 'XP: LevelConfig requires nothing (curve values live inside it)')
+must_contain(XP_LC, '\nLevelConfig.CurveV2 = { Enabled = true, Scale = 0.65, Knee = 21, RampEnd = 30 }\n', 'XP: curve values')
+must_contain(XP_LC, 'function LevelConfig.CurveMult(level: number): number\n\tlocal c = LevelConfig.CurveV2\n\tif not c.Enabled or level >= c.RampEnd then\n\t\treturn 1\n\tend\n\tif level <= c.Knee then\n\t\treturn c.Scale\n\tend\n\treturn c.Scale + (1 - c.Scale) * (level - c.Knee) / (c.RampEnd - c.Knee)\nend\n', 'XP: CurveMult body (x Scale to Knee, ramp to x1 at RampEnd)')
+must_contain(XP_LC, '\tlocal k = LevelConfig.CurveMult(level)\n\tif k == 1 then\n\t\treturn math.floor(100 * (level ^ 1.45))\n\tend\n\treturn math.floor(100 * (level ^ 1.45) * k)\n', 'XP: GetXPRequiredForLevel uses CurveMult')
+# config: formula, paying reasons, switches (the whole of each function)
+must_not_contain(XP_XB, 'require(', 'XP: XPBalanceConfig requires nothing')
+must_contain(XP_XB, '\tEnabled = true,\n', 'XP: purchase XP master switch on')
+must_contain(XP_XB, '\tBuild = { Enabled = true, A = 0.8, P = 0.5, Cap = 1000,\n', 'XP: build formula (A 0.8, P 0.5, Cap 1000)')
+must_contain(XP_XB, '\t\tReasonPrefixes = { "upgrade_", "research_", "vehicle_", "weapon_" },\n', 'XP: paying reasons (exactly the four prefixes)')
+must_contain(XP_XB, '\t\tRebirthRebuildMult = 1 },\n', 'XP: RebirthRebuildMult 1 until the owner decides')
+must_contain(XP_XB, '\tBackfill = { Enabled = false, Reason = "build_backfill",', 'XP-L1: the backfill switch ships OFF (change this pin in the same edit that turns it on)')
+must_contain(XP_XB, '\tNoBattlePassMirror = { build = true, build_backfill = true } :: { [string]: boolean },\n', 'XP: build / backfill XP never feed the battle pass')
+must_contain(XP_XB, 'function XPBalanceConfig.BuildXPFormula(price: number): number\n\tif typeof(price) ~= "number" or price ~= price or price <= 0 or price == math.huge then\n\t\treturn 0\n\tend\n\tlocal b = XPBalanceConfig.Build\n\treturn math.min(b.Cap, math.floor(b.A * price ^ b.P))\nend\n', 'XP: BuildXPFormula = min(Cap, floor(A * price ^ P)), 0 for junk (whole body)')
+must_contain(XP_XB, 'function XPBalanceConfig.BuildXP(price: number): number\n\tif not (XPBalanceConfig.Enabled and XPBalanceConfig.Build.Enabled) then\n\t\treturn 0\n\tend\n\treturn XPBalanceConfig.BuildXPFormula(price)\nend\n', 'XP: BuildXP pays 0 while purchase XP is off (whole body)')
+must_contain(XP_XB, 'function XPBalanceConfig.IsBuildReason(reason: string?): boolean\n\tif typeof(reason) ~= "string" then\n\t\treturn false\n\tend\n\tfor _, prefix in ipairs(XPBalanceConfig.Build.ReasonPrefixes) do\n\t\tif string.sub(reason, 1, #prefix) == prefix then\n\t\t\treturn true\n\t\tend\n\tend\n\treturn false\nend\n\nreturn XPBalanceConfig\n', 'XP: IsBuildReason = a plain prefix match on the four reasons (whole body), and nothing follows it but the return')
+# purchase hook: success path only, deferred (the whole SpendCash tail)
+must_contain(XP_ECON, '\tXPService = deps.XPService\n', 'XP: EconomyService takes XPService from deps (no require)')
+must_contain(XP_ECON, '\tif not ok then\n\t\twarn("[Economy] SpendCash threw:", a)\n\t\treturn false, "SpendFailed"\n\tend\n\t-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a\n\t-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).\n\tif a == true and XPService and XPService.OnSpend then task.defer(XPService.OnSpend, player, amount, _reason) end\n\treturn (a :: any) :: boolean, b :: string?\nend\n', 'XP: SpendCash tail: a throw returns false; purchase XP deferred only after a spend that returned true (whole tail)')
+# XPService: config source, whitelist, block check, battle pass, XP-L2, backfill guards and order, Push robustness
+must_contain(XP_SVC, 'local XP_OFF: any = {\n\tEnabled = false,\n\tBuild = { Enabled = false, Reason = "build", RebirthRebuildMult = 1, ReasonPrefixes = {} },\n\tBackfill = { Enabled = false, Reason = "build_backfill", Toast = "★ LEVEL %d!" },\n\tNoBattlePassMirror = { build = true, build_backfill = true },\n\tBuildXP = function(_price: number): number\n\t\treturn 0\n\tend,\n\tIsBuildReason = function(_reason: string?): boolean\n\t\treturn false\n\tend,\n}\n', 'XP: the fallback config is everything OFF')
+must_contain(XP_SVC, '\tsharedCfg, cfgProblem = ProfileSchema.XPBalance()\n', 'XP (H2): XPService takes its config from ProfileSchema.XPBalance(), the one validated copy')
+must_contain(XP_SVC, 'local XPBalanceConfig: any = if sharedCfg ~= nil then sharedCfg else XP_OFF\n', 'XP (H2): no validated config -> XPService is OFF, exactly when ProfileSchema is')
+must_not_contain(XP_SVC, 'Configs.XPBalanceConfig', 'XP (H2): XPService never requires XPBalanceConfig itself (no second, unvalidated copy)')
+must_not_contain(XP_SVC, 'local XPBalanceConfig = require(', 'XP: XPService never requires XPBalanceConfig outside the pcall')
+must_contain(XP_SVC, '\tif not XPBalanceConfig.IsBuildReason(reason) then\n\t\treturn\n\tend\n\tlocal profile = DataService.GetProfile(player)\n\tif not profile or typeof((profile :: any).BuildXP) ~= "table" then\n\t\treturn\n\tend\n', 'XP: OnSpend whitelists the reason, then pays only a save with a BuildXP block')
+must_contain(XP_SVC, '\tlocal base = XPBalanceConfig.BuildXP(amount)\n\tif (tonumber(profile.Prestige) or 0) > 0 and string.sub(reason :: string, 1, 8) == "upgrade_" then\n\t\tbase = math.floor(base * XPBalanceConfig.Build.RebirthRebuildMult)\n\tend\n\tif base > 0 then\n\t\tXPService.AddXP(player, base, XPBalanceConfig.Build.Reason)\n\tend\nend\n', 'XP: OnSpend pays BuildXP(amount) (x RebirthRebuildMult for a rebuild after a rebirth), nothing else (whole tail)')
+must_contain(XP_SVC, '\t\tand not XPBalanceConfig.NoBattlePassMirror[reasonKey]\n', 'XP: battle pass not fed by build XP')
+must_contain(XP_SVC, 'and reasonKey ~= XPBalanceConfig.Backfill.Reason then\n\t\tamount = math.max(1, math.floor(amount * TerritoryService.GetXPMult(player)))\n', 'XP-L2: the backfill grant skips the territory multiplier')
+must_contain(XP_SVC, '\tif not (XPBalanceConfig.Enabled and XPBalanceConfig.Backfill.Enabled) or typeof(bx) ~= "table" then\n\t\treturn 0\n\tend\n', 'XP (H3): the grant needs the master switch AND the backfill switch')
+must_contain(XP_SVC, '\tlocal owed = tonumber(bx.Owed) or 0\n\tif owed ~= owed or owed == math.huge then\n\t\towed = 0\n\tend\n\towed = math.floor(owed)\n\tif owed <= 0 then\n\t\treturn 0\n\tend\n', 'XP (H3): the grant never pays a NaN / inf / negative Owed')
+must_contain(XP_SVC, "\tlocal life = tonumber(profile.Prestige) or 0 -- ProfileSchema's nonNegInt: junk -> 0, else a whole number >= 0\n\tif life ~= life or life == math.huge or life == -math.huge then\n\t\tlife = 0\n\tend\n\tlife = math.clamp(math.floor(life), 0, 1e15)\n\tif bx.AtPrestige ~= life then\n\t\tbx.Owed = 0 -- H1: a snapshot from another life (or unstamped) is dropped unpaid\n\t\tDataService.MarkDirty(player)\n\t\treturn 0\n\tend\n", 'XP (H1): the grant pays only in the life the snapshot was taken in (AtPrestige == Prestige); otherwise Owed -> 0, nothing paid')
+must_contain(XP_SVC, '\tif typeof(pool) ~= "number" then\n\t\treturn 0', 'XP: no pool (a config did not load) -> the backfill pays nothing and keeps Owed')
+must_contain(XP_SVC, '\towed = math.min(owed, pool)\n\tbx.Owed = 0\n\tDataService.MarkDirty(player)\n\tlocal before = profile.Level\n\tXPService.AddXP(player, owed, XPBalanceConfig.Backfill.Reason, { Quiet = true })\n', 'XP: backfill capped at the pool, Owed zeroed and saved BEFORE the quiet grant')
+must_contain(XP_SVC, '\tif joinStepsRunning[player] then\n\t\treturn\n\tend\n\tjoinStepsRunning[player] = true\n', 'XP (H4): a Push that lands while the join steps run skips them (one toast per join)')
+must_contain(XP_SVC, '\telseif gained > 0 then\n\t\tDataService.MarkDirty(player)\n\tend\n\tjoinStepsRunning[player] = nil\nend\n', 'XP (H4): the in-flight flag is cleared after both pcalls')
+must_contain(XP_SVC, '\tlocal okGrant, grantErr = pcall(grantBackfill, player, profile)\n', 'XP: the backfill grant runs in a pcall')
+must_contain(XP_SVC, '\tlocal okSettle, gained = pcall(settle, player, profile, "curve_settle", false)\n', 'XP: the curve settle runs in a pcall')
+must_contain(XP_SVC, '\t\tif sanitizeLevelXP(profile) then\n\t\t\tDataService.MarkDirty(player)\n\t\tend\n', 'XP: Push makes Level / XP plain numbers first (NaN / string never throws at join)')
+must_contain(XP_SVC, '\t\ttask.spawn(joinLevelSteps, player, profile)\n\t\t-- 3. the normal HUD refresh (always runs)\n\t\tpushXP(player, profile)\n', 'XP: the join push always runs and never waits on the level steps')
+must_contain(XP_SVC, 'local function settleLevels(player: Player, profile: Types.PlayerProfile, reason: string?, quiet: boolean, nested: boolean): number\n\tlocal life = profile.Prestige\n\tif profile.Level < LevelConfig.MaxLevel and profile.XP >= LevelConfig.GetXPRequiredForLevel(profile.Level)\n\t\tand EconomyService and EconomyService.GetCashMult\n\tthen\n\t\tpcall(EconomyService.GetCashMult, player, "level_up")\n\tend\n\tlocal gained = 0\n\tlocal unlockMsg: string? = nil\n\tlocal fromLevel = profile.Level\n\twhile profile.Level < LevelConfig.MaxLevel do\n\t\tif DataService.GetProfile(player) ~= profile or profile.Prestige ~= life then\n\t\t\treturn 0 -- orphaned (left / rejoined, or rebirthed) while a reward waited: stop, pay nothing more\n\t\tend\n\t\tlocal need = LevelConfig.GetXPRequiredForLevel(profile.Level)\n\t\tif profile.XP < need then\n\t\t\tbreak\n\t\tend\n\t\tprofile.XP -= need\n\t\tprofile.Level += 1\n\t\tgained += 1\n', 'XP (v4): settle takes the pass-check wait up front (before any level changes), then stops an orphaned run (another profile table after a rejoin, or another life after a rebirth) before it changes or pays anything')
+must_contain(XP_SVC, '\t\tend\n\tend\n\tif gained <= 0 then\n\t\treturn 0\n\tend\n\t-- the unlock text of the highest level this run ends above that has one (a nested grant\'s levels included)\n\tfor lv = profile.Level, fromLevel + 1, -1 do\n\t\tunlockMsg = LevelConfig.GetUnlockMessage(lv)\n\t\tif unlockMsg then\n\t\t\tbreak\n\t\tend\n\tend\n\tif not quiet then\n', 'XP (v4, 4.1): settle toasts / pushes only for the levels this run settled; the toast names the highest crossed level with an unlock text, nested levels included')
+must_contain(XP_SVC, '\tif not nested then\n\t\tpushXP(player, profile, unlockMsg, true)\n\tend\n\treturn gained\nend\n', 'XP (4.1): a nested run pushes no LevelUp (one chip pop and one level-up sound per grant)')
+must_contain(XP_SVC, '\nlocal settlingThreads: { [thread]: number? } = setmetatable({}, { __mode = "k" }) :: any\n\nlocal function settle(player: Player, profile: Types.PlayerProfile, reason: string?, quiet: boolean): number\n\tlocal me = coroutine.running()\n\tlocal depth = settlingThreads[me] or 0\n\tsettlingThreads[me] = depth + 1\n\tlocal ok, gained = pcall(settleLevels, player, profile, reason, quiet or depth > 0, depth > 0)\n\tsettlingThreads[me] = if depth > 0 then depth else nil\n\tif not ok then\n\t\terror(gained, 0)\n\tend\n\treturn gained\nend\n', 'XP (4.1): settle = the per-thread depth wrapper: a grant made inside a running level loop in the same thread (a level reward -> the Level10 achievement XP) is quiet and nested; the depth is restored after a pcall (whole body)')
+# ProfileSchema: one validator (H2), pcall config, snapshot while OFF with its life stamp (H1), save-safety guards (H3)
+must_contain(XP_PS, '\treturn require(Shared.Configs.XPBalanceConfig) :: any\n', 'XP: ProfileSchema loads XPBalanceConfig in a pcall (a broken config never blocks a profile load)')
+must_contain(XP_PS, '\treturn require(Shared.Configs.ResearchConfig) :: any\n', 'XP: ProfileSchema loads ResearchConfig in a pcall')
+must_not_contain(XP_PS, 'local XPBalanceConfig = require(', 'XP: ProfileSchema never requires XPBalanceConfig outside the pcall')
+must_not_contain(XP_PS, 'local ResearchConfig = require(', 'XP: ProfileSchema never requires ResearchConfig outside the pcall')
+must_contain(XP_PS, 'local function validXPBalanceConfig(cfg: any): string?\n\tif typeof(cfg) ~= "table" then\n\t\treturn "did not load"\n\tend\n\tlocal b, f = cfg.Build, cfg.Backfill\n\tif typeof(cfg.Enabled) ~= "boolean" then\n\t\treturn "Enabled"\n\telseif typeof(b) ~= "table" or typeof(b.Enabled) ~= "boolean" or not finiteNumber(b.A) or not finiteNumber(b.P)\n\t\tor not finiteNumber(b.Cap) or typeof(b.ReasonPrefixes) ~= "table" or typeof(b.Reason) ~= "string"\n\t\tor not finiteNumber(b.RebirthRebuildMult)\n\tthen\n\t\treturn "Build"\n\telseif typeof(f) ~= "table" or typeof(f.Enabled) ~= "boolean" or typeof(f.Reason) ~= "string" or typeof(f.Toast) ~= "string" then\n\t\treturn "Backfill"\n\telseif typeof(cfg.NoBattlePassMirror) ~= "table" then\n\t\treturn "NoBattlePassMirror"\n\telseif typeof(cfg.BuildXPFormula) ~= "function" or typeof(cfg.BuildXP) ~= "function" or typeof(cfg.IsBuildReason) ~= "function" then\n\t\treturn "functions"\n\tend\n\tfor _, prefix in ipairs(b.ReasonPrefixes) do\n\t\tif typeof(prefix) ~= "string" or prefix == "" then\n\t\t\treturn "Build.ReasonPrefixes"\n\t\tend\n\tend\n\tlocal okF, formulaXP = pcall(cfg.BuildXPFormula, 5000)\n\tlocal okB, buildXP = pcall(cfg.BuildXP, 5000)\n\tlocal okU, upgradePays = pcall(cfg.IsBuildReason, "upgrade_x")\n\tlocal okR, recruitPays = pcall(cfg.IsBuildReason, "recruit_soldiers")\n\tlocal okT, toast = pcall(string.format, f.Toast, 5)\n\tif not (okF and finiteNumber(formulaXP) and formulaXP >= 0 and okB and finiteNumber(buildXP) and buildXP >= 0) then\n\t\treturn "smoke test: BuildXPFormula / BuildXP(5000)"\n\telseif not (okU and upgradePays == true and okR and recruitPays == false) then\n\t\treturn "smoke test: IsBuildReason (upgrade_ pays, recruit_soldiers does not)"\n\telseif not (okT and typeof(toast) == "string") then\n\t\treturn "smoke test: Backfill.Toast"\n\tend\n\treturn nil\nend\n', 'XP (H2): the one config check: every field used and smoke tests of BuildXPFormula / BuildXP / IsBuildReason / Toast (whole body)')
+must_contain(XP_PS, 'local xpCfgProblem: string? = if xpCfgOk then validXPBalanceConfig(xpCfg) else "did not load: " .. tostring(xpCfg)\nlocal XPBalanceConfig: any = if xpCfgProblem == nil then xpCfg else nil\n', 'XP (H2): only a config that passed the check is used')
+must_contain(XP_PS, 'function ProfileSchema.XPBalance(): (any?, string?)\n\treturn XPBalanceConfig, xpCfgProblem\nend\n', 'XP (H2): XPService gets the same verdict and table')
+must_contain(XP_PS, '\t-- XP rebalance: one-time build-XP backfill snapshot for saves that predate it (idempotent; no version bump)\n\tensureBuildXPFields(profile)\n', 'XP: backfill snapshot in Migrate')
+must_contain(XP_PS, '\t;(profile :: any).BuildXP = rawBuildXP\n', 'XP: the v0 default fill never marks an old save as new')
+must_contain(XP_PS, '\tlocal formula = XPBalanceConfig.BuildXPFormula\n', 'XP: the pool and the snapshot use the bare formula (the G5 cap holds with purchase XP off)')
+must_contain(XP_PS, '\tfor id, def in pairs(VehicleConfig.Vehicles :: any) do\n\t\tlocal cost = tonumber(def.CostCash) or 0\n\t\tif cost > 0 then\n\t\t\tif own == nil then\n\t\t\t\tif (tonumber(def.RequiresPrestige) or 0) <= 0 and def.RequiresRebirthFlag == nil then\n\t\t\t\t\tsum += formula(cost)\n\t\t\t\tend\n\t\t\telseif typeof(own.Vehicles) == "table" and own.Vehicles[id] == true then\n\t\t\t\tsum += formula(cost)\n\t\t\tend\n\t\tend\n\tend\n', 'XP (H3): the pool counts only cash vehicles that need no rebirth (RequiresPrestige / RequiresRebirthFlag filter)')
+must_contain(XP_PS, '\tfor id, def in pairs(WeaponConfig.Weapons :: any) do\n\t\tlocal cost = tonumber(def.CostCash) or 0\n\t\tif cost > 0 then\n\t\t\tif own == nil then\n\t\t\t\tif (tonumber(def.RequiresPrestige) or 0) <= 0 then\n\t\t\t\t\tsum += formula(cost)\n\t\t\t\tend\n\t\t\telseif typeof(own.Weapons) == "table" and own.Weapons[id] == true then\n\t\t\t\tsum += formula(cost)\n\t\t\tend\n\t\tend\n\tend\n', 'XP (H3): the pool counts only cash weapons that need no rebirth (RequiresPrestige filter)')
+must_contain(XP_PS, 'local function buildXPOf(own: any?, countItems: boolean): number\n\tlocal formula = XPBalanceConfig.BuildXPFormula\n\tlocal sum = 0\n\tlocal upgrades = if own ~= nil then own.BaseUpgrades else nil\n\tfor id, def in pairs(BaseConfig.Structures) do\n\t\tif def.Currency ~= "Gold" then\n\t\t\tlocal costs = def.Costs\n\t\t\tlocal lv = #costs\n\t\t\tif own ~= nil then\n\t\t\t\tlv = if typeof(upgrades) == "table" then math.clamp(nonNegInt(upgrades[id]), 0, #costs) else 0\n\t\t\tend\n\t\t\tfor l = 1, lv do\n\t\t\t\tsum += formula(costs[l])\n\t\t\tend\n\t\tend\n\tend\n\tif not countItems then\n\t\treturn sum\n\tend\n\tfor id, def in pairs(VehicleConfig.Vehicles :: any) do\n\t\tlocal cost = tonumber(def.CostCash) or 0\n\t\tif cost > 0 then\n\t\t\tif own == nil then\n\t\t\t\tif (tonumber(def.RequiresPrestige) or 0) <= 0 and def.RequiresRebirthFlag == nil then\n\t\t\t\t\tsum += formula(cost)\n\t\t\t\tend\n\t\t\telseif typeof(own.Vehicles) == "table" and own.Vehicles[id] == true then\n\t\t\t\tsum += formula(cost)\n\t\t\tend\n\t\tend\n\tend\n\tfor id, def in pairs(WeaponConfig.Weapons :: any) do\n\t\tlocal cost = tonumber(def.CostCash) or 0\n\t\tif cost > 0 then\n\t\t\tif own == nil then\n\t\t\t\tif (tonumber(def.RequiresPrestige) or 0) <= 0 then\n\t\t\t\t\tsum += formula(cost)\n\t\t\t\tend\n\t\t\telseif typeof(own.Weapons) == "table" and own.Weapons[id] == true then\n\t\t\t\tsum += formula(cost)\n\t\t\tend\n\t\tend\n\tend\n\tfor id, def in pairs(ResearchConfig.Upgrades) do\n\t\tlocal lv = if own == nil then #def.Costs else math.min(ResearchConfig.LevelOf(own.Research, id), #def.Costs)\n\t\tfor l = 1, lv do\n\t\t\tsum += formula(def.Costs[l])\n\t\tend\n\tend\n\treturn sum\nend\n', 'XP (4.2, reviewer s1-s5): buildXPOf whole body: structure levels = the saved level clamped to the cost list, Gold structures skipped, items only when countItems (Prestige 0), cash vehicles / weapons owned == true, research = LevelOf clamped (the snapshot and the pool cannot over-count)')
+must_contain(XP_PS, '\tlocal ok, pool = pcall(buildXPOf, nil, true)\n\tif ok and typeof(pool) == "number" and pool == pool and pool >= 0 and pool < math.huge then\n\t\treturn pool\n\tend\n\treturn nil\nend\n', 'XP (H5): BuildXPPool returns the catalogue pool itself (finite, >= 0) or nil')
+must_contain(XP_PS, '\tif not buildXPOn() then\n\t\treturn -- decided on the first load with purchase XP on\n', 'XP-L1: the snapshot waits only for purchase XP, never for the backfill switch')
+must_not_contain(XP_PS, 'Backfill.Enabled', 'XP-L1: ProfileSchema never reads the backfill switch (snapshot while OFF)')
+must_contain(XP_PS, 'local function ensureBuildXPFields(profile: any)\n\tlocal bx = profile.BuildXP\n\tif typeof(bx) == "table" then\n\t\tbx.Owed = math.min(nonNegInt(bx.Owed), BUILDXP_OWED_MAX) -- sanitised only: never re-capped by the current configs\n\t\treturn\n\tend\n', 'XP (H3, v4): an existing block is only sanitised: Owed clamped to the fixed ceiling, never re-capped from the current configs, never re-snapshotted (the grant caps at the pool when it pays)')
+must_contain(XP_PS, '\nlocal BUILDXP_OWED_MAX = 10000000\n', 'XP (v4): the load ceiling of a stored Owed is a fixed constant (10,000,000), not derived from the configs')
+must_contain(XP_PS, '\nif XPBalanceConfig ~= nil then\n\tlocal pool = ProfileSchema.BuildXPPool()\n\tif pool ~= nil and pool <= 0 then\n\t\txpCfgProblem = "BuildXPPool() is 0 (the formula pays nothing: Build.A / P / Cap)"\n\t\tXPBalanceConfig = nil\n\tend\nend\n', 'XP (v4): a formula that pays nothing for the whole catalogue (Cap 0, A 0, P 0) is a broken config: X1 OFF in both modules, Owed kept')
+must_contain(XP_PS, '\tif bx ~= nil then\n\t\tprofile.BuildXP = { Owed = 0, AtPrestige = nonNegInt(profile.Prestige) } -- junk (never written by this code): repair, pay nothing\n\t\treturn\n\tend\n', 'XP (H3): a junk BuildXP is repaired to Owed 0 (never re-snapshotted: that would re-count live-paid buys)')
+must_contain(XP_PS, '\tlocal ok, owed = pcall(buildXPOf, profile, nonNegInt(profile.Prestige) == 0)\n\tif pool == nil or not ok or typeof(owed) ~= "number" or owed ~= owed then\n', 'XP (H3): the snapshot counts items only at Prestige 0, in a pcall; no block when it cannot be counted')
+must_contain(XP_PS, '\tprofile.BuildXP = { Owed = math.min(nonNegInt(owed), pool), AtPrestige = nonNegInt(profile.Prestige) }\n', 'XP (H1): the snapshot is capped at the pool and stamped with its life')
+must_contain(XP_PS, '\t\tBuildXP = if buildXPOn() then { Owed = 0, AtPrestige = 0 } else nil,\n', 'XP (H1): a new save gets { Owed = 0, AtPrestige = 0 } while purchase XP is on')
+# rookie protection
+must_contain(XP_VCC, '\tRookieProtection = { BelowLevel = 10, VehicleWeaponMult = 0.5 },\n', 'XP: rookie protection below L10')
+
+def _xp_blank_luau(text: str) -> tuple[str, str]:
+    """Two same-length views of Luau source: (no_comments, no_comments_no_strings). Comments (-- and --[=[ ]=]) are
+    blanked in both; string contents are blanked in the second (quotes kept). The {...} expressions inside a backtick
+    string are code, so they stay visible in both views (v3). Newlines are kept, so offsets and line numbers match."""
+    out_c, out_s = list(text), list(text)
+    n = len(text)
+    def blank(a: int, b: int, both: bool) -> None:
+        for k in range(a, b):
+            if text[k] != "\n":
+                out_s[k] = " "
+                if both:
+                    out_c[k] = " "
+    def backtick_literal(j: int) -> int:
+        """Blank a backtick string's literal text from j; stop after the closing backtick or at a '{' (kept)."""
+        start = j
+        while j < n and text[j] != "`" and text[j] != "\n":
+            if text[j] == "\\":
+                j += 2
+                continue
+            if text[j] == "{":
+                blank(start, j, False)
+                stack.append(0)
+                return j + 1
+            j += 1
+        blank(start, min(j, n), False)
+        return j + 1
+    stack: list[int] = []  # brace depth inside each open backtick {expression}
+    i = 0
+    while i < n:
+        ch = text[i]
+        if stack and ch == "}" and stack[-1] == 0:
+            stack.pop()
+            i = backtick_literal(i + 1)
+            continue
+        if stack and ch == "{":
+            stack[-1] += 1
+        elif stack and ch == "}":
+            stack[-1] -= 1
+        if text.startswith("--", i):
+            m = re.match(r"--\[(=*)\[", text[i:])
+            if m:
+                end = text.find("]" + m.group(1) + "]", i + len(m.group(0)))
+                end = n if end < 0 else end + len(m.group(1)) + 2
+            else:
+                end = text.find("\n", i)
+                end = n if end < 0 else end
+            blank(i, end, True)
+            i = end
+        elif ch in "\"'":
+            j = i + 1
+            while j < n and text[j] != ch and text[j] != "\n":
+                j += 2 if text[j] == "\\" else 1
+            blank(i + 1, min(j, n), False)
+            i = j + 1
+        elif ch == "`":
+            i = backtick_literal(i + 1)
+        elif ch == "[" and re.match(r"\[(=*)\[", text[i:]):
+            m = re.match(r"\[(=*)\[", text[i:])
+            end = text.find("]" + m.group(1) + "]", i + len(m.group(0)))
+            end = n if end < 0 else end
+            blank(i + len(m.group(0)), end, False)
+            i = end + len(m.group(1)) + 2
+        else:
+            i += 1
+    return "".join(out_c), "".join(out_s)
+
+def _xp_call_args(code: str, open_paren: int) -> list[str] | None:
+    """Top-level comma-split arguments of the call whose '(' is at open_paren (code has comments blanked)."""
+    depth, i, start, args = 0, open_paren, open_paren + 1, []
+    while i < len(code):
+        ch = code[i]
+        if ch in "\"'":
+            j = i + 1
+            while j < len(code) and code[j] != ch:
+                j += 2 if code[j] == "\\" else 1
+            i = j + 1
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+            if depth == 0:
+                args.append(code[start:i].strip())
+                return args
+        elif ch == "," and depth == 1:
+            args.append(code[start:i].strip())
+            start = i + 1
+        i += 1
+    return None
+
+def _xp_open_loops(span: str) -> int:
+    """v4: loops (for / while / repeat) still open at the end of `span` (a function's text, comments and strings
+    blanked, from its head up to a call). Every if / function / do / loop block is closed by end or until."""
+    stack, pending = [], False
+    for m in re.finditer(r"\b(function|if|for|while|do|repeat|end|until)\b", span):
+        k = m.group(1)
+        if k in ("for", "while"):
+            pending = True
+        elif k == "do":
+            stack.append("loop" if pending else "do")
+            pending = False
+        elif k == "repeat":
+            stack.append("loop")
+        elif k in ("function", "if"):
+            stack.append(k)
+        elif stack:
+            stack.pop()
+    return stack.count("loop")
+
+def _xp_spendcash_sites() -> None:
+    """Every EconomyService.SpendCash call site is pinned. The 8 reasons each appear exactly once, in their one file and
+    function (upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase,
+    weapon_ CombatService.PurchaseWeapon pay XP; recruit_soldiers / missile_strike / gate_repair / atm_raid_loss do
+    not), there are exactly 8 calls, and SpendCash is not reached as a value, by a string key, as a method or through a
+    wrapper function (aliases or iteration are not followed: a regression guard, not a proof). v3: a call's function is the column-0 `function X(` / `local function x(`
+    above it, and the text between that head and the call may hold no column-0 line (that function ended) and no other
+    `function` keyword except `pcall(function(`: a SpendCash inside an anonymous, assigned (`X = function`), nested or
+    indented function (a repeatable helper) fails. v4: a paying call passes (player, cost, ...) unchanged and is not
+    inside a loop (for / while / repeat), so one purchase cannot be split into many paying spends (10 x BuildXP(cost / 10)
+    is about 3x the XP). A new spend therefore fails here until someone decides whether it pays.
+    (A regression guard, not a security boundary: see also _xp_no_bracket_index.)"""
+    svc = "src/ServerScriptService/Server/Services/"
+    sites = {
+        "upgrade_": (svc + "BaseService.luau", "BaseService.PurchaseUpgrade", True),
+        "research_": (svc + "ResearchService.luau", "ResearchService.Purchase", True),
+        "vehicle_": (svc + "VehicleService.luau", "VehicleService.Purchase", True),
+        "weapon_": (svc + "CombatService/init.luau", "CombatService.PurchaseWeapon", True),
+        "recruit_soldiers": (svc + "SoldierService.luau", "SoldierService.Recruit", False),
+        "missile_strike": (svc + "MissileStrikeService.luau", "launch", False),
+        "gate_repair": (svc + "GateDefenseService.luau", "GateDefenseService.TryRepair", False),
+        "atm_raid_loss": (svc + "MoneyCollectorService.luau", "completeRaid", False),
+    }
+    fn_head = re.compile(r"^(?:local\s+)?function\s+([\w.:]+)\s*\(", re.M)
+    guard_ok = re.compile(r"\s*(?:(?:==|~=)\s*nil\b|\)?\s*then\b)")
+    found = {k: [] for k in sites}
+    problems, seen, defs = [], 0, 0
+    for p in sorted((ROOT / "src").rglob("*.lua*")):
+        rel = p.relative_to(ROOT).as_posix()
+        text = p.read_text(encoding="utf-8")
+        if "SpendCash" not in text:
+            continue
+        code, bare = _xp_blank_luau(text)
+        line_of = lambda pos: code.count("\n", 0, pos) + 1
+        # a string that is exactly "SpendCash" (EconomyService["SpendCash"], rawget(..., `SpendCash`))
+        for m in re.finditer(r"([\"'`])\s*SpendCash\s*\1", code):
+            problems.append(f"{rel}:{line_of(m.start())} SpendCash named by a string")
+        for m in re.finditer(r"\bSpendCash\b", bare):
+            s, e = m.start(), m.end()
+            before = bare[max(0, s - 64):s]
+            after = bare[e:e + 64]
+            if re.search(r"^function\s+EconomyService\.$", bare[bare.rfind("\n", 0, s) + 1:s]):
+                defs += 1
+                if rel != svc + "EconomyService.luau":
+                    problems.append(f"{rel}:{line_of(s)} another SpendCash definition")
+                continue
+            if re.match(r"\s*\(", after):
+                if not re.search(r"\.\s*$", before):
+                    problems.append(f"{rel}:{line_of(s)} SpendCash called as a method or bare name")
+                    continue
+                seen += 1
+                args = _xp_call_args(code, e + after.index("("))
+                reason = None
+                if args is not None and len(args) == 3:
+                    a3 = args[2]
+                    m_exact = re.fullmatch(r"\"([a-z_]+)\"", a3)
+                    m_pref = re.fullmatch(r"\"([a-z]+_)\"\s*\.\.\s*[A-Za-z_]\w*", a3)
+                    if m_exact and m_exact.group(1) in sites and not m_exact.group(1).endswith("_"):
+                        reason = m_exact.group(1)
+                    elif m_pref and m_pref.group(1) in sites and m_pref.group(1).endswith("_"):
+                        reason = m_pref.group(1)
+                if reason is None:
+                    problems.append(f"{rel}:{line_of(s)} unknown or non-literal reason {args[2] if args and len(args) == 3 else args!r}")
+                    continue
+                heads = [h for h in fn_head.finditer(bare, 0, s)]
+                fn = heads[-1].group(1) if heads else "(top level)"
+                if heads:
+                    span = bare[heads[-1].end():s]
+                    if re.search(r"\n[^\s]", span):
+                        problems.append(f"{rel}:{line_of(s)} SpendCash after the end of {fn} (a column-0 line between its head and the call)")
+                        continue
+                    other_fns = [f for f in re.finditer(r"\bfunction\b", span) if not re.search(r"\bpcall\s*\(\s*$", span[:f.start()])]
+                    if other_fns:
+                        problems.append(f"{rel}:{line_of(s)} SpendCash inside an anonymous, assigned, nested or indented function (only pcall(function() is allowed) in {fn}")
+                        continue
+                if sites[reason][2]:
+                    if args[0] != "player" or args[1] != "cost":
+                        problems.append(f"{rel}:{line_of(s)} a paying SpendCash must pass (player, cost, ...) unchanged, got ({args[0]}, {args[1]}, ...)")
+                        continue
+                    if heads and _xp_open_loops(bare[heads[-1].start():s]):
+                        problems.append(f"{rel}:{line_of(s)} a paying SpendCash inside a loop in {fn} (one purchase split into many paying spends)")
+                        continue
+                found[reason].append((rel, fn, line_of(s)))
+                continue
+            if re.match(r"\s*\)\s*\(", after):
+                problems.append(f"{rel}:{line_of(s)} SpendCash called through parentheses (an alias)")
+            elif not guard_ok.match(after):
+                problems.append(f"{rel}:{line_of(s)} SpendCash used as a value (only calls and nil / existence checks are allowed)")
+    for reason, (file, fn, _pays) in sites.items():
+        hits = found[reason]
+        if len(hits) != 1 or hits[0][0] != file or hits[0][1] != fn:
+            problems.append(f"reason {reason!r}: expected exactly once in {file} {fn}, found {[(h[0].split('/')[-1], h[1], h[2]) for h in hits]}")
+    if defs != 1:
+        problems.append(f"{defs} definitions of EconomyService.SpendCash (expected 1)")
+    if seen == 8 and not problems:
+        ok("XP: SpendCash has exactly 8 call sites, each reason in its one file and function, none in a nested / anonymous / assigned function; the 4 paying calls pass (player, cost, ...) and sit in no loop (paying: upgrade_ BaseService.PurchaseUpgrade, research_ ResearchService.Purchase, vehicle_ VehicleService.Purchase, weapon_ CombatService.PurchaseWeapon)")
+    else:
+        bad(f"XP: SpendCash call-site pin — {seen} calls (expected 8); " + "; ".join(problems))
+
+def _xp_onspend_callers() -> None:
+    """XPService.OnSpend is reached only from EconomyService.SpendCash's success path (and defined in XPService)."""
+    allowed = {"src/ServerScriptService/Server/Services/EconomyService.luau", "src/ServerScriptService/Server/Services/XPService.luau"}
+    hits = []
+    for p in sorted((ROOT / "src").rglob("*.lua*")):
+        t = p.read_text(encoding="utf-8")
+        if "OnSpend" not in t:
+            continue
+        code, bare = _xp_blank_luau(t)
+        rel = p.relative_to(ROOT).as_posix()
+        if re.search(r"\bOnSpend\b", bare) or re.search(r"([\"'`])\s*OnSpend\s*\1", code):
+            hits.append(rel)
+    n_econ = len(re.findall(r"\bOnSpend\b", _xp_blank_luau(read(XP_ECON) or "")[1]))
+    n_svc = len(re.findall(r"\bOnSpend\b", _xp_blank_luau(read(XP_SVC) or "")[1]))
+    if set(hits) <= allowed and n_econ == 2 and n_svc == 1:
+        ok("XP: XPService.OnSpend is used only by EconomyService.SpendCash (one guarded task.defer)")
+    else:
+        bad(f"XP: XPService.OnSpend used outside EconomyService.SpendCash: files {hits}, EconomyService {n_econ} uses (expected 2), XPService {n_svc} (expected 1, the definition)")
+
+def _xp_no_bracket_index() -> None:
+    """v3 (H5): EconomyService and XPService are never indexed with brackets anywhere in src (EconomyService[`SpendCash`],
+    EconomyService["Spend" .. "Cash"], XPService["On" .. "Spend"], deps.EconomyService[k] ...), so every use of
+    SpendCash / OnSpend is visible to the two scans above."""
+    hits = []
+    for p in sorted((ROOT / "src").rglob("*.lua*")):
+        t = p.read_text(encoding="utf-8")
+        if "EconomyService" not in t and "XPService" not in t:
+            continue
+        _code, bare = _xp_blank_luau(t)
+        for m in re.finditer(r"\b(EconomyService|XPService)\s*\[", bare):
+            hits.append(f"{p.relative_to(ROOT).as_posix()}:{bare.count(chr(10), 0, m.start()) + 1} {m.group(1)}[")
+    if not hits:
+        ok("XP: no bracket indexing of EconomyService / XPService in src")
+    else:
+        bad("XP: bracket indexing of EconomyService / XPService (hides SpendCash / OnSpend from the scans): " + "; ".join(hits))
+
+# 4.1: any Luau assignment operator: `=` or a compound one (+= -= *= /= //= %= ^= ..=), never `==`
+_XP_ASSIGN = r"\s*(?:[-+*/%^]|//|\.\.)?=(?!=)"
+# 4.1: an optional type cast right after a name, `(XPBalanceConfig :: any).Build` (the `(` before it is not checked)
+_XP_CAST = r"(?:\s*::\s*[\w.]+\s*\))?"
+
+def _xp_no_config_writes() -> None:
+    """v3 (H5): the pinned tunables cannot be changed by a later statement instead of their pinned line. Anywhere in
+    src: no field assignment on XPBalanceConfig (or the xpCfg / sharedCfg locals that hold it), no table.* / rawset /
+    setmetatable on them, no assignment to a .ReasonPrefixes / .RebirthRebuildMult / .NoBattlePassMirror /
+    .RookieProtection field, and exactly one assignment to LevelConfig.CurveV2 (its pinned definition). A regression
+    guard, not a security boundary (an alias of the table is not followed). 4.1: every assignment operator counts
+    (`=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `..=`), so `XPBalanceConfig.Build.Cap += 9000` or
+    `LevelConfig.CurveV2.Scale -= 0.6` fails like a plain `=`."""
+    field = r"\s*(?:\.\s*\w+\s*|\[[^\]\n]*\]\s*)"
+    rules = [
+        (re.compile(r"\b(?:XPBalanceConfig|xpCfg|sharedCfg)" + _XP_CAST + field + r"+" + _XP_ASSIGN), "field assignment on XPBalanceConfig"),
+        (re.compile(r"\b(?:table\s*\.\s*\w+|rawset|setmetatable)\s*\(\s*[^,\n]*?\b(?:XPBalanceConfig|xpCfg|sharedCfg|(?:LevelConfig" + _XP_CAST + r"\s*\.\s*)?CurveV2|(?:VehicleCombatConfig" + _XP_CAST + r"\s*\.\s*)?RookieProtection)\b"), "table.* / rawset / setmetatable on a pinned config table"),
+        (re.compile(r"\.\s*(?:ReasonPrefixes|RebirthRebuildMult|NoBattlePassMirror|RookieProtection)" + field + r"*" + _XP_ASSIGN), "assignment to a pinned XP / rookie field"),
+    ]
+    curve = re.compile(r"\bCurveV2" + field + r"*" + _XP_ASSIGN)
+    hits, curve_hits = [], []
+    for p in sorted((ROOT / "src").rglob("*.lua*")):
+        t = p.read_text(encoding="utf-8")
+        rel = p.relative_to(ROOT).as_posix()
+        _code, bare = _xp_blank_luau(t)
+        for rx, what in rules:
+            for m in rx.finditer(bare):
+                hits.append(f"{rel}:{bare.count(chr(10), 0, m.start()) + 1} {what}: {bare[m.start():m.end()].strip()}")
+        for m in curve.finditer(bare):
+            curve_hits.append(f"{rel}:{bare.count(chr(10), 0, m.start()) + 1}")
+    if curve_hits != [XP_LC + ":" + str((read(XP_LC) or "").split("\nLevelConfig.CurveV2 = {")[0].count("\n") + 2)]:
+        hits.append(f"LevelConfig.CurveV2 assigned {len(curve_hits)} times (expected once, its pinned definition): {curve_hits}")
+    if not hits:
+        ok("XP: no statement reassigns XPBalanceConfig, LevelConfig.CurveV2 or VehicleCombatConfig.RookieProtection fields outside their pinned lines")
+    else:
+        bad("XP: a pinned tunable is reassigned: " + "; ".join(hits))
+
+def _xp_refund_paths() -> None:
+    """A "purchase_refund" grant exists only for missile strikes and raid losses (neither pays XP). Only the literal
+    reason is matched here; a sell / refund of a paying item under another reason is covered by
+    _xp_ownership_writes (clearing an owned vehicle / weapon or lowering a level fails there) and
+    _xp_paying_fns_grant_nothing (no cash / gold grant or write inside a paying purchase function)."""
+    allowed = {"src/ServerScriptService/Server/Services/MissileStrikeService.luau", "src/ServerScriptService/Server/Services/MoneyCollectorService.luau"}
+    hits = set()
+    for p in sorted((ROOT / "src").rglob("*.lua*")):
+        t = p.read_text(encoding="utf-8")
+        if '"purchase_refund"' in t or "'purchase_refund'" in t:
+            hits.add(p.relative_to(ROOT).as_posix())
+    if hits and hits <= allowed:
+        ok('XP: "purchase_refund" only in MissileStrikeService and MoneyCollectorService')
+    else:
+        bad(f'XP: "purchase_refund" found outside the two refund paths: {sorted(hits - allowed) or "(none found at all)"}')
+
+def _xp_backfill_exempt() -> None:
+    """XP-L2: build_backfill is in MonetizationConfig.XPMultExemptReasons (no DoubleXP on the grant, no pass check)."""
+    body = read(XP_MON) or ""
+    m = re.search(r"\n\tXPMultExemptReasons = \{\n(.*?)\n\t\},\n", body, re.S)
+    if m and re.search(r"^\t\tbuild_backfill = true,", m.group(1), re.M):
+        ok("XP-L2: build_backfill is in MonetizationConfig.XPMultExemptReasons (the backfill grant skips DoubleXP)")
+    else:
+        bad("XP-L2: build_backfill missing from MonetizationConfig.XPMultExemptReasons")
+
+XP_PRESTIGE_SVC = 'src/ServerScriptService/Server/Services/PrestigeService.luau'
+
+def _xp_src_files():
+    """(rel, text, code, bare) for every Luau file under src (see _xp_blank_luau for the two views)."""
+    for p in sorted((ROOT / "src").rglob("*.lua*")):
+        t = p.read_text(encoding="utf-8")
+        code, bare = _xp_blank_luau(t)
+        yield p.relative_to(ROOT).as_posix(), t, code, bare
+
+def _xp_fn_span(bare: str, name: str) -> tuple[int, int] | None:
+    """4.1: (start, end) of the one column-0 `function NAME(` / `local function NAME(` in `bare` (comments and strings
+    blanked), through its closing column-0 line; None when it is missing or defined more than once."""
+    heads = list(re.finditer(r"^(?:local\s+)?function\s+" + re.escape(name) + r"\s*\(", bare, re.M))
+    if len(heads) != 1:
+        return None
+    s = heads[0].start()
+    nl = bare.find("\n", s)
+    m2 = re.search(r"\n[^\s]", bare[nl:])
+    if not m2:
+        return (s, len(bare))
+    e = bare.find("\n", nl + m2.start() + 1)
+    return (s, e if e >= 0 else len(bare))
+
+def _xp_save_block_writers() -> None:
+    """v4 (round-3 reviews), 4.1 (round-4 exploit review): the BuildXP save block has exactly two writers, ProfileSchema
+    and XPService. Anywhere in src: `BuildXP` used as anything but a call / function name appears only in
+    ProfileSchema.luau and XPService.luau; no string names BuildXP / AtPrestige / Owed; PrestigeService never names
+    BuildXP; `BuildXP` is assigned (any operator, any value: `= nil`, `= (nil)`, a nil local ...) only at its four
+    pinned ProfileSchema lines (snapshot, junk repair, CreateDefault, the v0 fill `;(profile :: any).BuildXP =
+    rawBuildXP`) and XPService's everything-OFF key `BuildXP = function`; no table.* / rawset / setmetatable takes the
+    block. Inside the two files the life stamp is written (any operator: `=`, `+=`, `-=` ...) only at its three
+    ProfileSchema lines (snapshot, new save, junk repair) and never in XPService, Owed only at those three lines, the
+    load sanitise line and XPService's two `bx.Owed = 0`; and every Owed / AtPrestige token (a read too) sits inside
+    ProfileSchema's ensureBuildXPFields / CreateDefault or XPService's grantBackfill, so no second payer (a Push that
+    pays Owed again), no growing snapshot (OnSpend adding to Owed) and no re-stamp / re-cap (Migrate or Push) can be
+    added in any form. Keyed on BuildXP because PrestigeConfig / PrestigeService already use the name AtPrestige for
+    rebirth unlocks. A regression guard: aliases of the block are not followed."""
+    stamp_lines = [
+        '\tprofile.BuildXP = { Owed = math.min(nonNegInt(owed), pool), AtPrestige = nonNegInt(profile.Prestige) }',
+        '\t\tBuildXP = if buildXPOn() then { Owed = 0, AtPrestige = 0 } else nil,',
+        '\t\tprofile.BuildXP = { Owed = 0, AtPrestige = nonNegInt(profile.Prestige) } -- junk (never written by this code): repair, pay nothing',
+    ]
+    owed_ps = sorted(stamp_lines + ['\t\tbx.Owed = math.min(nonNegInt(bx.Owed), BUILDXP_OWED_MAX) -- sanitised only: never re-capped by the current configs'])
+    owed_xs = sorted(['\t\tbx.Owed = 0 -- H1: a snapshot from another life (or unstamped) is dropped unpaid', '\tbx.Owed = 0'])
+    block_want = {XP_PS: sorted(stamp_lines + ['\t\t;(profile :: any).BuildXP = rawBuildXP']), XP_SVC: ['\tBuildXP = function(_price: number): number']}
+    scope = {XP_PS: ("ensureBuildXPFields", "ProfileSchema.CreateDefault"), XP_SVC: ("grantBackfill",)}
+    problems, stamps, owed_hits = [], {XP_PS: [], XP_SVC: []}, {XP_PS: [], XP_SVC: []}
+    block_hits = {XP_PS: [], XP_SVC: []}
+    for rel, t, code, bare in _xp_src_files():
+        lines = t.split("\n")
+        ln = lambda pos: bare.count("\n", 0, pos) + 1
+        if rel not in (XP_PS, XP_SVC):
+            for m in re.finditer(r"\bBuildXP\b(?!\s*\()", bare):
+                problems.append(f"{rel}:{ln(m.start())} names the BuildXP save block")
+        if rel == XP_PRESTIGE_SVC and "BuildXP" in code:
+            problems.append(f"{rel} names BuildXP (a rebirth must never touch the snapshot block)")
+        for m in re.finditer(r"([\"'`])\s*(BuildXP|AtPrestige|Owed)\s*\1", code):
+            problems.append(f"{rel}:{ln(m.start())} names {m.group(2)} by a string")
+        for m in re.finditer(r"\bBuildXP" + _XP_ASSIGN, bare):
+            if rel in block_hits:
+                block_hits[rel].append(lines[ln(m.start()) - 1])
+            else:
+                problems.append(f"{rel}:{ln(m.start())} assigns BuildXP")
+        for m in re.finditer(r"\b(?:table\s*\.\s*\w+|rawset|setmetatable)\s*\(\s*[^,\n]*?\bBuildXP\b", bare):
+            problems.append(f"{rel}:{ln(m.start())} {bare[m.start():m.end()].strip()} (table.* / rawset / setmetatable on the save block)")
+        if rel in (XP_PS, XP_SVC):
+            for m in re.finditer(r"\bAtPrestige" + _XP_ASSIGN, bare):
+                stamps[rel].append(lines[ln(m.start()) - 1])
+            for m in re.finditer(r"\bOwed" + _XP_ASSIGN, bare):
+                owed_hits[rel].append(lines[ln(m.start()) - 1])
+            spans = [_xp_fn_span(bare, n) for n in scope[rel]]
+            if None in spans:
+                problems.append(f"{rel}: {', '.join(scope[rel])} not found exactly once")
+            spans = [s for s in spans if s is not None]
+            for m in re.finditer(r"\b(Owed|AtPrestige)\b", bare):
+                if not any(a <= m.start() < b for (a, b) in spans):
+                    problems.append(f"{rel}:{ln(m.start())} uses {m.group(1)} outside {' / '.join(scope[rel])}: {lines[ln(m.start()) - 1].strip()[:90]}")
+    for rel, want in block_want.items():
+        if sorted(block_hits[rel]) != want:
+            problems.append(f"BuildXP assigned outside its pinned lines in {rel.split('/')[-1]}: " + " | ".join(l.strip()[:90] for l in block_hits[rel] if l not in want) + f" ({len(block_hits[rel])} of {len(want)})")
+    if sorted(stamps[XP_PS]) != sorted(stamp_lines) or stamps[XP_SVC]:
+        problems.append(f"AtPrestige written at {len(stamps[XP_PS])} ProfileSchema lines and {len(stamps[XP_SVC])} XPService lines (expected exactly the 3 pinned ProfileSchema lines and none in XPService): " + " | ".join(l.strip()[:90] for l in stamps[XP_PS] + stamps[XP_SVC] if l not in stamp_lines))
+    if sorted(owed_hits[XP_PS]) != owed_ps or sorted(owed_hits[XP_SVC]) != owed_xs:
+        problems.append("Owed written outside its pinned lines: " + " | ".join(l.strip()[:90] for l in owed_hits[XP_PS] + owed_hits[XP_SVC] if l not in owed_ps + owed_xs) + f" (ProfileSchema {len(owed_hits[XP_PS])} of 4, XPService {len(owed_hits[XP_SVC])} of 2)")
+    if not problems:
+        ok("XP (v4, 4.1): only ProfileSchema / XPService touch the BuildXP block; BuildXP assigned (any operator) only at its 4 ProfileSchema lines + XPService's OFF key; AtPrestige written only at its 3 ProfileSchema lines, Owed only at its 6 pinned lines (any operator); Owed / AtPrestige used only inside ensureBuildXPFields / CreateDefault / grantBackfill; PrestigeService never names BuildXP")
+    else:
+        bad("XP (v4, 4.1): BuildXP save block written outside its pinned writers: " + "; ".join(problems))
+
+def _xp_function_forms() -> None:
+    """v4 (round-3 exploit review): a function statement is a field assignment. `function XPBalanceConfig.X` (or xpCfg /
+    sharedCfg, with `.` or `:`) appears only in XPBalanceConfig.luau, exactly once each for BuildXPFormula / BuildXP /
+    IsBuildReason; `function LevelConfig.CurveMult` / `.GetXPRequiredForLevel` exactly once each, in LevelConfig.luau;
+    `LevelConfig.CurveMult =`, `LevelConfig.GetXPRequiredForLevel =` and `LevelConfig[...] =` nowhere; and the pinned
+    tunable keys (XPBalanceConfig Enabled / Build / Backfill / NoBattlePassMirror, VehicleCombatConfig RookieProtection)
+    are each written once in their table constructor (a later duplicate key would override the pinned line)."""
+    xb_defs, lc_defs, problems = [], {"CurveMult": [], "GetXPRequiredForLevel": []}, []
+    for rel, _t, _code, bare in _xp_src_files():
+        ln = lambda pos: bare.count("\n", 0, pos) + 1
+        for m in re.finditer(r"\bfunction\s+(?:XPBalanceConfig|xpCfg|sharedCfg)\s*[.:]\s*(\w+)", bare):
+            xb_defs.append((rel, m.group(1), ln(m.start())))
+        for m in re.finditer(r"\bfunction\s+LevelConfig\s*[.:]\s*(CurveMult|GetXPRequiredForLevel)\b", bare):
+            lc_defs[m.group(1)].append((rel, ln(m.start())))
+        for m in re.finditer(r"\bLevelConfig" + _XP_CAST + r"\s*(?:\.\s*(?:CurveMult|GetXPRequiredForLevel)|\[[^\]\n]*\])" + _XP_ASSIGN, bare):
+            problems.append(f"{rel}:{ln(m.start())} reassigns a pinned LevelConfig function ({bare[m.start():m.end()].strip()})")
+    if sorted(n for (_r, n, _l) in xb_defs) != ["BuildXP", "BuildXPFormula", "IsBuildReason"] or any(r != XP_XB for (r, _n, _l) in xb_defs):
+        problems.append(f"XPBalanceConfig functions defined at {[(r.split('/')[-1], n, l) for (r, n, l) in xb_defs]} (expected BuildXPFormula, BuildXP, IsBuildReason once each, in XPBalanceConfig.luau)")
+    for name, d in lc_defs.items():
+        if len(d) != 1 or d[0][0] != XP_LC:
+            problems.append(f"LevelConfig.{name} defined at {[(r.split('/')[-1], l) for (r, l) in d]} (expected once, in LevelConfig.luau)")
+    for rel, keys in ((XP_XB, ("Enabled", "Build", "Backfill", "NoBattlePassMirror")), (XP_VCC, ("RookieProtection",))):
+        bare = _xp_blank_luau(read(rel) or "")[1]
+        for k in keys:
+            n = len(re.findall(r"^\t" + k + r"\s*=(?!=)", bare, re.M))
+            if n != 1:
+                problems.append(f"{rel.split('/')[-1]}: key {k} written {n} times in the table constructor (expected once)")
+    if not problems:
+        ok("XP (v4): XPBalanceConfig's three functions and LevelConfig.CurveMult / GetXPRequiredForLevel are each defined once, in their own file, and never reassigned; the pinned tunable keys are written once")
+    else:
+        bad("XP (v4): a pinned XP function or tunable key is redefined: " + "; ".join(problems))
+
+_XP_BUILT_NAMES = {"SpendCash", "OnSpend", "EconomyService", "XPService", "AddXP", "BuildXP", "AtPrestige", "Owed",
+                   "IsBuildReason", "BuildXPFormula", "CurveMult", "GetXPRequiredForLevel"}
+
+def _xp_no_iteration_or_built_names() -> None:
+    """v4 (round-3 exploit review): EconomyService / XPService (or deps.EconomyService / deps.XPService) are never
+    iterated (pairs / ipairs / next), and no chain of string literals joined with `..` spells a protected name
+    (SpendCash, OnSpend, EconomyService, XPService, AddXP, BuildXP, AtPrestige, Owed, IsBuildReason, BuildXPFormula,
+    CurveMult, GetXPRequiredForLevel), so a key built from pieces cannot hide a use from the scans above. Aliases (a
+    local that holds one of these tables) are still not followed: a regression guard, not a security boundary."""
+    lit = r"(?:\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\\n{]|\\.)*`)"
+    chain = re.compile(lit + r"(?:\s*\.\.\s*" + lit + r")+")
+    problems = []
+    for rel, _t, code, bare in _xp_src_files():
+        ln = lambda pos: bare.count("\n", 0, pos) + 1
+        for m in re.finditer(r"\b(?:i?pairs|next)\s*\(\s*(?:deps\s*\.\s*)?(?:EconomyService|XPService)\b", bare):
+            problems.append(f"{rel}:{ln(m.start())} iterates {bare[m.start():m.end()].strip()}")
+        for m in chain.finditer(code):
+            parts = re.findall(lit, m.group(0))
+            joined = "".join(q[1:-1] for q in parts)
+            if joined in _XP_BUILT_NAMES:
+                problems.append(f"{rel}:{ln(m.start())} builds the name {joined} from string pieces")
+    if not problems:
+        ok("XP (v4): EconomyService / XPService are never iterated and no protected XP / spend name is built from string pieces")
+    else:
+        bad("XP (v4): a spend / XP name is reached by iteration or a built string key: " + "; ".join(problems))
+
+_XP_PAYING_FNS = [
+    ("src/ServerScriptService/Server/Services/BaseService.luau", "BaseService.PurchaseUpgrade"),
+    ("src/ServerScriptService/Server/Services/ResearchService.luau", "ResearchService.Purchase"),
+    ("src/ServerScriptService/Server/Services/VehicleService.luau", "VehicleService.Purchase"),
+    ("src/ServerScriptService/Server/Services/CombatService/init.luau", "CombatService.PurchaseWeapon"),
+]
+
+def _xp_paying_fns_grant_nothing() -> None:
+    """v4 (round-3 exploit review, optional item), 4.1: the four paying purchase functions never grant or write cash /
+    gold: no AddCash / AddGold / AccruePendingCash / CollectPendingCash / TransferPendingCash call and no assignment
+    (any operator) to a .Cash / .Gold / .PendingCash field between the column-0 function head and its closing column-0
+    line, except BaseService.PurchaseUpgrade's two AdminPlaytestCash floor lines for UserId 470626172 (CLAUDE.md). So a
+    paying purchase cannot refund itself in place (buy -> XP -> refund -> buy again). A sell / refund elsewhere must
+    clear an owned entry or lower a level, which _xp_ownership_writes pins. A regression guard: helpers are not
+    followed."""
+    admin_ok = {("src/ServerScriptService/Server/Services/BaseService.luau", "\t\t\tprofile.Cash = floor"),
+                ("src/ServerScriptService/Server/Services/BaseService.luau", "\t\tprofile.Cash = math.max(math.floor(tonumber(profile.Cash) or 0), 50_000_000)")}
+    problems, admin_seen = [], set()
+    for rel, fn in _XP_PAYING_FNS:
+        t = read(rel) or ""
+        bare = _xp_blank_luau(t)[1]
+        lines = t.split("\n")
+        span = _xp_fn_span(bare, fn)
+        if span is None:
+            problems.append(f"{fn} not found exactly once in {rel}")
+            continue
+        body = bare[span[0]:span[1]]
+        for g in re.finditer(r"\b(AddCash|AddGold|AccruePendingCash|CollectPendingCash|TransferPendingCash)\b", body):
+            problems.append(f"{rel}:{bare.count(chr(10), 0, span[0] + g.start()) + 1} {g.group(1)} inside {fn}")
+        for g in re.finditer(r"\.\s*(Cash|Gold|PendingCash)" + _XP_ASSIGN, body):
+            line = lines[bare.count(chr(10), 0, span[0] + g.start())]
+            if (rel, line) in admin_ok:
+                admin_seen.add((rel, line))
+            else:
+                problems.append(f"{rel}:{bare.count(chr(10), 0, span[0] + g.start()) + 1} writes .{g.group(1)} inside {fn}: {line.strip()[:80]}")
+    if admin_seen != admin_ok:
+        problems.append(f"BaseService.PurchaseUpgrade AdminPlaytestCash floor lines found {len(admin_seen)} of 2")
+    if not problems:
+        ok("XP (v4, 4.1): the four paying purchase functions grant and write no cash or gold (only the AdminPlaytestCash floor for UserId 470626172): no in-place refund of a purchase that paid XP")
+    else:
+        bad("XP (v4, 4.1): a paying purchase function grants or writes cash / gold: " + "; ".join(problems))
+
+def _xp_one_time_guards() -> None:
+    """4.1 (round-4 exploit review): purchase XP is bounded only because nothing that pays can be bought twice (spec
+    §5.1: AlreadyOwned / Maxed / MaxLevel). In each paying purchase function (comments blanked), these statements each
+    appear exactly once and in this order: the one-time guard, the target it computes, the paying SpendCash, the
+    failed-spend return and the ownership / level write of that same target. The weapon guard's helpers are pinned too
+    (local owns -> CombatWeaponLogic.Owns, each defined once), and so is ResearchConfig.LevelOf, which the research
+    guard reads. The locals the guards compute (current / targetLevel, cur / target) are never reassigned in the
+    function. A disabled guard (`and false`), a write of the old level, or an unrecorded vehicle fails here; clearing
+    an entry elsewhere fails in _xp_ownership_writes. A regression guard: aliases are not followed."""
+    svc = "src/ServerScriptService/Server/Services/"
+    want = {
+        "VehicleService.Purchase": (svc + "VehicleService.luau", [
+            '\tif profile.Vehicles[vehicleId] then\n\t\treturn false, "AlreadyOwned"\n\tend\n',
+            '\t\tlocal ok, err = EconomyService.SpendCash(player, cost, "vehicle_" .. vehicleId)\n\t\tif not ok then\n\t\t\treturn false, err or "SpendFailed"\n\t\tend\n\tend\n\tprofile.Vehicles[vehicleId] = true\n\tDataService.MarkDirty(player)\n',
+        ], []),
+        "CombatService.PurchaseWeapon": (svc + "CombatService/init.luau", [
+            '\tensureStarter(profile)\n\tif owns(profile, weaponId) then\n\t\treturn false, "AlreadyOwned"\n\tend\n',
+            '\tlocal ok, err = EconomyService.SpendCash(player, cost, "weapon_" .. weaponId)\n\tif not ok then\n\t\treturn false, err or "SpendFailed"\n\tend\n\tprofile.Weapons[weaponId] = true\n\tDataService.MarkDirty(player)\n',
+        ], []),
+        "ResearchService.Purchase": (svc + "ResearchService.luau", [
+            '\tlocal research = profile.Research\n',
+            '\tlocal cur = ResearchConfig.LevelOf(research, id)\n\tif cur >= def.MaxLevel then\n\t\treturn false, "Maxed"\n\tend\n\tlocal target = cur + 1\n',
+            '\tlocal cost = def.Costs[target]\n',
+            '\tlocal spent, spendErr = EconomyService.SpendCash(player, cost, "research_" .. id)\n\tif not spent then\n\t\treturn false, spendErr or "SpendFailed"\n\tend\n',
+            '\tresearch[id] = target\n',
+        ], ["cur", "target", "research"]),
+        "BaseService.PurchaseUpgrade": (svc + "BaseService.luau", [
+            '\tlocal current = tonumber(profile.BaseUpgrades[structureId]) or 0\n\tif current >= def.MaxLevel then\n\t\treturn { Ok = false, Error = "MaxLevel" }\n\tend\n',
+            '\tlocal targetLevel = current + 1\n\tlocal cost = def.Costs[targetLevel]\n',
+            '\t\t\tspendOk, spendErr = EconomyService.SpendCash(player, cost, "upgrade_" .. structureId)\n',
+            '\tif not spendOk then\n\t\treturn { Ok = false, Error = spendErr or "SpendFailed", Cash = profile.Cash, Gold = profile.Gold }\n\tend\n',
+            '\tprofile.BaseUpgrades[structureId] = targetLevel\n',
+        ], ["current", "targetLevel"]),
+    }
+    problems = []
+    for fn, (rel, needles, locals_) in want.items():
+        t = read(rel) or ""
+        code, bare = _xp_blank_luau(t)
+        span = _xp_fn_span(bare, fn)
+        if span is None:
+            problems.append(f"{fn} not found exactly once in {rel}")
+            continue
+        body = code[span[0]:span[1]]
+        at = -1
+        for nd in needles:
+            n = body.count(nd)
+            k = body.find(nd)
+            if n != 1:
+                problems.append(f"{fn}: `{nd.strip()[:70]}` found {n} times (expected once)")
+            elif k <= at:
+                problems.append(f"{fn}: `{nd.strip()[:70]}` out of order")
+            else:
+                at = k
+        bbody = bare[span[0]:span[1]]
+        for name in locals_:
+            for m in re.finditer(r"(?<![.\w])" + name + _XP_ASSIGN, bbody):
+                if not re.search(r"\blocal\s+$", bbody[:m.start()].rsplit("\n", 1)[-1]):
+                    problems.append(f"{fn}: the guard local `{name}` is reassigned: {bbody[m.start():m.end()].strip()}")
+    helpers = [
+        (svc + "CombatService/init.luau", "local function owns(profile: PlayerProfile, weaponId: string): boolean\n\treturn CombatWeaponLogic.Owns(profile, weaponId)\nend\n", "owns"),
+        (svc + "CombatService/CombatWeaponLogic.luau", "function CombatWeaponLogic.Owns(profile: PlayerProfile, weaponId: string): boolean\n\treturn profile.Weapons ~= nil and profile.Weapons[weaponId] == true\nend\n", "CombatWeaponLogic.Owns"),
+        ("src/ReplicatedStorage/Shared/Configs/ResearchConfig.luau", "function ResearchConfig.LevelOf(research: any, id: string): number\n\tif typeof(research) ~= \"table\" or typeof(id) ~= \"string\" then\n\t\treturn 0\n\tend\n\tlocal def = ResearchConfig.Upgrades[id]\n\tif def == nil then\n\t\treturn 0\n\tend\n\tlocal v = rawget(research, id)\n\tif typeof(v) ~= \"number\" or v ~= v then\n\t\treturn 0\n\tend\n\treturn math.clamp(math.floor(v), 0, def.MaxLevel)\nend\n", "ResearchConfig.LevelOf"),
+    ]
+    for rel, body_txt, name in helpers:
+        t = read(rel) or ""
+        if t.count(body_txt) != 1:
+            problems.append(f"{name}: body changed or missing in {rel.split('/')[-1]}")
+    n_owns = sum(len(re.findall(r"\bfunction\s+(?:owns|CombatWeaponLogic\s*[.:]\s*Owns|ResearchConfig\s*[.:]\s*LevelOf)\s*\(", bare))
+                 for _r, _t, _c, bare in _xp_src_files())
+    if n_owns != 3:
+        problems.append(f"owns / CombatWeaponLogic.Owns / ResearchConfig.LevelOf defined {n_owns} times in src (expected 3)")
+    if not problems:
+        ok("XP (4.1): each paying purchase keeps its one-time guard (AlreadyOwned x2 / Maxed / MaxLevel), then pays, then writes that same target (Vehicles / Weapons = true, research[id] = target, BaseUpgrades = targetLevel); guard helpers pinned")
+    else:
+        bad("XP (4.1): a one-time purchase guard or its ownership write changed (a paying purchase could repeat and farm XP): " + "; ".join(problems))
+
+# 4.1 / 4.2: every write to an owned-item / level table in src, as (file, exact line). BaseUpgrades / Research are lowered
+# only by ProfileSchema (missing ids -> 0), PrestigeService (rebirth reset), AdminService (the admin's resetbase) and
+# StudioBuySmoke (Studio only); raised by the two cash purchases and (4.2) MonetizationService's InstantBarracks Robux
+# grant (Barracks -> at least 1; no SpendCash, so no purchase XP). Whole-table writes are the "not a table" repairs
+# (and SoundConfig.Weapons, a config table of the same name).
+_XP_LEVEL_WRITES = {
+    "src/ServerScriptService/Server/Modules/ProfileSchema.luau": ["\t\t\t\t\tprofile.BaseUpgrades[id] = 0", "\t\t\t\tprofile.BaseUpgrades[id] = 0"],
+    "src/ServerScriptService/Server/Modules/StudioBuySmoke.luau": ["\t\t\t\t\t\tprofile.BaseUpgrades[STRUCTURE_ID] = maxLevel - 1", "\t\t\t\t\t\t\t\tprof2.BaseUpgrades[barracksId] = maxB - 1"],
+    "src/ServerScriptService/Server/Services/AdminService.luau": ["\t\t\t\t\tprofile.BaseUpgrades[id] = 0"],
+    "src/ServerScriptService/Server/Services/BaseService.luau": ["\tprofile.BaseUpgrades[structureId] = targetLevel"],
+    "src/ServerScriptService/Server/Services/MonetizationService.luau": ["\t\t\tprofile.BaseUpgrades.Barracks = 1"],
+    "src/ServerScriptService/Server/Services/PrestigeService.luau": ["\t\t\tprofile.BaseUpgrades[id] = 0"],
+    "src/ServerScriptService/Server/Services/ResearchService.luau": ["\tresearch[id] = target"],
+}
+_XP_TABLE_WRITES = {
+    "src/ServerScriptService/Server/Modules/ProfileSchema.luau": ["\t\t\tprofile.BaseUpgrades = emptyUpgrades()", "\t\t\tprofile.Vehicles = { [VehicleConfig.StarterVehicle] = true }", "\t\t\tprofile.Weapons = { [WeaponConfig.DefaultWeapon] = true }", "\t\t(profile :: any).Research = {}", "\t\tprofile.BaseUpgrades = emptyUpgrades()"],
+    "src/ServerScriptService/Server/Services/BaseService.luau": ["\t\tprofile.BaseUpgrades = {}", "\t\tprofile.BaseUpgrades = {}"],
+    "src/ServerScriptService/Server/Services/CombatService/CombatWeaponLogic.luau": ["\t\tprofile.Weapons = {}"],
+    "src/ServerScriptService/Server/Services/ResearchService.luau": ["\t\tprofile.Research = {}"],
+    "src/ServerScriptService/Server/Services/UpgradePadService.luau": ["\t\tprofile.BaseUpgrades = {}"],
+    "src/ReplicatedStorage/Shared/Configs/SoundConfig.luau": ["SoundConfig.Weapons = {"],
+    # integration on v81 (9475f8b): the owner playtest grant (AdminConfig.AdminPlaytestAllVehicles, UserId 470626172 only)
+    "src/ServerScriptService/Server/Services/DataService.luau": ["\t\t\t\t(profile :: any).Vehicles = {}"],
+}
+# 4.2 (round-4.1 exploit review 2): every place server code hands a whole owned-item / level table on (binds it to a local
+# or a table field, passes it to a function that is not a pinned reader, returns it), as (file, exact line); a line found
+# must be pinned (as many times), a pinned line that is gone is harmless (so another lane's line can be pinned early). Each was read
+# on 2026-09-27 and only reads the table: the locals below are read-only aliases (their writes are checked like the table's
+# own; ResearchService's `research[id] = target` is the pinned purchase raise); BaseStateUpdate / PlayerStateUpdate /
+# VehicleStateUpdate / GetPlayerState payload fields go to the client (their `.Upgrades` / `.Owned` / `.Vehicles` /
+# `.Weapons` writes are checked in every file); TycoonMath.BasePassivePerTick / PickNext (-> PickCheapest, Level,
+# MeetsRequirements), StructureKitBuilder.SyncRearGates, BusinessService.SyncPlot (-> TycoonMath.Level) and
+# ResearchConfig.MultFor / AddFor (-> LevelOf) only read it; researchOf's calls are followed (one level);
+# VisualAssetService's `ref.Vehicles` is a VisualAssetConfig slot list, not a save.
+_XP_HANDONS = {
+    "src/ServerScriptService/Server/Modules/ProfileSchema.luau": ["\tlocal upgrades = if own ~= nil then own.BaseUpgrades else nil"],
+    "src/ServerScriptService/Server/Services/BaseService.luau": [
+        "\tlocal total = TycoonMath.BasePassivePerTick(profile.BaseUpgrades)", "\t\tUpgrades = profile.BaseUpgrades,",
+        "\t\tlocal okG, errG = pcall(StructureKitBuilder.SyncRearGates, plotId, profile.BaseUpgrades)",
+        "\t\tpcall(StructureKitBuilder.SyncRearGates, plotId, profile.BaseUpgrades)", "\tend, plotId, profile.BaseUpgrades, player.UserId)",
+        "\t\t\tUpgrades = profile.BaseUpgrades,", "\t\tVehicles = profile.Vehicles,", "\t\tWeapons = profile.Weapons,"],
+    "src/ServerScriptService/Server/Services/BusinessService.luau": ["\t\tUpgrades = if typeof(profile.BaseUpgrades) == \"table\" then profile.BaseUpgrades else {},"],
+    "src/ServerScriptService/Server/Services/CombatService/init.luau": ["\tlocal weapons: any = profile.Weapons"],
+    "src/ServerScriptService/Server/Services/MissileStrikeService.luau": ["\tlocal ups = profile and profile.BaseUpgrades"],
+    "src/ServerScriptService/Server/Services/OpsService/OpsRewards.luau": [
+        "\tlocal upgrades = if typeof(profile) == \"table\" and typeof(profile.BaseUpgrades) == \"table\" then profile.BaseUpgrades else nil",
+        "\tlocal ok, perTick = pcall(TycoonMath.BasePassivePerTick, upgrades)"],
+    "src/ServerScriptService/Server/Services/PrestigeService.luau": ["\tlocal upgrades = profile.BaseUpgrades", "\tlocal upgrades = profile.BaseUpgrades"],
+    "src/ServerScriptService/Server/Services/ResearchService.luau": [
+        "\treturn profile.Research", "\tlocal ups = profile.BaseUpgrades", "\tlocal research = profile.Research", "\tlocal research = profile.Research",
+        "\tlocal m = ResearchConfig.MultFor(researchOf(player), statId)", "\tlocal a = ResearchConfig.AddFor(researchOf(player), statId)"],
+    "src/ServerScriptService/Server/Services/SoldierService.luau": ["\tlocal upgrades = profile.BaseUpgrades"],
+    # the R-RIG lane's escort count (design3/rig/v3, not on main yet): reads upgrades.Barracks only
+    "src/ServerScriptService/Server/Services/SquadOrdersService.luau": ["\t\tlocal upgrades = if profile then profile.BaseUpgrades else nil"],
+    "src/ServerScriptService/Server/Services/TutorialService.luau": ["\t\tlocal upgrades = if typeof(profile.BaseUpgrades) == \"table\" then profile.BaseUpgrades else {}"],
+    "src/ServerScriptService/Server/Services/VehicleService.luau": ["\tlocal upgrades = profile.BaseUpgrades", "\t\tOwned = profile.Vehicles,"],
+    "src/ServerScriptService/Server/Services/VisualAssetService.luau": ["\tfor _, v in ipairs(if typeof(ref.Vehicles) == \"table\" then ref.Vehicles else {}) do"],
+}
+# 4.2: the ownership scan helpers (a small Luau prefix-expression reader over the comment / string blanked text)
+_XP_OWN_RX = re.compile(r"(?<![\w])(Vehicles|Weapons|BaseUpgrades|Research|research)\b")
+_XP_OP_RX = re.compile(_XP_ASSIGN)
+_XP_ID = re.compile(r"[A-Za-z_]\w*")
+_XP_KW = {"and", "or", "not", "return", "then", "else", "elseif", "if", "in", "do", "until", "local", "while", "repeat", "end", "function", "for"}
+
+def _xp_brackets(bare: str) -> dict:
+    """The partner offset of every matched bracket in `bare` (comments / strings blanked, so every bracket is code)."""
+    match, stack = {}, []
+    for m in re.finditer(r"[()\[\]{}]", bare):
+        c, k = m.group(), m.start()
+        if c in "([{":
+            stack.append(k)
+        elif stack and bare[stack[-1]] == {")": "(", "]": "[", "}": "{"}[c]:
+            o = stack.pop()
+            match[k] = o
+            match[o] = k
+    return match
+
+def _xp_ws(bare: str, j: int) -> int:
+    while j < len(bare) and bare[j] in " \t\r\n":
+        j += 1
+    return j
+
+def _xp_rws(bare: str, j: int) -> int:
+    while j > 0 and bare[j - 1] in " \t\r\n":
+        j -= 1
+    return j
+
+def _xp_is_call_paren(bare: str, o: int) -> bool:
+    """True when the '(' at o opens a call's arguments (a name that is not a keyword, or ) ] } / a string end, before it)."""
+    k = _xp_rws(bare, o)
+    if k == 0:
+        return False
+    c = bare[k - 1]
+    if c.isalnum() or c == "_":
+        w = re.search(r"[A-Za-z_]\w*$", bare[max(0, k - 40):k])
+        return not (w and w.group() in _XP_KW)
+    return c in ")]}\"'`"
+
+def _xp_skip_type(bare: str, j: int, match: dict) -> int:
+    """From j at '::', the offset just after the type annotation (names, . ? | & < >, bracketed parts)."""
+    j = _xp_ws(bare, j + 2)
+    while j < len(bare):
+        c = bare[j]
+        if c in "([{" and j in match:
+            j = match[j] + 1
+        elif c.isalnum() or c in "_.?|&<> \t":
+            j += 1
+        else:
+            break
+    return _xp_rws(bare, j)
+
+def _xp_prefix_start(bare: str, k: int, match: dict) -> int:
+    """Start of the prefix expression (a.b[c](d).e ...) that ends just before offset k."""
+    while True:
+        j = _xp_rws(bare, k)
+        if j > 0 and bare[j - 1] in ")]" and (j - 1) in match:
+            k = match[j - 1]
+            continue
+        if j > 0 and bare[j - 1] in ".:" and not (j > 1 and bare[j - 2] in ".:"):
+            k = j - 1
+            continue
+        w = re.search(r"[A-Za-z_]\w*$", bare[max(0, j - 60):j])
+        if w and w.group() not in _XP_KW:
+            k = j - len(w.group())
+            p = _xp_rws(bare, k)
+            if p > 0 and bare[p - 1] in ".:" and not (p > 1 and bare[p - 2] in ".:"):
+                k = p - 1
+                continue
+        return k
+
+def _xp_value(bare: str, s: int, e: int, match: dict) -> tuple:
+    """Widen the value at [s, e) through `:: T` casts and grouping parens, (V :: any) / (V)."""
+    while True:
+        j = _xp_ws(bare, e)
+        if bare.startswith("::", j):
+            e = _xp_skip_type(bare, j, match)
+            continue
+        if j < len(bare) and bare[j] == ")" and j in match:
+            o = match[j]
+            if o < s and not _xp_is_call_paren(bare, o) and bare[o + 1:s].strip() == "":
+                s, e = o, j + 1
+                continue
+        return s, e
+
+def _xp_accessors(bare: str, j: int, match: dict) -> tuple:
+    """(count, end) of the accessor chain from j: `.name` or a balanced `[...]` (a call or `:method` ends it)."""
+    n = 0
+    while True:
+        k = _xp_ws(bare, j)
+        if k < len(bare) and bare[k] == "." and not bare.startswith("..", k):
+            m = _XP_ID.match(bare, _xp_ws(bare, k + 1))
+            if not m:
+                return n, j
+            j, n = m.end(), n + 1
+        elif k < len(bare) and bare[k] == "[" and k in match and not re.match(r"\[=*\[", bare[k:k + 3]):
+            j, n = match[k] + 1, n + 1
+        else:
+            return n, j
+
+_XP_BENIGN_CALL = re.compile(r"(?:\btypeof|\btype|\bpairs|\bipairs|\bnext|\brawget|\brawlen|\btable\s*\.\s*find|\bResearchConfig\s*\.\s*LevelOf)\s*\($")
+
+def _xp_benign_use(bare: str, s: int, e: int) -> bool:
+    """A whole-table value at [s, e) that is only tested, counted, compared or iterated here, never handed on: `#V`,
+    `not V`, `== V` / `V ~= nil`, `if V then`, `V and ...`, `for k in V do`, or the first argument of typeof / type /
+    pairs / ipairs / next / rawget / rawlen / table.find / ResearchConfig.LevelOf (its body is pinned). Same line only."""
+    ls = bare.rfind("\n", 0, s) + 1
+    le = bare.find("\n", e)
+    pre = bare[ls:s].rstrip()
+    post = bare[e:le if le >= 0 else len(bare)].lstrip()
+    if pre.endswith("#") or re.search(r"(?:\bnot|==|~=)$", pre):
+        return True
+    if _XP_BENIGN_CALL.search(pre) and post[:1] in (")", ","):
+        return True
+    return bool(re.match(r"(?:then|do|and)\b|==|~=", post))
+
+def _xp_enclosing_open(bare: str, s: int, match: dict) -> int:
+    """Offset of the innermost bracket that is open at s, or -1."""
+    best = -1
+    for o, c in match.items():
+        if o < s < c and bare[o] in "([{" and o > best:
+            best = o
+    return best
+
+def _xp_multi_target(bare: str, s: int, j: int):
+    """4.2: when the value at [s, j) is one target of a multiple assignment on its line (`a, t.Vehicles.X = 1, nil` or
+    `t.Vehicles.X, a = nil, 1`), a match whose span is that statement's `=`; else None (a single assignment is matched
+    by the caller)."""
+    ls = bare.rfind("\n", 0, s) + 1
+    le = bare.find("\n", j)
+    le = len(bare) if le < 0 else le
+    pre = bare[ls:s]
+    pre = pre[pre.rfind(";") + 1:]
+    post = bare[j:le]
+    tgt = r"[\w.:\[\]()\"'`]+"
+    if re.match(r"\s*(?:local|return|if|elseif|while|until|for|and|or|not|in)\b", pre):
+        return None
+    if not re.fullmatch(r"\s*(?:" + tgt + r"\s*,\s*)*", pre):
+        return None
+    m = re.match(r"((?:\s*,\s*" + tgt + r")*)\s*=(?!=)", post)
+    if not m or (not pre.strip() and not m.group(1)):
+        return None
+    return re.compile(r"\s*=").match(bare, j + len(m.group(1)))
+
+def _xp_bound_names(bare: str, s: int, match: dict) -> list:
+    """(name, scope) pairs a statement binds to the value at s, when the value sits at bracket depth 0 of the right-hand
+    side on the same line: `local a[: T], b = <..V..>` -> block scope (the lines after it that are indented at least as
+    deep), `a = <..V..>` -> the whole file, a table-constructor field `a = <..V..>,` -> ("field": every `.a` in the file)."""
+    ls = bare.rfind("\n", 0, s) + 1
+    ls += bare[ls:s].rfind(";") + 1  # the statement after the last `;` on the line
+    pre = bare[ls:s]
+    m = re.match(r"\s*(local\s+)?((?:[A-Za-z_]\w*\s*(?::\s*[^=,]+?)?\s*,\s*)*[A-Za-z_]\w*)\s*(?::\s*[^=]+?)?\s*=(?!=)", pre)
+    if not m:
+        return []
+    depth = 0
+    for c in pre[m.end():]:
+        depth += 1 if c in "([{" else -1 if c in ")]}" else 0
+    if depth != 0:
+        return []
+    names = [nm for nm in re.findall(r"([A-Za-z_]\w*)\s*(?::\s*[^=,]+?)?\s*(?:,|$)", m.group(2)) if nm not in _XP_KW]
+    o = _xp_enclosing_open(bare, ls + m.start(2), match)
+    if o >= 0 and bare[o] == "{":
+        scope = "field"
+    elif m.group(1):
+        line = bare[bare.rfind("\n", 0, s) + 1:s]
+        indent = len(line) - len(line.lstrip("\t"))
+        end = len(bare)
+        for mm in re.finditer(r"\n(\t*)(?=[^\t\n])", bare[ls:]):
+            if len(mm.group(1)) < indent:
+                end = ls + mm.start()
+                break
+        scope = (ls, end)
+    else:
+        scope = (0, len(bare))
+    return [(nm, scope) for nm in names]
+
+def _xp_enclosing_fn(bare: str, s: int) -> str | None:
+    """Name of the nearest `function NAME(` / `local function NAME(` head above s (column 0 or indented)."""
+    heads = list(re.finditer(r"^\s*(?:local\s+)?function\s+([\w.:]+)\s*\(", bare[:s], re.M))
+    return heads[-1].group(1).split(".")[-1].split(":")[-1] if heads else None
+
+def _xp_own_scan(t: str, bare: str, server: bool) -> dict:
+    """Every write to, and every hand-on of, an owned-item / level table in one file (see _xp_ownership_writes).
+    entry: (kind, line no, line, accessor count, operator, right-hand side); whole: lines; esc: (line no, line);
+    fields: {name: kind} of table-constructor fields that hold a table (checked in every file by the caller)."""
+    match = _xp_brackets(bare)
+    lines = t.split("\n")
+    ln = lambda pos: bare.count("\n", 0, pos) + 1
+    res = {"entry": [], "whole": [], "esc": [], "fields": {}}
+    alias, fnsrc, seen = {}, {}, set()
+    def classify(s0: int, e0: int, kind: str, alias_use: bool, track: bool, s_init: int | None = None) -> None:
+        s = s_init if s_init is not None else _xp_prefix_start(bare, s0, match)
+        s, e = _xp_value(bare, s, e0, match)
+        n, j = _xp_accessors(bare, e, match)
+        if re.search(r"\bfunction\s+$", bare[bare.rfind("\n", 0, s) + 1:s]):
+            # `function t.Vehicles.X()` assigns a function to the entry (to the table itself with no key)
+            if n > 0:
+                res["entry"].append((kind, ln(s0), lines[ln(s0) - 1], n, "=", "function"))
+            elif not alias_use:
+                res["whole"].append(lines[ln(s0) - 1])
+            return
+        opm = _XP_OP_RX.match(bare, j) or _xp_multi_target(bare, s, j)
+        if n > 0:
+            if opm:
+                le = bare.find("\n", opm.end())
+                rest = bare[opm.end():le if le >= 0 else len(bare)].strip().rstrip(";").strip()
+                res["entry"].append((kind, ln(s0), lines[ln(s0) - 1], n, bare[opm.start():opm.end()].strip(), rest))
+            return
+        if opm:
+            if not alias_use and bare[_xp_rws(bare, s0) - 1] == ".":
+                res["whole"].append(lines[ln(s0) - 1])
+            return  # an alias on the left of `=` is its declaration or a rebinding to another value
+        if not track or _xp_benign_use(bare, s, e):
+            return
+        res["esc"].append((ln(s0), lines[ln(s0) - 1]))
+        for nm, scope in _xp_bound_names(bare, s, match):
+            if scope == "field":
+                res["fields"].setdefault(nm, kind)
+            else:
+                alias.setdefault((nm, scope), kind)
+        if re.search(r"\breturn\s*$", bare[bare.rfind("\n", 0, s) + 1:s]):
+            fn = _xp_enclosing_fn(bare, s)
+            if fn:
+                fnsrc.setdefault(fn, kind)
+    late = []
+    for m in _XP_OWN_RX.finditer(bare):
+        kind = "Research" if m.group(1) == "research" else m.group(1)
+        dotted = m.start() > 0 and bare[_xp_rws(bare, m.start()) - 1] == "."
+        if m.group(1) == "research" and not dotted:
+            late.append(m)
+            continue
+        seen.add(m.start())
+        recv = bare[_xp_prefix_start(bare, m.start(), match):m.start()]
+        cfg = bool(re.match(r"\(?\s*[A-Z]\w*Config\b", recv)) or not dotted
+        classify(m.start(), m.end(), kind, False, server and not cfg)
+    # one level of hand-on: a local / upvalue bound to a table (in its scope), then the calls of a function returning one
+    for (nm, scope), kind in list(alias.items()):
+        for m in re.finditer(r"(?<![\w.:])" + re.escape(nm) + r"\b", bare[scope[0]:scope[1]]):
+            p0 = scope[0] + m.start()
+            if p0 in seen:
+                continue
+            seen.add(p0)
+            if re.search(r"\blocal\s+(?:[\w\s:,]*,\s*)?$", bare[bare.rfind("\n", 0, p0) + 1:p0]):
+                continue  # its declaration
+            classify(p0, p0 + len(nm), kind, True, server, p0)
+    for fn, kind in fnsrc.items():
+        for m in re.finditer(r"(?<![\w.:])" + re.escape(fn) + r"\s*\(", bare):
+            if re.search(r"\bfunction\s+$", bare[max(0, m.start() - 20):m.start()]) or (m.end() - 1) not in match:
+                continue
+            seen.add(m.start())
+            classify(m.start(), match[m.end() - 1] + 1, kind, True, server, m.start())
+    for m in late:  # a `research` local that is not a known alias: its writes still count (the round-4.1 rule)
+        if m.start() not in seen:
+            seen.add(m.start())
+            classify(m.start(), m.end(), "Research", True, False, m.start())
+    res["field_scan"] = lambda names: [classify(m.start(1), m.end(1), names[m.group(1)], True, False)
+                                       for m in re.finditer(r"\.\s*(" + "|".join(map(re.escape, names)) + r")\b", bare)] if names else None
+    return res
+
+def _xp_ownership_writes() -> None:
+    """4.1 (round-4 exploit review), 4.2 (round-4.1 exploit review 2): the one-time guards hold only while an owned item
+    stays owned and a level never drops. Anywhere in src (comments / strings blanked, any assignment operator), an entry
+    write is the table name (`Vehicles` / `Weapons` / `BaseUpgrades` / `Research`, or a `research` local), after any
+    receiver and through `:: T` casts or grouping parens, then an accessor chain (`.name` or a balanced `[...]`, nested
+    indexes included), then an assignment (any operator, a target of a multiple assignment, or a `function t.X.k()`
+    statement). A Vehicles / Weapons entry is only ever set to `true` with one accessor (never
+    nil / false / an expression: no sell, no un-own, no conditional record); a BaseUpgrades / Research entry is written
+    only at its pinned lines (_XP_LEVEL_WRITES: the two purchase raises, the InstantBarracks grant, ProfileSchema's
+    missing-id fill, the rebirth reset, the admin's resetbase, the Studio-only smoke test); a whole field is replaced
+    only at its pinned "not a table" repairs (_XP_TABLE_WRITES); no table.clear / remove / insert / move / sort, rawset or
+    setmetatable takes one; none is indexed by a string key (profile["Vehicles"]). 4.2, in server code (everything but
+    StarterPlayer; a `*Config` receiver is a catalogue, not a save): every place a whole table is handed on (bound to a
+    local or a table field, passed to a function other than typeof / type / pairs / ipairs / next / rawget / rawlen /
+    table.find / ResearchConfig.LevelOf, returned) is a pinned line (_XP_HANDONS); uses that only test, count, compare or
+    iterate it are free. The names those lines bind are followed one level: a local in its block (its writes count as the
+    table's, its own hand-ons must be pinned), a table field in every file (`payload.Upgrades[k] = 0` counts), and the
+    calls of a function that returns a table (researchOf). A new sell / refund / rebuy path therefore fails here until
+    someone decides whether it may re-pay purchase XP. A regression guard, not a security boundary: a dynamic key
+    (profile[k]), iteration over the profile, and a callee's own parameter are not followed (the callees that receive a
+    table today are named in _XP_HANDONS and only read it)."""
+    mut = re.compile(r"\b(?:table\s*\.\s*(?:clear|remove|insert|move|sort)|rawset|setmetatable)\s*\(\s*[^,\n]*?\b(?:Vehicles|Weapons|BaseUpgrades|Research|research)\b")
+    strkey = re.compile(r"\[\s*([\"'`])(Vehicles|Weapons|BaseUpgrades|Research)\1\s*\]|\brawset\s*\([^,\n]*,\s*([\"'`])(Vehicles|Weapons|BaseUpgrades|Research)\3")
+    problems, lvl_got, tbl_got, esc_got, fields, scans = [], {}, {}, {}, {}, []
+    for rel, t, code, bare in _xp_src_files():
+        r = _xp_own_scan(t, bare, not rel.startswith("src/StarterPlayer/"))
+        scans.append((rel, t, code, bare, r))
+        for nm, kind in r["fields"].items():
+            if nm not in ("Vehicles", "Weapons", "BaseUpgrades", "Research"):
+                fields.setdefault(nm, kind)
+    for rel, t, code, bare, r in scans:
+        r["field_scan"](fields)
+        ln = lambda pos: bare.count("\n", 0, pos) + 1
+        for kind, line_no, line, n, op, rest in r["entry"]:
+            if kind in ("Vehicles", "Weapons"):
+                if n != 1 or op != "=" or rest != "true":
+                    problems.append(f"{rel}:{line_no} sets an owned {kind} entry to something other than true: {line.strip()[:90]}")
+            elif n != 1:
+                problems.append(f"{rel}:{line_no} writes inside a {kind} entry: {line.strip()[:90]}")
+            else:
+                lvl_got.setdefault(rel, []).append(line)
+        for line in r["whole"]:
+            tbl_got.setdefault(rel, []).append(line)
+        for line_no, line in r["esc"]:
+            esc_got.setdefault(rel, []).append(line)
+        for m in mut.finditer(bare):
+            problems.append(f"{rel}:{ln(m.start())} {bare[m.start():m.end()].strip()[:80]} (mutates an owned-item / level table)")
+        for m in strkey.finditer(code):
+            problems.append(f"{rel}:{ln(m.start())} indexes {m.group(2) or m.group(4)} by a string key")
+    for name, got, want in (("level", lvl_got, _XP_LEVEL_WRITES), ("whole-table", tbl_got, _XP_TABLE_WRITES)):
+        for rel in sorted(set(got) | set(want)):
+            if sorted(got.get(rel, [])) != sorted(want.get(rel, [])):
+                extra = [l.strip()[:90] for l in got.get(rel, []) if l not in want.get(rel, [])]
+                problems.append(f"{name} writes in {rel.split('/')[-1]}: {len(got.get(rel, []))} found, {len(want.get(rel, []))} pinned" + (f"; not pinned: {' | '.join(extra)}" if extra else ""))
+    for rel, got in sorted(esc_got.items()):  # hand-ons: each found line must be pinned (as often); a pinned one that is gone is harmless
+        want = list(_XP_HANDONS.get(rel, []))
+        extra = []
+        for l in got:
+            if l in want:
+                want.remove(l)
+            else:
+                extra.append(l.strip()[:110])
+        if extra:
+            problems.append(f"whole-table hand-ons in {rel.split('/')[-1]} not pinned in _XP_HANDONS: {' | '.join(extra)}")
+    n_h = sum(len(v) for v in _XP_HANDONS.values())
+    if not problems:
+        ok(f"XP (4.1, 4.2): owned vehicles / weapons are only ever set to true, BaseUpgrades / Research are written only at their pinned lines (3 raises: 2 purchases + InstantBarracks; lowered only by ProfileSchema, rebirth, admin resetbase, Studio smoke), through any key form (.name / [..] / nested / cast) and through the {n_h} pinned hand-ons (read-only aliases, client payloads, readers); whole tables replaced only by the pinned repairs, never mutated by table.* / rawset or a string key")
+    else:
+        bad("XP (4.1, 4.2): an owned-item / level table is written or handed on outside its pinned lines (a sell / refund / rebuy path could re-pay purchase XP): " + "; ".join(problems))
+
+def _xp_join_steps_once() -> None:
+    """4.1 (round-4.1 exploit review f2): Push starts the join steps from exactly one place (one `joinLevelSteps` call
+    site, the task.spawn in Push, plus its definition). A second start is harmless today (the H4 in-flight flag, Owed
+    zeroed before the grant, a settle finds nothing left), but it is a second path into the backfill grant."""
+    bare = _xp_blank_luau(read(XP_SVC) or "")[1]
+    uses = [bare.count("\n", 0, m.start()) + 1 for m in re.finditer(r"\bjoinLevelSteps\b", bare)]
+    push = _xp_fn_span(bare, "XPService.Push")
+    n_def = len(re.findall(r"^local function joinLevelSteps\(", bare, re.M))
+    in_push = [l for l in uses if push and bare.count("\n", 0, push[0]) + 1 <= l <= bare.count("\n", 0, push[1]) + 1]
+    if n_def == 1 and len(uses) == 2 and len(in_push) == 1 and "\t\ttask.spawn(joinLevelSteps, player, profile)\n" in (read(XP_SVC) or ""):
+        ok("XP (4.1): the join steps are started from one place (Push's task.spawn)")
+    else:
+        bad(f"XP (4.1): joinLevelSteps named {len(uses)} times (expected 2: definition + Push's task.spawn), {len(in_push)} in Push, {n_def} definitions")
+
+def _xp_settle_only_via_wrapper() -> None:
+    """4.1: the level loop (settleLevels) runs only through the per-thread depth wrapper `settle`, so no caller can skip
+    the nested-grant rule: in XPService, settleLevels appears exactly twice (its definition and the wrapper's pcall),
+    and `settle(` is called only from AddXP and joinLevelSteps (the pcall)."""
+    bare = _xp_blank_luau(read(XP_SVC) or "")[1]
+    n_sl = len(re.findall(r"\bsettleLevels\b", bare))
+    calls = [bare.count("\n", 0, m.start()) + 1 for m in re.finditer(r"(?<![.\w])settle\b(?!Levels)", bare)]
+    add = _xp_fn_span(bare, "XPService.AddXP")
+    jls = _xp_fn_span(bare, "joinLevelSteps")
+    wrap = _xp_fn_span(bare, "settle")
+    inside = lambda sp, line: sp is not None and bare.count("\n", 0, sp[0]) + 1 <= line <= bare.count("\n", 0, sp[1]) + 1
+    stray = [l for l in calls if not (inside(add, l) or inside(jls, l) or inside(wrap, l))]
+    n_add = sum(1 for l in calls if inside(add, l)); n_jls = sum(1 for l in calls if inside(jls, l))
+    if n_sl == 2 and not stray and n_add == 1 and n_jls == 1:
+        ok("XP (4.1): settleLevels runs only through the per-thread wrapper settle, called once from AddXP and once from joinLevelSteps")
+    else:
+        bad(f"XP (4.1): the level loop is reachable outside its wrapper: settleLevels named {n_sl} times (expected 2), settle used at lines {stray} outside AddXP / joinLevelSteps, AddXP {n_add} (expected 1), joinLevelSteps {n_jls} (expected 1)")
+
+def _xp_config_verdict_writes() -> None:
+    """v4: the validated-config variable is assigned only at its pinned lines: in ProfileSchema the H2 verdict line and
+    the v4 pool check's `XPBalanceConfig = nil`; in XPService the H2 `sharedCfg` line. A later `XPBalanceConfig = xpCfg`
+    would run X1 on a config that failed the check."""
+    want = {
+        XP_PS: sorted(['local XPBalanceConfig: any = if xpCfgProblem == nil then xpCfg else nil', '\t\tXPBalanceConfig = nil']),
+        XP_SVC: ['local XPBalanceConfig: any = if sharedCfg ~= nil then sharedCfg else XP_OFF'],
+    }
+    problems = []
+    for rel, lines_want in want.items():
+        t = read(rel) or ""
+        bare = _xp_blank_luau(t)[1]
+        lines = t.split("\n")
+        got = sorted(lines[bare.count("\n", 0, m.start())] for m in re.finditer(r"(?<![.\w])XPBalanceConfig\s*(?::\s*any\s*)?" + _XP_ASSIGN, bare))
+        if got != lines_want:
+            problems.append(f"{rel.split('/')[-1]}: {[l.strip()[:80] for l in got]}")
+    if not problems:
+        ok("XP (v4): XPBalanceConfig (the checked copy) is assigned only at its pinned lines in ProfileSchema and XPService")
+    else:
+        bad("XP (v4): XPBalanceConfig assigned outside its pinned lines (a failed check could be bypassed): " + "; ".join(problems))
+
+def _xp_backfill_one_grant() -> None:
+    """4.2 (reviewer g1 / g2): grantBackfill pays through exactly one AddXP call (the pinned quiet grant after Owed is
+    zeroed and saved), so the snapshot cannot be paid twice or also as live build XP inside the grant."""
+    bare = _xp_blank_luau(read(XP_SVC) or "")[1]
+    span = _xp_fn_span(bare, "grantBackfill")
+    n = len(re.findall(r"\bAddXP\b", bare[span[0]:span[1]])) if span else -1
+    if n == 1:
+        ok("XP (4.2): grantBackfill makes exactly one AddXP call (the pinned quiet backfill grant)")
+    else:
+        bad(f"XP (4.2): grantBackfill makes {n} AddXP calls (expected 1; -1 = the function is missing or defined twice)")
+
+_XP_PROFILE_ASSIGNS = {
+    "BaseService.PurchaseUpgrade": ["\tlocal profile = DS.GetProfile(player)", "\t\tprofile = DS.EnsureProfile(player)", "\t\tprofile = DS.GetProfile(player) or profile", "\t\tprofile = getDataService().GetProfile(player) or profile", "\tprofile = getDataService().GetProfile(player) or profile"],
+    "ResearchService.Purchase": ["\tlocal profile = getProfile(player)"],
+    "VehicleService.Purchase": ["\tlocal profile = DataService.GetProfile(player)"],
+    "CombatService.PurchaseWeapon": ["\tlocal profile = DataService.GetProfile(player)"],
+}
+
+def _xp_paying_fns_no_early_return() -> None:
+    """4.2 (reviewer c1 / c2 / c3): in each paying purchase function nothing returns between the paying SpendCash's
+    failed-spend return and the ownership / level write (a paid purchase always records its item), and `profile` is
+    assigned only at its pinned lines (never a clone, so the write lands in the saved profile). Vehicle / weapon: the
+    spend, its return and the write are one pinned block (_xp_one_time_guards)."""
+    svc = "src/ServerScriptService/Server/Services/"
+    gaps = {
+        "BaseService.PurchaseUpgrade": (svc + "BaseService.luau", '\tif not spendOk then\n\t\treturn { Ok = false, Error = spendErr or "SpendFailed", Cash = profile.Cash, Gold = profile.Gold }\n\tend\n', '\tprofile.BaseUpgrades[structureId] = targetLevel\n'),
+        "ResearchService.Purchase": (svc + "ResearchService.luau", '\tif not spent then\n\t\treturn false, spendErr or "SpendFailed"\n\tend\n', '\tresearch[id] = target\n'),
+        "VehicleService.Purchase": (svc + "VehicleService.luau", None, None),
+        "CombatService.PurchaseWeapon": (svc + "CombatService/init.luau", None, None),
+    }
+    problems = []
+    for fn, (rel, a, b) in gaps.items():
+        t = read(rel) or ""
+        code, bare = _xp_blank_luau(t)
+        span = _xp_fn_span(bare, fn)
+        if span is None:
+            problems.append(f"{fn} not found exactly once")
+            continue
+        body, bbody = code[span[0]:span[1]], bare[span[0]:span[1]]
+        if a is not None:
+            i = body.find(a)
+            j = body.find(b, i + len(a)) if i >= 0 else -1
+            if i < 0 or j < 0:
+                problems.append(f"{fn}: failed-spend return / write not found")
+            elif re.search(r"\breturn\b", bbody[i + len(a):j]):
+                problems.append(f"{fn}: a return between the paid spend and the write: {bbody[i + len(a):j].strip()[:120]}")
+        lines = t.split("\n")
+        got = sorted(lines[bare.count("\n", 0, span[0] + m.start())] for m in re.finditer(r"(?<![.\w])profile" + _XP_ASSIGN, bbody))
+        if got != sorted(_XP_PROFILE_ASSIGNS[fn]):
+            problems.append(f"{fn}: profile assigned at {[l.strip()[:80] for l in got]} (pinned: {len(_XP_PROFILE_ASSIGNS[fn])} lines)")
+    if not problems:
+        ok("XP (4.2): each paying purchase records its item right after the paid spend (no return in between) and writes the saved profile (profile assigned only at its pinned lines)")
+    else:
+        bad("XP (4.2): a paying purchase can pay without recording its item: " + "; ".join(problems))
+
+_xp_spendcash_sites()
+_xp_onspend_callers()
+_xp_no_bracket_index()
+_xp_no_config_writes()
+_xp_refund_paths()
+_xp_backfill_exempt()
+_xp_save_block_writers()
+_xp_function_forms()
+_xp_no_iteration_or_built_names()
+_xp_paying_fns_grant_nothing()
+_xp_config_verdict_writes()
+_xp_one_time_guards()
+_xp_ownership_writes()
+_xp_settle_only_via_wrapper()
+_xp_join_steps_once()
+_xp_backfill_one_grant()
+_xp_paying_fns_no_early_return()
+
+# integration (round-4 review MEDIUM): every pinned whole-table owned-item write is a REPAIR - the line right above it must be
+# its own `if typeof(<same table>) ~= "table" then` guard, so a one-line edit to the condition cannot turn a repair into a wipe.
+def _xp_repair_guards():
+    import re as _re
+    bad_g = []
+    n_g = 0
+    for rel, lines in _XP_TABLE_WRITES.items():
+        if not rel.endswith('.luau') or 'Configs/' in rel:
+            continue
+        src = (read(rel) or '').split('\n')
+        for want in set(lines):
+            for i, l in enumerate(src):
+                if l != want:
+                    continue
+                m = _re.match(r'^\s*(\(profile :: any\)|profile)\.(\w+)\s*=', l)
+                if not m:
+                    continue
+                n_g += 1
+                prev = src[i - 1] if i > 0 else ''
+                gm = _re.match(r'^\s*if typeof\(\(?profile(?: :: any\))?\.(\w+)\) ~= "table" then\s*$', prev)
+                if not gm or gm.group(1) != m.group(2):
+                    bad_g.append(f"{rel.split('/')[-1]}:{i + 1} {l.strip()} (guard above: {prev.strip()!r})")
+    if bad_g or n_g == 0:
+        bad(f"XP (integration): whole-table owned-item writes must sit right under their own typeof(...) ~= \"table\" repair guard: {n_g} checked; {' | '.join(bad_g) or 'none found'}")
+    else:
+        ok(f"XP (integration): all {n_g} whole-table owned-item writes are repairs under their own typeof(...) ~= \"table\" guard")
+
+_xp_repair_guards()
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

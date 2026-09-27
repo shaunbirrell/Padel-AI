@@ -34,6 +34,7 @@ local MissionService: any = nil
 local MonetizationService: any = nil
 local TutorialService: any = nil
 local MoneyCollectorService: any = nil
+local XPService: any = nil -- XP rebalance: one-time purchase XP (spec_xp.md §3.3; read from deps, no require)
 
 -- v65: never index nil DataService (SpendCash must not throw GetProfile on nil)
 local function getDataService(): any
@@ -301,6 +302,7 @@ function EconomyService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	TutorialService = deps.TutorialService
 	MoneyCollectorService = deps.MoneyCollectorService
+	XPService = deps.XPService
 	if TycoonGuideConfig.Enabled then
 		game:GetService("Players").PlayerRemoving:Connect(function(player: Player)
 			steadyIncome[player.UserId] = nil
@@ -466,6 +468,9 @@ function EconomyService.SpendCash(player: Player, amount: number, _reason: strin
 		warn("[Economy] SpendCash threw:", a)
 		return false, "SpendFailed"
 	end
+	-- XP rebalance: purchase XP only after a spend that succeeded, deferred so a level-up can never fail or double a
+	-- purchase. XPService.OnSpend pays only the whitelisted one-time reasons (upgrade_ / research_ / vehicle_ / weapon_).
+	if a == true and XPService and XPService.OnSpend then task.defer(XPService.OnSpend, player, amount, _reason) end
 	return (a :: any) :: boolean, b :: string?
 end
 
