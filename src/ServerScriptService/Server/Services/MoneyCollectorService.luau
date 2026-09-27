@@ -337,7 +337,7 @@ function MoneyCollectorService.GetRaidableBalance(victim: Player): number
 	local balance = math.max(0, math.floor(tonumber(profile.PendingCash) or 0))
 	if RaidConfig.Raid.AutoCollectCountsRecentIncome and autoCollectFlag[victim.UserId] == true then
 		-- capped at the Cash they still hold: auto income already spent cannot be stolen (completeRaid takes the
-		-- rest out of Cash), so the ATM never shows / promises more than a raid can actually take
+		-- rest out of Cash). v82: the ATM screen no longer shows this number (atmScreenBalance: PendingCash only)
 		local cash = math.max(0, math.floor(tonumber(profile.Cash) or 0))
 		balance += math.min(recentAutoSum(victim.UserId), cash)
 	end
@@ -345,6 +345,21 @@ function MoneyCollectorService.GetRaidableBalance(victim: Player): number
 end
 
 -- ── ATM screen (no floating card: spec §5 "WE_CollectorBillboard … REMOVE") ──────────────────────────────
+
+-- v82 ATM fix (owner report on v81: "I have auto collect but money is still going to the ATM"): the number on the
+-- ATM screen is the cash WAITING there (PendingCash, what walking in / the AutoCollect loop pays out). It used to be
+-- GetRaidableBalance, which for an AutoCollect owner adds the last 10 min of income already paid into the wallet:
+-- a balance that grew for 10 minutes and could never be collected. The raid still takes 10% of GetRaidableBalance.
+local function atmScreenBalance(owner: Player): number
+	if RaidConfig.Raid.AtmScreenCountsRecentIncome == true then
+		return MoneyCollectorService.GetRaidableBalance(owner)
+	end
+	local profile = profileOf(owner)
+	if not profile then
+		return 0
+	end
+	return math.max(0, math.floor(tonumber(profile.PendingCash) or 0))
+end
 
 -- v71: the old floating "ATM · WALK IN TO COLLECT" card (WE_CollectorBillboard: AlwaysOnTop, 100 studs, a card
 -- with a backdrop) is gone. Remove one left by an older server build or a resetmap.
@@ -1125,7 +1140,7 @@ function MoneyCollectorService.RefreshAllBillboards()
 		if inst:IsA("BasePart") and inst.Parent then
 			local plotId = plotIdOf(inst)
 			local owner = if plotId ~= nil then findOwnerByPlot(plotId) else nil
-			local amount = if owner then MoneyCollectorService.GetRaidableBalance(owner) else 0
+			local amount = if owner then atmScreenBalance(owner) else 0
 			refreshBillboard(inst, amount, atmTitle(owner, plotId, amount))
 		end
 	end
@@ -1136,7 +1151,7 @@ function MoneyCollectorService.RefreshForPlayer(player: Player)
 	if plotId == nil then
 		return
 	end
-	local amount = MoneyCollectorService.GetRaidableBalance(player)
+	local amount = atmScreenBalance(player)
 	for _, inst in ipairs(CollectionService:GetTagged(TAG)) do
 		if inst:IsA("BasePart") and plotIdOf(inst) == plotId then
 			refreshBillboard(inst, amount, atmTitle(player, plotId, amount))

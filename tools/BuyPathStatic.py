@@ -6431,6 +6431,21 @@ def _xp_repair_guards():
 
 _xp_repair_guards()
 
+# --- v82 ATM fix (owner report on v81: "I have auto collect but money is still going to the ATM"). The ATM screen
+# showed GetRaidableBalance = PendingCash + the last 10 min of AutoCollect income already paid into the wallet, so for
+# an AutoCollect owner it grew for 10 minutes and nothing could be collected. The screen shows PendingCash only; the
+# raid rule (AutoCollect is not raid immunity) is unchanged.
+_ATM_MCS = "src/ServerScriptService/Server/Services/MoneyCollectorService.luau"
+_ATM_RC = "src/ReplicatedStorage/Shared/Configs/RaidConfig.luau"
+must_contain(_ATM_RC, "AtmScreenCountsRecentIncome = false,", "v82 ATM: the screen does not count already-collected AutoCollect income (config)")
+must_contain(_ATM_MCS, "local function atmScreenBalance(owner: Player): number\n\tif RaidConfig.Raid.AtmScreenCountsRecentIncome == true then\n\t\treturn MoneyCollectorService.GetRaidableBalance(owner)\n\tend\n\tlocal profile = profileOf(owner)\n\tif not profile then\n\t\treturn 0\n\tend\n\treturn math.max(0, math.floor(tonumber(profile.PendingCash) or 0))\nend", "v82 ATM: atmScreenBalance = PendingCash (what walking in / AutoCollect pays out)")
+must_contain(_ATM_MCS, "local amount = if owner then atmScreenBalance(owner) else 0\n\t\t\trefreshBillboard(inst, amount, atmTitle(owner, plotId, amount))", "v82 ATM: RefreshAllBillboards paints atmScreenBalance")
+must_contain(_ATM_MCS, "local amount = atmScreenBalance(player)\n\tfor _, inst in ipairs(CollectionService:GetTagged(TAG)) do", "v82 ATM: RefreshForPlayer paints atmScreenBalance")
+must_not_contain(_ATM_MCS, "local amount = if owner then MoneyCollectorService.GetRaidableBalance(owner) else 0", "v82 ATM: no screen paints the raidable balance (RefreshAllBillboards)")
+must_not_contain(_ATM_MCS, "local amount = MoneyCollectorService.GetRaidableBalance(player)", "v82 ATM: no screen paints the raidable balance (RefreshForPlayer)")
+must_contain(_ATM_RC, "AutoCollectCountsRecentIncome = true,", "v82 ATM: raids still count recent AutoCollect income (not raid immunity)")
+must_contain(_ATM_MCS, "balance += math.min(recentAutoSum(victim.UserId), cash)", "v82 ATM: GetRaidableBalance unchanged (recent auto income, capped at Cash)")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
