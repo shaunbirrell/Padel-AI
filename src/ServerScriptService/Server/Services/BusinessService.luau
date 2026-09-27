@@ -20,6 +20,9 @@
 	  Owner asset list hook (2026-09-25): after the kit loop a deferred VisualAssetService.TryAttachBusinessVisual lets
 	  the line's catalog model (VisualAssetConfig.Businesses) take over its kit parts one for one (the Kit_<Role> names
 	  stay, so PartsPerBusinessL5 holds and the client belt crates still find Kit_Belt); a 0 id is a no-op.
+	  Droppers v1a look tiers: Field (L1-2) / Works (L3-4) / Arsenal (L5) from BusinessConfig.LookTiers on the
+	  LookTierRoles parts (applyLook): property-only, 0 new parts, written only where a value differs, never on a part
+	  that carries WE_CatalogAssetId. Expected extra changes per buy: +6 at L2->L3, +2 at L4->L5, 0 otherwise.
 
 	Money: NONE here (no remote, no grant). Business income is part of BaseService.ComputePassiveIncomePerTick
 	(TycoonMath.BasePassivePerTick) and is paid into the ATM on the existing 5 s passive tick.
@@ -77,7 +80,7 @@ local function colorFor(def: BusinessConfig.BusinessDef, key: string): Color3
 	return (BusinessConfig.SharedColors :: any)[key] or Color3.fromRGB(90, 90, 90)
 end
 
-local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material, collide: boolean, parent: Instance): Part
+local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, material: Enum.Material, collide: boolean, parent: Instance, reflectance: number?): Part
 	local p = Instance.new("Part")
 	p.Name = name
 	p.Anchored = true
@@ -85,6 +88,9 @@ local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, m
 	p.CFrame = cf
 	p.Color = color
 	p.Material = material
+	if reflectance ~= nil and reflectance ~= 0 then
+		p.Reflectance = reflectance -- droppers v1a look tier (Arsenal Roof), set before parenting
+	end
 	p.CanCollide = collide
 	p.CanTouch = false
 	p.CanQuery = collide
@@ -93,6 +99,67 @@ local function newPart(name: string, size: Vector3, cf: CFrame, color: Color3, m
 	p.BottomSurface = Enum.SurfaceType.Smooth
 	p.Parent = parent
 	return p
+end
+
+--[[ Droppers v1a look tiers (BusinessConfig.LookTiers on LookTierRoles; spec_droppers §3.4). Property-only, 0 new
+	parts: Material, Color and the Roof Reflectance. A new part is built with its tier look (newPart); an existing part
+	is written only where a value differs, so an idle re-sync writes nothing and a level-down or rebirth reapplies the
+	lower tier. Colours compare as whole RGB (BasePart.Color is stored 8 bits per channel) and Reflectance within 0.001
+	(stored as a float), so a live part never looks "different" from the value just written. A part that carries
+	WE_CatalogAssetId (a hooks dress) is never written. Cosmetic only: no money, no remote. ]]
+local tierRoles: { [string]: boolean } = {}
+for _, role in ipairs(BusinessConfig.LookTierRoles) do
+	tierRoles[role] = true
+end
+
+local function rgb8(c: Color3): number
+	return math.floor(c.R * 255 + 0.5) * 65536 + math.floor(c.G * 255 + 0.5) * 256 + math.floor(c.B * 255 + 0.5)
+end
+
+local function shaded(c: Color3, s: number): Color3
+	if s == 1 then
+		return c
+	end
+	local r, g, b = math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5)
+	return Color3.fromRGB(
+		math.clamp(math.floor(r * s + 0.5), 0, 255),
+		math.clamp(math.floor(g * s + 0.5), 0, 255),
+		math.clamp(math.floor(b * s + 0.5), 0, 255)
+	)
+end
+
+-- the tier look of kit part `kp` of business `def` at level `lv`: Material, Color, Roof Reflectance (nil = other roles)
+local function lookFor(def: BusinessConfig.BusinessDef, kp: BusinessConfig.KitPart, lv: number): (Enum.Material, Color3, number?)
+	local tier = BusinessConfig.LookTierFor(lv)
+	local material = tier.Material
+	if kp.Role == "Housing" and tier.HousingMaterial ~= nil then
+		material = tier.HousingMaterial
+	end
+	local color = if kp.Role == "BeltFrame" and tier.PaintFrame ~= nil
+		then colorFor(def, tier.PaintFrame)
+		else shaded(colorFor(def, kp.ColorKey), tier.Shade)
+	local reflectance: number? = if kp.Role == "Roof" then (tier.RoofReflectance or 0) else nil
+	return material, color, reflectance
+end
+
+-- an existing kit part: write only the tier values that differ; skip non-tier roles and hooks-dressed parts
+local function applyLook(p: BasePart, kp: BusinessConfig.KitPart, def: BusinessConfig.BusinessDef, lv: number)
+	if not tierRoles[kp.Role] then
+		return
+	end
+	if p:GetAttribute("WE_CatalogAssetId") ~= nil then
+		return -- a hooks dress (VisualAssetService) wears its own look: never recoloured
+	end
+	local material, color, reflectance = lookFor(def, kp, lv)
+	if p.Material ~= material then
+		p.Material = material
+	end
+	if rgb8(p.Color) ~= rgb8(color) then
+		p.Color = color
+	end
+	if reflectance ~= nil and math.abs(p.Reflectance - reflectance) > 0.001 then
+		p.Reflectance = reflectance
+	end
 end
 
 local function ensureConsole(model: Model, plotId: number, id: string, plotPos: Vector3): BasePart?
@@ -198,11 +265,17 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 						size, offset, shape = sig.Size, sig.Offset, sig.Shape
 					end
 				end
-				local p = newPart(partName, size, base * CFrame.new(offset), colorFor(def, kp.ColorKey), kp.Material, kp.Collide == true, m)
+				local color, material, reflectance = colorFor(def, kp.ColorKey), kp.Material, nil :: number?
+				if tierRoles[kp.Role] then
+					material, color, reflectance = lookFor(def, kp, lv) -- droppers v1a: built in its tier look (0 extra writes)
+				end
+				local p = newPart(partName, size, base * CFrame.new(offset), color, material, kp.Collide == true, m, reflectance)
 				if shape then
 					p.Shape = shape
 				end
 				p:SetAttribute("WE_BizRole", kp.Role)
+			elseif have:IsA("BasePart") then
+				applyLook(have, kp, def, lv) -- droppers v1a: tier change / level-down; writes only what differs
 			end
 		elseif have then
 			have:Destroy() -- rebirth reset / admin resetbase / level down

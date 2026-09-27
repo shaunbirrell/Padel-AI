@@ -496,6 +496,7 @@ local MonetizationConfig = {
 		admin = true,
 		battlepass = true,
 		achievement = true,
+		build_backfill = true, -- XP rebalance XP-L2: the one-time backfill grant (season x1.1 only; no pass check at join)
 	},
 }
 

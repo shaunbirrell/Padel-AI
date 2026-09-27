@@ -311,6 +311,206 @@ local function ensureOpsFields(profile: any, nowUnix: number)
 	ops.BestBag = nonNegInt(ops.BestBag)
 end
 
+-- XP rebalance (spec_xp.md §3.3, §7) ─────────────────────────────────────────────────────────────────────────────
+-- XPBalanceConfig (the file the owner edits to turn the backfill on) and ResearchConfig are loaded in a pcall, like
+-- NationConfig and OpsConfig above: a broken config edit must never block a profile load. XPBalanceConfig must also
+-- pass validXPBalanceConfig below, the ONE check for it: XPService takes its config from ProfileSchema.XPBalance(),
+-- so the two modules always agree (both run X1, or both are OFF). OFF is the safe direction: new saves get no
+-- BuildXP block, nothing is snapshotted, purchases pay no XP, and an existing block is kept exactly as it is (an
+-- unpaid Owed is never zeroed). The first load on a server whose configs work then snapshots a save that has no block
+-- yet, so what such a save bought in the broken window is counted by that snapshot and paid once (at Prestige > 0 the
+-- snapshot counts base levels only). A save that already has a block, and a Prestige > 0 save's vehicles / weapons /
+-- research, are not paid for purchases made while broken: an accepted loss (XP-X1-10), never a double pay.
+local function finiteNumber(v: any): boolean
+	return typeof(v) == "number" and v == v and v ~= math.huge and v ~= -math.huge
+end
+
+-- v4: the fixed ceiling a stored BuildXP.Owed is clamped to at load. A constant, never derived from the configs, so a
+-- retune (A / P / Cap) can never lower a stored snapshot for good; far above any real snapshot (the pool is 56,073).
+-- XPService.grantBackfill caps the payment at the pool when it pays.
+local BUILDXP_OWED_MAX = 10000000
+
+-- Every field ProfileSchema and XPService use, plus smoke tests of the three functions they call. Returns nil when
+-- the config is usable, else what is wrong (for the warning).
+local function validXPBalanceConfig(cfg: any): string?
+	if typeof(cfg) ~= "table" then
+		return "did not load"
+	end
+	local b, f = cfg.Build, cfg.Backfill
+	if typeof(cfg.Enabled) ~= "boolean" then
+		return "Enabled"
+	elseif typeof(b) ~= "table" or typeof(b.Enabled) ~= "boolean" or not finiteNumber(b.A) or not finiteNumber(b.P)
+		or not finiteNumber(b.Cap) or typeof(b.ReasonPrefixes) ~= "table" or typeof(b.Reason) ~= "string"
+		or not finiteNumber(b.RebirthRebuildMult)
+	then
+		return "Build"
+	elseif typeof(f) ~= "table" or typeof(f.Enabled) ~= "boolean" or typeof(f.Reason) ~= "string" or typeof(f.Toast) ~= "string" then
+		return "Backfill"
+	elseif typeof(cfg.NoBattlePassMirror) ~= "table" then
+		return "NoBattlePassMirror"
+	elseif typeof(cfg.BuildXPFormula) ~= "function" or typeof(cfg.BuildXP) ~= "function" or typeof(cfg.IsBuildReason) ~= "function" then
+		return "functions"
+	end
+	for _, prefix in ipairs(b.ReasonPrefixes) do
+		if typeof(prefix) ~= "string" or prefix == "" then
+			return "Build.ReasonPrefixes"
+		end
+	end
+	local okF, formulaXP = pcall(cfg.BuildXPFormula, 5000)
+	local okB, buildXP = pcall(cfg.BuildXP, 5000)
+	local okU, upgradePays = pcall(cfg.IsBuildReason, "upgrade_x")
+	local okR, recruitPays = pcall(cfg.IsBuildReason, "recruit_soldiers")
+	local okT, toast = pcall(string.format, f.Toast, 5)
+	if not (okF and finiteNumber(formulaXP) and formulaXP >= 0 and okB and finiteNumber(buildXP) and buildXP >= 0) then
+		return "smoke test: BuildXPFormula / BuildXP(5000)"
+	elseif not (okU and upgradePays == true and okR and recruitPays == false) then
+		return "smoke test: IsBuildReason (upgrade_ pays, recruit_soldiers does not)"
+	elseif not (okT and typeof(toast) == "string") then
+		return "smoke test: Backfill.Toast"
+	end
+	return nil
+end
+
+local xpCfgOk, xpCfg = pcall(function()
+	return require(Shared.Configs.XPBalanceConfig) :: any
+end)
+local xpCfgProblem: string? = if xpCfgOk then validXPBalanceConfig(xpCfg) else "did not load: " .. tostring(xpCfg)
+local XPBalanceConfig: any = if xpCfgProblem == nil then xpCfg else nil
+local researchCfgOk, researchCfg = pcall(function()
+	return require(Shared.Configs.ResearchConfig) :: any
+end)
+local ResearchConfig: any = if researchCfgOk and typeof(researchCfg) == "table" and typeof(researchCfg.Upgrades) == "table"
+		and typeof(researchCfg.LevelOf) == "function"
+	then researchCfg
+	else nil
+
+--[[ H2: the XPBalanceConfig that passed validXPBalanceConfig, or nil and what is wrong with it. XPService takes its
+	config ONLY from here (it never requires XPBalanceConfig itself), so X1 runs in both modules or in neither. ]]
+function ProfileSchema.XPBalance(): (any?, string?)
+	return XPBalanceConfig, xpCfgProblem
+end
+
+-- Purchase XP (and so the snapshot) is on: both switches, and the config loaded.
+local function buildXPOn(): boolean
+	return XPBalanceConfig ~= nil and XPBalanceConfig.Enabled == true and XPBalanceConfig.Build.Enabled == true
+end
+
+-- Build XP (the bare formula, whatever the switches say) of every cash structure / business level (levels clamped
+-- to #Costs), and, when countItems, of every cash vehicle and weapon the save owns and every research level.
+-- `own == nil` sums the whole live catalogue instead (the G5 cap: 56,073 base; rebirth-gated vehicles and weapons
+-- are not in it). Callers check that both configs loaded and call it in a pcall.
+local function buildXPOf(own: any?, countItems: boolean): number
+	local formula = XPBalanceConfig.BuildXPFormula
+	local sum = 0
+	local upgrades = if own ~= nil then own.BaseUpgrades else nil
+	for id, def in pairs(BaseConfig.Structures) do
+		if def.Currency ~= "Gold" then
+			local costs = def.Costs
+			local lv = #costs
+			if own ~= nil then
+				lv = if typeof(upgrades) == "table" then math.clamp(nonNegInt(upgrades[id]), 0, #costs) else 0
+			end
+			for l = 1, lv do
+				sum += formula(costs[l])
+			end
+		end
+	end
+	if not countItems then
+		return sum
+	end
+	for id, def in pairs(VehicleConfig.Vehicles :: any) do
+		local cost = tonumber(def.CostCash) or 0
+		if cost > 0 then
+			if own == nil then
+				if (tonumber(def.RequiresPrestige) or 0) <= 0 and def.RequiresRebirthFlag == nil then
+					sum += formula(cost)
+				end
+			elseif typeof(own.Vehicles) == "table" and own.Vehicles[id] == true then
+				sum += formula(cost)
+			end
+		end
+	end
+	for id, def in pairs(WeaponConfig.Weapons :: any) do
+		local cost = tonumber(def.CostCash) or 0
+		if cost > 0 then
+			if own == nil then
+				if (tonumber(def.RequiresPrestige) or 0) <= 0 then
+					sum += formula(cost)
+				end
+			elseif typeof(own.Weapons) == "table" and own.Weapons[id] == true then
+				sum += formula(cost)
+			end
+		end
+	end
+	for id, def in pairs(ResearchConfig.Upgrades) do
+		local lv = if own == nil then #def.Costs else math.min(ResearchConfig.LevelOf(own.Research, id), #def.Costs)
+		for l = 1, lv do
+			sum += formula(def.Costs[l])
+		end
+	end
+	return sum
+end
+
+--[[ G5: the backfill cap, the build XP of the whole live catalogue (56,073 base at this build). Computed from the
+	configs with the bare formula, so it holds even while purchase XP is switched off. nil when XPBalanceConfig or
+	ResearchConfig did not load (XPService.Push then keeps the Owed and pays nothing). ]]
+function ProfileSchema.BuildXPPool(): number?
+	if XPBalanceConfig == nil or ResearchConfig == nil then
+		return nil
+	end
+	local ok, pool = pcall(buildXPOf, nil, true)
+	if ok and typeof(pool) == "number" and pool == pool and pool >= 0 and pool < math.huge then
+		return pool
+	end
+	return nil
+end
+
+-- v4: part of the one config check. A formula that pays nothing for the whole catalogue (Cap 0, A 0 ...) is a broken
+-- config, not a retune: X1 is OFF in both modules (XPBalance() returns nil) and every stored Owed is kept. (No pool at
+-- all, ResearchConfig broken: purchase XP runs, nothing is snapshotted and the backfill waits.)
+if XPBalanceConfig ~= nil then
+	local pool = ProfileSchema.BuildXPPool()
+	if pool ~= nil and pool <= 0 then
+		xpCfgProblem = "BuildXPPool() is 0 (the formula pays nothing: Build.A / P / Cap)"
+		XPBalanceConfig = nil
+	end
+end
+
+--[[ One-time snapshot (lead decision XP-L1: snapshot while the backfill is OFF). A save with no BuildXP block
+	predates the rebalance: store, once, the build XP of what it owns in BuildXP.Owed, capped at the pool, and give it
+	the block, whether or not the backfill switch is on. The block is what lets OnSpend pay its later purchases live,
+	so an existing player earns purchase XP from ship day; the snapshot never grows, and the backfill switch only
+	decides when XPService.Push pays it (once, quietly, one toast). Prestige > 0: base levels only (vehicles, weapons
+	and research survive a rebirth, so they were bought in an earlier life).
+	H1: every block is stamped with the life it belongs to, AtPrestige = the save's Prestige when it was written.
+	XPService pays Owed only while the save is still in that life; after a rebirth (on any server, new or old) the
+	snapshot is dropped unpaid, as it would have been had the switch shipped ON (the grant is reset by the rebirth).
+	Runs inside Migrate, before DataService stores the profile, so no purchase can land between the snapshot and the
+	block. Idempotent: a save that has the block is only sanitised (Owed a whole number up to BUILDXP_OWED_MAX; never
+	re-capped from the current configs, so a retune cannot lower it for good). With purchase XP off (or its config
+	broken) an old save gets no block and is snapshotted on its first load with it on. Never throws (a profile load
+	must not fail here). ]]
+local function ensureBuildXPFields(profile: any)
+	local bx = profile.BuildXP
+	if typeof(bx) == "table" then
+		bx.Owed = math.min(nonNegInt(bx.Owed), BUILDXP_OWED_MAX) -- sanitised only: never re-capped by the current configs
+		return
+	end
+	if bx ~= nil then
+		profile.BuildXP = { Owed = 0, AtPrestige = nonNegInt(profile.Prestige) } -- junk (never written by this code): repair, pay nothing
+		return
+	end
+	if not buildXPOn() then
+		return -- decided on the first load with purchase XP on
+	end
+	local pool = ProfileSchema.BuildXPPool()
+	local ok, owed = pcall(buildXPOf, profile, nonNegInt(profile.Prestige) == 0)
+	if pool == nil or not ok or typeof(owed) ~= "number" or owed ~= owed then
+		return -- could not count it: no block yet, so its buys pay nothing live and a later load snapshots them, once
+	end
+	profile.BuildXP = { Owed = math.min(nonNegInt(owed), pool), AtPrestige = nonNegInt(profile.Prestige) }
+end
+
 function ProfileSchema.CreateDefault(): PlayerProfile
 	local now = os.time()
 	return {
@@ -320,6 +520,9 @@ function ProfileSchema.CreateDefault(): PlayerProfile
 		Gold = EconomyConfig.StartingGold,
 		Level = 1,
 		XP = 0,
+		-- XP rebalance: a new save owns nothing, so its snapshot is 0 (life 0). nil while purchase XP is off or its
+		-- config is broken: the save is then snapshotted on its first load with purchase XP on, like an old save
+		BuildXP = if buildXPOn() then { Owed = 0, AtPrestige = 0 } else nil,
 		Prestige = 0,
 		RebirthUnlocks = {},
 		Soldiers = SoldierConfig.StartingSoldiers,
@@ -429,6 +632,7 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	-- read before the v0 default fill below (see ensureFeatureFields)
 	local rawTutorialOrder = (data :: any).TutorialOrderVersion
 	local rawShieldDone = (data :: any).NoviceShieldDone
+	local rawBuildXP = (data :: any).BuildXP -- XP rebalance: the v0 default fill must not mark an old save as new
 
 	-- v0 / missing → fill defaults then set version
 	if version < 1 then
@@ -438,6 +642,7 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 				(profile :: any)[key] = value
 			end
 		end
+		;(profile :: any).BuildXP = rawBuildXP
 		-- Ensure nested tables
 		if typeof(profile.BaseUpgrades) ~= "table" then
 			profile.BaseUpgrades = emptyUpgrades()
@@ -669,6 +874,8 @@ function ProfileSchema.Migrate(data: any): PlayerProfile
 	ensureNationFields(profile)
 	-- W3 step 2 Phase B Jobs: cooldowns / today's runs / seen tips (idempotent; no version bump)
 	ensureOpsFields(profile, os.time())
+	-- XP rebalance: one-time build-XP backfill snapshot for saves that predate it (idempotent; no version bump)
+	ensureBuildXPFields(profile)
 
 	-- v64: always ensure nested tables (corrupt DS / partial migrate must not nil-index on buy)
 	if typeof(profile.BaseUpgrades) ~= "table" then

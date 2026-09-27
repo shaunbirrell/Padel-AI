@@ -1,7 +1,8 @@
 --!strict
 --[[
 	Levels 1–100 via formula.
-	XP to go from level L to L+1: floor(100 * L ^ 1.45)
+	XP to go from level L to L+1: floor(100 * L ^ 1.45 * CurveMult(L)) (XP rebalance, spec_xp.md; CurveV2 below).
+	With CurveV2.Enabled = false it is exactly floor(100 * L ^ 1.45), the pre-rebalance curve.
 	Rewards granted on level-up (cash + optional gold every 5).
 
 	Milestones: clear unlock messages + HUD next-goal text (Design/Code P0).
@@ -22,6 +23,22 @@ local LevelConfig = {}
 LevelConfig.MaxLevel = 100
 LevelConfig.MaxLevelBeforePrestige = 100
 
+-- XP rebalance (spec_xp.md): x Scale on XP-to-next up to Knee, straight ramp back to x1.0 at RampEnd.
+-- Enabled = false -> exactly floor(100 * L^1.45) (HEAD). Kept in LevelConfig: it must require nothing (BuyPathStatic K1).
+-- Totals: L22 75,008 -> 48,750; L30 162,850 -> 122,233; L40 (first rebirth) 332,988 -> 292,371. No level costs more.
+LevelConfig.CurveV2 = { Enabled = true, Scale = 0.65, Knee = 21, RampEnd = 30 }
+
+function LevelConfig.CurveMult(level: number): number
+	local c = LevelConfig.CurveV2
+	if not c.Enabled or level >= c.RampEnd then
+		return 1
+	end
+	if level <= c.Knee then
+		return c.Scale
+	end
+	return c.Scale + (1 - c.Scale) * (level - c.Knee) / (c.RampEnd - c.Knee)
+end
+
 function LevelConfig.GetXPRequiredForLevel(level: number): number
 	if level < 1 then
 		return 0
@@ -29,7 +46,11 @@ function LevelConfig.GetXPRequiredForLevel(level: number): number
 	if level >= LevelConfig.MaxLevel then
 		return math.huge
 	end
-	return math.floor(100 * (level ^ 1.45))
+	local k = LevelConfig.CurveMult(level)
+	if k == 1 then
+		return math.floor(100 * (level ^ 1.45))
+	end
+	return math.floor(100 * (level ^ 1.45) * k)
 end
 
 function LevelConfig.GetTotalXPForLevel(level: number): number

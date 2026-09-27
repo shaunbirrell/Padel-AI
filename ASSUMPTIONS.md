@@ -4854,3 +4854,331 @@ Nothing in this entry loads a new model at runtime or changes what players see.
   WE_LIVE.
 - **AW-W16 Batch P4 (3322196012, 4362642898, 5589684833, 14408455045) still needs the first check.** The second check
   does not cover it, because the promote tool reads `WE_CHECK OK` lines, not `WE_CHECK2` lines.
+
+## 2026-09-27 — Droppers v1a: business lines and looks (spec_droppers.md §3, §7, §10, §14, §17) - no money path, 0 server parts
+
+Slice v1a of the droppers spec, merged by lane L4a from lanes L1a (config keys and server look tiers), L2 (BusinessVisuals)
+and L3a (ProductionFx). Seven files: BusinessConfig, TycoonGuideConfig, SoundConfig, BusinessService, BusinessVisuals,
+ProductionFx (new) and tools/BuyPathStatic.py. Prices, income, requirements, XP and save data are unchanged; there is no
+new remote, no money path and no Bootstrap edit. Every item below is reversible in config or in one file. All results are
+from the headless Luau stand-in, the pure-Luau prototype or the Python economy model. None of it is Roblox, Studio or a
+phone. The owner's phone test is spec §18 A. The v1b lines (DR-8, DR-9, DR-10, DR-16, DR-19, DR-20 and Drop.Coin in
+DR-11) and v1.1 (DR-15) are merged by their own slices.
+
+DR-1 Tick-locked production.
+    - Keys: ProductsPerTick Ammo {2,3,3,4,5}, Arms {2,2,3,4,4}, Armor {2,2,3,3,4}, Rocket {2,2,2,3,3}; LandLeadSeconds 0.6,
+      PhaseGain 0.3, PeriodEma 0.25, ResyncSeconds 1, PathHz 20.
+    - Code: exactly k products land in every WE_PassiveTick window, the last one LandLeadSeconds before the tick. The
+      smoothed tick phase absorbs replication jitter; k = clamp(want, 1, floor(pool x period / travelTotal)) is re-checked
+      on every tick.
+    - Evidence: prototype feel/sched.txt 35/0 and synth/sched_lowq2.txt 60/0; stand-in T8, 2,280 of 2,280 windows exact
+      for all 20 business x level cases at GQ >= 4 and at GQ 3. The BuyPathStatic T6 rule checks feasibility for all 4 x 5
+      at pool 3 and pool 2.
+DR-2 Low quality.
+    - Saved GQ 1..LowQualityLevel (3): LowQualityPool 2 products per line and k = min(K, LowQualityMaxK 2).
+    - Automatic stays full for the lines (AutomaticTouchIsLow = false, OD-13). Set it to true if a mid-range Android on
+      Automatic runs hot; then Automatic on touch (HudLayout.PrefersKeys() false, PreferredInput, never TouchEnabled)
+      runs the light lines.
+    - "Low FX" (the sparkle counts) also covers Automatic on touch, whatever AutomaticTouchIsLow says.
+    - Quality and input changes apply on the next 4 Hz scan; surplus products go back to the pool.
+DR-3 Belt speed by level 3.2 / 3.6 / 4.0 / 4.5 / 5.0 studs/s (cosmetic; BeltSpeed 4 stays the fallback). The path table is
+    rebuilt only when the level changes.
+DR-4 Heap: one pooled local Part per active own line, 3.2 x 2.4 x 4.2, in the tier's done look (Rocket: Metal).
+    - It rises RiseByLevel[L] / k per landing (1.0-1.8, full top 3.15-3.95, clamped at k), and sinks in SinkSteps 3 steps
+      on the tick.
+    - Heap.Enabled = false falls back to HEAD's sink into the bin.
+    - The ship pop sits at bin centre + PopOffset (1 along the line toward the bin end, 5.5, 0), above the L3+ awning
+      (fix round 1: was 4.2; see L4a-4).
+DR-5 Look tiers (server, BusinessService applyLook, property-only, 0 new parts).
+    - Field L1-2: Metal, CorrodedMetal on the Housing only, key colour x 0.85. Works L3-4: the HEAD palette and Metal
+      (exactly the HEAD look). Arsenal L5: BeltFrame in Palette.Accent, Roof Reflectance 0.08.
+    - Roles: Housing, Roof, BeltFrame, Bin, Chimney. A part that carries WE_CatalogAssetId (a hooks-lane dress) is never
+      written.
+    - Cost: +6 instance changes at the L3 buy and +2 at L5, 0 elsewhere; the largest buy is 17 changes (target 60).
+    - Full CorrodedMetal (OD-2) is one config value (Field Material = CorrodedMetal); it waits for the owner's Studio look.
+DR-6 Product looks per tier (Products[id][Field|Works|Arsenal]). A product spawns in its tier's raw look and switches to the
+    done look at the machine hit (Color, plus Material only when it differs: at most 2 writes). Size and Shape change only
+    on a tier change, by re-skinning the pool in place (0 new Instances). The Ammo shell is thickened to 0.6. Crates stays
+    as an alias for one release.
+DR-7 Machines: one pooled local Part and one Tween (Quad, Reverses) per active own line, rebuilt only in measure().
+    - Geometry keys: boom and welder 0.6 thick; boom 0 / -20 deg, welder +10 / -20 deg, yaw 20; ShellPress x -3.05..-1.45
+      (inset 0.05 into the Housing wall, HitAlong 0.25); PlateStamp rests at y 4.25 (no coplanar face with the PressRam)
+      and hits at y 3.5.
+    - The rest pose is written before every Play (a stroke due while the tween still plays is skipped, never stacked),
+      after every Cancel and after measure(). Stand-in T10: 1,003 plays with 123 mid-stroke cancels, pose error 0.
+    - Hinge strokes are CFrame lerps: 0.0228 stud (boom) and 0.0375 stud (welder) off the true arc.
+    - The pending Armor press model (4362642898) needs a Studio re-check of the piston when the hooks lane promotes it.
+DR-11 Sounds reuse existing [PSE] ids (no new sound id): Biz.Ship 9113849492 at 0.18, pitch 1.5, 4 s cooldown, World bus,
+    28 studs (the tink, at most once per 4 s); Biz.FirstLand 9119915230 at 0.25, World bus, 40 studs (the clack, once per
+    level-up). ProductionFx also keeps both cooldowns locally and records a play only when AudioController starts it.
+DR-12 BUY line 2 and NEXT chip copy for business levels 2-5 (TycoonGuideConfig.BusinessUnlocks): "Faster belt",
+    "Clean works", "Stock pallet", "Arsenal paint". There is no [1] (it would shorten BUY line 1). BUY line 2 falls back
+    to "+$X/s income" and the chip to its short hint ("$2.4M  +$225/s") when the line does not fit.
+DR-13 Particles (ProductionFx): two pooled ParticleEmitters (gold sparkles, fire sparks), each on its own Attachment under
+    Workspace.Terrain; Rate = 0 and :Emit() only; the engine textures sparkles_main / fire_sparks_main (0 asset loads);
+    LightEmission Fx.LightEmission clamped to 0..0.3; no light objects; one token bucket, Fx.MaxParticlesPerSecond 16.
+    They are made on first use, never destroyed, and re-made only if something removed them.
+DR-14 BeltFx ships OFF (Visual.BeltFx.Enabled = false, pinned) until the owner's 2-minute Studio check (OD-7): the texture
+    on a Transparency-1 part, the scroll axis and sign, and the dressed Decal hidden locally with no moire. The skin code
+    (one transparent Part + one Texture per active own line, one offset write per step, the Decal restored when idle) is
+    built; stand-in T13 covers both values. Ghost and Ambient ship OFF (v1.1).
+DR-17 Level-up effects fire only on a rise of a line already seen at a known level: `if l.seenLevel ~= nil and lv >
+    l.seenLevel then`. seenLevel is cleared on an owner change and when the line is untracked (streamed out, destroyed),
+    and kept while the character is missing and across a local folder rebuild. Join, stream-in, plot hand-out, respawn
+    and folder rebuild emit nothing (stand-in T11, and T16 D3 through the real modules).
+DR-18 Two slices. v1a (lines and looks) ships without v1b (plate and ATM). ProductionFx is booted by BusinessVisuals.Init
+    (a lazy sibling require inside pcall, then pcall(ProductionFx.Init), once), before its started / Enabled guard.
+    Bootstrap.client.luau is not edited (byte-identical to 5f38c2e). A missing ProductionFx, or one that throws on require
+    or in Init, leaves the client and BusinessVisuals running (stand-in T17).
+
+L1a-1 Tier colours are whole RGB: Field = round-half-up(HEAD channel x 0.85) (70 becomes 60, 50 becomes 43). An existing
+    part is compared as whole RGB before a Color write, and within 0.001 before a Reflectance write, because a live part
+    stores Color at 8 bits per channel: a double compare would rewrite the tier parts on every re-sync (idle re-sync must
+    stay 0 changes). The stand-in keeps doubles and cannot show this; the compare-first lines are pinned.
+L1a-2 A new tier part is built in its tier look before it is parented, so building straight at L5 (a join with a saved L5)
+    costs 0 tier writes.
+L1a-3 BusinessConfig.LookTierFor(level) is the one tier rule for server and client (0-2 Field, 3-4 Works, 5+ Arsenal).
+L1a-4 Shapes the spec left open: HitOnProduct (ShellPress hit centre y = belt top + product height + half the press:
+    3.6 Field, 3.8 Works / Arsenal); HitPos (PlateStamp hit centre (2, 3.5, 0)); the hinge convention
+    CFrame.Angles(0, -rad(Yaw), 0) * CFrame.Angles(0, 0, rad(Pitch)), arm along +X; MachineMaterial = Metal;
+    HeapMaterial = Metal on the three Rocket tiers; Biz.* RollOff InverseTapered.
+L1a-5 Extra Fx keys (config first, so ProductionFx never hard-codes them): SparkleTexture, SparkTexture, SparkleColor
+    (255, 214, 72), SparkleLifetime 0.6, SparkLifetime 0.25, LightEmission 0.3.
+L1a-6 Extra pins beyond spec §13: BeltFx / Ghost / Ambient OFF, Fx.HideWhen, MaxParticlesPerSecond 16, the compare-first
+    lines, the Roof Reflectance set before parenting, a Products / Machines / MachineColors consistency rule,
+    BusinessUnlocks (18 characters or fewer, device-neutral, no [1]) and "Biz.* reuse existing sound ids". Turning Ghost,
+    Ambient or BeltFx on in v1.1 is a deliberate pin edit.
+L2-1 InstantFirstProduct uses an idle pool slot: after a level-up the first product appears at the belt end in its done
+    look and drops onto the heap (0.83 s in the stand-in). If every slot is in flight, the level-up's one FirstLand clack
+    comes with the next regular landing.
+L2-2 Tick-period adoption: a faster period (Studio FastPassiveIncome, 1 s) is adopted at once; a slower one only when two
+    intervals in a row agree, because one long gap (a server hitch) is a stall, not a slower clock.
+L2-3 Culling keeps HEAD's radii: a line runs while its belt is within ActiveRadius 80 of the character; welder sparks need
+    Machines.WeldRadius 40; pops need PopRadius 28. ProductionFx re-checks its own radii.
+L2-4 The ship sparkles and tink use the nearest popping line's cached bin top; LevelUp and FirstLand use that line's bin
+    top; Sparks use the welder tip at the hit. All positions are cached in measure(), so the step allocates nothing.
+L2-5 Fx.HideWhen (Driving, Dead, Modal, RecentCombat) skips pops and every ProductionFx call; the heap still ships and the
+    products and machines keep running. A missing HudLayout, or C5's empty HudLayout table (Shared never arrived),
+    gates nothing (HudLayout.GetFlag is checked to be a function first).
+L2-6 The BulkMoveTo buffers are pre-sized for every business at the full pool plus its heap (#Order x (MaxCratesPerLine + 1)
+    = 16), so the step never grows them.
+L2-7 While ProductsPerTick is nil for a business, k falls back to round(period / CrateEverySec[L]), still tick-locked. All
+    four businesses set it in v1a, so the fallback is unused.
+L2-8 Test harness only: the stand-in's Tween model keeps each tween's key from Create onward, so the T9 stub's Play never
+    rehashes inside step() (spec §12: the stubs allocate nothing).
+L3a-1 The particle bucket is a sliding 1 s window (a spent token returns exactly 1 s later): at most 16 particles in ANY 1 s
+    window. A classic refill bucket would allow up to 32. Lifetimes are clamped to <= 1 s; a request larger than what is
+    left gets a partial burst, never an overflow.
+L3a-2 GuiService.ReducedMotionEnabled drops every particle; the tink and the clack still play (sounds are not motion).
+L3a-3 Fx.Enabled = false (the first phone lever) silences every line effect: particles and sounds.
+L3a-4 ProductionFx re-checks the Fx.HideWhen flags and its range from the character (Ship 28, LevelUp / FirstLand 80,
+    Sparks 40) itself; no character (respawning) shows nothing.
+L3a-5 The emitter motion values (speed, spread, fall, size 0.8 -> 0.15 studs, spark tint (255, 190, 90)) are one LOOK table
+    in ProductionFx. Moving them to Fx keys is a later, cosmetic L1a change.
+L3a-6 Low FX changes the sparkle counts only: ShipEmit 4 -> ShipEmitLow 2, LevelEmit 10 -> LevelEmitLow 5. Welder sparks
+    stay at WeldSparks 2. Low FX is on at saved GQ 1..LowQualityLevel, or on Automatic when HudLayout.PrefersKeys() is
+    false; without HudLayout, UserInputService.PreferredInput decides (never TouchEnabled).
+L3a-7 ProductionFx never reads a server part, Level, OwnerUserId or money; the caller passes a cached Vector3. The ship
+    sparkles start at the bin top, so for the first part of their 0.36-0.6 s life they can sit inside a sinking heap.
+    That is a device look item; if it reads badly, BusinessVisuals can pass the heap's full top instead.
+L4a-1 Merge (lane L4a): 5f38c2e + L1a's four files + L2's BusinessVisuals + L3a's ProductionFx. tools/BuyPathStatic.py is a
+    3-way merge that keeps every 5f38c2e line: the C5 block, then the L1a, L2 and L3a blocks above the final
+    parse_gate(). L3a's own BusinessVisuals copy was a test fixture and is not merged.
+L4a-2 The NEXT chip hint for Rocket Assembly L4 -> L5 at x2.5 ("$2.4M  +$225/s  Arsenal paint") never fits the chip, whose
+    width is fixed in HUD units, so it shows its short hint "$2.4M  +$225/s" at all 7 viewports (HUD harness T20). The
+    BUY button's line 2 keeps "+$225/s  Arsenal paint". Ammo L1 -> L2 ("$2,000  +$4/s  Faster belt") fits everywhere.
+    Reversible: a shorter unlock word.
+L4a-3 At the 844x390 phone and the 800x360 notch viewport the BUY lane (unchanged v72 layout) reaches 20 x 55 px into the
+    harness's reserved bottom-right "vehicle/combat controls" box; the jump gap stays >= 16 px. 5f38c2e shows the same
+    rows, so v1a does not cause it. It is left for a HUD lane.
+L4a-4 Fix round 1 (review rv_visual-owner_1): PopOffset.Y 4.2 -> 5.5, config only (spec §3.6 and T11 said 4.2).
+    - Why: the pop's title is fixed 18 px text (WorldLabel, ClipsDescendants off), wider than its 3 x 1.2 stud box at
+      phone distances, so at 4.2 its "+" slid behind the L3+ awning (x <= 7.5, y 5.05-5.35) for the first ~0.6 s on the
+      Ammo and Arms lines. Round 0's clearance maths used the box, not the text.
+    - Why 5.5 and not the review's 5.2: in the phone-camera mock (fix1/sweep.py, 960 sampled phone cameras on the 4 lines
+      at L3 and L5, 800x360 and 956x440, text also drawn 1.2x wide for FredokaOne) the awning still clips the text at
+      its first frames on 40 cameras at 5.2 (max 3.7% of text pixels, all far from the bin), on 1 at 5.5 (0.5%, camera
+      pitched 5 degrees, nearly level) and on 0 at 5.8. From the default camera at each console (fix1/consolecam.py,
+      L1/L3/L5 x 4 lines x 6 viewports x 3 zooms) 5.2, 5.5 and 5.8 all show 0% hidden. 5.5 is the lowest value that
+      clears the sampled cameras; 0.3 stud higher than 5.2 does not change which bin the pop reads as belonging to.
+    - Unchanged: PopRise 1.5, PopSeconds 1.2, PopHold 0.5, 18 px text, MaxDistance 40, MaxPopsPerTick 2. The swept label
+      column (3 x 3 studs, y 6.0-8.7 in the line's frame) meets no kit, product, heap or machine box at L1-L5.
+    - The mock is not Roblox (Liberation Sans, flat shading, no camera occlusion zoom). Phone test §5 stays a device check.
+    - Reversible: BusinessConfig.Visual.PopOffset. Lower it only after a phone check at L3+.
+L4a-5 Fix round 1, test only: T11's InstantFirstProduct detector now classifies a product where it is at the end of the
+    step that showed it, not at its Transparency write. At the write, a pooled part re-used after a respawn can still sit
+    on its previous line's park spot. The handed L3 (Works) line's done colour equals the L5 Arms line's raw colour
+    (96, 104, 70), so a normal raw spawn was counted as an InstantFirstProduct ("a respawn: 0 / 0 / 2"). Pool order
+    follows hash order, so it was intermittent: 8 of 40 runs on round 0's own config and driver (round 0's recorded run
+    happened to pass), 0 of 40 with the new detector.
+    No frame is drawn between the write and the move, so players never saw it. A mutation that makes a respawn a real
+    rise still fails the check (5 / 5 / 5).
+L4a-6 Fix round 2 (review rv_visual-owner_2): the pop steps aside for the top-centre chip. BusinessVisuals + BusinessConfig.
+    - Why: the NEXT chip (and the tutorial's step chip, same slot) is a ScreenGui, drawn over every world billboard.
+      Round 1's PopOffset 5.5 put the "+$N" in the chip's rows (62-115 px on phones) about half the time away from a
+      console, where the chip shows. No single spot fixes it: in the phone-camera mock (fix2/sweep2.py, 96 static
+      offsets, the reviewer's camera set) the best static spot, (4, 3, 0), still lost 19% / 28% / 11% of pops at
+      844x390 / 800x360 / 956x440 (>= 50% of the title hidden by the chip or the scene), close to (1, 3, 0)'s
+      23% / 32% / 14%; the pop sits high on a phone screen for any spot near head height.
+    - What: while the chip is up (HudLayout.EvalRule(TycoonGuideConfig.ChipRule), or the Tutorial flag), popTick
+      tries PopDodge.Steps + 1 = 9 anchors from PopOffset (1, 5.5, 0) down to PopDodge.LowOffset (5, 2, 0) (3 studs
+      past the bin end, 1 over its rim) and takes the first whose title, at the top of its opaque rise, projects
+      (Camera:WorldToViewportPoint) clear of the chip slot grown by MarginPx 6 AND that the camera sees (one
+      Workspace:Raycast from the camera, the character excluded; an invisible first hit does not count). None clear of
+      the chip: LowOffset (the lowest on screen). Chip-clear ones all hidden by the scene: PopOffset if the camera
+      sees it (it shows until it rises under the chip), else the first chip-clear one. Behind the camera, chip down
+      (at a console, BUY button up), or PopDodge.Enabled = false: PopOffset, exactly round 1.
+    - Chip slot: HudConfig.TopStack (Top 8 v under the topbar row, Objective.Height 72 v, width min(460 v,
+      TopStackMaxWidthV)) x HudLayout.Scale(), centred on HudLayout.ContentRect(), topbar row = GuiService:GetGuiInset().Y,
+      extended up to the screen top (the topbar pills are there too). It matches the HUD harness rect within 2 px at
+      844x390 / 800x360 / 956x440. It assumes the chip is the first item of the top stack: when an Alert or Progress
+      pill sits above it (a capture, an ATM raid), the chip is lower and a pop can still be partly under it. Toasts
+      (under the chip) are not dodged.
+    - Chip-up errs toward "up": the NEXT chip's "Hide" button and "no pick yet" are not visible to BusinessVisuals, so
+      then the pop may step down without need (a lower pop, never a covered one).
+    - The spot is picked once, when the pop appears (<= MaxPopsPerTick x 9 projections and x 10 rays per
+      WE_PassiveTick, none per frame); a camera swung during the 1.2 s pop is not followed. The ray tests the anchor's
+      centre only, and any CanQuery part blocks it (a large invisible volume is skipped only when it is the first
+      hit); in the mock it changed little (kit geometry only), it is there for real dressing the mock lacks. Title width is estimated (0.62 x 18 px per
+      character + 2), a little wider than Liberation Sans Bold.
+    - The low anchor clears every L1-L5 kit box and the L5 heap (T11, >= 0.30 stud) and every part of the stand-in
+      plot at L1/L3/L5 (fix2/clearance.py); catalog dressing is not in the stand-in, so a phone check stays.
+    - Reversible: BusinessConfig.Visual.PopDodge.Enabled = false restores round 1 exactly; LowOffset / Steps /
+      MarginPx tune it. The mock is not Roblox (Liberation Sans, flat shading, crude camera push-in).
+
+## 2026-09-27 — XP rebalance lane X1 (spec_xp.md), v4.1 after the round-4 reviews: cheaper curve, one-time purchase XP, backfill snapshot taken now and paid (in the same life) when the owner turns it on
+
+Everything below is server-side and can be reverted by config (spec_xp.md §13). There is no client file, no remote, no DataVersion bump and no DataStore wipe, and the Place and Universe IDs are untouched. Built on and gated against 5f38c2e (the X1 Luau files are unchanged up to 3b5ac28; BuyPathStatic takes the X1 block through `v4/apply_pins.py`). The evidence comes from the headless stand-in (scratchpad/sim), which is not Roblox. `xpecon/x1/v4/phone_test.md` lists what the owner checks on his phone.
+
+### Spec lines (§11)
+- **XP-1 Curve.**
+  - XP-to-next is x0.65 for L1-21, then ramps back to x1.0 at L30.
+  - The L22 total goes from 75,008 to 48,750, and the L40 total from 332,988 to 292,371. No level costs more than before.
+  - The values live in `LevelConfig.CurveV2`, because LevelConfig must require nothing.
+  - Revert: `CurveV2.Enabled = false` gives exactly the old curve, and levels already reached are kept.
+- **XP-2 Purchase XP.**
+  - Each cash purchase of a base level, research level, vehicle or weapon pays `min(1000, floor(0.8 * sqrt(price)))` (`XPBalanceConfig.Build`, reasons `upgrade_` / `research_` / `vehicle_` / `weapon_`), once per item and life: nothing that pays can be sold, and after a rebirth the base levels are rebuilt and pay again at `RebirthRebuildMult` (1).
+  - It goes through `XPService.AddXP`, so the season, territory and DoubleXP multipliers apply.
+  - Soldiers, missile strikes, gate repair and raid losses pay nothing.
+  - From ship day every save earns it: new saves, and old saves once they are snapshotted (XP-L1).
+  - The whole live catalogue pays 56,073 base XP, or 61,581 with the season.
+  - Revert: `XPBalanceConfig.Enabled = false`, or `Build.Enabled = false` to turn off purchase XP only.
+- **XP-3 A = 0.8 rather than 0.7.**
+  - A builder who skips the boats and research levels 3-5 reaches L22 in 12.7 h instead of 57.7 h.
+  - A mixed player reaches L22 in 7.1 h, below the 8-10 h target. That is accepted because nothing waits on level.
+- **XP-4 Backfill.**
+  - Old saves are paid, once, the build XP of what they owned when they were snapshotted, capped at the catalogue pool, and only while they are still in the life (Prestige) the snapshot was taken in (XP-X1-11). A purchase is paid either by the snapshot or live, never by both.
+  - Saves with Prestige > 0 are paid for base levels only.
+  - Levels are never lowered and never re-derived.
+  - The snapshot is taken in `ProfileSchema.Migrate` (XP-L1).
+  - `XPService.Push` zeroes `BuildXP.Owed` and saves before the quiet grant, then shows one "Rank matches your base" toast.
+  - The switch ships **OFF** (XP-L1). The grant takes the season bonus only (XP-L2).
+- **XP-5 Messages.**
+  - Level-ups within one XP grant show one merged toast: "★ LEVEL n! — <unlock text of the highest level crossed that has one>". The grant also makes one VIP-offer check and one rebirth nudge.
+  - Cash and gold rewards and LEVEL_UP analytics are still recorded for each level.
+  - A veteran whose saved XP already covers the cheaper XP-to-next levels up on join, with one merged toast.
+  - One toast per join even when a second Push lands while the join's level-up rewards wait (XP-X1-12).
+  - 4.1: an XP grant made inside a running level loop (a level's cash reward reaching MissionService, whose Level10 achievement adds 100 XP) is quiet and pushes no LevelUp; the outer grant's one toast, or the backfill's one line, names the final level (XP-X1-15). A backfill or join settle that crosses level 10 shows one ★ LEVEL line plus the usual "Achievement: Sergeant" line, the same pair any player sees at level 10.
+- **XP-6 Rookie protection** now lasts below L10 instead of L5 (`VehicleCombatConfig.RookieProtection.BelowLevel = 10`), because levels arrive faster. Revert: `BelowLevel = 5`.
+- **XP-7 Unchanged:**
+  - vehicle and weapon gates
+  - mission XP, kill XP and the battle pass pace (build and backfill XP are not mirrored to the battle pass)
+  - `NewPlayerMaxLevel` 4
+  - the VIP offer at L10
+  - `RebirthRebuildMult` 1, pending the owner's decision
+  - The rebirth bar stays "XP", so on ship day it reads up to about 8 points lower at the same level (most around level 25-30).
+- **XP-8 Model assumptions.** The season x1.1 is on, the hit rate is 0.5 and play is 2 h a day. Mixed players are given the builder's cash timeline, which is optimistic for them. The veteran rows of spec §7 / a08_backfill at 10.87 h count items above the veteran's level; a real veteran at that point has bought only what their level allowed (round-2 model review), so `owner.md` uses the review's per-type veteran numbers.
+
+### Lead
+- **XP-L1 · Snapshot while OFF; the switch pays it.**
+  - **Snapshot.** Whether or not the backfill switch is on, `Migrate` gives every save that lacks a `BuildXP` block a block `{ Owed, AtPrestige }`: `Owed` is the build XP of what the save owns at that moment, capped at the pool, and `AtPrestige` the save's Prestige (XP-X1-11).
+  - **Live purchase XP.** Because the block exists, `OnSpend` pays that player's later purchases live, so existing players earn purchase XP on every new buy from ship day.
+  - **The switch.** `XPBalanceConfig.Backfill.Enabled` ships `false` and only controls paying the snapshot: one quiet grant and one toast on the next join after it is turned on.
+  - **The snapshot is frozen.** It never grows, and `Migrate` never re-snapshots a save that has a block. A purchase made after the snapshot is paid live, and not again by the backfill.
+  - **Tested** (headless stand-in): OFF → ON, rejoin, a throw mid-grant, a second server, rebirths in the OFF window with the real `PrestigeService.DoPrestige` (cash and keep-base), and a rolling deploy through an old (5f38c2e, no X1) server, including a rebirth on that old server. See `v4/gate_summary.txt`.
+  - **Old servers.** During the rolling deploy an old server keeps the block unchanged (tested), but a purchase made there after the snapshot never pays XP. A save first created on an old server is snapshotted on its first load by a new server, including what it bought on the old one.
+  - **Turning it on.** Set `Backfill = { Enabled = true, ...` in XPBalanceConfig. In the same edit, change the BuyPathStatic pin `'\tBackfill = { Enabled = false, Reason = "build_backfill",'` to `true`.
+- **XP-L2 · The backfill grant is exempt from DoubleXP and the territory bonus; the season x1.1 still applies.**
+  - **Why.** The grant runs inside the join routine. The DoubleXP check (`MonetizationService.GetXPMultiplier` → `PlayerOwnsGamePass`) waits on `UserOwnsGamePassAsync` while the pass cache is still cold. A cold check could also credit a DoubleXP owner's one-time grant at x1.
+  - **Result.** The amount is fixed: floor(Owed x 1.1). It never depends on a pass check.
+  - **How.** `build_backfill` is in `MonetizationConfig.XPMultExemptReasons`, and `XPService.AddXP` skips the territory multiplier for that reason, as it does for achievements.
+  - **Unchanged.** Live purchase XP (`build`) still gets DoubleXP and territory, as spec §5.1 says.
+  - **Tested.** With DoubleXP x2 and territory x1.5, the grant credits 1,100 for Owed 1,000 and makes 0 pass or territory calls (x1_xp L2a–L2e).
+
+### Lane X1 builder (reversible choices inside the spec)
+- **XP-X1-1 v0 saves.** The v0 default fill in `Migrate` (a save with no `DataVersion`) no longer marks the save as new. The raw `BuildXP` is read before the fill and put back, so a v0 save that owns things is snapshotted like any old save.
+- **XP-X1-2 Junk `BuildXP`.**
+  - A `BuildXP` that is not a table (this code never writes one) is repaired to `{ Owed = 0, AtPrestige = <Prestige> }`, which pays nothing.
+  - A table `Owed` is only sanitised on load: a whole number from 0 to `BUILDXP_OWED_MAX` (10,000,000, a fixed constant). v4: it is never re-capped from the current configs, so a retune (A / P / Cap) cannot lower a stored snapshot for good; the grant caps it at the pool when it pays. A stored 1e300 becomes 10,000,000 on load and pays at most the pool. The load does not touch `AtPrestige`; a table with no valid stamp is never paid (XP-X1-11).
+  - The pool uses the bare formula (`XPBalanceConfig.BuildXPFormula`), so the cap holds whatever the switches say.
+- **XP-X1-3 Switch interplay.**
+  - A snapshot, and a new save's `{ Owed = 0, AtPrestige = 0 }` block, need purchase XP on (`Enabled` and `Build.Enabled`). They never depend on the backfill switch.
+  - While purchase XP is off, a save gets no block and its buys pay nothing live. For a save not yet snapshotted, what it buys then is counted by its snapshot on the first load with purchase XP on and paid once (x1_ds X1-12); at Prestige > 0 that snapshot counts base levels only. A save that already has a block is paid nothing for such a buy (XP-X1-10).
+  - A pending unpaid `Owed` survives every switch and is paid once when `Enabled` and `Backfill.Enabled` are both on, in its own life.
+- **XP-X1-4 The cap pool.**
+  - It is summed at runtime from the configs: every cash structure and business level, every research level, and every cash vehicle and weapon that needs no rebirth. That is 56,073 at 5f38c2e (lane C5 changed no config it reads).
+  - v4: a pool of 0 (a Cap, A or P that pays nothing for the whole catalogue) makes the config count as broken (XP-X1-6): X1 is OFF in both modules and every stored `Owed` is kept.
+  - The grant is capped again at the moment it is paid.
+  - If the pool cannot be computed because a config did not load, the grant waits and `Owed` is kept.
+- **XP-X1-5 Push.**
+  - It marks the save dirty when the curve settle levels a veteran up.
+  - It first makes `Level` and `XP` plain numbers: a string becomes a number, NaN or inf XP becomes 0, a NaN Level becomes 1, and Level is clamped to 1..100.
+  - It runs the backfill grant and the curve settle, each in a pcall, in their own thread (`task.spawn`). The HUD push therefore always goes out, and the join routine (`BaseService.OnProfileLoaded`) never waits on a level-up's cash reward (`EconomyService.AddCash` reads the game-pass cache).
+  - When nothing waits, the thread ends before `task.spawn` returns, so the order is as before (x1_xp WAIT1/2, SAN1-6, SET1, B7).
+- **XP-X1-6 One config check (H2).**
+  - `ProfileSchema` loads `XPBalanceConfig` in a pcall and runs `validXPBalanceConfig`: every field either module uses (`Enabled`; `Build.Enabled/A/P/Cap/ReasonPrefixes/Reason/RebirthRebuildMult`; `Backfill.Enabled/Reason/Toast`; `NoBattlePassMirror`; the three functions) plus smoke tests: `BuildXPFormula(5000)` and `BuildXP(5000)` finite and >= 0, `IsBuildReason("upgrade_x")` true, `IsBuildReason("recruit_soldiers")` false, `Backfill.Toast` formats.
+  - `XPService` never requires `XPBalanceConfig`: it takes the checked table (or nil and the reason) from `ProfileSchema.XPBalance()`. So both modules run X1 or both are OFF; they can no longer disagree.
+  - OFF means: no purchase XP, no snapshot, no new block, no backfill, a pending `Owed` kept; levels, kills, missions, the join settle and the cheaper curve work as before; XPService warns once with the reason.
+  - Consequence for the owner: `upgrade_` must stay a paying prefix and `recruit_` must never become one; to switch purchase XP off, use `Build.Enabled`.
+  - v4: `BuildXPPool() <= 0` also counts as broken (the check runs once at load, after the pool can be computed).
+  - Tested for nine broken edits (throws, no `Build`, no `NoBattlePassMirror`, no `Build.Cap`, a NaN formula, `recruit_` added, and v4's Cap 0 / A 0 / P 0): profiles load and save (DataService harness 24/0 each), both modules are OFF, a pending `Owed` is kept exactly, and after the fix each save that had no block yet is paid once for what it bought in the broken window (at Prestige > 0, its base levels). The two documented losses are checked too: BR-13 / BA-4 (a Prestige-1 save's vehicle) and BR-14 / BA-5 (a save that already had a block). `v4/out/broken_cand4r.txt`; on cand3, Cap 0 / A 0 / P 0 zero every snapshot (`v4/out/broken_cand3.txt`).
+- **XP-X1-7 Pins (BuyPathStatic, v4.2: 64 pins + 17 scans in the X1 block).**
+  - BuyPathStatic is a regression guard for honest edits, not a security boundary.
+  - Every `EconomyService.SpendCash` call site is mapped to its one file and function: `upgrade_` BaseService.PurchaseUpgrade, `research_` ResearchService.Purchase, `vehicle_` VehicleService.Purchase, `weapon_` CombatService.PurchaseWeapon; recruit_soldiers, missile_strike, gate_repair and atm_raid_loss in their current functions. Each reason appears exactly once, and there are exactly 8 calls.
+  - A call's function is the column-0 head above it; a call after a column-0 line, or inside any other `function` than `pcall(function(` (an anonymous, assigned `X = function`, nested or indented function, a `Connect` handler), fails.
+  - SpendCash used as a value, by a string key (also backtick), as a method, in parentheses, or through bracket indexing fails: `EconomyService[` and `XPService[` are forbidden anywhere in src. v4: iterating EconomyService / XPService (`pairs` / `ipairs` / `next`, also through `deps.`) and building a protected name from string pieces (`"Spend" .. "Cash"`, `"On" .. "Spend"`, `"Build" .. "XP"` ...) fail too. Aliases (a local that holds one of these tables) are not followed: a regression guard. The scan's lexer keeps the `{…}` expressions of backtick strings visible.
+  - v4: the four paying purchase functions grant no cash or gold (no AddCash / AddGold / AccruePendingCash / CollectPendingCash / TransferPendingCash in their bodies), so a paying buy cannot refund itself in place; helpers are not followed. 4.1: nor do they assign `.Cash` / `.Gold` / `.PendingCash` (any operator), except BaseService.PurchaseUpgrade's two AdminPlaytestCash floor lines for UserId 470626172.
+  - 4.1 one-time guards (XP-X1-16): in each paying purchase function the guard (AlreadyOwned x2 / Maxed / MaxLevel), the target it computes, the paying SpendCash, the failed-spend return and the write of that same target appear exactly once and in that order; the guard locals are never reassigned; the weapon guard's helpers and `ResearchConfig.LevelOf` are pinned whole. 4.2: nothing returns between the failed-spend return and the write (BaseService / ResearchService; vehicle and weapon are one pinned block), and `profile` is assigned in those four functions only at its pinned lines (never a copy).
+  - Ownership writes (4.1, rewritten in 4.2 after the round-4.1 exploit review 2). Anywhere in src, comments and strings blanked, any assignment operator: an entry write is the table name (`Vehicles` / `Weapons` / `BaseUpgrades` / `Research`, or a `research` local) after any receiver, through `:: T` casts or grouping parens, then any key chain (`.name` or a balanced `[...]`, nested indexes included), then an assignment: any operator, a target of a multiple assignment (`a, t.Vehicles.X = 1, nil`), or a function statement (`function t.Vehicles.X() end`). A Vehicles / Weapons entry is only ever set to `true` with one key (so `= nil`, `= false`, `-= 1` or an expression fail, in the dot form too). A BaseUpgrades / Research entry is written only at its pinned lines: three raises (BaseService.PurchaseUpgrade's `= targetLevel`, ResearchService.Purchase's `research[id] = target`, and MonetizationService's InstantBarracks Robux grant `profile.BaseUpgrades.Barracks = 1`, which is not a SpendCash purchase and pays no XP; the 4.1 text missed it because it only saw `[...]` keys) and the lowering lines (ProfileSchema's missing-id fill x2, the rebirth reset, the admin's resetbase, the Studio-only smoke test x2). Whole tables are replaced only by the pinned "not a table" repairs; no table.* / rawset / setmetatable or string key (`profile["Vehicles"]`) touches them.
+  - Hand-ons (4.2). In server code (not StarterPlayer; a `*Config` receiver is a catalogue, not a save), every place a whole table goes somewhere else is a pinned line (`_XP_HANDONS`): bound to a local or a table field, passed to a function other than typeof / type / pairs / ipairs / next / rawget / rawlen / table.find / ResearchConfig.LevelOf (its body is pinned), or returned. Uses that only test, count, compare or iterate it are free. Main + X1 has 27: 12 read-only local aliases (the 8 the reviewer listed, VehicleService / SoldierService / ResearchService x3 / PrestigeService x2 / CombatService, plus ProfileSchema's snapshot, MissileStrikeService, OpsRewards and TutorialService), 6 payload / input fields (BaseStateUpdate, PlayerStateUpdate x3, VehicleStateUpdate, TycoonMath.PickNext), 5 reader calls (TycoonMath.BasePassivePerTick x2, StructureKitBuilder.SyncRearGates x2, BusinessService.SyncPlot), `researchOf`'s return and its 2 calls into ResearchConfig.MultFor / AddFor, and one VisualAssetConfig slot list. Each was read on 2026-09-27 and only reads the table. A found line must be pinned (as many times); a pinned line that is gone is harmless, so the R-RIG lane's read-only `local upgrades = if profile then profile.BaseUpgrades else nil` (SquadOrdersService, not on main yet) is pinned early. The names these lines bind are followed one level: a local in its block (its writes count as the table's, its own hand-ons must be pinned), a table field in every file (`payload.Owned.X = nil` or `.Upgrades.X = 0` counts), and the calls of a function that returns a table (`researchOf`). So a sell, un-own, rebuy or lowered level, written directly, through an alias, a helper, a cast or a payload field, fails until someone decides whether it may re-pay purchase XP.
+  - Not followed (a regression guard, not a security boundary): a dynamic key (`profile[k]`), iteration over the profile table itself, a callee's own parameter (every callee that receives a table today is named above and only reads it), a second level of aliasing through a returned or stored table, and client code. The current candidates of the droppers, squad-fairness, vehicle-scale, rig and asset lanes and main HEAD pass these scans (`v4/out/xlane_scan42.txt`).
+  - 4.1 level loop: `settleLevels` runs only through the per-thread wrapper `settle` (called once from AddXP and once from joinLevelSteps), whose whole body is pinned; `joinLevelSteps` is started from one place (Push).
+  - `XPService.OnSpend` is reached only from SpendCash's guarded `task.defer`; the whole SpendCash tail (from `if not ok then` to the return) is pinned.
+  - 4.1: every assignment operator counts in the writer scans below (`=`, `+=`, `-=`, `*=`, `/=`, `//=`, `%=`, `^=`, `..=`), and so does a type cast after the name (`(XPBalanceConfig :: any).Build.Cap = …`) and a table.* / rawset / setmetatable call whose first argument holds one of these tables.
+  - No statement anywhere in src assigns a field of `XPBalanceConfig` (or the `xpCfg` / `sharedCfg` locals), or a `.ReasonPrefixes` / `.RebirthRebuildMult` / `.NoBattlePassMirror` / `.RookieProtection` field, or calls `table.*` / `rawset` / `setmetatable` on them; `LevelConfig.CurveV2` is assigned exactly once (its pinned line). v4: a function statement counts as a field assignment: `function XPBalanceConfig.X` (or `xpCfg` / `sharedCfg`, `.` or `:`) appears only in XPBalanceConfig.luau, once each for BuildXPFormula / BuildXP / IsBuildReason; `function LevelConfig.CurveMult` / `.GetXPRequiredForLevel` exactly once, in LevelConfig; `LevelConfig.CurveMult =`, `.GetXPRequiredForLevel =` and `LevelConfig[...] =` nowhere; the pinned keys Enabled / Build / Backfill / NoBattlePassMirror / RookieProtection are each written once in their constructor; and `XPBalanceConfig` (the checked copy) is assigned only at its pinned lines. An alias of these tables is not followed.
+  - v4 / 4.1 save-block writers (keyed on BuildXP, because PrestigeConfig / PrestigeService use the name AtPrestige): `BuildXP` as anything but a call appears only in ProfileSchema and XPService; no string names BuildXP / AtPrestige / Owed; PrestigeService never names BuildXP; 4.1: `BuildXP` is assigned (any operator, any value: `nil`, `(nil)`, a nil local) only at its four ProfileSchema lines (snapshot, junk repair, CreateDefault, the v0 fill `;(profile :: any).BuildXP = rawBuildXP`) and XPService's everything-OFF key; no table.* / rawset / setmetatable takes the block; `AtPrestige` is written (any operator) only at its three ProfileSchema lines and never in XPService; `Owed` only at those three lines, the load sanitise line and XPService's two `bx.Owed = 0`; and every `Owed` / `AtPrestige` token, a read too, sits inside ensureBuildXPFields / CreateDefault (ProfileSchema) or grantBackfill (XPService), so a second payer, a growing snapshot, a re-stamp or a re-cap cannot be added in any form.
+  - Whole bodies are pinned: `BuildXPFormula`, `BuildXP`, `IsBuildReason` (nothing may follow it but the return), `CurveMult`, the OnSpend pay tail, the validator, the pool's vehicle and weapon loops, the head of `ensureBuildXPFields` with its existing-block sanitise branch (v4), the pool-is-0 check (v4), the head of `settle` through its guard (v4), and (4.2, reviewer s1-s5) `buildXPOf`, the one counter behind the snapshot and the pool. Single guards are pinned too: the junk repair, the `pcall(buildXPOf, …)` snapshot and its guard, the grant's switch gate, its NaN / inf guard, the stamp check, the stamp in the snapshot, the junk repair and a new save, the in-flight flag, and `BuildXPPool`'s return. 4.2 (reviewer g1 / g2): `grantBackfill` makes exactly one `AddXP` call.
+  - Needles are exact file text and terminated, so `Cap = 10000` or `BelowLevel = 100` cannot match. The backfill switch is pinned OFF.
+  - Mutations: 315 on cand41 (`v4/out/mut_summary.txt`, `v4/mut/run_mut_v41.py`): 304 bite, 1 breaks the parse and is also caught by a pin (its parseable twin bites), 0 do not bite, 10 N/A (target text gone since round 3; each has a re-targeted twin that bites). Lists: the builder's round-2 and round-3 lists, both round-2 reviews, the round-3 exploit (n3_) and save (s3_) reviews, round 4's v4_ list, the round-4.1 exploit review's list unchanged (rx4_: a1-a5, b1, b2, c1-c6, d1, d2, f1, f2, g1, h1-h4; all 22 bite, 21 of them passed round 4) and 4.1's v41_ list (36: the nested-grant wrapper, any-operator / cast / table.* writer forms, one-time guards and ownership writes). Behavioural twins: `v4/out/bmut_summary.txt` (round 4's five plus 4.1's: nested grant not forced quiet, depth keyed by player, depth never restored, the vehicle AlreadyOwned guard disabled).
+- **XP-X1-8 File set.** One line is added to `MonetizationConfig.luau` for XP-L2, beyond the spec's six files. No other lane has that file in flight. `PrestigeService` is not touched (the life stamp covers rebirths on any server).
+- **XP-X1-9 Not tested through their real services:** missile strike, gate repair and raid loss. They were checked at `EconomyService.SpendCash` with the exact reason literals their call sites use, plus the call-site pin. Soldiers, structures, research, vehicles, weapons and rebirths went through their real functions.
+- **XP-X1-10 Accepted losses and limits.** A purchase is paid by the snapshot or live, never both, and a snapshot at most once. What can be lost or delayed:
+  - a purchase made on an old server during the rolling deploy, after that save's snapshot (tested; documented in spec §7)
+  - the whole snapshot, when the player rebirths before the switch is turned on, on a new or an old server (XP-X1-11; the same as shipping ON, where the grant would have been reset by the rebirth)
+  - the grant, when something throws inside it after `Owed` was zeroed
+  - a purchase made while the config is broken or purchase XP is off (`Build.Enabled = false`) by a save that already has a block: it pays nothing then and the block is never re-snapshotted (BR-14 / BA-5)
+  - the vehicles, weapons and research a Prestige > 0 save with no block buys in that window: its later snapshot counts base levels only (BR-13 / BA-4; rs3 N2b)
+  - v4: a run orphaned by a leave, a same-server rejoin or a rebirth while a level-up reward waits on the join-time pass check stops before it changes or pays anything (XP-X1-13), so the round-3 losses (the level in flight) and double pays (the rejoin) are gone. If a later reward in the same run still waited (not expected in Roblox: the up-front wait fills the pass cache), at most that one level's cash reward would land in the old table (a leave) or the new life (a rebirth).
+  - a kill that lands during the join wait can show its own ★ LEVEL toast next to the backfill toast (S8, rare, join only)
+  - a veteran first loaded while A, P or Cap is retuned is snapshotted with that day's formula (R1-R3), and the payment is capped at the pool of the day it is paid: the owner is told not to retune before the backfill is paid
+- **XP-X1-11 Life stamp (H1).** Every block carries `AtPrestige`, written by the snapshot (the save's Prestige), a new save (0) and the junk repair (the save's Prestige). `grantBackfill` pays only when `AtPrestige` equals the save's current Prestige (as a whole number >= 0, junk → 0); otherwise, or with no valid stamp, it sets `Owed = 0`, marks the save dirty and pays nothing. This covers rebirths done by `PrestigeService.DoPrestige` on new servers and on old servers during the rolling deploy (any build without X1: 670bbf6 in round 3, 5f38c2e in round 4), which cannot run any new code. Tested: RX-B/C/D, S11, S11b (real DoPrestige), P1 (a Prestige-1 snapshot is still paid in life 1), JS (unstamped / junk stamps), roll B-5/C-7.
+- **XP-X1-12 In-flight Push (H4).** `joinLevelSteps` keeps a per-Player flag (weak-keyed by the Player object, so a rejoin is never blocked by a thread of the previous session). A Push that lands while a previous run still waits skips steps 1 and 2; the running thread settles every level itself. Cleared after both pcalls. Tested: S8c (one toast at join), x1_xp H4a-d.
+- **XP-X1-13 Orphaned settle (v4, round-3 save review N1 / N6).** A level's cash reward can wait on the join-time game-pass check (`EconomyService.AddCash` reads the pass cache), and `DataService.GetProfile` / `AddCash` / `AddGold` look the profile up by UserId. `settle` now captures the save's life (`profile.Prestige`), takes that wait once up front (`pcall(EconomyService.GetCashMult, player, "level_up")`, only when a level-up is due, so no new yield where none was before), and at the top of every iteration returns 0 if `DataService.GetProfile(player) ~= profile` (a leave or a same-server rejoin) or the life changed (a rebirth): no reward, toast or push. The toast counts only the levels that run settled. Tested (x1_r4): O1a / O1b / O1c (rejoin during the wait: grant, curve settle as shipped, a kill), O2 (leave), O3a / O3b (rebirth), O4 (control); all but O4 fail on cand3 and pass on cand4r; the save reviewer's rs3 N1a / N1b / N6 pass. Behavioural twins: without the up-front wait the in-flight reward still lands or is lost (O1-O3 fail); without the guard, or with the life check alone, the rejoin double pay is back. With the table check alone no driver case fails (DoPrestige resets Level and XP, so the old run finds nothing to settle): the life check is defence in depth, pinned by BuyPathStatic.
+- **XP-X1-15 Nested grants are quiet (4.1, round-4 owner review).** `settle` is now a wrapper around the level loop (`settleLevels`) that counts, per running thread (a weak-keyed table), how many level loops are on the stack. A grant made inside a running loop, in the same thread (EconomyService.AddCash(level reward) -> MissionService.TrackProgress -> CheckAchievements -> GrantAchievement -> XPService.AddXP(100, "achievement")), runs its own loop quiet whatever it asked for and pushes no LevelUp: it still adds its levels and pays their rewards; the outer run's one toast (or the backfill's one line) names the final level with the unlock text of the highest level crossed. Keyed by thread, not player, so a grant from another thread (a kill while the join waits on the pass check) keeps its own toast; the depth is restored after a pcall and the error re-raised, so a throw never leaves a thread marked. Levels, XP, cash and gold are unchanged by the fix (x1_l10 FINAL lines identical on cand4r and cand41; old-save level times identical). Tested with the REAL MissionService wired in (x1_l10: 10 step-8/9 saves incl. the owner.md builder L6 -> L17, the join curve settle across L10, a big admin grant, a kill across L10 only, the other-thread and throw cases; x1_alt and the wired old-save replays). Behavioural twins: not forced quiet, keyed by player, never restored.
+- **XP-X1-16 One-time purchases are pinned (4.1, round-4 exploit review; 4.2, round-4.1 exploit review 2).** X1 makes the one-time purchase guards the only thing that stops an XP farm (spec §5.1). Their text, order and ownership writes are pinned (XP-X1-7), and x1_buy BUY1-4 stay the behavioural check (a disabled vehicle guard fails BUY1). 4.2: the ownership scan sees every key form (`.name`, nested `[...]`, casts), writes through aliases and payload fields, and every place a whole owned table is handed on; the InstantBarracks grant is a pinned raise. A future sell / refund / rebuy-after-destroy feature must decide whether a rebuy pays purchase XP, and update `_XP_LEVEL_WRITES` / `_XP_HANDONS` (and these notes) in the same edit. Tested: the reviewer's o1-o12 all fail the gate now (o1-o9, o11, o12 passed 4.1), plus 19 more 4.2 forms and 3 controls that must pass (`v4/out/mut42/summary_cand42.txt`).
+- **XP-X1-14 No load-time re-cap (v4, round-3 save review).** See XP-X1-2 and XP-X1-4. Tested (x1_r4 R1-R4): A 0.4 or Cap 0 at runtime no longer trims a stored `Owed`; after the restore it is paid in full; while A is 0.4 the payment is min(Owed, that day's pool). The require-time Cap 0 / A 0 / P 0 variants are in the broken chains.
+
+### Owner decisions (the defaults ship as listed)
+- When to turn on the backfill. It ships OFF, and every player's snapshot is waiting; a player who rebirths first loses it. Do not change A, P or Cap until it has been paid.
+- Whether to publish together with the bank-guard fix (lane X2), as spec §8 recommends; on its own X1 makes today's bank farm about 1.5x faster.
+- `RebirthRebuildMult` 1, the VIP offer at L10, `NewPlayerMaxLevel` 4, and rebirth staying combat-driven (spec §9.8).
+
+### Needs a real device or live data
+- toast pacing during the tutorial on a phone (the first Command Center buy can show the level-up and First Brick toasts together)
+- the switch-on join of a save the backfill lifts past level 10 ("Achievement: Sergeant" + one "★ LEVEL n! Rank matches your base." line; the HUD harness shows the two lines in the top-centre lane at 5 viewports)
+- the join-time pass-cache timing, and whether a Roblox reconnect lands on the same server (the XP-X1-13 case)
+- real hours played and the phone hit rate
+- whether the season x1.1 is still on live
+- the live level distribution, to size the backfill, and how many players rebirth before it is turned on
+
+- XP-X1-INT (integration on v81 9475f8b): the owner playtest grant in DataService (AdminConfig.AdminPlaytestAllVehicles, UserId 470626172 only) writes `(profile :: any).Vehicles = {}` under its own typeof guard; it is added to the pinned whole-table repairs. New scan: every pinned whole-table owned-item write must sit right under its own `if typeof(...) ~= "table" then` guard (round-4 review MEDIUM), shown failing on a mutated guard. X1 drivers on this base: xp 84/0, r3 37/0, r4 29/0, ds 50/0, buy 20/0, rookie 4/0, DataService 24/0, world sim 12/12.

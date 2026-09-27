@@ -20,6 +20,18 @@
 	Enabled = false until integration (the lead flips it together with TycoonGuideConfig.Enabled). While false:
 	nothing is merged into BaseConfig, TycoonMath pays nothing for a saved business level, tutorial step 6 stays
 	the Barracks buy, and the game behaves exactly as before v72.
+
+	Droppers v1a (lines and looks; spec_droppers.md §3, §10.1). Every key below is cosmetic: the server never reads
+	ProductsPerTick, Machine, Products, Machines or Visual, and no price, income or save field changes.
+	  ProductsPerTick  per def: k products land in the bin per 5 s income beat at level 1..5 (the client locks the
+	                   line to WE_PassiveTick; CrateEverySec stays the fallback while ProductsPerTick is nil).
+	  Machine          per def: its Machines key (one pooled local part per own line, one reused Tween).
+	  LookTiers        server look tiers (BusinessService, property-only, 0 new parts) on LookTierRoles; a part that
+	                   carries WE_CatalogAssetId (a hooks dress) is never written. Tier names key Products and
+	                   MachineColors. BusinessConfig.LookTierFor(level) is the one tier rule (server and client).
+	  Products         per business and tier: raw look at spawn, done look after the machine hit (Color + Material).
+	  Visual           client lines, heap, clock, FX and the flags (BeltFx OFF in v1a; Ghost / Ambient are v1.1).
+	No stencils, insignia, flags, brands or real weapon names on any product.
 ]]
 
 export type Requirement = { StructureId: string, Level: number }
@@ -36,6 +48,45 @@ export type BusinessDef = {
 	Signature: string, -- per-business signature part (Signatures)
 	Product: string, -- crate look (Crates)
 	CrateEverySec: { number }, -- client visual cadence at level 1..5 (cosmetic only, never money)
+	ProductsPerTick: { number }?, -- droppers v1a: products landing per 5 s income beat at level 1..5 (cosmetic)
+	Machine: string?, -- droppers v1a: BusinessConfig.Machines key of this line's machine (cosmetic)
+}
+
+-- droppers v1a: server look tier (BusinessService) on the LookTierRoles parts; tier = the last one with FromLevel <= level
+export type LookTier = {
+	FromLevel: number,
+	Name: string, -- "Field" | "Works" | "Arsenal": also the key of Products[id] and MachineColors
+	Material: Enum.Material, -- every tier role
+	HousingMaterial: Enum.Material?, -- the Housing role only (Field: CorrodedMetal)
+	Shade: number, -- the role's HEAD colour (Palette / SharedColors key) x Shade, rounded to whole RGB
+	PaintFrame: string?, -- Palette key painted on the BeltFrame (Arsenal: "Accent")
+	RoofReflectance: number?, -- Roof Reflectance (nil = 0)
+}
+
+-- droppers v1a: a product look per business and tier (client pooled parts; raw at spawn, done after the machine hit)
+export type ProductLook = {
+	Size: Vector3,
+	Shape: Enum.PartType?, -- nil = Block
+	RawColor: Color3,
+	RawMaterial: Enum.Material,
+	Color: Color3, -- done look (after the hit; the heap wears it)
+	Material: Enum.Material,
+	HeapMaterial: Enum.Material?, -- the heap's material when it differs from Material (nil = Material)
+}
+
+-- droppers v1a: a machine (business-local studs, the Kit frame; see Machines below)
+export type MachineDef = {
+	Size: Vector3, -- hinge machines: X is the arm length, the hinge sits at the arm's -X end
+	Pos: Vector3?, -- slide machines: rest centre
+	HitPos: Vector3?, -- slide machines: hit centre when it is fixed (PlateStamp)
+	HitOnProduct: boolean?, -- slide machines: hit centre = (Pos.X, belt top + product height + Size.Y / 2, Pos.Z)
+	Hinge: Vector3?, -- hinge machines: pivot
+	Yaw: number?, -- hinge machines: degrees, the arm turned from +X toward +Z
+	RestPitch: number?, -- hinge machines: degrees, + = tip up
+	HitPitch: number?,
+	HitAlong: number, -- studs from the belt start (x -2.5) to where the product is hit
+	StrokeDown: number, -- seconds the stroke starts before the hit
+	Sparks: boolean?, -- ProductionFx.Sparks at the tip on the hit
 }
 
 export type KitPart = {
@@ -75,6 +126,8 @@ local BusinessConfig = {
 			Signature = "Hopper",
 			Product = "AmmoBox",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
+			ProductsPerTick = { 2, 3, 3, 4, 5 }, -- droppers v1a: one every 2.50 / 1.67 / 1.67 / 1.25 / 1.00 s (GQ 1-3: 2 per beat)
+			Machine = "ShellPress",
 		},
 		ArmsCrateLine = {
 			Id = "ArmsCrateLine",
@@ -89,6 +142,8 @@ local BusinessConfig = {
 			Signature = "RackBar",
 			Product = "RifleCrate",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
+			ProductsPerTick = { 2, 2, 3, 4, 4 }, -- droppers v1a: one every 2.50 / 2.50 / 1.67 / 1.25 / 1.25 s (GQ 1-3: 2 per beat)
+			Machine = "LoaderBoom",
 		},
 		ArmorPlatePress = {
 			Id = "ArmorPlatePress",
@@ -104,6 +159,8 @@ local BusinessConfig = {
 			Signature = "PressRam",
 			Product = "ArmorPlate",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
+			ProductsPerTick = { 2, 2, 3, 3, 4 }, -- droppers v1a: one every 2.50 / 2.50 / 1.67 / 1.67 / 1.25 s (GQ 1-3: 2 per beat)
+			Machine = "PlateStamp",
 		},
 		RocketAssembly = {
 			Id = "RocketAssembly",
@@ -117,6 +174,8 @@ local BusinessConfig = {
 			Signature = "RocketBody",
 			Product = "Rocket",
 			CrateEverySec = { 2.5, 2.2, 1.8, 1.5, 1.2 },
+			ProductsPerTick = { 2, 2, 2, 3, 3 }, -- droppers v1a: one every 2.50 / 2.50 / 2.50 / 1.67 / 1.67 s (GQ 1-3: 2 per beat)
+			Machine = "FinWelder",
 		},
 	} :: { [string]: BusinessDef },
 
@@ -152,16 +211,106 @@ local BusinessConfig = {
 		Dark = Color3.fromRGB(52, 54, 50),
 	} :: { [string]: Color3 },
 
-	-- Client-only visuals (Client/Modules/BusinessVisuals). Cosmetic: the server never reads these.
+	--[[ Droppers v1a: server look tiers (spec §3.4; BusinessService applyLook). Property-only, 0 new parts: Material,
+		Color and the Roof Reflectance of the LookTierRoles kit parts. A new part is built with its tier look; an existing
+		one is written only where a value differs (a level-down / rebirth reapplies the lower tier; an idle re-sync
+		writes nothing). A part that carries WE_CatalogAssetId (hooks dress) is never written. Housing, BeltFrame and Bin
+		collide, so the hooks lane never replaces them; Roof and Chimney are skipped once dressed. Every other role
+		(Slab, Signature, Belt, Stock, Awning, Hazard, Pallet, GoldTrim) keeps its HEAD look. Works = the HEAD look.
+		Full rust (OD-2, after a Studio look): Field Material = CorrodedMetal. ]]
+	LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Chimney" },
+	LookTiers = {
+		{ FromLevel = 1, Name = "Field", Material = Enum.Material.Metal, HousingMaterial = Enum.Material.CorrodedMetal, Shade = 0.85, RoofReflectance = 0 },
+		{ FromLevel = 3, Name = "Works", Material = Enum.Material.Metal, Shade = 1, RoofReflectance = 0 },
+		{ FromLevel = 5, Name = "Arsenal", Material = Enum.Material.Metal, Shade = 1, PaintFrame = "Accent", RoofReflectance = 0.08 },
+	} :: { LookTier },
+
+	-- Client-only visuals (Client/Modules/BusinessVisuals + ProductionFx). Cosmetic: the server never reads these.
 	Visual = {
-		ActiveRadius = 80, -- crates run only on YOUR lines within this many studs of your character
-		MaxCratesPerLine = 3, -- pooled parts per line (1 on Graphics Quality <= LowQualityLevel)
+		ActiveRadius = 80, -- products run only on YOUR lines within this many studs of your character
+		MaxCratesPerLine = 3, -- pooled products per line (LowQualityPool on Graphics Quality 1..LowQualityLevel)
 		LowQualityLevel = 3,
-		BeltSpeed = 4, -- studs / s along the belt
+		LowQualityPool = 2, -- droppers v1a: pooled products per line at Graphics Quality 1..LowQualityLevel (HEAD 1)
+		LowQualityMaxK = 2, -- ... and k = min(ProductsPerTick[L], LowQualityMaxK) there (<= LowQualityPool)
+		AutomaticTouchIsLow = false, -- OD-13 lever: true = Automatic quality on touch uses the low pool and k as well
+		BeltSpeed = 4, -- studs / s along the belt (fallback while BeltSpeedByLevel is nil)
+		BeltSpeedByLevel = { 3.2, 3.6, 4.0, 4.5, 5.0 },
 		UpdateHz = 20, -- one shared loop for all lines (BulkMoveTo); CLAUDE.md: no per-frame allocations
 		PopRadius = 28, -- "+$N" owner pop only within this range
 		MaxPopsPerTick = 2, -- world labels <= 3 at a base
 		PopTextPx = 18,
+		-- droppers v1a production clock (feel §8): k products land per WE_PassiveTick window, the last one
+		-- LandLeadSeconds before the tick; k = clamp(want, 1, floor(pool x period / travelTotal)), re-evaluated per tick
+		LandLeadSeconds = 0.6,
+		PhaseGain = 0.3,
+		PeriodEma = 0.25,
+		ResyncSeconds = 1,
+		PathHz = 20, -- path table resolution (CFrames per second of travel, built in measure(), never in the step)
+		InstantFirstProduct = true, -- a real level-up (a rise of a seen line) drops one product straight onto the heap
+		-- BusinessVisuals module locals moved here (POP_EVERY stays a pinned local: the 10 Hz UI cap)
+		ScanHz = 4,
+		DropFrac = 0.25, -- the drop into the bin lasts this share of the belt time
+		PopSeconds = 1.2,
+		PopHold = 0.5,
+		PopRise = 1.5,
+		-- y 4.2 -> 5.5 (v1a fix round 1): the title is fixed 18 px text, wider than its 3 x 1.2 stud box on a phone, so
+		-- at 4.2 its "+" slid behind the L3+ awning when it appeared. Lower it only after a phone check.
+		PopOffset = Vector3.new(1, 5.5, 0), -- from the bin centre: +1 along the line toward the bin end, above the L3+ awning
+		-- v1a fix round 2: the top-centre chip (NEXT / tutorial step, a ScreenGui) draws over world billboards. While it is
+		-- up, a pop whose title would land under it steps down the segment PopOffset -> LowOffset: the first of Steps + 1
+		-- anchors whose title (at the top of its opaque rise) projects clear of the chip wins, else LowOffset. At a
+		-- console the chip is hidden (BUY button up), so the pop stays at PopOffset there.
+		PopDodge = {
+			Enabled = true,
+			LowOffset = Vector3.new(5, 2, 0), -- 3 studs past the bin end, 1 over its rim: clear of the awning, beside the heap
+			Steps = 8,
+			MarginPx = 6, -- real px kept clear around the chip
+			CharWidth = 0.62, -- title width estimate: CharWidth x PopTextPx per character (+2 px stroke)
+			TutorialFlag = "Tutorial", -- HudLayout flag: the tutorial's step chip holds the same top-centre slot
+		},
+		Heap = {
+			Enabled = true, -- false = HEAD: products sink into the bin (the tick lock and pops stay)
+			Size = Vector3.new(3.2, 2.4, 4.2),
+			RestSink = 0.05, -- hidden at rest: its top sits this far under the bin top
+			RiseByLevel = { 1.0, 1.2, 1.4, 1.6, 1.8 }, -- studs a full heap rises at level 1..5 (full top 3.15..3.95)
+			SinkSteps = 3,
+		},
+		Machines = { Enabled = true, WeldRadius = 40 },
+		-- OD-7: code built, OFF until the owner's 2-minute Studio check (texture on a Transparency-1 part, arrow
+		-- direction, no double stripe). 40101352 is the conveyor texture the hooks belt already loads (0 load slots).
+		BeltFx = {
+			Enabled = false,
+			Image = "rbxassetid://40101352",
+			Tint = Color3.fromRGB(150, 165, 130),
+			TileStuds = 2.6,
+			ScrollAxis = "U",
+			ScrollSign = 1,
+			Lift = 0.02,
+			HideDressDecal = true,
+		},
+		Fx = {
+			Enabled = true,
+			ShipEmit = 4,
+			ShipEmitLow = 2,
+			LevelEmit = 10,
+			LevelEmitLow = 5,
+			AtmEmit = 8, -- v1b (ATM collect sparkle)
+			AtmEmitLow = 5,
+			AtmRadius = 16,
+			WeldSparks = 2,
+			MaxParticlesPerSecond = 16, -- module token bucket across every emitter
+			LevelBurstGap = 0.5,
+			-- the engine's own particle textures (0 load slots), pooled emitters with Rate = 0 (Emit only), no lights
+			SparkleTexture = "rbxasset://textures/particles/sparkles_main.dds",
+			SparkTexture = "rbxasset://textures/particles/fire_sparks_main.dds",
+			SparkleColor = Color3.fromRGB(255, 214, 72),
+			SparkleLifetime = 0.6, -- seconds (<= 0.6: with 16 per second at most 16 alive)
+			SparkLifetime = 0.25, -- welder sparks
+			LightEmission = 0.3, -- <= 0.3 (no glow floods)
+			HideWhen = { "Driving", "Dead", "Modal", "RecentCombat" }, -- HudLayout flags: no pops, sparkles or sounds
+		},
+		Ghost = { Enabled = false, Transparency = 0.7, ConsoleRadius = 14, MaxParts = 6, Inflate = 0.1 }, -- v1.1
+		Ambient = { Enabled = false, Radius = 50, MaxLines = 2 }, -- v1.1
 	},
 	Crates = {
 		AmmoBox = { Size = Vector3.new(1.2, 0.8, 0.9), Color = Color3.fromRGB(92, 104, 64), Material = Enum.Material.Metal },
@@ -169,6 +318,53 @@ local BusinessConfig = {
 		ArmorPlate = { Size = Vector3.new(1.6, 0.3, 1.6), Color = Color3.fromRGB(150, 154, 160), Material = Enum.Material.Metal },
 		Rocket = { Size = Vector3.new(2.4, 0.6, 0.6), Color = Color3.fromRGB(220, 220, 214), Material = Enum.Material.SmoothPlastic, Shape = Enum.PartType.Cylinder },
 	} :: { [string]: { Size: Vector3, Color: Color3, Material: Enum.Material, Shape: Enum.PartType? } },
+	-- (Crates: HEAD looks, kept as an alias for one release; Products below replaces it.)
+
+	-- Droppers v1a (spec §3.3): product looks per business and tier (Field L1-2, Works L3-4, Arsenal L5). A product
+	-- spawns raw and turns done at the machine hit (<= 2 writes: Color, Material when it differs); Size / Shape change
+	-- only on a tier change (the pool is re-skinned in place). All generic: no stencil, insignia, flag or brand.
+	Products = {
+		AmmoWorks = {
+			Field = { Size = Vector3.new(1.2, 0.6, 0.6), Shape = Enum.PartType.Cylinder, RawColor = Color3.fromRGB(150, 122, 70), RawMaterial = Enum.Material.Metal, Color = Color3.fromRGB(205, 165, 80), Material = Enum.Material.Metal },
+			Works = { Size = Vector3.new(1.2, 0.8, 0.9), RawColor = Color3.fromRGB(120, 122, 118), RawMaterial = Enum.Material.Metal, Color = Color3.fromRGB(92, 104, 64), Material = Enum.Material.Metal },
+			Arsenal = { Size = Vector3.new(1.2, 0.8, 0.9), RawColor = Color3.fromRGB(92, 104, 64), RawMaterial = Enum.Material.Metal, Color = Color3.fromRGB(196, 150, 60), Material = Enum.Material.Metal },
+		},
+		ArmsCrateLine = {
+			Field = { Size = Vector3.new(2.2, 0.7, 0.9), RawColor = Color3.fromRGB(150, 118, 72), RawMaterial = Enum.Material.WoodPlanks, Color = Color3.fromRGB(110, 92, 60), Material = Enum.Material.WoodPlanks },
+			Works = { Size = Vector3.new(2.2, 0.7, 0.9), RawColor = Color3.fromRGB(110, 92, 60), RawMaterial = Enum.Material.WoodPlanks, Color = Color3.fromRGB(96, 104, 70), Material = Enum.Material.WoodPlanks },
+			Arsenal = { Size = Vector3.new(2.2, 0.7, 0.9), RawColor = Color3.fromRGB(96, 104, 70), RawMaterial = Enum.Material.WoodPlanks, Color = Color3.fromRGB(70, 76, 64), Material = Enum.Material.Metal },
+		},
+		ArmorPlatePress = {
+			Field = { Size = Vector3.new(1.6, 0.3, 1.6), RawColor = Color3.fromRGB(150, 140, 128), RawMaterial = Enum.Material.CorrodedMetal, Color = Color3.fromRGB(150, 154, 160), Material = Enum.Material.Metal },
+			Works = { Size = Vector3.new(1.6, 0.3, 1.6), RawColor = Color3.fromRGB(150, 140, 128), RawMaterial = Enum.Material.CorrodedMetal, Color = Color3.fromRGB(170, 174, 180), Material = Enum.Material.DiamondPlate },
+			Arsenal = { Size = Vector3.new(1.6, 0.3, 1.6), RawColor = Color3.fromRGB(150, 140, 128), RawMaterial = Enum.Material.CorrodedMetal, Color = Color3.fromRGB(104, 112, 92), Material = Enum.Material.DiamondPlate },
+		},
+		RocketAssembly = {
+			Field = { Size = Vector3.new(2.4, 0.6, 0.6), Shape = Enum.PartType.Cylinder, RawColor = Color3.fromRGB(150, 150, 146), RawMaterial = Enum.Material.Metal, Color = Color3.fromRGB(200, 200, 196), Material = Enum.Material.Metal, HeapMaterial = Enum.Material.Metal },
+			Works = { Size = Vector3.new(2.4, 0.6, 0.6), Shape = Enum.PartType.Cylinder, RawColor = Color3.fromRGB(150, 150, 146), RawMaterial = Enum.Material.Metal, Color = Color3.fromRGB(220, 220, 214), Material = Enum.Material.SmoothPlastic, HeapMaterial = Enum.Material.Metal },
+			Arsenal = { Size = Vector3.new(2.4, 0.6, 0.6), Shape = Enum.PartType.Cylinder, RawColor = Color3.fromRGB(150, 150, 146), RawMaterial = Enum.Material.Metal, Color = Color3.fromRGB(190, 70, 56), Material = Enum.Material.SmoothPlastic, HeapMaterial = Enum.Material.Metal },
+		},
+	} :: { [string]: { [string]: ProductLook } },
+
+	--[[ Droppers v1a (spec §3.5): one pooled local part per own line, placed in the Kit_Belt frame:
+		belt.CFrame * CFrame.new(M.Pos - KitBeltOffset), KitBeltOffset = the Kit "Belt" Offset (2, 2.4, 0), with the +-X
+		sign measure() derives from the bin. Hinge arms run from Hinge along +X, turned Yaw degrees toward +Z, pitched
+		+up; a hinge tween is a CFrame lerp (<= 0.04 stud off the arc). Belt top y 2.6, belt start x -2.5; hit time =
+		spawn + HitAlong / BeltSpeedByLevel[L]; the tween starts StrokeDown earlier. No machine face is coplanar with
+		an overlapping kit face (ShellPress 0.05 into the Housing wall; PlateStamp rests at y 4.25 inside the PressRam). ]]
+	Machines = {
+		ShellPress = { Size = Vector3.new(1.6, 0.8, 1.8), Pos = Vector3.new(-2.25, 4.4, 0), HitOnProduct = true, HitAlong = 0.25, StrokeDown = 0.15 },
+		LoaderBoom = { Size = Vector3.new(3.0, 0.6, 0.6), Hinge = Vector3.new(-2.6, 4.6, 0), Yaw = 0, RestPitch = 0, HitPitch = -20, HitAlong = 2.72, StrokeDown = 0.25 },
+		PlateStamp = { Size = Vector3.new(1.2, 1.2, 1.2), Pos = Vector3.new(2, 4.25, 0), HitPos = Vector3.new(2, 3.5, 0), HitAlong = 4.5, StrokeDown = 0.12 },
+		FinWelder = { Size = Vector3.new(2.2, 0.6, 0.6), Hinge = Vector3.new(-3.0, 4.2, -0.9), Yaw = 20, RestPitch = 10, HitPitch = -20, HitAlong = 1.44, StrokeDown = 0.25, Sparks = true },
+	} :: { [string]: MachineDef },
+	-- machine colour per look tier: a Color3, or a Palette key (Arsenal: the business Accent); Metal throughout
+	MachineColors = {
+		Field = Color3.fromRGB(44, 46, 43),
+		Works = Color3.fromRGB(52, 54, 50),
+		Arsenal = "Accent",
+	} :: { [string]: Color3 | string },
+	MachineMaterial = Enum.Material.Metal,
 }
 
 -- The def for `id` (whether or not Enabled; use IsBusiness to ask "is this a live business").
@@ -190,6 +386,19 @@ function BusinessConfig.PartCount(level: number): number
 		end
 	end
 	return n
+end
+
+-- Droppers v1a: the look tier at `level` (the last LookTiers row with FromLevel <= level; below the first row, the
+-- first row). The one tier rule for the server look (BusinessService) and the client products / machines.
+function BusinessConfig.LookTierFor(level: number): LookTier
+	local tiers = BusinessConfig.LookTiers
+	local pick = tiers[1]
+	for _, t in ipairs(tiers) do
+		if t.FromLevel <= level then
+			pick = t
+		end
+	end
+	return pick
 end
 
 return BusinessConfig

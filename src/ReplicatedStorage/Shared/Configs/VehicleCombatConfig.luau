@@ -77,7 +77,7 @@ local VehicleCombatConfig = {
 		TickSeconds = 1,
 	},
 
-	RookieProtection = { BelowLevel = 5, VehicleWeaponMult = 0.5 },
+	RookieProtection = { BelowLevel = 10, VehicleWeaponMult = 0.5 },
 
 	SeatFire = {
 		DriverCanUseInfantryWeapons = true, -- J10 (owner decision D5)
