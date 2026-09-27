@@ -83,6 +83,12 @@ SoundConfig.Sounds = {
 	["Cash.Purchase"] = { Id = 9113728042, Volume = 0.6, RollOff = "Linear", MaxDistance = 0, Pitch = 1, CooldownSeconds = 0.5, Priority = 3, Bus = "Stinger", LengthSeconds = 1.5 }, -- [PSE] "Cash Register 1" 9113728042
 	["UI.Denied"] = { Id = ENG_PING, Volume = 0.5, RollOff = "Linear", MaxDistance = 0, Pitch = 0.55, CooldownSeconds = 0.6, Priority = 2, Bus = "Stinger", LengthSeconds = 0.4 }, -- [ENG] electronicpingshort.wav, lowest (failed buy)
 
+	-- ── war businesses (droppers v1a; Client/Modules/ProductionFx plays them at a world point; no new sound id) ─────
+	-- Biz.Ship: a soft tink at your nearest own line when its heap ships on the 5 s income beat (one per 4 s).
+	-- Biz.FirstLand: one metal clack when the first product of a newly bought level lands (after the purchase stinger).
+	["Biz.Ship"] = { Id = 9113849492, Volume = 0.18, RollOff = "InverseTapered", MaxDistance = 28, Pitch = 1.5, CooldownSeconds = 4, Priority = 1, Bus = "World", MaxSeconds = 0.35, LengthSeconds = 0.35 }, -- [PSE] "Coins Or Keys Jingle 6" 9113849492 (the Cash.Collect file), high and short
+	["Biz.FirstLand"] = { Id = 9119915230, Volume = 0.25, RollOff = "InverseTapered", MaxDistance = 40, Pitch = 1, CooldownSeconds = 0.5, Priority = 2, Bus = "World", LengthSeconds = 1 }, -- [PSE] "Tank Impact 1 (SFX)" 9119915230 (the Impact.Metal file)
+
 	-- ── outposts (TerritoryStateUpdate diffs) ─────────────────────────────────────────────────────────────────
 	["Capture.Start"] = { Id = ENG_PING, Volume = 0.6, RollOff = "Linear", MaxDistance = 0, Pitch = 0.85, CooldownSeconds = 3, Priority = 3, Bus = "Stinger", LengthSeconds = 0.4 }, -- [ENG] electronicpingshort.wav ("radio" cue)
 	["Capture.Secured"] = { Id = 9113849492, Volume = 0.8, RollOff = "Linear", MaxDistance = 0, Pitch = 0.85, CooldownSeconds = 2, Priority = 4, Bus = "Stinger", LengthSeconds = 1.6 }, -- [PSE] "Coins Or Keys Jingle 6" 9113849492 (+income), low

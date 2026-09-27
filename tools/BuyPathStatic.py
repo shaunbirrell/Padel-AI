@@ -4894,6 +4894,338 @@ must_contain(V81_VS, "return VehicleService._AdminConfig.IsPlaytestOwner(player.
 must_contain(V81_VS, "\tif not VehicleService._IsPlaytestOwner(player) then\n\t\tif profile.Level < def.UnlockLevel then", "v81 spawn/purchase gates skipped for owner only")
 must_not_contain(V81_DS, "EnsureAdminPlaytestUnlocks", "v81 no Ensure* floors")
 
+# --- droppers v1a lane L1a (config + server look tiers; spec_droppers.md §13 "New pins, v1a" for the L1a files) ---
+# Paste above the final `parse_gate()` call. Every must_contain / rule here fails on HEAD 5e021d8; the must_not_contain
+# pins and the economy guard pass on HEAD by design and were shown failing on a mutated copy (L1a_out/bps_pins.txt).
+# The BusinessVisuals / ProductionFx v1a pins of §13 belong to lanes L2 / L3a (their needles come from their code).
+# Nothing here reads money: the keys are cosmetic (the server reads only LookTiers / LookTierRoles, for the look).
+import math
+DR_BZC = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
+DR_BZS = "src/ServerScriptService/Server/Services/BusinessService.luau"
+DR_TGC = "src/ReplicatedStorage/Shared/Configs/TycoonGuideConfig.luau"
+DR_SND = "src/ReplicatedStorage/Shared/Configs/SoundConfig.luau"
+DR_ECO = "src/ReplicatedStorage/Shared/Configs/EconomyConfig.luau"
+# BusinessConfig: the v1a client keys (frozen for lanes L2 / L3a: L1a_contract.md)
+for _dr_needle, _dr_label in (
+    ("LowQualityPool = 2,", "GQ 1-3 keeps 2 products per line (HEAD 1)"),
+    ("LowQualityMaxK = 2,", "GQ 1-3: at most 2 products per beat"),
+    ("AutomaticTouchIsLow = false,", "Automatic quality keeps the full lines (OD-13; the one-line lever stays false)"),
+    ("PopOffset = Vector3.new(1, 5.5, 0),", "ship pop at bin centre + (1 along the line, 5.5, 0): its 18 px text clears the L3+ awning (v1a fix round 1; 4.2 was cut)"),
+    ("BeltSpeedByLevel = { 3.2, 3.6, 4.0, 4.5, 5.0 },", "belt speed by level 3.2 .. 5.0 studs/s"),
+    ("ProductsPerTick = { 2, 3, 3, 4, 5 },", "Ammo Works k per beat 2/3/3/4/5"),
+    ("ProductsPerTick = { 2, 2, 3, 4, 4 },", "Arms Crate Line k per beat 2/2/3/4/4"),
+    ("ProductsPerTick = { 2, 2, 3, 3, 4 },", "Armor Plate Press k per beat 2/2/3/3/4"),
+    ("ProductsPerTick = { 2, 2, 2, 3, 3 },", "Rocket Assembly k per beat 2/2/2/3/3"),
+    ("LookTiers = {", "server look tiers in config"),
+    ('LookTierRoles = { "Housing", "Roof", "BeltFrame", "Bin", "Chimney" },', "look tiers touch only Housing / Roof / BeltFrame / Bin / Chimney"),
+    ("RiseByLevel = { 1.0, 1.2, 1.4, 1.6, 1.8 },", "heap rise 1.0 .. 1.8 (full top 3.15 .. 3.95, under the awning)"),
+    ("BeltFx = {\n\t\t\tEnabled = false,", "BeltFx code ships OFF (OD-7: on only after the owner's Studio check)"),
+    ("Ghost = { Enabled = false,", "Ghost preview is v1.1 (off in v1a)"),
+    ("Ambient = { Enabled = false,", "visitor ambient lines are v1.1 (off in v1a)"),
+    ("MaxParticlesPerSecond = 16,", "FX token bucket: at most 16 particles per second"),
+    ('HideWhen = { "Driving", "Dead", "Modal", "RecentCombat" }, -- HudLayout flags: no pops, sparkles or sounds', "no ship pops / sparkles / sounds while driving, dead, in a panel or in combat"),
+):
+    must_contain(DR_BZC, _dr_needle, f"droppers v1a: BusinessConfig {_dr_label}")
+must_not_contain(DR_BZC, "Enum.Material.Neon", "droppers v1a: BusinessConfig names no Neon material (world Neon is over its 300 target)")
+# economy guard: v1a changes no price and no income (a change here is a visible, deliberate pin edit)
+for _dr_row in (
+    "Costs = { 600, 2000, 6000, 18000, 55000 },", "IncomePerTick = { 16, 36, 70, 125, 200 },",
+    "Costs = { 2000, 6500, 19000, 57000, 170000 },", "IncomePerTick = { 40, 85, 160, 280, 450 },",
+    "Costs = { 8000, 25000, 75000, 220000, 650000 },", "IncomePerTick = { 120, 220, 360, 580, 860 },",
+    "Costs = { 30000, 90000, 270000, 800000, 2400000 },", "IncomePerTick = { 260, 440, 700, 1050, 1500 },",
+):
+    must_contain(DR_BZC, _dr_row, f"droppers v1a economy guard: BusinessConfig keeps `{_dr_row}`")
+# BusinessService: property-only look tiers, skip dressed parts, compare before write, no XP
+must_contain(DR_BZS, '\tif p:GetAttribute("WE_CatalogAssetId") ~= nil then\n\t\treturn -- a hooks dress (VisualAssetService) wears its own look: never recoloured', "droppers v1a: applyLook never writes a part that carries WE_CatalogAssetId (hooks dress)")
+must_contain(DR_BZS, "for _, role in ipairs(BusinessConfig.LookTierRoles) do", "droppers v1a: BusinessService tiers only the LookTierRoles parts")
+must_contain(DR_BZS, "material, color, reflectance = lookFor(def, kp, lv) -- droppers v1a: built in its tier look (0 extra writes)", "droppers v1a: a new kit part is built in its tier look (0 extra writes)")
+must_contain(DR_BZS, "applyLook(have, kp, def, lv) -- droppers v1a: tier change / level-down; writes only what differs", "droppers v1a: an existing kit part gets applyLook (tier change, level-down)")
+must_contain(DR_BZS, "\tif rgb8(p.Color) ~= rgb8(color) then\n\t\tp.Color = color", "droppers v1a: colours compared as whole RGB before a write (idle re-sync = 0 changes on a live server)")
+must_contain(DR_BZS, "if reflectance ~= nil and math.abs(p.Reflectance - reflectance) > 0.001 then", "droppers v1a: Reflectance compared within 0.001 before a write (float storage)")
+must_contain(DR_BZS, "\t\tp.Reflectance = reflectance -- droppers v1a look tier (Arsenal Roof), set before parenting", "droppers v1a: a new Arsenal Roof gets its Reflectance before it is parented")
+must_not_contain(DR_BZS, "AddXP", "droppers v1a: BusinessService grants no XP (spec_xp: purchase XP only)")
+# TycoonGuideConfig: BUY line 2 / NEXT chip names for business levels 2-5 (no [1]: it would shorten BUY line 1)
+for _dr_id in ("AmmoWorks", "ArmsCrateLine", "ArmorPlatePress", "RocketAssembly"):
+    must_contain(DR_TGC, f'{_dr_id} = {{ [2] = "Faster belt", [3] = "Clean works", [4] = "Stock pallet", [5] = "Arsenal paint" }},', f"droppers v1a: {_dr_id} BUY line 2 / NEXT chip unlock names")
+# SoundConfig: the two v1a keys reuse ids already in SoundConfig (no new sound id)
+must_contain(DR_SND, '["Biz.Ship"] = { Id = 9113849492,', "droppers v1a: Biz.Ship reuses the Cash.Collect file 9113849492")
+must_contain(DR_SND, '["Biz.FirstLand"] = { Id = 9119915230,', "droppers v1a: Biz.FirstLand reuses the Impact.Metal file 9119915230")
+
+
+def _dr_bz_rules() -> None:
+    """droppers v1a static rules (T6): ProductsPerTick feasibility at both pools; LookTiers / Products / Machines /
+    MachineColors consistent; business unlock copy; no new sound id; Biz.* sounds positional and quiet."""
+    bz = read(DR_BZC) or ""
+    eco = read(DR_ECO) or ""
+
+    def num(pat: str, text: str) -> float | None:
+        m = re.search(pat, text)
+        return float(m.group(1)) if m else None
+
+    tick = num(r"\n\t\tTickSeconds = (\d+(?:\.\d+)?),", eco)
+    pool = num(r"\n\t\tMaxCratesPerLine = (\d+),", bz)
+    lpool = num(r"\n\t\tLowQualityPool = (\d+),", bz)
+    lmaxk = num(r"\n\t\tLowQualityMaxK = (\d+),", bz)
+    drop = num(r"\n\t\tDropFrac = (\d+(?:\.\d+)?),", bz)
+    beltm = re.search(r'\{ Role = "Belt", MinLevel = \d+, Size = Vector3\.new\((\d+(?:\.\d+)?),', bz)
+    spm = re.search(r"BeltSpeedByLevel = \{ ([^}]*) \},", bz)
+    ks = {m.group(1): [int(x) for x in m.group(3).split(",")]
+          for m in re.finditer(r'\n\t\t(\w+) = \{\n\t\t\tId = "(\w+)",(?:(?!\n\t\t\},).)*?\n\t\t\tProductsPerTick = \{ ([\d, ]+) \},', bz, re.S)}
+    order = re.findall(r'"(\w+)"', (re.search(r"Order = \{([^}]*)\}", bz) or re.search("()", "")).group(1) or "")
+    if None in (tick, pool, lpool, lmaxk, drop) or not beltm or not spm or not order:
+        bad(f"droppers v1a T6: ProductsPerTick rule inputs missing (tick {tick}, pool {pool}, low pool {lpool}, low k {lmaxk}, DropFrac {drop}, belt {bool(beltm)}, speeds {bool(spm)})")
+    else:
+        speeds = [float(x) for x in spm.group(1).split(",")]
+        belt = float(beltm.group(1))
+        problems = []
+        if not (lmaxk <= lpool):
+            problems.append(f"LowQualityMaxK {lmaxk:g} > LowQualityPool {lpool:g}")
+        if len(speeds) != 5 or any(s <= 0 for s in speeds):
+            problems.append(f"BeltSpeedByLevel {speeds}")
+        for bid in order:
+            k = ks.get(bid)
+            if k is None or len(k) != 5:
+                problems.append(f"{bid}: ProductsPerTick missing or not 5 levels ({k})")
+                continue
+            for lv in range(min(5, len(speeds))):
+                travel = belt * (1 + drop) / speeds[lv]
+                cap_full = math.floor(pool * tick / travel)
+                cap_low = math.floor(lpool * tick / travel)
+                if not (1 <= k[lv] <= cap_full):
+                    problems.append(f"{bid} L{lv + 1}: k {k[lv]} not in 1..{cap_full} (pool {pool:g})")
+                if not (1 <= min(k[lv], lmaxk) <= cap_low):
+                    problems.append(f"{bid} L{lv + 1}: low k {min(k[lv], lmaxk):g} not in 1..{cap_low} (pool {lpool:g})")
+        if problems:
+            bad("droppers v1a T6: ProductsPerTick infeasible: " + "; ".join(problems))
+        else:
+            ok(f"droppers v1a T6: ProductsPerTick feasible for {len(order)} x 5 at pool {pool:g} and low pool {lpool:g} (k <= floor(pool x {tick:g} / (belt {belt:g} x {1 + drop:g} / speed)))")
+    # LookTiers ascending from 1, names Field / Works / Arsenal; Products / Machines / MachineColors cover them
+    tiers = re.findall(r'\{ FromLevel = (\d+), Name = "(\w+)"', bz)
+    names = [n for _, n in tiers]
+    lv_ok = len(tiers) >= 1 and int(tiers[0][0]) == 1 and all(int(tiers[i][0]) < int(tiers[i + 1][0]) for i in range(len(tiers) - 1))
+    if names == ["Field", "Works", "Arsenal"] and [int(a) for a, _ in tiers] == [1, 3, 5] and lv_ok:
+        ok("droppers v1a: LookTiers Field L1 / Works L3 / Arsenal L5, ascending from level 1")
+    else:
+        bad(f"droppers v1a: LookTiers {tiers} (want Field 1, Works 3, Arsenal 5, ascending from 1)")
+    pm = re.search(r"\n\tProducts = \{(.*?)\n\t\} :: \{ \[string\]: \{ \[string\]: ProductLook \} \},", bz, re.S)
+    mm = re.search(r"\n\tMachines = \{(.*?)\n\t\} :: \{ \[string\]: MachineDef \},", bz, re.S)
+    cm = re.search(r"\n\tMachineColors = \{(.*?)\n\t\}", bz, re.S)
+    missing = []
+    if not pm or not mm or not cm:
+        missing.append("Products / Machines / MachineColors block")
+    else:
+        for bid in order:
+            blk = re.search(r"\n\t\t" + bid + r" = \{(.*?)\n\t\t\},", pm.group(1), re.S)
+            for n in names or ["Field", "Works", "Arsenal"]:
+                if not blk or not re.search(r"\n\t\t\t" + n + r" = \{ Size = Vector3\.new\(", blk.group(1)):
+                    missing.append(f"Products.{bid}.{n}")
+        for mk in re.findall(r'\n\t\t\tMachine = "(\w+)",', bz):
+            if not re.search(r"\n\t\t" + mk + r" = \{ Size = Vector3\.new\(", mm.group(1)):
+                missing.append(f"Machines.{mk}")
+        if len(re.findall(r'\n\t\t\tMachine = "(\w+)",', bz)) != len(order):
+            missing.append("a Machine key per business")
+        for n in names or ["Field", "Works", "Arsenal"]:
+            if not re.search(r"\n\t\t" + n + r" = ", cm.group(1)):
+                missing.append(f"MachineColors.{n}")
+    if not missing:
+        ok(f"droppers v1a: Products x {len(names)} tiers, a Machines def per business Machine and MachineColors per tier ({len(order)} businesses)")
+    else:
+        bad("droppers v1a: config contract incomplete: " + ", ".join(missing))
+    # business unlock copy: <= 18 characters, device-neutral, no level-1 row for a business
+    tg = read(DR_TGC) or ""
+    bu = re.search(r"\n\tBusinessUnlocks = \{(.*?)\n\t\}", tg, re.S)
+    rows = re.findall(r"\n\t\t(\w+) = \{([^}]*)\},", bu.group(1)) if bu else []
+    probs = []
+    for rid, body in rows:
+        for lvs, txt in re.findall(r'\[(\d+)\] = "([^"]*)"', body):
+            if len(txt) > 18 or re.search(r"\b(click|tap|press|key)\b", txt, re.I) or "·" in txt or "→" in txt:
+                probs.append(f"{rid}[{lvs}] {txt!r}")
+            if rid in order and lvs == "1":
+                probs.append(f"{rid}[1] (a level-1 business unlock shortens BUY line 1)")
+    biz_rows = [r for r, _ in rows if r in order]
+    if bu and sorted(biz_rows) == sorted(order) and not probs:
+        ok(f"droppers v1a: BusinessUnlocks rows for all {len(order)} businesses, <= 18 characters, device-neutral, no [1]")
+    else:
+        bad(f"droppers v1a: BusinessUnlocks rows {biz_rows} problems {probs}")
+    # sounds: Biz.* reuse ids other keys already use; World bus, positional, quiet
+    snd = read(DR_SND) or ""
+    body = re.search(r"SoundConfig\.Sounds = \{(.*?)\n\} :: \{ \[string\]: SoundDef \}", snd, re.S)
+    keys = dict(re.findall(r'\["([\w.]+)"\] = \{ Id = (\w+),', body.group(1))) if body else {}
+    biz = {k: v for k, v in keys.items() if k.startswith("Biz.")}
+    others = {v for k, v in keys.items() if not k.startswith("Biz.")}
+    sprobs = [f"{k} id {v} is new" for k, v in biz.items() if v not in others]
+    for k in ("Biz.Ship", "Biz.FirstLand"):
+        m = re.search(r'\["' + re.escape(k) + r'"\] = \{([^}]*)\}', body.group(1)) if body else None
+        if not m:
+            sprobs.append(f"{k} missing")
+            continue
+        vol = num(r"Volume = (\d+(?:\.\d+)?)", m.group(1))
+        md = num(r"MaxDistance = (\d+(?:\.\d+)?)", m.group(1))
+        if '"World"' not in m.group(1) or vol is None or vol > 0.3 or md is None or not (0 < md <= 40):
+            sprobs.append(f"{k}: World bus, Volume <= 0.3, 0 < MaxDistance <= 40 (got vol {vol}, max {md})")
+    if len(biz) >= 2 and not sprobs:
+        ok(f"droppers v1a: {sorted(biz)} reuse existing sound ids, World bus, quiet, <= 40 studs")
+    else:
+        bad(f"droppers v1a: Biz sounds {biz} problems {sprobs}")
+
+
+_dr_bz_rules()
+
+# --- droppers v1a lane L2 (client lines: BusinessVisuals; spec_droppers.md §13 "New pins, v1a" for BusinessVisuals) ---
+# Paste above the final `parse_gate()` call (after lane L1a's block). Every must_contain / rule here fails on HEAD
+# 5e021d8 (and on the L1a tree, whose BusinessVisuals is HEAD's); the must_not_contain pins pass there by design
+# except "l.rot + pos" (HEAD's per-step CFrame, removed here) and were shown failing on mutated copies
+# (L2_out/bps_pins.txt). Lane C's HEAD pins on BusinessVisuals (:2396-2426, :3416-3421) stay unchanged and pass.
+DR_BZV = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/BusinessVisuals.luau"
+for _dr_needle, _dr_label in (
+    ("-- STEP BEGIN", "the allocation-free step region starts here"),
+    ("-- STEP END", "the allocation-free step region ends here"),
+    ("V.LandLeadSeconds", "landings lock onto the WE_PassiveTick lattice, LandLeadSeconds before the tick"),
+    ("V.LowQualityPool", "Graphics Quality 1-3 keeps LowQualityPool products per line (HEAD 1)"),
+    ("HudLayout.GetFlag(", "pops and FX skipped under the Fx.HideWhen HUD flags"),
+    ("V.BeltFx.Enabled", "the belt skin runs only behind the BeltFx flag (OFF in v1a, OD-7)"),
+    ("V.AutomaticTouchIsLow", "the OD-13 lever: Automatic quality on touch can run the light lines"),
+    ("\t\tif mine then\n\t\t\tif l.seenLevel ~= nil and lv > l.seenLevel then\n\t\t\t\trose = true", "level-up effects only on a RISE of a line already seen (never join, stream-in, hand-out, respawn)"),
+    ("\t\t\tl.seenLevel = lv -- kept while the character is missing and across a local folder rebuild\n\t\telse\n\t\t\tl.seenLevel = nil -- not ours (any more): the next own sighting is a first sight", "seenLevel kept across respawns, cleared on an owner change"),
+    ("\t\treleaseAll(l)\n\t\tl.seenLevel = nil -- streamed out / destroyed: the next sighting is a first sight", "seenLevel cleared when a line is untracked (stream out)"),
+    ("\t\t\t\t\t\tif tw and mp and tw.PlaybackState ~= PLAYING then\n\t\t\t\t\t\t\tmp.CFrame = l.restCF -- the rest pose before every Play (a stroke due mid-play is skipped)\n\t\t\t\t\t\t\ttw:Play()", "machine: the rest pose is written before every Play; a stroke due mid-play is skipped, never stacked"),
+    ("\t\ttw:Cancel() -- going idle: stop the stroke, then write the rest pose (a cancelled Tween leaves it mid-stroke)\n\tend\n\tl.tween = nil\n\tlocal mp = l.machine\n\tif mp then\n\t\tl.machine = nil\n\t\tmp.CFrame = l.restCF", "machine: going idle cancels the tween, then writes the rest pose"),
+    ("\tl.tween = TweenService:Create(part, info, { CFrame = hit })\n\tpart.CFrame = l.restCF", "machine: measure() writes the rest pose right after it builds the tween"),
+    ("TweenInfo.new(math.max(0.05, M.StrokeDown), Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, true)", "machine: one reused Tween per measure(), Quad, Reverses (spec §3.5)"),
+    ("function BusinessVisuals.Init()\n\t-- droppers v1a (spec §7): boot ProductionFx first, once and pcall'd, before the started / Enabled guard\n\tlocal ProductionFx = productionFx()\n\tif not fxBooted and ProductionFx ~= nil then\n\t\tfxBooted = true\n\t\tpcall(ProductionFx.Init)\n\tend\n\tif started or not BusinessConfig.Enabled then", "ProductionFx is booted by BusinessVisuals.Init, once and pcall'd, before its guard (no Bootstrap edit)"),
+    ('fxModule = sibling("ProductionFx")', "ProductionFx is a lazy sibling require"),
+    ("\tlocal ok, mod = pcall(function(): any\n\t\tlocal parent = script.Parent\n\t\tlocal inst = if parent then parent:FindFirstChild(name) else nil", "sibling modules (ProductionFx, HudLayout) are required lazily inside pcall (the module runs without them)"),
+    ("\tif at == nil or fxGated() then\n\t\treturn\n\tend", "popTick: no pops and no Ship while a HideWhen flag is set (the heap still ships: onTick runs first)"),
+    ("local function popTick()\n\tonTick(clock)", "popTick ships every active line on the tick before the pop logic"),
+    ("\tif lowMode then\n\t\twant = math.min(want, V.LowQualityMaxK)", "low quality: k <= LowQualityMaxK"),
+    ("\tlocal feasible = math.max(1, math.floor(maxCrates * period / l.travelTotal))", "k never needs more products in flight than the pool holds"),
+    ("\t\t\t\t\t\tif l.fill < l.k then\n\t\t\t\t\t\t\tl.fill += 1", "the heap counts landings and clamps at k (a late tick keeps it full)"),
+    ("\tlocal base = l.binSize.Y * 0.5 - H.RestSink - H.Size.Y * 0.5", "the heap rests RestSink under the bin top (hidden) and rises RiseByLevel[L] / k per landing"),
+    ("\tl.popOffset = oriented:VectorToWorldSpace(V.PopOffset)", "the ship pop sits at bin centre + PopOffset, x along the line toward the bin end"),
+    ("\t\t\t\td.Transparency = 1 -- the dressed belt's own arrows hide while the scrolling skin shows", "BeltFx: the dressed belt's Decal hides only while the skin shows"),
+    ("\t\td.Transparency = l.decalT -- the belt's own Decal comes back when the scrolling skin goes", "BeltFx: the Decal is restored when the line goes idle"),
+):
+    must_contain(DR_BZV, _dr_needle, f"droppers v1a L2: BusinessVisuals {_dr_label}")
+for _dr_needle in ("l.rot + pos", "AddXP"):
+    must_not_contain(DR_BZV, _dr_needle, f"droppers v1a L2: BusinessVisuals has no {_dr_needle!r} (no per-step CFrame; no XP from products)")
+
+
+def _dr_bzv_rules() -> None:
+    """droppers v1a L2 static rules on BusinessVisuals: exactly one STEP region, with none of the constructions the
+    spec bans (§7, §13); the step's single BulkMoveTo lives inside it; every WaitForChild has a timeout."""
+    src = read(DR_BZV) or ""
+    nb, ne = src.count("-- STEP BEGIN"), src.count("-- STEP END")
+    if nb != 1 or ne != 1 or src.find("-- STEP BEGIN") > src.find("-- STEP END"):
+        bad(f"droppers v1a L2: BusinessVisuals needs exactly one STEP BEGIN / STEP END region (found {nb} / {ne})")
+    else:
+        region = src[src.find("-- STEP BEGIN"):src.find("-- STEP END")]
+        banned = ("CFrame.", "Vector3.new", "{", "Instance.new", "TweenService", "table.insert", "table.create", "string.format", ":Clone(")
+        found = [b for b in banned if b in region]
+        if found:
+            bad(f"droppers v1a L2: BusinessVisuals step region contains {found} (the step builds no CFrame, Vector3, table or string)")
+        else:
+            ok(f"droppers v1a L2: BusinessVisuals step region ({region.count(chr(10))} lines) has none of {len(banned)} banned constructions")
+        if "local function step(now: number)" in region and "Workspace:BulkMoveTo(movedParts, movedCFrames, Enum.BulkMoveMode.FireCFrameChanged)" in region:
+            ok("droppers v1a L2: step() and its single BulkMoveTo are inside the STEP region")
+        else:
+            bad("droppers v1a L2: step() or its BulkMoveTo is outside the STEP region")
+    if src and not re.search(r'WaitForChild\("[^"]*"\)', src):
+        ok("droppers v1a L2: BusinessVisuals: every WaitForChild has a timeout")
+    else:
+        bad("droppers v1a L2: BusinessVisuals: a WaitForChild without a timeout (or the file is missing)")
+
+
+_dr_bzv_rules()
+
+# --- droppers v1a lane L3a (ProductionFx, the FX core; spec_droppers.md §13 "New pins, v1a" for ProductionFx) ---
+# Paste above the final `parse_gate()` call (after the L1a block's `_dr_bz_rules()`). Every pin here fails on the
+# base tree (HEAD 5e021d8 / L1a: no ProductionFx file) and on a mutated copy of L3a (L3a_out/tools/mutate_l3a.py).
+# The BusinessVisuals boot of ProductionFx is lane L2's file and pin (its needle is in L3a_out/bps_pins.txt, "handoff").
+DR_PFX = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/ProductionFx.luau"
+# spec §13: pooled emitters with Rate = 0 and :Emit only, one token bucket
+for _dr_needle, _dr_label in (
+    ("e.Rate = 0 -- :Emit only; nothing runs between bursts", "pooled emitters with Rate = 0"),
+    ("em:Emit(n)", "particles only through :Emit"),
+    ("local maxPerSecond = math.max(0, math.floor(tonumber(FX.MaxParticlesPerSecond) or 16))", "one token bucket sized by Fx.MaxParticlesPerSecond"),
+    ("if now - ringT[i] < WINDOW then", "the bucket is a sliding 1 s window (a spent token returns 1 s later): <= 16 in ANY 1 s window"),
+    ("return math.clamp(s, 0.05, WINDOW)", "particle lifetimes clamped to the window (<= 16 alive)"),
+    ("local LIGHT_EMISSION = math.clamp(tonumber(FX.LightEmission) or 0.3, 0, 0.3)", "LightEmission <= 0.3 (no glow floods)"),
+    ('local terrain = Workspace:FindFirstChildOfClass("Terrain")', "emitters live on Attachments under Terrain (streaming-safe, never under a server part)"),
+    ("for _, name in ipairs(FX.HideWhen) do", "one message at a time: no sparkles or sounds under Fx.HideWhen HUD flags"),
+    ("if reducedMotion() then", "GuiService.ReducedMotionEnabled: no particles"),
+    ('local audio = sibling("AudioController")', "sounds through AudioController, a lazy pcall'd sibling require (read-only use of a C5 file)"),
+    ('local hud = sibling("HudLayout")', "HUD flags through HudLayout, a lazy pcall'd sibling require (read-only use of a C5 file)"),
+):
+    must_contain(DR_PFX, _dr_needle, f"droppers v1a ProductionFx: {_dr_label}")
+# spec §13 must_not_contain list, plus: no hard require of a sibling (HudLayout / AudioController are C5 files)
+for _dr_needle in ("PointLight", "SpotLight", "SurfaceLight", "Neon", "SurfaceGui", "FireServer", "InvokeServer", "AddCash",
+                   "AddXP", "RenderStepped", "GetDescendants", ":Destroy()", "task.wait(", "require(script.Parent."):
+    must_not_contain(DR_PFX, _dr_needle, f"droppers v1a ProductionFx: no {_dr_needle}")
+# lane G rule: every WaitForChild has a timeout
+_dr_pfx = read(DR_PFX)
+if _dr_pfx is not None and not re.search(r'WaitForChild\(\s*"[^"]*"\s*\)', _dr_pfx):
+    ok("droppers v1a ProductionFx: every WaitForChild has a timeout")
+else:
+    bad("droppers v1a ProductionFx: WaitForChild without a timeout (or file missing)")
+
+# --- droppers v1a fix round 2 (review rv_visual-owner_2: the "+$N" pop under the NEXT chip) ---
+# Paste above the final `parse_gate()` call (after the L3a block). Every pin and the rule fail on round 1's
+# BusinessConfig / BusinessVisuals (v1a_out/fix2/round1/) and on 5f38c2e / 5e021d8.
+DR_FX2_BC = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
+DR_FX2_BV = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/BusinessVisuals.luau"
+for _dr_path, _dr_needle, _dr_label in (
+    (DR_FX2_BC, "\t\tPopDodge = {\n\t\t\tEnabled = true,\n\t\t\tLowOffset = Vector3.new(5, 2, 0),", "the pop dodges the top-centre chip (ON); its lowest anchor is bin centre + (5 along the line, 2, 0)"),
+    (DR_FX2_BC, "\t\t\tSteps = 8,\n\t\t\tMarginPx = 6,", "the dodge tries 9 anchors and keeps 6 real px off the chip"),
+    (DR_FX2_BC, "\t\t\tTutorialFlag = \"Tutorial\",", "the tutorial's step chip (HudLayout flag Tutorial) is dodged too"),
+    (DR_FX2_BV, "local GuiService = game:GetService(\"GuiService\")", "the chip slot starts under the topbar row (GuiService:GetGuiInset)"),
+    (DR_FX2_BV, "local TycoonGuideConfig = require(Shared.Configs.TycoonGuideConfig)", "the chip-up test reads the NEXT chip's own rule"),
+    (DR_FX2_BV, "\tl.popLow = oriented:VectorToWorldSpace(V.PopDodge.LowOffset)", "the low anchor is cached in measure(), x along the line toward the bin end"),
+    (DR_FX2_BV, "\tif HudLayout.GetFlag(V.PopDodge.TutorialFlag) == true then\n\t\treturn true\n\tend\n\treturn TycoonGuideConfig.Enabled == true and HudLayout.EvalRule(TycoonGuideConfig.ChipRule) == true", "chip up = the tutorial step chip, or TycoonGuideConfig.ChipRule (hidden AtConsole)"),
+    (DR_FX2_BV, "\treturn cx - half, cx + half, top + (TS.Top + TS.Objective.Height) * s + V.PopDodge.MarginPx", "the keep-out is HudConfig.TopStack's objective slot x Scale(), under the topbar, grown by MarginPx"),
+    (DR_FX2_BV, "\tif not D.Enabled or not chipUp() then\n\t\treturn high\n\tend", "chip down (at a console) or dodge OFF: PopOffset, round 1's awning-safe anchor"),
+    (DR_FX2_BV, "\tlocal at = bin.Position + Vector3.new(0, V.PopRise * V.PopHold, 0)", "anchors are tested at the top of the pop's opaque rise"),
+    (DR_FX2_BV, "\t\tlocal off = high + (low - high) * (i / n)\n\t\tlocal p = cam:WorldToViewportPoint(at + off)\n\t\tif p.Z <= 0 then\n\t\t\treturn high -- behind the camera: nothing to dodge\n\t\tend\n\t\tif p.X + halfW <= x0 or p.X - halfW >= x1 or p.Y - halfH >= yb then\n\t\t\tif camSees(eye, at + off) then\n\t\t\t\treturn off\n\t\t\tend", "the first anchor down PopOffset -> LowOffset whose title clears the chip AND that the camera sees wins"),
+    (DR_FX2_BV, "\tif firstClear ~= nil then\n\t\treturn if camSees(eye, at + high) then high else firstClear\n\tend\n\treturn low\nend", "chip-clear anchors all hidden: PopOffset if seen, else the first chip-clear one; none clear of the chip: LowOffset"),
+    (DR_FX2_BV, "local rayParams = RaycastParams.new()\nrayParams.FilterType = Enum.RaycastFilterType.Exclude", "the visibility ray excludes only the character (kit, heap, other lines and dressing occlude)"),
+    (DR_FX2_BV, "\tlocal inst = hit.Instance\n\treturn inst:IsA(\"BasePart\") and inst.Transparency >= 0.98", "a first hit that is (nearly) invisible does not hide the pop"),
+    (DR_FX2_BV, "\t\t\tlocal text = TycoonMath.PopText(best.def.Id, bestLv, mult)\n\t\t\tshowPop(shown, bestBin, text, popOffsetFor(best, bestBin, text))", "popTick picks each pop's anchor from its own title"),
+):
+    must_contain(_dr_path, _dr_needle, f"droppers v1a fix2: {_dr_label}")
+
+
+def _dr_fx2_rules() -> None:
+    """droppers v1a fix round 2: the only projection and the only Raycast in BusinessVisuals are inside
+    popOffsetFor / camSees, and popOffsetFor runs only from popTick (once per pop per WE_PassiveTick), never from the
+    Heartbeat step or the 10 Hz pop animation."""
+    src = read(DR_FX2_BV) or ""
+    projs = [m.start() for m in re.finditer(r":WorldTo(?:Viewport|Screen)Point\(", src)]  # calls, not comments
+    n_proj = len(projs)
+    f0 = src.find("local function popOffsetFor(")
+    f1 = src.find("\nend\n", f0) if f0 >= 0 else -1
+    p0 = src.find("local function popTick()")
+    p1 = src.find("function BusinessVisuals.Init()")
+    calls = [m.start() for m in re.finditer(r"popOffsetFor\(", src)]
+    proj_at = projs[0] if projs else -1
+    if n_proj == 1 and 0 <= f0 < proj_at < f1:
+        ok("droppers v1a fix2: BusinessVisuals projects (WorldToViewportPoint) only inside popOffsetFor")
+    else:
+        bad(f"droppers v1a fix2: BusinessVisuals needs exactly one projection, inside popOffsetFor (found {n_proj})")
+    rays = [m.start() for m in re.finditer(r":Raycast\(", src)]
+    c0 = src.find("local function camSees(")
+    c1 = src.find("\nend\n", c0) if c0 >= 0 else -1
+    sees = [m.start() for m in re.finditer(r"camSees\(", src)]
+    if len(rays) == 1 and 0 <= c0 < rays[0] < c1 and len(sees) >= 2 and all(c0 == s - len("local function ") or f0 < s < f1 for s in sees):
+        ok("droppers v1a fix2: BusinessVisuals casts rays only in camSees, called only from popOffsetFor")
+    else:
+        bad(f"droppers v1a fix2: BusinessVisuals must Raycast only in camSees, called only from popOffsetFor (rays {len(rays)}, camSees refs {len(sees)})")
+    if len(calls) == 2 and calls[0] == f0 + len("local function ") and 0 <= p0 < calls[1] < p1:
+        ok("droppers v1a fix2: popOffsetFor is called only from popTick (per tick, not per frame)")
+    else:
+        bad(f"droppers v1a fix2: popOffsetFor must be defined once and called only from popTick (found {len(calls)} occurrences)")
+
+
+_dr_fx2_rules()
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

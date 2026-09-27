@@ -4854,3 +4854,194 @@ Nothing in this entry loads a new model at runtime or changes what players see.
   WE_LIVE.
 - **AW-W16 Batch P4 (3322196012, 4362642898, 5589684833, 14408455045) still needs the first check.** The second check
   does not cover it, because the promote tool reads `WE_CHECK OK` lines, not `WE_CHECK2` lines.
+
+## 2026-09-27 — Droppers v1a: business lines and looks (spec_droppers.md §3, §7, §10, §14, §17) - no money path, 0 server parts
+
+Slice v1a of the droppers spec, merged by lane L4a from lanes L1a (config keys and server look tiers), L2 (BusinessVisuals)
+and L3a (ProductionFx). Seven files: BusinessConfig, TycoonGuideConfig, SoundConfig, BusinessService, BusinessVisuals,
+ProductionFx (new) and tools/BuyPathStatic.py. Prices, income, requirements, XP and save data are unchanged; there is no
+new remote, no money path and no Bootstrap edit. Every item below is reversible in config or in one file. All results are
+from the headless Luau stand-in, the pure-Luau prototype or the Python economy model. None of it is Roblox, Studio or a
+phone. The owner's phone test is spec §18 A. The v1b lines (DR-8, DR-9, DR-10, DR-16, DR-19, DR-20 and Drop.Coin in
+DR-11) and v1.1 (DR-15) are merged by their own slices.
+
+DR-1 Tick-locked production.
+    - Keys: ProductsPerTick Ammo {2,3,3,4,5}, Arms {2,2,3,4,4}, Armor {2,2,3,3,4}, Rocket {2,2,2,3,3}; LandLeadSeconds 0.6,
+      PhaseGain 0.3, PeriodEma 0.25, ResyncSeconds 1, PathHz 20.
+    - Code: exactly k products land in every WE_PassiveTick window, the last one LandLeadSeconds before the tick. The
+      smoothed tick phase absorbs replication jitter; k = clamp(want, 1, floor(pool x period / travelTotal)) is re-checked
+      on every tick.
+    - Evidence: prototype feel/sched.txt 35/0 and synth/sched_lowq2.txt 60/0; stand-in T8, 2,280 of 2,280 windows exact
+      for all 20 business x level cases at GQ >= 4 and at GQ 3. The BuyPathStatic T6 rule checks feasibility for all 4 x 5
+      at pool 3 and pool 2.
+DR-2 Low quality.
+    - Saved GQ 1..LowQualityLevel (3): LowQualityPool 2 products per line and k = min(K, LowQualityMaxK 2).
+    - Automatic stays full for the lines (AutomaticTouchIsLow = false, OD-13). Set it to true if a mid-range Android on
+      Automatic runs hot; then Automatic on touch (HudLayout.PrefersKeys() false, PreferredInput, never TouchEnabled)
+      runs the light lines.
+    - "Low FX" (the sparkle counts) also covers Automatic on touch, whatever AutomaticTouchIsLow says.
+    - Quality and input changes apply on the next 4 Hz scan; surplus products go back to the pool.
+DR-3 Belt speed by level 3.2 / 3.6 / 4.0 / 4.5 / 5.0 studs/s (cosmetic; BeltSpeed 4 stays the fallback). The path table is
+    rebuilt only when the level changes.
+DR-4 Heap: one pooled local Part per active own line, 3.2 x 2.4 x 4.2, in the tier's done look (Rocket: Metal).
+    - It rises RiseByLevel[L] / k per landing (1.0-1.8, full top 3.15-3.95, clamped at k), and sinks in SinkSteps 3 steps
+      on the tick.
+    - Heap.Enabled = false falls back to HEAD's sink into the bin.
+    - The ship pop sits at bin centre + PopOffset (1 along the line toward the bin end, 5.5, 0), above the L3+ awning
+      (fix round 1: was 4.2; see L4a-4).
+DR-5 Look tiers (server, BusinessService applyLook, property-only, 0 new parts).
+    - Field L1-2: Metal, CorrodedMetal on the Housing only, key colour x 0.85. Works L3-4: the HEAD palette and Metal
+      (exactly the HEAD look). Arsenal L5: BeltFrame in Palette.Accent, Roof Reflectance 0.08.
+    - Roles: Housing, Roof, BeltFrame, Bin, Chimney. A part that carries WE_CatalogAssetId (a hooks-lane dress) is never
+      written.
+    - Cost: +6 instance changes at the L3 buy and +2 at L5, 0 elsewhere; the largest buy is 17 changes (target 60).
+    - Full CorrodedMetal (OD-2) is one config value (Field Material = CorrodedMetal); it waits for the owner's Studio look.
+DR-6 Product looks per tier (Products[id][Field|Works|Arsenal]). A product spawns in its tier's raw look and switches to the
+    done look at the machine hit (Color, plus Material only when it differs: at most 2 writes). Size and Shape change only
+    on a tier change, by re-skinning the pool in place (0 new Instances). The Ammo shell is thickened to 0.6. Crates stays
+    as an alias for one release.
+DR-7 Machines: one pooled local Part and one Tween (Quad, Reverses) per active own line, rebuilt only in measure().
+    - Geometry keys: boom and welder 0.6 thick; boom 0 / -20 deg, welder +10 / -20 deg, yaw 20; ShellPress x -3.05..-1.45
+      (inset 0.05 into the Housing wall, HitAlong 0.25); PlateStamp rests at y 4.25 (no coplanar face with the PressRam)
+      and hits at y 3.5.
+    - The rest pose is written before every Play (a stroke due while the tween still plays is skipped, never stacked),
+      after every Cancel and after measure(). Stand-in T10: 1,003 plays with 123 mid-stroke cancels, pose error 0.
+    - Hinge strokes are CFrame lerps: 0.0228 stud (boom) and 0.0375 stud (welder) off the true arc.
+    - The pending Armor press model (4362642898) needs a Studio re-check of the piston when the hooks lane promotes it.
+DR-11 Sounds reuse existing [PSE] ids (no new sound id): Biz.Ship 9113849492 at 0.18, pitch 1.5, 4 s cooldown, World bus,
+    28 studs (the tink, at most once per 4 s); Biz.FirstLand 9119915230 at 0.25, World bus, 40 studs (the clack, once per
+    level-up). ProductionFx also keeps both cooldowns locally and records a play only when AudioController starts it.
+DR-12 BUY line 2 and NEXT chip copy for business levels 2-5 (TycoonGuideConfig.BusinessUnlocks): "Faster belt",
+    "Clean works", "Stock pallet", "Arsenal paint". There is no [1] (it would shorten BUY line 1). BUY line 2 falls back
+    to "+$X/s income" and the chip to its short hint ("$2.4M  +$225/s") when the line does not fit.
+DR-13 Particles (ProductionFx): two pooled ParticleEmitters (gold sparkles, fire sparks), each on its own Attachment under
+    Workspace.Terrain; Rate = 0 and :Emit() only; the engine textures sparkles_main / fire_sparks_main (0 asset loads);
+    LightEmission Fx.LightEmission clamped to 0..0.3; no light objects; one token bucket, Fx.MaxParticlesPerSecond 16.
+    They are made on first use, never destroyed, and re-made only if something removed them.
+DR-14 BeltFx ships OFF (Visual.BeltFx.Enabled = false, pinned) until the owner's 2-minute Studio check (OD-7): the texture
+    on a Transparency-1 part, the scroll axis and sign, and the dressed Decal hidden locally with no moire. The skin code
+    (one transparent Part + one Texture per active own line, one offset write per step, the Decal restored when idle) is
+    built; stand-in T13 covers both values. Ghost and Ambient ship OFF (v1.1).
+DR-17 Level-up effects fire only on a rise of a line already seen at a known level: `if l.seenLevel ~= nil and lv >
+    l.seenLevel then`. seenLevel is cleared on an owner change and when the line is untracked (streamed out, destroyed),
+    and kept while the character is missing and across a local folder rebuild. Join, stream-in, plot hand-out, respawn
+    and folder rebuild emit nothing (stand-in T11, and T16 D3 through the real modules).
+DR-18 Two slices. v1a (lines and looks) ships without v1b (plate and ATM). ProductionFx is booted by BusinessVisuals.Init
+    (a lazy sibling require inside pcall, then pcall(ProductionFx.Init), once), before its started / Enabled guard.
+    Bootstrap.client.luau is not edited (byte-identical to 5f38c2e). A missing ProductionFx, or one that throws on require
+    or in Init, leaves the client and BusinessVisuals running (stand-in T17).
+
+L1a-1 Tier colours are whole RGB: Field = round-half-up(HEAD channel x 0.85) (70 becomes 60, 50 becomes 43). An existing
+    part is compared as whole RGB before a Color write, and within 0.001 before a Reflectance write, because a live part
+    stores Color at 8 bits per channel: a double compare would rewrite the tier parts on every re-sync (idle re-sync must
+    stay 0 changes). The stand-in keeps doubles and cannot show this; the compare-first lines are pinned.
+L1a-2 A new tier part is built in its tier look before it is parented, so building straight at L5 (a join with a saved L5)
+    costs 0 tier writes.
+L1a-3 BusinessConfig.LookTierFor(level) is the one tier rule for server and client (0-2 Field, 3-4 Works, 5+ Arsenal).
+L1a-4 Shapes the spec left open: HitOnProduct (ShellPress hit centre y = belt top + product height + half the press:
+    3.6 Field, 3.8 Works / Arsenal); HitPos (PlateStamp hit centre (2, 3.5, 0)); the hinge convention
+    CFrame.Angles(0, -rad(Yaw), 0) * CFrame.Angles(0, 0, rad(Pitch)), arm along +X; MachineMaterial = Metal;
+    HeapMaterial = Metal on the three Rocket tiers; Biz.* RollOff InverseTapered.
+L1a-5 Extra Fx keys (config first, so ProductionFx never hard-codes them): SparkleTexture, SparkTexture, SparkleColor
+    (255, 214, 72), SparkleLifetime 0.6, SparkLifetime 0.25, LightEmission 0.3.
+L1a-6 Extra pins beyond spec §13: BeltFx / Ghost / Ambient OFF, Fx.HideWhen, MaxParticlesPerSecond 16, the compare-first
+    lines, the Roof Reflectance set before parenting, a Products / Machines / MachineColors consistency rule,
+    BusinessUnlocks (18 characters or fewer, device-neutral, no [1]) and "Biz.* reuse existing sound ids". Turning Ghost,
+    Ambient or BeltFx on in v1.1 is a deliberate pin edit.
+L2-1 InstantFirstProduct uses an idle pool slot: after a level-up the first product appears at the belt end in its done
+    look and drops onto the heap (0.83 s in the stand-in). If every slot is in flight, the level-up's one FirstLand clack
+    comes with the next regular landing.
+L2-2 Tick-period adoption: a faster period (Studio FastPassiveIncome, 1 s) is adopted at once; a slower one only when two
+    intervals in a row agree, because one long gap (a server hitch) is a stall, not a slower clock.
+L2-3 Culling keeps HEAD's radii: a line runs while its belt is within ActiveRadius 80 of the character; welder sparks need
+    Machines.WeldRadius 40; pops need PopRadius 28. ProductionFx re-checks its own radii.
+L2-4 The ship sparkles and tink use the nearest popping line's cached bin top; LevelUp and FirstLand use that line's bin
+    top; Sparks use the welder tip at the hit. All positions are cached in measure(), so the step allocates nothing.
+L2-5 Fx.HideWhen (Driving, Dead, Modal, RecentCombat) skips pops and every ProductionFx call; the heap still ships and the
+    products and machines keep running. A missing HudLayout, or C5's empty HudLayout table (Shared never arrived),
+    gates nothing (HudLayout.GetFlag is checked to be a function first).
+L2-6 The BulkMoveTo buffers are pre-sized for every business at the full pool plus its heap (#Order x (MaxCratesPerLine + 1)
+    = 16), so the step never grows them.
+L2-7 While ProductsPerTick is nil for a business, k falls back to round(period / CrateEverySec[L]), still tick-locked. All
+    four businesses set it in v1a, so the fallback is unused.
+L2-8 Test harness only: the stand-in's Tween model keeps each tween's key from Create onward, so the T9 stub's Play never
+    rehashes inside step() (spec §12: the stubs allocate nothing).
+L3a-1 The particle bucket is a sliding 1 s window (a spent token returns exactly 1 s later): at most 16 particles in ANY 1 s
+    window. A classic refill bucket would allow up to 32. Lifetimes are clamped to <= 1 s; a request larger than what is
+    left gets a partial burst, never an overflow.
+L3a-2 GuiService.ReducedMotionEnabled drops every particle; the tink and the clack still play (sounds are not motion).
+L3a-3 Fx.Enabled = false (the first phone lever) silences every line effect: particles and sounds.
+L3a-4 ProductionFx re-checks the Fx.HideWhen flags and its range from the character (Ship 28, LevelUp / FirstLand 80,
+    Sparks 40) itself; no character (respawning) shows nothing.
+L3a-5 The emitter motion values (speed, spread, fall, size 0.8 -> 0.15 studs, spark tint (255, 190, 90)) are one LOOK table
+    in ProductionFx. Moving them to Fx keys is a later, cosmetic L1a change.
+L3a-6 Low FX changes the sparkle counts only: ShipEmit 4 -> ShipEmitLow 2, LevelEmit 10 -> LevelEmitLow 5. Welder sparks
+    stay at WeldSparks 2. Low FX is on at saved GQ 1..LowQualityLevel, or on Automatic when HudLayout.PrefersKeys() is
+    false; without HudLayout, UserInputService.PreferredInput decides (never TouchEnabled).
+L3a-7 ProductionFx never reads a server part, Level, OwnerUserId or money; the caller passes a cached Vector3. The ship
+    sparkles start at the bin top, so for the first part of their 0.36-0.6 s life they can sit inside a sinking heap.
+    That is a device look item; if it reads badly, BusinessVisuals can pass the heap's full top instead.
+L4a-1 Merge (lane L4a): 5f38c2e + L1a's four files + L2's BusinessVisuals + L3a's ProductionFx. tools/BuyPathStatic.py is a
+    3-way merge that keeps every 5f38c2e line: the C5 block, then the L1a, L2 and L3a blocks above the final
+    parse_gate(). L3a's own BusinessVisuals copy was a test fixture and is not merged.
+L4a-2 The NEXT chip hint for Rocket Assembly L4 -> L5 at x2.5 ("$2.4M  +$225/s  Arsenal paint") never fits the chip, whose
+    width is fixed in HUD units, so it shows its short hint "$2.4M  +$225/s" at all 7 viewports (HUD harness T20). The
+    BUY button's line 2 keeps "+$225/s  Arsenal paint". Ammo L1 -> L2 ("$2,000  +$4/s  Faster belt") fits everywhere.
+    Reversible: a shorter unlock word.
+L4a-3 At the 844x390 phone and the 800x360 notch viewport the BUY lane (unchanged v72 layout) reaches 20 x 55 px into the
+    harness's reserved bottom-right "vehicle/combat controls" box; the jump gap stays >= 16 px. 5f38c2e shows the same
+    rows, so v1a does not cause it. It is left for a HUD lane.
+L4a-4 Fix round 1 (review rv_visual-owner_1): PopOffset.Y 4.2 -> 5.5, config only (spec §3.6 and T11 said 4.2).
+    - Why: the pop's title is fixed 18 px text (WorldLabel, ClipsDescendants off), wider than its 3 x 1.2 stud box at
+      phone distances, so at 4.2 its "+" slid behind the L3+ awning (x <= 7.5, y 5.05-5.35) for the first ~0.6 s on the
+      Ammo and Arms lines. Round 0's clearance maths used the box, not the text.
+    - Why 5.5 and not the review's 5.2: in the phone-camera mock (fix1/sweep.py, 960 sampled phone cameras on the 4 lines
+      at L3 and L5, 800x360 and 956x440, text also drawn 1.2x wide for FredokaOne) the awning still clips the text at
+      its first frames on 40 cameras at 5.2 (max 3.7% of text pixels, all far from the bin), on 1 at 5.5 (0.5%, camera
+      pitched 5 degrees, nearly level) and on 0 at 5.8. From the default camera at each console (fix1/consolecam.py,
+      L1/L3/L5 x 4 lines x 6 viewports x 3 zooms) 5.2, 5.5 and 5.8 all show 0% hidden. 5.5 is the lowest value that
+      clears the sampled cameras; 0.3 stud higher than 5.2 does not change which bin the pop reads as belonging to.
+    - Unchanged: PopRise 1.5, PopSeconds 1.2, PopHold 0.5, 18 px text, MaxDistance 40, MaxPopsPerTick 2. The swept label
+      column (3 x 3 studs, y 6.0-8.7 in the line's frame) meets no kit, product, heap or machine box at L1-L5.
+    - The mock is not Roblox (Liberation Sans, flat shading, no camera occlusion zoom). Phone test §5 stays a device check.
+    - Reversible: BusinessConfig.Visual.PopOffset. Lower it only after a phone check at L3+.
+L4a-5 Fix round 1, test only: T11's InstantFirstProduct detector now classifies a product where it is at the end of the
+    step that showed it, not at its Transparency write. At the write, a pooled part re-used after a respawn can still sit
+    on its previous line's park spot. The handed L3 (Works) line's done colour equals the L5 Arms line's raw colour
+    (96, 104, 70), so a normal raw spawn was counted as an InstantFirstProduct ("a respawn: 0 / 0 / 2"). Pool order
+    follows hash order, so it was intermittent: 8 of 40 runs on round 0's own config and driver (round 0's recorded run
+    happened to pass), 0 of 40 with the new detector.
+    No frame is drawn between the write and the move, so players never saw it. A mutation that makes a respawn a real
+    rise still fails the check (5 / 5 / 5).
+L4a-6 Fix round 2 (review rv_visual-owner_2): the pop steps aside for the top-centre chip. BusinessVisuals + BusinessConfig.
+    - Why: the NEXT chip (and the tutorial's step chip, same slot) is a ScreenGui, drawn over every world billboard.
+      Round 1's PopOffset 5.5 put the "+$N" in the chip's rows (62-115 px on phones) about half the time away from a
+      console, where the chip shows. No single spot fixes it: in the phone-camera mock (fix2/sweep2.py, 96 static
+      offsets, the reviewer's camera set) the best static spot, (4, 3, 0), still lost 19% / 28% / 11% of pops at
+      844x390 / 800x360 / 956x440 (>= 50% of the title hidden by the chip or the scene), close to (1, 3, 0)'s
+      23% / 32% / 14%; the pop sits high on a phone screen for any spot near head height.
+    - What: while the chip is up (HudLayout.EvalRule(TycoonGuideConfig.ChipRule), or the Tutorial flag), popTick
+      tries PopDodge.Steps + 1 = 9 anchors from PopOffset (1, 5.5, 0) down to PopDodge.LowOffset (5, 2, 0) (3 studs
+      past the bin end, 1 over its rim) and takes the first whose title, at the top of its opaque rise, projects
+      (Camera:WorldToViewportPoint) clear of the chip slot grown by MarginPx 6 AND that the camera sees (one
+      Workspace:Raycast from the camera, the character excluded; an invisible first hit does not count). None clear of
+      the chip: LowOffset (the lowest on screen). Chip-clear ones all hidden by the scene: PopOffset if the camera
+      sees it (it shows until it rises under the chip), else the first chip-clear one. Behind the camera, chip down
+      (at a console, BUY button up), or PopDodge.Enabled = false: PopOffset, exactly round 1.
+    - Chip slot: HudConfig.TopStack (Top 8 v under the topbar row, Objective.Height 72 v, width min(460 v,
+      TopStackMaxWidthV)) x HudLayout.Scale(), centred on HudLayout.ContentRect(), topbar row = GuiService:GetGuiInset().Y,
+      extended up to the screen top (the topbar pills are there too). It matches the HUD harness rect within 2 px at
+      844x390 / 800x360 / 956x440. It assumes the chip is the first item of the top stack: when an Alert or Progress
+      pill sits above it (a capture, an ATM raid), the chip is lower and a pop can still be partly under it. Toasts
+      (under the chip) are not dodged.
+    - Chip-up errs toward "up": the NEXT chip's "Hide" button and "no pick yet" are not visible to BusinessVisuals, so
+      then the pop may step down without need (a lower pop, never a covered one).
+    - The spot is picked once, when the pop appears (<= MaxPopsPerTick x 9 projections and x 10 rays per
+      WE_PassiveTick, none per frame); a camera swung during the 1.2 s pop is not followed. The ray tests the anchor's
+      centre only, and any CanQuery part blocks it (a large invisible volume is skipped only when it is the first
+      hit); in the mock it changed little (kit geometry only), it is there for real dressing the mock lacks. Title width is estimated (0.62 x 18 px per
+      character + 2), a little wider than Liberation Sans Bold.
+    - The low anchor clears every L1-L5 kit box and the L5 heap (T11, >= 0.30 stud) and every part of the stand-in
+      plot at L1/L3/L5 (fix2/clearance.py); catalog dressing is not in the stand-in, so a phone check stays.
+    - Reversible: BusinessConfig.Visual.PopDodge.Enabled = false restores round 1 exactly; LowOffset / Steps /
+      MarginPx tune it. The mock is not Roblox (Liberation Sans, flat shading, crude camera push-in).
