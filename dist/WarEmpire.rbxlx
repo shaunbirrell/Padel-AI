@@ -61,6 +61,10 @@ return AchievementConfig
             <string name="Source"><![CDATA[--!strict
 --[[ Add your Roblox UserIds here for admin commands + AdminPlaytestCash ]]
 
+-- v81: owner playtest account (shaunie6); see PlaytestOwnerUserId / IsPlaytestOwner below
+local PLAYTEST_OWNER_USER_ID = 470626172
+local PLAYTEST_LEVEL = 100
+
 local AdminConfig = {
 	-- shaunie6 — playtest owner only (do not add random players)
 	UserIds = {
@@ -69,6 +73,31 @@ local AdminConfig = {
 	-- LoadProfile only: if UserId==470626172 and Cash below this, raise to this (simple max).
 	-- No ForceWipe / Ensure* floors. DataStore key bump (v2) forces fresh CreateDefault.
 	AdminPlaytestCash = 50_000_000,
+	-- v81: owner playtest (shaunie6 only, same LoadProfile hook as AdminPlaytestCash, every join, idempotent):
+	--   * Level raised to AdminPlaytestLevel (clamped to LevelConfig.MaxLevel = 100; XP 0 = the full XP of that
+	--     level, LevelConfig.GetTotalXPForLevel(100) = total earned). Never lowered.
+	--   * AdminPlaytestAllVehicles: every VehicleConfig.Vehicles id written into profile.Vehicles (all Ground,
+	--     all Air — helicopters, jets, bombers, transports — and all Naval).
+	--   * VehicleService skips the Helipad / Airfield / Dock / Depot level, Prestige and rebirth-flag gates on
+	--     SPAWN for this UserId only (AdminConfig.IsPlaytestOwner), so every aircraft spawns without the buildings.
+	-- Nobody else's profile and no shared economy value is touched.
+	PlaytestOwnerUserId = PLAYTEST_OWNER_USER_ID,
+	AdminPlaytestLevel = PLAYTEST_LEVEL,
+	AdminPlaytestAllVehicles = true,
+	-- v81: true only for the owner's playtest account (shaunie6). Pure: safe to require anywhere (server + Open
+	-- Cloud checks). Used by DataService (level + vehicles on LoadProfile) and VehicleService (spawn gate bypass).
+	IsPlaytestOwner = function(userId: any): boolean
+		local uid = tonumber(userId)
+		return uid ~= nil and uid == PLAYTEST_OWNER_USER_ID
+	end,
+	-- v81: the level the owner account is raised to (nil for everyone else), clamped to maxLevel (LevelConfig.MaxLevel)
+	PlaytestLevelFor = function(userId: any, maxLevel: number): number?
+		local uid = tonumber(userId)
+		if uid == nil or uid ~= PLAYTEST_OWNER_USER_ID then
+			return nil
+		end
+		return math.clamp(PLAYTEST_LEVEL, 1, math.max(1, math.floor(maxLevel)))
+	end,
 	Commands = {
 		"cash",
 		"givecash",
@@ -17797,7 +17826,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 80)
+		player:SetAttribute("WE_Build", 81)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -44353,7 +44382,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 80)
+			player:SetAttribute("WE_Build", 81)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -50691,15 +50720,62 @@ local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): b
 	return false
 end
 
+--[[ v81: owner playtest (shaunie6 only, AdminConfig.IsPlaytestOwner): on every LoadProfile, before the profile is
+	published / pushed, raise Level to AdminConfig.PlaytestLevelFor (100 = LevelConfig.MaxLevel; XP 0 = the full XP of
+	that level) and own every VehicleConfig.Vehicles id (all aircraft included). Idempotent, never lowers anything,
+	no level-up rewards, no cash. VehicleService skips the structure / prestige / rebirth spawn gates for this UserId. ]]
+local function applyAdminPlaytestUnlocks(userId: number, profile: PlayerProfile): boolean
+	if not AdminConfig.IsPlaytestOwner(userId) then
+		return false
+	end
+	local changed = false
+	local okLvl, errLvl = pcall(function()
+		local LevelConfig = require(Shared.Configs.LevelConfig)
+		local target = AdminConfig.PlaytestLevelFor(userId, LevelConfig.MaxLevel)
+		local have = math.floor(tonumber(profile.Level) or 1)
+		if target and have < target then
+			profile.Level = target
+			profile.XP = 0
+			changed = true
+		end
+	end)
+	if not okLvl then
+		warn("[DataService] admin playtest level failed:", errLvl)
+	end
+	if AdminConfig.AdminPlaytestAllVehicles then
+		local okVeh, errVeh = pcall(function()
+			local VehicleConfig = require(Shared.Configs.VehicleConfig)
+			if typeof(profile.Vehicles) ~= "table" then
+				(profile :: any).Vehicles = {}
+			end
+			for id in pairs(VehicleConfig.Vehicles) do
+				if profile.Vehicles[id] ~= true then
+					profile.Vehicles[id] = true
+					changed = true
+				end
+			end
+		end)
+		if not okVeh then
+			warn("[DataService] admin playtest vehicles failed:", errVeh)
+		end
+	end
+	return changed
+end
+
 local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local cash = math.floor(tonumber(profile.Cash) or 0)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 80)
+		player:SetAttribute("WE_Build", 81)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
+		-- v81: level replicated at load (HUD / Garage / Shop read WE_Level; CombatService keeps it fresh after)
+		local level = tonumber(profile.Level)
+		if level then
+			player:SetAttribute("WE_Level", math.floor(level))
+		end
 	end)
 	-- v60: leaderstats always — HUD reads this even if remotes dead
 	pcall(function()
@@ -50819,6 +50895,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 	applyStudioDevFlags(profile)
 	applyAdminPlaytestCash(userId, profile)
+	applyAdminPlaytestUnlocks(userId, profile)
 
 	profiles[userId] = profile
 	loaded[userId] = persistent
@@ -50830,7 +50907,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=80",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=81",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -71159,6 +71236,9 @@ local VehicleService = {}
 -- W2 (CC-2): vehicle HP for every vehicle. A module-table field, not a local (this file sits at Luau's 200-register
 -- limit for module locals).
 VehicleService._VehicleHealth = require(script.Parent.Parent.Modules.VehicleHealth)
+-- v81: owner playtest (AdminConfig.IsPlaytestOwner = shaunie6 only). A module field, not a local: this chunk is at
+-- the 200-register limit.
+VehicleService._AdminConfig = require(Shared.Configs.AdminConfig)
 -- streaming2 S3 (F8): pre-fetches a far seat's area before the auto-sit move (RequestSpawn). A no-op while
 -- Workspace.StreamingEnabled is false. A module-table field for the same register-limit reason.
 VehicleService._StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)
@@ -72893,6 +72973,11 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 		model:SetAttribute("WE_GroundDrive", "Client")
 	end
 	return model
+end
+
+-- v81: owner playtest account (AdminConfig.IsPlaytestOwner = shaunie6 only): every vehicle owned + spawn gates skipped
+function VehicleService._IsPlaytestOwner(player: Player): boolean
+	return VehicleService._AdminConfig.IsPlaytestOwner(player.UserId) == true
 end
 
 local function meetsStructureReq(profile: any, def: VehicleDef): (boolean, string?)
@@ -75058,16 +75143,20 @@ function VehicleService.Purchase(player: Player, vehicleId: any): (boolean, stri
 	if profile.Vehicles[vehicleId] then
 		return false, "AlreadyOwned"
 	end
-	if profile.Level < def.UnlockLevel then
-		return false, "LevelTooLow"
-	end
-	local okStruct, structErr = meetsStructureReq(profile, def)
-	if not okStruct then
-		return false, structErr
-	end
-	local okPres, presErr = meetsPrestigeReq(profile, def)
-	if not okPres then
-		return false, presErr
+	-- v81: the owner's playtest account (shaunie6 only) skips the level / Helipad / Airfield / Dock / Depot /
+	-- Prestige / rebirth-flag gates so every vehicle (all aircraft) can be tested without building the base first
+	if not VehicleService._IsPlaytestOwner(player) then
+		if profile.Level < def.UnlockLevel then
+			return false, "LevelTooLow"
+		end
+		local okStruct, structErr = meetsStructureReq(profile, def)
+		if not okStruct then
+			return false, structErr
+		end
+		local okPres, presErr = meetsPrestigeReq(profile, def)
+		if not okPres then
+			return false, presErr
+		end
 	end
 	local cost = def.CostCash or 0
 	if cost > 0 then
@@ -75109,18 +75198,28 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 		return false, "NoProfile"
 	end
 	if not profile.Vehicles[vehicleId] then
-		return false, "NotOwned"
+		if VehicleService._IsPlaytestOwner(player) then
+			-- v81: owner playtest owns every vehicle (DataService writes them at load; heal a late / missed write)
+			profile.Vehicles[vehicleId] = true
+			DataService.MarkDirty(player)
+		else
+			return false, "NotOwned"
+		end
 	end
-	if profile.Level < def.UnlockLevel then
-		return false, "LevelTooLow"
-	end
-	local okStruct, structErr = meetsStructureReq(profile, def)
-	if not okStruct then
-		return false, structErr
-	end
-	local okPres, presErr = meetsPrestigeReq(profile, def)
-	if not okPres then
-		return false, presErr
+	-- v81: the owner's playtest account (shaunie6 only) skips the level / Helipad / Airfield / Dock / Depot /
+	-- Prestige / rebirth-flag gates so every vehicle (all aircraft) can be tested without building the base first
+	if not VehicleService._IsPlaytestOwner(player) then
+		if profile.Level < def.UnlockLevel then
+			return false, "LevelTooLow"
+		end
+		local okStruct, structErr = meetsStructureReq(profile, def)
+		if not okStruct then
+			return false, structErr
+		end
+		local okPres, presErr = meetsPrestigeReq(profile, def)
+		if not okPres then
+			return false, presErr
+		end
 	end
 	if VehicleService._VehicleHealth.RepairLeft(player.UserId, vehicleId) > 0 then
 		return false, "Repairing" -- W2: destroyed → that id is locked for Destroy.RepairSeconds
@@ -75517,6 +75616,19 @@ function VehicleService.Init(deps: { [string]: any })
 		if not profile.Vehicles[starter] then
 			profile.Vehicles[starter] = true
 			DataService.MarkDirty(player)
+		end
+		-- v81: owner playtest (shaunie6 only) owns every vehicle incl. all aircraft (belt to DataService's load hook)
+		if VehicleService._IsPlaytestOwner(player) and VehicleService._AdminConfig.AdminPlaytestAllVehicles then
+			local added = false
+			for id in pairs(VehicleConfig.Vehicles) do
+				if profile.Vehicles[id] ~= true then
+					profile.Vehicles[id] = true
+					added = true
+				end
+			end
+			if added then
+				DataService.MarkDirty(player)
+			end
 		end
 		pushState(player)
 	end)

@@ -1094,8 +1094,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1160,7 +1160,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 81)', "v81 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1233,9 +1233,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 81)', "v81 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1262,9 +1262,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 81)', "v81 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1317,9 +1317,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 80)', "v80 WE_Build=80 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 80)', "v80 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 81)', "v81 WE_Build=81 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 81)', "v81 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -4877,6 +4877,23 @@ must_contain(WC2_CHECK2, "-- WE_CHECK2: WAR EMPIRE second model check (read-only
 must_contain(WC2_CHECK2, "\t\t\ttoDestroy:Destroy()", "wc2: the second check destroys every model it loaded")
 for _wc2_bad in (".Parent =", "SavePlaceAsync", "PublishAsync", "DataStoreService", "HttpService", "Instance.new("):
     must_not_contain(WC2_CHECK2, _wc2_bad, f"wc2: the second check never uses `{_wc2_bad}`")
+# v81: owner playtest (shaunie6 only): level 100 + every vehicle incl. all aircraft, spawn gates skipped for that UserId
+V81_AC = "src/ReplicatedStorage/Shared/Configs/AdminConfig.luau"
+V81_DS = "src/ServerScriptService/Server/Services/DataService.luau"
+V81_VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+must_contain(V81_AC, "local PLAYTEST_OWNER_USER_ID = 470626172", "v81 playtest owner = shaunie6 only")
+must_contain(V81_AC, "local PLAYTEST_LEVEL = 100", "v81 admin playtest level 100")
+must_contain(V81_AC, "AdminPlaytestAllVehicles = true", "v81 admin owns every vehicle")
+must_contain(V81_AC, "IsPlaytestOwner = function(userId: any): boolean", "v81 AdminConfig.IsPlaytestOwner")
+must_contain(V81_DS, "local function applyAdminPlaytestUnlocks(userId: number, profile: PlayerProfile): boolean", "v81 DataService admin unlock hook")
+must_contain(V81_DS, "if not AdminConfig.IsPlaytestOwner(userId) then", "v81 unlock hook is owner-only")
+must_contain(V81_DS, "\tapplyAdminPlaytestCash(userId, profile)\n\tapplyAdminPlaytestUnlocks(userId, profile)\n", "v81 unlocks applied on LoadProfile before publish")
+must_contain(V81_DS, 'player:SetAttribute("WE_Level", math.floor(level))', "v81 WE_Level replicated at load")
+must_contain(V81_VS, "VehicleService._AdminConfig = require(Shared.Configs.AdminConfig)", "v81 VehicleService requires AdminConfig (module field: register limit)")
+must_contain(V81_VS, "return VehicleService._AdminConfig.IsPlaytestOwner(player.UserId) == true", "v81 VehicleService owner check")
+must_contain(V81_VS, "\tif not VehicleService._IsPlaytestOwner(player) then\n\t\tif profile.Level < def.UnlockLevel then", "v81 spawn/purchase gates skipped for owner only")
+must_not_contain(V81_DS, "EnsureAdminPlaytestUnlocks", "v81 no Ensure* floors")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

@@ -161,15 +161,62 @@ local function applyAdminPlaytestCash(userId: number, profile: PlayerProfile): b
 	return false
 end
 
+--[[ v81: owner playtest (shaunie6 only, AdminConfig.IsPlaytestOwner): on every LoadProfile, before the profile is
+	published / pushed, raise Level to AdminConfig.PlaytestLevelFor (100 = LevelConfig.MaxLevel; XP 0 = the full XP of
+	that level) and own every VehicleConfig.Vehicles id (all aircraft included). Idempotent, never lowers anything,
+	no level-up rewards, no cash. VehicleService skips the structure / prestige / rebirth spawn gates for this UserId. ]]
+local function applyAdminPlaytestUnlocks(userId: number, profile: PlayerProfile): boolean
+	if not AdminConfig.IsPlaytestOwner(userId) then
+		return false
+	end
+	local changed = false
+	local okLvl, errLvl = pcall(function()
+		local LevelConfig = require(Shared.Configs.LevelConfig)
+		local target = AdminConfig.PlaytestLevelFor(userId, LevelConfig.MaxLevel)
+		local have = math.floor(tonumber(profile.Level) or 1)
+		if target and have < target then
+			profile.Level = target
+			profile.XP = 0
+			changed = true
+		end
+	end)
+	if not okLvl then
+		warn("[DataService] admin playtest level failed:", errLvl)
+	end
+	if AdminConfig.AdminPlaytestAllVehicles then
+		local okVeh, errVeh = pcall(function()
+			local VehicleConfig = require(Shared.Configs.VehicleConfig)
+			if typeof(profile.Vehicles) ~= "table" then
+				(profile :: any).Vehicles = {}
+			end
+			for id in pairs(VehicleConfig.Vehicles) do
+				if profile.Vehicles[id] ~= true then
+					profile.Vehicles[id] = true
+					changed = true
+				end
+			end
+		end)
+		if not okVeh then
+			warn("[DataService] admin playtest vehicles failed:", errVeh)
+		end
+	end
+	return changed
+end
+
 local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local cash = math.floor(tonumber(profile.Cash) or 0)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 80)
+		player:SetAttribute("WE_Build", 81)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
+		-- v81: level replicated at load (HUD / Garage / Shop read WE_Level; CombatService keeps it fresh after)
+		local level = tonumber(profile.Level)
+		if level then
+			player:SetAttribute("WE_Level", math.floor(level))
+		end
 	end)
 	-- v60: leaderstats always — HUD reads this even if remotes dead
 	pcall(function()
@@ -289,6 +336,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	end
 	applyStudioDevFlags(profile)
 	applyAdminPlaytestCash(userId, profile)
+	applyAdminPlaytestUnlocks(userId, profile)
 
 	profiles[userId] = profile
 	loaded[userId] = persistent
@@ -300,7 +348,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=80",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=81",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)

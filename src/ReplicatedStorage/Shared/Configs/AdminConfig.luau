@@ -1,6 +1,10 @@
 --!strict
 --[[ Add your Roblox UserIds here for admin commands + AdminPlaytestCash ]]
 
+-- v81: owner playtest account (shaunie6); see PlaytestOwnerUserId / IsPlaytestOwner below
+local PLAYTEST_OWNER_USER_ID = 470626172
+local PLAYTEST_LEVEL = 100
+
 local AdminConfig = {
 	-- shaunie6 — playtest owner only (do not add random players)
 	UserIds = {
@@ -9,6 +13,31 @@ local AdminConfig = {
 	-- LoadProfile only: if UserId==470626172 and Cash below this, raise to this (simple max).
 	-- No ForceWipe / Ensure* floors. DataStore key bump (v2) forces fresh CreateDefault.
 	AdminPlaytestCash = 50_000_000,
+	-- v81: owner playtest (shaunie6 only, same LoadProfile hook as AdminPlaytestCash, every join, idempotent):
+	--   * Level raised to AdminPlaytestLevel (clamped to LevelConfig.MaxLevel = 100; XP 0 = the full XP of that
+	--     level, LevelConfig.GetTotalXPForLevel(100) = total earned). Never lowered.
+	--   * AdminPlaytestAllVehicles: every VehicleConfig.Vehicles id written into profile.Vehicles (all Ground,
+	--     all Air — helicopters, jets, bombers, transports — and all Naval).
+	--   * VehicleService skips the Helipad / Airfield / Dock / Depot level, Prestige and rebirth-flag gates on
+	--     SPAWN for this UserId only (AdminConfig.IsPlaytestOwner), so every aircraft spawns without the buildings.
+	-- Nobody else's profile and no shared economy value is touched.
+	PlaytestOwnerUserId = PLAYTEST_OWNER_USER_ID,
+	AdminPlaytestLevel = PLAYTEST_LEVEL,
+	AdminPlaytestAllVehicles = true,
+	-- v81: true only for the owner's playtest account (shaunie6). Pure: safe to require anywhere (server + Open
+	-- Cloud checks). Used by DataService (level + vehicles on LoadProfile) and VehicleService (spawn gate bypass).
+	IsPlaytestOwner = function(userId: any): boolean
+		local uid = tonumber(userId)
+		return uid ~= nil and uid == PLAYTEST_OWNER_USER_ID
+	end,
+	-- v81: the level the owner account is raised to (nil for everyone else), clamped to maxLevel (LevelConfig.MaxLevel)
+	PlaytestLevelFor = function(userId: any, maxLevel: number): number?
+		local uid = tonumber(userId)
+		if uid == nil or uid ~= PLAYTEST_OWNER_USER_ID then
+			return nil
+		end
+		return math.clamp(PLAYTEST_LEVEL, 1, math.max(1, math.floor(maxLevel)))
+	end,
 	Commands = {
 		"cash",
 		"givecash",
