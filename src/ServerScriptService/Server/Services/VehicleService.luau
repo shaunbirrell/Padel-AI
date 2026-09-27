@@ -151,7 +151,9 @@ export type IdleState = {
 	RightClock: number?,
 	RightTimes: { number }?,
 }
-export type Footprint = { HalfX: number, HalfZ: number, Clearance: number, Top: number }
+-- vscale R2: VisHalfX / VisHalfZ / VisTop = a fitted Roblox-size body's extent (WE_Visual* attributes, chassis frame);
+-- nil for the plain Part kit. HalfX / HalfZ / Clearance / Top stay the kit's collidable box (driving, WE_HalfLength).
+export type Footprint = { HalfX: number, HalfZ: number, Clearance: number, Top: number, VisHalfX: number?, VisHalfZ: number?, VisTop: number? }
 export type SpawnPad = { Pos: Vector3, CFrame: CFrame, Size: Vector3, Naval: boolean }
 export type OccupiedSpot = { Pos: Vector3, Radius: number }
 export type SpawnCtx = {
@@ -177,6 +179,9 @@ export type SpawnCtx = {
 	-- player, but still water for a car), and a line-of-sight test (true = nothing solid between the two points)
 	AllWater: { BasePart }?,
 	Clear: ((from: Vector3, to: Vector3) -> boolean)?,
+	-- vscale R2.1: false = the car's box (kit or fitted body, the bigger) passes through tall visible non-colliding
+	-- decor (flag poles, palm trunks, the Garage sign, lintels); spots try clear of it first, then as before
+	DecorFree: ((cf: CFrame, half: Vector3, groundY: number) -> boolean)?,
 }
 export type SpawnChoice = { CFrame: CFrame, Source: string, State: string, Speed: number }
 export type ValidSample = { Pos: Vector3, Vel: Vector3, T: number, WaterY: number?, CFrame: CFrame? }
@@ -907,7 +912,16 @@ local function footprintOf(model: Model): Footprint
 			end
 		end
 	end
-	return { HalfX = hx, HalfZ = hz, Clearance = -low, Top = top }
+	local vx, vz, vt = model:GetAttribute("WE_VisualHalfWidth"), model:GetAttribute("WE_VisualHalfLength"), model:GetAttribute("WE_VisualTop")
+	return {
+		HalfX = hx,
+		HalfZ = hz,
+		Clearance = -low,
+		Top = top,
+		VisHalfX = if typeof(vx) == "number" then vx else nil,
+		VisHalfZ = if typeof(vz) == "number" then vz else nil,
+		VisTop = if typeof(vt) == "number" then vt else nil,
+	}
 end
 
 local function driveAttributes(def: VehicleDef, fp: Footprint, bonus: number?, armorMult: number?): { [string]: any }
@@ -995,6 +1009,42 @@ local function setMoverLimits(lv: LinearVelocity, ao: AlignOrientation, chassis:
 	return force
 end
 
+--[[ vscale R2.3 (review M1; Drive.Stability.DriveAtComXFamilies): on a fitted body the driver sits off the centreline
+	(Quad / Recon Buggy 1.62 left), so the centre of mass is too, and WE_DriveLV pushing at x = 0 turned the car
+	(a yaw couple of up to 84 % of WE_DriveAO on the Quad when the force limit saturates against a wall). Here
+	WE_DriveAttach.X = the centre of mass of the kit (WE_KitMass / WE_KitMomentX, set by _Ballast) plus a nominal
+	rider (RiderMass) on every occupied seat, or on the first seat (the driver's) when none is occupied. Y and Z stay
+	as _Ballast set them (the nominal driver). Called at build and on every seat's Occupant change; a kit without the
+	attributes (other families) is left alone. A module-table field: this file sits at Luau's 200-local limit. ]]
+VehicleService._DriveAttachX = function(chassis: BasePart, seats: { BasePart })
+	local att = chassis:FindFirstChild("WE_DriveAttach")
+	if not (att and att:IsA("Attachment")) then
+		return
+	end
+	local m = tonumber(att:GetAttribute("WE_KitMass"))
+	local mx = tonumber(att:GetAttribute("WE_KitMomentX"))
+	if m == nil or mx == nil then
+		return
+	end
+	local rm = Drive.Stability.RiderMass
+	local used = 0
+	for _, s in ipairs(seats) do
+		if s.Parent ~= nil and (s :: any).Occupant ~= nil then
+			m += rm
+			mx += chassis.CFrame:PointToObjectSpace(s.Position).X * rm
+			used += 1
+		end
+	end
+	if used == 0 and seats[1] and seats[1].Parent ~= nil then
+		m += rm
+		mx += chassis.CFrame:PointToObjectSpace(seats[1].Position).X * rm
+	end
+	if m > 0 then
+		local p = att.Position
+		att.Position = Vector3.new(mx / m, p.Y, p.Z)
+	end
+end
+
 --[[ Rollover fix (VehicleConfig.Drive.Stability; Car-mode kits of the listed families only): the WE_Ballast part and
 	WE_DriveAttach moved to the centre of mass with a nominal rider. Returns what WE_UprightAO needs (weight with the
 	rider, lever arm = min(half track to the tyre's outer face, half wheelbase)), or nil when the family gets nothing.
@@ -1058,6 +1108,11 @@ VehicleService._Ballast = function(model: Model, chassis: BasePart, attach: Atta
 			moment += ccf:PointToObjectSpace(d.Position) * pm
 		end
 	end
+	if cfg.DriveAtComXFamilies[def.KitFamily or ""] == true then
+		-- vscale R2.3: the kit alone (no rider), for _DriveAttachX
+		attach:SetAttribute("WE_KitMass", mass)
+		attach:SetAttribute("WE_KitMomentX", moment.X)
+	end
 	local seat = model:FindFirstChild("DriverSeat")
 	if seat and seat:IsA("BasePart") and cfg.RiderMass > 0 then
 		local sp = ccf:PointToObjectSpace(seat.Position) + Vector3.new(0, seat.Size.Y * 0.5 + cfg.RiderLift, 0)
@@ -1070,6 +1125,9 @@ VehicleService._Ballast = function(model: Model, chassis: BasePart, attach: Atta
 	if cfg.DriveAtCoM then
 		local com = moment / mass
 		attach.Position = Vector3.new(0, com.Y, com.Z)
+		if seat and seat:IsA("BasePart") then
+			VehicleService._DriveAttachX(chassis, { seat }) -- vscale R2.3: X too, with the nominal driver
+		end
 	end
 	return { Weight = mass * Workspace.Gravity, Arm = math.min(halfTrack, (zMax - zMin) * 0.5) }
 end
@@ -1940,15 +1998,16 @@ end
 type PadDist = { Pad: SpawnPad, D: number }
 type Offset2 = { X: number, Z: number }
 
+-- vscale R2: the bigger of the kit and a fitted body (spawn spacing, Occupied, PlayerFront distance, auto-sit reach)
 local function footRadius(fp: Footprint): number
-	return math.max(fp.HalfX, fp.HalfZ)
+	return math.max(fp.HalfX, fp.HalfZ, fp.VisHalfX or 0, fp.VisHalfZ or 0)
 end
 
 local function rideOffsetOf(fp: Footprint): number
 	return fp.Clearance - BoatCfg.Draft
 end
 
-local function spotFree(ctx: SpawnCtx, cf: CFrame): boolean
+local function spotFree(ctx: SpawnCtx, cf: CFrame, decor: boolean?): boolean
 	local fp = ctx.Footprint
 	local pos = cf.Position
 	local r = footRadius(fp)
@@ -1958,17 +2017,25 @@ local function spotFree(ctx: SpawnCtx, cf: CFrame): boolean
 		end
 	end
 	local boxFree = ctx.BoxFree
-	if boxFree then
-		-- from just above the lowest solid point to the top of the kit, over the XZ footprint
+	local decorFree = if decor then ctx.DecorFree else nil
+	if boxFree or decorFree then
+		-- from just above the lowest solid point to the top of the kit, over the XZ footprint; vscale R2: grown to a
+		-- fitted body's extent and roof, so a Roblox-size body never spawns into a wall or prop the kit would clear
 		local lowY = -fp.Clearance + 0.15
-		local highY = math.max(fp.Top, lowY + 0.5)
-		local half = Vector3.new(fp.HalfX, (highY - lowY) * 0.5, fp.HalfZ)
-		if not boxFree(cf * CFrame.new(0, (lowY + highY) * 0.5, 0), half) then
+		local highY = math.max(fp.Top, fp.VisTop or fp.Top, lowY + 0.5)
+		local half = Vector3.new(math.max(fp.HalfX, fp.VisHalfX or 0), (highY - lowY) * 0.5, math.max(fp.HalfZ, fp.VisHalfZ or 0))
+		local box = cf * CFrame.new(0, (lowY + highY) * 0.5, 0)
+		if boxFree and not boxFree(box, half) then
+			return false
+		end
+		-- vscale R2.1: the same box clear of tall visible non-colliding decor (the first of two passes over each spot list)
+		if decorFree and not decorFree(box, half, pos.Y - fp.Clearance - SpawnCfg.Clearance) then
 			return false
 		end
 	end
 	return true
 end
+
 
 -- Land spot: chassis Y = surface + Clearance + 0.3 (a ray when available, else refTop).
 local function landSpot(ctx: SpawnCtx, x: number, z: number, refTop: number, heading: number): CFrame?
@@ -1986,16 +2053,36 @@ local function landSpot(ctx: SpawnCtx, x: number, z: number, refTop: number, hea
 	return CFrame.new(x, y + ctx.Footprint.Clearance + SpawnCfg.Clearance, z) * CFrame.Angles(0, heading, 0)
 end
 
-local function aroundOffsets(fp: Footprint): { Offset2 }
-	local s = 2 * footRadius(fp) + SpawnCfg.OffsetStep
-	return { { X = 0, Z = 0 }, { X = s, Z = 0 }, { X = -s, Z = 0 }, { X = 0, Z = s }, { X = 0, Z = -s } }
+--[[ The centre, then four spots 2 x footRadius + OffsetStep away. vscale R2.1 (review): a parked car counts at its
+	fitted size (a Roblox-size van / pickup reaches 13.1-13.3 from its centre), so near a pad centre it can block all
+	five for a smaller car and the chooser moved on to another player's pad 570-740 studs away. A second ring (sides,
+	ends and diagonals) at footRadius + the biggest parked radius + 2 + RingMargin clears it around the same pad; it
+	is only tried after the first five, so an empty pad is unchanged. ]]
+local function aroundOffsets(fp: Footprint, occupied: { OccupiedSpot }?): { Offset2 }
+	local r = footRadius(fp)
+	local s = 2 * r + SpawnCfg.OffsetStep
+	local out = { { X = 0, Z = 0 }, { X = s, Z = 0 }, { X = -s, Z = 0 }, { X = 0, Z = s }, { X = 0, Z = -s } }
+	local big = 0
+	for _, o in ipairs(occupied or {}) do
+		big = math.max(big, o.Radius)
+	end
+	local s2 = r + big + 2 + SpawnCfg.RingMargin
+	if s2 > s + 0.01 then
+		local d = s2 * math.sqrt(0.5)
+		for _, o in ipairs({ { s2, 0 }, { -s2, 0 }, { 0, s2 }, { 0, -s2 }, { d, d }, { -d, d }, { d, -d }, { -d, -d } }) do
+			table.insert(out, { X = o[1], Z = o[2] })
+		end
+	end
+	return out
 end
 
 local function firstFreeLand(ctx: SpawnCtx, x: number, z: number, refTop: number, heading: number, offsets: { Offset2 }): CFrame?
-	for _, o in ipairs(offsets) do
-		local cf = landSpot(ctx, x + o.X, z + o.Z, refTop, heading)
-		if cf and spotFree(ctx, cf) then
-			return cf
+	for _, decor in ipairs(if ctx.DecorFree then { true, false } else { false }) do -- R2.1: clear of decor first, then as R2
+		for _, o in ipairs(offsets) do
+			local cf = landSpot(ctx, x + o.X, z + o.Z, refTop, heading)
+			if cf and spotFree(ctx, cf, decor) then
+				return cf
+			end
 		end
 	end
 	return nil
@@ -2071,10 +2158,22 @@ local function playerFront(ctx: SpawnCtx, state: string): SpawnChoice?
 	local heading = math.atan2(-look.X, -look.Z)
 	-- land vehicles only (Car / Heli / Plane): never a spot over water (a player on a pier facing the sea), never
 	-- across a wall (the auto-sit would carry the player through it) and never under a roof (inside a building)
-	for _, o in ipairs(aroundOffsets(ctx.Footprint)) do
-		local cf = landSpot(ctx, ahead.X + o.X, ahead.Z + o.Z, pp.Y - 3, heading)
-		if cf and not overAnyWater(ctx, cf) and inSight(ctx, pp, cf) and openSky(ctx, cf) and spotFree(ctx, cf) then
-			return choice(cf, "PlayerFront", state)
+	-- vscale R2: never with the car (kit or fitted body, the bigger) over the player's own root part
+	local fp = ctx.Footprint
+	local ex = math.max(fp.HalfX, fp.VisHalfX or 0) + SpawnCfg.PlayerClear
+	local ez = math.max(fp.HalfZ, fp.VisHalfZ or 0) + SpawnCfg.PlayerClear
+	local offsets = aroundOffsets(ctx.Footprint, ctx.Occupied)
+	-- R2.1: clear of decor first (the player's heading, then turned a quarter), then as R2
+	local decorPass: { boolean } = if ctx.DecorFree then { true, true, false } else { false }
+	local turnPass: { number } = if ctx.DecorFree then { 0, math.pi / 2, 0 } else { 0 }
+	for i, decor in ipairs(decorPass) do
+		for _, o in ipairs(offsets) do
+			local cf = landSpot(ctx, ahead.X + o.X, ahead.Z + o.Z, pp.Y - 3, heading + turnPass[i])
+			local rel = if cf then cf:PointToObjectSpace(pp) else nil
+			local overPlayer = rel ~= nil and math.abs(rel.X) < ex and math.abs(rel.Z) < ez
+			if cf and not overPlayer and not overAnyWater(ctx, cf) and inSight(ctx, pp, cf) and openSky(ctx, cf) and spotFree(ctx, cf, decor) then
+				return choice(cf, "PlayerFront", state)
+			end
 		end
 	end
 	return nil
@@ -2114,11 +2213,13 @@ local function firstFreePlotLand(
 	offsets: { Offset2 }
 ): CFrame?
 	local h = heading + yawOf(frame)
-	for _, o in ipairs(offsets) do
-		local wx, wz = plotXZ(frame, x, z, o.X, o.Z)
-		local cf = landSpot(ctx, wx, wz, refTop, h)
-		if cf and spotFree(ctx, cf) then
-			return cf
+	for _, decor in ipairs(if ctx.DecorFree then { true, false } else { false }) do -- R2.1: clear of decor first, then as R2
+		for _, o in ipairs(offsets) do
+			local wx, wz = plotXZ(frame, x, z, o.X, o.Z)
+			local cf = landSpot(ctx, wx, wz, refTop, h)
+			if cf and spotFree(ctx, cf, decor) then
+				return cf
+			end
 		end
 	end
 	return nil
@@ -2138,7 +2239,7 @@ end
 
 local function chooseCar(ctx: SpawnCtx): SpawnChoice
 	local fp = ctx.Footprint
-	local offsets = aroundOffsets(fp)
+	local offsets = aroundOffsets(fp, ctx.Occupied)
 	if ctx.AwayFromHome then
 		-- P1-9: away from your own plot SPAWN puts it in front of you, not on a pad 650 studs away or at home
 		local front = playerFront(ctx, "Grounded")
@@ -2189,7 +2290,7 @@ local function chooseHeli(ctx: SpawnCtx): SpawnChoice
 		end
 	end
 	local origin = ctx.PlayerPos or plot
-	local offsets = aroundOffsets(fp)
+	local offsets = aroundOffsets(fp, ctx.Occupied)
 	for _, e in ipairs(padsByDistance(ctx.VehiclePads, origin, false, nil)) do
 		local cf = firstFreeLand(ctx, e.Pad.Pos.X, e.Pad.Pos.Z, padTop(e.Pad), yawOf(e.Pad.CFrame), offsets)
 		if cf then
@@ -2535,7 +2636,10 @@ local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Foo
 		if m ~= exclude and m.Parent and rec.Chassis.Parent then
 			local hx = tonumber(m:GetAttribute("WE_HalfWidth")) or 4
 			local hz = tonumber(m:GetAttribute("WE_HalfLength")) or 6
-			table.insert(occupied, { Pos = rec.Chassis.Position, Radius = math.max(hx, hz) })
+			-- vscale R2: a parked Roblox-size body counts at its own size
+			local vx = tonumber(m:GetAttribute("WE_VisualHalfWidth")) or 0
+			local vz = tonumber(m:GetAttribute("WE_VisualHalfLength")) or 0
+			table.insert(occupied, { Pos = rec.Chassis.Position, Radius = math.max(hx, hz, vx, vz) })
 		end
 	end
 	local groundEx = rayParams(exclusionList(true, false))
@@ -2576,6 +2680,11 @@ local function buildSpawnCtx(player: Player, profile: any, mode: string, fp: Foo
 		Clear = function(from: Vector3, to: Vector3): boolean
 			return Workspace:Raycast(from, to - from, groundEx) == nil
 		end,
+		DecorFree = if SpawnCfg.Decor.Enabled
+			then function(cf: CFrame, half: Vector3, groundY: number): boolean
+				return VehicleService._DecorFree(cf, half, groundY)
+			end
+			else nil,
 	}
 	return ctx
 end
@@ -3778,6 +3887,557 @@ local function researchMult(player: Player, statId: string, maxBonus: number): n
 	return math.clamp(n, 1, maxBonus)
 end
 
+--[[ vscale R2 (owner, phone: the cars looked tiny under the avatar). Option B shows Roblox-size bodies over the
+	unchanged Part kit and moves the kit seats onto the body's seats, so a seated rider's torso starts inside the kit's
+	collidable Cabin / Cargo and touch-to-sit cannot reach most moved seats. Module-table fields (this chunk sits at
+	Luau's 200-local limit):
+	  * _SeatAllowed: VehicleCombatConfig.SeatPolicy for one role ("Anyone" / "Owner" / "OwnerOrClan"; squad units
+	    never ride, F8).
+	  * _ExitSpot / _PlaceExit / _OnSeatLeft (Drive.ExitSpot): a rider who left any seat stands on a clear spot beside
+	    the car, outside the visible body.
+	  * _AddRidePrompt / _RideSync / _Ride (Drive.Ride): one "Ride" prompt per car seats a passenger server-side. ]]
+VehicleService._Clans = nil :: any -- deps.ClanService (Init)
+
+-- vscale R2.1: overlap depth of two oriented boxes (separating-axis test, 15 axes; 0 = apart)
+VehicleService._ObbPen = function(a: CFrame, ha: Vector3, b: CFrame, hb: Vector3): number
+	local A = { a.RightVector, a.UpVector, a.LookVector }
+	local B = { b.RightVector, b.UpVector, b.LookVector }
+	local ea = { ha.X, ha.Y, ha.Z }
+	local eb = { hb.X, hb.Y, hb.Z }
+	local t = b.Position - a.Position
+	local best = math.huge
+	local function apart(axis: Vector3): boolean
+		local len = axis.Magnitude
+		if len < 1e-6 then
+			return false
+		end
+		local u = axis / len
+		local ra = ea[1] * math.abs(A[1]:Dot(u)) + ea[2] * math.abs(A[2]:Dot(u)) + ea[3] * math.abs(A[3]:Dot(u))
+		local rb = eb[1] * math.abs(B[1]:Dot(u)) + eb[2] * math.abs(B[2]:Dot(u)) + eb[3] * math.abs(B[3]:Dot(u))
+		local pen = ra + rb - math.abs(t:Dot(u))
+		if pen <= 0 then
+			return true
+		end
+		best = math.min(best, pen)
+		return false
+	end
+	for i = 1, 3 do
+		if apart(A[i]) or apart(B[i]) then
+			return 0
+		end
+	end
+	for i = 1, 3 do
+		for j = 1, 3 do
+			if apart(A[i]:Cross(B[j])) then
+				return 0
+			end
+		end
+	end
+	return best
+end
+
+--[[ vscale R2.1 (review): SPAWN keeps a Roblox-size body out of tall visible non-colliding decor (flag poles at the
+	POI centres, palm trunks, reeds, fort gate lintels, the Garage sign and post). Most of it is CanQuery = false, so no
+	box query can see it: an index of every anchored, visible (Transparency < MaxTransparency), non-colliding BasePart
+	outside the vehicles folder, at most MaxSize long, is built from ONE Workspace:GetDescendants() pass on the first
+	SPAWN and rebuilt at most every Drive.Spawn.Decor.RefreshSeconds, only when a SPAWN asks (never per frame). ]]
+VehicleService._Decor = nil :: any
+VehicleService._DecorGrid = function(): { [number]: { any } }
+	local cfg = SpawnCfg.Decor
+	local cur = VehicleService._Decor
+	local now = os.clock()
+	if cur and now - cur.At < cfg.RefreshSeconds then
+		return cur.Grid
+	end
+	local grid: { [number]: { any } } = {}
+	local cell = cfg.Cell
+	local folder = ensureFolder()
+	for _, d in ipairs(Workspace:GetDescendants()) do
+		if
+			d:IsA("BasePart")
+			and d.Anchored
+			and not d.CanCollide
+			and d.Transparency < cfg.MaxTransparency
+			and not d:IsDescendantOf(folder)
+			and not CollectionService:HasTag(d, Constants.Tags.Water)
+		then
+			local size = d.Size
+			if math.max(size.X, size.Y, size.Z) <= cfg.MaxSize then
+				local cf = d.CFrame
+				local h = size * 0.5
+				local ex = math.abs(cf.RightVector.X) * h.X + math.abs(cf.UpVector.X) * h.Y + math.abs(cf.LookVector.X) * h.Z
+				local ey = math.abs(cf.RightVector.Y) * h.X + math.abs(cf.UpVector.Y) * h.Y + math.abs(cf.LookVector.Y) * h.Z
+				local ez = math.abs(cf.RightVector.Z) * h.X + math.abs(cf.UpVector.Z) * h.Y + math.abs(cf.LookVector.Z) * h.Z
+				local p = cf.Position
+				local e = { CF = cf, H = h, Top = p.Y + ey }
+				for ix = math.floor((p.X - ex) / cell), math.floor((p.X + ex) / cell) do
+					for iz = math.floor((p.Z - ez) / cell), math.floor((p.Z + ez) / cell) do
+						local k = (ix + 4096) * 8192 + (iz + 4096)
+						local list = grid[k]
+						if list == nil then
+							list = {}
+							grid[k] = list
+						end
+						table.insert(list, e)
+					end
+				end
+			end
+		end
+	end
+	VehicleService._Decor = { At = now, Grid = grid }
+	return grid
+end
+
+-- true = the box (world CFrame + half size) is clear of indexed decor standing more than MinTop over groundY
+VehicleService._DecorFree = function(box: CFrame, half: Vector3, groundY: number): boolean
+	local cfg = SpawnCfg.Decor
+	local grid = VehicleService._DecorGrid()
+	local cell = cfg.Cell
+	local p = box.Position
+	local ex = math.abs(box.RightVector.X) * half.X + math.abs(box.UpVector.X) * half.Y + math.abs(box.LookVector.X) * half.Z
+	local ez = math.abs(box.RightVector.Z) * half.X + math.abs(box.UpVector.Z) * half.Y + math.abs(box.LookVector.Z) * half.Z
+	local seen: { [any]: boolean } = {}
+	for ix = math.floor((p.X - ex) / cell), math.floor((p.X + ex) / cell) do
+		for iz = math.floor((p.Z - ez) / cell), math.floor((p.Z + ez) / cell) do
+			for _, e in ipairs(grid[(ix + 4096) * 8192 + (iz + 4096)] or {}) do
+				if not seen[e] then
+					seen[e] = true
+					if e.Top > groundY + cfg.MinTop and VehicleService._ObbPen(box, half, e.CF, e.H) > cfg.Tolerance then
+						return false
+					end
+				end
+			end
+		end
+	end
+	return true
+end
+
+VehicleService._SeatAllowed = function(rec: VehicleRec, player: Player, role: string): boolean
+	local rule = (require(Shared.Configs.VehicleCombatConfig).SeatPolicy :: any)[role]
+	if rule == "Anyone" or player == rec.Owner then
+		return true
+	end
+	local clans = VehicleService._Clans
+	if rule == "OwnerOrClan" and clans and clans.GetClanId then
+		local okA, a = pcall(clans.GetClanId, rec.Owner)
+		local okB, b = pcall(clans.GetClanId, player)
+		return okA and okB and typeof(a) == "string" and a ~= "" and a == b
+	end
+	return false
+end
+
+--[[ Where a rider who just left `seat` stands (root-part CFrame, facing the car's heading), or nil. Candidates in the
+	car's flat frame (it faces -Z): the seat's side (Drive.ExitSpot.Side, else the side the seat is on) at
+	x = +-(W + Gap + HalfWidth) and the seat's z, the other side, behind the body at z = L + Gap + HalfWidth, in front
+	of it, then (R2.1, a seat more than HalfWidth off the centre) both sides again at z = 0; then the same FarStep
+	further out. Behind / in front only while the car moves toward that end slower
+	than EndMaxSpeed (never into its path). W / L = max(kit WE_HalfWidth / WE_HalfLength, fitted WE_VisualHalfWidth /
+	WE_VisualHalfLength). A spot needs a CanCollide ground hit (not water) within StepUp above / MaxDrop below the
+	car's wheel line, no WE_Water over it, an empty standing box, no other car's body over it and a clear line from
+	inside the car (this car and every character ignored).
+	vscale R2.1 (review): the line of sight starts INSIDE the collidable kit, never at the seat. A Roblox-size body's
+	seat can sit past the kit's nose, inside a wall the kit touches, and a ray that starts inside a part does not hit
+	it: the "in front" spot past a perimeter wall passed. Anchors: the chassis centre (refused outright when a world
+	part overlaps it), straight above it at the rider's height, and the seat's rider point when the kit can see it.
+	Every anchor needs a clear line to the spot. The stand box also stays out of every other car's fitted body (its
+	WE_Visual* extent: non-colliding, so the CanCollide box query cannot see it). Second result: true when the seat's
+	rider point is inside a world part or behind one as seen from the kit.
+	vscale R2.2 (review): other players are NOT ignored where the rider will stand. The stand box ignores only the leaving
+	rider's character (riderChar) and this car, so a standing player blocks it, and a spot where the rider's root part
+	would come closer than RiderGap to another player's root part, or to a spot handed out in the last HoldSeconds
+	(_ExitHeld), is taken (_ExitTaken): riders who leave together (a wreck drops everyone in one pass) or one after
+	another never land inside each other. Behind and in front each get two more spots EndSideStep to either side, so an
+	alley still has room for a full car. Rays (ground, lines of sight) still ignore every character: a player is not a
+	wall, and a ground ray must never land on a head. ]]
+VehicleService._ExitHeld = {} :: { { At: number, CF: CFrame, HX: number, HZ: number, Char: Instance } }
+-- R2.2: half size (flat x / z) of a character's root part (R15 / R6 2 x 1; scaled avatars their own), else HalfWidth x half
+VehicleService._RootHalf = function(char: Instance?): (number, number)
+	local r = if char then char:FindFirstChild("HumanoidRootPart") else nil
+	if r and r:IsA("BasePart") then
+		return r.Size.X * 0.5, r.Size.Z * 0.5
+	end
+	local hw = Drive.ExitSpot.HalfWidth
+	return hw, hw * 0.5
+end
+-- R2.2: true = a root part of half size (hx, hz) standing at `stand` would come closer than RiderGap (flat) to another
+-- player's character (its root part, any heading) or to a spot handed out in the last HoldSeconds. Separating-axis
+-- test on the ground plane, both boxes grown by half the gap; only within StandHeight up or down.
+VehicleService._ExitTaken = function(stand: CFrame, riderChar: Instance?): boolean
+	local cfg = Drive.ExitSpot
+	local hx, hz = VehicleService._RootHalf(riderChar)
+	local g = cfg.RiderGap * 0.5
+	local p = stand.Position
+	local function flatUnit(v: Vector3, fallback: Vector3): Vector3
+		local f = Vector3.new(v.X, 0, v.Z)
+		return if f.Magnitude > 0.1 then f.Unit else fallback
+	end
+	local ar, al = flatUnit(stand.RightVector, Vector3.xAxis), flatUnit(stand.LookVector, Vector3.zAxis)
+	local function overlaps(cf: CFrame, ox: number, oz: number): boolean
+		local q = cf.Position
+		if math.abs(q.Y - p.Y) >= cfg.StandHeight then
+			return false
+		end
+		local br, bl = flatUnit(cf.RightVector, Vector3.xAxis), flatUnit(cf.LookVector, Vector3.zAxis)
+		local d = Vector3.new(q.X - p.X, 0, q.Z - p.Z)
+		for _, axis in ipairs({ ar, al, br, bl }) do
+			local ra = (hx + g) * math.abs(ar:Dot(axis)) + (hz + g) * math.abs(al:Dot(axis))
+			local rb = (ox + g) * math.abs(br:Dot(axis)) + (oz + g) * math.abs(bl:Dot(axis))
+			if math.abs(d:Dot(axis)) >= ra + rb then
+				return false
+			end
+		end
+		return true
+	end
+	for _, pl in ipairs(Players:GetPlayers()) do
+		local ch = pl.Character
+		local r = if ch and ch ~= riderChar then ch:FindFirstChild("HumanoidRootPart") else nil
+		if r and r:IsA("BasePart") and overlaps(r.CFrame, r.Size.X * 0.5, r.Size.Z * 0.5) then
+			return true
+		end
+	end
+	local now = os.clock()
+	for _, h in ipairs(VehicleService._ExitHeld) do
+		if h.Char ~= riderChar and h.Char.Parent ~= nil and now - h.At < cfg.HoldSeconds and overlaps(h.CF, h.HX, h.HZ) then
+			local hum = h.Char:FindFirstChildOfClass("Humanoid")
+			if hum and hum.SeatPart == nil then
+				return true -- still on foot (a rider seated again, gone or respawned holds nothing)
+			end
+		end
+	end
+	return false
+end
+-- R2.2: remember a spot handed out (dropping expired ones and riders who are gone or seated again)
+VehicleService._ExitHold = function(spot: CFrame, char: Instance)
+	local now = os.clock()
+	local keep: { { At: number, CF: CFrame, HX: number, HZ: number, Char: Instance } } = {}
+	for _, h in ipairs(VehicleService._ExitHeld) do
+		local hum = if h.Char.Parent then h.Char:FindFirstChildOfClass("Humanoid") else nil
+		if h.Char ~= char and now - h.At < Drive.ExitSpot.HoldSeconds and hum and hum.SeatPart == nil then
+			table.insert(keep, h)
+		end
+	end
+	local hx, hz = VehicleService._RootHalf(char)
+	table.insert(keep, { At = now, CF = spot, HX = hx, HZ = hz, Char = char })
+	VehicleService._ExitHeld = keep
+end
+VehicleService._ExitSpot = function(model: Model, chassis: BasePart, seat: BasePart, hipAbove: number, riderChar: Instance?): (CFrame?, boolean)
+	local cfg = Drive.ExitSpot
+	local look = flat(chassis.CFrame.LookVector)
+	look = if look.Magnitude > 0.05 then look.Unit else Vector3.new(0, 0, -1)
+	local frame = CFrame.lookAt(chassis.Position, chassis.Position + look)
+	local w = math.max(tonumber(model:GetAttribute("WE_HalfWidth")) or chassis.Size.X * 0.5, tonumber(model:GetAttribute("WE_VisualHalfWidth")) or 0)
+	local l = math.max(tonumber(model:GetAttribute("WE_HalfLength")) or chassis.Size.Z * 0.5, tonumber(model:GetAttribute("WE_VisualHalfLength")) or 0)
+	local wheelY = chassis.Position.Y - (tonumber(model:GetAttribute("WE_GroundClearance")) or chassis.Size.Y * 0.5)
+	local sp = frame:PointToObjectSpace(seat.Position)
+	local want = cfg.Side[seat.Name]
+	local side = if want == "Right" then 1 elseif want == "Left" then -1 elseif sp.X > 0.05 then 1 else -1
+	local exclude = characterList()
+	table.insert(exclude, model)
+	local rp = rayParams(exclude)
+	local op = OverlapParams.new()
+	op.FilterType = Enum.RaycastFilterType.Exclude
+	op.FilterDescendantsInstances = exclude
+	op.RespectCanCollide = true
+	op.MaxParts = 1
+	-- R2.2: the stand box sees every other character (a standing player blocks it); only the rider and this car are ignored
+	local opStand = OverlapParams.new()
+	opStand.FilterType = Enum.RaycastFilterType.Exclude
+	opStand.FilterDescendantsInstances = if riderChar then { riderChar, model } else { model }
+	opStand.RespectCanCollide = true
+	opStand.MaxParts = 1
+	local probe = Vector3.one * cfg.AnchorProbe
+	local anchor = chassis.Position
+	if #Workspace:GetPartBoundsInBox(CFrame.new(anchor), probe, op) > 0 then
+		return nil, true -- the kit itself overlaps a world part: no move
+	end
+	local rider = seat.Position + Vector3.new(0, seat.Size.Y * 0.5 + 1.5, 0)
+	local anchors = { anchor }
+	local above = Vector3.new(anchor.X, math.max(anchor.Y, rider.Y), anchor.Z)
+	if above.Y > anchor.Y + 0.05 and Workspace:Raycast(anchor, above - anchor, rp) == nil and #Workspace:GetPartBoundsInBox(CFrame.new(above), probe, op) == 0 then
+		table.insert(anchors, above)
+	end
+	local seatBlocked = Workspace:Raycast(anchor, rider - anchor, rp) ~= nil or #Workspace:GetPartBoundsInBox(CFrame.new(rider), probe, op) > 0
+	if not seatBlocked then
+		table.insert(anchors, rider)
+	end
+	-- other cars near enough to matter (every model in the vehicles folder): their fitted body (else kit) box in their
+	-- own chassis frame
+	local near: { { cf: CFrame, hx: number, hz: number, lo: number, hi: number } } = {}
+	for _, m in ipairs(ensureFolder():GetChildren()) do
+		local och = if m:IsA("Model") and m ~= model then m.PrimaryPart else nil
+		if och and (och.Position - anchor).Magnitude < cfg.NeighbourRange then
+			local vt = tonumber(m:GetAttribute("WE_VisualTop"))
+			table.insert(near, {
+				cf = och.CFrame,
+				hx = math.max(tonumber(m:GetAttribute("WE_HalfWidth")) or och.Size.X * 0.5, tonumber(m:GetAttribute("WE_VisualHalfWidth")) or 0),
+				hz = math.max(tonumber(m:GetAttribute("WE_HalfLength")) or och.Size.Z * 0.5, tonumber(m:GetAttribute("WE_VisualHalfLength")) or 0),
+				lo = -(tonumber(m:GetAttribute("WE_GroundClearance")) or och.Size.Y * 0.5),
+				hi = math.max(vt or 0, och.Size.Y * 0.5 + 4),
+			})
+		end
+	end
+	local hw = cfg.HalfWidth
+	local function inOtherBody(c: Vector3, y0: number): boolean
+		local ax, az = frame.RightVector, frame.LookVector
+		for _, n in ipairs(near) do
+			local ry0 = y0 - n.cf.Position.Y
+			if ry0 < n.hi and ry0 + cfg.StandHeight > n.lo then
+				local bx, bz = n.cf.RightVector, n.cf.LookVector
+				local d = c - n.cf.Position
+				local apart = false
+				for _, axis in ipairs({ ax, az, bx, bz }) do
+					local ra = hw * math.abs(ax:Dot(axis)) + hw * math.abs(az:Dot(axis))
+					local rb = n.hx * math.abs(bx:Dot(axis)) + n.hz * math.abs(bz:Dot(axis))
+					if math.abs(d:Dot(axis)) >= ra + rb then
+						apart = true
+						break
+					end
+				end
+				if not apart then
+					return true
+				end
+			end
+		end
+		return false
+	end
+	local boxSize = Vector3.new(hw * 2, cfg.StandHeight, hw * 2)
+	local vel = chassis.AssemblyLinearVelocity
+	local vz = if typeof(vel) == "Vector3" then frame:VectorToObjectSpace(vel).Z else 0 -- + = backing up (the car faces -Z)
+	for ring = 0, 1 do
+		local out = cfg.Gap + hw + ring * cfg.FarStep
+		local spots = { Vector3.new(side * (w + out), 0, sp.Z), Vector3.new(-side * (w + out), 0, sp.Z) }
+		if vz < cfg.EndMaxSpeed then
+			table.insert(spots, Vector3.new(0, 0, l + out)) -- behind
+		end
+		if -vz < cfg.EndMaxSpeed then
+			table.insert(spots, Vector3.new(0, 0, -(l + out))) -- in front
+		end
+		if math.abs(sp.Z) > hw then
+			-- R2.1: both sides again level with the chassis centre (a front-row seat's own z can be at a wall the nose touches)
+			table.insert(spots, Vector3.new(side * (w + out), 0, 0))
+			table.insert(spots, Vector3.new(-side * (w + out), 0, 0))
+		end
+		-- R2.2: behind / in front again, EndSideStep to either side (more riders than end spots in an alley)
+		for _, dx in ipairs({ -cfg.EndSideStep, cfg.EndSideStep }) do
+			if vz < cfg.EndMaxSpeed then
+				table.insert(spots, Vector3.new(dx, 0, l + out))
+			end
+			if -vz < cfg.EndMaxSpeed then
+				table.insert(spots, Vector3.new(dx, 0, -(l + out)))
+			end
+		end
+		for _, o in ipairs(spots) do
+			local p = frame:PointToWorldSpace(o)
+			local hit = Workspace:Raycast(Vector3.new(p.X, wheelY + cfg.StepUp, p.Z), Vector3.new(0, -(cfg.StepUp + cfg.MaxDrop), 0), rp)
+			if hit and hit.Material ~= Enum.Material.Water and not CollectionService:HasTag(hit.Instance, Constants.Tags.Water) then
+				local gy = hit.Position.Y
+				local wet = false
+				for _, wp in ipairs(getWaterParts()) do
+					local lp = wp.CFrame:PointToObjectSpace(Vector3.new(p.X, gy, p.Z))
+					if wp.Parent and math.abs(lp.X) <= wp.Size.X * 0.5 and math.abs(lp.Z) <= wp.Size.Z * 0.5 and wp.Position.Y + wp.Size.Y * 0.5 > gy - 0.5 then
+						wet = true
+						break
+					end
+				end
+				local stand = CFrame.new(p.X, gy + hipAbove, p.Z) * frame.Rotation
+				if
+					not wet
+					and #Workspace:GetPartBoundsInBox(CFrame.new(p.X, gy + 0.3 + cfg.StandHeight * 0.5, p.Z) * frame.Rotation, boxSize, opStand) == 0
+					and not inOtherBody(Vector3.new(p.X, gy, p.Z), gy + 0.3)
+					and not VehicleService._ExitTaken(stand, riderChar)
+				then
+					local clear = true
+					for _, a in ipairs(anchors) do
+						if Workspace:Raycast(a, stand.Position - a, rp) ~= nil then
+							clear = false
+							break
+						end
+					end
+					if clear then
+						return stand, seatBlocked
+					end
+				end
+			end
+		end
+	end
+	return nil, seatBlocked
+end
+
+--[[ vscale R2.1: the last resort for a rider whose seat is inside or behind a world part (seen from the kit) when no
+	side / end spot is clear: standing on the kit's collidable top over the chassis centre (the car's own side of any
+	wall, as Roblox's own jump-out lands him from a seat inside the kit), never left to the physics inside that part.
+	Needs an empty standing box there and a clear line straight up from the chassis. R2.2: the box sees every other
+	character (riders still seated, or already placed on the roof) and this car's own kit (a tilted or overturned car's
+	"top" is beside or under its kit: refused, never a rider placed inside the kit), and the spot must not be taken
+	(_ExitTaken). ]]
+VehicleService._RoofSpot = function(model: Model, chassis: BasePart, hipAbove: number, riderChar: Instance?): CFrame?
+	local cfg = Drive.ExitSpot
+	local fp = footprintOf(model)
+	local top = chassis.CFrame:PointToWorldSpace(Vector3.new(0, fp.Top, 0))
+	local exclude = characterList()
+	table.insert(exclude, model)
+	local op = OverlapParams.new()
+	op.FilterType = Enum.RaycastFilterType.Exclude
+	op.FilterDescendantsInstances = if riderChar then { riderChar } else {}
+	op.RespectCanCollide = true
+	op.MaxParts = 1
+	local look = flat(chassis.CFrame.LookVector)
+	look = if look.Magnitude > 0.05 then look.Unit else Vector3.new(0, 0, -1)
+	local rot = CFrame.lookAt(Vector3.zero, look).Rotation
+	local stand = CFrame.new(top.X, top.Y + hipAbove, top.Z) * rot
+	local hw = cfg.HalfWidth
+	if
+		Workspace:Raycast(chassis.Position, stand.Position - chassis.Position, rayParams(exclude)) == nil
+		and #Workspace:GetPartBoundsInBox(CFrame.new(top.X, top.Y + 0.3 + cfg.StandHeight * 0.5, top.Z) * rot, Vector3.new(hw * 2, cfg.StandHeight, hw * 2), op) == 0
+		and not VehicleService._ExitTaken(stand, riderChar)
+	then
+		return stand
+	end
+	return nil
+end
+
+-- the move itself (deferred from the Occupant change: the SeatWeld is gone by then); returns the spot used, or nil
+VehicleService._PlaceExit = function(rec: VehicleRec, seat: BasePart, hum: Humanoid): CFrame?
+	local char = hum.Parent
+	if not (char and char:IsA("Model")) or hum.Health <= 0 or hum.SeatPart ~= nil then
+		return nil -- gone, dead, or already in another seat
+	end
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not (hrp and hrp:IsA("BasePart")) or not (rec.Chassis.Parent and seat.Parent) then
+		return nil
+	end
+	if (hrp.Position - seat.Position).Magnitude > Drive.ExitSpot.MaxFromSeat then
+		return nil -- moved away by something else (respawn, teleport)
+	end
+	local root: BasePart? = hrp.AssemblyRootPart
+	if root ~= nil and root == rec.Chassis.AssemblyRootPart then
+		return nil -- still welded to the car
+	end
+	local hh = hum.HipHeight
+	local hip = if typeof(hh) == "number" and hh > 0.05 then hh + hrp.Size.Y * 0.5 else 3 -- R15, else R6 (legs 2 + half torso)
+	local ok, spot, seatBlocked = pcall(VehicleService._ExitSpot, rec.Model, rec.Chassis, seat, hip + 0.05, char)
+	if ok and spot == nil and seatBlocked and Drive.ExitSpot.RoofFallback then
+		-- R2.1: the seat is inside / behind a world part: on the car's roof rather than left inside that part
+		local okR, roof = pcall(VehicleService._RoofSpot, rec.Model, rec.Chassis, hip + 0.05, char)
+		spot = if okR then roof else nil
+	end
+	if not ok or spot == nil then
+		return nil -- no clear spot: Roblox's own jump-out, as before
+	end
+	char:PivotTo(spot)
+	zeroVelocity(hrp) -- no fling: the character keeps nothing of the car's (or the jump's) speed
+	VehicleService._ExitHold(spot, char) -- R2.2: the next rider (same wreck, or right after) gets another spot
+	return spot
+end
+
+VehicleService._OnSeatLeft = function(rec: VehicleRec, seat: BasePart, hum: Humanoid)
+	local cfg = Drive.ExitSpot
+	if cfg.Enabled and cfg.Modes[rec.Mode] then
+		task.defer(function()
+			pcall(VehicleService._PlaceExit, rec, seat, hum)
+		end)
+	end
+end
+
+-- WE_RidePrompt on (server Enabled + WE_Open) while a passenger seat is free and the car is not wrecked
+VehicleService._RideSync = function(rec: VehicleRec)
+	local prompt = rec.Chassis:FindFirstChild("WE_RidePrompt")
+	if not (prompt and prompt:IsA("ProximityPrompt")) then
+		return
+	end
+	local open = false
+	if rec.Model:GetAttribute("WE_Destroyed") ~= true then
+		for _, ps in ipairs(rec.Passengers) do
+			if ps.Parent and not ps.Disabled and ps.Occupant == nil then
+				open = true
+				break
+			end
+		end
+	end
+	if prompt:GetAttribute("WE_Open") ~= open then
+		prompt:SetAttribute("WE_Open", open)
+	end
+	if prompt.Enabled ~= open then
+		prompt.Enabled = open
+	end
+end
+
+-- Triggered: validate (rate, alive, not seated, range + height, SeatPolicy.Passenger, a clear line to the seat: never
+-- through a wall or a closed gate into someone's base) and sit in the nearest free passenger seat
+VehicleService._Ride = function(rec: VehicleRec, player: Player): (boolean, string?)
+	local cfg = Drive.Ride
+	if RateLimitService and not RateLimitService.Allow(player, "vehicle_ride", cfg.RequestRate, cfg.RequestBurst) then
+		return false, "RateLimited"
+	end
+	if vehicles[rec.Model] ~= rec or rec.Model:GetAttribute("WE_Destroyed") == true then
+		return false, "Gone"
+	end
+	local ch = player.Character
+	local hum = if ch then ch:FindFirstChildOfClass("Humanoid") else nil
+	local hrp = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
+	if not (hum and hrp and hrp:IsA("BasePart")) or hum.Health <= 0 or hum.SeatPart ~= nil then
+		return false, "NoRider"
+	end
+	if not VehicleService._SeatAllowed(rec, player, "Passenger") then
+		return false, "Policy"
+	end
+	local prompt = rec.Chassis:FindFirstChild("WE_RidePrompt")
+	local range = if prompt and prompt:IsA("ProximityPrompt") then prompt.MaxActivationDistance else cfg.Range
+	local rel = hrp.Position - rec.Chassis.Position
+	if rel.Magnitude > range + 4 or math.abs(rel.Y) > cfg.MaxRise then
+		return false, "TooFar"
+	end
+	local best: Seat? = nil
+	local bestD = math.huge
+	for _, ps in ipairs(rec.Passengers) do
+		if ps.Parent and not ps.Disabled and ps.Occupant == nil then
+			local d = (ps.Position - hrp.Position).Magnitude
+			if d < bestD then
+				best, bestD = ps, d
+			end
+		end
+	end
+	if best == nil then
+		return false, "Full"
+	end
+	local seat: Seat = best
+	local exclude = characterList()
+	table.insert(exclude, rec.Model)
+	if Workspace:Raycast(hrp.Position, seat.Position - hrp.Position, rayParams(exclude)) ~= nil then
+		return false, "Blocked"
+	end
+	local okSit = pcall(function()
+		seat:Sit(hum)
+	end)
+	return okSit, if okSit then nil else "SitFailed"
+end
+
+VehicleService._AddRidePrompt = function(rec: VehicleRec, def: VehicleDef)
+	local cfg = Drive.Ride
+	if not (cfg.Enabled and cfg.Modes[rec.Mode]) or #rec.Passengers == 0 or rec.Chassis:FindFirstChild("WE_RidePrompt") then
+		return
+	end
+	local model = rec.Model
+	local half = math.max(tonumber(model:GetAttribute("WE_HalfLength")) or 0, tonumber(model:GetAttribute("WE_VisualHalfLength")) or 0)
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.Name = "WE_RidePrompt"
+	prompt.ActionText = "Ride"
+	prompt.ObjectText = def.DisplayName or "Vehicle"
+	prompt.HoldDuration = cfg.HoldSeconds
+	prompt.MaxActivationDistance = cfg.Range + half
+	prompt.RequiresLineOfSight = false
+	prompt.Enabled = false
+	prompt:SetAttribute("WE_Open", false)
+	prompt.Parent = rec.Chassis
+	table.insert(
+		rec.Conns,
+		prompt.Triggered:Connect(function(who: Player)
+			VehicleService._Ride(rec, who)
+		end)
+	)
+	VehicleService._RideSync(rec)
+end
+
 local function registerVehicle(player: Player, model: Model, def: VehicleDef, mode: string, spawn: SpawnChoice): VehicleRec?
 	local chassis = model.PrimaryPart
 	local seat = model:FindFirstChild("DriverSeat")
@@ -3918,6 +4578,27 @@ local function registerVehicle(player: Player, model: Model, def: VehicleDef, mo
 						end
 					end)
 				end
+				VehicleService._RideSync(rec) -- vscale R2: the Ride prompt shows while a passenger seat is free
+			end)
+		)
+	end
+	-- vscale R2: whoever leaves any seat (jump / EXIT, ejectSeat, a wreck) stands on a clear spot beside the car
+	local allSeats: { BasePart } = { seat }
+	for _, ps in ipairs(passengers) do
+		table.insert(allSeats, ps)
+	end
+	for _, st in ipairs(allSeats) do
+		local prevHum: Humanoid? = (st :: any).Occupant
+		table.insert(
+			rec.Conns,
+			(st :: any):GetPropertyChangedSignal("Occupant"):Connect(function()
+				local occ = (st :: any).Occupant
+				local left = prevHum
+				prevHum = occ
+				if left and left ~= occ then
+					VehicleService._OnSeatLeft(rec, st, left)
+				end
+				VehicleService._DriveAttachX(chassis, allSeats) -- vscale R2.3: the drive point follows the riders' side
 			end)
 		)
 	end
@@ -4149,7 +4830,8 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 			prompt.ActionText = "Drive"
 			prompt.ObjectText = def.DisplayName or "Vehicle"
 			prompt.HoldDuration = 0
-			prompt.MaxActivationDistance = 14
+			-- vscale R2: + a fitted body's overhang past the kit (a Roblox-size tailgate is up to 16 studs from the seat)
+			prompt.MaxActivationDistance = SpawnCfg.DrivePromptRange + math.max(0, (fp.VisHalfZ or 0) - fp.HalfZ)
 			prompt.RequiresLineOfSight = false
 			prompt.Parent = seat
 			table.insert(
@@ -4168,6 +4850,7 @@ function VehicleService.RequestSpawn(player: Player, vehicleId: any): (boolean, 
 				end)
 			)
 		end
+		pcall(VehicleService._AddRidePrompt, rec, def) -- vscale R2: passengers board by touch ("Ride")
 		-- "close" = the player's root part within sitRadius of the vehicle's footprint (centre distance - radius)
 		local reach = footRadius(fp)
 		local function seatNear(): boolean
@@ -4363,6 +5046,7 @@ function VehicleService.Init(deps: { [string]: any })
 	MonetizationService = deps.MonetizationService
 	ResearchService = deps.ResearchService
 	AntiExploitService = deps.AntiExploitService
+	VehicleService._Clans = deps.ClanService -- vscale R2: SeatPolicy "OwnerOrClan"
 	VehicleService._VehicleHealth.Init(deps) -- W2: every dep optional (CombatService / ClanService / XPService / ...)
 
 	ensureFolder()

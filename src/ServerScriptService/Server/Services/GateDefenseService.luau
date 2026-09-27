@@ -1620,7 +1620,18 @@ local function updateFriendlyGate(def: PlotDefense, tnow: number)
 			local root = char and char:FindFirstChild("HumanoidRootPart")
 			if root and root:IsA("BasePart") then
 				local delta = root.Position - gatePos
-				if Vector3.new(delta.X, 0, delta.Z).Magnitude <= D.GateOpenRadius and math.abs(delta.Y) <= D.GateOpenHeight then
+				-- vscale R2: an ally riding a car with a Roblox-size body opens it earlier by the body's overhang past the
+				-- kit + GateOpenVehicleLead, so the visible nose never reaches the closed barrier
+				local radius = D.GateOpenRadius
+				local hum = (char :: Model):FindFirstChildOfClass("Humanoid")
+				local car = if hum and hum.SeatPart then hum.SeatPart.Parent else nil
+				if car and car:IsA("Model") and car:GetAttribute("VehicleId") ~= nil then
+					local over = (tonumber(car:GetAttribute("WE_VisualHalfLength")) or 0) - (tonumber(car:GetAttribute("WE_HalfLength")) or 0)
+					if over > 0 then
+						radius += over + D.GateOpenVehicleLead
+					end
+				end
+				if Vector3.new(delta.X, 0, delta.Z).Magnitude <= radius and math.abs(delta.Y) <= D.GateOpenHeight then
 					allyNear = true
 					break
 				end

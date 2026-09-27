@@ -7849,6 +7849,175 @@ def _bl_rules() -> None:
 
 _bl_rules()
 
+# --- vscale lane, round 2 (owner: the avatar sits above the buggy / pokes through the jeep roof): option B. Fitted Roblox
+# bodies at a config scale (BodyScale) over the UNCHANGED Part kit, kit seats on the body's seats, label over the roof.
+# Round 2 adds: a clear exit spot beside the car after ANY seat is left, one touch "Ride" prompt per car (server-side
+# SeatPolicy + line of sight), spawn checks / prompt range / friendly gate sized by the fitted body, the garage sign
+# moved out of the body, the buggy passenger on the VehicleSeat mirror, the van at Roblox size. Paste above the final
+# `parse_gate()` call. R2.1 (review round 2.1): the exit's line of sight starts inside the kit, every seat stays inside the
+# kit's collidable box, exits keep out of other cars' bodies, a pad's second ring clears a big parked car, SPAWN tries spots
+# clear of tall non-colliding decor first, the Quad / Recon Buggy at Roblox size with the seats on the floor.
+# R2.2 (review round 2.2): an exit spot never lands a rider inside another player (the stand box sees other characters,
+# spots near another root part or handed out in the last second are taken, two more spots at each end); the Quad / Recon
+# Buggy at 1.2 x Roblox size with the seats 0.25 over the VehicleSeat (head under the roll cage's top rails).
+# R2.3 (review round 2.3): WE_DriveAttach.X follows the centre of mass with the seated riders (WheeledLight), the label
+# margin grows with the body's height and the over-vehicle HP bar sits over the nameplate (seen over a tall roof).
+# Verified headless (NOT Roblox) on git archive 5c8f57e + the eleven vscale files: FAIL=0;
+# on clean 5c8f57e every pin below marked [new] FAILS; the pins marked [guard] pass on both trees on purpose (the physics kit, the
+# kit's WE_HalfLength / WE_HalfWidth and the fit signature stay as they are; nothing re-adds the rejected hit box or the
+# old buggy passenger seat).
+VS_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+VS_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+VS_VS = "src/ServerScriptService/Server/Services/VehicleService.luau"
+VS_VC = "src/ReplicatedStorage/Shared/Configs/VehicleConfig.luau"
+VS_GDS = "src/ServerScriptService/Server/Services/GateDefenseService.luau"
+VS_RC = "src/ReplicatedStorage/Shared/Configs/RaidConfig.luau"
+VS_MS = "src/ServerScriptService/Server/Modules/MapSetup.luau"
+VS_WC = "src/ReplicatedStorage/Shared/Configs/WorldConfig.luau"
+VS_VDC = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleDriveClient.luau"
+VS_VCC = "src/ReplicatedStorage/Shared/Configs/VehicleCombatConfig.luau"
+VS_VCCL = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/VehicleCombatClient.luau"
+
+# [new] config: per-ref scale + seat map (body seat tops measured from the real store files, vscale/geo/native.json)
+must_contain(VS_VAC, "\tBodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives", "vscale: AssetRef.BodyScale")
+must_contain(VS_VAC, "\tBodySeats: { [string]: Vector3 }?, -- BodyScale: kit seat -> body seat top", "vscale: AssetRef.BodySeats")
+must_contain(VS_VAC, "\tBodyRoofParts: { string }?, -- BodyScale: kit parts lifted onto the body roof", "vscale: AssetRef.BodyRoofParts")
+must_contain(VS_VAC, "\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1.216, 3.387, -0.496), -- VehicleSeat\n", "vscale: Light Utility Vehicle (4x4 family) at Roblox size, driver on the body's VehicleSeat")
+must_contain(VS_VAC, '\t\t\tBodyRoofParts = { "GunMount", "Barrel" },\n', "vscale: the Armed 4x4 Part turret stands on the LUV roof")
+if (read(VS_VAC) or "").count("\t\t\tBodyScale = 1.2,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1.349, 2.434, 1.223), -- VehicleSeat + 0.25\n\t\t\t\tPassengerSeat1 = Vector3.new(1.349, 2.434, 1.223), -- mirror of the VehicleSeat (right-hand seat) + 0.25\n") == 2:
+    ok("vscale: R2.2 Dune Buggy (UtilityQuad + ReconBuggy) at 1.2 x Roblox size, seats 0.25 over the VehicleSeat (feet on the floor, head under the top rails); passenger on the VehicleSeat mirror")
+else:
+    bad("vscale: R2.2 Dune Buggy (UtilityQuad + ReconBuggy) at 1.2 x Roblox size, seats 0.25 over the VehicleSeat (feet on the floor, head under the top rails); passenger on the VehicleSeat mirror")
+must_not_contain(VS_VAC, "Vector3.new(-1.349, 2.634, 1.223)", "vscale: [guard] R2.2 no buggy seat at the R2.1 height at Roblox size (the head reached the roll cage's top rails)")
+must_not_contain(VS_VAC, "Vector3.new(-1.349, 2.184, 1.223)", "vscale: [guard] R2.1 no buggy seat at the bare VehicleSeat height (at 0.95 the feet hung 0.45 under the floor)")
+must_not_contain(VS_VAC, "PassengerSeat1 = Vector3.new(0.998, 2.676, -0.277)", "vscale: [guard] no buggy passenger on SeatFR (R2: the head went into the roll cage's front bar)")
+must_contain(VS_VAC, "\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.247, 4.004, -5.267), -- VehicleSeat\n", "vscale: R2 Van at Roblox size (arms no longer through the doors), driver on the body's VehicleSeat")
+must_contain(VS_VAC, "\t\t\t\tPassengerSeat4 = Vector3.new(2.255, 3.05, 0.6),\n", "vscale: R2 Van passengers 2-4 in the cargo bay, feet on the cargo floor")
+if (read(VS_VAC) or "").count("\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1.708, 5.075, -2.092), -- VehicleSeat\n") == 2:
+    ok("vscale: Pickup (PatrolTruck + EscortTruck) at Roblox size, driver on the body's VehicleSeat")
+else:
+    bad("vscale: Pickup (PatrolTruck + EscortTruck) at Roblox size, driver on the body's VehicleSeat")
+
+# [new] fit: scale from config, shadows from the fitted length, seats / roof parts / label / extents after a successful fit
+must_contain(VS_VAS, "\tlocal s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)", "vscale: body scale = BodyScale, else chassis length / body length")
+must_contain(VS_VAS, "\tlocal shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)", "vscale: shadow threshold = FitShadowShare of the fitted body length (phones: 2-5 casters)")
+must_contain(VS_VAS, "\tpart.CFrame = cf\n\tlocal w = Instance.new(\"WeldConstraint\")\n\tw.Part0 = primary\n\tw.Part1 = part\n\tw.Parent = primary", "vscale: a moved kit part is welded again to the chassis")
+must_contain(VS_VAS, "\t\t\tat = Vector3.new(math.clamp(at.X, -mx, mx), at.Y, math.clamp(at.Z, -mz, mz))\n\t\t\treweldAt(primary, seat, CFrame.new(primary.CFrame:PointToWorldSpace(at)) * rot * CFrame.new(0, -seat.Size.Y * 0.5, 0))\n\t\t\tseat.CanCollide = false", "vscale: kit seat top on the body seat top, CanCollide off (drive footprint unchanged); R2.1 its centre kept inside the kit's collidable box")
+must_contain(VS_VAS, "\t\tif d:IsA(\"BasePart\") and d.CanCollide and not d:IsA(\"Seat\") and not d:IsA(\"VehicleSeat\") then", "vscale: R2.1 the seat clamp measures the kit's collidable box without the seats (as WE_HalfLength / WE_HalfWidth)")
+must_contain(VS_VAS, "\tlocal inset = tonumber((VisualAssetConfig :: any).BodySeatKitInset) or 0\n", "vscale: R2.1 seat inset from config")
+must_contain(VS_VAC, "\tBodySeatKitInset = 0.25,\n", "vscale: R2.1 no seat (and no seated rider) past the kit's nose or tail (van front row, Dispatch back seat)")
+must_contain(VS_VAS, "\t\ttopY = math.max(topY, rel.Position.Y + halfHeightIn(rel, p.Size))\n\tend\n", "vscale: R2 label over the higher of the roof and the lifted roof parts (Armed 4x4 gun)")
+must_contain(VS_VAS, "\tlocal margin = (tonumber(lm.Base) or 1) + (tonumber(lm.PerStud) or 0) * math.max(0, topY - bottom - (tonumber(lm.EyeHeight) or 0))\n\thostModel:SetAttribute(\"WE_LabelY\", topY + margin)", "vscale: R2.3 label margin over the body top grows with the body's height over the ground (seen over a tall roof)")
+must_contain(VS_VAC, "\tBodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 },\n", "vscale: R2.3 config VisualAssetConfig.BodyLabelMargin")
+must_not_contain(VS_VAS, "hostModel:SetAttribute(\"WE_LabelY\", topY + 1)", "vscale: [guard] R2.3 no flat 1-stud label over a fitted roof (the HP bar sat 0.08 over it, hidden by the roof)")
+# [new] R2.3 (review M2): the over-vehicle HP bar over the owner nameplate (config), never AlwaysOnTop
+must_contain(VS_VCC, "MaxShown = 3, LabelOffset = 1.5 },", "vscale: R2.3 config VehicleCombatConfig.Ui.OverBar.LabelOffset (bar over the nameplate)")
+must_contain(VS_VCCL, "\t\treturn math.clamp(ly + OB.LabelOffset, 1, 30) -- vscale R2.3: over the owner nameplate", "vscale: R2.3 over-vehicle HP bar height from config (over the nameplate)")
+must_not_contain(VS_VCCL, "ly - 0.75", "vscale: [guard] R2.3 the HP bar no longer sits under the nameplate, 0.08 over a fitted roof")
+must_contain(VS_VCCL, "\tbb.AlwaysOnTop = false\n", "vscale: [guard] R2.3 the over-vehicle HP bar stays depth-tested (never AlwaysOnTop)")
+must_contain(VS_VAS, "\thostModel:SetAttribute(\"WE_VisualHalfLength\", halfZ)\n\thostModel:SetAttribute(\"WE_VisualHalfWidth\", halfX)\n\thostModel:SetAttribute(\"WE_VisualTop\", topY)", "vscale: R2 the fitted body's extent goes on the model (spawn, exit, prompts, gate)")
+must_contain(VS_VAS, "\t\tif typeof(ref.BodyScale) == \"number\" and ref.BodyScale > 0 then\n\t\t\tplaceKitOnBody(hostModel, primary, clone, ref)\n\t\tend\n\tend", "vscale: seats / label / extents only inside the fitted branch (a Part kit whose body failed keeps its own)")
+must_not_contain(VS_VAS, "WE_FitHitBox", "vscale: [guard] no fitted-body hit box (it would change who a shot at an open seat hits)")
+
+# [new] exit: any seat left -> a clear spot beside the car, outside the visible body (config Drive.ExitSpot)
+must_contain(VS_VC, "\t\tExitSpot = {\n\t\t\tEnabled = true,\n\t\t\tModes = { Car = true } :: { [string]: boolean },\n\t\t\tGap = 1,", "vscale: R2 config Drive.ExitSpot (Car mode, 1 stud outside the body)")
+must_contain(VS_VC, "\t\t\tSide = { DriverSeat = \"Left\" } :: { [string]: string },", "vscale: R2 per-seat ExitSide in config (unlisted seats: the side the seat is on)")
+must_contain(VS_VC, "\t\t\tEndMaxSpeed = 3,", "vscale: R2 behind / in front only when the car is not moving toward that end")
+must_contain(VS_VS, "\t\tlocal spots = { Vector3.new(side * (w + out), 0, sp.Z), Vector3.new(-side * (w + out), 0, sp.Z) }", "vscale: R2 exit order: the seat's side, then the other side, at the seat's Z")
+must_contain(VS_VS, "\tlocal w = math.max(tonumber(model:GetAttribute(\"WE_HalfWidth\")) or chassis.Size.X * 0.5, tonumber(model:GetAttribute(\"WE_VisualHalfWidth\")) or 0)", "vscale: R2 exit spot outside max(kit, fitted body) width (the plain kit uses its own)")
+must_contain(VS_VS, "\t\t\tif hit and hit.Material ~= Enum.Material.Water and not CollectionService:HasTag(hit.Instance, Constants.Tags.Water) then", "vscale: R2 exit needs solid ground in reach, never water or the void")
+must_contain(VS_VS, "\t\t\t\t\tand #Workspace:GetPartBoundsInBox(CFrame.new(p.X, gy + 0.3 + cfg.StandHeight * 0.5, p.Z) * frame.Rotation, boxSize, opStand) == 0\n\t\t\t\t\tand not inOtherBody(Vector3.new(p.X, gy, p.Z), gy + 0.3)\n\t\t\t\t\tand not VehicleService._ExitTaken(stand, riderChar)\n", "vscale: R2 exit spot: empty standing box; R2.1 never inside another car's fitted body; R2.2 never on another player")
+# [new] R2.2 (review): riders who leave together or one after another never land inside each other
+must_contain(VS_VS, "\topStand.FilterDescendantsInstances = if riderChar then { riderChar, model } else { model }\n", "vscale: R2.2 the exit stand box ignores only the rider and the car (a standing player blocks it)")
+must_not_contain(VS_VS, "* frame.Rotation, boxSize, op) == 0", "vscale: [guard] R2.2 the exit stand box never ignores every character")
+must_contain(VS_VS, "\tlocal exclude = characterList()\n\ttable.insert(exclude, model)\n\tlocal rp = rayParams(exclude)\n", "vscale: R2.2 exit rays (ground, lines of sight) still ignore every character (a ground ray never lands on a head)")
+must_contain(VS_VS, "\t\tif r and r:IsA(\"BasePart\") and overlaps(r.CFrame, r.Size.X * 0.5, r.Size.Z * 0.5) then\n\t\t\treturn true", "vscale: R2.2 a spot where the rider's root part would touch another player's is taken")
+must_contain(VS_VS, "\t\tif h.Char ~= riderChar and h.Char.Parent ~= nil and now - h.At < cfg.HoldSeconds and overlaps(h.CF, h.HX, h.HZ) then", "vscale: R2.2 a spot handed out in the last HoldSeconds stays taken")
+must_contain(VS_VS, "\tVehicleService._ExitHold(spot, char) -- R2.2: the next rider (same wreck, or right after) gets another spot\n", "vscale: R2.2 every exit move holds its spot")
+must_contain(VS_VS, "\tlocal ok, spot, seatBlocked = pcall(VehicleService._ExitSpot, rec.Model, rec.Chassis, seat, hip + 0.05, char)\n", "vscale: R2.2 the exit knows which character is leaving")
+must_contain(VS_VS, "\t\tlocal okR, roof = pcall(VehicleService._RoofSpot, rec.Model, rec.Chassis, hip + 0.05, char)\n", "vscale: R2.2 the roof fallback knows which character is leaving")
+must_contain(VS_VS, "\top.FilterDescendantsInstances = if riderChar then { riderChar } else {}\n", "vscale: R2.2 the roof stand box sees riders still seated or already on the roof, and its own kit (a tilted / overturned car: refused, never a rider inside the kit)")
+must_contain(VS_VS, "\t\tand not VehicleService._ExitTaken(stand, riderChar)\n\tthen\n\t\treturn stand", "vscale: R2.2 the roof spot is never another player's")
+must_contain(VS_VS, "\t\tfor _, dx in ipairs({ -cfg.EndSideStep, cfg.EndSideStep }) do\n", "vscale: R2.2 two more spots at each end (a full car in an alley)")
+must_contain(VS_VC, "\t\t\tRiderGap = 0.25,\n\t\t\tHoldSeconds = 1,\n\t\t\tEndSideStep = 2.5,", "vscale: R2.2 config Drive.ExitSpot.RiderGap / HoldSeconds / EndSideStep")
+must_contain(VS_VS, "\tlocal anchor = chassis.Position\n\tif #Workspace:GetPartBoundsInBox(CFrame.new(anchor), probe, op) > 0 then\n\t\treturn nil, true -- the kit itself overlaps a world part: no move\n\tend", "vscale: R2.1 exit line of sight anchored at the chassis centre (inside the collidable kit); no move when the kit overlaps a world part")
+must_contain(VS_VS, "\tlocal anchors = { anchor }\n", "vscale: R2.1 the chassis centre is always an anchor")
+must_contain(VS_VS, "\tlocal seatBlocked = Workspace:Raycast(anchor, rider - anchor, rp) ~= nil or #Workspace:GetPartBoundsInBox(CFrame.new(rider), probe, op) > 0\n\tif not seatBlocked then\n\t\ttable.insert(anchors, rider)\n\tend", "vscale: R2.1 the seat is an anchor only when the kit can see it (a seat inside a wall never starts a ray)")
+must_contain(VS_VS, "\t\t\t\t\tfor _, a in ipairs(anchors) do\n\t\t\t\t\t\tif Workspace:Raycast(a, stand.Position - a, rp) ~= nil then", "vscale: R2.1 every anchor needs a clear line to the spot (never through a wall)")
+must_not_contain(VS_VS, "Workspace:Raycast(from, stand.Position - from, rp)", "vscale: [guard] R2.1 no line of sight from the seat alone (a seat past the kit nose is inside the wall it touches)")
+must_contain(VS_VS, "\tfor _, m in ipairs(ensureFolder():GetChildren()) do\n\t\tlocal och = if m:IsA(\"Model\") and m ~= model then m.PrimaryPart else nil", "vscale: R2.1 the exit sees every other car's fitted body (non-colliding, so not in the box query)")
+must_contain(VS_VS, "\t\tif math.abs(sp.Z) > hw then\n", "vscale: R2.1 both sides again level with the chassis centre (a front-row seat's own z can be at the wall)")
+must_contain(VS_VS, "\tif ok and spot == nil and seatBlocked and Drive.ExitSpot.RoofFallback then", "vscale: R2.1 a seat inside / behind a world part: the roof, never left inside that part")
+must_contain(VS_VC, "\t\t\tAnchorProbe = 0.5,\n\t\t\tNeighbourRange = 60,", "vscale: R2.1 config Drive.ExitSpot.AnchorProbe / NeighbourRange")
+must_contain(VS_VC, "\t\t\tRoofFallback = true,", "vscale: R2.1 config Drive.ExitSpot.RoofFallback")
+must_contain(VS_VS, "\tchar:PivotTo(spot)\n\tzeroVelocity(hrp)", "vscale: R2 the rider is moved there with no speed (no fling)")
+must_contain(VS_VS, "\t\t\t\tif left and left ~= occ then\n\t\t\t\t\tVehicleService._OnSeatLeft(rec, st, left)", "vscale: R2 every seat (driver + passengers) hooks the exit on Occupant -> nil (jump, ejectSeat, wreck)")
+
+# [new] boarding: one Ride prompt per car, server-side SeatPolicy, range + height + line of sight, nearest free seat
+must_contain(VS_VC, "\t\tRide = {\n\t\t\tEnabled = true,\n\t\t\tModes = { Car = true } :: { [string]: boolean },\n\t\t\tRange = 8,", "vscale: R2 config Drive.Ride")
+must_contain(VS_VC, "\t\t\tHoldSeconds = 0.3,", "vscale: R2 Ride is a short hold (works with a finger)")
+must_contain(VS_VS, "\tprompt.Name = \"WE_RidePrompt\"\n\tprompt.ActionText = \"Ride\"", "vscale: R2 the Ride prompt (device-neutral text)")
+must_contain(VS_VS, "\tprompt.HoldDuration = cfg.HoldSeconds\n\tprompt.MaxActivationDistance = cfg.Range + half", "vscale: R2 Ride hold + range from config (+ the fitted body's half length)")
+must_contain(VS_VS, "\t\tprompt.Triggered:Connect(function(who: Player)\n\t\t\tVehicleService._Ride(rec, who)", "vscale: R2 Ride takes only the triggering player (no client-sent seat or target)")
+must_contain(VS_VS, "\tif not VehicleService._SeatAllowed(rec, player, \"Passenger\") then\n\t\treturn false, \"Policy\"", "vscale: R2 Ride follows VehicleCombatConfig.SeatPolicy.Passenger")
+must_contain(VS_VS, "\tif Workspace:Raycast(hrp.Position, seat.Position - hrp.Position, rayParams(exclude)) ~= nil then\n\t\treturn false, \"Blocked\"", "vscale: R2 Ride needs a clear line to the seat (never through a wall / closed gate)")
+must_contain(VS_VS, "\tif rel.Magnitude > range + 4 or math.abs(rel.Y) > cfg.MaxRise then\n\t\treturn false, \"TooFar\"", "vscale: R2 Ride range and height checked on the server")
+must_contain(VS_VS, "\tif RateLimitService and not RateLimitService.Allow(player, \"vehicle_ride\", cfg.RequestRate, cfg.RequestBurst) then", "vscale: R2 Ride is rate-limited")
+must_contain(VS_VS, "\t\tpcall(VehicleService._AddRidePrompt, rec, def) -- vscale R2: passengers board by touch (\"Ride\")", "vscale: R2 SPAWN adds the Ride prompt")
+must_contain(VS_VS, "\t\t\t\tVehicleService._RideSync(rec) -- vscale R2: the Ride prompt shows while a passenger seat is free", "vscale: R2 Ride on only while a passenger seat is free")
+must_contain(VS_VDC, "\t\twant = not mine and not seated and prompt:GetAttribute(\"WE_Open\") == true and model:GetAttribute(\"WE_Destroyed\") ~= true", "vscale: R2 client: Ride never for the owner / anyone seated / a full or wrecked car")
+must_contain(VS_VDC, "\t\trefreshAllPrompts() -- vscale R2: \"Ride\" hides while seated anywhere", "vscale: R2 client: Ride re-evaluated on every sit / stand")
+must_contain(VS_VDC, "\t\tif d.Name == \"WE_DrivePrompt\" or d.Name == \"WE_RidePrompt\" then\n\t\t\thookRidePrompt(d)\n\t\t\trefreshPrompt(d)", "vscale: R2 client: a Ride prompt already there when the folder is hooked (late joiner) gets its Enabled / WE_Open listeners too")
+
+# [new] spawn / Drive prompt / gate / garage sign sized by the fitted body
+must_contain(VS_VS, "\treturn math.max(fp.HalfX, fp.HalfZ, fp.VisHalfX or 0, fp.VisHalfZ or 0)", "vscale: R2 spawn spacing / Occupied / PlayerFront distance use max(kit, fitted body)")
+must_contain(VS_VS, "\t\tlocal half = Vector3.new(math.max(fp.HalfX, fp.VisHalfX or 0), (highY - lowY) * 0.5, math.max(fp.HalfZ, fp.VisHalfZ or 0))", "vscale: R2 spawn box = the fitted body (never into walls / props)")
+must_contain(VS_VS, "\t\t\tif cf and not overPlayer and not overAnyWater(ctx, cf) and inSight(ctx, pp, cf) and openSky(ctx, cf) and spotFree(ctx, cf, decor) then", "vscale: R2 PlayerFront never puts the body over the player")
+# [new] R2.1 pads: a second ring clears the biggest parked car around the same pad
+must_contain(VS_VS, "\tlocal s2 = r + big + 2 + SpawnCfg.RingMargin\n\tif s2 > s + 0.01 then\n", "vscale: R2.1 pad second ring at footRadius + biggest parked radius + 2 + RingMargin (never another player's pad 570-740 away)")
+must_contain(VS_VS, "local function chooseCar(ctx: SpawnCtx): SpawnChoice\n\tlocal fp = ctx.Footprint\n\tlocal offsets = aroundOffsets(fp, ctx.Occupied)", "vscale: R2.1 pads get the parked cars' radii")
+must_contain(VS_VS, "\tlocal offsets = aroundOffsets(ctx.Footprint, ctx.Occupied)\n", "vscale: R2.1 PlayerFront gets the parked cars' radii")
+must_contain(VS_VC, "\t\t\tRingMargin = 0.5,", "vscale: R2.1 config Drive.Spawn.RingMargin")
+# [new] R2.1 SPAWN tries spots clear of tall visible non-colliding decor first (flag poles, palms, reeds, lintels, the sign)
+must_contain(VS_VS, "\t\tif decorFree and not decorFree(box, half, pos.Y - fp.Clearance - SpawnCfg.Clearance) then\n\t\t\treturn false", "vscale: R2.1 spot box clear of indexed decor on the decor pass")
+if (read(VS_VS) or "").count("for _, decor in ipairs(if ctx.DecorFree then { true, false } else { false }) do") == 2:
+    ok("vscale: R2.1 pad / plot spots: clear of decor first, then as R2 (never fewer spawns)")
+else:
+    bad("vscale: R2.1 pad / plot spots: clear of decor first, then as R2 (never fewer spawns)")
+must_contain(VS_VS, "\tlocal decorPass: { boolean } = if ctx.DecorFree then { true, true, false } else { false }\n\tlocal turnPass: { number } = if ctx.DecorFree then { 0, math.pi / 2, 0 } else { 0 }\n", "vscale: R2.1 PlayerFront: clear of decor at the player's heading, then turned a quarter, then as R2")
+must_contain(VS_VS, "\t\tDecorFree = if SpawnCfg.Decor.Enabled\n", "vscale: R2.1 the real spawn ctx carries the decor test")
+must_contain(VS_VS, "\tif cur and now - cur.At < cfg.RefreshSeconds then\n\t\treturn cur.Grid\n\tend", "vscale: R2.1 the decor index is rebuilt at most every RefreshSeconds (no per-SPAWN scan)")
+if (read(VS_VS) or "").count("ipairs(Workspace:GetDescendants())") == 1:
+    ok("vscale: R2.1 exactly one whole-Workspace scan in VehicleService (the throttled decor index)")
+else:
+    bad("vscale: R2.1 exactly one whole-Workspace scan in VehicleService (the throttled decor index)")
+must_contain(VS_VC, "\t\t\tDecor = {\n\t\t\t\tEnabled = true,\n\t\t\t\tMinTop = 2.5,", "vscale: R2.1 config Drive.Spawn.Decor")
+must_contain(VS_VC, "\t\t\t\tRefreshSeconds = 300,", "vscale: R2.1 decor index refresh from config")
+must_contain(VS_VS, "\t\t\ttable.insert(occupied, { Pos = rec.Chassis.Position, Radius = math.max(hx, hz, vx, vz) })", "vscale: R2 a parked body counts at its own size (no second car inside it)")
+must_contain(VS_VS, "\t\t\tprompt.MaxActivationDistance = SpawnCfg.DrivePromptRange + math.max(0, (fp.VisHalfZ or 0) - fp.HalfZ)", "vscale: R2 Drive prompt range from config + the body's overhang")
+must_contain(VS_VC, "\t\t\tDrivePromptRange = 14,", "vscale: R2 config Drive.Spawn.DrivePromptRange")
+must_contain(VS_GDS, "\t\t\t\t\tif over > 0 then\n\t\t\t\t\t\tradius += over + D.GateOpenVehicleLead", "vscale: R2 friendly gate opens earlier by the rider's car overhang + lead")
+must_contain(VS_RC, "\t\tGateOpenVehicleLead = 1.5,", "vscale: R2 config RaidConfig.Defense.GateOpenVehicleLead")
+must_contain(VS_MS, "\t\tlocal back = tonumber(spawnCfg.GarageSignBack) or (spawnCfg.PadSize.Z * 0.5 + 0.4)", "vscale: R2 garage sign offset from config")
+must_contain(VS_WC, "\t\tGarageSignBack = 14.6,", "vscale: R2 garage sign behind a Roblox-size body's tail (13.29)")
+
+# [new] R2.3 (review M1): the drive point follows the centre of mass sideways too (a fitted body seats the driver off
+# the centreline), updated whenever a seat's occupant changes; the rollover fix's Y / Z line stays as it is
+must_contain(VS_VC, "\t\t\tDriveAtComXFamilies = { WheeledLight = true } :: { [string]: boolean },", "vscale: R2.3 config Drive.Stability.DriveAtComXFamilies (WheeledLight)")
+must_contain(VS_VS, "\tif cfg.DriveAtComXFamilies[def.KitFamily or \"\"] == true then\n\t\t-- vscale R2.3: the kit alone (no rider), for _DriveAttachX\n\t\tattach:SetAttribute(\"WE_KitMass\", mass)\n\t\tattach:SetAttribute(\"WE_KitMomentX\", moment.X)", "vscale: R2.3 _Ballast keeps the kit's mass / X moment on WE_DriveAttach (listed families only)")
+must_contain(VS_VS, "\t\tattach.Position = Vector3.new(0, com.Y, com.Z)\n\t\tif seat and seat:IsA(\"BasePart\") then\n\t\t\tVehicleService._DriveAttachX(chassis, { seat })", "vscale: R2.3 at build the drive point's X = the centre of mass with the nominal driver")
+must_contain(VS_VS, "\t\tif s.Parent ~= nil and (s :: any).Occupant ~= nil then\n\t\t\tm += rm\n\t\t\tmx += chassis.CFrame:PointToObjectSpace(s.Position).X * rm", "vscale: R2.3 _DriveAttachX adds a RiderMass rider on every occupied seat")
+must_contain(VS_VS, "\t\tatt.Position = Vector3.new(mx / m, p.Y, p.Z)\n", "vscale: R2.3 _DriveAttachX moves X only (Y / Z stay at the rollover fix's centre of mass)")
+must_contain(VS_VS, "\t\t\t\tVehicleService._DriveAttachX(chassis, allSeats) -- vscale R2.3: the drive point follows the riders' side\n", "vscale: R2.3 every seat's Occupant change re-centres the drive point")
+
+# [guard] the physics kit stays exactly as today (option B; option C = a separate lane with driving tests)
+must_contain(VS_VS, "\t\tbody.Size = Vector3.new(5.2 * s, 1.6 * s, if quad then 6.5 * s else 8.5 * s)", "vscale: [guard] WheeledLight kit chassis unchanged")
+must_contain(VS_VS, "\t\tseatOffset = CFrame.new(0, 1.9 * s, 0.1 * s)", "vscale: [guard] WheeledLight kit seat unchanged (moved only onto a fitted body)")
+must_contain(VS_VS, "\t\tbody.Size = Vector3.new(6.2 * s, 2.4 * s, 11 * s)", "vscale: [guard] WheeledTruck kit chassis unchanged")
+must_contain(VS_VS, "\t\tseatOffset = CFrame.new(0, 2.4 * s, -3.0 * s)", "vscale: [guard] WheeledTruck kit seat unchanged (moved only onto a fitted body)")
+must_contain(VS_VS, "\t\tWE_HalfLength = fp.HalfZ,\n\t\tWE_HalfWidth = fp.HalfX,", "vscale: [guard] WE_HalfLength / WE_HalfWidth stay the kit's (driving, splash)")
+must_contain(VS_VAS, "local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, ref: AssetRef): number?", "vscale: [guard] fitBodyToKit signature unchanged")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

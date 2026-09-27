@@ -3054,7 +3054,8 @@ function MapSetup.Run()
 			continue
 		end
 		-- 1-post sign on the back edge, the painted face toward the pad front (readable as you walk up to the pad)
-		local back = spawnCfg.PadSize.Z * 0.5 + 0.4
+		-- vscale R2: now GarageSignBack behind the pad centre, clear of a Roblox-size body parked on it (pickup tail 13.29)
+		local back = tonumber(spawnCfg.GarageSignBack) or (spawnCfg.PadSize.Z * 0.5 + 0.4)
 		local topY = spawnCfg.PadSize.Y * 0.5
 		local post = part({
 			Name = "SignPost",

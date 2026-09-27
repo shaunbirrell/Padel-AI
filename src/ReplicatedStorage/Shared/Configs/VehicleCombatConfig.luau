@@ -106,9 +106,13 @@ local VehicleCombatConfig = {
 	--   OverBar  over-vehicle BillboardGui on the Chassis: stud-scaled, never AlwaysOnTop, MaxDistance <= 40, no text;
 	--            ShowSeconds after that vehicle's WE_HP drops, and on your own parked vehicle while HP < MaxHP;
 	--            never on the vehicle you sit in; at most MaxShown at once (the most recent win).
+	--            LabelOffset (vscale R2.3): the bar's centre this far over the vehicle's WE_LabelY (the owner nameplate's
+	--            centre), so the bar is the highest thing over a tall fitted body and a player on foot beside it sees it
+	--            over the roof. 1.5 keeps it clear of the nameplate's top edge (0.4 studs + 20 px high) out to 35 studs.
+	--            W2 / R2.2: -0.75 (just under the nameplate, 0.08 over a fitted roof: hidden by it).
 	Ui = {
 		HudBar = { Width = 230, Height = 10, TouchStackOrder = 24, DesktopRight = 14, DesktopBottom = 50, LowFrac = 0.25 },
-		OverBar = { WidthStuds = 4, HeightStuds = 0.35, ShowSeconds = 5, MaxDistance = 40, MaxShown = 3 },
+		OverBar = { WidthStuds = 4, HeightStuds = 0.35, ShowSeconds = 5, MaxDistance = 40, MaxShown = 3, LabelOffset = 1.5 },
 		RefreshHz = 10,
 	},
 }

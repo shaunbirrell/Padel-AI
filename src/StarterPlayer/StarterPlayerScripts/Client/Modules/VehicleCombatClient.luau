@@ -356,7 +356,7 @@ end
 local function labelHeight(model: Model, chassis: BasePart): number
 	local ly = num(model:GetAttribute("WE_LabelY"))
 	if ly ~= nil and ly > 0 then
-		return math.clamp(ly - 0.75, 1, 30) -- just under the owner nameplate (VehicleDriveClient, at WE_LabelY)
+		return math.clamp(ly + OB.LabelOffset, 1, 30) -- vscale R2.3: over the owner nameplate (VehicleDriveClient, at WE_LabelY)
 	end
 	return chassis.Size.Y * 0.5 + 2
 end

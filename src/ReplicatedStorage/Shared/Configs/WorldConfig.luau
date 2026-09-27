@@ -930,6 +930,9 @@ local WorldConfig = {
 			{ Id = "Pool_Airstrip", X = 740, Z = -1180, Yaw = 180 }, -- faces +Z
 		} :: { Pad },
 		TutorialJeepPad = "Gate_P1", -- the tutorial's jeep step targets the player's own gate pad
+		-- vscale R2: the gate pads' "Garage" sign post and board stand this far behind the pad centre (pad-local +Z, was
+		-- PadSize.Z / 2 + 0.4 = 10.4): a Roblox-size Pickup / Van parked on the pad reaches 13.29 / 13.10 back
+		GarageSignBack = 14.6,
 		-- Invisible anchors (Transparency 1, CanCollide false, 14 x 1.2 x 14 at y 1)
 		AnchorSize = Vector3.new(14, 1.2, 14),
 		NPC = {

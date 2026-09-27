@@ -65,6 +65,9 @@ type AssetRef = {
 	Yaw: number?,
 	HideKit: boolean?,
 	KeepVisible: { string }?,
+	BodyScale: number?, -- vscale: the fitted body's scale (1 = Roblox size); nil = as long as the kit chassis
+	BodySeats: { [string]: Vector3 }?, -- vscale: kit seat -> the body's own seat top (unscaled, body box frame)
+	BodyRoofParts: { string }?, -- vscale: kit parts (the Armed 4x4 turret) lifted onto the fitted body's roof
 	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
 	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
 	KeepHost: boolean?, -- hooks: props: the host keeps its look (no fade)
@@ -861,6 +864,7 @@ end
 -- W3 LOOK: place a vehicle body (authored axis-aligned, front -Z) on the Part kit: one uniform scale so the body is
 -- as long as the kit chassis, centred on the chassis, tyre bottoms on the physics-wheel bottoms, turned by ref.Yaw.
 -- Moves each part (no Model:ScaleTo / pivots), so it does not depend on how the pack set its pivot. Returns the scale.
+-- vscale: ref.BodyScale sets the scale instead (Roblox size: the avatar fits inside); the physics kit is unchanged.
 local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, ref: AssetRef): number?
 	local parts: { BasePart } = {}
 	for _, d in ipairs(clone:GetDescendants()) do
@@ -889,7 +893,8 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	if bodyLen <= 0.05 then
 		return nil
 	end
-	local s = math.clamp(primary.Size.Z / bodyLen, 0.05, 4)
+	local fitScale = if typeof(ref.BodyScale) == "number" and ref.BodyScale > 0 then ref.BodyScale else nil
+	local s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)
 	-- lowest physics-wheel point in the chassis frame (else the chassis bottom)
 	local bottom = -primary.Size.Y * 0.5
 	local found = false
@@ -907,7 +912,8 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	end
 	local anchor = Vector3.new((lx + hx) * 0.5, ly, (lz + hz) * 0.5)
 	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(yawDeg), 0)
-	local shadowMin = primary.Size.Z * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
+	-- vscale: FitShadowShare of the FITTED body's length (at BodyScale the chassis is far shorter than the body)
+	local shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)
 	for _, p in ipairs(parts) do
 		local cf = p.CFrame
 		local size = p.Size * s
@@ -917,6 +923,110 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 		p:SetAttribute("WE_FitShadow", math.max(size.X, size.Y, size.Z) >= shadowMin)
 	end
 	return s
+end
+
+-- vscale: move a kit part welded to the primary (unweld, set CFrame, weld again: a CFrame set on a welded part would
+-- move the whole car).
+local function reweldAt(primary: BasePart, part: BasePart, cf: CFrame)
+	for _, holder in ipairs({ primary :: Instance, part :: Instance }) do
+		for _, w in ipairs(holder:GetChildren()) do
+			if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == part) or (w.Part0 == part and w.Part1 == primary)) then
+				w:Destroy()
+			end
+		end
+	end
+	part.CFrame = cf
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = primary
+	w.Part1 = part
+	w.Parent = primary
+end
+
+-- vscale: half height of a part in the chassis frame
+local function halfHeightIn(rel: CFrame, size: Vector3): number
+	local h = size * 0.5
+	return math.abs(rel.RightVector.Y) * h.X + math.abs(rel.UpVector.Y) * h.Y + math.abs(rel.LookVector.Y) * h.Z
+end
+
+-- vscale (option B): after a successful fit at ref.BodyScale the kit seats sit on the body's own seats (CanCollide off,
+-- so the drive footprint stays the kit's), the ref's roof parts stand on the roof and the label is 1 stud over the
+-- higher of the two. A kit whose body did not load keeps its own seats and label. The body frame is measured on the
+-- fitted clone: its lowest point is on the physics-wheel bottom and its box is centred on the chassis (fitBodyToKit).
+-- vscale R2: the fitted body's half length / half width / top in the chassis frame go on the model
+-- (WE_VisualHalfLength / WE_VisualHalfWidth / WE_VisualTop) for VehicleService's spawn spot, exit spot, prompt ranges
+-- and the friendly gate; WE_HalfLength / WE_HalfWidth stay the kit's (driving, splash, collisions).
+local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model, ref: AssetRef)
+	local s = math.clamp(ref.BodyScale or 1, 0.05, 4)
+	local bottom, roofY = math.huge, -math.huge
+	local halfX, halfZ = 0, 0
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local ey = halfHeightIn(rel, d.Size)
+			bottom, roofY = math.min(bottom, rel.Position.Y - ey), math.max(roofY, rel.Position.Y + ey)
+			local h = d.Size * 0.5
+			local ex = math.abs(rel.RightVector.X) * h.X + math.abs(rel.UpVector.X) * h.Y + math.abs(rel.LookVector.X) * h.Z
+			local ez = math.abs(rel.RightVector.Z) * h.X + math.abs(rel.UpVector.Z) * h.Y + math.abs(rel.LookVector.Z) * h.Z
+			halfX, halfZ = math.max(halfX, math.abs(rel.Position.X) + ex), math.max(halfZ, math.abs(rel.Position.Z) + ez)
+		end
+	end
+	if bottom > roofY then
+		return
+	end
+	local base = primary.CFrame * CFrame.new(0, bottom, 0) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0)
+	-- vscale R2.1: the kit's collidable half width / length (every CanCollide part but the seats, as WE_HalfWidth /
+	-- WE_HalfLength will be): a moved seat keeps its centre BodySeatKitInset inside it. A seat past the kit's nose or
+	-- tail (the Cargo Van's front row, the Dispatch Car's back seat) sits inside a wall the kit touches, and so does
+	-- its rider.
+	local kx, kz = 0, 0
+	for _, d in ipairs(hostModel:GetDescendants()) do
+		if d:IsA("BasePart") and d.CanCollide and not d:IsA("Seat") and not d:IsA("VehicleSeat") then
+			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
+			local h = d.Size * 0.5
+			kx = math.max(kx, math.abs(rel.Position.X) + math.abs(rel.RightVector.X) * h.X + math.abs(rel.UpVector.X) * h.Y + math.abs(rel.LookVector.X) * h.Z)
+			kz = math.max(kz, math.abs(rel.Position.Z) + math.abs(rel.RightVector.Z) * h.X + math.abs(rel.UpVector.Z) * h.Y + math.abs(rel.LookVector.Z) * h.Z)
+		end
+	end
+	local inset = tonumber((VisualAssetConfig :: any).BodySeatKitInset) or 0
+	local mx, mz = math.max(kx - inset, 0), math.max(kz - inset, 0)
+	for name, top in pairs(ref.BodySeats or {}) do
+		local seat = hostModel:FindFirstChild(name)
+		if seat and seat:IsA("BasePart") and typeof(top) == "Vector3" then
+			local rot = seat.CFrame - seat.CFrame.Position
+			local at = primary.CFrame:PointToObjectSpace((base * CFrame.new(top * s)).Position)
+			at = Vector3.new(math.clamp(at.X, -mx, mx), at.Y, math.clamp(at.Z, -mz, mz))
+			reweldAt(primary, seat, CFrame.new(primary.CFrame:PointToWorldSpace(at)) * rot * CFrame.new(0, -seat.Size.Y * 0.5, 0))
+			seat.CanCollide = false
+		end
+	end
+	local lift: number? = nil
+	local roofParts: { BasePart } = {}
+	for _, name in ipairs(ref.BodyRoofParts or {}) do
+		local p = hostModel:FindFirstChild(name)
+		if p and p:IsA("BasePart") then
+			local rel = primary.CFrame:ToObjectSpace(p.CFrame)
+			lift = math.max(lift or -math.huge, roofY - (rel.Position.Y - halfHeightIn(rel, p.Size)))
+			table.insert(roofParts, p)
+		end
+	end
+	if lift and lift > 0 then
+		for _, p in ipairs(roofParts) do
+			reweldAt(primary, p, p.CFrame + primary.CFrame.UpVector * lift)
+		end
+	end
+	-- vscale R2: the label clears the lifted roof parts too (the Armed 4x4 gun mount stands 0.8 over the roof)
+	local topY = roofY
+	for _, p in ipairs(roofParts) do
+		local rel = primary.CFrame:ToObjectSpace(p.CFrame)
+		topY = math.max(topY, rel.Position.Y + halfHeightIn(rel, p.Size))
+	end
+	-- vscale R2.3: the margin grows with the body's height over the ground (bottom = the physics-wheel bottom)
+	local lm = (VisualAssetConfig :: any).BodyLabelMargin or {}
+	local margin = (tonumber(lm.Base) or 1) + (tonumber(lm.PerStud) or 0) * math.max(0, topY - bottom - (tonumber(lm.EyeHeight) or 0))
+	hostModel:SetAttribute("WE_LabelY", topY + margin)
+	hostModel:SetAttribute("WE_VisualHalfLength", halfZ)
+	hostModel:SetAttribute("WE_VisualHalfWidth", halfX)
+	hostModel:SetAttribute("WE_VisualTop", topY)
 end
 
 -- W3 LOOK: under a fitted body the Part-kit visuals go (Transparency 1). Physics, seats, hit boxes and names stay.
@@ -968,6 +1078,9 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 				d.CastShadow = d:GetAttribute("WE_FitShadow") == true
 				d:SetAttribute("WE_FitShadow", nil)
 			end
+		end
+		if typeof(ref.BodyScale) == "number" and ref.BodyScale > 0 then
+			placeKitOnBody(hostModel, primary, clone, ref)
 		end
 	end
 	if not dressLogged[assetId] then

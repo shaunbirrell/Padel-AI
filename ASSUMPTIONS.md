@@ -7036,3 +7036,335 @@ Owner: "The droppers/businesses still look terrible. The dropper should look lik
 - How the stretched office and unit read on a phone, and from the side.
 - Frame rate at Graphics Quality 3 with 4 businesses at L5 per base: about 1.9k extra triangles per business (office 1,527-1,984, unit 264, canopy 122), all on one shared atlas.
 - Walking into the office or unit is still blocked by the hidden box.
+
+## 2026-09-27 — vscale lane, round 2 + refixes 2.1-2.3 (owner: "the cars look tiny under the avatar"): Roblox-size car bodies over the unchanged Part kit (option B)
+
+Refix 2.1 (review round 2.1) changes four of the nine files (VehicleService, VisualAssetService, VehicleConfig, VisualAssetConfig) on top of round 2; see "Round 2.1" below (VS-13 to VS-17, VS-A22 to VS-A29). Statements in the round-2 part that 2.1 changed carry an "(R2.1: ...)" note.
+
+Refix 2.2 (review round 2.2, two blocking issues) changes three files again (VehicleService, VehicleConfig, VisualAssetConfig); see "Round 2.2" below (VS-18, VS-19, VS-A30 to VS-A36). It supersedes VS-17, VS-A25 and VS-A26 for the Quad / Recon Buggy and adds to VS-7.
+
+Refix 2.3 (review round 2.3, two Medium findings and four Lows) is rebased onto **5c8f57e** and changes four files again (VehicleService, VehicleConfig, VisualAssetService, VisualAssetConfig) plus two new ones (VehicleCombatConfig, VehicleCombatClient); see "Round 2.3" below (VS-20, VS-21, VS-A37 to VS-A43). It supersedes VS-A15 and updates the numbers in VS-1, VS-3, VS-6, VS-8, VS-10, VS-19, VS-A24, VS-A35 and "Remaining costs". A number this round did not re-measure keeps its round tag.
+
+**R2.3: rebased onto 5c8f57e.** Each of the nine lane files was 3-way merged with `git merge-file` (base = the file at 5f38c2e, ours = main 5c8f57e, theirs = R2.2's `b2/cand22`): 0 conflicts. Main's changes in those files are kept: v81's playtest-owner gate in VehicleService, the bank / gate AutoGun rework in GateDefenseService (the lane's friendly-gate lines sit unchanged in `updateFriendlyGate`), and the aircraft weapon refs and WE_CHECK notes in VisualAssetConfig. The R2.3 candidate is `r23/cand` = `git archive 5c8f57e` + the eleven files (`files.txt`, `job_md5.txt`). The history below is kept as it was.
+
+Built on 5e021d8, then rebased onto **5f38c2e** (5e021d8 + streaming lane C5). The round-1 changes to VisualAssetConfig and VisualAssetService were merged with diff3 onto 5e021d8: 0 conflicts, and every hooks-lane line (vehicle weapon allow-lists, FitScale, HideParts) is kept. The rebase is a diff3 of the nine files onto `git archive 5f38c2e`: 0 conflicts. Only VehicleDriveClient overlaps with C5, and all 9 C5 lines in it are kept (the bounded `WaitForChild("Shared", 60)` and the `Shared.*` requires). Before the VS-A20 client fix, the vscale delta was the same line set on both bases. That fix (VehicleDriveClient only) was made on cand5f. The R2 final gates ran on `b2/main5f` (git archive 5f38c2e) against `b2/cand5f`; the R2.1 gates run against `b2/cand21` (cand5f + the R2.1 changes), and the same nine files also merge onto 3b5ac28 with 0 conflicts (`r21/rebase3b`). Nine files change (`files.txt`, `job_md5.txt` = cand21, plus the 3b5ac28 md5s):
+- the configs VisualAssetConfig, VehicleConfig, RaidConfig and WorldConfig;
+- VisualAssetService, VehicleService, GateDefenseService and MapSetup;
+- the client module VehicleDriveClient.
+
+Nothing changes in the physics kit, the kit sizes, WE_HalfLength / WE_HalfWidth, driving or the movers. There is no new remote, no DataStore or save change, and the Place and Universe IDs are untouched.
+
+Evidence comes from the headless stand-in only (scratchpad/sim), which is not Roblox. `vscale/b2/r23/out/phone_test.md` (R2.3) lists what the owner checks on his phone.
+
+**Revert:**
+- Delete a ref's `BodyScale` line: that car goes back to the old body squeezed to the chassis, with the kit's own seats and label and no visual extent.
+- Set `Drive.ExitSpot.Enabled = false`: exits go back to Roblox's own jump-out.
+- Set `Drive.Ride.Enabled = false`: no Ride prompt.
+- Set `GarageSignBack = 10.4`: the old sign position.
+- R2.2: `Drive.ExitSpot.HoldSeconds = 0` drops the 1 s hold (the root-part check and the stand box still keep riders apart); `EndSideStep` only moves the two extra end spots; the buggy goes back to R2.1 with `BodyScale = 1` and seat y 2.634 in both Dune Buggy refs (head in the top rails again, VS-19).
+- R2.3: `Drive.Stability.DriveAtComXFamilies = {}` puts WE_DriveAttach back at x = 0. `VisualAssetConfig.BodyLabelMargin = { Base = 1, PerStud = 0, EyeHeight = 4.5 }` restores R2.2's flat 1-stud label. `VehicleCombatConfig.Ui.OverBar.LabelOffset = -0.75` puts the HP bar back under the nameplate.
+- R2.1: `BodySeatKitInset = 0` puts the van's front row and the Dispatch Car's back seat back past the kit end (not advised: see VS-14); `Drive.Spawn.Decor.Enabled = false` turns the decor pass off; `Drive.ExitSpot.RoofFallback = false` turns the roof fallback off; `Drive.Spawn.RingMargin` only moves the pad's second ring.
+
+### What changed
+- **VS-1 Body scale from config (round 1, van changed in R2).** `AssetRef.BodyScale` is used for Vehicles refs with `Fit = "Kit"`:
+  - Light Utility Vehicle 1.0. This is the MilitaryJeep ref; the Armed 4x4, Scout Car and Dispatch Car use it too.
+  - Dune Buggy 0.95 (Utility Quad, Recon Buggy). R2.1: 1.0, with the seats 0.45 higher (VS-17). **R2.2 (current): 1.2**, with the seats 0.25 over the VehicleSeat (VS-19).
+  - **Van 1.0 (R2; it was 0.8)** (Cargo Van).
+  - Pickup 1.0 (Patrol Truck, Escort Truck).
+
+  The body stays centred on the chassis, with its lowest point on the lowest physics-wheel point.
+- **VS-2 Seats on the body's seats (round 1; R2 moves the buggy passenger and the van's cargo seats).** `AssetRef.BodySeats` is applied only inside the fitted branch. Each seat is unwelded, placed, welded again, and set to CanCollide off.
+  - R2: in both buggy refs, PassengerSeat1 sits on the mirror of the VehicleSeat, (1.349, 2.184, 1.223). R2.1: both buggy seats at y 2.634 (VS-17).
+  - R2.1: every moved seat's centre stays 0.25 inside the kit's collidable box (VS-14): the van's front row sits at z -4.43 instead of -5.27, the Dispatch Car's back seat at z 3.15 instead of 3.50.
+  - R2: the van's cargo passengers 2-4 have seat tops 0.95 lower, so their feet reach the cargo floor.
+  - A kit whose body does not load keeps its own seats.
+- **VS-3 Label (R2; R2.3 margin, VS-21).** `WE_LabelY` = max(body roof, top of the lifted roof parts) + a margin. R2 to R2.2 used a flat 1. R2.3 uses `BodyLabelMargin` 1 + 0.4 × (that top's height over the ground − 4.5). Heights above the ground, R2.3 (R2.2 in brackets):
+  - 4x4 10.28 (8.92); Armed 4x4 11.44 (9.74; the gun top is 8.74).
+  - Dispatch Car 10.28 (8.92).
+  - Quad / Buggy 11.00 (9.43; R2 7.67, R2.1 8.02).
+  - Van 12.74 (10.67).
+  - Patrol / Escort 12.70 (10.64).
+  - R2.3: the HP bar is 1.5 over these (`OverBar.LabelOffset`). R2.2 had it 0.75 under.
+- **VS-4 Shadows (round 1).** The `FitShadowShare` threshold is taken from the fitted body length.
+- **VS-5 Armed 4x4 gun on the roof (round 1).** `BodyRoofParts = { "GunMount", "Barrel" }`.
+- **VS-6 Fitted extent on the model (R2).** `placeKitOnBody` sets three attributes, in the chassis frame:
+  - `WE_VisualHalfLength`: 4x4 8.80, buggy 10.05 (R2.2 at 1.2x; R2 7.95, R2.1 8.37), van 13.10, pickup 13.29.
+  - `WE_VisualHalfWidth`: 4.09 / 5.62 (R2.2; R2 4.45, R2.1 4.68) / 5.82 / 5.30. Widths include the mirrors (the van body without them is 10.20).
+  - `WE_VisualTop`.
+- **VS-7 Exit spot (R2, `VehicleConfig.Drive.ExitSpot`).** On every seat's Occupant change to nil (jump or EXIT pill, `ejectSeat`, a wreck, a rejected NPC), the server moves the rider once the SeatWeld is gone.
+  - Where: on that seat's side at max(kit, fitted) half width + Gap 1 + HalfWidth 1, at the seat's Z.
+  - Order of tries: the seat's own side, then the other side, then behind, then in front. Behind and in front are tried only while the car moves toward that end at less than 3 studs/s. R2.1: then both sides again level with the chassis centre, when the seat is more than 1 stud off it. Then the same spots are tried 3 studs further out.
+  - Each spot needs:
+    - a CanCollide ground hit within 2.5 above and 6 below the wheel line;
+    - not terrain water, not a WE_Water part, and no WE_Water over the spot;
+    - an empty 2 × 5.2 × 2 standing box;
+    - a clear line from the seat (R2.1: from inside the kit instead, and out of every other car's body; see VS-13).
+  - The move is `PivotTo` plus zero velocity.
+  - If no spot is clear, Roblox's own jump-out applies, as before. R2.1: except when the seat's rider point is inside or behind a world part; then the rider stands on the kit's roof if that is clear (VS-13).
+  - Car mode only, including the plain Part kit.
+  - Per-seat `Side` is in config (`DriverSeat = "Left"`); any other seat uses the side it is on.
+- **VS-8 Ride (R2, `Drive.Ride`).** There is one `WE_RidePrompt` per car, on the Chassis. Only cars with passenger seats get one; a jeep now has 2 prompts in total (Drive + Ride).
+  - "Ride", held for 0.3 s. Range = 8 + max(kit, fitted) half length: 4x4 16.8 / buggy 18.05 (R2.2; R2 15.95, R2.1 16.37) / van 21.1 / pickup 21.29.
+  - The server turns it on (Enabled + `WE_Open`) while a passenger seat is free and the car is not wrecked.
+  - `VehicleDriveClient` hides it for the owner (his Drive and Ride would share one key), for anyone seated, and on a wreck.
+  - The client listens to each Ride prompt's `Enabled` and `WE_Open` so it can hide it again after a server toggle. It hooks every Ride prompt it finds, including the ones that already existed when it first hooked the vehicles folder (a late joiner). The 5e021d8 build hooked only prompts that arrived later. See VS-A20.
+  - Triggered checks, in order: rate limit 2/s, alive and not seated, range + 4 and height ≤ 6, `SeatPolicy.Passenger`, and a clear line to the chosen seat. Then the server sits the player in the nearest free passenger seat.
+- **VS-9 Spawn sized by the fitted body (R2).** Everything below uses max(kit, fitted body):
+  - `footRadius` (spacing, auto-sit reach, PlayerFront distance);
+  - the `spotFree` box (fitted width, length and roof);
+  - the `Occupied` radius of parked cars.
+
+  PlayerFront also refuses a spot whose box (+ `PlayerClear` 1.5) covers the player's root part. R2.1: a second ring around each pad for a big parked car (VS-15) and a decor pass (VS-16).
+- **VS-10 Drive prompt range (R2).** `Drive.Spawn.DrivePromptRange` 14 + the fitted overhang (WE_VisualHalfLength − WE_HalfLength): 4x4 family 18.55, Dispatch Car 19.40, Quad 21.39 (R2.2; R2 19.29, R2.1 19.71), Buggy 20.43 (R2.2; R2 18.34, R2.1 18.76), van 22.43, Patrol 22.34, Escort 21.79.
+- **VS-11 Friendly gate (R2).** An ally seated in a car with a fitted body opens the gate from GateOpenRadius 12 + the overhang + `RaidConfig.Defense.GateOpenVehicleLead` 1.5. On foot the radius is still 12.
+- **VS-12 Garage sign (R2).** `WorldConfig.Spawns.GarageSignBack` 14.6 (was 10.4): the post and board stand behind the pad, clear of a pickup's tail (13.29) or the van's (13.10).
+
+### Assumptions (reversible)
+- **VS-A1 Field names (round 1).** The fields are `BodyScale` / `BodySeats` / `BodyRoofParts`, because the hooks lane's `FitScale` already means something else for vehicle weapons.
+- **VS-A2 Scales (R2 re-measured with `clip_check.py` / `body_in_dummy.py`, review_visual method).**
+  - Condition 1: a seated blocky R15's head (seat top + 3.7) is at least 0.3 under the body top.
+  - Condition 2: nothing of the seated avatar pokes out through the body skin, and the body is not inside the avatar's head.
+  - LUV 1.0 and Pickup 1.0 are unchanged.
+  - Buggy 0.95: driver and passenger both sit at the VehicleSeat height. SeatFR (which R1 used) is posed for the model's own Passenger_Seated animation, which the game does not play. R1's "passenger head 0.43 under the roll-cage top" was measured against the highest point of the body, and it was wrong: the head went 0.29 into the cage's front bar and light bar.
+  - **R2.1 correction: the buggy at 0.95 did NOT meet condition 2.** Both riders' feet hung 0.45 under the floor (a dark block under the belly from the side), and the outer arm went 0.43 into the cage's lower side tube and showed 0.42 outside the body. R2 did not say so. R2.1 changes the buggy to 1.0 with the seats 0.45 higher (VS-17): feet on the floor, lower arm 0.20 into the side tube and upper arm 0.17 outside the body. Condition 2 is still not met for the arm; see VS-A26.
+  - Van: see VS-A14.
+- **VS-A3 Seats with no body seat.** The van's passengers 2-4 sit in the cargo bay.
+  - The trucks' PassengerSeat4 keeps its kit position between the rows (top 4.77 on the Patrol Truck, 5.27 on the Escort Truck). It is not on a body seat.
+  - R1's "in the 4x4 and trucks they sit on the real seats" was wrong for that seat.
+  - All of these are reached with Ride.
+- **VS-A4 Seat mass kept (round 1).** Moved seats keep their mass.
+- **VS-A5 Seated and standing avatar.** Seated: root part 1.5 over the seat top and head top 3.7 over it (a blocky R15). Standing: root part 2 × 2 × 1 with HipHeight 2, so the root centre is 3 over the ground (R6 is taken as 3 too). Taller avatars sit about 0.5 higher. Not confirmed on a device.
+- **VS-A6 No fitted-body hit box (round 1, unchanged).** It would change who a shot at an open seat hits. Shots at the overhang still miss.
+- **VS-A7 Footprint Top (round 1).** Moved seats do not collide, so the collidable top drops (jeep 2.30 to 2.00).
+- **VS-A8 Disk (round 1).** Heavy runs go in /dev/shm.
+- **VS-A9 The exit move.** A server `PivotTo` of a player's character, one deferred tick after the SeatWeld goes, is the usual Roblox server-side teleport. I assume the owning client takes it even while its own jump is running. Not verified on a device: if the jump shows first, the rider can pop 1-2 frames above the car before landing beside it (phone step 2). Speed is zeroed, so nobody keeps the car's speed and flies off.
+- **VS-A10 Front as the last exit spot.** The brief listed side, other side and behind. "In front" is added last so that a car parked nose-out between two walls with its back to a third can still be left. Both ends are skipped while the car moves toward them faster than 3 studs/s, so a moving car never gets a rider dropped in its path.
+- **VS-A11 Ride and security.** The brief did not ask for a clear line and a height limit, but without them Ride could put a player through a base wall or a closed gate into a car parked inside the base (≤ 21 studs away). The exit spot also needs a clear line from inside the car (R2.1: from the kit, VS-13), so the rider could not then step out inside the base. Both checks are on the server. `SeatPolicy.Passenger` is "Anyone" in the live config, so anyone may ride anyone's car, as touch-to-sit already allowed. "Owner" and "OwnerOrClan" (through `ClanService.GetClanId`) were tested by flipping the config in the stand-in.
+- **VS-A12 Ride visibility.** The server alone decides whether a seat is free (Enabled + `WE_Open`). The client only ever hides the prompt, and it restores it from `WE_Open`. A client without this code would show Ride to the owner; the server still refuses nothing wrong in that case, because the owner may sit as a passenger.
+- **VS-A13 Spawn box.** The fitted box blocks a spot, as the kit box already did. It sees CanCollide parts only. Non-colliding decor is not seen:
+  - the Garage sign;
+  - flag poles at the POI centres;
+  - palm trunks;
+  - reeds.
+
+  So a SPAWN made standing near a pad can still put the visible body through them. This is visual only; see the report, RW2. **R2.1: replaced by VS-16** (a decor pass that sees non-colliding decor; the reviewers counted 161-267 deep hits on R2, 43-71 on main5f).
+- **VS-A14 Van at Roblox size (decided with numbers, `clip_check.py`).** How far a seated avatar pokes out through the van's sides, at each scale:
+  - 0.8 (R1): 0.33 / 0.34 / 0.45 / 0.43 / 0.43.
+  - 0.9: 0.08-0.18.
+  - 0.95: 0.04-0.05, and the front row's feet go 0.15 through the floor.
+  - 1.0: 0 for every seat, the same as Roblox's own van.
+
+  Moving the seats inward at 0.8 would have made the two front riders overlap by about 1.3 instead of 0.38.
+
+  Costs of 1.0:
+  - The van is 26.20 long, so it hangs 3.10 past each end of the 20-stud pad.
+  - It is 11.63 wide with mirrors (10.20 without). At the 10-stud gate, the mirrors reach about 0.8 into each gate post and the body 0.10. This is visual only; the posts do not collide.
+  - The label is 10.68 over the ground.
+- **VS-A15 Lateral centre of mass. Superseded by VS-20 (R2.3) for the WheeledLight family.** R2 to R2.2 accepted it as a cost; the numbers below are history.
+  - R2: `WE_DriveAttach` X = com.X was tried, but the rollover unit pin (5e `X == 0`) failed, so it was withdrawn. R2.3 makes the change for real, and the unit pin now checks X = the centre of mass (VS-20).
+  - R2 / R2.1: the attach point sat 0.11-0.26 (R2.1 Quad 0.28) right of the centre of mass. The yaw couple at force saturation was 6-22 %, the Dispatch Car 33 %, the Quad 67 % (R2.1: 70 %). **R2.2 (the review's M1): the Quad 0.33 → 84 % at saturation, 15 % braking, 7 % accelerating; the Recon Buggy 0.23 → 28 % / 5 % / 3 %.**
+  - **R2.3, driver alone (`vsr_phys_r23` YAWC rows):** 0.00 and 0 % on every WheeledLight car (4x4, Armed 4x4, Scout Car, Dispatch Car, Quad, Recon Buggy). The Cargo Van 0.22 → 20 %, Patrol Truck 0.15 → 11 % and Escort Truck 0.11 → 6 % are unchanged (WheeledTruck is not in the list; see VS-A37).
+  - Heavy-side static stability factor: unchanged by R2.3, because the drive point does not move mass. With the driver alone it is 1.57-1.95 (Quad 1.63, tipping at 58.5° toward the driver's side). With every seat full it is 1.07-1.62 (`vsr` MASS rows, the same as R2.2). The steering demand is 0.61.
+  - Phone steps 4 and 5: full-stick turns both ways, and 3 s at full stick into a wall. The Quad must not spin.
+- **VS-A16 Gate lead 1.5.** The moved seats sit up to 1.1 studs further back than the kit seat. The lead covers that for the kit's own nose too.
+- **VS-A17 Sign at 14.6.** It clears the longest body (pickup 13.29) by 1.1. The new spot clashes with no world part on any of the 6 pads (`vs2_sign`).
+- **VS-A18 4x4 rear riders' feet, as in Roblox's own model.** On the 4x4 body the back seats (SeatRL / SeatRR) are open at foot height, so `clip_check.py` reports the feet 2.01 / 2.10 "out" and 0.74 under the belly.
+  - Roblox's own LUV at scale 1, with the same seats, gives exactly the same numbers (`results/clip_check_native_allseats.txt`).
+  - The side ray at the feet meets no skin until the centre tunnel (x ≈ −0.1), so this is the open back, not a foot through a panel.
+  - `body_in_dummy.py`: no body part inside any seated head on any body. The drivers match Roblox's own LUV and Pickup exactly (`results/body_in_dummy_*.txt`).
+- **VS-A19 Old look pins superseded.** Two older drivers pin the old squeeze-to-chassis fit: `assetwire/integ/drv/jeep_look.luau` K3 "fitted length = chassis" (4x4 family) and `w3/LOOK/t_look_unit.luau` U9 jeep/armed length. They fail on cand by design (head 127/131 → cand 123/131; head 51/57 → cand 49/57); every other line is unchanged. The vscale versions of the same checks (`vs2_jeep_look` 200/200 on R2; R2.1: `vs21_jeep_look` 200/200, see VS-A29, `vs_look_unit` 58/65 with the same 6 stand-in fails as head plus the R1 label pin) cover the new fit. The round-1 driver `vs_jeep_look` keeps 3 R1 pins that R2 changes on purpose (label above the gun, van at 1.0 and its seats).
+
+- **VS-A20 Ride prompt for a late joiner (fixed while rebasing onto 5f38c2e).** The 5e021d8 build hooked the Ride listeners only in `DescendantAdded`. A player who joined while someone else's car was already parked got that car's prompt state once, from the first full pass. After that, the server's `Enabled = true` when a seat freed was not judged on his client again, so Ride could show while he sat in another car. The server still refused him (`NoRider`), so it was only a stray tap target.
+  - The fix is `hookRidePrompt(d)`, called from both `refreshAllPrompts` and `DescendantAdded`. It is idempotent through a local `WE_RideHooked` mark.
+  - The client driver `vs2_client_ride` gains R10 and R11 for this case:
+    - the 5e021d8 cand gives 10/12 (R10 and R11 fail);
+    - cand5f gives 12/12;
+    - main5f gives 6/12, the same R1-R8 misses as HEAD.
+  - A BuyPathStatic pin plus mutation m9 guards it.
+- **VS-A21 The reviewers' gate row RW3 is a formula, not the service.** `vs_rw_world` RW3 computes the open point from a fixed `GateOpenRadius` of 12. It never runs GateDefenseService, so R2's vehicle lead does not show there: it gives the same numbers on cand and cand5f (trucks "0.80 at open").
+  - The R2 gate is measured by `vs2_gate`, which runs the tree's real GateDefenseService with a seated owner.
+  - Visible nose from the gate line when the barrier opens, main5f → cand5f:
+    - 4x4 family 7.50 → 9.70; Dispatch 8.35 → 10.45;
+    - Quad 9.09 → 9.55 (R2.1 at Roblox size: 9.38); Buggy 8.14 → 8.55 (R2.1: 8.38);
+    - Van 9.82 → 13.90 (R2.1, front row 0.84 further back: 12.90); Patrol 9.55 → 10.46; Escort 9.50 → 9.96.
+  - The kit's nose: 7.50-9.82 → 12.89-22.32 (R2.1: 13.14-21.32).
+  - That driver moves the car 0.25 studs per step, so it has no speed. At the cars' 40-68 studs/s, the gate loop's tick and replication use part of the margin. The margin is at least HEAD's for every car, and it is 5-12 studs larger for the collidable kit. Phone step 4 is the real check.
+
+### Corrections to the round-1 docs (false or stale claims the reviewers found)
+- **"The 14 main gate, the 16 inner/fort gates … clear every body": wrong.** There is no 14-stud gate: `BaseLayoutConfig.MainGateWidth` is defined but never read. The only base perimeter gate is StructureKitBuilder `GATE_CLEAR = 10`, measured at 10.00 on all 6 plots. The rest of that table was width arithmetic, not a driven run.
+- **"The visible body hits no world part at any pad": wrong in R1.** That check only covered CanCollide parts. The non-colliding Garage sign post and board stood inside the truck beds and the van's bumper on all 6 home pads. R2 moves the sign and checks every visible part: 0 hits.
+- **"Passenger head 0.43 under the roll-cage top": wrong** (see VS-A2).
+- **"In the 4x4 and trucks they sit on the real seats": wrong** for the trucks' PassengerSeat4 (see VS-A3).
+- **"The 4x4s and pickups are clear" on exit: withdrawn.** The margin was 0.04 and depended on the seat-weld offset. Exits now use VS-7.
+- **"The chase render is the phone camera": withdrawn.** Roblox's VehicleCamera zooms to 3× the car's bounding radius, so the camera starts 23-35 studs back instead of 15. The phone test says so.
+- **R1 said HEAD was 670bbf6.** This round was built on 5e021d8 and rebased onto 5f38c2e.
+
+### Remaining costs (option B keeps the old collision box)
+- **Overhang past the collision box.** The visible body reaches past the kit's collision box at each end, and 1.2-2.6 at the sides:
+
+  | Body | Past the box at each end (studs) |
+  |---|---|
+  | 4x4 family | 4.55 |
+  | Dispatch Car | 5.40 |
+  | Quad | 5.71 (R2: 5.29; R2.2: 7.39) |
+  | Buggy | 4.76 (R2: 4.34; R2.2: 6.44) |
+  | Van | 8.43 |
+  | Patrol | 8.34 |
+  | Escort | 7.79 |
+
+  Noses and tails pass into walls, players and other cars. Shots at the overhang miss.
+- **Tyres.** The visible tyres sit away from the physics wheels, so they float or sink on crests and kerbs. The front tyres of the LUV body float 0.40 on flat ground, as posed in Roblox's own model.
+- **Arm through the door.** A seated arm shows 0.42 through the 4x4's door, as in Roblox's own model.
+- **Arm across the buggy cage (R2.1; R2.2 see VS-A33).** On the Quad and the Recon Buggy the outer lower arm is 0.20 inside the roll cage's lower side tube and the upper arm shows 0.17 outside the body (R2: 0.43 and 0.42). See VS-A26. R2.2 (1.2x): the tube no longer passes into the arm; the forearm shows 0.18 outside the body side, inside the open cage.
+- **Van front row (R2.1).** The two front riders sit 0.84 behind the van's own seats (VS-14): their backs are 0.11-0.13 and heads 0.09 inside the seat backs (`body_in_dummy.py`); nothing shows through the outer skin.
+- **Driving through the own gate.** The visible nose sinks up to 1.7 into the raised PlayerSpawn block behind each plot's gate (0 on head). The world lane's move of that pad fixes it. At walls level 4-5, the van and trucks pass visibly through the sandbags beside the gate guns (non-colliding).
+- **Camera.** The default vehicle camera starts further back in the bigger cars; pinch to zoom in. It follows the driver seat, which sits 1.2-2.25 left of the centreline (the 1.2x Quad / Buggy: 1.62). Only a phone can show whether turning feels lopsided.
+- **Same size.** The Quad and the Recon Buggy look the same size; so do the 4x4, the Scout Car and the Dispatch Car.
+- **Wider than the gate (R2.2 scale, documented in R2.3).** The Quad / Recon Buggy body is 11.23 wide against the 10-stud gate: about 0.6 into each post when centred, and about 3 (reviewer: up to about 4.7) off-centre. Only the look is affected; see VS-A40.
+- **Label height (R2.3).** The nameplate floats 2.4-3.1 over a fitted roof and the HP bar 1.5 above it, so both are seen over the big bodies (VS-21). Right behind the van, or right against it at eye level, the roof can still hide them.
+- **Van and trucks' drive point (R2.3).** It still pushes at x = 0 while the centre of mass is 0.11-0.22 to the driver's side (6-20 % yaw couple at force saturation, the same as R2.2). See VS-A37.
+- **MG dress.** When the vehicle-weapon MG id is promoted, check the hooks lane's FitScale again: it sizes the gun to the 0.8-stud GunMount, which now stands on a much bigger body.
+
+### Round 2.1 (review round 2.1: three reviewers, five blocking issues)
+Built on cand5f (5f38c2e + the nine files); four files change again: VehicleService, VisualAssetService, VehicleConfig, VisualAssetConfig. Still nothing in the physics kit, WE_HalfLength / WE_HalfWidth, driving or the movers; no remote, no save change.
+
+#### What changed
+- **VS-13 Exit line of sight from inside the kit (review issue 1, Major).** R2 started the "clear line" ray at the seat. The Cargo Van's front seats sat 0.59 past the kit's nose (and the Dispatch Car's back seat 0.10 past its tail, which the review did not list). With that end touching a wall, the seat and the ray origin were inside the wall, a ray that starts inside a part does not hit it, and "in front" (or "behind") put the rider inside an enemy base. `_ExitSpot` now:
+  - refuses to move anyone when a world part overlaps a 0.5 probe box at the chassis centre (`AnchorProbe`);
+  - needs a clear line to the spot from the chassis centre, from straight above it at the rider's height (when that point is clear), and from the seat only when the chassis can see the seat's rider point;
+  - adds both side spots level with the chassis centre (z = 0) when the seat is more than HalfWidth off it, so a front-row rider at a wall still gets out at the side;
+  - keeps the stand box out of every other car's body (VS-A27);
+  - `_RoofSpot` (`RoofFallback`): when the seat's rider point is inside or behind a world part and no spot is clear, the rider stands on the kit's collidable top over the chassis centre (an empty standing box and a clear line straight up needed); otherwise Roblox's own jump-out, as before.
+- **VS-14 Every seat inside the kit (review issue 1).** `VisualAssetConfig.BodySeatKitInset` 0.25: `placeKitOnBody` keeps each moved seat's centre that far inside the kit's collidable half width / length (measured like WE_HalfWidth / WE_HalfLength, without the seats). Van front row z −5.27 → −4.43 (0.84 back); Dispatch Car back seat z 3.50 → 3.15. Every other seat was already inside and does not move.
+- **VS-15 Pad second ring (review issue 3, Major).** `aroundOffsets(fp, occupied)`: after the centre and the four spots at 2 × footRadius + OffsetStep, eight more (sides, ends, diagonals) at footRadius + the biggest parked radius + 2 + `Drive.Spawn.RingMargin` 0.5, only when that is further out. Used by the pad chooser, the plot fallback, the heli pads and PlayerFront. R2 sent a small car to another player's pad 569-739 studs away whenever a teammate's van or pickup stood within about 2.5 studs of your pad centre.
+- **VS-16 SPAWN clear of decor first (review issue 4).** Every land spot list is tried with a decor test first, then as in R2, so there are never fewer spawns. PlayerFront tries the player's heading, then a quarter turn, then as R2. The decor test: the spot's box (kit or fitted body, the bigger) may not overlap by more than `Tolerance` 0.25 any indexed part whose top stands more than `MinTop` 2.5 over the spot's ground. The index holds every anchored, visible (Transparency < 0.9), non-colliding BasePart outside the vehicles folder, not water, at most 80 long, on a 32-stud grid. It is built from one `Workspace:GetDescendants()` pass on the first SPAWN and rebuilt at most every `RefreshSeconds` 300, only when a SPAWN asks. Config `Drive.Spawn.Decor`.
+- **VS-17 Quad / Recon Buggy at Roblox size, seats on the floor (review issue 5).** `BodyScale` 0.95 → 1; both seat tops 0.45 over the VehicleSeat (y 2.634). Label 8.02 over the ground; WE_VisualHalfLength 8.37, WE_VisualHalfWidth 4.68; Drive prompt 19.71 (Quad) / 18.76 (Buggy); Ride 16.37.
+
+#### Assumptions (reversible)
+- **VS-A22 Inset 0.25, not the whole root box.** A seated root part is 1 deep, so an inset of 0.5 would keep all of it inside the kit. At 0.5 the van's front riders' heads go 0.32 into the seat backs (0.25: 0.09; `body_in_dummy.py` on trees with inset 0 / 0.25 / 0.5 / 0.75, `r21/results/inset_trials.txt`). At 0.25 the root can reach 0.25 past a kit face that touches a wall; VS-13 never starts a ray there, and Roblox's own jump-out (only when no spot is clear) starts with the root centre inside the kit.
+- **VS-A23 A generic decor index instead of tags.** Tagging needs edits in WorldKits, DesertFlora and MapSetup builders outside this lane, and misses anything added later. The index sees every name the reviewers listed (flag poles, palm trunks, reeds, fort lintels, Garage sign and post, shop tarps, well posts). Cost: one Workspace pass per 300 s at most, only on a SPAWN, server only. On the stand-in's L5 world it indexes 8,741 of 17,224 BaseParts in 1,119 grid cells (`r21/results/decor_count.txt`); the stand-in clock is virtual, so the pass time is not measured. Not measured on a Roblox server; phone step 12 checks for a hitch.
+- **VS-A24 Residual decor contact.** When none of the 13 spots x 2 headings is clear of decor, the spot is taken anyway rather than sending the car to a pad hundreds of studs away. In the reviewers' sampling (13,440 tries per car) that leaves 16 van and 16 Patrol Truck spawns with a visible non-colliding tall prop more than 0.5 deep (fort gate lintels at 2 forts, the Garage sign and post when standing at another player's pad) against 70-71 on main5f and 240-267 on R2; 0 for the 4x4, Quad and Buggy (main5f 30-43, R2 161-176). R2.3: the Quad / Buggy at 1.2x (R2.2) has a bigger box, so near garage pads a SPAWN falls back to the next spot about 0.8 % more often (reviewer's sampling). The decor counts above are R2.1's and were not re-sampled at 1.2x.
+- **VS-A25 Quad stability after the higher seats.** Centre-of-mass height (driver aboard, `vsr_phys_r2`): Quad main5f 1.46, R2 1.20, R2.1 1.33; Recon Buggy 1.41 / 1.18 / 1.27. Tip angle Quad 60.7° / 62.8° / 60.3°; full-seat static stability factor Quad 1.68 → 1.49 (R2 → R2.1), Buggy 1.87 → 1.70. The rollover suite's `t_stability` (rider 14, lift 1.3) gives the Quad SSF 1.48 on main5f and 1.63 on cand21 (tip 61° → 63°), the Buggy 1.59 → 1.77, both ok. Still at least as stable as the live game (main5f). Phone step 5 adds a full-stick corner with a passenger. Trials: `r21/results/quad_trials.txt`.
+- **VS-A26 The buggy's outer arm.** At 1.0 with the seats up, the outer lower arm is 0.20 inside the roll cage's lower side tube and the upper arm 0.17 outside the body; no seat height or scale in the stand-in removes it (0.95 + 0.45: head 0.16 into the cage; 1.0 + 0.30-0.40: feet 0.02-0.12 under the floor and the arm 0.25-0.30 in the tube). The real fix is a seated pose made for the game (arms in), which is not in this lane; it needs the owner's accept (phone_test "Known looks").
+- **VS-A27 Neighbour body = a box.** The other car's body is taken as its fitted (else kit) box from its wheel line to WE_VisualTop, so a spot beside an open pickup bed also counts as inside. Only models in the vehicles folder within `NeighbourRange` 60 are checked.
+- **VS-A28 Roof fallback look.** The kit's top is inside a Roblox-size body (van: kit top 2.29 over the chassis centre, body roof 7.45 over it), so a rider on the roof fallback stands inside the body until he walks off. It only happens when the seat is inside or behind a world part and every other spot is blocked; the R2.1 wall runs never needed it (396 + 990 rows moved to a side or an end).
+- **VS-A29 Old look pins superseded (like VS-A19).** `vs2_jeep_look` K3 / K4 hard-code the buggy at 0.95 with seat y 2.184 and the van's driver at z −5.267; they fail on cand21 by design. `r21/drv/vs21_jeep_look.luau` is the same driver with the R2.1 expectations (buggy 1.0 / y 2.634, seats clamped by BodySeatKitInset).
+
+#### Corrections to the round-2 docs
+- "Condition 2 ... the scales were chosen by" did not hold for the buggy at 0.95 (VS-A2 note above).
+- R2 said the second car on a pad lands 21.6 away and is seated; true only for a car of the same kind. A teammate's van or pickup near the pad centre sent every smaller car 569-739 studs away (review issue 3).
+- R2's exit "never through a wall" held only for seats inside the kit. The van's front row (0.59 past the nose) and the Dispatch Car's back seat (0.10 past the tail) could exit into a base (review issue 1; the Dispatch case is new in R2.1, `r21_world` WF rows).
+- R2's "0.00 inside the body" for exits was measured against the rider's own car only (review issue 2).
+
+### Round 2.2 (review round 2.2: two blocking issues)
+Built on cand21 (5f38c2e + the nine files, R2.1) as `b2/cand22`; the same nine files are in `b2/cand` (on 5e021d8) and merge onto 3b5ac28 (current main) with 0 conflicts (`r22/rebase3b`: only VisualAssetConfig differs, by the wc2 Notes). Three files change: VehicleService, VehicleConfig, VisualAssetConfig. Still nothing in the physics kit, WE_HalfLength / WE_HalfWidth, driving or the movers; no remote, no save change.
+
+#### What changed
+- **VS-18 Riders never land inside each other (review issue 1, Medium).** R2.1 excluded every player's character from the exit queries, so a spot where another player stood counted as empty; riders in the same row (same z), all riders in an alley, and the facing-side riders beside a neighbour car were sent to the same point (reviewer: 28 of 45 multi-rider cases on cand21). Now:
+  - `_ExitSpot(model, chassis, seat, hipAbove, riderChar)`: the standing-box query ignores only the leaving rider's character and this car (`opStand`), so a standing player's collidable parts block the spot. The anchor probes and every ray (ground ray, lines of sight) still ignore all characters: a player is not a wall, and a ground ray must never land on someone's head.
+  - `_ExitTaken(stand, riderChar)`: a spot is taken when the rider's root part (its own size; else 2 x 1) would come closer than `Drive.ExitSpot.RiderGap` 0.25 to another player's root part (any heading, separating-axis test on the ground plane, within StandHeight up or down), or to a spot handed out in the last `HoldSeconds` 1 (`_ExitHeld`). This does not depend on character parts being CanCollide / CanQuery on the server.
+  - `_PlaceExit` passes the character and records its spot (`_ExitHold`); a hold is ignored once its character is gone or seated again.
+  - `_RoofSpot(model, chassis, hipAbove, riderChar)`: the same rules (a rider still seated, or one already on the roof, blocks it). Its standing box now also sees this car's own collidable kit: on a tilted or overturned car the "top" is beside or under the kit, so the roof fallback is refused there (Roblox's own jump-out, as live) instead of placing the rider inside the kit (VS-A36).
+  - Behind and in front each get two more spots `EndSideStep` 2.5 to either side (after all the R2.1 spots of that ring), so a full van in an alley still gets everyone out (5 riders, 12 end spots).
+  - Config: `Drive.ExitSpot.RiderGap = 0.25`, `HoldSeconds = 1`, `EndSideStep = 2.5`.
+- **VS-19 Quad / Recon Buggy at 1.2x Roblox size, seats 0.25 over the VehicleSeat (review issue 2, Medium; supersedes VS-17).** At 1.0 no seat height fits a default-pose blocky R15: feet on the floor put the head in the roll cage's top rails (R2.1: head top 6.33 vs rail tops 6.03-6.85, at or above the rail in 7 of 12 slices). `BodyScale` 1 → 1.2, both seat tops y 2.634 → 2.434 (unscaled; 2.92 over the ground). WE_VisualHalfLength 10.05, WE_VisualHalfWidth 5.62, body 20.1 long x 11.2 wide x 8.43 high (4x4 17.6 x 8.2, van 26.2 x 11.6, pickup 26.6 x 10.6). Label about 9.4 over the ground; Drive prompt 21.39 (Quad) / 20.43 (Buggy); Ride 18.05; friendly gate opens with the chassis 19.25 / 18.25 from the gate.
+  - R2.3: the label is now 11.00 over the ground (VS-21). At 1.2x the body is 11.23 wide, wider than the 10-stud base gate (VS-A40). Near garage pads its bigger spawn box makes a SPAWN fall back to the next spot about 0.8 % more often (reviewer's sampling, VS-A41).
+
+#### Assumptions (reversible)
+- **VS-A30 Holding a spot for 1 s.** After a server `PivotTo` the owning client can still send a few position updates from before the move, so for a moment the server may see the rider back at the seat. The hold keeps his spot taken for `HoldSeconds` 1 so a rider leaving right after him cannot land on it. Cost: if the first rider walks off at once, the second one still uses the next spot for up to 1 s. The hold is not measured on Roblox (stand-in only).
+- **VS-A31 RiderGap 0.25, root parts only.** Humanoids keep arms and legs non-colliding, so root parts (torso) are what collide. With 0.5 the plain 4x4 kit (no body loaded: seats 1.4 apart along the car) sent the front passenger to the other side; 0.25 keeps him on his own side, 0.4 from the driver, never overlapping. Riders of the same car are placed facing the car's heading, so two of them 2 x 1 root parts side by side need 1.0 + 0.25 along the car.
+- **VS-A32 Size 1.2 for the buggy (measured, `r22/tools/buggy_metrics.py` + the reviewer's quad_rail / head_clear / clip_check / body_in_dummy / sit_gap on dumps of the real _Build + fit; stand-in, not Roblox).** Grid: scale 1.0-1.2 x seat y 2.184-2.634 (`r22/results/buggy_grid_lift0.txt`, `_lift05.txt`, the 1.15-1.2 refinement in the report). Wanted: feet not under the belly, head under the top rails in every slice for the default avatar and a 0.5 taller one, arm poke no worse than R2.1, the smallest scale that does it.
+
+  | Scale / seat y | Default head vs top rails | 0.5 taller head | Forearm outside the body | Thighs over the cushion |
+  |---|---|---|---|---|
+  | 1.0 / 2.634 (R2.1) | at or above in 6 of 11 slices, up to +0.31 | 10 of 11 above, up to +0.81 | 0.17 | 0.29 |
+  | 1.10 / 2.584 | under by 0.24 | 8 of 11 above, up to +0.26 | 0.05 | 0.27 |
+  | 1.15 / 2.484 | under by 0.51 | under by 0.01 | 0.39 | 0.17 |
+  | **1.2 / 2.434 (R2.2)** | **under by 0.63 (every slice)** | **under by 0.13** | **0.18** | **0.12** |
+
+  1.05-1.10 (the reviewer's range) leaves a 0.5 taller avatar's head above the rails. 1.2 is the top of the design clamp noted at `VehicleVisualScale` (0.85-1.2).
+- **VS-A33 The buggy's arm and shins (supersedes VS-A26).** At 1.2 / 2.434 the cage's side tube no longer passes into the arm (R2.1: 0.20 into the lower arm); the forearm shows 0.18 outside the body's side skin, inside the open cage (R2.1: upper arm 0.17), and the dash interior is 0.15 into the forearm. The shins are 0.45 into the footwell interior (R2.1: 0.37), hidden inside the body. A seated pose made for the game would still be the real fix; not this lane.
+- **VS-A34 Buggy stability at 1.2 (supersedes VS-A25 for the buggy).** `vsr_phys_r2`, driver aboard: Quad centre-of-mass height 1.39 (main5f 1.46, R2.1 1.33), tip angle toward the driver's side 58.5° (main5f 60.7°, R2.1 60.3°), because the rider sits 1.62 left of the centre (the body's own seat, scaled) where the live kit seat is central; full seats static stability factor 1.41 (main5f 1.25, R2.1 1.49). Recon Buggy: 1.31 (1.41 / 1.27), 61.9° (62.2° / 63.1°), 1.62 (1.40 / 1.70). The rollover suite's symmetric `t_stability`: Quad SSF 1.55 (main5f 1.48, R2.1 1.63), tip 62° (61° / 63°); Buggy 1.71 (1.59 / 1.77); all suites unchanged in pass counts. So: lower centre of mass than live, but a driver alone is 2.2° less stable toward his own side than live. Phone step 5 adds full-stick right-hand corners alone in the Quad.
+- **VS-A35 Stand-in drivers that leave riders standing.** The unchanged `vs2_world` F section keeps every earlier rider standing on his exit spot, so by the last car 30+ characters ring the one pad (a server has 6 players). R2.2 sees them: 20 (fit) / 14 (no fit) "exits on its own side" checks fail, 22 of 24 exits still land clear, and 2 exits plus 1 wreck exit find every spot taken and get Roblox's own jump-out. `r22/drv/vs22_world.luau` is the same driver where the earlier riders walk away and 1.1 s pass before the next exits: 0 fails on cand22 and cand21. R2.3: superseded by VS-A42, where the driver keeps at most 5 other players near the car, as on a 6-player server.
+
+- **VS-A36 Roof fallback only where the roof is clear of the kit.** The reviewers' boxed-in section (rv22_section B: tilted / rolled cars walled in on 4 sides with a beam at the seat) scored 64 rider placements inside the car's own kit on R2.1 (roll ±90°, 180°, pitch 30°: the roof fallback). The stand-in's box query cannot see car parts, so a copy of that driver with every car's collidable parts visible to the queries (as in Roblox, `r22/drv/mock_carparts.luau`) was used: R2.1 64 inside the kit, R2.2 0 (91 of 264 riders moved, the rest get Roblox's own jump-out, as live). With the unchanged mock R2.2 scores 66 (the 1.2x Quad's upside-down rows join the list), because that mock never sees the kit.
+
+#### Corrections to the round-2.1 docs
+- R2.1's phone_test step 1 said "In the Quad your head is under the roll cage"; the report said the head "touches the cage interior by 0.03". In fact the head top was level with or above the top rails in 7 of 12 side-view slices (up to +0.30), and a 0.5 taller avatar's head was clearly out of the cage (reviewer an/quad_rail.txt, crops/quad_head_rows.png). R2.1 also did not say the riders' thighs float 0.29 over the cushion.
+- R2.1's exit claims ("0.00 inside the body", "exits on its own side") were for one rider at a time. With several riders R2.1 put them inside each other (VS-18).
+
+### Round 2.3 (review round 2.3: two Medium findings, four Lows; rebased onto 5c8f57e)
+Built on `git archive 5c8f57e` as `r23/cand`. The nine R2.2 files were 3-way merged onto it with 0 conflicts (see the top of this entry). R2.3 then changes four files again (VehicleService, VehicleConfig, VisualAssetService, VisualAssetConfig) and adds two (VehicleCombatConfig, VehicleCombatClient), so eleven files change in all. As before, nothing changes in the physics kit, WE_HalfLength / WE_HalfWidth or the driving laws. There is no new remote and no save change.
+
+#### What changed
+- **VS-20 The drive point follows the riders sideways (review M1, Medium).** At 1.2x the Quad / Recon Buggy driver sits on the body's own seat at x −1.62. The centre of mass moved left with him, but `WE_DriveLV` still pushed at x = 0 (the rollover fix's `attach.Position = Vector3.new(0, com.Y, com.Z)`). That turned the car: 84 % of `WE_DriveAO` at force saturation (pushing a wall), 15 % braking and 7 % accelerating on the Quad, and 28 % at saturation on the Buggy.
+  - `VehicleConfig.Drive.Stability.DriveAtComXFamilies = { WheeledLight = true }`. For those families, `_Ballast` stores the kit's mass and X moment on `WE_DriveAttach` (`WE_KitMass`, `WE_KitMomentX`). `VehicleService._DriveAttachX(chassis, seats)` then sets `WE_DriveAttach.X` to the centre of mass of the kit plus a `RiderMass` (14) rider on every occupied seat, or on the driver seat when no seat is occupied.
+  - It runs at build, right after the rollover line, which stays as it was: main's BuyPathStatic pin on it still passes. It runs again on every seat's Occupant change, from the same listener that starts the exit move. Y and Z stay where the rollover fix puts them (the nominal driver).
+  - Other families get no attributes and are left alone. That covers the trucks and the van (WheeledTruck, see VS-A37) and the tracked, air and naval kits (rollover unit 5j).
+  - Results (`vsr_phys_r23`, YAWC rows; stand-in masses with Roblox's densities). The offset between the drive point and the centre of mass, R2.2 → R2.3:
+
+    | Car | Driver alone | Driver + passenger | Every seat |
+    |---|---|---|---|
+    | Quad | 0.33 (84 %) → 0 | 0.03 (7 %) → 0 | 0.03 → 0 |
+    | Recon Buggy | 0.23 (28 %) → 0 | 0.02 → 0 | 0.02 → 0 |
+    | 4x4 / Armed 4x4 | 0.12 (12 %) → 0 | 0.01 → 0 | 0.01 → 0 |
+    | Dispatch Car | 0.20 (33 %) → 0 | 0.03 → 0 | 0.16 (26 %) → 0 |
+
+    Main (live) for comparison: the Quad with a passenger is 0.23 (58 %), the Buggy 0.17 (20 %) and the Dispatch Car 0.18 (29 %). The live kit seats sit at the centre, so the passenger pulls the centre of mass sideways. After a full car empties, the drive point returns exactly to its build value (`empty_again`).
+  - In a real spawn, a Ride and the exits (`vs23_world` ATTLIVE rows, the world stand-in's own part masses): at spawn, with every rider aboard and after everyone got out, the drive point equals the centre of mass on all 6 WheeledLight cars (18 checks, 0 fails). The van and the trucks keep x = 0.
+  - Kits without a fitted body (the plain Part kit, a body that did not load): the kit is almost symmetric, so the drive point moves by at most about 0.01 (the plain Quad: x −0.01).
+  - Rollover suites: the unchanged `t_rollover_unit` fails exactly its 5e pin (`X == 0`) on cand, in plain and fit mode (41/42). The R2.3 copy `r23/drv/t_rollover_unit_*_r23.luau` checks X = the centre of mass with the rider and passes 42/42. It fails 41/42 on main, as it should. `t_rollover_server` 20/20, `t_rollover_client` 11/11 and `t_stability` are identical to R2.2 and main: the drive point does not move any mass, so the SSF, tip angle and centre-of-mass height do not change.
+- **VS-21 HP bar and nameplate seen over a tall body (review M2, Medium).** In R2.2 the over-vehicle HP bar was 0.75 under `WE_LabelY` (roof + 1), so it sat 0.08-0.10 over the roof. The car's own opaque roof hid it from a player on foot, and on the Cargo Van it hid the nameplate too. `AlwaysOnTop` stays off.
+  - `VisualAssetConfig.BodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 }`. A fitted body's `WE_LabelY` = top + 1 + 0.4 × max(0, the top's height over the ground − 4.5), where the ground is the body's bottom, on the wheel line. The margin comes to 4x4 2.37, Quad 2.57, Armed 4x4 2.70 (over the gun), van 3.07 and pickups 3.06. Label heights are in VS-3.
+  - `VehicleCombatConfig.Ui.OverBar.LabelOffset = 1.5`: the bar's centre sits 1.5 over `WE_LabelY`, above the nameplate. `VehicleCombatClient.labelHeight` reads it. W2 / R2.2 used −0.75. A kit without a fitted body keeps its kit label, and its bar is 1.5 over that too.
+  - Proof (`r23/tools/vis_check.py`, the real fitted meshes as occluders, a stand-in not Roblox). The camera stands 3, 6, 10 or 15 studs outside the body on 12 bearings, at heights 4.5 (a standing avatar's eyes), 6.5 and 8.5 (the default third-person camera). A billboard counts as seen when at least half of its 21 sample points have a clear line. That gives 144 views per car and 1,296 over 9 cars:
+
+    | | HP bar seen | Nameplate seen | Bar and plate overlap on screen |
+    |---|---|---|---|
+    | main 5c8f57e (small squeezed bodies) | 1296 | 1296 | 72-90 per car |
+    | R2.2 rebased | 745 (van 22 / 144, 4x4 79) | 1111 (van 72) | 106-136 per car |
+    | **R2.3** | **1286** (van 138) | **1268** (van 128) | **0** |
+
+    From the third-person heights (6.5 and 8.5, 6-15 studs out), R2.3 sees both on every car in every view but one: the van's nameplate from right behind at 6.5. What is still missed is the van at eye height (4.5): right behind it (bearing 270), and standing right against it (3 studs out), where the roof half hides the plate from every side. That is the bar in 5 of those 48 views and the plate in 14. From 6.5, only right behind at 3 studs. Renders: `r23/renders/hpbar_views.png` (main | R2.2 | R2.3; beside at third person, beside at eye level, rear three-quarter).
+  - The bar is not pulled toward the camera (`StudsOffset` Z). That was tried and rejected, see VS-A39.
+- **Lows.**
+  - VS-A40: the Quad / Buggy body is wider than the base gate.
+  - One line each in VS-19 and VS-A24: the spawn fallback.
+  - VS-A42 (supersedes VS-A35's numbers): the capped `vs23_world` driver.
+  - `phone_test.md` is restructured: a 5-minute core block first, the friend-only cases in an optional Part 2.
+
+#### Assumptions (reversible)
+- **VS-A37 A drive point that follows the riders, WheeledLight only.**
+  - A static com.X taken with the driver alone, as the review's option (a) proposed, would move the error to the two-rider case. The Quad goes from 0.03 to 0.30 with a passenger, because the passenger's seat mirrors the driver's. Updating on every Occupant change keeps it at 0 for every seat case.
+  - The Occupant listener already exists (the exit hook), so this adds one attribute write per sit or stand. There is no per-frame work. The server writes the Attachment, and the owning client's physics picks it up through replication. Not checked on a device.
+  - The review's option (b), capping the driver seat's |x|, was measured on a trial tree with both buggy seats at |x| 1.2 (26 % inward). The Quad was still at 63 % saturation / 11 % braking and the Buggy at 21 %. The rider would sit 0.42 inside the body's seat, and head and arm clearance would need a new study. So it was not taken.
+  - The van and trucks (WheeledTruck: driver alone 0.22 / 0.15 / 0.11 → 20 % / 11 % / 6 %, the same as R2.2) are not in the list, because the brief was about WheeledLight. Adding `WheeledTruck = true` to `DriveAtComXFamilies` would treat them the same way, but it is not measured.
+- **VS-A38 Masses in the world stand-in.** The world stand-in's `GetMass` is its own, not Roblox's densities. `vsr` uses Roblox's. So the ATTLIVE drive points (Quad −1.03 with the driver alone) differ from `vsr`'s (−0.33). Each is checked against the centre of mass computed with the same masses.
+- **VS-A39 A taller label instead of a pull toward the camera.** Pulling both billboards toward the camera by the body's half width was tried. It saw about as much (bar 788-829 of 864 in the trial set), but it enlarges a stud-sized bar close to the camera to 355-419 px wide on a 956-px-wide phone screen, against 124-166 without the pull. So it was dropped.
+  - Cost of the taller label: the nameplate floats 2.4-3.1 studs over the roof and the bar 1.5 higher, up to 14.2 studs over the ground on the van (the bar's centre). On main the bar is 0.7-3.2 over its small bodies.
+  - The bar sits 1.5 over the plate's centre. The plate is 0.4 studs + 20 px high, so they never touch out to about 35 studs (the plate's MaxDistance is 36).
+  - Phone step 3 checks the bar and the name in Part 1, and step 8 does so with a friend in Part 2.
+- **VS-A40 The Quad / Recon Buggy is wider than the base gate (review Low).**
+  - At 1.2x the body is 11.23 wide (`WE_VisualHalfWidth` 5.62) and the perimeter gate is 10 (StructureKitBuilder `GATE_CLEAR`). Driven through the middle, each side of the body passes about 0.6 into a gate post.
+  - Off-centre it goes further in. Driving straight with the kit (`WE_HalfWidth` 2.61, the 1.2x track) brushing a post, the body's side on that post is about 3.0 into it (5 − 2.61 + 5.62 − 5). The reviewer measured up to about 4.7 on angled approaches.
+  - The posts are not hit by the body (it does not collide) and the kit fits, so this is a look, not a block. The gate step in `phone_test.md` (step 9) says so.
+- **VS-A41 Spawn fallback near garage pads (review Low).** At 1.2x, the Quad's bigger spawn box makes a SPAWN fall back to the next pad or ring spot about 0.8 % more often near garage pads (reviewer's sampling). It is still seated on a pad; the fallback order is VS-15.
+- **VS-A42 The capped world driver (supersedes VS-A35's numbers).** `r23/drv/vs23_world.luau` is `vs2_world` unchanged except for one rule: before each spawn and before the exits, at most 5 other players (seated or on foot) stay within 80 studs, like a 6-player server. The oldest ones on foot walk 400 studs away (55 moves over the run). The driver also prints ATTLIVE (VS-20).
+  - Result: 4 "exits on its own side" fails on R2.3 (Quad, Van, Patrol and Escort drivers, whose own side had a bystander on it). R2.2 rebased gives the same 4, and no-fit gives 2. All 24 exits are clear, 0 in a body, and 24 of 24 Rides are OK.
+  - Main (live) fails 27: there is no Ride and no exit spot there.
+  - The unchanged `vs2_world` (30+ bystanders) and `vs22_world` (everyone walks away) are also run.
+
+- **VS-A43 Old label and bar pins superseded (like VS-A19 / VS-A29).** These drivers hard-code R2.2's flat 1-stud label or the bar under the nameplate, so they fail on R2.3 by design, and only in those checks:
+  - `vs22_jeep_look` K4 label: 9 fails, 191/200 (R2.2 200/200). The same driver with the R2.3 margin, `r23/drv/vs23_jeep_look.luau`, gives 200/200; R2.2 rebased 191/200, main 151/200.
+  - `vs_jeep_look` 176/191, `vs2_jeep_look` 186/200 and `vs21_jeep_look` 187/200: their only new fails are the K4 label rows.
+  - `vs_look_unit` U11 jeep label: 57/65 (R2.2 58/65).
+  - `t_vcc_client` C3 ("just under the nameplate"): 41/42. The copy `r23/drv/t_vcc_client_*_r23.luau` expects WE_LabelY + 1.5 and gives 42/42; main gives 41/42 on the copy.
+
+#### Corrections to the round-2.2 docs
+- VS-A15 still carried R2 / R2.1 numbers. At R2.2's 1.2x the Quad's drive point was 0.33 off the centre of mass (84 % at saturation, 15 % braking), not "67-70 %". The Buggy was at 28 % (review M1). R2.3 fixes it (VS-20).
+- VS-1, VS-3, VS-6, VS-8 and VS-10 listed R2 / R2.1 buggy values. They now carry the R2.2 values, and VS-3 carries R2.3's.
+- R2.2's phone step 11 said "the small name and health bar sit just above the roof". On the fitted bodies the roof hid the bar from a player on foot, and on the van it hid the name too (review M2). R2.3 moves both up (VS-21).
+- R2.2's `phone_test.md` did not mention that the 1.2x Quad is wider than the 10-stud gate (VS-A40).
+
+### Follow-up (not this lane): option C, the physics kit sized to the body
+Unchanged from round 1 (see vscale/build/assumptions.md): build the kit per axis from the body, with wheels at the body's tyres, the chassis at the body's footprint, and seats from `BodySeats`. That removes the overhang, floating tyres, shots through the nose and exits through the kit. It changes driving, so it needs the rollover, drive and terrain suites and a phone drive test.

@@ -58,6 +58,10 @@ export type AssetRef = {
 	-- turn the model's barrel onto -Z (turned once in the template at load)
 	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
 	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
+	-- vscale (owner: the avatar sat above the buggy / through the jeep roof): Fit bodies at a set scale over the same kit
+	BodyScale: number?, -- Fit: body scale (1 = Roblox size); nil = as long as the kit chassis. The kit still drives
+	BodySeats: { [string]: Vector3 }?, -- BodyScale: kit seat -> body seat top (unscaled studs: x/z from the body box centre, y above its lowest point)
+	BodyRoofParts: { string }?, -- BodyScale: kit parts lifted onto the body roof (the Armed 4x4 keeps its Part turret)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
@@ -124,6 +128,15 @@ local VisualAssetConfig = {
 	-- Press pick (its Smoke goes when it is promoted).
 	StripEffectsAssetIds = { 23153991, 31603741, 4362642898 },
 	FitShadowShare = 0.5, -- fitted vehicle bodies: only parts at least this share of the chassis length cast a shadow
+	-- vscale R2.1: a BodySeats seat's centre stays at least this far inside the kit's collidable box (the Cargo Van's
+	-- front row moves back, the Dispatch Car's back seat forward), so no seat and no seated rider is ever past the kit's
+	-- nose or tail, inside a wall the kit touches. 0 = on the kit's face.
+	BodySeatKitInset = 0.25,
+	-- vscale R2.3 (review M2): a fitted body's label (WE_LabelY: the owner nameplate; the HP bar sits 0.75 under it)
+	-- stands Base + PerStud x (the body top's height over the ground - EyeHeight) over the top, so a player on foot
+	-- beside a tall van or truck sees them over the roof (R2.2's flat 1 left the bar 0.08 over the roof, hidden by it).
+	-- Van / trucks about 3.1, 4x4 2.4, Quad 2.6. { Base = 1, PerStud = 0 } = R2.2.
+	BodyLabelMargin = { Base = 1, PerStud = 0.4, EyeHeight = 4.5 },
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
 	BuildingVisualScale = 1.0, -- ScaleTo uses TargetFootprint; do NOT squash to plinth
@@ -144,6 +157,15 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			KeepVisible = { "GunMount", "Barrel" },
+			-- vscale: Roblox size (the kit is 8.5 long; a seated avatar's head is 0.5 under the glass). Seats: the body's own.
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.216, 3.387, -0.496), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(1.2, 3.388, -0.496), -- SeatFR
+				PassengerSeat2 = Vector3.new(-1.216, 3.387, 3.504), -- SeatRL
+				PassengerSeat3 = Vector3.new(1.2, 3.388, 3.504), -- SeatRR
+			},
+			BodyRoofParts = { "GunMount", "Barrel" },
 			StripDecals = true,
 			Note = "W3 LOOK: Roblox Light Utility Vehicle body (NO JeepFallback); dress-only, Part kit drives",
 		} :: AssetRef,
@@ -156,6 +178,16 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			StripDecals = true,
+			-- vscale: 1.2 x Roblox size (R2.2; R2.1 1.0, R2 0.95). Seats: over the body's own VehicleSeat, the passenger
+			-- on its mirror (the model's SeatFR is posed for its own Passenger_Seated animation, which the game does not
+			-- play), both seat tops 0.25 (unscaled) over the VehicleSeat's. At 1.0 no seat height fits a default-pose
+			-- avatar: feet on the floor put the head up in the roll cage's top rails (R2.1). At 1.2 the feet are on the
+			-- floor and the head is 0.6 under the top rails (a 0.5 taller avatar: 0.1 under). buggy_metrics, vscale R2.2.
+			BodyScale = 1.2,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.349, 2.434, 1.223), -- VehicleSeat + 0.25
+				PassengerSeat1 = Vector3.new(1.349, 2.434, 1.223), -- mirror of the VehicleSeat (right-hand seat) + 0.25
+			},
 			Note = "owner list: Roblox Dune Buggy (beige) Body (23 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = the WheeledLight family body",
 		} :: AssetRef,
 		ScoutCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep)" } :: AssetRef,
@@ -167,6 +199,16 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			StripDecals = true,
+			-- vscale: 1.2 x Roblox size (R2.2; R2.1 1.0, R2 0.95). Seats: over the body's own VehicleSeat, the passenger
+			-- on its mirror (the model's SeatFR is posed for its own Passenger_Seated animation, which the game does not
+			-- play), both seat tops 0.25 (unscaled) over the VehicleSeat's. At 1.0 no seat height fits a default-pose
+			-- avatar: feet on the floor put the head up in the roll cage's top rails (R2.1). At 1.2 the feet are on the
+			-- floor and the head is 0.6 under the top rails (a 0.5 taller avatar: 0.1 under). buggy_metrics, vscale R2.2.
+			BodyScale = 1.2,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.349, 2.434, 1.223), -- VehicleSeat + 0.25
+				PassengerSeat1 = Vector3.new(1.349, 2.434, 1.223), -- mirror of the VehicleSeat (right-hand seat) + 0.25
+			},
 			Note = "owner list: Roblox Dune Buggy (beige) Body (23 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = the WheeledLight family body",
 		} :: AssetRef,
 		-- Free tank family
@@ -199,6 +241,14 @@ local VisualAssetConfig = {
 			HideKit = true,
 			StripDecals = true,
 			OmitParts = { "light_tail_glass" },
+			-- vscale: Roblox size (a seated avatar's head is 0.4 under the glass). Seats: the body's own.
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.708, 5.075, -2.092), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(1.708, 5.075, -2.091), -- SeatFR
+				PassengerSeat2 = Vector3.new(-1.708, 5.075, 2.158), -- SeatRL
+				PassengerSeat3 = Vector3.new(1.708, 5.075, 2.159), -- SeatRR
+			},
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
 		ArmoredTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
@@ -259,6 +309,20 @@ local VisualAssetConfig = {
 			Yaw = 0,
 			HideKit = true,
 			StripDecals = true,
+			-- vscale: Roblox size (R2: at 0.8 every rider's arms showed 0.33-0.45 through the doors and cargo panels, at 0.95
+			-- 0.04-0.05 and the front row's feet 0.15 through the floor; at 1 nothing, like Roblox's own van). Seats: the
+			-- body's own; head 2.0 under the roof. R2.1: the front row lands 0.84 further back (z -4.43), because
+			-- BodySeatKitInset keeps every seat centre inside the kit's collidable box (the kit nose is at z -4.67).
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.247, 4.004, -5.267), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(2.255, 4.004, -5.267), -- SeatFR
+				-- no body seat: the cargo bay behind the cab (the kit seats' heads were 0.5 through the roof), seat tops 1 lower
+				-- than the cab's so the feet reach the cargo floor (2.0 under the cab seat line)
+				PassengerSeat2 = Vector3.new(2.255, 3.05, -1.4),
+				PassengerSeat3 = Vector3.new(-2.247, 3.05, 0.6),
+				PassengerSeat4 = Vector3.new(2.255, 3.05, 0.6),
+			},
 			Note = "owner list: Roblox Van (white) Body (26 MeshParts, no decals), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
 		TroopTransport = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
@@ -272,6 +336,14 @@ local VisualAssetConfig = {
 			HideKit = true,
 			StripDecals = true,
 			OmitParts = { "light_tail_glass" },
+			-- vscale: Roblox size (a seated avatar's head is 0.4 under the glass). Seats: the body's own.
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1.708, 5.075, -2.092), -- VehicleSeat
+				PassengerSeat1 = Vector3.new(1.708, 5.075, -2.091), -- SeatFR
+				PassengerSeat2 = Vector3.new(-1.708, 5.075, 2.158), -- SeatRL
+				PassengerSeat3 = Vector3.new(1.708, 5.075, 2.159), -- SeatRR
+			},
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
 		InfantryCarrier = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,

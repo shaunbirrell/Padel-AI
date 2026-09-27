@@ -78,6 +78,9 @@ local RaidConfig = {
 		GuardPostInsideStuds = 10,
 		AutoGunInsideStuds = 7.5,
 		GateOpenRadius = 12, -- an ally within this (horizontal) of the gate centre opens the barrier
+		-- vscale R2: an ally seated in a car whose Roblox-size body is longer than its kit opens it from further out:
+		-- + the body's overhang (WE_VisualHalfLength - WE_HalfLength) + this (the moved seats sit up to 1.1 further back)
+		GateOpenVehicleLead = 1.5,
 		GateOpenHeight = 12,
 		GateCloseDelay = 1.0,
 		LosRespectCanCollide = true, -- guard/AutoGun line of sight ignores non-collidable decor
