@@ -1755,6 +1755,17 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	pcall(function()
 		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family)
 	end)
+	-- owner asset list hook: turret dress on the kit's weapon mount (VisualAssetConfig.VehicleWeapons: each ref names its
+	-- Mount part and an allow-list of kit families / vehicle ids; nothing else ever wears it). A 0 id is a no-op (no
+	-- load); a dress is massless, non-colliding and welded to the mount (never anchored), the ref's HideParts go
+	-- invisible, and it is in place before the vehicle is parented (Atomic). The kit gun's parts, combat and drive stay.
+	-- (Required here: the module chunk is at the 200-local limit.)
+	for weaponId, wref in pairs(require(Shared.Configs.VisualAssetConfig).VehicleWeapons) do
+		local mount = if typeof(wref.Mount) == "string" then model:FindFirstChild(wref.Mount) else nil
+		if mount and mount:IsA("BasePart") and VisualAssetService.VehicleWeaponAllowed(weaponId, id, family) then
+			pcall(VisualAssetService.TryAttachVehicleWeaponVisual, model, weaponId, mount)
+		end
+	end
 	CollectionService:AddTag(model, Constants.Tags.Vehicle)
 
 	-- v70: movers + drive attributes (protocol for VehicleDriveClient). Built at `at`, NOT parented:

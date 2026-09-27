@@ -11,12 +11,12 @@ lead's spec (assetwire, 2026-09-25).
 
 | What happened | Items |
 |---|---|
-| Wired now: Roblox's own models, no Get Model needed | 27 |
-| Your Get Model picks, waiting for the promote step | 69 |
+| Wired now: Roblox's own models, no Get Model needed | 31 |
+| Your Get Model picks, waiting for the promote step | 73 |
 | Kept our own build | 21 |
 | Not used (wrong item, real-world copy, too heavy …) | 32 |
 | Needs new game code first | 48 |
-| Waits on a file another job is editing | 11 |
+| Waits on a file another job is editing | 3 |
 | Soldiers and guards: need moving (animated) figures first | 9 |
 
 ## 1. What changed and what to test on your phone
@@ -31,8 +31,8 @@ Test on your phone in landscape, at Graphics Quality 3 if you can (a mid-range A
 - **Training yard:** the oil drums show, with no smoke.
 - **Roads and shores:** logs, driftwood, dead trees, stumps, grass tufts and dark car wrecks are not squashed or sideways.
   Watch the frame rate near the Town and near a group of wrecks.
-- **Walls level 4 and up:** the gate gun is our own Part-built gun. The machine-gun model you listed for the sandbag nest
-  is not used (it looks like a real WWII gun). Your tripod gun pick 114570602 waits for the Studio check in section 5.
+- **Walls level 4 and up:** the gate gun is your tripod gun pick 114570602 since the hooks batch below (our Part-built gun
+  if it fails to load). The machine-gun model you listed for the sandbag nest is not used (it looks like a real WWII gun).
 
 After each promote batch the lead adds that batch's phone checks here.
 
@@ -43,7 +43,23 @@ After each promote batch the lead adds that batch's phone checks here.
   giant or tiny. Road barriers also stand in for traffic cones and crates for pallets.
 - **Tutorial arrow:** a new player's arrow points at the next step and is not sideways.
 
-## 2. Wired now (27)
+**Hooks batch (2026-09-25: the items that waited on another job's files):** each shows the model, or our Part build if
+it fails to load. One check per line:
+- Gate gun (walls 4+): tripod feet on the ground, barrel out of the gate.
+- A second player (not in your clan) walks in: the gun turns barrel-first and shoots.
+- The gun keeps turning for 30 seconds: it stays level, never tilts.
+- Ammo Works / Arms Crate Line: the belt is a striped conveyor.
+- Crates still ride the belt to the bin.
+- Upgrade a belt business to level 5: still one belt, nothing floating.
+- Rocket Assembly: a rocket lies on the roof, with no fire or smoke.
+- Home Outpost (100 studs out of the gate): a round grey pad lies flat.
+- Stand on the outpost pad: capture still works.
+- The outpost flag and name label look as before.
+- Graphics Quality 3: buy Ammo Works; the belt swaps with no gap.
+- Walls 5, Graphics Quality 3: both gate guns turning at an enemy cause no stutter.
+- Dropper plates and vehicle guns look as before (no change yet).
+
+## 2. Wired now (31)
 
 Roblox's own models: they load with "Allow Loading Third Party Assets" OFF, so you click nothing. "Already live" rows
 were wired before your list; the Synty trees, stumps, reeds and grass now really show (before, other pieces took their
@@ -78,6 +94,10 @@ slots).
 | Driftwood | Synty twig as driftwood | shores | Synty Nature Pack, 6933438443 |
 | Reeds | Synty reeds | shores | Synty Nature Pack, 6933438443 |
 | Dune Grass | Synty dry plant | roads | Synty Nature Pack, 6933438443 |
+| Ammo Works | Roblox conveyor belt as the line's belt (hooks batch) | your base (businesses) | Conveyor Belt, 41324890 |
+| Arms Crate Line | the same conveyor belt (hooks batch) | your base (businesses) | Conveyor Belt, 41324890 |
+| Rocket Assembly | Roblox rocket on the roof, fire and smoke removed (hooks batch) | your base (businesses) | Rocket, 31603741 |
+| Home Outpost | Roblox capture pad on the outpost ring, its see-through beam dropped (hooks batch) | your Home Outpost | Capture Points, 80566030 |
 
 Cruise Missile: this is the rocket-launcher round in flight. If you meant the Missile Command strike missile, that one has
 no model slot yet (tell the lead).
@@ -136,7 +156,16 @@ Owning a model only makes it loadable. Nothing below shows in the game until the
 
 | Item(s) | Id | Store name | Creator | Owned | Next step |
 |---|---|---|---|---|---|
-| Auto Gun | [114570602](https://create.roblox.com/store/asset/114570602) | Tripod Mounted Machine Gun | GuestCapone | yes | first promote batch (P1): nothing else needed |
+| Auto Gun | [114570602](https://create.roblox.com/store/asset/114570602) | Tripod Mounted Machine Gun | GuestCapone | yes | promoted in the hooks batch (its loader now refuses > 40 parts or a Humanoid; turned 90 degrees so the barrel leads) |
+
+**Business press, dropper and vehicle guns (hooks batch P4: each needs the Studio check; the code hooks are in)**
+
+| Item(s) | Id | Store name | Creator | Owned | Next step |
+|---|---|---|---|---|---|
+| Armor Plate Press | [4362642898](https://create.roblox.com/store/asset/4362642898) | Metal Factory (Press) | Ghosttony503 | yes | the Studio check (batch P4), then drop its see-through bounds box (OmitParts) and choose the kit parts it replaces |
+| Manual Dropper | [14408455045](https://create.roblox.com/store/asset/14408455045) | Tycoon Dropper | tinghang77 | yes | the Studio check (batch P4) |
+| Vehicle MG | [5589684833](https://create.roblox.com/store/asset/5589684833) | Mounted Machine Gun | ifyouaremethaniamyou | yes | the Studio check (batch P4) |
+| Vehicle Cannon | [3322196012](https://create.roblox.com/store/asset/3322196012) | Tank Turret | Nierse217 | yes | the Studio check (batch P4) |
 
 **Vehicles (each needs the Studio check; the model is dress only, our kit still drives)**
 
@@ -186,7 +215,8 @@ Run, paste the script with the list below, copy every line that starts with `WE_
 to the lead. A model passes with `parts` 40 or less and `humanoids=0`; for vehicles the `size` tells the tool which way the
 model faces.
 
-- **Gate gun (held back from the first batch):** 114570602
+- **Batch P4 (business press, dropper, vehicle guns):** 3322196012, 4362642898 (also name the see-through bounds box
+  part), 5589684833, 14408455045
 - **Batch P2 (walls and buildings):** 52154909, 4005471827, 5343886540, 6980242709, 8333853928, 13183571527
 - **Batch P3 (vehicles):** 31538715, 43773162, 2474869838, 2627182035, 3304171953, 3553891209, 4954987035, 5177695483, 5318635087, 8455894899, 8546141386, 9076240315, 10069416832, 11357157285, 11552687660, 11756438288, 15838664806
 
@@ -319,24 +349,17 @@ fit the per-server load budget (section 8), so it would ship a few kinds at a ti
 | Desert Mesa | 6933438443 | needs a horizon host in MapSetup (another job's file) |
 | Cash Pile | 11760036257 | needs a host; the bills must be stripped (real currency art) |
 
-### 6.4 Waiting on another job (11)
+### 6.4 Waiting on another job (3)
 
-These need a change in a file that another job (streaming, part 2) is editing right now. The exact change is written down
-and is made when that job lands.
+These need a change in a file that another job is editing. The exact change is written down and is made when that job
+lands. (The business lines, the Home Outposts, the dropper and the vehicle guns got their hooks on 2026-09-25: see
+sections 2 and 3.)
 
 | Item | Id | Waits on |
 |---|---|---|
-| Ammo Works | 41324890 | BusinessService (streaming2-build): business dress hook |
-| Arms Crate Line | 41324890 | BusinessService (streaming2-build): business dress hook |
-| Armor Plate Press | 4362642898 | BusinessService (streaming2-build): business dress hook |
-| Rocket Assembly | 31603741 | BusinessService (streaming2-build): business dress hook |
-| Manual Dropper | 14408455045 | ManualDropperService (streaming2-build lane C1): dropper dress hook |
-| Home Outpost | 80566030 | MapSetup (streaming2-build): Home Outpost dress hook |
-| Premium Razorfang | 6433323089 | VehicleConfig + VehicleService (streaming2-build): premium vehicle def |
-| Premium Bastion | 16835152672 | VehicleConfig + VehicleService (streaming2-build): premium vehicle def |
-| Premium Tidebreaker | 4128350737 | VehicleConfig + VehicleService (streaming2-build): premium vehicle def, then a Studio look |
-| Vehicle MG | 5589684833 | VehicleService (streaming2-build): turret dress hook |
-| Vehicle Cannon | 3322196012 | VehicleService (streaming2-build): turret dress hook |
+| Premium Razorfang | 6433323089 | VehicleConfig + VehicleService: premium vehicle def (your yes / no, call 11) |
+| Premium Bastion | 16835152672 | VehicleConfig + VehicleService: premium vehicle def |
+| Premium Tidebreaker | 4128350737 | VehicleConfig + VehicleService: premium vehicle def, then a Studio look |
 
 ### 6.5 Soldiers and guards (9)
 
@@ -365,18 +388,30 @@ soldier 187790284 (what rule 9 says) or the models listed per row.
 | Roblox guns (Weapons Kit) | the gun model plus an invisible grip | scripts, sounds and the kit's weapon system |
 | Grenade and rocket | the mesh and its texture | nothing else is loaded |
 | Oil drum (Roblox Smoking Barrel) | the whole drum, 4 parts | the smoke |
+| Conveyor belt (Roblox) | the one belt part and its stripes, stretched to our belt | its script and settings; it stands in for our belt part, so the business part count stays 16 |
+| Rocket (Roblox) | the rocket mesh part, laid on the roof and scaled to our rocket body | the fire, the smoke and the empty effects part; it stands in for our rocket body part |
+| Capture Points (Roblox) | the round pad, 4 parts, flat on the outpost ring | its 2 scripts and settings; the see-through beam part and the hidden highlight part are dropped; the ring, flag and label stay ours |
+| Tripod gun (your pick 114570602) | the whole gun, 31 parts, turned 90 degrees so the barrel leads, tripod feet on the ground; one anchored aim part, the rest welded to it, so a turn moves one part | its 62 build-tool setting values (no scripts in it); more than 40 parts or a Humanoid would be refused. Our marker ring and the sandbags sit on the ground too |
 | Synty pieces (log, twig, sedan, and the trees, stumps, reeds, grass and crates already live) | one mesh each, recoloured to the desert palette | texture cleared; the sedan is recoloured as a burnt wreck and turned 90°, the twig is turned 90° as driftwood |
 | Every store model (now and at promote) | the look | scripts, seats, joints, prompts, sounds and movers; glowing parts become plastic on pack pieces; more than 40 parts or any Humanoid → refused, our kit stays |
-| Waiting picks | – | the tripod gun is 31 parts; vehicles are dress only while our kit drives; the Studio check decides the rest |
+| Waiting picks | – | vehicles and vehicle guns are dress only while our kit drives; the press must fit the business part budget; the Studio check decides the rest |
 
 ## 8. Load budget (why promotes go in batches)
 
-Each server may try at most 48 model loads (a failed one still counts). Today's config asks for about 22 different models
-on a live server (estimate from the headless census and the promote tool's count, not measured in Roblox). The promote
-tool refuses a batch that would pass 40, which keeps room for retries. After the walls (P2) the vehicle batch (P3, 17
-models) would bring the count to about 41, so it goes in together with a small clean-up that frees 2–3 slots (a crate
-model that never loads and two effect models that never load). Guns, the gate gun and the grenade and rocket meshes do
-not count against the 48.
+Each server may try at most 64 model loads (48 before the hooks batch; a failed one still counts). Retries of failed
+loads stop at 40, so the last 24 are kept for first loads after boot (your base, vehicles, guards, effects, vehicle guns)
+even while Roblox's asset service is down. Today's config asks for about 25 different models on a healthy server (22
+before the hooks batch: the conveyor belt, rocket and capture pad added 3), and in a full outage 8 models are first asked
+after boot (estimates from the headless census and the promote tool's count, not measured in Roblox).
+
+The promote tool refuses a batch that would pass 56 models on a healthy server, or that would ask for more than 24 models
+after boot in an outage (every fallback in a chain counts there). P4 (press, dropper, two vehicle guns) goes 25 → 28 and
+8 → 11: it fits. The walls (P2) go 25 → 27. The vehicle batch (P3, 17 models) then goes 27 → 44, under 56, but its
+after-boot outage count goes 10 → 27, over the 24 reserve, so the tool refuses P3. The planned clean-up (a crate model
+that never loads and two effect models that never load, config only) brings that to 25, still one over. So before P3 the
+lead frees at least 1–3 more slots, or raises the reserve on purpose (for example 65 / 25, retries still stopping at 40)
+after a census_fail run shows no refused load. Guns, the gate gun and the grenade and rocket meshes do not count against
+the 64.
 
 ## 9. For the lead: the promote tool
 
@@ -390,22 +425,44 @@ python3 tools/wire-asset-ids.py check --store          # inventory + store re-ch
 python3 tools/wire-asset-ids.py promote --batch P1 --dry-run   # print the diff, write nothing
 python3 tools/wire-asset-ids.py promote --batch P1             # edit, then luau-compile + BuyPathStatic (no new FAIL) or restore
 python3 tools/wire-asset-ids.py promote --batch P3 --we-check we_check.txt --owner-ok 8546141386,2627182035
-python3 tools/wire-asset-ids.py demote 114570602       # undo one promotion (journal: docs/asset_wiring.json)
+python3 tools/wire-asset-ids.py demote 182529039       # undo one promotion (journal: docs/asset_wiring.json)
 python3 tools/wire-asset-ids.py render [--check]       # the status table at the end of this page
 ```
 
+- **Undo the tripod gun (114570602):** `demote 114570602` on its own is refused, because the hooks batch added
+  `Yaw = 90, ` to its config line. Steps:
+  1. In `VisualAssetConfig.GateDefense.AutoGun` delete `Yaw = 90, ` (the line then matches the promote journal).
+  2. In `tools/BuyPathStatic.py` (hooks block) delete the pin `AutoGun = { ModelAssetId = 114570602, Yaw = 90,`, the
+     provenance pin `part names credit co-builders sk3let0n …`, and `"114570602"` from the `_hk_id` licence-row tuple.
+  3. Run `python3 tools/wire-asset-ids.py demote 114570602` (it restores the pending line, the id pin and the licence row).
+  4. By hand: the 3-line Yaw comment above the AutoGun ref, the gate-gun lines in sections 1 and 7, and ASSUMPTIONS AW-H3,
+     AW-H4 and AW-H13. The GateDefense loader rules, grounding and welds stay (they also serve the Part-built gun).
+- **Undo another hooks-batch item (config only, plus the BuyPathStatic hooks-block line that pins it):**
+  - a business line: `Businesses.<Id>.ModelAssetId = 0` and delete its pin (`AmmoWorks = { ModelAssetId = 41324890, …`,
+    `ArmsCrateLine = { ModelAssetId = 41324890, …` or `RocketAssembly = { ModelAssetId = 31603741, …`);
+  - the Home Outpost pad: `Landmarks.HomeOutpost.ModelAssetId = 0` and delete the pin `HomeOutpost = { ModelAssetId =
+    80566030, …`;
+  - the load budget back to 48 / 12: the two fix57 pins and the `(= 56)` pin (hooks/bps_inplace.txt lists the old text).
+  ASSUMPTIONS AW-H14 has the full list.
+
 - **Batches:** P1 = 8 ids with no gate that show on live (tripod gun, tent, tutorial arrow, road barrier, crates, plot pump,
-  sandbags, ATM). P1i = 10 ids recorded in fields that stay hidden (no change on screen). P2 = walls (they show) and the
-  buildings that need a yes/no or the Studio check. P3 = the 17 vehicle models (Studio check, 3 need a yes/no, and the
-  load-budget clean-up in the same commit).
+  sandbags, ATM; the tripod gun went live in the hooks batch). P4 = the hooks batch picks (press, dropper, vehicle MG,
+  vehicle cannon): Studio check each; the press also needs `OmitParts` in its config ref first (flag OMIT) and its
+  `ReplacesRoles` set so it fits the business part budget; a vehicle gun's `Yaw` is set by hand (the tool sets Yaw only
+  on vehicle bodies). P1i = 10 ids recorded in fields that stay hidden (no change on screen). P2 = walls (they show) and the
+  buildings that need a yes/no or the Studio check. P3 = the 17 vehicle models (Studio check, 3 need a yes/no, and a
+  load-budget decision first: section 8).
 - **What one promote writes:** `ModelAssetId = <id>` in every config line of that id (vehicles also get `Fit`, `Yaw`,
   `HideKit`, `StripDecals`), the `PendingAssetId` removed, a new `Note`; any BuyPathStatic needle that pinned the old id
   rewritten to the new id; the `docs/ASSET_LICENSES.md` §3.1 row (and a replaced id's §3 row moved to §2e when it leaves
   `src/`); this page's status table; and the undo journal `docs/asset_wiring.json`. Commit them together.
 - **Refusals:** unknown keys or ids, any decision other than a waiting pick, an id with no `PendingAssetId` in the config,
   not owned, store changed (creator, type, price), a missing yes/no or Studio check, a `WE_CHECK` over 40 parts or with a
-  Humanoid, a batch over the load budget, and any edit that breaks a BuyPathStatic needle it cannot rewrite.
-- After a promote: run the census (cap_refused must stay 0) and add that batch's phone checks to section 1.
+  Humanoid, a batch over the load budget (healthy: MaxLoadAttempts - 8; outage: LoadRetryReserve after boot), a
+  business ref whose `ReplacesRoles` span kit MinLevels, name a colliding or unknown kit role, or put the Belt on a fit
+  other than `Fit = "Box"`, and any edit that breaks a BuyPathStatic needle it cannot rewrite.
+- After a promote: run the census, fail mode included (cap_refused must stay 0), and add that batch's phone checks to
+  section 1.
 
 ## 10. Status of every item (generated)
 
@@ -415,11 +472,11 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 
 | Item | Decision | Live id | Pending id | Owned | Gate |
 |---|---|---|---|---|---|
-| Ammo Works | waits on another job's file | – | – | Roblox (no Get) | BusinessService (streaming2-build): business dress hook |
-| Arms Crate Line | waits on another job's file | – | – | Roblox (no Get) | BusinessService (streaming2-build): business dress hook |
-| Armor Plate Press | waits on another job's file | – | – | yes | BusinessService (streaming2-build): business dress hook |
-| Rocket Assembly | waits on another job's file | – | – | Roblox (no Get) | BusinessService (streaming2-build): business dress hook |
-| Manual Dropper | waits on another job's file | – | – | yes | ManualDropperService (streaming2-build lane C1): dropper dress hook |
+| Ammo Works | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt's place) |
+| Arms Crate Line | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works) |
+| Armor Plate Press | owner pick, waits for promote | 0 | 4362642898 | yes | Studio check + OmitParts, batch P4 |
+| Rocket Assembly | wired (Roblox-owned) | 31603741 | – | Roblox (no Get) | Roblox Rocket as the rocket body, Fire + Smoke removed |
+| Manual Dropper | owner pick, waits for promote | 0 | 14408455045 | yes | Studio check, batch P4 |
 | Plot Oil Pump | owner pick, waits for promote | 15192621369 | – | yes | promoted (live) |
 | Oil Rig | kept our build | – | – | yes | [WEAK]; likely over 40 parts; our oil-rig kit is the gameplay platform |
 | Money Collector | owner pick, waits for promote | 18220523228 | – | yes | promoted (live) |
@@ -443,7 +500,7 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Warehouse | owner pick, waits for promote | 15942568272 | 8076230849 | yes | ready, batch P1i (recorded only) |
 | Special Forces Facility | owner pick, waits for promote | 0 | 10112923897 | yes | ready, batch P1i (recorded only) |
 | Empire Bank | rejected | – | – | yes | wrong item: this store 'bank' is a park bench |
-| Home Outpost | waits on another job's file | – | – | Roblox (no Get) | MapSetup (streaming2-build): Home Outpost dress hook |
+| Home Outpost | wired (Roblox-owned) | 80566030 | – | Roblox (no Get) | Roblox Capture Points pad at each Home Outpost (its beam and highlight parts dropped) |
 | Hangar | owner pick, waits for promote | 0 | 5343886540 | yes | your yes/no + Studio check, batch P2 (recorded only) |
 | Bunker | needs new code first | – | – | yes | needs the world-model overlay job (W-OVERLAY); 43 parts, 3 wedges must be dropped |
 | Tent | owner pick, waits for promote | 182529039 | – | yes | promoted (live) |
@@ -586,9 +643,9 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Rocket Launcher | wired (Roblox-owned) | 4842186817 (WeaponConfig) | – | Roblox (no Get) | Roblox launcher in hand |
 | Grenade | wired (Roblox-owned) | 232379763 (WeaponConfig) | – | Roblox (no Get) | Roblox grenade mesh in flight |
 | Cruise Missile | wired (Roblox-owned) | 94690081 (WeaponConfig) | – | Roblox (no Get) | Roblox rocket mesh in flight (the rocket-launcher round) |
-| Auto Gun | owner pick, waits for promote | 0 | 114570602 | yes | ready, batch P1 |
-| Vehicle MG | waits on another job's file | – | – | yes | VehicleService (streaming2-build): turret dress hook |
-| Vehicle Cannon | waits on another job's file | – | – | yes | VehicleService (streaming2-build): turret dress hook |
+| Auto Gun | owner pick, waits for promote | 114570602 | – | yes | promoted (live) |
+| Vehicle MG | owner pick, waits for promote | 0 | 5589684833 | yes | Studio check, batch P4 |
+| Vehicle Cannon | owner pick, waits for promote | 0 | 3322196012 | yes | Studio check, batch P4 |
 | Rocket Pods | kept our build | – | – | yes | [WEAK]; the asset is a whole car; our kit is the pod |
 | Nuke | needs new code first | – | – | yes | needs a nuke-strike effect module (none exists) |
 | Crate Stack | wired (Roblox-owned) | 6933790012 | – | Roblox (no Get) | Synty wooden crates (already live) |

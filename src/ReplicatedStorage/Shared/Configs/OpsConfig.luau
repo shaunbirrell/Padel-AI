@@ -305,14 +305,15 @@ local OpsConfig = {
 		PingSeconds = 10,
 	},
 
-	-- Where prompts and labels live under StreamingEnabled (residual risk: a POI's ActivityHost part can be ~380
-	-- studs from its anchors, so a prompt on the anchor may not be streamed in where the player stands).
+	-- Where prompts and labels live under StreamingEnabled. A POI's ActivityHost part can be ~380 studs from its
+	-- anchors, so WorldPOI builds every ActivityHost cluster ModelStreamingMode Persistent before it is parented
+	-- (streaming2 S5: the one place that decides; 1 invisible part per POI). OpsSites only checks, never sets a mode:
 	-- 1. the host part is within NearHostStuds of the anchor: parent to the anchor Attachment;
-	-- 2. else the host's parent Model holds only that one BasePart (the ActivityHost cluster): set that Model's
-	--    ModelStreamingMode = Persistent once (1 invisible part per POI) and parent to the anchor Attachment;
+	-- 2. else the host's parent Model holds only that one BasePart and is already Persistent (the ActivityHost
+	--    cluster): parent to the anchor Attachment (PersistHostModel = false turns this case off);
 	-- 3. else: the site is off (logged once). No part is ever added for a prompt.
 	Streaming = {
-		NearHostStuds = 64,
+		NearHostStuds = 64, -- <= Workspace.StreamingMinRadius (64): seen from the anchor, a near host is inside the minimum radius
 		PersistHostModel = true,
 	},
 

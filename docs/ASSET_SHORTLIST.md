@@ -33,7 +33,7 @@ A config file holds an asset id, for example `VisualAssetConfig.WarzoneProps.Ten
 2. It strips scripts, seats, movers, joints, prompts and sounds.
 3. It welds the model onto our Part kit.
 
-If loading fails, the failure is cached and the Part kit stays. Each server makes at most **48 load attempts**, and a failed id still uses one. With owner decision D1 the setting **Game Settings › Security › "Allow Loading Third Party Assets" stays OFF**. Roblox's docs (InsertService:LoadAsset, AssetService.AllowInsertFreeAssets) then allow only assets that are "created or owned by the game creator", "shared by the asset owner" or "owned by Roblox".
+If loading fails, the failure is cached and the Part kit stays. Each server makes at most **64 load attempts** (48 until the hooks batch of 2026-09-25; retries stop at 40, the last 24 are kept for first loads), and a failed id still uses one. With owner decision D1 the setting **Game Settings › Security › "Allow Loading Third Party Assets" stays OFF**. Roblox's docs (InsertService:LoadAsset, AssetService.AllowInsertFreeAssets) then allow only assets that are "created or owned by the game creator", "shared by the asset owner" or "owned by Roblox".
 
 | Who made the asset | Loads with the switch OFF? | What the owner / Grok must click |
 |---|---|---|
@@ -92,7 +92,7 @@ Never bake a Roblox-owned pick just because you can: it already loads.
 
 1. Never turn "Allow Loading Third Party Assets" on. Never buy anything.
 2. Wire only ids from this sheet. Never type an id from memory or from a search result.
-3. Wire a third-party id only after the owner's Get Model **and** a `WE_CHECK OK` line from the Studio check (§5). A failed id still burns one of the 48 load attempts per server.
+3. Wire a third-party id only after the owner's Get Model **and** a `WE_CHECK OK` line from the Studio check (§5). A failed id still burns one of the 64 load attempts per server.
 4. No real-world names, insignia, flags or brand text on any model. Look at all sides in Studio.
 5. Config is changed in the repo, never in Studio, because a Rojo build overwrites Studio edits. Every new id gets a row in `docs/ASSET_LICENSES.md` in the same commit.
 6. Store titles never appear in the game: some audio titles name real products.
@@ -694,7 +694,7 @@ CargoVan     = { ModelAssetId = 6433316269, ChildName = "Van (white)", SubModel 
   - `VisualAssetService.luau:624` (hangar 6015472062);
   - `MissileController.luau:73` `SIREN_ID`, the missing engine file: use `Alarm.Missile` or remove it.
 
-  Also route GateDefenseService's own loader through `VisualAssetService`, so it counts against the 48-attempt budget (finding F10).
+  Also route GateDefenseService's own loader through `VisualAssetService`, so it counts against the load-attempt budget (finding F10; since the hooks batch it has the 40-part / no-Humanoid rules, one insert per id and one retry, still outside the budget).
 - **C4. Guns** (`WeaponVisuals.luau`, `WeaponConfig.Weapons[id].VisualAsset`, a new `VisualAssetConfig.Weapons` table or a separate `WeaponVisualConfig`).
   - **Loader:** `LoadAsset(id)` › `Tool[ToolName]` › its Model child. Destroy scripts **and the kit's Sounds**. Keep Attachments, Beams, WeldConstraints and the bolt Motor6D.
   - **Templates** go in ReplicatedStorage, with `CastShadow = false`. The grenade and rocket are a Part plus a SpecialMesh, so add `TextureId` to AssetRef.
@@ -716,7 +716,7 @@ Weapons = {
 - **C5. Combat audio.** Add the new §3.5 keys and their call sites through the planned WeaponFx relay (server to other players, `UnreliableRemoteEvent`). Add optional `LoopStart` / `LoopEnd` fields that set `Sound.LoopRegion`, using the loop times in §3.5.
 - **C6. Animations.** A `SoldierAnims` table with the §3.4 ids, a player weapon-animation controller (W2) and the `SoldierRig` (W6a). In the same commit, set every `Characters.*` key to 0 (§3.9).
 - **C7. World v2 `DesertKit`.** Rows from §3.8, once WorldPOI/WorldKits exist.
-- **C8. Load budget (finding F7).** After the clears, fewer than 30 distinct model ids with live callers remain. Keep `MaxLoadAttempts = 48`, and clear any id the live log reports as failed.
+- **C8. Load budget (finding F7).** After the clears, fewer than 30 distinct model ids with live callers remain. `MaxLoadAttempts = 64` with `LoadRetryReserve = 24` since the hooks batch (2026-09-25; was 48 / 12, retries still stop at 40), and clear any id the live log reports as failed. The promote tool also checks the outage count (docs/ASSET_WIRING.md §8).
 - **C9. Baking** (§1.B): only after the repo-privacy decision.
 
 ## 7. What was verified, and what was not

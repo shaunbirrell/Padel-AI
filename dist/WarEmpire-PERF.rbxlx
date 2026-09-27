@@ -5165,14 +5165,15 @@ local OpsConfig = {
 		PingSeconds = 10,
 	},
 
-	-- Where prompts and labels live under StreamingEnabled (residual risk: a POI's ActivityHost part can be ~380
-	-- studs from its anchors, so a prompt on the anchor may not be streamed in where the player stands).
+	-- Where prompts and labels live under StreamingEnabled. A POI's ActivityHost part can be ~380 studs from its
+	-- anchors, so WorldPOI builds every ActivityHost cluster ModelStreamingMode Persistent before it is parented
+	-- (streaming2 S5: the one place that decides; 1 invisible part per POI). OpsSites only checks, never sets a mode:
 	-- 1. the host part is within NearHostStuds of the anchor: parent to the anchor Attachment;
-	-- 2. else the host's parent Model holds only that one BasePart (the ActivityHost cluster): set that Model's
-	--    ModelStreamingMode = Persistent once (1 invisible part per POI) and parent to the anchor Attachment;
+	-- 2. else the host's parent Model holds only that one BasePart and is already Persistent (the ActivityHost
+	--    cluster): parent to the anchor Attachment (PersistHostModel = false turns this case off);
 	-- 3. else: the site is off (logged once). No part is ever added for a prompt.
 	Streaming = {
-		NearHostStuds = 64,
+		NearHostStuds = 64, -- <= Workspace.StreamingMinRadius (64): seen from the anchor, a near host is inside the minimum radius
 		PersistHostModel = true,
 	},
 
@@ -10665,20 +10666,33 @@ export type AssetRef = {
 	Material: Enum.Material?, -- single-part pieces
 	ClearTexture: boolean?, -- TextureID = "" and no SurfaceAppearance: flat desert palette, no stray text
 	StripDecals: boolean?, -- drop Decals / Textures (phone draw calls; the LUV camo decals are not Roblox-owned images)
-	Fit: string?, -- "Kit": vehicle body scaled to the kit chassis length, tyres on the physics-wheel bottoms
-	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z)
+	Fit: string?, -- "Kit": vehicle body scaled to the kit chassis length, tyres on the physics-wheel bottoms; "Ground": a prop
+	-- stands upright at the host's centre, lowest point on the host's lowest point, scale 1; "Box": a one-part business model
+	-- is stretched into the kit part it replaces (block parts only; default: one uniform scale onto the parts' long side)
+	Yaw: number?, -- Fit: degrees from the piece's front (-Z) to the kit's front (-Z); GateDefense.AutoGun: degrees that
+	-- turn the model's barrel onto -Z (turned once in the template at load)
 	HideKit: boolean?, -- Fit: hide the Part-kit visuals under the body (physics, seats and hitboxes unchanged)
 	KeepVisible: { string }?, -- HideKit: kit part names that stay visible (the Armed 4x4 keeps its Part turret)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
 	NoFamilyFallback: boolean?, -- vehicle ref at 0: keep the Part kit, never take the KitFamilyFallback body
+	-- Owner asset list hooks (2026-09-25: business / Home Outpost / dropper / turret dress). OmitParts also works on
+	-- whole-model props, businesses and vehicle weapons (the parts are dropped from each clone).
+	KeepHost: boolean?, -- props: the host part keeps its look (no fade under the model)
+	FitLong: number?, -- props: one uniform scale so the model's longest side is this many studs (default: scale 1)
+	ReplacesRoles: { string }?, -- Businesses: model part i takes over kit role i's part (named Kit_<Role>); one MinLevel
+	Mount: string?, -- VehicleWeapons: the vehicle kit part the weapon model sits on
+	FitScale: number?, -- VehicleWeapons: the model's longest side = the mount part's longest side x FitScale
+	KitFamilies: { string }?, -- VehicleWeapons: only vehicles of these VehicleConfig KitFamily values wear it
+	Vehicles: { string }?, -- VehicleWeapons: and / or only these vehicle ids
+	HideParts: { string }?, -- VehicleWeapons: kit parts made invisible once the dress attaches (the kit barrel)
 }
 
 local VisualAssetConfig = {
 	Enabled = true,
 	StripScripts = true,
-	MaxLoadAttempts = 48, -- per server, first tries + retries; an id asked for after that keeps its Part kit (one Output line)
+	MaxLoadAttempts = 64, -- per server, first tries + retries; an id asked for after that keeps its Part kit (one Output line)
 	-- A LoadAsset that fails with a transient error (HTTP 5xx / 429 / timeout) is retried in the background, never in
 	-- the caller's thread (boot and spawns never wait): up to LoadRetryCount more tries, LoadRetryDelay seconds after
 	-- the failure, x LoadRetryBackoff after each (20 s, 40 s). Every retry counts toward MaxLoadAttempts. An error
@@ -10690,9 +10704,13 @@ local VisualAssetConfig = {
 	-- the last LoadRetryReserve attempts of MaxLoadAttempts are kept for FIRST loads (a later spawn's model): a retry
 	-- that would use one is not made (the id is final, one line). Keeps a full outage at boot from using up the
 	-- budget later ids need (fix57 census: <= 19 ids at boot, <= 6 later, fallbacks included).
-	LoadRetryReserve = 12,
-	-- Owner asset list (2026-09-25): 48 / 12 stay. tools/wire-asset-ids.py refuses a promote batch that would take the
-	-- distinct live ids past MaxLoadAttempts - 8 (= 40). PendingAssetId ids are never loaded, so they cost 0.
+	LoadRetryReserve = 24,
+	-- Owner asset list hooks (2026-09-25): 48 / 12 -> 64 / 24. Retries still stop at 40 attempts (64 - 24, as before);
+	-- the first-load reserve doubles, so a full outage keeps 24 first loads for the plot / later ids (walls, vehicle
+	-- bodies, turret dress, businesses). Healthy servers load the same ids as before; an outage costs at most 16 more
+	-- failed LoadAsset calls. tools/wire-asset-ids.py refuses a promote batch that takes the distinct live ids
+	-- past MaxLoadAttempts - 8 (= 56), or whose outage count (every id a plot / later chain can ask for, fallbacks
+	-- included) passes LoadRetryReserve. PendingAssetId ids are never loaded, so they cost 0.
 	LoadRetryPermanentErrors = {
 		"not trusted",
 		"not authorized",
@@ -10711,8 +10729,10 @@ local VisualAssetConfig = {
 	},
 	MaxPartsPerModel = 40, -- CLAUDE.md catalog budget: an inserted template with more BaseParts is refused (Part kit stays)
 	-- Whole models whose Fire / Smoke / Sparkles / ParticleEmitter / Light / Beam / Trail are removed when the template
-	-- is prepared (phone cost). 23153991 = Roblox "Smoking Barrel" (the training-yard oil drum, smoke removed).
-	StripEffectsAssetIds = { 23153991 },
+	-- is prepared (phone cost). 23153991 = Roblox "Smoking Barrel" (the training-yard oil drum, smoke removed);
+	-- 31603741 = Roblox "Rocket" (Rocket Assembly: Fire + Smoke removed); 4362642898 = the owner's pending Armor Plate
+	-- Press pick (its Smoke goes when it is promoted).
+	StripEffectsAssetIds = { 23153991, 31603741, 4362642898 },
 	FitShadowShare = 0.5, -- fitted vehicle bodies: only parts at least this share of the chassis length cast a shadow
 	VehicleVisualScale = 1.0, -- Design clamp 0.85–1.2 (dress mesh only)
 	CharacterVisualScale = 1.0,
@@ -10950,13 +10970,39 @@ local VisualAssetConfig = {
 	-- Gate defense (Design Bot GATE_DEFENSE_WIRE 2026-09-20)
 	GateDefense = {
 		Guard = { ModelAssetId = 16134469614, Note = "Rigged Soldier — gate patrol" } :: AssetRef,
-		AutoGun = { ModelAssetId = 0, PendingAssetId = 114570602, Note = "0 = Part-built gate gun (4923345827 Machine Gun Nest dropped 2026-09-25: WWII MG 34-like silhouette, no part cap on this loader, loaded on live once the owner took it); owner pick Tripod Mounted Machine Gun (GuestCapone): pending, P1 (no gate)" } :: AssetRef,
+		-- Yaw 90: the store file's barrel points along +X (headless parse: the barrel cylinders ahead of the receiver, the single
+		-- tripod leg reaching forward, the rear grips behind, the ammo box on the left); GateDefenseService turns the template
+		-- once so it aims -Z, stands it on the ground and welds it to its aim part (only that part is anchored)
+		AutoGun = { ModelAssetId = 114570602, Yaw = 90, Note = "owner pick: Tripod Mounted Machine Gun by GuestCapone (promoted 2026-09-25 by tools/wire-asset-ids.py)" } :: AssetRef,
 		-- L2 elevated ONLY (not door flanks):
 		AutoGunElevated = { ModelAssetId = 0, Note = "W1 CFG drop (uploader not the author) — unused key" } :: AssetRef,
 		AutoGunElevatedAlt = { ModelAssetId = 10354803684, Note = "Military turret — L2/corner only" } :: AssetRef,
 		SandbagNest = { ModelAssetId = 0, Note = "Circular sandbag ring under HMG" } :: AssetRef,
 		Sandbags = { ModelAssetId = 3525056989, Note = "Realistic Sandbag scatter at posts" } :: AssetRef,
 	},
+
+	-- Owner asset list hooks (2026-09-25): war-business line dress. BusinessService.SyncBusiness defers
+	-- VisualAssetService.TryAttachBusinessVisual(model, id, level) after its kit loop. Model part i takes over the built
+	-- kit part of ReplacesRoles[i] (named Kit_<Role>, fitted into that part's own box), so a business never goes over
+	-- BusinessConfig.PartsPerBusinessL5 and the client's Kit_Belt crates keep working (a Belt part is always stretched
+	-- into the kit belt's box, block parts only). Refused (one warn, Part kit stays): more model parts than roles, roles
+	-- with different kit MinLevels, a colliding role. Anchored, non-colliding; a re-sync or level-up that finds every
+	-- built role dressed does nothing, and a role rebuilt after a level-down is dressed again.
+	Businesses = {
+		AmmoWorks = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" }, Note = "owner list: Roblox Conveyor Belt (1 part + its stripe decal; script stripped) as the belt" } :: AssetRef,
+		ArmsCrateLine = { ModelAssetId = 41324890, Fit = "Box", ReplacesRoles = { "Belt" }, Note = "owner list: Roblox Conveyor Belt as the belt (same model as Ammo Works: one load)" } :: AssetRef,
+		ArmorPlatePress = { ModelAssetId = 0, PendingAssetId = 4362642898, Note = "0 = Part-kit press; owner pick Metal Factory (Press) (Ghosttony503): pending, P4 (Studio check: WE_CHECK, then OmitParts for its translucent bounds box and ReplacesRoles so it fits PartsPerBusinessL5)" } :: AssetRef,
+		RocketAssembly = { ModelAssetId = 31603741, OmitParts = { "Particles" }, ReplacesRoles = { "Signature" }, Note = "owner list: Roblox Rocket as the rocket body (its empty effects part dropped; Fire + Smoke removed, StripEffectsAssetIds)" } :: AssetRef,
+	} :: { [string]: AssetRef },
+
+	-- Owner asset list hooks (2026-09-25): turret dress. VehicleService calls VisualAssetService.TryAttachVehicleWeaponVisual
+	-- only for a vehicle on the ref's allow-list (KitFamilies and / or Vehicles) whose kit has the Mount part. Dress only:
+	-- massless, non-colliding, welded to the mount (never anchored); HideParts turns the kit gun invisible once the dress is
+	-- on (its parts, collisions and combat stay). 0 = no load, no change.
+	VehicleWeapons = {
+		VehicleMG = { ModelAssetId = 0, PendingAssetId = 5589684833, Mount = "GunMount", FitScale = 3, Vehicles = { "ArmedJeep" }, HideParts = { "Barrel" }, Note = "0 = Part-kit gun; owner pick Mounted Machine Gun (ifyouaremethaniamyou): pending, P4 (Studio check); Armed 4x4 only" } :: AssetRef,
+		VehicleCannon = { ModelAssetId = 0, PendingAssetId = 3322196012, Mount = "Turret", FitScale = 1.6, KitFamilies = { "TrackedMBT" }, HideParts = { "Turret", "Barrel", "Mantlet" }, Note = "0 = Part-kit turret; owner pick Tank Turret (Nierse217): pending, P4 (Studio check; the store page says it may be asymmetrical); battle tanks only" } :: AssetRef,
+	} :: { [string]: AssetRef },
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs
 	-- W1 CFG drop (paid): 0 is skipped, so TryAttachCollectorVisual tries the fallback, then the alts, then the Part kit
@@ -11067,6 +11113,8 @@ local VisualAssetConfig = {
 		RustyPipes = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		OilBarrel = { ModelAssetId = 25623924, Note = "Oil barrel ring" } :: AssetRef,
 		FuelCans = { ModelAssetId = 1160141839, Note = "Fuel cans cluster" } :: AssetRef,
+		-- Owner asset list hook (2026-09-25): ManualDropperService dresses each dropper plate (TryAttachPropVisual)
+		ManualDropper = { ModelAssetId = 0, PendingAssetId = 14408455045, Fit = "Ground", FitLong = 4, KeepHost = true, Note = "0 = Part-kit plate; owner pick Tycoon Dropper (tinghang77): pending, P4 (Studio check; neon trim counts in the neon budget); at most 4 studs, the tap plate stays as it is" } :: AssetRef,
 		-- GasStation 5149705639 OPTIONAL heavy — not default
 		-- Ultrapump 1837698074 REJECT
 	} :: { [string]: AssetRef },
@@ -11082,6 +11130,8 @@ local VisualAssetConfig = {
 		Pier = { ModelAssetId = 0, Note = "W3 LOOK drop (third-party world landmark; no caller) — Part kit" } :: AssetRef,
 		PierAlt = { ModelAssetId = 0, Note = "W1 CFG drop (paid) — Part kit" } :: AssetRef,
 		CheckpointBridge = { ModelAssetId = 0, Note = "W3 LOOK drop (shortlist §4 real-world theme; WorldKits Checkpoint v2) — Part kit" } :: AssetRef,
+		-- Owner asset list hook (2026-09-25): MapSetup dresses each Home Outpost ring (TryAttachPropVisual, deferred)
+		HomeOutpost = { ModelAssetId = 80566030, Fit = "Ground", KeepHost = true, OmitParts = { "Height", "Highlight" }, Note = "owner list: Roblox Capture Points (2 scripts stripped) as the outpost pad: 4 parts, its translucent Height beam and invisible Highlight dropped" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	--[[ W3 LOOK: World v2 kit meshes (contracts §8.2; keys = WorldKits.Specs[kit].Mesh). One MeshPart from a Roblox-owned
@@ -17745,7 +17795,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 78)
+		player:SetAttribute("WE_Build", 79)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -26291,6 +26341,11 @@ function MapSetup.Run()
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
 		if isStarter then
+			-- owner asset list hook: the Roblox Capture Points pad on the ring (VisualAssetConfig.Landmarks.HomeOutpost: upright,
+			-- centred, the ring keeps its look, the Height beam and Highlight dropped). Deferred and pcall'd (a first load may
+			-- yield; it runs after the zone below is parented); a 0 id leaves the 4-part kit alone.
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			task.defer(pcall, vas.TryAttachPropVisual, ring, "HomeOutpost")
 			zone.Parent = territories -- streaming2 S4: parented whole
 			continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)
 		end
@@ -39328,6 +39383,9 @@ return WorldLabelPolicy
 	  * InWater = true clusters (gantry, jetty) skip the water keep-out and carry WE_AllowInWater (Waterways cull, H3).
 	  * The ActivityHost cluster (every kit of Class "anchor": 1 invisible part, no collision) passes the zones with the
 	    default 13-stud road test, may sit over an event anchor and is not added to the occupancy.
+	    streaming2 S5: it is the one cluster built ModelStreamingMode Persistent (every other cluster stays Atomic,
+	    WorldKits.NewCluster), set here before WorldKits.Finish parents it. This is the only place that decides its
+	    mode; OpsSites only checks it. Its anchors sit up to ~380 studs away, so it must be on every client.
 	  * Every part stays inside the POI footprint (rect: every part's AABB; circle: the cluster disc). Terrain rubble /
 	    scorch (WorldKits.Rock, 0 parts) passes Blocked too and keeps its centre (rect) / disc (circle) inside.
 	  * Infra rows (the airstrip runway) are flat strips under POI_<Id>.Infra (one Model, WE_Infra: exempt from H10):
@@ -39877,6 +39935,13 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 		end
 		model:SetAttribute("WE_AnchorX", math.floor(cx * 100 + 0.5) / 100)
 		model:SetAttribute("WE_AnchorZ", math.floor(cz * 100 + 0.5) / 100)
+		if hostOnly then
+			-- streaming2 S5 (F4): the ActivityHost cluster is Persistent from the start, set before Finish parents it. Its
+			-- anchors (job prompts and labels) can be ~380 studs from this 1-part host, and a prompt only works while its
+			-- part is streamed in. Cost: 1 invisible part per POI on every client. No effect while
+			-- Workspace.StreamingEnabled is false (default.project.json, lane Z).
+			model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+		end
 		local info = WorldKits.Finish(model, ctx.Folder)
 		if not info.Ok then
 			skip(ctx, c.Id, info.Reason or "Finish refused")
@@ -44260,7 +44325,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 78)
+			player:SetAttribute("WE_Build", 79)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -44789,6 +44854,9 @@ return BattlePassService
 	  the kiosk before the first buy. Unowned plots have none. Static only: nothing here moves or ticks; crates and
 	  the "+$N" pops are client-only (Client/Modules/BusinessVisuals). Every world call is a no-op while
 	  BusinessConfig.Enabled is false.
+	  Owner asset list hook (2026-09-25): after the kit loop a deferred VisualAssetService.TryAttachBusinessVisual lets
+	  the line's catalog model (VisualAssetConfig.Businesses) take over its kit parts one for one (the Kit_<Role> names
+	  stay, so PartsPerBusinessL5 holds and the client belt crates still find Kit_Belt); a 0 id is a no-op.
 
 	Money: NONE here (no remote, no grant). Business income is part of BaseService.ComputePassiveIncomePerTick
 	(TycoonMath.BasePassivePerTick) and is paid into the ATM on the existing 5 s passive tick.
@@ -44977,6 +45045,15 @@ function BusinessService.SyncBusiness(plotId: number, id: string, level: number,
 			have:Destroy() -- rebirth reset / admin resetbase / level down
 		end
 	end
+	-- owner asset list hook: the line's catalog dress (VisualAssetConfig.Businesses). Deferred: a first load may yield, and
+	-- the kiosk is whole and parented by then; a re-sync that finds it in place does nothing. VisualAssetService is
+	-- required here, pcall'd (as BaseService does), so a dress-module error can never stop the business world.
+	task.defer(function()
+		local okVas, vas = pcall(require, script.Parent.VisualAssetService)
+		if okVas and vas and vas.TryAttachBusinessVisual then
+			pcall(vas.TryAttachBusinessVisual, m, id, lv)
+		end
+	end)
 	if m:GetAttribute("Level") ~= lv then
 		m:SetAttribute("Level", lv)
 	end
@@ -50591,7 +50668,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 78)
+		player:SetAttribute("WE_Build", 79)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -50725,7 +50802,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=78",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=79",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -51661,7 +51738,15 @@ return FallSafetyService
 --[[
 	Gate door defense — 2 GateGuards patrol + shoot enemies; L4+ AutoGun nests.
 	Reads GatePost parts from WE_PerimeterWalls (does NOT edit StructureKitBuilder).
-	Design Bot GATE_DEFENSE_WIRE: Guard 16134469614, AutoGun 4923345827, sandbag dress.
+	Design Bot GATE_DEFENSE_WIRE: Guard 16134469614, sandbag dress. AutoGun model: VisualAssetConfig.GateDefense.AutoGun
+	(0 = the Part-built gun; no hard-coded store id).
+	Owner asset list hooks (2026-09-25): loadCatalogModel applies the 40-part rule (VisualAssetConfig.MaxPartsPerModel)
+	and refuses any template holding a Humanoid (one warn; the Part kit stays; VisualAssetService strips a Humanoid
+	instead). It drops the templates' data objects (ValueBase / Configuration), inserts an id once (a second caller waits)
+	and retries a transient failure once, LoadRetryDelay later. A catalog AutoGun is turned once by its ref's Yaw (barrel
+	onto -Z) and aims by its largest upright part facing the barrel; a model with no such part is refused (a tilted gun
+	never shows). Every AutoGun piece (gun, marker ring, nest, sandbags) stands on the ground under its post, and the
+	catalog gun is one anchored aim part with the rest welded to it, so an aim moves one CFrame.
 	Aggro covers MoneyCollector ATM approach (raid deterrent). No exotic persist.
 
 	v69 (RaidConfig.Defense, spec §1.9): allies = owner + same clan (IsAlly); guards / AutoGuns posted INSIDE the
@@ -51703,6 +51788,7 @@ local EconomyService: any = nil
 local NotificationService: any = nil
 
 local PERIMETER_FOLDER = "WE_PerimeterWalls"
+local GATE_POST_LIFT = 3 -- the gate CFrame stands this far above the gate posts' bottoms (the plot surface)
 local DEFENSE_FOLDER = "WE_GateDefense"
 local TAG_COLLECTOR = Constants.Tags.MoneyCollector
 
@@ -51784,20 +51870,56 @@ local function stripScripts(root: Instance)
 	end
 end
 
-local function loadCatalogModel(assetId: number): Model?
-	if assetId <= 0 or catalogFailed[assetId] then
-		return nil
+-- the VisualAssetService template rules: <= VisualAssetConfig.MaxPartsPerModel BaseParts and no Humanoid (nil = OK)
+local function catalogRefusal(model: Model): string?
+	local cap = tonumber((VisualAssetConfig :: any).MaxPartsPerModel) or 40
+	local n = 0
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Humanoid") then
+			return "holds a Humanoid"
+		elseif d:IsA("BasePart") then
+			n += 1
+		end
 	end
-	if catalogCache[assetId] then
-		return catalogCache[assetId]
+	if n > cap then
+		return string.format("%d parts > cap %d (VisualAssetConfig.MaxPartsPerModel)", n, cap)
 	end
+	return nil
+end
+
+local catalogInflight: { [number]: { thread } } = {} -- ids being inserted right now -> threads waiting for them
+local catalogRetryAt: { [number]: number } = {} -- after one transient failure: the os.clock() of the single retry
+
+-- true when a LoadAsset error says a retry cannot help (VisualAssetConfig.LoadRetryPermanentErrors, as VisualAssetService)
+local function permanentLoadError(msg: string): boolean
+	local lower = string.lower(msg)
+	local list = (VisualAssetConfig :: any).LoadRetryPermanentErrors
+	if typeof(list) == "table" then
+		for _, pat in ipairs(list) do
+			if typeof(pat) == "string" and pat ~= "" and string.find(lower, pat, 1, true) then
+				return true
+			end
+		end
+	end
+	return false
+end
+
+-- one LoadAsset + template prep; a LoadAsset error is final when permanent or on the retry, else one retry is allowed
+-- LoadRetryDelay seconds later (the next gate build after that time makes it)
+local function loadCatalogOnce(assetId: number, isRetry: boolean): Model?
 	local ok, result = pcall(function()
 		return InsertService:LoadAsset(assetId)
 	end)
 	if not ok or typeof(result) ~= "Instance" then
-		catalogFailed[assetId] = true
+		if isRetry or permanentLoadError(tostring(result)) then
+			catalogFailed[assetId] = true
+			catalogRetryAt[assetId] = nil
+		else
+			catalogRetryAt[assetId] = os.clock() + (tonumber(VisualAssetConfig.LoadRetryDelay) or 20)
+		end
 		return nil
 	end
+	catalogRetryAt[assetId] = nil
 	local container = result :: Instance
 	stripScripts(container)
 	local model: Model? = nil
@@ -51819,6 +51941,24 @@ local function loadCatalogModel(assetId: number): Model?
 		return nil
 	end
 	stripScripts(model)
+	-- owner asset list: no data objects (the store build tool's RobloxStamper / RobloxModel BoolValues: 62 on the tripod
+	-- gun) - they would replicate and be rebuilt on every gate sync for nothing
+	for _, d in ipairs(model:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("ValueBase") or d:IsA("Configuration")) then
+			d:Destroy()
+		end
+	end
+	-- owner asset list: the 40-part rule, and a Humanoid is refused here (AutoGun, SandbagNest, Sandbags: no character
+	-- model uses this loader); refused once, never tried again, the Part kit stays
+	local why = catalogRefusal(model)
+	if why then
+		catalogFailed[assetId] = true
+		warn(string.format("[GateDefense] refused catalog model %d: %s — Part kit stays", assetId, why))
+		pcall(function()
+			container:Destroy()
+		end)
+		return nil
+	end
 	for _, d in ipairs(model:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.Anchored = true
@@ -51834,6 +51974,37 @@ local function loadCatalogModel(assetId: number): Model?
 		end)
 	end
 	return model
+end
+
+local function loadCatalogModel(assetId: number): Model?
+	if assetId <= 0 or catalogFailed[assetId] then
+		return nil
+	end
+	local cached = catalogCache[assetId]
+	if cached then
+		return cached
+	end
+	local waiting = catalogInflight[assetId]
+	if waiting then
+		-- another gate build is inserting this id right now: wait for it (never two LoadAssets of one id)
+		if coroutine.isyieldable() then
+			table.insert(waiting, coroutine.running())
+			coroutine.yield()
+		end
+		return catalogCache[assetId]
+	end
+	local retryAt = catalogRetryAt[assetId]
+	if retryAt ~= nil and os.clock() < retryAt then
+		return nil -- one transient failure: the Part kit until the retry time (no LoadAsset, no wait)
+	end
+	catalogInflight[assetId] = {}
+	local ok, model = pcall(loadCatalogOnce, assetId, retryAt ~= nil)
+	local list = catalogInflight[assetId]
+	catalogInflight[assetId] = nil
+	for _, co in ipairs(list or {}) do
+		task.spawn(co)
+	end
+	return if ok then model else nil
 end
 
 local function scaleModelLongAxis(model: Model, targetStuds: number)
@@ -51890,7 +52061,7 @@ local function computeGateCFrame(plotFolder: Folder, posts: { BasePart }): CFram
 				look = Vector3.new(0, 0, 1)
 			end
 			local mid = posts[1].Position
-			local y = mid.Y - posts[1].Size.Y * 0.5 + 3
+			local y = mid.Y - posts[1].Size.Y * 0.5 + GATE_POST_LIFT
 			return CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(mid.X, y, mid.Z) + look.Unit)
 		end
 		return nil
@@ -51909,7 +52080,7 @@ local function computeGateCFrame(plotFolder: Folder, posts: { BasePart }): CFram
 	if outward.Magnitude < 0.05 then
 		outward = Vector3.new(0, 0, 1)
 	end
-	local y = math.min(a.Position.Y - a.Size.Y * 0.5, b.Position.Y - b.Size.Y * 0.5) + 3
+	local y = math.min(a.Position.Y - a.Size.Y * 0.5, b.Position.Y - b.Size.Y * 0.5) + GATE_POST_LIFT
 	local origin = Vector3.new(mid.X, y, mid.Z)
 	return CFrame.lookAt(origin, origin + outward.Unit)
 end
@@ -52235,18 +52406,134 @@ local function attachTurretVisualMarker(model: Model, at: CFrame)
 	ring.Parent = model
 end
 
+-- owner asset list: the ground under a gate post. The gate CFrame stands GATE_POST_LIFT above the gate posts' bottoms
+-- (the plot surface); a short downward ray (the defense folder excluded) finds the road / pad top within a stud of it.
+local function groundYAt(at: CFrame, exclude: Instance): number
+	local fallback = at.Position.Y - GATE_POST_LIFT
+	local ok, hit = pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = { exclude }
+		params.RespectCanCollide = true
+		return Workspace:Raycast(at.Position, Vector3.new(0, -(GATE_POST_LIFT + 2), 0), params)
+	end)
+	if ok and hit and math.abs(hit.Position.Y - fallback) <= 1 then
+		return hit.Position.Y
+	end
+	return fallback
+end
+
+-- owner asset list: one move that puts the lowest point of every BasePart under root on the ground it rests on: the
+-- highest surface under its footprint (centre and 4 corners, groundYAt each at the gate height; the gun nests sit on the
+-- road edge, 0.12 above the plot pad). Returns that ground height. Runs once per piece per gate build (no per-frame use).
+local function standOnGround(root: Model, at: CFrame, exclude: Instance): number
+	local minY = math.huge
+	local lo, hi = Vector3.new(math.huge, 0, math.huge), Vector3.new(-math.huge, 0, -math.huge)
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local cf, h = d.CFrame, d.Size * 0.5
+			local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+			local ex = math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z
+			local ey = math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z
+			local ez = math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+			local p = cf.Position
+			minY = math.min(minY, p.Y - ey)
+			lo = Vector3.new(math.min(lo.X, p.X - ex), 0, math.min(lo.Z, p.Z - ez))
+			hi = Vector3.new(math.max(hi.X, p.X + ex), 0, math.max(hi.Z, p.Z + ez))
+		end
+	end
+	if minY == math.huge then
+		return at.Position.Y - GATE_POST_LIFT
+	end
+	local y = at.Position.Y
+	local c = (lo + hi) * 0.5
+	local e = (hi - lo) * 0.45 -- corners just inside the footprint
+	local groundY = -math.huge
+	for _, off in ipairs({ Vector3.zero, Vector3.new(e.X, 0, e.Z), Vector3.new(-e.X, 0, e.Z), Vector3.new(e.X, 0, -e.Z), Vector3.new(-e.X, 0, -e.Z) }) do
+		groundY = math.max(groundY, groundYAt(CFrame.new(c.X + off.X, y, c.Z + off.Z), exclude))
+	end
+	if math.abs(groundY - minY) > 1e-4 then
+		root:PivotTo(root:GetPivot() + Vector3.new(0, groundY - minY, 0))
+	end
+	return groundY
+end
+
+--[[ owner asset list: thinkTurret turns the whole AutoGun so its YawPart's -Z faces the target (CFrame.lookAt), so the
+	aim part must stand upright with its front on the barrel. Once per template: turn every part by the ref's Yaw
+	(degrees about +Y, barrel onto -Z; baked, so later PivotTo / aims keep it), then mark as the aim part (PrimaryPart)
+	the largest upright part whose front is -Z. None (a wrong Yaw, a tilted model) → refused and never tried again: the
+	Part kit stays instead of a gun that aims sideways or lies on its side. ]]
+local function prepareAimTemplate(template: Model, assetId: number, yawDeg: number): boolean
+	if template:GetAttribute("WE_AimReady") == true then
+		return true
+	end
+	local parts: { BasePart } = {}
+	for _, d in ipairs(template:GetDescendants()) do
+		if d:IsA("BasePart") then
+			table.insert(parts, d)
+		end
+	end
+	if yawDeg ~= 0 and #parts > 0 then
+		local lo, hi = parts[1].Position, parts[1].Position
+		for _, p in ipairs(parts) do
+			lo, hi = lo:Min(p.Position), hi:Max(p.Position)
+		end
+		local c = (lo + hi) * 0.5
+		local turn = CFrame.new(c) * CFrame.Angles(0, math.rad(yawDeg), 0) * CFrame.new(-c)
+		for _, p in ipairs(parts) do
+			p.CFrame = turn * p.CFrame
+		end
+	end
+	local best: BasePart? = nil
+	local bestVol = -1
+	for _, p in ipairs(parts) do
+		local cf = p.CFrame
+		if cf.UpVector.Y >= 0.98 and cf.LookVector.Z <= -0.98 then
+			local vol = p.Size.X * p.Size.Y * p.Size.Z
+			if vol > bestVol then
+				best, bestVol = p, vol
+			end
+		end
+	end
+	if best == nil then
+		catalogFailed[assetId] = true
+		catalogCache[assetId] = nil
+		template:Destroy()
+		warn(string.format("[GateDefense] refused AutoGun model %d: no upright part faces the barrel after Yaw %s (VisualAssetConfig.GateDefense.AutoGun.Yaw) — Part kit stays", assetId, tostring(yawDeg)))
+		return false
+	end
+	best:SetAttribute("WE_AimPart", true)
+	template.PrimaryPart = best
+	template:SetAttribute("WE_AimReady", true)
+	return true
+end
+
 local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUnit?
 	local gd = (VisualAssetConfig :: any).GateDefense
-	local assetId = 4923345827
+	local assetId = 0 -- the config decides (a missing key = the Part-built gun)
+	local yawDeg = 0
 	if gd and gd.AutoGun and typeof(gd.AutoGun.ModelAssetId) == "number" then
 		assetId = gd.AutoGun.ModelAssetId
+		yawDeg = tonumber(gd.AutoGun.Yaw) or 0
 	end
+	-- every piece of the nest stands on the ground under the post (the gate CFrame is GATE_POST_LIFT above it)
+	local groundY = groundYAt(at, parent)
+	local base = at - Vector3.new(0, at.Position.Y - groundY, 0)
 	local template = loadCatalogModel(assetId)
+	if template and not prepareAimTemplate(template, assetId, yawDeg) then
+		template = nil
+	end
 	local model: Model
 	local yawPart: BasePart
 	if template then
 		model = template:Clone()
 		stripScripts(model)
+		for _, d in ipairs(model:GetDescendants()) do
+			if d:IsA("BasePart") and d:GetAttribute("WE_AimPart") == true then
+				model.PrimaryPart = d -- the aim part (set again on the copy)
+				break
+			end
+		end
 		scaleModelLongAxis(model, GateDefenseConfig.AutoGunLongAxisStuds or 5.5)
 		model.Name = "GateAutoGun_" .. tostring(slot)
 		if not model.PrimaryPart then
@@ -52255,29 +52542,40 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 				model.PrimaryPart = pp
 			end
 		end
-		model:PivotTo(at)
+		model:PivotTo(base)
+		groundY = standOnGround(model, at, parent) -- tripod feet on the ground; the aim part sits at barrel height above them
+		-- one anchored part (the aim part); every other part is welded to it (unanchored, massless, non-colliding), so an
+		-- aim sets one CFrame and replicates one part, not 32
+		local aim = model.PrimaryPart :: BasePart
 		for _, d in ipairs(model:GetDescendants()) do
 			if d:IsA("BasePart") then
-				d.Anchored = true
 				d.CanCollide = false
+				if d == aim then
+					d.Anchored = true
+				else
+					d.Anchored = false
+					d.Massless = true
+					local w = Instance.new("WeldConstraint")
+					w.Part0 = aim
+					w.Part1 = d
+					w.Parent = d
+				end
 			end
 		end
+		model:SetAttribute("WE_AimWelded", true)
 		-- streaming2 S4 (F10): the catalog AutoGun is Atomic too, set before it is parented. No effect with streaming off.
 		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 		model.Parent = parent
-		yawPart = model.PrimaryPart :: BasePart
-		local named = model:FindFirstChild("Barrel", true) or model:FindFirstChild("Yaw", true)
-		if named and named:IsA("BasePart") then
-			yawPart = named
-		end
+		yawPart = model.PrimaryPart :: BasePart -- the aim part (the one anchored part): thinkTurret turns the gun by it
 	else
-		model, yawPart = partKitAutoGun(at, parent)
+		model, yawPart = partKitAutoGun(base, parent)
+		groundY = standOnGround(model, at, parent)
 		model.Name = "GateAutoGun_" .. tostring(slot)
 	end
 
 	model:SetAttribute("GateAutoGun", true)
 	model:SetAttribute("FriendlyGate", true)
-	attachTurretVisualMarker(model, at)
+	attachTurretVisualMarker(model, at - Vector3.new(0, at.Position.Y - groundY, 0)) -- on the ground the gun stands on
 
 	-- Sandbag nest dress under gun
 	if gd and gd.SandbagNest and typeof(gd.SandbagNest.ModelAssetId) == "number" then
@@ -52287,13 +52585,14 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 			stripScripts(nest)
 			scaleModelLongAxis(nest, GateDefenseConfig.SandbagNestDiameterStuds or 8)
 			nest.Name = "SandbagNest_" .. tostring(slot)
-			nest:PivotTo(at * CFrame.new(0, -0.2, 0))
+			nest:PivotTo(base)
 			for _, d in ipairs(nest:GetDescendants()) do
 				if d:IsA("BasePart") then
 					d.Anchored = true
 					d.CanCollide = false
 				end
 			end
+			standOnGround(nest, at, parent)
 			nest.Parent = parent
 		end
 	end
@@ -52308,7 +52607,9 @@ local function spawnAutoGun(slot: number, at: CFrame, parent: Folder): TurretUni
 				stripScripts(bag)
 				scaleModelLongAxis(bag, 2.2)
 				local ox = (i - 2) * 1.4
-				bag:PivotTo(at * CFrame.new(ox, -0.1, 1.6 + (i % 2) * 0.4))
+				local spot = CFrame.new(ox, 0, 1.6 + (i % 2) * 0.4)
+				bag:PivotTo(base * spot)
+				standOnGround(bag, at, parent) -- its own ground (the road edge runs under the nest)
 				for _, d in ipairs(bag:GetDescendants()) do
 					if d:IsA("BasePart") then
 						d.Anchored = true
@@ -53387,7 +53688,9 @@ local function thinkTurret(def: PlotDefense, t: TurretUnit, stats: any, tnow: nu
 	if (flat - t.YawPart.Position).Magnitude > 0.05 then
 		local look = CFrame.lookAt(t.YawPart.Position, flat)
 		-- Rotate whole model toward target when PrimaryPart is yaw
-		if t.Model.PrimaryPart then
+		if t.Model:GetAttribute("WE_AimWelded") == true then
+			t.YawPart.CFrame = look -- the catalog gun: its one anchored part; the welded rest follows (one CFrame replicates)
+		elseif t.Model.PrimaryPart then
 			local offset = t.Model.PrimaryPart.CFrame:ToObjectSpace(t.YawPart.CFrame)
 			t.Model:PivotTo(look * offset:Inverse())
 		else
@@ -53594,6 +53897,9 @@ return GateDefenseService
 	WE_ConsolePos_<sid> and BusinessService's WE_AtmPos, so the tutorial beam has an end while the plate is streamed
 	out on that client. Stamped on plot ready and kept right by the 2 s owner sync (hand-outs, late claims, release,
 	rebuilt plates). Streaming off: no hook, no attribute (HEAD behaviour).
+
+	Owner asset list hook (2026-09-25): a newly built plate gets a deferred VisualAssetService.TryAttachPropVisual(plate,
+	"ManualDropper") (VisualAssetConfig.IndustrialProps.ManualDropper; 0 / pending = no load, the plate look stays).
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -53841,6 +54147,11 @@ local function buildDropperKit(parent: Instance, name: string, worldPos: Vector3
 	prompt.MaxActivationDistance = ManualDropperConfig.PromptMaxDistance or 12
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = pad
+
+	-- owner asset list hook: the dropper model on the plate (the plate is the kit's only host part; deferred, pcall'd)
+	if VisualAssetService and VisualAssetService.TryAttachPropVisual then
+		task.defer(pcall, VisualAssetService.TryAttachPropVisual, pad, "ManualDropper")
+	end
 
 	return pad
 end
@@ -62880,8 +63191,9 @@ return OpsRewards
 	     falls back to Npc.CommanderFallback);
 	  5. every anchor role resolves (ActivityAnchors records read ONCE by OpsService), Optional roles excepted;
 	  6. the streaming host rule (OpsConfig.Streaming) for every prompt and label anchor: the host part is within
-	     NearHostStuds, or its Model holds exactly one BasePart (the POI's ActivityHost cluster), which is then set
-	     to ModelStreamingMode.Persistent. Otherwise Off. No part is ever added to carry a prompt.
+	     NearHostStuds, or its Model holds exactly one BasePart and is already ModelStreamingMode.Persistent (the POI's
+	     ActivityHost cluster: WorldPOI builds it Persistent, streaming2 S5). Otherwise Off. This is only a guard:
+	     OpsSites never changes a streaming mode. No part is ever added to carry a prompt.
 
 	World bits, all on existing instances: ProximityPrompts and the one world label per site are parented to the anchor
 	Attachment (never a new part); the bank's BankGate / the Port's HeistGate (WE_RuntimeDoor parts) toggle CanCollide
@@ -63014,6 +63326,10 @@ function OpsSites.Resolve(def: OpsConfig.SiteDef, anchors: { [string]: any }): (
 			if d > OpsConfig.Streaming.NearHostStuds then
 				local model = host.Parent
 				if OpsConfig.Streaming.PersistHostModel and model ~= nil and model:IsA("Model") and partsIn(model) == 1 then
+					-- streaming2 S5 guard: the far host's Model must already be Persistent (WorldPOI sets it at build)
+					if (model :: Model).ModelStreamingMode ~= Enum.ModelStreamingMode.Persistent then
+						return nil, string.format("anchor %s is %.0f studs from its host, whose Model is not Persistent (streaming rule)", role, d)
+					end
 					if table.find(persist, model :: Model) == nil then
 						table.insert(persist, model :: Model)
 					end
@@ -63026,11 +63342,15 @@ function OpsSites.Resolve(def: OpsConfig.SiteDef, anchors: { [string]: any }): (
 	return byRole, persist
 end
 
+--[[ streaming2 S5 (F4): a no-op guard, kept so OpsService's goLive call stays as it is. The mode is decided once, when
+	WorldPOI builds the ActivityHost cluster (Persistent, before it is parented). The docs do not describe what a runtime
+	mode change does on clients that already hold the model, so this never writes ModelStreamingMode. Resolve only hands
+	over far-host Models that are already Persistent; anything else would be reported here and left as it is. ]]
 function OpsSites.Persist(models: { Model })
 	for _, m in ipairs(models) do
-		pcall(function()
-			(m :: any).ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-		end)
+		if m.ModelStreamingMode ~= Enum.ModelStreamingMode.Persistent then
+			warn(string.format("[OpsSites] %s is not Persistent (WorldPOI sets it at build); left as it is", m:GetFullName()))
+		end
 	end
 end
 
@@ -72519,6 +72839,17 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	pcall(function()
 		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family)
 	end)
+	-- owner asset list hook: turret dress on the kit's weapon mount (VisualAssetConfig.VehicleWeapons: each ref names its
+	-- Mount part and an allow-list of kit families / vehicle ids; nothing else ever wears it). A 0 id is a no-op (no
+	-- load); a dress is massless, non-colliding and welded to the mount (never anchored), the ref's HideParts go
+	-- invisible, and it is in place before the vehicle is parented (Atomic). The kit gun's parts, combat and drive stay.
+	-- (Required here: the module chunk is at the 200-local limit.)
+	for weaponId, wref in pairs(require(Shared.Configs.VisualAssetConfig).VehicleWeapons) do
+		local mount = if typeof(wref.Mount) == "string" then model:FindFirstChild(wref.Mount) else nil
+		if mount and mount:IsA("BasePart") and VisualAssetService.VehicleWeaponAllowed(weaponId, id, family) then
+			pcall(VisualAssetService.TryAttachVehicleWeaponVisual, model, weaponId, mount)
+		end
+	end
 	CollectionService:AddTag(model, Constants.Tags.Vehicle)
 
 	-- v70: movers + drive attributes (protocol for VehicleDriveClient). Built at `at`, NOT parented:
@@ -75240,6 +75571,11 @@ return VehicleService
 	  • The Airfield hangar is VisualAssetConfig.Buildings.Hangar (0 = the Part shed, no load).
 	  • CloneKitMesh marks a piece with its ref's Yaw (attribute WE_KitYaw) for WorldKits; IsKitMeshWired(key) tells
 	    WorldKits, from config only, whether a key can ever give a mesh (an unwired key takes no overlay slot).
+	  • Hooks (2026-09-25): TryAttachBusinessVisual (war-business lines: model part i takes over kit role i, so
+	    PartsPerBusinessL5 holds), TryAttachVehicleWeaponVisual (turret dress on allow-listed vehicles only, welded and
+	    massless, the kit gun hidden), and the prop ref options Fit = "Ground" (upright on the host), FitLong (one uniform
+	    size) and KeepHost (no host fade). OmitParts drops parts from whole-model props, businesses and weapons too, and
+	    their Configuration / value objects go. A 0 id is a no-op in every hook: no load, no attribute, no change.
 
 	Load failures (each one leaves the Part kit look and prints one Output line):
 	  • transient (HTTP 5xx / throttle / timeout): retried in the BACKGROUND (task.delay), VisualAssetConfig
@@ -75278,6 +75614,14 @@ type AssetRef = {
 	KeepVisible: { string }?,
 	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
 	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
+	KeepHost: boolean?, -- hooks: props: the host keeps its look (no fade)
+	FitLong: number?, -- hooks: props: longest side in studs (one uniform scale)
+	ReplacesRoles: { string }?, -- hooks: Businesses: model part i takes over kit role i
+	Mount: string?, -- hooks: VehicleWeapons: the kit part the weapon sits on
+	FitScale: number?, -- hooks: VehicleWeapons: longest side = the mount's longest side x FitScale
+	KitFamilies: { string }?, -- hooks: VehicleWeapons: allow-listed kit families
+	Vehicles: { string }?, -- hooks: VehicleWeapons: allow-listed vehicle ids
+	HideParts: { string }?, -- hooks: VehicleWeapons: kit parts hidden once the dress attaches
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
@@ -76530,6 +76874,177 @@ end
 --[[
 	Optional desert prop overlay (cactus etc.) welded to a flora host part.
 ]]
+-- ── hooks (2026-09-25): clone helpers (no per-frame use; each runs once per dressed host) ───────────────────────────
+local function listParts(root: Instance): { BasePart }
+	local out: { BasePart } = {}
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") then
+			table.insert(out, d)
+		end
+	end
+	return out
+end
+
+-- a dress clone keeps no data objects (the stripped scripts' Configuration / IntValue / BoolValue ...): they replicate
+-- for nothing
+local function dropDataChildren(clone: Instance)
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("Configuration") or d:IsA("ValueBase")) then
+			d:Destroy()
+		end
+	end
+end
+
+-- ref.OmitParts on a whole-model clone (packs drop them in extractPiece before the part count)
+local function dropOmitParts(clone: Instance, ref: AssetRef?)
+	if ref == nil then
+		return
+	end
+	local omit = omitNames(ref)
+	if #omit == 0 then
+		return
+	end
+	local drop: { [string]: boolean } = {}
+	for _, nm in ipairs(omit) do
+		drop[nm] = true
+	end
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d.Parent ~= nil and d:IsA("BasePart") and drop[d.Name] then
+			d:Destroy()
+		end
+	end
+end
+
+local function hasFileMesh(p: BasePart): boolean
+	for _, c in ipairs(p:GetChildren()) do
+		if c:IsA("SpecialMesh") and c.MeshType == Enum.MeshType.FileMesh then
+			return true
+		end
+	end
+	return false
+end
+
+-- half extents of a part box (cf, size) along the axes of the frame the cf is expressed in
+local function halfExtents(cf: CFrame, size: Vector3): Vector3
+	local h = size * 0.5
+	local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+	return Vector3.new(
+		math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z,
+		math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z,
+		math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+	)
+end
+
+-- axis-aligned box (lo, hi) of parts in the space of `frame`
+local function aabbIn(frame: CFrame, parts: { BasePart }): (Vector3, Vector3)
+	local lo = Vector3.new(math.huge, math.huge, math.huge)
+	local hi = -lo
+	for _, p in ipairs(parts) do
+		local rel = frame:ToObjectSpace(p.CFrame)
+		local e = halfExtents(rel, p.Size)
+		lo = lo:Min(rel.Position - e)
+		hi = hi:Max(rel.Position + e)
+	end
+	return lo, hi
+end
+
+-- Fit = "Ground": the clone stands upright (its template axes) at the host's centre, its lowest point on the host's
+-- lowest point, scale 1 (a pure move: the template parts keep their authored orientation)
+local function placeOnGround(clone: Model, host: BasePart)
+	local parts = listParts(clone)
+	if #parts == 0 then
+		return
+	end
+	local lo, hi = aabbIn(CFrame.identity, parts)
+	local e = halfExtents(host.CFrame, host.Size)
+	local p = host.Position
+	local shift = Vector3.new(p.X - (lo.X + hi.X) * 0.5, (p.Y - e.Y) - lo.Y, p.Z - (lo.Z + hi.Z) * 0.5)
+	for _, part in ipairs(parts) do
+		part.CFrame = part.CFrame + shift
+	end
+end
+
+-- one uniform scale k for a part and its mesh (FileMesh SpecialMesh scale, every mesh offset)
+local function scalePartMeshes(p: BasePart, k: number)
+	for _, c in ipairs(p:GetChildren()) do
+		if c:IsA("SpecialMesh") then
+			if c.MeshType == Enum.MeshType.FileMesh then
+				c.Scale = c.Scale * k
+			end
+			c.Offset = c.Offset * k
+		elseif c:IsA("BlockMesh") or c:IsA("CylinderMesh") then
+			local m = c :: any
+			m.Offset = m.Offset * k
+		end
+	end
+end
+
+-- ref.FitLong: one uniform scale (parts, meshes) about the model's bottom centre so its longest side is `long` studs
+local function scaleToLong(parts: { BasePart }, long: number)
+	if #parts == 0 or long <= 0 then
+		return
+	end
+	local lo, hi = aabbIn(CFrame.identity, parts)
+	local size = hi - lo
+	local cur = math.max(size.X, size.Y, size.Z)
+	if cur < 0.05 then
+		return
+	end
+	local k = math.clamp(long / cur, 0.05, 40)
+	local about = Vector3.new((lo.X + hi.X) * 0.5, lo.Y, (lo.Z + hi.Z) * 0.5)
+	for _, p in ipairs(parts) do
+		local cf = p.CFrame
+		p.Size = p.Size * k
+		scalePartMeshes(p, k)
+		p.CFrame = CFrame.new(about + (cf.Position - about) * k) * cf.Rotation
+	end
+end
+
+--[[ Fit parts (template axes) into the box lo..hi of `frame`: one uniform scale so the model's longest side is `long`
+	(alignLong: the box's longest side, the model's longest side turned onto it), then turned by yawDeg, centred on the
+	box in X / Z, lowest point on the box bottom. Moves each part (no pivots), like fitBodyToKit. ]]
+local function fitInBox(parts: { BasePart }, frame: CFrame, lo: Vector3, hi: Vector3, alignLong: boolean, yawDeg: number, long: number): boolean
+	local dLo, dHi = aabbIn(CFrame.identity, parts)
+	local dSize = dHi - dLo
+	local dLong = math.max(dSize.X, dSize.Y, dSize.Z)
+	if dLong < 0.05 then
+		return false
+	end
+	local rot = CFrame.Angles(0, math.rad(yawDeg), 0)
+	local target = long
+	if alignLong then
+		local bSize = hi - lo
+		local function axis(v: Vector3): number
+			return if v.X >= v.Y and v.X >= v.Z then 1 elseif v.Y >= v.Z then 2 else 3
+		end
+		local da, ba = axis(dSize), axis(bSize)
+		if da ~= ba then
+			rot = if da + ba == 3 then CFrame.Angles(0, 0, math.rad(90)) elseif da + ba == 4 then CFrame.Angles(0, math.rad(90), 0) else CFrame.Angles(math.rad(90), 0, 0)
+		end
+		target = math.max(bSize.X, bSize.Y, bSize.Z)
+	end
+	local k = math.clamp(target / dLong, 0.05, 40)
+	local c = (dLo + dHi) * 0.5
+	local rel: { CFrame } = {}
+	local rLo = Vector3.new(math.huge, math.huge, math.huge)
+	local rHi = -rLo
+	for i, p in ipairs(parts) do
+		local cf = p.CFrame
+		local r = rot * CFrame.new((cf.Position - c) * k) * cf.Rotation
+		rel[i] = r
+		local e = halfExtents(r, p.Size * k)
+		rLo = rLo:Min(r.Position - e)
+		rHi = rHi:Max(r.Position + e)
+	end
+	local shift = Vector3.new((lo.X + hi.X) * 0.5 - (rLo.X + rHi.X) * 0.5, lo.Y - rLo.Y, (lo.Z + hi.Z) * 0.5 - (rLo.Z + rHi.Z) * 0.5)
+	for i, p in ipairs(parts) do
+		p.Size = p.Size * k
+		scalePartMeshes(p, k)
+		p.CFrame = frame * CFrame.new(shift) * rel[i]
+	end
+	return true
+end
+
 --[[
 	Attach MeshPart dress when catalog entry is MeshId-only (AssetType 40).
 	Falls back to SpecialMesh on a Part if MeshPart.MeshId set fails.
@@ -76614,7 +77129,8 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 	-- W3 LOOK: through the ref, so a ChildName piece of a pack works for props too
-	local template: Instance? = templateForRef(lookupPropRef(propKey))
+	local usedRef: any = lookupPropRef(propKey)
+	local template: Instance? = templateForRef(usedRef)
 	-- Palm/Tent/OilPumpjack/Jersey/CamoNet/StreetLamp alt fallback (Design Bot wire)
 	if not template then
 		local altKey: string? = nil
@@ -76637,6 +77153,7 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 				template = templateForRef(lookupPropRef(altKey))
 				if template then
 					assetId = altId
+					usedRef = lookupPropRef(altKey)
 				end
 			end
 		end
@@ -76649,11 +77166,30 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 
+	-- hooks (2026-09-25): a first load may have yielded: the host may be gone, or another caller dressed it meanwhile
+	local hostParent: Instance? = hostPart.Parent
+	if hostParent == nil or hostPart:GetAttribute("WE_CatalogAssetId") ~= nil then
+		return false
+	end
 	local clone = cloneAsModel(template)
 	if not clone then
 		return false
 	end
-	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp") then
+	-- hooks (2026-09-25): ref options. OmitParts drops parts (the Capture Points beam and highlight), data objects go;
+	-- FitLong sets one uniform size; Fit = "Ground" stands the model upright on the host (the Home Outpost ring is a
+	-- Cylinder turned on its side, so a pivot onto its CFrame would lay the pad on edge); KeepHost leaves the host alone.
+	local refT = if typeof(usedRef) == "table" then usedRef :: AssetRef else nil
+	dropOmitParts(clone, refT)
+	dropDataChildren(clone)
+	local fitLong = if refT then tonumber(refT.FitLong) else nil
+	if fitLong and fitLong > 0 then
+		scaleToLong(listParts(clone), fitLong)
+	end
+	local ground = refT ~= nil and refT.Fit == "Ground"
+	if ground then
+		placeOnGround(clone, hostPart)
+	end
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp", ground) then
 		clone:Destroy()
 		return false
 	end
@@ -76661,8 +77197,236 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	-- v44 P0: props on DressHost OK to soften; never fade Body/Roof structure kits
 	local kitRole = hostPart:GetAttribute("WE_KitRole")
-	if kitRole ~= "Body" and kitRole ~= "Roof" and hostPart:GetAttribute("StructureId") == nil then
+	local keepHost = refT ~= nil and refT.KeepHost == true
+	if not keepHost and kitRole ~= "Body" and kitRole ~= "Roof" and hostPart:GetAttribute("StructureId") == nil then
 		hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
+	end
+	return true
+end
+
+-- ── hooks (2026-09-25): war-business lines and vehicle turrets ─────────────────────────────────────────────────────
+local bizWarned: { [string]: boolean } = {}
+
+local function bizWarn(key: string, msg: string)
+	if bizWarned[key] then
+		return
+	end
+	bizWarned[key] = true
+	warn("[VisualAssetService] " .. msg .. " — Part kit look stays")
+end
+
+-- BusinessConfig.Kit MinLevel of a kit role (nil = unknown role); lazy: VisualAssetService loads before any business
+local bizKitLevels: { [string]: number }? = nil
+local function kitMinLevel(role: string): number?
+	if bizKitLevels == nil then
+		local levels: { [string]: number } = {}
+		local ok, bc = pcall(function()
+			return require(ReplicatedStorage.Shared.Configs.BusinessConfig) :: any
+		end)
+		if ok and typeof(bc) == "table" and typeof(bc.Kit) == "table" then
+			for _, kp in ipairs(bc.Kit) do
+				levels[kp.Role] = kp.MinLevel
+			end
+		end
+		bizKitLevels = levels
+	end
+	return (bizKitLevels :: { [string]: number })[role]
+end
+
+-- the listed roles still to dress: { index into ReplacesRoles = its built, non-colliding kit part that does not wear
+-- assetId }, and how many built non-colliding roles there are (dressed or not)
+local function bizMissing(model: Model, roles: { string }, assetId: number, bizId: string): ({ [number]: BasePart }, number)
+	local missing: { [number]: BasePart } = {}
+	local built = 0
+	for i, role in ipairs(roles) do
+		local p = model:FindFirstChild("Kit_" .. role)
+		if p and p:IsA("BasePart") then
+			if p:GetAttribute("WE_CatalogAssetId") == assetId then
+				built += 1
+			elseif p.CanCollide then
+				-- a dress never takes a wall or a floor away: colliding kit parts are never taken over
+				bizWarn(bizId .. "|collide|" .. role, string.format("business %s: kit role %s collides, not replaced by %d", bizId, role, assetId))
+			else
+				built += 1
+				missing[i] = p
+			end
+		end
+	end
+	return missing, built
+end
+
+--[[ Hooks (2026-09-25): the catalog dress of a war-business line (VisualAssetConfig.Businesses[id]). Called deferred by
+	BusinessService.SyncBusiness after its kit loop (a re-sync, an upgrade, a rebirth reset). Model part i (the template's
+	part order) takes over the built kit part of ReplacesRoles[i]: it is named Kit_<Role>, fitted into THAT part's own box
+	and the kit part is destroyed, so the business never goes over BusinessConfig.PartsPerBusinessL5 and SyncBusiness (by
+	name) and the client belt crates (Kit_Belt) keep working. A Belt part (and every part with Fit = "Box") is stretched
+	into its kit box exactly (block parts only); any other part gets one uniform scale onto its box's long side. Done only
+	when every built listed role wears the id: a role rebuilt after a level-down is dressed again from the cached template.
+	Refused (one warn, the Part kit stays): more model parts than roles, roles with different kit MinLevels (a half-built
+	list), a mesh part on a Belt / Box role; colliding roles are never taken over. Same loader rules as every hook
+	(MaxPartsPerModel, Humanoid stripped, MaxLoadAttempts, StripEffectsAssetIds); anchored, non-colliding; a 0 id is a no-op. ]]
+function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean
+	local bucket = (VisualAssetConfig :: any).Businesses
+	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[id]) == "table" then bucket[id] :: AssetRef else nil
+	local assetId = refId(ref)
+	if ref == nil or assetId == 0 or model.Parent == nil or (tonumber(level) or 0) < 1 then
+		return false -- 0 / PendingAssetId (never read here): no load; the Part kit stays
+	end
+	local roles = ref.ReplacesRoles or {}
+	if #roles == 0 then
+		return false
+	end
+	local firstLevel = kitMinLevel(roles[1])
+	for _, role in ipairs(roles) do
+		local lv = kitMinLevel(role)
+		if lv == nil or lv ~= firstLevel then
+			bizWarn(id .. "|minlevel", string.format("business %s: ReplacesRoles of %d must be known kit roles with one MinLevel (%s: %s)",
+				id, assetId, role, tostring(lv)))
+			return false
+		end
+	end
+	local missing, built = bizMissing(model, roles, assetId, id)
+	if next(missing) == nil then
+		return built > 0 -- every built role already wears it (a re-sync / level-up: nothing to do)
+	end
+	local template = templateForRef(ref) -- may yield on the first load of this id; cached afterwards
+	if not template then
+		return false
+	end
+	-- after a yield: the kiosk may be gone, or another deferred sync may have dressed it meanwhile
+	local parentNow: Instance? = model.Parent
+	if parentNow == nil then
+		return false
+	end
+	missing, built = bizMissing(model, roles, assetId, id)
+	if next(missing) == nil then
+		return built > 0
+	end
+	local clone = cloneAsModel(template)
+	if not clone then
+		return false
+	end
+	dropOmitParts(clone, ref)
+	dropDataChildren(clone)
+	local parts = listParts(clone)
+	if #parts == 0 or #parts > #roles then
+		clone:Destroy()
+		bizWarn(id .. "|count", string.format("business %s: %d has %d parts for %d kit roles (BusinessConfig.PartsPerBusinessL5)", id, assetId, #parts, #roles))
+		return false
+	end
+	-- check every part first (nothing changes on a refusal)
+	for i, kp in pairs(missing) do
+		local p = parts[i]
+		if p and (roles[i] == "Belt" or ref.Fit == "Box") and (p:IsA("MeshPart") or hasFileMesh(p)) then
+			clone:Destroy()
+			bizWarn(id .. "|box", string.format("business %s: %d part %d is a mesh; the %s role needs a block part stretched into its box", id, assetId, i, roles[i]))
+			return false
+		end
+	end
+	local site = model:GetAttribute("WE_SiteCFrame")
+	local dressed = 0
+	for i, kp in pairs(missing) do
+		local p = parts[i]
+		if p then -- a role past the model's parts keeps its kit part
+			if roles[i] == "Belt" or ref.Fit == "Box" then
+				p.Size = kp.Size -- the client crates read Kit_Belt's box: keep it exactly
+				p.CFrame = kp.CFrame
+			else
+				local frame: CFrame = if typeof(site) == "CFrame" then site else kp.CFrame
+				local lo, hi = aabbIn(frame, { kp })
+				if not fitInBox({ p }, frame, lo, hi, true, 0, 1) then
+					continue
+				end
+			end
+			p.Name = kp.Name
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.CastShadow = false
+			p.Massless = true
+			p:SetAttribute("WE_BizRole", kp:GetAttribute("WE_BizRole"))
+			p:SetAttribute("WE_CatalogAssetId", assetId)
+			p.Parent = model
+			kp:Destroy()
+			dressed += 1
+		end
+	end
+	clone:Destroy() -- the wrapper and any part no missing role needed
+	return dressed > 0
+end
+
+-- hooks (2026-09-25): is this vehicle on the weapon ref's allow-list (KitFamilies / Vehicles)? No list = nobody.
+function VisualAssetService.VehicleWeaponAllowed(weaponId: string, vehicleId: string?, kitFamily: string?): boolean
+	local bucket = (VisualAssetConfig :: any).VehicleWeapons
+	local ref = if typeof(bucket) == "table" then bucket[weaponId] else nil
+	if typeof(ref) ~= "table" then
+		return false
+	end
+	for _, f in ipairs(if typeof(ref.KitFamilies) == "table" then ref.KitFamilies else {}) do
+		if f == kitFamily then
+			return true
+		end
+	end
+	for _, v in ipairs(if typeof(ref.Vehicles) == "table" then ref.Vehicles else {}) do
+		if v == vehicleId then
+			return true
+		end
+	end
+	return false
+end
+
+--[[ Hooks (2026-09-25): the catalog dress of a vehicle weapon (VisualAssetConfig.VehicleWeapons[weaponId]) on the kit's
+	mount part. Dress only: one uniform scale (longest side = the mount's longest side x FitScale), turned by Yaw
+	(front -Z), centred on the mount, its lowest point on the mount's lowest point, then every part is massless,
+	non-colliding, unanchored and welded to the mount (weldCloneToPrimary), so the driven assembly and its physics are
+	unchanged; built before the vehicle is parented (Atomic). Only a vehicle on the ref's allow-list (KitFamilies /
+	Vehicles) is dressed; the ref's HideParts (the kit gun) go invisible once it attaches. OmitParts and data objects are
+	dropped. A 0 id is a no-op: no load, no attribute. ]]
+function VisualAssetService.TryAttachVehicleWeaponVisual(hostModel: Model, weaponId: string, mountPart: BasePart): boolean
+	local bucket = (VisualAssetConfig :: any).VehicleWeapons
+	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[weaponId]) == "table" then bucket[weaponId] :: AssetRef else nil
+	local assetId = refId(ref)
+	if ref == nil or assetId == 0 then
+		return false -- 0 / PendingAssetId (never read here): no load; the kit gun stays
+	end
+	local vid, fam = hostModel:GetAttribute("VehicleId"), hostModel:GetAttribute("WE_KitFamily")
+	if not VisualAssetService.VehicleWeaponAllowed(weaponId, if typeof(vid) == "string" then vid else nil, if typeof(fam) == "string" then fam else nil) then
+		return false -- not on the ref's allow-list (a tank cannon never lands on an AA or rocket kit)
+	end
+	if mountPart:GetAttribute("WE_CatalogAssetId") ~= nil or not mountPart:IsDescendantOf(hostModel) then
+		return false
+	end
+	local template = templateForRef(ref)
+	if not template then
+		return false
+	end
+	local clone = cloneAsModel(template)
+	if not clone then
+		return false
+	end
+	dropOmitParts(clone, ref)
+	dropDataChildren(clone)
+	local parts = listParts(clone)
+	local h = mountPart.Size * 0.5
+	local long = math.max(mountPart.Size.X, mountPart.Size.Y, mountPart.Size.Z) * (tonumber(ref.FitScale) or 1)
+	if #parts == 0 or not fitInBox(parts, mountPart.CFrame, -h, h, false, tonumber(ref.Yaw) or 0, long) then
+		clone:Destroy()
+		return false
+	end
+	local attached = weldCloneToPrimary(clone, mountPart, "WE_CatalogWeapon_" .. weaponId, true)
+	if not attached then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostModel
+	mountPart:SetAttribute("WE_CatalogAssetId", assetId)
+	-- the kit gun goes invisible under the dress (its parts, collisions and combat stay)
+	for _, nm in ipairs(ref.HideParts or {}) do
+		local kp = hostModel:FindFirstChild(nm)
+		if kp and kp:IsA("BasePart") and not kp:IsDescendantOf(clone) then
+			kp.Transparency = 1
+		end
 	end
 	return true
 end

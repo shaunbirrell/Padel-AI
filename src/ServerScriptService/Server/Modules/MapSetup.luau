@@ -2986,6 +2986,11 @@ function MapSetup.Run()
 		flag:SetAttribute("TerritoryId", def.Id)
 		flag:SetAttribute("WE_Flag", true)
 		if isStarter then
+			-- owner asset list hook: the Roblox Capture Points pad on the ring (VisualAssetConfig.Landmarks.HomeOutpost: upright,
+			-- centred, the ring keeps its look, the Height beam and Highlight dropped). Deferred and pcall'd (a first load may
+			-- yield; it runs after the zone below is parented); a 0 id leaves the 4-part kit alone.
+			local vas = require(script.Parent.Parent.Services.VisualAssetService)
+			task.defer(pcall, vas.TryAttachPropVisual, ring, "HomeOutpost")
 			zone.Parent = territories -- streaming2 S4: parented whole
 			continue -- F10: the Home Outpost kit ends here (marker, ring, pole, flag: 4 parts, no light)
 		end

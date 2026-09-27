@@ -12,7 +12,7 @@ Commands
     check [--refresh] [--ids A,B] [--store]
                                  ownership (inventory API) for the pending ids (or --ids); --store also re-reads the store
                                  details (economy API). HTTP errors are reported as errors, never as "not owned".
-    promote <id|key ...> | --batch P1|P1i|P2|P3
+    promote <id|key ...> | --batch P1|P1i|P2|P3|P4
             [--got FILE] [--offline] [--we-check FILE] [--owner-ok ID,ID] [--yaw ID=DEG]
             [--allow-budget] [--dry-run] [--no-verify]
     demote <id|key ...> [--dry-run] [--no-verify]
@@ -29,10 +29,16 @@ Gates, in order (any failure refuses that id; nothing is half-written):
   2. owned: inventory API (or --got FILE: `GOT <id>` lines or bare ids; trusted only with --offline).
   3. store re-check (not with --offline): same creator id, asset type and still free.
   4. flags: OWNER needs --owner-ok <id>; STUDIO needs a `WE_CHECK OK <id> ... parts=N ... humanoids=0` line in
-     --we-check FILE with N <= 40 (docs/ASSET_SHORTLIST.md §5 step 5). A WE_CHECK FAIL line refuses.
+     --we-check FILE with N <= 40 (docs/ASSET_SHORTLIST.md §5 step 5). A WE_CHECK FAIL line refuses. OMIT needs the
+     config ref to hold OmitParts first (the part the Studio check named, e.g. a translucent bounds box).
   5. vehicles get Fit = "Kit", Yaw, HideKit, StripDecals; Yaw 0 when the WE_CHECK size has Z >= X, else 90 (--yaw).
-  6. load budget: the distinct live VisualAssetService ids after the batch must stay <= MaxLoadAttempts - 8
-     (--allow-budget only after a census run with cap_refused = 0). KitFamilyFallback side effects are listed.
+  6. load budget: the distinct live VisualAssetService ids after the batch must stay <= MaxLoadAttempts - 8; and in
+     an outage (every load fails, retries stop at MaxLoadAttempts - LoadRetryReserve), every id a PLOT / LATER chain
+     can ask for (fallbacks included, boot ids excepted) needs one of the LoadRetryReserve first loads, and the boot
+     ids must fit under MaxLoadAttempts - LoadRetryReserve (--allow-budget only after the fix57 census, fail mode
+     included, shows cap_refused = 0). KitFamilyFallback side effects are listed.
+  7. Businesses refs: ReplacesRoles must name known, non-colliding BusinessConfig.Kit roles with one MinLevel, and a
+     Belt role needs Fit = "Box" (the client belt crates read the kit belt's box).
 Then: config edit, BuyPathStatic needle rewrite (old id -> new id), docs/ASSET_LICENSES.md row, status table, journal,
 and (unless --no-verify) luau-compile on the changed .luau + BuyPathStatic with no new FAIL; any failure restores every
 file. --dry-run prints the diff and writes nothing (only the network cache). An id that is already live is a no-op.
@@ -68,7 +74,8 @@ WIRING_REL = "docs/ASSET_WIRING.md"
 JOURNAL_REL = "docs/asset_wiring.json"
 OWNER_USER_ID = 470626172  # shaunie6, the user that owns WAR EMPIRE (games API, 2026-09-25)
 HEAVY_IDS = (138331074285379, 18798977801, 6015472062)  # owner rule 5: never come back
-BUDGET_MARGIN = 8  # promote refuses above MaxLoadAttempts - 8 (= 40 with the pinned 48)
+BUDGET_MARGIN = 8  # promote refuses above MaxLoadAttempts - 8 (= 56 with the pinned 64)
+BIZ_REL = "src/ReplicatedStorage/Shared/Configs/BusinessConfig.luau"
 MAX_PARTS = 40
 USER_AGENT = "war-empire-wire-asset-ids/1 (+docs/ASSET_WIRING.md)"
 REQUEST_GAP = 0.55  # seconds between two network requests (<= 2 requests per second)
@@ -83,11 +90,11 @@ LIC_REPLACED_END = "<!-- wire-asset-ids:replaced:end -->"
 # fmt: off
 # key, group, decision, owner id, used id, flags, load phase, batch, config targets, extra edits, where, reason
 REGISTRY_ROWS = [
-    ('AmmoWorks', 'DROPPERS / PRODUCERS', 'DEFERRED', 41324890, 41324890, '', '-', '', [], [], '', 'BusinessService (streaming2-build): business dress hook'),
-    ('ArmsCrateLine', 'DROPPERS / PRODUCERS', 'DEFERRED', 41324890, 41324890, '', '-', '', [], [], '', 'BusinessService (streaming2-build): business dress hook'),
-    ('ArmorPlatePress', 'DROPPERS / PRODUCERS', 'DEFERRED', 4362642898, 4362642898, 'STUDIO', '-', '', [], [], '', 'BusinessService (streaming2-build): business dress hook'),
-    ('RocketAssembly', 'DROPPERS / PRODUCERS', 'DEFERRED', 31603741, 31603741, '', '-', '', [], [], '', 'BusinessService (streaming2-build): business dress hook'),
-    ('ManualDropper', 'DROPPERS / PRODUCERS', 'DEFERRED', 14408455045, 14408455045, '', '-', '', [], [], '', 'ManualDropperService (streaming2-build lane C1): dropper dress hook'),
+    ('AmmoWorks', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.AmmoWorks'], [], '', 'Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt\'s place)'),
+    ('ArmsCrateLine', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 41324890, 41324890, '', 'PLOT', '', ['Businesses.ArmsCrateLine'], [], '', 'Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works)'),
+    ('ArmorPlatePress', 'DROPPERS / PRODUCERS', 'PENDING-GET', 4362642898, 4362642898, 'STUDIO OMIT', 'PLOT', 'P4', ['Businesses.ArmorPlatePress'], [], '', '4,810 tris; big semi-transparent bounds box (OmitParts after the WE_CHECK); Smoke stripped (StripEffectsAssetIds); its parts must fit the kit roles it replaces (PartsPerBusinessL5)'),
+    ('RocketAssembly', 'DROPPERS / PRODUCERS', 'LIVE-NOW', 31603741, 31603741, '', 'PLOT', '', ['Businesses.RocketAssembly'], [], '', 'Roblox Rocket as the rocket body, Fire + Smoke removed'),
+    ('ManualDropper', 'DROPPERS / PRODUCERS', 'PENDING-GET', 14408455045, 14408455045, 'STUDIO', 'PLOT', 'P4', ['IndustrialProps.ManualDropper'], [], '', '184 tris; neon trim (whole models keep Neon: counts in the neon budget); stands on the dropper plate'),
     ('PlotOilPump', 'DROPPERS / PRODUCERS', 'PENDING-GET', 15192621369, 15192621369, '', 'LATER', 'P1', ['IndustrialProps.OilPumpjack'], [['IndustrialProps.OilPumpjackAlt', 0]], '', '1,398 tris, 0 scripts, generic pumpjack, better than kit; already live as the Alt'),
     ('OilRig', 'DROPPERS / PRODUCERS', 'KEEP-PART-KIT', 1962122463, 1962122463, 'WEAK', '-', '', [], [], '', '[WEAK]; likely over 40 parts; our oil-rig kit is the gameplay platform'),
     ('MoneyCollector', 'DROPPERS / PRODUCERS', 'PENDING-GET', 18220523228, 18220523228, '', 'BOOT', 'P1', ['MoneyCollector'], [], '', 'generic ATM, 1,032 tris, blank sign, better than kit'),
@@ -111,7 +118,7 @@ REGISTRY_ROWS = [
     ('Warehouse', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 8076230849, 8076230849, 'INERT', 'never', 'P1i', ['Buildings.Warehouse'], [], '', '7,136 tris corrugated shed'),
     ('SpecialForcesFacility', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 10112923897, 10112923897, 'WEAK INERT', 'never', 'P1i', ['Buildings.SpecialForcesFacility'], [], '', '4,680 tris; translucent roof sheet (overdraw)'),
     ('EmpireBank', 'BUILDINGS / STRUCTURES', 'REJECT', 10153551618, 10153551618, '', '-', '', [], [], '', "wrong item: this store 'bank' is a park bench"),
-    ('HomeOutpost', 'BUILDINGS / STRUCTURES', 'DEFERRED', 80566030, 80566030, '', '-', '', [], [], '', 'MapSetup (streaming2-build): Home Outpost dress hook'),
+    ('HomeOutpost', 'BUILDINGS / STRUCTURES', 'LIVE-NOW', 80566030, 80566030, '', 'BOOT', '', ['Landmarks.HomeOutpost'], [], '', 'Roblox Capture Points pad at each Home Outpost (its beam and highlight parts dropped)'),
     ('Hangar', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 5343886540, 5343886540, 'OWNER STUDIO INERT', 'never', 'P2', ['Buildings.Hangar'], [], '', '10,358 tris vs 45,887; plain block, no opening visible; store description "[ Content Deleted ]" (moderated text)'),
     ('Bunker', 'BUILDINGS / STRUCTURES', 'NO-FIELD', 62623350, 62623350, '', '-', '', [], [], '', 'needs the world-model overlay job (W-OVERLAY); 43 parts, 3 wedges must be dropped'),
     ('Tent', 'BUILDINGS / STRUCTURES', 'PENDING-GET', 182529039, 182529039, '', 'BOOT', 'P1', ['WarzoneProps.Tent'], [], '', '3,908 tris, 2610/390 votes, shortlist P1'),
@@ -254,9 +261,9 @@ REGISTRY_ROWS = [
     ('RocketLauncher', 'WEAPONS', 'LIVE-NOW', 4842186817, 4842186817, '', 'BOOT', '', [], [], 'WeaponConfig.Weapons.RocketLauncher.VisualAssetId', 'Roblox launcher in hand'),
     ('Grenade', 'WEAPONS', 'LIVE-NOW', 232379763, 232379763, '', 'CLIENT', '', [], [], 'WeaponConfig.Weapons.Grenade.Projectile.MeshId', 'Roblox grenade mesh in flight'),
     ('CruiseMissile', 'WEAPONS', 'LIVE-NOW', 94690081, 94690081, '', 'CLIENT', '', [], [], 'WeaponConfig.Weapons.RocketLauncher.Projectile.MeshId', 'Roblox rocket mesh in flight (the rocket-launcher round)'),
-    ('AutoGun', 'WEAPONS', 'PENDING-GET', 114570602, 114570602, '', 'PLOT', 'P1', ['GateDefense.AutoGun'], [], '', "parsed 31 block Parts, 0 scripts (anonymous download); GateDefense's own loader has no part cap and is outside the 48"),
-    ('VehicleMG', 'WEAPONS', 'DEFERRED', 5589684833, 5589684833, '', '-', '', [], [], '', 'VehicleService (streaming2-build): turret dress hook'),
-    ('VehicleCannon', 'WEAPONS', 'DEFERRED', 3322196012, 3322196012, '', '-', '', [], [], '', 'VehicleService (streaming2-build): turret dress hook'),
+    ('AutoGun', 'WEAPONS', 'PENDING-GET', 114570602, 114570602, '', 'PLOT', 'P1', ['GateDefense.AutoGun'], [], '', "parsed 31 block Parts, 0 scripts (anonymous download); GateDefense's own loader (40-part cap, no Humanoid, outside MaxLoadAttempts); needs Yaw 90"),
+    ('VehicleMG', 'WEAPONS', 'PENDING-GET', 5589684833, 5589684833, 'STUDIO', 'LATER', 'P4', ['VehicleWeapons.VehicleMG'], [], '', '204-tri blocky twin gun (Part-kit level); dress on the kit GunMount'),
+    ('VehicleCannon', 'WEAPONS', 'PENDING-GET', 3322196012, 3322196012, 'STUDIO', 'LATER', 'P4', ['VehicleWeapons.VehicleCannon'], [], '', '1,520-tri untextured turret ("Might Be Assymetrical"); dress on the kit Turret'),
     ('RocketPods', 'WEAPONS', 'KEEP-PART-KIT', 4795009475, 4795009475, 'WEAK', '-', '', [], [], '', '[WEAK]; the asset is a whole car; our kit is the pod'),
     ('Nuke', 'WEAPONS', 'NO-FIELD', 286526228, 286526228, '', '-', '', [], [], '', 'needs a nuke-strike effect module (none exists)'),
     ('CrateStack', 'PROPS / DECORATION', 'LIVE-NOW', 6933790012, 6933790012, '', 'BOOT', '', ['DesertKit.CrateWood'], [], '', 'Synty wooden crates (already live)'),
@@ -901,7 +908,8 @@ class Tree:
 # undressed (fail modes), so it is not counted here (the census HEAD "ok" total is 18 without it).
 CHAR_KINDS = ("Worker", "Infantry", "HeavyInfantry", "Guard", "Soldier", "GateGuard", "BankGuard", "OilRigGuard", "FortGuard")
 PROP_KEYS = ("Tent", "Crate", "MilitaryCrate", "Sandbag", "Lantern", "OilBarrel", "ConcreteBarrier", "FuelTanks", "AmmoShed",
-             "OilPumpjack", "Flag", "Floodlight")
+             "OilPumpjack", "Flag", "Floodlight", "HomeOutpost", "ManualDropper")
+HOOK_BUCKETS = ("Businesses", "VehicleWeapons")  # hooks (2026-09-25): business line dress (PLOT), turret dress (LATER)
 PROP_BUCKETS = ("WarzoneProps", "DesertProps", "MapDressing", "IndustrialProps", "Landmarks")
 PROP_ALT = {"Tent": "TentAlt", "OilPumpjack": "OilPumpjackAlt"}
 
@@ -925,6 +933,9 @@ def live_chains(vac: Config, svc: Config | None, families: dict[str, str] | None
     chains.append(("MoneyBagFX", [vac.num("MoneyBagFX"), vac.num("VfxSparkles")]))
     for key in vac.keys("DesertKit"):
         chains.append((f"DesertKit.{key}", [vac.num(f"DesertKit.{key}")]))
+    for bucket in HOOK_BUCKETS:
+        for key in vac.keys(bucket):
+            chains.append((f"{bucket}.{key}", [vac.num(f"{bucket}.{key}")]))
     svc_base = svc.num("Palettes.DefensiveWalls", "MeshAssetId") if svc else 0
     svc_l3 = svc.num("Palettes.DefensiveWalls", "MeshAssetIdL3") if svc else 0
     base = vac.num("Buildings.DefensiveWalls")
@@ -950,9 +961,54 @@ def project_live_ids(vac: Config, svc: Config | None, families: dict[str, str] |
     return seen
 
 
-def budget_cap(vac: Config) -> int:
+def max_attempts(vac: Config) -> int:
     m = re.search(r"MaxLoadAttempts\s*=\s*(\d+)", vac.text)
-    return (int(m.group(1)) if m else 48) - BUDGET_MARGIN
+    return int(m.group(1)) if m else 36  # VisualAssetService's default
+
+
+def retry_reserve(vac: Config) -> int:
+    m = re.search(r"LoadRetryReserve\s*=\s*(\d+)", vac.text)
+    return int(m.group(1)) if m else 0
+
+
+def budget_cap(vac: Config) -> int:
+    return max_attempts(vac) - BUDGET_MARGIN
+
+
+# Outage mode (fix57 census_fail: every LoadAsset fails with a transient error). Boot ids are asked first and their
+# background retries run until MaxLoadAttempts - LoadRetryReserve; every id first asked after boot (PLOT: the first
+# owner's base; LATER: spawns, NPCs, FX, turret dress) then needs one of the LoadRetryReserve attempts, and in an outage
+# a chain asks for every member (the first fails, so the fallbacks are asked too). Phases follow the census.
+BOOT_CHARS = ("Worker", "Infantry", "HeavyInfantry", "Guard")
+PLOT_PROPS = ("ManualDropper",)
+LATER_PROPS = ("OilPumpjack", "Flag", "Floodlight")
+OUTAGE_EXTRA = (("WarzoneProps.FloodlightTower", "BOOT"),)  # asked only while the plot-warzone host is undressed (fail modes)
+
+
+def chain_phase(name: str, vac: Config) -> str:
+    head, _, key = name.partition(".")
+    if head == "Characters":
+        return "BOOT" if key in BOOT_CHARS else "LATER"
+    if head in PROP_BUCKETS:
+        return "PLOT" if key in PLOT_PROPS else "LATER" if key in LATER_PROPS else "BOOT"
+    if head in ("MoneyCollector", "TutorialArrow", "DesertKit"):
+        return "BOOT"
+    if head in ("Businesses", "Buildings"):  # business line dress; DefensiveWalls chains
+        return "PLOT"
+    if head == "Vehicles":  # a ChildName piece is preloaded by VisualAssetService.Init
+        return "BOOT" if vac.has(name) and vac.raw(name, "ChildName") is not None else "LATER"
+    return "LATER"  # MoneyBagFX, VehicleWeapons, anything new: the safe side
+
+
+def outage_ids(vac: Config, svc: Config | None, families: dict[str, str] | None) -> tuple[set[int], set[int]]:
+    """(boot ids, ids first asked after boot) in outage mode: every member of every chain, fallbacks included."""
+    chains = [(n, ids, chain_phase(n, vac)) for n, ids in live_chains(vac, svc, families)]
+    for name, phase in OUTAGE_EXTRA:
+        if vac.has(name):
+            chains.append((name, [vac.num(name)], phase))
+    boot = {i for _n, ids, ph in chains if ph == "BOOT" for i in ids if i > 0}
+    after = {i for _n, ids, ph in chains if ph != "BOOT" for i in ids if i > 0} - boot
+    return boot, after
 
 
 # ── network (inventory + economy), throttled and cached ──────────────────────────────────────────────────────────
@@ -1320,6 +1376,8 @@ def gate_text(r: Row, state: str) -> str:
         need.append("your yes/no")
     if "STUDIO" in r.flags:
         need.append("Studio check")
+    if "OMIT" in r.flags:
+        need.append("OmitParts")
     base = " + ".join(need) if need else "ready"
     extra = " (recorded only)" if "INERT" in r.flags else ""
     return f"{base}, batch {r.batch}{extra}"
@@ -1444,7 +1502,7 @@ def resolve_ids(args_in: list[str], batch: str | None) -> tuple[list[int], list[
     refused: list[str] = []
     if batch:
         if batch not in BATCHES:
-            raise ToolError(f"unknown batch {batch} (P1, P1i, P2, P3)")
+            raise ToolError(f"unknown batch {batch} (P1, P1i, P2, P3, P4)")
         ids.extend(BATCHES[batch])
     for a in args_in:
         if a.isdigit():
@@ -1491,6 +1549,35 @@ def save_journal(files: Files, j: dict) -> None:
         files.set(JOURNAL_REL, None)
     else:
         files.set(JOURNAL_REL, json.dumps(j, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
+
+
+def parse_business_kit(text: str | None) -> dict[str, tuple[int, bool]]:
+    """BusinessConfig.Kit: role -> (MinLevel, Collide)."""
+    kit: dict[str, tuple[int, bool]] = {}
+    for m in re.finditer(r'\{\s*Role\s*=\s*"(\w+)"\s*,\s*MinLevel\s*=\s*(\d+)([^\n]*)', text or ""):
+        kit[m.group(1)] = (int(m.group(2)), re.search(r"\bCollide\s*=\s*true\b", m.group(3)) is not None)
+    return kit
+
+
+def business_roles_problem(tree: "Tree", target: str) -> str | None:
+    """Why a Businesses ref cannot be promoted as configured (None = OK); VisualAssetService refuses the same at runtime."""
+    raw = tree.vac.raw(target, "ReplacesRoles")
+    roles = re.findall(r'"(\w+)"', raw or "")
+    if not roles:
+        return f"{target} needs ReplacesRoles (the kit roles its parts take over, BusinessConfig.PartsPerBusinessL5)"
+    kit = parse_business_kit(read_text(tree.root, BIZ_REL))
+    unknown = [r for r in roles if r not in kit]
+    if unknown:
+        return f"{target} ReplacesRoles {', '.join(unknown)}: not a BusinessConfig.Kit role"
+    collide = [r for r in roles if kit[r][1]]
+    if collide:
+        return f"{target} ReplacesRoles {', '.join(collide)}: a colliding kit part (a dress never takes a wall or floor away)"
+    levels = sorted({kit[r][0] for r in roles})
+    if len(levels) > 1:
+        return f"{target} ReplacesRoles span MinLevels {levels}: all roles must share one MinLevel (a level-down would half-build it)"
+    if "Belt" in roles and (tree.vac.raw(target, "Fit") or "") != '"Box"':
+        return f"{target} replaces the Belt: needs Fit = \"Box\" (the client belt crates read the kit belt's box)"
+    return None
 
 
 def cmd_promote(a: argparse.Namespace, root: Path) -> int:
@@ -1564,6 +1651,16 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
                 why = f"WE_CHECK parts={wc.get('parts')} (cap {MAX_PARTS})"
             elif wc.get("humanoids") != 0:
                 why = f"WE_CHECK humanoids={wc.get('humanoids')} (must be 0)"
+        if not why and "OMIT" in flags:
+            no_omit = [r.targets[0] for r in rows if tree.vac.raw(r.targets[0], "OmitParts") is None]
+            if no_omit:
+                why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"
+        if not why:
+            for r in rows:
+                if r.targets and r.targets[0].startswith("Businesses."):
+                    why = business_roles_problem(tree, r.targets[0])
+                    if why:
+                        break
         if why:
             lines_out.append(f"REFUSED {aid} ({keys}): {why}")
             refused_n += 1
@@ -1691,11 +1788,20 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
             if dressed:
                 fam_lines.append(f"family look: {tkey} is the {'/'.join(fams)} fallback, so these also wear it: {', '.join(dressed)}")
     over = len(proj_after) > cap and len(proj_after) > len(proj_before)
+    boot_b, after_b = outage_ids(tree.vac, tree.svc, tree.families)
+    boot_a, after_a = outage_ids(vac_after, tree.svc, tree.families)
+    reserve = retry_reserve(vac_after)
+    retry_top = max_attempts(vac_after) - reserve
+    outage_line = (f"outage budget: first loads after boot {len(after_b)} -> {len(after_a)} (LoadRetryReserve {reserve}); "
+                   f"boot ids {len(boot_b)} -> {len(boot_a)} (MaxLoadAttempts - LoadRetryReserve = {retry_top})")
+    over_outage = ((len(after_a) > reserve and len(after_a) > len(after_b))
+                   or (len(boot_a) > retry_top and len(boot_a) > len(boot_b)))
     for ln in lines_out:
         print(ln)
     for ln in fam_lines:
         print(ln)
     print(budget_line)
+    print(outage_line)
     if fam_block:
         for ln in fam_block:
             print(ln)
@@ -1703,6 +1809,11 @@ def cmd_promote(a: argparse.Namespace, root: Path) -> int:
     if over and not a.allow_budget and ok_ids:
         print(f"REFUSED batch: {len(proj_after)} > {cap}. Free load slots first (docs/ASSET_WIRING.md, load budget) or pass "
               "--allow-budget after a census run with cap_refused = 0. Nothing written.")
+        return 1
+    if over_outage and not a.allow_budget and ok_ids:
+        print(f"REFUSED batch: outage budget ({len(after_a)} first loads after boot > LoadRetryReserve {reserve}, or "
+              f"{len(boot_a)} boot ids > {retry_top}). Free load slots or raise the reserve deliberately "
+              "(docs/ASSET_WIRING.md, load budget), or pass --allow-budget after census_fail shows cap_refused = 0. Nothing written.")
         return 1
     if not ok_ids:
         print("nothing to promote" + ("" if not already else " (already live)"))
@@ -1835,8 +1946,12 @@ def cmd_status(a: argparse.Namespace, root: Path) -> int:
         rows.append({"key": r.key, "decision": r.decision, "id": r.id, "live": live, "pending": pend, "flags": sorted(r.flags),
                      "batch": r.batch, "state": state, "gate": gate_text(r, state), "owned_0805": owned_0805(r.id) if r.id else None})
     proj = project_live_ids(tree.vac, tree.svc, tree.families)
+    boot_ids, after_ids = outage_ids(tree.vac, tree.svc, tree.families)
+    reserve = retry_reserve(tree.vac)
     if a.json:
-        print(json.dumps({"rows": rows, "budget": {"live_ids": len(proj), "cap": budget_cap(tree.vac)}}, indent=1))
+        print(json.dumps({"rows": rows, "budget": {"live_ids": len(proj), "cap": budget_cap(tree.vac),
+                                                   "outage_after_boot": len(after_ids), "reserve": reserve,
+                                                   "outage_boot": len(boot_ids), "retry_top": max_attempts(tree.vac) - reserve}}, indent=1))
         return 0
     counts: dict[str, int] = {}
     for x in rows:
@@ -1852,6 +1967,8 @@ def cmd_status(a: argparse.Namespace, root: Path) -> int:
     print("pending rows by state: " + ", ".join(f"{k} {v}" for k, v in sorted(st.items())))
     print(f"PreferMeshWhenAssetIdSet = {tree.prefer_mesh()}; vehicle families parsed: {len(tree.families or {})}")
     print(f"load budget: {len(proj)} distinct live VisualAssetService ids (cap {budget_cap(tree.vac)})")
+    print(f"outage budget: {len(after_ids)} ids first asked after boot (LoadRetryReserve {reserve}); "
+          f"{len(boot_ids)} boot ids (MaxLoadAttempts - LoadRetryReserve = {max_attempts(tree.vac) - reserve})")
     heavy = [h for h in HEAVY_IDS if id_token(h).search(tree.vac.text) or (tree.svc and id_token(h).search(tree.svc.text))]
     if heavy:
         print(f"WARN rule 5 heavy ids still in config: {heavy}")

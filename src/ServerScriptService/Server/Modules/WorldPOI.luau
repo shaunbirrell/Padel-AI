@@ -38,6 +38,9 @@
 	  * InWater = true clusters (gantry, jetty) skip the water keep-out and carry WE_AllowInWater (Waterways cull, H3).
 	  * The ActivityHost cluster (every kit of Class "anchor": 1 invisible part, no collision) passes the zones with the
 	    default 13-stud road test, may sit over an event anchor and is not added to the occupancy.
+	    streaming2 S5: it is the one cluster built ModelStreamingMode Persistent (every other cluster stays Atomic,
+	    WorldKits.NewCluster), set here before WorldKits.Finish parents it. This is the only place that decides its
+	    mode; OpsSites only checks it. Its anchors sit up to ~380 studs away, so it must be on every client.
 	  * Every part stays inside the POI footprint (rect: every part's AABB; circle: the cluster disc). Terrain rubble /
 	    scorch (WorldKits.Rock, 0 parts) passes Blocked too and keeps its centre (rect) / disc (circle) inside.
 	  * Infra rows (the airstrip runway) are flat strips under POI_<Id>.Infra (one Model, WE_Infra: exempt from H10):
@@ -587,6 +590,13 @@ local function placeClusters(ctx: Ctx, rows: Rows, partsCap: number)
 		end
 		model:SetAttribute("WE_AnchorX", math.floor(cx * 100 + 0.5) / 100)
 		model:SetAttribute("WE_AnchorZ", math.floor(cz * 100 + 0.5) / 100)
+		if hostOnly then
+			-- streaming2 S5 (F4): the ActivityHost cluster is Persistent from the start, set before Finish parents it. Its
+			-- anchors (job prompts and labels) can be ~380 studs from this 1-part host, and a prompt only works while its
+			-- part is streamed in. Cost: 1 invisible part per POI on every client. No effect while
+			-- Workspace.StreamingEnabled is false (default.project.json, lane Z).
+			model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+		end
 		local info = WorldKits.Finish(model, ctx.Folder)
 		if not info.Ok then
 			skip(ctx, c.Id, info.Reason or "Finish refused")

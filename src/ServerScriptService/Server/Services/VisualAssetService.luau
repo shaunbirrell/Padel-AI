@@ -24,6 +24,11 @@
 	  • The Airfield hangar is VisualAssetConfig.Buildings.Hangar (0 = the Part shed, no load).
 	  • CloneKitMesh marks a piece with its ref's Yaw (attribute WE_KitYaw) for WorldKits; IsKitMeshWired(key) tells
 	    WorldKits, from config only, whether a key can ever give a mesh (an unwired key takes no overlay slot).
+	  • Hooks (2026-09-25): TryAttachBusinessVisual (war-business lines: model part i takes over kit role i, so
+	    PartsPerBusinessL5 holds), TryAttachVehicleWeaponVisual (turret dress on allow-listed vehicles only, welded and
+	    massless, the kit gun hidden), and the prop ref options Fit = "Ground" (upright on the host), FitLong (one uniform
+	    size) and KeepHost (no host fade). OmitParts drops parts from whole-model props, businesses and weapons too, and
+	    their Configuration / value objects go. A 0 id is a no-op in every hook: no load, no attribute, no change.
 
 	Load failures (each one leaves the Part kit look and prints one Output line):
 	  • transient (HTTP 5xx / throttle / timeout): retried in the BACKGROUND (task.delay), VisualAssetConfig
@@ -62,6 +67,14 @@ type AssetRef = {
 	KeepVisible: { string }?,
 	OmitParts: { string }?, -- owner list: pack piece parts removed before the part count
 	NoFamilyFallback: boolean?, -- owner list: a vehicle ref at 0 never takes the family body
+	KeepHost: boolean?, -- hooks: props: the host keeps its look (no fade)
+	FitLong: number?, -- hooks: props: longest side in studs (one uniform scale)
+	ReplacesRoles: { string }?, -- hooks: Businesses: model part i takes over kit role i
+	Mount: string?, -- hooks: VehicleWeapons: the kit part the weapon sits on
+	FitScale: number?, -- hooks: VehicleWeapons: longest side = the mount's longest side x FitScale
+	KitFamilies: { string }?, -- hooks: VehicleWeapons: allow-listed kit families
+	Vehicles: { string }?, -- hooks: VehicleWeapons: allow-listed vehicle ids
+	HideParts: { string }?, -- hooks: VehicleWeapons: kit parts hidden once the dress attaches
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
@@ -1314,6 +1327,177 @@ end
 --[[
 	Optional desert prop overlay (cactus etc.) welded to a flora host part.
 ]]
+-- ── hooks (2026-09-25): clone helpers (no per-frame use; each runs once per dressed host) ───────────────────────────
+local function listParts(root: Instance): { BasePart }
+	local out: { BasePart } = {}
+	for _, d in ipairs(root:GetDescendants()) do
+		if d:IsA("BasePart") then
+			table.insert(out, d)
+		end
+	end
+	return out
+end
+
+-- a dress clone keeps no data objects (the stripped scripts' Configuration / IntValue / BoolValue ...): they replicate
+-- for nothing
+local function dropDataChildren(clone: Instance)
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d.Parent ~= nil and (d:IsA("Configuration") or d:IsA("ValueBase")) then
+			d:Destroy()
+		end
+	end
+end
+
+-- ref.OmitParts on a whole-model clone (packs drop them in extractPiece before the part count)
+local function dropOmitParts(clone: Instance, ref: AssetRef?)
+	if ref == nil then
+		return
+	end
+	local omit = omitNames(ref)
+	if #omit == 0 then
+		return
+	end
+	local drop: { [string]: boolean } = {}
+	for _, nm in ipairs(omit) do
+		drop[nm] = true
+	end
+	for _, d in ipairs(clone:GetDescendants()) do
+		if d.Parent ~= nil and d:IsA("BasePart") and drop[d.Name] then
+			d:Destroy()
+		end
+	end
+end
+
+local function hasFileMesh(p: BasePart): boolean
+	for _, c in ipairs(p:GetChildren()) do
+		if c:IsA("SpecialMesh") and c.MeshType == Enum.MeshType.FileMesh then
+			return true
+		end
+	end
+	return false
+end
+
+-- half extents of a part box (cf, size) along the axes of the frame the cf is expressed in
+local function halfExtents(cf: CFrame, size: Vector3): Vector3
+	local h = size * 0.5
+	local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
+	return Vector3.new(
+		math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z,
+		math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z,
+		math.abs(r.Z) * h.X + math.abs(u.Z) * h.Y + math.abs(l.Z) * h.Z
+	)
+end
+
+-- axis-aligned box (lo, hi) of parts in the space of `frame`
+local function aabbIn(frame: CFrame, parts: { BasePart }): (Vector3, Vector3)
+	local lo = Vector3.new(math.huge, math.huge, math.huge)
+	local hi = -lo
+	for _, p in ipairs(parts) do
+		local rel = frame:ToObjectSpace(p.CFrame)
+		local e = halfExtents(rel, p.Size)
+		lo = lo:Min(rel.Position - e)
+		hi = hi:Max(rel.Position + e)
+	end
+	return lo, hi
+end
+
+-- Fit = "Ground": the clone stands upright (its template axes) at the host's centre, its lowest point on the host's
+-- lowest point, scale 1 (a pure move: the template parts keep their authored orientation)
+local function placeOnGround(clone: Model, host: BasePart)
+	local parts = listParts(clone)
+	if #parts == 0 then
+		return
+	end
+	local lo, hi = aabbIn(CFrame.identity, parts)
+	local e = halfExtents(host.CFrame, host.Size)
+	local p = host.Position
+	local shift = Vector3.new(p.X - (lo.X + hi.X) * 0.5, (p.Y - e.Y) - lo.Y, p.Z - (lo.Z + hi.Z) * 0.5)
+	for _, part in ipairs(parts) do
+		part.CFrame = part.CFrame + shift
+	end
+end
+
+-- one uniform scale k for a part and its mesh (FileMesh SpecialMesh scale, every mesh offset)
+local function scalePartMeshes(p: BasePart, k: number)
+	for _, c in ipairs(p:GetChildren()) do
+		if c:IsA("SpecialMesh") then
+			if c.MeshType == Enum.MeshType.FileMesh then
+				c.Scale = c.Scale * k
+			end
+			c.Offset = c.Offset * k
+		elseif c:IsA("BlockMesh") or c:IsA("CylinderMesh") then
+			local m = c :: any
+			m.Offset = m.Offset * k
+		end
+	end
+end
+
+-- ref.FitLong: one uniform scale (parts, meshes) about the model's bottom centre so its longest side is `long` studs
+local function scaleToLong(parts: { BasePart }, long: number)
+	if #parts == 0 or long <= 0 then
+		return
+	end
+	local lo, hi = aabbIn(CFrame.identity, parts)
+	local size = hi - lo
+	local cur = math.max(size.X, size.Y, size.Z)
+	if cur < 0.05 then
+		return
+	end
+	local k = math.clamp(long / cur, 0.05, 40)
+	local about = Vector3.new((lo.X + hi.X) * 0.5, lo.Y, (lo.Z + hi.Z) * 0.5)
+	for _, p in ipairs(parts) do
+		local cf = p.CFrame
+		p.Size = p.Size * k
+		scalePartMeshes(p, k)
+		p.CFrame = CFrame.new(about + (cf.Position - about) * k) * cf.Rotation
+	end
+end
+
+--[[ Fit parts (template axes) into the box lo..hi of `frame`: one uniform scale so the model's longest side is `long`
+	(alignLong: the box's longest side, the model's longest side turned onto it), then turned by yawDeg, centred on the
+	box in X / Z, lowest point on the box bottom. Moves each part (no pivots), like fitBodyToKit. ]]
+local function fitInBox(parts: { BasePart }, frame: CFrame, lo: Vector3, hi: Vector3, alignLong: boolean, yawDeg: number, long: number): boolean
+	local dLo, dHi = aabbIn(CFrame.identity, parts)
+	local dSize = dHi - dLo
+	local dLong = math.max(dSize.X, dSize.Y, dSize.Z)
+	if dLong < 0.05 then
+		return false
+	end
+	local rot = CFrame.Angles(0, math.rad(yawDeg), 0)
+	local target = long
+	if alignLong then
+		local bSize = hi - lo
+		local function axis(v: Vector3): number
+			return if v.X >= v.Y and v.X >= v.Z then 1 elseif v.Y >= v.Z then 2 else 3
+		end
+		local da, ba = axis(dSize), axis(bSize)
+		if da ~= ba then
+			rot = if da + ba == 3 then CFrame.Angles(0, 0, math.rad(90)) elseif da + ba == 4 then CFrame.Angles(0, math.rad(90), 0) else CFrame.Angles(math.rad(90), 0, 0)
+		end
+		target = math.max(bSize.X, bSize.Y, bSize.Z)
+	end
+	local k = math.clamp(target / dLong, 0.05, 40)
+	local c = (dLo + dHi) * 0.5
+	local rel: { CFrame } = {}
+	local rLo = Vector3.new(math.huge, math.huge, math.huge)
+	local rHi = -rLo
+	for i, p in ipairs(parts) do
+		local cf = p.CFrame
+		local r = rot * CFrame.new((cf.Position - c) * k) * cf.Rotation
+		rel[i] = r
+		local e = halfExtents(r, p.Size * k)
+		rLo = rLo:Min(r.Position - e)
+		rHi = rHi:Max(r.Position + e)
+	end
+	local shift = Vector3.new((lo.X + hi.X) * 0.5 - (rLo.X + rHi.X) * 0.5, lo.Y - rLo.Y, (lo.Z + hi.Z) * 0.5 - (rLo.Z + rHi.Z) * 0.5)
+	for i, p in ipairs(parts) do
+		p.Size = p.Size * k
+		scalePartMeshes(p, k)
+		p.CFrame = frame * CFrame.new(shift) * rel[i]
+	end
+	return true
+end
+
 --[[
 	Attach MeshPart dress when catalog entry is MeshId-only (AssetType 40).
 	Falls back to SpecialMesh on a Part if MeshPart.MeshId set fails.
@@ -1398,7 +1582,8 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 	-- W3 LOOK: through the ref, so a ChildName piece of a pack works for props too
-	local template: Instance? = templateForRef(lookupPropRef(propKey))
+	local usedRef: any = lookupPropRef(propKey)
+	local template: Instance? = templateForRef(usedRef)
 	-- Palm/Tent/OilPumpjack/Jersey/CamoNet/StreetLamp alt fallback (Design Bot wire)
 	if not template then
 		local altKey: string? = nil
@@ -1421,6 +1606,7 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 				template = templateForRef(lookupPropRef(altKey))
 				if template then
 					assetId = altId
+					usedRef = lookupPropRef(altKey)
 				end
 			end
 		end
@@ -1433,11 +1619,30 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 		return false
 	end
 
+	-- hooks (2026-09-25): a first load may have yielded: the host may be gone, or another caller dressed it meanwhile
+	local hostParent: Instance? = hostPart.Parent
+	if hostParent == nil or hostPart:GetAttribute("WE_CatalogAssetId") ~= nil then
+		return false
+	end
 	local clone = cloneAsModel(template)
 	if not clone then
 		return false
 	end
-	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp") then
+	-- hooks (2026-09-25): ref options. OmitParts drops parts (the Capture Points beam and highlight), data objects go;
+	-- FitLong sets one uniform size; Fit = "Ground" stands the model upright on the host (the Home Outpost ring is a
+	-- Cylinder turned on its side, so a pivot onto its CFrame would lay the pad on edge); KeepHost leaves the host alone.
+	local refT = if typeof(usedRef) == "table" then usedRef :: AssetRef else nil
+	dropOmitParts(clone, refT)
+	dropDataChildren(clone)
+	local fitLong = if refT then tonumber(refT.FitLong) else nil
+	if fitLong and fitLong > 0 then
+		scaleToLong(listParts(clone), fitLong)
+	end
+	local ground = refT ~= nil and refT.Fit == "Ground"
+	if ground then
+		placeOnGround(clone, hostPart)
+	end
+	if not weldCloneToPrimary(clone, hostPart, "WE_CatalogProp", ground) then
 		clone:Destroy()
 		return false
 	end
@@ -1445,8 +1650,236 @@ function VisualAssetService.TryAttachPropVisual(hostPart: BasePart, propKey: str
 	hostPart:SetAttribute("WE_CatalogAssetId", assetId)
 	-- v44 P0: props on DressHost OK to soften; never fade Body/Roof structure kits
 	local kitRole = hostPart:GetAttribute("WE_KitRole")
-	if kitRole ~= "Body" and kitRole ~= "Roof" and hostPart:GetAttribute("StructureId") == nil then
+	local keepHost = refT ~= nil and refT.KeepHost == true
+	if not keepHost and kitRole ~= "Body" and kitRole ~= "Roof" and hostPart:GetAttribute("StructureId") == nil then
 		hostPart.Transparency = math.max(hostPart.Transparency, 0.65)
+	end
+	return true
+end
+
+-- ── hooks (2026-09-25): war-business lines and vehicle turrets ─────────────────────────────────────────────────────
+local bizWarned: { [string]: boolean } = {}
+
+local function bizWarn(key: string, msg: string)
+	if bizWarned[key] then
+		return
+	end
+	bizWarned[key] = true
+	warn("[VisualAssetService] " .. msg .. " — Part kit look stays")
+end
+
+-- BusinessConfig.Kit MinLevel of a kit role (nil = unknown role); lazy: VisualAssetService loads before any business
+local bizKitLevels: { [string]: number }? = nil
+local function kitMinLevel(role: string): number?
+	if bizKitLevels == nil then
+		local levels: { [string]: number } = {}
+		local ok, bc = pcall(function()
+			return require(ReplicatedStorage.Shared.Configs.BusinessConfig) :: any
+		end)
+		if ok and typeof(bc) == "table" and typeof(bc.Kit) == "table" then
+			for _, kp in ipairs(bc.Kit) do
+				levels[kp.Role] = kp.MinLevel
+			end
+		end
+		bizKitLevels = levels
+	end
+	return (bizKitLevels :: { [string]: number })[role]
+end
+
+-- the listed roles still to dress: { index into ReplacesRoles = its built, non-colliding kit part that does not wear
+-- assetId }, and how many built non-colliding roles there are (dressed or not)
+local function bizMissing(model: Model, roles: { string }, assetId: number, bizId: string): ({ [number]: BasePart }, number)
+	local missing: { [number]: BasePart } = {}
+	local built = 0
+	for i, role in ipairs(roles) do
+		local p = model:FindFirstChild("Kit_" .. role)
+		if p and p:IsA("BasePart") then
+			if p:GetAttribute("WE_CatalogAssetId") == assetId then
+				built += 1
+			elseif p.CanCollide then
+				-- a dress never takes a wall or a floor away: colliding kit parts are never taken over
+				bizWarn(bizId .. "|collide|" .. role, string.format("business %s: kit role %s collides, not replaced by %d", bizId, role, assetId))
+			else
+				built += 1
+				missing[i] = p
+			end
+		end
+	end
+	return missing, built
+end
+
+--[[ Hooks (2026-09-25): the catalog dress of a war-business line (VisualAssetConfig.Businesses[id]). Called deferred by
+	BusinessService.SyncBusiness after its kit loop (a re-sync, an upgrade, a rebirth reset). Model part i (the template's
+	part order) takes over the built kit part of ReplacesRoles[i]: it is named Kit_<Role>, fitted into THAT part's own box
+	and the kit part is destroyed, so the business never goes over BusinessConfig.PartsPerBusinessL5 and SyncBusiness (by
+	name) and the client belt crates (Kit_Belt) keep working. A Belt part (and every part with Fit = "Box") is stretched
+	into its kit box exactly (block parts only); any other part gets one uniform scale onto its box's long side. Done only
+	when every built listed role wears the id: a role rebuilt after a level-down is dressed again from the cached template.
+	Refused (one warn, the Part kit stays): more model parts than roles, roles with different kit MinLevels (a half-built
+	list), a mesh part on a Belt / Box role; colliding roles are never taken over. Same loader rules as every hook
+	(MaxPartsPerModel, Humanoid stripped, MaxLoadAttempts, StripEffectsAssetIds); anchored, non-colliding; a 0 id is a no-op. ]]
+function VisualAssetService.TryAttachBusinessVisual(model: Model, id: string, level: number): boolean
+	local bucket = (VisualAssetConfig :: any).Businesses
+	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[id]) == "table" then bucket[id] :: AssetRef else nil
+	local assetId = refId(ref)
+	if ref == nil or assetId == 0 or model.Parent == nil or (tonumber(level) or 0) < 1 then
+		return false -- 0 / PendingAssetId (never read here): no load; the Part kit stays
+	end
+	local roles = ref.ReplacesRoles or {}
+	if #roles == 0 then
+		return false
+	end
+	local firstLevel = kitMinLevel(roles[1])
+	for _, role in ipairs(roles) do
+		local lv = kitMinLevel(role)
+		if lv == nil or lv ~= firstLevel then
+			bizWarn(id .. "|minlevel", string.format("business %s: ReplacesRoles of %d must be known kit roles with one MinLevel (%s: %s)",
+				id, assetId, role, tostring(lv)))
+			return false
+		end
+	end
+	local missing, built = bizMissing(model, roles, assetId, id)
+	if next(missing) == nil then
+		return built > 0 -- every built role already wears it (a re-sync / level-up: nothing to do)
+	end
+	local template = templateForRef(ref) -- may yield on the first load of this id; cached afterwards
+	if not template then
+		return false
+	end
+	-- after a yield: the kiosk may be gone, or another deferred sync may have dressed it meanwhile
+	local parentNow: Instance? = model.Parent
+	if parentNow == nil then
+		return false
+	end
+	missing, built = bizMissing(model, roles, assetId, id)
+	if next(missing) == nil then
+		return built > 0
+	end
+	local clone = cloneAsModel(template)
+	if not clone then
+		return false
+	end
+	dropOmitParts(clone, ref)
+	dropDataChildren(clone)
+	local parts = listParts(clone)
+	if #parts == 0 or #parts > #roles then
+		clone:Destroy()
+		bizWarn(id .. "|count", string.format("business %s: %d has %d parts for %d kit roles (BusinessConfig.PartsPerBusinessL5)", id, assetId, #parts, #roles))
+		return false
+	end
+	-- check every part first (nothing changes on a refusal)
+	for i, kp in pairs(missing) do
+		local p = parts[i]
+		if p and (roles[i] == "Belt" or ref.Fit == "Box") and (p:IsA("MeshPart") or hasFileMesh(p)) then
+			clone:Destroy()
+			bizWarn(id .. "|box", string.format("business %s: %d part %d is a mesh; the %s role needs a block part stretched into its box", id, assetId, i, roles[i]))
+			return false
+		end
+	end
+	local site = model:GetAttribute("WE_SiteCFrame")
+	local dressed = 0
+	for i, kp in pairs(missing) do
+		local p = parts[i]
+		if p then -- a role past the model's parts keeps its kit part
+			if roles[i] == "Belt" or ref.Fit == "Box" then
+				p.Size = kp.Size -- the client crates read Kit_Belt's box: keep it exactly
+				p.CFrame = kp.CFrame
+			else
+				local frame: CFrame = if typeof(site) == "CFrame" then site else kp.CFrame
+				local lo, hi = aabbIn(frame, { kp })
+				if not fitInBox({ p }, frame, lo, hi, true, 0, 1) then
+					continue
+				end
+			end
+			p.Name = kp.Name
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.CastShadow = false
+			p.Massless = true
+			p:SetAttribute("WE_BizRole", kp:GetAttribute("WE_BizRole"))
+			p:SetAttribute("WE_CatalogAssetId", assetId)
+			p.Parent = model
+			kp:Destroy()
+			dressed += 1
+		end
+	end
+	clone:Destroy() -- the wrapper and any part no missing role needed
+	return dressed > 0
+end
+
+-- hooks (2026-09-25): is this vehicle on the weapon ref's allow-list (KitFamilies / Vehicles)? No list = nobody.
+function VisualAssetService.VehicleWeaponAllowed(weaponId: string, vehicleId: string?, kitFamily: string?): boolean
+	local bucket = (VisualAssetConfig :: any).VehicleWeapons
+	local ref = if typeof(bucket) == "table" then bucket[weaponId] else nil
+	if typeof(ref) ~= "table" then
+		return false
+	end
+	for _, f in ipairs(if typeof(ref.KitFamilies) == "table" then ref.KitFamilies else {}) do
+		if f == kitFamily then
+			return true
+		end
+	end
+	for _, v in ipairs(if typeof(ref.Vehicles) == "table" then ref.Vehicles else {}) do
+		if v == vehicleId then
+			return true
+		end
+	end
+	return false
+end
+
+--[[ Hooks (2026-09-25): the catalog dress of a vehicle weapon (VisualAssetConfig.VehicleWeapons[weaponId]) on the kit's
+	mount part. Dress only: one uniform scale (longest side = the mount's longest side x FitScale), turned by Yaw
+	(front -Z), centred on the mount, its lowest point on the mount's lowest point, then every part is massless,
+	non-colliding, unanchored and welded to the mount (weldCloneToPrimary), so the driven assembly and its physics are
+	unchanged; built before the vehicle is parented (Atomic). Only a vehicle on the ref's allow-list (KitFamilies /
+	Vehicles) is dressed; the ref's HideParts (the kit gun) go invisible once it attaches. OmitParts and data objects are
+	dropped. A 0 id is a no-op: no load, no attribute. ]]
+function VisualAssetService.TryAttachVehicleWeaponVisual(hostModel: Model, weaponId: string, mountPart: BasePart): boolean
+	local bucket = (VisualAssetConfig :: any).VehicleWeapons
+	local ref: AssetRef? = if typeof(bucket) == "table" and typeof(bucket[weaponId]) == "table" then bucket[weaponId] :: AssetRef else nil
+	local assetId = refId(ref)
+	if ref == nil or assetId == 0 then
+		return false -- 0 / PendingAssetId (never read here): no load; the kit gun stays
+	end
+	local vid, fam = hostModel:GetAttribute("VehicleId"), hostModel:GetAttribute("WE_KitFamily")
+	if not VisualAssetService.VehicleWeaponAllowed(weaponId, if typeof(vid) == "string" then vid else nil, if typeof(fam) == "string" then fam else nil) then
+		return false -- not on the ref's allow-list (a tank cannon never lands on an AA or rocket kit)
+	end
+	if mountPart:GetAttribute("WE_CatalogAssetId") ~= nil or not mountPart:IsDescendantOf(hostModel) then
+		return false
+	end
+	local template = templateForRef(ref)
+	if not template then
+		return false
+	end
+	local clone = cloneAsModel(template)
+	if not clone then
+		return false
+	end
+	dropOmitParts(clone, ref)
+	dropDataChildren(clone)
+	local parts = listParts(clone)
+	local h = mountPart.Size * 0.5
+	local long = math.max(mountPart.Size.X, mountPart.Size.Y, mountPart.Size.Z) * (tonumber(ref.FitScale) or 1)
+	if #parts == 0 or not fitInBox(parts, mountPart.CFrame, -h, h, false, tonumber(ref.Yaw) or 0, long) then
+		clone:Destroy()
+		return false
+	end
+	local attached = weldCloneToPrimary(clone, mountPart, "WE_CatalogWeapon_" .. weaponId, true)
+	if not attached then
+		clone:Destroy()
+		return false
+	end
+	clone.Parent = hostModel
+	mountPart:SetAttribute("WE_CatalogAssetId", assetId)
+	-- the kit gun goes invisible under the dress (its parts, collisions and combat stay)
+	for _, nm in ipairs(ref.HideParts or {}) do
+		local kp = hostModel:FindFirstChild(nm)
+		if kp and kp:IsA("BasePart") and not kp:IsDescendantOf(clone) then
+			kp.Transparency = 1
+		end
 	end
 	return true
 end
