@@ -6446,6 +6446,47 @@ must_not_contain(_ATM_MCS, "local amount = MoneyCollectorService.GetRaidableBala
 must_contain(_ATM_RC, "AutoCollectCountsRecentIncome = true,", "v82 ATM: raids still count recent AutoCollect income (not raid immunity)")
 must_contain(_ATM_MCS, "balance += math.min(recentAutoSum(victim.UserId), cash)", "v82 ATM: GetRaidableBalance unchanged (recent auto income, capped at Cash)")
 
+# airweapons (owner request part 2): only combat aircraft armed, server-authoritative, dark behind WeaponsLive except for
+# the owner's playtest account; phone fire buttons beside the ▲▼ column
+AW_CFG = "src/ReplicatedStorage/Shared/Configs/AircraftWeaponConfig.luau"
+AW_SVC = "src/ServerScriptService/Server/Services/AirWeaponService.luau"
+AW_ORD = "src/ServerScriptService/Server/Modules/AirOrdnance.luau"
+AW_CLI = "src/StarterPlayer/StarterPlayerScripts/Client/Modules/AirWeaponsClient.luau"
+must_contain(AW_CFG, "\tWeaponsLive = false, -- ship dark", "airweapons: WeaponsLive ships false")
+must_contain(AW_CFG, "\treturn AdminConfig.IsPlaytestOwner(userId) == true\n", "airweapons: live for the owner's playtest account only (AdminConfig.IsPlaytestOwner)")
+for _aw_unarmed in ("TransportHeli", "CargoPlane", "MedevacHeli", "AWACSPlane", "TankerPlane", "HeavyLiftHeli", "VTOLTransport"):
+    must_contain(AW_CFG, f"\t\t{_aw_unarmed} = true,", f"airweapons: {_aw_unarmed} stays unarmed")
+must_contain(AW_CFG, 'AttackHeli = { "HeliNoseGun", "HeliRockets" },', "airweapons: attack helicopters get a nose gun + rockets")
+must_contain(AW_CFG, 'Fighter = { "JetCannon", "JetMissiles" },', "airweapons: fighters get a gun + missiles")
+must_contain(AW_CFG, 'Strike = { "StrikeBombs" },', "airweapons: strike jets get bombs")
+must_contain(AW_CFG, 'Bomber = { "BomberStick" },', "airweapons: bombers get a bomb drop")
+must_contain(AW_CFG, "\t\tButtonPx = 64, -- >= 44 real", "airweapons: fire buttons 64 real px (>= 44)")
+must_contain(AW_SVC, 'RateLimitService.Allow(player, "air_fire", CFG.RemoteRate, CFG.RemoteBurst)', "airweapons: fire requests rate-limited")
+must_contain(AW_SVC, "\tif not CFG.LiveFor(player.UserId) then\n\t\treturn refuse(\"off\")", "airweapons: the server evaluates WeaponsLive / owner override")
+must_contain(AW_SVC, '\tif seat:GetAttribute("WE_SeatRole") ~= "Driver" then\n\t\treturn refuse("not_pilot")', "airweapons: pilot seat only")
+must_contain(AW_SVC, "\tif rec.OwnerUserId ~= player.UserId then\n\t\treturn refuse(\"not_owner\")", "airweapons: the owner's own aircraft only")
+must_contain(AW_SVC, "local dir = clampToArc(d.Unit, chassis.CFrame.LookVector, def.ArcDeg)", "airweapons: the aim is clamped into the weapon arc")
+must_contain(AW_SVC, "CombatDamage.LineOfSight(origin, cd.Part.Position, filter, cd.Model, false, 3)", "airweapons: missile locks need line of sight")
+must_contain(AW_SVC, "pcall(CombatService.ApplyRadiusDamage, attacker, center, radius, def.Damage, {", "airweapons: splash through CombatService.ApplyRadiusDamage")
+must_contain(AW_SVC, "pcall(VehicleHealth.ApplyRadiusDamage, center, radius, def.Damage, attacker, def.Class, {", "airweapons: vehicle splash through VehicleHealth")
+must_contain(AW_SVC, "local ok, res = pcall(CombatService.ApplyHit, attacker, part, amount, opts)", "airweapons: direct hits through CombatService.ApplyHit")
+must_contain(AW_SVC, "if ownerUid == nil or allyUid(attacker, ownerUid) or AirWeaponService.BaseShielded(ownerUid) then", "airweapons: allied / shielded bases never splashed")
+for _aw_bad in ("payload.T", "payload.Target", "TargetUserId", "TargetNpcId", "AddCash", "GiveCash"):
+    must_not_contain(AW_SVC, _aw_bad, f"airweapons: the service never reads `{_aw_bad}`")
+must_contain(AW_ORD, "local res = Workspace:Raycast(rec.Pos, seg, rec.Params)", "airweapons: ordnance is server-stepped with one ray per step")
+must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", 'safeInit("AirWeaponService", AirWeaponService, deps)', "airweapons: Bootstrap inits AirWeaponService")
+must_contain("src/ServerScriptService/Server/Services/GateDefenseService.luau", "local airReach = AircraftWeaponConfig.HitReach(_weaponId)", "airweapons: gates / guards take aircraft hits out to the weapon range")
+must_contain("src/ServerScriptService/Server/Services/CombatService/CombatFx.luau", "I = id, V = velocity, T = maxSeconds, G = g }", "airweapons: WeaponFx launch carries the bomb gravity")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Modules/WeaponVisuals.luau", "math.clamp(tonumber(p.G) or 0, 0, 5)", "airweapons: the client draws falling bombs")
+must_contain("src/ReplicatedStorage/Shared/Configs/AimAssistConfig.luau", "\tAircraft = {\n\t\tClasses = {", "airweapons: aircraft gun assist lives in AimAssistConfig")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'AirNoseGun = { ModelAssetId = 0, Mount = "Cockpit"', "airweapons: aircraft weapons reuse the v79 vehicle-gun hooks (no dress load)")
+must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/VehicleController.luau", "AirWeaponsClient.Init(Remotes.TryGetEvent)", "airweapons: VehicleController starts the fire buttons")
+must_contain(AW_CLI, 'local GUI_NAME = "WarEmpireVehicleWeapons"', "airweapons: fire buttons in their own vehicle ScreenGui (no UIScale)")
+must_contain(AW_CLI, 'if seat and m and m:IsA("Model") and live and seat:GetAttribute("WE_SeatRole") == "Driver" then', "airweapons: buttons only for the pilot with weapons live")
+must_contain(AW_CLI, "b.Hint.Visible = keys and k ~= nil", "airweapons: key hints only when PreferredInput is keyboard / gamepad")
+for _aw_bad in ("RenderStepped", "Heartbeat", "GetDescendants", 'WaitForChild("WE_Remotes")'):
+    must_not_contain(AW_CLI, _aw_bad, f"airweapons: fire buttons never use `{_aw_bad}`")
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

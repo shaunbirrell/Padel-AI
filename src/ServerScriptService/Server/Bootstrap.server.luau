@@ -74,6 +74,7 @@ local GateDefenseService = safeRequire("GateDefenseService", Services.GateDefens
 local ResearchService = safeRequire("ResearchService", Services.ResearchService) -- v69 Research Lab upgrades
 local MissileStrikeService = safeRequire("MissileStrikeService", Services.MissileStrikeService) -- v69 CC strikes
 local PlotOilPumpService = safeRequire("PlotOilPumpService", Services.PlotOilPumpService)
+local AirWeaponService = safeRequire("AirWeaponService", Services.AirWeaponService) -- aircraft weapons (WeaponsLive)
 local StudioBuySmoke = safeRequire("StudioBuySmoke", Modules.StudioBuySmoke)
 
 RemoteSetup.Init() -- idempotent; ensure remotes still present after requires
@@ -120,6 +121,7 @@ local deps: { [string]: any } = {
 	ResearchService = ResearchService,
 	MissileStrikeService = MissileStrikeService,
 	PlotOilPumpService = PlotOilPumpService,
+	AirWeaponService = AirWeaponService,
 }
 
 local function safeInit(label: string, svc: any, ...: any)
@@ -557,6 +559,8 @@ safeInit("PlotOilPumpService", PlotOilPumpService, deps)
 safeInit("SpinnerService", SpinnerService, deps)
 safeInit("ResearchService", ResearchService, deps)
 safeInit("MissileStrikeService", MissileStrikeService, deps)
+-- aircraft weapons: after Combat / Clan / GateDefense (it calls them per shot); dark unless WeaponsLive or the owner
+safeInit("AirWeaponService", AirWeaponService, deps)
 
 -- v70 waterways [J1]: the sea-gate loop (opens an armed plot's sea gate while a boat driven by the owner or a
 -- clan-mate is near). After the services' Init: it reads BaseService owners and GateDefenseService.IsAlly. Guarded —

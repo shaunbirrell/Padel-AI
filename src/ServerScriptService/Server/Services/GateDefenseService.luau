@@ -40,6 +40,7 @@ local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local RaidConfig = require(Shared.Configs.RaidConfig)
 local HudConfig = require(Shared.Configs.HudConfig)
 local WorldLabelConfig = require(Shared.Configs.WorldLabelConfig)
+local AircraftWeaponConfig = require(Shared.Configs.AircraftWeaponConfig) -- aircraft weapon reach (ApplyDamage)
 
 local GateDefenseService = {}
 
@@ -1379,6 +1380,11 @@ function GateDefenseService.ApplyDamage(attacker: Player, hitPart: BasePart, amo
 		return false
 	end
 	local maxDist = if isGuardPart then RaidConfig.Defense.GuardHitMaxDistance else 120
+	-- aircraft weapons (AirWeaponService, hit id "V_<mount>"): out to that weapon's Range + GateReachSlack
+	local airReach = AircraftWeaponConfig.HitReach(_weaponId)
+	if airReach ~= nil and airReach > maxDist then
+		maxDist = airReach
+	end
 	if (root.Position - hitPart.Position).Magnitude > maxDist then
 		return false
 	end

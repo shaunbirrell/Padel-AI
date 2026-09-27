@@ -969,7 +969,7 @@ local function launch(p: Types.WeaponFxPayload)
 	slot.Serial = serial
 	slot.O = p.O
 	slot.V = v :: Vector3
-	slot.G = Workspace.Gravity * (if pd then tonumber(pd.GravityFactor) or 0 else 0)
+	slot.G = Workspace.Gravity * (if pd then tonumber(pd.GravityFactor) or 0 else math.clamp(tonumber(p.G) or 0, 0, 5)) -- G: aircraft bombs
 	slot.T0 = clock()
 	slot.Until = slot.T0 + (tonumber(p.T) or (if pd then pd.MaxSeconds else 2)) + 0.5
 	slot.Live = true

@@ -387,6 +387,14 @@ local VisualAssetConfig = {
 	VehicleWeapons = {
 		VehicleMG = { ModelAssetId = 0, PendingAssetId = 5589684833, Mount = "GunMount", FitScale = 3, Vehicles = { "ArmedJeep" }, HideParts = { "Barrel" }, Note = "0 = Part-kit gun; owner pick Mounted Machine Gun (ifyouaremethaniamyou): pending, P4 (Studio check); Armed 4x4 only" } :: AssetRef,
 		VehicleCannon = { ModelAssetId = 0, PendingAssetId = 3322196012, Mount = "Turret", FitScale = 1.6, KitFamilies = { "TrackedMBT" }, HideParts = { "Turret", "Barrel", "Mantlet" }, Note = "0 = Part-kit turret; owner pick Tank Turret (Nierse217): pending, P4 (Studio check; the store page says it may be asymmetrical); battle tanks only" } :: AssetRef,
+		-- aircraft weapons (AircraftWeaponConfig Weapons[].Hook): no dress yet (0 = no load). AirWeaponService uses each
+		-- ref's Mount kit part as the muzzle / bomb bay, and its allow-list must hold every aircraft that carries it.
+		AirNoseGun = { ModelAssetId = 0, Mount = "Cockpit", FitScale = 0.5, KitFamilies = { "HeliAttack" }, Note = "0 = no dress; attack / gunship helicopter chin gun (muzzle under the cockpit)" } :: AssetRef,
+		AirRocketPods = { ModelAssetId = 0, Mount = "StubWingL", FitScale = 0.6, KitFamilies = { "HeliAttack" }, Note = "0 = no dress; helicopter rocket pods (left stub wing, mirrored right)" } :: AssetRef,
+		AirJetCannon = { ModelAssetId = 0, Mount = "Nose", FitScale = 0.5, Vehicles = { "FighterJet", "InterceptorJet", "LightFighter" }, Note = "0 = no dress; fighter nose cannon (trainer / recon jets stay unarmed)" } :: AssetRef,
+		AirMissileRails = { ModelAssetId = 0, Mount = "WingL", FitScale = 0.4, Vehicles = { "FighterJet", "InterceptorJet", "LightFighter" }, Note = "0 = no dress; fighter missile rails (left wing, mirrored right)" } :: AssetRef,
+		AirStrikeBombs = { ModelAssetId = 0, Mount = "Chassis", FitScale = 0.4, KitFamilies = { "JetStrike" }, Note = "0 = no dress; strike jet bombs under the fuselage" } :: AssetRef,
+		AirBombBay = { ModelAssetId = 0, Mount = "Bay", FitScale = 1, KitFamilies = { "JetBomber" }, Note = "0 = no dress; bomber bomb bay" } :: AssetRef,
 	} :: { [string]: AssetRef },
 
 	-- ATM / collect presentation (StripScripts on insert) — Design Bot prefer free IDs

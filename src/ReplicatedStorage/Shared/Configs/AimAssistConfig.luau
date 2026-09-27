@@ -35,6 +35,18 @@ local AimAssistConfig = {
 	ClassAttribute = "WE_InputClass",
 	ExcludeClanAllies = true,
 	LosPastTorsoStuds = 2,
+	-- Aircraft guns (AirWeaponService, gun mounts only; rockets / bombs never, missiles lock instead): the same rules
+	-- (one target per shot at the gun's own rate, never past the gun Range or MaxRangeStuds, never through walls,
+	-- no clan allies, no spawn-shielded players), with a wider lateral window because the pilot aims the whole
+	-- aircraft. Class = the fire payload's input class, else the player's WE_InputClass.
+	Aircraft = {
+		Classes = {
+			Touch = { LateralStuds = 5, MaxConeDeg = 3 },
+			Gamepad = { LateralStuds = 4, MaxConeDeg = 2.5 },
+			KeyboardAndMouse = { LateralStuds = 2.5, MaxConeDeg = 1.5 },
+		} :: { [string]: AssistClass },
+		MaxRangeStuds = 220,
+	},
 }
 
 return AimAssistConfig
