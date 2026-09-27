@@ -51,9 +51,77 @@ local CombatFairnessConfig = {
 	EscortRequireLos = true, -- escort shots need line of sight (friendly units and the owner never block)
 	UnitKillCashShare = 0.5, -- a kill landed by a squad unit pays the owner this share of the normal kill cash
 	UnitKillXPShare = 1, -- ...and this share of the normal kill XP (kills and mission progress count in full)
-	-- Attack-order hits credit the owner too? Off: Attack units roam with no leash and no line of sight, so an idle
-	-- owner hidden behind a wall near the bank earned ~$9,150 in 10 min in the verifier sim (HEAD: $0). Escort only.
+	-- Attack-order hits credit the owner too? Off: Attack units roam with no leash, so an idle owner hidden behind a
+	-- wall near the bank earned ~$9,150 in 10 min in the verifier sim (HEAD: $0; ATTACK shots then went through
+	-- walls). squadfair: they need a line of sight now, but the missing leash still makes an idle farm, so escort only.
 	UnitKillCreditOnAttack = false,
+
+	-- ── squadfair · every squad unit shot (orders ATTACK and FOLLOW escort; SquadOrdersService.unitShoot) ─────────
+	-- A unit shoots like an NPC: it needs a line of sight from its eyes (NpcEyeHeight) to the target (its squad, the
+	-- owner and the target never block; the escort's ray) and rolls a hit chance that falls with distance. A miss
+	-- spends the fire cooldown like a hit. A hit goes through CombatService's NPC damage path (ApplyUnitHit), so squad
+	-- fire provokes a Passive / grouped NPC (bank guards, Ops garrisons) like a player's shot. Units only ever shoot
+	-- CombatService NPCs: never a player (novice shield, clan allies), never a statue (a WE_NPC model with no NPCId).
+	UnitAttackRequireLos = true, -- ATTACK shots need line of sight too (FOLLOW escort shots: EscortRequireLos)
+	-- Another NPC's body never blocks a squad ray (walls, terrain, vehicles and other players still do): two hostiles
+	-- standing close hid each other from the whole squad, which then stopped shooting and pressed into them.
+	UnitLosIgnoreNPCBodies = true,
+	-- The FOLLOW escort (the default order) never opens fire on a calm Passive NPC (bank guards, Ops garrisons before they
+	-- are provoked), so walking past a quiet site with a squad never starts a fight. Once the group is provoked (your shot,
+	-- a breach, ProvokeRadius, an ATTACK order's hit) the escort defends you. false = the escort shoots calm guards too,
+	-- and its first hit provokes the whole group (ASSUMPTIONS SQF-11; reversible here).
+	EscortIgnoreCalm = true,
+	-- A unit whose nearest hostile is walled off shoots the nearest hostile within its fire range (ATTACK: 85 % of
+	-- AttackRange; FOLLOW escort: AttackRange) it CAN see: a check casts at most this many rays (the nearest hostile
+	-- first, then the next nearest), and only while the nearest is blocked.
+	UnitLosRaysPerCheck = 3,
+	-- With nothing in sight in range, an ATTACK unit keeps closing in (like NpcChaseWithoutLos) for at most
+	-- UnitBlockedChaseSeconds; so does a unit walking at a hostile out of range that gets no UnitChaseProgressStuds
+	-- nearer in that time (a wall in its way: MoveTo walks straight, there is no pathfinding). The blocked timer runs
+	-- only while something is in range to check: it starts over when nothing is (the unit is walking in) and when
+	-- another hostile out of range becomes its target (a swap between hostiles in range keeps it running). Then it
+	-- gives up THAT FIGHT: the hostiles within UnitGiveUpScopeStuds of where the one it chased stood (the last two such
+	-- spots are kept). It still attacks any hostile elsewhere in reach (another group, or the walled one once it walks
+	-- out of that circle); with only a given-up fight in reach it walks its owner's trail like FOLLOW, still shooting
+	-- any hostile it can see in range, so it never walks back to the same wall. A shot into a given-up fight, or the
+	-- order given again (tap ATTACK again), ends the give-ups; a given-up fight with nobody left in it is forgotten.
+	-- The give-up does not restart the blocked timer: after it, a hostile elsewhere beyond range gets a fresh approach,
+	-- but one inside range that it cannot see is given up at once, with no approach, until the timer starts over (so
+	-- three or more walled spots never take turns; only two are remembered).
+	-- 0 = one give-up covers every hostile until a shot or a new order (the round-3 rule). A blocked line is
+	-- re-checked at most once per shot cooldown
+	-- (1 / OrdersConfig.AttackFireRate).
+	UnitChaseWithoutLos = true,
+	UnitBlockedChaseSeconds = 6,
+	UnitChaseProgressStuds = 2,
+	UnitGiveUpScopeStuds = 30,
+	-- The same order again within this many seconds of the last one (a double tap, or a spammed button) changes
+	-- nothing: the blocked re-check wait, the chase timers and a give-up all stay. Later, the same order again is a
+	-- fresh order (a squad that gave up tries once more).
+	UnitRepeatOrderGraceSeconds = 2,
+	-- Hit chance: UnitNearHitChance at or inside UnitNearStuds, falling linearly to UnitFarHitChance at
+	-- OrdersConfig.AttackRange, never below UnitMinHitChance and never above UnitMaxHitChance (the code clamps to it).
+	-- ATTACK units fire only inside 85 % of AttackRange, as before; the FOLLOW escort fires out to AttackRange. Squad
+	-- values, higher than the NPC ones (Npc* above): units used to hit every shot, and the FOLLOW escort is the default
+	-- protection on live. 0.98 / 0.96 is the middle option of the owner's decision A/B (ASSUMPTIONS SQF-5 / SQF-18;
+	-- 0.96 / 0.92 is the lowest that meets the SQF-17 lines, 0.99 / 0.99 the closest to today). Never 1: a squad shot
+	-- can always miss (CLAUDE.md: a hit chance must exist); keep 0 < Far <= Near <= Max < 1 (a BuyPathStatic pin
+	-- parses these numbers, so a retune inside those bounds is a config-only change).
+	UnitNearStuds = 35,
+	UnitNearHitChance = 0.98,
+	UnitFarHitChance = 0.96,
+	UnitMinHitChance = 0.05,
+	UnitMaxHitChance = 0.98,
+	-- Provoke by proxy: a squad hit on a grouped or stance NPC (bank guards, Ops garrisons: any hit on one provokes its
+	-- group and keeps it fighting) is refused unless the owner's living character stands within that NPC type's
+	-- AggroRange of it (or within UnitProvokeOwnerStuds when that is above 0), calm or already provoked. The squad's
+	-- target pick (ATTACK and FOLLOW) skips such NPCs while the owner is out of reach. So a squad never opens a fight
+	-- its owner is not part of, and stops as soon as the owner leaves (the group then calms as usual). Plain Aggressive
+	-- NPCs (every live camp and bank NPC while Jobs are off) are not affected. The group's targets are not changed:
+	-- they take the nearest player, as before.
+	UnitProvokeNeedsOwner = true,
+	UnitProvokeOwnerStuds = 0,
+	UnitHitErrorLogSeconds = 30, -- a failing CombatService.ApplyUnitHit is logged at most once per this many seconds
 
 	-- ── F6 · novice shield (CombatService; owner's 11 features) ──────────────────────────────────────────────────
 	-- A brand-new player (tutorial not complete, profile.NoviceShieldDone false) spawns with a visible ForceField

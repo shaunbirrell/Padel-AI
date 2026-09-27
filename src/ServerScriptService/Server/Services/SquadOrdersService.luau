@@ -3,8 +3,9 @@
 	Squad Orders — server-authoritative Follow / Attack / Hold / Retreat.
 	Extends SoldierService counts + Combat MoveTo patterns. Not a second army economy.
 	P1-4 (mobile plan): Follow is an escort — units shoot hostiles within CombatFairnessConfig.EscortEngageRadius of
-	their player (line of sight required) while staying within EscortLeash of the player. Every unit hit tags the
-	owner as creator (CombatDamage.TagCreator, unit flag), so squad kills credit the owner at UnitKillCashShare.
+	their player (line of sight required) while staying within EscortLeash of the player. An escort hit tags the owner
+	as creator (unit flag), so escort kills credit the owner at UnitKillCashShare; an ATTACK hit does so only with
+	CombatFairnessConfig.UnitKillCreditOnAttack (off: ATTACK kills pay nothing).
 	v71 (HUD v70 spec §4.2 / §5): no per-unit "SQUAD" tags and no "Squad: X" toast per order — the order flashes
 	for OrderBillboardSeconds as one owner-only stud-scaled WorldLabel over the nearest unit (flashOrderBillboard),
 	and the Army popover shows the active order.
@@ -12,6 +13,21 @@
 	straight behind (the old grid stood between the third-person camera and the player). A unit whose straight walk to
 	its slot is blocked (door, narrow lane, stairs) walks the player's own trail (OrdersConfig.FollowPath) and fans back
 	out once its slot is in sight. Helmets are domes (SpecialMesh Sphere on the same part: 0 extra parts).
+	squadfair (CLAUDE.md combat fairness): every unit shot, ATTACK and escort, needs a line of sight (unitHasLos) and
+	rolls a hit chance (unitHitChance, CombatFairnessConfig.Unit*; tests seed it with SetRandomForTests); a miss spends
+	the fire cooldown. A hit goes through CombatService.ApplyUnitHit (the NPC damage path: creator tag, provoke, kill
+	credit), so squad fire wakes passive bank guards and Ops garrisons, but only while the owner is near enough to be
+	part of that fight (CombatService.UnitMayHitNPC). Units only target CombatService NPCs (a WE_NPC model with an
+	NPCId): never a player, never a static statue. A unit whose nearest hostile is walled off shoots the nearest one
+	in range it can see (pickShot, at most UnitLosRaysPerCheck rays); with nothing in sight an ATTACK unit closes in for
+	at most UnitBlockedChaseSeconds (or walks at a hostile out of range until it stops getting nearer), then walks its
+	owner's trail like FOLLOW, still shooting what it sees in range, until it gets a shot into that fight or the order is
+	given again. A give-up holds for its own fight only (the hostiles within UnitGiveUpScopeStuds of where it happened):
+	a hostile anywhere else in reach is still attacked, but the give-up does not restart the blocked timer, so a walled
+	one elsewhere INSIDE the fire band is given up at its first check, with no new approach (on purpose: two spots are
+	remembered, and a fresh approach there would let three walled spots take turns forever).
+	A check that found nothing in sight is repeated at most once per shot cooldown (LosCheckAt). ATTACK units fire only
+	inside 85 % of AttackRange, as before. The same order again within UnitRepeatOrderGraceSeconds changes nothing.
 ]]
 
 local Players = game:GetService("Players")
@@ -26,7 +42,6 @@ local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-
 local WorldLabel = require(Shared.Util.WorldLabel)
 
 local RemoteGuard = require(script.Parent.Parent.Modules.RemoteGuard)
-local CombatDamage = require(script.Parent.CombatService.CombatDamage) -- creator tags + line of sight
 
 local SquadOrdersService = {}
 
@@ -56,6 +71,26 @@ type SquadUnit = {
 	Crumb: number?, -- FollowPath: serial of the trail point this unit walks to while its slot is blocked
 	CrumbScanAt: number, -- FollowPath: no full trail scan before this (a scan found nothing in sight)
 	CrumbCheckAt: number, -- FollowPath: next check that the trail point is still in sight
+	LosBlocked: boolean, -- squadfair: the last shot check found nothing in sight (an ATTACK unit closes in)
+	LosCheckAt: number, -- squadfair: a check that found nothing in sight is not repeated before this (1 / AttackFireRate)
+	BlockedSince: number?, -- squadfair: ATTACK: the first check of this spell with nothing in sight (the chase timeout)
+	GiveUp: boolean, -- squadfair: ATTACK: its only fight in reach is one it gave up on: it walks its owner's trail
+	GiveUpPos: Vector3?, -- squadfair 3.2: where the hostile of the last fight it gave up on stood (that fight = the
+	-- hostiles within UnitGiveUpScopeStuds of it); kept until a shot into that fight or a new order
+	GiveUpPos2: Vector3?, -- ...and of the fight before that one (two walled spots never take turns)
+	ChaseBest: number?, -- squadfair: ATTACK: the nearest it has come to a target out of range during this approach
+	ChaseAt: number, -- ...and when it last came UnitChaseProgressStuds nearer (the no-progress timeout)
+	AimRoot: BasePart?, -- squadfair: the fallback hostile this unit last shot at (it faces it between shots)
+	AimHum: Humanoid?, -- ...and its Humanoid (a dead one is let go)
+	ChaseHum: Humanoid?, -- squadfair: ATTACK: the hostile it chases (the nearest); another one beyond the band = a fresh blocked spell
+}
+
+-- squadfair: up to `cap` hostiles, nearest first (the visible-target fallback). Refilled in place: no table per think.
+type CandList = {
+	Hum: { Humanoid },
+	Root: { BasePart },
+	Dist: { number },
+	N: number,
 }
 
 -- FollowPath: the player's recent positions (newest last) with serials, so a unit keeps its place in the trail
@@ -70,6 +105,7 @@ type SquadState = {
 	Units: { SquadUnit },
 	DesiredCount: number,
 	Mirror: boolean, -- lane C: wings swapped left <-> right (the player turned round; nobody crosses behind them)
+	OrderAt: number?, -- squadfair: when the current order was last given (UnitRepeatOrderGraceSeconds)
 }
 
 local VALID: { [string]: boolean } = {
@@ -84,6 +120,27 @@ local squadByUser: { [number]: SquadState } = {}
 local trailByUser: { [number]: Trail } = {}
 local unitSerial = 0
 local squadFolder: Folder? = nil
+local rng = Random.new() -- squadfair: the unit hit roll (tests seed it with SquadOrdersService.SetRandomForTests)
+local escortCands: CandList = { Hum = {}, Root = {}, Dist = {}, N = 0 } -- squadfair: per player per pass (escort)
+local attackCands: CandList = { Hum = {}, Root = {}, Dist = {}, N = 0 } -- squadfair: per ATTACK unit per think
+-- squadfair: one RaycastParams for every unit line-of-sight ray, its ignore list refilled per ray (no RaycastParams
+-- and no table per ray); the rules of CombatDamage.LineOfSight: Exclude, water ignored, NpcLosRespectCanCollide
+local losParams = RaycastParams.new()
+losParams.FilterType = Enum.RaycastFilterType.Exclude
+losParams.IgnoreWater = true
+local losIgnore: { Instance } = {}
+local npcBodyFolder: Instance? = nil -- squadfair: CombatService's NPC folder (CombatFairnessConfig.UnitLosIgnoreNPCBodies)
+local hitErrLogAt = -math.huge -- squadfair: the last ApplyUnitHit error warning (UnitHitErrorLogSeconds)
+local hitErrMuted = 0 -- ...and the errors not logged since
+
+-- squadfair: the folder CombatService keeps every NPC model in (nil until the first NPC spawns); cached
+local function npcBodies(): Instance?
+	if npcBodyFolder and npcBodyFolder.Parent then
+		return npcBodyFolder
+	end
+	npcBodyFolder = Workspace:FindFirstChild("WarEmpireNPCs")
+	return npcBodyFolder
+end
 
 local function ensureFolder(): Folder
 	if squadFolder and squadFolder.Parent then
@@ -595,6 +652,17 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 		Crumb = nil,
 		CrumbScanAt = 0,
 		CrumbCheckAt = 0,
+		LosBlocked = false,
+		LosCheckAt = 0,
+		BlockedSince = nil,
+		GiveUp = false,
+		GiveUpPos = nil,
+		GiveUpPos2 = nil,
+		ChaseBest = nil,
+		ChaseAt = 0,
+		AimRoot = nil,
+		AimHum = nil,
+		ChaseHum = nil,
 	}
 
 	humanoid.Died:Connect(function()
@@ -618,26 +686,124 @@ local function spawnUnit(owner: Player, slot: number, at: CFrame): SquadUnit?
 	return unit
 end
 
-local function nearestHostile(fromPos: Vector3, maxRange: number): (Humanoid?, BasePart?, number)
+-- squadfair: line-of-sight rays one unit may cast per check (UnitLosRaysPerCheck: the nearest hostile first, then the
+-- next nearest ones in range)
+local function losRayCap(): number
+	return math.clamp(math.floor(tonumber(CombatFairnessConfig.UnitLosRaysPerCheck) or 1), 1, 4)
+end
+
+-- squadfair: a candidate list holds the nearest few hostiles (enough for losRayCap() rays after skipping the nearest
+-- one and any out of the unit's range)
+local function candCap(): number
+	return 2 * losRayCap() + 1
+end
+
+local function candReset(list: CandList)
+	table.clear(list.Hum)
+	table.clear(list.Root)
+	table.clear(list.Dist)
+	list.N = 0
+end
+
+-- keep the `cap` nearest, sorted nearest first (insertion into a list of at most 9)
+local function candInsert(list: CandList, cap: number, hum: Humanoid, root: BasePart, d: number)
+	local n = list.N
+	if n >= cap then
+		if d >= list.Dist[n] then
+			return
+		end
+		n -= 1 -- the furthest one drops out
+	end
+	local i = n + 1
+	while i > 1 and list.Dist[i - 1] > d do
+		list.Hum[i] = list.Hum[i - 1]
+		list.Root[i] = list.Root[i - 1]
+		list.Dist[i] = list.Dist[i - 1]
+		i -= 1
+	end
+	list.Hum[i] = hum
+	list.Root[i] = root
+	list.Dist[i] = d
+	list.N = n + 1
+end
+
+-- squadfair 3.2: is `pos` within `r` of spot `a` or spot `b` (a fight an ATTACK unit gave up on)?
+local function nearSpot(pos: Vector3, a: Vector3?, b: Vector3?, r: number): boolean
+	return (a ~= nil and (pos - a).Magnitude <= r) or (b ~= nil and (pos - b).Magnitude <= r)
+end
+
+--[[ The hostile nearest `fromPos` within `maxRange`. `skipCalm` (squadfair, FOLLOW escort with
+	CombatFairnessConfig.EscortIgnoreCalm): leave out NPCs that hold fire now (CombatService.NPCHoldsFire: a Passive /
+	passive-group NPC whose group is not provoked). `owner` (squadfair): leave out NPCs this owner's squad may not hurt
+	(CombatService.UnitMayHitNPC false: a calm NPC whose owner is not near enough to be part of the fight; the pick only
+	saves shots, CombatService.ApplyUnitHit enforces the rule). `list`: also the hostiles within `listRange`, nearest first
+	(at most candCap()), for the visible-target fallback. squadfair 3.2 (ATTACK): a hostile within `avoidR` of `avoidA` or
+	`avoidB` (the fights this unit gave up on) is never the first result; the nearest such one comes back as the second
+	(its Humanoid, root and distance after the first three). It still goes into `list`. The last two results say
+	whether any live hostile, however far from `fromPos`, still stands within `avoidR` of `avoidA` / `avoidB`. ]]
+local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: boolean?, owner: Player?, list: CandList?, listRange: number?, avoidA: Vector3?, avoidB: Vector3?, avoidR: number?): (Humanoid?, BasePart?, number, Humanoid?, BasePart?, number, boolean, boolean)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
 	local bestDist = maxRange
+	local avoiding = avoidR ~= nil and (avoidA ~= nil or avoidB ~= nil)
+	local zoneHum: Humanoid? = nil
+	local zoneRoot: BasePart? = nil
+	local zoneDist = if avoiding then maxRange else 0
+	local heldA, heldB = false, false
 	local npcTag = Constants.Tags.NPC
+	local holds = if skipCalm == true and CombatService then CombatService.NPCHoldsFire else nil
+	if typeof(holds) ~= "function" then
+		holds = nil
+	end
+	local mayHit = if owner ~= nil and CombatService then CombatService.UnitMayHitNPC else nil
+	if typeof(mayHit) ~= "function" then
+		mayHit = nil
+	end
+	local lr = if list then (listRange or maxRange) else -1
+	local cap = candCap()
+	if list then
+		candReset(list)
+	end
 	for _, inst in ipairs(CollectionService:GetTagged(npcTag)) do
-		if inst:IsA("Model") and not inst:GetAttribute("FriendlySquad") and not inst:GetAttribute("OwnerUserId") then
+		-- squadfair: a CombatService NPC only (it has an NPCId); a static WE_NPC statue takes no damage from any shot
+		if
+			inst:IsA("Model")
+			and not inst:GetAttribute("FriendlySquad")
+			and not inst:GetAttribute("OwnerUserId")
+			and typeof(inst:GetAttribute("NPCId")) == "string"
+		then
 			local hum = inst:FindFirstChildOfClass("Humanoid")
 			local root = inst:FindFirstChild("HumanoidRootPart")
 			if hum and root and root:IsA("BasePart") and hum.Health > 0 then
-				local d = (root.Position - fromPos).Magnitude
-				if d < bestDist then
-					bestDist = d
-					bestHum = hum
-					bestRoot = root
+				local p = root.Position
+				local inA = avoidA ~= nil and avoidR ~= nil and (p - avoidA).Magnitude <= avoidR
+				local inB = avoidB ~= nil and avoidR ~= nil and (p - avoidB).Magnitude <= avoidR
+				heldA = heldA or inA
+				heldB = heldB or inB
+				local d = (p - fromPos).Magnitude
+				if d < bestDist or d < zoneDist or d <= lr then
+					local id = inst:GetAttribute("NPCId")
+					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then
+						if inA or inB then
+							if d < zoneDist then
+								zoneDist = d
+								zoneHum = hum
+								zoneRoot = root
+							end
+						elseif d < bestDist then
+							bestDist = d
+							bestHum = hum
+							bestRoot = root
+						end
+						if list and d <= lr then
+							candInsert(list, cap, hum, root, d)
+						end
+					end
 				end
 			end
 		end
 	end
-	return bestHum, bestRoot, bestDist
+	return bestHum, bestRoot, bestDist, zoneHum, zoneRoot, zoneDist, heldA, heldB
 end
 
 local function faceYaw(root: BasePart, lookAt: Vector3)
@@ -656,69 +822,433 @@ local function unitReady(unit: SquadUnit, now: number): boolean
 	return now - unit.LastFireAt >= 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
 end
 
--- One unit shot (Attack and escort). `credit`: the owner is tagged as creator first (unit flag), so a kill credits
--- the owner. Attack shots credit only with CombatFairnessConfig.UnitKillCreditOnAttack: Attack units roam without a
--- leash or line of sight, so an idle owner hidden near respawning NPCs would farm cash (verifier sim: bank guards).
+-- squadfair: the unit hit chance at `dist` studs: UnitNearHitChance up to UnitNearStuds, falling linearly to
+-- UnitFarHitChance at OrdersConfig.AttackRange, never below UnitMinHitChance (the CombatNPC.HitChance curve, squad keys)
+-- and never above UnitMaxHitChance (itself never above 0.99: a squad shot can always miss, whatever the config says)
+local function unitHitChance(dist: number): number
+	local C = CombatFairnessConfig
+	local maxRange = OrdersConfig.AttackRange or 55
+	local nearD = C.UnitNearStuds
+	local chance: number
+	if dist <= nearD or maxRange <= nearD then
+		chance = C.UnitNearHitChance
+	else
+		local t = math.clamp((dist - nearD) / (maxRange - nearD), 0, 1)
+		chance = C.UnitNearHitChance + (C.UnitFarHitChance - C.UnitNearHitChance) * t
+	end
+	local hi = math.min(tonumber(C.UnitMaxHitChance) or 0.95, 0.99)
+	local lo = math.min(tonumber(C.UnitMinHitChance) or 0.05, hi)
+	return math.clamp(chance, lo, hi)
+end
+
+-- Tests seed the unit hit roll; production never calls this and uses an unseeded Random (CombatNPC.SetRandom pattern)
+function SquadOrdersService.SetRandomForTests(seedOrRandom: any)
+	if typeof(seedOrRandom) == "Random" then
+		rng = seedOrRandom
+	elseif typeof(seedOrRandom) == "number" then
+		rng = Random.new(seedOrRandom)
+	else
+		rng = Random.new()
+	end
+end
+
+--[[ One unit shot (Attack and escort); the caller has checked the line of sight. The shot spends the fire cooldown,
+	then rolls unitHitChance at the target's distance (squadfair: a miss spends it too). A hit goes through
+	CombatService.ApplyUnitHit, the NPC damage path (provokes a Passive / grouped NPC; never a player). `credit`: the
+	owner is tagged as creator (unit flag), so a kill credits the owner. Attack shots credit only with
+	CombatFairnessConfig.UnitKillCreditOnAttack: Attack units roam without a leash, so an idle owner hidden near
+	respawning NPCs would farm cash (verifier sim: bank guards). No CombatService = no damage. An ApplyUnitHit error
+	deals nothing and is logged at most once per UnitHitErrorLogSeconds (the rest are counted). Returns true on a hit. ]]
 local function unitShoot(player: Player, unit: SquadUnit, th: Humanoid, now: number, credit: boolean): boolean
 	if not unitReady(unit, now) then
 		return false
 	end
-	unit.LastFireAt = now
-	if credit then
-		CombatDamage.TagCreator(th, player, true)
+	local model = th.Parent
+	local troot = if model then model:FindFirstChild("HumanoidRootPart") else nil
+	if troot == nil or not troot:IsA("BasePart") then
+		return false
 	end
-	th:TakeDamage((OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage")) -- v69 research
-	return true
+	unit.LastFireAt = now -- a miss spends the cooldown like a hit
+	if rng:NextNumber() >= unitHitChance((troot.Position - unit.Root.Position).Magnitude) then
+		return false
+	end
+	local apply = if CombatService then CombatService.ApplyUnitHit else nil
+	if typeof(apply) ~= "function" then
+		return false
+	end
+	local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit) -- v69 research
+	if not ok then
+		-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)
+		if now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then
+			warn(string.format("[WAR EMPIRE] SquadOrdersService: CombatService.ApplyUnitHit failed (%d more since the last warning): %s", hitErrMuted, tostring(dealt)))
+			hitErrLogAt = now
+			hitErrMuted = 0
+		else
+			hitErrMuted += 1
+		end
+		return false
+	end
+	return typeof(dealt) == "number" and dealt > 0
 end
 
--- Escort line of sight: the unit's squad, the owner and the target itself never block
-local function escortHasLos(player: Player, unit: SquadUnit, troot: BasePart): boolean
-	if not CombatFairnessConfig.EscortRequireLos then
+-- Unit line of sight (escort and, squadfair, ATTACK): a ray from the unit's eyes to the target root; the squads, the
+-- owner and the target itself never block, nor (UnitLosIgnoreNPCBodies) another NPC's body: two hostiles standing
+-- close must not hide each other from the squad (each blocked the ray to the other and the squad stopped shooting).
+-- The rules of CombatDamage.LineOfSight with no target (nothing may be hit; Exclude, water ignored, non-collidable
+-- decor per NpcLosRespectCanCollide), cast here with the one cached losParams and its reused ignore list (squadfair:
+-- no RaycastParams and no table per ray)
+local function unitHasLos(player: Player, unit: SquadUnit, troot: BasePart): boolean
+	local eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+	local delta = troot.Position - eye
+	if delta.Magnitude < 1e-3 then
 		return true
 	end
-	local ignore: { Instance } = { unit.Model, ensureFolder() }
+	table.clear(losIgnore)
+	table.insert(losIgnore, unit.Model)
+	table.insert(losIgnore, ensureFolder())
+	if CombatFairnessConfig.UnitLosIgnoreNPCBodies == true then
+		local bodies = npcBodies()
+		if bodies then
+			table.insert(losIgnore, bodies)
+		end
+	end
 	local targetModel = troot.Parent
 	if targetModel then
-		table.insert(ignore, targetModel)
+		table.insert(losIgnore, targetModel)
 	end
 	if player.Character then
-		table.insert(ignore, player.Character :: Instance)
+		table.insert(losIgnore, player.Character :: Instance)
 	end
-	local eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
-	return CombatDamage.LineOfSight(eye, troot.Position, ignore, nil, CombatFairnessConfig.NpcLosRespectCanCollide)
+	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
+	losParams.FilterDescendantsInstances = losIgnore -- the property takes a copy of the list
+	local blocked = Workspace:Raycast(eye, delta, losParams) ~= nil
+	table.clear(losIgnore) -- the Lua list holds no model between checks (the next ray's list replaces the property's)
+	return not blocked
+end
+
+--[[ squadfair: the shot a ready unit takes now. The primary hostile `th` when it is within `range` of the unit and
+	(with `requireLos`) in sight; else, with `requireLos`, the nearest hostile of `list` (not `th`) within `range` of the
+	unit that it can see, nearest first, casting at most UnitLosRaysPerCheck rays in all. Returns (hostile, root, rays
+	cast); no hostile = nothing to shoot now (rays 0: nothing was in range to check). ]]
+local function pickShot(player: Player, unit: SquadUnit, th: Humanoid, troot: BasePart, range: number, list: CandList, requireLos: boolean): (Humanoid?, BasePart?, number)
+	local from = unit.Root.Position
+	local inRange = (troot.Position - from).Magnitude <= range
+	if not requireLos then
+		if inRange then
+			return th, troot, 0
+		end
+		return nil, nil, 0
+	end
+	local cap = losRayCap()
+	local rays = 0
+	if inRange then
+		rays = 1
+		if unitHasLos(player, unit, troot) then
+			return th, troot, rays
+		end
+	end
+	for i = 1, list.N do
+		if rays >= cap then
+			break
+		end
+		local h, r = list.Hum[i], list.Root[i]
+		if h ~= th and h.Health > 0 and r.Parent ~= nil and (r.Position - from).Magnitude <= range then
+			rays += 1
+			if unitHasLos(player, unit, r) then
+				return h, r, rays
+			end
+		end
+	end
+	return nil, nil, rays
+end
+
+-- squadfair: a shot check is due: the gun is ready, and a check that found nothing in sight waits one shot cooldown
+local function losCheckDue(unit: SquadUnit, now: number): boolean
+	return unitReady(unit, now) and now >= unit.LosCheckAt
+end
+
+-- squadfair: a check cast rays and found nothing in sight: the next one waits 1 / AttackFireRate
+local function losBlockedFor(unit: SquadUnit, now: number)
+	unit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)
+	unit.LosBlocked = true
+	unit.AimRoot = nil
+	unit.AimHum = nil
+end
+
+-- squadfair: where a unit looks while it fights: the fallback hostile it last shot at, while that one stands, else `troot`
+local function aimPoint(unit: SquadUnit, troot: BasePart): Vector3
+	local a, h = unit.AimRoot, unit.AimHum
+	if a ~= nil and a.Parent ~= nil and h ~= nil and h.Health > 0 then
+		return a.Position
+	end
+	unit.AimRoot = nil
+	unit.AimHum = nil
+	return troot.Position
+end
+
+-- squadfair: an ATTACK unit's blocked-chase timers start over (a shot, no hostile in reach, a new order)
+local function clearChase(unit: SquadUnit)
+	unit.LosBlocked = false
+	unit.BlockedSince = nil
+	unit.ChaseBest = nil
+	unit.ChaseAt = 0
+	unit.ChaseHum = nil
+end
+
+-- squadfair: ...and the fights it gave up on are forgotten (a shot into one of them, a new order)
+local function resetChase(unit: SquadUnit)
+	clearChase(unit)
+	unit.GiveUp = false
+	unit.GiveUpPos = nil
+	unit.GiveUpPos2 = nil
 end
 
 --[[ P1-4 escort (order Follow): `th` / `troot` is the hostile nearest the PLAYER within EscortEngageRadius (picked
 	once per think pass). The unit closes in only as far as the leash allows, drifts back when it is beyond the leash,
-	and shoots when the hostile is within AttackRange with a clear line. Returns false when there is nothing to fight
-	(the caller then runs the plain follow move). ]]
+	and shoots when the hostile is within AttackRange with a clear line. squadfair: when this unit cannot shoot it (out
+	of range or walled off), it shoots the next hostile near the player (escortCands, nearest to the player first) that
+	is within its range and in sight (pickShot), and closes in on that one instead of walking at the walled-off one
+	(same leash). Returns false when there is nothing to fight (the caller then runs the plain follow move). ]]
 local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playerRoot: BasePart, th: Humanoid?, troot: BasePart?, now: number): boolean
 	if th == nil or troot == nil or th.Health <= 0 or troot.Parent == nil then
+		unit.AimRoot = nil
+		unit.AimHum = nil
 		return false
 	end
 	local leash = CombatFairnessConfig.EscortLeash
 	local range = OrdersConfig.AttackRange or 55
 	local playerPos = playerRoot.Position
 	local unitPos = unit.Root.Position
-	local dist = (troot.Position - unitPos).Magnitude
 	local fromPlayer = (unitPos - playerPos).Magnitude
-	faceYaw(unit.Root, troot.Position)
+	-- squadfair: the shot first (the unit faces what it shoots), then the escort's walk as before
+	if losCheckDue(unit, now) then
+		local sh, sr, rays = pickShot(player, unit, th, troot, range, escortCands, CombatFairnessConfig.EscortRequireLos == true)
+		if sh and sr then
+			unit.LosBlocked = false
+			unit.AimRoot = if sh ~= th then sr else nil
+			unit.AimHum = if sh ~= th then sh else nil
+			unitShoot(player, unit, sh, now, true)
+		elseif rays > 0 then
+			losBlockedFor(unit, now)
+		end
+	end
+	local aimAt = aimPoint(unit, troot) -- the fallback hostile it shoots, else the one nearest the player
+	local dist = (aimAt - unitPos).Magnitude
+	faceYaw(unit.Root, aimAt)
 	if fromPlayer > leash then
 		-- back to the formation slot next to the player (still shooting on the way when possible)
 		unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position)
 	elseif dist > range * 0.85 then
 		-- close in, but never past 90 % of the leash from the player
-		local off = troot.Position - playerPos
+		local off = aimAt - playerPos
 		local maxOff = leash * 0.9
-		local goal = if off.Magnitude > maxOff then playerPos + off.Unit * maxOff else troot.Position
+		local goal = if off.Magnitude > maxOff then playerPos + off.Unit * maxOff else aimAt
 		unit.Humanoid:MoveTo(goal)
 	else
 		unit.Humanoid:MoveTo(unitPos)
 	end
-	if dist <= range and unitReady(unit, now) and escortHasLos(player, unit, troot) then
-		unitShoot(player, unit, th, now, true)
-	end
 	return true
+end
+
+-- The plain FOLLOW walk: the unit's slot beside the player, or the player's trail when the slot is cut off
+-- (followGoal). squadfair: also an ATTACK unit that gave up a blocked chase (UnitBlockedChaseSeconds).
+local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart, trail: Trail?, probe: Probe?, now: number)
+	local offset = unitOffset(st, unit.Slot)
+	local slotPos = (playerRoot.CFrame * CFrame.new(offset)).Position
+	local target = followGoal(unit, playerRoot.CFrame, offset, slotPos, trail, probe, followPathCfg(), now)
+	if followSlotList() == nil then
+		-- old grid (FollowSlots empty): the original player-distance rules
+		local dist = (unit.Root.Position - playerRoot.Position).Magnitude
+		local stop = OrdersConfig.FollowStopDistance or 6
+		if dist > (OrdersConfig.FollowDistance or 10) then
+			unit.Humanoid:MoveTo(target)
+			faceYaw(unit.Root, playerRoot.Position)
+		elseif dist > stop then
+			unit.Humanoid:MoveTo(target)
+		else
+			unit.Humanoid:MoveTo(unit.Root.Position)
+		end
+		return
+	end
+	-- Follow slots sit 5.7-15.5 studs from the player, so arrival is measured to the slot: a unit walks facing
+	-- where it goes and, once in its slot, stands facing where the player faces (the old "face the player
+	-- beyond 10 studs" rule would crab-walk the outer wings sideways)
+	local toGoal = flatDist(target, unit.Root.Position)
+	if toGoal > (OrdersConfig.FollowArriveStuds or 2) then
+		unit.Humanoid:MoveTo(target)
+		if toGoal > 4 then
+			faceYaw(unit.Root, target)
+		end
+	else
+		unit.Humanoid:MoveTo(unit.Root.Position)
+		faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.LookVector * 8)
+	end
+end
+
+-- squadfair 3.2: how far from where a unit gave up a hostile may stand and still belong to that fight
+-- (UnitGiveUpScopeStuds; 0 or less = every hostile does: a give-up holds until a shot or a new order, the round-3 rule)
+local function giveUpScope(): number
+	local s = tonumber(CombatFairnessConfig.UnitGiveUpScopeStuds) or 30
+	return if s > 0 then s else math.huge
+end
+
+-- squadfair 3.2: the unit gives up the fight around `at` (and keeps the one before it)
+local function giveUpFight(unit: SquadUnit, at: Vector3)
+	unit.GiveUpPos2 = unit.GiveUpPos
+	unit.GiveUpPos = at
+	unit.GiveUp = true
+end
+
+-- squadfair: has any unit of this squad given up a chase (it walks the owner's trail and needs the FollowPath probe)?
+local function anyGaveUp(st: SquadState): boolean
+	for _, u in ipairs(st.Units) do
+		if u.GiveUp then
+			return true
+		end
+	end
+	return false
+end
+
+--[[ squadfair: one ATTACK unit's think. The hostile nearest the unit within AttackAggroRange that this squad may hurt
+	(nearestHostile with the owner) is its target. When the gun is ready it shoots that one if it is within the fire
+	band (85 % of AttackRange, as before) and in sight, else the nearest one in the band it can see (pickShot). It
+	walks at its target while that is beyond the band, and keeps closing in while nothing is in sight
+	(UnitChaseWithoutLos). It gives up after UnitBlockedChaseSeconds with nothing in sight, or with no
+	UnitChaseProgressStuds gained on a target out of the band, and then walks its owner's trail like FOLLOW (still
+	shooting what it can see in the band) until it gets a shot or the order is given again. The blocked timer counts
+	only checks that had something in the band to look at: a check with nothing in the band (the unit is walking in),
+	and another hostile beyond the band becoming its target (the old one down, gone, out of reach or no longer the
+	nearest), start it over; a swap between hostiles in the band keeps it running (nothing in the band is in sight
+	either way). squadfair 3.2: a give-up holds for the fight where it happened only (the hostiles within
+	UnitGiveUpScopeStuds of the spot; the last two spots are kept): its target is the nearest hostile outside those
+	fights, so another group, or the walled one once it walks out, is attacked as usual; only when nothing else is in
+	reach does it stay given up. A shot into a fight it gave up on ends those give-ups; a new order ends them too; a
+	given-up fight with no hostile left in it is forgotten. The give-up does NOT restart the blocked timer (round 3.3,
+	deliberate): after a give-up, a new target beyond the band gets a fresh approach, but a walled one inside the band
+	is given up at its first blocked check, with no approach, until the timer starts over (a shot, a check with nothing
+	in the band, nothing in reach, a target beyond the band, a new order). Only two spots are remembered, so a fresh
+	approach inside the band would let three or more walled spots take turns forever (reviewer S1 / S2). ]]
+local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playerRoot: BasePart?, now: number, trail: Trail?, probe: Probe?)
+	local aggro = OrdersConfig.AttackAggroRange or 120
+	local band = (OrdersConfig.AttackRange or 55) * 0.85 -- HEAD's ATTACK fire band: it fires only once this close
+	local scope = giveUpScope()
+	-- squadfair 3.2: `nh` is the nearest hostile outside the fights this unit gave up on, `zh` the nearest inside one
+	local nh, nroot, dist, zh, zroot, zdist, heldA, heldB = nearestHostile(unit.Root.Position, aggro, false, player, attackCands, band, unit.GiveUpPos, unit.GiveUpPos2, scope)
+	-- a given-up fight with no hostile left in it (all down or gone) is forgotten: whoever comes there later is new
+	if unit.GiveUpPos2 ~= nil and not heldB then
+		unit.GiveUpPos2 = nil
+	end
+	if unit.GiveUpPos ~= nil and not heldA then
+		unit.GiveUpPos = unit.GiveUpPos2
+		unit.GiveUpPos2 = nil
+	end
+	-- only a fight it gave up on is in reach: that fight's nearest hostile stays its target and it stays given up
+	local givenUp = nh == nil and zh ~= nil
+	if givenUp then
+		nh, nroot, dist = zh, zroot, zdist
+	end
+	if nh == nil or nroot == nil then
+		candReset(attackCands)
+		-- nothing in reach: the fights it gave up on are kept (no walk back to the same wall once it is in reach again)
+		clearChase(unit)
+		unit.GiveUp = false
+		unit.AimRoot = nil
+		unit.AimHum = nil
+		if playerRoot then
+			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
+		end
+		return
+	end
+	if unit.GiveUp and not givenUp then
+		-- it leaves a given-up fight for a hostile elsewhere. Not a fresh start: beyond the band the ChaseHum change below
+		-- restarts the blocked timer (a fresh approach), but inside the band the timer keeps running from the give-up, so
+		-- a walled newcomer there is given up at its first blocked check, with no approach. Deliberate: a fresh approach
+		-- here would let three walled spots take turns (only two are remembered)
+		unit.ChaseHum = nil
+	end
+	unit.GiveUp = givenUp
+	-- squadfair: another hostile is the nearest now (the one it chased is down, gone, out of reach or no longer the
+	-- nearest): a fresh approach, and a fresh blocked spell when it stands beyond the band (no stale give-up timer
+	-- from the old target). A swap between hostiles in the band keeps the blocked timer (3.2: nearest swaps along a
+	-- wall must not keep a unit pressed on it)
+	if unit.ChaseHum ~= nh then
+		if dist > band then
+			unit.BlockedSince = nil
+		end
+		unit.ChaseBest = nil
+		unit.ChaseHum = nh
+	end
+	-- squadfair: a shot needs a clear line (UnitAttackRequireLos, the escort's ray); checked when the gun is ready
+	if losCheckDue(unit, now) then
+		-- `th`: the hostile it shoots now (the nearest one, or the nearest one in the band it can see)
+		local th, troot, rays = pickShot(player, unit, nh, nroot, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)
+		if th and troot then
+			-- squadfair 3.2: a shot into a fight it gave up on ends those give-ups (from here nothing blocks that fight);
+			-- a shot elsewhere keeps them (no walk back to the old wall)
+			if nearSpot(troot.Position, unit.GiveUpPos, unit.GiveUpPos2, scope) then
+				resetChase(unit)
+			else
+				clearChase(unit)
+			end
+			unit.ChaseHum = nh
+			unit.AimRoot = if th ~= nh then troot else nil
+			unit.AimHum = if th ~= nh then th else nil
+			unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true) -- P1-4
+		elseif rays > 0 then
+			losBlockedFor(unit, now)
+			if unit.BlockedSince == nil then
+				unit.BlockedSince = now
+			end
+		else
+			unit.BlockedSince = nil -- nothing in the band to check (it is walking in): no stale blocked timer
+		end
+	end
+	candReset(attackCands) -- hold no reference to the NPCs between thinks
+	local giveUpAfter = tonumber(CombatFairnessConfig.UnitBlockedChaseSeconds) or math.huge
+	if not unit.GiveUp then
+		local since = unit.BlockedSince
+		if since ~= nil and now - since >= giveUpAfter then
+			giveUpFight(unit, nroot.Position) -- nothing in sight for UnitBlockedChaseSeconds
+		elseif dist > band then
+			local best = unit.ChaseBest
+			if best == nil or dist <= best - (tonumber(CombatFairnessConfig.UnitChaseProgressStuds) or 2) then
+				unit.ChaseBest = dist
+				unit.ChaseAt = now
+			elseif now - unit.ChaseAt >= giveUpAfter then
+				giveUpFight(unit, nroot.Position) -- no nearer in UnitBlockedChaseSeconds: something is in its way
+			end
+		else
+			unit.ChaseBest = nil
+		end
+	end
+	if unit.GiveUp then
+		-- squadfair: no pressing on a wall; back to the owner's trail until a shot into that fight, a hostile elsewhere
+		-- or a new order
+		unit.AimRoot = nil
+		unit.AimHum = nil
+		if playerRoot then
+			followMove(st, unit, playerRoot, trail, probe, now)
+		else
+			unit.Humanoid:MoveTo(unit.Root.Position)
+		end
+		return
+	end
+	local aimAt = aimPoint(unit, nroot)
+	faceYaw(unit.Root, aimAt)
+	if unit.AimRoot ~= nil then
+		-- squadfair: it shoots a visible hostile (the fallback): it closes in on that one only, never on the walled-off one
+		if (aimAt - unit.Root.Position).Magnitude > band then
+			unit.Humanoid:MoveTo(aimAt)
+		else
+			unit.Humanoid:MoveTo(unit.Root.Position)
+		end
+	elseif dist > band then
+		unit.Humanoid:MoveTo(nroot.Position)
+	elseif unit.LosBlocked and CombatFairnessConfig.UnitChaseWithoutLos == true then
+		unit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up
+	else
+		unit.Humanoid:MoveTo(unit.Root.Position)
+	end
 end
 
 local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: number, escortHum: Humanoid?, escortRoot: BasePart?, trail: Trail?, probe: Probe?)
@@ -735,36 +1265,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 		if escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now) then
 			return
 		end
-		local offset = unitOffset(st, unit.Slot)
-		local slotPos = (playerRoot.CFrame * CFrame.new(offset)).Position
-		local target = followGoal(unit, playerRoot.CFrame, offset, slotPos, trail, probe, followPathCfg(), now)
-		if followSlotList() == nil then
-			-- old grid (FollowSlots empty): the original player-distance rules
-			local dist = (unit.Root.Position - playerRoot.Position).Magnitude
-			local stop = OrdersConfig.FollowStopDistance or 6
-			if dist > (OrdersConfig.FollowDistance or 10) then
-				unit.Humanoid:MoveTo(target)
-				faceYaw(unit.Root, playerRoot.Position)
-			elseif dist > stop then
-				unit.Humanoid:MoveTo(target)
-			else
-				unit.Humanoid:MoveTo(unit.Root.Position)
-			end
-			return
-		end
-		-- Follow slots sit 5.7-15.5 studs from the player, so arrival is measured to the slot: a unit walks facing
-		-- where it goes and, once in its slot, stands facing where the player faces (the old "face the player
-		-- beyond 10 studs" rule would crab-walk the outer wings sideways)
-		local toGoal = flatDist(target, unit.Root.Position)
-		if toGoal > (OrdersConfig.FollowArriveStuds or 2) then
-			unit.Humanoid:MoveTo(target)
-			if toGoal > 4 then
-				faceYaw(unit.Root, target)
-			end
-		else
-			unit.Humanoid:MoveTo(unit.Root.Position)
-			faceYaw(unit.Root, unit.Root.Position + playerRoot.CFrame.LookVector * 8)
-		end
+		followMove(st, unit, playerRoot, trail, probe, now)
 		return
 	end
 
@@ -802,22 +1303,7 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	end
 
 	if order == "Attack" then
-		local aggro = OrdersConfig.AttackAggroRange or 120
-		local range = OrdersConfig.AttackRange or 55
-		local th, troot, dist = nearestHostile(unit.Root.Position, aggro)
-		if troot then
-			faceYaw(unit.Root, troot.Position)
-			if dist > range * 0.85 then
-				unit.Humanoid:MoveTo(troot.Position)
-			else
-				unit.Humanoid:MoveTo(unit.Root.Position)
-				if th and th.Health > 0 and dist <= range then
-					unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true) -- P1-4
-				end
-			end
-		elseif playerRoot then
-			unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(0, 0, -12)).Position)
-		end
+		attackUnit(player, st, unit, playerRoot, now, trail, probe)
 		return
 	end
 end
@@ -1014,6 +1500,13 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 		return false, "NoSquad"
 	end
 
+	-- squadfair: the same order again soon after (a double tap, a spammed button) is not a new order: the blocked
+	-- re-check wait, the chase timers and a give-up stay (UnitRepeatOrderGraceSeconds)
+	local now = os.clock()
+	local repeatOrder = order == st.Order
+		and st.OrderAt ~= nil
+		and now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)
+	st.OrderAt = now
 	st.Order = order :: OrderId
 	if order == "Hold" then
 		for _, u in ipairs(st.Units) do
@@ -1024,6 +1517,15 @@ function SquadOrdersService.SetOrder(player: Player, orderRaw: any): (boolean, s
 	else
 		for _, u in ipairs(st.Units) do
 			u.HoldPos = nil
+		end
+	end
+	for _, u in ipairs(st.Units) do
+		-- squadfair: a blocked line is never re-checked early (not even by a new order: at most one check per cooldown)
+		u.LosCheckAt = math.max(u.LosCheckAt, now)
+		if not repeatOrder then
+			resetChase(u) -- a new order (or ATTACK again after the grace) starts with no stale chase / given-up state
+			u.AimRoot = nil
+			u.AimHum = nil
 		end
 	end
 
@@ -1149,18 +1651,22 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					trail = recordTrail(player, proot, pathCfg)
 				end
 				if st and #st.Units > 0 then
-					-- P1-4 escort: one hostile pick per player per pass (nearest to the player)
+					-- P1-4 escort: one hostile pick per player per pass (nearest to the player); squadfair: plus the
+					-- hostiles near the player for the visible-target fallback (escortCands), only ones this squad may hurt
 					local escortHum: Humanoid?, escortRoot: BasePart? = nil, nil
 					if st.Order == "Follow" and proot then
-						escortHum, escortRoot = nearestHostile(proot.Position, CombatFairnessConfig.EscortEngageRadius)
+						local r = CombatFairnessConfig.EscortEngageRadius
+						escortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)
 						updateMirror(st, proot.CFrame)
-						if pathCfg and probe == nil then
-							probe = buildProbe(pathCfg)
-						end
+					end
+					-- lane C FollowPath (squadfair: also ATTACK once a unit has given up a chase: it walks the trail)
+					if (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then
+						probe = buildProbe(pathCfg)
 					end
 					for _, unit in ipairs(st.Units) do
 						thinkUnit(player, st, unit, now, escortHum, escortRoot, trail, probe)
 					end
+					candReset(escortCands) -- hold no reference to the NPCs between passes
 				end
 			end
 		end

@@ -5482,3 +5482,523 @@ only, NOT in Roblox.
 
 - **OFG-F3 (integrator, supersedes the band numbers above).** A review found that `GateDefenseService.ApplyDamage` refuses a player's gate hit when their root is more than 120 studs from the barrier part's centre, while the numbers above used the rifle ray's reach (124). The real Starter Rifle siege band at L4/L5 is therefore about 106 to 120 studs out on the centre line (about 13.5 studs, wider off the axis), not 106-124. The 120 now lives in config as `GateDefenseConfig.GateHitMaxDistance` (pinned; aircraft weapons may extend it). The cap `AutoGunOutsideMaxRange = 100` is unchanged and still leaves the band. Revert: set the config back or inline 120. The phone test says "about 105 to 120".
 - **BG-F2 (integrator).** The bank phone test names the starter car by its in-game name "Field 4x4" (not a brand), and describes the guard respawn spot as "away from where you are standing" (the sight test uses the character's eye, so a third-person camera can sometimes see the spot). Reviewer Low notes kept as follow-ups: a behaviour test for a camper standing on a guard post (today pinned as text), the seated health bar has no icon, and a chain of allies arriving one after another can each rob one clearing (bounded by the 90 s cap and the 300 s personal cooldown).
+
+## 2026-09-27 — squadfair v3: squad unit shots follow CLAUDE.md combat fairness (round 3, refix 3.3)
+
+**What this replaces.** The round-2 entry (squadfair/v2/assumptions.md) and the first build's SQF-1..13. Neither was
+merged. This entry is appended to 90cad49's ASSUMPTIONS.md and ships in the same commit as the 5 lane files.
+
+**Base.** Built on 5e021d8, rebased onto 5f38c2e and 3b5ac28, and at refix 3.3 onto 90cad49 (live v81 9475f8b + dropper
+v1a 882faf9 + XP X1 90cad49). `git diff 3b5ac28 90cad49` touches none of the four .luau files, so they carry over as they
+are. `tools/BuyPathStatic.py` is 90cad49's file with the lane block inserted before its final `parse_gate()`; every
+90cad49 line is kept.
+
+**Refix 3.3 (comments + config + pins; no code line changed).**
+- **Give-up rule, stated as built (SQF-3; reviewer-3.3 option (a)).** Refix 3.2 said that leaving a given-up fight
+  starts a fresh approach with no stale timer. That was true only for a target beyond the fire band (46.75 studs).
+    - **The rule.** The give-up does not restart the blocked timer, and neither does a switch to a hostile inside the
+      band. So after a give-up, a walled hostile elsewhere inside the band is given up at its first blocked check, with
+      no approach. This lasts until the timer starts over: a shot, a check with nothing in the band, nothing in reach, a
+      target beyond the band, or a new order. It applies after the usual give-up (nothing in sight for 6 s inside the
+      band); a no-progress give-up beyond the band may leave the timer stopped (SQF-3).
+    - **Why it is kept.** Only two give-up spots are remembered. With a really fresh approach there (the reviewer's
+      prototype), three walled spots took turns forever: 115–120 wall-press goals per 10 s for 60 s.
+    - **Where it is stated.** The comments in `SquadOrdersService` (header, `attackUnit`, the leave branch, the `ChaseHum`
+      field) and in `CombatFairnessConfig` now say this. SQF-3 below and the phone test say it too.
+- **Driver rows (new `w4/sqf33_s.luau`: the reviewer's S1 and S2; 9 of 9 pass on cand7).**
+    - **S1: a new walled Infantry B, units held beside the owner.**
+        - Control (a fresh ATTACK at B, 40 studs away): 80 goals at B, the last at 6.1 s.
+        - After every unit gave up walled A, B at 40 studs: 0 goals whether A is still there or despawned just before.
+          Every unit is back on the owner's trail at 0.3 s.
+        - A gone, then 1.2 s with nothing in reach, then B at 40 studs: 75 goals (a fresh approach).
+        - B at 60 studs (beyond the band), A there or gone: 75 / 75 goals.
+    - **S2: three walled spots 40 studs apart, ATTACK left on for 60 s.** Wall-press goals per 10 s: 75,0,0,0,0,0. Unit
+      rays: 3.75/s per unit (the cap).
+    - **HEAD (head7).** 5 of 9 rows pass. HEAD has no give-up: it shoots through walls.
+- **Pinned in BuyPathStatic.** Two pins cover this: the leave branch's text (its comment says the rule), and a code-only
+  pin (comments ignored). The code pin requires the leave branch to be only `unit.ChaseHum = nil`, and `giveUpFight` to
+  touch no blocked timer. Both pins fail on head7.
+    - **Mutation M24 (the reviewer's proto_fresh: leave branch = `clearChase`).** It fails both pins and driver rows S1b,
+      S1c and S2b: 75 goals at B, and 120,115,120,115,120,115 wall-press goals per 10 s.
+    - **Mutation M25 (a give-up clears `BlockedSince`).** It fails 2 pins and the same 3 rows: 30 goals at B, and the
+      same S2 cycling.
+- **Hit chances 0.98 near / 0.96 far (was 0.96 / 0.92; SQF-5, SQF-18).**
+    - **What it is.** The lead's reversible pick of the middle option for owner decisions A and B, pending the owner's
+      own answer.
+    - **Changing it.** Config only. The numeric pin (0 < Far <= Near <= Max < 1) is unchanged, `UnitMaxHitChance` stays
+      0.98, and a retune inside those bounds passes BuyPathStatic (mutations M1, M1b, M15).
+    - **Numbers** (b32; cand7 runs byte-identical to the refix-3.2 0.98 / 0.96 option runs; SQF-18):
+        - RINGF bank clear 32.0 s (HEAD 27.2, 0.96 / 0.92: 36.6).
+        - Clear before the first guard is back: 132 of 400 runs (HEAD 331, 0.96 / 0.92: 51).
+        - Stand-still escort, survived past 8 s: 111 of 400 (HEAD 136, 0.96 / 0.92: 83).
+- **Suite change from the hit chance (single seed, disclosed).** `adv_squad` went from 5/0 to 4/1. Its "bank is
+  winnable" check fails because the "cover, never peeks, ATTACK" run's loot window is 11.0 s against 11.1 s needed (one
+  0.125 s step), player HP 4. Refix 3.2 gave 11.1 s (a pass with no margin) and HP 28; HEAD gives 11.8 s and HP 40.
+    - **Cause: the hit chance.** The same tree at 0.96 / 0.92 passes 5/0, and at 0.99 / 0.99 it also fails, 4/1, at
+      11.0 s. The window is first death + 18 s − last death. Every run downs the last guard at 7.5 s, so the 0.1 s lost
+      at the higher hit chances comes from the first death.
+    - **The 120-seed line to read.** It is the b32 B_HIDE_ATK bank line, one line per process. There 0.98 / 0.96 is
+      better than 0.96 / 0.92 (below).
+
+**Refix 3.2 (code + config + restated balance).**
+- **Give-up scoped to its fight (SQF-3).** A unit that gives up a blocked chase now gives up that fight only: the
+  hostiles within the new `UnitGiveUpScopeStuds` (30) of where the one it chased stood. Its target is the nearest hostile
+  outside the fights it gave up on (the last two are kept), so ATTACK left on still goes after another group, or after
+  the walled one once it walks out. Round 3.1 kept one give-up for every hostile until a shot or a new order.
+- **Blocked timer on in-band swaps (SQF-3).** A swap of the nearest hostile between two hostiles inside the fire band
+  keeps the blocked timer running (round 3.1 restarted it, so a strafing owner kept units pressed on a wall).
+- **Balance restated (SQF-17).** The bank-ring acceptance now measures the kill time with no guard respawns (the
+  round-3.2 reviewer's RINGN line): the old ring medians passed only in geometries where today's squad already missed the
+  18 s respawn. Two owner-visible trade-offs are disclosed instead of claimed away, and wait for the owner's decision
+  (SQF-18): the ring clear with respawns (about 27 → 37 s) and the stand-still FOLLOW escort (saves a standing player 34 %
+  → 21 % of the time). The hit chances stayed 0.96 / 0.92 at 3.2 (3.3 raised them, above).
+
+**Refix 3.1 (config only).** `UnitNearHitChance` went from 0.94 to 0.96 and `UnitFarHitChance` from 0.90 to 0.92. The
+lone-Infantry acceptance in SQF-17 was restated so that it can't pass on a knife-edge: the median must hold with margin and
+the mean must hold too, both with a fixed and with a random tap phase.
+
+**Files (5, plus this entry in `ASSUMPTIONS.md`).**
+- `src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau`
+- `src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau`
+- `src/ServerScriptService/Server/Services/CombatService/init.luau`
+- `src/ServerScriptService/Server/Services/SquadOrdersService.luau`
+- `tools/BuyPathStatic.py`: 82 squadfair pins appended. They replace refix 3.2's 81: one is restated, one is new (the 3.3
+  code pin), and one is relabelled.
+
+**Reversibility.** Every item can be undone from config or with a small code change.
+
+**Evidence.** Everything below comes from the headless stand-in, which is NOT Roblox. The drivers are in
+`scratchpad/squadfair/w3` (refix 3.2: `w32`; refix 3.3: `w4`). Nothing was measured on a device. The phone checks are
+in `phone_test.md`.
+
+- **SQF-1 Line of sight on every unit shot (ATTACK and FOLLOW escort).**
+    - **The ray.** One ray from the unit's eye (root + `NpcEyeHeight`) to the target root.
+    - **What never blocks it.** The squads folder, the owner's character, the target, and (v3,
+      `UnitLosIgnoreNPCBodies`) any other NPC's body. Non-collidable decor doesn't block either
+      (`NpcLosRespectCanCollide`). Walls, terrain, vehicles and other players do.
+    - **Switches.** `UnitAttackRequireLos` for ATTACK and `EscortRequireLos` for FOLLOW.
+    - **No allocation per ray.** One module-level `RaycastParams` and a reused ignore list. The NPC folder is found by
+      name once and cached.
+    - **Ray cost, measured (squad_fair_v2 V1/V2/X9, default config):**
+        - Clear line: 1 ray per shot, 1.25 rays/s per unit (shot cadence 0.8 s).
+        - Blocked, one walled hostile: 1.25 rays/s per unit.
+        - Blocked, three walled hostiles in range: 3.75 rays/s per unit (`UnitLosRaysPerCheck` = 3 per check).
+        - ATTACK re-sent every 0.5 s for 20 s (the order remote's limit) with three walled hostiles: still 3.75 unit
+          rays/s per unit. Round 2 measured 6.00 under the same spam.
+        - After a give-up the unit walks its owner's trail and the FollowPath probe casts its own rays: 3.60 rays/s per
+          unit blocked (3.50 under the order spam), against 5.00 for FOLLOW at the same spots. ATTACK builds that probe
+          only once a unit has given up: 0 probes while every unit is shooting (round 2 built one per think pass).
+        - All of it is server-side in the 0.4 s think loop, never per frame.
+        - Refix 3.2 adds no ray: the given-up-fight test is a distance check inside the target pick the unit already
+          runs (squad_fair_v2 output identical to refix 3.1).
+- **SQF-2 Visible-target fallback (both orders).**
+    - **ATTACK.** The nearest hostile within `AttackAggroRange` that this squad may hurt (3.2: outside the fights the unit
+      gave up on, SQF-3) is the unit's target. When
+      that one is out of the fire band or walled off, the unit shoots the nearest hostile inside the band that it can
+      see (`pickShot`), at most `UnitLosRaysPerCheck` rays per check including the first. While it shoots a fallback
+      target it closes in only on that one.
+    - **FOLLOW escort.** The candidates are the hostiles near the player, nearest to the player first, within the
+      unit's range; the escort walks toward the one it shoots, inside the same 20-stud leash.
+    - **Measured (X1, every roll forced to hit).** ATTACK: nearest A behind a wall, B in the open at 39 studs: A 0, B
+      1520 (HEAD: 1520 on A through the wall). FOLLOW: B2 in the open took 1000 (HEAD: 0).
+- **SQF-3 A blocked ATTACK chase gives up that fight only.**
+    - **The give-up.** With nothing in sight a unit still closes in (`UnitChaseWithoutLos`), but for at most
+      `UnitBlockedChaseSeconds` (6 s). An approach that gains less than `UnitChaseProgressStuds` (2) in 6 s gives up too
+      (a wall in the way; there is no pathfinding).
+    - **3.2: scoped to its fight.** The unit records where the hostile it gave up on stood; the last two such spots are
+      kept. The hostiles within `UnitGiveUpScopeStuds` (30) of a spot are that fight. The unit's target is the nearest
+      hostile outside those fights. Only when nothing else is in reach does it take the nearest one inside a fight it gave
+      up on; then it walks its owner's trail like FOLLOW and still shoots anything it can see in the fire band.
+    - **What ends a give-up.** A shot into that fight (from where the unit now stands nothing blocks it); a new order
+      (ATTACK again after the 2 s grace); the fight emptying (every hostile in it down or gone, so a group that comes there
+      later is a new fight). The walled one walking more than 30 studs out of its spot makes it a hostile "elsewhere".
+    - **What keeps it.** A second hostile behind the same wall; the owner walking away and coming back while the walled
+      one lives (no walk back to the same wall each time it comes within 120 studs); two walled spots (both are kept, so
+      they never take turns).
+    - **3.3: after a give-up, a walled hostile elsewhere inside the band gets no approach (deliberate).**
+        - **How it works.** The give-up does not restart the blocked timer. Leaving a given-up fight restarts it only
+          when the new target stands beyond the band. So a walled hostile that is not part of the given-up fight but
+          stands inside the band is given up at its first blocked check (within one think, 0.4 s), with no approach.
+          This holds after the usual give-up: nothing in sight for 6 s, with the target inside the band. A give-up for no
+          progress on a target beyond the band can leave the timer stopped, and then the next walled one gets up to a
+          normal approach.
+        - **What restarts the timer.** A shot, a check with nothing in the band (the owner walked on), nothing in reach,
+          a target beyond the band, or a new order. After any of these, the next walled one gets a normal 6 s approach.
+        - **Why.** It stops three or more walled spots from taking turns, since only two spots are remembered.
+        - **Refix 3.2 was wrong about this.** It claimed "a fresh approach with no stale timer" here; that was false
+          inside the band (reviewer-3.3 S1).
+        - **Cost.** A second hidden enemy within about 45 studs of a squad that just gave up is not approached. The
+          squad still shoots it as soon as a unit can see it. HEAD shoots it through the wall.
+    - **Blocked timer (v3, 3.2).** It counts only checks that had something in the band to look at. It starts over when a
+      check finds nothing in the band (the unit is walking in) and when a hostile beyond the band becomes the target (no
+      stale timer: stale driver G2b, walled 5.5 s then a hostile 116 studs away in the open: 280 damage, unchanged). 3.2: a
+      swap of the nearest between two hostiles inside the band keeps it running, since nothing in the band is in sight
+      either way. Round 3.1 restarted it, and the round-3.2 reviewer's X2 (strafing owner, 3 Infantry behind a wall) kept
+      4-5 of 5 units pressed on the wall for 40 s. 3.3: the give-up itself does not restart it either (above).
+    - **Measured (headless stand-in, crude walk; ATTACK given once and never tapped again).**
+
+      | Case (driver) | Refix 3.1 | Refix 3.2 | HEAD |
+      |---|---|---|---|
+      | Walled 9 s, then 3 Aggressive Infantry in the open 75 / 100 studs, or 3 Post guards 70 studs (reviewer X1B) | killed 0/3 in every row; owner lost 540 / 0 / 150 HP | 3/3 in every row, 6.5 / 9.3 / 6.9 s; 50 / 0 / 0 HP | 3/3, 5.7 / 8.5 / 6.1 s |
+      | Walled 9.5 s, one hostile in the open 75 studs, 20 s (reviewer X1: + 60 s idle, 100 studs) | 0 / 0 / 0 damage | 880 / 880 / 800 | 880 / 880 / 800 |
+      | Walled 7 s or 12 s (every unit gave up), then a new group 70 or 100 studs away, ahead or to the side (G1, 8 rows + 9 s / 85 studs / 45°) | 0/3 in all 9 rows; owner lost up to 550 HP | 3/3 in all 9 rows, 5.5–9.3 s | 3/3 in all 9 rows |
+      | Walled one still there (nearest), a group 75 studs behind / beside the owner (G2) | 0/3 at 180° and 90° (nearest-scope prototype: 0/3) | 3/3 at 180° and 90° (walled one 1e6 or 80 HP), walled one untouched | 3/3 at 180°, 0/3 at 90° (shoots the walled one through the wall; 3/3 when it has 80 HP) |
+      | The walled one walks 70 studs out into the open (G3), 20 s | 0 (sticky) | 840 damage | 872 |
+      | A second hostile behind the same wall, 12 studs from the first (G4), 15 s | same as 3.2 | 0 chase goals at the wall; nearest unit stays 27 studs back | shoots through the wall |
+      | Two walled spots 50 studs apart, units held at the wall (G7), 30 s | same as 3.2 | 75 chase goals in the first 14 s, 0 after | — |
+      | Strafing owner, 3 Infantry behind a wall, 40 s (reviewer X2, 5 rows) | 0,0,4,5,4 units still on the wall | 0,0,0,0,0 | 0 (shoots through) |
+      | Nearest swap every 2 s / 5 s between a walled pair (reviewer v3x E5b / E5c) | give-up defeated (275 / 110 wall goals) | give-up holds (0 wall goals) | — |
+      | Camp with one member behind cover, owner 95 studs back (G6, 4 seeds) | same as 3.2 | 3/3 in 14.9–15.6 s | 3/3 in 11.7–12.0 s (through the wall) |
+      | After every unit gave up walled A: a new walled B 40 studs to the side, 12 s (reviewer-3.3 S1; 3.3 rows S1b / S1c) | — | 0 goals at B (A still there, or despawned just before); all units on the owner's trail at 0.3 s. Control (fresh ATTACK at B): 80 goals, 6.1 s | shoots B through the wall |
+      | The same with 1.2 s of nothing in reach first (S1d), or B at 60 studs, beyond the band (S1e / S1f) | — | 75 / 75 / 75 goals (a fresh approach) | — |
+      | Three walled spots 40 studs apart, ATTACK left on 60 s (reviewer-3.3 S2; row S2b) | — | wall-press goals per 10 s 75,0,0,0,0,0 (a fresh in-band approach: 120,115,120,115,120,115) | 0 (shoots through) |
+
+      X1B / X1 / X2 / E5 refix-3.1 numbers are the round-3.2 reviewer's runs; the G rows ran here on a refix-3.1 tree
+      (`w32/cand31`: 4 of the driver's 18 checks pass there, 18 of 18 on 3.2). Outputs: `w32/runs`, `w3/runs/*_32`.
+      The 3.2 column is the refix-3.2 code, which 3.3 keeps. Its rows re-ran on cand7 (90cad49 base, 0.98 / 0.96):
+      g32 18/18, x2 X1 880 / 880 / 880 / 880 / 800 and X2 0,0,0,0,0, x1b 3/3 in every row (after a give-up: 5.7 / 8.5 / 6.9 s), and the
+      new S rows 9/9 (`w4/runs/cand7`).
+    - **Limit (disclosed).** A hostile in the open within 30 studs of a spot where the squad gave up, while the walled one
+      there still lives, counts as that same fight. The squad then stays with its owner until a unit can shoot it from
+      inside the fire band (G5b: 0 damage in 15 s with the owner 64 studs away, 504 once the owner walks up). Today's squad
+      shoots the walled one through the wall instead (0 on the new one in both halves). Once the walled one is down, the
+      fight is forgotten and a newcomer there is attacked (G5a: 648 damage with the owner back).
+    - **Assumption.** 30 studs is about one camp's spread (an outpost group stands within ~25 studs of its centre) and
+      less than the 46.75-stud fire band. `UnitGiveUpScopeStuds = 0` restores the refix-3.1 rule.
+    - The FOLLOW escort has no give-up; its 20-stud leash bounds it, as on HEAD.
+- **SQF-4 Blocked re-checks are throttled; a repeated order changes nothing.**
+    - A check that finds nothing in sight sets `LosCheckAt = now + 1 / AttackFireRate`. A clear shot is throttled by the
+      fire cooldown. Cost: a unit whose line has just cleared may shoot up to one think (0.4 s) later than on HEAD.
+    - **v3.** An order never moves `LosCheckAt` earlier (`max(LosCheckAt, now)`). The same order again within
+      `UnitRepeatOrderGraceSeconds` (2 s) keeps the chase timers and the given-up fights (a double tap or a spammed
+      button). Later, the same order is a fresh order, so tapping ATTACK again sends a squad that gave up once more.
+    - **Measured.** R1: four ATTACK taps 0.5 s apart: the give-up still comes ~6 s after the first tap. R2: ATTACK 10 s
+      later sends the squad again. V2 above: rays under order spam stay at the cap.
+- **SQF-5 The hit chance uses squad values.**
+    - `UnitNearHitChance` 0.98 at or inside `UnitNearStuds` 35, falling linearly to `UnitFarHitChance` 0.96 at
+      `AttackRange` 55, floor `UnitMinHitChance` 0.05, ceiling `UnitMaxHitChance` 0.98. So a unit misses 2 % of its shots
+      up close and 4 % at the edge of its range.
+    - **Refix 3.1.** Round 3 shipped 0.94 / 0.90. That passed the lone-Infantry line only on a knife-edge, so the values
+      went up one notch to 0.96 / 0.92 (SQF-17).
+    - **Refix 3.3 (lead decision, reversible).** 0.98 / 0.96 is the middle of the three options put to the owner for
+      decisions A and B (SQF-18). 0.96 / 0.92 remains the lowest pair that meets every SQF-17 line; 0.98 / 0.96 meets
+      every b32 line with more margin (SQF-17 table). To go back, or to take option 3 (0.99 / 0.99 with
+      `UnitMaxHitChance` 0.99), change the config only.
+    - **v3: a code cap.** The code clamps the chance to `UnitMaxHitChance`, itself never above 0.99, so no config value
+      gives a certain hit. A BuyPathStatic pin parses the numbers and checks 0 < Far <= Near <= Max < 1, so a retune
+      inside those bounds is a config-only change.
+    - There is no fast-target penalty: squad targets are NPCs, and the server does not sample NPC speed.
+    - **Measured hit rates** (squad_fair_v2 on cand7, 2,500 shots each):
+
+      | Distance | Measured | Configured |
+      |---|---|---|
+      | 12 studs | 0.980 | 0.98 |
+      | 30 studs | 0.981 | 0.98 |
+      | 45 studs | 0.962 | 0.97 |
+
+      At 0.96 / 0.92 (refix 3.1) they were 0.958 / 0.960 / 0.934.
+- **SQF-6 A miss spends the fire cooldown.** All-miss and all-hit squads roll at the same cadence.
+- **SQF-7 The hit roll uses a module-level Random, unseeded in production.** The test hook is
+  `SquadOrdersService.SetRandomForTests`; a grep of `src/` finds no production caller.
+- **SQF-8 Hits go through the NPC damage path.** `CombatService.ApplyUnitHit` → `hurtNPC`: creator tag, group
+  provoke, kill credit, OnNPCDeath. The call is pcall'd; an error is warned at most once per
+  `UnitHitErrorLogSeconds` (30) with the count of muted errors (X5: 410 failing calls in 65 s gave 3 warnings, 0
+  damage).
+- **SQF-9 Squads never hurt players.** `ApplyUnitHit` refuses any player character (a shielded novice, a clan ally,
+  anyone). Unchanged.
+- **SQF-10 Squads target CombatService NPCs only** (a WE_NPC model with an `NPCId`); statues are never shot.
+- **SQF-11 `EscortIgnoreCalm = true` (reversible in config).**
+    - The FOLLOW escort never opens fire on a calm Passive / passive-group NPC (bank guards, Ops garrisons before they
+      are provoked). Without it, since squad hits now provoke, the default order started the whole bank fight on the
+      walk in (first build: every H2 FOLLOW raider died before the breach).
+    - `false` = the escort shoots calm guards too, and its first hit provokes the group.
+    - No effect on the live game while Jobs are OFF: today's bank guards are Aggressive and ungrouped.
+- **SQF-12 Kill credit is unchanged.** Escort hits tag the owner and pay `UnitKillCashShare`; ATTACK hits with
+  `UnitKillCreditOnAttack = false` leave no tag and pay nothing (V5: one payout per kill, never two).
+- **SQF-13 No provoke by proxy (Jobs ON only).**
+    - **v3: every hit.** A squad hit on a grouped or stance NPC (bank guards, Ops garrisons: any hit on one provokes
+      its group and keeps it fighting) is refused unless the owner's living character is within that NPC type's
+      `AggroRange` of it (`UnitProvokeOwnerStuds` replaces it when above 0), calm or already provoked. Round 2 gated only
+      calm NPCs, so an owner who came near for one hit could walk away while his ATTACK squad kept the group fighting a
+      bystander (reviewer V4).
+    - **Target picks.** ATTACK and FOLLOW skip such NPCs while the owner is out of reach
+      (`CombatService.UnitMayHitNPC`), so units don't walk at them or roll shots. Plain Aggressive NPCs (every live camp
+      and bank NPC while Jobs are off) are not affected.
+    - **v3: no provoker rule.** Round 2's SQF-14 (a provoked group aims at the first player who hit it) is dropped: it
+      let one player switch a guard group off for a teammate (reviewer V3/V8/V9). Guards take the nearest engageable
+      player, exactly as on HEAD; `CombatNPC.thinkStance` differs from HEAD only by the shared `holdsFire` helper.
+    - **Measured.** X8g: owner near for the first hit (group wakes 3/3), then 250 studs away for 40 s: 0 further squad
+      damage, the group calms (0/3), and a bystander who then stands beside the guards for 20 s takes 0. X8h: no shot at a
+      provoked grouped NPC while the owner is out of reach (0 rolls); a plain Aggressive NPC is still shot with the owner
+      250 studs away. V4: 0 squad damage after the owner leaves. V3a/b/c, V8, V9: the raider beside awake guards is shot
+      at (792 / 840 / 720 / 744 / 1020), as on HEAD.
+- **SQF-14 ATTACK keeps HEAD's fire band (v3).** An ATTACK unit fires only once its target is within 0.85 ×
+  `AttackRange` (46.75 studs), as on HEAD; the fallback candidates are limited to the same band. So ATTACK is never
+  stronger than today's (round 2 fired out to 55 studs; G3: a hostile held at 52 studs takes 0 on HEAD and on v3). The
+  FOLLOW escort keeps firing out to `AttackRange`, as on HEAD.
+- **SQF-15 Another NPC's body never blocks a squad ray (new, `UnitLosIgnoreNPCBodies = true`).**
+    - Found in the round-3 balance runs: in the stand-in, whose NPCs do not collide, two hostiles standing on top of
+      each other each blocked the ray to the other, so the squad stopped shooting and pressed into them. 3 units vs a
+      lone Infantry (plus a respawned one on the same spot) left it alive after 30 s in 7 of 238 seeds.
+    - HEAD's FOLLOW escort has the same blind spot (X10b: 0 damage on HEAD). Roblox NPCs do collide, so a full overlap
+      is rarer there, but one body can still hide another.
+    - Cost: a squad can hit a hostile standing right behind another NPC. `false` restores NPC bodies as cover.
+    - Measured (X10): two overlapping hostiles, 10 s: ATTACK 520 damage and the escort 520 (both 0 with the flag off).
+- **SQF-16 No new remote traffic and no tracers.** No per-hit feedback (`NoAttackerFb`); a credited kill still toasts
+  "Squad: X down (+$N)".
+- **SQF-17 Balance (the two sections below).**
+- **SQF-18 Two owner decisions (refix 3.2; the lead took the middle option at refix 3.3, reversible).** See "Owner
+  decisions" at the end of the live section.
+
+### Live (Jobs OFF) balance
+The squad values in SQF-5 keep the live FOLLOW escort and ATTACK kill times close to today's build on clean-start lines.
+Two moments change more than the 2–4 % of squad damage lost to misses (5–8 % at refix 3.2's 0.96 / 0.92). They are the
+owner's call (SQF-18): the bank clear when guards come back, and a player who stands still next to an outpost group on
+FOLLOW.
+
+**How it was measured.**
+- **Three drivers**, all from the headless stand-in, all placing the squad before any NPC spawns (clean start):
+    - **r31.** The refix-3.1 reviewer's driver (`w31/mk_r31.py`, copied unchanged): lone-Infantry lines with a fixed
+      tap phase (seeds 41001–41600) and a random one (51001–51800), full lines (31001–31200), bank lines (61001–61120).
+    - **mk_bal.** The builder's driver (`w3/bal/mk_bal.py` through `fast.sh`): full lines on seeds 101–160, lone-Infantry
+      lines on 1001–1300.
+    - **b32 (new at 3.2).** The round-3.2 reviewer's driver (`w32/bal/mk_b32.py`, copied unchanged; run by
+      `w32/bal/b32.sh`). Its own seeding (a lowbias32 chain); the squad settles in its real FOLLOW slots; every layout
+      at a random bearing, the tap at a random 0–0.8 s phase. It adds the **faced, random-bearing bank ring** with and
+      without guard respawns (RINGF / RINGN, seeds 93501–93900), the full lines with a random facing (93001–93400),
+      lone-Infantry lines (94001–95000) and bank lines (96001–96200). Its aggregates also report the **stand-still
+      survival past 8 s, paired, with an exact McNemar p** (`w32/bal/agg_extra.py`, `w32/agg_fs_all.py`).
+    - **b32 bank lines one per process (new at 3.2, `w32/bal/b32bank1.sh`).** The chained bank mode (r31 and b32) runs
+      four bank lines in one process; each line draws its bank spot and player id from the `math.random` stream the NPC
+      AI also consumes, so a change in one line moves every later line. The one-line-per-process runs (seeds
+      96001–96120) are the ones to read.
+- **Reproducibility.** My b32 HEAD runs are byte-identical to the reviewer's (ring 400/400, full 400/400, TTK
+  1000/1000, bank 199/200), and so are the 3.1 candidate runs I repeated (ring, full, TTK, and the 0.99 variants).
+- **Refix 3.2 vs 3.1 on these lines.** Every clean-start open-ground line is byte-identical to refix 3.1: b32 ring
+  400/400, full 400/400, TTK 1000/1000; r31 fixed-phase TTK 600/600, random-phase TTK 800/800, full 200/200; mk_bal
+  TTK 298/300. No unit gives up in these fights, so the 3.2 rule never runs there, and every number below that is not a
+  bank-with-cover line is a property of the 0.96 / 0.92 hit chance. mk_bal runs its chained S3 bank-with-cover section
+  before its clean-start lines and that section does change (below), so 2 of its TTK seeds and 50 of its 60 full-line
+  seeds moved through the chain, not through the code.
+- **Refix 3.3 (0.98 / 0.96, on cand7 = 90cad49 + the lane).**
+    - **b32.** Ring, full, TTK and the four bank lines (one per process) ran on cand7 with no override. They are
+      byte-identical, seed for seed, to the refix-3.2 option runs (cand3r with a 0.98 / 0.96 override): ring 400 / 400,
+      full 400 / 400, TTK 1000 / 1000, and the one bank line that had an option run (B_HIDE_ATK) 120 / 120. So the
+      90cad49 base changes none of these lines.
+    - **Base check on HEAD.** head7 (90cad49) gives the same results as head3 (5e021d8): the bank lines 120 / 120 seeds
+      per line, the ring 400 / 400 and the TTK lines 1000 / 1000 (full lines not re-run on head7).
+    - **r31.** The fixed-phase, random-phase and full lines were re-run on cand7.
+    - **Not re-run.** mk_bal, and the r31 / b32 chained bank modes. Their rows below are still the 0.96 / 0.92 values.
+
+**Acceptance (all must hold; restated at refix 3.2).**
+- FOLLOW shoot-back HP within 3 of HEAD, on every driver.
+- **ATTACK kill time without respawns** within +10 % of HEAD's median: the faced, random-bearing bank ring with every
+  respawn moved away (b32 RINGN), and the outpost clear (every clear ends before an 18 s respawn), on every driver that
+  has the line.
+- `0 < Far <= Near <= Max < 1`.
+- **Lone Infantry** (ATTACK; 5 and 3 units; 30 and 45 studs), unchanged from refix 3.1: every line must pass on r31
+  with a fixed and a random tap phase, on mk_bal and (new) on b32:
+    - **(a) Median, with margin.** Within +25 % of HEAD's median, and the upper end of the 95 % CI of the share of runs
+      slower than 1.25 × HEAD's median stays below 50 %.
+    - **(b) Mean.** Within +25 % of HEAD's mean, and so is the upper end of its paired-bootstrap 95 % CI.
+- **Why the ring line was restated.** Rounds 3 and 3.1 accepted the bank-ring clear time *with* guard respawns
+  (r31 and mk_bal medians +4.0 % / +5.8 %). Those two geometries already put today's squad past the first respawn
+  (r31: 0 of 200 HEAD clears under 28 s, median 31.5 s), so the line could not see the respawn threshold. In a faced,
+  random-bearing approach today's squad usually downs every guard before the first one comes back; the candidate
+  usually does not. That is not a kill-time line any more; it is decision A below, disclosed and not claimed as met.
+
+**Lone Infantry, 5 units** (r31; the 3-unit lines pass on every row: medians within +0 % / −11 %, at most 3.1 % of runs
+over the limit).
+
+| Near / Far | Tap phase | 30 studs: median, share over (CI upper), mean (CI upper) | 45 studs: median, share over (CI upper), mean (CI upper) | Verdict |
+|---|---|---|---|---|
+| HEAD 5e021d8 | fixed | 1.500 s | 1.875 s | — |
+| HEAD 5e021d8 | random | 1.375 s (mean 1.411) | 1.875 s (mean 1.925) | — |
+| 0.94 / 0.90 (round 3) | fixed | +0 %, 44.5 % (48.5), +22.3 % (24.3) | **+26.7 %, 52.8 % (56.8)**, +21.6 % (23.3) | **fails (a)** |
+| 0.94 / 0.90 (round 3) | random | +18.2 %, **48.1 % (51.6)**, **+26.7 % (28.7)** | +20.0 %, **49.9 % (53.3)**, +15.7 % (17.2) | **fails (a), (b)** |
+| 0.95 / 0.92 | fixed | +0 %, 38.3 % (42.2), +19.2 % (21.1) | +6.7 %, 44.5 % (48.5), +19.4 % (21.1) | meets |
+| 0.95 / 0.92 | random | +18.2 %, 43.1 % (46.6), +24.0 % (**25.9**) | +13.3 %, 42.8 % (46.2), +13.0 % (14.4) | **fails (b)** at 30 studs |
+| 0.96 / 0.92 (refix 3.1 / 3.2) | fixed | +0 %, 33.3 % (37.1), +16.7 % (18.6) | +6.7 %, 39.8 % (43.8), +17.7 % (19.2) | meets |
+| 0.96 / 0.92 (refix 3.1 / 3.2) | random | +9.1 %, 37.8 % (41.1), +21.0 % (22.9) | +13.3 %, 39.0 % (42.4), +11.7 % (13.1) | meets |
+| 0.96 / 0.93 | fixed | +0 %, 33.3 % (37.1), +16.7 % (18.6) | +6.7 %, 39.0 % (42.9), +17.4 % (19.0) | meets |
+| 0.96 / 0.93 | random | +9.1 %, 37.2 % (40.6), +20.7 % (22.6) | +13.3 %, 38.0 % (41.4), +11.4 % (12.8) | meets |
+| **0.98 / 0.96 (refix 3.3, this build)** | fixed | +0 %, 19.5 % (22.7), +9.7 % (11.3) | +0 %, 24.0 % (27.4), +11.8 % (13.4) | meets |
+| **0.98 / 0.96 (refix 3.3, this build)** | random | +9.1 %, 21.6 % (24.5), +12.0 % (13.6) | +6.7 %, 23.1 % (26.0), +6.1 % (7.2) | meets |
+
+The round-3 rows use the refix-3.1 reviewer's outputs for the same driver and seeds (`v3review_balance_1/out`),
+scored with `w31/ttkacc.py`. Every other row was run at refix 3.1; at refix 3.2 the 0.96 / 0.92 rows were re-run on
+the 3.2 code and came out byte-identical (fixed phase 600 of 600 seeds, random phase 800 of 800). The 0.98 / 0.96 rows
+ran at refix 3.3 on cand7 (`w32/r31out/{fx,ph}_c7`, scored with `w4/r31agg/ttkacc.py`).
+
+**The acceptance lines at 0.98 / 0.96 (this build, refix 3.3; every line meets its limit).**
+
+| Line | Driver | HEAD | Candidate 0.98 / 0.96 | Limit |
+|---|---|---|---|---|
+| FOLLOW shoot-back HP, clean start | b32, 400 seeds | 79.64 | 79.44 (−0.19, CI −0.38..−0.04) | within 3: meets |
+| FOLLOW shoot-back HP, clean start | r31, 200 seeds | 72.29 | 72.29 (+0.00) | within 3: meets |
+| FOLLOW shoot-back HP vs 3 Infantry | r31 | 93.95 | 93.85 (−0.10) | within 3: meets |
+| Bank ring kill time, no respawns (RINGN: faced, random bearing), median | b32, 400 | 27.20 s | 28.00 s (+2.9 %, CI +2.6..+3.3) | +10 %: meets |
+| Outpost clear (ATTACK), median | b32, 400 | 12.40 s | 12.60 s (+1.6 %, CI +0.8..+2.4) | +10 %: meets |
+| Outpost clear (ATTACK), median | r31 | 10.88 s | 11.12 s (+2.2 %, CI +0.5..+4.7) | +10 %: meets |
+| Lone Infantry 5 units, 30 / 45 studs | b32, 1000 seeds, random phase | 1.40 / 2.00 s | medians +0 % / +2.5 %; over 1.25× 16.8 % (Wilson hi 19.2) / 0.0 %; means +9.8 % (CI hi 11.1) / +1.8 % | meets |
+| Lone Infantry 3 units, 30 / 45 studs | b32 | 3.00 / 2.95 s | medians +0 % / +1.7 %; means +0.0 % / +0.6 % | meets |
+| Lone Infantry 5 units, 30 / 45 studs | r31, fixed phase, 600 seeds | 1.500 / 1.875 s | medians +0 % / +0 %; over 1.25× 19.5 % (CI hi 22.7) / 24.0 % (27.4); means +9.7 % (CI hi 11.3) / +11.8 % (13.4) | meets |
+| Lone Infantry 5 units, 30 / 45 studs | r31, random phase, 800 seeds | 1.375 / 1.875 s | medians +9.1 % / +6.7 %; over 1.25× 21.6 % (24.5) / 23.1 % (26.0); means +12.0 % (13.6) / +6.1 % (7.2) | meets |
+| Lone Infantry 3 units, 30 / 45 studs | r31, both phases | 3.125 / 3.500 s (fixed) | medians +0 %; means within −5.7 % .. +0.6 % | meets |
+
+Outputs: `w32/bal/out/{ring,full,ttk}_c7`, `w32/bal/out/b1_*_{c7,h7}`, `w32/r31out/{fx,ph,full}_c7`. Scored with
+`w32/bal/agg32.py`, `aggring.py`, `agg_extra.py`, `w4/agg_bank4.py` and `w4/r31agg/{ttkacc,agg}.py`.
+
+**The acceptance lines at 0.96 / 0.92 (refix 3.2, kept for comparison).**
+
+| Line | Driver | HEAD | Candidate | Limit |
+|---|---|---|---|---|
+| FOLLOW shoot-back HP, clean start | b32, 400 seeds | 79.64 | 79.11 (−0.53, CI −0.82..−0.27) | within 3: meets |
+| FOLLOW shoot-back HP, clean start | r31, 200 seeds | 72.29 | 72.21 (−0.08, CI −0.24..0.00) | within 3: meets |
+| FOLLOW shoot-back HP vs 3 Infantry | r31 | 93.95 | 93.80 (−0.15) | within 3: meets |
+| FOLLOW shoot-back HP, clean start | mk_bal, 60 seeds | 85.07 | 85.27 (+0.2; 3.1: 86.13, chain) | within 3: meets |
+| Bank ring kill time, no respawns (RINGN: faced, random bearing), median | b32, 400 | 27.20 s | 28.70 s (+5.5 %, CI +5.1..+5.9) | +10 %: meets |
+| Outpost clear (ATTACK), median | b32, 400 | 12.40 s | 12.80 s (+3.2 %, CI +2.4..+4.1) | +10 %: meets |
+| Outpost clear (ATTACK), median | r31 | 10.88 s | 11.38 s (+4.6 %, CI +2.2..+7.2) | +10 %: meets |
+| Outpost clear (ATTACK), median | mk_bal | 10.80 s | 11.10 s (+2.8 %) | +10 %: meets |
+| Lone Infantry 5 units, 30 / 45 studs | b32, 1000 seeds, random phase | 1.40 / 2.00 s | medians +3.6 % / +5.0 %; over 1.25× 33.0 % (CI hi 36.0) / 0.4 %; means +19.2 % (CI hi 20.9) / +3.7 % | meets |
+| Lone Infantry 3 units, 30 / 45 studs | b32 | 3.00 / 2.95 s | medians +0 % / +1.7 %; means +0.2 % / +2.1 % | meets |
+| Lone Infantry 5 units, 30 / 45 studs | mk_bal, 300 seeds | 1.50 / 1.88 s | medians +0 % / +0 %; means +15 % / +10 %; extra volley 30 % / 34 % | meets |
+| Lone Infantry 3 units, 30 / 45 studs | mk_bal | 3.12 / 3.50 s | medians +0 % / +0 %; means +0 % / −4 % | meets |
+
+**Why 0.98 / 0.96 (refix 3.3).** 0.96 / 0.92 is still the floor: the lowest Near that meets every lone-Infantry line
+with both tap phases, then the lowest Far. Refix 3.3 goes one step above the floor, to the middle option of owner
+decisions A and B below. A squad unit misses 2 % of its shots up close and 4 % at the edge of its range.
+
+**Owner decisions (SQF-18).** Measured on b32 (faced ring 400 seeds, full lines 400 seeds). Each option is a config-only
+change inside the pinned bounds (`UnitMaxHitChance` rises with option 3). Refix 3.3 applies the middle option. The
+0.98 / 0.96 column was measured on cand3r with a config override at refix 3.2. Refix 3.3's cand7 (90cad49 base, 0.98 /
+0.96 in config) gives byte-identical results: ring 400 / 400 seeds, full 400 / 400, TTK 1000 / 1000, and the B_HIDE_ATK
+bank line (one per process) 120 / 120.
+
+| Line | HEAD | 0.96 / 0.92 (refix 3.2) | **0.98 / 0.96 (this build)** | 0.99 / 0.99 |
+|---|---|---|---|---|
+| **A.** Bank ring clear with respawns, faced (RINGF), median | 27.20 s | 36.60 s (+34.6 %, CI +33.9..+35.3) | 32.00 s (+17.6 %) | 27.90 s (+2.6 %) |
+| A. …the clear comes before the first guard is back (first death + 18 s) | 331 / 400 | 51 / 400 | 132 / 400 | 224 / 400 |
+| A. …runs slower than 1.10 × HEAD's median | — | 349 / 400 | 268 / 400 | 176 / 400 |
+| A. Ring with a random facing (full mode), finite median / under 28 s | 27.00 s / 225 of 280 | 36.40 s / 12 of 280 | 31.85 s / 64 of 280 | 27.90 s / 144 of 281 |
+| A. The same ring without respawns (RINGN, the kill time) | 27.20 s | 28.70 s (+5.5 %) | 28.00 s (+2.9 %) | 27.50 s (+1.1 %) |
+| **B.** Standing still next to an outpost group on FOLLOW: survived past 8 s (the escort cleared the group), paired | 136 / 400 (34 %) | 83 / 400 (21 %); 56 seeds HEAD-only vs 3 cand-only, McNemar p 1.2e-13 | 111 / 400 (28 %); 27 vs 2, p 1.6e-06 | 124 / 400 (31 %); 13 vs 1, p 0.0018 |
+| B. …median time of death / alive at 35 s | 5.00 s / 13 | 4.50 s / 6 | 4.60 s / 6 | 5.00 s / 7 |
+| Lone Infantry 5 units at 30 studs, mean kill time (b32) | 1.376 s | 1.640 s (+19.2 %) | 1.510 s (+9.8 %) | 1.448 s (+5.3 %) |
+
+- **A in words.**
+    - **The clear.** An ATTACK squad sent at the bank guards from outside their range takes about 27 s today, about 37 s
+      at 0.96 / 0.92, and about 32 s at 0.98 / 0.96. Today's squad usually downs every guard before the first one comes
+      back, 18 s after it fell. At 0.98 / 0.96 the squad does so in 132 of 400 runs (0.96 / 0.92: 51; today: 331); in the
+      others it also has to kill a guard that came back.
+    - **Without respawns** the squad is only about 3 % slower (0.96 / 0.92: about 5 %).
+    - **Raising the hit chance** does not remove the threshold; it moves more runs back under it (0.99: 224 of 400).
+      The round-3.3 balance reviewer found option 3's median sensitive to the approach geometry. On that reviewer's own
+      driver it came out 30.5 s, not 27.9, so option 3 should be quoted as about 28–31 s.
+  Damage compensation does not help either (the round-3.2 reviewer measured AttackDamage 8.42: +14.0 %). A change to
+  the guards' respawn is another lane's work (the bank lane is changing group respawn); it would change this line.
+- **B in words.** A player who stands still next to an outpost group on FOLLOW is saved by his escort about 1 time in 4
+  at 0.98 / 0.96 (111 of 400), instead of about 1 time in 3 today (136) and 1 time in 5 at 0.96 / 0.92 (83). He usually
+  goes down in about 5 s on every build. The round-3.3 balance reviewer's own driver gave 110 of 400 at 0.98 / 0.96
+  (HEAD 125). The rest of this paragraph is the 0.96 / 0.92 evidence from refix 3.2. The other drivers agree: r31 40 → 30 of
+  200 (13 vs 3, p 0.021), mk_bal 17 → 12–15 of 60 (8 vs 3, p 0.23 on the 3.1 run; the 3.2 run moved through the bank
+  chain described below). About three quarters of the drop is the hit chance
+  (0.99: 124 of 400). Shooting back is unchanged (FB above).
+- **C. Information, not a setting: a squad partly behind a wall.** When some of the squad stands behind a small wall
+  as ATTACK starts (bank, one line per process), those units have to walk out before they can shoot; today's squad shoots
+  through the wall.
+    - **At 0.98 / 0.96:** player HP 59.6 → 31.0, and the player goes down in 9 of 120 runs (0 today). The guards are down
+      in time to loot in 111 of 120 runs (today 120).
+    - **The other options:** 0.96 / 0.92 gives 26.6 HP and 13 downs; 0.99 / 0.99 gives 35.1 HP and 5 downs.
+    - **Most of it is the "no shooting through walls" rule CLAUDE.md asks for.** With `UnitAttackRequireLos = false` the
+      line is 57.3 HP with 0 downs. The give-up rule adds none of it: the line is identical with no give-up at all.
+- **Refix 3.3 (lead decision, reversible):** 0.98 / 0.96, the middle option. It is recorded here as an assumption until
+  the owner answers A and B himself (C needs no answer); either answer is a two-number config change. Before 3.3 the
+  default was 0.96 / 0.92.
+
+**Stand-still line (corrected at refix 3.2).** Rounds 3 and 3.1 listed "standing still next to the outpost on FOLLOW:
+dead at about 5 s on both" as a line with no measurable difference. That was wrong: it looked only at "alive at 35 s"
+and the median. The survival-past-8-s share differs (decision B above), and the builder's own r31 data showed it too
+(40 → 30 of 200, p 0.021).
+
+**Clean-start lines with no measurable difference** (mk_bal, 60 seeds, at 0.96 / 0.92):
+- **Shooting back on HOLD:** HP 33.2 on HEAD vs 33.4 (refix 3.1: 34.0; the chain below).
+
+**Bank lines (ATTACK / FOLLOW with cover), one line per process** (b32 bank lines, `w32/bal/b32bank1.sh`, seeds
+96001–96120, player 50 studs from a 5-guard ring, 90 s):
+
+| Line (one per process, 120 seeds): player HP / player down / guards down in time to loot | HEAD | Refix 3.1 | Refix 3.2 (0.96 / 0.92) | Refix 3.3 (0.98 / 0.96, cand7) | Reading |
+|---|---|---|---|---|---|
+| Open ground, ATTACK, player shoots | 59.6 / 0 / 120 | — (the first chained line: identical on 3.1 and 3.2) | 57.3 / 0 / 120 (−2.3, CI −3.6..−1.2) | 58.9 / 0 / 120 (−0.7, CI −1.3..−0.1) | Small. |
+| Cover + peek, ATTACK | 81.9 / 0 / 0 | 81.7 / 0 / 0 | 83.9 / 0 / 0 (+2.2 vs 3.1, CI +1.4..+3.1; 98 of 120 seeds unchanged) | 84.0 / 0 / 0 (+2.1, CI +1.3..+2.9) | 3.2 slightly better: a unit that gave up on a guard behind the cover now fights the others. |
+| Cover + peek, FOLLOW | 72.8 / 0 / 0 | 81.8 / 0 / 0 | 81.8 / 0 / 0 (identical on all 120 seeds) | 81.9 / 0 / 0 (+9.1, CI +8.2..+10.0) | Player-favourable; 3.2 and 3.3 do not touch the FOLLOW code. |
+| Beside a 6-stud wall, ATTACK (the driver's "cover, never peeks": the player stands beside the wall and shoots; the wall only blocks squad rays) | 59.6 / 0 / 120 | 26.6 / 13 / 107 | 26.6 / 13 / 107 (identical on all 120 seeds) | 31.0 / 9 / 111 (−28.6, CI −31.5..−25.6) | Worse for the player, from the line-of-sight rule: with `UnitAttackRequireLos = false` it is 57.3 / 0 / 120; with 0.99 hits 35.1 / 5 / 115; with no give-up at all it is identical to 3.2. Units behind the small wall must walk out before they can shoot, where today's squad shoots through it. Decision C (information). |
+
+HEAD columns: head3 (5e021d8); head7 (90cad49) gives identical results on 120 / 120 seeds for every line. Refix 3.3
+outputs: `w32/bal/out/b1_*_{c7,h7}`, scored with `w4/agg_bank4.py` (`w4/agg_bank4.txt`).
+
+**Chained bank lines (r31 seeds 61001–61120, b32 96001–96200, mk_bal's S3 section).** They change between 3.1 and 3.2
+on every line after the first, including the FOLLOW line whose code 3.2 does not touch (r31 cover + peek FOLLOW 87.3 → 76.3
+HP; b32 88.8 → 77.8). In 3.2 the cover + peek ATTACK line now clears the guards, which moves the shared `math.random`
+stream and so the bank spot, the player id and the world clock of every later line in the same process. For the same
+reason mk_bal's clean-start lines (run after its S3 bank section) moved on 50 of 60 seeds, e.g. its stand-still survival
+12 → 15 of 60 with identical FOLLOW code. The chained per-line values are therefore not code effects; the one-line-per-
+process table above is. (For the record, chained r31 on 3.2: open −2.1, cover + peek ATTACK +18.6, cover + peek FOLLOW
++6.1, beside the wall −14.5 HP with 20 vs 4 player downs, against HEAD.)
+
+**Other live lines, not in the acceptance set** (mk_bal and the farm driver at 0.96 / 0.92; not re-run at 0.98 / 0.96).
+
+| Line | HEAD | Candidate (0.96 / 0.92) | Difference (95 % CI) | Reading |
+|---|---|---|---|---|
+| Outpost, harness start (2.5 s escort head start), stands still on FOLLOW: HP / alive (mk_bal, 60) | 25.3 / 56 of 60 | 10.9 / 28 of 60 (3.1: 10.4 / 26) | −14.4 (−20.5 to −8.2) | The head-start artifact the round-2 reviewer found. On a clean start this is decision B. |
+| Outpost, harness start, shoots back on FOLLOW: HP (mk_bal) | 87.9 | 87.9 | 0.0 | Same. |
+| Outpost, harness start, shoots back on HOLD: HP (mk_bal) | 84.4 | 76.9 | −7.5 (−14.6 to −0.3) | The same head-start artifact (the join runs on FOLLOW). On a clean start the line is the same (above). |
+| Escort AFK farm behind a 3-stud wall, 10 min (farm driver, seeds 201–208) | $800 × 8 | $800 × 7, $775 × 1 (identical to refix 3.1) | | The residual AFK farm pays about the same; a missed shot delays one kill. Bank AFK farms: $0 on both. |
+
+**Found on the way (SQF-15).** Before the NPC-body rule, 3 units at 30 studs left the Infantry alive after 30 s in 7 of
+238 TTK seeds (never on HEAD): a second Infantry stood on the same spot and each body hid the other.
+
+### Jobs-ON bank (H2)
+**Setup.**
+- **Test copies.** Jobs-ON TEST copies `w3/head3_on`, `w3/cand3r_on` (round 3), `w31/cand3r_on` (refix 3.1) and
+  `w32/cand3r_on` (refix 3.2; deleted after the run, `w3/mk_on.sh` recreates it), made with the apply_cutover.py flips.
+  They were never shipped and differ only in the four lane files.
+- **Harness.** The w3s2 cutprep H2 harness (`w3/h2_bank_balance_v2.luau`, with a per-seed squad roll via
+  `SetRandomForTests`), 100 seeds per scenario. Outputs are in `w3/h2/` (refix 3.1: `cand31_on_*`; refix 3.2:
+  `cand32_on_*`).
+- **Refixes 3.1 and 3.2 re-ran only the three squad scenarios.** The solo scenarios have no squad, so neither the Unit*
+  hit chances nor the give-up rule play any part in them.
+- **Refix 3.3 did not re-run H2.** Every number below is at 0.96 / 0.92. H2 is Jobs-ON only, and at refix 3.1 two points
+  more hit chance moved squad_follow by one run, inside its noise band. The squad_attack and squad_wait failures come
+  from the wake-up and owner-reach rules, not from the hit chance.
+
+**Reading the numbers.** H2 is not seed-deterministic for the squad scenarios (round 2 and review1 saw reruns move by
+several points), so only differences well outside the 95 % CIs count. The solo scenarios came out identical on all
+four trees (HEAD 5e021d8, v3, HEAD 670bbf6, round 2).
+
+| Scenario | HEAD 5e021d8 | Refix 3.2 | Refix 3.1 (0.96 / 0.92) | Round 3 (0.94 / 0.90) | Round 2 (670bbf6 base) |
+|---|---|---|---|---|---|
+| solo_cover | 31 % (22.8–40.6) | not re-run (no squad) | not re-run (no squad) | 31 % | 31 % |
+| solo_foot | 0 % | not re-run (no squad) | not re-run (no squad) | 0 % | 0 % |
+| squad_attack | 69 % (59.4–77.2) | 0 % (identical to 3.1, run for run) | 0 % (0–3.7) | 0 % (0–3.7) | 0 % |
+| squad_follow | 100 % (96.3–100) | 41 % (31.9–50.8) | 46 % (36.6–55.7) | 47 % (37.5–56.7) | 43 % |
+| squad_wait | 100 % | 0 % (identical to 3.1, run for run) | 0 % (0–3.7) | 0 % (0–3.7) | 0 % |
+
+**What the numbers show.**
+- **squad_attack.** The scripted raider walks up with ATTACK and never shoots before the breach. He is inside the
+  guards' AggroRange, so his squad's hits are allowed and, through the NPC damage path, wake the group. The guards take
+  the nearest player and he dies at about 11 s, before the breach. On HEAD the squad's raw damage never provoked
+  anyone, and ATTACK shot through walls.
+- **squad_wait.** The owner waits outside the guards' reach, so his squad cannot touch them (SQF-13). He walks in alone
+  after 120 s and dies.
+- **squad_follow.** The escort leaves calm guards alone (SQF-11) and fights once the breach provokes them.
+- These are the v3 rules working as designed. The cutprep target (squads win the bank 70 % or more) does not hold on
+  any squad scenario, and the hit chance cannot restore it: at refix 3.1, two points more hit chance moved squad_follow
+  by one run (47 → 46, inside noise). squad_attack is unchanged run for run. In squad_wait, 20 of the 100 runs differ in
+  detail (for example, the squad downs one guard after the owner walks in), but every raider still dies.
+- **Refix 3.2.** squad_attack and squad_wait came out identical to refix 3.1 run for run. squad_follow runs FOLLOW code
+  that 3.2 does not touch, yet 41 of its 100 seeds changed outcome between the 3.1 run and this one (46 → 41 %): H2 is
+  not seed-deterministic, and 41 / 46 / 47 % (3.2 / 3.1 / round 3) are one noise band.
+- The Jobs-ON bank retune (wake-up rules, guard setup or breach timings) stays with the combat lane. Jobs stay OFF on
+  live, so the live game is unaffected.

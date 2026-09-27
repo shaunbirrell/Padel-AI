@@ -6591,6 +6591,143 @@ must_contain(OFG_GDC, "\tGateHitMaxDistance = 120,", "ownerfb/gate [fix3]: GateH
 must_contain(OFG_GDS_F3, "else GateDefenseConfig.GateHitMaxDistance", "ownerfb/gate [fix3]: ApplyDamage reads GateDefenseConfig.GateHitMaxDistance")
 must_not_contain(OFG_GDS_F3, "GuardHitMaxDistance else 120", "ownerfb/gate [fix3]: no literal 120 gate-hit limit in ApplyDamage")
 
+# --- squadfair (CLAUDE.md combat fairness for squad units): every unit shot (ATTACK and FOLLOW escort) needs a line of
+# sight and rolls a hit chance (a miss spends the cooldown); hits go through CombatService's NPC damage path
+# (ApplyUnitHit -> hurtNPC: creator tag, provoke, kill credit); squads never hurt players or statues.
+# v2: a walled-off nearest hostile falls back to the nearest visible one in range (at most UnitLosRaysPerCheck rays);
+# an ATTACK chase with nothing in sight gives up after UnitBlockedChaseSeconds (the unit walks its owner's trail);
+# blocked re-checks wait one shot cooldown on a cached RaycastParams; squad hit chances are squad values.
+# v3: no provoker rule (guards take the nearest player, as on HEAD); the owner gate covers EVERY squad hit on a grouped
+# or stance NPC; the blocked timer starts over when nothing is in the band or the chased hostile changes; a repeated
+# order keeps the re-check wait and the give-up; ATTACK keeps HEAD's 0.85 x AttackRange fire band; the hit chances
+# are checked as numbers (a config-only retune inside the bounds passes) and the code caps them at UnitMaxHitChance;
+# another NPC's body never blocks a squad ray (UnitLosIgnoreNPCBodies).
+# 3.2: a give-up holds for the fight where it happened only (the hostiles within UnitGiveUpScopeStuds of the spot; the
+# last two spots are kept): the target is the nearest hostile outside those fights; a shot into one, or a new order,
+# ends them; a nearest swap inside the band keeps the blocked timer.
+# 3.3: the give-up does not restart the blocked timer, and leaving a given-up fight restarts it only for a target beyond
+# the band: after a give-up, a walled hostile elsewhere inside the band is given up at its first blocked check, with no
+# approach (deliberate: two spots are remembered, a fresh approach there lets 3+ walled spots take turns; reviewer S1 /
+# S2, driver w4/sqf33_s.luau). Hit chances 0.98 / 0.96 (owner decision A/B, middle option) sit inside the numeric pin ---
+SQF_CFC = 'src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau'
+SQF_SO = 'src/ServerScriptService/Server/Services/SquadOrdersService.luau'
+SQF_CS = 'src/ServerScriptService/Server/Services/CombatService/init.luau'
+SQF_NPC = 'src/ServerScriptService/Server/Services/CombatService/CombatNPC.luau'
+must_contain(SQF_CFC, '\tUnitAttackRequireLos = true,', 'squadfair: ATTACK unit shots need line of sight (config)')
+must_contain(SQF_CFC, '\tUnitChaseWithoutLos = true,', 'squadfair: an ATTACK unit with nothing in sight closes in (config)')
+must_contain(SQF_CFC, '\tUnitLosIgnoreNPCBodies = true,', 'squadfair v3: another NPC\'s body never blocks a squad ray (config)')
+# v3: the hit chances as numbers, not exact texts: 0 < Far <= Near <= Max < 1, 0 <= Min <= Far, 0 < NearStuds
+_sqf_cfc = read(SQF_CFC) or ''
+def _sqf_num(key):
+    m = re.search(r'^\t' + key + r' = ([0-9]*\.?[0-9]+),', _sqf_cfc, re.M)
+    return float(m.group(1)) if m else None
+_sqf_v = {k: _sqf_num(k) for k in ('UnitNearStuds', 'UnitNearHitChance', 'UnitFarHitChance', 'UnitMinHitChance', 'UnitMaxHitChance')}
+_sqf_missing = [k for k, v in _sqf_v.items() if v is None]
+if _sqf_missing:
+    bad(f'squadfair v3: unit hit chance keys missing or not plain numbers in {SQF_CFC}: {", ".join(_sqf_missing)}')
+else:
+    _n, _f, _lo, _hi, _nd = _sqf_v['UnitNearHitChance'], _sqf_v['UnitFarHitChance'], _sqf_v['UnitMinHitChance'], _sqf_v['UnitMaxHitChance'], _sqf_v['UnitNearStuds']
+    if 0 < _f <= _n <= _hi < 1 and 0 <= _lo <= _f and _nd > 0:
+        ok(f'squadfair v3: unit hit chances are real chances (0 < Far {_f} <= Near {_n} <= Max {_hi} < 1, Min {_lo}, NearStuds {_nd}): a squad shot can always miss')
+    else:
+        bad(f'squadfair v3: unit hit chances out of bounds: Far {_f}, Near {_n}, Max {_hi}, Min {_lo}, NearStuds {_nd} (want 0 < Far <= Near <= Max < 1, 0 <= Min <= Far, NearStuds > 0)')
+must_contain(SQF_CFC, '\tEscortRequireLos = true,', 'squadfair: escort shots keep their line of sight rule')
+must_contain(SQF_CFC, '\tUnitKillCreditOnAttack = false,', 'squadfair: unit kill credit rule unchanged (ATTACK kills pay nothing)')
+must_contain(SQF_CFC, '\tEscortIgnoreCalm = true,', 'squadfair: the FOLLOW escort never opens fire on a calm Passive NPC (config; assumption SQF-11)')
+must_contain(SQF_CFC, '\tUnitLosRaysPerCheck = 3,', 'squadfair v2: at most 3 line-of-sight rays per unit per shot check (config)')
+must_contain(SQF_CFC, '\tUnitBlockedChaseSeconds = 6,', 'squadfair v2: an ATTACK chase with nothing in sight gives up after 6 s (config)')
+must_contain(SQF_CFC, '\tUnitChaseProgressStuds = 2,', 'squadfair v2: an approach that gains no 2 studs in that time gives up too (config)')
+must_contain(SQF_CFC, '\tUnitGiveUpScopeStuds = 30,', 'squadfair 3.2: a give-up holds for hostiles within 30 studs of where it happened (config)')
+must_contain(SQF_CFC, '\tUnitRepeatOrderGraceSeconds = 2,', 'squadfair v3: the same order again within 2 s changes nothing (config)')
+must_contain(SQF_CFC, '\tUnitProvokeNeedsOwner = true,', 'squadfair: no provoke by proxy (config)')
+must_contain(SQF_CFC, '\tUnitProvokeOwnerStuds = 0,', 'squadfair v2: owner reach = the NPC type AggroRange (config)')
+must_contain(SQF_CFC, '\tUnitHitErrorLogSeconds = 30,', 'squadfair v2: a failing ApplyUnitHit is logged at most every 30 s (config)')
+# SquadOrdersService: line of sight, hit roll, damage path
+must_contain(SQF_SO, '\tlocal eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)\n\tlocal delta = troot.Position - eye\n', 'squadfair: unit line of sight = eye ray to the target root')
+must_contain(SQF_SO, '\ttable.insert(losIgnore, unit.Model)\n\ttable.insert(losIgnore, ensureFolder())\n', 'squadfair: the unit and every squad never block its ray')
+must_contain(SQF_SO, '\tif player.Character then\n\t\ttable.insert(losIgnore, player.Character :: Instance)\n\tend\n\tlosParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true\n\tlosParams.FilterDescendantsInstances = losIgnore', 'squadfair v2: the owner never blocks; non-collidable decor per NpcLosRespectCanCollide (NPC rule)')
+must_contain(SQF_SO, '\tlocal blocked = Workspace:Raycast(eye, delta, losParams) ~= nil\n', 'squadfair v2: the unit ray is cast on the one cached RaycastParams')
+must_contain(SQF_SO, '\tif CombatFairnessConfig.UnitLosIgnoreNPCBodies == true then\n\t\tlocal bodies = npcBodies()\n\t\tif bodies then\n\t\t\ttable.insert(losIgnore, bodies)\n\t\tend\n\tend\n', 'squadfair v3 (X10): NPC bodies (CombatService\'s WarEmpireNPCs folder) never hide a hostile from a squad ray; walls still do')
+must_contain(SQF_SO, '\tnpcBodyFolder = Workspace:FindFirstChild("WarEmpireNPCs")\n', 'squadfair v3: the NPC folder is looked up by name and cached (no scan per ray)')
+must_contain(SQF_SO, 'local losParams = RaycastParams.new()\nlosParams.FilterType = Enum.RaycastFilterType.Exclude\nlosParams.IgnoreWater = true\n', 'squadfair v2: one module-level RaycastParams (Exclude, water ignored) for every unit ray')
+must_not_contain(SQF_SO, 'CombatDamage.LineOfSight(', 'squadfair v2: no RaycastParams per unit ray (CombatDamage.LineOfSight allocates one per call)')
+must_contain(SQF_SO, '\tunit.LastFireAt = now -- a miss spends the cooldown like a hit\n\tif rng:NextNumber() >= unitHitChance((troot.Position - unit.Root.Position).Magnitude) then\n\t\treturn false\n\tend', 'squadfair: every unit shot spends the cooldown, then rolls the hit chance')
+must_contain(SQF_SO, '\tlocal nearD = C.UnitNearStuds\n', 'squadfair: unit hit chance reads the Unit* config keys')
+must_contain(SQF_SO, '\tlocal hi = math.min(tonumber(C.UnitMaxHitChance) or 0.95, 0.99)\n\tlocal lo = math.min(tonumber(C.UnitMinHitChance) or 0.05, hi)\n\treturn math.clamp(chance, lo, hi)\n', 'squadfair v3: the code caps the unit hit chance at UnitMaxHitChance (never above 0.99, whatever the config says)')
+must_contain(SQF_SO, 'function SquadOrdersService.SetRandomForTests(seedOrRandom: any)', 'squadfair v2: the unit hit roll is seedable by tests only (SetRandomForTests)')
+must_not_contain(SQF_SO, 'function SquadOrdersService.SetRandom(', 'squadfair v2: no SetRandom (renamed SetRandomForTests)')
+must_contain(SQF_SO, 'local ok, dealt = pcall(apply, player, th, (OrdersConfig.AttackDamage or 8) * researchMult(player, "SoldierDamage"), credit)', 'squadfair: a unit hit goes through CombatService.ApplyUnitHit (pcall; research damage kept)')
+must_contain(SQF_SO, '\tif not ok then\n\t\t-- squadfair: never silent (every squad would deal 0 damage), never a log flood (one line per UnitHitErrorLogSeconds)\n\t\tif now - hitErrLogAt >= (tonumber(CombatFairnessConfig.UnitHitErrorLogSeconds) or 30) then\n\t\t\twarn(', 'squadfair v2: an ApplyUnitHit error is warned, rate-limited')
+must_contain(SQF_SO, '\t\t\tand typeof(inst:GetAttribute("NPCId")) == "string"\n', 'squadfair: squads target CombatService NPCs only (no statues)')
+must_not_contain(SQF_SO, 'TakeDamage(', 'squadfair: no raw TakeDamage from a squad unit (the NPC damage path only)')
+must_not_contain(SQF_SO, 'escortHasLos', 'squadfair: one line of sight helper for ATTACK and escort')
+# v2: visible-target fallback (both orders), capped rays, only while blocked
+must_contain(SQF_SO, 'local function pickShot(player: Player, unit: SquadUnit, th: Humanoid, troot: BasePart, range: number, list: CandList, requireLos: boolean): (Humanoid?, BasePart?, number)', 'squadfair v2: pickShot (the nearest hostile if in sight, else the nearest visible one in range)')
+must_contain(SQF_SO, '\tif inRange then\n\t\trays = 1\n\t\tif unitHasLos(player, unit, troot) then\n\t\t\treturn th, troot, rays\n\t\tend\n\tend\n\tfor i = 1, list.N do\n\t\tif rays >= cap then\n\t\t\tbreak\n\t\tend', 'squadfair v2: the fallback runs only when the nearest is blocked or out of range, and stops at UnitLosRaysPerCheck rays')
+must_contain(SQF_SO, '\t\tif h ~= th and h.Health > 0 and r.Parent ~= nil and (r.Position - from).Magnitude <= range then\n\t\t\trays += 1\n\t\t\tif unitHasLos(player, unit, r) then\n\t\t\t\treturn h, r, rays', 'squadfair v2: the fallback takes the nearest hostile within range it can see')
+must_contain(SQF_SO, '\treturn math.clamp(math.floor(tonumber(CombatFairnessConfig.UnitLosRaysPerCheck) or 1), 1, 4)', 'squadfair v2: the ray cap reads UnitLosRaysPerCheck (1-4)')
+# v3: ATTACK keeps HEAD's fire band (0.85 x AttackRange) for its shot, its fallback list and its stop distance
+must_contain(SQF_SO, '\tlocal band = (OrdersConfig.AttackRange or 55) * 0.85 -- HEAD\'s ATTACK fire band: it fires only once this close\n\tlocal scope = giveUpScope()\n\t-- squadfair 3.2: `nh` is the nearest hostile outside the fights this unit gave up on, `zh` the nearest inside one\n\tlocal nh, nroot, dist, zh, zroot, zdist, heldA, heldB = nearestHostile(unit.Root.Position, aggro, false, player, attackCands, band, unit.GiveUpPos, unit.GiveUpPos2, scope)', 'squadfair v3 / 3.2: ATTACK lists fallback hostiles only inside HEAD\'s fire band (0.85 x AttackRange), skips NPCs the owner may not hurt, and targets the nearest hostile outside the fights it gave up on')
+must_contain(SQF_SO, '\t\tlocal th, troot, rays = pickShot(player, unit, nh, nroot, band, attackCands, CombatFairnessConfig.UnitAttackRequireLos == true)\n\t\tif th and troot then\n\t\t\t-- squadfair 3.2: a shot into a fight it gave up on ends those give-ups', 'squadfair v3: an ATTACK shot needs a clear line (pickShot, UnitAttackRequireLos) and fires only inside the band, as HEAD')
+must_not_contain(SQF_SO, 'pickShot(player, unit, nh, nroot, range,', 'squadfair v3: ATTACK never fires out to the full AttackRange (that made ATTACK stronger than HEAD)')
+must_contain(SQF_SO, '\t\tlocal sh, sr, rays = pickShot(player, unit, th, troot, range, escortCands, CombatFairnessConfig.EscortRequireLos == true)\n\t\tif sh and sr then', 'squadfair v2: an escort shot is taken only with a clear line, with the same fallback (pickShot, EscortRequireLos; AttackRange as HEAD)')
+must_contain(SQF_SO, 'escortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)', 'squadfair: EscortIgnoreCalm applies to the FOLLOW escort pick only; the escort pick skips NPCs the owner may not hurt')
+must_contain(SQF_SO, '\tlocal holds = if skipCalm == true and CombatService then CombatService.NPCHoldsFire else nil\n', 'squadfair: escort target pick asks CombatService which NPCs hold fire')
+must_contain(SQF_SO, '\t\t\t\t\tif not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(owner, id) == false) then\n', 'squadfair v2: the pick skips calm NPCs (escort) and NPCs this squad may not hurt (UnitMayHitNPC)')
+# v2/v3: blocked re-checks throttled; blocked chase gives up; no stale timer; repeated orders
+must_contain(SQF_SO, '\tunit.LosCheckAt = now + 1 / math.max(OrdersConfig.AttackFireRate or 1.8, 0.1)\n\tunit.LosBlocked = true', 'squadfair v2: a check that found nothing in sight waits one shot cooldown (LosCheckAt)')
+must_contain(SQF_SO, '\treturn unitReady(unit, now) and now >= unit.LosCheckAt\n', 'squadfair v2: shot checks honour LosCheckAt')
+must_contain(SQF_SO, '\t\tif since ~= nil and now - since >= giveUpAfter then\n\t\t\tgiveUpFight(unit, nroot.Position) -- nothing in sight for UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an ATTACK chase with nothing in sight gives up that fight after UnitBlockedChaseSeconds')
+must_contain(SQF_SO, '\t\t\telseif now - unit.ChaseAt >= giveUpAfter then\n\t\t\t\tgiveUpFight(unit, nroot.Position) -- no nearer in UnitBlockedChaseSeconds', 'squadfair v2 / 3.2: an approach that gets no nearer gives up that fight too')
+must_contain(SQF_SO, '\t\telseif rays > 0 then\n\t\t\tlosBlockedFor(unit, now)\n\t\t\tif unit.BlockedSince == nil then\n\t\t\t\tunit.BlockedSince = now\n\t\t\tend\n\t\telse\n\t\t\tunit.BlockedSince = nil -- nothing in the band to check (it is walking in): no stale blocked timer\n', 'squadfair v3 (G2b): a check with nothing in the band to look at starts the blocked timer over (no give-up on a reachable enemy)')
+must_contain(SQF_SO, '\tif unit.ChaseHum ~= nh then\n\t\tif dist > band then\n\t\t\tunit.BlockedSince = nil\n\t\tend\n\t\tunit.ChaseBest = nil\n\t\tunit.ChaseHum = nh\n\tend', 'squadfair v3 / 3.2: another chased hostile: a fresh approach, and a fresh blocked spell when it stands beyond the band (a swap inside the band keeps the timer: nearest swaps along a wall never keep a unit pressed on it)')
+must_contain(SQF_SO, '\t\t\t\t\t\tif inA or inB then\n\t\t\t\t\t\t\tif d < zoneDist then\n', 'squadfair 3.2: a hostile of a fight the unit gave up on is never its first pick (nearestHostile avoid spots)')
+must_contain(SQF_SO, '\tif unit.GiveUpPos2 ~= nil and not heldB then\n\t\tunit.GiveUpPos2 = nil\n\tend\n\tif unit.GiveUpPos ~= nil and not heldA then\n\t\tunit.GiveUpPos = unit.GiveUpPos2\n\t\tunit.GiveUpPos2 = nil\n\tend\n', 'squadfair 3.2: a given-up fight with no hostile left in it is forgotten (a group that walks in later is a new fight)')
+must_contain(SQF_SO, '\tif unit.GiveUp and not givenUp then\n\t\t-- it leaves a given-up fight for a hostile elsewhere. Not a fresh start: beyond the band the ChaseHum change below\n\t\t-- restarts the blocked timer (a fresh approach), but inside the band the timer keeps running from the give-up, so\n\t\t-- a walled newcomer there is given up at its first blocked check, with no approach. Deliberate: a fresh approach\n\t\t-- here would let three walled spots take turns (only two are remembered)\n\t\tunit.ChaseHum = nil\n\tend\n\tunit.GiveUp = givenUp\n', 'squadfair 3.3 (S1): leaving a given-up fight clears only the chased hostile; the blocked timer keeps running unless the new target is beyond the band (an in-band walled newcomer is given up at once, no approach)')
+# 3.3 (S1 / S2), code lines only (comments ignored): leaving a given-up fight clears only ChaseHum, and giveUpFight
+# never touches the blocked timer, so neither restarts it (a restart there lets three walled spots take turns)
+_sqf_so = read(SQF_SO) or ''
+def _sqf_code(body):
+    return [l.split('--', 1)[0].strip() for l in body.split('\n') if l.split('--', 1)[0].strip()]
+_sqf_m1 = re.search(r'\n\tif unit\.GiveUp and not givenUp then\n(.*?)\n\tend\n\tunit\.GiveUp = givenUp\n', _sqf_so, re.S)
+_sqf_m2 = re.search(r'\nlocal function giveUpFight\(unit: SquadUnit, at: Vector3\)\n(.*?)\nend\n', _sqf_so, re.S)
+_sqf_c1 = _sqf_code(_sqf_m1.group(1)) if _sqf_m1 else None
+_sqf_c2 = _sqf_code(_sqf_m2.group(1)) if _sqf_m2 else None
+if _sqf_c1 == ['unit.ChaseHum = nil'] and _sqf_c2 is not None and not any(('BlockedSince' in l or 'Chase(' in l) for l in _sqf_c2):
+    ok('squadfair 3.3 (S1 / S2): neither a give-up nor leaving a given-up fight restarts the blocked timer (code: the leave branch is only `unit.ChaseHum = nil`; giveUpFight has no BlockedSince / clearChase / resetChase)')
+else:
+    bad(f'squadfair 3.3 (S1 / S2): a give-up or leaving a given-up fight restarts the blocked timer (leave branch {_sqf_c1}, giveUpFight {_sqf_c2}): three walled spots would take turns')
+must_contain(SQF_SO, '\tlocal zoneDist = if avoiding then maxRange else 0\n', 'squadfair 3.2: without avoid spots (the FOLLOW escort) the pick is unchanged')
+must_contain(SQF_SO, '\tlocal givenUp = nh == nil and zh ~= nil\n\tif givenUp then\n\t\tnh, nroot, dist = zh, zroot, zdist\n\tend\n', 'squadfair 3.2: a unit stays given up only while nothing outside the fights it gave up on is in reach')
+must_contain(SQF_SO, '\tunit.GiveUp = givenUp\n', 'squadfair 3.2: the give-up state follows what is in reach every think')
+must_contain(SQF_SO, '\t\t\tif nearSpot(troot.Position, unit.GiveUpPos, unit.GiveUpPos2, scope) then\n\t\t\t\tresetChase(unit)\n\t\t\telse\n\t\t\t\tclearChase(unit)\n\t\t\tend\n', 'squadfair 3.2: a shot into a given-up fight ends the give-ups; a shot elsewhere keeps them (no walk back to the old wall)')
+must_contain(SQF_SO, 'local function giveUpFight(unit: SquadUnit, at: Vector3)\n\tunit.GiveUpPos2 = unit.GiveUpPos\n\tunit.GiveUpPos = at\n\tunit.GiveUp = true\nend', 'squadfair 3.2 / 3.3: a give-up records its spot and keeps the one before (two walled spots never take turns); it leaves the blocked timer running (S1)')
+must_contain(SQF_SO, '\tclearChase(unit)\n\tunit.GiveUp = false\n\tunit.GiveUpPos = nil\n\tunit.GiveUpPos2 = nil\nend', 'squadfair 3.2: a new order (resetChase) forgets the given-up fights')
+must_contain(SQF_SO, '\tlocal s = tonumber(CombatFairnessConfig.UnitGiveUpScopeStuds) or 30\n\treturn if s > 0 then s else math.huge\n', 'squadfair 3.2: the give-up scope reads UnitGiveUpScopeStuds (0 = the round-3 rule)')
+must_contain(SQF_SO, '\tif unit.GiveUp then\n\t\t-- squadfair: no pressing on a wall; back to the owner\'s trail until a shot into that fight, a hostile elsewhere\n\t\t-- or a new order\n\t\tunit.AimRoot = nil\n\t\tunit.AimHum = nil\n\t\tif playerRoot then\n\t\t\tfollowMove(st, unit, playerRoot, trail, probe, now)', 'squadfair v2: a unit that gave up walks its owner\'s trail like FOLLOW (followMove)')
+must_contain(SQF_SO, '\tlocal repeatOrder = order == st.Order\n\t\tand st.OrderAt ~= nil\n\t\tand now - (st.OrderAt :: number) < (tonumber(CombatFairnessConfig.UnitRepeatOrderGraceSeconds) or 0)\n', 'squadfair v3: the same order again within UnitRepeatOrderGraceSeconds is a repeat')
+must_contain(SQF_SO, '\t\tu.LosCheckAt = math.max(u.LosCheckAt, now)\n\t\tif not repeatOrder then\n\t\t\tresetChase(u)', 'squadfair v3: no order ever re-checks a blocked line early; a repeat keeps the chase timers and the give-up')
+must_not_contain(SQF_SO, '\t\tu.LosCheckAt = 0\n', 'squadfair v3: an order never zeroes the blocked re-check wait (order spam cost)')
+must_contain(SQF_SO, '\t\t\t\t\tif (st.Order == "Follow" or (st.Order == "Attack" and anyGaveUp(st))) and proot and pathCfg and probe == nil then\n\t\t\t\t\t\tprobe = buildProbe(pathCfg)', 'squadfair v3: ATTACK builds the FollowPath probe only once a unit has given up')
+must_contain(SQF_SO, '\t\tunit.Humanoid:MoveTo(nroot.Position) -- no clear shot: keep closing in (NPC rule), until it gives up', 'squadfair: an ATTACK unit with nothing in sight closes in (UnitChaseWithoutLos) until the give-up')
+# CombatService: squad hits, provoke by proxy
+must_contain(SQF_CS, 'function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: number, credit: boolean): (number, boolean)', 'squadfair: CombatService.ApplyUnitHit (squad hits)')
+must_contain(SQF_CS, '\tif model == nil or not model:IsA("Model") or Players:GetPlayerFromCharacter(model) ~= nil then\n\t\treturn 0, false -- never a player', 'squadfair: a squad never hurts a player (novice shield, clan ally, anyone)')
+must_contain(SQF_CS, '\tif not unitMayHit(owner, rec) then\n\t\treturn 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy\n\tend\n\treturn hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })', 'squadfair v3: a squad hit on a grouped / stance NPC is refused while the owner is out of its reach; else hurtNPC (provoke + credit), no per-hit feedback')
+must_contain(SQF_CS, '\tif CombatFairnessConfig.UnitProvokeNeedsOwner ~= true or not (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then\n\t\treturn true\n\tend\n\tlocal reach = tonumber(CombatFairnessConfig.UnitProvokeOwnerStuds) or 0\n\tif not (reach > 0) then\n\t\treach = rec.Def.AggroRange\n\tend', 'squadfair v3: the owner gate covers EVERY hit on a grouped / stance NPC (calm or provoked; the hurtNPC provoke condition); plain Aggressive NPCs are never gated')
+must_contain(SQF_CS, '\treturn (root.Position - rec.Root.Position).Magnitude <= reach\n', 'squadfair v2: the owner\'s own character must be within that reach')
+must_contain(SQF_CS, 'function CombatService.UnitMayHitNPC(owner: Player, npcId: string): boolean', 'squadfair v2: CombatService.UnitMayHitNPC (the squad pick skips NPCs it may not hurt)')
+must_contain(SQF_CS, '\tlocal credit = not (fb ~= nil and fb.NoCredit == true)\n\tif attacker and credit then\n\t\ttagCreator(rec.Humanoid, attacker, fb and fb.UnitShot)', 'squadfair: a NoCredit hit leaves the creator tag alone')
+must_contain(SQF_CS, '\tif killed and attacker and credit then\n\t\tCombatService.OnNPCKilled(', 'squadfair: a NoCredit hit never pays the kill itself')
+must_contain(SQF_CS, '\tif attacker and (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then\n\t\t-- lane N: a player (or their squad unit) hurting a grouped / Passive NPC provokes its whole group', 'squadfair: every attacker hit (credit or not) provokes a grouped / Passive NPC')
+must_contain(SQF_CS, 'function CombatService.NPCHoldsFire(npcId: string): boolean', 'squadfair: CombatService.NPCHoldsFire (calm Passive NPC query)')
+# CombatNPC: one hold-fire rule; v3: no provoker rule (guards take the nearest player, as on HEAD)
+must_contain(SQF_NPC, '\tlocal held = holdsFire(rec, g)\n', 'squadfair: thinkStance and HoldsFire share one hold-fire rule')
+must_contain(SQF_NPC, 'function CombatNPC.HoldsFire(rec: any): boolean\n\treturn holdsFire(rec, groups[groupKey(rec)])', 'squadfair: CombatNPC.HoldsFire')
+must_not_contain(SQF_NPC, 'Provoker', 'squadfair v3 (guard, passes on HEAD): no provoker rule in CombatNPC (it let one player switch a guard group off)')
+must_not_contain(SQF_CS, 'NoteProvoker', 'squadfair v3 (guard, passes on HEAD): hurtNPC names no provoker')
+must_contain(SQF_NPC, '\tlocal target, dist = CombatNPC.NearestPlayer(rec.Root.Position, rec.Def.AggroRange)\n\tif target and g and provoked then\n\t\tg.LastContact = now -- contact keeps a provoked group fighting', 'squadfair v3 (guard, passes on HEAD): a stance NPC targets the nearest player, as on HEAD')
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")
