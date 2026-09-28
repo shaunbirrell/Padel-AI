@@ -37,6 +37,10 @@
 	        The driver's plane law (VehicleDriveClient Laws.TailGuard) keeps them over the ground near the ground.
 	  • StripSigns: a store body's BillboardGui / SurfaceGui signs always go (whole model or pack piece), its decals with
 	    ref.StripDecals.
+	  • v87 (Code Bot): ClampScale (a ref's BodyMinScale lowers the 0.05 floor: the gunboat), KitRotor (the kit rotor onto
+	    a helicopter body's mast, stretched to its span; spun by a Kit RotorParts entry), BodyDeck (invisible collidable
+	    massless deck plates, WE_BodyDeck, skipped by VehicleService's footprint) and BodyKitNoCollide (kit parts that
+	    would stand over the fitted deck stop colliding). Helicopters, bombers, transports and ships (owner-only rollout).
 	Kit parts are moved with an unweld / set / weld (a CFrame set on a welded part would move the whole aircraft). ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -101,6 +105,14 @@ function AirBodyRig.KitFloor(hostModel: Model, primary: BasePart, fallback: numb
 		end
 	end
 	return if low ~= nil then math.min(low, fallback) else fallback
+end
+
+-- v87: a fitted body's scale, clamped to [floor, 4]. The floor is 0.05 unless the ref sets BodyMinScale (only the gunboat
+-- store model, authored 2048 studs long, fits at 0.027); a BodyMinScale is itself never under 0.005. Every other body
+-- keeps the 0.05 floor it always had.
+function AirBodyRig.ClampScale(ref: any, raw: number): number
+	local floor = if typeof(ref.BodyMinScale) == "number" then math.clamp(ref.BodyMinScale, 0.005, 0.05) else 0.05
+	return math.clamp(raw, floor, 4)
 end
 
 -- The chassis-frame X / Z move that puts ref.BodySeats[ref.BodyAnchor] (scaled by s, turned by yawDeg, measured from
@@ -411,6 +423,73 @@ local function tailGuard(hostModel: Model, primary: BasePart, clone: Model, cfg:
 	end
 end
 
+-- v87: the kit rotor onto a store helicopter body (ref.KitRotor). Every named kit part (never the body's) moves by one
+-- offset, so the Hub part's centre lands on At (unscaled body frame, like BodySeats); with Span each blade's longest side
+-- (X or Z) becomes Span x s, so the kit blades reach as far as the body's own rotor did. Returns the parts moved.
+local function kitRotor(hostModel: Model, primary: BasePart, clone: Model, spec: any, base: CFrame, s: number): number
+	if typeof(spec.Parts) ~= "table" or typeof(spec.At) ~= "Vector3" or typeof(spec.Hub) ~= "string" then
+		return 0
+	end
+	local parts: { BasePart } = {}
+	local hub: BasePart? = nil
+	for _, p in ipairs(namedParts(hostModel, spec.Parts)) do
+		if p ~= primary and not p:IsDescendantOf(clone) then
+			table.insert(parts, p)
+			if p.Name == spec.Hub then
+				hub = p
+			end
+		end
+	end
+	if hub == nil then
+		return 0
+	end
+	local delta = (base * CFrame.new(spec.At * s)).Position - hub.Position
+	local span = tonumber(spec.Span)
+	for _, p in ipairs(parts) do
+		if span and span > 0 and p ~= hub then
+			local z = p.Size
+			if z.X >= z.Z then
+				p.Size = Vector3.new(span * s, z.Y, z.Z)
+			else
+				p.Size = Vector3.new(z.X, z.Y, span * s)
+			end
+		end
+		reweld(primary, p, p.CFrame + delta)
+	end
+	return #parts
+end
+
+-- v87: invisible collidable deck plates over a fitted ship body (ref.BodyDeck, unscaled boxes like BodyHitBoxes), welded
+-- and massless, so players and aircraft stand on the deck they see. Attribute WE_BodyDeck: VehicleService's footprint
+-- (WE_HalfLength / WE_HalfWidth, the spawn box, driving) skips them, so the kit's physics box is unchanged. They take no
+-- shots (CanQuery false) and never fire Touched. Returns the number of plates made.
+local function deckPlates(hostModel: Model, primary: BasePart, list: any, base: CFrame, s: number): number
+	local n = 0
+	for _, hb in ipairs(list) do
+		if typeof(hb) == "table" and typeof(hb.At) == "Vector3" and typeof(hb.Size) == "Vector3" then
+			local p = Instance.new("Part")
+			p.Name = "WE_BodyDeck"
+			p.Size = hb.Size * s
+			p.CFrame = base * CFrame.new(hb.At * s)
+			p.Transparency = 1
+			p.CanCollide = true
+			p.CanTouch = false
+			p.CanQuery = false
+			p.Massless = true
+			p.CastShadow = false
+			p.Anchored = false
+			p:SetAttribute("WE_BodyDeck", true)
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = primary
+			w.Part1 = p
+			w.Parent = p
+			p.Parent = hostModel
+			n += 1
+		end
+	end
+	return n
+end
+
 -- After placeKitOnBody (a fitted BodyScale body): BodyMounts, RotorParts, ChaseCamera, BodyHitBoxes, BodyGear and
 -- TailGuard. Returns the number of rotor joints made (for tests). Never errors on a bad ref entry: it is skipped.
 function AirBodyRig.Apply(hostModel: Model, primary: BasePart, clone: Model, ref: any): number
@@ -421,6 +500,9 @@ function AirBodyRig.Apply(hostModel: Model, primary: BasePart, clone: Model, ref
 		and ref.BodyHitBoxes == nil
 		and ref.BodyGear == nil
 		and ref.TailGuard ~= true
+		and ref.KitRotor == nil
+		and ref.BodyDeck == nil
+		and ref.BodyKitNoCollide == nil
 	then
 		return 0 -- every car / boat body and every aircraft ref without the air-looks fields
 	end
@@ -428,7 +510,7 @@ function AirBodyRig.Apply(hostModel: Model, primary: BasePart, clone: Model, ref
 	if base == nil then
 		return 0
 	end
-	local s = math.clamp(tonumber(ref.BodyScale) or 1, 0.05, 4)
+	local s = AirBodyRig.ClampScale(ref, tonumber(ref.BodyScale) or 1)
 	if typeof(ref.BodyMounts) == "table" then
 		for name, at in pairs(ref.BodyMounts) do
 			local p = if typeof(name) == "string" then hostModel:FindFirstChild(name) else nil
@@ -438,6 +520,20 @@ function AirBodyRig.Apply(hostModel: Model, primary: BasePart, clone: Model, ref
 				local rot = p.CFrame - p.CFrame.Position
 				reweld(primary, p, CFrame.new((base * CFrame.new(at * s)).Position) * rot * CFrame.new(0, 0, p.Size.Z * 0.5))
 				p.CanQuery = false -- air2 fix1: a muzzle point, never a hit box beside the aircraft
+			end
+		end
+	end
+	if typeof(ref.KitRotor) == "table" then
+		kitRotor(hostModel, primary, clone, ref.KitRotor, base, s) -- v87: before the joints (they are made where it lands)
+	end
+	if typeof(ref.BodyDeck) == "table" then
+		deckPlates(hostModel, primary, ref.BodyDeck, base, s)
+	end
+	if typeof(ref.BodyKitNoCollide) == "table" then
+		for _, name in ipairs(ref.BodyKitNoCollide) do
+			local p = if typeof(name) == "string" then hostModel:FindFirstChild(name) else nil
+			if p and p:IsA("BasePart") and p ~= primary and not isSeat(p) then
+				p.CanCollide = false
 			end
 		end
 	end

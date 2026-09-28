@@ -828,6 +828,25 @@ local function resolveVehicleRef(vehicleId: string, kitFamily: string?): AssetRe
 	return nil
 end
 
+-- v87 (Code Bot): a Rollout = "Body" ref (the helicopter / bomber / transport / ship store bodies) is worn only as
+-- VisualAssetConfig.BodyRollout allows: "all" = everyone, "owner" = only a vehicle whose owner is the playtest owner
+-- (AdminConfig.IsPlaytestOwner, shaunie6), anything else = nobody. Every other ref is always allowed (cars, jets).
+function VisualAssetService.BodyAllowed(ref: any, ownerUserId: number?): boolean
+	if typeof(ref) ~= "table" or ref.Rollout ~= "Body" then
+		return true
+	end
+	local mode = (VisualAssetConfig :: any).BodyRollout
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		local ok, admin = pcall(function()
+			return require(Shared.Configs.AdminConfig)
+		end)
+		return ok and typeof(admin) == "table" and admin.IsPlaytestOwner(ownerUserId) == true
+	end
+	return false
+end
+
 function VisualAssetService.ResolveVehicleAssetId(vehicleId: string, kitFamily: string?): number?
 	local ref = resolveVehicleRef(vehicleId, kitFamily)
 	return if ref then refId(ref) else nil
@@ -955,7 +974,7 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 		return nil
 	end
 	local fitScale = if typeof(ref.BodyScale) == "number" and ref.BodyScale > 0 then ref.BodyScale else nil
-	local s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)
+	local s = AirBodyRig.ClampScale(ref, fitScale or primary.Size.Z / bodyLen) -- v87: a ref's BodyMinScale lowers the 0.05 floor
 	-- lowest physics-wheel point in the chassis frame (else the chassis bottom)
 	local bottom = -primary.Size.Y * 0.5
 	local found = false
@@ -981,6 +1000,8 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	end
 	-- air2 fix1: BodyLift stands a long aircraft body higher on its drawn gear (AirBodyRig), so its tail clears the runway
 	local lift = if fitScale and typeof(ref.BodyLift) == "number" then math.clamp(ref.BodyLift, 0, 4) else 0
+	-- v87: a ship body sinks BodyWaterline studs, so its hull sits in the water the kit rides on (not on top of it)
+	lift -= if fitScale and typeof(ref.BodyWaterline) == "number" then math.clamp(ref.BodyWaterline, 0, 30) else 0
 	local anchor = Vector3.new((lx + hx) * 0.5, ly, (lz + hz) * 0.5)
 	local base = primary.CFrame * CFrame.new(shift.X, bottom + lift, shift.Z) * CFrame.Angles(0, math.rad(yawDeg), 0)
 	-- vscale: FitShadowShare of the FITTED body's length (at BodyScale the chassis is far shorter than the body)
@@ -1027,7 +1048,7 @@ end
 -- (WE_VisualHalfLength / WE_VisualHalfWidth / WE_VisualTop) for VehicleService's spawn spot, exit spot, prompt ranges
 -- and the friendly gate; WE_HalfLength / WE_HalfWidth stay the kit's (driving, splash, collisions).
 local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model, ref: AssetRef)
-	local s = math.clamp(ref.BodyScale or 1, 0.05, 4)
+	local s = AirBodyRig.ClampScale(ref, ref.BodyScale or 1)
 	local bottom, roofY = math.huge, -math.huge
 	local halfX, halfZ = 0, 0
 	for _, d in ipairs(clone:GetDescendants()) do
@@ -1121,9 +1142,13 @@ end
 	Clone catalog visual under hostModel, welded to primary, non-colliding.
 	Returns true if attached. Never destroys host Part kit.
 ]]
-function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?): boolean
+function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?, ownerUserId: number?): boolean
 	local ref = resolveVehicleRef(vehicleId, kitFamily)
 	if not ref then
+		return false
+	end
+	-- v87: an owner-only store body (Rollout = "Body") on anyone else's vehicle: the Part kit stays (no load at all)
+	if not VisualAssetService.BodyAllowed(ref, ownerUserId) then
 		return false
 	end
 	local assetId = refId(ref)
@@ -1142,6 +1167,34 @@ function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: 
 		return false
 	end
 	AirBodyRig.StripSigns(clone, ref) -- air-looks: a store body's name signs (and decals with StripDecals) go, whole model or pack piece
+	-- v87: a whole-model body drops its OmitParts before the fit (a pack piece lost them when it was split), and a plain
+	-- store mesh takes BodyColor / BodyMaterial (BodyClearTexture: a dead texture path goes so the colour shows)
+	if typeof(ref.ChildName) ~= "string" and typeof(ref.OmitParts) == "table" then
+		local omit: { [string]: boolean } = {}
+		for _, n in ipairs(ref.OmitParts :: { string }) do
+			omit[n] = true
+		end
+		for _, d in ipairs(clone:GetDescendants()) do
+			if d.Parent ~= nil and omit[d.Name] and (d:IsA("BasePart") or d:IsA("Model")) then
+				d:Destroy()
+			end
+		end
+	end
+	if typeof(ref.BodyColor) == "Color3" then
+		local col: Color3 = ref.BodyColor :: any
+		local mat: any = ref.BodyMaterial
+		for _, d in ipairs(clone:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.Color = col
+				if typeof(mat) == "EnumItem" then
+					d.Material = mat
+				end
+				if ref.BodyClearTexture == true and d:IsA("MeshPart") then
+					d.TextureID = ""
+				end
+			end
+		end
+	end
 	local fitted = ref.Fit == "Kit" and fitBodyToKit(clone, hostModel, primary, ref) ~= nil
 	local attached, stripped = weldCloneToPrimary(clone, primary, "WE_CatalogVisual", fitted)
 	if not attached then
@@ -2617,6 +2670,9 @@ function VisualAssetService.TryAttachParkedPresence(plinth: BasePart, structureI
 					attached = true
 				else
 					local ref = resolveVehicleRef(vehicleId :: string, nil)
+					if ref and ref.Rollout == "Body" then
+						ref = nil -- v87: the owner-only fitted bodies never dress a plot's parked silhouette (unscaled, everyone sees it)
+					end
 					local assetId = if ref then refId(ref) else nil
 					if assetId then
 						local template = templateForRef(ref)

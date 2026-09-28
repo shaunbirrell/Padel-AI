@@ -942,7 +942,8 @@ local function footprintOf(model: Model): Footprint
 	local ccf = if chassis and chassis:IsA("BasePart") then chassis.CFrame else model:GetPivot()
 	local hx, hz, low, top = 0, 0, 0, 0
 	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("BasePart") and d.CanCollide then
+		-- v87: a ship body's deck plates (WE_BodyDeck, AirBodyRig) are for standing on, never the kit's physics box
+		if d:IsA("BasePart") and d.CanCollide and d:GetAttribute("WE_BodyDeck") == nil then
 			local cf = d.CFrame
 			local s = d.Size * 0.5
 			for _, sx in ipairs({ -1, 1 }) do
@@ -1860,7 +1861,7 @@ local function buildVehicleModel(def: VehicleDef, at: CFrame, ownerUserId: numbe
 	pcall(VehicleService._VehicleHealth.ApplySeatAttributes, model, def)
 	-- Optional free Creator Store visual (non-colliding); Part kit stays authoritative
 	pcall(function()
-		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family)
+		VisualAssetService.TryAttachVehicleVisual(model, def.Id or "", family, ownerUserId) -- v87: owner-only bodies (BodyRollout)
 	end)
 	-- owner asset list hook: turret dress on the kit's weapon mount (VisualAssetConfig.VehicleWeapons: each ref names its
 	-- Mount part and an allow-list of kit families / vehicle ids; nothing else ever wears it). A 0 id is a no-op (no
@@ -5081,6 +5082,8 @@ end
 -- ── Test hooks (headless sim; spec §7) ─────────────────────────────────────────────────────────
 VehicleService._DriveModeFor = driveModeFor
 VehicleService._DriveAttributes = driveAttributes
+-- v87: the read-only Open Cloud body check builds a vehicle (never parented) and inspects its fitted body
+VehicleService._BuildVehicleModel = buildVehicleModel
 VehicleService._Footprint = footprintOf
 VehicleService._WaterSurfaceAt = waterSurfaceAt
 VehicleService._IsConnectedToSea = isConnectedToSea

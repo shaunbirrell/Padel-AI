@@ -772,8 +772,8 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Ass
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FuelTanker = { ModelAssetId = 0", "v41 Cargo Truck FuelTanker")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "AmmoCarrier = { ModelAssetId = 0", "v41 Logistics AmmoCarrier")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "TroopTransport = { ModelAssetId = 0", "v41 TroopTransport Army Truck")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "PatrolBoat = { ModelAssetId = 0", "v41 PatrolBoat")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FastAttackCraft = { ModelAssetId = 0", "v41 Attack Boat")
+# v87 (Code Bot): retired, superseded in tools/checks/codebot_v87.py: #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "PatrolBoat = { ModelAssetId = 0", "v41 PatrolBoat")
+# v87 (Code Bot): retired, superseded in tools/checks/codebot_v87.py: #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FastAttackCraft = { ModelAssetId = 0", "v41 Attack Boat")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'LandingCraft = { ModelAssetId = 0', "v41 LandingCraft=0 reject template")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 13195201090", "v41 no Build-a-Boat template ID")
 must_contain("src/ServerScriptService/Server/Modules/RigBuilder.luau", 'local torsoColor = colorOf("Vest", rootColor)', "R-RIG: each kind keeps its kit colours on the Soldier body")
@@ -811,7 +811,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Mor
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "RocketArtillery = { ModelAssetId = 0", "v42 RocketArtillery MLRS")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "BridgeLayer = { ModelAssetId = 0", "v42 Engineer Track BridgeLayer")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "LightScoutTank = { ModelAssetId = 0", "v42 Scout Tank")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Frigate = { ModelAssetId = 0", "v42 Frigate")
+# v87 (Code Bot): retired, superseded in tools/checks/codebot_v87.py: #must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Frigate = { ModelAssetId = 0", "v42 Frigate")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Destroyer = { ModelAssetId = 0, Note = \"W1 CFG drop (real-world ship)", "v42 Destroyer")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Cruiser = { ModelAssetId = 0, Note = \"W1 CFG drop (real-world ship)", "v42 Cruiser")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'AircraftCarrier = { ModelAssetId = 0', "v42 Carrier Part-kit")
@@ -1095,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1161,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 86)', "v86 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 87)', "v87 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1234,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 86)', "v86 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 87)', "v87 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1263,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 86)', "v86 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 87)', "v87 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1318,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 86)', "v86 WE_Build=86 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 86)', "v86 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 87)', "v87 WE_Build=87 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 87)', "v87 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -7897,7 +7897,7 @@ else:
     bad("vscale: Pickup (PatrolTruck + EscortTruck) at Roblox size, driver on the body's VehicleSeat")
 
 # [new] fit: scale from config, shadows from the fitted length, seats / roof parts / label / extents after a successful fit
-must_contain(VS_VAS, "\tlocal s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)", "vscale: body scale = BodyScale, else chassis length / body length")
+# v87 (Code Bot): retired, superseded in tools/checks/codebot_v87.py: #must_contain(VS_VAS, "\tlocal s = math.clamp(fitScale or primary.Size.Z / bodyLen, 0.05, 4)", "vscale: body scale = BodyScale, else chassis length / body length")
 must_contain(VS_VAS, "\tlocal shadowMin = (if fitScale then bodyLen * s else primary.Size.Z) * (tonumber((VisualAssetConfig :: any).FitShadowShare) or 0.5)", "vscale: shadow threshold = FitShadowShare of the fitted body length (phones: 2-5 casters)")
 must_contain(VS_VAS, "\tpart.CFrame = cf\n\tlocal w = Instance.new(\"WeldConstraint\")\n\tw.Part0 = primary\n\tw.Part1 = part\n\tw.Parent = primary", "vscale: a moved kit part is welded again to the chassis")
 must_contain(VS_VAS, "\t\t\tat = Vector3.new(math.clamp(at.X, -mx, mx), at.Y, math.clamp(at.Z, -mz, mz))\n\t\t\treweldAt(primary, seat, CFrame.new(primary.CFrame:PointToWorldSpace(at)) * rot * CFrame.new(0, -seat.Size.Y * 0.5, 0))\n\t\t\tseat.CanCollide = false", "vscale: kit seat top on the body seat top, CanCollide off (drive footprint unchanged); R2.1 its centre kept inside the kit's collidable box")
@@ -8890,8 +8890,9 @@ AIRLOOKS_CHECK = "tools/WeCheck2_Replacements.luau"
 # the six family rows (AIR2: the jet is live on its four keys, the rescue helicopter pick is rejected: origin check)
 for _al_key in ("FighterJet", "InterceptorJet", "TrainerJet", "LightFighter"):
     must_contain(AIRLOOKS_VAC, f'\t\t{_al_key} = {{\n\t\t\tModelAssetId = 14589101870,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 180,\n\t\t\tHideKit = true,\n', f"AIRLOOKS/AIR2: Vehicles.{_al_key} shows the owner's jet 14589101870, nose turned forward (Yaw 180: its nose is +Z in his lines)")
-for _al_key in ("RescueHeli", "MedevacHeli"):
-    must_contain(AIRLOOKS_VAC, f'\t\t{_al_key} = {{ ModelAssetId = 0, Note = "owner replacement pick Medical Helicopter (TripleTripleTwinTips) not used: origin check 2026-09-28 (its rotor meshes and paint were uploaded by another creator) - family body / Part kit" }} :: AssetRef,', f"AIRLOOKS/AIR2: Vehicles.{_al_key} keeps its Part kit: the owner's pick 9120014090 failed the origin check")
+# v87 (Code Bot): retired (RescueHeli / MedevacHeli now wear the owner's pick 3130894523), see tools/checks/codebot_v87.py
+#for _al_key in ("RescueHeli", "MedevacHeli"):
+#    must_contain(AIRLOOKS_VAC, f'\t\t{_al_key} = {{ ModelAssetId = 0, Note = "owner replacement pick Medical Helicopter (TripleTripleTwinTips) not used: origin check 2026-09-28 (its rotor meshes and paint were uploaded by another creator) - family body / Part kit" }} :: AssetRef,', f"AIRLOOKS/AIR2: Vehicles.{_al_key} keeps its Part kit: the owner's pick 9120014090 failed the origin check")
 must_not_contain(AIRLOOKS_VAC, "PendingAssetId = 3553891209", "AIRLOOKS: the held jet 3553891209 is out of the config (the owner picked another)")
 # config-first tunables and the new ref fields
 must_contain(AIRLOOKS_VAC, '\tAirBody = {\n\t\tChaseCameraMargin = 18,\n\t\tChaseCameraMax = 60,\n\t\tBodyHitBoxes = true,\n\t\tTailGuard = { Enabled = true, Margin = 0.3, MinPitch = 3.5, LeadSeconds = 0.15 },\n\t\tRotorSpin = {\n\t\t\tEnabled = true,\n\t\t\tHz = 30,\n\t\t\tSteps = 24,\n\t\t\tMaxAircraft = 6,\n\t\t\tMaxDistance = 400,\n\t\t\tSpinUpSeconds = 2.5,\n\t\t\tRefresh = 0.5,\n\t\t},\n\t},\n', "AIRLOOKS/AIR2: VisualAssetConfig.AirBody holds the chase-camera margin (18: AIR2, the 44-stud jet) / cap, the hit-plate switch and the TailGuard numbers (AIR2 fix1), and the rotor-spin switch and budget (30 Hz, 6 aircraft, 400 studs)")
@@ -8912,7 +8913,7 @@ must_contain(AIRLOOKS_RIG, 'm:SetAttribute("WE_RotorRps", rps)\n\t\tm.Parent = p
 must_contain(AIRLOOKS_RIG, 'if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == p) or (w.Part0 == p and w.Part1 == primary)) then\n\t\t\t\t\tw:Destroy()', "AIRLOOKS: a rotor part's weld is replaced by its joint (never both)")
 must_contain(AIRLOOKS_RIG, 'local decals = ref.StripDecals == true\n\tlocal gone = 0\n\tfor _, d in ipairs(clone:GetDescendants()) do\n\t\tif d.Parent ~= nil and (d:IsA("BillboardGui") or d:IsA("SurfaceGui") or (decals and (d:IsA("Decal") or d:IsA("Texture")))) then', "AIRLOOKS: a store body's BillboardGui / SurfaceGui signs go (the Medical Helicopter's name sign), its decals only with StripDecals [mutant: decals = true]")
 must_not_contain(AIRLOOKS_RIG, 'if typeof(ref.ChildName) == "string" then\n\t\treturn 0', "AIRLOOKS fix1: StripSigns strips pack pieces too (a trimmed body is always a ChildName piece, and extractPiece keeps GUIs) [round 0: skipped pieces]")
-must_contain(AIRLOOKS_RIG, '\tif\n\t\tref.BodyMounts == nil\n\t\tand ref.RotorParts == nil\n\t\tand ref.ChaseCamera ~= true\n\t\tand ref.BodyHitBoxes == nil\n\t\tand ref.BodyGear == nil\n\t\tand ref.TailGuard ~= true\n\tthen\n\t\treturn 0', "AIRLOOKS/AIR2 fix1: AirBodyRig.Apply is a no-op for every car, boat and aircraft ref without the air-looks fields (fix1 adds BodyHitBoxes / BodyGear / TailGuard)")
+# v87 (Code Bot): retired, superseded in tools/checks/codebot_v87.py: #must_contain(AIRLOOKS_RIG, '\tif\n\t\tref.BodyMounts == nil\n\t\tand ref.RotorParts == nil\n\t\tand ref.ChaseCamera ~= true\n\t\tand ref.BodyHitBoxes == nil\n\t\tand ref.BodyGear == nil\n\t\tand ref.TailGuard ~= true\n\tthen\n\t\treturn 0', "AIRLOOKS/AIR2 fix1: AirBodyRig.Apply is a no-op for every car, boat and aircraft ref without the air-looks fields (fix1 adds BodyHitBoxes / BodyGear / TailGuard)")
 must_not_contain(AIRLOOKS_RIG, "RenderStepped", "AIRLOOKS: AirBodyRig (server) never runs per frame")
 # the client: one throttled loop, no scans, no waits, only while the driver seat is taken; the camera comes back
 must_contain(AIRLOOKS_CLI, "RunService.PreSimulation:Connect(onStep)", "AIRLOOKS: AircraftBodyClient spins every rotor from one PreSimulation loop")
