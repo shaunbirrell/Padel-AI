@@ -9090,6 +9090,17 @@ must_contain(AIR2X_WE2, "\t9120014090, -- Medical Helicopter (TripleTripleTwinTi
 must_contain(AIR2X_PWC, "This is a count check: ENV carries only ids=N, not the id list", "AIR2 fix2: the parser's docs say what the code checks (a count: the ground2 lane's file) [round 1: fails]")
 must_not_contain(AIR2X_PWC, "asks for exactly the ids it did not print", "AIR2 fix2: ... the round-1 'exactly the ids' claim is gone")
 
+
+# ===== LANE CHECK FILES (LANES.md, 2026-09-28) =====
+# Parallel Claude sessions never add pins to this file any more (it was the top merge-conflict file). Each lane
+# appends its pins to its own tools/checks/lane_<x>.py; they run here, in file-name order, in this module's globals,
+# so must_contain / must_not_contain / must_absent / read / ok / bad and ROOT work unchanged. Everything above this
+# block is frozen legacy: only Code Bot edits it (the WE_Build asserts on each publish, and moving pins on request).
+import glob as _lane_glob
+for _lane_file in sorted(_lane_glob.glob(str(ROOT / "tools" / "checks" / "*.py"))):
+    with open(_lane_file, encoding="utf-8") as _lane_fh:
+        exec(compile(_lane_fh.read(), _lane_file, "exec"), globals())
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

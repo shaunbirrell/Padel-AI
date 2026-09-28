@@ -1,5 +1,35 @@
 # WAR EMPIRE — rules for anyone working in this repo
 
+## 0. Start here (every session, every time)
+- **Parallel sessions:** read [`LANES.md`](LANES.md) first. It says which lane your job is in, which files you own,
+  the rules for shared hot files, the branch name (`claude/lane-<x>-<topic>` from the latest `phase-7-polish`), and
+  how to hand back (push your branch, reply `DONE` with a summary and a test list).
+- **Background:** `LATEST-HANDOFF.md`, `HANDOFF-TO-NEW-CODE-BOT.md`, `MASTER_BUILD_SPEC.md`, then the newest
+  sections of `ASSUMPTIONS.md` for your area.
+- **Never:** bump `WE_Build`, publish, build `dist/`, or push to `phase-7-polish` or `main`. Those are Code Bot's
+  job (the integrator).
+- **Flags:** new gameplay ships owner-only first (`AdminConfig.IsPlaytestOwner`, UserId 470626172, like
+  `ArmyConfig.Rollout` and `AircraftWeaponConfig.LiveFor`) behind a config switch. OFF must equal the old behaviour.
+- **Store models (Creator Store assets):**
+  - A model is used only after it passes the owner's `WE_CHECK2` check (`tools/WeCheck2*.luau` via Open Cloud;
+    see `docs/ASSET_WIRING.md`).
+  - Origin rule: every mesh and texture must be uploaded by the model's creator (or by Roblox).
+  - At most 40 parts after trimming, no scripts (strip them), at most 20,000 triangles for phones.
+  - No real-world or franchise copies (no F-16, B-2, Apache, Black Hawk, named real ships, other games' assets).
+  - It goes through `tools/wire-asset-ids.py` (PENDING, then promote or REJECT) and is attributed in
+    `docs/ASSET_LICENSES.md`.
+- **BuyPathStatic:** add your pins to `tools/checks/lane_<x>.py`, never to the body of `tools/BuyPathStatic.py`.
+- **Definition of done:**
+  - the parse gate is clean on changed files;
+  - `python3 tools/BuyPathStatic.py` ends `FAIL=0`, with your new pins;
+  - `rojo build` succeeds;
+  - the feature's own tests pass (no invented results);
+  - the change is behind an owner-only flag if it is gameplay;
+  - an `ASSUMPTIONS.md` section is appended;
+  - the branch is merged with the latest `phase-7-polish` and pushed;
+  - the `DONE` reply lists what the owner must test **on his phone**.
+
+
 Roblox military tycoon/PvP. Luau (`--!strict`) + Rojo. Build: `rojo build -o dist/WarEmpire-PERF.rbxlx`.
 The owner publishes this branch to the live game, so every push must be tested.
 
@@ -104,4 +134,4 @@ Design, build and verify for a **phone in landscape first**, PC second. Anything
 - `DataService` harness: all pass.
 - Plus the feature's own tests.
 
-Commit only files that were verified together. Push to both remotes.
+Commit only files that were verified together. Lane sessions push only their own `claude/lane-*` branch (LANES.md §6); Code Bot pushes `phase-7-polish` and the Padel-AI mirror.
