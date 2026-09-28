@@ -8677,6 +8677,180 @@ def _fbw_rules():
 _fbw_rules()
 # ── end fb4water
 
+# ── army lane A0 (SPEC-ARMY-FINAL §7.1 / §7.2 / §10.1; owner 2026-09-28: "I went to the bank and they didn't shoot"):
+#    the FOLLOW escort defends a targeted owner (NPCs aiming at him or hit by him within 90, DefendLeash 28), side-steps
+#    for a sight line, and its shots are visible (WeaponFx, sampled per army + an army bucket per recipient); one NPC
+#    list per think pass replaces the per-unit GetTagged scan. Ships Rollout.Escort = "owner" (the owner's playtest
+#    account only). Every rule reads comment-stripped code; a missing file / function is a FAIL ──
+A0_AC = "src/ReplicatedStorage/Shared/Configs/ArmyConfig.luau"
+A0_TC = "src/ReplicatedStorage/Shared/Configs/TerritoryConfig.luau"
+A0_CFC = "src/ReplicatedStorage/Shared/Configs/CombatFairnessConfig.luau"
+A0_SQ = "src/ServerScriptService/Server/Services/SquadOrdersService.luau"
+A0_CS = "src/ServerScriptService/Server/Services/CombatService/init.luau"
+A0_FX = "src/ServerScriptService/Server/Services/CombatService/CombatFx.luau"
+
+
+def _a0_code(rel: str) -> str | None:
+    """The file with --[[ ]] block comments and -- line comments removed (a comment-only line is dropped); None when missing."""
+    text = read(rel)
+    if text is None:
+        return None
+    text = re.sub(r"--\[(=*)\[.*?\]\1\]", "\x00", text, flags=re.S)
+    out = []
+    for line in text.splitlines():
+        i = line.find("--")
+        kept = (line if i < 0 else line[:i]).replace("\x00", "").rstrip()
+        if kept.strip() == "" and line.strip() != "":
+            continue
+        out.append(kept)
+    return "\n".join(out) + "\n"
+
+
+def _a0_fn(code: str | None, header: str) -> str | None:
+    """Body of the function whose header line starts with `header` (to its column-0 `end`), or None."""
+    if code is None:
+        return None
+    i = code.find(header)
+    if i < 0:
+        return None
+    j = code.find("\nend\n", i)
+    return code[i:j if j >= 0 else len(code)]
+
+
+def _a0_block(code: str | None, name: str) -> str:
+    """The body of a top-level `\tName = {` table in a config (to its `\t},` line); '' when missing."""
+    m = re.search(r"^\t" + name + r" = \{\n(.*?)^\t\},\n", code or "", re.M | re.S)
+    return m.group(1) if m else ""
+
+
+def _a0_check(cond: bool, label: str, why: str) -> None:
+    if cond:
+        ok("army A0: " + label)
+    else:
+        bad("army A0: " + label + " — " + why)
+
+
+def _a0_rules() -> None:
+    ac = _a0_code(A0_AC)
+    # 1. rollout shipping values (integrator decision: every part "owner" = the owner's playtest account only)
+    vals = dict(re.findall(r'^\t\t(\w+) = "(\w+)",', _a0_block(ac, "Rollout"), re.M))
+    _a0_check(vals == {"Escort": "owner", "Army": "owner", "March": "owner"},
+              'ArmyConfig.Rollout ships Escort / Army / March = "owner" (the owner\'s playtest account only)',
+              f"found {vals or 'no Rollout block'} in {A0_AC}")
+    # 2. the gate: "all" = everyone, "owner" = AdminConfig.IsPlaytestOwner only, anything else = off (fail closed)
+    ro = _a0_fn(ac, "function ArmyConfig.RolloutOf(") or ""
+    lf = _a0_fn(ac, "function ArmyConfig.LiveFor(") or ""
+    il = _a0_fn(ac, "function ArmyConfig.IsLive(") or ""
+    _a0_check('if v == "owner" or v == "all" then\n\t\treturn v\n\tend\n\treturn "off"' in ro
+              and 'if v == "all" then\n\t\treturn true\n\tend' in lf
+              and 'if v == "owner" then\n\t\treturn AdminConfig.IsPlaytestOwner(userId) == true\n\tend\n\treturn false' in lf
+              and 'return ArmyConfig.LiveFor(part, (player :: Player).UserId)' in il,
+              'ArmyConfig.LiveFor: "all" = everyone, "owner" = AdminConfig.IsPlaytestOwner only, any other value = off',
+              "RolloutOf / LiveFor / IsLive body changed or missing")
+    reqs = re.findall(r"require\(([^)]*)\)", ac or "")
+    _a0_check(ac is not None and "script.Parent.AdminConfig" in reqs and all(r.endswith(("AdminConfig", "PlotFrame")) for r in reqs),
+              "ArmyConfig requires only AdminConfig (+ PlotFrame, spec §10.1): pure, server and client read the same answer", f"requires {reqs}")
+    # 3. D1 / D8 are not built: FightRaiders (ArmyConfig.Guard) and HitsUnits (Posts garrison) are false wherever set
+    for rel, key in ((A0_AC, "FightRaiders"), (A0_TC, "HitsUnits")):
+        code = _a0_code(rel)
+        found = re.findall(r"\b" + key + r"\s*=\s*([\w\"]+)", code or "")
+        _a0_check(code is not None and all(v == "false" for v in found),
+                  f"{key} is false wherever it is set ({len(found)} site(s) in {rel.rsplit('/', 1)[-1]}; owner decision D1 / D8 not built)",
+                  f"found {found}" if code is not None else f"missing {rel}")
+    # 4. escort + shot fx numbers (spec §10.1)
+    esc = _a0_block(ac, "Escort")
+    want = ["DefendRadius = 90,", "DefendLeash = 28,", "FocusFireSeconds = 6,", "SideStep = true,", "SideStepAfterBlocked = 2,",
+            "SideStepStuds = { 4, 8 },", "SideStepMinGap = 1.5,", "NpcSnapshot = true,"]
+    miss = [w for w in want if ("\t\t" + w) not in esc]
+    _a0_check(not miss, "ArmyConfig.Escort: defend radius 90, leash 28, focus 6 s, side-step 4 / 8 studs after 2 blocked checks, >= 1.5 s apart; NPC snapshot on",
+              f"missing {miss}")
+    fxb = _a0_block(ac, "ShotFx")
+    hz = re.search(r"^\t\tPerRecipientHz = ([\d.]+),", fxb, re.M)
+    burst = re.search(r"^\t\tPerRecipientBurst = ([\d.]+),", fxb, re.M)
+    _a0_check("\t\tEnabled = true," in fxb and "\t\tPerArmyMinGap = 0.25," in fxb and hz is not None and 0 < float(hz.group(1)) <= 6
+              and burst is not None and 1 <= float(burst.group(1)) <= 2,
+              "ArmyConfig.ShotFx: one tracer per army per 0.25 s, army bucket <= 6 / s per recipient (burst <= 2)", f"ShotFx block: {fxb.strip()[:160]!r}")
+    txt = _a0_block(ac, "Text")
+    bad_words = [w for w in ("click", "tap", "press", "key", "button", "lmb", "[e]") if re.search(r"\b" + re.escape(w), txt, re.I)]
+    _a0_check(txt != "" and not bad_words, "ArmyConfig.Text is device-neutral (no key names, no click / tap)", f"found {bad_words or 'no Text block'}")
+    # 5. SquadOrdersService: the live escort only for a live owner; everyone else runs e506c9c's pick, leash and shots
+    sq = _a0_code(A0_SQ)
+    loop = _a0_fn(sq, "function SquadOrdersService.Init(") or ""
+    live_pick = ('\t\t\t\t\tescortLive = false\n\t\t\t\t\tescortLeash = CombatFairnessConfig.EscortLeash\n\t\t\t\t\tif st.Order == "Follow" and proot then\n'
+                 '\t\t\t\t\t\tlocal r = CombatFairnessConfig.EscortEngageRadius\n\t\t\t\t\t\tif ArmyCfg.LiveFor("Escort", player.UserId) then\n')
+    head_pick = ('\t\t\t\t\t\telse\n\t\t\t\t\t\t\tescortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, '
+                 'player, escortCands, r)\n\t\t\t\t\t\tend\n')
+    _a0_check(live_pick in loop and head_pick in loop and "escortLeash = math.max(tonumber(ArmyCfg.Escort.DefendLeash) or escortLeash, escortLeash)" in loop,
+              "the think loop resets the escort per owner; only a live owner (Rollout.Escort) gets the defend pick and DefendLeash, everyone else e506c9c's nearestHostile",
+              "live / HEAD escort pick lines missing in SquadOrdersService.Init's think loop")
+    eu = _a0_fn(sq, "local function escortUnit(") or ""
+    _a0_check("\tlocal leash = escortLeash\n" in eu and "\t\t\tif escortLive then\n\t\t\t\tstepSaw(unit)\n" in eu
+              and "\t\t\tif escortLive and fromPlayer <= leash then\n\t\t\t\tstepBlocked(player, unit, playerRoot, troot, now)\n" in eu
+              and "\tif escortLive and stepMove(unit, playerRoot, troot, fromPlayer, now) then\n\t\treturn true\n\tend\n" in eu,
+              "escortUnit: the leash comes from the pass (EscortLeash unless live + defending); side-step only for a live owner, only while blocked and inside the leash",
+              "escortUnit escortLeash / side-step guards changed or missing")
+    pick = _a0_fn(sq, "local function escortPickLive(") or ""
+    _a0_check("threat(id, player, focus)" in pick and "not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(player, id) == false)" in pick
+              and 'hostileScan(Constants.Tags.NPC)' in pick and '\t\t\tand typeof(inst:GetAttribute("NPCId")) == "string"\n' in pick,
+              "escortPickLive: defend / focus targets come from the server's NPC records (NPCThreat), keep EscortIgnoreCalm + UnitMayHitNPC, CombatService NPCs only",
+              "escortPickLive filters changed or missing")
+    probe = _a0_fn(sq, "local function stepProbe(") or ""
+    _a0_check(probe.count("Workspace:Raycast(") == 1 and "for k = 1, 2 do" in probe and probe.count("losFromEye(") == 1 and "Destroy" not in probe,
+              "side-step probe: <= 4 rays (2 sides x 1 clearance ray + 1 sight ray), never destroys", "stepProbe ray budget changed")
+    # 6. visible shots: after the unchanged unitShoot, only for a live owner, no random numbers; both call sites
+    usf = _a0_fn(sq, "local function unitShotFx(") or ""
+    _a0_check('if cfg.Enabled ~= true or not ArmyCfg.LiveFor("Escort", player.UserId) then\n\t\treturn\n\tend' in usf and "rng" not in usf
+              and "\tif unit.LastFireAt == firedAt then\n\t\treturn\n\tend" in usf
+              and "local hit = unitShoot(player, unit, sh, now, true)\n\t\t\tunitShotFx(player, unit, sr, firedAt, hit)" in (sq or "")
+              and "local hit = unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true)\n\t\t\tunitShotFx(player, unit, troot, firedAt, hit)" in (sq or "")
+              and "unitShotFx(" not in (_a0_fn(sq, "local function unitShoot(") or "x unitShotFx("),
+              "unit tracers: after the unchanged unitShoot (hit roll + ApplyUnitHit), live owners only, no random numbers, escort + ATTACK",
+              "unitShotFx gate / call sites changed or missing")
+    # 7. one NPC list per think pass (no GetTagged per unit per think)
+    nh = _a0_fn(sq, "local function nearestHostile(") or ""
+    _a0_check("for _, inst in ipairs(hostileScan(npcTag)) do" in nh and "GetTagged" not in nh
+              and "\t\t\trefillHostiles()\n" in loop and "\t\t\thostileSnapValid = false\n\t\t\ttable.clear(hostileSnap)\n\t\tend\n\tend)" in loop
+              and (sq or "").count("refillHostiles()") == 2,
+              "nearestHostile reads the pass's NPC list (CombatService.LiveNPCSnapshot, refilled once per pass, invalid outside it); no GetTagged per unit",
+              "snapshot wiring changed or missing")
+    cs = _a0_code(A0_CS)
+    snap = _a0_fn(cs, "function CombatService.LiveNPCSnapshot(") or ""
+    _a0_check(snap != "" and "{" not in snap.split("\n", 1)[-1] and "CollectionService:HasTag(model, tag)" in snap and "rec.Humanoid.Health > 0" in snap and "out[i] = nil" in snap,
+              "CombatService.LiveNPCSnapshot refills its list in place (no table made), tagged + living NPC records only", "LiveNPCSnapshot body changed or missing")
+    # 8. CombatService: focus stamp = the player's own hits only; threat read-only; unit fx gated and unreliable
+    hn = _a0_fn(cs, "local function hurtNPC(") or ""
+    _a0_check("\tif attacker and not (fb ~= nil and fb.UnitShot == true) then\n\t\tlocal stamps = rec.LastHitBy or {}\n\t\trec.LastHitBy = stamps\n\t\tstamps[attacker.UserId] = clock()\n\tend\n" in hn,
+              "hurtNPC stamps LastHitBy for the player's own hits only (a squad hit never feeds focus fire)", "LastHitBy stamp changed or missing")
+    th = _a0_fn(cs, "function CombatService.NPCThreat(") or ""
+    ai = _a0_fn(cs, "function CombatService.NPCsAimingAt(") or ""
+    _a0_check(th != "" and ai != "" and "rec.AimTarget == player" in th and "clock() - at <= focusSeconds" in th
+              and not re.search(r"\b(TakeDamage|SetAttribute|Destroy)\b|\bAimTarget\s*=(?!=)|\bLastHitBy\s*=(?!=)", th + ai),
+              "NPCThreat / NPCsAimingAt only read the NPC records (AimTarget, LastHitBy)", "NPCThreat / NPCsAimingAt missing or writing")
+    uf = _a0_fn(cs, "function CombatService.UnitShotFx(") or ""
+    _a0_check('if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then\n\t\treturn false\n\tend' in uf
+              and "pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)" in uf,
+              "CombatService.UnitShotFx: live owners only, through CombatFx.ArmyBullet with the ShotFx caps (pcall'd)", "UnitShotFx changed or missing")
+    fx = _a0_code(A0_FX)
+    ab = _a0_fn(fx, "function CombatFx.ArmyBullet(") or ""
+    fo = _a0_fn(fx, "local function fanOut(") or ""
+    _a0_check('local payload: Types.WeaponFxPayload = { S = 0, W = "NPC", O = origin, P = landed, K = kind }' in ab
+              and "if last ~= nil and t - last < minGap then" in ab and "take(army.shooter, ownerUid, fx.PerShooterHz, fx.PerShooterBurst, t)" in ab
+              and "fanOut(payload, nil, recipientHz, recipientBurst)" in ab
+              and "if armyHz ~= nil and not take(army.recipient, plr.UserId, armyHz, armyBurst or 1, t) then" in fo
+              and "elseif take(recipientBuckets, plr.UserId, fx.PerRecipientHz, fx.PerRecipientBurst, t) then" in fo
+              and 'RemoteSetup.GetUnreliable(Constants.RemoteNames.WeaponFx)' in (cs or ""),
+              "CombatFx.ArmyBullet: an NPC-rifle bullet (S = 0) on the WeaponFx UnreliableRemoteEvent, one per army per MinGap, army bucket per recipient before the recipient bucket",
+              "ArmyBullet / fanOut army bucket changed or missing")
+    # 9. fairness unchanged: ATTACK kills pay nothing; squads never hurt players; no per-frame loop in the squad service
+    _a0_check("\tUnitKillCreditOnAttack = false," in (_a0_code(A0_CFC) or "") and "return 0, false -- never a player" in (read(A0_CS) or "")
+              and not re.search(r"\b(RenderStepped|Heartbeat|GetDescendants)\b", sq or "x Heartbeat"),
+              "fairness: ATTACK kills pay nothing, squads never hurt a player, SquadOrdersService has no per-frame loop or tree scan",
+              "UnitKillCreditOnAttack / ApplyUnitHit player refusal / per-frame work changed")
+
+
+_a0_rules()
+# ── end army lane A0
+
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

@@ -7687,3 +7687,49 @@ round-2 texts (never merged). Numbers in brackets are from the headless stand-in
     - A pilot who stops on the water has 3 s to start a take-off run; a run started later ditches.
     - The jump correction also puts back an honest car whose stream stalled for 0.9 s or more while it drove round the
       end of a slip or a canal (item 5).
+
+## Army lane A0 — escort + bank engagement (2026-09-28; SPEC-ARMY-FINAL §7.1 / §7.2 / §10.1)
+
+- **ARMY-A0-1 — Rollout gate.** `ArmyConfig.Rollout` parts are `"off" | "owner" | "all"`; any other value counts as
+  `"off"` (fail closed). `"owner"` = `AdminConfig.IsPlaytestOwner` (UserId 470626172), the same gate as
+  `AircraftWeaponConfig.LiveFor`. The server decides (`ArmyConfig.LiveFor(part, userId)` / `IsLive(part, player)`);
+  lanes A and C reuse the helper. Ships `Escort = "owner"`, `Army = "owner"`, `March = "owner"` (integrator decision).
+  Reversible: set a part to `"off"` (today's game) or `"all"`.
+- **ARMY-A0-2 — Defend targets.** For a live owner in FOLLOW, the escort's first targets are the NPCs whose `AimTarget`
+  is the owner (the NPC has picked him; it fires once it sees him) within `Escort.DefendRadius` 90 of him, and the NPCs
+  he hit himself (his own shots, blasts or vehicle guns through the player -> NPC damage path; never his squad's shots)
+  in the last `FocusFireSeconds` 6 within 90. The nearest of them is the primary; then today's escort targets (55).
+  `EscortIgnoreCalm` and `UnitMayHitNPC` still filter every target. Reversible: `Rollout.Escort = "off"`.
+- **ARMY-A0-3 — Defend leash.** The escort leash is `Escort.DefendLeash` 28 only while a defend / focus target exists,
+  else `CombatFairnessConfig.EscortLeash` 20 (today). Geometry: 28 + `AttackRange` 55 = 83, so an NPC the owner hits at
+  85 is taken as the target and the units step out toward it, but none is in range of it until it (or the owner) comes
+  within about 83 studs (stand-in FOCUS85 / FOCUS78).
+- **ARMY-A0-4 — Side-step.** Only the FOLLOW escort of a live owner (GUARD 10 / FIGHT 8 are lanes A / C). After
+  `SideStepAfterBlocked` 2 shot checks in a row with the target in range but out of sight, a probe tries one distance
+  per probe (4, then 8, alternating) to the left and right of the unit's line to the target: per side one knee-height
+  walk-clearance ray (collidable geometry only) and one sight ray (the unit's own LOS rules) = at most 4 rays, at most
+  one probe per unit per `SideStepMinGap` 1.5 s, never while a side-step walk is on. The spot stays within 90 % of the
+  escort leash from the owner and within `AttackRange` of the target; the walk ends at a shot, a new target, the owner
+  leaving the leash, or after `SideStepHoldSeconds` 3.
+- **ARMY-A0-5 — Visible unit shots.** Every unit shot (hit or miss, FOLLOW and ATTACK) of a live owner's army may send
+  one WeaponFx bullet (`UnreliableRemoteEvent`) as an NPC rifle shot (`S = 0`, `W = "NPC"`: the client draws the NPC
+  tracer and the rig's aim pose). One event per army per `ShotFx.PerArmyMinGap` 0.25 s, then an army shooter bucket
+  (`CombatFeelConfig.Fx.PerShooterHz`), then an army bucket per recipient of `PerRecipientHz` 6 (burst 2: armies fire
+  together on the 2.5 Hz think, so at most 2 army tracers per pass reach one player, <= 6 in any second) before
+  CombatFx's own recipient bucket. A miss tracer lands `MissOffsetStuds` 3 beside the target, sides in turn: no random
+  number is drawn, so the squad hit rolls are exactly today's. Cosmetic only (dropped, never queued).
+- **ARMY-A0-6 — One NPC list per think pass (every army, not a Rollout part).** `nearestHostile` reads
+  `CombatService.LiveNPCSnapshot` (refilled in place once per 0.4 s pass, cleared at the end of it) instead of a
+  `CollectionService:GetTagged("WE_NPC")` per unit per think. The list holds exactly the tagged scan's CombatService
+  NPCs (stand-in: 3,000+ passes checked, 0 different), so every pick is the same; only an EXACT distance tie can be
+  broken differently, and e506c9c breaks those by GetTagged order, which Roblox does not specify. One deliberate
+  difference: a WE_NPC model carrying an NPCId that is NOT a live CombatService record (a "ghost": the squadfair
+  reviewer's X4 case, "a despawned record whose model lingers"; no e506c9c code path leaves one, because a record and
+  its model are removed in the same call) is no longer a target, so it cannot soak the squad's fire (X4: e506c9c's real
+  hostile behind the ghost took 0 damage in 20 s, now 400). Kill switch: `ArmyConfig.Escort.NpcSnapshot = false`
+  (exactly the per-unit scan of e506c9c).
+- **ARMY-A0-7 — Focus-fire stamp.** `CombatService` stamps `rec.LastHitBy[userId] = os.clock()` on every damaging hit
+  a player lands through `hurtNPC` (not squad unit shots). One small table per NPC on its first player hit; it goes with
+  the record. Read only by `CombatService.NPCThreat`.
+- **ARMY-A0-8 — D1 / D8 stay off.** `Guard.FightRaiders` (lanes A / D) and the Town Gate garrison `HitsUnits` (lanes
+  B / E) are pinned `false` wherever they are set. In this lane's tree neither key exists; the pins bite after the merge.

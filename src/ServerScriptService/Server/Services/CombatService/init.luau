@@ -61,6 +61,7 @@ local CombatFeelConfig = require(Shared.Configs.CombatFeelConfig) -- W2
 local VehicleCombatConfig = require(Shared.Configs.VehicleCombatConfig) -- W2 (M4)
 local VehicleConfig = require(Shared.Configs.VehicleConfig) -- W2: vehicle names in hit feedback
 local BankRaidConfig = require(Shared.Configs.BankRaidConfig) -- F6: the guarded bank ends a novice shield
+local ArmyConfig = require(Shared.Configs.ArmyConfig) -- army lane A0: squad unit shot fx (ShotFx)
 
 local CombatDamage = require(script.CombatDamage)
 local CombatNPC = require(script.CombatNPC)
@@ -113,6 +114,7 @@ type NPCRecord = {
 	AimTarget: Player?, -- P1-2: the player this NPC is aiming at (CombatNPC reaction delay)
 	AimSince: number,
 	AimBlocked: boolean, -- P1-2: the last line-of-sight check failed (the reaction delay restarts on regaining sight)
+	LastHitBy: { [number]: number }?, -- army lane A0 (focus fire): UserId -> os.clock() of that player's own last hit
 	KillCtx: { Quiet: boolean?, NoKillMarker: boolean? }?, -- W2: set around TakeDamage so an immediate Died pays quietly
 	-- W3 step 2 Phase B, lane N (SpawnNPC opts; a 2-argument spawn gets the defaults, i.e. today's NPC)
 	GroupId: string?, -- an Ops site id; ProvokeGroup / CalmGroup / GroupNPCs / OnNPCDeath carry it
@@ -849,6 +851,12 @@ local function hurtNPC(attacker: Player?, npcId: string, damage: number, weaponI
 	if dealt <= 0 then
 		return 0, false
 	end
+	-- army lane A0 (focus fire, NPCThreat): the player's own hit (never his squad unit's) is stamped on the record
+	if attacker and not (fb ~= nil and fb.UnitShot == true) then
+		local stamps = rec.LastHitBy or {}
+		rec.LastHitBy = stamps
+		stamps[attacker.UserId] = clock()
+	end
 	local killed = rec.Humanoid.Health <= 0
 	local quiet = fb ~= nil and fb.Quiet == true
 	if attacker and (rec.GroupId ~= nil or rec.Stance ~= "Aggressive") then
@@ -1068,6 +1076,7 @@ function CombatService.SpawnNPC(typeId: string?, at: CFrame, opts: NPCSpawnOpts?
 		AimTarget = nil,
 		AimSince = 0,
 		AimBlocked = false,
+		LastHitBy = nil, -- army lane A0 (made on the first player hit)
 		KillCtx = nil,
 		GroupId = o.GroupId,
 		NoRespawn = o.NoRespawn,
@@ -1926,6 +1935,104 @@ function CombatService.ApplyUnitHit(owner: Player, target: Humanoid, damage: num
 		return 0, false -- squadfair: a grouped / stance NPC whose owner is not near: no provoke by proxy
 	end
 	return hurtNPC(owner, npcId, damage, "Squad", { UnitShot = true, NoAttackerFb = true, NoCredit = credit ~= true })
+end
+
+-- ── army lane A0 (SPEC-ARMY-FINAL §7.1): the escort's NPC reads + visible unit shots ─────────────────────────────
+--[[ One hostile list per squad think pass (SquadOrdersService), instead of a CollectionService:GetTagged("WE_NPC") per
+	unit. `out` is refilled IN PLACE (entries 1..n, the old tail cleared; no table is made) with the Model of every NPC
+	record whose model is in the world, tagged WE_NPC and alive (Health > 0): the same models the tagged scan returns
+	(only CombatService NPCs carry an NPCId; a static WE_NPC statue has none and is skipped by both). Returns n. ]]
+function CombatService.LiveNPCSnapshot(out: { Model }): number
+	local n = 0
+	local tag = Constants.Tags.NPC
+	for _, rec in pairs(npcRecords) do
+		local model = rec.Model
+		if model and model.Parent ~= nil and rec.Humanoid.Health > 0 and CollectionService:HasTag(model, tag) then
+			n += 1
+			out[n] = model
+		end
+	end
+	for i = #out, n + 1, -1 do
+		out[i] = nil
+	end
+	return n
+end
+
+-- the live record of an NPC model id (nil: unknown, dead or gone)
+local function liveRecord(npcId: any): NPCRecord?
+	local rec = if typeof(npcId) == "string" then npcRecords[npcId] else nil
+	if rec == nil or not rec.Alive or rec.Humanoid.Health <= 0 or rec.Root.Parent == nil then
+		return nil
+	end
+	return rec
+end
+
+--[[ The NPCs aiming at `player` now (CombatNPC's AimTarget: the player it has picked; it fires once it sees him), within
+	`maxStuds` of his living root when given. Fills `out` in place when given (Models; old tail cleared). Returns how
+	many. No table is made. ]]
+function CombatService.NPCsAimingAt(player: Player, out: { Model }?, maxStuds: number?): number
+	local n = 0
+	local proot: BasePart? = nil
+	if maxStuds ~= nil then
+		local _, hum, root = characterParts(player)
+		if hum == nil or root == nil or hum.Health <= 0 then
+			if out then
+				table.clear(out)
+			end
+			return 0
+		end
+		proot = root
+	end
+	local r2 = if maxStuds ~= nil then maxStuds * maxStuds else math.huge
+	for _, rec in pairs(npcRecords) do
+		if rec.AimTarget == player and rec.Alive and rec.Humanoid.Health > 0 and rec.Root.Parent ~= nil then
+			local within = true
+			if proot then
+				local d = rec.Root.Position - proot.Position
+				within = d:Dot(d) <= r2
+			end
+			if within then
+				n += 1
+				if out then
+					out[n] = rec.Model
+				end
+			end
+		end
+	end
+	if out then
+		for i = #out, n + 1, -1 do
+			out[i] = nil
+		end
+	end
+	return n
+end
+
+--[[ Is this NPC a threat to `player` (the escort's defend-when-targeted and focus-fire test)? Returns (aiming: its
+	AimTarget is the player, hitRecently: the player's own hit on it landed within `focusSeconds`). false, false for
+	an unknown / dead id or a non-Player. ]]
+function CombatService.NPCThreat(npcId: any, player: Player, focusSeconds: number): (boolean, boolean)
+	local rec = liveRecord(npcId)
+	if rec == nil or typeof(player) ~= "Instance" or not player:IsA("Player") then
+		return false, false
+	end
+	local aiming = rec.AimTarget == player
+	local stamps = rec.LastHitBy
+	local at = if stamps then stamps[player.UserId] else nil
+	local recent = at ~= nil and clock() - at <= focusSeconds
+	return aiming, recent
+end
+
+--[[ A squad unit's shot, made visible (ArmyConfig.ShotFx): one WeaponFx NPC-rifle bullet from `origin` (the unit's eye)
+	to `landed`, kind "N" (hit) or "M" (miss), for `owner`'s army while ShotFx is on and the Escort part is live for
+	him; sampled / bucketed in CombatFx.ArmyBullet. Cosmetic only (unreliable, dropped when over a cap, pcall'd).
+	Returns true when an event went out. ]]
+function CombatService.UnitShotFx(owner: Player, origin: Vector3, landed: Vector3, kind: string): boolean
+	local cfg = ArmyConfig.ShotFx
+	if cfg.Enabled ~= true or not ArmyConfig.IsLive("Escort", owner) then
+		return false
+	end
+	local ok, sent = pcall(CombatFx.ArmyBullet, owner.UserId, origin, landed, kind, cfg.PerArmyMinGap, cfg.PerRecipientHz, cfg.PerRecipientBurst)
+	return ok and sent == true
 end
 
 --[[ W2 (contracts §3.7): `fn(victim, killer, info)` after every player death (once per death; after stats, rewards
