@@ -3035,6 +3035,7 @@ local function isOwnDriveObject(d: Instance): boolean
 		or n == "WE_DriveAO"
 		or n == "WE_UprightAO" -- rollover fix: our own roll / pitch assist, not a pin
 		or n == "SeatWeld"
+		or n == "WE_RotorJoint" -- air fix2: a store body's spinning rotor (AirBodyRig), not a pin
 		or string.sub(n, 1, 17) == "WE_WheelNoCollide"
 		or (d:IsA("HingeConstraint") and d:GetAttribute("WE_DriveHinge") == true)
 end

@@ -43,6 +43,11 @@
 -- air-looks (2026-09-28): one spinning rotor of a store aircraft body (AssetRef.RotorParts; AirBodyRig + AircraftBodyClient)
 export type AirRotor = {
 	Parts: { string }, -- BasePart names in the body (every descendant with one of these names spins with this rotor)
+	-- air fix2: store models often name every rotor piece alike ("MeshPart", hubs "Spinner"; main and tail rotor told apart
+	-- only by their parent Model). Under = an ancestor Model name ("Rotor1"): only Parts inside such a Model spin, each
+	-- such Model is its own rotor (its own Hub / centre), and Hub is looked up inside it. A part already on a rotor joint
+	-- is never jointed twice.
+	Under: string?,
 	Hub: string?, -- the spin centre is this part's centre (default: the average centre of Parts)
 	Axis: string, -- the spin axis in the kit chassis frame after the fit: "Y" up (main rotor), "X" sideways (tail rotor), "Z"
 	Rps: number, -- turns per second at full speed (drawn with RotorSpin.Steps precomputed angles)
@@ -803,6 +808,9 @@ local VisualAssetConfig = {
 	AirBody = {
 		ChaseCameraMargin = 18,
 		ChaseCameraMax = 60,
+		-- air fix2: while seated, the minimum zoom stays at least ChaseCameraSpan studs under the maximum zoom, so pinch
+		-- zoom still works when another module (the vehicle-kit chase cap) lowers the maximum
+		ChaseCameraSpan = 8,
 		BodyHitBoxes = true,
 		TailGuard = { Enabled = true, Margin = 0.3, MinPitch = 3.5, LeadSeconds = 0.15 },
 		RotorSpin = {

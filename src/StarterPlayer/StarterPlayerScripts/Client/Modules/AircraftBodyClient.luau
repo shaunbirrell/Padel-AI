@@ -13,7 +13,10 @@
 	    ChaseCamera refs), Player.CameraMinZoomDistance = min(WE_CamMinZoom, CameraMaxZoomDistance), so the camera
 	    stays behind a Roblox-size body instead of inside it (the body parts are CanQuery false, so Roblox's camera
 	    does not pop in front of them). The player's own value comes back when they leave the seat, die or respawn.
-	    Touch, keyboard and gamepad alike; no button, no text. ]]
+	    Touch, keyboard and gamepad alike; no button, no text.
+	    air fix2: the minimum also stays at least AirBody.ChaseCameraSpan studs under CameraMaxZoomDistance (never under
+	    the player's own minimum), re-checked whenever the maximum changes while seated: another module that caps the
+	    maximum (the vehicle-kit chase cap) can then never pin min = max, so pinch zoom keeps working on phones. ]]
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -44,6 +47,7 @@ local cfg = {
 	SpinUpSeconds = 2.5,
 	Refresh = 0.5,
 }
+local zoomSpan = 8 -- air fix2: AirBody.ChaseCameraSpan (readConfig; the chase camera below)
 local joints: { Joint } = {}
 local byMotor: { [Motor6D]: Joint } = {}
 local lut: { CFrame } = {}
@@ -57,6 +61,10 @@ local function readConfig()
 		local mod = configs and configs:FindFirstChild("VisualAssetConfig")
 		return if mod and mod:IsA("ModuleScript") then require(mod) :: any else nil
 	end)
+	local span = ok and VisualAssetConfig and VisualAssetConfig.AirBody and VisualAssetConfig.AirBody.ChaseCameraSpan
+	if typeof(span) == "number" then
+		zoomSpan = math.clamp(span, 0, 40)
+	end
 	local rs = ok and VisualAssetConfig and VisualAssetConfig.AirBody and VisualAssetConfig.AirBody.RotorSpin
 	if typeof(rs) == "table" then
 		for k, v in pairs(rs) do
@@ -200,8 +208,29 @@ end
 
 -- ── chase camera ──────────────────────────────────────────────────────────────────────────────────────────────────
 local savedMin: number? = nil -- the player's own CameraMinZoomDistance while a chase zoom is applied
+local wantZoom = 0 -- the seated vehicle's WE_CamMinZoom while applied
+local maxConn: RBXScriptConnection? = nil -- CameraMaxZoomDistance watch while applied
+
+-- air fix2: min(WE_CamMinZoom, max - span), never under the player's own minimum
+function AircraftBodyClient._ChaseMin(want: number, own: number, maxZoom: number, span: number): number
+	return math.max(own, math.min(want, maxZoom - span))
+end
+
+local function applyMin()
+	local plr = Players.LocalPlayer
+	if plr and savedMin ~= nil then
+		local v = AircraftBodyClient._ChaseMin(wantZoom, savedMin, plr.CameraMaxZoomDistance, zoomSpan)
+		if plr.CameraMinZoomDistance ~= v then
+			plr.CameraMinZoomDistance = v
+		end
+	end
+end
 
 local function restoreZoom()
+	if maxConn then
+		maxConn:Disconnect()
+		maxConn = nil
+	end
 	local plr = Players.LocalPlayer
 	if savedMin ~= nil and plr then
 		plr.CameraMinZoomDistance = savedMin
@@ -227,7 +256,11 @@ local function onSeated(isSeated: boolean, seat: Instance?)
 	if savedMin == nil then
 		savedMin = plr.CameraMinZoomDistance
 	end
-	plr.CameraMinZoomDistance = math.min(zoom, plr.CameraMaxZoomDistance)
+	wantZoom = zoom
+	if maxConn == nil then
+		maxConn = plr:GetPropertyChangedSignal("CameraMaxZoomDistance"):Connect(applyMin)
+	end
+	applyMin()
 end
 
 local function bindHumanoid(hum: Humanoid)

@@ -20,7 +20,8 @@
 	      - RotorParts: the named body (or kit) parts get a Motor6D to the chassis instead of their WeldConstraint, with
 	        the joint's Y axis on the rotor axis, tagged WE_RotorJoint (attribute WE_RotorRps). Each client turns them
 	        (AircraftBodyClient: Motor6D.Transform, local only, never replicated); the server never moves them, so
-	        physics and replication are unchanged.
+	        physics and replication are unchanged. air fix2: RotorParts[i].Under scopes the names to one ancestor Model
+	        per rotor (store rotors often share one part name), and a part already on a rotor joint is never jointed twice.
 	      - ChaseCamera: WE_CamMinZoom on the model = the body's reach from the pilot seat (its farthest end: tail, nose
 	        or wing tip) + AirBody.ChaseCameraMargin, capped at ChaseCameraMax, for AircraftBodyClient's seated camera.
 	      - BodyHitBoxes (air2 fix1, with AirBody.BodyHitBoxes on): invisible hit plates (Parts "WE_HitPlate": Transparency 1,
@@ -180,23 +181,51 @@ local function bodyBase(hostModel: Model, primary: BasePart, clone: Model, ref: 
 	return primary.CFrame * CFrame.new(sh.X, bottom, sh.Z) * CFrame.Angles(0, math.rad(tonumber(ref.Yaw) or 0), 0), reach
 end
 
-local function namedParts(root: Instance, names: { string }): { BasePart }
+-- air fix2: the parts one RotorParts spec names, grouped into rotors. Without Under: one group over the whole root. With
+-- Under (an ancestor Model name): one group per ancestor of that name inside the root, so a main rotor (Rotor1) and a tail
+-- rotor (Rotor2) whose pieces share one name ("MeshPart") never spin about each other's centre. Seats and parts that
+-- already carry a rotor joint (an earlier spec took them) are skipped: a part is never jointed twice.
+type RotorGroup = { parts: { BasePart }, scope: Instance }
+local function rotorGroups(root: Instance, spec: any): { RotorGroup }
 	local want: { [string]: boolean } = {}
-	for _, n in ipairs(names) do
+	for _, n in ipairs(spec.Parts) do
 		if typeof(n) == "string" then
 			want[n] = true
 		end
 	end
-	local out: { BasePart } = {}
+	local under: string? = if typeof(spec.Under) == "string" and spec.Under ~= "" then spec.Under else nil
+	local groups: { RotorGroup } = {}
+	local byScope: { [Instance]: { BasePart } } = {}
 	for _, d in ipairs(root:GetDescendants()) do
-		if d:IsA("BasePart") and want[d.Name] and not isSeat(d) then
-			table.insert(out, d)
+		if
+			d:IsA("BasePart")
+			and want[d.Name]
+			and not isSeat(d)
+			and d:FindFirstChild(AirBodyRig.RotorJointName) == nil
+		then
+			local scope: Instance? = root
+			if under ~= nil then
+				scope = d:FindFirstAncestor(under)
+				if scope ~= nil and scope ~= root and not scope:IsDescendantOf(root) then
+					scope = nil -- an ancestor above the body (the vehicle model) is not a rotor of the body
+				end
+			end
+			if scope ~= nil then
+				local list = byScope[scope]
+				if list == nil then
+					list = {}
+					byScope[scope] = list
+					table.insert(groups, { parts = list, scope = scope })
+				end
+				table.insert(list, d)
+			end
 		end
 	end
-	return out
+	return groups
 end
 
--- one rotor: every part gets a Motor6D to the chassis whose joint frame sits on the spin centre with Y on the axis
+-- one rotor spec: every part gets a Motor6D to the chassis whose joint frame sits on its group's spin centre (the Hub
+-- inside the group's scope, else the group's average centre) with Y on the axis
 local function rigRotor(hostModel: Model, primary: BasePart, clone: Model, spec: any): number
 	if typeof(spec) ~= "table" or typeof(spec.Parts) ~= "table" then
 		return 0
@@ -207,53 +236,54 @@ local function rigRotor(hostModel: Model, primary: BasePart, clone: Model, spec:
 		return 0
 	end
 	local root: Instance = if spec.Kit == true then hostModel else clone
-	local parts = namedParts(root, spec.Parts)
-	if spec.Kit == true then
-		-- kit rotor parts only (never the body's own parts under the same name)
-		local kit: { BasePart } = {}
-		for _, p in ipairs(parts) do
-			if not p:IsDescendantOf(clone) then
-				table.insert(kit, p)
-			end
-		end
-		parts = kit
-	end
-	if #parts == 0 then
-		return 0
-	end
-	local centre = Vector3.zero
-	local hub = if typeof(spec.Hub) == "string" then root:FindFirstChild(spec.Hub, true) else nil
-	if hub and hub:IsA("BasePart") then
-		centre = hub.Position
-	else
-		for _, p in ipairs(parts) do
-			centre += p.Position
-		end
-		centre /= #parts
-	end
-	local joint = CFrame.new(centre) * (primary.CFrame - primary.CFrame.Position) * axis
 	local n = 0
-	for _, p in ipairs(parts) do
-		for _, holder in ipairs({ primary :: Instance, p :: Instance }) do
-			for _, w in ipairs(holder:GetChildren()) do
-				if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == p) or (w.Part0 == p and w.Part1 == primary)) then
-					w:Destroy()
+	for _, g in ipairs(rotorGroups(root, spec)) do
+		local parts = g.parts
+		if spec.Kit == true then
+			-- kit rotor parts only (never the body's own parts under the same name)
+			local kit: { BasePart } = {}
+			for _, p in ipairs(parts) do
+				if not p:IsDescendantOf(clone) then
+					table.insert(kit, p)
 				end
 			end
+			parts = kit
 		end
-		local m = Instance.new("Motor6D")
-		m.Name = AirBodyRig.RotorJointName
-		m.Part0 = primary
-		m.Part1 = p
-		m.C0 = primary.CFrame:ToObjectSpace(joint)
-		m.C1 = p.CFrame:ToObjectSpace(joint)
-		m:SetAttribute("WE_RotorRps", rps)
-		m.Parent = p
-		CollectionService:AddTag(m, AirBodyRig.RotorTag)
-		p.Massless = true
-		p.CanCollide = false
-		p.CanTouch = false
-		n += 1
+		if #parts > 0 then
+			local centre = Vector3.zero
+			local hub = if typeof(spec.Hub) == "string" then g.scope:FindFirstChild(spec.Hub, true) else nil
+			if hub and hub:IsA("BasePart") then
+				centre = hub.Position
+			else
+				for _, p in ipairs(parts) do
+					centre += p.Position
+				end
+				centre /= #parts
+			end
+			local joint = CFrame.new(centre) * (primary.CFrame - primary.CFrame.Position) * (axis :: CFrame)
+			for _, p in ipairs(parts) do
+				for _, holder in ipairs({ primary :: Instance, p :: Instance }) do
+					for _, w in ipairs(holder:GetChildren()) do
+						if w:IsA("WeldConstraint") and ((w.Part0 == primary and w.Part1 == p) or (w.Part0 == p and w.Part1 == primary)) then
+							w:Destroy()
+						end
+					end
+				end
+				local m = Instance.new("Motor6D")
+				m.Name = AirBodyRig.RotorJointName
+				m.Part0 = primary
+				m.Part1 = p
+				m.C0 = primary.CFrame:ToObjectSpace(joint)
+				m.C1 = p.CFrame:ToObjectSpace(joint)
+				m:SetAttribute("WE_RotorRps", rps)
+				m.Parent = p
+				CollectionService:AddTag(m, AirBodyRig.RotorTag)
+				p.Massless = true
+				p.CanCollide = false
+				p.CanTouch = false
+				n += 1
+			end
+		end
 	end
 	return n
 end
