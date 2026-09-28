@@ -1,0 +1,448 @@
+diff --git a/src/ReplicatedStorage/Shared/Configs/RigConfig.luau b/src/ReplicatedStorage/Shared/Configs/RigConfig.luau
+--- a/src/ReplicatedStorage/Shared/Configs/RigConfig.luau
++++ b/src/ReplicatedStorage/Shared/Configs/RigConfig.luau
+@@ -35,7 +35,7 @@
+ 
+ 	Anim = {
+ 		Enabled = true, -- false: rigs stay in their rest pose, no tracks on any client
+-		TickHz = 4, -- client LOD pass rate (one task.wait loop; never RenderStepped / Heartbeat)
++		TickHz = 4, -- client LOD pass rate (task.wait loop; the camera guard also runs alone at Escort.Camera.GuardHz; never RenderStepped / Heartbeat)
+ 		NearStuds = 120, -- beyond this a figure is not animated (rest pose)
+ 		HysteresisStuds = 10, -- an animated figure stops only past NearStuds + this
+ 		MaxAnimated = 24, -- figures animated per client (own army first, then nearest); escorts counted apart
+@@ -92,16 +92,29 @@
+ 		-- 7 / 2.4 steps: no figure overlaps a unit, another escort or the player for 1-8 units (FollowSlots + ranks), and
+ 		-- with the camera straight behind the player every escort is past the guard's show line (v3/camera3.py).
+ 		Offsets = { Vector3.new(0, 0, -7), Vector3.new(0, 0, -9.4), Vector3.new(0, 0, -11.8) } :: { Vector3 },
+-		-- Camera guard (client, every pass): an escort is hidden while its root is nearer the camera than the local
+-		-- player's root + PlayerMarginStuds, or closer along the view than FigureStuds / (2 x MaxScreenFrac x
++		-- Camera guard (client, every pass + GuardHz): an escort is hidden while its root is nearer the camera than the
++		-- local player's root + PlayerMarginStuds, or closer along the view than FigureStuds / (2 x MaxScreenFrac x
+ 		-- tan(FOV / 2)) + DepthMarginStuds (it would cover more than MaxScreenFrac of the screen height). It shows
+-		-- again ShowHysteresisStuds past both lines.
++		-- again ShowHysteresisStuds past both lines. Hidden = every part AND every Decal (the kit head's face) of it.
+ 		Camera = {
+ 			MaxScreenFrac = 0.25,
+ 			FigureStuds = 5.3, -- feet to beret / helmet top
+ 			DepthMarginStuds = 0.25,
+ 			PlayerMarginStuds = 0.5,
+ 			ShowHysteresisStuds = 0.5,
++			-- faces lane (owner screenshot, v83): the guard also runs on its own GuardHz times a second (0 = off: only in
++			-- the 4 Hz pass; BuyPathStatic allows 0 or 20-60). A camera swipe or a turning unit swings an escort file (a
++			-- rigid 7-11.8 stud arm) through the camera faster than a 4 Hz pass follows. Each run reads <= Anim.MaxAnimated
++			-- roots and <= MaxPerClient torsos; with nothing to guard the loop sleeps a whole pass.
++			GuardHz = 30,
++			-- an own squad unit (a real unit) nearer the camera than the player and drawn taller than this share of the
++			-- screen height is hidden on this client the same way: the nearest point of its body along the view is closer
++			-- than FigureStuds / (2 x LeadScreenFrac x tan(FOV / 2)) + DepthMarginStuds. Depth, not distance: a phone in
++			-- landscape sees about 113 degrees across, so a soldier 5-6 studs off to the side still fills a bottom corner
++			-- (the owner's camo "blob"). Shows ShowHysteresisStuds past either line. 0 = off (BuyPathStatic allows 0 or
++			-- 0.8-1.0; lower hides wing soldiers of a running army at the default zoom).
++			LeadScreenFrac = 0.9,
++			RootToFeetStuds = 3, -- a squad unit's root to its feet (root half-height 1 + Humanoid.HipHeight 2)
+ 		},
+ 	},
+ 
+diff --git a/src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau b/src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau
+--- a/src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau
++++ b/src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau
+@@ -4,7 +4,9 @@
+ 	here replicates; the server never plays a track.
+ 	  • Registry from CollectionService "WE_Rig" (added / removed signals; streaming-safe: a figure that streams out is
+ 	    removed, one that streams in is added). Never scans the workspace.
+-	  • One task.wait loop at RigConfig.Anim.TickHz. No per-frame (render or physics step) work, no per-pass tables.
++	  • One task.wait loop at RigConfig.Anim.TickHz, plus the camera guard alone at Escort.Camera.GuardHz (the guard
++	    buffer only: <= MaxAnimated picked figures; it sleeps a whole pass while the buffer is empty). No per-frame
++	    (render or physics step) work, no per-pass tables.
+ 	  • Animated: the MaxAnimated figures within NearStuds, own squad units first, then nearest. Anchored base statues
+ 	    (WE_RigStatic) never animate (their pose is baked on the server).
+ 	  • Rifle held forward without tracks: an armed figure that is not animated (outside the pick, far, or waiting for
+@@ -17,7 +19,12 @@
+ 	    body AHEAD of it (RigConfig.Escort.Offsets), at most Escort.MaxPerClient on this client, own army first. They
+ 	    are parented under the unit (they go when it goes), can never be hit (CanQuery false; the aim filter skips the
+ 	    squad folder anyway) and copy the unit's state. Camera guard: an escort nearer the camera than the local
+-	    player's root, or close enough to cover more than Escort.Camera.MaxScreenFrac of the screen height, is hidden.
++	    player's root, or close enough to cover more than Escort.Camera.MaxScreenFrac of the screen height, is hidden:
++	    its parts AND its Decals (the kit head's face; Roblox draws a Decal whatever its part's transparency). The guard
++	    runs in every pass and on its own Camera.GuardHz times a second: a camera swipe or a turning unit swings a file
++	    through the camera faster than a 4 Hz pass can follow. An own squad unit nearer the camera than the player and
++	    drawn taller than Camera.LeadScreenFrac of the screen (judged by depth along the view, so the wide screen's
++	    corners count too) is hidden the same way (on this client only; it is still there and hittable).
+ ]]
+ 
+ local CollectionService = game:GetService("CollectionService")
+@@ -31,7 +38,7 @@
+ local RigAnimator = {}
+ 
+ type Tracks = { Hold: AnimationTrack?, Idle: AnimationTrack?, Walk: AnimationTrack?, Aim: AnimationTrack? }
+-type Escort = { Model: Model, Tracks: Tracks?, State: string, Torso: BasePart?, Parts: { BasePart }, Hidden: boolean }
++type Escort = { Model: Model, Tracks: Tracks?, State: string, Torso: BasePart?, Parts: { BasePart }, Decals: { Decal }, Hidden: boolean }
+ type Entry = {
+ 	Rig: Model,
+ 	Index: number,
+@@ -61,6 +68,7 @@
+ 	HoldBaked: boolean,
+ 	WantEsc: number, -- escorts this figure asks for this pass (WE_Escorts, capped; 0 when not eligible)
+ 	Escorts: { Escort },
++	LeadHidden: boolean, -- an own squad unit in the camera's face: its rig hidden on this client (parts + Decals)
+ }
+ 
+ local TAG: string = RigConfig.Tag
+@@ -90,9 +98,12 @@
+ local spickN = 0
+ local lastStep = 0
+ local localUserId = 0
++local guard: { Entry? } = {} -- fixed-size buffer: the picked figures the camera guard watches (escorts, own units)
++local guardN = 0
+ local stats = {
+ 	Passes = 0, Animated = 0, Loads = 0, Registered = 0, Escorts = 0, EscortParts = 0, EscortBuilds = 0, FarSwaps = 0,
+-	Meshed = 0, MeshedStatic = 0, EscortsHidden = 0, EscortHides = 0, HoldBaked = 0,
++	Meshed = 0, MeshedStatic = 0, EscortsHidden = 0, EscortHides = 0, HoldBaked = 0, LeadsHidden = 0, LeadHides = 0,
++	GuardPasses = 0,
+ }
+ 
+ local function animation(name: string): Animation?
+@@ -193,12 +204,38 @@
+ 	for _, p in ipairs(x.Parts) do
+ 		p.LocalTransparencyModifier = if hidden then 1 else 0
+ 	end
++	for _, d in ipairs(x.Decals) do -- the face: a Decal is drawn even on a hidden part
++		d.LocalTransparencyModifier = if hidden then 1 else 0
++	end
+ 	stats.EscortsHidden += if hidden then 1 else -1
+ 	if hidden then
+ 		stats.EscortHides += 1
+ 	end
+ end
+ 
++-- an own squad unit in the camera's face: its rig's parts and their Decals hidden on this client only (the unit is
++-- still there for everybody, hits included). Runs only when the state flips: one rig's children (<= 10 parts).
++local function setLeadHidden(e: Entry, hidden: boolean)
++	if e.LeadHidden == hidden then
++		return
++	end
++	e.LeadHidden = hidden
++	for _, c in ipairs(e.Rig:GetChildren()) do
++		if c:IsA("BasePart") then
++			c.LocalTransparencyModifier = if hidden or (c == e.Beret and e.Far) then 1 else 0
++			for _, d in ipairs(c:GetChildren()) do
++				if d:IsA("Decal") then -- the kit head's face: a Decal is drawn even on a hidden part
++					d.LocalTransparencyModifier = if hidden then 1 else 0
++				end
++			end
++		end
++	end
++	stats.LeadsHidden += if hidden then 1 else -1
++	if hidden then
++		stats.LeadHides += 1
++	end
++end
++
+ local function dropEscort(e: Entry)
+ 	local x = table.remove(e.Escorts)
+ 	if x then
+@@ -235,8 +272,12 @@
+ 	copy:SetAttribute("WE_RigStatic", nil)
+ 	local byName: { [string]: BasePart } = {}
+ 	local parts: { BasePart } = {}
++	local decals: { Decal } = {}
+ 	for _, d in ipairs(copy:GetDescendants()) do -- one small body (<= 30 instances), once per build, never per frame
+-		if d:IsA("BasePart") then
++		if d:IsA("Decal") then -- the kit head's face (a Texture is a Decal too)
++			d.LocalTransparencyModifier = 0
++			table.insert(decals, d)
++		elseif d:IsA("BasePart") then
+ 			byName[d.Name] = d
+ 			table.insert(parts, d)
+ 			d.CanQuery = false
+@@ -280,7 +321,7 @@
+ 	stats.Escorts += 1
+ 	stats.EscortParts += RigConfig.Budget.PartsPerEscort
+ 	stats.EscortBuilds += 1
+-	return { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Hidden = false }
++	return { Model = copy, Tracks = loadTracks(animatorOf(copy), true, false), State = "", Torso = torso, Parts = parts, Decals = decals, Hidden = false }
+ end
+ 
+ -- ── registry ─────────────────────────────────────────────────────────────────────────────────────────────────────
+@@ -321,7 +362,7 @@
+ 		m.Scale = if far then e.BrickScales[i] else e.FileScales[i]
+ 	end
+ 	if e.Beret then
+-		e.Beret.LocalTransparencyModifier = if far then 1 else 0
++		e.Beret.LocalTransparencyModifier = if far or e.LeadHidden then 1 else 0
+ 	end
+ 	stats.FarSwaps += 1
+ end
+@@ -378,6 +419,7 @@
+ 		HoldBaked = false,
+ 		WantEsc = 0,
+ 		Escorts = {},
++		LeadHidden = false,
+ 	}
+ 	entries[e.Index] = e
+ 	byRig[rig] = e
+@@ -398,6 +440,17 @@
+ 	if e.HoldBaked then
+ 		stats.HoldBaked -= 1 -- the instance is gone (streamed out / died); nothing to restore
+ 	end
++	if e.LeadHidden then
++		setLeadHidden(e, false) -- a streamed-out rig can come back as the same instance: never leave it hidden
++	end
++	for i = 1, guardN do
++		if guard[i] == e then
++			guard[i] = guard[guardN]
++			guard[guardN] = nil
++			guardN -= 1
++			break
++		end
++	end
+ 	byRig[e.Rig] = nil
+ 	local last = entries[#entries]
+ 	entries[e.Index] = last
+@@ -424,6 +477,61 @@
+ 	return n
+ end
+ 
++-- camera guard (every pass and, alone, Escort.Camera.GuardHz times a second): no escort between the camera and the
++-- player, none taller than MaxScreenFrac of the screen; no own squad unit between the camera and the player drawn
++-- taller than LeadScreenFrac of it. Only the guard buffer (picked figures with escorts, own units): no tables, no scans.
++local function cameraGuard(camCf: CFrame, focus: Vector3?, fovDeg: number?)
++	if guardN == 0 then
++		return
++	end
++	stats.GuardPasses += 1
++	local camPos = camCf.Position
++	local look = camCf.LookVector
++	local fov = math.clamp(tonumber(fovDeg) or 70, 1, 120)
++	local tanHalf = math.tan(math.rad(fov) / 2)
++	local minDepth = camCfg.FigureStuds / (2 * camCfg.MaxScreenFrac * tanHalf) + camCfg.DepthMarginStuds
++	local playerDist = if focus then (focus - camPos).Magnitude + camCfg.PlayerMarginStuds else -math.huge
++	local hyst = camCfg.ShowHysteresisStuds
++	local leadFrac = tonumber(camCfg.LeadScreenFrac) or 0
++	local leadDepth = if leadFrac > 0 then camCfg.FigureStuds / (2 * leadFrac * tanHalf) + camCfg.DepthMarginStuds else -math.huge
++	local feet = camCfg.RootToFeetStuds
++	-- a unit's body line runs from its feet (root - RootToFeetStuds) to its head top (FigureStuds above the feet); its
++	-- nearest point along the view is the head top when the camera looks down, the feet when it looks up
++	local nearLift = math.min(-feet * look.Y, (camCfg.FigureStuds - feet) * look.Y)
++	for i = 1, guardN do
++		local e = guard[i] :: Entry
++		for _, x in ipairs(e.Escorts) do
++			local t = x.Torso
++			if t then
++				local v = t.Position - camPos
++				local depth = v:Dot(look)
++				local dist = v.Magnitude
++				if x.Hidden then
++					if depth >= minDepth + hyst and dist >= playerDist + hyst then
++						setEscortHidden(x, false)
++					end
++				elseif depth < minDepth or dist < playerDist then
++					setEscortHidden(x, true)
++				end
++			end
++		end
++		local root = e.Root
++		if e.Own and root then
++			local v = root.Position - camPos
++			-- depth along the view sets how large the phone draws it, at the screen's wide corners too (distance does not)
++			local near = v:Dot(look) + nearLift
++			local d = v.Magnitude
++			if e.LeadHidden then
++				if near >= leadDepth + hyst or d >= playerDist + hyst then
++					setLeadHidden(e, false)
++				end
++			elseif near < leadDepth and d < playerDist then
++				setLeadHidden(e, true)
++			end
++		end
++	end
++end
++
+ -- ── one LOD pass (also the test hook) ────────────────────────────────────────────────────────────────────────────
+ -- now = os.clock(); camCf = the camera CFrame; focus = the local player's root position (nil: none); fovDeg = the
+ -- camera's vertical field of view
+@@ -489,6 +597,9 @@
+ 		if not e.Picked and not e.SPicked and #e.Meshes > 0 then
+ 			setFar(e, true)
+ 		end
++		if e.LeadHidden and not e.Picked then
++			setLeadHidden(e, false) -- out of the guard buffer: shown again
++		end
+ 	end
+ 	-- blocks -> Roblox body for picked figures, at most MaxSwapsPerTick per pass
+ 	local swaps = 0
+@@ -562,6 +673,8 @@
+ 			room -= keep
+ 		end
+ 	end
++	local gn = 0
++	local leadOn = (tonumber(camCfg.LeadScreenFrac) or 0) > 0 -- off: own units without escorts need no guard runs
+ 	for i = 1, pickN do
+ 		local e = pick[i] :: Entry
+ 		pick[i] = nil
+@@ -582,32 +695,16 @@
+ 				x.State = e.State
+ 			end
+ 		end
+-	end
+-	-- camera guard: no escort between the camera and the player, none taller than MaxScreenFrac of the screen
+-	if stats.Escorts > 0 then
+-		local look = camCf.LookVector
+-		local fov = math.clamp(tonumber(fovDeg) or 70, 1, 120)
+-		local minDepth = camCfg.FigureStuds / (2 * camCfg.MaxScreenFrac * math.tan(math.rad(fov) / 2)) + camCfg.DepthMarginStuds
+-		local playerDist = if focus then (focus - camPos).Magnitude + camCfg.PlayerMarginStuds else -math.huge
+-		local hyst = camCfg.ShowHysteresisStuds
+-		for _, e in ipairs(entries) do
+-			for _, x in ipairs(e.Escorts) do
+-				local t = x.Torso
+-				if t then
+-					local v = t.Position - camPos
+-					local depth = v:Dot(look)
+-					local dist = v.Magnitude
+-					if x.Hidden then
+-						if depth >= minDepth + hyst and dist >= playerDist + hyst then
+-							setEscortHidden(x, false)
+-						end
+-					elseif depth < minDepth or dist < playerDist then
+-						setEscortHidden(x, true)
+-					end
+-				end
+-			end
++		if #e.Escorts > 0 or (e.Own and leadOn) then
++			gn += 1
++			guard[gn] = e
+ 		end
+ 	end
++	for i = gn + 1, guardN do
++		guard[i] = nil
++	end
++	guardN = gn
++	cameraGuard(camCf, focus, fovDeg)
+ 	stats.Passes += 1
+ 	stats.Animated = animated
+ 	stats.Meshed = meshed
+@@ -680,6 +777,22 @@
+ 			end
+ 		end
+ 	end)
++	local guardHz = tonumber(camCfg.GuardHz) or 0
++	if guardHz > 0 then
++		task.spawn(function() -- the camera guard alone between passes (a camera swipe, a turning unit's file)
++			local gp = 1 / math.clamp(guardHz, 1, 60)
++			local idle = 1 / math.clamp(tonumber(cfg.TickHz) or 4, 1, 10)
++			while true do
++				task.wait(if guardN > 0 then gp else idle) -- nothing to guard: sleep one LOD pass
++				local cam = Workspace.CurrentCamera
++				if cam and guardN > 0 then
++					local ch = if lp then lp.Character else nil
++					local hrp = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
++					cameraGuard(cam.CFrame, if hrp and hrp:IsA("BasePart") then hrp.Position else nil, cam.FieldOfView)
++				end
++			end
++		end)
++	end
+ end
+ 
+ return RigAnimator
+diff --git a/tools/BuyPathStatic.py b/tools/BuyPathStatic.py
+--- a/tools/BuyPathStatic.py
++++ b/tools/BuyPathStatic.py
+@@ -8254,6 +8254,98 @@
+ _ap_rules()
+ # ── end atmprompt
+ 
++# --- faces lane (owner screenshot d6bccb79, live v83): a hidden army escort left its face Decal floating (Roblox draws
++# a Decal whatever its part's LocalTransparencyModifier); a camera swipe or a turning unit swung an escort file through
++# the camera between two 4 Hz passes (the camo "blob"); an own squad unit could stand in the camera's face, at the
++# wide phone screen's bottom corners too (a landscape phone sees about 113 degrees across: distance misses it).
++# Fix: Decals hide with their escort; the camera guard also runs alone at Escort.Camera.GuardHz over a fixed buffer; an
++# own unit nearer than the player and drawn taller than Escort.Camera.LeadScreenFrac of the screen (depth along the
++# view) hides locally and is always shown again (pick exit, stream-out). Config off values: GuardHz = 0,
++# LeadScreenFrac = 0 (both pass these pins).
++# Paste as ONE block directly above the final `parse_gate()` call. Headless-verified (NOT Roblox): every check below
++# passes on the faces candidate and fails on main e506c9c or on a named mutant (lane dir runs/mut_*.txt).
++FC_RA = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau'
++FC_RC = 'src/ReplicatedStorage/Shared/Configs/RigConfig.luau'
++must_contain(FC_RA, 'type Escort = { Model: Model, Tracks: Tracks?, State: string, Torso: BasePart?, Parts: { BasePart }, Decals: { Decal }, Hidden: boolean }',
++             "faces: an escort keeps its Decals (the kit head's face) next to its parts")
++must_contain(FC_RA, '\tfor _, d in ipairs(copy:GetDescendants()) do -- one small body (<= 30 instances), once per build, never per frame\n\t\tif d:IsA("Decal") then -- the kit head\'s face (a Texture is a Decal too)\n\t\t\td.LocalTransparencyModifier = 0\n\t\t\ttable.insert(decals, d)\n',
++             "faces: buildEscort collects every Decal of the copy (GetDescendants: the face sits under Head) once, at build (never a per-pass scan)")
++must_contain(FC_RA, 'Parts = parts, Decals = decals, Hidden = false }', "faces: the escort record carries its Decals")
++_fc_ra = read(FC_RA) or ''
++_fc_rc = read(FC_RC) or ''
++def _fc_fn(name):
++    m = re.search(r'\nlocal function ' + name + r'\(.*?\n(.*?)\nend\n', _fc_ra, re.S)
++    return m.group(1) if m else ''
++_fc_seh = _fc_fn('setEscortHidden')
++_fc_lt = re.findall(r'(\w+)\.LocalTransparencyModifier = if hidden then 1 else 0', _fc_seh)
++if re.search(r'for _, p in ipairs\(x\.Parts\) do\s*\n\s*p\.LocalTransparencyModifier = if hidden then 1 else 0', _fc_seh) \
++        and re.search(r'for _, d in ipairs\(x\.Decals\) do[^\n]*\n\s*d\.LocalTransparencyModifier = if hidden then 1 else 0', _fc_seh) \
++        and sorted(_fc_lt) == ['d', 'p']:
++    ok('faces: setEscortHidden hides and shows the Decals together with the parts (no face floats where a hidden head was)')
++else:
++    bad(f'faces: setEscortHidden must set LocalTransparencyModifier on x.Parts AND x.Decals, nothing else (got {_fc_lt})')
++# the camera guard: config, one function over a fixed buffer, run by the 4 Hz pass AND by its own loop
++_fc_hz = re.search(r'\n\t\t\tGuardHz = ([0-9.]+),', _fc_rc)
++_fc_lead = re.search(r'\n\t\t\tLeadScreenFrac = ([0-9.]+),', _fc_rc)
++_fc_feet = re.search(r'\n\t\t\tRootToFeetStuds = ([0-9.]+),', _fc_rc)
++if _fc_hz and (float(_fc_hz.group(1)) == 0 or 20 <= float(_fc_hz.group(1)) <= 60):
++    ok(f'faces config: Escort.Camera.GuardHz {_fc_hz.group(1)} is 0 (off) or in [20, 60] (a 0.3 s camera swipe or a turning unit outruns a slower guard)')
++else:
++    bad('faces config: Escort.Camera.GuardHz must be 0 (off) or 20..60 (at 4-10 Hz a swiped or swung escort file fills the screen between runs)')
++if _fc_lead and (float(_fc_lead.group(1)) == 0 or 0.8 <= float(_fc_lead.group(1)) <= 1.0):
++    ok(f'faces config: Escort.Camera.LeadScreenFrac {_fc_lead.group(1)} is 0 (off) or in [0.8, 1.0] (only a soldier drawn about screen-tall hides)')
++else:
++    bad('faces config: Escort.Camera.LeadScreenFrac must be 0 (off) or 0.8..1.0 (lower hides wing soldiers of a running army; higher leaves the corner blob)')
++if _fc_feet and 2 <= float(_fc_feet.group(1)) <= 4 and 'LeadHideStuds' not in _fc_rc:
++    ok(f'faces config: Escort.Camera.RootToFeetStuds {_fc_feet.group(1)} (squad root half-height + HipHeight) replaces the old distance key')
++else:
++    bad('faces config: Escort.Camera.RootToFeetStuds (2..4) must exist and the old LeadHideStuds key must be gone')
++_fc_cg = _fc_fn('cameraGuard')
++if _fc_cg and 'for i = 1, guardN do' in _fc_cg and 'entries' not in _fc_cg and not re.search(r'GetChildren|GetDescendants|FindFirstChild|Instance\.new|table\.|\{', _fc_cg):
++    ok('faces: cameraGuard walks only the guard buffer (no registry walk, no scan, no table per run)')
++else:
++    bad('faces: cameraGuard must loop `for i = 1, guardN do` over the fixed buffer with no scans, lookups or tables (it runs GuardHz times a second)')
++must_contain(FC_RA, '\tlocal leadOn = (tonumber(camCfg.LeadScreenFrac) or 0) > 0 -- off: own units without escorts need no guard runs\n',
++             "faces: the near-camera rule's own units join the guard buffer only while LeadScreenFrac > 0")
++must_contain(FC_RA, '\t\tif #e.Escorts > 0 or (e.Own and leadOn) then\n\t\t\tgn += 1\n\t\t\tguard[gn] = e\n\t\tend\n\tend\n\tfor i = gn + 1, guardN do\n\t\tguard[i] = nil\n\tend\n\tguardN = gn\n\tcameraGuard(camCf, focus, fovDeg)\n',
++             "faces: every pass refills the guard buffer (picked figures with escorts; own units while the near-camera rule is on) and runs the guard (the 30 Hz loop idles when it is empty)")
++must_contain(FC_RA, '\tfor i = 1, guardN do\n\t\tif guard[i] == e then\n\t\t\tguard[i] = guard[guardN]\n\t\t\tguard[guardN] = nil\n\t\t\tguardN -= 1\n',
++             "faces: a figure that streams out / dies leaves the guard buffer at once (the loop never touches a removed figure)")
++must_contain(FC_RA, '\tlocal guardHz = tonumber(camCfg.GuardHz) or 0\n\tif guardHz > 0 then\n\t\ttask.spawn(function() -- the camera guard alone between passes (a camera swipe, a turning unit\'s file)\n\t\t\tlocal gp = 1 / math.clamp(guardHz, 1, 60)\n',
++             "faces: the camera guard has its own task.wait loop at GuardHz (no RenderStepped / Heartbeat)")
++must_contain(FC_RA, '\t\t\t\ttask.wait(if guardN > 0 then gp else idle) -- nothing to guard: sleep one LOD pass\n',
++             "faces: the guard loop sleeps a whole LOD pass while there is nothing to guard")
++must_contain(FC_RA, '\t\t\t\t\tcameraGuard(cam.CFrame, if hrp and hrp:IsA("BasePart") then hrp.Position else nil, cam.FieldOfView)\n',
++             "faces: the guard loop uses the live camera and the local player's root")
++# an own squad unit in the camera's face: hidden locally, parts AND Decals, restored by every path
++must_contain(FC_RA, '\tlocal leadFrac = tonumber(camCfg.LeadScreenFrac) or 0\n\tlocal leadDepth = if leadFrac > 0 then camCfg.FigureStuds / (2 * leadFrac * tanHalf) + camCfg.DepthMarginStuds else -math.huge\n\tlocal feet = camCfg.RootToFeetStuds\n',
++             "faces: the own-unit line is a depth along the view where a figure is drawn LeadScreenFrac of the screen tall (off: never)")
++must_contain(FC_RA, '\tlocal nearLift = math.min(-feet * look.Y, (camCfg.FigureStuds - feet) * look.Y)\n',
++             "faces: the unit's body line (feet RootToFeetStuds below its root up to its head top) comes from config, no body-size number in code")
++must_contain(FC_RA, '\t\t\tlocal v = root.Position - camPos\n\t\t\t-- depth along the view sets how large the phone draws it, at the screen\'s wide corners too (distance does not)\n\t\t\tlocal near = v:Dot(look) + nearLift\n\t\t\tlocal d = v.Magnitude\n',
++             "faces: an own unit is judged by the depth of its body's nearest point along the view (a wide screen's corner draws a soldier 5-6 studs away screen-tall)")
++must_contain(FC_RA, '\t\t\telseif near < leadDepth and d < playerDist then\n\t\t\t\tsetLeadHidden(e, true)\n',
++             "faces: an own unit drawn taller than LeadScreenFrac of the screen, nearer than the player, hides on this client")
++must_contain(FC_RA, '\t\t\t\tif near >= leadDepth + hyst or d >= playerDist + hyst then\n\t\t\t\t\tsetLeadHidden(e, false)\n',
++             "faces: it shows again ShowHysteresisStuds past either line")
++must_contain(FC_RA, '\t\tif e.Own and root then\n', "faces: the near-camera rule is for the local player's own units only (never another player's army)")
++_fc_rm = _fc_fn('remove')
++if 'if e.LeadHidden then\n\t\tsetLeadHidden(e, false)' in _fc_rm and 'LeadsHidden' not in _fc_rm:
++    ok('faces: remove() shows a hidden own unit again (parts + face) before it leaves the registry (a streamed-out rig can come back as the same instance)')
++else:
++    bad('faces: remove() must call setLeadHidden(e, false) for a LeadHidden unit (never only fix the stat: a re-added rig would stay invisible)')
++_fc_slh = _fc_fn('setLeadHidden')
++if '\tfor _, c in ipairs(e.Rig:GetChildren()) do\n\t\tif c:IsA("BasePart") then\n' in _fc_slh and 'c.LocalTransparencyModifier = if hidden or (c == e.Beret and e.Far) then 1 else 0' in _fc_slh \
++        and re.search(r'\n\t\t\tfor _, d in ipairs\(c:GetChildren\(\)\) do\n\t\t\t\tif d:IsA\("Decal"\) then[^\n]*\n\s*d\.LocalTransparencyModifier = if hidden then 1 else 0', _fc_slh):
++    ok("faces: setLeadHidden hides the rig's parts and each part's own Decals (the face on Head), keeping the LOD's hidden beret")
++else:
++    bad("faces: setLeadHidden must walk the rig's parts, set LocalTransparencyModifier on each AND on each part's Decals (c:GetChildren()), and keep a far figure's beret hidden")
++must_contain(FC_RA, '\t\te.Beret.LocalTransparencyModifier = if far or e.LeadHidden then 1 else 0\n',
++             "faces: the blocks LOD never shows the beret of a unit hidden by the camera guard")
++must_contain(FC_RA, '\t\tif e.LeadHidden and not e.Picked then\n\t\t\tsetLeadHidden(e, false) -- out of the guard buffer: shown again\n',
++             "faces: a unit that leaves the pick (far, streamed) is shown again (never stays hidden)")
++# ── end faces lane
++
+ parse_gate()
+ 
+ print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

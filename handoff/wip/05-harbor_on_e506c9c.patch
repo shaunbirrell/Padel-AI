@@ -1,0 +1,840 @@
+diff --git a/src/ReplicatedStorage/Shared/Configs/DockKitConfig.luau b/src/ReplicatedStorage/Shared/Configs/DockKitConfig.luau
+new file mode 100644
+--- /dev/null
++++ b/src/ReplicatedStorage/Shared/Configs/DockKitConfig.luau
+@@ -0,0 +1,220 @@
++--!strict
++--[[
++	fb4 harbour (owner 2026-09-28, phone screenshots of his base dock: "The default boat in the dock looks terrible, make
++	it look like a real boat" and "The building beside the dock same thing should look like a legit dock building").
++
++	The Naval Dock's Part kit (StructureKitBuilder kit "dock"): a paved quay along the basin with bollards and tyre
++	fenders, a red-brick harbour warehouse (pitched roof with gables, roller doors), a grey patrol boat moored alongside
++	(flared pointed bow, black boot-top, wheelhouse with a glass band, mast, bow gun, mooring lines), then a quay crane,
++	lamp posts, cargo, a harbour control tower, stacked containers and a harbour launch as the Dock levels up.
++	Enabled = false builds the old v35 / v37 kit (pier slab, grey shed, 5-block parked boat) exactly as before.
++
++	Rules this kit keeps (CLAUDE.md):
++	  - Own Part kit only: no catalog model, no mesh, 0 new load attempts (PreferMesh stays OFF for structure kits).
++	  - No text, no SurfaceGui, no light, no Neon, no Humanoid, no markings on the boat (no numbers, flags or insignia).
++	  - Parts: 86 pieces + the hidden Body and boat host = 88 per base (the old kit had 24: +64 per base at L5). The
++	    biggest level-up (L1) shows 47 of them (57 instance changes with the Dock's gates and signs; target 60).
++	    Nothing is created or destroyed on a purchase: every piece is built once with the kit and BaseService only
++	    shows it (Transparency) and gives it its collision at its MinLevel (L5 also adds the usual WE_MaxSmoke).
++
++	Kit frame (the Dock's site frame, BaseLayoutConfig.Structures.Dock: site (78, -112), Yaw 90), in studs:
++	  X along the quay, + toward the sea gate (plot -Z);   Z across the quay, + toward the water (plot +X);
++	  Y = the piece's CENTRE height above the plot pad top (the water surface is at +0.5, the basin kerb top at +1.0).
++  What a piece stands on sets its bottom: on the quay (kit z 4 .. 23.8) the QuayDeck top at +0.4; landward of the
++  quay (kit z < 4: the warehouse yard, the gable-end cargo, the containers) the bare pad top at 0. So a crate of
++  height h on the pad has Y = h / 2 (a BuyPathStatic rule checks every low piece rests on one or the other).
++	  Pos is the piece's centre; Rot = CFrame.Angles(X, Y, Z) in degrees; a piece with From / To is a beam (rope, jib):
++	  a Size.X x Size.Y section stretched from From to To.
++	  Shape: "Block" | "Wedge" (Roblox WedgePart: tall face at local +Z, slope down toward -Z) | "Cylinder" (axis along
++	  local X) | "Ball".
++	  Landmarks in this frame: basin water z >= 25 (kerb z 23.8 .. 25, x -35.6 .. 35.6); inner Dock gate x -52,
++	  z 6 .. 22; helipad z <= -24; sea-gate guard (38, 20); sandbag berm (38, 2); sea gate lane x >= 35, z 30 .. 70.
++	  Nothing in the kit reaches past kit z 33.5 (the moored strip): the open basin, where driven boats spawn (z >= 34)
++	  and sail, has no kit part in it at any height. Every solid (Collide) piece stays inside kit x -48 .. 34 (the
++	  QuayDeck's span: off the Dock gate lane, the sea-gate guard, the berm and the sea-gate lane land) and at kit
++	  z >= -20 (off the helipad).
++
++	MinLevel: the Dock level that shows the piece (0 = from the kit build: the quay is base infrastructure like the
++	basin and its kerb). Collide = CanCollide + CanQuery (walkable quay, solid warehouse / hull / tower / containers;
++	a solid hull is "land" to a driven boat's probe, like the kerb, and a spawn never overlaps it). Everything else is
++	decor: CanCollide, CanQuery and CanTouch off. Shadow = CastShadow (the big volumes only).
++]]
++
++export type DockPiece = {
++	Name: string,
++	Shape: string?, -- default "Block"
++	Size: Vector3,
++	Pos: Vector3?, -- centre (Y above the pad top); nil for a From / To beam
++	Rot: Vector3?, -- degrees, CFrame.Angles(X, Y, Z)
++	From: Vector3?,
++	To: Vector3?,
++	Color: Color3,
++	Material: Enum.Material,
++	MinLevel: number,
++	Collide: boolean?,
++	Shadow: boolean?,
++	Transparency: number?, -- when shown (default 0; 1 = always hidden)
++}
++
++local C = Color3.fromRGB
++local M = Enum.Material
++local V = Vector3.new
++
++-- palette
++local BRICK = C(150, 86, 66)
++local ROOF = C(80, 96, 110)
++local CONCRETE = C(156, 152, 142)
++local TRIM = C(212, 204, 186)
++local GLASS = C(58, 88, 112)
++local DOOR = C(58, 78, 96)
++local HULL = C(92, 102, 112) -- dark naval grey
++local BOOT = C(34, 36, 38)
++local CRANE = C(226, 176, 44)
++local ROPE = C(196, 176, 130)
++local DARK = C(40, 42, 44)
++
++-- roof pitch: walls 10 high, ridge +4 at z = -5, eaves 0.8 past the walls (z 4.8 / -14.8)
++local PITCH = math.deg(math.atan(4 / 9.8))
++local ROOF_LEN = math.sqrt(9.8 * 9.8 + 4 * 4) + 0.3
++local ROOF_DY = 0.225 * math.cos(math.rad(PITCH))
++local ROOF_DZ = 0.225 * math.sin(math.rad(PITCH))
++
++-- crane jib: from the cab, luffed up over the harbour launch's berth (L4). The tip stays over the moored strip
++-- (kit z <= 33) and the hook hangs 15+ studs up, so nothing hangs in the open basin where driven boats sail. The crane
++-- stands at the sea-gate end of the quay (x 22), clear of the car-sized lane along the quay in front of the warehouse.
++local JIB_FROM = V(22, 11.8, 22.8)
++local JIB_TIP = V(21, 20.6, 29.4)
++
++local pieces: { DockPiece } = {
++	-- ── L0 quay (base infrastructure, with the basin): paved apron from the Dock gate lane to the kerb ───────────
++	{ Name = "QuayDeck", Size = V(82, 0.8, 19.8), Pos = V(-7, 0, 13.9), Color = CONCRETE, Material = M.Concrete, MinLevel = 0, Collide = true },
++	{ Name = "QuayEdgeLine", Size = V(70.4, 0.06, 0.45), Pos = V(0, 0.43, 22.9), Color = C(226, 184, 52), Material = M.SmoothPlastic, MinLevel = 0 },
++	{ Name = "Bollard", Shape = "Cylinder", Size = V(1.3, 1.1, 1.1), Pos = V(-26, 1.05, 22.6), Rot = V(0, 0, 90), Color = DARK, Material = M.Metal, MinLevel = 0 },
++	{ Name = "Bollard", Shape = "Cylinder", Size = V(1.3, 1.1, 1.1), Pos = V(-12, 1.05, 22.6), Rot = V(0, 0, 90), Color = DARK, Material = M.Metal, MinLevel = 0 },
++	{ Name = "Bollard", Shape = "Cylinder", Size = V(1.3, 1.1, 1.1), Pos = V(14, 1.05, 22.6), Rot = V(0, 0, 90), Color = DARK, Material = M.Metal, MinLevel = 0 },
++	{ Name = "Bollard", Shape = "Cylinder", Size = V(1.3, 1.1, 1.1), Pos = V(28, 1.05, 22.6), Rot = V(0, 0, 90), Color = DARK, Material = M.Metal, MinLevel = 0 },
++
++	-- ── L1 harbour warehouse: x -15 .. 13, z -14 .. 4 (front on the quay), walls 10, ridge 14 along X ──────────────
++	{ Name = "WarehouseBlock", Size = V(28, 10, 18), Pos = V(-1, 5, -5), Color = BRICK, Material = M.Brick, MinLevel = 1, Collide = true, Shadow = true },
++	{ Name = "WarehousePlinth", Size = V(28.3, 1.2, 18.3), Pos = V(-1, 0.6, -5), Color = C(118, 114, 106), Material = M.Concrete, MinLevel = 1 },
++	{ Name = "WarehouseRoof", Size = V(29.6, 0.45, ROOF_LEN), Pos = V(-1, 12 + ROOF_DY, -0.1 + ROOF_DZ), Rot = V(PITCH, 0, 0), Color = ROOF, Material = M.Metal, MinLevel = 1, Collide = true, Shadow = true },
++	{ Name = "WarehouseRoof", Size = V(29.6, 0.45, ROOF_LEN), Pos = V(-1, 12 + ROOF_DY, -9.9 - ROOF_DZ), Rot = V(-PITCH, 0, 0), Color = ROOF, Material = M.Metal, MinLevel = 1, Collide = true, Shadow = true },
++	{ Name = "WarehouseRidge", Size = V(29.8, 0.5, 0.9), Pos = V(-1, 14.25, -5), Color = C(62, 70, 78), Material = M.Metal, MinLevel = 1 },
++	{ Name = "WarehouseGable", Shape = "Wedge", Size = V(0.5, 4, 9), Pos = V(-14.75, 12, -0.5), Rot = V(0, 180, 0), Color = BRICK, Material = M.Brick, MinLevel = 1, Collide = true },
++	{ Name = "WarehouseGable", Shape = "Wedge", Size = V(0.5, 4, 9), Pos = V(-14.75, 12, -9.5), Color = BRICK, Material = M.Brick, MinLevel = 1, Collide = true },
++	{ Name = "WarehouseGable", Shape = "Wedge", Size = V(0.5, 4, 9), Pos = V(12.75, 12, -0.5), Rot = V(0, 180, 0), Color = BRICK, Material = M.Brick, MinLevel = 1, Collide = true },
++	{ Name = "WarehouseGable", Shape = "Wedge", Size = V(0.5, 4, 9), Pos = V(12.75, 12, -9.5), Color = BRICK, Material = M.Brick, MinLevel = 1, Collide = true },
++	-- quay front: two roller doors, a side door, a cream lintel band
++	{ Name = "RollerDoor", Size = V(7, 7.6, 0.25), Pos = V(-8.5, 4.2, 4.12), Color = C(182, 186, 188), Material = M.Metal, MinLevel = 1 },
++	{ Name = "RollerDoor", Size = V(7, 7.6, 0.25), Pos = V(2.5, 4.2, 4.12), Color = C(182, 186, 188), Material = M.Metal, MinLevel = 1 },
++	{ Name = "WarehouseDoor", Size = V(2.4, 5.2, 0.2), Pos = V(9.5, 3, 4.1), Color = DOOR, Material = M.Metal, MinLevel = 1 },
++	{ Name = "LintelBand", Size = V(28.1, 0.7, 0.3), Pos = V(-1, 8.6, 4.1), Color = TRIM, Material = M.Concrete, MinLevel = 1 },
++	-- gable end toward the Dock gate (the first thing a player sees walking in): door, window, round vent
++	{ Name = "WarehouseDoor", Size = V(0.2, 5.2, 2.4), Pos = V(-15.1, 2.6, -2), Color = DOOR, Material = M.Metal, MinLevel = 1 },
++	{ Name = "WarehouseWindow", Size = V(0.2, 2.2, 5), Pos = V(-15.1, 6.2, -9), Color = GLASS, Material = M.Glass, MinLevel = 1 },
++	{ Name = "GableVent", Shape = "Cylinder", Size = V(0.3, 2.2, 2.2), Pos = V(-15.05, 11.6, -5), Color = C(52, 58, 62), Material = M.Metal, MinLevel = 1 },
++	{ Name = "WarehouseWindow", Size = V(22, 1.6, 0.2), Pos = V(-1, 7.4, -14.1), Color = GLASS, Material = M.Glass, MinLevel = 1 },
++	{ Name = "WarehouseWindow", Size = V(0.2, 2.2, 5), Pos = V(13.1, 6.2, -5), Color = GLASS, Material = M.Glass, MinLevel = 1 },
++
++	-- ── L1 moored patrol boat: bow toward the sea gate (+X), centreline z 29, beam 6, stern x -10, bow tip x 13 ─────
++	-- black boot-top at the waterline, dark grey topsides, a raised forecastle with the bow gun, a flared pointed bow
++	-- (two wedges lying flat, overhanging the waterline like a raked stem), a pale wheelhouse with a glass band. The
++	-- wheelhouse is at player scale: 6 high over the deck (+2.4 .. +8.4), so a 5-stud avatar on deck stands below its
++	-- roof, the window band (+6.3 .. +7.8) is at his eye line, and the mast rises from the roof.
++	{ Name = "BoatBoot", Size = V(18.04, 0.9, 6.04), Pos = V(-1, 0.45, 29), Color = BOOT, Material = M.SmoothPlastic, MinLevel = 1, Collide = true },
++	{ Name = "BoatHull", Size = V(13, 1.5, 6), Pos = V(-3.5, 1.65, 29), Color = HULL, Material = M.Metal, MinLevel = 1, Collide = true, Shadow = true },
++	{ Name = "BoatForecastle", Size = V(5, 2.3, 6), Pos = V(5.5, 2.05, 29), Color = HULL, Material = M.Metal, MinLevel = 1, Collide = true, Shadow = true },
++	{ Name = "BoatBow", Shape = "Wedge", Size = V(2.3, 5, 3), Pos = V(10.5, 2.05, 27.5), Rot = V(0, 0, -90), Color = HULL, Material = M.Metal, MinLevel = 1, Collide = true },
++	{ Name = "BoatBow", Shape = "Wedge", Size = V(2.3, 5, 3), Pos = V(10.5, 2.05, 30.5), Rot = V(180, 0, -90), Color = HULL, Material = M.Metal, MinLevel = 1, Collide = true },
++	-- raked forefoot: the black boot-top sweeps up under the bow overhang (flat top at the bow's underside, slope from
++	-- the waterline at x 8 up to x 11.6), so from the side the bow rises out of the water instead of ending square
++	{ Name = "BoatStem", Shape = "Wedge", Size = V(1.8, 0.9, 3.6), Pos = V(9.8, 0.45, 29), Rot = V(180, -90, 0), Color = BOOT, Material = M.SmoothPlastic, MinLevel = 1 },
++	-- black rubbing strake round the hull just under the deck edge: a sheer line along the flat grey side and stern
++	{ Name = "BoatStrake", Size = V(18.1, 0.2, 6.12), Pos = V(-1.03, 2.2, 29), Color = DARK, Material = M.Rubber, MinLevel = 1 },
++	{ Name = "BoatDeck", Size = V(12.6, 0.12, 5.6), Pos = V(-3.7, 2.46, 29), Color = C(78, 84, 88), Material = M.DiamondPlate, MinLevel = 1 },
++	-- the quay-side bulwark has a boarding gap (x -8.6 .. -6.4) where the gangway comes aboard
++	{ Name = "BoatBulwark", Size = V(1.4, 0.7, 0.18), Pos = V(-9.3, 2.75, 26.09), Color = HULL, Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatBulwark", Size = V(9.4, 0.7, 0.18), Pos = V(-1.7, 2.75, 26.09), Color = HULL, Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatBulwark", Size = V(13, 0.7, 0.18), Pos = V(-3.5, 2.75, 31.91), Color = HULL, Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatWheelhouse", Size = V(6, 6, 4.4), Pos = V(-1.5, 5.4, 29), Color = C(206, 210, 210), Material = M.Metal, MinLevel = 1, Collide = true, Shadow = true },
++	{ Name = "BoatBridgeGlass", Size = V(6.12, 1.5, 4.52), Pos = V(-1.5, 7.05, 29), Color = C(40, 62, 82), Material = M.Glass, MinLevel = 1 },
++	{ Name = "BoatWheelhouseRoof", Size = V(6.8, 0.3, 5), Pos = V(-1.3, 8.55, 29), Color = C(150, 156, 160), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatMast", Size = V(0.3, 4.2, 0.3), Pos = V(-2.5, 10.8, 29), Color = C(220, 220, 220), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatRadarBar", Size = V(0.25, 0.2, 2.4), Pos = V(-2.5, 11.9, 29), Color = DARK, Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatMastLight", Shape = "Ball", Size = V(0.45, 0.45, 0.45), Pos = V(-2.5, 13.1, 29), Color = C(250, 248, 236), Material = M.SmoothPlastic, MinLevel = 1 },
++	{ Name = "BoatBowRail", Size = V(0.12, 0.12, 1), From = V(3.2, 3.9, 26.25), To = V(12.2, 4.25, 28.8), Color = C(200, 204, 206), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatBowRail", Size = V(0.12, 0.12, 1), From = V(3.2, 3.9, 31.75), To = V(12.2, 4.25, 29.2), Color = C(200, 204, 206), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatGunMount", Shape = "Cylinder", Size = V(0.7, 1.4, 1.4), Pos = V(5.8, 3.55, 29), Rot = V(0, 0, 90), Color = C(110, 116, 122), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatGunBarrel", Shape = "Cylinder", Size = V(2.8, 0.3, 0.3), Pos = V(7.5, 3.95, 29), Color = C(58, 62, 66), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatExhaust", Size = V(1.2, 1.4, 1.6), Pos = V(-6, 3.1, 29), Color = C(60, 64, 68), Material = M.Metal, MinLevel = 1 },
++	{ Name = "BoatLifeRing", Shape = "Cylinder", Size = V(0.15, 1.1, 1.1), Pos = V(-0.5, 4.3, 26.72), Rot = V(0, 90, 0), Color = C(230, 110, 40), Material = M.SmoothPlastic, MinLevel = 1 },
++	-- three hanging fenders on the quay side (clear of the gangway, x -8.4 .. -6.6), a gangway from the quay onto the aft
++	-- deck through the bulwark's boarding gap (walkable), two mooring lines
++	{ Name = "BoatFender", Shape = "Cylinder", Size = V(1.5, 0.7, 0.7), Pos = V(-5.5, 1.6, 25.65), Rot = V(0, 0, 90), Color = C(40, 48, 60), Material = M.Rubber, MinLevel = 1 },
++	{ Name = "BoatFender", Shape = "Cylinder", Size = V(1.5, 0.7, 0.7), Pos = V(-1, 1.6, 25.65), Rot = V(0, 0, 90), Color = C(40, 48, 60), Material = M.Rubber, MinLevel = 1 },
++	{ Name = "BoatFender", Shape = "Cylinder", Size = V(1.5, 0.7, 0.7), Pos = V(4.5, 1.6, 25.65), Rot = V(0, 0, 90), Color = C(40, 48, 60), Material = M.Rubber, MinLevel = 1 },
++	{ Name = "Gangway", Size = V(1.8, 0.2, 1), From = V(-7.5, 0.55, 21.6), To = V(-7.5, 2.55, 27.4), Color = C(120, 124, 126), Material = M.DiamondPlate, MinLevel = 1, Collide = true },
++	{ Name = "MooringLine", Size = V(0.18, 0.18, 1), From = V(-9, 2.6, 26.4), To = V(-12, 1.55, 22.6), Color = ROPE, Material = M.Fabric, MinLevel = 1 },
++	{ Name = "MooringLine", Size = V(0.18, 0.18, 1), From = V(7.5, 3.3, 26.4), To = V(14, 1.55, 22.6), Color = ROPE, Material = M.Fabric, MinLevel = 1 },
++
++	-- ── L2 quay crane (sea-gate end of the quay, jib over the launch berth), lamp posts, cargo at the gable end ─────────
++	-- (the crates and drums stand on the bare pad by the gable end, landward of the quay: bottom at 0)
++	{ Name = "CranePedestal", Shape = "Cylinder", Size = V(9, 2.4, 2.4), Pos = V(22, 4.9, 21.5), Rot = V(0, 0, 90), Color = CRANE, Material = M.Metal, MinLevel = 2, Collide = true },
++	{ Name = "CraneCab", Size = V(3.6, 3, 4.4), Pos = V(22, 10.9, 21), Color = CRANE, Material = M.Metal, MinLevel = 2, Shadow = true },
++	{ Name = "CraneCounterweight", Size = V(3.2, 2.2, 2.2), Pos = V(22, 10.5, 17.9), Color = C(92, 94, 96), Material = M.Concrete, MinLevel = 2 },
++	{ Name = "CraneJib", Size = V(0.9, 0.9, 1), From = JIB_FROM, To = JIB_TIP, Color = CRANE, Material = M.Metal, MinLevel = 2 },
++	{ Name = "CraneCable", Size = V(0.12, 4.2, 0.12), Pos = V(JIB_TIP.X, JIB_TIP.Y - 2.1, JIB_TIP.Z), Color = DARK, Material = M.Metal, MinLevel = 2 },
++	{ Name = "CraneHook", Size = V(0.9, 1, 0.9), Pos = V(JIB_TIP.X, JIB_TIP.Y - 4.7, JIB_TIP.Z), Color = C(40, 40, 40), Material = M.Metal, MinLevel = 2 },
++	{ Name = "LampPost", Size = V(0.35, 9, 0.35), Pos = V(-31, 4.9, 22.2), Color = C(72, 76, 78), Material = M.Metal, MinLevel = 2 },
++	{ Name = "LampHead", Size = V(0.7, 0.35, 1.8), Pos = V(-31, 9.4, 21.6), Color = C(230, 226, 206), Material = M.SmoothPlastic, MinLevel = 2 },
++	{ Name = "LampPost", Size = V(0.35, 9, 0.35), Pos = V(4, 4.9, 21.8), Color = C(72, 76, 78), Material = M.Metal, MinLevel = 2 },
++	{ Name = "LampHead", Size = V(0.7, 0.35, 1.8), Pos = V(4, 9.4, 21.2), Color = C(230, 226, 206), Material = M.SmoothPlastic, MinLevel = 2 },
++	{ Name = "CargoCrate", Size = V(2.4, 2.4, 2.4), Pos = V(-17.5, 1.2, -8.4), Color = C(156, 120, 78), Material = M.WoodPlanks, MinLevel = 2, Collide = true },
++	{ Name = "CargoCrate", Size = V(2, 2, 2), Pos = V(-17.4, 3.4, -8.2), Rot = V(0, 18, 0), Color = C(146, 112, 72), Material = M.WoodPlanks, MinLevel = 2, Collide = true },
++	{ Name = "FuelDrum", Shape = "Cylinder", Size = V(2.2, 1.5, 1.5), Pos = V(-17.2, 1.1, -5), Rot = V(0, 0, 90), Color = C(52, 92, 62), Material = M.Metal, MinLevel = 2, Collide = true },
++	{ Name = "FuelDrum", Shape = "Cylinder", Size = V(2.2, 1.5, 1.5), Pos = V(-17.6, 1.1, -11.6), Rot = V(0, 0, 90), Color = C(150, 58, 44), Material = M.Metal, MinLevel = 2, Collide = true },
++
++	-- ── L3 harbour control tower by the sea gate end of the quay, stacked containers ───────────────────────────────
++	-- (the tower stands on the quay: bottom at +0.4; the containers stand on the pad beside the helipad: bottom at 0)
++	{ Name = "TowerShaft", Size = V(6, 13, 6), Pos = V(27, 6.9, 10), Color = TRIM, Material = M.Concrete, MinLevel = 3, Collide = true, Shadow = true },
++	{ Name = "TowerCab", Size = V(7.6, 3.4, 7.6), Pos = V(27, 15.1, 10), Color = C(226, 228, 226), Material = M.Metal, MinLevel = 3, Collide = true, Shadow = true },
++	{ Name = "TowerGlass", Size = V(7.72, 2, 7.72), Pos = V(27, 15.3, 10), Color = GLASS, Material = M.Glass, MinLevel = 3 },
++	{ Name = "TowerRoof", Size = V(8.6, 0.45, 8.6), Pos = V(27, 17.03, 10), Color = C(66, 72, 78), Material = M.Metal, MinLevel = 3, Collide = true },
++	{ Name = "TowerDoor", Size = V(2.4, 5, 0.2), Pos = V(27, 2.9, 13.1), Color = DOOR, Material = M.Metal, MinLevel = 3 },
++	{ Name = "TowerWindow", Size = V(0.2, 6, 1.2), Pos = V(23.9, 7.5, 10), Color = GLASS, Material = M.Glass, MinLevel = 3 },
++	{ Name = "TowerMast", Size = V(0.3, 5, 0.3), Pos = V(27, 19.75, 10), Color = C(210, 210, 210), Material = M.Metal, MinLevel = 3 },
++	{ Name = "TowerRadar", Size = V(0.3, 0.25, 3.2), Pos = V(27, 21.4, 10), Color = DARK, Material = M.Metal, MinLevel = 3 },
++	{ Name = "Container", Size = V(12, 5.2, 5), Pos = V(21, 2.6, 0.2), Color = C(156, 66, 46), Material = M.Metal, MinLevel = 3, Collide = true, Shadow = true },
++	{ Name = "Container", Size = V(12, 5.2, 5), Pos = V(21, 2.6, -5.3), Color = C(46, 86, 136), Material = M.Metal, MinLevel = 3, Collide = true, Shadow = true },
++	{ Name = "Container", Size = V(12, 5.2, 5), Pos = V(21.6, 7.8, -2.55), Color = C(72, 116, 76), Material = M.Metal, MinLevel = 3, Collide = true, Shadow = true },
++
++	-- ── L4 harbour launch (rigid inflatable) moored under the crane, ahead of the patrol boat ─────────────────────
++	{ Name = "LaunchHull", Size = V(7, 0.7, 2.6), Pos = V(21, 0.55, 27.6), Color = C(64, 68, 72), Material = M.Metal, MinLevel = 4, Collide = true },
++	{ Name = "LaunchTube", Shape = "Cylinder", Size = V(7.4, 0.9, 0.9), Pos = V(21, 0.95, 26.4), Color = C(46, 50, 54), Material = M.Rubber, MinLevel = 4 },
++	{ Name = "LaunchTube", Shape = "Cylinder", Size = V(7.4, 0.9, 0.9), Pos = V(21, 0.95, 28.8), Color = C(46, 50, 54), Material = M.Rubber, MinLevel = 4 },
++	{ Name = "LaunchConsole", Size = V(0.9, 1, 1.1), Pos = V(21.5, 1.4, 27.6), Color = C(190, 192, 194), Material = M.Metal, MinLevel = 4 },
++	{ Name = "LaunchMotor", Size = V(0.7, 1.4, 0.8), Pos = V(17.2, 1, 27.6), Color = C(30, 32, 34), Material = M.Metal, MinLevel = 4 },
++
++	-- ── L5: gold band on the control cab + an amber beacon on its mast (painted, no light) ─────────────────────────
++	{ Name = "TowerGoldBand", Size = V(7.75, 0.3, 7.75), Pos = V(27, 16.62, 10), Color = C(240, 196, 64), Material = M.Metal, MinLevel = 5 },
++	{ Name = "TowerBeacon", Shape = "Ball", Size = V(0.8, 0.8, 0.8), Pos = V(27, 22.6, 10), Color = C(255, 176, 48), Material = M.SmoothPlastic, MinLevel = 5 },
++	-- warehouse chimney on the landward roof slope. It MUST be named "Roof": BaseService hangs every structure's L5 smoke
++	-- plume (WE_MaxSmoke) on the kit child called "Roof", as the old dock kit's shed roof had it.
++	{ Name = "Roof", Size = V(1.6, 3.4, 1.6), Pos = V(8, 13.2, -10), Color = C(118, 68, 54), Material = M.Brick, MinLevel = 5 },
++}
++
++local DockKitConfig = {
++	Enabled = true,
++	PadTopY = 0.5, -- the site frame is at the pad centre; the pad is 1 stud thick
++	-- StructureKitBuilder's required "Body" (EnsureKit): a concrete core at the warehouse footprint. From L1 it sits
++	-- inside the 28 x 10 x 18 warehouse block (BaseService recolours and grows it with the level, up to 24.7 x 1.28 x
++	-- 14.4 at L5), so it is hidden there. At L0, before the warehouse shows, it is the Dock's translucent footprint
++	-- ghost like every unbought structure's Body (main's v35 dock shows a 24 x 1.4 x 16 ghost there too).
++	Body = { Size = V(24, 0.8, 14), Pos = V(-1, 0.4, -5) },
++	-- Hidden host inside the hull: StructureKitBuilder.EnsureKit counts a "WE_DressHost*" child as the Dock's dress (no
++	-- rebuild loop); no WE_DressVehicle, so no catalog boat is ever hung on it.
++	ParkedBoatHost = { Size = V(2.8, 1.2, 2), Pos = V(-1, 1.2, 29) },
++	Pieces = pieces,
++}
++
++return DockKitConfig
+diff --git a/src/ServerScriptService/Server/Modules/StructureKitBuilder.luau b/src/ServerScriptService/Server/Modules/StructureKitBuilder.luau
+--- a/src/ServerScriptService/Server/Modules/StructureKitBuilder.luau
++++ b/src/ServerScriptService/Server/Modules/StructureKitBuilder.luau
+@@ -14,6 +14,7 @@
+ local Constants = require(Shared.Constants)
+ local HollowBuildingBuilder = require(script.Parent.HollowBuildingBuilder)
+ local WorldLabel = require(Shared.Util.WorldLabel)
++local DockKitConfig = require(Shared.Configs.DockKitConfig)
+ 
+ local StructureKitBuilder = {}
+ 
+@@ -101,6 +102,77 @@
+ 	return p
+ end
+ 
++--[[ fb4 harbour: one "Styled" kit part from a DockKitConfig piece (kit frame; Y = centre above the pad top). Built
++	hidden (Transparency 1, no collision, no query, no touch); BaseService.applyKitVisuals shows it from its
++	WE_MinLevel with its own look (colour, material, size and place are never changed by the level visuals) and
++	gives it WE_Collide (CanCollide + CanQuery) and WE_Shadow (CastShadow). ]]
++local function styledPart(plinth: BasePart, pc: any, padTop: number): BasePart
++	local shape = pc.Shape or "Block"
++	local p: BasePart
++	if shape == "Wedge" then
++		p = Instance.new("WedgePart")
++	else
++		local part = Instance.new("Part")
++		if shape == "Cylinder" then
++			part.Shape = Enum.PartType.Cylinder
++		elseif shape == "Ball" then
++			part.Shape = Enum.PartType.Ball
++		end
++		p = part
++	end
++	local lift = Vector3.new(0, padTop, 0)
++	local size: Vector3 = pc.Size
++	local localCF: CFrame
++	if pc.From ~= nil and pc.To ~= nil then
++		-- beam (rope, jib): the Size.X x Size.Y section stretched from From to To
++		local a: Vector3 = pc.From + lift
++		local b: Vector3 = pc.To + lift
++		size = Vector3.new(size.X, size.Y, math.max((b - a).Magnitude, 0.05))
++		localCF = CFrame.lookAt((a + b) * 0.5, b)
++	else
++		local rot: Vector3 = pc.Rot or Vector3.zero
++		localCF = CFrame.new((pc.Pos or Vector3.zero) + lift) * CFrame.Angles(math.rad(rot.X), math.rad(rot.Y), math.rad(rot.Z))
++	end
++	p.Name = pc.Name
++	p.Anchored = true
++	p.Size = size
++	p.CFrame = siteFrame(plinth) * localCF
++	p.Color = pc.Color
++	p.Material = pc.Material
++	p.TopSurface = Enum.SurfaceType.Smooth
++	p.BottomSurface = Enum.SurfaceType.Smooth
++	p.Transparency = 1
++	p.CanCollide = false
++	p.CanTouch = false
++	p.CanQuery = false
++	p.CastShadow = false
++	p:SetAttribute("WE_KitRole", "Styled")
++	p:SetAttribute("WE_BaseSize", size)
++	p:SetAttribute("WE_LocalOffset", localCF.Position)
++	p:SetAttribute("WE_Decor", true)
++	p:SetAttribute("WE_MinLevel", tonumber(pc.MinLevel) or 1)
++	p:SetAttribute("WE_Collide", pc.Collide == true)
++	p:SetAttribute("WE_Shadow", pc.Shadow == true)
++	p:SetAttribute("WE_BaseTransparency", tonumber(pc.Transparency) or 0)
++	p.Parent = plinth
++	return p
++end
++
++-- fb4 harbour: the Dock kit from DockKitConfig (hidden Body core, hidden boat host, every piece). Returns the part count.
++local function buildStyledDockKit(plinth: BasePart, pal: any): number
++	local cfg: any = DockKitConfig
++	local padTop = tonumber(cfg.PadTopY) or 0.5
++	local lift = Vector3.new(0, padTop, 0)
++	kitPart(plinth, "Body", cfg.Body.Size, cfg.Body.Pos + lift, pal.Body, Enum.Material.Concrete, nil)
++	styledPart(plinth, { Name = "WE_DressHost_ParkedBoat", Size = cfg.ParkedBoatHost.Size, Pos = cfg.ParkedBoatHost.Pos, Color = Color3.fromRGB(60, 65, 55), Material = Enum.Material.Metal, MinLevel = 99, Transparency = 1 }, padTop)
++	local n = 2
++	for _, pc in ipairs(cfg.Pieces) do
++		styledPart(plinth, pc, padTop)
++		n += 1
++	end
++	return n
++end
++
+ export type KitPalette = {
+ 	Plinth: Color3,
+ 	Body: Color3,
+@@ -357,6 +429,14 @@
+ 		kitPart(plinth, "Detail", Vector3.new(0.55, 26, 0.55), Vector3.new(5.2, 13.5, 5.2), Color3.fromRGB(55, 58, 48), Enum.Material.Metal, nil) -- ladder rail
+ 	elseif kit == "dock" then
+ 		-- v35: naval pier + bollards + crane silhouette + warehouse shed (readable Naval Dock)
++		-- fb4 (owner 2026-09-28: the default boat "looks terrible", the building "should look like a legit dock
++		-- building"): with DockKitConfig.Enabled the kit is the harbour (quay, brick warehouse, moored patrol boat,
++		-- crane, control tower, containers, launch) from DockKitConfig; Enabled = false keeps the v35 / v37 kit below.
++		if DockKitConfig.Enabled ~= false then
++			buildStyledDockKit(plinth, pal)
++			plinth:SetAttribute("WE_KitGen", KIT_GEN)
++			return
++		end
+ 		kitPart(plinth, "Body", Vector3.new(24, 1.4, 16), Vector3.new(0, 1.2, 0), pal.Body, Enum.Material.Concrete, nil)
+ 		kitPart(plinth, "Pier", Vector3.new(44, 0.9, 10), Vector3.new(0, 1.5, 20), pal.Roof, Enum.Material.Wood, nil)
+ 		kitPart(plinth, "Accent", Vector3.new(20, 0.16, 0.5), Vector3.new(0, 1.35, 0), pal.Accent, Enum.Material.SmoothPlastic, nil)
+diff --git a/src/ServerScriptService/Server/Services/BaseService.luau b/src/ServerScriptService/Server/Services/BaseService.luau
+--- a/src/ServerScriptService/Server/Services/BaseService.luau
++++ b/src/ServerScriptService/Server/Services/BaseService.luau
+@@ -806,16 +806,30 @@
+ 		return
+ 	end
+ 	local RunService = game:GetService("RunService")
++	-- fb4 harbour: the spinning showroom displays are found by a scan of every upgrade slot's children twice a second,
++	-- not every Heartbeat (the Dock kit alone is 88 parts per plinth); each frame only turns the displays found
++	local spinParts: { BasePart } = {}
++	local sinceScan = math.huge
+ 	showroomSpinConn = RunService.Heartbeat:Connect(function(dt)
+-		for _, inst in ipairs(CollectionService:GetTagged("WE_UpgradeSlot")) do
+-			if inst:IsA("BasePart") then
+-				for _, child in ipairs(inst:GetChildren()) do
+-					if child:IsA("BasePart") and child:GetAttribute("WE_ShowroomSpin") == true and child.Transparency < 0.5 then
+-						child.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)
++		sinceScan += dt
++		if sinceScan >= 0.5 then
++			sinceScan = 0
++			table.clear(spinParts)
++			for _, inst in ipairs(CollectionService:GetTagged("WE_UpgradeSlot")) do
++				if inst:IsA("BasePart") then
++					for _, child in ipairs(inst:GetChildren()) do
++						if child:IsA("BasePart") and child:GetAttribute("WE_ShowroomSpin") == true then
++							table.insert(spinParts, child)
++						end
+ 					end
+ 				end
+ 			end
+ 		end
++		for _, child in ipairs(spinParts) do
++			if child.Parent ~= nil and child.Transparency < 0.5 then
++				child.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)
++			end
++		end
+ 	end)
+ end
+ 
+@@ -1043,6 +1057,26 @@
+ 				child.Transparency = if lv == 0 then 1 else 0.08
+ 				child.Material = Enum.Material.Metal
+ 				child.CastShadow = lv > 0
++			elseif role == "Styled" then
++				-- fb4 harbour (DockKitConfig): the part keeps its own colour, material, size and place; the level only
++				-- shows it from WE_MinLevel (at WE_BaseTransparency) and gives it WE_Collide / WE_Shadow. Written only
++				-- where a value differs, so a purchase changes just the parts of the new level.
++				local shown = lv >= (tonumber(child:GetAttribute("WE_MinLevel")) or 1)
++				local tr = if shown then (tonumber(child:GetAttribute("WE_BaseTransparency")) or 0) else 1
++				local collide = shown and tr < 1 and child:GetAttribute("WE_Collide") == true
++				local shadow = shown and tr < 1 and child:GetAttribute("WE_Shadow") == true
++				if math.abs(child.Transparency - tr) > 1e-3 then -- Transparency is float32: compare with a tolerance
++					child.Transparency = tr
++				end
++				if child.CanCollide ~= collide then
++					child.CanCollide = collide
++				end
++				if child.CanQuery ~= collide then
++					child.CanQuery = collide
++				end
++				if child.CastShadow ~= shadow then
++					child.CastShadow = shadow
++				end
+ 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
+ 				local bx = child:GetAttribute("WE_BaseSize")
+ 				if typeof(bx) ~= "Vector3" then
+diff --git a/src/ServerScriptService/Server/Services/UpgradePadService.luau b/src/ServerScriptService/Server/Services/UpgradePadService.luau
+--- a/src/ServerScriptService/Server/Services/UpgradePadService.luau
++++ b/src/ServerScriptService/Server/Services/UpgradePadService.luau
+@@ -96,7 +96,10 @@
+ 	part.CanCollide = true
+ 	part.CanQuery = true
+ 	for _, child in ipairs(part:GetDescendants()) do
+-		if child:IsA("BasePart") then
++		-- fb4 harbour: a "Styled" Dock kit piece owns its query state (BaseService gives a shown solid piece CanQuery with
++		-- CanCollide, for spawn clearance, the boat land probe and the camera; it is built CanTouch false), so a re-harden
++		-- sweep must not switch it off
++		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") ~= "Styled" then
+ 			child.CanTouch = false
+ 			child.CanQuery = false
+ 		end
+diff --git a/tools/BuyPathStatic.py b/tools/BuyPathStatic.py
+--- a/tools/BuyPathStatic.py
++++ b/tools/BuyPathStatic.py
+@@ -8254,6 +8254,426 @@
+ _ap_rules()
+ # ── end atmprompt
+ 
++
++# ── fb4 harbour (owner 2026-09-28: the default boat "looks terrible", the dock building "should look like a legit dock
++# building"): the Naval Dock's Part kit comes from DockKitConfig (quay, brick warehouse, moored patrol boat, crane, control
++# tower, containers, launch) as "Styled" kit parts that keep their own look; BaseService only shows them by level.
++# Fix round 2 adds: styledPart / buildStyledDockKit body pins, one-line row count, solid load-bearing pieces, nothing
++# floats (low pieces rest on the quay or the pad), the moored boat's wheelhouse at player scale.
++# Fix round 3 adds: solid pieces stay off the land lanes (Dock gate, sea-gate guard / berm / lane, helipad), the boarding
++# ramp's walk space is clear, the pad sweep (UpgradePadService.hardenPad) leaves Styled pieces' CanQuery alone, the
++# Styled branch compares Transparency with a tolerance, and the showroom spin loop scans the slots twice a second.
++HB_CFG = "src/ReplicatedStorage/Shared/Configs/DockKitConfig.luau"
++HB_SKB = "src/ServerScriptService/Server/Modules/StructureKitBuilder.luau"
++HB_BS = "src/ServerScriptService/Server/Services/BaseService.luau"
++HB_UPS = "src/ServerScriptService/Server/Services/UpgradePadService.luau"
++
++
++class _HbV:
++    """Vector3 stand-in for DockKitConfig's V(x, y, z) literals and constants"""
++    def __init__(self, x, y, z):
++        self.X, self.Y, self.Z = float(x), float(y), float(z)
++
++
++def _hb_call_arg(s: str, key: str) -> str | None:
++    """the text of `key = V(...)` (balanced parentheses) in one config row, or None"""
++    i = s.find(key + " = V(")
++    if i < 0:
++        return None
++    j = i + len(key) + 3
++    depth = 0
++    for k in range(j, len(s)):
++        if s[k] == "(":
++            depth += 1
++        elif s[k] == ")":
++            depth -= 1
++            if depth == 0:
++                return s[j:k + 1]
++    return None
++
++
++def _hb_pieces() -> list[dict] | None:
++    """every DockKitConfig piece row: name, shape, size, pos (or from / to), rot, minlevel, collide, material; the numeric
++    constants above the rows (roof pitch, jib ends) are evaluated like the Luau does (math.* only)"""
++    body = read(HB_CFG)
++    if body is None:
++        return None
++    import math as _hbmath
++    import types as _hbtypes
++    _hbm = _hbtypes.SimpleNamespace(deg=_hbmath.degrees, rad=_hbmath.radians, atan=_hbmath.atan, atan2=_hbmath.atan2,
++                                    sqrt=_hbmath.sqrt, cos=_hbmath.cos, sin=_hbmath.sin, abs=abs, max=max, min=min,
++                                    floor=_hbmath.floor, pi=_hbmath.pi)
++    env = {"_m": _hbm, "V": _HbV}
++    for m in re.finditer(r"^local (\w+) = ([^\n]+?)(?:\s+--[^\n]*)?$", body, re.M):
++        try:
++            env[m.group(1)] = eval(m.group(2).replace("math.", "_m."), {"__builtins__": {}}, env)
++        except Exception:
++            pass
++
++    def vec(s, key):
++        a = _hb_call_arg(s, key)
++        if a is None:
++            m = re.search(key + r" = (\w+)[,}]", s)
++            v = env.get(m.group(1)) if m else None
++            return (v.X, v.Y, v.Z) if isinstance(v, _HbV) else None
++        try:
++            v = eval(a.replace("math.", "_m."), {"__builtins__": {}}, env)
++            return (v.X, v.Y, v.Z)
++        except Exception:
++            return None
++
++    rows = []
++    for line in body.splitlines():
++        s = line.strip()
++        if not s.startswith("{ Name = "):
++            continue
++        r = {"line": s, "name": re.search(r'Name = "([^"]+)"', s).group(1)}
++        m = re.search(r'Shape = "(\w+)"', s)
++        r["shape"] = m.group(1) if m else "Block"
++        m = re.search(r"MinLevel = (\d+)", s)
++        r["min"] = int(m.group(1)) if m else None
++        r["collide"] = "Collide = true" in s
++        m = re.search(r"Material = M\.(\w+)", s)
++        r["mat"] = m.group(1) if m else None
++        r["size"], r["pos"], r["rot"] = vec(s, "Size"), vec(s, "Pos"), vec(s, "Rot") or (0.0, 0.0, 0.0)
++        f, t = vec(s, "From"), vec(s, "To")
++        r["beam"] = (f + t) if f and t else None
++        rows.append(r)
++    return rows
++
++
++def _hb_z_range(r: dict) -> tuple[float, float] | None:
++    """kit-frame z extent of a piece (CFrame.Angles(X, Y, Z) = Rx * Ry * Rz; a beam: its two ends +- the section)"""
++    import math as _hbm
++    if r["beam"] is not None and r["size"]:
++        h = max(r["size"][0], r["size"][1]) * 0.5
++        return min(r["beam"][2], r["beam"][5]) - h, max(r["beam"][2], r["beam"][5]) + h
++    if r["pos"] is None or r["size"] is None:
++        return None
++    ax, ay, az = (_hbm.radians(v) for v in r["rot"])
++    cx, sx, cy, sy, cz, sz = _hbm.cos(ax), _hbm.sin(ax), _hbm.cos(ay), _hbm.sin(ay), _hbm.cos(az), _hbm.sin(az)
++    # third row of Rx(ax) * Ry(ay) * Rz(az)
++    row = (-cx * sy * cz + sx * sz, cx * sy * sz + sx * cz, cx * cy)
++    ez = sum(abs(row[i]) * r["size"][i] * 0.5 for i in range(3))
++    return r["pos"][2] - ez, r["pos"][2] + ez
++
++
++def _hb_extent(r: dict, axis: int) -> tuple[float, float] | None:
++    """kit-frame extent of a block piece along axis 0 / 1 / 2 (x / y / z), from its rotated box (CFrame.Angles(X, Y, Z) =
++    Rx * Ry * Rz); None for a beam (From / To) or a row without Pos / Size"""
++    import math as _hbm
++    if r["beam"] is not None or r["pos"] is None or r["size"] is None:
++        return None
++    ax, ay, az = (_hbm.radians(v) for v in r["rot"])
++    cx, sx, cy, sy, cz, sz = _hbm.cos(ax), _hbm.sin(ax), _hbm.cos(ay), _hbm.sin(ay), _hbm.cos(az), _hbm.sin(az)
++    rows = ((cy * cz, -cy * sz, sy),
++            (sx * sy * cz + cx * sz, -sx * sy * sz + cx * cz, -sx * cy),
++            (-cx * sy * cz + sx * sz, cx * sy * sz + sx * cz, cx * cy))
++    e = sum(abs(rows[axis][i]) * r["size"][i] * 0.5 for i in range(3))
++    return r["pos"][axis] - e, r["pos"][axis] + e
++
++
++def _hb_box(r: dict) -> list[tuple[float, float]] | None:
++    """fix round 3: kit-frame axis-aligned box [(x0, x1), (y0, y1), (z0, z1)] of any piece: a block from its rotated box,
++    a beam (From / To) from its two ends +- half its widest section"""
++    if r["beam"] is not None:
++        if not r["size"]:
++            return None
++        h = max(r["size"][0], r["size"][1]) * 0.5
++        f, t = r["beam"][:3], r["beam"][3:]
++        return [(min(f[i], t[i]) - h, max(f[i], t[i]) + h) for i in range(3)]
++    ex = [_hb_extent(r, a) for a in range(3)]
++    return ex if all(e is not None for e in ex) else None
++
++
++def _hb_dock_kit_rules() -> None:
++    rows = _hb_pieces()
++    if not rows:
++        bad("fb4 harbour: DockKitConfig.Pieces rows not found")
++        return
++    # budget: 86 pieces + the hidden Body core and boat host = 88 kit parts per base (the old kit had 24); cap 90
++    if len(rows) <= 88:
++        ok(f"fb4 harbour: {len(rows)} dock pieces (+ hidden Body and boat host) — within the 90-part kit budget")
++    else:
++        bad(f"fb4 harbour: {len(rows)} dock pieces > 88 (per-base part budget)")
++    # every level shows at most 50 new parts (instance changes per purchase: target 60, gates and Body included)
++    per = {}
++    for r in rows:
++        per[r["min"]] = per.get(r["min"], 0) + 1
++    if all(r["min"] is not None and 0 <= r["min"] <= 5 for r in rows) and max(per.values()) <= 50:
++        ok(f"fb4 harbour: pieces per Dock level {dict(sorted(per.items()))} (each level <= 50 new parts)")
++    else:
++        bad(f"fb4 harbour: a piece has no MinLevel 0..5 or a level shows > 50 parts: {per}")
++    # phone budget rules: no Neon, no lights / text / guis in the kit rows
++    neon = [r["name"] for r in rows if r["mat"] == "Neon"]
++    if not neon and all(r["mat"] for r in rows):
++        ok("fb4 harbour: no Neon piece and every piece names its material")
++    else:
++        bad(f"fb4 harbour: Neon / material-less pieces {neon}")
++    # a material name Roblox does not have (e.g. "CorrugatedPlate") errors when the config is required: live Enum.Material names only
++    real = {"Asphalt", "Basalt", "Brick", "Cardboard", "Carpet", "CeramicTiles", "ClayRoofTiles", "Cobblestone", "Concrete",
++            "CorrodedMetal", "CrackedLava", "DiamondPlate", "Fabric", "Foil", "ForceField", "Glacier", "Glass", "Granite", "Grass",
++            "Ground", "Ice", "LeafyGrass", "Leather", "Limestone", "Marble", "Metal", "Mud", "Neon", "Pavement", "Pebble", "Plaster",
++            "Plastic", "Rock", "RoofShingles", "Rubber", "Salt", "Sand", "Sandstone", "Slate", "SmoothPlastic", "Snow", "Wood",
++            "WoodPlanks"}
++    unknown = sorted({r["mat"] for r in rows if r["mat"] and r["mat"] not in real})
++    if not unknown:
++        ok("fb4 harbour: every piece material is a real Enum.Material name")
++    else:
++        bad(f"fb4 harbour: unknown Enum.Material names {unknown} (the config would error on require)")
++    # the moored boats float in the dock basin (kit z 25.4 .. 33, x -35 .. 35), clear of the sea gate lane (x >= 35)
++    boats = [r for r in rows if r["name"].startswith(("Boat", "Launch"))]
++    out = []
++    for r in boats:
++        if r["pos"] is None or r["size"] is None:
++            continue
++        x, _, z = r["pos"]
++        if not (25.3 <= z <= 33 and -35 <= x <= 35):
++            out.append(r["name"])
++    if len(boats) >= 20 and not out:
++        ok(f"fb4 harbour: {len(boats)} boat / launch pieces all inside the basin's west strip (z 25.3..33), clear of the gate lane")
++    else:
++        bad(f"fb4 harbour: boat pieces outside the basin strip {out} (or too few boat pieces: {len(boats)})")
++    # colliding pieces: on land (z <= 23.8, the kerb) or a hull in the basin strip; none reaches the gate lane or the
++    # basin's middle, where boats spawn (kit z >= 34)
++    bad_c = []
++    for r in rows:
++        if not r["collide"]:
++            continue
++        zs = _hb_z_range(r)
++        if zs is None or zs[1] > 33.5:
++            bad_c.append(r["name"])
++    if not bad_c:
++        ok("fb4 harbour: no colliding dock piece reaches past kit z 33.5 (the basin's spawn water and the sea gate lane stay open)")
++    else:
++        bad(f"fb4 harbour: colliding pieces reach the open basin: {bad_c}")
++    # decor too: nothing of the kit hangs over the open basin (kit z > 33.5), where driven boats spawn and sail and a
++    # non-colliding piece (crane cable, hook) would visibly cut through a passing hull
++    over = []
++    for r in rows:
++        zs = _hb_z_range(r)
++        if zs is None or zs[1] > 33.5:
++            over.append(r["name"])
++    if not over:
++        ok("fb4 harbour: no dock piece of any kind reaches past kit z 33.5 (nothing hangs over the open basin)")
++    else:
++        bad(f"fb4 harbour: pieces reach over the open basin (kit z > 33.5): {over}")
++    # the crane's hanging parts over the water (past the kerb, z > 25) stay 14+ studs up: a boat passing under clears them
++    low = []
++    for r in rows:
++        if not r["name"].startswith("Crane") or r["beam"] is not None:
++            continue
++        zs = _hb_z_range(r)
++        if r["pos"] is None or r["size"] is None or zs is None:
++            low.append(r["name"])
++        elif zs[1] > 25 and r["pos"][1] - r["size"][1] * 0.5 < 14:
++            low.append(r["name"])
++    if not low:
++        ok("fb4 harbour: the crane's cable and hook over the water hang 14+ studs above the pad")
++    else:
++        bad(f"fb4 harbour: crane parts hang low over the water (< 14 studs): {low}")
++    # the L5 smoke plume: BaseService hangs WE_MaxSmoke on the kit child named "Roof" (the old kit's shed roof); the
++    # harbour keeps exactly one "Roof" piece (the warehouse chimney), shown by L5, decor only
++    roof = [r for r in rows if r["name"] == "Roof"]
++    if len(roof) == 1 and roof[0]["min"] is not None and roof[0]["min"] <= 5 and not roof[0]["collide"]:
++        ok("fb4 harbour: one \"Roof\" piece (warehouse chimney) hosts the Dock's L5 smoke plume, as on the old kit")
++    else:
++        bad(f"fb4 harbour: the Dock kit needs exactly one decor piece named \"Roof\" shown by L5 (L5 smoke host): {[r['line'] for r in roof]}")
++    # the quay a player walks on: one colliding deck, top 0.4 over the pad, up to the kerb (z 23.8)
++    deck = [r for r in rows if r["name"] == "QuayDeck"]
++    if len(deck) == 1 and deck[0]["collide"] and deck[0]["min"] == 0 and deck[0]["pos"] and abs(deck[0]["pos"][1] + deck[0]["size"][1] * 0.5 - 0.4) < 1e-6 \
++            and abs(deck[0]["pos"][2] + deck[0]["size"][2] * 0.5 - 23.8) < 1e-6:
++        ok("fb4 harbour: the QuayDeck collides, is there from L0, top 0.4 over the pad, ends at the kerb (z 23.8)")
++    else:
++        bad(f"fb4 harbour: QuayDeck row changed: {deck[0]['line'] if deck else 'missing'}")
++    # fix round 2: every row of the Pieces table is read. A row written across several lines (formatter style) is not a
++    # "{ Name = ..." line, so it would skip every rule above: the table's `Name = "` count must equal the rows parsed
++    body = read(HB_CFG) or ""
++    ti = body.find("local pieces: { DockPiece } = {\n")
++    tj = body.find("\n}\n", ti)
++    names = len(re.findall(r'\bName = "', body[ti:tj])) if ti >= 0 and tj > ti else -1
++    if names == len(rows):
++        ok(f"fb4 harbour: all {names} rows of DockKitConfig.Pieces are one-line rows the rules above read")
++    else:
++        bad(f"fb4 harbour: DockKitConfig.Pieces has {names} `Name = \"` entries but {len(rows)} one-line rows (keep each piece on one line)")
++    # the load-bearing pieces stay solid: the quay a player walks on, the warehouse, the moored hull (boot-top, hull,
++    # forecastle, wheelhouse: a driven boat bumps it and a spawn never overlaps it) and the gangway onto its deck
++    need = ("QuayDeck", "WarehouseBlock", "BoatBoot", "BoatHull", "BoatForecastle", "BoatWheelhouse", "Gangway")
++    soft = [n for n in need if not any(r["name"] == n for r in rows) or any(r["name"] == n and not r["collide"] for r in rows)]
++    if not soft:
++        ok(f"fb4 harbour: the load-bearing pieces collide ({', '.join(need)})")
++    else:
++        bad(f"fb4 harbour: load-bearing pieces missing or not Collide = true: {soft}")
++    # nothing floats: every low block piece (bottom under +1; not a beam, not the QuayDeck itself) rests on what is
++    # under its centre - the QuayDeck top on the quay, the bare pad top (0) landward of the quay (kit z < the quay's
++    # landward edge). Pieces over the basin (z > the kerb) float on the water; the basin rules above cover them.
++    if deck and deck[0]["pos"] and deck[0]["size"]:
++        (dx, dy, dz), (sx_, sy_, sz_) = deck[0]["pos"], deck[0]["size"]
++        qx0, qx1, qz0, qz1, qtop = dx - sx_ * 0.5, dx + sx_ * 0.5, dz - sz_ * 0.5, dz + sz_ * 0.5, dy + sy_ * 0.5
++        float_ = []
++        n_rest = 0
++        for r in rows:
++            if r["name"] == "QuayDeck":
++                continue
++            ys = _hb_extent(r, 1)
++            if ys is None or ys[0] >= 1:
++                continue
++            x, _, z = r["pos"]
++            if z < qz0:
++                want = 0.0
++            elif z <= qz1 and qx0 <= x <= qx1:
++                want = qtop
++            else:
++                continue
++            n_rest += 1
++            if abs(ys[0] - want) > 0.02:
++                float_.append(f"{r['name']} bottom {ys[0]:+.2f} (on {'the pad 0' if want == 0 else f'the quay {qtop:+.2f}'})")
++        if not float_ and n_rest >= 10:
++            ok(f"fb4 harbour: {n_rest} low pieces rest on the quay (+{qtop:.2f}) or on the pad (0): nothing floats or sinks")
++        else:
++            bad(f"fb4 harbour: pieces float above / sink into what they stand on: {float_} (or too few low pieces: {n_rest})")
++    else:
++        bad("fb4 harbour: no QuayDeck row to check what the low pieces stand on")
++    # the moored patrol boat at player scale: the wheelhouse stands on the hull's deck line and is >= 5.5 tall (a
++    # 5-stud avatar on deck is under its roof); the roof sits on it and the mast on the roof
++    def one(n):
++        m = [r for r in rows if r["name"] == n]
++        return _hb_extent(m[0], 1) if len(m) == 1 else None
++    hull, wh, whr, mast, glass = (one(n) for n in ("BoatHull", "BoatWheelhouse", "BoatWheelhouseRoof", "BoatMast", "BoatBridgeGlass"))
++    if hull and wh and whr and mast and glass and abs(wh[0] - hull[1]) <= 0.05 and wh[1] - wh[0] >= 5.5 \
++            and abs(whr[0] - wh[1]) <= 0.05 and abs(mast[0] - whr[1]) <= 0.05 and glass[0] >= hull[1] + 3.5 and glass[1] <= wh[1]:
++        ok(f"fb4 harbour: the moored boat's wheelhouse is at player scale ({wh[1] - wh[0]:.1f} tall over the deck, window band at "
++           f"+{glass[0] - hull[1]:.1f} .. +{glass[1] - hull[1]:.1f}), roof on it, mast on the roof")
++    else:
++        bad(f"fb4 harbour: moored boat superstructure off scale or detached: hull {hull} wheelhouse {wh} roof {whr} mast {mast} glass {glass}")
++    # fix round 3: solid pieces stay off the land lanes the Dock must leave open - kit x -48 .. 34 (the QuayDeck's span:
++    # the inner Dock gate lane is at x <= -48, the sea-gate guard (38, 20), the sandbag berm (38, 2) and the sea-gate
++    # lane land at x >= 35) and kit z >= -20 (the helipad is at z <= -24)
++    lane = []
++    n_solid = 0
++    for r in rows:
++        if not r["collide"]:
++            continue
++        n_solid += 1
++        b = _hb_box(r)
++        if b is None or b[0][0] < -48 - 1e-6 or b[0][1] > 34 + 1e-6 or b[2][0] < -20 - 1e-6:
++            lane.append(f"{r['name']} x {b[0][0]:.1f}..{b[0][1]:.1f} z {b[2][0]:.1f}..{b[2][1]:.1f}" if b else r["name"])
++    if not lane and n_solid >= 20:
++        ok(f"fb4 harbour: all {n_solid} solid dock pieces stay inside kit x -48..34, z >= -20 (Dock gate lane, sea-gate guard / berm / lane and helipad stay open)")
++    else:
++        bad(f"fb4 harbour: solid dock pieces on a land lane (x outside -48..34 or z < -20): {lane} (or too few solid pieces: {n_solid})")
++    # fix round 3: the boarding ramp's walk space is clear - over the Gangway's walking surface (its width, from the
++    # surface + 0.05 up to + 5, quay end to deck end) no piece pokes through except what the ramp rests on (the quay,
++    # the hull, its boot-top, strake and deck). A fender or bulwark there shows as clipping through the avatar's legs.
++    gw = [r for r in rows if r["name"] == "Gangway"]
++    if len(gw) == 1 and gw[0]["beam"] is not None and gw[0]["size"]:
++        (fx, fy, fz, tx, ty, tz), (gwx, gwy, _) = gw[0]["beam"], gw[0]["size"]
++        rest = ("Gangway", "QuayDeck", "BoatHull", "BoatBoot", "BoatStrake", "BoatDeck")
++        hits = set()
++        steps = 60
++        for k in range(steps):
++            u0, u1 = k / steps, (k + 1) / steps
++            za, zb = fz + (tz - fz) * u0, fz + (tz - fz) * u1
++            ya, yb = fy + (ty - fy) * u0 + gwy * 0.5, fy + (ty - fy) * u1 + gwy * 0.5
++            xa, xb = min(fx, tx) - gwx * 0.5, max(fx, tx) + gwx * 0.5
++            y0, y1 = min(ya, yb) + 0.05, max(ya, yb) + 5
++            for r in rows:
++                if r["name"] in rest:
++                    continue
++                b = _hb_box(r)
++                if b is None:
++                    continue
++                if b[0][0] < xb and b[0][1] > xa and b[1][0] < y1 and b[1][1] > y0 and b[2][0] < max(za, zb) and b[2][1] > min(za, zb):
++                    hits.add(r["name"])
++        if not hits:
++            ok("fb4 harbour: the gangway's walk space is clear (no fender, bulwark or rope pokes through the boarding ramp)")
++        else:
++            bad(f"fb4 harbour: pieces poke through the gangway's walk space: {sorted(hits)}")
++    else:
++        bad("fb4 harbour: no single Gangway beam row to check the boarding path")
++
++
++if re.search(r"^\tEnabled = (true|false),$", read(HB_CFG) or "", re.M):
++    ok("fb4 harbour: DockKitConfig.Enabled is a plain true / false (false = the v35 / v37 kit, the documented rollback)")
++else:
++    bad("fb4 harbour: DockKitConfig.Enabled line missing or not a plain `\tEnabled = true,` / `\tEnabled = false,`")
++must_contain(HB_SKB, "local DockKitConfig = require(Shared.Configs.DockKitConfig)\n", "fb4 harbour: StructureKitBuilder reads DockKitConfig")
++must_contain(HB_SKB, "\t\tif DockKitConfig.Enabled ~= false then\n\t\t\tbuildStyledDockKit(plinth, pal)\n\t\t\tplinth:SetAttribute(\"WE_KitGen\", KIT_GEN)\n\t\t\treturn\n\t\tend\n",
++             "fb4 harbour: the dock kit branch builds the harbour first and keeps the v35 kit below as the rollback")
++must_contain(HB_SKB, "\tp.Transparency = 1\n\tp.CanCollide = false\n\tp.CanTouch = false\n\tp.CanQuery = false\n\tp.CastShadow = false\n\tp:SetAttribute(\"WE_KitRole\", \"Styled\")\n",
++             "fb4 harbour: a Styled piece is built hidden, not colliding, not queryable (BaseService shows it by level)")
++must_contain(HB_SKB, "\tstyledPart(plinth, { Name = \"WE_DressHost_ParkedBoat\", Size = cfg.ParkedBoatHost.Size, Pos = cfg.ParkedBoatHost.Pos, Color = Color3.fromRGB(60, 65, 55), Material = Enum.Material.Metal, MinLevel = 99, Transparency = 1 }, padTop)\n",
++             "fb4 harbour: the hidden WE_DressHost_ParkedBoat stays (EnsureKit counts it as the Dock's dress: no rebuild loop)")
++must_contain(HB_SKB, "\tkitPart(plinth, \"Body\", cfg.Body.Size, cfg.Body.Pos + lift, pal.Body, Enum.Material.Concrete, nil)\n",
++             "fb4 harbour: the kit keeps a Body (EnsureKit visibility gate), a concrete core hidden inside the warehouse from L1")
++# fix round 2: inside styledPart / buildStyledDockKit (function-scoped: kitPart has its own `p.Parent = plinth`)
++_hb_skb = read(HB_SKB) or ""
++_hb_si = _hb_skb.find("local function styledPart(plinth: BasePart, pc: any, padTop: number): BasePart\n")
++_hb_sj = _hb_skb.find("\nend\n", _hb_si)
++_hb_sp = _hb_skb[_hb_si:_hb_sj + 1] if _hb_si >= 0 and _hb_sj > _hb_si else ""
++_hb_ki = _hb_skb.find("local function buildStyledDockKit(plinth: BasePart, pal: any): number\n")
++_hb_kj = _hb_skb.find("\nend\n", _hb_ki)
++_hb_kb = _hb_skb[_hb_ki:_hb_kj + 1] if _hb_ki >= 0 and _hb_kj > _hb_ki else ""
++for _hb_need, _hb_why in (
++        ("\tlocal lift = Vector3.new(0, padTop, 0)\n", "lifts every piece onto the pad top (Y in the config is above the pad top)"),
++        ("\t\tlocal a: Vector3 = pc.From + lift\n\t\tlocal b: Vector3 = pc.To + lift\n", "lifts both ends of a beam (ropes, gangway, jib)"),
++        ("\t\tlocalCF = CFrame.new((pc.Pos or Vector3.zero) + lift) * CFrame.Angles(math.rad(rot.X), math.rad(rot.Y), math.rad(rot.Z))\n",
++         "places a block piece at its lifted centre with its CFrame.Angles(X, Y, Z) rotation"),
++        ("\tp:SetAttribute(\"WE_MinLevel\", tonumber(pc.MinLevel) or 1)\n", "stores the level that shows the piece"),
++        ("\tp:SetAttribute(\"WE_Collide\", pc.Collide == true)\n", "stores whether the shown piece is solid"),
++        ("\tp:SetAttribute(\"WE_Shadow\", pc.Shadow == true)\n", "stores whether the shown piece casts a shadow"),
++        ("\tp:SetAttribute(\"WE_BaseTransparency\", tonumber(pc.Transparency) or 0)\n", "stores the shown transparency"),
++        ("\tp.Parent = plinth\n\treturn p\n", "parents the piece to the Dock plinth (else nothing is built)")):
++    if _hb_need in _hb_sp:
++        ok(f"fb4 harbour: styledPart {_hb_why}")
++    else:
++        bad(f"fb4 harbour: styledPart no longer {_hb_why} — missing `{_hb_need.strip()}`")
++if "\tfor _, pc in ipairs(cfg.Pieces) do\n\t\tstyledPart(plinth, pc, padTop)\n" in _hb_kb:
++    ok("fb4 harbour: buildStyledDockKit builds every DockKitConfig.Pieces row")
++else:
++    bad("fb4 harbour: buildStyledDockKit no longer loops over cfg.Pieces with styledPart (the dock would be empty)")
++must_contain(HB_BS, "\t\t\telseif role == \"Styled\" then\n",
++             "fb4 harbour: BaseService.applyKitVisuals handles the Styled role")
++must_contain(HB_BS, "\t\t\t\tlocal shown = lv >= (tonumber(child:GetAttribute(\"WE_MinLevel\")) or 1)\n\t\t\t\tlocal tr = if shown then (tonumber(child:GetAttribute(\"WE_BaseTransparency\")) or 0) else 1\n\t\t\t\tlocal collide = shown and tr < 1 and child:GetAttribute(\"WE_Collide\") == true\n",
++             "fb4 harbour: a Styled part shows from its WE_MinLevel and collides only when shown")
++_hb_bs = read(HB_BS) or ""
++_hb_i = _hb_bs.find("\t\t\telseif role == \"Styled\" then\n")
++_hb_j = _hb_bs.find("\t\t\telseif role == \"Detail\" or role == \"Pier\"", _hb_i)
++_hb_branch = _hb_bs[_hb_i:_hb_j] if _hb_i >= 0 and _hb_j > _hb_i else ""
++if _hb_branch and not any(w in _hb_branch for w in ("child.Color", "child.Material", "child.Size", "placeKitPart", "child.CFrame")):
++    ok("fb4 harbour: the Styled branch never changes a piece's colour, material, size or place (the level only shows it)")
++else:
++    bad("fb4 harbour: the Styled branch is missing or writes a piece's look / size / place")
++# the four writes that show a piece at its level and give it its collision / query / shadow, each compare-first, inside
++# the Styled branch (without the Transparency write every piece stays invisible: styledPart builds them at 1)
++# (fix round 3: Transparency is float32, so it is compared with a tolerance; an exact ~= would rewrite a 0.3 piece on
++# every sync)
++for _hb_prop, _hb_val, _hb_why in (("Transparency", "tr", "shows the piece from its level (built at Transparency 1)"),
++                                   ("CanCollide", "collide", "makes a shown solid piece walkable / solid"),
++                                   ("CanQuery", "collide", "makes a shown solid piece queryable (spawn / land-probe / camera checks see it)"),
++                                   ("CastShadow", "shadow", "gives the big volumes their shadow")):
++    _hb_cmp = (f"math.abs(child.{_hb_prop} - {_hb_val}) > 1e-3 then -- Transparency is float32: compare with a tolerance"
++               if _hb_prop == "Transparency" else f"child.{_hb_prop} ~= {_hb_val} then")
++    _hb_w = f"\t\t\t\tif {_hb_cmp}\n\t\t\t\t\tchild.{_hb_prop} = {_hb_val}\n\t\t\t\tend\n"
++    if _hb_w in _hb_branch:
++        ok(f"fb4 harbour: the Styled branch writes {_hb_prop} compare-first ({_hb_why})")
++    else:
++        bad(f"fb4 harbour: the Styled branch lost its compare-first {_hb_prop} write ({_hb_why})")
++# fix round 3: UpgradePadService.hardenPad re-runs on every already-attached slot (its +1 s sweep, zero-pad rescans) and
++# switches CanQuery off on every BasePart under the pad; it must skip the Styled Dock pieces, whose CanQuery BaseService
++# sets with CanCollide (spawn clearance, the boat land probe and the camera need the solid harbour pieces queryable)
++must_contain(HB_UPS, "\t\tif child:IsA(\"BasePart\") and child:GetAttribute(\"WE_KitRole\") ~= \"Styled\" then\n\t\t\tchild.CanTouch = false\n\t\t\tchild.CanQuery = false\n",
++             "fb4 harbour: UpgradePadService.hardenPad leaves Styled Dock pieces' CanQuery alone (a pad re-harden sweep keeps the harbour solids queryable)")
++# fix round 3: BaseService.ensureShowroomSpin no longer walks every upgrade slot's children on every server Heartbeat
++# (the Dock plinth alone holds 88 kit parts): it re-scans for the spinning displays twice a second and each frame only
++# turns the displays it found
++must_contain(HB_BS, "\t\tsinceScan += dt\n\t\tif sinceScan >= 0.5 then\n\t\t\tsinceScan = 0\n\t\t\ttable.clear(spinParts)\n\t\t\tfor _, inst in ipairs(CollectionService:GetTagged(\"WE_UpgradeSlot\")) do\n",
++             "fb4 harbour: the showroom spin loop scans the upgrade slots twice a second, not every Heartbeat")
++must_contain(HB_BS, "\t\tfor _, child in ipairs(spinParts) do\n\t\t\tif child.Parent ~= nil and child.Transparency < 0.5 then\n\t\t\t\tchild.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)\n",
++             "fb4 harbour: each Heartbeat the showroom spin loop only turns the displays it found (22 deg/s, shown ones)")
++_hb_dock_kit_rules()
++# ── end fb4 harbour
++
+ parse_gate()
+ 
+ print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

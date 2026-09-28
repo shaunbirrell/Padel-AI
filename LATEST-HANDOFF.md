@@ -1,3 +1,32 @@
+# WHERE I STOPPED — 2026-09-28 ~19:40 UTC (branch claude/war-empire-phase-7-toqwff)
+
+**What I was doing:** shipping the army despawn fix (fix round r1), plus review rounds for the capture, harbor and faces fixes, and building the Part-made vehicle bodies (VKIT). The owner asked me to stop, so all workflows are stopped and nothing is scheduled.
+
+**Finished and pushed (live-ready):**
+- `af4c7d4`: ground vehicles can't drive on water.
+- `4d26673`: army escorts shoot back at the bank, with tracers (owner-only rollout).
+- `4e07fc2`: the owner's jet on the four jet keys, pilot inside, Ride on the Trainer.
+
+**Left (all saved as patches in `handoff/wip/`; not built, not live; the table in `handoff/wip/README.md` gives each base and status):**
+1. Army despawn fix: finish r1, re-measure, gates, review, ship (`01`).
+2. Plaza capture fix (`02`), then army lane B checkpoints (`03`, rebase after 02).
+3. Army lane A, guard and follow (`04`): finish tests and rebase onto the shipped `01`. Lane C (ATTACK marches to checkpoints) is not started.
+4. Harbor boat and dock (`05`), faces (`06`) and air fix-2 (`08`): each is waiting for its review round.
+5. VKIT vehicle bodies (`09`–`12`): ground fix-2 and naval deliverables are half-done. ground2 records (`07`) wait on VKIT ground.
+6. Water Lows: land spot behind walls, rider teleport prefetch, hover above 160 studs, shallow reverse.
+7. Owner questions:
+   - Should the Strike, CAS and Stealth jets get his jet?
+   - Is the jet's look OK?
+   - Should each jet get its own colour?
+   - Should the runway and hangar be bigger?
+   - Should the Bridge Layer be amphibious?
+   - He needs to pick a new helicopter model: the uploader made every part, 35 parts or fewer.
+
+**Files:** `handoff/wip/*.patch` (12 lanes, plus 03b/04b base patches), `handoff/wip/README.md` and `handoff/wip/notes/` (phone tests, owner texts, assumptions and the army design spec).
+**Owner phone test right now:** nothing new. `src/` is unchanged since 4e07fc2.
+
+---
+
 # LATEST HANDOFF — Code Bot Roblox replacement (20 Sep 2026 ~00:00 Madrid)
 
 > **v89 (28 Sep 2026, Code Bot): the wc7 capital ships + airlifter are WIRED — owner-only, same system. Claude: do not redo.**
