@@ -96,7 +96,10 @@ local function hardenPad(part: BasePart)
 	part.CanCollide = true
 	part.CanQuery = true
 	for _, child in ipairs(part:GetDescendants()) do
-		if child:IsA("BasePart") then
+		-- fb4 harbour: a "Styled" Dock kit piece owns its query state (BaseService gives a shown solid piece CanQuery with
+		-- CanCollide, for spawn clearance, the boat land probe and the camera; it is built CanTouch false), so a re-harden
+		-- sweep must not switch it off
+		if child:IsA("BasePart") and child:GetAttribute("WE_KitRole") ~= "Styled" then
 			child.CanTouch = false
 			child.CanQuery = false
 		end

@@ -14,6 +14,7 @@ local StructureVisualConfig = require(Shared.Configs.StructureVisualConfig)
 local Constants = require(Shared.Constants)
 local HollowBuildingBuilder = require(script.Parent.HollowBuildingBuilder)
 local WorldLabel = require(Shared.Util.WorldLabel)
+local DockKitConfig = require(Shared.Configs.DockKitConfig)
 
 local StructureKitBuilder = {}
 
@@ -99,6 +100,77 @@ local function kitPart(plinth: BasePart, role: string, size: Vector3, localOffse
 	p:SetAttribute("WE_LocalOffset", localOffset)
 	p:SetAttribute("WE_Decor", true)
 	return p
+end
+
+--[[ fb4 harbour: one "Styled" kit part from a DockKitConfig piece (kit frame; Y = centre above the pad top). Built
+	hidden (Transparency 1, no collision, no query, no touch); BaseService.applyKitVisuals shows it from its
+	WE_MinLevel with its own look (colour, material, size and place are never changed by the level visuals) and
+	gives it WE_Collide (CanCollide + CanQuery) and WE_Shadow (CastShadow). ]]
+local function styledPart(plinth: BasePart, pc: any, padTop: number): BasePart
+	local shape = pc.Shape or "Block"
+	local p: BasePart
+	if shape == "Wedge" then
+		p = Instance.new("WedgePart")
+	else
+		local part = Instance.new("Part")
+		if shape == "Cylinder" then
+			part.Shape = Enum.PartType.Cylinder
+		elseif shape == "Ball" then
+			part.Shape = Enum.PartType.Ball
+		end
+		p = part
+	end
+	local lift = Vector3.new(0, padTop, 0)
+	local size: Vector3 = pc.Size
+	local localCF: CFrame
+	if pc.From ~= nil and pc.To ~= nil then
+		-- beam (rope, jib): the Size.X x Size.Y section stretched from From to To
+		local a: Vector3 = pc.From + lift
+		local b: Vector3 = pc.To + lift
+		size = Vector3.new(size.X, size.Y, math.max((b - a).Magnitude, 0.05))
+		localCF = CFrame.lookAt((a + b) * 0.5, b)
+	else
+		local rot: Vector3 = pc.Rot or Vector3.zero
+		localCF = CFrame.new((pc.Pos or Vector3.zero) + lift) * CFrame.Angles(math.rad(rot.X), math.rad(rot.Y), math.rad(rot.Z))
+	end
+	p.Name = pc.Name
+	p.Anchored = true
+	p.Size = size
+	p.CFrame = siteFrame(plinth) * localCF
+	p.Color = pc.Color
+	p.Material = pc.Material
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Transparency = 1
+	p.CanCollide = false
+	p.CanTouch = false
+	p.CanQuery = false
+	p.CastShadow = false
+	p:SetAttribute("WE_KitRole", "Styled")
+	p:SetAttribute("WE_BaseSize", size)
+	p:SetAttribute("WE_LocalOffset", localCF.Position)
+	p:SetAttribute("WE_Decor", true)
+	p:SetAttribute("WE_MinLevel", tonumber(pc.MinLevel) or 1)
+	p:SetAttribute("WE_Collide", pc.Collide == true)
+	p:SetAttribute("WE_Shadow", pc.Shadow == true)
+	p:SetAttribute("WE_BaseTransparency", tonumber(pc.Transparency) or 0)
+	p.Parent = plinth
+	return p
+end
+
+-- fb4 harbour: the Dock kit from DockKitConfig (hidden Body core, hidden boat host, every piece). Returns the part count.
+local function buildStyledDockKit(plinth: BasePart, pal: any): number
+	local cfg: any = DockKitConfig
+	local padTop = tonumber(cfg.PadTopY) or 0.5
+	local lift = Vector3.new(0, padTop, 0)
+	kitPart(plinth, "Body", cfg.Body.Size, cfg.Body.Pos + lift, pal.Body, Enum.Material.Concrete, nil)
+	styledPart(plinth, { Name = "WE_DressHost_ParkedBoat", Size = cfg.ParkedBoatHost.Size, Pos = cfg.ParkedBoatHost.Pos, Color = Color3.fromRGB(60, 65, 55), Material = Enum.Material.Metal, MinLevel = 99, Transparency = 1 }, padTop)
+	local n = 2
+	for _, pc in ipairs(cfg.Pieces) do
+		styledPart(plinth, pc, padTop)
+		n += 1
+	end
+	return n
 end
 
 export type KitPalette = {
@@ -357,6 +429,14 @@ function StructureKitBuilder.BuildKitOnPlinth(plinth: BasePart, structureId: str
 		kitPart(plinth, "Detail", Vector3.new(0.55, 26, 0.55), Vector3.new(5.2, 13.5, 5.2), Color3.fromRGB(55, 58, 48), Enum.Material.Metal, nil) -- ladder rail
 	elseif kit == "dock" then
 		-- v35: naval pier + bollards + crane silhouette + warehouse shed (readable Naval Dock)
+		-- fb4 (owner 2026-09-28: the default boat "looks terrible", the building "should look like a legit dock
+		-- building"): with DockKitConfig.Enabled the kit is the harbour (quay, brick warehouse, moored patrol boat,
+		-- crane, control tower, containers, launch) from DockKitConfig; Enabled = false keeps the v35 / v37 kit below.
+		if DockKitConfig.Enabled ~= false then
+			buildStyledDockKit(plinth, pal)
+			plinth:SetAttribute("WE_KitGen", KIT_GEN)
+			return
+		end
 		kitPart(plinth, "Body", Vector3.new(24, 1.4, 16), Vector3.new(0, 1.2, 0), pal.Body, Enum.Material.Concrete, nil)
 		kitPart(plinth, "Pier", Vector3.new(44, 0.9, 10), Vector3.new(0, 1.5, 20), pal.Roof, Enum.Material.Wood, nil)
 		kitPart(plinth, "Accent", Vector3.new(20, 0.16, 0.5), Vector3.new(0, 1.35, 0), pal.Accent, Enum.Material.SmoothPlastic, nil)

@@ -35,7 +35,7 @@ local RigConfig = {
 
 	Anim = {
 		Enabled = true, -- false: rigs stay in their rest pose, no tracks on any client
-		TickHz = 4, -- client LOD pass rate (one task.wait loop; never RenderStepped / Heartbeat)
+		TickHz = 4, -- client LOD pass rate (task.wait loop; the camera guard also runs alone at Escort.Camera.GuardHz; never RenderStepped / Heartbeat)
 		NearStuds = 120, -- beyond this a figure is not animated (rest pose)
 		HysteresisStuds = 10, -- an animated figure stops only past NearStuds + this
 		MaxAnimated = 24, -- figures animated per client (own army first, then nearest); escorts counted apart
@@ -92,16 +92,29 @@ local RigConfig = {
 		-- 7 / 2.4 steps: no figure overlaps a unit, another escort or the player for 1-8 units (FollowSlots + ranks), and
 		-- with the camera straight behind the player every escort is past the guard's show line (v3/camera3.py).
 		Offsets = { Vector3.new(0, 0, -7), Vector3.new(0, 0, -9.4), Vector3.new(0, 0, -11.8) } :: { Vector3 },
-		-- Camera guard (client, every pass): an escort is hidden while its root is nearer the camera than the local
-		-- player's root + PlayerMarginStuds, or closer along the view than FigureStuds / (2 x MaxScreenFrac x
+		-- Camera guard (client, every pass + GuardHz): an escort is hidden while its root is nearer the camera than the
+		-- local player's root + PlayerMarginStuds, or closer along the view than FigureStuds / (2 x MaxScreenFrac x
 		-- tan(FOV / 2)) + DepthMarginStuds (it would cover more than MaxScreenFrac of the screen height). It shows
-		-- again ShowHysteresisStuds past both lines.
+		-- again ShowHysteresisStuds past both lines. Hidden = every part AND every Decal (the kit head's face) of it.
 		Camera = {
 			MaxScreenFrac = 0.25,
 			FigureStuds = 5.3, -- feet to beret / helmet top
 			DepthMarginStuds = 0.25,
 			PlayerMarginStuds = 0.5,
 			ShowHysteresisStuds = 0.5,
+			-- faces lane (owner screenshot, v83): the guard also runs on its own GuardHz times a second (0 = off: only in
+			-- the 4 Hz pass; BuyPathStatic allows 0 or 20-60). A camera swipe or a turning unit swings an escort file (a
+			-- rigid 7-11.8 stud arm) through the camera faster than a 4 Hz pass follows. Each run reads <= Anim.MaxAnimated
+			-- roots and <= MaxPerClient torsos; with nothing to guard the loop sleeps a whole pass.
+			GuardHz = 30,
+			-- an own squad unit (a real unit) nearer the camera than the player and drawn taller than this share of the
+			-- screen height is hidden on this client the same way: the nearest point of its body along the view is closer
+			-- than FigureStuds / (2 x LeadScreenFrac x tan(FOV / 2)) + DepthMarginStuds. Depth, not distance: a phone in
+			-- landscape sees about 113 degrees across, so a soldier 5-6 studs off to the side still fills a bottom corner
+			-- (the owner's camo "blob"). Shows ShowHysteresisStuds past either line. 0 = off (BuyPathStatic allows 0 or
+			-- 0.8-1.0; lower hides wing soldiers of a running army at the default zoom).
+			LeadScreenFrac = 0.9,
+			RootToFeetStuds = 3, -- a squad unit's root to its feet (root half-height 1 + Humanoid.HipHeight 2)
 		},
 	},
 

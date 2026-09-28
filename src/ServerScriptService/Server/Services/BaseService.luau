@@ -806,14 +806,28 @@ local function ensureShowroomSpin()
 		return
 	end
 	local RunService = game:GetService("RunService")
+	-- fb4 harbour: the spinning showroom displays are found by a scan of every upgrade slot's children twice a second,
+	-- not every Heartbeat (the Dock kit alone is 88 parts per plinth); each frame only turns the displays found
+	local spinParts: { BasePart } = {}
+	local sinceScan = math.huge
 	showroomSpinConn = RunService.Heartbeat:Connect(function(dt)
-		for _, inst in ipairs(CollectionService:GetTagged("WE_UpgradeSlot")) do
-			if inst:IsA("BasePart") then
-				for _, child in ipairs(inst:GetChildren()) do
-					if child:IsA("BasePart") and child:GetAttribute("WE_ShowroomSpin") == true and child.Transparency < 0.5 then
-						child.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)
+		sinceScan += dt
+		if sinceScan >= 0.5 then
+			sinceScan = 0
+			table.clear(spinParts)
+			for _, inst in ipairs(CollectionService:GetTagged("WE_UpgradeSlot")) do
+				if inst:IsA("BasePart") then
+					for _, child in ipairs(inst:GetChildren()) do
+						if child:IsA("BasePart") and child:GetAttribute("WE_ShowroomSpin") == true then
+							table.insert(spinParts, child)
+						end
 					end
 				end
+			end
+		end
+		for _, child in ipairs(spinParts) do
+			if child.Parent ~= nil and child.Transparency < 0.5 then
+				child.CFrame = child.CFrame * CFrame.Angles(0, math.rad(22) * dt, 0)
 			end
 		end
 	end)
@@ -1043,6 +1057,26 @@ local function applyKitVisuals(plinth: BasePart, structureId: string, level: num
 				child.Transparency = if lv == 0 then 1 else 0.08
 				child.Material = Enum.Material.Metal
 				child.CastShadow = lv > 0
+			elseif role == "Styled" then
+				-- fb4 harbour (DockKitConfig): the part keeps its own colour, material, size and place; the level only
+				-- shows it from WE_MinLevel (at WE_BaseTransparency) and gives it WE_Collide / WE_Shadow. Written only
+				-- where a value differs, so a purchase changes just the parts of the new level.
+				local shown = lv >= (tonumber(child:GetAttribute("WE_MinLevel")) or 1)
+				local tr = if shown then (tonumber(child:GetAttribute("WE_BaseTransparency")) or 0) else 1
+				local collide = shown and tr < 1 and child:GetAttribute("WE_Collide") == true
+				local shadow = shown and tr < 1 and child:GetAttribute("WE_Shadow") == true
+				if math.abs(child.Transparency - tr) > 1e-3 then -- Transparency is float32: compare with a tolerance
+					child.Transparency = tr
+				end
+				if child.CanCollide ~= collide then
+					child.CanCollide = collide
+				end
+				if child.CanQuery ~= collide then
+					child.CanQuery = collide
+				end
+				if child.CastShadow ~= shadow then
+					child.CastShadow = shadow
+				end
 			elseif role == "Detail" or role == "Pier" or role == "Door" or role == "Window" then
 				local bx = child:GetAttribute("WE_BaseSize")
 				if typeof(bx) ~= "Vector3" then
