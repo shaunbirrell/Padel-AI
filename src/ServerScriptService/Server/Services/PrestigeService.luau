@@ -118,10 +118,14 @@ end
 
 -- F7: the keep-base path can be SOLD (the Rebirth modal prompts it) only while its Id is pasted and it is Enabled.
 -- A saved token is always usable (it was paid for), whatever these say.
-local function keepBaseLive(): boolean
+local function keepBaseLive(player: Player): boolean
 	local def = keepBaseProduct()
 	local id = if def then tonumber(def.Id) else nil
-	return PrestigeConfig.KeepBase.Enabled == true and id ~= nil and id ~= 0
+	-- claude-bud: MonetizationConfig.Rollout ("owner" first) gates the SALE only; a saved token is always usable
+	return PrestigeConfig.KeepBase.Enabled == true
+		and id ~= nil
+		and id ~= 0
+		and MonetizationConfig.SkuLiveFor(player.UserId, PrestigeConfig.KeepBase.ProductKey)
 end
 
 local function keepBasePrice(): number
@@ -238,7 +242,7 @@ local function pushState(player: Player)
 		UnlockTrack = unlockListFor(prestige),
 		-- F7 / F11 (display only; RequestPrestige and the receipt re-check everything)
 		KeepBaseTokens = nonNegInt(profile.KeepBaseRebirths),
-		KeepBaseLive = keepBaseLive(),
+		KeepBaseLive = keepBaseLive(player),
 		KeepBasePrice = keepBasePrice(),
 		ProgressPct = PrestigeConfig.ProgressPct(level, xp),
 		Level = level,

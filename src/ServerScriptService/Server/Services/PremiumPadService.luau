@@ -180,7 +180,11 @@ local function alreadyOwns(player: Player, kind: string, key: string, part: Base
 	return false
 end
 
-local function resolveOffer(kind: string, key: string): (number?, string?)
+local function resolveOffer(kind: string, key: string, player: Player): (number?, string?)
+	-- claude-bud: MonetizationConfig.Rollout ("owner" first): a SKU not on sale for this player is silent
+	if not MonetizationConfig.SkuLiveFor(player.UserId, key) then
+		return nil, nil
+	end
 	if kind == "GamePass" then
 		local def = MonetizationConfig.GamePasses[key]
 		if def and typeof(def.Id) == "number" then
@@ -242,7 +246,7 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 		return
 	end
 
-	local productId, displayName = resolveOffer(kind, offerKey)
+	local productId, displayName = resolveOffer(kind, offerKey, player)
 	if productId == nil then
 		return
 	end

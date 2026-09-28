@@ -467,7 +467,8 @@ function MonetizationService.SpeedMultFor(player: Player): number
 	end
 	for passKey, def in pairs(MonetizationConfig.GamePasses :: any) do
 		local m = walkSpeedMultOf(def)
-		if m > best and ownsCached(player, passKey) then
+		-- claude-bud: the Speed Pass counts only while MonetizationConfig.Rollout is live for this player
+		if m > best and MonetizationConfig.SkuLiveFor(player.UserId, passKey) and ownsCached(player, passKey) then
 			best = m
 		end
 	end
@@ -835,6 +836,9 @@ function MonetizationService.Init(deps: { [string]: any })
 		if not def then
 			return
 		end
+		if not MonetizationConfig.SkuLiveFor(player.UserId, productKey :: string) then
+			return -- claude-bud: rollout gate; nothing is logged or prompted for a player it is not live for
+		end
 		local source = cleanSource(rawSource)
 		rememberIntent(player, "DP:" .. (productKey :: string), source)
 		if AnalyticsService then
@@ -865,6 +869,9 @@ function MonetizationService.Init(deps: { [string]: any })
 		local def = findGamePassByKey(passKey :: string)
 		if not def then
 			return
+		end
+		if not MonetizationConfig.SkuLiveFor(player.UserId, passKey :: string) then
+			return -- claude-bud: rollout gate
 		end
 		local source = cleanSource(rawSource)
 		rememberIntent(player, "GP:" .. (passKey :: string), source)
@@ -1495,6 +1502,9 @@ function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
 	local pass = (MonetizationConfig.GamePasses :: any)[passKey]
 	if typeof(pass) ~= "table" or typeof(pass.Id) ~= "number" or pass.Id == 0 then
 		return false
+	end
+	if not MonetizationConfig.SkuLiveFor(victim.UserId, passKey) then
+		return false -- claude-bud rollout gate: no death offer for a pass that is not on sale for this player
 	end
 	local userId = victim.UserId
 	if cfg.OncePerSession ~= false and deathSpeedSent[userId] == true then

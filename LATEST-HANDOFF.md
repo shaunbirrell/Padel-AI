@@ -1,3 +1,21 @@
+# WHERE I STOPPED — 2026-09-28 (Claude on Bud, branch claude/desktop-bud)
+
+**Job 1 (3 Robux products), DONE, committed and pushed to claude/desktop-bud.** Owner-only (`MonetizationConfig.Rollout = "owner"`).
+- Speed Pass 1998656357 / Keep-Base Rebirth 3714663721 / Golden Pumpjacks 3714663783 (+50% pump income per gold pump).
+- Gates: `python tools/BuyPathStatic.py` PASS=5009 FAIL=0 with the parse gate on (244 files). Windows needs a path wrapper; see ASSUMPTIONS.
+  `rojo build` ok; luau-lsp shows no new errors vs HEAD. Headless world sim and DataService harness are not in the repo, so they were NOT run.
+- 9 legacy "Id = 0" pins were retired and superseded in `tools/checks/claude_bud_monetization.py`; docs/LIVE_PLACE.md has the Ids.
+- Go live for everyone: `MonetizationConfig.Rollout = "all"`.
+
+**Next (in order):** runway bug (live runway still the old size; v90 meant 190x29, hangar 68x40), then Job 2: guards fight back,
+bag pickup line of sight, unstick guards G1/G2 (owner-only).
+
+**Phone tests for Shaun (owner account only):** Shop shows Speed Pass (5 R$) and Golden Pumpjacks (49 R$); buy Speed Pass, then walk and sprint
+faster and the army keeps up; the Rebirth panel shows KEEP BASE R$ 50 and the base survives the rebirth; Golden Pumpjacks turns the pumps gold
+and Pending cash per tick rises about 50%. A second (non-owner) account must see none of these, and the cyan ATM pad still sells Speed Boost.
+
+---
+
 # v92 — 2026-09-28 ~23:50 Dublin (Code Bot, branch phase-7-polish, WE_Build 92)
 
 **Claude: do not redo / undo these.** Code Bot finished the stalled Claude-watch takeover of WIP lane **02 capture**

@@ -476,8 +476,8 @@ local function promptDevProduct(productKey: string, source: string?)
 		return
 	end
 	-- Nothing prompts while the Id is 0 (the owner has not created the product yet): no intent, no Roblox sheet
-	if (tonumber(def.Id) or 0) == 0 then
-		toast("Coming soon", "Info")
+	if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, productKey) then
+		toast("Coming soon", "Info") -- claude-bud: also while MonetizationConfig.Rollout is not live for this player
 		return
 	end
 	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
@@ -501,7 +501,7 @@ local function promptGamePass(passKey: string, source: string?)
 		return
 	end
 	-- Nothing prompts while the Id is 0
-	if (tonumber(def.Id) or 0) == 0 then
+	if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then
 		toast("Coming soon", "Info")
 		return
 	end
@@ -875,6 +875,10 @@ function ShopController.Init()
 		if (tonumber(def.Id) or 0) == 0 then
 			return
 		end
+		-- claude-bud: MonetizationConfig.Rollout ("owner" first): no row for a SKU that is not on sale for this player
+		if not MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
+			return
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = false -- kept for "coming soon" path if ever re-enabled
 		local sub = def.Description or ""
@@ -959,6 +963,9 @@ function ShopController.Init()
 		-- other edit, once its Id is pasted. Nothing is ever prompted for an Id 0 pass.
 		if (tonumber(def.Id) or 0) == 0 then
 			continue
+		end
+		if not MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
+			continue -- claude-bud rollout gate
 		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"

@@ -27,6 +27,8 @@
 	the Id is pasted), DeathSpeedOffer (one death offer per session) and PremiumPads (the ATM pad slots). Every new Id
 	stays 0 until the owner creates the product: nothing prompts, no pad is built and no Shop row shows while it is 0. ]]
 
+local AdminConfig = require(script.Parent.AdminConfig)
+
 -- F1: one PremiumPads slot (see MonetizationConfig.PremiumPads)
 export type PremiumPadOffer = { Kind: "GamePass" | "DevProduct", Key: string }
 export type PremiumPadSlot = {
@@ -39,6 +41,11 @@ export type PremiumPadSlot = {
 }
 
 local MonetizationConfig = {
+	--[[ claude-bud: rollout of the three Robux SKUs in RolloutKeys. "owner" = only AdminConfig.IsPlaytestOwner can buy
+		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
+		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
+	Rollout = "owner",
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -81,7 +88,7 @@ local MonetizationConfig = {
 		-- multiplier (MonetizationService.SpeedMultFor). Keep this key name: BuyPathStatic matches the first Speed Boost
 		-- product block by its key.
 		ImpulseSpeed = {
-			Id = 0,
+			Id = 1998656357,
 			DisplayName = "Speed Pass",
 			RobuxPrice = 5,
 			WalkSpeedMult = 1.15,
@@ -255,14 +262,15 @@ local MonetizationConfig = {
 		-- every Id 0 Developer Product) and no gold pad is built at the pumps; once the Id is live the Shop row and the
 		-- pump pad appear with no other edit. ProcessReceipt + GrantEntitlement are ready.
 		GoldenPumpjack = {
-			Id = 0,
+			Id = 3714663783,
 			DisplayName = "Golden Pumpjacks",
 			RobuxPrice = 49,
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "GoldenPumpjack",
 			OneTime = true, -- boolean entitlement: a second purchase adds nothing; the Shop shows OWNED
-			Description = "Gold-dress every oil pump on your base  pumps at Walls Lv 2",
+			IncomeMult = 1.5, -- claude-bud: plot pump cash per tick x this for an owner (PlotOilPumpService)
+			Description = "Gold pumpjacks: +50% pump income",
 		},
 		-- v71 money (M1, owner decision D2): Commander Starter Pack v2, same Id, 149 R$, one time (J14: no timer until
 		-- M3's real 72 h window). $50,000 + Auto Collect (permanent); a buyer who already owns Auto Collect gets
@@ -310,7 +318,7 @@ local MonetizationConfig = {
 		-- Rebirth panel (SoldFrom), never from the Shop list. Id = 0 until the owner creates it: the Rebirth panel
 		-- shows SOON and never prompts. Paste the Id only after the double prestige multiplier (B1) is fixed.
 		RebirthKeepBase = {
-			Id = 0,
+			Id = 3714663721,
 			DisplayName = "Keep-Base Rebirth",
 			RobuxPrice = 50,
 			Cash = 0,
@@ -500,6 +508,20 @@ local MonetizationConfig = {
 	},
 }
 
+-- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
+function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
+	if not (MonetizationConfig.RolloutKeys :: any)[key] then
+		return true
+	end
+	local mode = MonetizationConfig.Rollout :: any
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
+
 --[[ F1: the offer a PremiumPads slot sells right now: the first offer whose GamePasses / DevProducts entry exists with
 	a non-zero Id, or nil when none is live (the pad is not built). Pure; the server and the client call it alike. ]]
 function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
@@ -509,7 +531,12 @@ function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
 			elseif offer.Kind == "DevProduct" then MonetizationConfig.DevProducts
 			else nil
 		local def = section and section[offer.Key]
-		if typeof(def) == "table" and typeof(def.Id) == "number" and def.Id ~= 0 then
+		if
+			typeof(def) == "table"
+			and typeof(def.Id) == "number"
+			and def.Id ~= 0
+			and (MonetizationConfig.Rollout == "all" or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])
+		then
 			return offer
 		end
 	end

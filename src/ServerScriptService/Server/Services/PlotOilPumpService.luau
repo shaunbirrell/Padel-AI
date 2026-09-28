@@ -247,7 +247,9 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	local out = (half + (PlotOilPumpConfig.WallClearanceStuds or 18)) / axis
 	local spread = PlotOilPumpConfig.LateralSpreadStuds or 22
 	local count = math.clamp(PlotOilPumpConfig.PumpsPerPlot or 2, 1, 2)
+	local goldForOwner = MonetizationConfig.SkuLiveFor(ownerUserId, GOLDEN_KEY) -- claude-bud rollout gate
 	local hasGold = owner ~= nil
+		and goldForOwner
 		and MonetizationService ~= nil
 		and MonetizationService.PlayerOwnsEntitlement ~= nil
 		and MonetizationService.PlayerOwnsEntitlement(owner, GOLDEN_KEY) == true
@@ -270,7 +272,7 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	-- F9: the Golden Pump pad, only while the Id is live and the owner does not own it (nothing prompts at Id 0)
 	local goldDef = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
 	local goldLive = typeof(goldDef) == "table" and typeof(goldDef.Id) == "number" and goldDef.Id ~= 0
-	if goldLive and not hasGold then
+	if goldLive and goldForOwner and not hasGold then
 		local g = PlotOilPumpConfig.Golden
 		local padPos = (plotPos :: Vector3) + toward * (out - (g.PadOffsetStuds or 10)) + Vector3.new(0, 0.3, 0)
 		local gate = PlotFrame.LocalToWorld(plotId, 0, half)
@@ -405,14 +407,22 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 					local owner = Players:GetPlayerByUserId(ownerId)
 					if owner then
 						local n = 0
+						local golden = 0
 						for _, ch in ipairs(folder:GetChildren()) do
 							if ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
 								n += 1
+								if ch:GetAttribute("WE_GoldenPump") == true then
+									golden += 1
+								end
 							end
 						end
 						if n > 0 then
+							-- claude-bud: a gold-dressed pump (owner bought Golden Pumpjacks, rollout live) earns IncomeMult x
+							local goldDef: any = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
+							local goldMult = math.clamp(tonumber(if typeof(goldDef) == "table" then goldDef.IncomeMult else nil) or 1, 1, 3)
+							local total = cash * (n - golden) + math.floor(cash * goldMult) * golden
 							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
-							EconomyService.AccruePendingCash(owner, cash * n, reason)
+							EconomyService.AccruePendingCash(owner, total, reason)
 						end
 					end
 				end

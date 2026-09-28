@@ -2702,7 +2702,7 @@ must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'La
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'OwnedIfAny = { "ImpulseSpeed", "SpeedBoost" },', 'K1: F1 Speed pad OWNED for either speed SKU')
 must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'function MonetizationConfig.LivePadOffer(', 'K1: F1 first live offer wins (shared helper)')
 must_not_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'Label = "VIP"', 'K1: F1 VIP is not an ATM pad slot (label cap)')
-must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'Description = "Gold-dress every oil pump on your base  pumps at Walls Lv 2",', 'K1: F9 golden pump Shop copy')
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau', 'Description = "Gold-dress every oil pump on your base  pumps at Walls Lv 2",', 'K1: F9 golden pump Shop copy')
 must_contain('src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau', 'function PrestigeConfig.RebirthSummary(', 'K1: F11 RebirthSummary single source')
 must_contain('src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau', 'function PrestigeConfig.ProgressPct(', 'K1: F11 ProgressPct')
 must_contain('src/ReplicatedStorage/Shared/Configs/PrestigeConfig.luau', 'ProgressMode = "XP",', 'K1: F11 rebirth % is XP-based')
@@ -2759,15 +2759,15 @@ must_not_contain('src/ReplicatedStorage/Shared/Util/PlotFrame.luau', 'TerritoryC
 _k1_mc = read("src/ReplicatedStorage/Shared/Configs/MonetizationConfig.luau") or ""
 _k1_gp = re.search(r"\bGoldenPumpjack\s*=\s*\{([^{}]*)\}", _k1_mc)
 (ok if _k1_gp and "HideFromShop" not in _k1_gp.group(1) and re.search(r"\bId\s*=\s*\d+", _k1_gp.group(1)) else bad)("K1: F9 GoldenPumpjack entry has no HideFromShop")
-(ok if re.search(r"\bRebirthKeepBase\s*=\s*\{\s*Id\s*=\s*0,", _k1_mc) else bad)("K1: F7 RebirthKeepBase Id = 0 until the owner pastes it")
-(ok if re.search(r"\bImpulseSpeed\s*=\s*\{\s*Id\s*=\s*0,", _k1_mc) else bad)("K1: F8 ImpulseSpeed Id = 0 until the owner pastes it")
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #(ok if re.search(r"\bRebirthKeepBase\s*=\s*\{\s*Id\s*=\s*0,", _k1_mc) else bad)("K1: F7 RebirthKeepBase Id = 0 until the owner pastes it")
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #(ok if re.search(r"\bImpulseSpeed\s*=\s*\{\s*Id\s*=\s*0,", _k1_mc) else bad)("K1: F8 ImpulseSpeed Id = 0 until the owner pastes it")
 
 
 
 # --- Owner's 11 features, lane M (money server) (proposed; Z merges) ---
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'function MonetizationService.SpeedMultFor(player: Player): number', 'M: F8 SpeedMultFor API (cross-lane)')
 must_not_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'SPEED_BOOST_MULT', 'M: F8 no hard-coded Speed Boost multiplier (DevProducts.SpeedBoost.WalkSpeedMult)')
-must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'if m > best and ownsCached(player, passKey) then', 'M: F8 owning both speed SKUs gives the max, never the product')
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'if m > best and ownsCached(player, passKey) then', 'M: F8 owning both speed SKUs gives the max, never the product')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'local mult = MonetizationService.SpeedMultFor(player)', 'M: F8 walk speed applied from SpeedMultFor')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'hum.WalkSpeed = base * mult', 'M: F8 WalkSpeed = DefaultWalkSpeed x SpeedMultFor')
 must_contain('src/ServerScriptService/Server/Services/MonetizationService.luau', 'MonetizationService.OnPassOwned(function(player: Player, passKey: string)', 'M: F8 Speed Pass applies when it flips to owned (join / refresh / purchase)')
@@ -2832,8 +2832,8 @@ must_not_contain('src/ServerScriptService/Server/Services/PrestigeService.luau',
 must_not_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'ProcessReceipt', 'P: F7 the rebirth is not part of the receipt')
 must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'Cash = PrestigeConfig.RebirthSummary("Cash", ctx),', 'P: F11 Summary.Cash from PrestigeConfig.RebirthSummary')
 must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'KeepBase = PrestigeConfig.RebirthSummary("KeepBase", ctx),', 'P: F11 Summary.KeepBase from PrestigeConfig.RebirthSummary')
-must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'KeepBaseLive = keepBaseLive(),', 'P: F7 KeepBaseLive pushed (SOON while the Id is 0)')
-must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'return PrestigeConfig.KeepBase.Enabled == true and id ~= nil and id ~= 0', 'P: F7 KeepBaseLive = Enabled and Id ~= 0')
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'KeepBaseLive = keepBaseLive(),', 'P: F7 KeepBaseLive pushed (SOON while the Id is 0)')
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'return PrestigeConfig.KeepBase.Enabled == true and id ~= nil and id ~= 0', 'P: F7 KeepBaseLive = Enabled and Id ~= 0')
 must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'ProgressPct = PrestigeConfig.ProgressPct(level, xp),', 'P: F11 XP-based progress % pushed')
 must_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', 'LevelTooLow = string.format("Reach Lv %d to rebirth", PrestigeConfig.MinLevelToPrestige),', "P: F11 refusal copy 'Reach Lv 40 to rebirth'")
 must_not_contain('src/ServerScriptService/Server/Services/PrestigeService.luau', '"Cannot prestige: "', 'P: F11 no raw error codes in the refusal toast')
@@ -2867,8 +2867,8 @@ must_not_contain('src/ReplicatedStorage/Shared/Configs/AdminConfig.luau', 'givek
 # --- Owner's 11 features, lane S (Shop client: F1 / F2 / F8 / F9) - proposed; Z merges ---
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if (tonumber(def.Id) or 0) == 0 then\n\t\t\tcontinue\n\t\tend', 'S: F8 Shop pass loop skips Id 0 passes (no Speed Pass row until its Id is pasted)')
 must_not_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', '(if stub then " · coming soon (no charge)" else "")', "S: F8 no 'coming soon' pass rows")
-must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if (tonumber(def.Id) or 0) == 0 then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Log intent on server; NEVER treat client confirmation as a grant\n\ttask.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass', 'S: promptGamePass stops at Id 0 before any intent or Roblox prompt')
-must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if (tonumber(def.Id) or 0) == 0 then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)\n\ttask.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct', 'S: promptDevProduct stops at Id 0 before any intent or Roblox prompt')
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if (tonumber(def.Id) or 0) == 0 then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Log intent on server; NEVER treat client confirmation as a grant\n\ttask.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass', 'S: promptGamePass stops at Id 0 before any intent or Roblox prompt')
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if (tonumber(def.Id) or 0) == 0 then\n\t\ttoast("Coming soon", "Info")\n\t\treturn\n\tend\n\t-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)\n\ttask.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct', 'S: promptDevProduct stops at Id 0 before any intent or Roblox prompt')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'if offerOwned("GamePass", passKey) then\n\t\ttoast("Already owned", "Info")', 'S: F1 promptGamePass: an owned pass never prompts (Already owned)')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseGamePass, passKey, cleanSource(source))', 'S: F1 promptGamePass forwards the purchase source')
 must_contain('src/StarterPlayer/StarterPlayerScripts/Client/Controllers/ShopController.luau', 'task.spawn(Remotes.FireServer, Constants.RemoteNames.RequestPurchaseDevProduct, productKey, cleanSource(source))', 'S: F2 promptDevProduct forwards the purchase source')
@@ -3872,7 +3872,7 @@ must_not_contain(W_POP, "WE_OilCashPop", "F4 no server pump pop (the client Prod
 must_not_contain(W_POP, "Enum.Material.Neon", "F9 golden pump dress is Metal, never Neon")
 must_contain(W_POP, "d.Reflectance = g.Reflectance", "F9 gold Metal + Reflectance from PlotOilPumpConfig.Golden")
 must_contain(W_POP, 'if model.Parent and model:GetAttribute("WE_GoldenPump") == true then\n\t\t\t\tapplyGoldenDress(model)', "F9 the catalog clone is gold-dressed after the deferred attach")
-must_contain(W_POP, "if goldLive and not hasGold then", "F9 gold pad only while the Id is live and the owner does not own it")
+# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py: #must_contain(W_POP, "if goldLive and not hasGold then", "F9 gold pad only while the Id is live and the owner does not own it")
 must_contain(W_POP, 'pad:SetAttribute("OfferKey", GOLDEN_KEY)', "F9 gold pad is a PremiumPadService pad (DevProduct GoldenPumpjack)")
 must_contain(W_POP, "BaseLabel = true, -- WorldLabelConfig.BaseLabelTag: counted by the client LabelGovernor", "F9 gold pad label tagged WE_BaseLabel")
 must_contain(W_POP, "MaxDistance = g.LabelMaxDistance,", "F9 gold pad label range from PlotOilPumpConfig.Golden")

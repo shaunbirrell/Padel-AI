@@ -8648,3 +8648,26 @@ ds_territories.luau T3):
 - **CAP-22 Home Outpost question.** The Home Outpost still comes back on every join once taken (CAP-3, F10). It is the
   same "had it again" pattern for a different zone, so phone_test step 11 asks the owner whether it should be free
   after a rejoin too; a switch is added only if he says yes.
+
+## 2026-09-28 — claude-bud: the 3 Robux products (Speed Pass, Keep-Base Rebirth, Golden Pumpjacks), owner-only
+- **Ids (the owner created them):** Speed Pass game pass 1998656357 (`GamePasses.ImpulseSpeed`), Keep-Base Rebirth
+  dev product 3714663721 (`DevProducts.RebirthKeepBase`), Golden Pumpjacks dev product 3714663783 (`DevProducts.GoldenPumpjack`).
+- **Rollout:** `MonetizationConfig.Rollout = "owner"` with `RolloutKeys` naming the 3 keys, and `SkuLiveFor(userId, key)`.
+  "all" means everyone; any other value means off (fail closed). For any account the rollout skips, the Shop rows, prompts,
+  purchase-intent remotes, the death speed offer, the gold pump pad, the Rebirth panel's KEEP BASE sale and the Speed Pass
+  walk-speed multiplier all behave as they did before (as if the Id were 0).
+- **Paid receipts are never gated.** `processReceipt` does not read the rollout, so a receipt Roblox delivers is always
+  granted. It stays idempotent: saved PurchaseId (`hasProcessed`), an in-flight lock, and save before PurchaseGranted.
+  A saved Keep-Base token is always usable.
+- **Golden Pumpjacks now pays:** each gold-dressed pump (`WE_GoldenPump`) pays `floor(cash * IncomeMult)` per tick
+  (IncomeMult 1.5, clamped 1..3). Before, it was cosmetic only. Assumed the owner wants the +50 % that the product copy
+  promises; set `IncomeMult = 1` for gold paint only. The Shop copy is now "Gold pumpjacks: +50% pump income".
+- **World ATM pads** (`LivePadOffer`) skip the gated keys until Rollout = "all", so the cyan pad keeps selling Speed Boost
+  for everyone and no shared-world pad shows an owner-only product.
+- **B1 prerequisite:** the double prestige multiplier is already fixed (lane E, see E-1), so pasting the Keep-Base Id is safe.
+- **Pins:** 9 legacy BuyPathStatic pins that asserted "Id = 0" or the pre-gate lines are retired with a
+  `# claude-bud: retired, superseded in tools/checks/claude_bud_monetization.py` comment (the Code Bot pattern).
+  Replacements are in that file. `claude_bud_robux.py` was folded into it.
+- **Windows:** 4 frozen pins compare POSIX path strings and fail on Windows at HEAD too. The runs used a scratchpad wrapper
+  that turns backslashes into forward slashes (no repo change).
+- **Not run:** the headless world sim and the DataService harness are not in the repo, so neither was run here.
