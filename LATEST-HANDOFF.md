@@ -1,18 +1,22 @@
 # WHERE I STOPPED — 2026-09-28 (Claude on Bud, branch claude/desktop-bud)
 
-**Job 1 (3 Robux products), DONE, committed and pushed to claude/desktop-bud.** Owner-only (`MonetizationConfig.Rollout = "owner"`).
-- Speed Pass 1998656357 / Keep-Base Rebirth 3714663721 / Golden Pumpjacks 3714663783 (+50% pump income per gold pump).
-- Gates: `python tools/BuyPathStatic.py` PASS=5009 FAIL=0 with the parse gate on (244 files). Windows needs a path wrapper; see ASSUMPTIONS.
-  `rojo build` ok; luau-lsp shows no new errors vs HEAD. Headless world sim and DataService harness are not in the repo, so they were NOT run.
-- 9 legacy "Id = 0" pins were retired and superseded in `tools/checks/claude_bud_monetization.py`; docs/LIVE_PLACE.md has the Ids.
-- Go live for everyone: `MonetizationConfig.Rollout = "all"`.
+Queue (owner's order): [x] Robux 3 products · [x] runway · [ ] guards (fight back, bag LOS, unstick G1/G2) · [ ] new JOB 2 army
+gate/formation · [ ] JOB 3 fill the map · [ ] JOB 4 features (supply drops, daily reward, plaza bounty, army upgrades) · [ ] JOB 5 monetisation.
 
-**Next (in order):** runway bug (live runway still the old size; v90 meant 190x29, hangar 68x40), then Job 2: guards fight back,
-bag pickup line of sight, unstick guards G1/G2 (owner-only).
+**Done, pushed:**
+- Robux: Speed Pass 1998656357, Keep-Base 3714663721 and Golden Pumpjacks 3714663783, owner-only (`MonetizationConfig.Rollout = "owner"`).
+- Runway: a saved pre-v90 map is now rebuilt (`WE_LayoutSig` layout hash in MapSetup + Bootstrap). Check: `tools/checks/claude_bud_runway.py`.
 
-**Phone tests for Shaun (owner account only):** Shop shows Speed Pass (5 R$) and Golden Pumpjacks (49 R$); buy Speed Pass, then walk and sprint
-faster and the army keeps up; the Rebirth panel shows KEEP BASE R$ 50 and the base survives the rebirth; Golden Pumpjacks turns the pumps gold
-and Pending cash per tick rises about 50%. A second (non-owner) account must see none of these, and the cyan ATM pad still sells Speed Boost.
+**How to run the gates on this Windows PC:**
+- `python` is the Store alias; use `C:\Users\shaun\AppData\Local\Programs\Python\Python312\python.exe`.
+- BuyPathStatic needs `PYTHONIOENCODING=utf-8`, plus a wrapper that makes paths use forward slashes (4 frozen pins compare POSIX paths).
+- luau-compile and luau-lsp are in the session scratchpad (not the repo). The headless world sim and the DataService harness are not in the repo, so they were not run.
+
+**Phone tests for Shaun:**
+- Robux (owner account only): Shop shows Speed Pass (5 R$) and Golden Pumpjacks (49 R$); Speed Pass makes you faster and the army keeps up;
+  the Rebirth panel shows KEEP BASE R$ 50; Golden Pumpjacks turns the pumps gold with about +50% Pending cash per tick. A second account sees none of these.
+- Runway: join a NEW server ("Migrate to Latest Update" first). The runway runs from the west plot wall almost to the helipad lane
+  (190 long, 29 wide, dashes all the way). A jet spawns at the west end and takes off along the whole strip. The hangar is not inside any building.
 
 ---
 

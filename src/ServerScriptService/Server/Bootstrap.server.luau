@@ -360,7 +360,11 @@ local function isStaleMapGen(setup: Instance?): boolean
 	if setup == nil or MapSetup == nil or MapSetup.MAP_GEN == nil then
 		return false
 	end
-	return setup:GetAttribute("WE_MapGen") ~= MapSetup.MAP_GEN
+	if setup:GetAttribute("WE_MapGen") ~= MapSetup.MAP_GEN then
+		return true
+	end
+	-- claude-bud (runway fix): same gen but another plot layout (e.g. a pre-v90 170 x 24 runway saved in the place)
+	return MapSetup.LAYOUT_SIG ~= nil and setup:GetAttribute("WE_LayoutSig") ~= MapSetup.LAYOUT_SIG
 end
 
 -- Run map build/heal AFTER remotes exist (never blocks EconomyUpdate creation)
@@ -373,7 +377,11 @@ elseif isStaleMapGen(Workspace:FindFirstChild("WarEmpireSetup")) then
 			.. tostring(stale:GetAttribute("WE_MapGen"))
 			.. " (want "
 			.. tostring(MapSetup.MAP_GEN)
-			.. ") — full MapSetup.Run (stale map gen)"
+			.. "), layout sig "
+			.. tostring(stale:GetAttribute("WE_LayoutSig"))
+			.. " (want "
+			.. tostring(MapSetup.LAYOUT_SIG)
+			.. ") — full MapSetup.Run (stale map gen / layout)"
 	)
 	pcall(function()
 		stale:Destroy()

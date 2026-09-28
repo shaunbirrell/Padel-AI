@@ -1018,6 +1018,33 @@ MapSetup.GROUND_TILES = GROUND_TILES_PER_SIDE * GROUND_TILES_PER_SIDE
 -- +10 keeps the FaceMapCentre parity (even = off, odd = on).
 MapSetup.MAP_GEN = (if BaseLayout.FacesMapCentre() then 83 else 82) + (if TerritoryConfig.Starter.Enabled then 10 else 0)
 
+--[[ claude-bud (runway fix): v90 made the runway 190 x 29 and the hangar 68 x 40 in config but kept MAP_GEN, so a place
+	saved with a pre-v90 WarEmpireSetup kept its 170 x 24 runway (Bootstrap only heals a same-gen map). This hash of the
+	plot layout geometry (every road rectangle, structure site and installation footprint) is stamped as WE_LayoutSig;
+	Bootstrap rebuilds a saved map whose stamp differs, so a layout edit never needs a MAP_GEN bump again. ]]
+local function layoutSignature(): number
+	local cfg = BaseLayout.Config()
+	local rows: { string } = {}
+	for _, r in ipairs(cfg.Roads or {}) do
+		table.insert(rows, string.format("R%s:%g,%g,%g,%g", tostring(r.Name), r.X, r.Z, r.SizeX, r.SizeZ))
+	end
+	for id, s in pairs(cfg.Structures or {}) do
+		local site = s.Site or {}
+		table.insert(rows, string.format("S%s:%g,%g,%g", tostring(id), tonumber(site.X) or 0, tonumber(site.Z) or 0, tonumber(s.Yaw) or 0))
+	end
+	for id, c in pairs((StructureVisualConfig :: any).Installations or {}) do
+		table.insert(rows, string.format("I%s:%g,%g", tostring(id), tonumber(c.Width) or 0, tonumber(c.Depth) or 0))
+	end
+	table.sort(rows)
+	local text = table.concat(rows, ";")
+	local h = 5381
+	for i = 1, #text do
+		h = (h * 33 + string.byte(text, i)) % 4294967296
+	end
+	return h
+end
+MapSetup.LAYOUT_SIG = layoutSignature()
+
 -- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
 function MapSetup.CountGroundTiles(setup: Instance): number
 	local map = setup:FindFirstChild("Map")
@@ -3334,6 +3361,7 @@ function MapSetup.Run()
 
 	-- v70: stamp the layout generation last (a Run that threw part-way stays unstamped → Bootstrap rebuilds it)
 	root:SetAttribute("WE_MapGen", MapSetup.MAP_GEN)
+	root:SetAttribute("WE_LayoutSig", MapSetup.LAYOUT_SIG) -- claude-bud: Bootstrap rebuilds a saved map from another layout
 
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " (World v2 edge: WorldTerrain + WorldBounds; dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))

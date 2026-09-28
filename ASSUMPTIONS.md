@@ -8671,3 +8671,28 @@ ds_territories.luau T3):
 - **Windows:** 4 frozen pins compare POSIX path strings and fail on Windows at HEAD too. The runs used a scratchpad wrapper
   that turns backslashes into forward slashes (no repo change).
 - **Not run:** the headless world sim and the DataService harness are not in the repo, so neither was run here.
+
+## 2026-09-28 — claude-bud: runway still the old size on live (v90 190 x 29 runway, 68 x 40 hangar)
+- **What I checked:**
+  - Every live builder reads the config:
+    - MapSetup `buildLayoutGround` builds `Road_Runway` at `r.SizeX x r.SizeZ`, and its dashes and thresholds follow the length.
+    - VehicleService `choosePlane` spawns jets at the config ends (west end + inset, facing +X, the whole strip ahead).
+    - `Installations/Airfield` scales the hangar by Width / 58.
+  - The two hard-coded strips are dormant on live:
+    - VisualAssetService's 70 x 10 `WE_AirfieldComposite` needs PreferMesh, which is off, and the Airfield slot is a console.
+    - StructureKitBuilder's 72 x 14 `airfield` Part kit is skipped for installations.
+  - Nothing overlaps the new strip (X -158..32, Z -94.5..-65.5).
+- **Root cause (assumed, the only path that keeps an old runway):**
+  - Bootstrap keeps an existing `WarEmpireSetup` whose `WE_MapGen` matches and heals only the ground.
+  - v90 changed the layout but, on purpose, did not bump MAP_GEN.
+  - So a place file that carries a map saved before v90 (for example one published from Studio) keeps 170 x 24 forever.
+  - An Open Cloud publish from the rojo build has no saved map, so if the live place was only ever published that way,
+    the owner may have been on an old server: use "Migrate to Latest Update".
+- **Fix:**
+  - `MapSetup.LAYOUT_SIG` is a djb2 hash of every layout road rectangle, structure site/yaw and installation Width/Depth.
+    It is stamped as `WE_LayoutSig`, and Bootstrap treats a different or missing stamp as a stale map (full `MapSetup.Run`).
+  - Any future layout edit now rebuilds saved maps on its own, and a pre-v90 map gets rebuilt once.
+  - World geometry cannot be owner-only, so this applies to every plot, as v90 did.
+- **Check:** `tools/checks/claude_bud_runway.py`. It pins the config (190 x 29, 68 x 40), fit in the plot, no overlap
+  with the HeliApron or any installation footprint, the config-reading builders, the two dormant strips staying dead,
+  and the signature stamp/compare.
