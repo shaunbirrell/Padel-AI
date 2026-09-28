@@ -725,6 +725,39 @@ local ArmyConfig = {
 		MissOffsetStuds = 3, -- a miss tracer lands this far beside the target (alternating sides)
 	},
 
+	-- ── FollowPace (v85 hotfix, owner phone v84: "The army still cut off when walking"; Rollout.Army) ────────────────
+	-- Root cause: FOLLOW units walked at OrdersConfig.UnitWalkSpeed 14 while the owner walks at 16 (18.4 Speed Pass,
+	-- 20 Speed Boost), so every second of walking left them 2-6 studs further behind; their MoveTo goal was the slot
+	-- where the player stood up to one think (0.4 s) ago; a unit that reached that stale slot stopped (MoveTo to
+	-- itself) until the next think; and an escort with any hostile in range stood still to shoot while he walked on
+	-- until it was EscortLeash (20) behind. The client escort figures stand 7-12 studs AHEAD of their unit, so a unit
+	-- that fell behind put its figures inside the camera guard's corridor and they vanished.
+	-- For a live owner (Rollout.Army) while he is on foot:
+	--   * speed: WalkSpeed = max(UnitWalkSpeed, owner WalkSpeed x MatchMult); x CatchUpMult once the unit is more than
+	--     CatchUpStartStuds from its (led) slot, x SprintMult beyond SprintStartStuds; never above MaxSpeed;
+	--   * lead: the slot is taken from where the owner will be LeadSeconds ahead (his flat velocity), so the goal is
+	--     never behind him, and a unit in its slot keeps walking while he walks (no stop-start);
+	--   * moving escort: while he moves faster than MovingStuds/s the escort shoots on the move from its slot instead of
+	--     standing (it still stops to fight when he stops);
+	--   * last resort: a unit more than TeleportStuds from him and out of his sight line (or more than
+	--     TeleportHardStuds, seen or not) is put back in its slot beside him (the recruit spawn rules: never inside a
+	--     wall), at most once per TeleportCooldown s per unit. Never while he is seated (vehicles keep today's rules).
+	FollowPace = {
+		Enabled = true,
+		MatchMult = 1.1, -- in-slot speed = owner WalkSpeed x this (a little faster so the wings keep their place)
+		CatchUpStartStuds = 6,
+		CatchUpMult = 1.4,
+		SprintStartStuds = 20,
+		SprintMult = 1.8,
+		MaxSpeed = 40,
+		LeadSeconds = 0.5,
+		MaxLeadStuds = 12,
+		MovingStuds = 3, -- owner flat speed (studs/s) that counts as walking
+		TeleportStuds = 70,
+		TeleportHardStuds = 140,
+		TeleportCooldown = 4,
+	},
+
 	-- ── Text (device-neutral; no key names, no "click" / "tap") ──────────────────────────────────────────────────
 	Text = {
 		Status = {
@@ -20160,7 +20193,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 84)
+		player:SetAttribute("WE_Build", 85)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -49765,7 +49798,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 84)
+			player:SetAttribute("WE_Build", 85)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -56564,7 +56597,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 84)
+		player:SetAttribute("WE_Build", 85)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -56704,7 +56737,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=84",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=85",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -73757,6 +73790,70 @@ local hostileSnapValid = false
 -- Escort.DefendLeash while a defend / focus-fire target exists). Set per player in the think loop.
 local escortLive = false
 local escortLeash = CombatFairnessConfig.EscortLeash
+-- v85 FollowPace (ArmyConfig.FollowPace, Rollout.Army): the owner being thought this pass, on foot in FOLLOW. Live =
+-- his army matches his speed, leads his motion, keeps walking with him and is put back beside him as a last resort.
+-- One table (this chunk is near the 200-register limit); TpAt: unit -> os.clock() of its next allowed recovery.
+local followCtx = {
+	Live = false,
+	Moving = false,
+	Speed = 16,
+	Lead = Vector3.zero,
+	TpAt = setmetatable({}, { __mode = "k" }) :: any,
+	Ray = RaycastParams.new(),
+}
+followCtx.Ray.FilterType = Enum.RaycastFilterType.Exclude
+followCtx.Ray.RespectCanCollide = true
+
+-- v85 FollowPace: is the pace live for this owner this pass (FOLLOW is checked by the caller)? Fills followCtx.
+function SquadOrdersService._PaceBegin(player: Player, proot: BasePart): boolean
+	followCtx.Live = false
+	followCtx.Moving = false
+	followCtx.Lead = Vector3.zero
+	local c = (ArmyCfg :: any).FollowPace
+	if typeof(c) ~= "table" or c.Enabled ~= true or not ArmyCfg.LiveFor("Army", player.UserId) then
+		return false
+	end
+	local char = proot.Parent
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	if hum == nil or hum.Health <= 0 or hum.SeatPart ~= nil then
+		return false -- seated (vehicles) or dead: today's rules
+	end
+	local v = proot.AssemblyLinearVelocity
+	local flatV = Vector3.new(v.X, 0, v.Z)
+	followCtx.Live = true
+	followCtx.Speed = math.clamp(hum.WalkSpeed, 0, 60)
+	followCtx.Moving = flatV.Magnitude > (tonumber(c.MovingStuds) or 3)
+	if followCtx.Moving then
+		local lead = flatV * (tonumber(c.LeadSeconds) or 0.5)
+		local maxLead = tonumber(c.MaxLeadStuds) or 12
+		if lead.Magnitude > maxLead then
+			lead = lead.Unit * maxLead
+		end
+		followCtx.Lead = lead
+	end
+	return true
+end
+
+-- v85 FollowPace: a unit's WalkSpeed for this pass. `gap` = studs from where it should be. Not live (other players,
+-- other orders, the owner seated) = OrdersConfig.UnitWalkSpeed, as before. Written on change only.
+function SquadOrdersService._PaceSpeed(unit: SquadUnit, gap: number)
+	local base = OrdersConfig.UnitWalkSpeed or 14
+	local want = base
+	if followCtx.Live then
+		local c = (ArmyCfg :: any).FollowPace
+		want = math.max(base, followCtx.Speed * (tonumber(c.MatchMult) or 1))
+		if gap > (tonumber(c.SprintStartStuds) or 20) then
+			want *= tonumber(c.SprintMult) or 1.8
+		elseif gap > (tonumber(c.CatchUpStartStuds) or 6) then
+			want *= tonumber(c.CatchUpMult) or 1.4
+		end
+		want = math.min(want, tonumber(c.MaxSpeed) or 40)
+	end
+	want = math.floor(want * 2 + 0.5) / 2
+	if unit.Humanoid.WalkSpeed ~= want then
+		unit.Humanoid.WalkSpeed = want
+	end
+end
 -- side-step (Escort.SideStep, live owners): per-unit state, weak-keyed (a unit's entry goes with the unit)
 type StepState = {
 	Blocked: number, -- shot checks in a row with the target in range and out of sight
@@ -74366,6 +74463,11 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			end
 		end
 	end
+	if followCtx.Live and followCtx.Moving then
+		-- v85 FollowPace: the owner is walking: the escort shoots on the move from its slot (followMove), never stands
+		faceYaw(unit.Root, aimPoint(unit, troot))
+		return false
+	end
 	if escortLive and stepMove(unit, playerRoot, troot, fromPlayer, now) then
 		return true -- army lane A0: walking to (or standing on) a side-step spot that sees the target
 	end
@@ -74375,6 +74477,7 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 	faceYaw(unit.Root, aimAt)
 	if fromPlayer > leash then
 		-- back to the formation slot next to the player (still shooting on the way when possible)
+		SquadOrdersService._PaceSpeed(unit, fromPlayer) -- v85 FollowPace (base speed when not live)
 		unit.Humanoid:MoveTo((playerRoot.CFrame * CFrame.new(unitOffset(st, unit.Slot))).Position)
 	elseif dist > range * 0.85 then
 		-- close in, but never past 90 % of the leash from the player
@@ -74392,8 +74495,11 @@ end
 -- (followGoal). squadfair: also an ATTACK unit that gave up a blocked chase (UnitBlockedChaseSeconds).
 local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart, trail: Trail?, probe: Probe?, now: number)
 	local offset = unitOffset(st, unit.Slot)
-	local slotPos = (playerRoot.CFrame * CFrame.new(offset)).Position
-	local target = followGoal(unit, playerRoot.CFrame, offset, slotPos, trail, probe, followPathCfg(), now)
+	-- v85 FollowPace: a live owner's slot is taken where he will be LeadSeconds ahead (never behind him)
+	local pcf = if followCtx.Live then playerRoot.CFrame + followCtx.Lead else playerRoot.CFrame
+	local slotPos = (pcf * CFrame.new(offset)).Position
+	local target = followGoal(unit, pcf, offset, slotPos, trail, probe, followPathCfg(), now)
+	SquadOrdersService._PaceSpeed(unit, flatDist(unit.Root.Position, slotPos))
 	if followSlotList() == nil then
 		-- old grid (FollowSlots empty): the original player-distance rules
 		local dist = (unit.Root.Position - playerRoot.Position).Magnitude
@@ -74412,7 +74518,7 @@ local function followMove(st: SquadState, unit: SquadUnit, playerRoot: BasePart,
 	-- where it goes and, once in its slot, stands facing where the player faces (the old "face the player
 	-- beyond 10 studs" rule would crab-walk the outer wings sideways)
 	local toGoal = flatDist(target, unit.Root.Position)
-	if toGoal > (OrdersConfig.FollowArriveStuds or 2) then
+	if toGoal > (OrdersConfig.FollowArriveStuds or 2) or (followCtx.Live and followCtx.Moving) then
 		unit.Humanoid:MoveTo(target)
 		if toGoal > 4 then
 			faceYaw(unit.Root, target)
@@ -74597,6 +74703,9 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 	end
 	local order = st.Order
 	local playerRoot = characterRoot(player)
+	if order ~= "Follow" then
+		SquadOrdersService._PaceSpeed(unit, 0) -- v85 FollowPace: back to UnitWalkSpeed outside FOLLOW
+	end
 
 	if order == "Follow" then
 		if not playerRoot then
@@ -74678,6 +74787,43 @@ local function spawnCFrame(player: Player, st: SquadState, root: BasePart?, base
 		end
 	end
 	return slotCf
+end
+
+-- v85 FollowPace last resort: a live owner's unit more than TeleportStuds from him and out of his sight line (or more
+-- than TeleportHardStuds either way) is put back in its slot beside him with the recruit spawn rules (spawnCFrame: never
+-- inside a wall), at most once per TeleportCooldown s per unit. Called only while followCtx.Live (on foot, FOLLOW).
+function SquadOrdersService._PaceRecover(player: Player, st: SquadState, unit: SquadUnit, proot: BasePart, now: number): boolean
+	if not unit.Alive or unit.Humanoid.Health <= 0 or not unit.Root.Parent then
+		return false
+	end
+	local c = (ArmyCfg :: any).FollowPace
+	local d = flatDist(unit.Root.Position, proot.Position)
+	if d <= (tonumber(c.TeleportStuds) or 70) then
+		return false
+	end
+	local at = followCtx.TpAt[unit]
+	if at ~= nil and now < at then
+		return false
+	end
+	if d <= (tonumber(c.TeleportHardStuds) or 140) then
+		local eye = proot.Position + Vector3.new(0, 1.5, 0)
+		local tgt = unit.Root.Position + Vector3.new(0, 1.5, 0)
+		local ignore: { Instance } = { ensureFolder() }
+		if proot.Parent then
+			table.insert(ignore, proot.Parent)
+		end
+		followCtx.Ray.FilterDescendantsInstances = ignore
+		if Workspace:Raycast(eye, tgt - eye, followCtx.Ray) == nil then
+			return false -- he can see it: it keeps jogging (CatchUp / Sprint speed) instead of popping
+		end
+	end
+	followCtx.TpAt[unit] = now + (tonumber(c.TeleportCooldown) or 4)
+	local cf = spawnCFrame(player, st, proot, proot.CFrame, unit.Slot)
+	unit.Model:PivotTo(cf)
+	unit.Root.AssemblyLinearVelocity = Vector3.zero
+	unit.Crumb = nil
+	unit.Humanoid:MoveTo(cf.Position)
+	return true
 end
 
 function SquadOrdersService.SyncArmy(player: Player)
@@ -75015,6 +75161,11 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					-- P1-4 escort: one hostile pick per player per pass (nearest to the player); squadfair: plus the
 					-- hostiles near the player for the visible-target fallback (escortCands), only ones this squad may hurt
 					local escortHum: Humanoid?, escortRoot: BasePart? = nil, nil
+					-- v85 FollowPace: live only for a Rollout.Army owner on foot in FOLLOW
+					if not (st.Order == "Follow" and proot and SquadOrdersService._PaceBegin(player, proot)) then
+						followCtx.Live = false
+						followCtx.Moving = false
+					end
 					escortLive = false -- army lane A0: today's escort unless Rollout.Escort is live for this owner
 					escortLeash = CombatFairnessConfig.EscortLeash
 					if st.Order == "Follow" and proot then
@@ -75038,6 +75189,13 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					for _, unit in ipairs(st.Units) do
 						thinkUnit(player, st, unit, now, escortHum, escortRoot, trail, probe)
 					end
+					if followCtx.Live and proot then
+						for _, unit in ipairs(st.Units) do
+							SquadOrdersService._PaceRecover(player, st, unit, proot, now) -- v85 FollowPace last resort
+						end
+					end
+					followCtx.Live = false
+					followCtx.Moving = false
 					candReset(escortCands) -- hold no reference to the NPCs between passes
 				end
 			end

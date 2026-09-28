@@ -69,6 +69,39 @@ local ArmyConfig = {
 		MissOffsetStuds = 3, -- a miss tracer lands this far beside the target (alternating sides)
 	},
 
+	-- ── FollowPace (v85 hotfix, owner phone v84: "The army still cut off when walking"; Rollout.Army) ────────────────
+	-- Root cause: FOLLOW units walked at OrdersConfig.UnitWalkSpeed 14 while the owner walks at 16 (18.4 Speed Pass,
+	-- 20 Speed Boost), so every second of walking left them 2-6 studs further behind; their MoveTo goal was the slot
+	-- where the player stood up to one think (0.4 s) ago; a unit that reached that stale slot stopped (MoveTo to
+	-- itself) until the next think; and an escort with any hostile in range stood still to shoot while he walked on
+	-- until it was EscortLeash (20) behind. The client escort figures stand 7-12 studs AHEAD of their unit, so a unit
+	-- that fell behind put its figures inside the camera guard's corridor and they vanished.
+	-- For a live owner (Rollout.Army) while he is on foot:
+	--   * speed: WalkSpeed = max(UnitWalkSpeed, owner WalkSpeed x MatchMult); x CatchUpMult once the unit is more than
+	--     CatchUpStartStuds from its (led) slot, x SprintMult beyond SprintStartStuds; never above MaxSpeed;
+	--   * lead: the slot is taken from where the owner will be LeadSeconds ahead (his flat velocity), so the goal is
+	--     never behind him, and a unit in its slot keeps walking while he walks (no stop-start);
+	--   * moving escort: while he moves faster than MovingStuds/s the escort shoots on the move from its slot instead of
+	--     standing (it still stops to fight when he stops);
+	--   * last resort: a unit more than TeleportStuds from him and out of his sight line (or more than
+	--     TeleportHardStuds, seen or not) is put back in its slot beside him (the recruit spawn rules: never inside a
+	--     wall), at most once per TeleportCooldown s per unit. Never while he is seated (vehicles keep today's rules).
+	FollowPace = {
+		Enabled = true,
+		MatchMult = 1.1, -- in-slot speed = owner WalkSpeed x this (a little faster so the wings keep their place)
+		CatchUpStartStuds = 6,
+		CatchUpMult = 1.4,
+		SprintStartStuds = 20,
+		SprintMult = 1.8,
+		MaxSpeed = 40,
+		LeadSeconds = 0.5,
+		MaxLeadStuds = 12,
+		MovingStuds = 3, -- owner flat speed (studs/s) that counts as walking
+		TeleportStuds = 70,
+		TeleportHardStuds = 140,
+		TeleportCooldown = 4,
+	},
+
 	-- ── Text (device-neutral; no key names, no "click" / "tap") ──────────────────────────────────────────────────
 	Text = {
 		Status = {
