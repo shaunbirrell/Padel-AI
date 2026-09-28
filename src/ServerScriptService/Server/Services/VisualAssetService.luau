@@ -897,6 +897,24 @@ function VisualAssetService.ResolvePropMeshId(propKey: string): number?
 	return nil
 end
 
+-- wc3 (owner pick 4954987035, the recon plane): the box Roblox DRAWS for a part. A Part with Shape = Cylinder is drawn
+-- Size.X long and min(Size.Y, Size.Z) across (the plane's fuselage is 15.83 x 11.26 x 3.88, drawn 3.88 round), a Ball
+-- min(Size) across; MeshParts, unions, wedges and blocks are their Size. The fit measures this box, so a cylinder-bodied
+-- model stands on its wheels instead of 3.7 studs over them.
+local function drawnSize(p: BasePart): Vector3
+	local size = p.Size
+	if p:IsA("Part") then
+		if p.Shape == Enum.PartType.Cylinder then
+			local d = math.min(size.Y, size.Z)
+			return Vector3.new(size.X, d, d)
+		elseif p.Shape == Enum.PartType.Ball then
+			local d = math.min(size.X, size.Y, size.Z)
+			return Vector3.new(d, d, d)
+		end
+	end
+	return size
+end
+
 -- W3 LOOK: place a vehicle body (authored axis-aligned, front -Z) on the Part kit: one uniform scale so the body is
 -- as long as the kit chassis, centred on the chassis, tyre bottoms on the physics-wheel bottoms, turned by ref.Yaw.
 -- Moves each part (no Model:ScaleTo / pivots), so it does not depend on how the pack set its pivot. Returns the scale.
@@ -914,7 +932,7 @@ local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, r
 	local lx, ly, lz = math.huge, math.huge, math.huge
 	local hx, hy, hz = -math.huge, -math.huge, -math.huge
 	for _, p in ipairs(parts) do
-		local cf, h = p.CFrame, p.Size * 0.5
+		local cf, h = p.CFrame, drawnSize(p) * 0.5
 		local r, u, l = cf.RightVector, cf.UpVector, cf.LookVector
 		local ex = math.abs(r.X) * h.X + math.abs(u.X) * h.Y + math.abs(l.X) * h.Z
 		local ey = math.abs(r.Y) * h.X + math.abs(u.Y) * h.Y + math.abs(l.Y) * h.Z
@@ -998,9 +1016,9 @@ local function placeKitOnBody(hostModel: Model, primary: BasePart, clone: Model,
 	for _, d in ipairs(clone:GetDescendants()) do
 		if d:IsA("BasePart") then
 			local rel = primary.CFrame:ToObjectSpace(d.CFrame)
-			local ey = halfHeightIn(rel, d.Size)
+			local ey = halfHeightIn(rel, drawnSize(d))
 			bottom, roofY = math.min(bottom, rel.Position.Y - ey), math.max(roofY, rel.Position.Y + ey)
-			local h = d.Size * 0.5
+			local h = drawnSize(d) * 0.5
 			local ex = math.abs(rel.RightVector.X) * h.X + math.abs(rel.UpVector.X) * h.Y + math.abs(rel.LookVector.X) * h.Z
 			local ez = math.abs(rel.RightVector.Z) * h.X + math.abs(rel.UpVector.Z) * h.Y + math.abs(rel.LookVector.Z) * h.Z
 			halfX, halfZ = math.max(halfX, math.abs(rel.Position.X) + ex), math.max(halfZ, math.abs(rel.Position.Z) + ez)

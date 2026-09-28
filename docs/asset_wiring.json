@@ -269,6 +269,27 @@
    ],
    "utc": "2026-09-25T09:43:36Z"
   },
+  "4954987035": {
+   "hunks": {
+    "docs/ASSET_LICENSES.md": [
+     [
+      "",
+      "| [4954987035](https://create.roblox.com/store/asset/4954987035) | Old propeller plane | Deadex40_Extra (User 1312654621) | Model | inventory API 2026-09-27T19:01:42Z (cached) | 738 | 0 (stripped) | `Vehicles.ReconPlane` | owner list 2026-09-25 (Recon Plane); Get Model by the game owner; WE_CHECK parts=20 humanoids=0; owner yes on record |\n"
+     ]
+    ],
+    "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau": [
+     [
+      "\t\tReconPlane = { ModelAssetId = 0, PendingAssetId = 4954987035, Note = \"owner pick Old propeller plane (Deadex40_Extra): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted\" } :: AssetRef,\n",
+      "\t\t-- wc3 (owner yes 2026-09-27; second check, live place v75): nose at -X (propeller blade and ball nose at -X, fin and\n\t\t-- tail plane at +X), so Yaw -90. Roblox size: 18 long, 25.3 wide. The pilot sits just behind the wing, sunk in the\n\t\t-- solid fuselage (the model has no cockpit opening): seat top 1.2 over the lowest point (unscaled), seated head top\n\t\t-- 4.9 against a fuselage top of 3.89, so only the top of the head shows; the shoulders stay about 0.3 under. The\n\t\t-- model has no wheels, so the kit's landing gear stays visible under it. Its fuselage is a Cylinder part:\n\t\t-- VisualAssetService fits the box Roblox draws (3.88 round), not the 11.26-tall Size.\n\t\tReconPlane = {\n\t\t\tModelAssetId = 4954987035,\n\t\t\tFit = \"Kit\",\n\t\t\tYaw = -90,\n\t\t\tHideKit = true,\n\t\t\tKeepVisible = { \"GearF\", \"WheelF\", \"GearL\", \"GearR\", \"WheelL\", \"WheelR\" },\n\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1, 1.2, 0), -- 1.4 behind the wing's trailing edge; only the head top clears the body\n\t\t\t},\n\t\t\tStripDecals = true,\n\t\t\tNote = \"owner pick: Old propeller plane by Deadex40_Extra (promoted 2026-09-27 by tools/wire-asset-ids.py)\",\n\t\t} :: AssetRef,\n"
+     ]
+    ]
+   },
+   "keys": [
+    "ReconPlane"
+   ],
+   "moves": [],
+   "utc": "2026-09-27T19:05:00Z"
+  },
   "632958370": {
    "hunks": {
     "docs/ASSET_LICENSES.md": [
@@ -312,6 +333,41 @@
     }
    ],
    "utc": "2026-09-25T09:43:36Z"
+  },
+  "9076240315": {
+   "hunks": {
+    "docs/ASSET_LICENSES.md": [
+     [
+      "",
+      "| [9076240315](https://create.roblox.com/store/asset/9076240315) | APC | CorzCringe (User 2027522302) | Model | inventory API 2026-09-27T19:01:44Z (cached) | 3,314 | 0 (stripped) | `Vehicles.APC`, `Vehicles.InfantryCarrier`, `Vehicles.CommandVehicle`, `Vehicles.WheeledIFV`, `Vehicles.AmphibiousAPC` | owner list 2026-09-25 (APC, Infantry Carrier, Command Vehicle, Wheeled IFV, Amphibious APC); Get Model by the game owner; WE_CHECK parts=12 humanoids=0 |\n"
+     ]
+    ],
+    "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau": [
+     [
+      "\t\tAPC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = \"owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted\" } :: AssetRef,\n",
+      "\t\t-- wc3 (second check, live place v75): front at -Z (white lights and the grey plate at -Z, red lights at +Z), Yaw 0.\n\t\t-- 0.55 of Roblox size (27.5 long, 11 wide, antennas to 10.4). The hull mesh's box top (12.43) is its cupola, not\n\t\t-- the roof: the flat roof is at or below 10.12, where the cupola's blue band starts (antenna bases 10.88), so 5.57\n\t\t-- at 0.55. The hull is one mesh with no seats, so every seat is placed by eye at y 2.2: a seated head (seat top +\n\t\t-- 3.7) is 4.91, 0.66 under that roof; the feet end 0.21 over the ground, inside the hull. Riders hidden, as in a\n\t\t-- closed APC: phone check. The same body on the four WheeledAPC variants below.\n\t\tAPC = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = \"Kit\",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},\n\t\t\tStripDecals = true,\n\t\t\tNote = \"owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)\",\n\t\t} :: AssetRef,\n"
+     ],
+     [
+      "\t\tInfantryCarrier = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = \"owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted\" } :: AssetRef,\n\t\tCommandVehicle = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = \"owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted\" } :: AssetRef,\n\t\tWheeledIFV = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = \"owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted\" } :: AssetRef,\n\t\tAmphibiousAPC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = \"owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted\" } :: AssetRef,\n",
+      "\t\tInfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = \"Kit\",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},\n\t\t\tStripDecals = true,\n\t\t\tNote = \"owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)\",\n\t\t} :: AssetRef,\n\t\tCommandVehicle = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = \"Kit\",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},\n\t\t\tStripDecals = true,\n\t\t\tNote = \"owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)\",\n\t\t} :: AssetRef,\n\t\tWheeledIFV = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = \"Kit\",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},\n\t\t\tStripDecals = true,\n\t\t\tNote = \"owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)\",\n\t\t} :: AssetRef,\n\t\tAmphibiousAPC = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = \"Kit\",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},\n\t\t\tStripDecals = true,\n\t\t\tNote = \"owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)\",\n\t\t} :: AssetRef,\n"
+     ]
+    ],
+    "tools/BuyPathStatic.py": [
+     [
+      "must_contain(\"src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau\", \"InfantryCarrier = { ModelAssetId = 0\", \"InfantryCarrier APC\")\n",
+      "must_contain(\"src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau\", \"InfantryCarrier = {\\n\\t\\t\\tModelAssetId = 9076240315,\", \"InfantryCarrier APC [owner pick 9076240315, 2026-09-27; wc3: body scale + seats]\")\n"
+     ]
+    ]
+   },
+   "keys": [
+    "APC",
+    "InfantryCarrier",
+    "CommandVehicle",
+    "WheeledIFV",
+    "AmphibiousAPC"
+   ],
+   "moves": [],
+   "utc": "2026-09-27T19:05:00Z"
   }
  },
  "version": 1

@@ -221,7 +221,7 @@ must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "9129
 # allow REJECT comments mentioning 3924234975; must_absent filters REJECT/DELETED
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "3924234975", "No plastic Rthro CharacterAlt assignment")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "SupplyTruck = { ModelAssetId = 0", "SupplyTruck truck mesh")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "InfantryCarrier = { ModelAssetId = 0", "InfantryCarrier APC")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "InfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,", "InfantryCarrier APC [owner pick 9076240315, 2026-09-27; wc3: body scale + seats]")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FloodlightTower = { ModelAssetId = 107381977457431", "FloodlightTower prop")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "CharacterAlt = { ModelAssetId = 0", "CharacterAlt disabled")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "PlotFloorChevrons", "Plot floor chevrons to next pad")
@@ -4904,13 +4904,11 @@ must_contain(WC2_TOOL, 'STUDIO_CHECK_SOURCE = "owner\'s Open Cloud run in the li
 must_contain(WC2_TOOL, '                why = "needs OmitParts in " + ", ".join(no_omit) + " first (the part the Studio check names, e.g. its bounds box)"\n        if not why and aid in HOLD:\n            why = f"on hold: {HOLD[aid]}', "wc2: promote runs the OMIT gate, then refuses a pick on HOLD")
 must_contain(WC2_TOOL, '    if "OMIT" in r.flags:\n        need.append("OmitParts")\n    if r.id in HOLD:\n        need.append(HOLD[r.id])', "wc2: the status gate text keeps OmitParts and shows the HOLD reason")
 must_contain(WC2_TOOL, "yaw = yaw_override.get(aid, YAW_HINT.get(aid))", "wc2: promote takes a held vehicle's yaw from YAW_HINT unless --yaw is given")
-# held picks: the jet waits on the owner's call 12, the walls on the VisualAssetService fit fix, the rest on the second check.
+# held picks: the walls wait on the VisualAssetService fit fix. (wc3, 2026-09-27: the jet's call-12 pin and the eight
+# "second check" HOLD pins moved to the wc3 block below, with the new HOLD texts.)
 # Each keeps ModelAssetId 0 and its PendingAssetId (no runtime load; the tool refuses a promote while the HOLD line
 # is there). Delete a HOLD line (and its pin here) in the same commit as its promote.
-must_contain(WC2_TOOL, '    3553891209: "your call 12 (load by id, or bake after each publish)",', "wc2: the fighter jet waits on the owner's call 12")
 must_contain(WC2_TOOL, '    6980242709: "a VisualAssetService wall-fit fix, then the second check",', "wc2: the walls pick waits on the VisualAssetService fit fix (its only caller buries it)")
-for _wc2_h in ("2474869838", "9076240315", "15838664806", "8546141386", "4954987035", "5318635087", "8455894899", "11357157285"):
-    must_contain(WC2_TOOL, f'    {_wc2_h}: "second check', f"wc2: {_wc2_h} waits on the second check (HOLD)")
 must_contain(WC2_VAC, 'DefensiveWalls = { ModelAssetId = 0, PendingAssetId = 6980242709, Note = "owner pick Military Wall (SMehmetaga): pending, P2; passed the owner check', "wc2: the walls pick stays pending and its Note records the fit finding")
 # call 12 is a fair choice (load by id, or a post-publish bake inside Roblox), and the owner can run both checks himself
 must_contain(WC2_WIRING, "12. **Store models: load them while the game runs (A), or bake them into the place after every publish (B)?**", "wc2: ASSET_WIRING §4 call 12 offers load-by-id or a post-publish bake")
@@ -8120,6 +8118,57 @@ if not _rr_hits:
     ok('R-RIG-H: no non-recursive Head / Helmet / Rifle / Pack lookup on an NPC, squad, guard or statue host')
 else:
     bad(f'R-RIG-H: non-recursive kit-part lookup on a rigged host (use FindFirstChild(name, true)): {_rr_hits[:6]}')
+# --- wc3: the owner's second check (WE_CHECK2 through Open Cloud Luau Execution in the live place, version 75, 2026-09-27),
+# his first check of batch P4 and his answers (call 12 = A, load by id; yes to the truck, the recon plane and the jet).
+# Paste above the final `parse_gate()` call. Replaces the wc2 pins on the jet's call-12 HOLD line and on the eight
+# `"second check` HOLD lines (their texts changed), and the InfantryCarrier needle the promote tool rewrote (the ref now
+# spans several lines). Variant vs: on the vscale lane (R2.1), with the recon plane and the APC promoted.
+# Headless-verified (NOT Roblox): every pin below PASSES on the wc3 candidate and FAILS on its base.
+WC3_VAC = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
+WC3_TOOL = "tools/wire-asset-ids.py"
+WC3_WIRING = "docs/ASSET_WIRING.md"
+WC3_VAS = "src/ServerScriptService/Server/Services/VisualAssetService.luau"
+must_not_contain(WC3_VAC, 'PendingAssetId = 5318635087', 'wc3: the fuel tanker pick 5318635087 is out of the config (55 parts, all named "Part")')
+must_not_contain(WC3_VAC, 'PendingAssetId = 11357157285', 'wc3: the rescue heli pick 11357157285 is out of the config (78 parts, only "Part" / "Wedge")')
+must_contain(WC3_TOOL, "('FuelTanker', 'VEHICLES', 'REJECT', 5318635087, 5318635087, '', '-', '', ['Vehicles.FuelTanker']", 'wc3: the FuelTanker registry row is REJECT with its config target kept')
+must_contain(WC3_TOOL, "('RescueHeli', 'VEHICLES', 'REJECT', 11357157285, 11357157285, '', '-', '', ['Vehicles.RescueHeli']", 'wc3: the RescueHeli registry row is REJECT with its config target kept')
+must_contain(WC3_TOOL, "('MedevacHeli', 'VEHICLES', 'REJECT', 11357398877, 11357157285, '', '-', '', ['Vehicles.MedevacHeli']", 'wc3: the MedevacHeli registry row (same model) is REJECT with its config target kept')
+must_contain(WC3_TOOL, "    # batch P4: the owner's first check of 2026-09-27 (same script, Open Cloud, live place version 75, shaunie6)\n    3322196012: 1, 4362642898: 28, 5589684833: 1, 14408455045: 14,\n}", 'wc3: STUDIO_DONE holds the P4 first check (2026-09-27)')
+must_contain(WC3_TOOL, 'OWNER_YES: dict[int, str] = {\n    8546141386: "2026-09-27 (call 2)",\n    4954987035: "2026-09-27 (call 4)",\n    3553891209: "2026-09-27 (jet look OK; call 12 = A, load by id)",\n}', "wc3: OWNER_YES records the owner's yes to the truck (call 2), the recon plane (call 4) and the jet (call 12 = A)")
+must_contain(WC3_TOOL, 'if not why and "OWNER" in flags and aid not in owner_ok and aid not in OWNER_YES:', 'wc3: promote takes an OWNER_YES answer in place of --owner-ok')
+must_contain(WC3_TOOL, 'if "OWNER" in r.flags and r.id not in OWNER_YES:\n        need.append("your yes/no")', 'wc3: the status table stops asking for an answer on record')
+must_contain(WC3_TOOL, '    3553891209: "your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist\'s signed three-view drawing of a real aircraft concept",', "wc3: the jet waits on the owner's decision about its paint (another artist's drawing of a real aircraft concept)")
+must_contain(WC3_TOOL, '    8546141386: "your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller",', 'wc3: the truck is held, not usable as it is (military unit markings in its paint; mesh and paint uploaded by another user)')
+must_contain(WC3_TOOL, '    2474869838: "a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera)",', 'wc3: the light heli waits on a look (one mesh, no seats; nose at -Z)')
+must_contain(WC3_TOOL, '    15838664806: "the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05",', 'wc3: the gunboat waits on the fit scale floor (MainHull is 2,048 studs)')
+must_contain(WC3_TOOL, '    8455894899: "a longer kit: trim known (ChildName \'FlatBed Truck\', 9 OmitParts names = 40 parts) but its cab sits past the kit\'s nose",', 'wc3: the flatbed waits on a longer kit (trim known, cab past the kit nose)')
+must_contain(WC3_TOOL, '    3322196012: "the P4 second check (which way the barrel points; a gun\'s Yaw is set by hand)",', 'wc3: P4 pick 3322196012 waits on the P4 second check')
+must_contain(WC3_TOOL, '    4362642898: "the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles)",', 'wc3: P4 pick 4362642898 waits on the P4 second check')
+must_contain(WC3_TOOL, '    5589684833: "the P4 second check (which end is the barrel) + a FitScale look on the Roblox-size 4x4",', 'wc3: P4 pick 5589684833 waits on the P4 second check')
+must_contain(WC3_TOOL, '    14408455045: "the P4 second check (neon parts, upright pose) + the droppers lane (v1b reads its WE_CatalogProp)",', 'wc3: P4 pick 14408455045 waits on the P4 second check')
+must_contain(WC3_TOOL, '    3553891209: 90, 2474869838: 0, 9076240315: 0, 8546141386: 180, 4954987035: -90, 15838664806: -90,\n}', 'wc3: YAW_HINT gives the light helicopters yaw 0 (their ThumbnailCamera)')
+must_contain(WC3_WIRING, '    - **Answered 2026-09-27: A** (keep loading by id).', 'wc3: ASSET_WIRING §4 records call 12 = A')
+must_contain(WC3_WIRING, '**Second check done, 2026-09-27: thank you**', 'wc3: ASSET_WIRING §5 holds the second-check results')
+must_contain(WC3_WIRING, '| Fuel Tanker | 5318635087 | 55 parts in your check (over 40); all named "Part", so none can be left out |', 'wc3: ASSET_WIRING §6.1 lists the fuel tanker as not used')
+must_contain(WC3_WIRING, '**After the second check (wc3, 2026-09-27).**', 'wc3: ASSET_WIRING §8 has the load budget after the second check')
+must_contain(WC3_WIRING, 'our rules\n  keep military markings out.', "wc3: ASSET_WIRING §5 says what the truck's paint shows")
+must_contain(WC3_VAC, '\t\tReconPlane = {\n\t\t\tModelAssetId = 4954987035,\n\t\t\tFit = "Kit",\n\t\t\tYaw = -90,\n\t\t\tHideKit = true,\n\t\t\tKeepVisible = { "GearF", "WheelF", "GearL", "GearR", "WheelL", "WheelR" },\n\t\t\tBodyScale = 1,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-1, 1.2, 0),', 'wc3: Vehicles.ReconPlane is owner pick 4954987035 at Roblox size (Yaw -90, pilot seat, kit gear visible)')
+must_contain(WC3_VAC, '\t\tAPC = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.APC is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tInfantryCarrier = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.InfantryCarrier is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tCommandVehicle = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.CommandVehicle is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tWheeledIFV = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.WheeledIFV is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAC, '\t\tAmphibiousAPC = {\n\t\t\tModelAssetId = 9076240315,\n\t\t\tFit = "Kit",\n\t\t\tYaw = 0,\n\t\t\tHideKit = true,\n\t\t\tBodyScale = 0.55,\n\t\t\tBodySeats = {\n\t\t\t\tDriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)\n\t\t\t\tPassengerSeat1 = Vector3.new(2.5, 2.2, -4),\n\t\t\t\tPassengerSeat2 = Vector3.new(-2.5, 2.2, 2),\n\t\t\t\tPassengerSeat3 = Vector3.new(2.5, 2.2, 2),\n\t\t\t\tPassengerSeat4 = Vector3.new(-2.5, 2.2, 6),\n\t\t\t},', "wc3: Vehicles.AmphibiousAPC is owner pick 9076240315 at 0.55 scale, every seat at y 2.2 (seated head 0.66 under the real roof, not the cupola's box top)")
+must_contain(WC3_VAS, '\t\tif p.Shape == Enum.PartType.Cylinder then\n\t\t\tlocal d = math.min(size.Y, size.Z)\n\t\t\treturn Vector3.new(size.X, d, d)', "wc3: drawnSize gives a Cylinder part its drawn Y/Z (the recon plane's fuselage)")
+must_contain(WC3_WIRING, '- Only if 2 friends own an APC, Infantry Carrier or Command Vehicle: each of you parks one by your garage', 'wc3: ASSET_WIRING §1 asks for the 3-APC frame-rate check only with 2 friends (one car out per player)')
+must_contain(WC3_WIRING, 'No head pokes through the roof, and no arm or foot shows through the', 'wc3: ASSET_WIRING §1 asks the owner to check the APC roof')
+must_contain(WC3_WIRING, 'two of your picks go live: the Recon Plane at Roblox size,\nand the APC (with its 4 variants) at about half Roblox size, about as big as the Escort Truck.', "wc3: ASSET_WIRING §1 gives each promoted body's size (the plane at Roblox size, the APC family at 0.55)")
+must_contain(WC3_WIRING, "- Sit in it: the top of your head shows over the plane's body, just behind the wing.\n", "wc3: ASSET_WIRING §1 says only the top of the pilot's head shows over the recon plane's body")
+must_contain(WC3_VAS, '\t\t\tlocal d = math.min(size.X, size.Y, size.Z)\n\t\t\treturn Vector3.new(d, d, d)', 'wc3: drawnSize gives a Ball part its drawn size')
+must_contain(WC3_VAS, 'local cf, h = p.CFrame, drawnSize(p) * 0.5', 'wc3: fitBodyToKit sizes the body box by drawn size')
+must_contain(WC3_VAS, 'local ey = halfHeightIn(rel, drawnSize(d))', "wc3: placeKitOnBody measures the body's bottom and roof by drawn size")
+must_contain(WC3_VAS, 'local h = drawnSize(d) * 0.5\n\t\t\tlocal ex =', "wc3: placeKitOnBody measures the body's half length / width by drawn size")
+must_not_contain(WC3_VAS, 'local cf, h = p.CFrame, p.Size * 0.5', 'wc3: fitBodyToKit no longer sizes a round part by its Size box')
+must_contain(WC3_TOOL, '    8455894899: "a longer kit: trim known (ChildName \'FlatBed Truck\', 9 OmitParts names = 40 parts) but its cab sits past the kit\'s nose",\n    3322196012: "the P4 second check (which way the barrel points; a gun\'s Yaw is set by hand)",', 'wc3: the recon plane and the APC are off HOLD (promoted)')
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

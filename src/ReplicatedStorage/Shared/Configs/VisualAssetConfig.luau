@@ -230,7 +230,7 @@ local VisualAssetConfig = {
 		LightScoutHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		GunshipHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		HeavyLiftHeli = { ModelAssetId = 0, Note = "owner pick transport helicopter (blokkere) not used: owner check 2026-09-25 (Open Cloud, v75), 109 parts > 40 - family body / Part kit" } :: AssetRef,
-		RescueHeli = { ModelAssetId = 0, PendingAssetId = 11357157285, Note = "owner pick Rescue Helicopter (KiboSprite): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		RescueHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
 		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
@@ -254,13 +254,52 @@ local VisualAssetConfig = {
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
 		ArmoredTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		APC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		-- wc3 (second check, live place v75): front at -Z (white lights and the grey plate at -Z, red lights at +Z), Yaw 0.
+		-- 0.55 of Roblox size (27.5 long, 11 wide, antennas to 10.4). The hull mesh's box top (12.43) is its cupola, not
+		-- the roof: the flat roof is at or below 10.12, where the cupola's blue band starts (antenna bases 10.88), so 5.57
+		-- at 0.55. The hull is one mesh with no seats, so every seat is placed by eye at y 2.2: a seated head (seat top +
+		-- 3.7) is 4.91, 0.66 under that roof; the feet end 0.21 over the ground, inside the hull. Riders hidden, as in a
+		-- closed APC: phone check. The same body on the four WheeledAPC variants below.
+		APC = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		-- Free jet family (classic + named free fighter)
 		_FallbackJet = { ModelAssetId = 0, Note = "Classic free fighter jet" } :: AssetRef,
 		FighterJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		InterceptorJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		TrainerJet = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		ReconPlane = { ModelAssetId = 0, PendingAssetId = 4954987035, Note = "owner pick Old propeller plane (Deadex40_Extra): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		-- wc3 (owner yes 2026-09-27; second check, live place v75): nose at -X (propeller blade and ball nose at -X, fin and
+		-- tail plane at +X), so Yaw -90. Roblox size: 18 long, 25.3 wide. The pilot sits just behind the wing, sunk in the
+		-- solid fuselage (the model has no cockpit opening): seat top 1.2 over the lowest point (unscaled), seated head top
+		-- 4.9 against a fuselage top of 3.89, so only the top of the head shows; the shoulders stay about 0.3 under. The
+		-- model has no wheels, so the kit's landing gear stays visible under it. Its fuselage is a Cylinder part:
+		-- VisualAssetService fits the box Roblox draws (3.88 round), not the 11.26-tall Size.
+		ReconPlane = {
+			ModelAssetId = 4954987035,
+			Fit = "Kit",
+			Yaw = -90,
+			HideKit = true,
+			KeepVisible = { "GearF", "WheelF", "GearL", "GearR", "WheelL", "WheelR" },
+			BodyScale = 1,
+			BodySeats = {
+				DriverSeat = Vector3.new(-1, 1.2, 0), -- 1.4 behind the wing's trailing edge; only the head top clears the body
+			},
+			StripDecals = true,
+			Note = "owner pick: Old propeller plane by Deadex40_Extra (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		LightFighter = { ModelAssetId = 0, PendingAssetId = 3553891209, Note = "owner pick Fighter Jet concept (PlanesFun56): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		StrikeJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
 		CASJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
@@ -296,7 +335,7 @@ local VisualAssetConfig = {
 		AttackSub = { ModelAssetId = 0, Note = "Boat reuse (surface stub)" } :: AssetRef,
 		-- Explicit aliases for depth-pass IDs (KitFamilyFallback also covers these)
 		SupplyTruck = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		FuelTanker = { ModelAssetId = 0, PendingAssetId = 5318635087, Note = "owner pick fuel truck (asp307): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		FuelTanker = { ModelAssetId = 0, Note = "owner pick fuel truck (asp307) not used: owner check 2026-09-25 (Open Cloud, v75), 55 parts > 40 - family body / Part kit" } :: AssetRef,
 		EngineeringTruck = { ModelAssetId = 0, Note = "owner list: pick rejected (cannot be checked from the store) - family body / Part kit" } :: AssetRef,
 		FlatbedHauler = { ModelAssetId = 0, PendingAssetId = 8455894899, Note = "owner pick FlatBed Truck (YourBoi_JonnyBoi): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
 		AmmoCarrier = { ModelAssetId = 0, PendingAssetId = 8546141386, Note = "owner pick Military Truck (LouBrawlerStars): pending, P3 (owner yes/no, Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
@@ -348,10 +387,70 @@ local VisualAssetConfig = {
 			},
 			Note = "owner list: Roblox Pickup Truck (bronze) Body (41 MeshParts; the overlapping tail-light glass is omitted = 40), fitted to the kit; dress-only, the Part kit drives. 0 = Part kit",
 		} :: AssetRef,
-		InfantryCarrier = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		CommandVehicle = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		WheeledIFV = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		AmphibiousAPC = { ModelAssetId = 0, PendingAssetId = 9076240315, Note = "owner pick APC (CorzCringe): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		InfantryCarrier = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		CommandVehicle = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		WheeledIFV = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
+		AmphibiousAPC = {
+			ModelAssetId = 9076240315,
+			Fit = "Kit",
+			Yaw = 0,
+			HideKit = true,
+			BodyScale = 0.55,
+			BodySeats = {
+				DriverSeat = Vector3.new(-2.5, 2.2, -4), -- no body seat: inside the hull, behind the cupola, under the roof (placed by eye)
+				PassengerSeat1 = Vector3.new(2.5, 2.2, -4),
+				PassengerSeat2 = Vector3.new(-2.5, 2.2, 2),
+				PassengerSeat3 = Vector3.new(2.5, 2.2, 2),
+				PassengerSeat4 = Vector3.new(-2.5, 2.2, 6),
+			},
+			StripDecals = true,
+			Note = "owner pick: APC by CorzCringe (promoted 2026-09-27 by tools/wire-asset-ids.py)",
+		} :: AssetRef,
 		CombatIFV = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
 		AssaultIFV = { ModelAssetId = 0, Note = "owner pick Fiction IFV (spookstiy) not used: owner check 2026-09-25 (Open Cloud, v75), 321 parts > 40 - family body / Part kit" } :: AssetRef,
 		BridgeLayer = { ModelAssetId = 0, NoFamilyFallback = true, Note = "owner list: no good match, keep the current build (Part kit; NoFamilyFallback: never a TrackedIFV family body)" } :: AssetRef,
@@ -369,7 +468,7 @@ local VisualAssetConfig = {
 		RailgunCarrier = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) → TrackedArtillery family body, else Part kit" } :: AssetRef,
 		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
 		UtilityHeli = { ModelAssetId = 0, PendingAssetId = 2474869838, Note = "owner pick Low poly helicopter (Azarth): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
-		MedevacHeli = { ModelAssetId = 0, PendingAssetId = 11357157285, Note = "owner pick Helicopter (Rescue) (KiboSprite): pending, P3 (Studio WE_CHECK); family body / Part kit until promoted" } :: AssetRef,
+		MedevacHeli = { ModelAssetId = 0, Note = "owner pick Rescue Helicopter (KiboSprite) not used: owner check 2026-09-25 (Open Cloud, v75), 78 parts > 40 - family body / Part kit" } :: AssetRef,
 		EscortHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
 		VTOLTransport = { ModelAssetId = 0, Note = "owner list: pick rejected (provenance) - family body / Part kit" } :: AssetRef,
 		HeavyBomber = { ModelAssetId = 0, Note = "Bomber/cargo/AWACS family" } :: AssetRef,

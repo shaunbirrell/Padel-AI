@@ -7399,3 +7399,117 @@ Built on main 2f71347 (spec read at 3b5ac28). Parts A and B ship together: squad
 - **R-RIG-24 (build, squadfair)** Squad line of sight and hit chance (7b89b6c) do not change with the rig. The unit LOS ray excludes the unit's own model, the squads folder, NPC bodies, the target and the owner, and rig parts are CanCollide false under `NpcLosRespectCanCollide = true`. Measured: the 10 squad-lane drivers (sfv2 ... s33) give the same pass counts on main and candidate, both plain and with rigs really built (15-189 rigs per driver). The only different line is the order of two hit buckets (A0/B1/B2, same 250 total), which the rig hook also causes on main.
 - **R-RIG-25 (build)** Statues on 2f71347: 60, not the spec's 72 (the Training Yard lane, 60d5c73, dropped the 2 worker statues per plot; its 3 shooters per plot, 18 in all, are statues). Numbers: 86 figures rigged in the census (60 statues, 16 NPCs, 8 squad, 2 guards). Statue parts 546 = 546; statue instances 726 -> 1,692. Workspace instances at boot 11,412 -> 12,378. World parts 5,151 = 5,151. LoadAsset calls at UPPER 54 -> 52, BOOT 16 -> 15 ids, capRefused 0.
 - **R-RIG-26 (build, docs)** docs/ASSET_LICENSES.md: rows for 187790284 and the four animations are added to §3.0. The three third-party character ids no config row uses any more (9104381136, 100212659702941; 16134469614 is now only `GateDefense.Guard`) have their "Used by" cells updated, and their rows stay. This is a reversible doc edit.
+## 2026-09-27 — The owner's second check (WE_CHECK2, live place v75), his P4 first check and his answers (call 12 = A): 2 picks not used, 7 held with named blockers, the recon plane and the APC promoted (wc3, on the vscale lane R2.1)
+
+All reversible. Tested in the headless stand-in only (models rebuilt from the owner's WE_CHECK2 lines, not Roblox). Owner
+page: docs/ASSET_WIRING.md §1, §4 (calls 2, 4, 12), §5 and §8. Evidence and scratch: wc3/ (parsed.json, brand/, runs/).
+
+- **AW-C1 Two variants; this is the vscale one.** It sits on the vscale lane (R2.1: `BodyScale` / `BodySeats`, seats kept
+  inside the kit) and promotes the recon plane and the APC. The records-only variant (HEAD 3b5ac28) keeps both on HOLD,
+  because without that lane the body is stretched to the kit's length and the kit seats stay where they are (the pilot
+  would sit on the plane, the APC driver on its roof).
+- **AW-C2 Fuel tanker 5318635087 and rescue / medevac heli 11357157285 are REJECT.** The second check names every part:
+  55 x "Part" (tanker); 49 x "Part" + 29 x "Wedge" (heli). OmitParts works by name, so no trim keeps 40 or fewer
+  parts and the body. `reject 5318635087 11357157285 --we-check` (the first check's lines) removed each PendingAssetId;
+  ModelAssetId stays 0. Loads do not change (a PendingAssetId is never loaded).
+- **AW-C3 The owner's answers are recorded, not assumed:** `OWNER_YES` in the tool (truck call 2, recon plane call 4, jet
+  "look OK" + call 12 = A). Promote takes them in place of `--owner-ok`; the status table stops asking. A yes does not
+  lift a HOLD.
+- **AW-C4 Jet 3553891209 held on its paint (owner decision: keep our jet, or pick another).** Its texture 3553780601 is
+  another artist's signed three-view drawing of a real aircraft concept, with the concept's name written on it (read from
+  Roblox's own thumbnail of the texture; evidence in the lane's scratch, wc3/brand). CLAUDE.md: no real-world vehicle
+  names, never copy other people's assets. The repo names neither the concept nor the artist. Call 12 = A no longer
+  blocks it. Reversible: delete its HOLD line and pin, then promote.
+- **AW-C5 Truck 8546141386 held, not usable as it is (owner decision: keep our truck, or pick another).** Its texture
+  7853120648 (Roblox's own 700 px thumbnail) is a photo-real atlas with stencilled military unit codes on both bumpers and
+  a shield emblem with an animal on the cab door: military markings, which CLAUDE.md keeps out, and a sign the paint was
+  lifted. Its mesh 7853120516 and that texture were uploaded by the user Karcist (Roblox asset details, 2021-10-28), not by
+  the seller LouBrawlerStars (model 2022-01-15), with no credit. Neither answer uses this model; it stays HOLD (not
+  REJECT) only until the owner answers, then `wire-asset-ids.py reject 8546141386`. The recon plane (20 plain
+  Parts, no mesh, no texture) and the APC (meshes 9076145980 / 9076154942 / 9076175497, uploaded by CorzCringe minutes
+  before the model) are the sellers' own work. The truck's cab-forward body would also put the driver behind the cab.
+- **AW-C6 Facing from the second check, not the store picture, where they differ.** Recon plane: propeller blade and ball
+  nose at -X, fin and tail plane at +X: Yaw -90 (as the hint). APC: white lights and the grey plate at -Z, red lights at
+  +Z: Yaw 0 (as the hint). Light helicopter 2474869838: its ThumbnailCamera puts the tail at +Z, so the nose is at -Z and
+  YAW_HINT becomes 0 (was 90). Gunboat: its gun is at +X and its radio mast at -X, so the bow may be +X (the hint says
+  -90): a look before any promote.
+- **AW-C7 Flatbed 8455894899 held (a longer kit).** ChildName "FlatBed Truck" plus 9 OmitParts names (FrontForceField,
+  VehicleSeatBack, ExhaustPipe, 4 brake lights, 2 headlights, 2 bumpers: 11 parts) keeps exactly 40 through the real
+  loader in the stand-in (KEPT 40; one name fewer: REFUSED 41). At full size its cab sits 7.8 studs ahead of the body
+  centre, past the 10.45-stud kit's nose, where R2.1 keeps no seat (BodySeatKitInset): the driver would sit behind the
+  cab. Its grille decal 58264306 (Roblox's "Car Grill2", Roblox R logo) goes with StripDecals.
+- **AW-C8 Gunboat 15838664806 held (scale floor).** The 2,048-stud part is MainHull, the boat itself (about 146x Roblox
+  size); leaving it out leaves no boat, and the fit clamps at x0.05 (still about 100 studs). Needs a code change first.
+- **AW-C9 Dock texture 319943163 is plain nailed wood** ("Wood_Nailed", no logo). The Dock stays recorded only.
+- **AW-C10 Batch P4 first check is on record (`STUDIO_DONE`): 1, 28, 1 and 14 parts; each held on the P4 second check.**
+  The press (28 parts, 3 smoke effects) cannot map onto the 3 kit parts a business dress may replace (model part i
+  replaces kit role i), so its part names decide: one ChildName piece, or new code. The machine gun (one 4.5-long part)
+  and the tank turret (one part, 3.6 x 13.6 x 5.4: probably modelled standing up) need their barrel direction. The
+  dropper needs its neon trim and pose, then the droppers lane. `wc3/owner/WeCheck2_P4.luau` is `tools/WeCheck2.luau`
+  with only the 4 P4 ids (stand-in fixtures: 23 checks, 0 FAIL); the repo copy is unchanged.
+- **AW-C11 Load budget (docs §8).** Recon plane + APC: 25 -> 27 healthy (cap 56), 8 -> 10 first loads after boot (reserve 24); census_fail:
+  LATER 49 -> 51 of 64 attempts, capRefused 0 (re-measured on 2f71347, wc3 r4). Everything still held promoted as well (P4 four, wall, jet, truck, heli,
+  gunboat, flatbed; the press set up as promote needs): tool 37 of 56 and 19 of 24; census_all 33 healthy; census_fail
+  BOOT 41, PLOT 46, LATER 58, capRefused 0 through LATER. With the tanker and the heli out, AW-W12's "free a slot before
+  the last batch" is no longer needed. Stand-in census and the tool's count, not measured in Roblox.
+- **AW-C12 Page counts from `status --json`:** waiting 49, not used 56 (3 registry rows moved: FuelTanker, RescueHeli,
+  MedevacHeli).
+- **AW-C13 BuyPathStatic:** the wc2 pins on the jet's call-12 HOLD line and the eight `"second check` HOLD lines are gone
+  (their texts changed); the wc3 block pins the new texts, the rejects, OWNER_YES, the P4 check and the docs, the promoted refs, the drawn-size fit, and the InfantryCarrier needle the promote tool wrote now matches the multi-line
+  ref. Every new pin fails on the base (vsbase: 41 of 41).
+- **AW-C14 Recon plane at Roblox size (BodyScale 1), pilot seat by eye.** 18 long with a 25.3 wing span; no seat in the
+  model, so DriverSeat = (-1, 1.2, 0), 1.4 behind the wing's trailing edge. The fuselage is a solid round Part (3.88
+  across, top 3.89 over the lowest point) with no cockpit opening, so the pilot sits sunk in it and only the top of the
+  head clears it: seated head top 4.9 (seat top + 3.7, VS-A5), 1.01 over the fuselage top (stand-in VSEAT: seat top
+  2.05, head top 5.75, fuselage top 4.74 in the world); the shoulders, about 1.3 under the head top, stay about 0.2-0.4
+  under it. Fix round 2: the owner's page said "head and shoulders show in the open cockpit"; it now says the top of
+  the head shows over the plane's body. (By the same arithmetic a seat at y 1.8 would put the shoulders about 0.3 over
+  it; not done: it needs a new seat dump and spawn check.) The model has no wheels: the kit's gear and wheels stay
+  visible (KeepVisible), and it stands on them 0.85 over the ground (stand-in).
+  Spawn (stand-in, wc3_pads_drawn, plots 1-6): the runway spot keeps the drawn body clear of every solid, and a second
+  plane spawns clear of the first. The vscale lane's own pads driver measures Size boxes, so a round Part reads as
+  sunk into the ground there (17.76, the fuselage length); that is the driver, not the game.
+- **AW-C15 Drawn-size fit (VisualAssetService `drawnSize`).** Roblox draws a Part Cylinder along X with diameter
+  min(Y, Z) and a Ball with diameter min(X, Y, Z); fitBodyToKit and placeKitOnBody (bottom, roof, half length / width)
+  use that box now. The plane's fuselage is a Cylinder 3.88 round in an 11.26-tall box: with Size the plane floated
+  about 3.7 studs. The kit-side measures (seat inset box, roof parts, label) are unchanged. The eight live Fit = Kit
+  vehicles (Roblox's four car packs, real store geometry from the vscale render cache: no uneven round Part) give
+  identical fit metrics and part dumps before and after (wc3/runs/live_*). Reversible: one helper, three call sites.
+- **AW-C16 APC at 0.55 of Roblox size, every seat under the real roof by eye.** At 1.0 it is 50 x 20 (about six kit
+  lengths); 0.55 gives 27.5 x 11 (antennas to 10.4), about the live Escort Truck's size (26.6 x 10.6). The hull is one
+  mesh with no seats. Its box top (12.43 unscaled, 6.84 at 0.55) is the commander's cupola, not the roof: in the owner's
+  WE_CHECK2 lines the cupola's blue band (P5) starts at 10.12, the antenna Cylinders (P11/P12) at 10.88 and the rear
+  door (P2) ends at 11.07, and Roblox's thumbnails show a flat roof with the band standing on it. The seats are set
+  against the lowest of these, 10.12 (5.57 at 0.55). Seats at x +-2.5, y 2.2, z -4 / 2 / 6 (unscaled): seat top 1.21,
+  seated head (seat top + 3.7, VS-A5) 4.91, 0.66 under that roof; a taller avatar (about 0.5 higher, VS-A5) still
+  clears it by 0.16; the feet (seat top - 1.0) end 0.21 over the ground, inside the closed hull (its lowest point is on
+  the ground). Fix round 1: the first cut (y 4.5) was measured against the box top and put every head 0.1-0.6 through
+  the roof. The real mesh is not in the stand-in: phone check. The four WheeledAPC variants share it. Its 4 small Neon
+  lights stay (whole-model loads keep materials; only pack pieces lose Neon); the hidden kit had 6, so drawn Neon per
+  APC goes 6 -> 4.
+- **AW-C17 The promote journal follows the multi-line refs.** docs/asset_wiring.json holds the text now in the config and
+  BuyPathStatic, so `demote 4954987035 9076240315` still reverts them (without this it refuses: "the promoted text
+  changed since"). A demote then fails only the six wc3 promote pins (ReconPlane + the five APC refs): drop them, and
+  put the HOLD lines back, in the same commit.
+- **AW-C18 The APC overhangs its 20 x 20 garage pad by 3.75** at each end (27.5 long), like the live Escort Truck (3.29).
+  Its body clears every solid on plots 1-6 and a second APC spawns clear of the first (stand-in, wc3_pads_drawn).
+- **AW-C19 Frame rate with 3 APCs needs 3 players.** VehicleService keeps one car out per player (a new spawn destroys
+  the old one), so the owner cannot park 3 alone. His page asks for it only if 2 friends own an APC-family car; otherwise
+  it stays a real-device check for the lead (3 clients on a mid-range Android or at Graphics Quality 3).
+- **AW-C20 Landed on the vscale lane as committed (R2.3, 2f71347), not R2.1 (wc3 r4, 2026-09-28).** The variant-vs patch
+  was 3-way merged onto 2f71347 (base: the tree it was built on); only ASSUMPTIONS.md conflicted (both appended). Main's
+  R2.3 vehicle work, the aircraft weapon rows and the town / business rows are unchanged. Re-checked with R2.3 in place
+  (headless stand-in, not Roblox): every body part and seat is identical to wc3 fix 2 (APC seated head 4.91, 0.66 under
+  the lowest roof evidence 5.57; plane head top 1.01 over the fuselage). Only the label moved: R2.3's BodyLabelMargin puts
+  the nameplate 3.38 over the APC's top (antenna tips included) and 2.41 over the plane's fin (fix 2: 1.0), with the HP
+  bar 1.5 over it. The APC family's drive point stays at x = 0: with Roblox's mass rules it is 0.06-0.09 off the centre of
+  mass with the driver alone (a yaw couple of 2-6 % at force saturation, 0-1 % braking), the Escort Truck's level and under
+  the Cargo Van's 20 % that R2.3 left as is, so `DriveAtComXFamilies` gets no WheeledAPC line. Exits: the multi-rider
+  driver (open ground, alley, walls, nose on a wall, a van alongside; together / 0.3 s / 2 s apart) moves all 651 riders
+  clear, with no overlaps, same as main. At the home pad every APC-family rider lands on clear ground; the driver of 3
+  of the 5 lands behind it, not on his own side, because earlier riders stand there (the R2.3 lane's known "own side"
+  class; main's Part-kit APCs show 4 of the same class). The recon plane is Air mode, where the game places no exit
+  (`Drive.ExitSpot.Modes = { Car = true }`), so getting out is Roblox's own jump-out, as with our plane kit on main; the
+  model is non-colliding: phone check. Load budget re-measured on 2f71347: tool 25 -> 27 healthy, 8 -> 10 after boot;
+  census_all 54 -> 56 attempts of 64, capRefused 0; census_fail LATER 49 -> 51, capRefused 0 (with every held pick also
+  promoted: 58, capRefused 0). The jet 3553891209 and the truck 8546141386 stay HOLD (owner decisions).

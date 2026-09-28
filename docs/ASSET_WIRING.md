@@ -12,9 +12,9 @@ lead's spec (assetwire, 2026-09-25).
 | What happened | Items |
 |---|---|
 | Wired now: Roblox's own models, no Get Model needed | 31 |
-| Your Get Model picks, waiting for the promote step | 52 |
+| Your Get Model picks, waiting for the promote step | 49 |
 | Kept our own build | 21 |
-| Not used (wrong item, real-world copy, too heavy …) | 53 |
+| Not used (wrong item, real-world copy, too heavy …) | 56 |
 | Needs new game code first | 48 |
 | Waits on a file another job is editing | 3 |
 | Soldiers and guards: need moving (animated) figures first | 9 |
@@ -62,6 +62,23 @@ it fails to load. One check per line:
 **Your model check (2026-09-25):** nothing new shows on screen. 12 of the 15 picks with more than 40 parts keep our
 build, the Dock pick is recorded only (docks stay our Part build), and every other pick still waits (section 5).
 - **Dock:** buy and upgrade the Dock at its kiosk. It still builds our Part dock, with no gap or floating piece.
+
+**Your second check (2026-09-27, live place version 75):** two of your picks go live: the Recon Plane at Roblox size,
+and the APC (with its 4 variants) at about half Roblox size, about as big as the Escort Truck. Each shows your model,
+or our Part build if it fails to load. One check per line:
+- Recon Plane (Airfield 1): an old wooden propeller plane, nose and propeller forward.
+- Sit in it: the top of your head shows over the plane's body, just behind the wing.
+- Parked, it stands on our small dark wheels (the model has none), about 1 stud off the runway.
+- Take off, fly and land: it flies nose first and never sideways.
+- APC (Vehicle Depot 3; also Infantry Carrier, Command Vehicle, Wheeled IFV, Amphibious APC): a green wedge APC,
+  white lights at the front.
+- Sit in the APC: you are hidden inside it. No head pokes through the roof, and no arm or foot shows through the
+  sides or under it.
+- A friend holds Ride and gets in; each of you jumps out and lands beside it.
+- Drive the APC through your own gate at full stick: the barrier opens in time.
+- Only if 2 friends own an APC, Infantry Carrier or Command Vehicle: each of you parks one by your garage, and the
+  frame rate feels the same. (One player can have only one car out at a time, so this needs 3 players.)
+- Fuel Tanker and Rescue / Medevac Heli: they look as before (those picks cannot be trimmed, section 5).
 
 ## 2. Wired now (31)
 
@@ -162,34 +179,34 @@ Owning a model only makes it loadable. Nothing below shows in the game until the
 |---|---|---|---|---|---|
 | Auto Gun | [114570602](https://create.roblox.com/store/asset/114570602) | Tripod Mounted Machine Gun | GuestCapone | yes | promoted in the hooks batch (its loader now refuses > 40 parts or a Humanoid; turned 90 degrees so the barrel leads) |
 
-**Business press, dropper and vehicle guns (hooks batch P4: each needs the Studio check; the code hooks are in)**
+**Business press, dropper and vehicle guns (hooks batch P4: your first check is done, 2026-09-27; each waits on the P4 second check)**
 
 | Item(s) | Id | Store name | Creator | Owned | Next step |
 |---|---|---|---|---|---|
-| Armor Plate Press | [4362642898](https://create.roblox.com/store/asset/4362642898) | Metal Factory (Press) | Ghosttony503 | yes | the Studio check (batch P4), then drop its see-through bounds box (OmitParts) and choose the kit parts it replaces |
-| Manual Dropper | [14408455045](https://create.roblox.com/store/asset/14408455045) | Tycoon Dropper | tinghang77 | yes | the Studio check (batch P4) |
-| Vehicle MG | [5589684833](https://create.roblox.com/store/asset/5589684833) | Mounted Machine Gun | ifyouaremethaniamyou | yes | the Studio check (batch P4) |
-| Vehicle Cannon | [3322196012](https://create.roblox.com/store/asset/3322196012) | Tank Turret | Nierse217 | yes | the Studio check (batch P4) |
+| Armor Plate Press | [4362642898](https://create.roblox.com/store/asset/4362642898) | Metal Factory (Press) | Ghosttony503 | yes | your check: 28 parts, 3 smoke effects. 28 parts cannot take over the 3 kit parts a press may replace, so the P4 second check names its parts: one piece of it, or new code |
+| Manual Dropper | [14408455045](https://create.roblox.com/store/asset/14408455045) | Tycoon Dropper | tinghang77 | yes | your check: 14 parts. The P4 second check shows its glowing trim and how it stands; then it goes in after the dropper job |
+| Vehicle MG | [5589684833](https://create.roblox.com/store/asset/5589684833) | Mounted Machine Gun | ifyouaremethaniamyou | yes | your check: 1 part, 4.5 long. The P4 second check shows which end is the barrel |
+| Vehicle Cannon | [3322196012](https://create.roblox.com/store/asset/3322196012) | Tank Turret | Nierse217 | yes | your check: 1 part, 13.6 tall and 3.6 wide. The P4 second check shows which way the barrel points |
 
 **Vehicles (your check is done; the model is dress only, our kit still drives)**
 
 | Item(s) | Id | Store name | Creator | Owned | Next step |
 |---|---|---|---|---|---|
-| Armored Truck, Supply Truck, Ammo Carrier, Troop Transport, Recovery Truck, Anti Air Truck | [8546141386](https://create.roblox.com/store/asset/8546141386) | Military Truck | LouBrawlerStars | yes | passed your check (1 part); your yes/no (call 2) + the second check |
-| Fuel Tanker | [5318635087](https://create.roblox.com/store/asset/5318635087) | fuel truck | asp307 | yes | 55 parts (over 40): the second check (section 5) shows if small parts can go |
-| Flatbed Hauler | [8455894899](https://create.roblox.com/store/asset/8455894899) | FlatBed Truck | YourBoi_JonnyBoi | yes | 53 parts (over 40): the second check (section 5) shows if small parts can go |
+| Armored Truck, Supply Truck, Ammo Carrier, Troop Transport, Recovery Truck, Anti Air Truck | [8546141386](https://create.roblox.com/store/asset/8546141386) | Military Truck | LouBrawlerStars | yes | your yes is on record (call 2); held, not usable as it is: its paint carries military unit markings, and its shape and paint were uploaded by another user (Karcist), not by the seller. Keep our truck, or pick another? (section 5) |
+| Fuel Tanker | [5318635087](https://create.roblox.com/store/asset/5318635087) | fuel truck | asp307 | yes | not used: 55 parts, every one named "Part", so none can be left out by name (second check) |
+| Flatbed Hauler | [8455894899](https://create.roblox.com/store/asset/8455894899) | FlatBed Truck | YourBoi_JonnyBoi | yes | 11 small parts can go (40 left), but its cab would sit ahead of our kit's nose: waits on a longer kit |
 | Radar Truck | [31538715](https://create.roblox.com/store/asset/31538715) | RMAR truck radar | Armour_Fox | yes | not used: 93 parts in your check (over 40) |
-| APC, Infantry Carrier, Command Vehicle, Wheeled IFV, Amphibious APC | [9076240315](https://create.roblox.com/store/asset/9076240315) | APC | CorzCringe | yes | passed your check (12 parts); the second check + a driver-seat code fix |
+| APC, Infantry Carrier, Command Vehicle, Wheeled IFV, Amphibious APC | [9076240315](https://create.roblox.com/store/asset/9076240315) | APC | CorzCringe | yes | promoted 2026-09-27: front at -Z, 0.55 of Roblox size, seats inside the hull (section 1) |
 | Combat IFV, Assault IFV, Flame Carrier | [11552687660](https://create.roblox.com/store/asset/11552687660) | Fiction IFV | spookstiy | yes | not used: 321 parts in your check (over 40) |
 | Missile Truck, Rocket Artillery | [3304171953](https://create.roblox.com/store/asset/3304171953) | missile truck | KlassicKanadian | yes | not used: 219 parts in your check (over 40) |
 | SPAAG, Mobile SAM [WEAK] | [10069416832](https://create.roblox.com/store/asset/10069416832) | anti aircraft Tank | XCX1001 | yes | not used: 301 parts in your check (over 40) |
-| Light Scout Heli, Utility Heli | [2474869838](https://create.roblox.com/store/asset/2474869838) | Low poly helicopter | Azarth | yes | passed your check (1 part); the second check: which way the nose points |
+| Light Scout Heli, Utility Heli | [2474869838](https://create.roblox.com/store/asset/2474869838) | Low poly helicopter | Azarth | yes | second check: nose at -Z (from its thumbnail camera, not 90 degrees); one mesh with no seats, so a look first |
 | Transport Heli, Heavy Lift Heli, Light Transport Heli | [2627182035](https://create.roblox.com/store/asset/2627182035) | transport helicopter | blokkere | yes | not used: 109 parts in your check (over 40) |
-| Rescue Heli, Medevac Heli | [11357157285](https://create.roblox.com/store/asset/11357157285) (your 11357398877 is the same model; one load for both) | Rescue Helicopter | KiboSprite | yes | 78 parts (over 40): the second check (section 5) shows if a smaller part of it fits |
-| Fighter Jet, Interceptor Jet, Trainer Jet, Light Fighter | [3553891209](https://create.roblox.com/store/asset/3553891209) | Fighter Jet concept | PlanesFun56 | yes | passed your check (25 parts); waits on your call 12 (section 4) |
-| Recon Plane | [4954987035](https://create.roblox.com/store/asset/4954987035) | Old propeller plane | Deadex40_Extra | yes | passed your check (20 parts); your yes/no (call 4) + the second check |
+| Rescue Heli, Medevac Heli | [11357157285](https://create.roblox.com/store/asset/11357157285) (your 11357398877 is the same model; one load for both) | Rescue Helicopter | KiboSprite | yes | not used: 78 parts, named only "Part" and "Wedge", so no trim keeps the body (second check) |
+| Fighter Jet, Interceptor Jet, Trainer Jet, Light Fighter | [3553891209](https://create.roblox.com/store/asset/3553891209) | Fighter Jet concept | PlanesFun56 | yes | your yes is on record (call 12 = A); held: its paint is another artist's signed drawing of a real aircraft concept. Keep our jet, or pick another? (section 5) |
+| Recon Plane | [4954987035](https://create.roblox.com/store/asset/4954987035) | Old propeller plane | Deadex40_Extra | yes | promoted 2026-09-27 (your yes, call 4): nose at -X (Yaw -90), Roblox size (section 1) |
 | Patrol Boat, Fast Attack Craft, Coast Cutter, Torpedo Boat | [5177695483](https://create.roblox.com/store/asset/5177695483) | Patrol Boat | pirateparty1234 | yes | not used: 114 parts in your check (over 40) |
-| Gunboat, Missile Boat, Mine Layer, Coastal Monitor | [15838664806](https://create.roblox.com/store/asset/15838664806) | Basic Gunboat | Confused Giants Studio (group) | yes | passed your check (3 parts, but 2,048 studs long); the second check + a scale code fix |
+| Gunboat, Missile Boat, Mine Layer, Coastal Monitor | [15838664806](https://create.roblox.com/store/asset/15838664806) | Basic Gunboat | Confused Giants Studio (group) | yes | second check: the 2,048-stud part is the hull itself (MainHull); the game cannot shrink it that far yet (a code change) |
 | Hover Transport | [43773162](https://create.roblox.com/store/asset/43773162) | HoverCraft | Fractality | yes | not used: 211 parts in your check (over 40) |
 | Supply Ship | [11756438288](https://create.roblox.com/store/asset/11756438288) | Cargo Ship | Yorsiur | yes | not used: 174 parts in your check (over 40) |
 
@@ -201,8 +218,11 @@ Reply with the number and yes or no. Nothing below changes the game until you an
 
 1. Roblox's own Auto Rifle and Rocket Launcher have AK-style and RPG-style shapes (unnamed Roblox models). They are wired now because you listed them; say no and they go back to our kit guns (one-line change).
 2. Military Truck 8546141386 for 6 trucks (Armored, Supply, Ammo, Troop, Recovery, Anti-Air): it reads like a US M35-style 6x6 and is more realistic than the rest of the world. Yes or no?
+   **Answered 2026-09-27: yes.** Held, not usable as it is: its paint carries military unit markings, and its shape
+   and paint were uploaded by another user (Karcist), not by the store seller (section 5). Keep our truck, or pick another?
 3. ~~Transport helicopter 2627182035 for the transport helis: a two-rotor layout like a CH-47. Yes or no?~~ No longer needed: your check found 109 parts (over 40), so it is not used.
 4. Recon Plane 4954987035 looks like a wooden toy plane (our kit may look better). Yes or no?
+   **Answered 2026-09-27: yes.** Promoted (section 1).
 5. Command Center 43803492 was made for another Roblox game ("Conquerors") and is plainer than our building. Yes or no? (It only shows if buildings ever use store models.)
 6. Weapons Facility 11850705638 says it is "crim inspired" and has a glowing "ARMORY 1" sign. Yes or no? (same note as 5)
 7. ~~Hangar 5343886540: its store description was removed by Roblox moderation. Yes or no? (same note as 5)~~ No longer needed: your check found 871 parts (over 40), so it is not used.
@@ -237,6 +257,8 @@ Reply with the number and yes or no. Nothing below changes the game until you an
       - We would prove it on a separate test place (the setting, the save, the loader change) before the live one.
     - **Our recommendation: A.** Switch to **B** only if `WE_LIVE` ever shows a `FAIL` on a live server, and only after
       the bake is proven on a test place. Reply A or B.
+    - **Answered 2026-09-27: A** (keep loading by id). The fighter jet no longer waits on this call, and your "jet look
+      OK" is on record; it now waits on your decision about its paint (section 5).
 
 ## 5. Studio check (for you or Grok)
 
@@ -251,7 +273,7 @@ model faces.
 - **Batch P2 (walls and buildings):** 52154909, 4005471827, 5343886540, 6980242709, 8333853928, 13183571527
 - **Batch P3 (vehicles):** 31538715, 43773162, 2474869838, 2627182035, 3304171953, 3553891209, 4954987035, 5177695483, 5318635087, 8455894899, 8546141386, 9076240315, 10069416832, 11357157285, 11552687660, 11756438288, 15838664806
 
-**Done for batches P2 and P3, 2026-09-25: thank you.** (Batch P4 is still to check.) You ran it through Open Cloud Luau
+**Done for batches P2 and P3, 2026-09-25: thank you.** (Batch P4: done 2026-09-27, 4 of 4 loaded, all at 28 parts or fewer.) You ran it through Open Cloud Luau
 Execution in the live place (version 75) as your own account, and all 24 models loaded. What it showed:
 - **15 have more than 40 parts. These 12 are not used** (section 6.1): 52154909, 4005471827, 5343886540, 8333853928,
   31538715, 43773162, 2627182035, 3304171953, 5177695483, 10069416832, 11552687660, 11756438288. Those items keep our
@@ -281,9 +303,46 @@ Execution in the live place (version 75) as your own account, and all 24 models 
    (Open Cloud Luau Execution on the live place). It looks at the 11 models above that still wait, deletes its copies
    and changes nothing in the game. Send back every line that starts with `WE_CHECK2` (the last one says `DONE`).
 
+**Second check done, 2026-09-27: thank you** (Open Cloud, live place version 75, 11 of 11 loaded; `tools/parse_we_check2.py
+--strict`: 0 problems). What it showed (the stand-in notes come from models rebuilt from your lines, not from Roblox):
+- **Recon plane 4954987035: promoted.** Nose at -X (its propeller and ball nose; fin and tail plane at +X), so Yaw -90.
+  Its fuselage is a round Part 3.88 across in a box 11.26 tall: our loader fitted the box, which would have floated the
+  plane about 3.7 studs; it now fits what Roblox draws (a small VisualAssetService change, only round Parts are affected).
+- **APC 9076240315: promoted.** Front at -Z (white lights, grey plate), Yaw 0. One hull mesh with no seats, so the seats
+  are placed by eye inside it. The hull's box top is its cupola; the flat roof is lower, where the cupola's blue band
+  starts (10.12 of 12.43). At 0.55 of Roblox size a seated head is 0.66 under that roof and the feet stay inside the
+  hull (your phone check).
+- **Fighter jet 3553891209: held, your decision.** Its paint (texture 3553780601) is another artist's signed three-view
+  drawing of a real aircraft concept, with the concept's name on it. Our rules keep real-world names and other people's
+  artwork out. Keep our jet, or pick another?
+- **Military truck 8546141386: held, not usable as it is.** Its paint (texture 7853120648, from Roblox's own picture of
+  it) carries stencilled military unit codes on both bumpers and a shield emblem with an animal on the cab door; our rules
+  keep military markings out. Its shape (mesh 7853120516) and paint were uploaded by the user Karcist; the seller
+  LouBrawlerStars republished them without credit. Its long cab-forward body would also put the driver behind the cab.
+  Keep our truck, or pick another?
+- **Light helicopter 2474869838: a look first.** Its thumbnail camera, which the check reported, shows the skids along Z
+  with the tail at +Z: the nose is at -Z (Yaw 0), not 90. It is one mesh with no seats, so the cabin seats would be
+  placed by eye.
+- **Flatbed 8455894899: trim found, held.** Leaving out FrontForceField, VehicleSeatBack, ExhaustPipe, the four brake
+  lights, the two headlights and both bumpers keeps 40 parts (checked with our loader on the rebuilt model). But at
+  full size its cab sits 7.8 studs ahead of the body centre, past our 10.45-stud kit's nose, where the car-size job keeps
+  no seat, so the driver would sit behind the cab. The grille decal (58264306, Roblox's "Car Grill2") shows the
+  Roblox R logo and is dropped with the other decals.
+- **Fuel tanker 5318635087 and rescue heli 11357157285: not used.** Every part is named "Part" (tanker) or "Part" /
+  "Wedge" (heli), so no part can be left out by name without losing the body.
+- **Gunboat 15838664806: held.** The 2,048-stud part is MainHull, the boat itself (the whole model is built about 146x
+  Roblox size); leaving it out leaves no boat. Our fit cannot shrink below x0.05 yet (a code change). Its gun sits at +X
+  and its radio mast at -X, so the bow may be +X, not -X as the store picture suggested: a look first.
+- **Walls 6980242709: held** (three MilitaryWall1 pieces along Z, 20 parts): still waits on the wall-fit fix.
+- **Dock 13183571527:** its texture 319943163 is a plain nailed-wood image ("Wood_Nailed"), no logo. Still recorded only.
+
+**P4 second check (next):** the lead sends you `WeCheck2_P4.luau`, a copy of `tools/WeCheck2.luau` with only the 4 P4
+ids. Run it the same way and send back every `WE_CHECK2` line. It names the press's parts (its see-through box), and
+shows which way the two guns point and the dropper's glowing trim.
+
 ## 6. Not wired, and why
 
-### 6.1 Not used (53)
+### 6.1 Not used (56)
 
 You own several of these now; owning them does nothing until an id is wired, and these never will be.
 
@@ -342,6 +401,9 @@ You own several of these now; owning them does nothing until an id is wired, and
 | Torpedo Boat | 5177695483 | 114 parts in your check (over 40), and only 7 studs long |
 | Hover Transport | 43773162 | 211 parts in your check (over 40) |
 | Supply Ship | 11756438288 | 174 parts in your check (over 40) |
+| Fuel Tanker | 5318635087 | 55 parts in your check (over 40); all named "Part", so none can be left out |
+| Rescue Heli | 11357157285 | 78 parts in your check (over 40); only "Part" and "Wedge" names, no trim keeps the body |
+| Medevac Heli | 11357157285 | the same model as the Rescue Heli (78 parts) |
 
 ### 6.2 Kept our own build (21)
 
@@ -504,6 +566,14 @@ leave the census one attempt spare. Any batch that takes the after-boot count pa
 tool may admit up to 3 more late loads than the census holds, ASSUMPTIONS AW-L4). Guns, the gate gun and the grenade
 and rocket meshes do not count against the 64.
 
+**After the second check (wc3, 2026-09-27).** The recon plane and the APC add 2 models (25 → 27 on a healthy server, 8 → 10
+first asked after boot in an outage). In the headless census a full outage now uses 51 of the 64 attempts by the end of
+the LATER phase (49 before), none refused. The fuel tanker and the rescue heli are out (2 models fewer), so with every pick that still
+waits promoted (the recon plane and the APC, the four P4 models, the wall, the jet, truck, heli, gunboat and flatbed) the
+tool counts 37 of 56 and 19 of the 24 after-boot loads, and the census of that copy uses 58 of the 64 attempts in a full
+outage by the end of LATER, none refused (33 models on a healthy server). Every batch left fits; nothing has to be freed
+first. (Headless census and the tool's count, not measured in Roblox.)
+
 ## 9. For the lead: the promote tool
 
 `tools/wire-asset-ids.py` (Python 3, standard library only). It never runs git and never edits StructureVisualConfig
@@ -566,6 +636,10 @@ python3 tools/wire-asset-ids.py render [--check]       # the status table at the
   gate); delete its line in the same commit as its promote. `YAW_HINT` is each held vehicle's yaw read from its store
   picture (jet 90, light helicopters 90, APC 0, truck 180, recon plane -90, gunboat -90): promote uses it when `--yaw`
   is not given, because the automatic size rule gets 4 of these 6 wrong. The second check can correct it (`--yaw`).
+  After the second check (wc3, 2026-09-27): the light helicopters are 0 (their ThumbnailCamera), `STUDIO_DONE` also
+  holds the P4 first check (2026-09-27), `OWNER_YES` records the owner's yes to the truck, the recon plane and the jet
+  (promote takes it in place of `--owner-ok`), and `HOLD` names the new blockers: the jet's paint and the truck's paint
+  and provenance (owner decisions), the flatbed's cab past the kit nose, the gunboat's scale floor, the P4 second check, and nothing for the recon plane and the APC (promoted).
 - **The walls pick 6980242709** passed the check but stays on `HOLD`: `StructureKitBuilder` (walls level 3+) is its only
   caller, and `VisualAssetService.weldScaledBuilding` scales the Z-long model into the X-long 24 x 8 x 3 wall footprint
   and then re-pivots it to the wall centre (`weldCloneToPrimary` without `keepPlace`), so it sits inside the wall. The
@@ -585,9 +659,9 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 |---|---|---|---|---|---|
 | Ammo Works | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Ammo Works belt (takes the kit belt's place) |
 | Arms Crate Line | wired (Roblox-owned) | 41324890 | – | Roblox (no Get) | Roblox Conveyor Belt as the Arms Crate Line belt (same load as Ammo Works) |
-| Armor Plate Press | owner pick, waits for promote | 0 | 4362642898 | yes | Studio check + OmitParts, batch P4 |
+| Armor Plate Press | owner pick, waits for promote | 0 | 4362642898 | yes | check passed (28 parts); OmitParts + the P4 second check (part names: its bounds box, and one piece for the Signature role; 28 parts > 3 roles), batch P4 |
 | Rocket Assembly | wired (Roblox-owned) | 31603741 | – | Roblox (no Get) | Roblox Rocket as the rocket body, Fire + Smoke removed |
-| Manual Dropper | owner pick, waits for promote | 0 | 14408455045 | yes | Studio check, batch P4 |
+| Manual Dropper | owner pick, waits for promote | 0 | 14408455045 | yes | check passed (14 parts); the P4 second check (neon parts, upright pose) + the droppers lane (v1b reads its WE_CatalogProp), batch P4 |
 | Plot Oil Pump | owner pick, waits for promote | 15192621369 | – | yes | promoted (live) |
 | Oil Rig | kept our build | – | – | yes | [WEAK]; likely over 40 parts; our oil-rig kit is the gameplay platform |
 | Money Collector | owner pick, waits for promote | 18220523228 | – | yes | promoted (live) |
@@ -653,23 +727,23 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Escort Truck | wired (Roblox-owned) | 6418225759 | – | Roblox (no Get) | Roblox pickup body |
 | Cargo Van | wired (Roblox-owned) | 6433316269 | – | Roblox (no Get) | Roblox van body |
 | Premium Razorfang | waits on another job's file | – | – | Roblox (no Get) | VehicleConfig + VehicleService (streaming2-build): premium vehicle def |
-| Armored Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your yes/no + second check (which end is the cab), batch P3 |
-| Supply Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your yes/no + second check (which end is the cab), batch P3 |
-| Ammo Carrier | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your yes/no + second check (which end is the cab), batch P3 |
-| Troop Transport | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your yes/no + second check (which end is the cab), batch P3 |
-| Recovery Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your yes/no + second check (which end is the cab), batch P3 |
-| Anti Air Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your yes/no + second check (which end is the cab), batch P3 |
-| Fuel Tanker | owner pick, waits for promote | 0 | 5318635087 | yes | check: 55 parts (over 40); second check (which small parts can go), batch P3 |
+| Armored Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Supply Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Ammo Carrier | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Troop Transport | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Recovery Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Anti Air Truck | owner pick, waits for promote | 0 | 8546141386 | yes | check passed (1 part); your decision (keep our truck, or pick another): its paint (texture 7853120648) carries stencilled military unit markings and a shield emblem; mesh 7853120516 and paint uploaded by another user (Karcist), not the seller, batch P3 |
+| Fuel Tanker | rejected | 0 | – | yes | owner check (Open Cloud, v75): 55 parts (cap 40); second check: all 55 are named "Part"… |
 | Engineering Truck | rejected | – | – | yes | cannot be checked: the only picture shows the inside of a block |
-| Flatbed Hauler | owner pick, waits for promote | 0 | 8455894899 | yes | check: 53 parts (over 40); second check (which small parts can go), batch P3 |
+| Flatbed Hauler | owner pick, waits for promote | 0 | 8455894899 | yes | check: 53 parts (over 40); a longer kit: trim known (ChildName 'FlatBed Truck', 9 OmitParts names = 40 parts) but its cab sits past the kit's nose, batch P3 |
 | Radar Truck | rejected | 0 | – | yes | owner check (Open Cloud, v75): 93 parts (cap 40) |
 | Mine Clearer | rejected | – | – | yes | wrong item (a wheel loader) and unclear origin |
 | Premium Bastion | waits on another job's file | – | – | yes | VehicleConfig + VehicleService (streaming2-build): premium vehicle def |
-| APC | owner pick, waits for promote | 0 | 9076240315 | yes | check passed (12 parts); second check + a driver-seat code fix, batch P3 |
-| Infantry Carrier | owner pick, waits for promote | 0 | 9076240315 | yes | check passed (12 parts); second check + a driver-seat code fix, batch P3 |
-| Command Vehicle | owner pick, waits for promote | 0 | 9076240315 | yes | check passed (12 parts); second check + a driver-seat code fix, batch P3 |
-| Wheeled IFV | owner pick, waits for promote | 0 | 9076240315 | yes | check passed (12 parts); second check + a driver-seat code fix, batch P3 |
-| Amphibious APC | owner pick, waits for promote | 0 | 9076240315 | yes | check passed (12 parts); second check + a driver-seat code fix, batch P3 |
+| APC | owner pick, waits for promote | 9076240315 | – | yes | promoted (live) |
+| Infantry Carrier | owner pick, waits for promote | 9076240315 | – | yes | promoted (live) |
+| Command Vehicle | owner pick, waits for promote | 9076240315 | – | yes | promoted (live) |
+| Wheeled IFV | owner pick, waits for promote | 9076240315 | – | yes | promoted (live) |
+| Amphibious APC | owner pick, waits for promote | 9076240315 | – | yes | promoted (live) |
 | Combat IFV | rejected | 0 | – | yes | owner check (Open Cloud, v75): 321 parts (cap 40) |
 | Assault IFV | rejected | 0 | – | yes | owner check (Open Cloud, v75): 321 parts (cap 40) |
 | Flame Carrier | rejected | 0 | – | yes | owner check (Open Cloud, v75): 321 parts (cap 40) |
@@ -690,8 +764,8 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Mobile Artillery | kept our build | – | – | yes | [WEAK]; a crude block gun, worse than our kit |
 | Howitzer Truck | kept our build | – | – | yes | [WEAK]; a crude block gun, worse than our kit |
 | Siege Mortar | kept our build | – | – | yes | [WEAK]; a crude block gun, worse than our kit |
-| Light Scout Heli | owner pick, waits for promote | 0 | 2474869838 | yes | check passed (1 part); second check (which way the nose points), batch P3 |
-| Utility Heli | owner pick, waits for promote | 0 | 2474869838 | yes | check passed (1 part); second check (which way the nose points), batch P3 |
+| Light Scout Heli | owner pick, waits for promote | 0 | 2474869838 | yes | check passed (1 part); a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera), batch P3 |
+| Utility Heli | owner pick, waits for promote | 0 | 2474869838 | yes | check passed (1 part); a look first: its one mesh has no seats (the cabin seats are placed by eye); nose at -Z (yaw 0, from its ThumbnailCamera), batch P3 |
 | Transport Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
 | Heavy Lift Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
 | Light Transport Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 109 parts (cap 40) |
@@ -700,28 +774,28 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Escort Heli | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Night Attack Heli | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
 | Premium Stormwing | rejected | – | – | yes | copy of a game-franchise gunship (Half-Life 2) |
-| Rescue Heli | owner pick, waits for promote | 0 | 11357157285 | yes | check: 78 parts (over 40); second check (a smaller part of it), batch P3 |
-| Medevac Heli | owner pick, waits for promote | 0 | 11357157285 | yes | check: 78 parts (over 40); second check (a smaller part of it), batch P3 |
+| Rescue Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); second check: only "Part" (49) and "W… |
+| Medevac Heli | rejected | 0 | – | yes | owner check (Open Cloud, v75): 78 parts (cap 40); same model as the Rescue Heli pick 11… |
 | VTOL Transport | rejected | – | – | yes | the uploader does not claim it ('Unknown Vtol'); looks ripped |
 | Cargo Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | AWACS Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | Tanker Plane | rejected | – | – | yes | 47 parts (over 40) and a real cargo-plane look |
 | Strike Jet | rejected | – | – | yes | copy of a real jet (F-16) |
 | CAS Jet | rejected | – | – | yes | copy of a real jet (F-16) |
-| Fighter Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your call 12 (load by id, or bake after each publish), batch P3 |
-| Interceptor Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your call 12 (load by id, or bake after each publish), batch P3 |
-| Trainer Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your call 12 (load by id, or bake after each publish), batch P3 |
-| Light Fighter | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your call 12 (load by id, or bake after each publish), batch P3 |
+| Fighter Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
+| Interceptor Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
+| Trainer Jet | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
+| Light Fighter | owner pick, waits for promote | 0 | 3553891209 | yes | check passed (25 parts); your decision (keep our jet, or pick another): its paint (texture 3553780601) is another artist's signed three-view drawing of a real aircraft concept, batch P3 |
 | Strike Bomber | rejected | – | – | yes | national-style roundel on the wing; made by someone else |
-| Recon Plane | owner pick, waits for promote | 0 | 4954987035 | yes | check passed (20 parts); your yes/no + second check (which end is the nose), batch P3 |
+| Recon Plane | owner pick, waits for promote | 4954987035 | – | yes | promoted (live) |
 | Patrol Boat | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
 | Fast Attack Craft | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
 | Coast Cutter | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
 | Torpedo Boat | rejected | 0 | – | yes | owner check (Open Cloud, v75): 114 parts (cap 40), and only 7 studs long |
-| Gunboat | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); second check (the 2,048-stud part) + a scale code fix, batch P3 |
-| Missile Boat | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); second check (the 2,048-stud part) + a scale code fix, batch P3 |
-| Mine Layer | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); second check (the 2,048-stud part) + a scale code fix, batch P3 |
-| Coastal Monitor | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); second check (the 2,048-stud part) + a scale code fix, batch P3 |
+| Gunboat | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
+| Missile Boat | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
+| Mine Layer | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
+| Coastal Monitor | owner pick, waits for promote | 0 | 15838664806 | yes | check passed (3 parts); the fit scale floor: MainHull (the boat itself) is 2,048 studs, about 146x Roblox size; the fit stops at x0.05, batch P3 |
 | Landing Craft | rejected | – | – | yes | wrong item: a space lander |
 | Assault Landing | rejected | – | – | yes | wrong item: a space lander |
 | Amphib Assault | rejected | – | – | yes | wrong item: a space lander |
@@ -756,8 +830,8 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Grenade | wired (Roblox-owned) | 232379763 (WeaponConfig) | – | Roblox (no Get) | Roblox grenade mesh in flight |
 | Cruise Missile | wired (Roblox-owned) | 94690081 (WeaponConfig) | – | Roblox (no Get) | Roblox rocket mesh in flight (the rocket-launcher round) |
 | Auto Gun | owner pick, waits for promote | 114570602 | – | yes | promoted (live) |
-| Vehicle MG | owner pick, waits for promote | 0 | 5589684833 | yes | Studio check, batch P4 |
-| Vehicle Cannon | owner pick, waits for promote | 0 | 3322196012 | yes | Studio check, batch P4 |
+| Vehicle MG | owner pick, waits for promote | 0 | 5589684833 | yes | check passed (1 part); the P4 second check (which end is the barrel) + a FitScale look on the Roblox-size 4x4, batch P4 |
+| Vehicle Cannon | owner pick, waits for promote | 0 | 3322196012 | yes | check passed (1 part); the P4 second check (which way the barrel points; a gun's Yaw is set by hand), batch P4 |
 | Rocket Pods | kept our build | – | – | yes | [WEAK]; the asset is a whole car; our kit is the pod |
 | Nuke | needs new code first | – | – | yes | needs a nuke-strike effect module (none exists) |
 | Crate Stack | wired (Roblox-owned) | 6933790012 | – | Roblox (no Get) | Synty wooden crates (already live) |
