@@ -1,3 +1,37 @@
+# v90 — 2026-09-28 ~22:30 Madrid (Code Bot, branch phase-7-polish, WE_Build 90, place version 86)
+
+**Claude: do not redo these. Shipped from `handoff/wip/` plus the owner's answers to the questions below.**
+- **01 army despawn fix**: merged onto HEAD behind the new `ArmyConfig.Rollout.Fix = "owner"`. Only shaunie6's squads use the fix
+  (Follow / Recover / Gate-open blocks via `SquadOrdersService._FixLive`, `reformRootless(uid)`, and the GateDefense gate-open
+  `LiveFor("Fix")`). For him it replaces v85 FollowPace (`_PaceBegin` returns false); everyone else keeps v85 / 4d26673.
+  NOT done: Claude's r1 re-measure (GATECAMP, UNDER, hall with guards down, T3), because it needs the stand-in/phone. Go-live for everyone: `Rollout.Fix = "all"`.
+- **05 harbour** (the dock boat and building as a Part kit): live for everyone, kill switch `DockKitConfig.Enabled = false`. Visual only, 0 new assets.
+- **06 floating faces**: live for everyone (client-only visual). Switches: `Escort.Camera.GuardHz = 0` / `LeadScreenFrac = 0`.
+- **08 air fix-2** (rotor `Under` scope, chase-zoom span, rotor joint not counted as a pin): live. No current ref uses `Under` yet.
+- **Owner answers:**
+  - **Jets:** StrikeJet, CASJet and StealthStrike (plus the StealthStrikeJet ref) now wear jet 14589101870 with the pilot inside,
+    using the FighterJet layout. They stay owner-only (`Rollout = "Body"`), like the v88 bodies they replace. The v88 tables
+    `BODY_STRIKE_JET` / `BODY_STEALTH_STRIKE` are kept, unused, so reverting is one line.
+  - **Jet colours:** each jet has its own colour on its grey panels only (`BodyColorParts = JET_PAINT_PARTS`). The black trim
+    and the glass canopy keep the approved look.
+    Palette (RGB):
+    - FighterJet: air-superiority grey (118,126,136)
+    - InterceptorJet: navy blue-grey (64,82,108)
+    - TrainerJet: desert sand (184,162,118)
+    - LightFighter: olive drab (96,104,66)
+    - StrikeJet: dark green (62,82,60)
+    - CASJet: earth brown (126,100,72)
+    - StealthStrike (and the StealthStrikeJet alias ref): charcoal (46,48,54)
+    The colours on the four original jets show for everyone. The three new jet keys are owner-only.
+  - **Runway:** 170 x 24 → 190 x 29. It can't be longer: the plot edge is at X -160 and the HeliApron at X 34.
+  - **Hangar:** 58 x 34 → 68 x 40 (+17 %). The site moves to Z -125 and the shell scales by Width/58.
+  - **Bridge Layer:** wades through water like the Amphibious APC (0.4 x speed). Server-authoritative,
+    owner-only (`VehicleConfig.Drive.WaterRule.AmphibiousRollout = { BridgeLayer = "owner" }`).
+- **Left in `handoff/wip/`** (the README rows give the status): 02 capture, 03 lane B, 04 lane A, 07, 09-12 VKIT. Lane C was not started.
+- **Pins:** `tools/checks/codebot_v90.py`, plus Claude's lane pins moved to `codebot_v90_airfix2.py`, `codebot_v90_harbor.py` and `codebot_v90_faces.py`.
+
+---
+
 # WHERE I STOPPED — 2026-09-28 ~19:40 UTC (branch claude/war-empire-phase-7-toqwff)
 
 **What I was doing:** shipping the army despawn fix (fix round r1), plus review rounds for the capture, harbor and faces fixes, and building the Part-made vehicle bodies (VKIT). The owner asked me to stop, so all workflows are stopped and nothing is scheduled.
@@ -8,19 +42,19 @@
 - `4e07fc2`: the owner's jet on the four jet keys, pilot inside, Ride on the Trainer.
 
 **Left (all saved as patches in `handoff/wip/`; not built, not live; the table in `handoff/wip/README.md` gives each base and status):**
-1. Army despawn fix: finish r1, re-measure, gates, review, ship (`01`).
-2. Plaza capture fix (`02`), then army lane B checkpoints (`03`, rebase after 02).
-3. Army lane A, guard and follow (`04`): finish tests and rebase onto the shipped `01`. Lane C (ATTACK marches to checkpoints) is not started.
-4. Harbor boat and dock (`05`), faces (`06`) and air fix-2 (`08`): each is waiting for its review round.
-5. VKIT vehicle bodies (`09`–`12`): ground fix-2 and naval deliverables are half-done. ground2 records (`07`) wait on VKIT ground.
-6. Water Lows: land spot behind walls, rider teleport prefetch, hover above 160 studs, shallow reverse.
-7. Owner questions:
-   - Should the Strike, CAS and Stealth jets get his jet?
-   - Is the jet's look OK?
-   - Should each jet get its own colour?
-   - Should the runway and hangar be bigger?
-   - Should the Bridge Layer be amphibious?
-   - He needs to pick a new helicopter model: the uploader made every part, 35 parts or fewer.
+1. ~~Army despawn fix (`01`)~~: **shipped in v90, owner-only (`Rollout.Fix`)**. Still open: the r1 re-measure on a device/stand-in.
+2. Plaza capture fix (`02`), then army lane B checkpoints (`03`, rebase after 02). **Still open** (not shipped in v90).
+3. Army lane A, guard and follow (`04`): finish tests and rebase onto the shipped `01`. **Still open.** Lane C (ATTACK marches to checkpoints) is not started.
+4. ~~Harbor boat and dock (`05`), faces (`06`) and air fix-2 (`08`)~~: **shipped in v90** (their review rounds were done by Code Bot while merging).
+5. VKIT vehicle bodies (`09`–`12`): ground fix-2 and naval deliverables are half-done. ground2 records (`07`) wait on VKIT ground. **Still open.**
+6. Water Lows: land spot behind walls, rider teleport prefetch, hover above 160 studs, shallow reverse. **Still open.**
+7. Owner questions (**answered by the owner 2026-09-28; all done in v90 except the helicopter**):
+   - Should the Strike, CAS and Stealth jets get his jet? **Yes**: they now use 14589101870 with the pilot inside (v90, owner-only like v88).
+   - Is the jet's look OK? **Yes, approved**: kept.
+   - Should each jet get its own colour? **Yes**: one military colour per jet key (v90; palette in the v90 note).
+   - Should the runway and hangar be bigger? **Yes, slightly (15-25 %)**: runway 190 x 29, hangar 68 x 40 (v90).
+   - Should the Bridge Layer be amphibious? **Yes, it should cross water**: it wades, owner-only, server-authoritative (v90).
+   - New helicopter model (the uploader made every part, 35 parts or fewer)? **Yes, wanted. The owner is handling the search himself: do NOT search.** Wire it once he sends the id.
 
 **Files:** `handoff/wip/*.patch` (12 lanes, plus 03b/04b base patches), `handoff/wip/README.md` and `handoff/wip/notes/` (phone tests, owner texts, assumptions and the army design spec).
 **Owner phone test right now:** nothing new. `src/` is unchanged since 4e07fc2.

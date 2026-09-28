@@ -7883,3 +7883,613 @@ round-2 texts (never merged). Numbers in brackets are from the headless stand-in
   seat and only the owner may drive, so round 1's "let your friend get in" could not work. Step 3 now keeps the owner
   seated while a friend walks round and sends a screenshot; the Trainer step uses the new Ride prompt and has the owner
   walk round his seated friend.
+
+# v90 (Code Bot, 2026-09-28): assumptions of the WIP lanes shipped in v90 (appended from handoff/wip/notes/<lane>/assumptions.md)
+
+## v90 lane 01-army-fix-ship
+
+## Army despawn fix (lane FIX, merged onto 4d26673 = lane A0; ship lane army/build/fix_ship)
+
+- **ARMY-FIX-1: Pace, lead and catch-up (round 1 retune).**
+  - **Pace:** in FOLLOW a unit walks at the owner's flat speed, never below `OrdersConfig.UnitWalkSpeed` (14).
+  - **Lead:** the goal is the owner's slot moved by his velocity x 0.4 s, at most `Follow.Lead.MaxStuds` 4 (round 0: 12). No lead above 40 studs/s (teleport, respawn, fast vehicle), and none on a think at under half the speed of the think before (he is stopping).
+  - **Run:** a unit runs 1.5 x the owner's pace (max 28) only when its goal is more than `StartStuds` 6 PLUS the lead distance away, with a walkable line. The lead alone never starts a run, so a unit in its slot walks at his pace. A unit whose line is blocked never runs, and the escort leash walk-back never runs.
+  - **Why:** round 0 (lead 12, run beyond 6) made in-slot units stop and start about 5 times a second at 24-28 studs/s. Measured on the stand-in open walk: stopped 0.8-1.1 % of ticks, 0.06-0.09 stop/move toggles per unit per second (round 0: 24 %, 4.7).
+  - **Stop:** when the owner stops (or slows hard, not near a hostile), a unit whose goal is at most `MaxStuds + StopHoldStuds` (6) behind it along his facing, within 1.5 s of his last walking think, stands facing his way until he moves again. It does not turn back toward the camera, so the escort figures do not hide: 0 escort hides after the stop at owner speeds 14, 16, 18.4 and 20 (round 0: 12 at 14 and 16).
+  - **Reversible:** `Follow.CatchUp.Enabled`, `Follow.Lead.Enabled` (false = e506c9c pacing).
+
+- **ARMY-FIX-2: "Far" is 80 studs for 4 s** (spec: 150 / 5). RigAnimator stops drawing escorts beyond 100 studs, so 80 recovers a unit before it leaves the drawn range. No recover while the owner is seated above 20 studs/s. Reversible: `Recover.FollowFarStuds` / `FollowFarSeconds`.
+
+- **ARMY-FIX-3: "Stuck"** = under 2 studs of progress toward its goal in 4 s, goal more than 4 studs away, more than 25 studs from the owner. FOLLOW only. With no walkable trail point a unit keeps the last one it had (`Follow.KeepTrailPoint`), which fixes the Barracks doorway stranding. No PathfindingService here; lane A inserts its path request before the stuck recover.
+
+- **ARMY-FIX-4: Where a recovered unit lands (round 1).**
+  - **Order:** its slot if 24+ behind or out of sight; up to `MaxTrailTries` 4 trail points 24-60 studs back and not ahead; 24 behind; back-right; back-left; the same three at `NearBehindStuds` 14 (a walled yard or street); then left and right. At most 14 tries.
+  - **Apart:** every spot but the slot is moved by the unit's own slot offset (0.7 x its side offset, plus its slot depth further back). A spot within 3 studs of another landing of the same army in the last 2 s, or of one of its standing units, is skipped. No two units land on one spot.
+  - **In view:** a left or right spot the owner's head can see waits (up to 10 s) for a spot behind him (`SideNeedsCover`).
+  - **Clear:** ground under it (a 12-stud down ray, not water), outside every plot but his own, and both the body probe and one ray at root height reach it from his root. The root-height ray stops recovers passing under a closed gate barrier. While the owner stands inside his own plot, a spot outside it (beyond his own wall or gate) is never used.
+  - **Budget:** at most 4 searches (not only moves) per owner per second. A search that finds no clear spot looks again after `MissRetrySeconds` 2 (a found spot: `CooldownSeconds` 8).
+  - **Jump regroup:** a jump on foot (he appears more than `FollowPath.ResetJump` 40 studs from where he last had a root: a teleport, a respawn at his plot, a fall rescue) opens the same 10 s regroup window as the end of a fast drive, so units more than 150 studs away come back at once instead of after the 4 s far wait. Stand-in: respawn settle 3.2 s, teleports 1.5 / 1.3 s.
+
+- **ARMY-FIX-5: Plots, water and other players (round 1).**
+  - **Plot trigger:** a unit is moved out of another player's plot only when it is more than 30 studs from the owner, has stood in that plot for 4 s, and the owner has been out of it for 4 s. A squad at the owner's side at another plot's edge or gate is left alone (round 0 looped every 8 s).
+  - **Unchanged:** never land within 25 studs of another player (wait up to 10 s), never into another plot or water, and no recover while the owner is on water.
+
+- **ARMY-FIX-6: Vehicles and owner death.** A fast drive (above 20) that ends (a stop or getting out) opens a 10 s regroup for units more than 150 away. While the owner is dead, units hold where they stand; after respawn the far rule brings them back.
+
+- **ARMY-FIX-7: The friendly gate opens for the owner's own units only while they follow him through it (round 1).**
+  - **Rule:** units count only when:
+    - the squad order is Follow;
+    - the owner is alive and within `Gate.OwnerNearStuds` 40 of the gate;
+    - units alone (no owner or ally player at the gate) have kept it open for at most `Gate.UnitHoldSeconds` 8 in a row. After that it stays shut while they stand there, until a player opens it or they leave.
+  - **Why this cap and not "8 s after the last player":** after a respawn the owner is home and his army walks back to a closed gate with no player at it; the in-a-row cap lets them in, then shuts.
+  - **Never:** Hold, Attack or Retreat units, a dead owner, or an owner who walked away.
+  - **Why:** in round 0, units on Hold at the gate held the barrier open for raiders.
+  - **Wiring:** `SquadOrdersService.AnyUnitNear`, called from `updateFriendlyGate`. `GateUnitSince` is new on the plot's defense record.
+  - **Reversible:** `Gate.OwnUnitsOpen = false`.
+  - **Ship:** a unit holds the gate only until it has crossed to his side (ARMY-FIX-25).
+
+- **ARMY-FIX-8: A rootless ghost is re-formed.** A unit whose root left its model without dying (fell out of the world) is re-formed through SyncArmy's existing not-living cull. Its id changes; this is the only case. Round 1: only while the owner is alive with ground under him (one down ray), at most 8 per owner per minute. Reversible: `Recover.ReformRootless`.
+
+- **ARMY-FIX-9: e506c9c pacing near a hostile, only inside the escort's own engage range (ship: ThreatStuds 55).**
+  - **Rule:** while a hostile the escort would pick (not calm, one this army may hit) is within `Follow.ThreatStuds` 55 of the owner (= `CombatFairnessConfig.EscortEngageRadius`), FOLLOW units use e506c9c pacing (no lead, UnitWalkSpeed). It is found in the same one NPC scan as the escort pick (lane A0's `escortPickLive` for a live owner, `nearestHostile` for everyone else); the escort target and its list are unchanged.
+  - **Owner (`Follow.ThreatStandingFor = "owner"`):** only while he stands. Everyone else: while he stands or walks toward it (`ThreatApproachOnly`).
+  - **Why 55 and not 130 (fix round 2):** 130 slowed the army to 14 on every approach to a camp, a checkpoint or the bank, so it fell behind the phone camera. Stand-in, default mode, a walk up to the Ridge camp at 16 / 18.4 / 20: no soldier on the phone camera in 0/16, 0/14, 0/13 walking seconds (130: 3/16; HEAD 4d26673: 15/16, 13/14, 13/13). BuyPathStatic pins ThreatStuds in [30, 55] and at most the engage radius.
+  - **Reversible:** `ThreatStuds = 0` turns it off; 130 is the fix round-2 value.
+- **ARMY-FIX-10: The not-living cull and the trim are pinned whole**, so a distance condition cannot be slipped into them. `queueReform` is called only for a rootless unit. `SyncArmy` is called only from SetOrder, ApplyResearch, Init hooks, the Died handler and queueReform.
+
+- **ARMY-FIX-11: The recover probe forgets a player who left.** On PlayerRemoving it drops its references to his Player, character and vehicle.
+
+- **ARMY-FIX-12: Counting on the phone.** The owner sees about 20 figures (8 server units + 12 client escorts, RigConfig MaxPerArmy), not 8. The escort figures show only within about 90 studs. The phone test counts figures against a number taken at the start.
+
+- **ARMY-FIX-13: The owner-only lanes change what the owner sees later.** `Rollout.Army` / `Rollout.March` are "owner" in ArmyConfig, but no code reads them in this build (lanes A and C are not merged). When lane A lands, his own army guards outside his gate (spec §3.1); its merged texts say so. This lane's phone_test and owner_text describe only what this build does.
+- **ARMY-FIX-14: The stand-in is not Roblox.** Its raycast registers a hit when a ray starts inside a part, it has no unit-to-unit collision, and it has no terrain. "Never lands in a wall" and "no pile-up" need the phone test (steps 6-7).
+
+- **ARMY-FIX-15: The standing-only pacing stays owner-only, with lane A0's escort (`Follow.ThreatStandingFor = "owner"`), measured on the merged tree.**
+  - **Values:** "off" | "owner" | "all". "owner" = `AdminConfig.IsPlaytestOwner` (UserId 470626172), the same gate as `Rollout.Escort`. `ArmyConfig.ThreatStandingFor(userId)` evaluates it.
+  - **Owner mode, final merged tree, stand-in (99-approach bank sweep: stand 40-55 studs from the guards, 11 approach variants each):** "owner" all 5 guards down in 91/99 (HEAD 4d26673: 91/99, the same approaches), guard shots at the standing owner 2004 (HEAD 2338); Town walk at 16 / 18.4 / 20: no soldier on the phone camera in 1/126, 2/110, 4/101 walking seconds. "off" (the approach rule for him too, measured before the gate crossing rule and the pace smoothing): 91/99, 2109 shots, 3/126, 3/110, 5/101. "owner" is at least as good on both, so it ships.
+  - **BANKSTAND (owner mode):** at 50 studs 125 unit hits, 0 guards left, 13 guard shots at him (HEAD 125 / 0 / 31); at 72 studs 100 / 1 left / 12 shots (HEAD 100 / 1 / 15).
+  - **Everyone else (standing-only for all, "all", measured too):** 75/99 at the bank against 79/99 for the approach rule, so non-owners keep the approach rule (ARMY-FIX-23).
+  - **Keep equal:** keep `ThreatStandingFor` equal to `Rollout.Escort`. When A0 goes "all", set this to "all" and re-run the bank sweep.
+  - **Reversible:** "off" = the approach rule for everyone; "all" = the standing rule for everyone.
+- **ARMY-FIX-16: The friendly gate's 8 s unit hold re-arms only after the units were away 3 s (`Gate.UnitRearmSeconds`).**
+  - Units shuffling across the 12-stud circle while the owner idles near the gate never re-open it again and again.
+  - Normal use is unchanged: GATE 8/8 out and 8/8 back in at 16 and 20.
+
+- **ARMY-FIX-17: One army's error never stops every army.**
+  - The think loop pcalls `updateOwnerMotion` and each `thinkUnit`.
+  - A caught error is warned at most once per owner per `Loop.ErrorLogSeconds` 30, and the loop goes on.
+  - Behaviour without errors is unchanged.
+
+- **ARMY-FIX-18: Config first, one kill switch.**
+  - `Recover.Enabled = false` now also turns off the rootless re-form (`ReformRootless`).
+  - The landing ring, the WE_Water re-read period, the re-form delay and the re-form window moved into `ArmyConfig.Recover` (`LandRing` 8, `WaterRereadSeconds` 10, `ReformDelaySeconds` 1, `ReformWindowSeconds` 60). The values are unchanged.
+
+- **ARMY-FIX-19: A unit held after the owner stopped keeps standing with no walkable-line probe.**
+  - Its slot is still just behind it, so it needs no rays per think while he stands.
+  - Without this, a walk-then-stand cost 13.9 rays per pass (2.3x e506c9c at BANKSTAND72). With it, the worst scenario is 1.10x.
+
+- **ARMY-FIX-20: The owner texts describe the merged build.**
+  - Lane A0 is live for the owner in the same build: his soldiers shoot back at NPCs that shoot at him within 90 studs, and he sees their shots (tracers). The texts say so and never promise it "in a later part".
+  - Step 3 counts figures honestly: 8 soldiers on the server plus up to 12 escort figures his phone draws near them (about 20), compared with the count at the start.
+  - The gate step walks about 25 steps past the gate: the owner himself opens his gate within `RaidConfig.Defense.GateOpenRadius` 12, so standing 10 steps inside keeps it open by design.
+  - No key names and no "click" in any text.
+- **ARMY-FIX-21: While the owner walks, escort units keep the formation (`Follow.EscortWalkInFormation`, `Follow.EscortWalkLeash` 10).**
+  - **Rule:** in FOLLOW, with the owner on foot at 1+ studs/s, an escort unit takes its shot first (as before), then walks with the formation: beyond `EscortWalkLeash` 10 studs of him it goes back to its led slot or his trail (followMove, catch-up run allowed); inside it, it keeps his pace toward its target on his line to it, at most 9 studs out. No stand-to-fight, no side-step walk and no side-step probe (rays) while he walks. While he stands, the escort is exactly lane A0's / e506c9c's.
+  - **Why:** the reviewers' bank-hall gap. The escort leash (20, A0 defend 28) is longer than the ~12.5-stud phone camera distance, so units that stopped to shoot trailed behind the camera for about 10 s in the hall (owner mode 10/126 zero-figure walking seconds, all in the hall). Leash 10 < 12.5.
+  - **Measured (stand-in, final merged tree):** owner mode Town walk 1/126, 2/110, 4/101 (HEAD 4d26673: 121/126 at 16); bank-hall legs 7-9: 1/6, 0/5, 1/5 seconds, at the vault turnaround with the units off to the side of the camera, not behind it (reviewer's fix-lane rerun: 10 hall seconds at 16); the bank sweep unchanged for him (91/99 = HEAD).
+  - **Reversible:** `EscortWalkInFormation = false` (e506c9c / A0 escort walk); `EscortWalkLeash = 0` (formation only).
+- **ARMY-FIX-22: Merge with lane A0 (4d26673).**
+  - A0's `escortPickLive` does the ThreatStuds scan with the same filters (the ThreatStuds nearest hostile, then A0's defend / engage picks inside DefendRadius).
+  - A0's side-step early return resets the despawn fix's follow state (`followSpeed(st, unit, 0, false)`; `unit.Goal = nil`), so a side-stepping unit never runs at the catch-up pace and its stuck window starts over.
+  - The one GetTagged is A0's `hostileScan` (one NPC list per pass).
+  - A0's own BuyPathStatic pin on escortUnit is updated for the two merged lines (`and not walkForm`; the side-step reset); nothing else in A0's pins changed.
+  - A recover spot within `Recover.MinMoveStuds` 4 of where the unit already stands is no move (no PivotTo onto itself); the stuck window starts over.
+  - `Recover.LandApartSeconds` 2 -> 2.5: on the stand-in a respawn regroup landed a unit 2.3 studs from another landing exactly 2.0 s (5 thinks) later; the half-think margin keeps "no two landings within 3 studs within 2 s" true.
+- **ARMY-FIX-23: Non-owner players: the phone view wins over the old bank luck.**
+  - **Rule for them:** ThreatStuds 55, the approach rule, the walking formation (21). No defend-when-targeted (A0 stays owner-only).
+  - **Measured (stand-in, default mode, final merged tree):** Town walk 2/126, 4/110, 5/101 zero-figure walking seconds (<= 10 %; fix round 2: 14/126, 12/110, 13/101; HEAD 4d26673: 121/126 at 16); Ridge camp approach 0/16, 0/14, 0/13 (HEAD 15/16, 13/14, 13/13).
+  - **Price:** bank stand 40-55 studs (final merged tree), all 5 guards down in 79/99 approaches against HEAD's 87/99: 9 approaches lost at the 52-stud stop (1/11 vs 10/11), where one guard stays at its post 61 studs away, outside the 55-stud escort range, and 1 won at 40 studs (10/11 vs 9/11). Guard shots at the standing player go down (1883 vs 2169). HEAD's kills there came from units trailing behind the camera that drew the guards off their posts.
+  - **Tried and not shipped:** ThreatStuds 130 (47/99), 60 (60/99), standing-only for all (75/99), no walking formation while engaged (46/99).
+  - **Fix for them:** lane A0's escort (`Rollout.Escort = "all"`), which gives the owner 91/99.
+- **ARMY-FIX-24: The ship lane's numbers come from the headless stand-in, not Roblox.** The owner's phone test (phone_test.md) is the real check: the bank hall walk, the gate, stopping in the open.
+- **ARMY-FIX-25: The gate crossing rule (`Gate.CrossingRule`, `Gate.CrossClearStuds` 3).**
+  - **Rule:** a FOLLOW unit near the gate holds it open only until it is more than 3 studs past the barrier on the owner's side. Units that are through never keep it open behind him. GateDefenseService passes the barrier's facing (`GateCf.LookVector`); without it the ARMY-FIX-7 rule applies unchanged.
+  - **Why:** the FIX round-3 reviewers' GATETAIL: the owner walks home and stops 16 studs inside; his units stood by the gate on his side and kept it open 9.6 s after he passed, so a raider tailing him 35, 50 or 70 studs behind walked in (4d26673: shut 1.4 s after him, raider kept out).
+  - **Measured (stand-in, owner and default mode):** the barrier was last open 1.6 s after he passed; a raider 35 / 50 / 70 studs behind was kept out (4d26673 the same). A raider 20 studs behind gets in on 4d26673 too (the owner's own 12-stud opening radius). GATE out 8/8 and back in 8/8 at 16 and 20; GATEFIDGET (owner 18-30 studs inside for 72 s): barrier open 0.0 s; HOLDGATE / GATEX / GATEHOLD / RETREATGATE: barrier open 0 s with his units there, raiders kept out.
+  - **Reversible:** `CrossingRule = false` (the ARMY-FIX-7 rule).
+- **ARMY-FIX-26: The follow pace is smoothed and stepped (`Follow.CatchUp.PaceSmooth` 0.4, `PaceStep` 1, `PaceJumpStuds` 3).**
+  - **Rule:** each 0.4 s pass the pace is his flat speed smoothed with weight 0.4. A change bigger than 3 studs/s (a start, a stop, a sprint) passes at once, and below 1 stud/s it drops at once. Units' WalkSpeed changes only when that pace has moved 1 stud/s or more.
+  - **Why:** every Humanoid.WalkSpeed write replicates to every client. The reviewers' OPENJIT: 0.4 studs of position jitter on a client-owned character rewrote WalkSpeed 19.6-20 times a second per army. Smoothing without the jump rule lagged behind a real start and made catch-up runs (open ground at 20: 92 of 145 on-camera unit-samples above the walk animation's speed; with it 7 of 163).
+  - **Measured (stand-in):** OPENJIT 1.9 WalkSpeed writes per second per army at 16 and 3.5 at 20. 4d26673 writes none: its units always walk at 14 and fall behind.
+  - **Reversible:** `PaceSmooth = 1` and `PaceStep = 0` (the raw pace every pass).
+- **ARMY-FIX-27: Known Lows, not fixed in this lane.**
+  - **SLIDE:** a catch-up run goes up to 1.5x his pace (at most 28), faster than the walk animation's natural 20.4 (14.5 x 1.4). Stand-in, units on the phone camera while he walks, unit-samples above 20.4: Town walk 24/441, 20/449, 33/429 at 16 / 18.4 / 20 (owner mode; default mode 18/497, 23/470, 29/389), open ground at 20: 7/163. 4d26673 shows 0 because its units are off the camera. The fix is a run animation or a speed cap in the client animator (RigAnimator), which this lane does not touch. Phone step 4 checks for sliding feet.
+  - **DRIVESLOW:** at town speed (30 studs/s) one unit-tick fell inside the moving car's body box (the stand-in has no unit-to-car collision). 4d26673: 0, because its units were 94 studs behind. Phone step 5 checks it.
+  - **Non-owner bank:** ARMY-FIX-23.
+
+## v90 lane 05-harbor
+
+# fb4 HARBOR: assumptions (all reversible)
+
+For ASSUMPTIONS.md. Owner request, 2026-09-28: "The default boat in the dock looks terrible, make it look like a real
+boat" and "The building beside the dock same thing should look like a legit dock building".
+Fix round 1 changes are marked (R1), fix round 2 changes (R2), fix round 3 changes (R3).
+
+## H1. "The default boat" and "the building beside the dock" are the Dock structure's Part kit
+- These are the 5-block parked boat and the grey shed/pier in `StructureKitBuilder` kit `"dock"` (v35/v37).
+- Every plot builds the same kit at the Dock site (78, -112), Yaw 90. I checked all 6 plots, L0 to L5.
+- The boats a player takes out to drive (VehicleService naval kits and their catalog bodies) are not changed by this
+  lane. They are separate work. (R2) The VKIT NAVAL lane may change them in the same release, so the owner texts no
+  longer say they "look the same as before".
+- Revert: set `DockKitConfig.Enabled = false`. The old v35/v37 kit code is still there, unchanged, below the new branch.
+  (R1) This rollback now passes BuyPathStatic as it is: the pin accepts `Enabled = true` or `Enabled = false`
+  (R2: mutant M8 shows PASS 4328 / FAIL 0 with `false`). Deleting the line or setting it to anything else fails the pin.
+
+## H2. Own Part kit, not a store model or mesh
+- (R1, reworded to what was actually searched)
+  - Creator Store search, creator Roblox (User 1) only: the earlier harvest (`ownervis/assets_work/search_roblox.json`,
+    Model + MeshPart, 2 pages each) already covered warehouse, dock, harbor, cargo, shipping container, container,
+    crate, tower and bridge. It found no Roblox-made harbour building, crane or container.
+  - This lane added 17 more keywords (boat, ship, yacht, speedboat, patrol boat, tugboat, ferry, pier, harbour, port,
+    marina, boathouse, crane, lighthouse, dock, harbor, warehouse), Model + MeshPart, first 100 results each
+    (`work/research/roblox_harbour_search_r1.json`). The only Roblox-made boat is 50504 "Boat for Sale", a 62-triangle
+    sign prop with a decal. "port" only returns portal templates.
+  - Of the 113 live-pack pieces documented in the earlier harvest (`facts.json`: City, Dungeon, Nature and Goblin camp
+    packs), none is a boat, pier, crane or warehouse. The only harbour-like pieces are Dungeon-pack crates.
+- The owner's earlier gunboat pick, Basic Gunboat 15838664806, was not tried. The wc3 check found its MainHull (the
+  boat itself) is 2,048 studs, about 146 times Roblox size, and the vehicle body fit clamps at x0.05. Using it needs a
+  per-model scale floor in VisualAssetService, which belongs to the vehicle lanes. It would also hang a catalog mesh
+  on a structure kit (PreferMesh stays OFF for structure kits) and add a load attempt. The wc3 decision was HOLD; it
+  stays HOLD. (R2) owner_text now tells the owner that his pick stays on hold and why.
+- So the kit is plain Parts: 0 new asset ids and 0 new load attempts.
+- (R2) Option (c), other creators' free store boats, was not researched. Each would need full provenance checks
+  (creator, scripts, texture text, insignia, owner ownership) and a new load attempt; the Part kit was chosen instead.
+- Nothing in it names or copies a real vessel, brand or navy. The boat has no numbers, flags or insignia.
+
+## H3. New kit role "Styled"
+- Each piece keeps its own colour, material, size and position.
+- `BaseService.applyKitVisuals` only shows a piece from its `WE_MinLevel`, and gives it collision (`WE_Collide` =
+  CanCollide + CanQuery) and `WE_Shadow`.
+- Each piece is built once, hidden, with the kit. A purchase creates and destroys nothing.
+- All writes are compare-first, so a purchase changes only that level's parts. Measured (R1):
+  - L0 to L1: 56 changes. After that: 16, 13, 7, 6.
+  - The target is 60 or fewer.
+- (R1) All four compare-first writes (Transparency, CanCollide, CanQuery, CastShadow) are now pinned inside the Styled
+  branch. Deleting any one of them fails BuyPathStatic (mutants M12, M17, M18, M19).
+- The old roles (Body, Roof, Detail, Pier and the rest) behave exactly as before.
+- (R2) Unchanged by round 2 (same pieces, only heights moved): 56 / 16 / 13 / 7 / 6 on the candidate against 33 / 16 /
+  16 / 16 / 17 on main; idle re-sync 0 on both.
+- (R3) 57 / 16 / 13 / 7 / 6 (the L1 step shows one more part, the split bulwark, H19); main 33 / 16 / 16 / 16 / 17; idle
+  re-sync 0 on both.
+- (R3) Transparency is a float32 property, so the Styled branch now compares it with a tolerance
+  (`math.abs(child.Transparency - tr) > 1e-3`). Today every piece is 0 or 1, so nothing changes; a future 0.3 piece is no
+  longer rewritten on every sync. The pin requires the tolerance form (mutant M51 fails).
+
+## H4. The quay shows at L0
+- The quay is a paved apron from the Dock gate lane to the basin kerb, with 4 bollards and an edge line.
+- Like the basin and its kerb, it counts as base infrastructure, so an unbought Dock already has a walkable quay.
+- It is 1 colliding part, top 0.4 studs above the pad, ending at the kerb.
+- Everything else shows from L1 (warehouse and boat) up to L5.
+- Revert: set `MinLevel = 1` on those 6 rows.
+
+## H5. The moored boat and the warehouse are solid
+- The warehouse, roof, hull, wheelhouse, gangway, crane pedestal, tower, containers and launch hull have collision and
+  can be queried.
+- The gangway is solid, so a player should be able to walk up it onto the boat's aft deck. This needs a device check;
+  the stand-in does not simulate walking.
+- A driven boat's land probe treats the moored hull like the kerb, as land. Driven boats spawn at kit z 34 or more
+  (R1: checked on all 6 plots, 150/150 naval spawns clear by at least 1 stud, lane to the sea gate clear).
+- Every colliding piece stays at kit z 33.5 or less. (R1) No piece of any kind (decor included) reaches past kit z
+  33.5 any more, and a pin checks it.
+- Decor pieces (rails, lines, lamps, windows) have CanCollide, CanQuery and CanTouch off.
+- (R3) Because the moored hull is land to a driven boat's shore probe, a boat driven at it slows and stops about its
+  half length + 3 studs short, as at the quay edge; it never touches it. Phone step 7 now says so (it said "bump it").
+- (R3) The warehouse, roof, gables, crane pedestal, tower and containers are solid and queryable, so the normal Roblox
+  camera moves in close when one of them comes between the camera and the avatar (the Town lane made the same choice).
+  Phone step 5 now says so (it said the camera "should not jump").
+- (R3) UpgradePadService's pad re-harden sweep no longer switches these pieces' CanQuery off (H17).
+
+## H6. Hidden hosts kept for EnsureKit
+- `EnsureKit` needs a `Body` (largest side 8 studs or more) and a `WE_DressHost*` child on the Dock, or it rebuilds the
+  kit every pass.
+- The kit keeps a Body (a concrete core at the warehouse footprint) and a hidden `WE_DressHost_ParkedBoat`.
+- (R1, comment corrected) From L1 the Body sits inside the warehouse block, so it is hidden. At L0, before the
+  warehouse shows, it is the Dock's usual translucent footprint ghost, like every unbought structure's Body. Main's
+  v35 dock shows a 24 x 1.4 x 16 ghost at L0 too.
+- The host has no `WE_DressVehicle`, so no catalog boat is ever hung on it. `census_all` attempts are unchanged (54).
+
+## H7. The warehouse chimney is named "Roof"
+- `BaseService` hangs every structure's L5 smoke plume (`WE_MaxSmoke`) on the kit child named `Roof`. The old dock had one.
+- The harbour's only `Roof` is a small brick chimney (MinLevel 5, decor), so the Dock keeps its L5 smoke like main does.
+- A BuyPathStatic pin guards this.
+
+## H8. A released plot's kit stays as main leaves it
+- Nothing changes in plot release or rejoin logic.
+- A rejoin rebuild (`NuclearRehydrateKits`) re-creates the Dock kit along with every structure, as it does on main.
+  (R1) That is 406 creates plus destroys for the whole plot, against 280 on main. It is not a purchase.
+  (R3) 408 with the split bulwark.
+- A saved Dock jumping from L0 to L5 in one sync is 90 changes (main 34). It is not a purchase either. (R3) 91.
+
+## H9. Materials: real Enum.Material names only
+- An earlier draft used `Enum.Material.CorrugatedPlate`, which does not exist. The headless stand-in accepted it; Roblox
+  would error when the config is required. luau-lsp caught it.
+- All such pieces now use `Metal`.
+- A BuyPathStatic rule fails any piece material that is not a real Enum.Material name. (R1) The list now holds every
+  real name, Neon included, so a Neon piece is reported once, by the no-Neon rule, and not also as "unknown".
+
+## H10. Part budget
+- (R1) +63 parts per base at L5: 87 kit parts against the old 24. That is 2,547 → 2,610 on all 6 plots, under the
+  2,700 hard cap (90 parts of headroom) but above the 2,000 target.
+- (R3) +64 per base: 88 kit parts (86 pieces + the hidden Body and boat host); the split bulwark (H19) is the extra part.
+  Census on all 6 plots, L1 to L5: 1,643 / 1,815 / 2,290 / 2,519 / 2,611 (main 1,579 / 1,751 / 2,226 / 2,455 / 2,547).
+  Headroom to the 2,700 cap at L5: 89.
+- Lights, Neon, SurfaceGuis and billboards are unchanged: no light, no Neon, no GUI and no text in the kit.
+- If the phone-performance pass needs the parts back, these decor pieces can go first with no gameplay effect
+  (13 parts):
+  - lamp posts and heads (4)
+  - mooring lines (2)
+  - bow rails (2)
+  - fenders (3)
+  - boat stem and rubbing strake (2)
+- The integrator should re-run `census_all` on the merged tree: other lanes also add parts per base.
+
+## H11. (R1) The crane stands at the sea-gate end of the quay
+- Round 0 hung the crane's jib, cable and hook over the open basin (kit z 37.5, hook 8 studs up), where driven boats
+  sail through them (decor, so no collision, but visible clipping).
+- The crane now stands at kit x 22 (was 18). Its jib is luffed up over the launch's berth: tip at kit z 29.4, 20.6
+  studs up; the hook hangs 15.4 studs up. Nothing is past kit z 33.5.
+- Moving it to x 22 also freed the quay lane in front of the warehouse, so a car called there fits again (H13).
+- Two pins guard this: no piece of any kind past kit z 33.5, and the crane's hanging parts over water stay 14+ studs up.
+
+## H12. (R1) Boat side profile
+- From side-on the round-0 hull read as a flat box. Two decor parts were added:
+  - a black raked forefoot wedge under the bow overhang (the black waterline band sweeps up toward the bow)
+  - a black rubbing strake round the hull just under the deck edge (a sheer line along the flat side and stern)
+- The bow rails now rise 0.35 studs toward the bow (no new parts).
+- The L1 level-up shows 46 parts (56 changes), still under the 60 target. (R3) 47 parts, 57 changes.
+
+## H13. (R1) Land vehicles called at the quay
+- The owner at home never gets a car at the quay: the garage flow uses the base's vehicle pad (12/12 on main and on
+  the candidate).
+- A visitor from another base who calls a car while standing on the quay uses VehicleService's "in front of the
+  player" path. On all 6 plots, 4 facings, jeep and truck (48 calls): every car lands on dry ground, clear of every
+  dock solid, on both trees.
+- The new buildings take quay space, so fewer of those calls land at the dock: 36 of 48 on the candidate, 42 of 48 on
+  main. The 6 that differ are the truck facing the sea-gate end: the crane pedestal (L2) and the control tower (L3)
+  leave no truck-sized spot there, so VehicleService puts the truck on the nearest vehicle pad, as it always does when
+  no spot in front of the player is free. The jeep in the same spot still lands at the quay. VehicleService is not
+  changed.
+- The driver now also covers the case where a jeep facing the warehouse landed, on main, where the warehouse now
+  stands. On the candidate it lands beside the warehouse's gable end instead.
+- (R3) Kept as is (re-measured: 36 of 48 on the candidate, 42 of 48 on main, every car on dry ground and clear of every
+  dock solid). Freeing a truck-sized spot at the sea-gate end would mean moving the crane or the tower back into the
+  quay lane in front of the warehouse, which round 1 cleared on purpose. It only affects visitors calling a truck there;
+  the owner's own calls always use his vehicle pad.
+
+## H14. (R2) Low props rest on what is under them
+- Round 1 set the height of every low prop as if it stood on the quay (top +0.4). Six props stand landward of the quay
+  (kit z < 4), on the bare pad, so they floated 0.4 studs up: the lower cargo crate, both fuel drums, both ground
+  containers and the gable-end warehouse door (reviewer finding). The stacked crate and the stacked container sat on
+  the lower ones, so they were 0.4 too high with them.
+- Round 2 lowers them by 0.4 (crate 1.6 -> 1.2 and stacked 3.8 -> 3.4, drums 1.5 -> 1.1, containers 3 -> 2.6 and stacked
+  8.2 -> 7.8, gable door 3 -> 2.6). No part count change.
+- Evidence: a support scan of the plot-1 L5 dump (work/support_scan.py: every visible Dock part, is there a surface within
+  0.06 under its bottom) goes from 32 to 26 parts without one; the 6 removed are exactly those props. The 26 left are
+  mounted or hanging by design (windows, glass bands, lintel, vent, radar bars, lamp heads, crane jib / hook /
+  counterweight, gun barrel, life ring, rub strake, mooring lines, launch parts floating on the water).
+- A BuyPathStatic rule now checks every low block piece (bottom under +1, not a beam, not the QuayDeck): its centre on
+  the quay -> bottom at the QuayDeck top (+0.4); landward of the quay -> bottom at 0 (both +-0.02). 21 pieces checked.
+- Revert: the Y values in out/round0/round1 DockKitConfig (work/r1_snapshot).
+
+## H15. (R2) The moored boat's wheelhouse is at player scale
+- Round 1's wheelhouse was 3 studs tall over the deck, so a 5-stud avatar standing aboard (phone step 3) had the cabin
+  roof at chest height and the boat read as a toy.
+- Round 2 makes it 6 tall (deck +2.4 to +8.4) with the same footprint, a taller window band at +6.3 to +7.8 (eye line),
+  the roof on top (+8.55) and the mast, radar bar and mast light 3 studs higher. The life ring moves up 0.6 to chest
+  height. No new parts.
+- The crane jib (kit x 21 to 22) is not over the boat (x -10 to 13). No spawn, lane or exit result changed (harbor_boats
+  output identical to round 1). Rider exits beside the moored boat are not driven by a test: reading
+  VehicleService._ExitSpot (down-ray from the wheel line + 2.5, a 5.2-tall stand box), a spot over the wheelhouse is
+  refused by the stand box, as it was over the 3-tall wheelhouse, so the change should not add exit spots. Device check.
+- A BuyPathStatic rule checks it: wheelhouse on the hull's deck line, >= 5.5 tall, window band >= 3.5 over the deck,
+  roof on the wheelhouse, mast on the roof.
+- Revert: Size.Y 3 / Pos.Y 3.9 and the four rows above it back to round 1 (the pin must then be relaxed).
+
+## H16. (R2) Wider pin coverage
+- The reviewer showed 7 mutants that wreck the harbour but still passed BuyPathStatic. Round 2 adds 13 pins, each
+  shown failing on a mutant (work/mutants_r2.log, M23 to M43):
+  - inside styledPart (function-scoped, because kitPart has its own `p.Parent = plinth`): the lift onto the pad top,
+    both beam ends lifted, the block CFrame with its rotation, the WE_MinLevel / WE_Collide / WE_Shadow /
+    WE_BaseTransparency attributes, `p.Parent = plinth`;
+  - buildStyledDockKit loops over cfg.Pieces with styledPart;
+  - the table's `Name = "` count equals the one-line rows the rules read (a multi-line row no longer skips them);
+  - the load-bearing pieces collide: QuayDeck, WarehouseBlock, BoatBoot, BoatHull, BoatForecastle, BoatWheelhouse,
+    Gangway;
+  - H14 (nothing floats) and H15 (wheelhouse scale).
+- Pin count: 36 in the block (was 23). Main + block: 4292 PASS / 23 FAIL; candidate 4328 / 0.
+- (R3) 41 checks in the block (5 new, 1 changed; H17 to H20). Main + block: 4292 PASS / 26 FAIL (every harbour check fails
+  on main: 24 code pins, the Enabled line and "DockKitConfig.Pieces rows not found", which stands for all the row rules);
+  candidate 4333 / 0. work/mutants_r3.log re-runs all 58 mutants (M1 to M56 plus M8b and M8c) on the round-3
+  candidate: each fails its pin (PASS 4333 -> FAIL 1 to 3), except M8, the documented rollback, which passes 4333 / 0.
+
+## H17. (R3) The pad re-harden sweep leaves the harbour's solid pieces queryable
+- `UpgradePadService.hardenPad` runs on every already-attached upgrade slot (its +1 s sweep after Init, the zero-pad
+  rescans and a slot re-tag) and set `CanQuery = false` on every BasePart under the pad. On main every kit part is
+  CanQuery false anyway. The harbour's 27 solid pieces need CanQuery true (vehicle spawn clearance, the boat shore
+  probe, the camera), so a sweep that landed after the Dock kit was built switched them off until the next Dock
+  UpdateVisuals (reviewer finding).
+- The fix is one condition in hardenPad: a part with `WE_KitRole == "Styled"` is skipped (it is built CanTouch false and
+  BaseService owns its CanCollide / CanQuery). This makes UpgradePadService.luau the lane's fifth file.
+- Evidence (drv/harbor_pad.luau, 6 plots, Dock L5, then UpgradePadService.Init and its +1 s sweep): round 2 went from
+  CanQuery 27 of 27 to 0 of 27 after the sweep; round 3 stays at 27 of 27 after the sweep, after the next sync and after
+  a slot re-tag. (In the stand-in the re-tag step does not re-run hardenPad on round 2 either, so only the +1 s sweep is
+  evidence.) A pin checks the condition; mutants M52 (main's hardenPad) and M53 (wrong role) fail it.
+- Merge: no other fb4 or VKIT lane's candidate tree changes UpgradePadService.luau, BaseService.luau or
+  StructureKitBuilder.luau (checked against every lane tree on disk).
+- Revert: drop `and child:GetAttribute("WE_KitRole") ~= "Styled"`; the pieces then get CanQuery back only at the next
+  Dock UpdateVisuals.
+
+## H18. (R3) The showroom spin loop no longer walks every kit part on every server frame
+- `BaseService.ensureShowroomSpin` ran on every server Heartbeat: `GetChildren()` of every upgrade slot plinth, then
+  `IsA` and `GetAttribute` on each child, to find the few spinning showroom displays. The Dock plinth now holds 88 kit
+  parts instead of 24, so the harbour made that per-frame scan bigger (reviewer finding; CLAUDE.md: no whole-tree scans
+  or allocations per frame).
+- Now the loop re-scans the slots twice a second and, each frame, only turns the displays it found (still 22 deg/s and
+  only while shown, Transparency < 0.5). A newly built display starts turning up to 0.5 s later.
+- Measured (drv/harbor_pad.luau, 6 plots owned, 114 slots, 180 Heartbeats fired by hand):
+  - main: 654 children visited per Heartbeat, 180 scans in 3 s (about 39,000 visits a second at 60 Hz);
+  - round 2: 1,032 per Heartbeat (about 62,000 a second);
+  - round 3: 1,038 per scan, 6 scans in 3 s (about 2,100 visits a second).
+  - A probe display turned 66 degrees in 3 s on both main and round 3.
+- Two pins check the throttle and the per-frame loop; mutants M54 (main's loop), M55 (scan every frame) and M56
+  (hidden displays turn too) fail them.
+- Revert: main's ensureShowroomSpin body (out/round0/round2 has no copy; take it from e506c9c).
+
+## H19. (R3) The boarding ramp is clear
+- Round 2's aft fender (kit x -7) stood about 0.3 studs proud through the gangway's walking surface, and the ramp ran
+  under the quay-side bulwark (decor, so an avatar's legs passed through it) (reviewer finding).
+- The aft fender moves to kit x -5.5 (fenders now at -5.5, -1 and 4.5). The quay-side bulwark is split into two pieces
+  (x -10 to -8.6 and -6.4 to 3), leaving a 2.2-stud boarding gap where the gangway comes aboard. That is 1 more part
+  (86 pieces, 88 kit parts per base).
+- A new rule checks the gangway's walk space: over its walking surface, its width, from 0.05 to 5 studs up, nothing
+  pokes through except what the ramp rests on (quay, hull, boot-top, strake, deck). Mutants M48 (round-2 fender), M49
+  (round-2 bulwark) and M50 (the whole round-2 config) fail it.
+- Still for the device check: the ramp meets the hull side about 0.2 studs below the hull top (+2.2 against +2.4; the
+  deck top is +2.52), a small lip an avatar steps over (phone step 3).
+
+## H20. (R3) Solid pieces stay off the land lanes
+- A new rule: every solid (Collide) piece stays inside kit x -48 to 34 (the QuayDeck's span: the Dock gate lane is at
+  x <= -48; the sea-gate guard (38, 20), the sandbag berm (38, 2) and the sea-gate lane land are at x >= 35) and at
+  kit z >= -20 (the helipad is at z <= -24). 27 solid pieces pass.
+- Mutants fail it: M44 a crate at the sea-gate guard spot (the reviewer's mA), M45 a crate toward the helipad, M46 a
+  crate in the Dock gate lane, M47 the solid gangway moved onto the sea-gate lane land.
+
+## H21. (R3) Checked with the VKIT NAVAL candidate as it is now
+- harbor_boats on a copy of the VKIT NAVAL lane's current candidate plus this lane's four .luau files: 564 pass / 0 fail,
+  150 of 150 naval spawns in their own basin, clear of every dock solid, with a clear lane to the sea gate; visitor
+  cars 36 of 48 at the dock (the same as this lane alone). The naval lane is still in progress, so the integrator
+  re-runs drv/harbor_boats.luau on the final merged tree.
+
+## v90 lane 06-faces
+
+## FACES lane (owner screenshots d6bccb79 / 6358908b, live v83): escort faces, the camo blob, the wall soldier
+
+- **FC-1: Decals hide with their escort.** Roblox draws a Decal whatever its part's LocalTransparencyModifier is. That is why PlayerModule's TransparencyController and our TutorialController set `Decal.LocalTransparencyModifier` separately.
+  - The R-RIG camera guard hid only an escort's 8 BaseParts. The kit head's `face` Decal (rbxasset://textures/face.png) stayed on screen at head height. With the camera tilted down, those faces looked as if they lay on the ground.
+  - RigAnimator now collects each escort's Decals once, when the escort is built, and hides and shows them with its parts.
+  - Device check: phone test step 2.
+- **FC-2: The camo blob has several possible sources, and all are now handled.** In d6bccb79 the blob is a camo cap within about 1.5-3 studs of the camera. It fits any of these:
+  - (a) an escort that the 4 Hz guard had not hidden yet. A camera swipe, or a unit or player turn, swings the file through the camera between two passes.
+  - (b) an own squad unit on the camera side of the player. `OrdersConfig.FollowPath` stops a cut-off unit on the player's trail, 4 or more studs behind him. In the stand-in, a unit 3.5 studs in front of the camera fills 61 % of the screen, and the render (`renders/lead_blob_before_after.png`) looks like the screenshot's corner.
+  - (c) (round 3, reviewer owner-phone 4) a wing soldier of a STANDING army in its normal FollowSlots place, with the camera turned about 45 degrees off the army's facing at the default zoom. Its beret is 5.6 studs from the camera but under 3 studs ahead along the view, in a bottom corner of the wide screen (`renders/corner_blob_before_after.png`, driver S4h and S12).
+  - The pinhole fit of the two faces is **consistent with** (not proof of) them being escorts 1 and 2 of the unit behind-left of the player. The fit has 4 unknowns for 4 numbers. Held-out checks:
+    - that unit's visible cap is predicted within 25 px of where it is on the 2868 px screenshot;
+    - the two faces' size ratio is within 8 % of the predicted depth ratio (`fit_screenshot.txt`).
+  - The screenshot cannot tell (a) from (b).
+- **FC-3: The camera guard also runs alone at `RigConfig.Escort.Camera.GuardHz = 30`.** It is a second `task.wait` loop in RigAnimator, not RenderStepped or Heartbeat.
+  - It walks a fixed buffer: the picked figures with escorts, plus own units while `LeadScreenFrac > 0` (at most `Anim.MaxAnimated` = 24). Per run that is at most 22 torso and 24 root position reads and some arithmetic. It makes no tables and does no scans.
+  - It sleeps a whole LOD pass (0.25 s) while the buffer is empty. With escorts off and `LeadScreenFrac = 0` it never runs (driver S11: 0 runs in 5 s).
+  - This departs from R-RIG spec §3.5 ("one task.wait loop") and R-RIG-18 ("the guard runs at 4 Hz, so a fast camera swing can show one for ≤ 0.25 s"). The spec file (scratchpad `design3/rig/spec_rig.md`) is not changed by this lane. The RigAnimator header comment and the `RigConfig.Anim.TickHz` comment now document the second loop. The R-RIG owner should update §3.5 and R-RIG-18 when the spec is next revised.
+  - At `GuardHz = 10` the reviewer measured 0.002-0.129 s of flash per swipe, so the pin allows 0 (off) or 20-60.
+  - Revert: `GuardHz = 0`, config only. BuyPathStatic accepts 0, so no pin edit is needed. The guard then runs only in the 4 Hz pass, as on main.
+  - Device checks: steps 4, 5 and 10. Phone frame time and heat are not measured here.
+- **FC-4: Frame order (not verified).** The stand-in runs the guard before it "draws" a frame. Roblox is assumed to draw a frame with the hide state set on earlier frames, because task.wait threads resume after the camera update. Every moving case is therefore measured both ways.
+  - One frame late, the candidate still shows an escort just past the 25 % line for 1-3 frames: 0.021-0.028 s per turn-round and at most 0.052 s per fast swipe. The worst was 31 % of the screen height.
+  - On main the same cases give 0.91-1.21 s per turn-round and 0.17-0.44 s per swipe, with marchers up to 77 % of the screen.
+  - At 30 Hz the guard runs on every second 60 fps frame, so even "guard first" can be one frame stale. The driver's own-unit blob check therefore allows about one frame per turn, like its escort checks. Measured in round 3 (head-and-beret blob between the camera and the player, guard first): the candidate 0 unit-frames at the default zoom (4 runs, 47 turns; main 200) and 2 at zoom 8 (main 2,725).
+- **FC-5 (round 3; replaces the round-2 distance rule `LeadHideStuds`, which never reached the repo): an own squad unit drawn about screen-tall between the camera and the player is hidden on this client, judged by on-screen size (depth along the view), not by distance (`Escort.Camera.LeadScreenFrac = 0.9`, `RootToFeetStuds = 3`).**
+  - Why: a landscape phone is about 2.17:1, so at the default vertical FOV 70 it sees about 113 degrees across. A soldier 5.6 studs from the camera but only 3 studs ahead along the view is drawn at the screen's bottom corner at the same huge scale as one 3 studs straight ahead. The round-2 distance rule (5 studs) missed him (reviewer owner-phone 4: yaws 45 / 315 / 105 / 255 at zoom 12.5).
+  - Rule (RigAnimator `cameraGuard`, client only): an own unit hides when it is nearer the camera than the player's root (+ PlayerMarginStuds) AND the nearest point of its body line (feet = root - RootToFeetStuds, head top = feet + FigureStuds) is nearer along the view than FigureStuds / (2 x LeadScreenFrac x tan(FOV / 2)) + DepthMarginStuds (= 4.46 studs at FOV 70). It shows again ShowHysteresisStuds (0.5) past either line. Hidden = its rig's parts and each part's Decals (the face), as in round 2. `LeadScreenFrac = 0` turns it off (config only; BuyPathStatic accepts 0).
+  - No "inside the viewport" clause (the reviewer's suggestion): hiding a unit that is off screen changes nothing a player can see, and hiding it before a camera swipe brings it on screen avoids a 1-2 frame flash. The cost metrics below therefore count only units that WOULD be on screen.
+  - Value 0.9, measured in the stand-in (NOT a phone):
+    - 0.75: after a camera orbit one own soldier stays hidden in the plain camera-behind view (driver S12 "camera back behind the player: 1 not drawn": by the rule's own sums the second-rank left-wing soldier's body line is about 5.5 studs ahead there, inside the 5.8-stud show line), and 9.9 % of unit-frames are hidden while running with turns. Rejected; the pin allows 0.8-1.0.
+    - 1.0 hides less (2.7 % of on-screen unit-frames while running with sharp turns, 58 on-screen pops in 120 s) but lets a head-and-beret blob through for 5 unit-frames at the default zoom and 6 at zoom 8.
+    - 0.9 (chosen): 0 blobs at every measured zoom except 2 unit-frames at zoom 8.
+  - Measured with the candidate (0.9) vs main, driver `faces3_body` (stand-in, 956x440, FOV 70):
+    - Camera orbit round a standing army (24 yaws, pitch 12): poses with a head-and-beret blob: zoom 12.5 main 8 -> 0, zoom 10 main 10 -> 0; poses with any big body part on screen: 9 -> 0 and 14 -> 0. Cost: poses where an own unit that would be on screen is hidden: zoom 12.5 12 of 24 (at most 2 at once, 0.54 per pose), zoom 10 16 of 24 (1.08 per pose); main 0.
+    - Reviewer pose A (yaw 315, zoom 12.5): the corner soldier (beret 5.6 studs away, 2.97 ahead) 8 of 8 parts drawn on main, 0 of 8 on the candidate.
+    - Running with sharp turns (4 x 30 s, 47 turns, default zoom 12.5, the Follow-camera model of round 2): main draws a head-and-beret blob for 200 unit-frames and a body part at >= 100 % figure scale for 474 unit-frames (7.9 unit-seconds); the candidate 0 and 0. Cost: 3.99 % of on-screen unit-frames hidden (35.9 unit-seconds in 120 s, about 0.76 s per sharp turn), 70 on-screen hide->show pops (about 1.5 per turn). The hidden time is longer than main's blob time because the rule starts at 90 % of the screen height and the hysteresis holds 0.5 stud.
+    - Zoom 8 / 5 while running with turns: 35.7 % / 25.5 % of on-screen unit-frames hidden (main: 2,725 blob unit-frames at zoom 8; 495 big-body unit-frames at zoom 5). Close zoom with an army round you means soldiers at the camera; this is expected.
+    - Straight running (zoom 12.5 and 5) and standing with the camera behind: 0 hidden.
+    - Still drawn on purpose: a soldier between the camera and the player drawn at up to about 90 % of the screen height, such as the reviewer's "lead6" (5.05 studs ahead, about 75 %). In the orbit the nearest soldier still drawn has his head 4.44 studs ahead (whole body 85 % of the screen height) at zoom 12.5 and 4.89 studs (77 %) at zoom 10. He is a whole, readable soldier, not a blob; hiding him needs LeadScreenFrac <= 0.75 (rejected above).
+  - Unchanged from round 2: the rig's parts and each part's Decals (the face) are hidden locally, the same way as escorts; the unit shows again when it leaves the pick or the registry (stream-out or death; FC-8); hits, aim and the server are unchanged (LocalTransparencyModifier is local and visual only); tracers (4d26673's army shot FX) from a hidden unit still start at its invisible body, which is cosmetic.
+  - Revert: `LeadScreenFrac = 0`, config only (BuyPathStatic accepts 0).
+  - Device checks: phone steps 2, 5 and 7. Whether the pops read as "soldiers vanishing" on a real phone is not known; if they do, 1.0 is the next value to try, or 0 to switch the rule off.
+- **FC-6: Design note, a turn hold was rejected.** During review, a 1.5 s hide of the own marchers after every sharp turn was tried in place of the fast guard. It left only 21-64 % of escort-frames drawn while running with turns (main: 85-94 %). The fast guard covers turns without hiding anything that is not in the camera's way. The turn hold never reached the repo.
+- **FC-7: The wall soldier is the rigged sea-gate guard (unchanged).** The soldier on the quay in 6358908b is `GateGuard_Sea`, a MapSetup `makeSoldierKit` statue of kind Guard. The evidence that he is rigged and wears the Roblox Soldier body:
+  - R-RIG's baked rifle-forward arm;
+  - the navy Vest torso and the navy kit helmet;
+  - he is the nearest of the 5 statues within 120 studs at the owner's dock camera.
+  If the owner still dislikes the look, that is an art change for another lane.
+- **FC-8: A hidden own unit is shown again when it leaves the registry.** Under StreamingEnabled, Roblox parents a streamed-out instance to nil and can reuse it on stream-in, and CollectionService then fires removed and added for the same rig. `remove()` therefore calls `setLeadHidden(e, false)` (setting properties on a parent-nil instance is allowed). Otherwise the re-added entry starts with `LeadHidden = false`, nothing un-hides it, and the unit stays invisible (driver S4g).
+  - The same premise ("the instance is gone; nothing to restore") exists on main for `HoldBaked` (the shoulder turn) and for the far LOD's hidden beret and Brick meshes. They are left unchanged here, because they are outside this lane's hunks. They are flagged to the R-RIG owner.
+  - Device check: step 8.
+- **FC-9 (round 3): other players' armies are not hidden.**
+  - The rule covers the local player's own units only (reviewer X3: another player's unit 3.5 studs in front of the camera covers about 70 % of the screen). The owner's screenshot was at his own base with his own army. Reversible: extend `if e.Own and root then` to squad units in general (still client-only) if a blob from another army is reported. Phone test step 10 asks the owner to report it.
+- **FC-10 (round 3): the Decal pins now include their loop headers.** Reviewer mutants m1 (`copy:GetDescendants()` -> `copy:GetChildren()` in buildEscort) and m2 (`c:GetChildren()` -> `e.Rig:GetChildren()` in setLeadHidden) brought the floating face back with BuyPathStatic still green. Both pins now include the loop headers; both mutants fail BuyPathStatic (runs/mut3_m1_escort_children.txt, runs/mut3_m2_lead_decal_level.txt).
+- **FC-11 (round 3): the R-RIG spec is out of date for this lane.** spec §3.5 ("one task.wait loop") and R-RIG-18 ("the guard runs at 4 Hz") describe main, not this candidate (second loop at `Escort.Camera.GuardHz = 30`, FC-3; own-unit rule, FC-9). This lane does not edit the spec file (scratchpad `design3/rig/spec_rig.md`); the R-RIG owner should update §3.5, R-RIG-18 and the §5 T9 camera criteria when the spec is next revised. `GuardHz = 0` and `LeadScreenFrac = 0` together restore main's guard behaviour (the Decal fix stays).
+
+## v90 lane 08-air-fix2
+
+## 2026-09-28 — The owner's replacement picture, air rows (jets + rescue helicopters): picks staged, old picks retired, body framework in place but unused (air lane)
+
+_Appended with the air lane's fix round 1 replay (on main 4e07fc2): these AIR-1 to AIR-16 records (the lane's rounds 0
+and 1, when the body framework AirBodyRig / AircraftBodyClient was written) were not carried by 4e07fc2, which holds the
+framework and AIR2's section above. Entries marked Superseded were overtaken by AIR2 and AIR-17 to AIR-22._
+
+- **AIR-1 Staged as PendingAssetId (never loaded), not promoted.** (Superseded 2026-09-28 by AIR2-2 / AIR2-9 and AIR-17:
+  the owner's raw lines arrived; the jet is promoted, the helicopter pick is rejected.) The owner's check on live v83
+  (his bot's summary in fb4/OWNER_LIVE_CHECK_v83.md; the raw lines were not attached) chose 14589101870 "Basic Fighter
+  jet" (Alecose1) for FighterJet / InterceptorJet / TrainerJet / LightFighter and 9120014090 "Medical Helicopter"
+  (TripleTripleTwinTips) for RescueHeli / MedevacHeli. He owns all six ids (inventory API, 2026-09-28). The model files
+  cannot be read from here (assetdelivery answers 401 without a Roblox login; 3D thumbnails 403), and the R2.3 body path
+  needs every part's box (BodyScale, BodySeats, the cockpit / cabin seats, the nose tip and wing-tip points, the rotor
+  parts). A promote without them would put the pilot on top of the body. So both ids wait on HOLD for the raw WE_CHECK2
+  lines (or one run of tools/WeCheck2_Replacements.luau: the ground and air ids together). Reversible: the six rows keep
+  ModelAssetId = 0, exactly like main. This is NOT the owner's replacement yet: on his phone nothing changes until the
+  promote (fix round 1 re-checked the blocker on 2026-09-28 07:04Z: assetdelivery 401 "Authentication required", 3D
+  thumbnails 403; no credential is used or sought).
+- **AIR-2 The jet pick's outline is close to a well-known real single-engine fighter.** It has no name, markings,
+  roundels or text in the store pictures (zoom crops in fb4/air/out/brand), the uploader calls it his own first Blender
+  model, it has 0 scripts and 0 decals. That is allowed by the owner's rule (no real names, insignia or markings), and it
+  is flagged here so he can decide otherwise. Backup 15024427757 and third 16967628140: not used (107 and 254 parts in his
+  check, over the 40-part cap).
+- **AIR-3 The rescue helicopter keeps the owner's pick; no usable fallback.** (Superseded by AIR2-9 and AIR-17: the pick
+  fails the origin check and neither backup passes; the Part kit stays and the owner is asked for a new pick.) His bot's
+  backup is 10077899617 (22 parts, olive, "omit the rocket pods and guns"); it is not used: its own store text says it
+  is another version of someone else's model, and it carries rocket pods and guns. The check script still measures it,
+  and the owner is told, so he can overrule. The picture's backup 1577255368 was rejected by his bot (a copy of a real
+  helicopter) and is no longer checked. The pick has 48 parts; his bot says trim to <= 35, so 13+ parts go by name
+  (registry OMIT_TARGET 35), and it has a floating "Medical Helicopter" name sign (the owner's bot: strip it).
+- **AIR-4 Registry: the old rows become REJECT history, new rows `<Key>V2` hold the picks (batch P5).** REGISTRY keys
+  are unique and the pinned wc3 texts for 3553891209 (OWNER_YES, HOLD, YAW_HINT) and the RescueHeli / MedevacHeli REJECT
+  rows stay byte-identical. STUDIO_DONE records the owner's v83 part counts (8, 48); YAW_HINT 180 for both (his summary:
+  front along +Z; the game's front is -Z). The helicopter rows are 'STUDIO OMIT'; fix round 1 made the tool count them
+  after OmitParts (AIR-14). The status table and `status` show a rejected row's pending column as "–" when a newer row
+  waits in the same ref; `status` lists only holds of ids still waiting (3553891209 is shown as a replaced pick) and
+  `reject` skips a ref that already waits for a newer pick.
+- **AIR-5 The store-aircraft body framework is inert until a ref uses it.** New AssetRef fields BodyAnchor, BodyFloor,
+  BodyMounts, RotorParts, ChaseCamera (VisualAssetConfig), tunables in VisualAssetConfig.AirBody, server module
+  Server/Modules/AirBodyRig, client module Client/Modules/AircraftBodyClient. No live ref sets any field, so the server
+  path returns at once. Stand-in proof (not Roblox): all 86 vehicles build byte-identical on main and candidate (with the
+  real jeep-pack files), the 27 aircraft Part kits are identical (647 lines), jeep look 200/200.
+- **AIR-6 BodyAnchor moves the body along the kit only (Z), and helicopters should not use it.** Moving the body so the
+  cockpit seat lands on the kit seat keeps physics, drive and HUD unchanged. For a helicopter it grows the parking
+  footprint (radius 19.9 -> 26.9 with the mock body) and the helipad spots refuse it (it parks at the vehicle spawn), so
+  the helicopter refs stay centred and the seats are clamped inside the cabin by BodySeatKitInset.
+- **AIR-7 BodyMounts puts a kit weapon mount's FRONT FACE on the body point.** AirWeaponService starts a shot at the mount
+  part's front face (+ MuzzleForward), so the muzzle lands on the nose tip / wing rail at every kit scale. Only
+  non-colliding, non-seat, non-chassis kit parts move.
+- **AIR-8 StripSigns for every store vehicle body.** A store body's BillboardGui / SurfaceGui always goes, its Decal /
+  Texture only with StripDecals, for whole models AND pack pieces (fix round 1: a piece loses its decals when the pack is
+  split, but not its GUIs, and the trimmed helicopter must be a piece, AIR-14). Nothing live changes: the live
+  whole-model refs (Recon Plane, APC) carry none (wc3 check lines: 0), and the live jeep / buggy / van / pickup packs
+  keep their only GUIs ("ButtonGuiPrototype") inside LocalScripts, which the loader strips first (stand-in: the
+  86-vehicle dump with the real pack files is byte-identical to main). Before this, StripDecals was silently ignored
+  for whole-model vehicle refs.
+- **AIR-9 Rotors turn on the client only, by a tag contract.** The server gives each RotorParts part a Motor6D named
+  WE_RotorJoint (tag WE_RotorJoint, attribute WE_RotorRps); the client sets Motor6D.Transform from 24 precomputed angles
+  at up to 30 Hz, only for the 6 nearest aircraft within 400 studs, and only while the driver seat is taken
+  (WE_DriverUserId). Nothing is replicated per frame. The VKIT lane (vehicle bodies v2) also spins rotors: the
+  integrator keeps ONE loop; the tag + attribute contract lets either side's joints join this loop.
+- **AIR-10 Seated chase camera.** (Margin 18 since AIR2-7; fix round 2 keeps the min ChaseCameraSpan under the max,
+  AIR-19.) While the local player sits in a vehicle that carries WE_CamMinZoom, their CameraMinZoomDistance becomes
+  min(WE_CamMinZoom, their CameraMaxZoomDistance) (WE_CamMinZoom = the seat's reach to the body's far end + 6, capped at
+  60); their own value comes back on leaving the seat, death or respawn. Assumed: Roblox's default camera applies a live
+  change of CameraMinZoomDistance (real-device check after a promote).
+- **AIR-11 Load budget (stand-in census, not Roblox).** Now: unchanged (census_all 54 of 64 attempts, capRefused 0;
+  census_fail BOOT 41 / PLOT 43 / LATER 50, capRefused 0 through LATER, 16 in PREFER / UPPER as on main). With both
+  picks promoted the way they now must be (fix round 1 projection on a scratch copy: the jet as a whole model, the
+  helicopter as a ChildName pack piece + OmitParts): census_all 56 of 64, capRefused 0; the helicopter pack is asked at
+  BOOT (every configured pack is; BOOT 15 -> 16 ids), the jet first in LATER; census_fail BOOT 41 / PLOT 43 / LATER 51
+  attempts, capRefused 0 through LATER, PREFER / UPPER 5 / 17 (main 4 / 16). (Round 0's whole-model projection had both
+  ids in LATER; a 48-part whole model would be refused at load, AIR-14.)
+- **AIR-12 Recorded only:** VisualAssetConfig has both StealthStrikeJet (no VehicleConfig key: a dead ref) and
+  StealthStrike (the real key). Not in this lane's families; left as is.
+- **AIR-13 (fix round 1) One owner check script, committed: tools/WeCheck2_Replacements.luau.** (Fix round 2: the owner
+  is no longer asked to run it or to resend lines; his raw log is in. The file stays as the ground lane's shared file.)
+  It replaces the lane-only WeCheck_Air.luau and the ground lane's WeCheck2_G1.luau. The file is byte-identical to the
+  ground lane's fix-round-1 file (md5 88057bb1612b31e65cd2828dbc77fabc: its open ground ids 1578555399, 14423269703 and
+  this lane's air id lines 14589101870, 9120014090, 10077899617 verbatim), so the two lanes add the same file. If the
+  ground lane changes it again, take the ground version: the air lines are the same. The owner is asked for the raw
+  lines of his v83 run first; the script is only the fallback.
+- **AIR-14 (fix round 1) A trimmed store body must be a pack piece.** VisualAssetService counts a whole model's parts at
+  load (loadModel: > MaxPartsPerModel is refused) before any OmitParts; OmitParts trims before the count only when a pack
+  is split into ChildName pieces (extractPiece). Stand-in proof (air_body section E, main and candidate alike): a 48-part
+  whole model + OmitParts is refused, the same 48 parts as a ChildName piece + OmitParts load with 8. So the helicopter
+  promote writes ChildName = its inner model's name + OmitParts. wire-asset-ids.py promote now: an OMIT pick over 40
+  needs ChildName on every target and the id's complete WE_CHECK2 part lines in the --we-check file; the parts the
+  loader keeps (no x=1) minus the OmitParts names must be <= 40 and <= OMIT_TARGET (35 for 9120014090, the owner's bot).
+- **AIR-15 (fix round 1) Phone cap for one vehicle body: VisualAssetConfig.VehicleBodyMaxTriangles = 20000** (Creator
+  Store triangle count, whole model; a pack counts in full, so it errs high). A tool gate only (a script cannot read a
+  mesh's triangle count); promote refuses a vehicle body above it unless --heavy-ok ID / HEAVY_OK (the lead's call), and
+  then the owner's phone test carries a frame-rate step with two or more in view at Graphics Quality 3 / a mid-range
+  Android. The jet pick (11,460) passes; the helicopter pick (65,837) needs that call. Live bodies are far under it
+  (Recon Plane 738, APC 3,314). Reversible: one config number; 0 or deleting the line removes the gate.
+- **AIR-16 (fix round 1) Not claimed as the owner's fix.** (Superseded by AIR2-13 and AIR-21.) The owner text says
+  plainly that nothing changes in the game yet and why; the change note for this commit must not say the jet / rescue
+  helicopter replacements are done.
+
+
+## 2026-09-28 — Air fix round 2 (replayed on main 4e07fc2): all six air ids decided from the owner's raw lines, rotors scoped by parent, seated zoom span (air lane)
+
+- **AIR-17 Per-id decisions (all six from his raw v83 log, fb4 wc4_all_raw.txt, `parse_we_check2.py --strict`: 0
+  problems; creators from Roblox's public economy API, 2026-09-28, no credential).** Jet: PICK 14589101870 passes (8
+  loader parts, 0 scripts / decals / Humanoids, all 8 meshes uploaded by the seller 11 minutes before the model) and is
+  live on the four fighter keys (AIR2-2). BACKUP 15024427757: 107 loader parts (cap 40), 8 scripts, 4 tools, meshes by
+  other creators too (FatFitFut; a Roblox missile mesh). 3rd 16967628140: 254 loader parts, 13 scripts, meshes by two
+  other creators. Rescue helicopter: PICK 9120014090 fails the origin check (AIR2-9, re-queried here: the same 14 mesh
+  and paint ids, all by JaimeEsP, 2020-03-02/03). BACKUP 1577255368: 53 loader parts (cap 40), 20 scripts, 5 SurfaceGuis
+  and 5 BillboardGuis, and its inner model is named after a real maker's helicopter (the check's MODEL line); his bot
+  also rejected it as a copy of a real helicopter. 3rd 10077899617: a Humanoid (HumanoidRootPart, Head, Torso; hum=1: a
+  catalog body must have none), 8 scripts ("Helicopter AI"), weapon parts named after real weapons, meshes and paint
+  from four other creators (one paint image is named after a real helicopter type), and its store text says it is
+  another version of someone else's model. So no helicopter passes: RescueHeli / MedevacHeli keep the Part kit and the
+  owner is asked for a new pick (made by its uploader, <= 35 parts, no weapons). Reversible: config Notes + registry rows.
+- **AIR-18 RotorParts.Under: rotor parts scoped by their parent Model; a part is never jointed twice.** Store helicopters
+  often name every rotor piece alike (9120014090: "MeshPart" for the 6 main-rotor pieces under Rotors/Rotor1 and the
+  tail rotor under Rotor2, "Spinner" for both hubs). AirRotor.Under = an ancestor Model name: only parts inside such a
+  Model spin, each such Model is its own rotor with its own Hub (looked up inside it) or average centre; a part that
+  already carries a WE_RotorJoint is skipped by later specs. Stand-in (air body driver F, a proxy of 9120014090 built
+  from his P lines with its real names and parents, BodyScale 0.7): Under = Rotor1 / Rotor2 gives 7 joints (6 + 1),
+  one per part, main blades 0.05 studs off the mast, the tilted mast pieces 0.32, the tail rotor 0.00 off its own hub,
+  axes up / across. Fix round 1 gave 14 joints (two per part), the blades 1.05 and the tail rotor 17.2 studs off
+  (orbiting the helicopter). Without Under the tail rotor still orbits the main hub (16.7): shared names need Under. No
+  live ref sets RotorParts, so nothing live changes.
+- **AIR-19 Seated zoom span (AirBody.ChaseCameraSpan = 8).** Another lane (vehicle bodies v2) lowers
+  CameraMaxZoomDistance while driving a big body (its cap, clamped at or above the current min). With this lane's raised
+  min the two could pin min = max, and pinch zoom would do nothing on a phone. The seated min is now max(own min,
+  min(WE_CamMinZoom, max - span)) and is re-checked whenever the max changes while seated; leaving the seat, or dying in
+  it (D-z5), drops the watch before the own min comes back. Stand-in (driver D: the mock helicopter, WE_CamMinZoom 41.9;
+  the other lane's formula simulated with a cap of 31.9): cap after seating: min 33.9 / max 41.9; cap before seating:
+  min 23.9 / max 31.9; leaving in either order restores 0.5 / 128 (fix round 1: min = max in both orders). Merge note:
+  keep ONE owner of the seated aircraft camera if both lanes land. That lane's latest client also raises a PASSENGER's
+  CameraMinZoomDistance (its passenger zoom, saved and restored by that module). With this module doing the same for the
+  same seat, whichever saves second saves the other's raised value as the player's own and may restore it last, so a
+  phone player could stay zoomed far out after standing up (stand-in D-z6, that lane's formula simulated on the
+  helicopter proxy: 2 of the 4 sit / stand orders leave the minimum at 41.9 or 47.9 instead of 0.5). So when that lane
+  lands, one module owns the seated minimum (fold WE_CamMinZoom into its zoom rule with its cap >= WE_CamMinZoom + span,
+  and drop this module's chase camera), then re-run sit / stand / die / respawn for a driver and a passenger (the
+  player's own 0.5 / 128 back each time). Main 4e07fc2 has no other writer of either property; the span keeps pinch zoom
+  working until then.
+- **AIR-20 Helipad room for a real-size helicopter (a record for the next pick).** A proxy at the owner's pick's real
+  size (50.2 x 17 x 54.6, rotor disc 50; the round-1 mock was 32 x 9.4 x 39.7) parks on his helipad up to BodyScale 0.9
+  (footprint radius 24.6); at 1.0 (radius 27.3) the helipad spots refuse it and it starts at the vehicle spawn. So a
+  new helicopter pick of that size needs BodyScale <= 0.9 (or larger helipad spots). Helicopter refs stay centred
+  (AIR-6).
+- **AIR-21 One air candidate, rebased on main 4e07fc2 (fix round 1 replay).** AIR2's final tree (its fix round 2) is
+  in main as 4e07fc2, so this lane's remaining change is a small delta on top of it (out/air_over_4e07fc2.patch: the
+  rotor scope, the zoom span, the rotor-joint diagnostic, their pins and these records). The e506c9c candidate is
+  AIR2's final lane tree plus the same delta, for the gates against e506c9c. Commit the delta on main; nothing of AIR2
+  is applied twice. The change note may say the owner's jet is in; it must not say the rescue helicopter replacement
+  is done (AIR2-13).
+- **AIR-22 A rotor joint is not a "pin".** VehicleService's NO-DRIVE diagnostic (countPins) no longer counts
+  WE_RotorJoint motors (diagnostic text only; no behaviour change).
+
+## v90 Code Bot: owner answers to Claude's 6 questions (all reversible)
+- A1. Army fix gated owner-only (`ArmyConfig.Rollout.Fix = "owner"`). For the owner it replaces v85 FollowPace; for everyone else v85 is unchanged. Go-live: "all".
+- A2. Strike/CAS/Stealth jets on 14589101870 use the FighterJet layout (seat, mounts, hit boxes, gear) unchanged, even though their kit is JetStrike (mounts missing on a kit are skipped). They stay owner-only (`Rollout = "Body"`) like the v88 bodies they replace. StealthStrikeJet is only a ref alias, so it shares StealthStrike's colour: 7 vehicles, 7 colours.
+- A3. Jet colour goes only on the grey panels (Cube, Cube.001, Cube.003, Cylinder.003, measured live on v85). The black fuselage tube, wings and trim and the Glass canopy keep the approved look, so the pilot stays visible. The four original jets' colours are cosmetic and show for everyone. Revert: remove BodyColor / BodyColorParts from a ref.
+- A4. Runway length is capped by its neighbours (plot edge X -160, HeliApron X 34): +12 % long and +21 % wide instead of a flat 20 %. The hangar is +17 % (68 x 40) and its site moved 3 studs back (Z -125), so the doors still meet the apron. Clear of the helipad (X 26..54), the dock and the rear sandbags. World geometry cannot be owner-only, so this applies to every plot. The map builds at server start, so no MAP_GEN bump is needed.
+- A5. Bridge Layer: the same "Wade" rule as the Amphibious APC (WadeSpeedFrac 0.4 x its max speed; another player's plot water still bogs it). The server decides from the vehicle owner (`AmphibiousRollout`), and the driver's client follows the server's WE_WaterState "Wade" (it can feel boggy for up to one server tick when it first enters water).
+- A6. Helicopter model: not searched (the owner is doing it himself).
