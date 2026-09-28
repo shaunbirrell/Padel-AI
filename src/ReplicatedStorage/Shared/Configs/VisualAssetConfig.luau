@@ -489,14 +489,22 @@ local function heliRef(scale: number, color: Color3?, cabin: boolean, note: stri
 		r.BodyColor = color
 		r.BodyColorParts = HELI_PAINT_PARTS
 	end
-	if cabin then
-		local seats: { [string]: Vector3 } = {}
-		for k, v in pairs(BODY_ATTACK_HELI.BodySeats) do
-			seats[k] = v
-		end
-		seats.PassengerSeat4 = Vector3.new(0, 5.0, -21) -- the cabin, between the cockpit and the rear bench
-		r.BodySeats = seats
+	-- v91 live check (v87 place): at z -13 the rear pair stuck out of the tapered tail (no hull beside their heads), and on
+	-- the narrow kits (LightScout / Utility / Rescue: seats clamped 1.3-1.6 studs off centre) the crew heads were 2.5
+	-- studs under the cockpit roof. Every heli key therefore gets the cockpit a little lower (3.5-4.8 studs under the glass)
+	-- and the passengers in the cabin: rear pair beside each other at z -21, the middle seat at z -25 (hull both sides,
+	-- roof over them). `cabin` only marks the transport keys (bigger kit, bigger BodyScale).
+	local _ = cabin
+	local seats: { [string]: Vector3 } = {}
+	for k, v in pairs(BODY_ATTACK_HELI.BodySeats) do
+		seats[k] = v
 	end
+	seats.DriverSeat = Vector3.new(-4, 5.4, -30)
+	seats.PassengerSeat1 = Vector3.new(4, 5.4, -30)
+	seats.PassengerSeat2 = Vector3.new(-3.5, 5.0, -21) -- the cabin
+	seats.PassengerSeat3 = Vector3.new(3.5, 5.0, -21)
+	seats.PassengerSeat4 = Vector3.new(0, 5.0, -25)
+	r.BodySeats = seats
 	r.Note = note
 	return r :: any
 end

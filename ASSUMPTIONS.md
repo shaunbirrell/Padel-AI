@@ -8497,7 +8497,7 @@ framework and AIR2's section above. Entries marked Superseded were overtaken by 
 ## v91 Code Bot (2026-09-28): helis on 11240665977 + army FOLLOW overhaul (all reversible)
 - H1. "Every heli key" = the 12 VehicleConfig Air keys whose name says Heli/Helicopter; VTOLTransport keeps its own tilt-rotor body.
 - H2. Only the navy body panels take a key's colour; glass, seats, blades, wheels and engines keep the model's own colours. StealthHeli keeps its v88 whole-body near-black.
-- H3. Transport scales (0.48-0.6) follow kit length (11-15.6 vs the attack kit 10.9); nothing goes under 0.45, because a smaller body puts the pilot's head through the canopy roof. The middle cabin seat is at (0, 5, -21) after live raycasts (4.1-5.1 studs of headroom).
+- H3. Transport scales (0.48-0.6) follow kit length (11-15.6 vs the attack kit 10.9); nothing goes under 0.45, because a smaller body puts the pilot's head through the canopy roof. Seats for every heli key (after live raycasts on place v87): crew (±4, 5.4, -30), rear pair (±3.5, 5.0, -21), middle (0, 5.0, -25). Kit seats wider than the kit are clamped inside it (BodySeatKitInset), which is why the narrow kits needed the lower cockpit.
 - A1. ArmyFollow is live for everyone (the parent's rule: "if it's solid, roll it out"). Kill switch: Follow2.Rollout = "off" (the old v85 / v90 code comes back).
 - A2. The wedge is behind and to the sides (never straight behind), so the v90 camera guard rarely hides a unit.
 - A3. "Inside his base" = inside his own plot square (the pad bounds), not only inside buildings. The wait line uses the main gate (plot front); a player who leaves by the sea gate is followed once he is out of the square.

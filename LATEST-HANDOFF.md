@@ -1,11 +1,14 @@
-# v91 — 2026-09-28 ~23:45 Madrid (Code Bot, branch phase-7-polish, WE_Build 91, place version 87)
+# v91 — 2026-09-28 ~23:45 Madrid (Code Bot, branch phase-7-polish, WE_Build 91, place versions 87 + 88)
 
 **Claude: do not redo these.**
 - **Helicopters (owner's choice):** every heli key wears the attack heli 11240665977, owner-only like every heli body
   (`Rollout = "Body"`). Each key has its own colour on the body panels only (`HELI_PAINT_PARTS`: BAP 1, Body, Doors,
   Thing for Blades); glass, seats, blades, wheels and engines keep theirs. Built with `heliRef(scale, colour, cabin, note)`.
   - Transport keys get a bigger scale to fit their bigger kit (TransportHeli 0.52, HeavyLiftHeli 0.6, Medevac and LightTransport 0.48;
-    the rest 0.45), and their middle seat sits in the cabin at (0, 5, -21), with 4.1-5.1 studs of headroom measured live.
+    the rest 0.45). Seats, after live raycasts on place v87 (the commit after the first v91 publish, place v88):
+    - crew at (±4, 5.4, -30): 3.4-4.8 studs under the glass (narrow kits had 2.5 at 6.0);
+    - rear pair at (±3.5, 5.0, -21) and the middle seat at (0, 5.0, -25), inside the cabin with hull on both sides.
+      The old z -13 rear pair stuck out of the tail.
   - The main Blades spin through the v90 rotor lookup.
   - `BODY_LIGHT_HELI` / `BODY_TRANSPORT_HELI` are kept, unused (a one-line revert).
   - AttackHelicopter keeps its own navy (27,42,53). StealthHeli keeps near-black (20,22,26), a whole-body recolour as in v88.

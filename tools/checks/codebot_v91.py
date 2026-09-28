@@ -20,7 +20,7 @@ else:
     bad(f"CODEBOT v91: heli colours must be distinct — {_cols}")
 must_contain(_cb91_vac, "local function heliRef(scale: number, color: Color3?, cabin: boolean, note: string): AssetRef\n\tlocal r: { [string]: any } = {}\n\tfor k, v in pairs(BODY_ATTACK_HELI) do", "CODEBOT v91: heliRef copies BODY_ATTACK_HELI (Rollout Body = owner-only, the Blades rotor spec)")
 must_contain(_cb91_vac, 'local HELI_PAINT_PARTS = { "BAP 1", "Body", "Doors", "Thing for Blades" }', "CODEBOT v91: only the heli body panels take the colour (glass, seats, blades, wheels keep theirs)")
-must_contain(_cb91_vac, "\t\tseats.PassengerSeat4 = Vector3.new(0, 5.0, -21) -- the cabin", "CODEBOT v91: the transport middle seat sits in the cabin (live raycasts: 4.1-5.1 headroom)")
+must_contain(_cb91_vac, "\tseats.DriverSeat = Vector3.new(-4, 5.4, -30)\n\tseats.PassengerSeat1 = Vector3.new(4, 5.4, -30)\n\tseats.PassengerSeat2 = Vector3.new(-3.5, 5.0, -21) -- the cabin\n\tseats.PassengerSeat3 = Vector3.new(3.5, 5.0, -21)\n\tseats.PassengerSeat4 = Vector3.new(0, 5.0, -25)\n\tr.BodySeats = seats", "CODEBOT v91: every heli key: crew 3.5+ studs under the glass, passengers inside the cabin (live v87 raycasts)")
 for _t in ("local BODY_LIGHT_HELI = {", "local BODY_TRANSPORT_HELI = {"):
     must_contain(_cb91_vac, _t, f"CODEBOT v91: {_t.split()[1]} stays defined for a one-line revert")
 if "bodyRef(BODY_LIGHT_HELI" not in _cb91_src and "bodyRef(BODY_TRANSPORT_HELI" not in _cb91_src:
