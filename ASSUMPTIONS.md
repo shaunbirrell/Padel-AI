@@ -8696,3 +8696,8 @@ ds_territories.luau T3):
 - **Check:** `tools/checks/claude_bud_runway.py`. It pins the config (190 x 29, 68 x 40), fit in the plot, no overlap
   with the HeliApron or any installation footprint, the config-reading builders, the two dormant strips staying dead,
   and the signature stamp/compare.
+
+## 2026-09-29 — v93 ship (Code Bot): Claude Bud Robux + runway layout-sig live
+- Shipped as WE_Build 93 from `claude/desktop-bud` commits 72c2b12 (Robux, owner-only) and d9c2b77 (WE_LayoutSig runway rebuild).
+- Ids and rollout behaviour documented in the 2026-09-28 claude-bud sections above; no new product behaviour beyond those notes.
+- PreferMesh stays OFF. WE_Building* attributes untouched. ProcessReceipt remains ungated.

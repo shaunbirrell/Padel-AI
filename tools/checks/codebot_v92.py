@@ -6,10 +6,11 @@ _cb92_ts = "src/ServerScriptService/Server/Services/TerritoryService/init.luau"
 _cb92_cl = "src/StarterPlayer/StarterPlayerScripts/Client/Controllers/TerritoryController.luau"
 _cb92_ty = "src/ReplicatedStorage/Shared/Types.luau"
 
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 92)', "CODEBOT v92: WE_Build=92 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 92)', "CODEBOT v92: WE_Build=92 BaseService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 92)', "CODEBOT v92: WE_Build=92 EarlyRemotes")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=92", "CODEBOT v92: DataService profile-loaded log says WE_Build=92")
+# v93 (Code Bot): retired WE_Build pins, superseded in tools/checks/codebot_v93.py
+#must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 92)', "CODEBOT v92: WE_Build=92 DataService")
+#must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 92)', "CODEBOT v92: WE_Build=92 BaseService")
+#must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 92)', "CODEBOT v92: WE_Build=92 EarlyRemotes")
+#must_contain("src/ServerScriptService/Server/Services/DataService.luau", "WE_Build=92", "CODEBOT v92: DataService profile-loaded log says WE_Build=92")
 
 must_contain(_cb92_ec, "\t\tPersistClaims = false,", "CODEBOT v92: PersistClaims off (no outpost comes back on rejoin)")
 must_contain(_cb92_tc, "\tReleaseOnLeave = true,\n", "CODEBOT v92: ReleaseOnLeave on (leaver's zones go Neutral)")

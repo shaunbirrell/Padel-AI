@@ -4910,6 +4910,8 @@ return MissionConfig
 	the Id is pasted), DeathSpeedOffer (one death offer per session) and PremiumPads (the ATM pad slots). Every new Id
 	stays 0 until the owner creates the product: nothing prompts, no pad is built and no Shop row shows while it is 0. ]]
 
+local AdminConfig = require(script.Parent.AdminConfig)
+
 -- F1: one PremiumPads slot (see MonetizationConfig.PremiumPads)
 export type PremiumPadOffer = { Kind: "GamePass" | "DevProduct", Key: string }
 export type PremiumPadSlot = {
@@ -4922,6 +4924,11 @@ export type PremiumPadSlot = {
 }
 
 local MonetizationConfig = {
+	--[[ claude-bud: rollout of the three Robux SKUs in RolloutKeys. "owner" = only AdminConfig.IsPlaytestOwner can buy
+		them and feel their effect; "all" = everyone; anything else = off (fail closed). ProcessReceipt still grants any
+		receipt Roblox delivers for these Ids (a paid receipt is never dropped). OFF must equal the old game. ]]
+	Rollout = "owner",
+	RolloutKeys = { ImpulseSpeed = true, RebirthKeepBase = true, GoldenPumpjack = true } :: { [string]: boolean },
 	GamePasses = {
 		VIP = {
 			Id = 1985475542,
@@ -4964,7 +4971,7 @@ local MonetizationConfig = {
 		-- multiplier (MonetizationService.SpeedMultFor). Keep this key name: BuyPathStatic matches the first Speed Boost
 		-- product block by its key.
 		ImpulseSpeed = {
-			Id = 0,
+			Id = 1998656357,
 			DisplayName = "Speed Pass",
 			RobuxPrice = 5,
 			WalkSpeedMult = 1.15,
@@ -5138,14 +5145,15 @@ local MonetizationConfig = {
 		-- every Id 0 Developer Product) and no gold pad is built at the pumps; once the Id is live the Shop row and the
 		-- pump pad appear with no other edit. ProcessReceipt + GrantEntitlement are ready.
 		GoldenPumpjack = {
-			Id = 0,
+			Id = 3714663783,
 			DisplayName = "Golden Pumpjacks",
 			RobuxPrice = 49,
 			Cash = 0,
 			Gold = 0,
 			GrantEntitlement = "GoldenPumpjack",
 			OneTime = true, -- boolean entitlement: a second purchase adds nothing; the Shop shows OWNED
-			Description = "Gold-dress every oil pump on your base  pumps at Walls Lv 2",
+			IncomeMult = 1.5, -- claude-bud: plot pump cash per tick x this for an owner (PlotOilPumpService)
+			Description = "Gold pumpjacks: +50% pump income",
 		},
 		-- v71 money (M1, owner decision D2): Commander Starter Pack v2, same Id, 149 R$, one time (J14: no timer until
 		-- M3's real 72 h window). $50,000 + Auto Collect (permanent); a buyer who already owns Auto Collect gets
@@ -5193,7 +5201,7 @@ local MonetizationConfig = {
 		-- Rebirth panel (SoldFrom), never from the Shop list. Id = 0 until the owner creates it: the Rebirth panel
 		-- shows SOON and never prompts. Paste the Id only after the double prestige multiplier (B1) is fixed.
 		RebirthKeepBase = {
-			Id = 0,
+			Id = 3714663721,
 			DisplayName = "Keep-Base Rebirth",
 			RobuxPrice = 50,
 			Cash = 0,
@@ -5383,6 +5391,20 @@ local MonetizationConfig = {
 	},
 }
 
+-- claude-bud: is this SKU key on sale / effective for this player under Rollout. Keys outside RolloutKeys are always live.
+function MonetizationConfig.SkuLiveFor(userId: any, key: string): boolean
+	if not (MonetizationConfig.RolloutKeys :: any)[key] then
+		return true
+	end
+	local mode = MonetizationConfig.Rollout :: any
+	if mode == "all" then
+		return true
+	elseif mode == "owner" then
+		return AdminConfig.IsPlaytestOwner(userId)
+	end
+	return false
+end
+
 --[[ F1: the offer a PremiumPads slot sells right now: the first offer whose GamePasses / DevProducts entry exists with
 	a non-zero Id, or nil when none is live (the pad is not built). Pure; the server and the client call it alike. ]]
 function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
@@ -5392,7 +5414,12 @@ function MonetizationConfig.LivePadOffer(slot: PremiumPadSlot): PremiumPadOffer?
 			elseif offer.Kind == "DevProduct" then MonetizationConfig.DevProducts
 			else nil
 		local def = section and section[offer.Key]
-		if typeof(def) == "table" and typeof(def.Id) == "number" and def.Id ~= 0 then
+		if
+			typeof(def) == "table"
+			and typeof(def.Id) == "number"
+			and def.Id ~= 0
+			and (MonetizationConfig.Rollout == "all" or not (MonetizationConfig.RolloutKeys :: any)[offer.Key])
+		then
 			return offer
 		end
 	end
@@ -21386,7 +21413,11 @@ local function isStaleMapGen(setup: Instance?): boolean
 	if setup == nil or MapSetup == nil or MapSetup.MAP_GEN == nil then
 		return false
 	end
-	return setup:GetAttribute("WE_MapGen") ~= MapSetup.MAP_GEN
+	if setup:GetAttribute("WE_MapGen") ~= MapSetup.MAP_GEN then
+		return true
+	end
+	-- claude-bud (runway fix): same gen but another plot layout (e.g. a pre-v90 170 x 24 runway saved in the place)
+	return MapSetup.LAYOUT_SIG ~= nil and setup:GetAttribute("WE_LayoutSig") ~= MapSetup.LAYOUT_SIG
 end
 
 -- Run map build/heal AFTER remotes exist (never blocks EconomyUpdate creation)
@@ -21399,7 +21430,11 @@ elseif isStaleMapGen(Workspace:FindFirstChild("WarEmpireSetup")) then
 			.. tostring(stale:GetAttribute("WE_MapGen"))
 			.. " (want "
 			.. tostring(MapSetup.MAP_GEN)
-			.. ") — full MapSetup.Run (stale map gen)"
+			.. "), layout sig "
+			.. tostring(stale:GetAttribute("WE_LayoutSig"))
+			.. " (want "
+			.. tostring(MapSetup.LAYOUT_SIG)
+			.. ") — full MapSetup.Run (stale map gen / layout)"
 	)
 	pcall(function()
 		stale:Destroy()
@@ -21686,7 +21721,7 @@ local function seedPlayer(player: Player)
 	local cash = seedCashAmount(player.UserId)
 	local gold = math.floor(tonumber(EconomyConfig.StartingGold) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 92)
+		player:SetAttribute("WE_Build", 93)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", 0)
@@ -29680,6 +29715,33 @@ MapSetup.GROUND_TILES = GROUND_TILES_PER_SIDE * GROUND_TILES_PER_SIDE
 -- +10 keeps the FaceMapCentre parity (even = off, odd = on).
 MapSetup.MAP_GEN = (if BaseLayout.FacesMapCentre() then 83 else 82) + (if TerritoryConfig.Starter.Enabled then 10 else 0)
 
+--[[ claude-bud (runway fix): v90 made the runway 190 x 29 and the hangar 68 x 40 in config but kept MAP_GEN, so a place
+	saved with a pre-v90 WarEmpireSetup kept its 170 x 24 runway (Bootstrap only heals a same-gen map). This hash of the
+	plot layout geometry (every road rectangle, structure site and installation footprint) is stamped as WE_LayoutSig;
+	Bootstrap rebuilds a saved map whose stamp differs, so a layout edit never needs a MAP_GEN bump again. ]]
+local function layoutSignature(): number
+	local cfg = BaseLayout.Config()
+	local rows: { string } = {}
+	for _, r in ipairs(cfg.Roads or {}) do
+		table.insert(rows, string.format("R%s:%g,%g,%g,%g", tostring(r.Name), r.X, r.Z, r.SizeX, r.SizeZ))
+	end
+	for id, s in pairs(cfg.Structures or {}) do
+		local site = s.Site or {}
+		table.insert(rows, string.format("S%s:%g,%g,%g", tostring(id), tonumber(site.X) or 0, tonumber(site.Z) or 0, tonumber(s.Yaw) or 0))
+	end
+	for id, c in pairs((StructureVisualConfig :: any).Installations or {}) do
+		table.insert(rows, string.format("I%s:%g,%g", tostring(id), tonumber(c.Width) or 0, tonumber(c.Depth) or 0))
+	end
+	table.sort(rows)
+	local text = table.concat(rows, ";")
+	local h = 5381
+	for i = 1, #text do
+		h = (h * 33 + string.byte(text, i)) % 4294967296
+	end
+	return h
+end
+MapSetup.LAYOUT_SIG = layoutSignature()
+
 -- v70: healthy ground tiles under setup.Map (Bootstrap "Ground AFTER heal" check)
 function MapSetup.CountGroundTiles(setup: Instance): number
 	local map = setup:FindFirstChild("Map")
@@ -31996,6 +32058,7 @@ function MapSetup.Run()
 
 	-- v70: stamp the layout generation last (a Run that threw part-way stays unstamped → Bootstrap rebuilds it)
 	root:SetAttribute("WE_MapGen", MapSetup.MAP_GEN)
+	root:SetAttribute("WE_LayoutSig", MapSetup.LAYOUT_SIG) -- claude-bud: Bootstrap rebuilds a saved map from another layout
 
 	print("[WAR EMPIRE] MapSetup complete: desert ground=" .. tostring(GROUND_SIZE) .. "x" .. tostring(GROUND_THICKNESS) .. " topY=" .. tostring(GROUND_TOP_Y) .. " (World v2 edge: WorldTerrain + WorldBounds; dressing deferred/Studio-skip)")
 	print("[WAR EMPIRE] MapSetup confirmation: Gravity=" .. tostring(Workspace.Gravity) .. " WarEmpireSetup children=" .. tostring(#root:GetChildren()))
@@ -52563,7 +52626,7 @@ function BaseService.Init(deps: { [string]: any })
 		end
 		getStateJoinedAt[player.UserId] = os.clock()
 		pcall(function()
-			player:SetAttribute("WE_Build", 92)
+			player:SetAttribute("WE_Build", 93)
 		end)
 		local assignedPlot = BaseService.AssignPlot(player)
 		if assignedPlot == nil then
@@ -59362,7 +59425,7 @@ local function stampEconomyAttrs(player: Player, profile: PlayerProfile)
 	local gold = math.floor(tonumber(profile.Gold) or 0)
 	local pending = math.floor(tonumber((profile :: any).PendingCash) or 0)
 	pcall(function()
-		player:SetAttribute("WE_Build", 92)
+		player:SetAttribute("WE_Build", 93)
 		player:SetAttribute("WE_Cash", cash)
 		player:SetAttribute("WE_Gold", gold)
 		player:SetAttribute("WE_PendingCash", pending)
@@ -59502,7 +59565,7 @@ function DataService.LoadProfile(player: Player): PlayerProfile?
 	fireProfileLoaded(player, profile)
 
 	print(string.format(
-		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=92",
+		"[DataService] profile loaded userId=%d cash=%d persistent=%s WE_Build=93",
 		userId,
 		math.floor(tonumber(profile.Cash) or 0),
 		tostring(persistent)
@@ -65826,7 +65889,8 @@ function MonetizationService.SpeedMultFor(player: Player): number
 	end
 	for passKey, def in pairs(MonetizationConfig.GamePasses :: any) do
 		local m = walkSpeedMultOf(def)
-		if m > best and ownsCached(player, passKey) then
+		-- claude-bud: the Speed Pass counts only while MonetizationConfig.Rollout is live for this player
+		if m > best and MonetizationConfig.SkuLiveFor(player.UserId, passKey) and ownsCached(player, passKey) then
 			best = m
 		end
 	end
@@ -66194,6 +66258,9 @@ function MonetizationService.Init(deps: { [string]: any })
 		if not def then
 			return
 		end
+		if not MonetizationConfig.SkuLiveFor(player.UserId, productKey :: string) then
+			return -- claude-bud: rollout gate; nothing is logged or prompted for a player it is not live for
+		end
 		local source = cleanSource(rawSource)
 		rememberIntent(player, "DP:" .. (productKey :: string), source)
 		if AnalyticsService then
@@ -66224,6 +66291,9 @@ function MonetizationService.Init(deps: { [string]: any })
 		local def = findGamePassByKey(passKey :: string)
 		if not def then
 			return
+		end
+		if not MonetizationConfig.SkuLiveFor(player.UserId, passKey :: string) then
+			return -- claude-bud: rollout gate
 		end
 		local source = cleanSource(rawSource)
 		rememberIntent(player, "GP:" .. (passKey :: string), source)
@@ -66854,6 +66924,9 @@ function MonetizationService.TryDeathSpeedOffer(victim: Player): boolean
 	local pass = (MonetizationConfig.GamePasses :: any)[passKey]
 	if typeof(pass) ~= "table" or typeof(pass.Id) ~= "number" or pass.Id == 0 then
 		return false
+	end
+	if not MonetizationConfig.SkuLiveFor(victim.UserId, passKey) then
+		return false -- claude-bud rollout gate: no death offer for a pass that is not on sale for this player
 	end
 	local userId = victim.UserId
 	if cfg.OncePerSession ~= false and deathSpeedSent[userId] == true then
@@ -73229,7 +73302,9 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	local out = (half + (PlotOilPumpConfig.WallClearanceStuds or 18)) / axis
 	local spread = PlotOilPumpConfig.LateralSpreadStuds or 22
 	local count = math.clamp(PlotOilPumpConfig.PumpsPerPlot or 2, 1, 2)
+	local goldForOwner = MonetizationConfig.SkuLiveFor(ownerUserId, GOLDEN_KEY) -- claude-bud rollout gate
 	local hasGold = owner ~= nil
+		and goldForOwner
 		and MonetizationService ~= nil
 		and MonetizationService.PlayerOwnsEntitlement ~= nil
 		and MonetizationService.PlayerOwnsEntitlement(owner, GOLDEN_KEY) == true
@@ -73252,7 +73327,7 @@ function PlotOilPumpService.SyncPlot(plotId: number)
 	-- F9: the Golden Pump pad, only while the Id is live and the owner does not own it (nothing prompts at Id 0)
 	local goldDef = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
 	local goldLive = typeof(goldDef) == "table" and typeof(goldDef.Id) == "number" and goldDef.Id ~= 0
-	if goldLive and not hasGold then
+	if goldLive and goldForOwner and not hasGold then
 		local g = PlotOilPumpConfig.Golden
 		local padPos = (plotPos :: Vector3) + toward * (out - (g.PadOffsetStuds or 10)) + Vector3.new(0, 0.3, 0)
 		local gate = PlotFrame.LocalToWorld(plotId, 0, half)
@@ -73387,14 +73462,22 @@ function PlotOilPumpService.Init(deps: { [string]: any })
 					local owner = Players:GetPlayerByUserId(ownerId)
 					if owner then
 						local n = 0
+						local golden = 0
 						for _, ch in ipairs(folder:GetChildren()) do
 							if ch:IsA("Model") and string.find(ch.Name, "PlotOilPump", 1, true) then
 								n += 1
+								if ch:GetAttribute("WE_GoldenPump") == true then
+									golden += 1
+								end
 							end
 						end
 						if n > 0 then
+							-- claude-bud: a gold-dressed pump (owner bought Golden Pumpjacks, rollout live) earns IncomeMult x
+							local goldDef: any = (MonetizationConfig.DevProducts :: any)[GOLDEN_KEY]
+							local goldMult = math.clamp(tonumber(if typeof(goldDef) == "table" then goldDef.IncomeMult else nil) or 1, 1, 3)
+							local total = cash * (n - golden) + math.floor(cash * goldMult) * golden
 							-- F4: the owner's "+$18 / every 5s" label is client-side (ProducerLabels); no server pop
-							EconomyService.AccruePendingCash(owner, cash * n, reason)
+							EconomyService.AccruePendingCash(owner, total, reason)
 						end
 					end
 				end
@@ -73594,7 +73677,11 @@ local function alreadyOwns(player: Player, kind: string, key: string, part: Base
 	return false
 end
 
-local function resolveOffer(kind: string, key: string): (number?, string?)
+local function resolveOffer(kind: string, key: string, player: Player): (number?, string?)
+	-- claude-bud: MonetizationConfig.Rollout ("owner" first): a SKU not on sale for this player is silent
+	if not MonetizationConfig.SkuLiveFor(player.UserId, key) then
+		return nil, nil
+	end
 	if kind == "GamePass" then
 		local def = MonetizationConfig.GamePasses[key]
 		if def and typeof(def.Id) == "number" then
@@ -73656,7 +73743,7 @@ local function tryPrompt(player: Player, part: BasePart, fromStanding: boolean?)
 		return
 	end
 
-	local productId, displayName = resolveOffer(kind, offerKey)
+	local productId, displayName = resolveOffer(kind, offerKey, player)
 	if productId == nil then
 		return
 	end
@@ -73952,10 +74039,14 @@ end
 
 -- F7: the keep-base path can be SOLD (the Rebirth modal prompts it) only while its Id is pasted and it is Enabled.
 -- A saved token is always usable (it was paid for), whatever these say.
-local function keepBaseLive(): boolean
+local function keepBaseLive(player: Player): boolean
 	local def = keepBaseProduct()
 	local id = if def then tonumber(def.Id) else nil
-	return PrestigeConfig.KeepBase.Enabled == true and id ~= nil and id ~= 0
+	-- claude-bud: MonetizationConfig.Rollout ("owner" first) gates the SALE only; a saved token is always usable
+	return PrestigeConfig.KeepBase.Enabled == true
+		and id ~= nil
+		and id ~= 0
+		and MonetizationConfig.SkuLiveFor(player.UserId, PrestigeConfig.KeepBase.ProductKey)
 end
 
 local function keepBasePrice(): number
@@ -74072,7 +74163,7 @@ local function pushState(player: Player)
 		UnlockTrack = unlockListFor(prestige),
 		-- F7 / F11 (display only; RequestPrestige and the receipt re-check everything)
 		KeepBaseTokens = nonNegInt(profile.KeepBaseRebirths),
-		KeepBaseLive = keepBaseLive(),
+		KeepBaseLive = keepBaseLive(player),
 		KeepBasePrice = keepBasePrice(),
 		ProgressPct = PrestigeConfig.ProgressPct(level, xp),
 		Level = level,
@@ -108527,8 +108618,8 @@ local function promptDevProduct(productKey: string, source: string?)
 		return
 	end
 	-- Nothing prompts while the Id is 0 (the owner has not created the product yet): no intent, no Roblox sheet
-	if (tonumber(def.Id) or 0) == 0 then
-		toast("Coming soon", "Info")
+	if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, productKey) then
+		toast("Coming soon", "Info") -- claude-bud: also while MonetizationConfig.Rollout is not live for this player
 		return
 	end
 	-- Ask server to log + validate; client still prompts Marketplace (v69: intent log never delays the prompt)
@@ -108552,7 +108643,7 @@ local function promptGamePass(passKey: string, source: string?)
 		return
 	end
 	-- Nothing prompts while the Id is 0
-	if (tonumber(def.Id) or 0) == 0 then
+	if (tonumber(def.Id) or 0) == 0 or not MonetizationConfig.SkuLiveFor(player.UserId, passKey) then
 		toast("Coming soon", "Info")
 		return
 	end
@@ -108926,6 +109017,10 @@ function ShopController.Init()
 		if (tonumber(def.Id) or 0) == 0 then
 			return
 		end
+		-- claude-bud: MonetizationConfig.Rollout ("owner" first): no row for a SKU that is not on sale for this player
+		if not MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
+			return
+		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local stub = false -- kept for "coming soon" path if ever re-enabled
 		local sub = def.Description or ""
@@ -109010,6 +109105,9 @@ function ShopController.Init()
 		-- other edit, once its Id is pasted. Nothing is ever prompted for an Id 0 pass.
 		if (tonumber(def.Id) or 0) == 0 then
 			continue
+		end
+		if not MonetizationConfig.SkuLiveFor(Players.LocalPlayer.UserId, key) then
+			continue -- claude-bud rollout gate
 		end
 		local robux = tonumber(def.RobuxPrice) or 0
 		local btnLabel = if robux > 0 then (tostring(robux) .. " R$") else "PASS"
