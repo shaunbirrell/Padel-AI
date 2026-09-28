@@ -38,6 +38,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Constants = require(Shared.Constants)
 local OrdersConfig = require(Shared.Configs.OrdersConfig)
+local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG: escort figures per unit (army D14)
 local CombatFairnessConfig = require(Shared.Configs.CombatFairnessConfig) -- P1-4 escort + kill credit
 local WorldLabel = require(Shared.Util.WorldLabel)
 
@@ -1412,6 +1413,26 @@ function SquadOrdersService.SyncArmy(player: Player)
 			table.insert(st.Units, unit)
 		else
 			break
+		end
+	end
+
+	-- R-RIG (army D14): escort figures per unit (built only by clients, inside their own budget). Units in slot order
+	-- share RigConfig.EscortsFor(soldiers, units, Barracks), front pair first; an unchanged value does not replicate
+	-- again. Only with FollowSlots (wings): escorts stand ahead of wing units; the old centre grid would put them in
+	-- front of the player's view.
+	if RigConfig.Enabled == true then
+		local profile = DataService and DataService.GetProfile(player)
+		local upgrades = if profile then profile.BaseUpgrades else nil
+		local barracks = if typeof(upgrades) == "table" then tonumber(upgrades.Barracks) or 0 else 0
+		local escorts = if followSlotList() ~= nil then RigConfig.EscortsFor(soldiers, #st.Units, barracks) else 0
+		for _, u in ipairs(st.Units) do
+			local rank = 1
+			for _, o in ipairs(st.Units) do
+				if o.Slot < u.Slot then
+					rank += 1
+				end
+			end
+			u.Model:SetAttribute("WE_Escorts", RigConfig.EscortShare(escorts, #st.Units, rank))
 		end
 	end
 

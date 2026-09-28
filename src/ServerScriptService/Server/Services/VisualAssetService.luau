@@ -48,6 +48,8 @@ local ServerStorage = game:GetService("ServerStorage")
 local Shared = ReplicatedStorage.Shared
 local VisualAssetConfig = require(Shared.Configs.VisualAssetConfig)
 local DevConfig = require(Shared.Configs.DevConfig)
+local RigBuilder = require(script.Parent.Parent.Modules.RigBuilder) -- R-RIG
+local RigConfig = require(Shared.Configs.RigConfig) -- R-RIG
 
 local VisualAssetService = {}
 
@@ -82,6 +84,8 @@ type AssetRef = {
 	HideRoles: { string }?, -- bizlook: BusinessPieces: kit roles turned invisible (collision kept) once the piece is on
 	FromLevel: number?, -- bizlook: BusinessPieces: worn from this business level
 	ToLevel: number?, -- bizlook: BusinessPieces: ... up to this level
+	Rig: string?, -- R-RIG: "R6" = an animated rig template (RigBuilder), never a welded statue
+	Headwear: string?, -- R-RIG: "Beret" | "KitHelmet" | "None"
 }
 
 local cache: { [number]: Model } = {} -- template models (parented to nil / folder)
@@ -440,7 +444,39 @@ local function splitPack(assetId: number, pack: Instance)
 end
 
 -- Prepared asset → cache (whole model), or split (pack), or refused (over the part cap / Humanoid left).
+-- R-RIG: ids that a Characters ref with Rig = "R6" names are baked by RigBuilder (joints kept, no Humanoid)
+local function isRigId(assetId: number): boolean
+	for _, ref in pairs(VisualAssetConfig.Characters :: any) do
+		if typeof(ref) == "table" and ref.Rig == "R6" and ref.ModelAssetId == assetId then
+			return true
+		end
+	end
+	return false
+end
+
+-- R-RIG: hosts that asked for a rig while its file was loading or waiting for a retry (weak keys: a host that is
+-- destroyed meanwhile is simply forgotten). They get the rig when the file arrives (flushRigPending).
+local rigPending: { [Model]: string } = setmetatable({} :: any, { __mode = "k" })
+local flushRigPending: (number) -> ()
+
 local function acceptTemplate(assetId: number, model: Model): Model?
+	if isRigId(assetId) then
+		local rig, why = RigBuilder.BakeTemplate(model, assetId)
+		if rig == nil or countParts(rig) > maxParts() or hasHumanoid(rig) then
+			failed[assetId] = true
+			if rig then
+				rig:Destroy()
+			else
+				pcall(model.Destroy, model) -- not an R6 rig (e.g. R15): the inserted model goes, the Part kit stays
+			end
+			warn(string.format("[VisualAssetService] rig %d refused: %s — Part kit look stays", assetId, why or "over the cap / Humanoid"))
+			return nil
+		end
+		rig.Parent = ensureFolder()
+		cache[assetId] = rig
+		task.defer(flushRigPending, assetId) -- R-RIG: hosts that asked while it loaded / cooled get it now
+		return rig
+	end
 	prepareTemplate(assetId, model)
 	if isPack(assetId) then
 		splitPack(assetId, model)
@@ -1118,9 +1154,62 @@ end
 	Optional character visual overlay for NPC Part kits.
 	Attaches non-colliding clone; host HumanoidRootPart stays authoritative.
 ]]
+-- R-RIG: attach the rig to every host that asked while `assetId` was loading or cooling and is still alive in the
+-- world with no rig (a late statue, squad unit, NPC or gate guard gets the same body as the rest). Bounded by the
+-- hosts waiting (at most the figures alive); runs once per template arrival.
+function flushRigPending(assetId: number)
+	local template: Model? = cache[assetId]
+	if template == nil or RigConfig.Enabled ~= true then
+		return
+	end
+	local hosts: { Model } = {}
+	for host in pairs(rigPending) do
+		table.insert(hosts, host)
+	end
+	local n = 0
+	local world = game:GetService("Workspace")
+	for _, host in ipairs(hosts) do
+		local kind = rigPending[host]
+		rigPending[host] = nil
+		local ref = (VisualAssetConfig.Characters :: any)[kind] or VisualAssetConfig.Characters.Soldier
+		-- still in the world and still a Part kit (a dying host is removed by its builder moments later anyway)
+		if typeof(ref) == "table" and ref.Rig == "R6" and refId(ref) == assetId and host:IsDescendantOf(world)
+			and host:FindFirstChild(RigBuilder.RigName) == nil then
+			if RigBuilder.Attach(host, template, { Headwear = ref.Headwear, StaticHoldDeg = RigConfig.Anim.StaticHoldDeg }) then
+				host:SetAttribute("WE_CatalogAssetId", assetId)
+				n += 1
+			end
+		end
+	end
+	if n > 0 then
+		print(string.format("[VisualAssetService] rig %d attached late to %d figure(s)", assetId, n))
+	end
+end
+
 function VisualAssetService.TryAttachCharacterVisual(hostModel: Model, kind: string): boolean
 	-- P0: always attempt character catalog inserts (bypass StudioSkipWorldDressing)
 	local forceChar = true
+	-- R-RIG: a friendly squad soldier has its own look key; a Rig ref gets the animated rig or keeps its Part kit
+	local rigKind = if hostModel:GetAttribute("FriendlySquad") == true and (VisualAssetConfig.Characters :: any).Squad then "Squad" else kind
+	local rigRef = (VisualAssetConfig.Characters :: any)[rigKind] or VisualAssetConfig.Characters.Soldier
+	if typeof(rigRef) == "table" and rigRef.Rig == "R6" then
+		if RigConfig.Enabled ~= true then
+			return false -- R-RIG off: the Part kit stays (no load, never a welded statue)
+		end
+		local rid = refId(rigRef)
+		local rigTemplate = if rid > 0 then loadModel(rid, forceChar) else nil
+		if rigTemplate == nil then
+			if rid > 0 and not failed[rid] then
+				rigPending[hostModel] = rigKind -- loading / retry cooling: the rig comes when the file does
+			end
+			return false -- the Part kit stays (no welded-statue fallback for rig kinds)
+		end
+		local ok = RigBuilder.Attach(hostModel, rigTemplate, { Headwear = rigRef.Headwear, StaticHoldDeg = RigConfig.Anim.StaticHoldDeg })
+		if ok then
+			hostModel:SetAttribute("WE_CatalogAssetId", rid)
+		end
+		return ok
+	end
 	local assetId = VisualAssetService.ResolveCharacterAssetId(kind)
 	if not assetId then
 		return false

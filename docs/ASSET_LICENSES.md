@@ -197,6 +197,8 @@ LOOK lane keeps the full responses with its test evidence). Roblox's docs for `I
 | [41324890](https://create.roblox.com/store/asset/41324890) | Conveyor Belt | Roblox (User 1) | Model | 2011-05-13 | The whole model: 1 block part (4 x 0.4 x 4) with its stripe Decal, stretched into the kit belt's box; its "Force Script" is stripped at load (static belt) and its Configuration dropped | `Businesses.AmmoWorks`, `Businesses.ArmsCrateLine` (the part takes the `Kit_Belt` place, so the business part count is unchanged) | [economy API](https://economy.roblox.com/v2/assets/41324890/details) (re-read 2026-09-25 10:25 UTC) |
 | [31603741](https://create.roblox.com/store/asset/31603741) | Rocket | Roblox (User 1) | Model | 2010-07-27 | Part `Rocket` (one mesh part, 448 tris), laid along the kit rocket body and scaled to its length; the empty `Particles` part is dropped (`OmitParts`) and its Fire + Smoke removed (`StripEffectsAssetIds`) | `Businesses.RocketAssembly` (takes the `Kit_Signature` place) | [economy API](https://economy.roblox.com/v2/assets/31603741/details) (re-read 2026-09-25 10:25 UTC) |
 | [80566030](https://create.roblox.com/store/asset/80566030) | Capture Points | Roblox (User 1) | Model | 2012-05-11 | The whole model: 6 CylinderMesh parts (a round pad, 17.5 studs); its 2 scripts are stripped at load and its translucent `Height` beam is made invisible (`TransparentParts`) | `Landmarks.HomeOutpost` (the pad at each Home Outpost, on the capture ring; welded, non-colliding) | [economy API](https://economy.roblox.com/v2/assets/80566030/details) (re-read 2026-09-25 10:25 UTC) |
+| [187790284](https://create.roblox.com/store/asset/187790284) | Soldier | Roblox (User 1) | Model | 2014 | R6 body only (R-RIG, 2026-09-27): Torso + 4 limbs with their Roblox CharacterMesh bodies baked to FileMesh, BodyColors baked to part colours, the camo cap `Handle` kept as `Beret`; 6 parts, 6 Motor6D, AnimationController + Animator, 0 Humanoids. Its Humanoid, Head, scripts, Tool, BodyGyro, sounds and the real-world rifle mesh 72012671 are stripped at load (owner rule 9); the kit Head, helmet and block rifle are kept | `Characters.Soldier`, `Squad`, `Infantry`, `Worker`, `HeavyInfantry`, `Guard`, `BankGuard`, `OilRigGuard`, `FortGuard`, `CampCommander`, `GateGuard` (`Rig = "R6"`) | [economy API](https://economy.roblox.com/v2/assets/187790284/details) |
+| 182393478, 180435571, 180426354, 183817498 | R6 Hold, Idle, Walk, Aim animations | Roblox (User 1) | Animation | — | Played by id on each client (`RigAnimator`, `RigConfig.Anim.Ids`); nothing is copied or loaded as a model | `RigConfig.Anim.Ids` | economy API cache (design3/rig); live check `WE_RIG` (docs/ASSET_SHORTLIST.md §5c) |
 
 **Terms.**
 - Synty packs: Roblox's DevForum announcement "Free Synty Asset Packs Released in the Marketplace" (topic 1283755,
@@ -217,6 +219,9 @@ LOOK lane keeps the full responses with its test evidence). Roblox's docs for `I
 - Smoking Barrel (2026-09-25): a free Roblox-owned model; used whole (4 parts) with its smoke removed.
 - Conveyor Belt, Rocket and Capture Points (2026-09-25, hooks): free Roblox-owned models, the same terms; used as static
   dress only (every script stripped, the rocket's fire and smoke removed, the capture beam hidden).
+- Soldier 187790284 and the four R6 animations (2026-09-27, R-RIG): free Roblox-owned assets, the same terms. The
+  Soldier is used as a body only (its rifle mesh 72012671 and every script are stripped at load); the animations are
+  played by id and never copied.
 - The meshes and textures inside these models were uploaded by the accounts that built them for Roblox (checked on the
   economy API: oggo732, 1114780684, for the LUV and Nature meshes; Klaugrana001, 1453730866, for the City and Dungeon
   meshes and the pack textures). We never reference those inner ids in config; they arrive inside the Roblox-owned model
@@ -267,9 +272,9 @@ Roblox-owned bodies in §3.0 and every other family keeps its Part kit. The owne
 
 | Asset ID | Creator Store name | Uploader | Type | Updated | Triangles | Scripts | Used by | Notes |
 |---|---|---|---|---|---|---|---|---|
-| [9104381136](https://create.roblox.com/store/asset/9104381136) | Layered clothing realistic soldier | paquinhos (User) | Model | 2022-03-14 | 29,703 | 0 | `Characters.Infantry`, `Characters.WorkerFallback` | Uploader assembled Marketplace clothing and accessories made by others ("no need to credit"). Pinned Infantry/Worker fallback; W6a replaces with Roblox rigs |
-| [100212659702941](https://create.roblox.com/store/asset/100212659702941) | Realistic soldier StarterCharacter | HeitorGameplayBr009 (User) | Model | 2025-08-10 | 20,000 | 2 | `Characters.Soldier` |  |
-| [16134469614](https://create.roblox.com/store/asset/16134469614) | Rigged Soldier | Gioele_e (User) | Model | 2024-01-27 | 50,580 | 0 | `Characters.Worker`, `Characters.Guard`, `Characters.BankGuard`, `Characters.OilRigGuard`, `Characters.FortGuard`, `Characters.GateGuard`, `GateDefense.Guard` |  |
+| [9104381136](https://create.roblox.com/store/asset/9104381136) | Layered clothing realistic soldier | paquinhos (User) | Model | 2022-03-14 | 29,703 | 0 | none since R-RIG (2026-09-27) | Uploader assembled Marketplace clothing and accessories made by others ("no need to credit"). R-RIG replaced it with the Roblox Soldier 187790284 (§3.0); no config row names it |
+| [100212659702941](https://create.roblox.com/store/asset/100212659702941) | Realistic soldier StarterCharacter | HeitorGameplayBr009 (User) | Model | 2025-08-10 | 20,000 | 2 | none since R-RIG (2026-09-27) | R-RIG replaced it with the Roblox Soldier 187790284 (§3.0); no config row names it |
+| [16134469614](https://create.roblox.com/store/asset/16134469614) | Rigged Soldier | Gioele_e (User) | Model | 2024-01-27 | 50,580 | 0 | `GateDefense.Guard` | Since R-RIG (2026-09-27) the `Characters.*` rows use the Roblox Soldier 187790284 (§3.0) |
 
 ### Buildings (dress on structure plinths; PreferMesh stays OFF)
 

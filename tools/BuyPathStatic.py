@@ -212,10 +212,10 @@ def must_absent(path, needle, label):
         print(f"[BuyPathStatic] PASS {label}")
 
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "59524622", "No JeepFallback 59524622 assignment")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Soldier = { ModelAssetId = 100212659702941", "Soldier Design Bot primary")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Infantry = { ModelAssetId = 9104381136", "Infantry Design Bot")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Soldier = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret"', "R-RIG: Soldier = the Roblox Soldier rig (rule 9)")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Infantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet"', "R-RIG: Infantry = Soldier rig with the kit helmet")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ArmedJeep = { ModelAssetId = 0", "ArmedJeep tan turreted")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "HeavyInfantry = { ModelAssetId = 0", "HeavyInfantry Design Bot")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'HeavyInfantry = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet"', "R-RIG: HeavyInfantry = Soldier rig (#8 default)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Guard = { ModelAssetId = 16134469614", "Guard Design Bot")
 must_absent("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "91299598767068", "No Respawn pack primary assignment")
 # allow REJECT comments mentioning 3924234975; must_absent filters REJECT/DELETED
@@ -300,7 +300,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "960
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "0", "AsphaltDecal")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "MeshId = 0", "DesertRock MeshPart")
 # No-regress P0
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 9104381136", "Worker/Infantry unchanged")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Worker = { ModelAssetId = 187790284, Rig = "R6", Headwear = "KitHelmet"', "R-RIG: Worker = Soldier body in worker kit colours (#9 moot)")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 0", "MilitaryJeep unchanged")
 
 
@@ -550,7 +550,7 @@ kit_gen_at_least(32, "KIT_GEN 27")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", 'kit == "armory"', "WeaponsFacility armory kit")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "3-story weapons inventory", "Armory densify comment")
 must_contain("src/ServerScriptService/Server/Modules/StructureKitBuilder.luau", "compound-scale HQ", "HQ densify comment")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "100212659702941", "Worker distinct Soldier mesh")
+must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", '100212659702941', "R-RIG: the unowned spec-ops soldier id is gone (it never loaded)")
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'Worker = "Worker"', "Worker VisualKind Worker")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "HeavyInfantry", "Stall HeavyInfantry variety")
 must_contain("src/ServerScriptService/Server/Modules/MapSetup.luau", "role Part-dress differentiation", "Soldier role dress")
@@ -776,7 +776,7 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Pat
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "FastAttackCraft = { ModelAssetId = 0", "v41 Attack Boat")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'LandingCraft = { ModelAssetId = 0', "v41 LandingCraft=0 reject template")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 13195201090", "v41 no Build-a-Boat template ID")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Worker = { ModelAssetId = 16134469614", "v41 Worker distinct")
+must_contain("src/ServerScriptService/Server/Modules/RigBuilder.luau", 'local torsoColor = colorOf("Vest", rootColor)', "R-RIG: each kind keeps its kit colours on the Soldier body")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "\tSpecialForces = { ModelAssetId = 0", "v41 SpecialForces")
 must_contain("src/ReplicatedStorage/Shared/Configs/SoldierConfig.luau", 'SpecialForces = "SpecialForces"', "v41 SF VisualKind")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "OilPumpjack = { ModelAssetId = 15192621369", "v41 OilPumpjack [owner pick 15192621369, 2026-09-25]")
@@ -817,8 +817,8 @@ must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Cru
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'AircraftCarrier = { ModelAssetId = 0', "v42 Carrier Part-kit")
 must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'LandingCraft = { ModelAssetId = 0', "v42 LandingCraft Part-kit")
 must_not_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "ModelAssetId = 13195201090", "v42 no Build-a-Boat template")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Worker = { ModelAssetId = 16134469614", "v42 Worker ≠ Soldier")
-must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", "Soldier = { ModelAssetId = 100212659702941", "v42 Soldier KEEP")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'Squad = { ModelAssetId = 187790284, Rig = "R6", Headwear = "Beret"', "R-RIG: friendly squads wear the beret, hostile kinds the kit helmet")
+must_contain("src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau", 'WorkerFallback = { ModelAssetId = 0,', "R-RIG: no third-party fallback body (a failed rig load keeps the Part kit)")
 must_contain("src/ReplicatedStorage/Shared/Configs/StructureVisualConfig.luau", "BuildingDressGen = 29", "v42 BuildingDressGen 29")
 must_contain("src/ServerScriptService/Server/Services/VisualAssetService.luau", "local DRESS_GEN = 29", "v42 VAS DRESS_GEN 29")
 kit_gen_at_least(32, "v42 KIT_GEN stays 27")
@@ -8018,6 +8018,108 @@ must_contain(VS_VS, "\t\tseatOffset = CFrame.new(0, 2.4 * s, -3.0 * s)", "vscale
 must_contain(VS_VS, "\t\tWE_HalfLength = fp.HalfZ,\n\t\tWE_HalfWidth = fp.HalfX,", "vscale: [guard] WE_HalfLength / WE_HalfWidth stay the kit's (driving, splash)")
 must_contain(VS_VAS, "local function fitBodyToKit(clone: Model, hostModel: Model, primary: BasePart, ref: AssetRef): number?", "vscale: [guard] fitBodyToKit signature unchanged")
 
+
+# --- R-RIG: animated soldier rigs + army escorts (design3/rig/spec_rig.md, v3) ---
+RR_RC = 'src/ReplicatedStorage/Shared/Configs/RigConfig.luau'
+RR_RB = 'src/ServerScriptService/Server/Modules/RigBuilder.luau'
+RR_RA = 'src/StarterPlayer/StarterPlayerScripts/Client/Modules/RigAnimator.luau'
+RR_VAS = 'src/ServerScriptService/Server/Services/VisualAssetService.luau'
+RR_SOS = 'src/ServerScriptService/Server/Services/SquadOrdersService.luau'
+RR_BOOT = 'src/StarterPlayer/StarterPlayerScripts/Client/Bootstrap.client.luau'
+for _n in ('Enabled = true, -- false: VisualAssetService never rigs', 'Tag = "WE_Rig",', 'RigType = "Keep",', 'RequiresNeck = false,',
+           'TorsoDepth = 1.45,', 'TickHz = 4,', 'MaxAnimated = 24,', 'AnimateStatic = false,', 'HoldUntracked = true,',
+           'Hold = 182393478,', 'Idle = 180435571,', 'Walk = 180426354,', 'Aim = 183817498,', 'FarMeshStuds = 120,',
+           'MaxMeshedStatic = 8,', 'SoldiersPerEscort = 4,', 'MaxPerArmy = 12,', 'MaxPerUnit = 3,', 'MaxPerClient = 22,',
+           'MaxScreenFrac = 0.25,', 'FigureStuds = 5.3,', 'MaxPartsPerFigure = 10,', 'PartsPerEscort = 8,',
+           'PhoneFigureParts = 940,', 'LeadFigureParts = 760,', 'TrianglesPerMeshedFigure = 1530,', 'MaxMeshedTriangles = 85000,',
+           'Offsets = { Vector3.new(0, 0, -7), Vector3.new(0, 0, -9.4), Vector3.new(0, 0, -11.8) }'):
+    must_contain(RR_RC, _n, f"R-RIG config: {_n}")
+_rr_rc = read(RR_RC) or ''
+def _rr_num(key):
+    _m = re.search(r'\b' + key + r' = ([0-9.]+),', _rr_rc)
+    return float(_m.group(1)) if _m else None
+_rr_mpc, _rr_ppe, _rr_ppf, _rr_lead = _rr_num('MaxPerClient'), _rr_num('PartsPerEscort'), _rr_num('PhoneFigureParts'), _rr_num('LeadFigureParts')
+if None not in (_rr_mpc, _rr_ppe, _rr_ppf, _rr_lead) and _rr_mpc * _rr_ppe <= _rr_ppf - _rr_lead:
+    ok(f'R-RIG: Escort.MaxPerClient x PartsPerEscort = {_rr_mpc * _rr_ppe:.0f} <= PhoneFigureParts - LeadFigureParts = {_rr_ppf - _rr_lead:.0f} (a phone never holds more figure parts than HEAD)')
+else:
+    bad('R-RIG: escorts per phone exceed Budget.PhoneFigureParts - Budget.LeadFigureParts')
+_rr_ma, _rr_ms, _rr_tri, _rr_tmax = _rr_num('MaxAnimated'), _rr_num('MaxMeshedStatic'), _rr_num('TrianglesPerMeshedFigure'), _rr_num('MaxMeshedTriangles')
+if None not in (_rr_ma, _rr_ms, _rr_mpc, _rr_tri, _rr_tmax) and (_rr_ma + _rr_ms + _rr_mpc) * _rr_tri <= _rr_tmax:
+    ok(f'R-RIG: meshed soldier triangles per phone ({_rr_ma:.0f} + {_rr_ms:.0f} + {_rr_mpc:.0f}) x {_rr_tri:.0f} <= {_rr_tmax:.0f}')
+else:
+    bad('R-RIG: (MaxAnimated + MaxMeshedStatic + MaxPerClient) x TrianglesPerMeshedFigure exceeds MaxMeshedTriangles')
+_rr_u = _rr_num('MaxPerUnit')
+_rr_o = re.search(r'Offsets = \{(.*)\} :: \{ Vector3 \}', _rr_rc)
+_rr_offs = re.findall(r'Vector3\.new\(([-0-9.]+), ([-0-9.]+), ([-0-9.]+)\)', _rr_o.group(1)) if _rr_o else []
+if _rr_u is not None and len(_rr_offs) == int(_rr_u) and all(float(x) == 0 and float(z) < 0 for x, _, z in _rr_offs):
+    ok('R-RIG: one escort offset per allowed escort, every one AHEAD of its unit (X = 0, Z < 0: out of the camera corridor)')
+else:
+    bad(f'R-RIG: Escort.Offsets must be MaxPerUnit entries ahead of the unit (X = 0, Z < 0), got {_rr_offs}')
+must_contain(RR_RB, 'return nil, "no Torso"', "R-RIG: a non-R6 body is refused (Part kit stays)")
+must_contain(RR_RB, 'ac.Name = "AnimationController"', "R-RIG: the template animates through an AnimationController")
+must_not_contain(RR_RB, 'Instance.new("Humanoid")', "R-RIG: no Humanoid is ever made for a rig")
+must_contain(RR_RB, 'hum.BreakJointsOnDeath = false', "R-RIG: a dead figure stays whole until its builder removes it")
+must_contain(RR_RB, 'hum.RequiresNeck = RigConfig.Host.RequiresNeck == true', "R-RIG: the rig Neck can never kill the host")
+must_contain(RR_RB, 'if RigConfig.Host.RigType == "R15" then', "R-RIG: the Studio fallback for the host hip height is a config flip")
+must_contain(RR_RB, 'torso.CanQuery = true', "R-RIG: the rig Torso is the hit box that keeps today's side-on hit area")
+must_contain(RR_RB, 'rig:SetAttribute("WE_RigStatic", true)', "R-RIG: anchored statues are marked static")
+must_contain(RR_RB, 'for k, v in pairs(rootAttrs) do', "R-RIG: the host root's hit attributes go onto every queryable rig part")
+must_not_contain(RR_RB, 'rbxassetid://2711', "R-RIG: no store mesh id is baked into our code (read from the loaded file)")
+for _n in ('RenderStepped', 'Heartbeat', 'FireServer', 'InvokeServer', 'workspace:GetDescendants', 'Workspace:GetDescendants'):
+    must_not_contain(RR_RA, _n, f"R-RIG client: no {_n}")
+_rr_ra = read(RR_RA) or ''
+_rr_gd = re.findall(r'(\w+):GetDescendants\(\)', _rr_ra)
+if _rr_ra and _rr_gd and all(x == 'copy' for x in _rr_gd):
+    ok('R-RIG client: GetDescendants only on one escort body at build (never a tree scan)')
+else:
+    bad(f'R-RIG client: GetDescendants on something other than the escort copy: {sorted(set(_rr_gd))}')
+# no closure is made per pass: applyState (called every pass for every walking figure) defines no function
+_rr_as = re.search(r'\nlocal function applyState\(.*?\nend\n', _rr_ra, re.S)
+if _rr_as and 'function' not in _rr_as.group(0)[len('\nlocal function applyState('):]:
+    ok('R-RIG client: applyState makes no closure per call (playTrack is module level)')
+else:
+    bad('R-RIG client: applyState defines a function (a closure per pass per figure)')
+must_contain(RR_RA, 'local function playTrack(tr: AnimationTrack?, on: boolean)', "R-RIG client: one module-level track helper")
+must_contain(RR_RA, 'CollectionService:RemoveTag(copy, TAG)', "R-RIG: an escort copy never keeps the rig tag")
+must_contain(RR_RA, 'd.CanQuery = false', "R-RIG: escorts can never be hit")
+must_contain(RR_RA, 'copy.Parent = host -- goes with the unit', "R-RIG: escorts are parented under their unit")
+must_contain(RR_RA, 'local period = 1 / math.clamp(tonumber(cfg.TickHz) or 4, 1, 10)', "R-RIG: one LOD loop <= 10 Hz")
+must_contain(RR_RA, 'room -= allow', "R-RIG: the own army's escorts come first inside Escort.MaxPerClient")
+must_contain(RR_RA, 'local keep = if e.Tracks then math.min(#e.Escorts, e.WantEsc, math.max(0, room)) else 0', "R-RIG: other armies keep the escorts they have (no churn in a crowd)")
+must_contain(RR_RA, 'elseif depth < minDepth or dist < playerDist then', "R-RIG: camera guard hides an escort nearer than the player or taller than MaxScreenFrac")
+must_contain(RR_RA, 'if not e.Picked and not e.SPicked and #e.Meshes > 0 then', "R-RIG: only the pick, the nearest statues and escorts wear the Roblox body")
+must_contain(RR_RA, 'setHoldBaked(e, false) -- the Hold track lifts the arm itself', "R-RIG: the rifle-forward turn is undone before Hold plays")
+must_contain(RR_RA, 'setHoldBaked(e, true) -- rifle forward from the first frame this client sees it', "R-RIG: an untracked figure holds its rifle forward")
+must_contain(RR_VAS, 'return false -- R-RIG off: the Part kit stays (no load, never a welded statue)', "R-RIG kill switch")
+must_contain(RR_VAS, 'local rig, why = RigBuilder.BakeTemplate(model, assetId)', "R-RIG: rig ids are baked, not welded")
+must_contain(RR_VAS, 'pcall(model.Destroy, model)', "R-RIG: a refused body is destroyed")
+must_contain(RR_VAS, 'rigPending[hostModel] = rigKind', "R-RIG: a figure that asked while the Soldier file was loading / cooling is remembered")
+must_contain(RR_VAS, 'task.defer(flushRigPending, assetId)', "R-RIG: it gets the rig when the file arrives (no mixed looks after a retry)")
+must_contain(RR_SOS, 'u.Model:SetAttribute("WE_Escorts", RigConfig.EscortShare(escorts, #st.Units, rank))', "R-RIG: escorts per unit from the server")
+must_contain(RR_SOS, 'local escorts = if followSlotList() ~= nil then RigConfig.EscortsFor(soldiers, #st.Units, barracks) else 0', "R-RIG: escorts only with the FollowSlots wings")
+must_contain(RR_BOOT, 'safeInit("RigAnimator", safeRequire("RigAnimator", Modules:WaitForChild("RigAnimator", 5) :: Instance))', "R-RIG: client init guarded, bounded wait")
+_rr_fake = [str(_p) for _p in (ROOT / 'src').rglob('*.luau') if 'SOLDIER_FAKE' in _p.read_text(encoding='utf-8', errors='ignore')]
+if not _rr_fake:
+    ok('R-RIG: the store-derived Soldier fake never enters the repo')
+else:
+    bad(f'R-RIG: store-derived fake found in {_rr_fake}')
+# R-RIG-H: the kit Head / Helmet / Rifle / Pack live INSIDE the WE_Rig sub-model of NPC, squad, gate-guard and statue
+# hosts. A non-recursive lookup of them on anything but a player character (or inside the rig modules, on the rig)
+# silently finds nothing. Allowed receivers: character / char (players), rig (RigBuilder / RigAnimator).
+_rr_hits = []
+for _p in (ROOT / 'src').rglob('*.luau'):
+    _t = _p.read_text(encoding='utf-8', errors='ignore')
+    for _m in re.finditer(r'([\w.]+):(?:FindFirstChild|WaitForChild)\("(Head|Helmet|Rifle|Pack)"(\)|, *[0-9.]+\))', _t):
+        _recv = _m.group(1).split('.')[-1]
+        if _recv in ('character', 'char') or (_recv == 'rig' and _p.name in ('RigBuilder.luau', 'RigAnimator.luau')):
+            continue
+        _rr_hits.append(f'{_p.relative_to(ROOT)}: {_m.group(0)}')
+    for _m in re.finditer(r'\b(?:model|host|hostModel|npc|unit|guard|figure)(?:\.Model)?\.(Head|Helmet|Rifle|Pack)\b', _t):
+        _rr_hits.append(f'{_p.relative_to(ROOT)}: {_m.group(0)}')
+if not _rr_hits:
+    ok('R-RIG-H: no non-recursive Head / Helmet / Rifle / Pack lookup on an NPC, squad, guard or statue host')
+else:
+    bad(f'R-RIG-H: non-recursive kit-part lookup on a rigged host (use FindFirstChild(name, true)): {_rr_hits[:6]}')
 parse_gate()
 
 print(f"[BuyPathStatic] Done PASS={PASS} FAIL={FAIL}")

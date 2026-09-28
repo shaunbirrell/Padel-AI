@@ -734,16 +734,17 @@ Generated from the repo config (PreferMeshWhenAssetIdSet = false). "Owned" is th
 | Hospital Ship | rejected | – | – | yes | red-cross emblems and a copy of a named real ship |
 | Supply Ship | rejected | 0 | – | yes | owner check (Open Cloud, v75): 174 parts (cap 40) |
 | Premium Tidebreaker | waits on another job's file | – | – | yes | VehicleConfig + VehicleService (streaming2-build): premium vehicle def, then a Studio look |
-| Soldier | animated-rig job | – | – | Roblox (no Get) | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Infantry | animated-rig job | – | – | Roblox (no Get) | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Heavy Infantry | animated-rig job | – | – | yes | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
+| Soldier | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG); camo cap; the look every unknown soldier kind fal… |
+| Infantry | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet |
+| Squad | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), camo cap: friendly squad units (the army escorts… |
+| Heavy Infantry | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
 | Special Forces | rejected | – | – | yes | wrong item: a beret with a real regiment's badge |
-| Worker | animated-rig job | – | – | yes | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Guard | animated-rig job | – | – | yes | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Gate Guard | animated-rig job | – | – | yes | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Oil Rig Guard | animated-rig job | – | – | Roblox (no Get) | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Fort Guard | animated-rig job | – | – | Roblox (no Get) | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
-| Bank Guard | animated-rig job | – | – | yes | needs the animated-rig job R-RIG (rule 9: animated rigs, not welded statues) |
+| Worker | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
+| Guard | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
+| Gate Guard | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
+| Oil Rig Guard | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet |
+| Fort Guard | wired (Roblox-owned) | 187790284 | – | Roblox (no Get) | Roblox Soldier, animated rig (R-RIG), in the kit colours and kit helmet |
+| Bank Guard | rejected | – | – | yes | #8 default (R-RIG): the Roblox Soldier rig 187790284 dresses this kind; a Shirt / Pants… |
 | Town Civilian | needs new code first | – | – | yes | needs a town civilian spawner plus the animated-rig job |
 | Starter Rifle | wired (Roblox-owned) | 4842207161 (WeaponConfig) | – | Roblox (no Get) | Roblox rifle model in hand |
 | Assault Rifle | wired (Roblox-owned) | 4842207161 (WeaponConfig) | – | Roblox (no Get) | Roblox rifle model in hand |
