@@ -5,7 +5,7 @@ _cb88_vac = "src/ReplicatedStorage/Shared/Configs/VisualAssetConfig.luau"
 _cb88_rig = "src/ServerScriptService/Server/Modules/AirBodyRig.luau"
 _cb88_map = {
     "BODY_VTOL": ("80886282228822", ("VTOLTransport",)),
-    "BODY_ATTACK_HELI": ("11240665977", ("AttackHelicopter", "GunshipHeli", "EscortHeli", "NightAttackHeli")),
+    "BODY_ATTACK_HELI": ("11240665977", ("AttackHelicopter",)),  # v91: Gunship / Escort / NightAttack -> heliRef (codebot_v91.py)
     "BODY_STEALTH_HELI": ("11240665977", ("StealthHeli",)),
     # v90 (Code Bot): StrikeJet / CASJet / StealthStrike / StealthStrikeJet moved to the jet 14589101870 (owner answer 1,
     # pinned in codebot_v90.py); the two v88 tables stay defined (unused) for an easy revert

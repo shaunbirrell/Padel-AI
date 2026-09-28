@@ -471,6 +471,36 @@ local BODY_ATTACK_HELI = {
 	StripDecals = true,
 }
 
+-- v91 (owner 2026-09-28): every helicopter key wears the attack heli 11240665977 (10 parts, every part by its uploader),
+-- each in its own military colour on the body panels only (the glass, seats, blades, wheels and engines keep theirs;
+-- measured live on v86: BAP 1 / Body / Doors / Thing for Blades are the navy 27,42,53 panels). Owner-only like every
+-- heli body (Rollout "Body"). Transport keys: a bigger BodyScale for their bigger kit, and the middle cabin seat
+-- (PassengerSeat4) between the cockpit and the rear bench (live v86 raycasts: 4.1-5.1 studs of headroom). The main
+-- Blades spin through the v90 rotor lookup. Revert one key: put its old bodyRef line back (BODY_LIGHT_HELI /
+-- BODY_TRANSPORT_HELI are kept, unused).
+local HELI_PAINT_PARTS = { "BAP 1", "Body", "Doors", "Thing for Blades" }
+local function heliRef(scale: number, color: Color3?, cabin: boolean, note: string): AssetRef
+	local r: { [string]: any } = {}
+	for k, v in pairs(BODY_ATTACK_HELI) do
+		r[k] = v
+	end
+	r.BodyScale = scale
+	if color then
+		r.BodyColor = color
+		r.BodyColorParts = HELI_PAINT_PARTS
+	end
+	if cabin then
+		local seats: { [string]: Vector3 } = {}
+		for k, v in pairs(BODY_ATTACK_HELI.BodySeats) do
+			seats[k] = v
+		end
+		seats.PassengerSeat4 = Vector3.new(0, 5.0, -21) -- the cabin, between the cockpit and the rear bench
+		r.BodySeats = seats
+	end
+	r.Note = note
+	return r :: any
+end
+
 -- StealthHeli: the attack-heli body recoloured near-black.
 local BODY_STEALTH_HELI = {
 	ModelAssetId = 11240665977,
@@ -918,14 +948,14 @@ local VisualAssetConfig = {
 		TankDestroyer = { ModelAssetId = 0, Note = "owner list: [WEAK] low-poly tank declined, our Part kit reads better - Part kit" } :: AssetRef,
 		AssaultGun = { ModelAssetId = 0, Note = "owner list: [WEAK] low-poly tank declined, our Part kit reads better - Part kit" } :: AssetRef,
 		-- Free heli family
-		TransportHeli = bodyRef(BODY_TRANSPORT_HELI, "v87 owner pick 109615982233602 transport helicopter (wc5), owner-only rollout"),
+		TransportHeli = heliRef(0.52, Color3.fromRGB(54, 78, 56), true, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (forest green)"),
 		AttackHelicopter = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
-		LightTransportHeli = bodyRef(BODY_TRANSPORT_HELI, "v87 owner pick 109615982233602 transport helicopter (wc5), owner-only rollout"),
-		NightAttackHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
-		LightScoutHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
-		GunshipHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
-		HeavyLiftHeli = bodyRef(BODY_TRANSPORT_HELI, "v87 owner pick 109615982233602 transport helicopter (wc5), owner-only rollout"),
-		RescueHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
+		LightTransportHeli = heliRef(0.48, Color3.fromRGB(118, 134, 112), true, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (sage green)"),
+		NightAttackHeli = heliRef(0.45, Color3.fromRGB(58, 62, 40), false, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (dark olive)"),
+		LightScoutHeli = heliRef(0.45, Color3.fromRGB(100, 108, 68), false, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (olive drab)"),
+		GunshipHeli = heliRef(0.45, Color3.fromRGB(74, 80, 88), false, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (gunmetal grey)"),
+		HeavyLiftHeli = heliRef(0.6, Color3.fromRGB(116, 92, 66), true, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (earth brown)"),
+		RescueHeli = heliRef(0.45, Color3.fromRGB(190, 168, 122), false, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (desert sand)"),
 		StealthHeli = bodyRef(BODY_STEALTH_HELI, "v88 owner pick 11240665977 attack helicopter, near-black (wc6), owner-only rollout"),
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
@@ -1348,9 +1378,9 @@ local VisualAssetConfig = {
 		FortressTank = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) — Part kit" } :: AssetRef,
 		RailgunCarrier = { ModelAssetId = 0, Note = "W1 CFG drop (franchise design) → TrackedArtillery family body, else Part kit" } :: AssetRef,
 		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
-		UtilityHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
-		MedevacHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
-		EscortHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
+		UtilityHeli = heliRef(0.45, Color3.fromRGB(150, 138, 100), false, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (khaki)"),
+		MedevacHeli = heliRef(0.48, Color3.fromRGB(160, 164, 168), true, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (light grey)"),
+		EscortHeli = heliRef(0.45, Color3.fromRGB(78, 98, 124), false, "v91 owner pick: attack heli 11240665977 for every heli key, own colour, owner-only rollout (slate blue)"),
 		VTOLTransport = bodyRef(BODY_VTOL, "v88 owner pick 80886282228822 ev41 tilt-rotor (wc6), owner-only rollout"),
 		HeavyBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
 		-- v90 (owner 2026-09-28): the owner's jet 14589101870 replaces the v88 body on this key, pilot inside like the

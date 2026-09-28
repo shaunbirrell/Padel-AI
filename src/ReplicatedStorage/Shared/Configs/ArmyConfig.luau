@@ -290,6 +290,58 @@ local ArmyConfig = {
 		WaterRereadSeconds = 10, -- the WE_Water surface list is re-read at most this often, only while a recover searches
 	},
 
+	-- v91 (Code Bot, owner 2026-09-28: the army still despawned while he ran, glitched and walked into each other, and
+	-- must not follow him into his base): FOLLOW movement overhaul (Server/Modules/ArmyFollow.luau). Rollout "all" |
+	-- "owner" | "off" ("off" = the old v85 / v90 follow code). Wedge slots behind the owner, separation + no
+	-- soldier-vs-soldier collision, straight MoveTo with throttled pathfinding only when blocked, catch-up faster than
+	-- his sprint, regroup teleport (never a delete), and a wait line outside his main gate while he is in his base.
+	Follow2 = {
+		Enabled = true,
+		Rollout = "all",
+		WedgeBack = 3, -- rank k: row = ceil(k / 2), back = WedgeBack + row x RowBack, side = +-(WedgeSide + row x RowSide)
+		RowBack = 3,
+		WedgeSide = 2.5,
+		RowSide = 2.5,
+		LeadSeconds = 0.3, -- the slot leads his move by this (capped at LeadMaxStuds)
+		LeadMaxStuds = 5,
+		FacingTurnDeg = 35, -- standing: the wedge turns with him only past this
+		SeparationStuds = 3.5,
+		SeparationGain = 3,
+		MatchMult = 1.08, -- in the slot: his pace x this (his WalkSpeed incl. Speed Pass / Boost, or his measured speed)
+		CatchUpStartStuds = 5,
+		CatchUpMult = 1.35,
+		CatchUpPerStud = 0.6,
+		CatchUpMaxMult = 1.8,
+		CatchUpMin = 34, -- the catch-up cap is never under this (a boosted sprint is 20)
+		MaxSpeed = 50,
+		ArriveStuds = 2,
+		ReissueStuds = 1.5, -- a MoveTo is re-sent only when the goal moved this far ...
+		ReissueSeconds = 5, -- ... or this long passed (Humanoid.MoveTo times out after 8 s)
+		PathCooldown = 1.5, -- one path per unit per this, only while the straight line to its slot is blocked
+		PathBudgetPerSecond = 8, -- paths per server per second
+		PathKeepStuds = 8, -- a path is kept while its end stays this near the slot
+		FarStuds = 70, -- regroup: this far from its slot ...
+		FarSeconds = 1, -- ... for this long
+		BaseFarStuds = 140, -- while he is in his base (the wait line)
+		StuckSeconds = 3, -- regroup: moved less than StuckStuds in this long while its slot is more than StuckMinStuds away
+		StuckStuds = 3,
+		StuckGoalStuds = 6,
+		StuckMinStuds = 10,
+		VoidBelowOwner = 60, -- regroup: this far under the owner, or within VoidMargin of FallenPartsDestroyHeight
+		VoidMargin = 80,
+		OwnerJumpSpeed = 60, -- an owner move faster than this on one think is a teleport / respawn: far units regroup at once
+		JumpRegroupStuds = 40,
+		VehicleDeferSpeed = 20, -- no regroup while he drives faster than this
+		TeleportCooldown = 2.5,
+		StandHeight = 3.2,
+		BaseInStuds = 4, -- in his base: this far inside his plot square's edge (out again BaseOutStuds past it)
+		BaseOutStuds = 2,
+		BaseWaitOut = 12, -- the wait line: this far outside the plot's front edge (main gate) ...
+		BaseWaitGap = 5, -- ... beside the gate lane (MainGateWidth / 2 + this), never in it ...
+		BaseWaitSpacing = 4, -- ... then this apart, two staggered rows
+		LogSeconds = 5,
+	},
+
 	Gate = {
 		-- The owner's FOLLOW units within RaidConfig.Defense.GateOpenRadius open his friendly gate, only while he is
 		-- alive within OwnerNearStuds (flat) of it, and units alone (no owner / ally player at the gate) for at most

@@ -20,7 +20,7 @@ if (read(_cb90_sos) or "").count("SquadOrdersService._FixLive = false") >= 3:
     ok("CODEBOT v90: _FixLive is reset after each owner and after the loop (never leaks to the next player)")
 else:
     bad("CODEBOT v90: _FixLive must be reset after each owner and after the loop")
-must_contain(_cb90_sos, 'return ArmyConfig.LiveFor("Fix", uid) and typeof(rc) == "table"', "CODEBOT v90: reformRootless obeys Rollout.Fix")
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #must_contain(_cb90_sos, 'return ArmyConfig.LiveFor("Fix", uid) and typeof(rc) == "table"', "CODEBOT v90: reformRootless obeys Rollout.Fix")
 must_contain(_cb90_gds, 'and ArmyConfig.LiveFor("Fix", def.OwnerUserId)', "CODEBOT v90: the gate-open part of the army fix obeys Rollout.Fix")
 
 # answer 1-3: every jet key on the owner's jet 14589101870, pilot inside, its own colour on the grey panels

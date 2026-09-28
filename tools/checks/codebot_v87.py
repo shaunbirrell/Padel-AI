@@ -10,8 +10,9 @@ _cb87_veh = "src/ServerScriptService/Server/Services/VehicleService.luau"
 # the rollout: owner only, every new body carries Rollout = "Body"
 must_contain(_cb87_vac, '\tBodyRollout = "owner",\n', "CODEBOT v87: VisualAssetConfig.BodyRollout ships \"owner\" (only the playtest owner's vehicles wear the new bodies)")
 _cb87_map = {
-    "BODY_LIGHT_HELI": ("3130894523", ("LightScoutHeli", "UtilityHeli", "RescueHeli", "MedevacHeli")),
-    "BODY_TRANSPORT_HELI": ("109615982233602", ("TransportHeli", "LightTransportHeli", "HeavyLiftHeli")),
+    # v91 (Code Bot): every heli key moved to the attack heli 11240665977 (codebot_v91.py); the tables stay, unused
+    "BODY_LIGHT_HELI": ("3130894523", ()),
+    "BODY_TRANSPORT_HELI": ("109615982233602", ()),
     "BODY_BOMBER": ("14669079591", ("StrikeBomber", "HeavyBomber", "StrategicBomber")),
     "BODY_PATROL_BOAT": ("16692908395", ("PatrolBoat", "FastAttackCraft", "RiverBoat", "CoastCutter", "TorpedoBoat")),
     "BODY_GUNBOAT": ("15838664806", ("Gunboat", "MissileBoat", "MineLayer", "CoastalMonitor")),

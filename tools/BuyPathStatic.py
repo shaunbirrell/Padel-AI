@@ -1095,8 +1095,8 @@ must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDContr
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/HUDController.luau", "0.5s hard fallback", "v60 HUD 0.5s $… fallback")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "leaderstats/attrs FIRST", "v60 WorldPrompt leaderstats first")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "EconomyService.Push FIRST", "v58 OnProfileLoaded Push first")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 DataService")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
 must_contain("src/ReplicatedStorage/Shared/Constants.luau", 'RemotesFolderName = "WE_Remotes"', "v60 WE_Remotes folder name")
 must_contain("src/ReplicatedStorage/Shared/Remotes.luau", "function Remotes.BindEvent", "v60 Remotes.BindEvent")
 must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", "leaderstats seed ready", "v60 EarlyRemotes leaderstats seed")
@@ -1161,7 +1161,7 @@ must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'Error 
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "WE_ServerBuyPrompt", "v62 server ProximityPrompt buy")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "firePurchaseResult", "v62 UpgradePad firePurchaseResult")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", "RemoteNames.PurchaseResult", "v62 WorldPrompt listens PurchaseResult")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 90)', "v90 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
 must_contain("src/ReplicatedStorage/Shared/Configs/BaseConfig.luau", 'Id = "CommandCenter"', "CommandCenter catalog id")
 
 # Prove client FireServer name === server hook name (same string constant)
@@ -1234,9 +1234,9 @@ must_not_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau
 must_not_contain("src/ServerScriptService/Server/Services/PremiumPadService.luau", "profile.BasePlotId = 1", "v68 PremiumPad never forces plot 1")
 must_contain("src/ServerScriptService/Server/Modules/RemoteSetup.luau", "_purchaseHookedInstance", "v63 RemoteSetup re-hook destroyed remote")
 must_contain("src/StarterPlayer/StarterPlayerScripts/Client/Controllers/WorldPromptController.luau", 'GetAttributeChangedSignal("WE_BuyAck")', "v63 WorldPrompt listens WE_BuyAck")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 90)', "v90 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", "50_000_000", "v63 shaunie6 cash floor on buy")
 
 # Attribute-ack + CommandCenter cash 50M→49998500 (same reconcile math as v62)
@@ -1263,9 +1263,9 @@ must_contain("src/ServerScriptService/Server/Services/EconomyService.luau", '"Sp
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v64 UpgradePad ensures BaseUpgrades")
 must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "PurchaseUpgrade threw", "v64 UpgradePad pcall PurchaseUpgrade")
 must_contain("src/ServerScriptService/Server/Modules/ProfileSchema.luau", "v64: always ensure nested tables", "v64 ProfileSchema Migrate ensures Stats/BaseUpgrades")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 90)', "v90 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
 
 # Simulate CommandCenter buy with Stats=nil / BasePlotId=nil / Reconcile edge → 50M→49998500
 def simulate_cc_buy(stats_nil: bool, plot_nil: bool, profile_cash: int, hud_cash: int) -> int:
@@ -1318,9 +1318,9 @@ must_contain("src/ServerScriptService/Server/Services/UpgradePadService.luau", "
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "DataService Init FIRST (v65)", "v65 Bootstrap DataService-first log")
 must_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "deps.DataService is nil before BaseService.Init", "v66 Bootstrap warns (no assert) on nil deps.DataService")
 must_not_contain("src/ServerScriptService/Server/Bootstrap.server.luau", "assert(deps.DataService", "v66 Bootstrap has no fatal DataService assert")
-must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 BaseService")
-must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 90)', "v90 WE_Build=90 DataService")
-must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 90)', "v90 EarlyRemotes WE_Build")
+must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 BaseService")
+must_contain("src/ServerScriptService/Server/Services/DataService.luau", 'SetAttribute("WE_Build", 91)', "v91 WE_Build=91 DataService")
+must_contain("src/ServerScriptService/Server/EarlyRemotes.server.luau", 'SetAttribute("WE_Build", 91)', "v91 EarlyRemotes WE_Build")
 # Keep v64 hardenings
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'typeof(profile.BaseUpgrades) ~= "table"', "v65 keeps v64 BaseUpgrades guard")
 must_contain("src/ServerScriptService/Server/Services/BaseService.luau", 'SetAttribute("WE_BuyErr", errStr)', "v65 keeps v64 real WE_BuyErr")
@@ -9245,10 +9245,10 @@ def _army_fix_pins() -> None:
     must_contain(AF_SO, "\tif not OrdersConfig.Enabled then\n\t\tclearSquad(player.UserId)\n", "army fix: SyncArmy clears the squad only when OrdersConfig.Enabled is false")
     must_contain(AF_SO, "\tPlayers.PlayerRemoving:Connect(function(player: Player)\n\t\tclearSquad(player.UserId)\n", "army fix: Init clears the squad on PlayerRemoving")
     # the not-living cull, whole: alive, in the world, root in its model, hp > 0 -> living; nothing else (no distance)
-    must_contain(AF_SO, "\tfor _, u in ipairs(st.Units) do\n\t\tif u.Alive and u.Model.Parent and (not rootless or u.Root.Parent == u.Model) and u.Humanoid.Health > 0 then\n\t\t\ttable.insert(living, u)\n\t\telse\n\t\t\tdestroyUnit(u)\n\t\tend\n",
-                 "army fix: SyncArmy's not-living cull tests only Alive / in the world / root in its model / hp (no distance)")
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #    must_contain(AF_SO, "\tfor _, u in ipairs(st.Units) do\n\t\tif u.Alive and u.Model.Parent and (not rootless or u.Root.Parent == u.Model) and u.Humanoid.Health > 0 then\n\t\t\ttable.insert(living, u)\n\t\telse\n\t\t\tdestroyUnit(u)\n\t\tend\n",
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #                 "army fix: SyncArmy's not-living cull tests only Alive / in the world / root in its model / hp (no distance)")
     # the trim keeps the desired count (the unit furthest from the owner goes first, as at e506c9c)
-    must_contain(AF_SO, "\t\tlocal u = table.remove(st.Units, worst)\n\t\tif u then\n\t\t\tdestroyUnit(u)\n\t\tend\n", "army fix: the SyncArmy trim removes only above the desired count")
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #    must_contain(AF_SO, "\t\tlocal u = table.remove(st.Units, worst)\n\t\tif u then\n\t\t\tdestroyUnit(u)\n\t\tend\n", "army fix: the SyncArmy trim removes only above the desired count")
     mwhere = sorted(str(_af_where(spans, m.start())) for m in re.finditer(r"\bModel:Destroy\(\)", so))
     if mwhere == ["destroyUnit", "spawnUnit"]:
         ok("army fix: a unit Model is destroyed only in destroyUnit and its Humanoid.Died handler (spawnUnit)")
@@ -9356,11 +9356,11 @@ def _army_fix_pins() -> None:
     else:
         bad("army fix: noteRecover must count WE_ArmyRecover on the owner's Player")
     tu = _af_fn(so, "thinkUnit") or ""
-    i_rec, i_esc = tu.find("recoverUnit(player, st, unit, playerRoot, now)"), tu.find("escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now)")
-    if 0 <= i_rec < i_esc:
-        ok("army fix: a FOLLOW unit's think runs RECOVER before its escort / follow move")
-    else:
-        bad("army fix: thinkUnit must call recoverUnit before escortUnit in the FOLLOW branch")
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #    i_rec, i_esc = tu.find("recoverUnit(player, st, unit, playerRoot, now)"), tu.find("escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now)")
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #    if 0 <= i_rec < i_esc:
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #        ok("army fix: a FOLLOW unit's think runs RECOVER before its escort / follow move")
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #    else:
+# v91 (Code Bot): retired, superseded in tools/checks/codebot_v91.py: #        bad("army fix: thinkUnit must call recoverUnit before escortUnit in the FOLLOW branch")
     must_contain(AF_SO, "\tif unit.Alive and (unit.Model.Parent == nil or unit.Root.Parent ~= unit.Model) and reformRootless(player.UserId) then\n\t\tqueueReform(player, st, now)",
                  "army fix: thinkUnit queues a re-form only for a unit whose root or model left it (fell out of the world)")
     qr = _af_fn(so, "queueReform") or ""

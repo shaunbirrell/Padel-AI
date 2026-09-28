@@ -1,3 +1,49 @@
+# v91 — 2026-09-28 ~23:45 Madrid (Code Bot, branch phase-7-polish, WE_Build 91, place version 87)
+
+**Claude: do not redo these.**
+- **Helicopters (owner's choice):** every heli key wears the attack heli 11240665977, owner-only like every heli body
+  (`Rollout = "Body"`). Each key has its own colour on the body panels only (`HELI_PAINT_PARTS`: BAP 1, Body, Doors,
+  Thing for Blades); glass, seats, blades, wheels and engines keep theirs. Built with `heliRef(scale, colour, cabin, note)`.
+  - Transport keys get a bigger scale to fit their bigger kit (TransportHeli 0.52, HeavyLiftHeli 0.6, Medevac and LightTransport 0.48;
+    the rest 0.45), and their middle seat sits in the cabin at (0, 5, -21), with 4.1-5.1 studs of headroom measured live.
+  - The main Blades spin through the v90 rotor lookup.
+  - `BODY_LIGHT_HELI` / `BODY_TRANSPORT_HELI` are kept, unused (a one-line revert).
+  - AttackHelicopter keeps its own navy (27,42,53). StealthHeli keeps near-black (20,22,26), a whole-body recolour as in v88.
+  - Colours: GunshipHeli gunmetal 74,80,88 · EscortHeli slate blue 78,98,124 · NightAttackHeli dark olive 58,62,40 ·
+    LightScoutHeli olive drab 100,108,68 · UtilityHeli khaki 150,138,100 · RescueHeli desert sand 190,168,122 ·
+    MedevacHeli light grey 160,164,168 · TransportHeli forest green 54,78,56 · LightTransportHeli sage 118,134,112 ·
+    HeavyLiftHeli earth brown 116,92,66. VTOLTransport keeps its own tilt-rotor body.
+- **Army FOLLOW overhaul, live for EVERYONE** (`ArmyConfig.Follow2.Rollout = "all"`; set it to `"off"` to go back to the old follow).
+  New `Server/Modules/ArmyFollow.luau`; SquadOrdersService hands it FOLLOW movement (`_AFOn`) and keeps the lifecycle
+  and shooting. The v85 FollowPace and v90 Fix follow/recover are bypassed while it is on.
+  - **What was wrong:** soldiers collided with each other (every HumanoidRootPart collides, all in Default). At a run they
+    shoved, tripped (FallingDown/Ragdoll) and got flung. A unit flung under the map lost its root to
+    FallenPartsDestroyHeight; for everyone but the owner that unit then stayed in the squad as an invisible ghost forever.
+    SyncArmy only culls dead or parentless models, and the v90 re-form was owner-only. That was the "despawn".
+    On top of that: no per-unit spacing, catch-up capped at 28 (or the v85 multipliers), and regroup was owner-only and slow.
+  - **Now:**
+    - wedge slots behind him, turned by his move direction;
+    - separation steering, and CollisionGroup `WE_Squad` never collides with itself;
+    - trip/ragdoll states off;
+    - straight MoveTo while the slot is in sight, pathfinding only when blocked (1.5 s per unit, 8 per server per second,
+      path kept while its end is within 8 studs of the slot);
+    - catch-up speed = max(his WalkSpeed incl. Speed Pass/Boost, his measured speed) x 1.35 plus 0.6 per stud behind,
+      capped at max(owner x 1.8, 34);
+    - regroup teleport (one PivotTo to a ground-checked clear spot behind him, never a delete) when: 70 studs from its slot
+      for 1 s, stuck 3 s, under the map, or right after he teleports/respawns;
+    - a unit that lost its root is re-formed for everyone;
+    - every removal, death, root loss and regroup is logged `[ArmyFollow] ...` (rate-limited).
+  - **Own base:** while he is inside his own plot square (4 studs in; out again 2 studs past the edge), his units wait spread
+    out 12-16 studs outside his main gate, beside the gate lane and never in it. They re-form behind him when he comes out.
+  - **Checks:** the Open Cloud session has no physics (GetRealPhysicsFPS 0) and no built map, so the check was a
+    kinematic stand-in (units walk to their WalkToPoint at their WalkSpeed). Owner sprinting at 26 for 20 s, turn, stop,
+    diagonal, base, exit: 0 units lost, formation within 25 studs while running, 0 units inside the plot during the base
+    phase, re-formed after the exit. Real physics and the wait line on the real map need the phone test.
+- Pins: `tools/checks/codebot_v91.py`. It retires 3 frozen army-fix pins and 1 v90 pin (the cull/trim now log first, and the
+  ArmyFollow branch runs before recoverUnit).
+
+---
+
 # v90 — 2026-09-28 ~22:30 Madrid (Code Bot, branch phase-7-polish, WE_Build 90, place version 86)
 
 **Claude: do not redo these. Shipped from `handoff/wip/` plus the owner's answers to the questions below.**

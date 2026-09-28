@@ -61,6 +61,11 @@ local SquadOrdersService = {}
 -- ArmyConfig.LiveFor("Fix", userId); set per owner at the top of his think pass (a module field: this chunk is near the
 -- 200-register limit). False = v85 FollowPace (Rollout.Army) / 4d26673 behaviour.
 SquadOrdersService._FixLive = false
+-- v91 (Code Bot): the FOLLOW movement overhaul (Modules/ArmyFollow, ArmyConfig.Follow2). _AFOn is set per owner in the
+-- think pass (module fields, not locals: this chunk is near the register limit). While it is on, the v85 FollowPace and
+-- the v90 Fix follow / recover paths are off for that owner (ArmyFollow replaces them); shooting stays here.
+SquadOrdersService._AF = require(script.Parent.Parent.Modules.ArmyFollow)
+SquadOrdersService._AFOn = false
 
 local DataService: any = nil
 local SoldierService: any = nil
@@ -2553,7 +2558,8 @@ end
 local function reformRootless(uid: number): boolean
 	local rc = (ArmyConfig :: any).Recover
 	-- off with the Recover kill switch; v90: only for a Rollout.Fix owner
-	return ArmyConfig.LiveFor("Fix", uid) and typeof(rc) == "table" and rc.Enabled == true and rc.ReformRootless == true
+	-- v91: also for every ArmyFollow owner (a unit that lost its root is re-formed, never left as an invisible ghost)
+	return (ArmyConfig.LiveFor("Fix", uid) or SquadOrdersService._AF.LiveFor(uid)) and typeof(rc) == "table" and rc.Enabled == true and rc.ReformRootless == true
 end
 
 local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: number, escortHum: Humanoid?, escortRoot: BasePart?, trail: Trail?, probe: Probe?)
@@ -2575,6 +2581,23 @@ local function thinkUnit(player: Player, st: SquadState, unit: SquadUnit, now: n
 			-- the owner is dead: units hold where they stand; army fix: the stuck window starts over once he is back
 			unit.ProgPos = nil
 			unit.ProgDir = nil
+			return
+		end
+		if SquadOrdersService._AFOn then
+			-- v91 ArmyFollow: the escort still shoots (and stands to fight only while he stands near a hostile outside his
+			-- base); every walk, catch-up, regroup and the base wait line are ArmyFollow's
+			local moving = st.OwnerSpeed >= 2 or st.Seated
+			if not (st :: any)._afInBase then
+				followCtx.Live = moving
+				followCtx.Moving = moving
+				local fought = escortUnit(player, st, unit, playerRoot, escortHum, escortRoot, now)
+				followCtx.Live = false
+				followCtx.Moving = false
+				if fought and not moving then
+					return
+				end
+			end
+			SquadOrdersService._AF.Unit(player, st, unit, playerRoot, now)
 			return
 		end
 		if recoverUnit(player, st, unit, playerRoot, now) then -- army fix: far / stuck / fallen / plot / regroup
@@ -2875,6 +2898,8 @@ function SquadOrdersService.SyncArmy(player: Player)
 		if u.Alive and u.Model.Parent and (not rootless or u.Root.Parent == u.Model) and u.Humanoid.Health > 0 then
 			table.insert(living, u)
 		else
+			-- v91: every removal is logged with its reason
+			SquadOrdersService._AF.LogRemoval(u, if not u.Alive or u.Humanoid.Health <= 0 then "died" elseif not u.Model.Parent then "model gone" else "lost its root (fell out of the world)")
 			destroyUnit(u)
 		end
 	end
@@ -2890,6 +2915,7 @@ function SquadOrdersService.SyncArmy(player: Player)
 		end
 		local u = table.remove(st.Units, worst)
 		if u then
+			SquadOrdersService._AF.LogRemoval(u, "fewer soldiers than units (trim)") -- v91
 			destroyUnit(u)
 		end
 	end
@@ -3152,6 +3178,13 @@ function SquadOrdersService.Init(deps: { [string]: any })
 	end
 
 	ensureFolder()
+	SquadOrdersService._AF.Bind({ -- v91 ArmyFollow
+		Folder = ensureFolder,
+		OwnPlotId = ownPlotId,
+		UnitWalkSpeed = function()
+			return OrdersConfig.UnitWalkSpeed or 14
+		end,
+	})
 
 	local orderRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSquadOrder) :: RemoteEvent
 	orderRemote.OnServerEvent:Connect(function(player: Player, orderId: any)
@@ -3237,6 +3270,10 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					trail = recordTrail(player, proot, pathCfg)
 				end
 				SquadOrdersService._FixLive = st ~= nil and ArmyConfig.LiveFor("Fix", player.UserId) -- v90: Rollout.Fix
+				SquadOrdersService._AFOn = st ~= nil and SquadOrdersService._AF.LiveFor(player.UserId) -- v91: ArmyConfig.Follow2
+				if SquadOrdersService._AFOn then
+					SquadOrdersService._FixLive = false -- v91: ArmyFollow replaces the v90 Fix follow / recover
+				end
 				if st and #st.Units > 0 then
 					local okM, errM = pcall(updateOwnerMotion :: any, st, proot, now) -- army fix: Follow.Lead / CatchUp pace / Recover regroup
 					if not okM then
@@ -3251,7 +3288,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					local threat = if st.Order == "Follow" and proot then threatStuds() else 0
 					threatScanStuds = threat
 					-- v85 FollowPace: live only for a Rollout.Army owner on foot in FOLLOW
-					if not (st.Order == "Follow" and proot and SquadOrdersService._PaceBegin(player, proot)) then
+					if not (st.Order == "Follow" and proot and not SquadOrdersService._AFOn and SquadOrdersService._PaceBegin(player, proot)) then
 						followCtx.Live = false
 						followCtx.Moving = false
 					end
@@ -3302,8 +3339,10 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					candReset(escortCands) -- hold no reference to the NPCs between passes
 				end
 				SquadOrdersService._FixLive = false
+				SquadOrdersService._AFOn = false
 			end
 			SquadOrdersService._FixLive = false
+			SquadOrdersService._AFOn = false
 			hostileSnapValid = false -- army lane A0: the list is this pass's only (no NPC reference kept between passes)
 			table.clear(hostileSnap)
 		end

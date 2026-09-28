@@ -8493,3 +8493,12 @@ framework and AIR2's section above. Entries marked Superseded were overtaken by 
 - A4. Runway length is capped by its neighbours (plot edge X -160, HeliApron X 34): +12 % long and +21 % wide instead of a flat 20 %. The hangar is +17 % (68 x 40) and its site moved 3 studs back (Z -125), so the doors still meet the apron. Clear of the helipad (X 26..54), the dock and the rear sandbags. World geometry cannot be owner-only, so this applies to every plot. The map builds at server start, so no MAP_GEN bump is needed.
 - A5. Bridge Layer: the same "Wade" rule as the Amphibious APC (WadeSpeedFrac 0.4 x its max speed; another player's plot water still bogs it). The server decides from the vehicle owner (`AmphibiousRollout`), and the driver's client follows the server's WE_WaterState "Wade" (it can feel boggy for up to one server tick when it first enters water).
 - A6. Helicopter model: not searched (the owner is doing it himself).
+
+## v91 Code Bot (2026-09-28): helis on 11240665977 + army FOLLOW overhaul (all reversible)
+- H1. "Every heli key" = the 12 VehicleConfig Air keys whose name says Heli/Helicopter; VTOLTransport keeps its own tilt-rotor body.
+- H2. Only the navy body panels take a key's colour; glass, seats, blades, wheels and engines keep the model's own colours. StealthHeli keeps its v88 whole-body near-black.
+- H3. Transport scales (0.48-0.6) follow kit length (11-15.6 vs the attack kit 10.9); nothing goes under 0.45, because a smaller body puts the pilot's head through the canopy roof. The middle cabin seat is at (0, 5, -21) after live raycasts (4.1-5.1 studs of headroom).
+- A1. ArmyFollow is live for everyone (the parent's rule: "if it's solid, roll it out"). Kill switch: Follow2.Rollout = "off" (the old v85 / v90 code comes back).
+- A2. The wedge is behind and to the sides (never straight behind), so the v90 camera guard rarely hides a unit.
+- A3. "Inside his base" = inside his own plot square (the pad bounds), not only inside buildings. The wait line uses the main gate (plot front); a player who leaves by the sea gate is followed once he is out of the square.
+- A4. No real-physics simulation was possible in Open Cloud (no physics stepping). The controller logic was verified with a kinematic stand-in only.
