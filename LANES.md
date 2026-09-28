@@ -154,3 +154,9 @@ Claude sessions clone **`shaunbirrell/Padel-AI`**, branch **`war-empire-handoff`
 same repo. Code Bot fetches `claude/*` from both `shaunbirrell/Padel-AI` and `shaunbirrell/war-empire` (the
 legacy branch exists on both), so a session with push access to `shaunbirrell/war-empire` may push there too.
 Pick one remote per branch.
+
+## 9. Known conflict magnets
+- Lane F vs BuyPathStatic: the frozen body still pins `ImpulseSpeed Id = 0` and `RebirthKeepBase Id = 0` (K1 labels). Wiring the real Ids will FAIL those pins. The lane reports them in DONE; Code Bot moves or retires them when merging.
+- VisualAssetConfig and VisualAssetService sit across A, C and D: prefer Additive, isolated commits with a NOTE.
+- SquadOrdersService (B) and VehicleService (A) are near the 200-local limit: use module fields.
+- ASSUMPTIONS.md: append only. Conflicts are resolved by keeping both sides.
