@@ -9,7 +9,10 @@
 	    rate bounds them at <= 0.5/s).
 	  - Every recipient: token bucket PerRecipientHz / PerRecipientBurst.
 	Over a cap the event is dropped, never queued. Every send is pcall'd: a missing remote drops the effect, never
-	the shot. ]]
+	the shot.
+	army lane A0 (ArmyConfig.ShotFx): ArmyBullet sends a squad unit's shot for a live owner's army (S = 0, W = "NPC":
+	the NPC rifle look), at most one per army per MinGap s, through a per-army shooter bucket and an army bucket per
+	recipient (checked before the recipient bucket above). Its own tables and ArmyStats(); Forget(userId) clears them. ]]
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +36,13 @@ local recipientBuckets: { [number]: Bucket } = {}
 local cachedRemote: Instance? = nil
 local stats = { Sent = 0, Events = 0, DroppedShooter = 0, DroppedRecipient = 0, Failed = 0 }
 local serial = 0
+-- army lane A0: squad unit shot fx (ArmyBullet), keyed by the owner's UserId; separate from the tables above
+local army = {
+	sampleAt = {} :: { [number]: number }, -- owner UserId -> the last event sent for his army (the PerArmyMinGap sampler)
+	shooter = {} :: { [number]: Bucket }, -- owner UserId -> the army's shooter bucket (CombatFeelConfig.Fx.PerShooterHz)
+	recipient = {} :: { [number]: Bucket }, -- recipient UserId -> the army bucket (ArmyConfig.ShotFx.PerRecipientHz)
+	stats = { Events = 0, Sampled = 0, DroppedShooter = 0, DroppedRecipient = 0, Sent = 0 },
+}
 
 function CombatFx.Bind(bindings: Bindings)
 	B = bindings
@@ -80,7 +90,8 @@ local function remote(): Instance?
 	return nil
 end
 
-local function fanOut(payload: Types.WeaponFxPayload, excludeUid: number?)
+-- `armyHz` / `armyBurst` (army lane A0, ArmyBullet only): each recipient first spends a token of its army bucket
+local function fanOut(payload: Types.WeaponFxPayload, excludeUid: number?, armyHz: number?, armyBurst: number?)
 	local r = remote()
 	if r == nil then
 		stats.Failed += 1
@@ -98,12 +109,17 @@ local function fanOut(payload: Types.WeaponFxPayload, excludeUid: number?)
 				local pos = root.Position
 				local dO, dP = pos - o, pos - p
 				if dO:Dot(dO) <= r2 or dP:Dot(dP) <= r2 then
-					if take(recipientBuckets, plr.UserId, fx.PerRecipientHz, fx.PerRecipientBurst, t) then
+					if armyHz ~= nil and not take(army.recipient, plr.UserId, armyHz, armyBurst or 1, t) then
+						army.stats.DroppedRecipient += 1 -- army lane A0: this recipient's army bucket is empty
+					elseif take(recipientBuckets, plr.UserId, fx.PerRecipientHz, fx.PerRecipientBurst, t) then
 						local ok = pcall(function()
 							(r :: any):FireClient(plr, payload)
 						end)
 						if ok then
 							stats.Sent += 1
+							if armyHz ~= nil then
+								army.stats.Sent += 1
+							end
 						else
 							stats.Failed += 1
 						end
@@ -130,6 +146,45 @@ function CombatFx.Bullet(shooterKey: any, shooterUid: number, weaponId: string, 
 	return true
 end
 
+--[[ army lane A0 (ArmyConfig.ShotFx): one squad unit shot of `ownerUid`'s army, from `origin` (the unit's eye) to
+	`landed`, kind "N" (hit) or "M" (miss). Sent as an NPC shot (S = 0, W = "NPC") to every player near either end,
+	the owner included. Returns false when sampled out (another event of this army less than `minGap` s ago) or
+	dropped by the army's shooter bucket; per recipient, the army bucket (`recipientHz`, `recipientBurst`) then the
+	CombatFx recipient bucket may drop it. Never queued. ]]
+function CombatFx.ArmyBullet(ownerUid: number, origin: Vector3, landed: Vector3, kind: string, minGap: number, recipientHz: number, recipientBurst: number): boolean
+	local t = now()
+	local last = army.sampleAt[ownerUid]
+	if last ~= nil and t - last < minGap then
+		army.stats.Sampled += 1
+		return false
+	end
+	army.sampleAt[ownerUid] = t
+	local fx = CombatFeelConfig.Fx
+	if not take(army.shooter, ownerUid, fx.PerShooterHz, fx.PerShooterBurst, t) then
+		army.stats.DroppedShooter += 1
+		return false
+	end
+	army.stats.Events += 1
+	stats.Events += 1
+	local payload: Types.WeaponFxPayload = { S = 0, W = "NPC", O = origin, P = landed, K = kind }
+	fanOut(payload, nil, recipientHz, recipientBurst)
+	return true
+end
+
+-- army lane A0: ArmyBullet counters (Events sent, Sampled out, DroppedShooter, DroppedRecipient, Sent to recipients)
+function CombatFx.ArmyStats(): { [string]: number }
+	return table.clone(army.stats)
+end
+
+function CombatFx.ResetArmyStats()
+	local st = army.stats
+	st.Events = 0
+	st.Sampled = 0
+	st.DroppedShooter = 0
+	st.DroppedRecipient = 0
+	st.Sent = 0
+end
+
 -- Projectile serial shared by one projectile's "L" and "X" events
 function CombatFx.NextSerial(): number
 	serial = (serial % 1000000) + 1
@@ -154,6 +209,9 @@ function CombatFx.Forget(key: any)
 	shooterBuckets[key] = nil
 	if typeof(key) == "number" then
 		recipientBuckets[key] = nil
+		army.sampleAt[key] = nil -- army lane A0: his army's sampler / shooter bucket, his army recipient bucket
+		army.shooter[key] = nil
+		army.recipient[key] = nil
 	end
 end
 

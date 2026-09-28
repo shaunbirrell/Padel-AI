@@ -53,6 +53,9 @@ VehicleService._AdminConfig = require(Shared.Configs.AdminConfig)
 -- streaming2 S3 (F8): pre-fetches a far seat's area before the auto-sit move (RequestSpawn). A no-op while
 -- Workspace.StreamingEnabled is false. A module-table field for the same register-limit reason.
 VehicleService._StreamPrefetch = require(script.Parent.Parent.Modules.StreamPrefetch)
+-- fb4 water rule (Drive.WaterRule): a ground vehicle in WE_Water bogs down, then its riders go ashore and it sinks. A
+-- module-table field for the same register-limit reason.
+VehicleService._WaterGuard = require(script.Parent.Parent.Modules.VehicleWaterGuard)
 
 local Drive = VehicleConfig.Drive
 local CarCfg = Drive.Modes.Car
@@ -106,6 +109,9 @@ export type DriveSense = {
 	WaterFar: boolean?,
 	Time: number,
 	Clear: boolean?, -- rollover fix: false = another player is within reach of this flipped car (no righting); nil = clear
+	WaterCap: number?, -- fb4 water rule: bogged / wading, the Car law's speed cap (studs/s); nil = not in water
+	WaterExit: Vector3?, -- ... the one-way bog's way out (flat unit normal): WaterCap deeper along it, else up to WaterExitCap
+	WaterExitCap: number?,
 }
 export type DriveHud = { Speed: number, Alt: number?, Throttle: number?, Tag: string? }
 -- Righting: flip recovery is lifting / levelling the car (WE_DriveAO.MaxAngularVelocity = Car.RecoverSpin meanwhile)
@@ -707,8 +713,12 @@ local function carStep(state: DriveState, p: DriveParams, input: DriveInput, sen
 	local c = if p.Tracked then CarCfg.Tracked else CarCfg.Wheeled
 	local maxS = p.MaxSpeed
 	local rev = maxS * CarCfg.ReverseFrac
+	if sense.WaterExitCap ~= nil and sense.WaterExitCap > rev then
+		rev = sense.WaterExitCap -- fb4 water rule: bogged, it backs out at the exit cap at least (slow tanks too)
+	end
 	local t, s = unitInput(input.Throttle), unitInput(input.Steer)
 	speedResync(state, sense.Velocity:Dot(fwd(state.Heading)), ResyncCfg.CarGap, dt)
+	local before = state.Speed -- fb4 water rule: the speed before this step's throttle
 	if sense.UpY < CarCfg.FlipUpY then
 		-- rollover fix: no traction and no steering on its side / roof (it used to be driven along on its side)
 		s = 0
@@ -717,11 +727,47 @@ local function carStep(state: DriveState, p: DriveParams, input: DriveInput, sen
 		state.Speed = throttleSpeed(state.Speed, t, maxS, rev, p.Accel, c.Brake, c.Coast, CarCfg.ReverseAccelFrac, dt)
 	end
 	state.Speed = math.clamp(state.Speed, -rev, maxS)
-	local dir = if state.Speed < -0.5 then -1 else 1
+	local cap = sense.WaterCap -- fb4 water rule (Drive.WaterRule): bogged / wading
+	if cap ~= nil then
+		-- lo..hi: WaterCap for a move that takes it deeper along WaterExit (the throttle never adds speed that way), up
+		-- to WaterExitCap for one that does not (facing the bank: forward; facing the water or along the bank: reverse,
+		-- and reverse still while it faces the bank by up to ReverseBand, so a turn while backing out never locks it);
+		-- outside it brakes at BogBrake (the client's stepCar is the same)
+		local lo, hi = -cap, cap
+		local n = sense.WaterExit
+		if n ~= nil then
+			local f = fwd(state.Heading)
+			local exit = sense.WaterExitCap or cap
+			local along = n.X * f.X + n.Z * f.Z -- > 0: it faces the bank
+			if along > 1e-3 then
+				hi = exit
+			end
+			if along <= (Drive.WaterRule.ReverseBand or 1e-3) then
+				lo = -exit
+			end
+		end
+		local b = Drive.WaterRule.BogBrake * dt
+		state.Speed = if state.Speed > hi then math.max(hi, math.min(state.Speed, before) - b)
+			elseif state.Speed < lo then math.min(lo, math.max(state.Speed, before) + b)
+			else state.Speed
+	end
+	-- fb4 water rule: bogged and (nearly) stopped with the stick back, it steers as it will move (backing out), so a
+	-- turn while it starts to reverse swings the rear the way the stick says
+	local dir = if state.Speed < -0.5 or (cap ~= nil and state.Speed <= 0.5 and t < 0) then -1 else 1
 	local spd = math.abs(state.Speed)
 	local turn = s * p.TurnRate * math.clamp(spd / CarCfg.TurnSpeedRef, c.MinTurnFactor, 1)
 	if c.MaxLatAccel > 0 and spd > 1 then
 		turn = math.clamp(turn, -c.MaxLatAccel / spd, c.MaxLatAccel / spd) -- rollover fix: speed-sensitive steering
+	end
+	local wn = sense.WaterExit
+	if cap ~= nil and wn ~= nil and t < 0 and turn ~= 0 and Drive.WaterRule.BackOutSteerLock == true then
+		-- fb4 water rule: backing out, a sideways thumb never turns the nose past along-the-bank toward it (reverse
+		-- would stop there); it still turns the other way (the client's stepCar is the same)
+		local f0, f1 = fwd(state.Heading), fwd(state.Heading - turn * dir * dt)
+		local a1 = wn.X * f1.X + wn.Z * f1.Z
+		if a1 > 0 and a1 > wn.X * f0.X + wn.Z * f0.Z then
+			turn = 0
+		end
 	end
 	state.Heading -= turn * dir * dt
 	if math.abs(wrapAngle(sense.Yaw - state.Heading)) > CarCfg.YawResyncRad then
@@ -2080,7 +2126,8 @@ local function firstFreeLand(ctx: SpawnCtx, x: number, z: number, refTop: number
 	for _, decor in ipairs(if ctx.DecorFree then { true, false } else { false }) do -- R2.1: clear of decor first, then as R2
 		for _, o in ipairs(offsets) do
 			local cf = landSpot(ctx, x + o.X, z + o.Z, refTop, heading)
-			if cf and spotFree(ctx, cf, decor) then
+			-- fb4 water rule: never a land spawn in water (overAnyWater is declared further down: the module field)
+			if cf and not VehicleService._OverAnyWater(ctx, cf) and spotFree(ctx, cf, decor) then
 				return cf
 			end
 		end
@@ -2132,6 +2179,7 @@ local function overAnyWater(ctx: SpawnCtx, cf: CFrame): boolean
 	end
 	return false
 end
+VehicleService._OverAnyWater = overAnyWater -- fb4 water rule: firstFreeLand (declared above this) calls it through here
 
 -- P1-9: nothing solid between the player's root part and the spot (never a spawn across a wall: the auto-sit would
 -- carry the player through it, e.g. from outside an enemy base's perimeter wall into its courtyard)
@@ -2217,7 +2265,7 @@ local function firstFreePlotLand(
 		for _, o in ipairs(offsets) do
 			local wx, wz = plotXZ(frame, x, z, o.X, o.Z)
 			local cf = landSpot(ctx, wx, wz, refTop, h)
-			if cf and spotFree(ctx, cf, decor) then
+			if cf and not overAnyWater(ctx, cf) and spotFree(ctx, cf, decor) then -- fb4 water rule: never a land spawn in water
 				return cf
 			end
 		end
@@ -2891,6 +2939,10 @@ local function senseFor(rec: VehicleRec, t: number): DriveSense
 		end
 		clear = rec.ClearVal
 	end
+	local wCap: number?, wOut: Vector3?, wExit: number? = nil, nil, nil
+	if rec.Mode == "Car" then
+		wCap, wOut, wExit = VehicleService._WaterGuard.Cap(rec.Model) -- fb4 water rule
+	end
 	return {
 		Position = pos,
 		Velocity = partVelocity(rec.Chassis),
@@ -2900,6 +2952,9 @@ local function senseFor(rec: VehicleRec, t: number): DriveSense
 		WaterY = waterY,
 		Time = t,
 		Clear = clear,
+		WaterCap = wCap, -- fb4 water rule: the guard's one-way bog / wade cap (Car only)
+		WaterExit = wOut,
+		WaterExitCap = wExit,
 	}
 end
 
@@ -3317,8 +3372,9 @@ local function recallVehicle(rec: VehicleRec, reason: string)
 	destroyVehicle(rec, "Vehicle recalled")
 end
 
--- Violation: take the physics back and put the vehicle at its last valid position.
-local function beginCorrection(rec: VehicleRec, t: number)
+-- Violation: take the physics back and put the vehicle at its last valid position. quiet (fb4 water rule, a chassis
+-- that jumped across water): no "Vehicle stabilised" line.
+local function beginCorrection(rec: VehicleRec, t: number, quiet: boolean?)
 	stopDrive(rec)
 	setAuthority(rec, "Server")
 	local released = setOwner(rec, nil)
@@ -3326,6 +3382,7 @@ local function beginCorrection(rec: VehicleRec, t: number)
 	pcall(function()
 		rec.Model:PivotTo(back.CFrame)
 	end)
+	VehicleService._WaterGuard.Moved(rec.Model, back.CFrame) -- fb4 water rule: the server's own move is never a jump
 	zeroVelocity(rec.Chassis)
 	rec.CorrectUntil = t + Valid.CorrectionHold
 	rec.CorrectPos = back.Pos
@@ -3338,7 +3395,7 @@ local function beginCorrection(rec: VehicleRec, t: number)
 	if not released then
 		ejectDriver(rec) -- ownership cannot be taken back with the driver seated
 	end
-	if t - rec.LastStabilisedAt >= Drive.StabilisedNoticeSeconds then
+	if not quiet and t - rec.LastStabilisedAt >= Drive.StabilisedNoticeSeconds then
 		rec.LastStabilisedAt = t
 		notify(rec.Owner, "Vehicle stabilised", "Warn", 3)
 	end
@@ -3509,6 +3566,7 @@ local function correctionStep(rec: VehicleRec, t: number)
 			pcall(function()
 				rec.Model:PivotTo(back.CFrame)
 			end)
+			VehicleService._WaterGuard.Moved(rec.Model, back.CFrame) -- fb4 water rule (as in beginCorrection)
 			zeroVelocity(rec.Chassis)
 		end
 	end
@@ -3665,6 +3723,9 @@ local function tickRecord(rec: VehicleRec, t: number, dt: number)
 	if pos.Y < Drive.LostBelowY or math.abs(pos.X) > lim or math.abs(pos.Z) > lim then
 		destroyVehicle(rec, "Vehicle lost")
 		return
+	end
+	if VehicleService._WaterGuard.Step(rec, t) then
+		return -- fb4 water rule: sinking (riders ashore, the guard times the removal); no idle law, no checks over it
 	end
 	if anyOccupied(rec) then
 		rec.LastSeatedAt = t
@@ -4332,10 +4393,13 @@ end
 
 VehicleService._OnSeatLeft = function(rec: VehicleRec, seat: BasePart, hum: Humanoid)
 	local cfg = Drive.ExitSpot
-	if cfg.Enabled and cfg.Modes[rec.Mode] then
+	-- fb4 water rule: a sinking vehicle's riders are put ashore by the guard, not beside the vehicle
+	if cfg.Enabled and cfg.Modes[rec.Mode] and not VehicleService._WaterGuard.Sinking(rec.Model) then
 		task.defer(function()
 			pcall(VehicleService._PlaceExit, rec, seat, hum)
 		end)
+	elseif rec.Mode == "Plane" then
+		VehicleService._WaterGuard.Left(rec, seat, hum) -- fb4 water rule: EXIT from a plane on the water = ashore
 	end
 end
 
@@ -5058,6 +5122,29 @@ function VehicleService.Init(deps: { [string]: any })
 	CollectionService:GetInstanceRemovedSignal(Constants.Tags.Water):Connect(function()
 		waterRefreshAt = 0
 	end)
+	-- fb4 water rule: the guard works through these (its own module; this chunk is at the 200-local limit)
+	VehicleService._WaterGuard.Bind({
+		WaterParts = getWaterParts,
+		PlotIdOf = function(player: Player?): number?
+			local profile = if player and DataService then DataService.GetProfile(player) else nil
+			return if profile then tonumber(profile.BasePlotId) else nil
+		end,
+		Notify = notify,
+		TakePhysics = function(rec: any)
+			setAuthority(rec, "Server")
+			setOwner(rec, nil)
+		end,
+		Eject = ejectSeat,
+		Destroy = function(rec: any, message: string?)
+			destroyVehicle(rec, message)
+		end,
+		-- a chassis that jumped across water: back to cf by the validator's correction (quiet, no strike)
+		Correct = function(rec: any, cf: CFrame, t: number)
+			rec.LastValid = { CFrame = cf, Pos = cf.Position, T = t }
+			beginCorrection(rec, t, true)
+		end,
+		Service = VehicleService,
+	})
 
 	local spawnRemote = RemoteSetup.Get(Constants.RemoteNames.RequestSpawnVehicle) :: RemoteEvent
 	spawnRemote.OnServerEvent:Connect(function(player: Player, vehicleId: any)

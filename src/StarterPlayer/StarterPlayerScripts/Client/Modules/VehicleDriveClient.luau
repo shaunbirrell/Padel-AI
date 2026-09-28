@@ -75,6 +75,12 @@ export type Sense = {
 	WaterNear: boolean?,
 	WaterFar: boolean?,
 	Clear: boolean?, -- rollover fix: false = another player is within reach of this flipped car (no righting); nil = clear
+	WaterCap: number?, -- fb4 water rule: bogged / wading, the Car law's speed cap (studs/s); nil = not in water
+	WaterBrake: number?, -- ... and how hard it brakes down to it (studs/s², Drive.WaterRule.BogBrake)
+	WaterBand: number?, -- ... reverse still allowed while it faces the bank by up to this (Drive.WaterRule.ReverseBand)
+	WaterExit: Vector3?, -- ... the one-way bog's way out (flat unit normal): WaterCap deeper along it, else up to WaterExitCap
+	WaterExitCap: number?,
+	WaterSteerLock: boolean?, -- ... backing out, the nose never turns past along-the-bank (Drive.WaterRule.BackOutSteerLock)
 }
 
 -- Restricted: the air-box guard steered / capped this step (the HUD shows the "Restricted airspace" line)
@@ -223,6 +229,30 @@ local DEFAULTS: any = {
 	-- overrides key by key). FallbackY = the desert floor top (MapSetup GROUND_TOP_Y 0.5), the lowest ground on the map;
 	-- LastHitRadius = how far (flat studs) from its last hit the ray may still use that hit's height.
 	Ground = { FallbackY = 0.5, LastHitRadius = 16 },
+	-- fb4 water rule, the driver's mirror (VehicleConfig.Drive.WaterRule overrides key by key; off without it: the
+	-- server decides either way)
+	WaterRule = {
+		Enabled = false,
+		Hz = 10,
+		EnterDepth = 2,
+		ExitDepth = 1.9,
+		WheelAbove = 0.3,
+		WheelBelow = 8,
+		BogSpeed = 8,
+		BogAwaySpeed = 0,
+		BogExitFrac = 0.45,
+		BogExitMin = 16,
+		BogBrake = 250,
+		EntryPush = 4,
+		EntrySearchStuds = 160,
+		PillTag = "BACK OUT",
+		PillTagForward = "DRIVE OUT",
+		ReverseBand = 0.09,
+		BackOutSteerLock = true,
+		PlaneTag = "IN WATER",
+		WadeSpeedFrac = 0.4,
+		Amphibious = {},
+	},
 	Modes = {
 		Car = {
 			ReverseFrac = 0.45,
@@ -742,7 +772,11 @@ local function stepCar(st: State, P: Params, input: Input, sense: Sense, dt: num
 	local t, s = input.Throttle, input.Steer
 	local Max = P.MaxSpeed
 	local Rev = C.ReverseFrac * Max
+	if sense.WaterExitCap ~= nil and sense.WaterExitCap > Rev then
+		Rev = sense.WaterExitCap -- fb4 water rule: bogged, it backs out at the exit cap at least (slow tanks too)
+	end
 	st.Speed = resync(st, C, st.Speed, sense.Velocity:Dot(fwd(st.Heading)), dt)
+	local before = st.Speed -- fb4 water rule: the speed before this step's throttle
 	if sense.UpY < C.FlipUpY then
 		-- rollover fix: no traction and no steering on its side / roof (the law used to drive a flipped car along
 		-- on its side at full speed, so it never stopped long enough to be righted)
@@ -751,12 +785,48 @@ local function stepCar(st: State, P: Params, input: Input, sense: Sense, dt: num
 	else
 		st.Speed = speedUpdate(st.Speed, t, Max, Rev, P.Accel, C.Brake, C.Coast, C.ReverseAccelFrac, dt)
 	end
-	local dir = if st.Speed < -0.5 then -1 else 1
+	local cap = sense.WaterCap -- fb4 water rule: bogged / wading (server: carStep, the same maths)
+	if cap ~= nil then
+		-- lo..hi: WaterCap for a move that takes it deeper along WaterExit (the throttle never adds speed that way), up
+		-- to WaterExitCap for one that does not (facing the bank: forward; facing the water or along the bank: reverse,
+		-- and reverse still while it faces the bank by up to WaterBand, so a turn while backing out never locks it);
+		-- outside it brakes at WaterBrake
+		local lo, hi = -cap, cap
+		local n = sense.WaterExit
+		if n ~= nil then
+			local f = fwd(st.Heading)
+			local exit = sense.WaterExitCap or cap
+			local along = n.X * f.X + n.Z * f.Z -- > 0: it faces the bank
+			if along > 1e-3 then
+				hi = exit
+			end
+			if along <= (sense.WaterBand or 1e-3) then
+				lo = -exit
+			end
+		end
+		local b = (sense.WaterBrake or 250) * dt
+		st.Speed = if st.Speed > hi then math.max(hi, math.min(st.Speed, before) - b)
+			elseif st.Speed < lo then math.min(lo, math.max(st.Speed, before) + b)
+			else st.Speed
+	end
+	-- fb4 water rule: bogged and (nearly) stopped with the stick back, it steers as it will move (backing out), so a
+	-- turn while it starts to reverse swings the rear the way the stick says (server: carStep, the same)
+	local dir = if st.Speed < -0.5 or (cap ~= nil and st.Speed <= 0.5 and t < 0) then -1 else 1
 	local spd = math.abs(st.Speed)
 	local turn = s * P.TurnRate * math.clamp(spd / C.TurnSpeedRef, C.MinTurnFactor, 1)
 	local latMax = C.MaxLatAccel or 0
 	if latMax > 0 and spd > 1 then
 		turn = math.clamp(turn, -latMax / spd, latMax / spd) -- rollover fix: speed-sensitive steering
+	end
+	local wn = sense.WaterExit
+	if cap ~= nil and wn ~= nil and t < 0 and turn ~= 0 and sense.WaterSteerLock == true then
+		-- fb4 water rule: backing out, a sideways thumb never turns the nose past along-the-bank toward it (reverse
+		-- would stop there); it still turns the other way (server: carStep, the same)
+		local f0, f1 = fwd(st.Heading), fwd(st.Heading - turn * dir * dt)
+		local a1 = wn.X * f1.X + wn.Z * f1.Z
+		if a1 > 0 and a1 > wn.X * f0.X + wn.Z * f0.Z then
+			turn = 0
+		end
 	end
 	st.Heading -= turn * dir * dt
 	if math.abs(wrap(sense.Yaw - st.Heading)) > C.YawResyncRad then
@@ -1300,6 +1370,80 @@ function Laws.WaterSurfaceAt(
 	return best
 end
 
+--[[ fb4 water rule, the driver's mirror (feel only: the SERVER decides, sinks and moves riders). (cap, tag, exitCap) for
+	the law (Sense.WaterCap / WaterExitCap) and the SPD pill: wet = my own 10 Hz test on the WE_Water parts I have
+	streamed in OR the server's WE_WaterState on the model ("Bog" / "Wade" / "Ditch" / "Sink"). Car with a way out known
+	(hasExit): the one-way bog, BogAwaySpeed deeper along it and max(BogExitMin, BogExitFrac x max) otherwise, and the
+	pill says which way works: PillTag (back out) until it faces the bank by more than ReverseBand (facing = its heading
+	. the way out), then PillTagForward (drive out), which stays until it faces the bank by less than half of that
+	(prevTag: no flicker); without one: BogSpeed both ways, PillTag. An amphibious car wades (WadeSpeedFrac x its max, no
+	tag) unless the server says "Bog" (another player's plot water: BogSpeed both ways). Plane: PlaneTag only. Heli /
+	Boat: nothing. Pure (tested headless). ]]
+function Laws.WaterFeel(
+	rule: any,
+	mode: string,
+	amphibious: boolean,
+	localWet: boolean,
+	server: any,
+	maxSpeed: number,
+	hasExit: boolean?,
+	facing: number?,
+	prevTag: string?
+): (number?, string?, number?)
+	if typeof(rule) ~= "table" or rule.Enabled ~= true then
+		return nil, nil, nil
+	end
+	local wet = localWet or server == "Bog" or server == "Wade" or server == "Ditch" or server == "Sink"
+	if not wet then
+		return nil, nil, nil
+	end
+	if mode == "Plane" then
+		return nil, rule.PlaneTag, nil
+	elseif mode ~= "Car" then
+		return nil, nil, nil
+	end
+	if amphibious then
+		if server ~= "Bog" then
+			return rule.WadeSpeedFrac * maxSpeed, nil, nil
+		end
+		return rule.BogSpeed, rule.PillTag, nil
+	end
+	if hasExit then
+		local band = tonumber(rule.ReverseBand) or 1e-3
+		local fwdTag = typeof(rule.PillTagForward) == "string" and rule.PillTagForward or nil
+		local tag = rule.PillTag
+		if fwdTag and facing ~= nil and (facing > band or (prevTag == fwdTag and facing > band * 0.5)) then
+			tag = fwdTag
+		end
+		return rule.BogAwaySpeed, tag, math.max(rule.BogExitMin, rule.BogExitFrac * maxSpeed)
+	end
+	return rule.BogSpeed, rule.PillTag, nil
+end
+
+--[[ fb4 water rule, the driver's own check (pure; the runtime calls it every frame, the headless tests too). m = the
+	mirror { Acc, Wet, Out, Exit }. At rule.Hz only: WaterRule.Probe (mod) on rects, the same test the server runs; in
+	when EnterDepth inside, out when less than ExitDepth inside. Out = where the chassis was at the last check out of the
+	water; Exit = the way out (WaterRule.Bog, as the server: the outward normal of the bank it came over) when it went
+	in. The server's WE_WaterExit replaces it as soon as it arrives. Allocates only when it goes in. ]]
+function Laws.WaterMirror(m: any, mod: any, rects: { any }, rule: any, pos: Vector3, clearance: number, dt: number)
+	m.Acc += dt
+	if mod == nil or m.Acc < 1 / math.max(1, rule.Hz) then
+		return
+	end
+	m.Acc = 0
+	local depth = if m.Wet then rule.ExitDepth or rule.EnterDepth else rule.EnterDepth
+	local _, wet = mod.Probe(rects, pos.X, pos.Z, pos.Y - clearance, depth, rule.WheelAbove, nil, rule.WheelBelow)
+	if wet and not m.Wet then
+		local o: Vector3 = m.Out or pos
+		local nx, nz = mod.Bog(rects, pos.X, pos.Z, o.X, o.Z, rule.EntryPush, rule.EntrySearchStuds)
+		m.Exit = if nx ~= nil then Vector3.new(nx, 0, nz) else nil
+	elseif not wet then
+		m.Out = pos
+		m.Exit = nil
+	end
+	m.Wet = wet
+end
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Runtime (client only; everything below runs from Init)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -1342,6 +1486,12 @@ type Drive = {
 	Righting: boolean,
 	ClearAt: number,
 	ClearVal: boolean,
+	-- fb4 water rule mirror: my own check (Laws.WaterMirror: { Acc, Wet, Out, Exit }), the server's WE_WaterState and
+	-- WE_WaterExit, the pill tag while in water
+	WaterM: { Acc: number, Wet: boolean, Out: Vector3?, Exit: Vector3? },
+	WaterServer: any,
+	WaterExitServer: any,
+	WaterTag: string?,
 }
 
 local WATER_TAG_DEFAULT = "WE_Water"
@@ -1385,6 +1535,9 @@ local waterRefreshSeconds = 2
 
 local active: Drive? = nil
 local waterParts: { BasePart } = {}
+-- fb4 water rule mirror: Shared/Util/WaterRule (nil until loadShared), its rectangles for waterParts (rebuilt while
+-- driving only after waterParts changed) and Drive.WaterRule over DEFAULTS.WaterRule
+local waterMirror: { Mod: any, Rects: { any }, Dirty: boolean, Rule: any } = { Mod = nil, Rects = {}, Dirty = true, Rule = nil }
 local rayParams: RaycastParams? = nil
 local promptFolderConn: RBXScriptConnection? = nil
 local hintShown: { [string]: boolean } = {}
@@ -1483,6 +1636,10 @@ local function refreshConfig()
 	AIRC = cfgSection("AirBox")
 	HUDC = cfgSection("Hud")
 	GROUND = cfgSection("Ground")
+	waterMirror.Rule = cfgSection("WaterRule") -- fb4 water rule
+	RED_TAGS[tostring(waterMirror.Rule.PillTag)] = true
+	RED_TAGS[tostring(waterMirror.Rule.PillTagForward)] = true
+	RED_TAGS[tostring(waterMirror.Rule.PlaneTag)] = true
 	local uid = localPlayer().UserId
 	local ids: any = DBG.UserIds
 	debugUser = DBG.All == true or (typeof(ids) == "table" and table.find(ids, uid) ~= nil)
@@ -1535,6 +1692,12 @@ local function loadShared()
 	else
 		warn("[VehicleDriveClient] Remotes module:", R)
 	end
+	local okW, WR = pcall(function(): any
+		return require(Shared.Util.WaterRule) -- fb4 water rule mirror (pure geometry)
+	end)
+	if okW and typeof(WR) == "table" then
+		waterMirror.Mod = WR
+	end
 	local okV, V = pcall(function(): any
 		return require(Shared.Configs.VehicleConfig)
 	end)
@@ -1565,6 +1728,7 @@ local function refreshWater()
 		end
 	end
 	waterParts = list
+	waterMirror.Dirty = true -- fb4 water rule: rebuild the mirror's rectangles on the next check
 end
 
 local function refreshRayFilter()
@@ -3013,6 +3177,53 @@ local function updateHud(d: Drive, dt: number, hud: Hud?)
 	setRestrictedLine(os.clock() < d.RestrictedUntil)
 end
 
+--[[ fb4 water rule mirror (feel only): my own check at Drive.WaterRule.Hz on the WE_Water parts I have (Laws.WaterMirror:
+	the same WaterRule.Probe the server runs), merged with the server's WE_WaterState / WE_WaterExit by Laws.WaterFeel.
+	The one-way bog uses the server's way out as soon as it has arrived (the law and the server's checks then agree),
+	my own before that. Nothing is allocated per frame (the rectangles are rebuilt only after refreshWater). ]]
+local function waterFeel(d: Drive, sense: Sense, dt: number)
+	local rule = waterMirror.Rule
+	if rule == nil or rule.Enabled ~= true or not (d.Mode == "Car" or d.Mode == "Plane") then
+		d.WaterTag = nil
+		return
+	end
+	local mod = waterMirror.Mod
+	local m = d.WaterM
+	if mod and waterMirror.Dirty and m.Acc + dt >= 1 / math.max(1, rule.Hz) then
+		waterMirror.Dirty = false
+		waterMirror.Rects = mod.Build(waterParts)
+	end
+	Laws.WaterMirror(m, mod, waterMirror.Rects, rule, sense.Position, d.Params.Clearance, dt)
+	local way: Vector3? = if d.WaterServer == "Bog" and typeof(d.WaterExitServer) == "Vector3" then d.WaterExitServer
+		elseif m.Wet then m.Exit
+		else nil
+	local facing: number? = nil -- the heading . the way out: > 0 = it faces the bank (the pill says drive out)
+	local st = d.State
+	if way ~= nil and st ~= nil then
+		local f = fwd(st.Heading)
+		facing = way.X * f.X + way.Z * f.Z
+	end
+	local amph: any = rule.Amphibious
+	local cap, tag, exit = Laws.WaterFeel(
+		rule,
+		d.Mode,
+		typeof(amph) == "table" and amph[d.VehicleId] == true,
+		m.Wet,
+		d.WaterServer,
+		d.Params.MaxSpeed,
+		way ~= nil,
+		facing,
+		d.WaterTag
+	)
+	sense.WaterCap = cap
+	sense.WaterExitCap = exit
+	sense.WaterExit = if exit ~= nil then way else nil
+	sense.WaterBrake = rule.BogBrake
+	sense.WaterBand = rule.ReverseBand
+	sense.WaterSteerLock = rule.BackOutSteerLock == true
+	d.WaterTag = tag
+end
+
 local function stepDrive(d: Drive, dt: number)
 	if active ~= d then
 		return
@@ -3064,7 +3275,11 @@ local function stepDrive(d: Drive, dt: number)
 		sense.WaterNear = Laws.WaterSurfaceAt(waterParts, sense.Position + f * near, 0, landProbe) ~= nil
 		sense.WaterFar = Laws.WaterSurfaceAt(waterParts, sense.Position + f * far, 0, landProbe) ~= nil
 	end
+	waterFeel(d, sense, dt) -- fb4 water rule
 	local out = Laws.Step(state, d.Params, input, sense, dt)
+	if d.WaterTag then
+		out.Hud.Tag = d.WaterTag -- fb4 water rule: "BACK OUT" / "DRIVE OUT" / "IN WATER" in the SPD pill (red), never a key name
+	end
 	applyOut(d, out)
 	if out.Hud.Restricted then
 		d.RestrictedUntil = now + (tonumber(AIRC.NoticeHoldSeconds) or 1.5)
@@ -3117,6 +3332,8 @@ local NON_PARAM_ATTRS: { [string]: boolean } = {
 	WE_Diag = true,
 	WE_DriveFail = true,
 	WE_GroundDrive = true,
+	WE_WaterState = true, -- fb4 water rule (read into Drive.WaterServer)
+	WE_WaterExit = true, -- fb4 water rule (read into Drive.WaterExitServer)
 }
 
 local function startDrive(hum: Humanoid, seat: VehicleSeat)
@@ -3179,6 +3396,10 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 		Righting = false,
 		ClearAt = -math.huge,
 		ClearVal = true,
+		WaterM = { Acc = 1, Wet = false, Out = nil, Exit = nil },
+		WaterServer = model:GetAttribute("WE_WaterState"),
+		WaterExitServer = model:GetAttribute("WE_WaterExit"),
+		WaterTag = nil,
 	}
 	local proto = model:GetAttribute("WE_ProtocolVersion")
 	if typeof(proto) == "number" and proto ~= PROTOCOL_VERSION then
@@ -3209,6 +3430,11 @@ local function startDrive(hum: Humanoid, seat: VehicleSeat)
 		table.insert(
 			d.Conns,
 			model.AttributeChanged:Connect(function(attr: string)
+				if attr == "WE_WaterState" then
+					d.WaterServer = model:GetAttribute(attr) -- fb4 water rule
+				elseif attr == "WE_WaterExit" then
+					d.WaterExitServer = model:GetAttribute(attr)
+				end
 				if not NON_PARAM_ATTRS[attr] and string.sub(attr, 1, 3) == "WE_" then
 					d.Params = Laws.BuildParams(d.Mode, model:GetAttributes(), driveCfg)
 				end

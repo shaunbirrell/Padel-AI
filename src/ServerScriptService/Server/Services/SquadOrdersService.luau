@@ -733,6 +733,60 @@ local function nearSpot(pos: Vector3, a: Vector3?, b: Vector3?, r: number): bool
 	return (a ~= nil and (pos - a).Magnitude <= r) or (b ~= nil and (pos - b).Magnitude <= r)
 end
 
+-- ── army lane A0 (ArmyConfig Rollout.Escort / Escort / ShotFx; SPEC-ARMY-FINAL §7.1-7.2) ─────────────────────────
+local ArmyCfg = require(Shared.Configs.ArmyConfig)
+-- One hostile list per think pass (Escort.NpcSnapshot, every army): CombatService.LiveNPCSnapshot refills it in place
+-- at the start of the pass; nearestHostile reads it instead of a CollectionService:GetTagged per unit. Outside a pass
+-- (or with the switch off / no CombatService) it scans the tag as before.
+local hostileSnap: { Model } = {}
+local hostileSnapValid = false
+-- the FOLLOW escort of the owner being thought this pass: live (Rollout.Escort) and its leash (EscortLeash, or
+-- Escort.DefendLeash while a defend / focus-fire target exists). Set per player in the think loop.
+local escortLive = false
+local escortLeash = CombatFairnessConfig.EscortLeash
+-- side-step (Escort.SideStep, live owners): per-unit state, weak-keyed (a unit's entry goes with the unit)
+type StepState = {
+	Blocked: number, -- shot checks in a row with the target in range and out of sight
+	Target: BasePart?, -- the target those checks were about (another one starts over)
+	ProbeAt: number, -- the last probe (Escort.SideStepMinGap)
+	Ring: number, -- probes made (the probe distance alternates over Escort.SideStepStuds)
+	Goal: Vector3?, -- the spot it walks to (nil: none)
+	Until: number, -- ...until then (Escort.SideStepHoldSeconds)
+}
+local stepState: { [any]: StepState } = setmetatable({}, { __mode = "k" }) :: any
+local stepParams = RaycastParams.new() -- walk-clearance ray of a probe (collidable geometry only)
+stepParams.FilterType = Enum.RaycastFilterType.Exclude
+stepParams.RespectCanCollide = true
+local stepIgnore: { Instance } = {}
+local missSide = 1 -- ShotFx: a miss tracer lands left / right of the target in turn
+-- read-only counters (tests, the Studio command bar): SquadOrdersService._EscortStats()
+local escortStats = { LivePasses = 0, DefendPasses = 0, Probes = 0, ProbeRays = 0, SideSteps = 0, Snapshots = 0 }
+
+local function hostileScan(tag: string): { Instance }
+	if hostileSnapValid then
+		return hostileSnap :: any
+	end
+	return CollectionService:GetTagged(tag)
+end
+
+-- once at the start of a think pass: the NPC list every nearestHostile / escort pick of this pass reads
+local function refillHostiles()
+	hostileSnapValid = false
+	local cs = CombatService
+	local fill = if cs then cs.LiveNPCSnapshot else nil
+	if ArmyCfg.Escort.NpcSnapshot ~= true or typeof(fill) ~= "function" then
+		return
+	end
+	-- the list counts only when the fill kept its contract (returned the count); anything else = the tag scan, as before
+	local ok, n = pcall(fill, hostileSnap)
+	hostileSnapValid = ok and typeof(n) == "number"
+	if hostileSnapValid then
+		escortStats.Snapshots += 1
+	else
+		table.clear(hostileSnap)
+	end
+end
+
 --[[ The hostile nearest `fromPos` within `maxRange`. `skipCalm` (squadfair, FOLLOW escort with
 	CombatFairnessConfig.EscortIgnoreCalm): leave out NPCs that hold fire now (CombatService.NPCHoldsFire: a Passive /
 	passive-group NPC whose group is not provoked). `owner` (squadfair): leave out NPCs this owner's squad may not hurt
@@ -765,7 +819,7 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 	if list then
 		candReset(list)
 	end
-	for _, inst in ipairs(CollectionService:GetTagged(npcTag)) do
+	for _, inst in ipairs(hostileScan(npcTag)) do -- army lane A0: the pass's NPC list (was GetTagged per call)
 		-- squadfair: a CombatService NPC only (it has an NPCId); a static WE_NPC statue takes no damage from any shot
 		if
 			inst:IsA("Model")
@@ -805,6 +859,86 @@ local function nearestHostile(fromPos: Vector3, maxRange: number, skipCalm: bool
 		end
 	end
 	return bestHum, bestRoot, bestDist, zoneHum, zoneRoot, zoneDist, heldA, heldB
+end
+
+--[[ army lane A0 (live owners, Rollout.Escort): the FOLLOW escort's pick for one pass, in place of nearestHostile. First
+	the defend targets: NPCs aiming at the owner, or hit by the owner himself in the last Escort.FocusFireSeconds, within
+	Escort.DefendRadius of him (CombatService.NPCThreat); the nearest of them is the primary. Else today's pick (the
+	nearest hostile within EscortEngageRadius). The same filters as nearestHostile (a CombatService NPC; EscortIgnoreCalm;
+	UnitMayHitNPC). escortCands holds the defend targets first (nearest first), then today's candidates, for pickShot's
+	visible-target fallback. Returns (primary Humanoid, its root, a defend target exists). No table is made. ]]
+local function escortPickLive(player: Player, proot: BasePart): (Humanoid?, BasePart?, boolean)
+	local E = ArmyCfg.Escort
+	local r = CombatFairnessConfig.EscortEngageRadius
+	local dr = math.max(tonumber(E.DefendRadius) or r, r)
+	local focus = tonumber(E.FocusFireSeconds) or 0
+	local cs = CombatService
+	local holds = if CombatFairnessConfig.EscortIgnoreCalm == true and cs then cs.NPCHoldsFire else nil
+	if typeof(holds) ~= "function" then
+		holds = nil
+	end
+	local mayHit = if cs then cs.UnitMayHitNPC else nil
+	if typeof(mayHit) ~= "function" then
+		mayHit = nil
+	end
+	local threat = if cs then cs.NPCThreat else nil
+	if typeof(threat) ~= "function" then
+		threat = nil
+	end
+	local from = proot.Position
+	local cap = candCap()
+	candReset(escortCands)
+	local bestHum: Humanoid?, bestRoot: BasePart?, bestDist = nil, nil, r
+	local defHum: Humanoid?, defRoot: BasePart?, defDist = nil, nil, math.huge
+	for _, inst in ipairs(hostileScan(Constants.Tags.NPC)) do
+		if
+			inst:IsA("Model")
+			and not inst:GetAttribute("FriendlySquad")
+			and not inst:GetAttribute("OwnerUserId")
+			and typeof(inst:GetAttribute("NPCId")) == "string"
+		then
+			local hum = inst:FindFirstChildOfClass("Humanoid")
+			local root = inst:FindFirstChild("HumanoidRootPart")
+			if hum and root and root:IsA("BasePart") and hum.Health > 0 then
+				local d = (root.Position - from).Magnitude
+				if d <= dr then
+					local id = inst:GetAttribute("NPCId")
+					if not (holds ~= nil and holds(id) == true) and not (mayHit ~= nil and mayHit(player, id) == false) then
+						local aiming, recent = false, false
+						if threat ~= nil then
+							aiming, recent = threat(id, player, focus)
+						end
+						if aiming == true or recent == true then
+							if d < defDist then
+								defDist = d
+								defHum = hum
+								defRoot = root
+							end
+							candInsert(escortCands, cap, hum, root, d - dr - 1) -- sorts before every other hostile
+						elseif d <= r then
+							if d < bestDist then
+								bestDist = d
+								bestHum = hum
+								bestRoot = root
+							end
+							candInsert(escortCands, cap, hum, root, d)
+						end
+					end
+				end
+			end
+		end
+	end
+	escortStats.LivePasses += 1
+	if defHum ~= nil then
+		escortStats.DefendPasses += 1
+		return defHum, defRoot, true
+	end
+	return bestHum, bestRoot, false
+end
+
+-- army lane A0: the escort counters (a copy; tests and the Studio command bar)
+function SquadOrdersService._EscortStats(): { [string]: number }
+	return table.clone(escortStats)
 end
 
 local function faceYaw(root: BasePart, lookAt: Vector3)
@@ -851,6 +985,34 @@ function SquadOrdersService.SetRandomForTests(seedOrRandom: any)
 	else
 		rng = Random.new()
 	end
+end
+
+--[[ army lane A0 (ArmyConfig.ShotFx, live owners, every order): after a unitShoot call, the tracer of the shot it fired
+	(its LastFireAt moved past `firedAt`: a hit or a miss; nothing when the gun was not ready), from the unit's eye to
+	the target (`hit`) or MissOffsetStuds beside it (a miss, sides in turn: no random numbers, so the hit rolls are
+	untouched). CombatService.UnitShotFx samples it (one per army per PerArmyMinGap) and sends it as an NPC rifle shot. ]]
+local function unitShotFx(player: Player, unit: SquadUnit, troot: BasePart, firedAt: number, hit: boolean)
+	if unit.LastFireAt == firedAt then
+		return -- no shot this call
+	end
+	local cfg = ArmyCfg.ShotFx
+	if cfg.Enabled ~= true or not ArmyCfg.LiveFor("Escort", player.UserId) then
+		return
+	end
+	local send = if CombatService then CombatService.UnitShotFx else nil
+	if typeof(send) ~= "function" then
+		return
+	end
+	local eye = unit.Root.Position + Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+	local landed = troot.Position
+	if not hit then
+		missSide = -missSide
+		local d = landed - eye
+		local flat = Vector3.new(d.X, 0, d.Z)
+		local side = if flat.Magnitude > 0.01 then Vector3.new(-flat.Z, 0, flat.X).Unit else Vector3.xAxis
+		landed += side * (missSide * (tonumber(cfg.MissOffsetStuds) or 3))
+	end
+	pcall(send, player, eye, landed, if hit then "N" else "M")
 end
 
 --[[ One unit shot (Attack and escort); the caller has checked the line of sight. The shot spends the fire cooldown,
@@ -927,6 +1089,36 @@ local function unitHasLos(player: Player, unit: SquadUnit, troot: BasePart): boo
 	return not blocked
 end
 
+-- army lane A0 (side-step probe): unitHasLos's ray (the same ignore list and rules, the one cached losParams) from any
+-- eye point, e.g. a spot beside the unit
+local function losFromEye(player: Player, unit: SquadUnit, eye: Vector3, troot: BasePart): boolean
+	local delta = troot.Position - eye
+	if delta.Magnitude < 1e-3 then
+		return true
+	end
+	table.clear(losIgnore)
+	table.insert(losIgnore, unit.Model)
+	table.insert(losIgnore, ensureFolder())
+	if CombatFairnessConfig.UnitLosIgnoreNPCBodies == true then
+		local bodies = npcBodies()
+		if bodies then
+			table.insert(losIgnore, bodies)
+		end
+	end
+	local targetModel = troot.Parent
+	if targetModel then
+		table.insert(losIgnore, targetModel)
+	end
+	if player.Character then
+		table.insert(losIgnore, player.Character :: Instance)
+	end
+	losParams.RespectCanCollide = CombatFairnessConfig.NpcLosRespectCanCollide == true
+	losParams.FilterDescendantsInstances = losIgnore
+	local blocked = Workspace:Raycast(eye, delta, losParams) ~= nil
+	table.clear(losIgnore)
+	return not blocked
+end
+
 --[[ squadfair: the shot a ready unit takes now. The primary hostile `th` when it is within `range` of the unit and
 	(with `requireLos`) in sight; else, with `requireLos`, the nearest hostile of `list` (not `th`) within `range` of the
 	unit that it can see, nearest first, casting at most UnitLosRaysPerCheck rays in all. Returns (hostile, root, rays
@@ -987,6 +1179,126 @@ local function aimPoint(unit: SquadUnit, troot: BasePart): Vector3
 	return troot.Position
 end
 
+-- ── army lane A0: side-step (ArmyConfig.Escort.SideStep; FOLLOW escort of a live owner) ───────────────────────────
+local function stepOf(unit: SquadUnit): StepState
+	local s = stepState[unit]
+	if s == nil then
+		s = { Blocked = 0, Target = nil, ProbeAt = -math.huge, Ring = 0, Goal = nil, Until = 0 }
+		stepState[unit] = s
+	end
+	return s :: StepState
+end
+
+-- a shot went out: the blocked count starts over and a side-step walk ends (it sees from here)
+local function stepSaw(unit: SquadUnit)
+	local s = stepState[unit]
+	if s then
+		s.Blocked = 0
+		s.Goal = nil
+	end
+end
+
+--[[ One probe (<= 4 rays): SideStepStuds[ring] to the unit's left and right (across its line to the target). A side is
+	tried only when that spot stays within 90 % of the escort leash from the owner and within AttackRange of the target:
+	one knee-height ray for walk clearance (collidable geometry), then one sight ray from the spot's eye to the target
+	(the unit's own LOS rules). Returns the first spot that sees the target, or nil. ]]
+local function stepProbe(player: Player, unit: SquadUnit, s: StepState, playerRoot: BasePart, troot: BasePart, now: number): Vector3?
+	local E = ArmyCfg.Escort
+	s.ProbeAt = now
+	escortStats.Probes += 1
+	local list = E.SideStepStuds
+	local n = if typeof(list) == "table" then #list else 0
+	if n == 0 then
+		return nil
+	end
+	local off = tonumber(list[(s.Ring % n) + 1]) or 4
+	s.Ring += 1
+	local from = unit.Root.Position
+	local d = troot.Position - from
+	local flat = Vector3.new(d.X, 0, d.Z)
+	if flat.Magnitude < 1 then
+		return nil
+	end
+	local side = Vector3.new(-flat.Z, 0, flat.X).Unit
+	local pc = followPathCfg()
+	local drop = if pc then cfgNum(pc, "RayDrop", 1) else 1
+	local half = if pc then cfgNum(pc, "RayHalfWidth", 0.9) else 0.9
+	local maxOwner = escortLeash * 0.9
+	local range = OrdersConfig.AttackRange or 55
+	local eyeUp = Vector3.new(0, CombatFairnessConfig.NpcEyeHeight, 0)
+	local found: Vector3? = nil
+	local paramsSet = false
+	for k = 1, 2 do
+		local dir = if k == 1 then side else -side
+		local spot = from + dir * off
+		if flatDist(spot, playerRoot.Position) <= maxOwner and (troot.Position - spot).Magnitude <= range then
+			if not paramsSet then
+				paramsSet = true
+				table.clear(stepIgnore)
+				table.insert(stepIgnore, ensureFolder())
+				if player.Character then
+					table.insert(stepIgnore, player.Character :: Instance)
+				end
+				stepParams.FilterDescendantsInstances = stepIgnore
+			end
+			local clear = Workspace:Raycast(from - Vector3.new(0, drop, 0), dir * (off + half), stepParams) == nil
+			escortStats.ProbeRays += if clear then 2 else 1
+			if clear and losFromEye(player, unit, spot + eyeUp, troot) then
+				found = spot
+				break
+			end
+		end
+	end
+	table.clear(stepIgnore) -- no model held between probes (the property keeps its own copy)
+	return found
+end
+
+-- a shot check found nothing in sight (the target in range): count it; after SideStepAfterBlocked in a row, probe (at
+-- most once per SideStepMinGap, never while a side-step walk is on)
+local function stepBlocked(player: Player, unit: SquadUnit, playerRoot: BasePart, troot: BasePart, now: number)
+	local E = ArmyCfg.Escort
+	if E.SideStep ~= true then
+		return
+	end
+	local s = stepOf(unit)
+	if s.Target ~= troot then
+		s.Target = troot
+		s.Blocked = 0
+		s.Goal = nil
+	end
+	s.Blocked += 1
+	if s.Goal ~= nil or s.Blocked < (tonumber(E.SideStepAfterBlocked) or 2) or now - s.ProbeAt < (tonumber(E.SideStepMinGap) or 1.5) then
+		return
+	end
+	local spot = stepProbe(player, unit, s, playerRoot, troot, now)
+	if spot then
+		escortStats.SideSteps += 1
+		s.Goal = spot
+		s.Until = now + (tonumber(E.SideStepHoldSeconds) or 3)
+	end
+end
+
+-- this think's move while a side-step walk is on (the target is the same, the owner still within the leash of the spot
+-- and of the unit, not timed out): walk to the spot facing the target, or stand on it. false = no side-step (it ends)
+local function stepMove(unit: SquadUnit, playerRoot: BasePart, troot: BasePart, fromPlayer: number, now: number): boolean
+	local s = stepState[unit]
+	if s == nil or s.Goal == nil then
+		return false
+	end
+	local goal = s.Goal :: Vector3
+	if s.Target ~= troot or now >= s.Until or fromPlayer > escortLeash or flatDist(goal, playerRoot.Position) > escortLeash then
+		s.Goal = nil
+		return false
+	end
+	faceYaw(unit.Root, troot.Position)
+	if flatDist(goal, unit.Root.Position) > 1.5 then
+		unit.Humanoid:MoveTo(goal)
+	else
+		unit.Humanoid:MoveTo(unit.Root.Position)
+	end
+	return true
+end
+
 -- squadfair: an ATTACK unit's blocked-chase timers start over (a shot, no hostile in reach, a new order)
 local function clearChase(unit: SquadUnit)
 	unit.LosBlocked = false
@@ -1016,7 +1328,7 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 		unit.AimHum = nil
 		return false
 	end
-	local leash = CombatFairnessConfig.EscortLeash
+	local leash = escortLeash -- army lane A0: EscortLeash, or Escort.DefendLeash while a defend target exists (live)
 	local range = OrdersConfig.AttackRange or 55
 	local playerPos = playerRoot.Position
 	local unitPos = unit.Root.Position
@@ -1028,11 +1340,23 @@ local function escortUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			unit.LosBlocked = false
 			unit.AimRoot = if sh ~= th then sr else nil
 			unit.AimHum = if sh ~= th then sh else nil
-			unitShoot(player, unit, sh, now, true)
+			local firedAt = unit.LastFireAt -- army lane A0
+			local hit = unitShoot(player, unit, sh, now, true)
+			unitShotFx(player, unit, sr, firedAt, hit) -- army lane A0: the tracer (live owners)
+			if escortLive then
+				stepSaw(unit) -- army lane A0
+			end
 		elseif rays > 0 then
 			losBlockedFor(unit, now)
+			if escortLive and fromPlayer <= leash then
+				stepBlocked(player, unit, playerRoot, troot, now) -- army lane A0: side-step after SideStepAfterBlocked
+			end
 		end
 	end
+	if escortLive and stepMove(unit, playerRoot, troot, fromPlayer, now) then
+		return true -- army lane A0: walking to (or standing on) a side-step spot that sees the target
+	end
+
 	local aimAt = aimPoint(unit, troot) -- the fallback hostile it shoots, else the one nearest the player
 	local dist = (aimAt - unitPos).Magnitude
 	faceYaw(unit.Root, aimAt)
@@ -1194,7 +1518,9 @@ local function attackUnit(player: Player, st: SquadState, unit: SquadUnit, playe
 			unit.ChaseHum = nh
 			unit.AimRoot = if th ~= nh then troot else nil
 			unit.AimHum = if th ~= nh then th else nil
-			unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true) -- P1-4
+			local firedAt = unit.LastFireAt -- army lane A0
+			local hit = unitShoot(player, unit, th, now, CombatFairnessConfig.UnitKillCreditOnAttack == true) -- P1-4
+			unitShotFx(player, unit, troot, firedAt, hit) -- army lane A0: the tracer (live owners)
 		elseif rays > 0 then
 			losBlockedFor(unit, now)
 			if unit.BlockedSince == nil then
@@ -1661,6 +1987,7 @@ function SquadOrdersService.Init(deps: { [string]: any })
 			local interval = OrdersConfig.ThinkInterval or 0.4
 			task.wait(interval)
 			local now = os.clock()
+			refillHostiles() -- army lane A0: one NPC list for this pass
 			local pathCfg = followPathCfg()
 			local probe: Probe? = nil -- lane C FollowPath: built once per pass, only when a squad follows
 			for _, player in ipairs(Players:GetPlayers()) do
@@ -1675,9 +2002,20 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					-- P1-4 escort: one hostile pick per player per pass (nearest to the player); squadfair: plus the
 					-- hostiles near the player for the visible-target fallback (escortCands), only ones this squad may hurt
 					local escortHum: Humanoid?, escortRoot: BasePart? = nil, nil
+					escortLive = false -- army lane A0: today's escort unless Rollout.Escort is live for this owner
+					escortLeash = CombatFairnessConfig.EscortLeash
 					if st.Order == "Follow" and proot then
 						local r = CombatFairnessConfig.EscortEngageRadius
-						escortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)
+						if ArmyCfg.LiveFor("Escort", player.UserId) then
+							local defending = false
+							escortLive = true
+							escortHum, escortRoot, defending = escortPickLive(player, proot)
+							if defending then
+								escortLeash = math.max(tonumber(ArmyCfg.Escort.DefendLeash) or escortLeash, escortLeash)
+							end
+						else
+							escortHum, escortRoot = nearestHostile(proot.Position, r, CombatFairnessConfig.EscortIgnoreCalm == true, player, escortCands, r)
+						end
 						updateMirror(st, proot.CFrame)
 					end
 					-- lane C FollowPath (squadfair: also ATTACK once a unit has given up a chase: it walks the trail)
@@ -1690,6 +2028,8 @@ function SquadOrdersService.Init(deps: { [string]: any })
 					candReset(escortCands) -- hold no reference to the NPCs between passes
 				end
 			end
+			hostileSnapValid = false -- army lane A0: the list is this pass's only (no NPC reference kept between passes)
+			table.clear(hostileSnap)
 		end
 	end)
 
