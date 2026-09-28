@@ -123,6 +123,8 @@ export type AssetRef = {
 	BodyDeck: { AirHitBox }?, -- invisible collidable deck plates (unscaled body boxes, like BodyHitBoxes): players / aircraft stand on the fitted deck
 	BodyKitNoCollide: { string }?, -- kit parts that stop colliding under the body (the carrier's kit deck / island would stand over the fitted deck)
 	KitRotor: KitRotorSpec?, -- helicopters: the kit rotor (kept visible) moved onto the body's mast and stretched to the body's rotor span
+	BodyMaxScale: number?, -- v88: BodyScale cap for this ref (default 4; the 2-stud airliner mesh fits at 30)
+	BodyAnchorX: boolean?, -- v88: BodyAnchor also moves the body across the kit (a bridge on an off-centre island)
 	-- Owner asset list (2026-09-25)
 	PendingAssetId: number?, -- the owner's third-party pick; NEVER loaded (VisualAssetService ignores it); tools/wire-asset-ids.py promotes it
 	OmitParts: { string }?, -- pack piece: BaseParts with these names are removed before the part count (Pickup Truck tail-light glass)
@@ -268,29 +270,6 @@ local BODY_BOMBER = {
 	StripDecals = true,
 }
 
--- 2475398012 prop transport (1 mesh, the propeller is fused: it cannot spin). Nose +Z (Yaw 180). Pilot in the cockpit
--- hump, passengers in the fuselage.
-local BODY_CARGO_PLANE = {
-	ModelAssetId = 2475398012,
-	Rollout = "Body",
-	Fit = "Kit",
-	Yaw = 180,
-	HideKit = true,
-	BodyScale = 1.4,
-	BodySeats = {
-		DriverSeat = Vector3.new(0, 8.6, 3.5),
-		PassengerSeat1 = Vector3.new(-0.7, 3.6, -5),
-		PassengerSeat2 = Vector3.new(0.7, 3.6, -5),
-		PassengerSeat3 = Vector3.new(-0.7, 3.6, -8.5),
-		PassengerSeat4 = Vector3.new(0.7, 3.6, -8.5),
-	},
-	BodyAnchor = "DriverSeat",
-	BodyFloor = "Collide",
-	TailGuard = true,
-	ChaseCamera = true,
-	StripDecals = true,
-}
-
 -- 16692908395 patrol torpedo boat (5 parts; the two seated crew figures Group1 / Group2 are dropped). Bow -X (Yaw -90).
 -- Helmsman in the cockpit where the crew sat, the rest on the deck behind it.
 local BODY_PATROL_BOAT = {
@@ -378,6 +357,7 @@ local BODY_CARRIER = {
 		PassengerSeat4 = Vector3.new(3, 1.8, -13),
 	},
 	BodyAnchor = "DriverSeat",
+	BodyAnchorX = true, -- v88: the island bridge is off the centre line; the body moves across too, so the seat stays in it
 	BodyDeck = {
 		{ At = Vector3.new(0.65, 1.6, -3), Size = Vector3.new(11.3, 0.4, 28) }, -- main deck, island side to the starboard edge
 		{ At = Vector3.new(-1.25, 1.6, 17.5), Size = Vector3.new(7.5, 0.4, 13) }, -- the narrow bow run
@@ -405,6 +385,7 @@ local BODY_AMPHIB = {
 		PassengerSeat4 = Vector3.new(6, 17.7, 20),
 	},
 	BodyAnchor = "DriverSeat",
+	BodyAnchorX = true, -- v88: the island bridge is off the centre line; the body moves across too, so the seat stays in it
 	StripDecals = true,
 }
 
@@ -427,6 +408,205 @@ local BODY_SUB = {
 	},
 	BodyAnchor = "DriverSeat",
 	RotorParts = { { Parts = { "Meshes/newsubmarine_Propellor Blades", "Meshes/newsubmarine_Propellor Cap" }, Axis = "Z", Rps = 3 } },
+	StripDecals = true,
+}
+
+-- v88 (Code Bot, 2026-09-28): the wc6 winners, owner-only, same system (owner: "add them all in"). Seat points from the
+-- Open Cloud raycast grids grid88.
+-- 80886282228822 ev41 tilt-rotor (37 MeshParts, dark olive). Nose -Z. Pilots in the tandem cockpit seats, troops in the cabin.
+local BODY_VTOL = {
+	ModelAssetId = 80886282228822,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 0.55,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 8.0, -30),
+		PassengerSeat1 = Vector3.new(0, 8.0, -25.6),
+		PassengerSeat2 = Vector3.new(-2.5, 3.2, -15),
+		PassengerSeat3 = Vector3.new(2.5, 3.2, -15),
+		PassengerSeat4 = Vector3.new(-2.5, 3.2, -8),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyFloor = "Collide",
+	RotorParts = {
+		{ Parts = { "Resolution 1.292" }, Hub = "Resolution 1.021", Axis = "Y", Rps = 4 }, -- right proprotor, about its hub
+		{ Parts = { "Resolution 1.273" }, Hub = "Resolution 1.015", Axis = "Y", Rps = 4 }, -- left proprotor
+	},
+	ChaseCamera = true,
+	StripDecals = true,
+}
+
+-- 11240665977 attack helicopter (10 MeshParts, dark navy; tail rotor baked in, main Blades spin). Nose -Z. Crew in the front seats under the glass.
+local BODY_ATTACK_HELI = {
+	ModelAssetId = 11240665977,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 0.45,
+	BodySeats = {
+		DriverSeat = Vector3.new(-4, 6.0, -30),
+		PassengerSeat1 = Vector3.new(4, 6.0, -30),
+		PassengerSeat2 = Vector3.new(-3.5, 5.5, -13),
+		PassengerSeat3 = Vector3.new(3.5, 5.5, -13),
+		PassengerSeat4 = Vector3.new(0, 5.5, -8),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyFloor = "Collide",
+	RotorParts = { { Parts = { "Blades" }, Hub = "Thing for Blades", Axis = "Y", Rps = 5 } },
+	BodyMounts = { StubWingL = Vector3.new(-8.5, 11, -8) }, -- rocket pods (AirWeaponService, mirrored right) beside the cabin
+	ChaseCamera = true,
+	StripDecals = true,
+}
+
+-- StealthHeli: the attack-heli body recoloured near-black.
+local BODY_STEALTH_HELI = {
+	ModelAssetId = 11240665977,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 0.45,
+	BodySeats = {
+		DriverSeat = Vector3.new(-4, 6.0, -30),
+		PassengerSeat1 = Vector3.new(4, 6.0, -30),
+		PassengerSeat2 = Vector3.new(-3.5, 5.5, -13),
+		PassengerSeat3 = Vector3.new(3.5, 5.5, -13),
+		PassengerSeat4 = Vector3.new(0, 5.5, -8),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyFloor = "Collide",
+	RotorParts = { { Parts = { "Blades" }, Hub = "Thing for Blades", Axis = "Y", Rps = 5 } },
+	BodyMounts = { StubWingL = Vector3.new(-8.5, 11, -8) }, -- rocket pods (AirWeaponService, mirrored right) beside the cabin
+	ChaseCamera = true,
+	BodyColor = Color3.fromRGB(20, 22, 26), -- near-black (owner: not the Little Bird look-alike 11839207737)
+	StripDecals = true,
+}
+
+-- 3553891209 Fighter Jet concept (1 MeshPart after the gear goes). Nose +X (Yaw 90). Pilot under the canopy hump.
+local BODY_STRIKE_JET = {
+	ModelAssetId = 3553891209,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 90,
+	HideKit = true,
+	BodyScale = 0.9,
+	BodySeats = {
+		DriverSeat = Vector3.new(10, 0.8, 0),
+	},
+	BodyAnchor = "DriverSeat",
+	OmitParts = { "Part" }, -- its 24 landing-gear Parts (the kit gear still stands it)
+	BodyFloor = "Collide",
+	BodyColor = Color3.fromRGB(44, 48, 54), -- dark; its texture (the earlier registry note: another artist's paint) is cleared
+	BodyClearTexture = true,
+	TailGuard = true,
+	ChaseCamera = true,
+	StripDecals = true,
+}
+
+-- 7976374439 stealth delta (4 MeshParts; its red neon strip / exhausts stay as a glow). Nose -Z.
+local BODY_STEALTH_STRIKE = {
+	ModelAssetId = 7976374439,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 0.9,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 1.0, -2),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyFloor = "Collide",
+	TailGuard = true,
+	ChaseCamera = true,
+	StripDecals = true,
+}
+
+-- 17033079003 generic twin-jet transport (1 mesh; replaces 2475398012). Nose -Z. Crew inside the fuselage.
+local BODY_AIRLINER = {
+	ModelAssetId = 17033079003,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 30,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 0.12, -0.8),
+		PassengerSeat1 = Vector3.new(-0.05, 0.12, -0.4),
+		PassengerSeat2 = Vector3.new(0.05, 0.12, -0.4),
+		PassengerSeat3 = Vector3.new(-0.05, 0.12, -0.1),
+		PassengerSeat4 = Vector3.new(0.05, 0.12, -0.1),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyMaxScale = 30, -- authored 2.1 studs long: fitted at 30 (63 long, 55 span)
+	BodyFloor = "Collide",
+	BodyColor = Color3.fromRGB(70, 74, 80), -- dark grey
+	BodyMaterial = Enum.Material.Metal,
+	TailGuard = true,
+	ChaseCamera = true,
+	StripDecals = true,
+}
+
+-- 12235335847 ramp barge (27 parts, 24 kept). Ramp / bow -Z. Helmsman in the forward deckhouse, troops on the cargo deck.
+local BODY_BARGE = {
+	ModelAssetId = 12235335847,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 0.25,
+	BodySeats = {
+		DriverSeat = Vector3.new(1.2, 35.2, -45),
+		PassengerSeat1 = Vector3.new(-8, 35.3, -10),
+		PassengerSeat2 = Vector3.new(8, 35.3, -10),
+		PassengerSeat3 = Vector3.new(-8, 35.3, 10),
+		PassengerSeat4 = Vector3.new(8, 35.3, 10),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyWaterline = 5.7,
+	OmitParts = { "Meshes/bargepiece12_Cylinder.051", "Meshes/bargepiece12_Cube.130", "Meshes/bargepiece12_Cylinder.080" }, -- hanging anchor + chain
+	StripDecals = true,
+}
+
+-- 2625253037 tanker (10 MeshParts, the creator's own textures). Bow -Z. Captain inside the aft bridge, crew on the deck.
+local BODY_SUPPORT_SHIP = {
+	ModelAssetId = 2625253037,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 1,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 15.5, 36),
+		PassengerSeat1 = Vector3.new(-3, 14.6, 5),
+		PassengerSeat2 = Vector3.new(3, 14.6, 5),
+		PassengerSeat3 = Vector3.new(-3, 14.6, 10),
+		PassengerSeat4 = Vector3.new(3, 14.6, 10),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyWaterline = 6.2,
+	StripDecals = true,
+}
+
+-- 3626114334 hovercraft (1 textured mesh). Nose -Z. Driver in the forward cabin, riders inside behind.
+local BODY_HOVER = {
+	ModelAssetId = 3626114334,
+	Rollout = "Body",
+	Fit = "Kit",
+	Yaw = 0,
+	HideKit = true,
+	BodyScale = 0.8,
+	BodySeats = {
+		DriverSeat = Vector3.new(0, 4.5, -9),
+		PassengerSeat1 = Vector3.new(-3, 4.5, -3),
+		PassengerSeat2 = Vector3.new(3, 4.5, -3),
+		PassengerSeat3 = Vector3.new(-3, 4.5, 3),
+		PassengerSeat4 = Vector3.new(3, 4.5, 3),
+	},
+	BodyAnchor = "DriverSeat",
+	BodyWaterline = 2.9,
 	StripDecals = true,
 }
 
@@ -611,14 +791,14 @@ local VisualAssetConfig = {
 		AssaultGun = { ModelAssetId = 0, Note = "owner list: [WEAK] low-poly tank declined, our Part kit reads better - Part kit" } :: AssetRef,
 		-- Free heli family
 		TransportHeli = bodyRef(BODY_TRANSPORT_HELI, "v87 owner pick 109615982233602 transport helicopter (wc5), owner-only rollout"),
-		AttackHelicopter = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
+		AttackHelicopter = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
 		LightTransportHeli = bodyRef(BODY_TRANSPORT_HELI, "v87 owner pick 109615982233602 transport helicopter (wc5), owner-only rollout"),
-		NightAttackHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
+		NightAttackHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
 		LightScoutHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
-		GunshipHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
+		GunshipHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
 		HeavyLiftHeli = bodyRef(BODY_TRANSPORT_HELI, "v87 owner pick 109615982233602 transport helicopter (wc5), owner-only rollout"),
 		RescueHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
-		StealthHeli = { ModelAssetId = 0, Note = "Gunship/stealth heli" } :: AssetRef,
+		StealthHeli = bodyRef(BODY_STEALTH_HELI, "v88 owner pick 11240665977 attack helicopter, near-black (wc6), owner-only rollout"),
 		-- Classic free pack (trucks / APC fallback)
 		_FallbackWheeled = { ModelAssetId = 0, Note = "Military Vehicle Meshes pack (free)" } :: AssetRef,
 		PatrolTruck = {
@@ -788,13 +968,13 @@ local VisualAssetConfig = {
 			StripDecals = true,
 			Note = "owner pick: Basic Fighter jet by Alecose1 (promoted 2026-09-28 by tools/wire-asset-ids.py)",
 		} :: AssetRef,
-		StrikeJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
-		CASJet = { ModelAssetId = 0, Note = "owner list: pick rejected (real-world aircraft copy) - family body / Part kit" } :: AssetRef,
-		StealthStrikeJet = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
+		StrikeJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 Fighter Jet concept, texture cleared, dark (wc6), owner-only rollout"),
+		CASJet = bodyRef(BODY_STRIKE_JET, "v88 owner pick 3553891209 Fighter Jet concept, texture cleared, dark (wc6), owner-only rollout"),
+		StealthStrikeJet = bodyRef(BODY_STEALTH_STRIKE, "v88 owner pick 7976374439 stealth (wc6), owner-only rollout"),
 		StrikeBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
-		CargoPlane = bodyRef(BODY_CARGO_PLANE, "v87 owner pick 2475398012 prop transport (wc5), owner-only rollout"),
-		AWACSPlane = bodyRef(BODY_CARGO_PLANE, "v87 owner pick 2475398012 prop transport (wc5), owner-only rollout"),
-		TankerPlane = bodyRef(BODY_CARGO_PLANE, "v87 owner pick 2475398012 prop transport (wc5), owner-only rollout"),
+		CargoPlane = bodyRef(BODY_AIRLINER, "v88 owner pick 17033079003 twin-jet transport, dark grey (wc6; replaces 2475398012), owner-only rollout"),
+		AWACSPlane = bodyRef(BODY_AIRLINER, "v88 owner pick 17033079003 twin-jet transport, dark grey (wc6; replaces 2475398012), owner-only rollout"),
+		TankerPlane = bodyRef(BODY_AIRLINER, "v88 owner pick 17033079003 twin-jet transport, dark grey (wc6; replaces 2475398012), owner-only rollout"),
 		-- Free naval family
 		_FallbackNaval = { ModelAssetId = 0, Note = "Free Boat (Creator Store)" } :: AssetRef,
 		PatrolBoat = bodyRef(BODY_PATROL_BOAT, "v87 owner pick 16692908395 patrol boat (wc5), owner-only rollout"),
@@ -806,17 +986,17 @@ local VisualAssetConfig = {
 		MissileBoat = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
 		MineLayer = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
 		CoastalMonitor = bodyRef(BODY_GUNBOAT, "v87 owner pick 15838664806 Basic Gunboat (wc5), owner-only rollout"),
-		LandingCraft = { ModelAssetId = 0, Note = "Part-kit barge — REJECT 13195201090 template; owner list: pick rejected (wrong item: a space lander)" } :: AssetRef,
-		AssaultLanding = { ModelAssetId = 0, Note = "Part-kit — REJECT 13195201090; owner list: pick rejected (wrong item: a space lander)" } :: AssetRef,
-		HoverTransport = { ModelAssetId = 0, Note = "owner pick HoverCraft (Fractality) not used: owner check 2026-09-25 (Open Cloud, v75), 211 parts > 40 - family body / Part kit" } :: AssetRef,
-		HospitalShip = { ModelAssetId = 0, Note = "owner list: pick rejected (protected emblem and a named real ship) - family body / Part kit" } :: AssetRef,
-		SupplyShip = { ModelAssetId = 0, Note = "owner pick Cargo Ship (Yorsiur) not used: owner check 2026-09-25 (Open Cloud, v75), 174 parts > 40 - family body / Part kit" } :: AssetRef,
+		LandingCraft = bodyRef(BODY_BARGE, "v88 owner pick 12235335847 Barge (wc6), owner-only rollout"),
+		AssaultLanding = bodyRef(BODY_BARGE, "v88 owner pick 12235335847 Barge (wc6), owner-only rollout"),
+		HoverTransport = bodyRef(BODY_HOVER, "v88 owner pick 3626114334 Hover craft (wc6), owner-only rollout"),
+		HospitalShip = bodyRef(BODY_SUPPORT_SHIP, "v88 owner pick 2625253037 Civillian tanker (wc6), owner-only rollout"),
+		SupplyShip = bodyRef(BODY_SUPPORT_SHIP, "v88 owner pick 2625253037 Civillian tanker (wc6), owner-only rollout"),
 		AmphibAssault = bodyRef(BODY_AMPHIB, "v87 owner pick 5545544418 amphibious assault ship (wc5), owner-only rollout"),
 		Corvette = bodyRef(BODY_FRIGATE, "v87 owner pick 473576954 frigate hull (wc5), owner-only rollout"),
-		Destroyer = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit; owner list: [WEAK] warship pick declined" } :: AssetRef,
+		Destroyer = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit; owner list: [WEAK] warship pick declined", NoFamilyFallback = true } :: AssetRef,
 		Frigate = bodyRef(BODY_FRIGATE, "v87 owner pick 473576954 frigate hull (wc5), owner-only rollout"),
 		CarrierEscort = bodyRef(BODY_FRIGATE, "v87 owner pick 473576954 frigate hull (wc5), owner-only rollout"),
-		Battleship = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
+		Battleship = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit", NoFamilyFallback = true } :: AssetRef,
 		AircraftCarrier = { ModelAssetId = 0, Note = "Part-kit capital — REJECT 13195201090" } :: AssetRef,
 		SubSurfaceRunner = bodyRef(BODY_SUB, "v87 owner pick 116924692473761 submarine (wc5), owner-only rollout"),
 		AttackSub = bodyRef(BODY_SUB, "v87 owner pick 116924692473761 submarine (wc5), owner-only rollout"),
@@ -956,13 +1136,13 @@ local VisualAssetConfig = {
 		DispatchCar = { ModelAssetId = 0, Note = "0 → WheeledLight family body (MilitaryJeep, fitted to the smaller kit)" } :: AssetRef,
 		UtilityHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
 		MedevacHeli = bodyRef(BODY_LIGHT_HELI, "v87 owner pick 3130894523 light helicopter (load check wc5 2026-09-28), owner-only rollout"),
-		EscortHeli = { ModelAssetId = 0, Note = "owner list: pick rejected (franchise copy) - family body / Part kit" } :: AssetRef,
-		VTOLTransport = { ModelAssetId = 0, NoFamilyFallback = true, Note = "owner list: pick rejected (provenance) - Part kit (v87: NoFamilyFallback, never the TransportHeli store body)" } :: AssetRef,
+		EscortHeli = bodyRef(BODY_ATTACK_HELI, "v88 owner pick 11240665977 attack helicopter (wc6), owner-only rollout"),
+		VTOLTransport = bodyRef(BODY_VTOL, "v88 owner pick 80886282228822 ev41 tilt-rotor (wc6), owner-only rollout"),
 		HeavyBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
-		StealthStrike = { ModelAssetId = 0, Note = "Strike/CAS jet" } :: AssetRef,
+		StealthStrike = bodyRef(BODY_STEALTH_STRIKE, "v88 owner pick 7976374439 stealth (wc6), owner-only rollout"),
 		-- Depth-pass capital / bomber IDs previously missing from catalog map
-		Cruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
-		MissileCruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit" } :: AssetRef,
+		Cruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit", NoFamilyFallback = true } :: AssetRef,
+		MissileCruiser = { ModelAssetId = 0, Note = "W1 CFG drop (real-world ship) — NavalCapital → Part kit", NoFamilyFallback = true } :: AssetRef,
 		FleetCarrier = bodyRef(BODY_CARRIER, "v87 owner pick 7941124517 aircraft carrier (wc5), owner-only rollout"),
 		StrategicBomber = bodyRef(BODY_BOMBER, "v87 owner pick 14669079591 delta-wing bomber (wc5), owner-only rollout"),
 	} :: { [string]: AssetRef },

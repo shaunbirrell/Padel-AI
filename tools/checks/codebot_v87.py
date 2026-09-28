@@ -13,7 +13,6 @@ _cb87_map = {
     "BODY_LIGHT_HELI": ("3130894523", ("LightScoutHeli", "UtilityHeli", "RescueHeli", "MedevacHeli")),
     "BODY_TRANSPORT_HELI": ("109615982233602", ("TransportHeli", "LightTransportHeli", "HeavyLiftHeli")),
     "BODY_BOMBER": ("14669079591", ("StrikeBomber", "HeavyBomber", "StrategicBomber")),
-    "BODY_CARGO_PLANE": ("2475398012", ("CargoPlane", "AWACSPlane", "TankerPlane")),
     "BODY_PATROL_BOAT": ("16692908395", ("PatrolBoat", "FastAttackCraft", "RiverBoat", "CoastCutter", "TorpedoBoat")),
     "BODY_GUNBOAT": ("15838664806", ("Gunboat", "MissileBoat", "MineLayer", "CoastalMonitor")),
     "BODY_FRIGATE": ("473576954", ("Corvette", "Frigate", "CarrierEscort")),
@@ -54,9 +53,8 @@ else:
     bad("CODEBOT v87: only the gunboat lowers the scale floor (every other body keeps 0.05)")
 # rejected / kept on the kit
 must_not_contain(_cb87_vac, "16675798409", "CODEBOT v87: the Lütjens model 16675798409 is never wired (no real-world copies)")
-for _cb87_k in ("Destroyer", "Cruiser", "MissileCruiser", "Battleship", "VTOLTransport", "AttackHelicopter", "GunshipHeli", "EscortHeli", "NightAttackHeli", "StealthHeli", "StrikeJet", "CASJet", "StealthStrike", "StealthStrikeJet", "LandingCraft", "AssaultLanding", "HospitalShip", "SupplyShip", "HoverTransport"):
+for _cb87_k in ("Destroyer", "Cruiser", "MissileCruiser", "Battleship"):  # v88: the rest of the v87 kit list now wears the wc6 bodies (codebot_v88.py)
     must_contain(_cb87_vac, f"\t\t{_cb87_k} = {{ ModelAssetId = 0,", f"CODEBOT v87: Vehicles.{_cb87_k} keeps the Part kit")
-must_contain(_cb87_vac, "\t\tVTOLTransport = { ModelAssetId = 0, NoFamilyFallback = true,", "CODEBOT v87: VTOLTransport never inherits the TransportHeli body through HeliTransport")
 # the gate: resolved ref (own or family) checked against the owner before any load; parked plot dress never uses them
 must_contain(_cb87_vas, "function VisualAssetService.TryAttachVehicleVisual(hostModel: Model, vehicleId: string, kitFamily: string?, ownerUserId: number?): boolean\n\tlocal ref = resolveVehicleRef(vehicleId, kitFamily)\n\tif not ref then\n\t\treturn false\n\tend\n\t-- v87: an owner-only store body (Rollout = \"Body\") on anyone else's vehicle: the Part kit stays (no load at all)\n\tif not VisualAssetService.BodyAllowed(ref, ownerUserId) then\n\t\treturn false\n\tend", "CODEBOT v87: TryAttachVehicleVisual refuses an owner-only body before templateForRef (no load for other players)")
 must_contain(_cb87_vas, "\tif typeof(ref) ~= \"table\" or ref.Rollout ~= \"Body\" then\n\t\treturn true\n\tend", "CODEBOT v87: BodyAllowed leaves every non-rollout ref alone (cars, jets unchanged)")
@@ -67,7 +65,7 @@ must_contain(_cb87_veh, 'VisualAssetService.TryAttachVehicleVisual(model, def.Id
 must_contain(_cb87_vas, "\tlocal s = AirBodyRig.ClampScale(ref, fitScale or primary.Size.Z / bodyLen)", "CODEBOT v87: fit scale clamped by AirBodyRig.ClampScale (BodyMinScale per ref, else 0.05)")
 must_contain(_cb87_vas, "\tlocal s = AirBodyRig.ClampScale(ref, ref.BodyScale or 1)", "CODEBOT v87: placeKitOnBody uses the same clamp")
 must_contain(_cb87_rig, "\tlocal s = AirBodyRig.ClampScale(ref, tonumber(ref.BodyScale) or 1)", "CODEBOT v87: AirBodyRig.Apply uses the same clamp")
-must_contain(_cb87_rig, "local floor = if typeof(ref.BodyMinScale) == \"number\" then math.clamp(ref.BodyMinScale, 0.005, 0.05) else 0.05\n\treturn math.clamp(raw, floor, 4)", "CODEBOT v87: ClampScale floor 0.05 unless BodyMinScale (never under 0.005), cap 4")
+must_contain(_cb87_rig, "local floor = if typeof(ref.BodyMinScale) == \"number\" then math.clamp(ref.BodyMinScale, 0.005, 0.05) else 0.05\n", "CODEBOT v87: ClampScale floor 0.05 unless BodyMinScale (never under 0.005); v88 cap in codebot_v88.py")
 must_contain(_cb87_vas, "\tlift -= if fitScale and typeof(ref.BodyWaterline) == \"number\" then math.clamp(ref.BodyWaterline, 0, 30) else 0", "CODEBOT v87: a ship body sinks BodyWaterline studs")
 must_contain(_cb87_vas, "\tif typeof(ref.ChildName) ~= \"string\" and typeof(ref.OmitParts) == \"table\" then", "CODEBOT v87: whole-model bodies drop OmitParts before the fit")
 # AirBodyRig: the extended no-op condition, deck plates, kit rotor

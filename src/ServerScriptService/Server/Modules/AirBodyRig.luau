@@ -41,6 +41,8 @@
 	    a helicopter body's mast, stretched to its span; spun by a Kit RotorParts entry), BodyDeck (invisible collidable
 	    massless deck plates, WE_BodyDeck, skipped by VehicleService's footprint) and BodyKitNoCollide (kit parts that
 	    would stand over the fitted deck stop colliding). Helicopters, bombers, transports and ships (owner-only rollout).
+	  • v88 (Code Bot): BodyMaxScale (raises the 4 scale cap, max 40: the airliner mesh) and BodyAnchorX (BodyAnchor also
+	    moves the body across the kit: the carrier / amphib island bridge). The wc6 bodies (owner-only rollout).
 	Kit parts are moved with an unweld / set / weld (a CFrame set on a welded part would move the whole aircraft). ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -112,7 +114,9 @@ end
 -- keeps the 0.05 floor it always had.
 function AirBodyRig.ClampScale(ref: any, raw: number): number
 	local floor = if typeof(ref.BodyMinScale) == "number" then math.clamp(ref.BodyMinScale, 0.005, 0.05) else 0.05
-	return math.clamp(raw, floor, 4)
+	-- v88: BodyMaxScale raises the 4 cap (only the airliner mesh, authored 2.1 studs long, fits at 30); never over 40
+	local cap = if typeof(ref.BodyMaxScale) == "number" then math.clamp(ref.BodyMaxScale, 4, 40) else 4
+	return math.clamp(raw, floor, cap)
 end
 
 -- The chassis-frame X / Z move that puts ref.BodySeats[ref.BodyAnchor] (scaled by s, turned by yawDeg, measured from
@@ -130,8 +134,10 @@ function AirBodyRig.AnchorShift(hostModel: Model, primary: BasePart, ref: any, s
 	end
 	local k = primary.CFrame:PointToObjectSpace(kitSeat.Position)
 	local v = CFrame.Angles(0, math.rad(yawDeg), 0) * (top * s)
-	-- along the kit's length only: the body stays centred across the kit (its seats' X still clamp into the kit box)
-	return Vector3.new(0, 0, k.Z - v.Z)
+	-- along the kit's length only: the body stays centred across the kit (its seats' X still clamp into the kit box).
+	-- v88: BodyAnchorX moves it across too (the carrier / amphib bridge sits on an island off the centre line)
+	local dx = if ref.BodyAnchorX == true then k.X - v.X else 0
+	return Vector3.new(dx, 0, k.Z - v.Z)
 end
 
 -- unweld `part` from the chassis (WeldConstraints either side), set its CFrame, weld it again
